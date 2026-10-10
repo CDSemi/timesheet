@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# WP5-UX-FIX7: copies task-folder logs into the evidence folder, masked (task/project paths, home, user name, ANSI) and LF.
+# Usage: copy-evidence.sh <source in <task>/out or <task>> <evidence name> [more pairs...]
+. <task>/env.sh
+export MASK_TASK="$(cygpath -w "$T")"
+export MASK_PROJECT="$(cygpath -w "$REPO")"
+EV="$REPO/handoff/delivery/evidence/WP5-UX-FIX7"
+mkdir -p "$EV"
+while [ $# -ge 2 ]; do
+  node "$T/probe-src/mask.mjs" "$1" "$EV/$2"
+  echo "masked $1 -> $2 exit=$?"
+  shift 2
+done

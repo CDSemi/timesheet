@@ -7,6 +7,7 @@ import { describeError, isStaleVersion } from './components/errors.ts';
 import { sessionText } from './components/format.ts';
 import { expectedFinishText, inputZoneChoices, policyOn } from './components/sessionModel.ts';
 import { SessionForm } from './components/SessionForm.tsx';
+import { useBlockSizeProperty } from './components/useBlockSize.ts';
 import { WEEKDAYS } from './components/dayModel.ts';
 import { formatDuration } from '../domain/format.ts';
 import { isoWeekday } from '../domain/dates.ts';
@@ -69,6 +70,9 @@ export function DayEditor({
   readOnly?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const head = useRef<HTMLElement>(null);
+  // The sticky head is 123 to 166px tall; the panel's scroll padding follows it (WP5-UX-AX-01).
+  useBlockSizeProperty(head, '--editor-head-size', dialog);
   const heading = useRef<HTMLHeadingElement>(null);
   const timesHeading = useRef<HTMLHeadingElement>(null);
   const [day, setDay] = useState<DayView | null>(null);
@@ -247,7 +251,7 @@ export function DayEditor({
       }}
     >
       {bottomSheet && <div className="sheet-handle" aria-hidden="true" />}
-      <header className="editor-head">
+      <header ref={head} className="editor-head">
         <div className="editor-title">
           <h2 id="day-editor-title" ref={heading} tabIndex={-1}>
             {readOnly ? 'Day' : 'Day editor'} <span className="mono">{`${weekday} ${workDate}`}</span>

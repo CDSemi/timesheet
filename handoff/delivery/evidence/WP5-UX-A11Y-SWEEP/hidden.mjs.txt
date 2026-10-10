@@ -1,0 +1,37 @@
+// WP5-UX-A11Y-SWEEP: stops entirely hidden (0 of 25 points visible) per viewport/theme and walk, with the occluder.
+// Also lists keyboard stops without any focus change (ring sides 0) by element kind.
+// Usage: node hidden.mjs <rawDir> <tag> <outFile>
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [rawDir, tag, outFile] = process.argv.slice(2);
+const lines = [];
+const noRing = new Map();
+const totals = new Map();
+for (const f of readdirSync(rawDir).filter((name) => name.startsWith(`${tag}-`) && name.endsWith('-walks.json')).sort()) {
+  const combo = f.slice(tag.length + 1, -'-walks.json'.length);
+  const walks = JSON.parse(readFileSync(join(rawDir, f), 'utf8'));
+  for (const [walk, value] of Object.entries(walks)) {
+    const stops = value.stops.filter((stop) => stop.id !== undefined);
+    const hidden = stops.filter((stop) => stop.vis === 0);
+    if (hidden.length > 0) {
+      const occluders = [...new Set(hidden.flatMap((stop) => stop.covers))].join(',');
+      lines.push(`${combo.padEnd(12)} ${walk.padEnd(24)} hidden ${String(hidden.length).padStart(2)}/${String(stops.length).padEnd(3)} by ${occluders}: ${hidden.map((stop) => stop.name).join(' | ').slice(0, 300)}`);
+      for (const occ of occluders.split(',')) totals.set(occ, (totals.get(occ) ?? 0) + hidden.filter((stop) => stop.covers.includes(occ)).length);
+    }
+    for (const stop of stops) {
+      const ring = stop.ring;
+      if (ring && ring.sidesPresent === 0 && ring.sidesSampled > 0) {
+        const kind = `${stop.tag}${stop.type ? `[type=${stop.type}]` : ''} ${stop.native ? '' : '(non-native) '}"${String(stop.name).replace(/\d{4}-\d{2}-\d{2}/g, '{date}').slice(0, 40)}" shadow=${String(stop.boxShadow).slice(0, 45)}`;
+        const entry = noRing.get(kind) ?? new Set();
+        entry.add(`${combo}:${walk}`);
+        noRing.set(kind, entry);
+      }
+    }
+  }
+}
+lines.push('', 'occluder totals (stop-walks entirely hidden):');
+for (const [occ, n] of totals) lines.push(`  ${occ}: ${n}`);
+lines.push('', 'stops with no focus change at all (ring sides 0; date/time inputs on touch viewports are a measurement limit, see R-12):');
+for (const [kind, where] of [...noRing.entries()].sort()) lines.push(`  ${kind}: ${where.size} walks, e.g. ${[...where].slice(0, 4).join(', ')}`);
+writeFileSync(outFile, `${lines.join('\n')}\n`);

@@ -53,14 +53,19 @@ function useMedia(query: string): boolean {
 }
 
 /**
- * Moves focus back to a day's own button ("Edit {date}" or "View {date}") after the day editor
- * closed; when that day is not on the sheet (opened through "Open a day"), to what opened it.
+ * Moves focus back to a day's own button (found by the day's `data-day`, never by its accessible
+ * name) after the day editor closed; when that day is not on the sheet (opened through "Open a day"),
+ * to what opened it.
  */
 function focusDay(workDate: string, opener: Element | null) {
-  const day = document.querySelector(`[data-day="${workDate}"]`);
-  const button = day?.querySelector<HTMLElement>(`button[aria-label="Edit ${workDate}"], button[aria-label="View ${workDate}"]`);
-  if (button !== null && button !== undefined) button.focus();
+  const button = document.querySelector<HTMLElement>(`[data-day="${workDate}"] [data-day-button]`);
+  if (button !== null) button.focus();
   else if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+}
+
+/** Moves focus back to an element after a dialog closed, when it is still on the page and enabled. */
+function focusIfAvailable(element: HTMLElement | null) {
+  if (element !== null && element.isConnected && !element.matches(':disabled')) element.focus();
 }
 
 /** Moves focus back to a day's label picker after its review dialog closed. */
@@ -142,6 +147,9 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const returnFocusTo = useRef<string | null>(null);
   /** The date whose label picker gets focus back when its review dialog closes. */
   const returnToPicker = useRef<string | null>(null);
+  /** What opened the batch review ("Preview changes"); it gets focus back when the review is cancelled. */
+  const batchOpener = useRef<HTMLElement | null>(null);
+  const returnToBatchOpener = useRef(false);
 
   const report = (caught: unknown) => setMessage(describeError(caught));
 
@@ -228,6 +236,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
 
   async function previewBatch() {
     if (view === null) return;
+    // Read before the busy state disables the button and the browser drops its focus.
+    batchOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setMessage(null);
     setNotice(null);
     setStaleNotice(null);
@@ -318,15 +328,23 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
 
   function closePreview() {
     if (previewSource.kind === 'label') returnToPicker.current = previewSource.entry.work_date;
+    else returnToBatchOpener.current = true;
     setPreview(null);
   }
 
-  // After a label pick's review dialog is gone (the page is no longer inert), focus goes back to the picker.
+  // After a review dialog is gone (the page is no longer inert), focus goes back to what opened it:
+  // a label pick's picker, or "Preview changes" after a cancelled batch review (WP5-UX-AX-08).
   useEffect(() => {
+    if (preview !== null) return;
     const date = returnToPicker.current;
-    if (preview !== null || date === null) return;
-    returnToPicker.current = null;
-    focusLabelPicker(date);
+    if (date !== null) {
+      returnToPicker.current = null;
+      focusLabelPicker(date);
+    }
+    if (returnToBatchOpener.current) {
+      returnToBatchOpener.current = false;
+      focusIfAvailable(batchOpener.current);
+    }
   }, [preview]);
 
   function openEditor(workDate: string) {
@@ -397,7 +415,11 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
                 )}
               </div>
             </div>
-            {message !== null && <p className="error">{message}</p>}
+            {message !== null && (
+              <p className="error" role="alert">
+                {message}
+              </p>
+            )}
             {notice !== null && (
               <p className="notice-ok" role="status">
                 {notice}

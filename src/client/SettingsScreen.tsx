@@ -176,7 +176,11 @@ export function SettingsScreen({ onSharesChanged }: { onSharesChanged: () => voi
       <form className="card stack" aria-label="New policy version" onSubmit={submit}>
         <h2>New policy version</h2>
         <PolicyFields draft={draft} onChange={edit} />
-        {!result.ok && <p className="notice">{result.message}</p>}
+        {!result.ok && (
+          <p className="notice" role="status">
+            {result.message}
+          </p>
+        )}
         {error !== null && (
           <p className="error" role="alert" data-error="policy">
             {error}

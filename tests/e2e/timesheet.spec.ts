@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { formatHoursMinutes } from '../../src/domain/format.ts';
+import { namedDayButton } from './dayButton.ts';
 import { expect, screenshotPath, test } from './fixtures.ts';
 
 /*
@@ -261,7 +262,7 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   const start = sheet.period.period_start;
   await expect(dayRow(page, start)).toHaveAccessibleName(new RegExp(`${start}$`));
   await expect(dayRow(page, start)).toContainText(`${start.slice(5, 7)}/${start.slice(8, 10)}`);
-  await expect(dayRow(page, start).getByRole('button', { name: `Edit ${start}`, exact: true })).toBeVisible();
+  await expect(namedDayButton(page, start, 'Edit')).toBeVisible();
   await expect(page.getByText('accounting dates', { exact: false }).first()).toBeVisible();
 
   // Session times are in the display zone (Asia/Ho_Chi_Minh), not in the reporting zone of the seed (09:00-18:00 LA).

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# WP5-UX-FIX7 self-check: the sweep's probe (copied, names and ports adapted) against a clean export of the fixed
+# working tree. Usage: run-selfcheck.sh <tag> <viewport ids, comma separated> <grep>
+. <task>/env.sh
+export SWEEP_TASK="$(cygpath -w "$T/selfcheck")"
+export SWEEP_TAG="$1"
+export SWEEP_VP="${2:-}"
+export SWEEP_THEME=""
+export SWEEP_PORT=48260
+GREP="${3:-.}"
+mkdir -p "$T/selfcheck"
+cd "$T/fixed" || exit 9
+LOG="$T/out/07-selfcheck-$SWEEP_TAG.txt"
+echo "start $(date -u +%Y-%m-%dT%H:%M:%SZ) tag=$SWEEP_TAG vp=$SWEEP_VP grep=$GREP port=$SWEEP_PORT" > "$LOG"
+node node_modules/@playwright/test/cli.js test -c a11y-sweep/sweep.config.ts -g "$GREP" >> "$LOG" 2>&1
+CODE=$?
+echo "exit=$CODE end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$LOG"

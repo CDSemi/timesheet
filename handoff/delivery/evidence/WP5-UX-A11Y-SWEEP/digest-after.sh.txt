@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# WP5-UX-A11Y-SWEEP: source digest after all runs (same three forms as before) and the working-tree status.
+. <task>/env.sh
+cd "$REPO" || exit 9
+echo "UTC $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+node --version
+echo "HEAD=$(git rev-parse HEAD) origin/main=$(git rev-parse origin/main)"
+git ls-tree -r --format='%(path) %(objectname)' "$SNAP" > "$T/out/lstree-snap-after-raw.txt"
+grep -v '^handoff/' "$T/out/lstree-snap-after-raw.txt" | LC_ALL=C sort > "$T/out/lstree-snap-after.txt"
+echo "5e104e1 ls-tree form: $(wc -l < "$T/out/lstree-snap-after.txt") files, $(sha256sum < "$T/out/lstree-snap-after.txt")"
+git ls-tree -r --format='%(path) %(objectname)' HEAD > "$T/out/lstree-head-after-raw.txt"
+grep -v '^handoff/' "$T/out/lstree-head-after-raw.txt" | LC_ALL=C sort > "$T/out/lstree-head-after.txt"
+echo "HEAD ls-tree form: $(sha256sum < "$T/out/lstree-head-after.txt")"
+node scripts/source-digest.mjs
+echo "source-digest exit=$?"
+echo "export:"
+bash "$T/exdigest.sh"
+echo "non-handoff changes in the working tree (expected none):"
+git status --short -- . ':(exclude)handoff'
+echo "git status --short (all):"
+git status --short

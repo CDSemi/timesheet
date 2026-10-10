@@ -216,11 +216,40 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - Board: status `blocked`, next_task_id WP5-UX-A11Y-SWEEP (pending), waiting for the
   owner's answer to WP5-UX-Q2. Uncommitted: this flip, the CKPT3 results and evidence,
   and this checkpoint update (+ vi).
-- Next action: record the owner's answer verbatim; (a) dispatch WP5-UX-A11Y-SWEEP, then
-  one fix round, freeze, regate, fresh B and A-delta rechecks; (b) a fix task for
-  B5-01..B5-03 only; (c) a docs task recording the accepted backlog in docs/10 (+ vi)
-  and the pilot on 5e104e1 without formal WP5 re-acceptance; (d) the pilot packet stays
-  on 014bd47 and the UI round resumes after the pilot.
+- Owner answered WP5-UX-Q2 "a" (2026-10-09, recorded verbatim). Board back to `running`.
+- Running: WP5-UX-A11Y-SWEEP (planner, opus, read-only; automated axe plus a full
+  keyboard walk of every screen on desktop and phone, light and dark).
+- Next: one fix round WP5-UX-FIX7 for every WCAG 2.2 AA item the sweep lists, its
+  freeze, WP5-UX-REGATE5, fresh B6 and an area-A delta A6, then the WP5 re-accept (docs/10
+  gets the Q1 and Q2 owner decisions).
+- WP5-UX-A11Y-SWEEP done (planner, self-reported claude-opus-5-5, read-only): ten WCAG
+  2.2 AA issues AX-01..AX-10 (AX-01..AX-03 = B5-01..B5-03; new: AX-04 pressed-tool ring,
+  AX-05 accessible names without the visible text (SC 2.5.3), AX-06 sharing switcher
+  navigates on change (SC 3.2.2), AX-07 missing status/alert roles (SC 4.1.3), AX-08 focus
+  not returned after dialogs (SC 2.4.3), AX-09 light `--ok` contrast (SC 1.4.3), AX-10
+  batch header overflow at 320px (SC 1.4.10)). HEAD observed 5b349f8 (handoff-only commit
+  after d3935e7; the next freeze checks its author and contents).
+- Coordinator decision (AGENTS rule 8): AX-05 contradicts docs/04 line 48 (the day button
+  name); the name will contain the visible text and keep the ISO date, and docs/04 EN+VI
+  change in FIX7.
+- WP5-UX-FIX7 done (self-reported claude-opus-5-5; reported, not independent proof): all
+  ten fixed client-only in 29 files plus docs/04 line 48 EN+VI; new checks fail on
+  5e104e1; probe self-check 0 hidden stops; AX-09 deviation `--ok` #136a42; extra R-12
+  date-field ring; unit 1823, full e2e 208/0/24, preflight and verify 0; digest b7c011d2.
+  Slips: one `| head`, one shared TEMP folder for parallel runs.
+- WP5-UX-FIX7-FREEZE attempt 1 stopped before commit: 5b349f8 is the owner's
+  handoff-only checkpoint (author huysrc, 6 handoff files); digest b7c011d2 matched; 141
+  paths staged and left staged; the precommit check blocked 36 cut synthetic addresses
+  (domain cut to `example.inval`) and one profile-path grep pattern in evidence and the FIX7 record.
+- WP5-UX-FIX7-MASK done (light, self-reported claude-sonnet-5-5): 36 `<email>` and one
+  `<user>` replacement in nine files; no index change; sed used instead of Edit.
+- WP5-UX-FIX7-FREEZE attempt 2 stopped: 143 staged, 7 new email blocks, all records
+  written after the mask that quoted the cut address (coordinator's own five rewritten
+  without the at sign; rule added to runtime_observations).
+- WP5-UX-FIX7-MASK attempt 2 done: both lines fixed; whole handoff sweep 0 blocked
+  emails, 0 profile-path hits in changed paths; 21 older pattern hits in committed files
+  noted for a later read-only privacy classification.
+- Running: WP5-UX-FIX7-FREEZE attempt 3 (143 paths). Then WP5-UX-REGATE5, fresh B6 and A6.
 - Next: if both PASS, the WP5 re-accept (pilot packet identity refresh to 5e104e1 /
   07c3ca00 / image 218dd7cc…, docs/10 owner decision Q1, STATE, NEXT_ACTION, WP5
   handoff, accept commit).

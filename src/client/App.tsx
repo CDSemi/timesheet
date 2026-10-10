@@ -179,7 +179,11 @@ function LoginForm({ onSignedIn, created }: { onSignedIn: (user: User) => void; 
             required
           />
         </label>
-        {error !== null && <p className="error">{error}</p>}
+        {error !== null && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
         <button type="submit" disabled={busy}>
           Sign in
         </button>

@@ -1,0 +1,36 @@
+// WP5-UX-A11Y-SWEEP: copies a text file into the evidence folder masked (task and project paths, home folder,
+// user name, ANSI codes) and as LF. The project path and user name come from the environment, not from this file.
+// Usage: node mask.mjs <source> <destination>   (env: MASK_TASK and MASK_PROJECT as Windows paths)
+import { readFileSync, writeFileSync } from 'node:fs';
+import { userInfo } from 'node:os';
+
+const [source, destination] = process.argv.slice(2);
+let text = readFileSync(source, 'utf8');
+const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** The forms a Windows path takes in logs: C:\a\b, C:\\a\\b, C:/a/b and /c/a/b. */
+function forms(windowsPath) {
+  const parts = windowsPath.replace(/[\\/]+$/, '').split(/[\\/]+/);
+  const drive = (parts[0] ?? '').replace(':', '');
+  const rest = parts.slice(1);
+  return [
+    [`${drive}:`, ...rest].join('\\\\'),
+    [`${drive}:`, ...rest].join('\\'),
+    [`${drive}:`, ...rest].join('/'),
+    [`/${drive.toLowerCase()}`, ...rest].join('/'),
+  ];
+}
+const replacements = [];
+for (const [envName, label] of [
+  ['MASK_TASK', '<task>'],
+  ['MASK_PROJECT', '<project>'],
+]) {
+  const value = process.env[envName];
+  if (value === undefined || value === '') throw new Error(`${envName} is not set`);
+  for (const form of forms(value)) replacements.push([new RegExp(escape(form), 'gi'), label]);
+}
+replacements.push([/C:\\\\Users\\\\[^\\"\s]+/gi, '<home>'], [/<home>\\"\s]+/gi, '<home>'], [/\/c\/Users\/[^/"\s]+/gi, '<home>']);
+replacements.push([new RegExp(escape(userInfo().username), 'gi'), '<user>']);
+// eslint-disable-next-line no-control-regex
+replacements.push([/\u001b\[[0-9;]*m/g, ''], [/\r\n/g, '\n']);
+for (const [pattern, value] of replacements) text = text.replace(pattern, value);
+writeFileSync(destination, text.endsWith('\n') ? text : `${text}\n`);

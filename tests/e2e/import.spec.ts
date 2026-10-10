@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { type Page } from '@playwright/test';
 import { addDays } from '../../src/domain/dates.ts';
 import { buildSyntheticWorkbook } from '../support/syntheticWorkbook.ts';
+import { namedDayButton } from './dayButton.ts';
 import { type BuiltServer, expect, newPerson, type Person, screenshotPath, SeedClient, statusInPage, test } from './fixtures.ts';
 
 /*
@@ -170,6 +171,8 @@ test('upload, preview with source cells, decide, confirm and commit; the same wo
   await expect(summary).toContainText(`${imported} days in 1 period will be saved as "Imported, unverified".`);
   await expect(summary).toContainText(`${required - 1} day${required - 1 === 1 ? '' : 's'} will be skipped by decision.`);
   await page.getByRole('button', { name: 'Back to the preview' }).click();
+  // WP5-UX-AX-08: going back returns focus to the button that opened the confirmation.
+  await expect(page.getByRole('button', { name: 'Review and commit' })).toBeFocused();
   expect((await person.api.call<{ imports: Array<{ state: string }> }>('GET', '/api/imports')).imports[0]?.state).toBe('preview');
   await page.getByRole('button', { name: 'Review and commit' }).click();
   await page.getByRole('button', { name: 'Confirm import' }).click();
@@ -225,7 +228,7 @@ test('an imported period shows "Imported, unverified" with edit, sign and submit
   await expect(page.locator('[data-label-picker]')).toHaveCount(0);
 
   // The day opens to read only, and the server refuses the same edit the disabled controls stand for.
-  await page.getByRole('button', { name: `View ${layout.cacheDay}` }).click();
+  await namedDayButton(page, layout.cacheDay, 'View').click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add session' })).toHaveCount(0);
   await page.keyboard.press('Escape');
@@ -346,6 +349,11 @@ test('the opening balance: validation, confirmation, a repeat that changes nothi
   expect(ledger.entries).toHaveLength(1);
   await second.close();
 
+  // WP5-UX-AX-08: cancelling the correction returns focus to the button that opened it.
+  await panel.getByRole('button', { name: 'Correct the opening balance' }).click();
+  await panel.getByRole('form', { name: 'Correct the opening balance' }).getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Correct the opening balance' })).toBeFocused();
+
   // The correction needs a reason and evidence, shows what changes, and posts one correction entry.
   await panel.getByRole('button', { name: 'Correct the opening balance' }).click();
   const correction = panel.getByRole('form', { name: 'Correct the opening balance' });
@@ -360,6 +368,12 @@ test('the opening balance: validation, confirmation, a repeat that changes nothi
   await correction.getByRole('button', { name: 'Review before posting' }).click();
   await expect(panel.locator('[data-confirm-change]')).toHaveText('+12h 30m to +10h 00m');
   await expect(panel.locator('[data-confirm-result]')).toHaveAttribute('data-confirm-result', '600');
+  // WP5-UX-AX-08: back to the form, focus is on the button that opened the confirmation; the values stay.
+  await panel.getByRole('button', { name: 'Back to edit' }).click();
+  await expect(correction.getByRole('button', { name: 'Review before posting' })).toBeFocused();
+  await expect(correction.getByLabel('Hours', { exact: true })).toHaveValue('10');
+  await correction.getByRole('button', { name: 'Review before posting' }).click();
+  await expect(panel.locator('[data-confirm-change]')).toHaveText('+12h 30m to +10h 00m');
   await panel.getByRole('button', { name: 'Confirm correction' }).click();
   await expect(panel.locator('[data-opening-current]')).toHaveAttribute('data-opening-current', '600');
   await expect(panel.locator('[data-opening-correction]')).toHaveCount(1);

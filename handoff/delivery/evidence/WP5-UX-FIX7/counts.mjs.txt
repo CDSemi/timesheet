@@ -1,0 +1,24 @@
+// WP5-UX-FIX7: per-project outcome counts from a Playwright JSON report. Usage: node counts.mjs <report.json> <out.txt>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+const report = JSON.parse(readFileSync(input, 'utf8'));
+const counts = {};
+const failures = [];
+function walk(suite, file) {
+  for (const spec of suite.specs ?? []) {
+    for (const test of spec.tests ?? []) {
+      const project = test.projectName;
+      const status = test.status; // expected | unexpected | skipped | flaky
+      counts[project] ??= { expected: 0, unexpected: 0, skipped: 0, flaky: 0 };
+      counts[project][status] = (counts[project][status] ?? 0) + 1;
+      if (status === 'unexpected' || status === 'flaky') failures.push(`${project} ${file} ${spec.title}`);
+    }
+  }
+  for (const child of suite.suites ?? []) walk(child, file ?? child.file);
+}
+for (const suite of report.suites ?? []) walk(suite, suite.file);
+const lines = [`stats: ${JSON.stringify(report.stats)}`];
+for (const [project, value] of Object.entries(counts)) lines.push(`${project}: passed ${value.expected}, failed ${value.unexpected}, flaky ${value.flaky}, skipped ${value.skipped}`);
+lines.push(`failed or flaky: ${failures.length === 0 ? 'none' : failures.join(' | ')}`);
+writeFileSync(output, `${lines.join('\n')}\n`);

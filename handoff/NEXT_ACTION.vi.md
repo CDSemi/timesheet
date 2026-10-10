@@ -13,16 +13,12 @@
   duyệt. Chưa xin phép chủ dự án, chưa có kết quả pilot, NAS chưa được kiểm.
 - Vòng thay đổi UI (chủ dự án yêu cầu 2026-10-08): kế hoạch và mockup tĩnh đã sẵn
   (task WP5-UX-PLAN; `handoff/delivery/design/WP5-UX/mockup.html`). Chủ dự án đã chấp
-  nhận E-1..E-7 theo khuyến nghị (2026-10-08) và trả lời WP5-UX-Q1 là (a) (2026-10-09).
-  Phần triển khai T01..T06 và các bản sửa FIX1..FIX6 đã freeze (commit mã nguồn cuối
-  5e104e1, digest 07c3ca00); WP5-UX-REGATE4 PASS; audit lại phần A PASS
-  (WP5-UX-AUDIT-A5). Phần B (WP5-UX-AUDIT-B5) còn ba lỗi trợ năng bàn phím: B5-01 thanh
-  sticky che control đang focus khi Shift+Tab, B5-02 vị trí bàn phím trong bộ chọn nhãn
-  chỉ là màu nhạt 1.14:1, B5-03 hộp thoại sửa ngày là điểm dừng focus không có dấu hiệu.
-  **Câu hỏi cho chủ dự án WP5-UX-Q2** (board `pending_owner_question_2`): (a, khuyến nghị)
-  rà soát trợ năng đầy đủ một lượt, rồi một vòng sửa tất cả, rồi gate và kiểm tra lại;
-  (b) chỉ sửa B5-01..B5-03; (c) chạy pilot với UI này, ghi các lỗi vào backlog (WP5 chưa
-  được nghiệm thu lại chính thức); (d) chạy pilot trên snapshot đã nghiệm thu 014bd47.
+  nhận E-1..E-7 theo khuyến nghị (2026-10-08), trả lời WP5-UX-Q1 là (a) và WP5-UX-Q2 là
+  (a) (2026-10-09). Phần triển khai T01..T06 và các bản sửa FIX1..FIX6 đã freeze ở
+  5e104e1 (digest 07c3ca00); audit lại phần A PASS (WP5-UX-AUDIT-A5). Bản rà soát trợ
+  năng WP5-UX-A11Y-SWEEP tìm ra mười lỗi WCAG 2.2 AA (AX-01..AX-10); WP5-UX-FIX7 đã sửa
+  trong một vòng (là báo cáo; digest b7c011d2). Hiện tại: freeze WP5-UX-FIX7-FREEZE, rồi
+  WP5-UX-REGATE5 và hai lần kiểm tra lại độc lập mới B6 và A6, rồi nghiệm thu lại WP5.
 
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
 Xem [STATE](delivery/STATE.json), [bảng task](delivery/ORCHESTRATION.json),

@@ -14,16 +14,12 @@
   NAS is NOT VERIFIED.
 - UI change round (owner request 2026-10-08): the plan and a static mockup are ready
   (task WP5-UX-PLAN; `handoff/delivery/design/WP5-UX/mockup.html`). The owner accepted
-  E-1..E-7 as recommended (2026-10-08) and answered WP5-UX-Q1 with (a) (2026-10-09).
-  Implementation T01..T06 and fixes FIX1..FIX6 are frozen (last source commit 5e104e1,
-  digest 07c3ca00); WP5-UX-REGATE4 PASS; area A re-audit PASS (WP5-UX-AUDIT-A5). Area B
-  (WP5-UX-AUDIT-B5) reports three keyboard-accessibility items: B5-01 sticky bars hide
-  the focused control on Shift+Tab, B5-02 the label-picker keyboard position is a 1.14:1
-  tint, B5-03 the editor dialog is a focus stop without indicator. **Owner question
-  WP5-UX-Q2** (board `pending_owner_question_2`): (a, recommended) one complete
-  accessibility sweep, then one fix round for everything, then regate and recheck;
-  (b) fix only B5-01..B5-03; (c) pilot on this UI with the items as recorded backlog
-  (no formal WP5 re-acceptance yet); (d) pilot on the last accepted snapshot 014bd47.
+  E-1..E-7 as recommended (2026-10-08) and answered WP5-UX-Q1 with (a) and WP5-UX-Q2
+  with (a) (2026-10-09). Implementation T01..T06 and fixes FIX1..FIX6 were frozen at
+  5e104e1 (digest 07c3ca00); area A re-audit PASS (WP5-UX-AUDIT-A5). The accessibility
+  sweep WP5-UX-A11Y-SWEEP found ten WCAG 2.2 AA issues (AX-01..AX-10); WP5-UX-FIX7
+  fixed them in one round (reported; digest b7c011d2). Now: freeze WP5-UX-FIX7-FREEZE,
+  then WP5-UX-REGATE5 and fresh independent rechecks B6 and A6, then the WP5 re-accept.
 
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),

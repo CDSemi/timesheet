@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Calculation, DayEntry, DayView, FinalizationResponse, Session } from '../../src/client/api.ts';
 import {
+  dayButtonName,
   overtimeTotal,
   sessionRange,
   sheetCheck,
@@ -270,6 +271,22 @@ describe('sheetDay', () => {
       JSON.stringify(sheetDay(item, LA, '2026-12-03')),
     );
     for (const text of texts) expect(text).not.toMatch(/\bnone\b/i);
+  });
+});
+
+describe('dayButtonName (WCAG 2.5.3 label in name)', () => {
+  it('starts with the verb, contains the visible text of each layout and ends with the ISO accounting date', () => {
+    const shown = sheetDay(day('2026-11-30'), LA, null);
+    expect(shown).toMatchObject({ weekday: 'Mon', dateText: '11/30' });
+    expect(dayButtonName('Edit', shown, 'sheet')).toBe('Edit 11/30 (2026-11-30)');
+    expect(dayButtonName('Edit', shown, 'phone')).toBe('Edit Mon 11/30 (2026-11-30)');
+    expect(dayButtonName('View', shown, 'phone')).toBe('View Mon 11/30 (2026-11-30)');
+  });
+
+  it('keeps the saved accounting date whatever the display zone', () => {
+    for (const zone of [LA, 'Asia/Ho_Chi_Minh', 'Pacific/Kiritimati']) {
+      expect(dayButtonName('View', sheetDay(day('2026-12-06'), zone, null), 'sheet')).toBe('View 12/06 (2026-12-06)');
+    }
   });
 });
 

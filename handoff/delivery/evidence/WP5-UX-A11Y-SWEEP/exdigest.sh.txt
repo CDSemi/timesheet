@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# WP5-UX-A11Y-SWEEP: source digest of the clean export (same form as scripts/source-digest.mjs: sorted "path blob" lines, handoff/ excluded).
+# Excludes the generated or probe-only folders node_modules/, dist/ and a11y-sweep/.
+. <task>/env.sh
+cd "$T/export" || exit 9
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' -not -path './a11y-sweep/*' | sed 's|^\./||' | LC_ALL=C sort > "$T/out/ex-files.txt"
+git hash-object --no-filters --stdin-paths < "$T/out/ex-files.txt" > "$T/out/ex-blobs.txt"
+paste -d ' ' "$T/out/ex-files.txt" "$T/out/ex-blobs.txt" | LC_ALL=C sort > "$T/out/ex-sorted.txt"
+wc -l < "$T/out/ex-sorted.txt"
+sha256sum < "$T/out/ex-sorted.txt"

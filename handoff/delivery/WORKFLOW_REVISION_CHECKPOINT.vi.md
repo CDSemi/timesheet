@@ -220,11 +220,42 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Board: status `blocked`, next_task_id WP5-UX-A11Y-SWEEP (pending), chờ chủ dự án trả
   lời WP5-UX-Q2. Chưa commit: lần chuyển trạng thái này, kết quả và evidence của CKPT3,
   và cập nhật checkpoint này (+ en).
-- Bước kế tiếp: ghi nguyên văn câu trả lời; (a) giao WP5-UX-A11Y-SWEEP, rồi một vòng sửa,
-  freeze, gate lại, kiểm tra lại B và phần thay đổi của A; (b) một task sửa chỉ
-  B5-01..B5-03; (c) một task tài liệu ghi backlog đã chấp nhận vào docs/10 (+ vi) và
-  pilot trên 5e104e1 khi WP5 chưa được nghiệm thu lại chính thức; (d) pilot packet giữ
-  014bd47 và vòng UI tiếp tục sau pilot.
+- Chủ dự án trả lời WP5-UX-Q2 "a" (2026-10-09, đã ghi nguyên văn). Board về lại `running`.
+- Đang chạy: WP5-UX-A11Y-SWEEP (planner, opus, chỉ đọc; quét axe tự động cùng đi phím đầy
+  đủ qua mọi màn hình trên máy tính và điện thoại, nền sáng và tối).
+- Tiếp theo: một vòng sửa WP5-UX-FIX7 cho mọi lỗi WCAG 2.2 AA mà bản rà soát liệt kê,
+  freeze, WP5-UX-REGATE5, B6 mới và A6 kiểm phần thay đổi, rồi nghiệm thu lại WP5 (ghi
+  quyết định Q1 và Q2 của chủ dự án vào docs/10).
+- WP5-UX-A11Y-SWEEP xong (planner, tự báo claude-opus-5-5, chỉ đọc): mười lỗi WCAG 2.2 AA
+  AX-01..AX-10 (AX-01..AX-03 = B5-01..B5-03; mới: AX-04 viền focus của nút công cụ đang
+  bật, AX-05 tên trợ năng không chứa chữ hiển thị (SC 2.5.3), AX-06 bộ chuyển chia sẻ tự
+  điều hướng khi đổi lựa chọn (SC 3.2.2), AX-07 thiếu vai trò status/alert (SC 4.1.3),
+  AX-08 focus không trả về sau hộp thoại (SC 2.4.3), AX-09 độ tương phản `--ok` nền sáng
+  (SC 1.4.3), AX-10 tiêu đề nhập hàng loạt tràn ở 320px (SC 1.4.10)). HEAD thấy là 5b349f8
+  (commit chỉ có handoff sau d3935e7; lần freeze tới kiểm tác giả và nội dung).
+- Quyết định coordinator (AGENTS quy tắc 8): AX-05 mâu thuẫn với docs/04 dòng 48 (tên nút
+  ngày); tên mới sẽ chứa chữ hiển thị và giữ ngày ISO, docs/04 EN+VI đổi trong FIX7.
+- WP5-UX-FIX7 xong (tự báo claude-opus-5-5; là báo cáo, chưa phải bằng chứng độc lập):
+  sửa cả mười lỗi chỉ phía client trong 29 file cùng docs/04 dòng 48 EN+VI; các kiểm
+  tra mới fail trên 5e104e1; tự kiểm bằng probe: 0 điểm dừng bị che; AX-09 lệch đề xuất
+  `--ok` #136a42; thêm viền focus ô ngày (R-12); unit 1823, toàn bộ e2e 208/0/24,
+  preflight và verify 0; digest b7c011d2. Sơ suất: một `| head`, một thư mục TEMP dùng
+  chung cho hai lần chạy song song.
+- WP5-UX-FIX7-FREEZE lần 1 dừng trước khi commit: 5b349f8 là checkpoint chỉ có handoff
+  của chủ dự án (tác giả huysrc, 6 file handoff); digest b7c011d2 khớp; 141 đường dẫn đã
+  stage và để nguyên; bước kiểm tra trước commit chặn 36 địa chỉ giả bị cắt
+  (tên miền bị cắt còn `example.inval`) và một mẫu grep đường dẫn hồ sơ người dùng trong evidence và bản
+  ghi FIX7.
+- WP5-UX-FIX7-MASK xong (light, tự báo claude-sonnet-5-5): 36 lần thay bằng `<email>` và
+  một lần thay bằng `<user>` trong chín file; không đổi index; dùng sed thay vì Edit.
+- WP5-UX-FIX7-FREEZE lần 2 dừng: 143 đường dẫn đã stage, 7 chỗ chặn email mới, đều là
+  bản ghi viết sau lần che có trích lại địa chỉ bị cắt (năm chỗ của coordinator đã viết
+  lại không có ký tự at; quy tắc đã ghi vào runtime_observations).
+- WP5-UX-FIX7-MASK lần 2 xong: đã sửa cả hai dòng; quét toàn bộ handoff: 0 email bị
+  chặn, 0 đường dẫn hồ sơ trong các file đã đổi; 21 chỗ khớp mẫu cũ trong các file đã
+  commit được ghi lại để phân loại quyền riêng tư (chỉ đọc) sau này.
+- Đang chạy: WP5-UX-FIX7-FREEZE lần 3 (143 đường dẫn). Sau đó WP5-UX-REGATE5, B6 và A6
+  mới.
 - Tiếp theo: nếu cả hai PASS, nghiệm thu lại WP5 (cập nhật định danh pilot packet thành
   5e104e1 / 07c3ca00 / image 218dd7cc…, quyết định Q1 vào docs/10, STATE, NEXT_ACTION, WP5
   handoff, commit nghiệm thu).

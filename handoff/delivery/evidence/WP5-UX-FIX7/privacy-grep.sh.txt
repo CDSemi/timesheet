@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# WP5-UX-FIX7 step 8: user-profile paths and e-mail addresses in the changed files and the evidence folder.
+. <task>/env.sh
+cd "$REPO" || exit 9
+OUT="$T/out/70-privacy-grep.txt"
+FILES="$(git status --short src tests docs | sed 's/^...//') handoff/delivery/tasks/WP5-UX-FIX7.md"
+EV=handoff/delivery/evidence/WP5-UX-FIX7
+USERNAME_PATTERN="$(basename "$(cygpath -u "$USERPROFILE")")"
+{
+  echo "changed files: $(echo $FILES | wc -w); evidence text files: $(ls $EV/*.txt | wc -l)"
+  echo "--- user-profile paths (<home> C:/Users/, <home> the user name): matching lines"
+  grep -n -i -E 'c:\\\\users\\\\<user>|<home> $FILES $EV/*.txt | grep -v -i '<user>' | wc -l
+  grep -n -i -F "$USERNAME_PATTERN" $FILES $EV/*.txt | wc -l
+  echo "--- e-mail addresses: all, then those not on example.invalid"
+  grep -o -h -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' $FILES $EV/*.txt | wc -l
+  grep -o -h -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' $FILES $EV/*.txt | grep -v -E '@example\.invalid$' | sort | uniq -c
+  echo "--- distinct example.invalid addresses"
+  grep -o -h -E '[A-Za-z0-9._%+-]+@example\.invalid' $FILES $EV/*.txt | sed -E 's/synthetic-[0-9a-f]{10}/synthetic-<hex>/' | sort | uniq -c
+} > "$OUT" 2>&1
+echo "exit=$?" >> "$OUT"

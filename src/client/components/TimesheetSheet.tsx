@@ -3,6 +3,7 @@ import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.ts
 import { minutesText, usDate } from './format.ts';
 import { periodStatus, reviewHash, reviewLinkLabel } from './reviewModel.ts';
 import {
+  dayButtonName,
   DETAIL_ROWS,
   overtimeTotal,
   SHEET_COMPANY,
@@ -55,7 +56,7 @@ function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boo
         {review ? (
           <span className="sheet-date-text">{day.dateText}</span>
         ) : (
-          <button type="button" className="sheet-date" onClick={() => actions.onEdit(day.workDate)} aria-label={`${verb} ${day.workDate}`}>
+          <button type="button" className="sheet-date" onClick={() => actions.onEdit(day.workDate)} aria-label={dayButtonName(verb, day, 'sheet')} data-day-button>
             {day.dateText}
           </button>
         )}

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# WP5-UX-A11Y-SWEEP probe runner. Usage: run-sweep.sh <tag> [viewport ids, comma separated | spacing] [theme] [grep]
+. <task>/env.sh
+export SWEEP_TASK="<task>"
+export SWEEP_TAG="$1"
+export SWEEP_VP="${2:-}"
+export SWEEP_THEME="${3:-}"
+GREP="${4:-.}"
+cd "$T/export" || exit 9
+STAMP="$(date -u +%H%M%S)"
+LOG="$T/out/sweep-run-$SWEEP_TAG-$STAMP.txt"
+echo "start $(date -u +%Y-%m-%dT%H:%M:%SZ) tag=$SWEEP_TAG vp=$SWEEP_VP theme=$SWEEP_THEME grep=$GREP" > "$LOG"
+node node_modules/@playwright/test/cli.js test -c a11y-sweep/sweep.config.ts -g "$GREP" >> "$LOG" 2>&1
+CODE=$?
+echo "exit=$CODE end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$LOG"
+echo "sweep exit=$CODE tag=$SWEEP_TAG vp=$SWEEP_VP theme=$SWEEP_THEME grep=$GREP log=$(basename "$LOG") at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/out/sweep-summary.txt"

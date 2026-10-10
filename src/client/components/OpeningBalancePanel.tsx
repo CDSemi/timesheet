@@ -33,6 +33,15 @@ export function OpeningBalancePanel() {
   const [correcting, setCorrecting] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const noticeRef = useRef<HTMLParagraphElement>(null);
+  const correctButton = useRef<HTMLButtonElement>(null);
+  /** Set by Cancel: "Correct the opening balance" gets focus back once it is shown again (WP5-UX-AX-08). */
+  const returnToCorrect = useRef(false);
+
+  useEffect(() => {
+    if (correcting || !returnToCorrect.current) return;
+    returnToCorrect.current = false;
+    correctButton.current?.focus();
+  }, [correcting]);
 
   const load = useCallback(async () => {
     try {
@@ -155,11 +164,14 @@ export function OpeningBalancePanel() {
               opening={opening}
               postedMinutes={state.balance.posted_minutes}
               onSubmit={submit}
-              onCancel={() => setCorrecting(false)}
+              onCancel={() => {
+                returnToCorrect.current = true;
+                setCorrecting(false);
+              }}
             />
           ) : (
             <div className="button-row">
-              <button type="button" className="secondary" onClick={() => setCorrecting(true)}>
+              <button ref={correctButton} type="button" className="secondary" onClick={() => setCorrecting(true)}>
                 Correct the opening balance
               </button>
             </div>

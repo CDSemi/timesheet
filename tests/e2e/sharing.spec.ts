@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { crc32, deflateSync } from 'node:zlib';
 import { type Page } from '@playwright/test';
 import { addDays } from '../../src/domain/dates.ts';
+import { dayButtonName, namedDayButton } from './dayButton.ts';
 import {
   type BuiltServer,
   type CreatedAccount,
@@ -228,6 +229,9 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
   await switchUser(page, signInPageAs, grantee.account, '#/timesheet');
   await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
   await switcher(page).selectOption({ label: 'Synthetic Owner' });
+  // WP5-UX-AX-06: the choice alone changes nothing; the explicit Open goes there.
+  await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+  await page.getByRole('form', { name: 'Shared with me' }).getByRole('button', { name: 'Open', exact: true }).click();
   await expect(bar(page).locator('[data-share-bar-title]')).toHaveText("Viewing Synthetic Owner's timesheets - view only");
   await expect(bar(page).getByText('Timesheets: view only')).toBeVisible();
   await expect(page.getByRole('heading', { name: "Synthetic Owner's timesheet" })).toBeVisible();
@@ -240,7 +244,7 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
   }
   await expect(page.getByLabel('Open a day')).toHaveCount(0);
   await expect(page.getByRole('checkbox')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: dayButtonName('Edit', workDay) })).toHaveCount(0);
   // The label cells are plain text: no in-cell label picker without edit rights.
   await expect(page.locator('[data-label-picker]')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^Label for / })).toHaveCount(0);
@@ -251,7 +255,7 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
 
   // A read-only day: the figures and fields are shown, and no add, edit, delete or save control exists.
   await page.screenshot({ path: screenshotPath(`sharing-view-only-${project}-synthetic.png`), animations: 'disabled' });
-  await page.getByRole('button', { name: `View ${workDay}`, exact: true }).click();
+  await namedDayButton(page, workDay, 'View').click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('heading', { name: new RegExp(`Day .*${workDay}`) })).toBeVisible();
   await expect(dialog.locator('[data-day-fields="read-only"]')).toContainText(note);
@@ -329,7 +333,7 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
   await page.getByRole('button', { name: 'Done' }).click();
   await expect(page.getByRole('button', { name: 'Preview changes' })).toHaveCount(0);
   await expect(page.getByLabel('Open a day')).toBeVisible();
-  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeVisible();
+  await expect(namedDayButton(page, workDay, 'Edit')).toBeVisible();
   for (const name of ['Clock in', 'Clock out']) await expect(page.getByRole('button', { name, exact: true }), name).toHaveCount(0);
   await expect(page.getByRole('link', { name: /review/i })).toHaveCount(0);
   await expect(page.locator('[data-signature], [data-sheet-review-link]')).toHaveCount(0);
@@ -349,7 +353,7 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
 
   const grantedNote = `edited-by-grantee-${randomBytes(4).toString('hex')}`;
   await page.screenshot({ path: screenshotPath(`sharing-edit-${project}-synthetic.png`), animations: 'disabled' });
-  await page.getByRole('button', { name: `Edit ${workDay}`, exact: true }).click();
+  await namedDayButton(page, workDay, 'Edit').click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('heading', { name: new RegExp(`Day editor .*${workDay}`) })).toBeVisible();
   await dialog.getByLabel('Notes').fill(grantedNote);
@@ -358,7 +362,7 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
   await page.screenshot({ path: screenshotPath(`sharing-edit-day-${project}-synthetic.png`), animations: 'disabled' });
   await dialog.getByRole('button', { name: 'Close' }).click();
   // Focus returns to the day's button.
-  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeFocused();
+  await expect(namedDayButton(page, workDay, 'Edit')).toBeFocused();
   expectOnlySharedRequests(recorded.list, owner.account.id);
   expect((await owner.api.dayView(workDay)).entry?.notes).toBe(grantedNote);
   // The server also refuses the live clock for an edit share.

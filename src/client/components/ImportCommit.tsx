@@ -28,10 +28,21 @@ export function ImportCommit({
   onCancel: () => void;
 }) {
   const panel = useRef<HTMLDivElement>(null);
+  const askButton = useRef<HTMLButtonElement>(null);
+  /** Set by "Back to the preview" or Escape: the button that opened the confirmation gets focus back (WP5-UX-AX-08). */
+  const returnToAsk = useRef(false);
   useEffect(() => {
     if (confirming) panel.current?.focus();
+    else if (returnToAsk.current) {
+      returnToAsk.current = false;
+      askButton.current?.focus();
+    }
   }, [confirming]);
   const counts = commitCounts(plan, decisions);
+  const cancel = () => {
+    returnToAsk.current = true;
+    onCancel();
+  };
 
   if (!confirming) {
     return (
@@ -44,7 +55,7 @@ export function ImportCommit({
           </p>
         )}
         <div className="button-row">
-          <button type="button" onClick={onAsk} disabled={busy}>
+          <button ref={askButton} type="button" onClick={onAsk} disabled={busy}>
             Review and commit
           </button>
         </div>
@@ -61,7 +72,7 @@ export function ImportCommit({
         tabIndex={-1}
         ref={panel}
         onKeyDown={(event) => {
-          if (event.key === 'Escape' && !busy) onCancel();
+          if (event.key === 'Escape' && !busy) cancel();
         }}
       >
         <h4 id="import-confirm-title">Commit this import?</h4>
@@ -81,7 +92,7 @@ export function ImportCommit({
           <button type="button" disabled={busy} onClick={onConfirm}>
             Confirm import
           </button>
-          <button type="button" className="secondary" disabled={busy} onClick={onCancel}>
+          <button type="button" className="secondary" disabled={busy} onClick={cancel}>
             Back to the preview
           </button>
         </div>

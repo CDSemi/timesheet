@@ -55,11 +55,23 @@ export function OpeningBalanceForm({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const confirmPanel = useRef<HTMLDivElement>(null);
+  const reviewButton = useRef<HTMLButtonElement>(null);
+  /** Set by "Back to edit" or Escape: the button that opened the confirmation gets focus back (WP5-UX-AX-08). */
+  const returnToReview = useRef(false);
   const ids = { minutes: useId(), asOf: useId(), reason: useId(), evidence: useId() };
 
   useEffect(() => {
     if (step === 'confirm') confirmPanel.current?.focus();
+    else if (returnToReview.current) {
+      returnToReview.current = false;
+      reviewButton.current?.focus();
+    }
   }, [step]);
+
+  function backToEdit() {
+    returnToReview.current = true;
+    setStep('edit');
+  }
 
   const parsed = parseSignedMinutes(values);
   const set = (change: Partial<OpeningFormValues>) => setValues((current) => ({ ...current, ...change }));
@@ -97,7 +109,7 @@ export function OpeningBalanceForm({
         ref={confirmPanel}
         data-confirm={mode}
         onKeyDown={(event) => {
-          if (event.key === 'Escape' && !busy) setStep('edit');
+          if (event.key === 'Escape' && !busy) backToEdit();
         }}
       >
         <h4 id="opening-confirm-title">{correcting ? 'Record this correction?' : 'Record this opening balance?'}</h4>
@@ -150,7 +162,7 @@ export function OpeningBalanceForm({
           <button type="button" disabled={busy} onClick={() => void confirm()}>
             {correcting ? 'Confirm correction' : 'Confirm and post'}
           </button>
-          <button type="button" className="secondary" disabled={busy} onClick={() => setStep('edit')}>
+          <button type="button" className="secondary" disabled={busy} onClick={backToEdit}>
             Back to edit
           </button>
         </div>
@@ -251,7 +263,9 @@ export function OpeningBalanceForm({
         </p>
       )}
       <div className="button-row">
-        <button type="submit">Review before posting</button>
+        <button ref={reviewButton} type="submit">
+          Review before posting
+        </button>
         {onCancel !== undefined && (
           <button type="button" className="secondary" onClick={onCancel}>
             Cancel

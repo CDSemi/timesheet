@@ -1,0 +1,38 @@
+$ git diff --numstat docs/
+1	1	docs/04_UX_AND_SETTINGS.md
+1	1	docs/04_UX_AND_SETTINGS.vi.md
+$ wc -l at HEAD and now (the 92/94 line difference pre-exists at HEAD)
+92
+94
+   92 docs/04_UX_AND_SETTINGS.md
+   94 docs/04_UX_AND_SETTINGS.vi.md
+  186 total
+$ git diff docs/
+diff --git a/docs/04_UX_AND_SETTINGS.md b/docs/04_UX_AND_SETTINGS.md
+index 6e3683f..f64c61d 100644
+--- a/docs/04_UX_AND_SETTINGS.md
++++ b/docs/04_UX_AND_SETTINGS.md
+@@ -45,7 +45,7 @@ The Timesheet page shows the form of the Excel workbook and the PDF. The header
+ - Formats are those of the PDF: US dates (MM/DD in the cells, MM/DD/YYYY in the header and period bar), durations as h:mm, times as 24-hour ranges such as 08:00-17:00 in the display zone, with several sessions listed and a running session marked. The accounting date stays the saved reporting-zone date.
+ - Non-working days (weekends, holidays and closures from the server calendar, never inferred from the weekday) carry one light tint with fine diagonal hatching. Today carries an accent top bar and a "Today" tag. A cell that needs input has an amber tint plus the Check text and shape.
+ - Signature lines: "Employee Signature" shows the signer's name when signed, or the pending-review state, with the date in the saved reporting zone and a link to the Review. "Manager Signature" shows "Not used yet" with an empty date. The signature image never appears on the Timesheet page. The lines and the link are absent in a shared view and for an imported period.
+-- Phones (below 768px): each week is a four-column table Day | Label | Time | OT, one row per day at least 54px tall, with no sideways scroll; the Check status folds into the Day cell and the Time cell tint. A whole row opens the day editor. The first screen shows the period card (with "<" and ">" beside the title), the one-row clock card and the compact tools, so the first day row is fully visible above the tab bar at 390x844; the page heading and the form title stay for screen readers only. Both layouts expose exactly one element per day, named by weekday and date, with an "Edit {date}" button (or "View {date}" when read-only).
++- Phones (below 768px): each week is a four-column table Day | Label | Time | OT, one row per day at least 54px tall, with no sideways scroll; the Check status folds into the Day cell and the Time cell tint. A whole row opens the day editor. The first screen shows the period card (with "<" and ">" beside the title), the one-row clock card and the compact tools, so the first day row is fully visible above the tab bar at 390x844; the page heading and the form title stay for screen readers only. Both layouts expose exactly one element per day, named by weekday and date, with one day button whose accessible name holds its visible text and keeps the accounting date (WCAG 2.2 SC 2.5.3): "Edit {MM/DD} ({date})" on the sheet, for example "Edit 09/28 (2026-09-28)", and "Edit {weekday} {MM/DD} ({date})" on a phone, for example "Edit Mon 09/28 (2026-09-28)"; "View" replaces "Edit" when read-only.
+ - The Review uses the same sheet. In a shared view, the share bar stays above the period bar and controls outside the share are absent.
+ 
+ ## Period bar, clock and batch mode
+diff --git a/docs/04_UX_AND_SETTINGS.vi.md b/docs/04_UX_AND_SETTINGS.vi.md
+index 70899da..60dbc90 100644
+--- a/docs/04_UX_AND_SETTINGS.vi.md
++++ b/docs/04_UX_AND_SETTINGS.vi.md
+@@ -45,7 +45,7 @@ Trang Timesheet hiện biểu mẫu của workbook Excel và PDF. Khối đầu
+ - Định dạng giống PDF: ngày kiểu Mỹ (MM/DD trong ô, MM/DD/YYYY ở phần đầu và thanh kỳ), thời lượng dạng h:mm, giờ dạng khoảng 24 giờ như 08:00-17:00 theo múi giờ hiển thị, liệt kê nhiều ca và đánh dấu ca đang chạy. Ngày ghi sổ vẫn là ngày theo múi giờ báo cáo đã lưu.
+ - Ngày không làm việc (cuối tuần, ngày lễ và ngày đóng cửa từ lịch của server, không suy ra từ thứ trong tuần) có một nền nhạt kèm sọc chéo mảnh. Hôm nay có thanh nhấn phía trên và nhãn "Today". Ô cần nhập có nền hổ phách cùng chữ và hình trong dòng Check.
+ - Dòng chữ ký: "Employee Signature" hiện tên người ký khi đã ký, hoặc trạng thái chờ xác nhận, kèm ngày theo múi giờ báo cáo đã lưu và liên kết tới Review. "Manager Signature" hiện "Not used yet" với ô ngày trống. Ảnh chữ ký không bao giờ xuất hiện trên trang Timesheet. Các dòng này và liên kết không có trong chế độ xem chia sẻ và với kỳ đã nhập.
+-- Điện thoại (dưới 768px): mỗi tuần là một bảng bốn cột Day | Label | Time | OT, mỗi ngày một hàng cao ít nhất 54px, không cuộn ngang; trạng thái Check gộp vào ô Day và màu ô Time. Chạm cả hàng sẽ mở trình sửa ngày. Màn hình đầu hiện thẻ kỳ (với "<" và ">" cạnh tiêu đề), thẻ đồng hồ một hàng và các công cụ gọn, nên hàng ngày đầu tiên hiện đầy đủ phía trên thanh tab ở 390x844; tiêu đề trang và tiêu đề biểu mẫu chỉ dành cho trình đọc màn hình. Cả hai bố cục chỉ có đúng một phần tử cho mỗi ngày, đặt tên theo thứ và ngày, kèm nút "Edit {date}" (hoặc "View {date}" khi chỉ đọc).
++- Điện thoại (dưới 768px): mỗi tuần là một bảng bốn cột Day | Label | Time | OT, mỗi ngày một hàng cao ít nhất 54px, không cuộn ngang; trạng thái Check gộp vào ô Day và màu ô Time. Chạm cả hàng sẽ mở trình sửa ngày. Màn hình đầu hiện thẻ kỳ (với "<" và ">" cạnh tiêu đề), thẻ đồng hồ một hàng và các công cụ gọn, nên hàng ngày đầu tiên hiện đầy đủ phía trên thanh tab ở 390x844; tiêu đề trang và tiêu đề biểu mẫu chỉ dành cho trình đọc màn hình. Cả hai bố cục chỉ có đúng một phần tử cho mỗi ngày, đặt tên theo thứ và ngày, kèm một nút ngày có tên truy cập chứa đúng chữ hiển thị và giữ ngày kế toán (WCAG 2.2 SC 2.5.3): "Edit {MM/DD} ({date})" trên bảng timesheet, ví dụ "Edit 09/28 (2026-09-28)", và "Edit {weekday} {MM/DD} ({date})" trên điện thoại, ví dụ "Edit Mon 09/28 (2026-09-28)"; khi chỉ đọc thì "View" thay cho "Edit".
+ - Review dùng cùng bảng này. Trong chế độ xem chia sẻ, thanh chia sẻ vẫn nằm trên thanh kỳ và các điều khiển ngoài quyền chia sẻ bị ẩn.
+ 
+ ## Thanh kỳ, đồng hồ và chế độ nhiều ngày
+parity: both files change exactly line 48; same examples, same code spans ("Edit {MM/DD} ({date})", "Edit 09/28 (2026-09-28)", "Edit {weekday} {MM/DD} ({date})", "Edit Mon 09/28 (2026-09-28)", "View", "Edit"), same SC reference (WCAG 2.2 SC 2.5.3)
+quoted-span diff exit=0

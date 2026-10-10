@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# WP5-UX-A11Y-SWEEP: copies masked LF text evidence and selected synthetic screenshots into the evidence folder.
+. <task>/env.sh
+E="$REPO/handoff/delivery/evidence/WP5-UX-A11Y-SWEEP"
+m() { node "$T/mask.mjs" "$1" "$E/$2" || echo "mask failed: $1"; }
+# scripts
+m "$T/export/a11y-sweep/sweep.probe.ts" sweep.probe.ts.txt
+m "$T/export/a11y-sweep/sweep.config.ts" sweep.config.ts.txt
+m "$T/run-sweep.sh" run-sweep.sh.txt
+m "$T/env.sh" env.sh.txt
+m "$T/exdigest.sh" exdigest.sh.txt
+m "$T/summarize.mjs" summarize.mjs.txt
+m "$T/hidden.mjs" hidden.mjs.txt
+m "$T/mask.mjs" mask.mjs.txt
+m "$T/tokens-contrast.mjs" tokens-contrast.mjs.txt
+m "$T/copy-evidence.sh" copy-evidence.sh.txt
+m "$T/append-results.mjs" append-results.mjs.txt
+m "$T/digest-after.sh" digest-after.sh.txt
+# logs and summaries
+m "$T/out/digest-before.txt" 01-digest-before.txt
+m "$T/out/export-build.txt" 02-export-build.txt
+for f in "$T"/out/sweep-run-*.txt; do b=$(basename "$f" .txt); m "$f" "10-$b.txt"; done
+m "$T/out/sweep-summary.txt" 10-sweep-summary.txt
+for tag in r1 r2 r3 r3d r3e; do
+  m "$T/out/summary-$tag.txt" "11-summary-$tag.txt"
+  m "$T/out/hidden-$tag.txt" "12-hidden-norings-$tag.txt"
+done
+m "$T/raw/f2-followup.json" 13-followup-f2.json.txt
+m "$T/raw/f2-metrics.json" 14-metrics-f2.json.txt
+m "$T/raw/r2-text-spacing.json" 15-text-spacing-r2.json.txt
+for c in w1280-light w1280-dark w390-light w320-light; do m "$T/raw/r2-$c-dialogs.json" "16-dialogs-r2-$c.json.txt"; done
+m "$T/raw/r2-w1280-light-timesheet-aria.txt" 17-aria-r2-w1280-light-timesheet.txt
+m "$T/raw/r2-w390-light-timesheet-aria.txt" 17-aria-r2-w390-light-timesheet.txt
+m "$T/out/static-source.txt" 20-static-source.txt
+m "$T/out/tokens-contrast.txt" 30-tokens-contrast.txt
+m "$T/out/digest-after.txt" 90-digest-after.txt
+# screenshots (synthetic data only)
+for s in $(cat "$T/out/shots-selected.txt"); do cp "$T/shots/$s" "$E/$s" || echo "copy failed: $s"; done
+ls "$E" | wc -l

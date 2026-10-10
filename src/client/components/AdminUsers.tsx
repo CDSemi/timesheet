@@ -99,7 +99,11 @@ export function UserCreateForm({
         </label>
       </div>
       <p className="hint muted">You type the temporary password and give it to the person yourself. It is stored only as a hash and is never shown again.</p>
-      {problem !== null && <p className="notice">{problem}</p>}
+      {problem !== null && (
+        <p className="notice" role="status">
+          {problem}
+        </p>
+      )}
       {error !== null && (
         <p className="error" role="alert" data-error="user-create">
           {error}

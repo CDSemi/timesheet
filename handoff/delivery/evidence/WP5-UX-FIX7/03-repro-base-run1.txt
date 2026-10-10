@@ -1,0 +1,1426 @@
+$ node node_modules/@playwright/test/cli.js test tests/e2e/keyboard-access.spec.ts tests/e2e/focus-ring.spec.ts tests/e2e/import.spec.ts --reporter=line   (in <task>/base = git archive 5e104e1 + the new checks)
+2026-10-10T01:22:06Z
+
+Running 54 tests using 2 workers
+
+[1/54] [desktop] › tests\e2e\focus-ring.spec.ts:192:3 › the shared focus ring reaches 3:1 on every surface and on real controls (light)
+[2/54] [desktop] › tests\e2e\import.spec.ts:106:1 › upload, preview with source cells, decide, confirm and commit; the same workbook is already imported
+  1) [desktop] › tests\e2e\focus-ring.spec.ts:192:3 › the shared focus ring reaches 3:1 on every surface and on real controls (light) 
+
+    Error: expect(locator).toHaveAccessibleName(expected) failed
+
+    Locator: locator('[data-day] [data-day-button]').first()
+    Expected pattern: /^(Edit|View) (?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?\d{2}\/\d{2} \(\d{4}-\d{2}-\d{2}\)$/
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveAccessibleName" locator('[data-day] [data-day-button]').first() with timeout 7000ms
+      - waiting for locator('[data-day] [data-day-button]').first()
+
+
+      200 |     const nav = page.getByRole('navigation', { name: 'Main' });
+      201 |     const sheetDate = page.locator('[data-day] [data-day-button]').first();
+    > 202 |     await expect(sheetDate).toHaveAccessibleName(ANY_DAY_BUTTON_NAME);
+          |                             ^
+      203 |     const controls: Array<[string, Locator]> = [
+      204 |       ['button', page.getByRole('button', { name: 'Clock in' })],
+      205 |       ['link', nav.getByRole('link', { name: 'Overtime' })],
+        at <task>\base\tests\e2e\focus-ring.spec.ts:202:29
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-the-shared-focu-c7e7e-and-on-real-controls-light--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-the-shared-focu-c7e7e-and-on-real-controls-light--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-the-shared-focu-c7e7e-and-on-real-controls-light--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[3/54] [desktop] › tests\e2e\focus-ring.spec.ts:224:3 › WP5-UX-AX-02: the open label picker shows a ring on the list and on the active option (light)
+  2) [desktop] › tests\e2e\import.spec.ts:106:1 › upload, preview with source cells, decide, confirm and commit; the same workbook is already imported 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('button', { name: 'Review and commit' })
+    Expected: focused
+    Received: inactive
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('button', { name: 'Review and commit' }) with timeout 7000ms
+      - waiting for getByRole('button', { name: 'Review and commit' })
+        18 × locator resolved to <button type="button">Review and commit</button>
+           - unexpected value "inactive"
+
+
+      173 |   await page.getByRole('button', { name: 'Back to the preview' }).click();
+      174 |   // WP5-UX-AX-08: going back returns focus to the button that opened the confirmation.
+    > 175 |   await expect(page.getByRole('button', { name: 'Review and commit' })).toBeFocused();
+          |                                                                         ^
+      176 |   expect((await person.api.call<{ imports: Array<{ state: string }> }>('GET', '/api/imports')).imports[0]?.state).toBe('preview');
+      177 |   await page.getByRole('button', { name: 'Review and commit' }).click();
+      178 |   await page.getByRole('button', { name: 'Confirm import' }).click();
+        at <task>\base\tests\e2e\import.spec.ts:175:73
+
+    Error Context: ..\tmp\timesheet-e2e-output\import-upload-preview-with-931ba-orkbook-is-already-imported-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\import-upload-preview-with-931ba-orkbook-is-already-imported-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\import-upload-preview-with-931ba-orkbook-is-already-imported-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[4/54] [desktop] › tests\e2e\import.spec.ts:205:1 › an imported period shows "Imported, unverified" with edit, sign and submit disabled
+  3) [desktop] › tests\e2e\focus-ring.spec.ts:224:3 › WP5-UX-AX-02: the open label picker shows a ring on the list and on the active option (light) 
+
+    Error: label list ring rgba(28, 36, 48, 0.1) 0px 0px 0px 1px, rgba(28, 36, 48, 0.08) 0px 2px 4px 0px, rgba(28, 36, 48, 0.1) 0px 8px 24px 0px, rgba(28, 36, 48, 0.08) 0px 24px 64px 0px against its backdrop
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 3
+    Received:    1.2138968167099293
+
+      110 |   if (ring === undefined) return 0;
+      111 |   const ratio = contrast(ringOn(ring.colour, backdropOf(probe.backdrops)), backdropOf(probe.backdrops));
+    > 112 |   expect(ratio, `${name} ring ${probe.boxShadow} against its backdrop`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
+          |                                                                         ^
+      113 |   return ratio;
+      114 | }
+      115 |
+        at expectRing (<task>\base\tests\e2e\focus-ring.spec.ts:112:73)
+        at <task>\base\tests\e2e\focus-ring.spec.ts:237:23
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-02-th-4275b-on-the-active-option-light--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-02-th-4275b-on-the-active-option-light--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-02-th-4275b-on-the-active-option-light--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[5/54] [desktop] › tests\e2e\focus-ring.spec.ts:250:3 › WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (light)
+  4) [desktop] › tests\e2e\import.spec.ts:205:1 › an imported period shows "Imported, unverified" with edit, sign and submit disabled 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-day="2026-09-16"] [data-day-button]').and(getByRole('button', { name: /^View (?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?09\/16 \(2026-09-16\)$/ }))
+
+
+      229 |
+      230 |   // The day opens to read only, and the server refuses the same edit the disabled controls stand for.
+    > 231 |   await namedDayButton(page, layout.cacheDay, 'View').click();
+          |                                                       ^
+      232 |   await expect(page.getByRole('dialog')).toBeVisible();
+      233 |   await expect(page.getByRole('button', { name: 'Add session' })).toHaveCount(0);
+      234 |   await page.keyboard.press('Escape');
+        at <task>\base\tests\e2e\import.spec.ts:231:55
+
+    Error Context: ..\tmp\timesheet-e2e-output\import-an-imported-period--bf1f9-it-sign-and-submit-disabled-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\import-an-imported-period--bf1f9-it-sign-and-submit-disabled-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\import-an-imported-period--bf1f9-it-sign-and-submit-disabled-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[6/54] [desktop] › tests\e2e\import.spec.ts:253:1 › another user cannot see the batch, and an administrator cannot read it either
+  5) [desktop] › tests\e2e\focus-ring.spec.ts:250:3 › WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (light) 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-day="2026-10-08"] [data-day-button]')
+
+
+      260 |     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      261 |     await signInPageAs(person.account, '#/timesheet');
+    > 262 |     await dayButton(page, day).click();
+          |                                ^
+      263 |     const editor = page.locator(`dialog[data-day-editor="${day}"]`);
+      264 |     await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
+      265 |     expect(await editor.evaluate((element) => element.scrollHeight > element.clientHeight), 'the editor scrolls').toBe(true);
+        at <task>\base\tests\e2e\focus-ring.spec.ts:262:32
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-03-th-4beb8-is-the-keyboard-stop-light--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-03-th-4beb8-is-the-keyboard-stop-light--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-03-th-4beb8-is-the-keyboard-stop-light--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[7/54] [desktop] › tests\e2e\focus-ring.spec.ts:278:3 › WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (light)
+[8/54] [desktop] › tests\e2e\import.spec.ts:269:1 › the upload refuses the wrong file in words, before and after it is sent
+[9/54] [desktop] › tests\e2e\import.spec.ts:292:1 › the opening balance: validation, confirmation, a repeat that changes nothing, and a reasoned correction
+  6) [desktop] › tests\e2e\focus-ring.spec.ts:278:3 › WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (light) 
+
+    Error: Show details: focused and pressed differs from pressed only
+
+    expect(received).not.toBe(expected) // Object.is equality
+
+    Expected: not "rgb(31, 95, 191) 0px 0px 0px 1px inset"
+
+      288 |       const pressedOnly = await settledShadow(toggle);
+      289 |       const probe = await focusedProbe(toggle);
+    > 290 |       expect(probe.boxShadow, `${name}: focused and pressed differs from pressed only`).not.toBe(pressedOnly);
+          |                                                                                             ^
+      291 |       const outset = parseLayers(probe.boxShadow).filter((layer) => !layer.inset && layer.spread > 0);
+      292 |       expect(outset.length, `${name} paints an outer focus ring (${probe.boxShadow})`).toBeGreaterThan(0);
+      293 |       expectRing(`pressed ${name}`, probe);
+        at <task>\base\tests\e2e\focus-ring.spec.ts:290:93
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-04-a--d656b-shows-the-focus-ring-light--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-04-a--d656b-shows-the-focus-ring-light--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-04-a--d656b-shows-the-focus-ring-light--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[10/54] [desktop] › tests\e2e\focus-ring.spec.ts:192:3 › the shared focus ring reaches 3:1 on every surface and on real controls (dark)
+  7) [desktop] › tests\e2e\import.spec.ts:292:1 › the opening balance: validation, confirmation, a repeat that changes nothing, and a reasoned correction 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('region', { name: 'Opening OT balance' }).getByRole('button', { name: 'Correct the opening balance' })
+    Expected: focused
+    Received: inactive
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('region', { name: 'Opening OT balance' }).getByRole('button', { name: 'Correct the opening balance' }) with timeout 7000ms
+      - waiting for getByRole('region', { name: 'Opening OT balance' }).getByRole('button', { name: 'Correct the opening balance' })
+        18 × locator resolved to <button type="button" class="secondary">Correct the opening balance</button>
+           - unexpected value "inactive"
+
+
+      353 |   await panel.getByRole('button', { name: 'Correct the opening balance' }).click();
+      354 |   await panel.getByRole('form', { name: 'Correct the opening balance' }).getByRole('button', { name: 'Cancel', exact: true }).click();
+    > 355 |   await expect(panel.getByRole('button', { name: 'Correct the opening balance' })).toBeFocused();
+          |                                                                                    ^
+      356 |
+      357 |   // The correction needs a reason and evidence, shows what changes, and posts one correction entry.
+      358 |   await panel.getByRole('button', { name: 'Correct the opening balance' }).click();
+        at <task>\base\tests\e2e\import.spec.ts:355:84
+
+    Error Context: ..\tmp\timesheet-e2e-output\import-the-opening-balance-5fe7d-g-and-a-reasoned-correction-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\import-the-opening-balance-5fe7d-g-and-a-reasoned-correction-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\import-the-opening-balance-5fe7d-g-and-a-reasoned-correction-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[11/54] [desktop] › tests\e2e\import.spec.ts:396:1 › the Import entry is for the signed-in person and is not part of the administrator views
+  8) [desktop] › tests\e2e\focus-ring.spec.ts:192:3 › the shared focus ring reaches 3:1 on every surface and on real controls (dark) 
+
+    Error: expect(locator).toHaveAccessibleName(expected) failed
+
+    Locator: locator('[data-day] [data-day-button]').first()
+    Expected pattern: /^(Edit|View) (?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?\d{2}\/\d{2} \(\d{4}-\d{2}-\d{2}\)$/
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveAccessibleName" locator('[data-day] [data-day-button]').first() with timeout 7000ms
+      - waiting for locator('[data-day] [data-day-button]').first()
+
+
+      200 |     const nav = page.getByRole('navigation', { name: 'Main' });
+      201 |     const sheetDate = page.locator('[data-day] [data-day-button]').first();
+    > 202 |     await expect(sheetDate).toHaveAccessibleName(ANY_DAY_BUTTON_NAME);
+          |                             ^
+      203 |     const controls: Array<[string, Locator]> = [
+      204 |       ['button', page.getByRole('button', { name: 'Clock in' })],
+      205 |       ['link', nav.getByRole('link', { name: 'Overtime' })],
+        at <task>\base\tests\e2e\focus-ring.spec.ts:202:29
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-the-shared-focu-a22dd--and-on-real-controls-dark--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-the-shared-focu-a22dd--and-on-real-controls-dark--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-the-shared-focu-a22dd--and-on-real-controls-dark--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[12/54] [desktop] › tests\e2e\keyboard-access.spec.ts:204:5 › WP5-UX-AX-01 on the desktop project › Shift+Tab never stops on a hidden control at 1280px: Timesheet, Settings, shared view, day editor
+[13/54] [desktop] › tests\e2e\focus-ring.spec.ts:224:3 › WP5-UX-AX-02: the open label picker shows a ring on the list and on the active option (dark)
+  9) [desktop] › tests\e2e\focus-ring.spec.ts:224:3 › WP5-UX-AX-02: the open label picker shows a ring on the list and on the active option (dark) 
+
+    Error: label list ring rgba(4, 8, 14, 0.6) 0px 0px 0px 1px, rgba(4, 8, 14, 0.4) 0px 2px 4px 0px, rgba(4, 8, 14, 0.45) 0px 8px 24px 0px, rgba(4, 8, 14, 0.4) 0px 24px 64px 0px against its backdrop
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 3
+    Received:    1.1506499738778142
+
+      110 |   if (ring === undefined) return 0;
+      111 |   const ratio = contrast(ringOn(ring.colour, backdropOf(probe.backdrops)), backdropOf(probe.backdrops));
+    > 112 |   expect(ratio, `${name} ring ${probe.boxShadow} against its backdrop`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
+          |                                                                         ^
+      113 |   return ratio;
+      114 | }
+      115 |
+        at expectRing (<task>\base\tests\e2e\focus-ring.spec.ts:112:73)
+        at <task>\base\tests\e2e\focus-ring.spec.ts:237:23
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-02-th-68028--on-the-active-option-dark--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-02-th-68028--on-the-active-option-dark--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-02-th-68028--on-the-active-option-dark--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[14/54] [desktop] › tests\e2e\focus-ring.spec.ts:250:3 › WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (dark)
+  10) [desktop] › tests\e2e\focus-ring.spec.ts:250:3 › WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (dark) 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-day="2026-10-08"] [data-day-button]')
+
+
+      260 |     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      261 |     await signInPageAs(person.account, '#/timesheet');
+    > 262 |     await dayButton(page, day).click();
+          |                                ^
+      263 |     const editor = page.locator(`dialog[data-day-editor="${day}"]`);
+      264 |     await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
+      265 |     expect(await editor.evaluate((element) => element.scrollHeight > element.clientHeight), 'the editor scrolls').toBe(true);
+        at <task>\base\tests\e2e\focus-ring.spec.ts:262:32
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-03-th-9bdfc--is-the-keyboard-stop-dark--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-03-th-9bdfc--is-the-keyboard-stop-dark--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-03-th-9bdfc--is-the-keyboard-stop-dark--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[15/54] [desktop] › tests\e2e\focus-ring.spec.ts:278:3 › WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (dark)
+  11) [desktop] › tests\e2e\focus-ring.spec.ts:278:3 › WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (dark) 
+
+    Error: Show details: focused and pressed differs from pressed only
+
+    expect(received).not.toBe(expected) // Object.is equality
+
+    Expected: not "rgb(110, 168, 255) 0px 0px 0px 1px inset"
+
+      288 |       const pressedOnly = await settledShadow(toggle);
+      289 |       const probe = await focusedProbe(toggle);
+    > 290 |       expect(probe.boxShadow, `${name}: focused and pressed differs from pressed only`).not.toBe(pressedOnly);
+          |                                                                                             ^
+      291 |       const outset = parseLayers(probe.boxShadow).filter((layer) => !layer.inset && layer.spread > 0);
+      292 |       expect(outset.length, `${name} paints an outer focus ring (${probe.boxShadow})`).toBeGreaterThan(0);
+      293 |       expectRing(`pressed ${name}`, probe);
+        at <task>\base\tests\e2e\focus-ring.spec.ts:290:93
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-04-a--ba3cd--shows-the-focus-ring-dark--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-04-a--ba3cd--shows-the-focus-ring-dark--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-04-a--ba3cd--shows-the-focus-ring-dark--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[16/54] [mobile] › tests\e2e\focus-ring.spec.ts:192:3 › the shared focus ring reaches 3:1 on every surface and on real controls (light)
+  12) [mobile] › tests\e2e\focus-ring.spec.ts:192:3 › the shared focus ring reaches 3:1 on every surface and on real controls (light) 
+
+    Error: expect(locator).toHaveAccessibleName(expected) failed
+
+    Locator: locator('[data-day] [data-day-button]').first()
+    Expected pattern: /^(Edit|View) (?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?\d{2}\/\d{2} \(\d{4}-\d{2}-\d{2}\)$/
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveAccessibleName" locator('[data-day] [data-day-button]').first() with timeout 7000ms
+      - waiting for locator('[data-day] [data-day-button]').first()
+
+
+      200 |     const nav = page.getByRole('navigation', { name: 'Main' });
+      201 |     const sheetDate = page.locator('[data-day] [data-day-button]').first();
+    > 202 |     await expect(sheetDate).toHaveAccessibleName(ANY_DAY_BUTTON_NAME);
+          |                             ^
+      203 |     const controls: Array<[string, Locator]> = [
+      204 |       ['button', page.getByRole('button', { name: 'Clock in' })],
+      205 |       ['link', nav.getByRole('link', { name: 'Overtime' })],
+        at <task>\base\tests\e2e\focus-ring.spec.ts:202:29
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-the-shared-focu-c7e7e-and-on-real-controls-light--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-the-shared-focu-c7e7e-and-on-real-controls-light--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-the-shared-focu-c7e7e-and-on-real-controls-light--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[17/54] [mobile] › tests\e2e\focus-ring.spec.ts:224:3 › WP5-UX-AX-02: the open label picker shows a ring on the list and on the active option (light)
+  13) [mobile] › tests\e2e\focus-ring.spec.ts:224:3 › WP5-UX-AX-02: the open label picker shows a ring on the list and on the active option (light) 
+
+    Error: label list ring rgba(28, 36, 48, 0.1) 0px 0px 0px 1px, rgba(28, 36, 48, 0.08) 0px 2px 4px 0px, rgba(28, 36, 48, 0.1) 0px 8px 24px 0px, rgba(28, 36, 48, 0.08) 0px 24px 64px 0px against its backdrop
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 3
+    Received:    1.2138968167099293
+
+      110 |   if (ring === undefined) return 0;
+      111 |   const ratio = contrast(ringOn(ring.colour, backdropOf(probe.backdrops)), backdropOf(probe.backdrops));
+    > 112 |   expect(ratio, `${name} ring ${probe.boxShadow} against its backdrop`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
+          |                                                                         ^
+      113 |   return ratio;
+      114 | }
+      115 |
+        at expectRing (<task>\base\tests\e2e\focus-ring.spec.ts:112:73)
+        at <task>\base\tests\e2e\focus-ring.spec.ts:237:23
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-02-th-4275b-on-the-active-option-light--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-02-th-4275b-on-the-active-option-light--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-02-th-4275b-on-the-active-option-light--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[18/54] [mobile] › tests\e2e\focus-ring.spec.ts:250:3 › WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (light)
+  14) [mobile] › tests\e2e\focus-ring.spec.ts:250:3 › WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (light) 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-day="2026-10-08"] [data-day-button]')
+
+
+      260 |     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      261 |     await signInPageAs(person.account, '#/timesheet');
+    > 262 |     await dayButton(page, day).click();
+          |                                ^
+      263 |     const editor = page.locator(`dialog[data-day-editor="${day}"]`);
+      264 |     await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
+      265 |     expect(await editor.evaluate((element) => element.scrollHeight > element.clientHeight), 'the editor scrolls').toBe(true);
+        at <task>\base\tests\e2e\focus-ring.spec.ts:262:32
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-03-th-4beb8-is-the-keyboard-stop-light--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-03-th-4beb8-is-the-keyboard-stop-light--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-03-th-4beb8-is-the-keyboard-stop-light--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[19/54] [mobile] › tests\e2e\focus-ring.spec.ts:278:3 › WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (light)
+  15) [mobile] › tests\e2e\focus-ring.spec.ts:278:3 › WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (light) 
+
+    Error: Show details: focused and pressed differs from pressed only
+
+    expect(received).not.toBe(expected) // Object.is equality
+
+    Expected: not "rgb(31, 95, 191) 0px 0px 0px 1px inset"
+
+      288 |       const pressedOnly = await settledShadow(toggle);
+      289 |       const probe = await focusedProbe(toggle);
+    > 290 |       expect(probe.boxShadow, `${name}: focused and pressed differs from pressed only`).not.toBe(pressedOnly);
+          |                                                                                             ^
+      291 |       const outset = parseLayers(probe.boxShadow).filter((layer) => !layer.inset && layer.spread > 0);
+      292 |       expect(outset.length, `${name} paints an outer focus ring (${probe.boxShadow})`).toBeGreaterThan(0);
+      293 |       expectRing(`pressed ${name}`, probe);
+        at <task>\base\tests\e2e\focus-ring.spec.ts:290:93
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-04-a--d656b-shows-the-focus-ring-light--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-04-a--d656b-shows-the-focus-ring-light--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-04-a--d656b-shows-the-focus-ring-light--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[20/54] [mobile] › tests\e2e\focus-ring.spec.ts:192:3 › the shared focus ring reaches 3:1 on every surface and on real controls (dark)
+  16) [mobile] › tests\e2e\focus-ring.spec.ts:192:3 › the shared focus ring reaches 3:1 on every surface and on real controls (dark) 
+
+    Error: expect(locator).toHaveAccessibleName(expected) failed
+
+    Locator: locator('[data-day] [data-day-button]').first()
+    Expected pattern: /^(Edit|View) (?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?\d{2}\/\d{2} \(\d{4}-\d{2}-\d{2}\)$/
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveAccessibleName" locator('[data-day] [data-day-button]').first() with timeout 7000ms
+      - waiting for locator('[data-day] [data-day-button]').first()
+
+
+      200 |     const nav = page.getByRole('navigation', { name: 'Main' });
+      201 |     const sheetDate = page.locator('[data-day] [data-day-button]').first();
+    > 202 |     await expect(sheetDate).toHaveAccessibleName(ANY_DAY_BUTTON_NAME);
+          |                             ^
+      203 |     const controls: Array<[string, Locator]> = [
+      204 |       ['button', page.getByRole('button', { name: 'Clock in' })],
+      205 |       ['link', nav.getByRole('link', { name: 'Overtime' })],
+        at <task>\base\tests\e2e\focus-ring.spec.ts:202:29
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-the-shared-focu-a22dd--and-on-real-controls-dark--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-the-shared-focu-a22dd--and-on-real-controls-dark--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-the-shared-focu-a22dd--and-on-real-controls-dark--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[21/54] [mobile] › tests\e2e\focus-ring.spec.ts:224:3 › WP5-UX-AX-02: the open label picker shows a ring on the list and on the active option (dark)
+  17) [mobile] › tests\e2e\focus-ring.spec.ts:224:3 › WP5-UX-AX-02: the open label picker shows a ring on the list and on the active option (dark) 
+
+    Error: label list ring rgba(4, 8, 14, 0.6) 0px 0px 0px 1px, rgba(4, 8, 14, 0.4) 0px 2px 4px 0px, rgba(4, 8, 14, 0.45) 0px 8px 24px 0px, rgba(4, 8, 14, 0.4) 0px 24px 64px 0px against its backdrop
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 3
+    Received:    1.1506499738778142
+
+      110 |   if (ring === undefined) return 0;
+      111 |   const ratio = contrast(ringOn(ring.colour, backdropOf(probe.backdrops)), backdropOf(probe.backdrops));
+    > 112 |   expect(ratio, `${name} ring ${probe.boxShadow} against its backdrop`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
+          |                                                                         ^
+      113 |   return ratio;
+      114 | }
+      115 |
+        at expectRing (<task>\base\tests\e2e\focus-ring.spec.ts:112:73)
+        at <task>\base\tests\e2e\focus-ring.spec.ts:237:23
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-02-th-68028--on-the-active-option-dark--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-02-th-68028--on-the-active-option-dark--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-02-th-68028--on-the-active-option-dark--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[22/54] [mobile] › tests\e2e\focus-ring.spec.ts:250:3 › WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (dark)
+  18) [mobile] › tests\e2e\focus-ring.spec.ts:250:3 › WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (dark) 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-day="2026-10-08"] [data-day-button]')
+
+
+      260 |     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      261 |     await signInPageAs(person.account, '#/timesheet');
+    > 262 |     await dayButton(page, day).click();
+          |                                ^
+      263 |     const editor = page.locator(`dialog[data-day-editor="${day}"]`);
+      264 |     await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
+      265 |     expect(await editor.evaluate((element) => element.scrollHeight > element.clientHeight), 'the editor scrolls').toBe(true);
+        at <task>\base\tests\e2e\focus-ring.spec.ts:262:32
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-03-th-9bdfc--is-the-keyboard-stop-dark--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-03-th-9bdfc--is-the-keyboard-stop-dark--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-03-th-9bdfc--is-the-keyboard-stop-dark--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[23/54] [mobile] › tests\e2e\focus-ring.spec.ts:278:3 › WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (dark)
+  19) [mobile] › tests\e2e\focus-ring.spec.ts:278:3 › WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (dark) 
+
+    Error: Show details: focused and pressed differs from pressed only
+
+    expect(received).not.toBe(expected) // Object.is equality
+
+    Expected: not "rgb(110, 168, 255) 0px 0px 0px 1px inset"
+
+      288 |       const pressedOnly = await settledShadow(toggle);
+      289 |       const probe = await focusedProbe(toggle);
+    > 290 |       expect(probe.boxShadow, `${name}: focused and pressed differs from pressed only`).not.toBe(pressedOnly);
+          |                                                                                             ^
+      291 |       const outset = parseLayers(probe.boxShadow).filter((layer) => !layer.inset && layer.spread > 0);
+      292 |       expect(outset.length, `${name} paints an outer focus ring (${probe.boxShadow})`).toBeGreaterThan(0);
+      293 |       expectRing(`pressed ${name}`, probe);
+        at <task>\base\tests\e2e\focus-ring.spec.ts:290:93
+
+    Error Context: ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-04-a--ba3cd--shows-the-focus-ring-dark--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-04-a--ba3cd--shows-the-focus-ring-dark--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\focus-ring-WP5-UX-AX-04-a--ba3cd--shows-the-focus-ring-dark--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[24/54] [mobile] › tests\e2e\import.spec.ts:106:1 › upload, preview with source cells, decide, confirm and commit; the same workbook is already imported
+  20) [mobile] › tests\e2e\import.spec.ts:106:1 › upload, preview with source cells, decide, confirm and commit; the same workbook is already imported 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('button', { name: 'Review and commit' })
+    Expected: focused
+    Received: inactive
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('button', { name: 'Review and commit' }) with timeout 7000ms
+      - waiting for getByRole('button', { name: 'Review and commit' })
+        18 × locator resolved to <button type="button">Review and commit</button>
+           - unexpected value "inactive"
+
+
+      173 |   await page.getByRole('button', { name: 'Back to the preview' }).click();
+      174 |   // WP5-UX-AX-08: going back returns focus to the button that opened the confirmation.
+    > 175 |   await expect(page.getByRole('button', { name: 'Review and commit' })).toBeFocused();
+          |                                                                         ^
+      176 |   expect((await person.api.call<{ imports: Array<{ state: string }> }>('GET', '/api/imports')).imports[0]?.state).toBe('preview');
+      177 |   await page.getByRole('button', { name: 'Review and commit' }).click();
+      178 |   await page.getByRole('button', { name: 'Confirm import' }).click();
+        at <task>\base\tests\e2e\import.spec.ts:175:73
+
+    Error Context: ..\tmp\timesheet-e2e-output\import-upload-preview-with-931ba-orkbook-is-already-imported-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\import-upload-preview-with-931ba-orkbook-is-already-imported-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\import-upload-preview-with-931ba-orkbook-is-already-imported-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[25/54] [mobile] › tests\e2e\import.spec.ts:205:1 › an imported period shows "Imported, unverified" with edit, sign and submit disabled
+  21) [desktop] › tests\e2e\keyboard-access.spec.ts:204:5 › WP5-UX-AX-01 on the desktop project › Shift+Tab never stops on a hidden control at 1280px: Timesheet, Settings, shared view, day editor 
+
+    Test timeout of 180000ms exceeded.
+
+    Error: locator.click: Test timeout of 180000ms exceeded.
+    Call log:
+      - waiting for locator('[data-day="2026-10-08"] [data-day-button]')
+
+
+      184 |
+      185 |   await page.goto('/#/timesheet');
+    > 186 |   await dayButton(page, world.complete).click();
+          |                                         ^
+      187 |   const editor = page.locator(`dialog[data-day-editor="${world.complete}"]`);
+      188 |   await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
+      189 |   await expect(editor.getByRole('button', { name: 'Save day fields' })).toBeVisible();
+        at walkScreens (<task>\base\tests\e2e\keyboard-access.spec.ts:186:41)
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:207:7
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--bfacd-ings-shared-view-day-editor-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--bfacd-ings-shared-view-day-editor-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--bfacd-ings-shared-view-day-editor-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[26/54] [desktop] › tests\e2e\keyboard-access.spec.ts:204:5 › WP5-UX-AX-01 on the desktop project › Shift+Tab never stops on a hidden control at 768px: Timesheet, Settings, shared view, day editor
+  22) [mobile] › tests\e2e\import.spec.ts:205:1 › an imported period shows "Imported, unverified" with edit, sign and submit disabled 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-day="2026-09-16"] [data-day-button]').and(getByRole('button', { name: /^View (?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?09\/16 \(2026-09-16\)$/ }))
+
+
+      229 |
+      230 |   // The day opens to read only, and the server refuses the same edit the disabled controls stand for.
+    > 231 |   await namedDayButton(page, layout.cacheDay, 'View').click();
+          |                                                       ^
+      232 |   await expect(page.getByRole('dialog')).toBeVisible();
+      233 |   await expect(page.getByRole('button', { name: 'Add session' })).toHaveCount(0);
+      234 |   await page.keyboard.press('Escape');
+        at <task>\base\tests\e2e\import.spec.ts:231:55
+
+    Error Context: ..\tmp\timesheet-e2e-output\import-an-imported-period--bf1f9-it-sign-and-submit-disabled-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\import-an-imported-period--bf1f9-it-sign-and-submit-disabled-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\import-an-imported-period--bf1f9-it-sign-and-submit-disabled-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[27/54] [mobile] › tests\e2e\import.spec.ts:253:1 › another user cannot see the batch, and an administrator cannot read it either
+[28/54] [mobile] › tests\e2e\import.spec.ts:269:1 › the upload refuses the wrong file in words, before and after it is sent
+[29/54] [mobile] › tests\e2e\import.spec.ts:292:1 › the opening balance: validation, confirmation, a repeat that changes nothing, and a reasoned correction
+  23) [mobile] › tests\e2e\import.spec.ts:292:1 › the opening balance: validation, confirmation, a repeat that changes nothing, and a reasoned correction 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('region', { name: 'Opening OT balance' }).getByRole('button', { name: 'Correct the opening balance' })
+    Expected: focused
+    Received: inactive
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('region', { name: 'Opening OT balance' }).getByRole('button', { name: 'Correct the opening balance' }) with timeout 7000ms
+      - waiting for getByRole('region', { name: 'Opening OT balance' }).getByRole('button', { name: 'Correct the opening balance' })
+        18 × locator resolved to <button type="button" class="secondary">Correct the opening balance</button>
+           - unexpected value "inactive"
+
+
+      353 |   await panel.getByRole('button', { name: 'Correct the opening balance' }).click();
+      354 |   await panel.getByRole('form', { name: 'Correct the opening balance' }).getByRole('button', { name: 'Cancel', exact: true }).click();
+    > 355 |   await expect(panel.getByRole('button', { name: 'Correct the opening balance' })).toBeFocused();
+          |                                                                                    ^
+      356 |
+      357 |   // The correction needs a reason and evidence, shows what changes, and posts one correction entry.
+      358 |   await panel.getByRole('button', { name: 'Correct the opening balance' }).click();
+        at <task>\base\tests\e2e\import.spec.ts:355:84
+
+    Error Context: ..\tmp\timesheet-e2e-output\import-the-opening-balance-5fe7d-g-and-a-reasoned-correction-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\import-the-opening-balance-5fe7d-g-and-a-reasoned-correction-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\import-the-opening-balance-5fe7d-g-and-a-reasoned-correction-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[30/54] [mobile] › tests\e2e\import.spec.ts:396:1 › the Import entry is for the signed-in person and is not part of the administrator views
+[31/54] [mobile] › tests\e2e\keyboard-access.spec.ts:204:5 › WP5-UX-AX-01 on the desktop project › Shift+Tab never stops on a hidden control at 1280px: Timesheet, Settings, shared view, day editor
+[32/54] [mobile] › tests\e2e\keyboard-access.spec.ts:204:5 › WP5-UX-AX-01 on the desktop project › Shift+Tab never stops on a hidden control at 768px: Timesheet, Settings, shared view, day editor
+[33/54] [mobile] › tests\e2e\keyboard-access.spec.ts:218:5 › WP5-UX-AX-01 on the mobile project › Shift+Tab never stops on a hidden control at 390px: Timesheet, Settings, shared view, day editor
+  24) [desktop] › tests\e2e\keyboard-access.spec.ts:204:5 › WP5-UX-AX-01 on the desktop project › Shift+Tab never stops on a hidden control at 768px: Timesheet, Settings, shared view, day editor 
+
+    Test timeout of 180000ms exceeded.
+
+    Error: locator.click: Test timeout of 180000ms exceeded.
+    Call log:
+      - waiting for locator('[data-day="2026-10-08"] [data-day-button]')
+
+
+      184 |
+      185 |   await page.goto('/#/timesheet');
+    > 186 |   await dayButton(page, world.complete).click();
+          |                                         ^
+      187 |   const editor = page.locator(`dialog[data-day-editor="${world.complete}"]`);
+      188 |   await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
+      189 |   await expect(editor.getByRole('button', { name: 'Save day fields' })).toBeVisible();
+        at walkScreens (<task>\base\tests\e2e\keyboard-access.spec.ts:186:41)
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:207:7
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--b85a9-ings-shared-view-day-editor-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--b85a9-ings-shared-view-day-editor-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--b85a9-ings-shared-view-day-editor-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[34/54] [desktop] › tests\e2e\keyboard-access.spec.ts:218:5 › WP5-UX-AX-01 on the mobile project › Shift+Tab never stops on a hidden control at 390px: Timesheet, Settings, shared view, day editor
+[35/54] [desktop] › tests\e2e\keyboard-access.spec.ts:218:5 › WP5-UX-AX-01 on the mobile project › Shift+Tab never stops on a hidden control at 320px: Timesheet, Settings, shared view, day editor
+[36/54] [desktop] › tests\e2e\keyboard-access.spec.ts:228:1 › WP5-UX-AX-05: each day button and "End share" carry their visible text in the accessible name
+  25) [desktop] › tests\e2e\keyboard-access.spec.ts:228:1 › WP5-UX-AX-05: each day button and "End share" carry their visible text in the accessible name 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-day="2026-09-28"] [data-day-button]')
+    Expected: 1
+    Received: 0
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveCount" locator('[data-day="2026-09-28"] [data-day-button]') with timeout 7000ms
+      - waiting for locator('[data-day="2026-09-28"] [data-day-button]')
+        18 × locator resolved to 0 elements
+           - unexpected value "0"
+
+
+      235 |     for (const date of dates) {
+      236 |       const button = dayButton(page, date);
+    > 237 |       await expect(button).toHaveCount(1);
+          |                            ^
+      238 |       const visible = (await button.innerText()).replace(/\s+/g, ' ').trim();
+      239 |       await expect(button, `the day button of ${date}`).toHaveAccessibleName(`${verb} ${visible} (${date})`);
+      240 |       await expect(button).toHaveAccessibleName(dayButtonName(verb, date));
+        at check (<task>\base\tests\e2e\keyboard-access.spec.ts:237:28)
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:244:3
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--22134-text-in-the-accessible-name-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--22134-text-in-the-accessible-name-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--22134-text-in-the-accessible-name-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[37/54] [desktop] › tests\e2e\keyboard-access.spec.ts:262:1 › WP5-UX-AX-06: the "Shared with me" choice changes nothing until Open is pressed
+  26) [mobile] › tests\e2e\keyboard-access.spec.ts:218:5 › WP5-UX-AX-01 on the mobile project › Shift+Tab never stops on a hidden control at 390px: Timesheet, Settings, shared view, day editor 
+
+    Test timeout of 180000ms exceeded.
+
+    Error: locator.click: Test timeout of 180000ms exceeded.
+    Call log:
+      - waiting for locator('[data-day="2026-10-08"] [data-day-button]')
+
+
+      184 |
+      185 |   await page.goto('/#/timesheet');
+    > 186 |   await dayButton(page, world.complete).click();
+          |                                         ^
+      187 |   const editor = page.locator(`dialog[data-day-editor="${world.complete}"]`);
+      188 |   await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
+      189 |   await expect(editor.getByRole('button', { name: 'Save day fields' })).toBeVisible();
+        at walkScreens (<task>\base\tests\e2e\keyboard-access.spec.ts:186:41)
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:221:7
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--de308-ings-shared-view-day-editor-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--de308-ings-shared-view-day-editor-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--de308-ings-shared-view-day-editor-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[38/54] [mobile] › tests\e2e\keyboard-access.spec.ts:218:5 › WP5-UX-AX-01 on the mobile project › Shift+Tab never stops on a hidden control at 320px: Timesheet, Settings, shared view, day editor
+  27) [desktop] › tests\e2e\keyboard-access.spec.ts:262:1 › WP5-UX-AX-06: the "Shared with me" choice changes nothing until Open is pressed 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /#\/timesheet$/
+    Received string:  "http://127.0.0.1:51254/#/shared/051e0040-15a9-4ca7-92d6-664165b8d212/timesheet"
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 7000ms
+        18 × locator resolved to <html lang="en">…</html>
+           - unexpected value "http://127.0.0.1:51254/#/shared/051e0040-15a9-4ca7-92d6-664165b8d212/timesheet"
+
+
+      271 |   await expect(select).toHaveValue(ownerId);
+      272 |   await page.waitForTimeout(500);
+    > 273 |   await expect(page).toHaveURL(/#\/timesheet$/);
+          |                      ^
+      274 |   await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+      275 |   await expect(page.locator('[data-share-bar]')).toHaveCount(0);
+      276 |
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:273:22
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--cf6a3-thing-until-Open-is-pressed-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--cf6a3-thing-until-Open-is-pressed-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--cf6a3-thing-until-Open-is-pressed-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[39/54] [desktop] › tests\e2e\keyboard-access.spec.ts:297:1 › WP5-UX-AX-07: a failed sign-in is an alert and a share form problem is a status message
+  28) [desktop] › tests\e2e\keyboard-access.spec.ts:297:1 › WP5-UX-AX-07: a failed sign-in is an alert and a share form problem is a status message 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: getByRole('alert')
+    Expected: "Email or password is incorrect"
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" getByRole('alert') with timeout 7000ms
+      - waiting for getByRole('alert')
+
+
+      300 |   await page.getByLabel('Password').fill('wrong-synthetic-password');
+      301 |   await page.getByRole('button', { name: 'Sign in' }).click();
+    > 302 |   await expect(page.getByRole('alert')).toHaveText('Email or password is incorrect');
+          |                                         ^
+      303 |
+      304 |   const person = await newPerson(adminSeed, builtServer, { displayName: ME, signature: 'none' });
+      305 |   await signInPageAs(person.account, '#/settings');
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:302:41
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--6a842-problem-is-a-status-message-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--6a842-problem-is-a-status-message-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--6a842-problem-is-a-status-message-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[40/54] [desktop] › tests\e2e\keyboard-access.spec.ts:313:1 › WP5-UX-AX-08: the batch review returns focus to "Preview changes" and moves focus to each step heading
+  29) [desktop] › tests\e2e\keyboard-access.spec.ts:313:1 › WP5-UX-AX-08: the batch review returns focus to "Preview changes" and moves focus to each step heading 
+
+    Error: after Escape
+
+    expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('button', { name: 'Preview changes' })
+    Expected: focused
+    Received: inactive
+    Timeout:  7000ms
+
+    Call log:
+      - after Escape getByRole('button', { name: 'Preview changes' }) with timeout 7000ms
+      - waiting for getByRole('button', { name: 'Preview changes' })
+        18 × locator resolved to <button type="button">Preview changes</button>
+           - unexpected value "inactive"
+
+
+      330 |   await page.keyboard.press('Escape');
+      331 |   await expect(dialog).toHaveCount(0);
+    > 332 |   await expect(preview, 'after Escape').toBeFocused();
+          |                                         ^
+      333 |
+      334 |   await openReview();
+      335 |   await dialog.getByRole('button', { name: 'Cancel', exact: true }).focus();
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:332:41
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--bb5b9--focus-to-each-step-heading-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--bb5b9--focus-to-each-step-heading-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--bb5b9--focus-to-each-step-heading-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[41/54] [desktop] › tests\e2e\keyboard-access.spec.ts:356:1 › WP5-UX-AX-08: the sharing rows in Settings return focus to the button that opened a confirmation or a change
+  30) [desktop] › tests\e2e\keyboard-access.spec.ts:356:1 › WP5-UX-AX-08: the sharing rows in Settings return focus to the button that opened a confirmation or a change 
+
+    Error: Escape returns focus
+
+    expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('list', { name: 'Shares I gave' }).getByRole('button', { name: /^End shar(e|ing) with / })
+    Expected: focused
+    Received: inactive
+    Timeout:  7000ms
+
+    Call log:
+      - Escape returns focus getByRole('list', { name: 'Shares I gave' }).getByRole('button', { name: /^End shar(e|ing) with / }) with timeout 7000ms
+      - waiting for getByRole('list', { name: 'Shares I gave' }).getByRole('button', { name: /^End shar(e|ing) with / })
+        18 × locator resolved to <button type="button" class="secondary" aria-label="End sharing with Synthetic Sharing Owner">End share</button>
+           - unexpected value "inactive"
+
+
+      385 |     }
+      386 |     await expect(confirm).toHaveCount(0);
+    > 387 |     await expect(opener, `${how} returns focus`).toBeFocused();
+          |                                                  ^
+      388 |   }
+      389 |
+      390 |   await change.focus();
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:387:50
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--8ac5a--a-confirmation-or-a-change-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--8ac5a--a-confirmation-or-a-change-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--8ac5a--a-confirmation-or-a-change-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[42/54] [desktop] › tests\e2e\keyboard-access.spec.ts:405:3 › WP5-UX-AX-09: the "Complete" status text reaches 4.5:1 on a selected batch row and on every surface (light)
+  31) [desktop] › tests\e2e\keyboard-access.spec.ts:405:3 › WP5-UX-AX-09: the "Complete" status text reaches 4.5:1 on a selected batch row and on every surface (light) 
+
+    Error: "Complete" rgb(26, 127, 75) on ["rgba(0, 0, 0, 0)","rgba(0, 0, 0, 0)","rgba(31, 95, 191, 0.09)","rgba(0, 0, 0, 0)"]
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 4.5
+    Received:    4.408397317274224
+
+      425 |     const background = composite(rendered.backdrops);
+      426 |     const ratio = contrast(over(parseColour(rendered.colour), background), background);
+    > 427 |     expect(ratio, `"Complete" ${rendered.colour} on ${JSON.stringify(rendered.backdrops.slice(0, 4))}`).toBeGreaterThanOrEqual(4.5);
+          |                                                                                                         ^
+      428 |
+      429 |     // The status token against every surface it can be drawn on, a selected row included.
+      430 |     const tokens = await page.locator('body').evaluate((body) => {
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:427:105
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--0d125-and-on-every-surface-light--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--0d125-and-on-every-surface-light--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--0d125-and-on-every-surface-light--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[43/54] [desktop] › tests\e2e\keyboard-access.spec.ts:405:3 › WP5-UX-AX-09: the "Complete" status text reaches 4.5:1 on a selected batch row and on every surface (dark)
+[desktop] › tests\e2e\keyboard-access.spec.ts:405:3 › WP5-UX-AX-09: the "Complete" status text reaches 4.5:1 on a selected batch row and on every surface (dark)
+AX-09 dark: rendered 6.78; --ok {"--card":8.71,"--day-selected over --card":6.78,"--bg":9.65,"--day-selected over --bg":7.65,"--off":7.98,"--day-selected over --off":6.2,"--sheet-head":7.7,"--day-selected over --sheet-head":5.98,"--sheet-head-off":6.97,"--day-selected over --sheet-head-off":5.43,"--day-nonworking":8.21,"--day-selected over --day-nonworking":6.37,"--attention-bg":7.63,"--day-selected over --attention-bg":6.03}
+
+[44/54] [desktop] › tests\e2e\keyboard-access.spec.ts:472:5 › WP5-UX-AX-10 on the mobile project › in batch mode at 390px each day button stays inside its cell and clear of the label
+[45/54] [desktop] › tests\e2e\keyboard-access.spec.ts:472:5 › WP5-UX-AX-10 on the mobile project › in batch mode at 320px each day button stays inside its cell and clear of the label
+  32) [mobile] › tests\e2e\keyboard-access.spec.ts:218:5 › WP5-UX-AX-01 on the mobile project › Shift+Tab never stops on a hidden control at 320px: Timesheet, Settings, shared view, day editor 
+
+    Test timeout of 180000ms exceeded.
+
+    Error: locator.click: Test timeout of 180000ms exceeded.
+    Call log:
+      - waiting for locator('[data-day="2026-10-08"] [data-day-button]')
+
+
+      184 |
+      185 |   await page.goto('/#/timesheet');
+    > 186 |   await dayButton(page, world.complete).click();
+          |                                         ^
+      187 |   const editor = page.locator(`dialog[data-day-editor="${world.complete}"]`);
+      188 |   await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
+      189 |   await expect(editor.getByRole('button', { name: 'Save day fields' })).toBeVisible();
+        at walkScreens (<task>\base\tests\e2e\keyboard-access.spec.ts:186:41)
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:221:7
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--ce1c5-ings-shared-view-day-editor-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--ce1c5-ings-shared-view-day-editor-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--ce1c5-ings-shared-view-day-editor-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[46/54] [mobile] › tests\e2e\keyboard-access.spec.ts:228:1 › WP5-UX-AX-05: each day button and "End share" carry their visible text in the accessible name
+  33) [mobile] › tests\e2e\keyboard-access.spec.ts:228:1 › WP5-UX-AX-05: each day button and "End share" carry their visible text in the accessible name 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-day="2026-09-28"] [data-day-button]')
+    Expected: 1
+    Received: 0
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveCount" locator('[data-day="2026-09-28"] [data-day-button]') with timeout 7000ms
+      - waiting for locator('[data-day="2026-09-28"] [data-day-button]')
+        18 × locator resolved to 0 elements
+           - unexpected value "0"
+
+
+      235 |     for (const date of dates) {
+      236 |       const button = dayButton(page, date);
+    > 237 |       await expect(button).toHaveCount(1);
+          |                            ^
+      238 |       const visible = (await button.innerText()).replace(/\s+/g, ' ').trim();
+      239 |       await expect(button, `the day button of ${date}`).toHaveAccessibleName(`${verb} ${visible} (${date})`);
+      240 |       await expect(button).toHaveAccessibleName(dayButtonName(verb, date));
+        at check (<task>\base\tests\e2e\keyboard-access.spec.ts:237:28)
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:244:3
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--22134-text-in-the-accessible-name-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--22134-text-in-the-accessible-name-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--22134-text-in-the-accessible-name-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[47/54] [mobile] › tests\e2e\keyboard-access.spec.ts:262:1 › WP5-UX-AX-06: the "Shared with me" choice changes nothing until Open is pressed
+  34) [mobile] › tests\e2e\keyboard-access.spec.ts:262:1 › WP5-UX-AX-06: the "Shared with me" choice changes nothing until Open is pressed 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /#\/timesheet$/
+    Received string:  "http://127.0.0.1:58004/#/shared/dc50d552-69f4-4a31-a389-78a0f1166a0d/timesheet"
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 7000ms
+        18 × locator resolved to <html lang="en">…</html>
+           - unexpected value "http://127.0.0.1:58004/#/shared/dc50d552-69f4-4a31-a389-78a0f1166a0d/timesheet"
+
+
+      271 |   await expect(select).toHaveValue(ownerId);
+      272 |   await page.waitForTimeout(500);
+    > 273 |   await expect(page).toHaveURL(/#\/timesheet$/);
+          |                      ^
+      274 |   await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+      275 |   await expect(page.locator('[data-share-bar]')).toHaveCount(0);
+      276 |
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:273:22
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--cf6a3-thing-until-Open-is-pressed-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--cf6a3-thing-until-Open-is-pressed-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--cf6a3-thing-until-Open-is-pressed-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[48/54] [mobile] › tests\e2e\keyboard-access.spec.ts:297:1 › WP5-UX-AX-07: a failed sign-in is an alert and a share form problem is a status message
+  35) [mobile] › tests\e2e\keyboard-access.spec.ts:297:1 › WP5-UX-AX-07: a failed sign-in is an alert and a share form problem is a status message 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: getByRole('alert')
+    Expected: "Email or password is incorrect"
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" getByRole('alert') with timeout 7000ms
+      - waiting for getByRole('alert')
+
+
+      300 |   await page.getByLabel('Password').fill('wrong-synthetic-password');
+      301 |   await page.getByRole('button', { name: 'Sign in' }).click();
+    > 302 |   await expect(page.getByRole('alert')).toHaveText('Email or password is incorrect');
+          |                                         ^
+      303 |
+      304 |   const person = await newPerson(adminSeed, builtServer, { displayName: ME, signature: 'none' });
+      305 |   await signInPageAs(person.account, '#/settings');
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:302:41
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--6a842-problem-is-a-status-message-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--6a842-problem-is-a-status-message-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--6a842-problem-is-a-status-message-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[49/54] [mobile] › tests\e2e\keyboard-access.spec.ts:313:1 › WP5-UX-AX-08: the batch review returns focus to "Preview changes" and moves focus to each step heading
+  36) [mobile] › tests\e2e\keyboard-access.spec.ts:313:1 › WP5-UX-AX-08: the batch review returns focus to "Preview changes" and moves focus to each step heading 
+
+    Error: after Escape
+
+    expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('button', { name: 'Preview changes' })
+    Expected: focused
+    Received: inactive
+    Timeout:  7000ms
+
+    Call log:
+      - after Escape getByRole('button', { name: 'Preview changes' }) with timeout 7000ms
+      - waiting for getByRole('button', { name: 'Preview changes' })
+        18 × locator resolved to <button type="button">Preview changes</button>
+           - unexpected value "inactive"
+
+
+      330 |   await page.keyboard.press('Escape');
+      331 |   await expect(dialog).toHaveCount(0);
+    > 332 |   await expect(preview, 'after Escape').toBeFocused();
+          |                                         ^
+      333 |
+      334 |   await openReview();
+      335 |   await dialog.getByRole('button', { name: 'Cancel', exact: true }).focus();
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:332:41
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--bb5b9--focus-to-each-step-heading-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--bb5b9--focus-to-each-step-heading-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--bb5b9--focus-to-each-step-heading-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[50/54] [mobile] › tests\e2e\keyboard-access.spec.ts:356:1 › WP5-UX-AX-08: the sharing rows in Settings return focus to the button that opened a confirmation or a change
+  37) [mobile] › tests\e2e\keyboard-access.spec.ts:356:1 › WP5-UX-AX-08: the sharing rows in Settings return focus to the button that opened a confirmation or a change 
+
+    Error: Escape returns focus
+
+    expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('list', { name: 'Shares I gave' }).getByRole('button', { name: /^End shar(e|ing) with / })
+    Expected: focused
+    Received: inactive
+    Timeout:  7000ms
+
+    Call log:
+      - Escape returns focus getByRole('list', { name: 'Shares I gave' }).getByRole('button', { name: /^End shar(e|ing) with / }) with timeout 7000ms
+      - waiting for getByRole('list', { name: 'Shares I gave' }).getByRole('button', { name: /^End shar(e|ing) with / })
+        18 × locator resolved to <button type="button" class="secondary" aria-label="End sharing with Synthetic Sharing Owner">End share</button>
+           - unexpected value "inactive"
+
+
+      385 |     }
+      386 |     await expect(confirm).toHaveCount(0);
+    > 387 |     await expect(opener, `${how} returns focus`).toBeFocused();
+          |                                                  ^
+      388 |   }
+      389 |
+      390 |   await change.focus();
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:387:50
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--8ac5a--a-confirmation-or-a-change-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--8ac5a--a-confirmation-or-a-change-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--8ac5a--a-confirmation-or-a-change-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[51/54] [mobile] › tests\e2e\keyboard-access.spec.ts:405:3 › WP5-UX-AX-09: the "Complete" status text reaches 4.5:1 on a selected batch row and on every surface (light)
+  38) [mobile] › tests\e2e\keyboard-access.spec.ts:405:3 › WP5-UX-AX-09: the "Complete" status text reaches 4.5:1 on a selected batch row and on every surface (light) 
+
+    Error: "Complete" rgb(26, 127, 75) on ["rgba(0, 0, 0, 0)","rgba(31, 95, 191, 0.09)","rgba(0, 0, 0, 0)","rgba(0, 0, 0, 0)"]
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 4.5
+    Received:    4.408397317274224
+
+      425 |     const background = composite(rendered.backdrops);
+      426 |     const ratio = contrast(over(parseColour(rendered.colour), background), background);
+    > 427 |     expect(ratio, `"Complete" ${rendered.colour} on ${JSON.stringify(rendered.backdrops.slice(0, 4))}`).toBeGreaterThanOrEqual(4.5);
+          |                                                                                                         ^
+      428 |
+      429 |     // The status token against every surface it can be drawn on, a selected row included.
+      430 |     const tokens = await page.locator('body').evaluate((body) => {
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:427:105
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--0d125-and-on-every-surface-light--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--0d125-and-on-every-surface-light--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--0d125-and-on-every-surface-light--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[52/54] [mobile] › tests\e2e\keyboard-access.spec.ts:405:3 › WP5-UX-AX-09: the "Complete" status text reaches 4.5:1 on a selected batch row and on every surface (dark)
+[mobile] › tests\e2e\keyboard-access.spec.ts:405:3 › WP5-UX-AX-09: the "Complete" status text reaches 4.5:1 on a selected batch row and on every surface (dark)
+AX-09 dark: rendered 6.78; --ok {"--card":8.71,"--day-selected over --card":6.78,"--bg":9.65,"--day-selected over --bg":7.65,"--off":7.98,"--day-selected over --off":6.2,"--sheet-head":7.7,"--day-selected over --sheet-head":5.98,"--sheet-head-off":6.97,"--day-selected over --sheet-head-off":5.43,"--day-nonworking":8.21,"--day-selected over --day-nonworking":6.37,"--attention-bg":7.63,"--day-selected over --attention-bg":6.03}
+
+[53/54] [mobile] › tests\e2e\keyboard-access.spec.ts:472:5 › WP5-UX-AX-10 on the mobile project › in batch mode at 390px each day button stays inside its cell and clear of the label
+  39) [mobile] › tests\e2e\keyboard-access.spec.ts:472:5 › WP5-UX-AX-10 on the mobile project › in batch mode at 390px each day button stays inside its cell and clear of the label 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 16
+
+    - Array []
+    + Array [
+    +   "2026-09-28: missing part",
+    +   "2026-09-29: missing part",
+    +   "2026-09-30: missing part",
+    +   "2026-10-01: missing part",
+    +   "2026-10-02: missing part",
+    +   "2026-10-03: missing part",
+    +   "2026-10-04: missing part",
+    +   "2026-10-05: missing part",
+    +   "2026-10-06: missing part",
+    +   "2026-10-07: missing part",
+    +   "2026-10-08: missing part",
+    +   "2026-10-09: missing part",
+    +   "2026-10-10: missing part",
+    +   "2026-10-11: missing part",
+    + ]
+
+      497 |         if (pick.width < 44 || pick.height < 44) problems.push(`${day}: selection target ${pick.width}x${pick.height}`);
+      498 |       }
+    > 499 |       expect(problems).toEqual([]);
+          |                        ^
+      500 |       const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth }));
+      501 |       expect(widths.scroll, 'no sideways scroll').toBeLessThanOrEqual(widths.inner);
+      502 |     });
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:499:24
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--56c5a-cell-and-clear-of-the-label-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--56c5a-cell-and-clear-of-the-label-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--56c5a-cell-and-clear-of-the-label-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[54/54] [mobile] › tests\e2e\keyboard-access.spec.ts:472:5 › WP5-UX-AX-10 on the mobile project › in batch mode at 320px each day button stays inside its cell and clear of the label
+  40) [mobile] › tests\e2e\keyboard-access.spec.ts:472:5 › WP5-UX-AX-10 on the mobile project › in batch mode at 320px each day button stays inside its cell and clear of the label 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 16
+
+    - Array []
+    + Array [
+    +   "2026-09-28: missing part",
+    +   "2026-09-29: missing part",
+    +   "2026-09-30: missing part",
+    +   "2026-10-01: missing part",
+    +   "2026-10-02: missing part",
+    +   "2026-10-03: missing part",
+    +   "2026-10-04: missing part",
+    +   "2026-10-05: missing part",
+    +   "2026-10-06: missing part",
+    +   "2026-10-07: missing part",
+    +   "2026-10-08: missing part",
+    +   "2026-10-09: missing part",
+    +   "2026-10-10: missing part",
+    +   "2026-10-11: missing part",
+    + ]
+
+      497 |         if (pick.width < 44 || pick.height < 44) problems.push(`${day}: selection target ${pick.width}x${pick.height}`);
+      498 |       }
+    > 499 |       expect(problems).toEqual([]);
+          |                        ^
+      500 |       const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth }));
+      501 |       expect(widths.scroll, 'no sideways scroll').toBeLessThanOrEqual(widths.inner);
+      502 |     });
+        at <task>\base\tests\e2e\keyboard-access.spec.ts:499:24
+
+    Error Context: ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--94db0-cell-and-clear-of-the-label-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--94db0-cell-and-clear-of-the-label-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\keyboard-access-WP5-UX-AX--94db0-cell-and-clear-of-the-label-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  40 failed
+    [desktop] › tests\e2e\focus-ring.spec.ts:192:3 › the shared focus ring reaches 3:1 on every surface and on real controls (light) 
+    [desktop] › tests\e2e\focus-ring.spec.ts:224:3 › WP5-UX-AX-02: the open label picker shows a ring on the list and on the active option (light) 
+    [desktop] › tests\e2e\focus-ring.spec.ts:250:3 › WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (light) 
+    [desktop] › tests\e2e\focus-ring.spec.ts:278:3 › WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (light) 
+    [desktop] › tests\e2e\focus-ring.spec.ts:192:3 › the shared focus ring reaches 3:1 on every surface and on real controls (dark) 
+    [desktop] › tests\e2e\focus-ring.spec.ts:224:3 › WP5-UX-AX-02: the open label picker shows a ring on the list and on the active option (dark) 
+    [desktop] › tests\e2e\focus-ring.spec.ts:250:3 › WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (dark) 
+    [desktop] › tests\e2e\focus-ring.spec.ts:278:3 › WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (dark) 
+    [desktop] › tests\e2e\import.spec.ts:106:1 › upload, preview with source cells, decide, confirm and commit; the same workbook is already imported 
+    [desktop] › tests\e2e\import.spec.ts:205:1 › an imported period shows "Imported, unverified" with edit, sign and submit disabled 
+    [desktop] › tests\e2e\import.spec.ts:292:1 › the opening balance: validation, confirmation, a repeat that changes nothing, and a reasoned correction 
+    [desktop] › tests\e2e\keyboard-access.spec.ts:204:5 › WP5-UX-AX-01 on the desktop project › Shift+Tab never stops on a hidden control at 1280px: Timesheet, Settings, shared view, day editor 
+    [desktop] › tests\e2e\keyboard-access.spec.ts:204:5 › WP5-UX-AX-01 on the desktop project › Shift+Tab never stops on a hidden control at 768px: Timesheet, Settings, shared view, day editor 
+    [desktop] › tests\e2e\keyboard-access.spec.ts:228:1 › WP5-UX-AX-05: each day button and "End share" carry their visible text in the accessible name 
+    [desktop] › tests\e2e\keyboard-access.spec.ts:262:1 › WP5-UX-AX-06: the "Shared with me" choice changes nothing until Open is pressed 
+    [desktop] › tests\e2e\keyboard-access.spec.ts:297:1 › WP5-UX-AX-07: a failed sign-in is an alert and a share form problem is a status message 
+    [desktop] › tests\e2e\keyboard-access.spec.ts:313:1 › WP5-UX-AX-08: the batch review returns focus to "Preview changes" and moves focus to each step heading 
+    [desktop] › tests\e2e\keyboard-access.spec.ts:356:1 › WP5-UX-AX-08: the sharing rows in Settings return focus to the button that opened a confirmation or a change 
+    [desktop] › tests\e2e\keyboard-access.spec.ts:405:3 › WP5-UX-AX-09: the "Complete" status text reaches 4.5:1 on a selected batch row and on every surface (light) 
+    [mobile] › tests\e2e\focus-ring.spec.ts:192:3 › the shared focus ring reaches 3:1 on every surface and on real controls (light) 
+    [mobile] › tests\e2e\focus-ring.spec.ts:224:3 › WP5-UX-AX-02: the open label picker shows a ring on the list and on the active option (light) 
+    [mobile] › tests\e2e\focus-ring.spec.ts:250:3 › WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (light) 
+    [mobile] › tests\e2e\focus-ring.spec.ts:278:3 › WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (light) 
+    [mobile] › tests\e2e\focus-ring.spec.ts:192:3 › the shared focus ring reaches 3:1 on every surface and on real controls (dark) 
+    [mobile] › tests\e2e\focus-ring.spec.ts:224:3 › WP5-UX-AX-02: the open label picker shows a ring on the list and on the active option (dark) 
+    [mobile] › tests\e2e\focus-ring.spec.ts:250:3 › WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (dark) 
+    [mobile] › tests\e2e\focus-ring.spec.ts:278:3 › WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (dark) 
+    [mobile] › tests\e2e\import.spec.ts:106:1 › upload, preview with source cells, decide, confirm and commit; the same workbook is already imported 
+    [mobile] › tests\e2e\import.spec.ts:205:1 › an imported period shows "Imported, unverified" with edit, sign and submit disabled 
+    [mobile] › tests\e2e\import.spec.ts:292:1 › the opening balance: validation, confirmation, a repeat that changes nothing, and a reasoned correction 
+    [mobile] › tests\e2e\keyboard-access.spec.ts:218:5 › WP5-UX-AX-01 on the mobile project › Shift+Tab never stops on a hidden control at 390px: Timesheet, Settings, shared view, day editor 
+    [mobile] › tests\e2e\keyboard-access.spec.ts:218:5 › WP5-UX-AX-01 on the mobile project › Shift+Tab never stops on a hidden control at 320px: Timesheet, Settings, shared view, day editor 
+    [mobile] › tests\e2e\keyboard-access.spec.ts:228:1 › WP5-UX-AX-05: each day button and "End share" carry their visible text in the accessible name 
+    [mobile] › tests\e2e\keyboard-access.spec.ts:262:1 › WP5-UX-AX-06: the "Shared with me" choice changes nothing until Open is pressed 
+    [mobile] › tests\e2e\keyboard-access.spec.ts:297:1 › WP5-UX-AX-07: a failed sign-in is an alert and a share form problem is a status message 
+    [mobile] › tests\e2e\keyboard-access.spec.ts:313:1 › WP5-UX-AX-08: the batch review returns focus to "Preview changes" and moves focus to each step heading 
+    [mobile] › tests\e2e\keyboard-access.spec.ts:356:1 › WP5-UX-AX-08: the sharing rows in Settings return focus to the button that opened a confirmation or a change 
+    [mobile] › tests\e2e\keyboard-access.spec.ts:405:3 › WP5-UX-AX-09: the "Complete" status text reaches 4.5:1 on a selected batch row and on every surface (light) 
+    [mobile] › tests\e2e\keyboard-access.spec.ts:472:5 › WP5-UX-AX-10 on the mobile project › in batch mode at 390px each day button stays inside its cell and clear of the label 
+    [mobile] › tests\e2e\keyboard-access.spec.ts:472:5 › WP5-UX-AX-10 on the mobile project › in batch mode at 320px each day button stays inside its cell and clear of the label 
+  6 skipped
+  8 passed (11.5m)
+exit=1
+2026-10-10T01:33:33Z

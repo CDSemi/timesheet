@@ -1,0 +1,1521 @@
+import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { closeSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { inflateSync } from 'node:zlib';
+import { type Browser, type BrowserContext, type Locator, type Page, test as base, expect } from '@playwright/test';
+import { newPerson, SeedClient } from '../tests/e2e/fixtures.ts';
+
+/*
+ * WP5-UX-A11Y-SWEEP diagnostic probe (planner-written, synthetic data only, never part of the source).
+ * axe-core is not installed in node_modules, so this probe implements the checks it needs itself:
+ *   - per state, viewport and theme: text contrast (1.4.3), names/roles from the accessibility tree
+ *     (4.1.2), ARIA id references, focusables under aria-hidden, nested interactive controls, target
+ *     size with the spacing exception (2.5.8), reflow (1.4.10), headings and landmarks;
+ *   - keyboard walks with real Tab / Shift+Tab: focus-visible, the rendered ring against the adjacent
+ *     colour (1.4.11 / 2.4.7; focused vs. blurred clip, as in WP5-UX-AUDIT-B5), occlusion of the focused
+ *     control by other author content (2.4.11, 5x5 elementFromPoint grid), order (2.4.3);
+ *   - dialogs and popups: focus on open, trap, Escape, focus return; label picker arrows.
+ * Servers: built dist/ of this export on ports 48240 (main) and 48241 (first-time setup), DATA_DIR and
+ * DATABASE_PATH inside the task folder, stopped through the child handle.
+ */
+
+const REPO = resolve(import.meta.dirname, '..');
+const TASK = process.env.SWEEP_TASK ?? resolve(REPO, '..');
+const OUT = join(TASK, 'raw');
+const SHOTS = join(TASK, 'shots');
+const WORK = join(TASK, 'work');
+const TAG = process.env.SWEEP_TAG ?? 'r1';
+const PORT = Number(process.env.SWEEP_PORT ?? '48240');
+const ONLY_VP = process.env.SWEEP_VP ?? '';
+const ONLY_THEME = process.env.SWEEP_THEME ?? '';
+const WALK_MAX = Number(process.env.SWEEP_WALK_MAX ?? '160');
+for (const dir of [OUT, SHOTS, WORK]) mkdirSync(dir, { recursive: true });
+
+function record(name: string, data: unknown) {
+  writeFileSync(join(OUT, `${TAG}-${name}.json`), `${JSON.stringify(data, null, 1)}\n`);
+}
+function shotPath(name: string): string {
+  if (!name.endsWith('-synthetic.png')) throw new Error('screenshot names end in -synthetic.png');
+  return join(SHOTS, `${TAG}-${name}`);
+}
+
+/* ---- Servers --------------------------------------------------------------------------------------- */
+
+interface Creds {
+  email: string;
+  password: string;
+}
+interface World {
+  origin: string;
+  setupOrigin: string;
+  admin: Creds;
+  a: Creds & { id: string; name: string };
+  b: { id: string; name: string };
+  d0: string;
+  d1: string;
+  d2: string;
+  payrollDate: string;
+}
+
+async function waitHealthy(origin: string, child: ChildProcess) {
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    if (child.exitCode !== null) throw new Error(`server exited early with ${child.exitCode}`);
+    try {
+      if ((await fetch(`${origin}/api/health`)).ok) return;
+    } catch {
+      // not listening yet
+    }
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  throw new Error('server did not become healthy');
+}
+
+function serverEnv(port: number, work: string, extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const origin = `http://127.0.0.1:${port}`;
+  return {
+    ...process.env,
+    NODE_ENV: 'development',
+    HOST: '127.0.0.1',
+    PORT: String(port),
+    DATABASE_PATH: join(work, 'timesheet.db'),
+    DATA_DIR: join(work, 'private-data'),
+    APP_ORIGINS: origin,
+    OUTBOUND_MODE: 'capture',
+    MAIL_FROM: 'timesheet-capture@example.invalid',
+    ...extra,
+  };
+}
+
+const SETUP_FILE = {
+  schema_version: 1,
+  calendar: { name: 'Synthetic company calendar', reporting_zone: 'America/Los_Angeles', normal_weekdays_iso: [1, 2, 3, 4, 5], effective_from: '2026-01-01' },
+  holidays: [{ date: '2026-01-01', name: "New Year's Day" }],
+  policy: {
+    effective_from: '2026-01-01',
+    required_minutes: 480,
+    threshold_minutes: 30,
+    rounding_step_minutes: 30,
+    reference_start: '08:00',
+    reference_end: '17:00',
+    breaks: [
+      { start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false },
+      { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false },
+      { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false },
+    ],
+    deficit_mode: 'ignore',
+  },
+  payroll: { anchor_payroll_date: '2026-10-02', cycle_days: 14, period_start_offset_days: -18, period_end_offset_days: -5, due_offset_days: -3, due_local_time: '17:00' },
+};
+
+const test = base.extend<object, { world: World }>({
+  world: [
+    async ({}, use) => {
+      const children: Array<{ child: ChildProcess; fd: number; port: number }> = [];
+      try {
+        // Main server.
+        const work = mkdtempSync(join(WORK, `${TAG}-main-`));
+        const admin = { email: 'admin@example.invalid', password: randomBytes(18).toString('base64url') };
+        const employee = { email: 'employee@example.invalid', password: randomBytes(18).toString('base64url') };
+        const env = serverEnv(PORT, work, { SEED_ADMIN_PASSWORD: admin.password, SEED_EMPLOYEE_PASSWORD: employee.password });
+        for (const command of ['migrate', 'seed']) {
+          const result = spawnSync(process.execPath, ['dist/server/cli.js', command], { cwd: REPO, env, encoding: 'utf8' });
+          if (result.status !== 0) throw new Error(`cli ${command} failed: ${result.status} ${result.stderr}`);
+        }
+        const fd = openSync(join(OUT, `${TAG}-server-main-stderr.txt`), 'w');
+        const child = spawn(process.execPath, ['dist/server/index.js'], { cwd: REPO, env, stdio: ['ignore', 'ignore', fd] });
+        children.push({ child, fd, port: PORT });
+        const origin = `http://127.0.0.1:${PORT}`;
+        await waitHealthy(origin, child);
+
+        // Setup server (no administrator yet): first-time setup screen.
+        const setupWork = mkdtempSync(join(WORK, `${TAG}-setup-`));
+        const setupEnv = serverEnv(PORT + 1, setupWork, { JOB_RUNNER: 'off' });
+        const file = join(setupWork, 'company.json');
+        writeFileSync(file, JSON.stringify(SETUP_FILE));
+        for (const args of [['migrate'], ['bootstrap', '--config', file]]) {
+          const result = spawnSync(process.execPath, ['dist/server/cli.js', ...args], { cwd: REPO, env: setupEnv, encoding: 'utf8' });
+          if (result.status !== 0) throw new Error(`setup cli ${args[0]} failed: ${result.status} ${result.stderr}`);
+        }
+        const sfd = openSync(join(OUT, `${TAG}-server-setup-stderr.txt`), 'w');
+        const setupChild = spawn(process.execPath, ['dist/server/index.js'], { cwd: REPO, env: setupEnv, stdio: ['ignore', 'ignore', sfd] });
+        children.push({ child: setupChild, fd: sfd, port: PORT + 1 });
+        const setupOrigin = `http://127.0.0.1:${PORT + 1}`;
+        await waitHealthy(setupOrigin, setupChild);
+
+        // Synthetic people and data (over HTTP, as the e2e suite does).
+        const adminSeed = await new SeedClient(origin).signIn(admin.email, admin.password);
+        const a = await newPerson(adminSeed, { origin } as never, { displayName: 'Synthetic Owner A' });
+        const b = await newPerson(adminSeed, { origin } as never, { displayName: 'Synthetic Sharer B' });
+        const days = await a.api.displayedPeriodFreeWorkdays();
+        const [d0 = '', d1 = '', d2 = ''] = days;
+        expect(d2, 'three past free workdays in the displayed period').not.toBe('');
+        await a.api.seedCompleteDay(d0);
+        await a.api.seedUnconfirmedBreaksDay(d1);
+        await a.api.seedCompleteDay(d2);
+        await a.api.putDay(d2, { wfh: true, notes: 'Synthetic note' });
+        await a.api.call('POST', '/api/clock/in', { input_zone: 'America/Los_Angeles' }, 201);
+        const [bDay = ''] = await b.api.displayedPeriodFreeWorkdays();
+        if (bDay !== '') await b.api.seedCompleteDay(bDay);
+        await b.api.call('POST', '/api/shares', { grantee_email: a.account.email, items: { timesheets: 'view', ot_read: true, pdf_download: true } }, 201);
+        await a.api.call('POST', '/api/shares', { grantee_email: b.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+        const world: World = {
+          origin,
+          setupOrigin,
+          admin,
+          a: { email: a.account.email, password: a.account.password, id: a.account.id, name: a.account.displayName },
+          b: { id: b.account.id, name: b.account.displayName },
+          d0,
+          d1,
+          d2,
+          payrollDate: a.payrollDate,
+        };
+        record('world', { ...world, admin: { email: admin.email }, a: { email: world.a.email, id: world.a.id, name: world.a.name } });
+        await use(world);
+      } finally {
+        const stopped: unknown[] = [];
+        for (const { child, fd, port } of children) {
+          if (child.exitCode === null) {
+            const exited = new Promise((done) => child.once('exit', done));
+            child.kill();
+            await exited;
+          }
+          closeSync(fd);
+          stopped.push({ port, exitCode: child.exitCode, signal: child.signalCode });
+        }
+        record('servers-stopped', stopped);
+      }
+    },
+    { scope: 'worker', timeout: 180_000 },
+  ],
+});
+
+/* ---- PNG decoding and colour maths (as in WP5-UX-AUDIT-B5) ----------------------------------------- */
+
+type RGB = [number, number, number];
+interface Img {
+  width: number;
+  height: number;
+  data: Buffer;
+  bpp: number;
+}
+
+function decodePng(buf: Buffer): Img {
+  let pos = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  let interlace = 0;
+  const idat: Buffer[] = [];
+  while (pos < buf.length) {
+    const length = buf.readUInt32BE(pos);
+    const type = buf.toString('latin1', pos + 4, pos + 8);
+    const chunk = buf.subarray(pos + 8, pos + 8 + length);
+    if (type === 'IHDR') {
+      width = chunk.readUInt32BE(0);
+      height = chunk.readUInt32BE(4);
+      bitDepth = chunk[8] ?? 0;
+      colorType = chunk[9] ?? 0;
+      interlace = chunk[12] ?? 0;
+    } else if (type === 'IDAT') idat.push(chunk);
+    else if (type === 'IEND') break;
+    pos += 12 + length;
+  }
+  if (bitDepth !== 8 || interlace !== 0 || (colorType !== 2 && colorType !== 6)) throw new Error(`unsupported PNG ${bitDepth}/${colorType}/${interlace}`);
+  const bpp = colorType === 6 ? 4 : 3;
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * bpp;
+  const data = Buffer.alloc(height * stride);
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[y * (stride + 1)] ?? 0;
+    const src = y * (stride + 1) + 1;
+    const dst = y * stride;
+    for (let i = 0; i < stride; i += 1) {
+      const left = i >= bpp ? (data[dst + i - bpp] ?? 0) : 0;
+      const up = y > 0 ? (data[dst - stride + i] ?? 0) : 0;
+      const upLeft = i >= bpp && y > 0 ? (data[dst - stride + i - bpp] ?? 0) : 0;
+      const x = raw[src + i] ?? 0;
+      let value = x;
+      if (filter === 1) value = x + left;
+      else if (filter === 2) value = x + up;
+      else if (filter === 3) value = x + ((left + up) >> 1);
+      else if (filter === 4) {
+        const p = left + up - upLeft;
+        const pa = Math.abs(p - left);
+        const pb = Math.abs(p - up);
+        const pc = Math.abs(p - upLeft);
+        value = x + (pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft);
+      } else if (filter !== 0) throw new Error(`PNG filter ${filter}`);
+      data[dst + i] = value & 0xff;
+    }
+  }
+  return { width, height, data, bpp };
+}
+
+function pixel(img: Img, x: number, y: number): RGB | null {
+  if (x < 0 || y < 0 || x >= img.width || y >= img.height) return null;
+  const o = (y * img.width + x) * img.bpp;
+  return [img.data[o] ?? 0, img.data[o + 1] ?? 0, img.data[o + 2] ?? 0];
+}
+function luminance([r, g, b]: RGB): number {
+  const c = (v: number) => {
+    const s = v / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * c(r) + 0.7152 * c(g) + 0.0722 * c(b);
+}
+function contrast(a: RGB, b: RGB): number {
+  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p) as [number, number];
+  return (x + 0.05) / (y + 0.05);
+}
+const hex = (c: RGB | null | undefined) => (c === null || c === undefined ? null : `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`);
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Ring per side: along 3 lines per side, the pixel that changed most between focused and blurred. */
+function ringOf(focused: Img, unfocused: Img, rect: Rect, origin: { x: number; y: number }) {
+  const sides: Array<Record<string, unknown> & { side: string; change: number; outerRatio: number | null; innerRatio: number | null }> = [];
+  for (const side of ['top', 'bottom', 'left', 'right'] as const) {
+    let bestSide: (typeof sides)[number] | null = null;
+    const vertical = side === 'top' || side === 'bottom';
+    const inside = Math.max(0.5, Math.min(6, (vertical ? rect.height : rect.width) / 2 - 0.5));
+    for (const at of [0.3, 0.5, 0.7]) {
+      const points: Array<{ d: number; f: RGB; u: RGB }> = [];
+      const edge = side === 'top' ? rect.y : side === 'bottom' ? rect.y + rect.height : side === 'left' ? rect.x : rect.x + rect.width;
+      const sign = side === 'top' || side === 'left' ? -1 : 1;
+      for (let step = -Math.floor(inside); step <= 8; step += 1) {
+        const coord = Math.floor(edge + sign * step + (sign > 0 ? 0 : -1) + 0.0001);
+        const other = Math.floor(vertical ? rect.x + at * rect.width : rect.y + at * rect.height);
+        const x = (vertical ? other : coord) - origin.x;
+        const y = (vertical ? coord : other) - origin.y;
+        const f = pixel(focused, x, y);
+        const u = pixel(unfocused, x, y);
+        if (f === null || u === null) continue;
+        points.push({ d: step, f, u });
+      }
+      let best = -1;
+      let bestCh = 1;
+      points.forEach((point, index) => {
+        const ch = contrast(point.f, point.u);
+        if (ch > bestCh + 1e-9) {
+          bestCh = ch;
+          best = index;
+        }
+      });
+      let result: (typeof sides)[number];
+      if (best < 0) result = { side, at, change: 1, outerRatio: null, innerRatio: null };
+      else {
+        const ring = points[best]?.f as RGB;
+        let start = best;
+        let end = best;
+        while (start - 1 >= 0 && contrast(points[start - 1]?.f as RGB, ring) < 1.15) start -= 1;
+        while (end + 1 < points.length && contrast(points[end + 1]?.f as RGB, ring) < 1.15) end += 1;
+        const outer = points[end + 1]?.f ?? null;
+        const inner = points[start - 1]?.f ?? null;
+        result = {
+          side,
+          at,
+          change: r2(bestCh),
+          d: points[best]?.d,
+          ring: hex(ring),
+          under: hex(points[best]?.u),
+          outer: hex(outer),
+          inner: hex(inner),
+          outerRatio: outer === null ? null : r2(contrast(ring, outer)),
+          innerRatio: inner === null ? null : r2(contrast(ring, inner)),
+          band: end - start + 1,
+        };
+      }
+      if (bestSide === null || result.change > bestSide.change) bestSide = result;
+    }
+    if (bestSide !== null) sides.push(bestSide);
+  }
+  const present = sides.filter((side) => side.change >= 3);
+  const outer = present.filter((side) => side.outerRatio !== null).map((side) => side.outerRatio ?? 0);
+  return {
+    sidesPresent: present.length,
+    sidesSampled: sides.length,
+    minOuter: outer.length === 0 ? null : r2(Math.min(...outer)),
+    maxChange: sides.length === 0 ? null : r2(Math.max(...sides.map((side) => side.change))),
+    sides: sides.map((side) => `${side.side} ch=${side.change} d=${String(side.d)} ring=${String(side.ring)} outer=${String(side.outer)}(${String(side.outerRatio)}) inner=${String(side.inner)}(${String(side.innerRatio)}) under=${String(side.under)}`),
+  };
+}
+
+/* ---- In-page checks -------------------------------------------------------------------------------- */
+
+/** Everything a static audit of one rendered state needs; runs in the page, no outside references. */
+function auditInPage() {
+  const W = document.documentElement.clientWidth;
+  const H = innerHeight;
+  type C4 = [number, number, number, number];
+  const parse = (c: string): C4 | null => {
+    const m = /rgba?\(([^)]+)\)/.exec(c);
+    if (m === null) return null;
+    const p = (m[1] ?? '').split(/[\s,/]+/).filter((s) => s !== '').map(Number);
+    return [p[0] ?? 0, p[1] ?? 0, p[2] ?? 0, p.length > 3 ? (p[3] ?? 1) : 1];
+  };
+  const lum = (c: C4) => {
+    const f = (v: number) => {
+      const s = v / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+  };
+  const ratio = (a: C4, b: C4) => {
+    const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p) as [number, number];
+    return (x + 0.05) / (y + 0.05);
+  };
+  const over = (top: C4, bottom: C4): C4 => {
+    const a = top[3];
+    return [top[0] * a + bottom[0] * (1 - a), top[1] * a + bottom[1] * (1 - a), top[2] * a + bottom[2] * (1 - a), 1];
+  };
+  const hexOf = (c: C4) => `#${c.slice(0, 3).map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+  const desc = (el: Element) => {
+    const cls = typeof (el as HTMLElement).className === 'string' ? (el as HTMLElement).className.trim().split(/\s+/).slice(0, 2).join('.') : '';
+    const id = el.id === '' ? '' : `#${el.id}`;
+    return `${el.tagName.toLowerCase()}${id}${cls === '' ? '' : `.${cls}`}`;
+  };
+  const visible = (el: Element) => {
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return false;
+    if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return false;
+    const cs = getComputedStyle(el);
+    if (cs.clipPath !== 'none' && cs.clipPath.includes('inset(50%')) return false;
+    for (let p: Element | null = el; p !== null; p = p.parentElement) {
+      const pcs = getComputedStyle(p);
+      if (pcs.clipPath.includes('inset(50%') || (pcs.position === 'absolute' && pcs.clip.startsWith('rect(0'))) return false;
+    }
+    return true;
+  };
+  const bgOf = (el: Element): { bg: C4; complex: string | null } => {
+    const layers: C4[] = [];
+    let complex: string | null = null;
+    for (let p: Element | null = el; p !== null; p = p.parentElement) {
+      const cs = getComputedStyle(p);
+      if (cs.backgroundImage !== 'none' && complex === null && !cs.backgroundImage.startsWith('repeating-linear-gradient')) complex = `${desc(p)} ${cs.backgroundImage.slice(0, 40)}`;
+      const c = parse(cs.backgroundColor);
+      if (c !== null && c[3] > 0) {
+        layers.push(c);
+        if (c[3] >= 1) break;
+      }
+      if (p.tagName === 'DIALOG' && (p as HTMLDialogElement).open && c !== null && c[3] >= 1) break;
+    }
+    let bg: C4 = parse(getComputedStyle(document.body).backgroundColor) ?? [255, 255, 255, 1];
+    if (layers.length === 0 || (layers.at(-1)?.[3] ?? 0) < 1) {
+      const rootBg = parse(getComputedStyle(document.documentElement).backgroundColor);
+      bg = rootBg !== null && rootBg[3] >= 1 ? rootBg : matchMedia('(prefers-color-scheme: dark)').matches ? [18, 18, 18, 1] : [255, 255, 255, 1];
+    } else bg = layers.pop() as C4;
+    while (layers.length > 0) bg = over(layers.pop() as C4, bg);
+    return { bg, complex };
+  };
+  const opacityOf = (el: Element) => {
+    let o = 1;
+    for (let p: Element | null = el; p !== null; p = p.parentElement) o *= Number(getComputedStyle(p).opacity);
+    return o;
+  };
+  const disabled = (el: Element) => el.closest(':disabled, [aria-disabled="true"], fieldset:disabled') !== null;
+  // Content behind an open modal dialog (or under [inert]) is inactive: not a target, not an audited text.
+  const modal = document.querySelector('dialog:modal');
+  const inactive = (el: Element) => el.closest('[inert]') !== null || (modal !== null && !modal.contains(el));
+
+  // 1.4.3 text contrast
+  const text: Array<Record<string, unknown>> = [];
+  const seen = new Set<Element>();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+    const el = n.parentElement;
+    if (el === null || seen.has(el) || (n.textContent ?? '').trim() === '') continue;
+    seen.add(el);
+    if (['SCRIPT', 'STYLE', 'OPTION', 'TITLE'].includes(el.tagName) || !visible(el)) continue;
+    const cs = getComputedStyle(el);
+    const fg = parse(cs.color);
+    if (fg === null) continue;
+    const { bg, complex } = bgOf(el);
+    const alpha = fg[3] * opacityOf(el);
+    const eff = over([fg[0], fg[1], fg[2], alpha], bg);
+    const size = parseFloat(cs.fontSize);
+    const bold = Number(cs.fontWeight) >= 700;
+    const large = size >= 24 || (bold && size >= 18.66);
+    const need = large ? 3 : 4.5;
+    const r = ratio(eff, bg);
+    const isDisabled = disabled(el) || inactive(el);
+    if (r < need + 0.005) {
+      text.push({ el: desc(el), path: desc(el.parentElement ?? el), text: (n.textContent ?? '').trim().slice(0, 50), fg: hexOf(eff), bg: hexOf(bg), ratio: Math.round(r * 100) / 100, need, size, weight: cs.fontWeight, disabled: isDisabled, complex });
+    }
+  }
+  // placeholders
+  for (const input of document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[placeholder], textarea[placeholder]')) {
+    if (!visible(input) || input.value !== '' || input.placeholder === '') continue;
+    const fg = parse(getComputedStyle(input, '::placeholder').color);
+    if (fg === null) continue;
+    const { bg } = bgOf(input);
+    const r = ratio(over(fg, bg), bg);
+    if (r < 4.5) text.push({ el: `${desc(input)}::placeholder`, text: input.placeholder.slice(0, 50), fg: hexOf(over(fg, bg)), bg: hexOf(bg), ratio: Math.round(r * 100) / 100, need: 4.5, placeholder: true });
+  }
+
+  // Interactive elements
+  const focusSel = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex], [role="button"], [role="link"], [role="checkbox"], [role="switch"], [role="option"], [role="tab"]';
+  const interactive = [...document.querySelectorAll<HTMLElement>(focusSel)].filter((el) => visible(el) && !inactive(el) && !(el.tabIndex < 0 && !['option'].includes(el.getAttribute('role') ?? '')));
+  // ARIA references
+  const refs: Array<Record<string, unknown>> = [];
+  for (const attr of ['aria-labelledby', 'aria-describedby', 'aria-controls', 'aria-activedescendant', 'aria-owns', 'aria-errormessage']) {
+    for (const el of document.querySelectorAll(`[${attr}]`)) {
+      const ids = (el.getAttribute(attr) ?? '').split(/\s+/).filter((s) => s !== '');
+      const missing = ids.filter((id) => document.getElementById(id) === null);
+      if (missing.length > 0) refs.push({ el: desc(el), attr, missing, expanded: el.getAttribute('aria-expanded') });
+    }
+  }
+  for (const label of document.querySelectorAll('label[for]')) {
+    const id = label.getAttribute('for') ?? '';
+    if (document.getElementById(id) === null) refs.push({ el: desc(label), attr: 'for', missing: [id] });
+  }
+  // Focusable content inside aria-hidden, nested interactive
+  const hiddenFocusable = [...document.querySelectorAll('[aria-hidden="true"]')].flatMap((h) =>
+    [...h.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]')].filter((el) => el.tabIndex >= 0 && visible(el)).map((el) => `${desc(h)} > ${desc(el)}`),
+  );
+  const nested = [...document.querySelectorAll('button button, button a[href], a[href] button, a[href] a[href], button input, a[href] input, [role="option"] button, summary button')].map((el) => desc(el));
+
+  // 2.5.8 target size (minimum 24 x 24 CSS px, or the spacing exception; inline links exempt)
+  const targets = interactive.filter((el) => el.getAttribute('role') !== 'option' || el.closest('[role="listbox"]') !== null);
+  const rects = targets.map((el) => ({ el, r: el.getBoundingClientRect() }));
+  const small: Array<Record<string, unknown>> = [];
+  for (const { el, r } of rects) {
+    if (r.width >= 24 && r.height >= 24) continue;
+    if (el.tagName === 'A' && el.parentElement !== null && ['P', 'LI', 'SPAN', 'TD'].includes(el.parentElement.tagName) && (el.parentElement.textContent ?? '').trim().length > (el.textContent ?? '').trim().length + 3) {
+      continue;
+    }
+    if (el.getAttribute('tabindex') === '-1') continue;
+    if (el.closest('[role="listbox"]') !== null && el.tagName === 'UL') continue;
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const conflicts: string[] = [];
+    for (const other of rects) {
+      if (other.el === el || other.el.contains(el) || el.contains(other.el)) continue;
+      const o = other.r;
+      const dx = Math.max(o.left - cx, 0, cx - o.right);
+      const dy = Math.max(o.top - cy, 0, cy - o.bottom);
+      const distRect = Math.hypot(dx, dy);
+      const oSmall = o.width < 24 || o.height < 24;
+      const ocx = o.left + o.width / 2;
+      const ocy = o.top + o.height / 2;
+      if (distRect < 12 || (oSmall && Math.hypot(ocx - cx, ocy - cy) < 24)) conflicts.push(`${desc(other.el)} ${Math.round(o.width)}x${Math.round(o.height)}`);
+    }
+    // A native control inside a <label> also takes the label's clicks: record the label box.
+    const label = el.closest('label');
+    const lr = label?.getBoundingClientRect();
+    small.push({
+      el: desc(el),
+      name: (el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 40),
+      size: `${Math.round(r.width * 10) / 10}x${Math.round(r.height * 10) / 10}`,
+      spacingOk: conflicts.length === 0,
+      conflicts: conflicts.slice(0, 4),
+      label: lr === undefined ? null : `${Math.round(lr.width)}x${Math.round(lr.height)}`,
+      disabled: disabled(el),
+    });
+  }
+
+  // 1.4.10 reflow
+  const docScroll = { scrollWidth: document.documentElement.scrollWidth, clientWidth: W };
+  const scrollers: Array<Record<string, unknown>> = [];
+  const overflowing: Array<Record<string, unknown>> = [];
+  for (const el of document.querySelectorAll<HTMLElement>('body *')) {
+    if (!visible(el)) continue;
+    const cs = getComputedStyle(el);
+    if ((cs.overflowX === 'auto' || cs.overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 1) {
+      scrollers.push({ el: desc(el), scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, table: el.querySelector('table') !== null });
+    }
+    const r = el.getBoundingClientRect();
+    if (r.right > W + 1 || r.left < -1) {
+      let clipped = false;
+      for (let p = el.parentElement; p !== null; p = p.parentElement) {
+        const pcs = getComputedStyle(p);
+        if (pcs.overflowX !== 'visible') {
+          clipped = true;
+          break;
+        }
+      }
+      if (!clipped) overflowing.push({ el: desc(el), left: Math.round(r.left), right: Math.round(r.right) });
+    }
+    if ((cs.overflowX === 'hidden' || cs.overflowX === 'clip') && el.scrollWidth > el.clientWidth + 1 && (el.textContent ?? '').trim() !== '' && cs.textOverflow !== 'ellipsis') {
+      overflowing.push({ el: desc(el), clippedText: (el.textContent ?? '').trim().slice(0, 40), scrollWidth: el.scrollWidth, clientWidth: el.clientWidth });
+    }
+  }
+
+  // Headings and landmarks
+  const headings = [...document.querySelectorAll('h1, h2, h3, h4, h5, h6')].filter(visible).map((h) => `${h.tagName}:${(h.textContent ?? '').trim().slice(0, 40)}`);
+  const landmarks = [...document.querySelectorAll('main, nav, header, footer, aside, [role="main"], [role="navigation"], [role="region"], section[aria-label], section[aria-labelledby]')]
+    .filter(visible)
+    .map((el) => `${el.tagName.toLowerCase()}${el.getAttribute('role') === null ? '' : `[${el.getAttribute('role')}]`}:${el.getAttribute('aria-label') ?? ''}`);
+
+  // Links in text distinguishable by more than colour (1.4.1)
+  const textLinks: Array<Record<string, unknown>> = [];
+  for (const a of document.querySelectorAll<HTMLAnchorElement>('p a[href], li a[href], td a[href], span a[href]')) {
+    if (!visible(a)) continue;
+    const parent = a.parentElement;
+    if (parent === null) continue;
+    const parentText = (parent.textContent ?? '').trim();
+    const own = (a.textContent ?? '').trim();
+    if (parentText.length <= own.length + 3) continue;
+    const cs = getComputedStyle(a);
+    const ps = getComputedStyle(parent);
+    const decorated = cs.textDecorationLine.includes('underline') || cs.borderBottomStyle !== 'none' || Number(cs.fontWeight) - Number(ps.fontWeight) >= 300;
+    const lc = parse(cs.color);
+    const pc = parse(ps.color);
+    const lr = lc !== null && pc !== null ? Math.round(ratio(lc, pc) * 100) / 100 : null;
+    if (!decorated) textLinks.push({ el: desc(a), text: own.slice(0, 40), linkVsText: lr });
+  }
+
+  return {
+    url: location.hash,
+    title: document.title,
+    lang: document.documentElement.lang,
+    viewport: { W, H, scrollHeight: document.documentElement.scrollHeight },
+    textContrast: text,
+    ariaRefs: refs,
+    hiddenFocusable,
+    nested,
+    smallTargets: small,
+    reflow: { ...docScroll, horizontalScroll: docScroll.scrollWidth > W + 1, scrollers, overflowing: overflowing.slice(0, 30) },
+    headings,
+    landmarks,
+    textLinks,
+    interactiveCount: interactive.length,
+  };
+}
+
+/** Unnamed controls from the accessibility tree (Playwright aria snapshot of the body). */
+async function unnamed(page: Page) {
+  const snap = await page.locator('body').ariaSnapshot();
+  const roles = 'button|link|textbox|combobox|checkbox|radio|listbox|option|switch|slider|spinbutton|searchbox|tab|menuitem|dialog|img|group|radiogroup|region|navigation|form';
+  const re = new RegExp(`^\\s*- (${roles})(\\s*\\[[^\\]]*\\])?\\s*:?\\s*$`);
+  const lines = snap.split('\n');
+  return { unnamed: lines.filter((line) => re.test(line)).map((line) => line.trim()), lines: lines.length, snapshot: snap };
+}
+
+/* ---- Keyboard walk ----------------------------------------------------------------------------------- */
+
+interface StopInfo {
+  body?: boolean;
+  id?: number;
+  tag?: string;
+  type?: string | null;
+  role?: string | null;
+  name?: string;
+  fv?: boolean;
+  boxShadow?: string;
+  outline?: string;
+  rect?: Rect;
+  inViewport?: boolean;
+  pts?: number;
+  vis?: number;
+  covers?: string[];
+  scope?: string | null;
+  docY?: number;
+  native?: boolean;
+  scrollable?: boolean;
+}
+
+async function stopInfo(page: Page): Promise<StopInfo> {
+  return page.evaluate(() => {
+    const w = window as unknown as { __ids?: WeakMap<Element, number>; __next?: number };
+    w.__ids ??= new WeakMap();
+    w.__next ??= 0;
+    const a = document.activeElement as HTMLElement | null;
+    if (a === null || a === document.body || a === document.documentElement) return { body: true };
+    let id = w.__ids.get(a);
+    if (id === undefined) {
+      w.__next += 1;
+      id = w.__next;
+      w.__ids.set(a, id);
+    }
+    const r = a.getBoundingClientRect();
+    const cs = getComputedStyle(a);
+    const labelled = a.getAttribute('aria-labelledby');
+    const labels = (a as HTMLInputElement).labels;
+    const name = (
+      a.getAttribute('aria-label') ??
+      (labelled !== null ? labelled.split(' ').map((part) => document.getElementById(part)?.textContent ?? '').join(' ') : null) ??
+      (labels !== null && labels !== undefined && labels.length > 0 ? (labels[0]?.textContent ?? '') : null) ??
+      a.innerText ??
+      ''
+    )
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 60);
+    let pts = 0;
+    let vis = 0;
+    const covers = new Set<string>();
+    for (let i = 0; i < 5; i += 1) {
+      for (let j = 0; j < 5; j += 1) {
+        const x = r.left + 1 + ((r.width - 2) * (i + 0.5)) / 5;
+        const y = r.top + 1 + ((r.height - 2) * (j + 0.5)) / 5;
+        pts += 1;
+        if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) {
+          covers.add('(outside viewport)');
+          continue;
+        }
+        const hit = document.elementFromPoint(x, y);
+        const inLabel = labels !== null && labels !== undefined && [...labels].some((label) => hit !== null && label.contains(hit));
+        if (hit !== null && (hit === a || a.contains(hit) || inLabel)) vis += 1;
+        else if (hit !== null) {
+          const cover = hit.closest('.shell-bar, .shell-tabs, .editor-head, dialog, .more-panel, .label-list, .batch-bar') ?? hit;
+          covers.add(`${cover.tagName.toLowerCase()}.${typeof cover.className === 'string' ? cover.className.split(' ')[0] : ''}`);
+        }
+      }
+    }
+    const scope = a.closest('dialog')?.getAttribute('aria-labelledby') ?? (a.closest('.more-panel') !== null ? 'more-panel' : null) ?? (a.closest('.shell-bar') !== null ? 'bar' : null) ?? (a.closest('.shell-tabs') !== null ? 'tabs' : null);
+    const native = a.matches('a[href], button, input, select, textarea, summary');
+    return {
+      id,
+      tag: a.tagName,
+      type: a.getAttribute('type'),
+      role: a.getAttribute('role'),
+      name,
+      fv: a.matches(':focus-visible'),
+      boxShadow: cs.boxShadow.slice(0, 120),
+      outline: `${cs.outlineStyle} ${cs.outlineWidth} ${cs.outlineColor}`,
+      rect: { x: r.left, y: r.top, width: r.width, height: r.height },
+      inViewport: r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth,
+      pts,
+      vis,
+      covers: [...covers],
+      scope,
+      docY: Math.round(r.top + scrollY),
+      native,
+      scrollable: a.scrollHeight > a.clientHeight + 1 && ['auto', 'scroll'].includes(cs.overflowY),
+    };
+  });
+}
+
+async function measureRing(page: Page, info: StopInfo, vw: number, vh: number) {
+  const rect = info.rect;
+  if (rect === undefined) return null;
+  const x = Math.max(0, Math.floor(rect.x - 10));
+  const y = Math.max(0, Math.floor(rect.y - 10));
+  const right = Math.min(vw, Math.ceil(rect.x + rect.width + 10));
+  const bottom = Math.min(vh, Math.ceil(rect.y + rect.height + 10));
+  if (right - x < 2 || bottom - y < 2) return { offscreen: true };
+  const clip = { x, y, width: right - x, height: bottom - y };
+  const focused = decodePng(await page.screenshot({ clip, scale: 'css', animations: 'disabled', caret: 'hide' }));
+  await page.evaluate(() => {
+    const a = document.activeElement as HTMLElement;
+    (window as unknown as { __probeEl: HTMLElement }).__probeEl = a;
+    a.blur();
+  });
+  const unfocused = decodePng(await page.screenshot({ clip, scale: 'css', animations: 'disabled', caret: 'hide' }));
+  const refocused = await page.evaluate(() => {
+    const el = (window as unknown as { __probeEl: HTMLElement }).__probeEl;
+    el.focus({ preventScroll: true });
+    return document.activeElement === el && el.matches(':focus-visible');
+  });
+  return { refocused, ...ringOf(focused, unfocused, rect, { x, y }) };
+}
+
+interface WalkOptions {
+  back?: boolean;
+  max?: number;
+  measure?: boolean;
+  shotPrefix?: string;
+}
+
+async function walk(page: Page, vw: number, vh: number, options: WalkOptions) {
+  const stops: Array<Record<string, unknown>> = [];
+  const seen = new Set<number>();
+  let lastId: number | undefined;
+  let repeats = 0;
+  let shots = 0;
+  const max = options.max ?? WALK_MAX;
+  for (let index = 0; index < max; index += 1) {
+    await page.keyboard.press(options.back === true ? 'Shift+Tab' : 'Tab');
+    const info = await stopInfo(page);
+    if (info.body === true) {
+      stops.push({ index, body: true });
+      if (stops.filter((stop) => stop.body === true).length >= 2) break;
+      continue;
+    }
+    // Date and time inputs keep focus while Tab moves through their segments.
+    if (info.id !== undefined && info.id === lastId && repeats < 6) {
+      repeats += 1;
+      continue;
+    }
+    repeats = 0;
+    lastId = info.id;
+    if (info.id !== undefined && seen.has(info.id)) {
+      stops.push({ index, cycleTo: info.id, name: info.name });
+      break;
+    }
+    if (info.id !== undefined) seen.add(info.id);
+    const ring = options.measure === true ? await measureRing(page, info, vw, vh) : null;
+    const bad = info.vis === 0 || info.fv === false || (ring !== null && 'sidesPresent' in ring && (ring.sidesPresent < 2 || (ring.minOuter ?? 99) < 3));
+    if (bad && options.shotPrefix !== undefined && shots < 4) {
+      shots += 1;
+      await page.screenshot({ path: shotPath(`${options.shotPrefix}-${options.back === true ? 'back' : 'fwd'}-${index}-${String(info.name).replace(/[^A-Za-z0-9]+/g, '-').slice(0, 30)}-synthetic.png`) });
+    }
+    stops.push({ index, ...info, ring });
+  }
+  return stops;
+}
+
+function walkSummary(stops: Array<Record<string, unknown>>) {
+  const real = stops.filter((stop) => stop.id !== undefined) as Array<StopInfo & { ring: Record<string, unknown> | null; index: number }>;
+  const problems = real
+    .filter((stop) => {
+      const ring = stop.ring as { sidesPresent?: number; minOuter?: number | null } | null;
+      return stop.vis === 0 || stop.fv === false || !stop.native || (ring !== null && ring.sidesPresent !== undefined && (ring.sidesPresent < 2 || (ring.minOuter ?? 99) < 3));
+    })
+    .map((stop) => ({ index: stop.index, name: stop.name, tag: stop.tag, role: stop.role, native: stop.native, scrollable: stop.scrollable, fv: stop.fv, vis: `${stop.vis}/${stop.pts}`, covers: stop.covers, scope: stop.scope, boxShadow: stop.boxShadow, ring: stop.ring }));
+  // Forward order: report a move upwards of more than 60px inside the same scope (manual review).
+  const upward: string[] = [];
+  for (let i = 1; i < real.length; i += 1) {
+    const prev = real[i - 1];
+    const cur = real[i];
+    if (prev === undefined || cur === undefined) continue;
+    if (prev.scope === cur.scope && (cur.docY ?? 0) < (prev.docY ?? 0) - 60) upward.push(`${prev.name} (${prev.docY}) -> ${cur.name} (${cur.docY})`);
+  }
+  return { stops: real.length, end: stops.at(-1), entirelyHidden: real.filter((stop) => stop.vis === 0).map((stop) => `${stop.name} [${(stop.covers ?? []).join(',')}]`), problems, upward };
+}
+
+/* ---- States ----------------------------------------------------------------------------------------- */
+
+interface Viewport {
+  id: string;
+  width: number;
+  height: number;
+  mobile: boolean;
+}
+const VIEWPORTS: Viewport[] = [
+  { id: 'w1280', width: 1280, height: 800, mobile: false },
+  { id: 'w1024', width: 1024, height: 800, mobile: false },
+  { id: 'w768', width: 768, height: 1024, mobile: false },
+  { id: 'w390', width: 390, height: 844, mobile: true },
+  { id: 'w320', width: 320, height: 640, mobile: true },
+];
+const THEMES = ['light', 'dark'] as const;
+
+async function newCtx(browser: Browser, vp: Viewport, theme: (typeof THEMES)[number], bypassCSP = false): Promise<BrowserContext> {
+  const ctx = await browser.newContext({
+    viewport: { width: vp.width, height: vp.height },
+    isMobile: vp.mobile,
+    hasTouch: vp.mobile,
+    deviceScaleFactor: vp.mobile ? 2 : 1,
+    colorScheme: theme,
+    reducedMotion: 'reduce',
+    locale: 'en-US',
+    timezoneId: 'Asia/Ho_Chi_Minh',
+    bypassCSP,
+  });
+  // A missing control fails fast instead of waiting for the long test timeout.
+  ctx.setDefaultTimeout(15_000);
+  return ctx;
+}
+
+async function signIn(page: Page, origin: string, who: Creds, hash = '') {
+  await page.goto(`${origin}/${hash}`);
+  await page.getByLabel('Email').fill(who.email);
+  await page.getByLabel('Password').fill(who.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+}
+
+async function settle(page: Page) {
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(150);
+}
+
+async function topReset(page: Page) {
+  await page.mouse.move(1, 1);
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    window.scrollTo(0, 0);
+  });
+}
+
+/** One check of the open dialog / popup: where focus is, Tab containment, Escape and focus return. */
+async function dialogCheck(page: Page, opener: Locator, dialog: Locator, tabs = 30) {
+  const openerMark = await opener.evaluate((el) => {
+    el.setAttribute('data-sweep-opener', '1');
+    return el.tagName;
+  });
+  const startFocus = await page.evaluate(() => {
+    const a = document.activeElement;
+    return a === null ? null : `${a.tagName}${a.id === '' ? '' : `#${a.id}`} ${(a.getAttribute('aria-label') ?? a.textContent ?? '').trim().slice(0, 40)}`;
+  });
+  const inside = async () => dialog.evaluate((d) => d.contains(document.activeElement));
+  const focusInsideOnOpen = await inside();
+  const left: string[] = [];
+  for (let i = 0; i < tabs; i += 1) {
+    await page.keyboard.press('Tab');
+    if (!(await inside())) {
+      left.push(await page.evaluate(() => `${document.activeElement?.tagName} ${(document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? '').trim().slice(0, 40)}`));
+      break;
+    }
+  }
+  // back inside if it left (non-modal panels), then Escape from inside
+  if (left.length > 0) await dialog.evaluate((d) => (d.querySelector('button, input, select, a[href]') as HTMLElement | null)?.focus());
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(250);
+  const closed = (await dialog.count()) === 0 || !(await dialog.isVisible());
+  const returned = await page.evaluate(() => document.activeElement?.getAttribute('data-sweep-opener') === '1');
+  const after = await page.evaluate(() => {
+    const a = document.activeElement;
+    return a === null ? null : `${a.tagName} ${(a.getAttribute('aria-label') ?? a.textContent ?? '').trim().slice(0, 40)}`;
+  });
+  await page.evaluate(() => document.querySelector('[data-sweep-opener]')?.removeAttribute('data-sweep-opener'));
+  return { opener: openerMark, startFocus, focusInsideOnOpen, leftAfterTabs: left, escapeClosed: closed, focusReturned: returned, focusAfter: after };
+}
+
+/* ---- The sweep ---------------------------------------------------------------------------------------- */
+
+for (const vp of VIEWPORTS) {
+  for (const theme of THEMES) {
+    const name = `${vp.id}-${theme}`;
+    if ((ONLY_VP !== '' && !ONLY_VP.split(',').includes(vp.id)) || (ONLY_THEME !== '' && ONLY_THEME !== theme)) continue;
+    test(name, async ({ browser, world }) => {
+      const ctx = await newCtx(browser, vp, theme);
+      const page = await ctx.newPage();
+      const consoleLines: string[] = [];
+      page.on('console', (m) => {
+        if (m.type() === 'warning' || m.type() === 'error') consoleLines.push(`${m.type()}: ${m.text()}`);
+      });
+      const results: Record<string, unknown> = {};
+      const walks: Record<string, unknown> = {};
+      const dialogs: Record<string, unknown> = {};
+      const extra: Record<string, unknown> = {};
+      const audit = async (state: string, opts: { walk?: boolean; back?: boolean; reset?: boolean } = {}) => {
+        await settle(page);
+        const a = await page.evaluate(auditInPage);
+        const n = await unnamed(page);
+        results[state] = { ...a, unnamed: n.unnamed };
+        writeFileSync(join(OUT, `${TAG}-${name}-${state}-aria.txt`), n.snapshot);
+        await page.screenshot({ path: shotPath(`${name}-${state}-synthetic.png`) });
+        if (opts.walk !== false) {
+          if (opts.reset !== false) await topReset(page);
+          const fwd = await walk(page, vp.width, vp.height, { measure: true, shotPrefix: `${name}-${state}` });
+          walks[`${state}-fwd`] = { summary: walkSummary(fwd), stops: fwd };
+          if (opts.back !== false) {
+            if (opts.reset !== false) {
+              await page.evaluate(() => {
+                (document.activeElement as HTMLElement | null)?.blur();
+                window.scrollTo(0, document.documentElement.scrollHeight);
+              });
+            }
+            const back = await walk(page, vp.width, vp.height, { back: true, measure: false, shotPrefix: `${name}-${state}` });
+            walks[`${state}-back`] = { summary: walkSummary(back), stops: back };
+          }
+        }
+      };
+      try {
+        // Sign-in form and its error state.
+        await page.goto(`${world.origin}/`);
+        await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+        await audit('login');
+        await page.getByLabel('Email').fill(world.a.email);
+        await page.getByLabel('Password').fill('wrong-synthetic-password');
+        await page.getByRole('button', { name: 'Sign in' }).click();
+        await page.waitForTimeout(400);
+        extra.loginError = await page.evaluate(() => {
+          const p = document.querySelector('form p.error');
+          return p === null ? null : { text: p.textContent, role: p.getAttribute('role'), live: p.closest('[aria-live], [role="alert"], [role="status"]') !== null, focus: document.activeElement?.tagName };
+        });
+        await audit('login-error', { walk: false });
+
+        // Timesheet.
+        await signIn(page, world.origin, world.a);
+        await expect(page.locator('[data-day]').first()).toBeVisible();
+        await audit('timesheet');
+
+        // 3.2.2: the "Shared with me" switcher changes the screen when its value changes.
+        const switcher = page.getByLabel('Shared with me');
+        if ((await switcher.count()) > 0 && (await switcher.isVisible())) {
+          const before = await page.evaluate(() => location.hash);
+          await switcher.focus();
+          await page.keyboard.press('ArrowDown');
+          await page.waitForTimeout(500);
+          const after = await page.evaluate(() => location.hash);
+          extra.switcher = { before, afterArrowDown: after, changedContext: before !== after, heading: await page.locator('h1').first().textContent() };
+          await page.goto(`${world.origin}/#/timesheet`);
+          await expect(page.locator('[data-day]').first()).toBeVisible();
+        } else extra.switcher = { visible: false };
+
+        // Day editor, opened from the keyboard.
+        await topReset(page);
+        const editD0 = page.getByRole('button', { name: `Edit ${world.d0}`, exact: true });
+        await editD0.focus();
+        await page.keyboard.press('Enter');
+        const editor = page.getByRole('dialog', { name: /Day editor/ });
+        await expect(editor).toBeVisible();
+        await settle(page);
+        extra.editorOpen = await page.evaluate(() => ({ focus: `${document.activeElement?.tagName}#${document.activeElement?.id}`, modal: document.querySelector('dialog.day-panel')?.matches(':modal') }));
+        await audit('editor', { reset: false, back: false });
+        // backward from Close inside the editor (B5-01 editor head, B5-03 dialog stop)
+        await editor.getByRole('button', { name: 'Close', exact: true }).focus();
+        const editorBack = await walk(page, vp.width, vp.height, { back: true, measure: true, max: 60, shotPrefix: `${name}-editor-fromclose` });
+        walks['editor-back-from-close'] = { summary: walkSummary(editorBack), stops: editorBack };
+        // forward from the last control of the editor upwards via Shift+Tab from the end
+        const lastInEditor = editor.locator('button, input, select, textarea, a[href]').last();
+        await lastInEditor.focus();
+        const editorBackEnd = await walk(page, vp.width, vp.height, { back: true, measure: false, max: 80, shotPrefix: `${name}-editor-fromend` });
+        walks['editor-back-from-end'] = { summary: walkSummary(editorBackEnd), stops: editorBackEnd };
+        await editD0.evaluate((el) => el.setAttribute('data-sweep-opener', '1'));
+        await editor.getByRole('heading').first().focus();
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+        dialogs.editor = {
+          escapeClosed: !(await editor.isVisible()),
+          focusReturned: await page.evaluate(() => document.activeElement?.getAttribute('data-sweep-opener') === '1'),
+          focusAfter: await page.evaluate(() => `${document.activeElement?.tagName} ${document.activeElement?.getAttribute('aria-label') ?? ''}`),
+        };
+        await page.evaluate(() => document.querySelector('[data-sweep-opener]')?.removeAttribute('data-sweep-opener'));
+
+        // Label picker: keyboard open, arrows, the active option's indicator, Escape and return.
+        const trigger = page.getByRole('button', { name: new RegExp(`^Label for ${world.d2}`) });
+        await trigger.focus();
+        await page.keyboard.press('Enter');
+        const list = page.getByRole('listbox', { name: `Label for ${world.d2}` });
+        await expect(list).toBeVisible();
+        const pickerStates: unknown[] = [];
+        for (const key of ['', 'ArrowDown', 'ArrowDown', 'End', 'Home']) {
+          if (key !== '') await page.keyboard.press(key);
+          await page.waitForTimeout(80);
+          const info = await page.evaluate(() => {
+            const listEl = document.activeElement as HTMLElement;
+            const activeId = listEl.getAttribute('aria-activedescendant') ?? '';
+            const opt = document.getElementById(activeId);
+            const ocs = opt === null ? null : getComputedStyle(opt);
+            const lcs = getComputedStyle(listEl);
+            const r = opt?.getBoundingClientRect();
+            return {
+              focus: `${listEl.tagName}[role=${listEl.getAttribute('role')}]`,
+              listFocusVisible: listEl.matches(':focus-visible'),
+              listShadow: lcs.boxShadow.slice(0, 100),
+              listOutline: `${lcs.outlineStyle} ${lcs.outlineColor}`,
+              active: opt?.textContent,
+              optBg: ocs?.backgroundColor,
+              optColor: ocs?.color,
+              optShadow: ocs?.boxShadow,
+              optOutline: ocs === null ? null : `${ocs.outlineStyle} ${ocs.outlineWidth} ${ocs.outlineColor}`,
+              optBorder: ocs === null ? null : `${ocs.borderLeftStyle} ${ocs.borderLeftWidth} ${ocs.borderLeftColor}`,
+              listBg: lcs.backgroundColor,
+              rect: r === undefined ? null : { x: r.left, y: r.top, width: r.width, height: r.height },
+            };
+          });
+          // rendered colours of the active option against its neighbour
+          if (info.rect !== null) {
+            const shotBuf = await page.screenshot({ scale: 'css', animations: 'disabled' });
+            const img = decodePng(shotBuf);
+            const cx = Math.floor(info.rect.x + info.rect.width - 6);
+            const inside = pixel(img, cx, Math.floor(info.rect.y + info.rect.height / 2));
+            const neighbour = pixel(img, cx, Math.floor(info.rect.y + info.rect.height + 4)) ?? pixel(img, cx, Math.floor(info.rect.y - 4));
+            const ratioInfo = inside !== null && neighbour !== null ? { inside: hex(inside), neighbour: hex(neighbour), ratio: r2(contrast(inside, neighbour)) } : null;
+            pickerStates.push({ key, ...info, rendered: ratioInfo });
+          } else pickerStates.push({ key, ...info });
+        }
+        await page.screenshot({ path: shotPath(`${name}-label-picker-synthetic.png`) });
+        results['label-picker'] = { ...(await page.evaluate(auditInPage)), unnamed: (await unnamed(page)).unnamed };
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(150);
+        dialogs.labelPicker = {
+          states: pickerStates,
+          escapeClosed: (await list.count()) === 0,
+          focusReturned: await trigger.evaluate((el) => el === document.activeElement),
+        };
+
+        // Label review dialog: pick Off for a worked day from the keyboard.
+        const triggerD0 = page.getByRole('button', { name: new RegExp(`^Label for ${world.d0}`) });
+        await triggerD0.focus();
+        await page.keyboard.press('Enter');
+        const listD0 = page.getByRole('listbox', { name: `Label for ${world.d0}` });
+        await expect(listD0).toBeVisible();
+        for (let i = 0; i < 12; i += 1) {
+          const activeText = await listD0.evaluate((el) => document.getElementById(el.getAttribute('aria-activedescendant') ?? '')?.textContent ?? '');
+          if (activeText === 'Off') break;
+          await page.keyboard.press('ArrowDown');
+        }
+        await page.keyboard.press('Enter');
+        const review = page.getByRole('dialog', { name: `Review label change for ${world.d0}` });
+        await expect(review).toBeVisible();
+        await audit('label-review', { reset: false });
+        await triggerD0.evaluate((el) => el.setAttribute('data-sweep-opener', '1'));
+        await review.locator('button').first().focus();
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+        dialogs.labelReview = {
+          escapeClosed: !(await review.isVisible()),
+          focusReturned: await page.evaluate(() => document.activeElement?.getAttribute('data-sweep-opener') === '1'),
+          focusAfter: await page.evaluate(() => `${document.activeElement?.tagName} ${document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? ''}`),
+        };
+        await page.evaluate(() => document.querySelector('[data-sweep-opener]')?.removeAttribute('data-sweep-opener'));
+
+        // Batch mode and its review dialog.
+        const batchToggle = page.getByRole('button', { name: 'Change several days' });
+        await batchToggle.focus();
+        await page.keyboard.press('Enter');
+        await expect(page.getByRole('group', { name: 'Batch category edit' })).toBeVisible();
+        const box = page.getByLabel(`Select ${world.d0}`);
+        await box.focus();
+        await page.keyboard.press('Space');
+        await audit('batch');
+        extra.batchSelected = await page.evaluate((d0) => {
+          const row = document.querySelector(`[data-day="${d0}"]`);
+          const other = [...document.querySelectorAll('[data-day]')].find((r) => !r.classList.contains('selected') && !r.classList.contains('nonworking') && !r.classList.contains('today'));
+          const td = row?.querySelector('td');
+          const otd = other?.querySelector('td');
+          return {
+            selectedClass: row?.className,
+            selectedBg: td === null || td === undefined ? null : getComputedStyle(td).backgroundColor,
+            rowBg: row === null ? null : getComputedStyle(row).backgroundColor,
+            otherBg: otd === null || otd === undefined ? null : getComputedStyle(otd).backgroundColor,
+            otherRowBg: other === undefined ? null : getComputedStyle(other).backgroundColor,
+            selectedShadow: row === null ? null : getComputedStyle(row).boxShadow,
+          };
+        }, world.d0);
+        await page.getByLabel('Category for selected days').selectOption('Off');
+        const previewBtn = page.getByRole('button', { name: 'Preview changes' });
+        await previewBtn.focus();
+        await page.keyboard.press('Enter');
+        const batchDialog = page.getByRole('dialog');
+        await expect(batchDialog).toBeVisible();
+        await audit('batch-review', { reset: false });
+        dialogs.batchReview = await dialogCheck(page, previewBtn, batchDialog);
+        const done = page.getByRole('button', { name: 'Done' });
+        if (await done.isVisible()) await done.click();
+
+        // Clock out dialog.
+        const clockOut = page.getByRole('button', { name: 'Clock out' }).first();
+        await clockOut.focus();
+        await page.keyboard.press('Enter');
+        const clockDialog = page.getByRole('dialog', { name: 'Clock out' });
+        await expect(clockDialog).toBeVisible();
+        await audit('clock-out', { reset: false });
+        dialogs.clockOut = await dialogCheck(page, clockOut, clockDialog);
+
+        // Phone "More" panel.
+        if (vp.width < 768) {
+          const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+          await more.focus();
+          await page.keyboard.press('Enter');
+          const panel = page.locator('#more-panel');
+          await expect(panel).toBeVisible();
+          await audit('more', { walk: false });
+          dialogs.more = await dialogCheck(page, more, panel, 8);
+        }
+
+        // Other screens.
+        const screens: Array<[string, string, string]> = [
+          ['review', `#/review/${world.payrollDate}`, 'h1'],
+          ['ot', '#/ot', 'h1'],
+          ['history', '#/history', 'h1'],
+          ['settings', '#/settings', 'h1'],
+          ['import', '#/import', 'h1'],
+          ['shared', `#/shared/${world.b.id}`, 'h1'],
+        ];
+        for (const [state, hash, sel] of screens) {
+          await page.goto(`${world.origin}/${hash}`);
+          await expect(page.locator(sel).first()).toBeVisible();
+          await audit(state);
+        }
+
+        // Settings: the inline confirm groups (end a share I gave, leave a share I received) take Escape.
+        await page.goto(`${world.origin}/#/settings`);
+        await settle(page);
+        const endShare = page.getByRole('button', { name: /^End sharing with/ }).first();
+        if ((await endShare.count()) > 0) {
+          await endShare.focus();
+          await page.keyboard.press('Enter');
+          await page.waitForTimeout(200);
+          extra.endShareConfirm = await page.evaluate(() => {
+            const a = document.activeElement;
+            return { focus: `${a?.tagName} ${a?.getAttribute('role') ?? ''} ${(a?.getAttribute('aria-label') ?? a?.textContent ?? '').trim().slice(0, 50)}`, fv: a?.matches(':focus-visible'), shadow: a === null ? null : getComputedStyle(a).boxShadow.slice(0, 80) };
+          });
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(200);
+          extra.endShareAfterEscape = await page.evaluate(() => `${document.activeElement?.tagName} ${(document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? '').trim().slice(0, 50)}`);
+        }
+
+        // Administrator screens.
+        const adminCtx = await newCtx(browser, vp, theme);
+        const adminPage = await adminCtx.newPage();
+        try {
+          await signIn(adminPage, world.origin, world.admin, '#/admin');
+          await expect(adminPage.locator('h1').first()).toBeVisible();
+          await settle(adminPage);
+          const a = await adminPage.evaluate(auditInPage);
+          results.admin = { ...a, unnamed: (await unnamed(adminPage)).unnamed };
+          await adminPage.screenshot({ path: shotPath(`${name}-admin-synthetic.png`) });
+          await topReset(adminPage);
+          const fwd = await walk(adminPage, vp.width, vp.height, { measure: true, shotPrefix: `${name}-admin` });
+          walks['admin-fwd'] = { summary: walkSummary(fwd), stops: fwd };
+          await adminPage.evaluate(() => {
+            (document.activeElement as HTMLElement | null)?.blur();
+            window.scrollTo(0, document.documentElement.scrollHeight);
+          });
+          const back = await walk(adminPage, vp.width, vp.height, { back: true, shotPrefix: `${name}-admin` });
+          walks['admin-back'] = { summary: walkSummary(back), stops: back };
+        } finally {
+          await adminCtx.close();
+        }
+
+        // First-time setup screen (separate server without an administrator).
+        const setupCtx = await newCtx(browser, vp, theme);
+        const setupPage = await setupCtx.newPage();
+        try {
+          await setupPage.goto(`${world.setupOrigin}/`);
+          await expect(setupPage.getByRole('heading', { name: 'First-time setup' })).toBeVisible();
+          await settle(setupPage);
+          results.setup = { ...(await setupPage.evaluate(auditInPage)), unnamed: (await unnamed(setupPage)).unnamed };
+          await setupPage.screenshot({ path: shotPath(`${name}-setup-synthetic.png`) });
+          await topReset(setupPage);
+          const fwd = await walk(setupPage, vp.width, vp.height, { measure: true, shotPrefix: `${name}-setup` });
+          walks['setup-fwd'] = { summary: walkSummary(fwd), stops: fwd };
+        } finally {
+          await setupCtx.close();
+        }
+      } finally {
+        record(`${name}-results`, results);
+        record(`${name}-walks`, walks);
+        record(`${name}-dialogs`, { dialogs, extra, console: consoleLines });
+        await ctx.close();
+      }
+    });
+  }
+}
+
+/* ---- Text spacing (1.4.12) ------------------------------------------------------------------------------ */
+
+test('text-spacing', async ({ browser, world }) => {
+  test.skip(ONLY_VP !== '' && !ONLY_VP.split(',').includes('spacing'), 'only on request');
+  const out: Record<string, unknown> = {};
+  for (const vp of [VIEWPORTS[0], VIEWPORTS[3], VIEWPORTS[4]] as Viewport[]) {
+    const ctx = await newCtx(browser, vp, 'light', true);
+    const page = await ctx.newPage();
+    try {
+      await signIn(page, world.origin, world.a);
+      await expect(page.locator('[data-day]').first()).toBeVisible();
+      for (const [state, hash] of [
+        ['timesheet', '#/timesheet'],
+        ['review', `#/review/${world.payrollDate}`],
+        ['ot', '#/ot'],
+        ['settings', '#/settings'],
+      ] as const) {
+        await page.goto(`${world.origin}/${hash}`);
+        await settle(page);
+        await page.addStyleTag({ content: '* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; } p { margin-bottom: 2em !important; }' });
+        await page.waitForTimeout(200);
+        out[`${vp.id}-${state}`] = await page.evaluate(() => {
+          const res: Array<Record<string, unknown>> = [];
+          for (const el of document.querySelectorAll<HTMLElement>('body *')) {
+            const r = el.getBoundingClientRect();
+            if (r.width < 1 || r.height < 1 || (el.textContent ?? '').trim() === '') continue;
+            const cs = getComputedStyle(el);
+            const hidY = cs.overflowY === 'hidden' || cs.overflowY === 'clip';
+            const hidX = cs.overflowX === 'hidden' || cs.overflowX === 'clip';
+            if (cs.clipPath.includes('inset(50%')) continue;
+            if ((hidY && el.scrollHeight > el.clientHeight + 1) || (hidX && el.scrollWidth > el.clientWidth + 1)) {
+              res.push({ el: `${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]}`, text: (el.textContent ?? '').trim().slice(0, 40), sh: el.scrollHeight, ch: el.clientHeight, sw: el.scrollWidth, cw: el.clientWidth, ellipsis: cs.textOverflow });
+            }
+          }
+          // text that spills out of a fixed-height table cell (overlap with the next row)
+          const spills: Array<Record<string, unknown>> = [];
+          for (const cell of document.querySelectorAll<HTMLElement>('td, th')) {
+            const cr = cell.getBoundingClientRect();
+            for (const child of cell.querySelectorAll<HTMLElement>('*')) {
+              const r = child.getBoundingClientRect();
+              if (r.height > 0 && (r.bottom > cr.bottom + 1 || r.right > cr.right + 1)) {
+                spills.push({ cell: cell.className, child: `${child.tagName.toLowerCase()}.${String(child.className).split(' ')[0]}`, text: (child.textContent ?? '').trim().slice(0, 30), overBottom: Math.round(r.bottom - cr.bottom), overRight: Math.round(r.right - cr.right) });
+                break;
+              }
+            }
+          }
+          return { clipped: res.slice(0, 40), clippedCount: res.length, spills: spills.slice(0, 20), spillCount: spills.length, hScroll: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1 };
+        });
+        await page.screenshot({ path: shotPath(`spacing-${vp.id}-${state}-synthetic.png`), fullPage: true });
+      }
+    } finally {
+      await ctx.close();
+    }
+  }
+  record('text-spacing', out);
+});
+
+/* ---- Sticky / fixed geometry per viewport (for the scroll-padding fix) ---------------------------------- */
+
+test('metrics', async ({ browser, world }) => {
+  test.skip(!ONLY_VP.split(',').includes('followup'), 'only on request');
+  const out: Record<string, unknown> = {};
+  for (const vp of VIEWPORTS) {
+    const ctx = await newCtx(browser, vp, 'light');
+    const page = await ctx.newPage();
+    try {
+      await signIn(page, world.origin, world.a);
+      await expect(page.locator('[data-day]').first()).toBeVisible();
+      await settle(page);
+      const geometry = async () =>
+        page.evaluate(() => {
+          const box = (sel: string) => {
+            const el = document.querySelector(sel);
+            if (el === null) return null;
+            const r = el.getBoundingClientRect();
+            const cs = getComputedStyle(el);
+            return { top: Math.round(r.top), height: Math.round(r.height), position: cs.position, cssTop: cs.top, zIndex: cs.zIndex, display: cs.display };
+          };
+          return {
+            shellBar: box('.shell-bar'),
+            shellTabs: box('.shell-tabs'),
+            shareBar: box('.share-bar'),
+            editorHead: box('dialog.day-panel .editor-head'),
+            dayPanel: box('dialog.day-panel'),
+            scrollPaddingTop: getComputedStyle(document.documentElement).scrollPaddingTop,
+            scrollPaddingBottom: getComputedStyle(document.documentElement).scrollPaddingBottom,
+            panelScrollPaddingTop: (() => {
+              const p = document.querySelector('dialog.day-panel');
+              return p === null ? null : getComputedStyle(p).scrollPaddingTop;
+            })(),
+          };
+        });
+      out[`${vp.id}-timesheet`] = await geometry();
+      await page.getByRole('button', { name: `Edit ${world.d0}`, exact: true }).click();
+      await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+      await settle(page);
+      out[`${vp.id}-editor`] = await geometry();
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(200);
+      if (vp.width < 768) {
+        // Batch mode on a phone: does the day button run into the Label cell (text drawn over text)?
+        await page.getByRole('button', { name: 'Change several days' }).click();
+        await page.waitForTimeout(200);
+        out[`${vp.id}-batch-overlap`] = await page.evaluate(() =>
+          [...document.querySelectorAll('tr.sheet-row')].slice(0, 7).map((row) => {
+            const button = row.querySelector('.sheet-day-button')?.getBoundingClientRect();
+            const dayCell = row.querySelector('td.t-day')?.getBoundingClientRect();
+            const labelCell = row.querySelector('td.t-label')?.getBoundingClientRect();
+            const labelText = row.querySelector('td.t-label > *')?.getBoundingClientRect();
+            return {
+              day: row.getAttribute('data-day'),
+              buttonRight: button === undefined ? null : Math.round(button.right * 10) / 10,
+              dayCellRight: dayCell === undefined ? null : Math.round(dayCell.right * 10) / 10,
+              labelTextLeft: labelText === undefined ? null : Math.round(labelText.left * 10) / 10,
+              overlapPx: button === undefined || labelText === undefined ? null : Math.round((button.right - labelText.left) * 10) / 10,
+              buttonOutsideCell: button === undefined || dayCell === undefined ? null : Math.round((button.right - dayCell.right) * 10) / 10,
+              labelCellLeft: labelCell === undefined ? null : Math.round(labelCell.left * 10) / 10,
+            };
+          }),
+        );
+        await page.locator('tr.sheet-row').first().scrollIntoViewIfNeeded();
+        await page.screenshot({ path: shotPath(`metrics-${vp.id}-batch-overlap-synthetic.png`) });
+        await page.getByRole('button', { name: 'Done' }).click();
+      }
+      await page.goto(`${world.origin}/#/shared/${world.b.id}`);
+      await expect(page.locator('h1').first()).toBeAttached();
+      await settle(page);
+      await page.evaluate(() => window.scrollTo(0, 600));
+      await page.waitForTimeout(100);
+      out[`${vp.id}-shared-scrolled`] = await geometry();
+      await page.screenshot({ path: shotPath(`metrics-${vp.id}-shared-scrolled-synthetic.png`) });
+    } finally {
+      await ctx.close();
+    }
+  }
+  record('metrics', out);
+});
+
+/* ---- Follow-ups on the first sweep's findings -------------------------------------------------------- */
+
+const focusDesc = (page: Page) =>
+  page.evaluate(() => {
+    const a = document.activeElement;
+    if (a === null) return 'null';
+    return `${a.tagName}${a.getAttribute('role') === null ? '' : `[${a.getAttribute('role')}]`} "${(a.getAttribute('aria-label') ?? a.textContent ?? '').trim().slice(0, 50)}" fv=${a.matches(':focus-visible')}`;
+  });
+
+test('followup', async ({ browser, world }) => {
+  test.skip(!ONLY_VP.split(',').includes('followup'), 'only on request');
+  const out: Record<string, unknown> = {};
+  for (const vp of [VIEWPORTS[0], VIEWPORTS[3]] as Viewport[]) {
+    for (const theme of THEMES) {
+      const key = `${vp.id}-${theme}`;
+      const res: Record<string, unknown> = {};
+      const ctx = await newCtx(browser, vp, theme);
+      const page = await ctx.newPage();
+      try {
+        await signIn(page, world.origin, world.a);
+        await expect(page.locator('[data-day]').first()).toBeVisible();
+        await settle(page);
+        const step = async (id: string, work: () => Promise<void>) => {
+          try {
+            await work();
+          } catch (error) {
+            res[`error-${id}`] = String(error).slice(0, 400);
+            await page.keyboard.press('Escape').catch(() => undefined);
+            await page.goto(`${world.origin}/#/timesheet`).catch(() => undefined);
+            await settle(page).catch(() => undefined);
+          }
+        };
+
+        // F2: pressed toggle buttons keep or lose the focus ring.
+        await step('F2', async () => {
+        for (const label of ['Show details', 'Change several days']) {
+          const btn = page.getByRole('button', { name: label });
+          await btn.focus();
+          await page.keyboard.press('Shift+Tab');
+          await page.keyboard.press('Tab');
+          const before = await stopInfo(page);
+          const ringBefore = await measureRing(page, before, vp.width, vp.height);
+          await page.keyboard.press('Enter');
+          await page.waitForTimeout(150);
+          await btn.focus();
+          await page.keyboard.press('Shift+Tab');
+          await page.keyboard.press('Tab');
+          const after = await stopInfo(page);
+          const ringAfter = await measureRing(page, after, vp.width, vp.height);
+          const pressed = await btn.getAttribute('aria-pressed');
+          await page.screenshot({ path: shotPath(`followup-${key}-pressed-${label.replace(/\s+/g, '-')}-synthetic.png`) });
+          res[`pressed:${label}`] = { pressed, nameAfter: after.name, shadowBefore: before.boxShadow, shadowAfter: after.boxShadow, ringBefore, ringAfter };
+          await page.keyboard.press('Enter');
+          await page.waitForTimeout(150);
+        }
+        });
+
+        // F1: batch review dialog, Escape and Cancel, where focus goes; and the review -> conflicts step.
+        for (const how of ['Escape', 'Cancel', 'Conflicts']) await step(`F1-${how}`, async () => {
+          const toggle = page.getByRole('button', { name: 'Change several days' });
+          if ((await toggle.getAttribute('aria-pressed')) !== 'true') {
+            await toggle.focus();
+            await page.keyboard.press('Enter');
+          }
+          const box = page.getByLabel(`Select ${world.d0}`);
+          if (!(await box.isChecked())) {
+            await box.focus();
+            await page.keyboard.press('Space');
+          }
+          await page.getByLabel('Category for selected days').selectOption('Off');
+          const preview = page.getByRole('button', { name: 'Preview changes' });
+          await preview.focus();
+          await page.keyboard.press('Enter');
+          const dialog = page.getByRole('dialog');
+          await expect(dialog).toBeVisible();
+          await page.waitForTimeout(200);
+          const onOpen = await focusDesc(page);
+          if (how === 'Escape') await page.keyboard.press('Escape');
+          else if (how === 'Cancel') {
+            await dialog.getByRole('button', { name: 'Cancel' }).focus();
+            await page.keyboard.press('Enter');
+          } else {
+            await dialog.getByRole('button', { name: 'Review conflicts' }).focus();
+            await page.keyboard.press('Enter');
+            await page.waitForTimeout(200);
+            res['batch-conflicts-step'] = { focusAfterStep: await focusDesc(page), heading: await dialog.locator('h2').textContent() };
+            await dialog.getByRole('button', { name: 'Back' }).focus();
+            await page.keyboard.press('Enter');
+            await page.waitForTimeout(200);
+            res['batch-back-step'] = { focusAfterBack: await focusDesc(page) };
+            await page.keyboard.press('Escape');
+          }
+          await page.waitForTimeout(250);
+          res[`batch-${how}`] = { onOpen, open: await dialog.isVisible(), focusAfter: await focusDesc(page), previewDisabled: await preview.isDisabled() };
+        });
+        await step('F1-done', async () => {
+          const done = page.getByRole('button', { name: 'Done' });
+          if (await done.isVisible()) await done.click();
+        });
+
+        // Label review dialog: the review -> conflicts step.
+        await step('F1-label', async () => {
+        const triggerD0 = page.getByRole('button', { name: new RegExp(`^Label for ${world.d0}`) });
+        await triggerD0.focus();
+        await page.keyboard.press('Enter');
+        const listD0 = page.getByRole('listbox', { name: `Label for ${world.d0}` });
+        await expect(listD0).toBeVisible();
+        for (let i = 0; i < 12; i += 1) {
+          const activeText = await listD0.evaluate((el) => document.getElementById(el.getAttribute('aria-activedescendant') ?? '')?.textContent ?? '');
+          if (activeText === 'Off') break;
+          await page.keyboard.press('ArrowDown');
+        }
+        await page.keyboard.press('Enter');
+        const review = page.getByRole('dialog', { name: `Review label change for ${world.d0}` });
+        await expect(review).toBeVisible();
+        res['label-review-open'] = await focusDesc(page);
+        await review.getByRole('button', { name: 'Review conflicts' }).focus();
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(200);
+        res['label-review-conflicts-step'] = await focusDesc(page);
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(250);
+        res['label-review-closed'] = await focusDesc(page);
+        });
+
+        // F3: messages that appear without a live region.
+        await step('F3', async () => {
+        await page.goto(`${world.origin}/#/settings`);
+        await settle(page);
+        const grant = page.getByRole('form', { name: 'Share my timesheets' });
+        if ((await grant.count()) > 0) {
+          const initial = await grant.locator('p.notice').allTextContents();
+          await grant.getByRole('radio', { name: 'View only' }).check();
+          await page.waitForTimeout(100);
+          const afterView = await grant.locator('p.notice').allTextContents();
+          await grant.getByRole('radio', { name: 'None' }).focus();
+          await page.keyboard.press('Space');
+          await page.waitForTimeout(100);
+          const after = await grant.locator('p.notice').evaluateAll((els) => els.map((el) => ({ text: el.textContent, role: el.getAttribute('role'), live: el.closest('[aria-live], [role="status"], [role="alert"]') !== null })));
+          res['share-grant-problem'] = { initial, afterView, afterNone: after, focus: await focusDesc(page) };
+        }
+        const policy = page.getByRole('form', { name: 'New policy version' });
+        if ((await policy.count()) > 0) {
+          const initial = await policy.locator('p.notice').allTextContents();
+          const firstNumber = policy.locator('input[type="number"]').first();
+          if ((await firstNumber.count()) > 0) {
+            await firstNumber.fill('');
+            await page.keyboard.type('-5');
+            await page.waitForTimeout(150);
+          }
+          const after = await policy.locator('p.notice').evaluateAll((els) => els.map((el) => ({ text: el.textContent, role: el.getAttribute('role'), live: el.closest('[aria-live], [role="status"], [role="alert"]') !== null })));
+          res['policy-problem'] = { initial, after, field: await firstNumber.getAttribute('aria-label').catch(() => null) };
+          await page.screenshot({ path: shotPath(`followup-${key}-policy-problem-synthetic.png`), fullPage: false });
+        }
+        });
+
+        // F4: inline confirm groups: Cancel and Escape, where focus goes.
+        await page.goto(`${world.origin}/#/settings`);
+        await settle(page);
+        for (const [label, how] of [
+          [/^End sharing with/, 'Escape'],
+          [/^End sharing with/, 'Cancel'],
+          [/^Change items shared with/, 'Cancel'],
+          [/^Leave .*shared items$/, 'Escape'],
+        ] as const) await step(`F4-${String(label)}-${how}`, async () => {
+          const opener = page.getByRole('button', { name: label }).first();
+          if ((await opener.count()) === 0) {
+            res[`confirm-${String(label)}-${how}`] = 'opener not found';
+            return;
+          }
+          await opener.focus();
+          await page.keyboard.press('Enter');
+          await page.waitForTimeout(200);
+          const opened = await focusDesc(page);
+          if (how === 'Escape') await page.keyboard.press('Escape');
+          else {
+            await page.getByRole('button', { name: 'Cancel', exact: true }).first().focus();
+            await page.keyboard.press('Enter');
+          }
+          await page.waitForTimeout(200);
+          res[`confirm-${String(label)}-${how}`] = { opened, after: await focusDesc(page) };
+          if (how === 'Escape' || how === 'Cancel') {
+            await page.goto(`${world.origin}/#/settings`);
+            await settle(page);
+          }
+        });
+      } finally {
+        out[key] = res;
+        await ctx.close();
+      }
+    }
+  }
+  record('followup', out);
+});

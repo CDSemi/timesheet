@@ -3,6 +3,7 @@ import { api, type ReceivedShare, type User } from '../api.ts';
 import { parseReviewHash, reviewHash } from './reviewModel.ts';
 import { SharingSwitcher } from './SharingSwitcher.tsx';
 import { parseSharedHash, type SharedView } from './sharingModel.ts';
+import { useBlockSizeProperty } from './useBlockSize.ts';
 
 /**
  * The screens reachable from the navigation. Import (the person's own workbook and opening
@@ -114,6 +115,9 @@ export function AppShell({
   const [moreOpen, setMoreOpen] = useState(false);
   const moreButton = useRef<HTMLButtonElement>(null);
   const tabsRef = useRef<HTMLElement>(null);
+  const barRef = useRef<HTMLElement>(null);
+  // The sticky bar wraps (52 to 107px); scroll padding follows its real height (WP5-UX-AX-01).
+  useBlockSizeProperty(barRef, '--shell-bar-size');
   const { tabs, more } = mobileRoutesFor(user.role);
   // Import belongs under Settings on the desktop bar; on the phone it is its own entry under "More".
   const desktopCurrent = route === 'import' ? 'settings' : route;
@@ -149,7 +153,7 @@ export function AppShell({
 
   return (
     <>
-      <header className="shell-bar">
+      <header ref={barRef} className="shell-bar">
         <span className="shell-brand">C&amp;D Semi</span>
         <nav className="shell-nav" aria-label="Main">
           {desktopRoutesFor(user.role).map((item) => (

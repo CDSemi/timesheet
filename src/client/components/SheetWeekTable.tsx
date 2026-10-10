@@ -1,7 +1,7 @@
 import { type KeyboardEvent, type MouseEvent, useId, useRef, useState } from 'react';
 import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.tsx';
 import { LABEL_CHOICES, type LabelChoice } from './labelPickerModel.ts';
-import { DETAIL_ROWS, type SheetDay, type SheetWeek } from './sheetModel.ts';
+import { dayButtonName, DETAIL_ROWS, type SheetDay, type SheetWeek } from './sheetModel.ts';
 
 /** The in-cell label picker of the sheet (E-3 a): what each day's label is now, and what a pick does. */
 export interface LabelPickerActions {
@@ -165,7 +165,7 @@ export function LabelPicker({ day, picker }: { day: SheetDay; picker: LabelPicke
   );
 }
 
-/** "Edit" while the day can change, otherwise "View"; the stable accessible name of the day button. */
+/** "Edit" while the day can change, otherwise "View": the first word of the day button's name (`dayButtonName`). */
 export const dayVerb = (actions: Pick<DayActions, 'editable' | 'locked'>): 'Edit' | 'View' => (actions.editable && !actions.locked ? 'Edit' : 'View');
 
 /** A click anywhere on the day opens it, except on its own controls (they act themselves). */
@@ -276,7 +276,13 @@ function DayRows({ day, details, actions, verb }: { day: SheetDay; details: bool
                 <span className="mono">{day.dateText}</span>
               </span>
             ) : (
-              <button type="button" className="sheet-day-button" onClick={() => actions.onEdit(day.workDate)} aria-label={`${verb} ${day.workDate}`}>
+              <button
+                type="button"
+                className="sheet-day-button"
+                onClick={() => actions.onEdit(day.workDate)}
+                aria-label={dayButtonName(verb, day, 'phone')}
+                data-day-button
+              >
                 <span className="t-weekday">{day.weekday}</span>
                 <span className="mono">{day.dateText}</span>
               </button>

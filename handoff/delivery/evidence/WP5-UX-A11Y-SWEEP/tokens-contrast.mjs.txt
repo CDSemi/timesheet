@@ -1,0 +1,54 @@
+// WP5-UX-A11Y-SWEEP: contrast of the text and status tokens of styles.css over every surface token, both themes.
+// The token values are copied from src/client/styles.css:7-199 at 5e104e1 (read-only diagnostic).
+const themes = {
+  light: {
+    card: '#ffffff', bg: '#f6f7f9', off: '#eef1f5', 'sheet-head': '#e9eef5', 'sheet-head-off': '#e1e6ee', 'day-nonworking': '#f0f2f5',
+    'attention-bg': '#fff4dc', 'day-selected': ['#1f5fbf', 0.09], 'day-hover': ['#1f5fbf', 0.04],
+    text: '#1c2430', muted: '#5b6675', accent: '#1f5fbf', ok: '#1a7f4b', warn: '#8a5a00', error: '#b42318', 'attention-ink': '#7a4f00',
+  },
+  dark: {
+    card: '#1a2029', bg: '#12161c', off: '#202733', 'sheet-head': '#222a35', 'sheet-head-off': '#283140', 'day-nonworking': '#1e252f',
+    'attention-bg': '#33290f', 'day-selected': ['#6ea8ff', 0.14], 'day-hover': ['#6ea8ff', 0.06],
+    text: '#e6e9ee', muted: '#9aa5b4', accent: '#6ea8ff', ok: '#5fd29a', warn: '#e3b341', error: '#ff8a80', 'attention-ink': '#f0c25a',
+  },
+};
+const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const lum = (c) => {
+  const f = (v) => {
+    const s = v / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+};
+const ratio = (a, b) => {
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+};
+const over = ([h, a], base) => rgb(h).map((v, i) => Math.round(v * a + base[i] * (1 - a)));
+const hex = (c) => `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+const surfaces = ['card', 'bg', 'off', 'sheet-head', 'sheet-head-off', 'day-nonworking', 'attention-bg', 'day-selected', 'day-hover'];
+const inks = ['text', 'muted', 'accent', 'ok', 'warn', 'error', 'attention-ink'];
+for (const [name, t] of Object.entries(themes)) {
+  console.log(`== ${name}`);
+  const solid = {};
+  for (const s of surfaces) solid[s] = Array.isArray(t[s]) ? over(t[s], rgb(t.card)) : rgb(t[s]);
+  console.log(`surfaces: ${surfaces.map((s) => `${s}=${hex(solid[s])}`).join(' ')}`);
+  for (const ink of inks) {
+    const row = surfaces.map((s) => {
+      const r = ratio(rgb(t[ink]), solid[s]);
+      return `${s}:${r.toFixed(2)}${r < 4.5 ? '!' : ''}`;
+    });
+    console.log(`${ink.padEnd(14)} ${row.join(' ')}`);
+  }
+  // non-text: the 1px option/selected tints against the card
+  console.log(`day-selected vs card ${ratio(solid['day-selected'], solid.card).toFixed(2)}; accent vs day-selected ${ratio(rgb(t.accent), solid['day-selected']).toFixed(2)}; accent vs card ${ratio(rgb(t.accent), solid.card).toFixed(2)}`);
+}
+// Candidate darker light --ok values reaching 4.5 on the selected tint
+const sel = over(['#1f5fbf', 0.09], [255, 255, 255]);
+for (const cand of ['#1a7f4b', '#187a48', '#177548', '#167045', '#156b42']) console.log(`light ok candidate ${cand}: on day-selected ${ratio(rgb(cand), sel).toFixed(2)}, on card ${ratio(rgb(cand), [255, 255, 255]).toFixed(2)}, on sheet-head ${ratio(rgb(cand), rgb('#e9eef5')).toFixed(2)}`);
+// Minimum over every light surface for each candidate (the token must hold wherever status text can sit).
+const lightSurfaces = ['#ffffff', '#f6f7f9', '#eef1f5', '#e9eef5', '#e1e6ee', '#f0f2f5', '#fff4dc', hex(sel), hex(over(['#1f5fbf', 0.04], [255, 255, 255]))];
+for (const cand of ['#1a7f4b', '#177548', '#167045', '#156b42']) {
+  const min = Math.min(...lightSurfaces.map((s) => ratio(rgb(cand), rgb(s))));
+  console.log(`light ok candidate ${cand}: minimum over all light surfaces ${min.toFixed(2)}`);
+}

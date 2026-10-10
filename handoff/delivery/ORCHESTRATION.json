@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mission_id": "timesheet-software-readiness",
-  "status": "blocked",
+  "status": "running",
   "authorized_scope": [
     "WP1",
     "WP2",
@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "ux-change-round-owner-question-q2",
+  "phase": "ux-change-round-fix7",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,8 +28,20 @@
   "current_source_digest": "07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX-A11Y-SWEEP",
+  "next_task_id": "WP5-UX-FIX7-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-09",
+      "observation": "WP5-UX-FIX7-MASK attempt 2 reported 21 profile-path pattern hits in already-committed handoff files (evidence/orchestration, WF-IMPL-TOOLING, WP1 Codex review, WP3-REQ, WP2-T05-PRIVSCAN). Those files passed the precommit check when committed, so the hits are probably masked placeholders, documentation patterns or routes rather than real account names; not classified yet. Follow-up: a read-only privacy classification after the WP5 re-accept (no edit before then)."
+    },
+    {
+      "date": "2026-10-09",
+      "observation": "Coordinator records that quoted a blocked token verbatim (the probe-truncated synthetic address) re-triggered the precommit check in WP5-UX-FIX7-FREEZE attempt 2. Coordinator rule: never quote a blocked token with its at sign in board, checkpoint or brief text; describe it instead. The committer (sonnet) also ran one null-device redirect and a node -e probe in attempt 2, against its brief."
+    },
+    {
+      "date": "2026-10-09",
+      "observation": "WP5-UX-FIX7 (opus worker-high) piped one read-only grep into `head` against the brief, and ran a base reproduction in parallel with full e2e run 1 using the same TEMP output folder, which deleted one Playwright trace (ENOENT, no app failure; later runs were alone). Future worker briefs: give each parallel Playwright run its own output folder."
+    },
     {
       "date": "2026-10-09",
       "observation": "The owner committed the coordinator's uncommitted post-CKPT2 records himself (49a3ff0, handoff-only, pushed, reusing the WP5-UX-CKPT2 message) while the board waited for WP5-UX-Q1. Reconciled by the read-only lookup WP5-UX-RECON1; source identity unchanged (digest b7bbcbc0). Later freeze briefs use 49a3ff0 as the expected HEAD."
@@ -151,7 +163,9 @@
       "observation": "WP4-DEC: the worker bundled evidence writing, the brief-results heredoc and 'cmd.exe /c \"npm run digest\"' in one backgrounded Bash call. The cmd.exe step hung, the heredoc append never landed, and the worker's hand-back wrongly said results were appended. The coordinator stopped the background task and resumed the worker to append the results with the Edit tool. Briefs now forbid cmd.exe entirely (with or without /c) and ask for npm or node to be run from Git Bash with Node 24 first on PATH, and for task records to be written with the Edit tool, not shell heredocs."
     }
   ],
-  "pending_owner_question_2": {
+  "pending_owner_question_2": null,
+  "answered_owner_question_ux_q2": {
+    "answered": "2026-10-09, owner chat 'a' (accessibility sweep, then one fix round); see owner_decisions",
     "id": "WP5-UX-Q2",
     "asked": "2026-10-09",
     "source": "WP5-UX-AUDIT-B5 FIX REQUIRED on 5e104e1 (handoff/delivery/WP5_UX_REVIEW_B5.md) after WP5-UX-AUDIT-A5 PASS; each area-B round since WP5-UX-AUDIT-B has found a few new keyboard-accessibility items.",
@@ -328,9 +342,20 @@
       "source": "owner chat, direct reply typed by the owner to pending question WP5-UX-Q1",
       "verbatim": "a",
       "decision": "WP5-UX-Q1 option (a): fix both area-B findings of WP5-UX-AUDIT-B4 in one small round, WP5-UX-FIX6: B4-01 a stronger shared focus-ring token with at least 3:1 against every adjacent surface in both themes plus an automated contrast check; B4-02 the display-zone due time in the US date format promised by docs/04. Then freeze, regate, a fresh area-B recheck and an area-A delta recheck before WP5 re-acceptance."
+    },
+    {
+      "date": "2026-10-09",
+      "source": "owner chat, direct reply typed by the owner to pending question WP5-UX-Q2",
+      "verbatim": "a",
+      "decision": "WP5-UX-Q2 option (a): run one read-only accessibility sweep (WP5-UX-A11Y-SWEEP: automated axe scan plus a full Tab/Shift+Tab/arrow/Escape walk of every screen on desktop and phone, light and dark) to list every remaining WCAG 2.2 AA item including B5-01..B5-03, then ONE fix round for all of them, then regate and fresh area-B and area-A-delta rechecks before WP5 re-acceptance."
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-09",
+      "basis": "WP5-UX-A11Y-SWEEP AX-05: docs/04 line 48 (EN and VI) documents the day button's accessible name as 'Edit {date}' (ISO date), while the visible label is '09/28' / 'Mon 09/28', which fails WCAG 2.2 SC 2.5.3 Label in Name; that name came from WP5-UX-PLAN's stable test hooks, not from an owner requirement; the owner chose WCAG compliance (WP5-UX-Q2 option a). AGENTS rule 8: flag a real contradiction and update the canonical rule plus translation.",
+      "decision": "Change the day-button accessible name so it contains the visible text and keeps the ISO date (for example 'Edit 09/28 (2026-09-28)', phone 'Edit Mon 09/28 (2026-09-28)', 'View …' for view-only), and 'End share with {name}' for the sharing row; update docs/04 line 48 EN and VI in the same fix task; e2e selectors move to one helper without weakening any assertion. WP5-UX-FIX7 runs on worker-high with an opus override (reason escalation: the area-B fix rounds keep recurring) and fixes AX-01..AX-10 in one round; then freeze, WP5-UX-REGATE5, a fresh area-B recheck B6 and an area-A delta recheck A6 (AX-06 and AX-08 touch the sharing and dialog flows)."
+    },
     {
       "date": "2026-10-09",
       "basis": "WP5-UX-AUDIT-A3 PASS and WP5-UX-AUDIT-B3 FIX REQUIRED (B3-01 Low, nested review dialog loses Escape and focus across the 1200px mode switch; B3-02 Low, docs/04 line 55) on a2ea7a4 / 0b8428fd; the third consecutive FIX REQUIRED in area B (B, B2, B3), each smaller; docs/08 escalation rule (recurring FIX REQUIRED) and 'never force PASS'.",
@@ -16598,8 +16623,8 @@
       "id": "WP5-UX-A11Y-SWEEP",
       "package": "WP5",
       "kind": "diagnose",
-      "status": "pending",
-      "blocked_by": "owner question WP5-UX-Q2 (dispatched only with option a)",
+      "status": "done",
+      "unblocked_by": "owner answer WP5-UX-Q2 (a), 2026-10-09",
       "depends_on": [
         "WP5-UX-REGATE4"
       ],
@@ -16612,25 +16637,196 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
-      "attempt": 0,
+      "agent_id": "a8f0254830ef91286",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
       "owned_paths": [
         "handoff/delivery/tasks/WP5-UX-A11Y-SWEEP.md",
         "handoff/delivery/evidence/WP5-UX-A11Y-SWEEP"
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX-A11Y-SWEEP.md",
       "report": "handoff/delivery/tasks/WP5-UX-A11Y-SWEEP.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-A11Y-SWEEP/00-README.txt",
+        "handoff/delivery/evidence/WP5-UX-A11Y-SWEEP/01-digest-before.txt",
+        "handoff/delivery/evidence/WP5-UX-A11Y-SWEEP/11-summary-r1.txt",
+        "handoff/delivery/evidence/WP5-UX-A11Y-SWEEP/11-summary-r2.txt",
+        "handoff/delivery/evidence/WP5-UX-A11Y-SWEEP/12-hidden-norings-r1.txt",
+        "handoff/delivery/evidence/WP5-UX-A11Y-SWEEP/12-hidden-norings-r2.txt",
+        "handoff/delivery/evidence/WP5-UX-A11Y-SWEEP/90-digest-after.txt"
+      ],
       "baseline_commit": "5e104e14dad71268a9185920c04ed0ee2a4b31c2",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "diagnosed: 10 WCAG 2.2 AA issues (0 High, 5 Medium, 5 Low): AX-01 (2.4.11, B5-01 widened: sticky shell bar, share bar and editor head hide Shift+Tab stops on every long screen), AX-02 (1.4.11+2.4.7, B5-02 label-picker active option), AX-03 (2.4.7, B5-03 plus the Clock out dialog at 320), AX-04 (2.4.7, pressed toolbar toggles lose the ring), AX-05 (2.5.3, day button names 'Edit {date}' do not contain the visible '09/28'; 'End sharing with' vs visible 'End share'; contradicts docs/04 line 48), AX-06 (3.2.2, the 'Shared with me' select navigates on arrow key), AX-07 (4.1.3, error and notice paragraphs without roles), AX-08 (2.4.3, focus drops to BODY after closing or switching dialog steps), AX-09 (1.4.3, light --ok 4.41:1 on the selected row), AX-10 (1.4.10, batch day head overlap at 320). axe-core is not in node_modules and nothing was installed; the probe implemented the needed checks and walked every state with real Tab/Shift+Tab at 5 viewports, light and dark; r1 and r2 identical, three partial reruns matched. One grouped fix task proposed (styles/tokens, focused component changes, tests failing on 5e104e1, docs/04 line 48 EN/VI). Digest 07c3ca00 before, export and after; HEAD observed 5b349f8 (a handoff-only commit after d3935e7). Slips: one pipe into head -c and two no-op node -e calls; node_modules copied instead of npm ci; run f1 hung 30 minutes and ended by itself.",
+      "next_action": "WP5-UX-FIX7 fixes AX-01..AX-10 in one round."
+    },
+    {
+      "id": "WP5-UX-FIX7",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP5-UX-AUDIT-B5",
+      "depends_on": [
+        "WP5-UX-A11Y-SWEEP",
+        "WP5-UX-REGATE4"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "escalation",
+      "routing": {
+        "size": "L",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ac4684761796f0e78",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client",
+        "tests/e2e",
+        "tests/client",
+        "docs/04_UX_AND_SETTINGS.md",
+        "docs/04_UX_AND_SETTINGS.vi.md",
+        "handoff/delivery/tasks/WP5-UX-FIX7.md",
+        "handoff/delivery/evidence/WP5-UX-FIX7"
+      ],
+      "ownership_note": "src/client only for the files the ten AX fixes need; tests/e2e excludes fixtures.ts; no server, domain or api.ts change.",
+      "prompt": "handoff/delivery/tasks/WP5-UX-FIX7.md",
+      "report": "handoff/delivery/tasks/WP5-UX-FIX7.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-FIX7/00-README.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/03-repro-base-run1.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/03b-repro-base-run2.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/03c-repro-base-r12.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/04-typecheck-lint-test.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/06b-new-checks-fixed-run2.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/08d-e2e-counts.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/11-selfcheck-summary-s1.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/12-selfcheck-hidden-norings-s1.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/14-diag-date-field-focus.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/30-preflight.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/40-verify.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/50-digest.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/60-docs-parity.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/70-privacy-grep.txt"
+      ],
+      "baseline_commit": "5b349f8f72c051f5bee3f4fe80855c941e6d9f12",
+      "source_digest": "b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563",
+      "reviewed_digest": null,
+      "author_agent_ids": [
+        "ac4684761796f0e78"
+      ],
+      "decision": "reported done (not independent proof): AX-01..AX-10 fixed client-only in 29 files (26 modified, 3 new: src/client/components/useBlockSize.ts, tests/e2e/keyboard-access.spec.ts, tests/e2e/dayButton.ts); docs/04 line 48 EN+VI only. New checks fail on a 5e104e1 export (40 failed run 1, 10 failed run 2, R-12 fails). Deviation AX-09: light --ok #136a42 (sweep's #167045 measured 4.32:1 under the selection tint). Extra outside the ten: B5 risk R-12, date/time fields get a :focus-within ring after Shift+Tab (desktop check). Self-check with the sweep probe at 1280/768/390/320 light and dark: 0 hidden stops (sweep: 262); no-ring stops only date/time fields, explained as a probe limit by a diagnostic. Unit 1823 passed; full e2e exit 0, desktop 103+13 skipped, mobile 105+11 skipped, 0 failed, 0 flaky; preflight 0; verify 0 (smoke 48262); digest b7c011d2 (793 files). Slips: one `| head` pipe on a read-only grep; one parallel run sharing the TEMP output folder (deleted one trace of e2e run 1, later runs alone).",
+      "next_action": "WP5-UX-FIX7-FREEZE (committer) on expected HEAD 5b349f8, digest b7c011d2; report the author and contents of 5b349f8."
+    },
+    {
+      "id": "WP5-UX-FIX7-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "history": [
+        "attempt 1 (agent a5c5eef877ae74158, self-reported claude-sonnet-5-5): stopped before commit; HEAD = origin/main = 5b349f8 (author huysrc, 'Checkpoint WP5 UX round: regate4 PASS, area A PASS, owner question Q2', parent d3935e7, 6 files all under handoff/); working-tree digest b7c011d2 matched; 141 paths staged (index left staged); precommit-check exit 1 with 37 blocks: 36 cut synthetic addresses (local part payroll-synthetic, domain cut to example.inval) (A11Y-SWEEP 11-summary-r1/r2/r3/r3d/r3e, FIX7 11-selfcheck-summary-s1 and 70-privacy-grep, tasks/WP5-UX-FIX7.md line 205) and 1 profile-path grep pattern (FIX7 privacy-grep.sh.txt line 12); the committer profile only allows masking a profile account segment, so no file was edited. Coordinator: bounded mask task WP5-UX-FIX7-MASK (light), then attempt 2.",
+        "attempt 2 (same agent, resumed): stopped before commit; HEAD = origin/main = 5b349f8; staged list before add identical to attempt 1 (141); digest b7c011d2 matched; 143 staged; diff check 0; precommit-check exit 1 with 7 email blocks, all quoting the cut synthetic address in records written after the mask: board history (this entry), checkpoint pair (a 17-character quoted form), the MASK brief lines 8 and 34, evidence/WP5-UX-FIX7-MASK/mask-report.txt line 3 and this brief's attempt 1 Results line 214. Slip: one shell call with a null-device redirect and a node -e probe (no repo effect). Coordinator: rewrote its own five occurrences without the at sign (board, checkpoint pair, MASK brief, this brief's line 118); WP5-UX-FIX7-MASK attempt 2 masks the two agent-written lines and sweeps every changed handoff path with the check's rule; then attempt 3."
+      ],
+      "depends_on": [
+        "WP5-UX-FIX7",
+        "WP5-UX-FIX7-MASK"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-FIX7-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX-FIX7-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-FIX7-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-FIX7-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "5b349f8f72c051f5bee3f4fe80855c941e6d9f12",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Waits for the owner's answer to WP5-UX-Q2."
+      "next_action": "After WP5-UX-FIX7-MASK: attempt 2 re-stages the same explicit paths (index already holds attempt 1's 141 paths), reruns every check and commits/pushes; then WP5-UX-REGATE5."
+    },
+    {
+      "id": "WP5-UX-FIX7-MASK",
+      "package": "WP5",
+      "kind": "documentation",
+      "status": "done",
+      "history": [
+        "attempt 1 (agent ab5555bcfa08bd836, self-reported claude-sonnet-5-5): done; 36 <email> and 1 <user> replacements in nine files; sed used instead of Edit; no index change. Its own report and the MASK brief then quoted the cut token again (freeze attempt 2 blocks)."
+      ],
+      "depends_on": [
+        "WP5-UX-FIX7"
+      ],
+      "profile": "timesheet-light",
+      "requested_model": "sonnet",
+      "requested_effort": "low",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ab5555bcfa08bd836",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 2,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-FIX7-MASK.md",
+        "handoff/delivery/evidence/WP5-UX-FIX7-MASK",
+        "handoff/delivery/evidence/WP5-UX-A11Y-SWEEP/11-summary-r1.txt",
+        "handoff/delivery/evidence/WP5-UX-A11Y-SWEEP/11-summary-r2.txt",
+        "handoff/delivery/evidence/WP5-UX-A11Y-SWEEP/11-summary-r3.txt",
+        "handoff/delivery/evidence/WP5-UX-A11Y-SWEEP/11-summary-r3d.txt",
+        "handoff/delivery/evidence/WP5-UX-A11Y-SWEEP/11-summary-r3e.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/11-selfcheck-summary-s1.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/70-privacy-grep.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX7/privacy-grep.sh.txt",
+        "handoff/delivery/tasks/WP5-UX-FIX7.md",
+        "handoff/delivery/tasks/WP5-UX-FIX7-FREEZE.md"
+      ],
+      "ownership_note": "tasks/WP5-UX-FIX7.md line 205 only; tasks/WP5-UX-FIX7-FREEZE.md attempt 1 Results line 214 only (attempt 2); no git index change (the freeze staging stays).",
+      "prompt": "handoff/delivery/tasks/WP5-UX-FIX7-MASK.md",
+      "report": "handoff/delivery/tasks/WP5-UX-FIX7-MASK.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-FIX7-MASK/mask-report.txt"
+      ],
+      "baseline_commit": "5b349f8f72c051f5bee3f4fe80855c941e6d9f12",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [
+        "ab5555bcfa08bd836"
+      ],
+      "decision": "reported done: 36 cut addresses masked as <email> (A11Y-SWEEP 11-summary r1 10, r2 10, r3 2, r3d 2, r3e 2; FIX7 11-selfcheck-summary-s1 8, 70-privacy-grep 1; tasks/WP5-UX-FIX7.md line 205 1) and the profile account segment in FIX7 privacy-grep.sh.txt line 12 masked as <user> (1 edit); Grep shows only allowed full @example.invalid addresses, counts unchanged; no git write command; index and other files untouched. Deviation: sed was used for the 36 email replacements instead of the Edit tool (the freeze's diff check and precommit check re-verify the files). Attempt 2 (reported): mask-report.txt line 3 rewritten without the at sign; FIX7-FREEZE attempt 1 Results line 214 cut address replaced with <email>; sweep of the whole handoff tree (superset of the 114 changed/untracked paths) with the check's rules: 0 blocked emails, 0 profile-path hits in changed paths (ORCHESTRATION.json:2746 is a /users API route); 21 older profile-path pattern hits in already-committed files left unedited (outside scope); Edit tool only; no git write command.",
+      "next_action": "None; WP5-UX-FIX7-FREEZE attempt 3."
     },
     {
       "id": "WP5-UX-CKPT3",

@@ -38,14 +38,30 @@ export function BatchDialog({
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
   const [step, setStep] = useState<'review' | 'conflicts'>('review');
   const [reason, setReason] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  /**
+   * True after the first step change. The headings take focus only from then on, so on open the
+   * dialog still focuses its first control as before.
+   */
+  const [stepChanged, setStepChanged] = useState(false);
 
   useEffect(() => {
     const element = dialog.current;
     if (element !== null && !element.open) element.showModal();
   }, []);
+
+  // A step change replaces the dialog's content: focus moves to the new step's heading, never to the page (WP5-UX-AX-08).
+  useEffect(() => {
+    if (stepChanged) heading.current?.focus();
+  }, [step, stepChanged]);
+
+  function goTo(next: 'review' | 'conflicts') {
+    setStepChanged(true);
+    setStep(next);
+  }
 
   const needsReason = preview.reason_required;
   const reasonMissing = needsReason && reason.trim() === '';
@@ -58,7 +74,9 @@ export function BatchDialog({
     <dialog ref={dialog} className="dialog" aria-labelledby="batch-title" onClose={onClose}>
       {step === 'review' ? (
         <div className="stack">
-          <h2 id="batch-title">{title}</h2>
+          <h2 id="batch-title" ref={heading} tabIndex={stepChanged ? -1 : undefined}>
+            {title}
+          </h2>
           <p>
             {preview.changed_count} {preview.changed_count === 1 ? 'day' : 'days'} will change. Nothing is saved until you commit.
           </p>
@@ -97,7 +115,7 @@ export function BatchDialog({
               Cancel
             </button>
             {hasConflicts ? (
-              <button type="button" onClick={() => setStep('conflicts')} disabled={!canContinue}>
+              <button type="button" onClick={() => goTo('conflicts')} disabled={!canContinue}>
                 Review conflicts
               </button>
             ) : (
@@ -109,7 +127,9 @@ export function BatchDialog({
         </div>
       ) : (
         <div className="stack">
-          <h2 id="batch-title">Recorded work conflicts with the new label</h2>
+          <h2 id="batch-title" ref={heading} tabIndex={stepChanged ? -1 : undefined}>
+            Recorded work conflicts with the new label
+          </h2>
           <p>No work session is edited or deleted. Only the day label changes.</p>
           <ul className="plain conflict-list">
             {details.map(({ conflict, sessions }) => (
@@ -138,7 +158,7 @@ export function BatchDialog({
             </p>
           )}
           <div className="dialog-actions">
-            <button type="button" className="secondary" onClick={() => setStep('review')}>
+            <button type="button" className="secondary" onClick={() => goTo('review')}>
               Back
             </button>
             <button type="button" onClick={() => submit(true)} disabled={!confirmed || busy}>

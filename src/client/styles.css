@@ -20,7 +20,8 @@
   --accent: #1f5fbf;
   --on-accent: #ffffff;
   --error: #b42318;
-  --ok: #1a7f4b;
+  /* 4.5:1 or more on every light surface token, also under the selection tint (WP5-UX-AX-09, SC 1.4.3) */
+  --ok: #136a42;
   --warn: #8a5a00;
 
   /* Shape and motion */
@@ -82,6 +83,7 @@
   --dialog-fit: 92vw;
   --dialog-fit-wide: 96vw;
   --select-min: 10rem;
+  --switcher-select-min: 6rem;
   --facts-min: 11rem;
   --figures-min: 9rem;
   --counter-min: 6rem;
@@ -139,6 +141,16 @@
   --layer-bar: 3;
   --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(28 36 48 / 0.06);
   --more-width: 16rem;
+  /*
+   * Rendered block sizes of the sticky bars (WP5-UX-AX-01, SC 2.4.11). The shell writes the measured
+   * sizes over these defaults (a bar wraps to 104px at 768px and with the "Shared with me" switcher),
+   * so scroll padding keeps a focused control clear of them; a bar that is not shown counts as none.
+   */
+  --size-none: 0px;
+  --shell-bar-size: var(--bar-height-compact);
+  --share-bar-size: var(--size-none);
+  --editor-head-size: var(--size-none);
+  --focus-clearance: var(--space-2);
 
   /* Type: the system stack only (the CSP allows no web fonts) */
   --root-font-size: 15px;
@@ -379,6 +391,14 @@ body {
   box-shadow: none;
 }
 
+/*
+ * A control that takes focus scrolls clear of the sticky shell bar (and, from 768px, the sticky share
+ * bar below it), whatever height they wrap to (WP5-UX-AX-01, SC 2.4.11).
+ */
+html {
+  scroll-padding-top: calc(var(--shell-bar-size) + var(--focus-clearance));
+}
+
 @media (max-width: 767px) {
   html {
     scroll-padding-bottom: calc(var(--tabbar-height) + var(--space-2));
@@ -386,6 +406,14 @@ body {
 }
 
 @media (min-width: 768px) {
+  :root {
+    --shell-bar-size: var(--bar-height);
+  }
+
+  html {
+    scroll-padding-top: calc(var(--shell-bar-size) + var(--share-bar-size) + var(--focus-clearance));
+  }
+
   .shell-bar {
     min-height: var(--bar-height);
   }
@@ -469,6 +497,16 @@ input:hover,
 select:hover,
 textarea:hover {
   border-color: var(--muted);
+}
+
+/*
+ * Shift+Tab into a date or time field focuses the browser's own picker button inside it: the field then
+ * matches neither :focus nor :focus-visible, only :focus-within, so the shared ring follows that (WP5-UX-B5
+ * R-12; a click or Tab into these fields already matches :focus-visible, so nothing else changes).
+ */
+input[type='date']:focus-within,
+input[type='time']:focus-within {
+  box-shadow: var(--focus-ring);
 }
 
 input[type='checkbox'],
@@ -781,6 +819,11 @@ tr.nonworking td {
   box-shadow: inset 0 0 0 var(--hairline) var(--accent);
 }
 
+/* A pressed toggle keeps its pressed edge and still shows the focus ring (WP5-UX-AX-04, SC 2.4.7). */
+.tools button[aria-pressed='true']:focus-visible {
+  box-shadow: var(--focus-ring), inset 0 0 0 var(--hairline) var(--accent);
+}
+
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(var(--facts-min), var(--track)));
@@ -952,6 +995,18 @@ textarea {
 
 .dialog::backdrop {
   background: var(--scrim);
+}
+
+/*
+ * A dialog that scrolls is a keyboard stop of its own; its ring is inset so the overflow never clips it
+ * (WP5-UX-AX-03, SC 2.4.7). Step headings take focus only as a starting point: not controls, so no ring.
+ */
+.dialog:focus-visible {
+  box-shadow: var(--focus-ring-inset), var(--shadow-overlay);
+}
+
+.dialog [tabindex='-1']:focus-visible {
+  box-shadow: none;
 }
 
 .dialog h2 {
@@ -1493,10 +1548,16 @@ textarea {
   box-shadow: inset var(--sheet-today-bar) 0 0 var(--accent);
 }
 
+/* In batch mode a narrow Day cell puts the selection box above the day button (WP5-UX-AX-10, SC 1.4.10). */
 .t-day-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
+}
+
+.t-day-head > .sheet-day-button {
+  max-width: 100%;
 }
 
 .sheet .sheet-day-button {
@@ -1916,6 +1977,13 @@ textarea {
   box-shadow: var(--shadow-overlay);
   overflow: auto;
   overscroll-behavior: contain;
+  /* A focused control scrolls clear of the sticky editor head (WP5-UX-AX-01, SC 2.4.11). */
+  scroll-padding-top: calc(var(--editor-head-size) + var(--focus-clearance));
+}
+
+/* The scrolling panel is a keyboard stop of its own: an inset ring the overflow cannot clip (WP5-UX-AX-03). */
+.day-panel:focus-visible {
+  box-shadow: var(--focus-ring-inset), var(--shadow-overlay);
 }
 
 .day-panel-side {
@@ -1943,10 +2011,14 @@ textarea {
   .day-panel-side {
     position: sticky;
     inset: auto;
-    top: calc(var(--bar-height) + var(--space-3));
+    top: calc(var(--shell-bar-size) + var(--share-bar-size) + var(--space-3));
     width: auto;
-    max-height: calc(100dvh - var(--bar-height) - 2 * var(--space-3));
+    max-height: calc(100dvh - var(--shell-bar-size) - var(--share-bar-size) - 2 * var(--space-3));
     box-shadow: var(--shadow-panel);
+  }
+
+  .day-panel-side:focus-visible {
+    box-shadow: var(--focus-ring-inset), var(--shadow-panel);
   }
 }
 
@@ -2272,8 +2344,17 @@ textarea {
   transition: var(--transition);
 }
 
+/*
+ * The focused list keeps the ring, and the active option (what Enter picks) carries the inset ring
+ * (WP5-UX-AX-02, SC 1.4.11 and 2.4.7); the chosen option stays marked by colour and weight.
+ */
+.label-list:focus-visible {
+  box-shadow: var(--focus-ring), var(--shadow-overlay);
+}
+
 .label-option.active {
   background: var(--day-selected);
+  box-shadow: var(--focus-ring-inset);
 }
 
 .label-option[aria-selected='true'] {
@@ -2858,10 +2939,6 @@ code {
 
 /* ---- Sharing (FR-17): Settings, the shell switcher, the persistent owner bar -------------- */
 
-.shell-switcher {
-  gap: var(--space-2);
-}
-
 .flash {
   display: flex;
   flex-wrap: wrap;
@@ -2948,12 +3025,40 @@ code {
   color: var(--muted);
 }
 
+/* Sticky below the sticky shell bar, never under it (WP5-UX-AX-01, SC 2.4.11). */
 @media (min-width: 768px) {
   .share-bar {
     position: sticky;
-    top: 0;
+    top: var(--shell-bar-size);
     z-index: var(--layer-sticky);
   }
+}
+
+/*
+ * "Shared with me": the choice, then an explicit Open (WP5-UX-AX-06, SC 3.2.2). The choice narrows
+ * before the row wraps, so a 320px bar keeps the label, the choice and Open on one line.
+ */
+.shell-switcher {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.shell-switcher label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.shell-switcher select {
+  flex: 1 1 auto;
+  min-width: var(--switcher-select-min);
+}
+
+.shell-switcher button {
+  flex: none;
 }
 
 /* ---- Outbound pause banner of the operations status (WP4-T07) ---------------------------- */

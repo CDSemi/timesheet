@@ -50,7 +50,11 @@ export function SharingGrantForm({ onGranted }: { onGranted: (share: GivenShare)
         </span>
       </label>
       <SharingItemsFields items={items} onChange={setItems} disabled={busy} />
-      {problem !== null && <p className="notice">{problem}</p>}
+      {problem !== null && (
+        <p className="notice" role="status">
+          {problem}
+        </p>
+      )}
       {error !== null && (
         <p className="error" role="alert" data-error="share-grant">
           {error}

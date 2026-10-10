@@ -1,0 +1,19 @@
+import { join } from 'node:path';
+import { defineConfig } from '@playwright/test';
+
+// WP5-UX-A11Y-SWEEP probe configuration (diagnostic, outside the reviewed source; lives only in the
+// task folder's clean export). Same browser channel as playwright.config.ts (installed Edge, nothing
+// downloaded). Viewports and colour schemes are set per browser context inside the probe.
+const TASK = process.env.SWEEP_TASK ?? join(import.meta.dirname, '..', '..');
+
+export default defineConfig({
+  testDir: '.',
+  testMatch: '*.probe.ts',
+  outputDir: join(TASK, 'pw-output'),
+  workers: 1,
+  reporter: 'list',
+  timeout: 1_800_000,
+  expect: { timeout: 7_000 },
+  use: { channel: 'msedge', headless: true, screenshot: 'off', trace: 'off', locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' },
+  projects: [{ name: 'sweep' }],
+});

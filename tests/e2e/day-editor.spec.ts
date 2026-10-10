@@ -1,6 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { addDays } from '../../src/domain/dates.ts';
 import { dateTimeIn, instantOfWallTime, wallTimeIn } from '../client/zoneOracle.ts';
+import { namedDayButton } from './dayButton.ts';
 import { expect, newPerson, screenshotPath, type SeedClient, test } from './fixtures.ts';
 
 /*
@@ -98,7 +99,7 @@ test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, conf
   try {
     await signInThroughUi();
     // The grid (desktop) or the day list (mobile) opens the editor.
-    await page.locator(`[data-day="${date}"]`).getByRole('button', { name: `Edit ${date}` }).click();
+    await namedDayButton(page, date, 'Edit').click();
     const editor = page.getByRole('dialog', { name: /Day editor/ });
     await expect(editor).toBeVisible();
     await expect(editor.getByText('No session recorded for this day.')).toBeVisible();
@@ -850,7 +851,7 @@ test('future days show as upcoming from the server date, past days without a rec
   await snap(page, 'upcoming-days', project);
 
   // The editor shows the same state for that day.
-  await row.getByRole('button', { name: `Edit ${futureDay}` }).click();
+  await namedDayButton(page, futureDay, 'Edit').click();
   const editor = page.getByRole('dialog', { name: /Day editor/ });
   await expect(figure(editor, 'status')).toContainText('upcoming');
 });
@@ -902,7 +903,7 @@ test('the day editor is a side panel on a desktop and a modal bottom sheet on a 
   const project = testInfo.project.name;
   const [date = '', other = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
   await signInThroughUi();
-  const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
+  const dayButton = (workDate: string) => namedDayButton(page, workDate, 'Edit');
   await dayButton(date).click();
   const editor = page.getByRole('dialog', { name: /Day editor/ });
   await expect(editor).toBeVisible();
@@ -991,7 +992,7 @@ test.describe('WP5-UX-B-02: below 1200px the panel never hides a focused sheet c
       await page.setViewportSize({ width, height: 800 });
       await signInThroughUi();
       await expect(page.locator('[data-day]')).toHaveCount(14);
-      const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
+      const dayButton = (workDate: string) => namedDayButton(page, workDate, 'Edit');
       await dayButton(date).click();
       const editor = page.getByRole('dialog', { name: /Day editor/ });
       await expect(editor).toBeVisible();
@@ -1018,7 +1019,7 @@ test.describe('WP5-UX-B-02: below 1200px the panel never hides a focused sheet c
   test('at 1280px the panel stays beside the sheet and Escape closes it wherever focus is', async ({ page, employeeSeed, signInThroughUi }) => {
     const [date = '', other = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
     await signInThroughUi();
-    const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
+    const dayButton = (workDate: string) => namedDayButton(page, workDate, 'Edit');
     await dayButton(date).click();
     const editor = page.getByRole('dialog', { name: /Day editor/ });
     await expect(editor).toBeVisible();
@@ -1307,7 +1308,7 @@ test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape a
       await page.setViewportSize({ width: 1280, height: 800 });
       await signInPageAs(person.account, '#/timesheet');
       await expect(page.locator('[data-day]')).toHaveCount(14);
-      const dayButton = page.locator(`[data-day="${editDay}"]`).getByRole('button', { name: `Edit ${editDay}`, exact: true });
+      const dayButton = namedDayButton(page, editDay, 'Edit');
 
       // The non-modal editor beside the sheet, then a label pick on a worked day opens the review over it.
       await dayButton.click();

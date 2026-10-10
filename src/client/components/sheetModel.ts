@@ -98,7 +98,17 @@ export interface SheetWeek {
 
 const LEAVE_WORD: Readonly<Record<string, string>> = { vacation: 'Vacation', sick: 'Sick', ot: 'OT' };
 
-export const hm = (minutes: number | null | undefined): string => (minutes === null || minutes === undefined ? '' : formatHoursMinutes(minutes));
+/**
+ * The accessible name of a day's button (WCAG 2.2 SC 2.5.3 label in name, WP5-UX-AX-05): the verb, the
+ * visible text, then the ISO accounting date. The desktop sheet shows "09/28" ("Edit 09/28 (2026-09-28)"),
+ * a phone row "Mon 09/28" ("Edit Mon 09/28 (2026-09-28)"); "View" when the day only opens to read.
+ */
+export function dayButtonName(verb: 'Edit' | 'View', day: Pick<SheetDay, 'weekday' | 'dateText' | 'workDate'>, layout: 'sheet' | 'phone'): string {
+  const visible = layout === 'phone' ? `${day.weekday} ${day.dateText}` : day.dateText;
+  return `${verb} ${visible} (${day.workDate})`;
+}
+
+export const hm =(minutes: number | null | undefined): string => (minutes === null || minutes === undefined ? '' : formatHoursMinutes(minutes));
 
 /** What the label cell reads from a day: the day view of the Timesheet page and the review payload both fit. */
 export interface LabelSource {

@@ -1,0 +1,12 @@
+// WP5-UX-A11Y-SWEEP: replaces the "(planner appends here)" placeholder of the brief's Results section with the result text.
+// Usage: node append-results.mjs <brief.md> <results.md>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [briefPath, resultsPath] = process.argv.slice(2);
+const brief = readFileSync(briefPath, 'utf8');
+const results = readFileSync(resultsPath, 'utf8').replace(/\r\n/g, '\n').trimEnd();
+const marker = '(planner appends here)';
+const count = brief.split(marker).length - 1;
+if (count !== 1) throw new Error(`expected one placeholder, found ${count}`);
+writeFileSync(briefPath, brief.replace(marker, results));
+console.log(`replaced placeholder; brief now ${brief.length - marker.length + results.length} chars`);

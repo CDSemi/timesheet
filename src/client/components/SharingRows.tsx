@@ -72,15 +72,32 @@ function ItemList({ items }: { items: ShareItems }) {
 
 type Mode = 'idle' | 'change' | 'end';
 
-/** One share the caller gave: its items, since when, a change of items and the end of the share (after a confirmation). */
+/**
+ * One share the caller gave: its items, since when, a change of items and the end of the share (after a
+ * confirmation). The change step takes focus when it opens; cancelling either step returns focus to the
+ * button that opened it (WP5-UX-AX-08).
+ */
 export function GivenShareRow({ share, onChanged }: { share: GivenShare; onChanged: (message: string) => void }) {
   const [mode, setMode] = useState<Mode>('idle');
   const [draft, setDraft] = useState<ShareItems>(share.items);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const name = share.grantee.display_name;
+  const changeButton = useRef<HTMLButtonElement>(null);
+  const endButton = useRef<HTMLButtonElement>(null);
+  const changePanel = useRef<HTMLDivElement>(null);
+  /** The step that was just cancelled; its opener gets focus once the buttons are back. */
+  const returnFrom = useRef<Mode>('idle');
+
+  useEffect(() => {
+    if (mode === 'change') changePanel.current?.focus();
+    if (mode !== 'idle' || returnFrom.current === 'idle') return;
+    (returnFrom.current === 'change' ? changeButton : endButton).current?.focus();
+    returnFrom.current = 'idle';
+  }, [mode]);
 
   function close() {
+    returnFrom.current = mode;
     setMode('idle');
     setError(null);
     setDraft(share.items);
@@ -121,18 +138,22 @@ export function GivenShareRow({ share, onChanged }: { share: GivenShare; onChang
       <ItemList items={share.items} />
       {mode === 'idle' && (
         <div className="button-row">
-          <button type="button" className="secondary" onClick={() => setMode('change')} aria-label={`Change items shared with ${name}`}>
+          <button ref={changeButton} type="button" className="secondary" onClick={() => setMode('change')} aria-label={`Change items shared with ${name}`}>
             Change
           </button>
-          <button type="button" className="secondary" onClick={() => setMode('end')} aria-label={`End sharing with ${name}`}>
+          <button ref={endButton} type="button" className="secondary" onClick={() => setMode('end')} aria-label={`End share with ${name}`}>
             End share
           </button>
         </div>
       )}
       {mode === 'change' && (
-        <div className="stack">
+        <div className="stack" role="group" aria-label={`Change items shared with ${name}`} tabIndex={-1} ref={changePanel}>
           <SharingItemsFields items={draft} onChange={setDraft} disabled={busy} />
-          {problem !== null && <p className="notice">{problem}</p>}
+          {problem !== null && (
+            <p className="notice" role="status">
+              {problem}
+            </p>
+          )}
           {error !== null && (
             <p className="error" role="alert">
               {error}
@@ -163,12 +184,23 @@ export function GivenShareRow({ share, onChanged }: { share: GivenShare; onChang
   );
 }
 
-/** One share the caller received: its items, since when, a way into it, and leaving it (after a confirmation). */
+/**
+ * One share the caller received: its items, since when, a way into it, and leaving it (after a
+ * confirmation). Cancelling the confirmation returns focus to "Leave" (WP5-UX-AX-08).
+ */
 export function ReceivedShareRow({ share, onLeft }: { share: ReceivedShare; onLeft: (message: string) => void }) {
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const name = share.owner.display_name;
+  const leaveButton = useRef<HTMLButtonElement>(null);
+  const returnToLeave = useRef(false);
+
+  useEffect(() => {
+    if (asking || !returnToLeave.current) return;
+    returnToLeave.current = false;
+    leaveButton.current?.focus();
+  }, [asking]);
 
   async function leave() {
     setBusy(true);
@@ -199,6 +231,7 @@ export function ReceivedShareRow({ share, onLeft }: { share: ReceivedShare; onLe
           error={error}
           onConfirm={() => void leave()}
           onCancel={() => {
+            returnToLeave.current = true;
             setAsking(false);
             setError(null);
           }}
@@ -208,7 +241,7 @@ export function ReceivedShareRow({ share, onLeft }: { share: ReceivedShare; onLe
           <a className="button-link" href={sharedHash(share.owner.id, null)} aria-label={`Open ${name}'s shared items`}>
             Open
           </a>
-          <button type="button" className="secondary" onClick={() => setAsking(true)} aria-label={`Leave ${name}'s shared items`}>
+          <button ref={leaveButton} type="button" className="secondary" onClick={() => setAsking(true)} aria-label={`Leave ${name}'s shared items`}>
             Leave
           </button>
         </div>

@@ -1,0 +1,42 @@
+WP5-UX-A11Y-SWEEP - clean export, build and export digest (Git Bash, Node v24.21.0)
+
+$ git -C <project> archive 5e104e14dad71268a9185920c04ed0ee2a4b31c2 | tar -x -C <task>/export   (snapshot 5e104e1, not HEAD)
+$ cp -r <project>/node_modules <task>/export/node_modules   (no install, no network: the working repository's existing dependency tree; axe-core is not in it)
+archive exit=0
+cp node_modules exit=0
+
+$ ls node_modules | grep -i -E 'axe|playwright'  (working repository)
+@playwright
+playwright
+playwright-core
+$ find node_modules -maxdepth 3 -iname '*axe*' -type d   -> (no output: axe-core absent)
+
+$ node <npm-cli.js> run build   (in <task>/export)
+
+> timesheet@0.1.0 build
+> npm run build:server && npm run build:client
+
+
+> timesheet@0.1.0 build:server
+> tsc -p tsconfig.server.json
+
+
+> timesheet@0.1.0 build:client
+> vite build
+
+vite v8.3.1 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/index.html                   0.39 kB │ gzip:   0.26 kB
+dist/client/assets/index-DPPNpeCA.css   44.94 kB │ gzip:   8.49 kB
+dist/client/assets/index-Cx-bUFZF.js   480.79 kB │ gzip: 136.29 kB │ map: 2,000.74 kB
+
+✓ built in 250ms
+build exit=0
+
+$ bash exdigest.sh   (export tree, node_modules/ dist/ a11y-sweep/ handoff/ excluded; same form as scripts/source-digest.mjs)
+790
+07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635 *-
+-> equals the digest of record 07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635 (790 files)
