@@ -1,0 +1,311 @@
+// WP5-UX-AUDIT-A7 delta probe (scope 1): FIX8's one-row phone shell bar can never hide or block an edit, clock,
+// reason or confirmation control. The A6 sticky probe (lib-sticky.ts) with three changes: (1) it runs with and
+// without a received share ("Shared with me" in the bar or not) and the Playwright project sets the width
+// (390x844, 320x640) and the device zone (zone note shown or not); (2) every control also gets a touch trial
+// (tap, actionability only) on top of the pointer trial; (3) a keyboard walk: real Tab presses through the own
+// view, the open day editor and the shared edit view, each stop measured (25 sample points and the centre hit).
+// For every listed control and three starting scroll positions (page or panel at the bottom, at the top, the
+// control half under the sticky bar or the editor head) the control takes focus with element.focus() (the browser
+// scrolls it with the page's scroll padding), then the probe measures 25 sample points and the centre with
+// elementFromPoint. Nothing is committed except one Clock in. Synthetic data only.
+import { controlFacts, stickySizes, writeResult } from './common.ts';
+
+export interface Sticky7Options {
+  build: string;
+  dayButton: (page: any, workDate: string) => any;
+}
+
+export function registerSticky7Probe(fx: any, options: Sticky7Options): void {
+  const { test, expect, newPerson } = fx;
+  test.use({ locale: 'en-US' });
+
+  for (const share of [true, false]) {
+    const shareLabel = share ? 'share' : 'noshare';
+    test(`phone bar never hides or blocks an edit, clock, reason or confirmation control (${options.build}, ${shareLabel})`, async ({ page, adminSeed, builtServer }: any, testInfo: any) => {
+      test.setTimeout(900_000);
+      page.setDefaultTimeout(15_000);
+      const project = testInfo.project.name;
+      const touch = (testInfo.project.use as any).hasTouch === true;
+      const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Sticky Probe', signature: 'none' });
+      const [d0 = '', d1 = ''] = await person.api.displayedPeriodFreeWorkdays();
+      expect(d1, 'two free workdays').not.toBe('');
+      await person.api.seedCompleteDay(d0);
+      await person.api.seedUnconfirmedBreaksDay(d1);
+      let owner: any = null;
+      let o0 = '';
+      if (share) {
+        owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Sticky Owner', signature: 'none' });
+        [o0 = ''] = await owner.api.displayedPeriodFreeWorkdays();
+        await owner.api.seedCompleteDay(o0);
+        await owner.api.call('POST', '/api/shares', { grantee_email: person.account.email, items: { timesheets: 'edit', ot_read: false, pdf_download: false } }, 201);
+      }
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/#/timesheet');
+      await page.getByLabel('Email').fill(person.account.email);
+      await page.getByLabel('Password').fill(person.account.password);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const width = await page.evaluate('window.innerWidth');
+      const zone = await page.evaluate('Intl.DateTimeFormat().resolvedOptions().timeZone');
+      const zoneNote = await page.locator('[data-zone-note]').count();
+      const switchers = await page.locator('.shell-switcher').count();
+
+      const results: any[] = [];
+      const walks: any[] = [];
+      const sizesSeen: any[] = [];
+
+      const place = async (locator: any, position: string, host: 'page' | 'dialog') =>
+        locator.evaluate(
+          (el: any, args: any) => {
+            const [where, inDialog] = args;
+            const dialog = el.closest('dialog');
+            const scroller = inDialog && dialog !== null ? dialog : document.scrollingElement;
+            if (where === 'bottom') scroller.scrollTop = scroller.scrollHeight;
+            else if (where === 'top') scroller.scrollTop = 0;
+            else {
+              let stickyBottom = 0;
+              if (inDialog && dialog !== null) {
+                const head = dialog.querySelector('.editor-head');
+                stickyBottom = head === null ? 0 : head.getBoundingClientRect().bottom;
+              } else {
+                const shell = document.querySelector('.shell-bar');
+                const shareBar = document.querySelector('.share-bar');
+                stickyBottom = shell === null ? 0 : shell.getBoundingClientRect().height;
+                if (shareBar !== null && getComputedStyle(shareBar).position === 'sticky') stickyBottom += shareBar.getBoundingClientRect().height;
+              }
+              const r = el.getBoundingClientRect();
+              scroller.scrollTop += r.top - (stickyBottom - r.height / 2);
+            }
+            if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
+          },
+          [position, host === 'dialog'],
+        );
+
+      const check = async (scenario: string, name: string, locator: any, host: 'page' | 'dialog' = 'page') => {
+        const count = await locator.count();
+        if (count === 0) {
+          results.push({ width, scenario, name, missing: true });
+          return;
+        }
+        const first = locator.first();
+        for (const position of ['bottom', 'top', 'half-under-sticky']) {
+          await place(first, position, host);
+          await page.waitForTimeout(60);
+          await first.focus();
+          await page.waitForTimeout(120);
+          const facts = await controlFacts(page, first);
+          results.push({ width, scenario, name, position, ...facts });
+        }
+        let trial = 'ok';
+        try {
+          await first.click({ trial: true, timeout: 5_000 });
+        } catch (error) {
+          trial = `fail: ${String((error as Error).message).split('\n')[0]}`;
+        }
+        results.push({ width, scenario, name, position: 'trial-click', trial });
+        if (touch) {
+          let tap = 'ok';
+          try {
+            await place(first, 'half-under-sticky', host);
+            await first.tap({ trial: true, timeout: 5_000 });
+          } catch (error) {
+            tap = `fail: ${String((error as Error).message).split('\n')[0]}`;
+          }
+          results.push({ width, scenario, name, position: 'trial-tap', trial: tap });
+        }
+      };
+
+      /** Real Tab presses from the top of a scope; every stop is measured where the browser scrolled it. */
+      const walk = async (scenario: string, scope: 'page' | 'dialog', max: number) => {
+        if (scope === 'page') {
+          await page.evaluate('window.scrollTo(0, 0); if (document.activeElement instanceof HTMLElement) document.activeElement.blur();');
+        } else {
+          await page.evaluate("(() => { const d = document.querySelector('dialog[open]'); if (d !== null) { d.scrollTop = 0; const c = d.querySelector('button, a[href], input, select, textarea'); if (c !== null) c.focus(); } })()");
+        }
+        const seen = new Set<string>();
+        const stops: any[] = [];
+        for (let i = 0; i < max; i += 1) {
+          await page.keyboard.press('Tab');
+          await page.waitForTimeout(70);
+          const focused = page.locator(':focus');
+          if ((await focused.count()) === 0) continue;
+          const id = await focused.evaluate((el: any) => {
+            if (el.dataset.a7walk === undefined) el.dataset.a7walk = String(Math.random()).slice(2);
+            return el.dataset.a7walk;
+          });
+          if (seen.has(id)) break;
+          seen.add(id);
+          const label = await focused.evaluate((el: any) => `${el.tagName.toLowerCase()} "${(el.getAttribute('aria-label') || el.labels?.[0]?.textContent || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 50)}"`);
+          const facts = await controlFacts(page, focused);
+          stops.push({ label, ...facts });
+        }
+        walks.push({ width, scenario, stops: stops.length, hidden: stops.filter((s) => s.visibleSamples === 0).length, notCentre: stops.filter((s) => !s.centreHit).length, minSamples: stops.length === 0 ? null : Math.min(...stops.map((s) => s.visibleSamples)), problems: stops.filter((s) => s.visibleSamples === 0 || !s.centreHit), labels: stops.map((s) => `${s.label}:${s.visibleSamples}`) });
+      };
+
+      sizesSeen.push({ width, where: 'own view', ...(await stickySizes(page)) });
+      const dates: string[] = await page.locator('[data-day]').evaluateAll((rows: any[]) => rows.map((row) => row.getAttribute('data-day')));
+
+      // Own view.
+      await walk('own view', 'page', 160);
+      await check('own view', 'Clock in/out', page.getByRole('button', { name: /^Clock (in|out)$/ }));
+      await check('own view', 'Open a day', page.getByLabel('Open a day'));
+      await check('own view', 'Change several days', page.getByRole('button', { name: 'Change several days' }));
+      await check('own view', 'Previous period', page.getByRole('button', { name: 'Previous period' }));
+      await check('own view', 'first label picker', page.locator('[data-label-picker] button').first());
+      await check('own view', 'last label picker', page.locator('[data-label-picker] button').last());
+      await check('own view', 'first day button', options.dayButton(page, dates[0] ?? ''));
+      await check('own view', 'last day button', options.dayButton(page, dates.at(-1) ?? ''));
+      if (share) {
+        await check('own view', 'Shared with me choice', page.locator('.shell-switcher select'));
+        await check('own view', 'Shared with me Open', page.locator('.shell-switcher button[type="submit"]'));
+      }
+
+      // The day editor of a complete day and of a day with unconfirmed breaks.
+      await place(options.dayButton(page, d0), 'top', 'page');
+      await options.dayButton(page, d0).click();
+      const editor = page.locator(`dialog[data-day-editor="${d0}"]`);
+      await expect(editor.getByRole('form', { name: 'Day fields' })).toBeVisible();
+      await page.waitForTimeout(200);
+      sizesSeen.push({ width, where: 'editor', ...(await stickySizes(page)) });
+      await walk('editor', 'dialog', 80);
+      await check('editor', 'Close', editor.getByRole('button', { name: 'Close', exact: true }), 'dialog');
+      await check('editor', 'Save day fields', editor.getByRole('button', { name: 'Save day fields' }), 'dialog');
+      await check('editor', 'Notes', editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes'), 'dialog');
+      await check('editor', 'Leave hours', editor.getByLabel('Leave hours'), 'dialog');
+      await check('editor', 'Add session', editor.getByRole('button', { name: 'Add session' }), 'dialog');
+      await check('editor', 'Edit session', editor.getByRole('button', { name: /^Edit session/ }), 'dialog');
+      await check('editor', 'Delete session', editor.getByRole('button', { name: /^Delete session/ }), 'dialog');
+      await editor.getByRole('button', { name: /^Delete session/ }).click();
+      await check('editor', 'Confirm delete', editor.getByRole('button', { name: 'Confirm delete' }), 'dialog');
+      await editor.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(page.locator('dialog[data-day-editor]')).toHaveCount(0);
+      await options.dayButton(page, d1).click();
+      const quick = page.locator(`dialog[data-day-editor="${d1}"]`);
+      await expect(quick.getByRole('form', { name: 'Day fields' })).toBeVisible();
+      await check('editor', 'Confirm suggested breaks', quick.getByRole('button', { name: /^Confirm (suggested )?breaks$/ }), 'dialog');
+      await quick.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(page.locator('dialog[data-day-editor]')).toHaveCount(0);
+
+      // An old period: the editor's reason, then the batch review's reason.
+      await page.getByRole('button', { name: 'Previous period' }).click();
+      await expect(page.locator('.period-title .badge.old')).toBeVisible();
+      const oldDay = (await page.locator('[data-day]').nth(2).getAttribute('data-day')) ?? '';
+      await options.dayButton(page, oldDay).click();
+      const oldEditor = page.locator(`dialog[data-day-editor="${oldDay}"]`);
+      await expect(oldEditor.getByRole('form', { name: 'Day fields' })).toBeVisible();
+      await check('old period editor', 'Reason', oldEditor.getByLabel('Reason for editing an old or finalized period'), 'dialog');
+      await oldEditor.getByRole('form', { name: 'Day fields' }).getByLabel('Worked from home (WFH)').check();
+      await oldEditor.getByLabel('Reason for editing an old or finalized period').fill('sticky probe (synthetic, not saved)');
+      await check('old period editor', 'Save day fields', oldEditor.getByRole('button', { name: 'Save day fields' }), 'dialog');
+      await oldEditor.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(page.locator('dialog[data-day-editor]')).toHaveCount(0);
+      await page.getByRole('button', { name: 'Change several days' }).click();
+      await page.getByLabel(`Select ${oldDay}`).check();
+      await page.getByLabel('Category for selected days').selectOption('Sick');
+      await check('old period batch', 'Preview changes', page.getByRole('button', { name: 'Preview changes' }));
+      await page.getByRole('button', { name: 'Preview changes' }).click();
+      const batch = page.getByRole('dialog');
+      await expect(batch.getByLabel(/Reason for editing an old or finalized period/)).toBeVisible();
+      await check('old period batch review', 'Reason', batch.getByLabel(/Reason for editing an old or finalized period/), 'dialog');
+      await check('old period batch review', 'Cancel', batch.getByRole('button', { name: 'Cancel', exact: true }), 'dialog');
+      await batch.getByLabel(/Reason for editing an old or finalized period/).fill('sticky probe (synthetic, not committed)');
+      await check('old period batch review', 'Commit changes', batch.getByRole('button', { name: 'Commit changes' }), 'dialog');
+      await page.keyboard.press('Escape');
+      await expect(batch).toHaveCount(0);
+      const done = page.getByRole('button', { name: 'Done' });
+      if ((await done.count()) > 0) await done.click();
+      else await page.getByRole('button', { name: 'Change several days' }).click();
+      await page.getByRole('button', { name: 'Next period' }).click();
+      await expect(page.locator(`[data-day="${d0}"]`)).toHaveCount(1);
+
+      // The batch review's conflict step in the displayed period.
+      await page.getByRole('button', { name: 'Change several days' }).click();
+      await page.getByLabel(`Select ${d0}`).check();
+      await page.getByLabel('Category for selected days').selectOption('Off');
+      await page.getByRole('button', { name: 'Preview changes' }).click();
+      await expect(batch.getByRole('button', { name: 'Review conflicts' })).toBeVisible();
+      await check('batch review', 'Review conflicts', batch.getByRole('button', { name: 'Review conflicts' }), 'dialog');
+      await batch.getByRole('button', { name: 'Review conflicts' }).click();
+      await check('batch conflicts', 'Confirmation checkbox', batch.getByLabel('I confirm the label change for these dates'), 'dialog');
+      await batch.getByLabel('I confirm the label change for these dates').check();
+      await check('batch conflicts', 'Confirm and commit', batch.getByRole('button', { name: 'Confirm and commit' }), 'dialog');
+      await check('batch conflicts', 'Back', batch.getByRole('button', { name: 'Back', exact: true }), 'dialog');
+      await page.keyboard.press('Escape');
+      await expect(batch).toHaveCount(0);
+      if ((await done.count()) > 0) await done.click();
+      else await page.getByRole('button', { name: 'Change several days' }).click();
+
+      // Clock: in (if not yet), out, and the clock-out dialog's controls (Escape ends nothing).
+      if ((await page.getByRole('button', { name: 'Clock in', exact: true }).count()) > 0) {
+        await check('clock', 'Clock in', page.getByRole('button', { name: 'Clock in', exact: true }));
+        await page.getByRole('button', { name: 'Clock in', exact: true }).click();
+        await expect(page.getByRole('button', { name: 'Clock out', exact: true })).toBeVisible();
+        await page.waitForTimeout(1_100);
+      }
+      await check('clock', 'Clock out', page.getByRole('button', { name: 'Clock out', exact: true }));
+      await page.getByRole('button', { name: 'Clock out', exact: true }).click();
+      const clockOut = page.getByRole('dialog', { name: 'Clock out' });
+      await expect(clockOut).toBeVisible();
+      await check('clock-out dialog', 'No breaks taken', clockOut.getByRole('radio', { name: /No breaks taken/ }), 'dialog');
+      await check('clock-out dialog', 'Cancel', clockOut.getByRole('button', { name: 'Cancel', exact: true }), 'dialog');
+      await clockOut.getByRole('radio', { name: /No breaks taken/ }).check();
+      await check('clock-out dialog', 'Submit', clockOut.locator('button[type="submit"]'), 'dialog');
+      await page.keyboard.press('Escape');
+      await expect(clockOut).toHaveCount(0);
+
+      if (share) {
+        // A shared edit view: the share bar under the shell bar (static below 768px).
+        await page.evaluate(`window.location.hash = '#/shared/${owner.account.id}'`);
+        await expect(page.locator('[data-share-bar]')).toBeVisible();
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        await page.waitForTimeout(300);
+        sizesSeen.push({ width, where: 'shared view', ...(await stickySizes(page)) });
+        const shared: string[] = await page.locator('[data-day]').evaluateAll((rows: any[]) => rows.map((row) => row.getAttribute('data-day')));
+        await walk('shared edit view', 'page', 160);
+        await check('shared edit view', 'Open a day', page.getByLabel('Open a day'));
+        await check('shared edit view', 'Change several days', page.getByRole('button', { name: 'Change several days' }));
+        await check('shared edit view', 'first label picker', page.locator('[data-label-picker] button').first());
+        await check('shared edit view', 'last label picker', page.locator('[data-label-picker] button').last());
+        await check('shared edit view', 'first day button', options.dayButton(page, shared[0] ?? ''));
+        await check('shared edit view', 'last day button', options.dayButton(page, shared.at(-1) ?? ''));
+        await check('shared edit view', 'Back to my timesheets', page.locator('[data-share-bar] a[href="#/timesheet"]'));
+        await check('shared edit view', 'Shared with me Open', page.locator('.shell-switcher button[type="submit"]'));
+        await place(options.dayButton(page, o0), 'bottom', 'page');
+        await options.dayButton(page, o0).click();
+        const sharedEditor = page.locator(`dialog[data-day-editor="${o0}"]`);
+        await expect(sharedEditor.getByRole('form', { name: 'Day fields' })).toBeVisible();
+        await page.waitForTimeout(200);
+        sizesSeen.push({ width, where: 'shared editor', ...(await stickySizes(page)) });
+        await check('shared editor', 'Close', sharedEditor.getByRole('button', { name: 'Close', exact: true }), 'dialog');
+        await check('shared editor', 'Save day fields', sharedEditor.getByRole('button', { name: 'Save day fields' }), 'dialog');
+        await check('shared editor', 'Add session', sharedEditor.getByRole('button', { name: 'Add session' }), 'dialog');
+        await check('shared editor', 'Delete session', sharedEditor.getByRole('button', { name: /^Delete session/ }), 'dialog');
+        await sharedEditor.getByRole('button', { name: 'Close', exact: true }).click();
+        await expect(page.locator('dialog[data-day-editor]')).toHaveCount(0);
+      }
+
+      const isTrial = (row: any) => row.position === 'trial-click' || row.position === 'trial-tap';
+      const problems = results.filter((row) => row.missing === true || (isTrial(row) ? row.trial !== 'ok' : !(row.focused && row.centreHit && row.visibleSamples > 0)));
+      writeResult(`sticky7-${options.build}-${project}-${shareLabel}.json`, {
+        build: options.build,
+        project,
+        share: shareLabel,
+        width,
+        zone,
+        zoneNote,
+        switchers,
+        checks: results.filter((row) => !isTrial(row) && row.missing !== true).length,
+        trials: results.filter((row) => row.position === 'trial-click').length,
+        taps: results.filter((row) => row.position === 'trial-tap').length,
+        problems,
+        walks,
+        sizes: sizesSeen,
+        results,
+      });
+      // Writes: none of the above committed anything (the clock in is the only write).
+      expect((await person.api.dayView(d0)).sessions).toHaveLength(1);
+      expect((await person.api.dayView(d0)).category).toBe('Worked');
+      expect(switchers).toBe(share ? 1 : 0);
+    });
+  }
+}

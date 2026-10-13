@@ -1,0 +1,31 @@
+// Checks every file of the evidence folder (and the review pair and brief given as extra arguments): CR bytes, e-mail
+// addresses outside the full synthetic example.invalid form, user-profile paths, unmasked task, scratch or project paths.
+// Usage: node check-evidence.mjs <evidence-dir> [extra files...]
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir, ...extra] = process.argv.slice(2);
+const files = [...readdirSync(dir).map((n) => join(dir, n)), ...extra];
+const rules = [
+  ['CR byte', /\r/],
+  ['e-mail outside example.invalid', /[A-Za-z0-9._%+-]+@(?!example\.invalid\b)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/],
+  ['user-profile path', /[A-Za-z]:[\\/]+Users[\\/]+(?!<user>)[^\\/\s"'<]+|\/c\/Users\/(?!<user>)[^/\s"'<]+/i],
+  ['task path', /\.claude-tmp[\\/]+timesheet[\\/]+WP5-UX-AUDIT-A7/i],
+  ['scratch path', /\.claude-tmp[\\/]+claude[\\/]+/i],
+  ['project path', /Dropbox[\\/]+Work\.CDSemi/i],
+];
+let problems = 0;
+for (const file of files) {
+  const name = file.split(/[\\/]/).pop();
+  if (name.endsWith('.png')) continue;
+  const text = readFileSync(file, 'latin1');
+  for (const [label, pattern] of rules) {
+    const m = text.match(pattern);
+    if (m !== null) {
+      problems += 1;
+      console.log(`${name}: ${label}: ${JSON.stringify(m[0]).slice(0, 80)}`);
+    }
+  }
+}
+console.log(`files checked ${files.length}; problems ${problems}`);
+process.exitCode = problems === 0 ? 0 : 1;

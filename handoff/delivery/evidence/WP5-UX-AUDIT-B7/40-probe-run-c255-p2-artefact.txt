@@ -1,0 +1,55 @@
+2026-10-13T19:13:04Z
+where=clone head=255ba17d6bf891c0ff779d4a4f518e0d2998cee8 tag=c255-p2 port=48420 grep=P2 switcher project=both
+
+Running 2 tests using 1 worker
+
+  ok 1 [desktop] › b7probe\b7.probe.ts:477:1 › P2 switcher items (12.4s)
+  x  2 [mobile] › b7probe\b7.probe.ts:477:1 › P2 switcher items (22.1s)
+
+
+  1) [mobile] › b7probe\b7.probe.ts:477:1 › P2 switcher items ──────────────────────────────────────
+
+    TimeoutError: locator.tap: Timeout 8000ms exceeded.
+    Call log:
+      - waiting for getByRole('form', { name: 'Shared with me' }).getByRole('button', { name: 'Open', exact: true })
+        - locator resolved to <button type="submit" class="secondary">Open</button>
+      - attempting tap action
+        2 × waiting for element to be visible, enabled and stable
+          - element is visible, enabled and stable
+          - scrolling into view if needed
+          - done scrolling
+          - <select>…</select> from <label class="inline">…</label> subtree intercepts pointer events
+        - retrying tap action
+        - waiting 20ms
+        2 × waiting for element to be visible, enabled and stable
+          - element is visible, enabled and stable
+          - scrolling into view if needed
+          - done scrolling
+          - <select>…</select> from <label class="inline">…</label> subtree intercepts pointer events
+        - retrying tap action
+          - waiting 100ms
+        15 × waiting for element to be visible, enabled and stable
+           - element is visible, enabled and stable
+           - scrolling into view if needed
+           - done scrolling
+           - <select>…</select> from <label class="inline">…</label> subtree intercepts pointer events
+         - retrying tap action
+           - waiting 500ms
+
+
+      534 |           const hashBefore = await page.evaluate(() => location.hash);
+      535 |           const open = page.getByRole('form', { name: 'Shared with me' }).getByRole('button', { name: 'Open', exact: true });
+    > 536 |           if (mobile) await open.tap();
+          |                                  ^
+      537 |           else await open.click();
+      538 |           await page.waitForTimeout(500);
+      539 |           row.openByPointer = { hashBeforeOpen: hashBefore, hash: await page.evaluate(() => location.hash), shareBar: await page.locator('[data-share-bar]').count() };
+        at D:\.claude-tmp\timesheet\WP5-UX-AUDIT-B7-2\clone\b7probe\b7.probe.ts:536:34
+
+    Error Context: ..\probe-pw-c255-p2\b7.probe.ts-P2-switcher-items-mobile\error-context.md
+
+  1 failed
+    [mobile] › b7probe\b7.probe.ts:477:1 › P2 switcher items ───────────────────────────────────────
+  1 passed (38.5s)
+exit=1
+2026-10-13T19:13:43Z

@@ -21,8 +21,12 @@
   fixed them in one round (frozen at bf954c0, digest b7c011d2); WP5-UX-REGATE5 PASS;
   area A recheck WP5-UX-AUDIT-A6 PASS; area B recheck WP5-UX-AUDIT-B6 closed every
   accessibility item and found one Low layout item, WP5-UX-B6-01 (phone first screen with
-  a received share and the zone note). WP5-UX-FIX8 fixed it (reported; digest b07727b2).
-  Now: freeze, WP5-UX-REGATE6, delta rechecks B7 and A7, then the WP5 re-accept.
+  a received share and the zone note). WP5-UX-FIX8 fixed it (frozen at 255ba17, digest
+  b07727b2); WP5-UX-REGATE6 PASS; the delta rechecks B7 and A7 confirmed the fix and that
+  it changes no area-A behaviour, and both found one test-only defect (WP5-UX-B7-01 =
+  A7-01: the isolation and shell specs seed a day outside the displayed period on the 4
+  days ending on each payroll date). WP5-UX-FIX9 fixed the tests (reported; digest 58b0deee). Now:
+  freeze, WP5-UX-REGATE7, delta rechecks B8 and A8, then the WP5 re-accept.
 
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),

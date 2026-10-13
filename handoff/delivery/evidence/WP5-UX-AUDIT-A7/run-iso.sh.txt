@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# isolation.spec.ts follow-up (sequential, each run with its own output folder):
+#  a) the unchanged isolation.spec.ts of the bf954c0 export now (is the failure older than FIX8?);
+#  b) the unchanged shell.spec.ts of the 255ba17 export now (the same seed pattern at shell.spec.ts:68);
+#  c) the auditor's variant of isolation.spec.ts on 255ba17 (seed date taken from the displayed period; assertions unchanged);
+#  d) the unchanged isolation.spec.ts of the 255ba17 export again (repeatability).
+source <task>/env.sh
+mkdir -p "$T/tmp/iso-bf9" "$T/tmp/iso-255" "$T/tmp/shell-255"
+{
+  echo '$ (exbf9) playwright test tests/e2e/isolation.spec.ts --output <task>/tmp/iso-bf9 (projects desktop and mobile)'
+  date -u +%Y-%m-%dT%H:%M:%SZ
+  cd "$T/exbf9" && node node_modules/@playwright/test/cli.js test tests/e2e/isolation.spec.ts --output "$(cygpath -w "$T/tmp/iso-bf9")"
+  echo "exit $?"
+} > "$T/raw/04c-isolation-bf9-now.txt" 2>&1
+{
+  echo '$ (export 255ba17) playwright test tests/e2e/shell.spec.ts --output <task>/tmp/shell-255 (projects desktop and mobile)'
+  date -u +%Y-%m-%dT%H:%M:%SZ
+  cd "$T/export" && node node_modules/@playwright/test/cli.js test tests/e2e/shell.spec.ts --output "$(cygpath -w "$T/tmp/shell-255")"
+  echo "exit $?"
+} > "$T/raw/04e-shell-255-now.txt" 2>&1
+bash "$T/run-probe.sh" 255 "$T/raw/04f-isolation-variant-255.txt" a7-isolation-variant --project desktop --project mobile
+{
+  echo '$ (export 255ba17) playwright test tests/e2e/isolation.spec.ts --output <task>/tmp/iso-255 (projects desktop and mobile), second run'
+  date -u +%Y-%m-%dT%H:%M:%SZ
+  cd "$T/export" && node node_modules/@playwright/test/cli.js test tests/e2e/isolation.spec.ts --output "$(cygpath -w "$T/tmp/iso-255")"
+  echo "exit $?"
+} > "$T/raw/04d-isolation-255-again.txt" 2>&1
+echo done > "$T/raw/iso-done.txt"

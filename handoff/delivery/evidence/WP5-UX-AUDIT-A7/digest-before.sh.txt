@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Digest of record FIRST: ls-tree of the reviewed commit, HEAD and origin/main, npm run digest, clean export.
+set -u
+source <task>/env.sh
+RC=255ba17d6bf891c0ff779d4a4f518e0d2998cee8
+OUT="$T/raw/00-digest.txt"
+{
+echo "== digest BEFORE (first commands of the audit)"
+date -u +%Y-%m-%dT%H:%M:%SZ
+echo "node $(node --version)"
+cd "$REPO" || exit 2
+echo "reviewed_commit=$(git rev-parse $RC)"
+echo "HEAD=$(git rev-parse HEAD) origin/main=$(git rev-parse origin/main)"
+echo "git log --oneline 255ba17..HEAD:"
+git log --oneline $RC..HEAD
+echo "(end)"
+echo "git log --oneline 255ba17..origin/main:"
+git log --oneline $RC..origin/main
+echo "(end)"
+git ls-tree -r --format='%(path) %(objectname)' $RC | grep -v '^handoff/' | LC_ALL=C sort > "$T/raw/lstree-rc.txt"
+git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort > "$T/raw/lstree-head.txt"
+git ls-tree -r --format='%(path) %(objectname)' origin/main | grep -v '^handoff/' | LC_ALL=C sort > "$T/raw/lstree-origin.txt"
+echo "ls-tree files outside handoff/: $(wc -l < "$T/raw/lstree-rc.txt")"
+echo "ls-tree digest at 255ba17: $(sha256sum < "$T/raw/lstree-rc.txt")"
+echo "ls-tree digest of HEAD: $(sha256sum < "$T/raw/lstree-head.txt")"
+echo "ls-tree digest of origin/main: $(sha256sum < "$T/raw/lstree-origin.txt")"
+echo "non-handoff paths differing 255ba17 -> HEAD:"
+git diff --name-only $RC HEAD -- . ':(exclude)handoff'
+echo "(end)"
+echo "non-handoff paths differing 255ba17 -> origin/main:"
+git diff --name-only $RC origin/main -- . ':(exclude)handoff'
+echo "(end)"
+echo "npm run digest (working tree):"
+npmr run digest --silent
+echo "exit $?"
+echo "git status --short outside handoff/ (expected empty):"
+git status --short -- . ':(exclude)handoff'
+echo "(end)"
+mkdir -p "$T/export"
+git archive $RC | tar -x -C "$T/export"
+echo "git archive exit ${PIPESTATUS[0]} tar exit ${PIPESTATUS[1]}"
+echo "clean git-archive export of 255ba17, git hash-object --no-filters (before any check):"
+bash "$T/exdigest.sh" "$T/export" "$T/raw/exdigest-before"
+diff "$T/raw/exdigest-before-sorted.txt" "$T/raw/lstree-rc.txt" > "$T/raw/exdigest-vs-lstree.diff"
+echo "export path/blob list vs ls-tree path/blob list: diff exit $? ($(wc -c < "$T/raw/exdigest-vs-lstree.diff") bytes)"
+} > "$OUT" 2>&1
+echo done

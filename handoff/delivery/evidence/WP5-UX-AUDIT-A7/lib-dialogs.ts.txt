@@ -1,0 +1,348 @@
+// WP5-UX-AUDIT-A6 delta probe (scope 1): the dialogs and inline steps whose focus handling FIX7 changed
+// (batch review and its conflict step, the label-pick review, the sharing change / end / leave steps, the
+// import confirmation, the opening balance and its correction) and two neighbours (the clock-out dialog, the
+// editor's delete confirmation). For each Cancel, Escape, Back and step change the probe records every
+// non-GET request with its body and what the server stored; then it commits through the same dialog and
+// records the commit body. Registered for bf954c0 and 5e104e1 (Timesheet and Settings/Import parts) and for
+// 014bd47 (Settings/Import part: those components are identical at 014bd47 and 5e104e1). Synthetic only.
+import { recordWrites, writeResult } from './common.ts';
+
+export interface DialogOptions {
+  build: string;
+  /** Finds a day's own button in this build. */
+  dayButton?: (page: any, workDate: string) => any;
+  addDays: (date: string, days: number) => string;
+  buildSyntheticWorkbook?: (spec: any) => Uint8Array;
+}
+
+/** What has focus, in words (for the record; FIX7 changed only this). */
+const FOCUS = `(() => { const a = document.activeElement; if (a === null) return null; const name = (a.getAttribute('aria-label') || a.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 60); return a.tagName.toLowerCase() + ' "' + name + '"'; })()`;
+
+export function registerTimesheetDialogs(fx: any, options: DialogOptions): void {
+  const { test, expect, newPerson } = fx;
+  test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+  test(`Timesheet dialogs: Cancel, Escape, Back and step changes write nothing; commits keep their bodies (${options.build})`, async ({ page, adminSeed, builtServer }: any, testInfo: any) => {
+    test.setTimeout(300_000);
+    page.setDefaultTimeout(15_000);
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Dialog Probe', signature: 'none' });
+    const free = await person.api.displayedPeriodFreeWorkdays();
+    expect(free.length).toBeGreaterThanOrEqual(4);
+    const [worked = '', plain = '', picked = '', deleted = ''] = free;
+    await person.api.seedCompleteDay(worked);
+    await person.api.seedCompleteDay(picked);
+    await person.api.seedCompleteDay(deleted);
+    const writes = recordWrites(page);
+    const steps: any[] = [];
+    const state = async (date: string) => {
+      const day = await person.api.dayView(date);
+      return { category: day.category, sessions: day.sessions.length, version: day.entry?.version ?? null };
+    };
+    const step = async (label: string, dates: string[]) => {
+      steps.push({ label, writes: writes.splice(0), focus: await page.evaluate(FOCUS), stored: Object.fromEntries(await Promise.all(dates.map(async (d) => [d, await state(d)]))) });
+    };
+    await page.goto('/#/timesheet');
+    await page.getByLabel('Email').fill(person.account.email);
+    await page.getByLabel('Password').fill(person.account.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    writes.splice(0);
+
+    // A. Batch review ("Change several days"): two days to Off; the worked day makes a conflict step.
+    await page.getByRole('button', { name: 'Change several days' }).click();
+    await page.getByLabel(`Select ${worked}`).check();
+    await page.getByLabel(`Select ${plain}`).check();
+    await page.getByLabel('Category for selected days').selectOption('Off');
+    const dialog = page.getByRole('dialog');
+    const open = async () => {
+      await page.getByRole('button', { name: 'Preview changes' }).click();
+      await expect(dialog.getByRole('button', { name: 'Review conflicts' })).toBeVisible();
+    };
+    await open();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await step('batch: preview, Escape', [worked, plain]);
+    await open();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await step('batch: preview, Cancel', [worked, plain]);
+    await open();
+    await dialog.getByRole('button', { name: 'Review conflicts' }).click();
+    await expect(dialog.getByRole('heading', { name: 'Recorded work conflicts with the new label' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Back', exact: true }).click();
+    await expect(dialog.getByRole('button', { name: 'Review conflicts' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await step('batch: preview, Review conflicts, Back, Escape', [worked, plain]);
+    await open();
+    await dialog.getByRole('button', { name: 'Review conflicts' }).click();
+    await expect(dialog.getByRole('button', { name: 'Confirm and commit' })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await step('batch: preview, Review conflicts, Escape', [worked, plain]);
+    await open();
+    await dialog.getByRole('button', { name: 'Review conflicts' }).click();
+    await dialog.getByLabel('I confirm the label change for these dates').check();
+    await dialog.getByRole('button', { name: 'Confirm and commit' }).click();
+    await expect(page.getByRole('status')).toContainText('Saved 2 days.');
+    await step('batch: preview, Review conflicts, confirm, commit', [worked, plain]);
+    const done = page.getByRole('button', { name: 'Done' });
+    if ((await done.count()) > 0) await done.click();
+
+    // B. The in-cell label picker's review (a worked day to Off needs the conflict step).
+    const picker = page.getByRole('button', { name: new RegExp(`^Label for ${picked}`) });
+    const review = page.getByRole('dialog', { name: `Review label change for ${picked}` });
+    const pick = async () => {
+      await picker.click();
+      await page.getByRole('listbox', { name: `Label for ${picked}` }).getByRole('option', { name: 'Off', exact: true }).click();
+      await expect(review).toBeVisible();
+    };
+    await pick();
+    await page.keyboard.press('Escape');
+    await expect(review).toHaveCount(0);
+    await step('label pick: review, Escape', [picked]);
+    await pick();
+    await review.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(review).toHaveCount(0);
+    await step('label pick: review, Cancel', [picked]);
+    await pick();
+    await review.getByRole('button', { name: 'Review conflicts' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Back', exact: true }).click();
+    await expect(page.getByRole('dialog').getByRole('button', { name: 'Review conflicts' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await step('label pick: review, Review conflicts, Back, Escape', [picked]);
+    await pick();
+    await review.getByRole('button', { name: 'Review conflicts' }).click();
+    await page.getByRole('dialog').getByLabel('I confirm the label change for these dates').check();
+    await page.getByRole('dialog').getByRole('button', { name: 'Confirm and commit' }).click();
+    await expect(page.getByRole('status')).toContainText('Saved 1 day.');
+    await step('label pick: review, Review conflicts, confirm, commit', [picked]);
+
+    // C. The editor's delete confirmation, then Escape; then the real delete.
+    const dayButton = options.dayButton?.(page, deleted);
+    await dayButton.click();
+    const editor = page.locator(`dialog[data-day-editor="${deleted}"]`);
+    await expect(editor.getByRole('form', { name: 'Day fields' })).toBeVisible();
+    await editor.getByRole('button', { name: /^Delete session/ }).click();
+    await expect(editor.getByRole('button', { name: 'Confirm delete' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('dialog[data-day-editor]')).toHaveCount(0);
+    await step('editor: Delete, Escape', [deleted]);
+    await options.dayButton?.(page, deleted).click();
+    await editor.getByRole('button', { name: /^Delete session/ }).click();
+    await editor.getByRole('button', { name: 'Confirm delete' }).click();
+    await expect(editor.getByText('No session recorded for this day.')).toBeVisible();
+    await editor.getByRole('button', { name: 'Close', exact: true }).click();
+    await step('editor: Delete, Confirm delete', [deleted]);
+
+    // D. Clock out: Escape and Cancel end nothing; the submit ends the session.
+    await page.getByRole('button', { name: 'Clock in', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Clock out', exact: true })).toBeVisible();
+    await step('clock: Clock in', []);
+    await page.waitForTimeout(1_200);
+    const clockOut = page.getByRole('dialog', { name: 'Clock out' });
+    await page.getByRole('button', { name: 'Clock out', exact: true }).click();
+    await expect(clockOut).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(clockOut).toHaveCount(0);
+    await step('clock out: Escape', []);
+    await page.getByRole('button', { name: 'Clock out', exact: true }).click();
+    await clockOut.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(clockOut).toHaveCount(0);
+    await step('clock out: Cancel', []);
+    await page.getByRole('button', { name: 'Clock out', exact: true }).click();
+    await clockOut.getByRole('radio', { name: /No breaks taken/ }).check();
+    await clockOut.locator('button[type="submit"]').click();
+    await expect(clockOut).toHaveCount(0);
+    await step('clock out: submit', []);
+
+    writeResult(`dialogs-ts-${options.build}-${testInfo.project.name}.json`, { build: options.build, project: testInfo.project.name, days: { worked, plain, picked, deleted }, steps });
+    for (const item of steps) {
+      if (/Escape$|Cancel$|Back, Escape$/.test(item.label)) {
+        const writesHere = item.writes.filter((w: any) => !(w.call === 'POST /api/days/batch' && w.body?.mode === 'preview'));
+        expect(writesHere, `${item.label}: only previews`).toEqual([]);
+      }
+    }
+  });
+}
+
+export function registerSettingsDialogs(fx: any, options: DialogOptions): void {
+  const { test, expect, newPerson } = fx;
+  test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+  test(`Settings and Import steps: Cancel, Escape and Back write nothing; commits keep their bodies (${options.build})`, async ({ page, adminSeed, builtServer }: any, testInfo: any) => {
+    test.setTimeout(300_000);
+    page.setDefaultTimeout(15_000);
+    const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner O', signature: 'none' });
+    const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee One', signature: 'none' });
+    const giver = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner Two', signature: 'none' });
+    await giver.api.call('POST', '/api/shares', { grantee_email: owner.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+    const writes = recordWrites(page);
+    const tokens: Array<[string, string]> = [
+      [grantee.account.email, '<grantee-email>'],
+      [owner.account.email, '<owner-email>'],
+      [grantee.account.id, '<grantee-id>'],
+      [owner.account.id, '<owner-id>'],
+      [giver.account.id, '<giver-id>'],
+    ];
+    const normalise = (value: unknown) => {
+      let text = JSON.stringify(value);
+      for (const [from, to] of tokens) text = text.split(from).join(to);
+      return JSON.parse(text.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '<uuid>'));
+    };
+    const steps: any[] = [];
+    const shares = async () => {
+      const answer = await owner.api.call('GET', '/api/shares');
+      return { given: answer.given.map((s: any) => s.items), received: answer.received.length };
+    };
+    const opening = async () => {
+      const answer = await owner.api.call('GET', '/api/ot/opening-balance');
+      const ledger = await owner.api.call('GET', '/api/ot/ledger');
+      return { opening: answer.opening_balance === null ? null : answer.opening_balance.minutes ?? 'set', ledger: ledger.entries.map((e: any) => [e.entry_type, e.delta_minutes]) };
+    };
+    const imports = async () => (await owner.api.call('GET', '/api/imports')).imports.map((i: any) => i.state);
+    const step = async (label: string, stored: () => Promise<unknown>) => {
+      steps.push({ label, writes: normalise(writes.splice(0)), focus: normalise(await page.evaluate(FOCUS)), stored: normalise(await stored()) });
+    };
+    await page.goto('/#/settings');
+    await page.getByLabel('Email').fill(owner.account.email);
+    await page.getByLabel('Password').fill(owner.account.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    const form = page.getByRole('form', { name: 'Share my timesheets' });
+    await expect(form).toBeVisible();
+    writes.splice(0);
+
+    // Grant, change (Cancel, Escape, Save), end (Escape, Cancel, End share), leave (Escape, Cancel, Leave).
+    await form.getByLabel('Account email').fill(grantee.account.email);
+    await form.getByRole('radio', { name: 'View only' }).check();
+    await form.getByRole('button', { name: 'Share', exact: true }).click();
+    await expect(page.locator('[data-status="share"]')).toHaveText('Shared with Synthetic Grantee One.');
+    await step('share: grant view only', shares);
+    const row = page.getByRole('list', { name: 'Shares I gave' }).locator('li', { hasText: 'Synthetic Grantee One' });
+    const change = row.getByRole('button', { name: 'Change items shared with Synthetic Grantee One' });
+    await change.click();
+    await row.getByRole('radio', { name: 'Can edit' }).check();
+    await row.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(change).toBeVisible();
+    await step('share change: Can edit, Cancel', shares);
+    await change.click();
+    await row.getByRole('radio', { name: 'Can edit' }).check();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(400);
+    const stillOpen = await row.getByRole('button', { name: 'Save items' }).count();
+    await step(`share change: Can edit, Escape (change step still open: ${stillOpen})`, shares);
+    if (stillOpen > 0) await row.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await change.click();
+    await row.getByRole('radio', { name: 'Can edit' }).check();
+    await row.getByRole('button', { name: 'Save items' }).click();
+    await expect(page.locator('[data-status="share"]')).toContainText('The items shared with Synthetic Grantee One were changed.');
+    await step('share change: Can edit, Save items', shares);
+    const end = row.getByRole('button', { name: /^End shar(e|ing) with Synthetic Grantee One$/ });
+    const confirm = page.locator('[data-confirm="share"]');
+    await end.click();
+    await expect(confirm).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(confirm).toHaveCount(0);
+    await step('share end: Escape', shares);
+    await end.click();
+    await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(confirm).toHaveCount(0);
+    await step('share end: Cancel', shares);
+    await end.click();
+    await confirm.getByRole('button', { name: 'End share', exact: true }).click();
+    await expect(page.locator('[data-status="share"]')).toContainText('Sharing with Synthetic Grantee One ended.');
+    await step('share end: End share', shares);
+    const leave = page.getByRole('list', { name: 'Shares I received' }).getByRole('button', { name: "Leave Synthetic Owner Two's shared items" });
+    await leave.click();
+    await expect(confirm).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(confirm).toHaveCount(0);
+    await step('share leave: Escape', shares);
+    await leave.click();
+    await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(confirm).toHaveCount(0);
+    await step('share leave: Cancel', shares);
+    await leave.click();
+    await confirm.getByRole('button', { name: 'Leave', exact: true }).click();
+    await expect(page.locator('[data-status="share"]')).toHaveText("You left Synthetic Owner Two's shared items.");
+    await step('share leave: Leave', shares);
+
+    // Import: Back to the preview, Escape, then Confirm import.
+    await page.evaluate("window.location.hash = '#/import'");
+    await expect(page.getByRole('heading', { name: 'Import and opening balance' })).toBeVisible();
+    const payrollDate = options.addDays(owner.payrollDate, -14);
+    const bytes = options.buildSyntheticWorkbook?.({ periods: [{ payrollDate, days: { 1: { label: 'Mystery label' }, 2: { labelFormulaCache: 'Holiday' }, 3: { label: 'Off day (overtime used)' } } }] });
+    await page.locator('[data-import-file]').setInputFiles({ name: 'synthetic-hours.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from(bytes ?? new Uint8Array()) });
+    await page.getByRole('button', { name: 'Upload and preview' }).click();
+    await expect(page.locator('[data-import-notice="created"]')).toBeVisible();
+    await step('import: upload and preview', imports);
+    const ask = page.getByRole('button', { name: 'Review and commit' });
+    await ask.click();
+    await page.getByRole('button', { name: 'Back to the preview' }).click();
+    await expect(ask).toBeVisible();
+    await step('import: Review and commit, Back to the preview', imports);
+    await ask.click();
+    await expect(page.getByRole('button', { name: 'Confirm import' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(ask).toBeVisible();
+    await step('import: Review and commit, Escape', imports);
+    await ask.click();
+    await page.getByRole('button', { name: 'Confirm import' }).click();
+    await expect(page.locator('[data-import-notice="committed"]')).toBeVisible();
+    await step('import: Review and commit, Confirm import', imports);
+
+    // Opening balance: Back to edit, Escape, Confirm and post; correction: Cancel, Back to edit, Escape, Confirm correction.
+    const panel = page.getByRole('region', { name: 'Opening OT balance' });
+    const record = panel.getByRole('form', { name: 'Record the opening balance' });
+    await record.getByLabel('Hours').fill('12');
+    await record.getByLabel('Minutes (0 to 59)').fill('30');
+    await record.getByLabel('As-of date').fill(options.addDays(owner.todayLocal, -10));
+    await record.getByLabel('Reason', { exact: true }).fill('Balance carried over (synthetic)');
+    await record.getByLabel('Evidence reference').fill('Synthetic email 2026-01-05');
+    const reviewButton = record.getByRole('button', { name: 'Review before posting' });
+    await reviewButton.click();
+    await panel.getByRole('button', { name: 'Back to edit' }).click();
+    await expect(reviewButton).toBeVisible();
+    await step('opening: Review, Back to edit', opening);
+    await reviewButton.click();
+    await expect(panel.getByRole('button', { name: 'Confirm and post' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(reviewButton).toBeVisible();
+    await step('opening: Review, Escape', opening);
+    await reviewButton.click();
+    await panel.getByRole('button', { name: 'Confirm and post' }).click();
+    await expect(panel.locator('[data-opening-current]')).toHaveAttribute('data-opening-current', '750');
+    await step('opening: Review, Confirm and post', opening);
+    const correct = panel.getByRole('button', { name: 'Correct the opening balance' });
+    await correct.click();
+    await panel.getByRole('form', { name: 'Correct the opening balance' }).getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(correct).toBeVisible();
+    await step('opening correction: Cancel', opening);
+    await correct.click();
+    const correction = panel.getByRole('form', { name: 'Correct the opening balance' });
+    await correction.getByLabel('Hours').fill('10');
+    await correction.getByLabel('Minutes (0 to 59)').fill('0');
+    await correction.getByLabel('Reason for the correction').fill('Two hours were counted twice (synthetic)');
+    await correction.getByLabel('Evidence reference').fill('Synthetic ticket 42');
+    const correctionReview = correction.getByRole('button', { name: 'Review before posting' });
+    await correctionReview.click();
+    await panel.getByRole('button', { name: 'Back to edit' }).click();
+    await expect(correctionReview).toBeVisible();
+    await step('opening correction: Review, Back to edit', opening);
+    await correctionReview.click();
+    await expect(panel.getByRole('button', { name: 'Confirm correction' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(correctionReview).toBeVisible();
+    await step('opening correction: Review, Escape', opening);
+    await correctionReview.click();
+    await panel.getByRole('button', { name: 'Confirm correction' }).click();
+    await expect(panel.locator('[data-opening-current]')).toHaveAttribute('data-opening-current', '600');
+    await step('opening correction: Review, Confirm correction', opening);
+
+    writeResult(`dialogs-settings-${options.build}-${testInfo.project.name}.json`, { build: options.build, project: testInfo.project.name, steps });
+    for (const item of steps) {
+      if (/Escape|Cancel$|Back to (the preview|edit)$/.test(item.label)) expect(item.writes, `${item.label}: nothing written`).toEqual([]);
+    }
+  });
+}

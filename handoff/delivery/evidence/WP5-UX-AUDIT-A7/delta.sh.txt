@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Delta bf954c0..255ba17 (FIX8) and the boundary since 014bd47: commits, paths, full diff outside handoff/,
+# forbidden paths, test lines removed/added.
+set -u
+source <task>/env.sh
+cd "$REPO" || exit 2
+BASE=bf954c0b371ad9a5fe461a603c5d476ea210e66c
+RC=255ba17d6bf891c0ff779d4a4f518e0d2998cee8
+{
+echo "== commits bf954c0..255ba17"
+git log --format='%H %s' $BASE..$RC
+echo "== non-handoff paths per commit"
+for c in $(git rev-list $BASE..$RC); do
+  echo "-- $c"
+  git diff-tree --no-commit-id --name-status -r $c -- . ':(exclude)handoff'
+done
+echo "== git diff --stat bf954c0..255ba17 outside handoff/"
+git diff --stat=200 $BASE $RC -- . ':(exclude)handoff'
+echo "== git diff --numstat bf954c0..255ba17 outside handoff/ (added removed path)"
+git diff --numstat $BASE $RC -- . ':(exclude)handoff'
+echo "== forbidden paths bf954c0..255ba17 (src/server src/domain src/client/*.ts(x) other than styles.css, api.ts, fixtures.ts, dayButton.ts, package files, configs, scripts, docs) - expected empty"
+git diff --stat $BASE $RC -- src/server src/domain src/client ':(exclude)src/client/styles.css' tests/e2e/fixtures.ts tests/e2e/dayButton.ts tests/client tests/integration tests/domain tests/server package.json package-lock.json vite.config.ts playwright.config.ts tsconfig.json tsconfig.server.json tsconfig.client.json tsconfig.test.json eslint.config.js scripts docs
+echo "(end)"
+echo "== removed lines in the delta (any file outside handoff/), expected 0"
+git diff -U0 $BASE $RC -- . ':(exclude)handoff' > "$T/raw/delta-U0.txt"
+echo "removed lines: $(grep -cE '^-[^-]' "$T/raw/delta-U0.txt")   added lines: $(grep -cE '^\+[^+]' "$T/raw/delta-U0.txt")"
+echo "== tests/e2e/sharing.spec.ts: test( declarations and expect( counts"
+echo "test( at bf954c0: $(git show $BASE:tests/e2e/sharing.spec.ts | grep -cE '^\s*test\(')  at 255ba17: $(git show $RC:tests/e2e/sharing.spec.ts | grep -cE '^\s*test\(')"
+echo "expect( at bf954c0: $(git show $BASE:tests/e2e/sharing.spec.ts | grep -c 'expect(')  at 255ba17: $(git show $RC:tests/e2e/sharing.spec.ts | grep -c 'expect(')"
+echo "== boundary since 014bd47: src/server src/domain src/client/api.ts tests/e2e/pdf-visual.spec.ts tests/e2e/fixtures.ts package.json package-lock.json"
+git diff --stat 014bd47 $RC -- src/server src/domain src/client/api.ts tests/e2e/pdf-visual.spec.ts tests/e2e/fixtures.ts package.json package-lock.json
+echo "(end)"
+echo "== src/server and src/server/pdf since 014bd47 (expected empty)"
+git diff --stat 014bd47 $RC -- src/server
+echo "(end)"
+echo "== src/domain diff since 014bd47"
+git diff 014bd47 $RC -- src/domain
+echo "(end)"
+echo "== whole round 014bd47..255ba17 name-status outside handoff/ (count)"
+git diff --name-status 014bd47 $RC -- . ':(exclude)handoff' > "$T/raw/round-namestatus.txt"
+wc -l < "$T/raw/round-namestatus.txt"
+git diff --name-status 014bd47 $BASE -- . ':(exclude)handoff' > "$T/raw/round-namestatus-bf9.txt"
+echo "-- path list vs the list at bf954c0 (014bd47..bf954c0); status letters compared"
+diff "$T/raw/round-namestatus-bf9.txt" "$T/raw/round-namestatus.txt"; echo "diff exit $?"
+} > "$T/raw/10-delta.txt" 2>&1
+git diff $BASE $RC -- . ':(exclude)handoff' > "$T/raw/10b-diff-fix8.txt" 2>&1
+echo done

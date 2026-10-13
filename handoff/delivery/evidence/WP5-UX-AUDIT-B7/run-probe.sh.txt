@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Usage: run-probe.sh <clone|base> <tag> <port-base> <grep> [project]
+# Runs the auditor probe in the given scratch copy against its own built server; log to the task folder.
+set -u
+T=/d/.claude-tmp/timesheet/WP5-UX-AUDIT-B7-2
+WHERE="$1"
+TAG="$2"
+PORT="$3"
+GREP="$4"
+PROJECT="${5:-}"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$(cygpath -u "$APPDATA")/npm:$PATH"
+export TEMP='D:\.claude-tmp\timesheet\WP5-UX-AUDIT-B7-2' TMP='D:\.claude-tmp\timesheet\WP5-UX-AUDIT-B7-2'
+export PROBE_OUT="D:\\.claude-tmp\\timesheet\\WP5-UX-AUDIT-B7-2\\probe-out"
+export PROBE_WORK="D:\\.claude-tmp\\timesheet\\WP5-UX-AUDIT-B7-2\\probe-work"
+export PROBE_OUT_DIR="D:\\.claude-tmp\\timesheet\\WP5-UX-AUDIT-B7-2\\probe-pw-${TAG}"
+export PROBE_PORT_BASE="$PORT"
+export PROBE_TAG="$TAG"
+cd "$T/$WHERE" || exit 9
+LOG="$T/40-probe-${TAG}.txt"
+{
+  date -u +%FT%TZ
+  echo "where=$WHERE head=$(git rev-parse HEAD) tag=$TAG port=$PORT grep=$GREP project=${PROJECT:-both}"
+  if [ -n "$PROJECT" ]; then
+    node.exe node_modules/@playwright/test/cli.js test -c b7probe/probe.config.ts --project "$PROJECT" -g "$GREP"
+  else
+    node.exe node_modules/@playwright/test/cli.js test -c b7probe/probe.config.ts -g "$GREP"
+  fi
+  echo "exit=$?"
+  date -u +%FT%TZ
+} > "$LOG" 2>&1
+grep -n "passed\|failed\|skipped\|exit=" "$LOG"

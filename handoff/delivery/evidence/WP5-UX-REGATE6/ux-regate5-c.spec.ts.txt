@@ -1,0 +1,114 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator } from '@playwright/test';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX-REGATE5 probe C (scratch, never committed): R-12 on a time field of the session form reached by
+ * Shift+Tab (desktop), and the rendered "Complete" backdrop of a selected row on the desktop sheet. Synthetic data.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles', actionTimeout: 15_000 });
+const OUT = process.env.UXREGATE_OUT ?? '';
+function note(line: string): void {
+  if (OUT !== '') appendFileSync(join(OUT, 'obs-rings-c.txt'), `${line}\n`);
+}
+
+type Rgba = [number, number, number, number];
+function parseColour(text: string): Rgba {
+  const numbers = (/rgba?\(([^)]*)\)/.exec(text)?.[1] ?? '').split(/[\s,/]+/).filter((part) => part !== '').map(Number);
+  const [r = 0, g = 0, b = 0, a = 1] = numbers;
+  return [r, g, b, a];
+}
+function over(top: Rgba, bottom: Rgba): Rgba {
+  const alpha = top[3] + bottom[3] * (1 - top[3]);
+  if (alpha === 0) return [0, 0, 0, 0];
+  const mix = (index: 0 | 1 | 2) => (top[index] * top[3] + bottom[index] * bottom[3] * (1 - top[3])) / alpha;
+  return [mix(0), mix(1), mix(2), alpha];
+}
+function luminance([r, g, b]: Rgba): number {
+  const channel = (value: number) => {
+    const s = value / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+function contrast(a: Rgba, b: Rgba): number {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
+}
+const composite = (nearestFirst: string[]) => nearestFirst.reduceRight<Rgba>((below, css) => over(parseColour(css), below), [255, 255, 255, 1]);
+const hex = ([r, g, b]: Rgba) => `#${[r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+
+async function shadowOf(locator: Locator): Promise<string> {
+  const read = async () => locator.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).boxShadow ?? 'none');
+  let settled = await read();
+  await expect
+    .poll(async () => {
+      const first = await read();
+      await locator.page().waitForTimeout(400);
+      settled = await read();
+      return first === settled;
+    })
+    .toBe(true);
+  return settled;
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`R-12 time field after Shift+Tab, ${colorScheme}`, async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop only');
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Ring Person', signature: 'none' });
+    const [day = ''] = await person.api.displayedPeriodFreeWorkdays();
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await signInPageAs(person.account, '#/timesheet');
+    await page.locator(`[data-day="${day}"] :is(.d-time, .t-time)`).click();
+    const editor = page.locator(`dialog[data-day-editor="${day}"]`);
+    await expect(editor).toBeVisible();
+    await editor.getByRole('button', { name: /Add session/ }).first().click();
+    const time = editor.locator('input[type="time"]').first();
+    await expect(time).toBeVisible();
+    await time.focus();
+    for (let i = 0; i < 6; i += 1) {
+      await page.keyboard.press('Tab');
+      if (!(await time.evaluate((element) => element.matches(':focus-within')))) break;
+    }
+    await page.keyboard.press('Shift+Tab');
+    const within = await time.evaluate((element) => element.matches(':focus-within'));
+    const shadow = await shadowOf(time);
+    const layers = shadow.split(/,\s*(?=rgba?\()/).map((layer) => ({ colour: parseColour(layer), inset: layer.includes('inset'), spread: parseFloat((layer.replace(/rgba?\([^)]*\)/, '').match(/-?\d+(\.\d+)?px/g) ?? [])[3] ?? '0') }));
+    const outer = layers.filter((layer) => !layer.inset).sort((a, b) => b.spread - a.spread)[0];
+    const backdrops = await time.evaluate((element) => {
+      const view = element.ownerDocument.defaultView;
+      const list: string[] = [];
+      for (let node = element.parentElement; node; node = node.parentElement) list.push(view?.getComputedStyle(node).backgroundColor ?? '');
+      return list;
+    });
+    const surface = composite(backdrops);
+    const painted = outer === undefined ? surface : over(outer.colour, over(surface, [255, 255, 255, 1]));
+    const ratio = contrast(painted, surface);
+    note(`desktop ${colorScheme} time field after Shift+Tab: :focus-within ${within}; box-shadow ${shadow}; outer ring ${hex(painted)} on ${hex(surface)} = ${ratio.toFixed(2)}:1`);
+    expect(within).toBe(true);
+    expect(ratio).toBeGreaterThanOrEqual(3);
+    if (colorScheme === 'light') await page.screenshot({ path: screenshotPath('regate5-time-field-ring-light-synthetic.png'), animations: 'disabled' });
+  });
+}
+
+test('AX-09 desktop selected row backdrop', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Ring Person', signature: 'none' });
+  const [day = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(day);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signInPageAs(person.account, '#/timesheet');
+  await page.getByRole('button', { name: 'Change several days' }).click();
+  await page.getByRole('checkbox', { name: `Select ${day}` }).check();
+  const info = await page.evaluate((workDate) => {
+    const view = window;
+    const matches = [...document.querySelectorAll(`[data-day="${workDate}"]`)].map((row) => {
+      const status = row.querySelector('.status-complete');
+      const chain: string[] = [];
+      for (let node = status; node; node = node.parentElement) chain.push(`${node.tagName.toLowerCase()}.${String((node as HTMLElement).className).split(' ').join('.')}:${view.getComputedStyle(node).backgroundColor}`);
+      return { tag: row.tagName.toLowerCase(), cls: String((row as HTMLElement).className), visible: (row as HTMLElement).getClientRects().length > 0, color: status ? view.getComputedStyle(status).color : null, chain: chain.slice(0, 6) };
+    });
+    return matches;
+  }, day);
+  note(`${testInfo.project.name} selected-row structure: ${JSON.stringify(info)}`);
+});

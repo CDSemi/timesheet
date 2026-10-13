@@ -280,8 +280,38 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Board list corrected.
 - Attempt 2 stopped on the validator: FIX8 listed the FIX REQUIRED audit B6 in
   depends_on. Removed; addresses_audit keeps the link.
-- Running: WP5-UX-FIX8-FREEZE attempt 3 (committer, expected HEAD bf954c0). Then
-  WP5-UX-REGATE6, delta rechecks B7 and A7, then the WP5 re-accept.
+- WP5-UX-FIX8-FREEZE attempt 3 done: 255ba17d6bf891c0ff779d4a4f518e0d2998cee8 on main,
+  pushed (393 paths; digests b07727b2; every check exit 0).
+- WP5-UX-REGATE6 PASS (verifier, self-reported claude-sonnet-5-5; NAS NOT VERIFIED) on
+  255ba17 / b07727b2: unit 1823, full e2e 210/0/26, drill 208 PASS, image
+  sha256:f36d083ee6dd37ab66c1d00a98398a18171264ebad17b170f1a9c85b25e83af4; fix scope 2
+  paths (76 insertions, 0 deletions); B6-01 four states fit at 390x844; AX-01 0 hidden.
+  Informational for B7: at 320 the switcher's select text is clipped; at 375/360/320 a
+  share plus the zone note still exceeds the first screen (outside the 390x844 promise).
+- B7 and A7 attempt 1 (2026-10-09) stopped at the subscription weekly usage limit; no
+  record written. The owner asked to try again (2026-10-13).
+- WP5-UX-AUDIT-A7 attempt 2 FIX REQUIRED (fresh opus): FIX8 changes no area-A
+  behaviour (delta proof passes), but WP5-UX-A7-01 (Low, tests only, older than FIX8):
+  `isolation.spec.ts` (and `shell.spec.ts:68`) seed a date outside the displayed period
+  on 4 of every 14 days (Tuesday to Friday of each period's first week; now until
+  2026-10-16 Los Angeles), so the mandatory isolation spec fails on every build then.
+  A seed-date variant with unchanged assertions passes 6/6.
+- WP5-UX-AUDIT-B7 attempt 2 FIX REQUIRED (fresh opus): B6-01 closed (first-row bottoms
+  757.97 / 659.02 / 765.97 / 667.02 against 788), every bar-affected area-B item holds,
+  no weakened assertion; the only blocker is WP5-UX-B7-01, the same test-date defect as
+  A7-01 (6 e2e failures in the window, also on bf954c0). Optional risks R-B7-1 (select
+  value clipped at 355-420 px after FIX8), R-B7-2..R-B7-4.
+- Coordinator decision: one tests-only round WP5-UX-FIX9 with a deterministic window
+  check; no product change; R-B7-1..R-B7-4 to the pilot fix backlog.
+- WP5-UX-FIX9 done (self-reported claude-sonnet-5-5; reported, not independent proof):
+  the displayed period is the one with the earliest payroll date on or after today; the
+  old seed choice is wrong on the 4 days ending on each payroll date (P-3..P; A7's
+  description). Isolation and shell specs now use
+  `displayedSeedDay()`; new deterministic test `tests/domain/e2eSeedSelection.test.ts`
+  (the old choice fails it); 5 test paths; specs 3x pass in the window; full e2e
+  210/0/26; unit 1827; verify 0; digest 58b0deee.
+- Running: WP5-UX-FIX9-FREEZE (committer, expected HEAD 255ba17). Then WP5-UX-REGATE7,
+  delta rechecks B8 and A8, then the WP5 re-accept.
 - Next: if both PASS, the WP5 re-accept (pilot packet identity refresh to 5e104e1 /
   07c3ca00 / image 218dd7cc…, docs/10 owner decision Q1, STATE, NEXT_ACTION, WP5
   handoff, accept commit).

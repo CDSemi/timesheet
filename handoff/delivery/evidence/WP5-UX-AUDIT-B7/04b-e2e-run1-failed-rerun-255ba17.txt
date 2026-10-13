@@ -1,0 +1,219 @@
+2026-10-13T19:09:44Z
+
+Running 6 tests using 2 workers
+
+  x  2 [desktop] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell (7.7s)
+  x  1 [desktop] › tests\e2e\isolation.spec.ts:94:1 › a second employee cannot reach employee 1 by hash swap or by id swap (7.9s)
+  x  3 [mobile] › tests\e2e\isolation.spec.ts:94:1 › a second employee cannot reach employee 1 by hash swap or by id swap (7.9s)
+  x  4 [desktop] › tests\e2e\isolation.spec.ts:145:1 › an admin cannot open employee data through any admin screen (8.2s)
+  x  5 [mobile] › tests\e2e\isolation.spec.ts:145:1 › an admin cannot open employee data through any admin screen (8.3s)
+  x  6 [mobile] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell (7.7s)
+
+
+  1) [desktop] › tests\e2e\isolation.spec.ts:94:1 › a second employee cannot reach employee 1 by hash swap or by id swap 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-day="2026-10-12"]')
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" locator('[data-day="2026-10-12"]') with timeout 7000ms
+      - waiting for locator('[data-day="2026-10-12"]')
+
+
+      104 |     // Employee 1's date is in the displayed period for employee 2 too, with nothing recorded.
+      105 |     const row = page.locator(`[data-day="${owner.workDate}"]`);
+    > 106 |     await expect(row).toBeVisible();
+          |                       ^
+      107 |     await expect(row).not.toContainText('Complete');
+      108 |     await expect(row.locator('[data-check="complete"]')).toHaveCount(0);
+      109 |     await expect(page.locator('main')).not.toContainText(owner.note);
+        at D:\.claude-tmp\timesheet\WP5-UX-AUDIT-B7-2\clone\tests\e2e\isolation.spec.ts:106:23
+
+    Error Context: ..\e2e-rep-clone-out\isolation-a-second-employe-1aa67--by-hash-swap-or-by-id-swap-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\e2e-rep-clone-out\isolation-a-second-employe-1aa67--by-hash-swap-or-by-id-swap-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\e2e-rep-clone-out\isolation-a-second-employe-1aa67--by-hash-swap-or-by-id-swap-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\e2e\isolation.spec.ts:145:1 › an admin cannot open employee data through any admin screen 
+
+    Error: expect(locator).not.toContainText(expected) failed
+
+    Locator: locator('[data-day="2026-10-12"]')
+    Expected substring: not "Complete"
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "not toContainText" locator('[data-day="2026-10-12"]') with timeout 7000ms
+      - waiting for locator('[data-day="2026-10-12"]')
+
+
+      186 |     await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+      187 |     await expect(page.locator('main')).not.toContainText(owner.note);
+    > 188 |     await expect(page.locator(`[data-day="${owner.workDate}"]`)).not.toContainText('Complete');
+          |                                                                      ^
+      189 |     await expect(page.locator(`[data-day="${owner.workDate}"] [data-check="complete"]`)).toHaveCount(0);
+      190 |
+      191 |     const intact = await employeeSeed.dayView(owner.workDate);
+        at D:\.claude-tmp\timesheet\WP5-UX-AUDIT-B7-2\clone\tests\e2e\isolation.spec.ts:188:70
+
+    Error Context: ..\e2e-rep-clone-out\isolation-an-admin-cannot--12f93-ta-through-any-admin-screen-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\e2e-rep-clone-out\isolation-an-admin-cannot--12f93-ta-through-any-admin-screen-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\e2e-rep-clone-out\isolation-an-admin-cannot--12f93-ta-through-any-admin-screen-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [desktop] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell ─
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: locator('[data-day="2026-10-12"]')
+    Expected substring: "Complete"
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" locator('[data-day="2026-10-12"]') with timeout 7000ms
+      - waiting for locator('[data-day="2026-10-12"]')
+
+
+      74 |   await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+      75 |   const row = page.locator(`[data-day="${workDate}"]`);
+    > 76 |   await expect(row).toContainText('Complete');
+         |                     ^
+      77 |   await expect(row.locator('[data-check="complete"]')).toHaveCount(1);
+      78 |   await expect(page.locator('[data-day]')).toHaveCount(14);
+      79 |   // The worked minutes of the sheet's detail row (Show details), as h:mm.
+        at D:\.claude-tmp\timesheet\WP5-UX-AUDIT-B7-2\clone\tests\e2e\shell.spec.ts:76:21
+
+    Error Context: ..\e2e-rep-clone-out\shell-the-existing-timesheet-view-works-inside-the-shell-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\e2e-rep-clone-out\shell-the-existing-timesheet-view-works-inside-the-shell-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\e2e-rep-clone-out\shell-the-existing-timesheet-view-works-inside-the-shell-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [mobile] › tests\e2e\isolation.spec.ts:94:1 › a second employee cannot reach employee 1 by hash swap or by id swap 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-day="2026-10-12"]')
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" locator('[data-day="2026-10-12"]') with timeout 7000ms
+      - waiting for locator('[data-day="2026-10-12"]')
+
+
+      104 |     // Employee 1's date is in the displayed period for employee 2 too, with nothing recorded.
+      105 |     const row = page.locator(`[data-day="${owner.workDate}"]`);
+    > 106 |     await expect(row).toBeVisible();
+          |                       ^
+      107 |     await expect(row).not.toContainText('Complete');
+      108 |     await expect(row.locator('[data-check="complete"]')).toHaveCount(0);
+      109 |     await expect(page.locator('main')).not.toContainText(owner.note);
+        at D:\.claude-tmp\timesheet\WP5-UX-AUDIT-B7-2\clone\tests\e2e\isolation.spec.ts:106:23
+
+    Error Context: ..\e2e-rep-clone-out\isolation-a-second-employe-1aa67--by-hash-swap-or-by-id-swap-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\e2e-rep-clone-out\isolation-a-second-employe-1aa67--by-hash-swap-or-by-id-swap-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\e2e-rep-clone-out\isolation-a-second-employe-1aa67--by-hash-swap-or-by-id-swap-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [mobile] › tests\e2e\isolation.spec.ts:145:1 › an admin cannot open employee data through any admin screen 
+
+    Error: expect(locator).not.toContainText(expected) failed
+
+    Locator: locator('[data-day="2026-10-12"]')
+    Expected substring: not "Complete"
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "not toContainText" locator('[data-day="2026-10-12"]') with timeout 7000ms
+      - waiting for locator('[data-day="2026-10-12"]')
+
+
+      186 |     await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+      187 |     await expect(page.locator('main')).not.toContainText(owner.note);
+    > 188 |     await expect(page.locator(`[data-day="${owner.workDate}"]`)).not.toContainText('Complete');
+          |                                                                      ^
+      189 |     await expect(page.locator(`[data-day="${owner.workDate}"] [data-check="complete"]`)).toHaveCount(0);
+      190 |
+      191 |     const intact = await employeeSeed.dayView(owner.workDate);
+        at D:\.claude-tmp\timesheet\WP5-UX-AUDIT-B7-2\clone\tests\e2e\isolation.spec.ts:188:70
+
+    Error Context: ..\e2e-rep-clone-out\isolation-an-admin-cannot--12f93-ta-through-any-admin-screen-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\e2e-rep-clone-out\isolation-an-admin-cannot--12f93-ta-through-any-admin-screen-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\e2e-rep-clone-out\isolation-an-admin-cannot--12f93-ta-through-any-admin-screen-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) [mobile] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell ──
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: locator('[data-day="2026-10-12"]')
+    Expected substring: "Complete"
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" locator('[data-day="2026-10-12"]') with timeout 7000ms
+      - waiting for locator('[data-day="2026-10-12"]')
+
+
+      74 |   await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+      75 |   const row = page.locator(`[data-day="${workDate}"]`);
+    > 76 |   await expect(row).toContainText('Complete');
+         |                     ^
+      77 |   await expect(row.locator('[data-check="complete"]')).toHaveCount(1);
+      78 |   await expect(page.locator('[data-day]')).toHaveCount(14);
+      79 |   // The worked minutes of the sheet's detail row (Show details), as h:mm.
+        at D:\.claude-tmp\timesheet\WP5-UX-AUDIT-B7-2\clone\tests\e2e\shell.spec.ts:76:21
+
+    Error Context: ..\e2e-rep-clone-out\shell-the-existing-timesheet-view-works-inside-the-shell-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\e2e-rep-clone-out\shell-the-existing-timesheet-view-works-inside-the-shell-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\e2e-rep-clone-out\shell-the-existing-timesheet-view-works-inside-the-shell-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6 failed
+    [desktop] › tests\e2e\isolation.spec.ts:94:1 › a second employee cannot reach employee 1 by hash swap or by id swap 
+    [desktop] › tests\e2e\isolation.spec.ts:145:1 › an admin cannot open employee data through any admin screen 
+    [desktop] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell ──
+    [mobile] › tests\e2e\isolation.spec.ts:94:1 › a second employee cannot reach employee 1 by hash swap or by id swap 
+    [mobile] › tests\e2e\isolation.spec.ts:145:1 › an admin cannot open employee data through any admin screen 
+    [mobile] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell ───
+exit=1
+2026-10-13T19:10:15Z

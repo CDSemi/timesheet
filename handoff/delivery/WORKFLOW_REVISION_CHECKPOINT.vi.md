@@ -286,8 +286,40 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   stage). Đã sửa danh sách trên board.
 - Lần 2 dừng ở validator: FIX8 ghi audit B6 (FIX REQUIRED) trong depends_on. Đã bỏ;
   addresses_audit vẫn giữ liên kết.
-- Đang chạy: WP5-UX-FIX8-FREEZE lần 3 (committer, HEAD mong đợi bf954c0). Sau đó
-  WP5-UX-REGATE6, kiểm lại phần thay đổi B7 và A7, rồi nghiệm thu lại WP5.
+- WP5-UX-FIX8-FREEZE lần 3 xong: 255ba17d6bf891c0ff779d4a4f518e0d2998cee8 trên main, đã
+  push (393 đường dẫn; digest b07727b2; mọi kiểm tra exit 0).
+- WP5-UX-REGATE6 PASS (verifier, tự báo claude-sonnet-5-5; NAS chưa kiểm) trên 255ba17 /
+  b07727b2: unit 1823, toàn bộ e2e 210/0/26, drill 208 PASS, image
+  sha256:f36d083ee6dd37ab66c1d00a98398a18171264ebad17b170f1a9c85b25e83af4; phạm vi sửa 2
+  đường dẫn (76 dòng thêm, 0 dòng xóa); B6-01 vừa khung ở cả bốn trường hợp tại 390x844;
+  AX-01 0 điểm dừng bị che. Thông tin để B7 đánh giá: ở 320 chữ trong ô chọn của bộ chuyển
+  bị cắt; ở 375/360/320, khi có chia sẻ và ghi chú múi giờ thì màn hình đầu vẫn vượt khung
+  (nằm ngoài lời hứa ở 390x844).
+- B7 và A7 lần 1 (2026-10-09) dừng vì chạm giới hạn sử dụng hàng tuần của subscription;
+  không ghi bản ghi nào. Chủ dự án yêu cầu chạy lại (2026-10-13).
+- WP5-UX-AUDIT-A7 lần 2 FIX REQUIRED (opus mới): FIX8 không đổi hành vi phần A (chứng
+  minh phần thay đổi đạt), nhưng có WP5-UX-A7-01 (Low, chỉ ở test, có từ trước FIX8):
+  `isolation.spec.ts` (và `shell.spec.ts:68`) tạo dữ liệu vào một ngày nằm ngoài kỳ đang
+  hiển thị trong 4 trên mỗi 14 ngày (thứ Ba đến thứ Sáu tuần đầu mỗi kỳ; hiện tại đến hết
+  2026-10-16 giờ Los Angeles), nên spec cách ly bắt buộc fail trên mọi bản build trong
+  những ngày đó. Bản thử đổi ngày tạo dữ liệu, giữ nguyên assertion, pass 6/6.
+- WP5-UX-AUDIT-B7 lần 2 FIX REQUIRED (opus mới): B6-01 đã đóng (đáy dòng đầu 757.97 /
+  659.02 / 765.97 / 667.02 so với 788), mọi mục phần B chịu ảnh hưởng của thanh trên
+  cùng đều đạt, không assertion nào bị nới lỏng; lỗi chặn duy nhất là WP5-UX-B7-01, cùng
+  lỗi ngày trong test với A7-01 (6 test e2e fail trong khoảng ngày lỗi, cả trên bf954c0).
+  Rủi ro không bắt buộc: R-B7-1 (chữ trong ô chọn bị cắt ở 355-420 px sau FIX8),
+  R-B7-2..R-B7-4.
+- Quyết định coordinator: một vòng chỉ sửa test WP5-UX-FIX9, có phép kiểm tất định cho
+  khoảng ngày; không đổi sản phẩm; R-B7-1..R-B7-4 đưa vào backlog của vòng sửa pilot.
+- WP5-UX-FIX9 xong (tự báo claude-sonnet-5-5; là báo cáo, chưa phải bằng chứng độc lập):
+  kỳ đang hiển thị là kỳ có ngày trả lương sớm nhất từ hôm nay trở đi; cách chọn ngày cũ
+  sai trong 4 ngày kết thúc ở mỗi ngày trả lương (P-3..P; đúng như A7 mô tả).
+  Spec cách ly và spec khung app giờ dùng `displayedSeedDay()`; test tất định mới
+  `tests/domain/e2eSeedSelection.test.ts` (cách chọn cũ fail); 5 đường dẫn test; chạy spec
+  3 lần đều pass trong khoảng ngày lỗi; toàn bộ e2e 210/0/26; unit 1827; verify 0; digest
+  58b0deee.
+- Đang chạy: WP5-UX-FIX9-FREEZE (committer, HEAD mong đợi 255ba17). Sau đó
+  WP5-UX-REGATE7, kiểm lại phần thay đổi B8 và A8, rồi nghiệm thu lại WP5.
 - Tiếp theo: nếu cả hai PASS, nghiệm thu lại WP5 (cập nhật định danh pilot packet thành
   5e104e1 / 07c3ca00 / image 218dd7cc…, quyết định Q1 vào docs/10, STATE, NEXT_ACTION, WP5
   handoff, commit nghiệm thu).

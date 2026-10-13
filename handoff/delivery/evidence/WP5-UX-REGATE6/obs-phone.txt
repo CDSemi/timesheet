@@ -1,0 +1,14 @@
+viewport {"width":390,"height":844} scrollY=0
+B-01 first [data-day] row top=585.4375 bottom=659.015625 ; tab bar top=788 ; bottom<=top: true
+tab order: previous -> next focused=true; next -> review focused=true; boxes prev(x=28,y=84.109375) next(x=318,y=84.109375) review(x=28,y=192.390625)
+B-04 Check text of an unseeded workday 2026-10-02: "Fri\n10/02\nNo times\t\nWorked\n\t\nno times yet\n\t"
+B-04 Check text of another unseeded workday 2026-10-01: "Thu\n10/01\nNo times\t\nWorked\n\t\nno times yet\n\t"
+timesheet phone: controls=41 below44=0 scrollWidth=390 innerWidth=390 []
+B-04 control labelled "Category for selected days" count=1; "Preview changes" button count=1
+batch phone: controls=46 below44=0 scrollWidth=390 innerWidth=390 []
+editor phone: controls=49 below44=0 scrollWidth=390 innerWidth=390 []
+A-01 hours "2-" with minutes 30: alert visible=true role=alert aria-live=null text="Enter leave as whole hours (0 to 24) and minutes (0 to 59), at most 24h 00m." aria-invalid(hours,minutes)=["true",null] PUT sent=0 stored leave_minutes=0
+A-01 hours 4 with minutes "3-": alert visible=true role=alert aria-live=null text="Enter leave as whole hours (0 to 24) and minutes (0 to 59), at most 24h 00m." aria-invalid(hours,minutes)=[null,"true"] PUT sent=0 stored leave_minutes=0
+A-01 valid 2 h 30 m: PUT bodies ["/api/days/2026-10-02 {\"category\":\"Worked\",\"leave_minutes\":150,\"leave_kind\":\"vacation\",\"wfh\":false,\"notes\":\"\",\"expected_version\":null}"] stored leave_minutes=150
+A-01 empty fields: PUT body ["/api/days/2026-10-02 {\"category\":\"Worked\",\"leave_minutes\":0,\"leave_kind\":null,\"wfh\":false,\"notes\":\"\",\"expected_version\":1}"] stored leave_minutes=0
+review phone: controls=8 below44=0 scrollWidth=390 innerWidth=390 []

@@ -1,0 +1,23 @@
+Failure context of tests/e2e/shell.spec.ts:67 (desktop) in e2e run 1 at 255ba17, 2026-10-13 ~19:05Z (12:05 America/Los_Angeles, a Tuesday).
+Page snapshot lines (error-context.md) naming the displayed period, then the failing locator:
+47:    - strong: 09/28/2026 to 10/11/2026
+50:    - paragraph: Payroll date Fri 10/16/2026 Due Tue 10/13/2026, 17:00 (America/Los_Angeles) Times in America/Los_Angeles
+65:    - definition: Example Employee
+67:    - definition: 10/16/2026
+69:    - definition: 09/28/2026 - 10/11/2026
+70:    - region "Week 1, 09/28/2026 to 10/04/2026":
+71:      - strong: WEEK 1
+99:    - region "Week 2, 10/05/2026 to 10/11/2026":
+100:      - strong: WEEK 2
+
+Failing locators in the six failures (run 1):
+295:    Locator: locator('[data-day="2026-10-12"]')
+328:    Locator: locator('[data-day="2026-10-12"]')
+361:    Locator: locator('[data-day="2026-10-12"]')
+394:    Locator: locator('[data-day="2026-10-12"]')
+427:    Locator: locator('[data-day="2026-10-12"]')
+460:    Locator: locator('[data-day="2026-10-12"]')
+
+Helper used by the failing tests: tests/e2e/fixtures.ts:392-406 pastFreeWorkdays() takes days from BOTH periods.in_progress and periods.current (newest first);
+the app displays periods.current first (the not-yet-due period). On the due Tuesday of each 14-day period, from 00:00 to 17:00 America/Los_Angeles, the newest free day (the Monday, here 2026-10-12) lies in the in-progress period, which is not displayed. On the Monday no in-progress day is in the past yet, so the helper returns a displayed day.
+Callers: tests/e2e/shell.spec.ts:68, tests/e2e/isolation.spec.ts:52 (seedOwner, used by :94 and :145), tests/e2e/admin.spec.ts:88 (passes: it only needs recorded data, it never looks for the row).

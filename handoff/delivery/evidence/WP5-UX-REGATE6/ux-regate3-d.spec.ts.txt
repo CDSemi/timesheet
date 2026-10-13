@@ -1,0 +1,143 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX-REGATE3 probe (scratch only, never committed): direct observation of B3-01 in the built app.
+ * The editor is open at 1280x800, a label pick on a worked day opens the review, the window crosses
+ * 1200px, and Escape/focus/stacking are recorded after each step. A third path resizes with only the
+ * editor open.
+ */
+const OUT = process.env.UXREGATE_OUT ?? '';
+
+function note(line: string): void {
+  if (OUT !== '') appendFileSync(join(OUT, 'obs-b3.txt'), `${line}\n`);
+}
+
+function state(page: Page): Promise<string> {
+  return page.evaluate(`(() => {
+    const nameOf = (dialog) => {
+      const id = dialog.getAttribute('aria-labelledby');
+      const heading = id === null ? null : document.getElementById(id);
+      return (heading?.textContent ?? '').replace(/\\s+/g, ' ').trim();
+    };
+    const dialogs = [...document.querySelectorAll('dialog[open]')].map((dialog) => {
+      const box = dialog.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return { name: nameOf(dialog).slice(0, 40), modal: dialog.matches(':modal'), x: Math.round(box.left), w: Math.round(box.width), focusInside: dialog.contains(document.activeElement), onTopAtCentre: hit !== null && dialog.contains(hit) };
+    });
+    const a = document.activeElement;
+    const active = a === null ? 'none' : a.tagName + ' ' + ((a.getAttribute('aria-label') ?? a.textContent ?? '').replace(/\\s+/g, ' ').trim().slice(0, 40));
+    return JSON.stringify({ inner: window.innerWidth, dialogs, active });
+  })()`);
+}
+
+async function settle(page: Page, wide: boolean) {
+  const area = page.locator('.sheet-area');
+  if (wide) await expect(area).toHaveClass(/with-editor/);
+  else await expect(area).not.toHaveClass(/with-editor/);
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 150))))');
+}
+
+test.describe('B3-01 observation', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop project: crossing 1200px');
+
+  for (const path of [
+    { tag: 'A-1280-to-1024', widths: [1024] },
+    { tag: 'B-1280-to-1024-to-1280', widths: [1024, 1280] },
+  ]) {
+    test(`B3-01 path ${path.tag}: review open`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+      test.setTimeout(90_000);
+      const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Resize', signature: 'none' });
+      const free = await person.api.displayedPeriodFreeWorkdays();
+      const [editDay = '', workedDay = ''] = free;
+      await person.api.seedCompleteDay(workedDay);
+      const batch: string[] = [];
+      page.on('request', (request) => {
+        const url = new URL(request.url());
+        if (request.method() !== 'GET' && url.pathname.startsWith('/api/days')) batch.push(`${request.method()} ${url.pathname} ${request.postData() ?? ''}`.slice(0, 160));
+      });
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await signInPageAs(person.account, '#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const dayButton = page.locator(`[data-day="${editDay}"] [data-day-button]`);
+      await dayButton.click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toBeVisible();
+      await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+      note(`${path.tag} step 1 editor open at 1280: ${await state(page)}`);
+      await page.getByRole('button', { name: new RegExp(`^Label for ${workedDay}`) }).click();
+      await page.getByRole('listbox', { name: `Label for ${workedDay}` }).getByRole('option', { name: 'Off', exact: true }).click();
+      const review = page.getByRole('dialog', { name: `Review label change for ${workedDay}` });
+      await expect(review).toBeVisible();
+      await expect.poll(async () => review.evaluate((element) => element.matches(':focus-within'))).toBe(true);
+      note(`${path.tag} step 2 review open at 1280: ${await state(page)}`);
+      for (const width of path.widths) {
+        await page.setViewportSize({ width, height: 800 });
+        await settle(page, width >= 1200);
+        const s = await state(page);
+        note(`${path.tag} step 3 after resize to ${width}: ${s}`);
+        const parsed = JSON.parse(s) as { dialogs: Array<{ name: string; modal: boolean; focusInside: boolean; onTopAtCentre: boolean }> };
+        const r = parsed.dialogs.find((d) => d.name.startsWith('Review label change'));
+        const e = parsed.dialogs.find((d) => d.name.startsWith('Day editor'));
+        expect(r).toMatchObject({ modal: true, focusInside: true, onTopAtCentre: true });
+        expect(e?.focusInside).toBe(false);
+        if (width === 1024 && path.tag.startsWith('A')) await page.screenshot({ path: screenshotPath('review-on-top-w1024-after-resize-synthetic.png'), animations: 'disabled' });
+        if (width === 1280) await page.screenshot({ path: screenshotPath('review-on-top-w1280-after-return-synthetic.png'), animations: 'disabled' });
+      }
+      // First Escape: only the review closes.
+      await page.keyboard.press('Escape');
+      await expect(review).toHaveCount(0);
+      await expect(editor).toBeVisible();
+      await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 200))))');
+      const afterFirst = await state(page);
+      const cat1 = (await person.api.dayView(workedDay)).category;
+      note(`${path.tag} step 4 after first Escape: ${afterFirst} ; stored category of ${workedDay}=${cat1} ; non-GET day requests so far=${JSON.stringify(batch)}`);
+      const parsed1 = JSON.parse(afterFirst) as { dialogs: Array<{ name: string; focusInside: boolean }> };
+      expect(parsed1.dialogs.length).toBe(1);
+      expect(parsed1.dialogs[0]?.name.startsWith('Day editor')).toBe(true);
+      expect(parsed1.dialogs[0]?.focusInside || path.tag.includes('to-1280')).toBe(true);
+      expect(cat1).toBe('Worked');
+      // Second Escape: the editor closes, focus returns to the day's button.
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+      const returned = await dayButton.evaluate((el) => el === document.activeElement);
+      const cat2 = (await person.api.dayView(workedDay)).category;
+      note(`${path.tag} step 5 after second Escape: ${await state(page)} ; focus on the day's button=${returned} ; stored category=${cat2} ; day requests=${JSON.stringify(batch)}`);
+      expect(returned).toBe(true);
+      expect(cat2).toBe('Worked');
+    });
+  }
+
+  test('B3-01 path C: resize with only the editor open (no review)', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+    test.setTimeout(90_000);
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Resize', signature: 'none' });
+    const free = await person.api.displayedPeriodFreeWorkdays();
+    const [editDay = ''] = free;
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInPageAs(person.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const dayButton = page.locator(`[data-day="${editDay}"] [data-day-button]`);
+    await dayButton.click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+    note(`C step 1 editor at 1280: ${await state(page)}`);
+    for (const width of [1024, 1280, 768, 1200, 1199]) {
+      await page.setViewportSize({ width, height: 800 });
+      await settle(page, width >= 1200);
+      const s = await state(page);
+      note(`C after resize to ${width}: ${s}`);
+      const d = (JSON.parse(s) as { dialogs: Array<{ modal: boolean; onTopAtCentre: boolean }> }).dialogs;
+      expect(d.length).toBe(1);
+      expect(d[0]?.modal).toBe(width < 1200);
+      expect(d[0]?.onTopAtCentre).toBe(true);
+    }
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    const returned = await dayButton.evaluate((el) => el === document.activeElement);
+    note(`C Escape: closed, focus on the day's button=${returned} ; ${await state(page)}`);
+    expect(returned).toBe(true);
+  });
+});

@@ -49,9 +49,8 @@ async function openMoreOnPhone(page: Page) {
 }
 
 async function seedOwner(employee: SeedClient): Promise<Owner> {
-  const [workDate] = await employee.pastFreeWorkdays();
-  expect(workDate, 'a past free workday').toBeDefined();
-  if (workDate === undefined) throw new Error('no free workday');
+  // A day of the period the page displays; pastFreeWorkdays() can return an in-progress period's day that is not on the page.
+  const workDate = await employee.displayedSeedDay();
   await employee.seedCompleteDay(workDate);
   const note = `private-synthetic-${randomBytes(6).toString('hex')}`;
   await employee.putDay(workDate, { notes: note });

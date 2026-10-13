@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Static comparisons (A6 scripts reused unchanged as a method): API call sites, request-body builders, client
+# arithmetic, the declaration-level CSS diff, and the built server/domain/client hashes of 255ba17, bf954c0, 014bd47.
+source <task>/env.sh
+S="$T/scripts"
+cd "$T" || exit 2
+{
+  echo '$ node callsites.mjs <exbf9> <export 255ba17> bf954c0 255ba17'
+  node "$S/callsites.mjs" "$T/exbf9" "$T/export" bf954c0 255ba17; echo "exit $?"
+  echo
+  echo '$ node callsites.mjs <ex014> <export 255ba17> 014bd47 255ba17'
+  node "$S/callsites.mjs" "$T/ex014" "$T/export" 014bd47 255ba17; echo "exit $?"
+} > "$T/raw/13-callsites.txt" 2>&1
+{
+  echo '$ node body-builders.mjs <exbf9> <export 255ba17> bf954c0 255ba17'
+  node "$S/body-builders.mjs" "$T/exbf9" "$T/export" bf954c0 255ba17; echo "exit $?"
+  echo
+  echo '$ node body-builders.mjs <ex014> <export 255ba17> 014bd47 255ba17'
+  node "$S/body-builders.mjs" "$T/ex014" "$T/export" 014bd47 255ba17; echo "exit $?"
+} > "$T/raw/14-body-builders.txt" 2>&1
+cd "$REPO" || exit 2
+git diff --name-status 014bd47 255ba17d6bf891c0ff779d4a4f518e0d2998cee8 -- src/client > "$T/raw/namestatus-014-255-client.txt"
+git diff --name-status 014bd47 bf954c0b371ad9a5fe461a603c5d476ea210e66c -- src/client > "$T/raw/namestatus-014-bf9-client.txt"
+{
+  echo '$ node client-arith.mjs <export 255ba17> <name-status 014bd47..255ba17 src/client>'
+  node "$S/client-arith.mjs" "$T/export" "$T/raw/namestatus-014-255-client.txt" > "$T/raw/arith-255.txt"; echo "exit $?"
+  cat "$T/raw/arith-255.txt"
+  echo
+  echo '$ node client-arith.mjs <exbf9> <name-status 014bd47..bf954c0 src/client>'
+  node "$S/client-arith.mjs" "$T/exbf9" "$T/raw/namestatus-014-bf9-client.txt" > "$T/raw/arith-bf9.txt"; echo "exit $?"
+  echo "(output kept in the task folder)"
+  echo
+  echo '$ diff <arith 255ba17> <arith bf954c0>   (expected: no difference)'
+  diff "$T/raw/arith-255.txt" "$T/raw/arith-bf9.txt"; echo "diff exit $?"
+  echo '$ diff <name-status 014..255 src/client> <name-status 014..bf9 src/client>   (expected: no difference)'
+  diff "$T/raw/namestatus-014-255-client.txt" "$T/raw/namestatus-014-bf9-client.txt"; echo "diff exit $?"
+} > "$T/raw/16-client-arith.txt" 2>&1
+{
+  echo '$ node css-rules.mjs <exbf9>/src/client/styles.css <export>/src/client/styles.css'
+  node "$S/css-rules.mjs" "$T/exbf9/src/client/styles.css" "$T/export/src/client/styles.css"; echo "exit $?"
+} > "$T/raw/12a-css-rules.txt" 2>&1
+{
+  for part in server domain client; do
+    for b in export:255ba17 exbf9:bf954c0 ex014:014bd47; do
+      dir="${b%%:*}"; label="${b##*:}"
+      echo "== dist/$part of $label"
+      bash "$T/tree-hash.sh" "$T/$dir/dist/$part" "$T/raw/dist-$part-$label.txt"
+    done
+    echo "-- diff dist/$part 255ba17 vs bf954c0"
+    diff "$T/raw/dist-$part-255ba17.txt" "$T/raw/dist-$part-bf954c0.txt"; echo "diff exit $?"
+    echo "-- diff dist/$part 255ba17 vs 014bd47"
+    diff "$T/raw/dist-$part-255ba17.txt" "$T/raw/dist-$part-014bd47.txt" > "$T/raw/dist-$part-diff-014.txt"; echo "diff exit $? ($(wc -l < "$T/raw/dist-$part-diff-014.txt") lines)"
+  done
+} > "$T/raw/11b-dist.txt" 2>&1
+echo done

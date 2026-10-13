@@ -1,0 +1,32 @@
+// Summary of the P3 focus walks. Usage: node sum-p3.mjs <p3-walks-*.json>...
+import { readFileSync } from 'node:fs';
+
+for (const file of process.argv.slice(2)) {
+  const rows = JSON.parse(readFileSync(file, 'utf8'));
+  console.log(`# ${file.replace(/^.*[\\/]/, '')}`);
+  console.log('who | theme | size | screen | key | stops | hidden | partly covered by a bar | min visible/25 | not :focus-visible | no ring | ring with no side shown | outside dialog | left document');
+  const total = { walks: 0, stops: 0, hidden: 0, partly: 0, noFv: 0, noRing: 0, ringHidden: 0, outsideDialog: 0 };
+  const details = [];
+  for (const r of rows) {
+    if (r.stops === undefined) {
+      console.log(`${r.who} | ${r.theme} | ${r.size} | ${r.screen} | Escape closes: ${r.closedByEscape}; focus after: "${r.focusAfterEscape}"`);
+      continue;
+    }
+    total.walks += 1;
+    total.stops += r.stops;
+    total.hidden += r.hidden.length;
+    total.partly += r.partlyCovered.length;
+    total.noFv += r.noFocusVisible.length;
+    total.noRing += r.noRing.length;
+    total.ringHidden += r.ringAllSidesHidden.length;
+    total.outsideDialog += r.outsideDialog ?? 0;
+    console.log([r.who, r.theme, r.size, r.screen, r.key, r.stops, r.hidden.length, r.partlyCovered.length, r.minVisible, r.noFocusVisible.length, r.noRing.length, r.ringAllSidesHidden.length, r.outsideDialog ?? '-', r.outsideDocument].join(' | '));
+    for (const h of r.hidden) details.push(`HIDDEN ${r.who}/${r.theme}/${r.size}/${r.screen}/${r.key}: ${h.what} ${JSON.stringify(h.covered)} ${JSON.stringify(h.rect)}`);
+    for (const p of r.partlyCovered) details.push(`PARTLY ${r.who}/${r.theme}/${r.size}/${r.screen}/${r.key}: ${p.what} visible ${p.visible} ${JSON.stringify(p.covered)}`);
+    for (const n of r.noFocusVisible) details.push(`NO-FV ${r.who}/${r.theme}/${r.size}/${r.screen}/${r.key}: ${n}`);
+    for (const n of r.noRing) details.push(`NO-RING ${r.who}/${r.theme}/${r.size}/${r.screen}/${r.key}: ${n}`);
+    for (const n of r.ringAllSidesHidden) details.push(`RING-HIDDEN ${r.who}/${r.theme}/${r.size}/${r.screen}/${r.key}: ${n.what} ${JSON.stringify(n.sides)}`);
+  }
+  console.log(`TOTAL walks ${total.walks}, stops ${total.stops}, hidden ${total.hidden}, partly covered ${total.partly}, not focus-visible ${total.noFv}, no ring ${total.noRing}, ring with no side shown ${total.ringHidden}, stops outside the dialog ${total.outsideDialog}`);
+  for (const line of details) console.log(line);
+}

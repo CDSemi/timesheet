@@ -1,0 +1,15 @@
+// Per-project counts of a Playwright list-reporter log. Usage: node e2e-counts.mjs <log>
+import { readFileSync } from 'node:fs';
+
+const text = readFileSync(process.argv[2], 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
+const counts = {};
+for (const line of text.split(/\r?\n/)) {
+  const m = /^\s+(ok|x|-|✓|✘)\s+\d+\s+\[(desktop|mobile)\]/.exec(line);
+  if (!m) continue;
+  const status = m[1] === 'ok' || m[1] === '✓' ? 'passed' : m[1] === '-' ? 'skipped' : 'failed';
+  counts[m[2]] ??= { passed: 0, failed: 0, skipped: 0 };
+  counts[m[2]][status] += 1;
+}
+console.log(JSON.stringify(counts));
+const summary = text.split(/\r?\n/).filter((line) => /^\s+\d+ (passed|failed|skipped|flaky|did not run)|exit=/.test(line));
+console.log(summary.map((line) => line.trim()).join('; '));

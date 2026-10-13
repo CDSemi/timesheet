@@ -65,9 +65,8 @@ test('an unknown hash falls back to the timesheet route', async ({ page, signInT
 });
 
 test('the existing timesheet view works inside the shell', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
-  const [workDate] = await employeeSeed.pastFreeWorkdays();
-  expect(workDate, 'a past workday with no session in the current periods').toBeDefined();
-  if (workDate === undefined) return;
+  // A day of the period the page displays (it fails clearly when that period has no past free workday).
+  const workDate = await employeeSeed.displayedSeedDay();
   await employeeSeed.seedCompleteDay(workDate);
 
   await signInThroughUi();

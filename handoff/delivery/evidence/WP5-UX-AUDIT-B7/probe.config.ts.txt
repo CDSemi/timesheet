@@ -1,0 +1,20 @@
+import { join } from 'node:path';
+import { defineConfig } from '@playwright/test';
+
+// WP5-UX-AUDIT-B7 attempt 2 probe configuration (auditor-written, outside git tracking): the same browser and
+// projects as playwright.config.ts. Each project starts its own built server on PROBE_PORT_BASE (desktop) or
+// PROBE_PORT_BASE + 1 (mobile), inside the task port range 48420-48439. Output goes to PROBE_OUT_DIR.
+export default defineConfig({
+  testDir: '.',
+  testMatch: '*.probe.ts',
+  outputDir: process.env.PROBE_OUT_DIR ?? join(import.meta.dirname, '..', '..', 'probe-pw-out'),
+  workers: 1,
+  reporter: 'list',
+  timeout: 3_600_000,
+  expect: { timeout: 7_000 },
+  use: { channel: 'msedge', headless: true, screenshot: 'off', trace: 'off', locale: 'en-US', actionTimeout: 8_000, navigationTimeout: 20_000 },
+  projects: [
+    { name: 'desktop', use: { viewport: { width: 1280, height: 800 } } },
+    { name: 'mobile', use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } },
+  ],
+});

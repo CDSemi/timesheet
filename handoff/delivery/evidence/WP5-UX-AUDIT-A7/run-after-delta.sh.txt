@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Waits until the delta probes have finished (raw/delta-done.txt), then runs the isolation follow-up and the
+# Settings sharing-path probes, so that no two Playwright runs overlap.
+T=<task>
+until [ -f "$T/raw/delta-done.txt" ]; do sleep 5; done
+bash "$T/run-iso.sh"
+bash "$T/run-settings.sh"
+echo done > "$T/raw/after-delta-done.txt"

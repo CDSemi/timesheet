@@ -1,0 +1,24 @@
+// Width sweep summary: prints a line whenever a fact changes from the previous width. Usage: node sum-p5.mjs <json>...
+import { readFileSync } from 'node:fs';
+
+for (const file of process.argv.slice(2)) {
+  const rows = JSON.parse(readFileSync(file, 'utf8'));
+  console.log(`# ${file.replace(/^.*[\\/]/, '')}`);
+  let previous = '';
+  const counts = {};
+  for (const r of rows) {
+    const facts = `row=${r.row} bar=${r.bar} sideways=${r.sideways} outside=${r.outside} labelLines=${r.labelLines} labelVisible=${r.labelVisible} labelOverlapsSelect=${r.labelOverlapsSelect} chosenFits=${r.chosenFits} targetsOk=${r.targetsOk} selectOverlapsOpen=${r.selectOverlapsOpen} openHit=${JSON.stringify(r.openHit)} scale=${r.visualScale}`;
+    const key = `${r.view}`;
+    counts[key] ??= { widths: 0, sideways: 0, notFits: 0, overlap: 0, targetsBad: 0, labelHidden: 0 };
+    const c = counts[key];
+    c.widths += 1;
+    if (r.sideways) c.sideways += 1;
+    if (!r.chosenFits) c.notFits += 1;
+    if (r.selectOverlapsOpen) c.overlap += 1;
+    if (!r.targetsOk) c.targetsBad += 1;
+    if (!r.labelVisible) c.labelHidden += 1;
+    if (`${r.view} ${facts}` !== previous) console.log(`${r.view} w=${r.width}: ${facts} select=${r.selectW} content=${r.selectContentWidth} chosen="${r.chosen}" (${r.chosenTextWidth})`);
+    previous = `${r.view} ${facts}`;
+  }
+  console.log(`COUNTS ${JSON.stringify(counts)}`);
+}

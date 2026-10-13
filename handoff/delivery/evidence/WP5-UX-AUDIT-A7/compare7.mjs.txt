@@ -1,0 +1,178 @@
+// WP5-UX-AUDIT-A7: compares the probe results of 255ba17 with bf954c0 (FIX8 delta) and with 014bd47 (body
+// baseline). Sections: 1 bodies vs 014bd47 (A6 section 4, unchanged), 2 switcher by keyboard/touch/pointer at 390
+// and 320 vs bf954c0, 3 sticky/keyboard-walk counts per build, width, zone and share, 4 computed layout vs
+// bf954c0. Prints SAME/DIFF lines and a final mismatch count. Usage: node compare7.mjs <probe-results-dir>
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const read = (name) => (existsSync(join(dir, name)) ? JSON.parse(readFileSync(join(dir, name), 'utf8')) : null);
+let mismatches = 0;
+let missing = 0;
+const canon = (value) => JSON.stringify(value, (key, v) => (v !== null && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v));
+const same = (label, a, b, left = '255ba17') => {
+  const x = canon(a);
+  const y = canon(b);
+  if (x === y) console.log(`  SAME      ${label}: ${x.length > 240 ? `${x.slice(0, 237)}...` : x}`);
+  else {
+    mismatches += 1;
+    console.log(`  DIFF      ${label}:\n            ${left} ${x}\n            other   ${y}`);
+  }
+};
+const need = (name) => {
+  const value = read(name);
+  if (value === null) {
+    missing += 1;
+    console.log(`  MISSING   ${name}`);
+  }
+  return value;
+};
+const PROJECTS = ['m390-la', 'm390-note', 'm320-la', 'm320-note'];
+
+console.log('== 1. Bodies of the clock, sign-off, batch, editor and one-day label change: 255ba17 vs 014bd47');
+const runIndependent = (body) => {
+  if (body === null || typeof body !== 'object') return body;
+  const copy = { ...body };
+  delete copy.expected_version;
+  delete copy.reviewed_hash;
+  return copy;
+};
+for (const [project, base] of [['desktop', 'desktop'], ['tablet', 'desktop'], ['mobile', 'mobile']]) {
+  const a = need(`bodies-255ba17-${project}.json`);
+  const b = need(`bodies-014bd47-${base}.json`);
+  if (a === null || b === null) continue;
+  console.log(`-- 255ba17 ${project} (editor modal=${a.editor_layout?.modal} class=${a.editor_layout?.className}) vs 014bd47 ${base}`);
+  same('clock calls', a.clock.map((w) => w.call), b.clock.map((w) => w.call));
+  same('clock bodies (run-independent)', a.clock.map((w) => runIndependent(w.body)), b.clock.map((w) => runIndependent(w.body)));
+  same('clock body keys', a.clock.map((w) => Object.keys(w.body).sort()), b.clock.map((w) => Object.keys(w.body).sort()));
+  same('sign-off call', a.signoff.at(-1)?.call.replace(/\d{4}-\d{2}-\d{2}/, ':p'), b.signoff.at(-1)?.call.replace(/\d{4}-\d{2}-\d{2}/, ':p'));
+  same('sign-off keys', Object.keys(a.signoff.at(-1)?.body ?? {}).sort(), Object.keys(b.signoff.at(-1)?.body ?? {}).sort());
+  same('sign-off run-independent values', runIndependent(a.signoff.at(-1)?.body), runIndependent(b.signoff.at(-1)?.body));
+  console.log(`            sign-off binding 255ba17: reviewed_hash = payload_hash ${a.signoff.at(-1)?.body.reviewed_hash === a.review_binding.payload_hash}, expected_version = reviewed ${a.signoff.at(-1)?.body.expected_version === a.review_binding.expected_version}; status ${a.signoff_status} (014bd47 ${b.signoff_status}); writes on the review page ${a.signoff.length} vs ${b.signoff.length}`);
+  same('batch days', a.batch_days, b.batch_days);
+  same('batch preview and commit bodies', a.batch.map((w) => w.body), b.batch.map((w) => w.body));
+  same('editor day dates', a.editor_days, b.editor_days);
+  same('editor writes (calls)', a.editor.map((w) => w.call), b.editor.map((w) => w.call));
+  same('editor day-fields PUT body', a.editor[0]?.body, b.editor[0]?.body);
+  same('editor new-session POST body', a.editor[1]?.body, b.editor[1]?.body);
+  same('one-day label change calls (picker vs batch bar)', a.picker.map((w) => w.call), b.picker.map((w) => w.call));
+  same('one-day label change bodies (picker vs batch bar)', a.picker.map((w) => w.body), b.picker.map((w) => w.body));
+}
+
+console.log('\n== 2. "Shared with me" by keyboard, touch and pointer: routes, shared views and isolation, 255ba17 vs bf954c0');
+for (const project of PROJECTS) {
+  const a = need(`switcher7-255ba17-${project}.json`);
+  const b = need(`switcher7-bf954c0-${project}.json`);
+  if (a === null || b === null) continue;
+  console.log(`-- ${project} (viewport ${a.viewport.width}x${a.viewport.height}, zone ${a.zone})`);
+  same('switcher options', a.switcher_options, b.switcher_options);
+  for (const runA of a.runs) {
+    const runB = b.runs.find((r) => r.mode === runA.mode);
+    runA.steps.forEach((stepA, index) => {
+      const stepB = runB?.steps[index];
+      same(`${runA.mode} step ${index + 1} ${stepA.from} -> ${stepA.target}: landed`, stepA.landed, stepB?.landed);
+      same(`${runA.mode} step ${index + 1} requests`, stepA.requests, stepB?.requests);
+      same(`${runA.mode} step ${index + 1} choice alone (address, requests, chosen) and how`, { afterChoice: stepA.afterChoice, how: stepA.how }, { afterChoice: stepB?.afterChoice, how: stepB?.how });
+    });
+    const gA = runA.steps.map((s) => `${s.geometryBefore.shellBar.h}`);
+    const gB = runB?.steps.map((s) => `${s.geometryBefore.shellBar.h}`);
+    const okA = runA.steps.every((s) => s.geometryBefore.selectInView && s.geometryBefore.selectHit && s.geometryBefore.openInView && s.geometryBefore.openHit);
+    const okB = runB?.steps.every((s) => s.geometryBefore.selectInView && s.geometryBefore.selectHit && s.geometryBefore.openInView && s.geometryBefore.openHit);
+    console.log(`            ${runA.mode}: shell bar height before each step 255ba17 [${gA.join(', ')}] vs bf954c0 [${gB?.join(', ')}]; select and Open in view and hit at every step: 255ba17 ${okA}, bf954c0 ${okB}`);
+    const s0 = runA.steps[0].geometryBefore;
+    console.log(`            ${runA.mode} 255ba17 first step: select ${JSON.stringify(s0.select)} Open ${JSON.stringify(s0.open)} label "${s0.labelText}" visible ${s0.labelVisible}; scrollWidth ${s0.scrollWidth} innerWidth ${s0.innerWidth}`);
+  }
+  same('isolation', a.isolation, b.isolation);
+}
+
+console.log('\n== 3. Sticky bars and keyboard walks: focus checks, pointer and touch trials, walks (no problem allowed on 255ba17)');
+for (const project of PROJECTS) {
+  for (const share of ['share', 'noshare']) {
+    for (const build of ['255ba17', 'bf954c0']) {
+      const r = need(`sticky7-${build}-${project}-${share}.json`);
+      if (r === null) continue;
+      const hidden = r.results.filter((x) => typeof x.visibleSamples === 'number' && x.visibleSamples === 0).length;
+      const minSamples = Math.min(...r.results.filter((x) => typeof x.visibleSamples === 'number').map((x) => x.visibleSamples));
+      const controls = new Set(r.results.filter((x) => x.missing !== true).map((x) => `${x.scenario}/${x.name}`)).size;
+      console.log(`-- ${build} ${project} ${share} (width ${r.width}, zone ${r.zone}, zone note ${r.zoneNote}, switchers ${r.switchers}): ${controls} controls, ${r.checks} focus checks, ${r.trials} pointer trials, ${r.taps} touch trials; problems ${r.problems.length} (entirely hidden ${hidden}); lowest visible samples ${minSamples}/25`);
+      for (const p of r.problems.slice(0, 10)) console.log(`     problem: ${p.scenario} / ${p.name} / ${p.position}: ${p.trial ?? (p.missing ? 'missing' : `focused ${p.focused} centreHit ${p.centreHit} samples ${p.visibleSamples} covers ${JSON.stringify(p.covers)}`)}`);
+      for (const w of r.walks) console.log(`     walk ${w.scenario}: ${w.stops} Tab stops, entirely hidden ${w.hidden}, centre not hit ${w.notCentre}, lowest samples ${w.minSamples}/25${w.problems.length > 0 ? `; problems ${JSON.stringify(w.problems.map((p) => `${p.label}:${p.visibleSamples}:${JSON.stringify(p.covers)}`))}` : ''}`);
+      for (const s of r.sizes) console.log(`     ${s.where}: --shell-bar-size ${s.shellBarSizeVar} (bar ${s.shellBarHeight}), share bar ${s.shareBarHeight ?? '-'} (${s.shareBarPosition ?? '-'}), scroll-padding-top ${s.scrollPaddingTop}; editor head ${s.editorHeadSizeVar ?? '-'} (head ${s.editorHeadHeight ?? '-'}), editor scroll-padding-top ${s.editorScrollPaddingTop ?? '-'}`);
+      if (build === '255ba17') {
+        const walkProblems = r.walks.reduce((n, w) => n + w.problems.length, 0);
+        if (r.problems.length > 0 || walkProblems > 0) {
+          // A date input is not scrolled by a programmatic focus() (A6 N5): placed half under the bar it stays half under,
+          // placed below the fold (page at the top) it stays below. Such a row of the "Open a day" field is explained only
+          // when it kept focus, its pointer and touch trials passed, and the keyboard walk (real Tab presses) reached the
+          // same field fully visible (25/25 samples) in the same view.
+          for (const p of r.problems) {
+            const walk = r.walks.find((w) => w.scenario === p.scenario);
+            const viaKeys = walk?.labels.find((l) => l.startsWith('input "Open a day"'));
+            const trialsOk = r.results.filter((x) => x.scenario === p.scenario && x.name === p.name && (x.position === 'trial-click' || x.position === 'trial-tap')).every((x) => x.trial === 'ok');
+            const explained = p.name === 'Open a day' && p.focused === true && trialsOk && viaKeys !== undefined && viaKeys.endsWith(':25');
+            console.log(`     ${explained ? 'EXPLAINED' : 'UNEXPLAINED'} ${p.scenario} / ${p.name} / ${p.position} (covers ${JSON.stringify(p.covers)})${explained ? `: focused, pointer and touch trials ok, and the keyboard walk reached it ${viaKeys}` : ''}`);
+            if (!explained) mismatches += 1;
+          }
+          mismatches += walkProblems;
+        }
+      }
+    }
+  }
+}
+
+console.log('\n== 4. Computed layout per width: 255ba17 vs bf954c0 (only FIX8 properties and their geometry may differ, and only below 768px)');
+const factsOf = (row) => {
+  const { size, ...rest } = row;
+  return rest;
+};
+const flat = (obj, prefix = '', out = {}) => {
+  if (obj === null || typeof obj !== 'object') {
+    out[prefix] = obj;
+    return out;
+  }
+  for (const [k, v] of Object.entries(obj)) flat(v, prefix === '' ? k : `${prefix}.${k}`, out);
+  return out;
+};
+for (const project of ['wide', 'm390-la']) {
+  const a = need(`css7-255ba17-${project}.json`);
+  const b = need(`css7-bf954c0-${project}.json`);
+  if (a === null || b === null) continue;
+  for (const rowA of a.rows) {
+    const rowB = b.rows.find((r) => r.who === rowA.who && r.view === rowA.view && r.width === rowA.width);
+    const fa = flat(factsOf(rowA));
+    const fb = rowB === undefined ? {} : flat(factsOf(rowB));
+    const keys = [...new Set([...Object.keys(fa), ...Object.keys(fb)])].sort();
+    const diff = keys.filter((k) => canon(fa[k]) !== canon(fb[k]));
+    const label = `${project} ${rowA.width} ${rowA.who} ${rowA.view}`;
+    if (diff.length === 0) console.log(`  SAME      ${label}: all ${keys.length} facts equal (bar ${fa['shellBar.box.h']}, first row bottom ${(fa['firstDayRow.y'] ?? 0) + (fa['firstDayRow.h'] ?? 0)}, tab bar top ${fa['tabBar.y'] ?? '-'})`);
+    else {
+      const wide = rowA.width >= 768;
+      if (wide) mismatches += 1;
+      console.log(`  ${wide ? 'DIFF     ' : 'CHANGED  '} ${label}: ${diff.length} of ${keys.length} facts differ`);
+      for (const k of diff) console.log(`            ${k}: 255ba17 ${canon(fa[k])} | bf954c0 ${canon(fb[k])}`);
+      const bottomA = (fa['firstDayRow.y'] ?? 0) + (fa['firstDayRow.h'] ?? 0);
+      const bottomB = (fb['firstDayRow.y'] ?? 0) + (fb['firstDayRow.h'] ?? 0);
+      console.log(`            first day row bottom 255ba17 ${Math.round(bottomA * 10) / 10} | bf954c0 ${Math.round(bottomB * 10) / 10}; tab bar top ${fa['tabBar.y'] ?? '-'}`);
+    }
+  }
+}
+
+console.log('\n== 5. Sharing paths in Settings (grant, change, end, leave) with the import and opening-balance steps: 255ba17 vs 014bd47 (A6 method)');
+for (const [project, base] of [['desktop', 'desktop'], ['tablet', 'desktop'], ['mobile', 'mobile']]) {
+  const s = need(`dialogs-settings-255ba17-${project}.json`);
+  const t = need(`dialogs-settings-014bd47-${base}.json`);
+  if (s === null || t === null) continue;
+  console.log(`-- Settings and Import, 255ba17 ${project} vs 014bd47 ${base}`);
+  s.steps.forEach((stepA, index) => {
+    const stepB = t.steps[index];
+    const norm = (x) => ({ label: x.label.replace(/ \(change step still open: \d\)/, ''), writes: x.writes, stored: x.stored });
+    same(`${stepA.label}`, norm(stepA), stepB === undefined ? null : norm(stepB));
+  });
+  if (s.steps.length !== t.steps.length) {
+    mismatches += 1;
+    console.log(`  DIFF      step count 255ba17 ${s.steps.length} vs 014bd47 ${t.steps.length}`);
+  }
+}
+
+console.log(`\nmissing=${missing} mismatches=${mismatches}`);
+process.exitCode = mismatches === 0 && missing === 0 ? 0 : 1;

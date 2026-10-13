@@ -1,0 +1,73 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, test } from './fixtures.ts';
+
+/*
+ * WP5-UX-REGATE3 probe (scratch only, never committed): tap targets (44x44) and horizontal scroll at
+ * 390, 360 and 320px on the timesheet, the batch bar, the day editor and the Review.
+ */
+const OUT = process.env.UXREGATE_OUT ?? '';
+
+function note(line: string): void {
+  if (OUT !== '') appendFileSync(join(OUT, 'obs-targets.txt'), `${line}\n`);
+}
+
+async function targetsOf(page: Page): Promise<{ count: number; small: unknown[]; scroll: number; inner: number }> {
+  return page.evaluate(() => {
+    const sel = 'button, a[href], select, input:not([type="checkbox"]):not([type="hidden"]), label.pick, label.inline, [role="button"], [role="tab"]';
+    const small: Array<{ name: string; w: number; h: number }> = [];
+    let count = 0;
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>(sel))) {
+      const r = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      if (r.width === 0 || r.height === 0 || style.visibility === 'hidden' || style.display === 'none') continue;
+      count += 1;
+      if (r.width < 44 || r.height < 44) small.push({ name: (el.textContent ?? '').trim().slice(0, 30) || el.getAttribute('aria-label') || el.tagName, w: Math.round(r.width), h: Math.round(r.height) });
+    }
+    return { count, small, scroll: document.documentElement.scrollWidth, inner: window.innerWidth };
+  });
+}
+
+test.describe('phone only', () => {
+  test.skip(({ isMobile }) => !isMobile, 'phone viewport probes');
+
+  for (const width of [390, 375, 360, 320]) {
+    test(`targets and overflow at ${width}px`, async ({ page, adminSeed, builtServer }) => {
+      test.setTimeout(120_000);
+      await page.setViewportSize({ width, height: 844 });
+      const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Reviewer' });
+      const days = await person.api.displayedPeriodFreeWorkdays();
+      const [d1 = '', d2 = '', d3 = ''] = days;
+      await person.api.seedCompleteDay(d1);
+      await person.api.seedCompleteDay(d2);
+      await person.api.seedUnconfirmedBreaksDay(d3);
+      await page.goto('/');
+      await page.getByLabel('Email').fill(person.account.email);
+      await page.getByLabel('Password').fill(person.account.password);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const states: Array<[string, Awaited<ReturnType<typeof targetsOf>>]> = [];
+      states.push(['timesheet', await targetsOf(page)]);
+      await page.getByRole('button', { name: 'Change several days' }).click();
+      await page.getByLabel(`Select ${d1}`).check();
+      await page.getByLabel(`Select ${d2}`).check();
+      await expect(page.getByText('2 days selected')).toBeVisible();
+      states.push(['batch', await targetsOf(page)]);
+      await page.getByRole('button', { name: 'Done' }).click();
+      await page.getByLabel('Open a day').fill(d3);
+      await page.getByRole('button', { name: 'Open day', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+      states.push(['editor', await targetsOf(page)]);
+      await page.keyboard.press('Escape');
+      await page.goto(`/#/review/${person.payrollDate}`);
+      await expect(page.locator('[data-review-day]')).toHaveCount(14);
+      states.push(['review', await targetsOf(page)]);
+      for (const [name, t] of states) {
+        note(`width=${width} ${name}: controls=${t.count} below44=${t.small.length} scrollWidth=${t.scroll} innerWidth=${t.inner} ${JSON.stringify(t.small)}`);
+        expect(t.small.length).toBe(0);
+        expect(t.scroll).toBeLessThanOrEqual(t.inner);
+      }
+    });
+  }
+});

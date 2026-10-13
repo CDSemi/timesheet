@@ -1,0 +1,28 @@
+// Compares two P4 computed-style dumps (same probe on two snapshots). Usage: node cmp-p4.mjs <a.json> <b.json>
+import { readFileSync } from 'node:fs';
+
+const [fileA, fileB] = process.argv.slice(2);
+const a = JSON.parse(readFileSync(fileA, 'utf8'));
+const b = JSON.parse(readFileSync(fileB, 'utf8'));
+let states = 0;
+let elements = 0;
+let differing = 0;
+for (const key of Object.keys(a)) {
+  states += 1;
+  const left = a[key];
+  const right = b[key];
+  if (right === undefined) {
+    console.log(`${key}: missing in ${fileB}`);
+    continue;
+  }
+  const diffs = [];
+  const keys = new Set([...Object.keys(left.rows), ...Object.keys(right.rows)]);
+  for (const path of keys) {
+    elements += 1;
+    if (left.rows[path] !== right.rows[path]) diffs.push(path);
+  }
+  differing += diffs.length;
+  console.log(`${key}: elements ${left.count}/${right.count}, differing ${diffs.length}, --shell-bar-size ${left.shellBarSizeVar}/${right.shellBarSizeVar}, scroll-padding-top ${left.scrollPaddingTop}/${right.scrollPaddingTop}`);
+  for (const path of diffs.slice(0, 12)) console.log(`  ${path}\n    A ${left.rows[path]}\n    B ${right.rows[path]}`);
+}
+console.log(`TOTAL states ${states}, element comparisons ${elements}, differing ${differing}`);

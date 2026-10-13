@@ -1,0 +1,27 @@
+// Prints one compact line per first-screen measurement (P1 probe JSON). Usage: node sum-p1.mjs <json>...
+import { readFileSync } from 'node:fs';
+
+for (const file of process.argv.slice(2)) {
+  const rows = JSON.parse(readFileSync(file, 'utf8'));
+  console.log(`# ${file.replace(/^.*[\\/]/, '')}`);
+  console.log('who | zone note (expected/seen) | theme | size | shell bar | --shell-bar-size | switcher row | first row top..bottom | tab bar top | margin | fully visible | scrollY | sideways');
+  for (const r of rows) {
+    console.log(
+      [
+        r.who,
+        `${r.zoneNoteExpected ? 'shown' : 'hidden'}/${r.zoneNote ? 'shown' : 'hidden'}`,
+        r.theme,
+        r.size,
+        r.shellBar,
+        r.shellBarSizeVar,
+        r.switcherRow ?? '-',
+        `${r.firstRowTop}..${r.firstRowBottom}`,
+        r.tabBarTop,
+        r.margin,
+        r.fullyVisible,
+        r.scrollY,
+        r.sideways,
+      ].join(' | '),
+    );
+  }
+}

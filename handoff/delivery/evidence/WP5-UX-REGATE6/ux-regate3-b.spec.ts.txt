@@ -1,0 +1,69 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX-REGATE3 probe (scratch only, never committed): direct observation of R-7 at 390, 375, 360 and
+ * 320px. The "Open a day" field must show the full date; the first [data-day] bottom is recorded
+ * against the tab bar top with and without the zone note (the rule promises 390x844 only).
+ */
+const OUT = process.env.UXREGATE_OUT ?? '';
+
+function note(line: string): void {
+  if (OUT !== '') appendFileSync(join(OUT, 'obs-r7.txt'), `${line}\n`);
+}
+
+async function firstRowVsTabBar(page: Page, label: string, enforce: boolean): Promise<void> {
+  const tabs = await page.locator('.shell-tabs').boundingBox();
+  const row = await page.locator('[data-day]').first().boundingBox();
+  const bottom = (row?.y ?? 0) + (row?.height ?? 0);
+  const zoneNote = await page.locator('[data-zone-note]').count();
+  note(
+    `B-01 ${label}: viewport ${JSON.stringify(page.viewportSize())} scrollY=${await page.evaluate('window.scrollY')} zone-note count=${zoneNote} first [data-day] top=${row?.y} bottom=${bottom} ; tab bar top=${tabs?.y} ; bottom<=top: ${bottom <= (tabs?.y ?? 0) + 0.5} ; enforced=${enforce}`,
+  );
+  if (enforce) expect(bottom).toBeLessThanOrEqual((tabs?.y ?? 0) + 0.5);
+}
+
+const ZONES = [
+  { name: 'zone note shown', zone: 'Asia/Ho_Chi_Minh', expectNote: 1, tag: 'note' },
+  { name: 'zone equal, no note', zone: 'America/Los_Angeles', expectNote: 0, tag: 'nonote' },
+];
+
+for (const variant of ZONES) {
+  test.describe(`phone only, ${variant.name}`, () => {
+    test.skip(({ isMobile }) => !isMobile, 'phone viewport probes');
+    test.use({ locale: 'en-US', timezoneId: variant.zone });
+
+    for (const width of [390, 375, 360, 320]) {
+      test(`R-7 Open a day and first row at ${width}px, ${variant.name}`, async ({ page, signInThroughUi }) => {
+        await page.setViewportSize({ width, height: 844 });
+        await signInThroughUi();
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        await page.evaluate('window.scrollTo(0, 0)');
+        await expect(page.locator('[data-zone-note]')).toHaveCount(variant.expectNote);
+        // First row against the tab bar before and after the field is filled (the field value does not change the row).
+        await firstRowVsTabBar(page, `${variant.tag} width ${width} before fill`, width === 390);
+        const field = page.getByLabel('Open a day');
+        await field.fill('2026-10-09');
+        await expect(field).toHaveValue('2026-10-09');
+        const box = await field.boundingBox();
+        const minimum = await page.evaluate<number>(
+          "(() => { const probe = document.createElement('div'); probe.style.width = 'var(--date-field-min)'; document.body.append(probe); const px = probe.getBoundingClientRect().width; probe.remove(); return px; })()",
+        );
+        const clip = await field.evaluate((input) => ({ scrollWidth: input.scrollWidth, clientWidth: input.clientWidth }));
+        const doc = await page.evaluate('({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth, inner: window.innerWidth })');
+        const row = await page.locator('.tools .open-day').boundingBox();
+        const button = await page.getByRole('button', { name: 'Open day', exact: true }).boundingBox();
+        note(
+          `R-7 ${variant.tag} width=${width}: value="2026-10-09" field width=${box?.width}px (height ${box?.height}) ; --date-field-min=${minimum}px ; input scrollWidth=${clip.scrollWidth} clientWidth=${clip.clientWidth} (clipped=${clip.scrollWidth > clip.clientWidth}) ; page ${JSON.stringify(doc)} ; row box=${JSON.stringify(row)} ; Open day button box=${JSON.stringify(button)}`,
+        );
+        expect(box?.width ?? 0).toBeGreaterThanOrEqual(minimum - 0.5);
+        expect(clip.scrollWidth).toBeLessThanOrEqual(clip.clientWidth);
+        await page.locator('.tools .open-day').screenshot({ path: screenshotPath(`open-day-${variant.tag}-w${width}-synthetic.png`) });
+        await firstRowVsTabBar(page, `${variant.tag} width ${width} after fill`, width === 390);
+        if (width === 390 || width === 320) await page.screenshot({ path: screenshotPath(`first-screen-${variant.tag}-w${width}-synthetic.png`), animations: 'disabled' });
+      });
+    }
+  });
+}

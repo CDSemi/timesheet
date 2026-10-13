@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Copies masked LF evidence into handoff/delivery/evidence/WP5-UX-AUDIT-A7 (logs as .txt, JSON results, scripts and
+# probe sources with a .txt suffix). Masking: task folder, user profile, scratch folder, project path, non-synthetic
+# e-mail addresses; ANSI codes stripped; CRLF to LF.
+source <task>/env.sh
+mkdir -p "$EV"
+M="$T/scripts/mask.mjs"
+R="$T/raw"
+LOGS=""
+for f in 00-digest.txt 00-digest-after.txt 01-npm-ci.txt 02-npm-test.txt 03-build.txt 04-e2e.txt 04b-e2e-per-spec.txt \
+  04c-isolation-bf9-now.txt 04d-isolation-255-again.txt 04e-shell-255-now.txt 04f-isolation-variant-255.txt 05-ac13.txt \
+  06-npm-audit.txt 07-typecheck-lint.txt 10-delta.txt 10b-diff-fix8.txt 11b-dist.txt 11c-client-js-diff.txt 12a-css-rules.txt \
+  13-callsites.txt 14-body-builders.txt 16-client-arith.txt 20-exbf9-build.txt 20-ex014-build.txt 30-probe-255-main.txt \
+  33-probe-014-baseline.txt 36-compare.txt 37-summary.txt 40-d255-periods.txt 41-d255-css.txt 41-dbf9-css.txt \
+  42-d255-switcher.txt 42-dbf9-switcher.txt 43-d255-sticky.txt 43-dbf9-sticky.txt 04g-isolation-variant-diff.txt 34-probe-255-settings.txt 34-probe-014-settings.txt; do
+  if [ -f "$R/$f" ]; then LOGS="$LOGS $R/$f"; else echo "missing $f"; fi
+done
+node "$M" "$EV" "" $LOGS
+node "$M" "$EV" ".txt" "$R"/probe-results/*.json
+node "$M" "$EV" ".txt" "$T"/env.sh "$T"/digest-before.sh "$T"/digest-after.sh "$T"/exdigest.sh "$T"/tree-hash.sh "$T"/run-checks.sh \
+  "$T"/run-e2e.sh "$T"/setup-ref.sh "$T"/delta.sh "$T"/run-static.sh "$T"/run-probe.sh "$T"/run-delta.sh "$T"/run-iso.sh "$T"/run-settings.sh "$T"/run-after-delta.sh "$T"/copy-evidence.sh
+node "$M" "$EV" ".txt" "$T"/probe/*.ts "$T"/probe/package.json "$T"/scripts/*.mjs
+echo done

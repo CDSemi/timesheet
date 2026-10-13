@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Runs auditor probes with the CLI of the export under test.
+# Usage: bash run-probe.sh <255|bf9|014|d255|dbf9> <out-file> [playwright args...]
+source <task>/env.sh
+which="$1"; out="$2"; shift 2
+case "$which" in
+  255) cli="$T/export/node_modules/@playwright/test/cli.js"; cfg="$T/probe/probe.255.config.ts" ;;
+  014) cli="$T/ex014/node_modules/@playwright/test/cli.js"; cfg="$T/probe/probe.014.config.ts" ;;
+  d255) cli="$T/export/node_modules/@playwright/test/cli.js"; cfg="$T/probe/delta.255.config.ts" ;;
+  dbf9) cli="$T/exbf9/node_modules/@playwright/test/cli.js"; cfg="$T/probe/delta.bf9.config.ts" ;;
+  *) echo "unknown build $which"; exit 2 ;;
+esac
+cd "$T/probe" || exit 2
+{
+  echo "\$ playwright test --config $(basename "$cfg") $*  (CLI of the $which export)"
+  date -u +%Y-%m-%dT%H:%M:%SZ
+  node "$cli" test --config "$cfg" "$@"
+  echo "exit $?"
+  date -u +%Y-%m-%dT%H:%M:%SZ
+} > "$out" 2>&1

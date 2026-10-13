@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Copies masked LF text evidence and selected synthetic screenshots into the repository evidence folder.
+# Usage: copy-evidence.sh  (reads the list below; every source is in the task folder)
+set -u
+T=/d/.claude-tmp/timesheet/WP5-UX-AUDIT-B7-2
+E=/d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX-AUDIT-B7
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+mkdir -p "$E"
+mask() { node "$T/mask.mjs" "$1" "$E/$2" || echo "MASK FAILED $1"; }
+# text: source (task folder relative) -> evidence name
+while read -r src dst; do
+  [ -z "$src" ] && continue
+  if [ -f "$T/$src" ]; then mask "$T/$src" "$dst"; else echo "MISSING $src"; fi
+done < "$T/evidence-list.txt"
+# screenshots: copied unchanged (synthetic data only)
+while read -r src dst; do
+  [ -z "$src" ] && continue
+  if [ -f "$T/$src" ]; then cp "$T/$src" "$E/$dst"; else echo "MISSING $src"; fi
+done < "$T/evidence-png-list.txt"
+ls "$E" > "$T/r-evidence-ls.txt"
+echo "copied: $(wc -l < "$T/r-evidence-ls.txt") files"

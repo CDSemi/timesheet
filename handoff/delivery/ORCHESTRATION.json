@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "ux-change-round-fix8",
+  "phase": "ux-change-round-fix9",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,8 +28,12 @@
   "current_source_digest": "b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX-FIX8-FREEZE",
+  "next_task_id": "WP5-UX-FIX9-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-13",
+      "observation": "Both delta rechecks WP5-UX-AUDIT-B7 and WP5-UX-AUDIT-A7 (opus) stopped on 2026-10-09 at the subscription weekly usage limit (HTTP 429, reset 2026-10-12 11:00 America/Los_Angeles). No overage or billing change was made. The owner asked to try again on 2026-10-13; both rechecks are re-dispatched as attempt 2 with new task folders and ports."
+    },
     {
       "date": "2026-10-09",
       "observation": "Two coordinator board slips stopped WP5-UX-FIX8-FREEZE twice: evidence paths recorded from a report without checking that the files exist, and a fix task listing its FIX REQUIRED audit in depends_on (the validator requires PASS dependencies; use addresses_audit only). Coordinator rule: Glob every evidence path before recording it, and never depend on a non-PASS audit."
@@ -225,7 +229,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "bf954c0b371ad9a5fe461a603c5d476ea210e66c",
+    "last_commit": "255ba17d6bf891c0ff779d4a4f518e0d2998cee8",
     "unpushed": []
   },
   "owner_decisions": [
@@ -355,6 +359,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-13",
+      "basis": "WP5-UX-AUDIT-A7 and WP5-UX-AUDIT-B7 both FIX REQUIRED on 255ba17 for the same test-only root cause (WP5-UX-A7-01 = WP5-UX-B7-01): the isolation and shell specs seed a day from pastFreeWorkdays(), which can lie in the in-progress period while the app still displays the previous period, so the mandatory e2e fails on every build for part of each pay period (inside that window now, until at most 2026-10-16 Los Angeles). FIX8's product behaviour passed in both areas. B7 also records R-B7-1 (select value clipped at 355-420 px after FIX8) as a non-blocking regression, and R-B7-2 (mobile sideways checks vacuous) as optional.",
+      "decision": "One bounded tests-only fix WP5-UX-FIX9 on timesheet-worker (sonnet, medium, no override; size S, risk M because AC-01 evidence depends on it): seed from the period the app displays, at every call site with that pattern, keep every assertion, handle a displayed period without a past normal workday, and prove deterministically (not by waiting for a date) that the seed lies in the displayed period on every day of two full periods. No product source change in this round, to converge. R-B7-1..R-B7-4 stay recorded as optional backlog for the pilot fix round (with the owner's D answers). Then freeze, gate (inside the window if possible) and fresh opus delta rechecks of the test change in both areas."
+    },
     {
       "date": "2026-10-09",
       "basis": "WP5-UX-AUDIT-B6 FIX REQUIRED with one Low finding WP5-UX-B6-01: the phone first-screen budget of docs/04 line 48 (approved direction plan C, mockup A2, B-01) fails at 390x844 for a person with a received share while the zone note shows (first day row bottom 830.2px, tab bar top 788px). Pre-existing at 5e104e1. The auditor offers a bounded layout fix or an owner/coordinator decision to narrow docs/04 line 48.",
@@ -16969,13 +16978,236 @@
       "id": "WP5-UX-FIX8-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "history": [
         "attempt 1 (agent adbee90d7e20fc8d3, self-reported claude-sonnet-5-5): stopped before commit; HEAD = origin/main = bf954c0; digest b07727b2 matched; 393 staged (2 source + 391 handoff); precommit 0 (0 findings), diff check 0, JSON parse 0, preflight 0; validate_orchestration and check_recovery exit 1 because the board listed WP5-UX-FIX7-FREEZE evidence files checks.txt and checks-attempt2.txt that do not exist. Coordinator: board evidence list corrected to the two existing files; attempt 2 re-stages the board and checkpoint pair and reruns every check.",
         "attempt 2 (same agent, resumed): stopped before commit; HEAD bf954c0; 393 staged; digest b07727b2 matched; precommit, diff check, JSON parse and preflight 0; validate_orchestration and check_recovery exit 1: 'Dependency audit not PASS: WP5-UX-FIX8' (a dependency on an audit must be a PASS; the FIX REQUIRED link belongs in addresses_audit only, as in FIX6 and FIX7). Coordinator: removed WP5-UX-AUDIT-B6 from WP5-UX-FIX8 depends_on (addresses_audit keeps the link); attempt 3."
       ],
       "depends_on": [
         "WP5-UX-FIX8"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "adbee90d7e20fc8d3",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 3,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-FIX8-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX-FIX8-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-FIX8-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-FIX8-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-FIX8-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX8-FREEZE/checks-attempt2.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX8-FREEZE/checks-attempt3.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX8-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "bf954c0b371ad9a5fe461a603c5d476ea210e66c",
+      "branch": "main",
+      "commit_sha": "255ba17d6bf891c0ff779d4a4f518e0d2998cee8",
+      "pushed": true,
+      "source_digest": "b07727b2f95b4e202e9e0dc391512b051b288218ceb3e2ffe93f0f1c14a95abe",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed on attempt 3: 393 paths (src/client/styles.css, tests/e2e/sharing.spec.ts and 391 handoff records incl. the FIX7-FREEZE results and evidence, REGATE5, B6, A6, FIX8 records and evidence); working-tree and HEAD ls-tree digests b07727b2; precommit (0 findings), diff check, JSON parse, validate_orchestration, check_recovery (106) and preflight exit 0; remote main = 255ba17; no tag.",
+      "next_action": "None; WP5-UX-REGATE6 on 255ba17."
+    },
+    {
+      "id": "WP5-UX-REGATE6",
+      "package": "WP5",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "255ba17d6bf891c0ff779d4a4f518e0d2998cee8",
+      "depends_on": [
+        "WP5-UX-FIX8-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aab5a4cdaf6f66637",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-REGATE6.md",
+        "handoff/delivery/evidence/WP5-UX-REGATE6"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-REGATE6.md",
+      "report": "handoff/delivery/tasks/WP5-UX-REGATE6.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-REGATE6/00-README.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/exdigest-before.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/exdigest-after.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/lstree-sha.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/repo-digest-after.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/03-verify.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/04-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/04-e2e-exit.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/07-drill.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/15-docker-ps.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/20-bound-stat.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/21-pdf-stat.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/22a-fixround.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/40-contrast.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/obs-ax01.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE6/obs-switcher.txt"
+      ],
+      "baseline_commit": "255ba17d6bf891c0ff779d4a4f518e0d2998cee8",
+      "source_digest": "b07727b2f95b4e202e9e0dc391512b051b288218ceb3e2ffe93f0f1c14a95abe",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "gate_notes": "PASS (NAS items NOT VERIFIED) on 255ba17, digest b07727b2 (793 files) equal in clean-export, ls-tree and npm run digest forms before and after; npm ci, lint, verify exit 0 (1823 tests, SMOKE PASSED, 0 deprecation lines); full e2e 210 passed / 26 skipped / 0 failed (desktop 103, mobile 107; automation.spec.ts:118 passed); AC-13 x3 and under Asia/Tokyo and America/New_York pass; npm test x3; drill --wp3 208 PASS / 0 FAIL, forbidden-file scan PASS, image sha256:f36d083ee6dd37ab66c1d00a98398a18171264ebad17b170f1a9c85b25e83af4 (110014793 B); compose config x3, env keys, npm audit, validators (check_recovery 106) and precommit self-test pass; business boundary only format.ts; PDF unchanged; contrast identical to REGATE5; 44px and no horizontal scroll at 390/375/360/320; Docker cleaned. Fix scope exactly styles.css and sharing.spec.ts (76 insertions, 0 deletions). Observed: B6-01 four states at 390x844 first row at or above the tab bar (margins 22-129px), shell bar 60px with the switcher; switcher at 390 and 320 label, name, 44px, keyboard and touch pass; AX-01 64 walks 0 hidden stops; earlier fixes hold. Informational: at 375, 360 and 320 a received share plus the zone note still puts the first row below the tab bar (outside the 390x844 promise); at 320 the switcher wraps and the select text is clipped. Admin new-user and Settings policy status notices not observed in the built app. Slips: pipes into head or tail and two null-device redirects (no file touched).",
+      "next_action": "None; delta rechecks WP5-UX-AUDIT-B7 and WP5-UX-AUDIT-A7 on 255ba17 (B7 judges the 320 clipped select text)."
+    },
+    {
+      "id": "WP5-UX-AUDIT-B7",
+      "package": "WP5",
+      "kind": "audit",
+      "status": "done",
+      "history": [
+        "attempt 1 (agent a9f403c6534af8ad8, opus, 2026-10-09): terminated early by the subscription weekly usage limit (HTTP 429, reset 2026-10-12 11:00 America/Los_Angeles) while npm test ran; no record, review or evidence written in the repository. Attempt 2 on 2026-10-13 after the owner's 'Try again', with a new task folder and ports 48420-48439."
+      ],
+      "reviewed_commit": "255ba17d6bf891c0ff779d4a4f518e0d2998cee8",
+      "depends_on": [
+        "WP5-UX-REGATE6"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "afe2e446eade8f94f",
+      "previous_agent_ids": [
+        "a9f403c6534af8ad8"
+      ],
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 2,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-AUDIT-B7.md",
+        "handoff/delivery/WP5_UX_REVIEW_B7.md",
+        "handoff/delivery/WP5_UX_REVIEW_B7.vi.md",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B7"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-AUDIT-B7.md",
+      "report": "handoff/delivery/tasks/WP5-UX-AUDIT-B7.md",
+      "evidence": [
+        "handoff/delivery/WP5_UX_REVIEW_B7.md",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B7/00-README.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B7/00-digest-before.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B7/02b-typecheck.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B7/02c-lint.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B7/03-npm-test.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B7/04-e2e-full-run1.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B7/04a-e2e-run1-counts.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B7/04c-e2e-same-tests-bf954c0.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B7/04e-e2e-fixcheck-displayed-period.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B7/04f-fixcheck-scratch-diff.txt"
+      ],
+      "baseline_commit": "255ba17d6bf891c0ff779d4a4f518e0d2998cee8",
+      "source_digest": "b07727b2f95b4e202e9e0dc391512b051b288218ceb3e2ffe93f0f1c14a95abe",
+      "reviewed_digest": "b07727b2f95b4e202e9e0dc391512b051b288218ceb3e2ffe93f0f1c14a95abe",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP5-UX-B7-01 (Low; test only; blocks because a mandatory check fails; same root cause as WP5-UX-A7-01): tests/e2e/shell.spec.ts:68 and tests/e2e/isolation.spec.ts:52 (seedOwner, used by :94 and :145) take the day from pastFreeWorkdays() (fixtures.ts:392-406), which returns days of periods.in_progress and periods.current newest first, while the app displays periods.current first. On the due Tuesday of a period between 00:00 and 17:00 America/Los_Angeles (here 2026-10-13) the helper returns 2026-10-12 while the page shows 09/28-10/11; 6 tests fail on both projects, also on bf954c0. Against AGENTS rule 5, docs/06 line 30 (deterministic clocks) and the AC-01 evidence. Bounded fix: seed from the period the app displays first (for example displayedPeriodFreeWorkdays() at both call sites; scratch copies pass 6/6 in the window) or navigate to the seeded day's period; keep every isolation assertion; handle a displayed period without a past normal workday."
+      ],
+      "notes": [
+        "Fresh context; self-reported claude-opus-5-5, not weaker than the strongest author.",
+        "Delta proof: only styles.css (+25) and sharing.spec.ts (+51), 0 deletions; no assertion removed or weakened; both new tests fail on bf954c0 (812.8 > 788.5; bar 106.8 > 60).",
+        "B6-01 closed: first-row bottoms at 390x844 against 788: no share 757.97 (note) / 659.02; share 765.97 (note) / 667.02, light and dark. Every bar-affected area-B item holds at 767/390/320 (128 walks, 2928 stops, 0 hidden, 0 without a ring); nothing changes at 768 and wider.",
+        "Optional risks: R-B7-1 select value clipped at 355-420 px (a FIX8 regression, non-blocking); R-B7-2 the e2e sideways checks are vacuous on the mobile project; R-B7-3 the switcher label wraps below 768; R-B7-4 200% text-only on phone widths (pre-existing).",
+        "Checks: typecheck 0, lint 0, npm test 82 files / 1823; full e2e 204 passed, 6 failed (B7-01), 26 skipped; digest b07727b2 before and after. The window description differs from A7's (A7: Tuesday to Friday of the first week until the payroll date; B7: due Tuesday before 17:00 Los Angeles); the fix must hold on every day, so FIX9 derives the exact rule from currentPayPeriod and proves it deterministically."
+      ],
+      "next_action": "WP5-UX-FIX9 (tests only) for WP5-UX-A7-01 and WP5-UX-B7-01."
+    },
+    {
+      "id": "WP5-UX-FIX9",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP5-UX-AUDIT-B7",
+      "depends_on": [
+        "WP5-UX-REGATE6"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a80b07980f8929c3e",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "tests",
+        "handoff/delivery/tasks/WP5-UX-FIX9.md",
+        "handoff/delivery/evidence/WP5-UX-FIX9"
+      ],
+      "ownership_note": "tests only; fixtures.ts additive only; also answers WP5-UX-AUDIT-A7 finding A7-01 (same root cause); no src, docs, scripts or config change.",
+      "prompt": "handoff/delivery/tasks/WP5-UX-FIX9.md",
+      "report": "handoff/delivery/tasks/WP5-UX-FIX9.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-FIX9/digest-before.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX9/repro.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX9/test.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX9/unit-scratch-old-choice.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX9/specs-run1.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX9/specs-run2.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX9/specs-run3.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX9/e2e-full.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX9/preflight.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX9/verify.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX9/digest-final.txt"
+      ],
+      "baseline_commit": "255ba17d6bf891c0ff779d4a4f518e0d2998cee8",
+      "source_digest": "58b0deee5d0169f0211740de34953517500576baa2fd914d5a26059d5ba1dffd",
+      "reviewed_digest": null,
+      "author_agent_ids": [
+        "a80b07980f8929c3e"
+      ],
+      "decision": "reported done (not independent proof): derived window: the displayed period is the one with the earliest payroll date on or after today; the old pastFreeWorkdays()[0] choice is wrong on P-3..P of each period (P = payroll date), which includes the due Tuesday (A7's description is right, B7's too narrow). Call sites fixed: isolation.spec.ts seedOwner (2 tests) and shell.spec.ts:68 now use the new additive displayedSeedDay() (clear error when none); admin.spec.ts:88 checked and not affected. Files: tests/e2e/displayedSeed.ts (new, pure), tests/e2e/fixtures.ts (additive import and method), tests/e2e/isolation.spec.ts, tests/e2e/shell.spec.ts, tests/domain/e2eSeedSelection.test.ts (new, 4 tests over 56 days x 4 wall times, 16:59/17:00 and the payroll date; the old choice fails 3 of 4 in a scratch copy). Repro on 255ba17 (2026-10-13 Los Angeles, displayed payroll 10-16): 6 failed, 7 passed, 1 skipped. Specs 3x: 13 passed, 1 skipped each; full e2e 210 passed / 26 skipped / 0 failed (desktop 103, mobile 107); unit 83 files / 1827; preflight 0; verify 0; digest 58b0deee (795 files). Deviation: one early pipe into head.",
+      "next_action": "WP5-UX-FIX9-FREEZE (committer) on 255ba17, digest 58b0deee."
+    },
+    {
+      "id": "WP5-UX-FIX9-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX-FIX9"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -16993,21 +17225,88 @@
       "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP5-UX-FIX8-FREEZE.md",
-        "handoff/delivery/evidence/WP5-UX-FIX8-FREEZE"
+        "handoff/delivery/tasks/WP5-UX-FIX9-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX-FIX9-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP5-UX-FIX8-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP5-UX-FIX8-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP5-UX-FIX9-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-FIX9-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "bf954c0b371ad9a5fe461a603c5d476ea210e66c",
+      "baseline_commit": "255ba17d6bf891c0ff779d4a4f518e0d2998cee8",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "b07727b2f95b4e202e9e0dc391512b051b288218ceb3e2ffe93f0f1c14a95abe",
+      "source_digest": "58b0deee5d0169f0211740de34953517500576baa2fd914d5a26059d5ba1dffd",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Committer stages the 2 FIX8 source paths and the listed handoff records, runs the checks, commits and pushes; then WP5-UX-REGATE6."
+      "next_action": "Committer stages the 5 FIX9 test paths and the listed handoff records, runs the checks, commits and pushes; then WP5-UX-REGATE7."
+    },
+    {
+      "id": "WP5-UX-AUDIT-A7",
+      "package": "WP5",
+      "kind": "audit",
+      "status": "done",
+      "history": [
+        "attempt 1 (agent adb1361e72d2ebd96, opus, 2026-10-09): terminated early by the subscription weekly usage limit (HTTP 429, reset 2026-10-12 11:00 America/Los_Angeles) during the static delta; no record, review or evidence written in the repository. Attempt 2 on 2026-10-13 after the owner's 'Try again', with a new task folder and ports 48440-48459."
+      ],
+      "reviewed_commit": "255ba17d6bf891c0ff779d4a4f518e0d2998cee8",
+      "depends_on": [
+        "WP5-UX-REGATE6"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a20d8532cf4870e3a",
+      "previous_agent_ids": [
+        "adb1361e72d2ebd96"
+      ],
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 2,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-AUDIT-A7.md",
+        "handoff/delivery/WP5_UX_REVIEW_A7.md",
+        "handoff/delivery/WP5_UX_REVIEW_A7.vi.md",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A7"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-AUDIT-A7.md",
+      "report": "handoff/delivery/tasks/WP5-UX-AUDIT-A7.md",
+      "evidence": [
+        "handoff/delivery/WP5_UX_REVIEW_A7.md",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A7/00-README.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A7/00-digest.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A7/00-digest-after.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A7/02-npm-test.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A7/04-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A7/04c-isolation-bf9-now.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A7/04e-shell-255-now.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A7/04f-isolation-variant-255.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A7/04g-isolation-variant-diff.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A7/05-ac13.txt"
+      ],
+      "baseline_commit": "255ba17d6bf891c0ff779d4a4f518e0d2998cee8",
+      "source_digest": "b07727b2f95b4e202e9e0dc391512b051b288218ceb3e2ffe93f0f1c14a95abe",
+      "reviewed_digest": "b07727b2f95b4e202e9e0dc391512b051b288218ceb3e2ffe93f0f1c14a95abe",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP5-UX-A7-01 (Low; tests only; older than FIX8): tests/e2e/isolation.spec.ts:51-53 (seedOwner takes employee.pastFreeWorkdays()[0], fixtures.ts:392-406 lists the in-progress period's days first) seeds a date outside the displayed period whenever the reporting-zone today lies after a new period's first day and on or before the previous period's payroll date (currentPayPeriod keeps the previous period on screen until payroll, src/domain/periods.ts:149-164): Tuesday to Friday of each period's first week, 4 of every 14 days (now until 2026-10-16 Los Angeles). Then :94 stops at :106 and :145 at :188 on both projects before reaching the isolation assertions; bf954c0 fails the same way; shell.spec.ts:68 with :75-77 has the same seed pattern. A variant seeding from the displayed period's free workdays (every assertion unchanged) passes 6/6 on 255ba17. Bounded fix: tests-only, seed a date of the displayed period in both specs; recheck inside and outside the window."
+      ],
+      "notes": [
+        "Fresh context; self-reported claude-opus-5-5, not weaker than the strongest author.",
+        "Delta proof passes: FIX8 (styles.css +25, sharing.spec.ts +51, nothing deleted) changes no area-A behaviour; server and domain builds byte-identical; calls and bodies unchanged; the switcher reaches the same routes by keyboard, touch and pointer at 390 and 320; AC-16 and isolation hold; no control hidden (936 focus checks, 624 trials, 592 Tab stops).",
+        "Checks: npm test 1823 passed; area-A e2e 103 passed, 17 skipped, 4 failed (isolation, A7-01 window); isolation variant 6/6; AC-13 1/1; probe comparisons 0 mismatches; digest b07727b2 before and after.",
+        "A6 is not superseded by this audit (not a PASS)."
+      ],
+      "next_action": "After WP5-UX-AUDIT-B7: one bounded tests-only fix for WP5-UX-A7-01 (plus any B7 finding), freeze, gate, and fresh delta rechecks run inside and outside the date window."
     },
     {
       "id": "WP5-UX-AUDIT-A6",

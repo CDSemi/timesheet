@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { type Page, test as base, expect } from '@playwright/test';
 import { addDays } from '../../src/domain/dates.ts';
 import { syntheticSignaturePng } from '../../src/server/seed.ts';
+import { displayedPeriodSeedDay } from './displayedSeed.ts';
 
 /*
  * Browser-test harness. One worker gets one BUILT server (dist/) on a free loopback port and a
@@ -423,6 +424,17 @@ export class SeedClient {
       .map((day) => day.work_date)
       .sort()
       .reverse();
+  }
+
+  /**
+   * The newest past normal workday without a session in the period the app displays first: the
+   * seed for a spec that then looks for that day on the page. Fails with a clear message when the
+   * displayed period has none (for example every past workday is a holiday); it never reaches into another period.
+   */
+  async displayedSeedDay(): Promise<string> {
+    const { todayLocal, currentPayrollDate } = await this.today();
+    const sheet = await this.call<TimesheetResponse>('GET', `/api/timesheets/${currentPayrollDate}`);
+    return displayedPeriodSeedDay(sheet.days, todayLocal, currentPayrollDate);
   }
 
   async dayView(workDate: string): Promise<SeededDay> {

@@ -1,0 +1,65 @@
+// Flattens a CSS file into one line per declaration: "<at-rule context> | <selector> | <property>: <value>",
+// comments removed and whitespace collapsed, so two versions can be compared declaration by declaration.
+// Usage: node css-rules.mjs <old.css> <new.css>
+import { readFileSync } from 'node:fs';
+
+function flatten(path) {
+  const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n').replace(/\/\*[\s\S]*?\*\//g, '');
+  const out = [];
+  const stack = [];
+  let buffer = '';
+  for (const ch of text) {
+    if (ch === '{') {
+      stack.push(buffer.replace(/\s+/g, ' ').trim());
+      buffer = '';
+    } else if (ch === '}') {
+      emit(buffer, stack, out);
+      buffer = '';
+      stack.pop();
+    } else if (ch === ';') {
+      emit(buffer, stack, out);
+      buffer = '';
+    } else {
+      buffer += ch;
+    }
+  }
+  return out;
+}
+
+function emit(buffer, stack, out) {
+  const decl = buffer.replace(/\s+/g, ' ').trim();
+  if (decl === '') return;
+  const colon = decl.indexOf(':');
+  const selector = stack.at(-1) ?? '';
+  const context = stack.slice(0, -1).join(' >> ');
+  if (colon < 0) {
+    out.push(`${context} | ${selector} | <statement> ${decl}`);
+    return;
+  }
+  out.push(`${context} | ${selector} | ${decl.slice(0, colon).trim()}: ${decl.slice(colon + 1).trim()}`);
+}
+
+const [a, b] = process.argv.slice(2);
+const la = flatten(a);
+const lb = flatten(b);
+const count = (list) => {
+  const m = new Map();
+  for (const l of list) m.set(l, (m.get(l) ?? 0) + 1);
+  return m;
+};
+const ca = count(la);
+const cb = count(lb);
+const removed = [...ca].filter(([l, n]) => (cb.get(l) ?? 0) < n).map(([l]) => l);
+const added = [...cb].filter(([l, n]) => (ca.get(l) ?? 0) < n).map(([l]) => l);
+console.log(`declarations: old ${la.length}, new ${lb.length}; removed ${removed.length}; added ${added.length}`);
+for (const l of removed) console.log(`- ${l}`);
+for (const l of added) console.log(`+ ${l}`);
+const props = new Set([...removed, ...added].map((l) => l.split(' | ')[2].split(':')[0]));
+console.log(`properties touched: ${[...props].join(', ')}`);
+const layoutish = /^(display|visibility|opacity|position|overflow|overflow-x|overflow-y|clip|clip-path|height|width|min-width|max-width|min-height|max-height|z-index|pointer-events|order|transform|inset|top|left|right|bottom|margin|padding|flex|flex-basis|grid|contain|content-visibility|mask|filter|outline-offset)$/;
+console.log(`layout, visibility or hit-test properties touched: ${[...props].filter((p) => layoutish.test(p)).join(', ') || 'none'}`);
+// Every declaration that uses either focus token in the new file.
+console.log('uses of var(--focus-ring) / var(--focus-ring-inset) in the new file:');
+for (const l of lb) if (/var\(--focus-ring(-inset)?\)/.test(l)) console.log(`  ${l}`);
+console.log('uses of var(--focus-ring) in the old file:');
+for (const l of la) if (/var\(--focus-ring\)/.test(l)) console.log(`  ${l}`);

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Digest of a clean export: sorted "<path> <blob>" lines over every file outside handoff/,
+# blob IDs from git hash-object --no-filters (export bytes as written by git archive).
+# Usage: bash exdigest.sh <export-dir> <out-prefix>
+set -u
+EX="$1"; OUT="$2"
+cd "$EX" || exit 2
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' \
+  -not -path './test-results/*' -not -path './playwright-report/*' -not -path './.vite/*' \
+  -not -path './probe/*' -not -path './blob-report/*' \
+  | sed 's#^\./##' | LC_ALL=C sort > "$OUT-paths.txt"
+git hash-object --no-filters --stdin-paths < "$OUT-paths.txt" > "$OUT-blobs.txt"
+paste -d ' ' "$OUT-paths.txt" "$OUT-blobs.txt" > "$OUT-sorted.txt"
+wc -l < "$OUT-sorted.txt"
+sha256sum "$OUT-sorted.txt"

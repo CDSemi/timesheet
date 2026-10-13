@@ -1,0 +1,71 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/domain/e2eSeedSelectionScratch.test.ts (4 tests | 3 failed) 66ms
+   ❯ the browser specs seed from the displayed period (4)
+     × always seeds inside the displayed period, on every step of three periods 7ms
+     × the old choice leaves the displayed period during the window (negative control) 27ms
+     × skips a holiday and fails clearly when the displayed period has no past normal workday 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/domain/e2eSeedSelectionScratch.test.ts > the browser specs seed from the displayed period > always seeds inside the displayed period, on every step of three periods
+AssertionError: 2026-09-15: 2026-09-14 in 2026-08-31..2026-09-13: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/domain/e2eSeedSelectionScratch.test.ts:102:149
+    100|       // The page switches to a period only after the previous payroll…
+    101|       const seed = displayedSeed(today, []);
+    102|       expect(seed >= displayed.periodStart && seed <= displayed.period…
+       |                                                                                                                                                     ^
+    103|       expect(seed < today).toBe(true);
+    104|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/domain/e2eSeedSelectionScratch.test.ts > the browser specs seed from the displayed period > the old choice leaves the displayed period during the window (negative control)
+AssertionError: expected '2026-10-12' to be '2026-10-09' // Object.is equality
+
+Expected: "2026-10-09"
+Received: "2026-10-12"
+
+ ❯ tests/domain/e2eSeedSelectionScratch.test.ts:120:45
+    118|     expect(unique.length).toBe(16);
+    119|     expect(legacySeed('2026-10-13', [])).toBe('2026-10-12');
+    120|     expect(displayedSeed('2026-10-13', [])).toBe('2026-10-09');
+       |                                             ^
+    121|   });
+    122|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/domain/e2eSeedSelectionScratch.test.ts > the browser specs seed from the displayed period > skips a holiday and fails clearly when the displayed period has no past normal workday
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ tests/domain/e2eSeedSelectionScratch.test.ts:128:60
+    126|     expect(displayedSeed('2026-09-22', ['2026-09-21'])).toBe('2026-09-…
+    127|     const allHolidays = ['2026-09-14', '2026-09-15', '2026-09-16', '20…
+    128|     expect(() => displayedSeed('2026-09-19', allHolidays)).toThrow(
+       |                                                            ^
+    129|       /displayed period \(payroll 2026-10-02\) has no past normal work…
+    130|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  12:48:26
+   Duration  279ms (tests 38%, import 34%, transform 26%, worker 2%)
+

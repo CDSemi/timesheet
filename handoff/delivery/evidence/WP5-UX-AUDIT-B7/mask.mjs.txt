@@ -1,0 +1,13 @@
+// Copies a text file as masked LF text: strips ANSI codes, CRLF -> LF, user-profile paths -> <user>,
+// any e-mail address not in the synthetic example.invalid domain -> <email>. Usage: node mask.mjs <in> <out>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+let text = readFileSync(input, 'utf8');
+text = text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+text = text.replace(/\r\n?/g, '\n');
+text = text.replace(/([A-Za-z]:[\\/]+Users[\\/]+)(?!<user>)[^\\/\s"'<>:]+/gi, '$1<user>');
+text = text.replace(/(\/[a-z]\/Users\/)(?!<user>)[^/\s"'<>:]+/gi, '$1<user>');
+text = text.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, (address) => (/@example\.invalid$/i.test(address) ? address : '<email>'));
+if (!text.endsWith('\n')) text += '\n';
+writeFileSync(output, text);

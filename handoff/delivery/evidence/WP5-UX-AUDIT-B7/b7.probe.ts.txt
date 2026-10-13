@@ -1,0 +1,1069 @@
+import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { closeSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { type Browser, type BrowserContext, type Page, type TestInfo, test as base, expect } from '@playwright/test';
+import { newPerson, type Person, SeedClient } from '../tests/e2e/fixtures.ts';
+
+/*
+ * WP5-UX-AUDIT-B7 attempt 2 probes (auditor-written; outside git tracking; the same file runs on the 255ba17
+ * clone and the bf954c0 base copy). Synthetic data only; one own built server per project on the task port range,
+ * stopped through its own handle. Parts (select with --grep):
+ *   P1 first screen (B6-01 four states, light/dark, 390x844 plus 375/360/320 for information)
+ *   P2 switcher items (label, name, AX-06, targets, contrast, 200% page zoom and 200% text, reflow)
+ *   P3 focus walks (Tab and Shift+Tab: Timesheet, day editor, shared views) with occlusion and ring checks
+ *   P4 computed styles and bar screenshots at 768px and wider (compared across the two snapshots)
+ *   P5 width sweep 300..420 (one-row threshold, sideways scroll, select text fit)
+ *   P6 320x256 (400% of 1280x1024) information
+ */
+
+const REPO = resolve(import.meta.dirname, '..');
+const OUT = process.env.PROBE_OUT ?? join(REPO, '..', 'probe-out');
+const WORK = process.env.PROBE_WORK ?? join(REPO, '..', 'probe-work');
+const PORT_BASE = Number(process.env.PROBE_PORT_BASE ?? '48420');
+const TAG = process.env.PROBE_TAG ?? 'b7';
+mkdirSync(OUT, { recursive: true });
+mkdirSync(WORK, { recursive: true });
+
+interface Credentials {
+  email: string;
+  password: string;
+}
+
+async function waitHealthy(origin: string, child: ChildProcess) {
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    if (child.exitCode !== null) throw new Error(`server exited early with ${child.exitCode}`);
+    try {
+      if ((await fetch(`${origin}/api/health`)).ok) return;
+    } catch {
+      // not listening yet
+    }
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  throw new Error('server did not become healthy');
+}
+
+const test = base.extend<{ adminSeed: SeedClient }, { server: { origin: string; admin: Credentials } }>({
+  server: [
+    async ({}, use, workerInfo) => {
+      const port = workerInfo.project.name === 'desktop' ? PORT_BASE : PORT_BASE + 1;
+      const work = mkdtempSync(join(WORK, `${TAG}-${workerInfo.project.name}-`));
+      const origin = `http://127.0.0.1:${port}`;
+      const admin = { email: 'admin@example.invalid', password: randomBytes(18).toString('base64url') };
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        NODE_ENV: 'development',
+        HOST: '127.0.0.1',
+        PORT: String(port),
+        DATABASE_PATH: join(work, 'timesheet.db'),
+        DATA_DIR: join(work, 'private-data'),
+        APP_ORIGINS: origin,
+        OUTBOUND_MODE: 'capture',
+        MAIL_FROM: 'timesheet-capture@example.invalid',
+        SEED_ADMIN_PASSWORD: admin.password,
+        SEED_EMPLOYEE_PASSWORD: randomBytes(18).toString('base64url'),
+      };
+      for (const command of ['migrate', 'seed']) {
+        const result = spawnSync(process.execPath, ['dist/server/cli.js', command], { cwd: REPO, env, encoding: 'utf8' });
+        if (result.status !== 0) throw new Error(`cli ${command} failed: ${result.status} ${result.stderr}`);
+      }
+      const errFd = openSync(join(OUT, `${TAG}-server-${workerInfo.project.name}-stderr.txt`), 'w');
+      const child = spawn(process.execPath, ['dist/server/index.js'], { cwd: REPO, env, stdio: ['ignore', 'ignore', errFd] });
+      try {
+        await waitHealthy(origin, child);
+        await use({ origin, admin });
+      } finally {
+        if (child.exitCode === null) {
+          const exited = new Promise((done) => child.once('exit', done));
+          child.kill();
+          await exited;
+        }
+        closeSync(errFd);
+        writeFileSync(join(OUT, `${TAG}-server-${workerInfo.project.name}-stopped.json`), `${JSON.stringify({ port, exitCode: child.exitCode, signal: child.signalCode })}\n`);
+      }
+    },
+    { scope: 'worker', timeout: 90_000 },
+  ],
+  baseURL: async ({ server }, use) => {
+    await use(server.origin);
+  },
+  adminSeed: async ({ server }, use) => {
+    await use(await new SeedClient(server.origin).signIn(server.admin.email, server.admin.password));
+  },
+});
+
+const NOTE_ZONE = 'Asia/Ho_Chi_Minh';
+const EQUAL_ZONE = 'America/Los_Angeles';
+const THEMES = ['light', 'dark'] as const;
+
+interface Cast {
+  ownerA: Person;
+  ownerB: Person;
+  grantee: Person;
+  solo: Person;
+}
+
+async function cast(adminSeed: SeedClient, origin: string): Promise<Cast> {
+  const server = { origin } as never;
+  const ownerA = await newPerson(adminSeed, server, { displayName: 'Synthetic Sharing Owner', signature: 'none' });
+  const ownerB = await newPerson(adminSeed, server, { displayName: 'Synthetic Sharing Partner', signature: 'none' });
+  const grantee = await newPerson(adminSeed, server, { displayName: 'Synthetic Grantee', signature: 'none' });
+  const solo = await newPerson(adminSeed, server, { displayName: 'Synthetic Solo', signature: 'none' });
+  for (const owner of [ownerA, ownerB]) {
+    const [day = ''] = await owner.api.displayedPeriodFreeWorkdays();
+    if (day !== '') await owner.api.seedCompleteDay(day);
+  }
+  await ownerA.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  await ownerB.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'edit', ot_read: true, pdf_download: true } }, 201);
+  return { ownerA, ownerB, grantee, solo };
+}
+
+async function context(browser: Browser, testInfo: TestInfo, origin: string, zone: string): Promise<BrowserContext> {
+  const use = testInfo.project.use;
+  const created = await browser.newContext({
+    viewport: use.viewport ?? { width: 1280, height: 800 },
+    isMobile: use.isMobile ?? false,
+    hasTouch: use.hasTouch ?? false,
+    deviceScaleFactor: use.deviceScaleFactor ?? 1,
+    timezoneId: zone,
+    locale: 'en-US',
+    baseURL: origin,
+    reducedMotion: 'reduce',
+  });
+  created.setDefaultTimeout(8_000);
+  return created;
+}
+
+async function signIn(page: Page, who: Credentials) {
+  await page.goto('/#/timesheet');
+  await page.getByLabel('Email').fill(who.email);
+  await page.getByLabel('Password').fill(who.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('[data-day]').first()).toBeVisible({ timeout: 15_000 });
+}
+
+async function show(page: Page, hash: string) {
+  await page.goto(`/${hash}`);
+  await page.reload();
+  await expect(page.locator('[data-day]').first()).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(350);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(100);
+}
+
+function save(name: string, data: unknown) {
+  writeFileSync(join(OUT, `${TAG}-${name}.json`), `${JSON.stringify(data, null, 1)}\n`);
+}
+
+/* ---- In-page measurements (self-contained functions) -------------------------------------------- */
+
+function firstScreen() {
+  const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect() ?? null;
+  const r2 = (value: number) => Math.round(value * 100) / 100;
+  const first = box('[data-day]');
+  const tabs = box('.shell-tabs');
+  const bar = box('.shell-bar');
+  const brand = box('.shell-brand');
+  const switcher = box('.shell-switcher');
+  const note = document.querySelector('[data-zone-note]');
+  return {
+    zoneNote: note !== null && note.getBoundingClientRect().height > 0,
+    switcher: switcher !== null,
+    switcherRow: switcher === null || brand === null ? null : Math.abs(switcher.top + switcher.height / 2 - (brand.top + brand.height / 2)) < 8 ? 'same row as brand' : 'below brand',
+    shellBar: bar === null ? null : r2(bar.height),
+    shellBarSizeVar: document.documentElement.style.getPropertyValue('--shell-bar-size'),
+    firstRowTop: first === null ? null : r2(first.top),
+    firstRowBottom: first === null ? null : r2(first.bottom),
+    tabBarTop: tabs === null ? null : r2(tabs.top),
+    margin: first === null || tabs === null ? null : r2(tabs.top - first.bottom),
+    fullyVisible: first !== null && tabs !== null && first.bottom <= tabs.top + 0.5,
+    scrollY: window.scrollY,
+    sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth || document.documentElement.scrollWidth > window.innerWidth || (window.visualViewport?.scale ?? 1) < 0.999,
+    innerWidth: window.innerWidth,
+    visualScale: window.visualViewport?.scale ?? null,
+  };
+}
+
+function switcherFacts() {
+  const r2 = (value: number) => Math.round(value * 100) / 100;
+  const rect = (element: Element | null) => {
+    if (element === null) return null;
+    const r = element.getBoundingClientRect();
+    return { x: r2(r.x), y: r2(r.y), w: r2(r.width), h: r2(r.height), right: r2(r.right), bottom: r2(r.bottom) };
+  };
+  const parse = (value: string) => {
+    const m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/.exec(value);
+    if (m === null) return null;
+    return { r: Number(m[1]), g: Number(m[2]), b: Number(m[3]), a: m[4] === undefined ? 1 : Number(m[4]) };
+  };
+  const lum = (c: { r: number; g: number; b: number }) => {
+    const ch = (v: number) => {
+      const s = v / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b);
+  };
+  const background = (element: Element) => {
+    for (let node: Element | null = element; node !== null; node = node.parentElement) {
+      const c = parse(getComputedStyle(node).backgroundColor);
+      if (c !== null && c.a > 0) return { color: c, from: `${node.tagName.toLowerCase()}.${node.className}` };
+    }
+    return { color: { r: 255, g: 255, b: 255, a: 1 }, from: 'default' };
+  };
+  const contrast = (fgText: string, element: Element) => {
+    const fg = parse(fgText);
+    const bg = background(element);
+    if (fg === null) return null;
+    const mixed = { r: fg.r * fg.a + bg.color.r * (1 - fg.a), g: fg.g * fg.a + bg.color.g * (1 - fg.a), b: fg.b * fg.a + bg.color.b * (1 - fg.a) };
+    const l1 = lum(mixed);
+    const l2 = lum(bg.color);
+    return { ratio: r2((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)), fg: fgText, bg: `rgb(${bg.color.r}, ${bg.color.g}, ${bg.color.b})`, bgFrom: bg.from };
+  };
+  const bar = document.querySelector('.shell-bar');
+  const brand = document.querySelector('.shell-brand');
+  const form = document.querySelector('.shell-switcher');
+  const base = {
+    viewport: `${window.innerWidth}x${window.innerHeight}`,
+    rootFont: getComputedStyle(document.documentElement).fontSize,
+    bar: rect(bar),
+    barSizeVar: document.documentElement.style.getPropertyValue('--shell-bar-size'),
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth: window.innerWidth,
+    clientWidth: document.documentElement.clientWidth,
+    visualScale: window.visualViewport?.scale ?? null,
+    // A mobile page zooms out to fit wider content, so innerWidth grows with it: compare with the layout width too.
+    sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth || document.documentElement.scrollWidth > window.innerWidth || (window.visualViewport?.scale ?? 1) < 0.999,
+  };
+  if (form === null || bar === null || brand === null) return { ...base, switcher: false };
+  const label = form.querySelector('label');
+  const span = form.querySelector('label .muted');
+  const select = form.querySelector('select');
+  const open = form.querySelector('button');
+  if (label === null || span === null || select === null || open === null) return { ...base, switcher: 'incomplete' };
+  const range = document.createRange();
+  range.selectNodeContents(span);
+  const textBox = range.getBoundingClientRect();
+  const textLines = new Set([...range.getClientRects()].map((line) => Math.round(line.top))).size;
+  const spanStyle = getComputedStyle(span);
+  const selectStyle = getComputedStyle(select);
+  const canvas = document.createElement('canvas').getContext('2d');
+  const measure = (text: string) => {
+    if (canvas === null) return -1;
+    canvas.font = `${selectStyle.fontStyle} ${selectStyle.fontWeight} ${selectStyle.fontSize} ${selectStyle.fontFamily}`;
+    return r2(canvas.measureText(text).width);
+  };
+  const chosen = select.options[select.selectedIndex]?.text ?? '';
+  const contentWidth = select.clientWidth - parseFloat(selectStyle.paddingLeft) - parseFloat(selectStyle.paddingRight);
+  const centre = (r: DOMRect) => document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  const hitText = centre(textBox);
+  const brandBox = brand.getBoundingClientRect();
+  const formBox = form.getBoundingClientRect();
+  const controls = [...bar.querySelectorAll('a, button, select, input')].filter((element) => element.getBoundingClientRect().width > 0);
+  const overlaps = (a: DOMRect, b: DOMRect) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+  const outside = [...bar.querySelectorAll('*')].filter((element) => {
+    const r = element.getBoundingClientRect();
+    return r.width > 0 && (r.left < -0.5 || r.right > window.innerWidth + 0.5);
+  }).length;
+  return {
+    ...base,
+    switcher: true,
+    switcherRow: Math.abs(formBox.top + formBox.height / 2 - (brandBox.top + brandBox.height / 2)) < 8 ? 'same row as brand' : 'below brand',
+    form: rect(form),
+    label: rect(label),
+    labelPadding: `${getComputedStyle(label).paddingTop} ${getComputedStyle(label).paddingBottom}`,
+    labelText: span.textContent,
+    labelTextBox: { x: r2(textBox.x), y: r2(textBox.y), w: r2(textBox.width), h: r2(textBox.height), right: r2(textBox.right) },
+    labelTextLines: textLines,
+    labelTextVisible: hitText !== null && (hitText === span || span.contains(hitText)),
+    labelTextInsideViewport: textBox.left >= -0.5 && textBox.right <= window.innerWidth + 0.5 && textBox.top >= -0.5,
+    labelTextOverlapsSelect: overlaps(textBox, select.getBoundingClientRect()),
+    labelFont: `${spanStyle.fontSize} ${spanStyle.fontWeight}`,
+    labelContrast: contrast(spanStyle.color, span),
+    select: rect(select),
+    selectFont: selectStyle.fontSize,
+    selectContentWidth: r2(contentWidth),
+    chosen,
+    chosenTextWidth: measure(chosen),
+    chosenFits: measure(chosen) <= contentWidth - 20,
+    optionWidths: [...select.options].map((option) => ({ text: option.text, width: measure(option.text) })),
+    selectValueContrast: contrast(selectStyle.color, select),
+    open: rect(open),
+    openHit: (() => {
+      const b = open.getBoundingClientRect();
+      const out: Record<string, string> = {};
+      for (const [name, x] of [
+        ['left+4', b.left + 4],
+        ['centre', b.left + b.width / 2],
+      ] as const) {
+        const hit = document.elementFromPoint(x, b.top + b.height / 2);
+        out[name] = hit === null ? 'none' : hit === open || open.contains(hit) ? 'Open' : `${hit.tagName.toLowerCase()}`;
+      }
+      return out;
+    })(),
+    selectOverlapsOpen: select.getBoundingClientRect().right > open.getBoundingClientRect().left + 0.5,
+    selectMinWidth: selectStyle.minWidth,
+    openInsideBar: open.getBoundingClientRect().bottom <= bar.getBoundingClientRect().bottom + 0.5,
+    targets: controls.map((element) => {
+      const r = element.getBoundingClientRect();
+      return { name: `${element.tagName.toLowerCase()} ${(element.textContent ?? '').trim().slice(0, 18)}`, w: r2(r.width), h: r2(r.height), ok: r.width >= 44 - 0.01 && r.height >= 44 - 0.01 };
+    }),
+    elementsOutsideViewport: outside,
+    styles: {
+      barColumnGap: getComputedStyle(bar).columnGap,
+      formFlex: getComputedStyle(form).flex,
+      labelRadius: selectStyle.borderRadius,
+      selectTransition: selectStyle.transition,
+      openTransition: getComputedStyle(open).transition,
+      openRadius: getComputedStyle(open).borderRadius,
+    },
+  };
+}
+
+function focusStop() {
+  const element = document.activeElement;
+  if (element === null || element === document.body || element === document.documentElement) return null;
+  const path: string[] = [];
+  for (let node: Element | null = element; node !== null && node !== document.body; node = node.parentElement) {
+    const parent: Element | null = node.parentElement;
+    const index = parent === null ? 0 : Array.prototype.indexOf.call(parent.children, node);
+    path.unshift(`${node.tagName.toLowerCase()}${index}`);
+  }
+  const r = element.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const overlaySelector = '.shell-bar, .shell-tabs, [data-share-bar], .editor-head, .more-panel';
+  const labels = 'labels' in element && element.labels instanceof NodeList ? [...(element.labels as NodeListOf<HTMLLabelElement>)] : [];
+  const ownedBy = (hit: Element | null) => hit !== null && (hit === element || element.contains(hit) || labels.some((label) => label.contains(hit)));
+  const blocker = (hit: Element | null) => {
+    if (hit === null) return 'nothing';
+    const overlay = hit.closest(overlaySelector);
+    if (overlay !== null && !overlay.contains(element)) return overlay.className.split(' ')[0] || overlay.tagName.toLowerCase();
+    return null;
+  };
+  let visible = 0;
+  const covered: Record<string, number> = {};
+  for (let i = 0; i < 5; i += 1) {
+    for (let j = 0; j < 5; j += 1) {
+      const x = r.left + (r.width * (i + 0.5)) / 5;
+      const y = r.top + (r.height * (j + 0.5)) / 5;
+      if (x < 0 || y < 0 || x >= vw || y >= vh) {
+        covered.offscreen = (covered.offscreen ?? 0) + 1;
+        continue;
+      }
+      const hit = document.elementFromPoint(x, y);
+      if (ownedBy(hit)) visible += 1;
+      else {
+        const by = blocker(hit) ?? `other:${hit?.tagName.toLowerCase() ?? ''}`;
+        covered[by] = (covered[by] ?? 0) + 1;
+      }
+    }
+  }
+  // The ring: the element's own box-shadow or outline, or a :focus-within wrapper up to three levels up.
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  const probe = document.createElement('i');
+  probe.style.color = accent;
+  document.body.append(probe);
+  const accentRgb = getComputedStyle(probe).color;
+  probe.remove();
+  let ring: string | null = null;
+  let ringOn: Element = element;
+  for (let node: Element | null = element, depth = 0; node !== null && depth < 4; node = node.parentElement, depth += 1) {
+    const style = getComputedStyle(node);
+    const hasShadow = style.boxShadow.includes(accentRgb);
+    const hasOutline = style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0;
+    if (hasShadow || hasOutline) {
+      ring = hasShadow ? (/inset/.test(style.boxShadow) && !/\) 0px 0px 0px 3px,|0px 0px 0px 3px(?! inset)/.test(style.boxShadow) ? 'inset' : 'outer') : 'outline';
+      ringOn = node;
+      break;
+    }
+  }
+  const ringBox = ringOn.getBoundingClientRect();
+  const sides: Record<string, string> = {};
+  if (ring !== null) {
+    const off = ring === 'inset' ? -1.5 : 2;
+    const points: Record<string, [number, number]> = {
+      top: [ringBox.left + ringBox.width / 2, ringBox.top - off],
+      bottom: [ringBox.left + ringBox.width / 2, ringBox.bottom + off],
+      left: [ringBox.left - off, ringBox.top + ringBox.height / 2],
+      right: [ringBox.right + off, ringBox.top + ringBox.height / 2],
+    };
+    for (const [side, [x, y]] of Object.entries(points)) {
+      if (x < 0 || y < 0 || x >= vw || y >= vh) sides[side] = 'offscreen';
+      else sides[side] = blocker(document.elementFromPoint(x, y)) ?? 'shown';
+    }
+  }
+  const name = element.getAttribute('aria-label') ?? (element.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 40);
+  return {
+    key: path.join('/'),
+    what: `${element.tagName.toLowerCase()}${element.getAttribute('type') === null ? '' : `[${element.getAttribute('type')}]`} ${name}`,
+    rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+    visible,
+    covered,
+    focusVisible: element.matches(':focus-visible'),
+    ring,
+    ringOnSelf: ringOn === element,
+    ringSidesShown: Object.values(sides).filter((value) => value === 'shown').length,
+    sides,
+    inDialog: element.closest('dialog') !== null,
+    barBottom: Math.round(document.querySelector('.shell-bar')?.getBoundingClientRect().bottom ?? 0),
+  };
+}
+
+type Stop = NonNullable<ReturnType<typeof focusStop>>;
+
+async function walk(page: Page, key: 'Tab' | 'Shift+Tab', limit: number, startOnBody: boolean): Promise<{ stops: Stop[]; outside: number }> {
+  if (startOnBody) {
+    await page.evaluate(() => {
+      (document.activeElement as HTMLElement | null)?.blur();
+      window.scrollTo(0, 0);
+    });
+  }
+  const stops: Stop[] = [];
+  let firstKey: string | null = null;
+  let outside = 0;
+  for (let index = 0; index < limit; index += 1) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(70);
+    const stop = await page.evaluate(focusStop);
+    if (stop === null) {
+      outside += 1;
+      if (outside > 3) break;
+      continue;
+    }
+    if (firstKey !== null && stop.key === firstKey) break;
+    firstKey ??= stop.key;
+    stops.push(stop);
+  }
+  return { stops, outside };
+}
+
+function summarize(stops: Stop[]) {
+  return {
+    stops: stops.length,
+    hidden: stops.filter((stop) => stop.visible === 0).map((stop) => ({ what: stop.what, covered: stop.covered, rect: stop.rect })),
+    partlyCovered: stops.filter((stop) => stop.visible > 0 && stop.visible < 25 && Object.keys(stop.covered).some((k) => !k.startsWith('other') && k !== 'offscreen')).map((stop) => ({ what: stop.what, visible: stop.visible, covered: stop.covered })),
+    noFocusVisible: stops.filter((stop) => !stop.focusVisible).map((stop) => stop.what),
+    noRing: stops.filter((stop) => stop.ring === null).map((stop) => stop.what),
+    ringAllSidesHidden: stops.filter((stop) => stop.ring !== null && stop.ringSidesShown === 0).map((stop) => ({ what: stop.what, sides: stop.sides })),
+    minVisible: stops.reduce((min, stop) => Math.min(min, stop.visible), 25),
+  };
+}
+
+/* ---- P1: B6-01 first screen ------------------------------------------------------------------------ */
+
+test('P1 first screen four states', async ({ browser, adminSeed, server }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'the 390x844 phone budget');
+  const people = await cast(adminSeed, server.origin);
+  const sizes = [
+    { width: 390, height: 844 },
+    { width: 375, height: 812 },
+    { width: 360, height: 800 },
+    { width: 320, height: 640 },
+    { width: 375, height: 844 },
+    { width: 360, height: 844 },
+    { width: 320, height: 844 },
+  ];
+  const rows: unknown[] = [];
+  for (const [who, person] of [
+    ['no received share', people.solo],
+    ['received share', people.grantee],
+  ] as const) {
+    for (const zone of [NOTE_ZONE, EQUAL_ZONE]) {
+      const ctx = await context(browser, testInfo, server.origin, zone);
+      const page = await ctx.newPage();
+      await signIn(page, person.account);
+      for (const theme of THEMES) {
+        await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+        for (const size of sizes) {
+          await page.setViewportSize(size);
+          await show(page, '#/timesheet');
+          const facts = await page.evaluate(firstScreen);
+          rows.push({ who, zone, zoneNoteExpected: zone === NOTE_ZONE, theme, size: `${size.width}x${size.height}`, ...facts });
+          if (size.width === 390 && size.height === 844) {
+            const name = `${who.replace(/ /g, '-')}-zone-note-${zone === NOTE_ZONE ? 'shown' : 'hidden'}-390x844-${theme}`;
+            await page.screenshot({ path: join(OUT, `${TAG}-p1-${name}-synthetic.png`), animations: 'disabled', caret: 'hide' });
+          }
+        }
+      }
+      await ctx.close();
+    }
+  }
+  save('p1-first-screen', rows);
+});
+
+/* ---- P2: switcher items at 767, 390 and 320 (plus 375 and 360) ------------------------------------- */
+
+test('P2 switcher items', async ({ browser, adminSeed, server }, testInfo) => {
+  const mobile = testInfo.project.name === 'mobile';
+  const people = await cast(adminSeed, server.origin);
+  const sizes = mobile
+    ? [
+        { width: 767, height: 1024 },
+        { width: 390, height: 844 },
+        { width: 375, height: 812 },
+        { width: 360, height: 800 },
+        { width: 320, height: 640 },
+      ]
+    : [
+        { width: 767, height: 800 },
+        { width: 640, height: 400 },
+      ];
+  const rows: unknown[] = [];
+  // Every width and every step gets a fresh context: a mobile page that was zoomed out once keeps a stale
+  // visual viewport, which broke pointer actions in the first probe version (probe artefact, not the app).
+  const fresh = async (person: Person, theme: 'light' | 'dark', size: { width: number; height: number }) => {
+    const ctx = await context(browser, testInfo, server.origin, NOTE_ZONE);
+    const page = await ctx.newPage();
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    await page.setViewportSize(size);
+    await signIn(page, person.account);
+    await show(page, '#/timesheet');
+    return { ctx, page };
+  };
+  for (const [who, person] of [
+    ['received share', people.grantee],
+    ['no received share', people.solo],
+  ] as const) {
+    for (const theme of THEMES) {
+      for (const size of sizes) {
+        const { ctx, page } = await fresh(person, theme, size);
+        const writes: string[] = [];
+        page.on('request', (request) => {
+          if (request.method() !== 'GET' && new URL(request.url()).pathname.startsWith('/api/')) writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+        });
+        const row: Record<string, unknown> = { who, theme, size: `${size.width}x${size.height}`, facts: await page.evaluate(switcherFacts) };
+        if (who === 'no received share') {
+          await page.locator('.shell-bar').screenshot({ path: join(OUT, `${TAG}-p2-bar-solo-${size.width}-${theme}-synthetic.png`), animations: 'disabled', caret: 'hide' });
+        }
+        if (who === 'received share') {
+          const form = page.locator('form.shell-switcher');
+          row.ariaSnapshot = await form.ariaSnapshot();
+          row.comboboxByExactName = await page.getByRole('combobox', { name: 'Shared with me', exact: true }).count();
+          await page.locator('form.shell-switcher').screenshot({ path: join(OUT, `${TAG}-p2-switcher-${size.width}-${theme}-synthetic.png`), animations: 'disabled', caret: 'hide' });
+          await page.locator('.shell-bar').screenshot({ path: join(OUT, `${TAG}-p2-bar-${size.width}-${theme}-synthetic.png`), animations: 'disabled', caret: 'hide' });
+          // AX-06: keys on the choice never navigate and never write; Open does navigate.
+          const select = page.locator('.shell-switcher select');
+          writes.length = 0;
+          await select.focus();
+          const keys: unknown[] = [];
+          for (const key of ['ArrowDown', 'ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'ArrowDown']) {
+            await page.keyboard.press(key);
+            await page.waitForTimeout(120);
+            keys.push({ key, hash: await page.evaluate(() => location.hash), value: await select.inputValue(), shareBar: await page.locator('[data-share-bar]').count(), activeIsSelect: await select.evaluate((element) => document.activeElement === element) });
+          }
+          row.ax06Keys = keys;
+          row.ax06Writes = [...writes];
+          await page.keyboard.press('Tab');
+          row.tabFromSelectLandsOn = await page.evaluate(() => `${document.activeElement?.tagName ?? ''} ${(document.activeElement?.textContent ?? '').trim()}`);
+          await page.keyboard.press('Enter');
+          await page.waitForTimeout(500);
+          row.openByEnter = { hash: await page.evaluate(() => location.hash), shareBar: await page.locator('[data-share-bar]').count(), writes: [...writes] };
+          // Open by touch (mobile) or pointer (desktop), from the own Timesheet.
+          await show(page, '#/timesheet');
+          await select.selectOption({ index: 1 });
+          await page.waitForTimeout(150);
+          const hashBefore = await page.evaluate(() => location.hash);
+          const open = page.getByRole('form', { name: 'Shared with me' }).getByRole('button', { name: 'Open', exact: true });
+          row.hitBeforeTap = await page.evaluate(() => {
+            const button = document.querySelector('.shell-switcher button');
+            const choice = document.querySelector('.shell-switcher select');
+            if (button === null || choice === null) return null;
+            const b = button.getBoundingClientRect();
+            const s = choice.getBoundingClientRect();
+            const points: Record<string, string> = {};
+            for (const [name, x] of [
+              ['left edge+4', b.left + 4],
+              ['centre', b.left + b.width / 2],
+              ['right edge-4', b.right - 4],
+            ] as const) {
+              const hit = document.elementFromPoint(x, b.top + b.height / 2);
+              points[name] = hit === null ? 'none' : hit === button || button.contains(hit) ? 'Open' : `${hit.tagName.toLowerCase()}.${hit.className}`;
+            }
+            const sStyle = getComputedStyle(choice);
+            return {
+              open: { left: b.left, right: b.right, top: b.top, width: b.width },
+              select: { left: s.left, right: s.right, width: s.width, minWidth: sStyle.minWidth, scrollWidth: choice.scrollWidth, clientWidth: choice.clientWidth },
+              label: (() => {
+                const l = choice.closest('label')?.getBoundingClientRect();
+                return l === undefined ? null : { left: l.left, right: l.right, width: l.width };
+              })(),
+              form: (() => {
+                const f = choice.closest('form')?.getBoundingClientRect();
+                return f === undefined ? null : { left: f.left, right: f.right, width: f.width };
+              })(),
+              selectOverlapsOpen: s.right > b.left + 0.5,
+              points,
+            };
+          });
+          let tapError: string | null = null;
+          try {
+            if (mobile) await open.tap({ timeout: 3_000 });
+            else await open.click({ timeout: 3_000 });
+          } catch (error) {
+            tapError = String(error).split('\n')[0] ?? 'error';
+          }
+          await page.waitForTimeout(500);
+          row.openByPointer = { tapError, hashBeforeOpen: hashBefore, hash: await page.evaluate(() => location.hash), shareBar: await page.locator('[data-share-bar]').count() };
+          if (tapError !== null) {
+            await page.locator('.shell-bar').screenshot({ path: join(OUT, `${TAG}-p2-tap-blocked-${size.width}-${theme}-synthetic.png`), animations: 'disabled', caret: 'hide' });
+            await show(page, `#/shared/${people.ownerA.account.id}`);
+          }
+          await page.waitForTimeout(200);
+          row.sharedViewFacts = await page.evaluate(switcherFacts);
+          row.sharedViewHit = await page.evaluate(() => {
+            const button = document.querySelector('.shell-switcher button');
+            if (button === null) return null;
+            const b = button.getBoundingClientRect();
+            const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+            return hit === null ? 'none' : hit === button || button.contains(hit) ? 'Open' : `${hit.tagName.toLowerCase()}.${hit.className}`;
+          });
+          row.ownerOnlyControlsInSharedView = await page.evaluate(() =>
+            [...document.querySelectorAll('button, a')].filter((element) => /^(Clock in|Clock out|Change several days|Review & sign off)$/.test((element.textContent ?? '').trim())).length,
+          );
+          await ctx.close();
+          // 200% page zoom (CSS viewport halved, as browser zoom does), in a fresh context.
+          const zoomSize = { width: Math.round(size.width / 2), height: Math.round(size.height / 2) };
+          const zoomed = await fresh(person, theme, zoomSize);
+          row.pageZoom200 = await zoomed.page.evaluate(switcherFacts);
+          await zoomed.page.screenshot({ path: join(OUT, `${TAG}-p2-zoom200-${size.width}-${theme}-synthetic.png`), animations: 'disabled', caret: 'hide' });
+          await zoomed.ctx.close();
+          // 200% text (root font size doubled, as a text-only zoom does), in a fresh context.
+          const texted = await fresh(person, theme, size);
+          await texted.page.evaluate(() => document.documentElement.style.setProperty('--root-font-size', '30px'));
+          await texted.page.waitForTimeout(400);
+          row.text200 = await texted.page.evaluate(switcherFacts);
+          row.text200FirstScreen = await texted.page.evaluate(firstScreen);
+          await texted.page.screenshot({ path: join(OUT, `${TAG}-p2-text200-${size.width}-${theme}-synthetic.png`), animations: 'disabled', caret: 'hide' });
+          await texted.ctx.close();
+        } else {
+          await ctx.close();
+        }
+        rows.push(row);
+      }
+    }
+  }
+  save(`p2-switcher-${testInfo.project.name}`, rows);
+});
+
+/* ---- P2t: touch Open in a fresh page per width (no earlier zoom or text-size step) ------------------ */
+
+test('P2t touch Open fresh', async ({ browser, adminSeed, server }, testInfo) => {
+  const mobile = testInfo.project.name === 'mobile';
+  const people = await cast(adminSeed, server.origin);
+  const sizes = mobile
+    ? [
+        { width: 767, height: 1024 },
+        { width: 390, height: 844 },
+        { width: 375, height: 812 },
+        { width: 360, height: 800 },
+        { width: 320, height: 640 },
+      ]
+    : [
+        { width: 767, height: 800 },
+        { width: 640, height: 400 },
+        { width: 383, height: 400 },
+      ];
+  const rows: unknown[] = [];
+  for (const theme of THEMES) {
+    for (const size of sizes) {
+      const ctx = await context(browser, testInfo, server.origin, NOTE_ZONE);
+      const page = await ctx.newPage();
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      await page.setViewportSize(size);
+      await signIn(page, people.grantee.account);
+      await show(page, '#/timesheet');
+      const scale = await page.evaluate(() => ({ innerWidth: window.innerWidth, clientWidth: document.documentElement.clientWidth, visualScale: window.visualViewport?.scale ?? null, visualOffsetLeft: window.visualViewport?.offsetLeft ?? null, scrollWidth: document.documentElement.scrollWidth }));
+      const select = page.locator('.shell-switcher select');
+      await select.selectOption({ index: 1 });
+      await page.waitForTimeout(150);
+      const open = page.getByRole('form', { name: 'Shared with me' }).getByRole('button', { name: 'Open', exact: true });
+      const box = await open.boundingBox();
+      let actionError: string | null = null;
+      try {
+        if (mobile) await open.tap({ timeout: 3_000 });
+        else await open.click({ timeout: 3_000 });
+      } catch (error) {
+        actionError = String(error).split('\n').slice(0, 1).join(' ');
+      }
+      await page.waitForTimeout(400);
+      const hashAfterLocatorAction = await page.evaluate(() => location.hash);
+      let hashAfterRawTouch: string | null = null;
+      if (actionError !== null && box !== null) {
+        if (mobile) await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+        else await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+        await page.waitForTimeout(400);
+        hashAfterRawTouch = await page.evaluate(() => location.hash);
+      }
+      rows.push({ theme, size: `${size.width}x${size.height}`, scale, openBox: box, actionError, hashAfterLocatorAction: hashAfterLocatorAction.replace(/[0-9a-f-]{36}/, '{owner}'), hashAfterRawTouch: hashAfterRawTouch?.replace(/[0-9a-f-]{36}/, '{owner}') ?? null });
+      await ctx.close();
+    }
+  }
+  save(`p2t-touch-open-${testInfo.project.name}`, rows);
+});
+
+/* ---- P2s: switcher in the shared view (an owner chosen) at phone widths, screenshots ---------------- */
+
+test('P2s shared view switcher', async ({ browser, adminSeed, server }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'phone widths');
+  const people = await cast(adminSeed, server.origin);
+  const rows: unknown[] = [];
+  for (const size of [
+    { width: 390, height: 844 },
+    { width: 375, height: 812 },
+    { width: 360, height: 800 },
+    { width: 320, height: 640 },
+  ]) {
+    const ctx = await context(browser, testInfo, server.origin, EQUAL_ZONE);
+    const page = await ctx.newPage();
+    await page.setViewportSize(size);
+    await signIn(page, people.grantee.account);
+    await show(page, `#/shared/${people.ownerA.account.id}`);
+    const facts = (await page.evaluate(switcherFacts)) as Record<string, unknown>;
+    const barTitle = await page.locator('[data-share-bar-title]').textContent();
+    rows.push({ size: `${size.width}x${size.height}`, chosen: facts.chosen, chosenTextWidth: facts.chosenTextWidth, selectContentWidth: facts.selectContentWidth, chosenFits: facts.chosenFits, shareBarTitle: barTitle });
+    await page.locator('form.shell-switcher').screenshot({ path: join(OUT, `${TAG}-p2s-shared-switcher-${size.width}-light-synthetic.png`), animations: 'disabled', caret: 'hide' });
+    await ctx.close();
+  }
+  save('p2s-shared-switcher', rows);
+});
+
+/* ---- P7: does the e2e sideways check (scrollWidth <= innerWidth) see overflow on the mobile project? ---- */
+
+test('P7 sideways detector', async ({ browser, adminSeed, server }, testInfo) => {
+  const people = await cast(adminSeed, server.origin);
+  const rows: unknown[] = [];
+  for (const forced of [false, true]) {
+    const ctx = await context(browser, testInfo, server.origin, EQUAL_ZONE);
+    if (forced) {
+      // A synthetic 600px block appended to every page (CSSOM rule, allowed by the CSP), as overflowing content would be.
+      await ctx.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const sheet = document.styleSheets[0];
+          if (sheet !== undefined) sheet.insertRule('.page::after { content: ""; display: block; width: 600px; height: 1px; }', sheet.cssRules.length);
+        });
+      });
+    }
+    const page = await ctx.newPage();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signIn(page, people.solo.account);
+    await show(page, '#/timesheet');
+    const facts = await page.evaluate(() => ({
+      innerWidth: window.innerWidth,
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      visualScale: window.visualViewport?.scale ?? null,
+      visualWidth: window.visualViewport?.width ?? null,
+      pageAfterWidth: getComputedStyle(document.querySelector('.page') as Element, '::after').width,
+    }));
+    const e2eCheck = await page.evaluate<{ scroll: number; inner: number }>('({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth })');
+    rows.push({ forcedOverflow: forced, facts, e2eExpressionPasses: e2eCheck.scroll <= e2eCheck.inner, clientWidthCheckPasses: facts.scrollWidth <= facts.clientWidth });
+    await ctx.close();
+  }
+  save(`p7-sideways-detector-${testInfo.project.name}`, rows);
+});
+
+/* ---- P3: focus walks --------------------------------------------------------------------------------- */
+
+test('P3 focus walks', async ({ browser, adminSeed, server }, testInfo) => {
+  const mobile = testInfo.project.name === 'mobile';
+  const people = await cast(adminSeed, server.origin);
+  const sizes = mobile
+    ? [
+        { width: 767, height: 1024 },
+        { width: 390, height: 844 },
+        { width: 320, height: 640 },
+      ]
+    : [{ width: 767, height: 800 }];
+  const ownerA = people.ownerA.account.id;
+  const ownerB = people.ownerB.account.id;
+  const results: unknown[] = [];
+  const raw: unknown[] = [];
+  for (const [who, person] of [
+    ['received share', people.grantee],
+    ['no received share', people.solo],
+  ] as const) {
+    const ctx = await context(browser, testInfo, server.origin, NOTE_ZONE);
+    const page = await ctx.newPage();
+    await signIn(page, person.account);
+    const screens: [string, string][] = [['Timesheet', '#/timesheet']];
+    if (who === 'received share') screens.push(['shared view-only', `#/shared/${ownerA}`], ['shared edit', `#/shared/${ownerB}`]);
+    for (const theme of THEMES) {
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      for (const size of sizes) {
+        await page.setViewportSize(size);
+        for (const [screen, hash] of screens) {
+          for (const key of ['Tab', 'Shift+Tab'] as const) {
+            await show(page, hash);
+            const { stops, outside } = await walk(page, key, 140, true);
+            results.push({ who, theme, size: `${size.width}x${size.height}`, screen, key, outsideDocument: outside, ...summarize(stops) });
+            raw.push({ who, theme, size: `${size.width}x${size.height}`, screen, key, stops });
+          }
+          // The day editor of the first day, opened by keyboard; then both walks inside the dialog.
+          await show(page, hash);
+          const dayButton = page.locator('[data-day]').first().getByRole('button', { name: /^(Edit|View) / }).first();
+          await dayButton.focus();
+          await page.keyboard.press('Enter');
+          const dialog = page.locator('dialog[open]').last();
+          await expect(dialog).toBeVisible();
+          await page.waitForTimeout(300);
+          for (const key of ['Tab', 'Shift+Tab'] as const) {
+            const { stops, outside } = await walk(page, key, 90, false);
+            const outsideDialog = stops.filter((stop) => !stop.inDialog).length;
+            results.push({ who, theme, size: `${size.width}x${size.height}`, screen: `${screen} day editor`, key, outsideDocument: outside, outsideDialog, ...summarize(stops) });
+            raw.push({ who, theme, size: `${size.width}x${size.height}`, screen: `${screen} day editor`, key, stops });
+          }
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(200);
+          results.push({ who, theme, size: `${size.width}x${size.height}`, screen: `${screen} day editor`, closedByEscape: (await page.locator('dialog[open]').count()) === 0, focusAfterEscape: await page.evaluate(() => (document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? '').trim().slice(0, 40)) });
+        }
+      }
+    }
+    await ctx.close();
+  }
+  save(`p3-walks-${testInfo.project.name}`, results);
+  save(`p3-walks-raw-${testInfo.project.name}`, raw);
+});
+
+/* ---- P3b: rendered ring around the switcher's select and Open (screenshot pairs) -------------------- */
+
+test('P3b switcher rings rendered', async ({ browser, adminSeed, server }, testInfo) => {
+  const mobile = testInfo.project.name === 'mobile';
+  const people = await cast(adminSeed, server.origin);
+  const sizes = mobile
+    ? [
+        { width: 767, height: 1024 },
+        { width: 390, height: 844 },
+        { width: 320, height: 640 },
+      ]
+    : [{ width: 767, height: 800 }];
+  const ctx = await context(browser, testInfo, server.origin, NOTE_ZONE);
+  const page = await ctx.newPage();
+  const decoder = await ctx.newPage();
+  await signIn(page, people.grantee.account);
+  const rows: unknown[] = [];
+  for (const theme of THEMES) {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    for (const size of sizes) {
+      await page.setViewportSize(size);
+      for (const [hash, label] of [
+        ['#/timesheet', 'own'],
+        [`#/shared/${people.ownerA.account.id}`, 'shared'],
+      ] as const) {
+        await show(page, hash);
+        for (const target of ['select', 'button'] as const) {
+          // Reach the control with real Tab presses from the top of the page.
+          await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+          let reached = false;
+          for (let index = 0; index < 12 && !reached; index += 1) {
+            await page.keyboard.press('Tab');
+            reached = await page.evaluate((tag) => document.activeElement?.closest('.shell-switcher') !== null && document.activeElement?.tagName.toLowerCase() === tag, target);
+          }
+          const box = await page.locator(`.shell-switcher ${target}`).boundingBox();
+          if (box === null || !reached) {
+            rows.push({ theme, size: `${size.width}x${size.height}`, view: label, target, reached });
+            continue;
+          }
+          const clip = { x: Math.max(0, box.x - 8), y: Math.max(0, box.y - 8), width: box.width + 16, height: box.height + 16 };
+          const focused = await page.screenshot({ clip, animations: 'disabled', caret: 'hide' });
+          await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+          await page.waitForTimeout(150);
+          const plain = await page.screenshot({ clip, animations: 'disabled', caret: 'hide' });
+          const inner = { left: box.x - clip.x, top: box.y - clip.y, width: box.width, height: box.height };
+          const sides = await decoder.evaluate(
+            async ({ a, b, inner, cssWidth }) => {
+              const load = async (data: string) => {
+                const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+                const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+                const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+                const ctx2 = canvas.getContext('2d');
+                if (ctx2 === null) throw new Error('no 2d');
+                ctx2.drawImage(bitmap, 0, 0);
+                return { width: bitmap.width, height: bitmap.height, data: ctx2.getImageData(0, 0, bitmap.width, bitmap.height).data };
+              };
+              const fa = await load(a);
+              const fb = await load(b);
+              const scale = fa.width / cssWidth;
+              const lum = (r: number, g: number, bl: number) => {
+                const ch = (v: number) => {
+                  const s = v / 255;
+                  return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+                };
+                return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(bl);
+              };
+              const ratio = (p: number[], q: number[]) => {
+                const l1 = lum(p[0] ?? 0, p[1] ?? 0, p[2] ?? 0);
+                const l2 = lum(q[0] ?? 0, q[1] ?? 0, q[2] ?? 0);
+                return Math.round(((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100) / 100;
+              };
+              const px = (f: typeof fa, x: number, y: number) => {
+                const i = (Math.round(y * scale) * f.width + Math.round(x * scale)) * 4;
+                return [f.data[i] ?? 0, f.data[i + 1] ?? 0, f.data[i + 2] ?? 0];
+              };
+              const out: Record<string, unknown> = {};
+              const lines: Record<string, Array<[number, number]>> = {
+                top: Array.from({ length: 5 }, (_, k) => [inner.left + (inner.width * (k + 1)) / 6, inner.top]),
+                bottom: Array.from({ length: 5 }, (_, k) => [inner.left + (inner.width * (k + 1)) / 6, inner.top + inner.height]),
+                left: Array.from({ length: 5 }, (_, k) => [inner.left, inner.top + (inner.height * (k + 1)) / 6]),
+                right: Array.from({ length: 5 }, (_, k) => [inner.left + inner.width, inner.top + (inner.height * (k + 1)) / 6]),
+              };
+              for (const [side, points] of Object.entries(lines)) {
+                let best = 0;
+                let changed = 0;
+                for (const [x0, y0] of points) {
+                  // Walk 0..5 css px outward across the edge and compare the focused pixel with the unfocused one there.
+                  for (let d = 0; d <= 5; d += 0.5) {
+                    const x = side === 'left' ? x0 - d : side === 'right' ? x0 + d : x0;
+                    const y = side === 'top' ? y0 - d : side === 'bottom' ? y0 + d : y0;
+                    const p = px(fa, x, y);
+                    const q = px(fb, x, y);
+                    if (p.some((v, k) => Math.abs(v - (q[k] ?? 0)) > 24)) {
+                      changed += 1;
+                      best = Math.max(best, ratio(p, q));
+                    }
+                  }
+                }
+                out[side] = { changedSamples: changed, bestRingContrastAgainstUnfocused: best };
+              }
+              return out;
+            },
+            { a: focused.toString('base64'), b: plain.toString('base64'), inner, cssWidth: clip.width },
+          );
+          rows.push({ theme, size: `${size.width}x${size.height}`, view: label, target, reached, box, sides });
+          if (size.width !== 767) writeFileSync(join(OUT, `${TAG}-p3b-${label}-${target}-${size.width}-${theme}-focused-synthetic.png`), focused);
+        }
+      }
+    }
+  }
+  await ctx.close();
+  save(`p3b-rings-${testInfo.project.name}`, rows);
+});
+
+/* ---- P4: computed styles at 768px and wider ------------------------------------------------------------ */
+
+function styleDump() {
+  const props = [
+    'display', 'position', 'flex-direction', 'flex-wrap', 'flex-grow', 'flex-shrink', 'flex-basis', 'column-gap', 'row-gap',
+    'padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+    'font-size', 'font-weight', 'line-height', 'color', 'background-color', 'border-radius', 'box-shadow', 'transition',
+    'min-height', 'min-width', 'top', 'z-index',
+  ];
+  const rows: Record<string, string> = {};
+  const all = document.querySelectorAll('body *');
+  all.forEach((element) => {
+    const path: string[] = [];
+    for (let node: Element | null = element; node !== null && node !== document.body; node = node.parentElement) {
+      const parent: Element | null = node.parentElement;
+      const index = parent === null ? 0 : Array.prototype.indexOf.call(parent.children, node);
+      path.unshift(`${node.tagName.toLowerCase()}${index}`);
+    }
+    const style = getComputedStyle(element);
+    const r = element.getBoundingClientRect();
+    rows[path.join('/')] = `${props.map((prop) => style.getPropertyValue(prop)).join('|')}|${Math.round(r.x * 10) / 10},${Math.round(r.y * 10) / 10},${Math.round(r.width * 10) / 10},${Math.round(r.height * 10) / 10}`;
+  });
+  return { count: all.length, rows, shellBarSizeVar: document.documentElement.style.getPropertyValue('--shell-bar-size'), scrollPaddingTop: getComputedStyle(document.documentElement).scrollPaddingTop };
+}
+
+test('P4 no change at 768 and wider', async ({ browser, adminSeed, server }, testInfo) => {
+  const mobile = testInfo.project.name === 'mobile';
+  const people = await cast(adminSeed, server.origin);
+  const sizes = mobile ? [{ width: 768, height: 1024 }] : [
+    { width: 768, height: 800 },
+    { width: 1024, height: 800 },
+    { width: 1280, height: 800 },
+  ];
+  const dumps: Record<string, unknown> = {};
+  for (const [who, person] of [
+    ['share', people.grantee],
+    ['solo', people.solo],
+  ] as const) {
+    const ctx = await context(browser, testInfo, server.origin, EQUAL_ZONE);
+    const page = await ctx.newPage();
+    await signIn(page, person.account);
+    const screens: [string, string][] = [['timesheet', '#/timesheet']];
+    if (who === 'share') screens.push(['shared', `#/shared/${people.ownerA.account.id}`]);
+    for (const theme of THEMES) {
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      for (const size of sizes) {
+        await page.setViewportSize(size);
+        for (const [screen, hash] of screens) {
+          await show(page, hash);
+          dumps[`${who}|${screen}|${theme}|${size.width}x${size.height}`] = await page.evaluate(styleDump);
+          await page.locator('.shell-bar').screenshot({ path: join(OUT, `${TAG}-p4-bar-${testInfo.project.name}-${who}-${screen}-${size.width}-${theme}-synthetic.png`), animations: 'disabled', caret: 'hide' });
+        }
+      }
+    }
+    await ctx.close();
+  }
+  save(`p4-styles-${testInfo.project.name}`, dumps);
+});
+
+/* ---- P5: width sweep ------------------------------------------------------------------------------------- */
+
+test('P5 width sweep', async ({ browser, adminSeed, server }, testInfo) => {
+  const people = await cast(adminSeed, server.origin);
+  const ctx = await context(browser, testInfo, server.origin, NOTE_ZONE);
+  const page = await ctx.newPage();
+  await signIn(page, people.grantee.account);
+  const rows: unknown[] = [];
+  for (const [hash, view] of [
+    ['#/timesheet', 'own'],
+    [`#/shared/${people.ownerA.account.id}`, 'shared'],
+  ] as const) {
+    await show(page, hash);
+    for (let width = 300; width <= 420; width += 1) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.waitForTimeout(60);
+      const facts = (await page.evaluate(switcherFacts)) as Record<string, unknown>;
+      rows.push({
+        view,
+        width,
+        bar: (facts.bar as { h: number } | null)?.h,
+        barSizeVar: facts.barSizeVar,
+        row: facts.switcherRow,
+        sideways: facts.sideways,
+        outside: facts.elementsOutsideViewport,
+        labelLines: facts.labelTextLines,
+        labelVisible: facts.labelTextVisible,
+        labelOverlapsSelect: facts.labelTextOverlapsSelect,
+        selectW: (facts.select as { w: number } | null)?.w,
+        selectContentWidth: facts.selectContentWidth,
+        chosen: facts.chosen,
+        chosenTextWidth: facts.chosenTextWidth,
+        chosenFits: facts.chosenFits,
+        targetsOk: (facts.targets as { ok: boolean }[] | undefined)?.every((t) => t.ok),
+        selectOverlapsOpen: facts.selectOverlapsOpen,
+        innerWidth: facts.innerWidth,
+        visualScale: facts.visualScale,
+        openHit: facts.openHit,
+        selectRight: (facts.select as { right: number } | null)?.right,
+        openLeft: (facts.open as { x: number } | null)?.x,
+      });
+    }
+  }
+  await ctx.close();
+  save(`p5-sweep-${testInfo.project.name}`, rows);
+});
+
+/* ---- P6: 320x256 (400% of 1280x1024) -------------------------------------------------------------------- */
+
+test('P6 320x256', async ({ browser, adminSeed, server }, testInfo) => {
+  const people = await cast(adminSeed, server.origin);
+  const rows: unknown[] = [];
+  for (const [who, person] of [
+    ['received share', people.grantee],
+    ['no received share', people.solo],
+  ] as const) {
+    const ctx = await context(browser, testInfo, server.origin, NOTE_ZONE);
+    const page = await ctx.newPage();
+    await signIn(page, person.account);
+    await page.setViewportSize({ width: 320, height: 256 });
+    await show(page, '#/timesheet');
+    const facts = await page.evaluate(switcherFacts);
+    const screen = await page.evaluate(firstScreen);
+    const tab = await walk(page, 'Tab', 140, true);
+    rows.push({ who, facts, screen, walk: summarize(tab.stops) });
+    await page.screenshot({ path: join(OUT, `${TAG}-p6-${who.replace(/ /g, '-')}-320x256-${testInfo.project.name}-synthetic.png`), animations: 'disabled', caret: 'hide' });
+    await ctx.close();
+  }
+  save(`p6-320x256-${testInfo.project.name}`, rows);
+});

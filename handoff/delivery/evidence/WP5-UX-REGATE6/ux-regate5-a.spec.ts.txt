@@ -1,0 +1,617 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { dayButton, dayButtonName } from './dayButton.ts';
+import { type BuiltServer, expect, newPerson, type Person, screenshotPath, type SeedClient, test } from './fixtures.ts';
+
+/*
+ * WP5-UX-REGATE5 probe A (scratch, never committed): AX-01 (Tab and Shift+Tab walks), AX-02/03/04/R-12 (focus ring
+ * contrast), AX-05 (names), AX-06 (switcher), AX-07 (alerts and status), AX-09 and AX-10. Real key presses, built
+ * server, synthetic data.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles', actionTimeout: 15_000 });
+
+const OUT = process.env.UXREGATE_OUT ?? '';
+function note(file: string, line: string): void {
+  if (OUT !== '') appendFileSync(join(OUT, file), `${line}\n`);
+}
+
+/* ---- colour maths ---------------------------------------------------------------------------- */
+type Rgba = [number, number, number, number];
+interface Layer {
+  colour: Rgba;
+  inset: boolean;
+  spread: number;
+}
+function parseColour(text: string): Rgba {
+  const numbers = (/rgba?\(([^)]*)\)/.exec(text)?.[1] ?? '').split(/[\s,/]+/).filter((part) => part !== '').map(Number);
+  const [r = 0, g = 0, b = 0, a = 1] = numbers;
+  return [r, g, b, a];
+}
+function parseLayers(boxShadow: string): Layer[] {
+  if (boxShadow === 'none') return [];
+  return boxShadow.split(/,\s*(?=rgba?\()/).map((layer) => {
+    const lengths = (layer.replace(/rgba?\([^)]*\)/, '').match(/-?\d+(\.\d+)?px/g) ?? []).map(parseFloat);
+    return { colour: parseColour(layer), inset: layer.includes('inset'), spread: lengths[3] ?? 0 };
+  });
+}
+function outermost(layers: Layer[]): Layer | undefined {
+  const outset = layers.filter((layer) => !layer.inset);
+  if (outset.length > 0) return outset.reduce((a, b) => (b.spread > a.spread ? b : a));
+  return layers.length === 0 ? undefined : layers.reduce((a, b) => (b.spread < a.spread ? b : a));
+}
+function over(top: Rgba, bottom: Rgba): Rgba {
+  const alpha = top[3] + bottom[3] * (1 - top[3]);
+  if (alpha === 0) return [0, 0, 0, 0];
+  const mix = (index: 0 | 1 | 2) => (top[index] * top[3] + bottom[index] * bottom[3] * (1 - top[3])) / alpha;
+  return [mix(0), mix(1), mix(2), alpha];
+}
+function luminance([r, g, b]: Rgba): number {
+  const channel = (value: number) => {
+    const s = value / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+function contrast(a: Rgba, b: Rgba): number {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
+}
+function composite(nearestFirst: string[]): Rgba {
+  return nearestFirst.reduceRight<Rgba>((below, css) => over(parseColour(css), below), [255, 255, 255, 1]);
+}
+function hex([r, g, b]: Rgba): string {
+  return `#${[r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function settledShadow(locator: Locator): Promise<string> {
+  const read = async () => locator.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).boxShadow ?? 'none');
+  let settled = await read();
+  await expect
+    .poll(
+      async () => {
+        const first = await read();
+        await locator.page().waitForTimeout(400);
+        settled = await read();
+        return first === settled;
+      },
+      { message: 'the box-shadow is settled', timeout: 7000 },
+    )
+    .toBe(true);
+  return settled;
+}
+async function backdropsOf(locator: Locator, includeSelf: boolean): Promise<string[]> {
+  return locator.evaluate((element, self) => {
+    const view = element.ownerDocument.defaultView;
+    const backdrops: string[] = [];
+    for (let node = self ? element : element.parentElement; node; node = node.parentElement) backdrops.push(view?.getComputedStyle(node).backgroundColor ?? '');
+    return backdrops;
+  }, includeSelf);
+}
+/** Outer ring (outset) or edge ring (inset) against the adjacent surface(s); returns the lowest ratio and the description. */
+function ringRatio(boxShadow: string, surfaces: string[][], mode: 'outer' | 'inset' = 'outer'): { ratio: number; text: string } {
+  const layers = parseLayers(boxShadow);
+  const insetLayers = layers.filter((layer) => layer.inset && layer.spread > 0);
+  const ring = mode === 'inset' ? (insetLayers.length === 0 ? undefined : insetLayers.reduce((a, b) => (b.spread < a.spread ? b : a))) : outermost(layers);
+  if (ring === undefined || ring.spread <= 0) return { ratio: 0, text: `no ring (${boxShadow})` };
+  let lowest = Number.POSITIVE_INFINITY;
+  let shown = '';
+  for (const backdrops of surfaces) {
+    const surface = composite(backdrops);
+    const painted = over(ring.colour, over(surface, [255, 255, 255, 1]));
+    const ratio = contrast(painted, surface);
+    if (ratio < lowest) {
+      lowest = ratio;
+      shown = `${ring.inset ? 'inset' : 'outset'} ${ring.spread}px ${hex(painted)} on ${hex(surface)}`;
+    }
+  }
+  return { ratio: lowest, text: shown };
+}
+
+/* ---- world ------------------------------------------------------------------------------------ */
+const ME = 'Synthetic Keyboard User';
+const OWNER = 'Synthetic Sharing Owner';
+interface World {
+  me: Person;
+  owner: Person;
+  complete: string;
+}
+async function newWorld(adminSeed: SeedClient, server: BuiltServer, options: { mutual?: boolean } = {}): Promise<World> {
+  const me = await newPerson(adminSeed, server, { displayName: ME, signature: 'none' });
+  const owner = await newPerson(adminSeed, server, { displayName: OWNER, signature: 'none' });
+  const [complete = '', unconfirmed = ''] = await me.api.displayedPeriodFreeWorkdays();
+  expect(complete, 'a past free workday').not.toBe('');
+  await me.api.seedCompleteDay(complete);
+  if (unconfirmed !== '') await me.api.seedUnconfirmedBreaksDay(unconfirmed);
+  const [ownerDay = ''] = await owner.api.displayedPeriodFreeWorkdays();
+  if (ownerDay !== '') await owner.api.seedCompleteDay(ownerDay);
+  const items = { timesheets: 'view', ot_read: false, pdf_download: false };
+  await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items }, 201);
+  if (options.mutual === true) await me.api.call('POST', '/api/shares', { grantee_email: owner.account.email, items }, 201);
+  return { me, owner, complete };
+}
+
+/* ---- AX-01: Tab and Shift+Tab walks ---------------------------------------------------------- */
+interface Stop {
+  key: number;
+  name: string;
+  visible: number;
+  inside: boolean;
+  covers: string[];
+}
+async function focusedStop(page: Page, scope: string): Promise<Stop | null> {
+  return page.evaluate((scopeSelector) => {
+    const w = window as unknown as { walkKeys?: WeakMap<Element, number>; walkNext?: number };
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || active === document.body) return null;
+    w.walkKeys = w.walkKeys ?? new WeakMap();
+    let key = w.walkKeys.get(active);
+    if (key === undefined) {
+      w.walkNext = (w.walkNext ?? 0) + 1;
+      key = w.walkNext;
+      w.walkKeys.set(active, key);
+    }
+    const labels = active instanceof HTMLInputElement || active instanceof HTMLSelectElement ? [...(active.labels ?? [])] : [];
+    const rect = active.getBoundingClientRect();
+    let visible = 0;
+    const covers = new Set<string>();
+    for (let i = 0; i < 5; i += 1) {
+      for (let j = 0; j < 5; j += 1) {
+        const x = rect.left + 1 + ((rect.width - 2) * (i + 0.5)) / 5;
+        const y = rect.top + 1 + ((rect.height - 2) * (j + 0.5)) / 5;
+        if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) {
+          covers.add('outside the viewport');
+          continue;
+        }
+        const hit = document.elementFromPoint(x, y);
+        if (hit !== null && (active.contains(hit) || labels.some((label) => label.contains(hit)))) visible += 1;
+        else if (hit !== null) {
+          const cover = hit.closest('.shell-bar, .shell-tabs, .share-bar, .editor-head, dialog') ?? hit;
+          covers.add(`${cover.tagName.toLowerCase()}.${String(cover.className).split(' ')[0]}`);
+        }
+      }
+    }
+    const name = (active.getAttribute('aria-label') ?? active.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    return { key, name: `${active.tagName.toLowerCase()} "${name}"`, visible, covers: [...covers], inside: active.closest(scopeSelector) !== null };
+  }, scope);
+}
+async function focusEdge(page: Page, scope: string, which: 'first' | 'last'): Promise<void> {
+  const found = await page.evaluate(
+    ([scopeSelector, edge]) => {
+      const root = document.querySelector(scopeSelector as string);
+      const candidates = root === null ? [] : [...root.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])')];
+      const visibleOnes = candidates.filter((element) => element.getClientRects().length > 0);
+      const target = edge === 'first' ? visibleOnes[0] : visibleOnes.at(-1);
+      if (target === undefined) return false;
+      target.focus();
+      return document.activeElement === target;
+    },
+    [scope, which],
+  );
+  expect(found, `a focusable control in ${scope}`).toBe(true);
+}
+async function walk(page: Page, scope: string, label: string, direction: 'forward' | 'backward'): Promise<{ stops: number; hidden: string[]; minVisible: number }> {
+  await focusEdge(page, scope, direction === 'forward' ? 'first' : 'last');
+  const seen = new Set<number>();
+  const hidden: string[] = [];
+  let minVisible = 25;
+  let last: number | undefined;
+  let repeats = 0;
+  const key = direction === 'forward' ? 'Tab' : 'Shift+Tab';
+  for (let index = 0; index < 200; index += 1) {
+    const stop = await focusedStop(page, scope);
+    if (stop === null || !stop.inside) break;
+    if (stop.key === last && repeats < 6) {
+      repeats += 1;
+    } else {
+      if (stop.key !== last && seen.has(stop.key)) break;
+      repeats = 0;
+      last = stop.key;
+      seen.add(stop.key);
+      minVisible = Math.min(minVisible, stop.visible);
+      if (stop.visible === 0) hidden.push(`${label} ${direction}: ${stop.name} under ${stop.covers.join(', ')}`);
+    }
+    await page.keyboard.press(key);
+  }
+  return { stops: seen.size, hidden, minVisible };
+}
+
+async function barGeometry(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const rect = (selector: string) => {
+      const element = document.querySelector(selector);
+      if (element === null) return null;
+      const box = element.getBoundingClientRect();
+      return { top: Math.round(box.top * 10) / 10, bottom: Math.round(box.bottom * 10) / 10, position: getComputedStyle(element).position };
+    };
+    return JSON.stringify({ shell: rect('.shell-bar'), share: rect('.share-bar,[data-share-bar]'), scrollY: window.scrollY });
+  });
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`AX-01 walks, ${colorScheme}`, async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+    test.setTimeout(600_000);
+    const project = testInfo.project.name;
+    const sizes = project === 'mobile' ? [{ width: 390, height: 844 }, { width: 320, height: 640 }] : [{ width: 1280, height: 800 }, { width: 768, height: 1024 }];
+    const world = await newWorld(adminSeed, builtServer);
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await signInPageAs(world.me.account, '#/timesheet');
+    for (const size of sizes) {
+      await page.keyboard.press('Escape');
+      await page.setViewportSize(size);
+      await page.goto('/#/timesheet');
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const results: Array<{ name: string; dir: string; r: Awaited<ReturnType<typeof walk>> }> = [];
+      const run = async (name: string, scope: string) => {
+        for (const dir of ['forward', 'backward'] as const) {
+          await page.evaluate('window.scrollTo(0, 0)');
+          results.push({ name, dir, r: await walk(page, scope, `${size.width} ${colorScheme} ${name}`, dir) });
+        }
+      };
+      await run('Timesheet', 'body');
+      await page.goto('/#/settings');
+      await expect(page.locator('[data-settings="sharing"]')).toBeVisible();
+      await run('Settings', 'body');
+      await page.goto(`/#/shared/${world.owner.account.id}`);
+      await expect(page.locator('[data-share-bar]')).toBeVisible();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await page.evaluate('window.scrollTo(0, 0)');
+      note('obs-ax01.txt', `${project} ${colorScheme} ${size.width}: share bar geometry at top ${await barGeometry(page)}`);
+      await page.evaluate('window.scrollTo(0, 300)');
+      await page.waitForTimeout(200);
+      note('obs-ax01.txt', `${project} ${colorScheme} ${size.width}: share bar geometry scrolled ${await barGeometry(page)}`);
+      const geometry = JSON.parse(await barGeometry(page)) as { shell: { bottom: number } | null; share: { top: number; position: string } | null };
+      // Sticky share bar (desktop): it must stay below the shell bar while scrolled; a static one scrolls away.
+      if (geometry.shell !== null && geometry.share !== null && geometry.share.position === 'sticky') expect(geometry.share.top, 'sticky share bar below the shell bar').toBeGreaterThanOrEqual(geometry.shell.bottom - 0.5);
+      await page.evaluate('window.scrollTo(0, 0)');
+      const atTop = JSON.parse(await barGeometry(page)) as { shell: { bottom: number } | null; share: { top: number } | null };
+      if (atTop.shell !== null && atTop.share !== null) expect(atTop.share.top, 'share bar below the shell bar at the top').toBeGreaterThanOrEqual(atTop.shell.bottom - 0.5);
+      await run('Shared view', 'body');
+      await page.goto('/#/timesheet');
+      await page.locator(`[data-day="${world.complete}"] :is(.d-time, .t-time)`).click();
+      const editor = page.locator(`dialog[data-day-editor="${world.complete}"]`);
+      await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
+      await run('Day editor', `dialog[data-day-editor="${world.complete}"]`);
+      let total = 0;
+      let hiddenAll: string[] = [];
+      let min = 25;
+      for (const { name, dir, r } of results) {
+        note('obs-ax01.txt', `${project} ${colorScheme} ${size.width} ${name} ${dir}: stops ${r.stops}, hidden ${r.hidden.length}, min visible sample points ${r.minVisible}/25`);
+        total += r.stops;
+        hiddenAll = hiddenAll.concat(r.hidden);
+        min = Math.min(min, r.minVisible);
+        expect(r.stops, `${name} ${dir} reached several stops`).toBeGreaterThan(5);
+      }
+      note('obs-ax01.txt', `${project} ${colorScheme} ${size.width} TOTAL stops ${total}, hidden ${hiddenAll.length}, min visible ${min}/25 ${hiddenAll.join(' | ')}`);
+      expect(hiddenAll).toEqual([]);
+      // Screenshot: Shift+Tab stop clear of the bar (phone 390, light).
+      if (project === 'mobile' && size.width === 390 && colorScheme === 'light') {
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+        await page.goto('/#/timesheet');
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        await focusEdge(page, 'body', 'last');
+        for (let i = 0; i < 12; i += 1) await page.keyboard.press('Shift+Tab');
+        await page.waitForTimeout(500);
+        await page.screenshot({ path: screenshotPath(`regate5-shift-tab-stop-w390-light-synthetic.png`), animations: 'disabled' });
+      }
+    }
+  });
+}
+
+/* ---- AX-02, AX-03, AX-04, R-12: focus rings --------------------------------------------------- */
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`AX-02/03/04/R-12 rings, ${colorScheme}`, async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+    test.setTimeout(240_000);
+    const project = testInfo.project.name;
+    const world = await newWorld(adminSeed, builtServer);
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await signInPageAs(world.me.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const lines: string[] = [];
+    const check = (name: string, result: { ratio: number; text: string }) => {
+      lines.push(`${project} ${colorScheme} ${name}: ${result.text} = ${result.ratio.toFixed(2)}:1`);
+      expect(result.ratio, `${name} ring at least 3:1 (${result.text})`).toBeGreaterThanOrEqual(3);
+    };
+
+    // AX-02: label list and its active option, opened and moved by keys.
+    const trigger = page.locator('[data-label-picker] button').first();
+    await trigger.scrollIntoViewIfNeeded();
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    const list = page.getByRole('listbox');
+    await expect(list).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    expect(await list.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
+    check('label list', ringRatio(await settledShadow(list), [await backdropsOf(list, false)]));
+    const active = list.locator('.label-option.active');
+    await expect(active).toHaveCount(1);
+    check('active label option (inset)', ringRatio(await settledShadow(active), [await backdropsOf(active, true), await backdropsOf(active, false)], 'inset'));
+    if (project === 'desktop') await page.screenshot({ path: screenshotPath(`regate5-label-picker-active-${colorScheme}-synthetic.png`), animations: 'disabled' });
+    await page.keyboard.press('Escape');
+    await expect(trigger).toBeFocused();
+
+    // AX-03: the day editor dialog as the keyboard stop (scrolling container), Shift+Tab from Close.
+    await page.locator(`[data-day="${world.complete}"] :is(.d-time, .t-time)`).click();
+    const editor = page.locator(`dialog[data-day-editor="${world.complete}"]`);
+    await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
+    lines.push(`${project} ${colorScheme} editor scrolls: ${await editor.evaluate((element) => element.scrollHeight > element.clientHeight)}`);
+    await editor.getByRole('button', { name: 'Close', exact: true }).focus();
+    await page.keyboard.press('Shift+Tab');
+    const editorIsStop = await editor.evaluate((element) => element === element.ownerDocument.activeElement && element.matches(':focus-visible'));
+    lines.push(`${project} ${colorScheme} day editor dialog is the keyboard stop: ${editorIsStop}`);
+    if (editorIsStop) {
+      check('day editor dialog (inset)', ringRatio(await settledShadow(editor), [await backdropsOf(editor, true)], 'inset'));
+      if (colorScheme === 'light') await page.screenshot({ path: screenshotPath(`regate5-editor-dialog-ring-${project}-light-synthetic.png`), animations: 'disabled' });
+    }
+    expect(editorIsStop).toBe(true);
+
+    // R-12 on desktop: a time field in the editor reached by Shift+Tab.
+    if (project === 'desktop') {
+      const time = editor.locator('input[type="time"]').first();
+      if ((await time.count()) > 0 && (await time.isVisible())) {
+        await time.focus();
+        for (let i = 0; i < 6; i += 1) {
+          await page.keyboard.press('Tab');
+          if (!(await time.evaluate((element) => element.matches(':focus-within')))) break;
+        }
+        await page.keyboard.press('Shift+Tab');
+        const within = await time.evaluate((element) => element.matches(':focus-within'));
+        lines.push(`${project} ${colorScheme} time field focus-within after Shift+Tab: ${within}`);
+        expect(within).toBe(true);
+        check('time field after Shift+Tab', ringRatio(await settledShadow(time), [await backdropsOf(time, false)]));
+      } else {
+        lines.push(`${project} ${colorScheme} time field: none visible in the editor`);
+      }
+    }
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+
+    // AX-04 (pressed toggles) and R-12 (date field) on the sheet.
+    for (const name of ['Show details', 'Change several days']) {
+      const toggle = page.getByRole('button', { name, exact: true });
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+      await page.mouse.move(0, 0);
+      await toggle.evaluate((element) => element.blur());
+      const pressedOnly = await settledShadow(toggle);
+      await page.keyboard.press('Shift');
+      await toggle.focus();
+      const focused = await settledShadow(toggle);
+      lines.push(`${project} ${colorScheme} ${name} pressed only: ${pressedOnly}; pressed+focus: ${focused}`);
+      expect(focused).not.toBe(pressedOnly);
+      check(`pressed toggle ${name}`, ringRatio(focused, [await backdropsOf(toggle, false)]));
+      if (project === 'desktop' && colorScheme === 'light' && name === 'Change several days') await page.screenshot({ path: screenshotPath('regate5-pressed-toggle-focus-light-synthetic.png'), animations: 'disabled' });
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    }
+    if (project === 'desktop') {
+      const field = page.getByLabel('Open a day');
+      await page.getByRole('button', { name: 'Show details', exact: true }).focus();
+      await page.keyboard.press('Shift+Tab');
+      await expect(field).toBeFocused();
+      check('date field after Shift+Tab', ringRatio(await settledShadow(field), [await backdropsOf(field, false)]));
+    }
+    for (const line of lines) note('obs-rings.txt', line);
+  });
+}
+
+/* ---- AX-05: names ---------------------------------------------------------------------------- */
+test('AX-05 names', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(120_000);
+  const project = testInfo.project.name;
+  const world = await newWorld(adminSeed, builtServer);
+  const check = async (verb: 'Edit' | 'View', where: string) => {
+    const days = page.locator('[data-day]');
+    await expect(days).toHaveCount(14);
+    const dates = await days.evaluateAll((elements) => elements.map((element) => element.getAttribute('data-day') ?? ''));
+    let ok = 0;
+    const samples: string[] = [];
+    for (const date of dates) {
+      const button = dayButton(page, date);
+      await expect(button).toHaveCount(1);
+      const visible = (await button.innerText()).replace(/\s+/g, ' ').trim();
+      const name = (await button.getAttribute('aria-label')) ?? '';
+      await expect(button).toHaveAccessibleName(`${verb} ${visible} (${date})`);
+      await expect(button).toHaveAccessibleName(dayButtonName(verb, date));
+      expect(name === '' || name.includes(visible)).toBe(true);
+      ok += 1;
+      if (samples.length < 2) samples.push(`"${verb} ${visible} (${date})"`);
+    }
+    note('obs-ax05.txt', `${project} ${where} ${verb}: ${ok}/14 day buttons contain visible text and the ISO date; e.g. ${samples.join(', ')}`);
+  };
+  await signInPageAs(world.me.account, '#/timesheet');
+  await check('Edit', 'own sheet');
+  await page.goto(`/#/shared/${world.owner.account.id}`);
+  await expect(page.locator('[data-share-bar]')).toBeVisible();
+  await check('View', 'shared view (view-only)');
+  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+  if (await more.isVisible()) await more.click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  await signInPageAs(world.owner.account, '#/settings');
+  const end = page.getByRole('list', { name: 'Shares I gave' }).getByRole('button', { name: `End share with ${ME}`, exact: true });
+  await expect(end).toBeVisible();
+  note('obs-ax05.txt', `${project} sharing row button: visible text ${JSON.stringify((await end.innerText()).trim())}, accessible name "End share with ${ME}"`);
+});
+
+/* ---- AX-06: switcher ------------------------------------------------------------------------- */
+test('AX-06 switcher', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(120_000);
+  const project = testInfo.project.name;
+  const world = await newWorld(adminSeed, builtServer);
+  const ownerId = world.owner.account.id;
+  const writes: string[] = [];
+  if (project === 'mobile') await page.setViewportSize({ width: 320, height: 640 });
+  await signInPageAs(world.me.account, '#/timesheet');
+  await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+  page.on('request', (request) => {
+    if (request.method() !== 'GET') writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+  });
+  const select = page.getByRole('combobox', { name: 'Shared with me' });
+  const open = page.getByRole('form', { name: 'Shared with me' }).getByRole('button', { name: 'Open', exact: true });
+  await select.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(select).toHaveValue(ownerId);
+  await page.waitForTimeout(600);
+  const urlAfterChoice = page.url().split('#')[1] ?? '';
+  note('obs-ax06.txt', `${project}: after ArrowDown the choice is the owner, URL hash "${urlAfterChoice}", heading Timesheet visible: ${await page.getByRole('heading', { name: 'Timesheet', exact: true }).isVisible()}, share bar count ${await page.locator('[data-share-bar]').count()}`);
+  await expect(page).toHaveURL(/#\/timesheet$/);
+  await expect(page.locator('[data-share-bar]')).toHaveCount(0);
+  if (project === 'mobile') await page.screenshot({ path: screenshotPath('regate5-switcher-open-w320-synthetic.png'), animations: 'disabled' });
+  await page.keyboard.press('Tab');
+  await expect(open).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(new RegExp(`#/shared/${ownerId}`));
+  await expect(page.locator('[data-share-bar]')).toBeVisible();
+  note('obs-ax06.txt', `${project}: Open navigated to #/shared/<owner id>; share bar visible; heading "${await page.getByRole('heading', { level: 1 }).first().innerText()}"`);
+  // owner-only controls stay hidden in the shared view
+  const hiddenControls: string[] = [];
+  for (const name of ['Clock in', 'Clock out', 'Change several days', 'Open day', 'Preview changes', 'Select all', 'Clear']) {
+    const count = await page.getByRole('button', { name, exact: true }).count();
+    if (count !== 0) hiddenControls.push(`${name}:${count}`);
+  }
+  const checkboxes = await page.getByRole('checkbox').count();
+  const picker = await page.locator('[data-label-picker]').count();
+  note('obs-ax06.txt', `${project}: owner-only controls present in shared view: ${hiddenControls.length === 0 ? 'none' : hiddenControls.join(',')}; checkboxes ${checkboxes}; label pickers ${picker}`);
+  expect(hiddenControls).toEqual([]);
+  expect(checkboxes).toBe(0);
+  expect(picker).toBe(0);
+  note('obs-ax06.txt', `${project}: non-GET requests during the walk: ${JSON.stringify(writes)}`);
+  expect(writes).toEqual([]);
+});
+
+/* ---- AX-07: alerts and status ---------------------------------------------------------------- */
+test('AX-07 alerts and status', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(120_000);
+  const project = testInfo.project.name;
+  await page.goto('/');
+  await page.getByLabel('Email').fill(builtServer.credentials.employee.email.replace(/^.*@/, 'nobody@'));
+  await page.getByLabel('Password').fill('wrong-synthetic-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  const alert = page.getByRole('alert');
+  await expect(alert).toHaveText('Email or password is incorrect');
+  note('obs-ax07.txt', `${project}: wrong password -> role=alert element text "${await alert.innerText()}" (count ${await alert.count()})`);
+
+  const world = await newWorld(adminSeed, builtServer, { mutual: true });
+  await signInPageAs(world.me.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.route('**/api/clock/in', (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'internal_error', message: 'Synthetic failure for the probe' } }) }));
+  await page.getByRole('button', { name: 'Clock in' }).click();
+  const tsAlert = page.locator('main [role="alert"], [role="alert"]').first();
+  await expect(tsAlert).toBeVisible();
+  note('obs-ax07.txt', `${project}: Timesheet action failure -> role=alert text ${JSON.stringify((await tsAlert.innerText()).slice(0, 80))}; class ${await tsAlert.getAttribute('class')}`);
+  await page.unroute('**/api/clock/in');
+
+  // Status notices: the share grant form and the change step.
+  await page.goto('/#/settings');
+  const form = page.getByRole('form', { name: 'Share my timesheets' });
+  await form.getByRole('radio', { name: 'None' }).check();
+  const status = form.getByRole('status');
+  await expect(status).toHaveText('Turn on at least one shared item.');
+  note('obs-ax07.txt', `${project}: share grant form notice role=status text ${JSON.stringify(await status.innerText())}`);
+
+  const given = page.getByRole('list', { name: 'Shares I gave' });
+  await given.getByRole('button', { name: /^Change items shared with / }).click();
+  const group = given.getByRole('group', { name: /^Change items shared with / });
+  await expect(group).toBeVisible();
+  for (const radio of await group.getByRole('radio', { name: 'None' }).all()) await radio.check();
+  const checks = group.getByRole('checkbox');
+  for (const box of await checks.all()) if (await box.isChecked()) await box.uncheck();
+  const rowStatus = group.getByRole('status');
+  const count = await rowStatus.count();
+  note('obs-ax07.txt', `${project}: sharing change step with every item off -> role=status count ${count}${count > 0 ? ` text ${JSON.stringify(await rowStatus.first().innerText())}` : ''}`);
+  expect(count).toBeGreaterThan(0);
+
+  // Administrator: new user password notice.
+  const adminCreds = builtServer.credentials.admin;
+  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+  if (await more.isVisible()) await more.click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  await signInPageAs(adminCreds, '#/admin');
+  const pw = page.locator('input[type="password"][autocomplete="new-password"]').first();
+  if ((await pw.count()) > 0) {
+    await pw.fill('short');
+    const notice = page.locator('p.notice[role="status"]').first();
+    await expect(notice).toBeVisible();
+    note('obs-ax07.txt', `${project}: admin new-user password notice role=status text ${JSON.stringify((await notice.innerText()).slice(0, 80))}`);
+  } else {
+    note('obs-ax07.txt', `${project}: admin new-user form not found at #/admin`);
+  }
+});
+
+/* ---- AX-09 ---------------------------------------------------------------------------------- */
+test('AX-09 Complete text contrast, light', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  const project = testInfo.project.name;
+  const world = await newWorld(adminSeed, builtServer);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signInPageAs(world.me.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const measure = async (label: string) => {
+    const status = page.locator(`[data-day="${world.complete}"] .status-complete`).first();
+    await expect(status).toHaveText(/Complete/);
+    await page.waitForTimeout(800); // the shared transition (300 ms) must have finished before the backdrop is read
+    const rendered = await status.evaluate((element) => {
+      const view = element.ownerDocument.defaultView;
+      const chain = [element];
+      for (let node = element.parentElement; node; node = node.parentElement) chain.push(node);
+      return { colour: view?.getComputedStyle(element).color ?? '', backdrops: chain.map((node) => view?.getComputedStyle(node).backgroundColor ?? '') };
+    });
+    const background = composite(rendered.backdrops);
+    const ratio = contrast(over(parseColour(rendered.colour), background), background);
+    note('obs-ax09.txt', `${project} light ${label} row: "Complete" ${rendered.colour} on ${hex(background)} = ${ratio.toFixed(2)}:1`);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+  };
+  await measure('normal');
+  await page.getByRole('button', { name: 'Change several days' }).click();
+  await page.getByRole('checkbox', { name: `Select ${world.complete}` }).check();
+  await measure('selected');
+});
+
+/* ---- AX-10 ---------------------------------------------------------------------------------- */
+test.describe('AX-10 phone', () => {
+  test.skip(({ isMobile }) => !isMobile, 'phone only');
+  for (const size of [{ width: 390, height: 844 }, { width: 320, height: 640 }]) {
+    test(`batch mode at ${size.width}`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+      test.setTimeout(120_000);
+      const world = await newWorld(adminSeed, builtServer);
+      await page.setViewportSize(size);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await signInPageAs(world.me.account, '#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await page.getByRole('button', { name: 'Change several days' }).click();
+      await expect(page.getByRole('group', { name: 'Batch category edit' })).toBeVisible();
+      const result = await page.evaluate(() => {
+        const rows = [...document.querySelectorAll('tr.sheet-row[data-day]')].map((row) => {
+          const box = (selector: string) => {
+            const rect = row.querySelector(selector)?.getBoundingClientRect();
+            return rect === undefined ? null : { left: rect.left, right: rect.right, width: rect.width, height: rect.height };
+          };
+          return { day: row.getAttribute('data-day'), button: box('button.sheet-day-button'), cell: box('td.t-day'), label: box('td.t-label'), pick: box('label.pick') };
+        });
+        const small = [...document.querySelectorAll('main button, main a[href], main input:not([type="hidden"]), main select, main label.pick')]
+          .filter((element) => (element as HTMLElement).getClientRects().length > 0)
+          .map((element) => ({ tag: element.tagName.toLowerCase(), text: (element.getAttribute('aria-label') ?? element.textContent ?? '').trim().slice(0, 30), w: element.getBoundingClientRect().width, h: element.getBoundingClientRect().height }))
+          .filter((item) => item.w < 43.5 || item.h < 43.5);
+        return { rows, small, scroll: document.documentElement.scrollWidth, inner: window.innerWidth, count: document.querySelectorAll('main button, main a[href], main input, main select').length };
+      });
+      const problems: string[] = [];
+      for (const { day, button, cell, label, pick } of result.rows) {
+        if (button === null || cell === null || label === null || pick === null) {
+          problems.push(`${day}: missing part`);
+          continue;
+        }
+        if (button.right > cell.right + 0.5) problems.push(`${day}: button ${(button.right - cell.right).toFixed(1)}px outside its cell`);
+        if (button.right > label.left + 0.5) problems.push(`${day}: button ${(button.right - label.left).toFixed(1)}px over the label cell`);
+        if (pick.width < 44 || pick.height < 44) problems.push(`${day}: selection target ${pick.width}x${pick.height}`);
+      }
+      note('obs-ax10.txt', `${size.width}px batch mode: rows ${result.rows.length}, problems ${problems.length}, scrollWidth ${result.scroll} vs innerWidth ${result.inner}, controls ${result.count}, targets under 44x44: ${result.small.length} ${JSON.stringify(result.small.slice(0, 6))}`);
+      expect(problems).toEqual([]);
+      expect(result.scroll).toBeLessThanOrEqual(result.inner);
+      expect(result.rows).toHaveLength(14);
+      if (size.width === 320) await page.screenshot({ path: screenshotPath('regate5-batch-mode-w320-synthetic.png'), animations: 'disabled' });
+    });
+  }
+});

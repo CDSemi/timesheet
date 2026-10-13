@@ -197,3 +197,11 @@ Attempt 2: STOPPED, no commit, no push. Index left staged (393 paths).
   audit does not have decision PASS (the B6 audit is FIX REQUIRED per the commit message; the validator wants a PASS audit for the dependency).
   Not an allowed fix; coordinator must correct the board.
 - Evidence: handoff/delivery/evidence/WP5-UX-FIX8-FREEZE/checks-attempt2.txt (unstaged).
+
+Attempt 3: COMMITTED and PUSHED.
+
+- Pre-HEAD = origin/main = bf954c0b371ad9a5fe461a603c5d476ea210e66c; commit/post-HEAD = remote = 255ba17d6bf891c0ff779d4a4f518e0d2998cee8; branch main; no tag.
+- Digest before add and ls-tree digest of new HEAD both b07727b2f95b4e202e9e0dc391512b051b288218ceb3e2ffe93f0f1c14a95abe.
+- Staged 393 (2 source, 391 handoff incl. this brief as of before attempt 3 results). No fixes applied.
+- Exit codes: precommit 0; diff check 0; JSON 0; validate_orchestration 0; check_recovery 0 (106 probes); preflight 0; commit 0; dry-run 0; push 0.
+- Evidence (unstaged): checks-attempt3.txt, commit-message.txt in evidence/WP5-UX-FIX8-FREEZE/.

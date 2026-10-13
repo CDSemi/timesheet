@@ -1,0 +1,34 @@
+// WP5-UX-AUDIT-A7: why isolation.spec.ts fails at this hour. Records, for a fresh synthetic person and for the
+// seeded employee of the harness, what /api/periods/current reports (today, the in-progress and the current =
+// displayed period with its due time), the date the isolation spec's seedOwner() takes (pastFreeWorkdays()[0])
+// and the dates of the period the Timesheet page displays first. Read-only (no write). Synthetic data only.
+import { expect, newPerson, test } from '../export/tests/e2e/fixtures.ts';
+import { writeResult } from './common.ts';
+
+test('periods now: the isolation spec seed date versus the displayed period (255ba17)', async ({ page, adminSeed, builtServer, employeeSeed }: any) => {
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Period Probe', signature: 'none' });
+  const periods = await employeeSeed.call('GET', '/api/periods/current');
+  const pastFree = await employeeSeed.pastFreeWorkdays();
+  const displayedFree = await employeeSeed.displayedPeriodFreeWorkdays();
+  const sheet = await employeeSeed.call('GET', `/api/timesheets/${periods.current.payroll_date}`);
+  await page.goto('/#/timesheet');
+  await page.getByLabel('Email').fill(person.account.email);
+  await page.getByLabel('Password').fill(person.account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const shown: string[] = await page.locator('[data-day]').evaluateAll((rows: any[]) => rows.map((row) => row.getAttribute('data-day')));
+  const result = {
+    now_utc: new Date().toISOString(),
+    today_local: periods.today_local,
+    reporting_zone: periods.reporting_zone,
+    in_progress: periods.in_progress,
+    current: periods.current,
+    current_due: { due_local_date: sheet.period?.due_local_date, due_local_time: sheet.period?.due_local_time, due_at_utc: sheet.period?.due_at_utc },
+    seedOwner_date_pastFreeWorkdays_0: pastFree[0] ?? null,
+    pastFreeWorkdays: pastFree,
+    displayedPeriodFreeWorkdays: displayedFree,
+    page_first_and_last_day: [shown[0], shown.at(-1)],
+    seed_date_shown_on_page: shown.includes(pastFree[0] ?? ''),
+  };
+  writeResult('periods7-255ba17.json', result);
+});

@@ -1,0 +1,80 @@
+// WP5-UX-AUDIT-A7 delta probe (scope 1): what FIX8's stylesheet hunk changes in the built app. For a person with
+// a received edit share (own view and the shared view) and a person without one, at 1280, 1024, 768 and 767 px
+// (desktop context) and 390, 375, 360 and 320 px (phone context), the probe records the computed layout facts of
+// the shell bar, the brand, the "Shared with me" form, its label, select and Open, the share bar, the scroll
+// padding with the measured --shell-bar-size, the first day row and the tab bar. The same probe runs on the
+// 255ba17 build and the bf954c0 build; compare7.mjs lists every fact that differs. Synthetic data only.
+import { writeResult } from './common.ts';
+
+export function registerCss7Probe(fx: any, build: string): void {
+  const { test, expect, newPerson } = fx;
+  test.use({ locale: 'en-US' });
+
+  test(`computed layout of the shell bar, the switcher and the share bar per width (${build})`, async ({ page, browser, adminSeed, builtServer }: any, testInfo: any) => {
+    test.setTimeout(600_000);
+    page.setDefaultTimeout(15_000);
+    const mobile = (testInfo.project.use as any).isMobile === true;
+    const sizes = mobile
+      ? [{ width: 390, height: 844 }, { width: 375, height: 812 }, { width: 360, height: 800 }, { width: 320, height: 640 }]
+      : [{ width: 1280, height: 800 }, { width: 1024, height: 800 }, { width: 768, height: 1024 }, { width: 767, height: 1024 }];
+    const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Css Grantee', signature: 'none' });
+    const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Css Owner', signature: 'none' });
+    const loner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Css Loner', signature: 'none' });
+    await owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'edit', ot_read: false, pdf_download: false } }, 201);
+
+    const facts = async (p: any) =>
+      p.evaluate(`(() => {
+        const r1 = (n) => Math.round(n * 10) / 10;
+        const box = (el) => { if (el === null) return null; const r = el.getBoundingClientRect(); return { x: r1(r.x), y: r1(r.y), w: r1(r.width), h: r1(r.height) }; };
+        const cs = (el, props) => { if (el === null) return null; const s = getComputedStyle(el); const o = {}; for (const k of props) o[k] = s.getPropertyValue(k); return o; };
+        const q = (s) => document.querySelector(s);
+        window.scrollTo(0, 0);
+        return {
+          width: window.innerWidth,
+          html: { scrollPaddingTop: getComputedStyle(document.documentElement).scrollPaddingTop, scrollPaddingBottom: getComputedStyle(document.documentElement).scrollPaddingBottom, shellBarSizeInline: document.documentElement.style.getPropertyValue('--shell-bar-size'), shareBarSizeInline: document.documentElement.style.getPropertyValue('--share-bar-size') },
+          shellBar: { box: box(q('.shell-bar')), css: cs(q('.shell-bar'), ['position', 'top', 'z-index', 'display', 'flex-wrap', 'column-gap', 'row-gap', 'min-height', 'padding-top', 'padding-bottom', 'visibility', 'overflow']) },
+          brand: box(q('.shell-brand')),
+          switcher: { box: box(q('.shell-switcher')), css: cs(q('.shell-switcher'), ['display', 'flex-grow', 'flex-shrink', 'flex-basis', 'visibility', 'opacity', 'pointer-events', 'position', 'z-index', 'overflow']) },
+          label: { box: box(q('.shell-switcher label')), css: cs(q('.shell-switcher label'), ['padding-top', 'padding-bottom', 'display', 'visibility']) },
+          labelText: { box: box(q('.shell-switcher label .muted')), css: cs(q('.shell-switcher label .muted'), ['font-size', 'visibility', 'display']), text: q('.shell-switcher label .muted') === null ? null : q('.shell-switcher label .muted').textContent },
+          select: box(q('.shell-switcher select')),
+          open: box(q('.shell-switcher button[type="submit"]')),
+          shareBar: { box: box(q('[data-share-bar]')), css: cs(q('[data-share-bar]'), ['position', 'top', 'z-index']) },
+          firstDayRow: box(q('[data-day]')),
+          days: document.querySelectorAll('[data-day]').length,
+          tabBar: box(q('.shell-tabs')),
+          zoneNote: document.querySelectorAll('[data-zone-note]').length,
+          scrollWidth: document.documentElement.scrollWidth,
+        };
+      })()`);
+
+    const rows: any[] = [];
+    const use = testInfo.project.use as any;
+    for (const [who, person] of [['grantee', grantee], ['no share', loner]] as const) {
+      const context = await browser.newContext({ baseURL: builtServer.origin, timezoneId: use.timezoneId, locale: 'en-US', viewport: sizes[0], isMobile: use.isMobile ?? false, hasTouch: use.hasTouch ?? false, deviceScaleFactor: use.deviceScaleFactor ?? 1, reducedMotion: 'reduce' });
+      const p = await context.newPage();
+      p.setDefaultTimeout(15_000);
+      await p.goto('/#/timesheet');
+      await p.getByLabel('Email').fill(person.account.email);
+      await p.getByLabel('Password').fill(person.account.password);
+      await p.getByRole('button', { name: 'Sign in' }).click();
+      await expect(p.locator('[data-day]')).toHaveCount(14);
+      for (const size of sizes) {
+        await p.setViewportSize(size);
+        await p.evaluate("window.location.hash = '#/timesheet'");
+        await expect(p.locator('[data-day]')).toHaveCount(14);
+        await p.waitForTimeout(400);
+        rows.push({ who, view: 'own', size, ...(await facts(p)) });
+        if (who === 'grantee') {
+          await p.evaluate(`window.location.hash = '#/shared/${owner.account.id}'`);
+          await expect(p.locator('[data-share-bar]')).toBeVisible();
+          await expect(p.locator('[data-day]')).toHaveCount(14);
+          await p.waitForTimeout(400);
+          rows.push({ who, view: 'shared', size, ...(await facts(p)) });
+        }
+      }
+      await context.close();
+    }
+    writeResult(`css7-${build}-${testInfo.project.name}.json`, { build, project: testInfo.project.name, zone: use.timezoneId, rows });
+  });
+}

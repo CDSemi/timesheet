@@ -1,0 +1,44 @@
+// Compact text summary of the P2 switcher probe JSON. Usage: node sum-p2.mjs <json>...
+import { readFileSync } from 'node:fs';
+
+const brief = (f) => {
+  if (f === undefined || f === null) return 'n/a';
+  if (f.switcher !== true) return `viewport ${f.viewport} root ${f.rootFont} bar h=${f.bar?.h} var=${f.barSizeVar} switcher=${f.switcher} sideways=${f.sideways} (scrollWidth ${f.scrollWidth}/${f.innerWidth})`;
+  const targets = f.targets.filter((t) => !t.ok).map((t) => `${t.name} ${t.w}x${t.h}`);
+  return [
+    `viewport ${f.viewport} layout ${f.clientWidth} scale ${f.visualScale} root ${f.rootFont}`,
+    `bar h=${f.bar.h} var=${f.barSizeVar} ${f.switcherRow}`,
+    `label "${f.labelText}" ${f.labelFont} lines=${f.labelTextLines} visible=${f.labelTextVisible} inViewport=${f.labelTextInsideViewport} overlapsSelect=${f.labelTextOverlapsSelect} pad=${f.labelPadding} label box ${f.label.w}x${f.label.h}`,
+    `label contrast ${f.labelContrast?.ratio} (${f.labelContrast?.fg} on ${f.labelContrast?.bg} from ${f.labelContrast?.bgFrom})`,
+    `select ${f.select.w}x${f.select.h} x=${f.select.x}..${f.select.right} min=${f.selectMinWidth} content=${f.selectContentWidth} chosen "${f.chosen}" text=${f.chosenTextWidth} fits(-20)=${f.chosenFits} value contrast ${f.selectValueContrast?.ratio}`,
+    `options ${f.optionWidths.map((o) => `"${o.text}" ${o.width}`).join(', ')}`,
+    `open ${f.open.w}x${f.open.h} x=${f.open.x}..${f.open.right} insideBar=${f.openInsideBar} hit=${JSON.stringify(f.openHit)} selectOverlapsOpen=${f.selectOverlapsOpen}`,
+    `targets<44: ${targets.length === 0 ? 'none' : targets.join('; ')}`,
+    `sideways=${f.sideways} (scrollWidth ${f.scrollWidth}/${f.innerWidth}) bar elements outside viewport=${f.elementsOutsideViewport}`,
+    `styles ${JSON.stringify(f.styles)}`,
+  ].join('\n      ');
+};
+
+for (const file of process.argv.slice(2)) {
+  const rows = JSON.parse(readFileSync(file, 'utf8'));
+  console.log(`# ${file.replace(/^.*[\\/]/, '')}`);
+  for (const r of rows) {
+    console.log(`== ${r.who} | ${r.theme} | ${r.size}`);
+    console.log(`   own Timesheet: ${brief(r.facts)}`);
+    if (r.ariaSnapshot !== undefined) {
+      console.log(`   aria: ${r.ariaSnapshot.replace(/\n/g, ' / ')}`);
+      console.log(`   combobox with exact name "Shared with me": ${r.comboboxByExactName}`);
+      console.log(`   AX-06 keys: ${r.ax06Keys.map((k) => `${k.key}->${k.hash} value=${k.value === '' ? '(mine)' : 'owner'} bar=${k.shareBar} focus=${k.activeIsSelect}`).join('; ')}`);
+      console.log(`   AX-06 non-GET requests during keys: ${r.ax06Writes.length === 0 ? 'none' : r.ax06Writes.join(', ')}`);
+      console.log(`   Tab from select lands on: ${r.tabFromSelectLandsOn}; Enter -> ${r.openByEnter.hash.replace(/[0-9a-f-]{36}/, '{owner}')} shareBar=${r.openByEnter.shareBar} writes=${r.openByEnter.writes.length}`);
+      console.log(`   hit before pointer Open: ${JSON.stringify(r.hitBeforeTap)}`);
+      console.log(`   pointer/touch Open: error=${r.openByPointer.tapError} ${r.openByPointer.hashBeforeOpen} -> ${r.openByPointer.hash.replace(/[0-9a-f-]{36}/, '{owner}')} shareBar=${r.openByPointer.shareBar}`);
+      console.log(`   shared view: ${brief(r.sharedViewFacts)}`);
+      console.log(`   shared view Open centre hit: ${r.sharedViewHit}; owner-only controls in shared view: ${r.ownerOnlyControlsInSharedView}`);
+      console.log(`   200% page zoom: ${brief(r.pageZoom200)}`);
+      console.log(`   200% text: ${brief(r.text200)}`);
+      const fs = r.text200FirstScreen;
+      console.log(`   200% text first screen: bar ${fs.shellBar} var ${fs.shellBarSizeVar} sideways=${fs.sideways}`);
+    }
+  }
+}

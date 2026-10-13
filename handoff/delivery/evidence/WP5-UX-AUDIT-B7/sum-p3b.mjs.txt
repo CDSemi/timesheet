@@ -1,0 +1,13 @@
+// Rendered ring summary (P3b). Usage: node sum-p3b.mjs <json>...
+import { readFileSync } from 'node:fs';
+
+for (const file of process.argv.slice(2)) {
+  const rows = JSON.parse(readFileSync(file, 'utf8'));
+  console.log(`# ${file.replace(/^.*[\\/]/, '')}`);
+  console.log('theme | size | view | control | reached by Tab | box | per side: changed samples / best ring contrast against the unfocused pixel');
+  for (const r of rows) {
+    const sides = r.sides === undefined ? 'n/a' : Object.entries(r.sides).map(([side, v]) => `${side} ${v.changedSamples}/${v.bestRingContrastAgainstUnfocused}`).join(', ');
+    const box = r.box === undefined ? '-' : `${Math.round(r.box.x)},${Math.round(r.box.y)} ${Math.round(r.box.width)}x${Math.round(r.box.height)}`;
+    console.log([r.theme, r.size, r.view, r.target, r.reached, box, sides].join(' | '));
+  }
+}

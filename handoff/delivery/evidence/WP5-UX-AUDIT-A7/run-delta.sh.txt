@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# FIX8 delta probes, sequentially: the period facts (why isolation.spec.ts fails now), the computed layout per
+# width, the switcher by keyboard/touch/pointer and the sticky/keyboard-walk probe, on 255ba17 then on bf954c0.
+T=<task>
+P="--project m390-la --project m390-note --project m320-la --project m320-note"
+bash $T/run-probe.sh d255 $T/raw/40-d255-periods.txt periods7 --project wide
+bash $T/run-probe.sh d255 $T/raw/41-d255-css.txt css7 --project wide --project m390-la
+bash $T/run-probe.sh dbf9 $T/raw/41-dbf9-css.txt css7 --project wide --project m390-la
+bash $T/run-probe.sh d255 $T/raw/42-d255-switcher.txt switcher7 $P
+bash $T/run-probe.sh dbf9 $T/raw/42-dbf9-switcher.txt switcher7 $P
+bash $T/run-probe.sh d255 $T/raw/43-d255-sticky.txt sticky7 $P
+bash $T/run-probe.sh dbf9 $T/raw/43-dbf9-sticky.txt sticky7 $P
+echo done > $T/raw/delta-done.txt

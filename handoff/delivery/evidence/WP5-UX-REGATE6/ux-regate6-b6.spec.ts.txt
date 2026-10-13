@@ -1,0 +1,164 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX-REGATE6 probe (scratch, never committed): B6-01 first screen in four states at 390x844 (and 375, 360, 320
+ * for information), and the "Shared with me" switcher at 390 and 320. Built server, synthetic data, real events.
+ */
+const OUT = process.env.UXREGATE_OUT ?? '';
+function note(file: string, line: string): void {
+  if (OUT !== '') appendFileSync(join(OUT, file), `${line}\n`);
+}
+test.use({ locale: 'en-US', actionTimeout: 15_000 });
+test.skip(({ isMobile }) => !isMobile, 'phone project only');
+
+const ZONES = [
+  ['zone note shown', 'Asia/Ho_Chi_Minh'],
+  ['zone note hidden', 'America/Los_Angeles'],
+] as const;
+const SIZES = [
+  { width: 390, height: 844 },
+  { width: 375, height: 812 },
+  { width: 360, height: 800 },
+  { width: 320, height: 640 },
+];
+
+async function measure(page: Page): Promise<{ firstBottom: number; tabsTop: number; barHeight: number; barBottom: number; scrollY: number; note: number; scrollW: number; innerW: number; wraps: number }> {
+  return page.evaluate(() => {
+    const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect();
+    const first = box('[data-day]');
+    const tabs = box('.shell-tabs');
+    const bar = box('.shell-bar');
+    return {
+      firstBottom: Math.round((first?.bottom ?? -1) * 100) / 100,
+      tabsTop: Math.round((tabs?.top ?? -1) * 100) / 100,
+      barHeight: Math.round((bar?.height ?? -1) * 100) / 100,
+      barBottom: Math.round((bar?.bottom ?? -1) * 100) / 100,
+      scrollY: window.scrollY,
+      note: document.querySelectorAll('[data-zone-note]').length,
+      scrollW: document.documentElement.scrollWidth,
+      innerW: window.innerWidth,
+      wraps: 0,
+    };
+  });
+}
+
+for (const [situation, zone] of ZONES) {
+  test.describe(situation, () => {
+    test.use({ timezoneId: zone });
+    for (const colorScheme of ['light', 'dark'] as const) {
+      for (const label of ['no received share', 'received share'] as const) {
+        test(`B6-01 ${situation} ${label} ${colorScheme}`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+          test.setTimeout(240_000);
+          const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee', signature: 'none' });
+          if (label === 'received share') {
+            const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner', signature: 'none' });
+            await owner.api.call('POST', '/api/shares', { grantee_email: person.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+          }
+          await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+          await page.setViewportSize({ width: 390, height: 844 });
+          await signInPageAs(person.account, '#/timesheet');
+          await expect(page.locator('[data-day]')).toHaveCount(14);
+          expect(await page.locator('.shell-switcher').count(), 'switcher presence').toBe(label === 'received share' ? 1 : 0);
+          for (const size of SIZES) {
+            await page.setViewportSize(size);
+            await page.goto('/#/timesheet');
+            await expect(page.locator('[data-day]')).toHaveCount(14);
+            await page.evaluate('window.scrollTo(0, 0)');
+            await page.waitForTimeout(400);
+            const m = await measure(page);
+            const ok = m.firstBottom <= m.tabsTop + 0.5;
+            note('obs-b6.txt', `${colorScheme} ${situation} (${zone}) ${label} ${size.width}x${size.height}: zone notes ${m.note}, shell bar height ${m.barHeight} (bottom ${m.barBottom}), first [data-day] bottom ${m.firstBottom}, tab bar top ${m.tabsTop}, margin ${(m.tabsTop - m.firstBottom).toFixed(2)}, at or above tab bar ${ok}, scrollY ${m.scrollY}, scrollWidth ${m.scrollW} vs innerWidth ${m.innerW}`);
+            if (size.width === 390) {
+              expect(m.note, 'zone note presence').toBe(situation === 'zone note shown' ? 1 : 0);
+              expect(ok, `${label} ${situation} ${colorScheme}: first row at or above the tab bar`).toBe(true);
+              expect(m.barHeight, 'compact shell bar').toBeLessThanOrEqual(60);
+              expect(m.scrollW).toBeLessThanOrEqual(m.innerW);
+              if (colorScheme === 'light') {
+                await page.screenshot({ path: screenshotPath(`regate6-b6-${label.replace(/ /g, '-')}-${situation.replace(/ /g, '-')}-390x844-synthetic.png`), animations: 'disabled' });
+              }
+            }
+          }
+        });
+      }
+    }
+  });
+}
+
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`switcher at 390 and 320, ${colorScheme}`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+    test.setTimeout(240_000);
+    const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Keyboard User', signature: 'none' });
+    const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Sharing Owner', signature: 'none' });
+    await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await signInPageAs(me.account, '#/timesheet');
+    const writes: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() !== 'GET') writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    });
+    for (const size of [{ width: 390, height: 844 }, { width: 320, height: 640 }]) {
+      const tag = `${colorScheme} ${size.width}`;
+      await page.setViewportSize(size);
+      await page.goto('/#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const select = page.getByRole('combobox', { name: 'Shared with me' });
+      const form = page.getByRole('form', { name: 'Shared with me' });
+      const open = form.getByRole('button', { name: 'Open', exact: true });
+      await expect(select).toBeVisible();
+      const label = page.locator('.shell-switcher label').first();
+      await expect(label).toBeVisible();
+      const labelText = (await label.innerText()).replace(/\s+/g, ' ').trim();
+      const snapshot = await select.ariaSnapshot();
+      const labelBox = await label.boundingBox();
+      const labelFont = await label.locator('.muted').first().evaluate((element) => getComputedStyle(element).fontSize).catch(() => 'n/a');
+      const sBox = await select.boundingBox();
+      const oBox = await open.boundingBox();
+      const barBox = await page.locator('.shell-bar').boundingBox();
+      note('obs-switcher.txt', `${tag}: visible label "${labelText}" (${labelBox?.width.toFixed(1)}x${labelBox?.height.toFixed(1)}, label font ${labelFont}); aria snapshot ${snapshot.replace(/\s+/g, ' ')}; select ${sBox?.width.toFixed(1)}x${sBox?.height.toFixed(1)}; Open ${oBox?.width.toFixed(1)}x${oBox?.height.toFixed(1)}; shell bar height ${barBox?.height.toFixed(1)}`);
+      expect(labelText).toContain('Shared with me');
+      expect(snapshot).toContain('Shared with me');
+      expect(sBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+      expect(oBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+      // keyboard: changing the choice does not navigate
+      await select.focus();
+      await page.keyboard.press('ArrowDown');
+      await expect(select).toHaveValue(owner.account.id);
+      await page.waitForTimeout(600);
+      const hash = page.url().split('#')[1] ?? '';
+      const shareBars = await page.locator('[data-share-bar]').count();
+      note('obs-switcher.txt', `${tag}: ArrowDown set the choice; URL hash "${hash.replace(owner.account.id, '<owner id>')}"; share bars ${shareBars}; non-GET requests ${writes.length}`);
+      expect(hash).toBe('/timesheet');
+      expect(shareBars).toBe(0);
+      if (size.width === 320 && colorScheme === 'light') await page.screenshot({ path: screenshotPath('regate6-switcher-choice-320-synthetic.png'), animations: 'disabled' });
+      // keyboard: Open navigates
+      await page.keyboard.press('Tab');
+      await expect(open).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(new RegExp(`#/shared/${owner.account.id}`));
+      await expect(page.locator('[data-share-bar]')).toBeVisible();
+      const hiddenControls: string[] = [];
+      for (const name of ['Clock in', 'Clock out', 'Change several days', 'Open day', 'Preview changes', 'Select all', 'Clear']) {
+        if ((await page.getByRole('button', { name, exact: true }).count()) !== 0) hiddenControls.push(name);
+      }
+      note('obs-switcher.txt', `${tag}: Open by keyboard navigated to the shared view; owner-only controls present ${hiddenControls.length === 0 ? 'none' : hiddenControls.join(',')}; checkboxes ${await page.getByRole('checkbox').count()}; label pickers ${await page.locator('[data-label-picker]').count()}`);
+      expect(hiddenControls).toEqual([]);
+      // touch: tap Open navigates
+      await page.goto('/#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await expect(page).toHaveURL(/#\/timesheet$/);
+      await select.selectOption(owner.account.id);
+      await page.waitForTimeout(400);
+      expect(page.url().split('#')[1]).toBe('/timesheet');
+      await open.tap();
+      await expect(page).toHaveURL(new RegExp(`#/shared/${owner.account.id}`));
+      await expect(page.locator('[data-share-bar]')).toBeVisible();
+      note('obs-switcher.txt', `${tag}: Open by touch (tap) navigated to the shared view`);
+    }
+    expect(writes).toEqual([]);
+    note('obs-switcher.txt', `${colorScheme}: non-GET requests during the checks ${JSON.stringify(writes)}`);
+  });
+}

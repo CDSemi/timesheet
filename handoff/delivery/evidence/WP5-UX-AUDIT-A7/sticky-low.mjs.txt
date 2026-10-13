@@ -1,0 +1,16 @@
+// Lists every focus check of the sticky7 probe with fewer than 25 visible sample points (partly covered after the
+// programmatic focus), per build, project and share state, so the lowest counts can be explained; and the per-file
+// totals. Usage: node sticky-low.mjs <probe-results-dir>
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+for (const name of readdirSync(dir).filter((n) => n.startsWith('sticky7-')).sort()) {
+  const r = JSON.parse(readFileSync(join(dir, name), 'utf8'));
+  const checks = r.results.filter((x) => typeof x.visibleSamples === 'number');
+  const low = checks.filter((x) => x.visibleSamples < 25);
+  const trials = r.results.filter((x) => x.position === 'trial-click');
+  const taps = r.results.filter((x) => x.position === 'trial-tap');
+  console.log(`${name}: checks ${checks.length}, below 25 samples ${low.length}, zero samples ${checks.filter((x) => x.visibleSamples === 0).length}, not focused ${checks.filter((x) => !x.focused).length}, centre not hit ${checks.filter((x) => !x.centreHit).length}; pointer trials ${trials.length} (fail ${trials.filter((x) => x.trial !== 'ok').length}), touch trials ${taps.length} (fail ${taps.filter((x) => x.trial !== 'ok').length}); walks ${r.walks.map((w) => `${w.scenario} ${w.stops} stops, hidden ${w.hidden}, centre-miss ${w.notCentre}, min ${w.minSamples}`).join('; ')}`);
+  for (const x of low) console.log(`    ${x.scenario} / ${x.name} / ${x.position}: samples ${x.visibleSamples}, centre ${x.centreHit}, covers ${JSON.stringify(x.covers)}, box ${JSON.stringify(x.box)}`);
+}

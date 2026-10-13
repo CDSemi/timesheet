@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Reference builds for comparison: clean exports of bf954c0 (before FIX8, area A PASS by A6) and 014bd47
+# (accepted WP5 snapshot, body baseline), npm ci, build.
+source <task>/env.sh
+for pair in "exbf9 bf954c0b371ad9a5fe461a603c5d476ea210e66c" "ex014 014bd47"; do
+  set -- $pair
+  dir="$1"; rev="$2"
+  out="$T/raw/20-$dir-build.txt"
+  {
+    echo "== $dir = git archive $rev"
+    cd "$REPO" || exit 2
+    echo "commit $(git rev-parse $rev)"
+    mkdir -p "$T/$dir"
+    git archive "$rev" | tar -x -C "$T/$dir"
+    echo "archive exit ${PIPESTATUS[0]} tar exit ${PIPESTATUS[1]}"
+    cd "$T/$dir" || exit 2
+    echo '$ npm ci'; npmr ci; echo "exit $?"
+    echo '$ npm run build'; npmr run build; echo "exit $?"
+  } > "$out" 2>&1
+done
+echo done > "$T/raw/ref-done.txt"

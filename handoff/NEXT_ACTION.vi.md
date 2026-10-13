@@ -20,9 +20,13 @@
   trong một vòng (freeze ở bf954c0, digest b7c011d2); WP5-UX-REGATE5 PASS; kiểm tra lại
   phần A WP5-UX-AUDIT-A6 PASS; kiểm tra lại phần B WP5-UX-AUDIT-B6 xác nhận đã đóng mọi
   mục trợ năng và tìm thêm một lỗi bố cục mức Low, WP5-UX-B6-01 (màn hình đầu trên điện
-  thoại khi có timesheet được chia sẻ và ghi chú múi giờ). WP5-UX-FIX8 đã sửa (là báo
-  cáo; digest b07727b2). Hiện tại: freeze, WP5-UX-REGATE6, kiểm lại phần thay đổi B7 và
-  A7, rồi nghiệm thu lại WP5.
+  thoại khi có timesheet được chia sẻ và ghi chú múi giờ). WP5-UX-FIX8 đã sửa (freeze ở
+  255ba17, digest b07727b2); WP5-UX-REGATE6 PASS; hai lần kiểm lại phần thay đổi B7 và A7
+  xác nhận bản sửa đạt và không đổi hành vi phần A, nhưng cùng tìm ra một lỗi chỉ ở test
+  (WP5-UX-B7-01 = A7-01: spec cách ly và spec khung app tạo dữ liệu vào ngày nằm ngoài kỳ
+  đang hiển thị trong 4 ngày kết thúc ở mỗi ngày trả lương). WP5-UX-FIX9 đã sửa test (là báo cáo;
+  digest 58b0deee). Hiện tại: freeze, WP5-UX-REGATE7, kiểm lại phần thay đổi B8 và A8, rồi
+  nghiệm thu lại WP5.
 
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
 Xem [STATE](delivery/STATE.json), [bảng task](delivery/ORCHESTRATION.json),

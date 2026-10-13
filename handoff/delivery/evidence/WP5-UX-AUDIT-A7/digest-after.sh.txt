@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Digest at the end: the clean export re-hashed (unchanged by the checks), ls-tree of 255ba17, HEAD and origin/main,
+# npm run digest in the repository, and no change outside handoff/.
+set -u
+source <task>/env.sh
+RC=255ba17d6bf891c0ff779d4a4f518e0d2998cee8
+OUT="$T/raw/00-digest-after.txt"
+{
+echo "== digest AFTER (last commands of the audit)"
+date -u +%Y-%m-%dT%H:%M:%SZ
+cd "$REPO" || exit 2
+echo "HEAD=$(git rev-parse HEAD) origin/main=$(git rev-parse origin/main)"
+echo "git log --oneline 255ba17..HEAD:"
+git log --oneline $RC..HEAD
+echo "(end)"
+echo "non-handoff paths differing 255ba17 -> HEAD:"
+git diff --name-only $RC HEAD -- . ':(exclude)handoff'
+echo "(end)"
+git ls-tree -r --format='%(path) %(objectname)' $RC | grep -v '^handoff/' | LC_ALL=C sort > "$T/raw/lstree-rc-after.txt"
+git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort > "$T/raw/lstree-head-after.txt"
+echo "ls-tree files outside handoff/: $(wc -l < "$T/raw/lstree-rc-after.txt")"
+echo "ls-tree digest at 255ba17: $(sha256sum < "$T/raw/lstree-rc-after.txt")"
+echo "ls-tree digest of HEAD: $(sha256sum < "$T/raw/lstree-head-after.txt")"
+echo "npm run digest (working tree):"
+npmr run digest --silent
+echo "exit $?"
+echo "git status --short outside handoff/ (expected empty):"
+git status --short -- . ':(exclude)handoff'
+echo "(end)"
+echo "clean export of 255ba17 re-hashed after all checks (node_modules, dist, test output excluded):"
+bash "$T/exdigest.sh" "$T/export" "$T/raw/exdigest-after"
+diff "$T/raw/exdigest-after-sorted.txt" "$T/raw/exdigest-before-sorted.txt" > "$T/raw/exdigest-after-vs-before.diff"
+echo "export after vs before: diff exit $? ($(wc -c < "$T/raw/exdigest-after-vs-before.diff") bytes)"
+} > "$OUT" 2>&1
+echo done
