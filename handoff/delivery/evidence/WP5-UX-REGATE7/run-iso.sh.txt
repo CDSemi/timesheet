@@ -1,0 +1,11 @@
+. <task>/env.sh
+cd $T/export
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+rm -f $T/out/11-iso-shell.txt
+for i in 1 2 3; do
+  for p in desktop mobile; do
+    npx playwright test tests/e2e/isolation.spec.ts tests/e2e/shell.spec.ts --project=$p --output=$T/pw/iso-$p-$i > $T/out/11-iso-$p-$i.txt 2>&1
+    echo "run $i $p exit $? : $(grep -E '^\s+[0-9]+ (passed|skipped|failed)' $T/out/11-iso-$p-$i.txt | tr '\n' ' ') deprecation=$(grep -ci deprecat $T/out/11-iso-$p-$i.txt)" >> $T/out/11-iso-shell.txt
+  done
+done
+cat $T/out/11-iso-shell.txt

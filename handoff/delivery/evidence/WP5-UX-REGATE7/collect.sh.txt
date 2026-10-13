@@ -1,0 +1,10 @@
+. <task>/env.sh
+E=<repo>/handoff/delivery/evidence/WP5-UX-REGATE7
+cd $T/out
+for f in *.txt; do
+  case "$f" in ex-files.txt|ex-hashes.txt|ex-sorted.txt|lstree-sorted.txt|keys-list.txt|51-*-files.txt|09-keys-print.txt|15-wsl-status.txt) continue;; esac
+  node $T/mask.mjs "$T/out/$f" "$E/$f"
+done
+for s in env.sh exdigest.sh keys.sh cfg.sh run-iso.sh run-drill.sh cmpdist.sh collect.sh; do node $T/mask.mjs "$T/$s" "$E/$s.txt"; done
+for s in run-tz.mjs mask.mjs contrast5.mjs tzprobe.mjs tzchild.mjs zone.mjs; do node $T/mask.mjs "$T/$s" "$E/$s.txt"; done
+ls $E | wc -l

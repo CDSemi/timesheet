@@ -1,0 +1,38 @@
+diff --git a/tests/e2e/fixtures.ts b/tests/e2e/fixtures.ts
+index 611c0ed..fdb292b 100644
+--- a/tests/e2e/fixtures.ts
++++ b/tests/e2e/fixtures.ts
+@@ -10,0 +11 @@ import { syntheticSignaturePng } from '../../src/server/seed.ts';
++import { displayedPeriodSeedDay } from './displayedSeed.ts';
+@@ -427,0 +429,11 @@ export class SeedClient {
++  /**
++   * The newest past normal workday without a session in the period the app displays first: the
++   * seed for a spec that then looks for that day on the page. Fails with a clear message when the
++   * displayed period has none (for example every past workday is a holiday); it never reaches into another period.
++   */
++  async displayedSeedDay(): Promise<string> {
++    const { todayLocal, currentPayrollDate } = await this.today();
++    const sheet = await this.call<TimesheetResponse>('GET', `/api/timesheets/${currentPayrollDate}`);
++    return displayedPeriodSeedDay(sheet.days, todayLocal, currentPayrollDate);
++  }
++
+diff --git a/tests/e2e/isolation.spec.ts b/tests/e2e/isolation.spec.ts
+index 1b271f2..4270d00 100644
+--- a/tests/e2e/isolation.spec.ts
++++ b/tests/e2e/isolation.spec.ts
+@@ -52,3 +52,2 @@ async function seedOwner(employee: SeedClient): Promise<Owner> {
+-  const [workDate] = await employee.pastFreeWorkdays();
+-  expect(workDate, 'a past free workday').toBeDefined();
+-  if (workDate === undefined) throw new Error('no free workday');
++  // A day of the period the page displays; pastFreeWorkdays() can return an in-progress period's day that is not on the page.
++  const workDate = await employee.displayedSeedDay();
+diff --git a/tests/e2e/shell.spec.ts b/tests/e2e/shell.spec.ts
+index 493f8d5..3c1ed99 100644
+--- a/tests/e2e/shell.spec.ts
++++ b/tests/e2e/shell.spec.ts
+@@ -68,3 +68,2 @@ test('the existing timesheet view works inside the shell', async ({ page, employ
+-  const [workDate] = await employeeSeed.pastFreeWorkdays();
+-  expect(workDate, 'a past workday with no session in the current periods').toBeDefined();
+-  if (workDate === undefined) return;
++  // A day of the period the page displays (it fails clearly when that period has no past free workday).
++  const workDate = await employeeSeed.displayedSeedDay();

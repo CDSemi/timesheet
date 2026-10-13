@@ -318,8 +318,20 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   `tests/domain/e2eSeedSelection.test.ts` (cách chọn cũ fail); 5 đường dẫn test; chạy spec
   3 lần đều pass trong khoảng ngày lỗi; toàn bộ e2e 210/0/26; unit 1827; verify 0; digest
   58b0deee.
-- Đang chạy: WP5-UX-FIX9-FREEZE (committer, HEAD mong đợi 255ba17). Sau đó
-  WP5-UX-REGATE7, kiểm lại phần thay đổi B8 và A8, rồi nghiệm thu lại WP5.
+- WP5-UX-FIX9-FREEZE xong: 3670a6c3c22ddcf75138927ed60f4cd9bf02078d trên main, đã push
+  (374 đường dẫn; digest 58b0deee; mọi kiểm tra exit 0).
+- WP5-UX-REGATE7 lần 1 NOT VERIFIED chỉ vì không kết nối được Docker engine (drill --wp3
+  không chạy được). Mọi mục khác đều đạt trên 3670a6c / 58b0deee: toàn bộ e2e 210/0/26
+  chạy trong khoảng ngày lỗi (2026-10-13 13:04 giờ Los Angeles), unit 1827, test chọn
+  ngày fail với cách chọn cũ, spec mới pass 3 lần, 230 file dist giống từng byte với
+  255ba17.
+- Board đã `blocked`, chờ chủ dự án làm WP5-UX-DOCKER (mở Docker Desktop). Chủ dự án trả
+  lời "tiếp tục nếu đang chạy dở" mà chưa xác nhận Docker; board về lại `running`. REGATE7
+  lần 2 (chỉ drill) dừng ở bước kiểm engine: client 28.5.1, thiếu pipe của Docker Desktop
+  Linux engine. Board lại `blocked` chờ WP5-UX-DOCKER. Đang chạy: checkpoint commit
+  WP5-UX-CKPT4 (chỉ handoff, digest 58b0deee). Khi chủ dự án mở Docker: REGATE7 lần 3,
+  chỉ chạy drill; rồi audit opus gộp WP5-UX-AUDIT-AB8 (phần A và B; brief đã soạn;
+  quyết định coordinator để tiết kiệm lượt dùng), rồi nghiệm thu lại WP5.
 - Tiếp theo: nếu cả hai PASS, nghiệm thu lại WP5 (cập nhật định danh pilot packet thành
   5e104e1 / 07c3ca00 / image 218dd7cc…, quyết định Q1 vào docs/10, STATE, NEXT_ACTION, WP5
   handoff, commit nghiệm thu).

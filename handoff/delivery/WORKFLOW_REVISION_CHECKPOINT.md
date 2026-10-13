@@ -310,8 +310,20 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   `displayedSeedDay()`; new deterministic test `tests/domain/e2eSeedSelection.test.ts`
   (the old choice fails it); 5 test paths; specs 3x pass in the window; full e2e
   210/0/26; unit 1827; verify 0; digest 58b0deee.
-- Running: WP5-UX-FIX9-FREEZE (committer, expected HEAD 255ba17). Then WP5-UX-REGATE7,
-  delta rechecks B8 and A8, then the WP5 re-accept.
+- WP5-UX-FIX9-FREEZE done: 3670a6c3c22ddcf75138927ed60f4cd9bf02078d on main, pushed (374
+  paths; digests 58b0deee; every check exit 0).
+- WP5-UX-REGATE7 attempt 1 NOT VERIFIED only because the Docker engine was unreachable
+  (drill --wp3 could not run). Everything else passed on 3670a6c / 58b0deee: full e2e
+  210/0/26 inside the seed-date window (2026-10-13 13:04 Los Angeles), unit 1827, seed
+  test fails on the old choice, new specs pass 3x, 230 dist files byte-identical to
+  255ba17.
+- Board was `blocked` on owner action WP5-UX-DOCKER (start Docker Desktop). The owner
+  replied "tiếp tục nếu đang chạy dở" without confirming Docker; board back to
+  `running`. REGATE7 attempt 2 (drill only) stopped at the engine check: client 28.5.1,
+  the Docker Desktop Linux engine pipe is missing. Board `blocked` again on
+  WP5-UX-DOCKER. Running: checkpoint commit WP5-UX-CKPT4 (handoff only, digest
+  58b0deee). After the owner starts Docker: REGATE7 attempt 3, the drill only; then the combined opus recheck WP5-UX-AUDIT-AB8 (areas
+  A and B; brief prepared; coordinator decision to save usage), then the WP5 re-accept.
 - Next: if both PASS, the WP5 re-accept (pilot packet identity refresh to 5e104e1 /
   07c3ca00 / image 218dd7cc…, docs/10 owner decision Q1, STATE, NEXT_ACTION, WP5
   handoff, accept commit).

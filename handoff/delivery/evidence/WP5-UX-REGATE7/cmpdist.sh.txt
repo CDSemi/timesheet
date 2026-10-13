@@ -1,0 +1,14 @@
+. <task>/env.sh
+cd $T/export
+npm run build > $T/out/50-new-build.txt 2>&1; echo "new build exit $?"
+for d in export-old export; do
+  cd $T/$d
+  find dist -type f | LC_ALL=C sort > $T/out/51-$d-files.txt
+  rm -f $T/out/51-$d-hashes.txt
+  while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)" >> $T/out/51-$d-hashes.txt; done < $T/out/51-$d-files.txt
+  echo "$d: $(wc -l < $T/out/51-$d-files.txt) files"
+done
+cmp $T/out/51-export-old-hashes.txt $T/out/51-export-hashes.txt && echo "dist IDENTICAL (all files, byte for byte by sha256)"
+grep -c "dist/client" $T/out/51-export-hashes.txt
+grep -c "dist/server" $T/out/51-export-hashes.txt
+grep "dist/client/assets" $T/out/51-export-hashes.txt

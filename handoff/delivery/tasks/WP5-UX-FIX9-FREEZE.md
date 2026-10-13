@@ -174,4 +174,19 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+Attempt 1, timesheet-committer (claude-sonnet-5-5): DONE.
+
+- Pre-HEAD = origin/main = 255ba17d6bf891c0ff779d4a4f518e0d2998cee8; no extra commits.
+- Post-HEAD = commit 3670a6c3c22ddcf75138927ed60f4cd9bf02078d on main; pushed; remote
+  SHA 3670a6c3c22ddcf75138927ed60f4cd9bf02078d; no tag.
+- Digests: working tree before add and HEAD ls-tree after commit both
+  58b0deee5d0169f0211740de34953517500576baa2fd914d5a26059d5ba1dffd.
+- Staged 374: tests 5; evidence folders 354; other handoff files 15.
+- Other modified tracked handoff files: none (REGATE5, AUDIT-A6, AUDIT-B6 not modified).
+- Checks (exit): node v24.21.0 (0); digest (0); precommit PASS 374 files (0);
+  diff --cached --check (0); JSON parse (0); validate_orchestration (0);
+  check_recovery 106 probes (0); validate_package --preflight (0); push dry-run (0).
+- Fixes: none. Process note: one stray trivial `node -e` call with output sent to the
+  null device was made by mistake after the precommit step; it had no effect on files.
+- Evidence: handoff/delivery/evidence/WP5-UX-FIX9-FREEZE/checks.txt and commit-message.txt
+  (unstaged).
