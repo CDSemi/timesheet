@@ -2,6 +2,85 @@
 
 Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
+## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
+
+- Điểm xuất phát: WP5 đã nghiệm thu lại trên 90b98ef / 57e2974c (WP5-UX-AUDIT-AB9 PASS);
+  commit board cuối là aa3a7a0 (WP5-UX-ACCEPT). Mục cập nhật bên dưới ghi các bản ghi
+  coordinator chưa commit sau commit đó; một tra cứu chỉ đọc (OWNER-RESEED) được thêm vào
+  board ngày 2026-10-14 trước vòng này.
+- Chủ dự án yêu cầu sáu thay đổi trên trang Timesheet (nguyên văn ở `owner_decisions` trên
+  board): tô sáng cả cột của ngày đang mở trong Day editor; kiểu chọn nhẹ nhàng nhưng dễ
+  nhận biết trong ô chọn Label; nút chuyển giao diện tối/sáng trên thanh điều hướng chính;
+  hover rõ hơn trên các nút bật/tắt; nút Today tường minh sau khi Open day hoặc chuyển kỳ;
+  Show details thành công tắc trượt.
+- Quyết định coordinator: vòng thay đổi UI lần 2 của WP5 (mã task WP5-UX2-*) trước khi
+  kích hoạt pilot, không tạo package mới; board `running`, `next_task_id` WP5-UX2-PLAN.
+- Phiên coordinator mới 11acfabe-25ef-48b5-ac28-73ce2d74ecee (suy từ đường dẫn
+  scratchpad); `coordinator_session_id` trên board và dòng resume trong NEXT_ACTION trỏ
+  tới phiên này.
+- Đang chạy: WP5-UX2-PLAN (planner, sonnet, chỉ đọc; brief
+  `handoff/delivery/tasks/WP5-UX2-PLAN.md`; mockup trong
+  `handoff/delivery/design/WP5-UX2/`). Bước 0 đối chiếu git (commit sau aa3a7a0, đường dẫn
+  chưa commit, digest).
+- Thứ tự dự kiến: kế hoạch → chỉ hỏi chủ dự án nếu kế hoạch nêu câu hỏi → commit
+  checkpoint chỉ gồm handoff WP5-UX2-CKPT → các phần việc WP5-UX2-T01.., mỗi phần một lần
+  đóng băng → gate cuối package (quét đồng hồ giả lập cho Today, drill) → audit opus mới →
+  nghiệm thu lại WP5 kèm cập nhật định danh pilot packet; docs/10 nhận mục WP5-UX-Q1/Q2
+  còn treo và yêu cầu này trong cùng vòng.
+- Xong WP5-UX2-PLAN (planner, tự báo claude-sonnet-5-5, chỉ đọc): bước 0 thấy HEAD =
+  origin/main = 834b9fc, một commit chỉ gồm handoff do chủ dự án tạo sau aa3a7a0, chứa các
+  bản ghi WP5-UX-ACCEPT; digest 57e2974c (795 file) không đổi từ đầu đến cuối. Kế hoạch
+  mục A-H, mockup và ba ảnh dựng tổng hợp trong `handoff/delivery/design/WP5-UX2/`. Không
+  đổi server/API/schema. Đo thêm ngoài yêu cầu: vạch Today ở đầu cột mà docs/04 dòng 46
+  hứa bị ô tiêu đề ngày (nền đặc) che mất (cũng làm hỏng viền chọn hàng loạt); một quy tắc
+  hover xoá mất kiểu "đang bật" của các nút bật/tắt.
+- Quyết định coordinator (board): gộp còn các phần T01 theme, T02 control (hover và trạng
+  thái bật, công tắc Show details, ô chọn Label), T03 tô cột đang sửa kèm sửa vạch Today,
+  T04 Today (sau khi chủ dự án trả lời), T05 tài liệu EN+VI, mỗi phần một lần đóng băng;
+  màu hover áp dụng toàn app; theme lưu theo thiết bị; Day editor đang mở đi theo Today
+  (mặc định F-2). Câu hỏi chủ dự án WP5-UX2-Q1 (đích của Today trong 5 ngày P-4..P;
+  coordinator khuyến nghị b, kỳ chứa ngày hôm nay) chỉ chặn T04.
+- Không commit checkpoint riêng: kế hoạch, mockup và các bản ghi vào commit đóng băng T01.
+- Đang chạy: WP5-UX2-T01 (worker-high, sonnet; nút Dark mode).
+- Chủ dự án trả lời WP5-UX2-Q1 (nguyên văn trên board): Today mở kỳ chứa hôm nay, thêm
+  một nút riêng quay về kỳ mà trang mở ra (R-07). Coordinator: tên hiển thị "Current
+  period" (khớp nhãn "current"); cả hai nút làm trong T04. Chạy song song với T01:
+  WP5-UX2-PLAN2 (cùng planner được resume, chỉ đọc, không build, không chạy app hay
+  trình duyệt) sửa lại B5 và thiết kế nút thứ hai, kèm phần thay đổi về test, tài liệu,
+  dòng T04 và mockup.
+- Xong WP5-UX2-PLAN2 (tự báo claude-sonnet-5-5, chỉ đọc): Today nhắm `in_progress` (đọc
+  lại khi bấm), editor đi theo; Current period nhắm `current`, chỉ hiện trong P-4..P khi
+  đã rời kỳ trang mở ra, chỉ chuyển kỳ; thứ tự Previous, Next, Today, Current period,
+  Review. Mockup HTML đã cập nhật (ảnh dựng có trước bản bổ sung). Cảnh báo: trong khoảng
+  đó, hàng nút trên điện thoại sẽ đẩy Review xuống dòng. Quyết định coordinator: một hàng
+  ở 390px trong mọi trạng thái (nếu cần, nhãn hiển thị gọn "Current" dưới 768px, tên trợ
+  năng "Current period"); T04 đo thật và dừng lại báo nếu không vừa.
+- Chủ dự án thêm ba yêu cầu (nguyên văn trên board, kèm logo): logo C&D thay chữ "C&D
+  CDsemi" (thêm "CDSemi" khi đủ chỗ); trên điện thoại đưa phần chấm công lên thanh header
+  và để Today, Current period, Review & sign off cùng một hàng ("Review & sign off" có thể
+  xuống hai dòng hoặc thành "Sign off"); đổi "Clock in/out" thành "Check in/out".
+  Coordinator: gộp vào vòng 2; logo dùng SVG vẽ lại từ ảnh (quy tắc privacy trước commit
+  chặn PNG); chữ "Current period" giữ đầy đủ. Chạy song song với T01: WP5-UX2-PLAN3 (cùng
+  planner được resume, chỉ đọc).
+- Xong WP5-UX2-T01 (worker-high, tự báo claude-sonnet-5-5; do người làm báo, chưa phải
+  bằng chứng độc lập): nút Dark mode, `/theme-init.js` chạy trước lần vẽ đầu (CSP không
+  đổi), token tối nằm trong media query và `[data-theme='dark']`; unit 1848; e2e đầy đủ
+  desktop 138/0/15, mobile 142/0/11; ngân sách màn hình 659/758/667/766 trên 788; verify
+  0; digest 44f5b6cc (802 file). Phát hiện R-UX2-1: `/theme-init.js` không có
+  Cache-Control (trình duyệt tự đoán thời gian cache cho file không có hash). Sơ suất: hai
+  lần chuyển hướng /dev/null, một heredoc ghi vào file test của chính nó.
+- Xong WP5-UX2-PLAN3 (chỉ đọc): logo `src/client/public/cd-logo.svg` (kiêm favicon), 36px,
+  chữ "CDSemi" từ 768px; phần chấm công lên header điện thoại trên mọi màn hình của chính
+  người dùng (ClockProvider), không có trong màn hình xem chia sẻ, desktop giữ thẻ cũ, ngân
+  sách 591/690/643/742; "Review & sign off" xuống hai dòng; đổi chữ chạm ba chuỗi thông báo
+  phía server. Coordinator: chấp nhận, gate kiểm diff dist/server chỉ gồm ba chuỗi đó. Các
+  phần cuối: T02 control, T03 tô cột, T04 Today và Current period, T05 logo, T06 đổi chữ,
+  T07 chấm công trên header điện thoại, T08 tài liệu.
+- Tiếp theo: WP5-UX2-T01-FREEZE (committer, chạy một mình), rồi brief T02.
+- Đang chưa commit (handoff, cộng source của T01): board, checkpoint này (+ en),
+  NEXT_ACTION (+ en), `next_role` trong STATE.json, bản ghi WP5-UX2-PLAN, PLAN2, PLAN3, T01
+  và T01-FREEZE, `handoff/delivery/design/WP5-UX2/` và bằng chứng T01.
+
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 
 - Chủ dự án yêu cầu UI đẹp, dễ dùng hơn; trang Timesheet bố cục giống bảng timesheet

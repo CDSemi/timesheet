@@ -9,7 +9,7 @@ export default defineConfig([
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
-        projectService: { allowDefaultProject: ['eslint.config.js', 'scripts/*.mjs'] },
+        projectService: { allowDefaultProject: ['eslint.config.js', 'scripts/*.mjs', 'src/client/public/theme-init.js'] },
         tsconfigRootDir: import.meta.dirname,
       },
     },

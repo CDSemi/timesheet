@@ -2,6 +2,85 @@
 
 Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
+## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
+
+- Starting point: WP5 re-accepted on 90b98ef / 57e2974c (WP5-UX-AUDIT-AB9 PASS); last
+  board commit aa3a7a0 (WP5-UX-ACCEPT). The earlier update below recorded uncommitted
+  coordinator records after that commit; one read-only lookup (OWNER-RESEED) was added
+  to the board on 2026-10-14 before this round.
+- The owner asked for six Timesheet-page changes (verbatim in the board
+  `owner_decisions`): highlight the whole column of the day open in the Day editor; a
+  lighter but recognisable selection in the Label picker; a dark/light theme toggle in
+  the main navigation; a clearer hover on toggle buttons; an explicit Today button after
+  Open day or period navigation; Show details as a slide toggle (switch).
+- Coordinator decision: WP5 UI change round 2 (task IDs WP5-UX2-*) before pilot
+  activation, no new package; board `running`, `next_task_id` WP5-UX2-PLAN.
+- New coordinator session 11acfabe-25ef-48b5-ac28-73ce2d74ecee (inferred from the
+  scratchpad path); the board's `coordinator_session_id` and the NEXT_ACTION resume line
+  point to it.
+- Running: WP5-UX2-PLAN (planner, sonnet, read-only; brief
+  `handoff/delivery/tasks/WP5-UX2-PLAN.md`; mockup under
+  `handoff/delivery/design/WP5-UX2/`). Step 0 reconciles git (commits after aa3a7a0,
+  uncommitted paths, digest).
+- Planned order: plan → owner questions only if the plan lists any → handoff-only
+  checkpoint commit WP5-UX2-CKPT → slices WP5-UX2-T01.. with a freeze each → package-final
+  gate (simulated-clock sweep for Today, drill) → fresh opus audit → WP5 re-accept with a
+  pilot-packet identity refresh; docs/10 receives the carried WP5-UX-Q1/Q2 entries and
+  this request in the same round.
+- WP5-UX2-PLAN done (planner, self-reported claude-sonnet-5-5, read-only): step 0 found
+  HEAD = origin/main = 834b9fc, a handoff-only commit by the owner after aa3a7a0 holding
+  the WP5-UX-ACCEPT records; digest 57e2974c (795 files) unchanged at start and end.
+  Plan sections A-H, mockup and three synthetic renders under
+  `handoff/delivery/design/WP5-UX2/`. No server/API/schema change. Measured beyond the
+  request: the docs/04 line 46 Today top bar is hidden by the opaque day head (also breaks
+  the batch ring); a hover rule erases the pressed look of toggles.
+- Coordinator decisions (board): slices consolidated to T01 theme, T02 controls (hover
+  and pressed, Show details switch, label picker), T03 editing column with the Today-bar
+  repair, T04 Today (after the owner's answer), T05 docs EN+VI, each with a freeze; the
+  hover fill applies app-wide; theme stored per device; an open Day editor follows Today
+  (F-2 default). Owner question WP5-UX2-Q1 (Today target in the 5 days P-4..P; the
+  coordinator recommends b, the period that contains today's date) blocks only T04.
+- No separate checkpoint commit: the plan, mockup and records go into the T01 freeze.
+- Running: WP5-UX2-T01 (worker-high, sonnet; Dark mode toggle).
+- Owner answered WP5-UX2-Q1 (verbatim on the board): Today opens the period that
+  contains today, plus a separate button back to the period the page opens on (R-07).
+  Coordinator: visible name "Current period" (matches the "current" badge); both buttons
+  in T04. Running in parallel with T01: WP5-UX2-PLAN2 (the same planner resumed,
+  read-only, no build, app or browser) revises B5 and designs the second button, with the
+  test, docs, T04-row and mockup deltas.
+- WP5-UX2-PLAN2 done (self-reported claude-sonnet-5-5, read-only): Today targets
+  `in_progress` (re-read on click), the editor follows; Current period targets `current`
+  and is rendered only in P-4..P away from the landing period, only navigates; order
+  Previous, Next, Today, Current period, Review. Mockup HTML updated (renders predate it).
+  Flag: in that window the phone row would wrap Review. Coordinator decision: one row at
+  390px in every state (compact visible label "Current" below 768px, accessible name
+  "Current period", if needed); T04 measures and stops if it cannot fit.
+- The owner added three requests (verbatim on the board, with the attached logo): the
+  C&D logo instead of the "C&D CDsemi" text (plus "CDSemi" where there is room); on
+  phones the clock controls in the top header bar and Today, Current period and Review &
+  sign off in one row ("Review & sign off" may wrap or become "Sign off"); "Clock in/out"
+  becomes "Check in/out". Coordinator: folded into round 2; the logo ships as a traced
+  SVG (the precommit privacy rule blocks PNG); the visible "Current period" stays full.
+  Running in parallel with T01: WP5-UX2-PLAN3 (the same planner resumed, read-only).
+- WP5-UX2-T01 done (worker-high, self-reported claude-sonnet-5-5; reported, not
+  independent proof): Dark mode toggle, `/theme-init.js` before first paint (CSP
+  unchanged), dark tokens under the media query and `[data-theme='dark']`; unit 1848; full
+  e2e desktop 138/0/15, mobile 142/0/11; budget 659/758/667/766 of 788; verify 0; digest
+  44f5b6cc (802 files). Finding R-UX2-1: `/theme-init.js` has no Cache-Control (heuristic
+  caching of an unhashed file). Slips: two /dev/null redirects, one heredoc into its own
+  test file.
+- WP5-UX2-PLAN3 done (read-only): logo `src/client/public/cd-logo.svg` (also favicon),
+  36px, "CDSemi" from 768px; phone header clock on every own screen (ClockProvider), none
+  in shared views, desktop card unchanged, budget 591/690/643/742; "Review & sign off" on
+  two lines; rename touches three server message literals. Coordinator: adopted, with a
+  dist/server diff limited to those literals at the gate. Final slices T02 controls, T03
+  editing column, T04 Today and Current period, T05 logo, T06 rename, T07 phone header
+  clock, T08 docs.
+- Next: WP5-UX2-T01-FREEZE (committer, alone), then the T02 brief.
+- Uncommitted now (handoff only, plus T01 source): the board, this checkpoint (+ vi),
+  NEXT_ACTION (+ vi), STATE.json `next_role`, the WP5-UX2-PLAN, PLAN2, PLAN3, T01 and
+  T01-FREEZE records, `handoff/delivery/design/WP5-UX2/` and the T01 evidence.
+
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 
 - The owner asked for a more beautiful, easier UI, with the Timesheet page laid out like

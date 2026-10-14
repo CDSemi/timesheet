@@ -1,4 +1,5 @@
-import { expect, screenshotPath, test } from './fixtures.ts';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
 
 /*
  * Shell smoke on both viewports: sign in, the app shell with its hash route, and the existing
@@ -39,6 +40,7 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
     await expect(more).toHaveAttribute('aria-expanded', 'true');
     await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings', 'Import']);
     await expect(nav.getByRole('button', { name: 'Sign out' })).toBeVisible();
+    await expect(nav.getByRole('button', { name: 'Dark mode', exact: true })).toBeVisible();
     await page.screenshot({ path: screenshotPath(`shell-more-${project}-synthetic.png`) });
     await page.keyboard.press('Escape');
     await expect(more).toHaveAttribute('aria-expanded', 'false');
@@ -53,7 +55,86 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
     // Desktop: the top bar lists the main screens (Import is a link inside Settings) and has Sign out.
     await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings']);
     await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
+    await expect(page.getByRole('banner').getByRole('button', { name: 'Dark mode', exact: true })).toBeVisible();
   }
+});
+
+test('the Dark mode toggle: first control of the top bar group on a desktop, between the entries and Sign out in More on a phone', async ({
+  page,
+  signInThroughUi,
+  isMobile,
+}) => {
+  await signInThroughUi();
+  await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+  if (isMobile) {
+    const nav = page.getByRole('navigation', { name: 'Main' });
+    await nav.getByRole('button', { name: 'More' }).click();
+    const panel = page.locator('#more-panel');
+    await expect(panel.getByRole('button')).toHaveText(['Dark mode', 'Sign out']);
+    const toggle = panel.getByRole('button', { name: 'Dark mode', exact: true });
+    await expect(toggle).toHaveAttribute('aria-pressed', /^(true|false)$/);
+    // The toggle sits after the last entry (Settings, Import) and before Sign out; a 44px target.
+    const toggleBox = await toggle.boundingBox();
+    const lastLink = await panel.getByRole('link').last().boundingBox();
+    const signOut = await panel.getByRole('button', { name: 'Sign out' }).boundingBox();
+    expect(toggleBox?.y ?? 0).toBeGreaterThan(lastLink?.y ?? Number.POSITIVE_INFINITY);
+    expect(toggleBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(signOut?.y ?? 0);
+    expect(toggleBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(toggleBox?.width ?? 0).toBeGreaterThanOrEqual(44);
+    // The compact phone top bar has no theme control.
+    await expect(page.locator('.shell-bar').getByRole('button', { name: 'Dark mode' })).toHaveCount(0);
+  } else {
+    const group = page.locator('.shell-user');
+    await expect(group.getByRole('button')).toHaveText(['Dark mode', 'Sign out']);
+    const toggleBox = await group.getByRole('button', { name: 'Dark mode', exact: true }).boundingBox();
+    const nameBox = await group.locator('.muted').boundingBox();
+    expect(toggleBox?.x ?? Number.POSITIVE_INFINITY).toBeLessThan(nameBox?.x ?? 0);
+    // The More panel exists on a phone only.
+    await expect(page.locator('#more-panel')).toHaveCount(0);
+  }
+});
+
+/** The text of the focused control, or `select` for the sharing switcher's list. */
+async function focusedLabel(page: Page): Promise<string> {
+  return page.evaluate<string>(
+    "(() => { const element = document.activeElement; return element === null ? '' : element.tagName === 'SELECT' ? 'select' : (element.textContent ?? '').trim(); })()",
+  );
+}
+
+test('desktop Tab order: navigation links, Dark mode, Sign out', async ({ page, signInThroughUi }) => {
+  // The top bar is the desktop layout: both projects use a desktop-sized window here.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signInThroughUi();
+  const nav = page.getByRole('banner').getByRole('navigation', { name: 'Main' });
+  await nav.getByRole('link', { name: 'Timesheet' }).focus();
+  const order: string[] = [];
+  for (let step = 0; step < 5; step += 1) {
+    await page.keyboard.press('Tab');
+    order.push(await focusedLabel(page));
+  }
+  expect(order.slice(0, 5)).toEqual(['Overtime', 'History', 'Settings', 'Dark mode', 'Sign out']);
+});
+
+test('desktop Tab order with the sharing switcher: navigation links, switcher, Dark mode, Sign out', async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Tab Order User', signature: 'none' });
+  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Tab Order Owner', signature: 'none' });
+  await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  await signInPageAs(me.account, '#/timesheet');
+  await expect(page.getByRole('combobox', { name: 'Shared with me' })).toBeVisible();
+  const nav = page.getByRole('banner').getByRole('navigation', { name: 'Main' });
+  await nav.getByRole('link', { name: 'Timesheet' }).focus();
+  const order: string[] = [];
+  for (let step = 0; step < 7; step += 1) {
+    await page.keyboard.press('Tab');
+    order.push(await focusedLabel(page));
+  }
+  expect(order).toEqual(['Overtime', 'History', 'Settings', 'select', 'Open', 'Dark mode', 'Sign out']);
 });
 
 test('an unknown hash falls back to the timesheet route', async ({ page, signInThroughUi }) => {

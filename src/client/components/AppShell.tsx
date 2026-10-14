@@ -3,6 +3,7 @@ import { api, type ReceivedShare, type User } from '../api.ts';
 import { parseReviewHash, reviewHash } from './reviewModel.ts';
 import { SharingSwitcher } from './SharingSwitcher.tsx';
 import { parseSharedHash, type SharedView } from './sharingModel.ts';
+import { ThemeToggle } from './ThemeToggle.tsx';
 import { useBlockSizeProperty } from './useBlockSize.ts';
 
 /**
@@ -164,6 +165,7 @@ export function AppShell({
         </nav>
         <SharingSwitcher received={received} ownerId={sharedOwnerId} />
         <div className="shell-user">
+          <ThemeToggle />
           <span className="muted">{user.display_name}</span>
           <button type="button" className="secondary" onClick={signOut}>
             Sign out
@@ -212,6 +214,7 @@ export function AppShell({
                 {item.label}
               </a>
             ))}
+            <ThemeToggle className="more-action" />
             <button type="button" className="more-action" onClick={signOut}>
               Sign out
             </button>

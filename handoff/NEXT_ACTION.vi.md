@@ -19,9 +19,17 @@
   test e2e không phụ thuộc lịch) chỉ đổi UI phía client và test; không đổi server hay
   nghiệp vụ. Backlog không bắt buộc cho vòng sửa pilot: xem
   [WP5 handoff](delivery/WP5_HANDOFF.vi.md).
+- Vòng thay đổi UI lần 2 (chủ dự án yêu cầu 2026-10-14, đang chạy): sáu thay đổi trên
+  trang Timesheet (tô sáng cột của ngày đang mở trong Day editor, kiểu chọn nhẹ nhàng hơn
+  trong ô chọn Label, nút chuyển giao diện tối/sáng trên thanh điều hướng chính, hover rõ
+  hơn trên các nút bật/tắt, nút Today tường minh, và Show details thành công tắc trượt).
+  Chạy như vòng thay đổi WP5-UX2 trước khi kích hoạt pilot: kế hoạch WP5-UX2-PLAN (đang
+  chạy), các phần việc có đóng băng, gate cuối package, audit độc lập mới, rồi nghiệm thu
+  lại WP5 và cập nhật định danh trong pilot packet. Đến lúc đó WP5 vẫn được nghiệm thu
+  trên 90b98ef.
 - Pilot: [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) cụ thể đã sẵn để chủ dự án duyệt
-  (định danh bản phát hành 90b98ef / 57e2974c). Chưa xin phép chủ dự án, chưa có kết quả
-  pilot, NAS chưa được kiểm.
+  (định danh bản phát hành 90b98ef / 57e2974c; sẽ cập nhật sau vòng 2). Chưa xin phép chủ
+  dự án, chưa có kết quả pilot, NAS chưa được kiểm.
 
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
 Xem [STATE](delivery/STATE.json), [bảng task](delivery/ORCHESTRATION.json),
@@ -56,7 +64,13 @@ Luồng hiện tại:
    mission (bản sửa đóng băng ở 7f750e9, gate PASS,
    [GOV recovery review](delivery/GOV_RECOVERY_REVIEW.vi.md) PASS). Board ghi mission là
    `software_ready`.
-3. **Tiếp theo, chủ dự án: duyệt pilot.** Đọc
+3. **Đang chạy: vòng thay đổi UI lần 2 (WP5-UX2).** Kế hoạch đã xong (mockup trong
+   `handoff/delivery/design/WP5-UX2/`; phần bổ sung PLAN2 và PLAN3 cho cặp nút Today/Current
+   period, logo, chấm công trên header điện thoại và chữ "Check in/out"). Phần việc
+   WP5-UX2-T01 (nút Dark mode) đã xong và đang được đóng băng; tiếp theo là T02-T08, rồi
+   gate, audit mới và nghiệm thu lại. Nếu phiên dừng, resume coordinator bằng prompt ở
+   trên.
+4. **Chủ dự án, lúc nào cũng được: duyệt pilot.** Đọc
    [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) và trả lời D-1..D-15.
    - D-1, D-7, D-8 và D-13 cần có trước khi kích hoạt.
    - Câu trả lời nào khác mặc định hiện tại sẽ kéo theo một vòng sửa (sửa, đóng băng,
@@ -66,7 +80,7 @@ Luồng hiện tại:
      resume coordinator bằng prompt ở trên.
 
 Sau reset usage: Resume/Continue phiên cũ, ví dụ `claude --continue` tại đây hoặc
-`claude --resume 44e3451e-da20-4a12-94bb-6b94fc5f531e`. Nếu không còn, mở phiên mới
+`claude --resume 11acfabe-25ef-48b5-ac28-73ce2d74ecee`. Nếu không còn, mở phiên mới
 dùng cùng prompt. [RESUME](prompts/RESUME.vi.md) phục hồi từ board, checkpoint, report
 task và git; không cần gửi lại brief nghiệp vụ.
 

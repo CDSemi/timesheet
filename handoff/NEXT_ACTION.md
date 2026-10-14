@@ -19,9 +19,16 @@
   calendar-independent e2e tests) changed the client UI and tests only; no server or
   business change. Optional backlog for the pilot fix round: see the
   [WP5 handoff](delivery/WP5_HANDOFF.md).
+- UI change round 2 (owner request 2026-10-14, running): six Timesheet-page changes (a
+  highlighted column for the day open in the Day editor, a lighter Label-picker selection,
+  a dark/light theme toggle in the main navigation, a clearer hover on toggle buttons, an
+  explicit Today button, and Show details as a switch). It runs as the WP5 change round
+  WP5-UX2 before pilot activation: plan WP5-UX2-PLAN (running), slices with freezes, a
+  package-final gate, a fresh independent audit, then the WP5 re-accept and a pilot-packet
+  identity refresh. WP5 stays accepted on 90b98ef until then.
 - Pilot: the concrete [pilot packet](delivery/WP5_PILOT_PACKET.md) is ready for owner
-  review (release identity 90b98ef / 57e2974c). Owner permission has not been
-  requested, there is no pilot result, and the NAS is NOT VERIFIED.
+  review (release identity 90b98ef / 57e2974c; refreshed after round 2). Owner permission
+  has not been requested, there is no pilot result, and the NAS is NOT VERIFIED.
 
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),
@@ -57,7 +64,13 @@ Current route:
    status (fix frozen at 7f750e9, gate PASS,
    [GOV recovery review](delivery/GOV_RECOVERY_REVIEW.md) PASS). The board records the
    mission as `software_ready`.
-3. **Next, owner: review the pilot.** Read the
+3. **Running: UI change round 2 (WP5-UX2).** The plan is done (mockup in
+   `handoff/delivery/design/WP5-UX2/`; addenda PLAN2 and PLAN3 for the Today/Current
+   period pair, the logo, the phone header clock and the "Check in/out" wording). Slice
+   WP5-UX2-T01 (Dark mode toggle) is done and being frozen; slices T02-T08 follow, then
+   the gate, a fresh audit and the re-accept. Resume the coordinator with the entry prompt
+   above if the session stops.
+4. **Owner, at any time: review the pilot.** Read the
    [pilot packet](delivery/WP5_PILOT_PACKET.md) and answer D-1..D-15.
    - D-1, D-7, D-8 and D-13 are needed before activation.
    - An answer that differs from the current default causes a fix round (fix, freeze,
@@ -67,7 +80,7 @@ Current route:
      authorization. Then resume the coordinator with the entry prompt above.
 
 After usage reset: Resume/Continue the existing session, for example
-`claude --continue` here or `claude --resume 44e3451e-da20-4a12-94bb-6b94fc5f531e`.
+`claude --continue` here or `claude --resume 11acfabe-25ef-48b5-ac28-73ce2d74ecee`.
 If unavailable, open a new session and reuse the same entry prompt. [RESUME](prompts/RESUME.md)
 recovers from the board, checkpoint, task reports and git; no need to resend the business brief.
 

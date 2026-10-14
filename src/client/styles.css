@@ -142,6 +142,7 @@
   --layer-bar: 3;
   --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(28 36 48 / 0.06);
   --more-width: 16rem;
+  --theme-glyph-size: 14px;
   /*
    * Rendered block sizes of the sticky bars (WP5-UX-AX-01, SC 2.4.11). The shell writes the measured
    * sizes over these defaults (a bar wraps to 104px at 768px and with the "Shared with me" switcher),
@@ -176,8 +177,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * The theme (WP5-UX2-T01). The light tokens above are the default. The dark set below is written twice,
+ * identically: once for a device that prefers dark and has no manual choice, once for the manual choice
+ * (`data-theme` on <html>, set before the first paint by public/theme-init.js and by the Dark mode
+ * toggle). tests/client/cssThemeParity.test.ts fails when the two sets differ or a token is missing above.
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #12161c;
     --card: #1a2029;
     --text: #e6e9ee;
@@ -209,6 +216,44 @@
     --accent-line: rgb(110 168 255 / 0.5);
     --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(4 8 14 / 0.3);
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #12161c;
+  --card: #1a2029;
+  --text: #e6e9ee;
+  --muted: #9aa5b4;
+  --line: #2c3440;
+  --line-soft: #232a34;
+  --off: #202733;
+  --accent: #6ea8ff;
+  --on-accent: #0b1220;
+  --error: #ff8a80;
+  --ok: #5fd29a;
+  --warn: #e3b341;
+  --shadow-panel: 0 0 0 1px rgb(4 8 14 / 0.4), 0 1px 2px rgb(4 8 14 / 0.3), 0 4px 12px rgb(4 8 14 / 0.3),
+    0 12px 32px rgb(4 8 14 / 0.25);
+  --shadow-overlay: 0 0 0 1px rgb(4 8 14 / 0.6), 0 2px 4px rgb(4 8 14 / 0.4), 0 8px 24px rgb(4 8 14 / 0.45),
+    0 24px 64px rgb(4 8 14 / 0.4);
+  --sheet-rule: #36404d;
+  --sheet-rule-soft: #29313c;
+  --sheet-rule-strong: #5d6a7b;
+  --sheet-head: #222a35;
+  --sheet-head-off: #283140;
+  --day-nonworking: #1e252f;
+  --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(230 233 238 / 0.04) 7px 8px);
+  --day-hover: rgb(110 168 255 / 0.06);
+  --day-selected: rgb(110 168 255 / 0.14);
+  --attention-bg: #33290f;
+  --attention-ink: #f0c25a;
+  --accent-strong: #8dbbff;
+  --accent-line: rgb(110 168 255 / 0.5);
+  --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(4 8 14 / 0.3);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -390,6 +435,45 @@ body {
 .more-panel .more-action:hover:not(:disabled) {
   background: var(--off);
   box-shadow: none;
+}
+
+/*
+ * The "Dark mode" toggle (WP5-UX2-T01). Pressed (the dark theme is in effect) is a solid accent fill
+ * with the on-accent text. The pressed selectors repeat :hover:not(:disabled) so the generic quiet-button
+ * hover (specificity 0,3,1) and the More-panel hover (0,4,0) cannot erase the pressed look. The shared
+ * focus ring is repeated at the same weight for the same reason. The half-disc glyph is decoration.
+ */
+button.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.theme-glyph {
+  flex: none;
+  width: var(--theme-glyph-size);
+  height: var(--theme-glyph-size);
+  border: var(--rule) solid currentColor;
+  border-radius: var(--shape-round);
+  background: linear-gradient(90deg, currentColor var(--shape-round), transparent var(--shape-round));
+}
+
+button.theme-toggle[aria-pressed='true'],
+button.theme-toggle[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  box-shadow: none;
+}
+
+button.theme-toggle[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+button.theme-toggle:focus-visible:not(:disabled),
+.more-panel button.theme-toggle:focus-visible:not(:disabled) {
+  box-shadow: var(--focus-ring);
 }
 
 /*
