@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mission_id": "timesheet-software-readiness",
-  "status": "running",
+  "status": "software_ready",
   "authorized_scope": [
     "WP1",
     "WP2",
@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "ux-change-round-reaccept",
+  "phase": "software-ready-after-ux-round",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +28,7 @@
   "current_source_digest": "57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX-ACCEPT",
+  "next_task_id": null,
   "runtime_observations": [
     {
       "date": "2026-10-13",
@@ -244,7 +244,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "90b98efc395c3894a21a909b6d361eadc6fc2bd9",
+    "last_commit": "aa3a7a02f04a059843d120f7372848709f816f69",
     "unpushed": []
   },
   "owner_decisions": [
@@ -613,6 +613,22 @@
     }
   ],
   "auxiliary_lookups": [
+    {
+      "id": "OWNER-RESEED",
+      "agent_type": "Explore",
+      "agent_id": "a59cc7004e046edba",
+      "status": "done",
+      "writes": [],
+      "purpose": "Read-only lookup for an owner question (2026-10-14, verbatim: 'Tôi lỡ seed mà ko ghi lại password, giờ làm sao lấy lại pass hoặc reset db để seed lại từ đầu để test?'): whether a lost seed password can be recovered or reset (CLI or admin path), where the local dev database lives by default, and the exact documented steps to reset it and seed again with known passwords; no credential values copied, nothing changed.",
+      "result": {
+        "recovery": "Not possible: only a scrypt hash with a random salt is stored (src/server/auth/passwords.ts); the plain password is printed once only when generated (cli.ts:457, seed.ts:303). No CLI reset command (cli.ts commands: migrate, seed, run-jobs, bootstrap, backup, restore, outbound); no admin password reset route (admin.ts:84-85, AdminUsers.tsx:33-34, docs/11:103, docs/10 E-11); bootstrap refuses once a user exists (bootstrap.ts:209-210, 282).",
+        "reseed": "The seed returns at once without changes or passwords if any seed account exists (seed.ts:225-234, cli.ts:455), so SEED_* variables do not help on an existing database.",
+        "locations": "Database %LOCALAPPDATA%\\timesheet-dev\\timesheet.db (WAL: -wal and -shm beside it); DATA_DIR default private-data beside the database (files, tmp, mail-capture); no default backup folder (DEVELOPMENT.md:11, 44, 50; config.ts:28-31, 67, 106-119).",
+        "documented_restart_steps": "Not found in the docs (no stop/delete/new-path procedure). Documented: SEED_ADMIN_PASSWORD, SEED_EMPLOYEE_PASSWORD, SEED_EMPLOYEE2_PASSWORD 12-256 characters (DEVELOPMENT.md:36, passwords.ts:14-15); no .env loading, so set them in the shell; seed runs dist/server/cli.js, so build first; DATA_DIR inside Dropbox is refused.",
+        "warnings": "The seed is not one transaction (seed.ts:237-312): a too-short employee password leaves the admin created and a rerun prints nothing; seed refused in production; any CLI command without DATABASE_PATH uses the dev database (docs/11:386). Coordinator note: the portable Node 24 also lives under %LOCALAPPDATA%\\timesheet-dev, so the owner must move only the database files and private-data, not the whole folder.",
+        "follow_up_candidate": "Optional docs item for the pilot fix round: a short 'reset the local dev database' section in DEVELOPMENT.md (+ vi)."
+      }
+    },
     {
       "id": "WP5-UX-RECON1",
       "agent_type": "timesheet-light",
@@ -17723,7 +17739,7 @@
       "id": "WP5-UX-ACCEPT",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX-ACCEPT-DOCS",
         "WP5-UX-AUDIT-AB9"
@@ -17737,10 +17753,10 @@
         "risk": "L",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a7564622eda94eb8b",
       "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
       "attempt": 1,
       "owned_paths": [
@@ -17749,16 +17765,20 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX-ACCEPT.md",
       "report": "handoff/delivery/tasks/WP5-UX-ACCEPT.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-ACCEPT/checks.txt",
+        "handoff/delivery/evidence/WP5-UX-ACCEPT/commit-message.txt",
+        "handoff/delivery/evidence/WP5-UX-ACCEPT/digest-before.txt"
+      ],
       "baseline_commit": "90b98efc395c3894a21a909b6d361eadc6fc2bd9",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "aa3a7a02f04a059843d120f7372848709f816f69",
+      "pushed": true,
       "source_digest": "57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d",
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Committer stages the re-acceptance records (STATE, pilot packet, WP5 handoff, NEXT_ACTION, checkpoint, board, REGATE8, AB9, ACCEPT-DOCS and their evidence), runs the checks, commits and pushes; then the board returns to software_ready."
+      "decision": "committed and pushed: 182 handoff paths (11 modified records; FIX10-FREEZE evidence 2; REGATE8 104 evidence + task; AB9 53 evidence + task + review pair; ACCEPT-DOCS 6 evidence + task; this brief); HEAD was 90b98ef with no extra commits; no other tracked handoff file modified; working-tree and HEAD ls-tree digests 57e2974c; precommit (182 files, 0 findings), diff check, JSON parse, validate_orchestration, check_recovery (106) and preflight exit 0; remote main = aa3a7a0; no tag. WP5 re-accepted on 90b98ef.",
+      "next_action": "None; the mission is software_ready again; the owner reviews the pilot packet and answers D-1..D-15."
     },
     {
       "id": "WP5-UX-AUDIT-A7",

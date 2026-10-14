@@ -146,4 +146,21 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+Committer result (attempt 1):
+
+- Pre-HEAD 90b98efc395c3894a21a909b6d361eadc6fc2bd9 (= origin/main); post-HEAD
+  aa3a7a02f04a059843d120f7372848709f816f69; branch main; pushed yes; remote SHA
+  aa3a7a02f04a059843d120f7372848709f816f69. No tag.
+- Digest before add and ls-tree digest of new HEAD: both
+  57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d.
+- Staged 182: modified 11 (board, STATE, checkpoint pair, NEXT_ACTION pair, pilot
+  packet pair, WP5 handoff pair, FIX10-FREEZE task); FIX10-FREEZE evidence 2;
+  REGATE8 evidence 104 + task 1; AUDIT-AB9 evidence 53 + task 1 + review pair 2;
+  ACCEPT-DOCS evidence 6 + task 1; this brief 1.
+- Other modified tracked handoff files: none.
+- Checks (exit codes): node v24.21.0 0; digest 0; git add 0; precommit 0 (182 files,
+  0 findings); diff --cached --check 0; JSON parse 0; validate_orchestration 0;
+  check_recovery 0 (106 probes); validate_package --preflight 0; commit 0;
+  fetch 0; push dry-run 0; push 0.
+- Fixes or stops: none. Evidence in handoff/delivery/evidence/WP5-UX-ACCEPT/ left
+  unstaged.

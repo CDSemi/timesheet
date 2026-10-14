@@ -370,8 +370,15 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   014bd47 và 90b98ef (chỉ client thay đổi); WP5 handoff (EN/VI) có mục nghiệm thu lại; kiểm
   tra song ngữ và preflight đạt; digest không đổi. Coordinator đã cập nhật STATE (WP5
   nghiệm thu lại trên 90b98ef) và NEXT_ACTION (EN/VI).
-- Đang chạy: commit nghiệm thu WP5-UX-ACCEPT (committer). Sau đó board về lại
-  `software_ready` (lần chuyển này để chưa commit đến commit kế tiếp).
+- WP5-UX-ACCEPT xong: aa3a7a02f04a059843d120f7372848709f816f69 trên main, đã push (182
+  đường dẫn handoff; digest 57e2974c không đổi; mọi kiểm tra exit 0). **WP5 đã nghiệm thu
+  lại trên 90b98ef; vòng thay đổi UI đã khép lại.** Board về lại `software_ready`
+  (next_task_id null). Chưa commit sau đó: lần chuyển trạng thái này, kết quả và evidence
+  của ACCEPT, và cập nhật này (+ en).
+- Tiếp theo (chủ dự án): duyệt pilot packet (định danh bản phát hành 90b98ef / 57e2974c),
+  trả lời D-1..D-15 trong chat, làm các bước NAS và quyết định cho phép pilot. Backlog
+  không bắt buộc cho vòng sửa pilot: xem WP5 handoff. Dọn dẹp: xoá hai file lạc
+  `D:\raw-r07.txt` và `D:\canedit.txt`.
 - Tiếp theo: nếu cả hai PASS, nghiệm thu lại WP5 (cập nhật định danh pilot packet thành
   5e104e1 / 07c3ca00 / image 218dd7cc…, quyết định Q1 vào docs/10, STATE, NEXT_ACTION, WP5
   handoff, commit nghiệm thu).

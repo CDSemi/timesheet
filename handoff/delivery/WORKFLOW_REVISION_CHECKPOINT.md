@@ -362,8 +362,15 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   across 74d5bfe, 014bd47 and 90b98ef (only the client changed); WP5 handoff (EN/VI)
   re-acceptance section; parity and preflight pass; digest unchanged. The coordinator
   updated STATE (WP5 re-accepted on 90b98ef) and NEXT_ACTION (EN/VI).
-- Running: the accept commit WP5-UX-ACCEPT (committer). Then the board returns to
-  `software_ready` (that flip stays uncommitted until the next commit).
+- WP5-UX-ACCEPT done: aa3a7a02f04a059843d120f7372848709f816f69 on main, pushed (182
+  handoff paths; digest 57e2974c unchanged; every check exit 0). **WP5 re-accepted on
+  90b98ef; the UI change round is closed.** Board back to `software_ready`
+  (next_task_id null). Uncommitted afterwards: that flip, the ACCEPT result and evidence,
+  and this update (+ vi).
+- Next (owner): review the pilot packet (release identity 90b98ef / 57e2974c), answer
+  D-1..D-15 in chat, run the NAS steps, and decide on pilot authorization. Optional
+  backlog for the pilot fix round: see the WP5 handoff. Housekeeping: delete the stray
+  files `D:\raw-r07.txt` and `D:\canedit.txt`.
 - Next: if both PASS, the WP5 re-accept (pilot packet identity refresh to 5e104e1 /
   07c3ca00 / image 218dd7cc…, docs/10 owner decision Q1, STATE, NEXT_ACTION, WP5
   handoff, accept commit).
