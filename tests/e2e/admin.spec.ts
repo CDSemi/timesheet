@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { type Page } from '@playwright/test';
+import { defaultImportYear } from '../../src/client/components/adminModel.ts';
 import { addDays } from '../../src/domain/dates.ts';
+import { importDatesAfter } from './displayedSeed.ts';
 import {
   type CalendarSchedule,
   createAccountByAdminApi,
@@ -43,12 +45,12 @@ interface ApiCalendar {
   };
   versions: Array<{ seq: number; effective_from: string; dates: Array<{ date: string; name: string }> }>;
   payroll_exceptions: Array<{ nominal_payroll_date: string; payroll_date: string }>;
-  warnings: Array<{ code: string; year: number }>;
+  warnings: Array<{ code: string; year: number; warn_from: string; message: string }>;
 }
 
 interface ApiPeriods {
   today_local: string;
-  current: { payroll_date: string; period_start: string };
+  current: { payroll_date: string; period_start: string; period_end: string };
 }
 
 /** Below 768px the shell shows the bottom tab bar, where Settings, Import, Admin and Sign out sit under "More". */
@@ -286,9 +288,15 @@ test('holiday CSV: issue, boundary, stale hash, preview diff, commit and no-chan
   const calendar = await adminSeed.call<ApiCalendar>('GET', '/api/calendar');
   const periods = await adminSeed.call<ApiPeriods>('GET', '/api/periods/current');
   const warning = calendar.warnings.find((item) => item.code === 'next_year_calendar_missing');
-  // The server clock decides whether the warning exists; the import year follows what the server says.
-  const year = warning?.year ?? Number(periods.today_local.slice(0, 4)) + 1;
+  // The server clock decides whether the warning exists; the form defaults to the warning year, else the server's year
+  // (the client's own rule, WP5-UX-AB8-04: the warning only exists from 1 October).
+  const year = defaultImportYear(periods.today_local, calendar.warnings);
   const boundary = periods.current.period_start;
+  // WP5-UX-AB8-03: the import takes effect from the displayed period's start, and another spec of this worker finalizes a
+  // timesheet of that period. The dates lie in the import year after the period, so they are added (not dropped as past)
+  // and no finalized day is touched. They are 1 January, 4 July and 3 March whenever the period is not in the way.
+  const [newYear = '', midYear = '', extraDate = ''] = importDatesAfter([`${year}-01-01`, `${year}-07-04`, `${year}-03-03`], periods.current.period_end);
+  expect([newYear, midYear, extraDate].every((date) => date.startsWith(`${year}-`)), `import dates inside ${year}: ${newYear} ${midYear} ${extraDate}`).toBe(true);
 
   await signInPageAs(builtServer.credentials.admin);
   await openAdmin(page);
@@ -303,8 +311,6 @@ test('holiday CSV: issue, boundary, stale hash, preview diff, commit and no-chan
   const section = page.getByRole('form', { name: 'Holiday import' });
   await expect(section.getByLabel('Year of the dates')).toHaveValue(String(year));
   await expect(section.getByLabel('Effective from')).toHaveValue(boundary);
-  const newYear = `${year}-01-01`;
-  const midYear = `${year}-07-04`;
 
   // An invalid row is shown with its line; commit stays off.
   await section.getByLabel('Or choose a CSV file').setInputFiles(
@@ -340,7 +346,7 @@ test('holiday CSV: issue, boundary, stale hash, preview diff, commit and no-chan
   await page.screenshot({ path: screenshotPath(`holiday-preview-${project}-synthetic.png`), fullPage: true });
 
   // The calendar changes behind the preview: the commit is refused as stale and the preview retired.
-  const other = `date,name,kind\n${year}-03-03,Synthetic Extra,holiday\n`;
+  const other = `date,name,kind\n${extraDate},Synthetic Extra,holiday\n`;
   const body = { calendar_id: calendar.id, year, effective_from: boundary, csv: other, remove_dates: [] };
   const otherPreview = await adminSeed.call<{ preview_hash: string }>('POST', '/api/admin/calendar/import/preview', body);
   await adminSeed.call('POST', '/api/admin/calendar/import/commit', { ...body, preview_hash: otherPreview.preview_hash }, 201);
@@ -351,12 +357,12 @@ test('holiday CSV: issue, boundary, stale hash, preview diff, commit and no-chan
 
   // Preview again (the extra date is now a kept date), commit, then commit again: no change.
   await section.getByRole('button', { name: 'Preview import' }).click();
-  await expect(section.locator(`[data-kept-date="${year}-03-03"]`)).toBeAttached();
+  await expect(section.locator(`[data-kept-date="${extraDate}"]`)).toBeAttached();
   await section.getByRole('button', { name: 'Commit import' }).click();
   await expect(section.locator('[data-status="holiday-outcome"]')).toContainText('Committed as calendar version');
   const committed = await adminSeed.call<ApiCalendar>('GET', '/api/calendar');
   const latest = committed.versions.at(-1);
-  expect(latest?.dates.map((item) => item.date)).toEqual(expect.arrayContaining([newYear, midYear, `${year}-03-03`]));
+  expect(latest?.dates.map((item) => item.date)).toEqual(expect.arrayContaining([newYear, midYear, extraDate]));
   expect(committed.warnings, 'next year has dates now').toEqual([]);
   await expect(banner).toHaveCount(0);
 

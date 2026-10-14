@@ -8,6 +8,8 @@
  * period is then not on the page. These helpers only ever return days of the period the page shows.
  */
 
+import { addDays } from '../../src/domain/dates.ts';
+
 /** The slice of one timesheet day the selection reads. */
 export interface SeedDayFacts {
   work_date: string;
@@ -22,6 +24,51 @@ export function freeWorkdaysOfDisplayedPeriod(days: readonly SeedDayFacts[], tod
     .map((day) => day.work_date)
     .sort()
     .reverse();
+}
+
+/** The slice of the displayed period (`/api/periods/current`, `current`) the deadline scenarios read. */
+export interface DeadlinePeriodFacts {
+  payroll_date: string;
+  nominal_payroll_date: string;
+  period_start: string;
+  due_at_utc: string;
+}
+
+/** A later deadline for one period, as the admin payroll-exception route takes it (the payroll date itself stays). */
+export interface LaterDeadline {
+  due_local_date: string;
+  due_local_time: string;
+}
+
+/**
+ * WP5-UX-AB8-01: the deadline scenarios (automatic submission, automatic PDFs) need the displayed period to be due
+ * LATER than the activation they record a minute from now (docs/05 line 26 makes a period eligible only when its due is
+ * on or after the activation). The page keeps a period on screen from its due time through its payroll date, so for
+ * about three days of every cycle its deadline is behind. The next period (in progress) is no substitute: the history
+ * window of the page ends at the displayed period, so the scenario's history facts exist only for the displayed one.
+ *
+ * Returns null when the deadline is already more than `marginMs` ahead (nothing to change), else the deadline of
+ * tomorrow at noon in the reporting zone, to be recorded for the displayed period through the supported admin payroll
+ * exception (test database only). That is always at least half a day ahead.
+ */
+export function laterDeadlineFor(current: DeadlinePeriodFacts, todayLocal: string, nowMs: number, marginMs: number): LaterDeadline | null {
+  if (Date.parse(current.due_at_utc) > nowMs + marginMs) return null;
+  return { due_local_date: addDays(todayLocal, 1), due_local_time: '12:00' };
+}
+
+/**
+ * Dates of an import year that lie after `lastBlockedDate` (the displayed period's last day, whose days another spec may
+ * have finalized) and are distinct, one per nominal date: the nominal date when it already qualifies, else the first free day after.
+ * WP5-UX-AB8-03: an import effective from the displayed period's start must neither touch that period nor drop a date as past.
+ */
+export function importDatesAfter(nominals: readonly string[], lastBlockedDate: string): string[] {
+  const taken = new Set<string>();
+  return nominals.map((nominal) => {
+    let date = nominal > lastBlockedDate ? nominal : addDays(lastBlockedDate, 1);
+    while (taken.has(date)) date = addDays(date, 1);
+    taken.add(date);
+    return date;
+  });
 }
 
 /** The newest such day, or a clear failure: a seed is never skipped or silently taken from another period. */

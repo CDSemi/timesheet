@@ -143,6 +143,10 @@ test('the deadline submits automatically: note off/on, image off/on, an empty pe
   const imageOnly = await newPerson(admin, server, { displayName: 'Synthetic Auto Image', autoSubmit: true, signature: 'authorized', signaturePhase: 5 });
   const off = await newPerson(admin, server, { displayName: 'Synthetic Auto Off', autoSubmit: false, signature: 'saved' });
 
+  // WP5-UX-AB8-01: the displayed period must be due after the activation recorded below. The page keeps it on screen from its
+  // due time through its payroll date; then a later deadline is recorded for it (admin payroll exception, test database only).
+  await admin.ensureDeadlineAhead(120_000);
+
   // `full` keeps an empty period (default labels); the others have one complete day when the period has a past workday.
   const days = { plain: await seedDay(plain), noteOnly: await seedDay(noteOnly), imageOnly: await seedDay(imageOnly), off: await seedDay(off) };
 

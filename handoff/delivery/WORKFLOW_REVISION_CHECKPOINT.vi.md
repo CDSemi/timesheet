@@ -328,10 +328,31 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Board đã `blocked`, chờ chủ dự án làm WP5-UX-DOCKER (mở Docker Desktop). Chủ dự án trả
   lời "tiếp tục nếu đang chạy dở" mà chưa xác nhận Docker; board về lại `running`. REGATE7
   lần 2 (chỉ drill) dừng ở bước kiểm engine: client 28.5.1, thiếu pipe của Docker Desktop
-  Linux engine. Board lại `blocked` chờ WP5-UX-DOCKER. Đang chạy: checkpoint commit
-  WP5-UX-CKPT4 (chỉ handoff, digest 58b0deee). Khi chủ dự án mở Docker: REGATE7 lần 3,
-  chỉ chạy drill; rồi audit opus gộp WP5-UX-AUDIT-AB8 (phần A và B; brief đã soạn;
-  quyết định coordinator để tiết kiệm lượt dùng), rồi nghiệm thu lại WP5.
+  Linux engine. Board lại `blocked` chờ WP5-UX-DOCKER. Checkpoint commit WP5-UX-CKPT4
+  xong: dc70ba65eb6c93925b3abe821829b76fc7e1f9da trên main, đã push (100 đường dẫn
+  handoff, digest 58b0deee không đổi). Chưa commit sau đó: cập nhật này (+ en), kết quả
+  trên board, kết quả và evidence của CKPT4. Chủ dự án trả lời "Docker đã chạy"; board `running`.
+  WP5-UX-REGATE7 lần 3 (chỉ drill): drill --wp3 208 PASS / 0 FAIL, image
+  sha256:52b45ad9774df69e0a116440bbd64d15fa114ad0273af6b063f08a8f7c61b590, đã dọn sạch;
+  cả gate PASS trên 3670a6c / 58b0deee (NAS chưa kiểm). WP5-UX-AUDIT-AB8 (audit
+  opus mới, gộp) FIX REQUIRED: sản phẩm giống từng byte với 255ba17, độ mạnh của test và
+  quy tắc chọn ngày đều PASS, AC-01 pass trong khoảng ngày lỗi, B7-01 = A7-01 đã đóng;
+  nhưng toàn bộ e2e có 3 test fail (AB8-01, các test hạn chót sau giờ hạn nộp), và một lượt
+  quét bằng đồng hồ giả lập đã được kiểm chứng tìm thêm AB8-02 (hết ngày trống ngày
+  2026-11-28..30), AB8-03 (nhập ngày lễ qua năm mới) và AB8-04 (năm nhập mặc định từ
+  2027-01-01). Tất cả chỉ ở test và có từ trước.
+- Quyết định coordinator: một vòng chỉ sửa test WP5-UX-FIX10 (worker-high, sonnet), tự
+  chạy lượt quét đồng hồ giả lập và sửa mọi lỗi theo lịch mà lượt quét cho thấy. Sau đó
+  freeze, WP5-UX-REGATE8 (đồng hồ thật và lượt quét) và audit gộp AB9.
+- WP5-UX-FIX10 xong (tự báo claude-sonnet-5-5; là báo cáo, chưa phải bằng chứng độc
+  lập): AB8-01 ghi một hạn chót muộn hơn qua đường ngoại lệ trả lương khi hạn của kỳ đang
+  hiển thị đã qua; AB8-02 trả lại các ngày đã tạo dữ liệu; AB8-03 ngày nhập nằm sau kỳ
+  đang hiển thị; AB8-04 năm nhập mặc định theo quy tắc của client. 8 file test, không có
+  file mới. Lượt quét: 14 lần chạy toàn bộ trên cả hai project, 0 fail (một lỗi thoáng
+  qua ERR_NO_BUFFER_SPACE ngày 2027-01-19, chạy lại thì pass); unit 1831; verify 0; digest
+  57e2974c.
+- Đang chạy: WP5-UX-FIX10-FREEZE (committer, HEAD mong đợi dc70ba6). Sau đó
+  WP5-UX-REGATE8 và audit gộp AB9.
 - Tiếp theo: nếu cả hai PASS, nghiệm thu lại WP5 (cập nhật định danh pilot packet thành
   5e104e1 / 07c3ca00 / image 218dd7cc…, quyết định Q1 vào docs/10, STATE, NEXT_ACTION, WP5
   handoff, commit nghiệm thu).

@@ -188,8 +188,10 @@ test('automatic revisions: the note off/on and the image off/on, long Vietnamese
   test.setTimeout(300_000);
   const server = privateServer;
   const admin = await privateAdmin(server);
-  const periods = await admin.call<{ reporting_zone: string; current: { period_start: string; due_at_utc: string } }>('GET', '/api/periods/current');
-  const start = periods.current.period_start;
+  // WP5-UX-AB8-01: the activation below only covers a period whose deadline is on or after it (docs/05), so the displayed period
+  // must be due later. The page keeps it on screen from its due time through its payroll date: a later deadline is recorded then.
+  const { period: current } = await admin.ensureDeadlineAhead(120_000);
+  const start = current.period_start;
   // A short and a very long holiday name on two weekdays of the displayed period (default labels, no entries needed).
   const holidayA = addDays(start, 1);
   const holidayB = addDays(start, 2);
@@ -218,7 +220,7 @@ test('automatic revisions: the note off/on and the image off/on, long Vietnamese
 
   const activeFrom = new Date(Date.now() + 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
   await admin.call('PUT', '/api/admin/automation/activation', { active_from: activeFrom, reason: 'Synthetic e2e activation (test database only)' });
-  const submittedAt = new Date(new Date(periods.current.due_at_utc).getTime() + 5 * 60_000);
+  const submittedAt = new Date(new Date(current.due_at_utc).getTime() + 5 * 60_000);
   drainJobsFrom(server, submittedAt);
   const payrollDate = people.plain.payrollDate;
   const submissionDate = usDate(submittedAt);

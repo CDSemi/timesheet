@@ -1,0 +1,20 @@
+# Usage: bash sweep.sh <set-name> then label/instant pairs are fixed below. Full e2e (both projects), sequential.
+# Each run: bash run-shift.sh <label> <instant|real> [extra playwright args]; log in logs/sweep-<label>.txt.
+cd /d/.claude-tmp/timesheet/WP5-UX-FIX10
+run() {
+  label=$1; instant=$2; shift 2
+  bash run-shift.sh "$label" "$instant" "$@" > "logs/sweep-$label.txt" 2>&1
+  echo "$label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/sweep-progress.txt
+}
+run real real
+run p4-1026-1000 2026-10-26T17:00:00Z
+run p3-1027-1300 2026-10-27T20:00:00Z
+run p3-1027-1800 2026-10-28T01:00:00Z
+run p-1030-1000 2026-10-30T17:00:00Z
+run p1-1031-1000 2026-10-31T17:00:00Z
+run d-1128-1000 2026-11-28T18:00:00Z
+run d-1128-1000-w1 2026-11-28T18:00:00Z --workers=1
+run d-1226-1000 2026-12-26T18:00:00Z
+run d-2027-0111-1000 2027-01-11T18:00:00Z
+run d-2027-0119-1800 2027-01-20T02:00:00Z
+echo done > logs/sweep.done

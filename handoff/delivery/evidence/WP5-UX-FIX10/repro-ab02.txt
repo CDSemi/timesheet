@@ -1,0 +1,106 @@
+== repro-ab02: real start 2026-10-14T03:23:08Z, simulated start 2026-11-28T18:00:00Z, AB8_SHIFT_MS=3940611767
+process clock 2026-11-28T18:00:00.083Z (Date.now 1795888800093); America/Los_Angeles Sat, 2026-11-28, 10:00; shift ms 3940611767; instanceof true
+$ node node_modules/@playwright/test/cli.js test --workers=1 shell.spec.ts timesheet.spec.ts --output=<task>/pw-repro-ab02
+
+Running 32 tests using 1 worker
+
+  ok  1 [desktop] › tests\e2e\shell.spec.ts:22:1 › sign-in form, then the shell on the timesheet route (632ms)
+  ok  2 [desktop] › tests\e2e\shell.spec.ts:59:1 › an unknown hash falls back to the timesheet route (396ms)
+  ok  3 [desktop] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell (623ms)
+  -   4 [desktop] › tests\e2e\shell.spec.ts:85:1 › mobile: no horizontal overflow and tap targets of at least 44px
+  ok  5 [desktop] › tests\e2e\timesheet.spec.ts:44:3 › viewing zone equals the reporting zone › the period bar still names the viewing zone, without the longer zone note (479ms)
+  ok  6 [desktop] › tests\e2e\timesheet.spec.ts:81:1 › the period card keeps its tab order equal to its visual reading order: Previous, Next, then Review (451ms)
+  -   7 [desktop] › tests\e2e\timesheet.spec.ts:109:5 › phone first screen › viewing zone equals the reporting zone › the first day row is fully visible above the tab bar
+  -   8 [desktop] › tests\e2e\timesheet.spec.ts:117:3 › phone first screen › the first day row is fully visible above the tab bar with the zone note shown
+  -   9 [desktop] › tests\e2e\timesheet.spec.ts:136:5 › phone first screen › the Open a day date field shows a full date at 390px
+  -  10 [desktop] › tests\e2e\timesheet.spec.ts:136:5 › phone first screen › the Open a day date field shows a full date at 375px
+  -  11 [desktop] › tests\e2e\timesheet.spec.ts:136:5 › phone first screen › the Open a day date field shows a full date at 360px
+  -  12 [desktop] › tests\e2e\timesheet.spec.ts:136:5 › phone first screen › the Open a day date field shows a full date at 320px
+  ok 13 [desktop] › tests\e2e\timesheet.spec.ts:189:1 › shows 14 days with due date, completeness, pending OT, both zones and accounting dates (1.2s)
+  ok 14 [desktop] › tests\e2e\timesheet.spec.ts:322:1 › batch edit: preview, conflict dialog for a clock session, confirmed commit (2.5s)
+  ok 15 [desktop] › tests\e2e\timesheet.spec.ts:370:1 › batch edit: an old period asks for a reason and commits with it (848ms)
+  x  16 [desktop] › tests\e2e\timesheet.spec.ts:403:1 › batch edit: a stale version shows the reload message naming the date (198ms)
+  ok 17 [mobile] › tests\e2e\shell.spec.ts:22:1 › sign-in form, then the shell on the timesheet route (898ms)
+  ok 18 [mobile] › tests\e2e\shell.spec.ts:59:1 › an unknown hash falls back to the timesheet route (437ms)
+  ok 19 [mobile] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell (709ms)
+  ok 20 [mobile] › tests\e2e\shell.spec.ts:85:1 › mobile: no horizontal overflow and tap targets of at least 44px (881ms)
+  ok 21 [mobile] › tests\e2e\timesheet.spec.ts:44:3 › viewing zone equals the reporting zone › the period bar still names the viewing zone, without the longer zone note (490ms)
+  ok 22 [mobile] › tests\e2e\timesheet.spec.ts:81:1 › the period card keeps its tab order equal to its visual reading order: Previous, Next, then Review (454ms)
+  ok 23 [mobile] › tests\e2e\timesheet.spec.ts:109:5 › phone first screen › viewing zone equals the reporting zone › the first day row is fully visible above the tab bar (435ms)
+  ok 24 [mobile] › tests\e2e\timesheet.spec.ts:117:3 › phone first screen › the first day row is fully visible above the tab bar with the zone note shown (417ms)
+  ok 25 [mobile] › tests\e2e\timesheet.spec.ts:136:5 › phone first screen › the Open a day date field shows a full date at 390px (534ms)
+  ok 26 [mobile] › tests\e2e\timesheet.spec.ts:136:5 › phone first screen › the Open a day date field shows a full date at 375px (510ms)
+  ok 27 [mobile] › tests\e2e\timesheet.spec.ts:136:5 › phone first screen › the Open a day date field shows a full date at 360px (531ms)
+  ok 28 [mobile] › tests\e2e\timesheet.spec.ts:136:5 › phone first screen › the Open a day date field shows a full date at 320px (491ms)
+  ok 29 [mobile] › tests\e2e\timesheet.spec.ts:189:1 › shows 14 days with due date, completeness, pending OT, both zones and accounting dates (1.6s)
+  ok 30 [mobile] › tests\e2e\timesheet.spec.ts:322:1 › batch edit: preview, conflict dialog for a clock session, confirmed commit (2.5s)
+  ok 31 [mobile] › tests\e2e\timesheet.spec.ts:370:1 › batch edit: an old period asks for a reason and commits with it (906ms)
+  x  32 [mobile] › tests\e2e\timesheet.spec.ts:403:1 › batch edit: a stale version shows the reload message naming the date (199ms)
+
+
+  1) [desktop] › tests\e2e\timesheet.spec.ts:403:1 › batch edit: a stale version shows the reload message naming the date 
+
+    Error: past free workdays in the displayed period
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 1
+    Received:    0
+
+      35 | /** Picks the days to select, failing clearly when the period has too few past workdays. */
+      36 | function need(days: string[], count: number): string[] {
+    > 37 |   expect(days.length, 'past free workdays in the displayed period').toBeGreaterThanOrEqual(count);
+         |                                                                     ^
+      38 |   return days;
+      39 | }
+      40 |
+        at need (D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\timesheet.spec.ts:37:69)
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\timesheet.spec.ts:408:16
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab02\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab02\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab02\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\timesheet.spec.ts:403:1 › batch edit: a stale version shows the reload message naming the date 
+
+    Error: past free workdays in the displayed period
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 1
+    Received:    0
+
+      35 | /** Picks the days to select, failing clearly when the period has too few past workdays. */
+      36 | function need(days: string[], count: number): string[] {
+    > 37 |   expect(days.length, 'past free workdays in the displayed period').toBeGreaterThanOrEqual(count);
+         |                                                                     ^
+      38 |   return days;
+      39 | }
+      40 |
+        at need (D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\timesheet.spec.ts:37:69)
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\timesheet.spec.ts:408:16
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab02\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab02\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab02\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\timesheet.spec.ts:403:1 › batch edit: a stale version shows the reload message naming the date 
+    [mobile] › tests\e2e\timesheet.spec.ts:403:1 › batch edit: a stale version shows the reload message naming the date 
+  7 skipped
+  23 passed (24.8s)
+exit=1
+process clock 2026-11-28T18:00:25.267Z (Date.now 1795888825277); America/Los_Angeles Sat, 2026-11-28, 10:00; shift ms 3940611767; instanceof true
+== repro-ab02 real end 2026-10-14T03:23:33Z

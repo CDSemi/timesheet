@@ -1,0 +1,181 @@
+----- M0-unmodified -----
+$ diff -u original mutated
+$ vitest run tests/domain/e2eSeedSelection.test.ts --reporter=verbose
+exit=0
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > derives the window from the domain: in-progress differs from displayed on P-4..P 31ms
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > always seeds inside the displayed period, on every step of four periods 22ms
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > the old choice leaves the displayed period during the window (negative control) 26ms
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > skips a holiday and fails clearly when the displayed period has no past normal workday 1ms
+      Tests  4 passed (4)
+----- M1-old-choice-via-helper -----
+$ diff -u original mutated
+--- <task>/orig-e2eSeedSelection.test.ts.txt	2026-10-13 19:11:05.995270600 -0700
++++ <task>/xscratch/tests/domain/e2eSeedSelection.test.ts	2026-10-13 19:11:46.075128800 -0700
+@@ -54,7 +54,7 @@
+ /** The new choice: only the displayed period's days. */
+ function displayedSeed(today: string, holidays: readonly string[]): string {
+   const displayed = currentPayPeriod(SCHEDULE, today);
+-  return displayedPeriodSeedDay(daysOf(displayed, holidays), today, displayed.payrollDate);
++  return displayedPeriodSeedDay([...daysOf(payPeriodContaining(SCHEDULE, today), holidays), ...daysOf(displayed, holidays)], today, displayed.payrollDate);
+ }
+ 
+ interface Step {
+$ vitest run tests/domain/e2eSeedSelection.test.ts --reporter=verbose
+exit=1
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > derives the window from the domain: in-progress differs from displayed on P-4..P 32ms
+ × tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > always seeds inside the displayed period, on every step of four periods 7ms
+   → 2026-09-15: 2026-09-14 in 2026-08-31..2026-09-13: expected false to be true // Object.is equality
+ × tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > the old choice leaves the displayed period during the window (negative control) 27ms
+   → expected '2026-10-12' to be '2026-10-09' // Object.is equality
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > skips a holiday and fails clearly when the displayed period has no past normal workday 1ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: 2026-09-15: 2026-09-14 in 2026-08-31..2026-09-13: expected false to be true // Object.is equality
+AssertionError: expected '2026-10-12' to be '2026-10-09' // Object.is equality
+      Tests  2 failed | 2 passed (4)
+----- M1b-old-choice-legacySeed -----
+$ diff -u original mutated
+--- <task>/orig-e2eSeedSelection.test.ts.txt	2026-10-13 19:11:05.995270600 -0700
++++ <task>/xscratch/tests/domain/e2eSeedSelection.test.ts	2026-10-13 19:11:46.845217400 -0700
+@@ -54,7 +54,7 @@
+ /** The new choice: only the displayed period's days. */
+ function displayedSeed(today: string, holidays: readonly string[]): string {
+   const displayed = currentPayPeriod(SCHEDULE, today);
+-  return displayedPeriodSeedDay(daysOf(displayed, holidays), today, displayed.payrollDate);
++  return legacySeed(today, holidays) as string;
+ }
+ 
+ interface Step {
+$ vitest run tests/domain/e2eSeedSelection.test.ts --reporter=verbose
+exit=1
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > derives the window from the domain: in-progress differs from displayed on P-4..P 32ms
+ × tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > always seeds inside the displayed period, on every step of four periods 8ms
+   → 2026-09-15: 2026-09-14 in 2026-08-31..2026-09-13: expected false to be true // Object.is equality
+ × tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > the old choice leaves the displayed period during the window (negative control) 28ms
+   → expected '2026-10-12' to be '2026-10-09' // Object.is equality
+ × tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > skips a holiday and fails clearly when the displayed period has no past normal workday 1ms
+   → expected [Function] to throw an error
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: 2026-09-15: 2026-09-14 in 2026-08-31..2026-09-13: expected false to be true // Object.is equality
+AssertionError: expected '2026-10-12' to be '2026-10-09' // Object.is equality
+AssertionError: expected [Function] to throw an error
+      Tests  3 failed | 1 passed (4)
+----- M2-helper-oldest-first -----
+$ diff -u original mutated
+--- <task>/orig-displayedSeed.ts.txt	2026-10-13 19:11:06.025183000 -0700
++++ <task>/xscratch/tests/e2e/displayedSeed.ts	2026-10-13 19:11:47.638587700 -0700
+@@ -21,7 +21,7 @@
+     .filter((day) => day.work_date < todayLocal && day.classification?.day_class === 'normal' && day.sessions.length === 0)
+     .map((day) => day.work_date)
+     .sort()
+-    .reverse();
++    ;
+ }
+ 
+ /** The newest such day, or a clear failure: a seed is never skipped or silently taken from another period. */
+$ vitest run tests/domain/e2eSeedSelection.test.ts --reporter=verbose
+exit=1
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > derives the window from the domain: in-progress differs from displayed on P-4..P 32ms
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > always seeds inside the displayed period, on every step of four periods 23ms
+ × tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > the old choice leaves the displayed period during the window (negative control) 29ms
+   → expected '2026-09-28' to be '2026-10-09' // Object.is equality
+ × tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > skips a holiday and fails clearly when the displayed period has no past normal workday 1ms
+   → expected '2026-09-14' to be '2026-09-18' // Object.is equality
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected '2026-09-28' to be '2026-10-09' // Object.is equality
+AssertionError: expected '2026-09-14' to be '2026-09-18' // Object.is equality
+      Tests  2 failed | 2 passed (4)
+----- M3-helper-includes-today -----
+$ diff -u original mutated
+--- <task>/orig-displayedSeed.ts.txt	2026-10-13 19:11:06.025183000 -0700
++++ <task>/xscratch/tests/e2e/displayedSeed.ts	2026-10-13 19:11:48.437828800 -0700
+@@ -18,7 +18,7 @@
+ /** Past normal workdays without a session in the displayed period's own days, newest first. */
+ export function freeWorkdaysOfDisplayedPeriod(days: readonly SeedDayFacts[], todayLocal: string): string[] {
+   return days
+-    .filter((day) => day.work_date < todayLocal && day.classification?.day_class === 'normal' && day.sessions.length === 0)
++    .filter((day) => day.work_date <= todayLocal && day.classification?.day_class === 'normal' && day.sessions.length === 0)
+     .map((day) => day.work_date)
+     .sort()
+     .reverse();
+$ vitest run tests/domain/e2eSeedSelection.test.ts --reporter=verbose
+exit=1
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > derives the window from the domain: in-progress differs from displayed on P-4..P 32ms
+ × tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > always seeds inside the displayed period, on every step of four periods 10ms
+   → expected false to be true // Object.is equality
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > the old choice leaves the displayed period during the window (negative control) 26ms
+ × tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > skips a holiday and fails clearly when the displayed period has no past normal workday 1ms
+   → expected '2026-09-22' to be '2026-09-18' // Object.is equality
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected false to be true // Object.is equality
+AssertionError: expected '2026-09-22' to be '2026-09-18' // Object.is equality
+      Tests  2 failed | 2 passed (4)
+----- M4-helper-silent-on-edge -----
+$ diff -u original mutated
+--- <task>/orig-displayedSeed.ts.txt	2026-10-13 19:11:06.025183000 -0700
++++ <task>/xscratch/tests/e2e/displayedSeed.ts	2026-10-13 19:11:49.252692400 -0700
+@@ -27,7 +27,7 @@
+ /** The newest such day, or a clear failure: a seed is never skipped or silently taken from another period. */
+ export function displayedPeriodSeedDay(days: readonly SeedDayFacts[], todayLocal: string, payrollDate: string): string {
+   const [first] = freeWorkdaysOfDisplayedPeriod(days, todayLocal);
+-  if (first === undefined) {
++  if (first === undefined && Number.NaN === 0) {
+     throw new Error(
+       `The displayed period (payroll ${payrollDate}) has no past normal workday without a session on ${todayLocal}; ` +
+         'every past workday is a holiday or already has a session; a seed is never taken from another period.',
+$ vitest run tests/domain/e2eSeedSelection.test.ts --reporter=verbose
+exit=1
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > derives the window from the domain: in-progress differs from displayed on P-4..P 33ms
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > always seeds inside the displayed period, on every step of four periods 23ms
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > the old choice leaves the displayed period during the window (negative control) 26ms
+ × tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > skips a holiday and fails clearly when the displayed period has no past normal workday 4ms
+   → expected [Function] to throw an error
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [Function] to throw an error
+      Tests  1 failed | 3 passed (4)
+----- M5-helper-ignores-day-class -----
+$ diff -u original mutated
+--- <task>/orig-displayedSeed.ts.txt	2026-10-13 19:11:06.025183000 -0700
++++ <task>/xscratch/tests/e2e/displayedSeed.ts	2026-10-13 19:11:50.044203800 -0700
+@@ -18,7 +18,7 @@
+ /** Past normal workdays without a session in the displayed period's own days, newest first. */
+ export function freeWorkdaysOfDisplayedPeriod(days: readonly SeedDayFacts[], todayLocal: string): string[] {
+   return days
+-    .filter((day) => day.work_date < todayLocal && day.classification?.day_class === 'normal' && day.sessions.length === 0)
++    .filter((day) => day.work_date < todayLocal && day.sessions.length === 0)
+     .map((day) => day.work_date)
+     .sort()
+     .reverse();
+$ vitest run tests/domain/e2eSeedSelection.test.ts --reporter=verbose
+exit=1
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > derives the window from the domain: in-progress differs from displayed on P-4..P 31ms
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > always seeds inside the displayed period, on every step of four periods 24ms
+ × tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > the old choice leaves the displayed period during the window (negative control) 30ms
+   → expected '2026-10-11' to be '2026-10-09' // Object.is equality
+ × tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > skips a holiday and fails clearly when the displayed period has no past normal workday 1ms
+   → expected '2026-09-21' to be '2026-09-18' // Object.is equality
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected '2026-10-11' to be '2026-10-09' // Object.is equality
+AssertionError: expected '2026-09-21' to be '2026-09-18' // Object.is equality
+      Tests  2 failed | 2 passed (4)
+----- M6-helper-ignores-sessions -----
+$ diff -u original mutated
+--- <task>/orig-displayedSeed.ts.txt	2026-10-13 19:11:06.025183000 -0700
++++ <task>/xscratch/tests/e2e/displayedSeed.ts	2026-10-13 19:11:50.851227400 -0700
+@@ -18,7 +18,7 @@
+ /** Past normal workdays without a session in the displayed period's own days, newest first. */
+ export function freeWorkdaysOfDisplayedPeriod(days: readonly SeedDayFacts[], todayLocal: string): string[] {
+   return days
+-    .filter((day) => day.work_date < todayLocal && day.classification?.day_class === 'normal' && day.sessions.length === 0)
++    .filter((day) => day.work_date < todayLocal && day.classification?.day_class === 'normal')
+     .map((day) => day.work_date)
+     .sort()
+     .reverse();
+$ vitest run tests/domain/e2eSeedSelection.test.ts --reporter=verbose
+exit=0
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > derives the window from the domain: in-progress differs from displayed on P-4..P 30ms
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > always seeds inside the displayed period, on every step of four periods 23ms
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > the old choice leaves the displayed period during the window (negative control) 25ms
+ ✓ tests/domain/e2eSeedSelection.test.ts > the browser specs seed from the displayed period > skips a holiday and fails clearly when the displayed period has no past normal workday 1ms
+      Tests  4 passed (4)
+----- restored -----
+restore diff exit=0

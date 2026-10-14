@@ -1,0 +1,65 @@
+# WP5-UX-AUDIT-AB8 mutation checks on the scratch copy only (<task>/xscratch). Never touches the repository.
+source <task>/env.sh
+S=$T/xscratch
+TESTF=tests/domain/e2eSeedSelection.test.ts
+HELP=tests/e2e/displayedSeed.ts
+cd $S || exit 2
+
+restore() {
+  cp $T/orig-e2eSeedSelection.test.ts.txt $S/$TESTF
+  cp $T/orig-displayedSeed.ts.txt $S/$HELP
+  cp $T/orig-fixtures.ts.txt $S/tests/e2e/fixtures.ts
+}
+
+run_unit() { # $1 = label
+  echo "----- $1 -----"
+  echo "\$ diff -u original mutated"
+  diff -u $T/orig-e2eSeedSelection.test.ts.txt $S/$TESTF
+  diff -u $T/orig-displayedSeed.ts.txt $S/$HELP
+  echo "\$ vitest run $TESTF --reporter=verbose"
+  node node_modules/vitest/vitest.mjs run $TESTF --reporter=verbose > $T/mut-$1-raw.txt 2>&1
+  echo "exit=$?"
+  grep -E "^ +(✓|×) |Tests +[0-9]|AssertionError|expected" $T/mut-$1-raw.txt
+}
+
+restore
+run_unit M0-unmodified
+
+# M1: the old pastFreeWorkdays()[0] choice restored through the production helper: in-progress + displayed days merged.
+restore
+sed -i 's|^  return displayedPeriodSeedDay(daysOf(displayed, holidays), today, displayed.payrollDate);$|  return displayedPeriodSeedDay([...daysOf(payPeriodContaining(SCHEDULE, today), holidays), ...daysOf(displayed, holidays)], today, displayed.payrollDate);|' $S/$TESTF
+run_unit M1-old-choice-via-helper
+
+# M1b: the old choice as the test's own legacySeed (the form the gate used).
+restore
+sed -i 's|^  return displayedPeriodSeedDay(daysOf(displayed, holidays), today, displayed.payrollDate);$|  return legacySeed(today, holidays) as string;|' $S/$TESTF
+run_unit M1b-old-choice-legacySeed
+
+# M2: helper returns the oldest day instead of the newest.
+restore
+sed -i 's|^    \.reverse();$|    ;|' $S/$HELP
+run_unit M2-helper-oldest-first
+
+# M3: helper allows today itself.
+restore
+sed -i 's|day.work_date < todayLocal|day.work_date <= todayLocal|' $S/$HELP
+run_unit M3-helper-includes-today
+
+# M4: helper returns undefined silently instead of failing (the edge case would pass on silently).
+restore
+sed -i 's|^  if (first === undefined) {$|  if (first === undefined \&\& Number.NaN === 0) {|' $S/$HELP
+run_unit M4-helper-silent-on-edge
+
+# M5: helper ignores the day class (a holiday or weekend could be chosen).
+restore
+sed -i "s|day.classification?.day_class === 'normal' && day.sessions.length === 0|day.sessions.length === 0|" $S/$HELP
+run_unit M5-helper-ignores-day-class
+
+# M6: helper ignores existing sessions (the unit test has no sessions; the e2e would hit an overlap instead).
+restore
+sed -i "s|day.classification?.day_class === 'normal' && day.sessions.length === 0|day.classification?.day_class === 'normal'|" $S/$HELP
+run_unit M6-helper-ignores-sessions
+
+restore
+echo "----- restored -----"
+diff -u $T/orig-e2eSeedSelection.test.ts.txt $S/$TESTF; diff -u $T/orig-displayedSeed.ts.txt $S/$HELP; diff -u $T/orig-fixtures.ts.txt $S/tests/e2e/fixtures.ts; echo "restore diff exit=$?"

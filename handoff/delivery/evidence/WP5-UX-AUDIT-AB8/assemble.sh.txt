@@ -1,0 +1,45 @@
+# Assembles raw evidence in <task>/ev-raw, then masks it into the repository evidence folder.
+source <task>/env.sh
+R=$T/ev-raw
+mkdir -p $R
+sec() { echo; echo "######## $1"; }
+
+{ cat $T/start-time.txt; cat $T/node-version.txt; sec "HEAD"; cat $T/head.txt; sec "digest before"; cat $T/digest-before.txt; sec "clean exports"; cat $T/export.txt; cat $T/exdigest-before.txt; } > $R/01-digest-before.txt
+
+{ cat $T/diff-scope.txt; sec "git diff 255ba17 3670a6c outside handoff/ (full)"; cat $T/diff-255-3670.txt; } > $R/02-diff-scope.txt
+
+{ cat $T/teststrength.txt; } > $R/03-test-strength.txt
+
+{ sec "npm ci x255"; cat $T/ci-old.txt; sec "npm ci x3670"; cat $T/ci-new.txt; sec "npm run build x255"; cat $T/build-old.txt; sec "npm run build x3670"; cat $T/build-new.txt; sec "byte comparison of dist/ (after the first builds)"; cat $T/cmpdist.txt; sec "x3670 rebuilt before the full e2e, compared again"; cat $T/e2e-full-build.txt; cat $T/cmpdist-2.txt; } > $R/04-bundles.txt
+
+{ sec "typecheck"; cat $T/typecheck.txt; sec "lint"; cat $T/lint.txt; sec "npm test"; cat $T/npmtest.txt; sec "seed-selection test, verbose"; cat $T/seedtest-new.txt; sec "AC-13 once"; cat $T/ac13.txt; sec "npm audit"; cat $T/audit.txt; sec "deprecation lines in all logs"; echo "matching lines: $(wc -l < $T/deprec-lines.txt)"; } > $R/05-mandatory-checks.txt
+
+{ cat $T/derive.txt; } > $R/06-seed-derivation.txt
+
+{ cat $T/mutate.txt; } > $R/07-seed-mutations.txt
+
+{ sec "periods at the start and end of the AC-01 run (derive.mts [6])"; grep "^\[6\]" $T/derive-ac01-before.txt; grep "^\[6\]" $T/derive-ac01-after.txt; sec "isolation.spec.ts + shell.spec.ts, both projects, x3670"; cat $T/ac01.txt; sec "step report: test lines"; grep "^TEST\|^END" $T/steps-ac01.txt; sec "seeded day per test (fixtures POST)"; cat $T/ac01-seeds.txt; sec "assertion steps located in isolation.spec.ts (count, project, test, line)"; cat $T/ac01-iso-lines.txt; sec "isolation assertion steps, titles cut at 70 characters"; cat $T/ac01-iso-steps-short.txt; sec "isolation and shell:67 across every real and simulated full run"; cat $T/ac01-all-runs.txt; } > $R/08-ac01.txt
+
+{ sec "the unchanged 255ba17 specs now (same window, after 17:00): the old seed choice still fails"; cat $T/old255-now.txt; } > $R/09-ac01-old255-now.txt
+
+{ sec "periods at the start of the full run"; grep "^\[6\]" $T/derive-e2e-before.txt; cat $T/e2e-full.txt; } > $R/10-e2e-full.txt
+
+{ sec "automation + pdf-visual again on x3670"; cat $T/clock-new.txt; sec "automation + pdf-visual on x255"; cat $T/clock-old.txt; sec "docs/05 line 26 (activation)"; cat $T/activation-docs.txt; } > $R/11-deadline-window.txt
+
+{ sec "simulated clock controls"; cat $T/sim-c1.txt; cat $T/sim-c2.txt; grep -o '"today_local":"[0-9-]*","current":{"payroll_date":"[0-9-]*"' $T/steps-sim-c1-1027-1300.txt | sort | uniq -c; sec "full suite at simulated 2026-10-27 13:00 (control)"; grep -v "^  ok " $T/sim-s4.txt; } > $R/12-sim-controls.txt
+
+for s in s2 s3 s6 s1 s5 s7; do echo; done
+{ for s in s2 s3 s6 s1 s5 s7; do sec "full suite $s (lines other than passing tests)"; grep -v "^  ok " $T/sim-$s.txt; done; } > $R/13-sim-sweep.txt
+
+{ sec "AB8-02 deterministic: shell + timesheet, desktop, one worker, 2026-11-28 (x3670)"; cat $T/sim-r2.txt; sec "timesheet alone (x3670)"; cat $T/sim-r2b.txt; sec "shell + timesheet on x255"; cat $T/sim-r2-old.txt; sec "who wrote sessions on 11-23..11-25 in the full run (all accounts)"; cat $T/sim-s1-pool.txt; sec "AB8-03 deterministic: admin-status + admin, one worker, 2026-12-26"; cat $T/sim-r3.txt; for d in $T/pw-sim-r3-1226-admin/*/; do grep -h "alter days of a finalized" "$d/error-context.md"; done; sec "admin alone"; cat $T/sim-r3b.txt; sec "AB8-04: client default year (adminModel.ts) and the server warning"; cat $T/yr5.txt; cat $T/calwarn.txt; sec "edge-case attempt: shell:67 repeated 4x at 2026-11-28 (each repetition gets a fresh worker server, so the pool never ran out)"; cat $T/sim-edge.txt; } > $R/14-sim-repro.txt
+
+{ cat $T/digest-after.txt; } > $R/90-digest-after.txt
+
+for f in env.sh exdigest.sh cmpdist.sh mutate.sh run-pw.sh run-shift.sh assemble.sh; do cp $T/$f $R/$f.txt; done
+cp $T/derive.mts $R/derive.ts.txt
+for f in stepreporter shiftclock probe-now mask; do cp $T/$f.mjs $R/$f.mjs.txt; done
+
+PAIRS=()
+for f in $R/*.txt; do PAIRS+=("$(cygpath -w $f)" "$(cygpath -w $E/$(basename $f))"); done
+node $T/mask.mjs "${PAIRS[@]}"
+echo "mask exit=$?"

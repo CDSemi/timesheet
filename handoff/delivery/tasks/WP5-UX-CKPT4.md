@@ -140,4 +140,16 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+- Pre-HEAD 3670a6c3c22ddcf75138927ed60f4cd9bf02078d (= origin/main, no extra commits).
+  Post-HEAD / commit dc70ba65eb6c93925b3abe821829b76fc7e1f9da; pushed to main; remote
+  SHA dc70ba65eb6c93925b3abe821829b76fc7e1f9da. No tag.
+- Digest before add and ls-tree digest of HEAD: both 58b0deee5d0169f0211740de34953517500576baa2fd914d5a26059d5ba1dffd.
+- Staged 100: modified 6; new FIX9-FREEZE evidence 2; REGATE7 evidence 89; tasks 3
+  (REGATE7, AUDIT-AB8, CKPT4).
+- Other modified tracked handoff files: none.
+- Checks (all exit 0): node v24.21.0; precommit PASS (100 files); diff --cached --check;
+  JSON parse; validate_orchestration (329 tasks); check_recovery (106 probes);
+  validate_package --preflight; fetch; push dry-run; push.
+- No fixes applied, no masking needed. Process note: one stray no-op
+  `node -e "1"` call with a null-device redirect was issued in the check step by mistake
+  (no effect on files); disclosed here. Evidence in evidence/WP5-UX-CKPT4/ (unstaged).

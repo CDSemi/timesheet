@@ -1,0 +1,97 @@
+== repro-ab03: real start 2026-10-14T03:23:33Z, simulated start 2026-12-26T18:00:00Z, AB8_SHIFT_MS=6359786309
+process clock 2026-12-26T18:00:00.080Z (Date.now 1798308000090); America/Los_Angeles Sat, 2026-12-26, 10:00; shift ms 6359786309; instanceof true
+$ node node_modules/@playwright/test/cli.js test --workers=1 admin-status.spec.ts admin.spec.ts --output=<task>/pw-repro-ab03
+
+Running 16 tests using 1 worker
+
+  ok  1 [desktop] › tests\e2e\admin-status.spec.ts:106:1 › the admin sees pipeline states, a fault code and recipients, and no timesheet detail (1.3m)
+  ok  2 [desktop] › tests\e2e\admin-status.spec.ts:195:1 › an employee cannot read the status routes and the Admin screen is not offered (396ms)
+  ok  3 [desktop] › tests\e2e\admin-status.spec.ts:244:1 › a paused instance shows why, how many sends are held, an old backup and the disk space (719ms)
+  ok  4 [desktop] › tests\e2e\admin.spec.ts:81:1 › accounts: create, rename, refusals, deactivate with 401, reactivate (1.9s)
+  ok  5 [desktop] › tests\e2e\admin.spec.ts:184:1 › settings: preview the effect, then create; the day figures equal the preview (1.2s)
+  x   6 [desktop] › tests\e2e\admin.spec.ts:281:1 › holiday CSV: issue, boundary, stale hash, preview diff, commit and no-change re-commit (8.0s)
+  ok  7 [desktop] › tests\e2e\admin.spec.ts:373:1 › payroll exception needs a reason and is recorded once (1.0s)
+  ok  8 [desktop] › tests\e2e\admin.spec.ts:405:3 › navigation › Settings for everyone, Admin for administrators only (671ms)
+  ok  9 [mobile] › tests\e2e\admin-status.spec.ts:106:1 › the admin sees pipeline states, a fault code and recipients, and no timesheet detail (17.4s)
+  ok 10 [mobile] › tests\e2e\admin-status.spec.ts:195:1 › an employee cannot read the status routes and the Admin screen is not offered (394ms)
+  ok 11 [mobile] › tests\e2e\admin-status.spec.ts:244:1 › a paused instance shows why, how many sends are held, an old backup and the disk space (661ms)
+  ok 12 [mobile] › tests\e2e\admin.spec.ts:81:1 › accounts: create, rename, refusals, deactivate with 401, reactivate (2.2s)
+  ok 13 [mobile] › tests\e2e\admin.spec.ts:184:1 › settings: preview the effect, then create; the day figures equal the preview (1.5s)
+  x  14 [mobile] › tests\e2e\admin.spec.ts:281:1 › holiday CSV: issue, boundary, stale hash, preview diff, commit and no-change re-commit (8.3s)
+  ok 15 [mobile] › tests\e2e\admin.spec.ts:373:1 › payroll exception needs a reason and is recorded once (1.2s)
+  ok 16 [mobile] › tests\e2e\admin.spec.ts:405:3 › navigation › Settings for everyone, Admin for administrators only (845ms)
+
+
+  1) [desktop] › tests\e2e\admin.spec.ts:281:1 › holiday CSV: issue, boundary, stale hash, preview diff, commit and no-change re-commit 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('form', { name: 'Holiday import' }).locator('[data-preview-can-commit="true"]')
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('form', { name: 'Holiday import' }).locator('[data-preview-can-commit="true"]') with timeout 7000ms
+      - waiting for getByRole('form', { name: 'Holiday import' }).locator('[data-preview-can-commit="true"]')
+
+
+      336 |   await expect(section.locator(`[data-diff="added"] [data-diff-date="${midYear}"]`)).toBeVisible();
+      337 |   await expect(section.locator('[data-diff="counts"]')).toBeVisible();
+    > 338 |   await expect(section.locator('[data-preview-can-commit="true"]')).toBeVisible();
+          |                                                                     ^
+      339 |   await expect(section.getByRole('button', { name: 'Commit import' })).toBeEnabled();
+      340 |   await page.screenshot({ path: screenshotPath(`holiday-preview-${project}-synthetic.png`), fullPage: true });
+      341 |
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\admin.spec.ts:338:69
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab03\admin-holiday-CSV-issue-bo-c1a00-mit-and-no-change-re-commit-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab03\admin-holiday-CSV-issue-bo-c1a00-mit-and-no-change-re-commit-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab03\admin-holiday-CSV-issue-bo-c1a00-mit-and-no-change-re-commit-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\admin.spec.ts:281:1 › holiday CSV: issue, boundary, stale hash, preview diff, commit and no-change re-commit 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('form', { name: 'Holiday import' }).locator('[data-preview-can-commit="true"]')
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('form', { name: 'Holiday import' }).locator('[data-preview-can-commit="true"]') with timeout 7000ms
+      - waiting for getByRole('form', { name: 'Holiday import' }).locator('[data-preview-can-commit="true"]')
+
+
+      336 |   await expect(section.locator(`[data-diff="added"] [data-diff-date="${midYear}"]`)).toBeVisible();
+      337 |   await expect(section.locator('[data-diff="counts"]')).toBeVisible();
+    > 338 |   await expect(section.locator('[data-preview-can-commit="true"]')).toBeVisible();
+          |                                                                     ^
+      339 |   await expect(section.getByRole('button', { name: 'Commit import' })).toBeEnabled();
+      340 |   await page.screenshot({ path: screenshotPath(`holiday-preview-${project}-synthetic.png`), fullPage: true });
+      341 |
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\admin.spec.ts:338:69
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab03\admin-holiday-CSV-issue-bo-c1a00-mit-and-no-change-re-commit-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab03\admin-holiday-CSV-issue-bo-c1a00-mit-and-no-change-re-commit-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab03\admin-holiday-CSV-issue-bo-c1a00-mit-and-no-change-re-commit-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\admin.spec.ts:281:1 › holiday CSV: issue, boundary, stale hash, preview diff, commit and no-change re-commit 
+    [mobile] › tests\e2e\admin.spec.ts:281:1 › holiday CSV: issue, boundary, stale hash, preview diff, commit and no-change re-commit 
+  14 passed (2.3m)
+exit=1
+process clock 2026-12-26T18:02:16.055Z (Date.now 1798308136065); America/Los_Angeles Sat, 2026-12-26, 10:02; shift ms 6359786309; instanceof true
+== repro-ab03 real end 2026-10-14T03:25:49Z

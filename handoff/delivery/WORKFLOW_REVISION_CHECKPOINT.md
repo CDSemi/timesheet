@@ -321,9 +321,30 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   replied "tiếp tục nếu đang chạy dở" without confirming Docker; board back to
   `running`. REGATE7 attempt 2 (drill only) stopped at the engine check: client 28.5.1,
   the Docker Desktop Linux engine pipe is missing. Board `blocked` again on
-  WP5-UX-DOCKER. Running: checkpoint commit WP5-UX-CKPT4 (handoff only, digest
-  58b0deee). After the owner starts Docker: REGATE7 attempt 3, the drill only; then the combined opus recheck WP5-UX-AUDIT-AB8 (areas
-  A and B; brief prepared; coordinator decision to save usage), then the WP5 re-accept.
+  WP5-UX-DOCKER. Checkpoint commit WP5-UX-CKPT4 done:
+  dc70ba65eb6c93925b3abe821829b76fc7e1f9da on main, pushed (100 handoff paths, digest
+  58b0deee unchanged). Uncommitted afterwards: this update (+ vi), the board result and
+  the CKPT4 results and evidence. The owner replied "Docker đã chạy" (Docker is running);
+  board `running`. WP5-UX-REGATE7 attempt 3 (drill only): drill --wp3 208 PASS / 0
+  FAIL, image sha256:52b45ad9774df69e0a116440bbd64d15fa114ad0273af6b063f08a8f7c61b590,
+  cleanup verified; the whole gate PASS on 3670a6c / 58b0deee (NAS NOT VERIFIED).
+  WP5-UX-AUDIT-AB8 (combined fresh opus) FIX REQUIRED: product byte-identical to
+  255ba17, test strength and the seed rule PASS, AC-01 passes inside the window, B7-01 =
+  A7-01 closed; but the full e2e has 3 failures (AB8-01, deadline tests after each due
+  time) and a validated simulated-clock sweep found AB8-02 (free-day pool on
+  2026-11-28..30), AB8-03 (holiday import across New Year) and AB8-04 (default import
+  year from 2027-01-01). All test-only and pre-existing.
+- Coordinator decision: one tests-only round WP5-UX-FIX10 (worker-high, sonnet) that
+  also runs the simulated-clock sweep itself and fixes every calendar failure it shows.
+  Then freeze, WP5-UX-REGATE8 (real clock plus the sweep) and a combined recheck AB9.
+- WP5-UX-FIX10 done (self-reported claude-sonnet-5-5; reported, not independent proof):
+  AB8-01 later deadline through the payroll-exception path when the displayed due has
+  passed; AB8-02 seeded days released; AB8-03 import dates after the displayed period;
+  AB8-04 client default import year. 8 test files, no new file. Sweep: 14 full runs on
+  both projects with 0 failures (one transient ERR_NO_BUFFER_SPACE on 2027-01-19 passed on
+  rerun); unit 1831; verify 0; digest 57e2974c.
+- Running: WP5-UX-FIX10-FREEZE (committer, expected HEAD dc70ba6). Then WP5-UX-REGATE8
+  and the combined recheck AB9.
 - Next: if both PASS, the WP5 re-accept (pilot packet identity refresh to 5e104e1 /
   07c3ca00 / image 218dd7cc…, docs/10 owner decision Q1, STATE, NEXT_ACTION, WP5
   handoff, accept commit).

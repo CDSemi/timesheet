@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mission_id": "timesheet-software-readiness",
-  "status": "blocked",
+  "status": "running",
   "authorized_scope": [
     "WP1",
     "WP2",
@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "ux-change-round-regate7-docker-blocked",
+  "phase": "ux-change-round-fix10",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,8 +28,12 @@
   "current_source_digest": "b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX-CKPT4",
+  "next_task_id": "WP5-UX-FIX10-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-13",
+      "observation": "Committers (sonnet) ran a no-op `node -e \"1\"` with a null-device redirect in three consecutive commit tasks (FIX8-FREEZE attempt 2 area, FIX9-FREEZE, CKPT4) despite the brief; no file changed. Candidate for a later GOV profile hardening of timesheet-committer (an explicit node availability check by `node --version` to a file)."
+    },
     {
       "date": "2026-10-13",
       "observation": "Both delta rechecks WP5-UX-AUDIT-B7 and WP5-UX-AUDIT-A7 (opus) stopped on 2026-10-09 at the subscription weekly usage limit (HTTP 429, reset 2026-10-12 11:00 America/Los_Angeles). No overage or billing change was made. The owner asked to try again on 2026-10-13; both rechecks are re-dispatched as attempt 2 with new task folders and ports."
@@ -171,7 +175,8 @@
       "observation": "WP4-DEC: the worker bundled evidence writing, the brief-results heredoc and 'cmd.exe /c \"npm run digest\"' in one backgrounded Bash call. The cmd.exe step hung, the heredoc append never landed, and the worker's hand-back wrongly said results were appended. The coordinator stopped the background task and resumed the worker to append the results with the Edit tool. Briefs now forbid cmd.exe entirely (with or without /c) and ask for npm or node to be run from Git Bash with Node 24 first on PATH, and for task records to be written with the Edit tool, not shell heredocs."
     }
   ],
-  "pending_owner_question_2": {
+  "pending_owner_question_2": null,
+  "answered_owner_action_docker": {
     "id": "WP5-UX-DOCKER",
     "asked": "2026-10-13",
     "kind": "owner_action",
@@ -179,7 +184,8 @@
     "blocks": "WP5-UX-REGATE7 attempt 2 (drill only), then WP5-UX-AUDIT-AB8 and the WP5 re-accept",
     "recommendation": "Open Docker Desktop, wait until it shows the engine running, then reply in chat.",
     "owner_reply": "2026-10-13, owner chat (verbatim): 'tiếp tục nếu đang chạy dở' (continue if work is unfinished). No Docker confirmation; the coordinator dispatches REGATE7 attempt 2, which checks the engine first and stops at once if it is still unreachable.",
-    "status_after_reply": "REGATE7 attempt 2 found the engine still unreachable (Docker Desktop Linux engine pipe missing). Still pending: the owner starts Docker Desktop and confirms in chat."
+    "status_after_reply": "REGATE7 attempt 2 found the engine still unreachable (Docker Desktop Linux engine pipe missing). Still pending: the owner starts Docker Desktop and confirms in chat.",
+    "answered": "2026-10-13, owner chat (verbatim): 'Docker đã chạy' (Docker is running). REGATE7 attempt 3 (drill only) dispatched."
   },
   "answered_owner_question_ux_q2": {
     "answered": "2026-10-09, owner chat 'a' (accessibility sweep, then one fix round); see owner_decisions",
@@ -238,7 +244,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "3670a6c3c22ddcf75138927ed60f4cd9bf02078d",
+    "last_commit": "dc70ba65eb6c93925b3abe821829b76fc7e1f9da",
     "unpushed": []
   },
   "owner_decisions": [
@@ -368,6 +374,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-13",
+      "basis": "WP5-UX-AUDIT-AB8 FIX REQUIRED on 3670a6c: the product is byte-identical to 255ba17 and passes both areas; B7-01 = A7-01 is closed; but the e2e suite depends on the calendar in four more places (AB8-01 deadline tests after each due time, AB8-02 free-day pool on 2026-11-28..30, AB8-03 holiday import across New Year, AB8-04 default import year from 2027-01-01), all test-only and pre-existing. The auditor swept the suite with a validated simulated clock (preload shiftclock.mjs) at 7 instants, so the list is as complete as that sweep. Repeated one-defect-per-audit rounds must stop.",
+      "decision": "One tests-only round WP5-UX-FIX10 for AB8-01..AB8-04 on timesheet-worker-high (sonnet, high effort is the profile; no override; size M, risk M). It must also run the auditor's simulated-clock sweep itself before returning (the 8 instants: P-4, P-3 13:00, P-3 18:00, P, P+1, 2026-11-28, 2026-12-26, 2027-01-11, plus a 2027 due Tuesday) and fix every calendar failure it finds in that sweep in the same round, as long as it is test-only. No product change; R-AB8-1..R-AB8-4 and the carried risks stay optional backlog. Then freeze, WP5-UX-REGATE8 (full gate on the real clock plus the same simulated-clock sweep; bundles compared with 3670a6c), and one combined fresh opus recheck WP5-UX-AUDIT-AB9."
+    },
     {
       "date": "2026-10-13",
       "basis": "FIX9 changes tests only (5 paths under tests/); WP5-UX-REGATE7 compares the 255ba17 and 3670a6c bundles byte for byte. Two parallel opus audits per round (about 0.4-0.7M tokens each) already hit the subscription weekly limit once (2026-10-09).",
@@ -17262,7 +17273,7 @@
       "id": "WP5-UX-CKPT4",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX-FIX9-FREEZE"
       ],
@@ -17275,10 +17286,10 @@
         "risk": "L",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a91165794f39cd24e",
       "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
       "attempt": 1,
       "owned_paths": [
@@ -17287,25 +17298,29 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX-CKPT4.md",
       "report": "handoff/delivery/tasks/WP5-UX-CKPT4.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-CKPT4/checks.txt",
+        "handoff/delivery/evidence/WP5-UX-CKPT4/commit-message.txt"
+      ],
       "baseline_commit": "3670a6c3c22ddcf75138927ed60f4cd9bf02078d",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "dc70ba65eb6c93925b3abe821829b76fc7e1f9da",
+      "pushed": true,
       "source_digest": "58b0deee5d0169f0211740de34953517500576baa2fd914d5a26059d5ba1dffd",
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Committer stages the handoff records since 3670a6c (FIX9-FREEZE results, REGATE7, AB8 brief, board, checkpoint, NEXT_ACTION), runs the checks, commits and pushes; then the board waits for WP5-UX-DOCKER."
+      "decision": "committed and pushed: 100 handoff paths (6 modified records, 2 FIX9-FREEZE evidence files, 89 REGATE7 evidence files, 3 task briefs); HEAD was 3670a6c with no extra commits; no other tracked handoff file modified; working-tree and HEAD ls-tree digests 58b0deee; precommit (100 files), diff check, JSON parse, validate_orchestration, check_recovery (106) and preflight exit 0; remote main = dc70ba6; no tag. Slip: one no-op node -e call with a null-device redirect (disclosed).",
+      "next_action": "None; the board waits for owner action WP5-UX-DOCKER, then WP5-UX-REGATE7 attempt 3 (drill only)."
     },
     {
       "id": "WP5-UX-REGATE7",
       "package": "WP5",
       "kind": "gate",
-      "status": "blocked",
+      "status": "done",
       "history": [
         "attempt 1 (agent af000510ec10ebc9a, self-reported claude-sonnet-5-5): NOT VERIFIED only because the Docker engine was unreachable ('docker desktop start' did not complete twice; no project resources created), so drill --wp3 did not run and there is no image ID. Every other item passed: digest 58b0deee (795 files) in three forms before and after; npm ci, lint, verify exit 0 (83 files, 1827 tests, smoke passed); full e2e 210 passed / 26 skipped / 0 failed (desktop 103, mobile 107) on 2026-10-13 about 13:04 America/Los_Angeles, inside the seed-date window; AC-13 x3 and under Asia/Tokyo and America/New_York; npm test x3; validators and check_recovery (106), precommit self-test, npm audit 0, compose config forms, contrast identical to REGATE6, 44px and scroll at 390/375/360/320; fix scope exactly the 5 test paths (fixtures.ts 12 additions, 0 deletions; no weakened assertion, no skip/fixme/only); seed test 4 passed, old choice 3 failed in a scratch copy, old 255ba17 specs failed 3 per project today, new specs passed 3x on both projects; 230 dist files byte-identical to 255ba17 (REGATE6 product observations carry forward). Coordinator: owner action WP5-UX-DOCKER, then attempt 2 runs the drill only.",
-        "attempt 2 (same agent, resumed, 2026-10-13): NOT VERIFIED; stopped at the engine check as instructed: docker client 28.5.1 answers, the Docker Desktop Linux engine pipe is missing (server unreachable); Docker Desktop not started, no retry, no drill, nothing to clean up; HEAD = origin/main = 3670a6c; node v24.21.0. Attempt 1's other results stand. Coordinator: board blocked again on WP5-UX-DOCKER; checkpoint commit WP5-UX-CKPT4 meanwhile."
+        "attempt 2 (same agent, resumed, 2026-10-13): NOT VERIFIED; stopped at the engine check as instructed: docker client 28.5.1 answers, the Docker Desktop Linux engine pipe is missing (server unreachable); Docker Desktop not started, no retry, no drill, nothing to clean up; HEAD = origin/main = 3670a6c; node v24.21.0. Attempt 1's other results stand. Coordinator: board blocked again on WP5-UX-DOCKER; checkpoint commit WP5-UX-CKPT4 meanwhile.",
+        "attempt 3 (same agent, resumed, 2026-10-13, after the owner's 'Docker đã chạy'): drill only; HEAD = origin/main = dc70ba6, no non-handoff path changed since 3670a6c; digest 58b0deee (ls-tree and npm run digest); drill --wp3 exit 0 on the clean 3670a6c export, project ts-wp5-uxregate7, stages 33/31/57/35/27/23 = 208 PASS / 0 FAIL, forbidden-file scan PASS, no deprecation warnings; image sha256:52b45ad9774df69e0a116440bbd64d15fa114ad0273af6b063f08a8f7c61b590 (110014793 B, linux/amd64); image removed by exact tag, compose down -v, final docker ps empty. Whole gate PASS (NAS NOT VERIFIED)."
       ],
       "freeze_commit": "3670a6c3c22ddcf75138927ed60f4cd9bf02078d",
       "depends_on": [
@@ -17320,12 +17335,12 @@
         "risk": "H",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
       "agent_id": "af000510ec10ebc9a",
       "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
-      "attempt": 1,
+      "attempt": 3,
       "owned_paths": [
         "handoff/delivery/tasks/WP5-UX-REGATE7.md",
         "handoff/delivery/evidence/WP5-UX-REGATE7"
@@ -17344,14 +17359,188 @@
         "handoff/delivery/evidence/WP5-UX-REGATE7/20-bound-stat.txt",
         "handoff/delivery/evidence/WP5-UX-REGATE7/22a-fixround.txt",
         "handoff/delivery/evidence/WP5-UX-REGATE7/15-docker-version.txt",
-        "handoff/delivery/evidence/WP5-UX-REGATE7/a2-docker-version.txt"
+        "handoff/delivery/evidence/WP5-UX-REGATE7/a2-docker-version.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE7/a3-head.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE7/a3-digest.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE7/a3-lstree.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE7/a3-docker-version.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE7/a3-drill.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE7/a3-drill-exit.txt",
+        "handoff/delivery/evidence/WP5-UX-REGATE7/a3-docker-ps.txt"
       ],
       "baseline_commit": "3670a6c3c22ddcf75138927ed60f4cd9bf02078d",
       "source_digest": "58b0deee5d0169f0211740de34953517500576baa2fd914d5a26059d5ba1dffd",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "PASS",
+      "gate_notes": "PASS (NAS items NOT VERIFIED) on 3670a6c, digest 58b0deee (795 files): attempt 1 items (npm ci, lint, verify 1827 tests; full e2e 210/0/26 inside the seed-date window on 2026-10-13; AC-13 x3 plus Tokyo and New_York; npm test x3; validators and check_recovery 106; precommit self-test; npm audit 0; compose config; contrast; 44px and scroll; fix scope exactly 5 test paths, fixtures.ts additive only, no weakened assertion; seed test passes and fails on the old choice; new specs 3x pass; 230 dist files byte-identical to 255ba17) plus attempt 3 drill --wp3 208 PASS / 0 FAIL, image sha256:52b45ad9774df69e0a116440bbd64d15fa114ad0273af6b063f08a8f7c61b590 (110014793 B), cleanup verified. Attempt 2 stopped at the engine check (Docker not running).",
+      "next_action": "None; combined fresh opus recheck WP5-UX-AUDIT-AB8 on 3670a6c."
+    },
+    {
+      "id": "WP5-UX-AUDIT-AB8",
+      "package": "WP5",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "3670a6c3c22ddcf75138927ed60f4cd9bf02078d",
+      "depends_on": [
+        "WP5-UX-REGATE7"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a61e761845b704d4f",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-AUDIT-AB8.md",
+        "handoff/delivery/WP5_UX_REVIEW_AB8.md",
+        "handoff/delivery/WP5_UX_REVIEW_AB8.vi.md",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-AUDIT-AB8.md",
+      "report": "handoff/delivery/tasks/WP5-UX-AUDIT-AB8.md",
+      "evidence": [
+        "handoff/delivery/WP5_UX_REVIEW_AB8.md",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/00-README.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/01-digest-before.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/03-test-strength.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/04-bundles.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/05-mandatory-checks.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/06-seed-derivation.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/08-ac01.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/10-e2e-full.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/11-deadline-window.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/12-sim-controls.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/13-sim-sweep.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/14-sim-repro.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/shiftclock.mjs.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-AB8/90-digest-after.txt"
+      ],
+      "baseline_commit": "3670a6c3c22ddcf75138927ed60f4cd9bf02078d",
+      "source_digest": "58b0deee5d0169f0211740de34953517500576baa2fd914d5a26059d5ba1dffd",
+      "reviewed_digest": "58b0deee5d0169f0211740de34953517500576baa2fd914d5a26059d5ba1dffd",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP5-UX-AB8-01 (Low; tests only; older than FIX9; blocks because the mandatory full e2e fails): tests/e2e/automation.spec.ts:149-151 (test :118) requires periods.current.due_at_utc > now + 120 s, and tests/e2e/pdf-visual.spec.ts:219-221 (test :187) records activation at now + 60 s and drains jobs at current.due_at_utc + 5 min; from about 16:58 on each due Tuesday (P-3) to the end of the payroll date P (about 3 days 7 hours of every 14) the 3 tests fail (real clock 2026-10-13 19:14 PDT; same on 255ba17; simulated 2026-10-27 13:00 passes, 18:00 fails). Bounded fix: run the deadline scenario on a period whose due is still ahead (in_progress or next period), keep every assertion, prove at P-3 13:00, P-3 18:00, P and P+1.",
+        "WP5-UX-AB8-02 (Low; tests only; blocks on 2026-11-28..11-30): shell.spec.ts:67-70 and timesheet.spec.ts:189-201 seed days for the worker-shared employee and never remove them; timesheet.spec.ts:403-408 then needs one more free day; the displayed period 11/23-12/06 has only 3 past normal workdays (synthetic holidays 11-26, 11-27). Bounded fix: release seeded days in finally or use per-test accounts; check demand against the minimum pool (3).",
+        "WP5-UX-AB8-03 (Low; tests only; blocks on 2026-12-26..12-31): admin.spec.ts:281 imports ${year}-01-01 effective from periods.current.period_start on the worker's shared calendar; while the displayed period spans New Year, admin-status.spec.ts has finalized a timesheet of that period, so the product correctly refuses. Bounded fix: import dates outside the displayed period or use a calendar no other test finalizes; keep the stale-hash and no-change assertions.",
+        "WP5-UX-AB8-04 (Low; tests only; first fails 2027-01-01): admin.spec.ts:290 falls back to today's year + 1 when there is no next-year warning, while the client's defaultImportYear (adminModel.ts:93-95) falls back to today's year (the server warns only from 1 October); fails every day 1 January to 30 September. Bounded fix: compute the expected year with the client's rule or import defaultImportYear; keep every assertion."
+      ],
+      "notes": [
+        "Fresh context; self-reported claude-opus-5-5, not weaker than the strongest author.",
+        "Product unchanged: dist byte-identical between 255ba17 and 3670a6c (230 files). Test strength PASS (fixtures.ts 12/0 additive; spec changes only the seed source; no skip/fixme/only; edge case throws clearly). Seed rule PASS (old seed off-page window P-3..P at any hour; the unit test fails on the old choice; the specs use the proven helper). AC-01 inside the window (2026-10-13 19:12 PDT): 13 passed, 1 skipped; all four isolation groups reached and passed. B7-01 = A7-01 closed.",
+        "Checks: typecheck 0, lint 0, npm test 83 files / 1827, AC-13 1/1; full e2e exit 1: 207 passed, 3 failed (AB8-01), 26 skipped. Simulated-clock sweep (validated preload shiftclock.mjs via NODE_OPTIONS=--import; controls match the real clock) at 7 instants found AB8-02..04; isolation and shell:67 pass at every instant. Digest 58b0deee before and after.",
+        "Optional: R-AB8-1 seed unit test has no case with an existing session; R-AB8-2 displayedPeriodFreeWorkdays keeps its own filter copy; R-AB8-3 midnight crossing flake risk; R-AB8-4 sweep covered 7 instants only. Carried risks unchanged and non-blocking."
+      ],
+      "next_action": "WP5-UX-FIX10 (tests only) for AB8-01..AB8-04, then freeze, a gate with a simulated-clock sweep, and a combined recheck."
+    },
+    {
+      "id": "WP5-UX-FIX10",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP5-UX-AUDIT-AB8",
+      "depends_on": [
+        "WP5-UX-REGATE7"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a81411f4c2d9ef450",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "tests",
+        "handoff/delivery/tasks/WP5-UX-FIX10.md",
+        "handoff/delivery/evidence/WP5-UX-FIX10"
+      ],
+      "ownership_note": "tests only; fixtures.ts additive only; no src, docs, scripts or config change; the simulated-clock preload stays in the task folder.",
+      "prompt": "handoff/delivery/tasks/WP5-UX-FIX10.md",
+      "report": "handoff/delivery/tasks/WP5-UX-FIX10.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-FIX10/00-README.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/01-digest-before.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/repro-ab01.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/repro-ab02.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/repro-ab03.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/repro-ab04.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/sweep-table.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/sweep-real.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/sweep-d-2027-0119-1800.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/sweep-d-2027-0119-1800-rerun.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/unit.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/git-diffstat.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/preflight.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/verify.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX10/90-digest-after.txt"
+      ],
+      "baseline_commit": "dc70ba65eb6c93925b3abe821829b76fc7e1f9da",
+      "source_digest": "57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d",
+      "reviewed_digest": null,
+      "author_agent_ids": [
+        "a81411f4c2d9ef450"
+      ],
+      "decision": "reported done (not independent proof): AB8-01 keeps the displayed period and, when its due has passed, records a later deadline through the payroll-exception path on the private server (new ensureDeadlineAhead and laterDeadlineFor; the in-progress route was rejected because it fails at the History 'Signed' fact); AB8-02 shell:67 releases its day in finally and timesheet:189 in afterEach; AB8-03 importDatesAfter puts import dates after the displayed period; AB8-04 admin:281 imports the client's defaultImportYear. All four reproduced on the base. Files (tests only, 8 modified, no new file): tests/e2e/displayedSeed.ts (+47), fixtures.ts (additive; one import line widened), automation.spec.ts, pdf-visual.spec.ts, shell.spec.ts, timesheet.spec.ts, admin.spec.ts, tests/domain/e2eSeedSelection.test.ts (+4 unit tests). Sweep on both projects: 14 runs 210 passed / 0 failed / 26 skipped (real clock, P-4, P-3 13:00 and 18:00, P, P+1, 11-28 and 11-30 with one worker, 12-26, 2027-01-02, 2027-01-11, 2027-01-19 18:00); one 2027-01-19 run had a single transient ERR_NO_BUFFER_SPACE failure in ot-leave:195 and passed on rerun. Real clock desktop 103/0/15, mobile 107/0/11; unit 83 files / 1831; preflight 0; verify 0; digest 57e2974c (795 files). Deviation: one empty heredoc run by mistake (no change).",
+      "next_action": "WP5-UX-FIX10-FREEZE (committer) on dc70ba6, digest 57e2974c."
+    },
+    {
+      "id": "WP5-UX-FIX10-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX-FIX10"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-FIX10-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX-FIX10-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-FIX10-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-FIX10-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "dc70ba65eb6c93925b3abe821829b76fc7e1f9da",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Attempt 2 (drill only): check the Docker engine first and stop if unreachable; otherwise run drill --wp3 on 3670a6c with cleanup and record the image ID; attempt 1's other results stand; then WP5-UX-AUDIT-AB8."
+      "next_action": "Committer stages the 8 FIX10 test paths and the listed handoff records, runs the checks, commits and pushes; then WP5-UX-REGATE8."
     },
     {
       "id": "WP5-UX-AUDIT-A7",

@@ -1,0 +1,37 @@
+// WP5-UX-AUDIT-AB8: a Playwright reporter that records every assertion step (category "expect") with
+// its spec line, so a run shows which isolation assertions were reached and whether each passed.
+// Usage: --reporter=list,<abs path>/stepreporter.mjs ; output file from env STEP_REPORT_FILE.
+import { appendFileSync, writeFileSync } from 'node:fs';
+import { basename } from 'node:path';
+
+export default class StepReporter {
+  constructor() {
+    this.file = process.env.STEP_REPORT_FILE;
+    if (!this.file) throw new Error('STEP_REPORT_FILE is required');
+    writeFileSync(this.file, '');
+    this.counts = new Map();
+  }
+  key(test) {
+    const project = test.parent?.project()?.name ?? '?';
+    return `${project} | ${basename(test.location.file)}:${test.location.line} | ${test.title}`;
+  }
+  onStepEnd(test, result, step) {
+    if (step.category !== 'expect') return;
+    const loc = step.location ? `${basename(step.location.file)}:${step.location.line}` : '?';
+    const ok = step.error ? 'FAIL' : 'ok';
+    appendFileSync(this.file, `STEP ${ok} | ${this.key(test)} | retry ${result.retry} | ${loc} | ${step.title}\n`);
+    const k = this.key(test);
+    const c = this.counts.get(k) ?? { ok: 0, fail: 0 };
+    if (step.error) c.fail += 1;
+    else c.ok += 1;
+    this.counts.set(k, c);
+  }
+  onTestEnd(test, result) {
+    const c = this.counts.get(this.key(test)) ?? { ok: 0, fail: 0 };
+    const err = result.error ? ` | error: ${String(result.error.message ?? '').split('\n')[0]}` : '';
+    appendFileSync(this.file, `TEST ${result.status} | ${this.key(test)} | expect steps ok ${c.ok} fail ${c.fail} | ${result.duration} ms${err}\n`);
+  }
+  onEnd(result) {
+    appendFileSync(this.file, `END ${result.status}\n`);
+  }
+}

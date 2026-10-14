@@ -1,0 +1,90 @@
+== fix-ab01: real start 2026-10-14T03:29:46Z, simulated start 2026-10-28T01:00:00Z, AB8_SHIFT_MS=1200613098
+process clock 2026-10-28T01:00:00.081Z (Date.now 1793149200092); America/Los_Angeles Tue, 2026-10-27, 18:00; shift ms 1200613098; instanceof true
+$ node node_modules/@playwright/test/cli.js test automation.spec.ts pdf-visual.spec.ts --output=<task>/pw-fix-ab01
+
+Running 8 tests using 2 workers
+
+  ok 2 [desktop] › tests\e2e\pdf-visual.spec.ts:122:1 › a manual revision: name, real sign date, signature, OT on both Sundays in the total, Vietnamese text (3.4s)
+  ok 3 [desktop] › tests\e2e\pdf-visual.spec.ts:187:1 › automatic revisions: the note off/on and the image off/on, long Vietnamese labels, an empty period (4.8s)
+  x  1 [desktop] › tests\e2e\automation.spec.ts:120:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices (12.0s)
+  ok 5 [desktop] › tests\e2e\automation.spec.ts:278:1 › a period is not submitted automatically while the activation instant is not recorded (2.6s)
+  -  6 [mobile] › tests\e2e\pdf-visual.spec.ts:122:1 › a manual revision: name, real sign date, signature, OT on both Sundays in the total, Vietnamese text
+  -  7 [mobile] › tests\e2e\pdf-visual.spec.ts:187:1 › automatic revisions: the note off/on and the image off/on, long Vietnamese labels, an empty period
+  x  4 [mobile] › tests\e2e\automation.spec.ts:120:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices (12.0s)
+  ok 8 [mobile] › tests\e2e\automation.spec.ts:278:1 › a period is not submitted automatically while the activation instant is not recorded (2.4s)
+
+
+  1) [desktop] › tests\e2e\automation.spec.ts:120:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('[data-revision]').first().locator('[data-fact="signed"]')
+    Expected: "Not signed yet"
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" locator('[data-revision]').first().locator('[data-fact="signed"]') with timeout 7000ms
+      - waiting for locator('[data-revision]').first().locator('[data-fact="signed"]')
+
+
+      233 |   await expect(revision.locator('[data-fact="origin"]')).toHaveText('Submitted automatically');
+      234 |   await expect(revision.locator('[data-revision-badge="review"]')).toHaveText('Review pending');
+    > 235 |   await expect(revision.locator('[data-fact="signed"]')).toHaveText('Not signed yet');
+          |                                                          ^
+      236 |   await expect(revision.locator('[data-revision-badge="delivery"]')).toHaveText('Email accepted by the mail server');
+      237 |   // WP3-RBC-01: an event with no actor reads "automatic" because the server flags it (`actor_is_system`), never "by someone else".
+      238 |   const submitted = page.locator('[data-operation="timesheet.auto_finalize"]').first();
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\automation.spec.ts:235:58
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-fix-ab01\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-fix-ab01\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-fix-ab01\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\automation.spec.ts:120:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('[data-revision]').first().locator('[data-fact="signed"]')
+    Expected: "Not signed yet"
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" locator('[data-revision]').first().locator('[data-fact="signed"]') with timeout 7000ms
+      - waiting for locator('[data-revision]').first().locator('[data-fact="signed"]')
+
+
+      233 |   await expect(revision.locator('[data-fact="origin"]')).toHaveText('Submitted automatically');
+      234 |   await expect(revision.locator('[data-revision-badge="review"]')).toHaveText('Review pending');
+    > 235 |   await expect(revision.locator('[data-fact="signed"]')).toHaveText('Not signed yet');
+          |                                                          ^
+      236 |   await expect(revision.locator('[data-revision-badge="delivery"]')).toHaveText('Email accepted by the mail server');
+      237 |   // WP3-RBC-01: an event with no actor reads "automatic" because the server flags it (`actor_is_system`), never "by someone else".
+      238 |   const submitted = page.locator('[data-operation="timesheet.auto_finalize"]').first();
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\automation.spec.ts:235:58
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-fix-ab01\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-fix-ab01\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-fix-ab01\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\automation.spec.ts:120:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices 
+    [mobile] › tests\e2e\automation.spec.ts:120:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices 
+  2 skipped
+  4 passed (35.9s)
+exit=1
+process clock 2026-10-28T01:00:36.366Z (Date.now 1793149236376); America/Los_Angeles Tue, 2026-10-27, 18:00; shift ms 1200613098; instanceof true
+== fix-ab01 real end 2026-10-14T03:30:23Z

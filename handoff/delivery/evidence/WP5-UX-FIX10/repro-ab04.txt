@@ -1,0 +1,95 @@
+== repro-ab04: real start 2026-10-14T03:25:49Z, simulated start 2027-01-11T18:00:00Z, AB8_SHIFT_MS=7742050051
+process clock 2027-01-11T18:00:00.081Z (Date.now 1799690400090); America/Los_Angeles Mon, 2027-01-11, 10:00; shift ms 7742050051; instanceof true
+$ node node_modules/@playwright/test/cli.js test admin.spec.ts --output=<task>/pw-repro-ab04
+
+Running 10 tests using 2 workers
+
+  ok  2 [desktop] › tests\e2e\admin.spec.ts:81:1 › accounts: create, rename, refusals, deactivate with 401, reactivate (2.3s)
+  ok  1 [mobile] › tests\e2e\admin.spec.ts:81:1 › accounts: create, rename, refusals, deactivate with 401, reactivate (2.5s)
+  ok  3 [desktop] › tests\e2e\admin.spec.ts:184:1 › settings: preview the effect, then create; the day figures equal the preview (1.3s)
+  ok  4 [mobile] › tests\e2e\admin.spec.ts:184:1 › settings: preview the effect, then create; the day figures equal the preview (1.5s)
+  x   5 [desktop] › tests\e2e\admin.spec.ts:281:1 › holiday CSV: issue, boundary, stale hash, preview diff, commit and no-change re-commit (7.6s)
+  x   6 [mobile] › tests\e2e\admin.spec.ts:281:1 › holiday CSV: issue, boundary, stale hash, preview diff, commit and no-change re-commit (7.7s)
+  ok  7 [desktop] › tests\e2e\admin.spec.ts:373:1 › payroll exception needs a reason and is recorded once (1.2s)
+  ok  8 [mobile] › tests\e2e\admin.spec.ts:373:1 › payroll exception needs a reason and is recorded once (1.3s)
+  ok  9 [desktop] › tests\e2e\admin.spec.ts:405:3 › navigation › Settings for everyone, Admin for administrators only (785ms)
+  ok 10 [mobile] › tests\e2e\admin.spec.ts:405:3 › navigation › Settings for everyone, Admin for administrators only (891ms)
+
+
+  1) [desktop] › tests\e2e\admin.spec.ts:281:1 › holiday CSV: issue, boundary, stale hash, preview diff, commit and no-change re-commit 
+
+    Error: expect(locator).toHaveValue(expected) failed
+
+    Locator:  getByRole('form', { name: 'Holiday import' }).getByLabel('Year of the dates')
+    Expected: "2028"
+    Received: "2027"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveValue" getByRole('form', { name: 'Holiday import' }).getByLabel('Year of the dates') with timeout 7000ms
+      - waiting for getByRole('form', { name: 'Holiday import' }).getByLabel('Year of the dates')
+        18 × locator resolved to <input value="2027" inputmode="numeric"/>
+           - unexpected value "2027"
+
+
+      302 |
+      303 |   const section = page.getByRole('form', { name: 'Holiday import' });
+    > 304 |   await expect(section.getByLabel('Year of the dates')).toHaveValue(String(year));
+          |                                                         ^
+      305 |   await expect(section.getByLabel('Effective from')).toHaveValue(boundary);
+      306 |   const newYear = `${year}-01-01`;
+      307 |   const midYear = `${year}-07-04`;
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\admin.spec.ts:304:57
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab04\admin-holiday-CSV-issue-bo-c1a00-mit-and-no-change-re-commit-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab04\admin-holiday-CSV-issue-bo-c1a00-mit-and-no-change-re-commit-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab04\admin-holiday-CSV-issue-bo-c1a00-mit-and-no-change-re-commit-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\admin.spec.ts:281:1 › holiday CSV: issue, boundary, stale hash, preview diff, commit and no-change re-commit 
+
+    Error: expect(locator).toHaveValue(expected) failed
+
+    Locator:  getByRole('form', { name: 'Holiday import' }).getByLabel('Year of the dates')
+    Expected: "2028"
+    Received: "2027"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveValue" getByRole('form', { name: 'Holiday import' }).getByLabel('Year of the dates') with timeout 7000ms
+      - waiting for getByRole('form', { name: 'Holiday import' }).getByLabel('Year of the dates')
+        18 × locator resolved to <input value="2027" inputmode="numeric"/>
+           - unexpected value "2027"
+
+
+      302 |
+      303 |   const section = page.getByRole('form', { name: 'Holiday import' });
+    > 304 |   await expect(section.getByLabel('Year of the dates')).toHaveValue(String(year));
+          |                                                         ^
+      305 |   await expect(section.getByLabel('Effective from')).toHaveValue(boundary);
+      306 |   const newYear = `${year}-01-01`;
+      307 |   const midYear = `${year}-07-04`;
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\admin.spec.ts:304:57
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab04\admin-holiday-CSV-issue-bo-c1a00-mit-and-no-change-re-commit-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab04\admin-holiday-CSV-issue-bo-c1a00-mit-and-no-change-re-commit-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab04\admin-holiday-CSV-issue-bo-c1a00-mit-and-no-change-re-commit-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\admin.spec.ts:281:1 › holiday CSV: issue, boundary, stale hash, preview diff, commit and no-change re-commit 
+    [mobile] › tests\e2e\admin.spec.ts:281:1 › holiday CSV: issue, boundary, stale hash, preview diff, commit and no-change re-commit 
+  8 passed (18.7s)
+exit=1
+process clock 2027-01-11T18:00:19.179Z (Date.now 1799690419188); America/Los_Angeles Mon, 2027-01-11, 10:00; shift ms 7742050051; instanceof true
+== repro-ab04 real end 2026-10-14T03:26:09Z

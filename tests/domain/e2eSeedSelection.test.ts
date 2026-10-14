@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, diffDays } from '../../src/domain/dates.ts';
-import { currentPayPeriod, type PayPeriod, type PayrollScheduleRules, payPeriodContaining } from '../../src/domain/periods.ts';
+import { formatUtcInstant } from '../../src/domain/instants.ts';
+import {
+  currentPayPeriod,
+  type PayPeriod,
+  type PayrollException,
+  type PayrollScheduleRules,
+  payPeriodAt,
+  payPeriodContaining,
+} from '../../src/domain/periods.ts';
 import { localDateOf, resolveLocalDateTimeCompatible } from '../../src/domain/zones.ts';
-import { displayedPeriodSeedDay, type SeedDayFacts } from '../e2e/displayedSeed.ts';
+import {
+  type DeadlinePeriodFacts,
+  displayedPeriodSeedDay,
+  importDatesAfter,
+  laterDeadlineFor,
+  type SeedDayFacts,
+} from '../e2e/displayedSeed.ts';
 
 /*
  * WP5-UX-FIX9 (B7-01 / A7-01): the browser specs must seed a day of the period the page displays.
@@ -129,5 +143,90 @@ describe('the browser specs seed from the displayed period', () => {
     expect(() => displayedSeed('2026-09-19', allHolidays)).toThrow(
       /displayed period \(payroll 2026-10-02\) has no past normal workday without a session on 2026-09-19/,
     );
+  });
+});
+
+/*
+ * WP5-UX-AB8-01: the deadline scenarios (automatic submission, automatic PDFs) need the displayed period to be due after
+ * the activation they record. The page keeps the period on screen from its due Tuesday (P-3) 17:00 through the payroll
+ * date P, so for about three days of every cycle its deadline is behind and a later one is recorded for it.
+ */
+const MARGIN_MS = 120_000;
+
+function factsOf(period: PayPeriod): DeadlinePeriodFacts {
+  return {
+    payroll_date: period.payrollDate,
+    nominal_payroll_date: period.nominalPayrollDate,
+    period_start: period.periodStart,
+    due_at_utc: formatUtcInstant(period.dueAtUtc),
+  };
+}
+
+/** The displayed period at an instant, with the later deadline applied as the admin payroll exception records it. */
+function displayedWithLater(today: string, later: { due_local_date: string; due_local_time: string }): PayPeriod {
+  const displayed = currentPayPeriod(SCHEDULE, today);
+  const exception: PayrollException = {
+    nominalPayrollDate: displayed.nominalPayrollDate,
+    payrollDate: displayed.payrollDate,
+    dueLocalDate: later.due_local_date,
+    dueLocalTime: later.due_local_time,
+  };
+  return payPeriodAt(SCHEDULE, displayed.index, [exception]);
+}
+
+describe('the deadline scenarios have a displayed period that is still due later', () => {
+  it('records nothing while the deadline is ahead; otherwise a deadline that is ahead for the same period, on every step', () => {
+    const recorded: string[] = [];
+    for (const { instant, today } of steps()) {
+      const displayed = currentPayPeriod(SCHEDULE, today);
+      const nowMs = instant * 1000;
+      const later = laterDeadlineFor(factsOf(displayed), today, nowMs, MARGIN_MS);
+      if (later === null) {
+        expect(Date.parse(formatUtcInstant(displayed.dueAtUtc)) > nowMs + MARGIN_MS, `${today}: the natural deadline is ahead`).toBe(true);
+        continue;
+      }
+      recorded.push(today);
+      const moved = displayedWithLater(today, later);
+      expect(moved.payrollDate, `${today}: the payroll date is kept`).toBe(displayed.payrollDate);
+      expect(moved.periodStart, `${today}: the period is kept`).toBe(displayed.periodStart);
+      expect(moved.dueAtUtc * 1000 > nowMs + 12 * 3_600_000, `${today}: the recorded deadline is at least 12 hours ahead`).toBe(true);
+    }
+    // The negative control: without the recorded deadline these steps fail (the due Tuesday from 17:00 through the payroll date).
+    const unique = [...new Set(recorded)];
+    expect(unique).toContain('2026-10-13');
+    expect(unique).toContain('2026-10-16');
+    expect(unique).not.toContain('2026-10-12');
+    expect(unique).not.toContain('2026-10-17');
+  });
+
+  it('switches at the margin around the due time of the due Tuesday', () => {
+    const laterAt = (date: string, time: string) => {
+      const instant = resolveLocalDateTimeCompatible(`${date}T${time}`, LA);
+      const today = localDateOf(LA, instant);
+      return laterDeadlineFor(factsOf(currentPayPeriod(SCHEDULE, today)), today, instant * 1000, MARGIN_MS);
+    };
+    // Payroll Friday 2026-10-16, due Tuesday 2026-10-13 17:00 Los Angeles time.
+    expect(laterAt('2026-10-13', '12:00')).toBeNull();
+    expect(laterAt('2026-10-13', '16:57')).toBeNull();
+    expect(laterAt('2026-10-13', '16:59')).toEqual({ due_local_date: '2026-10-14', due_local_time: '12:00' });
+    expect(laterAt('2026-10-16', '23:59')).toEqual({ due_local_date: '2026-10-17', due_local_time: '12:00' });
+    expect(laterAt('2026-10-17', '10:00')).toBeNull();
+  });
+});
+
+describe('the holiday import dates stay clear of the displayed period (WP5-UX-AB8-03)', () => {
+  const nominals = ['2027-01-01', '2027-07-04', '2027-03-03'];
+
+  it('keeps the nominal dates when they already follow the period', () => {
+    expect(importDatesAfter(nominals, '2026-10-11')).toEqual(nominals);
+  });
+
+  it('moves a date inside or before the period to the first free day after it, never onto another date', () => {
+    // The period 2026-12-21..2027-01-03 spans New Year.
+    expect(importDatesAfter(nominals, '2027-01-03')).toEqual(['2027-01-04', '2027-07-04', '2027-03-03']);
+    // Every nominal date is behind the period: consecutive free days in order.
+    expect(importDatesAfter(nominals, '2027-09-30')).toEqual(['2027-10-01', '2027-10-02', '2027-10-03']);
+    // A shifted date meets a nominal one.
+    expect(importDatesAfter(nominals, '2027-07-01')).toEqual(['2027-07-02', '2027-07-04', '2027-07-03']);
   });
 });

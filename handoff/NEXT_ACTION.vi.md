@@ -25,10 +25,12 @@
   xác nhận bản sửa đạt và không đổi hành vi phần A, nhưng cùng tìm ra một lỗi chỉ ở test
   (WP5-UX-B7-01 = A7-01: spec cách ly và spec khung app tạo dữ liệu vào ngày nằm ngoài kỳ
   đang hiển thị trong 4 ngày kết thúc ở mỗi ngày trả lương). WP5-UX-FIX9 đã sửa test
-  (freeze ở 3670a6c, digest 58b0deee). WP5-UX-REGATE7 đạt mọi mục trừ drill container: **Docker engine trên máy phát triển
-  chưa chạy. Việc của chủ dự án WP5-UX-DOCKER: mở Docker Desktop và xác nhận trong
-  chat.** Sau đó chạy drill, một audit gộp WP5-UX-AUDIT-AB8 (phần A và B), rồi nghiệm thu
-  lại WP5.
+  (freeze ở 3670a6c, digest 58b0deee). WP5-UX-REGATE7 PASS sau khi chủ dự án bật Docker
+  (image drill 52b45ad9…). Audit gộp WP5-UX-AUDIT-AB8 xác nhận sản phẩm không đổi và đóng
+  B7-01, nhưng tìm thêm bốn lỗi test phụ thuộc lịch (AB8-01..AB8-04) bằng một lượt quét
+  đồng hồ giả lập. WP5-UX-FIX10 đã sửa, chỉ trong test, và tự chạy lượt quét với 0 test
+  fail (là báo cáo; digest 57e2974c). Hiện tại: freeze, WP5-UX-REGATE8 (đồng hồ thật và
+  lượt quét; Docker phải đang chạy), một audit gộp AB9, rồi nghiệm thu lại WP5.
 
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
 Xem [STATE](delivery/STATE.json), [bảng task](delivery/ORCHESTRATION.json),

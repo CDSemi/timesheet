@@ -1,0 +1,105 @@
+== repro-ab01: real start 2026-10-14T03:22:38Z, simulated start 2026-10-28T01:00:00Z, AB8_SHIFT_MS=1201041336
+process clock 2026-10-28T01:00:00.079Z (Date.now 1793149200088); America/Los_Angeles Tue, 2026-10-27, 18:00; shift ms 1201041336; instanceof true
+$ node node_modules/@playwright/test/cli.js test automation.spec.ts pdf-visual.spec.ts --output=<task>/pw-repro-ab01
+
+Running 8 tests using 2 workers
+
+  x  2 [desktop] › tests\e2e\automation.spec.ts:118:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices (1.1s)
+  ok 1 [desktop] › tests\e2e\pdf-visual.spec.ts:122:1 › a manual revision: name, real sign date, signature, OT on both Sundays in the total, Vietnamese text (3.4s)
+  ok 3 [desktop] › tests\e2e\automation.spec.ts:264:1 › a period is not submitted automatically while the activation instant is not recorded (2.7s)
+  x  4 [desktop] › tests\e2e\pdf-visual.spec.ts:187:1 › automatic revisions: the note off/on and the image off/on, long Vietnamese labels, an empty period (3.3s)
+  -  6 [mobile] › tests\e2e\pdf-visual.spec.ts:122:1 › a manual revision: name, real sign date, signature, OT on both Sundays in the total, Vietnamese text
+  -  7 [mobile] › tests\e2e\pdf-visual.spec.ts:187:1 › automatic revisions: the note off/on and the image off/on, long Vietnamese labels, an empty period
+  x  5 [mobile] › tests\e2e\automation.spec.ts:118:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices (1.0s)
+  ok 8 [mobile] › tests\e2e\automation.spec.ts:264:1 › a period is not submitted automatically while the activation instant is not recorded (2.5s)
+
+
+  1) [desktop] › tests\e2e\automation.spec.ts:118:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices 
+
+    Error: the displayed period is not due yet
+
+    expect(received).toBeGreaterThan(expected)
+
+    Expected: > 1793149326635
+    Received:   1793145600000
+
+      149 |   const periods = await plain.api.call<PeriodsView>('GET', '/api/periods/current');
+      150 |   const due = new Date(periods.current.due_at_utc);
+    > 151 |   expect(due.getTime(), 'the displayed period is not due yet').toBeGreaterThan(Date.now() + 120_000);
+          |                                                                ^
+      152 |
+      153 |   // Before the activation nothing is automatic, even long after the deadline.
+      154 |   const early = runJobsAt(server, new Date(due.getTime() + 60_000));
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\automation.spec.ts:151:64
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab01\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab01\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab01\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\e2e\pdf-visual.spec.ts:187:1 › automatic revisions: the note off/on and the image off/on, long Vietnamese labels, an empty period 
+
+    TypeError: Cannot read properties of null (reading 'id')
+
+      115 | async function pdfOf(person: Person, payrollDate: string): Promise<Buffer> {
+      116 |   const finalized = await person.api.call<{ revision: { id: string } }>('GET', `/api/timesheets/${payrollDate}/finalization`);
+    > 117 |   const download = await person.api.download(`/api/revisions/${finalized.revision.id}/pdf`);
+          |                                                                                   ^
+      118 |   expect(download.status, 'PDF download').toBe(200);
+      119 |   return download.body;
+      120 | }
+        at pdfOf (D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\pdf-visual.spec.ts:117:83)
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\pdf-visual.spec.ts:233:17
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab01\pdf-visual-automatic-revis-54935-mese-labels-an-empty-period-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab01\pdf-visual-automatic-revis-54935-mese-labels-an-empty-period-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab01\pdf-visual-automatic-revis-54935-mese-labels-an-empty-period-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [mobile] › tests\e2e\automation.spec.ts:118:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices 
+
+    Error: the displayed period is not due yet
+
+    expect(received).toBeGreaterThan(expected)
+
+    Expected: > 1793149338135
+    Received:   1793145600000
+
+      149 |   const periods = await plain.api.call<PeriodsView>('GET', '/api/periods/current');
+      150 |   const due = new Date(periods.current.due_at_utc);
+    > 151 |   expect(due.getTime(), 'the displayed period is not due yet').toBeGreaterThan(Date.now() + 120_000);
+          |                                                                ^
+      152 |
+      153 |   // Before the activation nothing is automatic, even long after the deadline.
+      154 |   const early = runJobsAt(server, new Date(due.getTime() + 60_000));
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\automation.spec.ts:151:64
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab01\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab01\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX-FIX10\pw-repro-ab01\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    [desktop] › tests\e2e\automation.spec.ts:118:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices 
+    [desktop] › tests\e2e\pdf-visual.spec.ts:187:1 › automatic revisions: the note off/on and the image off/on, long Vietnamese labels, an empty period 
+    [mobile] › tests\e2e\automation.spec.ts:118:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices 
+  2 skipped
+  3 passed (24.0s)
+exit=1
+process clock 2026-10-28T01:00:24.592Z (Date.now 1793149224602); America/Los_Angeles Tue, 2026-10-27, 18:00; shift ms 1201041336; instanceof true
+== repro-ab01 real end 2026-10-14T03:23:03Z

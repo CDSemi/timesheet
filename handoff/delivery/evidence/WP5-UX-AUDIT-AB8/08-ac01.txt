@@ -1,0 +1,410 @@
+
+######## periods at the start and end of the AC-01 run (derive.mts [6])
+[6] now 2026-10-14T02:12:47.000Z: today in America/Los_Angeles 2026-10-13; local 2026-10-13T19:12:47-07:00; displayed 2026-10-16 (2026-09-28..2026-10-11); in-progress 2026-10-30; old choice 2026-10-12; new choice 2026-10-09; inside the old-choice failure window: true; on or before 2026-10-16: true
+[6] now 2026-10-14T02:12:59.000Z: today in America/Los_Angeles 2026-10-13; local 2026-10-13T19:12:59-07:00; displayed 2026-10-16 (2026-09-28..2026-10-11); in-progress 2026-10-30; old choice 2026-10-12; new choice 2026-10-09; inside the old-choice failure window: true; on or before 2026-10-16: true
+
+######## isolation.spec.ts + shell.spec.ts, both projects, x3670
+== ac01 in x3670 start 2026-10-14T02:12:47Z
+$ node node_modules/@playwright/test/cli.js test tests/e2e/isolation.spec.ts tests/e2e/shell.spec.ts --reporter=list,<task>/stepreporter.mjs --output=<task>/pw-ac01
+
+Running 14 tests using 2 workers
+
+  ok  2 [desktop] › tests\e2e\shell.spec.ts:22:1 › sign-in form, then the shell on the timesheet route (765ms)
+  ok  3 [desktop] › tests\e2e\shell.spec.ts:59:1 › an unknown hash falls back to the timesheet route (489ms)
+  ok  1 [desktop] › tests\e2e\isolation.spec.ts:93:1 › a second employee cannot reach employee 1 by hash swap or by id swap (1.3s)
+  ok  4 [desktop] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell (794ms)
+  -   6 [desktop] › tests\e2e\shell.spec.ts:85:1 › mobile: no horizontal overflow and tap targets of at least 44px
+  ok  5 [desktop] › tests\e2e\isolation.spec.ts:144:1 › an admin cannot open employee data through any admin screen (1.1s)
+  ok  7 [desktop] › tests\e2e\isolation.spec.ts:198:1 › an employee sees no Admin entry and the server refuses the admin routes (485ms)
+  ok  8 [mobile] › tests\e2e\isolation.spec.ts:93:1 › a second employee cannot reach employee 1 by hash swap or by id swap (1.3s)
+  ok  9 [mobile] › tests\e2e\shell.spec.ts:22:1 › sign-in form, then the shell on the timesheet route (966ms)
+  ok 11 [mobile] › tests\e2e\shell.spec.ts:59:1 › an unknown hash falls back to the timesheet route (474ms)
+  ok 10 [mobile] › tests\e2e\isolation.spec.ts:144:1 › an admin cannot open employee data through any admin screen (1.3s)
+  ok 12 [mobile] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell (776ms)
+  ok 13 [mobile] › tests\e2e\isolation.spec.ts:198:1 › an employee sees no Admin entry and the server refuses the admin routes (555ms)
+  ok 14 [mobile] › tests\e2e\shell.spec.ts:85:1 › mobile: no horizontal overflow and tap targets of at least 44px (944ms)
+
+  1 skipped
+  13 passed (11.0s)
+exit=0
+== ac01 end 2026-10-14T02:12:59Z
+
+######## step report: test lines
+TEST passed | desktop | shell.spec.ts:22 | sign-in form, then the shell on the timesheet route | expect steps ok 7 fail 0 | 765 ms
+TEST passed | desktop | shell.spec.ts:59 | an unknown hash falls back to the timesheet route | expect steps ok 4 fail 0 | 489 ms
+TEST passed | desktop | isolation.spec.ts:93 | a second employee cannot reach employee 1 by hash swap or by id swap | expect steps ok 56 fail 0 | 1320 ms
+TEST passed | desktop | shell.spec.ts:67 | the existing timesheet view works inside the shell | expect steps ok 10 fail 0 | 794 ms
+TEST skipped | desktop | shell.spec.ts:85 | mobile: no horizontal overflow and tap targets of at least 44px | expect steps ok 0 fail 0 | 136 ms
+TEST passed | desktop | isolation.spec.ts:144 | an admin cannot open employee data through any admin screen | expect steps ok 47 fail 0 | 1146 ms
+TEST passed | desktop | isolation.spec.ts:198 | an employee sees no Admin entry and the server refuses the admin routes | expect steps ok 12 fail 0 | 485 ms
+TEST passed | mobile | isolation.spec.ts:93 | a second employee cannot reach employee 1 by hash swap or by id swap | expect steps ok 56 fail 0 | 1281 ms
+TEST passed | mobile | shell.spec.ts:22 | sign-in form, then the shell on the timesheet route | expect steps ok 20 fail 0 | 966 ms
+TEST passed | mobile | shell.spec.ts:59 | an unknown hash falls back to the timesheet route | expect steps ok 4 fail 0 | 474 ms
+TEST passed | mobile | isolation.spec.ts:144 | an admin cannot open employee data through any admin screen | expect steps ok 47 fail 0 | 1273 ms
+TEST passed | mobile | shell.spec.ts:67 | the existing timesheet view works inside the shell | expect steps ok 10 fail 0 | 776 ms
+TEST passed | mobile | isolation.spec.ts:198 | an employee sees no Admin entry and the server refuses the admin routes | expect steps ok 12 fail 0 | 555 ms
+TEST passed | mobile | shell.spec.ts:85 | mobile: no horizontal overflow and tap targets of at least 44px | expect steps ok 127 fail 0 | 944 ms
+END passed
+
+######## seeded day per test (fixtures POST)
+ok desktop isolation.spec.ts:93 POST /api/days/2026-10-09/sessions
+ok desktop shell.spec.ts:67 POST /api/days/2026-10-09/sessions
+ok desktop isolation.spec.ts:144 POST /api/days/2026-10-09/sessions
+ok mobile isolation.spec.ts:93 POST /api/days/2026-10-09/sessions
+ok mobile isolation.spec.ts:144 POST /api/days/2026-10-09/sessions
+ok mobile shell.spec.ts:67 POST /api/days/2026-10-09/sessions
+
+######## assertion steps located in isolation.spec.ts (count, project, test, line)
+      2 desktop isolation.spec.ts:144 fixtures.ts:352
+     12 desktop isolation.spec.ts:144 fixtures.ts:385
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:153
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:154
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:158
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:159
+      3 desktop isolation.spec.ts:144 isolation.spec.ts:161
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:168
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:169
+      5 desktop isolation.spec.ts:144 isolation.spec.ts:179
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:185
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:186
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:187
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:188
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:191
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:192
+      9 desktop isolation.spec.ts:144 isolation.spec.ts:28
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:45
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:79
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:89
+      1 desktop isolation.spec.ts:144 isolation.spec.ts:90
+      1 desktop isolation.spec.ts:198 isolation.spec.ts:202
+      1 desktop isolation.spec.ts:198 isolation.spec.ts:203
+      1 desktop isolation.spec.ts:198 isolation.spec.ts:205
+      1 desktop isolation.spec.ts:198 isolation.spec.ts:206
+      1 desktop isolation.spec.ts:198 isolation.spec.ts:207
+      1 desktop isolation.spec.ts:198 isolation.spec.ts:208
+      1 desktop isolation.spec.ts:198 isolation.spec.ts:209
+      4 desktop isolation.spec.ts:198 isolation.spec.ts:28
+      1 desktop isolation.spec.ts:198 isolation.spec.ts:45
+      3 desktop isolation.spec.ts:93 fixtures.ts:352
+     16 desktop isolation.spec.ts:93 fixtures.ts:385
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:101
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:105
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:106
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:107
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:108
+      4 desktop isolation.spec.ts:93 isolation.spec.ts:113
+      4 desktop isolation.spec.ts:93 isolation.spec.ts:114
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:116
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:121
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:123
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:124
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:127
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:128
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:129
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:130
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:131
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:136
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:137
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:138
+      9 desktop isolation.spec.ts:93 isolation.spec.ts:28
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:79
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:89
+      1 desktop isolation.spec.ts:93 isolation.spec.ts:90
+      2 mobile isolation.spec.ts:144 fixtures.ts:352
+     12 mobile isolation.spec.ts:144 fixtures.ts:385
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:153
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:154
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:158
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:159
+      3 mobile isolation.spec.ts:144 isolation.spec.ts:161
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:168
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:169
+      5 mobile isolation.spec.ts:144 isolation.spec.ts:179
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:185
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:186
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:187
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:188
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:191
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:192
+      9 mobile isolation.spec.ts:144 isolation.spec.ts:28
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:45
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:79
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:89
+      1 mobile isolation.spec.ts:144 isolation.spec.ts:90
+      1 mobile isolation.spec.ts:198 isolation.spec.ts:202
+      1 mobile isolation.spec.ts:198 isolation.spec.ts:203
+      1 mobile isolation.spec.ts:198 isolation.spec.ts:205
+      1 mobile isolation.spec.ts:198 isolation.spec.ts:206
+      1 mobile isolation.spec.ts:198 isolation.spec.ts:207
+      1 mobile isolation.spec.ts:198 isolation.spec.ts:208
+      1 mobile isolation.spec.ts:198 isolation.spec.ts:209
+      4 mobile isolation.spec.ts:198 isolation.spec.ts:28
+      1 mobile isolation.spec.ts:198 isolation.spec.ts:45
+      3 mobile isolation.spec.ts:93 fixtures.ts:352
+     16 mobile isolation.spec.ts:93 fixtures.ts:385
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:101
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:105
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:106
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:107
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:108
+      4 mobile isolation.spec.ts:93 isolation.spec.ts:113
+      4 mobile isolation.spec.ts:93 isolation.spec.ts:114
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:116
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:121
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:123
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:124
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:127
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:128
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:129
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:130
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:131
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:136
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:137
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:138
+      9 mobile isolation.spec.ts:93 isolation.spec.ts:28
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:79
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:89
+      1 mobile isolation.spec.ts:93 isolation.spec.ts:90
+
+######## isolation assertion steps, titles cut at 70 characters
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:352 | seed sign-in
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:352 | seed sign-in
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/periods/current: {"reporting_zone":"America/Los_Angeles","tod...
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/timesheets/2026-10-16: {"reporting_zone":"America/Los_Angeles...
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | POST /api/days/2026-10-09/sessions: {"session":{"id":"1f2f56db-0de2-4b...
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | PUT /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/calendar: {"id":"7ff3857b-7c16-4316-8410-6392f19964dd","name"...
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | POST /api/admin/users: {"user":{"id":"b0612751-8e50-47fb-942c-e9d5bcad...
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:352 | seed sign-in
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/periods/current: {"reporting_zone":"America/Los_Angeles","tod...
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | POST /api/policies: {"policy":{"id":"722f4363-bd62-461e-b7cd-93cf1341e...
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:101 | Expect "toBeVisible"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:105 | Expect "toBeVisible"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:106 | Expect "not toContainText"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:107 | Expect "toHaveCount"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:108 | Expect "not toContainText"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:113 | Expect "toHaveURL"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:114 | Expect "not toContainText"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:113 | Expect "toHaveURL"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:114 | Expect "not toContainText"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:113 | Expect "toHaveURL"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:114 | Expect "not toContainText"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:113 | Expect "toHaveURL"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:114 | Expect "not toContainText"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:116 | Expect "toHaveCount"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:79 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:89 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:90 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:121 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:123 | the day route answers about the caller, not the owner
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:124 | Expect "not toBe"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:127 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:128 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:129 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:130 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:131 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:136 | Expect "toHaveLength"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:137 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:93 | isolation.spec.ts:138 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | DELETE /api/sessions/1f2f56db-0de2-4bda-8add-edf4fe96059d: {"deleted":...
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:93 | fixtures.ts:385 | PUT /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:352 | seed sign-in
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:352 | seed sign-in
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/periods/current: {"reporting_zone":"America/Los_Angeles","tod...
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/timesheets/2026-10-16: {"reporting_zone":"America/Los_Angeles...
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:385 | POST /api/days/2026-10-09/sessions: {"session":{"id":"80af010c-9de8-4d...
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:385 | PUT /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:45 | Expect "toBeVisible"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:153 | Expect "toBeVisible"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:154 | Expect "toBeVisible"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:158 | Expect "not toContainText"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:159 | Expect "not toContainText"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:161 | Expect "toHaveCount"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:161 | Expect "toHaveCount"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:161 | Expect "toHaveCount"
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/admin/users: {"users":[{"id":"ad27ede8-d4e0-4224-a4ce-6f5c641...
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:168 | Expect "toEqual"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:169 | Expect "not toContain"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:179 | /api/admin/timesheets/2026-10-09
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:179 | /api/admin/users/ad27ede8-d4e0-4224-a4ce-6f5c6417e13d/timesheets
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:179 | /api/admin/ot/ledger
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:179 | /api/admin/history
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:179 | /api/admin/exports
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:79 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:89 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:90 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:185 | Expect "toBeVisible"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:186 | Expect "not toContainText"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:187 | Expect "not toContainText"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:188 | Expect "toHaveCount"
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:191 | Expect "toHaveLength"
+STEP ok | desktop | isolation.spec.ts:144 | isolation.spec.ts:192 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:385 | DELETE /api/sessions/80af010c-9de8-4dff-8ebc-c296bac5f2d7: {"deleted":...
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:144 | fixtures.ts:385 | PUT /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | desktop | isolation.spec.ts:198 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:198 | isolation.spec.ts:45 | Expect "toBeVisible"
+STEP ok | desktop | isolation.spec.ts:198 | isolation.spec.ts:202 | Expect "toBeVisible"
+STEP ok | desktop | isolation.spec.ts:198 | isolation.spec.ts:203 | Expect "toHaveCount"
+STEP ok | desktop | isolation.spec.ts:198 | isolation.spec.ts:205 | Expect "toHaveURL"
+STEP ok | desktop | isolation.spec.ts:198 | isolation.spec.ts:206 | Expect "toHaveCount"
+STEP ok | desktop | isolation.spec.ts:198 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:198 | isolation.spec.ts:207 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:198 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:198 | isolation.spec.ts:208 | Expect "toBe"
+STEP ok | desktop | isolation.spec.ts:198 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | desktop | isolation.spec.ts:198 | isolation.spec.ts:209 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:352 | seed sign-in
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:352 | seed sign-in
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/periods/current: {"reporting_zone":"America/Los_Angeles","tod...
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/timesheets/2026-10-16: {"reporting_zone":"America/Los_Angeles...
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | POST /api/days/2026-10-09/sessions: {"session":{"id":"6a22d70c-346f-43...
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | PUT /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/calendar: {"id":"da8bc868-7464-4a1f-94b2-2d76f535b82d","name"...
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | POST /api/admin/users: {"user":{"id":"5187c89f-3113-414a-933c-b3f28194...
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:352 | seed sign-in
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/periods/current: {"reporting_zone":"America/Los_Angeles","tod...
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | POST /api/policies: {"policy":{"id":"087dea20-ed7d-44f1-9b07-9b9097573...
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:101 | Expect "toBeVisible"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:105 | Expect "toBeVisible"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:106 | Expect "not toContainText"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:107 | Expect "toHaveCount"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:108 | Expect "not toContainText"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:113 | Expect "toHaveURL"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:114 | Expect "not toContainText"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:113 | Expect "toHaveURL"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:114 | Expect "not toContainText"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:113 | Expect "toHaveURL"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:114 | Expect "not toContainText"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:113 | Expect "toHaveURL"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:114 | Expect "not toContainText"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:116 | Expect "toHaveCount"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:79 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:89 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:90 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:121 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:123 | the day route answers about the caller, not the owner
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:124 | Expect "not toBe"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:127 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:128 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:129 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:130 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:131 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:136 | Expect "toHaveLength"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:137 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:93 | isolation.spec.ts:138 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | DELETE /api/sessions/6a22d70c-346f-43f8-a4e6-be8027de01fc: {"deleted":...
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:93 | fixtures.ts:385 | PUT /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:352 | seed sign-in
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:352 | seed sign-in
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/periods/current: {"reporting_zone":"America/Los_Angeles","tod...
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/timesheets/2026-10-16: {"reporting_zone":"America/Los_Angeles...
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:385 | POST /api/days/2026-10-09/sessions: {"session":{"id":"953ec971-1db4-48...
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:385 | PUT /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:45 | Expect "toBeVisible"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:153 | Expect "toBeVisible"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:154 | Expect "toBeVisible"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:158 | Expect "not toContainText"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:159 | Expect "not toContainText"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:161 | Expect "toHaveCount"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:161 | Expect "toHaveCount"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:161 | Expect "toHaveCount"
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/admin/users: {"users":[{"id":"4037a466-9012-4231-b567-22a72b8...
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:168 | Expect "toEqual"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:169 | Expect "not toContain"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:179 | /api/admin/timesheets/2026-10-09
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:179 | /api/admin/users/4037a466-9012-4231-b567-22a72b8046ee/timesheets
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:179 | /api/admin/ot/ledger
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:179 | /api/admin/history
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:179 | /api/admin/exports
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:79 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:89 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:90 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:185 | Expect "toBeVisible"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:186 | Expect "not toContainText"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:187 | Expect "not toContainText"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:188 | Expect "toHaveCount"
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:191 | Expect "toHaveLength"
+STEP ok | mobile | isolation.spec.ts:144 | isolation.spec.ts:192 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:385 | DELETE /api/sessions/953ec971-1db4-4806-8952-ca625aba39dc: {"deleted":...
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:385 | GET /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:144 | fixtures.ts:385 | PUT /api/days/2026-10-09: {"work_date":"2026-10-09","classification":{...
+STEP ok | mobile | isolation.spec.ts:198 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:198 | isolation.spec.ts:45 | Expect "toBeVisible"
+STEP ok | mobile | isolation.spec.ts:198 | isolation.spec.ts:202 | Expect "toBeVisible"
+STEP ok | mobile | isolation.spec.ts:198 | isolation.spec.ts:203 | Expect "toHaveCount"
+STEP ok | mobile | isolation.spec.ts:198 | isolation.spec.ts:205 | Expect "toHaveURL"
+STEP ok | mobile | isolation.spec.ts:198 | isolation.spec.ts:206 | Expect "toHaveCount"
+STEP ok | mobile | isolation.spec.ts:198 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:198 | isolation.spec.ts:207 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:198 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:198 | isolation.spec.ts:208 | Expect "toBe"
+STEP ok | mobile | isolation.spec.ts:198 | isolation.spec.ts:28 | console error: Failed to load resource: the server responded with a st...
+STEP ok | mobile | isolation.spec.ts:198 | isolation.spec.ts:209 | Expect "toBe"
+
+######## isolation and shell:67 across every real and simulated full run
+ac01: 6 isolation passed, 0 failed; shell:67 passed 2; iso expect steps ok 92, fail 0; today "today_local":"2026-10-13" 
+e2e-full: 6 isolation passed, 0 failed; shell:67 passed 2; iso expect steps ok 92, fail 0; today "today_local":"2026-10-13" 
+sim-s4-1027-1300-full: 6 isolation passed, 0 failed; shell:67 passed 2; iso expect steps ok 92, fail 0; today "today_local":"2026-10-27" 
+sim-s2-1017-1000-full: 6 isolation passed, 0 failed; shell:67 passed 2; iso expect steps ok 92, fail 0; today "today_local":"2026-10-17" 
+sim-s3-1026-1000-full: 6 isolation passed, 0 failed; shell:67 passed 2; iso expect steps ok 92, fail 0; today "today_local":"2026-10-26" 
+sim-s6-1102-1000-full: 6 isolation passed, 0 failed; shell:67 passed 2; iso expect steps ok 92, fail 0; today "today_local":"2026-11-02" 
+sim-s1-1128-1000-full: 6 isolation passed, 0 failed; shell:67 passed 2; iso expect steps ok 92, fail 0; today "today_local":"2026-11-28" 
+sim-s5-1226-1000-full: 6 isolation passed, 0 failed; shell:67 passed 2; iso expect steps ok 92, fail 0; today "today_local":"2026-12-26" 
+sim-s7-20270111-1000-full: 6 isolation passed, 0 failed; shell:67 passed 2; iso expect steps ok 92, fail 0; today "today_local":"2027-01-11" 

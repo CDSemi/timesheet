@@ -1,0 +1,27 @@
+# Byte comparison of the built output of the two exports (dist/ entirely, then client and server named).
+source <task>/env.sh
+for d in old new; do
+  if [ $d = old ]; then X=$OLD; else X=$NEW; fi
+  cd "$X/dist" || exit 2
+  find . -type f | LC_ALL=C sort > $T/dist-$d-files.txt
+  : > $T/dist-$d-sha.txt
+  while IFS= read -r f; do
+    h=$(sha256sum "$f"); echo "${h%% *} $f" >> $T/dist-$d-sha.txt
+  done < $T/dist-$d-files.txt
+done
+echo "files old=$(wc -l < $T/dist-old-files.txt) new=$(wc -l < $T/dist-new-files.txt)"
+echo "server files old=$(grep -c ' ./server/' $T/dist-old-sha.txt) new=$(grep -c ' ./server/' $T/dist-new-sha.txt)"
+echo "client files old=$(grep -c ' ./client/' $T/dist-old-sha.txt) new=$(grep -c ' ./client/' $T/dist-new-sha.txt)"
+echo "\$ cmp per-file sha256 lists (all of dist/)"
+cmp $T/dist-old-sha.txt $T/dist-new-sha.txt; echo "cmp exit=$?"
+echo "\$ diff -r --brief x255/dist x3670/dist"
+diff -r --brief $OLD/dist $NEW/dist; echo "diff exit=$?"
+echo "\$ diff -r --brief x255/dist/server x3670/dist/server"
+diff -r --brief $OLD/dist/server $NEW/dist/server; echo "diff exit=$?"
+echo "\$ diff -r --brief x255/dist/client x3670/dist/client"
+diff -r --brief $OLD/dist/client $NEW/dist/client; echo "diff exit=$?"
+echo "client assets (sha256, size):"
+for f in $(cd $NEW/dist && find ./client -type f | LC_ALL=C sort); do
+  echo "  $(grep " $f\$" $T/dist-new-sha.txt | cut -c1-16)  $(wc -c < $NEW/dist/$f) $f"
+done
+echo "sha256 of the per-file sha list: old $(sha256sum < $T/dist-old-sha.txt | cut -c1-64) new $(sha256sum < $T/dist-new-sha.txt | cut -c1-64)"

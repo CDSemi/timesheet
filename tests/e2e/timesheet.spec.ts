@@ -23,6 +23,16 @@ test.beforeEach(({ page }) => {
   });
 });
 
+/**
+ * WP5-UX-AB8-02: days a test seeded on the worker-shared employee. They are released after the test, pass or fail, so
+ * a short displayed period (3 past workdays on 2026-11-28..30) keeps its free workdays for the specs that follow.
+ */
+const seededDays: string[] = [];
+
+test.afterEach(async ({ employeeSeed }) => {
+  for (const workDate of seededDays.splice(0)) await employeeSeed.clearSessions(workDate);
+});
+
 function dayRow(page: Page, workDate: string) {
   return page.locator(`[data-day="${workDate}"]`);
 }
@@ -197,6 +207,7 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   const displayZone = await page.evaluate<string>('Intl.DateTimeFormat().resolvedOptions().timeZone');
   const free = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
   const [completeDay, pendingDay] = [free[0] ?? '', free[1] ?? ''];
+  seededDays.push(completeDay, pendingDay);
   await employeeSeed.seedCompleteDay(completeDay);
   await employeeSeed.seedUnconfirmedBreaksDay(pendingDay);
   const { reportingZone, currentPayrollDate } = await employeeSeed.today();

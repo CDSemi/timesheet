@@ -26,10 +26,13 @@
   it changes no area-A behaviour, and both found one test-only defect (WP5-UX-B7-01 =
   A7-01: the isolation and shell specs seed a day outside the displayed period on the 4
   days ending on each payroll date). WP5-UX-FIX9 fixed the tests (frozen at 3670a6c,
-  digest 58b0deee). WP5-UX-REGATE7 passed every item except the container drill: **the
-  Docker engine is not running on the development machine. Owner action WP5-UX-DOCKER:
-  start Docker Desktop and confirm in chat.** Then the drill, one combined recheck
-  WP5-UX-AUDIT-AB8 (areas A and B), and the WP5 re-accept.
+  digest 58b0deee). WP5-UX-REGATE7 PASS after the owner started Docker (drill image
+  52b45ad9…). The combined recheck WP5-UX-AUDIT-AB8 confirmed the product unchanged and
+  closed B7-01, and found four more calendar-dependent test defects (AB8-01..AB8-04)
+  with a simulated-clock sweep. WP5-UX-FIX10 fixed them in tests only and ran the sweep
+  itself with 0 failures (reported; digest 57e2974c). Now: freeze, WP5-UX-REGATE8 (real
+  clock plus the sweep; Docker must be running), one combined recheck AB9, then the WP5
+  re-accept.
 
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),

@@ -1,0 +1,20 @@
+# Usage: bash run-shift.sh <export-dir> <label> <target instant, UTC ISO> [playwright args...]
+# One Playwright run under a simulated wall clock (shiftclock.mjs), own output, screenshot and step-report folders.
+source <task>/env.sh
+X=$1; L=$2; TARGET=$3; shift 3
+mkdir -p $T/pw-$L $T/shots-$L
+TARGET_MS=$(date -u -d "$TARGET" +%s%3N)
+NOW_MS=$(date -u +%s%3N)
+export AB8_SHIFT_MS=$((TARGET_MS - NOW_MS))
+export NODE_OPTIONS="--trace-deprecation --import file:///$(cygpath -m $T)/shiftclock.mjs"
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+export STEP_REPORT_FILE="$TW\\steps-$L.txt"
+echo "== $L in $(basename $X): real start $(date -u +%Y-%m-%dT%H:%M:%SZ), simulated start $TARGET, AB8_SHIFT_MS=$AB8_SHIFT_MS"
+echo "NODE_OPTIONS=--trace-deprecation --import <task>/shiftclock.mjs"
+node $T/probe-now.mjs
+cd "$X" || exit 2
+echo "\$ node node_modules/@playwright/test/cli.js test $* --reporter=list,<task>/stepreporter.mjs --output=<task>/pw-$L"
+node node_modules/@playwright/test/cli.js test "$@" --reporter="list,$TW\\stepreporter.mjs" --output="$TW\\pw-$L"
+echo "exit=$?"
+node $T/probe-now.mjs
+echo "== $L real end $(date -u +%Y-%m-%dT%H:%M:%SZ)"

@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { type Page, test as base, expect } from '@playwright/test';
 import { addDays } from '../../src/domain/dates.ts';
 import { syntheticSignaturePng } from '../../src/server/seed.ts';
-import { displayedPeriodSeedDay } from './displayedSeed.ts';
+import { type DeadlinePeriodFacts, displayedPeriodSeedDay, laterDeadlineFor } from './displayedSeed.ts';
 
 /*
  * Browser-test harness. One worker gets one BUILT server (dist/) on a free loopback port and a
@@ -435,6 +435,40 @@ export class SeedClient {
     const { todayLocal, currentPayrollDate } = await this.today();
     const sheet = await this.call<TimesheetResponse>('GET', `/api/timesheets/${currentPayrollDate}`);
     return displayedPeriodSeedDay(sheet.days, todayLocal, currentPayrollDate);
+  }
+
+  /**
+   * WP5-UX-AB8-01, as the ADMIN of a private server: makes sure the displayed period is due more than `marginMs` from now,
+   * which a deadline scenario needs (see `laterDeadlineFor`). When the due time has passed (the period stays on screen
+   * through its payroll date) it records a later deadline for that period through the admin payroll exception (the payroll
+   * date itself unchanged; test database only). Returns the displayed period as the server reports it afterwards; fails
+   * clearly when it is still not due later than the margin. It reads this process's clock, which the server under test shares.
+   */
+  async ensureDeadlineAhead(marginMs: number): Promise<{ period: DeadlinePeriodFacts; moved: boolean }> {
+    const read = () => this.call<{ today_local: string; current: DeadlinePeriodFacts }>('GET', '/api/periods/current');
+    const before = await read();
+    const later = laterDeadlineFor(before.current, before.today_local, Date.now(), marginMs);
+    if (later !== null) {
+      const calendar = await this.call<{ id: string }>('GET', '/api/calendar');
+      await this.call(
+        'POST',
+        '/api/admin/payroll-exceptions',
+        {
+          calendar_id: calendar.id,
+          nominal_payroll_date: before.current.nominal_payroll_date,
+          payroll_date: before.current.payroll_date,
+          ...later,
+          reason: 'Synthetic e2e deadline still ahead (test database only)',
+        },
+        201,
+      );
+    }
+    const after = later === null ? before : await read();
+    expect(Date.parse(after.current.due_at_utc), `the displayed period (payroll ${after.current.payroll_date}) is due after ${marginMs / 1000} s from now`).toBeGreaterThan(
+      Date.now() + marginMs,
+    );
+    expect(after.current.payroll_date, 'the deadline change keeps the payroll date').toBe(before.current.payroll_date);
+    return { period: after.current, moved: later !== null };
   }
 
   async dayView(workDate: string): Promise<SeededDay> {

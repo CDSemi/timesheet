@@ -1,0 +1,163 @@
+// WP5-UX-AUDIT-AB8: independent derivation of the displayed-period seed rule.
+// Run: node derive.mts <export-root>   (Node 24 type stripping; imports the export's production code by path)
+import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+const root = process.argv[2];
+if (root === undefined) throw new Error('usage: node derive.mts <export-root>');
+const imp = (rel: string) => import(pathToFileURL(join(root, rel)).href);
+const periods = await imp('src/domain/periods.ts');
+const zones = await imp('src/domain/zones.ts');
+const seedHelper = await imp('tests/e2e/displayedSeed.ts');
+
+const policy = JSON.parse(readFileSync(join(root, 'reference/examples/policy.example.json'), 'utf8'));
+const holidayFile = JSON.parse(readFileSync(join(root, 'reference/examples/holidays.2026.example.json'), 'utf8'));
+const HOLIDAYS: string[] = holidayFile.holidays.map((h: { date: string }) => h.date);
+const WEEKDAYS: number[] = policy.calendar.normal_weekdays_iso;
+const P = policy.payroll;
+const ZONE: string = policy.calendar.reporting_zone;
+const schedule = {
+  anchorPayrollDate: P.anchor_payroll_date,
+  cycleDays: P.cycle_days,
+  periodStartOffsetDays: P.period_start_offset_days,
+  periodEndOffsetDays: P.period_end_offset_days,
+  dueOffsetDays: P.due_offset_days,
+  dueLocalTime: P.due_local_time,
+  reportingZone: ZONE,
+};
+console.log('seeded schedule (reference/examples/policy.example.json):', JSON.stringify(schedule));
+console.log('normal weekdays (ISO):', JSON.stringify(WEEKDAYS), 'synthetic holidays:', HOLIDAYS.length);
+
+// --- My own calendar arithmetic (UTC date numbers), independent of src/domain/dates.ts ---
+const DAY = 86_400_000;
+const num = (d: string) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / DAY;
+const str = (n: number) => new Date(n * DAY).toISOString().slice(0, 10);
+const isoWd = (d: string) => ((new Date(num(d) * DAY).getUTCDay() + 6) % 7) + 1;
+const anchor = num(schedule.anchorPayrollDate);
+const cyc = schedule.cycleDays;
+
+/** Mine: the displayed period = the earliest payroll date on or after today. */
+function myDisplayedPayroll(today: string): string {
+  const k = Math.ceil((num(today) - anchor) / cyc);
+  return str(anchor + k * cyc);
+}
+/** Mine: the period containing a date: payroll P with P-18 <= date <= P-5. */
+function myContainingPayroll(date: string): string {
+  // date - (P-18) in [0, 13]  =>  P = date + 18 - r, P = anchor + k*cyc
+  for (let r = 0; r < cyc; r += 1) {
+    const p = num(date) - schedule.periodStartOffsetDays - r;
+    if ((((p - anchor) % cyc) + cyc) % cyc === 0) return str(p);
+  }
+  throw new Error('no period');
+}
+const span = (payroll: string) => [str(num(payroll) + schedule.periodStartOffsetDays), str(num(payroll) + schedule.periodEndOffsetDays)];
+function daysOf(payroll: string, holidays: string[]) {
+  const [a, b] = span(payroll);
+  const out: { work_date: string; classification: { day_class: 'normal' | 'nonworking' }; sessions: unknown[] }[] = [];
+  for (let n = num(a!); n <= num(b!); n += 1) {
+    const d = str(n);
+    const normal = WEEKDAYS.includes(isoWd(d)) && !holidays.includes(d);
+    out.push({ work_date: d, classification: { day_class: normal ? 'normal' : 'nonworking' }, sessions: [] });
+  }
+  return out;
+}
+/** Mine: the old fixture choice, pastFreeWorkdays()[0] = newest past normal day of in-progress + displayed. */
+function oldChoice(today: string, holidays: string[]): string | undefined {
+  const ps = [...new Set([myContainingPayroll(today), myDisplayedPayroll(today)])];
+  const all = ps.flatMap((p) => daysOf(p, holidays)).filter((d) => d.work_date < today && d.classification.day_class === 'normal');
+  return all.map((d) => d.work_date).sort().reverse()[0];
+}
+/** Mine: the new rule, written independently: newest past normal day of the displayed period. */
+function myNewChoice(today: string, holidays: string[]): string | undefined {
+  return daysOf(myDisplayedPayroll(today), holidays)
+    .filter((d) => d.work_date < today && d.classification.day_class === 'normal')
+    .map((d) => d.work_date)
+    .sort()
+    .reverse()[0];
+}
+
+// --- 1. Cross-check the production period functions against mine over two years ---
+let mismatches = 0;
+const windowDays: string[] = [];
+const oldOutside: string[] = [];
+const oldOutsideNoHol: string[] = [];
+const newThrows: string[] = [];
+let helperDiffers = 0;
+let checked = 0;
+for (let n = num('2026-01-01'); n <= num('2027-12-31'); n += 1) {
+  const today = str(n);
+  const prodDisplayed = periods.currentPayPeriod(schedule, today);
+  const prodContaining = periods.payPeriodContaining(schedule, today);
+  if (prodDisplayed.payrollDate !== myDisplayedPayroll(today) || prodContaining.payrollDate !== myContainingPayroll(today)) mismatches += 1;
+  const disp = myDisplayedPayroll(today);
+  const [a, b] = span(disp);
+  if (disp !== myContainingPayroll(today)) windowDays.push(today);
+  const hol = today < '2027-01-01' ? HOLIDAYS : [];
+  const old = oldChoice(today, hol);
+  if (old !== undefined && (old < a! || old > b!)) oldOutside.push(today);
+  const oldN = oldChoice(today, []);
+  if (oldN !== undefined && (oldN < a! || oldN > b!)) oldOutsideNoHol.push(today);
+  // The production helper the fixture calls, on the displayed period's days.
+  let helper: string | undefined;
+  try {
+    helper = seedHelper.displayedPeriodSeedDay(daysOf(disp, hol), today, disp);
+  } catch {
+    newThrows.push(today);
+  }
+  if (helper !== myNewChoice(today, hol)) helperDiffers += 1;
+  if (helper !== undefined && !(helper >= a! && helper <= b! && helper < today)) throw new Error(`helper outside on ${today}`);
+  checked += 1;
+}
+console.log(`\n[1] days checked 2026-01-01..2027-12-31: ${checked}; production currentPayPeriod/payPeriodContaining vs my arithmetic mismatches: ${mismatches}`);
+
+// --- 2. The window: displayed != in-progress, as offsets from the displayed payroll date ---
+const offs = new Map<number, number>();
+for (const d of windowDays) {
+  const o = num(d) - num(myDisplayedPayroll(d));
+  offs.set(o, (offs.get(o) ?? 0) + 1);
+}
+console.log(`[2] window days (displayed != in-progress): ${windowDays.length}; offsets from payroll P: ${JSON.stringify([...offs.entries()].sort((x, y) => x[0] - y[0]))}`);
+console.log(`    weekdays of window days: ${JSON.stringify([...new Set(windowDays.map(isoWd))].sort())} (1=Mon..5=Fri)`);
+console.log(`    window days in Oct 2026: ${windowDays.filter((d) => d.startsWith('2026-10')).join(', ')}`);
+
+// --- 3. Old choice outside the displayed period ---
+const offsOld = new Map<number, number>();
+for (const d of oldOutsideNoHol) {
+  const o = num(d) - num(myDisplayedPayroll(d));
+  offsOld.set(o, (offsOld.get(o) ?? 0) + 1);
+}
+console.log(`[3] old pastFreeWorkdays()[0] outside the displayed period (no holidays): ${oldOutsideNoHol.length} days; offsets: ${JSON.stringify([...offsOld.entries()].sort((x, y) => x[0] - y[0]))}`);
+console.log(`    with the seeded 2026 holidays: ${oldOutside.length} days; in Oct 2026: ${oldOutside.filter((d) => d.startsWith('2026-10')).join(', ')}`);
+
+// --- 4. New rule through the production helper ---
+console.log(`[4] production displayedPeriodSeedDay vs my independent new rule: ${helperDiffers} differences; days where it throws (seeded calendar): ${newThrows.length} ${JSON.stringify(newThrows)}`);
+let minPast = 99;
+let minDay = '';
+for (let n = num('2026-01-01'); n <= num('2027-12-31'); n += 1) {
+  const today = str(n);
+  const hol = today < '2027-01-01' ? HOLIDAYS : [];
+  const c = daysOf(myDisplayedPayroll(today), hol).filter((d) => d.work_date < today && d.classification.day_class === 'normal').length;
+  if (c < minPast) {
+    minPast = c;
+    minDay = today;
+  }
+}
+console.log(`    fewest past normal workdays in the displayed period over 2026-2027 (seeded holidays): ${minPast} (first on ${minDay})`);
+
+// --- 5. Due time: the reporting-zone date at the due instants does not depend on the time of day ---
+for (const t of ['2026-10-13T16:59', '2026-10-13T17:00', '2026-10-13T23:59', '2026-10-14T00:00', '2026-10-16T23:59', '2026-10-17T00:00']) {
+  const instant = zones.resolveLocalDateTimeCompatible(t, ZONE);
+  const today = zones.localDateOf(ZONE, instant);
+  const intlDate = new Intl.DateTimeFormat('en-CA', { timeZone: ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(instant * 1000));
+  const d = periods.currentPayPeriod(schedule, today);
+  console.log(`[5] ${t} ${ZONE} = ${new Date(instant * 1000).toISOString()} -> today ${today} (Intl ${intlDate}); displayed payroll ${d.payrollDate} ${d.periodStart}..${d.periodEnd}; in-progress ${periods.payPeriodContaining(schedule, today).payrollDate}; old ${oldChoice(today, HOLIDAYS)}; new ${myNewChoice(today, HOLIDAYS)}`);
+}
+const due = periods.currentPayPeriod(schedule, '2026-10-13');
+console.log(`    due of payroll ${due.payrollDate}: ${due.dueLocalDate} ${due.dueLocalTime} = ${new Date(due.dueAtUtc * 1000).toISOString()}`);
+
+// --- 6. Now ---
+const nowSec = Math.floor(Date.now() / 1000);
+const todayNow = zones.localDateOf(ZONE, nowSec);
+const dn = periods.currentPayPeriod(schedule, todayNow);
+console.log(`[6] now ${new Date(nowSec * 1000).toISOString()}: today in ${ZONE} ${todayNow}; local ${zones.formatInZone(ZONE, nowSec)}; displayed ${dn.payrollDate} (${dn.periodStart}..${dn.periodEnd}); in-progress ${periods.payPeriodContaining(schedule, todayNow).payrollDate}; old choice ${oldChoice(todayNow, HOLIDAYS)}; new choice ${myNewChoice(todayNow, HOLIDAYS)}; inside the old-choice failure window: ${oldOutside.includes(todayNow)}; on or before 2026-10-16: ${todayNow <= '2026-10-16'}`);

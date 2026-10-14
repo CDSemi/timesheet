@@ -146,6 +146,12 @@ without confirming Docker. Step 2 therefore decides the outcome: if the engine i
 unreachable, stop right there and report. Do not start Docker Desktop, and do not wait
 or retry in a loop.
 
+Attempt 3 (2026-10-13): the owner confirmed "Docker đã chạy" ("Docker is running").
+Repeat the attempt 2 steps and save the evidence with an `a3-` prefix. HEAD may now be
+dc70ba6 or later. Those commits change only handoff/, so the digest must still be
+58b0deee…. Run the drill on the 3670a6c snapshot exactly as WP5-UX-REGATE6 did,
+including the `--wp3` base it uses.
+
 ## Results
 
 ### Verifier result (attempt 1) - decision: NOT VERIFIED (drill --wp3 blocked; every other item PASS; NAS items NOT VERIFIED)
@@ -194,5 +200,21 @@ rerun by someone with a working Docker engine; the product build is byte-identic
 Self-reported model: claude-sonnet-5-5. Node v24.21.0; HEAD = origin/main = 3670a6c (`a2-node.txt`). `docker version` (`a2-docker-version.txt`): client 28.5.1 answers; the
 server is unreachable (Docker Desktop Linux engine pipe missing). Per the addendum I stopped at step 2: Docker Desktop was not started, no retry loop, no drill, no image,
 no project. Digest not recomputed (nothing ran; source untouched by me). Whole gate: NOT VERIFIED, because drill --wp3 has no result; every other item stands from attempt 1.
+
+### Verifier result (attempt 3, drill only) - decision: PASS (NAS items NOT VERIFIED)
+
+Self-reported model: claude-sonnet-5-5. Node v24.21.0; HEAD = origin/main = dc70ba65eb6c93925b3abe821829b76fc7e1f9da; no non-handoff path changed since 3670a6c
+(`a3-head.txt` empty list; `a3-nonhandoff.txt` empty). Digest 58b0deee5d0169f0211740de34953517500576baa2fd914d5a26059d5ba1dffd, 795 files, equal in the `git ls-tree` form
+and `npm run digest` (`a3-digest.txt`). `docker version`: server Docker Desktop 4.48.0, engine 28.5.1 reachable (`a3-docker-version.txt`).
+
+Drill `--wp3` run from the clean 3670a6c export (wp3 = 49651c8 build from attempt 1, exit 0), project `ts-wp5-uxregate7`, work dir task-local: exit 0; stages 33/31/57/35/27/23 =
+208 PASS, 0 FAIL ("DRILL STAGES 1-6 PASSED"); build and every container log: no deprecation warning (all 8 matching lines are PASS lines). Forbidden-file scan PASS.
+Image `sha256:52b45ad9774df69e0a116440bbd64d15fa114ad0273af6b063f08a8f7c61b590`, 110014793 bytes (104.9 MiB), linux/amd64 (`a3-drill.txt`). Client bundle in the image was
+the same size class as REGATE6 (product byte-identical, attempt 1); the image ID differs from REGATE6 only because it is a new build.
+
+Cleanup: image removed by exact tag `ts-wp5-uxregate7-timesheet:drill` (untagged, deleted); `docker compose -p ts-wp5-uxregate7 down -v` exit 0; final
+`docker ps --all --filter name=ts-wp5-uxregate7` empty, no project image left (`a3-docker-ps.txt`, `a3-images-after.txt`). Nothing left running.
+
+Whole gate: PASS. Attempt 1 items 1-5 (except the drill) pass and stand; the drill now passes. NAS items remain NOT VERIFIED.
 
 Status: done

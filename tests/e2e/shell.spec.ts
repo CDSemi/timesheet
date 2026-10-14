@@ -67,19 +67,24 @@ test('an unknown hash falls back to the timesheet route', async ({ page, signInT
 test('the existing timesheet view works inside the shell', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
   // A day of the period the page displays (it fails clearly when that period has no past free workday).
   const workDate = await employeeSeed.displayedSeedDay();
-  await employeeSeed.seedCompleteDay(workDate);
+  // WP5-UX-AB8-02: the employee is shared by the worker's specs; release the day so a short period keeps its free workdays.
+  try {
+    await employeeSeed.seedCompleteDay(workDate);
 
-  await signInThroughUi();
-  await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
-  const row = page.locator(`[data-day="${workDate}"]`);
-  await expect(row).toContainText('Complete');
-  await expect(row.locator('[data-check="complete"]')).toHaveCount(1);
-  await expect(page.locator('[data-day]')).toHaveCount(14);
-  // The worked minutes of the sheet's detail row (Show details), as h:mm.
-  await page.getByRole('button', { name: 'Show details' }).click();
-  await expect(page.locator(`[data-detail="regular"][data-detail-day="${workDate}"]`)).toHaveText('8:00');
+    await signInThroughUi();
+    await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+    const row = page.locator(`[data-day="${workDate}"]`);
+    await expect(row).toContainText('Complete');
+    await expect(row.locator('[data-check="complete"]')).toHaveCount(1);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    // The worked minutes of the sheet's detail row (Show details), as h:mm.
+    await page.getByRole('button', { name: 'Show details' }).click();
+    await expect(page.locator(`[data-detail="regular"][data-detail-day="${workDate}"]`)).toHaveText('8:00');
 
-  await page.screenshot({ path: screenshotPath(`timesheet-${testInfo.project.name}-synthetic.png`), fullPage: true });
+    await page.screenshot({ path: screenshotPath(`timesheet-${testInfo.project.name}-synthetic.png`), fullPage: true });
+  } finally {
+    await employeeSeed.clearSessions(workDate);
+  }
 });
 
 test('mobile: no horizontal overflow and tap targets of at least 44px', async ({ page, signInThroughUi }, testInfo) => {
