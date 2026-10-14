@@ -1,7 +1,7 @@
 import { type KeyboardEvent, type MouseEvent, useId, useRef, useState } from 'react';
 import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.tsx';
 import { LABEL_CHOICES, type LabelChoice } from './labelPickerModel.ts';
-import { dayButtonName, DETAIL_ROWS, type SheetDay, type SheetWeek } from './sheetModel.ts';
+import { dayButtonName, dayClass, DETAIL_ROWS, type SheetDay, type SheetWeek } from './sheetModel.ts';
 
 /** The in-cell label picker of the sheet (E-3 a): what each day's label is now, and what a pick does. */
 export interface LabelPickerActions {
@@ -15,6 +15,8 @@ export interface LabelPickerActions {
 /** What a day of the sheet can do; shared by the desktop sheet and the phone tables. */
 export interface DayActions {
   selected: ReadonlySet<string>;
+  /** The accounting date open in the Day editor, or null; the sheet marks that day's column (desktop) or row (phone). */
+  editing: string | null;
   onToggle: (workDate: string) => void;
   onEdit: (workDate: string) => void;
   /** False in a view-only shared view: no selection box, and the day only opens to read. */
@@ -32,6 +34,7 @@ export interface DayActions {
 /** The read-only review sheet: nothing is editable, selectable or openable. */
 export const REVIEW_ACTIONS: DayActions = {
   selected: new Set<string>(),
+  editing: null,
   onToggle: () => undefined,
   onEdit: () => undefined,
   editable: false,
@@ -176,9 +179,8 @@ export function openOnClick(workDate: string, onEdit: (workDate: string) => void
   };
 }
 
-export function dayClass(day: SheetDay, selected: boolean, base: string): string {
-  return [base, day.nonworking ? 'nonworking' : '', day.today ? 'today' : '', selected ? 'selected' : ''].filter((part) => part !== '').join(' ');
-}
+/** True for the day open in the Day editor; the container carries `data-editing` and the day's button `aria-current`. */
+export const isEditingDay = (day: Pick<SheetDay, 'workDate'>, actions: Pick<DayActions, 'editing'>): boolean => actions.editing === day.workDate;
 
 /** The selection box of batch editing ("Select {date}"); only in batch mode, and absent in a view-only share. */
 export function SelectBox({ day, actions }: { day: SheetDay; actions: DayActions }) {
@@ -196,9 +198,9 @@ export function SelectBox({ day, actions }: { day: SheetDay; actions: DayActions
   );
 }
 
-function DetailLine({ day }: { day: SheetDay }) {
+function DetailLine({ day, editing }: { day: SheetDay; editing: boolean }) {
   return (
-    <tr className="sheet-detail-row">
+    <tr className={`sheet-detail-row${editing ? ' editing-detail' : ''}`}>
       <td colSpan={4}>
         <span className="detail-pair">
           {DETAIL_ROWS.regular}{' '}
@@ -258,13 +260,15 @@ export function SheetWeekTable({ week, details, actions }: { week: SheetWeek; de
 function DayRows({ day, details, actions, verb }: { day: SheetDay; details: boolean; actions: DayActions; verb: 'Edit' | 'View' }) {
   const picker = labelPickerOf(actions);
   const review = actions.review === true;
+  const editing = isEditingDay(day, actions);
   return (
     <>
       <tr
         data-day={review ? undefined : day.workDate}
         data-review-day={review ? day.workDate : undefined}
+        data-editing={editing ? 'true' : undefined}
         aria-label={day.name}
-        className={dayClass(day, actions.selected.has(day.workDate), review ? 'sheet-row sheet-row-static' : 'sheet-row')}
+        className={dayClass(day, { selected: actions.selected.has(day.workDate), editing }, `${review ? 'sheet-row sheet-row-static' : 'sheet-row'}${editing && details ? ' editing-open' : ''}`)}
         onClick={review ? undefined : openOnClick(day.workDate, actions.onEdit)}
       >
         <td className="t-day">
@@ -281,6 +285,7 @@ function DayRows({ day, details, actions, verb }: { day: SheetDay; details: bool
                 className="sheet-day-button"
                 onClick={() => actions.onEdit(day.workDate)}
                 aria-label={dayButtonName(verb, day, 'phone')}
+                aria-current={editing ? 'true' : undefined}
                 data-day-button
               >
                 <span className="t-weekday">{day.weekday}</span>
@@ -302,7 +307,7 @@ function DayRows({ day, details, actions, verb }: { day: SheetDay; details: bool
           <OtContent ot={day.ot} />
         </td>
       </tr>
-      {details && <DetailLine day={day} />}
+      {details && <DetailLine day={day} editing={editing} />}
     </>
   );
 }

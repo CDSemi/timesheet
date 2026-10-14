@@ -1,4 +1,5 @@
-import { expect, type Locator } from '@playwright/test';
+import { inflateSync } from 'node:zlib';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /*
  * Colour maths and computed-style probes for the contrast checks of the e2e specs (WCAG 2.x relative
@@ -15,6 +16,8 @@ export interface Layer {
   spread: number;
   /** The horizontal offset in px: the width of a one-sided rail such as `inset 3px 0 0 colour`. */
   offsetX: number;
+  /** The vertical offset in px: the height of a one-sided bar such as `inset 0 3px 0 colour` (negative from the bottom). */
+  offsetY: number;
 }
 
 export function parseColour(text: string): Rgba {
@@ -27,7 +30,7 @@ export function parseLayers(boxShadow: string): Layer[] {
   if (boxShadow === 'none') return [];
   return boxShadow.split(/,\s*(?=rgba?\()/).map((layer) => {
     const lengths = (layer.replace(/rgba?\([^)]*\)/, '').match(/-?\d+(\.\d+)?px/g) ?? []).map(parseFloat);
-    return { colour: parseColour(layer), inset: layer.includes('inset'), spread: lengths[3] ?? 0, offsetX: lengths[0] ?? 0 };
+    return { colour: parseColour(layer), inset: layer.includes('inset'), spread: lengths[3] ?? 0, offsetX: lengths[0] ?? 0, offsetY: lengths[1] ?? 0 };
   });
 }
 
@@ -94,6 +97,11 @@ export async function settledStyle(locator: Locator, property: StyleProperty): P
   return settled;
 }
 
+/** One immediate read of a computed property, for callers that have already waited for the colour transitions (300 ms). */
+export async function computedStyle(locator: Locator, property: StyleProperty): Promise<string> {
+  return locator.evaluate((element, name) => element.ownerDocument.defaultView?.getComputedStyle(element)[name] ?? '', property);
+}
+
 /** Focuses the element the way the keyboard does (so `:focus-visible` matches), then waits until its ring is painted and settled. */
 export async function focusFromKeyboard(locator: Locator): Promise<void> {
   await locator.scrollIntoViewIfNeeded();
@@ -145,6 +153,113 @@ export async function flattenedBackground(locator: Locator): Promise<Rgba> {
 /** The colour of the first gradient stop painted as the background image (the switch thumb is a one-colour gradient). */
 export async function imageColour(locator: Locator): Promise<Rgba> {
   return parseColour(await settledStyle(locator, 'backgroundImage'));
+}
+
+/** The computed style of a `::before` or `::after` layer of an element, with the host's padding box. */
+export interface PseudoStyle {
+  content: string;
+  position: string;
+  top: string;
+  /** Used size of the layer in px; for an absolute layer with `inset: 0` it equals the host's padding box. */
+  width: number;
+  height: number;
+  zIndex: string;
+  pointerEvents: string;
+  backgroundColor: string;
+  boxShadow: string;
+  borderStartWidth: number;
+  borderEndWidth: number;
+  borderStartColor: string;
+  borderEndColor: string;
+  hostClientWidth: number;
+  hostClientHeight: number;
+}
+
+/** One read of a pseudo-element's computed style (`none` content means the layer does not exist). */
+export async function readPseudo(locator: Locator, pseudo: '::before' | '::after'): Promise<PseudoStyle> {
+  return locator.evaluate((element, which) => {
+    const style = element.ownerDocument.defaultView?.getComputedStyle(element, which);
+    const pixels = (value: string | undefined) => parseFloat(value ?? '0');
+    return {
+      content: style?.content ?? 'none',
+      position: style?.position ?? '',
+      top: style?.top ?? '',
+      width: pixels(style?.width),
+      height: pixels(style?.height),
+      zIndex: style?.zIndex ?? '',
+      pointerEvents: style?.pointerEvents ?? '',
+      backgroundColor: style?.backgroundColor ?? '',
+      boxShadow: style?.boxShadow ?? '',
+      borderStartWidth: pixels(style?.borderInlineStartWidth),
+      borderEndWidth: pixels(style?.borderInlineEndWidth),
+      borderStartColor: style?.borderInlineStartColor ?? '',
+      borderEndColor: style?.borderInlineEndColor ?? '',
+      hostClientWidth: element.clientWidth,
+      hostClientHeight: element.clientHeight,
+    };
+  }, pseudo);
+}
+
+/** A pseudo-element's computed style once it has not changed over two reads 400 ms apart. */
+export async function settledPseudo(locator: Locator, pseudo: '::before' | '::after'): Promise<PseudoStyle> {
+  let settled = await readPseudo(locator, pseudo);
+  await expect
+    .poll(
+      async () => {
+        const first = await readPseudo(locator, pseudo);
+        await locator.page().waitForTimeout(400);
+        settled = await readPseudo(locator, pseudo);
+        return JSON.stringify(first) === JSON.stringify(settled);
+      },
+      { message: `the computed ${pseudo} style is settled` },
+    )
+    .toBe(true);
+  return settled;
+}
+
+/** The colour a CSS custom property resolves to (probed on a detached-style element, read from its computed colour). */
+export async function tokenColour(page: Page, token: string): Promise<Rgba> {
+  const text = await page.locator('body').evaluate((body, name) => {
+    const probe = body.ownerDocument.createElement('span');
+    probe.style.color = `var(${name})`;
+    body.append(probe);
+    const colour = body.ownerDocument.defaultView?.getComputedStyle(probe).color ?? '';
+    probe.remove();
+    return colour;
+  }, token);
+  return parseColour(text);
+}
+
+/**
+ * The colour actually painted at one CSS pixel of the viewport, read from a screenshot (so an overlay
+ * that hides another layer, or a layer that is not painted at all, is seen; computed styles cannot show that).
+ * `x` and `y` are viewport coordinates (`getBoundingClientRect`). The pointer is moved off the page first
+ * so no hover tint is painted. A 1x1 PNG has one pixel, so every PNG filter returns the raw bytes.
+ */
+export async function paintedPixel(page: Page, x: number, y: number): Promise<Rgba> {
+  await page.mouse.move(0, 0);
+  const png = await page.screenshot({ clip: { x, y, width: 1, height: 1 }, scale: 'css', animations: 'disabled', caret: 'hide' });
+  const data: Buffer[] = [];
+  let colourType = 0;
+  for (let offset = 8; offset < png.length; ) {
+    const length = png.readUInt32BE(offset);
+    const type = png.toString('latin1', offset + 4, offset + 8);
+    const body = png.subarray(offset + 8, offset + 8 + length);
+    if (type === 'IHDR') {
+      expect(body.readUInt8(8), 'PNG bit depth').toBe(8);
+      colourType = body.readUInt8(9);
+    }
+    if (type === 'IDAT') data.push(body);
+    offset += 12 + length;
+  }
+  expect([2, 6], `PNG colour type ${colourType}`).toContain(colourType);
+  const raw = inflateSync(Buffer.concat(data));
+  return [raw.readUInt8(1), raw.readUInt8(2), raw.readUInt8(3), colourType === 6 ? raw.readUInt8(4) / 255 : 1];
+}
+
+/** True when two opaque colours differ by at most `tolerance` on every channel. */
+export function sameColour(a: Rgba, b: Rgba, tolerance = 3): boolean {
+  return [0, 1, 2].every((index) => Math.abs((a[index] ?? 0) - (b[index] ?? 0)) <= tolerance);
 }
 
 /** The text colour of a control against its own fill composited over what is behind it. */

@@ -458,6 +458,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
               desktop={desktop}
               actions={{
                 selected,
+                editing: editDate,
                 onToggle: toggle,
                 onEdit: openEditor,
                 editable: canEdit,

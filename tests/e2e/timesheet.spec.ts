@@ -1,7 +1,23 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { formatHoursMinutes } from '../../src/domain/format.ts';
-import { namedDayButton } from './dayButton.ts';
-import { expect, screenshotPath, test } from './fixtures.ts';
+import {
+  backdropOf,
+  backdropsAbove,
+  computedStyle,
+  contrast,
+  over,
+  paintedPixel,
+  parseColour,
+  parseLayers,
+  readPseudo,
+  type Rgba,
+  sameColour,
+  settledPseudo,
+  settledStyle,
+  tokenColour,
+} from './contrast.ts';
+import { ANY_DAY_BUTTON_NAME, dayButtonName, namedDayButton } from './dayButton.ts';
+import { expect, screenshotPath, type SeedClient, test } from './fixtures.ts';
 
 /*
  * The Excel-style sheet (two week bands on desktop, a table per week on a phone) and batch
@@ -441,4 +457,708 @@ test('batch edit: a stale version shows the reload message naming the date', asy
   await alert.getByRole('button', { name: 'Reload period' }).click();
   await expect(alert).toHaveCount(0);
   await expect(dayRow(page, workDate)).toContainText('Vacation');
+});
+
+/* ---- WP5-UX2-T03: the day open in the Day editor is marked; the Today bar and the batch ring are painted ---------------------
+ *
+ * Every date comes from the server (`/api/periods/current`, the displayed period's sheet) and the displayed period, never from the
+ * device clock. A branch that depends on whether today lies in the shown period asserts both facts: the applicable branch is
+ * chosen from server values and the other asserts the opposite.
+ */
+
+interface ShownSheet {
+  days: Array<{ work_date: string; classification: { day_class: 'normal' | 'nonworking' } | null }>;
+}
+
+/** The displayed period as the server reports it, with today's accounting date and its non-working days. */
+async function shownPeriod(employeeSeed: SeedClient) {
+  const { todayLocal, currentPayrollDate } = await employeeSeed.today();
+  const sheet = await employeeSeed.call<ShownSheet>('GET', `/api/timesheets/${currentPayrollDate}`);
+  const dates = sheet.days.map((day) => day.work_date);
+  const nonworking = sheet.days.filter((day) => day.classification?.day_class === 'nonworking').map((day) => day.work_date);
+  return { todayLocal, dates, todayShown: dates.includes(todayLocal), nonworking };
+}
+
+/** Makes today's column or row appear: asserts both facts of the branch (today in the shown period or not) and steps to the next period when needed. */
+async function showToday(page: Page, employeeSeed: SeedClient): Promise<string> {
+  const { todayLocal, todayShown } = await shownPeriod(employeeSeed);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await expect(page.locator(`[data-day="${todayLocal}"]`)).toHaveCount(todayShown ? 1 : 0);
+  await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(todayShown ? 1 : 0);
+  if (!todayShown) await page.getByRole('button', { name: 'Next period' }).click();
+  await expect(page.locator(`[data-day="${todayLocal}"].today`)).toHaveCount(1);
+  await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(1);
+  return todayLocal;
+}
+
+const dayButtonOf = (page: Page, workDate: string) => namedDayButton(page, workDate, 'Edit');
+const markedDays = (page: Page) => page.locator('[data-sheet] [data-day][data-editing]');
+const currentButtons = (page: Page) => page.locator('[data-sheet] [aria-current]');
+const editorDialog = (page: Page) => page.getByRole('dialog', { name: /Day editor/ });
+
+async function openDay(page: Page, workDate: string) {
+  await dayButtonOf(page, workDate).click();
+  await expect(editorDialog(page)).toBeVisible();
+}
+
+async function expectMarkedOnly(page: Page, workDate: string) {
+  await expect(markedDays(page)).toHaveCount(1);
+  await expect(markedDays(page)).toHaveAttribute('data-day', workDate);
+  await expect(markedDays(page)).toHaveAttribute('data-editing', 'true');
+  await expect(currentButtons(page)).toHaveCount(1);
+  await expect(dayButtonOf(page, workDate)).toHaveAttribute('aria-current', 'true');
+}
+
+async function expectNoMarker(page: Page) {
+  await expect(markedDays(page)).toHaveCount(0);
+  await expect(page.locator('[data-sheet] [data-editing]')).toHaveCount(0);
+  await expect(currentButtons(page)).toHaveCount(0);
+  await expect(page.locator('[data-sheet] .editing, [data-sheet] .editing-detail')).toHaveCount(0);
+}
+
+interface Appearance {
+  name: string;
+  scheme: 'light' | 'dark';
+  /** A manual choice (`data-theme` on <html>), or null while the page follows the device. */
+  theme: 'light' | 'dark' | null;
+}
+
+/** Both themes, and the manual choice both ways over the opposite device setting. */
+const APPEARANCES: Appearance[] = [
+  { name: 'light', scheme: 'light', theme: null },
+  { name: 'dark', scheme: 'dark', theme: null },
+  { name: 'dark chosen on a light device', scheme: 'light', theme: 'dark' },
+  { name: 'light chosen on a dark device', scheme: 'dark', theme: 'light' },
+];
+
+async function applyAppearance(page: Page, appearance: Appearance) {
+  await page.emulateMedia({ colorScheme: appearance.scheme });
+  await page.locator('html').evaluate((root, theme) => {
+    if (theme === null) root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', theme);
+  }, appearance.theme);
+  await page.mouse.move(0, 0);
+  // The colour transitions take 300 ms (--duration); later reads of computed colours are immediate.
+  await page.waitForTimeout(450);
+}
+
+interface Box {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
+/** A desktop column: the column box and the box of each cell (the pseudo-element layers are not children). */
+async function columnBoxes(host: Locator): Promise<{ host: Box; cells: Array<{ className: string; box: Box }> }> {
+  return host.evaluate((element) => {
+    const box = (target: typeof element) => {
+      const rect = target.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+    };
+    return { host: box(element), cells: [...element.children].map((child) => ({ className: child.className, box: box(child) })) };
+  });
+}
+
+/** Scrolls so the element's top sits below the sticky bars, and the pointer is off the sheet. */
+async function bringIntoView(page: Page, target: Locator) {
+  await target.evaluate((element) => element.ownerDocument.defaultView?.scrollBy(0, element.getBoundingClientRect().top - 140));
+  await page.mouse.move(0, 0);
+}
+
+const sameRgb = (a: Rgba, b: Rgba, tolerance = 3) => sameColour(a, b, tolerance);
+
+/** The painted colour near the top-left corner of a column's OT cell: no text is there, so it is the column's own surface. */
+async function otCorner(page: Page, column: Locator): Promise<Rgba> {
+  await bringIntoView(page, column);
+  const ot = (await columnBoxes(column)).cells.find((cell) => cell.className.includes('d-ot'))?.box;
+  expect(ot, 'the OT cell of the column').toBeDefined();
+  return paintedPixel(page, Math.ceil(ot?.left ?? 0) + 8, Math.ceil(ot?.top ?? 0) + 2);
+}
+
+test('the day open in the Day editor is marked on that day only, moves with the editor, goes with it, and no button name changes', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const desktop = testInfo.project.name === 'desktop';
+  const [first = '', second = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  // Nothing is open: no day carries the marker and no day button carries aria-current.
+  await expectNoMarker(page);
+  const buttons = page.locator('[data-sheet] [data-day-button]');
+  await expect(buttons).toHaveCount(14);
+
+  await openDay(page, first);
+  await expectMarkedOnly(page, first);
+  // The accessible names are unchanged (docs/04 line 48, SC 2.5.3): aria-current names the state, the name stays.
+  await expect(dayButtonOf(page, first)).toHaveAccessibleName(dayButtonName('Edit', first));
+  for (const button of await buttons.all()) await expect(button).toHaveAccessibleName(ANY_DAY_BUTTON_NAME);
+  // No other ARIA state is added to the button or its column.
+  await expect(dayButtonOf(page, first)).not.toHaveAttribute('aria-expanded', /.*/);
+  await expect(dayButtonOf(page, first)).not.toHaveAttribute('aria-controls', /.*/);
+
+  // The marker moves when another day opens: from the sheet beside the panel on a desktop, after the modal sheet closes on a phone.
+  if (!desktop) {
+    await page.keyboard.press('Escape');
+    await expect(editorDialog(page)).toHaveCount(0);
+    await expectNoMarker(page);
+  }
+  await dayButtonOf(page, second).click();
+  await expect(editorDialog(page)).toBeVisible();
+  await expectMarkedOnly(page, second);
+  await expect(dayButtonOf(page, first)).not.toHaveAttribute('aria-current', /.*/);
+
+  // Escape removes the marker, and focus returns to the day's button as before.
+  await page.keyboard.press('Escape');
+  await expect(editorDialog(page)).toHaveCount(0);
+  await expectNoMarker(page);
+  await expect(dayButtonOf(page, second)).toBeFocused();
+
+  // So does the Close button.
+  await openDay(page, first);
+  await expectMarkedOnly(page, first);
+  await editorDialog(page).getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(editorDialog(page)).toHaveCount(0);
+  await expectNoMarker(page);
+  await expect(dayButtonOf(page, first)).toBeFocused();
+  for (const button of await buttons.all()) await expect(button).toHaveAccessibleName(ANY_DAY_BUTTON_NAME);
+});
+
+test('the marker stays with the editor across Show details and a period change, and is absent while its date is not on the sheet', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const desktop = testInfo.project.name === 'desktop';
+  const { dates } = await shownPeriod(employeeSeed);
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  const lastShown = dates.at(-1) ?? '';
+  // A date after the shown period, from the server's last date (calendar arithmetic only, no clock).
+  const elsewhere = new Date(Date.UTC(Number(lastShown.slice(0, 4)), Number(lastShown.slice(5, 7)) - 1, Number(lastShown.slice(8, 10)) + 30)).toISOString().slice(0, 10);
+  expect(dates, 'the date outside the sheet is not on it').not.toContain(elsewhere);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  // A phone's modal sheet makes the toolbar inert, so its switch is set first there; on a desktop the panel is beside the sheet.
+  if (!desktop) await page.getByRole('switch', { name: 'Show details' }).check();
+  await openDay(page, date);
+  await expectMarkedOnly(page, date);
+
+  // Show details re-renders the sheet; the marker is kept and the layer still covers the whole column.
+  if (desktop) await page.getByRole('switch', { name: 'Show details' }).check();
+  await expect(page.locator('[data-detail]')).toHaveCount(28);
+  await expectMarkedOnly(page, date);
+
+  if (!desktop) {
+    // The modal sheet makes the page behind inert, so a phone cannot change the period or the day while it is open.
+    await expect(page.getByRole('button', { name: 'Next period' }).click({ trial: true, timeout: 1500 })).rejects.toThrow(/intercepts pointer events/);
+    await page.keyboard.press('Escape');
+    await expectNoMarker(page);
+    return;
+  }
+  await page.getByRole('button', { name: 'Next period' }).click();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  // The editor stays open on its date (existing behaviour) but the date is not on the sheet: no column is marked.
+  await expect(page.locator(`[data-day="${date}"]`)).toHaveCount(0);
+  await expect(editorDialog(page)).toBeVisible();
+  await expectNoMarker(page);
+  // Back on the period that shows the date, the marker is back.
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(page.locator(`[data-day="${date}"]`)).toHaveCount(1);
+  await expectMarkedOnly(page, date);
+  // Open day takes any date: outside the sheet nothing is marked, on the sheet the marker follows.
+  await page.getByLabel('Open a day').fill(elsewhere);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  await expect(editorDialog(page).getByRole('heading', { level: 2 })).toHaveText(new RegExp(`${elsewhere}$`));
+  await expectNoMarker(page);
+  await page.getByLabel('Open a day').fill(date);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  await expect(editorDialog(page).getByRole('heading', { level: 2 })).toHaveText(new RegExp(`${date}$`));
+  await expectMarkedOnly(page, date);
+});
+
+test('desktop: the layers of the editing column cover the head and every row, with or without Show details; the phone row is framed', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const desktop = testInfo.project.name === 'desktop';
+  const [first = '', second = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await openDay(page, first);
+  await expectMarkedOnly(page, first);
+  const accentColour = await tokenColour(page, '--accent');
+  const fillToken = await tokenColour(page, '--day-editing');
+  expect(fillToken[3], 'the editing fill is translucent').toBeGreaterThan(0.05);
+  expect(fillToken[3]).toBeLessThan(0.2);
+
+  if (desktop) {
+    const column = page.locator(`[data-day="${first}"]`);
+    for (const details of [false, true]) {
+      if (details) await page.getByRole('switch', { name: 'Show details' }).check();
+      await expect(page.locator('[data-detail]')).toHaveCount(details ? 28 : 0);
+      await page.mouse.move(0, 0);
+      const before = await settledPseudo(column, '::before');
+      const after = await settledPseudo(column, '::after');
+      // The fill is a layer behind the cells, the same size as the column's padding box and out of the grid flow.
+      expect(before.content).toBe('""');
+      expect(before.position).toBe('absolute');
+      expect(before.zIndex).toBe('-1');
+      expect(before.top).toBe('0px');
+      expect(Math.abs(before.width - before.hostClientWidth)).toBeLessThanOrEqual(1);
+      expect(Math.abs(before.height - before.hostClientHeight)).toBeLessThanOrEqual(1);
+      expect(sameRgb(parseColour(before.backgroundColor), fillToken, 0), `fill ${before.backgroundColor}`).toBe(true);
+      expect(Math.abs(parseColour(before.backgroundColor)[3] - fillToken[3])).toBeLessThan(0.01);
+      // The side rails are a layer over the cells that never takes the pointer.
+      expect(after.content).toBe('""');
+      expect(after.position).toBe('absolute');
+      expect(after.pointerEvents).toBe('none');
+      expect(Number(after.zIndex)).toBeGreaterThan(0);
+      expect(Math.abs(after.width - after.hostClientWidth)).toBeLessThanOrEqual(1);
+      expect(Math.abs(after.height - after.hostClientHeight)).toBeLessThanOrEqual(1);
+      expect([after.borderStartWidth, after.borderEndWidth]).toEqual([2, 2]);
+      expect(sameRgb(parseColour(after.borderStartColor), accentColour, 0)).toBe(true);
+      expect(sameRgb(parseColour(after.borderEndColor), accentColour, 0)).toBe(true);
+      // The layers span from the top of the day head to the bottom of the last row (the subgrid is not disturbed).
+      const boxes = await columnBoxes(column);
+      expect(boxes.cells.length, 'cells of the column').toBe(details ? 8 : 6);
+      const head = boxes.cells[0]?.box;
+      const last = boxes.cells.at(-1)?.box;
+      expect(Math.abs((head?.top ?? 0) - boxes.host.top)).toBeLessThanOrEqual(1);
+      expect(Math.abs((last?.bottom ?? 0) - boxes.host.bottom)).toBeLessThanOrEqual(1.5);
+      expect(Math.abs(after.hostClientHeight - ((last?.bottom ?? 0) - (head?.top ?? 0)))).toBeLessThanOrEqual(1.5);
+      // The head carries the underline that joins the rails.
+      const underline = parseLayers(await settledStyle(column.locator('.d-day'), 'boxShadow'));
+      expect(underline.map((layer) => [layer.inset, layer.offsetY])).toEqual([[true, -3]]);
+      expect(sameRgb(underline[0]?.colour ?? [0, 0, 0, 0], accentColour, 0)).toBe(true);
+      // No other column has a layer.
+      expect((await settledPseudo(page.locator(`[data-day="${second}"]`), '::after')).content).toBe('none');
+      expect((await settledPseudo(page.locator(`[data-day="${second}"]`), '::before')).content).toBe('none');
+    }
+  } else {
+    // Phone: the row is framed by inset 2px accent shadows over a fill layer that sits above the cell colours.
+    for (const details of [false, true]) {
+      if (details) {
+        await page.keyboard.press('Escape');
+        await page.getByRole('switch', { name: 'Show details' }).check();
+        await openDay(page, first);
+      }
+      await expectMarkedOnly(page, first);
+      const cells = page.locator(`tr[data-day="${first}"] > td`);
+      await expect(cells).toHaveCount(4);
+      // The visual record: the framed row above the bottom sheet (the part of the page the sheet does not cover), light and dark.
+      await page.locator(`tr[data-day="${first}"]`).evaluate((row) => row.ownerDocument.defaultView?.scrollBy(0, row.getBoundingClientRect().top - 60));
+      for (const appearance of [APPEARANCES[0], APPEARANCES[1]] as Appearance[]) {
+        await applyAppearance(page, appearance);
+        await page.screenshot({ path: screenshotPath(`editing-row${details ? '-details' : ''}-phone-${appearance.name}-synthetic.png`), animations: 'disabled' });
+      }
+      await applyAppearance(page, APPEARANCES[0] as Appearance);
+      for (const index of [0, 1, 2, 3]) {
+        const cell = cells.nth(index);
+        const frame = parseLayers(await settledStyle(cell, 'boxShadow')).filter((layer) => layer.colour[3] > 0);
+        const sides = frame.map((layer) => `${layer.inset ? 'inset' : 'outset'} ${layer.offsetX},${layer.offsetY}`).sort();
+        const expected = [
+          ...(index === 0 ? ['inset 2,0'] : []),
+          ...(index === 3 ? ['inset -2,0'] : []),
+          'inset 0,2',
+          ...(details ? [] : ['inset 0,-2']),
+        ].sort();
+        expect(sides, `frame of cell ${index} (details ${details})`).toEqual(expected);
+        for (const layer of frame) expect(sameRgb(layer.colour, accentColour, 0)).toBe(true);
+        const image = await settledStyle(cell, 'backgroundImage');
+        expect(image.startsWith('linear-gradient('), `the fill layer is the top background layer of cell ${index}: ${image}`).toBe(true);
+        expect(sameRgb(parseColour(image), fillToken, 0)).toBe(true);
+      }
+      if (details) {
+        const detail = page.locator(`tr[data-day="${first}"] + tr.sheet-detail-row.editing-detail > td`);
+        await expect(detail).toHaveCount(1);
+        const closing = parseLayers(await settledStyle(detail, 'boxShadow')).filter((layer) => layer.colour[3] > 0);
+        expect(closing.map((layer) => `${layer.offsetX},${layer.offsetY}`).sort()).toEqual(['-2,0', '0,-2', '2,0']);
+        // Only the editing day's detail row joins the frame.
+        await expect(page.locator('tr.editing-detail')).toHaveCount(1);
+      } else {
+        await expect(page.locator('tr.editing-detail')).toHaveCount(0);
+      }
+    }
+    // The fill sits above the hatching of a non-working day (a layered background, not a replaced one).
+    await page.keyboard.press('Escape');
+    const { nonworking } = await shownPeriod(employeeSeed);
+    const off = nonworking[0] ?? '';
+    expect(off, 'a non-working day in the shown period').not.toBe('');
+    await openDay(page, off);
+    const hatched = await settledStyle(page.locator(`tr[data-day="${off}"] > td`).nth(1), 'backgroundImage');
+    expect(hatched).toMatch(/^linear-gradient\(.*\), repeating-linear-gradient\(/);
+  }
+});
+
+/**
+ * The colour actually painted: rails over the opaque day head and over an attention cell (they used to be hidden there), the
+ * fill behind the cells, and the Today bar over the head. Read from screenshots in both themes (desktop only: on a phone the
+ * modal sheet and its scrim cover the page while the editor is open).
+ */
+test('desktop: the rails are painted over every cell, the fill behind them, and a neighbouring day is left alone, in both themes', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const [first = '', second = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  if (project !== 'desktop') {
+    // The phone has no column. The row frame is measured in the previous test; here the row is painted in the closed state.
+    await expectNoMarker(page);
+    return;
+  }
+  await openDay(page, first);
+  await expectMarkedOnly(page, first);
+  for (const details of [false, true]) {
+    if (details) await page.getByRole('switch', { name: 'Show details' }).check();
+    for (const appearance of APPEARANCES) {
+      await applyAppearance(page, appearance);
+      const accent = await tokenColour(page, '--accent');
+      const fill = await tokenColour(page, '--day-editing');
+      const column = page.locator(`[data-day="${first}"]`);
+      const neighbour = page.locator(`[data-day="${second}"]`);
+      await bringIntoView(page, column);
+      await settledPseudo(column, '::before');
+      const boxes = await columnBoxes(column);
+      const left = Math.ceil(boxes.host.left);
+      const right = Math.floor(boxes.host.right - 2);
+      // The attention cell (a past workday without a session) is among the cells, and so is the head.
+      expect(boxes.cells.some((cell) => cell.className.includes('attention')), 'an attention cell in the column').toBe(true);
+      for (const cell of boxes.cells) {
+        const y = Math.floor(cell.box.top + cell.box.height / 2);
+        expect(sameRgb(await paintedPixel(page, left, y), accent), `${appearance.name}: left rail over "${cell.className}" (details ${details})`).toBe(true);
+        expect(sameRgb(await paintedPixel(page, right, y), accent), `${appearance.name}: right rail over "${cell.className}" (details ${details})`).toBe(true);
+      }
+      // The rail is a layer over the cell, not a property of it: the same pixel of the neighbouring day is not accent.
+      await bringIntoView(page, neighbour);
+      const other = await columnBoxes(neighbour);
+      const otherHead = other.cells[0]?.box;
+      expect(sameRgb(await paintedPixel(page, Math.ceil(other.host.left), Math.floor((otherHead?.top ?? 0) + (otherHead?.height ?? 0) / 2)), accent)).toBe(false);
+      // The fill is behind the cells: a corner of the OT cell is the neighbour's colour with the fill over it.
+      const bare = await otCorner(page, neighbour);
+      const filled = await otCorner(page, column);
+      const expected = over(fill, bare);
+      expect(sameRgb(filled, expected, 4), `${appearance.name}: fill ${filled.join(',')} over ${bare.join(',')} should be about ${expected.map(Math.round).join(',')}`).toBe(true);
+      expect(sameRgb(filled, bare, 0), `${appearance.name}: the fill changes the pixel`).toBe(false);
+    }
+  }
+  // The visual record: the column with and without the detail rows, light and dark.
+  const column = page.locator(`[data-day="${first}"]`);
+  for (const details of [false, true]) {
+    const toggle = page.getByRole('switch', { name: 'Show details' });
+    await (details ? toggle.check() : toggle.uncheck());
+    for (const appearance of [APPEARANCES[0], APPEARANCES[1]] as Appearance[]) {
+      await applyAppearance(page, appearance);
+      await bringIntoView(page, column);
+      await page.screenshot({ path: screenshotPath(`editing-column${details ? '-details' : ''}-desktop-${appearance.name}-synthetic.png`), animations: 'disabled' });
+    }
+  }
+});
+
+/** The page never scrolls sideways: the root element's scroll width equals its client width (R-B7-2: measured, not assumed). */
+async function expectNoSidewaysScroll(page: Page, label: string) {
+  const root = await page.locator('html').evaluate((element) => ({ client: element.clientWidth, scroll: element.scrollWidth }));
+  expect(root.client, `${label}: the root has a width`).toBeGreaterThan(0);
+  expect(root.scroll, `${label}: scrollWidth ${root.scroll} against clientWidth ${root.client}`).toBe(root.client);
+}
+
+for (const width of [390, 375, 360, 320]) {
+  test(`no sideways scroll at ${width}px with detail rows, the selection ring, and the editing frame`, async ({ page, employeeSeed, signInThroughUi }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const [first = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await expect(page.locator('[data-sheet="phone"]')).toHaveCount(1);
+    await page.getByRole('switch', { name: 'Show details' }).check();
+    await page.getByRole('button', { name: 'Change several days' }).click();
+    await page.getByLabel(`Select ${first}`).check();
+    await expectNoSidewaysScroll(page, `selected, details on, ${width}px`);
+    await page.getByRole('button', { name: 'Change several days' }).click();
+    await openDay(page, first);
+    await expectMarkedOnly(page, first);
+    await expectNoSidewaysScroll(page, `editing frame with the details row, ${width}px`);
+    const dialogOverflow = await editorDialog(page).evaluate((element) => element.scrollWidth - element.clientWidth);
+    expect(dialogOverflow, `the editor sheet does not scroll sideways at ${width}px`).toBe(0);
+    await page.keyboard.press('Escape');
+    await expectNoSidewaysScroll(page, `closed again, ${width}px`);
+  });
+}
+
+test('an open label picker list stays above the neighbouring columns, also in the editing column', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  const desktop = testInfo.project.name === 'desktop';
+  const [first = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  // The column layers make each desktop column its own stacking context; the open picker raises its column so the list is not
+  // painted under the next column. The editing column is the isolated column with the most layers.
+  if (desktop) {
+    await openDay(page, first);
+    await expectMarkedOnly(page, first);
+  }
+  const trigger = page.locator(`[data-label-picker="${first}"] .label-trigger`);
+  await trigger.click();
+  const list = page.locator(`[data-label-picker="${first}"] .label-list`);
+  await expect(list).toBeVisible();
+  await list.scrollIntoViewIfNeeded();
+  const covered = await list.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const doc = element.ownerDocument;
+    const points = [0.1, 0.5, 0.9].flatMap((x) => [0.15, 0.5, 0.85].map((y) => [box.left + box.width * x, box.top + box.height * y] as const));
+    return points.filter(([x, y]) => doc.elementFromPoint(x, y)?.closest('.label-list') === null).length;
+  });
+  expect(covered, 'points of the open list that another element covers').toBe(0);
+  await page.keyboard.press('Escape');
+  await expect(list).toHaveCount(0);
+});
+
+test('the batch-selection ring is unbroken at the day head and at an attention cell, in both themes', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  const desktop = testInfo.project.name === 'desktop';
+  const [first = '', second = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByRole('button', { name: 'Change several days' }).click();
+  await page.getByLabel(`Select ${first}`).check();
+  const unit = page.locator(`[data-day="${first}"]`);
+  await expect(unit).toHaveClass(/\bselected\b/);
+  await expect(page.locator('[data-day].selected')).toHaveCount(1);
+  if (!desktop) {
+    // A phone row keeps its tint (the ring is a column property); nothing else about batch selection changes.
+    await expect(page.getByLabel(`Select ${first}`)).toBeChecked();
+    await expect(page.getByLabel(`Select ${second}`)).not.toBeChecked();
+    return;
+  }
+  for (const appearance of APPEARANCES) {
+    await applyAppearance(page, appearance);
+    const accent = await tokenColour(page, '--accent');
+    const after = await settledPseudo(unit, '::after');
+    expect(after.pointerEvents).toBe('none');
+    const rings = parseLayers(after.boxShadow).filter((layer) => layer.colour[3] > 0);
+    expect(rings.map((layer) => [layer.inset, layer.offsetX, layer.offsetY, layer.spread])).toEqual([[true, 0, 0, 2]]);
+    // The old place of the ring, the column's own shadow, is gone: it was painted under the opaque head and attention cell.
+    expect(await settledStyle(unit, 'boxShadow')).toBe('none');
+    await bringIntoView(page, unit);
+    const boxes = await columnBoxes(unit);
+    const left = Math.ceil(boxes.host.left);
+    const right = Math.floor(boxes.host.right - 2);
+    for (const cell of boxes.cells) {
+      const y = Math.floor(cell.box.top + cell.box.height / 2);
+      expect(sameRgb(await paintedPixel(page, left, y), accent), `${appearance.name}: left ring over "${cell.className}"`).toBe(true);
+      expect(sameRgb(await paintedPixel(page, right, y), accent), `${appearance.name}: right ring over "${cell.className}"`).toBe(true);
+    }
+    const head = boxes.cells[0]?.box;
+    const middle = Math.floor((head?.left ?? 0) + (head?.width ?? 0) / 2);
+    expect(sameRgb(await paintedPixel(page, middle, Math.ceil(boxes.host.top)), accent), `${appearance.name}: top ring over the head`).toBe(true);
+    const last = boxes.cells.at(-1)?.box;
+    expect(sameRgb(await paintedPixel(page, middle, Math.floor((last?.bottom ?? 0) - 1)), accent), `${appearance.name}: bottom ring`).toBe(true);
+  }
+  await applyAppearance(page, APPEARANCES[0] as Appearance);
+  await bringIntoView(page, unit);
+  await page.screenshot({ path: screenshotPath('batch-ring-desktop-light-synthetic.png'), animations: 'disabled' });
+});
+
+test('the Today bar is painted over the day head, with the Today tag, and stays with batch selection and the editing marker', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const desktop = testInfo.project.name === 'desktop';
+  await signInThroughUi();
+  const today = await showToday(page, employeeSeed);
+  const unit = page.locator(`[data-day="${today}"]`);
+  await expect(unit).toHaveClass(/\btoday\b/);
+  await expect(unit.locator('.today-tag')).toBeVisible();
+  await expect(page.locator('[data-day].today')).toHaveCount(1);
+
+  if (desktop) {
+    for (const appearance of APPEARANCES) {
+      await applyAppearance(page, appearance);
+      const accent = await tokenColour(page, '--accent');
+      const headBackground = parseColour(await settledStyle(unit.locator('.d-day'), 'backgroundColor'));
+      expect(sameRgb(headBackground, accent, 20), 'the head is not accent coloured itself').toBe(false);
+      await bringIntoView(page, unit);
+      // The bar is a layer over the head, not a shadow of the column: the column itself has none.
+      expect(await settledStyle(unit, 'boxShadow')).toBe('none');
+      const bar = parseLayers((await settledPseudo(unit, '::after')).boxShadow).filter((layer) => layer.colour[3] > 0);
+      expect(bar.map((layer) => [layer.inset, layer.offsetX, layer.offsetY, layer.spread])).toEqual([[true, 0, 3, 0]]);
+      const boxes = await columnBoxes(unit);
+      const head = boxes.cells[0]?.box;
+      const middle = Math.floor((head?.left ?? 0) + (head?.width ?? 0) / 2);
+      const top = Math.ceil(boxes.host.top);
+      // The bar is 3px; layout may place its edge between pixels, so the two rows that it covers whole are accent, and the
+      // row below it is the head colour again.
+      for (const row of [0, 1]) expect(sameRgb(await paintedPixel(page, middle, top + row), accent), `${appearance.name}: Today bar row ${row} over the head`).toBe(true);
+      expect(sameRgb(await paintedPixel(page, middle, top + 4), accent), `${appearance.name}: the head under the bar is not accent`).toBe(false);
+    }
+    await applyAppearance(page, APPEARANCES[0] as Appearance);
+
+    // With batch selection: the bar and the ring together; the ring is unbroken at the head.
+    await page.getByRole('button', { name: 'Change several days' }).click();
+    await page.getByLabel(`Select ${today}`).check();
+    await expect(unit).toHaveClass(/\bselected\b/);
+    const both = parseLayers((await settledPseudo(unit, '::after')).boxShadow).filter((layer) => layer.colour[3] > 0);
+    expect(both.map((layer) => [layer.inset, layer.offsetY, layer.spread]).sort()).toEqual([
+      [true, 0, 2],
+      [true, 3, 0],
+    ]);
+    await bringIntoView(page, unit);
+    const accent = await tokenColour(page, '--accent');
+    const selectedBoxes = await columnBoxes(unit);
+    const selectedHead = selectedBoxes.cells[0]?.box;
+    const centre = Math.floor((selectedHead?.left ?? 0) + (selectedHead?.width ?? 0) / 2);
+    const rowY = Math.floor((selectedHead?.top ?? 0) + (selectedHead?.height ?? 0) / 2);
+    expect(sameRgb(await paintedPixel(page, centre, Math.ceil(selectedBoxes.host.top) + 1), accent), 'Today bar with batch selection').toBe(true);
+    expect(sameRgb(await paintedPixel(page, Math.ceil(selectedBoxes.host.left), rowY), accent), 'ring over the head').toBe(true);
+    await page.screenshot({ path: screenshotPath('today-bar-batch-desktop-light-synthetic.png'), animations: 'disabled' });
+    await applyAppearance(page, APPEARANCES[1] as Appearance);
+    await bringIntoView(page, unit);
+    await page.screenshot({ path: screenshotPath('today-bar-batch-desktop-dark-synthetic.png'), animations: 'disabled' });
+    await applyAppearance(page, APPEARANCES[0] as Appearance);
+
+    // With the editor open as well: all three markers on one column.
+    await openDay(page, today);
+    await expect(unit).toHaveClass(/\btoday\b/);
+    await expect(unit).toHaveClass(/\bselected\b/);
+    await expect(unit).toHaveClass(/\bediting\b/);
+    const all = await settledPseudo(unit, '::after');
+    expect([all.borderStartWidth, all.borderEndWidth]).toEqual([2, 2]);
+    expect(
+      parseLayers(all.boxShadow)
+        .filter((layer) => layer.colour[3] > 0)
+        .map((layer) => [layer.offsetY, layer.spread])
+        .sort(),
+    ).toEqual([
+      [0, 2],
+      [3, 0],
+    ]);
+    await expectMarkedOnly(page, today);
+    await bringIntoView(page, unit);
+    const allBoxes = await columnBoxes(unit);
+    const allHead = allBoxes.cells[0]?.box;
+    const allCentre = Math.floor((allHead?.left ?? 0) + (allHead?.width ?? 0) / 2);
+    expect(sameRgb(await paintedPixel(page, allCentre, Math.ceil(allBoxes.host.top)), accent), 'Today bar with all three markers').toBe(true);
+    // The head underline is the lowest rows of the head.
+    expect(sameRgb(await paintedPixel(page, allCentre, Math.floor((allHead?.bottom ?? 0) - 2)), accent), 'head underline').toBe(true);
+    await unit.locator('.today-tag').waitFor();
+  } else {
+    // A phone row: the Today bar is the 3px leading rail of the first cell.
+    await bringIntoView(page, unit);
+    const first = unit.locator(':scope > td').first();
+    const rail = parseLayers(await settledStyle(first, 'boxShadow')).filter((layer) => layer.colour[3] > 0);
+    expect(rail.map((layer) => [layer.inset, layer.offsetX, layer.offsetY])).toEqual([[true, 3, 0]]);
+    const accent = await tokenColour(page, '--accent');
+    const box = await first.boundingBox();
+    expect(box, 'first cell box').not.toBeNull();
+    const y = Math.floor((box?.y ?? 0) + (box?.height ?? 0) / 2);
+    expect(sameRgb(await paintedPixel(page, Math.ceil(box?.x ?? 0), y), accent), 'Today rail painted').toBe(true);
+    // Together with batch selection the rail stays.
+    await page.getByRole('button', { name: 'Change several days' }).click();
+    await page.getByLabel(`Select ${today}`).check();
+    await expect(unit).toHaveClass(/\bselected\b/);
+    await bringIntoView(page, unit);
+    const kept = parseLayers(await settledStyle(first, 'boxShadow')).filter((layer) => layer.colour[3] > 0);
+    expect(kept.map((layer) => [layer.inset, layer.offsetX, layer.offsetY])).toEqual([[true, 3, 0]]);
+    const selectedBox = await first.boundingBox();
+    expect(sameRgb(await paintedPixel(page, Math.ceil(selectedBox?.x ?? 0), Math.floor((selectedBox?.y ?? 0) + (selectedBox?.height ?? 0) / 2)), accent), 'Today rail with selection').toBe(true);
+    // And with the editor open: the 3px rail leads, with the 2px frame above and below.
+    await page.getByRole('button', { name: 'Change several days' }).click();
+    await openDay(page, today);
+    await expectMarkedOnly(page, today);
+    const framed = parseLayers(await settledStyle(first, 'boxShadow'))
+      .filter((layer) => layer.colour[3] > 0)
+      .map((layer) => `${layer.offsetX},${layer.offsetY}`)
+      .sort();
+    expect(framed).toEqual(['0,-2', '0,2', '3,0']);
+  }
+});
+
+interface EditingSurfaces {
+  /** The colour of the rails (the frame on a phone). */
+  rail: Rgba;
+  /** What lies under a body cell: the card or the non-working tint, with the editing fill over it. */
+  bodies: Rgba[];
+  /** Opaque cells that the rails cross: the day head (desktop). */
+  heads: Rgba[];
+  /** The amber cell, with the fill over it on a phone (the fill is behind the cell on a desktop). */
+  attention: Rgba[];
+}
+
+/** The surfaces of the day open in the editor, composited from the computed styles of the cells and layers. */
+async function editingSurfaces(page: Page, desktop: boolean, workDate: string): Promise<EditingSurfaces> {
+  await page.mouse.move(0, 0);
+  if (desktop) {
+    const host = page.locator(`[data-day="${workDate}"]`);
+    const base = over(parseColour(await computedStyle(host, 'backgroundColor')), backdropOf(await backdropsAbove(host)));
+    const fill = parseColour((await readPseudo(host, '::before')).backgroundColor);
+    const rail = parseColour((await readPseudo(host, '::after')).borderStartColor);
+    const head = over(parseColour(await computedStyle(host.locator('.d-day'), 'backgroundColor')), base);
+    const attention = host.locator('.d-time.attention');
+    return {
+      rail,
+      bodies: [over(fill, base)],
+      heads: [head],
+      attention: (await attention.count()) === 0 ? [] : [over(parseColour(await computedStyle(attention, 'backgroundColor')), base)],
+    };
+  }
+  const cells = page.locator(`tr[data-day="${workDate}"] > td`);
+  const rails = parseLayers(await computedStyle(cells.first(), 'boxShadow')).filter((layer) => layer.colour[3] > 0);
+  const surfaces: Rgba[] = [];
+  const amber: Rgba[] = [];
+  for (const cell of await cells.all()) {
+    const under = over(parseColour(await computedStyle(cell, 'backgroundColor')), backdropOf(await backdropsAbove(cell)));
+    const surface = over(parseColour(await computedStyle(cell, 'backgroundImage')), under);
+    if (((await cell.getAttribute('class')) ?? '').includes('attention')) amber.push(surface);
+    else surfaces.push(surface);
+  }
+  // On a phone every cell that is not amber is a body cell (the fill is a background layer of the cell itself).
+  return { rail: rails[0]?.colour ?? [0, 0, 0, 0], bodies: surfaces, heads: [], attention: amber };
+}
+
+test('rails and text keep their contrast on every surface of the editing day: card, non-working, head and amber, in both themes and both manual choices', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const desktop = testInfo.project.name === 'desktop';
+  const [workday = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  const { nonworking } = await shownPeriod(employeeSeed);
+  const dayOff = nonworking[0] ?? '';
+  expect(dayOff, 'a non-working day in the shown period').not.toBe('');
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const notes: string[] = [];
+  for (const [index, workDate] of [workday, dayOff].entries()) {
+    if (index > 0 && !desktop) await page.keyboard.press('Escape');
+    await openDay(page, workDate);
+    await expectMarkedOnly(page, workDate);
+    for (const appearance of APPEARANCES) {
+      await applyAppearance(page, appearance);
+      const surfaces = await editingSurfaces(page, desktop, workDate);
+      // SC 1.4.11: the rails (frame) against every surface they cross are at least 3:1.
+      const crossed = [...surfaces.bodies, ...surfaces.heads, ...surfaces.attention];
+      const railMin = Math.min(...crossed.map((surface) => contrast(surfaces.rail, surface)));
+      expect(railMin, `${appearance.name}, ${workDate}: rail against its worst surface`).toBeGreaterThanOrEqual(3);
+      // SC 1.4.3: text on the worst body surface (the non-working tint with the fill over it) is at least 4.5:1.
+      let textMin = Infinity;
+      for (const token of ['--text', '--muted', '--ok', '--warn', '--error', '--accent']) {
+        const colour = await tokenColour(page, token);
+        for (const surface of surfaces.bodies) textMin = Math.min(textMin, contrast(colour, surface));
+        for (const surface of surfaces.bodies) expect(contrast(colour, surface), `${appearance.name}, ${workDate}: ${token} on ${surface.map(Math.round).join(',')}`).toBeGreaterThanOrEqual(4.5);
+      }
+      const ink = await tokenColour(page, '--attention-ink');
+      for (const surface of surfaces.attention) {
+        expect(contrast(ink, surface), `${appearance.name}, ${workDate}: attention text on the amber cell`).toBeGreaterThanOrEqual(4.5);
+      }
+      notes.push(`${appearance.name} ${workDate === dayOff ? 'non-working' : 'workday'}: rail ${railMin.toFixed(2)}:1, text ${textMin.toFixed(2)}:1`);
+    }
+  }
+  await applyAppearance(page, APPEARANCES[0] as Appearance);
+  testInfo.annotations.push({ type: 'editing-contrast', description: notes.join('; ') });
+  for (const note of notes) console.log(`editing contrast (${testInfo.project.name}) ${note}`);
 });

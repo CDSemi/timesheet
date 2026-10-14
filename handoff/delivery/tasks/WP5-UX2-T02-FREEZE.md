@@ -171,4 +171,18 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(The committer appends results here.)
+Self-reported model: claude-sonnet-5-5.
+
+- Pre-HEAD af6207c281badc27192d1d420de8ace5a73c8296 (= origin/main, no extra commits).
+  Commit d0d21e1ffde06e4ae99c5ce90fa4a8324ccf0646, pushed yes, remote SHA the same.
+- Digest before add and from the new HEAD ls-tree: 1e421090db42b29359948de3b4773d438eebe343b47a3e9ce9a2f240b06604c3 (804 files), both equal.
+- Staged 42: source 10 (8 modified, 2 new); handoff modified 5; new task records 3
+  (including this brief); evidence 2 (T01-FREEZE) + 22 (T02).
+- No other modified tracked handoff files. Nothing was staged beforehand.
+- Checks, all exit 0: node v24.21.0; precommit 42 files 0 findings; diff --cached --check;
+  JSON parse; validate_orchestration PASS; check_recovery 106 probes; validate_package
+  --preflight PASS; fetch; push dry-run; push. Details in evidence/WP5-UX2-T02-FREEZE/checks.txt.
+- No fix applied, no masking needed, no stop.
+- Deviations: node v24 was taken from the portable install because system node is v26.
+  I also ran one stray `node scripts/ -v` redirected to /dev/null and one `| tail` pipe
+  (both harmless, no output used). This appended text is not part of the commit.

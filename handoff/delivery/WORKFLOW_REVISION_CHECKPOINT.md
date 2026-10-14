@@ -108,10 +108,22 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   verify and digest again.
 - WP5-UX2-T02 done after addendum 1: `theme.spec.ts:215` branches on `(hover: hover)`;
   full e2e desktop 171/0/15, mobile 175/0/11; verify 0; digest 1e421090 (804 files).
-- Next: WP5-UX2-T02-FREEZE (committer, alone), then the T03 brief.
-- Uncommitted now: the T02 source (10 paths), the board, this checkpoint (+ vi), the
-  mockup (PLAN4), the T01-FREEZE results and evidence, the T02, PLAN4 and T02-FREEZE
-  records, the T02 evidence.
+- WP5-UX2-T02-FREEZE done: d0d21e1ffde06e4ae99c5ce90fa4a8324ccf0646 on main, pushed (42
+  paths; digests 1e421090, 804 files; every check exit 0; slips: one /dev/null redirect,
+  one pipe into tail).
+- Running: WP5-UX2-T03 (worker-high, sonnet; editing-column marker and Today-bar repair)
+  on d0d21e1 / 1e421090.
+- WP5-UX2-T03 done (worker-high, self-reported claude-sonnet-5-5; reported, not
+  independent proof): editing column via `::before` fill and `::after` rails, Today bar
+  and batch ring now visible above the day head; `aria-current` on the editing day only;
+  phone row frame (the detail row also has side edges); rails at least 4.53:1, text at
+  least 4.52:1; mutation caught (3 failures); unit 1850; e2e desktop 183/0/15, mobile
+  187/0/11; budget unchanged; verify 0; digest a42c5b04 (804 files). Slips recorded on
+  the board (pipes into tail, one /dev/null, one rm -rf of its own scratch folder outside
+  the repository).
+- Next: WP5-UX2-T03-FREEZE (committer, alone), then the T04 brief.
+- Uncommitted now: the T03 source (8 paths), the board, this checkpoint (+ vi), the
+  T02-FREEZE results and evidence, the T03 and T03-FREEZE records, the T03 evidence.
 
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 

@@ -107,10 +107,22 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   digest.
 - Xong WP5-UX2-T02 sau addendum 1: `theme.spec.ts:215` rẽ nhánh theo `(hover: hover)`;
   e2e đầy đủ desktop 171/0/15, mobile 175/0/11; verify 0; digest 1e421090 (804 file).
-- Tiếp theo: WP5-UX2-T02-FREEZE (committer, chạy một mình), rồi brief T03.
-- Đang chưa commit: source T02 (10 đường dẫn), board, checkpoint này (+ en), mockup
-  (PLAN4), kết quả và bằng chứng T01-FREEZE, bản ghi T02, PLAN4 và T02-FREEZE, bằng chứng
-  T02.
+- Xong WP5-UX2-T02-FREEZE: d0d21e1ffde06e4ae99c5ce90fa4a8324ccf0646 trên main, đã push
+  (42 đường dẫn; digest 1e421090, 804 file; mọi kiểm tra exit 0; sơ suất: một lần
+  /dev/null, một lần pipe vào tail).
+- Đang chạy: WP5-UX2-T03 (worker-high, sonnet; tô cột đang sửa và sửa vạch Today) trên
+  d0d21e1 / 1e421090.
+- Xong WP5-UX2-T03 (worker-high, tự báo claude-sonnet-5-5; do người làm báo, chưa phải
+  bằng chứng độc lập): tô cột đang sửa bằng lớp nền `::before` và viền `::after`; vạch
+  Today và viền chọn hàng loạt nay hiện trên ô tiêu đề ngày; `aria-current` chỉ ở ngày đang
+  sửa; khung hàng trên điện thoại (hàng chi tiết cũng có viền hai bên); viền ít nhất
+  4.53:1, chữ ít nhất 4.52:1; thử đột biến bị test bắt (3 lỗi); unit 1850; e2e desktop
+  183/0/15, mobile 187/0/11; ngân sách màn hình không đổi; verify 0; digest a42c5b04 (804
+  file). Sơ suất ghi trên board (pipe vào tail, một /dev/null, một rm -rf thư mục nháp của
+  chính nó, nằm ngoài repo).
+- Tiếp theo: WP5-UX2-T03-FREEZE (committer, chạy một mình), rồi brief T04.
+- Đang chưa commit: source T03 (8 đường dẫn), board, checkpoint này (+ en), kết quả và bằng
+  chứng T02-FREEZE, bản ghi T03 và T03-FREEZE, bằng chứng T03.
 
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 

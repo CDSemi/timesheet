@@ -108,6 +108,17 @@ export function dayButtonName(verb: 'Edit' | 'View', day: Pick<SheetDay, 'weekda
   return `${verb} ${visible} (${day.workDate})`;
 }
 
+/**
+ * The class list of a day's container (a desktop column or a phone row): the base classes plus one word per
+ * state. `editing` marks the day open in the Day editor (WP5-UX2-T03); it is its own word, so it combines with
+ * `today`, `selected` and `nonworking` on one day. The name of the day's button never depends on any of them.
+ */
+export function dayClass(day: Pick<SheetDay, 'today' | 'nonworking'>, state: { selected: boolean; editing: boolean }, base: string): string {
+  return [base, day.nonworking ? 'nonworking' : '', day.today ? 'today' : '', state.selected ? 'selected' : '', state.editing ? 'editing' : '']
+    .filter((part) => part !== '')
+    .join(' ');
+}
+
 export const hm =(minutes: number | null | undefined): string => (minutes === null || minutes === undefined ? '' : formatHoursMinutes(minutes));
 
 /** What the label cell reads from a day: the day view of the Timesheet page and the review payload both fit. */

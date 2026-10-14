@@ -4,6 +4,7 @@ import { minutesText, usDate } from './format.ts';
 import { periodStatus, reviewHash, reviewLinkLabel } from './reviewModel.ts';
 import {
   dayButtonName,
+  dayClass,
   DETAIL_ROWS,
   overtimeTotal,
   SHEET_COMPANY,
@@ -16,8 +17,8 @@ import {
 } from './sheetModel.ts';
 import {
   type DayActions,
-  dayClass,
   dayVerb,
+  isEditingDay,
   LabelPicker,
   labelPickerOf,
   openOnClick,
@@ -38,11 +39,13 @@ function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boo
   const picker = labelPickerOf(actions);
   const hasTime = day.time.ranges.length > 0 || day.time.note !== null;
   const review = actions.review === true;
+  const editing = isEditingDay(day, actions);
   return (
     <div
-      className={dayClass(day, actions.selected.has(day.workDate), review ? 'sheet-day sheet-day-static' : 'sheet-day')}
+      className={dayClass(day, { selected: actions.selected.has(day.workDate), editing }, review ? 'sheet-day sheet-day-static' : 'sheet-day')}
       data-day={review ? undefined : day.workDate}
       data-review-day={review ? day.workDate : undefined}
+      data-editing={editing ? 'true' : undefined}
       role="group"
       aria-label={day.name}
       onClick={review ? undefined : openOnClick(day.workDate, actions.onEdit)}
@@ -56,7 +59,7 @@ function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boo
         {review ? (
           <span className="sheet-date-text">{day.dateText}</span>
         ) : (
-          <button type="button" className="sheet-date" onClick={() => actions.onEdit(day.workDate)} aria-label={dayButtonName(verb, day, 'sheet')} data-day-button>
+          <button type="button" className="sheet-date" onClick={() => actions.onEdit(day.workDate)} aria-label={dayButtonName(verb, day, 'sheet')} aria-current={editing ? 'true' : undefined} data-day-button>
             {day.dateText}
           </button>
         )}

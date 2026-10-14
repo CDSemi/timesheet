@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Calculation, DayEntry, DayView, FinalizationResponse, Session } from '../../src/client/api.ts';
 import {
   dayButtonName,
+  dayClass,
   overtimeTotal,
   sessionRange,
   sheetCheck,
@@ -287,6 +288,29 @@ describe('dayButtonName (WCAG 2.5.3 label in name)', () => {
     for (const zone of [LA, 'Asia/Ho_Chi_Minh', 'Pacific/Kiritimati']) {
       expect(dayButtonName('View', sheetDay(day('2026-12-06'), zone, null), 'sheet')).toBe('View 12/06 (2026-12-06)');
     }
+  });
+});
+
+describe('dayClass (WP5-UX2-T03: the day open in the Day editor)', () => {
+  const none = { selected: false, editing: false };
+
+  it('adds the editing word for the editing day only, and keeps the other state words', () => {
+    const today = sheetDay(day('2026-12-03'), LA, '2026-12-03');
+    const holidayDay = sheetDay(day('2026-11-26', { classification: holiday('Thanksgiving Day') }), LA, null);
+    const plain = sheetDay(day('2026-12-01'), LA, '2026-12-03');
+    expect(dayClass(plain, none, 'sheet-day').split(' ')).toEqual(['sheet-day']);
+    expect(dayClass(plain, { selected: false, editing: true }, 'sheet-day').split(' ')).toEqual(['sheet-day', 'editing']);
+    // Every state combines on one day; the order of the words is fixed.
+    expect(dayClass(today, { selected: true, editing: true }, 'sheet-day').split(' ')).toEqual(['sheet-day', 'today', 'selected', 'editing']);
+    expect(dayClass(holidayDay, { selected: false, editing: true }, 'sheet-row').split(' ')).toEqual(['sheet-row', 'nonworking', 'editing']);
+    // The other states never add the editing word.
+    for (const state of [none, { selected: true, editing: false }]) expect(dayClass(today, state, 'sheet-day')).not.toContain('editing');
+  });
+
+  it('does not change the accessible name of the day button', () => {
+    const shown = sheetDay(day('2026-12-01'), LA, null);
+    expect(dayButtonName('Edit', shown, 'sheet')).toBe('Edit 12/01 (2026-12-01)');
+    expect(dayButtonName('Edit', shown, 'phone')).toBe('Edit Tue 12/01 (2026-12-01)');
   });
 });
 
