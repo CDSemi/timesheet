@@ -1,0 +1,23 @@
+# Sweep table: per-project counts of every sweep run plus what each instant exercises.
+source <task>/env.sh
+cd $T
+labels=""
+for f in logs/sweep-s*.txt logs/sweep-w*.txt; do
+  [ -f "$f" ] || continue
+  l=${f#logs/sweep-}; labels="$labels ${l%.txt}"
+done
+echo "== simulated-clock sweep, FULL suite, both projects, 90b98ef export, sequential (default 2 workers unless the label starts with w1)"
+echo "== counts from the step reporter (TEST lines) and the list reporter summary; desktop/mobile = passed/failed/skipped"
+node summarize.mjs real-full $labels
+echo
+echo "== deadline path per run: recorded payroll-exception POSTs (fixtures.ts:385 call steps; 3 = moved on automation x2 + pdf-visual, 0 = natural)"
+for l in real-full $labels; do echo "$l: $(grep -c 'POST /api/admin/payroll-exceptions' steps-$l.txt) exception POST step(s); admin.spec import dates: $(grep -o 'import dates inside [0-9]*: [0-9 -]*' steps-$l.txt | sort -u | tr '\n' ';')"; done
+echo
+echo "== isolation + shell:67 assertion lines in every run (ac01.mjs)"
+node ac01.mjs real-full $labels
+echo
+echo "== what each instant exercises (production period functions + FIX10 helpers; instants.ts.txt)"
+cat logs/instants.txt
+echo
+echo "== progress log"
+cat logs/sweep-progress.txt

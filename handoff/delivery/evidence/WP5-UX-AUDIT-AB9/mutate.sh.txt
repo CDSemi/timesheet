@@ -1,0 +1,24 @@
+# Scratch mutations of the FIX10 helpers in the separate export x90m (never in the repository); each is restored from git.
+source <task>/env.sh
+M=$T/x90m
+B=90b98efc395c3894a21a909b6d361eadc6fc2bd9
+restore() { (cd $REPO && git show $B:"$1") > "$M/$1"; }
+unit() {
+  (cd $M && node node_modules/vitest/vitest.mjs run tests/domain/e2eSeedSelection.test.ts) > $T/logs/mut-$1.raw 2>&1
+  echo "$1: vitest exit=$? | $(grep -E 'Tests +[0-9]' $T/logs/mut-$1.raw) | failing: $(grep -E '^ +(×|FAIL) ' $T/logs/mut-$1.raw | sed 's/^ *//' | tr '\n' ';' | cut -c1-400)"
+}
+S=tests/e2e/displayedSeed.ts
+echo "== baseline (no mutation)"; unit M0
+echo "== M1 laterDeadlineFor never records a later deadline"
+node $T/mutate.mjs $M/$S "if (Date.parse(current.due_at_utc) > nowMs + marginMs) return null;" "return null;"; unit M1; restore $S
+echo "== M2 the later deadline is today at noon (not tomorrow)"
+node $T/mutate.mjs $M/$S "due_local_date: addDays(todayLocal, 1)" "due_local_date: todayLocal"; unit M2; restore $S
+echo "== M3 the margin is ignored (moves only when the due has passed)"
+node $T/mutate.mjs $M/$S "> nowMs + marginMs) return null;" "> nowMs) return null;"; unit M3; restore $S
+echo "== M4 importDatesAfter keeps the nominal dates"
+node $T/mutate.mjs $M/$S "let date = nominal > lastBlockedDate ? nominal : addDays(lastBlockedDate, 1);" "let date = nominal;"; unit M4; restore $S
+echo "== M5 importDatesAfter does not keep the dates distinct"
+node $T/mutate.mjs $M/$S "while (taken.has(date)) date = addDays(date, 1);" ""; unit M5; restore $S
+echo "== M6 importDatesAfter lets a date equal the period's last day"
+node $T/mutate.mjs $M/$S "nominal > lastBlockedDate ? nominal" "nominal >= lastBlockedDate ? nominal"; unit M6; restore $S
+echo "== restored: $(cd $M && git --no-pager diff --no-index --stat $M/$S $NEW/$S; echo "diff exit=$?")"

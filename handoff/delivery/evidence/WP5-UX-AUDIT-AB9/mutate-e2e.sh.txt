@@ -1,0 +1,22 @@
+# E2E-level scratch mutations in x90m (never in the repository); each restored from git afterwards.
+source <task>/env.sh
+M=$T/x90m
+B=90b98efc395c3894a21a909b6d361eadc6fc2bd9
+restore() { (cd $REPO && git show $B:"$1") > "$M/$1"; }
+F=tests/e2e/fixtures.ts
+echo "== M7 ensureDeadlineAhead records nothing (the admin exception call is dropped): must fail clearly at 18:30 on a due Tuesday"
+node $T/mutate.mjs $M/$F "    if (later !== null) {
+      const calendar" "    if (later !== null && process.env.AB9_NEVER === 'x') {
+      const calendar"
+bash $T/run-shift.sh $M m7-noexception-1124-1830 2026-11-25T02:30:00Z tests/e2e/automation.spec.ts tests/e2e/pdf-visual.spec.ts
+restore $F
+echo "== M8 the AB8-02 release removed (shell finally, timesheet afterEach): 2026-11-30 15:00 PST, one worker, shell + timesheet"
+node $T/mutate.mjs $M/tests/e2e/shell.spec.ts "    await employeeSeed.clearSessions(workDate);
+  }" "    void workDate;
+  }"
+node $T/mutate.mjs $M/tests/e2e/timesheet.spec.ts "for (const workDate of seededDays.splice(0)) await employeeSeed.clearSessions(workDate);" "seededDays.splice(0); void employeeSeed;"
+bash $T/run-shift.sh $M m8-norelease-1130-1500 2026-11-30T23:00:00Z tests/e2e/shell.spec.ts tests/e2e/timesheet.spec.ts --workers=1
+restore tests/e2e/shell.spec.ts; restore tests/e2e/timesheet.spec.ts
+echo "== M8 control: the unmutated x90m, same instant and files"
+bash $T/run-shift.sh $M m8c-release-1130-1500 2026-11-30T23:00:00Z tests/e2e/shell.spec.ts tests/e2e/timesheet.spec.ts --workers=1
+for f in $F tests/e2e/shell.spec.ts tests/e2e/timesheet.spec.ts; do cmp -s $M/$f $NEW/$f; echo "restored $f equal to x90b: cmp exit=$?"; done

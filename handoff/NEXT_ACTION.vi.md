@@ -7,30 +7,21 @@
   WP3-RECHECK-A lần 3 và WP3-RECHECK-BC3, đều PASS tại 49651c8, digest c31c300c.
 - WP4 đã nghiệm thu: WP4-REGATE4 PASS và hai lần kiểm tra lại độc lập cuối cùng,
   WP4-RECHECK-A lần 4 và WP4-RECHECK-B4, đều PASS tại 546cdda, digest 26fcc969.
-- WP5 đã nghiệm thu (độ sẵn sàng phần mềm): WP5-REGATE và WP5-REGATE2 PASS, và lần kiểm
-  tra lại độc lập cuối WP5-RECHECK PASS tại 014bd47, digest 150420e7.
-- Pilot: [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) cụ thể đã sẵn để chủ dự án
-  duyệt. Chưa xin phép chủ dự án, chưa có kết quả pilot, NAS chưa được kiểm.
-- Vòng thay đổi UI (chủ dự án yêu cầu 2026-10-08): kế hoạch và mockup tĩnh đã sẵn
-  (task WP5-UX-PLAN; `handoff/delivery/design/WP5-UX/mockup.html`). Chủ dự án đã chấp
-  nhận E-1..E-7 theo khuyến nghị (2026-10-08), trả lời WP5-UX-Q1 là (a) và WP5-UX-Q2 là
-  (a) (2026-10-09). Phần triển khai T01..T06 và các bản sửa FIX1..FIX6 đã freeze ở
-  5e104e1 (digest 07c3ca00); audit lại phần A PASS (WP5-UX-AUDIT-A5). Bản rà soát trợ
-  năng WP5-UX-A11Y-SWEEP tìm ra mười lỗi WCAG 2.2 AA (AX-01..AX-10); WP5-UX-FIX7 đã sửa
-  trong một vòng (freeze ở bf954c0, digest b7c011d2); WP5-UX-REGATE5 PASS; kiểm tra lại
-  phần A WP5-UX-AUDIT-A6 PASS; kiểm tra lại phần B WP5-UX-AUDIT-B6 xác nhận đã đóng mọi
-  mục trợ năng và tìm thêm một lỗi bố cục mức Low, WP5-UX-B6-01 (màn hình đầu trên điện
-  thoại khi có timesheet được chia sẻ và ghi chú múi giờ). WP5-UX-FIX8 đã sửa (freeze ở
-  255ba17, digest b07727b2); WP5-UX-REGATE6 PASS; hai lần kiểm lại phần thay đổi B7 và A7
-  xác nhận bản sửa đạt và không đổi hành vi phần A, nhưng cùng tìm ra một lỗi chỉ ở test
-  (WP5-UX-B7-01 = A7-01: spec cách ly và spec khung app tạo dữ liệu vào ngày nằm ngoài kỳ
-  đang hiển thị trong 4 ngày kết thúc ở mỗi ngày trả lương). WP5-UX-FIX9 đã sửa test
-  (freeze ở 3670a6c, digest 58b0deee). WP5-UX-REGATE7 PASS sau khi chủ dự án bật Docker
-  (image drill 52b45ad9…). Audit gộp WP5-UX-AUDIT-AB8 xác nhận sản phẩm không đổi và đóng
-  B7-01, nhưng tìm thêm bốn lỗi test phụ thuộc lịch (AB8-01..AB8-04) bằng một lượt quét
-  đồng hồ giả lập. WP5-UX-FIX10 đã sửa, chỉ trong test, và tự chạy lượt quét với 0 test
-  fail (là báo cáo; digest 57e2974c). Hiện tại: freeze, WP5-UX-REGATE8 (đồng hồ thật và
-  lượt quét; Docker phải đang chạy), một audit gộp AB9, rồi nghiệm thu lại WP5.
+- WP5 đã nghiệm thu (độ sẵn sàng phần mềm), nghiệm thu lại sau vòng thay đổi UI theo yêu
+  cầu chủ dự án: WP5-UX-REGATE8 PASS và lần kiểm tra lại độc lập cuối WP5-UX-AUDIT-AB9
+  PASS (phần A và B) tại 90b98ef, digest 57e2974c (lần nghiệm thu đầu: 014bd47, digest
+  150420e7).
+- Vòng thay đổi UI (chủ dự án yêu cầu 2026-10-08, đã xong): trang Timesheet theo bố cục
+  bảng timesheet trong file Excel mẫu, khung app thân thiện hơn, trên máy tính và điện
+  thoại (kế hoạch và mockup: task WP5-UX-PLAN, `handoff/delivery/design/WP5-UX/mockup.html`).
+  Chủ dự án chấp nhận E-1..E-7 theo khuyến nghị và trả lời WP5-UX-Q1, WP5-UX-Q2 là (a).
+  Các phần T01..T06 và các vòng sửa FIX1..FIX10 (trợ năng WCAG 2.2 AA, bố cục điện thoại,
+  test e2e không phụ thuộc lịch) chỉ đổi UI phía client và test; không đổi server hay
+  nghiệp vụ. Backlog không bắt buộc cho vòng sửa pilot: xem
+  [WP5 handoff](delivery/WP5_HANDOFF.vi.md).
+- Pilot: [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) cụ thể đã sẵn để chủ dự án duyệt
+  (định danh bản phát hành 90b98ef / 57e2974c). Chưa xin phép chủ dự án, chưa có kết quả
+  pilot, NAS chưa được kiểm.
 
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
 Xem [STATE](delivery/STATE.json), [bảng task](delivery/ORCHESTRATION.json),
@@ -58,8 +49,9 @@ Không đổi billing hay cài đặt quyền.
 ~~~
 
 Luồng hiện tại:
-1. **Đã xong: WP5 đã nghiệm thu.** Biên bản nghiệm thu trong
-   [WP5 handoff](delivery/WP5_HANDOFF.vi.md) đã commit ở dd0c7d1, không đổi source.
+1. **Đã xong: WP5 đã nghiệm thu, rồi nghiệm thu lại sau vòng thay đổi UI.** Biên bản
+   nghiệm thu đầu đã commit ở dd0c7d1; biên bản nghiệm thu lại trên 90b98ef / 57e2974c
+   (WP5-UX-AUDIT-AB9) nằm trong [WP5 handoff](delivery/WP5_HANDOFF.vi.md).
 2. **Đã xong: GOV-RECOVERY.** `check_recovery.py` không còn lấy trạng thái thật của
    mission (bản sửa đóng băng ở 7f750e9, gate PASS,
    [GOV recovery review](delivery/GOV_RECOVERY_REVIEW.vi.md) PASS). Board ghi mission là

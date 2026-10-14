@@ -343,8 +343,27 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   AB8-04 client default import year. 8 test files, no new file. Sweep: 14 full runs on
   both projects with 0 failures (one transient ERR_NO_BUFFER_SPACE on 2027-01-19 passed on
   rerun); unit 1831; verify 0; digest 57e2974c.
-- Running: WP5-UX-FIX10-FREEZE (committer, expected HEAD dc70ba6). Then WP5-UX-REGATE8
-  and the combined recheck AB9.
+- WP5-UX-FIX10-FREEZE done: 90b98efc395c3894a21a909b6d361eadc6fc2bd9 on main, pushed (106
+  paths; digests 57e2974c; every check exit 0).
+- WP5-UX-REGATE8 PASS (verifier, self-reported claude-sonnet-5-5; NAS NOT VERIFIED) on
+  90b98ef / 57e2974c: real-clock e2e 210/0/26 at 22:20 Los Angeles after the displayed
+  due; sweep 7 instants 0 failed; drill 208 PASS, image
+  sha256:dec7b4856a8220743c513a955a840d399e4be0d74970a89801ea39b6d7898327; dist identical
+  to 3670a6c; fix scope the 8 test paths.
+- WP5-UX-AUDIT-AB9 PASS (combined fresh opus, self-reported claude-opus-5-5; no
+  finding): dist byte-identical across 255ba17, 3670a6c and 90b98ef; test strength holds;
+  the AB8-01 payroll-exception setup still proves the deadline automation, the docs/05
+  activation rule and the automatic PDF; own sweep at 8 new instants (2026-2028) plus 2
+  one-worker runs, all 210/0/26; real-clock e2e 210/0/26; AC-01 and AC-13 pass; AB8-01..04
+  closed; optional R-AB9-1..6 to the pilot backlog. Board: A6, A5, A4, A3, A2 and
+  WP5-RECHECK superseded_by AB9; current digest 57e2974c.
+- WP5-UX-ACCEPT-DOCS done (light, self-reported claude-sonnet-5-5): pilot packet (EN/VI)
+  refreshed to 90b98ef / 57e2974c / image dec7b485 / AB9, with dist/server byte-identical
+  across 74d5bfe, 014bd47 and 90b98ef (only the client changed); WP5 handoff (EN/VI)
+  re-acceptance section; parity and preflight pass; digest unchanged. The coordinator
+  updated STATE (WP5 re-accepted on 90b98ef) and NEXT_ACTION (EN/VI).
+- Running: the accept commit WP5-UX-ACCEPT (committer). Then the board returns to
+  `software_ready` (that flip stays uncommitted until the next commit).
 - Next: if both PASS, the WP5 re-accept (pilot packet identity refresh to 5e104e1 /
   07c3ca00 / image 218dd7cc…, docs/10 owner decision Q1, STATE, NEXT_ACTION, WP5
   handoff, accept commit).

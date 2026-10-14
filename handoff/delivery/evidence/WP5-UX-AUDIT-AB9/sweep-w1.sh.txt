@@ -1,0 +1,11 @@
+# One-worker FULL-suite runs (both projects) at the two instants where the holiday import makes today a holiday (R-AB9-3):
+# with one worker every spec file of a project shares the worker server that admin.spec.ts changed, the maximum exposure.
+source <task>/env.sh
+run() {
+  label=$1; instant=$2; shift 2
+  bash $T/run-shift.sh $NEW "$label" "$instant" "$@" > "$T/logs/sweep-$label.txt" 2>&1
+  echo "$label finished $(date -u +%Y-%m-%dT%H:%M:%SZ) $(grep -m1 '^exit=' $T/logs/sweep-$label.txt)" >> $T/logs/sweep-progress.txt
+}
+run w1-due-tue-20270914-1830 2027-09-15T01:30:00Z --workers=1
+run w1-mon-p4-20270315-1000 2027-03-15T17:00:00Z --workers=1
+echo "w1 sweep done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $T/logs/sweep-progress.txt

@@ -1,0 +1,9 @@
+# Task-local probe of the FIX10 History observation, in the scratch export x90m (removed afterwards).
+source <task>/env.sh
+M=$T/x90m
+cp $T/zz-ab9-history-probe.spec.ts $M/tests/e2e/zz-ab9-history-probe.spec.ts
+# P-3 after the due (2026-11-24 18:30 PST): the page displays payroll 11-27; the period in progress (11-23..12-06) is not displayed.
+bash $T/run-shift.sh $M probe-history-1124-1830 2026-11-25T02:30:00Z tests/e2e/zz-ab9-history-probe.spec.ts --project=desktop
+# Control: P+1 (2026-11-28 10:00 PST), when the same kind of period is the displayed one.
+bash $T/run-shift.sh $M probe-history-1128-1000 2026-11-28T18:00:00Z tests/e2e/zz-ab9-history-probe.spec.ts --project=desktop
+rm $M/tests/e2e/zz-ab9-history-probe.spec.ts; echo "probe spec removed from x90m: exit=$?"

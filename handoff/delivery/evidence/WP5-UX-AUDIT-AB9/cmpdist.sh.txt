@@ -1,0 +1,34 @@
+# Byte comparison of the built output of the two exports (dist/ entirely, then client and server named).
+# Usage: bash cmpdist.sh <label>
+source <task>/env.sh
+L=${1:-1}
+for d in old new; do
+  if [ $d = old ]; then X=$OLD; else X=$NEW; fi
+  cd "$X/dist" || exit 2
+  find . -type f | LC_ALL=C sort > $T/dist-$L-$d-files.txt
+  : > $T/dist-$L-$d-sha.txt
+  while IFS= read -r f; do
+    h=$(sha256sum "$f"); echo "${h%% *} $f" >> $T/dist-$L-$d-sha.txt
+  done < $T/dist-$L-$d-files.txt
+done
+echo "comparison $L at $(date -u +%Y-%m-%dT%H:%M:%SZ): old = export of 3670a6c, new = export of 90b98ef"
+echo "files old=$(wc -l < $T/dist-$L-old-files.txt) new=$(wc -l < $T/dist-$L-new-files.txt)"
+echo "server files old=$(grep -c ' ./server/' $T/dist-$L-old-sha.txt) new=$(grep -c ' ./server/' $T/dist-$L-new-sha.txt)"
+echo "domain files old=$(grep -c ' ./domain/' $T/dist-$L-old-sha.txt) new=$(grep -c ' ./domain/' $T/dist-$L-new-sha.txt)"
+echo "client files old=$(grep -c ' ./client/' $T/dist-$L-old-sha.txt) new=$(grep -c ' ./client/' $T/dist-$L-new-sha.txt)"
+echo "\$ cmp per-file sha256 lists (all of dist/)"
+cmp $T/dist-$L-old-sha.txt $T/dist-$L-new-sha.txt; echo "cmp exit=$?"
+echo "\$ diff -r --brief x3670/dist x90b/dist"
+diff -r --brief $OLD/dist $NEW/dist; echo "diff exit=$?"
+echo "\$ diff -r --brief x3670/dist/server x90b/dist/server"
+diff -r --brief $OLD/dist/server $NEW/dist/server; echo "diff exit=$?"
+echo "\$ diff -r --brief x3670/dist/client x90b/dist/client"
+diff -r --brief $OLD/dist/client $NEW/dist/client; echo "diff exit=$?"
+echo "client assets (sha256 prefix, size):"
+for f in $(cd $NEW/dist && find ./client -type f | LC_ALL=C sort); do
+  echo "  $(grep " $f\$" $T/dist-$L-new-sha.txt | cut -c1-16)  $(wc -c < $NEW/dist/$f) $f"
+done
+h1=$(sha256sum $T/dist-$L-old-sha.txt); h2=$(sha256sum $T/dist-$L-new-sha.txt)
+echo "sha256 of the per-file sha list: old ${h1%% *} new ${h2%% *}"
+echo "\$ git diff --stat 3670a6c 90b98ef -- src scripts docs package.json package-lock.json tsconfig*.json vite.config.ts vitest.config.ts playwright.config.ts eslint.config.js Dockerfile compose.example.yaml"
+cd $REPO && git diff --stat 3670a6c3c22ddcf75138927ed60f4cd9bf02078d 90b98efc395c3894a21a909b6d361eadc6fc2bd9 -- src scripts docs package.json package-lock.json 'tsconfig*.json' vite.config.ts vitest.config.ts playwright.config.ts eslint.config.js Dockerfile compose.example.yaml; echo "git diff exit=$? (empty output above = no change)"

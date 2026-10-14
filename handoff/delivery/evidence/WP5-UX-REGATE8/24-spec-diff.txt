@@ -1,0 +1,317 @@
+diff --git a/tests/domain/e2eSeedSelection.test.ts b/tests/domain/e2eSeedSelection.test.ts
+index ca5101a..2400495 100644
+--- a/tests/domain/e2eSeedSelection.test.ts
++++ b/tests/domain/e2eSeedSelection.test.ts
+@@ -3 +3,9 @@ import { addDays, diffDays } from '../../src/domain/dates.ts';
+-import { currentPayPeriod, type PayPeriod, type PayrollScheduleRules, payPeriodContaining } from '../../src/domain/periods.ts';
++import { formatUtcInstant } from '../../src/domain/instants.ts';
++import {
++  currentPayPeriod,
++  type PayPeriod,
++  type PayrollException,
++  type PayrollScheduleRules,
++  payPeriodAt,
++  payPeriodContaining,
++} from '../../src/domain/periods.ts';
+@@ -5 +13,7 @@ import { localDateOf, resolveLocalDateTimeCompatible } from '../../src/domain/zo
+-import { displayedPeriodSeedDay, type SeedDayFacts } from '../e2e/displayedSeed.ts';
++import {
++  type DeadlinePeriodFacts,
++  displayedPeriodSeedDay,
++  importDatesAfter,
++  laterDeadlineFor,
++  type SeedDayFacts,
++} from '../e2e/displayedSeed.ts';
+@@ -133,0 +148,85 @@ describe('the browser specs seed from the displayed period', () => {
++
++/*
++ * WP5-UX-AB8-01: the deadline scenarios (automatic submission, automatic PDFs) need the displayed period to be due after
++ * the activation they record. The page keeps the period on screen from its due Tuesday (P-3) 17:00 through the payroll
++ * date P, so for about three days of every cycle its deadline is behind and a later one is recorded for it.
++ */
++const MARGIN_MS = 120_000;
++
++function factsOf(period: PayPeriod): DeadlinePeriodFacts {
++  return {
++    payroll_date: period.payrollDate,
++    nominal_payroll_date: period.nominalPayrollDate,
++    period_start: period.periodStart,
++    due_at_utc: formatUtcInstant(period.dueAtUtc),
++  };
++}
++
++/** The displayed period at an instant, with the later deadline applied as the admin payroll exception records it. */
++function displayedWithLater(today: string, later: { due_local_date: string; due_local_time: string }): PayPeriod {
++  const displayed = currentPayPeriod(SCHEDULE, today);
++  const exception: PayrollException = {
++    nominalPayrollDate: displayed.nominalPayrollDate,
++    payrollDate: displayed.payrollDate,
++    dueLocalDate: later.due_local_date,
++    dueLocalTime: later.due_local_time,
++  };
++  return payPeriodAt(SCHEDULE, displayed.index, [exception]);
++}
++
++describe('the deadline scenarios have a displayed period that is still due later', () => {
++  it('records nothing while the deadline is ahead; otherwise a deadline that is ahead for the same period, on every step', () => {
++    const recorded: string[] = [];
++    for (const { instant, today } of steps()) {
++      const displayed = currentPayPeriod(SCHEDULE, today);
++      const nowMs = instant * 1000;
++      const later = laterDeadlineFor(factsOf(displayed), today, nowMs, MARGIN_MS);
++      if (later === null) {
++        expect(Date.parse(formatUtcInstant(displayed.dueAtUtc)) > nowMs + MARGIN_MS, `${today}: the natural deadline is ahead`).toBe(true);
++        continue;
++      }
++      recorded.push(today);
++      const moved = displayedWithLater(today, later);
++      expect(moved.payrollDate, `${today}: the payroll date is kept`).toBe(displayed.payrollDate);
++      expect(moved.periodStart, `${today}: the period is kept`).toBe(displayed.periodStart);
++      expect(moved.dueAtUtc * 1000 > nowMs + 12 * 3_600_000, `${today}: the recorded deadline is at least 12 hours ahead`).toBe(true);
++    }
++    // The negative control: without the recorded deadline these steps fail (the due Tuesday from 17:00 through the payroll date).
++    const unique = [...new Set(recorded)];
++    expect(unique).toContain('2026-10-13');
++    expect(unique).toContain('2026-10-16');
++    expect(unique).not.toContain('2026-10-12');
++    expect(unique).not.toContain('2026-10-17');
++  });
++
++  it('switches at the margin around the due time of the due Tuesday', () => {
++    const laterAt = (date: string, time: string) => {
++      const instant = resolveLocalDateTimeCompatible(`${date}T${time}`, LA);
++      const today = localDateOf(LA, instant);
++      return laterDeadlineFor(factsOf(currentPayPeriod(SCHEDULE, today)), today, instant * 1000, MARGIN_MS);
++    };
++    // Payroll Friday 2026-10-16, due Tuesday 2026-10-13 17:00 Los Angeles time.
++    expect(laterAt('2026-10-13', '12:00')).toBeNull();
++    expect(laterAt('2026-10-13', '16:57')).toBeNull();
++    expect(laterAt('2026-10-13', '16:59')).toEqual({ due_local_date: '2026-10-14', due_local_time: '12:00' });
++    expect(laterAt('2026-10-16', '23:59')).toEqual({ due_local_date: '2026-10-17', due_local_time: '12:00' });
++    expect(laterAt('2026-10-17', '10:00')).toBeNull();
++  });
++});
++
++describe('the holiday import dates stay clear of the displayed period (WP5-UX-AB8-03)', () => {
++  const nominals = ['2027-01-01', '2027-07-04', '2027-03-03'];
++
++  it('keeps the nominal dates when they already follow the period', () => {
++    expect(importDatesAfter(nominals, '2026-10-11')).toEqual(nominals);
++  });
++
++  it('moves a date inside or before the period to the first free day after it, never onto another date', () => {
++    // The period 2026-12-21..2027-01-03 spans New Year.
++    expect(importDatesAfter(nominals, '2027-01-03')).toEqual(['2027-01-04', '2027-07-04', '2027-03-03']);
++    // Every nominal date is behind the period: consecutive free days in order.
++    expect(importDatesAfter(nominals, '2027-09-30')).toEqual(['2027-10-01', '2027-10-02', '2027-10-03']);
++    // A shifted date meets a nominal one.
++    expect(importDatesAfter(nominals, '2027-07-01')).toEqual(['2027-07-02', '2027-07-04', '2027-07-03']);
++  });
++});
+diff --git a/tests/e2e/admin.spec.ts b/tests/e2e/admin.spec.ts
+index 59359fc..bcf6ae8 100644
+--- a/tests/e2e/admin.spec.ts
++++ b/tests/e2e/admin.spec.ts
+@@ -2,0 +3 @@ import { type Page } from '@playwright/test';
++import { defaultImportYear } from '../../src/client/components/adminModel.ts';
+@@ -3,0 +5 @@ import { addDays } from '../../src/domain/dates.ts';
++import { importDatesAfter } from './displayedSeed.ts';
+@@ -46 +48 @@ interface ApiCalendar {
+-  warnings: Array<{ code: string; year: number }>;
++  warnings: Array<{ code: string; year: number; warn_from: string; message: string }>;
+@@ -51 +53 @@ interface ApiPeriods {
+-  current: { payroll_date: string; period_start: string };
++  current: { payroll_date: string; period_start: string; period_end: string };
+@@ -289,2 +291,3 @@ test('holiday CSV: issue, boundary, stale hash, preview diff, commit and no-chan
+-  // The server clock decides whether the warning exists; the import year follows what the server says.
+-  const year = warning?.year ?? Number(periods.today_local.slice(0, 4)) + 1;
++  // The server clock decides whether the warning exists; the form defaults to the warning year, else the server's year
++  // (the client's own rule, WP5-UX-AB8-04: the warning only exists from 1 October).
++  const year = defaultImportYear(periods.today_local, calendar.warnings);
+@@ -291,0 +295,5 @@ test('holiday CSV: issue, boundary, stale hash, preview diff, commit and no-chan
++  // WP5-UX-AB8-03: the import takes effect from the displayed period's start, and another spec of this worker finalizes a
++  // timesheet of that period. The dates lie in the import year after the period, so they are added (not dropped as past)
++  // and no finalized day is touched. They are 1 January, 4 July and 3 March whenever the period is not in the way.
++  const [newYear = '', midYear = '', extraDate = ''] = importDatesAfter([`${year}-01-01`, `${year}-07-04`, `${year}-03-03`], periods.current.period_end);
++  expect([newYear, midYear, extraDate].every((date) => date.startsWith(`${year}-`)), `import dates inside ${year}: ${newYear} ${midYear} ${extraDate}`).toBe(true);
+@@ -306,2 +313,0 @@ test('holiday CSV: issue, boundary, stale hash, preview diff, commit and no-chan
+-  const newYear = `${year}-01-01`;
+-  const midYear = `${year}-07-04`;
+@@ -343 +349 @@ test('holiday CSV: issue, boundary, stale hash, preview diff, commit and no-chan
+-  const other = `date,name,kind\n${year}-03-03,Synthetic Extra,holiday\n`;
++  const other = `date,name,kind\n${extraDate},Synthetic Extra,holiday\n`;
+@@ -354 +360 @@ test('holiday CSV: issue, boundary, stale hash, preview diff, commit and no-chan
+-  await expect(section.locator(`[data-kept-date="${year}-03-03"]`)).toBeAttached();
++  await expect(section.locator(`[data-kept-date="${extraDate}"]`)).toBeAttached();
+@@ -359 +365 @@ test('holiday CSV: issue, boundary, stale hash, preview diff, commit and no-chan
+-  expect(latest?.dates.map((item) => item.date)).toEqual(expect.arrayContaining([newYear, midYear, `${year}-03-03`]));
++  expect(latest?.dates.map((item) => item.date)).toEqual(expect.arrayContaining([newYear, midYear, extraDate]));
+diff --git a/tests/e2e/automation.spec.ts b/tests/e2e/automation.spec.ts
+index f70325c..97f4f4e 100644
+--- a/tests/e2e/automation.spec.ts
++++ b/tests/e2e/automation.spec.ts
+@@ -145,0 +146,4 @@ test('the deadline submits automatically: note off/on, image off/on, an empty pe
++  // WP5-UX-AB8-01: the displayed period must be due after the activation recorded below. The page keeps it on screen from its
++  // due time through its payroll date; then a later deadline is recorded for it (admin payroll exception, test database only).
++  await admin.ensureDeadlineAhead(120_000);
++
+diff --git a/tests/e2e/displayedSeed.ts b/tests/e2e/displayedSeed.ts
+index 68c28af..042e24d 100644
+--- a/tests/e2e/displayedSeed.ts
++++ b/tests/e2e/displayedSeed.ts
+@@ -10,0 +11,2 @@
++import { addDays } from '../../src/domain/dates.ts';
++
+@@ -26,0 +29,45 @@ export function freeWorkdaysOfDisplayedPeriod(days: readonly SeedDayFacts[], tod
++/** The slice of the displayed period (`/api/periods/current`, `current`) the deadline scenarios read. */
++export interface DeadlinePeriodFacts {
++  payroll_date: string;
++  nominal_payroll_date: string;
++  period_start: string;
++  due_at_utc: string;
++}
++
++/** A later deadline for one period, as the admin payroll-exception route takes it (the payroll date itself stays). */
++export interface LaterDeadline {
++  due_local_date: string;
++  due_local_time: string;
++}
++
++/**
++ * WP5-UX-AB8-01: the deadline scenarios (automatic submission, automatic PDFs) need the displayed period to be due
++ * LATER than the activation they record a minute from now (docs/05 line 26 makes a period eligible only when its due is
++ * on or after the activation). The page keeps a period on screen from its due time through its payroll date, so for
++ * about three days of every cycle its deadline is behind. The next period (in progress) is no substitute: the history
++ * window of the page ends at the displayed period, so the scenario's history facts exist only for the displayed one.
++ *
++ * Returns null when the deadline is already more than `marginMs` ahead (nothing to change), else the deadline of
++ * tomorrow at noon in the reporting zone, to be recorded for the displayed period through the supported admin payroll
++ * exception (test database only). That is always at least half a day ahead.
++ */
++export function laterDeadlineFor(current: DeadlinePeriodFacts, todayLocal: string, nowMs: number, marginMs: number): LaterDeadline | null {
++  if (Date.parse(current.due_at_utc) > nowMs + marginMs) return null;
++  return { due_local_date: addDays(todayLocal, 1), due_local_time: '12:00' };
++}
++
++/**
++ * Dates of an import year that lie after `lastBlockedDate` (the displayed period's last day, whose days another spec may
++ * have finalized) and are distinct, one per nominal date: the nominal date when it already qualifies, else the first free day after.
++ * WP5-UX-AB8-03: an import effective from the displayed period's start must neither touch that period nor drop a date as past.
++ */
++export function importDatesAfter(nominals: readonly string[], lastBlockedDate: string): string[] {
++  const taken = new Set<string>();
++  return nominals.map((nominal) => {
++    let date = nominal > lastBlockedDate ? nominal : addDays(lastBlockedDate, 1);
++    while (taken.has(date)) date = addDays(date, 1);
++    taken.add(date);
++    return date;
++  });
++}
++
+diff --git a/tests/e2e/fixtures.ts b/tests/e2e/fixtures.ts
+index fdb292b..79389eb 100644
+--- a/tests/e2e/fixtures.ts
++++ b/tests/e2e/fixtures.ts
+@@ -11 +11 @@ import { syntheticSignaturePng } from '../../src/server/seed.ts';
+-import { displayedPeriodSeedDay } from './displayedSeed.ts';
++import { type DeadlinePeriodFacts, displayedPeriodSeedDay, laterDeadlineFor } from './displayedSeed.ts';
+@@ -439,0 +440,34 @@ export class SeedClient {
++  /**
++   * WP5-UX-AB8-01, as the ADMIN of a private server: makes sure the displayed period is due more than `marginMs` from now,
++   * which a deadline scenario needs (see `laterDeadlineFor`). When the due time has passed (the period stays on screen
++   * through its payroll date) it records a later deadline for that period through the admin payroll exception (the payroll
++   * date itself unchanged; test database only). Returns the displayed period as the server reports it afterwards; fails
++   * clearly when it is still not due later than the margin. It reads this process's clock, which the server under test shares.
++   */
++  async ensureDeadlineAhead(marginMs: number): Promise<{ period: DeadlinePeriodFacts; moved: boolean }> {
++    const read = () => this.call<{ today_local: string; current: DeadlinePeriodFacts }>('GET', '/api/periods/current');
++    const before = await read();
++    const later = laterDeadlineFor(before.current, before.today_local, Date.now(), marginMs);
++    if (later !== null) {
++      const calendar = await this.call<{ id: string }>('GET', '/api/calendar');
++      await this.call(
++        'POST',
++        '/api/admin/payroll-exceptions',
++        {
++          calendar_id: calendar.id,
++          nominal_payroll_date: before.current.nominal_payroll_date,
++          payroll_date: before.current.payroll_date,
++          ...later,
++          reason: 'Synthetic e2e deadline still ahead (test database only)',
++        },
++        201,
++      );
++    }
++    const after = later === null ? before : await read();
++    expect(Date.parse(after.current.due_at_utc), `the displayed period (payroll ${after.current.payroll_date}) is due after ${marginMs / 1000} s from now`).toBeGreaterThan(
++      Date.now() + marginMs,
++    );
++    expect(after.current.payroll_date, 'the deadline change keeps the payroll date').toBe(before.current.payroll_date);
++    return { period: after.current, moved: later !== null };
++  }
++
+diff --git a/tests/e2e/pdf-visual.spec.ts b/tests/e2e/pdf-visual.spec.ts
+index 9852933..0ecbe51 100644
+--- a/tests/e2e/pdf-visual.spec.ts
++++ b/tests/e2e/pdf-visual.spec.ts
+@@ -191,2 +191,4 @@ test('automatic revisions: the note off/on and the image off/on, long Vietnamese
+-  const periods = await admin.call<{ reporting_zone: string; current: { period_start: string; due_at_utc: string } }>('GET', '/api/periods/current');
+-  const start = periods.current.period_start;
++  // WP5-UX-AB8-01: the activation below only covers a period whose deadline is on or after it (docs/05), so the displayed period
++  // must be due later. The page keeps it on screen from its due time through its payroll date: a later deadline is recorded then.
++  const { period: current } = await admin.ensureDeadlineAhead(120_000);
++  const start = current.period_start;
+@@ -221 +223 @@ test('automatic revisions: the note off/on and the image off/on, long Vietnamese
+-  const submittedAt = new Date(new Date(periods.current.due_at_utc).getTime() + 5 * 60_000);
++  const submittedAt = new Date(new Date(current.due_at_utc).getTime() + 5 * 60_000);
+diff --git a/tests/e2e/shell.spec.ts b/tests/e2e/shell.spec.ts
+index 3c1ed99..3166aa3 100644
+--- a/tests/e2e/shell.spec.ts
++++ b/tests/e2e/shell.spec.ts
+@@ -70 +70,3 @@ test('the existing timesheet view works inside the shell', async ({ page, employ
+-  await employeeSeed.seedCompleteDay(workDate);
++  // WP5-UX-AB8-02: the employee is shared by the worker's specs; release the day so a short period keeps its free workdays.
++  try {
++    await employeeSeed.seedCompleteDay(workDate);
+@@ -72,9 +74,9 @@ test('the existing timesheet view works inside the shell', async ({ page, employ
+-  await signInThroughUi();
+-  await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+-  const row = page.locator(`[data-day="${workDate}"]`);
+-  await expect(row).toContainText('Complete');
+-  await expect(row.locator('[data-check="complete"]')).toHaveCount(1);
+-  await expect(page.locator('[data-day]')).toHaveCount(14);
+-  // The worked minutes of the sheet's detail row (Show details), as h:mm.
+-  await page.getByRole('button', { name: 'Show details' }).click();
+-  await expect(page.locator(`[data-detail="regular"][data-detail-day="${workDate}"]`)).toHaveText('8:00');
++    await signInThroughUi();
++    await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
++    const row = page.locator(`[data-day="${workDate}"]`);
++    await expect(row).toContainText('Complete');
++    await expect(row.locator('[data-check="complete"]')).toHaveCount(1);
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    // The worked minutes of the sheet's detail row (Show details), as h:mm.
++    await page.getByRole('button', { name: 'Show details' }).click();
++    await expect(page.locator(`[data-detail="regular"][data-detail-day="${workDate}"]`)).toHaveText('8:00');
+@@ -82 +84,4 @@ test('the existing timesheet view works inside the shell', async ({ page, employ
+-  await page.screenshot({ path: screenshotPath(`timesheet-${testInfo.project.name}-synthetic.png`), fullPage: true });
++    await page.screenshot({ path: screenshotPath(`timesheet-${testInfo.project.name}-synthetic.png`), fullPage: true });
++  } finally {
++    await employeeSeed.clearSessions(workDate);
++  }
+diff --git a/tests/e2e/timesheet.spec.ts b/tests/e2e/timesheet.spec.ts
+index 6190cd6..e74f109 100644
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -25,0 +26,10 @@ test.beforeEach(({ page }) => {
++/**
++ * WP5-UX-AB8-02: days a test seeded on the worker-shared employee. They are released after the test, pass or fail, so
++ * a short displayed period (3 past workdays on 2026-11-28..30) keeps its free workdays for the specs that follow.
++ */
++const seededDays: string[] = [];
++
++test.afterEach(async ({ employeeSeed }) => {
++  for (const workDate of seededDays.splice(0)) await employeeSeed.clearSessions(workDate);
++});
++
+@@ -199,0 +210 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
++  seededDays.push(completeDay, pendingDay);

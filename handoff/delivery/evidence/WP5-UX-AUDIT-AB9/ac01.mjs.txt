@@ -1,0 +1,29 @@
+// node ac01.mjs <label> [...]: the isolation.spec.ts assertion lines reached per project and test, with ok/fail counts.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const T = '<task>';
+for (const label of process.argv.slice(2)) {
+  const groups = new Map();
+  for (const line of readFileSync(join(T, `steps-${label}.txt`), 'utf8').split('\n')) {
+    if (!line.startsWith('STEP ')) continue;
+    const parts = line.split(' | ');
+    const ok = parts[0] === 'STEP ok';
+    const [project, testLoc, , , stepLoc] = [parts[1], parts[2], parts[3], parts[4], parts[5]];
+    if (!testLoc.startsWith('isolation.spec.ts') && !testLoc.startsWith('shell.spec.ts:67')) continue;
+    const key = `${project} ${testLoc}`;
+    if (!groups.has(key)) groups.set(key, new Map());
+    const lines = groups.get(key);
+    const step = (stepLoc ?? '?').replace(/^[^:]+:/, ':');
+    const c = lines.get(step) ?? { ok: 0, fail: 0 };
+    if (ok) c.ok += 1;
+    else c.fail += 1;
+    lines.set(step, c);
+  }
+  console.log(`== ${label}`);
+  for (const [key, lines] of [...groups.entries()].sort()) {
+    const sorted = [...lines.entries()].sort((a, b) => Number(a[0].slice(1)) - Number(b[0].slice(1)));
+    const fails = sorted.reduce((s, [, c]) => s + c.fail, 0);
+    console.log(`${key}: ${sorted.length} assertion lines, failed steps ${fails}: ${sorted.map(([l, c]) => (c.ok === 1 && c.fail === 0 ? l : `${l}x${c.ok}${c.fail ? `/FAIL${c.fail}` : ''}`)).join(' ')}`);
+  }
+}

@@ -1,0 +1,11 @@
+// node mutate.mjs <file> <search> <replace>: replaces exactly one occurrence (fails when the search text is absent or repeated).
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, search, replace] = process.argv.slice(2);
+if (file === undefined || search === undefined || replace === undefined) throw new Error('usage: node mutate.mjs <file> <search> <replace>');
+const text = readFileSync(file, 'utf8');
+const first = text.indexOf(search);
+if (first < 0) throw new Error(`search text not found in ${file}`);
+if (text.indexOf(search, first + 1) >= 0) throw new Error(`search text repeated in ${file}`);
+writeFileSync(file, text.slice(0, first) + replace + text.slice(first + search.length));
+console.log(`mutated ${file.replace(/\\/g, '/').split('/').slice(-2).join('/')}`);

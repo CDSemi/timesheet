@@ -1,0 +1,12 @@
+# Validation controls of the simulated clock before the sweep (sequential).
+source <task>/env.sh
+# V1: control spec in the 90b98ef export at Tue 2026-11-24 18:30 PST (02:30Z on 11-25); server must report today 2026-11-24.
+cp $T/zz-ab9-control.spec.ts $NEW/tests/e2e/zz-ab9-control.spec.ts
+CONTROL_TODAY=2026-11-24 bash $T/run-shift.sh $NEW v1-control-1124-1830 2026-11-25T02:30:00Z tests/e2e/zz-ab9-control.spec.ts
+rm $NEW/tests/e2e/zz-ab9-control.spec.ts; echo "control spec removed from the export: exit=$?"
+# V2: the unchanged 3670a6c deadline specs at 13:00 (before the due) and at 18:30 (after it) on the same Tuesday.
+bash $T/run-shift.sh $OLD v2-old-1124-1300 2026-11-24T21:00:00Z tests/e2e/automation.spec.ts tests/e2e/pdf-visual.spec.ts
+bash $T/run-shift.sh $OLD v3-old-1124-1830 2026-11-25T02:30:00Z tests/e2e/automation.spec.ts tests/e2e/pdf-visual.spec.ts
+# V4: the 90b98ef deadline specs at 18:30 (moved path).
+bash $T/run-shift.sh $NEW v4-new-1124-1830 2026-11-25T02:30:00Z tests/e2e/automation.spec.ts tests/e2e/pdf-visual.spec.ts
+echo "validation done $(date -u +%Y-%m-%dT%H:%M:%SZ)"

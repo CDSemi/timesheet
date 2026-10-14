@@ -133,3 +133,40 @@ Do WP5-ACCREC chuẩn bị (chỉ ghi hồ sơ, không sửa mã nguồn). Các 
   - sẵn sàng phần mềm của WP1–WP5: đã chấp nhận. WP5 đã được triển khai, qua cổng kiểm (WP5-REGATE2 PASS, cùng WP5-GATE và WP5-REGATE trên các freeze trước) và audit độc lập (WP5-RECHECK PASS trên `014bd47`, digest `150420e7…`), với đích NAS CHƯA ĐƯỢC KIỂM CHỨNG; coordinator ghi WP5-ACCEPT;
   - phép của chủ sở hữu: không xin ở đây, và chưa cấp. Gói pilot sẵn sàng cho chủ sở hữu xem xét. Không triển khai, không email thật, không dữ liệu thật, `PRODUCTION_SENDING_ENABLED` không bao giờ được đặt, và không có thời điểm kích hoạt trên instance thật nào;
   - kết quả pilot: chưa có; chưa chạy pilot nào.
+
+## Nghiệm thu lại sau vòng đổi giao diện (WP5-UX)
+
+Mục này được thêm sau hồ sơ nghiệm thu cũ ở trên, hồ sơ cũ giữ nguyên làm lịch sử (định danh `014bd47` / `150420e7…` là bản WP5 được nghiệm thu đầu tiên). Nguồn: board [ORCHESTRATION.json](ORCHESTRATION.json) (các tác vụ `WP5-UX-*`, `owner_decisions`, `coordinator_decisions`), [checkpoint](WORKFLOW_REVISION_CHECKPOINT.vi.md) và các báo cáo nêu dưới đây. Kết quả tự báo cáo không phải bằng chứng độc lập; bằng chứng độc lập là các audit.
+
+- **Yêu cầu và câu trả lời của chủ sở hữu:**
+  - Ngày 2026-10-08, chủ sở hữu yêu cầu giao diện đẹp hơn, dễ dùng hơn, với trang Timesheet bố trí như workbook Excel mẫu (nguyên văn trong `owner_decisions`). Coordinator chạy nó như một vòng thay đổi WP5 trước khi kích hoạt pilot (không có gói mới).
+  - E-1..E-7 (kế hoạch [WP5-UX-PLAN](tasks/WP5-UX-PLAN.md) mục E): trả lời "OK theo khuyến nghị", tất cả theo khuyến nghị (hàng kiểu Excel với chi tiết sau "Show details"; một sắc nền gạch chéo cho mọi ngày không làm việc; panel bên ở desktop và bottom sheet ở điện thoại; ngày kiểu Mỹ, h:mm, 24 giờ; điều hướng Timesheet, Overtime, History, Settings (+ Admin); hiện dòng chữ ký quản lý để trống; phạm vi shell/token, Timesheet, trình sửa ngày và Review).
+  - WP5-UX-Q1 (2026-10-09): trả lời "a", sửa độ tương phản vòng focus và định dạng ngày hạn kiểu Mỹ trong một vòng nhỏ (FIX6).
+  - WP5-UX-Q2 (2026-10-09): trả lời "a", một lượt quét khả năng truy cập, rồi một vòng sửa cho mọi mục WCAG 2.2 AA (A11Y-SWEEP, sau đó FIX7).
+- **Các lát cắt (mỗi cái một dòng; sau mỗi cái có commit FREEZE):**
+  - T01: app shell, design token, điều hướng (Settings và Sign out nằm trong More ở điện thoại) và bốn spec.
+  - T02: các thành phần bảng kiểu Excel; lưới và danh sách cũ bị xóa; bộ định dạng hiển thị.
+  - T03: PeriodBar, ClockPanel, `periodBarModel` và chế độ batch.
+  - T04: trình sửa ngày dạng panel bên và bottom sheet, nghỉ phép theo giờ và phút, xác nhận giờ nghỉ một chạm, bộ chọn nhãn ngay trong ô.
+  - T05: Review dưới dạng bảng chỉ đọc cùng danh sách kiểm.
+  - T06: docs/04, docs/10 (các quyết định của chủ sở hữu ngày 2026-10-08) và docs/12, EN và VI.
+- **Các vòng sửa (mỗi cái một dòng; sau mỗi cái có commit FREEZE):**
+  - FIX1: "Times in <zone>" luôn hiện, kèm ghi chú khi hai múi giờ khác nhau (mâu thuẫn docs/04 do coordinator quyết định).
+  - FIX2: dữ liệu nghỉ phép sai định dạng bị từ chối thay vì lưu thành một loại nghỉ khác (A-01).
+  - FIX3: hàng ngày đầu tiên trên điện thoại nằm trên thanh tab, trình sửa dạng modal dưới 1200 px, khôi phục assertion về import-absence, chỉnh câu chữ docs/04, thứ tự tab trên điện thoại (B-01..B-04).
+  - FIX4: ô "Open a day" hiện đủ ngày ở 360 và 320 px (B2-01).
+  - FIX5: trình sửa hoãn chuyển chế độ khi một modal khác đang mở; docs/04; assertion có nghĩa; token khoảng cách (B3-01, B3-02, O-5, R-7).
+  - FIX6: vòng focus mạnh hơn kèm kiểm tra tương phản tự động, và ngày hạn kiểu Mỹ trong ghi chú múi giờ (B4-01, B4-02).
+  - FIX7: mười mục WCAG 2.2 AA là AX-01..AX-10 (chỉ client, 29 tệp, cộng dòng 48 của docs/04).
+  - FIX8: thanh chuyển đổi gọn một hàng trên điện thoại, hàng ngày đầu tiên nằm trên thanh tab khi có chia sẻ nhận được (B6-01).
+  - FIX9: các ngày cô lập của e2e được seed từ kỳ đang hiển thị (A7-01, B7-01; chỉ test).
+  - FIX10: bộ e2e không phụ thuộc lịch sau một lượt quét đồng hồ giả lập (AB8-01..AB8-04; chỉ test).
+- **Gate cuối và audit cuối (định danh được nghiệm thu):**
+  - Commit phát hành `90b98efc395c3894a21a909b6d361eadc6fc2bd9` (WP5-UX-FIX10-FREEZE, đã push); source digest `57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d`, 795 tệp, không tính `handoff/`.
+  - WP5-UX-REGATE8 PASS, NAS NOT VERIFIED ([tác vụ](tasks/WP5-UX-REGATE8.md)): e2e đầy đủ đồng hồ thật 210 passed / 26 skipped / 0 failed; quét đồng hồ giả lập 7 thời điểm, 0 failed; drill `--wp3` 208 PASS / 0 FAIL; 1.831 unit test. Image tham chiếu `sha256:dec7b4856a8220743c513a955a840d399e4be0d74970a89801ea39b6d7898327` (110.014.793 byte, `linux/amd64`), đã xóa sau gate.
+  - WP5-UX-AUDIT-AB9 PASS, không có phát hiện, gộp vùng A và B ([WP5_UX_REVIEW_AB9](WP5_UX_REVIEW_AB9.vi.md)): `dist/` giống từng byte giữa 255ba17, 3670a6c và 90b98ef; độ mạnh của test được giữ; lượt quét riêng ở thêm 8 thời điểm và 2 lượt một worker đều 210/0/26. Nó thay thế WP5-UX-AUDIT-A6 và các audit trước đó (A5, A4, A3, A2 và WP5-RECHECK). Các báo cáo trước của vòng này: `WP5_UX_REVIEW_A.md` đến `_A7.md`, `WP5_UX_REVIEW_B.md` đến `_B7.md` và `WP5_UX_REVIEW_AB8.md`.
+  - Ranh giới sản phẩm: vòng này đổi giao diện client và các test (cùng bộ định dạng chỉ để hiển thị trong `src/domain/format.ts`). `dist/server` giống từng byte với 014bd47 (A7, AB9); không đổi server hay quy tắc nghiệp vụ.
+- **Quyết định docs/10 (coordinator):** docs/10 giữ nguyên cho lần nghiệm thu lại này. Lý do: `docs/` nằm trong source digest, nên một mục cho Q1 và Q2 sẽ làm digest đổi sau gate và audit cuối; Q1 và Q2 vẫn được ghi nguyên văn trên board trong `owner_decisions` và được tóm tắt ở đây. Chuyển tiếp: mục docs/10 (+ vi) cho Q1 và Q2 được đưa vào vòng thay đổi mã nguồn kế tiếp, vòng đó vốn đã có gate và audit.
+- **Backlog tùy chọn được mang theo (theo ID; không mục nào chặn nghiệm thu):** R-B7-1..R-B7-4 ([WP5_UX_REVIEW_B7](WP5_UX_REVIEW_B7.vi.md)); R-AB8-1..R-AB8-4 ([WP5_UX_REVIEW_AB8](WP5_UX_REVIEW_AB8.vi.md)); R-AB9-1..R-AB9-6 ([WP5_UX_REVIEW_AB9](WP5_UX_REVIEW_AB9.vi.md)); các rủi ro B6 và A7 ([WP5_UX_REVIEW_B6](WP5_UX_REVIEW_B6.vi.md), [WP5_UX_REVIEW_A7](WP5_UX_REVIEW_A7.vi.md)). Các rủi ro cũ ở trên vẫn áp dụng.
+- **Gói pilot:** [WP5_PILOT_PACKET](WP5_PILOT_PACKET.vi.md) và bản `.md` của nó đã được làm mới theo định danh trên (mục 0, 3, 5, 6 và 10); D-1..D-15 và biên bản cho phép chưa ký không đổi.
+- **Tách ba kết quả:** phần mềm sẵn sàng của WP1–WP5 trên `90b98ef` / `57e2974c…`: được chấp nhận qua REGATE8 và AB9, NAS vẫn NOT VERIFIED; quyền của chủ sở hữu: chưa yêu cầu và chưa cấp; kết quả pilot: chưa có, chưa chạy pilot nào.

@@ -7,32 +7,21 @@
   attempt 3 and WP3-RECHECK-BC3 PASS at 49651c8, digest c31c300c.
 - WP4 accepted: WP4-REGATE4 PASS and final independent rechecks WP4-RECHECK-A
   attempt 4 and WP4-RECHECK-B4 PASS at 546cdda, digest 26fcc969.
-- WP5 accepted (software readiness): WP5-REGATE and WP5-REGATE2 PASS, and the closing
-  independent recheck WP5-RECHECK PASS at 014bd47, digest 150420e7.
+- WP5 accepted (software readiness), re-accepted after the owner-requested UI change
+  round: WP5-UX-REGATE8 PASS and the final independent recheck WP5-UX-AUDIT-AB9 PASS
+  (areas A and B) at 90b98ef, digest 57e2974c (first acceptance: 014bd47, digest
+  150420e7).
+- UI change round (owner request 2026-10-08, done): the Timesheet page now follows the
+  sample Excel timesheet layout, with a friendlier shell, on desktop and phone (plan and
+  mockup: task WP5-UX-PLAN, `handoff/delivery/design/WP5-UX/mockup.html`). The owner
+  accepted E-1..E-7 as recommended and answered WP5-UX-Q1 and WP5-UX-Q2 with (a). Slices
+  T01..T06 and fix rounds FIX1..FIX10 (accessibility WCAG 2.2 AA, phone layout, and
+  calendar-independent e2e tests) changed the client UI and tests only; no server or
+  business change. Optional backlog for the pilot fix round: see the
+  [WP5 handoff](delivery/WP5_HANDOFF.md).
 - Pilot: the concrete [pilot packet](delivery/WP5_PILOT_PACKET.md) is ready for owner
-  review. Owner permission has not been requested, there is no pilot result, and the
-  NAS is NOT VERIFIED.
-- UI change round (owner request 2026-10-08): the plan and a static mockup are ready
-  (task WP5-UX-PLAN; `handoff/delivery/design/WP5-UX/mockup.html`). The owner accepted
-  E-1..E-7 as recommended (2026-10-08) and answered WP5-UX-Q1 with (a) and WP5-UX-Q2
-  with (a) (2026-10-09). Implementation T01..T06 and fixes FIX1..FIX6 were frozen at
-  5e104e1 (digest 07c3ca00); area A re-audit PASS (WP5-UX-AUDIT-A5). The accessibility
-  sweep WP5-UX-A11Y-SWEEP found ten WCAG 2.2 AA issues (AX-01..AX-10); WP5-UX-FIX7
-  fixed them in one round (frozen at bf954c0, digest b7c011d2); WP5-UX-REGATE5 PASS;
-  area A recheck WP5-UX-AUDIT-A6 PASS; area B recheck WP5-UX-AUDIT-B6 closed every
-  accessibility item and found one Low layout item, WP5-UX-B6-01 (phone first screen with
-  a received share and the zone note). WP5-UX-FIX8 fixed it (frozen at 255ba17, digest
-  b07727b2); WP5-UX-REGATE6 PASS; the delta rechecks B7 and A7 confirmed the fix and that
-  it changes no area-A behaviour, and both found one test-only defect (WP5-UX-B7-01 =
-  A7-01: the isolation and shell specs seed a day outside the displayed period on the 4
-  days ending on each payroll date). WP5-UX-FIX9 fixed the tests (frozen at 3670a6c,
-  digest 58b0deee). WP5-UX-REGATE7 PASS after the owner started Docker (drill image
-  52b45ad9…). The combined recheck WP5-UX-AUDIT-AB8 confirmed the product unchanged and
-  closed B7-01, and found four more calendar-dependent test defects (AB8-01..AB8-04)
-  with a simulated-clock sweep. WP5-UX-FIX10 fixed them in tests only and ran the sweep
-  itself with 0 failures (reported; digest 57e2974c). Now: freeze, WP5-UX-REGATE8 (real
-  clock plus the sweep; Docker must be running), one combined recheck AB9, then the WP5
-  re-accept.
+  review (release identity 90b98ef / 57e2974c). Owner permission has not been
+  requested, there is no pilot result, and the NAS is NOT VERIFIED.
 
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),
@@ -61,8 +50,9 @@ Do not change billing or permission settings.
 ~~~
 
 Current route:
-1. **Done: WP5 accepted.** The [WP5 handoff](delivery/WP5_HANDOFF.md) acceptance
-   record was committed at dd0c7d1, with no source change.
+1. **Done: WP5 accepted, then re-accepted after the UI change round.** The first
+   acceptance record was committed at dd0c7d1; the re-acceptance on 90b98ef / 57e2974c
+   (WP5-UX-AUDIT-AB9) is in the [WP5 handoff](delivery/WP5_HANDOFF.md).
 2. **Done: GOV-RECOVERY.** `check_recovery.py` no longer inherits the live mission
    status (fix frozen at 7f750e9, gate PASS,
    [GOV recovery review](delivery/GOV_RECOVERY_REVIEW.md) PASS). The board records the

@@ -1,0 +1,310 @@
+== baseline (no mutation)
+M0: vitest exit=0 |       Tests  8 passed (8) | failing: 
+== M1 laterDeadlineFor never records a later deadline
+mutated e2e/displayedSeed.ts
+M1: vitest exit=1 | ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 6 passed (8) | failing: × records nothing while the deadline is ahead; otherwise a deadline that is ahead for the same period, on every step 7ms;× switches at the margin around the due time of the due Tuesday 1ms;FAIL  tests/domain/e2eSeedSelection.test.ts > the deadline scenarios have a displayed period that is still due later > records nothing while the deadline is ahead; otherwise a deadline that is ahead for the sa
+== M2 the later deadline is today at noon (not tomorrow)
+mutated e2e/displayedSeed.ts
+M2: vitest exit=1 | ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 6 passed (8) | failing: × records nothing while the deadline is ahead; otherwise a deadline that is ahead for the same period, on every step 7ms;× switches at the margin around the due time of the due Tuesday 1ms;FAIL  tests/domain/e2eSeedSelection.test.ts > the deadline scenarios have a displayed period that is still due later > records nothing while the deadline is ahead; otherwise a deadline that is ahead for the sa
+== M3 the margin is ignored (moves only when the due has passed)
+mutated e2e/displayedSeed.ts
+M3: vitest exit=1 | ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 6 passed (8) | failing: × records nothing while the deadline is ahead; otherwise a deadline that is ahead for the same period, on every step 9ms;× switches at the margin around the due time of the due Tuesday 2ms;FAIL  tests/domain/e2eSeedSelection.test.ts > the deadline scenarios have a displayed period that is still due later > records nothing while the deadline is ahead; otherwise a deadline that is ahead for the sa
+== M4 importDatesAfter keeps the nominal dates
+mutated e2e/displayedSeed.ts
+M4: vitest exit=1 | ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 7 passed (8) | failing: × moves a date inside or before the period to the first free day after it, never onto another date 4ms;FAIL  tests/domain/e2eSeedSelection.test.ts > the holiday import dates stay clear of the displayed period (WP5-UX-AB8-03) > moves a date inside or before the period to the first free day after it, never onto another date;
+== M5 importDatesAfter does not keep the dates distinct
+mutated e2e/displayedSeed.ts
+M5: vitest exit=1 | ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 7 passed (8) | failing: × moves a date inside or before the period to the first free day after it, never onto another date 4ms;FAIL  tests/domain/e2eSeedSelection.test.ts > the holiday import dates stay clear of the displayed period (WP5-UX-AB8-03) > moves a date inside or before the period to the first free day after it, never onto another date;
+== M6 importDatesAfter lets a date equal the period's last day
+mutated e2e/displayedSeed.ts
+M6: vitest exit=0 |       Tests  8 passed (8) | failing: 
+warning: in the working copy of '<task>/x90m/tests/e2e/displayedSeed.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '<task>/x90b/tests/e2e/displayedSeed.ts', LF will be replaced by CRLF the next time Git touches it
+== restored: diff exit=0
+
+== e2e-level mutations
+== M7 ensureDeadlineAhead records nothing (the admin exception call is dropped): must fail clearly at 18:30 on a due Tuesday
+mutated e2e/fixtures.ts
+== m7-noexception-1124-1830 in x90m: real start 2026-10-14T06:35:21Z, simulated start 2026-11-25T02:30:00Z, AB8_SHIFT_MS=3614078763
+NODE_OPTIONS=--trace-deprecation --import <task>/shiftclock.mjs
+process clock 2026-11-25T02:30:00.128Z (Date.now 1795573800138); America/Los_Angeles Tue, 2026-11-24, 18:30; shift ms 3614078763; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/automation.spec.ts tests/e2e/pdf-visual.spec.ts --reporter=list,<task>/stepreporter.mjs --output=<task>/pw-m7-noexception-1124-1830
+
+Running 8 tests using 2 workers
+
+  x  2 [desktop] › tests\e2e\automation.spec.ts:118:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices (1.1s)
+  ok 1 [desktop] › tests\e2e\pdf-visual.spec.ts:122:1 › a manual revision: name, real sign date, signature, OT on both Sundays in the total, Vietnamese text (3.1s)
+  x  4 [desktop] › tests\e2e\pdf-visual.spec.ts:187:1 › automatic revisions: the note off/on and the image off/on, long Vietnamese labels, an empty period (280ms)
+  ok 3 [desktop] › tests\e2e\automation.spec.ts:268:1 › a period is not submitted automatically while the activation instant is not recorded (2.3s)
+  -  6 [mobile] › tests\e2e\pdf-visual.spec.ts:122:1 › a manual revision: name, real sign date, signature, OT on both Sundays in the total, Vietnamese text
+  -  7 [mobile] › tests\e2e\pdf-visual.spec.ts:187:1 › automatic revisions: the note off/on and the image off/on, long Vietnamese labels, an empty period
+  x  5 [mobile] › tests\e2e\automation.spec.ts:118:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices (1.1s)
+  ok 8 [mobile] › tests\e2e\automation.spec.ts:268:1 › a period is not submitted automatically while the activation instant is not recorded (2.2s)
+
+
+  1) [desktop] › tests\e2e\automation.spec.ts:118:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices 
+
+    Error: the displayed period (payroll 2026-11-27) is due after 120 s from now
+
+    expect(received).toBeGreaterThan(expected)
+
+    Expected: > 1795573927445
+    Received:   1795568400000
+
+       at fixtures.ts:467
+
+      465 |     }
+      466 |     const after = later === null ? before : await read();
+    > 467 |     expect(Date.parse(after.current.due_at_utc), `the displayed period (payroll ${after.current.payroll_date}) is due after ${marginMs / 1000} s from now`).toBeGreaterThan(
+          |                                                                                                                                                             ^
+      468 |       Date.now() + marginMs,
+      469 |     );
+      470 |     expect(after.current.payroll_date, 'the deadline change keeps the payroll date').toBe(before.current.payroll_date);
+        at SeedClient.ensureDeadlineAhead (<task>\x90m\tests\e2e\fixtures.ts:467:157)
+        at <task>\x90m\tests\e2e\automation.spec.ts:148:3
+
+    Error Context: ..\pw-m7-noexception-1124-1830\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-m7-noexception-1124-1830\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-m7-noexception-1124-1830\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\e2e\pdf-visual.spec.ts:187:1 › automatic revisions: the note off/on and the image off/on, long Vietnamese labels, an empty period 
+
+    Error: the displayed period (payroll 2026-11-27) is due after 120 s from now
+
+    expect(received).toBeGreaterThan(expected)
+
+    Expected: > 1795573931062
+    Received:   1795568400000
+
+       at fixtures.ts:467
+
+      465 |     }
+      466 |     const after = later === null ? before : await read();
+    > 467 |     expect(Date.parse(after.current.due_at_utc), `the displayed period (payroll ${after.current.payroll_date}) is due after ${marginMs / 1000} s from now`).toBeGreaterThan(
+          |                                                                                                                                                             ^
+      468 |       Date.now() + marginMs,
+      469 |     );
+      470 |     expect(after.current.payroll_date, 'the deadline change keeps the payroll date').toBe(before.current.payroll_date);
+        at SeedClient.ensureDeadlineAhead (<task>\x90m\tests\e2e\fixtures.ts:467:157)
+        at <task>\x90m\tests\e2e\pdf-visual.spec.ts:193:31
+
+    Error Context: ..\pw-m7-noexception-1124-1830\pdf-visual-automatic-revis-54935-mese-labels-an-empty-period-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-m7-noexception-1124-1830\pdf-visual-automatic-revis-54935-mese-labels-an-empty-period-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-m7-noexception-1124-1830\pdf-visual-automatic-revis-54935-mese-labels-an-empty-period-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [mobile] › tests\e2e\automation.spec.ts:118:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices 
+
+    Error: the displayed period (payroll 2026-11-27) is due after 120 s from now
+
+    expect(received).toBeGreaterThan(expected)
+
+    Expected: > 1795573935623
+    Received:   1795568400000
+
+       at fixtures.ts:467
+
+      465 |     }
+      466 |     const after = later === null ? before : await read();
+    > 467 |     expect(Date.parse(after.current.due_at_utc), `the displayed period (payroll ${after.current.payroll_date}) is due after ${marginMs / 1000} s from now`).toBeGreaterThan(
+          |                                                                                                                                                             ^
+      468 |       Date.now() + marginMs,
+      469 |     );
+      470 |     expect(after.current.payroll_date, 'the deadline change keeps the payroll date').toBe(before.current.payroll_date);
+        at SeedClient.ensureDeadlineAhead (<task>\x90m\tests\e2e\fixtures.ts:467:157)
+        at <task>\x90m\tests\e2e\automation.spec.ts:148:3
+
+    Error Context: ..\pw-m7-noexception-1124-1830\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-m7-noexception-1124-1830\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-m7-noexception-1124-1830\automation-the-deadline-su-b52b7-that-is-off-and-the-notices-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    [desktop] › tests\e2e\automation.spec.ts:118:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices 
+    [desktop] › tests\e2e\pdf-visual.spec.ts:187:1 › automatic revisions: the note off/on and the image off/on, long Vietnamese labels, an empty period 
+    [mobile] › tests\e2e\automation.spec.ts:118:1 › the deadline submits automatically: note off/on, image off/on, an empty period, a switch that is off, and the notices 
+  2 skipped
+  3 passed (20.9s)
+exit=1
+process clock 2026-11-25T02:30:21.672Z (Date.now 1795573821682); America/Los_Angeles Tue, 2026-11-24, 18:30; shift ms 3614078763; instanceof true
+== m7-noexception-1124-1830 real end 2026-10-14T06:35:42Z
+== M8 the AB8-02 release removed (shell finally, timesheet afterEach): 2026-11-30 15:00 PST, one worker, shell + timesheet
+mutated e2e/shell.spec.ts
+mutated e2e/timesheet.spec.ts
+== m8-norelease-1130-1500 in x90m: real start 2026-10-14T06:35:43Z, simulated start 2026-11-30T23:00:00Z, AB8_SHIFT_MS=4119856729
+NODE_OPTIONS=--trace-deprecation --import <task>/shiftclock.mjs
+process clock 2026-11-30T23:00:00.130Z (Date.now 1796079600140); America/Los_Angeles Mon, 2026-11-30, 15:00; shift ms 4119856729; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/shell.spec.ts tests/e2e/timesheet.spec.ts --workers=1 --reporter=list,<task>/stepreporter.mjs --output=<task>/pw-m8-norelease-1130-1500
+
+Running 32 tests using 1 worker
+
+  ok  1 [desktop] › tests\e2e\shell.spec.ts:22:1 › sign-in form, then the shell on the timesheet route (703ms)
+  ok  2 [desktop] › tests\e2e\shell.spec.ts:59:1 › an unknown hash falls back to the timesheet route (432ms)
+  ok  3 [desktop] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell (612ms)
+  -   4 [desktop] › tests\e2e\shell.spec.ts:90:1 › mobile: no horizontal overflow and tap targets of at least 44px
+  ok  5 [desktop] › tests\e2e\timesheet.spec.ts:54:3 › viewing zone equals the reporting zone › the period bar still names the viewing zone, without the longer zone note (502ms)
+  ok  6 [desktop] › tests\e2e\timesheet.spec.ts:91:1 › the period card keeps its tab order equal to its visual reading order: Previous, Next, then Review (537ms)
+  -   7 [desktop] › tests\e2e\timesheet.spec.ts:119:5 › phone first screen › viewing zone equals the reporting zone › the first day row is fully visible above the tab bar
+  -   8 [desktop] › tests\e2e\timesheet.spec.ts:127:3 › phone first screen › the first day row is fully visible above the tab bar with the zone note shown
+  -   9 [desktop] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 390px
+  -  10 [desktop] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 375px
+  -  11 [desktop] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 360px
+  -  12 [desktop] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 320px
+  ok 13 [desktop] › tests\e2e\timesheet.spec.ts:199:1 › shows 14 days with due date, completeness, pending OT, both zones and accounting dates (1.2s)
+  ok 14 [desktop] › tests\e2e\timesheet.spec.ts:333:1 › batch edit: preview, conflict dialog for a clock session, confirmed commit (2.5s)
+  ok 15 [desktop] › tests\e2e\timesheet.spec.ts:381:1 › batch edit: an old period asks for a reason and commits with it (895ms)
+  x  16 [desktop] › tests\e2e\timesheet.spec.ts:414:1 › batch edit: a stale version shows the reload message naming the date (208ms)
+  ok 17 [mobile] › tests\e2e\shell.spec.ts:22:1 › sign-in form, then the shell on the timesheet route (929ms)
+  ok 18 [mobile] › tests\e2e\shell.spec.ts:59:1 › an unknown hash falls back to the timesheet route (414ms)
+  ok 19 [mobile] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell (730ms)
+  ok 20 [mobile] › tests\e2e\shell.spec.ts:90:1 › mobile: no horizontal overflow and tap targets of at least 44px (852ms)
+  ok 21 [mobile] › tests\e2e\timesheet.spec.ts:54:3 › viewing zone equals the reporting zone › the period bar still names the viewing zone, without the longer zone note (501ms)
+  ok 22 [mobile] › tests\e2e\timesheet.spec.ts:91:1 › the period card keeps its tab order equal to its visual reading order: Previous, Next, then Review (517ms)
+  ok 23 [mobile] › tests\e2e\timesheet.spec.ts:119:5 › phone first screen › viewing zone equals the reporting zone › the first day row is fully visible above the tab bar (469ms)
+  ok 24 [mobile] › tests\e2e\timesheet.spec.ts:127:3 › phone first screen › the first day row is fully visible above the tab bar with the zone note shown (471ms)
+  ok 25 [mobile] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 390px (573ms)
+  ok 26 [mobile] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 375px (618ms)
+  ok 27 [mobile] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 360px (601ms)
+  ok 28 [mobile] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 320px (570ms)
+  ok 29 [mobile] › tests\e2e\timesheet.spec.ts:199:1 › shows 14 days with due date, completeness, pending OT, both zones and accounting dates (1.6s)
+  ok 30 [mobile] › tests\e2e\timesheet.spec.ts:333:1 › batch edit: preview, conflict dialog for a clock session, confirmed commit (2.5s)
+  ok 31 [mobile] › tests\e2e\timesheet.spec.ts:381:1 › batch edit: an old period asks for a reason and commits with it (895ms)
+  x  32 [mobile] › tests\e2e\timesheet.spec.ts:414:1 › batch edit: a stale version shows the reload message naming the date (213ms)
+
+
+  1) [desktop] › tests\e2e\timesheet.spec.ts:414:1 › batch edit: a stale version shows the reload message naming the date 
+
+    Error: past free workdays in the displayed period
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 1
+    Received:    0
+
+      45 | /** Picks the days to select, failing clearly when the period has too few past workdays. */
+      46 | function need(days: string[], count: number): string[] {
+    > 47 |   expect(days.length, 'past free workdays in the displayed period').toBeGreaterThanOrEqual(count);
+         |                                                                     ^
+      48 |   return days;
+      49 | }
+      50 |
+        at need (<task>\x90m\tests\e2e\timesheet.spec.ts:47:69)
+        at <task>\x90m\tests\e2e\timesheet.spec.ts:419:16
+
+    Error Context: ..\pw-m8-norelease-1130-1500\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-m8-norelease-1130-1500\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-m8-norelease-1130-1500\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\timesheet.spec.ts:414:1 › batch edit: a stale version shows the reload message naming the date 
+
+    Error: past free workdays in the displayed period
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 1
+    Received:    0
+
+      45 | /** Picks the days to select, failing clearly when the period has too few past workdays. */
+      46 | function need(days: string[], count: number): string[] {
+    > 47 |   expect(days.length, 'past free workdays in the displayed period').toBeGreaterThanOrEqual(count);
+         |                                                                     ^
+      48 |   return days;
+      49 | }
+      50 |
+        at need (<task>\x90m\tests\e2e\timesheet.spec.ts:47:69)
+        at <task>\x90m\tests\e2e\timesheet.spec.ts:419:16
+
+    Error Context: ..\pw-m8-norelease-1130-1500\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-m8-norelease-1130-1500\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-m8-norelease-1130-1500\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\timesheet.spec.ts:414:1 › batch edit: a stale version shows the reload message naming the date 
+    [mobile] › tests\e2e\timesheet.spec.ts:414:1 › batch edit: a stale version shows the reload message naming the date 
+  7 skipped
+  23 passed (25.7s)
+exit=1
+process clock 2026-11-30T23:00:26.223Z (Date.now 1796079626233); America/Los_Angeles Mon, 2026-11-30, 15:00; shift ms 4119856729; instanceof true
+== m8-norelease-1130-1500 real end 2026-10-14T06:36:09Z
+== M8 control: the unmutated x90m, same instant and files
+== m8c-release-1130-1500 in x90m: real start 2026-10-14T06:36:09Z, simulated start 2026-11-30T23:00:00Z, AB8_SHIFT_MS=4119830244
+NODE_OPTIONS=--trace-deprecation --import <task>/shiftclock.mjs
+process clock 2026-11-30T23:00:00.128Z (Date.now 1796079600138); America/Los_Angeles Mon, 2026-11-30, 15:00; shift ms 4119830244; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/shell.spec.ts tests/e2e/timesheet.spec.ts --workers=1 --reporter=list,<task>/stepreporter.mjs --output=<task>/pw-m8c-release-1130-1500
+
+Running 32 tests using 1 worker
+
+  ok  1 [desktop] › tests\e2e\shell.spec.ts:22:1 › sign-in form, then the shell on the timesheet route (752ms)
+  ok  2 [desktop] › tests\e2e\shell.spec.ts:59:1 › an unknown hash falls back to the timesheet route (416ms)
+  ok  3 [desktop] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell (674ms)
+  -   4 [desktop] › tests\e2e\shell.spec.ts:90:1 › mobile: no horizontal overflow and tap targets of at least 44px
+  ok  5 [desktop] › tests\e2e\timesheet.spec.ts:54:3 › viewing zone equals the reporting zone › the period bar still names the viewing zone, without the longer zone note (510ms)
+  ok  6 [desktop] › tests\e2e\timesheet.spec.ts:91:1 › the period card keeps its tab order equal to its visual reading order: Previous, Next, then Review (547ms)
+  -   7 [desktop] › tests\e2e\timesheet.spec.ts:119:5 › phone first screen › viewing zone equals the reporting zone › the first day row is fully visible above the tab bar
+  -   8 [desktop] › tests\e2e\timesheet.spec.ts:127:3 › phone first screen › the first day row is fully visible above the tab bar with the zone note shown
+  -   9 [desktop] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 390px
+  -  10 [desktop] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 375px
+  -  11 [desktop] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 360px
+  -  12 [desktop] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 320px
+  ok 13 [desktop] › tests\e2e\timesheet.spec.ts:199:1 › shows 14 days with due date, completeness, pending OT, both zones and accounting dates (1.2s)
+  ok 14 [desktop] › tests\e2e\timesheet.spec.ts:333:1 › batch edit: preview, conflict dialog for a clock session, confirmed commit (2.5s)
+  ok 15 [desktop] › tests\e2e\timesheet.spec.ts:381:1 › batch edit: an old period asks for a reason and commits with it (864ms)
+  ok 16 [desktop] › tests\e2e\timesheet.spec.ts:414:1 › batch edit: a stale version shows the reload message naming the date (814ms)
+  ok 17 [mobile] › tests\e2e\shell.spec.ts:22:1 › sign-in form, then the shell on the timesheet route (1.0s)
+  ok 18 [mobile] › tests\e2e\shell.spec.ts:59:1 › an unknown hash falls back to the timesheet route (423ms)
+  ok 19 [mobile] › tests\e2e\shell.spec.ts:67:1 › the existing timesheet view works inside the shell (726ms)
+  ok 20 [mobile] › tests\e2e\shell.spec.ts:90:1 › mobile: no horizontal overflow and tap targets of at least 44px (938ms)
+  ok 21 [mobile] › tests\e2e\timesheet.spec.ts:54:3 › viewing zone equals the reporting zone › the period bar still names the viewing zone, without the longer zone note (533ms)
+  ok 22 [mobile] › tests\e2e\timesheet.spec.ts:91:1 › the period card keeps its tab order equal to its visual reading order: Previous, Next, then Review (513ms)
+  ok 23 [mobile] › tests\e2e\timesheet.spec.ts:119:5 › phone first screen › viewing zone equals the reporting zone › the first day row is fully visible above the tab bar (472ms)
+  ok 24 [mobile] › tests\e2e\timesheet.spec.ts:127:3 › phone first screen › the first day row is fully visible above the tab bar with the zone note shown (461ms)
+  ok 25 [mobile] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 390px (599ms)
+  ok 26 [mobile] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 375px (579ms)
+  ok 27 [mobile] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 360px (592ms)
+  ok 28 [mobile] › tests\e2e\timesheet.spec.ts:146:5 › phone first screen › the Open a day date field shows a full date at 320px (586ms)
+  ok 29 [mobile] › tests\e2e\timesheet.spec.ts:199:1 › shows 14 days with due date, completeness, pending OT, both zones and accounting dates (1.6s)
+  ok 30 [mobile] › tests\e2e\timesheet.spec.ts:333:1 › batch edit: preview, conflict dialog for a clock session, confirmed commit (2.5s)
+  ok 31 [mobile] › tests\e2e\timesheet.spec.ts:381:1 › batch edit: an old period asks for a reason and commits with it (877ms)
+  ok 32 [mobile] › tests\e2e\timesheet.spec.ts:414:1 › batch edit: a stale version shows the reload message naming the date (729ms)
+
+  7 skipped
+  25 passed (27.0s)
+exit=0
+process clock 2026-11-30T23:00:27.511Z (Date.now 1796079627521); America/Los_Angeles Mon, 2026-11-30, 15:00; shift ms 4119830244; instanceof true
+== m8c-release-1130-1500 real end 2026-10-14T06:36:37Z
+restored tests/e2e/fixtures.ts equal to x90b: cmp exit=0
+restored tests/e2e/shell.spec.ts equal to x90b: cmp exit=0
+restored tests/e2e/timesheet.spec.ts equal to x90b: cmp exit=0

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Digest of record in three forms. Usage: digest.sh <label>
+set -u
+T=<task>
+R="<repo>"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+label="$1"
+out="$T/digest-$label.txt"
+cd "$R" || exit 9
+{
+  echo "label: $label"
+  echo "utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "node: $(node --version)"
+  echo "HEAD: $(git rev-parse HEAD)"
+  echo "origin/main: $(git rev-parse origin/main)"
+  echo "form 1 (scripts/source-digest.mjs, working tree): $(node scripts/source-digest.mjs)"
+  for ref in 90b98efc395c3894a21a909b6d361eadc6fc2bd9 HEAD; do
+    git ls-tree -r --format='%(path) %(objectname)' "$ref" | grep -v '^handoff/' | LC_ALL=C sort > "$T/lstree-$label-$( [ "$ref" = HEAD ] && echo head || echo 90b98ef ).txt"
+    f="$T/lstree-$label-$( [ "$ref" = HEAD ] && echo head || echo 90b98ef ).txt"
+    h=$(sha256sum "$f")
+    n=$(wc -l < "$f")
+    echo "form ls-tree $ref: ${h%% *} ($n files)"
+  done
+  echo "non-handoff diff 90b98ef..HEAD (names):"
+  git diff --name-only 90b98efc395c3894a21a909b6d361eadc6fc2bd9 HEAD -- . ':(exclude)handoff'
+  echo "non-handoff working-tree status:"
+  git status --porcelain -- . ':(exclude)handoff'
+  echo "end"
+} > "$out" 2>&1
+echo "exit 0" >> "$out"

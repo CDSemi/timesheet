@@ -1,0 +1,42 @@
+== WP5-UX-FIX10 observation re-assessed: History after an EARLY manual sign-off of the period in progress (task-local probe spec in the scratch export x90m, removed afterwards; it asserts nothing about the product)
+== product code path: src/client/components/deliveryModel.ts historyWindow (windows end at the displayed period's end), buildRevisionRows (only revisions of loaded periods are current), resendState/correctionLinkLabel (non-current rows get neither); unchanged since WP3 (5b90d30, 8ad2e4f, 2026-10-05):
+8ad2e4f 2026-10-05 Add the timesheet sharing interface and a complete revision history
+5b90d30 2026-10-05 Add history, delivery decisions, submission settings and owner-only PDF download
+
+== probe-history-1124-1830 in x90m: real start 2026-10-14T07:32:17Z, simulated start 2026-11-25T02:30:00Z, AB8_SHIFT_MS=3610663046
+NODE_OPTIONS=--trace-deprecation --import <task>/shiftclock.mjs
+process clock 2026-11-25T02:30:00.132Z (Date.now 1795573800142); America/Los_Angeles Tue, 2026-11-24, 18:30; shift ms 3610663046; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/zz-ab9-history-probe.spec.ts --project=desktop --reporter=list,<task>/stepreporter.mjs --output=<task>/pw-probe-history-1124-1830
+
+Running 1 test using 1 worker
+
+PROBE desktop today=2026-11-24 displayed payroll=2026-11-27 in-progress payroll=2026-12-11 (2026-11-23..2026-12-06)
+PROBE desktop early sign-off of 2026-12-11 accepted: revision caf56b1a
+PROBE desktop jobs [4,1,0,0,0,0]
+PROBE desktop history row {"current":"false","heading":"Period Payroll date 2026-12-11","badges":["number=Revision 1","review=Signed","pdf=PDF ready"],"facts":["origin=Signed by you","recipients=payroll-synthetic@example.invalid"],"buttons":["Download PDF"]}
+PROBE desktop timesheet keys reporting_zone,period,current_payroll_date,timesheet,reason_required,days,totals
+  ok 1 [desktop] › tests\e2e\zz-ab9-history-probe.spec.ts:6:1 › probe: History after an early manual sign-off of the in-progress period (2.6s)
+
+  1 passed (5.9s)
+exit=0
+process clock 2026-11-25T02:30:06.449Z (Date.now 1795573806458); America/Los_Angeles Tue, 2026-11-24, 18:30; shift ms 3610663046; instanceof true
+== probe-history-1124-1830 real end 2026-10-14T07:32:23Z
+== probe-history-1128-1000 in x90m: real start 2026-10-14T07:32:23Z, simulated start 2026-11-28T18:00:00Z, AB8_SHIFT_MS=3925656406
+NODE_OPTIONS=--trace-deprecation --import <task>/shiftclock.mjs
+process clock 2026-11-28T18:00:00.131Z (Date.now 1795888800141); America/Los_Angeles Sat, 2026-11-28, 10:00; shift ms 3925656406; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/zz-ab9-history-probe.spec.ts --project=desktop --reporter=list,<task>/stepreporter.mjs --output=<task>/pw-probe-history-1128-1000
+
+Running 1 test using 1 worker
+
+PROBE desktop today=2026-11-28 displayed payroll=2026-12-11 in-progress payroll=2026-12-11 (2026-11-23..2026-12-06)
+PROBE desktop early sign-off of 2026-12-11 accepted: revision 30f0e760
+PROBE desktop jobs [4,0,0,0,0,0]
+PROBE desktop history row {"current":"true","heading":"Period 2026-11-23 to 2026-12-06","badges":["number=Revision 1","review=Signed","pdf=PDF ready","delivery=Email accepted by the mail server"],"facts":["origin=Signed by you","signed=Synthetic Early Signer, 2026-11-28 10:00","recipients=payroll-synthetic@example.invalid"],"buttons":["Download PDF","Resend email","Correct this period"]}
+PROBE desktop timesheet keys reporting_zone,period,current_payroll_date,timesheet,reason_required,days,totals
+  ok 1 [desktop] › tests\e2e\zz-ab9-history-probe.spec.ts:6:1 › probe: History after an early manual sign-off of the in-progress period (2.7s)
+
+  1 passed (5.9s)
+exit=0
+process clock 2026-11-28T18:00:06.462Z (Date.now 1795888806473); America/Los_Angeles Sat, 2026-11-28, 10:00; shift ms 3925656406; instanceof true
+== probe-history-1128-1000 real end 2026-10-14T07:32:30Z
+probe spec removed from x90m: exit=0

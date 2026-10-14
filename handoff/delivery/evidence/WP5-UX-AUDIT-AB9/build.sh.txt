@@ -1,0 +1,11 @@
+# Usage: bash build.sh <export-dir> <label>   npm ci + npm run build in one export, with exit codes.
+source <task>/env.sh
+X=$1; L=$2
+cd "$X" || exit 2
+echo "== $L ci start $(date -u +%Y-%m-%dT%H:%M:%SZ) node $(node --version)"
+npmx ci
+echo "ci exit=$?"
+echo "== $L build start $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+npmx run build
+echo "build exit=$?"
+echo "== $L end $(date -u +%Y-%m-%dT%H:%M:%SZ)"

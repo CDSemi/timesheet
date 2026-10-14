@@ -1,0 +1,46 @@
+# Test-strength evidence for 3670a6c..90b98ef (tests only). Read-only git queries on the repository.
+source <task>/env.sh
+A=3670a6c3c22ddcf75138927ed60f4cd9bf02078d
+B=90b98efc395c3894a21a909b6d361eadc6fc2bd9
+cd $REPO || exit 2
+echo "\$ git diff --numstat $A $B -- . ':(exclude)handoff'"
+git diff --numstat $A $B -- . ':(exclude)handoff'
+echo
+echo "== every removed line (git diff -U0, '-' lines) per file =="
+for f in $(git diff --name-only $A $B -- . ':(exclude)handoff'); do
+  n=$(git diff -U0 $A $B -- "$f" | grep -c '^-[^-]')
+  echo "-- $f: $n removed line(s)"
+  git diff -U0 $A $B -- "$f" | grep '^-[^-]'
+done
+echo
+echo "== counts per file: old -> new (expect( / test( or it( / describe( ) =="
+for f in $(git diff --name-only $A $B -- . ':(exclude)handoff'); do
+  git show $A:"$f" > $T/old-file.txt; git show $B:"$f" > $T/new-file.txt
+  eo=$(grep -o 'expect(' $T/old-file.txt | wc -l); en=$(grep -o 'expect(' $T/new-file.txt | wc -l)
+  to=$(grep -cE "^\s*(test|it)\(" $T/old-file.txt); tn=$(grep -cE "^\s*(test|it)\(" $T/new-file.txt)
+  do_=$(grep -cE "^\s*(test\.)?describe\(" $T/old-file.txt); dn=$(grep -cE "^\s*(test\.)?describe\(" $T/new-file.txt)
+  echo "$f: expect( $eo -> $en; test/it $to -> $tn; describe $do_ -> $dn"
+done
+echo
+echo "== added lines that mention skip / fixme / only / fail / slow / soft / retries =="
+git diff -U0 $A $B -- tests | grep '^+[^+]' | grep -nE "\.skip|fixme|\.only|test\.fail|\.slow|expect\.soft|retries|test\.describe\.configure" ; echo "grep exit=$? (1 = none)"
+echo
+echo "== whole tests/ tree at both commits: skip / only / fixme lines =="
+for c in $A $B; do
+  s=$(git grep -nE "test\.skip|describe\.skip|it\.skip" $c -- tests | wc -l)
+  o=$(git grep -nE "\.only\(" $c -- tests | wc -l)
+  x=$(git grep -nE "fixme" $c -- tests | wc -l)
+  echo "${c:0:7}: skip lines $s, only lines $o, fixme lines $x"
+done
+echo
+echo "== fixtures.ts: removed lines (must be only the widened import) =="
+git diff -U0 $A $B -- tests/e2e/fixtures.ts | grep -E '^[-+][^-+]' | grep -E '^-|^\+import'
+echo
+echo "== displayedSeed.ts: removed lines (additive only?) =="
+git diff -U0 $A $B -- tests/e2e/displayedSeed.ts | grep -c '^-[^-]'
+echo
+echo "== shell.spec.ts: whitespace-insensitive diff (only try/finally expected) =="
+git diff -w $A $B -- tests/e2e/shell.spec.ts | grep -E '^[-+][^-+]'
+echo
+echo "== timesheet.spec.ts and automation.spec.ts: removed line counts =="
+git diff -U0 $A $B -- tests/e2e/timesheet.spec.ts tests/e2e/automation.spec.ts | grep -c '^-[^-]'

@@ -1,0 +1,46 @@
+import { drainJobsFrom, newPerson, SeedClient, test } from './fixtures.ts';
+
+// WP5-UX-AUDIT-AB9 task-local PROBE (never part of the repository; copied into the scratch export x90m for one run and removed).
+// It asserts nothing about the product: it records what History shows after an early manual sign-off of the in-progress period
+// while the page still displays the previous period (P-4..P), to re-assess the observation in the WP5-UX-FIX10 Results.
+test('probe: History after an early manual sign-off of the in-progress period', async ({ page, privateServer }, testInfo) => {
+  test.setTimeout(120_000);
+  const server = privateServer;
+  const admin = await new SeedClient(server.origin).signIn(server.credentials.admin.email, server.credentials.admin.password);
+  const person = await newPerson(admin, server, { displayName: 'Synthetic Early Signer', autoSubmit: false, signature: 'saved' });
+  const periods = await person.api.call<{
+    today_local: string;
+    current: { payroll_date: string; period_end: string };
+    in_progress: { payroll_date: string; period_start: string; period_end: string };
+  }>('GET', '/api/periods/current');
+  const target = periods.in_progress.payroll_date;
+  const log = (text: string) => console.log(`PROBE ${testInfo.project.name} ${text}`);
+  log(`today=${periods.today_local} displayed payroll=${periods.current.payroll_date} in-progress payroll=${target} (${periods.in_progress.period_start}..${periods.in_progress.period_end})`);
+  const review = await person.api.call<{ expected_version: number | null; payload_hash: string }>('GET', `/api/timesheets/${target}/review`);
+  const signed = await person.api.call<{ revision: { id: string } }>(
+    'POST',
+    `/api/timesheets/${target}/signoff`,
+    { expected_version: review.expected_version, reviewed_hash: review.payload_hash, signer_name: 'Synthetic Early Signer', incomplete_evidence_acknowledged: true },
+    201,
+  );
+  log(`early sign-off of ${target} accepted: revision ${signed.revision.id.slice(0, 8)}`);
+  const runs = drainJobsFrom(server, new Date());
+  log(`jobs ${JSON.stringify(runs.map((run) => run.claimed))}`);
+
+  await page.goto(`${server.origin}/#/history`);
+  await page.getByLabel('Email').fill(person.account.email);
+  await page.getByLabel('Password').fill(person.account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  const row = page.locator(`[data-revision="${signed.revision.id}"]`);
+  await row.waitFor({ state: 'visible', timeout: 15_000 });
+  const facts = await row.evaluate((element) => ({
+    current: element.getAttribute('data-current'),
+    heading: element.querySelector('h3')?.textContent ?? null,
+    badges: [...element.querySelectorAll('[data-revision-badge]')].map((badge) => `${badge.getAttribute('data-revision-badge')}=${badge.textContent}`),
+    facts: [...element.querySelectorAll('[data-fact]')].map((fact) => `${fact.getAttribute('data-fact')}=${fact.textContent}`),
+    buttons: [...element.querySelectorAll('button, a')].map((control) => control.textContent?.trim() ?? ''),
+  }));
+  log(`history row ${JSON.stringify(facts)}`);
+  const timesheet = await person.api.call<{ status?: unknown; finalization?: unknown }>('GET', `/api/timesheets/${target}`);
+  log(`timesheet keys ${Object.keys(timesheet).join(',')}`);
+});

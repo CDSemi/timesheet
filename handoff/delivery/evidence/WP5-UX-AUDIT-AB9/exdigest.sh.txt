@@ -1,0 +1,11 @@
+# Usage: bash exdigest.sh <export-dir> <label>   (writes $T/exdigest-<label>-*.txt and prints the digest)
+source <task>/env.sh
+X=$1; L=$2
+cd "$X" || exit 2
+find . -type f ! -path './handoff/*' ! -path './node_modules/*' ! -path './dist/*' ! -path './test-results/*' ! -path './playwright-report/*' | sed 's|^\./||' | LC_ALL=C sort > $T/exdigest-$L-files.txt
+git hash-object --no-filters --stdin-paths < $T/exdigest-$L-files.txt > $T/exdigest-$L-blobs.txt
+paste -d' ' $T/exdigest-$L-files.txt $T/exdigest-$L-blobs.txt > $T/exdigest-$L-list.txt
+echo "export $L: files=$(wc -l < $T/exdigest-$L-list.txt)"
+h=$(sha256sum $T/exdigest-$L-list.txt)
+echo "export $L digest: ${h%% *}"
+if cmp -s $T/exdigest-$L-list.txt $T/lstree-first-90b98ef.txt; then echo "list equals git ls-tree 90b98ef list: yes"; else echo "list equals git ls-tree 90b98ef list: NO"; fi

@@ -1,0 +1,17 @@
+import { expect, test } from './fixtures.ts';
+
+// WP5-UX-AUDIT-AB9 task-local control (never part of the repository; copied into the scratch export for one run and removed):
+// the built server and the CLI-seeded data follow the simulated clock, and the runner agrees.
+test('control: the server reports the simulated today_local', async ({ adminSeed }, testInfo) => {
+  const periods = await adminSeed.call<{
+    today_local: string;
+    reporting_zone: string;
+    current: { payroll_date: string; period_start: string; period_end: string; due_at_utc: string };
+    in_progress: { payroll_date: string; period_start: string; period_end: string };
+  }>('GET', '/api/periods/current');
+  const now = new Date();
+  console.log(
+    `CONTROL ${testInfo.project.name} runner-clock=${now.toISOString()} today_local=${periods.today_local} zone=${periods.reporting_zone} displayed=${periods.current.period_start}..${periods.current.period_end} payroll=${periods.current.payroll_date} due_at_utc=${periods.current.due_at_utc} in_progress=${periods.in_progress.period_start}..${periods.in_progress.period_end}`,
+  );
+  expect(periods.today_local).toBe(process.env.CONTROL_TODAY ?? 'CONTROL_TODAY missing');
+});

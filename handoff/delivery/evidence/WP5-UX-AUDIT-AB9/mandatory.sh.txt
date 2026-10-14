@@ -1,0 +1,12 @@
+# Mandatory non-browser checks in the clean export of 90b98ef: typecheck, lint, npm test, AC-13 once, npm audit.
+source <task>/env.sh
+cd $NEW || exit 2
+echo "== node $(node --version), export x90b, start $(date -u +%Y-%m-%dT%H:%M:%SZ), NODE_OPTIONS=$NODE_OPTIONS"
+echo "\$ npm run typecheck"; npmx run typecheck; echo "typecheck exit=$?"
+echo "\$ npm run lint"; npmx run lint; echo "lint exit=$?"
+echo "\$ npm test"; npmx test; echo "npm test exit=$?"
+echo "\$ npx vitest run tests/integration/ac13-two-week.test.ts (AC-13 once)"
+node node_modules/vitest/vitest.mjs run tests/integration/ac13-two-week.test.ts; echo "ac13 exit=$?"
+echo "\$ npm audit --omit=dev"; npmx audit --omit=dev; echo "audit omit-dev exit=$?"
+echo "\$ npm audit"; npmx audit; echo "audit exit=$?"
+echo "== end $(date -u +%Y-%m-%dT%H:%M:%SZ)"

@@ -1,0 +1,79 @@
+$ git diff --numstat 3670a6c3c22ddcf75138927ed60f4cd9bf02078d 90b98efc395c3894a21a909b6d361eadc6fc2bd9 -- . ':(exclude)handoff'
+101	2	tests/domain/e2eSeedSelection.test.ts
+15	9	tests/e2e/admin.spec.ts
+4	0	tests/e2e/automation.spec.ts
+47	0	tests/e2e/displayedSeed.ts
+35	1	tests/e2e/fixtures.ts
+5	3	tests/e2e/pdf-visual.spec.ts
+16	11	tests/e2e/shell.spec.ts
+11	0	tests/e2e/timesheet.spec.ts
+
+== every removed line (git diff -U0, '-' lines) per file ==
+-- tests/domain/e2eSeedSelection.test.ts: 2 removed line(s)
+-import { currentPayPeriod, type PayPeriod, type PayrollScheduleRules, payPeriodContaining } from '../../src/domain/periods.ts';
+-import { displayedPeriodSeedDay, type SeedDayFacts } from '../e2e/displayedSeed.ts';
+-- tests/e2e/admin.spec.ts: 9 removed line(s)
+-  warnings: Array<{ code: string; year: number }>;
+-  current: { payroll_date: string; period_start: string };
+-  // The server clock decides whether the warning exists; the import year follows what the server says.
+-  const year = warning?.year ?? Number(periods.today_local.slice(0, 4)) + 1;
+-  const newYear = `${year}-01-01`;
+-  const midYear = `${year}-07-04`;
+-  const other = `date,name,kind\n${year}-03-03,Synthetic Extra,holiday\n`;
+-  await expect(section.locator(`[data-kept-date="${year}-03-03"]`)).toBeAttached();
+-  expect(latest?.dates.map((item) => item.date)).toEqual(expect.arrayContaining([newYear, midYear, `${year}-03-03`]));
+-- tests/e2e/automation.spec.ts: 0 removed line(s)
+-- tests/e2e/displayedSeed.ts: 0 removed line(s)
+-- tests/e2e/fixtures.ts: 1 removed line(s)
+-import { displayedPeriodSeedDay } from './displayedSeed.ts';
+-- tests/e2e/pdf-visual.spec.ts: 3 removed line(s)
+-  const periods = await admin.call<{ reporting_zone: string; current: { period_start: string; due_at_utc: string } }>('GET', '/api/periods/current');
+-  const start = periods.current.period_start;
+-  const submittedAt = new Date(new Date(periods.current.due_at_utc).getTime() + 5 * 60_000);
+-- tests/e2e/shell.spec.ts: 11 removed line(s)
+-  await employeeSeed.seedCompleteDay(workDate);
+-  await signInThroughUi();
+-  await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+-  const row = page.locator(`[data-day="${workDate}"]`);
+-  await expect(row).toContainText('Complete');
+-  await expect(row.locator('[data-check="complete"]')).toHaveCount(1);
+-  await expect(page.locator('[data-day]')).toHaveCount(14);
+-  // The worked minutes of the sheet's detail row (Show details), as h:mm.
+-  await page.getByRole('button', { name: 'Show details' }).click();
+-  await expect(page.locator(`[data-detail="regular"][data-detail-day="${workDate}"]`)).toHaveText('8:00');
+-  await page.screenshot({ path: screenshotPath(`timesheet-${testInfo.project.name}-synthetic.png`), fullPage: true });
+-- tests/e2e/timesheet.spec.ts: 0 removed line(s)
+
+== counts per file: old -> new (expect( / test( or it( / describe( ) ==
+tests/domain/e2eSeedSelection.test.ts: expect( 18 -> 35; test/it 4 -> 8; describe 1 -> 3
+tests/e2e/admin.spec.ts: expect( 87 -> 88; test/it 5 -> 5; describe 1 -> 1
+tests/e2e/automation.spec.ts: expect( 56 -> 56; test/it 2 -> 2; describe 0 -> 0
+tests/e2e/displayedSeed.ts: expect( 0 -> 0; test/it 0 -> 0; describe 0 -> 0
+tests/e2e/fixtures.ts: expect( 5 -> 7; test/it 0 -> 0; describe 0 -> 0
+tests/e2e/pdf-visual.spec.ts: expect( 26 -> 26; test/it 2 -> 2; describe 0 -> 0
+tests/e2e/shell.spec.ts: expect( 29 -> 29; test/it 4 -> 4; describe 0 -> 0
+tests/e2e/timesheet.spec.ts: expect( 119 -> 119; test/it 9 -> 9; describe 3 -> 3
+
+== added lines that mention skip / fixme / only / fail / slow / soft / retries ==
+grep exit=1 (1 = none)
+
+== whole tests/ tree at both commits: skip / only / fixme lines ==
+3670a6c: skip lines 12, only lines 0, fixme lines 0
+90b98ef: skip lines 12, only lines 0, fixme lines 0
+
+== fixtures.ts: removed lines (must be only the widened import) ==
+-import { displayedPeriodSeedDay } from './displayedSeed.ts';
++import { type DeadlinePeriodFacts, displayedPeriodSeedDay, laterDeadlineFor } from './displayedSeed.ts';
+
+== displayedSeed.ts: removed lines (additive only?) ==
+0
+
+== shell.spec.ts: whitespace-insensitive diff (only try/finally expected) ==
++  // WP5-UX-AB8-02: the employee is shared by the worker's specs; release the day so a short period keeps its free workdays.
++  try {
++  } finally {
++    await employeeSeed.clearSessions(workDate);
++  }
+
+== timesheet.spec.ts and automation.spec.ts: removed line counts ==
+0

@@ -1,0 +1,31 @@
+// node summarize.mjs <label> [<label> ...]: per-project counts from <task>/steps-<label>.txt and the log <task>/logs/<label>.txt.
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const T = '<task>';
+for (const label of process.argv.slice(2)) {
+  const steps = join(T, `steps-${label}.txt`);
+  const logFile = [join(T, 'logs', `${label}.txt`), join(T, 'logs', `sweep-${label}.txt`)].find((file) => existsSync(file));
+  const counts = {};
+  const failed = [];
+  let expectOk = 0;
+  let expectFail = 0;
+  for (const line of readFileSync(steps, 'utf8').split('\n')) {
+    if (line.startsWith('STEP ok')) expectOk += 1;
+    if (line.startsWith('STEP FAIL')) expectFail += 1;
+    if (!line.startsWith('TEST ')) continue;
+    const [head, project] = line.split(' | ');
+    const status = head.slice(5);
+    counts[project] ??= { passed: 0, failed: 0, skipped: 0, timedOut: 0, interrupted: 0 };
+    counts[project][status] = (counts[project][status] ?? 0) + 1;
+    if (status !== 'passed' && status !== 'skipped') failed.push(line.slice(0, 300));
+  }
+  const log = logFile === undefined ? '' : readFileSync(logFile, 'utf8');
+  const exit = (log.match(/^exit=\d+$/m) ?? ['exit=?'])[0];
+  const summary = (log.match(/^\s+\d+ (passed|failed|skipped|flaky).*$/gm) ?? []).map((s) => s.trim()).join('; ');
+  const clocks = (log.match(/America\/Los_Angeles [A-Za-z]{3}, \d{4}-\d{2}-\d{2}, \d{2}:\d{2}/g) ?? []).join(' -> ');
+  const deprecations = (log.match(/DeprecationWarning|DEP0\d+|\[DEP/g) ?? []).length;
+  const fmt = (p) => (counts[p] === undefined ? 'n/a' : `${counts[p].passed}/${counts[p].failed + counts[p].timedOut + counts[p].interrupted}/${counts[p].skipped}`);
+  console.log(`${label}: ${exit}; desktop ok/fail/skip ${fmt('desktop')}; mobile ${fmt('mobile')}; list summary: ${summary}; expect steps ok ${expectOk} fail ${expectFail}; deprecation lines ${deprecations}; LA clock ${clocks}`);
+  for (const line of failed) console.log(`  NOT PASSED ${line}`);
+}

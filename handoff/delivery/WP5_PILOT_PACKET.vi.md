@@ -15,14 +15,17 @@
 
 | Trường | Giá trị |
 |---|---|
-| Commit phát hành (đóng băng package-final của WP5, đã qua gate lại WP5-REGATE2) | `014bd47a8d906c944d2781eba4f2b91c5a532419` |
-| Source digest (`npm run digest`, không tính `handoff/`; digest ghi nhận của WP5-REGATE2) | `150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61`, 779 tệp; tính lại trước và sau tác vụ này, không đổi |
+| Commit phát hành (WP5-UX-FIX10-FREEZE, đã push; bản WP5 được nghiệm thu lại sau vòng đổi giao diện) | `90b98efc395c3894a21a909b6d361eadc6fc2bd9` |
+| Source digest (`npm run digest`, không tính `handoff/`; digest ghi nhận của WP5-UX-REGATE8) | `57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d`, 795 tệp; tính lại trước và sau tác vụ này, không đổi |
+| Gate và audit cuối | WP5-UX-REGATE8 PASS, NAS NOT VERIFIED ([tác vụ](tasks/WP5-UX-REGATE8.md)): e2e đầy đủ đồng hồ thật 210 passed / 26 skipped / 0 failed; quét đồng hồ giả lập 7 thời điểm, 0 failed; drill `--wp3` 208 PASS / 0 FAIL; 1.831 unit test. WP5-UX-AUDIT-AB9 PASS, gộp vùng A và B ([báo cáo](WP5_UX_REVIEW_AB9.vi.md)); nó thay thế WP5-UX-AUDIT-A6 và các audit trước đó |
 | Phiên bản trong `package.json` | `0.1.0` (không định danh bản phát hành; commit và digest mới định danh) |
-| Image ID tham chiếu (bản build drill của WP5-REGATE, máy trạm phát triển, `linux/amd64`, 110.002.055 byte; build từ 9bcdd88, chênh lệch chỉ về tài liệu so với commit phát hành; WP5-REGATE2 không build image) | `sha256:bd17d06185d205fb08bf90ee4de0d25190b7f3bf6b32f01151c9de99b7455f49` |
+| Image ID tham chiếu (bản build drill của WP5-UX-REGATE8, máy trạm phát triển, `linux/amd64`, 110.014.793 byte; image đã được xóa) | `sha256:dec7b4856a8220743c513a955a840d399e4be0d74970a89801ea39b6d7898327` |
 | Image ID build trên NAS | `<image-id>` (chủ sở hữu ghi lại lúc build, [runbook](../../docs/11_OPERATIONS_RUNBOOK.vi.md) mục 1 bước 8; build lại cùng mã nguồn cho ID khác) |
 | Tuyên bố phát hành | chưa tuyên bố, không có tag; khuyến nghị tuyên bố khi chủ sở hữu cho phép pilot; quyết định của chủ sở hữu đang chờ (D-14) |
 
 Image ID tham chiếu là image drill của gate trên máy trạm phát triển. Nó không phải image trên NAS, và image đó đã được xóa sau gate. Nếu bất kỳ tệp nào ngoài `handoff/` thay đổi thì commit và digest đổi, và định danh này phải được làm mới.
+
+**Vòng đổi giao diện (WP5-UX).** Sau khi gói được viết lần đầu ở `014bd47`, chủ sở hữu yêu cầu ngày 2026-10-08 một giao diện đẹp hơn, dễ dùng hơn, với trang Timesheet bố trí như workbook Excel mẫu. Chủ sở hữu trả lời E-1..E-7 theo khuyến nghị, và WP5-UX-Q1 cùng WP5-UX-Q2 bằng "a". Vòng này chỉ đổi giao diện client và các test (cùng một bộ định dạng giờ:phút chỉ để hiển thị); không đổi server và không đổi quy tắc nghiệp vụ. Nó đã được gate lại (WP5-UX-REGATE8) và audit cuối (WP5-UX-AUDIT-AB9, [báo cáo](WP5_UX_REVIEW_AB9.vi.md)); vì vậy định danh ở trên khác định danh phát hành đầu tiên `014bd47` / `150420e7…`. Hồ sơ nằm ở [bàn giao WP5](WP5_HANDOFF.vi.md), mục "Nghiệm thu lại sau vòng đổi giao diện (WP5-UX)".
 
 Bằng chứng của gói nằm ở `handoff/delivery/evidence/WP5-PILOT/` (mục lục ở mục 11).
 
@@ -83,7 +86,7 @@ Khuyến nghị; quyết định của chủ sở hữu đang chờ (D-12): kỳ
 
 Mọi mẫu được tạo từ bản export `git archive` sạch của commit `74d5bfe` (bản đóng băng đã qua gate), build bằng `npm ci` và `build:server`, dùng các service và job handler production, đồng hồ cố định, chế độ capture và user tổng hợp ở `example.invalid`. `PRODUCTION_SENDING_ENABLED` chưa bao giờ được đặt và không gửi gì cả. Lịch là lịch seed tổng hợp: kỳ 2026-09-14 đến 2026-09-27, ngày payroll 2026-10-02, múi giờ báo cáo `America/Los_Angeles`. Ngày thật sẽ khác.
 
-Nguồn gốc của các mẫu này: tạo tại 74d5bfe (WP5-GATE). Chênh lệch từ 74d5bfe đến commit phát hành 014bd47 chỉ về tài liệu; 230 tệp `dist/` giống hệt từng byte (WP5-REGATE2), và WP5-REGATE đã chạy lại drill đạt trên 9bcdd88.
+Nguồn gốc của các mẫu này: tạo tại 74d5bfe (WP5-GATE). Các mẫu email và PDF đến từ server. `dist/server` (180 tệp) giống hệt từng byte giữa 74d5bfe, 014bd47 và commit phát hành 90b98ef: 74d5bfe bằng 014bd47 (WP5-RECHECK, 230 tệp `dist/`), 014bd47 bằng 255ba17 (WP5-UX-AUDIT-A7), và 255ba17 bằng 3670a6c và 90b98ef (WP5-UX-AUDIT-AB9, các bản export sạch chạy `npm ci` và `npm run build`, `diff -r` exit 0). Vì vậy các mẫu vẫn đại diện cho bản phát hành. Vòng đổi giao diện chỉ đổi bundle client (46 tệp `dist/domain` giống nhau từ 5e104e1 trở đi; từ 014bd47 chỉ thêm bộ định dạng hiển thị `src/domain/format.ts`, +13 dòng, WP5-UX-AUDIT-A6), nên màn hình khác thời của các mẫu còn thư và PDF thì không.
 
 Mỗi thư lưu thành một `.txt` (tiêu đề, header thô, nội dung đã giải mã, thông tin PDF), và mỗi trang PDF thành một ảnh `*-synthetic.png`. Mọi ảnh đều đã được xem sau khi tạo. Mỗi PDF có một trang; hash đã lưu khớp tệp đính kèm đã capture.
 
@@ -163,7 +166,7 @@ Cài đặt ứng dụng. Cột "mặc định đã ghi" là mặc định thi�
 
 Nguồn: drill container của gate, dữ liệu tổng hợp, chế độ capture, Docker Desktop trên máy trạm phát triển (`linux/amd64`), image `sha256:0addd2000b42...9fd8`. `npm run drill:container -- --wp3 <bản build trước>`: các giai đoạn 33, 31, 57, 35, 27 và 23 kiểm tra = 208 PASS, 0 FAIL (`handoff/delivery/evidence/WP5-GATE/07-drill.txt`).
 
-Nguồn gốc của các số liệu này: tạo tại 74d5bfe (WP5-GATE). Chênh lệch từ 74d5bfe đến commit phát hành 014bd47 chỉ về tài liệu; 230 tệp `dist/` giống hệt từng byte (WP5-REGATE2), và WP5-REGATE đã chạy lại drill đạt trên 9bcdd88.
+Nguồn gốc của các số liệu này: bảng được tạo lần đầu tại 74d5bfe (WP5-GATE). Commit phát hành 90b98ef đã đạt lại cùng drill container trong WP5-UX-REGATE8 (`--wp3`, 208 PASS / 0 FAIL, cùng 208 kiểm tra, image `sha256:dec7b4856a8220743c513a955a840d399e4be0d74970a89801ea39b6d7898327`), nên số lượng đạt đúng với bản phát hành; các giá trị riêng lẻ bên dưới (mili giây, số byte, số lượt ghi) là của lần chạy WP5-GATE; hồ sơ WP5-UX-REGATE8 ghi số kiểm tra (33/31/57/35/27/23), không ghi các giá trị này. Code server mà drill chạy, `dist/server`, giống hệt từng byte giữa 74d5bfe và 90b98ef (xem mục 3); client đã đổi trong vòng giao diện và không thuộc số liệu khôi phục.
 
 | Số liệu | Giá trị |
 |---|---|
@@ -210,9 +213,9 @@ Pilot là lần cài đặt đầu tiên, nên không có schema production hay 
 
 | Trường | Giá trị |
 |---|---|
-| Commit phát hành | `014bd47a8d906c944d2781eba4f2b91c5a532419` |
-| Source digest | `150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61` |
-| Image ID build trên NAS | `<image-id>` (bản build tham chiếu của drill WP5-REGATE, máy phát triển, build từ 9bcdd88, chênh lệch chỉ về tài liệu so với commit phát hành: `sha256:bd17d06185d205fb08bf90ee4de0d25190b7f3bf6b32f01151c9de99b7455f49`) |
+| Commit phát hành | `90b98efc395c3894a21a909b6d361eadc6fc2bd9` |
+| Source digest | `57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d` (795 tệp, không tính `handoff/`) |
+| Image ID build trên NAS | `<image-id>` (bản build tham chiếu của drill WP5-UX-REGATE8, máy phát triển, 110.014.793 byte, đã xóa sau gate: `sha256:dec7b4856a8220743c513a955a840d399e4be0d74970a89801ea39b6d7898327`) |
 | Backup trước kích hoạt | `<backup-name>` (lấy ở runbook mục 13 bước 3) |
 | Hash manifest của backup đó | `<manifest-sha256>` |
 | Bản sao thiết bị riêng của backup và `<env-file>` chế độ capture | cất ở đâu (bản riêng) |
@@ -304,6 +307,8 @@ Sau lần gửi thật đầu tiên, ghi riêng nhà cung cấp chấp nhận v�
 - Lịch, tên và ngày của mẫu là tổng hợp. Không có tên host, địa chỉ, thông tin đăng nhập, chữ ký hay dữ liệu cá nhân thật nào trong gói được theo dõi hay bằng chứng của nó.
 - Mục 4 liệt kê mặc định đã ghi, không phải lựa chọn của chủ sở hữu; giá trị của chủ sở hữu không được biết ở đây.
 - Image ID tham chiếu thuộc một bản build đã bị xóa sau gate; bản build trên NAS ghi ID riêng của nó.
+- Pilot chưa chạy, NAS là NOT VERIFIED, chưa ai yêu cầu hay cấp phép, và không có kết quả pilot.
+- Backlog tùy chọn cho vòng sửa sau pilot, chỉ theo ID (không mục nào chặn việc nghiệm thu lại): R-B7-1..R-B7-4 ([WP5_UX_REVIEW_B7](WP5_UX_REVIEW_B7.vi.md)); R-AB8-1..R-AB8-4 ([WP5_UX_REVIEW_AB8](WP5_UX_REVIEW_AB8.vi.md)); R-AB9-1..R-AB9-6 ([WP5_UX_REVIEW_AB9](WP5_UX_REVIEW_AB9.vi.md)); và các rủi ro B6 và A7 ([WP5_UX_REVIEW_B6](WP5_UX_REVIEW_B6.vi.md), [WP5_UX_REVIEW_A7](WP5_UX_REVIEW_A7.vi.md)).
 
 ## 11. Mục lục bằng chứng
 

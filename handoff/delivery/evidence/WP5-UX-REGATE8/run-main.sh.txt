@@ -1,0 +1,12 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+cd $T/export
+npm ci > $T/out/02-ci.txt 2>&1; echo "ci exit $?" > $T/out/02-ci-exit.txt
+npm run lint > $T/out/02-lint.txt 2>&1; echo "lint exit $?" > $T/out/02-lint-exit.txt
+npm run verify > $T/out/03-verify.txt 2>&1; echo "verify exit $?" > $T/out/03-verify-exit.txt
+cat $T/out/02-ci-exit.txt $T/out/02-lint-exit.txt $T/out/03-verify-exit.txt
+node $T/zone.mjs > $T/out/03-window.txt 2>&1
+npm run test:e2e > $T/out/04-e2e.txt 2>&1; echo "e2e exit $?" > $T/out/04-e2e-exit.txt
+node $T/zone.mjs >> $T/out/03-window.txt 2>&1
+cat $T/out/04-e2e-exit.txt
+echo main-done > $T/out/main.done

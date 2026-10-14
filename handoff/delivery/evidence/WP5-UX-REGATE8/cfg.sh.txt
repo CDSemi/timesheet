@@ -1,0 +1,14 @@
+. <task>/env.sh
+P=ts-wp5-uxregate8
+C=$T/cfgproj
+mkdir -p $C/data $C/restore
+cp $T/export/Dockerfile $C/Dockerfile
+cp $T/export/compose.example.yaml $C/compose.yaml
+printf '%s\n' APP_ORIGINS=https://timesheet.example.invalid PUBLIC_BASE_URL=https://timesheet.example.invalid MAIL_FROM=timesheet@example.invalid OUTBOUND_MODE=capture HOST=0.0.0.0 PORT=3000 DATA_DIR=/data/private-data DATABASE_PATH=/data/timesheet.db TRUSTED_PROXY_ADDRESSES= NODE_ENV=production > $C/timesheet.env
+cp $C/timesheet.env $C/rollback.env
+printf '%s\n' JOB_RUNNER=off >> $C/rollback.env
+cd $C
+TIMESHEET_IMAGE=timesheet:aaaaaaa TIMESHEET_ENV_FILE=./timesheet.env TIMESHEET_DATA_DIR=./data docker compose -p $P -f compose.yaml config > $T/out/08-config-live.txt 2>&1; echo "live exit $?"
+TIMESHEET_IMAGE=timesheet:aaaaaaa TIMESHEET_ENV_FILE=./timesheet.env TIMESHEET_DATA_DIR=./restore docker compose -p $P-restored -f compose.yaml config > $T/out/08-config-restored.txt 2>&1; echo "restored exit $?"
+TIMESHEET_IMAGE=timesheet:bbbbbbb TIMESHEET_ENV_FILE=./rollback.env TIMESHEET_DATA_DIR=./restore docker compose -p $P-rollback -f compose.yaml config > $T/out/08-config-rollback.txt 2>&1; echo "rollback exit $?"
+grep -E "^name:|image:|JOB_RUNNER|source:" $T/out/08-config-*.txt

@@ -1,0 +1,176 @@
+// WP5-UX-AUDIT-AB9: independent derivation for the FIX10 helpers (AB8-01, AB8-03, AB8-04).
+// Run: node derive9.mts <export-root>   (Node 24 type stripping; imports the export's production and test helpers by path)
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const root = process.argv[2];
+if (root === undefined) throw new Error('usage: node derive9.mts <export-root>');
+const imp = (rel: string) => import(pathToFileURL(join(root, rel)).href);
+const periods = await imp('src/domain/periods.ts');
+const zones = await imp('src/domain/zones.ts');
+const dates = await imp('src/domain/dates.ts');
+const instants = await imp('src/domain/instants.ts');
+const helper = await imp('tests/e2e/displayedSeed.ts');
+const adminModel = await imp('src/client/components/adminModel.ts');
+
+const policy = JSON.parse(readFileSync(join(root, 'reference/examples/policy.example.json'), 'utf8'));
+const holidayFile = JSON.parse(readFileSync(join(root, 'reference/examples/holidays.2026.example.json'), 'utf8'));
+const HOLIDAYS: string[] = holidayFile.holidays.map((h: { date: string }) => h.date);
+const P = policy.payroll;
+const ZONE: string = policy.calendar.reporting_zone;
+const schedule = {
+  anchorPayrollDate: P.anchor_payroll_date,
+  cycleDays: P.cycle_days,
+  periodStartOffsetDays: P.period_start_offset_days,
+  periodEndOffsetDays: P.period_end_offset_days,
+  dueOffsetDays: P.due_offset_days,
+  dueLocalTime: P.due_local_time,
+  reportingZone: ZONE,
+};
+console.log('schedule:', JSON.stringify(schedule));
+const MARGIN = 120_000;
+
+// ---- my own arithmetic (no production period function) ----
+const DAY = 86_400_000;
+const dnum = (d: string) => Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10))) / DAY;
+const dstr = (n: number) => new Date(n * DAY).toISOString().slice(0, 10);
+const plus = (d: string, k: number) => dstr(dnum(d) + k);
+/** Earliest scheduled payroll date on or after today (the seed has no payroll exception). */
+function myDisplayed(today: string) {
+  const k = Math.ceil((dnum(today) - dnum(schedule.anchorPayrollDate)) / schedule.cycleDays);
+  const payroll = plus(schedule.anchorPayrollDate, k * schedule.cycleDays);
+  return { payroll, start: plus(payroll, -18), end: plus(payroll, -5), dueDate: plus(payroll, -3) };
+}
+/** UTC ms of a wall time in the reporting zone, by searching offsets with Intl (independent of zones.ts). */
+function myWallToUtc(date: string, time: string): number {
+  const guess = Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)), Number(time.slice(0, 2)), Number(time.slice(3, 5)));
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: ZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  for (const offsetHours of [7, 8, 6, 9, 5, 10]) {
+    const candidate = guess + offsetHours * 3_600_000;
+    const parts = Object.fromEntries(fmt.formatToParts(new Date(candidate)).map((p) => [p.type, p.value]));
+    if (`${parts.year}-${parts.month}-${parts.day}` === date && `${parts.hour}:${parts.minute}` === time) return candidate;
+  }
+  throw new Error(`no UTC instant for ${date} ${time}`);
+}
+function myLocalDate(ms: number): string {
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: ZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
+  return fmt.format(new Date(ms));
+}
+
+let checked = 0;
+let moved = 0;
+let natural = 0;
+const mismatches: string[] = [];
+const tightNatural: string[] = [];
+const movedDays = new Set<string>();
+const TIMES = ['00:30', '10:00', '12:00', '16:57', '16:58', '16:59', '17:00', '17:01', '18:30', '23:59'];
+for (let d = '2026-10-01'; d <= '2028-12-31'; d = plus(d, 1)) {
+  for (const time of TIMES) {
+    let nowMs: number;
+    try {
+      nowMs = myWallToUtc(d, time);
+    } catch {
+      continue; // a wall time that does not exist (none at these times in America/Los_Angeles)
+    }
+    const today = myLocalDate(nowMs);
+    const mine = myDisplayed(today);
+    const displayed = periods.currentPayPeriod(schedule, today);
+    if (displayed.payrollDate !== mine.payroll || displayed.periodStart !== mine.start || displayed.periodEnd !== mine.end) {
+      mismatches.push(`${today} ${time}: displayed ${displayed.payrollDate} vs mine ${mine.payroll}`);
+    }
+    const naturalDueMs = myWallToUtc(mine.dueDate, schedule.dueLocalTime);
+    if (naturalDueMs !== displayed.dueAtUtc * 1000) mismatches.push(`${today} ${time}: natural due ${displayed.dueAtUtc} vs mine ${naturalDueMs}`);
+    const facts = {
+      payroll_date: displayed.payrollDate,
+      nominal_payroll_date: displayed.nominalPayrollDate,
+      period_start: displayed.periodStart,
+      due_at_utc: instants.formatUtcInstant(displayed.dueAtUtc),
+    };
+    const later = helper.laterDeadlineFor(facts, today, nowMs, MARGIN);
+    const expectMove = !(naturalDueMs > nowMs + MARGIN);
+    if ((later !== null) !== expectMove) mismatches.push(`${today} ${time}: helper move=${later !== null}, mine ${expectMove}`);
+    checked += 1;
+    if (later === null) {
+      natural += 1;
+      // automation.spec rechecks due > now + 120 s after seeding a few days; flag a natural due within 60 s of the margin.
+      if (naturalDueMs <= nowMs + MARGIN + 60_000) tightNatural.push(`${today} ${time}`);
+      continue;
+    }
+    moved += 1;
+    movedDays.add(today);
+    // The exception the admin route records, through the production validation and period resolution.
+    const exception = { nominalPayrollDate: displayed.nominalPayrollDate, payrollDate: displayed.payrollDate, dueLocalDate: later.due_local_date, dueLocalTime: later.due_local_time };
+    try {
+      periods.validatePayrollExceptions(schedule, [exception]);
+    } catch (error) {
+      mismatches.push(`${today} ${time}: validation refuses ${JSON.stringify(exception)}: ${String(error)}`);
+      continue;
+    }
+    const after = periods.currentPayPeriod(schedule, today, [exception]);
+    const myLaterMs = myWallToUtc(plus(today, 1), '12:00');
+    const activation = nowMs + 60_000;
+    if (after.payrollDate !== displayed.payrollDate) mismatches.push(`${today} ${time}: payroll changed`);
+    if (after.periodStart !== displayed.periodStart || after.periodEnd !== displayed.periodEnd) mismatches.push(`${today} ${time}: period changed`);
+    if (after.dueAtUtc * 1000 !== myLaterMs) mismatches.push(`${today} ${time}: moved due ${after.dueAtUtc} vs mine ${myLaterMs}`);
+    if (!(after.dueAtUtc * 1000 > nowMs + 12 * 3_600_000)) mismatches.push(`${today} ${time}: moved due less than 12 h ahead`);
+    if (!(after.dueAtUtc * 1000 >= activation)) mismatches.push(`${today} ${time}: moved due before the activation`);
+  }
+}
+const sortedMoved = [...movedDays].sort();
+console.log(`AB8-01 laterDeadlineFor: ${checked} instants 2026-10-01..2028-12-31 at ${TIMES.join(' ')}; natural ${natural}, moved ${moved}; moved days ${sortedMoved.length}`);
+console.log(`  first moved days: ${sortedMoved.slice(0, 12).join(' ')}`);
+console.log(`  natural instants with due within 60 s past the 120 s margin (a recheck race window, not a FIX10 change): ${tightNatural.length} ${tightNatural.slice(0, 6).join(', ')}`);
+
+// ---- AB8-03 / AB8-04: import year and dates for every date ----
+/** E-12 as I read calendars.ts: from 1 October warn when next year holds no date; the seed holds only 2026 dates. */
+function myWarnings(today: string): Array<{ code: 'next_year_calendar_missing'; year: number; warn_from: string; message: string }> {
+  const year = Number(today.slice(0, 4));
+  if (today < `${year}-10-01`) return [];
+  if (HOLIDAYS.some((h) => h.startsWith(`${year + 1}-`))) return [];
+  return [{ code: 'next_year_calendar_missing', year: year + 1, warn_from: `${year}-10-01`, message: '' }];
+}
+let importChecked = 0;
+const importProblems: string[] = [];
+const todayHit: string[] = [];
+const pastHit: string[] = [];
+const yearByMonth = new Map<string, Set<number>>();
+for (let today = '2026-10-01'; today <= '2028-12-31'; today = plus(today, 1)) {
+  const mine = myDisplayed(today);
+  const warnings = myWarnings(today);
+  const myYear = today.slice(5) >= '10-01' ? Number(today.slice(0, 4)) + 1 : Number(today.slice(0, 4));
+  const year = adminModel.defaultImportYear(today, warnings);
+  if (year !== myYear) importProblems.push(`${today}: defaultImportYear ${year}, mine ${myYear}`);
+  const key = `${today.slice(5, 7)}`;
+  if (!yearByMonth.has(key)) yearByMonth.set(key, new Set());
+  yearByMonth.get(key)?.add(year - Number(today.slice(0, 4)));
+  const nominals = [`${year}-01-01`, `${year}-07-04`, `${year}-03-03`];
+  const got = helper.importDatesAfter(nominals, mine.end);
+  importChecked += 1;
+  if (new Set(got).size !== 3) importProblems.push(`${today}: duplicate dates ${got.join(' ')}`);
+  for (const date of got) {
+    if (!date.startsWith(`${year}-`)) importProblems.push(`${today}: ${date} outside ${year}`);
+    if (date <= mine.end) importProblems.push(`${today}: ${date} not after the displayed period end ${mine.end}`);
+    if (date < mine.start) importProblems.push(`${today}: ${date} before the effective date ${mine.start}`);
+  }
+  // My own expectation of the helper: nominal if after the end, else the first free day after the end, in order.
+  const taken = new Set<string>();
+  const expected = nominals.map((n) => {
+    let date = n > mine.end ? n : plus(mine.end, 1);
+    while (taken.has(date)) date = plus(date, 1);
+    taken.add(date);
+    return date;
+  });
+  if (expected.join() !== got.join()) importProblems.push(`${today}: helper ${got.join(' ')} vs mine ${expected.join(' ')}`);
+  if (got.includes(today)) todayHit.push(`${today}(${got.join(',')})`);
+  if (got.some((date) => date < today)) pastHit.push(today);
+}
+console.log(`AB8-03/04 import: ${importChecked} days 2026-10-01..2028-12-31; problems ${importProblems.length}`);
+for (const p of importProblems.slice(0, 20)) console.log(`  PROBLEM ${p}`);
+console.log(`  year offset by month (0 = this year, 1 = next): ${[...yearByMonth.entries()].map(([m, s]) => `${m}:${[...s].join('/')}`).join(' ')}`);
+console.log(`  days on which an import date is TODAY (the import turns today into a holiday on the shared calendar): ${todayHit.length}`);
+for (const t of todayHit.slice(0, 40)) console.log(`    ${t}`);
+console.log(`  days on which an import date lies before today (a past day of the in-progress period becomes a holiday): ${pastHit.length}; first ${pastHit.slice(0, 8).join(' ')}`);
+console.log(`mismatches (AB8-01): ${mismatches.length}`);
+for (const m of mismatches.slice(0, 20)) console.log(`  MISMATCH ${m}`);
+console.log(`holidays in the seed: ${HOLIDAYS.join(' ')}`);

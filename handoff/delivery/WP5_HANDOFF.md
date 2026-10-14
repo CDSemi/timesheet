@@ -133,3 +133,40 @@ Prepared by WP5-ACCREC (records only, no source edit). The sections above are th
   - software readiness of WP1–WP5: accepted. WP5 is implemented, gated (WP5-REGATE2 PASS, with WP5-GATE and WP5-REGATE on the earlier freezes) and independently audited (WP5-RECHECK PASS on `014bd47`, digest `150420e7…`), with the NAS target NOT VERIFIED; the coordinator records WP5-ACCEPT;
   - owner permission: not requested here, and not given. The pilot packet is ready for the owner's review. No deployment, no real email, no real data, `PRODUCTION_SENDING_ENABLED` never set, and no activation instant on any real instance;
   - pilot result: none; no pilot has run.
+
+## Re-acceptance after the UI change round (WP5-UX)
+
+This section is added after the older acceptance record above, which is kept unchanged as history (its identity `014bd47` / `150420e7…` was the first accepted WP5 snapshot). Sources: the board [ORCHESTRATION.json](ORCHESTRATION.json) (tasks `WP5-UX-*`, `owner_decisions`, `coordinator_decisions`), the [checkpoint](WORKFLOW_REVISION_CHECKPOINT.md) and the reviews named below. A reported result is not independent proof; the independent proofs are the audits.
+
+- **Owner request and answers:**
+  - 2026-10-08, the owner asked for a more beautiful, easier UI with the Timesheet page laid out like the sample Excel workbook (verbatim in `owner_decisions`). The coordinator ran it as a WP5 change round before pilot activation (no new package).
+  - E-1..E-7 (plan [WP5-UX-PLAN](tasks/WP5-UX-PLAN.md) section E): answered "OK theo khuyến nghị", all as recommended (Excel-style rows with details behind "Show details"; one hatched tint for every non-working day; side panel on desktop and bottom sheet on phone; US dates, h:mm, 24-hour; navigation Timesheet, Overtime, History, Settings (+ Admin); empty manager signature line shown; scope shell/tokens, Timesheet, day editor and Review).
+  - WP5-UX-Q1 (2026-10-09): answered "a", fix the focus-ring contrast and the US due-date format in one small round (FIX6).
+  - WP5-UX-Q2 (2026-10-09): answered "a", one accessibility sweep, then one fix round for every WCAG 2.2 AA item (A11Y-SWEEP, then FIX7).
+- **Slices (one line each; each is followed by a FREEZE commit):**
+  - T01: app shell, design tokens, navigation (Settings and Sign out under More on the phone) and four specs.
+  - T02: the Excel-style sheet components; the old grid and list deleted; display formatter.
+  - T03: PeriodBar, ClockPanel, `periodBarModel` and batch mode.
+  - T04: side-panel and bottom-sheet day editor, hours-and-minutes leave, one-tap break confirmation, in-cell label picker.
+  - T05: Review as a read-only sheet plus checklist.
+  - T06: docs/04, docs/10 (owner decisions of 2026-10-08) and docs/12, EN and VI.
+- **Fix rounds (one line each; each is followed by a FREEZE commit):**
+  - FIX1: "Times in <zone>" always shown, with a note when the zones differ (docs/04 contradiction decided by the coordinator).
+  - FIX2: malformed leave input refused instead of saved as another leave (A-01).
+  - FIX3: phone first day row above the tab bar, modal editor below 1200 px, import-absence assertion restored, docs/04 wording, phone tab order (B-01..B-04).
+  - FIX4: the "Open a day" field shows the full date at 360 and 320 px (B2-01).
+  - FIX5: the editor defers the mode switch while another modal is open; docs/04; meaningful assertion; spacing tokens (B3-01, B3-02, O-5, R-7).
+  - FIX6: stronger focus ring with an automated contrast check, and the US due date in the zone note (B4-01, B4-02).
+  - FIX7: ten WCAG 2.2 AA items AX-01..AX-10 (client-only, 29 files, plus docs/04 line 48).
+  - FIX8: one-row compact switcher bar on the phone, first day row above the tab bar with a received share (B6-01).
+  - FIX9: e2e isolation days seeded from the displayed period (A7-01, B7-01; tests only).
+  - FIX10: calendar-independent e2e suite after a simulated-clock sweep (AB8-01..AB8-04; tests only).
+- **Final gate and final audit (accepted identity):**
+  - Release commit `90b98efc395c3894a21a909b6d361eadc6fc2bd9` (WP5-UX-FIX10-FREEZE, pushed); source digest `57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d`, 795 files, `handoff/` excluded.
+  - WP5-UX-REGATE8 PASS, NAS NOT VERIFIED ([task](tasks/WP5-UX-REGATE8.md)): real-clock full e2e 210 passed / 26 skipped / 0 failed; simulated-clock sweep of 7 instants, 0 failed; drill `--wp3` 208 PASS / 0 FAIL; 1,831 unit tests. Reference image `sha256:dec7b4856a8220743c513a955a840d399e4be0d74970a89801ea39b6d7898327` (110,014,793 bytes, `linux/amd64`), removed after the gate.
+  - WP5-UX-AUDIT-AB9 PASS, no finding, combined areas A and B ([WP5_UX_REVIEW_AB9](WP5_UX_REVIEW_AB9.md)): `dist/` byte-identical across 255ba17, 3670a6c and 90b98ef; test strength holds; own sweep at 8 more instants and 2 one-worker runs all 210/0/26. It supersedes WP5-UX-AUDIT-A6 and the audits before it (A5, A4, A3, A2 and WP5-RECHECK). Earlier reviews of the round: `WP5_UX_REVIEW_A.md` to `_A7.md`, `WP5_UX_REVIEW_B.md` to `_B7.md` and `WP5_UX_REVIEW_AB8.md`.
+  - Product boundary: the round changed the client UI and the tests (plus the display-only formatter in `src/domain/format.ts`). `dist/server` is byte-identical to 014bd47 (A7, AB9); no server or business-rule change.
+- **docs/10 decision (coordinator):** docs/10 is kept unchanged for this re-accept. Reason: `docs/` is inside the source digest, so an entry for Q1 and Q2 would move the digest after the final gate and audit; Q1 and Q2 stay recorded verbatim on the board in `owner_decisions` and are summarised here. Carry-forward: a docs/10 (+ vi) entry for Q1 and Q2 goes into the next source-changing round, which is gated and audited anyway.
+- **Carried optional backlog (by ID; none blocks acceptance):** R-B7-1..R-B7-4 ([WP5_UX_REVIEW_B7](WP5_UX_REVIEW_B7.md)); R-AB8-1..R-AB8-4 ([WP5_UX_REVIEW_AB8](WP5_UX_REVIEW_AB8.md)); R-AB9-1..R-AB9-6 ([WP5_UX_REVIEW_AB9](WP5_UX_REVIEW_AB9.md)); the B6 and A7 risks ([WP5_UX_REVIEW_B6](WP5_UX_REVIEW_B6.md), [WP5_UX_REVIEW_A7](WP5_UX_REVIEW_A7.md)). The older carried risks above still apply.
+- **Pilot packet:** [WP5_PILOT_PACKET](WP5_PILOT_PACKET.md) and its `.vi.md` are refreshed to the identity above (sections 0, 3, 5, 6 and 10); D-1..D-15 and the unsigned authorization record are unchanged.
+- **Separation of three outcomes:** software readiness of WP1–WP5 on `90b98ef` / `57e2974c…`: accepted by REGATE8 and AB9, with the NAS still NOT VERIFIED; owner permission: not requested and not given; pilot result: none, no pilot has run.

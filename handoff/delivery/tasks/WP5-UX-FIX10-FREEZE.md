@@ -164,4 +164,14 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+- Pre-HEAD dc70ba65eb6c93925b3abe821829b76fc7e1f9da (= origin/main, no extra commits).
+  Post-HEAD / commit 90b98efc395c3894a21a909b6d361eadc6fc2bd9; pushed to main; remote
+  SHA 90b98efc395c3894a21a909b6d361eadc6fc2bd9. No tag.
+- Digest before add and HEAD ls-tree digest after: both
+  57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d.
+- Staged 106: tests 8; modified handoff 8; new records 4 (FIX10, this brief, review pair);
+  evidence AB8 28, FIX10 43, CKPT4 2, REGATE7 13.
+- Other modified tracked handoff files: none.
+- Checks all exit 0 (node v24.21.0, add, precommit PASS 106 files, diff --check, JSON parse,
+  validate_orchestration PASS, check_recovery 106 probes, preflight PASS, dry-run, push).
+- No fix applied, no masking, no unstaging. Details: evidence/WP5-UX-FIX10-FREEZE/checks.txt.

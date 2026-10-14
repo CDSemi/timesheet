@@ -1,0 +1,27 @@
+// WP5-UX-AUDIT-AB9: the free-day pool of the displayed period (past normal workdays, seeded holidays only) for every day 2026-10-01..2028-12-31.
+// Run: node pool.mts <export-root>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const root = process.argv[2];
+if (root === undefined) throw new Error('usage: node pool.mts <export-root>');
+const periods = await import(pathToFileURL(join(root, 'src/domain/periods.ts')).href);
+const dates = await import(pathToFileURL(join(root, 'src/domain/dates.ts')).href);
+const policy = JSON.parse(readFileSync(join(root, 'reference/examples/policy.example.json'), 'utf8'));
+const HOLIDAYS: string[] = JSON.parse(readFileSync(join(root, 'reference/examples/holidays.2026.example.json'), 'utf8')).holidays.map((h: { date: string }) => h.date);
+const P = policy.payroll;
+const schedule = { anchorPayrollDate: P.anchor_payroll_date, cycleDays: P.cycle_days, periodStartOffsetDays: P.period_start_offset_days, periodEndOffsetDays: P.period_end_offset_days, dueOffsetDays: P.due_offset_days, dueLocalTime: P.due_local_time, reportingZone: policy.calendar.reporting_zone };
+const weekdays: number[] = policy.calendar.normal_weekdays_iso; // ISO 1 = Monday
+const iso = (d: string) => ((new Date(`${d}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
+const byPool = new Map<number, string[]>();
+for (let today = '2026-10-01'; today <= '2028-12-31'; today = dates.addDays(today, 1)) {
+  const shown = periods.currentPayPeriod(schedule, today);
+  let pool = 0;
+  for (let d = shown.periodStart; d <= shown.periodEnd && d < today; d = dates.addDays(d, 1)) if (weekdays.includes(iso(d)) && !HOLIDAYS.includes(d)) pool += 1;
+  if (!byPool.has(pool)) byPool.set(pool, []);
+  byPool.get(pool)?.push(today);
+}
+for (const [pool, days] of [...byPool.entries()].sort((a, b) => a[0] - b[0])) {
+  console.log(`pool ${pool}: ${days.length} days${pool <= 4 ? `: ${days.join(' ')}` : ''}`);
+}

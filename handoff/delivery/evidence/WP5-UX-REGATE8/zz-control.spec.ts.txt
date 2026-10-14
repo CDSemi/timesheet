@@ -1,0 +1,9 @@
+import { expect, test } from './fixtures.ts';
+
+// Task-local control (never part of the repository): the built server reports the simulated reporting-zone date.
+test('control: the server reports the simulated today_local', async ({ adminSeed }, testInfo) => {
+  const periods = await adminSeed.call<{ today_local: string; reporting_zone: string; current: { payroll_date: string; period_start: string; period_end: string; due_at_utc: string } }>('GET', '/api/periods/current');
+  const now = new Date();
+  console.log(`CONTROL ${testInfo.project.name} process-clock=${now.toISOString()} today_local=${periods.today_local} zone=${periods.reporting_zone} displayed-period=${periods.current.period_start}..${periods.current.period_end} payroll=${periods.current.payroll_date} due_at_utc=${periods.current.due_at_utc}`);
+  expect(periods.today_local).toBe(process.env.CONTROL_TODAY ?? periods.today_local);
+});

@@ -1,0 +1,17 @@
+# Direct proof that the product is unchanged since 255ba17: export, ci, build, compare dist with the 90b98ef build.
+source <task>/env.sh
+X255=$T/x255
+mkdir -p $X255
+cd $REPO || exit 2
+echo "\$ git rev-parse 255ba17"; git rev-parse 255ba17
+echo "\$ git diff --name-only 255ba17 90b98ef -- . ':(exclude)handoff' ':(exclude)tests'"
+git diff --name-only 255ba17 90b98efc395c3894a21a909b6d361eadc6fc2bd9 -- . ':(exclude)handoff' ':(exclude)tests'; echo "git diff exit=$? (empty output above = only tests/ and handoff/ changed)"
+git archive 255ba17 | tar -x -C $X255; echo "archive exit ${PIPESTATUS[*]}"
+bash $T/build.sh $X255 x255
+cd $X255/dist || exit 2
+find . -type f | LC_ALL=C sort > $T/dist-255-files.txt
+: > $T/dist-255-sha.txt
+while IFS= read -r f; do h=$(sha256sum "$f"); echo "${h%% *} $f" >> $T/dist-255-sha.txt; done < $T/dist-255-files.txt
+echo "files 255=$(wc -l < $T/dist-255-files.txt)"
+echo "\$ cmp per-file sha256 lists 255ba17 vs 90b98ef"; cmp $T/dist-255-sha.txt $T/dist-1-new-sha.txt; echo "cmp exit=$?"
+echo "\$ diff -r --brief x255/dist x90b/dist"; diff -r --brief $X255/dist $NEW/dist; echo "diff exit=$?"

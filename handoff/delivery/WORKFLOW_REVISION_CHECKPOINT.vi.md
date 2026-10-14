@@ -351,8 +351,27 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   file mới. Lượt quét: 14 lần chạy toàn bộ trên cả hai project, 0 fail (một lỗi thoáng
   qua ERR_NO_BUFFER_SPACE ngày 2027-01-19, chạy lại thì pass); unit 1831; verify 0; digest
   57e2974c.
-- Đang chạy: WP5-UX-FIX10-FREEZE (committer, HEAD mong đợi dc70ba6). Sau đó
-  WP5-UX-REGATE8 và audit gộp AB9.
+- WP5-UX-FIX10-FREEZE xong: 90b98efc395c3894a21a909b6d361eadc6fc2bd9 trên main, đã push
+  (106 đường dẫn; digest 57e2974c; mọi kiểm tra exit 0).
+- WP5-UX-REGATE8 PASS (verifier, tự báo claude-sonnet-5-5; NAS chưa kiểm) trên 90b98ef /
+  57e2974c: e2e trên đồng hồ thật 210/0/26 lúc 22:20 giờ Los Angeles, sau hạn nộp của kỳ
+  đang hiển thị; lượt quét 7 thời điểm 0 fail; drill 208 PASS, image
+  sha256:dec7b4856a8220743c513a955a840d399e4be0d74970a89801ea39b6d7898327; dist giống hệt
+  3670a6c; phạm vi sửa đúng 8 đường dẫn test.
+- WP5-UX-AUDIT-AB9 PASS (opus mới, gộp, tự báo claude-opus-5-5; không có finding): dist
+  giống từng byte ở 255ba17, 3670a6c và 90b98ef; độ mạnh của test giữ nguyên; cách dựng
+  hạn chót qua ngoại lệ trả lương của AB8-01 vẫn chứng minh tự động hóa hạn chót, quy tắc
+  kích hoạt docs/05 và PDF tự động; lượt quét riêng ở 8 thời điểm mới (2026-2028) và 2 lần
+  chạy một worker, tất cả 210/0/26; e2e đồng hồ thật 210/0/26; AC-01 và AC-13 đạt;
+  AB8-01..04 đã đóng; R-AB9-1..6 (không bắt buộc) vào backlog pilot. Board: A6, A5, A4, A3,
+  A2 và WP5-RECHECK có superseded_by AB9; digest hiện hành 57e2974c.
+- WP5-UX-ACCEPT-DOCS xong (light, tự báo claude-sonnet-5-5): pilot packet (EN/VI) cập nhật
+  thành 90b98ef / 57e2974c / image dec7b485 / AB9, dist/server giống từng byte ở 74d5bfe,
+  014bd47 và 90b98ef (chỉ client thay đổi); WP5 handoff (EN/VI) có mục nghiệm thu lại; kiểm
+  tra song ngữ và preflight đạt; digest không đổi. Coordinator đã cập nhật STATE (WP5
+  nghiệm thu lại trên 90b98ef) và NEXT_ACTION (EN/VI).
+- Đang chạy: commit nghiệm thu WP5-UX-ACCEPT (committer). Sau đó board về lại
+  `software_ready` (lần chuyển này để chưa commit đến commit kế tiếp).
 - Tiếp theo: nếu cả hai PASS, nghiệm thu lại WP5 (cập nhật định danh pilot packet thành
   5e104e1 / 07c3ca00 / image 218dd7cc…, quyết định Q1 vào docs/10, STATE, NEXT_ACTION, WP5
   handoff, commit nghiệm thu).
