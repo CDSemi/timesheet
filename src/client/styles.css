@@ -58,6 +58,14 @@
   --button-pad-x: 14px;
   --hairline: 1px;
   --rule: 2px;
+  /* The leading accent rail of the active label option (a shape cue, not a frame) */
+  --rail: calc(var(--rule) + var(--hairline));
+  /* The "Show details" slide switch: a 44x24 track, an 18px thumb, a 3px inset, travel derived from them */
+  --switch-width: 44px;
+  --switch-height: 24px;
+  --switch-thumb: 18px;
+  --switch-inset: 3px;
+  --switch-travel: calc(var(--switch-width) - var(--switch-thumb) - 2 * var(--switch-inset) - 2 * var(--hairline));
   --press-offset: 1px;
   --opacity-disabled: 0.6;
   --track: 1fr;
@@ -110,6 +118,12 @@
   /* Buttons: primary hover and the secondary border */
   --accent-strong: #184e9e;
   --accent-line: rgb(31 95 191 / 0.45);
+  /*
+   * Hover (WP5-UX2-T02): a clearly visible accent tint plus an accent boundary on quiet and secondary
+   * buttons, navigation links and tabs. Over a card it differs from rest by at least 1.20:1 (1.23 light,
+   * 1.45 dark); pressed (a solid accent) differs from it by at least 3:1.
+   */
+  --hover-fill: rgb(31 95 191 / 0.14);
   --control-height: 36px;
   --clock-width: 26rem;
   --clock-button-min: 9rem;
@@ -134,6 +148,8 @@
   --sheet-handle-height: 4px;
   --picker-min: 11rem;
   --caret-size: 4px;
+  --check-width: 5px;
+  --check-height: 10px;
 
   /* App shell: desktop top bar, mobile compact bar and bottom tab bar */
   --bar-height: 56px;
@@ -214,6 +230,7 @@
     --attention-ink: #f0c25a;
     --accent-strong: #8dbbff;
     --accent-line: rgb(110 168 255 / 0.5);
+    --hover-fill: rgb(110 168 255 / 0.20);
     --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(4 8 14 / 0.3);
   }
 }
@@ -249,6 +266,7 @@
   --attention-ink: #f0c25a;
   --accent-strong: #8dbbff;
   --accent-line: rgb(110 168 255 / 0.5);
+  --hover-fill: rgb(110 168 255 / 0.20);
   --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(4 8 14 / 0.3);
 }
 
@@ -335,9 +353,12 @@ body {
   transition: var(--transition);
 }
 
-.nav-link:hover {
-  background: var(--off);
-  color: var(--text);
+/* Hover is a preview: the tint token, never on a touch device (no sticky hover); the current entry keeps its look. */
+@media (hover: hover) {
+  .nav-link:hover {
+    background: var(--hover-fill);
+    color: var(--text);
+  }
 }
 
 .nav-link[aria-current='page'] {
@@ -382,13 +403,16 @@ body {
   box-shadow: none;
 }
 
-.shell-tabs .tab:hover:not(:disabled) {
-  background: var(--off);
-  color: var(--text);
-  box-shadow: none;
+@media (hover: hover) {
+  .shell-tabs .tab:hover:not(:disabled):not([aria-current]) {
+    background: var(--hover-fill);
+    color: var(--text);
+    box-shadow: none;
+  }
 }
 
-.shell-tabs .tab:focus-visible {
+.shell-tabs .tab:focus-visible,
+.shell-tabs .tab:focus-visible:hover:not(:disabled) {
   box-shadow: var(--focus-ring-inset);
 }
 
@@ -432,16 +456,22 @@ body {
   text-align: left;
 }
 
-.more-panel .more-action:hover:not(:disabled) {
-  background: var(--off);
-  box-shadow: none;
+@media (hover: hover) {
+  .more-panel .more-action:hover:not(:disabled):not([aria-pressed='true']) {
+    background: var(--hover-fill);
+    border-color: var(--accent);
+    box-shadow: none;
+  }
+
+  .more-panel .more-action:focus-visible:hover:not(:disabled) {
+    box-shadow: var(--focus-ring);
+  }
 }
 
 /*
- * The "Dark mode" toggle (WP5-UX2-T01). Pressed (the dark theme is in effect) is a solid accent fill
- * with the on-accent text. The pressed selectors repeat :hover:not(:disabled) so the generic quiet-button
- * hover (specificity 0,3,1) and the More-panel hover (0,4,0) cannot erase the pressed look. The shared
- * focus ring is repeated at the same weight for the same reason. The half-disc glyph is decoration.
+ * The "Dark mode" toggle (WP5-UX2-T01). Its pressed look (the dark theme is in effect) is the shared
+ * pressed system of the Controls section (WP5-UX2-T02): a solid accent fill with the on-accent text,
+ * `--accent-strong` under the pointer. The half-disc glyph is decoration.
  */
 button.theme-toggle {
   display: inline-flex;
@@ -456,24 +486,6 @@ button.theme-toggle {
   border: var(--rule) solid currentColor;
   border-radius: var(--shape-round);
   background: linear-gradient(90deg, currentColor var(--shape-round), transparent var(--shape-round));
-}
-
-button.theme-toggle[aria-pressed='true'],
-button.theme-toggle[aria-pressed='true']:hover:not(:disabled) {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
-  box-shadow: none;
-}
-
-button.theme-toggle[aria-pressed='true']:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-}
-
-button.theme-toggle:focus-visible:not(:disabled),
-.more-panel button.theme-toggle:focus-visible:not(:disabled) {
-  box-shadow: var(--focus-ring);
 }
 
 /*
@@ -616,12 +628,6 @@ button {
   transition: var(--transition);
 }
 
-button:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-  box-shadow: var(--shadow-panel);
-}
-
 button:active:not(:disabled) {
   transform: translateY(var(--press-offset));
 }
@@ -636,22 +642,57 @@ button.secondary {
   color: var(--accent);
 }
 
-button.secondary:hover:not(:disabled) {
-  background: var(--off);
-  border-color: var(--accent);
-  box-shadow: none;
-}
-
 button.quiet {
   background: transparent;
   border-color: transparent;
   color: var(--accent);
 }
 
-button.quiet:hover:not(:disabled) {
-  background: var(--off);
-  border-color: transparent;
-  box-shadow: none;
+/*
+ * Pressed (WP5-UX2-T02): a toggle whose state is on is a solid accent fill with the on-accent text, so the
+ * state shows without the pointer. It sets no box-shadow, so the shared focus ring paints on it unchanged
+ * (the 1px card gap keeps the ring visible on the fill, SC 2.4.7 and 1.4.11). Hover cannot erase it: every
+ * hover rule below excludes a pressed button and the pressed hover rule is more specific than any of them.
+ */
+button.quiet[aria-pressed='true'],
+button.secondary[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+/*
+ * Hover exists only where the device can hover, so a tap on a phone leaves no hover look behind. A
+ * secondary or quiet button shows the tint token and an accent boundary; a pressed one goes to the stronger
+ * accent (pressed and hover differ by at least 3:1); the primary button keeps its stronger accent. A
+ * focused control keeps its ring under the pointer.
+ */
+@media (hover: hover) {
+  button:hover:not(:disabled) {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+    box-shadow: var(--shadow-panel);
+  }
+
+  button.secondary:hover:not(:disabled):not([aria-pressed='true']),
+  button.quiet:hover:not(:disabled):not([aria-pressed='true']) {
+    background: var(--hover-fill);
+    border-color: var(--accent);
+    box-shadow: none;
+  }
+
+  button.quiet[aria-pressed='true']:hover:not(:disabled),
+  button.secondary[aria-pressed='true']:hover:not(:disabled) {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+    box-shadow: none;
+  }
+
+  button:focus-visible:hover:not(:disabled),
+  button.secondary:focus-visible:hover:not(:disabled),
+  button.quiet:focus-visible:hover:not(:disabled) {
+    box-shadow: var(--focus-ring);
+  }
 }
 
 button:disabled {
@@ -898,15 +939,74 @@ tr.nonworking td {
   gap: var(--space-2);
 }
 
-.tools button[aria-pressed='true'] {
-  background: var(--day-selected);
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 var(--hairline) var(--accent);
+/*
+ * "Show details" is a slide switch (WP5-UX2-T02): a native checkbox with role="switch" and the visible text
+ * "Show details", drawn with `appearance: none`. The track is 44x24 with a 4px radius; the thumb is an 18px
+ * one-colour gradient layer placed with background-position (no pseudo-element), 3px from the track edge.
+ * State is shown by the thumb position and the track fill, never by colour alone. Contrast of the track
+ * boundary and of the thumb is at least 3:1 in both themes and in every state (tests/e2e/hover.spec.ts).
+ */
+label.inline.switch {
+  display: inline-flex;
+  min-height: var(--control-height);
+  font-weight: var(--font-weight-strong);
+  cursor: pointer;
 }
 
-/* A pressed toggle keeps its pressed edge and still shows the focus ring (WP5-UX-AX-04, SC 2.4.7). */
-.tools button[aria-pressed='true']:focus-visible {
-  box-shadow: var(--focus-ring), inset 0 0 0 var(--hairline) var(--accent);
+@media (max-width: 767px), (pointer: coarse) {
+  label.inline.switch {
+    min-height: var(--tap-min);
+  }
+}
+
+input[type='checkbox'].switch-input {
+  appearance: none;
+  flex: none;
+  width: var(--switch-width);
+  height: var(--switch-height);
+  margin: 0;
+  padding: 0;
+  border: var(--hairline) solid var(--muted);
+  border-radius: var(--radius);
+  /* The card colour at rest, so the hover tint differs from it by at least 1.20:1 (it would be 1.08:1 over --off in the light theme). */
+  background-color: var(--card);
+  background-image: linear-gradient(var(--muted), var(--muted));
+  background-repeat: no-repeat;
+  background-size: var(--switch-thumb) var(--switch-thumb);
+  background-position: var(--switch-inset) center;
+  cursor: pointer;
+}
+
+input[type='checkbox'].switch-input:checked {
+  border-color: var(--accent);
+  background-color: var(--accent);
+  background-image: linear-gradient(var(--on-accent), var(--on-accent));
+  background-position: calc(var(--switch-inset) + var(--switch-travel)) center;
+}
+
+input[type='checkbox'].switch-input:active:not(:disabled) {
+  transform: translateY(var(--press-offset));
+}
+
+input[type='checkbox'].switch-input:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+@media (hover: hover) {
+  input[type='checkbox'].switch-input:hover:not(:disabled):not(:checked) {
+    border-color: var(--accent);
+    background-color: var(--hover-fill);
+  }
+
+  input[type='checkbox'].switch-input:checked:hover:not(:disabled) {
+    border-color: var(--accent-strong);
+    background-color: var(--accent-strong);
+  }
+}
+
+input[type='checkbox'].switch-input:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 
 .facts {
@@ -1247,8 +1347,9 @@ textarea {
     min-width: var(--date-field-min);
   }
 
+  /* One row where the switch and the button fit (390px and wider); narrower, the button wraps below instead of scrolling sideways. */
   .tools-right {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: stretch;
   }
 
@@ -2376,8 +2477,12 @@ textarea {
   box-shadow: inset 0 0 0 var(--hairline) var(--accent-line);
 }
 
-.sheet .label-trigger:focus-visible,
+/* The open picker marks its trigger with a 1px accent line (the list owns the focus); keyboard focus keeps the 2px indicator. */
 .label-picker.open .label-trigger {
+  box-shadow: inset 0 0 0 var(--hairline) var(--accent);
+}
+
+.sheet .label-trigger:focus-visible {
   box-shadow: inset 0 0 0 var(--rule) var(--accent);
 }
 
@@ -2395,6 +2500,11 @@ textarea {
   height: 0;
   border-inline: var(--caret-size) solid transparent;
   border-top: var(--caret-size) solid var(--muted);
+  transition: var(--transition);
+}
+
+.label-picker.open .label-caret {
+  transform: rotate(180deg);
 }
 
 .label-list {
@@ -2423,6 +2533,7 @@ textarea {
 .label-option {
   display: flex;
   align-items: center;
+  gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius);
   cursor: pointer;
@@ -2430,21 +2541,34 @@ textarea {
 }
 
 /*
- * The focused list keeps the ring, and the active option (what Enter picks) carries the inset ring
- * (WP5-UX-AX-02, SC 1.4.11 and 2.4.7); the chosen option stays marked by colour and weight.
+ * The focused list keeps the ring (WP5-UX-AX-02, SC 2.4.7). The active option (what Enter picks, and the
+ * one under the pointer) is a tint plus a leading accent rail, not a frame (WP5-UX2-T02); the rail is 3px
+ * and reaches 3:1 against the option fill and the card (SC 1.4.11). The current value is accent text, a
+ * heavier weight and a check shape, so it is not shown by colour alone (SC 1.4.1).
  */
 .label-list:focus-visible {
   box-shadow: var(--focus-ring), var(--shadow-overlay);
 }
 
 .label-option.active {
-  background: var(--day-selected);
-  box-shadow: var(--focus-ring-inset);
+  background: var(--hover-fill);
+  box-shadow: inset var(--rail) 0 0 var(--accent);
 }
 
 .label-option[aria-selected='true'] {
   color: var(--accent);
   font-weight: var(--font-weight-strong);
+}
+
+.label-option[aria-selected='true']::after {
+  content: '';
+  flex: none;
+  width: var(--check-width);
+  height: var(--check-height);
+  margin-left: auto;
+  border: solid currentColor;
+  border-width: 0 var(--rule) var(--rule) 0;
+  transform: rotate(45deg) translateY(calc(-1 * var(--rule)));
 }
 
 .label-option-extra {

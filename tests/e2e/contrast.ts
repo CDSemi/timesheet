@@ -13,6 +13,8 @@ export interface Layer {
   colour: Rgba;
   inset: boolean;
   spread: number;
+  /** The horizontal offset in px: the width of a one-sided rail such as `inset 3px 0 0 colour`. */
+  offsetX: number;
 }
 
 export function parseColour(text: string): Rgba {
@@ -25,7 +27,7 @@ export function parseLayers(boxShadow: string): Layer[] {
   if (boxShadow === 'none') return [];
   return boxShadow.split(/,\s*(?=rgba?\()/).map((layer) => {
     const lengths = (layer.replace(/rgba?\([^)]*\)/, '').match(/-?\d+(\.\d+)?px/g) ?? []).map(parseFloat);
-    return { colour: parseColour(layer), inset: layer.includes('inset'), spread: lengths[3] ?? 0 };
+    return { colour: parseColour(layer), inset: layer.includes('inset'), spread: lengths[3] ?? 0, offsetX: lengths[0] ?? 0 };
   });
 }
 
@@ -71,8 +73,11 @@ export async function backdropsAbove(locator: Locator): Promise<string[]> {
   });
 }
 
+/** The computed properties the probes read. */
+export type StyleProperty = 'boxShadow' | 'color' | 'backgroundColor' | 'borderTopColor' | 'backgroundImage';
+
 /** The computed value of one property of an element, once it has not changed over two reads 400 ms apart. */
-export async function settledStyle(locator: Locator, property: 'boxShadow' | 'color' | 'backgroundColor'): Promise<string> {
+export async function settledStyle(locator: Locator, property: StyleProperty): Promise<string> {
   const read = async () => locator.evaluate((element, name) => element.ownerDocument.defaultView?.getComputedStyle(element)[name] ?? '', property);
   let settled = await read();
   await expect
@@ -129,6 +134,17 @@ export async function measureFocusRing(locator: Locator): Promise<RingMeasure> {
     ringAgainstGap: contrast(ringColour, gapColour),
     layers: boxShadow,
   };
+}
+
+/** The settled background of a control, flattened over the surfaces behind it (opaque). */
+export async function flattenedBackground(locator: Locator): Promise<Rgba> {
+  const fill = parseColour(await settledStyle(locator, 'backgroundColor'));
+  return over(fill, backdropOf(await backdropsAbove(locator)));
+}
+
+/** The colour of the first gradient stop painted as the background image (the switch thumb is a one-colour gradient). */
+export async function imageColour(locator: Locator): Promise<Rgba> {
+  return parseColour(await settledStyle(locator, 'backgroundImage'));
 }
 
 /** The text colour of a control against its own fill composited over what is behind it. */

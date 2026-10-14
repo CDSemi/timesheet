@@ -28,7 +28,7 @@
   "current_source_digest": "57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX2-T01-FREEZE",
+  "next_task_id": "WP5-UX2-T02-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-13",
@@ -176,6 +176,14 @@
     }
   ],
   "pending_owner_question_2": null,
+  "answered_owner_question_ux2_q2": {
+    "answered": "2026-10-14, owner chat 'Q-1 a, Q-2 a' (see owner_decisions)",
+    "id": "WP5-UX2-Q2",
+    "asked": "2026-10-14",
+    "source": "WP5-UX2-PLAN4 (font facts and theme section); coordinator decision 2026-10-14.",
+    "question": "Q-1: the font is VNI-Revue Bold ('Copyright (c) 1991 VNI All Rights Reserved.', no licence text). The app will contain only the vector outlines of the glyphs of 'Semiconductor' and 'SERVICES, INC.' (no font file) in a public repository. Does the company hold the right to use this font for its logo/wordmark? [a] yes, proceed with outlines (recommended if the company already uses it in its logo); b no or unsure: use a free font with a similar style instead. Q-2: dark theme: [a] the wordmark uses lighter tints of the brand blue and grey on the dark bar so it stays readable (the exact grey is 2.0:1 there); b exact brand colours in both themes; c exact colours on a light backing plate in dark.",
+    "blocking": "WP5-UX2-T05 (brand slice) only; T02-T04 continue meanwhile."
+  },
   "answered_owner_question_ux2_q1": {
     "answered": "2026-10-14, owner chat: Today = option b plus a separate button for the R-07 current period (see owner_decisions)",
     "id": "WP5-UX2-Q1",
@@ -252,7 +260,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "834b9fcc62d55501371030dea966547d3dc53902",
+    "last_commit": "af6207c281badc27192d1d420de8ace5a73c8296",
     "unpushed": []
   },
   "owner_decisions": [
@@ -397,9 +405,26 @@
       "source": "owner chat, direct request typed by the owner, with an attached logo image (session image 1.png: a light-grey rimmed circle with a blue disc of horizontal white stripes and a central blue band carrying the grey letters 'C & D')",
       "verbatim": "1. Tôi muốn bạn dùng logo này thay cho chữ \"C&D CDsemi\" (đang display ở góc trên bên trái). Nếu đủ chỗ để hiện thêm text thì hiện \"CDSemi\", không đủ thì thôi.\n2. Ở màn hình điện thoại: Đưa phần Clock in/out vào header bar trên đầu (phần đang có chữ \"C&D CDsemi\"); Tôi cũng muốn 3 nút \"Today\", \"Current period\" và \"Review & sign off\" nằm cùng 1 hàng. Có thể tách text \"Review & sign off\" thành 2 hàng hoặc rút gọn thành \"Sign off\" nếu cần.\n3. Đổi chữ Clock in/out thành Check in/out",
       "decision": "Added to UI change round 2: (1) the attached C&D logo replaces the 'C&D CDsemi' brand text at the top left, with the text 'CDSemi' beside it only where there is room; (2) on phones the Clock in/out controls move into the top header bar, and 'Today', 'Current period' and 'Review & sign off' share one row, where 'Review & sign off' may wrap to two lines or shorten to 'Sign off'; (3) the visible wording 'Clock in/out' becomes 'Check in/out'. Business behaviour is unchanged."
+    },
+    {
+      "date": "2026-10-14",
+      "source": "owner chat, direct request typed by the owner, with an attached image (session image 2.png: the C&D logo above a two-line blue wordmark 'SEMICONDUCTOR' / 'SERVICES, INC.') and a referenced font file outside the repository",
+      "verbatim": "@\"D:\\Dropbox\\Working.CDSemi\\App.Cluster\\ClusterPro\\ClusterPro\\CDSemiFont.ttf\"\n* Tôi muốn sửa thêm 1 chút, thay chữ \"CDSemi\" trên title bằng cách trình bày 2 hàng như hình (dùng màu và font như trong hình, logo nằm bên trái và text nằm bên phải thay vì logo nằm trên và text nằm dưới)\n* Bỏ chữ \"C&D Semiconductor Services, Inc.\" ở trong phần timesheet đi, vì đã hiển thị trên top bar rồi)",
+      "decision": "Added to UI change round 2: (1) the 'CDSemi' text beside the logo in the top bar becomes the two-line wordmark of the attached image ('SEMICONDUCTOR' over 'SERVICES, INC.'), in the image's colours and in the referenced CDSemiFont.ttf, with the logo on the left and the two text lines on the right (not stacked as in the image); (2) the 'C&D Semiconductor Services, Inc.' line is removed from the on-screen timesheet, because the top bar now shows the company. Business behaviour is unchanged."
+    },
+    {
+      "date": "2026-10-14",
+      "source": "owner chat, direct reply typed by the owner to pending question WP5-UX2-Q2",
+      "verbatim": "* Q-1 a, Q-2 a",
+      "decision": "Q-1 (a): the company holds the right to use VNI-Revue Bold for its logo/wordmark; proceed with vector outlines of the wordmark glyphs (the font file itself is still never committed). Q-2 (a): in the dark theme the wordmark uses lighter tints of the brand blue and grey so it stays readable; the light theme keeps the exact brand colours."
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-14",
+      "basis": "Owner request 2026-10-14 (two-line wordmark beside the logo in the owner's font and colours; remove the company line from the on-screen timesheet; verbatim in owner_decisions). The repository is public by design; the font file's licence is unknown and redistributing a font file may breach it; outlines of a few brand words in a logo are a different use. The company line also appears on the PDF (timesheetPdf.ts:61), which is the submitted document and server output. WP5-UX2-T02 is the running writer.",
+      "decision": "Fold both items into the brand slice WP5-UX2-T05. The font file is never committed: the wordmark is rendered as vector outlines generated from the owner's TTF (recording the font's name-table copyright, licence and embedding fields in the task record); the PDF keeps its company line (only the on-screen sheet loses it, on the Timesheet and wherever the same on-screen form header appears, for example the Review sheet if it shares it). A read-only plan addendum WP5-UX2-PLAN4 (the same planner resumed, sonnet, no override; size S, risk L, novelty yes) settles the wordmark layout and sizes per width, colours sampled from the owner's image, theme legibility (logotypes are exempt from SC 1.4.3, but the dark bar needs a legible rendering), inline SVG versus img, the accessible name, the outline method and its fidelity check, where the company line appears and the test and docs deltas; no build, app or browser while T02 runs."
+    },
     {
       "date": "2026-10-14",
       "basis": "WP5-UX2-PLAN3 done (logo, phone header clock, three-button row, rename inventory) and WP5-UX2-T01 done (digest 44f5b6cc, 802 files). The rename reaches three server message literals shown in the UI (timesheetCommands.ts:539, 573, 599); keeping 'Clock' there would contradict the owner's wording in visible errors.",
@@ -18469,9 +18494,162 @@
       "id": "WP5-UX2-T01-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX2-T01"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a20fa4fbf6fc0bc5c",
+      "session_id": "11acfabe-25ef-48b5-ac28-73ce2d74ecee",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX2-T01-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX2-T01-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX2-T01-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX2-T01-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX2-T01-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-UX2-T01-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "834b9fcc62d55501371030dea966547d3dc53902",
+      "branch": "main",
+      "commit_sha": "af6207c281badc27192d1d420de8ace5a73c8296",
+      "pushed": true,
+      "source_digest": "44f5b6ccb1569f11d0a966a54ecfbd90d151f2e7b8a958ccdbd8ce03108b5c07",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed on attempt 1: 46 paths (12 source, 6 modified handoff, 5 task records, 4 design, 19 T01 evidence); HEAD was 834b9fc = origin/main with no extra commits; no other modified handoff file; digests 44f5b6cc (802 files) before add and on the new HEAD; node v24.21.0; precommit (0 findings), diff --check, JSON parse, validate_orchestration, check_recovery (106) and preflight exit 0; remote main = af6207c; no tag. Slip: one /dev/null redirect (harmless).",
+      "next_action": "None; WP5-UX2-T02 (controls) on af6207c / 44f5b6cc."
+    },
+    {
+      "id": "WP5-UX2-T02",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX2-T01-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ac90307b14c9bad40",
+      "session_id": "11acfabe-25ef-48b5-ac28-73ce2d74ecee",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/styles.css",
+        "src/client/TimesheetScreen.tsx",
+        "src/client/components/ShowDetailsSwitch.tsx",
+        "src/client/components/SheetWeekTable.tsx",
+        "tests/e2e/hover.spec.ts",
+        "tests/e2e/contrast.ts",
+        "tests/e2e/focus-ring.spec.ts",
+        "tests/e2e/timesheet.spec.ts",
+        "tests/e2e/shell.spec.ts",
+        "tests/e2e/day-editor.spec.ts",
+        "tests/e2e/theme.spec.ts",
+        "handoff/delivery/tasks/WP5-UX2-T02.md",
+        "handoff/delivery/evidence/WP5-UX2-T02"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX2-T02.md",
+      "report": "handoff/delivery/tasks/WP5-UX2-T02.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX2-T02/digest-before.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/typecheck.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/lint.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/unit-tests.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/e2e-full-final.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/e2e-full-first-run.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/hover-spec-both-projects.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/focused-run-affected-specs.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/mutation-pressed-hover-erased.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/verify.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/digest-final.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/t02-tools-pressed-hover-light-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX2-T02/t02-tools-pressed-hover-dark-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX2-T02/t02-switch-off-hover-light-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX2-T02/t02-switch-off-hover-dark-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX2-T02/t02-picker-open-light-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX2-T02/t02-picker-open-dark-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX2-T02/addendum1-typecheck.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/addendum1-lint.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/addendum1-e2e-full.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/addendum1-verify.txt",
+        "handoff/delivery/evidence/WP5-UX2-T02/addendum1-digest.txt"
+      ],
+      "baseline_commit": "af6207c281badc27192d1d420de8ace5a73c8296",
+      "source_digest": "1e421090db42b29359948de3b4773d438eebe343b47a3e9ce9a2f240b06604c3",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented after addendum 1 (reported, not independent proof): tokens --hover-fill (in :root and both dark sets), --rail, --switch-*, --check-*; pressed quiet/secondary buttons are solid --accent with --on-accent and hover --accent-strong, hover can no longer erase pressed (mutation check: dropping the rule failed 4 tests); not-pressed hover = --hover-fill plus accent border; nav links, phone tabs, More-panel entries and the switch use the same token; every hover rule inside @media (hover: hover); AX-04 special case removed (ring 6.09/6.79 on the accent fill); ShowDetailsSwitch (native checkbox role=switch); label picker rail, check and caret turn in CSS only (no TSX change). Contrast light/dark: hover vs rest 1.23/1.45, boundary 6.09/6.79, pressed vs hover 4.96/4.68, switch states >= 4.53, picker rail 4.96/4.68. Six existing assertions changed as planned (role switch, check(), focus by role, R-12, AX-04 plus Dark mode, AX-02 expectRail). Addendum 1: T01's theme.spec.ts test at line 215 now branches on (hover: hover) (hover: --accent-strong; no hover: --accent, --on-accent and aria-pressed true). Final: unit 1848; full e2e desktop 171 passed / 15 skipped, mobile 175 / 11, 0 failed; budget 659/758/667/766 of 788; tools row one line at 390/375/360, wraps at 320; verify 0; digest 1e421090 (804 files). Deviations: switch off-track uses --card instead of --off (hover contrast 1.23/1.45 instead of 1.08; accepted by the coordinator, for the audit); .tools-right wraps below 768px (only at 320); one 2>/dev/null and one tail -c on a file; no background task.",
+      "next_action": "None; WP5-UX2-T02-FREEZE."
+    },
+    {
+      "id": "WP5-UX2-PLAN4",
+      "package": "WP5",
+      "kind": "plan",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX2-PLAN3"
+      ],
+      "profile": "timesheet-planner",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": true
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a767b8896b0d1cc72",
+      "session_id": "11acfabe-25ef-48b5-ac28-73ce2d74ecee",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX2-PLAN4.md",
+        "handoff/delivery/design/WP5-UX2/mockup.html"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX2-PLAN4.md",
+      "report": "handoff/delivery/tasks/WP5-UX2-PLAN4.md",
+      "evidence": [
+        "handoff/delivery/design/WP5-UX2/mockup.html"
+      ],
+      "baseline_commit": "af6207c281badc27192d1d420de8ace5a73c8296",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "addendum delivered (read-only; no npm, build, app or browser; no font committed; only the PLAN4 brief and mockup.html changed). Correction: image 2 is 131x90px; line 1 is 'Semiconductor' (capital S plus the font's small capitals), line 2 'SERVICES, INC.' is dark grey and about 82% of line 1's width. Font: VNI-Revue Bold, 'Copyright (c) 1991 VNI All Rights Reserved.', no licence or URL record, fsType 0 (not a licence), all glyphs present, no kerning tables. Wordmark: logo 36px left, line 1 20px (~149px), line 2 7px with 0.73em letter-spacing centred below; colours blue ~#006bbb, grey ~#4c4f57; brand width 196px, shown from 1280px (logo only below and on phones; the slice measures the bar at 1280 and raises the breakpoint if it wraps). Themes: exact brand colours in light; the lighter accent and muted tokens in dark (sampled grey is 2.0:1 on the dark bar), so the wordmark is an inline SVG with class-based fills and the logo stays an img. Name 'C&D Semiconductor Services, Inc.' once as visually hidden text; graphics decorative; not a link. Outlines from @pdf-lib/fontkit 1.1.1 (already a dependency) in a temp script; guards: no font file, no <text>, no @font-face; fidelity by side-by-side render plus ratio checks. Company line: sheetModel.ts:19 rendered at TimesheetSheet.tsx:252 (Timesheet) and :329 (Review), CSS styles.css:1411 and :1973; the PDF keeps it; timesheet.spec.ts:231 becomes an absence check plus the remaining header facts, with the company name exactly once in the page. T05 stays M/M (split option if long). Non-blocking owner questions Q-1 (font licence for logo use) and Q-2 (dark-theme tint).",
+      "next_action": "None; the owner answered WP5-UX2-Q2 (Q-1 a, Q-2 a); the design goes into the WP5-UX2-T05 brief."
+    },
+    {
+      "id": "WP5-UX2-T02-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX2-T02"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -18489,18 +18667,18 @@
       "session_id": "11acfabe-25ef-48b5-ac28-73ce2d74ecee",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP5-UX2-T01-FREEZE.md",
-        "handoff/delivery/evidence/WP5-UX2-T01-FREEZE"
+        "handoff/delivery/tasks/WP5-UX2-T02-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX2-T02-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP5-UX2-T01-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP5-UX2-T01-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP5-UX2-T02-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX2-T02-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "834b9fcc62d55501371030dea966547d3dc53902",
-      "source_digest": "44f5b6ccb1569f11d0a966a54ecfbd90d151f2e7b8a958ccdbd8ce03108b5c07",
+      "baseline_commit": "af6207c281badc27192d1d420de8ace5a73c8296",
+      "source_digest": "1e421090db42b29359948de3b4773d438eebe343b47a3e9ce9a2f240b06604c3",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Committer stages the 12 T01 source paths and the listed handoff records, runs the checks, commits and pushes to main; then the WP5-UX2-T02 brief."
+      "next_action": "Committer stages the 10 T02 source paths and the listed handoff records, runs the checks, commits and pushes to main; then the WP5-UX2-T03 brief."
     }
   ],
   "future_packages": [

@@ -76,10 +76,41 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   phía server. Coordinator: chấp nhận, gate kiểm diff dist/server chỉ gồm ba chuỗi đó. Các
   phần cuối: T02 control, T03 tô cột, T04 Today và Current period, T05 logo, T06 đổi chữ,
   T07 chấm công trên header điện thoại, T08 tài liệu.
-- Tiếp theo: WP5-UX2-T01-FREEZE (committer, chạy một mình), rồi brief T02.
-- Đang chưa commit (handoff, cộng source của T01): board, checkpoint này (+ en),
-  NEXT_ACTION (+ en), `next_role` trong STATE.json, bản ghi WP5-UX2-PLAN, PLAN2, PLAN3, T01
-  và T01-FREEZE, `handoff/delivery/design/WP5-UX2/` và bằng chứng T01.
+- Xong WP5-UX2-T01-FREEZE: af6207c281badc27192d1d420de8ace5a73c8296 trên main, đã push (46
+  đường dẫn; digest 44f5b6cc, 802 file; mọi kiểm tra exit 0; một lần /dev/null vô hại).
+- Đang chạy: WP5-UX2-T02 (worker-high, sonnet; hover và trạng thái bật, công tắc Show
+  details, ô chọn Label) trên af6207c / 44f5b6cc.
+- Chủ dự án thêm hai yêu cầu (nguyên văn trên board, kèm ảnh 2 và một file font nằm ngoài
+  repo): chữ thương hiệu hai hàng ("SEMICONDUCTOR" / "SERVICES, INC.") theo font và màu
+  của anh, đặt bên phải logo thay cho "CDSemi"; bỏ dòng tên công ty khỏi phần timesheet
+  trên màn hình. Coordinator: cả hai vào phần thương hiệu T05; không bao giờ commit file
+  font (repo public, chưa rõ giấy phép), chữ được chuyển thành đường vector; PDF giữ dòng
+  tên công ty. Chạy song song với T02: WP5-UX2-PLAN4 (cùng planner được resume, chỉ đọc).
+- Xong WP5-UX2-PLAN4 (chỉ đọc): font là VNI-Revue Bold (bản quyền 1991 VNI, giữ mọi
+  quyền, không có điều khoản giấy phép); chữ thương hiệu "Semiconductor" (20px) trên
+  "SERVICES, INC." (7px, giãn chữ), xanh ~#006bbb và xám ~#4c4f57, cùng logo rộng 196px,
+  hiện từ 1280px; SVG vector nội tuyến tạo bằng fontkit đã cài, theme tối dùng màu sáng
+  hơn; tên trợ năng "C&D Semiconductor Services, Inc."; dòng tên công ty bỏ khỏi bảng
+  Timesheet và Review (PDF giữ nguyên). Câu hỏi chủ dự án WP5-UX2-Q2 (Q-1 quyền dùng font
+  cho logo, Q-2 màu theme tối) chỉ chặn T05.
+- Chủ dự án trả lời WP5-UX2-Q2 "Q-1 a, Q-2 a" (nguyên văn trên board): công ty được dùng
+  font cho chữ thương hiệu (chỉ đường vector, không có file font); theme tối dùng màu sáng
+  hơn. T05 không còn bị chặn.
+- WP5-UX2-T02 bàn giao lần đầu (worker-high, tự báo claude-sonnet-5-5): màu hover mới, nút
+  đang bật nền đặc màu nhấn (hover không xoá được; bỏ trường hợp riêng AX-04, viền focus
+  6.09/6.79), Show details thành checkbox role=switch, ô chọn Label có vạch và dấu check;
+  unit 1848; e2e desktop 171/0/15, mobile 174/1/11; ngân sách màn hình không đổi; verify
+  0; digest c44e612c (804 file). Lỗi duy nhất là test `theme.spec.ts:215` của T01 chờ màu
+  hover trên điện thoại, nơi hover không còn áp dụng (plan B4). Khác thiết kế: rãnh công
+  tắc khi tắt dùng `--card` (tương phản hover 1.23/1.45 thay vì 1.08). Addendum 1 cho cùng
+  worker: cho test đó rẽ nhánh theo `(hover: hover)`, rồi chạy lại e2e đầy đủ, verify và
+  digest.
+- Xong WP5-UX2-T02 sau addendum 1: `theme.spec.ts:215` rẽ nhánh theo `(hover: hover)`;
+  e2e đầy đủ desktop 171/0/15, mobile 175/0/11; verify 0; digest 1e421090 (804 file).
+- Tiếp theo: WP5-UX2-T02-FREEZE (committer, chạy một mình), rồi brief T03.
+- Đang chưa commit: source T02 (10 đường dẫn), board, checkpoint này (+ en), mockup
+  (PLAN4), kết quả và bằng chứng T01-FREEZE, bản ghi T02, PLAN4 và T02-FREEZE, bằng chứng
+  T02.
 
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 

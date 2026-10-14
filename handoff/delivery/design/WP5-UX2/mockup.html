@@ -23,6 +23,7 @@
   --shadow-overlay: 0 0 0 1px rgb(28 36 48 / 0.1), 0 2px 4px rgb(28 36 48 / 0.08), 0 8px 24px rgb(28 36 48 / 0.1), 0 24px 64px rgb(28 36 48 / 0.08);
   --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(28 36 48 / 0.06);
   /* NEW */
+  --wordmark-main: #006bbb; --wordmark-sub: #4c4f57; /* sampled from the owner's image (estimates; the slice re-samples) */
   --hover-fill: rgb(31 95 191 / 0.14);
   --day-editing: rgb(31 95 191 / 0.10);
 }
@@ -38,6 +39,7 @@
   --shadow-overlay: 0 0 0 1px rgb(4 8 14 / 0.6), 0 2px 4px rgb(4 8 14 / 0.4), 0 8px 24px rgb(4 8 14 / 0.45), 0 24px 64px rgb(4 8 14 / 0.4);
   --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(4 8 14 / 0.3);
   /* NEW */
+  --wordmark-main: #6ea8ff; --wordmark-sub: #9aa5b4; /* dark theme: the lighter tints (accent and muted tokens) so the wordmark stays readable */
   --hover-fill: rgb(110 168 255 / 0.20);
   --day-editing: rgb(110 168 255 / 0.16);
 }
@@ -107,8 +109,12 @@ body { margin: 0; padding: 24px; background: #c9ced6; color: #1c2430; font-famil
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-5); min-height: 56px; padding: var(--space-2) var(--space-4); background: var(--card); box-shadow: var(--shadow-panel); }
 .brand { display: inline-flex; align-items: center; gap: var(--space-2); font-size: 1.05rem; font-weight: 600; letter-spacing: -0.01em; }
 .logo { width: 36px; height: 36px; flex: none; }
-/* WP5-UX2-PLAN3: on a phone the "CDSemi" text is only for screen readers (no room beside the check in/out controls); the logo stays. */
-.phone .brand-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* WP5-UX2-PLAN4: the name "C&D Semiconductor Services, Inc." is always present once for screen readers (visually hidden); the two-line wordmark is a decorative vector (outlines of the owner's font; here only a PLACEHOLDER made of plain text: capital S plus small capitals, then spaced capitals, like the owner's image). It shows from 1280px; below that and on phones only the logo shows. */
+.brand-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.wordmark { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; line-height: 1; font-family: 'Arial Black', Arial, sans-serif; text-transform: none; }
+.wm1 { font-variant-caps: small-caps; font-size: 20px; font-weight: 900; letter-spacing: -0.01em; color: var(--wordmark-main); }
+.wm2 { font-size: 7px; font-weight: 700; letter-spacing: 0.73em; margin-right: -0.73em; color: var(--wordmark-sub); }
+.phone .wordmark { display: none; }
 .bar-clock { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; min-width: 0; }
 .bar-clock .state { display: flex; flex-direction: column; min-width: 0; font-size: 0.8rem; line-height: 1.3; }
 .bar-clock .state b { font-weight: 600; color: var(--muted); }
@@ -301,14 +307,14 @@ label.switch { display: inline-flex; flex-direction: row; align-items: center; g
   <!-- ===================== DESKTOP ===================== -->
   <section class="artboard">
     <h2>Bản vẽ 1: màn hình rộng (1280 px, panel Day editor bên phải)</h2>
-    <p class="caption">Cột Thu 10/15 đang mở trong Day editor: có hai thanh viền dọc, nền xanh nhạt và gạch chân dưới tiêu đề cột, khác với "Today" (thanh trên cùng và nhãn Today ở cột Wed 10/14) và với cột nghỉ có vân chéo. Nút "Dark mode" nằm trên thanh điều hướng, nút Today nằm cạnh mũi tên kỳ, "Show details" là công tắc trượt. Bấm vào cột khác thì phần tô chuyển sang cột đó; đóng panel thì phần tô biến mất. Thanh kỳ (đang xem kỳ 10/12-10/25 trong lúc kỳ "current" 09/28-10/11 đã kết thúc): "Today" mở kỳ chứa ngày hôm nay, "Current period" quay về kỳ mà trang mở ra lúc đầu (kỳ vừa kết thúc, để xem lại và ký). "Current period" chỉ xuất hiện khi bạn đang xem kỳ khác kỳ đó và kỳ đó khác kỳ chứa hôm nay (5 ngày từ thứ Hai sau khi kỳ kết thúc đến thứ Sáu trả lương); các ngày khác chỉ có "Today". Thanh trên cùng: logo C&amp;D (bản vẽ giữ chỗ đơn giản, bản thật là SVG vẽ lại từ hình chủ sở hữu gửi) cùng chữ "CDSemi" vì ở màn hình rộng còn chỗ; trên máy tính thẻ đồng hồ vẫn nằm trong trang như cũ (nút đổi tên thành "Check in/out").</p>
+    <p class="caption">Cột Thu 10/15 đang mở trong Day editor: có hai thanh viền dọc, nền xanh nhạt và gạch chân dưới tiêu đề cột, khác với "Today" (thanh trên cùng và nhãn Today ở cột Wed 10/14) và với cột nghỉ có vân chéo. Nút "Dark mode" nằm trên thanh điều hướng, nút Today nằm cạnh mũi tên kỳ, "Show details" là công tắc trượt. Bấm vào cột khác thì phần tô chuyển sang cột đó; đóng panel thì phần tô biến mất. Thanh kỳ (đang xem kỳ 10/12-10/25 trong lúc kỳ "current" 09/28-10/11 đã kết thúc): "Today" mở kỳ chứa ngày hôm nay, "Current period" quay về kỳ mà trang mở ra lúc đầu (kỳ vừa kết thúc, để xem lại và ký). "Current period" chỉ xuất hiện khi bạn đang xem kỳ khác kỳ đó và kỳ đó khác kỳ chứa hôm nay (5 ngày từ thứ Hai sau khi kỳ kết thúc đến thứ Sáu trả lương); các ngày khác chỉ có "Today". Thanh trên cùng: logo C&amp;D bên trái và chữ hai dòng "Semiconductor / SERVICES, INC." bên phải, đúng bố cục và màu của hình chủ sở hữu gửi (đây chỉ là bản vẽ GIỮ CHỖ: logo đơn giản, chữ là chữ thường; bản thật là các đường viền vector vẽ từ tệp phông của chủ sở hữu, tệp phông không được đưa vào kho mã). Chữ hai dòng chỉ hiện từ 1280 px trở lên; ở màn hình hẹp hơn 1280 px chỉ còn logo. Ở chế độ tối, chữ dùng màu xanh và xám nhạt hơn để vẫn đọc rõ. Dòng "C&amp;D Semiconductor Services, Inc." đã được bỏ khỏi đầu biểu mẫu Timesheet vì thanh trên cùng đã có (file PDF vẫn giữ dòng này); trên máy tính thẻ đồng hồ vẫn nằm trong trang như cũ (nút đổi tên thành "Check in/out").</p>
     <div class="frames stack">
       <!-- light -->
       <div class="frame-wrap">
         <h3>Sáng (Light)</h3>
         <div class="frame t-light">
           <header class="bar">
-            <span class="brand"><svg class="logo" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><use href="#cdlogo"/></svg><span class="brand-text">CDSemi</span></span>
+            <span class="brand"><svg class="logo" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><use href="#cdlogo"/></svg><span class="wordmark" aria-hidden="true"><span class="wm1">Semiconductor</span><span class="wm2">SERVICES, INC.</span></span><span class="brand-name">C&amp;D Semiconductor Services, Inc.</span></span>
             <nav class="nav" aria-label="Main (mockup)">
               <a class="nav-link" href="#" aria-current="page">Timesheet</a>
               <a class="nav-link" href="#">Overtime</a>
@@ -352,7 +358,7 @@ label.switch { display: inline-flex; flex-direction: row; align-items: center; g
               </div>
               <article class="sheet" aria-label="Timesheet form (mockup)">
                 <header class="form-head">
-                  <div><div class="company">C&amp;D Semiconductor Services, Inc.</div><div class="form-title">TIME SHEET FOR SALARIED EXEMPT EMPLOYEES</div></div>
+                  <div><div class="form-title">TIME SHEET FOR SALARIED EXEMPT EMPLOYEES</div></div>
                   <dl class="form-fields"><div><dt>Employee:</dt><dd>Example Employee</dd></div><div><dt>Payroll Date:</dt><dd>10/30/2026</dd></div></dl>
                 </header>
                 <section>
@@ -389,7 +395,7 @@ label.switch { display: inline-flex; flex-direction: row; align-items: center; g
         <h3>Tối (Dark), đã bật "Dark mode"</h3>
         <div class="frame t-dark">
           <header class="bar">
-            <span class="brand"><svg class="logo" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><use href="#cdlogo"/></svg><span class="brand-text">CDSemi</span></span>
+            <span class="brand"><svg class="logo" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><use href="#cdlogo"/></svg><span class="wordmark" aria-hidden="true"><span class="wm1">Semiconductor</span><span class="wm2">SERVICES, INC.</span></span><span class="brand-name">C&amp;D Semiconductor Services, Inc.</span></span>
             <nav class="nav" aria-label="Main (mockup)">
               <a class="nav-link" href="#" aria-current="page">Timesheet</a>
               <a class="nav-link" href="#">Overtime</a>
@@ -433,7 +439,7 @@ label.switch { display: inline-flex; flex-direction: row; align-items: center; g
               </div>
               <article class="sheet" aria-label="Timesheet form (mockup)">
                 <header class="form-head">
-                  <div><div class="company">C&amp;D Semiconductor Services, Inc.</div><div class="form-title">TIME SHEET FOR SALARIED EXEMPT EMPLOYEES</div></div>
+                  <div><div class="form-title">TIME SHEET FOR SALARIED EXEMPT EMPLOYEES</div></div>
                   <dl class="form-fields"><div><dt>Employee:</dt><dd>Example Employee</dd></div><div><dt>Payroll Date:</dt><dd>10/30/2026</dd></div></dl>
                 </header>
                 <section>
@@ -569,12 +575,12 @@ label.switch { display: inline-flex; flex-direction: row; align-items: center; g
   <!-- ===================== PHONE ===================== -->
   <section class="artboard">
     <h2>Bản vẽ 3: điện thoại (390 px)</h2>
-    <p class="caption">Màn hình đầu tiên khi vừa mở trang: nút Today dùng chung một hàng với "Review &amp; sign off" nên không làm thẻ kỳ cao thêm. Hình bên dưới là trạng thái sau khi đã chuyển sang kỳ khác trong 5 ngày đặc biệt: "Today", "Current period" và "Review &amp; sign off" nằm chung MỘT hàng; chữ "Review &amp; sign off" tự xuống 2 dòng trong nút (nguyên văn, không rút gọn) nên hàng cao thêm khoảng 17 px (chỉ ở trạng thái này; ở màn hình rất hẹp 320 px thì "Review &amp; sign off" xuống hàng dưới). Theo yêu cầu mới, phần đồng hồ đã chuyển lên thanh trên cùng: logo C&amp;D thay chữ (chữ "CDSemi" chỉ dành cho trình đọc màn hình vì không đủ chỗ), bên cạnh là trạng thái và nút "Check in" / "Check out"; thẻ đồng hồ trong trang không còn nên màn hình đầu thấp hơn khoảng 76 px; công tắc "Show details" và "Change several days" vẫn nằm trong một hàng; hàng đầu tiên của bảng vẫn nằm trên thanh tab. Hàng ngày đang mở trong Day editor có khung bao quanh cả hàng (thực tế bottom sheet che phần lớn trang, phần tô chỉ thấy rõ khi sheet đã đóng hoặc ở cạnh trên). Nút "Dark mode" nằm trong menu More để không làm thanh trên cao thêm.</p>
+    <p class="caption">Màn hình đầu tiên khi vừa mở trang: nút Today dùng chung một hàng với "Review &amp; sign off" nên không làm thẻ kỳ cao thêm. Hình bên dưới là trạng thái sau khi đã chuyển sang kỳ khác trong 5 ngày đặc biệt: "Today", "Current period" và "Review &amp; sign off" nằm chung MỘT hàng; chữ "Review &amp; sign off" tự xuống 2 dòng trong nút (nguyên văn, không rút gọn) nên hàng cao thêm khoảng 17 px (chỉ ở trạng thái này; ở màn hình rất hẹp 320 px thì "Review &amp; sign off" xuống hàng dưới). Theo yêu cầu mới, phần đồng hồ đã chuyển lên thanh trên cùng: logo C&amp;D thay chữ (chữ hai dòng không hiện trên điện thoại vì không đủ chỗ; tên "C&amp;D Semiconductor Services, Inc." vẫn có cho trình đọc màn hình), bên cạnh là trạng thái và nút "Check in" / "Check out"; thẻ đồng hồ trong trang không còn nên màn hình đầu thấp hơn khoảng 76 px; công tắc "Show details" và "Change several days" vẫn nằm trong một hàng; hàng đầu tiên của bảng vẫn nằm trên thanh tab. Hàng ngày đang mở trong Day editor có khung bao quanh cả hàng (thực tế bottom sheet che phần lớn trang, phần tô chỉ thấy rõ khi sheet đã đóng hoặc ở cạnh trên). Nút "Dark mode" nằm trong menu More để không làm thanh trên cao thêm.</p>
     <div class="frames">
       <div class="frame-wrap">
         <h3>Sáng, màn hình đầu</h3>
         <div class="frame phone t-light">
-          <header class="bar"><span class="brand"><svg class="logo" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><use href="#cdlogo"/></svg><span class="brand-text">CDSemi</span></span>
+          <header class="bar"><span class="brand"><svg class="logo" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><use href="#cdlogo"/></svg><span class="wordmark" aria-hidden="true"><span class="wm1">Semiconductor</span><span class="wm2">SERVICES, INC.</span></span><span class="brand-name">C&amp;D Semiconductor Services, Inc.</span></span>
             <section class="bar-clock" aria-label="Check in or out (mockup)"><div class="state"><b>Checked out</b></div><button type="button" class="btn">Check in</button></section></header>
           <div class="page">
             <section class="card period-bar" aria-label="Pay period (mockup)">
@@ -625,7 +631,7 @@ label.switch { display: inline-flex; flex-direction: row; align-items: center; g
       <div class="frame-wrap">
         <h3>Tối, màn hình đầu</h3>
         <div class="frame phone t-dark">
-          <header class="bar"><span class="brand"><svg class="logo" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><use href="#cdlogo"/></svg><span class="brand-text">CDSemi</span></span>
+          <header class="bar"><span class="brand"><svg class="logo" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><use href="#cdlogo"/></svg><span class="wordmark" aria-hidden="true"><span class="wm1">Semiconductor</span><span class="wm2">SERVICES, INC.</span></span><span class="brand-name">C&amp;D Semiconductor Services, Inc.</span></span>
             <section class="bar-clock" aria-label="Check in or out (mockup)"><div class="state"><b class="live">Checked in since 08:02</b><span>Wed 10/14, session running</span></div><button type="button" class="btn secondary">Check out</button></section></header>
           <div class="page">
             <section class="card period-bar" aria-label="Pay period (mockup)">

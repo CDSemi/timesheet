@@ -288,11 +288,11 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   await expect(dayRow(page, completeDay).locator('[data-cell="ot"]')).not.toContainText('pending');
   await expect(dayRow(page, pendingDay)).toContainText('Confirm breaks');
   await expect(dayRow(page, pendingDay).locator('[data-cell="ot"] [data-ot="pending"]')).toHaveText('pending');
-  const details = page.getByRole('button', { name: 'Show details' });
-  await expect(details).toHaveAttribute('aria-pressed', 'false');
+  const details = page.getByRole('switch', { name: 'Show details' });
+  await expect(details).not.toBeChecked();
   await expect(page.locator('[data-detail]')).toHaveCount(0);
   await details.click();
-  await expect(details).toHaveAttribute('aria-pressed', 'true');
+  await expect(details).toBeChecked();
   const regular = page.locator(`[data-detail="regular"][data-detail-day="${completeDay}"]`);
   await expect(regular).toHaveText(formatHoursMinutes(complete.calculation?.regular_minutes ?? -1));
   await expect(regular).toHaveText('8:00');

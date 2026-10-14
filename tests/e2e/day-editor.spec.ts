@@ -1033,7 +1033,7 @@ test.describe('WP5-UX-B-02: below 1200px the panel never hides a focused sheet c
     await expect(dayButton(date)).toBeFocused();
     await dayButton(date).click();
     await expect(editor).toBeVisible();
-    await page.getByRole('button', { name: 'Show details' }).focus();
+    await page.getByRole('switch', { name: 'Show details' }).focus();
     await page.keyboard.press('Escape');
     await expect(editor).toHaveCount(0);
     await expect(dayButton(date)).toBeFocused();

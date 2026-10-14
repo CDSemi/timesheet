@@ -76,10 +76,42 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   dist/server diff limited to those literals at the gate. Final slices T02 controls, T03
   editing column, T04 Today and Current period, T05 logo, T06 rename, T07 phone header
   clock, T08 docs.
-- Next: WP5-UX2-T01-FREEZE (committer, alone), then the T02 brief.
-- Uncommitted now (handoff only, plus T01 source): the board, this checkpoint (+ vi),
-  NEXT_ACTION (+ vi), STATE.json `next_role`, the WP5-UX2-PLAN, PLAN2, PLAN3, T01 and
-  T01-FREEZE records, `handoff/delivery/design/WP5-UX2/` and the T01 evidence.
+- WP5-UX2-T01-FREEZE done: af6207c281badc27192d1d420de8ace5a73c8296 on main, pushed (46
+  paths; digests 44f5b6cc, 802 files; every check exit 0; one harmless /dev/null slip).
+- Running: WP5-UX2-T02 (worker-high, sonnet; hover and pressed, Show details switch,
+  label picker) on af6207c / 44f5b6cc.
+- The owner added two requests (verbatim on the board, with image 2 and a font file
+  outside the repository): a two-line wordmark ("SEMICONDUCTOR" / "SERVICES, INC.") in
+  his font and colours to the right of the logo instead of "CDSemi"; remove the company
+  line from the on-screen timesheet. Coordinator: both go into the brand slice T05; the
+  font file is never committed (public repository, unknown licence), the wordmark becomes
+  vector outlines; the PDF keeps its company line. Running in parallel with T02:
+  WP5-UX2-PLAN4 (the same planner resumed, read-only).
+- WP5-UX2-PLAN4 done (read-only): the font is VNI-Revue Bold (copyright 1991 VNI, all
+  rights reserved, no licence text); wordmark "Semiconductor" (20px) over "SERVICES, INC."
+  (7px, spaced), blue ~#006bbb and grey ~#4c4f57, 196px with the logo, shown from 1280px;
+  inline SVG outlines through the installed fontkit, lighter tints in dark; name "C&D
+  Semiconductor Services, Inc."; the company line leaves the Timesheet and Review sheets
+  (PDF unchanged). Owner question WP5-UX2-Q2 (Q-1 font right for the logo, Q-2 dark
+  tint) blocks only T05.
+- Owner answered WP5-UX2-Q2 "Q-1 a, Q-2 a" (verbatim on the board): the company may use
+  the font for its wordmark (outlines only, no font file); lighter tints in the dark
+  theme. T05 is unblocked.
+- WP5-UX2-T02 first hand-back (worker-high, self-reported claude-sonnet-5-5): hover fill,
+  pressed = solid accent (hover cannot erase it; AX-04 special case removed, ring
+  6.09/6.79), Show details as a role=switch checkbox, label picker rail and check; unit
+  1848; e2e desktop 171/0/15, mobile 174/1/11; budget unchanged; verify 0; digest
+  c44e612c (804 files). The single failure is T01's `theme.spec.ts:215` expecting a hover
+  colour on the mobile project, where hover rules no longer apply (plan B4). Deviation:
+  the switch off-track uses `--card` (hover contrast 1.23/1.45 instead of 1.08).
+  Addendum 1 to the same worker: branch that one test on `(hover: hover)`, then full e2e,
+  verify and digest again.
+- WP5-UX2-T02 done after addendum 1: `theme.spec.ts:215` branches on `(hover: hover)`;
+  full e2e desktop 171/0/15, mobile 175/0/11; verify 0; digest 1e421090 (804 files).
+- Next: WP5-UX2-T02-FREEZE (committer, alone), then the T03 brief.
+- Uncommitted now: the T02 source (10 paths), the board, this checkpoint (+ vi), the
+  mockup (PLAN4), the T01-FREEZE results and evidence, the T02, PLAN4 and T02-FREEZE
+  records, the T02 evidence.
 
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 

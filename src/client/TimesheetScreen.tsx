@@ -27,6 +27,7 @@ import { OpenDay } from './components/OpenDay.tsx';
 import { PeriodBar } from './components/PeriodBar.tsx';
 import { runningSessionOf } from './components/periodBarModel.ts';
 import { usePeriodState } from './components/ReviewStatus.tsx';
+import { ShowDetailsSwitch } from './components/ShowDetailsSwitch.tsx';
 import { TimesheetSheet } from './components/TimesheetSheet.tsx';
 import { DayEditor } from './DayEditor.tsx';
 
@@ -395,9 +396,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
             <div className="tools">
               <div className="tools-left">{canEdit && <OpenDay onOpen={openEditor} />}</div>
               <div className="tools-right">
-                <button type="button" className="quiet" aria-pressed={details} onClick={() => setDetails((on) => !on)}>
-                  Show details
-                </button>
+                <ShowDetailsSwitch checked={details} onChange={setDetails} />
                 {canEdit && (
                   <button
                     type="button"

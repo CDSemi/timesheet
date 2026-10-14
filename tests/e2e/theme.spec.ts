@@ -221,8 +221,15 @@ test('the pointer on the pressed toggle keeps it pressed: a solid accent fill wi
   // The pointer is still on the button after the click: this is the moment the old toggles lost their state.
   await toggle.hover();
   const pressedAndHovered = { background: await settledStyle(toggle, 'backgroundColor'), text: await settledStyle(toggle, 'color') };
-  // Dark tokens: --accent-strong #8dbbff under the pointer, --on-accent #0b1220 text.
-  expect(pressedAndHovered).toEqual({ background: 'rgb(141, 187, 255)', text: 'rgb(11, 18, 32)' });
+  // Hover rules exist only where the device can hover (WP5-UX2-T02); a touch device keeps the pressed rest look.
+  if (await page.evaluate<boolean>("window.matchMedia('(hover: hover)').matches")) {
+    // Dark tokens: --accent-strong #8dbbff under the pointer, --on-accent #0b1220 text.
+    expect(pressedAndHovered).toEqual({ background: 'rgb(141, 187, 255)', text: 'rgb(11, 18, 32)' });
+  } else {
+    // No hover on this device: --accent #6ea8ff, never the stronger hover accent, and the toggle stays pressed.
+    expect(pressedAndHovered).toEqual({ background: 'rgb(110, 168, 255)', text: 'rgb(11, 18, 32)' });
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  }
   await page.mouse.move(0, 0);
   // Pointer away: --accent #6ea8ff.
   expect(await settledStyle(toggle, 'backgroundColor')).toBe('rgb(110, 168, 255)');

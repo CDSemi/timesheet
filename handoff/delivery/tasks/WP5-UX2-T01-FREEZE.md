@@ -173,4 +173,13 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(The committer appends results here.)
+- Pre-HEAD 834b9fcc62d55501371030dea966547d3dc53902 (= origin/main, no extra commits).
+- Commit af6207c281badc27192d1d420de8ace5a73c8296, pushed yes; remote SHA is the same.
+- Digest before add and ls-tree digest of the new HEAD: both 44f5b6cc... (802 files).
+- Staged 46: 12 source, 6 modified handoff, 5 task records, 4 design, 19 evidence.
+- No other modified tracked handoff files; nothing was staged beforehand.
+- Checks, all exit 0: node v24.21.0, precommit (46 files, 0 findings), diff --check
+  (empty), JSON parse, validate_orchestration, check_recovery (106 probes),
+  validate_package --preflight. Details in evidence/WP5-UX2-T01-FREEZE/checks.txt.
+- No fixes, no masking. Deviation: my first call redirected a command's output to
+  /dev/null by mistake (harmless).
