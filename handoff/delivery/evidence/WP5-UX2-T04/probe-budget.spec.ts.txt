@@ -1,0 +1,54 @@
+import { createAccountByAdminApi, expect, SeedClient, starterPolicyBody, test } from '../../../../Dropbox/Work.CDSemi/timesheet/tests/e2e/fixtures.ts';
+
+// Probe (task folder only, never in the repository): the first-screen budget at 390x844 in the four landing states and the away states.
+test.use({ locale: 'en-US' });
+
+const ZONES = [
+  ['zonenote', 'Asia/Ho_Chi_Minh'],
+  ['sameZone', 'America/Los_Angeles'],
+] as const;
+
+async function measure(page: import('@playwright/test').Page, label: string) {
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.evaluate('window.scrollTo(0, 0)');
+  const first = await page.locator('[data-day]').first().boundingBox();
+  const tabs = await page.locator('.shell-tabs').boundingBox();
+  const bottom = (first?.y ?? 0) + (first?.height ?? 0);
+  const firstIsToday = await page.locator('[data-day]').first().evaluate((element) => element.classList.contains('today') || element.querySelector('.today-tag') !== null);
+  console.log(`MEASURE ${label} firstRowBottom=${bottom} firstRowHeight=${first?.height} firstRowHasTodayTag=${firstIsToday} tabBarTop=${tabs?.y} headroom=${(tabs?.y ?? 0) - bottom}`);
+  return bottom;
+}
+
+for (const [name, zone] of ZONES) {
+  test.describe(name, () => {
+    test.use({ timezoneId: zone });
+
+    test(`own timesheet landing and away, ${name}`, async ({ page, signInThroughUi }) => {
+      await signInThroughUi();
+      await measure(page, `own landing ${name}`);
+      await page.getByRole('button', { name: 'Next period' }).click();
+      await expect(page.getByRole('button', { name: 'Today', exact: true })).toBeVisible();
+      await page.waitForTimeout(400);
+      await measure(page, `own away(Next) ${name} current=${await page.getByRole('button', { name: 'Current period', exact: true }).count()}`);
+    });
+
+    test(`received share landing and away, ${name}`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+      const owner = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Owner' });
+      const grantee = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Grantee' });
+      const ownerApi = await new SeedClient(builtServer.origin).signIn(owner.email, owner.password);
+      const granteeApi = await new SeedClient(builtServer.origin).signIn(grantee.email, grantee.password);
+      const { todayLocal } = await granteeApi.today();
+      await granteeApi.call('POST', '/api/policies', starterPolicyBody('2020-01-06'), 201);
+      await ownerApi.call('POST', '/api/policies', starterPolicyBody('2020-01-06'), 201);
+      await ownerApi.call('POST', '/api/shares', { grantee_email: grantee.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+      expect(todayLocal).not.toBe('');
+      await signInPageAs(grantee, '#/timesheet');
+      await expect(page.locator('.shell-switcher select')).toBeVisible();
+      await measure(page, `share landing ${name}`);
+      await page.getByRole('button', { name: 'Next period' }).click();
+      await expect(page.getByRole('button', { name: 'Today', exact: true })).toBeVisible();
+      await page.waitForTimeout(400);
+      await measure(page, `share away(Next) ${name} current=${await page.getByRole('button', { name: 'Current period', exact: true }).count()}`);
+    });
+  });
+}

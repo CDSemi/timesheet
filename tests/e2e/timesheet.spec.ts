@@ -104,26 +104,32 @@ async function expectFirstDayAboveTabBar(page: Page) {
   expect(await page.evaluate('window.scrollY')).toBe(0);
 }
 
-test('the period card keeps its tab order equal to its visual reading order: Previous, Next, then Review', async ({ page, signInThroughUi }) => {
+test('the period card keeps its tab order equal to its visual reading order: Previous, Next, Today, then Review', async ({ page, signInThroughUi }) => {
   await signInThroughUi();
   await expect(page.locator('[data-day]')).toHaveCount(14);
   const bar = page.locator('.period-bar');
   const previous = bar.getByRole('button', { name: 'Previous period' });
   const next = bar.getByRole('button', { name: 'Next period' });
+  // WP5-UX2-T04: Today sits between Next and Review on every layout (Current period, when shown, follows it).
+  const today = bar.getByRole('button', { name: 'Today', exact: true });
   const review = bar.locator('[data-review-link]');
+  await expect(bar.getByRole('button', { name: 'Current period', exact: true }), 'Current period is not shown on the opening period').toHaveCount(0);
   await previous.focus();
   await page.keyboard.press('Tab');
   await expect(next).toBeFocused();
   await page.keyboard.press('Tab');
+  await expect(today).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(review).toBeFocused();
   // Visual order: top to bottom, then left to right (no overlap of rows is assumed within 4px).
-  const boxes = [await previous.boundingBox(), await next.boundingBox(), await review.boundingBox()];
+  const boxes = [await previous.boundingBox(), await next.boundingBox(), await today.boundingBox(), await review.boundingBox()];
   for (const box of boxes) expect(box, 'control box').not.toBeNull();
-  const [a, b, c] = boxes;
+  const [a, b, c, d] = boxes;
   const before = (first: typeof a, second: typeof a) =>
     (first?.y ?? 0) + 4 < (second?.y ?? 0) || (Math.abs((first?.y ?? 0) - (second?.y ?? 0)) <= 4 && (first?.x ?? 0) < (second?.x ?? 0));
   expect(before(a, b), 'Previous comes before Next visually').toBe(true);
-  expect(before(b, c), 'Next comes before Review visually').toBe(true);
+  expect(before(b, c), 'Next comes before Today visually').toBe(true);
+  expect(before(c, d), 'Today comes before Review visually').toBe(true);
 });
 
 test.describe('phone first screen', () => {

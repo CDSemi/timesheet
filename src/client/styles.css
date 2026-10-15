@@ -130,6 +130,10 @@
   --clock-width: 26rem;
   --clock-button-min: 9rem;
   --clock-button-height: 44px;
+  /* The side padding of the three buttons in that row on a phone, so all three fit one row at 360px */
+  --cta-pad-x: 10px;
+  /* The width the period title block keeps beside the buttons from 768px; below it the buttons wrap under the title */
+  --period-main-min: 10rem;
 
   /* Sheet geometry */
   --editor-width: 400px;
@@ -176,6 +180,7 @@
   /* Type: the system stack only (the CSP allows no web fonts) */
   --root-font-size: 15px;
   --root-line-height: 1.45;
+  --font-weight-normal: 400;
   --font-weight-strong: 600;
   --letter-spacing-tight: -0.01em;
   --font-size-h1: 1.4rem;
@@ -693,6 +698,13 @@ button.secondary[aria-pressed='true'] {
     box-shadow: none;
   }
 
+  /* An inactive button (aria-disabled) keeps its resting look under the pointer, as a disabled one does. */
+  button.secondary[aria-disabled='true']:hover:not(:disabled) {
+    background: var(--card);
+    border-color: var(--accent-line);
+    box-shadow: none;
+  }
+
   button:focus-visible:hover:not(:disabled),
   button.secondary:focus-visible:hover:not(:disabled),
   button.quiet:focus-visible:hover:not(:disabled) {
@@ -703,6 +715,16 @@ button.secondary[aria-pressed='true'] {
 button:disabled {
   opacity: var(--opacity-disabled);
   cursor: not-allowed;
+}
+
+/* Inactive but focusable (WP5-UX2-T04, "Today" while the sheet already shows today): muted like a disabled button, no press movement. */
+button[aria-disabled='true'] {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+button[aria-disabled='true']:active {
+  transform: none;
 }
 
 /* Touch devices and narrow screens: every control is at least 44px in both directions. */
@@ -825,15 +847,20 @@ tr.nonworking td {
   margin-bottom: var(--space-3);
 }
 
+/*
+ * From 768px the card sits beside the clock card, so at the narrow end of that range it is only about 330px wide. The title block keeps
+ * a readable minimum (`--period-main-min`) and the button group wraps below it instead of squeezing it (WP5-UX2-T04).
+ */
 .period-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: var(--space-3);
 }
 
 .period-main {
   display: flex;
-  flex: 1;
+  flex: 1 1 var(--period-main-min);
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
@@ -849,6 +876,13 @@ tr.nonworking td {
 .period-name {
   font-size: var(--font-size-lg);
   letter-spacing: var(--letter-spacing-tight);
+}
+
+/* The arrow between the two dates of the period range: a label-coloured, regular-weight separator (screen readers read the hidden " to "). */
+.period-name .range-arrow {
+  margin-inline: var(--space-2);
+  color: var(--muted);
+  font-weight: var(--font-weight-normal);
 }
 
 .period-meta {
@@ -867,9 +901,42 @@ tr.nonworking td {
 
 .period-actions {
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
+  margin-left: auto;
   gap: var(--space-2);
+}
+
+/*
+ * The button row of the period bar (WP5-UX2-T04): Today, Current period (only while it applies) and the review link. Every label stays
+ * on one line. On a phone the review link shows its full label when that fits beside the other buttons and a short form otherwise
+ * (see the container query below the phone rules); the text content and the accessible name are always the full label.
+ */
+.period-cta {
+  display: flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--space-2);
+  min-width: min-content;
+}
+
+.period-cta > .period-jump {
+  flex: none;
+  white-space: nowrap;
+}
+
+.period-cta > .review-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.review-link::after {
+  content: none;
 }
 
 .zone-note {
@@ -1283,6 +1350,76 @@ textarea {
   .period-main > :not(.period-title, .period-meta),
   .period-actions > :not(.period-step) {
     grid-column: 1 / -1;
+  }
+
+  .period-cta > :is(.period-jump, .button-link, button) {
+    padding-inline: var(--cta-pad-x);
+  }
+
+  /*
+   * The review link never wraps. It shows its full label when that fits on one line beside the other buttons and a short form
+   * (`data-short`: "Sign off", "Review") otherwise; the text content stays the full label and `aria-label` keeps the accessible
+   * name. The row is a size container, and the thresholds are its width, measured with 15px/600 labels and 10px side padding
+   * (one line, in rem of the 15px root; container conditions cannot read custom properties):
+   *   with Current period (Today 62.3 + Current period 121.8 + two 8px gaps = 200.1px before the review link):
+   *     "Review & sign off" / "Review or correct" 140.1px: full from 22.8rem (342px), "Sign off" / "Review" 75.1px / 69.8px from
+   *     18.4rem (276px), else the link takes its own row (full label); "Review now" 102.9px: full from 20.2rem (303px), "Review" from 18.1rem.
+   *   without Current period (Today 62.3 + one 8px gap = 70.3px): the long labels fit in full from 14.1rem (211px), "Review now" from 11.6rem.
+   */
+  .period-cta {
+    container: period-cta / inline-size;
+  }
+
+  @container period-cta (18.4rem <= width < 22.8rem) {
+    .period-cta[data-current] > .review-link[data-label-size='long'] > .review-full {
+      display: none;
+    }
+
+    .period-cta[data-current] > .review-link[data-label-size='long']::after {
+      content: attr(data-short);
+    }
+  }
+
+  @container period-cta (width < 18.4rem) {
+    .period-cta[data-current] > .review-link[data-label-size='long'] {
+      flex-basis: 100%;
+    }
+  }
+
+  @container period-cta (18.1rem <= width < 20.2rem) {
+    .period-cta[data-current] > .review-link[data-label-size='short'] > .review-full {
+      display: none;
+    }
+
+    .period-cta[data-current] > .review-link[data-label-size='short']::after {
+      content: attr(data-short);
+    }
+  }
+
+  @container period-cta (width < 18.1rem) {
+    .period-cta[data-current] > .review-link[data-label-size='short'] {
+      flex-basis: 100%;
+    }
+  }
+
+  @container period-cta (width < 14.1rem) {
+    .period-cta:not([data-current]) > .review-link[data-label-size='long'] > .review-full {
+      display: none;
+    }
+
+    .period-cta:not([data-current]) > .review-link[data-label-size='long']::after {
+      content: attr(data-short);
+    }
+  }
+
+  @container period-cta (width < 11.6rem) {
+    .period-cta:not([data-current]) > .review-link[data-label-size='short'] > .review-full {
+      display: none;
+    }
+
+    .period-cta:not([data-current]) > .review-link[data-label-size='short']::after {
+      content: attr(data-short);
+    }
   }
 
   .period-name {

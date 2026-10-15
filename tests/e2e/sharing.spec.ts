@@ -5,11 +5,13 @@ import { addDays } from '../../src/domain/dates.ts';
 import { dayButtonName, namedDayButton } from './dayButton.ts';
 import {
   type BuiltServer,
+  type CalendarSchedule,
   type CreatedAccount,
   createAccountByAdminApi,
   expect,
   SeedClient,
   screenshotPath,
+  seedSecondCalendar,
   starterPolicyBody,
   statusInPage,
   test,
@@ -530,6 +532,95 @@ test('a revoked share ends on the grantee next request with a clear message and 
   const adminShares = JSON.stringify(await adminSeed.call('GET', '/api/admin/shares'));
   expect(adminShares).not.toContain(note);
   expect(adminShares).not.toContain(workDay);
+});
+
+/* ---- WP5-UX2-T04: Today and Current period in a shared view use the OWNER's periods, zone and date -------------- */
+
+test('a shared view: Today and Current period work on the owner periods, zone and date, and never on the grantee own', async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+}) => {
+  test.setTimeout(120_000);
+  // The owner is on a second calendar in another reporting zone whose payroll dates lie a week after the default ones, so the
+  // owner's periods differ from the grantee's on every day, whatever the clock says.
+  const calendar = await adminSeed.call<{
+    payroll: { anchor_payroll_date: string; cycle_days: number; period_start_offset_days: number; period_end_offset_days: number; due_offset_days: number; due_local_time: string };
+  }>('GET', '/api/calendar');
+  const schedule: CalendarSchedule = {
+    reportingZone: 'Pacific/Auckland',
+    anchorPayrollDate: addDays(calendar.payroll.anchor_payroll_date, 7),
+    cycleDays: calendar.payroll.cycle_days,
+    periodStartOffsetDays: calendar.payroll.period_start_offset_days,
+    periodEndOffsetDays: calendar.payroll.period_end_offset_days,
+    dueOffsetDays: calendar.payroll.due_offset_days,
+    dueLocalTime: calendar.payroll.due_local_time,
+  };
+  const ownerAccount = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Owner', calendarId: seedSecondCalendar(builtServer, schedule) });
+  const ownerApi = await new SeedClient(builtServer.origin).signIn(ownerAccount.email, ownerAccount.password);
+  const ownerPeriods = await ownerApi.periodsCurrent();
+  await ownerApi.call('POST', '/api/policies', starterPolicyBody(addDays(ownerPeriods.today_local, -400)), 201);
+  const owner: Person = { account: ownerAccount, api: ownerApi, payrollDate: ownerPeriods.current.payroll_date };
+  const grantee = await newPerson(adminSeed, builtServer, 'Synthetic Grantee');
+  const granteePeriods = await grantee.api.periodsCurrent();
+  expect(ownerPeriods.reporting_zone).toBe('Pacific/Auckland');
+  expect(ownerPeriods.current.period_start, "the owner's opening period is not the grantee's").not.toBe(granteePeriods.current.period_start);
+  await grantByApi(owner, grantee, { timesheets: 'view', ot_read: false, pdf_download: false });
+
+  const us = (date: string) => `${date.slice(5, 7)}/${date.slice(8, 10)}/${date.slice(0, 4)}`;
+  // The bar title's text content is the two dates, the decorative arrow and the hidden " to "; the live-region texts keep "to".
+  const range = (period: { period_start: string; period_end: string }) => `${us(period.period_start)}→ to ${us(period.period_end)}`;
+  const announced = (period: { period_start: string; period_end: string }) => `${us(period.period_start)} to ${us(period.period_end)}`;
+  const weekday = (date: string) => new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
+  const contains = (period: { period_start: string; period_end: string }, date: string) => period.period_start <= date && date <= period.period_end;
+  const today = ownerPeriods.today_local;
+  const window = ownerPeriods.current.payroll_date !== ownerPeriods.in_progress.payroll_date;
+
+  const recorded = recordApiRequests(page);
+  await signInPageAs(grantee.account, `#/shared/${owner.account.id}/timesheet`);
+  await expect(bar(page).locator('[data-share-bar-title]')).toHaveText("Viewing Synthetic Owner's timesheets - view only");
+  const periodBar = page.locator('.period-bar');
+  const todayButton = periodBar.getByRole('button', { name: 'Today', exact: true });
+  const currentButton = periodBar.getByRole('button', { name: 'Current period', exact: true });
+  const status = page.locator('[data-period-jump-status]');
+  // The grantee sees the owner's opening period, Today is there (a view-only grantee may use it), and there is no review link.
+  await expect(periodBar.locator('.period-name')).toHaveText(range(ownerPeriods.current));
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  // The page opened on the owner's periods through the share (the sign-in and the grantee's own session probe came first).
+  expect(recorded.list, "the owner's periods were read through the share on load").toContain(`GET /api/shared/${owner.account.id}/periods/current`);
+  recorded.reset();
+  await expect(currentButton).toHaveCount(0);
+  await expect(periodBar.locator('[data-review-link], [data-review-link-disabled]')).toHaveCount(0);
+  await expect(todayButton).toBeVisible();
+  if (contains(ownerPeriods.current, today)) await expect(todayButton).toHaveAttribute('aria-disabled', 'true');
+  else await expect(todayButton).not.toHaveAttribute('aria-disabled', /.*/);
+
+  if (window) {
+    await todayButton.click();
+    await expect(periodBar.locator('.period-name')).toHaveText(range(ownerPeriods.in_progress));
+    await expect(status).toHaveText(`Showing today, ${weekday(today)} ${us(today)}, in the period ${announced(ownerPeriods.in_progress)}`);
+    await expect(page.locator('[data-sheet] [data-day].today')).toHaveAttribute('data-day', today);
+    await expect(currentButton).toHaveCount(1);
+    await currentButton.click();
+    await expect(periodBar.locator('.period-name')).toHaveText(range(ownerPeriods.current));
+    await expect(status).toHaveText(`Showing the current period ${announced(ownerPeriods.current)}`);
+    await expect(currentButton).toHaveCount(0);
+    await expect(todayButton).toBeFocused();
+  } else {
+    // Opposite fact outside the owner's window: away from the opening period there is still no Current period.
+    await page.getByRole('button', { name: 'Next period' }).click();
+    await expect(periodBar.locator('.period-name')).not.toHaveText(range(ownerPeriods.current));
+    await expect(currentButton).toHaveCount(0);
+    await todayButton.click();
+    await expect(periodBar.locator('.period-name')).toHaveText(range(ownerPeriods.current));
+    await expect(status).toHaveText(`Showing today, ${weekday(today)} ${us(today)}, in the period ${announced(ownerPeriods.current)}`);
+    await expect(page.locator('[data-sheet] [data-day].today')).toHaveAttribute('data-day', today);
+  }
+  // Every read came through the share: the owner's periods, never the grantee's own /api/periods/current.
+  expectOnlySharedRequests(recorded.list, owner.account.id);
+  expect(recorded.list.filter((entry) => entry === `GET /api/shared/${owner.account.id}/periods/current`).length, "the owner's periods were re-read on the jump").toBeGreaterThanOrEqual(1);
+  await expectNoSidewaysScroll(page);
 });
 
 /* ---- WP5-UX-B6-01: the phone first screen holds with a received share (docs/04 line 48) ---------------- */

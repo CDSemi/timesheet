@@ -24,8 +24,9 @@ import { describeError } from './components/errors.ts';
 import { displayZone } from './components/format.ts';
 import { currentLabelChoice, type LabelChoice, labelEntry, labelPreviewOutcome } from './components/labelPickerModel.ts';
 import { OpenDay } from './components/OpenDay.tsx';
-import { PeriodBar } from './components/PeriodBar.tsx';
+import { PeriodBar, type PeriodJumps } from './components/PeriodBar.tsx';
 import { runningSessionOf } from './components/periodBarModel.ts';
+import { currentPeriodJump, currentStatusText, todayJump, todayStatusText } from './components/periodJumpModel.ts';
 import { usePeriodState } from './components/ReviewStatus.tsx';
 import { ShowDetailsSwitch } from './components/ShowDetailsSwitch.tsx';
 import { TimesheetSheet } from './components/TimesheetSheet.tsx';
@@ -151,6 +152,11 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   /** What opened the batch review ("Preview changes"); it gets focus back when the review is cancelled. */
   const batchOpener = useRef<HTMLElement | null>(null);
   const returnToBatchOpener = useRef(false);
+  /** The visually hidden status line after "Today" or "Current period"; cleared by anything else that changes the sheet. */
+  const [jumpStatus, setJumpStatus] = useState<string | null>(null);
+  /** Raised by "Today" so the effect below scrolls today's day into view once; an ordinary reload never scrolls. */
+  const [jumpCount, setJumpCount] = useState(0);
+  const scrollToToday = useRef<string | null>(null);
 
   const report = (caught: unknown) => setMessage(describeError(caught));
 
@@ -201,10 +207,66 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
       setSelected(new Set());
       setStaleNotice(null);
       setNotice(null);
+      setJumpStatus(null);
+      scrollToToday.current = null;
     } catch (caught) {
       report(caught);
     }
   }
+
+  /**
+   * "Today": re-reads the server's periods, opens the period that contains its `today_local` (the
+   * accounting date in the saved reporting zone, never the device clock), moves an open Day editor to
+   * that date and scrolls today's day into view. Everything comes from the model and the server.
+   */
+  async function jumpToToday() {
+    if (view === null) return;
+    setJumpStatus(null);
+    try {
+      const fresh = await request<CurrentPeriods>('GET', '/periods/current');
+      const jump = todayJump({ today: fresh.today_local, current: fresh.current, inProgress: fresh.in_progress, shown: view.period, editDate });
+      setPeriods(fresh);
+      setPayrollDate(jump.targetPayrollDate);
+      setSelected(new Set());
+      setStaleNotice(null);
+      setNotice(null);
+      if (jump.moveEditorTo !== null) setEditDate(jump.moveEditorTo);
+      scrollToToday.current = fresh.today_local;
+      setJumpCount((count) => count + 1);
+      setJumpStatus(todayStatusText(fresh.today_local, fresh.in_progress));
+    } catch (caught) {
+      report(caught);
+    }
+  }
+
+  /** "Current period": returns to the R-07 current period the page opens on. It only navigates; an open editor stays as it is. */
+  async function jumpToCurrent() {
+    if (view === null) return;
+    setJumpStatus(null);
+    try {
+      const fresh = await request<CurrentPeriods>('GET', '/periods/current');
+      const jump = currentPeriodJump({ current: fresh.current, inProgress: fresh.in_progress, shown: view.period });
+      setPeriods(fresh);
+      setPayrollDate(jump.targetPayrollDate);
+      setSelected(new Set());
+      setStaleNotice(null);
+      setNotice(null);
+      scrollToToday.current = null;
+      setJumpStatus(currentStatusText(fresh.current));
+    } catch (caught) {
+      report(caught);
+    }
+  }
+
+  // After "Today", today's day (a desktop column or a phone row) is scrolled into view once its period is on the sheet.
+  useEffect(() => {
+    const date = scrollToToday.current;
+    if (date === null || view === null) return;
+    const element = document.querySelector<HTMLElement>(`[data-day="${date}"]`);
+    if (element === null) return;
+    scrollToToday.current = null;
+    element.scrollIntoView({ block: 'nearest' });
+  }, [jumpCount, view]);
 
   async function clockIn() {
     setMessage(null);
@@ -373,6 +435,18 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   }
 
   const todayLocal = periods?.today_local ?? null;
+  // The two jump buttons come from the server's periods and today's accounting date, compared with the shown period. A saved notice
+  // (the other status line of this screen) replaces the jump status, so two status lines never stand side by side.
+  const jumps: PeriodJumps | undefined =
+    periods === null || view === null
+      ? undefined
+      : {
+          todayAway: todayJump({ today: periods.today_local, current: periods.current, inProgress: periods.in_progress, shown: view.period, editDate }).away,
+          currentVisible: currentPeriodJump({ current: periods.current, inProgress: periods.in_progress, shown: view.period }).visible,
+          onToday: () => void jumpToToday(),
+          onCurrent: () => void jumpToCurrent(),
+          status: notice === null ? jumpStatus : null,
+        };
 
   return (
     <div>
@@ -385,7 +459,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
 
       {view !== null && (
         <div className="workbar">
-          <PeriodBar view={view} zone={displayZone} onMove={move} own={own} state={periodState} />
+          <PeriodBar view={view} zone={displayZone} onMove={move} own={own} state={periodState} jumps={jumps} />
           {own && <ClockPanel running={running} zone={displayZone} onClockIn={() => void clockIn()} onClockOut={() => void openClockOut()} />}
         </div>
       )}

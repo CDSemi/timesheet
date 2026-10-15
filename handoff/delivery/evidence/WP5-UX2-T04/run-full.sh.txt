@@ -1,0 +1,12 @@
+# Usage: bash run-full.sh <label>
+# The FULL e2e suite on both projects, real clock, through `npm run test:e2e` (build + playwright), alone.
+source /d/.claude-tmp/timesheet/WP5-UX2-T04/env.sh
+L=$1
+mkdir -p $T/shots-$L
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+export NODE_OPTIONS="--trace-deprecation"
+cd "$REPO" || exit 2
+echo "== $L start $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+npmx run test:e2e
+echo "exit=$?"
+echo "== $L end $(date -u +%Y-%m-%dT%H:%M:%SZ)"

@@ -1,0 +1,21 @@
+# Usage: bash sweep.sh
+# today.spec.ts and timesheet.spec.ts on both projects at each simulated America/Los_Angeles instant, sequentially, each with its
+# own output folder (run-shift.sh). The label names the instant; the log is logs/sweep-<label>.txt.
+cd /d/.claude-tmp/timesheet/WP5-UX2-T04
+run() {
+  label=$1; instant=$2
+  bash run-shift.sh "$label" "$instant" tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts > "logs/sweep-$label.txt" 2>&1
+  echo "$label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/sweep-progress.txt
+}
+run s01-1017-1000 2026-10-17T17:00:00Z
+run s02-1025-2330 2026-10-26T06:30:00Z
+run s03-1026-0030 2026-10-26T07:30:00Z
+run s04-1027-1300 2026-10-27T20:00:00Z
+run s05-1027-1800 2026-10-28T01:00:00Z
+run s06-1030-2359 2026-10-31T06:59:00Z
+run s07-1031-0030 2026-10-31T07:30:00Z
+run s08-1101-0130 2026-11-01T08:30:00Z
+run s09-0314-0330 2027-03-14T10:30:00Z
+run s10-1231-2330 2027-01-01T07:30:00Z
+run s11-0101-0030 2027-01-01T08:30:00Z
+echo done > logs/sweep.done

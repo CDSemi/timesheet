@@ -1,0 +1,54 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/periodJumpModel.test.ts (12 tests | 3 failed) 473ms
+   ❯ Today (todayJump) (5)
+     × targets the period that contains today and never the ended current period, on every step: the default schedule 58ms
+     × targets the period that contains today and never the ended current period, on every step: a schedule with payroll exceptions that move a payroll date 48ms
+   ❯ Current period (currentPeriodJump) (3)
+     × Today and Current period reach different periods exactly on the window days 51ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/periodJumpModel.test.ts > Today (todayJump) > targets the period that contains today and never the ended current period, on every step: the default schedule
+ FAIL  tests/client/periodJumpModel.test.ts > Today (todayJump) > targets the period that contains today and never the ended current period, on every step: a schedule with payroll exceptions that move a payroll date
+AssertionError: 2026-09-14 00:00: the target is the in-progress period: expected '2026-09-18' to be '2026-10-02' // Object.is equality
+
+Expected: "2026-10-02"
+Received: "2026-09-18"
+
+ ❯ tests/client/periodJumpModel.test.ts:119:92
+    117|         for (const shown of step.periods) {
+    118|           const jump = todayJump({ today: step.today, current: step.cu…
+    119|           expect(jump.targetPayrollDate, `${where}: the target is the …
+       |                                                                                            ^
+    120|           expect(periodContains(step.inProgress, step.today), `${where…
+    121|           if (window) expect(jump.targetPayrollDate, `${where}: in the…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/client/periodJumpModel.test.ts > Current period (currentPeriodJump) > Today and Current period reach different periods exactly on the window days
+AssertionError: 2026-09-14 00:00: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/client/periodJumpModel.test.ts:193:99
+    191|       const today = todayJump({ today: step.today, current: step.curre…
+    192|       const current = currentPeriodJump({ current: step.current, inPro…
+    193|       expect(today.targetPayrollDate !== current.targetPayrollDate, `$…
+       |                                                                                                   ^
+    194|     }
+    195|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 9 passed (12)
+   Start at  17:08:26
+   Duration  840ms (tests 67%, import 21%, transform 11%, worker 1%)
+

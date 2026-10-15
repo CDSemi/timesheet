@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DayView, Session } from '../../src/client/api.ts';
-import { clockedInText, dueInWords, dueInZoneText,runningSessionOf, viewingZoneText, weekdayName, zoneNoteVisible } from '../../src/client/components/periodBarModel.ts';
+import { clockedInText, dueInWords, dueInZoneText, dueParts, reviewShortLabel, runningSessionOf, viewingZoneText, weekdayName, zoneNoteVisible } from '../../src/client/components/periodBarModel.ts';
 
 function session(id: string, start: string, end: string | null): Session {
   return { id, work_date: '2026-12-03', start_utc: start, end_utc: end, input_zone: 'America/Los_Angeles', source: 'clock', breaks_confirmed: false, version: 1, breaks: [] };
@@ -23,6 +23,31 @@ describe('dueInWords', () => {
     expect(dueInWords({ due_local_date: '2026-12-08', due_local_time: '17:00' }, 'America/Los_Angeles')).toBe(
       'Due Tue 12/08/2026, 17:00 (America/Los_Angeles)',
     );
+  });
+});
+
+describe('dueParts', () => {
+  const due = { due_local_date: '2026-12-08', due_local_time: '17:00' };
+
+  it('splits the label word from the value, and the two joined by a space are the unchanged due line', () => {
+    const parts = dueParts(due, 'America/Los_Angeles');
+    expect(parts).toEqual({ label: 'Due', value: 'Tue 12/08/2026, 17:00 (America/Los_Angeles)' });
+    expect(`${parts.label} ${parts.value}`).toBe(dueInWords(due, 'America/Los_Angeles'));
+  });
+});
+
+describe('reviewShortLabel', () => {
+  it('shortens each label of the review link to the word that names its action, and leaves any other text alone', () => {
+    expect(reviewShortLabel('Review & sign off')).toBe('Sign off');
+    expect(reviewShortLabel('Review now')).toBe('Review');
+    expect(reviewShortLabel('Review or correct')).toBe('Review');
+    expect(reviewShortLabel('Something else')).toBe('Something else');
+  });
+
+  it('keeps every full label containing its short form (SC 2.5.3: the accessible name contains the visible text)', () => {
+    for (const label of ['Review & sign off', 'Review now', 'Review or correct']) {
+      expect(label.toLowerCase()).toContain(reviewShortLabel(label).toLowerCase());
+    }
   });
 });
 

@@ -309,6 +309,21 @@ interface PeriodsResponse {
   in_progress: { payroll_date: string };
 }
 
+/** One period of `GET /api/periods/current` (the dates the Today and Current period buttons work with). */
+export interface PeriodFacts {
+  payroll_date: string;
+  period_start: string;
+  period_end: string;
+}
+
+/** The whole answer of `GET /api/periods/current`. */
+export interface PeriodsCurrent {
+  reporting_zone: string;
+  today_local: string;
+  current: PeriodFacts;
+  in_progress: PeriodFacts;
+}
+
 /** The slice of a day view the specs read back through the API. */
 export interface SeededDay {
   work_date: string;
@@ -404,6 +419,15 @@ export class SeedClient {
       }
     }
     return [...new Set(found)].sort().reverse();
+  }
+
+  /**
+   * The server's own answer to `GET /api/periods/current` (WP5-UX2-T04): today's accounting date in the saved reporting zone,
+   * the R-07 `current` period (the page opens on it) and the `in_progress` period (the one that contains today). The two
+   * differ on the five days after a period ends; a spec picks its branch from these values, never from the browser clock.
+   */
+  async periodsCurrent(): Promise<PeriodsCurrent> {
+    return this.call<PeriodsCurrent>('GET', '/api/periods/current');
   }
 
   /** Today in the reporting zone, the reporting zone itself and the payroll date of the displayed period. */

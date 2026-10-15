@@ -120,9 +120,38 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   183/0/15, mobile 187/0/11; ngân sách màn hình không đổi; verify 0; digest a42c5b04 (804
   file). Sơ suất ghi trên board (pipe vào tail, một /dev/null, một rm -rf thư mục nháp của
   chính nó, nằm ngoài repo).
-- Tiếp theo: WP5-UX2-T03-FREEZE (committer, chạy một mình), rồi brief T04.
-- Đang chưa commit: source T03 (8 đường dẫn), board, checkpoint này (+ en), kết quả và bằng
-  chứng T02-FREEZE, bản ghi T03 và T03-FREEZE, bằng chứng T03.
+- Xong WP5-UX2-T03-FREEZE: 70ecb1264f7b54cc967a136811eeddcd64d9014a trên main, đã push
+  (35 đường dẫn; digest a42c5b04, 804 file; mọi kiểm tra exit 0; không có file bằng chứng
+  checks.txt, kết quả chỉ nằm trong brief).
+- Đang chạy: WP5-UX2-T04 (worker-high, sonnet; Today và Current period, hàng nút một dòng
+  trên điện thoại, tự quét đồng hồ giả lập) trên 70ecb12 / a42c5b04.
+- WP5-UX2-T04 bàn giao lần đầu (worker-high, tự báo claude-sonnet-5-5): Today và Current
+  period đúng thiết kế; một hàng nút trên điện thoại ở 390/375/360 (Review hai dòng),
+  Review xuống hàng ở 320; unit 1862; e2e desktop 190/0/19, mobile 197/0/12; quét 11 thời
+  điểm đều đạt trừ một; thử đột biến bị bắt; verify 0; digest c9abda3e (807 file). DỪNG:
+  vào ngày đầu của khoảng 5 ngày, trạng thái đã rời kỳ mở trang có ghi chú múi giờ thì
+  hàng đầu kết thúc ở 795.0 / 803.0 so với 788 (nhãn Today cộng Review hai dòng); các
+  trạng thái lúc mở trang vẫn đạt (659/758/667/766). Quyết định coordinator: Addendum 1
+  chuyển phần kiểm tra trạng thái đó sang T07 (T07 giải phóng chiều cao trang), đổi thông
+  báo sau khi bấm thành vùng aria-live cố định, rồi chạy lại e2e, quét, verify và digest.
+- Chủ dự án thêm năm yêu cầu (nguyên văn trên board): trên điện thoại dùng "Sign off" thay
+  vì cho nút Review xuống dòng (giữ chữ đầy đủ khi đủ chỗ); trên màn hình lớn, giãn khoảng
+  cách giữa phần thương hiệu và menu; thay nút "Dark mode" bằng nút chuyển Light/Dark có
+  icon; chữ "Due" theo kiểu nhãn; thay chữ "to" trong khoảng kỳ bằng ký hiệu đẹp hơn.
+  Coordinator: T04 Addendum 2 (nhãn Review rút gọn bằng container query, nên phần kiểm tra
+  trạng thái đã rời kỳ mở trang ở lại T04; "Due" theo kiểu nhãn; mũi tên ẩn với trình đọc
+  màn hình, kèm chữ " to " ẩn); khoảng cách vào T05; phần mới T06 cho nút chuyển theme;
+  thứ tự mới T05 thương hiệu, T06 nút theme, T07 đổi chữ, T08 chấm công trên header điện
+  thoại, T09 tài liệu.
+- Xong WP5-UX2-T04 sau addendum 1 và 2: vùng aria-live cố định cho thông báo; nút Review
+  trên điện thoại một dòng (dạng gọn "Sign off" / "Review" bằng container query, tên trợ
+  năng là nhãn đầy đủ); "Due" theo kiểu nhãn; mũi tên trong khoảng kỳ kèm " to " ẩn; trạng
+  thái đã rời kỳ mở trang vào ngày đầu của khoảng 5 ngày đạt 777.5 / 785.5 trên 788 và có
+  test; unit 1865; e2e desktop 191/0/19, mobile 198/0/12; quét 11 thời điểm đều đạt;
+  verify 0; digest 9c76a1ec (807 file).
+- Tiếp theo: WP5-UX2-T04-FREEZE (committer, chạy một mình), rồi brief T05 (thương hiệu).
+- Đang chưa commit: source T04 (12 đường dẫn), board, checkpoint này (+ en), kết quả và
+  bằng chứng T03-FREEZE, bản ghi T04 và T04-FREEZE, bằng chứng T04.
 
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 

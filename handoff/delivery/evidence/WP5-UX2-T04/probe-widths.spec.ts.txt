@@ -1,0 +1,24 @@
+import { expect, test } from '../../../../Dropbox/Work.CDSemi/timesheet/tests/e2e/fixtures.ts';
+
+// Probe (task folder only): intrinsic one-line widths of the button labels in the app's own button font, plus the button chrome.
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+test('label widths', async ({ page, signInThroughUi }) => {
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const out = await page.evaluate(`(() => {
+    const button = document.querySelector('.period-cta .period-jump');
+    const style = getComputedStyle(button);
+    const widths = {};
+    for (const text of ['Today', 'Current period', 'Review & sign off', 'Review or correct', 'Review now', 'Sign off', 'Review']) {
+      const probe = document.createElement('span');
+      Object.assign(probe.style, { position: 'absolute', whiteSpace: 'pre', fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, letterSpacing: style.letterSpacing });
+      probe.textContent = text;
+      document.body.append(probe);
+      widths[text] = probe.getBoundingClientRect().width;
+      probe.remove();
+    }
+    return { font: style.fontSize + ' ' + style.fontWeight, padding: style.paddingLeft + '/' + style.paddingRight, border: style.borderLeftWidth, widths };
+  })()`);
+  console.log('WIDTHS ' + JSON.stringify(out));
+});

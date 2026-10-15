@@ -158,4 +158,19 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(The committer appends results here.)
+Self-reported model: claude-sonnet-5-5
+
+- Node: v24.21.0 (exit 0).
+- Pre-HEAD = origin/main = d0d21e1ffde06e4ae99c5ce90fa4a8324ccf0646; no extra commits;
+  nothing staged before start.
+- Post-HEAD = origin/main = 70ecb1264f7b54cc967a136811eeddcd64d9014a; pushed yes.
+- Digest before add: a42c5b04... (804 files); `git ls-tree` digest of new HEAD: a42c5b04...
+- Staged 35: 8 source; handoff modified 4; new task records 2; evidence 21
+  (T02-FREEZE 2, T03 19).
+- Other modified tracked handoff files: none.
+- Checks (exit): precommit 0 (35 files, 0 findings), diff --cached --check 0, JSON
+  parse 0, validate_orchestration 0 (PASS), check_recovery 0 (106 probes),
+  validate_package --preflight 0 (PASS), dry-run push 0, push 0.
+- Fixes or stops: none; no masking needed. Raw outputs in D:\.claude-tmp\timesheet\WP5-UX2-T03-FREEZE.
+- Deviation: the evidence folder holds only commit-message.txt; checks.txt not written
+  (results recorded here instead).

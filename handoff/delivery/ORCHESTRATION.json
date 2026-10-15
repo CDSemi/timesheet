@@ -28,7 +28,7 @@
   "current_source_digest": "57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX2-T03-FREEZE",
+  "next_task_id": "WP5-UX2-T04-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-14",
@@ -264,7 +264,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "d0d21e1ffde06e4ae99c5ce90fa4a8324ccf0646",
+    "last_commit": "70ecb1264f7b54cc967a136811eeddcd64d9014a",
     "unpushed": []
   },
   "owner_decisions": [
@@ -421,9 +421,25 @@
       "source": "owner chat, direct reply typed by the owner to pending question WP5-UX2-Q2",
       "verbatim": "* Q-1 a, Q-2 a",
       "decision": "Q-1 (a): the company holds the right to use VNI-Revue Bold for its logo/wordmark; proceed with vector outlines of the wordmark glyphs (the font file itself is still never committed). Q-2 (a): in the dark theme the wordmark uses lighter tints of the brand blue and grey so it stays readable; the light theme keeps the exact brand colours."
+    },
+    {
+      "date": "2026-10-14",
+      "source": "owner chat, direct request typed by the owner",
+      "verbatim": "* Trên màn hình điện thoại, rút gọn nút \"Review & sign off\" thành \"Sign off\" thay vì xuống hàng, vì tôi thấy xuống hàng sẽ làm chiều cao nút tăng thêm. (giữ full text nếu đủ chỗ hiển thị)\n* Trên màn hình lớn, tách phần menu ra xa text và logo bên trái 1 chút sao cho hài hòa dễ nhìn. hiện tại cảm giác hơi sát, không được hài hòa.\n* Nút \"Dark mode\" (trên màn hình lớn) nên đổi thành kiểu toggle Dark/Light kèm icon tương ứng chứ đừng fixed chữ Dark mode rồi dùng toggle button dạng on/off như hiện tại, nhìn quá xấu\n* Chữ \"Due\" (ví dụ Due Tue 10/13/2026, 17:00...) trong timesheet đang cùng màu với ngày giờ, vì nó là nhãn nên nó phải cùng màu/style với các nhãn khác (ví dụ như Payroll date, Time in...)\n* Chữ \"to\" trong period (ví dụ \"09/28/2026 to 10/11/2026\") đổi thành dấu mũi tên →, hoặc dấu gạch ngang, hoặc dùng màu/style giống các label  (ví dụ như Payroll date, Time in...)... hoặc tùy bạn trình bày cách nào khác đẹp, dễ nhìn càng tốt.",
+      "decision": "Added to UI change round 2: (1) on phones 'Review & sign off' shortens to 'Sign off' instead of wrapping, keeping the full text when it fits; (2) on large screens more space between the brand (logo and text) and the menu; (3) the desktop theme control becomes a Dark/Light toggle with matching icons instead of the fixed 'Dark mode' on/off button; (4) 'Due' in the due line takes the label style of the other labels; (5) the 'to' in a period range becomes an arrow, a dash or label-styled text, the coordinator's choice. Business behaviour is unchanged."
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-14",
+      "basis": "Owner request 2026-10-14 (five items, verbatim in owner_decisions) while WP5-UX2-T04 runs Addendum 1. Three items are period-bar changes in T04's files (Review short label, 'Due' label style, period-range separator); the Review short label also fixes the away-state budget (T04 measured 777.5 and 785.5 against 788). The theme control redesign and the brand-to-menu spacing are shell changes after T04.",
+      "decision": "(a) T04 Addendum 2: phone Review link on one line with the full label when it fits and 'Sign off' (or a short form for the other review labels) otherwise, via a CSS container query, accessible name the full label; the away-state budget assertion stays in T04 and must pass at every sweep instant; 'Due' gets the label style with unchanged text content; the period-range 'to' becomes an aria-hidden label-coloured arrow with a visually hidden ' to ' (the coordinator's choice among the owner's options: compact, readable, still read as 'to'). (b) Brand-to-menu spacing joins the brand slice T05. (c) A new slice T06 replaces the 'Dark mode' pressed button with a two-option Light/Dark toggle with sun and moon icons (inline SVG, no icon library), on desktop and, for consistency, in the phone More panel. (d) New slice order: T05 brand (logo, wordmark, company-line removal, spacing), T06 theme toggle, T07 Check in/out rename, T08 phone header clock (keeps the away-state budget assertion), T09 docs EN+VI; then gate, fresh opus audit and re-accept."
+    },
+    {
+      "date": "2026-10-14",
+      "basis": "WP5-UX2-T04 stopped on its stop condition: in the away state (Current period shown) on the first window day, the first phone day row carries the Today tag (+19.6px) on top of the two-line Review row (+17.5px), so at 390x844 with the zone note the first row ends at 795.0 (own) and 803.0 (share) against the tab bar at 788. The four landing states (docs/04 line 48, the canonical first-screen promise) hold at 659/758/667/766; the away-state target was a coordinator requirement. PLAN3 derives that WP5-UX2-T07 (check in/out moved into the phone header) frees 76px of page for +8px (no share) or +52px (share) of bar, i.e. about 727 and 779. 'Sign off' does not fit every status label (PLAN3 item 3). The T04 status line is inserted only after a jump, which may not be announced reliably.",
+      "decision": "Addendum 1 to the same T04 worker: drop the new away-state budget assertion from T04 (record the numbers), keep the four landing-state tests; make the jump announcement a persistent hidden aria-live polite atomic region (no role=status, so existing getByRole('status') specs stay unambiguous); accept the tab-order test edit and the project-conditional skips; rerun full e2e, the eleven-instant sweep, verify and digest. WP5-UX2-T07 must add the away-state budget assertion in all four states including the first window day with the Today tag; if it fails after T07, the coordinator raises it with the owner."
+    },
     {
       "date": "2026-10-14",
       "basis": "Owner request 2026-10-14 (two-line wordmark beside the logo in the owner's font and colours; remove the company line from the on-screen timesheet; verbatim in owner_decisions). The repository is public by design; the font file's licence is unknown and redistributing a font file may breach it; outlines of a few brand words in a logo are a different use. The company line also appears on the PDF (timesheetPdf.ts:61), which is the submitted document and server output. WP5-UX2-T02 is the running writer.",
@@ -18759,9 +18775,118 @@
       "id": "WP5-UX2-T03-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX2-T03"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a04c8f8324eb08688",
+      "session_id": "11acfabe-25ef-48b5-ac28-73ce2d74ecee",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX2-T03-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX2-T03-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX2-T03-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX2-T03-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX2-T03-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "d0d21e1ffde06e4ae99c5ce90fa4a8324ccf0646",
+      "branch": "main",
+      "commit_sha": "70ecb1264f7b54cc967a136811eeddcd64d9014a",
+      "pushed": true,
+      "source_digest": "a42c5b0496451808cbf9dd3e6b0471a5ad949c08e6e1c914006717c200f6e41f",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed on attempt 1: 35 paths (8 source, 4 modified handoff, 2 new task records, 21 evidence); HEAD was d0d21e1 = origin/main with no extra commits; nothing pre-staged; no other modified handoff file; digests a42c5b04 (804 files) before add and on the new HEAD; node v24.21.0; precommit (35 files, 0 findings), diff --check, JSON parse, validate_orchestration, check_recovery (106), preflight, push dry-run and push exit 0; remote main = 70ecb12; no tag. Deviation: no checks.txt evidence file; the check results are in the brief's Results only.",
+      "next_action": "None; WP5-UX2-T04 (Today and Current period) on 70ecb12 / a42c5b04."
+    },
+    {
+      "id": "WP5-UX2-T04",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX2-T03-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ae57a22e4eaa6440a",
+      "session_id": "11acfabe-25ef-48b5-ac28-73ce2d74ecee",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/components/ReviewStatus.tsx",
+        "src/client/TimesheetScreen.tsx",
+        "src/client/components/PeriodBar.tsx",
+        "src/client/components/periodJumpModel.ts",
+        "src/client/components/periodBarModel.ts",
+        "src/client/styles.css",
+        "tests/client/periodJumpModel.test.ts",
+        "tests/client/periodBarModel.test.ts",
+        "tests/e2e/today.spec.ts",
+        "tests/e2e/fixtures.ts",
+        "tests/e2e/sharing.spec.ts",
+        "tests/e2e/timesheet.spec.ts",
+        "tests/e2e/contrast.ts",
+        "handoff/delivery/tasks/WP5-UX2-T04.md",
+        "handoff/delivery/evidence/WP5-UX2-T04"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX2-T04.md",
+      "report": "handoff/delivery/tasks/WP5-UX2-T04.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX2-T04/step2-base-head-status-digest.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/unit-jump.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/mutation-unit.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/mutation-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/probe-budget-1026-0030.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/a1-full.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/a2-typecheck.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/a2-lint.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/a2-full.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/a2-probe-widths.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/a2-probe-budget-1026-0030.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/a2-sweep-s03-1026-0030.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/a2-verify.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/a2-digest.txt",
+        "handoff/delivery/evidence/WP5-UX2-T04/today-bar-phone-away-w390-a2-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX2-T04/today-bar-phone-away-w320-a2-synthetic.png"
+      ],
+      "baseline_commit": "70ecb1264f7b54cc967a136811eeddcd64d9014a",
+      "source_digest": "9c76a1ec5e04b14b000d00d3bdc70c08215936cd76123e4dd7b6cc836c97e369",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented after addenda 1 and 2 (reported, not independent proof): periodJumpModel (todayJump, currentPeriodJump) from server period objects and today_local only; Today always rendered, aria-disabled when not away, re-reads /periods/current, loads in_progress, moves an open editor to today_local, scrolls today's day via a jump counter; Current period only when current differs from in_progress and the shown period is not current, only navigates, focus to Today; a persistent visually hidden aria-live polite atomic region (no role) announces jumps ('to' kept); order Previous, Next, Today, Current period, Review. Phone Review link on one line: CSS container query on .period-cta below 768px, full label as text content and aria-label, short form drawn from data-short by ::after ('Sign off' for 'Review & sign off', 'Review' for 'Review now' and 'Review or correct'); short at 390/375/360 in the away state, full on its own row at 320, full at landing and 600. 'Due' in label style with unchanged text content (dueParts); period-bar range shows an aria-hidden muted arrow plus a visually hidden ' to ' and a wbr (text content '→ to'); other range formatters unchanged. Budget 390x844 of 788: landing 659/758/667/766; away on the first window day (Today tag on row 1) own 777.5, share 785.5 (headroom 2.5), asserted in today.spec.ts. Unit 1865; final full e2e desktop 191 passed / 19 skipped, mobile 198 / 12, 0 failed; eleven-instant sweep all pass (window instants took the window branch); mutation 'Today targets current' caught (unit 3, e2e 5), reverted; verify 0; digest 9c76a1ec (807 files). Files: TimesheetScreen.tsx, PeriodBar.tsx, ReviewStatus.tsx (added, Review link markup), periodBarModel.ts, periodJumpModel.ts (new), styles.css, periodBarModel.test.ts, periodJumpModel.test.ts (new), today.spec.ts (new), fixtures.ts (additive periodsCurrent), sharing.spec.ts, timesheet.spec.ts (tab order includes Today). Deviations: the away assertion lives in today.spec.ts; short label by pseudo-element to keep review.spec text; literal rem thresholds in container conditions; project-conditional test.skip pattern; one 2>/dev/null slip.",
+      "next_action": "None; WP5-UX2-T04-FREEZE."
+    },
+    {
+      "id": "WP5-UX2-T04-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX2-T04"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -18779,18 +18904,18 @@
       "session_id": "11acfabe-25ef-48b5-ac28-73ce2d74ecee",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP5-UX2-T03-FREEZE.md",
-        "handoff/delivery/evidence/WP5-UX2-T03-FREEZE"
+        "handoff/delivery/tasks/WP5-UX2-T04-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX2-T04-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP5-UX2-T03-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP5-UX2-T03-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP5-UX2-T04-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX2-T04-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "d0d21e1ffde06e4ae99c5ce90fa4a8324ccf0646",
-      "source_digest": "a42c5b0496451808cbf9dd3e6b0471a5ad949c08e6e1c914006717c200f6e41f",
+      "baseline_commit": "70ecb1264f7b54cc967a136811eeddcd64d9014a",
+      "source_digest": "9c76a1ec5e04b14b000d00d3bdc70c08215936cd76123e4dd7b6cc836c97e369",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Committer stages the 8 T03 source paths and the listed handoff records, runs the checks, commits and pushes to main; then the WP5-UX2-T04 brief."
+      "next_action": "Committer stages the 12 T04 source paths and the listed handoff records, runs the checks, commits and pushes to main; then the WP5-UX2-T05 brief."
     }
   ],
   "future_packages": [

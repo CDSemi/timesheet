@@ -21,7 +21,27 @@ export function weekdayName(date: string): string {
  * The date and time are the server's `due_local_*` fields; nothing is converted here.
  */
 export function dueInWords(period: Pick<Period, 'due_local_date' | 'due_local_time'>, reportingZone: string): string {
-  return `Due ${weekdayName(period.due_local_date)} ${usDate(period.due_local_date)}, ${period.due_local_time} (${reportingZone})`;
+  const { label, value } = dueParts(period, reportingZone);
+  return `${label} ${value}`;
+}
+
+/** The due line in two parts: the label word `Due` (shown in the label style) and the value `Tue 12/08/2026, 17:00 (America/Los_Angeles)`. Their text joined by one space is `dueInWords`. */
+export function dueParts(period: Pick<Period, 'due_local_date' | 'due_local_time'>, reportingZone: string): { label: string; value: string } {
+  return {
+    label: 'Due',
+    value: `${weekdayName(period.due_local_date)} ${usDate(period.due_local_date)}, ${period.due_local_time} (${reportingZone})`,
+  };
+}
+
+/**
+ * The short form of the review link's label, shown on a phone only when the full label does not fit on one line beside the other buttons
+ * (the accessible name stays the full label, which contains the short text). `Review & sign off` becomes `Sign off`; `Review now` and
+ * `Review or correct` become `Review`, the one word that names the action of both (the review screen is where a correction is made).
+ */
+export function reviewShortLabel(label: string): string {
+  if (label === 'Review & sign off') return 'Sign off';
+  if (label === 'Review now' || label === 'Review or correct') return 'Review';
+  return label;
 }
 
 /** The due instant in the display zone, formatted like the bar: `Wed 10/14/2026, 07:00`. Display only; the instant and zone are unchanged. */

@@ -121,9 +121,36 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   187/0/11; budget unchanged; verify 0; digest a42c5b04 (804 files). Slips recorded on
   the board (pipes into tail, one /dev/null, one rm -rf of its own scratch folder outside
   the repository).
-- Next: WP5-UX2-T03-FREEZE (committer, alone), then the T04 brief.
-- Uncommitted now: the T03 source (8 paths), the board, this checkpoint (+ vi), the
-  T02-FREEZE results and evidence, the T03 and T03-FREEZE records, the T03 evidence.
+- WP5-UX2-T03-FREEZE done: 70ecb1264f7b54cc967a136811eeddcd64d9014a on main, pushed (35
+  paths; digests a42c5b04, 804 files; every check exit 0; no checks.txt evidence file,
+  results in the brief only).
+- Running: WP5-UX2-T04 (worker-high, sonnet; Today and Current period, one-row phone
+  layout, its own simulated-clock sweep) on 70ecb12 / a42c5b04.
+- WP5-UX2-T04 first hand-back (worker-high, self-reported claude-sonnet-5-5): Today and
+  Current period as designed; one phone row at 390/375/360 (Review two lines), Review
+  drops at 320; unit 1862; e2e desktop 190/0/19, mobile 197/0/12; sweep 11 instants pass
+  except one; mutation caught; verify 0; digest c9abda3e (807 files). STOP: on the first
+  window day the away state with the zone note ends at 795.0 / 803.0 against 788 (Today
+  tag plus two-line Review); the landing states hold (659/758/667/766). Coordinator
+  decision: Addendum 1 drops the away-state assertion to T07 (which frees page height),
+  makes the jump announcement a persistent aria-live region, and reruns e2e, sweep,
+  verify and digest.
+- The owner added five requests (verbatim on the board): "Sign off" instead of a wrapped
+  Review label on phones (full text when it fits); more space between the brand and the
+  menu on large screens; a Light/Dark toggle with icons instead of the "Dark mode"
+  button; "Due" in label style; a nicer separator than "to" in period ranges.
+  Coordinator: T04 Addendum 2 (Review short label via container query, so the away-state
+  budget assertion stays in T04; "Due" label style; an aria-hidden arrow with a hidden
+  " to "); spacing joins T05; new slice T06 theme toggle; new order T05 brand, T06 theme
+  toggle, T07 rename, T08 phone header clock, T09 docs.
+- WP5-UX2-T04 done after addenda 1 and 2: persistent aria-live jump region; phone Review
+  link on one line ("Sign off" / "Review" short forms via container query, full label as
+  name); "Due" label style; arrow range separator with a hidden " to "; first window day
+  away state 777.5 / 785.5 of 788 asserted; unit 1865; e2e desktop 191/0/19, mobile
+  198/0/12; eleven-instant sweep all pass; verify 0; digest 9c76a1ec (807 files).
+- Next: WP5-UX2-T04-FREEZE (committer, alone), then the T05 brief (brand).
+- Uncommitted now: the T04 source (12 paths), the board, this checkpoint (+ vi), the
+  T03-FREEZE results and evidence, the T04 and T04-FREEZE records, the T04 evidence.
 
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 

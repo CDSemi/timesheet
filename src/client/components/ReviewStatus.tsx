@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type DeliveryAttempt, type FinalizationResponse } from '../api.ts';
+import { reviewShortLabel } from './periodBarModel.ts';
 import { deliveryStatus, type DeliveryStatus, periodStatus, type PeriodStatus, reviewHash, reviewLinkLabel, type Tone } from './reviewModel.ts';
 
 /** What the server says about the finalization and the email of one period. */
@@ -69,9 +70,19 @@ export function ReviewBadges({ state, fallback }: { state: PeriodState | null; f
 /** The link from the timesheet to the review of a period; the wording follows the period state. */
 export function ReviewLink({ payrollDate, state }: { payrollDate: string; state: PeriodState | null }) {
   const label = reviewLinkLabel(state === null ? null : periodStatus(state.finalization));
+  // The text content is the full label. On a phone the style sheet may show `data-short` instead (a pseudo-element) when the full label
+  // does not fit on one line; `aria-label` keeps the accessible name the full label either way (it contains the short text, SC 2.5.3).
   return (
-    <a className="button-link" href={reviewHash(payrollDate)} data-review-link={payrollDate}>
-      {label}
+    <a className="button-link review-link" href={reviewHash(payrollDate)} data-review-link={payrollDate} aria-label={label} {...reviewLabelAttributes(label)}>
+      <span className="review-full">{label}</span>
     </a>
   );
 }
+
+/** The attributes the style sheet reads to pick the full or the short label: the short text, and whether the full label is a long one. */
+export function reviewLabelAttributes(label: string): { 'data-short': string; 'data-label-size': 'long' | 'short' } {
+  return { 'data-short': reviewShortLabel(label), 'data-label-size': label.length > REVIEW_LONG_LABEL ? 'long' : 'short' };
+}
+
+/** Labels longer than this many characters ("Review & sign off", "Review or correct") need the wider threshold; "Review now" the narrow one. */
+const REVIEW_LONG_LABEL = 12;

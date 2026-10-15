@@ -1,11 +1,25 @@
+import { useRef } from 'react';
 import type { TimesheetView } from '../api.ts';
 import { reviewStatus } from './dayModel.ts';
 import { gridStatus } from './deliveryModel.ts';
 import { usDate } from './format.ts';
 import { ImportedBadge, ImportedNote } from './ImportStatus.tsx';
-import { dueInWords, dueInZoneText, viewingZoneText, weekdayName, zoneNoteVisible } from './periodBarModel.ts';
+import { dueInZoneText, dueParts, reviewShortLabel, viewingZoneText, weekdayName, zoneNoteVisible } from './periodBarModel.ts';
+import { CURRENT_PERIOD_DESCRIPTION, todayDescription } from './periodJumpModel.ts';
 import { type PeriodState, ReviewLink } from './ReviewStatus.tsx';
 import { SubmissionStatusLine } from './SubmissionStatus.tsx';
+
+/** What the two jump buttons need, all derived by the screen from the server's periods and `today_local`. */
+export interface PeriodJumps {
+  /** True when "Today" is active; false renders it `aria-disabled` (focusable, doing nothing). */
+  todayAway: boolean;
+  /** True when "Current period" is rendered at all. */
+  currentVisible: boolean;
+  onToday: () => void;
+  onCurrent: () => void;
+  /** The visually hidden status line after the last jump, or null before any. */
+  status: string | null;
+}
 
 /**
  * The period bar: which period, when it is due, its one status group and the way to review and sign.
@@ -19,6 +33,7 @@ export function PeriodBar({
   onMove,
   own = true,
   state,
+  jumps,
 }: {
   view: TimesheetView;
   zone: string;
@@ -27,8 +42,12 @@ export function PeriodBar({
   own?: boolean;
   /** The period's finalization and delivery state (own, not imported); null while loading or when not asked. */
   state: PeriodState | null;
+  /** "Today" and "Current period"; absent until the server's periods are known. */
+  jumps?: PeriodJumps;
 }) {
+  const todayButton = useRef<HTMLButtonElement>(null);
   const { period } = view;
+  const due = dueParts(period, view.reporting_zone);
   // F-2: an imported period is read-only history. It has no review or delivery state, and its sign and submit are off.
   const imported = view.timesheet.imported_unverified;
   const status = state === null ? null : gridStatus(state);
@@ -40,7 +59,15 @@ export function PeriodBar({
       <div className="period-main">
         <div className="period-title">
           <strong className="period-name">
-            {usDate(period.period_start)} to {usDate(period.period_end)}
+            {usDate(period.period_start)}
+            {/* The arrow is decoration in the label colour; screen readers read the hidden " to " (the text stays "10/12/2026 to 10/25/2026"). */}
+            <span className="range-arrow" aria-hidden="true">
+              →
+            </span>
+            {/* A break opportunity: on the narrowest phones the end date moves to a second line instead of running under the arrow button. */}
+            <wbr />
+            <span className="sr-only"> to </span>
+            {usDate(period.period_end)}
           </strong>
           <span className={`badge ${period.relation ?? ''}`}>{period.relation}</span>
           {imported ? <ImportedBadge /> : status !== null ? <SubmissionStatusLine status={status} /> : <span className="badge">{reviewStatus(view.timesheet)}</span>}
@@ -53,7 +80,8 @@ export function PeriodBar({
             </b>
           </span>
           <span data-period-due={period.payroll_date}>
-            <b>{dueInWords(period, view.reporting_zone)}</b>
+            {/* "Due" is a label like "Payroll date"; the text content stays `Due Tue 12/08/2026, 17:00 (zone)` (dueInWords). */}
+            {due.label} <b>{due.value}</b>
           </span>
           <span data-period-zone={zone}>{viewingZoneText(zone)}</span>
         </p>
@@ -79,20 +107,77 @@ export function PeriodBar({
         {imported && <ImportedNote id="imported-reason" />}
         {!imported && view.reason_required && <span className="notice">Edits to this period require a reason.</span>}
       </div>
-      {/* DOM order is the reading and tab order on every layout: previous, next, then the review link. */}
+      {/* DOM order is the reading and tab order on every layout: previous, next, Today, Current period (when shown), then the review link. */}
       <div className="period-actions">
         <button type="button" className="secondary period-step" onClick={() => onMove(1)} aria-label="Next period">
           &gt;
         </button>
-        {own &&
-          (imported ? (
-            <button type="button" className="secondary" disabled aria-describedby="imported-reason" data-review-link-disabled={period.payroll_date}>
-              Review &amp; sign off
-            </button>
-          ) : (
-            <ReviewLink payrollDate={period.payroll_date} state={state} />
-          ))}
+        <div className="period-cta" data-current={jumps?.currentVisible === true ? 'shown' : undefined}>
+          {jumps !== undefined && (
+            <>
+              <button
+                type="button"
+                className="secondary period-jump"
+                aria-disabled={jumps.todayAway ? undefined : 'true'}
+                aria-describedby="period-today-note"
+                onClick={() => {
+                  if (jumps.todayAway) jumps.onToday();
+                }}
+                data-period-today
+                ref={todayButton}
+              >
+                Today
+              </button>
+              <span id="period-today-note" className="sr-only">
+                {todayDescription(jumps.todayAway)}
+              </span>
+              {jumps.currentVisible && (
+                <>
+                  <button
+                    type="button"
+                    className="secondary period-jump"
+                    aria-describedby="period-current-note"
+                    onClick={() => {
+                      // The button leaves the page once the current period is shown, so focus goes to the next logical control first.
+                      todayButton.current?.focus();
+                      jumps.onCurrent();
+                    }}
+                    data-period-current
+                  >
+                    Current period
+                  </button>
+                  <span id="period-current-note" className="sr-only">
+                    {CURRENT_PERIOD_DESCRIPTION}
+                  </span>
+                </>
+              )}
+            </>
+          )}
+          {own &&
+            (imported ? (
+              <button
+                type="button"
+                className="secondary review-link"
+                disabled
+                aria-describedby="imported-reason"
+                aria-label="Review & sign off"
+                data-short={reviewShortLabel('Review & sign off')}
+                data-label-size="long"
+                data-review-link-disabled={period.payroll_date}
+              >
+                <span className="review-full">Review &amp; sign off</span>
+              </button>
+            ) : (
+              <ReviewLink payrollDate={period.payroll_date} state={state} />
+            ))}
+        </div>
       </div>
+      {/* A persistent live region (SC 4.1.3): present from load, empty until a jump, so the inserted text is announced. No role="status": the saved notice keeps that role. */}
+      {jumps !== undefined && (
+        <p className="sr-only" aria-live="polite" aria-atomic="true" data-period-jump-status>
+          {jumps.status ?? ''}
+        </p>
+      )}
     </section>
   );
 }
