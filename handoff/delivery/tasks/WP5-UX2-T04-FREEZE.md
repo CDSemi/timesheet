@@ -174,4 +174,18 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(The committer appends results here.)
+Self-reported model: claude-sonnet-5-5
+
+- Pre-HEAD 70ecb1264f7b54cc967a136811eeddcd64d9014a (= origin/main); post-HEAD and commit
+  54dda11bbd95e8a8df07aa5918d1e6736231a0a5; pushed yes; remote SHA the same.
+- Digest before add 9c76a1ec5e04b14b000d00d3bdc70c08215936cd76123e4dd7b6cc836c97e369 (807 files);
+  git ls-tree digest of new HEAD identical (807 files).
+- Staged 101: 12 source, 4 modified handoff, 2 task records, 1 T03-FREEZE evidence,
+  82 T04 evidence (76 .txt, 6 -synthetic.png).
+- Other modified tracked handoff files: none.
+- Checks (all exit 0): node v24.21.0; precommit PASS (101 files); diff --cached --check;
+  JSON parse; validate_orchestration; check_recovery; validate_package --preflight;
+  fetch, push dry-run, push.
+- No fix, no masking, no stop. Deviation: one stray `node -e "1"` call was run by mistake
+  (no effect). Evidence: handoff/delivery/evidence/WP5-UX2-T04-FREEZE/ (checks.txt,
+  commit-message.txt, status.txt, digest-pre.txt), unstaged.

@@ -155,7 +155,10 @@ export function AppShell({
   return (
     <>
       <header ref={barRef} className="shell-bar">
-        <span className="shell-brand">C&amp;D Semi</span>
+        <span className="shell-brand">
+          <img src="/cd-logo.svg" alt="" width={36} height={36} />
+          <span className="sr-only">C&amp;D Semiconductor Services, Inc.</span>
+        </span>
         <nav className="shell-nav" aria-label="Main">
           {desktopRoutesFor(user.role).map((item) => (
             <a key={item.id} className="nav-link" href={item.hash} aria-current={item.id === desktopCurrent ? 'page' : undefined}>

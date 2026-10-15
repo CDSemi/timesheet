@@ -148,9 +148,21 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   name); "Due" label style; arrow range separator with a hidden " to "; first window day
   away state 777.5 / 785.5 of 788 asserted; unit 1865; e2e desktop 191/0/19, mobile
   198/0/12; eleven-instant sweep all pass; verify 0; digest 9c76a1ec (807 files).
-- Next: WP5-UX2-T04-FREEZE (committer, alone), then the T05 brief (brand).
-- Uncommitted now: the T04 source (12 paths), the board, this checkpoint (+ vi), the
-  T03-FREEZE results and evidence, the T04 and T04-FREEZE records, the T04 evidence.
+- WP5-UX2-T04-FREEZE done: 54dda11bbd95e8a8df07aa5918d1e6736231a0a5 on main, pushed (101
+  paths; digests 9c76a1ec, 807 files; every check exit 0; one stray `node -e "1"`).
+- Coordinator decision: the brand slice is split. T05 logo (traced SVG, favicon, logo
+  brand with the hidden company name) and T06 wordmark (outlines, tokens, breakpoint,
+  brand-to-menu spacing, on-screen company-line removal); then T07 Light/Dark toggle, T08
+  rename, T09 phone header clock, T10 docs.
+- Running: WP5-UX2-T05 (worker-high, sonnet; logo) on 54dda11 / 9c76a1ec.
+- WP5-UX2-T05 done (worker-high, self-reported claude-sonnet-5-5; reported, not
+  independent proof): traced `cd-logo.svg` (3,440 B, pure vector), fidelity 0.45 / 1.40 /
+  2.87 mean at 512/64/32 (within thresholds; renders viewed), favicon, logo brand with the
+  hidden company name; unit 1869; e2e desktop 196, mobile 203, 0 failed; verify 0; digest
+  38a2bb09 (810 files). No 1px ring on the rim (for the audit).
+- Next: WP5-UX2-T05-FREEZE (committer, alone), then the T06 brief (wordmark).
+- Uncommitted now: the T05 source (6 paths), the board, this checkpoint (+ vi), the
+  T04-FREEZE results and evidence, the T05 and T05-FREEZE records, the T05 evidence.
 
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 

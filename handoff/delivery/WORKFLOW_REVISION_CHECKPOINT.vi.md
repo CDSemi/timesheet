@@ -149,9 +149,25 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   thái đã rời kỳ mở trang vào ngày đầu của khoảng 5 ngày đạt 777.5 / 785.5 trên 788 và có
   test; unit 1865; e2e desktop 191/0/19, mobile 198/0/12; quét 11 thời điểm đều đạt;
   verify 0; digest 9c76a1ec (807 file).
-- Tiếp theo: WP5-UX2-T04-FREEZE (committer, chạy một mình), rồi brief T05 (thương hiệu).
-- Đang chưa commit: source T04 (12 đường dẫn), board, checkpoint này (+ en), kết quả và
-  bằng chứng T03-FREEZE, bản ghi T04 và T04-FREEZE, bằng chứng T04.
+- Xong WP5-UX2-T04-FREEZE: 54dda11bbd95e8a8df07aa5918d1e6736231a0a5 trên main, đã push
+  (101 đường dẫn; digest 9c76a1ec, 807 file; mọi kiểm tra exit 0; một lần `node -e "1"`
+  thừa).
+- Quyết định coordinator: tách phần thương hiệu. T05 logo (SVG vẽ lại, favicon, logo trên
+  thanh trên cùng kèm tên công ty ẩn cho trình đọc màn hình) và T06 chữ thương hiệu (đường
+  vector, token màu, mốc bề rộng hiển thị, khoảng cách với menu, bỏ dòng tên công ty trên
+  màn hình); sau đó T07 nút Light/Dark, T08 đổi chữ, T09 chấm công trên header điện thoại,
+  T10 tài liệu.
+- Đang chạy: WP5-UX2-T05 (worker-high, sonnet; logo) trên 54dda11 / 9c76a1ec.
+- Xong WP5-UX2-T05 (worker-high, tự báo claude-sonnet-5-5; do người làm báo, chưa phải
+  bằng chứng độc lập): `cd-logo.svg` vẽ lại (3.440 B, thuần vector), độ khớp trung bình
+  0.45 / 1.40 / 2.87 ở 512/64/32 (trong ngưỡng; coordinator đã xem ảnh so sánh), favicon,
+  logo trên thanh trên cùng kèm tên công ty ẩn; unit 1869; e2e desktop 196, mobile 203, 0
+  lỗi; verify 0; digest 38a2bb09 (810 file). Không thêm viền 1px cho vành logo (để audit
+  xem).
+- Tiếp theo: WP5-UX2-T05-FREEZE (committer, chạy một mình), rồi brief T06 (chữ thương
+  hiệu).
+- Đang chưa commit: source T05 (6 đường dẫn), board, checkpoint này (+ en), kết quả và
+  bằng chứng T04-FREEZE, bản ghi T05 và T05-FREEZE, bằng chứng T05.
 
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 

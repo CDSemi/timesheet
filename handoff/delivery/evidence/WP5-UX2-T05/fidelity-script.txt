@@ -1,0 +1,63 @@
+// Render the SVG and the PNG through the same canvas over white and compare per pixel.
+// Usage: node fidelity.mjs <svg> [evidenceDir]  (writes logo-fidelity-<size>-synthetic.png when evidenceDir is given)
+import { readFileSync, writeFileSync } from 'node:fs';
+import { chromium } from 'file:///D:/Dropbox/Work.CDSemi/timesheet/node_modules/@playwright/test/index.mjs';
+
+const dir = 'D:/.claude-tmp/timesheet/WP5-UX2-T05/';
+const svgPath = process.argv[2];
+const evidence = process.argv[3] ?? null;
+const png = readFileSync(dir + 'cd-logo-source.png').toString('base64');
+const svg = readFileSync(svgPath).toString('base64');
+const THRESHOLDS = { 512: { mean: 2, pct: 1.5 }, 64: { mean: 3, pct: 3 }, 32: { mean: 4, pct: null } };
+
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const page = await browser.newPage();
+const results = await page.evaluate(async ({ png, svg, sizes }) => {
+  const load = async (src) => { const img = new Image(); img.src = src; await img.decode(); return img; };
+  const pngImg = await load('data:image/png;base64,' + png);
+  const svgImg = await load('data:image/svg+xml;base64,' + svg);
+  const out = [];
+  for (const size of sizes) {
+    const draw = (img) => {
+      const c = document.createElement('canvas'); c.width = size; c.height = size;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, size, size);
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, size, size);
+      return { c, d: ctx.getImageData(0, 0, size, size).data };
+    };
+    const a = draw(pngImg), b = draw(svgImg);
+    let sum = 0, over = 0, max = 0;
+    const n = size * size;
+    for (let i = 0; i < n; i++) {
+      let worst = 0;
+      for (let k = 0; k < 3; k++) { const dlt = Math.abs(a.d[i * 4 + k] - b.d[i * 4 + k]); sum += dlt; worst = Math.max(worst, dlt); }
+      if (worst > 48) over++;
+      max = Math.max(max, worst);
+    }
+    // side by side: PNG | SVG | amplified difference, each at the tested size (scaled up for small sizes)
+    const scale = size >= 256 ? 1 : Math.floor(256 / size);
+    const w = size * scale;
+    const s = document.createElement('canvas'); s.width = w * 3 + 20; s.height = w;
+    const sctx = s.getContext('2d'); sctx.imageSmoothingEnabled = false;
+    sctx.fillStyle = '#ffffff'; sctx.fillRect(0, 0, s.width, s.height);
+    sctx.drawImage(a.c, 0, 0, w, w); sctx.drawImage(b.c, w + 10, 0, w, w);
+    const diff = document.createElement('canvas'); diff.width = size; diff.height = size;
+    const dctx = diff.getContext('2d'); const dd = dctx.createImageData(size, size);
+    for (let i = 0; i < n; i++) { let m = 0; for (let k = 0; k < 3; k++) m = Math.max(m, Math.abs(a.d[i * 4 + k] - b.d[i * 4 + k])); const v = 255 - Math.min(255, m * 4); dd.data[i * 4] = v; dd.data[i * 4 + 1] = v; dd.data[i * 4 + 2] = v; dd.data[i * 4 + 3] = 255; }
+    dctx.putImageData(dd, 0, 0);
+    sctx.drawImage(diff, 2 * (w + 10), 0, w, w);
+    out.push({ size, mean: sum / (n * 3), pct: (over / n) * 100, max, png: s.toDataURL('image/png').split(',')[1] });
+  }
+  return out;
+}, { png, svg, sizes: [512, 64, 32] });
+await browser.close();
+let ok = true;
+for (const r of results) {
+  const t = THRESHOLDS[r.size];
+  const pass = r.mean <= t.mean && (t.pct === null || r.pct <= t.pct);
+  ok &&= pass;
+  console.log(`size ${r.size}: mean abs channel diff ${r.mean.toFixed(3)}/255 (limit ${t.mean}), pixels over 48: ${r.pct.toFixed(3)}% (limit ${t.pct === null ? 'n/a' : t.pct + '%'}), max ${r.max} => ${pass ? 'PASS' : 'FAIL'}`);
+  if (evidence !== null) writeFileSync(`${evidence}/logo-fidelity-${r.size}-synthetic.png`, Buffer.from(r.png, 'base64'));
+}
+console.log(ok ? 'ALL PASS' : 'FAIL');

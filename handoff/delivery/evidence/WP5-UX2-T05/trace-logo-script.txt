@@ -1,0 +1,122 @@
+// Trace the C&D logo into a pure vector SVG (temp script, never committed).
+// Geometry (circles, stripes, band) is rebuilt from measurements; the glyphs "C", "&", "D" are traced
+// from the pixels with marching squares on the grey/blue ramp and simplified with Douglas-Peucker.
+// Usage: node trace.mjs <out.svg> [epsilon] [discRadius]
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const dir = 'D:/.claude-tmp/timesheet/WP5-UX2-T05/';
+const out = process.argv[2];
+const EPS = Number(process.argv[3] ?? 0.3);
+const DISC_R = Number(process.argv[4] ?? 239.8);
+const px = readFileSync(dir + 'pixels.rgba');
+const W = 512;
+const BLUE = { r: 14, hex: '#0e71b8' };
+const GREY = { r: 231, hex: '#e7e8e9' };
+const STRIPE = { start: 64.06, pitch: 29.79, height: 14.76, count: 15 };
+const BAND = { top: 183.27, bottom: 317.23 };
+
+const num = (v) => String(Number(v.toFixed(2)));
+const coverage = (x, y) => (GREY.r - px[(y * W + x) * 4]) < 0 ? 1 : 1 - (GREY.r - px[(y * W + x) * 4]) / (GREY.r - BLUE.r); // 1 = glyph grey, 0 = blue
+
+// Field over the glyph window (padded with blue so every contour closes).
+const X0 = 30, X1 = 482, Y0 = 192, Y1 = 309;
+const fw = X1 - X0, fh = Y1 - Y0;
+const field = (i, j) => (i < 0 || j < 0 || i >= fw || j >= fh ? 0 : coverage(X0 + i, Y0 + j));
+const LEVEL = 0.5;
+
+const segs = [];
+const edgeKey = (kind, i, j) => `${kind},${i},${j}`;
+function edgePoint(kind, i, j) {
+  if (kind === 'h') { // between (i,j) and (i+1,j)
+    const a = field(i, j), b = field(i + 1, j);
+    return [X0 + i + 0.5 + (LEVEL - a) / (b - a), Y0 + j + 0.5];
+  }
+  const a = field(i, j), b = field(i, j + 1);
+  return [X0 + i + 0.5, Y0 + j + 0.5 + (LEVEL - a) / (b - a)];
+}
+for (let j = -1; j < fh; j++) {
+  for (let i = -1; i < fw; i++) {
+    const tl = field(i, j) >= LEVEL, tr = field(i + 1, j) >= LEVEL, br = field(i + 1, j + 1) >= LEVEL, bl = field(i, j + 1) >= LEVEL;
+    const c = (tl ? 1 : 0) | (tr ? 2 : 0) | (br ? 4 : 0) | (bl ? 8 : 0);
+    if (c === 0 || c === 15) continue;
+    const T = edgeKey('h', i, j), B = edgeKey('h', i, j + 1), L = edgeKey('v', i, j), R = edgeKey('v', i + 1, j);
+    const centre = (field(i, j) + field(i + 1, j) + field(i + 1, j + 1) + field(i, j + 1)) / 4 >= LEVEL;
+    const table = {
+      1: [[L, T]], 2: [[T, R]], 3: [[L, R]], 4: [[R, B]],
+      5: centre ? [[T, R], [L, B]] : [[L, T], [R, B]],
+      6: [[T, B]], 7: [[L, B]], 8: [[B, L]], 9: [[T, B]],
+      10: centre ? [[L, T], [R, B]] : [[T, R], [L, B]],
+      11: [[R, B]], 12: [[L, R]], 13: [[T, R]], 14: [[L, T]],
+    };
+    for (const s of table[c]) segs.push(s);
+  }
+}
+const adj = new Map();
+for (const [a, b] of segs) {
+  if (!adj.has(a)) adj.set(a, []);
+  if (!adj.has(b)) adj.set(b, []);
+  adj.get(a).push(b);
+  adj.get(b).push(a);
+}
+const pointOf = (key) => { const [kind, i, j] = key.split(','); return edgePoint(kind, Number(i), Number(j)); };
+const used = new Set();
+const loops = [];
+for (const start of adj.keys()) {
+  if (used.has(start)) continue;
+  const loop = [];
+  let prev = null, cur = start;
+  for (;;) {
+    used.add(cur);
+    loop.push(pointOf(cur));
+    const next = adj.get(cur).find((n) => n !== prev && !used.has(n)) ?? null;
+    if (next === null) break;
+    prev = cur; cur = next;
+  }
+  loops.push(loop);
+}
+
+function area(loop) {
+  let a = 0;
+  for (let k = 0; k < loop.length; k++) { const [x1, y1] = loop[k], [x2, y2] = loop[(k + 1) % loop.length]; a += x1 * y2 - x2 * y1; }
+  return a / 2;
+}
+function dpOpen(pts, eps) {
+  if (pts.length < 3) return pts;
+  const [ax, ay] = pts[0], [bx, by] = pts[pts.length - 1];
+  const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
+  let idx = -1, max = -1;
+  for (let k = 1; k < pts.length - 1; k++) {
+    const d = len === 0 ? Math.hypot(pts[k][0] - ax, pts[k][1] - ay) : Math.abs(dy * pts[k][0] - dx * pts[k][1] + bx * ay - by * ax) / len;
+    if (d > max) { max = d; idx = k; }
+  }
+  if (max <= eps) return [pts[0], pts[pts.length - 1]];
+  const left = dpOpen(pts.slice(0, idx + 1), eps), right = dpOpen(pts.slice(idx), eps);
+  return left.slice(0, -1).concat(right);
+}
+function dpClosed(loop, eps) {
+  let far = 0, max = -1;
+  for (let k = 1; k < loop.length; k++) { const d = Math.hypot(loop[k][0] - loop[0][0], loop[k][1] - loop[0][1]); if (d > max) { max = d; far = k; } }
+  const a = dpOpen(loop.slice(0, far + 1), eps), b = dpOpen(loop.slice(far).concat([loop[0]]), eps);
+  return a.slice(0, -1).concat(b.slice(0, -1));
+}
+
+const kept = loops.filter((l) => Math.abs(area(l)) >= 4).map((l) => dpClosed(l, EPS));
+const centreX = (l) => (Math.min(...l.map((p) => p[0])) + Math.max(...l.map((p) => p[0]))) / 2;
+const groups = { C: [], '&': [], D: [] };
+for (const l of kept) groups[centreX(l) < 175 ? 'C' : centreX(l) < 330 ? '&' : 'D'].push(l);
+const pathData = (ls) => ls.map((l) => 'M' + l.map(([x, y]) => `${num(x)} ${num(y)}`).join(' ') + 'Z').join('');
+
+let svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">\n';
+svg += `<circle cx="256" cy="256" r="256" fill="${GREY.hex}"/>\n`;
+svg += `<clipPath id="disc"><circle cx="256" cy="256" r="${num(DISC_R)}"/></clipPath>\n`;
+svg += '<g clip-path="url(#disc)">\n';
+svg += `<rect x="0" y="0" width="512" height="512" fill="${GREY.hex}"/>\n`;
+svg += `<g fill="${BLUE.hex}">\n`;
+for (let k = 0; k < STRIPE.count; k++) svg += `<rect x="0" y="${num(STRIPE.start + STRIPE.pitch * k)}" width="512" height="${num(STRIPE.height)}"/>\n`;
+svg += `<rect x="0" y="${num(BAND.top)}" width="512" height="${num(BAND.bottom - BAND.top)}"/>\n`;
+svg += '</g>\n</g>\n';
+svg += `<g fill="${GREY.hex}" fill-rule="evenodd">\n`;
+for (const [name, ls] of Object.entries(groups)) svg += `<path d="${pathData(ls)}"/>\n`;
+svg += '</g>\n</svg>\n';
+writeFileSync(out, svg);
+console.log('loops', loops.length, 'kept', kept.length, 'per glyph', Object.entries(groups).map(([k, v]) => `${k}:${v.length} loops ${v.reduce((s, l) => s + l.length, 0)} pts`).join(', '), 'bytes', Buffer.byteLength(svg), 'eps', EPS, 'r', DISC_R);
