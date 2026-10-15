@@ -181,4 +181,13 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(The committer appends results here.)
+- Pre-HEAD 9864400243ee0da55ff6241cca7a6ddf720e765d (= origin/main); post-HEAD and commit
+  608572f6e8ea53e1567568ac85ca49190b5d45cf; pushed yes; remote SHA the same.
+- Digest pre-add d3c1f7ca... (812 files); ls-tree digest of new HEAD d3c1f7ca... (812).
+- Staged 45: handoff 22, src 11 (client 10, server 1), tests 12. No other modified tracked
+  handoff files; nothing pre-staged.
+- Checks (all exit 0): node v24.21.0; precommit PASS 45 files; diff --cached --check;
+  src/server only timesheetCommands.ts; JSON parse; validate_orchestration PASS; check_recovery
+  106 probes PASS; validate_package --preflight PASS. Details in
+  evidence/WP5-UX2-T08-FREEZE/checks.txt.
+- Fixes/masking: none. Deviations: none (this results text stays unstaged).

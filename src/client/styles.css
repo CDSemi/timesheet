@@ -1150,6 +1150,78 @@ tr.nonworking td {
   font-size: var(--font-size-md);
 }
 
+/* A failed check in or out: a full line under the status and the button */
+.clock-error {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+/*
+ * Check in/out in the phone's top bar (WP5-UX2-T09, below 768px; the card above shows from 768px). The group sits at the
+ * right of the logo and never wraps below it: its widest allowed size is the room left beside the logo, so a narrow bar
+ * wraps the status words inside the group instead (the "Shared with me" switcher is what wraps to a second row). The button
+ * keeps the 44px target; the bar's measured height (--shell-bar-size) follows.
+ */
+.bar-clock {
+  display: grid;
+  flex: 0 1 auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-0) var(--space-2);
+  min-width: 0;
+  max-width: calc(100% - var(--brand-logo-size) - var(--space-3));
+  margin-inline-start: auto;
+}
+
+.bar-clock .clock-state {
+  align-items: flex-end;
+  text-align: end;
+}
+
+/* A block, not a flex row, so a status that wraps keeps its live dot on the first line, flush with the text */
+.bar-clock .clock-now {
+  display: block;
+  font-size: var(--font-size-sm);
+}
+
+.bar-clock .live-dot {
+  vertical-align: middle;
+}
+
+.bar-clock .hint {
+  font-size: var(--font-size-xs);
+}
+
+.bar-clock .clock-button {
+  min-width: var(--tap-min);
+  padding-inline: var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.bar-clock[data-clock='in'] .clock-now {
+  color: var(--ok);
+}
+
+.bar-clock .clock-error {
+  grid-column: 1 / -1;
+  text-align: end;
+}
+
+/*
+ * Below 360px the date line does not fit beside the button without growing the bar past one row of 44px targets, so it stays
+ * for screen readers only (it is still the second line of the status; the visible words keep "Checked in since HH:MM").
+ */
+@media (max-width: 359px) {
+  .bar-clock .hint {
+    position: absolute;
+    width: var(--hairline);
+    height: var(--hairline);
+    overflow: hidden;
+    clip-path: var(--clip-hidden);
+    white-space: nowrap;
+  }
+}
+
 .tools {
   display: flex;
   flex-wrap: wrap;
@@ -1593,11 +1665,6 @@ textarea {
 
   .zone-note .facts {
     gap: 0 var(--space-3);
-  }
-
-  .clock-panel {
-    flex-wrap: nowrap;
-    padding: var(--space-3);
   }
 
   .clock-button {

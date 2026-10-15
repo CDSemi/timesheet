@@ -86,7 +86,7 @@ test.describe('viewing zone equals the reporting zone', () => {
 
 /**
  * WP5-UX-B-01: on a phone the first day row must be fully visible on the first screen, above the
- * bottom tab bar (the approved mockup A2: period card, clock card, then the sheet). Checked with
+ * bottom tab bar (the approved mockup A2: period card, then the sheet; since WP5-UX2-T09 the check in/out control is in the top bar, not in the page). Checked with
  * the viewing zone equal to the reporting zone and with the longer zone note shown.
  */
 async function expectFirstDayAboveTabBar(page: Page) {
@@ -98,6 +98,7 @@ async function expectFirstDayAboveTabBar(page: Page) {
   expect(tabs, 'tab bar box').not.toBeNull();
   expect(row, 'first day row box').not.toBeNull();
   expect(viewport, 'viewport').not.toBeNull();
+  console.log(`BUDGET landing zoneNote=${(await page.locator('[data-zone-note]').count()) > 0} firstRowBottom=${(row?.y ?? 0) + (row?.height ?? 0)} tabBarTop=${tabs?.y}`);
   expect((row?.y ?? 0) + (row?.height ?? 0), 'bottom of the first day row is at or above the tab bar').toBeLessThanOrEqual((tabs?.y ?? 0) + 0.5);
   expect(tabs?.y ?? 0, 'the tab bar sits on the bottom edge').toBeGreaterThan((viewport?.height ?? 0) / 2);
   // Nothing was scrolled to get here.

@@ -522,14 +522,20 @@ test('screenshots: the theme control in the bar or the More panel, light and dar
 test.describe('phone: first screen budget and the More panel with the theme control', () => {
   // Both projects run these at the phone's size (the layout follows the width), so none is skipped.
   /** The first day row against the tab bar, and the compact bar, measured; the theme control is not on the first screen. */
-  async function expectBudget(page: Page, label: string): Promise<void> {
+  async function expectBudget(page: Page, label: string, share: boolean): Promise<void> {
     await expect(page.locator('[data-day]')).toHaveCount(14);
     const first = await page.locator('[data-day]').first().boundingBox();
     const tabs = await page.locator('.shell-tabs').boundingBox();
     const shellBar = await page.locator('.shell-bar').boundingBox();
     const rowBottom = (first?.y ?? 0) + (first?.height ?? 0);
     expect(rowBottom, `${label}: bottom of the first day row is at or above the tab bar`).toBeLessThanOrEqual((tabs?.y ?? 0) + 0.5);
-    expect(shellBar?.height ?? 0, `${label}: the compact shell bar is one row`).toBeLessThanOrEqual(60);
+    // WP5-UX2-T09: the phone bar holds Check in/out. Without a share it is one row of a 44px target (60px with the bar padding);
+    // with a share the switcher wraps to a second 44px row (112px). Either way the measured --shell-bar-size equals the rendered bar (AX-01).
+    expect(shellBar?.height ?? 0, share ? `${label}: the clock row plus the switcher row` : `${label}: the compact shell bar is one row`).toBeLessThanOrEqual(
+      share ? 112.5 : 60,
+    );
+    const measured = await page.evaluate<number>("parseFloat(document.documentElement.style.getPropertyValue('--shell-bar-size'))");
+    expect(measured, `${label}: --shell-bar-size equals the rendered bar`).toBeCloseTo(shellBar?.height ?? 0, 1);
     expect(await page.evaluate('window.scrollY')).toBe(0);
     await expect(page.locator('.shell-bar .theme-switch').filter({ visible: true })).toHaveCount(0);
     console.log(`first screen 390x844 ${label}: first day row bottom ${rowBottom} of tab bar top ${tabs?.y}, shell bar ${shellBar?.height}px`);
@@ -546,7 +552,7 @@ test.describe('phone: first screen budget and the More panel with the theme cont
         await page.setViewportSize({ width: 390, height: 844 });
         await signInThroughUi();
         await expect(page.locator('[data-zone-note]')).toHaveCount(zone === 'Asia/Ho_Chi_Minh' ? 1 : 0);
-        await expectBudget(page, `no share, ${zoneState}`);
+        await expectBudget(page, `no share, ${zoneState}`, false);
       });
 
       test('a received share', async ({ page, adminSeed, builtServer, signInPageAs }) => {
@@ -558,7 +564,7 @@ test.describe('phone: first screen budget and the More panel with the theme cont
         await signInPageAs(me.account, '#/timesheet');
         await expect(page.getByRole('combobox', { name: 'Shared with me' })).toBeVisible();
         await expect(page.locator('[data-zone-note]')).toHaveCount(zone === 'Asia/Ho_Chi_Minh' ? 1 : 0);
-        await expectBudget(page, `received share, ${zoneState}`);
+        await expectBudget(page, `received share, ${zoneState}`, true);
       });
     });
   }

@@ -195,10 +195,25 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   204/0/19, mobile 210/0/13; dist/server differs from 9864400 only in
   timesheetCommands.js (3 literals, 1 comment); verify 0; digest d3c1f7ca (812 files); the
   junction incident is documented and nothing is left in the repository root.
-- Next: WP5-UX2-T08-FREEZE (committer, alone), then the T09 brief (phone header check
-  in/out).
-- Uncommitted now: the T08 source (23 paths), the board, this checkpoint (+ vi), the
-  T07-FREEZE results and evidence, the T08 and T08-FREEZE records, the T08 evidence.
+- WP5-UX2-T08-FREEZE done: 608572f6e8ea53e1567568ac85ca49190b5d45cf on main, pushed (45
+  paths; digests d3c1f7ca, 812 files; staged src/server limited to timesheetCommands.ts;
+  every check exit 0).
+- Running: WP5-UX2-T09 (worker-high, sonnet; phone header check in/out via ClockProvider,
+  none in shared views, desktop card unchanged) on 608572f / d3c1f7ca.
+- WP5-UX2-T09 first hand-back STOPPED (worker-high, self-reported claude-sonnet-5-5):
+  ClockProvider (disabled in shared views, at most the old 3 GETs) and BarClock in a 60px
+  phone bar (112px with a share), desktop card kept; budgets 571.5/670.4/623.5/722.4 of
+  788; AX-01 passes at 390/375/360/320; full e2e 5 failures, all two older bar-height
+  assertions (`theme.spec.ts:532`, `logo.spec.ts:150`) that encode the old heights.
+  Addendum 1: own those two assertions with the designed heights, then finish unit,
+  e2e, sweep, verify and digest. Slip: two empty heredocs.
+- WP5-UX2-T09 done after addendum 1: both bar assertions follow the designed heights;
+  unit 1878; e2e desktop 209/0/29, mobile 225/0/13; sweep 3 instants 0 failed; budgets
+  571.5/670.4/623.5/722.4 and away 571.5/670.4 of 788; AX-01 0 hidden; verify 0; digest
+  29ea76df (814 files).
+- Next: WP5-UX2-T09-FREEZE (committer, alone), then the T10 docs brief.
+- Uncommitted now: the T09 source (12 paths), the board, this checkpoint (+ vi), the
+  T08-FREEZE results and evidence, the T09 and T09-FREEZE records, the T09 evidence.
 
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 

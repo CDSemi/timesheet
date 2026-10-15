@@ -200,10 +200,26 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   204/0/19, mobile 210/0/13; dist/server chỉ khác 9864400 ở timesheetCommands.js (3 câu, 1
   chú thích); verify 0; digest d3c1f7ca (812 file); sự cố junction đã ghi lại và thư mục
   gốc repo không còn gì sót.
-- Tiếp theo: WP5-UX2-T08-FREEZE (committer, chạy một mình), rồi brief T09 (check in/out
-  trên header điện thoại).
-- Đang chưa commit: source T08 (23 đường dẫn), board, checkpoint này (+ en), kết quả và
-  bằng chứng T07-FREEZE, bản ghi T08 và T08-FREEZE, bằng chứng T08.
+- Xong WP5-UX2-T08-FREEZE: 608572f6e8ea53e1567568ac85ca49190b5d45cf trên main, đã push (45
+  đường dẫn; digest d3c1f7ca, 812 file; phần src/server được stage chỉ có
+  timesheetCommands.ts; mọi kiểm tra exit 0).
+- Đang chạy: WP5-UX2-T09 (worker-high, sonnet; check in/out trên header điện thoại qua
+  ClockProvider, không có trong màn hình xem chia sẻ, thẻ trên desktop giữ nguyên) trên
+  608572f / d3c1f7ca.
+- WP5-UX2-T09 bàn giao lần đầu, ĐÃ DỪNG (worker-high, tự báo claude-sonnet-5-5):
+  ClockProvider (tắt trong màn hình xem chia sẻ, tối đa 3 GET như cũ) và BarClock trong
+  header điện thoại cao 60px (112px khi có chia sẻ), desktop giữ thẻ cũ; ngân sách màn
+  hình 571.5/670.4/623.5/722.4 trên 788; AX-01 đạt ở 390/375/360/320; e2e đầy đủ 5 lỗi,
+  đều do hai phép kiểm chiều cao header cũ (`theme.spec.ts:532`, `logo.spec.ts:150`).
+  Addendum 1: nhận hai phép kiểm đó với chiều cao theo thiết kế mới, rồi làm nốt unit,
+  e2e, quét, verify và digest. Sơ suất: hai heredoc rỗng.
+- Xong WP5-UX2-T09 sau addendum 1: hai phép kiểm chiều cao header theo thiết kế mới;
+  unit 1878; e2e desktop 209/0/29, mobile 225/0/13; quét 3 thời điểm 0 lỗi; ngân sách
+  571.5/670.4/623.5/722.4 và trạng thái đã rời kỳ 571.5/670.4 trên 788; AX-01 0 ô bị che;
+  verify 0; digest 29ea76df (814 file).
+- Tiếp theo: WP5-UX2-T09-FREEZE (committer, chạy một mình), rồi brief T10 tài liệu.
+- Đang chưa commit: source T09 (12 đường dẫn), board, checkpoint này (+ en), kết quả và
+  bằng chứng T08-FREEZE, bản ghi T09 và T09-FREEZE, bằng chứng T09.
 
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 

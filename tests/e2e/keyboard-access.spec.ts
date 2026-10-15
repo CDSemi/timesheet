@@ -217,8 +217,11 @@ test.describe('WP5-UX-AX-01 on the desktop project', () => {
 
 test.describe('WP5-UX-AX-01 on the mobile project', () => {
   test.skip(({ isMobile }) => !isMobile, 'Phone widths');
+  // WP5-UX2-T09: the phone bar is taller (it holds Check in/out); the walk now covers 375 and 360 as well as 390 and 320.
   for (const size of [
     { width: 390, height: 844 },
+    { width: 375, height: 812 },
+    { width: 360, height: 740 },
     { width: 320, height: 640 },
   ]) {
     test(`Shift+Tab never stops on a hidden control at ${size.width}px: Timesheet, Settings, shared view, day editor`, async ({ page, adminSeed, builtServer, signInPageAs }) => {

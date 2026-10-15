@@ -635,7 +635,7 @@ test.describe('phone first screen with a received share', () => {
     test.describe(situation, () => {
       test.use({ timezoneId: zone });
 
-      test('the first day row is fully visible above the tab bar and the shell bar stays one row', async ({
+      test('the first day row is fully visible above the tab bar and the shell bar is the clock row plus the switcher row', async ({
         page,
         adminSeed,
         builtServer,
@@ -657,7 +657,10 @@ test.describe('phone first screen with a received share', () => {
         expect(tabs, 'tab bar box').not.toBeNull();
         expect(shellBar, 'shell bar box').not.toBeNull();
         expect((first?.y ?? 0) + (first?.height ?? 0), 'bottom of the first day row is at or above the tab bar').toBeLessThanOrEqual((tabs?.y ?? 0) + 0.5);
-        expect(shellBar?.height ?? 0, 'the compact shell bar is one row').toBeLessThanOrEqual(60);
+        // WP5-UX2-T09: the phone bar now also holds Check in/out. Its first row is the logo and that group (one 44px row, 60px with
+        // the bar padding); the switcher wraps to a second 44px row, so the bar is at most 112px. The first-screen budget above still holds.
+        expect(shellBar?.height ?? 0, 'the shell bar is two rows at most: the clock row and the switcher row').toBeLessThanOrEqual(112.5);
+        console.log(`BUDGET share zone=${zone} firstRowBottom=${(first?.y ?? 0) + (first?.height ?? 0)} tabBarTop=${tabs?.y} bar.h=${shellBar?.height}`);
         expect(await page.evaluate('window.scrollY')).toBe(0);
         // The switcher keeps its visible label, its 44px targets and its place inside the bar.
         const select = page.getByRole('combobox', { name: 'Shared with me' });

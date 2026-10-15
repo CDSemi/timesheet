@@ -144,10 +144,11 @@ test('the shell brand is the logo image with one hidden name, and the favicon is
   await signInThroughUi();
   await expectLogo(page);
 
-  // The logo does not change the bar: 56px on a desktop, the 52px compact bar on a phone.
+  // The logo does not change the bar: 56px on a desktop. The phone bar is 60px (8 + 44 + 8): since WP5-UX2-T09 it holds the 44px Check in/out
+  // target beside the logo, which is what sets its height (the 36px logo alone would keep the 52px compact bar).
   const barHeight = (await page.locator('header.shell-bar').boundingBox())?.height ?? 0;
   console.log(`shell bar height ${testInfo.project.name}: ${barHeight}px`);
-  expect(barHeight).toBe(testInfo.project.name === 'mobile' ? 52 : 56);
+  expect(barHeight).toBe(testInfo.project.name === 'mobile' ? 60 : 56);
 
   // The name appears exactly once in the shell bar and nowhere else as a standalone element on this route.
   await expect(page.locator('header.shell-bar').getByText(BRAND_NAME, { exact: true })).toHaveCount(1);

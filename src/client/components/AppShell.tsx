@@ -1,6 +1,8 @@
 import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { api, type ReceivedShare, type User } from '../api.ts';
+import { BarClock } from './BarClock.tsx';
 import { BrandWordmark } from './BrandWordmark.tsx';
+import { ClockProvider } from './ClockProvider.tsx';
 import { parseReviewHash, reviewHash } from './reviewModel.ts';
 import { SharingSwitcher } from './SharingSwitcher.tsx';
 import { parseSharedHash, type SharedView } from './sharingModel.ts';
@@ -154,13 +156,15 @@ export function AppShell({
   }
 
   return (
-    <>
+    // One check in/out state for the person's own screens; a shared view has none (F-Q5).
+    <ClockProvider enabled={route !== 'shared'}>
       <header ref={barRef} className="shell-bar">
         <span className="shell-brand">
           <img src="/cd-logo.svg" alt="" width={36} height={36} />
           <BrandWordmark />
           <span className="sr-only">C&amp;D Semiconductor Services, Inc.</span>
         </span>
+        <BarClock />
         <nav className="shell-nav" aria-label="Main">
           {desktopRoutesFor(user.role).map((item) => (
             <a key={item.id} className="nav-link" href={item.hash} aria-current={item.id === desktopCurrent ? 'page' : undefined}>
@@ -226,6 +230,6 @@ export function AppShell({
           </div>
         )}
       </nav>
-    </>
+    </ClockProvider>
   );
 }
