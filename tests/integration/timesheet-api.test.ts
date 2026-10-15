@@ -129,11 +129,21 @@ describe('calculations through the API', () => {
     expect(open.body.day.deficit_minutes).toBeNull();
     const again = await t.request('POST', '/api/clock/in', { cookie, body: { input_zone: 'America/Los_Angeles' } });
     expect(again.body.error.code).toBe('open_session_exists');
+    expect(again.status).toBe(409);
+    expect(again.body.error.message).toContain('Check out');
     t.clock.set('2026-09-29T01:00:00Z');
     const unknownBreaks = await t.request('POST', '/api/clock/out', { cookie, body: { breaks: [], breaks_confirmed: false, expected_version: 1 } });
     expect(unknownBreaks.body.day.calculation).toMatchObject({ status: 'incomplete_breaks', credited_minutes: null });
     const sheet = await t.request('GET', '/api/timesheets/2026-10-16', { cookie });
     expect(sheet.body.totals).toEqual({ provisional_credited_minutes: 0, pending_days: 1 });
+  });
+
+  it('answers a clock-out with no running session with its typed code and a Check wording', async () => {
+    const { t, cookie } = await setup('2026-09-28T16:00:00Z');
+    const none = await t.request('POST', '/api/clock/out', { cookie, body: { breaks: [], breaks_confirmed: true, expected_version: 1 } });
+    expect(none.status).toBe(409);
+    expect(none.body.error.code).toBe('no_open_session');
+    expect(none.body.error.message).toContain('check out');
   });
 
   it('reports the raw deficit on a short confirmed weekday without posting anything', async () => {

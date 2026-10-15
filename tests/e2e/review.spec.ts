@@ -270,7 +270,7 @@ test('the review shows the server content for all 14 days, then the sign-off sub
 
   // Back on the timesheet the header carries the review and delivery status from the server.
   await page.getByRole('link', { name: 'Back to the timesheet' }).first().click();
-  await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Check in' })).toBeVisible();
   await expect(page.locator('[data-status="review"]')).toHaveText('Submitted manually');
   await expect(page.locator('[data-status="delivery"]')).toBeVisible();
   await expect(page.locator(`[data-review-link="${reviewer.payrollDate}"]`)).toHaveText('Review or correct');

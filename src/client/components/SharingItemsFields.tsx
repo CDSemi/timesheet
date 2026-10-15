@@ -11,7 +11,7 @@ const SCOPES: ReadonlyArray<{ value: TimesheetsScope; label: string }> = [
 /**
  * The per-item switches of a share: timesheets (none, view or edit), the read-only OT summary and
  * ledger, and final PDF downloads. The note that PDFs carry the owner's signature image stands
- * beside the PDF switch and is its accessible description. Clock in/out, sign-off, sending and
+ * beside the PDF switch and is its accessible description. Check in/out, sign-off, sending and
  * settings are not items: no share can include them.
  */
 export function SharingItemsFields({

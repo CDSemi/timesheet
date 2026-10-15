@@ -185,10 +185,25 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   chọn đang dùng nền đặc màu nhấn; tương phản chữ ít nhất 4.68, viền focus 6.09; thanh
   trên cùng một hàng ở 1440 khi có chia sẻ; menu More vừa; unit 1877; e2e desktop 204,
   mobile 210, 0 lỗi; verify 0; digest 3416cf04 (812 file).
-- Tiếp theo: WP5-UX2-T07-FREEZE (committer, chạy một mình), rồi brief T08 (đổi chữ Check
-  in/out).
-- Đang chưa commit: source T07 (8 đường dẫn), board, checkpoint này (+ en), kết quả và bằng
-  chứng T06-FREEZE, bản ghi T07 và T07-FREEZE, bằng chứng T07.
+- Xong WP5-UX2-T07-FREEZE: 9864400243ee0da55ff6241cca7a6ddf720e765d trên main, đã push (34
+  đường dẫn; digest 3416cf04, 812 file; mọi kiểm tra exit 0).
+- Đang chạy: WP5-UX2-T08 (worker, sonnet; đổi chữ Check in/out, gồm ba câu thông báo phía
+  server, có chứng minh dist/server chỉ khác ở các câu đó) trên 9864400 / 3416cf04.
+- WP5-UX2-T08 bàn giao lần đầu, ĐÃ DỪNG (worker, tự báo claude-sonnet-5-5): đã đổi chữ ở
+  mười file client, ba câu phía server cộng một chú thích, và các test thuộc phần việc
+  (vùng "Check in and out", dòng chờ "Checking your status"); unit 1878; e2e đầy đủ 4 lỗi,
+  đều ở `keyboard-access.spec.ts:177` (không thuộc phần việc) vẫn chờ "Clock in/out". Một
+  junction đặt sai đường dẫn từng được tạo thoáng qua ở thư mục gốc repo rồi đã xoá.
+  Addendum 1: nhận thêm đúng dòng mẫu đó (chỉ tên mới), ghi lại sự cố junction kèm bằng
+  chứng, rồi chạy e2e đầy đủ, chứng minh khác biệt dist/server, verify và digest.
+- Xong WP5-UX2-T08 sau addendum 1: đổi tên trong mẫu keyboard-access; e2e đầy đủ desktop
+  204/0/19, mobile 210/0/13; dist/server chỉ khác 9864400 ở timesheetCommands.js (3 câu, 1
+  chú thích); verify 0; digest d3c1f7ca (812 file); sự cố junction đã ghi lại và thư mục
+  gốc repo không còn gì sót.
+- Tiếp theo: WP5-UX2-T08-FREEZE (committer, chạy một mình), rồi brief T09 (check in/out
+  trên header điện thoại).
+- Đang chưa commit: source T08 (23 đường dẫn), board, checkpoint này (+ en), kết quả và
+  bằng chứng T07-FREEZE, bản ghi T08 và T08-FREEZE, bằng chứng T08.
 
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 

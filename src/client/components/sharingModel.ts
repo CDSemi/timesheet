@@ -51,7 +51,7 @@ export type SharedView = 'timesheet' | 'ot' | 'revisions';
 export const SHARED_VIEW_LABEL: Record<SharedView, string> = { timesheet: 'Timesheet', ot: 'OT', revisions: 'Revisions' };
 
 /**
- * The actions and views a share exposes. There is deliberately no field for Clock in/out, sign-off,
+ * The actions and views a share exposes. There is deliberately no field for Check in/out, sign-off,
  * sending, corrections, leave or settings: no share can ever allow them, so no screen of a shared
  * view has anything to show for them.
  */

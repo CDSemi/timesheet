@@ -122,7 +122,7 @@ export function draftGap(draft: SessionDraft): string | null {
   return breaksGap(draft);
 }
 
-/** An empty field in a listed break (a Clock out has no end to check, only its breaks). */
+/** An empty field in a listed break (a Check out has no end to check, only its breaks). */
 export function breaksGap(draft: SessionDraft): string | null {
   if (draft.mode !== 'none' && draft.breaks.some((row) => !fieldIsFilled(row.start) || !fieldIsFilled(row.end))) {
     return 'Complete every break or remove it.';
@@ -146,7 +146,7 @@ export function buildSessionRequest(draft: SessionDraft, options: { expectedVers
 }
 
 /**
- * Clock out body (E-1). Confirmed or none sends the complete list; pending omits it, which keeps
+ * Check out body (E-1). Confirmed or none sends the complete list; pending omits it, which keeps
  * the saved rows and leaves the breaks unknown.
  */
 export function buildClockOutRequest(draft: SessionDraft, expectedVersion: number, reason?: string): ClockOutRequest {

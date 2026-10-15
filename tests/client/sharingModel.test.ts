@@ -91,7 +91,7 @@ describe('which actions a share shows', () => {
     expect(abilitiesOf(items('none', true)).viewRevisions).toBe(false);
   });
 
-  it('never offers Clock in/out, sign-off, sending or settings to a grantee, whatever the items', () => {
+  it('never offers Check in/out, sign-off, sending or settings to a grantee, whatever the items', () => {
     for (const set of VALID_SETS) {
       const abilities = abilitiesOf(set);
       expect(Object.keys(abilities).sort(), JSON.stringify(set)).toEqual(

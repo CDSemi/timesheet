@@ -526,7 +526,7 @@ export class SeedClient {
     await this.putDay(workDate, {});
   }
 
-  /** Clock in and straight out (breaks confirmed none): a clock-source session today. */
+  /** Check in and straight out (breaks confirmed none): a clock-source session today. */
   async seedClockSessionToday(): Promise<{ workDate: string; sessionId: string }> {
     const started = await this.call<{ session: { id: string; work_date: string; version: number } }>(
       'POST',

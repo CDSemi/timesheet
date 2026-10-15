@@ -91,7 +91,7 @@ export function DayEditor({
 
   // Opens the panel (non-modal) or the bottom sheet (modal) and moves focus to the heading. A switch
   // between the two while open (the window crossed 1200px) re-opens the same element in the other mode.
-  // WP5-UX-B3-01: re-showing it while another modal dialog is open (a label review, the clock-out
+  // WP5-UX-B3-01: re-showing it while another modal dialog is open (a label review, the check-out
   // dialog) would stack the editor above that dialog and take its focus and its Escape. The switch then
   // waits until no other modal dialog is left (closed or removed), so the open dialog keeps both.
   useEffect(() => {
@@ -120,7 +120,7 @@ export function DayEditor({
   }, [modal]);
 
   // A non-modal panel leaves the sheet focusable, so Escape closes it wherever focus is. A nested
-  // modal dialog (a review, the clock-out dialog) takes Escape first, and so does a control that
+  // modal dialog (a review, the check-out dialog) takes Escape first, and so does a control that
   // already used the key (an open label picker). A modal editor closes through its own handlers.
   useEffect(() => {
     if (modal) return;

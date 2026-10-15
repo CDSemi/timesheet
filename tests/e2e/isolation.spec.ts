@@ -98,7 +98,7 @@ test('a second employee cannot reach employee 1 by hash swap or by id swap', asy
   try {
     const { account, api } = await secondEmployee(adminSeed, builtServer);
     await signInPageAs(account);
-    await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Check in' })).toBeVisible();
 
     // Employee 1's date is in the displayed period for employee 2 too, with nothing recorded.
     const row = page.locator(`[data-day="${owner.workDate}"]`);
@@ -157,7 +157,7 @@ test('an admin cannot open employee data through any admin screen', async (
     const main = page.locator('main');
     await expect(main).not.toContainText(owner.note);
     await expect(main).not.toContainText(owner.sessionId);
-    for (const forbidden of ['Clock in', 'Daily evidence', 'Reserve OT leave']) {
+    for (const forbidden of ['Check in', 'Clock in', 'Daily evidence', 'Reserve OT leave']) {
       await expect(main.getByText(forbidden)).toHaveCount(0);
     }
     await page.screenshot({ path: screenshotPath(`isolation-admin-${testInfo.project.name}-synthetic.png`), fullPage: true });
@@ -182,7 +182,7 @@ test('an admin cannot open employee data through any admin screen', async (
 
     // The admin's own timesheet shows nothing of employee 1.
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Timesheet' }).click();
-    await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Check in' })).toBeVisible();
     await expect(page.locator('main')).not.toContainText(owner.note);
     await expect(page.locator(`[data-day="${owner.workDate}"]`)).not.toContainText('Complete');
     await expect(page.locator(`[data-day="${owner.workDate}"] [data-check="complete"]`)).toHaveCount(0);

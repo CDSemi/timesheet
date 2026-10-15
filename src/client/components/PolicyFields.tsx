@@ -49,7 +49,7 @@ export function PolicyFields({ draft, onChange }: { draft: PolicyDraft; onChange
         </select>
       </label>
       <fieldset className="breaks">
-        <legend>Breaks, counted from the first clock-in</legend>
+        <legend>Breaks, counted from the first check-in</legend>
         {draft.breaks.length === 0 && <p className="muted">No breaks are configured.</p>}
         {draft.breaks.map((row, index) => (
           <div key={row.rowKey} className="break-row" data-break-row={index + 1}>

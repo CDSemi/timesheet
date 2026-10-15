@@ -180,9 +180,25 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   segment solid accent; contrast at least 4.68 text and 6.09 ring; bar one row at 1440
   with a share; More panel fits; unit 1877; e2e desktop 204, mobile 210, 0 failed; verify
   0; digest 3416cf04 (812 files).
-- Next: WP5-UX2-T07-FREEZE (committer, alone), then the T08 brief (Check in/out rename).
-- Uncommitted now: the T07 source (8 paths), the board, this checkpoint (+ vi), the
-  T06-FREEZE results and evidence, the T07 and T07-FREEZE records, the T07 evidence.
+- WP5-UX2-T07-FREEZE done: 9864400243ee0da55ff6241cca7a6ddf720e765d on main, pushed (34
+  paths; digests 3416cf04, 812 files; every check exit 0).
+- Running: WP5-UX2-T08 (worker, sonnet; Check in/out rename incl. three server message
+  literals, with a dist/server delta proof) on 9864400 / 3416cf04.
+- WP5-UX2-T08 first hand-back STOPPED (worker, self-reported claude-sonnet-5-5): rename
+  done in ten client files, three server literals plus one comment, and the owned tests
+  (region "Check in and out", loading text "Checking your status"); unit 1878; full e2e
+  4 failed, all `keyboard-access.spec.ts:177` (not owned) still expecting "Clock in/out".
+  A mis-escaped junction was briefly created in the repository root and removed.
+  Addendum 1: own that one pattern (new name only), record the junction incident with
+  proof, then full e2e, the dist/server delta proof, verify and digest.
+- WP5-UX2-T08 done after addendum 1: keyboard-access pattern renamed; full e2e desktop
+  204/0/19, mobile 210/0/13; dist/server differs from 9864400 only in
+  timesheetCommands.js (3 literals, 1 comment); verify 0; digest d3c1f7ca (812 files); the
+  junction incident is documented and nothing is left in the repository root.
+- Next: WP5-UX2-T08-FREEZE (committer, alone), then the T09 brief (phone header check
+  in/out).
+- Uncommitted now: the T08 source (23 paths), the board, this checkpoint (+ vi), the
+  T07-FREEZE results and evidence, the T08 and T08-FREEZE records, the T08 evidence.
 
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 

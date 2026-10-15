@@ -94,7 +94,7 @@ async function findRunningSession(shown: TimesheetView | null): Promise<Session 
 
 /**
  * Another person's timesheets, opened through a share (FR-17). Every read and write goes through
- * `request` (below `/api/shared/:ownerId`). Clock in/out, the review and the submission status are
+ * `request` (below `/api/shared/:ownerId`). Check in/out, the review and the submission status are
  * the owner's own: they are absent here, and the batch and day edit controls are absent without an
  * edit share (never merely disabled).
  */
@@ -136,7 +136,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const [batchMode, setBatchMode] = useState(false);
   // An imported period keeps its locked batch controls and the reason visible (F-2).
   const batchOn = canEdit && (batchMode || imported);
-  /** The running session found in the loaded periods: undefined until the first check, null when clocked out. */
+  /** The running session found in the loaded periods: undefined until the first check, null when checked out. */
   const [running, setRunning] = useState<Session | null | undefined>(undefined);
   /** What the open review dialog commits (the batch selection, or one in-cell label pick). */
   const [previewSource, setPreviewSource] = useState<PreviewSource>({ kind: 'batch' });
@@ -591,12 +591,12 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
           displayZone={displayZone}
           onDone={() => {
             setClockOutSession(null);
-            setNotice('Clocked out.');
+            setNotice('Checked out.');
             load();
           }}
           onStale={() => {
             setClockOutSession(null);
-            setNotice('The running session changed elsewhere; it was reloaded. Clock out again to review it.');
+            setNotice('The running session changed elsewhere; it was reloaded. Check out again to review it.');
             load();
           }}
           onClose={() => setClockOutSession(null)}

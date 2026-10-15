@@ -228,7 +228,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     const sheetDate = page.locator('[data-day] [data-day-button]').first();
     await expect(sheetDate).toHaveAccessibleName(ANY_DAY_BUTTON_NAME);
     const controls: Array<[string, Locator]> = [
-      ['button', page.getByRole('button', { name: 'Clock in' })],
+      ['button', page.getByRole('button', { name: 'Check in' })],
       ['link', nav.getByRole('link', { name: 'Overtime' })],
       ['sheet date', sheetDate],
     ];

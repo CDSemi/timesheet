@@ -14,7 +14,7 @@ import {
 } from './sessionModel.ts';
 
 /**
- * Clock out with break confirmation (R-01, R-02). The running session's version goes with the
+ * Check out with break confirmation (R-01, R-02). The running session's version goes with the
  * request, so a session changed elsewhere answers 409 stale_version instead of being overwritten.
  * Suggested breaks shift with the arrival; unconfirmed breaks keep the day pending OT. The server
  * ends the session at its own current second.
@@ -55,10 +55,10 @@ export function ClockOutDialog({
   const gap = breaksGap(draft);
   const submitLabel =
     draft.mode === 'pending'
-      ? 'Clock out, breaks unconfirmed'
+      ? 'Check out, breaks unconfirmed'
       : draft.mode === 'none'
-        ? 'Clock out, no breaks taken'
-        : 'Clock out with these breaks';
+        ? 'Check out, no breaks taken'
+        : 'Check out with these breaks';
 
   function suggest() {
     setError(null);
@@ -71,7 +71,7 @@ export function ClockOutDialog({
       setSuggestNote(start.message);
       return;
     }
-    setSuggestNote('Suggested from your arrival. A break that ends later than the Clock out time is refused.');
+    setSuggestNote('Suggested from your arrival. A break that ends later than the check-out time is refused.');
     setDraft({ ...draft, breaks: suggestedRows(start.utc, draft.zone, policy.breaks, () => newRowKey()), mode: 'pending' });
   }
 
@@ -97,7 +97,7 @@ export function ClockOutDialog({
   return (
     <dialog ref={dialog} className="dialog dialog-wide" aria-labelledby="clock-out-title" onClose={onClose}>
       <form className="stack" onSubmit={submit}>
-        <h2 id="clock-out-title">Clock out</h2>
+        <h2 id="clock-out-title">Check out</h2>
         <p>
           Running since <span className="mono">{instantText(session.start_utc, displayZone)}</span> ({displayZone}), accounting
           date <span className="mono">{session.work_date}</span>, entered in {session.input_zone}.
@@ -119,7 +119,7 @@ export function ClockOutDialog({
         )}
         {stale && (
           <div className="stale" role="alert">
-            <p>This session changed since it was loaded. Nothing was saved. Reload to review the latest session, then clock out again.</p>
+            <p>This session changed since it was loaded. Nothing was saved. Reload to review the latest session, then check out again.</p>
             <button type="button" onClick={onStale}>
               Reload
             </button>

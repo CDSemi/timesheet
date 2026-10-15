@@ -2,9 +2,9 @@ import type { Session } from '../api.ts';
 import { clockedInText } from './periodBarModel.ts';
 
 /**
- * The clock: one button chosen from the running session. Clocked out shows "Clock in"; clocked in
- * shows "Clocked in since HH:MM" with a live dot (static: a ringed shape, not an animation) and
- * "Clock out", which opens the break confirmation dialog. `running` is undefined while the first
+ * Check in/out: one button chosen from the running session. Checked out shows "Check in"; checked in
+ * shows "Checked in since HH:MM" with a live dot (static: a ringed shape, not an animation) and
+ * "Check out", which opens the break confirmation dialog. `running` is undefined while the first
  * check is still on its way; the button then waits instead of guessing.
  */
 export function ClockPanel({
@@ -20,15 +20,15 @@ export function ClockPanel({
 }) {
   const since = running === null || running === undefined ? null : clockedInText(running, zone);
   return (
-    <section className="card clock-panel" aria-label="Clock" data-clock={running === undefined ? 'checking' : since === null ? 'out' : 'in'}>
+    <section className="card clock-panel" aria-label="Check in and out" data-clock={running === undefined ? 'checking' : since === null ? 'out' : 'in'}>
       <div className="clock-state" aria-live="polite">
         {since === null ? (
-          <span className="clock-now">{running === undefined ? 'Checking the clock' : 'Clocked out'}</span>
+          <span className="clock-now">{running === undefined ? 'Checking your status' : 'Checked out'}</span>
         ) : (
           <>
             <span className="clock-now">
               <span className="shape shape-circle live-dot" aria-hidden="true" />
-              Clocked in since {since.time}
+              Checked in since {since.time}
             </span>
             <span className="muted hint">{since.day}, session running</span>
           </>
@@ -36,11 +36,11 @@ export function ClockPanel({
       </div>
       {since === null ? (
         <button type="button" className="clock-button" onClick={onClockIn} disabled={running === undefined}>
-          Clock in
+          Check in
         </button>
       ) : (
         <button type="button" className="clock-button" onClick={onClockOut}>
-          Clock out
+          Check out
         </button>
       )}
     </section>

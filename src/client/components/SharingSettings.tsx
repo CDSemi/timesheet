@@ -39,7 +39,7 @@ export function SharingSection({ onChanged }: { onChanged: () => void }) {
       <h2 id="sharing-title">Sharing</h2>
       <p className="hint muted">
         Share your timesheets with another account, item by item. You can change or end a share at any time; it applies on the other person&apos;s next
-        request. Sign-off, sending, Clock in/out and your settings always stay with you.
+        request. Sign-off, sending, Check in/out and your settings always stay with you.
       </p>
       {loadError !== null && (
         <p className="error" role="alert">

@@ -308,6 +308,7 @@ describe('Clock out break-list contract (WP2-T01, decision E-1)', () => {
     const omitted = await clockOut(t, cookie, { breaks_confirmed: false });
     expect(omitted.status).toBe(422);
     expect(omitted.body.error.code).toBe('saved_break_after_clock_out');
+    expect(omitted.body.error.message).toContain('Check out');
     expect(omitted.body.error.details.break_ids).toEqual(['legacy-future-break']);
     expect(sessionState(t.db, sessionId)).toEqual(STILL_OPEN);
     expect(breakRowsWithIds(t.db, sessionId)).toEqual(rowsBefore);

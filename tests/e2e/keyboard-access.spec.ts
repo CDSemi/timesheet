@@ -174,7 +174,7 @@ async function walkScreens(page: Page, world: World, signInPageAs: (credentials:
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await signInPageAs(world.me.account, '#/timesheet');
   await expect(page.locator('[data-day]')).toHaveCount(14);
-  await expect(page.getByRole('button', { name: /^Clock (in|out)$/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Check (in|out)$/ })).toBeVisible();
   const results = [await walkBackward(page, 'body', `${width} Timesheet`)];
 
   await page.goto('/#/settings');

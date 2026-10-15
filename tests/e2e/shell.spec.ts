@@ -65,7 +65,7 @@ test('the Theme control: first control of the top bar group on a desktop, betwee
   isMobile,
 }) => {
   await signInThroughUi();
-  await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Check in' })).toBeVisible();
   if (isMobile) {
     const nav = page.getByRole('navigation', { name: 'Main' });
     await nav.getByRole('button', { name: 'More' }).click();
@@ -161,7 +161,7 @@ test('the existing timesheet view works inside the shell', async ({ page, employ
     await employeeSeed.seedCompleteDay(workDate);
 
     await signInThroughUi();
-    await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Check in' })).toBeVisible();
     const row = page.locator(`[data-day="${workDate}"]`);
     await expect(row).toContainText('Complete');
     await expect(row.locator('[data-check="complete"]')).toHaveCount(1);
@@ -179,7 +179,7 @@ test('the existing timesheet view works inside the shell', async ({ page, employ
 test('mobile: no horizontal overflow and tap targets of at least 44px', async ({ page, signInThroughUi }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', 'mobile layout only');
   await signInThroughUi();
-  await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Check in' })).toBeVisible();
 
   const widths = await page.evaluate<{ scroll: number; inner: number }>(
     '({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth })',

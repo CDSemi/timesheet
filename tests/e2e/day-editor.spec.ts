@@ -6,7 +6,7 @@ import { expect, newPerson, screenshotPath, type SeedClient, test } from './fixt
 
 /*
  * Day editor on both projects: manual sessions with an explicit input zone, DST fold and gap
- * choices and an explicit overnight end date; break suggestions; Clock in and Clock out with
+ * choices and an explicit overnight end date; break suggestions; Check in and Check out with
  * break confirmation and a stale version; category, partial leave and WFH with the OT mismatch
  * notice; the reason prompt for old periods; and future days shown as upcoming. WP5-UX-T04: the
  * editor is a non-modal side panel on a desktop and a modal bottom sheet on a phone (focus in and
@@ -58,7 +58,7 @@ function figure(editor: Locator, name: string): Locator {
 
 /** Clocks in through the UI and waits until the server shows the running session and a positive length. */
 async function clockIn(page: Page, seed: SeedClient, todayLocal: string) {
-  await page.getByRole('button', { name: 'Clock in' }).click();
+  await page.getByRole('button', { name: 'Check in' }).click();
   await expect
     .poll(async () => (await seed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null))
     .toBe(true);
@@ -474,7 +474,7 @@ test('a local time that does not exist (DST gap) is explained and can move to th
   }
 });
 
-test('Clock in then Clock out asks for break confirmation and sends the session version', async ({
+test('Check in then Check out asks for break confirmation and sends the session version', async ({
   page,
   employeeSeed,
   signInThroughUi,
@@ -484,48 +484,48 @@ test('Clock in then Clock out asks for break confirmation and sends the session 
   await signInThroughUi();
   await clockIn(page, employeeSeed, todayLocal);
 
-  // One state-aware button: clocked in shows only Clock out, with the running state in words.
-  await expect(page.getByRole('button', { name: 'Clock out' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Clock in' })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Clock' })).toContainText('Clocked in since');
+  // One state-aware button: checked in shows only Check out, with the running state in words.
+  await expect(page.getByRole('button', { name: 'Check out' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Check in' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Check in and out' })).toContainText('Checked in since');
   await page.screenshot({ path: screenshotPath(`period-${project}-clocked-in-synthetic.png`), animations: 'disabled' });
-  await page.getByRole('button', { name: 'Clock out' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Clock out' });
+  await page.getByRole('button', { name: 'Check out' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Check out' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Running since');
   await expect(dialog.getByRole('radio', { name: /Breaks not confirmed yet/ })).toBeChecked();
-  await expect(dialog.getByRole('button', { name: 'Clock out, breaks unconfirmed' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' })).toBeVisible();
 
-  // Suggestions follow the arrival; confirming breaks that end after the Clock out is refused.
+  // Suggestions follow the arrival; confirming breaks that end after the check-out is refused.
   await dialog.getByRole('button', { name: 'Suggest breaks' }).click();
   await expect(dialog.locator('[data-break]')).toHaveCount(3);
   await dialog.getByRole('button', { name: 'Confirm suggested breaks' }).click();
   await snap(page, 'clock-out-dialog', project);
-  await dialog.getByRole('button', { name: 'Clock out with these breaks' }).click();
+  await dialog.getByRole('button', { name: 'Check out with these breaks' }).click();
   await expect(dialog.getByRole('alert')).toContainText('inside their work session');
   expect((await employeeSeed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(true);
 
   // Confirming that no break was taken ends the session with confirmed, empty breaks.
   await dialog.getByRole('radio', { name: /No breaks taken/ }).check();
-  await dialog.getByRole('button', { name: 'Clock out, no breaks taken' }).click();
+  await dialog.getByRole('button', { name: 'Check out, no breaks taken' }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByText('Clocked out.')).toBeVisible();
-  // After the clock out the panel offers Clock in again.
-  await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Clock out' })).toHaveCount(0);
+  await expect(page.getByText('Checked out.')).toBeVisible();
+  // After the check-out the panel offers Check in again.
+  await expect(page.getByRole('button', { name: 'Check in' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Check out' })).toHaveCount(0);
   const closed = (await employeeSeed.dayView(todayLocal)).sessions.filter((session) => session.source === 'clock').at(-1);
   expect(closed?.end_utc).not.toBeNull();
   expect(closed?.breaks_confirmed).toBe(true);
   expect(closed?.breaks).toHaveLength(0);
 });
 
-test('a stale session version at Clock out says so, reloads and then clocks out', async ({ page, employeeSeed, signInThroughUi }) => {
+test('a stale session version at Check out says so, reloads and then checks out', async ({ page, employeeSeed, signInThroughUi }) => {
   const { todayLocal } = await employeeSeed.today();
   await signInThroughUi();
   await clockIn(page, employeeSeed, todayLocal);
 
-  await page.getByRole('button', { name: 'Clock out' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Clock out' });
+  await page.getByRole('button', { name: 'Check out' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Check out' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('radio', { name: /No breaks taken/ }).check();
 
@@ -541,17 +541,17 @@ test('a stale session version at Clock out says so, reloads and then clocks out'
     expected_version: running?.version,
   });
 
-  await dialog.getByRole('button', { name: 'Clock out, no breaks taken' }).click();
+  await dialog.getByRole('button', { name: 'Check out, no breaks taken' }).click();
   await expect(dialog.getByRole('alert').first()).toContainText('This session changed since it was loaded');
   expect((await employeeSeed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(true);
   await dialog.getByRole('button', { name: 'Reload' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByText('reloaded')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Clock out' }).click();
-  const again = page.getByRole('dialog', { name: 'Clock out' });
+  await page.getByRole('button', { name: 'Check out' }).click();
+  const again = page.getByRole('dialog', { name: 'Check out' });
   await again.getByRole('radio', { name: /No breaks taken/ }).check();
-  await again.getByRole('button', { name: 'Clock out, no breaks taken' }).click();
+  await again.getByRole('button', { name: 'Check out, no breaks taken' }).click();
   await expect(again).toHaveCount(0);
   expect((await employeeSeed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(false);
 });

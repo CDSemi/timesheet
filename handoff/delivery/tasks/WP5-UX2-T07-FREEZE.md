@@ -159,4 +159,13 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(The committer appends results here.)
+- Pre-HEAD 3f5a3b333dede51043000e7123960ac05d26a76b; post-HEAD and commit SHA
+  9864400243ee0da55ff6241cca7a6ddf720e765d; pushed yes; remote SHA the same.
+- Digest before add and after commit (ls-tree): 3416cf04012f3da4a44b3968d384200e108301741ee599f37fdfe61b388975e8 (812 files).
+- Staged 34: 8 source, 4 modified handoff, 2 task records, 2 T06-FREEZE evidence, 18 T07 evidence.
+- Other modified tracked handoff files: none.
+- Checks (all exit 0): node v24.21.0, digest, add, precommit (34 files, PASS), diff --check,
+  JSON parse, validator, check_recovery (106 probes), validate_package --preflight, post-commit digest.
+- No fix, no masking, no stop. Deviation: first PATH attempt used a Windows-style path and
+  resolved Node 26; corrected to the /c/ path before any repo command.
+- Evidence: handoff/delivery/evidence/WP5-UX2-T07-FREEZE/ (checks.txt, commit-message.txt), unstaged.

@@ -170,7 +170,7 @@ describe('request bodies follow the server contract', () => {
     expect(buildSessionRequest(draft(), { reason: '   ' })).not.toHaveProperty('reason');
   });
 
-  it('builds Clock out per E-1: unknown omits the list, confirmed or none sends the complete list', () => {
+  it('builds Check out per E-1: unknown omits the list, confirmed or none sends the complete list', () => {
     const rows = [{ key: 'a', start: field('2026-09-21', '11:00'), end: field('2026-09-21', '11:15'), countsAsWork: false }];
     const unknown = buildClockOutRequest(draft({ breaks: rows, mode: 'pending' }), 7);
     expect(unknown).toEqual({ breaks_confirmed: false, expected_version: 7 });
