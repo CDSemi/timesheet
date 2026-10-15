@@ -29,6 +29,12 @@
   texts; no business change. Optional owner question WP5-UX2-Q3 (the "future" badge on the
   period Today opens in the five window days; default: keep) and optional backlog: see the
   [WP5 handoff](delivery/WP5_HANDOFF.md).
+- UI change round 3 (owner requests 2026-10-15, running): a modern style instead of the
+  industrial one, a top-bar identity menu, header and period-bar layout, lifted sheet
+  selections, and a Day editor with a separate session dialog and a simpler break area
+  (27 items, verbatim on the board). Running: the plan WP5-UX3-PLAN (read-only, with a
+  mockup). The owner will review the mockup and the plan's questions before the
+  style-dependent slices; a governance change of the AGENTS.md UI section comes first.
 - Pilot: the concrete [pilot packet](delivery/WP5_PILOT_PACKET.md) is ready for owner
   review (release identity a643794 / 229df806). Owner permission has not been requested,
   there is no pilot result, and the NAS is NOT VERIFIED.
@@ -81,7 +87,7 @@ Current route:
      authorization. Then resume the coordinator with the entry prompt above.
 
 After usage reset: Resume/Continue the existing session, for example
-`claude --continue` here or `claude --resume 11acfabe-25ef-48b5-ac28-73ce2d74ecee`.
+`claude --continue` here or `claude --resume b5de56d1-fb31-4dc5-b74f-70e9473e1a0a`.
 If unavailable, open a new session and reuse the same entry prompt. [RESUME](prompts/RESUME.md)
 recovers from the board, checkpoint, task reports and git; no need to resend the business brief.
 

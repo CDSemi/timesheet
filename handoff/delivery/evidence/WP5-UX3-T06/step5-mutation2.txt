@@ -1,0 +1,172 @@
+$ mutation 2: past-day comparison workDate < todayLocal changed to <=
+546:  if (policy === undefined || todayLocal === null || !isCivilDate(workDate) || !isCivilDate(todayLocal)) return [];
+547:  if (!(workDate <= todayLocal)) return [];
+
+> timesheet@0.1.0 test
+> vitest run tests/client/breakRowsModel.test.ts
+
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/breakRowsModel.test.ts (68 tests | 2 failed) 22ms
+   ❯ past-day suggestions (6)
+     × today_local itself, later dates and an unknown today get none 5ms
+     × nothing is re-shifted for today, for saved rows or while the start cannot be resolved 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > past-day suggestions > today_local itself, later dates and an unknown today get none
+AssertionError: expected [ { key: 's0', …(6) }, …(2) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "countsAsWork": false,
++     "edited": false,
++     "key": "s0",
++     "minutes": "15",
++     "origin": "suggested",
++     "pinned": {
++       "endUtc": 1791998100,
++       "startUtc": 1791997200,
++       "zone": "America/Los_Angeles",
++     },
++     "start": {
++       "date": "2026-10-14",
++       "fold": null,
++       "offset": "-07:00",
++       "time": "10:00",
++     },
++   },
++   {
++     "countsAsWork": false,
++     "edited": false,
++     "key": "s1",
++     "minutes": "30",
++     "origin": "suggested",
++     "pinned": {
++       "endUtc": 1792006200,
++       "startUtc": 1792004400,
++       "zone": "America/Los_Angeles",
++     },
++     "start": {
++       "date": "2026-10-14",
++       "fold": null,
++       "offset": "-07:00",
++       "time": "12:00",
++     },
++   },
++   {
++     "countsAsWork": false,
++     "edited": false,
++     "key": "s2",
++     "minutes": "15",
++     "origin": "suggested",
++     "pinned": {
++       "endUtc": 1792014300,
++       "startUtc": 1792013400,
++       "zone": "America/Los_Angeles",
++     },
++     "start": {
++       "date": "2026-10-14",
++       "fold": null,
++       "offset": "-07:00",
++       "time": "14:30",
++     },
++   },
++ ]
+
+ ❯ tests/client/breakRowsModel.test.ts:628:84
+    626|
+    627|   it('today_local itself, later dates and an unknown today get none', …
+    628|     expect(pastDaySuggestedRows(context('2026-10-14', '2026-10-14'), s…
+       |                                                                                    ^
+    629|     expect(pastDaySuggestedRows(context('2026-10-15', '2026-10-14'), s…
+    630|     expect(pastDaySuggestedRows(context('2026-10-14', null), session, …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > past-day suggestions > nothing is re-shifted for today, for saved rows or while the start cannot be resolved
+AssertionError: expected [ { key: 's0', …(6) }, …(2) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "countsAsWork": false,
++     "edited": false,
++     "key": "s0",
++     "minutes": "15",
++     "origin": "suggested",
++     "pinned": {
++       "endUtc": 1791998100,
++       "startUtc": 1791997200,
++       "zone": "America/Los_Angeles",
++     },
++     "start": {
++       "date": "2026-10-14",
++       "fold": null,
++       "offset": "-07:00",
++       "time": "10:00",
++     },
++   },
++   {
++     "countsAsWork": false,
++     "edited": false,
++     "key": "s1",
++     "minutes": "30",
++     "origin": "suggested",
++     "pinned": {
++       "endUtc": 1792006200,
++       "startUtc": 1792004400,
++       "zone": "America/Los_Angeles",
++     },
++     "start": {
++       "date": "2026-10-14",
++       "fold": null,
++       "offset": "-07:00",
++       "time": "12:00",
++     },
++   },
++   {
++     "countsAsWork": false,
++     "edited": false,
++     "key": "s2",
++     "minutes": "15",
++     "origin": "suggested",
++     "pinned": {
++       "endUtc": 1792014300,
++       "startUtc": 1792013400,
++       "zone": "America/Los_Angeles",
++     },
++     "start": {
++       "date": "2026-10-14",
++       "fold": null,
++       "offset": "-07:00",
++       "time": "14:30",
++     },
++   },
++ ]
+
+ ❯ tests/client/breakRowsModel.test.ts:673:24
+    671|   it('nothing is re-shifted for today, for saved rows or while the sta…
+    672|     const today = reshiftSuggestions(dialog(), context('2026-10-14', '…
+    673|     expect(today.rows).toEqual([]);
+       |                        ^
+    674|     const saved = sessionDialogDraftFromSession(savedSession());
+    675|     expect(reshiftSuggestions(saved, context('2026-09-21', '2026-10-15…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 66 passed (68)
+   Start at  16:21:52
+   Duration  358ms (import 50%, transform 39%, tests 9%, worker 1%)
+
+exit 1

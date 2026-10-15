@@ -1,0 +1,62 @@
+$ mutation 3: end = typed local wall clock + minutes, read again in the input zone (instead of start instant + minutes x 60 s)
+311:  const endUtc = resolveLocalDateTimeCompatible(new Date(Date.parse(`${fieldLocal(row.start)}Z`) + minutes.minutes * 60_000).toISOString().slice(0, 19), zone);
+527:  const endUtc = resolveLocalDateTimeCompatible(`${endDate}T${policy.reference_end}`, reportingZone);
+
+> timesheet@0.1.0 test
+> vitest run tests/client/breakRowsModel.test.ts
+
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/breakRowsModel.test.ts (68 tests | 2 failed) 21ms
+   ❯ DST in America/Los_Angeles (5)
+     × a 30-minute break from the first 01:45 (PDT) ends 30 elapsed minutes later, at 01:15 PST 4ms
+     × a break across the fall-back hour lasts its minutes of elapsed time, not the wall-clock difference 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > DST in America/Los_Angeles > a 30-minute break from the first 01:45 (PDT) ends 30 elapsed minutes later, at 01:15 PST
+AssertionError: expected 1793528100 to be 1793524500 // Object.is equality
+
+- Expected
++ Received
+
+- 1793524500
++ 1793528100
+
+ ❯ tests/client/breakRowsModel.test.ts:296:24
+    294|     const row = resolved(draft.rows[0] as BreakRowDraft);
+    295|     expect(row.startUtc).toBe(utc('2026-11-01T08:45:00Z'));
+    296|     expect(row.endUtc).toBe(utc('2026-11-01T09:15:00Z'));
+       |                        ^
+    297|     expect(sessionRequest(draft).breaks[0]).toEqual({
+    298|       start: { local: '2026-11-01T01:45', zone: LA, fold: 0 },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > DST in America/Los_Angeles > a break across the fall-back hour lasts its minutes of elapsed time, not the wall-clock difference
+AssertionError: expected 1793528400 to be 1793524800 // Object.is equality
+
+- Expected
++ Received
+
+- 1793524800
++ 1793528400
+
+ ❯ tests/client/breakRowsModel.test.ts:315:24
+    313|     const row = resolved(typedRow('a', '2026-11-01', '00:50', '90'));
+    314|     expect(row.startUtc).toBe(utc('2026-11-01T07:50:00Z'));
+    315|     expect(row.endUtc).toBe(utc('2026-11-01T09:20:00Z'));
+       |                        ^
+    316|     expect(row.request.end).toEqual({ local: '2026-11-01T01:20', zone:…
+    317|     expect(sessionRequest({ ...fallBack, rows: [typedRow('a', '2026-11…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 66 passed (68)
+   Start at  16:22:02
+   Duration  352ms (import 52%, transform 38%, tests 9%, worker 1%)
+
+exit 1

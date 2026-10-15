@@ -2,6 +2,68 @@
 
 Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
+## Cập nhật 2026-10-15: vòng thay đổi UI lần 3 theo yêu cầu chủ dự án (WP5-UX3)
+
+- Điểm xuất phát: WP5 đã nghiệm thu lại trên a643794 / 229df806 (WP5-UX2-AUDIT2 PASS);
+  commit board cuối là b1bf147 (WP5-UX2-ACCEPT). Mục cập nhật vòng 2 bên dưới ghi các bản
+  ghi chưa commit sau commit đó (chuyển về `software_ready`, kết quả và bằng chứng ACCEPT,
+  cập nhật checkpoint).
+- Phiên coordinator mới b5de56d1-fb31-4dc5-b74f-70e9473e1a0a (suy ra từ đường dẫn
+  scratchpad); `coordinator_session_id` trên board trỏ tới phiên này.
+- Chủ dự án yêu cầu 27 thay đổi UI (nguyên văn ở `owner_decisions` trên board; danh sách
+  tiếng Anh U-01..U-27 trong `handoff/delivery/tasks/WP5-UX3-PLAN.md`): phong cách hiện đại
+  thay cho phong cách công nghiệp; tăng tương phản các bề mặt và làm bảng tuần nổi lên;
+  khối nhận diện người dùng trên thanh trên cùng (avatar, tên hiển thị, email) với menu gồm
+  Light/Dark, Profile, Settings (Administration thành một tab) và Sign out; trên màn hình
+  lớn: chữ thương hiệu, Check in/out cùng hàng tiêu đề, bỏ tên dưới tiêu đề, nhãn
+  old/current/future dễ phân biệt (future màu hồng), hàng thông tin kỳ tự xuống dòng, Open a
+  day cùng hàng ô chọn ngày, giãn cách trước Show details, tô nền ô Day và hiệu ứng nổi
+  (đổ bóng) cho cột chọn hàng loạt và cột đang sửa, ý kiến về tên hàng "Label" và "Check";
+  trên màn hình hẹp: "Current" và ẩn chữ "Open a day" khi cần; trong Day editor: ghi chú
+  ngắn, phần đầu nổi bật hơn, hộp thoại riêng cho phiên giờ với bảng giờ nghỉ (ngày bắt
+  đầu, giờ, số phút), xác nhận khi xóa, điền sẵn giờ mặc định và giờ nghỉ gợi ý cho ngày
+  đã qua, vùng giờ nghỉ đơn giản hơn, Save cũng là xác nhận kèm hộp thoại xác nhận, và WFH
+  cùng hàng Label.
+- Quyết định của coordinator (board): vòng thay đổi UI lần 3 của WP5 (mã task WP5-UX3-*),
+  không mở package mới; board `running`, `next_task_id` WP5-UX3-PLAN. U-01 đổi một đường
+  dẫn quản trị (mục UI trong AGENTS.md; E-8), nên một vòng GOV đi trước mọi phần áp dụng
+  phong cách mới. U-21..U-25 chạm tới cách nhập và xác nhận giờ nghỉ (rủi ro H; có thể đổi
+  quy tắc chuẩn theo AGENTS quy tắc 8). Chủ dự án xem mockup và các câu hỏi của plan trước
+  các phần phụ thuộc phong cách.
+- Đang chạy: WP5-UX3-PLAN (planner, opus, lý do size_risk, chỉ đọc; brief
+  `handoff/delivery/tasks/WP5-UX3-PLAN.md`; mockup trong
+  `handoff/delivery/design/WP5-UX3/`). Bước 0 đối chiếu git (commit sau b1bf147, đường dẫn
+  chưa commit, digest).
+- WP5-UX3-PLAN xong (planner, tự báo claude-opus-5-5, chỉ đọc): HEAD b4d9dd8 = origin/main,
+  một commit chỉ chứa handoff do chủ dự án tạo sau b1bf147, ghi việc vòng 2 trở về
+  `software_ready`; digest 229df806 (815 file) lúc đầu và lúc cuối. Sự thật: chữ thương
+  hiệu chỉ hiện từ 1440px; hàng "Check" chỉ hiển thị trạng thái; hàng "Label" là loại ngày
+  ("Category" trên PDF và trong API); tên hiển thị và email đã có, chưa có trang Profile;
+  giờ tham chiếu đã có theo từng phiên bản quy tắc; các nhãn kỳ ở giao diện sáng chỉ khác
+  nhau 1.12:1. Thiết kế: token và độ nổi hiện đại, menu tài khoản, trang con trong
+  Settings, cột được chọn nổi lên, hộp thoại phiên giờ với dòng giờ nghỉ dạng bắt đầu + số
+  phút (không đổi server hay API). Một mâu thuẫn quy tắc: điền sẵn giờ ở U-23 trái với
+  docs/04 dòng 16 và docs/10 dòng 178 (đã soạn câu chữ mới). Mockup và mười ảnh tổng hợp
+  trong `handoff/delivery/design/WP5-UX3/`.
+- Quyết định của coordinator (board): nhận kế hoạch và các mặc định khuyến nghị; "Status"
+  thay cho "Check"; câu hỏi cho chủ dự án G-1..G-5 (`pending_owner_question_3`; G-5 thay
+  WP5-UX2-Q3); việc thiếu GLOSSARY.md đưa vào backlog quản trị.
+- Đang chạy: WP5-UX3-T06 (worker-high, opus, lý do novelty; model thuần cho dòng giờ nghỉ
+  và unit test, không đổi UI; cả hai phương án G-4 nằm sau một tham số). Lần đóng băng của
+  nó commit luôn kế hoạch, mockup và bản ghi vòng 3. Sau khi chủ dự án trả lời: chuỗi GOV,
+  rồi T01..T10.
+- WP5-UX3-T06 xong (worker-high, tự báo claude-opus-5-5; kết quả tự báo, chưa phải bằng
+  chứng độc lập): chỉ thêm `breakRowsModel.ts` và unit test của nó (không đổi UI); dòng
+  không bị sửa gửi lại đúng từng byte các thời điểm đã lưu; giờ kết thúc = bắt đầu + số phút
+  theo UTC, gửi kèm offset rõ ràng; `breaks_confirmed` theo tham số G-4; Check out giữ E-1;
+  unit 1950; file mới 68/68 dưới ba múi giờ thiết bị; 3 đột biến đều bị bắt; e2e day-editor
+  và shell 0 lỗi; verify 0; digest 0ef75a15 (817 file). Ghi chú cho T08: hiện chỉ
+  `future_break` có `break_index`.
+- `next_role` trong STATE nay ghi vòng 3 đang chạy (WP5 vẫn nghiệm thu trên a643794 cho tới
+  lần nghiệm thu lại).
+- Đang chạy: WP5-UX3-T06-FREEZE (committer, chạy một mình): hai file T06 cùng kế hoạch,
+  mockup, ảnh, bằng chứng T06, board, STATE, cặp checkpoint và cặp NEXT_ACTION.
+
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 
 - Điểm xuất phát: WP5 đã nghiệm thu lại trên 90b98ef / 57e2974c (WP5-UX-AUDIT-AB9 PASS);

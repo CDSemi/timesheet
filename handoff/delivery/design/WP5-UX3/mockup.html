@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WP5-UX3 mockup: giao diện hiện đại (bản đề xuất, dữ liệu giả)</title>
+<!--
+  WP5-UX3-PLAN mockup. Self-contained: inline CSS only, no script, no network, no web font.
+  Synthetic data only (example.invalid addresses, "Example Employee Two"). The logo and the
+  wordmark reuse the shapes already in src/client/public/cd-logo.svg and BrandWordmark.tsx.
+  Token values below are the PROPOSED values of section B1 of handoff/delivery/tasks/WP5-UX3-PLAN.md.
+  Each artboard is drawn twice: .t-light and .t-dark (the same markup, the theme set differs).
+-->
+<style>
+/* ---------- Proposed tokens (light) ---------- */
+.t-light {
+  color-scheme: light;
+  --bg: #edf0f5; --card: #ffffff; --off: #f4f6f9; --panel-head: #f2f5fa; --sheet-head: #eaf0f7;
+  --nonworking: #f2f4f7; --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(28 36 48 / 0.05) 7px 8px);
+  --text: #1c2430; --muted: #5b6675; --line: #d5dbe3; --line-soft: #e6eaf0; --field-bg: #ffffff;
+  --accent: #1f5fbf; --accent-strong: #184e9e; --on-accent: #ffffff; --accent-soft: #e7effb; --accent-line: rgb(31 95 191 / 0.45);
+  --ok: #136a42; --warn: #8a5a00; --error: #b42318; --danger: #b42318; --on-danger: #ffffff;
+  --attention-bg: #fff4dc; --attention-ink: #7a4f00;
+  --edit-head: #d8e6fa; --day-selected: rgb(31 95 191 / 0.09); --hover-fill: rgb(31 95 191 / 0.14);
+  --pill-current-bg: #e2f4e9; --pill-current-ink: #0f5d39; --pill-current-line: #86c9a3;
+  --pill-old-bg: #fcefd3; --pill-old-ink: #7a4b00; --pill-old-line: #dfb35a;
+  --pill-future-bg: #fde6f0; --pill-future-ink: #9f1857; --pill-future-line: #ee9cc0;
+  --pill-neutral-bg: #eef1f5; --pill-neutral-ink: #4c5664; --pill-neutral-line: #cfd6df;
+  --avatar-bg: #dbe7f9; --avatar-ink: #163f7d; --row-alt: #f7f9fb; --row-num-bg: #e7effb;
+  --scrim: rgb(18 22 28 / 0.45);
+  --wordmark-main: #006eba; --wordmark-sub: #4c4f57;
+  --elev-bar: 0 1px 0 rgb(20 30 50 / 0.08), 0 2px 8px rgb(20 30 50 / 0.05);
+  --elev-1: 0 0 0 1px rgb(20 30 50 / 0.06), 0 1px 2px rgb(20 30 50 / 0.06), 0 2px 6px rgb(20 30 50 / 0.04);
+  --elev-2: 0 0 0 1px rgb(20 30 50 / 0.07), 0 2px 4px rgb(20 30 50 / 0.06), 0 8px 24px -6px rgb(20 30 50 / 0.16);
+  --elev-3: 0 0 0 1px rgb(20 30 50 / 0.08), 0 4px 8px rgb(20 30 50 / 0.08), 0 16px 40px -8px rgb(20 30 50 / 0.24);
+  --elev-lift: 0 0 0 1px rgb(20 30 50 / 0.06), 0 6px 12px -2px rgb(20 30 50 / 0.14), 0 14px 28px -8px rgb(31 95 191 / 0.30);
+}
+/* ---------- Proposed tokens (dark; both dark sets of styles.css get the same values) ---------- */
+.t-dark {
+  color-scheme: dark;
+  --bg: #0e1217; --card: #1a2029; --off: #212834; --panel-head: #232b37; --sheet-head: #222a35;
+  --nonworking: #1e252f; --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(230 233 238 / 0.04) 7px 8px);
+  --text: #e6e9ee; --muted: #9aa5b4; --line: #323b48; --line-soft: #262e3a; --field-bg: #141920;
+  --accent: #6ea8ff; --accent-strong: #8dbbff; --on-accent: #0b1220; --accent-soft: #22324a; --accent-line: rgb(110 168 255 / 0.5);
+  --ok: #5fd29a; --warn: #e3b341; --error: #ff8a80; --danger: #ff8a80; --on-danger: #1a0b0a;
+  --attention-bg: #33290f; --attention-ink: #f0c25a;
+  --edit-head: #24395a; --day-selected: rgb(110 168 255 / 0.14); --hover-fill: rgb(110 168 255 / 0.20);
+  --pill-current-bg: #163628; --pill-current-ink: #7fe0b0; --pill-current-line: #2f7a55;
+  --pill-old-bg: #3a2d0f; --pill-old-ink: #f0c25a; --pill-old-line: #8a6a1f;
+  --pill-future-bg: #3d1a2d; --pill-future-ink: #f9a8d4; --pill-future-line: #b04c80;
+  --pill-neutral-bg: #262e3a; --pill-neutral-ink: #b3bdca; --pill-neutral-line: #3a4452;
+  --avatar-bg: #25395a; --avatar-ink: #cfe0ff; --row-alt: #1e2530; --row-num-bg: #22324a;
+  --scrim: rgb(0 0 0 / 0.6);
+  --wordmark-main: #6ea8ff; --wordmark-sub: #9aa5b4;
+  --elev-bar: 0 1px 0 rgb(255 255 255 / 0.06), 0 2px 10px rgb(0 0 0 / 0.45);
+  --elev-1: 0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.40), inset 0 1px 0 rgb(255 255 255 / 0.03);
+  --elev-2: 0 0 0 1px rgb(255 255 255 / 0.08), 0 2px 4px rgb(0 0 0 / 0.35), 0 10px 28px -6px rgb(0 0 0 / 0.60), inset 0 1px 0 rgb(255 255 255 / 0.04);
+  --elev-3: 0 0 0 1px rgb(255 255 255 / 0.10), 0 6px 12px rgb(0 0 0 / 0.45), 0 18px 44px -8px rgb(0 0 0 / 0.70);
+  --elev-lift: 0 0 0 1px rgb(110 168 255 / 0.28), 0 8px 16px -4px rgb(0 0 0 / 0.55), 0 16px 32px -10px rgb(0 0 0 / 0.75);
+}
+/* Shared shape, motion and type tokens (one set for both themes) */
+.t-light, .t-dark {
+  --radius-sm: 6px; --radius: 8px; --radius-lg: 12px; --radius-pill: 999px;
+  --duration-fast: 120ms; --duration: 180ms; --duration-slow: 260ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1); --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition: color var(--duration) var(--ease-standard), background-color var(--duration) var(--ease-standard),
+    border-color var(--duration) var(--ease-standard), box-shadow var(--duration) var(--ease-standard), transform var(--duration) var(--ease-standard);
+  --lift-y: -3px; --toolbar-group-gap: 24px; --identity-max: 14rem; --tap-min: 44px;
+  --font-weight-normal: 400; --font-weight-medium: 500; --font-weight-strong: 600; --font-weight-heavy: 700;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  --focus-ring: 0 0 0 1px var(--card), 0 0 0 3px var(--accent);
+}
+
+/* ---------- Mockup document ---------- */
+* { box-sizing: border-box; }
+body { margin: 0; background: #c9ced6; color: #1c2430; font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+.doc { padding: 24px; }
+.doc > header { max-width: 1100px; margin: 0 0 28px; }
+.doc > header h1 { margin: 0 0 6px; font-size: 1.5rem; }
+.doc > header p { margin: 0 0 6px; }
+.board { margin: 0 0 44px; }
+.cap { max-width: 1100px; margin: 0 0 10px; padding: 10px 14px; background: #ffffff; border-radius: 8px; font-size: 14px; }
+.cap b { display: block; margin-bottom: 2px; }
+.pair { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+.frame { position: relative; overflow: hidden; background: var(--bg); color: var(--text); font-variant-numeric: tabular-nums; border-radius: 10px; outline: 1px solid rgb(0 0 0 / 0.18); }
+.tag { position: absolute; top: 6px; left: 8px; z-index: 9; padding: 1px 8px; border-radius: 999px; font-size: 11px; background: rgb(0 0 0 / 0.55); color: #fff; }
+.w1440 { width: 1440px; } .w1280 { width: 1280px; } .w980 { width: 980px; } .w820 { width: 820px; }
+.w390 { width: 390px; } .w320 { width: 320px; } .w700 { width: 700px; } .w1200 { width: 1200px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.mono { font-family: var(--font-mono); }
+.muted { color: var(--muted); }
+svg.ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- Buttons and fields ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: inherit; font-weight: var(--font-weight-strong);
+  min-height: 38px; padding: 8px 16px; border-radius: var(--radius); border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent);
+  white-space: nowrap; transition: var(--transition); }
+.btn.secondary { background: var(--card); color: var(--accent); border-color: var(--accent-line); }
+.btn.quiet { background: transparent; color: var(--accent); border-color: transparent; }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: var(--on-danger); }
+.btn.pressed { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.btn.icon { width: 38px; padding: 0; }
+.btn.inactive { color: var(--muted); border-color: var(--line); }
+.btn.focus { box-shadow: var(--focus-ring); }
+.btn.hover { background: var(--hover-fill); border-color: var(--accent); }
+.field { font: inherit; min-height: 38px; padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--field-bg); color: var(--text); display: inline-flex; align-items: center; gap: 8px; }
+.field.date { min-width: 8.6rem; justify-content: space-between; }
+.field.time { min-width: 6.6rem; justify-content: space-between; }
+.field.min { width: 6.2rem; }
+.field .ph { color: var(--muted); }
+label.lab { display: flex; flex-direction: column; gap: 4px; font-weight: var(--font-weight-medium); }
+.hint { font-size: 0.8rem; color: var(--muted); margin: 0; }
+.chk { width: 20px; height: 20px; flex: none; border: 2px solid var(--muted); border-radius: 5px; background: var(--field-bg); display: inline-grid; place-items: center; }
+.chk.on { background: var(--accent); border-color: var(--accent); }
+.chk.on::after { content: ''; width: 5px; height: 10px; border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
+.switch { display: inline-flex; align-items: center; gap: 10px; font-weight: var(--font-weight-strong); }
+.switch i { width: 40px; height: 22px; border-radius: 999px; border: 1px solid var(--muted); background: var(--card); position: relative; }
+.switch i::after { content: ''; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 999px; background: var(--muted); }
+
+/* ---------- Top bar, identity block and account menu ---------- */
+.bar { position: relative; z-index: 3; display: flex; align-items: center; gap: 8px 24px; min-height: 60px; padding: 8px 16px; background: var(--card); box-shadow: var(--elev-bar); }
+.brand { display: inline-flex; align-items: center; gap: 12px; }
+.brand svg.logo { width: 36px; height: 36px; }
+.brand svg.wm { width: 151.36px; height: 27.78px; }
+.wm-main { fill: var(--wordmark-main); } .wm-sub { fill: var(--wordmark-sub); }
+.nav { display: flex; gap: 4px; flex: 1; margin-left: 8px; }
+.nav a { display: inline-flex; align-items: center; min-height: 38px; padding: 6px 12px; border-radius: var(--radius); color: var(--muted); text-decoration: none; font-weight: var(--font-weight-medium); }
+.nav a.cur { background: var(--accent-soft); color: var(--accent); font-weight: var(--font-weight-strong); }
+.switcher { display: inline-flex; align-items: center; gap: 8px; }
+.switcher .field { min-width: 11rem; justify-content: space-between; }
+.who { display: inline-flex; align-items: center; gap: 10px; padding: 4px 4px 4px 10px; border-radius: var(--radius-lg); border: 1px solid transparent; background: transparent; color: inherit; font: inherit; }
+.who.open { background: var(--hover-fill); border-color: var(--accent-line); }
+.who .names { display: flex; flex-direction: column; align-items: flex-end; max-width: var(--identity-max); line-height: 1.2; text-align: right; }
+.who .name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--font-weight-heavy); color: var(--text); }
+.who .email { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; color: var(--muted); }
+.avatar { width: 36px; height: 36px; flex: none; border-radius: var(--radius-pill); background: var(--avatar-bg); color: var(--avatar-ink); display: grid; place-items: center; font-size: 0.85rem; font-weight: var(--font-weight-heavy); letter-spacing: 0.02em; }
+.avatar.lg { width: 56px; height: 56px; font-size: 1.15rem; }
+.menu { position: absolute; z-index: 5; right: 16px; top: 64px; width: 18.5rem; padding: 8px; border-radius: var(--radius-lg); background: var(--card); box-shadow: var(--elev-3); }
+.menu .mhead { display: flex; gap: 12px; align-items: center; padding: 8px 8px 12px; border-bottom: 1px solid var(--line-soft); margin-bottom: 6px; }
+.menu .mhead b { display: block; }
+.menu .mhead .mt span { display: block; font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
+.menu .item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 10px; border-radius: var(--radius); color: var(--text); text-decoration: none; font-weight: var(--font-weight-medium); }
+.menu .item.hov { background: var(--hover-fill); }
+.menu .item .ic { color: var(--muted); }
+.menu .sep { height: 1px; background: var(--line-soft); margin: 6px 0; }
+.menu .theme { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; }
+.seg { display: inline-flex; padding: 2px; border-radius: var(--radius); background: var(--off); border: 1px solid var(--line); }
+.seg span { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 2px 10px; border-radius: var(--radius-sm); font-weight: var(--font-weight-strong); color: var(--muted); }
+.seg span.on { background: var(--accent); color: var(--on-accent); }
+
+/* ---------- Page header, period bar, toolbar ---------- */
+.page { max-width: 1200px; margin: 0 auto; padding: 20px 24px 28px; }
+.titlerow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-bottom: 16px; }
+.titlerow h1 { margin: 0; font-size: 1.6rem; font-weight: var(--font-weight-heavy); letter-spacing: -0.015em; }
+.checkin { display: flex; align-items: center; gap: 14px; }
+.checkin .state { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
+.checkin .now { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--font-weight-strong); color: var(--ok); }
+.checkin .now.out { color: var(--muted); }
+.dot { width: 10px; height: 10px; border-radius: 999px; background: currentColor; box-shadow: 0 0 0 1px var(--card), 0 0 0 3px currentColor; }
+.checkin .sub { font-size: 0.8rem; color: var(--muted); }
+.card { background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--elev-1); padding: 16px 20px; }
+.period { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px 16px; align-items: center; }
+.ptitle { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.pname { font-size: 1.15rem; font-weight: var(--font-weight-heavy); letter-spacing: -0.01em; }
+.pname .arr { color: var(--muted); font-weight: var(--font-weight-normal); margin: 0 6px; }
+.pactions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 28px; padding-top: 12px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 0.9rem; }
+.meta b { color: var(--text); font-weight: var(--font-weight-strong); }
+.pill { display: inline-flex; align-items: center; height: 22px; padding: 0 10px; border-radius: var(--radius-pill); font-size: 0.78rem; font-weight: var(--font-weight-strong);
+  border: 1px solid var(--pl); background: var(--pb); color: var(--pi); }
+.pill.current { --pb: var(--pill-current-bg); --pi: var(--pill-current-ink); --pl: var(--pill-current-line); }
+.pill.old { --pb: var(--pill-old-bg); --pi: var(--pill-old-ink); --pl: var(--pill-old-line); }
+.pill.future { --pb: var(--pill-future-bg); --pi: var(--pill-future-ink); --pl: var(--pill-future-line); }
+.pill.neutral { --pb: var(--pill-neutral-bg); --pi: var(--pill-neutral-ink); --pl: var(--pill-neutral-line); }
+.tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin: 16px 0 4px; }
+.openday { display: flex; align-items: center; gap: 8px; }
+.openday .t { font-weight: var(--font-weight-strong); white-space: nowrap; }
+.toolsr { display: flex; align-items: center; gap: var(--toolbar-group-gap); }
+.vsep { width: 1px; height: 24px; background: var(--line); }
+
+/* ---------- Form header and week sheets ---------- */
+.formhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 24px; padding: 12px 4px 4px; }
+.formhead .ft { font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.formhead dl { display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 0; font-size: 0.9rem; }
+.formhead dl div { display: flex; gap: 6px; } .formhead dt { color: var(--muted); } .formhead dd { margin: 0; font-weight: var(--font-weight-strong); }
+.week { margin-top: 16px; background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--elev-2); }
+.weekbar { display: flex; gap: 16px; align-items: baseline; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); }
+.weekbar b { letter-spacing: 0.06em; }
+.wgrid { display: grid; grid-template-columns: 92px repeat(7, minmax(0, 1fr)); padding: 0 8px 8px 0; }
+.rl { display: flex; flex-direction: column; color: var(--muted); font-size: 0.72rem; font-weight: var(--font-weight-strong); }
+.rl div, .day > div { display: flex; align-items: center; border-bottom: 1px solid var(--line-soft); }
+.rl div { padding: 0 12px; }
+.h-day { height: 34px; } .h-date { height: 32px; } .h-label { height: 60px; } .h-time { height: 54px; } .h-ot { height: 34px; } .h-st { height: 32px; }
+.rl div:last-child, .day > div:last-child { border-bottom: 0; }
+.day { position: relative; display: flex; flex-direction: column; border-left: 1px solid var(--line-soft); background: var(--card); transition: var(--transition); }
+.day > div { justify-content: center; flex-direction: column; text-align: center; padding: 2px 6px; font-size: 0.9rem; }
+.day .d-day { flex-direction: row; gap: 6px; font-weight: var(--font-weight-heavy); background: var(--sheet-head); }
+.day .d-date { font-family: var(--font-mono); }
+.day .d-label { font-weight: var(--font-weight-strong); }
+.day .d-label small { display: block; font-weight: var(--font-weight-normal); color: var(--muted); font-size: 0.72rem; }
+.day .d-time { font-family: var(--font-mono); font-size: 0.8rem; }
+.day .d-time small { display: block; font-family: inherit; color: var(--muted); font-size: 0.72rem; }
+.day .d-ot { font-family: var(--font-mono); font-weight: var(--font-weight-heavy); font-size: 1rem; }
+.day .d-st { font-size: 0.74rem; }
+.day.nonworking { background-color: var(--nonworking); background-image: var(--hatch); }
+.day.nonworking .d-day { background: transparent; }
+.day .attention { background: var(--attention-bg); color: var(--attention-ink); }
+.day.today .d-day { box-shadow: inset 0 3px 0 var(--accent); }
+.todaytag { padding: 0 6px; border-radius: var(--radius-sm); background: var(--accent); color: var(--on-accent); font-size: 0.7rem; font-weight: var(--font-weight-strong); }
+/* Lift: batch-selected and editor columns rise with a soft shadow */
+.day.lifted { z-index: 1; transform: translateY(var(--lift-y)); border-radius: var(--radius); box-shadow: var(--elev-lift); border-left-color: transparent; }
+.day.lifted > div:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+.day.selected { background-image: linear-gradient(var(--day-selected), var(--day-selected)); }
+.day.editing { box-shadow: 0 0 0 1px var(--accent), var(--elev-lift); }
+.day.editing .d-day { background: var(--edit-head); }
+.day .pick { display: inline-flex; }
+.picktext { font-size: 0.72rem; color: var(--muted); }
+/* Status shapes; "No times" is a slashed ring (not a box that looks like a checkbox) */
+.st { display: inline-flex; align-items: center; gap: 5px; }
+.st.ok { color: var(--ok); } .st.warn { color: var(--warn); } .st.mut { color: var(--muted); }
+.sh { width: 10px; height: 10px; flex: none; background: currentColor; }
+.sh.circle { border-radius: 999px; }
+.sh.diamond { transform: rotate(45deg) scale(0.85); }
+.sh.dash { height: 2px; }
+.sh.none { background: linear-gradient(135deg, transparent 43%, currentColor 43% 57%, transparent 57%); border: 2px solid currentColor; border-radius: 999px; }
+.sh.live { border-radius: 999px; box-shadow: 0 0 0 1px var(--card), 0 0 0 2.5px currentColor; width: 8px; height: 8px; }
+
+/* ---------- Day editor panel ---------- */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; align-items: start; }
+.panel { background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--elev-2); overflow: hidden; }
+.phead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 14px 16px 12px; background: var(--panel-head); border-bottom: 1px solid var(--line); }
+.phead h2 { margin: 0; font-size: 1.15rem; font-weight: var(--font-weight-heavy); letter-spacing: -0.01em; }
+.phead .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: var(--radius-pill); font-size: 0.75rem; font-weight: var(--font-weight-medium); background: var(--card); color: var(--muted); border: 1px solid var(--line); }
+.pbody { padding: 4px 16px 16px; }
+.psec { padding: 14px 0; border-bottom: 1px solid var(--line-soft); }
+.psec:last-child { border-bottom: 0; }
+.psec h3 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 10px; font-size: 1rem; }
+.sess { border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 10px 12px; background: var(--card); }
+.sess + .sess { margin-top: 10px; }
+.sess .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sess .rng { font-family: var(--font-mono); font-weight: var(--font-weight-heavy); font-size: 1rem; }
+.sess .by { font-size: 0.78rem; color: var(--muted); margin: 2px 0 8px; }
+.sess .acts { display: flex; gap: 6px; }
+.sess .acts .btn { min-height: 32px; padding: 4px 10px; font-size: 0.85rem; }
+table.bt { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+table.bt caption { text-align: left; font-size: 0.78rem; color: var(--muted); padding-bottom: 4px; }
+table.bt th { text-align: left; font-weight: var(--font-weight-strong); color: var(--muted); font-size: 0.75rem; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+table.bt td { padding: 5px 6px; border-bottom: 1px solid var(--line-soft); font-family: var(--font-mono); }
+table.bt td:first-child { font-family: inherit; }
+table.bt tr:last-child td { border-bottom: 0; }
+.notice { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 8px 10px; border-radius: var(--radius); background: var(--attention-bg); color: var(--attention-ink); font-size: 0.85rem; margin-top: 8px; }
+.labelrow { display: grid; grid-template-columns: minmax(8rem, 1fr) auto; gap: 12px; align-items: end; }
+.labelrow .field { width: 100%; justify-content: space-between; }
+.inline { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; }
+.leave { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.leave .field { width: 100%; }
+
+/* ---------- Dialogs ---------- */
+.stage { position: relative; padding: 28px; background: var(--scrim); min-height: 100%; display: grid; place-items: center; }
+.dlg { width: 720px; max-width: 100%; background: var(--card); color: var(--text); border-radius: var(--radius-lg); box-shadow: var(--elev-3); overflow: hidden; }
+.dlg.sm { width: 440px; }
+.dhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 16px 20px 12px; border-bottom: 1px solid var(--line-soft); }
+.dhead h2 { margin: 0; font-size: 1.15rem; }
+.dhead p { margin: 2px 0 0; font-size: 0.85rem; color: var(--muted); }
+.dbody { padding: 16px 20px; display: grid; gap: 16px; }
+.dfoot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line-soft); background: var(--panel-head); }
+.grp { display: grid; gap: 10px; }
+.grp > h3 { margin: 0; font-size: 0.95rem; }
+.times { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dt { display: flex; gap: 8px; }
+.prefill { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: var(--radius); background: var(--accent-soft); color: var(--text); font-size: 0.85rem; }
+.brows { display: grid; gap: 8px; }
+.brow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 8px 8px 10px; border-radius: var(--radius); background: var(--row-alt); border: 1px solid var(--line-soft); }
+.brow .num { display: inline-flex; align-items: center; justify-content: center; min-width: 4.6rem; height: 26px; padding: 0 8px; border-radius: var(--radius-pill); background: var(--row-num-bg); color: var(--accent); font-weight: var(--font-weight-strong); font-size: 0.8rem; }
+.brow .sugg { font-size: 0.72rem; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius-pill); padding: 1px 8px; }
+.brow .end { font-size: 0.78rem; color: var(--muted); }
+.brow .x { margin-left: auto; }
+.bactions { display: flex; gap: 8px; flex-wrap: wrap; }
+.confirmlist { margin: 0; padding: 10px 12px; border-radius: var(--radius); background: var(--off); display: grid; gap: 4px; font-size: 0.9rem; }
+.confirmlist div { display: flex; gap: 8px; } .confirmlist dt { min-width: 5.5rem; color: var(--muted); } .confirmlist dd { margin: 0; font-weight: var(--font-weight-strong); }
+
+/* ---------- Settings ---------- */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+.tabs a { padding: 10px 14px; color: var(--muted); text-decoration: none; font-weight: var(--font-weight-strong); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs a.cur { color: var(--accent); border-bottom-color: var(--accent); }
+.kv { display: grid; grid-template-columns: 10rem 1fr; gap: 8px 16px; margin: 0; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; font-weight: var(--font-weight-strong); }
+
+/* ---------- Phone ---------- */
+.pbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 60px; padding: 8px 12px; background: var(--card); box-shadow: var(--elev-bar); position: relative; z-index: 2; }
+.pbar .cl { display: flex; align-items: center; gap: 8px; }
+.pbar .cl .state { text-align: right; line-height: 1.2; font-size: 0.85rem; }
+.pbar .btn { min-height: 44px; }
+.ppage { padding: 12px 12px 76px; }
+.pcard { background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--elev-1); padding: 12px; }
+.pperiod { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 6px 8px; align-items: center; }
+.pperiod .btn.icon { width: 44px; min-height: 44px; }
+.pperiod .ptitle { gap: 4px 8px; }
+.pperiod .pname { font-size: 1.02rem; }
+.pperiod .meta { font-size: 0.8rem; gap: 0 12px; padding-top: 8px; }
+.prow { grid-column: 1 / -1; display: flex; gap: 8px; }
+.prow .btn { min-height: 44px; padding-inline: 10px; }
+.prow .grow { flex: 1 1 auto; }
+.ptools { display: grid; gap: 8px; margin-top: 10px; }
+.ptools .openday .field { flex: 1; min-height: 44px; }
+.ptools .openday .btn { min-height: 44px; }
+.ptools .r2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ptools .r2 .btn, .ptools .r2 .switch { min-height: 44px; }
+.prowtable { margin-top: 10px; background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--elev-2); overflow: hidden; font-size: 0.85rem; }
+.prowtable .h { display: grid; grid-template-columns: 28% 27% 28% 17%; padding: 6px 8px; background: var(--sheet-head); color: var(--muted); font-weight: var(--font-weight-strong); font-size: 0.72rem; }
+.prowtable .r { display: grid; grid-template-columns: 28% 27% 28% 17%; padding: 8px; border-top: 1px solid var(--line-soft); min-height: 54px; align-items: center; }
+.prowtable .r.editing { box-shadow: inset 0 0 0 1px var(--accent); }
+.prowtable .r.editing > :first-child { background: var(--edit-head); border-radius: var(--radius-sm); padding: 2px 4px; }
+.tabbar { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--card); box-shadow: 0 -1px 0 var(--line), 0 -8px 24px rgb(0 0 0 / 0.06); }
+.tabbar span { display: grid; place-items: center; min-height: 56px; color: var(--muted); font-size: 0.8rem; font-weight: var(--font-weight-strong); }
+.tabbar span.cur { color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
+.tabbar span.open { color: var(--accent); background: var(--hover-fill); }
+.pmenu { position: absolute; right: 8px; bottom: 64px; width: 17rem; z-index: 4; }
+.pmenu.menu { top: auto; }
+.pmenu .item { min-height: 44px; }
+.ph-h { height: 844px; } .ph-h568 { height: 640px; }
+</style>
+</head>
+<body>
+<!-- Shared vector shapes: the C&D logo (cd-logo.svg) and the wordmark outlines (BrandWordmark.tsx). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <clipPath id="disc"><circle cx="256" cy="256" r="239.8"/></clipPath>
+    <symbol id="logo" viewBox="0 0 512 512">
+      <circle cx="256" cy="256" r="256" fill="#e7e8e9"/>
+      <g clip-path="url(#disc)"><rect x="0" y="0" width="512" height="512" fill="#e7e8e9"/>
+        <g fill="#0e71b8"><rect x="0" y="64.06" width="512" height="14.76"/><rect x="0" y="93.85" width="512" height="14.76"/><rect x="0" y="123.64" width="512" height="14.76"/><rect x="0" y="153.43" width="512" height="14.76"/><rect x="0" y="183.22" width="512" height="14.76"/><rect x="0" y="213.01" width="512" height="14.76"/><rect x="0" y="242.8" width="512" height="14.76"/><rect x="0" y="272.59" width="512" height="14.76"/><rect x="0" y="302.38" width="512" height="14.76"/><rect x="0" y="332.17" width="512" height="14.76"/><rect x="0" y="361.96" width="512" height="14.76"/><rect x="0" y="391.75" width="512" height="14.76"/><rect x="0" y="421.54" width="512" height="14.76"/><rect x="0" y="451.33" width="512" height="14.76"/><rect x="0" y="481.12" width="512" height="14.76"/><rect x="0" y="183.27" width="512" height="133.96"/></g>
+      </g>
+      <g fill="#e7e8e9" fill-rule="evenodd">
+        <path d="M91.5 199.5 86.5 200.17 78.5 202.14 71.5 205.33 66.87 208.5 63.58 211.5 58.95 217.5 56.03 223.5 54.38 229.5 53.45 238.5 54.27 249.5 56.15 257.5 58.45 263.5 60.4 267.5 64.14 273.5 67.22 277.5 71.87 282.5 76.5 286.73 83.5 291.73 88.5 294.5 93.5 296.8 99.5 298.83 109.5 300.8 119.5 301.46 124.5 301.48 125.51 300.5 131.77 280.5 131.97 279.5 131.5 278.55 119.5 277.92 110.5 275.8 102.5 272.07 96.5 267.7 90.91 261.5 87.5 255.49 85.35 248.5 84.8 241.5 85.38 235.5 87.35 230.5 89.69 227.5 92.5 225.33 94.5 224.21 99.5 222.79 106.5 222.12 129.5 222.08 130.4 221.5 123.73 199.5 122.5 199 99.5 199.01Z"/>
+        <path d="M227.5 199.35 219.5 201.02 213.5 203.33 208.97 206.5 206.17 209.5 204.38 212.5 203.2 215.5 202.47 218.5 202.15 223.5 202.46 226.5 203.22 229.5 204.12 231.5 207.29 236.5 211.1 240.5 217 245.5 216.37 246.5 209.67 251.5 205.5 255.58 201.2 261.5 198.4 267.5 197.27 272.5 197.06 276.5 197.38 280.5 199.28 286.5 201.12 289.5 205.01 293.5 210.5 296.92 218.5 299.68 225.5 300.89 236.5 301.48 290.5 301.48 291.13 300.5 291.13 258.5 291.5 257.82 292.5 257.65 297.5 257.61 297.95 256.5 297.95 235.5 297.59 234.5 262.23 234.5 261.63 235.5 261.5 277.7 260.5 278.22 243.5 278.2 238.5 278.04 234.5 277.05 232.29 275.5 231.32 273.5 231.16 272.5 231.95 268.5 234.5 264.51 237.5 261.29 242.5 257.27 250.5 252.23 259.9 247.5 258.5 246.19 241.5 234.49 237.05 229.5 236.26 226.5 236.97 224.5 238.5 223.14 241.5 222.24 280.5 222.08 281.34 221.5 274.5 199.32 273.5 199 236.5 199Z"/>
+        <path d="M363.5 199 362.88 199.5 362.17 201.5 356.33 220.5 356.08 221.5 356.5 222 404.5 222.08 413.5 223 417.5 224.29 419.5 225.36 422.31 227.5 424.66 230.5 426.63 235.5 427.2 241.5 426.68 248.5 425.01 254.5 421.5 261.42 417.65 266.5 411.5 272.05 405.48 275.5 398.5 277.67 392.5 278.18 391.97 277.5 391.97 226.5 391.76 225.5 390.5 225.2 362.5 225.2 361.92 225.5 361.6 226.5 361.6 300.5 362.5 301.48 386.5 301.48 393.5 301.17 399.5 300.6 408.5 298.84 415.5 296.71 420.5 294.75 426.5 291.75 431.5 288.68 435.5 285.75 441.5 280.51 447.61 273.5 449.77 270.5 453.07 264.5 455.55 258.5 456.68 254.5 458.19 245.5 458.54 238.5 457.86 230.5 456.82 226.5 455.95 223.5 453 217.5 448.37 211.5 443.5 207.25 440.5 205.3 436.5 203.29 433.5 202.13 423.5 199.8 412.5 199.01Z"/>
+      </g>
+    </symbol>
+    <symbol id="wm" viewBox="0 0 151.36 27.78">
+      <path class="wm-main" d="M9.45 0L10.5 3.86L6.38 3.86Q5.71 3.86 5.4 4.02Q5.08 4.18 5.08 4.45Q5.08 4.77 5.31 5.08Q5.65 5.46 5.8 5.63L8.95 9.11Q10 10.29 10.4 10.96Q11.05 12.05 11.05 13.19Q11.05 14.72 10.16 15.75Q8.95 17.18 6.43 17.18L1.22 17.18L0.17 13.31L4.24 13.31L4.54 13.36Q5.04 13.36 5.46 13.21Q5.88 13.06 5.88 12.73Q5.88 12.41 5.65 12.1Q5.31 11.72 5.17 11.55L2.1 8.11Q0.8 6.59 0.4 5.73Q0 4.87 0 3.99Q0 2.48 0.9 1.43Q2.12 0 4.62 0ZM21.23 4.29L22.02 7.19L16.82 7.19L16.82 9.11L21.55 9.11L20.76 12.01L16.82 12.01L16.82 14.28L22.37 14.28L21.58 17.18L13.45 17.18L13.45 4.29ZM36.51 4.29L36.51 17.18L33.14 17.18L33.14 9.4L30.49 12.86L27.97 9.4L27.94 17.18L24.57 17.18L24.57 4.29L27.75 4.29L30.49 8.07L33.3 4.29ZM42.27 4.29L42.27 17.18L38.9 17.18L38.9 4.29ZM52.76 14.28L51.98 17.18L51.38 17.18Q48.2 17.18 46.07 14.82Q44.01 12.53 44.01 9.33Q44.01 7.16 45.14 5.85Q46.49 4.29 49.17 4.29L51.79 4.29L52.57 7.19L49.96 7.19Q49 7.19 48.48 7.49Q47.47 8.07 47.47 9.65Q47.47 11.59 48.73 12.89Q50.1 14.31 52.35 14.31ZM60.39 17.46Q57.66 17.46 55.98 14.58Q54.53 12.11 54.53 9.15Q54.53 6.8 55.76 5.52Q57.2 4.01 60.39 4.01Q63.57 4.01 65.02 5.52Q66.24 6.8 66.24 9.15Q66.24 12.14 64.81 14.58Q63.13 17.46 60.39 17.46ZM60.39 14.41Q61.33 14.41 62.04 12.78Q62.75 11.15 62.75 9.3Q62.75 8.03 62.2 7.53Q61.66 7.04 60.39 7.04Q59.11 7.04 58.58 7.52Q58.05 8.01 58.05 9.3Q58.05 11.11 58.76 12.76Q59.47 14.41 60.39 14.41ZM78.25 4.29L78.25 17.18L74.88 17.18L74.88 13.37L71.32 9.05L71.28 17.18L67.91 17.18L67.91 4.29L71.13 4.29L74.88 8.67L74.88 4.29ZM83.38 17.18L80.64 17.18L80.64 7.6L84.01 7.6L84.01 14.28Q85.68 14.28 86.85 12.83Q87.95 11.46 87.95 9.65Q87.95 8.07 86.96 7.51Q86.4 7.19 85.46 7.19L80.01 7.19L80.8 4.29L86.25 4.29Q88.92 4.29 90.26 5.84Q91.41 7.16 91.41 9.33Q91.41 12.85 89 15.07Q86.7 17.18 83.38 17.18ZM103.57 4.29L103.57 17.18L98.09 17.18Q95.43 17.18 94.14 15.65Q92.99 14.3 92.99 11.89Q92.99 10.01 93.65 7.98Q94.15 6.45 95.22 4.29L98.88 4.29Q98.39 5.33 97.92 6.37Q97.29 7.79 96.93 9.04Q96.45 10.63 96.45 11.82Q96.45 13.4 97.45 13.97Q98 14.28 98.94 14.28L100.2 14.28L100.2 4.29ZM114.25 14.28L113.46 17.18L112.86 17.18Q109.68 17.18 107.56 14.82Q105.49 12.53 105.49 9.33Q105.49 7.16 106.63 5.85Q107.98 4.29 110.66 4.29L113.27 4.29L114.06 7.19L111.45 7.19Q110.49 7.19 109.97 7.49Q108.96 8.07 108.96 9.65Q108.96 11.59 110.22 12.89Q111.59 14.31 113.84 14.31ZM124.96 4.29L125.75 7.19L122.16 7.19L122.16 17.18L118.79 17.18L118.79 7.19L115.16 7.19L115.98 4.29ZM132.55 17.46Q129.83 17.46 128.14 14.58Q126.69 12.11 126.69 9.15Q126.69 6.8 127.92 5.52Q129.37 4.01 132.55 4.01Q135.73 4.01 137.18 5.52Q138.41 6.8 138.41 9.15Q138.41 12.14 136.98 14.58Q135.29 17.46 132.55 17.46ZM132.55 14.41Q133.5 14.41 134.21 12.78Q134.91 11.15 134.91 9.3Q134.91 8.03 134.37 7.53Q133.83 7.04 132.55 7.04Q131.28 7.04 130.75 7.52Q130.22 8.01 130.22 9.3Q130.22 11.11 130.93 12.76Q131.64 14.41 132.55 14.41ZM140.27 4.29L146.48 4.29Q148.57 4.29 149.58 5.4Q150.38 6.26 150.38 7.63Q150.38 8.94 149.56 10.01Q148.92 10.86 147.61 11.7Q148.36 13.16 149.31 14.53Q150.19 15.81 151.36 17.18L148.52 19.13Q147.03 17.43 145.75 15.32Q144.65 13.49 143.58 11.1Q144.49 10.44 145.4 9.76Q146.57 8.78 146.57 8.01Q146.57 7.51 146.1 7.32Q145.78 7.19 145.15 7.19L139.48 7.19ZM143.48 7.6L143.48 17.18L140.11 17.18L140.11 7.6Z"/>
+      <path class="wm-sub" d="M16.47 21.18L16.82 22.47L15.45 22.47Q15.22 22.47 15.12 22.52Q15.01 22.57 15.01 22.66Q15.01 22.77 15.09 22.87Q15.2 23 15.25 23.05L16.3 24.22Q16.65 24.61 16.78 24.83Q17 25.2 17 25.57Q17 26.09 16.71 26.43Q16.3 26.9 15.46 26.9L13.73 26.9L13.38 25.62L14.73 25.62L14.83 25.63Q15 25.63 15.14 25.58Q15.28 25.53 15.28 25.42Q15.28 25.32 15.2 25.21Q15.09 25.08 15.04 25.03L14.02 23.88Q13.59 23.38 13.45 23.09Q13.32 22.8 13.32 22.51Q13.32 22 13.62 21.65Q14.03 21.18 14.86 21.18ZM26.73 21.18L27.08 22.47L24.77 22.47L24.77 23.32L26.87 23.32L26.52 24.61L24.77 24.61L24.77 25.62L27.24 25.62L26.89 26.9L23.27 26.9L23.27 21.18ZM33.65 21.18L36.41 21.18Q37.34 21.18 37.79 21.67Q38.14 22.05 38.14 22.66Q38.14 23.24 37.78 23.72Q37.49 24.1 36.91 24.47Q37.25 25.12 37.67 25.73Q38.06 26.3 38.58 26.9L37.32 27.77Q36.65 27.02 36.08 26.08Q35.59 25.27 35.12 24.2Q35.52 23.91 35.93 23.61Q36.45 23.17 36.45 22.83Q36.45 22.61 36.24 22.52Q36.1 22.47 35.82 22.47L33.3 22.47ZM35.08 22.65L35.08 26.9L33.58 26.9L33.58 22.65ZM45.45 21.18L46.29 24.96L47.13 21.18L48.73 21.18L47.17 26.9L45.41 26.9L43.84 21.18ZM56.34 21.18L56.34 26.9L54.85 26.9L54.85 21.18ZM66.35 25.62L66 26.9L65.74 26.9Q64.32 26.9 63.38 25.85Q62.46 24.84 62.46 23.42Q62.46 22.45 62.97 21.87Q63.57 21.18 64.76 21.18L65.92 21.18L66.27 22.47L65.11 22.47Q64.68 22.47 64.45 22.6Q64 22.86 64 23.56Q64 24.42 64.56 25Q65.17 25.63 66.17 25.63ZM76.24 21.18L76.59 22.47L74.28 22.47L74.28 23.32L76.38 23.32L76.03 24.61L74.28 24.61L74.28 25.62L76.74 25.62L76.39 26.9L72.78 26.9L72.78 21.18ZM85.9 21.18L86.25 22.47L84.88 22.47Q84.65 22.47 84.55 22.52Q84.44 22.57 84.44 22.66Q84.44 22.77 84.52 22.87Q84.63 23 84.68 23.05L85.73 24.22Q86.08 24.61 86.21 24.83Q86.43 25.2 86.43 25.57Q86.43 26.09 86.14 26.43Q85.73 26.9 84.89 26.9L83.16 26.9L82.81 25.62L84.16 25.62L84.26 25.63Q84.43 25.63 84.57 25.58Q84.71 25.53 84.71 25.42Q84.71 25.32 84.63 25.21Q84.52 25.08 84.47 25.03L83.45 23.88Q83.02 23.38 82.88 23.09Q82.75 22.8 82.75 22.51Q82.75 22 83.05 21.65Q83.46 21.18 84.29 21.18ZM94.05 25.63L93.47 27.58L92.16 27.58L92.73 25.63ZM109.42 21.18L109.42 26.9L107.92 26.9L107.92 21.18ZM120.45 21.18L120.45 26.9L118.96 26.9L118.96 25.21L117.37 23.29L117.36 26.9L115.86 26.9L115.86 21.18L117.29 21.18L118.96 23.12L118.96 21.18ZM130.42 25.62L130.07 26.9L129.81 26.9Q128.39 26.9 127.45 25.85Q126.53 24.84 126.53 23.42Q126.53 22.45 127.03 21.87Q127.64 21.18 128.83 21.18L129.99 21.18L130.34 22.47L129.18 22.47Q128.75 22.47 128.52 22.6Q128.07 22.86 128.07 23.56Q128.07 24.42 128.63 25Q129.24 25.63 130.24 25.63ZM138.04 25.62L138.04 26.9L136.78 26.9L136.78 25.62Z"/>
+    </symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.6 15H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9.7 4.6V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 .3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+  </defs>
+</svg>
+
+<div class="doc">
+<header>
+  <h1>WP5-UX3: bản mockup giao diện hiện đại (vòng sửa giao diện 3)</h1>
+  <p>Mỗi bản vẽ có hai giao diện: sáng (trên hoặc trái) và tối. Dữ liệu là dữ liệu giả; tên và email đều là ví dụ trên miền example.invalid. Màu, bóng đổ, bo góc và khoảng cách là giá trị đề xuất trong kế hoạch (mục B1).</p>
+  <p>Đây là ảnh tĩnh để duyệt hướng thiết kế; phần nút bấm không hoạt động. Xin anh xác nhận hướng "modern style" (câu hỏi G-1) sau khi xem.</p>
+</header>
+
+<!-- =============================== A1: desktop 1440, identity block and open menu =============================== -->
+<section class="board">
+  <p class="cap"><b>A1. Thanh trên cùng, màn hình 1440px, menu tài khoản đang mở (U-03, U-04, U-05, U-06)</b>
+  Logo và chữ "SEMICONDUCTOR / SERVICES, INC." hiện từ 1024px (từ 1280px khi có ô "Shared with me"), nên thấy được ở các màn hình máy tính thông dụng 1280, 1366, 1440, 1536 và 1920px. Menu chính chỉ còn Timesheet, Overtime, History. Bên phải: họ tên đậm, email chữ nhỏ màu xám đậm, ảnh đại diện là chữ cái đầu. Bấm vào khối này mở menu: Hồ sơ, Cài đặt, Quản trị (chỉ admin), chế độ Sáng/Tối, Đăng xuất.</p>
+  <div class="pair">
+  <div class="frame w1440 t-light" style="height:480px"><span class="tag">Sáng</span>
+    <div class="bar">
+      <span class="brand"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg><svg class="wm" aria-hidden="true"><use href="#wm"/></svg></span>
+      <nav class="nav" aria-label="Main"><a class="cur" href="#a1">Timesheet</a><a href="#a1">Overtime</a><a href="#a1">History</a></nav>
+      <button class="who open" type="button" aria-expanded="true"><span class="names"><span class="name">Example Employee Two</span><span class="email">employee2@example.invalid</span></span><span class="avatar" aria-hidden="true">ET</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
+    </div>
+    <div class="menu">
+      <div class="mhead"><span class="avatar">ET</span><span class="mt"><b>Example Employee Two</b><span>employee2@example.invalid</span><span>Administrator</span></span></div>
+      <a class="item hov" href="#a1"><svg class="ic"><use href="#i-user"/></svg>Profile</a>
+      <a class="item" href="#a1"><svg class="ic"><use href="#i-gear"/></svg>Settings</a>
+      <a class="item" href="#a1"><svg class="ic"><use href="#i-shield"/></svg>Administration</a>
+      <div class="sep"></div>
+      <div class="theme"><span>Theme</span><span class="seg"><span class="on"><svg class="ic"><use href="#i-sun"/></svg>Light</span><span><svg class="ic"><use href="#i-moon"/></svg>Dark</span></span></div>
+      <div class="sep"></div>
+      <a class="item" href="#a1"><svg class="ic"><use href="#i-out"/></svg>Sign out</a>
+    </div>
+    <div class="page"><div class="titlerow"><h1>Timesheet</h1></div><div class="card muted">(Nội dung trang bên dưới)</div></div>
+  </div>
+  <div class="frame w1440 t-dark" style="height:480px"><span class="tag">Tối</span>
+    <div class="bar">
+      <span class="brand"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg><svg class="wm" aria-hidden="true"><use href="#wm"/></svg></span>
+      <nav class="nav" aria-label="Main"><a class="cur" href="#a1">Timesheet</a><a href="#a1">Overtime</a><a href="#a1">History</a></nav>
+      <button class="who open" type="button" aria-expanded="true"><span class="names"><span class="name">Example Employee Two</span><span class="email">employee2@example.invalid</span></span><span class="avatar" aria-hidden="true">ET</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
+    </div>
+    <div class="menu">
+      <div class="mhead"><span class="avatar">ET</span><span class="mt"><b>Example Employee Two</b><span>employee2@example.invalid</span><span>Administrator</span></span></div>
+      <a class="item hov" href="#a1"><svg class="ic"><use href="#i-user"/></svg>Profile</a>
+      <a class="item" href="#a1"><svg class="ic"><use href="#i-gear"/></svg>Settings</a>
+      <a class="item" href="#a1"><svg class="ic"><use href="#i-shield"/></svg>Administration</a>
+      <div class="sep"></div>
+      <div class="theme"><span>Theme</span><span class="seg"><span><svg class="ic"><use href="#i-sun"/></svg>Light</span><span class="on"><svg class="ic"><use href="#i-moon"/></svg>Dark</span></span></div>
+      <div class="sep"></div>
+      <a class="item" href="#a1"><svg class="ic"><use href="#i-out"/></svg>Sign out</a>
+    </div>
+    <div class="page"><div class="titlerow"><h1>Timesheet</h1></div><div class="card muted">(Nội dung trang bên dưới)</div></div>
+  </div>
+  </div>
+</section>
+
+<!-- =============================== A2: desktop 1280 with the Shared-with-me switcher =============================== -->
+<section class="board">
+  <p class="cap"><b>A2. Thanh trên cùng, màn hình 1280px, có ô "Shared with me" (U-06)</b>
+  Vì Settings, Admin, nút Sáng/Tối và Đăng xuất đã vào menu tài khoản, thanh trên còn đủ chỗ cho chữ thương hiệu ngay cả khi có người chia sẻ bảng chấm công. Tên hoặc email dài bị cắt bằng dấu "..." (hiện đầy đủ trong menu).</p>
+  <div class="pair">
+  <div class="frame w1280 t-light" style="height:76px"><span class="tag">Sáng</span>
+    <div class="bar">
+      <span class="brand"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg><svg class="wm" aria-hidden="true"><use href="#wm"/></svg></span>
+      <nav class="nav" aria-label="Main"><a class="cur" href="#a2">Timesheet</a><a href="#a2">Overtime</a><a href="#a2">History</a></nav>
+      <span class="switcher"><span class="muted">Shared with me</span><span class="field">My timesheets<svg class="ic"><use href="#i-chev"/></svg></span><span class="btn secondary">Open</span></span>
+      <button class="who" type="button"><span class="names"><span class="name">Example Employee Two With A Long Name</span><span class="email">employee2@example.invalid</span></span><span class="avatar" aria-hidden="true">EN</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
+    </div>
+  </div>
+  <div class="frame w1280 t-dark" style="height:76px"><span class="tag">Tối</span>
+    <div class="bar">
+      <span class="brand"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg><svg class="wm" aria-hidden="true"><use href="#wm"/></svg></span>
+      <nav class="nav" aria-label="Main"><a class="cur" href="#a2">Timesheet</a><a href="#a2">Overtime</a><a href="#a2">History</a></nav>
+      <span class="switcher"><span class="muted">Shared with me</span><span class="field">My timesheets<svg class="ic"><use href="#i-chev"/></svg></span><span class="btn secondary">Open</span></span>
+      <button class="who" type="button"><span class="names"><span class="name">Example Employee Two With A Long Name</span><span class="email">employee2@example.invalid</span></span><span class="avatar" aria-hidden="true">EN</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- =============================== A3: page header, period bar, pills, meta row, toolbar =============================== -->
+<section class="board">
+  <p class="cap"><b>A3. Đầu trang Timesheet, 1280px (U-07..U-12)</b>
+  Tiêu đề "Timesheet" và nút Check in/out cùng một hàng (bên phải, kèm giờ đã check in). Bỏ tên người dùng dưới tiêu đề. Ba nhãn kỳ: "old" màu hổ phách, "current" màu xanh lá, "future" màu hồng, có nền màu để phân biệt rõ ở cả hai chế độ. Hàng thông tin (Payroll date, Due, Times in) nằm một hàng khi đủ chỗ. "Open a day" nằm cùng hàng với ô chọn ngày. "Show details" và "Change several days" cách nhau 24px có vạch ngăn.</p>
+  <div class="pair">
+  <div class="frame w1280 t-light"><span class="tag">Sáng</span>
+    <div class="page">
+      <div class="titlerow"><h1>Timesheet</h1>
+        <div class="checkin"><div class="state"><span class="now"><span class="dot"></span>Checked in since 08:12</span><span class="sub">Thu 10/15, session running</span></div><span class="btn">Check out</span></div>
+      </div>
+      <section class="card period" aria-label="Pay period">
+        <span class="btn secondary icon" aria-label="Previous period"><svg class="ic"><use href="#i-left"/></svg></span>
+        <div class="ptitle"><span class="pname">09/28/2026<span class="arr">→</span>10/11/2026</span><span class="pill current">current</span><span class="pill neutral">Draft</span></div>
+        <div class="pactions"><span class="btn secondary icon" aria-label="Next period"><svg class="ic"><use href="#i-right"/></svg></span><span class="btn secondary">Today</span><span class="btn">Review &amp; sign off</span></div>
+        <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/16/2026</b></span><span>Due <b>Tue 10/13/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
+      </section>
+      <div class="tools">
+        <div class="openday"><span class="t">Open a day</span><span class="field date"><span class="ph">mm/dd/yyyy</span><svg class="ic"><use href="#i-cal"/></svg></span><span class="btn secondary">Open day</span></div>
+        <div class="toolsr"><span class="switch"><i></i>Show details</span><span class="vsep"></span><span class="btn secondary">Change several days</span></div>
+      </div>
+      <p class="muted" style="margin:18px 0 6px;font-size:13px">Ba nhãn kỳ đặt cạnh nhau (old, current, future) và nhãn trạng thái trung tính:</p>
+      <div style="display:flex;gap:10px;align-items:center"><span class="pill old">old</span><span class="pill current">current</span><span class="pill future">future</span><span class="pill neutral">Draft</span></div>
+    </div>
+  </div>
+  <div class="frame w1280 t-dark"><span class="tag">Tối</span>
+    <div class="page">
+      <div class="titlerow"><h1>Timesheet</h1>
+        <div class="checkin"><div class="state"><span class="now"><span class="dot"></span>Checked in since 08:12</span><span class="sub">Thu 10/15, session running</span></div><span class="btn">Check out</span></div>
+      </div>
+      <section class="card period" aria-label="Pay period">
+        <span class="btn secondary icon" aria-label="Previous period"><svg class="ic"><use href="#i-left"/></svg></span>
+        <div class="ptitle"><span class="pname">09/28/2026<span class="arr">→</span>10/11/2026</span><span class="pill current">current</span><span class="pill neutral">Draft</span></div>
+        <div class="pactions"><span class="btn secondary icon" aria-label="Next period"><svg class="ic"><use href="#i-right"/></svg></span><span class="btn secondary">Today</span><span class="btn">Review &amp; sign off</span></div>
+        <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/16/2026</b></span><span>Due <b>Tue 10/13/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
+      </section>
+      <div class="tools">
+        <div class="openday"><span class="t">Open a day</span><span class="field date"><span class="ph">mm/dd/yyyy</span><svg class="ic"><use href="#i-cal"/></svg></span><span class="btn secondary">Open day</span></div>
+        <div class="toolsr"><span class="switch"><i></i>Show details</span><span class="vsep"></span><span class="btn secondary">Change several days</span></div>
+      </div>
+      <p class="muted" style="margin:18px 0 6px;font-size:13px">Ba nhãn kỳ đặt cạnh nhau (old, current, future) và nhãn trạng thái trung tính:</p>
+      <div style="display:flex;gap:10px;align-items:center"><span class="pill old">old</span><span class="pill current">current</span><span class="pill future">future</span><span class="pill neutral">Draft</span></div>
+    </div>
+  </div>
+  </div>
+</section>
+
+<section class="board">
+  <p class="cap"><b>A3b. Hàng thông tin khi hẹp (khoảng 820px): tự xuống hàng (U-10)</b>
+  Khi không đủ chỗ, "Due ..." và "Times in ..." xuống hàng; trạng thái chưa check in hiện "Checked out" và nút "Check in".</p>
+  <div class="pair">
+  <div class="frame w820 t-light"><span class="tag">Sáng</span>
+    <div class="page">
+      <div class="titlerow"><h1>Timesheet</h1><div class="checkin"><div class="state"><span class="now out">Checked out</span></div><span class="btn">Check in</span></div></div>
+      <section class="card period">
+        <span class="btn secondary icon" aria-label="Previous period"><svg class="ic"><use href="#i-left"/></svg></span>
+        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span>10/25/2026</span><span class="pill future">future</span><span class="pill neutral">Draft</span></div>
+        <div class="pactions"><span class="btn secondary icon" aria-label="Next period"><svg class="ic"><use href="#i-right"/></svg></span><span class="btn secondary inactive">Today</span><span class="btn secondary">Current period</span><span class="btn">Review &amp; sign off</span></div>
+        <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/30/2026</b></span><span>Due <b>Tue 10/27/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
+      </section>
+    </div>
+  </div>
+  <div class="frame w820 t-dark"><span class="tag">Tối</span>
+    <div class="page">
+      <div class="titlerow"><h1>Timesheet</h1><div class="checkin"><div class="state"><span class="now out">Checked out</span></div><span class="btn">Check in</span></div></div>
+      <section class="card period">
+        <span class="btn secondary icon" aria-label="Previous period"><svg class="ic"><use href="#i-left"/></svg></span>
+        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span>10/25/2026</span><span class="pill future">future</span><span class="pill neutral">Draft</span></div>
+        <div class="pactions"><span class="btn secondary icon" aria-label="Next period"><svg class="ic"><use href="#i-right"/></svg></span><span class="btn secondary inactive">Today</span><span class="btn secondary">Current period</span><span class="btn">Review &amp; sign off</span></div>
+        <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/30/2026</b></span><span>Due <b>Tue 10/27/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
+      </section>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- =============================== A4: sheet with lifted columns and the Day editor panel =============================== -->
+<section class="board">
+  <p class="cap"><b>A4. Bảng tuần nổi bật và panel Day editor, 1280px (U-02, U-13..U-16, U-19..U-21, U-27)</b>
+  Mỗi tuần là một tấm bảng trắng có bóng đổ trên nền xám. Cột Tue và Wed được chọn bằng "Change several days": nổi lên nhẹ bằng bóng đổ, có ô chọn đã tick, không còn khung dày. Cột Mon đang mở Day editor: cũng nổi lên, có viền xanh mỏng và ô "Day" tô nền xanh nhạt (không còn gạch đậm). Hàng "Label" đổi thành "Category", hàng "Check" đổi thành "Status"; "No times" dùng vòng tròn có gạch chéo thay cho ô vuông giống checkbox. Panel: tiêu đề nổi bật trên nền khác, ghi chú ngắn bằng hai nhãn nhỏ, danh sách phiên làm việc và bảng nghỉ giữa giờ (ngày, giờ bắt đầu, số phút), WFH cùng hàng với Category.</p>
+  <div class="pair">
+  <div class="frame w1280 t-light"><span class="tag">Sáng</span>
+    <div class="page" style="max-width:none">
+      <div class="split">
+        <div>
+          <div class="formhead"><span class="ft">Time sheet for salaried exempt employees</span><dl><div><dt>Employee:</dt><dd>Example Employee Two</dd></div><div><dt>Payroll Date:</dt><dd class="mono">10/30/2026</dd></div><div><dt>Period:</dt><dd class="mono">10/12/2026 - 10/25/2026</dd></div></dl></div>
+          <section class="week" aria-label="Week 1">
+            <div class="weekbar"><b>WEEK 1</b><span class="mono muted">10/12/2026 - 10/18/2026</span><span class="muted" style="margin-left:auto;font-size:13px">2 selected</span></div>
+            <div class="wgrid">
+              <div class="rl"><div class="h-day">Day</div><div class="h-date">Date</div><div class="h-label">Category</div><div class="h-time">Time</div><div class="h-ot">OT (h:mm)</div><div class="h-st">Status</div></div>
+              <div class="day lifted editing"><div class="d-day h-day">Mon <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/12</div><div class="d-label h-label">Worked</div><div class="d-time h-time">09:00-17:30<small>1 break</small></div><div class="d-ot h-ot">0:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+              <div class="day lifted selected"><div class="d-day h-day">Tue <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/13</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:30-19:00<small>1 break</small></div><div class="d-ot h-ot">2:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+              <div class="day lifted selected"><div class="d-day h-day">Wed <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/14</div><div class="d-label h-label">Worked<small>Work from home</small></div><div class="d-time h-time">09:00-17:30<small>breaks not confirmed</small></div><div class="d-ot h-ot"><span style="font-size:12px;font-weight:400;color:var(--attention-ink)">pending</span></div><div class="d-st h-st"><span class="st warn"><i class="sh diamond"></i>Confirm breaks</span></div></div>
+              <div class="day today"><div class="d-day h-day">Thu <span class="todaytag">Today</span> <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/15</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:12<small>running</small></div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st ok"><i class="sh live"></i>Running</span></div></div>
+              <div class="day"><div class="d-day h-day">Fri <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/16</div><div class="d-label h-label">Worked</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st mut"><i class="sh dash"></i>Upcoming</span></div></div>
+              <div class="day nonworking"><div class="d-day h-day">Sat <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/17</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+              <div class="day nonworking"><div class="d-day h-day">Sun <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/18</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+            </div>
+          </section>
+          <p class="muted" style="margin:18px 4px 0;font-size:13px">Ví dụ trạng thái khác (tuần trước): cột vừa được chọn vừa đang mở Day editor; một ngày quá khứ chưa có giờ ("No times").</p>
+          <section class="week" aria-label="Example state">
+            <div class="weekbar"><b>WEEK 2</b><span class="mono muted">10/05/2026 - 10/11/2026</span></div>
+            <div class="wgrid">
+              <div class="rl"><div class="h-day">Day</div><div class="h-date">Date</div><div class="h-label">Category</div><div class="h-time">Time</div><div class="h-ot">OT (h:mm)</div><div class="h-st">Status</div></div>
+              <div class="day"><div class="d-day h-day">Mon <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/05</div><div class="d-label h-label">Worked</div><div class="d-time h-time attention">no times yet</div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st warn"><i class="sh none"></i>No times</span></div></div>
+              <div class="day lifted selected editing"><div class="d-day h-day">Tue <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/06</div><div class="d-label h-label">Vacation<small>Leave 8:00</small></div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+              <div class="day"><div class="d-day h-day">Wed <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/07</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:00-17:00<small>3 breaks</small></div><div class="d-ot h-ot">0:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+              <div class="day"><div class="d-day h-day">Thu <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/08</div><div class="d-label h-label">Worked</div><div class="d-time h-time">07:30-17:30<small>3 breaks</small></div><div class="d-ot h-ot">1:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+              <div class="day"><div class="d-day h-day">Fri <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/09</div><div class="d-label h-label">Holiday<small>Synthetic Holiday</small></div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+              <div class="day nonworking"><div class="d-day h-day">Sat <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/10</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+              <div class="day nonworking"><div class="d-day h-day">Sun <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/11</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+            </div>
+          </section>
+        </div>
+        <aside class="panel" aria-label="Day editor">
+          <div class="phead">
+            <div><h2><span class="sr">Day editor </span>Mon 10/12/2026</h2>
+              <div class="chips"><span class="pill future">future period</span><span class="chip"><svg class="ic"><use href="#i-clock"/></svg>Times in America/Los_Angeles</span></div></div>
+            <span class="btn quiet icon" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></span>
+          </div>
+          <div class="pbody">
+            <div class="psec">
+              <h3>Times <span class="btn secondary" style="min-height:32px;padding:4px 10px;font-size:0.85rem"><svg class="ic"><use href="#i-plus"/></svg>Add session</span></h3>
+              <div class="sess">
+                <div class="top"><span class="rng">09:00-17:30</span><span class="pill current">Breaks confirmed</span></div>
+                <p class="by">Entered by hand in America/Los_Angeles</p>
+                <table class="bt"><caption>Breaks of 09:00-17:30</caption><thead><tr><th>Break</th><th>Date</th><th>Start</th><th>Minutes</th></tr></thead>
+                  <tbody><tr><td>1</td><td>10/12</td><td>11:00</td><td>15</td></tr><tr><td>2</td><td>10/12</td><td>13:00</td><td>30</td></tr><tr><td>3</td><td>10/12</td><td>15:30</td><td>15</td></tr></tbody></table>
+                <div class="acts" style="margin-top:8px"><span class="btn secondary">Edit</span><span class="btn secondary"><svg class="ic"><use href="#i-trash"/></svg>Delete</span></div>
+              </div>
+              <div class="sess">
+                <div class="top"><span class="rng">18:00-20:15</span><span class="pill old">Breaks not confirmed</span></div>
+                <p class="by">Checked in and out</p>
+                <div class="notice"><span>OT stays pending until breaks are confirmed.</span><span class="btn" style="min-height:32px;padding:4px 10px;font-size:0.85rem">Confirm breaks</span></div>
+                <div class="acts" style="margin-top:8px"><span class="btn secondary">Edit</span><span class="btn secondary"><svg class="ic"><use href="#i-trash"/></svg>Delete</span></div>
+              </div>
+            </div>
+            <div class="psec">
+              <h3>Category and leave</h3>
+              <div class="labelrow"><label class="lab">Category<span class="field">Worked<svg class="ic"><use href="#i-chev"/></svg></span></label><span class="inline"><span class="chk"></span>Worked from home (WFH)</span></div>
+              <p class="hint" style="margin-top:6px">Calendar default. Saving records it as your choice.</p>
+              <div class="leave"><label class="lab">Leave hours<span class="field">0</span></label><label class="lab">Leave minutes<span class="field">0</span></label><label class="lab">Leave kind<span class="field">Not set</span></label></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+  <div class="frame w1280 t-dark"><span class="tag">Tối</span>
+    <div class="page" style="max-width:none">
+      <div class="split">
+        <div>
+          <div class="formhead"><span class="ft">Time sheet for salaried exempt employees</span><dl><div><dt>Employee:</dt><dd>Example Employee Two</dd></div><div><dt>Payroll Date:</dt><dd class="mono">10/30/2026</dd></div><div><dt>Period:</dt><dd class="mono">10/12/2026 - 10/25/2026</dd></div></dl></div>
+          <section class="week" aria-label="Week 1">
+            <div class="weekbar"><b>WEEK 1</b><span class="mono muted">10/12/2026 - 10/18/2026</span><span class="muted" style="margin-left:auto;font-size:13px">2 selected</span></div>
+            <div class="wgrid">
+              <div class="rl"><div class="h-day">Day</div><div class="h-date">Date</div><div class="h-label">Category</div><div class="h-time">Time</div><div class="h-ot">OT (h:mm)</div><div class="h-st">Status</div></div>
+              <div class="day lifted editing"><div class="d-day h-day">Mon <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/12</div><div class="d-label h-label">Worked</div><div class="d-time h-time">09:00-17:30<small>1 break</small></div><div class="d-ot h-ot">0:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+              <div class="day lifted selected"><div class="d-day h-day">Tue <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/13</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:30-19:00<small>1 break</small></div><div class="d-ot h-ot">2:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+              <div class="day lifted selected"><div class="d-day h-day">Wed <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/14</div><div class="d-label h-label">Worked<small>Work from home</small></div><div class="d-time h-time">09:00-17:30<small>breaks not confirmed</small></div><div class="d-ot h-ot"><span style="font-size:12px;font-weight:400;color:var(--attention-ink)">pending</span></div><div class="d-st h-st"><span class="st warn"><i class="sh diamond"></i>Confirm breaks</span></div></div>
+              <div class="day today"><div class="d-day h-day">Thu <span class="todaytag">Today</span> <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/15</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:12<small>running</small></div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st ok"><i class="sh live"></i>Running</span></div></div>
+              <div class="day"><div class="d-day h-day">Fri <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/16</div><div class="d-label h-label">Worked</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st mut"><i class="sh dash"></i>Upcoming</span></div></div>
+              <div class="day nonworking"><div class="d-day h-day">Sat <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/17</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+              <div class="day nonworking"><div class="d-day h-day">Sun <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/18</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+            </div>
+          </section>
+          <p class="muted" style="margin:18px 4px 0;font-size:13px">Ví dụ trạng thái khác (tuần trước): cột vừa được chọn vừa đang mở Day editor; một ngày quá khứ chưa có giờ ("No times").</p>
+          <section class="week" aria-label="Example state">
+            <div class="weekbar"><b>WEEK 2</b><span class="mono muted">10/05/2026 - 10/11/2026</span></div>
+            <div class="wgrid">
+              <div class="rl"><div class="h-day">Day</div><div class="h-date">Date</div><div class="h-label">Category</div><div class="h-time">Time</div><div class="h-ot">OT (h:mm)</div><div class="h-st">Status</div></div>
+              <div class="day"><div class="d-day h-day">Mon <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/05</div><div class="d-label h-label">Worked</div><div class="d-time h-time attention">no times yet</div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st warn"><i class="sh none"></i>No times</span></div></div>
+              <div class="day lifted selected editing"><div class="d-day h-day">Tue <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/06</div><div class="d-label h-label">Vacation<small>Leave 8:00</small></div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+              <div class="day"><div class="d-day h-day">Wed <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/07</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:00-17:00<small>3 breaks</small></div><div class="d-ot h-ot">0:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+              <div class="day"><div class="d-day h-day">Thu <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/08</div><div class="d-label h-label">Worked</div><div class="d-time h-time">07:30-17:30<small>3 breaks</small></div><div class="d-ot h-ot">1:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+              <div class="day"><div class="d-day h-day">Fri <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/09</div><div class="d-label h-label">Holiday<small>Synthetic Holiday</small></div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+              <div class="day nonworking"><div class="d-day h-day">Sat <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/10</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+              <div class="day nonworking"><div class="d-day h-day">Sun <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/11</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+            </div>
+          </section>
+        </div>
+        <aside class="panel" aria-label="Day editor">
+          <div class="phead">
+            <div><h2><span class="sr">Day editor </span>Mon 10/12/2026</h2>
+              <div class="chips"><span class="pill future">future period</span><span class="chip"><svg class="ic"><use href="#i-clock"/></svg>Times in America/Los_Angeles</span></div></div>
+            <span class="btn quiet icon" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></span>
+          </div>
+          <div class="pbody">
+            <div class="psec">
+              <h3>Times <span class="btn secondary" style="min-height:32px;padding:4px 10px;font-size:0.85rem"><svg class="ic"><use href="#i-plus"/></svg>Add session</span></h3>
+              <div class="sess">
+                <div class="top"><span class="rng">09:00-17:30</span><span class="pill current">Breaks confirmed</span></div>
+                <p class="by">Entered by hand in America/Los_Angeles</p>
+                <table class="bt"><caption>Breaks of 09:00-17:30</caption><thead><tr><th>Break</th><th>Date</th><th>Start</th><th>Minutes</th></tr></thead>
+                  <tbody><tr><td>1</td><td>10/12</td><td>11:00</td><td>15</td></tr><tr><td>2</td><td>10/12</td><td>13:00</td><td>30</td></tr><tr><td>3</td><td>10/12</td><td>15:30</td><td>15</td></tr></tbody></table>
+                <div class="acts" style="margin-top:8px"><span class="btn secondary">Edit</span><span class="btn secondary"><svg class="ic"><use href="#i-trash"/></svg>Delete</span></div>
+              </div>
+              <div class="sess">
+                <div class="top"><span class="rng">18:00-20:15</span><span class="pill old">Breaks not confirmed</span></div>
+                <p class="by">Checked in and out</p>
+                <div class="notice"><span>OT stays pending until breaks are confirmed.</span><span class="btn" style="min-height:32px;padding:4px 10px;font-size:0.85rem">Confirm breaks</span></div>
+                <div class="acts" style="margin-top:8px"><span class="btn secondary">Edit</span><span class="btn secondary"><svg class="ic"><use href="#i-trash"/></svg>Delete</span></div>
+              </div>
+            </div>
+            <div class="psec">
+              <h3>Category and leave</h3>
+              <div class="labelrow"><label class="lab">Category<span class="field">Worked<svg class="ic"><use href="#i-chev"/></svg></span></label><span class="inline"><span class="chk"></span>Worked from home (WFH)</span></div>
+              <p class="hint" style="margin-top:6px">Calendar default. Saving records it as your choice.</p>
+              <div class="leave"><label class="lab">Leave hours<span class="field">0</span></label><label class="lab">Leave minutes<span class="field">0</span></label><label class="lab">Leave kind<span class="field">Not set</span></label></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- =============================== A5: session dialog and confirmations =============================== -->
+<section class="board">
+  <p class="cap"><b>A5. Hộp thoại phiên làm việc (U-21..U-26)</b>
+  Thêm hoặc sửa phiên làm việc trong hộp thoại riêng. Ngày đã qua: tự điền giờ mặc định trong Settings (08:00-17:00) và ba giờ nghỉ gợi ý (có nhãn "suggested" đến khi sửa). Mỗi giờ nghỉ một dòng: ngày, giờ bắt đầu, số phút, nút X; giờ kết thúc tự tính. Một ô "Confirm no breaks taken". Nút "Suggest breaks" và "Add break". Nút "Save" cũng là xác nhận các giờ nghỉ; luôn hỏi lại trước khi lưu.</p>
+  <div class="pair">
+  <div class="frame w980 t-light" style="height:900px"><span class="tag">Sáng</span>
+    <div class="stage">
+      <div class="dlg" role="dialog" aria-labelledby="sd1">
+        <div class="dhead"><div><h2 id="sd1">New session</h2><p>Mon 10/12/2026 · accounting date in America/Los_Angeles</p></div><span class="btn quiet icon" aria-label="Cancel"><svg class="ic"><use href="#i-x"/></svg></span></div>
+        <div class="dbody">
+          <div class="prefill"><svg class="ic"><use href="#i-info"/></svg><span>Pre-filled from your reference hours (08:00-17:00) and suggested breaks. Change them to the times you worked.</span></div>
+          <div class="grp"><h3>Time</h3>
+            <div class="times"><label class="lab">Start<span class="dt"><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">08:00<svg class="ic"><use href="#i-clock"/></svg></span></span></label><label class="lab">End<span class="dt"><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">17:00<svg class="ic"><use href="#i-clock"/></svg></span></span></label></div>
+            <label class="lab">Input zone<span class="field" style="justify-content:space-between">America/Los_Angeles<svg class="ic"><use href="#i-chev"/></svg></span><span class="hint">The zone the times are typed in. Saved with the session; it never moves the day.</span></label>
+          </div>
+          <div class="grp"><h3>Breaks</h3>
+            <span class="inline"><span class="chk"></span>Confirm no breaks taken</span>
+            <div class="brows">
+              <div class="brow"><span class="num">Break 1</span><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">10:00<svg class="ic"><use href="#i-clock"/></svg></span><span class="field min">15 <span class="ph">min</span></span><span class="end">ends 10:15</span><span class="sugg">suggested</span><span class="btn quiet icon x" aria-label="Remove break 1"><svg class="ic"><use href="#i-x"/></svg></span></div>
+              <div class="brow"><span class="num">Break 2</span><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">12:00<svg class="ic"><use href="#i-clock"/></svg></span><span class="field min">30 <span class="ph">min</span></span><span class="end">ends 12:30</span><span class="sugg">suggested</span><span class="btn quiet icon x" aria-label="Remove break 2"><svg class="ic"><use href="#i-x"/></svg></span></div>
+              <div class="brow"><span class="num">Break 3</span><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">14:30<svg class="ic"><use href="#i-clock"/></svg></span><span class="field min"><span class="ph">total mins</span></span><span class="btn quiet icon x" aria-label="Remove break 3"><svg class="ic"><use href="#i-x"/></svg></span></div>
+            </div>
+            <div class="bactions"><span class="btn secondary"><svg class="ic"><use href="#i-spark"/></svg>Suggest breaks</span><span class="btn secondary"><svg class="ic"><use href="#i-plus"/></svg>Add break</span></div>
+            <p class="hint">Saving confirms the breaks listed here. Leave the list empty and the box unticked if you do not know yet: OT for the day then stays pending.</p>
+          </div>
+        </div>
+        <div class="dfoot"><span class="btn secondary">Cancel</span><span class="btn">Save</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="frame w980 t-dark" style="height:900px"><span class="tag">Tối</span>
+    <div class="stage">
+      <div class="dlg" role="dialog" aria-labelledby="sd2">
+        <div class="dhead"><div><h2 id="sd2">New session</h2><p>Mon 10/12/2026 · accounting date in America/Los_Angeles</p></div><span class="btn quiet icon" aria-label="Cancel"><svg class="ic"><use href="#i-x"/></svg></span></div>
+        <div class="dbody">
+          <div class="prefill"><svg class="ic"><use href="#i-info"/></svg><span>Pre-filled from your reference hours (08:00-17:00) and suggested breaks. Change them to the times you worked.</span></div>
+          <div class="grp"><h3>Time</h3>
+            <div class="times"><label class="lab">Start<span class="dt"><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">08:00<svg class="ic"><use href="#i-clock"/></svg></span></span></label><label class="lab">End<span class="dt"><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">17:00<svg class="ic"><use href="#i-clock"/></svg></span></span></label></div>
+            <label class="lab">Input zone<span class="field" style="justify-content:space-between">America/Los_Angeles<svg class="ic"><use href="#i-chev"/></svg></span><span class="hint">The zone the times are typed in. Saved with the session; it never moves the day.</span></label>
+          </div>
+          <div class="grp"><h3>Breaks</h3>
+            <span class="inline"><span class="chk"></span>Confirm no breaks taken</span>
+            <div class="brows">
+              <div class="brow"><span class="num">Break 1</span><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">10:00<svg class="ic"><use href="#i-clock"/></svg></span><span class="field min">15 <span class="ph">min</span></span><span class="end">ends 10:15</span><span class="sugg">suggested</span><span class="btn quiet icon x" aria-label="Remove break 1"><svg class="ic"><use href="#i-x"/></svg></span></div>
+              <div class="brow"><span class="num">Break 2</span><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">12:00<svg class="ic"><use href="#i-clock"/></svg></span><span class="field min">30 <span class="ph">min</span></span><span class="end">ends 12:30</span><span class="sugg">suggested</span><span class="btn quiet icon x" aria-label="Remove break 2"><svg class="ic"><use href="#i-x"/></svg></span></div>
+              <div class="brow"><span class="num">Break 3</span><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">14:30<svg class="ic"><use href="#i-clock"/></svg></span><span class="field min"><span class="ph">total mins</span></span><span class="btn quiet icon x" aria-label="Remove break 3"><svg class="ic"><use href="#i-x"/></svg></span></div>
+            </div>
+            <div class="bactions"><span class="btn secondary"><svg class="ic"><use href="#i-spark"/></svg>Suggest breaks</span><span class="btn secondary"><svg class="ic"><use href="#i-plus"/></svg>Add break</span></div>
+            <p class="hint">Saving confirms the breaks listed here. Leave the list empty and the box unticked if you do not know yet: OT for the day then stays pending.</p>
+          </div>
+        </div>
+        <div class="dfoot"><span class="btn secondary">Cancel</span><span class="btn">Save</span></div>
+      </div>
+    </div>
+  </div>
+  </div>
+</section>
+
+<section class="board">
+  <p class="cap"><b>A5b. Các thông báo xác nhận (U-22, U-26)</b>
+  Trái: hỏi trước khi lưu (tóm tắt giờ, số giờ nghỉ, ghi rõ "Saving confirms these breaks"). Giữa: xoá phiên làm việc (nút đỏ "Delete session", nút "Cancel" được chọn sẵn). Phải: bấm Cancel khi đã sửa dữ liệu.</p>
+  <div class="pair">
+  <div class="frame w1440 t-light" style="height:330px"><span class="tag">Sáng</span>
+    <div class="stage" style="display:flex;gap:24px;justify-content:center;align-items:flex-start;height:330px">
+      <div class="dlg sm" role="alertdialog"><div class="dhead"><h2>Save this session?</h2></div><div class="dbody"><dl class="confirmlist"><div><dt>Day</dt><dd>Mon 10/12/2026</dd></div><div><dt>Time</dt><dd>08:00-17:00 (America/Los_Angeles)</dd></div><div><dt>Breaks</dt><dd>3 breaks, 60 min</dd></div></dl><p style="margin:0">Saving confirms these breaks as the breaks you took.</p></div><div class="dfoot"><span class="btn secondary">Back</span><span class="btn">Save</span></div></div>
+      <div class="dlg sm" role="alertdialog"><div class="dhead"><h2>Delete this session?</h2></div><div class="dbody"><dl class="confirmlist"><div><dt>Day</dt><dd>Mon 10/12/2026</dd></div><div><dt>Time</dt><dd>09:00-17:30 (America/Los_Angeles)</dd></div><div><dt>Breaks</dt><dd>3 breaks</dd></div></dl><p style="margin:0">The session and its breaks are deleted. Worked time and OT of the day are calculated again.</p></div><div class="dfoot"><span class="btn secondary focus">Cancel</span><span class="btn danger">Delete session</span></div></div>
+      <div class="dlg sm" role="alertdialog"><div class="dhead"><h2>Discard your changes?</h2></div><div class="dbody"><p style="margin:0">You changed this session. If you leave now, nothing is saved.</p></div><div class="dfoot"><span class="btn secondary focus">Keep editing</span><span class="btn danger">Discard</span></div></div>
+    </div>
+  </div>
+  <div class="frame w1440 t-dark" style="height:330px"><span class="tag">Tối</span>
+    <div class="stage" style="display:flex;gap:24px;justify-content:center;align-items:flex-start;height:330px">
+      <div class="dlg sm" role="alertdialog"><div class="dhead"><h2>Save this session?</h2></div><div class="dbody"><dl class="confirmlist"><div><dt>Day</dt><dd>Mon 10/12/2026</dd></div><div><dt>Time</dt><dd>08:00-17:00 (America/Los_Angeles)</dd></div><div><dt>Breaks</dt><dd>3 breaks, 60 min</dd></div></dl><p style="margin:0">Saving confirms these breaks as the breaks you took.</p></div><div class="dfoot"><span class="btn secondary">Back</span><span class="btn">Save</span></div></div>
+      <div class="dlg sm" role="alertdialog"><div class="dhead"><h2>Delete this session?</h2></div><div class="dbody"><dl class="confirmlist"><div><dt>Day</dt><dd>Mon 10/12/2026</dd></div><div><dt>Time</dt><dd>09:00-17:30 (America/Los_Angeles)</dd></div><div><dt>Breaks</dt><dd>3 breaks</dd></div></dl><p style="margin:0">The session and its breaks are deleted. Worked time and OT of the day are calculated again.</p></div><div class="dfoot"><span class="btn secondary focus">Cancel</span><span class="btn danger">Delete session</span></div></div>
+      <div class="dlg sm" role="alertdialog"><div class="dhead"><h2>Discard your changes?</h2></div><div class="dbody"><p style="margin:0">You changed this session. If you leave now, nothing is saved.</p></div><div class="dfoot"><span class="btn secondary focus">Keep editing</span><span class="btn danger">Discard</span></div></div>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- =============================== A6: Settings with the Administration tab =============================== -->
+<section class="board">
+  <p class="cap"><b>A6. Settings có thẻ "Administration" (U-05) và thẻ "Profile" (U-04)</b>
+  Settings gồm các thẻ Personal, Profile và Administration (thẻ cuối chỉ hiện với admin). Địa chỉ cũ #/admin tự chuyển sang thẻ Administration. Máy chủ vẫn kiểm tra quyền admin như cũ.</p>
+  <div class="pair">
+  <div class="frame w1200 t-light"><span class="tag">Sáng</span>
+    <div class="bar"><span class="brand"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg><svg class="wm" aria-hidden="true"><use href="#wm"/></svg></span><nav class="nav"><a href="#a6">Timesheet</a><a href="#a6">Overtime</a><a href="#a6">History</a></nav><button class="who" type="button"><span class="names"><span class="name">Example Admin</span><span class="email">admin@example.invalid</span></span><span class="avatar">EA</span><svg class="ic"><use href="#i-chev"/></svg></button></div>
+    <div class="page">
+      <nav class="tabs" aria-label="Settings sections"><a href="#a6">Personal</a><a href="#a6">Profile</a><a class="cur" href="#a6" aria-current="page">Administration</a></nav>
+      <div class="titlerow"><h1>Administration</h1></div>
+      <p class="muted" style="margin:-6px 0 14px">Accounts, company calendar and operations status. This screen never shows anyone's timesheet details.</p>
+      <div class="card"><h2 style="margin:0 0 10px;font-size:1.05rem">Accounts</h2><dl class="kv"><dt>Example Admin</dt><dd>admin@example.invalid · Administrator</dd><dt>Example Employee</dt><dd>employee@example.invalid · Employee</dd><dt>Example Employee Two</dt><dd>employee2@example.invalid · Employee</dd></dl></div>
+    </div>
+  </div>
+  <div class="frame w1200 t-dark"><span class="tag">Tối</span>
+    <div class="bar"><span class="brand"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg><svg class="wm" aria-hidden="true"><use href="#wm"/></svg></span><nav class="nav"><a href="#a6">Timesheet</a><a href="#a6">Overtime</a><a href="#a6">History</a></nav><button class="who" type="button"><span class="names"><span class="name">Example Admin</span><span class="email">admin@example.invalid</span></span><span class="avatar">EA</span><svg class="ic"><use href="#i-chev"/></svg></button></div>
+    <div class="page">
+      <nav class="tabs" aria-label="Settings sections"><a href="#a6">Personal</a><a class="cur" href="#a6" aria-current="page">Profile</a><a href="#a6">Administration</a></nav>
+      <div class="titlerow"><h1>Profile</h1></div>
+      <div class="card" style="display:flex;gap:20px;align-items:flex-start"><span class="avatar lg">EA</span><dl class="kv"><dt>Display name</dt><dd>Example Admin</dd><dt>Email</dt><dd>admin@example.invalid</dd><dt>Role</dt><dd>Administrator</dd><dt>Reporting zone</dt><dd>America/Los_Angeles</dd></dl></div>
+      <p class="hint" style="margin-top:10px">An administrator changes display names. Password changes are planned separately (D-9).</p>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- =============================== A7: phones 390 and 320, More panel =============================== -->
+<section class="board">
+  <p class="cap"><b>A7. Điện thoại 390px và 320px (U-17, U-18) và menu "More" (U-04)</b>
+  390px: ba nút "Today", "Current period", "Sign off" cùng một hàng. 320px: "Current period" rút gọn thành "Current" để ba nút vẫn cùng một hàng; chữ "Open a day" được ẩn (ô chọn ngày vẫn có nhãn cho trình đọc màn hình) để ô ngày và nút "Open day" cùng một hàng. Bên phải: menu "More" trên điện thoại có khối tài khoản giống menu máy tính.</p>
+  <div class="pair">
+  <div class="frame w390 ph-h t-light"><span class="tag">Sáng 390</span>
+    <div class="pbar"><span class="brand"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg></span><span class="cl"><span class="state"><b style="color:var(--ok)">Checked in since 08:12</b><br><span class="muted">Thu 10/15</span></span><span class="btn">Check out</span></span></div>
+    <div class="ppage">
+      <div class="pcard pperiod">
+        <span class="btn secondary icon"><svg class="ic"><use href="#i-left"/></svg></span>
+        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span>10/25/2026</span><span class="pill future">future</span><span class="pill neutral">Draft</span></div>
+        <span class="btn secondary icon"><svg class="ic"><use href="#i-right"/></svg></span>
+        <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/30/2026</b></span><span>Due <b>Tue 10/27/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
+        <div class="prow"><span class="btn secondary inactive">Today</span><span class="btn secondary">Current period</span><span class="btn grow">Sign off</span></div>
+      </div>
+      <div class="ptools"><div class="openday"><span class="t">Open a day</span><span class="field date"><span class="ph">mm/dd/yyyy</span><svg class="ic"><use href="#i-cal"/></svg></span><span class="btn secondary">Open day</span></div><div class="r2"><span class="switch"><i></i>Show details</span><span class="btn secondary">Change several days</span></div></div>
+      <div class="prowtable"><div class="h"><span>Day</span><span>Category</span><span>Time</span><span style="text-align:right">OT</span></div>
+        <div class="r editing"><span><b>Mon</b> <span class="mono muted">10/12</span><br><span class="st ok" style="font-size:12px"><i class="sh circle"></i>Complete</span></span><span><b>Worked</b></span><span class="mono" style="font-size:12px">09:00-17:30<br><span class="muted">3 breaks</span></span><span class="mono" style="text-align:right;font-weight:700">0:00</span></div>
+        <div class="r"><span><b>Tue</b> <span class="mono muted">10/13</span><br><span class="st ok" style="font-size:12px"><i class="sh circle"></i>Complete</span></span><span><b>Worked</b></span><span class="mono" style="font-size:12px">08:30-19:00<br><span class="muted">1 break</span></span><span class="mono" style="text-align:right;font-weight:700">2:00</span></div>
+      </div>
+    </div>
+    <div class="tabbar"><span class="cur">Timesheet</span><span>Overtime</span><span>History</span><span>More</span></div>
+  </div>
+  <div class="frame w320 ph-h t-light"><span class="tag">Sáng 320</span>
+    <div class="pbar"><span class="brand"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg></span><span class="cl"><span class="state"><b style="color:var(--muted)">Checked out</b></span><span class="btn">Check in</span></span></div>
+    <div class="ppage">
+      <div class="pcard pperiod">
+        <span class="btn secondary icon"><svg class="ic"><use href="#i-left"/></svg></span>
+        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span> 10/25/2026</span><span class="pill future">future</span></div>
+        <span class="btn secondary icon"><svg class="ic"><use href="#i-right"/></svg></span>
+        <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/30/2026</b></span><span>Due <b>Tue 10/27/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
+        <div class="prow"><span class="btn secondary inactive">Today</span><span class="btn secondary">Current</span><span class="btn grow">Sign off</span></div>
+      </div>
+      <div class="ptools"><div class="openday"><span class="sr">Open a day</span><span class="field date"><span class="ph">mm/dd/yyyy</span><svg class="ic"><use href="#i-cal"/></svg></span><span class="btn secondary">Open day</span></div><div class="r2"><span class="switch"><i></i>Show details</span><span class="btn secondary">Change several days</span></div></div>
+    </div>
+    <div class="tabbar"><span class="cur">Timesheet</span><span>Overtime</span><span>History</span><span>More</span></div>
+  </div>
+  <div class="frame w390 ph-h t-light"><span class="tag">Sáng: More</span>
+    <div class="pbar"><span class="brand"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg></span><span class="cl"><span class="state"><b style="color:var(--muted)">Checked out</b></span><span class="btn">Check in</span></span></div>
+    <div class="ppage"><div class="pcard muted">(Trang phía sau)</div></div>
+    <div class="menu pmenu">
+      <div class="mhead"><span class="avatar">ET</span><span class="mt"><b>Example Employee Two</b><span>employee2@example.invalid</span></span></div>
+      <a class="item" href="#a7"><svg class="ic"><use href="#i-user"/></svg>Profile</a>
+      <a class="item" href="#a7"><svg class="ic"><use href="#i-gear"/></svg>Settings</a>
+      <a class="item" href="#a7"><svg class="ic"><use href="#i-cal"/></svg>Import</a>
+      <div class="sep"></div>
+      <div class="theme"><span>Theme</span><span class="seg"><span class="on"><svg class="ic"><use href="#i-sun"/></svg>Light</span><span><svg class="ic"><use href="#i-moon"/></svg>Dark</span></span></div>
+      <div class="sep"></div>
+      <a class="item" href="#a7"><svg class="ic"><use href="#i-out"/></svg>Sign out</a>
+    </div>
+    <div class="tabbar"><span>Timesheet</span><span>Overtime</span><span>History</span><span class="open">More</span></div>
+  </div>
+  </div>
+  <div class="pair" style="margin-top:24px">
+  <div class="frame w390 ph-h t-dark"><span class="tag">Tối 390</span>
+    <div class="pbar"><span class="brand"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg></span><span class="cl"><span class="state"><b style="color:var(--ok)">Checked in since 08:12</b><br><span class="muted">Thu 10/15</span></span><span class="btn">Check out</span></span></div>
+    <div class="ppage">
+      <div class="pcard pperiod">
+        <span class="btn secondary icon"><svg class="ic"><use href="#i-left"/></svg></span>
+        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span>10/25/2026</span><span class="pill future">future</span><span class="pill neutral">Draft</span></div>
+        <span class="btn secondary icon"><svg class="ic"><use href="#i-right"/></svg></span>
+        <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/30/2026</b></span><span>Due <b>Tue 10/27/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
+        <div class="prow"><span class="btn secondary inactive">Today</span><span class="btn secondary">Current period</span><span class="btn grow">Sign off</span></div>
+      </div>
+      <div class="ptools"><div class="openday"><span class="t">Open a day</span><span class="field date"><span class="ph">mm/dd/yyyy</span><svg class="ic"><use href="#i-cal"/></svg></span><span class="btn secondary">Open day</span></div><div class="r2"><span class="switch"><i></i>Show details</span><span class="btn secondary">Change several days</span></div></div>
+      <div class="prowtable"><div class="h"><span>Day</span><span>Category</span><span>Time</span><span style="text-align:right">OT</span></div>
+        <div class="r editing"><span><b>Mon</b> <span class="mono muted">10/12</span><br><span class="st ok" style="font-size:12px"><i class="sh circle"></i>Complete</span></span><span><b>Worked</b></span><span class="mono" style="font-size:12px">09:00-17:30<br><span class="muted">3 breaks</span></span><span class="mono" style="text-align:right;font-weight:700">0:00</span></div>
+        <div class="r"><span><b>Tue</b> <span class="mono muted">10/13</span><br><span class="st ok" style="font-size:12px"><i class="sh circle"></i>Complete</span></span><span><b>Worked</b></span><span class="mono" style="font-size:12px">08:30-19:00<br><span class="muted">1 break</span></span><span class="mono" style="text-align:right;font-weight:700">2:00</span></div>
+      </div>
+    </div>
+    <div class="tabbar"><span class="cur">Timesheet</span><span>Overtime</span><span>History</span><span>More</span></div>
+  </div>
+  <div class="frame w320 ph-h t-dark"><span class="tag">Tối 320</span>
+    <div class="pbar"><span class="brand"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg></span><span class="cl"><span class="state"><b style="color:var(--muted)">Checked out</b></span><span class="btn">Check in</span></span></div>
+    <div class="ppage">
+      <div class="pcard pperiod">
+        <span class="btn secondary icon"><svg class="ic"><use href="#i-left"/></svg></span>
+        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span> 10/25/2026</span><span class="pill future">future</span></div>
+        <span class="btn secondary icon"><svg class="ic"><use href="#i-right"/></svg></span>
+        <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/30/2026</b></span><span>Due <b>Tue 10/27/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
+        <div class="prow"><span class="btn secondary inactive">Today</span><span class="btn secondary">Current</span><span class="btn grow">Sign off</span></div>
+      </div>
+      <div class="ptools"><div class="openday"><span class="sr">Open a day</span><span class="field date"><span class="ph">mm/dd/yyyy</span><svg class="ic"><use href="#i-cal"/></svg></span><span class="btn secondary">Open day</span></div><div class="r2"><span class="switch"><i></i>Show details</span><span class="btn secondary">Change several days</span></div></div>
+    </div>
+    <div class="tabbar"><span class="cur">Timesheet</span><span>Overtime</span><span>History</span><span>More</span></div>
+  </div>
+  <div class="frame w390 ph-h t-dark"><span class="tag">Tối: More</span>
+    <div class="pbar"><span class="brand"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg></span><span class="cl"><span class="state"><b style="color:var(--muted)">Checked out</b></span><span class="btn">Check in</span></span></div>
+    <div class="ppage"><div class="pcard muted">(Trang phía sau)</div></div>
+    <div class="menu pmenu">
+      <div class="mhead"><span class="avatar">ET</span><span class="mt"><b>Example Employee Two</b><span>employee2@example.invalid</span></span></div>
+      <a class="item" href="#a7"><svg class="ic"><use href="#i-user"/></svg>Profile</a>
+      <a class="item" href="#a7"><svg class="ic"><use href="#i-gear"/></svg>Settings</a>
+      <a class="item" href="#a7"><svg class="ic"><use href="#i-cal"/></svg>Import</a>
+      <div class="sep"></div>
+      <div class="theme"><span>Theme</span><span class="seg"><span><svg class="ic"><use href="#i-sun"/></svg>Light</span><span class="on"><svg class="ic"><use href="#i-moon"/></svg>Dark</span></span></div>
+      <div class="sep"></div>
+      <a class="item" href="#a7"><svg class="ic"><use href="#i-out"/></svg>Sign out</a>
+    </div>
+    <div class="tabbar"><span>Timesheet</span><span>Overtime</span><span>History</span><span class="open">More</span></div>
+  </div>
+  </div>
+</section>
+
+<section class="board">
+  <p class="cap"><b>A8. Hộp thoại phiên làm việc trên điện thoại 390px (U-21, U-24)</b>
+  Hộp thoại chiếm cả màn hình; mỗi giờ nghỉ là một khối riêng: hàng trên là ngày và giờ, hàng dưới là số phút và nút X (chỉ xuống hàng khi không đủ chỗ). Nút Save và Cancel luôn ở dưới cùng.</p>
+  <div class="pair">
+  <div class="frame w390 ph-h t-light"><span class="tag">Sáng 390</span>
+    <div class="dlg" style="width:390px;height:844px;border-radius:0;display:flex;flex-direction:column">
+      <div class="dhead"><div><h2>Edit session</h2><p>Mon 10/12/2026</p></div><span class="btn quiet icon" aria-label="Cancel"><svg class="ic"><use href="#i-x"/></svg></span></div>
+      <div class="dbody" style="flex:1;overflow:hidden;padding:14px 12px">
+        <div class="grp"><h3>Time</h3><label class="lab">Start<span class="dt"><span class="field date">10/12/2026</span><span class="field time">09:00</span></span></label><label class="lab">End<span class="dt"><span class="field date">10/12/2026</span><span class="field time">17:30</span></span></label></div>
+        <div class="grp"><h3>Breaks</h3><span class="inline"><span class="chk"></span>Confirm no breaks taken</span>
+          <div class="brows">
+            <div class="brow"><span class="num">Break 1</span><span class="field date">10/12/2026</span><span class="field time">11:00</span><span class="field min">15 <span class="ph">min</span></span><span class="btn quiet icon x" aria-label="Remove break 1"><svg class="ic"><use href="#i-x"/></svg></span></div>
+            <div class="brow"><span class="num">Break 2</span><span class="field date">10/12/2026</span><span class="field time">13:00</span><span class="field min">30 <span class="ph">min</span></span><span class="btn quiet icon x" aria-label="Remove break 2"><svg class="ic"><use href="#i-x"/></svg></span></div>
+          </div>
+          <div class="bactions"><span class="btn secondary">Suggest breaks</span><span class="btn secondary">Add break</span></div>
+        </div>
+      </div>
+      <div class="dfoot" style="padding:10px 12px"><span class="btn secondary" style="flex:1;min-height:44px">Cancel</span><span class="btn" style="flex:1;min-height:44px">Save</span></div>
+    </div>
+  </div>
+  <div class="frame w390 ph-h t-dark"><span class="tag">Tối 390</span>
+    <div class="dlg" style="width:390px;height:844px;border-radius:0;display:flex;flex-direction:column">
+      <div class="dhead"><div><h2>Edit session</h2><p>Mon 10/12/2026</p></div><span class="btn quiet icon" aria-label="Cancel"><svg class="ic"><use href="#i-x"/></svg></span></div>
+      <div class="dbody" style="flex:1;overflow:hidden;padding:14px 12px">
+        <div class="grp"><h3>Time</h3><label class="lab">Start<span class="dt"><span class="field date">10/12/2026</span><span class="field time">09:00</span></span></label><label class="lab">End<span class="dt"><span class="field date">10/12/2026</span><span class="field time">17:30</span></span></label></div>
+        <div class="grp"><h3>Breaks</h3><span class="inline"><span class="chk"></span>Confirm no breaks taken</span>
+          <div class="brows">
+            <div class="brow"><span class="num">Break 1</span><span class="field date">10/12/2026</span><span class="field time">11:00</span><span class="field min">15 <span class="ph">min</span></span><span class="btn quiet icon x" aria-label="Remove break 1"><svg class="ic"><use href="#i-x"/></svg></span></div>
+            <div class="brow"><span class="num">Break 2</span><span class="field date">10/12/2026</span><span class="field time">13:00</span><span class="field min">30 <span class="ph">min</span></span><span class="btn quiet icon x" aria-label="Remove break 2"><svg class="ic"><use href="#i-x"/></svg></span></div>
+          </div>
+          <div class="bactions"><span class="btn secondary">Suggest breaks</span><span class="btn secondary">Add break</span></div>
+        </div>
+      </div>
+      <div class="dfoot" style="padding:10px 12px"><span class="btn secondary" style="flex:1;min-height:44px">Cancel</span><span class="btn" style="flex:1;min-height:44px">Save</span></div>
+    </div>
+  </div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

@@ -29,6 +29,13 @@
   báo lỗi phía server; không đổi nghiệp vụ. Câu hỏi không bắt buộc WP5-UX2-Q3 (nhãn
   "future" trên kỳ mà Today mở ra trong 5 ngày trước ngày trả lương; mặc định giữ nguyên)
   và backlog không bắt buộc: xem [WP5 handoff](delivery/WP5_HANDOFF.vi.md).
+- Vòng thay đổi UI lần 3 (chủ dự án yêu cầu 2026-10-15, đang chạy): phong cách hiện đại
+  thay cho phong cách công nghiệp, menu nhận diện người dùng trên thanh trên cùng, bố cục
+  phần đầu trang và thanh kỳ, hiệu ứng nổi cho cột được chọn trên bảng, và Day editor với
+  hộp thoại riêng cho phiên giờ cùng vùng giờ nghỉ đơn giản hơn (27 mục, nguyên văn trên
+  board). Đang chạy: kế hoạch WP5-UX3-PLAN (chỉ đọc, có mockup). Chủ dự án sẽ xem mockup
+  và các câu hỏi của plan trước các phần phụ thuộc phong cách; thay đổi quản trị cho mục
+  UI trong AGENTS.md làm trước.
 - Pilot: [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) cụ thể đã sẵn để chủ dự án duyệt
   (định danh bản phát hành a643794 / 229df806). Chưa xin phép chủ dự án, chưa có kết quả
   pilot, NAS chưa được kiểm.
@@ -81,7 +88,7 @@ Luồng hiện tại:
      resume coordinator bằng prompt ở trên.
 
 Sau reset usage: Resume/Continue phiên cũ, ví dụ `claude --continue` tại đây hoặc
-`claude --resume 11acfabe-25ef-48b5-ac28-73ce2d74ecee`. Nếu không còn, mở phiên mới
+`claude --resume b5de56d1-fb31-4dc5-b74f-70e9473e1a0a`. Nếu không còn, mở phiên mới
 dùng cùng prompt. [RESUME](prompts/RESUME.vi.md) phục hồi từ board, checkpoint, report
 task và git; không cần gửi lại brief nghiệp vụ.
 

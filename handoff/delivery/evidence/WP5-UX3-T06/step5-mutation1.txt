@@ -1,0 +1,64 @@
+$ mutation 1: breaksConfirmed true for an empty unticked list (session mode, allowUnconfirmed true)
+
+> timesheet@0.1.0 test
+> vitest run tests/client/breakRowsModel.test.ts
+
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/breakRowsModel.test.ts (68 tests | 2 failed) 21ms
+   ❯ breaks_confirmed (10)
+     × session mode, G-4 allowUnconfirmed true: an empty unticked list saves breaks unknown 3ms
+     × breaksPayload exposes the same rule for both modes 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > breaks_confirmed > session mode, G-4 allowUnconfirmed true: an empty unticked list saves breaks unknown
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/client/breakRowsModel.test.ts:455:38
+    453|     const request = sessionRequest(dialog(), { allowUnconfirmed: true …
+    454|     expect(request.breaks).toEqual([]);
+    455|     expect(request.breaks_confirmed).toBe(false);
+       |                                      ^
+    456|   });
+    457|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > breaks_confirmed > breaksPayload exposes the same rule for both modes
+AssertionError: expected { ok: true, breaks: [], …(1) } to deeply equal { ok: true, breaks: [], …(1) }
+
+- Expected
++ Received
+
+  {
+    "breaks": [],
+-   "breaksConfirmed": false,
++   "breaksConfirmed": true,
+    "ok": true,
+  }
+
+ ❯ tests/client/breakRowsModel.test.ts:495:79
+    493|     const input = { rows: [], noBreaks: false, zone: LA, bounds: null …
+    494|     expect(breaksPayload(input, { kind: 'checkout' })).toEqual({ ok: t…
+    495|     expect(breaksPayload(input, { kind: 'session', allowUnconfirmed: t…
+       |                                                                               ^
+    496|   });
+    497|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 66 passed (68)
+   Start at  16:21:42
+   Duration  362ms (import 50%, transform 40%, tests 9%, worker 1%)
+
+exit 1

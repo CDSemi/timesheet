@@ -2,6 +2,65 @@
 
 Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
+## Update 2026-10-15: owner-requested UI change round 3 (WP5-UX3)
+
+- Starting point: WP5 re-accepted on a643794 / 229df806 (WP5-UX2-AUDIT2 PASS); last board
+  commit b1bf147 (WP5-UX2-ACCEPT). The round-2 update below records uncommitted records
+  after that commit (the `software_ready` flip, the ACCEPT results and evidence, the
+  checkpoint update).
+- New coordinator session b5de56d1-fb31-4dc5-b74f-70e9473e1a0a (inferred from the
+  scratchpad path); the board's `coordinator_session_id` points to it.
+- The owner asked for 27 UI changes (verbatim in the board `owner_decisions`; English list
+  U-01..U-27 in `handoff/delivery/tasks/WP5-UX3-PLAN.md`): a modern instead of an
+  industrial style; more surface contrast and a raised week sheet; a top-bar identity block
+  (avatar, display name, email) with a menu holding Light/Dark, Profile, Settings (with
+  Administration as a tab) and Sign out; on large screens the wordmark, Check in/out on the
+  title row, no name under the title, distinct old/current/future pills (future pink), a
+  wrapping meta row, Open a day beside its picker, more space before Show details, a
+  Day-cell fill and lifted (shadowed) batch and editor columns, and opinions on the row
+  names "Label" and "Check"; on narrow screens "Current" and a hidden "Open a day" text when
+  needed; in the Day editor a short note, a stronger header, a separate session dialog
+  with a break table (start date, time, minutes), a delete confirmation, pre-filled
+  defaults and suggested breaks for past days, a simpler break area, Save as confirmation
+  with confirmation prompts, and WFH on the Label row.
+- Coordinator decision (board): WP5 UI change round 3 (task IDs WP5-UX3-*), no new
+  package; board `running`, `next_task_id` WP5-UX3-PLAN. U-01 changes a governance path
+  (AGENTS.md UI section; E-8), so a GOV cycle precedes any style slice. U-21..U-25 touch
+  break entry and confirmation (risk H; possible canonical-rule change under AGENTS rule
+  8). The owner reviews a mockup and the plan's questions before the style-dependent
+  slices.
+- Running: WP5-UX3-PLAN (planner, opus override size_risk, read-only; brief
+  `handoff/delivery/tasks/WP5-UX3-PLAN.md`; mockup under
+  `handoff/delivery/design/WP5-UX3/`). Step 0 reconciles git (commits after b1bf147,
+  uncommitted paths, digest).
+- WP5-UX3-PLAN done (planner, self-reported claude-opus-5-5, read-only): HEAD b4d9dd8 =
+  origin/main, an owner-made handoff-only commit after b1bf147 that holds the round-2
+  return to `software_ready`; digest 229df806 (815 files) at start and end. Facts: the
+  wordmark shows only from 1440px; the "Check" row only displays status; the "Label" row
+  is the day category ("Category" on the PDF and in the API); display name and email
+  already exist, no Profile page; reference hours exist per policy; light-mode pills differ
+  by 1.12:1. Design: modern tokens and elevation, account menu, Settings sub-pages,
+  lifted columns, a session dialog with start+minutes break rows (no server or API change).
+  One rule contradiction: U-23 pre-fill vs docs/04 line 16 and docs/10 line 178 (new text
+  drafted). Mockup and ten synthetic renders under `handoff/delivery/design/WP5-UX3/`.
+- Coordinator decision (board): adopt the plan and its recommended defaults; "Status"
+  replaces "Check"; owner questions G-1..G-5 (`pending_owner_question_3`; G-5 supersedes
+  WP5-UX2-Q3); GLOSSARY.md missing goes to the governance backlog.
+- Running: WP5-UX3-T06 (worker-high, opus override novelty; pure break-row model and unit
+  tests, no UI change; both G-4 options behind one parameter). Its freeze also commits the
+  plan, mockup and round-3 records. After the owner's answers: GOV chain, then T01..T10.
+- WP5-UX3-T06 done (worker-high, self-reported claude-opus-5-5; reported, not independent
+  proof): new `breakRowsModel.ts` and its unit tests only (no UI change); untouched rows
+  resend saved instants byte-identically; end = start + minutes in UTC with an explicit
+  offset; `breaks_confirmed` per the G-4 parameter; Check out keeps E-1; unit 1950; new file
+  68/68 under three device zones; 3 mutations caught; day-editor and shell e2e 0 failed;
+  verify 0; digest 0ef75a15 (817 files). Note for T08: only `future_break` carries
+  `break_index` today.
+- STATE `next_role` now says round 3 is running (WP5 stays accepted on a643794 until the
+  re-accept).
+- Running: WP5-UX3-T06-FREEZE (committer, alone): the two T06 files plus the plan, mockup,
+  renders, T06 evidence, board, STATE, checkpoint pair and NEXT_ACTION pair.
+
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 
 - Starting point: WP5 re-accepted on 90b98ef / 57e2974c (WP5-UX-AUDIT-AB9 PASS); last

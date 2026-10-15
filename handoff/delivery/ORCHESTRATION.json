@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mission_id": "timesheet-software-readiness",
-  "status": "software_ready",
+  "status": "running",
   "authorized_scope": [
     "WP1",
     "WP2",
@@ -14,22 +14,26 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "software-ready-after-ux2-round",
-  "coordinator_session_id": "11acfabe-25ef-48b5-ac28-73ce2d74ecee",
+  "phase": "ux3-round-t06-and-owner-questions",
+  "coordinator_session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
     "requested_model": "inherit",
     "requested_effort": "medium",
     "actual_model": "claude-opus-5-5",
     "actual_effort": null,
-    "observed_at": "2026-10-14",
-    "note": "Main session runs Opus 5.5 by owner choice (system context claude-opus-5-5); session ID inferred from the session scratchpad path. Earlier coordinator sessions: 44e3451e-da20-4a12-94bb-6b94fc5f531e, d5029c61-21ee-4f70-9252-41ab1589f937."
+    "observed_at": "2026-10-15",
+    "note": "Main session runs Opus 5.5 by owner choice (system context claude-opus-5-5); session ID inferred from the session scratchpad path. Earlier coordinator sessions: 44e3451e-da20-4a12-94bb-6b94fc5f531e, d5029c61-21ee-4f70-9252-41ab1589f937, 11acfabe-25ef-48b5-ac28-73ce2d74ecee."
   },
   "current_source_digest": "229df806aeaaa886ab11ee83556746ee65eda6c81a596dcd180d80d5d0b04db3",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": null,
+  "next_task_id": "WP5-UX3-T06-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-15",
+      "observation": "WP5-UX3-PLAN step 0: the owner committed the coordinator's post-WP5-UX2-ACCEPT records himself as b4d9dd87fd47531ff84eba40189153ab83562677 (author huysrc, 'chore(handoff): return the mission to software_ready after WP5-UX2', 6 handoff files, pushed; HEAD = origin/main). Source digest unchanged (229df806). Later freeze briefs use b4d9dd8 as the expected base HEAD."
+    },
     {
       "date": "2026-10-14",
       "observation": "UI change round 2 (sonnet workers and committers): runtime-rule slips keep recurring despite capitalised briefs and dispatch prompts: pipes into head/tail (planner, T03), /dev/null redirects (T01, T02, both committers), one cat heredoc into a test file (T01), and in WP5-UX2-T03 one rm -rf of its own scratch folder inside D:\\.claude-tmp\\timesheet\\WP5-UX2-T03 (outside the repository, no data lost). None changed a file outside the owned paths and no background task was left. Candidate for a later GOV profile hardening (an explicit denylist line in the worker and committer profiles)."
@@ -179,7 +183,15 @@
       "observation": "WP4-DEC: the worker bundled evidence writing, the brief-results heredoc and 'cmd.exe /c \"npm run digest\"' in one backgrounded Bash call. The cmd.exe step hung, the heredoc append never landed, and the worker's hand-back wrongly said results were appended. The coordinator stopped the background task and resumed the worker to append the results with the Edit tool. Briefs now forbid cmd.exe entirely (with or without /c) and ask for npm or node to be run from Git Bash with Node 24 first on PATH, and for task records to be written with the Edit tool, not shell heredocs."
     }
   ],
+  "pending_owner_question_3": {
+    "id": "WP5-UX3-G-1..G-5",
+    "asked": "2026-10-15",
+    "source": "WP5-UX3-PLAN section G (handoff/delivery/tasks/WP5-UX3-PLAN.md); mockup handoff/delivery/design/WP5-UX3/mockup.html and ten synthetic renders; coordinator decision 2026-10-15.",
+    "question": "Recommendations in brackets. G-1 the mockup and the modern direction (U-01/U-02; replaces the E-8 values 4px radius and 300 ms ease-out): [a] approve as drawn (lighter-grey page, raised white week sheets and panels with soft shadows, radius 6/8/12px plus round pills, 180 ms eased transitions; plain CSS custom properties stay); b approve with named changes; c keep the current look and apply only the functional items. G-2 the word for the 'Label' row (U-15): [a] 'Category' (the word on the signed PDF, in batch mode and in the data); b 'Day type'; c keep 'Label'. 'Check' becomes 'Status' (owner's own suggestion; the row only displays a status). G-3 pre-filled times (U-23) and the rule change of plan section C: [a] pre-fill the reference hours automatically in a new session, and the suggested breaks for past days, marked and editable, with the rewritten rule ('actual clock values are never stored from a schedule; a time becomes actual only when the person saves it'); b a button 'Use my reference hours' instead (no rule change); c no time pre-fill, only the suggested breaks. G-4 Save with no break listed and 'Confirm no breaks taken' unticked (U-24/U-25): [a] allow it; the confirmation says 'Breaks not confirmed: OT for this day stays pending'; b block Save until a break is listed or the box is ticked. G-5 (optional; re-asks WP5-UX2-Q3) the badge of the period that contains today during the five window days: a keep 'future' (now pink); [b] show 'in progress' (blue).",
+    "blocking": "G-1 blocks WP5-UX3-GOV and every slice that applies the new style (T01-T05, T07-T09). G-2 blocks only the rename part of T05. G-3 blocks the pre-fill part of T08 and the docs slice T10. G-4 blocks one flag in T08 (default a if unanswered). G-5 blocks nothing (T04 includes b if chosen). WP5-UX3-T06 (pure break-row model) runs meanwhile."
+  },
   "pending_owner_question_2": {
+    "superseded_by": "WP5-UX3-G-5 (pending_owner_question_3); the same choice is re-asked there with the pink 'future' pill in view",
     "id": "WP5-UX2-Q3",
     "asked": "2026-10-15",
     "source": "WP5-UX2-AUDIT risk R-UX2A-5 (handoff/delivery/WP5_UX2_REVIEW.md); coordinator decision 2026-10-15.",
@@ -252,6 +264,7 @@
     }
   },
   "governance_backlog": [
+    "2026-10-15 (WP5-UX3-PLAN flag): AGENTS.md 'Domain docs' names a root GLOSSARY.md (single-context layout per docs/agents/domain.md), but the file does not exist. Optional: create it in a domain-docs task, or reword the AGENTS line in the next GOV cycle. Not part of WP5-UX3-GOV unless the owner asks.",
     "GOV-SUPERSEDE-AUDIT (PASS at 831f760) optional: R1 add check_recovery probes that kill the surviving mutants N3d and N7a; R2 docs/08 VI line 66 wording ('cùng giai đoạn', 'kiểm PASS cũ'). R3 is coordinator discipline: never treat a superseded PASS as current acceptance before its target passes.",
     "2026-10-08 (tooling, not a governance path): scripts/source-digest.mjs hashes `git ls-files --cached` paths and exits 1 when a tracked file is deleted but the deletion is unstaged (WP5-UX-T02). Workers cannot stage, so slices that delete files report a probe digest and the freeze computes the digest after staging. Optional fix: skip index paths missing from the working tree (deleted files are not part of the working-tree snapshot).",
     "Evidence whitespace policy: resolved in WP2 by WP2-INFRA1 (.gitattributes 'handoff/delivery/evidence/** -whitespace'; .gitattributes is not a governance path). Optional later: mention it in docs/08 commit checks during the next GOV cycle.",
@@ -266,11 +279,11 @@
   "wp2_plan": "handoff/delivery/tasks/WP2-PLAN.md",
   "wp3_plan": "handoff/delivery/tasks/WP3-PLAN.md",
   "checkpoint": "handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md",
-  "updated_at": "2026-10-14",
+  "updated_at": "2026-10-15",
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "b1bf1479ba51f2df0d888fca232a1cb71f47c9e8",
+    "last_commit": "b4d9dd87fd47531ff84eba40189153ab83562677",
     "unpushed": []
   },
   "owner_decisions": [
@@ -433,9 +446,25 @@
       "source": "owner chat, direct request typed by the owner",
       "verbatim": "* Trên màn hình điện thoại, rút gọn nút \"Review & sign off\" thành \"Sign off\" thay vì xuống hàng, vì tôi thấy xuống hàng sẽ làm chiều cao nút tăng thêm. (giữ full text nếu đủ chỗ hiển thị)\n* Trên màn hình lớn, tách phần menu ra xa text và logo bên trái 1 chút sao cho hài hòa dễ nhìn. hiện tại cảm giác hơi sát, không được hài hòa.\n* Nút \"Dark mode\" (trên màn hình lớn) nên đổi thành kiểu toggle Dark/Light kèm icon tương ứng chứ đừng fixed chữ Dark mode rồi dùng toggle button dạng on/off như hiện tại, nhìn quá xấu\n* Chữ \"Due\" (ví dụ Due Tue 10/13/2026, 17:00...) trong timesheet đang cùng màu với ngày giờ, vì nó là nhãn nên nó phải cùng màu/style với các nhãn khác (ví dụ như Payroll date, Time in...)\n* Chữ \"to\" trong period (ví dụ \"09/28/2026 to 10/11/2026\") đổi thành dấu mũi tên →, hoặc dấu gạch ngang, hoặc dùng màu/style giống các label  (ví dụ như Payroll date, Time in...)... hoặc tùy bạn trình bày cách nào khác đẹp, dễ nhìn càng tốt.",
       "decision": "Added to UI change round 2: (1) on phones 'Review & sign off' shortens to 'Sign off' instead of wrapping, keeping the full text when it fits; (2) on large screens more space between the brand (logo and text) and the menu; (3) the desktop theme control becomes a Dark/Light toggle with matching icons instead of the fixed 'Dark mode' on/off button; (4) 'Due' in the due line takes the label style of the other labels; (5) the 'to' in a period range becomes an arrow, a dash or label-styled text, the coordinator's choice. Business behaviour is unchanged."
+    },
+    {
+      "date": "2026-10-15",
+      "source": "owner chat, direct request typed by the owner (coordinator session b5de56d1); one personal name given as an example display name is replaced by [name] here",
+      "verbatim": "Sửa giao diện trang Timesheet:\n- Đừng ép dùng theme style chuẩn công nghiệp, đây không phải app công nghiệp. hãy dùng modern style.\n- Tăng độ tương phản màu nền / card board / pannel / sheets lên một chút. Đặc biệt là tôi muốn week sheet nổi bật hơn. có thể đổ bóng hay làm gì đó cho đẹp mắt hơn không?\n- Username ở top bar cần redesign:\n    + Avarta canh lề phải.\n    + User name gồm 2 hàng:\n        + Hàng 1 là user display name (họ tên, ví dụ [name]) in đậm, canh phải (trước avatar).\n        + hàng 2 là email, chữ nhỏ, màu tối, cũng canh phải (trước avatar)\n    + Khi click vào avatar thì sổ ra menu: gồm một vài mục như dark/light toggle, Profile, Settings (bỏ 2 main menu \"Settings\" và \"Admin\" vào đây. \"Administration\" là sub page / tab trong \"Settings\" page), Sign out.\n\n- Trên màn hình lớn:\n    + Chữ Semiconductor Services, Inc. cạnh logo đâu? sao mockup có mà app thực tế lại ko thấy đâu?\n    + Đưa phần Check in/out và checked in since time lên cùng hàng với page title, canh lề phải.\n    + Bỏ username dưới title page đi.\n    + Màu của chip/pill \"old\", \"current\", \"future\" ở dark mode thì còn ổn, nhưng trong light mode không rõ ràng, nhìn cứ như cùng 1 màu. Tôi quy định lại như sau:\n        + \"old\": tông màu như hiện tại là OK, nhưng cần làm cho dễ nhìn hơn trong light mode.\n        + \"current\": tông màu như hiện tại là OK, nhưng cần làm cho dễ nhìn hơn trong light mode.\n        + \"future\": tông màu hồng, cần đảm bảo dễ phân biệt ở cả 2 mode.\n    + Trình bày lại các Payroll date Fri 10/30/2026, Due Tue 10/27/2026, 17:00 (America/Los_Angeles), Times in America/Los_Angeles cho nằm cùng 1  hàng nếu đủ chỗ hoặc xuống hàng khi không đủ chỗ.\n    + Title \"Open a day\" cho cùng hàng với date picker của nó.\n    + Nút \"Show details\" đang bị dính sát váo nút \"Change several days\", cho chúng tách nhau ra một chút sao cho hợp lý.\n    + Cột đang mở \"Day editor\" panel: bỏ gạch đậm dưới ô \"Day\" đi, thay vào đó đổi màu nền ô \"Day\" tôi nghĩ sẽ đẹp hơn. Ngoài ra hai thanh màu xanh 2 bên có thể dùng màu khác để dễ phân biệt với các cột đang được chọn bằng \"Change several days\".\n    + Các cột đang được chọn bằng \"Change several days\" thay vì đóng khung nặng nề như hiện tại thì có thể cho chúng nổi lên bằng việc đổ bóng nhẹ không? tạo hiệu ứng giống như ô được chọn đang \"bay\" lên vậy. (Tôi muốn hiệu ứng này dùng cho cả ô đang được chọn để mở \"Day editor\" panel luôn, chỉ khác là nó sẽ có border màu xanh mỏng cho biết nó đang có focus thôi)\n    + Row \"Label\": Từ Label có chính xác không? có từ nào phù hợp hơn ko?\n    + Row \"check\" có tác dụng check/uncheck \"[ ] No times\" không? nếu không thì dùng từ \"State\", \"States\" hoặc \"Status\" sẽ đúng hơn nhỉ?\n    \n- Trên màn hình hẹp:\n    + Sau khi rút text của button \"Review & sign off\" lại thành \"Sign off\" rồi mà vẫn không đủ chỗ để hiển thị 3 button trên cùng hàng thì rút gọn tiếp text của nút \"Current period\" lại thành \"Current\".\n    + Ẩn chữ \"Open a day\" đi nếu không đủ hiển thị cả 3 (title, date picker, button \"Open day\") trên cùng 1 hàng.\n    \n- \"Day editor\" panel:\n    + Ghi chú \"Accounting date 2026-10-12 in the reporting zone America/Los_Angeles. Times below are typed in an input zone you choose; they are shown in America/Los_Angeles elsewhere. Period: future.\" đang quá dài dòng tốn chỗ, tôi muốn ngắn gọn thôi, hoặc bỏ đi cũng được.\n    + Phần header của pannel nên thiết kế nổi bật hơn cho dễ phân biệt với body của nó.\n    + Đưa New/edit time session vào 1 dialog riêng, trong pannel chỉ hiện times và breaks đã chọn. (break list là một bảng, trong đó mỗi dòng là 1 break gồm ngày bắt đầu, giờ bắt đầu, break minutes (không cần phải điền ngày/giờ kết thúc break).\n    + Delete time cần hiện thông báo xác nhận rõ ràng, không xác nhận kiểu đổi nút \"Delete\" thành \"Confirm delete\" như hiện tại.\n    + Trong dialog edit times/breaks:\n        + Tôi muốn tự động điền luôn giờ mặc định (đã chỉ định trong Settings cho Start/End time) và cả suggest breaks nếu đây là 1 ngày trong quá khứ.\n        + Break area: Tôi cần bạn thiết kế lại cách not confirmed / confirmed / no breaks và thêm/xóa/sửa breaks sao cho dễ xài chút. hiện tại hơi khó xài với người mới. Ví dụ Break area chỉ cần 1 checkbox \"Confrim no breaks taken\", breaks list và nút \"Suggest breaks\", \"Add breaks\". Trình bày các break thành từng dòng (ví dụ: Break 1  [mm/dd/yyyy <icon>] [hh:mm AM/PM <icon>] [(place holder \"total mins\")] [X]), chỉ xuống dòng khi không đủ chỗ. Nhưng cần trình bày sao cho dễ dàng phân biệt các dòng với nhau.\n        + Dialog có nút \"Save\" / \"Cancel\", khi save thì cũng tương đương confirm. Luôn hiện thông báo xác nhận trước khi Save, hoặc khi cancel đang có modified data.\n    + Label and leave area: Đưa checkbox \"Worked from home (WFH)\" lên cùng hàng với \"Label\" combobox.",
+      "decision": "Owner-requested UI change round 3 (WP5-UX3) before pilot activation; the English item list U-01..U-27 is in handoff/delivery/tasks/WP5-UX3-PLAN.md. Summary: stop enforcing the industrial style standard and use a modern style (governance text in AGENTS.md); more contrast between the page background and cards/panels/sheets, the week sheet raised (shadow); a top-bar identity block (right-aligned avatar; display name in bold over a smaller email, right-aligned before it) that opens a menu with the Light/Dark toggle, Profile, Settings (the Settings and Admin main-menu items move there; Administration becomes a tab or sub-page of Settings) and Sign out; on large screens the wordmark visible, Check in/out with its since-time on the page-title row, no user name under the title, distinct 'old'/'current'/'future' pills (future pink) in both themes, one wrapping row for payroll date, due and zone, 'Open a day' beside its date picker, space between Show details and Change several days, the editor column marked by a Day-cell fill and differently coloured rails, batch-selected columns and the editor column lifted by a soft shadow (the editor column also with a thin blue focus border), and answers on the row names 'Label' and 'Check'; on narrow screens 'Current' when the three period buttons still do not fit, and the 'Open a day' text hidden when its row does not fit; in the Day editor a short (or no) zone note, a stronger panel header, new/edit time sessions in a separate dialog with the panel listing times and a break table (start date, start time, minutes), a clear delete confirmation, defaults from Settings and suggested breaks pre-filled for past days, a simpler break area (one 'Confirm no breaks taken' checkbox, one row per break, Suggest breaks and Add break), Save also confirming with a confirmation prompt before Save and before Cancel with changes, and WFH on the Label row. Business behaviour changes only where the owner's words require it (break confirmation through Save); any canonical rule this touches is flagged and updated under AGENTS rule 8."
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-15",
+      "basis": "WP5-UX3-PLAN done (sections A-I, mockup and ten synthetic renders under handoff/delivery/design/WP5-UX3/): no server/API change; one canonical-rule contradiction (U-23 pre-fill vs docs/04 line 16 and docs/10 line 178), with replacement text; owner questions G-1..G-5; slicing with a GOV chain, T01..T10, and T06 (pure break-row model) free of owner answers.",
+      "decision": "Adopt the plan's design and the recommended defaults of section G (disclosure account menu and item order; read-only Profile; Settings sub-pages with their own h1 and the #/admin redirect for admins; wordmark from 1024px, 1280px with the share switcher; native date and time inputs whose 12/24-hour display follows the browser locale, every displayed time 24-hour per E-4; the Check out dialog reusing the break rows with E-1 semantics; 'Confirm breaks' replacing the one-tap buttons; the slashed 'No times' ring; 'Change several days' as an outlined button; the 'Current' and 'Open a day' thresholds; the editor chips; the section I backlog choices). 'Status' replaces 'Check' (the owner suggested it and the row only displays status). G-1..G-5 go to the owner (pending_owner_question_3); WP5-UX2-Q3 is superseded by G-5. Meanwhile WP5-UX3-T06 runs: pure break-row model and tests only (no UI change), timesheet-worker-high with model opus (override novelty: a new integrity-core model for break input; size M, risk H), both G-4 options behind one parameter and the pre-fill helpers pure, so no owner answer is needed. Its freeze also commits the plan, mockup and round-3 records. Order after the answers: GOV chain (WP5-UX3-GOV, worker sonnet; GOV freeze, gate, fresh opus audit) -> T01 -> T02 -> T03 -> T04 -> T05 -> T07 -> T08 -> T09 -> T10 -> gate -> area audits A and B plus an integration pass -> re-accept. GLOSSARY.md (named by AGENTS.md, missing) goes to the governance backlog."
+    },
+    {
+      "date": "2026-10-15",
+      "basis": "Owner request 2026-10-15 (27 items U-01..U-27, verbatim in owner_decisions) while the mission is software_ready on a643794 / 229df806 and the pilot is not authorized. Rounds 1 and 2 set the precedent of a WP5 change round before activation. Unlike round 2 this request is large and reaches beyond client styling: (1) U-01 changes a governance path (the AGENTS.md section 'Unified Frontend & UI/UX Standards' mandates 'High-End Industrial Polish' with 4px corners; owner decision E-8 of 2026-10-03 adopted the 4px radius and 300 ms ease-out tokens), so it needs a GOV cycle (fix, freeze, gate, fresh audit); (2) U-21..U-25 touch break entry and break confirmation, which feed worked minutes and OT credit (docs/08 risk H) and may contradict a canonical rule (Save as confirmation, suggested breaks pre-filled for past days, break end derived from start plus minutes); (3) U-04/U-05 restructure navigation (Admin under Settings) where authorization must stay server-enforced, and U-03/U-04 may need a display name or a Profile page that may not exist yet (possible server/API change); (4) the owner's break-row example shows 12-hour 'hh:mm AM/PM' input while E-4 chose 24-hour times as on the PDF; (5) 'modern style' is a subjective visual direction. The checkpoint records uncommitted handoff records after WP5-UX2-ACCEPT (b1bf147).",
+      "decision": "Run it as WP5 UI change round 3 (task IDs WP5-UX3-*) before pilot activation; no new package; board status running. First WP5-UX3-PLAN on timesheet-planner with model opus (override size_risk: size L, risk H for the break items, novelty yes for the identity menu, the session dialog and the new style system; docs/08 row 'Package decomposition' uses opus), read-only, with a step-0 git reconciliation, measured current state per item, a concrete design per item with WCAG 2.2 AA numbers, the draft replacement of the AGENTS.md UI section (EN and VI) and its effect on E-8, a canonical-rule analysis for U-21..U-25 under AGENTS rule 8, answers with recommendations for U-06, U-15 and U-16, a full self-contained mockup for owner review (light and dark, desktop widths, phone widths), the docs and test impact, owner questions and the slicing (one writer, a freeze per slice, the GOV cycle before any slice that applies the new style). After the plan the coordinator puts the mockup and the questions to the owner before the style-dependent slices (as E-1..E-7 in round 1); slices the answers do not affect may start meanwhile. Then the package-final gate, a fresh opus audit (area split if the round stays size L) and the WP5 re-accept with a pilot-packet identity refresh. The optional WP5-UX2-Q3 (the 'future' badge) is reconsidered in the plan beside U-09. D-1..D-15 stay pending and unaffected."
+    },
     {
       "date": "2026-10-15",
       "basis": "WP5-UX2-AUDIT FIX REQUIRED on d1a20a7 / 20e7a7c8 with three Low findings (01 Today inert after the reporting-zone midnight while the page is open; 02 docs omit the 320px Review row; 03 the inactive Today's focus ring dimmed to 2.70:1 by element opacity) and five optional risks; owner fidelity, zones, sharing, server delta, WCAG and test strength otherwise hold.",
@@ -20145,6 +20174,147 @@
       "author_agent_ids": [],
       "decision": "committed and pushed: 263 handoff paths (11 modified, 4 task records, the review pair; evidence FIX2-FREEZE 2, REGATE2 105, AUDIT2 138 = 134 txt + 4 png, ACCEPT-DOCS 1); HEAD was a643794 = origin/main; no other modified handoff file; digests 229df806 (815 files) before add and on the new HEAD; node v24.21.0; precommit PASS, diff --check, JSON parse, validate_orchestration, check_recovery (106), preflight exit 0; remote main = b1bf147; no tag. WP5 re-accepted on a643794; UI change round 2 closed.",
       "next_action": "None; the mission is software_ready again; the owner reviews the pilot packet, answers D-1..D-15 and, optionally, WP5-UX2-Q3."
+    },
+    {
+      "id": "WP5-UX3-PLAN",
+      "package": "WP5",
+      "kind": "plan",
+      "status": "done",
+      "depends_on": [],
+      "profile": "timesheet-planner",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "size_risk",
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a5aedde22524f8852",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX3-PLAN.md",
+        "handoff/delivery/design/WP5-UX3"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-PLAN.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-PLAN.md",
+      "evidence": [
+        "handoff/delivery/design/WP5-UX3/mockup.html",
+        "handoff/delivery/design/WP5-UX3/mockup-a1-topbar-1440-menu-synthetic.png",
+        "handoff/delivery/design/WP5-UX3/mockup-a2-topbar-1280-share-synthetic.png",
+        "handoff/delivery/design/WP5-UX3/mockup-a3-page-header-1280-synthetic.png",
+        "handoff/delivery/design/WP5-UX3/mockup-a3b-meta-wrapped-820-synthetic.png",
+        "handoff/delivery/design/WP5-UX3/mockup-a4-sheet-and-editor-1280-synthetic.png",
+        "handoff/delivery/design/WP5-UX3/mockup-a5-session-dialog-synthetic.png",
+        "handoff/delivery/design/WP5-UX3/mockup-a5b-confirmations-synthetic.png",
+        "handoff/delivery/design/WP5-UX3/mockup-a6-settings-tabs-synthetic.png",
+        "handoff/delivery/design/WP5-UX3/mockup-a7-phones-390-320-more-synthetic.png",
+        "handoff/delivery/design/WP5-UX3/mockup-a8-phone-session-dialog-synthetic.png"
+      ],
+      "baseline_commit": "b4d9dd87fd47531ff84eba40189153ab83562677",
+      "source_digest": "229df806aeaaa886ab11ee83556746ee65eda6c81a596dcd180d80d5d0b04db3",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "plan delivered (read-only; Step 0: HEAD b4d9dd8 = origin/main, one owner-made handoff-only commit after b1bf147 holding the round-2 return to software_ready; digest 229df806 / 815 files at start and end; Node v24.21.0; measurements on the built a643794 app with a fresh synthetic database, port 48521, probe stopped its own server). Facts: U-06 wordmark only from 1440px (styles.css:405-413; raised in WP5-UX2-T06 because the bar with a share needed 1408px); U-16 the Check row is a status display, it toggles nothing ('No times' is a hollow 2px square); U-15 the row is the day category ('Category' on the PDF, in batch mode and in the API); U-03/U-04 display name and email already in /api/auth/me, no Profile page; U-23 reference start/end exist per policy version, suggested breaks are client-side and on demand; U-09 light 'current' vs 'old' inks differ 1.12:1, 'future' has no own style; U-02 card on page 1.07:1 light / 1.11:1 dark. Design: modern tokens (page #edf0f5, five-level elevation with dark rings, radius 6/8/12 plus pills, 180 ms on listed properties), each week band its own raised card; identity block with initials avatar and a disclosure account menu (Profile, Settings, Administration for admins, Theme, Sign out); main nav Timesheet, Overtime, History; Settings sub-pages Personal, Profile, Administration with the #/admin redirect; wordmark from 1024px (1280px with the share switcher); lift shadow for batch and editor columns, editor column 1px accent frame and Day-cell fill, rails and underline removed; 'Status' replaces 'Check'; 'Current' and the hidden 'Open a day' text on narrow phones; editor header chips instead of the long note; session cards with break tables; a session dialog with one row per break (date, start, minutes; end = start + minutes in UTC sent with an explicit offset); pre-fill reference hours for new sessions and suggested breaks only for past days by the server date; confirmations before Save, on dirty Cancel and before Delete; WFH on the Category row. No server or API change. Governance draft B2 (AGENTS.md and AGENTS.vi.md UI section; closes GOV-E8-AUDIT R2). One rule contradiction: U-23 pre-fill vs docs/04 line 16 and docs/10 line 178 ('actual clock values are not seeded from a schedule'), replacement EN/VI text in section C. Owner questions G-1..G-5; slicing GOV chain, T01..T10 (T06 pure break-row model may start before the answers); gate and an area-split audit (A visual/shell/admin/a11y, B break-entry integrity) plus an integration pass; backlog include R-UX2A-3, R-UX2A-4, R-UX2A2-1, R-UX2A2-3. Flag: GLOSSARY.md, named in AGENTS.md, does not exist. Privacy scan clean; no deviation; nothing left running.",
+      "next_action": "None; the coordinator adopted the plan (coordinator_decisions 2026-10-15), asks the owner G-1..G-5 and dispatches WP5-UX3-T06 meanwhile."
+    },
+    {
+      "id": "WP5-UX3-T06",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX3-PLAN"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "novelty",
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aeba6338447954b75",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/components/breakRowsModel.ts",
+        "src/client/components/sessionModel.ts",
+        "src/client/components/dayEditorModel.ts",
+        "tests/client/breakRowsModel.test.ts",
+        "tests/client/sessionModel.test.ts",
+        "tests/client/dayEditorModel.test.ts",
+        "handoff/delivery/tasks/WP5-UX3-T06.md",
+        "handoff/delivery/evidence/WP5-UX3-T06"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-T06.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-T06.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-T06/step2-base.txt",
+        "handoff/delivery/evidence/WP5-UX3-T06/step2-digest.txt",
+        "handoff/delivery/evidence/WP5-UX3-T06/step3-typecheck.txt",
+        "handoff/delivery/evidence/WP5-UX3-T06/step3-lint.txt",
+        "handoff/delivery/evidence/WP5-UX3-T06/step3-test.txt",
+        "handoff/delivery/evidence/WP5-UX3-T06/step4-tz.txt",
+        "handoff/delivery/evidence/WP5-UX3-T06/step5-mutation1.txt",
+        "handoff/delivery/evidence/WP5-UX3-T06/step5-mutation2.txt",
+        "handoff/delivery/evidence/WP5-UX3-T06/step5-mutation3.txt",
+        "handoff/delivery/evidence/WP5-UX3-T06/step5-reverted.txt",
+        "handoff/delivery/evidence/WP5-UX3-T06/step6-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX3-T06/step8-verify.txt",
+        "handoff/delivery/evidence/WP5-UX3-T06/step9-digest.txt"
+      ],
+      "baseline_commit": "b4d9dd87fd47531ff84eba40189153ab83562677",
+      "source_digest": "0ef75a1533d9831057f42f3a7b45e0a9386792caa47b4f2c98e091d1040b7499",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (reported, not independent proof): new src/client/components/breakRowsModel.ts and tests/client/breakRowsModel.test.ts; sessionModel.ts, dayEditorModel.ts and their tests unchanged (existing helpers reused). Untouched pinned rows resend their saved instants byte-identically to the current form (JSON-compared with buildSessionRequest, buildClockOutRequest and suggestedRows); otherwise start resolved with resolveLocalDateTime (gap/fold as the existing TimeProblem named 'Break n'), end = start + minutes x 60 s sent with its explicit offset. breaks_confirmed: rows or the ticked box true; empty unticked -> allowUnconfirmed true: breaks [] false, false: blocked; Check out mode omits breaks (E-1). Pre-fill referenceHours and pastDaySuggestedRows (workDate < todayLocal from the server) with reshiftSuggestions; summary text; dirty check. Unit full 1950 passed; new file 68/68 under TZ unset, Asia/Ho_Chi_Minh and America/New_York (through a Node wrapper because Git Bash drops TZ); 3 mutations each 2 failures, reverted; day-editor and shell e2e desktop 38/0/10, mobile 43/0/5; verify exit 0 (SMOKE_PORT 48541); digest 0ef75a15 (817 files). Note for T08: today only future_break carries break_index (timesheetCommands.ts:195); break_outside_session and overlapping_breaks stay form-level. No deviation from the runtime rules; nothing left running.",
+      "next_action": "None; WP5-UX3-T06-FREEZE (committer alone; also commits the plan, mockup and round-3 records)."
+    },
+    {
+      "id": "WP5-UX3-T06-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX3-T06"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX3-T06-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX3-T06-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-T06-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-T06-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "b4d9dd87fd47531ff84eba40189153ab83562677",
+      "source_digest": "0ef75a1533d9831057f42f3a7b45e0a9386792caa47b4f2c98e091d1040b7499",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Committer: stage the two T06 source files and the listed handoff records, run the checks, commit on main and push."
     }
   ],
   "future_packages": [
