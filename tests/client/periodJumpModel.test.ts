@@ -141,6 +141,32 @@ describe('Today (todayJump)', () => {
     });
   }
 
+  it('decides from the fresh answer across the reporting-zone midnight: the stale answer says "not away", the next day\'s says "away" exactly when the period ended', () => {
+    // WP5-UX2-AUDIT-01: a page opened before midnight holds yesterday's answer; a press re-reads the server and judges the SAME shown period
+    // again with today's `today_local`. The oracle is the period's own last day, independent of the comparison in the model.
+    const firstOfDay = new Map<string, Step>();
+    for (const step of allSteps()) if (!firstOfDay.has(step.today)) firstOfDay.set(step.today, step);
+    let ended = 0;
+    let midPeriod = 0;
+    for (const [date, stale] of firstOfDay) {
+      const next = firstOfDay.get(addDays(date, 1));
+      if (next === undefined) continue;
+      const shown = stale.inProgress;
+      const before = todayJump({ today: stale.today, current: stale.current, inProgress: stale.inProgress, shown, editDate: null });
+      const after = todayJump({ today: next.today, current: next.current, inProgress: next.inProgress, shown, editDate: null });
+      expect(before.away, `${date}: before midnight the sheet shows today`).toBe(false);
+      const periodEnded = date === shown.period_end;
+      expect(after.away, `${next.today}: after midnight the sheet shows today only while the period lasts`).toBe(periodEnded);
+      if (periodEnded) {
+        ended += 1;
+        expect(after.targetPayrollDate, `${next.today}: the target is the period that now contains today`).toBe(next.inProgress.payroll_date);
+        expect(periodContains(next.inProgress, next.today)).toBe(true);
+      } else midPeriod += 1;
+    }
+    expect(ended, 'period-end midnights were exercised').toBeGreaterThan(0);
+    expect(midPeriod, 'mid-period midnights were exercised').toBeGreaterThan(0);
+  });
+
   it('never reads the device clock: a clock years away changes nothing', () => {
     const step = steps('2026-10-12', 1)[0];
     if (step === undefined) throw new Error('no step');

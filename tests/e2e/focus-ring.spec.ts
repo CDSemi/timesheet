@@ -389,3 +389,57 @@ for (const colorScheme of ['light', 'dark'] as const) {
     }
   });
 }
+
+/*
+ * WP5-UX2-AUDIT-03 (owner decision WP5-UX-Q1 a): the inactive Today (`aria-disabled`, still focusable) is dimmed with colour tokens
+ * (muted text and the quiet line border), never with element opacity, so the shared focus ring around it is painted at full strength:
+ * at least 3:1 against the card in the light and the dark theme and with both manual overrides. The ring is read from the screenshot
+ * pixel in the middle of the accent band (the card-coloured 1px gap lies inside it), so a dimmed ring would be seen.
+ */
+const THEME_SITUATIONS = [
+  { name: 'light device', scheme: 'light', stored: null },
+  { name: 'dark device', scheme: 'dark', stored: null },
+  { name: 'light device, manual dark', scheme: 'light', stored: 'dark' },
+  { name: 'dark device, manual light', scheme: 'dark', stored: 'light' },
+] as const;
+
+for (const situation of THEME_SITUATIONS) {
+  test(`WP5-UX2-AUDIT-03: the focus ring of the inactive Today is painted at 3:1 (${situation.name})`, async ({ page, signInThroughUi }, testInfo) => {
+    await page.emulateMedia({ colorScheme: situation.scheme, reducedMotion: 'reduce' });
+    if (situation.stored !== null) await page.addInitScript(`try { localStorage.setItem('timesheet.theme', '${situation.stored}'); } catch {}`);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const today = page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true });
+    // On the five days after a period ends the page opens on the ended period and Today is active: pressing it makes it inactive.
+    if ((await today.getAttribute('aria-disabled')) !== 'true') {
+      await today.focus();
+      await page.keyboard.press('Enter');
+    }
+    await expect(today).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    await expect(today).toBeFocused();
+    const ring = await shared.measureFocusRing(today);
+    const opacity = await today.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).opacity ?? '');
+    const box = await today.boundingBox();
+    expect(box, 'the inactive Today has a box').not.toBeNull();
+    const card = await shared.tokenColour(page, '--card');
+    const accent = await shared.tokenColour(page, '--accent');
+    // The shared ring is a 1px card gap, then 2px of accent, outside the border box: sample the middle of the accent band.
+    const pixel = await shared.paintedPixel(page, (box?.x ?? 0) - 2.5, (box?.y ?? 0) + (box?.height ?? 0) / 2);
+    const painted = shared.contrast(pixel, card);
+    const text = await shared.textContrast(today);
+    console.log(
+      `inactive Today ring ${testInfo.project.name} ${situation.name}: opacity ${opacity}; painted ${pixel.slice(0, 3).join(',')} on ${card.slice(0, 3).join(',')} = ${painted.toFixed(2)}:1; token ring/card ${ring.ringAgainstBackdrop.toFixed(2)}; text ${text.toFixed(2)}:1`,
+    );
+    // Within anti-aliasing of the sampled sub-pixel (16 per channel): a 0.6-opacity blend would be about 90 away on the red channel.
+    expect(shared.sameColour(pixel, accent, 16), `the painted ring ${pixel.slice(0, 3).join(',')} is the full accent ${accent.slice(0, 3).join(',')}`).toBe(true);
+    expect(painted, `painted ring ${pixel.slice(0, 3).join(',')} against the card ${card.slice(0, 3).join(',')}`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
+    // No element opacity: it would dim the ring with the button (that was 2.70:1 in the light theme at opacity 0.6).
+    expect(opacity, 'the inactive Today is dimmed with colours, not with opacity').toBe('1');
+    expect(ring.ringAgainstBackdrop, `ring against the card (${ring.layers})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
+    expect(ring.ringAgainstGap, `ring against its gap (${ring.layers})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
+    // Dimmed by colour, still readable: the muted text keeps 4.5:1 on the card.
+    expect(text, 'the inactive Today text against its fill').toBeGreaterThanOrEqual(4.5);
+  });
+}

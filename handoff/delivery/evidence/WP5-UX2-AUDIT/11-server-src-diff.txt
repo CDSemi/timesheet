@@ -1,0 +1,40 @@
+diff --git a/src/server/services/timesheetCommands.ts b/src/server/services/timesheetCommands.ts
+index 702fdce..f2be4db 100644
+--- a/src/server/services/timesheetCommands.ts
++++ b/src/server/services/timesheetCommands.ts
+@@ -536,7 +536,7 @@ export function clockIn(ctx: CommandContext, input: ClockInBody) {
+   const inputZone = assertTimeZone(input.input_zone, 'input_zone');
+   const sessionId = writeTransaction(ctx.db, () => {
+     if (findOpenSession(ctx.db, ctx.user.id) !== undefined) {
+-      throw new ApiError(409, 'open_session_exists', 'Clock out of the running session first');
++      throw new ApiError(409, 'open_session_exists', 'Check out of the running session first');
+     }
+     const scope = loadScope(ctx.db, ctx.user);
+     const now = nowEpoch(ctx.clock);
+@@ -570,7 +570,7 @@ export function clockIn(ctx: CommandContext, input: ClockInBody) {
+ export function clockOut(ctx: CommandContext, input: ClockOutBody) {
+   const sessionId = writeTransaction(ctx.db, () => {
+     const open = findOpenSession(ctx.db, ctx.user.id);
+-    if (open === undefined) throw new ApiError(409, 'no_open_session', 'There is no running session to clock out of');
++    if (open === undefined) throw new ApiError(409, 'no_open_session', 'There is no running session to check out of');
+     if (open.version !== input.expected_version) throw staleVersion();
+     if (input.breaks === undefined && input.breaks_confirmed) {
+       throw new ApiError(422, 'breaks_required', 'Confirming breaks requires the complete list of breaks, including an empty list');
+@@ -586,7 +586,7 @@ export function clockOut(ctx: CommandContext, input: ClockOutBody) {
+     });
+     const replaceBreaks = input.breaks !== undefined;
+     if (!replaceBreaks) {
+-      // Legacy rows saved before the future-break rule can end after this Clock out. They
++      // Legacy rows saved before the future-break rule can end after this Check out. They
+       // cannot stay inside the closed session and are never deleted silently: the caller
+       // must resubmit the complete list, which replaces them.
+       const late = ctx.db
+@@ -596,7 +596,7 @@ export function clockOut(ctx: CommandContext, input: ClockOutBody) {
+         throw new ApiError(
+           422,
+           'saved_break_after_clock_out',
+-          'A saved break ends after this Clock out; resubmit the complete list of breaks to replace it',
++          'A saved break ends after this Check out; resubmit the complete list of breaks to replace it',
+           { break_ids: late.map((row) => row.id) },
+         );
+       }

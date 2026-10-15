@@ -1,0 +1,43 @@
+"""Summarise the axe, walk, ring and review-fit lines of an a11y probe log (and an optional axe baseline log)."""
+import re
+import sys
+from collections import Counter, defaultdict
+
+log = open(sys.argv[1], encoding="utf-8", errors="replace").read().splitlines()
+out = []
+axe = [l for l in log if l.startswith("AXE ")]
+rules = Counter()
+by_state = defaultdict(lambda: Counter())
+zero = 0
+for l in axe:
+    m = re.match(r"AXE (\w+) (\d+) (.+?) state=(\S+) violations=(\d+)(.*)", l)
+    if not m:
+        continue
+    project, width, situation, state, n, rest = m.groups()
+    if n == "0":
+        zero += 1
+    for rule in re.findall(r"\| ([a-z0-9-]+) \((\w+)\) x(\d+)", rest):
+        rules[(rule[0], rule[1])] += 1
+        by_state[(rule[0])][f"{project} {state}"] += 1
+out.append(f"axe scans: {len(axe)}; with 0 violations: {zero}")
+for (rule, impact), count in sorted(rules.items()):
+    out.append(f"  rule {rule} ({impact}) in {count} scans: {dict(by_state[rule])}")
+walks = [l for l in log if l.startswith("WALK ")]
+out.append(f"walks: {len(walks)}")
+for l in walks:
+    m = re.match(r"WALK (\w+ \d+ .+?) forward=(\d+) backward=(\d+) noRing=(\[.*?\]) hidden=(\[.*?\]) under24=(\[.*?\]) round2Under44=(\[.*?\]) sideways=(\w+)", l)
+    if m:
+        where, f, b, nr, hd, u24, r44, sw = m.groups()
+        flag = "" if nr == "[]" and hd == "[]" and u24 == "[]" and r44 == "[]" and sw == "false" else "  <-- check"
+        out.append(f"  {where}: forward {f}, backward {b}, noRing {nr}, hidden {hd}, under24 {u24}, round2Under44 {r44}, sideways {sw}{flag}")
+for l in log:
+    if l.startswith("INACTIVE-TODAY-RING") or l.startswith("ACTIVE-TODAY-RING") or l.startswith("REVIEWFIT"):
+        out.append("  " + l)
+results = [l for l in log if re.search(r"^\s+(ok|x|-)\s+\d+ \[", l)]
+out.append(f"tests: {len(results)}; failed: {sum(1 for l in results if re.match(r'^\s+x', l))}")
+for l in results:
+    if re.match(r"^\s+x", l):
+        out.append("  FAILED " + l.strip())
+text = "\n".join(out) + "\n"
+open(sys.argv[2], "w", encoding="utf-8", newline="\n").write(text)
+print(text.encode("ascii", "replace").decode())

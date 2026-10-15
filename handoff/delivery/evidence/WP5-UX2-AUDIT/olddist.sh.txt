@@ -1,0 +1,19 @@
+# Build dist/server and dist/domain of 90b98ef (clean export) and diff against the d1a20a7 build
+. <task>/env.sh
+cd $T/old
+npm ci > $T/out/13-old-ci.txt 2>&1
+echo "old npm ci exit $?" > $T/out/13-old-exits.txt
+npm run build > $T/out/13-old-build.txt 2>&1
+echo "old build exit $?" >> $T/out/13-old-exits.txt
+cd $T
+echo "== diff -r dist/server (old 90b98ef vs new d1a20a7)" > $T/out/13-dist-diff.txt
+diff -r old/dist/server export/dist/server >> $T/out/13-dist-diff.txt 2>&1
+echo "diff dist/server exit $?" >> $T/out/13-old-exits.txt
+echo "== diff -r dist/domain" >> $T/out/13-dist-diff.txt
+diff -r old/dist/domain export/dist/domain >> $T/out/13-dist-diff.txt 2>&1
+echo "diff dist/domain exit $?" >> $T/out/13-old-exits.txt
+echo "== diff -rq dist/client" >> $T/out/13-dist-diff.txt
+diff -rq old/dist/client export/dist/client >> $T/out/13-dist-diff.txt 2>&1
+echo "diff dist/client exit $?" >> $T/out/13-old-exits.txt
+echo "files old server $(find old/dist/server -type f | wc -l) new server $(find export/dist/server -type f | wc -l) old domain $(find old/dist/domain -type f | wc -l) new domain $(find export/dist/domain -type f | wc -l)" >> $T/out/13-old-exits.txt
+cat $T/out/13-old-exits.txt

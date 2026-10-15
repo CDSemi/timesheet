@@ -1,0 +1,371 @@
+diff --git a/src/client/components/ClockPanel.tsx b/src/client/components/ClockPanel.tsx
+index 5bbd09f..7689f6f 100644
+--- a/src/client/components/ClockPanel.tsx
++++ b/src/client/components/ClockPanel.tsx
+@@ -1,47 +1,78 @@
+ import type { Session } from '../api.ts';
++import { useClock } from './ClockProvider.tsx';
+ import { clockedInText } from './periodBarModel.ts';
+ 
++/** What the check in/out control shows: waiting for the first check, checked out, or checked in. */
++export function clockPhase(running: Session | null | undefined): 'checking' | 'out' | 'in' {
++  return running === undefined ? 'checking' : running === null ? 'out' : 'in';
++}
++
++/**
++ * The status words of the check in/out control, shared by the desktop card and the phone's bar so the
++ * two never differ. Checked in shows "Checked in since HH:MM" with a live dot (static: a ringed shape,
++ * not an animation) and the date line. `running` is undefined while the first check is on its way.
++ */
++export function ClockStatus({ running, zone }: { running: Session | null | undefined; zone: string }) {
++  const since = running === null || running === undefined ? null : clockedInText(running, zone);
++  return (
++    <div className="clock-state" aria-live="polite">
++      {since === null ? (
++        <span className="clock-now">{running === undefined ? 'Checking your status' : 'Checked out'}</span>
++      ) : (
++        <>
++          <span className="clock-now">
++            <span className="shape shape-circle live-dot" aria-hidden="true" />
++            Checked in since {since.time}
++          </span>
++          <span className="muted hint">{since.day}, session running</span>
++        </>
++      )}
++    </div>
++  );
++}
++
+ /**
+- * The clock: one button chosen from the running session. Clocked out shows "Clock in"; clocked in
+- * shows "Clocked in since HH:MM" with a live dot (static: a ringed shape, not an animation) and
+- * "Clock out", which opens the break confirmation dialog. `running` is undefined while the first
+- * check is still on its way; the button then waits instead of guessing.
++ * The one button, chosen from the running session: "Check in" when checked out (waiting while the
++ * first check is on its way instead of guessing), "Check out" when checked in (it opens the break
++ * confirmation dialog).
+  */
+-export function ClockPanel({
++export function ClockButton({
+   running,
+-  zone,
+-  onClockIn,
+-  onClockOut,
++  onCheckIn,
++  onCheckOut,
+ }: {
+   running: Session | null | undefined;
+-  zone: string;
+-  onClockIn: () => void;
+-  onClockOut: () => void;
++  onCheckIn: () => void;
++  onCheckOut: () => void;
+ }) {
+-  const since = running === null || running === undefined ? null : clockedInText(running, zone);
++  return running === null || running === undefined ? (
++    <button type="button" className="clock-button" onClick={onCheckIn} disabled={running === undefined}>
++      Check in
++    </button>
++  ) : (
++    <button type="button" className="clock-button" onClick={onCheckOut}>
++      Check out
++    </button>
++  );
++}
++
++/**
++ * Check in/out as a card in the Timesheet page (768px and wider). It reads the one clock state of the
++ * ClockProvider and renders nothing without it (a shared view has no provider state). Below 768px the
++ * same state shows in the top bar instead (BarClock); the two are never rendered together.
++ */
++export function ClockPanel() {
++  const clock = useClock();
++  if (clock === null) return null;
++  const { running, zone, error } = clock;
+   return (
+-    <section className="card clock-panel" aria-label="Clock" data-clock={running === undefined ? 'checking' : since === null ? 'out' : 'in'}>
+-      <div className="clock-state" aria-live="polite">
+-        {since === null ? (
+-          <span className="clock-now">{running === undefined ? 'Checking the clock' : 'Clocked out'}</span>
+-        ) : (
+-          <>
+-            <span className="clock-now">
+-              <span className="shape shape-circle live-dot" aria-hidden="true" />
+-              Clocked in since {since.time}
+-            </span>
+-            <span className="muted hint">{since.day}, session running</span>
+-          </>
+-        )}
+-      </div>
+-      {since === null ? (
+-        <button type="button" className="clock-button" onClick={onClockIn} disabled={running === undefined}>
+-          Clock in
+-        </button>
+-      ) : (
+-        <button type="button" className="clock-button" onClick={onClockOut}>
+-          Clock out
+-        </button>
++    <section className="card clock-panel" aria-label="Check in and out" data-clock={clockPhase(running)}>
++      <ClockStatus running={running} zone={zone} />
++      <ClockButton running={running} onCheckIn={() => void clock.checkIn()} onCheckOut={() => void clock.openCheckOut()} />
++      {error !== null && (
++        <p className="error clock-error" role="alert">
++          {error}
++        </p>
+       )}
+     </section>
+   );
+diff --git a/src/client/components/ReviewStatus.tsx b/src/client/components/ReviewStatus.tsx
+index 33c1bcc..1eeb061 100644
+--- a/src/client/components/ReviewStatus.tsx
++++ b/src/client/components/ReviewStatus.tsx
+@@ -1,5 +1,6 @@
+ import { useEffect, useState } from 'react';
+ import { api, type DeliveryAttempt, type FinalizationResponse } from '../api.ts';
++import { reviewShortLabel } from './periodBarModel.ts';
+ import { deliveryStatus, type DeliveryStatus, periodStatus, type PeriodStatus, reviewHash, reviewLinkLabel, type Tone } from './reviewModel.ts';
+ 
+ /** What the server says about the finalization and the email of one period. */
+@@ -69,9 +70,19 @@ export function ReviewBadges({ state, fallback }: { state: PeriodState | null; f
+ /** The link from the timesheet to the review of a period; the wording follows the period state. */
+ export function ReviewLink({ payrollDate, state }: { payrollDate: string; state: PeriodState | null }) {
+   const label = reviewLinkLabel(state === null ? null : periodStatus(state.finalization));
++  // The text content is the full label. On a phone the style sheet may show `data-short` instead (a pseudo-element) when the full label
++  // does not fit on one line; `aria-label` keeps the accessible name the full label either way (it contains the short text, SC 2.5.3).
+   return (
+-    <a className="button-link" href={reviewHash(payrollDate)} data-review-link={payrollDate}>
+-      {label}
++    <a className="button-link review-link" href={reviewHash(payrollDate)} data-review-link={payrollDate} aria-label={label} {...reviewLabelAttributes(label)}>
++      <span className="review-full">{label}</span>
+     </a>
+   );
+ }
++
++/** The attributes the style sheet reads to pick the full or the short label: the short text, and whether the full label is a long one. */
++export function reviewLabelAttributes(label: string): { 'data-short': string; 'data-label-size': 'long' | 'short' } {
++  return { 'data-short': reviewShortLabel(label), 'data-label-size': label.length > REVIEW_LONG_LABEL ? 'long' : 'short' };
++}
++
++/** Labels longer than this many characters ("Review & sign off", "Review or correct") need the wider threshold; "Review now" the narrow one. */
++const REVIEW_LONG_LABEL = 12;
+diff --git a/src/client/components/SheetWeekTable.tsx b/src/client/components/SheetWeekTable.tsx
+index c2bb230..781724a 100644
+--- a/src/client/components/SheetWeekTable.tsx
++++ b/src/client/components/SheetWeekTable.tsx
+@@ -1,7 +1,7 @@
+ import { type KeyboardEvent, type MouseEvent, useId, useRef, useState } from 'react';
+ import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.tsx';
+ import { LABEL_CHOICES, type LabelChoice } from './labelPickerModel.ts';
+-import { dayButtonName, DETAIL_ROWS, type SheetDay, type SheetWeek } from './sheetModel.ts';
++import { dayButtonName, dayClass, DETAIL_ROWS, type SheetDay, type SheetWeek } from './sheetModel.ts';
+ 
+ /** The in-cell label picker of the sheet (E-3 a): what each day's label is now, and what a pick does. */
+ export interface LabelPickerActions {
+@@ -15,6 +15,8 @@ export interface LabelPickerActions {
+ /** What a day of the sheet can do; shared by the desktop sheet and the phone tables. */
+ export interface DayActions {
+   selected: ReadonlySet<string>;
++  /** The accounting date open in the Day editor, or null; the sheet marks that day's column (desktop) or row (phone). */
++  editing: string | null;
+   onToggle: (workDate: string) => void;
+   onEdit: (workDate: string) => void;
+   /** False in a view-only shared view: no selection box, and the day only opens to read. */
+@@ -32,6 +34,7 @@ export interface DayActions {
+ /** The read-only review sheet: nothing is editable, selectable or openable. */
+ export const REVIEW_ACTIONS: DayActions = {
+   selected: new Set<string>(),
++  editing: null,
+   onToggle: () => undefined,
+   onEdit: () => undefined,
+   editable: false,
+@@ -176,9 +179,8 @@ export function openOnClick(workDate: string, onEdit: (workDate: string) => void
+   };
+ }
+ 
+-export function dayClass(day: SheetDay, selected: boolean, base: string): string {
+-  return [base, day.nonworking ? 'nonworking' : '', day.today ? 'today' : '', selected ? 'selected' : ''].filter((part) => part !== '').join(' ');
+-}
++/** True for the day open in the Day editor; the container carries `data-editing` and the day's button `aria-current`. */
++export const isEditingDay = (day: Pick<SheetDay, 'workDate'>, actions: Pick<DayActions, 'editing'>): boolean => actions.editing === day.workDate;
+ 
+ /** The selection box of batch editing ("Select {date}"); only in batch mode, and absent in a view-only share. */
+ export function SelectBox({ day, actions }: { day: SheetDay; actions: DayActions }) {
+@@ -196,9 +198,9 @@ export function SelectBox({ day, actions }: { day: SheetDay; actions: DayActions
+   );
+ }
+ 
+-function DetailLine({ day }: { day: SheetDay }) {
++function DetailLine({ day, editing }: { day: SheetDay; editing: boolean }) {
+   return (
+-    <tr className="sheet-detail-row">
++    <tr className={`sheet-detail-row${editing ? ' editing-detail' : ''}`}>
+       <td colSpan={4}>
+         <span className="detail-pair">
+           {DETAIL_ROWS.regular}{' '}
+@@ -258,13 +260,15 @@ export function SheetWeekTable({ week, details, actions }: { week: SheetWeek; de
+ function DayRows({ day, details, actions, verb }: { day: SheetDay; details: boolean; actions: DayActions; verb: 'Edit' | 'View' }) {
+   const picker = labelPickerOf(actions);
+   const review = actions.review === true;
++  const editing = isEditingDay(day, actions);
+   return (
+     <>
+       <tr
+         data-day={review ? undefined : day.workDate}
+         data-review-day={review ? day.workDate : undefined}
++        data-editing={editing ? 'true' : undefined}
+         aria-label={day.name}
+-        className={dayClass(day, actions.selected.has(day.workDate), review ? 'sheet-row sheet-row-static' : 'sheet-row')}
++        className={dayClass(day, { selected: actions.selected.has(day.workDate), editing }, `${review ? 'sheet-row sheet-row-static' : 'sheet-row'}${editing && details ? ' editing-open' : ''}`)}
+         onClick={review ? undefined : openOnClick(day.workDate, actions.onEdit)}
+       >
+         <td className="t-day">
+@@ -281,6 +285,7 @@ function DayRows({ day, details, actions, verb }: { day: SheetDay; details: bool
+                 className="sheet-day-button"
+                 onClick={() => actions.onEdit(day.workDate)}
+                 aria-label={dayButtonName(verb, day, 'phone')}
++                aria-current={editing ? 'true' : undefined}
+                 data-day-button
+               >
+                 <span className="t-weekday">{day.weekday}</span>
+@@ -302,7 +307,7 @@ function DayRows({ day, details, actions, verb }: { day: SheetDay; details: bool
+           <OtContent ot={day.ot} />
+         </td>
+       </tr>
+-      {details && <DetailLine day={day} />}
++      {details && <DetailLine day={day} editing={editing} />}
+     </>
+   );
+ }
+diff --git a/src/client/components/TimesheetSheet.tsx b/src/client/components/TimesheetSheet.tsx
+index 5f3447d..e354bd7 100644
+--- a/src/client/components/TimesheetSheet.tsx
++++ b/src/client/components/TimesheetSheet.tsx
+@@ -4,9 +4,9 @@ import { minutesText, usDate } from './format.ts';
+ import { periodStatus, reviewHash, reviewLinkLabel } from './reviewModel.ts';
+ import {
+   dayButtonName,
++  dayClass,
+   DETAIL_ROWS,
+   overtimeTotal,
+-  SHEET_COMPANY,
+   SHEET_ROWS,
+   SHEET_TITLE,
+   type SheetDay,
+@@ -16,8 +16,8 @@ import {
+ } from './sheetModel.ts';
+ import {
+   type DayActions,
+-  dayClass,
+   dayVerb,
++  isEditingDay,
+   LabelPicker,
+   labelPickerOf,
+   openOnClick,
+@@ -38,11 +38,13 @@ function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boo
+   const picker = labelPickerOf(actions);
+   const hasTime = day.time.ranges.length > 0 || day.time.note !== null;
+   const review = actions.review === true;
++  const editing = isEditingDay(day, actions);
+   return (
+     <div
+-      className={dayClass(day, actions.selected.has(day.workDate), review ? 'sheet-day sheet-day-static' : 'sheet-day')}
++      className={dayClass(day, { selected: actions.selected.has(day.workDate), editing }, review ? 'sheet-day sheet-day-static' : 'sheet-day')}
+       data-day={review ? undefined : day.workDate}
+       data-review-day={review ? day.workDate : undefined}
++      data-editing={editing ? 'true' : undefined}
+       role="group"
+       aria-label={day.name}
+       onClick={review ? undefined : openOnClick(day.workDate, actions.onEdit)}
+@@ -56,7 +58,7 @@ function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boo
+         {review ? (
+           <span className="sheet-date-text">{day.dateText}</span>
+         ) : (
+-          <button type="button" className="sheet-date" onClick={() => actions.onEdit(day.workDate)} aria-label={dayButtonName(verb, day, 'sheet')} data-day-button>
++          <button type="button" className="sheet-date" onClick={() => actions.onEdit(day.workDate)} aria-label={dayButtonName(verb, day, 'sheet')} aria-current={editing ? 'true' : undefined} data-day-button>
+             {day.dateText}
+           </button>
+         )}
+@@ -249,7 +251,6 @@ export function TimesheetSheet({
+     <article className={`sheet ${desktop ? 'sheet-desktop' : 'sheet-phone'}`} aria-label="Timesheet form" data-sheet={desktop ? 'desktop' : 'phone'}>
+       <header className="form-head">
+         <div className="form-brand">
+-          <div className="company">{SHEET_COMPANY}</div>
+           <div className="form-title">{SHEET_TITLE}</div>
+         </div>
+         <dl className="form-fields">
+@@ -326,7 +327,6 @@ export function ReviewSheet({
+     <article className={`sheet sheet-review ${desktop ? 'sheet-desktop' : 'sheet-phone'}`} aria-label="What you sign" data-sheet={desktop ? 'desktop' : 'phone'}>
+       <header className="form-head">
+         <div className="form-brand">
+-          <div className="company">{SHEET_COMPANY}</div>
+           <div className="form-title">{SHEET_TITLE}</div>
+         </div>
+         <dl className="form-fields">
+diff --git a/src/client/components/periodBarModel.ts b/src/client/components/periodBarModel.ts
+index 0b19696..f44a7c1 100644
+--- a/src/client/components/periodBarModel.ts
++++ b/src/client/components/periodBarModel.ts
+@@ -21,7 +21,27 @@ export function weekdayName(date: string): string {
+  * The date and time are the server's `due_local_*` fields; nothing is converted here.
+  */
+ export function dueInWords(period: Pick<Period, 'due_local_date' | 'due_local_time'>, reportingZone: string): string {
+-  return `Due ${weekdayName(period.due_local_date)} ${usDate(period.due_local_date)}, ${period.due_local_time} (${reportingZone})`;
++  const { label, value } = dueParts(period, reportingZone);
++  return `${label} ${value}`;
++}
++
++/** The due line in two parts: the label word `Due` (shown in the label style) and the value `Tue 12/08/2026, 17:00 (America/Los_Angeles)`. Their text joined by one space is `dueInWords`. */
++export function dueParts(period: Pick<Period, 'due_local_date' | 'due_local_time'>, reportingZone: string): { label: string; value: string } {
++  return {
++    label: 'Due',
++    value: `${weekdayName(period.due_local_date)} ${usDate(period.due_local_date)}, ${period.due_local_time} (${reportingZone})`,
++  };
++}
++
++/**
++ * The short form of the review link's label, shown on a phone only when the full label does not fit on one line beside the other buttons
++ * (the accessible name stays the full label, which contains the short text). `Review & sign off` becomes `Sign off`; `Review now` and
++ * `Review or correct` become `Review`, the one word that names the action of both (the review screen is where a correction is made).
++ */
++export function reviewShortLabel(label: string): string {
++  if (label === 'Review & sign off') return 'Sign off';
++  if (label === 'Review now' || label === 'Review or correct') return 'Review';
++  return label;
+ }
+ 
+ /** The due instant in the display zone, formatted like the bar: `Wed 10/14/2026, 07:00`. Display only; the instant and zone are unchanged. */
+diff --git a/src/client/components/sheetModel.ts b/src/client/components/sheetModel.ts
+index 092a38a..2c8b52b 100644
+--- a/src/client/components/sheetModel.ts
++++ b/src/client/components/sheetModel.ts
+@@ -15,8 +15,10 @@ import { usDate, usShortDate } from './format.ts';
+  * accounting dates; session times are shown in the display zone (R-07).
+  */
+ 
+-/** The form header, as on the Excel template and the PDF. */
+-export const SHEET_COMPANY = 'C&D Semiconductor Services, Inc.';
++/**
++ * The form title, as on the Excel template and the PDF. The company name is in the top bar and is not
++ * repeated on the sheet (WP5-UX2-T06); the PDF keeps its own company header.
++ */
+ export const SHEET_TITLE = 'Time sheet for salaried exempt employees';
+ 
+ /** The visual row names; each cell repeats its row name for screen readers. */
+@@ -108,6 +110,17 @@ export function dayButtonName(verb: 'Edit' | 'View', day: Pick<SheetDay, 'weekda
+   return `${verb} ${visible} (${day.workDate})`;
+ }
+ 
++/**
++ * The class list of a day's container (a desktop column or a phone row): the base classes plus one word per
++ * state. `editing` marks the day open in the Day editor (WP5-UX2-T03); it is its own word, so it combines with
++ * `today`, `selected` and `nonworking` on one day. The name of the day's button never depends on any of them.
++ */
++export function dayClass(day: Pick<SheetDay, 'today' | 'nonworking'>, state: { selected: boolean; editing: boolean }, base: string): string {
++  return [base, day.nonworking ? 'nonworking' : '', day.today ? 'today' : '', state.selected ? 'selected' : '', state.editing ? 'editing' : '']
++    .filter((part) => part !== '')
++    .join(' ');
++}
++
+ export const hm =(minutes: number | null | undefined): string => (minutes === null || minutes === undefined ? '' : formatHoursMinutes(minutes));
+ 
+ /** What the label cell reads from a day: the day view of the Timesheet page and the review payload both fit. */

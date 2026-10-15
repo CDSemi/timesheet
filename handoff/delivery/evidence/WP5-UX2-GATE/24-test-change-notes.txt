@@ -1,0 +1,37 @@
+WP5-UX2-GATE item 3: test changes between 90b98ef and d1a20a7 (git diff -U0 -- tests; full diff in 24-test-diff.txt, removed lines in 24-removed-lines.txt)
+
+Added lines containing skip, fixme, slow or only: 5, every one a project-conditional skip (24-skipcheck-added.txt):
+  logo.spec.ts   test.skip(isMobile, ...)                       wordmark is a desktop-width brand
+  today.spec.ts  test.skip(testInfo.project.name !== 'mobile') phone bar only
+  today.spec.ts  test.skip(({ isMobile }) => !isMobile, ...)    phone one-row layout and first-screen budget
+  today.spec.ts  test.skip(({ isMobile }) => !isMobile, ...)    phone first-screen budget (away state)
+  today.spec.ts  test.skip(({ isMobile }) => isMobile, ...)     desktop period bar 768 to 1280
+No .only, no .fixme, no test.slow added (forbidOnly is set in playwright.config.ts).
+
+Removed lines (76), all explained by the slice records:
+  - Clock in / Clock out -> Check in / Check out wording (T08): day-editor, shell, isolation, sharing, review, keyboard-access, focus-ring
+    specs; sessionModel and sharingModel unit titles. The assertions keep the same shape on the new names.
+  - Show details button with aria-pressed -> native switch role with checked state (T02): timesheet.spec (aria-pressed false/true ->
+    not.toBeChecked / toBeChecked), focus-ring.spec (the pressed-toggle test split: "Change several days" and the Light/Dark theme
+    segments keep the pressed-ring test, now with ring-against-gap and gap-against-fill checks; a new test covers the switch in both
+    states).
+  - label picker active option: inset ring check -> a 3px leading rail with 3:1 against the option fill and the card (T02), expectRail.
+  - Today button added to the period card tab order (T04): Previous, Next, Today, Review; Current period absent on the opening period.
+  - company name: sheet no longer repeats it; asserted absent from the form and present exactly once (hidden) in the bar (T06/owner decision).
+  - phone bar height bound: one row (<= 60) -> <= 60 without a share and <= 112.5 with a share (clock row plus switcher row) (T09);
+    the measured --shell-bar-size must equal the rendered bar.
+  - import lines widened or re-ordered (periodBarModel import fix; shared contrast.ts import).
+No removed assertion was left without a replacement of equal or greater strength in the diff reviewed; the replacements are listed above.
+Integration tests: clock-out-breaks.test.ts +1 line, timesheet-api.test.ts +10 lines (additive, T08 message checks).
+
+Owned-path flags (t01-t10 records):
+  T02 touched tests/e2e/theme.spec.ts (not in its first owned list): the coordinator extended the owned paths by exactly that file for one
+      test ("the pointer on the pressed toggle keeps it pressed", WP5-UX2-T02 addendum, recorded in the T02 record).
+  T04 touched src/client/components/ReviewStatus.tsx, periodBarModel.ts and tests/client/periodBarModel.test.ts: owned paths extended per
+      its addendum 479-519 (review link on one line on phones).
+  T08 touched tests/integration/* (the brief lists "the integration tests under tests/integration/ that assert the three messages") and
+      tests/e2e/keyboard-access.spec.ts line 177 (regex /^Clock (in|out)$/ -> /^Check (in|out)$/): the T08 record says the owned paths grew
+      by exactly that one test line after the first full e2e run failed 4 AX-01 tests on it. T09 owns keyboard-access.spec.ts and added the
+      375 and 360 widths to the AX-01 walk (additive).
+  eslint.config.js (T01): one entry for src/client/public/theme-init.js in allowDefaultProject.
+No path outside src/client, src/server/services/timesheetCommands.ts, tests, docs, DEVELOPMENT*.md and eslint.config.js changed.

@@ -1,0 +1,44 @@
+import json
+import sys
+
+board_path = sys.argv[1]
+out_path = sys.argv[2]
+with open(board_path, encoding="utf-8") as f:
+    board = json.load(f)
+
+out = []
+out.append("TOP KEYS: " + ", ".join(board.keys()))
+
+tasks = board.get("tasks", [])
+if isinstance(tasks, dict):
+    tasks = list(tasks.values())
+for t in tasks:
+    tid = t.get("id") or t.get("task_id")
+    if tid and tid.startswith("WP5-UX2"):
+        slim = {k: t.get(k) for k in (
+            "id", "kind", "status", "profile", "requested_model", "actual_model", "actual_source",
+            "agent_id", "previous_agent_ids", "author_agent_ids", "freeze_commit", "reviewed_commit",
+            "source_digest", "decision", "depends_on", "owned_paths", "routing", "model_override_reason")
+            if k in t}
+        out.append(json.dumps(slim, ensure_ascii=False, indent=1))
+    if tid in ("WP5-UX-AUDIT-AB9",):
+        slim = {k: t.get(k) for k in ("id", "kind", "status", "reviewed_commit", "source_digest", "decision", "actual_model") if k in t}
+        out.append(json.dumps(slim, ensure_ascii=False, indent=1))
+
+for key in ("owner_decisions", "coordinator_decisions"):
+    val = board.get(key)
+    out.append("==== " + key + " type=" + type(val).__name__)
+    if isinstance(val, list):
+        for item in val:
+            s = json.dumps(item, ensure_ascii=False, indent=1)
+            if "2026-10-14" in s or "UX2" in s:
+                out.append(s)
+    elif isinstance(val, dict):
+        for k2, item in val.items():
+            s = json.dumps(item, ensure_ascii=False, indent=1)
+            if "2026-10-14" in s or "UX2" in s or "2026-10-14" in k2:
+                out.append(k2 + ": " + s)
+
+with open(out_path, "w", encoding="utf-8", newline="\n") as f:
+    f.write("\n".join(out) + "\n")
+print("written", len(out))

@@ -1,0 +1,10 @@
+import { expect, test } from './fixtures.ts';
+
+// WP5-UX2-AUDIT task-local control (never part of the repository): the built server reports the simulated reporting-zone date.
+test('control: the server reports the simulated today_local', async ({ employeeSeed }, testInfo) => {
+  const periods = await employeeSeed.periodsCurrent();
+  console.log(
+    `CONTROL ${testInfo.project.name} runner-clock=${new Date().toISOString()} today_local=${periods.today_local} zone=${periods.reporting_zone} current=${periods.current.period_start}..${periods.current.period_end} payroll=${periods.current.payroll_date} in_progress=${periods.in_progress.period_start}..${periods.in_progress.period_end}`,
+  );
+  expect(periods.today_local).toBe(process.env.CONTROL_TODAY ?? periods.today_local);
+});

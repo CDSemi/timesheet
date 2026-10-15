@@ -1,0 +1,28 @@
+import { readFileSync } from 'node:fs';
+import { expect, test } from './fixtures.ts';
+
+/*
+ * WP5-UX2-AUDIT task-local baseline (never part of the repository): the same axe-core scan of the Timesheet landing page on
+ * the accepted 90b98ef build and on d1a20a7, so a violation can be told apart as pre-existing or new. Light and dark device.
+ */
+const AXE = readFileSync(process.env.AXE_PATH ?? '', 'utf8');
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles', bypassCSP: true });
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`axe baseline: Timesheet landing (${scheme})`, async ({ page, signInThroughUi }, testInfo) => {
+    test.setTimeout(240_000);
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const widths = testInfo.project.name === 'desktop' ? [1440, 1280, 1024, 768] : [390, 375, 360, 320];
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: testInfo.project.name === 'desktop' ? 900 : 844 });
+      await page.waitForTimeout(400);
+      if ((await page.evaluate('typeof window.axe')) !== 'object') await page.addScriptTag({ content: AXE });
+      const result = await page.evaluate<Array<{ id: string; impact: string | null; count: number; first: string }>>(
+        "window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] }, resultTypes: ['violations'] }).then((r) => r.violations.map((v) => ({ id: v.id, impact: v.impact, count: v.nodes.length, first: v.nodes[0].target.join(' ') })))",
+      );
+      console.log(`AXEBASE ${testInfo.project.name} ${width} ${scheme} violations=${result.length}${result.map((v) => ` | ${v.id} (${v.impact}) x${v.count}: ${v.first}`).join('')}`);
+    }
+  });
+}

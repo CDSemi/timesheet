@@ -1,0 +1,14 @@
+# typecheck, lint, npm test, build, smoke in the clean export of d1a20a7
+. <task>/env.sh
+cd $T/export
+X=$T/out/05-exits.txt
+: > $X
+for step in typecheck lint test build smoke; do
+  echo "== $step start $(date -u +%H:%M:%SZ)" > $T/out/05-$step.txt
+  npm run $step >> $T/out/05-$step.txt 2>&1
+  rc=$?
+  echo "$step exit $rc" >> $X
+  echo "== $step end $(date -u +%H:%M:%SZ) exit $rc" >> $T/out/05-$step.txt
+done
+grep -i -c "deprecat" $T/out/05-typecheck.txt $T/out/05-lint.txt $T/out/05-test.txt $T/out/05-build.txt $T/out/05-smoke.txt >> $X
+cat $X

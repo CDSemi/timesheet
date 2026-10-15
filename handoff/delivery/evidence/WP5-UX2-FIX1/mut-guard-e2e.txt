@@ -1,0 +1,86 @@
+== mut-guard: real start 2026-10-15T08:52:44Z, simulated start 2026-10-26T06:59:20Z, AB8_SHIFT_MS=943595140
+$ playwright test tests/e2e/today.spec.ts -g left open across --output=<task>/pw-mut-guard
+
+Running 2 tests using 2 workers
+
+  x  1 [desktop] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (45.4s)
+  x  2 [mobile] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (45.5s)
+
+
+  1) [desktop] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('.period-bar').locator('.period-name')
+    Expected: "10/26/2026→ to 11/08/2026"
+    Received: "10/12/2026→ to 10/25/2026"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" locator('.period-bar').locator('.period-name') with timeout 7000ms
+      - waiting for locator('.period-bar').locator('.period-name')
+        18 × locator resolved to <strong class="period-name">…</strong>
+           - unexpected value "10/12/2026→ to 10/25/2026"
+
+
+      67 | /** The sheet shows this period (its name in the bar) and, when it contains `today`, only that day carries the Today tag. */
+      68 | async function expectShown(page: Page, period: PeriodFacts, today: string) {
+    > 69 |   await expect(periodName(page)).toHaveText(rangeText(period));
+         |                                  ^
+      70 |   await expect(page.locator('[data-day]')).toHaveCount(14);
+      71 |   const showsToday = contains(period, today);
+      72 |   await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(showsToday ? 1 : 0);
+        at expectShown (D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\today.spec.ts:69:34)
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\today.spec.ts:585:13
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX2-FIX1\pw-mut-guard\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX2-FIX1\pw-mut-guard\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX2-FIX1\pw-mut-guard\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('.period-bar').locator('.period-name')
+    Expected: "10/26/2026→ to 11/08/2026"
+    Received: "10/12/2026→ to 10/25/2026"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" locator('.period-bar').locator('.period-name') with timeout 7000ms
+      - waiting for locator('.period-bar').locator('.period-name')
+        18 × locator resolved to <strong class="period-name">…</strong>
+           - unexpected value "10/12/2026→ to 10/25/2026"
+
+
+      67 | /** The sheet shows this period (its name in the bar) and, when it contains `today`, only that day carries the Today tag. */
+      68 | async function expectShown(page: Page, period: PeriodFacts, today: string) {
+    > 69 |   await expect(periodName(page)).toHaveText(rangeText(period));
+         |                                  ^
+      70 |   await expect(page.locator('[data-day]')).toHaveCount(14);
+      71 |   const showsToday = contains(period, today);
+      72 |   await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(showsToday ? 1 : 0);
+        at expectShown (D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\today.spec.ts:69:34)
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\today.spec.ts:585:13
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX2-FIX1\pw-mut-guard\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX2-FIX1\pw-mut-guard\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX2-FIX1\pw-mut-guard\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+    [mobile] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+exit=1
+== mut-guard real end 2026-10-15T08:53:33Z

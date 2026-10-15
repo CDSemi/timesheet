@@ -231,8 +231,46 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   mình), rồi WP5-UX2-GATE (verifier) và audit opus mới WP5-UX2-AUDIT. Khi gate ghi digest
   mới, WP5-UX-AUDIT-AB9 và sáu audit trỏ tới nó được gán superseded_by WP5-UX2-AUDIT
   (không tạo chuỗi).
-- Đang chưa commit: tài liệu T10 (12 đường dẫn), board, checkpoint này (+ en), kết quả và
-  bằng chứng T09-FREEZE, bản ghi T10 và T10-FREEZE, bằng chứng T10.
+- Xong WP5-UX2-T10-FREEZE (đóng băng cuối package): d1a20a7f0112fa00171fe4b1d6035427855f12b6
+  trên main, đã push (27 đường dẫn; digest 20e7a7c8, 814 file; mọi kiểm tra exit 0; một
+  lần `node -e` thừa ra null device).
+- Đang chạy: WP5-UX2-GATE (verifier, sonnet) trên d1a20a7 / 20e7a7c8: các mục gate WP5,
+  ranh giới server so với 90b98ef (chỉ ba câu thông báo), phạm vi vòng, quét đồng hồ giả
+  lập (6 thời điểm toàn bộ test cộng 9 thời điểm có chọn lọc), các kiểm tra riêng của vòng
+  và ảnh chụp tổng hợp.
+- WP5-UX2-GATE PASS (verifier, tự báo claude-sonnet-5-5; NAS chưa kiểm) trên d1a20a7 /
+  20e7a7c8 (814 file, ba dạng digest bằng nhau): verify 1878; e2e 434/0/42; AC-13 x3 cùng
+  Tokyo và New York; drill 208/0, image
+  sha256:8b0effa0f831dbb96a08e1e0ab22615601dfbfe8384086abf1ee030682ce4310 (đã xoá); server
+  và domain chỉ khác 90b98ef ở timesheetCommands (ba câu, một chú thích); phạm vi 67 đường
+  dẫn đều thuộc T01-T10, không có font hay ảnh raster; quét 6 lần toàn bộ cộng 10 lần chọn
+  lọc, 0 lỗi (một lần chạy lại vì lỗi bộ đệm); tương phản, 44px, không cuộn ngang; ngân sách
+  571.5/670.4/623.5/722.4, trạng thái đã rời kỳ 591.0/690.0 trên 788; header 56, 60 và 112;
+  CSP không đổi; không có check in/out khi xem chia sẻ; 10 ảnh chụp tổng hợp.
+- Board: current_source_digest 20e7a7c8; WP5-UX-AUDIT-AB9 và sáu audit trỏ tới nó nay có
+  superseded_by WP5-UX2-AUDIT.
+- Đang chạy: WP5-UX2-AUDIT (auditor opus mới, xhigh) trên d1a20a7 / 20e7a7c8.
+- WP5-UX2-AUDIT FIX REQUIRED (opus mới, tự báo claude-opus-5-5) trên d1a20a7 / 20e7a7c8
+  (digest bằng nhau đầu và cuối): ba lỗi Low, 01 nút Today không phản hồi sau nửa đêm theo
+  múi giờ báo cáo khi trang vẫn mở, 02 tài liệu thiếu mô tả hàng Review riêng ở 320px, 03
+  viền focus của Today khi bị mờ chỉ 2.70:1 do opacity; rủi ro R-UX2A-1..5; các kiểm tra bắt
+  buộc đều đạt (npm test 1878 x2, e2e 434/0/42, AC-13, server chỉ khác ba câu); 20 đột biến,
+  16 bị bắt; độ đúng yêu cầu: cả 16 mục và hai câu trả lời đều đạt. Bản review:
+  `handoff/delivery/WP5_UX2_REVIEW.vi.md` (+ en).
+- Quyết định coordinator (2026-10-15): một vòng sửa WP5-UX2-FIX1 (lỗi 01-03 và R-UX2A-2);
+  R-UX2A-5 (nhãn "future" trên kỳ mà Today mở ra) được hỏi chủ dự án như câu hỏi không bắt
+  buộc. Sau đó FIX1-FREEZE, WP5-UX2-REGATE và audit mới WP5-UX2-AUDIT2.
+- Xong WP5-UX2-FIX1 sau addendum 1 (worker-high, tự báo claude-sonnet-5-5; do người làm
+  báo, chưa phải bằng chứng độc lập): nút Today khi mờ đọc lại ngày từ server khi bấm, khi
+  cửa sổ được focus hoặc hiện lại (test qua nửa đêm với đồng hồ giả lập đạt ở 10-25 và
+  10-31); tài liệu mô tả hàng Review dưới 330px và cách bấm mới; làm mờ bằng màu, viền
+  focus 6.09-6.79; test chữ bắt cả 5 lần đổi ngược; unit 1882; e2e desktop 216/0/29,
+  mobile 232/0/13; preflight và verify 0; digest ac1895d9 (815 file).
+- Tiếp theo: WP5-UX2-FIX1-FREEZE (committer, chạy một mình), rồi WP5-UX2-REGATE và audit
+  mới WP5-UX2-AUDIT2. Câu hỏi không bắt buộc WP5-UX2-Q3 vẫn mở (mặc định a).
+- Đang chưa commit: source và tài liệu FIX1 (11 đường dẫn), board, checkpoint này (+ en),
+  kết quả và bằng chứng T10-FREEZE, bản ghi và bằng chứng gate và audit, cặp review, bản
+  ghi FIX1 và FIX1-FREEZE, bằng chứng FIX1.
 
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 

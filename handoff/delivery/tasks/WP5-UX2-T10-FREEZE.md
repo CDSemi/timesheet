@@ -164,4 +164,16 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(The committer appends results here.)
+Self-reported model: claude-sonnet-5-5.
+
+- Pre-HEAD f70a5c0479b6cc1a0dd10d29f7791157ff29c43d (= origin/main); post-HEAD and
+  commit d1a20a7f0112fa00171fe4b1d6035427855f12b6; pushed yes; remote SHA the same.
+- Digests: pre-add 20e7a7c8cd19b811aedfd814b35ead3b9a8d2eab7c9dbdd0b23626a609773fa5
+  (814 files); post-commit git ls-tree digest identical (814 files).
+- Staged 27: 12 docs, 4 modified handoff, 2 new task records, 2 T09-FREEZE evidence,
+  7 T10 evidence. No other modified tracked handoff files.
+- Checks (all exit 0): node v24.21.0; precommit PASS (27 files); diff --cached --check;
+  JSON parse; validate_orchestration PASS; check_recovery PASS (106 probes);
+  validate_package --preflight PASS; push dry-run and push.
+- No fixes applied. Deviation: one stray `node -e` call with output redirected to the
+  null device was run by mistake (rule breach, no repository effect).

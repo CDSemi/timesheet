@@ -1,0 +1,59 @@
+import { readFileSync, appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX2-GATE (task-local): the SVG logo rendered next to the source image of WP5-UX2-PLAN3, 512px wide each on white,
+ * and the mean absolute colour difference between the two renderings.
+ */
+const OUT = process.env.GATE_OUT ?? '';
+const SOURCE = process.env.LOGO_SOURCE ?? '';
+const SVG = process.env.LOGO_SVG ?? '';
+
+test('logo fidelity: SVG next to the source image', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'Desktop only');
+  test.skip(SOURCE === '' || SVG === '', 'no source');
+  const png = readFileSync(SOURCE).toString('base64');
+  const svg = readFileSync(SVG).toString('base64');
+  await page.setViewportSize({ width: 1200, height: 700 });
+  await page.setContent(
+    `<body style="margin:0;background:#fff"><div style="display:flex;gap:24px;padding:24px;align-items:flex-start">` +
+      `<div><div style="font:14px sans-serif">source image</div><img id="a" width="512" src="data:image/png;base64,${png}"></div>` +
+      `<div><div style="font:14px sans-serif">SVG logo</div><img id="b" width="512" src="data:image/svg+xml;base64,${svg}"></div></div></body>`,
+  );
+  await page.waitForFunction(() => Array.from(document.images).every((image) => image.complete && image.naturalWidth > 0));
+  const result = await page.evaluate(() => {
+    const [a, b] = Array.from(document.images);
+    if (a === undefined || b === undefined) throw new Error('images');
+    const width = 512;
+    const heightOf = (image: HTMLImageElement) => Math.round((image.naturalHeight / image.naturalWidth) * width);
+    const height = Math.max(heightOf(a), heightOf(b));
+    const draw = (image: HTMLImageElement) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (context === null) throw new Error('canvas');
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, heightOf(image));
+      return context.getImageData(0, 0, width, height).data;
+    };
+    const da = draw(a);
+    const db = draw(b);
+    let sum = 0;
+    let differing = 0;
+    for (let i = 0; i < da.length; i += 4) {
+      const d = (Math.abs((da[i] ?? 0) - (db[i] ?? 0)) + Math.abs((da[i + 1] ?? 0) - (db[i + 1] ?? 0)) + Math.abs((da[i + 2] ?? 0) - (db[i + 2] ?? 0))) / 3;
+      sum += d;
+      if (d > 48) differing += 1;
+    }
+    const pixels = da.length / 4;
+    return { aSize: `${a.naturalWidth}x${a.naturalHeight}`, bSize: `${b.naturalWidth}x${b.naturalHeight}`, meanAbsDiff: sum / pixels, differingFraction: differing / pixels };
+  });
+  const line = `logo fidelity: source ${result.aSize}, svg ${result.bSize}, mean absolute colour difference ${result.meanAbsDiff.toFixed(2)} of 255, pixels differing by more than 48: ${(result.differingFraction * 100).toFixed(2)} %`;
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'obs-logo-fidelity.txt'), `${line}\n`);
+  await page.screenshot({ path: screenshotPath('gate-logo-fidelity-synthetic.png') });
+  expect(result.meanAbsDiff).toBeLessThan(40);
+});

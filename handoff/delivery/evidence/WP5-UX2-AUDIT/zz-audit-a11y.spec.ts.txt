@@ -1,0 +1,254 @@
+import { readFileSync } from 'node:fs';
+import type { Locator, Page } from '@playwright/test';
+import { contrast, paintedPixel, parseColour, type Rgba, tokenColour } from './contrast.ts';
+import { createAccountByAdminApi, expect, SeedClient, starterPolicyBody, test } from './fixtures.ts';
+import { addDays } from '../../src/domain/dates.ts';
+
+/*
+ * WP5-UX2-AUDIT task-local accessibility probe (never part of the repository): an axe-core scan (axe-core from the audit task
+ * folder, path in AXE_PATH) of the round-2 states, a forward and backward keyboard walk with occlusion and ring checks, target
+ * sizes, and the painted focus ring of an inactive (aria-disabled) Today. Four theme situations; desktop widths 1440, 1280,
+ * 1024, 768 on the desktop project and 390, 375, 360, 320 on the mobile project, with a received share on the phone.
+ */
+const AXE = readFileSync(process.env.AXE_PATH ?? '', 'utf8');
+// The probe injects axe-core as an inline script, which the app's CSP (script-src 'self') blocks; this probe context alone bypasses it.
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles', bypassCSP: true, actionTimeout: 10_000 });
+
+const SITUATIONS = [
+  { name: 'light device', scheme: 'light', stored: null },
+  { name: 'dark device', scheme: 'dark', stored: null },
+  { name: 'light device, manual dark', scheme: 'light', stored: 'dark' },
+  { name: 'dark device, manual light', scheme: 'dark', stored: 'light' },
+] as const;
+
+type Situation = (typeof SITUATIONS)[number];
+
+async function applySituation(page: Page, situation: Situation) {
+  await page.emulateMedia({ colorScheme: situation.scheme, reducedMotion: 'reduce' });
+  if (situation.stored !== null) await page.addInitScript(`try { localStorage.setItem('timesheet.theme', '${situation.stored}'); } catch {}`);
+}
+
+interface AxeViolation {
+  id: string;
+  impact: string | null;
+  nodes: Array<{ target: string[]; failureSummary?: string }>;
+}
+
+async function axeScan(page: Page, state: string, where: string, out: string[]) {
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(350);
+  const has = await page.evaluate('typeof window.axe');
+  if (has !== 'object') await page.addScriptTag({ content: AXE });
+  const violations = await page.evaluate<AxeViolation[]>(
+    "window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] }, resultTypes: ['violations'] }).then((r) => r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => ({ target: n.target, failureSummary: n.failureSummary })) })))",
+  );
+  const line = `AXE ${where} state=${state} violations=${violations.length}${violations
+    .map((v) => ` | ${v.id} (${v.impact}) x${v.nodes.length}: ${v.nodes.slice(0, 4).map((n) => n.target.join(' ')).join(' ; ')}`)
+    .join('')}`;
+  console.log(line);
+  out.push(line);
+}
+
+/** A share given TO the seeded employee, so the phone shows the "Shared with me" switcher (the 112px bar). */
+async function receiveShare(adminSeed: SeedClient, origin: string, employeeEmail: string) {
+  const owner = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Sharer' });
+  const api = await new SeedClient(origin).signIn(owner.email, owner.password);
+  const { todayLocal } = await api.today();
+  await api.call('POST', '/api/policies', starterPolicyBody(addDays(todayLocal, -400)), 201);
+  await api.call('POST', '/api/shares', { grantee_email: employeeEmail, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+}
+
+interface Stop {
+  name: string;
+  tag: string;
+  ringVisible: boolean;
+  occluded: boolean;
+  w: number;
+  h: number;
+}
+
+/** One keyboard stop: what has focus, whether a ring is painted, whether the sticky bars hide it, and its size. */
+async function readStop(page: Page): Promise<Stop | null> {
+  return page.evaluate(() => {
+    const element = document.activeElement as HTMLElement | null;
+    if (element === null || element === document.body) return null;
+    const label = element.closest('label');
+    const painted = element instanceof HTMLInputElement && (element.type === 'radio') && label !== null ? label : element;
+    const style = getComputedStyle(painted);
+    const ringVisible = (style.boxShadow !== 'none' && style.boxShadow !== '') || (style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0);
+    const rect = painted.getBoundingClientRect();
+    // Occlusion (SC 2.4.11): sample 5x5 points; the stop is hidden when no sample hits the element (or its label).
+    let visible = 0;
+    for (let i = 1; i <= 5; i += 1)
+      for (let j = 1; j <= 5; j += 1) {
+        const x = rect.left + (rect.width * i) / 6;
+        const y = rect.top + (rect.height * j) / 6;
+        if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+        const hit = document.elementFromPoint(x, y);
+        if (hit !== null && (painted.contains(hit) || hit.contains(painted) || element.contains(hit))) visible += 1;
+      }
+    const name = (element.getAttribute('aria-label') ?? element.textContent ?? element.getAttribute('name') ?? '').trim().slice(0, 40);
+    return { name, tag: `${element.tagName.toLowerCase()}${element.getAttribute('role') ? `[${element.getAttribute('role')}]` : ''}`, ringVisible, occluded: visible === 0, w: rect.width, h: rect.height };
+  });
+}
+
+async function walk(page: Page, direction: 'Tab' | 'Shift+Tab', max: number): Promise<Stop[]> {
+  const stops: Stop[] = [];
+  for (let index = 0; index < max; index += 1) {
+    await page.keyboard.press(direction);
+    await page.waitForTimeout(60);
+    const stop = await readStop(page);
+    if (stop === null) break;
+    stops.push(stop);
+  }
+  return stops;
+}
+
+const WIDTHS = { desktop: [1440, 1280, 1024, 768], mobile: [390, 375, 360, 320] } as const;
+
+for (const situation of SITUATIONS) {
+  test(`axe, keyboard walk and targets on the round-2 states (${situation.name})`, async ({ page, adminSeed, builtServer, signInThroughUi }, testInfo) => {
+    test.setTimeout(600_000);
+    const project = testInfo.project.name as 'desktop' | 'mobile';
+    if (project === 'mobile') await receiveShare(adminSeed, builtServer.origin, builtServer.credentials.employee.email);
+    await applySituation(page, situation);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const out: string[] = [];
+    for (const width of WIDTHS[project]) {
+      await page.setViewportSize({ width, height: project === 'mobile' ? 844 : 900 });
+      await page.goto('/#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const where = `${project} ${width} ${situation.name}`;
+      await axeScan(page, 'landing', where, out);
+      // Away state: Next (Today active; Current period too inside the five window days).
+      await page.locator('.period-bar').getByRole('button', { name: 'Next period' }).click();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await axeScan(page, 'away', where, out);
+      const todayControl = page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true });
+      if ((await todayControl.getAttribute('aria-disabled')) !== 'true') await todayControl.click();
+      else await page.locator('.period-bar').getByRole('button', { name: 'Previous period' }).click();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      // Show details on.
+      await page.getByRole('switch', { name: 'Show details' }).check();
+      await axeScan(page, 'details-on', where, out);
+      // The label picker open on the first workday that has one.
+      const trigger = page.locator('.label-trigger').first();
+      if ((await trigger.count()) > 0) {
+        await trigger.click();
+        await expect(page.getByRole('listbox')).toBeVisible();
+        await axeScan(page, 'picker-open', where, out);
+        await page.keyboard.press('Escape');
+      }
+      if (project === 'mobile') {
+        const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+        await more.click();
+        await expect(page.getByRole('radiogroup', { name: 'Theme' })).toBeVisible();
+        await axeScan(page, 'more-open', where, out);
+        await page.keyboard.press('Escape');
+      }
+      // Keyboard walk: forward from the top, backward from the end; every stop shows a ring, none hidden, targets >= 24 (44 on a phone for the round's controls).
+      await page.goto('/#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await page.evaluate('window.scrollTo(0, 0)');
+      await page.locator('body').click({ position: { x: 1, y: 1 } }).catch(() => undefined);
+      const forward = await walk(page, 'Tab', 160);
+      await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+      const backward = await walk(page, 'Shift+Tab', 160);
+      const all = [...forward, ...backward];
+      const noRing = all.filter((stop) => !stop.ringVisible).map((stop) => `${stop.tag}:${stop.name}`);
+      const hidden = all.filter((stop) => stop.occluded).map((stop) => `${stop.tag}:${stop.name}`);
+      const small = all.filter((stop) => stop.w < 24 || stop.h < 24).map((stop) => `${stop.tag}:${stop.name} ${stop.w.toFixed(0)}x${stop.h.toFixed(0)}`);
+      const round2 = /^(Today|Current period|Light|Dark|light|dark|Show details|Check in|Check out|Sign off|Review)/;
+      const smallRound2 =
+        project === 'mobile' ? all.filter((stop) => round2.test(stop.name) && (stop.w < 44 || stop.h < 44)).map((stop) => `${stop.tag}:${stop.name} ${stop.w.toFixed(0)}x${stop.h.toFixed(0)}`) : [];
+      const line = `WALK ${where} forward=${forward.length} backward=${backward.length} noRing=${JSON.stringify(noRing)} hidden=${JSON.stringify(hidden)} under24=${JSON.stringify(small)} round2Under44=${JSON.stringify(smallRound2)} sideways=${await page.evaluate('document.documentElement.scrollWidth > document.documentElement.clientWidth')}`;
+      console.log(line);
+      out.push(line);
+      const stopNames = forward.map((stop) => stop.name);
+      console.log(`ORDER ${where} ${JSON.stringify(stopNames.slice(0, 24))}`);
+    }
+    testInfo.annotations.push({ type: 'audit', description: out.join('\n') });
+  });
+}
+
+/**
+ * Observation for risk R-UX2A-3 (no assertion): in the away state with Current period (a window day), does the review link's text overflow
+ * its one-line button at any phone width from 320 to 767px, with the system font and with two wider fonts forced on the page?
+ */
+test('observation: the review link label against its button width, system font and wider fonts', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'phone widths only');
+  test.setTimeout(240_000);
+  const periods = await employeeSeed.periodsCurrent();
+  const window = periods.current.payroll_date !== periods.in_progress.payroll_date;
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.locator('.period-bar').getByRole('button', { name: 'Next period' }).click();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const font of ['system', 'Arial', 'Verdana']) {
+    if (font !== 'system') await page.addStyleTag({ content: `html, body, button, a { font-family: ${font}, sans-serif !important; }` });
+    const overflow: string[] = [];
+    for (let width = 320; width <= 767; width += 1) {
+      await page.setViewportSize({ width, height: 844 });
+      const state = await page.locator('.period-bar [data-review-link]').evaluate((link) => {
+        const full = link.querySelector('.review-full');
+        const shownFull = full !== null && getComputedStyle(full).display !== 'none';
+        const range = document.createRange();
+        range.selectNodeContents(link);
+        const text = range.getBoundingClientRect().width;
+        const after = shownFull ? 0 : parseFloat(getComputedStyle(link, '::after').width) || 0;
+        const style = getComputedStyle(link);
+        const inner = link.getBoundingClientRect().width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - parseFloat(style.borderLeftWidth) - parseFloat(style.borderRightWidth);
+        return { shownFull, scroll: link.scrollWidth, client: link.clientWidth, text, after, inner, height: link.getBoundingClientRect().height };
+      });
+      if (state.scroll > state.client + 0.5 || state.height > 45) overflow.push(`${width}:${state.shownFull ? 'full' : 'short'} scroll=${state.scroll} client=${state.client} h=${state.height}`);
+    }
+    console.log(`REVIEWFIT font=${font} window=${window} overflowing_widths=${overflow.length} ${overflow.slice(0, 12).join(' | ')}`);
+  }
+});
+
+/** The painted ring of the inactive Today (aria-disabled, opacity) against the card, light and dark, both projects. */
+for (const situation of SITUATIONS) {
+  test(`the focus ring of an inactive Today is painted at 3:1 (${situation.name})`, async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+    await applySituation(page, situation);
+    const periods = await employeeSeed.periodsCurrent();
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const today = page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true });
+    // Make Today inactive (open the period that contains today), keeping the keyboard focus on it.
+    if ((await today.getAttribute('aria-disabled')) !== 'true') {
+      await today.focus();
+      await page.keyboard.press('Enter');
+      await expect(today).toHaveAttribute('aria-disabled', 'true');
+    }
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    await expect(today).toBeFocused();
+    await page.waitForTimeout(500);
+    const box = await today.boundingBox();
+    expect(box).not.toBeNull();
+    const card: Rgba = await tokenColour(page, '--card');
+    const accent: Rgba = await tokenColour(page, '--accent');
+    // The shared ring: a 1px card gap, then 2px of accent, outside the border box. Sample the middle of the accent band.
+    const ringPixel = await paintedPixel(page, (box?.x ?? 0) - 2.5, (box?.y ?? 0) + (box?.height ?? 0) / 2);
+    const ratio = contrast(ringPixel, card);
+    const ratioFull = contrast(accent, card);
+    const opacity = await today.evaluate((element) => getComputedStyle(element).opacity);
+    console.log(
+      `INACTIVE-TODAY-RING ${testInfo.project.name} ${situation.name} window=${periods.current.payroll_date !== periods.in_progress.payroll_date} opacity=${opacity} ring_pixel=${ringPixel.slice(0, 3).join(',')} card=${card.slice(0, 3).join(',')} accent=${accent.slice(0, 3).join(',')} painted_ring_vs_card=${ratio.toFixed(2)} token_ring_vs_card=${ratioFull.toFixed(2)}`,
+    );
+    // The same control active (the Next period moves away): the full-strength ring, for comparison.
+    await page.locator('.period-bar').getByRole('button', { name: 'Next period' }).click();
+    await expect(today).not.toHaveAttribute('aria-disabled', /.*/);
+    await today.focus();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    await expect(today).toBeFocused();
+    await page.waitForTimeout(500);
+    const box2 = await today.boundingBox();
+    const activePixel = await paintedPixel(page, (box2?.x ?? 0) - 2.5, (box2?.y ?? 0) + (box2?.height ?? 0) / 2);
+    console.log(`ACTIVE-TODAY-RING ${testInfo.project.name} ${situation.name} ring_pixel=${activePixel.slice(0, 3).join(',')} painted_ring_vs_card=${contrast(activePixel, card).toFixed(2)}`);
+    expect(ratio, 'the painted focus ring of the inactive Today reaches 3:1 against the card (docs/04 Visual standard)').toBeGreaterThanOrEqual(3);
+    void parseColour;
+  });
+}

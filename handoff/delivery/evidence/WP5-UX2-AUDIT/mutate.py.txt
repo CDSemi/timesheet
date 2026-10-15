@@ -1,0 +1,107 @@
+"""Apply one named mutation to the scratch export <task>/mut (never the repository). Restore with restore.sh (git show)."""
+import sys
+
+ROOT = sys.argv[1]
+NAME = sys.argv[2]
+
+DEVICE_DATE = "new Intl.DateTimeFormat('en-CA').format(new Date())"
+
+MUTATIONS = {
+    # M1: Today reads the device date instead of the server's today_local (status, editor move, away state).
+    "M1-device-date": [
+        ("src/client/TimesheetScreen.tsx", "todayJump({ today: fresh.today_local,", f"todayJump({{ today: {DEVICE_DATE},", 1),
+        ("src/client/TimesheetScreen.tsx", "setJumpStatus(todayStatusText(fresh.today_local, fresh.in_progress));", f"setJumpStatus(todayStatusText({DEVICE_DATE}, fresh.in_progress));", 1),
+        ("src/client/TimesheetScreen.tsx", "todayAway: todayJump({ today: periods.today_local,", f"todayAway: todayJump({{ today: {DEVICE_DATE},", 1),
+    ],
+    # M2: Today targets the R-07 current period instead of the period in progress.
+    "M2-today-targets-current": [
+        ("src/client/components/periodJumpModel.ts", "targetPayrollDate: inProgress.payroll_date,", "targetPayrollDate: input.current.payroll_date,", 1),
+    ],
+    # M3: aria-current removed from the editing day's button (both layouts).
+    "M3-no-aria-current": [
+        ("src/client/components/TimesheetSheet.tsx", " aria-current={editing ? 'true' : undefined}", "", 1),
+        ("src/client/components/SheetWeekTable.tsx", "aria-current={editing ? 'true' : undefined}", "data-x-current={editing ? 'true' : undefined}", 1),
+    ],
+    # M4a: the desktop editing rails dropped (the ::after border-inline of the editing column).
+    "M4a-rails-dropped": [
+        ("src/client/styles.css", ".sheet-day.editing::after {\n  border-inline: var(--rule) solid var(--accent);", ".sheet-day.editing::after {\n  border-inline: 0 solid transparent;", 1),
+    ],
+    # M4b: the phone editing fill dropped (the gradient layer of the framed row).
+    "M4b-phone-fill-dropped": [
+        ("src/client/styles.css", "  background-image: linear-gradient(var(--day-editing), var(--day-editing));\n", "  background-image: none;\n", 1),
+    ],
+    # M5: hover contrast below 1.20 (light theme hover fill halved).
+    "M5-hover-weak": [
+        ("src/client/styles.css", "  --hover-fill: rgb(31 95 191 / 0.14);", "  --hover-fill: rgb(31 95 191 / 0.07);", 1),
+    ],
+    # M6: the Show details switch role reverted (a plain checkbox).
+    "M6-switch-role": [
+        ("src/client/components/ShowDetailsSwitch.tsx", ' role="switch"', "", 1),
+    ],
+    # M7: data-theme not applied before the first paint (the head script removed).
+    "M7-no-prepaint": [
+        ("src/client/index.html", '    <script src="/theme-init.js"></script>\n', "", 1),
+    ],
+    # M8: the clock rendered in a shared view (provider always enabled).
+    "M8-clock-in-shared": [
+        ("src/client/components/AppShell.tsx", "<ClockProvider enabled={route !== 'shared'}>", "<ClockProvider enabled={true}>", 1),
+    ],
+    # M9: the logo img removed from the shell bar.
+    "M9-no-logo": [
+        ("src/client/components/AppShell.tsx", '          <img src="/cd-logo.svg" alt="" width={36} height={36} />\n', "", 1),
+    ],
+    # M10a: the rename reverted on the check-in button.
+    "M10a-button-clock-in": [
+        ("src/client/components/ClockPanel.tsx", "      Check in\n", "      Clock in\n", 1),
+    ],
+    # M10b: the rename reverted on the History/OT operation label.
+    "M10b-ot-label": [
+        ("src/client/components/otModel.ts", "'work_session.clock_in': 'Checked in',", "'work_session.clock_in': 'Clocked in',", 1),
+    ],
+    # M10c: the rename reverted on the policy legend in Settings.
+    "M10c-policy-legend": [
+        ("src/client/components/PolicyFields.tsx", "first check-in", "first clock-in", 1),
+    ],
+    # M10d: the rename reverted on the stale check-out notice.
+    "M10d-stale-notice": [
+        ("src/client/components/ClockProvider.tsx", "Check out again to review it.", "Clock out again to review it.", 1),
+    ],
+    # M10e: the rename reverted on one server message literal.
+    "M10e-server-literal": [
+        ("src/server/services/timesheetCommands.ts", "'There is no running session to check out of'", "'There is no running session to clock out of'", 1),
+    ],
+    # M11: the one-line Review rule removed (the label may wrap again).
+    "M11-review-wraps": [
+        ("src/client/styles.css", ".period-cta > .review-link {\n  flex: 1 1 auto;\n  min-width: 0;\n  white-space: nowrap;", ".period-cta > .review-link {\n  flex: 1 1 auto;\n  min-width: 0;\n  white-space: normal;", 1),
+    ],
+    # M11b: the one-line rule's short form removed for the long labels beside Current period (the container query block).
+    "M11b-no-short-form": [
+        ("src/client/styles.css", "  @container period-cta (18.4rem <= width < 22.8rem) {\n    .period-cta[data-current] > .review-link[data-label-size='long'] > .review-full {\n      display: none;\n    }\n\n    .period-cta[data-current] > .review-link[data-label-size='long']::after {\n      content: attr(data-short);\n    }\n  }\n", "", 1),
+    ],
+    # M12: Current period shown outside the five window days.
+    "M12-current-always": [
+        ("src/client/components/periodJumpModel.ts", "visible: current.payroll_date !== inProgress.payroll_date && shown.payroll_date !== current.payroll_date,", "visible: shown.payroll_date !== current.payroll_date,", 1),
+    ],
+    # M13: the theme choice not mirrored to data-theme (the toggle only stores).
+    "M13-toggle-no-attribute": [
+        ("src/client/components/ThemeToggle.tsx", "  else document.documentElement.setAttribute('data-theme', choice);", "  else document.documentElement.removeAttribute('data-theme');", 1),
+    ],
+    # M14: the CSP loosened (unsafe-inline scripts allowed).
+    "M14-csp-loosened": [
+        ("src/server/app.ts", "scriptSrc: [\"'self'\"],", "scriptSrc: [\"'self'\", \"'unsafe-inline'\"],", 1),
+    ],
+}
+
+if NAME not in MUTATIONS:
+    raise SystemExit(f"unknown mutation {NAME}")
+for path, old, new, count in MUTATIONS[NAME]:
+    full = f"{ROOT}/{path}"
+    with open(full, encoding="utf-8", newline="") as f:
+        text = f.read()
+    found = text.count(old)
+    if found != count:
+        raise SystemExit(f"{NAME}: expected {count} match(es) of {old!r} in {path}, found {found}")
+    text = text.replace(old, new)
+    with open(full, "w", encoding="utf-8", newline="") as f:
+        f.write(text)
+    print(f"{NAME}: applied in {path}")

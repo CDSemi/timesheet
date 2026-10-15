@@ -1,0 +1,15 @@
+# Copy masked LF evidence (outputs and scripts) into handoff/delivery/evidence/WP5-UX2-AUDIT/.
+. <task>/env.sh
+mkdir -p $E
+cd $T/out
+OUTS=$(ls | grep -E '^(0[0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9]|6[0-9]|7[0-9]|8[0-9]|9[0-9])-' | grep -vE '^(60-mut-ci|63-mut2-ci|13-old-ci|02-ci)\.txt$')
+"$PY" -I $T/mask.py $T/out $E $OUTS > $T/collect-log.txt 2>&1
+cd $T
+SCRIPTS="env.sh digest.sh ci.sh mandatory.sh olddist.sh e2e-real.sh zone.mjs run-shift.sh probe-now.mjs shiftclock.mjs zz-audit-probe.spec.ts zz-audit-midnight.spec.ts zz-audit-control.spec.ts zz-audit-a11y.spec.ts zz-audit-axe-base.spec.ts zz-audit-axe-375.spec.ts mutate.py mutrun.sh mutunit.sh restore.sh mutdigest.sh mutsetup.sh mut2setup.sh probe-sweep.sh parity.py fidelity.mjs headers.mjs mask.py board_extract.py collect.sh mutations.sh ringcalc.py mutcheck.sh after-a11y.sh a11ysum.py assemble.sh chain.sh mutsum.py fill.py waitfor.mjs"
+for s in $SCRIPTS; do
+  if [ -f "$T/$s" ]; then cp "$T/$s" "$T/scripts-copy/$s"; fi
+done
+"$PY" -I $T/mask.py $T/scripts-copy $E $(ls $T/scripts-copy) >> $T/collect-log.txt 2>&1
+if [ -f $T/fid/audit-brand-fidelity-synthetic.png ]; then cp $T/fid/audit-brand-fidelity-synthetic.png $E/; fi
+for f in $T/shots-audit/*-synthetic.png; do if [ -f "$f" ]; then cp "$f" $E/; fi; done
+grep -c masked $T/collect-log.txt

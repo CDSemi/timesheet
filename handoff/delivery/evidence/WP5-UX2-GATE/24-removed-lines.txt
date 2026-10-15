@@ -1,0 +1,76 @@
+-import { clockedInText, dueInWords, dueInZoneText,runningSessionOf, viewingZoneText, weekdayName, zoneNoteVisible } from '../../src/client/components/periodBarModel.ts';
+-  it('builds Clock out per E-1: unknown omits the list, confirmed or none sends the complete list', () => {
+-  it('never offers Clock in/out, sign-off, sending or settings to a grantee, whatever the items', () => {
+- * choices and an explicit overnight end date; break suggestions; Clock in and Clock out with
+-  await page.getByRole('button', { name: 'Clock in' }).click();
+-test('Clock in then Clock out asks for break confirmation and sends the session version', async ({
+-  // One state-aware button: clocked in shows only Clock out, with the running state in words.
+-  await expect(page.getByRole('button', { name: 'Clock out' })).toBeVisible();
+-  await expect(page.getByRole('button', { name: 'Clock in' })).toHaveCount(0);
+-  await expect(page.getByRole('region', { name: 'Clock' })).toContainText('Clocked in since');
+-  await page.getByRole('button', { name: 'Clock out' }).click();
+-  const dialog = page.getByRole('dialog', { name: 'Clock out' });
+-  await expect(dialog.getByRole('button', { name: 'Clock out, breaks unconfirmed' })).toBeVisible();
+-  // Suggestions follow the arrival; confirming breaks that end after the Clock out is refused.
+-  await dialog.getByRole('button', { name: 'Clock out with these breaks' }).click();
+-  await dialog.getByRole('button', { name: 'Clock out, no breaks taken' }).click();
+-  await expect(page.getByText('Clocked out.')).toBeVisible();
+-  // After the clock out the panel offers Clock in again.
+-  await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+-  await expect(page.getByRole('button', { name: 'Clock out' })).toHaveCount(0);
+-test('a stale session version at Clock out says so, reloads and then clocks out', async ({ page, employeeSeed, signInThroughUi }) => {
+-  await page.getByRole('button', { name: 'Clock out' }).click();
+-  const dialog = page.getByRole('dialog', { name: 'Clock out' });
+-  await dialog.getByRole('button', { name: 'Clock out, no breaks taken' }).click();
+-  await page.getByRole('button', { name: 'Clock out' }).click();
+-  const again = page.getByRole('dialog', { name: 'Clock out' });
+-  await again.getByRole('button', { name: 'Clock out, no breaks taken' }).click();
+-    await page.getByRole('button', { name: 'Show details' }).focus();
+-  /** Clock in and straight out (breaks confirmed none): a clock-source session today. */
+-async function focusedProbe(locator: Locator): Promise<Probe> {
+-  const read = async () => locator.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).boxShadow ?? 'none');
+-  return locator.evaluate((element) => {
+-      ['button', page.getByRole('button', { name: 'Clock in' })],
+-    const optionRatio = expectInsetRing('active label option', await settledShadow(active), [await backdropsOf(active, true), await backdropsOf(active, false)]);
+-    console.log(`label picker ring ${colorScheme}: list ${listRatio.toFixed(2)} active option ${optionRatio.toFixed(2)}`);
+-    await page.getByRole('button', { name: 'Show details', exact: true }).focus();
+-   * WP5-UX-AX-04 (SC 2.4.7 and 1.4.11): a pressed toolbar toggle ("Show details", "Change several days")
+-   * keeps the focus ring when it takes keyboard focus; its pressed state alone is not a ring.
+-  test(`WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (${colorScheme})`, async ({ page, signInThroughUi }) => {
+-    for (const name of ['Show details', 'Change several days']) {
+-      const toggle = page.getByRole('button', { name, exact: true });
+-      await toggle.click();
+-      await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+-      await toggle.evaluate((element) => element.blur());
+-      const pressedOnly = await settledShadow(toggle);
+-      const probe = await focusedProbe(toggle);
+-      await toggle.click();
+-      await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+-    await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+-    for (const forbidden of ['Clock in', 'Daily evidence', 'Reserve OT leave']) {
+-    await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+-  await expect(page.getByRole('button', { name: /^Clock (in|out)$/ })).toBeVisible();
+-  await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+-  for (const name of ['Clock in', 'Clock out', 'Change several days', 'Open day', 'Preview changes', 'Select all', 'Clear']) {
+-test('the owner changes the share to edit; the grantee edits a day without Clock in/out and the owner History names the grantee', async ({
+-  // Edit rights show the edit controls (batch mode is opened first), but still no Clock in/out and no review.
+-  for (const name of ['Clock in', 'Clock out']) await expect(page.getByRole('button', { name, exact: true }), name).toHaveCount(0);
+-      test('the first day row is fully visible above the tab bar and the shell bar stays one row', async ({
+-        expect(shellBar?.height ?? 0, 'the compact shell bar is one row').toBeLessThanOrEqual(60);
+-import { expect, screenshotPath, test } from './fixtures.ts';
+-    await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+-    await page.getByRole('button', { name: 'Show details' }).click();
+-  await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+-import type { Page } from '@playwright/test';
+-import { namedDayButton } from './dayButton.ts';
+-import { expect, screenshotPath, test } from './fixtures.ts';
+- * bottom tab bar (the approved mockup A2: period card, clock card, then the sheet). Checked with
+-test('the period card keeps its tab order equal to its visual reading order: Previous, Next, then Review', async ({ page, signInThroughUi }) => {
+-  const boxes = [await previous.boundingBox(), await next.boundingBox(), await review.boundingBox()];
+-  const [a, b, c] = boxes;
+-  expect(before(b, c), 'Next comes before Review visually').toBe(true);
+-  // The Excel form: company header, two Monday to Sunday bands of seven days, Overtime Total, signature lines.
+-  await expect(form).toContainText('C&D Semiconductor Services, Inc.');
+-  const details = page.getByRole('button', { name: 'Show details' });
+-  await expect(details).toHaveAttribute('aria-pressed', 'false');
+-  await expect(details).toHaveAttribute('aria-pressed', 'true');

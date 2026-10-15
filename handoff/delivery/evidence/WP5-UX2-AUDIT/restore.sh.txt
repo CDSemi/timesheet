@@ -1,0 +1,10 @@
+# Restore every path a mutation may touch in <task>/mut from the reviewed commit, then print the scratch export's source digest.
+. <task>/env.sh
+for p in src/client/TimesheetScreen.tsx src/client/components/periodJumpModel.ts src/client/components/TimesheetSheet.tsx \
+  src/client/components/SheetWeekTable.tsx src/client/styles.css src/client/components/ShowDetailsSwitch.tsx src/client/index.html \
+  src/client/components/AppShell.tsx src/client/components/ClockPanel.tsx src/client/components/otModel.ts \
+  src/client/components/PolicyFields.tsx src/client/components/ClockProvider.tsx src/client/components/ThemeToggle.tsx \
+  src/server/services/timesheetCommands.ts src/server/app.ts; do
+  git -C $REPO show "$SHA:$p" > "$T/mut/$p"
+done
+bash $T/mutdigest.sh

@@ -1,0 +1,23 @@
+# Own simulated-clock probes (task-local specs in the scratch export, unmutated, digest-checked), one Playwright run at a time.
+. <task>/env.sh
+cd $T
+run() {
+  label=$1; instant=$2; shift 2
+  bash run-shift.sh mut "$label" "$instant" "$@" > "out/62-probe-$label.txt" 2>&1
+  echo "$label $(grep -E '^exit=' out/62-probe-$label.txt) $(grep -E '[0-9]+ (passed|failed|skipped)' out/62-probe-$label.txt | tr -s ' ' | tr '\n' ' ')" >> out/62-probe-progress.txt
+}
+: > out/62-probe-progress.txt
+P=tests/e2e/zz-audit-probe.spec.ts
+run p-1025-2330 2026-10-26T06:30:00Z $P
+run p-1026-0030 2026-10-26T07:30:00Z $P
+run p-1028-1200 2026-10-28T19:00:00Z $P
+run p-1030-2350 2026-10-31T06:50:00Z $P
+run p-1031-0030 2026-10-31T07:30:00Z $P
+run p-1101-0130-pdt 2026-11-01T08:30:00Z $P
+run p-1101-0130-pst 2026-11-01T09:30:00Z $P
+run p-0314-0330 2027-03-14T10:30:00Z $P
+run p-1231-2350 2027-01-01T07:50:00Z $P
+run p-0101-0030 2027-01-01T08:30:00Z $P
+run p-real real $P
+run midnight-1025 2026-10-26T06:59:20Z tests/e2e/zz-audit-midnight.spec.ts
+cat out/62-probe-progress.txt

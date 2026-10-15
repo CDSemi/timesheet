@@ -1,0 +1,41 @@
+"""Copy raw outputs into the evidence folder with masking (LF, no ANSI, <user>/<task>/<repo>, emails)."""
+import os
+import re
+import sys
+
+src_dir = sys.argv[1]
+dst_dir = sys.argv[2]
+names = sys.argv[3:]
+
+ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+REPLACEMENTS = [
+    (re.compile(r"[A-Za-z]:[\\/]+\.claude-tmp[\\/]+timesheet[\\/]+WP5-UX2-AUDIT", re.I), "<task>"),
+    (re.compile(r"/[a-z]/\.claude-tmp/timesheet/WP5-UX2-AUDIT", re.I), "<task>"),
+    (re.compile(r"[A-Za-z]:[\\/]+Dropbox[\\/]+Work\.CDSemi[\\/]+timesheet", re.I), "<repo>"),
+    (re.compile(r"/[a-z]/Dropbox/Work\.CDSemi/timesheet", re.I), "<repo>"),
+    (re.compile(r"([\\/])Users([\\/]+)[^\\/\s\"']+", re.I), r"\1Users\2<user>"),
+    (re.compile(r"[A-Za-z]:[\\/]+\.claude-tmp[\\/]+claude[\\/]+[^\s\"']*", re.I), "<claude-tmp>"),
+]
+
+
+def mask_email(match):
+    text = match.group(0)
+    if text.lower().endswith("@example.invalid"):
+        return text
+    return "<email>"
+
+
+for name in names:
+    with open(os.path.join(src_dir, name), "rb") as f:
+        data = f.read().decode("utf-8", errors="replace")
+    data = ANSI.sub("", data)
+    data = data.replace("\r\n", "\n").replace("\r", "\n")
+    for pattern, repl in REPLACEMENTS:
+        data = pattern.sub(repl, data)
+    data = data.replace("<user>", "<user>")
+    data = EMAIL.sub(mask_email, data)
+    out_name = name if name.endswith(".txt") else name + ".txt"
+    with open(os.path.join(dst_dir, out_name), "w", encoding="utf-8", newline="\n") as f:
+        f.write(data)
+    print("masked", name, "->", out_name, len(data))

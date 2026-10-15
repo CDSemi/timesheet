@@ -1,0 +1,24 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+cd $T/export-old
+npm ci > $T/out/50-old-ci.txt 2>&1; echo "old ci exit $?"
+npm run build > $T/out/50-old-build.txt 2>&1; echo "old build exit $?"
+cd $T/export
+npm run build > $T/out/50-new-build.txt 2>&1; echo "new build exit $?"
+for d in export-old export; do
+  cd $T/$d
+  find dist -type f | LC_ALL=C sort > $T/out/51-$d-files.txt
+  rm -f $T/out/51-$d-hashes.txt
+  while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)" >> $T/out/51-$d-hashes.txt; done < $T/out/51-$d-files.txt
+  echo "$d: $(wc -l < $T/out/51-$d-files.txt) files (server $(grep -c 'dist/server' $T/out/51-$d-hashes.txt), domain-dir files $(grep -c 'dist/domain' $T/out/51-$d-hashes.txt), client $(grep -c 'dist/client' $T/out/51-$d-hashes.txt))"
+done
+cd $T
+diff out/51-export-old-hashes.txt out/51-export-hashes.txt > out/51-hash-diff.txt
+echo "hash diff lines: $(wc -l < out/51-hash-diff.txt)"
+grep -E '^[<>] dist/(server|domain)' out/51-hash-diff.txt
+echo "server+domain files differing:"
+diff <(grep -E 'dist/(server|domain)' out/51-export-old-hashes.txt) <(grep -E 'dist/(server|domain)' out/51-export-hashes.txt) | grep -E '^[<>]' | cut -d' ' -f2 | sort -u
+echo "client-only difference lines: $(grep -cE '^[<>] dist/client' out/51-hash-diff.txt)"
+echo "files only in one side:"
+diff out/51-export-old-files.txt out/51-export-files.txt
+echo cmp-done > out/cmp.done

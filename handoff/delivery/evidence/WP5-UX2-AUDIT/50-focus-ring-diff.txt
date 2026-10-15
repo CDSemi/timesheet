@@ -1,0 +1,183 @@
+diff --git a/tests/e2e/focus-ring.spec.ts b/tests/e2e/focus-ring.spec.ts
+index e94cd71..4986f45 100644
+--- a/tests/e2e/focus-ring.spec.ts
++++ b/tests/e2e/focus-ring.spec.ts
+@@ -1,4 +1,5 @@
+ import type { Locator, Page } from '@playwright/test';
++import * as shared from './contrast.ts';
+ import { ANY_DAY_BUTTON_NAME } from './dayButton.ts';
+ import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+ 
+@@ -73,13 +74,14 @@ interface Probe {
+   backdrops: string[];
+ }
+ 
+-async function focusedProbe(locator: Locator): Promise<Probe> {
++/** Focuses `locator` from the keyboard and reads the ring from `painted` (another element, such as the label of an invisible radio). */
++async function focusedProbe(locator: Locator, painted: Locator = locator): Promise<Probe> {
+   await locator.scrollIntoViewIfNeeded();
+   await locator.page().keyboard.press('Shift');
+   await locator.focus();
+   await expect(locator).toBeFocused();
+   // Wait until the shared transition has finished: the ring is painted and unchanged over two reads.
+-  const read = async () => locator.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).boxShadow ?? 'none');
++  const read = async () => painted.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).boxShadow ?? 'none');
+   await expect
+     .poll(
+       async () => {
+@@ -91,7 +93,7 @@ async function focusedProbe(locator: Locator): Promise<Probe> {
+       { message: 'the focus ring is painted and settled' },
+     )
+     .toBe(true);
+-  return locator.evaluate((element) => {
++  return painted.evaluate((element) => {
+     const style = (node: typeof element) => element.ownerDocument.defaultView?.getComputedStyle(node);
+     const backdrops: string[] = [];
+     for (let node = element.parentElement; node; node = node.parentElement) backdrops.push(style(node)?.backgroundColor ?? '');
+@@ -160,6 +162,31 @@ function expectInsetRing(name: string, boxShadow: string, surfaces: string[][]):
+   return lowest;
+ }
+ 
++/**
++ * The active label option (WP5-UX2-T02) is a tint plus a leading accent rail, not a frame: a one-sided inset layer at
++ * least 2px wide that reaches 3:1 against the option's own fill and against the card behind the list (SC 1.4.11).
++ */
++async function expectRail(option: Locator): Promise<{ width: number; againstFill: number; againstCard: number }> {
++  const boxShadow = await settledShadow(option);
++  const card = backdropOf(await backdropsOf(option, false));
++  const fill = shared.over(shared.parseColour(await shared.settledStyle(option, 'backgroundColor')), card);
++  const layers = shared.parseLayers(boxShadow);
++  expect(
++    layers.filter((layer) => layer.inset && layer.spread > 0),
++    `the active option is not framed (${boxShadow})`,
++  ).toHaveLength(0);
++  const rail = layers.find((layer) => layer.inset && layer.offsetX > 0);
++  expect(rail, `the active option paints a leading rail (${boxShadow})`).toBeDefined();
++  if (rail === undefined) return { width: 0, againstFill: 0, againstCard: 0 };
++  expect(rail.offsetX, `the rail is at least 2px wide (${boxShadow})`).toBeGreaterThanOrEqual(2);
++  const colour = shared.over(rail.colour, fill);
++  const againstFill = shared.contrast(colour, fill);
++  const againstCard = shared.contrast(colour, card);
++  expect(againstFill, `the rail against the option fill (${boxShadow})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
++  expect(againstCard, `the rail against the card (${boxShadow})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
++  return { width: rail.offsetX, againstFill, againstCard };
++}
++
+ /** Every surface token the shared ring can sit on, and the token ring painted on each. */
+ async function surfaceRatios(page: Page): Promise<Record<string, number>> {
+   const raw = await page.locator('body').evaluate((body) => {
+@@ -201,7 +228,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
+     const sheetDate = page.locator('[data-day] [data-day-button]').first();
+     await expect(sheetDate).toHaveAccessibleName(ANY_DAY_BUTTON_NAME);
+     const controls: Array<[string, Locator]> = [
+-      ['button', page.getByRole('button', { name: 'Clock in' })],
++      ['button', page.getByRole('button', { name: 'Check in' })],
+       ['link', nav.getByRole('link', { name: 'Overtime' })],
+       ['sheet date', sheetDate],
+     ];
+@@ -237,8 +264,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
+     const listRatio = expectRing('label list', { boxShadow: await settledShadow(list), backdrops: await backdropsOf(list, false) });
+     const active = list.locator('.label-option.active');
+     await expect(active).toHaveCount(1);
+-    const optionRatio = expectInsetRing('active label option', await settledShadow(active), [await backdropsOf(active, true), await backdropsOf(active, false)]);
+-    console.log(`label picker ring ${colorScheme}: list ${listRatio.toFixed(2)} active option ${optionRatio.toFixed(2)}`);
++    const rail = await expectRail(active);
++    console.log(`label picker ring ${colorScheme}: list ${listRatio.toFixed(2)} active option rail ${rail.width}px, against fill ${rail.againstFill.toFixed(2)} against card ${rail.againstCard.toFixed(2)}`);
+     await page.keyboard.press('Escape');
+     await expect(trigger).toBeFocused();
+   });
+@@ -284,7 +311,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
+     const field = page.getByLabel('Open a day');
+     await expect(page.getByRole('button', { name: 'Open day', exact: true })).toBeDisabled();
+     await page.keyboard.press('Shift');
+-    await page.getByRole('button', { name: 'Show details', exact: true }).focus();
++    await page.getByRole('switch', { name: 'Show details', exact: true }).focus();
+     await page.keyboard.press('Shift+Tab');
+     await expect(field).toBeFocused();
+     const ratio = expectRing('date field', { boxShadow: await settledShadow(field), backdrops: await backdropsOf(field, false) });
+@@ -292,27 +319,73 @@ for (const colorScheme of ['light', 'dark'] as const) {
+   });
+ 
+   /*
+-   * WP5-UX-AX-04 (SC 2.4.7 and 1.4.11): a pressed toolbar toggle ("Show details", "Change several days")
+-   * keeps the focus ring when it takes keyboard focus; its pressed state alone is not a ring.
++   * WP5-UX-AX-04 (SC 2.4.7 and 1.4.11): a pressed toggle ("Change several days") and, since WP5-UX2-T07, the
++   * checked segment of the Light/Dark theme control (which replaced the pressed "Dark mode" button) keep the focus
++   * ring when they take keyboard focus; the pressed or checked state alone is not a ring. WP5-UX2-T02: the pressed
++   * look is a solid accent fill and the old pressed-ring special case is gone, so the shared ring itself must stay
++   * visible on that fill (its card-coloured gap against the fill and the ring against the gap, 3:1 each).
++   * A theme segment is painted by the label of its invisible radio: the radio takes the focus, the label shows the ring.
++   * "Show details" is a switch now and has its own test below.
+    */
+-  test(`WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (${colorScheme})`, async ({ page, signInThroughUi }) => {
++  test(`WP5-UX-AX-04: a pressed toggle and a checked theme segment still show the focus ring (${colorScheme})`, async ({ page, signInThroughUi, isMobile }) => {
+     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+     await signInThroughUi();
+     await expect(page.locator('[data-day]')).toHaveCount(14);
+-    for (const name of ['Show details', 'Change several days']) {
+-      const toggle = page.getByRole('button', { name, exact: true });
+-      await toggle.click();
+-      await expect(toggle).toHaveAttribute('aria-pressed', 'true');
++    /** The assertions of one pressed or checked control; `focusTarget` takes the focus and `painted` shows the ring. */
++    const expectPressedRing = async (name: string, focusTarget: Locator, painted: Locator): Promise<void> => {
+       await page.mouse.move(0, 0);
+-      await toggle.evaluate((element) => element.blur());
+-      const pressedOnly = await settledShadow(toggle);
+-      const probe = await focusedProbe(toggle);
++      await focusTarget.evaluate((element) => element.blur());
++      const pressedOnly = await settledShadow(painted);
++      const probe = await focusedProbe(focusTarget, painted);
+       expect(probe.boxShadow, `${name}: focused and pressed differs from pressed only`).not.toBe(pressedOnly);
+       const outset = parseLayers(probe.boxShadow).filter((layer) => !layer.inset && layer.spread > 0);
+       expect(outset.length, `${name} paints an outer focus ring (${probe.boxShadow})`).toBeGreaterThan(0);
+       expectRing(`pressed ${name}`, probe);
+-      await toggle.click();
+-      await expect(toggle).toHaveAttribute('aria-pressed', 'false');
++      const ring = await shared.measureFocusRing(painted);
++      expect(ring.ringAgainstGap, `pressed ${name}: ring against its gap (${ring.layers})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
++      expect(ring.gapAgainstFill ?? 0, `pressed ${name}: gap against the accent fill (${ring.layers})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
++      console.log(`pressed ${name} ring ${colorScheme}: ring/backdrop ${ring.ringAgainstBackdrop.toFixed(2)} ring/gap ${ring.ringAgainstGap.toFixed(2)} gap/fill ${(ring.gapAgainstFill ?? 0).toFixed(2)}`);
++    };
++
++    const several = page.getByRole('button', { name: 'Change several days', exact: true });
++    await several.click();
++    await expect(several).toHaveAttribute('aria-pressed', 'true');
++    await expectPressedRing('Change several days', several, several);
++    await several.click();
++    await expect(several).toHaveAttribute('aria-pressed', 'false');
++
++    // The theme control of a phone lives in the More panel, which is opened if closed.
++    if (isMobile) {
++      const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++      if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
++    }
++    const group = page.getByRole('radiogroup', { name: 'Theme', exact: true });
++    for (const option of ['Light', 'Dark']) {
++      const radio = group.getByRole('radio', { name: option, exact: true });
++      await radio.check();
++      await expect(radio).toBeChecked();
++      await expectPressedRing(`${option} theme segment`, radio, radio.locator('xpath=..'));
++    }
++  });
++
++  /* The "Show details" slide switch (WP5-UX2-T02) shows the shared ring in both states, also on its accent track. */
++  test(`the Show details switch shows the focus ring unchecked and checked (${colorScheme})`, async ({ page, signInThroughUi }) => {
++    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    const details = page.getByRole('switch', { name: 'Show details', exact: true });
++    for (const checked of [false, true]) {
++      if (checked) await details.check();
++      await expect(details).toBeChecked({ checked });
++      await page.mouse.move(0, 0);
++      await details.evaluate((element) => element.blur());
++      const probe = await focusedProbe(details);
++      const label = checked ? 'checked' : 'unchecked';
++      expectRing(`${label} switch`, probe);
++      const ring = await shared.measureFocusRing(details);
++      expect(ring.ringAgainstGap, `${label} switch: ring against its gap (${ring.layers})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
++      if (checked) expect(ring.gapAgainstFill ?? 0, `checked switch: gap against the accent track (${ring.layers})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
++      console.log(`switch ring ${colorScheme} ${label}: ring/backdrop ${ring.ringAgainstBackdrop.toFixed(2)} ring/gap ${ring.ringAgainstGap.toFixed(2)}`);
+     }
+   });
+ }

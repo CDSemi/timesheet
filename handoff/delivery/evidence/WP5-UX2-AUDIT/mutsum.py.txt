@@ -1,0 +1,30 @@
+"""Summarise each e2e mutation log: passed / failed / skipped per project and the first failing test titles."""
+import glob
+import os
+import re
+import sys
+
+out_dir = sys.argv[1]
+target = sys.argv[2]
+lines = []
+for log in sorted(glob.glob(os.path.join(out_dir, "70-mut-*-e2e.txt"))):
+    name = os.path.basename(log)[len("70-mut-"):-len("-e2e.txt")]
+    text = open(log, encoding="utf-8", errors="replace").read()
+    results = re.findall(r"^\s+(ok|x|-)\s+\d+ \[(desktop|mobile)\] \S+ (\S+?):(\d+):\d+ \S+ (.*)$", text, re.M)
+    counts = {}
+    failed_titles = []
+    for status, project, spec, line, title in results:
+        key = (project, status)
+        counts[key] = counts.get(key, 0) + 1
+        if status == "x":
+            failed_titles.append(f"[{project}] {spec.split(chr(92))[-1]}:{line} {title[:90]}")
+    exit_line = re.findall(r"^exit=(\d+)", text, re.M)
+    summary = ", ".join(f"{p} {s}={n}" for (p, s), n in sorted(counts.items()))
+    lines.append(f"{name}: exit={exit_line[-1] if exit_line else '?'}; {summary}")
+    for t in failed_titles[:6]:
+        lines.append(f"    FAILED {t}")
+    if len(failed_titles) > 6:
+        lines.append(f"    ... {len(failed_titles) - 6} more failed")
+text = "\n".join(lines) + "\n"
+open(target, "w", encoding="utf-8", newline="\n").write(text)
+print(text.encode("ascii", "replace").decode())

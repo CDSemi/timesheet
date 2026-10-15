@@ -1,0 +1,14 @@
+# Dry-run every mutation pattern on <task>/mut2 (apply, then restore all touched files from the reviewed commit).
+. <task>/env.sh
+for M in M1-device-date M2-today-targets-current M3-no-aria-current M4a-rails-dropped M4b-phone-fill-dropped M5-hover-weak M6-switch-role \
+  M7-no-prepaint M8-clock-in-shared M9-no-logo M10a-button-clock-in M10b-ot-label M10c-policy-legend M10d-stale-notice M10e-server-literal \
+  M11-review-wraps M11b-no-short-form M12-current-always M13-toggle-no-attribute M14-csp-loosened; do
+  "$PY" -I $T/mutate.py $T/mut2 $M
+  for p in src/client/TimesheetScreen.tsx src/client/components/periodJumpModel.ts src/client/components/TimesheetSheet.tsx \
+    src/client/components/SheetWeekTable.tsx src/client/styles.css src/client/components/ShowDetailsSwitch.tsx src/client/index.html \
+    src/client/components/AppShell.tsx src/client/components/ClockPanel.tsx src/client/components/otModel.ts \
+    src/client/components/PolicyFields.tsx src/client/components/ClockProvider.tsx src/client/components/ThemeToggle.tsx \
+    src/server/services/timesheetCommands.ts src/server/app.ts; do
+    git -C $REPO show "$SHA:$p" > "$T/mut2/$p"
+  done
+done

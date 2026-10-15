@@ -1,0 +1,23 @@
+# Usage: bash mutrun.sh <mutation> <build: client|server|none> <unit test path or -> <instant|real|-> [specs...]
+# Applies one mutation to the scratch export, rebuilds what it touches, runs the unit file and/or the specs, restores, rebuilds.
+. <task>/env.sh
+M=$1; B=$2; U=$3; I=$4; shift 4
+LOG=$T/out/70-mut-$M.txt
+echo "== mutation $M start $(date -u +%Y-%m-%dT%H:%M:%SZ)" > $LOG
+"$PY" -I $T/mutate.py $T/mut $M >> $LOG 2>&1 || { echo "APPLY FAILED" >> $LOG; exit 3; }
+cd $T/mut
+if [ "$B" = "client" ]; then npx vite build > $T/out/70-mut-$M-build.txt 2>&1; echo "client build exit $?" >> $LOG; fi
+if [ "$B" = "server" ]; then npx tsc -p tsconfig.server.json > $T/out/70-mut-$M-build.txt 2>&1; echo "server build exit $?" >> $LOG; fi
+if [ "$U" != "-" ]; then
+  npx vitest run $U > $T/out/70-mut-$M-unit.txt 2>&1
+  echo "unit $U exit $? :: $(grep -E 'Tests +[0-9]' $T/out/70-mut-$M-unit.txt | tr -s ' ')" >> $LOG
+fi
+if [ "$I" != "-" ]; then
+  bash $T/run-shift.sh mut mut-$M "$I" "$@" > $T/out/70-mut-$M-e2e.txt 2>&1
+  echo "e2e ($I) $* :: $(grep -E '^exit=' $T/out/70-mut-$M-e2e.txt) :: $(grep -E '^ +[0-9]+ (passed|failed|skipped|flaky)' $T/out/70-mut-$M-e2e.txt | tr -s ' ' | tr '\n' ' ')" >> $LOG
+fi
+bash $T/restore.sh >> $LOG 2>&1
+if [ "$B" = "client" ]; then npx vite build > $T/out/70-mut-$M-rebuild.txt 2>&1; echo "client rebuild exit $?" >> $LOG; fi
+if [ "$B" = "server" ]; then npx tsc -p tsconfig.server.json > $T/out/70-mut-$M-rebuild.txt 2>&1; echo "server rebuild exit $?" >> $LOG; fi
+echo "== mutation $M end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $LOG
+cat $LOG

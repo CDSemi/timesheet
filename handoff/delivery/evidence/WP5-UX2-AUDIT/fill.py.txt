@@ -1,0 +1,20 @@
+"""Replace one placeholder token in a file with the text of another file (trailing newline stripped). Exactly one match is required."""
+import sys
+
+target, token, source = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(target, encoding="utf-8", newline="") as f:
+    text = f.read()
+with open(source, encoding="utf-8", newline="") as f:
+    replacement = f.read().rstrip("\n")
+count = text.count(token)
+# The token must match as a whole word (PENDING_F3 must not hit PENDING_F3_ID).
+import re
+
+pattern = re.compile(re.escape(token) + r"(?![A-Z0-9_])")
+matches = pattern.findall(text)
+if len(matches) != 1:
+    raise SystemExit(f"{token}: expected 1 whole-token match in {target}, found {len(matches)} (substring count {count})")
+text = pattern.sub(lambda m: replacement, text)
+with open(target, "w", encoding="utf-8", newline="") as f:
+    f.write(text)
+print(f"filled {token} in {target}")

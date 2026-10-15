@@ -1,0 +1,171 @@
+// WP5-UX2-AUDIT task-local fidelity check (never part of the repository). Renders the shipped logo SVG next to the owner's
+// source PNG at 512, 64 and 32 px over white and compares pixels; renders the shipped wordmark paths (light colours) next to
+// the owner's wordmark image, registers both by their ink boxes and compares luminance. Writes a side-by-side image.
+// Usage: node fidelity.mjs <export dir> <logo png> <wordmark png> <out dir>
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [exportDir, logoPng, wordmarkPng, outDir] = process.argv.slice(2);
+const pw = await import(pathToFileURL(join(exportDir, 'node_modules', 'playwright-core', 'index.js')).href);
+const chromium = pw.chromium ?? pw.default.chromium;
+
+const svg = readFileSync(join(exportDir, 'src', 'client', 'public', 'cd-logo.svg'), 'utf8');
+const tsx = readFileSync(join(exportDir, 'src', 'client', 'components', 'BrandWordmark.tsx'), 'utf8');
+const css = readFileSync(join(exportDir, 'src', 'client', 'styles.css'), 'utf8');
+const paths = [...tsx.matchAll(/\bd=\{?["'`]([^"'`]+)["'`]\}?/g)].map((m) => m[1]);
+const pathConsts = [...tsx.matchAll(/const\s+(\w+)\s*=\s*\n?\s*['"`]([MLQZmlqz0-9.,\s-]+)['"`]/g)].map((m) => m[2]);
+const allPaths = paths.length >= 2 ? paths : pathConsts;
+const viewBox = (tsx.match(/viewBox="([^"]+)"/) ?? [])[1] ?? '';
+const mainColour = (css.match(/--wordmark-main:\s*(#[0-9a-fA-F]{6})/) ?? [])[1];
+const subColour = (css.match(/--wordmark-sub:\s*(#[0-9a-fA-F]{6})/) ?? [])[1];
+const logoB64 = readFileSync(logoPng).toString('base64');
+const wordB64 = readFileSync(wordmarkPng).toString('base64');
+
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const page = await browser.newPage({ viewport: { width: 1400, height: 900 }, deviceScaleFactor: 1 });
+await page.setContent('<!doctype html><html><body style="margin:0;background:#fff"></body></html>');
+
+const result = await page.evaluate(
+  async ({ svg, logoB64, wordB64, allPaths, viewBox, mainColour, subColour }) => {
+    const load = (src) =>
+      new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error('image load failed'));
+        image.src = src;
+      });
+    const svgImage = await load(`data:image/svg+xml;base64,${btoa(svg)}`);
+    const pngImage = await load(`data:image/png;base64,${logoB64}`);
+    // Both images are drawn at 512 over white, then reduced to the size with the same box filter (area average),
+    // so the comparison measures the artwork, not two different browser resampling paths.
+    const draw512 = (image) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, 512, 512);
+      ctx.drawImage(image, 0, 0, 512, 512);
+      return ctx.getImageData(0, 0, 512, 512).data;
+    };
+    const draw = (image, size) => {
+      const full = draw512(image);
+      const k = 512 / size;
+      const outData = new Float64Array(size * size * 4);
+      for (let y = 0; y < size; y += 1)
+        for (let x = 0; x < size; x += 1)
+          for (let c = 0; c < 4; c += 1) {
+            let sum = 0;
+            for (let yy = 0; yy < k; yy += 1) for (let xx = 0; xx < k; xx += 1) sum += full[((y * k + yy) * 512 + (x * k + xx)) * 4 + c];
+            outData[(y * size + x) * 4 + c] = sum / (k * k);
+          }
+      return outData;
+    };
+    const logo = {};
+    for (const size of [512, 64, 32]) {
+      const a = draw(svgImage, size);
+      const b = draw(pngImage, size);
+      let sum = 0;
+      let over = 0;
+      for (let i = 0; i < a.length; i += 4) {
+        let pixelMax = 0;
+        for (let c = 0; c < 3; c += 1) {
+          const d = Math.abs(a[i + c] - b[i + c]);
+          sum += d;
+          pixelMax = Math.max(pixelMax, d);
+        }
+        if (pixelMax > 48) over += 1;
+      }
+      logo[size] = { meanAbs: +(sum / ((a.length / 4) * 3)).toFixed(3), sharePixelsOver48: +((100 * over) / (a.length / 4)).toFixed(3) };
+    }
+    // Wordmark: the owner's image and the shipped paths, both reduced to an ink mask and registered by the ink box.
+    const wordImage = await load(`data:image/png;base64,${wordB64}`);
+    const W = wordImage.naturalWidth;
+    const H = wordImage.naturalHeight;
+    const src = document.createElement('canvas');
+    src.width = W;
+    src.height = H;
+    const sctx = src.getContext('2d');
+    sctx.fillStyle = '#fff';
+    sctx.fillRect(0, 0, W, H);
+    sctx.drawImage(wordImage, 0, 0);
+    const sdata = sctx.getImageData(0, 0, W, H).data;
+    // The owner's image holds the logo above the two text lines; the text rows are the lower part with blue or grey ink.
+    const lum = (d, i) => 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+    const isInk = (d, i) => lum(d, i) < 170;
+    // The text block lies below the logo (PLAN4: the S spans rows 62-76 of the 131x90 image); its ink box from row 60 down.
+    let x0 = W;
+    let x1 = 0;
+    let y0 = H;
+    let y1 = 0;
+    for (let y = 60; y < H; y += 1)
+      for (let x = 0; x < W; x += 1)
+        if (isInk(sdata, (y * W + x) * 4)) {
+          x0 = Math.min(x0, x);
+          x1 = Math.max(x1, x);
+          y0 = Math.min(y0, y);
+          y1 = Math.max(y1, y);
+        }
+    const boxW = x1 - x0 + 1;
+    const boxH = y1 - y0 + 1;
+    // The shipped wordmark rendered into exactly that box (the ink box of the paths fills its viewBox).
+    const [vx, vy, vw, vh] = viewBox.split(/\s+/).map(Number);
+    const markup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vx} ${vy} ${vw} ${vh}" width="${boxW}" height="${boxH}" preserveAspectRatio="none"><path fill="${mainColour}" d="${allPaths[0]}"/><path fill="${subColour}" d="${allPaths[1]}"/></svg>`;
+    const markImage = await load(`data:image/svg+xml;base64,${btoa(markup)}`);
+    const out = document.createElement('canvas');
+    out.width = boxW;
+    out.height = boxH;
+    const octx = out.getContext('2d');
+    octx.fillStyle = '#fff';
+    octx.fillRect(0, 0, boxW, boxH);
+    octx.drawImage(markImage, 0, 0, boxW, boxH);
+    const odata = octx.getImageData(0, 0, boxW, boxH).data;
+    const crop = sctx.getImageData(x0, y0, boxW, boxH).data;
+    let lsum = 0;
+    let inkA = 0;
+    let inkB = 0;
+    let both = 0;
+    for (let i = 0; i < odata.length; i += 4) {
+      lsum += Math.abs(lum(odata, i) - lum(crop, i));
+      const a = lum(odata, i) < 170;
+      const b = lum(crop, i) < 170;
+      if (a) inkA += 1;
+      if (b) inkB += 1;
+      if (a && b) both += 1;
+    }
+    const n = odata.length / 4;
+    // Side-by-side image: source text crop (6x) above the shipped paths (6x), then the logo pair at 256.
+    const scale = 6;
+    const side = document.createElement('canvas');
+    side.width = Math.max(boxW * scale, 512) + 20;
+    side.height = boxH * scale * 2 + 30 + 256 + 20;
+    const c = side.getContext('2d');
+    c.fillStyle = '#fff';
+    c.fillRect(0, 0, side.width, side.height);
+    c.imageSmoothingEnabled = false;
+    c.drawImage(src, x0, y0, boxW, boxH, 10, 10, boxW * scale, boxH * scale);
+    c.drawImage(out, 0, 0, boxW, boxH, 10, 20 + boxH * scale, boxW * scale, boxH * scale);
+    c.imageSmoothingEnabled = true;
+    c.drawImage(pngImage, 10, 30 + boxH * scale * 2, 256, 256);
+    c.drawImage(svgImage, 276, 30 + boxH * scale * 2, 256, 256);
+    return {
+      logo,
+      wordmark: {
+        imageSize: `${W}x${H}`,
+        textInkBox: { x0, y0, x1, y1, width: boxW, height: boxH },
+        pathsFound: allPaths.length,
+        viewBox,
+        colours: { main: mainColour, sub: subColour },
+        meanAbsLuminance: +(lsum / n).toFixed(2),
+        inkPixels: { shipped: inkA, source: inkB, overlap: both, iou: +(both / (inkA + inkB - both)).toFixed(3) },
+      },
+      sideBySide: side.toDataURL('image/png'),
+    };
+  },
+  { svg, logoB64, wordB64, allPaths, viewBox, mainColour, subColour },
+);
+await browser.close();
+writeFileSync(join(outDir, 'audit-brand-fidelity-synthetic.png'), Buffer.from(result.sideBySide.split(',')[1], 'base64'));
+delete result.sideBySide;
+console.log(JSON.stringify(result, null, 1));

@@ -154,6 +154,32 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
 
   useEffect(load, [load]);
 
+  // The server's date moves on while the page stays open (midnight in the reporting zone). The periods are read again when the window
+  // regains focus or the tab becomes visible, so "Today" and the Today tag do not go stale; the person's own view and a shared view
+  // both read through `request` (the share's requester in a shared view). One read at a time: the browser fires both events together.
+  const refreshing = useRef(false);
+  useEffect(() => {
+    const refresh = () => {
+      if (refreshing.current) return;
+      refreshing.current = true;
+      request<CurrentPeriods>('GET', '/periods/current')
+        .then(setPeriods)
+        .catch(() => undefined)
+        .finally(() => {
+          refreshing.current = false;
+        });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [request]);
+
   // The clock state looks the running session up again with every load: this page reports the period it loaded.
   const reportView = clock?.reportView;
   useEffect(() => {
@@ -198,14 +224,25 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
    * "Today": re-reads the server's periods, opens the period that contains its `today_local` (the
    * accounting date in the saved reporting zone, never the device clock), moves an open Day editor to
    * that date and scrolls today's day into view. Everything comes from the model and the server.
+   * A press on the inactive button (`wasAway` false) re-reads the same way: the page may have stayed open past the reporting
+   * zone's midnight, so only the fresh answer says whether the sheet still shows today.
    */
-  async function jumpToToday() {
+  async function jumpToToday(wasAway: boolean) {
     if (view === null) return;
-    setJumpStatus(null);
+    // An active press clears the old announcement first, so the same text is read again; an inactive press must leave it alone.
+    const announced = jumpStatus;
+    if (wasAway) setJumpStatus(null);
     try {
       const fresh = await request<CurrentPeriods>('GET', '/periods/current');
       const jump = todayJump({ today: fresh.today_local, current: fresh.current, inProgress: fresh.in_progress, shown: view.period, editDate });
       setPeriods(fresh);
+      if (!jump.away) {
+        // The fresh answer decides, not the button's look: the sheet already shows today (and the open editor is on it), so nothing
+        // moves. Only the periods are renewed, so the Today tag and the buttons follow the server's date.
+        if (wasAway) setJumpStatus(announced);
+        return;
+      }
+      setJumpStatus(null);
       setPayrollDate(jump.targetPayrollDate);
       setSelected(new Set());
       setStaleNotice(null);
@@ -396,13 +433,14 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const todayLocal = periods?.today_local ?? null;
   // The two jump buttons come from the server's periods and today's accounting date, compared with the shown period. A saved notice
   // (the other status line of this screen) replaces the jump status, so two status lines never stand side by side.
+  const todayAway = periods === null || view === null ? false : todayJump({ today: periods.today_local, current: periods.current, inProgress: periods.in_progress, shown: view.period, editDate }).away;
   const jumps: PeriodJumps | undefined =
     periods === null || view === null
       ? undefined
       : {
-          todayAway: todayJump({ today: periods.today_local, current: periods.current, inProgress: periods.in_progress, shown: view.period, editDate }).away,
+          todayAway,
           currentVisible: currentPeriodJump({ current: periods.current, inProgress: periods.in_progress, shown: view.period }).visible,
-          onToday: () => void jumpToToday(),
+          onToday: () => void jumpToToday(todayAway),
           onCurrent: () => void jumpToCurrent(),
           status: notice === null ? jumpStatus : null,
         };

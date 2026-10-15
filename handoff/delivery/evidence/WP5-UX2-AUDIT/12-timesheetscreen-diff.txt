@@ -1,0 +1,319 @@
+diff --git a/src/client/TimesheetScreen.tsx b/src/client/TimesheetScreen.tsx
+index a0f0118..fe02786 100644
+--- a/src/client/TimesheetScreen.tsx
++++ b/src/client/TimesheetScreen.tsx
+@@ -1,7 +1,6 @@
+-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
++import { useCallback, useEffect, useRef, useState } from 'react';
+ import { addDays } from '../domain/dates.ts';
+ import {
+-  api,
+   ApiRequestError,
+   type CurrentPeriods,
+   type DayBatchEntry,
+@@ -11,27 +10,29 @@ import {
+   ownRequest,
+   type Period,
+   type Requester,
+-  type Session,
+   type TimesheetView,
+   type User,
+ } from './api.ts';
+ import { BatchBar } from './components/BatchBar.tsx';
+ import { BatchDialog } from './components/BatchDialog.tsx';
+-import { ClockOutDialog } from './components/ClockOutDialog.tsx';
+ import { ClockPanel } from './components/ClockPanel.tsx';
++import { DESKTOP_QUERY, useClock, useMedia } from './components/ClockProvider.tsx';
+ import { batchEntries, staleDates, staleReloadMessage } from './components/dayModel.ts';
+ import { describeError } from './components/errors.ts';
+ import { displayZone } from './components/format.ts';
+ import { currentLabelChoice, type LabelChoice, labelEntry, labelPreviewOutcome } from './components/labelPickerModel.ts';
+ import { OpenDay } from './components/OpenDay.tsx';
+-import { PeriodBar } from './components/PeriodBar.tsx';
+-import { runningSessionOf } from './components/periodBarModel.ts';
++import { PeriodBar, type PeriodJumps } from './components/PeriodBar.tsx';
++import { currentPeriodJump, currentStatusText, todayJump, todayStatusText } from './components/periodJumpModel.ts';
+ import { usePeriodState } from './components/ReviewStatus.tsx';
++import { ShowDetailsSwitch } from './components/ShowDetailsSwitch.tsx';
+ import { TimesheetSheet } from './components/TimesheetSheet.tsx';
+ import { DayEditor } from './DayEditor.tsx';
+ 
+-/** The documented layout breakpoint: the 7-column sheet from 768px up, one table per week below it. */
+-const DESKTOP_QUERY = '(min-width: 768px)';
++/*
++ * The documented layout breakpoint (DESKTOP_QUERY, shared with the check in/out control): the 7-column sheet from
++ * 768px up, one table per week below it.
++ */
+ 
+ /**
+  * From this width the day editor is a non-modal panel in its own column beside the sheet. Below it
+@@ -40,18 +41,6 @@ const DESKTOP_QUERY = '(min-width: 768px)';
+  */
+ const WIDE_QUERY = '(min-width: 1200px)';
+ 
+-/** True while a media query matches; the layouts below are chosen with it, never both at once. */
+-function useMedia(query: string): boolean {
+-  return useSyncExternalStore(
+-    (notify) => {
+-      const list = window.matchMedia(query);
+-      list.addEventListener('change', notify);
+-      return () => list.removeEventListener('change', notify);
+-    },
+-    () => window.matchMedia(query).matches,
+-  );
+-}
+-
+ /**
+  * Moves focus back to a day's own button (found by the day's `data-day`, never by its accessible
+  * name) after the day editor closed; when that day is not on the sheet (opened through "Open a day"),
+@@ -76,23 +65,9 @@ function focusLabelPicker(workDate: string) {
+ /** What the open batch review dialog commits: the batch selection, or the one entry of an in-cell label pick. */
+ type PreviewSource = { kind: 'batch' } | { kind: 'label'; entry: DayBatchEntry };
+ 
+-/** Finds the running session in the shown period, else in the current and in-progress periods. */
+-async function findRunningSession(shown: TimesheetView | null): Promise<Session | undefined> {
+-  const inShown = shown === null ? undefined : runningSessionOf(shown);
+-  if (inShown !== undefined) return inShown;
+-  const known = await api<CurrentPeriods>('GET', '/api/periods/current');
+-  const payrollDates = [...new Set([known.current.payroll_date, known.in_progress.payroll_date])];
+-  for (const date of payrollDates) {
+-    if (date === shown?.period.payroll_date) continue;
+-    const found = runningSessionOf(await api<TimesheetView>('GET', `/api/timesheets/${date}`));
+-    if (found !== undefined) return found;
+-  }
+-  return undefined;
+-}
+-
+ /**
+  * Another person's timesheets, opened through a share (FR-17). Every read and write goes through
+- * `request` (below `/api/shared/:ownerId`). Clock in/out, the review and the submission status are
++ * `request` (below `/api/shared/:ownerId`). Check in/out, the review and the submission status are
+  * the owner's own: they are absent here, and the batch and day edit controls are absent without an
+  * edit share (never merely disabled).
+  */
+@@ -121,7 +96,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+   const [dialogError, setDialogError] = useState<string | null>(null);
+   const [busy, setBusy] = useState(false);
+   const [editDate, setEditDate] = useState<string | null>(null);
+-  const [clockOutSession, setClockOutSession] = useState<Session | null>(null);
++  // The one check in/out state (null in a shared view, which has none). The desktop card shows here; below 768px the top bar does.
++  const clock = useClock();
+   // Review and delivery status of the shown period, from the server's fields; re-read with every edit.
+   // A shared view has no status line: the finalization and delivery routes are the owner's own.
+   // F-2: an imported period is read-only history with no review or delivery state, so it has no status line.
+@@ -134,8 +110,6 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+   const [batchMode, setBatchMode] = useState(false);
+   // An imported period keeps its locked batch controls and the reason visible (F-2).
+   const batchOn = canEdit && (batchMode || imported);
+-  /** The running session found in the loaded periods: undefined until the first check, null when clocked out. */
+-  const [running, setRunning] = useState<Session | null | undefined>(undefined);
+   /** What the open review dialog commits (the batch selection, or one in-cell label pick). */
+   const [previewSource, setPreviewSource] = useState<PreviewSource>({ kind: 'batch' });
+   /** The date whose in-cell label pick is being previewed or committed. */
+@@ -150,6 +124,11 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+   /** What opened the batch review ("Preview changes"); it gets focus back when the review is cancelled. */
+   const batchOpener = useRef<HTMLElement | null>(null);
+   const returnToBatchOpener = useRef(false);
++  /** The visually hidden status line after "Today" or "Current period"; cleared by anything else that changes the sheet. */
++  const [jumpStatus, setJumpStatus] = useState<string | null>(null);
++  /** Raised by "Today" so the effect below scrolls today's day into view once; an ordinary reload never scrolls. */
++  const [jumpCount, setJumpCount] = useState(0);
++  const scrollToToday = useRef<string | null>(null);
+ 
+   const report = (caught: unknown) => setMessage(describeError(caught));
+ 
+@@ -175,21 +154,29 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+ 
+   useEffect(load, [load]);
+ 
+-  // The clock shows one button, chosen from the running session; it is looked up again with every load.
++  // The clock state looks the running session up again with every load: this page reports the period it loaded.
++  const reportView = clock?.reportView;
+   useEffect(() => {
+-    if (!own || view === null) return;
+-    let current = true;
+-    findRunningSession(view)
+-      .then((found) => {
+-        if (current) setRunning(found ?? null);
+-      })
+-      .catch(() => {
+-        if (current) setRunning(null);
+-      });
+-    return () => {
+-      current = false;
+-    };
+-  }, [own, view]);
++    if (!own || view === null || reportView === undefined) return;
++    reportView(view);
++    return () => reportView(null);
++  }, [own, view, reportView]);
++
++  // An action of the clock (check in, check out) reloads the period; the check-out confirmation shows as this page's saved notice.
++  const seenVersion = useRef(clock?.version ?? 0);
++  const clockVersion = clock?.version;
++  useEffect(() => {
++    if (clockVersion === undefined || clockVersion === seenVersion.current) return;
++    seenVersion.current = clockVersion;
++    load();
++  }, [clockVersion, load]);
++  const clockNotice = clock?.notice ?? null;
++  const seenNotice = useRef(clockNotice?.id ?? 0);
++  useEffect(() => {
++    if (clockNotice === null || clockNotice.id === seenNotice.current) return;
++    seenNotice.current = clockNotice.id;
++    setNotice(clockNotice.text);
++  }, [clockNotice]);
+ 
+   async function move(direction: -1 | 1) {
+     if (view === null) return;
+@@ -200,32 +187,67 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+       setSelected(new Set());
+       setStaleNotice(null);
+       setNotice(null);
++      setJumpStatus(null);
++      scrollToToday.current = null;
+     } catch (caught) {
+       report(caught);
+     }
+   }
+ 
+-  async function clockIn() {
+-    setMessage(null);
++  /**
++   * "Today": re-reads the server's periods, opens the period that contains its `today_local` (the
++   * accounting date in the saved reporting zone, never the device clock), moves an open Day editor to
++   * that date and scrolls today's day into view. Everything comes from the model and the server.
++   */
++  async function jumpToToday() {
++    if (view === null) return;
++    setJumpStatus(null);
+     try {
+-      await api('POST', '/api/clock/in', { input_zone: displayZone });
+-      load();
++      const fresh = await request<CurrentPeriods>('GET', '/periods/current');
++      const jump = todayJump({ today: fresh.today_local, current: fresh.current, inProgress: fresh.in_progress, shown: view.period, editDate });
++      setPeriods(fresh);
++      setPayrollDate(jump.targetPayrollDate);
++      setSelected(new Set());
++      setStaleNotice(null);
++      setNotice(null);
++      if (jump.moveEditorTo !== null) setEditDate(jump.moveEditorTo);
++      scrollToToday.current = fresh.today_local;
++      setJumpCount((count) => count + 1);
++      setJumpStatus(todayStatusText(fresh.today_local, fresh.in_progress));
+     } catch (caught) {
+       report(caught);
+     }
+   }
+ 
+-  async function openClockOut() {
+-    setMessage(null);
++  /** "Current period": returns to the R-07 current period the page opens on. It only navigates; an open editor stays as it is. */
++  async function jumpToCurrent() {
++    if (view === null) return;
++    setJumpStatus(null);
+     try {
+-      const found = await findRunningSession(view);
+-      if (found === undefined) setMessage('No running session found; reload the page.');
+-      else setClockOutSession(found);
++      const fresh = await request<CurrentPeriods>('GET', '/periods/current');
++      const jump = currentPeriodJump({ current: fresh.current, inProgress: fresh.in_progress, shown: view.period });
++      setPeriods(fresh);
++      setPayrollDate(jump.targetPayrollDate);
++      setSelected(new Set());
++      setStaleNotice(null);
++      setNotice(null);
++      scrollToToday.current = null;
++      setJumpStatus(currentStatusText(fresh.current));
+     } catch (caught) {
+       report(caught);
+     }
+   }
+ 
++  // After "Today", today's day (a desktop column or a phone row) is scrolled into view once its period is on the sheet.
++  useEffect(() => {
++    const date = scrollToToday.current;
++    if (date === null || view === null) return;
++    const element = document.querySelector<HTMLElement>(`[data-day="${date}"]`);
++    if (element === null) return;
++    scrollToToday.current = null;
++    element.scrollIntoView({ block: 'nearest' });
++  }, [jumpCount, view]);
++
+   function toggle(workDate: string) {
+     setSelected((current) => {
+       const next = new Set(current);
+@@ -372,6 +394,18 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+   }
+ 
+   const todayLocal = periods?.today_local ?? null;
++  // The two jump buttons come from the server's periods and today's accounting date, compared with the shown period. A saved notice
++  // (the other status line of this screen) replaces the jump status, so two status lines never stand side by side.
++  const jumps: PeriodJumps | undefined =
++    periods === null || view === null
++      ? undefined
++      : {
++          todayAway: todayJump({ today: periods.today_local, current: periods.current, inProgress: periods.in_progress, shown: view.period, editDate }).away,
++          currentVisible: currentPeriodJump({ current: periods.current, inProgress: periods.in_progress, shown: view.period }).visible,
++          onToday: () => void jumpToToday(),
++          onCurrent: () => void jumpToCurrent(),
++          status: notice === null ? jumpStatus : null,
++        };
+ 
+   return (
+     <div>
+@@ -384,8 +418,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+ 
+       {view !== null && (
+         <div className="workbar">
+-          <PeriodBar view={view} zone={displayZone} onMove={move} own={own} state={periodState} />
+-          {own && <ClockPanel running={running} zone={displayZone} onClockIn={() => void clockIn()} onClockOut={() => void openClockOut()} />}
++          <PeriodBar view={view} zone={displayZone} onMove={move} own={own} state={periodState} jumps={jumps} />
++          {own && desktop && <ClockPanel />}
+         </div>
+       )}
+ 
+@@ -395,9 +429,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+             <div className="tools">
+               <div className="tools-left">{canEdit && <OpenDay onOpen={openEditor} />}</div>
+               <div className="tools-right">
+-                <button type="button" className="quiet" aria-pressed={details} onClick={() => setDetails((on) => !on)}>
+-                  Show details
+-                </button>
++                <ShowDetailsSwitch checked={details} onChange={setDetails} />
+                 {canEdit && (
+                   <button
+                     type="button"
+@@ -459,6 +491,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+               desktop={desktop}
+               actions={{
+                 selected,
++                editing: editDate,
+                 onToggle: toggle,
+                 onEdit: openEditor,
+                 editable: canEdit,
+@@ -510,24 +543,6 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+           onClose={closePreview}
+         />
+       )}
+-
+-      {own && clockOutSession !== null && (
+-        <ClockOutDialog
+-          session={clockOutSession}
+-          displayZone={displayZone}
+-          onDone={() => {
+-            setClockOutSession(null);
+-            setNotice('Clocked out.');
+-            load();
+-          }}
+-          onStale={() => {
+-            setClockOutSession(null);
+-            setNotice('The running session changed elsewhere; it was reloaded. Clock out again to review it.');
+-            load();
+-          }}
+-          onClose={() => setClockOutSession(null)}
+-        />
+-      )}
+     </div>
+   );
+ }

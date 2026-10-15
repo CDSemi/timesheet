@@ -1,0 +1,8 @@
+# Waits for the first a11y run to end, then runs the corrected a11y probe, the axe baselines and sweeps, then every mutation (one at a time).
+T=<task>
+until grep -q '^exit=' $T/out/71-a11y-real.txt; do sleep 5; done
+echo "a11y-real ended $(date -u +%Y-%m-%dT%H:%M:%SZ)" > $T/out/76-chain.txt
+bash $T/after-a11y.sh >> $T/out/76-chain.txt 2>&1
+echo "after-a11y ended $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $T/out/76-chain.txt
+bash $T/mutations.sh >> $T/out/76-chain.txt 2>&1
+echo "mutations ended $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $T/out/76-chain.txt

@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { dayButton } from './dayButton.ts';
-import { expect, type PeriodFacts, type PeriodsCurrent, screenshotPath, test } from './fixtures.ts';
+import { expect, newPerson, type PeriodFacts, type PeriodsCurrent, screenshotPath, test } from './fixtures.ts';
 
 /*
  * WP5-UX2-T04: the "Today" and "Current period" buttons of the period bar, on both projects.
@@ -502,6 +502,180 @@ test('the period bar: "Due" is a label like "Payroll date", and the range arrow 
   });
   expect(spoken, 'accessible text of the range').toBe(plainRange(periods.current));
   expect(spoken).toContain(' to ');
+});
+
+/* ---- WP5-UX2-AUDIT-01: the server date moves on while the page stays open ------------------------------------- */
+
+/**
+ * Seconds from this process's clock until midnight in `zone`. The test runner shares the clock the server under test uses (the
+ * simulated-clock preload shifts every process by the same constant), so under the preload this is the server's own distance to
+ * the reporting-zone midnight. The browser's clock is never read.
+ */
+function secondsToMidnight(zone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date());
+  const part = (type: string) => Number(parts.find((entry) => entry.type === type)?.value ?? Number.NaN);
+  return 86_400 - (part('hour') * 3600 + part('minute') * 60 + part('second'));
+}
+
+/** Counts the GET reads of one periods route the page makes from now on. */
+function periodReads(page: Page, path: string): { count: () => number; reset: () => void } {
+  let reads = 0;
+  page.on('request', (request) => {
+    if (request.method() === 'GET' && new URL(request.url()).pathname === path) reads += 1;
+  });
+  return { count: () => reads, reset: () => void (reads = 0) };
+}
+
+/** The date of the Today tag on the sheet, or null when the sheet shows another period. */
+async function tagDate(page: Page): Promise<string | null> {
+  const tagged = page.locator('[data-sheet] [data-day].today');
+  return (await tagged.count()) === 0 ? null : tagged.getAttribute('data-day');
+}
+
+/** The next response of the server's periods route (set up before the action that causes it). */
+const periodsResponse = (page: Page, path: string) => page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === path);
+
+test('a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself', async ({
+  page,
+  context,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  test.setTimeout(240_000);
+  const before = await employeeSeed.periodsCurrent();
+  // Only a run that starts within 90 s of the reporting-zone midnight (the gate runs it under the simulated-clock preload at
+  // 23:59:20) can cross it; every other run asserts the inactive press re-read below. No run is skipped.
+  const crossing = secondsToMidnight(before.reporting_zone) <= 90;
+  await landOn(page, signInThroughUi);
+  const shown = before.current;
+  // A second tab on the same session is the person who comes back to the page by focus alone, without pressing anything.
+  const other = crossing ? await context.newPage() : undefined;
+  if (other !== undefined) {
+    await other.goto('/');
+    await expect(other.locator('[data-day]')).toHaveCount(14);
+  }
+  const landed = await employeeSeed.periodsCurrent();
+
+  if (other !== undefined && landed.today_local === before.today_local) {
+    // The page was signed in before the server date moved on, so both tabs hold the old date. Wait for the new one.
+    let after = landed;
+    await expect
+      .poll(
+        async () => {
+          after = await employeeSeed.periodsCurrent();
+          return after.today_local;
+        },
+        { message: 'the server date passes the reporting-zone midnight', timeout: 150_000, intervals: [1000] },
+      )
+      .not.toBe(before.today_local);
+    const stillShowsToday = contains(shown, after.today_local);
+    // The tab nobody refreshed: no event reached it, so it still holds the old answer and its Today is as it was before midnight.
+    if (contains(shown, before.today_local)) await expectTodayActive(page, false);
+    await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(contains(shown, before.today_local) ? 1 : 0);
+    // A press on the inactive Today re-reads /periods/current and acts on the fresh answer.
+    await todayButton(page).click({ force: true });
+    if (stillShowsToday) {
+      // Fresh state: the shown period still holds today. The sheet and the live region stay, the Today tag follows the server date.
+      await expect(periodName(page)).toHaveText(rangeText(shown));
+      await expect.poll(() => tagDate(page), { message: 'the pressed tab tags the new date' }).toBe(after.today_local);
+      await expect(jumpStatus(page)).toHaveText('');
+      await expectTodayActive(page, false);
+    } else {
+      // Fresh state: today is in another period. The sheet jumps to it, the tag sits on the new date and the jump is announced.
+      await expectShown(page, after.in_progress, after.today_local);
+      await expect(jumpStatus(page)).toHaveText(`Showing today, ${weekday(after.today_local)} ${us(after.today_local)}, in the period ${plainRange(after.in_progress)}`);
+      await expectTodayActive(page, false);
+      await expect(page.locator(`[data-day="${after.today_local}"]`)).toBeInViewport();
+    }
+    // The other tab, which nobody pressed: a focus refresh alone moves the Today tag and the inactive state to the new date, with no reload.
+    await other.evaluate("window.dispatchEvent(new Event('focus'))");
+    await expect.poll(() => tagDate(other), { message: 'the refreshed tab tags the new date' }).toBe(stillShowsToday ? after.today_local : null);
+    await expectTodayActive(other, !stillShowsToday);
+    return;
+  }
+
+  // The real-clock part (no midnight in reach): a press on the inactive Today still re-reads /periods/current and, because the
+  // fresh answer is not away, leaves the sheet and the live region exactly as they are.
+  if (isWindow(landed)) {
+    await todayButton(page).click();
+    await expectShown(page, landed.in_progress, landed.today_local);
+  }
+  await expectTodayActive(page, false);
+  // The jump's own follow-up read of the periods has to be over before reads are counted.
+  await page.waitForTimeout(600);
+  const name = await periodName(page).textContent();
+  const status = await jumpStatus(page).textContent();
+  const reads = periodReads(page, '/api/periods/current');
+  const read = periodsResponse(page, '/api/periods/current');
+  await todayButton(page).click({ force: true });
+  await read;
+  await page.waitForTimeout(400);
+  expect(reads.count(), 'one /periods/current read for one press on the inactive Today').toBe(1);
+  expect(await periodName(page).textContent(), 'the period is unchanged').toBe(name);
+  expect(await jumpStatus(page).textContent(), 'the live region is untouched').toBe(status);
+  await expectTodayActive(page, false);
+  expect(await tagDate(page), 'the Today tag stays on the server date').toBe(landed.today_local);
+});
+
+/** The refresh triggers shared by the person's own view and a shared view: the window regaining focus, the tab becoming visible. */
+async function expectRefreshTriggers(page: Page, path: string, otherPath: string, ownView: boolean) {
+  await page.waitForTimeout(600);
+  const reads = periodReads(page, path);
+  const otherReads = periodReads(page, otherPath);
+  // Window focus: exactly one read.
+  let read = periodsResponse(page, path);
+  await page.evaluate("window.dispatchEvent(new Event('focus'))");
+  await read;
+  await page.waitForTimeout(300);
+  expect(reads.count(), 'window focus reads the periods once').toBe(1);
+  // Two focus events in one tick (a browser can fire more than one): one read at a time, not two.
+  reads.reset();
+  read = periodsResponse(page, path);
+  await page.evaluate("(() => { window.dispatchEvent(new Event('focus')); window.dispatchEvent(new Event('focus')); })()");
+  await read;
+  await page.waitForTimeout(400);
+  expect(reads.count(), 'two focus events together read the periods once').toBe(1);
+  // The tab becoming visible reads the periods. In the person's own view the check in/out state (WP5-UX2-T09) also reacts to that event:
+  // its own lookup reads the periods and the sheet's reload reads them again, so the screen's read is the third. A shared view has no
+  // check in/out, so there it is exactly one read.
+  reads.reset();
+  read = periodsResponse(page, path);
+  await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+  await read;
+  await page.waitForTimeout(500);
+  if (ownView) expect(reads.count(), 'a visible tab reads the periods (check in/out lookup, sheet reload, and the screen)').toBeGreaterThanOrEqual(3);
+  else expect(reads.count(), 'a visible tab reads the periods once').toBe(1);
+  // A hidden tab reads nothing.
+  reads.reset();
+  await page.evaluate(
+    "(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); })()",
+  );
+  await page.waitForTimeout(600);
+  expect(reads.count(), 'a hidden tab reads nothing').toBe(0);
+  await page.evaluate("(() => { delete document.visibilityState; })()");
+  // Whatever the view, the reads go to its own route only.
+  expect(otherReads.count(), `no read of ${otherPath}`).toBe(0);
+}
+
+test('the periods are re-read when the window regains focus or the tab becomes visible (the person\'s own view)', async ({ page, signInThroughUi }) => {
+  await landOn(page, signInThroughUi);
+  await expectRefreshTriggers(page, '/api/periods/current', '/api/shared/none/periods/current', true);
+});
+
+test('the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view)', async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+}) => {
+  test.setTimeout(90_000);
+  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner', signature: 'none' });
+  const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee', signature: 'none' });
+  await owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  await signInPageAs(grantee.account, `#/shared/${owner.account.id}/timesheet`);
+  await expect(page.locator('[data-share-bar-title]')).toBeVisible();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await expectRefreshTriggers(page, `/api/shared/${owner.account.id}/periods/current`, '/api/periods/current', false);
 });
 
 /* ---- Desktop widths --------------------------------------------------------------------------------------- */

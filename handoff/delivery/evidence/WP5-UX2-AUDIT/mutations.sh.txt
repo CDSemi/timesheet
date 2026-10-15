@@ -1,0 +1,36 @@
+# All e2e-level mutations, one at a time, in the scratch export <task>/mut (each restored and rebuilt afterwards).
+. <task>/env.sh
+cd $T
+WIN=2026-10-27T20:00:00Z   # Tue 2026-10-27 13:00 PDT, a window day (P-3)
+OUT=2026-10-21T19:00:00Z   # Wed 2026-10-21 12:00 PDT, outside the window
+: > out/73-mutation-summary.txt
+# Follow-up of the axe target-size result at 375px (overlay open), on 90b98ef and on d1a20a7, before any mutation.
+export AXE_PATH="$(cygpath -w $T/axe/node_modules/axe-core/axe.min.js)"
+cp $T/zz-audit-axe-375.spec.ts $T/old/tests/e2e/
+cp $T/zz-audit-axe-375.spec.ts $T/mut/tests/e2e/
+bash run-shift.sh old axe375-old real tests/e2e/zz-audit-axe-375.spec.ts > out/77-axe375-old.txt 2>&1
+bash run-shift.sh mut axe375-new real tests/e2e/zz-audit-axe-375.spec.ts > out/77-axe375-new.txt 2>&1
+rm -f $T/old/tests/e2e/zz-audit-axe-375.spec.ts
+echo "axe375 old $(grep -E '^exit=' out/77-axe375-old.txt) new $(grep -E '^exit=' out/77-axe375-new.txt)" >> out/73-mutation-summary.txt
+m() { bash mutrun.sh "$@" > <task>/tmp/last-mut.txt 2>&1; grep -E "^(== mutation|unit|e2e|APPLY|client|server|mut export)" <task>/tmp/last-mut.txt >> out/73-mutation-summary.txt; }
+m M1-device-date client - $WIN tests/e2e/today.spec.ts
+m M2-today-targets-current client - $WIN tests/e2e/today.spec.ts
+m M3-no-aria-current client - $OUT tests/e2e/timesheet.spec.ts
+m M4a-rails-dropped client - $OUT tests/e2e/timesheet.spec.ts --project=desktop
+m M4b-phone-fill-dropped client - $OUT tests/e2e/timesheet.spec.ts --project=mobile
+m M5-hover-weak client - $OUT tests/e2e/hover.spec.ts
+m M6-switch-role client - $OUT tests/e2e/timesheet.spec.ts
+m M7-no-prepaint client - $OUT tests/e2e/theme.spec.ts
+m M8-clock-in-shared client - $OUT tests/e2e/sharing.spec.ts tests/e2e/shell.spec.ts
+m M9-no-logo client - $OUT tests/e2e/logo.spec.ts
+m M10a-button-clock-in client - $OUT tests/e2e/shell.spec.ts
+m M10b-ot-label client - $OUT tests/e2e/history-settings.spec.ts tests/e2e/ot-leave.spec.ts
+m M10c-policy-legend client - $OUT tests/e2e/history-settings.spec.ts
+m M10d-stale-notice client - $OUT tests/e2e/day-editor.spec.ts
+m M11-review-wraps client - $WIN tests/e2e/today.spec.ts --project=mobile
+m M11b-no-short-form client - $WIN tests/e2e/today.spec.ts --project=mobile
+m M12-current-always client - $OUT tests/e2e/today.spec.ts
+m M13-toggle-no-attribute client - $OUT tests/e2e/theme.spec.ts
+m M14-csp-loosened server - $OUT tests/e2e/theme.spec.ts
+bash mutdigest.sh >> out/73-mutation-summary.txt
+echo done >> out/73-mutation-summary.txt

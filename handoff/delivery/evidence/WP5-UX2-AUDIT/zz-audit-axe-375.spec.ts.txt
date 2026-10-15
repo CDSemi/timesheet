@@ -1,0 +1,47 @@
+import { readFileSync } from 'node:fs';
+import { expect, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX2-AUDIT task-local follow-up (never part of the repository): axe-core's target-size result on the review link at 375px with the
+ * label picker or the More panel open, with the full failure text and the geometry, on whichever build is under test (90b98ef or d1a20a7).
+ */
+const AXE = readFileSync(process.env.AXE_PATH ?? '', 'utf8');
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles', bypassCSP: true, actionTimeout: 10_000 });
+
+test('axe target-size at phone widths with an overlay open', async ({ page, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'phone widths only');
+  test.setTimeout(240_000);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const width of [390, 380, 375, 370, 360]) {
+    for (const overlay of ['none', 'picker', 'more'] as const) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto('/#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      if (overlay === 'picker') {
+        await page.locator('.label-trigger').first().click();
+        await expect(page.getByRole('listbox')).toBeVisible();
+      }
+      if (overlay === 'more') {
+        await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' }).click();
+      }
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+      if ((await page.evaluate('typeof window.axe')) !== 'object') await page.addScriptTag({ content: AXE });
+      const result = await page.evaluate<Array<{ target: string; summary: string }>>(
+        "window.axe.run(document, { runOnly: { type: 'rule', values: ['target-size'] }, resultTypes: ['violations'] }).then((r) => r.violations.flatMap((v) => v.nodes.map((n) => ({ target: n.target.join(' '), summary: (n.failureSummary || '').replace(/\\s+/g, ' ') }))))",
+      );
+      const geometry = await page.evaluate(() => {
+        const box = (selector: string) => {
+          const element = document.querySelector(selector);
+          if (element === null) return null;
+          const r = element.getBoundingClientRect();
+          return `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}`;
+        };
+        return { review: box('.period-bar [data-review-link]'), today: box('.period-bar [data-period-today]'), list: box('[role="listbox"]'), more: box('#more-panel'), scrollY: window.scrollY };
+      });
+      console.log(`AXE375 width=${width} overlay=${overlay} violations=${result.length} ${JSON.stringify(geometry)} ${result.map((r) => `${r.target}: ${r.summary}`).join(' || ')}`);
+      if (result.length > 0) await page.screenshot({ path: screenshotPath(`audit-axe-target-size-w${width}-${overlay}-synthetic.png`) });
+    }
+  }
+});

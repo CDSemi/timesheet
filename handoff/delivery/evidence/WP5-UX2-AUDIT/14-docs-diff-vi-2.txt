@@ -1,0 +1,81 @@
+diff --git a/DEVELOPMENT.vi.md b/DEVELOPMENT.vi.md
+index 9d2f3a2..2741383 100644
+--- a/DEVELOPMENT.vi.md
++++ b/DEVELOPMENT.vi.md
+@@ -65,7 +65,7 @@ Seed (`npm run seed`) tạo ba tài khoản: `admin@example.invalid`, `employee@
+ 
+ ## Chia sẻ
+ 
+-Một cá nhân có thể chia sẻ timesheet của mình với tài khoản khác từ màn Cài đặt, theo từng mục: timesheet không/xem/sửa, tổng hợp và sổ cái OT chỉ đọc, và tải PDF cuối (PDF chứa ảnh chữ ký). Quyền cấp gọi tài khoản bằng đúng email. Sửa gồm sửa ngày, phiên, giờ nghỉ và hàng loạt thủ công; không bao giờ gồm Clock in/out, sign-off, sửa sau chốt hay gửi. Chia sẻ thu hồi được bởi chủ sở hữu hoặc người được chia sẻ, có hiệu lực từ yêu cầu kế tiếp, không bắc cầu và có audit; admin liệt kê và thu hồi được nhưng không tạo hay dùng. API: `GET|POST /api/shares`, `PUT /api/shares/{id}`, `POST /api/shares/{id}/revoke`; đọc và ghi qua chia sẻ đi theo danh sách cho phép tường minh dưới `/api/shared/{ownerId}`.
++Một cá nhân có thể chia sẻ timesheet của mình với tài khoản khác từ màn Cài đặt, theo từng mục: timesheet không/xem/sửa, tổng hợp và sổ cái OT chỉ đọc, và tải PDF cuối (PDF chứa ảnh chữ ký). Quyền cấp gọi tài khoản bằng đúng email. Sửa gồm sửa ngày, phiên, giờ nghỉ và hàng loạt thủ công; không bao giờ gồm Check in/out, sign-off, sửa sau chốt hay gửi. Chia sẻ thu hồi được bởi chủ sở hữu hoặc người được chia sẻ, có hiệu lực từ yêu cầu kế tiếp, không bắc cầu và có audit; admin liệt kê và thu hồi được nhưng không tạo hay dùng. API: `GET|POST /api/shares`, `PUT /api/shares/{id}`, `POST /api/shares/{id}/revoke`; đọc và ghi qua chia sẻ đi theo danh sách cho phép tường minh dưới `/api/shared/{ownerId}`.
+ 
+ ## Vận hành, drill và dữ liệu nhập mẫu (WP4)
+ 
+@@ -115,7 +115,7 @@ Mọi route nằm dưới `/api`, trả JSON và chỉ lấy chủ sở hữu t
+ | `GET /days/{date}`, `PUT /days/{date}` | Xem ngày; nhãn, số phút nghỉ một phần, WFH và ghi chú |
+ | `POST /days/{date}/sessions` | Phiên nhập tay: chuỗi UTC `…Z` hoặc `{local, zone, fold?, offset?}` |
+ | `GET`, `PUT`, `DELETE /sessions/{id}` | Phiên của chính mình; sửa và xóa cần `expected_version` |
+-| `POST /clock/in`, `POST /clock/out` | Chấm công trực tiếp theo giờ server (giữ giây); khi ra xác nhận giờ nghỉ hoặc để chưa biết |
++| `POST /clock/in`, `POST /clock/out` | Check in và check out trực tiếp theo giờ server (giữ giây); khi check out xác nhận giờ nghỉ hoặc để chưa biết |
+ | `GET /policies`, `POST /policies` | Phiên bản chính sách theo ngày hiệu lực của chính mình (chỉ thêm, áp dụng về sau) |
+ 
+ Lỗi có dạng `{ "error": { "code", "message", "details?" } }`: 401 xác thực, 403 origin, 404 không tìm thấy (kể cả bản ghi của người khác), 409 `stale_version`/bất biến/xung đột, 415 kiểu dữ liệu, 422 kiểm tra hợp lệ (mã miền như `overlapping_user_intervals`, `nonexistent_local_time`, `reason_required`, `retroactive_change`), 429 giới hạn tần suất.
+diff --git a/docs/01_PRODUCT_REQUIREMENTS.vi.md b/docs/01_PRODUCT_REQUIREMENTS.vi.md
+index 1a8cecc..6889f3e 100644
+--- a/docs/01_PRODUCT_REQUIREMENTS.vi.md
++++ b/docs/01_PRODUCT_REQUIREMENTS.vi.md
+@@ -11,7 +11,7 @@ Công cụ timesheet cá nhân, sẵn nền tảng tài khoản riêng cho đồ
+ | FR-03 | Mặc định Worked ngày làm theo lịch, Holiday ngày lễ công ty, còn lại Off | WP2 |
+ | FR-04 | Sửa Worked/Off/Vacation/Sick/Holiday/Shutdown, nghỉ một phần và nhiều ngày | WP2 |
+ | FR-05 | Cấu hình giờ tham chiếu/nghỉ, mốc 480 phút, giờ vào linh hoạt | WP1/WP2 |
+-| FR-06 | Nhập tay, Clock in/out, nhiều phiên, UTC và qua đêm | WP1/WP2 |
++| FR-06 | Nhập tay, Check in/out, nhiều phiên, UTC và qua đêm | WP1/WP2 |
+ | FR-07 | OT mỗi ngày, vượt N nghiêm ngặt, làm tròn M đúng giữa xuống, OT ngoài lịch | WP1 |
+ | FR-08 | Tùy chọn trừ giờ thiếu tự động hoặc khi sign-off; không trừ ngày nghỉ không làm | WP1/WP2 |
+ | FR-09 | Sổ OT truy vết, sửa chênh lệch, ghi manager cho phép, đổi phép một phần | WP2 |
+diff --git a/docs/02_TIME_AND_OT_RULES.vi.md b/docs/02_TIME_AND_OT_RULES.vi.md
+index 3dab8f9..746313a 100644
+--- a/docs/02_TIME_AND_OT_RULES.vi.md
++++ b/docs/02_TIME_AND_OT_RULES.vi.md
+@@ -12,7 +12,7 @@ Trừ nghỉ loại trừ đã xác nhận; cộng giây trước rồi lấy xu
+ 
+ Mặc định B=480 phút thực làm, lịch 08:00–17:00. Nghỉ bị loại: 10:00–10:15, 12:00–12:30, 14:30–14:45 (tổng 60 phút). Loại cả ba là diễn giải thiết kế rõ cho sổ nội bộ, không phải phân loại tính lương.
+ 
+-Mỗi nghỉ có vị trí, thời lượng và `counts_as_work`. Gợi ý mặc định dịch theo clock-in đầu: vào 09:00 thì nghỉ 11:00, 13:00 và 15:30. Xác nhận gợi ý, sửa thực tế hoặc xác nhận không nghỉ lúc lưu/Clock out/review. Chưa biết khác với xác nhận không nghỉ; không trừ nghỉ tương lai của ca ngắn/mở.
++Mỗi nghỉ có vị trí, thời lượng và `counts_as_work`. Gợi ý mặc định dịch theo check-in đầu: vào 09:00 thì nghỉ 11:00, 13:00 và 15:30. Xác nhận gợi ý, sửa thực tế hoặc xác nhận không nghỉ lúc lưu/Check out/review. Chưa biết khác với xác nhận không nghỉ; không trừ nghỉ tương lai của ca ngắn/mở.
+ 
+ Giờ đủ công = giờ vào thật + giờ cần làm + nghỉ/gián đoạn bị loại. Với nghỉ 60 phút, vào 07:00/08:00/09:00 tương ứng ra 16:00/17:00/18:00. Chỉ sớm/muộn hơn giờ tham chiếu không tạo OT/thiếu. Kiểm nhất quán thời lượng lịch tham chiếu, phút cần làm và nghỉ.
+ 
+diff --git a/docs/12_RELEASE_NOTES.vi.md b/docs/12_RELEASE_NOTES.vi.md
+index 594e7bd..02e0962 100644
+--- a/docs/12_RELEASE_NOTES.vi.md
++++ b/docs/12_RELEASE_NOTES.vi.md
+@@ -20,11 +20,18 @@ Các ghi chú này xác định bản ứng viên phát hành của ứng dụng
+ - **Vòng thay đổi WP5, thiết kế lại UI (yêu cầu của chủ sở hữu ngày 2026-10-08).** Các màn hình được thiết kế lại cho dễ dùng; quy tắc nghiệp vụ, PDF và phép tính của server không đổi. Vòng này cần cổng kiểm và audit độc lập mới của riêng nó trước khi kích hoạt pilot, nên định danh bản phát hành ở trên chỉ được làm mới sau đó. Điều người dùng thấy ([04 UX](04_UX_AND_SETTINGS.vi.md); quyết định của chủ ở [10 Quyết định](10_DECISIONS_AND_SOURCES.vi.md)):
+   - **Timesheet theo biểu mẫu Excel.** Trang hiện bố cục của workbook Excel và PDF: phần đầu biểu mẫu, hai tuần từ thứ Hai đến Chủ nhật với các dòng Day, Date, Label, Time và OT, một dòng Check nêu trạng thái từng ngày bằng chữ và hình, các dòng "Show details", ô "Overtime Total :" và các dòng chữ ký (không có ảnh chữ ký). Cuối tuần, ngày lễ và ngày đóng cửa theo lịch công ty có nền nhạt kèm sọc, và hôm nay được đánh dấu. Ngày, thời lượng và giờ viết như trên PDF (ngày kiểu Mỹ, h:mm, 24 giờ). Trên điện thoại mỗi tuần là một bảng bốn cột gọn, không cuộn ngang.
+   - **Điều hướng mới.** Thanh trên cùng trên desktop (Timesheet, Overtime, History, Settings, và Admin cho quản trị viên) và thanh tab dưới trên điện thoại với menu More (Settings, Import, Admin, Sign out). "OT" nay gọi là "Overtime"; Import mở từ Settings hoặc More.
+-  - **Thanh kỳ và đồng hồ.** Một thanh hiện kỳ, trạng thái duy nhất của kỳ, ngày payroll, hạn nộp bằng chữ và "Review & sign off". Một nút Clock in / Clock out cho biết bạn đang vào ca hay chưa. "Change several days" mở chế độ sửa nhiều ngày khi cần thay vì luôn hiện.
++  - **Thanh kỳ và check in/out.** Một thanh hiện kỳ, trạng thái duy nhất của kỳ, ngày payroll, hạn nộp bằng chữ và "Review & sign off". Một nút Check in / Check out cho biết bạn đang vào ca hay chưa. "Change several days" mở chế độ sửa nhiều ngày khi cần thay vì luôn hiện.
+   - **Trình sửa ngày.** Bảng bên cạnh trên desktop và bottom sheet trên điện thoại, đặt giờ lên đầu, xác nhận giờ nghỉ gợi ý bằng một chạm, nghỉ nhập theo giờ và phút, và chọn nhãn trực tiếp trong ô của bảng. Lý do và xác nhận xung đột hoạt động như trước.
+   - **Review.** "What you sign" hiện đúng bảng người dùng ký, với các dòng chi tiết bật, cạnh checklist ba bước (ngày cần chú ý, email và PDF, ký).
+   - **Không tái tạo từ Excel.** Các công thức của workbook mâu thuẫn với quy tắc chuẩn (OT 8,5 giờ mỗi ngày, tổng không có Chủ nhật, giờ thập phân và các ngày lấy từ TODAY()) không được sao chép; app hiện giá trị của server.
+   - **Vòng sau.** Overtime, History và Settings giữ bố cục hiện tại và sẽ được làm lại giao diện ở vòng sau (quyết định E-7 của chủ).
++- **Vòng thay đổi WP5 thứ hai, tinh chỉnh trang Timesheet và khung ứng dụng (yêu cầu của chủ sở hữu ngày 2026-10-14).** Vòng thứ hai theo yêu cầu của chủ sở hữu trên cùng các màn hình. Không quy tắc nghiệp vụ, phép tính hay PDF nào đổi; thay đổi duy nhất ở server là cách diễn đạt của ba thông báo lỗi hiện ra màn hình (chỉ đổi chữ: nay ghi "check out"; mã lỗi và đường dẫn API không đổi). Vòng này cũng cần cổng kiểm và audit độc lập mới của riêng nó, nên định danh bản phát hành ở trên chỉ được làm mới sau đó. Điều người dùng thấy ([04 UX](04_UX_AND_SETTINGS.vi.md); quyết định của chủ và coordinator ở [10 Quyết định](10_DECISIONS_AND_SOURCES.vi.md)):
++  - **Thương hiệu.** Logo C&D thay cho chữ ở góc trên bên trái, với chữ thương hiệu hai dòng ("SEMICONDUCTOR" trên "SERVICES, INC.") bên cạnh từ màn hình rộng 1440px và khoảng cách rộng hơn giữa thương hiệu và menu. Tên công ty không còn lặp lại trên timesheet và bảng Review trên màn hình; phần đầu PDF không đổi.
++  - **Giao diện sáng/tối.** Điều khiển "Theme" với Light và Dark, mỗi lựa chọn có biểu tượng, trong thanh desktop và trong menu More trên điện thoại. Trang theo thiết bị cho đến khi bạn chọn; lựa chọn được giữ trên thiết bị đó.
++  - **Today và Current period.** Thanh kỳ có "Today" (kỳ chứa ngày hôm nay; nút chuyển Day editor đang mở sang hôm nay) và, trong năm ngày sau khi một kỳ kết thúc, "Current period" (quay về kỳ mà trang mở ra, để review và ký). "Due" nay trông như các nhãn khác, khoảng kỳ được viết bằng mũi tên, và trên điện thoại liên kết Review luôn một dòng ("Sign off" khi nhãn đầy đủ không vừa).
++  - **Check in/out.** Hành động nay gọi là "Check in" / "Check out". Trên điện thoại nó nằm ở thanh trên cùng trong các màn hình của chính bạn (không bao giờ trong chế độ xem chia sẻ); desktop giữ thẻ trong trang.
++  - **Điều khiển.** Màu hover rõ hơn trên nút, liên kết và tab, nút bật (toggle) đang nhấn là nền đặc, "Show details" là công tắc, và bộ chọn Label dùng kiểu chọn nhẹ hơn (đường mảnh, thanh bên và dấu chọn).
++  - **Ngày đang mở.** Ngày đang mở trong Day editor được tô sáng cả cột (hàng được khung lại trên điện thoại), và thanh Today trên đầu cột hiện đúng như tài liệu.
+ 
+ ## Sẵn sàng phần mềm, phép của chủ sở hữu và kết quả pilot
+ 
+@@ -54,7 +61,7 @@ Mỗi dòng nêu giới hạn và nơi có quy tắc hoặc bước. Không dòn
+ - **Nghỉ một phần không hiện trên PDF (R-WA2).** Một ngày làm 4 giờ và nghỉ 4 giờ in ra như giờ làm kèm OT của nó; số phút nghỉ không xuất hiện. Chủ sở hữu quyết định bộ phận lương có cần chúng không.
+ - **Ngày không có bản ghi hiện "Worked" trên PDF tự động (R-WA8).** Đây là quyết định F-1 và F-Q1 của chủ sở hữu (không có dấu hiệu tự động, nhãn mặc định), xem [10 Quyết định](10_DECISIONS_AND_SOURCES.vi.md); mẫu pilot sẽ hiển thị điều này.
+ - **Thông báo kết quả sau khi phục hồi do ngừng chạy chưa chính xác (R-WA1).** Thông báo nói kỳ được nộp "tại hạn" dù bản nộp được phục hồi tạo ra muộn hơn; ngày trên PDF là đúng.
+-- **Giờ nghỉ chưa xác nhận.** Clock out bị từ chối với 422 khi còn dòng nghỉ chưa xác nhận, và dòng nghỉ tương lai trên phiên đang mở cũng bị từ chối; hãy xác nhận giờ nghỉ trước ([02 Thời gian và OT](02_TIME_AND_OT_RULES.vi.md)).
++- **Giờ nghỉ chưa xác nhận.** Check out bị từ chối với 422 khi còn dòng nghỉ chưa xác nhận, và dòng nghỉ tương lai trên phiên đang mở cũng bị từ chối; hãy xác nhận giờ nghỉ trước ([02 Thời gian và OT](02_TIME_AND_OT_RULES.vi.md)).
+ 
+ ### Tài khoản, nhập và số dư
+ 

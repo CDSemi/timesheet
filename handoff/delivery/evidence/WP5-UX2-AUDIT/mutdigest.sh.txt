@@ -1,0 +1,10 @@
+# Source digest (export form) of the scratch export <task>/mut, task-local specs excluded; must equal the reviewed digest.
+. <task>/env.sh
+cd $T/mut
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' -not -path './.git/*' -not -path './test-results/*' -not -path './playwright-report/*' -not -name 'zz-audit-*' | sed 's|^\./||' | LC_ALL=C sort > $T/out/mut-files.txt
+: > $T/out/mut-hashes.txt
+while IFS= read -r f; do
+  printf '%s %s\n' "$f" "$(git hash-object --no-filters -- "$f")" >> $T/out/mut-hashes.txt
+done < $T/out/mut-files.txt
+LC_ALL=C sort $T/out/mut-hashes.txt > $T/out/mut-sorted.txt
+echo "mut export digest: $(sha256sum $T/out/mut-sorted.txt | cut -d' ' -f1) files $(wc -l < $T/out/mut-sorted.txt) (reviewed 20e7a7c8cd19b811aedfd814b35ead3b9a8d2eab7c9dbdd0b23626a609773fa5)"

@@ -1,0 +1,21 @@
+# After the first a11y run: the corrected a11y probe, the axe baselines (90b98ef and d1a20a7), and today/timesheet at the first
+# window day and at P 23:50 (own sweep), each Playwright run alone.
+. <task>/env.sh
+cd $T
+export AXE_PATH="$(cygpath -w $T/axe/node_modules/axe-core/axe.min.js)"
+cp $T/zz-audit-a11y.spec.ts $T/mut/tests/e2e/
+cp $T/zz-audit-axe-base.spec.ts $T/mut/tests/e2e/
+cp $T/zz-audit-axe-base.spec.ts $T/old/tests/e2e/
+bash run-shift.sh mut a11y-2 real tests/e2e/zz-audit-a11y.spec.ts > out/71-a11y-2.txt 2>&1
+echo "a11y-2 $(grep -E '^exit=' out/71-a11y-2.txt)" > out/74-progress.txt
+bash run-shift.sh old axe-base-old real tests/e2e/zz-audit-axe-base.spec.ts > out/74-axe-base-old.txt 2>&1
+echo "axe-base-old $(grep -E '^exit=' out/74-axe-base-old.txt)" >> out/74-progress.txt
+bash run-shift.sh mut axe-base-new real tests/e2e/zz-audit-axe-base.spec.ts > out/74-axe-base-new.txt 2>&1
+echo "axe-base-new $(grep -E '^exit=' out/74-axe-base-new.txt)" >> out/74-progress.txt
+rm -f $T/old/tests/e2e/zz-audit-axe-base.spec.ts
+bash run-shift.sh mut sw-1026-0030 2026-10-26T07:30:00Z tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts > out/64-sweep-1026-0030.txt 2>&1
+echo "sw-1026-0030 $(grep -E '^exit=' out/64-sweep-1026-0030.txt) $(grep -E '^ +[0-9]+ (passed|failed|skipped)' out/64-sweep-1026-0030.txt | tr -s ' ' | tr '\n' ' ')" >> out/74-progress.txt
+bash run-shift.sh mut sw-1030-2345 2026-10-31T06:45:00Z tests/e2e/today.spec.ts > out/64-sweep-1030-2345.txt 2>&1
+echo "sw-1030-2345 $(grep -E '^exit=' out/64-sweep-1030-2345.txt) $(grep -E '^ +[0-9]+ (passed|failed|skipped)' out/64-sweep-1030-2345.txt | tr -s ' ' | tr '\n' ' ')" >> out/74-progress.txt
+echo done >> out/74-progress.txt
+cat out/74-progress.txt

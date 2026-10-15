@@ -1,0 +1,26 @@
+"""Expected contrast of the shared focus ring painted on an element with opacity 0.6 (the inactive Today), WCAG 2.x formula."""
+
+
+def lin(c):
+    c = c / 255
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def lum(rgb):
+    r, g, b = (lin(v) for v in rgb)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def ratio(a, b):
+    la, lb = lum(a), lum(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def mix(top, bottom, alpha):
+    return tuple(alpha * t + (1 - alpha) * b for t, b in zip(top, bottom))
+
+
+for name, accent, card in [("light", (0x1F, 0x5F, 0xBF), (0xFF, 0xFF, 0xFF)), ("dark", (0x6E, 0xA8, 0xFF), (0x1A, 0x20, 0x29))]:
+    painted = mix(accent, card, 0.6)
+    print(f"{name}: ring token vs card {ratio(accent, card):.2f}; ring at opacity 0.6 over card {ratio(painted, card):.2f} (painted {tuple(round(v) for v in painted)})")

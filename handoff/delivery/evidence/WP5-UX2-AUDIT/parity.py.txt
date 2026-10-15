@@ -1,0 +1,60 @@
+"""EN/VI parity of the docs changed in round 2: structure counts and the set of literal tokens per changed line pair."""
+import re
+import sys
+
+root = sys.argv[1]
+out_path = sys.argv[2]
+pairs = [
+    "docs/04_UX_AND_SETTINGS",
+    "docs/10_DECISIONS_AND_SOURCES",
+    "docs/12_RELEASE_NOTES",
+    "docs/01_PRODUCT_REQUIREMENTS",
+    "docs/02_TIME_AND_OT_RULES",
+    "DEVELOPMENT",
+]
+TOKEN = re.compile(r"`[^`]+`|\b\d+(?:\.\d+)?(?:px|rem|:1|%)?\b|#[0-9a-fA-F]{6}\b|\b[A-Z][A-Z0-9]+-[A-Z0-9-]+\b|--[a-z-]+|\"[^\"]+\"")
+
+
+def structure(text):
+    lines = text.split("\n")
+    return {
+        "lines": len(lines),
+        "headings": sum(1 for l in lines if l.startswith("#")),
+        "table_rows": sum(1 for l in lines if l.startswith("|")),
+        "bullets": sum(1 for l in lines if re.match(r"^\s*- ", l)),
+        "numbered": sum(1 for l in lines if re.match(r"^\s*\d+\. ", l)),
+        "links": len(re.findall(r"\]\(([^)]+)\)", text)),
+    }
+
+
+def tokens(text):
+    found = []
+    for t in TOKEN.findall(text):
+        if t.startswith('"'):
+            continue  # quoted UI text may be translated in prose; checked by eye
+        found.append(t)
+    return found
+
+
+report = []
+for base in pairs:
+    with open(f"{root}/{base}.md", encoding="utf-8") as f:
+        en = f.read()
+    with open(f"{root}/{base}.vi.md", encoding="utf-8") as f:
+        vi = f.read()
+    s_en, s_vi = structure(en), structure(vi)
+    report.append(f"== {base}: EN {s_en} VI {s_vi}")
+    for key in s_en:
+        if s_en[key] != s_vi[key]:
+            report.append(f"   DIFF {key}: EN {s_en[key]} VI {s_vi[key]}")
+    t_en, t_vi = tokens(en), tokens(vi)
+    from collections import Counter
+    c_en, c_vi = Counter(t_en), Counter(t_vi)
+    only_en = {k: v for k, v in (c_en - c_vi).items()}
+    only_vi = {k: v for k, v in (c_vi - c_en).items()}
+    report.append(f"   literal tokens only in EN: {only_en}")
+    report.append(f"   literal tokens only in VI: {only_vi}")
+
+with open(out_path, "w", encoding="utf-8", newline="\n") as f:
+    f.write("\n".join(report) + "\n")
+print("\n".join(report))

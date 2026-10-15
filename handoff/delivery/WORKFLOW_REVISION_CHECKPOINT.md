@@ -225,8 +225,46 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   WP5-UX2-GATE (verifier) and the fresh opus WP5-UX2-AUDIT. When the gate records the new
   digest, WP5-UX-AUDIT-AB9 and the six audits that point to it get superseded_by
   WP5-UX2-AUDIT (no chains).
-- Uncommitted now: the T10 docs (12 paths), the board, this checkpoint (+ vi), the
-  T09-FREEZE results and evidence, the T10 and T10-FREEZE records, the T10 evidence.
+- WP5-UX2-T10-FREEZE done (package-final freeze): d1a20a7f0112fa00171fe4b1d6035427855f12b6
+  on main, pushed (27 paths; digests 20e7a7c8, 814 files; every check exit 0; one stray
+  `node -e` to the null device).
+- Running: WP5-UX2-GATE (verifier, sonnet) on d1a20a7 / 20e7a7c8: the WP5 gate items,
+  the server boundary against 90b98ef (only the three message literals), the round
+  scope, a simulated-clock sweep (6 full-suite instants plus 9 targeted), the
+  round-specific checks and synthetic screenshots.
+- WP5-UX2-GATE PASS (verifier, self-reported claude-sonnet-5-5; NAS NOT VERIFIED) on
+  d1a20a7 / 20e7a7c8 (814 files, three forms equal): verify 1878; e2e 434/0/42; AC-13 x3
+  plus Tokyo and New York; drill 208/0, image
+  sha256:8b0effa0f831dbb96a08e1e0ab22615601dfbfe8384086abf1ee030682ce4310 (removed); server
+  and domain differ from 90b98ef only in timesheetCommands (three literals, one comment);
+  scope 67 paths mapped to T01-T10, no font or raster; sweep 6 full plus 10 targeted runs,
+  0 failed (one buffer-error rerun); contrast, 44px, no sideways scroll; budgets
+  571.5/670.4/623.5/722.4, away 591.0/690.0 of 788; bars 56, 60 and 112; CSP identical;
+  no check in/out in shared views; 10 synthetic screenshots.
+- Board: current_source_digest 20e7a7c8; WP5-UX-AUDIT-AB9 and the six audits that pointed
+  to it now carry superseded_by WP5-UX2-AUDIT.
+- Running: WP5-UX2-AUDIT (fresh opus auditor, xhigh) on d1a20a7 / 20e7a7c8.
+- WP5-UX2-AUDIT FIX REQUIRED (fresh opus, self-reported claude-opus-5-5) on d1a20a7 /
+  20e7a7c8 (digest equal at start and end): three Low findings, 01 Today inert after the
+  reporting-zone midnight with the page open, 02 docs omit the 320px Review row, 03 the
+  inactive Today's focus ring dimmed to 2.70:1 by element opacity; risks R-UX2A-1..5;
+  mandatory checks green (npm test 1878 x2, e2e 434/0/42, AC-13, server diff only the
+  three literals); 20 mutants, 16 caught; owner fidelity: all 16 items and both answers
+  done. Review: `handoff/delivery/WP5_UX2_REVIEW.md` (+ vi).
+- Coordinator decision (2026-10-15): one fix round WP5-UX2-FIX1 (findings 01-03 and
+  R-UX2A-2); R-UX2A-5 (the "future" badge on the period Today opens) goes to the owner as
+  an optional question. Then FIX1-FREEZE, WP5-UX2-REGATE and a fresh WP5-UX2-AUDIT2.
+- WP5-UX2-FIX1 done after addendum 1 (worker-high, self-reported claude-sonnet-5-5;
+  reported, not independent proof): the inactive Today re-reads on press, focus and
+  visibility (midnight e2e under the preload passes at 10-25 and 10-31); the docs
+  describe the below-330px row and the new press behaviour; inactive dimming by colour,
+  ring 6.09-6.79; wording unit test catches all 5 reverts; unit 1882; e2e desktop
+  216/0/29, mobile 232/0/13; preflight and verify 0; digest ac1895d9 (815 files).
+- Next: WP5-UX2-FIX1-FREEZE (committer, alone), then WP5-UX2-REGATE and the fresh
+  WP5-UX2-AUDIT2. The optional owner question WP5-UX2-Q3 stays open (default a).
+- Uncommitted now: the FIX1 source and docs (11 paths), the board, this checkpoint
+  (+ vi), the T10-FREEZE results and evidence, the gate and audit records and evidence,
+  the review pair, the FIX1 and FIX1-FREEZE records, the FIX1 evidence.
 
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 

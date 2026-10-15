@@ -1,0 +1,47 @@
+== midnight-1025 (mut): real start 2026-10-15T06:57:31Z, simulated start 2026-10-26T06:59:20Z, AB8_SHIFT_MS=950508243
+process clock 2026-10-26T06:59:20.090Z; America/Los_Angeles Sun, 2026-10-25, 23:59:20; shift ms 950508243
+$ node node_modules/@playwright/test/cli.js test tests/e2e/zz-audit-midnight.spec.ts --output=<task>/pw-midnight-1025
+
+Running 2 tests using 2 workers
+
+  -  2 [mobile] › tests\e2e\zz-audit-midnight.spec.ts:26:1 › an open page across midnight: Today after the accounting date changed
+MIDNIGHT before server_today=2026-10-25 current=2026-10-12..2026-10-25 in_progress=2026-10-12..2026-10-25 page={"todayDisabled":"true","tagOn":"2026-10-25","shown":"10/12/2026→ to 10/25/2026"}
+MIDNIGHT after server_today=2026-10-26 current=2026-10-12..2026-10-25 in_progress=2026-10-26..2026-11-08 page={"todayDisabled":"true","tagOn":"2026-10-25","shown":"10/12/2026→ to 10/25/2026"}
+MIDNIGHT after-click page={"todayDisabled":"true","tagOn":"2026-10-25","shown":"10/12/2026→ to 10/25/2026"} expected_shown="10/26/2026→ to 11/08/2026" expected_tag=2026-10-26
+  x  1 [desktop] › tests\e2e\zz-audit-midnight.spec.ts:26:1 › an open page across midnight: Today after the accounting date changed (42.2s)
+
+
+  1) [desktop] › tests\e2e\zz-audit-midnight.spec.ts:26:1 › an open page across midnight: Today after the accounting date changed 
+
+    Error: Today opens the period that contains the new server date
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "10/26/2026→ to 11/08/2026"
+    Received: "10/12/2026→ to 10/25/2026"
+
+      52 |   console.log(`MIDNIGHT after-click page=${JSON.stringify(stateClick)} expected_shown="${range(after.in_progress)}" expected_tag=${after.today_local}`);
+      53 |   // The documented behaviour (docs/04 line 54): after midnight the sheet no longer shows today's date, so Today opens the period that contains it.
+    > 54 |   expect(stateClick.shown, 'Today opens the period that contains the new server date').toBe(range(after.in_progress));
+         |                                                                                        ^
+      55 |   expect(stateClick.tagOn, 'the Today tag is on the new server date').toBe(after.today_local);
+      56 | });
+      57 |
+        at <task>\mut\tests\e2e\zz-audit-midnight.spec.ts:54:88
+
+    Error Context: ..\pw-midnight-1025\zz-audit-midnight-an-open--be26e-the-accounting-date-changed-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-midnight-1025\zz-audit-midnight-an-open--be26e-the-accounting-date-changed-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-midnight-1025\zz-audit-midnight-an-open--be26e-the-accounting-date-changed-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\zz-audit-midnight.spec.ts:26:1 › an open page across midnight: Today after the accounting date changed 
+  1 skipped
+exit=1
+process clock 2026-10-26T07:00:05.043Z; America/Los_Angeles Mon, 2026-10-26, 00:00:05; shift ms 950508243
+== midnight-1025 real end 2026-10-15T06:58:16Z

@@ -1,0 +1,12 @@
+// Waits (at most the given seconds) until a file contains at least N lines matching a pattern; prints the count. Usage:
+// node waitfor.mjs <file> <regex> <count> <max seconds>
+import { existsSync, readFileSync } from 'node:fs';
+
+const [file, pattern, countText, maxText] = process.argv.slice(2);
+const regex = new RegExp(pattern, 'gm');
+const deadline = Date.now() + Number(maxText) * 1000;
+const count = () => (existsSync(file) ? (readFileSync(file, 'utf8').match(regex) ?? []).length : 0);
+while (count() < Number(countText) && Date.now() < deadline) {
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+}
+console.log(`matches ${count()} at ${new Date().toISOString()}`);

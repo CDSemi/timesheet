@@ -11,7 +11,7 @@ import { SubmissionStatusLine } from './SubmissionStatus.tsx';
 
 /** What the two jump buttons need, all derived by the screen from the server's periods and `today_local`. */
 export interface PeriodJumps {
-  /** True when "Today" is active; false renders it `aria-disabled` (focusable, doing nothing). */
+  /** True when "Today" is active; false renders it `aria-disabled` (focusable, dimmed with colours; a press only re-reads the server's date). */
   todayAway: boolean;
   /** True when "Current period" is rendered at all. */
   currentVisible: boolean;
@@ -121,7 +121,9 @@ export function PeriodBar({
                 aria-disabled={jumps.todayAway ? undefined : 'true'}
                 aria-describedby="period-today-note"
                 onClick={() => {
-                  if (jumps.todayAway) jumps.onToday();
+                  // Also while inactive: the page may have stayed open past midnight, so the screen re-reads the server's periods and
+                  // decides from the fresh answer (it jumps only when the sheet no longer shows today).
+                  jumps.onToday();
                 }}
                 data-period-today
                 ref={todayButton}

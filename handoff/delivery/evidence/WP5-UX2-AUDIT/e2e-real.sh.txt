@@ -1,0 +1,10 @@
+# Full e2e on both projects on the real clock (clean export of d1a20a7), run alone.
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+export E2E_SCREENSHOT_DIR="$TW\\shots-real"
+cd $T/export
+node $T/zone.mjs > $T/out/20-e2e-window.txt 2>&1
+npm run test:e2e > $T/out/20-e2e-real.txt 2>&1
+echo "e2e exit $?" > $T/out/20-e2e-exit.txt
+node $T/zone.mjs >> $T/out/20-e2e-window.txt 2>&1
+cat $T/out/20-e2e-exit.txt

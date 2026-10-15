@@ -1,0 +1,19 @@
+# Usage: bash mutunit.sh <mutation> <vitest paths...>   (unit/integration level, in <task>/mut2; restored afterwards)
+. <task>/env.sh
+M=$1; shift
+LOG=$T/out/72-unit-$M.txt
+echo "== unit mutation $M start $(date -u +%Y-%m-%dT%H:%M:%SZ)" > $LOG
+"$PY" -I $T/mutate.py $T/mut2 $M >> $LOG 2>&1 || { echo "APPLY FAILED" >> $LOG; cat $LOG; exit 3; }
+cd $T/mut2
+npx vitest run "$@" > $T/out/72-unit-$M-run.txt 2>&1
+echo "vitest $* exit $? :: $(grep -E 'Test Files|Tests +[0-9]' $T/out/72-unit-$M-run.txt | tr -s ' ' | tr '\n' ' ')" >> $LOG
+grep -E "FAIL|✗|×|AssertionError|Expected|Received" $T/out/72-unit-$M-run.txt | cut -c1-220 >> $LOG
+for p in src/client/TimesheetScreen.tsx src/client/components/periodJumpModel.ts src/client/components/TimesheetSheet.tsx \
+  src/client/components/SheetWeekTable.tsx src/client/styles.css src/client/components/ShowDetailsSwitch.tsx src/client/index.html \
+  src/client/components/AppShell.tsx src/client/components/ClockPanel.tsx src/client/components/otModel.ts \
+  src/client/components/PolicyFields.tsx src/client/components/ClockProvider.tsx src/client/components/ThemeToggle.tsx \
+  src/server/services/timesheetCommands.ts src/server/app.ts; do
+  git -C $REPO show "$SHA:$p" > "$T/mut2/$p"
+done
+echo "restored $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $LOG
+cat $LOG

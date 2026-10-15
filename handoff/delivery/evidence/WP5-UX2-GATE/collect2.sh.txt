@@ -1,0 +1,44 @@
+. <task>/env.sh
+mkdir -p $E
+cd $T
+# logs and observations into out/
+cp logs/control-p.txt out/03-control-p.txt
+cp logs/control-real.txt out/03-control-real.txt
+cp obs/obs-headers.txt out/62-obs-headers.txt
+cp obs/obs-bars.txt out/62-obs-bars.txt
+cp obs/obs-shared.txt out/62-obs-shared.txt
+cp obs/obs-targets.txt out/62-obs-targets.txt
+cp obs/obs-logo-fidelity.txt out/62-obs-logo-fidelity.txt
+cp obs-old/obs-headers.txt out/62-obs-headers-old-90b98ef.txt
+cp logs/probe-clean.txt out/62-probe-run.txt
+cp logs/probe2-clean.txt out/62-probe2-run.txt
+cp logs/probe-old.txt out/62-probe-old-run.txt
+for f in logs/sweep-*.txt; do cp $f out/$(basename $f); done
+cp out/e2e-clean.txt out/04-e2e-clean.txt
+cd $T/out
+for f in *.txt; do
+  case "$f" in ex-files.txt|ex-hashes.txt|ex-sorted.txt|lstree-sorted.txt|keys-list.txt|51-*-files.txt|e2e-clean.txt|e2e-summary-lines.txt|24-removed.txt|24-focus-diff.txt|24-shell-diff.txt|24-ts-diff.txt) continue;; esac
+  node $T/mask.mjs "$T/out/$f" "$E/$f"
+done
+for s in env.sh digest.sh run-main.sh run-rest.sh run-drill.sh run-shift.sh sweep-gate.sh cmp-dist.sh cfg.sh keys.sh collect2.sh; do node $T/mask.mjs "$T/$s" "$E/$s.txt"; done
+for s in mask.mjs zone.mjs run-tz.mjs tzprobe.mjs tzchild.mjs contrast5.mjs shiftclock.mjs probe-now.mjs; do node $T/mask.mjs "$T/$s" "$E/$s.txt"; done
+node $T/mask.mjs "$T/zz-control.spec.ts" "$E/zz-control.spec.ts.txt"
+node $T/mask.mjs "$T/zz-gate-probe.spec.ts" "$E/zz-gate-probe.spec.ts.txt"
+node $T/mask.mjs "$T/zz-logo-fidelity.spec.ts" "$E/zz-logo-fidelity.spec.ts.txt"
+# screenshots (synthetic only; at most 12)
+cp $T/shots-probe2/gate-bar-1440-light-synthetic.png $E/
+cp $T/shots-probe2/gate-bar-1440-dark-synthetic.png $E/
+cp $T/shots-probe2/gate-sheet-open-day-today-1440-light-synthetic.png $E/
+cp $T/shots-probe2/gate-sheet-open-day-today-1440-dark-synthetic.png $E/
+cp $T/shots-probe2/gate-label-picker-open-synthetic.png $E/
+cp $T/shots-probe2/gate-show-details-switch-synthetic.png $E/
+cp $T/shots-probe2/gate-theme-control-synthetic.png $E/
+cp $T/shots-probe/gate-phone-390-first-screen-noshare-synthetic.png $E/
+cp $T/shots-probe/gate-phone-390-first-screen-share-synthetic.png $E/
+cp $T/shots-probe/gate-logo-fidelity-synthetic.png $E/
+ls $E | wc -l
+cp $T/obs/obs-away.txt $T/out/62-obs-away.txt
+tr -d '\r' < $T/logs/away.txt > $T/out/62-away-run.txt
+node $T/mask.mjs $T/out/62-obs-away.txt $E/62-obs-away.txt
+node $T/mask.mjs $T/out/62-away-run.txt $E/62-away-run.txt
+node $T/mask.mjs $T/zz-away-share.spec.ts $E/zz-away-share.spec.ts.txt

@@ -1,0 +1,12 @@
+# Scratch export of d1a20a7 for probes and mutations (the clean export stays untouched for the digest).
+. <task>/env.sh
+mkdir -p $T/mut
+cd $REPO && git archive $SHA | tar -x -C $T/mut
+cd $T/mut
+npm ci > $T/out/60-mut-ci.txt 2>&1
+echo "mut npm ci exit $?" > $T/out/60-mut-setup.txt
+npm run build > $T/out/60-mut-build.txt 2>&1
+echo "mut build exit $?" >> $T/out/60-mut-setup.txt
+cp $T/zz-audit-probe.spec.ts $T/zz-audit-midnight.spec.ts $T/zz-audit-control.spec.ts $T/mut/tests/e2e/
+bash $T/mutdigest.sh >> $T/out/60-mut-setup.txt
+cat $T/out/60-mut-setup.txt

@@ -1,0 +1,56 @@
+import { expect, type PeriodFacts, test } from './fixtures.ts';
+
+/*
+ * WP5-UX2-AUDIT task-local probe (never part of the repository): the page stays open while the server's accounting date
+ * passes midnight in the reporting zone. Run with the simulated clock about 40 s before midnight America/Los_Angeles on the
+ * last day of a period (P-5 Sunday), so the period that contains today changes at midnight. docs/04 line 54: Today "opens the
+ * period that contains today's date in the timesheet's saved reporting zone" and "is inactive ... when the sheet already shows
+ * today". The probe records what the open page does after midnight, without a reload.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const us = (date: string) => `${date.slice(5, 7)}/${date.slice(8, 10)}/${date.slice(0, 4)}`;
+const range = (period: PeriodFacts) => `${us(period.period_start)}→ to ${us(period.period_end)}`;
+
+const READ_STATE = `(() => {
+  const today = document.querySelector('.period-bar [data-period-today]');
+  const tag = document.querySelector('[data-sheet] [data-day].today');
+  const name = document.querySelector('.period-bar .period-name');
+  return {
+    todayDisabled: today === null ? 'absent' : String(today.getAttribute('aria-disabled')),
+    tagOn: tag === null ? 'none' : String(tag.getAttribute('data-day')),
+    shown: name === null ? '' : String(name.textContent),
+  };
+})()`;
+
+test('an open page across midnight: Today after the accounting date changed', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'one project is enough for this observation');
+  test.setTimeout(150_000);
+  const before = await employeeSeed.periodsCurrent();
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const stateBefore = await page.evaluate<{ todayDisabled: string; tagOn: string; shown: string }>(READ_STATE);
+  console.log(
+    `MIDNIGHT before server_today=${before.today_local} current=${before.current.period_start}..${before.current.period_end} in_progress=${before.in_progress.period_start}..${before.in_progress.period_end} page=${JSON.stringify(stateBefore)}`,
+  );
+  // Wait (real time; the server clock moves with it) until the server's date has changed.
+  let after = before;
+  for (let attempt = 0; attempt < 100 && after.today_local === before.today_local; attempt += 1) {
+    await page.waitForTimeout(1000);
+    after = await employeeSeed.periodsCurrent();
+  }
+  expect(after.today_local, 'the server date passed midnight during the probe').not.toBe(before.today_local);
+  await page.waitForTimeout(1500);
+  const stateAfter = await page.evaluate<{ todayDisabled: string; tagOn: string; shown: string }>(READ_STATE);
+  console.log(
+    `MIDNIGHT after server_today=${after.today_local} current=${after.current.period_start}..${after.current.period_end} in_progress=${after.in_progress.period_start}..${after.in_progress.period_end} page=${JSON.stringify(stateAfter)}`,
+  );
+  // A person presses Today (forced: Playwright treats aria-disabled as not actionable; a person can still press it).
+  await page.locator('.period-bar [data-period-today]').click({ force: true });
+  await page.waitForTimeout(2500);
+  const stateClick = await page.evaluate<{ todayDisabled: string; tagOn: string; shown: string }>(READ_STATE);
+  console.log(`MIDNIGHT after-click page=${JSON.stringify(stateClick)} expected_shown="${range(after.in_progress)}" expected_tag=${after.today_local}`);
+  // The documented behaviour (docs/04 line 54): after midnight the sheet no longer shows today's date, so Today opens the period that contains it.
+  expect(stateClick.shown, 'Today opens the period that contains the new server date').toBe(range(after.in_progress));
+  expect(stateClick.tagOn, 'the Today tag is on the new server date').toBe(after.today_local);
+});

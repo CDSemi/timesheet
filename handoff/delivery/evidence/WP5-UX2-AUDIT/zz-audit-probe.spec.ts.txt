@@ -1,0 +1,177 @@
+import type { Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { dayButton } from './dayButton.ts';
+import {
+  type CalendarSchedule,
+  createAccountByAdminApi,
+  expect,
+  type PeriodFacts,
+  type PeriodsCurrent,
+  SeedClient,
+  seedSecondCalendar,
+  starterPolicyBody,
+  test,
+} from './fixtures.ts';
+
+/*
+ * WP5-UX2-AUDIT task-local probe (never part of the repository). Today and Current period must use only the server's
+ * today_local, current and in_progress, never the device clock or the display zone (AGENTS rule 7), in the own view and in a
+ * shared view (the owner's dates). Device zones far from the reporting zone: Pacific/Kiritimati (UTC+14) and Pacific/Pago_Pago
+ * (UTC-11). Run under a simulated wall clock (shiftclock.mjs) at window days, midnight and DST instants.
+ */
+
+const us = (date: string) => `${date.slice(5, 7)}/${date.slice(8, 10)}/${date.slice(0, 4)}`;
+const range = (period: PeriodFacts) => `${us(period.period_start)}→ to ${us(period.period_end)}`;
+const contains = (period: PeriodFacts, date: string) => period.period_start <= date && date <= period.period_end;
+const isWindow = (periods: PeriodsCurrent) => periods.current.payroll_date !== periods.in_progress.payroll_date;
+const bar = (page: Page) => page.locator('.period-bar');
+const todayButton = (page: Page) => bar(page).getByRole('button', { name: 'Today', exact: true });
+const currentButton = (page: Page) => bar(page).getByRole('button', { name: 'Current period', exact: true });
+const periodName = (page: Page) => bar(page).locator('.period-name');
+
+async function deviceDate(page: Page, zone: string): Promise<string> {
+  return page.evaluate<string, string>((z) => new Intl.DateTimeFormat('en-CA', { timeZone: z }).format(new Date()), zone);
+}
+
+async function expectTodayTag(page: Page, period: PeriodFacts, today: string) {
+  await expect(periodName(page)).toHaveText(range(period));
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const shows = contains(period, today);
+  await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(shows ? 1 : 0);
+  if (shows) await expect(page.locator('[data-sheet] [data-day].today')).toHaveAttribute('data-day', today);
+}
+
+for (const zone of ['Pacific/Kiritimati', 'Pacific/Pago_Pago'] as const) {
+  test.describe(`own view, device zone ${zone}`, () => {
+    test.use({ locale: 'en-US', timezoneId: zone });
+
+    test('Today and Current period follow the server dates only', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+      const periods = await employeeSeed.periodsCurrent();
+      const today = periods.today_local;
+      await signInThroughUi();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const device = await deviceDate(page, zone);
+      const window = isWindow(periods);
+      console.log(
+        `PROBE own project=${testInfo.project.name} zone=${zone} server_today=${today} device_date=${device} window=${window} current=${periods.current.period_start}..${periods.current.period_end} in_progress=${periods.in_progress.period_start}..${periods.in_progress.period_end}`,
+      );
+      // Landing: R-07 current; Today inactive exactly when the shown period contains the SERVER date.
+      await expectTodayTag(page, periods.current, today);
+      await expect(currentButton(page)).toHaveCount(0);
+      if (contains(periods.current, today)) await expect(todayButton(page)).toHaveAttribute('aria-disabled', 'true');
+      else await expect(todayButton(page)).not.toHaveAttribute('aria-disabled', /.*/);
+      const jumps: string[] = [];
+      page.on('request', (request) => {
+        if (request.url().includes('/api/periods/current')) jumps.push(request.url());
+      });
+      if (window) {
+        await todayButton(page).click();
+        await expectTodayTag(page, periods.in_progress, today);
+        await expect(currentButton(page)).toHaveCount(1);
+        await currentButton(page).click();
+        await expectTodayTag(page, periods.current, today);
+        await expect(currentButton(page)).toHaveCount(0);
+        await expect(todayButton(page)).toBeFocused();
+      } else {
+        await bar(page).getByRole('button', { name: 'Next period' }).click();
+        await expect(periodName(page)).not.toHaveText(range(periods.current));
+        await expect(currentButton(page)).toHaveCount(0);
+        await expect(todayButton(page)).not.toHaveAttribute('aria-disabled', /.*/);
+        await todayButton(page).click();
+        await expectTodayTag(page, periods.current, today);
+      }
+      expect(jumps.length, 'each jump re-read the server periods').toBeGreaterThanOrEqual(1);
+      console.log(`PROBE own-result project=${testInfo.project.name} zone=${zone} ok window=${window} rereads=${jumps.length}`);
+    });
+
+    test('Today moves an open editor to the server date (desktop)', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+      test.skip(testInfo.project.name !== 'desktop', 'the editor is a non-modal panel on the desktop project');
+      const periods = await employeeSeed.periodsCurrent();
+      const today = periods.today_local;
+      const other = today === periods.current.period_start ? periods.current.period_end : periods.current.period_start;
+      await signInThroughUi();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await dayButton(page, other).click();
+      await expect(page.locator('[data-day-editor]')).toHaveAttribute('data-day-editor', other);
+      await todayButton(page).click();
+      await expect(page.locator('[data-day-editor]')).toHaveAttribute('data-day-editor', today);
+      await expectTodayTag(page, periods.in_progress, today);
+      await expect(page.locator(`[data-sheet] [data-day="${today}"][data-editing="true"]`)).toHaveCount(1);
+      await expect(page.locator('[data-sheet] [aria-current="true"]')).toHaveCount(1);
+      console.log(`PROBE editor zone=${zone} server_today=${today} device_date=${await deviceDate(page, zone)} editor=${today}`);
+    });
+  });
+}
+
+test.describe('shared view, owner in Pacific/Kiritimati, grantee device Pacific/Pago_Pago', () => {
+  test.use({ locale: 'en-US', timezoneId: 'Pacific/Pago_Pago' });
+
+  test('both buttons use the owner dates and no check in/out exists in the shared view', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+    test.setTimeout(120_000);
+    const calendar = await adminSeed.call<{
+      payroll: { anchor_payroll_date: string; cycle_days: number; period_start_offset_days: number; period_end_offset_days: number; due_offset_days: number; due_local_time: string };
+    }>('GET', '/api/calendar');
+    const schedule: CalendarSchedule = {
+      reportingZone: 'Pacific/Kiritimati',
+      anchorPayrollDate: calendar.payroll.anchor_payroll_date,
+      cycleDays: calendar.payroll.cycle_days,
+      periodStartOffsetDays: calendar.payroll.period_start_offset_days,
+      periodEndOffsetDays: calendar.payroll.period_end_offset_days,
+      dueOffsetDays: calendar.payroll.due_offset_days,
+      dueLocalTime: calendar.payroll.due_local_time,
+    };
+    const ownerAccount = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Far Owner', calendarId: seedSecondCalendar(builtServer, schedule) });
+    const ownerApi = await new SeedClient(builtServer.origin).signIn(ownerAccount.email, ownerAccount.password);
+    const ownerPeriods = await ownerApi.periodsCurrent();
+    await ownerApi.call('POST', '/api/policies', starterPolicyBody(addDays(ownerPeriods.today_local, -400)), 201);
+    const granteeAccount = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Near Grantee' });
+    const granteeApi = await new SeedClient(builtServer.origin).signIn(granteeAccount.email, granteeAccount.password);
+    const granteePeriods = await granteeApi.periodsCurrent();
+    await granteeApi.call('POST', '/api/policies', starterPolicyBody(addDays(granteePeriods.today_local, -400)), 201);
+    await ownerApi.call('POST', '/api/shares', { grantee_email: granteeAccount.email, items: { timesheets: 'edit', ot_read: false, pdf_download: false } }, 201);
+
+    const requests: string[] = [];
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (url.pathname.startsWith('/api/')) requests.push(`${request.method()} ${url.pathname}`);
+    });
+    await signInPageAs(granteeAccount, `#/shared/${ownerAccount.id}/timesheet`);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const device = await deviceDate(page, 'Pacific/Pago_Pago');
+    const today = ownerPeriods.today_local;
+    const window = isWindow(ownerPeriods);
+    console.log(
+      `PROBE shared project=${testInfo.project.name} owner_today=${today} grantee_today=${granteePeriods.today_local} device_date=${device} owner_window=${window} owner_current=${ownerPeriods.current.period_start}..${ownerPeriods.current.period_end} owner_in_progress=${ownerPeriods.in_progress.period_start}..${ownerPeriods.in_progress.period_end}`,
+    );
+    await expectTodayTag(page, ownerPeriods.current, today);
+    if (contains(ownerPeriods.current, today)) await expect(todayButton(page)).toHaveAttribute('aria-disabled', 'true');
+    else await expect(todayButton(page)).not.toHaveAttribute('aria-disabled', /.*/);
+    await expect(currentButton(page)).toHaveCount(0);
+    if (window) {
+      await todayButton(page).click();
+      await expectTodayTag(page, ownerPeriods.in_progress, today);
+      await expect(currentButton(page)).toHaveCount(1);
+      await currentButton(page).click();
+      await expectTodayTag(page, ownerPeriods.current, today);
+    } else {
+      await bar(page).getByRole('button', { name: 'Next period' }).click();
+      await expect(todayButton(page)).not.toHaveAttribute('aria-disabled', /.*/);
+      await expect(currentButton(page)).toHaveCount(0);
+      await todayButton(page).click();
+      await expectTodayTag(page, ownerPeriods.current, today);
+    }
+    // No check in/out anywhere in the shared view (edit share), at this width and at 390 and 1440.
+    for (const width of [testInfo.project.name === 'desktop' ? 1280 : 390, 1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      for (const name of ['Check in', 'Check out', 'Clock in', 'Clock out']) await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
+      await expect(page.locator('.bar-clock, .clock-panel, [data-clock]')).toHaveCount(0);
+      await expect(page.getByRole('region', { name: 'Check in and out' })).toHaveCount(0);
+    }
+    const afterLanding = requests.filter((entry) => !entry.startsWith('POST /api/auth') && !entry.startsWith('GET /api/auth') && !entry.startsWith('GET /api/me') && !entry.startsWith('GET /api/shares'));
+    const ownOrClock = afterLanding.filter((entry) => !entry.includes(`/api/shared/${ownerAccount.id}/`));
+    console.log(`PROBE shared-requests project=${testInfo.project.name} total=${requests.length} non-shared-after-auth=${JSON.stringify(ownOrClock)}`);
+    expect(requests.filter((entry) => entry.includes('/api/clock')), 'no clock request in the shared view').toEqual([]);
+    expect(requests.filter((entry) => entry === 'GET /api/periods/current'), "no read of the grantee's own periods in the shared view").toEqual([]);
+  });
+});
