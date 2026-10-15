@@ -317,10 +317,15 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   `software_ready` (that last flip stays uncommitted). **WP5 is re-accepted on
   a643794 / 229df806; UI change round 2 is closed.** Next owner action: review the pilot
   packet and answer D-1..D-15 (optional WP5-UX2-Q3).
-- Uncommitted now (handoff only): the board, STATE, NEXT_ACTION (+ vi), this checkpoint
-  (+ vi), the pilot packet and WP5 handoff pairs, the FIX2-FREEZE results and evidence,
-  the REGATE2, AUDIT2 and ACCEPT-DOCS records and evidence, the review pair, the ACCEPT
-  brief.
+- WP5-UX2-ACCEPT done: b1bf1479ba51f2df0d888fca232a1cb71f47c9e8 on main, pushed (263
+  handoff paths; digest 229df806 unchanged; every check exit 0). **WP5 re-accepted on
+  a643794 / 229df806; UI change round 2 is closed.** Board back to `software_ready`
+  (next_task_id null).
+- Uncommitted afterwards (handoff only): that flip, the ACCEPT results and evidence, and
+  this update (+ vi).
+- Next (owner): review the pilot packet (release identity a643794 / 229df806, image
+  6d184442…), answer D-1..D-15 and, optionally, WP5-UX2-Q3 (the "future" badge; default
+  keep), run the NAS steps, and decide on pilot authorization.
 
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 

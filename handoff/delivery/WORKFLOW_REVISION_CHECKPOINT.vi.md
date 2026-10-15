@@ -322,9 +322,15 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   `software_ready` (bước chuyển cuối này để chưa commit). **WP5 được nghiệm thu lại trên
   a643794 / 229df806; vòng thay đổi UI lần 2 đã khép lại.** Việc tiếp theo của chủ dự án:
   duyệt pilot packet và trả lời D-1..D-15 (WP5-UX2-Q3 không bắt buộc).
-- Đang chưa commit (chỉ handoff): board, STATE, NEXT_ACTION (+ en), checkpoint này (+ en),
-  cặp pilot packet và WP5 handoff, kết quả và bằng chứng FIX2-FREEZE, bản ghi và bằng chứng
-  REGATE2, AUDIT2 và ACCEPT-DOCS, cặp review, brief ACCEPT.
+- Xong WP5-UX2-ACCEPT: b1bf1479ba51f2df0d888fca232a1cb71f47c9e8 trên main, đã push (263
+  đường dẫn handoff; digest 229df806 không đổi; mọi kiểm tra exit 0). **WP5 được nghiệm thu
+  lại trên a643794 / 229df806; vòng thay đổi UI lần 2 đã khép lại.** Board về
+  `software_ready` (next_task_id null).
+- Chưa commit sau đó (chỉ handoff): bước chuyển trạng thái đó, kết quả và bằng chứng
+  ACCEPT, và mục cập nhật này (+ en).
+- Tiếp theo (chủ dự án): duyệt pilot packet (định danh bản phát hành a643794 / 229df806,
+  image 6d184442…), trả lời D-1..D-15 và, nếu muốn, WP5-UX2-Q3 (nhãn "future"; mặc định giữ
+  nguyên), làm các bước NAS, rồi quyết định cho phép pilot.
 
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 

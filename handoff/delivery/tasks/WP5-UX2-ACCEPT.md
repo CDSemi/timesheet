@@ -152,4 +152,11 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(The committer appends results here.)
+Committer: claude-sonnet-5-5.
+- Pre-HEAD = origin/main = a6437943403fc416240fd13a787a8c4748af3e84; no extra commits; nothing pre-staged.
+- Commit b1bf1479ba51f2df0d888fca232a1cb71f47c9e8 on main; pushed yes; remote SHA b1bf1479ba51f2df0d888fca232a1cb71f47c9e8; post-HEAD same.
+- Digest before (working tree) and after (git ls-tree of HEAD): 229df806aeaaa886ab11ee83556746ee65eda6c81a596dcd180d80d5d0b04db3, 815 files, both.
+- Staged 263: modified 11; task records 4; review pair 2; evidence FIX2-FREEZE 2, REGATE2 105, AUDIT2 138 (134 txt + 4 png), ACCEPT-DOCS 1.
+- Other modified tracked handoff files: none.
+- Checks (all exit 0): node v24.21.0; precommit PASS 263 files; diff --cached --check; JSON parse; validate_orchestration PASS; check_recovery PASS 106 probes; validate_package --preflight PASS; post-commit ls-tree digest.
+- No fix, masking or stop. Evidence in evidence/WP5-UX2-ACCEPT/ (checks.txt, commit-message.txt), left unstaged along with this appended result.
