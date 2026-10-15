@@ -1,0 +1,153 @@
+// Wordmark outline generator (WP5-UX2-T06). Not committed: it reads the owner's font from a path given as an argument.
+// Usage: node gen-wordmark.mjs <fontPath> <repoRoot> <outJson> [componentPath|-] [smallCapsScale] [size1]
+// Lays out "SEMICONDUCTOR" (a full-size S, then the other letters as small capitals, the owner's image) and "SERVICES, INC."
+// with the installed @pdf-lib/fontkit, scales by size / unitsPerEm, flips y at the baseline, applies the line-2 letter-spacing and
+// writes one absolute SVG path string per line (2-decimal numbers) plus the ink metrics. Geometry is in CSS px at line-1 size
+// SIZE1 and line-2 size SIZE2.
+import { createRequire } from 'node:module';
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [fontPath, repoRoot, outJson, componentArg, kArg, sizeArg] = process.argv.slice(2);
+const require = createRequire(`${repoRoot}/package.json`);
+const fontkit = require('@pdf-lib/fontkit');
+const font = fontkit.create(readFileSync(fontPath));
+
+const K = kArg === undefined ? 0.75 : Number(kArg); // small-capital scale of the letters after the S
+const SIZE1 = sizeArg === undefined ? 21 : Number(sizeArg);
+const SIZE2 = 7;
+const GAP = 4; // px between the baseline of line 1 and the cap top of line 2
+const TARGET_RATIO = 0.824; // line 2 ink width over line 1 ink width, measured on the owner's image (about 99 / 120)
+const CAP = 0.818; // the capital height of this font in em
+
+const num = (value) => {
+  const text = (Math.round(value * 100) / 100).toFixed(2).replace(/\.?0+$/, '');
+  return text === '-0' || text === '' ? '0' : text;
+};
+
+/**
+ * Absolute path data and ink bounds for a text laid out at `size`, starting at pen x `x0`, baseline y `baseline`.
+ * `smallCaps` draws every glyph after the first at `K` of the size (the advance scales with it).
+ */
+function outline(text, size, spacing, x0, baseline, smallCaps) {
+  const run = font.layout(text);
+  let pen = x0;
+  let d = '';
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  const track = (x, y) => {
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  };
+  run.glyphs.forEach((glyph, index) => {
+    const scale = ((smallCaps && index > 0 ? K : 1) * size) / font.unitsPerEm;
+    const tx = (x) => pen + x * scale;
+    const ty = (y) => baseline - y * scale;
+    for (const command of glyph.path.commands) {
+      const a = command.args;
+      if (command.command === 'moveTo') {
+        d += `M${num(tx(a[0]))} ${num(ty(a[1]))}`;
+        track(tx(a[0]), ty(a[1]));
+      } else if (command.command === 'lineTo') {
+        d += `L${num(tx(a[0]))} ${num(ty(a[1]))}`;
+        track(tx(a[0]), ty(a[1]));
+      } else if (command.command === 'quadraticCurveTo') {
+        d += `Q${num(tx(a[0]))} ${num(ty(a[1]))} ${num(tx(a[2]))} ${num(ty(a[3]))}`;
+        track(tx(a[2]), ty(a[3]));
+      } else if (command.command === 'bezierCurveTo') {
+        d += `C${num(tx(a[0]))} ${num(ty(a[1]))} ${num(tx(a[2]))} ${num(ty(a[3]))} ${num(tx(a[4]))} ${num(ty(a[5]))}`;
+        track(tx(a[4]), ty(a[5]));
+      } else if (command.command === 'closePath') {
+        d += 'Z';
+      } else {
+        throw new Error(`unexpected path command ${command.command}`);
+      }
+    }
+    pen += run.positions[index].xAdvance * scale + spacing;
+  });
+  return { d, minX, maxX, minY, maxY };
+}
+
+const TEXT1 = 'SEMICONDUCTOR';
+const TEXT2 = 'SERVICES, INC.';
+
+// Natural ink width of line 2 at SIZE2 (no spacing), then the spacing that makes it TARGET_RATIO of line 1.
+const line1Probe = outline(TEXT1, SIZE1, 0, 0, 0, true);
+const w1 = line1Probe.maxX - line1Probe.minX;
+const line2Probe = outline(TEXT2, SIZE2, 0, 0, 0, false);
+const natural2 = line2Probe.maxX - line2Probe.minX;
+const glyphCount2 = font.layout(TEXT2).glyphs.length;
+const spacing2 = (TARGET_RATIO * w1 - natural2) / (glyphCount2 - 1);
+
+// Final placement: the topmost ink of line 1 (the S) at y = 0, line 2 below its baseline, centred on line 1's ink centre.
+const base1 = -line1Probe.minY;
+const line1 = outline(TEXT1, SIZE1, 0, -line1Probe.minX, base1, true);
+const centre1 = (line1.minX + line1.maxX) / 2;
+const baseline2 = base1 + GAP + CAP * SIZE2;
+const probe2 = outline(TEXT2, SIZE2, spacing2, 0, baseline2, false);
+const w2 = probe2.maxX - probe2.minX;
+const line2 = outline(TEXT2, SIZE2, spacing2, centre1 - w2 / 2 - probe2.minX, baseline2, false);
+
+const width = Math.max(line1.maxX, line2.maxX) - Math.min(line1.minX, line2.minX);
+const height = Math.max(line1.maxY, line2.maxY) - Math.min(line1.minY, line2.minY);
+const viewBox = [0, 0, Math.ceil(width * 100) / 100, Math.ceil(height * 100) / 100];
+const result = {
+  smallCapsScale: K,
+  size1: SIZE1,
+  size2: SIZE2,
+  gap: GAP,
+  spacing2,
+  spacing2Em: spacing2 / SIZE2,
+  line1: { minX: line1.minX, maxX: line1.maxX, minY: line1.minY, maxY: line1.maxY, baseline: base1 },
+  line2: { minX: line2.minX, maxX: line2.maxX, minY: line2.minY, maxY: line2.maxY, baseline: baseline2 },
+  viewBox,
+  widthPerSize: viewBox[2] / SIZE1,
+  heightPerSize: viewBox[3] / SIZE1,
+  d1: line1.d,
+  d2: line2.d,
+  d1Bytes: line1.d.length,
+  d2Bytes: line2.d.length,
+};
+writeFileSync(outJson, JSON.stringify(result, null, 2));
+
+// Optional: emit the React component (the only place the outlines live in the repository).
+if (componentArg !== undefined && componentArg !== '-') {
+  const [, , vbW, vbH] = viewBox;
+  const source = `/*
+ * The two-line wordmark of the shell bar (WP5-UX2-T06): "Semiconductor" over "SERVICES, INC.".
+ *
+ * The letters are vector OUTLINES of those two lines of text, generated once from the company's own typeface
+ * with a throwaway script (the shapes are the company's logo artwork). The application ships no font file, no
+ * font-face rule, no SVG text element and no font family for the mark; tests/client/wordmarkAsset.test.ts
+ * guards this.
+ *
+ * Geometry: one coordinate system of ${vbW} x ${vbH} units, where 1 unit is 1 CSS px when the first line
+ * is set at ${SIZE1}px (the --wordmark-size token). Line 1 is the capital S at ${SIZE1} units followed by the other
+ * twelve letters as small capitals at ${K} of that size (as in the owner's reference image); line 2 is
+ * drawn at ${SIZE2} units with ${result.spacing2Em.toFixed(2)} em of letter-spacing, centred under line 1. The fills come from the CSS
+ * classes (the --wordmark-main and --wordmark-sub tokens), so the mark follows the light and dark themes. The graphic is
+ * decorative: the shell brand carries the one accessible name as visually hidden text.
+ */
+
+/** "Semiconductor" (a full-size S, then small capitals). */
+const MAIN_PATH =
+  '${result.d1}';
+
+/** "SERVICES, INC." */
+const SUB_PATH =
+  '${result.d2}';
+
+export function BrandWordmark() {
+  return (
+    <svg className="wordmark" viewBox="0 0 ${vbW} ${vbH}" aria-hidden="true" focusable="false">
+      <path className="wordmark-main" d={MAIN_PATH} />
+      <path className="wordmark-sub" d={SUB_PATH} />
+    </svg>
+  );
+}
+`;
+  writeFileSync(componentArg, source);
+}

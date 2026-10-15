@@ -15,8 +15,10 @@ import { usDate, usShortDate } from './format.ts';
  * accounting dates; session times are shown in the display zone (R-07).
  */
 
-/** The form header, as on the Excel template and the PDF. */
-export const SHEET_COMPANY = 'C&D Semiconductor Services, Inc.';
+/**
+ * The form title, as on the Excel template and the PDF. The company name is in the top bar and is not
+ * repeated on the sheet (WP5-UX2-T06); the PDF keeps its own company header.
+ */
 export const SHEET_TITLE = 'Time sheet for salaried exempt employees';
 
 /** The visual row names; each cell repeats its row name for screen readers. */

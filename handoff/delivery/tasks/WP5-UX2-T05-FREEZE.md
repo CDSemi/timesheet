@@ -160,4 +160,14 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(The committer appends results here.)
+- Pre-HEAD 54dda11bbd95e8a8df07aa5918d1e6736231a0a5; post-HEAD and commit
+  fa2e679273185e3ebad9f3af425177bf21fb8ac1; pushed yes; remote SHA the same.
+- Digest pre and post: 38a2bb09b2b98f467f1966aa3524c463d7be366bd5c1c495cb71fefcca9d5369
+  (810 files).
+- Staged 39: 6 source, 4 modified handoff, 2 task records, 27 evidence (4 + 23).
+- Other modified tracked handoff files: none.
+- Checks, all exit 0: node v24.21.0; precommit PASS 39; diff --check; JSON parse
+  (via Python); validate_orchestration; check_recovery (106 probes); preflight PASS;
+  fetch, push dry-run and push.
+- Fixes: none. Deviation: the TEMP folder did not exist, so raw output went to the
+  evidence folder. Details: evidence/WP5-UX2-T05-FREEZE/checks.txt.

@@ -248,9 +248,15 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   const isDesktop = project === 'desktop';
   await expect(page.locator('[data-sheet="desktop"]')).toHaveCount(isDesktop ? 1 : 0);
   await expect(page.locator('[data-sheet="phone"]')).toHaveCount(isDesktop ? 0 : 1);
-  // The Excel form: company header, two Monday to Sunday bands of seven days, Overtime Total, signature lines.
+  // The Excel form: title and fields, two Monday to Sunday bands of seven days, Overtime Total, signature lines.
   const form = page.getByRole('article', { name: 'Timesheet form' });
-  await expect(form).toContainText('C&D Semiconductor Services, Inc.');
+  // WP5-UX2-T06: the company name is in the top bar (visually hidden, once) and is not repeated on the sheet; the PDF keeps it.
+  await expect(form).not.toContainText('C&D Semiconductor Services, Inc.');
+  await expect(form.locator('.company')).toHaveCount(0);
+  await expect(page.getByText('C&D Semiconductor Services, Inc.', { exact: true })).toHaveCount(1);
+  const formHead = form.locator('header.form-head');
+  await expect(formHead).toContainText('Time sheet for salaried exempt employees');
+  for (const field of ['Employee:', 'Payroll Date:', 'Period:']) await expect(formHead.getByText(field, { exact: true })).toHaveCount(1);
   const weeks = form.locator('section.sheet-week');
   await expect(weeks).toHaveCount(2);
   for (const index of [0, 1]) await expect(weeks.nth(index).locator('[data-day]')).toHaveCount(7);

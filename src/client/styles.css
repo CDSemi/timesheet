@@ -163,6 +163,26 @@
   --bar-height-compact: 52px;
   --tabbar-height: 56px;
   --brand-logo-size: 36px;
+  /*
+   * The wordmark beside the logo (WP5-UX2-T06). --wordmark-size is the size of its first line; the second line
+   * is drawn at one third of it inside the same graphic, so one token scales both. The graphic's coordinate box
+   * is 151.36 x 27.78 units for a 21px first line (7.21 and 1.323 times the size), so the width and height follow
+   * from the size. The brand colours were re-sampled from the owner's image (the thickest blue strokes and the
+   * darkest grey pixels): fixed in the light theme, a lighter tint in the dark one (both dark sets below).
+   */
+  --wordmark-size: 21px;
+  --wordmark-width: calc(var(--wordmark-size) * 7.21);
+  --wordmark-height: calc(var(--wordmark-size) * 1.323);
+  --wordmark-main: #006eba;
+  --wordmark-sub: #4c4f57;
+  /* The space between the logo and the wordmark inside the brand */
+  --shell-brand-inner-gap: var(--space-3);
+  /*
+   * The bar's column gap, and the total gap between the brand and the navigation (owner: "a little further
+   * from the text and logo, so it is balanced"). The wordmark shows from 1440px, where the gap grows one step.
+   */
+  --shell-gap: var(--space-5);
+  --shell-brand-gap: var(--space-5);
   --layer-bar: 3;
   --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(28 36 48 / 0.06);
   --more-width: 16rem;
@@ -242,6 +262,8 @@
     --accent-line: rgb(110 168 255 / 0.5);
     --hover-fill: rgb(110 168 255 / 0.20);
     --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(4 8 14 / 0.3);
+    --wordmark-main: var(--accent);
+    --wordmark-sub: var(--muted);
   }
 }
 
@@ -279,6 +301,8 @@
   --accent-line: rgb(110 168 255 / 0.5);
   --hover-fill: rgb(110 168 255 / 0.20);
   --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(4 8 14 / 0.3);
+  --wordmark-main: var(--accent);
+  --wordmark-sub: var(--muted);
 }
 
 :root[data-theme='light'] {
@@ -329,23 +353,60 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-5);
+  gap: var(--space-2) var(--shell-gap);
   min-height: var(--bar-height-compact);
   padding: var(--space-2) var(--space-4);
   background: var(--card);
   box-shadow: var(--shadow-panel);
 }
 
-/* The brand is the traced C&D logo (WP5-UX2-T05, a fixed-colour mark); its name is the visually hidden text. */
+/*
+ * The brand is the traced C&D logo (WP5-UX2-T05, a fixed-colour mark) and, from 1440px, the two-line wordmark
+ * (WP5-UX2-T06); its one name is the visually hidden text. Both graphics are decorative.
+ */
 .shell-brand {
   display: inline-flex;
   align-items: center;
+  gap: var(--shell-brand-inner-gap);
 }
 
 .shell-brand img {
   display: block;
+  flex: none;
   width: var(--brand-logo-size);
   height: var(--brand-logo-size);
+}
+
+.wordmark {
+  display: none;
+  flex: none;
+  width: var(--wordmark-width);
+  height: var(--wordmark-height);
+}
+
+.wordmark-main {
+  fill: var(--wordmark-main);
+}
+
+.wordmark-sub {
+  fill: var(--wordmark-sub);
+}
+
+/*
+ * Custom properties cannot drive a media query: 1440px is the wordmark breakpoint. Measured on the built app: with
+ * a "Shared with me" switcher and a 20-character display name the one-row bar needs 1408px with the wordmark
+ * (1376px for 16 characters) and a 16-character share owner; below that it wraps to two rows, so the wordmark
+ * waits for 1440px, which also leaves room for a vertical scrollbar. A longer owner or user name widens the bar
+ * further and wraps it as it already did at narrower widths.
+ */
+@media (min-width: 1440px) {
+  :root {
+    --shell-brand-gap: var(--space-6);
+  }
+
+  .wordmark {
+    display: block;
+  }
 }
 
 .shell-nav,
@@ -535,6 +596,11 @@ html {
   .shell-nav,
   .shell-user {
     display: flex;
+  }
+
+  /* The total space from the brand to the menu is --shell-brand-gap: the bar's own column gap plus this margin. */
+  .shell-nav {
+    margin-inline-start: calc(var(--shell-brand-gap) - var(--shell-gap));
   }
 
   .shell-tabs {
@@ -1557,12 +1623,6 @@ textarea {
   border-bottom: var(--rule) solid var(--sheet-rule-strong);
 }
 
-.company {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-heavy);
-  letter-spacing: var(--letter-spacing-tight);
-}
-
 .form-title {
   margin-top: var(--space-0);
   color: var(--muted);
@@ -2187,15 +2247,7 @@ textarea {
     padding-bottom: var(--space-2);
   }
 
-  /* A one-line form header as in mockup A2: company and form title together, the fields in small type. */
-  .form-brand {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0 var(--space-2);
-  }
-
-  /* As in mockup A2 the phone header shows the company and the fields; the form title stays for screen readers. */
+  /* The company name is in the top bar, not on the sheet (WP5-UX2-T06): the phone header shows the fields, and the form title stays for screen readers. */
   .form-title {
     position: absolute;
     width: var(--hairline);
@@ -2209,10 +2261,6 @@ textarea {
   .form-fields {
     gap: 0 var(--space-3);
     font-size: var(--font-size-xs);
-  }
-
-  .company {
-    font-size: var(--font-size-sm);
   }
 
   .sheet-foot .ot-total {
@@ -2430,7 +2478,7 @@ textarea {
     grid-template-columns: minmax(0, var(--track)) var(--editor-width);
   }
 
-  /* The narrower sheet beside the panel stacks its form header instead of squeezing the company name. */
+  /* The narrower sheet beside the panel stacks its form header instead of squeezing the title. */
   .sheet-area.with-editor .form-head {
     grid-template-columns: var(--track);
   }
@@ -3147,7 +3195,7 @@ textarea.mono {
     grid-template-columns: minmax(0, var(--track)) var(--checklist-width);
   }
 
-  /* The narrower sheet beside the checklist stacks its form header instead of squeezing the company name. */
+  /* The narrower sheet beside the checklist stacks its form header instead of squeezing the title. */
   .review-layout .form-head {
     grid-template-columns: var(--track);
   }

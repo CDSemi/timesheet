@@ -160,9 +160,20 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   2.87 mean at 512/64/32 (within thresholds; renders viewed), favicon, logo brand with the
   hidden company name; unit 1869; e2e desktop 196, mobile 203, 0 failed; verify 0; digest
   38a2bb09 (810 files). No 1px ring on the rim (for the audit).
-- Next: WP5-UX2-T05-FREEZE (committer, alone), then the T06 brief (wordmark).
-- Uncommitted now: the T05 source (6 paths), the board, this checkpoint (+ vi), the
-  T04-FREEZE results and evidence, the T05 and T05-FREEZE records, the T05 evidence.
+- WP5-UX2-T05-FREEZE done: fa2e679273185e3ebad9f3af425177bf21fb8ac1 on main, pushed (39
+  paths; digests 38a2bb09, 810 files; every check exit 0; raw step outputs written as
+  `.txt` in its evidence folder, checked: no profile path or private address).
+- Running: WP5-UX2-T06 (worker-high, sonnet; wordmark outlines, brand-to-menu gap,
+  on-screen company-line removal) on fa2e679 / 38a2bb09.
+- WP5-UX2-T06 done (worker-high, self-reported claude-sonnet-5-5; reported, not
+  independent proof): wordmark outlines (5.8 KB, font not committed), light
+  #006eba/#4c4f57, dark accent/muted tints; fidelity within the PLAN4 checks (render
+  viewed); breakpoint raised to 1440 because the bar wraps at 1280 with a share; gap
+  24px/32px; company line removed on screen (PDF unchanged); unit 1877; e2e desktop 198,
+  mobile 204, 0 failed; verify 0; digest 3407f8f7 (812 files).
+- Next: WP5-UX2-T06-FREEZE (committer, alone), then the T07 brief (Light/Dark toggle).
+- Uncommitted now: the T06 source (9 paths), the board, this checkpoint (+ vi), the
+  T05-FREEZE results and evidence, the T06 and T06-FREEZE records, the T06 evidence.
 
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 

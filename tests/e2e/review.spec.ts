@@ -193,6 +193,13 @@ test('the review shows the server content for all 14 days, then the sign-off sub
 
   // Exactly the server payload: 14 days, and every figure on screen is the server's own number.
   await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  // WP5-UX2-T06: the sheet header keeps the title and the fields; the company name is in the top bar only (the PDF keeps it).
+  const reviewForm = page.getByRole('article', { name: 'What you sign' });
+  await expect(reviewForm).not.toContainText('C&D Semiconductor Services, Inc.');
+  await expect(reviewForm.locator('.company')).toHaveCount(0);
+  await expect(reviewForm.locator('header.form-head')).toContainText('Time sheet for salaried exempt employees');
+  for (const field of ['Employee:', 'Payroll Date:', 'Period:']) await expect(reviewForm.locator('header.form-head').getByText(field, { exact: true })).toHaveCount(1);
+  await expect(page.getByText('C&D Semiconductor Services, Inc.', { exact: true })).toHaveCount(1);
   for (const day of api.payload.days) {
     const row = page.locator(`[data-review-day="${day.work_date}"]`);
     // The detail rows are always on in the review: worked on a workday / on a day off, as h:mm.

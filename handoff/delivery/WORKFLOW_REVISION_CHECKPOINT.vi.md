@@ -164,10 +164,21 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   logo trên thanh trên cùng kèm tên công ty ẩn; unit 1869; e2e desktop 196, mobile 203, 0
   lỗi; verify 0; digest 38a2bb09 (810 file). Không thêm viền 1px cho vành logo (để audit
   xem).
-- Tiếp theo: WP5-UX2-T05-FREEZE (committer, chạy một mình), rồi brief T06 (chữ thương
-  hiệu).
-- Đang chưa commit: source T05 (6 đường dẫn), board, checkpoint này (+ en), kết quả và
-  bằng chứng T04-FREEZE, bản ghi T05 và T05-FREEZE, bằng chứng T05.
+- Xong WP5-UX2-T05-FREEZE: fa2e679273185e3ebad9f3af425177bf21fb8ac1 trên main, đã push
+  (39 đường dẫn; digest 38a2bb09, 810 file; mọi kiểm tra exit 0; đầu ra thô được ghi thành
+  file `.txt` trong thư mục bằng chứng của nó, đã kiểm: không có đường dẫn hồ sơ người dùng
+  hay địa chỉ riêng).
+- Đang chạy: WP5-UX2-T06 (worker-high, sonnet; chữ thương hiệu dạng vector, khoảng cách
+  với menu, bỏ dòng tên công ty trên màn hình) trên fa2e679 / 38a2bb09.
+- Xong WP5-UX2-T06 (worker-high, tự báo claude-sonnet-5-5; do người làm báo, chưa phải
+  bằng chứng độc lập): chữ thương hiệu dạng vector (5.8 KB, không commit font), sáng
+  #006eba/#4c4f57, tối dùng tông accent/muted; độ khớp đạt các kiểm tra của PLAN4 (đã xem
+  ảnh); mốc hiển thị nâng lên 1440 vì ở 1280 có chia sẻ thì thanh xuống dòng; khoảng cách
+  24px/32px; bỏ dòng tên công ty trên màn hình (PDF giữ nguyên); unit 1877; e2e desktop
+  198, mobile 204, 0 lỗi; verify 0; digest 3407f8f7 (812 file).
+- Tiếp theo: WP5-UX2-T06-FREEZE (committer, chạy một mình), rồi brief T07 (nút Light/Dark).
+- Đang chưa commit: source T06 (9 đường dẫn), board, checkpoint này (+ en), kết quả và bằng
+  chứng T05-FREEZE, bản ghi T06 và T06-FREEZE, bằng chứng T06.
 
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 

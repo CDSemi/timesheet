@@ -7,7 +7,6 @@ import {
   dayClass,
   DETAIL_ROWS,
   overtimeTotal,
-  SHEET_COMPANY,
   SHEET_ROWS,
   SHEET_TITLE,
   type SheetDay,
@@ -252,7 +251,6 @@ export function TimesheetSheet({
     <article className={`sheet ${desktop ? 'sheet-desktop' : 'sheet-phone'}`} aria-label="Timesheet form" data-sheet={desktop ? 'desktop' : 'phone'}>
       <header className="form-head">
         <div className="form-brand">
-          <div className="company">{SHEET_COMPANY}</div>
           <div className="form-title">{SHEET_TITLE}</div>
         </div>
         <dl className="form-fields">
@@ -329,7 +327,6 @@ export function ReviewSheet({
     <article className={`sheet sheet-review ${desktop ? 'sheet-desktop' : 'sheet-phone'}`} aria-label="What you sign" data-sheet={desktop ? 'desktop' : 'phone'}>
       <header className="form-head">
         <div className="form-brand">
-          <div className="company">{SHEET_COMPANY}</div>
           <div className="form-title">{SHEET_TITLE}</div>
         </div>
         <dl className="form-fields">

@@ -1,5 +1,6 @@
 import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { api, type ReceivedShare, type User } from '../api.ts';
+import { BrandWordmark } from './BrandWordmark.tsx';
 import { parseReviewHash, reviewHash } from './reviewModel.ts';
 import { SharingSwitcher } from './SharingSwitcher.tsx';
 import { parseSharedHash, type SharedView } from './sharingModel.ts';
@@ -157,6 +158,7 @@ export function AppShell({
       <header ref={barRef} className="shell-bar">
         <span className="shell-brand">
           <img src="/cd-logo.svg" alt="" width={36} height={36} />
+          <BrandWordmark />
           <span className="sr-only">C&amp;D Semiconductor Services, Inc.</span>
         </span>
         <nav className="shell-nav" aria-label="Main">
