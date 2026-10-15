@@ -65,7 +65,7 @@ The seed (`npm run seed`) creates three accounts: `admin@example.invalid`, `empl
 
 ## Sharing
 
-An individual can share their own timesheets with another account from Settings, item by item: timesheets none, view or edit, read-only OT summary and ledger, and final PDF downloads (a PDF contains the signature image). The grant names the account by its exact email. Edit covers manual day, session, break and batch edits; never Clock in/out, sign-off, corrections or sending. Shares are revocable by the owner or the grantee, effective on the next request, never transitive, and audited; administrators can list and revoke them but not create or use them. API: `GET|POST /api/shares`, `PUT /api/shares/{id}`, `POST /api/shares/{id}/revoke`; shared reads and writes go through the explicit allowlist under `/api/shared/{ownerId}`.
+An individual can share their own timesheets with another account from Settings, item by item: timesheets none, view or edit, read-only OT summary and ledger, and final PDF downloads (a PDF contains the signature image). The grant names the account by its exact email. Edit covers manual day, session, break and batch edits; never Check in/out, sign-off, corrections or sending. Shares are revocable by the owner or the grantee, effective on the next request, never transitive, and audited; administrators can list and revoke them but not create or use them. API: `GET|POST /api/shares`, `PUT /api/shares/{id}`, `POST /api/shares/{id}/revoke`; shared reads and writes go through the explicit allowlist under `/api/shared/{ownerId}`.
 
 ## Operations, the drill and import fixtures (WP4)
 
@@ -115,7 +115,7 @@ All routes are under `/api`, return JSON and take the owner from the session coo
 | `GET /days/{date}`, `PUT /days/{date}` | Day view; label, partial leave minutes, WFH and notes |
 | `POST /days/{date}/sessions` | Manual session: UTC `…Z` strings or `{local, zone, fold?, offset?}` |
 | `GET`, `PUT`, `DELETE /sessions/{id}` | Own session; updates and deletes need `expected_version` |
-| `POST /clock/in`, `POST /clock/out` | Live clock at server time (seconds kept); clock-out confirms breaks or leaves them unknown |
+| `POST /clock/in`, `POST /clock/out` | Live check in and check out at server time (seconds kept); check-out confirms breaks or leaves them unknown |
 | `GET /policies`, `POST /policies` | Own effective-dated policy versions (append-only, prospective) |
 
 Errors use `{ "error": { "code", "message", "details?" } }`: 401 authentication, 403 origin, 404 not found (also another user's record), 409 `stale_version`/immutable/conflict, 415 media type, 422 validation (domain codes such as `overlapping_user_intervals`, `nonexistent_local_time`, `reason_required`, `retroactive_change`), 429 rate limit.

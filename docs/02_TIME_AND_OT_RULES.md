@@ -12,7 +12,7 @@ Subtract confirmed excluded breaks; aggregate seconds first, then floor each dai
 
 Default B=480 worked minutes, reference 08:00–17:00. Excluded breaks: 10:00–10:15, 12:00–12:30, 14:30–14:45 (60 minutes total). Treating all three as excluded is an explicit internal-tracker design interpretation, not a payroll classification.
 
-Each break has placement, duration and `counts_as_work`. Default suggestions shift with first clock-in: a 09:00 start moves breaks to 11:00, 13:00 and 15:30. Confirm suggested breaks, edit actuals or explicitly confirm none at save/Clock out/review. Unknown is different from confirmed zero; never deduct future breaks on a short/open shift.
+Each break has placement, duration and `counts_as_work`. Default suggestions shift with first check-in: a 09:00 start moves breaks to 11:00, 13:00 and 15:30. Confirm suggested breaks, edit actuals or explicitly confirm none at save/Check out/review. Unknown is different from confirmed zero; never deduct future breaks on a short/open shift.
 
 Expected finish = actual start + required work + excluded breaks/interruptions. With 60 excluded minutes, 07:00/08:00/09:00 starts imply 16:00/17:00/18:00. Reference clock time alone creates no OT/deficit. Validate consistency between configured reference duration, required minutes and breaks.
 

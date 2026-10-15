@@ -217,9 +217,22 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   unit 1878; e2e desktop 209/0/29, mobile 225/0/13; quét 3 thời điểm 0 lỗi; ngân sách
   571.5/670.4/623.5/722.4 và trạng thái đã rời kỳ 571.5/670.4 trên 788; AX-01 0 ô bị che;
   verify 0; digest 29ea76df (814 file).
-- Tiếp theo: WP5-UX2-T09-FREEZE (committer, chạy một mình), rồi brief T10 tài liệu.
-- Đang chưa commit: source T09 (12 đường dẫn), board, checkpoint này (+ en), kết quả và
-  bằng chứng T08-FREEZE, bản ghi T09 và T09-FREEZE, bằng chứng T09.
+- Xong WP5-UX2-T09-FREEZE: f70a5c0479b6cc1a0dd10d29f7791157ff29c43d trên main, đã push (43
+  đường dẫn; digest 29ea76df, 814 file; mọi kiểm tra exit 0).
+- Đang chạy: WP5-UX2-T10 (worker, sonnet; docs/04, 10, 12, 01, 02 và DEVELOPMENT, EN và
+  VI) trên f70a5c0 / 29ea76df. Sau commit đóng băng của nó: gate cuối package
+  WP5-UX2-GATE, rồi audit opus mới WP5-UX2-AUDIT.
+- Xong WP5-UX2-T10 (worker, tự báo claude-sonnet-5-5; do người làm báo, chưa phải bằng
+  chứng độc lập): docs/04, docs/10 (mục mới của vòng 2, danh sách quyết định coordinator,
+  WP5-UX-Q1/Q2 còn treo; E-1 và F-Q5 đổi chữ sang "Check in/out" có ghi rõ), docs/12,
+  docs/01, docs/02 và DEVELOPMENT, EN và VI; khớp song ngữ; preflight 0; verify 0; digest
+  20e7a7c8 (814 file).
+- Tiếp theo: WP5-UX2-T10-FREEZE (commit đóng băng cuối package, committer chạy một
+  mình), rồi WP5-UX2-GATE (verifier) và audit opus mới WP5-UX2-AUDIT. Khi gate ghi digest
+  mới, WP5-UX-AUDIT-AB9 và sáu audit trỏ tới nó được gán superseded_by WP5-UX2-AUDIT
+  (không tạo chuỗi).
+- Đang chưa commit: tài liệu T10 (12 đường dẫn), board, checkpoint này (+ en), kết quả và
+  bằng chứng T09-FREEZE, bản ghi T10 và T10-FREEZE, bằng chứng T10.
 
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 

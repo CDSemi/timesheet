@@ -12,7 +12,7 @@ Trừ nghỉ loại trừ đã xác nhận; cộng giây trước rồi lấy xu
 
 Mặc định B=480 phút thực làm, lịch 08:00–17:00. Nghỉ bị loại: 10:00–10:15, 12:00–12:30, 14:30–14:45 (tổng 60 phút). Loại cả ba là diễn giải thiết kế rõ cho sổ nội bộ, không phải phân loại tính lương.
 
-Mỗi nghỉ có vị trí, thời lượng và `counts_as_work`. Gợi ý mặc định dịch theo clock-in đầu: vào 09:00 thì nghỉ 11:00, 13:00 và 15:30. Xác nhận gợi ý, sửa thực tế hoặc xác nhận không nghỉ lúc lưu/Clock out/review. Chưa biết khác với xác nhận không nghỉ; không trừ nghỉ tương lai của ca ngắn/mở.
+Mỗi nghỉ có vị trí, thời lượng và `counts_as_work`. Gợi ý mặc định dịch theo check-in đầu: vào 09:00 thì nghỉ 11:00, 13:00 và 15:30. Xác nhận gợi ý, sửa thực tế hoặc xác nhận không nghỉ lúc lưu/Check out/review. Chưa biết khác với xác nhận không nghỉ; không trừ nghỉ tương lai của ca ngắn/mở.
 
 Giờ đủ công = giờ vào thật + giờ cần làm + nghỉ/gián đoạn bị loại. Với nghỉ 60 phút, vào 07:00/08:00/09:00 tương ứng ra 16:00/17:00/18:00. Chỉ sớm/muộn hơn giờ tham chiếu không tạo OT/thiếu. Kiểm nhất quán thời lượng lịch tham chiếu, phút cần làm và nghỉ.
 

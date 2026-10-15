@@ -211,9 +211,22 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   unit 1878; e2e desktop 209/0/29, mobile 225/0/13; sweep 3 instants 0 failed; budgets
   571.5/670.4/623.5/722.4 and away 571.5/670.4 of 788; AX-01 0 hidden; verify 0; digest
   29ea76df (814 files).
-- Next: WP5-UX2-T09-FREEZE (committer, alone), then the T10 docs brief.
-- Uncommitted now: the T09 source (12 paths), the board, this checkpoint (+ vi), the
-  T08-FREEZE results and evidence, the T09 and T09-FREEZE records, the T09 evidence.
+- WP5-UX2-T09-FREEZE done: f70a5c0479b6cc1a0dd10d29f7791157ff29c43d on main, pushed (43
+  paths; digests 29ea76df, 814 files; every check exit 0).
+- Running: WP5-UX2-T10 (worker, sonnet; docs/04, 10, 12, 01, 02 and DEVELOPMENT, EN and
+  VI) on f70a5c0 / 29ea76df. After its freeze: the package-final gate WP5-UX2-GATE, then
+  the fresh opus audit WP5-UX2-AUDIT.
+- WP5-UX2-T10 done (worker, self-reported claude-sonnet-5-5; reported, not independent
+  proof): docs/04, docs/10 (new round-2 section, coordinator list, carried WP5-UX-Q1/Q2;
+  E-1 and F-Q5 reworded to "Check in/out" with the change disclosed), docs/12, docs/01,
+  docs/02 and DEVELOPMENT, EN and VI; parity OK; preflight 0; verify 0; digest 20e7a7c8
+  (814 files).
+- Next: WP5-UX2-T10-FREEZE (the package-final freeze, committer alone), then
+  WP5-UX2-GATE (verifier) and the fresh opus WP5-UX2-AUDIT. When the gate records the new
+  digest, WP5-UX-AUDIT-AB9 and the six audits that point to it get superseded_by
+  WP5-UX2-AUDIT (no chains).
+- Uncommitted now: the T10 docs (12 paths), the board, this checkpoint (+ vi), the
+  T09-FREEZE results and evidence, the T10 and T10-FREEZE records, the T10 evidence.
 
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 

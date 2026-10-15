@@ -65,7 +65,7 @@ Seed (`npm run seed`) tạo ba tài khoản: `admin@example.invalid`, `employee@
 
 ## Chia sẻ
 
-Một cá nhân có thể chia sẻ timesheet của mình với tài khoản khác từ màn Cài đặt, theo từng mục: timesheet không/xem/sửa, tổng hợp và sổ cái OT chỉ đọc, và tải PDF cuối (PDF chứa ảnh chữ ký). Quyền cấp gọi tài khoản bằng đúng email. Sửa gồm sửa ngày, phiên, giờ nghỉ và hàng loạt thủ công; không bao giờ gồm Clock in/out, sign-off, sửa sau chốt hay gửi. Chia sẻ thu hồi được bởi chủ sở hữu hoặc người được chia sẻ, có hiệu lực từ yêu cầu kế tiếp, không bắc cầu và có audit; admin liệt kê và thu hồi được nhưng không tạo hay dùng. API: `GET|POST /api/shares`, `PUT /api/shares/{id}`, `POST /api/shares/{id}/revoke`; đọc và ghi qua chia sẻ đi theo danh sách cho phép tường minh dưới `/api/shared/{ownerId}`.
+Một cá nhân có thể chia sẻ timesheet của mình với tài khoản khác từ màn Cài đặt, theo từng mục: timesheet không/xem/sửa, tổng hợp và sổ cái OT chỉ đọc, và tải PDF cuối (PDF chứa ảnh chữ ký). Quyền cấp gọi tài khoản bằng đúng email. Sửa gồm sửa ngày, phiên, giờ nghỉ và hàng loạt thủ công; không bao giờ gồm Check in/out, sign-off, sửa sau chốt hay gửi. Chia sẻ thu hồi được bởi chủ sở hữu hoặc người được chia sẻ, có hiệu lực từ yêu cầu kế tiếp, không bắc cầu và có audit; admin liệt kê và thu hồi được nhưng không tạo hay dùng. API: `GET|POST /api/shares`, `PUT /api/shares/{id}`, `POST /api/shares/{id}/revoke`; đọc và ghi qua chia sẻ đi theo danh sách cho phép tường minh dưới `/api/shared/{ownerId}`.
 
 ## Vận hành, drill và dữ liệu nhập mẫu (WP4)
 
@@ -115,7 +115,7 @@ Mọi route nằm dưới `/api`, trả JSON và chỉ lấy chủ sở hữu t�
 | `GET /days/{date}`, `PUT /days/{date}` | Xem ngày; nhãn, số phút nghỉ một phần, WFH và ghi chú |
 | `POST /days/{date}/sessions` | Phiên nhập tay: chuỗi UTC `…Z` hoặc `{local, zone, fold?, offset?}` |
 | `GET`, `PUT`, `DELETE /sessions/{id}` | Phiên của chính mình; sửa và xóa cần `expected_version` |
-| `POST /clock/in`, `POST /clock/out` | Chấm công trực tiếp theo giờ server (giữ giây); khi ra xác nhận giờ nghỉ hoặc để chưa biết |
+| `POST /clock/in`, `POST /clock/out` | Check in và check out trực tiếp theo giờ server (giữ giây); khi check out xác nhận giờ nghỉ hoặc để chưa biết |
 | `GET /policies`, `POST /policies` | Phiên bản chính sách theo ngày hiệu lực của chính mình (chỉ thêm, áp dụng về sau) |
 
 Lỗi có dạng `{ "error": { "code", "message", "details?" } }`: 401 xác thực, 403 origin, 404 không tìm thấy (kể cả bản ghi của người khác), 409 `stale_version`/bất biến/xung đột, 415 kiểu dữ liệu, 422 kiểm tra hợp lệ (mã miền như `overlapping_user_intervals`, `nonexistent_local_time`, `reason_required`, `retroactive_change`), 429 giới hạn tần suất.

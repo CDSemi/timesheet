@@ -175,4 +175,17 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(The committer appends results here.)
+Self-reported model: claude-sonnet-5-5.
+
+- Pre-HEAD 608572f6e8ea53e1567568ac85ca49190b5d45cf (= origin/main); post-HEAD and
+  commit SHA f70a5c0479b6cc1a0dd10d29f7791157ff29c43d; pushed yes; remote SHA the same.
+- Digests: working tree before add 29ea76df... (814 files); git ls-tree of the new HEAD
+  29ea76df... (814 files). Both equal the expected value.
+- Staged 43: 12 source, 4 modified handoff, 2 new task records, 25 evidence (2 T08-FREEZE,
+  23 T09).
+- Other modified tracked handoff files: none.
+- Checks (exit): node v24.21.0; precommit PASS 43 files (0); diff --cached --check (0);
+  JSON parse (0); validate_orchestration PASS (0); check_recovery 106 probes (0);
+  validate_package --preflight PASS (0).
+- Fixes: none. Stops: none. Deviations: none. Evidence in
+  evidence/WP5-UX2-T09-FREEZE/ (checks.txt, commit-message.txt) left unstaged.

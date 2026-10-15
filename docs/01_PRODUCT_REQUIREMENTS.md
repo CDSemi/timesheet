@@ -11,7 +11,7 @@ A personal timesheet tool, ready for isolated coworker accounts later. Record at
 | FR-03 | Default Worked on scheduled weekdays, Holiday on company holidays, Off otherwise | WP2 |
 | FR-04 | Edit Worked/Off/Vacation/Sick/Holiday/Shutdown, partial leave and multiple dates | WP2 |
 | FR-05 | Configurable reference start/end/breaks, 480-minute target, flexible arrival | WP1/WP2 |
-| FR-06 | Manual entry, Clock in/out, multiple sessions, UTC and overnight support | WP1/WP2 |
+| FR-06 | Manual entry, Check in/out, multiple sessions, UTC and overnight support | WP1/WP2 |
 | FR-07 | Daily OT, strict N activation, midpoint-down M rounding, off-calendar OT | WP1 |
 | FR-08 | Optional deficit deduction automatically or at sign-off; no absence-day debit | WP1/WP2 |
 | FR-09 | Traceable OT ledger, corrections, recorded manager permission and partial leave conversion | WP2 |

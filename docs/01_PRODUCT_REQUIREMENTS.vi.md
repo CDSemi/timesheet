@@ -11,7 +11,7 @@ Công cụ timesheet cá nhân, sẵn nền tảng tài khoản riêng cho đồ
 | FR-03 | Mặc định Worked ngày làm theo lịch, Holiday ngày lễ công ty, còn lại Off | WP2 |
 | FR-04 | Sửa Worked/Off/Vacation/Sick/Holiday/Shutdown, nghỉ một phần và nhiều ngày | WP2 |
 | FR-05 | Cấu hình giờ tham chiếu/nghỉ, mốc 480 phút, giờ vào linh hoạt | WP1/WP2 |
-| FR-06 | Nhập tay, Clock in/out, nhiều phiên, UTC và qua đêm | WP1/WP2 |
+| FR-06 | Nhập tay, Check in/out, nhiều phiên, UTC và qua đêm | WP1/WP2 |
 | FR-07 | OT mỗi ngày, vượt N nghiêm ngặt, làm tròn M đúng giữa xuống, OT ngoài lịch | WP1 |
 | FR-08 | Tùy chọn trừ giờ thiếu tự động hoặc khi sign-off; không trừ ngày nghỉ không làm | WP1/WP2 |
 | FR-09 | Sổ OT truy vết, sửa chênh lệch, ghi manager cho phép, đổi phép một phần | WP2 |
