@@ -176,9 +176,19 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   ảnh); mốc hiển thị nâng lên 1440 vì ở 1280 có chia sẻ thì thanh xuống dòng; khoảng cách
   24px/32px; bỏ dòng tên công ty trên màn hình (PDF giữ nguyên); unit 1877; e2e desktop
   198, mobile 204, 0 lỗi; verify 0; digest 3407f8f7 (812 file).
-- Tiếp theo: WP5-UX2-T06-FREEZE (committer, chạy một mình), rồi brief T07 (nút Light/Dark).
-- Đang chưa commit: source T06 (9 đường dẫn), board, checkpoint này (+ en), kết quả và bằng
-  chứng T05-FREEZE, bản ghi T06 và T06-FREEZE, bằng chứng T06.
+- Xong WP5-UX2-T06-FREEZE: 3f5a3b333dede51043000e7123960ac05d26a76b trên main, đã push (68
+  đường dẫn; digest 3407f8f7, 812 file; mọi kiểm tra exit 0; một lần /dev/null).
+- Đang chạy: WP5-UX2-T07 (worker-high, sonnet; nút chuyển Light/Dark dạng nhóm radio có
+  icon mặt trời và mặt trăng, trên desktop và menu More điện thoại) trên 3f5a3b3 / 3407f8f7.
+- Xong WP5-UX2-T07 (worker-high, tự báo claude-sonnet-5-5; do người làm báo, chưa phải
+  bằng chứng độc lập): nhóm radio "Theme" Light | Dark có icon mặt trời và mặt trăng, lựa
+  chọn đang dùng nền đặc màu nhấn; tương phản chữ ít nhất 4.68, viền focus 6.09; thanh
+  trên cùng một hàng ở 1440 khi có chia sẻ; menu More vừa; unit 1877; e2e desktop 204,
+  mobile 210, 0 lỗi; verify 0; digest 3416cf04 (812 file).
+- Tiếp theo: WP5-UX2-T07-FREEZE (committer, chạy một mình), rồi brief T08 (đổi chữ Check
+  in/out).
+- Đang chưa commit: source T07 (8 đường dẫn), board, checkpoint này (+ en), kết quả và bằng
+  chứng T06-FREEZE, bản ghi T07 và T07-FREEZE, bằng chứng T07.
 
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 

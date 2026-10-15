@@ -219,7 +219,7 @@ export function AppShell({
                 {item.label}
               </a>
             ))}
-            <ThemeToggle className="more-action" />
+            <ThemeToggle className="more-theme" />
             <button type="button" className="more-action" onClick={signOut}>
               Sign out
             </button>

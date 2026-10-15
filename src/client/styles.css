@@ -186,7 +186,10 @@
   --layer-bar: 3;
   --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(28 36 48 / 0.06);
   --more-width: 16rem;
-  --theme-glyph-size: 14px;
+  /* The theme control (WP5-UX2-T07): the sun and moon icon size, the segment's side padding, the raised focused segment */
+  --theme-icon-size: 16px;
+  --theme-option-pad-x: 8px;
+  --layer-focus: 1;
   /*
    * Rendered block sizes of the sticky bars (WP5-UX-AX-01, SC 2.4.11). The shell writes the measured
    * sizes over these defaults (a bar wraps to 104px at 768px and with the "Shared with me" switcher),
@@ -225,8 +228,8 @@
 /*
  * The theme (WP5-UX2-T01). The light tokens above are the default. The dark set below is written twice,
  * identically: once for a device that prefers dark and has no manual choice, once for the manual choice
- * (`data-theme` on <html>, set before the first paint by public/theme-init.js and by the Dark mode
- * toggle). tests/client/cssThemeParity.test.ts fails when the two sets differ or a token is missing above.
+ * (`data-theme` on <html>, set before the first paint by public/theme-init.js and by the Light/Dark
+ * theme control). tests/client/cssThemeParity.test.ts fails when the two sets differ or a token is missing above.
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
@@ -547,23 +550,100 @@ body {
 }
 
 /*
- * The "Dark mode" toggle (WP5-UX2-T01). Its pressed look (the dark theme is in effect) is the shared
- * pressed system of the Controls section (WP5-UX2-T02): a solid accent fill with the on-accent text,
- * `--accent-strong` under the pointer. The half-disc glyph is decoration.
+ * The theme control (WP5-UX2-T01, a Light/Dark segmented control since WP5-UX2-T07): two native radios whose
+ * labels paint the segments, the radio itself invisible and covering its label so the whole segment is the
+ * target. The checked segment is the pressed look of the Controls section (WP5-UX2-T02): a solid accent
+ * fill with the on-accent text, `--accent-strong` under the pointer. The unchecked one is a quiet segment
+ * with an accent boundary and the hover tint. The icons are decoration (aria-hidden, stroke in the text colour).
  */
-button.theme-toggle {
+.theme-switch {
   display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
+  align-items: stretch;
 }
 
-.theme-glyph {
+.theme-option {
+  position: relative;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--control-height);
+  padding: var(--space-1) var(--theme-option-pad-x);
+  border: var(--hairline) solid var(--accent);
+  border-radius: var(--radius) 0 0 var(--radius);
+  background: transparent;
+  color: var(--accent);
+  font-weight: var(--font-weight-strong);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.theme-option + .theme-option {
+  margin-inline-start: calc(-1 * var(--hairline));
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.theme-icon {
   flex: none;
-  width: var(--theme-glyph-size);
-  height: var(--theme-glyph-size);
-  border: var(--rule) solid currentColor;
-  border-radius: var(--shape-round);
-  background: linear-gradient(90deg, currentColor var(--shape-round), transparent var(--shape-round));
+  width: var(--theme-icon-size);
+  height: var(--theme-icon-size);
+}
+
+/* The invisible radio covers the segment's whole border box, so the target is the segment's full size. */
+.theme-switch .theme-option input {
+  position: absolute;
+  inset: calc(-1 * var(--hairline));
+  width: calc(100% + 2 * var(--hairline));
+  height: calc(100% + 2 * var(--hairline));
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.theme-option:has(input:checked) {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* The shared ring on the focused segment, raised so the neighbouring segment does not cover it. */
+.theme-option:has(input:focus-visible) {
+  z-index: var(--layer-focus);
+  box-shadow: var(--focus-ring);
+}
+
+@media (hover: hover) {
+  .theme-option:hover:not(:has(input:checked)) {
+    background: var(--hover-fill);
+  }
+
+  .theme-option:hover:has(input:checked) {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+  }
+}
+
+/* Forced colours drop author fills: the checked segment is still told apart by the system highlight. */
+@media (forced-colors: active) {
+  .theme-option:has(input:checked) {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+}
+
+/* In the More panel the control spans the panel and each segment is a 44px target. */
+.more-panel .theme-switch {
+  display: flex;
+  width: 100%;
+}
+
+.more-panel .theme-option {
+  flex: 1;
+  min-height: var(--tap-min);
 }
 
 /*
@@ -807,6 +887,7 @@ button[aria-disabled='true']:active {
   input:not([type='checkbox']):not([type='radio']),
   select,
   label.inline,
+  .theme-option,
   .pick {
     min-height: var(--tap-min);
   }
@@ -814,6 +895,7 @@ button[aria-disabled='true']:active {
   button,
   .nav-link,
   .button-link,
+  .theme-option,
   .pick {
     min-width: var(--tap-min);
   }

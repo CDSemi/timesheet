@@ -40,7 +40,7 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
     await expect(more).toHaveAttribute('aria-expanded', 'true');
     await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings', 'Import']);
     await expect(nav.getByRole('button', { name: 'Sign out' })).toBeVisible();
-    await expect(nav.getByRole('button', { name: 'Dark mode', exact: true })).toBeVisible();
+    await expect(nav.getByRole('radiogroup', { name: 'Theme', exact: true })).toBeVisible();
     await page.screenshot({ path: screenshotPath(`shell-more-${project}-synthetic.png`) });
     await page.keyboard.press('Escape');
     await expect(more).toHaveAttribute('aria-expanded', 'false');
@@ -55,11 +55,11 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
     // Desktop: the top bar lists the main screens (Import is a link inside Settings) and has Sign out.
     await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings']);
     await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
-    await expect(page.getByRole('banner').getByRole('button', { name: 'Dark mode', exact: true })).toBeVisible();
+    await expect(page.getByRole('banner').getByRole('radiogroup', { name: 'Theme', exact: true })).toBeVisible();
   }
 });
 
-test('the Dark mode toggle: first control of the top bar group on a desktop, between the entries and Sign out in More on a phone', async ({
+test('the Theme control: first control of the top bar group on a desktop, between the entries and Sign out in More on a phone', async ({
   page,
   signInThroughUi,
   isMobile,
@@ -70,38 +70,46 @@ test('the Dark mode toggle: first control of the top bar group on a desktop, bet
     const nav = page.getByRole('navigation', { name: 'Main' });
     await nav.getByRole('button', { name: 'More' }).click();
     const panel = page.locator('#more-panel');
-    await expect(panel.getByRole('button')).toHaveText(['Dark mode', 'Sign out']);
-    const toggle = panel.getByRole('button', { name: 'Dark mode', exact: true });
-    await expect(toggle).toHaveAttribute('aria-pressed', /^(true|false)$/);
-    // The toggle sits after the last entry (Settings, Import) and before Sign out; a 44px target.
-    const toggleBox = await toggle.boundingBox();
+    await expect(panel.getByRole('button')).toHaveText(['Sign out']);
+    const control = panel.getByRole('radiogroup', { name: 'Theme', exact: true });
+    await expect(control.getByRole('radio')).toHaveCount(2);
+    await expect(control.locator('label')).toHaveText(['Light', 'Dark']);
+    await expect(control.getByRole('radio', { checked: true })).toHaveCount(1);
+    // The control sits after the last entry (Settings, Import) and before Sign out; 44px targets.
+    const controlBox = await control.boundingBox();
     const lastLink = await panel.getByRole('link').last().boundingBox();
     const signOut = await panel.getByRole('button', { name: 'Sign out' }).boundingBox();
-    expect(toggleBox?.y ?? 0).toBeGreaterThan(lastLink?.y ?? Number.POSITIVE_INFINITY);
-    expect(toggleBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(signOut?.y ?? 0);
-    expect(toggleBox?.height ?? 0).toBeGreaterThanOrEqual(44);
-    expect(toggleBox?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(controlBox?.y ?? 0).toBeGreaterThan(lastLink?.y ?? Number.POSITIVE_INFINITY);
+    expect(controlBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(signOut?.y ?? 0);
+    for (const radio of await control.getByRole('radio').all()) {
+      const box = await radio.boundingBox();
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+      expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    }
     // The compact phone top bar has no theme control.
-    await expect(page.locator('.shell-bar').getByRole('button', { name: 'Dark mode' })).toHaveCount(0);
+    await expect(page.locator('.shell-bar .theme-switch').filter({ visible: true })).toHaveCount(0);
   } else {
     const group = page.locator('.shell-user');
-    await expect(group.getByRole('button')).toHaveText(['Dark mode', 'Sign out']);
-    const toggleBox = await group.getByRole('button', { name: 'Dark mode', exact: true }).boundingBox();
+    await expect(group.getByRole('button')).toHaveText(['Sign out']);
+    const control = group.getByRole('radiogroup', { name: 'Theme', exact: true });
+    await expect(control.locator('label')).toHaveText(['Light', 'Dark']);
+    await expect(control.getByRole('radio', { checked: true })).toHaveCount(1);
+    const controlBox = await control.boundingBox();
     const nameBox = await group.locator('.muted').boundingBox();
-    expect(toggleBox?.x ?? Number.POSITIVE_INFINITY).toBeLessThan(nameBox?.x ?? 0);
+    expect(controlBox?.x ?? Number.POSITIVE_INFINITY).toBeLessThan(nameBox?.x ?? 0);
     // The More panel exists on a phone only.
     await expect(page.locator('#more-panel')).toHaveCount(0);
   }
 });
 
-/** The text of the focused control, or `select` for the sharing switcher's list. */
+/** The text of the focused control, `select` for the sharing switcher's list, or the group name (`Theme`) for a radio. */
 async function focusedLabel(page: Page): Promise<string> {
   return page.evaluate<string>(
-    "(() => { const element = document.activeElement; return element === null ? '' : element.tagName === 'SELECT' ? 'select' : (element.textContent ?? '').trim(); })()",
+    "(() => { const element = document.activeElement; if (element === null) return ''; if (element.tagName === 'SELECT') return 'select'; if (element instanceof HTMLInputElement && element.type === 'radio') return element.closest('[role=radiogroup]')?.getAttribute('aria-label') ?? 'radio'; return (element.textContent ?? '').trim(); })()",
   );
 }
 
-test('desktop Tab order: navigation links, Dark mode, Sign out', async ({ page, signInThroughUi }) => {
+test('desktop Tab order: navigation links, Theme (one stop), Sign out', async ({ page, signInThroughUi }) => {
   // The top bar is the desktop layout: both projects use a desktop-sized window here.
   await page.setViewportSize({ width: 1280, height: 800 });
   await signInThroughUi();
@@ -112,10 +120,10 @@ test('desktop Tab order: navigation links, Dark mode, Sign out', async ({ page, 
     await page.keyboard.press('Tab');
     order.push(await focusedLabel(page));
   }
-  expect(order.slice(0, 5)).toEqual(['Overtime', 'History', 'Settings', 'Dark mode', 'Sign out']);
+  expect(order.slice(0, 5)).toEqual(['Overtime', 'History', 'Settings', 'Theme', 'Sign out']);
 });
 
-test('desktop Tab order with the sharing switcher: navigation links, switcher, Dark mode, Sign out', async ({
+test('desktop Tab order with the sharing switcher: navigation links, switcher, Theme, Sign out', async ({
   page,
   adminSeed,
   builtServer,
@@ -134,7 +142,7 @@ test('desktop Tab order with the sharing switcher: navigation links, switcher, D
     await page.keyboard.press('Tab');
     order.push(await focusedLabel(page));
   }
-  expect(order).toEqual(['Overtime', 'History', 'Settings', 'select', 'Open', 'Dark mode', 'Sign out']);
+  expect(order).toEqual(['Overtime', 'History', 'Settings', 'select', 'Open', 'Theme', 'Sign out']);
 });
 
 test('an unknown hash falls back to the timesheet route', async ({ page, signInThroughUi }) => {

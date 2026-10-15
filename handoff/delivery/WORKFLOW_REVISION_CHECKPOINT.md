@@ -171,9 +171,18 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   viewed); breakpoint raised to 1440 because the bar wraps at 1280 with a share; gap
   24px/32px; company line removed on screen (PDF unchanged); unit 1877; e2e desktop 198,
   mobile 204, 0 failed; verify 0; digest 3407f8f7 (812 files).
-- Next: WP5-UX2-T06-FREEZE (committer, alone), then the T07 brief (Light/Dark toggle).
-- Uncommitted now: the T06 source (9 paths), the board, this checkpoint (+ vi), the
-  T05-FREEZE results and evidence, the T06 and T06-FREEZE records, the T06 evidence.
+- WP5-UX2-T06-FREEZE done: 3f5a3b333dede51043000e7123960ac05d26a76b on main, pushed (68
+  paths; digests 3407f8f7, 812 files; every check exit 0; one /dev/null slip).
+- Running: WP5-UX2-T07 (worker-high, sonnet; Light/Dark radio-group toggle with sun and
+  moon icons, desktop and phone More panel) on 3f5a3b3 / 3407f8f7.
+- WP5-UX2-T07 done (worker-high, self-reported claude-sonnet-5-5; reported, not
+  independent proof): "Theme" radio group Light | Dark with sun and moon icons, checked
+  segment solid accent; contrast at least 4.68 text and 6.09 ring; bar one row at 1440
+  with a share; More panel fits; unit 1877; e2e desktop 204, mobile 210, 0 failed; verify
+  0; digest 3416cf04 (812 files).
+- Next: WP5-UX2-T07-FREEZE (committer, alone), then the T08 brief (Check in/out rename).
+- Uncommitted now: the T07 source (8 paths), the board, this checkpoint (+ vi), the
+  T06-FREEZE results and evidence, the T07 and T07-FREEZE records, the T07 evidence.
 
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 

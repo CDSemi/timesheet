@@ -106,6 +106,10 @@ interface BarFacts {
   wordmark: { left: number; width: number; height: number; centreY: number; visible: boolean } | null;
   navLeft: number;
   userRight: number;
+  /** The Light/Dark theme control in the user group (WP5-UX2-T07). */
+  theme: { left: number; right: number; top: number; bottom: number; width: number; height: number } | null;
+  /** The unused room of the bar's flexible middle (the menu cell less its links), in px: how much wider the user group could grow. */
+  slack: number;
 }
 
 /** The geometry of the shell bar as the browser laid it out (the bar, the brand, the wordmark, the menu). */
@@ -128,6 +132,8 @@ async function barFacts(page: Page): Promise<BarFacts> {
         wordmark: { left: markBox.left, width: markBox.width, height: markBox.height, centreY: markBox.top + markBox.height / 2, visible },
         navLeft: rect(bar.querySelector('.shell-nav')).left,
         userRight: rect(bar.querySelector('.shell-user')).right,
+        slack: (() => { const nav = bar.querySelector('.shell-nav'); const links = nav.querySelectorAll('a'); const last = links[links.length - 1]; return rect(nav).right - rect(last).right; })(),
+        theme: (() => { const control = bar.querySelector('.theme-switch'); if (control === null) return null; const box = rect(control); return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height }; })(),
       };
     })()`,
   );
@@ -204,6 +210,12 @@ async function expectWordmarkBar(page: Page): Promise<BarFacts> {
   expect(facts.bar.height, 'the bar stays one 56px row').toBeCloseTo(56, 0);
   expect(facts.scrollWidth, 'no horizontal overflow').toBeLessThanOrEqual(facts.innerWidth);
   expect(facts.userRight, 'the user group stays inside the viewport').toBeLessThanOrEqual(facts.innerWidth);
+  // The Light/Dark control is on the bar's one row (inside it, vertically), 36px high like the buttons beside it.
+  expect(facts.theme, 'the theme control is in the bar').not.toBeNull();
+  expect(facts.theme?.top ?? 0, 'the theme control starts inside the bar').toBeGreaterThanOrEqual(facts.bar.top);
+  expect(facts.theme?.bottom ?? Number.POSITIVE_INFINITY, 'the theme control ends inside the bar').toBeLessThanOrEqual(facts.bar.top + facts.bar.height);
+  expect(facts.theme?.height ?? 0, 'the theme control is a 36px control').toBeCloseTo(36, 0);
+  expect(facts.theme?.right ?? Number.POSITIVE_INFINITY, 'the theme control ends inside the viewport').toBeLessThanOrEqual(facts.innerWidth);
   expect(facts.logo.width).toBeCloseTo(36, 0);
   expect(facts.logo.height).toBeCloseTo(36, 0);
   const mark = facts.wordmark;
@@ -234,7 +246,7 @@ test('the wordmark shows from 1440px beside the logo in one 56px row, with and w
   await expect(page.locator('header.shell-bar')).toBeVisible();
   await expect(page.locator('header.shell-bar .shell-switcher')).toHaveCount(0);
   const alone = await expectWordmarkBar(page);
-  console.log(`wordmark 1440 without a share: bar ${alone.bar.height}px, wordmark ${alone.wordmark?.width}x${alone.wordmark?.height}, brand to menu ${alone.navLeft - alone.brandRight}px`);
+  console.log(`wordmark 1440 without a share: bar ${alone.bar.height}px, wordmark ${alone.wordmark?.width}x${alone.wordmark?.height}, brand to menu ${alone.navLeft - alone.brandRight}px, theme control ${alone.theme?.width}x${alone.theme?.height}, spare room ${alone.slack.toFixed(1)}px`);
   await page.locator('header.shell-bar').screenshot({ path: screenshotPath('wordmark-bar-1440-noshare-synthetic.png') });
 
   // The longest names live in the user group: add a "Shared with me" switcher and the bar must still be one row.
@@ -244,6 +256,12 @@ test('the wordmark shows from 1440px beside the logo in one 56px row, with and w
   const shared = await expectWordmarkBar(page);
   console.log(`wordmark 1440 with a share: bar ${shared.bar.height}px, wordmark ${shared.wordmark?.width}x${shared.wordmark?.height}, brand to menu ${shared.navLeft - shared.brandRight}px`);
   await page.locator('header.shell-bar').screenshot({ path: screenshotPath('wordmark-bar-1440-share-synthetic.png') });
+  console.log(`theme control 1440 with a share: ${shared.theme?.width}x${shared.theme?.height}, user group right edge ${shared.userRight} of ${shared.innerWidth}, spare room ${shared.slack.toFixed(1)}px`);
+
+  // Wider than the breakpoint the bar stays one row too (1600, with the share).
+  await page.setViewportSize({ width: 1600, height: 800 });
+  const wide = await expectWordmarkBar(page);
+  console.log(`wordmark 1600 with a share: bar ${wide.bar.height}px, theme control ${wide.theme?.width}x${wide.theme?.height}, user group right edge ${wide.userRight} of ${wide.innerWidth}, spare room ${wide.slack.toFixed(1)}px`);
   expect(await violations(page), 'no Content-Security-Policy violation').toEqual([]);
 });
 
@@ -283,7 +301,7 @@ test('below 1440px and on a phone only the logo shows, and the brand-to-menu gap
       expect(await tokenPx(page, '--shell-brand-gap'), `the narrow-width gap at ${label}`).toBe(24);
       // One row where the bar had room before this slice: 1280 with and without a share, 1024 without one.
       if (width >= 1280 || (width === 1024 && !withShare)) expect(facts.bar.height, `one row at ${label}`).toBeCloseTo(56, 0);
-      console.log(`bar ${label}: ${facts.bar.height}px high, brand to menu ${facts.navLeft - facts.brandRight}px`);
+      console.log(`bar ${label}: ${facts.bar.height}px high, brand to menu ${facts.navLeft - facts.brandRight}px, theme control ${facts.theme?.width}x${facts.theme?.height}, spare room ${facts.slack.toFixed(1)}px`);
       if (width === 1280 || width === 1024) {
         await page.locator('header.shell-bar').screenshot({ path: screenshotPath(`bar-${width}-${withShare ? 'share' : 'noshare'}-synthetic.png`) });
       }

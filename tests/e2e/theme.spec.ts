@@ -1,12 +1,16 @@
 import type { Locator, Page } from '@playwright/test';
-import { focusFromKeyboard, measureFocusRing, settledStyle, textContrast } from './contrast.ts';
+import { backdropOf, backdropsAbove, contrast, flattenedBackground, focusFromKeyboard, measureFocusRing, over, parseColour, settledStyle, textContrast } from './contrast.ts';
 import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
 
 /*
- * WP5-UX2-T01: the Dark mode toggle of the main navigation. Two states, the device's theme until the
- * first press, a per-device choice kept in local storage (`timesheet.theme`), applied before the first
+ * WP5-UX2-T01: the theme control of the main navigation. Two states, the device's theme until the
+ * first choice, a per-device choice kept in local storage (`timesheet.theme`), applied before the first
  * paint by a same-origin script (the content security policy forbids inline scripts). Desktop: the
- * toggle is in the top bar; phone: in the More panel. Nothing here depends on the date or the time of day.
+ * control is in the top bar; phone: in the More panel. Nothing here depends on the date or the time of day.
+ *
+ * WP5-UX2-T07: the control is a "Theme" radio group of two native radios, "Light" (sun icon) and "Dark" (moon
+ * icon), instead of a pressed "Dark mode" button. The checked radio is the theme in effect (the device's before
+ * any choice); the radio is invisible and covers its label, which paints the segment, so style probes read the label.
  */
 test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
 
@@ -29,16 +33,45 @@ async function seedStoredTheme(page: Page, theme: Theme): Promise<void> {
   });
 }
 
-/** The toggle of this viewport: the top bar's on a desktop, the More panel's on a phone (opened if closed). */
-async function themeToggle(page: Page, isMobile: boolean): Promise<Locator> {
+const THEMES: readonly Theme[] = ['light', 'dark'];
+const OPTION_NAME: Record<Theme, string> = { light: 'Light', dark: 'Dark' };
+const MIN_TEXT = 4.5;
+const MIN_NON_TEXT = 3;
+
+interface ThemeControl {
+  group: Locator;
+  /** The native radio of each option (invisible, covers its segment). */
+  radio: Record<Theme, Locator>;
+  /** The label that paints each segment: background, border, text colour and focus ring are read from it. */
+  segment: Record<Theme, Locator>;
+}
+
+/** The theme control of this viewport: the top bar's on a desktop, the More panel's on a phone (opened if closed). */
+async function themeControl(page: Page, isMobile: boolean): Promise<ThemeControl> {
   if (isMobile) {
     const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
     await expect(more).toBeVisible();
     if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
   }
-  const toggle = page.getByRole('button', { name: 'Dark mode', exact: true });
-  await expect(toggle).toBeVisible();
-  return toggle;
+  const group = page.getByRole('radiogroup', { name: 'Theme', exact: true });
+  await expect(group).toBeVisible();
+  const radio = {
+    light: group.getByRole('radio', { name: OPTION_NAME.light, exact: true }),
+    dark: group.getByRole('radio', { name: OPTION_NAME.dark, exact: true }),
+  };
+  await expect(radio.light).toBeVisible();
+  await expect(radio.dark).toBeVisible();
+  return { group, radio, segment: { light: radio.light.locator('xpath=..'), dark: radio.dark.locator('xpath=..') } };
+}
+
+/** Exactly the radio of `theme` is checked. */
+async function expectChecked(control: ThemeControl, theme: Theme): Promise<void> {
+  for (const option of THEMES) await expect(control.radio[option], `${OPTION_NAME[option]} is ${option === theme ? '' : 'not '}checked`).toBeChecked({ checked: option === theme });
+}
+
+/** Whether the device can hover (the hover look exists only there). */
+async function canHover(page: Page): Promise<boolean> {
+  return page.evaluate<boolean>("window.matchMedia('(hover: hover)').matches");
 }
 
 interface ThemeState {
@@ -64,52 +97,87 @@ async function expectPainted(page: Page, theme: Theme, explicit: boolean): Promi
   expect(state.attribute, 'data-theme').toBe(explicit ? theme : null);
 }
 
-/* ---- Default: the device decides until the first press ---------------------------------------------- */
+/* ---- The control: group, names, icons ------------------------------------------------------------------ */
+
+test('the theme control is a "Theme" radio group of two native radios, Light and Dark, with aria-hidden icons', async ({ page, signInThroughUi, isMobile }) => {
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signInThroughUi();
+  const control = await themeControl(page, isMobile);
+  // One visible group named "Theme" (the other placement is not displayed at this width); no "Dark mode" button.
+  await expect(page.getByRole('radiogroup')).toHaveCount(1);
+  await expect(control.group.getByRole('radio')).toHaveCount(2);
+  await expect(control.group.getByRole('radio')).toHaveText(['', '']);
+  await expect(page.getByRole('button', { name: /dark mode/i })).toHaveCount(0);
+  for (const theme of THEMES) {
+    // Native radios in one group: a real <input type="radio"> sharing a name, valued with the stored value.
+    await expect(control.radio[theme]).toHaveAttribute('type', 'radio');
+    await expect(control.radio[theme]).toHaveAttribute('name', /^theme-/);
+    await expect(control.radio[theme]).toHaveAttribute('value', theme);
+    // The accessible name is the visible text; the icon is decoration.
+    await expect(control.segment[theme]).toHaveText(OPTION_NAME[theme]);
+    const icon = control.segment[theme].locator('svg');
+    await expect(icon).toHaveCount(1);
+    await expect(icon).toHaveAttribute('aria-hidden', 'true');
+    await expect(icon).toHaveAttribute('focusable', 'false');
+    expect(await icon.textContent(), 'the icon carries no text').toBe('');
+    const box = await icon.boundingBox();
+    expect(box?.width ?? 0).toBeCloseTo(16, 0);
+    expect(box?.height ?? 0).toBeCloseTo(16, 0);
+  }
+  // The sun and the moon are different drawings.
+  const sun = await control.segment.light.locator('svg').innerHTML();
+  const moon = await control.segment.dark.locator('svg').innerHTML();
+  expect(sun).toContain('<circle');
+  expect(moon).not.toContain('<circle');
+  expect(sun).not.toBe(moon);
+});
+
+/* ---- Default: the device decides until the first choice ------------------------------------------------ */
 
 for (const media of ['light', 'dark'] as const) {
-  test(`without a stored choice the app follows the device (${media}) and the toggle shows it`, async ({ page, signInThroughUi, isMobile }) => {
+  test(`without a stored choice the app follows the device (${media}) and the control shows it`, async ({ page, signInThroughUi, isMobile }) => {
     await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
     await signInThroughUi();
-    const toggle = await themeToggle(page, isMobile);
+    const control = await themeControl(page, isMobile);
     await expectPainted(page, media, false);
-    await expect(toggle).toHaveAttribute('aria-pressed', String(media === 'dark'));
+    await expectChecked(control, media);
     expect((await themeState(page)).stored).toBeNull();
 
     // The device changing its mind is followed live while nothing is stored.
     const other = media === 'dark' ? 'light' : 'dark';
     await page.emulateMedia({ colorScheme: other, reducedMotion: 'reduce' });
     await expectPainted(page, other, false);
-    await expect(toggle).toHaveAttribute('aria-pressed', String(other === 'dark'));
+    await expectChecked(control, other);
   });
 
-  test(`the toggle switches the theme, stores the opposite of the effective one and survives a reload (${media} device)`, async ({
+  test(`choosing the other option switches the theme, stores it and survives a reload (${media} device)`, async ({
     page,
     signInThroughUi,
     isMobile,
   }, testInfo) => {
     await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
     await signInThroughUi();
-    const toggle = await themeToggle(page, isMobile);
+    const control = await themeControl(page, isMobile);
     const opposite: Theme = media === 'dark' ? 'light' : 'dark';
 
-    await toggle.click();
+    await control.radio[opposite].click();
     await expectPainted(page, opposite, true);
-    await expect(toggle).toHaveAttribute('aria-pressed', String(opposite === 'dark'));
+    await expectChecked(control, opposite);
     await page.screenshot({ path: screenshotPath(`t01-theme-${opposite}-${testInfo.project.name}-synthetic.png`), animations: 'disabled' });
-    const pressed = await themeState(page);
-    expect(pressed.stored).toBe(opposite);
-    expect(pressed.token).toBe(opposite === 'dark' ? '#12161c' : '#f6f7f9');
+    const chosen = await themeState(page);
+    expect(chosen.stored).toBe(opposite);
+    expect(chosen.token).toBe(opposite === 'dark' ? '#12161c' : '#f6f7f9');
 
     // The choice persists after a reload (still signed in: the session cookie).
     await page.reload();
-    const again = await themeToggle(page, isMobile);
+    const again = await themeControl(page, isMobile);
     await expectPainted(page, opposite, true);
-    await expect(again).toHaveAttribute('aria-pressed', String(opposite === 'dark'));
+    await expectChecked(again, opposite);
 
-    // A second press goes back to the device's theme, now as an explicit choice.
-    await again.click();
+    // Choosing the device's theme again stores it, now as an explicit choice.
+    await again.radio[media].click();
     await expectPainted(page, media, true);
-    await expect(again).toHaveAttribute('aria-pressed', String(media === 'dark'));
+    await expectChecked(again, media);
     expect((await themeState(page)).stored).toBe(media);
   });
 }
@@ -126,9 +194,9 @@ for (const media of ['light', 'dark'] as const) {
       await expectPainted(page, stored, true);
 
       await signInThroughUi();
-      const toggle = await themeToggle(page, isMobile);
+      const control = await themeControl(page, isMobile);
       await expectPainted(page, stored, true);
-      await expect(toggle).toHaveAttribute('aria-pressed', String(stored === 'dark'));
+      await expectChecked(control, stored);
     });
   }
 }
@@ -156,7 +224,7 @@ for (const [media, stored] of [
     await page.addInitScript({ content: RECORD_AT_DOM_READY });
     await page.goto('/');
     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
-    // The sign-in page has no toggle, so nothing but the head script can have set the attribute by DOMContentLoaded.
+    // The sign-in page has no theme control, so nothing but the head script can have set the attribute by DOMContentLoaded.
     expect(await recordedAtDomReady(page)).toEqual({ attribute: stored, bodyBackground: BG[stored] });
   });
 
@@ -202,66 +270,68 @@ test('the theme script is a same-origin file: no violation, JavaScript content t
   expect(await tag.evaluate((element) => [element.hasAttribute('async'), element.hasAttribute('defer'), element.getAttribute('type')])).toEqual([false, false, null]);
   await expect(page.locator('script:not([src])')).toHaveCount(0);
 
-  // Using the toggle (setting the attribute, storing the choice) triggers no violation.
+  // Using the control (setting the attribute, storing the choice) triggers no violation.
   await signInThroughUi();
-  const toggle = await themeToggle(page, isMobile);
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', /true|false/);
+  const control = await themeControl(page, isMobile);
+  await control.radio.dark.check();
+  await expectChecked(control, 'dark');
+  await expectPainted(page, 'dark', true);
   expect(await page.evaluate('window.__cspViolations')).toEqual([]);
 });
 
-/* ---- Hover cannot erase the pressed look (the specificity defect of the generic quiet-button hover) ---- */
+/* ---- Hover cannot erase the checked look (the specificity defect of the generic quiet-button hover) ------ */
 
-test('the pointer on the pressed toggle keeps it pressed: a solid accent fill with on-accent text', async ({ page, signInThroughUi, isMobile }) => {
+test('the pointer on the checked segment keeps it checked: a solid accent fill with on-accent text', async ({ page, signInThroughUi, isMobile }) => {
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await signInThroughUi();
-  const toggle = await themeToggle(page, isMobile);
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  // The pointer is still on the button after the click: this is the moment the old toggles lost their state.
-  await toggle.hover();
-  const pressedAndHovered = { background: await settledStyle(toggle, 'backgroundColor'), text: await settledStyle(toggle, 'color') };
-  // Hover rules exist only where the device can hover (WP5-UX2-T02); a touch device keeps the pressed rest look.
-  if (await page.evaluate<boolean>("window.matchMedia('(hover: hover)').matches")) {
+  const control = await themeControl(page, isMobile);
+  await control.radio.dark.click();
+  await expectChecked(control, 'dark');
+  const segment = control.segment.dark;
+  // The pointer is still on the segment after the click: this is the moment the old toggles lost their state.
+  await segment.hover();
+  const checkedAndHovered = { background: await settledStyle(segment, 'backgroundColor'), text: await settledStyle(segment, 'color') };
+  // Hover rules exist only where the device can hover (WP5-UX2-T02); a touch device keeps the checked rest look.
+  if (await canHover(page)) {
     // Dark tokens: --accent-strong #8dbbff under the pointer, --on-accent #0b1220 text.
-    expect(pressedAndHovered).toEqual({ background: 'rgb(141, 187, 255)', text: 'rgb(11, 18, 32)' });
+    expect(checkedAndHovered).toEqual({ background: 'rgb(141, 187, 255)', text: 'rgb(11, 18, 32)' });
   } else {
-    // No hover on this device: --accent #6ea8ff, never the stronger hover accent, and the toggle stays pressed.
-    expect(pressedAndHovered).toEqual({ background: 'rgb(110, 168, 255)', text: 'rgb(11, 18, 32)' });
-    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    // No hover on this device: --accent #6ea8ff, never the stronger hover accent, and the segment stays checked.
+    expect(checkedAndHovered).toEqual({ background: 'rgb(110, 168, 255)', text: 'rgb(11, 18, 32)' });
+    await expect(control.radio.dark).toBeChecked();
   }
   await page.mouse.move(0, 0);
   // Pointer away: --accent #6ea8ff.
-  expect(await settledStyle(toggle, 'backgroundColor')).toBe('rgb(110, 168, 255)');
-  expect(await textContrast(toggle)).toBeGreaterThanOrEqual(4.5);
+  expect(await settledStyle(segment, 'backgroundColor')).toBe('rgb(110, 168, 255)');
+  expect(await textContrast(segment)).toBeGreaterThanOrEqual(MIN_TEXT);
 });
 
 /* ---- Blocked storage, and other tabs ------------------------------------------------------------------ */
 
-test('blocked storage does not break the toggle: the choice lasts for the page', async ({ page, signInThroughUi, isMobile }) => {
+test('blocked storage does not break the control: the choice lasts for the page', async ({ page, signInThroughUi, isMobile }) => {
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await page.addInitScript({
     content: `Object.defineProperty(window, 'localStorage', { configurable: true, get() { throw new DOMException('blocked', 'SecurityError'); } });`,
   });
   await signInThroughUi();
-  const toggle = await themeToggle(page, isMobile);
+  const control = await themeControl(page, isMobile);
   await expectPainted(page, 'light', false);
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expectChecked(control, 'light');
 
-  await toggle.click();
+  await control.radio.dark.click();
   await expectPainted(page, 'dark', true);
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expectChecked(control, 'dark');
   expect((await themeState(page)).stored).toBe('blocked');
 
-  await toggle.click();
+  await control.radio.light.click();
   await expectPainted(page, 'light', true);
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expectChecked(control, 'light');
 });
 
 test('a storage event keeps a second tab in step', async ({ page, signInThroughUi, isMobile }) => {
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await signInThroughUi();
-  const toggle = await themeToggle(page, isMobile);
+  const control = await themeControl(page, isMobile);
 
   const second = await page.context().newPage();
   second.on('pageerror', (error) => {
@@ -269,18 +339,18 @@ test('a storage event keeps a second tab in step', async ({ page, signInThroughU
   });
   await second.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await second.goto('/#/timesheet');
-  const secondToggle = await themeToggle(second, isMobile);
+  const secondControl = await themeControl(second, isMobile);
   await expectPainted(second, 'light', false);
-  await expect(secondToggle).toHaveAttribute('aria-pressed', 'false');
+  await expectChecked(secondControl, 'light');
 
-  await toggle.click();
+  await control.radio.dark.click();
   await expectPainted(page, 'dark', true);
   await expectPainted(second, 'dark', true);
-  await expect(secondToggle).toHaveAttribute('aria-pressed', 'true');
+  await expectChecked(secondControl, 'dark');
 
-  await secondToggle.click();
+  await secondControl.radio.light.click();
   await expectPainted(page, 'light', true);
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expectChecked(control, 'light');
   await second.close();
 });
 
@@ -294,46 +364,164 @@ const CASES: ReadonlyArray<{ name: string; media: Theme; stored: Theme | null }>
 ];
 
 for (const { name, media, stored } of CASES) {
-  test(`keyboard and contrast of the toggle, pressed and not pressed (${name})`, async ({ page, signInThroughUi, isMobile }) => {
+  test(`keyboard: Tab reaches the group once, the arrow keys switch the theme, Space chooses a focused radio (${name})`, async ({
+    page,
+    signInThroughUi,
+    isMobile,
+  }) => {
     await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
     if (stored !== null) await seedStoredTheme(page, stored);
     await signInThroughUi();
-    const toggle = await themeToggle(page, isMobile);
+    const control = await themeControl(page, isMobile);
     const effective: Theme = stored ?? media;
+    const other: Theme = effective === 'dark' ? 'light' : 'dark';
     await expectPainted(page, effective, stored !== null);
+    await expectChecked(control, effective);
+
+    // Tab reaches the group at its checked radio (one tab stop), and the next Tab leaves it for Sign out.
+    const before = isMobile
+      ? page.locator('#more-panel').getByRole('link').last()
+      : page.getByRole('banner').getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings', exact: true });
+    await before.focus();
+    await page.keyboard.press('Tab');
+    await expect(control.radio[effective], 'Tab lands on the checked radio').toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: 'Sign out', exact: true }), 'the group is one tab stop').toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(control.radio[effective], 'Shift+Tab returns to the checked radio').toBeFocused();
+
+    // An arrow key moves the choice to the other radio (the group of two wraps) and switches the theme at once.
+    await page.keyboard.press('ArrowRight');
+    await expect(control.radio[other]).toBeFocused();
+    await expectChecked(control, other);
+    await expectPainted(page, other, true);
+    expect((await themeState(page)).stored).toBe(other);
+    await page.keyboard.press('ArrowLeft');
+    await expect(control.radio[effective]).toBeFocused();
+    await expectChecked(control, effective);
+    await expectPainted(page, effective, true);
+    expect((await themeState(page)).stored).toBe(effective);
+
+    // Space on a focused, unchecked radio chooses it; Enter does not (as in any native radio group).
+    await control.radio[other].focus();
+    await page.keyboard.press('Space');
+    await expectChecked(control, other);
+    await expectPainted(page, other, true);
+    await control.radio[effective].focus();
+    await page.keyboard.press('Enter');
+    await expectChecked(control, other);
+    await expectPainted(page, other, true);
+    console.log(`theme control keyboard ${name} ${isMobile ? 'mobile' : 'desktop'}: Tab, Shift+Tab, arrows and Space verified`);
+  });
+
+  test(`contrast of the checked and the unchecked segment: rest, hover and focus (${name})`, async ({ page, signInThroughUi, isMobile }) => {
+    await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
+    if (stored !== null) await seedStoredTheme(page, stored);
+    await signInThroughUi();
+    const control = await themeControl(page, isMobile);
+    const effective: Theme = stored ?? media;
+    const other: Theme = effective === 'dark' ? 'light' : 'dark';
+    await expectPainted(page, effective, stored !== null);
+    const hover = await canHover(page);
+
+    /** The segment's indicator against the surface behind it: its fill when checked, else its boundary. */
+    const indicator = async (segment: Locator, checked: boolean): Promise<number> => {
+      const backdrop = backdropOf(await backdropsAbove(segment));
+      const colour = checked ? await flattenedBackground(segment) : over(parseColour(await settledStyle(segment, 'borderTopColor')), backdrop);
+      return contrast(colour, backdrop);
+    };
 
     const measured: string[] = [];
-    // Two states: the one in effect now, then (after Enter) the opposite one.
+    // Two states: the one in effect now, then (after choosing the other) the opposite one.
     for (const turn of [0, 1]) {
-      const pressed = (effective === 'dark') !== (turn === 1);
-      await expect(toggle).toHaveAttribute('aria-pressed', String(pressed));
-      await focusFromKeyboard(toggle);
-      const ring = await measureFocusRing(toggle);
-      expect(ring.ringAgainstBackdrop, `focus ring against the surface (${ring.layers})`).toBeGreaterThanOrEqual(3);
-      expect(ring.ringAgainstGap, `focus ring against its gap (${ring.layers})`).toBeGreaterThanOrEqual(3);
-      if (pressed) expect(ring.gapAgainstFill, `focus gap against the pressed fill (${ring.layers})`).toBeGreaterThanOrEqual(3);
-      const text = await textContrast(toggle);
-      expect(text, `text of the ${pressed ? 'pressed' : 'unpressed'} toggle`).toBeGreaterThanOrEqual(4.5);
-      measured.push(`${pressed ? 'pressed' : 'unpressed'} ring ${ring.ringAgainstBackdrop.toFixed(2)} gap ${ring.gapAgainstFill?.toFixed(2) ?? 'n/a'} text ${text.toFixed(2)}`);
+      const checkedTheme = turn === 0 ? effective : other;
+      await expectChecked(control, checkedTheme);
+      for (const theme of THEMES) {
+        const segment = control.segment[theme];
+        const checked = theme === checkedTheme;
+        const label = `${checked ? 'checked' : 'unchecked'} ${OPTION_NAME[theme]}`;
+        await page.mouse.move(0, 0);
+
+        const restText = await textContrast(segment);
+        const restIndicator = await indicator(segment, checked);
+        expect(restText, `${label}: text at rest`).toBeGreaterThanOrEqual(MIN_TEXT);
+        expect(restIndicator, `${label}: boundary or fill at rest`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
+
+        let hovered = 'no hover on this device';
+        if (hover) {
+          await segment.hover();
+          const hoverText = await textContrast(segment);
+          const hoverIndicator = await indicator(segment, checked);
+          expect(hoverText, `${label}: text hovered`).toBeGreaterThanOrEqual(MIN_TEXT);
+          expect(hoverIndicator, `${label}: boundary or fill hovered`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
+          hovered = `text ${hoverText.toFixed(2)} boundary ${hoverIndicator.toFixed(2)}`;
+          await page.mouse.move(0, 0);
+        }
+
+        await focusFromKeyboard(control.radio[theme], segment);
+        const ring = await measureFocusRing(segment);
+        expect(ring.ringAgainstBackdrop, `${label}: focus ring against the surface (${ring.layers})`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
+        expect(ring.ringAgainstGap, `${label}: focus ring against its gap (${ring.layers})`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
+        if (checked) expect(ring.gapAgainstFill ?? 0, `${label}: focus gap against the accent fill (${ring.layers})`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
+        const focusText = await textContrast(segment);
+        expect(focusText, `${label}: text focused`).toBeGreaterThanOrEqual(MIN_TEXT);
+        await control.radio[theme].evaluate((element) => element.blur());
+        measured.push(
+          `${label}: rest text ${restText.toFixed(2)} boundary ${restIndicator.toFixed(2)}; hover ${hovered}; focus ring ${ring.ringAgainstBackdrop.toFixed(2)} gap ${ring.gapAgainstFill?.toFixed(2) ?? 'n/a'} text ${focusText.toFixed(2)}`,
+        );
+      }
       if (turn === 0) {
-        // Enter toggles (the keyboard path); the second turn measures the opposite state.
-        await page.keyboard.press('Enter');
-        await expectPainted(page, effective === 'dark' ? 'light' : 'dark', true);
+        await control.radio[other].check();
+        await expectPainted(page, other, true);
       }
     }
-    // Space toggles back.
-    await focusFromKeyboard(toggle);
-    await page.keyboard.press('Space');
-    await expectPainted(page, effective, true);
-    console.log(`theme toggle contrast ${name} ${isMobile ? 'mobile' : 'desktop'}: ${measured.join('; ')}`);
+    console.log(`theme control contrast ${name} ${isMobile ? 'mobile' : 'desktop'}:\n  ${measured.join('\n  ')}`);
   });
 }
 
-/* ---- Phone: the toggle in the More panel costs the first screen nothing, and the panel fits ------------- */
+/* ---- Screenshots for the record: the control in the bar and in the More panel, light and dark ------------ */
 
-test.describe('phone: first screen budget and the More panel with the toggle', () => {
+test('screenshots: the theme control in the bar or the More panel, light and dark, an unchecked segment hovered and focused', async ({
+  page,
+  signInThroughUi,
+  isMobile,
+}, testInfo) => {
+  await signInThroughUi();
+  for (const media of THEMES) {
+    await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
+    const control = await themeControl(page, isMobile);
+    await expectPainted(page, media, false);
+    await page.mouse.move(0, 0);
+    const surface = isMobile ? page.locator('#more-panel') : page.locator('header.shell-bar');
+    await surface.screenshot({ path: screenshotPath(`t07-${isMobile ? 'more' : 'bar'}-${media}-${testInfo.project.name}-synthetic.png`), animations: 'disabled' });
+    if (isMobile) continue;
+    const unchecked: Theme = media === 'light' ? 'dark' : 'light';
+    const segment = control.segment[unchecked];
+    /** The group with room around it for the focus ring. */
+    const closeUp = async (state: string): Promise<void> => {
+      const box = await control.group.boundingBox();
+      expect(box).not.toBeNull();
+      await page.screenshot({
+        path: screenshotPath(`t07-segment-${state}-${media}-${testInfo.project.name}-synthetic.png`),
+        animations: 'disabled',
+        clip: { x: (box?.x ?? 0) - 8, y: (box?.y ?? 0) - 8, width: (box?.width ?? 0) + 16, height: (box?.height ?? 0) + 16 },
+      });
+    };
+    await segment.hover();
+    await settledStyle(segment, 'backgroundColor');
+    await closeUp('hover');
+    await page.mouse.move(0, 0);
+    await focusFromKeyboard(control.radio[unchecked], segment);
+    await closeUp('focus');
+    await control.radio[unchecked].evaluate((element) => element.blur());
+  }
+});
+
+/* ---- Phone: the control in the More panel costs the first screen nothing, and the panel fits ------------- */
+
+test.describe('phone: first screen budget and the More panel with the theme control', () => {
   // Both projects run these at the phone's size (the layout follows the width), so none is skipped.
-  /** The first day row against the tab bar, and the compact bar, measured; the toggle is not on the first screen. */
+  /** The first day row against the tab bar, and the compact bar, measured; the theme control is not on the first screen. */
   async function expectBudget(page: Page, label: string): Promise<void> {
     await expect(page.locator('[data-day]')).toHaveCount(14);
     const first = await page.locator('[data-day]').first().boundingBox();
@@ -343,7 +531,7 @@ test.describe('phone: first screen budget and the More panel with the toggle', (
     expect(rowBottom, `${label}: bottom of the first day row is at or above the tab bar`).toBeLessThanOrEqual((tabs?.y ?? 0) + 0.5);
     expect(shellBar?.height ?? 0, `${label}: the compact shell bar is one row`).toBeLessThanOrEqual(60);
     expect(await page.evaluate('window.scrollY')).toBe(0);
-    await expect(page.locator('.shell-bar').getByRole('button', { name: 'Dark mode' })).toHaveCount(0);
+    await expect(page.locator('.shell-bar .theme-switch').filter({ visible: true })).toHaveCount(0);
     console.log(`first screen 390x844 ${label}: first day row bottom ${rowBottom} of tab bar top ${tabs?.y}, shell bar ${shellBar?.height}px`);
   }
 
@@ -377,7 +565,7 @@ test.describe('phone: first screen budget and the More panel with the toggle', (
 
   for (const width of [390, 375, 360, 320]) {
     for (const role of ['employee', 'admin'] as const) {
-      test(`the More panel with the toggle fits at ${width}px (${role}): 44px targets, inside the screen, no sideways scroll`, async ({
+      test(`the More panel with the theme control fits at ${width}px (${role}): 44px targets, inside the screen, no sideways scroll`, async ({
         page,
         builtServer,
         signInPageAs,
@@ -387,7 +575,9 @@ test.describe('phone: first screen budget and the More panel with the toggle', (
         const nav = page.getByRole('navigation', { name: 'Main' });
         await nav.getByRole('button', { name: 'More' }).click();
         const panel = page.locator('#more-panel');
-        await expect(panel.getByRole('button', { name: 'Dark mode', exact: true })).toBeVisible();
+        const group = panel.getByRole('radiogroup', { name: 'Theme', exact: true });
+        await expect(group).toBeVisible();
+        await expect(group.getByRole('radio')).toHaveCount(2);
         const panelBox = await panel.boundingBox();
         const viewport = await page.evaluate<{ client: number; scroll: number }>('({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth })');
         expect(panelBox, 'More panel box').not.toBeNull();
@@ -396,14 +586,18 @@ test.describe('phone: first screen budget and the More panel with the toggle', (
         expect(panelBox?.y ?? -1, 'panel top is on the screen').toBeGreaterThanOrEqual(0);
         expect(viewport.scroll, 'no horizontal scroll (scrollWidth against clientWidth)').toBeLessThanOrEqual(viewport.client);
         const heights: number[] = [];
-        for (const target of await panel.locator('a, button').all()) {
+        // Links, buttons, and both the radios (the real targets) and their segments, inside the panel.
+        for (const target of await panel.locator('a, button, label.theme-option, input[type="radio"]').all()) {
           const box = await target.boundingBox();
-          const name = (await target.textContent())?.trim() ?? '';
+          const name = (await target.textContent())?.trim() || (await target.getAttribute('value')) || '';
           expect(box?.height ?? 0, `${name} height`).toBeGreaterThanOrEqual(44);
           expect(box?.width ?? 0, `${name} width`).toBeGreaterThanOrEqual(44);
           heights.push(Math.round(box?.height ?? 0));
         }
-        console.log(`More panel ${role} ${width}px: x ${panelBox?.x} y ${panelBox?.y} w ${panelBox?.width} h ${panelBox?.height}, targets ${heights.join('/')}, clientWidth ${viewport.client} scrollWidth ${viewport.scroll}`);
+        const groupBox = await group.boundingBox();
+        expect((groupBox?.x ?? -1) + (groupBox?.width ?? 0), 'the theme control ends inside the panel').toBeLessThanOrEqual((panelBox?.x ?? 0) + (panelBox?.width ?? 0) + 0.5);
+        expect(groupBox?.x ?? -1, 'the theme control starts inside the panel').toBeGreaterThanOrEqual(panelBox?.x ?? 0);
+        console.log(`More panel ${role} ${width}px: x ${panelBox?.x} y ${panelBox?.y} w ${panelBox?.width} h ${panelBox?.height}, theme control w ${groupBox?.width} h ${groupBox?.height}, targets ${heights.join('/')}, clientWidth ${viewport.client} scrollWidth ${viewport.scroll}`);
       });
     }
   }

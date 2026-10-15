@@ -74,13 +74,14 @@ interface Probe {
   backdrops: string[];
 }
 
-async function focusedProbe(locator: Locator): Promise<Probe> {
+/** Focuses `locator` from the keyboard and reads the ring from `painted` (another element, such as the label of an invisible radio). */
+async function focusedProbe(locator: Locator, painted: Locator = locator): Promise<Probe> {
   await locator.scrollIntoViewIfNeeded();
   await locator.page().keyboard.press('Shift');
   await locator.focus();
   await expect(locator).toBeFocused();
   // Wait until the shared transition has finished: the ring is painted and unchanged over two reads.
-  const read = async () => locator.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).boxShadow ?? 'none');
+  const read = async () => painted.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).boxShadow ?? 'none');
   await expect
     .poll(
       async () => {
@@ -92,7 +93,7 @@ async function focusedProbe(locator: Locator): Promise<Probe> {
       { message: 'the focus ring is painted and settled' },
     )
     .toBe(true);
-  return locator.evaluate((element) => {
+  return painted.evaluate((element) => {
     const style = (node: typeof element) => element.ownerDocument.defaultView?.getComputedStyle(node);
     const backdrops: string[] = [];
     for (let node = element.parentElement; node; node = node.parentElement) backdrops.push(style(node)?.backgroundColor ?? '');
@@ -318,47 +319,52 @@ for (const colorScheme of ['light', 'dark'] as const) {
   });
 
   /*
-   * WP5-UX-AX-04 (SC 2.4.7 and 1.4.11): a pressed toggle ("Change several days", "Dark mode") keeps the focus
-   * ring when it takes keyboard focus; its pressed state alone is not a ring. WP5-UX2-T02: the pressed look is
-   * a solid accent fill and the old pressed-ring special case is gone, so the shared ring itself must stay
+   * WP5-UX-AX-04 (SC 2.4.7 and 1.4.11): a pressed toggle ("Change several days") and, since WP5-UX2-T07, the
+   * checked segment of the Light/Dark theme control (which replaced the pressed "Dark mode" button) keep the focus
+   * ring when they take keyboard focus; the pressed or checked state alone is not a ring. WP5-UX2-T02: the pressed
+   * look is a solid accent fill and the old pressed-ring special case is gone, so the shared ring itself must stay
    * visible on that fill (its card-coloured gap against the fill and the ring against the gap, 3:1 each).
+   * A theme segment is painted by the label of its invisible radio: the radio takes the focus, the label shows the ring.
    * "Show details" is a switch now and has its own test below.
    */
-  test(`WP5-UX-AX-04: a pressed toggle still shows the focus ring (${colorScheme})`, async ({ page, signInThroughUi, isMobile }) => {
+  test(`WP5-UX-AX-04: a pressed toggle and a checked theme segment still show the focus ring (${colorScheme})`, async ({ page, signInThroughUi, isMobile }) => {
     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
     await signInThroughUi();
     await expect(page.locator('[data-day]')).toHaveCount(14);
-    /** The toggle by name; the Dark mode toggle of a phone lives in the More panel, which is opened if closed. */
-    const toggleNamed = async (name: string): Promise<Locator> => {
-      if (isMobile && name === 'Dark mode') {
-        const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
-        if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-      }
-      return page.getByRole('button', { name, exact: true });
-    };
-    for (const name of ['Change several days', 'Dark mode']) {
-      let toggle = await toggleNamed(name);
-      // The dark device is already pressed on "Dark mode"; every other situation is pressed here by a click.
-      const pressedAtLoad = (await toggle.getAttribute('aria-pressed')) === 'true';
-      if (!pressedAtLoad) await toggle.click();
-      toggle = await toggleNamed(name);
-      await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    /** The assertions of one pressed or checked control; `focusTarget` takes the focus and `painted` shows the ring. */
+    const expectPressedRing = async (name: string, focusTarget: Locator, painted: Locator): Promise<void> => {
       await page.mouse.move(0, 0);
-      await toggle.evaluate((element) => element.blur());
-      const pressedOnly = await settledShadow(toggle);
-      const probe = await focusedProbe(toggle);
+      await focusTarget.evaluate((element) => element.blur());
+      const pressedOnly = await settledShadow(painted);
+      const probe = await focusedProbe(focusTarget, painted);
       expect(probe.boxShadow, `${name}: focused and pressed differs from pressed only`).not.toBe(pressedOnly);
       const outset = parseLayers(probe.boxShadow).filter((layer) => !layer.inset && layer.spread > 0);
       expect(outset.length, `${name} paints an outer focus ring (${probe.boxShadow})`).toBeGreaterThan(0);
       expectRing(`pressed ${name}`, probe);
-      const ring = await shared.measureFocusRing(toggle);
+      const ring = await shared.measureFocusRing(painted);
       expect(ring.ringAgainstGap, `pressed ${name}: ring against its gap (${ring.layers})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
       expect(ring.gapAgainstFill ?? 0, `pressed ${name}: gap against the accent fill (${ring.layers})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
       console.log(`pressed ${name} ring ${colorScheme}: ring/backdrop ${ring.ringAgainstBackdrop.toFixed(2)} ring/gap ${ring.ringAgainstGap.toFixed(2)} gap/fill ${(ring.gapAgainstFill ?? 0).toFixed(2)}`);
-      if (!pressedAtLoad) {
-        await (await toggleNamed(name)).click();
-        await expect(await toggleNamed(name)).toHaveAttribute('aria-pressed', 'false');
-      }
+    };
+
+    const several = page.getByRole('button', { name: 'Change several days', exact: true });
+    await several.click();
+    await expect(several).toHaveAttribute('aria-pressed', 'true');
+    await expectPressedRing('Change several days', several, several);
+    await several.click();
+    await expect(several).toHaveAttribute('aria-pressed', 'false');
+
+    // The theme control of a phone lives in the More panel, which is opened if closed.
+    if (isMobile) {
+      const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+      if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+    }
+    const group = page.getByRole('radiogroup', { name: 'Theme', exact: true });
+    for (const option of ['Light', 'Dark']) {
+      const radio = group.getByRole('radio', { name: option, exact: true });
+      await radio.check();
+      await expect(radio).toBeChecked();
+      await expectPressedRing(`${option} theme segment`, radio, radio.locator('xpath=..'));
     }
   });
 

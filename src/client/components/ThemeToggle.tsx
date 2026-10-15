@@ -1,9 +1,10 @@
-import { useSyncExternalStore } from 'react';
-import { effectiveTheme, nextTheme, readStoredTheme, THEME_KEY, type Theme, type ThemeStorage, writeStoredTheme } from './themeModel.ts';
+import { useId, useSyncExternalStore } from 'react';
+import { effectiveTheme, readStoredTheme, THEME_KEY, type Theme, type ThemeStorage, writeStoredTheme } from './themeModel.ts';
 
 /*
- * The "Dark mode" toggle of the main navigation (WP5-UX2-T01). The theme in effect is the person's
- * choice (local storage, per device) or, until the first press, the device's (the media query below).
+ * The theme control of the main navigation (WP5-UX2-T01; a Light/Dark segmented control since WP5-UX2-T07).
+ * The theme in effect is the person's choice (local storage, per device) or, until the first choice, the
+ * device's (the media query below).
  * `data-theme` on <html> carries an explicit choice for the stylesheet; with no choice the attribute is
  * absent and the CSS follows the device by itself. Every toggle in the page (the desktop bar and the
  * phone's More panel) reads the same store, and a `storage` event keeps other tabs in step.
@@ -63,21 +64,57 @@ function currentTheme(): Theme {
   return effectiveTheme(chosenTheme(), window.matchMedia(DARK_QUERY).matches);
 }
 
+/** The two icons: a sun and a moon drawn here (24-unit grid, stroke in the text colour), decoration only. */
+function ThemeIcon({ theme }: { theme: Theme }) {
+  return (
+    <svg
+      className="theme-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {theme === 'light' ? (
+        <>
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+        </>
+      ) : (
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+      )}
+    </svg>
+  );
+}
+
+const OPTIONS: ReadonlyArray<{ theme: Theme; label: string }> = [
+  { theme: 'light', label: 'Light' },
+  { theme: 'dark', label: 'Dark' },
+];
+
 /**
- * A two-state button: the name stays "Dark mode" and `aria-pressed` tells whether the dark theme is in
- * effect (also when it is the device's). The half-disc glyph is decoration drawn in CSS.
+ * A segmented control of two native radios, "Light" (sun) and "Dark" (moon), in a radio group named
+ * "Theme". The checked radio is the theme in effect, also before any choice (then it is the device's);
+ * choosing the other one stores it. The arrow keys move the choice as they do in any native radio group.
+ * The radio itself is invisible and covers its label, so the label paints the segment.
  */
 export function ThemeToggle({ className }: { className?: string }) {
   const theme = useSyncExternalStore(subscribe, currentTheme);
+  // The bar's control and the More panel's are both in the page (one hidden by the layout): each is its own
+  // radio group, or checking a radio of one would uncheck the same-named radio of the other.
+  const groupName = `theme-${useId()}`;
   return (
-    <button
-      type="button"
-      className={className === undefined ? 'quiet theme-toggle' : `quiet theme-toggle ${className}`}
-      aria-pressed={theme === 'dark'}
-      onClick={() => chooseTheme(nextTheme(theme))}
-    >
-      <span className="theme-glyph" aria-hidden="true" />
-      Dark mode
-    </button>
+    <div role="radiogroup" aria-label="Theme" className={className === undefined ? 'theme-switch' : `theme-switch ${className}`}>
+      {OPTIONS.map((option) => (
+        <label key={option.theme} className="theme-option">
+          <input type="radio" name={groupName} value={option.theme} checked={theme === option.theme} onChange={() => chooseTheme(option.theme)} />
+          <ThemeIcon theme={option.theme} />
+          <span>{option.label}</span>
+        </label>
+      ))}
+    </div>
   );
 }

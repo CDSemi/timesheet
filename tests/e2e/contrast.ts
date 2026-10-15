@@ -102,13 +102,16 @@ export async function computedStyle(locator: Locator, property: StyleProperty): 
   return locator.evaluate((element, name) => element.ownerDocument.defaultView?.getComputedStyle(element)[name] ?? '', property);
 }
 
-/** Focuses the element the way the keyboard does (so `:focus-visible` matches), then waits until its ring is painted and settled. */
-export async function focusFromKeyboard(locator: Locator): Promise<void> {
+/**
+ * Focuses the element the way the keyboard does (so `:focus-visible` matches), then waits until its ring is painted and
+ * settled. `painted` is the element that paints the ring when it is not the focused one (the label of an invisible radio).
+ */
+export async function focusFromKeyboard(locator: Locator, painted: Locator = locator): Promise<void> {
   await locator.scrollIntoViewIfNeeded();
   await locator.page().keyboard.press('Shift');
   await locator.focus();
   await expect(locator).toBeFocused();
-  await expect.poll(async () => (parseLayers(await settledStyle(locator, 'boxShadow')).length > 0 ? 'ring' : 'none')).toBe('ring');
+  await expect.poll(async () => (parseLayers(await settledStyle(painted, 'boxShadow')).length > 0 ? 'ring' : 'none')).toBe('ring');
 }
 
 export interface RingMeasure {

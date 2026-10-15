@@ -170,3 +170,11 @@ Push per the profile. Append to this brief:
 ## Results
 
 (The committer appends results here.)
+
+Committer results: pre-HEAD fa2e679273185e3ebad9f3af425177bf21fb8ac1; commit and
+post-HEAD 3f5a3b333dede51043000e7123960ac05d26a76b; pushed yes; remote main equals
+that SHA. Digest pre and post both 3407f8f7... (812 files). Staged 68: 9 source, 6
+handoff records, 23 T05-FREEZE evidence, 30 T06 evidence. No other modified tracked
+handoff files. All checks exit 0 (see evidence/WP5-UX2-T06-FREEZE/checks.txt); recovery
+106 probes. No fixes, no masking. Deviation: one shell call included a tail to a
+null redirect for a no-op (no effect).
