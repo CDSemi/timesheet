@@ -158,3 +158,14 @@ Push per the profile. Append to this brief:
 - any fix applied or the stop reason.
 
 ## Results
+
+- Pre-HEAD b4d9dd87fd47531ff84eba40189153ab83562677 (= origin/main); post-HEAD and
+  commit 5c8355df8d60fdeb85b551eb0e5a09e8f18a6334; pushed yes; remote SHA the same.
+- Digest before add and on new HEAD: 0ef75a1533d9831057f42f3a7b45e0a9386792caa47b4f2c98e091d1040b7499
+  (817 files) both times.
+- Staged 35: 2 source, 6 modified handoff, 3 task records, 11 design, 13 evidence.
+- No other modified tracked handoff files; nothing pre-staged; no extra commits.
+- Checks (all exit 0): node v24.21.0; digest; git add; precommit-check (35 files, 0
+  findings); diff --cached --check; JSON parse; validate_orchestration PASS; check_recovery
+  106 probes; validate_package --preflight; fetch, push dry-run, push.
+- Deviation: none. No fixes, no masking. Details in evidence/WP5-UX3-T06-FREEZE/checks.txt.

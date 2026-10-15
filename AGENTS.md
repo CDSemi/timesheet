@@ -28,12 +28,10 @@ The five canonical triage roles, each label string equal to its name (`needs-tri
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
-### Unified Frontend & UI/UX Standards (Taste Skills Integration)
-Whenever editing, refactoring, or creating any UI components or views for C&D Semi, you must strictly orchestrate three skills: `stitch-design-taste`, `design-taste-frontend`, and `high-end-visual-design` using the following unified workflow:
+### Frontend and UI/UX standards
+When editing, refactoring or creating UI components or views, follow these rules. The skills `stitch-design-taste`, `design-taste-frontend` and `high-end-visual-design` are optional references for visual polish only; where they conflict with this section, the content security policy, accessibility or document 04, this section and document 04 win (system fonts only, no icon or animation library, no entrance, scroll or looping animation).
 
-1. **Pre-flight Consistency Check (Stitch Taste):** Before generating any code, inspect the existing `src/client/styles.css` (CSS custom properties), global CSS files, and established components in the repository. Match the exact spacing density (padding/margin), font weights, and corporate color palette. Never introduce arbitrary styling; introduce new values only as CSS custom properties.
-2. **Structural & Layout Foundations (Frontend Taste):** Ensure high-density, grid-based layouts with strict typographic hierarchy and a responsive mobile-first default. Every component must have proper "breathing room" (clean padding/gap) and structured data presentation suitable for B2B semiconductor hardware.
-3. **High-End Industrial Polish (High-End Design):** Elevate the visual aesthetic without losing technical seriousness:
-- **Shapes:** Avoid organic or playful shapes. Maintain strict adherence to the sharp, low-radius `4px / rounded` corners set by a radius CSS custom property of `4px`.
-- **Shadows:** For cards and panels, use ultra-subtle, multi-layered diffuse soft shadows instead of harsh borders to project a premium, high-tech instrument feel.
-- **Transitions:** Implement smooth micro-interactions. All interactive states (`hover`, `active`, `focus`) for buttons and links must use fluid, non-abrupt CSS transitions (`transition: all 300ms ease-out`) through a shared CSS custom property.
+1. **Consistency pre-flight:** Before writing code, read `src/client/styles.css` (CSS custom properties in the light set and both dark sets) and the established components. Reuse the tokens for colour, spacing, radius, elevation, motion and type; introduce a new value only as a CSS custom property, and a colour in both dark sets as well.
+2. **Modern, friendly business style:** Clear hierarchy, comfortable spacing and readable density for a small-team timesheet app, mobile-first and responsive. Surfaces step from the page to cards, sheets, panels and menus with soft layered shadows and hairline rings; corners follow the radius scale documented in document 04; one brand accent; every status colour is paired with words or a shape.
+3. **Accessible states:** Every interactive element has rest, hover (only where the device can hover), active, focus-visible, selected or checked, and disabled states in both themes, meeting WCAG 2.2 AA (text 4.5:1, state indicators and component boundaries 3:1, the shared focus ring, 44px targets below 768px and with a coarse pointer). State is never shown by colour alone.
+4. **Motion:** Interactive states change through the shared `--transition` custom property (short, eased, listed properties only, never `all`); honour `prefers-reduced-motion`; no decorative or looping animation.

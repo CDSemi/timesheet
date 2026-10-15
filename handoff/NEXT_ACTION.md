@@ -32,9 +32,13 @@
 - UI change round 3 (owner requests 2026-10-15, running): a modern style instead of the
   industrial one, a top-bar identity menu, header and period-bar layout, lifted sheet
   selections, and a Day editor with a separate session dialog and a simpler break area
-  (27 items, verbatim on the board). Running: the plan WP5-UX3-PLAN (read-only, with a
-  mockup). The owner will review the mockup and the plan's questions before the
-  style-dependent slices; a governance change of the AGENTS.md UI section comes first.
+  (27 items, verbatim on the board). The plan WP5-UX3-PLAN is done (mockup
+  `handoff/delivery/design/WP5-UX3/mockup.html`); slice T06 (break-row model) is frozen at
+  5c8355d. The owner answered G-1..G-5 (G-1 b with changes); the addendum WP5-UX3-PLAN2
+  updated the mockup (floating editor below 1360px, square week sheets, phone break chips,
+  the "in progress" pill). Running: the governance chain for the AGENTS.md UI section
+  (freeze, gate, fresh audit), then slices T01..T10. Optional owner question WP5-UX3-Q6
+  (phone break rows or chips; board `pending_owner_question_4`) blocks only T08B.
 - Pilot: the concrete [pilot packet](delivery/WP5_PILOT_PACKET.md) is ready for owner
   review (release identity a643794 / 229df806). Owner permission has not been requested,
   there is no pilot result, and the NAS is NOT VERIFIED.

@@ -1,0 +1,31 @@
+Freeze WP5-UX3-T06: pure break-row model for the session and Check out dialogs
+
+- feat(client): add breakRowsModel.ts:
+  - break rows as start date, start time and minutes; untouched saved or
+    suggested rows resend their saved instants unchanged; otherwise the end is
+    start + minutes in UTC, sent with an explicit offset (no DST gap or fold
+    on the end);
+  - row checks (whole minutes 1-720, before start, after end, overlap), DST
+    gap and fold named "Break n", server break_index mapped to its row;
+  - breaks_confirmed: listed rows or "Confirm no breaks taken" confirm; an
+    empty unticked list follows one parameter (unconfirmed or blocked);
+    Check out keeps E-1;
+  - reference-hour pre-fill and past-day suggested breaks (server today_local
+    only); summary text and dirty check for the confirmations. No UI change
+    yet.
+- test: add breakRowsModel.test.ts (68 tests, passing under three device
+  zones; three mutations caught).
+- docs(handoff):
+  - the UI change round 3 plan (owner items U-01..U-27), the mockup and ten
+    synthetic renders;
+  - the T06 record and evidence;
+  - the owner request and coordinator decisions on the board, owner questions
+    G-1..G-5;
+  - STATE, the checkpoint (+ vi) and NEXT_ACTION (+ vi).
+
+Task: WP5-UX3-T06 (owner request 2026-10-15, items U-21 and U-23..U-26)
+Gate: unit 1950 passed; day-editor and shell e2e desktop 38 passed / 10 skipped, mobile 43 / 5, 0 failed; verify exit 0 (worker-reported)
+Audit: pending, WP5-UX3-GATE then the round-3 area audits after slice T10
+Digest: 0ef75a15 (was 229df806)
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

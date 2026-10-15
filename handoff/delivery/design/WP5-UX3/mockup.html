@@ -71,6 +71,58 @@
   --focus-ring: 0 0 0 1px var(--card), 0 0 0 3px var(--accent);
 }
 
+/* ---------- PLAN2 additions (owner answers G-1 b, G-4, G-5 b, N-1, N-2) ---------- */
+.t-light {
+  --pill-progress-bg: #e3eefc; --pill-progress-ink: #174a9c; --pill-progress-line: #9dbdf0;
+  --scrim-side: rgb(18 22 28 / 0.18);
+}
+.t-dark {
+  --pill-progress-bg: #1b2d4a; --pill-progress-ink: #a9c8ff; --pill-progress-line: #3f6fb3;
+  --scrim-side: rgb(0 0 0 / 0.38);
+}
+.t-light, .t-dark {
+  --radius-sheet: 0; --radius-lift: 4px; --lift-clip: 32px; --sheet-col-min: 7.2rem;
+  --dialog-pad-phone: 16px; --dialog-section-gap-phone: 20px; --dialog-field-gap-phone: 12px; --break-row-gap: 8px;
+  --break-date-w: 7.6rem; --break-time-w: 6.8rem; --break-min-w: 5.6rem;
+}
+.pill.progress { --pb: var(--pill-progress-bg); --pi: var(--pill-progress-ink); --pl: var(--pill-progress-line); }
+.floatscrim { position: absolute; inset: 0; z-index: 6; background: var(--scrim-side); }
+.floatpanel { position: absolute; z-index: 7; top: 12px; right: 12px; bottom: 12px; width: 400px; overflow: hidden; border-radius: var(--radius-lg); box-shadow: var(--elev-3); background: var(--card); }
+.floatpanel.left { right: auto; left: 12px; }
+/* Phone break list: two-line rows from 25.5rem, chips below (container query on the list). */
+.blist { container: blist / inline-size; display: grid; gap: var(--break-row-gap); }
+.brow2 { display: grid; gap: 6px; padding: 8px 8px 8px 10px; border-radius: var(--radius); background: var(--row-alt); border: 1px solid var(--line-soft); }
+.brow2 .l1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.brow2 .l2 { display: flex; align-items: center; gap: 8px; }
+.brow2 .l2 .field { min-height: 44px; }
+.brow2 .l2 .field.date { width: var(--break-date-w); min-width: 0; }
+.brow2 .l2 .field.time { width: var(--break-time-w); min-width: 0; }
+.brow2 .l2 .field.min { width: var(--break-min-w); }
+.brow2 .l2 .x { width: 44px; min-height: 44px; margin-left: auto; }
+.bchip { display: none; align-items: center; gap: 8px; min-height: 44px; padding: 6px 10px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--row-alt); color: var(--text); font: inherit; font-size: 0.9rem; text-align: left; width: 100%; }
+.bchip .val { font-family: var(--font-mono); font-size: 0.85rem; }
+.brow2 .num, .bchip .num { display: inline-flex; flex: none; align-items: center; height: 26px; padding: 0 8px; border-radius: var(--radius-pill); background: var(--row-num-bg); color: var(--accent); font-weight: var(--font-weight-strong); font-size: 0.8rem; white-space: nowrap; }
+.brow2 .end { font-size: 0.78rem; color: var(--muted); }
+.brow2 .sugg { font-size: 0.72rem; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius-pill); padding: 1px 8px; }
+.bchip .go { margin-left: auto; color: var(--muted); }
+.bchip.err { border-color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); }
+.chipmsg { margin: 2px 0 0; font-size: 0.8rem; color: var(--attention-ink); }
+/* 382px = 25.5rem at the app's 15px root (this mockup's root is 16px, so the value is written in px here). */
+@container blist (width < 382px) { .brow2 { display: none; } .bchip { display: flex; } }
+/* Phone session dialog spacing (N-2) */
+.pdlg { width: 100%; height: 100%; display: flex; flex-direction: column; background: var(--card); color: var(--text); }
+.pdlg .dhead { padding: 12px var(--dialog-pad-phone); min-height: 56px; align-items: center; }
+.pdlg .dbody { flex: 1; overflow: auto; padding: 16px var(--dialog-pad-phone); gap: var(--dialog-section-gap-phone); }
+.pdlg .grp { gap: var(--dialog-field-gap-phone); }
+.pdlg .dt .field { flex: 1; min-height: 44px; }
+.pdlg .dfoot { padding: 12px var(--dialog-pad-phone); gap: 12px; }
+.pdlg .dfoot .btn { flex: 1; min-height: 44px; }
+.pdlg .prefill { padding: 8px 10px; }
+.pdlg .bactions .btn { flex: 1; min-height: 44px; }
+.sub { position: absolute; left: 0; right: 0; bottom: 0; z-index: 8; border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--card); box-shadow: var(--elev-3); }
+.sub .dbody { padding: 16px var(--dialog-pad-phone); gap: var(--dialog-field-gap-phone); }
+.sub .dfoot { padding: 12px var(--dialog-pad-phone); }
+
 /* ---------- Mockup document ---------- */
 * { box-sizing: border-box; }
 body { margin: 0; background: #c9ced6; color: #1c2430; font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif; }
@@ -183,10 +235,10 @@ label.lab { display: flex; flex-direction: column; gap: 4px; font-weight: var(--
 .formhead .ft { font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .formhead dl { display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 0; font-size: 0.9rem; }
 .formhead dl div { display: flex; gap: 6px; } .formhead dt { color: var(--muted); } .formhead dd { margin: 0; font-weight: var(--font-weight-strong); }
-.week { margin-top: 16px; background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--elev-2); }
+.week { margin-top: 20px; background: var(--card); border-radius: var(--radius-sheet); box-shadow: var(--elev-2); }
 .weekbar { display: flex; gap: 16px; align-items: baseline; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); }
 .weekbar b { letter-spacing: 0.06em; }
-.wgrid { display: grid; grid-template-columns: 92px repeat(7, minmax(0, 1fr)); padding: 0 8px 8px 0; }
+.wgrid { display: grid; grid-template-columns: 92px repeat(7, minmax(var(--sheet-col-min), 1fr)); padding: 0 8px 8px 0; }
 .rl { display: flex; flex-direction: column; color: var(--muted); font-size: 0.72rem; font-weight: var(--font-weight-strong); }
 .rl div, .day > div { display: flex; align-items: center; border-bottom: 1px solid var(--line-soft); }
 .rl div { padding: 0 12px; }
@@ -194,7 +246,7 @@ label.lab { display: flex; flex-direction: column; gap: 4px; font-weight: var(--
 .rl div:last-child, .day > div:last-child { border-bottom: 0; }
 .day { position: relative; display: flex; flex-direction: column; border-left: 1px solid var(--line-soft); background: var(--card); transition: var(--transition); }
 .day > div { justify-content: center; flex-direction: column; text-align: center; padding: 2px 6px; font-size: 0.9rem; }
-.day .d-day { flex-direction: row; gap: 6px; font-weight: var(--font-weight-heavy); background: var(--sheet-head); }
+.day .d-day { flex-direction: row; flex-wrap: wrap; gap: 2px 6px; font-weight: var(--font-weight-heavy); background: var(--sheet-head); }
 .day .d-date { font-family: var(--font-mono); }
 .day .d-label { font-weight: var(--font-weight-strong); }
 .day .d-label small { display: block; font-weight: var(--font-weight-normal); color: var(--muted); font-size: 0.72rem; }
@@ -208,10 +260,15 @@ label.lab { display: flex; flex-direction: column; gap: 4px; font-weight: var(--
 .day.today .d-day { box-shadow: inset 0 3px 0 var(--accent); }
 .todaytag { padding: 0 6px; border-radius: var(--radius-sm); background: var(--accent); color: var(--on-accent); font-size: 0.7rem; font-weight: var(--font-weight-strong); }
 /* Lift: batch-selected and editor columns rise with a soft shadow */
-.day.lifted { z-index: 1; transform: translateY(var(--lift-y)); border-radius: var(--radius); box-shadow: var(--elev-lift); border-left-color: transparent; }
-.day.lifted > div:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+.day.lifted { z-index: 1; transform: translateY(var(--lift-y)); border-radius: var(--radius-lift); box-shadow: var(--elev-lift); border-left-color: transparent; }
+.day.lifted > div:first-child { border-radius: inherit; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+/* A contiguous run of lifted columns is one group: inner edges carry no shadow and no radius. */
+.day.lifted.run-start { border-radius: var(--radius-lift) 0 0 var(--radius-lift); clip-path: inset(calc(-1 * var(--lift-clip)) 0 calc(-1 * var(--lift-clip)) calc(-1 * var(--lift-clip))); }
+.day.lifted.run-mid { border-radius: 0; clip-path: inset(calc(-1 * var(--lift-clip)) 0); }
+.day.lifted.run-end { border-radius: 0 var(--radius-lift) var(--radius-lift) 0; clip-path: inset(calc(-1 * var(--lift-clip)) calc(-1 * var(--lift-clip)) calc(-1 * var(--lift-clip)) 0); }
 .day.selected { background-image: linear-gradient(var(--day-selected), var(--day-selected)); }
-.day.editing { box-shadow: 0 0 0 1px var(--accent), var(--elev-lift); }
+/* The editor column: the 1px accent frame is drawn inside the box, so the run clipping never cuts it. */
+.day.editing::after { content: ''; position: absolute; inset: 0; z-index: 2; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--accent); pointer-events: none; }
 .day.editing .d-day { background: var(--edit-head); }
 .day .pick { display: inline-flex; }
 .picktext { font-size: 0.72rem; color: var(--muted); }
@@ -439,7 +496,7 @@ table.bt tr:last-child td { border-bottom: 0; }
 <!-- =============================== A3: page header, period bar, pills, meta row, toolbar =============================== -->
 <section class="board">
   <p class="cap"><b>A3. Đầu trang Timesheet, 1280px (U-07..U-12)</b>
-  Tiêu đề "Timesheet" và nút Check in/out cùng một hàng (bên phải, kèm giờ đã check in). Bỏ tên người dùng dưới tiêu đề. Ba nhãn kỳ: "old" màu hổ phách, "current" màu xanh lá, "future" màu hồng, có nền màu để phân biệt rõ ở cả hai chế độ. Hàng thông tin (Payroll date, Due, Times in) nằm một hàng khi đủ chỗ. "Open a day" nằm cùng hàng với ô chọn ngày. "Show details" và "Change several days" cách nhau 24px có vạch ngăn.</p>
+  Tiêu đề "Timesheet" và nút Check in/out cùng một hàng (bên phải, kèm giờ đã check in). Bỏ tên người dùng dưới tiêu đề. Ba nhãn kỳ: "old" màu hổ phách, "current" màu xanh lá, "future" màu hồng, có nền màu để phân biệt rõ ở cả hai chế độ; thêm "in progress" màu xanh dương cho kỳ chứa ngày hôm nay trong 5 ngày sau khi kỳ trước kết thúc (G-5). Hàng thông tin (Payroll date, Due, Times in) nằm một hàng khi đủ chỗ. "Open a day" nằm cùng hàng với ô chọn ngày. "Show details" và "Change several days" cách nhau 24px có vạch ngăn.</p>
   <div class="pair">
   <div class="frame w1280 t-light"><span class="tag">Sáng</span>
     <div class="page">
@@ -456,8 +513,8 @@ table.bt tr:last-child td { border-bottom: 0; }
         <div class="openday"><span class="t">Open a day</span><span class="field date"><span class="ph">mm/dd/yyyy</span><svg class="ic"><use href="#i-cal"/></svg></span><span class="btn secondary">Open day</span></div>
         <div class="toolsr"><span class="switch"><i></i>Show details</span><span class="vsep"></span><span class="btn secondary">Change several days</span></div>
       </div>
-      <p class="muted" style="margin:18px 0 6px;font-size:13px">Ba nhãn kỳ đặt cạnh nhau (old, current, future) và nhãn trạng thái trung tính:</p>
-      <div style="display:flex;gap:10px;align-items:center"><span class="pill old">old</span><span class="pill current">current</span><span class="pill future">future</span><span class="pill neutral">Draft</span></div>
+      <p class="muted" style="margin:18px 0 6px;font-size:13px">Các nhãn kỳ đặt cạnh nhau (old, current, in progress, future) và nhãn trạng thái trung tính:</p>
+      <div style="display:flex;gap:10px;align-items:center"><span class="pill old">old</span><span class="pill current">current</span><span class="pill progress">in progress</span><span class="pill progress">in progress</span><span class="pill neutral">Draft</span></div>
     </div>
   </div>
   <div class="frame w1280 t-dark"><span class="tag">Tối</span>
@@ -475,8 +532,8 @@ table.bt tr:last-child td { border-bottom: 0; }
         <div class="openday"><span class="t">Open a day</span><span class="field date"><span class="ph">mm/dd/yyyy</span><svg class="ic"><use href="#i-cal"/></svg></span><span class="btn secondary">Open day</span></div>
         <div class="toolsr"><span class="switch"><i></i>Show details</span><span class="vsep"></span><span class="btn secondary">Change several days</span></div>
       </div>
-      <p class="muted" style="margin:18px 0 6px;font-size:13px">Ba nhãn kỳ đặt cạnh nhau (old, current, future) và nhãn trạng thái trung tính:</p>
-      <div style="display:flex;gap:10px;align-items:center"><span class="pill old">old</span><span class="pill current">current</span><span class="pill future">future</span><span class="pill neutral">Draft</span></div>
+      <p class="muted" style="margin:18px 0 6px;font-size:13px">Các nhãn kỳ đặt cạnh nhau (old, current, in progress, future) và nhãn trạng thái trung tính:</p>
+      <div style="display:flex;gap:10px;align-items:center"><span class="pill old">old</span><span class="pill current">current</span><span class="pill progress">in progress</span><span class="pill progress">in progress</span><span class="pill neutral">Draft</span></div>
     </div>
   </div>
   </div>
@@ -484,14 +541,14 @@ table.bt tr:last-child td { border-bottom: 0; }
 
 <section class="board">
   <p class="cap"><b>A3b. Hàng thông tin khi hẹp (khoảng 820px): tự xuống hàng (U-10)</b>
-  Khi không đủ chỗ, "Due ..." và "Times in ..." xuống hàng; trạng thái chưa check in hiện "Checked out" và nút "Check in".</p>
+  Khi không đủ chỗ, "Due ..." và "Times in ..." xuống hàng; trạng thái chưa check in hiện "Checked out" và nút "Check in". Kỳ chứa ngày hôm nay trong 5 ngày chờ duyệt kỳ trước hiện nhãn "in progress" (G-5).</p>
   <div class="pair">
   <div class="frame w820 t-light"><span class="tag">Sáng</span>
     <div class="page">
       <div class="titlerow"><h1>Timesheet</h1><div class="checkin"><div class="state"><span class="now out">Checked out</span></div><span class="btn">Check in</span></div></div>
       <section class="card period">
         <span class="btn secondary icon" aria-label="Previous period"><svg class="ic"><use href="#i-left"/></svg></span>
-        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span>10/25/2026</span><span class="pill future">future</span><span class="pill neutral">Draft</span></div>
+        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span>10/25/2026</span><span class="pill progress">in progress</span><span class="pill neutral">Draft</span></div>
         <div class="pactions"><span class="btn secondary icon" aria-label="Next period"><svg class="ic"><use href="#i-right"/></svg></span><span class="btn secondary inactive">Today</span><span class="btn secondary">Current period</span><span class="btn">Review &amp; sign off</span></div>
         <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/30/2026</b></span><span>Due <b>Tue 10/27/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
       </section>
@@ -502,7 +559,7 @@ table.bt tr:last-child td { border-bottom: 0; }
       <div class="titlerow"><h1>Timesheet</h1><div class="checkin"><div class="state"><span class="now out">Checked out</span></div><span class="btn">Check in</span></div></div>
       <section class="card period">
         <span class="btn secondary icon" aria-label="Previous period"><svg class="ic"><use href="#i-left"/></svg></span>
-        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span>10/25/2026</span><span class="pill future">future</span><span class="pill neutral">Draft</span></div>
+        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span>10/25/2026</span><span class="pill progress">in progress</span><span class="pill neutral">Draft</span></div>
         <div class="pactions"><span class="btn secondary icon" aria-label="Next period"><svg class="ic"><use href="#i-right"/></svg></span><span class="btn secondary inactive">Today</span><span class="btn secondary">Current period</span><span class="btn">Review &amp; sign off</span></div>
         <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/30/2026</b></span><span>Due <b>Tue 10/27/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
       </section>
@@ -513,10 +570,10 @@ table.bt tr:last-child td { border-bottom: 0; }
 
 <!-- =============================== A4: sheet with lifted columns and the Day editor panel =============================== -->
 <section class="board">
-  <p class="cap"><b>A4. Bảng tuần nổi bật và panel Day editor, 1280px (U-02, U-13..U-16, U-19..U-21, U-27)</b>
-  Mỗi tuần là một tấm bảng trắng có bóng đổ trên nền xám. Cột Tue và Wed được chọn bằng "Change several days": nổi lên nhẹ bằng bóng đổ, có ô chọn đã tick, không còn khung dày. Cột Mon đang mở Day editor: cũng nổi lên, có viền xanh mỏng và ô "Day" tô nền xanh nhạt (không còn gạch đậm). Hàng "Label" đổi thành "Category", hàng "Check" đổi thành "Status"; "No times" dùng vòng tròn có gạch chéo thay cho ô vuông giống checkbox. Panel: tiêu đề nổi bật trên nền khác, ghi chú ngắn bằng hai nhãn nhỏ, danh sách phiên làm việc và bảng nghỉ giữa giờ (ngày, giờ bắt đầu, số phút), WFH cùng hàng với Category.</p>
+  <p class="cap"><b>A4. Bảng tuần và panel Day editor đặt cạnh nhau, 1440px (U-02, U-13..U-16, U-19..U-21, U-27; sửa theo G-1 b)</b>
+  Bản sửa: bảng tuần có góc vuông (không bo tròn); cột được chọn chỉ bo 4px; các cột được chọn liền nhau là một khối, bóng đổ chỉ ở ngoài khối, không đổ lên cột bên cạnh. Mỗi cột rộng tối thiểu 108px nên chữ không bị ép, không đè lên nhau; panel chỉ đặt cạnh bảng khi màn hình từ 1360px trở lên (xem A4b cho màn hình hẹp hơn). Mỗi tuần là một tấm bảng trắng có bóng đổ trên nền xám. Cột Tue và Wed được chọn bằng "Change several days": nổi lên nhẹ, có ô chọn đã tick, không còn khung dày. Cột Mon đang mở Day editor: cũng nổi lên, có viền xanh mỏng và ô "Day" tô nền xanh nhạt (không còn gạch đậm). Hàng "Label" đổi thành "Category", hàng "Check" đổi thành "Status"; "No times" dùng vòng tròn có gạch chéo thay cho ô vuông giống checkbox. Panel: tiêu đề nổi bật trên nền khác, ghi chú ngắn bằng hai nhãn nhỏ, danh sách phiên làm việc và bảng nghỉ giữa giờ (ngày, giờ bắt đầu, số phút), WFH cùng hàng với Category.</p>
   <div class="pair">
-  <div class="frame w1280 t-light"><span class="tag">Sáng</span>
+  <div class="frame w1440 t-light"><span class="tag">Sáng</span>
     <div class="page" style="max-width:none">
       <div class="split">
         <div>
@@ -525,9 +582,9 @@ table.bt tr:last-child td { border-bottom: 0; }
             <div class="weekbar"><b>WEEK 1</b><span class="mono muted">10/12/2026 - 10/18/2026</span><span class="muted" style="margin-left:auto;font-size:13px">2 selected</span></div>
             <div class="wgrid">
               <div class="rl"><div class="h-day">Day</div><div class="h-date">Date</div><div class="h-label">Category</div><div class="h-time">Time</div><div class="h-ot">OT (h:mm)</div><div class="h-st">Status</div></div>
-              <div class="day lifted editing"><div class="d-day h-day">Mon <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/12</div><div class="d-label h-label">Worked</div><div class="d-time h-time">09:00-17:30<small>1 break</small></div><div class="d-ot h-ot">0:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
-              <div class="day lifted selected"><div class="d-day h-day">Tue <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/13</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:30-19:00<small>1 break</small></div><div class="d-ot h-ot">2:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
-              <div class="day lifted selected"><div class="d-day h-day">Wed <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/14</div><div class="d-label h-label">Worked<small>Work from home</small></div><div class="d-time h-time">09:00-17:30<small>breaks not confirmed</small></div><div class="d-ot h-ot"><span style="font-size:12px;font-weight:400;color:var(--attention-ink)">pending</span></div><div class="d-st h-st"><span class="st warn"><i class="sh diamond"></i>Confirm breaks</span></div></div>
+              <div class="day lifted editing run-start"><div class="d-day h-day">Mon <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/12</div><div class="d-label h-label">Worked</div><div class="d-time h-time">09:00-17:30<small>1 break</small></div><div class="d-ot h-ot">0:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+              <div class="day lifted selected run-mid"><div class="d-day h-day">Tue <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/13</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:30-19:00<small>1 break</small></div><div class="d-ot h-ot">2:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+              <div class="day lifted selected run-end"><div class="d-day h-day">Wed <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/14</div><div class="d-label h-label">Worked<small>Work from home</small></div><div class="d-time h-time">09:00-17:30<small>breaks not confirmed</small></div><div class="d-ot h-ot"><span style="font-size:12px;font-weight:400;color:var(--attention-ink)">pending</span></div><div class="d-st h-st"><span class="st warn"><i class="sh diamond"></i>Confirm breaks</span></div></div>
               <div class="day today"><div class="d-day h-day">Thu <span class="todaytag">Today</span> <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/15</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:12<small>running</small></div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st ok"><i class="sh live"></i>Running</span></div></div>
               <div class="day"><div class="d-day h-day">Fri <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/16</div><div class="d-label h-label">Worked</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st mut"><i class="sh dash"></i>Upcoming</span></div></div>
               <div class="day nonworking"><div class="d-day h-day">Sat <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/17</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
@@ -552,7 +609,7 @@ table.bt tr:last-child td { border-bottom: 0; }
         <aside class="panel" aria-label="Day editor">
           <div class="phead">
             <div><h2><span class="sr">Day editor </span>Mon 10/12/2026</h2>
-              <div class="chips"><span class="pill future">future period</span><span class="chip"><svg class="ic"><use href="#i-clock"/></svg>Times in America/Los_Angeles</span></div></div>
+              <div class="chips"><span class="pill progress">in progress</span><span class="chip"><svg class="ic"><use href="#i-clock"/></svg>Times in America/Los_Angeles</span></div></div>
             <span class="btn quiet icon" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></span>
           </div>
           <div class="pbody">
@@ -583,7 +640,7 @@ table.bt tr:last-child td { border-bottom: 0; }
       </div>
     </div>
   </div>
-  <div class="frame w1280 t-dark"><span class="tag">Tối</span>
+  <div class="frame w1440 t-dark"><span class="tag">Tối</span>
     <div class="page" style="max-width:none">
       <div class="split">
         <div>
@@ -592,9 +649,9 @@ table.bt tr:last-child td { border-bottom: 0; }
             <div class="weekbar"><b>WEEK 1</b><span class="mono muted">10/12/2026 - 10/18/2026</span><span class="muted" style="margin-left:auto;font-size:13px">2 selected</span></div>
             <div class="wgrid">
               <div class="rl"><div class="h-day">Day</div><div class="h-date">Date</div><div class="h-label">Category</div><div class="h-time">Time</div><div class="h-ot">OT (h:mm)</div><div class="h-st">Status</div></div>
-              <div class="day lifted editing"><div class="d-day h-day">Mon <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/12</div><div class="d-label h-label">Worked</div><div class="d-time h-time">09:00-17:30<small>1 break</small></div><div class="d-ot h-ot">0:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
-              <div class="day lifted selected"><div class="d-day h-day">Tue <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/13</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:30-19:00<small>1 break</small></div><div class="d-ot h-ot">2:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
-              <div class="day lifted selected"><div class="d-day h-day">Wed <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/14</div><div class="d-label h-label">Worked<small>Work from home</small></div><div class="d-time h-time">09:00-17:30<small>breaks not confirmed</small></div><div class="d-ot h-ot"><span style="font-size:12px;font-weight:400;color:var(--attention-ink)">pending</span></div><div class="d-st h-st"><span class="st warn"><i class="sh diamond"></i>Confirm breaks</span></div></div>
+              <div class="day lifted editing run-start"><div class="d-day h-day">Mon <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/12</div><div class="d-label h-label">Worked</div><div class="d-time h-time">09:00-17:30<small>1 break</small></div><div class="d-ot h-ot">0:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+              <div class="day lifted selected run-mid"><div class="d-day h-day">Tue <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/13</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:30-19:00<small>1 break</small></div><div class="d-ot h-ot">2:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+              <div class="day lifted selected run-end"><div class="d-day h-day">Wed <span class="pick"><span class="chk on"></span></span></div><div class="d-date h-date">10/14</div><div class="d-label h-label">Worked<small>Work from home</small></div><div class="d-time h-time">09:00-17:30<small>breaks not confirmed</small></div><div class="d-ot h-ot"><span style="font-size:12px;font-weight:400;color:var(--attention-ink)">pending</span></div><div class="d-st h-st"><span class="st warn"><i class="sh diamond"></i>Confirm breaks</span></div></div>
               <div class="day today"><div class="d-day h-day">Thu <span class="todaytag">Today</span> <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/15</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:12<small>running</small></div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st ok"><i class="sh live"></i>Running</span></div></div>
               <div class="day"><div class="d-day h-day">Fri <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/16</div><div class="d-label h-label">Worked</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st mut"><i class="sh dash"></i>Upcoming</span></div></div>
               <div class="day nonworking"><div class="d-day h-day">Sat <span class="pick"><span class="chk"></span></span></div><div class="d-date h-date">10/17</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
@@ -619,7 +676,7 @@ table.bt tr:last-child td { border-bottom: 0; }
         <aside class="panel" aria-label="Day editor">
           <div class="phead">
             <div><h2><span class="sr">Day editor </span>Mon 10/12/2026</h2>
-              <div class="chips"><span class="pill future">future period</span><span class="chip"><svg class="ic"><use href="#i-clock"/></svg>Times in America/Los_Angeles</span></div></div>
+              <div class="chips"><span class="pill progress">in progress</span><span class="chip"><svg class="ic"><use href="#i-clock"/></svg>Times in America/Los_Angeles</span></div></div>
             <span class="btn quiet icon" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></span>
           </div>
           <div class="pbody">
@@ -649,6 +706,67 @@ table.bt tr:last-child td { border-bottom: 0; }
         </aside>
       </div>
     </div>
+  </div>
+  </div>
+</section>
+
+<!-- =============================== A4b (PLAN2): floating editor panel below 1360px =============================== -->
+<section class="board">
+  <p class="cap"><b>A4b. Màn hình 1280px: panel Day editor nổi lên trên trang (G-1 b, mục 2 của PLAN2)</b>
+  Khi màn hình không đủ chỗ cho cả bảng tuần (mỗi cột tối thiểu 108px) và panel 400px (dưới 1360px), bảng giữ nguyên độ rộng và panel nổi lên ở mép phải. Nền phía sau tối nhẹ và tạm khóa (như hộp thoại); cột đang sửa (Mon) vẫn nhìn thấy. Nếu cột đang sửa nằm bên phải (ví dụ Sat), panel chuyển sang mép trái để không che cột đó. Escape hoặc nút X đóng panel và đưa con trỏ về ngày đó.</p>
+  <div class="pair">
+  <div class="frame w1280 t-light" style="height:640px"><span class="tag">Sáng</span>
+    <div class="page" style="max-width:none">
+      <div class="titlerow"><h1>Timesheet</h1><div class="checkin"><div class="state"><span class="now out">Checked out</span></div><span class="btn">Check in</span></div></div>
+      <section class="week" aria-label="Week 1">
+        <div class="weekbar"><b>WEEK 1</b><span class="mono muted">10/12/2026 - 10/18/2026</span></div>
+        <div class="wgrid">
+          <div class="rl"><div class="h-day">Day</div><div class="h-date">Date</div><div class="h-label">Category</div><div class="h-time">Time</div><div class="h-ot">OT (h:mm)</div><div class="h-st">Status</div></div>
+          <div class="day lifted editing"><div class="d-day h-day">Mon</div><div class="d-date h-date">10/12</div><div class="d-label h-label">Worked</div><div class="d-time h-time">09:00-17:30<small>3 breaks</small></div><div class="d-ot h-ot">0:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+          <div class="day"><div class="d-day h-day">Tue</div><div class="d-date h-date">10/13</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:30-19:00<small>1 break</small></div><div class="d-ot h-ot">2:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+          <div class="day"><div class="d-day h-day">Wed</div><div class="d-date h-date">10/14</div><div class="d-label h-label">Worked</div><div class="d-time h-time">09:00-17:30<small>3 breaks</small></div><div class="d-ot h-ot">0:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+          <div class="day today"><div class="d-day h-day">Thu <span class="todaytag">Today</span></div><div class="d-date h-date">10/15</div><div class="d-label h-label">Worked</div><div class="d-time h-time attention">no times yet</div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st warn"><i class="sh none"></i>No times</span></div></div>
+          <div class="day"><div class="d-day h-day">Fri</div><div class="d-date h-date">10/16</div><div class="d-label h-label">Worked</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st mut"><i class="sh dash"></i>Upcoming</span></div></div>
+          <div class="day nonworking"><div class="d-day h-day">Sat</div><div class="d-date h-date">10/17</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+          <div class="day nonworking"><div class="d-day h-day">Sun</div><div class="d-date h-date">10/18</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+        </div>
+      </section>
+    </div>
+    <div class="floatscrim"></div>
+    <aside class="floatpanel" aria-label="Day editor">
+      <div class="phead"><div><h2><span class="sr">Day editor </span>Mon 10/12/2026</h2><div class="chips"><span class="pill progress">in progress</span><span class="chip"><svg class="ic"><use href="#i-clock"/></svg>Times in America/Los_Angeles</span></div></div><span class="btn quiet icon" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></span></div>
+      <div class="pbody"><div class="psec"><h3>Times <span class="btn secondary" style="min-height:32px;padding:4px 10px;font-size:0.85rem"><svg class="ic"><use href="#i-plus"/></svg>Add session</span></h3>
+        <div class="sess"><div class="top"><span class="rng">09:00-17:30</span><span class="pill current">Breaks confirmed</span></div><p class="by">Entered by hand in America/Los_Angeles</p>
+          <table class="bt"><caption>Breaks of 09:00-17:30</caption><thead><tr><th>Break</th><th>Date</th><th>Start</th><th>Minutes</th></tr></thead><tbody><tr><td>1</td><td>10/12</td><td>11:00</td><td>15</td></tr><tr><td>2</td><td>10/12</td><td>13:00</td><td>30</td></tr><tr><td>3</td><td>10/12</td><td>15:30</td><td>15</td></tr></tbody></table>
+          <div class="acts" style="margin-top:8px"><span class="btn secondary">Edit</span><span class="btn secondary"><svg class="ic"><use href="#i-trash"/></svg>Delete</span></div></div></div>
+        <div class="psec"><h3>Category and leave</h3><div class="labelrow"><label class="lab">Category<span class="field">Worked<svg class="ic"><use href="#i-chev"/></svg></span></label><span class="inline"><span class="chk"></span>Worked from home (WFH)</span></div></div>
+      </div>
+    </aside>
+  </div>
+  <div class="frame w1280 t-dark" style="height:640px"><span class="tag">Tối</span>
+    <div class="page" style="max-width:none">
+      <div class="titlerow"><h1>Timesheet</h1><div class="checkin"><div class="state"><span class="now out">Checked out</span></div><span class="btn">Check in</span></div></div>
+      <section class="week" aria-label="Week 1">
+        <div class="weekbar"><b>WEEK 1</b><span class="mono muted">10/12/2026 - 10/18/2026</span></div>
+        <div class="wgrid">
+          <div class="rl"><div class="h-day">Day</div><div class="h-date">Date</div><div class="h-label">Category</div><div class="h-time">Time</div><div class="h-ot">OT (h:mm)</div><div class="h-st">Status</div></div>
+          <div class="day"><div class="d-day h-day">Mon</div><div class="d-date h-date">10/12</div><div class="d-label h-label">Worked</div><div class="d-time h-time">09:00-17:30<small>3 breaks</small></div><div class="d-ot h-ot">0:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+          <div class="day"><div class="d-day h-day">Tue</div><div class="d-date h-date">10/13</div><div class="d-label h-label">Worked</div><div class="d-time h-time">08:30-19:00<small>1 break</small></div><div class="d-ot h-ot">2:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+          <div class="day"><div class="d-day h-day">Wed</div><div class="d-date h-date">10/14</div><div class="d-label h-label">Worked</div><div class="d-time h-time">09:00-17:30<small>3 breaks</small></div><div class="d-ot h-ot">0:00</div><div class="d-st h-st"><span class="st ok"><i class="sh circle"></i>Complete</span></div></div>
+          <div class="day today"><div class="d-day h-day">Thu <span class="todaytag">Today</span></div><div class="d-date h-date">10/15</div><div class="d-label h-label">Worked</div><div class="d-time h-time attention">no times yet</div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st warn"><i class="sh none"></i>No times</span></div></div>
+          <div class="day"><div class="d-day h-day">Fri</div><div class="d-date h-date">10/16</div><div class="d-label h-label">Worked</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"><span class="st mut"><i class="sh dash"></i>Upcoming</span></div></div>
+          <div class="day nonworking lifted editing"><div class="d-day h-day">Sat</div><div class="d-date h-date">10/17</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+          <div class="day nonworking"><div class="d-day h-day">Sun</div><div class="d-date h-date">10/18</div><div class="d-label h-label">Off</div><div class="d-time h-time"></div><div class="d-ot h-ot"></div><div class="d-st h-st"></div></div>
+        </div>
+      </section>
+    </div>
+    <div class="floatscrim"></div>
+    <aside class="floatpanel left" aria-label="Day editor">
+      <div class="phead"><div><h2><span class="sr">Day editor </span>Sat 10/17/2026</h2><div class="chips"><span class="pill progress">in progress</span><span class="chip"><svg class="ic"><use href="#i-clock"/></svg>Times in America/Los_Angeles</span></div></div><span class="btn quiet icon" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></span></div>
+      <div class="pbody"><div class="psec"><h3>Times <span class="btn secondary" style="min-height:32px;padding:4px 10px;font-size:0.85rem"><svg class="ic"><use href="#i-plus"/></svg>Add session</span></h3><p class="muted" style="margin:0">No session recorded for this day.</p></div>
+        <div class="psec"><h3>Category and leave</h3><div class="labelrow"><label class="lab">Category<span class="field">Off<svg class="ic"><use href="#i-chev"/></svg></span></label><span class="inline"><span class="chk"></span>Worked from home (WFH)</span></div></div>
+      </div>
+    </aside>
   </div>
   </div>
 </section>
@@ -768,7 +886,7 @@ table.bt tr:last-child td { border-bottom: 0; }
     <div class="ppage">
       <div class="pcard pperiod">
         <span class="btn secondary icon"><svg class="ic"><use href="#i-left"/></svg></span>
-        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span>10/25/2026</span><span class="pill future">future</span><span class="pill neutral">Draft</span></div>
+        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span>10/25/2026</span><span class="pill progress">in progress</span><span class="pill neutral">Draft</span></div>
         <span class="btn secondary icon"><svg class="ic"><use href="#i-right"/></svg></span>
         <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/30/2026</b></span><span>Due <b>Tue 10/27/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
         <div class="prow"><span class="btn secondary inactive">Today</span><span class="btn secondary">Current period</span><span class="btn grow">Sign off</span></div>
@@ -786,7 +904,7 @@ table.bt tr:last-child td { border-bottom: 0; }
     <div class="ppage">
       <div class="pcard pperiod">
         <span class="btn secondary icon"><svg class="ic"><use href="#i-left"/></svg></span>
-        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span> 10/25/2026</span><span class="pill future">future</span></div>
+        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span> 10/25/2026</span><span class="pill progress">in progress</span></div>
         <span class="btn secondary icon"><svg class="ic"><use href="#i-right"/></svg></span>
         <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/30/2026</b></span><span>Due <b>Tue 10/27/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
         <div class="prow"><span class="btn secondary inactive">Today</span><span class="btn secondary">Current</span><span class="btn grow">Sign off</span></div>
@@ -817,7 +935,7 @@ table.bt tr:last-child td { border-bottom: 0; }
     <div class="ppage">
       <div class="pcard pperiod">
         <span class="btn secondary icon"><svg class="ic"><use href="#i-left"/></svg></span>
-        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span>10/25/2026</span><span class="pill future">future</span><span class="pill neutral">Draft</span></div>
+        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span>10/25/2026</span><span class="pill progress">in progress</span><span class="pill neutral">Draft</span></div>
         <span class="btn secondary icon"><svg class="ic"><use href="#i-right"/></svg></span>
         <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/30/2026</b></span><span>Due <b>Tue 10/27/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
         <div class="prow"><span class="btn secondary inactive">Today</span><span class="btn secondary">Current period</span><span class="btn grow">Sign off</span></div>
@@ -835,7 +953,7 @@ table.bt tr:last-child td { border-bottom: 0; }
     <div class="ppage">
       <div class="pcard pperiod">
         <span class="btn secondary icon"><svg class="ic"><use href="#i-left"/></svg></span>
-        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span> 10/25/2026</span><span class="pill future">future</span></div>
+        <div class="ptitle"><span class="pname">10/12/2026<span class="arr">→</span> 10/25/2026</span><span class="pill progress">in progress</span></div>
         <span class="btn secondary icon"><svg class="ic"><use href="#i-right"/></svg></span>
         <p class="meta" style="margin:0"><span>Payroll date <b>Fri 10/30/2026</b></span><span>Due <b>Tue 10/27/2026, 17:00 (America/Los_Angeles)</b></span><span>Times in America/Los_Angeles</span></p>
         <div class="prow"><span class="btn secondary inactive">Today</span><span class="btn secondary">Current</span><span class="btn grow">Sign off</span></div>
@@ -863,8 +981,8 @@ table.bt tr:last-child td { border-bottom: 0; }
 </section>
 
 <section class="board">
-  <p class="cap"><b>A8. Hộp thoại phiên làm việc trên điện thoại 390px (U-21, U-24)</b>
-  Hộp thoại chiếm cả màn hình; mỗi giờ nghỉ là một khối riêng: hàng trên là ngày và giờ, hàng dưới là số phút và nút X (chỉ xuống hàng khi không đủ chỗ). Nút Save và Cancel luôn ở dưới cùng.</p>
+  <p class="cap"><b>A8 (bản cũ của PLAN, được thay bằng A8r2 và A9 bên dưới)</b>
+  Bản này giữ lại để so sánh; trên điện thoại giờ nghỉ nay hiển thị theo A8r2 (nhãn "Break n" ở dòng trên, hoặc dạng thẻ khi không đủ chỗ).</p>
   <div class="pair">
   <div class="frame w390 ph-h t-light"><span class="tag">Sáng 390</span>
     <div class="dlg" style="width:390px;height:844px;border-radius:0;display:flex;flex-direction:column">
@@ -896,6 +1014,169 @@ table.bt tr:last-child td { border-bottom: 0; }
         </div>
       </div>
       <div class="dfoot" style="padding:10px 12px"><span class="btn secondary" style="flex:1;min-height:44px">Cancel</span><span class="btn" style="flex:1;min-height:44px">Save</span></div>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- =============================== A5c (PLAN2): G-4 notice, then the final confirmation =============================== -->
+<section class="board">
+  <p class="cap"><b>A5c. Bấm Save khi chưa có giờ nghỉ và chưa tick "Confirm no breaks taken" (G-4)</b>
+  Trái: thông báo cho chọn một trong ba cách: xác nhận không nghỉ, lưu nhưng để giờ nghỉ chưa xác nhận, hoặc quay lại thêm giờ nghỉ (được chọn sẵn; phím Escape cũng là quay lại). Phải: nếu tiếp tục, vẫn hiện hộp xác nhận cuối "Save this session?" với tóm tắt tương ứng trước khi lưu.</p>
+  <div class="pair">
+  <div class="frame w1280 t-light" style="height:420px"><span class="tag">Sáng</span>
+    <div class="stage" style="display:flex;gap:24px;justify-content:center;align-items:flex-start;height:420px">
+      <div class="dlg sm" role="alertdialog"><div class="dhead"><h2>No breaks listed</h2></div><div class="dbody"><p style="margin:0">This session has no breaks listed, and "Confirm no breaks taken" is not ticked. What do you want to do?</p>
+        <div style="display:grid;gap:8px"><span class="btn">Confirm no breaks taken</span><span class="btn secondary">Leave breaks unconfirmed for now</span><span class="btn secondary focus">Go back and add breaks</span></div>
+        <p class="hint">Unconfirmed breaks keep OT for this day pending until you confirm them.</p></div></div>
+      <div class="dlg sm" role="alertdialog"><div class="dhead"><h2>Save this session?</h2></div><div class="dbody"><dl class="confirmlist"><div><dt>Day</dt><dd>Mon 10/12/2026</dd></div><div><dt>Time</dt><dd>08:00-17:00 (America/Los_Angeles)</dd></div><div><dt>Breaks</dt><dd>Breaks not confirmed: OT for this day stays pending</dd></div></dl></div><div class="dfoot"><span class="btn secondary">Back</span><span class="btn">Save</span></div></div>
+    </div>
+  </div>
+  <div class="frame w1280 t-dark" style="height:420px"><span class="tag">Tối</span>
+    <div class="stage" style="display:flex;gap:24px;justify-content:center;align-items:flex-start;height:420px">
+      <div class="dlg sm" role="alertdialog"><div class="dhead"><h2>No breaks listed</h2></div><div class="dbody"><p style="margin:0">This session has no breaks listed, and "Confirm no breaks taken" is not ticked. What do you want to do?</p>
+        <div style="display:grid;gap:8px"><span class="btn">Confirm no breaks taken</span><span class="btn secondary">Leave breaks unconfirmed for now</span><span class="btn secondary focus">Go back and add breaks</span></div>
+        <p class="hint">Unconfirmed breaks keep OT for this day pending until you confirm them.</p></div></div>
+      <div class="dlg sm" role="alertdialog"><div class="dhead"><h2>Save this session?</h2></div><div class="dbody"><dl class="confirmlist"><div><dt>Day</dt><dd>Mon 10/12/2026</dd></div><div><dt>Time</dt><dd>08:00-17:00 (America/Los_Angeles)</dd></div><div><dt>Breaks</dt><dd>No breaks taken</dd></div></dl><p style="margin:0">Saving confirms these breaks as the breaks you took.</p></div><div class="dfoot"><span class="btn secondary">Back</span><span class="btn">Save</span></div></div>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- =============================== A8r2 (PLAN2): phone session dialog, rows or chips =============================== -->
+<section class="board">
+  <p class="cap"><b>A8r2. Hộp thoại phiên làm việc trên điện thoại: 430px, 390px, 320px (N-1, N-2)</b>
+  430px: mỗi giờ nghỉ có dòng trên "Break n" (giờ kết thúc, nhãn suggested), dòng dưới là ngày, giờ, số phút và nút xoá trên cùng một hàng. 390px và 320px không đủ chỗ cho một hàng như vậy (cần khoảng 382px), nên mỗi giờ nghỉ hiện thành một thẻ "Break 1 · 10/12/2026 10:00 → 10:15"; bấm vào thẻ để sửa trong hộp thoại nhỏ (A9). Khoảng cách: lề 16px, giữa các phần 20px, giữa các ô 12px, giữa các giờ nghỉ 8px, nút cao 44px.</p>
+  <div class="pair">
+  <div class="frame ph-h t-light" style="width:430px"><span class="tag">Sáng 430</span>
+    <div class="pdlg">
+      <div class="dhead"><div><h2>New session</h2><p>Mon 10/12/2026</p></div><span class="btn quiet icon" style="width:44px;min-height:44px" aria-label="Cancel"><svg class="ic"><use href="#i-x"/></svg></span></div>
+      <div class="dbody">
+        <div class="prefill"><svg class="ic"><use href="#i-info"/></svg><span>Pre-filled from your reference hours (08:00-17:00) and suggested breaks.</span></div>
+        <div class="grp"><h3>Time</h3>
+          <label class="lab">Start<span class="dt"><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">08:00<svg class="ic"><use href="#i-clock"/></svg></span></span></label>
+          <label class="lab">End<span class="dt"><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">17:00<svg class="ic"><use href="#i-clock"/></svg></span></span></label>
+          <label class="lab">Input zone<span class="field" style="min-height:44px;justify-content:space-between">America/Los_Angeles<svg class="ic"><use href="#i-chev"/></svg></span></label>
+        </div>
+        <div class="grp"><h3>Breaks</h3>
+          <span class="inline" style="min-height:44px"><span class="chk"></span>Confirm no breaks taken</span>
+          <div class="blist">
+            <div class="brow2"><div class="l1"><span class="num">Break 1</span><span class="end">ends 10:15</span><span class="sugg">suggested</span></div><div class="l2"><span class="field date">10/12/2026</span><span class="field time">10:00</span><span class="field min">15 <span class="ph">min</span></span><span class="btn quiet icon x" aria-label="Remove break 1"><svg class="ic"><use href="#i-x"/></svg></span></div></div>
+            <button class="bchip" type="button"><span class="num">Break 1</span><span class="val">10/12/2026 10:00 → 10:15</span><svg class="ic go"><use href="#i-right"/></svg></button>
+            <div class="brow2"><div class="l1"><span class="num">Break 2</span><span class="end">ends 12:30</span><span class="sugg">suggested</span></div><div class="l2"><span class="field date">10/12/2026</span><span class="field time">12:00</span><span class="field min">30 <span class="ph">min</span></span><span class="btn quiet icon x" aria-label="Remove break 2"><svg class="ic"><use href="#i-x"/></svg></span></div></div>
+            <button class="bchip" type="button"><span class="num">Break 2</span><span class="val">10/12/2026 12:00 → 12:30</span><svg class="ic go"><use href="#i-right"/></svg></button>
+            <div class="brow2"><div class="l1"><span class="num">Break 3</span><span class="end">ends 14:45</span><span class="sugg">suggested</span></div><div class="l2"><span class="field date">10/12/2026</span><span class="field time">14:30</span><span class="field min">15 <span class="ph">min</span></span><span class="btn quiet icon x" aria-label="Remove break 3"><svg class="ic"><use href="#i-x"/></svg></span></div></div>
+            <button class="bchip" type="button"><span class="num">Break 3</span><span class="val">10/12/2026 14:30 → 14:45</span><svg class="ic go"><use href="#i-right"/></svg></button>
+          </div>
+          <div class="bactions"><span class="btn secondary"><svg class="ic"><use href="#i-spark"/></svg>Suggest breaks</span><span class="btn secondary"><svg class="ic"><use href="#i-plus"/></svg>Add break</span></div>
+        </div>
+      </div>
+      <div class="dfoot"><span class="btn secondary">Cancel</span><span class="btn">Save</span></div>
+    </div>
+  </div>
+  <div class="frame w390 ph-h t-light"><span class="tag">Sáng 390</span>
+    <div class="pdlg">
+      <div class="dhead"><div><h2>New session</h2><p>Mon 10/12/2026</p></div><span class="btn quiet icon" style="width:44px;min-height:44px" aria-label="Cancel"><svg class="ic"><use href="#i-x"/></svg></span></div>
+      <div class="dbody">
+        <div class="prefill"><svg class="ic"><use href="#i-info"/></svg><span>Pre-filled from your reference hours (08:00-17:00) and suggested breaks.</span></div>
+        <div class="grp"><h3>Time</h3>
+          <label class="lab">Start<span class="dt"><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">08:00<svg class="ic"><use href="#i-clock"/></svg></span></span></label>
+          <label class="lab">End<span class="dt"><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">17:00<svg class="ic"><use href="#i-clock"/></svg></span></span></label>
+          <label class="lab">Input zone<span class="field" style="min-height:44px;justify-content:space-between">America/Los_Angeles<svg class="ic"><use href="#i-chev"/></svg></span></label>
+        </div>
+        <div class="grp"><h3>Breaks</h3>
+          <span class="inline" style="min-height:44px"><span class="chk"></span>Confirm no breaks taken</span>
+          <div class="blist">
+            <div class="brow2"><div class="l1"><span class="num">Break 1</span><span class="end">ends 10:15</span><span class="sugg">suggested</span></div><div class="l2"><span class="field date">10/12/2026</span><span class="field time">10:00</span><span class="field min">15 <span class="ph">min</span></span><span class="btn quiet icon x" aria-label="Remove break 1"><svg class="ic"><use href="#i-x"/></svg></span></div></div>
+            <button class="bchip" type="button"><span class="num">Break 1</span><span class="val">10/12/2026 10:00 → 10:15</span><svg class="ic go"><use href="#i-right"/></svg></button>
+            <div class="brow2"><div class="l1"><span class="num">Break 2</span><span class="end">ends 12:30</span><span class="sugg">suggested</span></div><div class="l2"><span class="field date">10/12/2026</span><span class="field time">12:00</span><span class="field min">30 <span class="ph">min</span></span><span class="btn quiet icon x" aria-label="Remove break 2"><svg class="ic"><use href="#i-x"/></svg></span></div></div>
+            <button class="bchip" type="button"><span class="num">Break 2</span><span class="val">10/12/2026 12:00 → 12:30</span><svg class="ic go"><use href="#i-right"/></svg></button>
+            <div class="brow2"><div class="l1"><span class="num">Break 3</span><span class="end">ends 14:45</span><span class="sugg">suggested</span></div><div class="l2"><span class="field date">10/12/2026</span><span class="field time">14:30</span><span class="field min">15 <span class="ph">min</span></span><span class="btn quiet icon x" aria-label="Remove break 3"><svg class="ic"><use href="#i-x"/></svg></span></div></div>
+            <button class="bchip" type="button"><span class="num">Break 3</span><span class="val">10/12/2026 14:30 → 14:45</span><svg class="ic go"><use href="#i-right"/></svg></button>
+          </div>
+          <div class="bactions"><span class="btn secondary"><svg class="ic"><use href="#i-spark"/></svg>Suggest breaks</span><span class="btn secondary"><svg class="ic"><use href="#i-plus"/></svg>Add break</span></div>
+        </div>
+      </div>
+      <div class="dfoot"><span class="btn secondary">Cancel</span><span class="btn">Save</span></div>
+    </div>
+  </div>
+  <div class="frame w320 ph-h t-dark"><span class="tag">Tối 320</span>
+    <div class="pdlg">
+      <div class="dhead"><div><h2>New session</h2><p>Mon 10/12/2026</p></div><span class="btn quiet icon" style="width:44px;min-height:44px" aria-label="Cancel"><svg class="ic"><use href="#i-x"/></svg></span></div>
+      <div class="dbody">
+        <div class="prefill"><svg class="ic"><use href="#i-info"/></svg><span>Pre-filled from your reference hours (08:00-17:00) and suggested breaks.</span></div>
+        <div class="grp"><h3>Time</h3>
+          <label class="lab">Start<span class="dt"><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">08:00<svg class="ic"><use href="#i-clock"/></svg></span></span></label>
+          <label class="lab">End<span class="dt"><span class="field date">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span><span class="field time">17:00<svg class="ic"><use href="#i-clock"/></svg></span></span></label>
+          <label class="lab">Input zone<span class="field" style="min-height:44px;justify-content:space-between">America/Los_Angeles<svg class="ic"><use href="#i-chev"/></svg></span></label>
+        </div>
+        <div class="grp"><h3>Breaks</h3>
+          <span class="inline" style="min-height:44px"><span class="chk"></span>Confirm no breaks taken</span>
+          <div class="blist">
+            <div class="brow2"><div class="l1"><span class="num">Break 1</span></div><div class="l2"><span class="field date">10/12/2026</span></div></div>
+            <button class="bchip" type="button"><span class="num">Break 1</span><span class="val">10/12/2026 10:00 → 10:15</span><svg class="ic go"><use href="#i-right"/></svg></button>
+            <div class="brow2"><div class="l1"><span class="num">Break 2</span></div><div class="l2"><span class="field date">10/12/2026</span></div></div>
+            <button class="bchip err" type="button" aria-describedby="m2"><span class="num">Break 2</span><span class="val">10/12/2026 12:00 → 12:30</span><svg class="ic go"><use href="#i-right"/></svg></button>
+            <p class="chipmsg" id="m2">Break 2 overlaps Break 1.</p>
+            <div class="brow2"><div class="l1"><span class="num">Break 3</span></div><div class="l2"><span class="field date">10/12/2026</span></div></div>
+            <button class="bchip" type="button"><span class="num">Break 3</span><span class="val">10/12/2026 14:30 → 14:45</span><svg class="ic go"><use href="#i-right"/></svg></button>
+          </div>
+          <div class="bactions"><span class="btn secondary"><svg class="ic"><use href="#i-spark"/></svg>Suggest breaks</span><span class="btn secondary"><svg class="ic"><use href="#i-plus"/></svg>Add break</span></div>
+        </div>
+      </div>
+      <div class="dfoot"><span class="btn secondary">Cancel</span><span class="btn">Save</span></div>
+    </div>
+  </div>
+  <div class="frame t-dark" style="width:430px;height:600px"><span class="tag">Tối 430 (phần giờ nghỉ)</span>
+    <div class="pdlg">
+      <div class="dbody">
+        <div class="grp"><h3>Breaks</h3>
+          <span class="inline" style="min-height:44px"><span class="chk"></span>Confirm no breaks taken</span>
+          <div class="blist">
+            <div class="brow2"><div class="l1"><span class="num">Break 1</span><span class="end">ends 10:15</span><span class="sugg">suggested</span></div><div class="l2"><span class="field date">10/12/2026</span><span class="field time">10:00</span><span class="field min">15 <span class="ph">min</span></span><span class="btn quiet icon x" aria-label="Remove break 1"><svg class="ic"><use href="#i-x"/></svg></span></div></div>
+            <button class="bchip" type="button"><span class="num">Break 1</span><span class="val">10/12/2026 10:00 → 10:15</span><svg class="ic go"><use href="#i-right"/></svg></button>
+            <div class="brow2"><div class="l1"><span class="num">Break 2</span><span class="end">ends 12:30</span><span class="sugg">suggested</span></div><div class="l2"><span class="field date">10/12/2026</span><span class="field time">12:00</span><span class="field min">30 <span class="ph">min</span></span><span class="btn quiet icon x" aria-label="Remove break 2"><svg class="ic"><use href="#i-x"/></svg></span></div></div>
+            <button class="bchip" type="button"><span class="num">Break 2</span><span class="val">10/12/2026 12:00 → 12:30</span><svg class="ic go"><use href="#i-right"/></svg></button>
+            <div class="brow2"><div class="l1"><span class="num">Break 3</span><span class="end">ends 14:45</span></div><div class="l2"><span class="field date">10/12/2026</span><span class="field time">14:30</span><span class="field min"><span class="ph">total mins</span></span><span class="btn quiet icon x" aria-label="Remove break 3"><svg class="ic"><use href="#i-x"/></svg></span></div></div>
+            <button class="bchip" type="button"><span class="num">Break 3</span><span class="val">10/12/2026 14:30</span><svg class="ic go"><use href="#i-right"/></svg></button>
+          </div>
+          <div class="bactions"><span class="btn secondary"><svg class="ic"><use href="#i-spark"/></svg>Suggest breaks</span><span class="btn secondary"><svg class="ic"><use href="#i-plus"/></svg>Add break</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- =============================== A9 (PLAN2): break sub-dialog on a phone =============================== -->
+<section class="board">
+  <p class="cap"><b>A9. Hộp thoại nhỏ để sửa một giờ nghỉ trên điện thoại 390px (N-1)</b>
+  Bấm vào thẻ "Break 2" mở hộp thoại nhỏ từ dưới lên: ngày, giờ bắt đầu, số phút (hiện giờ kết thúc), nút "Remove break", "Cancel" và "Done". Done chỉ cập nhật bản nháp; mọi thứ chỉ được lưu khi bấm Save của phiên làm việc. Escape hoặc Cancel đóng hộp nhỏ và đưa con trỏ về thẻ.</p>
+  <div class="pair">
+  <div class="frame w390 ph-h t-light"><span class="tag">Sáng 390</span>
+    <div class="pdlg"><div class="dhead"><div><h2>New session</h2><p>Mon 10/12/2026</p></div></div><div class="dbody"><div class="grp"><h3>Breaks</h3><div class="blist"><button class="bchip" type="button"><span class="num">Break 1</span><span class="val">10/12/2026 10:00 → 10:15</span></button><button class="bchip" type="button"><span class="num">Break 2</span><span class="val">10/12/2026 12:00 → 12:30</span></button></div></div></div></div>
+    <div class="floatscrim"></div>
+    <div class="sub" role="dialog" aria-labelledby="sb1">
+      <div class="dhead"><h2 id="sb1">Break 2</h2><span class="btn quiet icon" style="width:44px;min-height:44px" aria-label="Cancel"><svg class="ic"><use href="#i-x"/></svg></span></div>
+      <div class="dbody">
+        <label class="lab">Date<span class="field date" style="min-height:44px;width:100%">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span></label>
+        <div class="times"><label class="lab">Start time<span class="field time" style="min-height:44px;width:100%">12:00<svg class="ic"><use href="#i-clock"/></svg></span></label><label class="lab">Minutes<span class="field" style="min-height:44px;width:100%">30</span></label></div>
+        <p class="hint">Ends 12:30 (America/Los_Angeles).</p>
+      </div>
+      <div class="dfoot" style="justify-content:space-between"><span class="btn quiet" style="color:var(--danger);min-height:44px"><svg class="ic"><use href="#i-trash"/></svg>Remove break</span><span style="display:flex;gap:8px"><span class="btn secondary" style="min-height:44px">Cancel</span><span class="btn" style="min-height:44px">Done</span></span></div>
+    </div>
+  </div>
+  <div class="frame w390 ph-h t-dark"><span class="tag">Tối 390</span>
+    <div class="pdlg"><div class="dhead"><div><h2>New session</h2><p>Mon 10/12/2026</p></div></div><div class="dbody"><div class="grp"><h3>Breaks</h3><div class="blist"><button class="bchip" type="button"><span class="num">Break 1</span><span class="val">10/12/2026 10:00 → 10:15</span></button><button class="bchip" type="button"><span class="num">Break 2</span><span class="val">10/12/2026 12:00 → 12:30</span></button></div></div></div></div>
+    <div class="floatscrim"></div>
+    <div class="sub" role="dialog" aria-labelledby="sb2">
+      <div class="dhead"><h2 id="sb2">Break 2</h2><span class="btn quiet icon" style="width:44px;min-height:44px" aria-label="Cancel"><svg class="ic"><use href="#i-x"/></svg></span></div>
+      <div class="dbody">
+        <label class="lab">Date<span class="field date" style="min-height:44px;width:100%">10/12/2026<svg class="ic"><use href="#i-cal"/></svg></span></label>
+        <div class="times"><label class="lab">Start time<span class="field time" style="min-height:44px;width:100%">12:00<svg class="ic"><use href="#i-clock"/></svg></span></label><label class="lab">Minutes<span class="field" style="min-height:44px;width:100%">30</span></label></div>
+        <p class="hint">Ends 12:30 (America/Los_Angeles).</p>
+      </div>
+      <div class="dfoot" style="justify-content:space-between"><span class="btn quiet" style="color:var(--danger);min-height:44px"><svg class="ic"><use href="#i-trash"/></svg>Remove break</span><span style="display:flex;gap:8px"><span class="btn secondary" style="min-height:44px">Cancel</span><span class="btn" style="min-height:44px">Done</span></span></div>
     </div>
   </div>
   </div>

@@ -63,6 +63,48 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   lần nghiệm thu lại).
 - Đang chạy: WP5-UX3-T06-FREEZE (committer, chạy một mình): hai file T06 cùng kế hoạch,
   mockup, ảnh, bằng chứng T06, board, STATE, cặp checkpoint và cặp NEXT_ACTION.
+- WP5-UX3-T06-FREEZE xong: 5c8355df8d60fdeb85b551eb0e5a09e8f18a6334 trên main, đã push (35
+  đường dẫn; digest 0ef75a15, 817 file; mọi bước kiểm exit 0; không sai lệch).
+- Board: trạng thái `blocked`, chờ chủ dự án trả lời G-1..G-5 (`pending_owner_question_3`);
+  `next_task_id` WP5-UX3-GOV (brief chờ `handoff/delivery/tasks/WP5-UX3-GOV.md`, giao khi
+  G-1 là a hoặc b, hủy nếu là c). Chưa commit sau đó: kết quả đóng băng, brief GOV, mục cập
+  nhật này (+ en).
+- Sau khi có câu trả lời: WP5-UX3-GOV, đóng băng, gate và audit opus mới; rồi T01..T05,
+  T07..T10, mỗi phần một lần đóng băng (câu trả lời được đưa vào brief), gate cuối gói,
+  audit vùng A và B cùng một lượt tích hợp, và nghiệm thu lại WP5.
+- Chủ dự án đã trả lời (nguyên văn trên board): G-1 b kèm thay đổi (bảng tuần không bo góc,
+  cột được chọn bo 4px, các cột nổi liền nhau không đổ bóng đè lên nhau, nội dung cột không
+  bị ép hay chồng lên nhau khi mở panel; panel nổi khi không đủ chỗ cho cả hai), G-2 a, G-3
+  a, G-4 theo phương án của chủ dự án (thông báo cho chọn xác nhận không nghỉ / tạm chưa
+  xác nhận / quay lại, rồi hộp xác nhận cuối), G-5 b; thêm N-1 (trên điện thoại các ô giờ
+  nghỉ nằm một hàng dưới nhãn "Break n", dạng chip có hộp thoại con khi vẫn không đủ chỗ)
+  và N-2 (khoảng cách hộp thoại trên điện thoại gọn hơn).
+- Quyết định của coordinator: G-4 chỉ hiện khi không có giờ nghỉ nào và chưa tick ô; chip
+  giờ nghỉ dùng giờ 24h (E-4; chủ dự án có thể yêu cầu AM/PM); câu chữ AGENTS không đổi
+  vì G-1.
+- Đang chạy song song: WP5-UX3-GOV (worker, sonnet; AGENTS.md và AGENTS.vi.md, bên ghi duy
+  nhất) và WP5-UX3-PLAN2 (cùng planner được tiếp tục, opus, chỉ đọc: đo chồng lấn trên app
+  thật, quy tắc panel nổi, hình dạng bảng, hàng giờ nghỉ trên điện thoại và hộp thoại con,
+  khoảng cách, thông báo G-4, nhãn G-5, phần thay đổi của mockup và các phần việc).
+- WP5-UX3-GOV xong (worker, tự báo claude-sonnet-5-5; kết quả tự báo, chưa phải bằng chứng
+  độc lập): mục UI trong AGENTS.md và AGENTS.vi.md được thay bằng văn bản B2 giữ nguyên (mỗi
+  file thêm 7, bỏ 9 dòng); preflight, validator và check_recovery đạt; digest a682f153 (817
+  file). Lần đóng băng của nó chờ WP5-UX3-PLAN2 trả kết quả (task commit chạy một mình);
+  sau đó WP5-UX3-GOV-GATE và audit opus mới WP5-UX3-GOV-AUDIT.
+- Quyết định của coordinator: mục "Visual standard" của docs/04 và ghi chú thay thế E-8 ở
+  docs/10 chuyển vào T01, để AGENTS, docs/04 và styles.css khớp nhau từ lần đóng băng T01;
+  audit GOV coi khoảng giữa là chuyển tiếp có kế hoạch.
+- WP5-UX3-PLAN2 xong (planner, tự báo claude-opus-5-5, chỉ đọc): app thật không có phần tử
+  chồng lên nhau nhưng cột chỉ rộng 89.4px và chữ bị ngắt giữa từ khi mở panel; panel đặt
+  cạnh bảng từ 1360px, dưới mức đó là panel nổi dạng modal; bảng tuần không bo góc, các cột
+  nổi bo 4px và gộp nhóm; hàng giờ nghỉ trên điện thoại từ 382px, dưới mức đó là chip có hộp
+  thoại con "Break n" (tức là trên điện thoại 390/375/360/320); khoảng cách hộp thoại trên
+  điện thoại; thông báo G-4; nhãn "in progress"; thêm phần T05B và T08B; mockup cập nhật
+  kèm tám ảnh `mockup-r2`.
+- Quyết định của coordinator: nhận PLAN2; câu hỏi không bắt buộc WP5-UX3-Q6 (hàng hay chip
+  trên điện thoại phổ biến; mặc định chip) chỉ chặn T08B.
+- Đang chạy: WP5-UX3-GOV-FREEZE (committer, chạy một mình; cặp AGENTS cùng 32 đường dẫn
+  handoff). Sau đó WP5-UX3-GOV-GATE và WP5-UX3-GOV-AUDIT (đã đăng ký, đang chờ).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

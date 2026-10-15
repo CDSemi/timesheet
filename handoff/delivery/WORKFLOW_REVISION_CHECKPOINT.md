@@ -60,6 +60,47 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   re-accept).
 - Running: WP5-UX3-T06-FREEZE (committer, alone): the two T06 files plus the plan, mockup,
   renders, T06 evidence, board, STATE, checkpoint pair and NEXT_ACTION pair.
+- WP5-UX3-T06-FREEZE done: 5c8355df8d60fdeb85b551eb0e5a09e8f18a6334 on main, pushed (35
+  paths; digests 0ef75a15, 817 files; every check exit 0; no deviation).
+- Board: status `blocked` on the owner's answers G-1..G-5 (`pending_owner_question_3`);
+  `next_task_id` WP5-UX3-GOV (pending brief `handoff/delivery/tasks/WP5-UX3-GOV.md`,
+  dispatched after G-1 a or b, cancelled by c). Uncommitted afterwards: the freeze result,
+  the GOV brief, this update (+ vi).
+- Next after the answers: WP5-UX3-GOV, its freeze, gate and fresh opus audit; then T01..T05,
+  T07..T10 with a freeze each (owner answers folded into the briefs), the package-final
+  gate, area audits A and B plus an integration pass, and the WP5 re-accept.
+- Owner answered (verbatim on the board): G-1 b with changes (square week sheets, 4px
+  selection columns, no overlapping shadows between adjacent lifted columns, no squeezed
+  or overlapping column content beside the panel; a floating panel when both do not fit),
+  G-2 a, G-3 a, G-4 owner variant (a notice with confirm no breaks / leave unconfirmed /
+  go back, then the final confirmation), G-5 b; plus N-1 (phone break rows on one line
+  under a "Break n" label, chips with a sub-dialog when even that does not fit) and N-2
+  (tidier phone dialog spacing).
+- Coordinator decision: G-4 triggers only with no break listed and the box unticked; the
+  break chip uses 24-hour times (E-4; the owner may ask for AM/PM); the AGENTS wording is
+  unchanged by G-1.
+- Running in parallel: WP5-UX3-GOV (worker, sonnet; AGENTS.md and AGENTS.vi.md, the only
+  writer) and WP5-UX3-PLAN2 (the same planner resumed, opus, read-only: real-app overlap
+  measurement, floating-panel rule, sheet shapes, phone break rows and sub-dialog, spacing,
+  G-4 notice, G-5 pill, mockup and slice deltas).
+- WP5-UX3-GOV done (worker, self-reported claude-sonnet-5-5; reported, not independent
+  proof): the AGENTS.md and AGENTS.vi.md UI sections replaced by the B2 text unchanged (7
+  added, 9 removed per file); preflight, validator and check_recovery pass; digest
+  a682f153 (817 files). Its freeze waits until WP5-UX3-PLAN2 returns (a commit task runs
+  alone); then WP5-UX3-GOV-GATE and a fresh opus WP5-UX3-GOV-AUDIT.
+- Coordinator decision: docs/04 "Visual standard" and a docs/10 E-8 supersession note move
+  into T01, so AGENTS, docs/04 and styles.css agree from the T01 freeze; the GOV audit
+  treats the interval as a planned transition.
+- WP5-UX3-PLAN2 done (planner, self-reported claude-opus-5-5, read-only): the real app has
+  no element overlap but 89.4px columns with mid-word breaks beside the panel; side by side
+  from 1360px, a floating modal side panel below; square sheets, grouped 4px lifted
+  columns; phone break rows from 382px, chips with a "Break n" sub-dialog below (so on
+  390/375/360/320 phones); phone dialog spacing; the G-4 notice; the "in progress" pill;
+  new slices T05B and T08B; mockup updated with eight `mockup-r2` renders.
+- Coordinator decision: adopt PLAN2; optional owner question WP5-UX3-Q6 (rows or chips on
+  common phones; default chips) blocks only T08B.
+- Running: WP5-UX3-GOV-FREEZE (committer, alone; AGENTS pair plus 32 handoff paths). Then
+  WP5-UX3-GOV-GATE and WP5-UX3-GOV-AUDIT (registered pending).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

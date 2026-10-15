@@ -33,9 +33,14 @@
   thay cho phong cách công nghiệp, menu nhận diện người dùng trên thanh trên cùng, bố cục
   phần đầu trang và thanh kỳ, hiệu ứng nổi cho cột được chọn trên bảng, và Day editor với
   hộp thoại riêng cho phiên giờ cùng vùng giờ nghỉ đơn giản hơn (27 mục, nguyên văn trên
-  board). Đang chạy: kế hoạch WP5-UX3-PLAN (chỉ đọc, có mockup). Chủ dự án sẽ xem mockup
-  và các câu hỏi của plan trước các phần phụ thuộc phong cách; thay đổi quản trị cho mục
-  UI trong AGENTS.md làm trước.
+  board). Kế hoạch WP5-UX3-PLAN đã xong (mockup
+  `handoff/delivery/design/WP5-UX3/mockup.html`); phần T06 (model dòng giờ nghỉ) đã đóng
+  băng ở 5c8355d. Chủ dự án đã trả lời G-1..G-5 (G-1 b kèm thay đổi); phụ lục
+  WP5-UX3-PLAN2 đã cập nhật mockup (Day editor nổi dưới 1360px, bảng tuần không bo góc,
+  chip giờ nghỉ trên điện thoại, nhãn "in progress"). Đang chạy: chuỗi quản trị cho mục UI
+  trong AGENTS.md (đóng băng, gate, audit mới), sau đó các phần T01..T10. Câu hỏi không bắt
+  buộc WP5-UX3-Q6 (hàng hay chip cho giờ nghỉ trên điện thoại; `pending_owner_question_4`
+  trên board) chỉ chặn T08B.
 - Pilot: [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) cụ thể đã sẵn để chủ dự án duyệt
   (định danh bản phát hành a643794 / 229df806). Chưa xin phép chủ dự án, chưa có kết quả
   pilot, NAS chưa được kiểm.
