@@ -1,0 +1,24 @@
+import json
+import sys
+
+sys.stdout.reconfigure(encoding="utf-8")
+board = json.load(open(sys.argv[1], encoding="utf-8"))
+tasks = board.get("tasks", [])
+for t in tasks:
+    tid = t.get("id", "")
+    if not tid.startswith("WP5-UX2"):
+        continue
+    dec = str(t.get("decision"))[:90]
+    print(
+        tid,
+        "| kind", t.get("kind"),
+        "| status", t.get("status"),
+        "| req", t.get("requested_model"),
+        "| actual", t.get("actual_model"),
+        "| agent", t.get("agent_id"),
+        "| prev", t.get("previous_agent_ids"),
+        "| reviewed", t.get("reviewed_commit"),
+        "| freeze", t.get("freeze_commit"),
+        "| author_ids", t.get("author_agent_ids"),
+        "| decision", dec,
+    )

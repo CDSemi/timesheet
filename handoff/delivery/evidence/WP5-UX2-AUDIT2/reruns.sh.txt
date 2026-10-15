@@ -1,0 +1,14 @@
+# Reruns of the two probes whose first version had a probe defect (real clock, px copy). One run at a time.
+. <task>/env.sh
+P=$T/out/69-reruns-progress.txt
+: > $P
+export AUDIT2_AXE="$TW\\axe\\axe.min.js"
+export AUDIT2_EXPECT_TODAY=
+echo "start 66-requests-real $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P
+bash $T/run-shift.sh 66-requests-real real $T/px tests/e2e/zz-audit2-requests.spec.ts > $T/out/66-requests-real.txt 2>&1
+echo "end 66-requests-real $(date -u +%Y-%m-%dT%H:%M:%SZ) $(grep -E '^exit=' $T/out/66-requests-real.txt | tr '\n' ' ')" >> $P
+export AUDIT2_SHOTS=1
+echo "start 68-a11y-real $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P
+bash $T/run-shift.sh 68-a11y-real real $T/px tests/e2e/zz-audit2-a11y.spec.ts > $T/out/68-a11y-real.txt 2>&1
+echo "end 68-a11y-real $(date -u +%Y-%m-%dT%H:%M:%SZ) $(grep -E '^exit=' $T/out/68-a11y-real.txt | tr '\n' ' ')" >> $P
+echo "reruns done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P

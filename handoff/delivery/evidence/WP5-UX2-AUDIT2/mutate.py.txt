@@ -1,0 +1,83 @@
+"""Applies one WP5-UX2-AUDIT2 mutation to the scratch export (exact text, exactly one occurrence). Usage: mutate.py <root> <id>."""
+import sys
+from pathlib import Path
+
+PB = "src/client/components/PeriodBar.tsx"
+TS = "src/client/TimesheetScreen.tsx"
+CSS = "src/client/styles.css"
+
+MUTATIONS = {
+    # The inactive-press re-read removed: the old guard in the period bar is back.
+    "MA-press-guard": [(PB, "                  jumps.onToday();\n", "                  if (jumps.todayAway) jumps.onToday();\n")],
+    # The window-focus re-read removed.
+    "MB1-no-focus": [(TS, "    window.addEventListener('focus', refresh);\n", "")],
+    # The visibility re-read removed.
+    "MB2-no-visibility": [(TS, "    document.addEventListener('visibilitychange', onVisibility);\n", "")],
+    # Both re-reads removed (the effect registers nothing).
+    "MB3-no-refresh": [
+        (TS, "    window.addEventListener('focus', refresh);\n", ""),
+        (TS, "    document.addEventListener('visibilitychange', onVisibility);\n", ""),
+    ],
+    # The focus/visibility re-read goes to the person's own route even in a shared view (sharing boundary).
+    "MG-own-route-in-shared": [
+        (
+            TS,
+            "      request<CurrentPeriods>('GET', '/periods/current')\n        .then(setPeriods)\n        .catch(() => undefined)\n        .finally(",
+            "      ownRequest<CurrentPeriods>('GET', '/periods/current')\n        .then(setPeriods)\n        .catch(() => undefined)\n        .finally(",
+        )
+    ],
+    # The one-read-at-a-time guard removed.
+    "MB4-no-guard": [(TS, "      if (refreshing.current) return;\n", "")],
+    # The opacity rule restored on top of the colour dimming.
+    "MC-opacity": [
+        (
+            CSS,
+            "button.secondary[aria-disabled='true'] {\n  border-color: var(--line);\n  color: var(--muted);\n  cursor: not-allowed;\n}\n",
+            "button.secondary[aria-disabled='true'] {\n  border-color: var(--line);\n  color: var(--muted);\n  cursor: not-allowed;\n}\n\nbutton[aria-disabled='true'] {\n  opacity: var(--opacity-disabled);\n}\n",
+        )
+    ],
+    # One renamed string reverted (a place none of the earlier mutation runs used).
+    "MD-wording-checkout-time": [
+        (
+            "src/client/components/ClockOutDialog.tsx",
+            "A break that ends later than the check-out time is refused.",
+            "A break that ends later than the clock-out time is refused.",
+        )
+    ],
+    "MD2-wording-checking": [("src/client/components/ClockPanel.tsx", "'Checking your status'", "'Checking the clock'")],
+    # The inactive Today loses its focus ring (shows whether the FIX2 focus-ring tests measure a real ring on every day).
+    "ME-no-ring": [
+        (
+            CSS,
+            "button[aria-disabled='true']:active {\n",
+            "button.secondary[aria-disabled='true']:focus-visible {\n  box-shadow: none;\n}\n\nbutton[aria-disabled='true']:active {\n",
+        )
+    ],
+    # A press decides from the page's stale periods instead of the fresh answer.
+    "MF-stale-decision": [
+        (
+            TS,
+            "      const jump = todayJump({ today: fresh.today_local, current: fresh.current, inProgress: fresh.in_progress, shown: view.period, editDate });\n",
+            "      const jump = todayJump({ today: periods?.today_local ?? fresh.today_local, current: fresh.current, inProgress: fresh.in_progress, shown: view.period, editDate });\n",
+        )
+    ],
+}
+
+
+def main() -> int:
+    root = Path(sys.argv[1])
+    key = sys.argv[2]
+    for relative, old, new in MUTATIONS[key]:
+        path = root / relative
+        text = path.read_bytes().decode("utf-8")
+        count = text.count(old)
+        if count != 1:
+            print(f"{key}: {relative}: expected exactly one occurrence, found {count}")
+            return 2
+        path.write_bytes(text.replace(old, new).encode("utf-8"))
+        print(f"{key}: {relative}: applied")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

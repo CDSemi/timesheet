@@ -1,0 +1,11 @@
+. <task>/env.sh
+mkdir -p $E
+cd $T/out
+for f in *.txt; do
+  case "$f" in ex-files.txt|ex-hashes.txt|ex-sorted.txt|lstree-sorted.txt|keys-list.txt|51-*-files.txt|51-*-hashes.txt) continue;; esac
+  node $T/mask.mjs "$T/out/$f" "$E/$f"
+done
+for s in env.sh digest.sh run-main.sh run-rest.sh run-drill.sh run-shift.sh sweep.sh cmp-dist.sh cfg.sh keys.sh collect.sh; do node $T/mask.mjs "$T/$s" "$E/$s.txt"; done
+for s in mask.mjs zone.mjs run-tz.mjs tzprobe.mjs tzchild.mjs contrast5.mjs shiftclock.mjs probe-now.mjs; do node $T/mask.mjs "$T/$s" "$E/$s.txt"; done
+node $T/mask.mjs "$T/zz-control.spec.ts" "$E/zz-control.spec.ts.txt"
+ls $E | wc -l

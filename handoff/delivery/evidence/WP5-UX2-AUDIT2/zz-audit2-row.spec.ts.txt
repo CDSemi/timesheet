@@ -1,0 +1,40 @@
+import type { Page } from '@playwright/test';
+import { expect, type PeriodsCurrent, test } from './fixtures.ts';
+
+/*
+ * WP5-UX2-AUDIT2 task-local probe (never part of the repository). Finding WP5-UX2-AUDIT-02 (docs): where does the phone Review
+ * link take its own row when Current period is shown? docs/04 and docs/10 now say "below about 330px". Measured on the window
+ * branch only (Current period exists only there); outside the window the probe records that Current period is absent.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const bar = (page: Page) => page.locator('.period-bar');
+const isWindow = (periods: PeriodsCurrent) => periods.current.payroll_date !== periods.in_progress.payroll_date;
+
+test('AUDIT2 phone Review row by width', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'phone layout only');
+  test.setTimeout(120_000);
+  const periods = await employeeSeed.periodsCurrent();
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  if (!isWindow(periods)) {
+    console.log(`AUDIT2 row outside the window (server_today ${periods.today_local}): Current period count ${await bar(page).getByRole('button', { name: 'Current period' }).count()}`);
+    return;
+  }
+  await bar(page).getByRole('button', { name: 'Today', exact: true }).click();
+  await expect(bar(page).getByRole('button', { name: 'Current period', exact: true })).toHaveCount(1);
+  for (let width = 316; width <= 400; width += 2) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.waitForTimeout(120);
+    const facts = await page.evaluate<{ today: number; review: number; reviewH: number; label: string; container: number; sideways: number }>(`(() => {
+      const today = document.querySelector('.period-bar [data-period-today]').getBoundingClientRect();
+      const link = document.querySelector('.period-bar [data-review-link]');
+      const review = link.getBoundingClientRect();
+      const cta = document.querySelector('.period-cta').getBoundingClientRect();
+      const shown = link.querySelector('.review-full') && getComputedStyle(link.querySelector('.review-full')).display !== 'none' ? 'full' : 'short:' + getComputedStyle(link, '::after').content;
+      return { today: today.top, review: review.top, reviewH: review.height, label: shown, container: cta.width, sideways: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+    })()`);
+    const ownRow = Math.abs(facts.review - facts.today) > 4;
+    console.log(`AUDIT2 row width=${width} container=${facts.container.toFixed(1)} review_own_row=${ownRow} label=${facts.label} review_height=${facts.reviewH} sideways=${facts.sideways}`);
+  }
+});

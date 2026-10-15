@@ -1,0 +1,604 @@
+diff --git a/docs/04_UX_AND_SETTINGS.md b/docs/04_UX_AND_SETTINGS.md
+index ba12c43..aab6d52 100644
+--- a/docs/04_UX_AND_SETTINGS.md
++++ b/docs/04_UX_AND_SETTINGS.md
+@@ -45,15 +45,15 @@ The Timesheet page shows the form of the Excel workbook and the PDF. The header
+ - Formats are those of the PDF: US dates (MM/DD in the cells, MM/DD/YYYY in the header and period bar), durations as h:mm, times as 24-hour ranges such as 08:00-17:00 in the display zone, with several sessions listed and a running session marked. The accounting date stays the saved reporting-zone date.
+ - Non-working days (weekends, holidays and closures from the server calendar, never inferred from the weekday) carry one light tint with fine diagonal hatching. Today carries an accent top bar and a "Today" tag. A cell that needs input has an amber tint plus the Check text and shape. The day open in the Day editor is marked as a whole: a light accent fill behind the cells, accent rails on both sides and an accent underline on its head (a framed row on a phone), and its day button carries `aria-current`. The marker combines with the Today bar and the batch ring on the same column, goes when the editor closes or when the day is not on the displayed sheet, keeps at least 3:1 contrast for the rails and 4.5:1 for text, and never covers the open label picker.
+ - Signature lines: "Employee Signature" shows the signer's name when signed, or the pending-review state, with the date in the saved reporting zone and a link to the Review. "Manager Signature" shows "Not used yet" with an empty date. The signature image never appears on the Timesheet page. The lines and the link are absent in a shared view and for an imported period.
+-- Phones (below 768px): each week is a four-column table Day | Label | Time | OT, one row per day at least 54px tall, with no sideways scroll; the Check status folds into the Day cell and the Time cell tint. A whole row opens the day editor, and the row of the day open in it is framed. The first screen shows the period card (with "<" and ">" beside the title, and "Today" and the Review link together in one row) and the compact tools, so the first day row is fully visible above the tab bar at 390x844, also in the five days when "Current period" joins that row; the check in/out controls are in the top bar, not on the page; the page heading and the form title stay for screen readers only. Both layouts expose exactly one element per day, named by weekday and date, with one day button whose accessible name holds its visible text and keeps the accounting date (WCAG 2.2 SC 2.5.3): "Edit {MM/DD} ({date})" on the sheet, for example "Edit 09/28 (2026-09-28)", and "Edit {weekday} {MM/DD} ({date})" on a phone, for example "Edit Mon 09/28 (2026-09-28)"; "View" replaces "Edit" when read-only.
++- Phones (below 768px): each week is a four-column table Day | Label | Time | OT, one row per day at least 54px tall, with no sideways scroll; the Check status folds into the Day cell and the Time cell tint. A whole row opens the day editor, and the row of the day open in it is framed. The first screen shows the period card (with "<" and ">" beside the title, and "Today" and the Review link together in one row) and the compact tools, so the first day row is fully visible above the tab bar at 390x844, also in the five days when "Current period" joins that row (on the narrowest phones, below about 330px, the Review link then takes its own row with its full label); the check in/out controls are in the top bar, not on the page; the page heading and the form title stay for screen readers only. Both layouts expose exactly one element per day, named by weekday and date, with one day button whose accessible name holds its visible text and keeps the accounting date (WCAG 2.2 SC 2.5.3): "Edit {MM/DD} ({date})" on the sheet, for example "Edit 09/28 (2026-09-28)", and "Edit {weekday} {MM/DD} ({date})" on a phone, for example "Edit Mon 09/28 (2026-09-28)"; "View" replaces "Edit" when read-only.
+ - The Review uses the same sheet. In a shared view, the share bar stays above the period bar and controls outside the share are absent.
+ 
+ ## Period bar, check in/out and batch mode
+ 
+ - Period bar: one title (the period dates joined by an arrow, "09/28/2026 → 10/11/2026", which screen readers read as "to", and a current, past or future badge), the payroll date, the due date in words with the reporting zone, where "Due" is a label in the same style as "Payroll date" and the date and time keep the value style (for example "Due Tue 12/08/2026, 17:00 (America/Los_Angeles)"), exactly one status group (review and delivery) and the buttons Previous, Next, Today, Current period (when it applies) and "Review & sign off", in that order (the Review link is disabled with its reason for an imported period). The bar always names the current viewing zone compactly (for example "Times in America/Los_Angeles"), also when it equals the reporting zone; each day in the sheet keeps its saved accounting date. The reporting zone, display zone, the due time in the display zone and the explanation of accounting dates versus session times show in an extra note only when the display zone differs from the reporting zone. A banner says when edits to the period require a reason.
+-- Today: always shown. It opens the period that contains today's date in the timesheet's saved reporting zone (the server's date, never the device zone), shows today's column and moves an open Day editor to today. It is inactive (`aria-disabled`, still focusable, doing nothing) when the sheet already shows today and the editor, if open, is on today.
++- Today: always shown. It opens the period that contains today's date in the timesheet's saved reporting zone (the server's date, never the device zone), shows today's column and moves an open Day editor to today. It is inactive (`aria-disabled`, still focusable, dimmed with colours) when the sheet already shows today and the editor, if open, is on today; a press on the inactive button re-reads the server's date and moves to today's period only when the date has changed (for example after midnight in the reporting zone), otherwise nothing moves. The periods are also re-read when the window regains focus or the tab becomes visible.
+ - Current period: returns to the period the page opens on, the current period of R-07 (document 02). It is shown only in the five days from the Monday after a period ends to its payroll Friday, and only while the sheet shows another period; it only navigates and leaves the editor alone. In a shared view both buttons use the owner's zone and dates. Each jump is announced in a hidden polite status region.
+-- Phone buttons: Previous and Next stay beside the title; Today, Current period (when shown) and the Review link share one row. The Review link stays on one line, 44px high: it shows its full label when that fits and a short form otherwise ("Sign off" for "Review & sign off", "Review" for "Review now" and "Review or correct"), and its accessible name is always the full label. Desktop shows the full label.
++- Phone buttons: Previous and Next stay beside the title; Today, Current period (when shown) and the Review link share one row; on the narrowest phones (below about 330px), when Current period is shown, the Review link takes its own row with its full label. The Review link stays on one line, 44px high: it shows its full label when that fits and a short form otherwise ("Sign off" for "Review & sign off", "Review" for "Review now" and "Review or correct"), and its accessible name is always the full label. Desktop shows the full label.
+ - Check in/out: one state-aware button. Checked out shows "Checked out" and "Check in"; checked in shows "Checked in since HH:MM" with a static ringed dot and "Check out", which opens the break confirmation. On a desktop it is a card in the Timesheet page. On a phone the same state and button are a group in the top bar on every screen of the person's own context (the bar is 60px high, or 112px when the "Shared with me" switcher takes a second row), so the card is not on the page; the break confirmation is the same dialog and focus returns to the button that opened it. It is absent in every shared view, on any width (the owner's check in/out stays the owner's).
+ - Toolbar: "Open a day" (any date, also outside the displayed period; Today brings the sheet back), the "Show details" switch and "Change several days". Batch mode is off by default: the selection boxes, "Select all", "Clear", the category choice ("Category for selected days") and "Preview changes" appear only after "Change several days" and leave with "Done". Batch category changes still preview conflicts with recorded work before saving. Without edit rights (view-only share) and for an imported period these controls are absent or disabled with their reason.
+ 
+diff --git a/docs/04_UX_AND_SETTINGS.vi.md b/docs/04_UX_AND_SETTINGS.vi.md
+index e15bf14..831db46 100644
+--- a/docs/04_UX_AND_SETTINGS.vi.md
++++ b/docs/04_UX_AND_SETTINGS.vi.md
+@@ -45,15 +45,15 @@ Trang Timesheet hiện biểu mẫu của workbook Excel và PDF. Khối đầu
+ - Định dạng giống PDF: ngày kiểu Mỹ (MM/DD trong ô, MM/DD/YYYY ở phần đầu và thanh kỳ), thời lượng dạng h:mm, giờ dạng khoảng 24 giờ như 08:00-17:00 theo múi giờ hiển thị, liệt kê nhiều ca và đánh dấu ca đang chạy. Ngày ghi sổ vẫn là ngày theo múi giờ báo cáo đã lưu.
+ - Ngày không làm việc (cuối tuần, ngày lễ và ngày đóng cửa từ lịch của server, không suy ra từ thứ trong tuần) có một nền nhạt kèm sọc chéo mảnh. Hôm nay có thanh nhấn phía trên và nhãn "Today". Ô cần nhập có nền hổ phách cùng chữ và hình trong dòng Check. Ngày đang mở trong trình sửa ngày được đánh dấu cả cột: nền nhấn nhạt phía sau các ô, hai thanh nhấn hai bên và một đường nhấn dưới đầu cột (hàng được khung lại trên điện thoại), và nút ngày của nó mang `aria-current`. Dấu này kết hợp được với thanh Today và vòng chọn nhiều ngày trên cùng một cột, mất khi trình sửa đóng hoặc khi ngày đó không nằm trên bảng đang hiển thị, giữ độ tương phản ít nhất 3:1 cho thanh và 4.5:1 cho chữ, và không bao giờ che bộ chọn nhãn đang mở.
+ - Dòng chữ ký: "Employee Signature" hiện tên người ký khi đã ký, hoặc trạng thái chờ xác nhận, kèm ngày theo múi giờ báo cáo đã lưu và liên kết tới Review. "Manager Signature" hiện "Not used yet" với ô ngày trống. Ảnh chữ ký không bao giờ xuất hiện trên trang Timesheet. Các dòng này và liên kết không có trong chế độ xem chia sẻ và với kỳ đã nhập.
+-- Điện thoại (dưới 768px): mỗi tuần là một bảng bốn cột Day | Label | Time | OT, mỗi ngày một hàng cao ít nhất 54px, không cuộn ngang; trạng thái Check gộp vào ô Day và màu ô Time. Chạm cả hàng sẽ mở trình sửa ngày, và hàng của ngày đang mở trong đó được khung lại. Màn hình đầu hiện thẻ kỳ (với "<" và ">" cạnh tiêu đề, và "Today" cùng liên kết Review trong một hàng) và các công cụ gọn, nên hàng ngày đầu tiên hiện đầy đủ phía trên thanh tab ở 390x844, kể cả trong năm ngày khi "Current period" vào cùng hàng đó; điều khiển check in/out nằm ở thanh trên cùng, không nằm trên trang; tiêu đề trang và tiêu đề biểu mẫu chỉ dành cho trình đọc màn hình. Cả hai bố cục chỉ có đúng một phần tử cho mỗi ngày, đặt tên theo thứ và ngày, kèm một nút ngày có tên truy cập chứa đúng chữ hiển thị và giữ ngày kế toán (WCAG 2.2 SC 2.5.3): "Edit {MM/DD} ({date})" trên bảng timesheet, ví dụ "Edit 09/28 (2026-09-28)", và "Edit {weekday} {MM/DD} ({date})" trên điện thoại, ví dụ "Edit Mon 09/28 (2026-09-28)"; khi chỉ đọc thì "View" thay cho "Edit".
++- Điện thoại (dưới 768px): mỗi tuần là một bảng bốn cột Day | Label | Time | OT, mỗi ngày một hàng cao ít nhất 54px, không cuộn ngang; trạng thái Check gộp vào ô Day và màu ô Time. Chạm cả hàng sẽ mở trình sửa ngày, và hàng của ngày đang mở trong đó được khung lại. Màn hình đầu hiện thẻ kỳ (với "<" và ">" cạnh tiêu đề, và "Today" cùng liên kết Review trong một hàng) và các công cụ gọn, nên hàng ngày đầu tiên hiện đầy đủ phía trên thanh tab ở 390x844, kể cả trong năm ngày khi "Current period" vào cùng hàng đó (trên điện thoại hẹp nhất, dưới khoảng 330px, liên kết Review khi đó có hàng riêng với nhãn đầy đủ); điều khiển check in/out nằm ở thanh trên cùng, không nằm trên trang; tiêu đề trang và tiêu đề biểu mẫu chỉ dành cho trình đọc màn hình. Cả hai bố cục chỉ có đúng một phần tử cho mỗi ngày, đặt tên theo thứ và ngày, kèm một nút ngày có tên truy cập chứa đúng chữ hiển thị và giữ ngày kế toán (WCAG 2.2 SC 2.5.3): "Edit {MM/DD} ({date})" trên bảng timesheet, ví dụ "Edit 09/28 (2026-09-28)", và "Edit {weekday} {MM/DD} ({date})" trên điện thoại, ví dụ "Edit Mon 09/28 (2026-09-28)"; khi chỉ đọc thì "View" thay cho "Edit".
+ - Review dùng cùng bảng này. Trong chế độ xem chia sẻ, thanh chia sẻ vẫn nằm trên thanh kỳ và các điều khiển ngoài quyền chia sẻ bị ẩn.
+ 
+ ## Thanh kỳ, check in/out và chế độ nhiều ngày
+ 
+ - Thanh kỳ: một tiêu đề (ngày của kỳ nối bằng mũi tên, "09/28/2026 → 10/11/2026", trình đọc màn hình đọc là "to", và nhãn hiện tại, quá khứ hoặc tương lai), ngày payroll, hạn nộp bằng chữ kèm múi giờ báo cáo, trong đó "Due" là nhãn cùng kiểu với "Payroll date" còn ngày giờ giữ kiểu giá trị (ví dụ "Due Tue 12/08/2026, 17:00 (America/Los_Angeles)"), đúng một nhóm trạng thái (review và gửi) và các nút Previous, Next, Today, Current period (khi áp dụng) và "Review & sign off", theo đúng thứ tự đó (liên kết Review bị khóa kèm lý do với kỳ đã nhập). Thanh luôn nêu ngắn gọn múi giờ đang xem (ví dụ "Times in America/Los_Angeles"), kể cả khi trùng múi giờ báo cáo; mỗi ngày trong bảng giữ ngày ghi sổ đã lưu. Múi giờ báo cáo, múi giờ hiển thị, hạn theo giờ hiển thị và lời giải thích ngày ghi sổ so với giờ phiên chỉ hiện trong một ghi chú thêm khi múi giờ hiển thị khác múi giờ báo cáo. Một dòng báo khi sửa kỳ cần lý do.
+-- Today: luôn hiện. Nút mở kỳ chứa ngày hôm nay theo múi giờ báo cáo đã lưu của timesheet (ngày của server, không bao giờ theo múi giờ thiết bị), hiện cột hôm nay và chuyển trình sửa ngày đang mở sang hôm nay. Nút ở trạng thái không hoạt động (`aria-disabled`, vẫn nhận tiêu điểm, bấm không làm gì) khi bảng đã hiện hôm nay và trình sửa, nếu đang mở, đã ở hôm nay.
++- Today: luôn hiện. Nút mở kỳ chứa ngày hôm nay theo múi giờ báo cáo đã lưu của timesheet (ngày của server, không bao giờ theo múi giờ thiết bị), hiện cột hôm nay và chuyển trình sửa ngày đang mở sang hôm nay. Nút ở trạng thái không hoạt động (`aria-disabled`, vẫn nhận tiêu điểm, làm mờ bằng màu) khi bảng đã hiện hôm nay và trình sửa, nếu đang mở, đã ở hôm nay; bấm nút không hoạt động sẽ đọc lại ngày của server và chỉ chuyển sang kỳ của hôm nay khi ngày đã đổi (ví dụ sau nửa đêm theo múi giờ báo cáo), nếu không thì không có gì di chuyển. Các kỳ cũng được đọc lại khi cửa sổ lấy lại tiêu điểm hoặc tab hiện lại.
+ - Current period: quay về kỳ mà trang mở ra, kỳ hiện tại của R-07 (tài liệu 02). Nút chỉ hiện trong năm ngày từ thứ Hai sau khi một kỳ kết thúc đến thứ Sáu payroll của kỳ đó, và chỉ khi bảng đang hiện một kỳ khác; nút chỉ điều hướng và không đụng đến trình sửa. Trong chế độ xem chia sẻ cả hai nút dùng múi giờ và ngày của chủ. Mỗi lần nhảy được thông báo trong một vùng trạng thái ẩn, mức polite.
+-- Các nút trên điện thoại: Previous và Next vẫn cạnh tiêu đề; Today, Current period (khi hiện) và liên kết Review chung một hàng. Liên kết Review luôn trên một dòng, cao 44px: hiện nhãn đầy đủ khi vừa chỗ và dạng rút gọn khi không ("Sign off" cho "Review & sign off", "Review" cho "Review now" và "Review or correct"), và tên truy cập luôn là nhãn đầy đủ. Desktop luôn hiện nhãn đầy đủ.
++- Các nút trên điện thoại: Previous và Next vẫn cạnh tiêu đề; Today, Current period (khi hiện) và liên kết Review chung một hàng; trên điện thoại hẹp nhất (dưới khoảng 330px), khi Current period hiện, liên kết Review có hàng riêng với nhãn đầy đủ. Liên kết Review luôn trên một dòng, cao 44px: hiện nhãn đầy đủ khi vừa chỗ và dạng rút gọn khi không ("Sign off" cho "Review & sign off", "Review" cho "Review now" và "Review or correct"), và tên truy cập luôn là nhãn đầy đủ. Desktop luôn hiện nhãn đầy đủ.
+ - Check in/out: một nút theo trạng thái. Khi chưa vào ca hiện "Checked out" và "Check in"; khi đang vào ca hiện "Checked in since HH:MM" với chấm vòng tĩnh và "Check out", nút mở bước xác nhận giờ nghỉ. Trên desktop đây là thẻ trong trang Timesheet. Trên điện thoại cùng trạng thái và nút đó là một nhóm ở thanh trên cùng trên mọi màn hình thuộc ngữ cảnh của chính người dùng (thanh cao 60px, hoặc 112px khi bộ chuyển "Shared with me" chiếm hàng thứ hai), nên thẻ không nằm trên trang; bước xác nhận giờ nghỉ là cùng một hộp thoại và tiêu điểm trở về nút đã mở nó. Nút không có trong mọi chế độ xem chia sẻ, ở mọi độ rộng (check in/out của chủ vẫn là của chủ).
+ - Thanh công cụ: "Open a day" (mọi ngày, kể cả ngoài kỳ đang hiển thị; Today đưa bảng quay lại), công tắc "Show details" và "Change several days". Chế độ nhiều ngày mặc định tắt: ô chọn, "Select all", "Clear", ô chọn loại ngày ("Category for selected days") và "Preview changes" chỉ hiện sau "Change several days" và mất khi bấm "Done". Đổi loại nhiều ngày vẫn xem trước xung đột với giờ đã ghi trước khi lưu. Khi không có quyền sửa (chia sẻ chỉ xem) và với kỳ đã nhập, các điều khiển này bị ẩn hoặc khóa kèm lý do.
+ 
+diff --git a/docs/10_DECISIONS_AND_SOURCES.md b/docs/10_DECISIONS_AND_SOURCES.md
+index ca4e54b..445f6b5 100644
+--- a/docs/10_DECISIONS_AND_SOURCES.md
++++ b/docs/10_DECISIONS_AND_SOURCES.md
+@@ -199,7 +199,7 @@ None changes a confirmed requirement or a business rule.
+ - Open day marker: the day open in the Day editor is marked as a whole column (a framed row on a phone) and its day button carries `aria-current`; the Today top bar, which the document already promised, is repaired so it shows over the column head.
+ - Wordmark: vector outlines generated from the owner's font with the installed PDF font library; no font file is in the repository and a static test guards it. The colours are sampled from the owner's image (`#006eba` and `#4c4f57`); the dark tints reuse the dark accent and muted colours. The wordmark shows from 1440px because a bar with the "Shared with me" switcher and a long user name needs 1376 to 1440px on one row (1280px was the plan); the space from the brand to the menu is 24px below 1440px and 32px from it.
+ - Company line: removed from the on-screen Timesheet and Review sheets only; the PDF keeps its company header, because it is the submitted document and server output.
+-- Phone Review link: always one line at 44px; the full label when it fits, otherwise "Sign off" for "Review & sign off" and "Review" for "Review now" and "Review or correct"; the accessible name is the full label (WCAG 2.2 SC 2.5.3).
++- Phone Review link: always one line at 44px; the full label when it fits, otherwise "Sign off" for "Review & sign off" and "Review" for "Review now" and "Review or correct"; on the narrowest phones (below about 330px), when Current period is shown, it takes its own row with its full label; the accessible name is the full label (WCAG 2.2 SC 2.5.3).
+ - Period range separator: an arrow "→" in the label colour, `aria-hidden`, with a visually hidden " to " so screen readers still read "to"; live-region texts and the PDF keep the word "to". "Due" keeps its text and takes the label style.
+ - Check in/out on phones: a provider in the app shell serves both the top-bar group and the desktop card; the bar is 60px, or 112px with the switcher row. It is absent in every shared view (the grantee never appears to check in for the owner, F-Q5).
+ - Three server messages: the wording of three error texts that reach the screen changes with the rename ("Check out of the running session first", "There is no running session to check out of", "A saved break ends after this Check out; resubmit the complete list of breaks to replace it"). Codes, API paths and behaviour are unchanged. Gate rule: `dist/server` compared with the accepted build differs only in these literals (and the one comment that the build keeps).
+diff --git a/docs/10_DECISIONS_AND_SOURCES.vi.md b/docs/10_DECISIONS_AND_SOURCES.vi.md
+index 857f940..128f578 100644
+--- a/docs/10_DECISIONS_AND_SOURCES.vi.md
++++ b/docs/10_DECISIONS_AND_SOURCES.vi.md
+@@ -200,7 +200,7 @@ Không quyết định nào đổi yêu cầu đã chốt hay quy tắc nghiệp
+ - Dấu ngày đang mở: ngày đang mở trong Day editor được đánh dấu cả cột (hàng được khung lại trên điện thoại) và nút ngày của nó mang `aria-current`; thanh Today phía trên mà tài liệu đã hứa được sửa để hiện đè lên đầu cột.
+ - Chữ thương hiệu: đường viền vector sinh từ font của chủ bằng thư viện font PDF đã cài; không có file font trong repository và một test tĩnh bảo vệ điều đó. Màu lấy mẫu từ ảnh của chủ (`#006eba` và `#4c4f57`); sắc tối dùng lại màu nhấn và màu mờ của giao diện tối. Chữ thương hiệu hiện từ 1440px vì thanh có bộ chuyển "Shared with me" và tên người dùng dài cần 1376 đến 1440px trên một hàng (kế hoạch là 1280px); khoảng cách từ thương hiệu đến menu là 24px dưới 1440px và 32px từ đó.
+ - Dòng tên công ty: chỉ bỏ khỏi bảng Timesheet và Review trên màn hình; PDF vẫn giữ phần đầu có tên công ty, vì đó là tài liệu được nộp và là đầu ra của server.
+-- Liên kết Review trên điện thoại: luôn một dòng cao 44px; nhãn đầy đủ khi vừa chỗ, nếu không thì "Sign off" cho "Review & sign off" và "Review" cho "Review now" và "Review or correct"; tên truy cập là nhãn đầy đủ (WCAG 2.2 SC 2.5.3).
++- Liên kết Review trên điện thoại: luôn một dòng cao 44px; nhãn đầy đủ khi vừa chỗ, nếu không thì "Sign off" cho "Review & sign off" và "Review" cho "Review now" và "Review or correct"; trên điện thoại hẹp nhất (dưới khoảng 330px), khi Current period hiện, liên kết có hàng riêng với nhãn đầy đủ; tên truy cập là nhãn đầy đủ (WCAG 2.2 SC 2.5.3).
+ - Dấu ngăn khoảng kỳ: mũi tên "→" màu nhãn, `aria-hidden`, kèm chữ " to " ẩn trực quan để trình đọc màn hình vẫn đọc "to"; các văn bản vùng live và PDF giữ chữ "to". "Due" giữ nguyên chữ và lấy kiểu nhãn.
+ - Check in/out trên điện thoại: một provider trong khung ứng dụng phục vụ cả nhóm ở thanh trên cùng và thẻ desktop; thanh cao 60px, hoặc 112px khi có hàng bộ chuyển. Không có trong mọi chế độ xem chia sẻ (người được chia sẻ không bao giờ có vẻ check in thay chủ, F-Q5).
+ - Ba thông báo của server: cách diễn đạt của ba thông báo lỗi hiện ra màn hình đổi theo tên mới ("Check out of the running session first", "There is no running session to check out of", "A saved break ends after this Check out; resubmit the complete list of breaks to replace it"). Mã lỗi, đường dẫn API và hành vi không đổi. Quy tắc cổng kiểm: `dist/server` so với bản build đã nghiệm thu chỉ khác ở các chuỗi này (và một comment mà bản build giữ lại).
+diff --git a/src/client/TimesheetScreen.tsx b/src/client/TimesheetScreen.tsx
+index fe02786..fc414d3 100644
+--- a/src/client/TimesheetScreen.tsx
++++ b/src/client/TimesheetScreen.tsx
+@@ -154,6 +154,32 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+ 
+   useEffect(load, [load]);
+ 
++  // The server's date moves on while the page stays open (midnight in the reporting zone). The periods are read again when the window
++  // regains focus or the tab becomes visible, so "Today" and the Today tag do not go stale; the person's own view and a shared view
++  // both read through `request` (the share's requester in a shared view). One read at a time: the browser fires both events together.
++  const refreshing = useRef(false);
++  useEffect(() => {
++    const refresh = () => {
++      if (refreshing.current) return;
++      refreshing.current = true;
++      request<CurrentPeriods>('GET', '/periods/current')
++        .then(setPeriods)
++        .catch(() => undefined)
++        .finally(() => {
++          refreshing.current = false;
++        });
++    };
++    const onVisibility = () => {
++      if (document.visibilityState === 'visible') refresh();
++    };
++    window.addEventListener('focus', refresh);
++    document.addEventListener('visibilitychange', onVisibility);
++    return () => {
++      window.removeEventListener('focus', refresh);
++      document.removeEventListener('visibilitychange', onVisibility);
++    };
++  }, [request]);
++
+   // The clock state looks the running session up again with every load: this page reports the period it loaded.
+   const reportView = clock?.reportView;
+   useEffect(() => {
+@@ -198,14 +224,25 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+    * "Today": re-reads the server's periods, opens the period that contains its `today_local` (the
+    * accounting date in the saved reporting zone, never the device clock), moves an open Day editor to
+    * that date and scrolls today's day into view. Everything comes from the model and the server.
++   * A press on the inactive button (`wasAway` false) re-reads the same way: the page may have stayed open past the reporting
++   * zone's midnight, so only the fresh answer says whether the sheet still shows today.
+    */
+-  async function jumpToToday() {
++  async function jumpToToday(wasAway: boolean) {
+     if (view === null) return;
+-    setJumpStatus(null);
++    // An active press clears the old announcement first, so the same text is read again; an inactive press must leave it alone.
++    const announced = jumpStatus;
++    if (wasAway) setJumpStatus(null);
+     try {
+       const fresh = await request<CurrentPeriods>('GET', '/periods/current');
+       const jump = todayJump({ today: fresh.today_local, current: fresh.current, inProgress: fresh.in_progress, shown: view.period, editDate });
+       setPeriods(fresh);
++      if (!jump.away) {
++        // The fresh answer decides, not the button's look: the sheet already shows today (and the open editor is on it), so nothing
++        // moves. Only the periods are renewed, so the Today tag and the buttons follow the server's date.
++        if (wasAway) setJumpStatus(announced);
++        return;
++      }
++      setJumpStatus(null);
+       setPayrollDate(jump.targetPayrollDate);
+       setSelected(new Set());
+       setStaleNotice(null);
+@@ -396,13 +433,14 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+   const todayLocal = periods?.today_local ?? null;
+   // The two jump buttons come from the server's periods and today's accounting date, compared with the shown period. A saved notice
+   // (the other status line of this screen) replaces the jump status, so two status lines never stand side by side.
++  const todayAway = periods === null || view === null ? false : todayJump({ today: periods.today_local, current: periods.current, inProgress: periods.in_progress, shown: view.period, editDate }).away;
+   const jumps: PeriodJumps | undefined =
+     periods === null || view === null
+       ? undefined
+       : {
+-          todayAway: todayJump({ today: periods.today_local, current: periods.current, inProgress: periods.in_progress, shown: view.period, editDate }).away,
++          todayAway,
+           currentVisible: currentPeriodJump({ current: periods.current, inProgress: periods.in_progress, shown: view.period }).visible,
+-          onToday: () => void jumpToToday(),
++          onToday: () => void jumpToToday(todayAway),
+           onCurrent: () => void jumpToCurrent(),
+           status: notice === null ? jumpStatus : null,
+         };
+diff --git a/src/client/components/PeriodBar.tsx b/src/client/components/PeriodBar.tsx
+index 40ba898..e5b005b 100644
+--- a/src/client/components/PeriodBar.tsx
++++ b/src/client/components/PeriodBar.tsx
+@@ -11,7 +11,7 @@ import { SubmissionStatusLine } from './SubmissionStatus.tsx';
+ 
+ /** What the two jump buttons need, all derived by the screen from the server's periods and `today_local`. */
+ export interface PeriodJumps {
+-  /** True when "Today" is active; false renders it `aria-disabled` (focusable, doing nothing). */
++  /** True when "Today" is active; false renders it `aria-disabled` (focusable, dimmed with colours; a press only re-reads the server's date). */
+   todayAway: boolean;
+   /** True when "Current period" is rendered at all. */
+   currentVisible: boolean;
+@@ -121,7 +121,9 @@ export function PeriodBar({
+                 aria-disabled={jumps.todayAway ? undefined : 'true'}
+                 aria-describedby="period-today-note"
+                 onClick={() => {
+-                  if (jumps.todayAway) jumps.onToday();
++                  // Also while inactive: the page may have stayed open past midnight, so the screen re-reads the server's periods and
++                  // decides from the fresh answer (it jumps only when the sheet no longer shows today).
++                  jumps.onToday();
+                 }}
+                 data-period-today
+                 ref={todayButton}
+diff --git a/src/client/styles.css b/src/client/styles.css
+index babeec1..e9a4d23 100644
+--- a/src/client/styles.css
++++ b/src/client/styles.css
+@@ -854,7 +854,7 @@ button.secondary[aria-pressed='true'] {
+   /* An inactive button (aria-disabled) keeps its resting look under the pointer, as a disabled one does. */
+   button.secondary[aria-disabled='true']:hover:not(:disabled) {
+     background: var(--card);
+-    border-color: var(--accent-line);
++    border-color: var(--line);
+     box-shadow: none;
+   }
+ 
+@@ -870,9 +870,15 @@ button:disabled {
+   cursor: not-allowed;
+ }
+ 
+-/* Inactive but focusable (WP5-UX2-T04, "Today" while the sheet already shows today): muted like a disabled button, no press movement. */
+-button[aria-disabled='true'] {
+-  opacity: var(--opacity-disabled);
++/*
++ * Inactive but focusable (WP5-UX2-T04, "Today" while the sheet already shows today): dimmed with the muted text and the quiet line
++ * border, never with element opacity (WP5-UX2-AUDIT-03). Opacity would dim the focus ring with the button (2.70:1 in the light theme at
++ * 0.6, below the owner-decided 3:1); colours leave the ring at full strength in the light theme, the dark theme and both manual
++ * overrides. The only element that uses this rule is the "Today" button of the period bar. No press movement.
++ */
++button.secondary[aria-disabled='true'] {
++  border-color: var(--line);
++  color: var(--muted);
+   cursor: not-allowed;
+ }
+ 
+diff --git a/tests/client/periodJumpModel.test.ts b/tests/client/periodJumpModel.test.ts
+index be42157..360fd1a 100644
+--- a/tests/client/periodJumpModel.test.ts
++++ b/tests/client/periodJumpModel.test.ts
+@@ -141,6 +141,32 @@ describe('Today (todayJump)', () => {
+     });
+   }
+ 
++  it('decides from the fresh answer across the reporting-zone midnight: the stale answer says "not away", the next day\'s says "away" exactly when the period ended', () => {
++    // WP5-UX2-AUDIT-01: a page opened before midnight holds yesterday's answer; a press re-reads the server and judges the SAME shown period
++    // again with today's `today_local`. The oracle is the period's own last day, independent of the comparison in the model.
++    const firstOfDay = new Map<string, Step>();
++    for (const step of allSteps()) if (!firstOfDay.has(step.today)) firstOfDay.set(step.today, step);
++    let ended = 0;
++    let midPeriod = 0;
++    for (const [date, stale] of firstOfDay) {
++      const next = firstOfDay.get(addDays(date, 1));
++      if (next === undefined) continue;
++      const shown = stale.inProgress;
++      const before = todayJump({ today: stale.today, current: stale.current, inProgress: stale.inProgress, shown, editDate: null });
++      const after = todayJump({ today: next.today, current: next.current, inProgress: next.inProgress, shown, editDate: null });
++      expect(before.away, `${date}: before midnight the sheet shows today`).toBe(false);
++      const periodEnded = date === shown.period_end;
++      expect(after.away, `${next.today}: after midnight the sheet shows today only while the period lasts`).toBe(periodEnded);
++      if (periodEnded) {
++        ended += 1;
++        expect(after.targetPayrollDate, `${next.today}: the target is the period that now contains today`).toBe(next.inProgress.payroll_date);
++        expect(periodContains(next.inProgress, next.today)).toBe(true);
++      } else midPeriod += 1;
++    }
++    expect(ended, 'period-end midnights were exercised').toBeGreaterThan(0);
++    expect(midPeriod, 'mid-period midnights were exercised').toBeGreaterThan(0);
++  });
++
+   it('never reads the device clock: a clock years away changes nothing', () => {
+     const step = steps('2026-10-12', 1)[0];
+     if (step === undefined) throw new Error('no step');
+diff --git a/tests/client/userWording.test.ts b/tests/client/userWording.test.ts
+new file mode 100644
+index 0000000..93db3bf
+--- /dev/null
++++ b/tests/client/userWording.test.ts
+@@ -0,0 +1,92 @@
++import { readdirSync, readFileSync } from 'node:fs';
++import { join, relative } from 'node:path';
++import { describe, expect, it } from 'vitest';
++
++/*
++ * WP5-UX2-AUDIT R-UX2A-2: the owner renamed "Clock in" / "Clock out" to "Check in" / "Check out" (WP5-UX2-UX2-2 (3)). Reverting the
++ * rename in a string that no other test reads was caught by nothing, so this test scans the client's source for the old wording.
++ *
++ * It looks only at what a person can read: string literals, JSX text and CSS `content`. Comments are skipped, and so are identifiers
++ * (`ClockOutDialog`, `clockedInText`, `buildClockOutRequest`) and API paths (`/api/clock/out`), which never contain a space or a hyphen
++ * between the two words. The only hyphenated hits are two element ids, listed explicitly below; a visible "Clock-in" is not allowlisted.
++ */
++
++const CLIENT = join(import.meta.dirname, '..', '..', 'src', 'client');
++const EXTENSIONS = /\.(ts|tsx|css|html|js)$/;
++
++/** The old wording: a word break, "clock", a space or a hyphen, then "in" or "out"; "clocked"; "checking the clock". Case-insensitive. */
++const OLD_WORDING = [/\bclock[ -]in\b/i, /\bclock[ -]out\b/i, /\bclocked\b/i, /\bchecking the clock\b/i] as const;
++
++/** Identifier-shaped strings that contain the old words by design: the check-out dialog's element ids (not read by anyone). */
++const ALLOWED_IDENTIFIERS = ['clock-out-title', 'clock-out'] as const;
++
++/** One line without its comments and without the allowlisted identifier strings. */
++function visibleText(line: string): string {
++  let text = line.replace(/\/\*.*?\*\//g, '');
++  const trimmed = text.trim();
++  if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return '';
++  text = text.replace(/(^|\s)\/\/\s.*$/, '');
++  for (const identifier of ALLOWED_IDENTIFIERS) {
++    for (const quote of ['"', "'"]) text = text.split(`${quote}${identifier}${quote}`).join(`${quote}${quote}`);
++  }
++  return text;
++}
++
++/** The old wording found in `source`, as `line: text` entries. */
++function oldWordingIn(source: string): string[] {
++  const found: string[] = [];
++  source.split(/\r?\n/).forEach((line, index) => {
++    const text = visibleText(line);
++    if (OLD_WORDING.some((pattern) => pattern.test(text))) found.push(`${index + 1}: ${line.trim()}`);
++  });
++  return found;
++}
++
++function clientFiles(directory: string): string[] {
++  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
++    const path = join(directory, entry.name);
++    if (entry.isDirectory()) return clientFiles(path);
++    return EXTENSIONS.test(entry.name) ? [path] : [];
++  });
++}
++
++describe('the client says "Check in" and "Check out", never the old clock wording', () => {
++  it('finds no old wording in any string, JSX text or CSS content of src/client', () => {
++    const files = clientFiles(CLIENT);
++    expect(files.length, 'the scan reads the client source').toBeGreaterThan(40);
++    const offences = files.flatMap((file) => oldWordingIn(readFileSync(file, 'utf8')).map((hit) => `${relative(CLIENT, file)}:${hit}`));
++    expect(offences).toEqual([]);
++  });
++
++  it('would catch each old phrase, in a string, in JSX text and in a CSS content', () => {
++    for (const sample of [
++      "const label = 'Clock in';",
++      '<button>Clock out</button>',
++      'return `Clocked ${time}`;',
++      "legend: 'first clock-in of the day',",
++      'const text = "Checking the clock";',
++      "const again = 'Clock out again to finish';",
++      '  content: "Clock in";',
++    ]) {
++      expect(oldWordingIn(sample), sample).toHaveLength(1);
++    }
++  });
++
++  it('lets identifiers, API paths, the two element ids and comments through', () => {
++    for (const sample of [
++      "import { ClockOutDialog } from './ClockOutDialog.tsx';",
++      'const since = clockedInText(running, zone);',
++      "await api('POST', '/api/clock/out', buildClockOutRequest(draft, version));",
++      'export interface ClockedInText {',
++      '<dialog aria-labelledby="clock-out-title">',
++      '<h2 id="clock-out-title">Check out</h2>',
++      'idPrefix="clock-out"',
++      '/* ---- Day editor and Clock out dialog ---- */',
++      '// Clock in is the old wording',
++      ' * The owner renamed Clock in to Check in.',
++      '{/* Clock out */}',
++    ]) {
++      expect(oldWordingIn(sample), sample).toEqual([]);
++    }
++  });
++});
+diff --git a/tests/e2e/focus-ring.spec.ts b/tests/e2e/focus-ring.spec.ts
+index 4986f45..d9c7c81 100644
+--- a/tests/e2e/focus-ring.spec.ts
++++ b/tests/e2e/focus-ring.spec.ts
+@@ -389,3 +389,61 @@ for (const colorScheme of ['light', 'dark'] as const) {
+     }
+   });
+ }
++
++/*
++ * WP5-UX2-AUDIT-03 (owner decision WP5-UX-Q1 a): the inactive Today (`aria-disabled`, still focusable) is dimmed with colour tokens
++ * (muted text and the quiet line border), never with element opacity, so the shared focus ring around it is painted at full strength:
++ * at least 3:1 against the card in the light and the dark theme and with both manual overrides. The ring is read from the screenshot
++ * pixel in the middle of the accent band (the card-coloured 1px gap lies inside it), so a dimmed ring would be seen.
++ */
++const THEME_SITUATIONS = [
++  { name: 'light device', scheme: 'light', stored: null },
++  { name: 'dark device', scheme: 'dark', stored: null },
++  { name: 'light device, manual dark', scheme: 'light', stored: 'dark' },
++  { name: 'dark device, manual light', scheme: 'dark', stored: 'light' },
++] as const;
++
++for (const situation of THEME_SITUATIONS) {
++  test(`WP5-UX2-AUDIT-03: the focus ring of the inactive Today is painted at 3:1 (${situation.name})`, async ({ page, signInThroughUi }, testInfo) => {
++    await page.emulateMedia({ colorScheme: situation.scheme, reducedMotion: 'reduce' });
++    if (situation.stored !== null) await page.addInitScript(`try { localStorage.setItem('timesheet.theme', '${situation.stored}'); } catch {}`);
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    const today = page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true });
++    // On the five days after a period ends the page opens on the ended period and Today is active: pressing it makes it inactive.
++    if ((await today.getAttribute('aria-disabled')) !== 'true') {
++      await today.focus();
++      await page.keyboard.press('Enter');
++    }
++    await expect(today).toHaveAttribute('aria-disabled', 'true');
++    // Calendar-independent focus step: outside that window Today is already inactive on landing and nothing has focus, so start from
++    // the button itself, step away and come back by keyboard (it must stay in the tab order while inactive).
++    await today.focus();
++    await page.keyboard.press('Shift+Tab');
++    await expect(today).not.toBeFocused();
++    await page.keyboard.press('Tab');
++    await expect(today).toBeFocused();
++    const ring = await shared.measureFocusRing(today);
++    const opacity = await today.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).opacity ?? '');
++    const box = await today.boundingBox();
++    expect(box, 'the inactive Today has a box').not.toBeNull();
++    const card = await shared.tokenColour(page, '--card');
++    const accent = await shared.tokenColour(page, '--accent');
++    // The shared ring is a 1px card gap, then 2px of accent, outside the border box: sample the middle of the accent band.
++    const pixel = await shared.paintedPixel(page, (box?.x ?? 0) - 2.5, (box?.y ?? 0) + (box?.height ?? 0) / 2);
++    const painted = shared.contrast(pixel, card);
++    const text = await shared.textContrast(today);
++    console.log(
++      `inactive Today ring ${testInfo.project.name} ${situation.name}: opacity ${opacity}; painted ${pixel.slice(0, 3).join(',')} on ${card.slice(0, 3).join(',')} = ${painted.toFixed(2)}:1; token ring/card ${ring.ringAgainstBackdrop.toFixed(2)}; text ${text.toFixed(2)}:1`,
++    );
++    // Within anti-aliasing of the sampled sub-pixel (16 per channel): a 0.6-opacity blend would be about 90 away on the red channel.
++    expect(shared.sameColour(pixel, accent, 16), `the painted ring ${pixel.slice(0, 3).join(',')} is the full accent ${accent.slice(0, 3).join(',')}`).toBe(true);
++    expect(painted, `painted ring ${pixel.slice(0, 3).join(',')} against the card ${card.slice(0, 3).join(',')}`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
++    // No element opacity: it would dim the ring with the button (that was 2.70:1 in the light theme at opacity 0.6).
++    expect(opacity, 'the inactive Today is dimmed with colours, not with opacity').toBe('1');
++    expect(ring.ringAgainstBackdrop, `ring against the card (${ring.layers})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
++    expect(ring.ringAgainstGap, `ring against its gap (${ring.layers})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
++    // Dimmed by colour, still readable: the muted text keeps 4.5:1 on the card.
++    expect(text, 'the inactive Today text against its fill').toBeGreaterThanOrEqual(4.5);
++  });
++}
+diff --git a/tests/e2e/today.spec.ts b/tests/e2e/today.spec.ts
+index c2d158e..48f113c 100644
+--- a/tests/e2e/today.spec.ts
++++ b/tests/e2e/today.spec.ts
+@@ -1,6 +1,6 @@
+ import type { Locator, Page } from '@playwright/test';
+ import { dayButton } from './dayButton.ts';
+-import { expect, type PeriodFacts, type PeriodsCurrent, screenshotPath, test } from './fixtures.ts';
++import { expect, newPerson, type PeriodFacts, type PeriodsCurrent, screenshotPath, test } from './fixtures.ts';
+ 
+ /*
+  * WP5-UX2-T04: the "Today" and "Current period" buttons of the period bar, on both projects.
+@@ -504,6 +504,180 @@ test('the period bar: "Due" is a label like "Payroll date", and the range arrow
+   expect(spoken).toContain(' to ');
+ });
+ 
++/* ---- WP5-UX2-AUDIT-01: the server date moves on while the page stays open ------------------------------------- */
++
++/**
++ * Seconds from this process's clock until midnight in `zone`. The test runner shares the clock the server under test uses (the
++ * simulated-clock preload shifts every process by the same constant), so under the preload this is the server's own distance to
++ * the reporting-zone midnight. The browser's clock is never read.
++ */
++function secondsToMidnight(zone: string): number {
++  const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date());
++  const part = (type: string) => Number(parts.find((entry) => entry.type === type)?.value ?? Number.NaN);
++  return 86_400 - (part('hour') * 3600 + part('minute') * 60 + part('second'));
++}
++
++/** Counts the GET reads of one periods route the page makes from now on. */
++function periodReads(page: Page, path: string): { count: () => number; reset: () => void } {
++  let reads = 0;
++  page.on('request', (request) => {
++    if (request.method() === 'GET' && new URL(request.url()).pathname === path) reads += 1;
++  });
++  return { count: () => reads, reset: () => void (reads = 0) };
++}
++
++/** The date of the Today tag on the sheet, or null when the sheet shows another period. */
++async function tagDate(page: Page): Promise<string | null> {
++  const tagged = page.locator('[data-sheet] [data-day].today');
++  return (await tagged.count()) === 0 ? null : tagged.getAttribute('data-day');
++}
++
++/** The next response of the server's periods route (set up before the action that causes it). */
++const periodsResponse = (page: Page, path: string) => page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === path);
++
++test('a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself', async ({
++  page,
++  context,
++  employeeSeed,
++  signInThroughUi,
++}) => {
++  test.setTimeout(240_000);
++  const before = await employeeSeed.periodsCurrent();
++  // Only a run that starts within 90 s of the reporting-zone midnight (the gate runs it under the simulated-clock preload at
++  // 23:59:20) can cross it; every other run asserts the inactive press re-read below. No run is skipped.
++  const crossing = secondsToMidnight(before.reporting_zone) <= 90;
++  await landOn(page, signInThroughUi);
++  const shown = before.current;
++  // A second tab on the same session is the person who comes back to the page by focus alone, without pressing anything.
++  const other = crossing ? await context.newPage() : undefined;
++  if (other !== undefined) {
++    await other.goto('/');
++    await expect(other.locator('[data-day]')).toHaveCount(14);
++  }
++  const landed = await employeeSeed.periodsCurrent();
++
++  if (other !== undefined && landed.today_local === before.today_local) {
++    // The page was signed in before the server date moved on, so both tabs hold the old date. Wait for the new one.
++    let after = landed;
++    await expect
++      .poll(
++        async () => {
++          after = await employeeSeed.periodsCurrent();
++          return after.today_local;
++        },
++        { message: 'the server date passes the reporting-zone midnight', timeout: 150_000, intervals: [1000] },
++      )
++      .not.toBe(before.today_local);
++    const stillShowsToday = contains(shown, after.today_local);
++    // The tab nobody refreshed: no event reached it, so it still holds the old answer and its Today is as it was before midnight.
++    if (contains(shown, before.today_local)) await expectTodayActive(page, false);
++    await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(contains(shown, before.today_local) ? 1 : 0);
++    // A press on the inactive Today re-reads /periods/current and acts on the fresh answer.
++    await todayButton(page).click({ force: true });
++    if (stillShowsToday) {
++      // Fresh state: the shown period still holds today. The sheet and the live region stay, the Today tag follows the server date.
++      await expect(periodName(page)).toHaveText(rangeText(shown));
++      await expect.poll(() => tagDate(page), { message: 'the pressed tab tags the new date' }).toBe(after.today_local);
++      await expect(jumpStatus(page)).toHaveText('');
++      await expectTodayActive(page, false);
++    } else {
++      // Fresh state: today is in another period. The sheet jumps to it, the tag sits on the new date and the jump is announced.
++      await expectShown(page, after.in_progress, after.today_local);
++      await expect(jumpStatus(page)).toHaveText(`Showing today, ${weekday(after.today_local)} ${us(after.today_local)}, in the period ${plainRange(after.in_progress)}`);
++      await expectTodayActive(page, false);
++      await expect(page.locator(`[data-day="${after.today_local}"]`)).toBeInViewport();
++    }
++    // The other tab, which nobody pressed: a focus refresh alone moves the Today tag and the inactive state to the new date, with no reload.
++    await other.evaluate("window.dispatchEvent(new Event('focus'))");
++    await expect.poll(() => tagDate(other), { message: 'the refreshed tab tags the new date' }).toBe(stillShowsToday ? after.today_local : null);
++    await expectTodayActive(other, !stillShowsToday);
++    return;
++  }
++
++  // The real-clock part (no midnight in reach): a press on the inactive Today still re-reads /periods/current and, because the
++  // fresh answer is not away, leaves the sheet and the live region exactly as they are.
++  if (isWindow(landed)) {
++    await todayButton(page).click();
++    await expectShown(page, landed.in_progress, landed.today_local);
++  }
++  await expectTodayActive(page, false);
++  // The jump's own follow-up read of the periods has to be over before reads are counted.
++  await page.waitForTimeout(600);
++  const name = await periodName(page).textContent();
++  const status = await jumpStatus(page).textContent();
++  const reads = periodReads(page, '/api/periods/current');
++  const read = periodsResponse(page, '/api/periods/current');
++  await todayButton(page).click({ force: true });
++  await read;
++  await page.waitForTimeout(400);
++  expect(reads.count(), 'one /periods/current read for one press on the inactive Today').toBe(1);
++  expect(await periodName(page).textContent(), 'the period is unchanged').toBe(name);
++  expect(await jumpStatus(page).textContent(), 'the live region is untouched').toBe(status);
++  await expectTodayActive(page, false);
++  expect(await tagDate(page), 'the Today tag stays on the server date').toBe(landed.today_local);
++});
++
++/** The refresh triggers shared by the person's own view and a shared view: the window regaining focus, the tab becoming visible. */
++async function expectRefreshTriggers(page: Page, path: string, otherPath: string, ownView: boolean) {
++  await page.waitForTimeout(600);
++  const reads = periodReads(page, path);
++  const otherReads = periodReads(page, otherPath);
++  // Window focus: exactly one read.
++  let read = periodsResponse(page, path);
++  await page.evaluate("window.dispatchEvent(new Event('focus'))");
++  await read;
++  await page.waitForTimeout(300);
++  expect(reads.count(), 'window focus reads the periods once').toBe(1);
++  // Two focus events in one tick (a browser can fire more than one): one read at a time, not two.
++  reads.reset();
++  read = periodsResponse(page, path);
++  await page.evaluate("(() => { window.dispatchEvent(new Event('focus')); window.dispatchEvent(new Event('focus')); })()");
++  await read;
++  await page.waitForTimeout(400);
++  expect(reads.count(), 'two focus events together read the periods once').toBe(1);
++  // The tab becoming visible reads the periods. In the person's own view the check in/out state (WP5-UX2-T09) also reacts to that event:
++  // its own lookup reads the periods and the sheet's reload reads them again, so the screen's read is the third. A shared view has no
++  // check in/out, so there it is exactly one read.
++  reads.reset();
++  read = periodsResponse(page, path);
++  await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
++  await read;
++  await page.waitForTimeout(500);
++  if (ownView) expect(reads.count(), 'a visible tab reads the periods (check in/out lookup, sheet reload, and the screen)').toBeGreaterThanOrEqual(3);
++  else expect(reads.count(), 'a visible tab reads the periods once').toBe(1);
++  // A hidden tab reads nothing.
++  reads.reset();
++  await page.evaluate(
++    "(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); })()",
++  );
++  await page.waitForTimeout(600);
++  expect(reads.count(), 'a hidden tab reads nothing').toBe(0);
++  await page.evaluate("(() => { delete document.visibilityState; })()");
++  // Whatever the view, the reads go to its own route only.
++  expect(otherReads.count(), `no read of ${otherPath}`).toBe(0);
++}
++
++test('the periods are re-read when the window regains focus or the tab becomes visible (the person\'s own view)', async ({ page, signInThroughUi }) => {
++  await landOn(page, signInThroughUi);
++  await expectRefreshTriggers(page, '/api/periods/current', '/api/shared/none/periods/current', true);
++});
++
++test('the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view)', async ({
++  page,
++  adminSeed,
++  builtServer,
++  signInPageAs,
++}) => {
++  test.setTimeout(90_000);
++  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner', signature: 'none' });
++  const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee', signature: 'none' });
++  await owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
++  await signInPageAs(grantee.account, `#/shared/${owner.account.id}/timesheet`);
++  await expect(page.locator('[data-share-bar-title]')).toBeVisible();
++  await expect(page.locator('[data-day]')).toHaveCount(14);
++  await expectRefreshTriggers(page, `/api/shared/${owner.account.id}/periods/current`, '/api/periods/current', false);
++});
++
+ /* ---- Desktop widths --------------------------------------------------------------------------------------- */
+ 
+ test.describe('desktop widths', () => {

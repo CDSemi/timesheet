@@ -1,0 +1,24 @@
+# Sequential simulated-clock runs (one Playwright run at a time, each with its own output folder). Log per run: out/6x-<label>.txt
+. <task>/env.sh
+P=$T/out/60-sweep-progress.txt
+run() {
+  L=$1; TARGET=$2; EXD=$3; shift 3
+  echo "start $L $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P
+  bash $T/run-shift.sh $L $TARGET $EXD "$@" > $T/out/$L.txt 2>&1
+  echo "end $L $(date -u +%Y-%m-%dT%H:%M:%SZ) $(grep -E '^exit=' $T/out/$L.txt | tr '\n' ' ')" >> $P
+}
+: > $P
+# Control outside the window (2026-11-04 15:00 America/Los_Angeles, PST).
+export AUDIT2_EXPECT_TODAY=2026-11-04
+run 61-control-1104 2026-11-04T23:00:00Z $T/px tests/e2e/zz-audit2-control.spec.ts
+unset AUDIT2_EXPECT_TODAY
+# Midnight probes (own view, device zone Pacific/Kiritimati; shared view, owner in Pacific/Kiritimati, grantee device Pago Pago).
+run 62-midnight-own-1025 2026-10-26T06:58:30Z $T/px tests/e2e/zz-audit2-midnight.spec.ts -g "own view across"
+run 62-midnight-own-1030 2026-10-31T06:58:30Z $T/px tests/e2e/zz-audit2-midnight.spec.ts -g "own view across"
+run 62-midnight-own-1031 2026-11-01T06:58:30Z $T/px tests/e2e/zz-audit2-midnight.spec.ts -g "own view across"
+run 62-midnight-shared-kiritimati-1025 2026-10-25T09:58:00Z $T/px tests/e2e/zz-audit2-midnight.spec.ts -g "shared view across"
+# The repository's own midnight e2e under the preload (its crossing branch), clean export.
+run 63-repo-midnight-1025 2026-10-26T06:59:20Z $T/export tests/e2e/today.spec.ts -g "left open across"
+# FULL suite outside the five-day window, clean export.
+run 64-full-1104-1500 2026-11-04T23:00:00Z $T/export
+echo "sweep done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P

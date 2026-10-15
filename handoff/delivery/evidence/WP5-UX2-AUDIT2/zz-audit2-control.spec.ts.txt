@@ -1,0 +1,24 @@
+import { expect, test } from './fixtures.ts';
+
+/*
+ * WP5-UX2-AUDIT2 task-local control (never part of the repository): the built server under test reports the simulated date
+ * (AUDIT2_EXPECT_TODAY) while the browser keeps the real clock.
+ */
+test('AUDIT2 control: the server date under the simulated clock', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  const periods = await employeeSeed.periodsCurrent();
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const browserNow = await page.evaluate('new Date().toISOString()');
+  console.log(
+    `AUDIT2 control project=${testInfo.project.name} runner_now=${new Date().toISOString()} browser_now=${String(browserNow)} server_today=${periods.today_local} zone=${periods.reporting_zone} current=${periods.current.period_start}..${periods.current.period_end} (payroll ${periods.current.payroll_date}) in_progress=${periods.in_progress.period_start}..${periods.in_progress.period_end} (payroll ${periods.in_progress.payroll_date})`,
+  );
+  for (const path of ['/', '/theme-init.js', '/cd-logo.svg']) {
+    const response = await page.request.get(path);
+    const headers = response.headers();
+    console.log(
+      `AUDIT2 headers ${path} status=${response.status()} content-type=${headers['content-type'] ?? '-'} cache-control=${headers['cache-control'] ?? '(none)'} etag=${headers.etag ?? '(none)'} nosniff=${headers['x-content-type-options'] ?? '-'} csp=${headers['content-security-policy'] ?? '-'}`,
+    );
+  }
+  const expected = process.env.AUDIT2_EXPECT_TODAY;
+  if (expected !== undefined && expected !== '') expect(periods.today_local).toBe(expected);
+});

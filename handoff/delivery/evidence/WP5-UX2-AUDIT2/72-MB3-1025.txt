@@ -1,0 +1,98 @@
+== mutation MB3-no-refresh, run MB3-1025 (e2e, 2026-10-26T06:59:20Z), start 2026-10-15T13:37:44Z
+MB3-no-refresh: src/client/TimesheetScreen.tsx: applied
+MB3-no-refresh: src/client/TimesheetScreen.tsx: applied
+-- mutated lines (diff -r export/src mut/src):
+diff -r <task>/export/src/client/TimesheetScreen.tsx <task>/mut/src/client/TimesheetScreen.tsx
+175,176d174
+<     window.addEventListener('focus', refresh);
+<     document.addEventListener('visibilitychange', onVisibility);
+build:client exit=0
+== mut-MB3-1025: real start 2026-10-15T13:37:45Z, simulated start 2026-10-26T06:59:20Z, AB8_SHIFT_MS=926494455, export mut
+process clock 2026-10-26T06:59:20.107Z (Date.now 1792997960118); America/Los_Angeles Sun, 2026-10-25, 23:59:20; shift ms 926494455; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/today.spec.ts -g left open across --output=<task>/pw-mut-MB3-1025
+
+Running 2 tests using 2 workers
+
+  x  1 [desktop] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (44.8s)
+  x  2 [mobile] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (44.8s)
+
+
+  1) [desktop] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+
+    Error: the refreshed tab tags the new date
+
+    the refreshed tab tags the new date
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: null
+    Received: "2026-10-25"
+
+    Call Log:
+    - Timeout 7000ms exceeded while waiting on the predicate
+
+      590 |     // The other tab, which nobody pressed: a focus refresh alone moves the Today tag and the inactive state to the new date, with no reload.
+      591 |     await other.evaluate("window.dispatchEvent(new Event('focus'))");
+    > 592 |     await expect.poll(() => tagDate(other), { message: 'the refreshed tab tags the new date' }).toBe(stillShowsToday ? after.today_local : null);
+          |                                                                                                 ^
+      593 |     await expectTodayActive(other, !stillShowsToday);
+      594 |     return;
+      595 |   }
+        at <task>\mut\tests\e2e\today.spec.ts:592:97
+
+    Error Context: ..\pw-mut-MB3-1025\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MB3-1025\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MB3-1025\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+
+    Error: the refreshed tab tags the new date
+
+    the refreshed tab tags the new date
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: null
+    Received: "2026-10-25"
+
+    Call Log:
+    - Timeout 7000ms exceeded while waiting on the predicate
+
+      590 |     // The other tab, which nobody pressed: a focus refresh alone moves the Today tag and the inactive state to the new date, with no reload.
+      591 |     await other.evaluate("window.dispatchEvent(new Event('focus'))");
+    > 592 |     await expect.poll(() => tagDate(other), { message: 'the refreshed tab tags the new date' }).toBe(stillShowsToday ? after.today_local : null);
+          |                                                                                                 ^
+      593 |     await expectTodayActive(other, !stillShowsToday);
+      594 |     return;
+      595 |   }
+        at <task>\mut\tests\e2e\today.spec.ts:592:97
+
+    Error Context: ..\pw-mut-MB3-1025\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MB3-1025\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MB3-1025\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+    [mobile] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+exit=1
+process clock 2026-10-26T07:00:07.820Z (Date.now 1792998007830); America/Los_Angeles Mon, 2026-10-26, 00:00:07; shift ms 926494455; instanceof true
+== mut-MB3-1025 real end 2026-10-15T13:38:33Z
+restored src/client/components/PeriodBar.tsx: identical to the clean export
+restored src/client/TimesheetScreen.tsx: identical to the clean export
+restored src/client/styles.css: identical to the clean export
+restored src/client/components/ClockOutDialog.tsx: identical to the clean export
+restored src/client/components/ClockPanel.tsx: identical to the clean export
+rebuild after restore exit=0
+== end 2026-10-15T13:38:34Z

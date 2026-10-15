@@ -1,0 +1,39 @@
+"""EN/VI parity of the lines WP5-UX2-FIX1 changed: the literal tokens (numbers, px values, code spans, quoted labels) must match.
+Usage: parity.py <export root>"""
+import re
+import sys
+from pathlib import Path
+
+sys.stdout.reconfigure(encoding="utf-8")
+root = Path(sys.argv[1])
+PAIRS = [
+    ("docs/04_UX_AND_SETTINGS.md", "docs/04_UX_AND_SETTINGS.vi.md", [(48, 48), (54, 54), (56, 56)]),
+    ("docs/10_DECISIONS_AND_SOURCES.md", "docs/10_DECISIONS_AND_SOURCES.vi.md", [(202, 203)]),
+]
+TOKEN = re.compile(r"`[^`]+`|\"[^\"]+\"|\d+(?:\.\d+)?(?:px|:1)?|[A-Z]{2,}[\w-]*")
+
+
+def tokens(line: str) -> list[str]:
+    return sorted(TOKEN.findall(line))
+
+
+ok = True
+for en_name, vi_name, lines in PAIRS:
+    en = (root / en_name).read_text(encoding="utf-8").split("\n")
+    vi = (root / vi_name).read_text(encoding="utf-8").split("\n")
+    print(f"{en_name} lines {len(en)} / {vi_name} lines {len(vi)}")
+    for en_no, vi_no in lines:
+        a = tokens(en[en_no - 1])
+        b = tokens(vi[vi_no - 1])
+        same = a == b
+        ok = ok and same
+        print(f"  EN {en_no} / VI {vi_no}: tokens {len(a)} / {len(b)} equal={same}")
+        if not same:
+            print(f"    only EN: {sorted(set(a) - set(b))}")
+            print(f"    only VI: {sorted(set(b) - set(a))}")
+    heads_en = [line for line in en if line.startswith("#")]
+    heads_vi = [line for line in vi if line.startswith("#")]
+    bullets_en = sum(1 for line in en if line.startswith("- "))
+    bullets_vi = sum(1 for line in vi if line.startswith("- "))
+    print(f"  headings {len(heads_en)} / {len(heads_vi)}; top-level bullets {bullets_en} / {bullets_vi}")
+print("PARITY", "OK" if ok else "DIFFERENT")

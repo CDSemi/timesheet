@@ -170,3 +170,45 @@ Mục này được thêm sau hồ sơ nghiệm thu cũ ở trên, hồ sơ cũ 
 - **Backlog tùy chọn được mang theo (theo ID; không mục nào chặn nghiệm thu):** R-B7-1..R-B7-4 ([WP5_UX_REVIEW_B7](WP5_UX_REVIEW_B7.vi.md)); R-AB8-1..R-AB8-4 ([WP5_UX_REVIEW_AB8](WP5_UX_REVIEW_AB8.vi.md)); R-AB9-1..R-AB9-6 ([WP5_UX_REVIEW_AB9](WP5_UX_REVIEW_AB9.vi.md)); các rủi ro B6 và A7 ([WP5_UX_REVIEW_B6](WP5_UX_REVIEW_B6.vi.md), [WP5_UX_REVIEW_A7](WP5_UX_REVIEW_A7.vi.md)). Các rủi ro cũ ở trên vẫn áp dụng.
 - **Gói pilot:** [WP5_PILOT_PACKET](WP5_PILOT_PACKET.vi.md) và bản `.md` của nó đã được làm mới theo định danh trên (mục 0, 3, 5, 6 và 10); D-1..D-15 và biên bản cho phép chưa ký không đổi.
 - **Tách ba kết quả:** phần mềm sẵn sàng của WP1–WP5 trên `90b98ef` / `57e2974c…`: được chấp nhận qua REGATE8 và AB9, NAS vẫn NOT VERIFIED; quyền của chủ sở hữu: chưa yêu cầu và chưa cấp; kết quả pilot: chưa có, chưa chạy pilot nào.
+
+## Nghiệm thu lại sau vòng đổi giao diện 2 (WP5-UX2)
+
+Mục này được thêm sau phần nghiệm thu lại WP5-UX ở trên, phần đó giữ nguyên làm lịch sử (định danh `90b98ef` / `57e2974c…` của nó đã bị thay thế). Nguồn: board [ORCHESTRATION.json](ORCHESTRATION.json) (các tác vụ `WP5-UX2-*`, `owner_decisions` và `coordinator_decisions` ngày 2026-10-14 và 2026-10-15) và các báo cáo nêu dưới đây. Kết quả được báo cáo không phải bằng chứng độc lập; bằng chứng độc lập là các audit.
+
+- **Yêu cầu của chủ sở hữu ngày 2026-10-14 (tóm tắt tiếng Anh; nguyên văn nằm trên board) và các câu trả lời:**
+  - Yêu cầu 1: tô sáng cả cột ngày có Day editor đang mở; kiểu chọn nhẹ và thanh thoát hơn trong bộ chọn Label; nút chuyển giao diện dark/light ở thanh điều hướng chính; hover rõ hơn trên các nút bật/tắt; nút Today tường minh để quay về ngày hoặc kỳ hiện tại; "Show details" thành công tắc trượt.
+  - Yêu cầu 2: logo C&D thay chữ thương hiệu ở góc trên bên trái; trên điện thoại điều khiển check in/out chuyển lên thanh trên cùng và Today, Current period, Review nằm chung một hàng; cách gọi "Clock in/out" thành "Check in/out".
+  - Yêu cầu 3: chữ thương hiệu cạnh logo thành wordmark hai dòng theo màu của ảnh và font được chỉ định, logo ở bên trái; bỏ dòng tên công ty khỏi timesheet trên màn hình (PDF vẫn giữ).
+  - Yêu cầu 4: trên điện thoại "Review & sign off" rút gọn thành "Sign off" thay vì xuống hàng; thêm khoảng cách giữa thương hiệu và menu trên màn hình lớn; điều khiển giao diện trên desktop thành công tắc Dark/Light có icon; "Due" theo kiểu nhãn; chữ "to" trong khoảng kỳ thành mũi tên màu nhãn.
+  - WP5-UX2-Q1 (2026-10-14): cả hai nút. Today mở kỳ chứa ngày hôm nay; Current period quay về kỳ mà trang mở ra (kỳ R-07, trong năm ngày của cửa sổ là kỳ vừa kết thúc). Quy tắc kỳ mở đầu R-07 không đổi.
+  - WP5-UX2-Q2 (2026-10-14, "Q-1 a, Q-2 a"): công ty được dùng font cho logo/wordmark, nên wordmark được đưa vào dưới dạng đường viền vector (tệp font không bao giờ được commit); ở giao diện tối wordmark dùng sắc nhạt hơn.
+- **Kế hoạch và các phụ lục:** WP5-UX2-PLAN ([tác vụ](tasks/WP5-UX2-PLAN.md); thiết kế chỉ phía client, mockup, chia lát); PLAN2 (nút Current period: đích, hiển thị, hành vi của editor, vừa khít trên điện thoại); PLAN3 (logo, đồng hồ ở thanh trên của điện thoại, hàng ba nút, danh mục đổi tên); PLAN4 (wordmark, độ dễ đọc theo giao diện, dữ kiện về font).
+- **Các lát (mỗi lát một dòng; sau mỗi lát có một commit FREEZE):**
+  - T01 `af6207c`: nút chuyển Dark mode ở thanh điều hướng chính.
+  - T02 `d0d21e1`: hover, công tắc và lựa chọn trong bộ chọn nhãn rõ hơn.
+  - T03 `70ecb12`: đánh dấu ngày đang mở trong Day editor.
+  - T04 `54dda11`: các nút Today và Current period.
+  - T05 `fa2e679`: logo C&D trên thanh trên cùng.
+  - T06 `3f5a3b3`: wordmark hai dòng cạnh logo.
+  - T07 `9864400`: công tắc giao diện Light/Dark có icon.
+  - T08 `608572f`: cách gọi "Check in/out" (gồm ba văn bản thông báo của server).
+  - T09 `f70a5c0`: check in/out trên thanh trên cùng của điện thoại.
+  - T10 `d1a20a7`: tài liệu hóa vòng này (docs/04, docs/10, docs/12, EN và VI).
+- **Các vòng sửa (mỗi vòng một dòng; sau mỗi vòng có một commit FREEZE):**
+  - FIX1 `b1b725b`: ba phát hiện Low của WP5-UX2-AUDIT (Today sau nửa đêm của múi giờ báo cáo, hàng Review ở 320 px trong docs/04, vòng focus của Today không hoạt động) và R-UX2A-2 (một unit test chống cách gọi đồng hồ cũ).
+  - FIX2 `a643794`: test không phụ thuộc lịch cho vòng focus của Today không hoạt động.
+- **Gate và audit:**
+  - WP5-UX2-GATE PASS tại `d1a20a7` (digest `20e7a7c8…`).
+  - WP5-UX2-AUDIT, FIX REQUIRED ([WP5_UX2_REVIEW](WP5_UX2_REVIEW.vi.md)): ba phát hiện Low (01 Today không phản hồi sau nửa đêm của múi giờ báo cáo; 02 tài liệu thiếu hàng Review ở 320 px; 03 vòng focus của Today không hoạt động bị làm mờ còn 2,70:1) và các rủi ro tùy chọn R-UX2A-1..R-UX2A-5; được FIX1 đóng.
+  - WP5-UX2-REGATE FAIL tại `b1b725b`: một test phụ thuộc lịch hỏng trong lượt quét đồng hồ giả lập (8 failed ở hai trong ba lần chạy đầy đủ); được FIX2 sửa. NAS NOT VERIFIED.
+  - WP5-UX2-REGATE2 PASS, NAS NOT VERIFIED ([tác vụ](tasks/WP5-UX2-REGATE2.md)): e2e đầy đủ đồng hồ thật 448 passed / 42 skipped / 0 failed; chạy đồng hồ giả lập trong và ngoài cửa sổ năm ngày, 0 failed; drill `--wp3` 208 PASS / 0 FAIL; 1.882 unit test.
+  - WP5-UX2-AUDIT2 PASS ([WP5_UX2_REVIEW2](WP5_UX2_REVIEW2.vi.md)), các rủi ro tùy chọn R-UX2A2-1..R-UX2A2-4. Nó thay thế WP5-UX-AUDIT-AB9.
+- **Định danh được chấp nhận:**
+  - Commit phát hành `a6437943403fc416240fd13a787a8c4748af3e84` (WP5-UX2-FIX2-FREEZE, đã push); source digest `229df806aeaaa886ab11ee83556746ee65eda6c81a596dcd180d80d5d0b04db3`, 815 tệp, không tính `handoff/`.
+  - Image tham chiếu `sha256:6d1844425345a6e64a962689c01c03143a225abf33df02bcdaa20c8dcc05695a` (110.024.344 byte, `linux/amd64`, bản build drill của REGATE2), đã xóa sau gate.
+  - Ranh giới sản phẩm: vòng này đổi giao diện client, cách diễn đạt và test. `dist/server` chỉ khác 90b98ef ở cách diễn đạt của ba thông báo lỗi trong `services/timesheetCommands.js` và một chú thích (hồ sơ GATE, REGATE và REGATE2); không đổi quy tắc nghiệp vụ, phép tính, schema, API hay PDF.
+- **Mục docs/10:** các mục cho WP5-UX-Q1 và WP5-UX-Q2, chuyển tiếp từ vòng 1, đã được ghi vào docs/10 (EN và VI) trong vòng này (T10), cùng các quyết định của vòng 2.
+- **Backlog tùy chọn được mang theo (theo ID; không mục nào chặn nghiệm thu):** R-UX2A-1..R-UX2A-5 và R-UX2A2-1..R-UX2A2-4 (ở trên); R-B7-1..R-B7-4, R-AB8-1..R-AB8-4, R-AB9-1..R-AB9-6, và các rủi ro B6 và A7 (xem phần ở trên). Các rủi ro cũ hơn vẫn áp dụng.
+- **Câu hỏi tùy chọn còn mở cho chủ sở hữu WP5-UX2-Q3 (không chặn gì; mặc định (a) giữ nguyên):** trong năm ngày từ thứ Hai sau khi kỳ kết thúc đến thứ Sáu payroll, kỳ mà Today mở ra hiện nhãn "future"; phương án (b) sẽ hiện "in progress" ở đó (một thay đổi nhỏ về cách diễn đạt ở client cộng với docs/04; server không đổi).
+- **Gói pilot:** [WP5_PILOT_PACKET](WP5_PILOT_PACKET.vi.md) và bản `.md` của nó đã được làm mới theo định danh trên (mục 0, 3, 5, 6 và 10); D-1..D-15 (tất cả còn chờ) và biên bản cho phép chưa ký không đổi.
+- **Tách ba kết quả:** phần mềm sẵn sàng của WP1–WP5 trên `a643794` / `229df806…`: được chấp nhận qua REGATE2 và AUDIT2, NAS vẫn NOT VERIFIED; quyền của chủ sở hữu: chưa yêu cầu và chưa cấp; kết quả pilot: chưa có, chưa chạy pilot nào.

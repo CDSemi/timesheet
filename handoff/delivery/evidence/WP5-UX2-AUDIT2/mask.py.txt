@@ -1,0 +1,49 @@
+"""Copies task-local logs and scripts into the evidence folder as masked LF text.
+Usage: mask.py <task dir> <evidence dir> <file>...   (each file relative to the task dir; scripts get a .txt suffix)."""
+import os
+import re
+import sys
+from pathlib import Path
+
+task = Path(sys.argv[1])
+evidence = Path(sys.argv[2])
+ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
+EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+PROFILE = re.compile(r"([A-Za-z]:[\\/]+Users[\\/]+)[^\\/\s\"']+", re.IGNORECASE)
+PROFILE_UNIX = re.compile(r"(/[a-z]/Users/)[^/\s\"']+", re.IGNORECASE)
+TASK_WIN = re.compile(r"[A-Za-z]:[\\/]+\.claude-tmp[\\/]+timesheet[\\/]+WP5-UX2-AUDIT2", re.IGNORECASE)
+TASK_UNIX = re.compile(r"/d/\.claude-tmp/timesheet/WP5-UX2-AUDIT2", re.IGNORECASE)
+REPO_ANY = re.compile(r"(?:[A-Za-z]:[\\/]+|/d/)Dropbox[\\/]+Work\.CDSemi[\\/]+timesheet", re.IGNORECASE)
+ACCOUNT = re.compile(r"\b" + re.escape(os.environ.get("USERNAME", "") or "\x00") + r"\b")
+ALLOWED_EMAIL = ("@example.invalid", "noreply@anthropic.com")
+
+
+def mask_email(match: re.Match) -> str:
+    text = match.group(0)
+    if text.endswith("@example.invalid") or text == "noreply@anthropic.com":
+        return text
+    return "<email>"
+
+
+def clean(text: str) -> str:
+    text = ANSI.sub("", text)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = TASK_WIN.sub("<task>", text)
+    text = TASK_UNIX.sub("<task>", text)
+    text = REPO_ANY.sub("<repo>", text)
+    text = PROFILE.sub(lambda m: m.group(1) + "<user>", text)
+    text = PROFILE_UNIX.sub(lambda m: m.group(1) + "<user>", text)
+    text = ACCOUNT.sub("<user>", text)
+    text = EMAIL.sub(mask_email, text)
+    return text
+
+
+SCRIPT_SUFFIXES = (".sh", ".py", ".mjs", ".ts")
+for name in sys.argv[3:]:
+    source = task / name
+    target_name = Path(name).name
+    if target_name.endswith(SCRIPT_SUFFIXES):
+        target_name += ".txt"
+    data = source.read_bytes().decode("utf-8", errors="replace")
+    (evidence / target_name).write_bytes(clean(data).encode("utf-8"))
+    print(f"{name} -> {target_name}")

@@ -1,0 +1,21 @@
+# Real-clock probes in the probe copy (px), then the a11y probe outside the window under the simulated clock. One run at a time.
+. <task>/env.sh
+P=$T/out/65-probes-progress.txt
+run() {
+  L=$1; TARGET=$2; EXD=$3; shift 3
+  echo "start $L $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P
+  bash $T/run-shift.sh $L $TARGET $EXD "$@" > $T/out/$L.txt 2>&1
+  echo "end $L $(date -u +%Y-%m-%dT%H:%M:%SZ) $(grep -E '^exit=' $T/out/$L.txt | tr '\n' ' ')" >> $P
+}
+: > $P
+export AUDIT2_AXE="$TW\\axe\\axe.min.js"
+export AUDIT2_EXPECT_TODAY=
+run 66-requests-real real $T/px tests/e2e/zz-audit2-requests.spec.ts
+run 67-row-real real $T/px tests/e2e/zz-audit2-row.spec.ts
+export AUDIT2_SHOTS=1
+run 68-a11y-real real $T/px tests/e2e/zz-audit2-a11y.spec.ts
+run 68-a11y-1104-1500 2026-11-04T23:00:00Z $T/px tests/e2e/zz-audit2-a11y.spec.ts
+unset AUDIT2_SHOTS
+run 66-requests-1104-1500 2026-11-04T23:00:00Z $T/px tests/e2e/zz-audit2-requests.spec.ts
+run 62-midnight-edge-1025 2026-10-26T06:58:30Z $T/px tests/e2e/zz-audit2-midnight.spec.ts -g "Next before midnight"
+echo "probes done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P

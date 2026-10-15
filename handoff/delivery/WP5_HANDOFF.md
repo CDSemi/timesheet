@@ -170,3 +170,45 @@ This section is added after the older acceptance record above, which is kept unc
 - **Carried optional backlog (by ID; none blocks acceptance):** R-B7-1..R-B7-4 ([WP5_UX_REVIEW_B7](WP5_UX_REVIEW_B7.md)); R-AB8-1..R-AB8-4 ([WP5_UX_REVIEW_AB8](WP5_UX_REVIEW_AB8.md)); R-AB9-1..R-AB9-6 ([WP5_UX_REVIEW_AB9](WP5_UX_REVIEW_AB9.md)); the B6 and A7 risks ([WP5_UX_REVIEW_B6](WP5_UX_REVIEW_B6.md), [WP5_UX_REVIEW_A7](WP5_UX_REVIEW_A7.md)). The older carried risks above still apply.
 - **Pilot packet:** [WP5_PILOT_PACKET](WP5_PILOT_PACKET.md) and its `.vi.md` are refreshed to the identity above (sections 0, 3, 5, 6 and 10); D-1..D-15 and the unsigned authorization record are unchanged.
 - **Separation of three outcomes:** software readiness of WP1–WP5 on `90b98ef` / `57e2974c…`: accepted by REGATE8 and AB9, with the NAS still NOT VERIFIED; owner permission: not requested and not given; pilot result: none, no pilot has run.
+
+## Re-acceptance after UI change round 2 (WP5-UX2)
+
+This section is added after the WP5-UX re-acceptance above, which is kept unchanged as history (its identity `90b98ef` / `57e2974c…` is superseded). Sources: the board [ORCHESTRATION.json](ORCHESTRATION.json) (tasks `WP5-UX2-*`, `owner_decisions` and `coordinator_decisions` of 2026-10-14 and 2026-10-15) and the reviews named below. A reported result is not independent proof; the independent proofs are the audits.
+
+- **Owner requests of 2026-10-14 (English summary; the verbatim text stays on the board) and answers:**
+  - Request 1: highlight the whole day column whose Day editor is open; a lighter, more elegant selection in the Label picker; a dark/light theme toggle in the main navigation; a clearer hover highlight on toggle buttons; an explicit Today button that returns to the current day or period; "Show details" becomes a slide toggle.
+  - Request 2: the C&D logo replaces the brand text at the top left; on phones the check in/out controls move into the top bar and Today, Current period and Review share one row; the wording "Clock in/out" becomes "Check in/out".
+  - Request 3: the brand text beside the logo becomes the two-line wordmark in the image's colours and the referenced font, logo on the left; the company line is removed from the on-screen timesheet (the PDF keeps it).
+  - Request 4: on phones "Review & sign off" shortens to "Sign off" instead of wrapping; more space between brand and menu on large screens; the desktop theme control becomes a Dark/Light toggle with icons; "Due" takes the label style; the "to" in a period range becomes a label-coloured arrow.
+  - WP5-UX2-Q1 (2026-10-14): both buttons. Today opens the period that contains today's date; Current period returns to the period the page opens on (the R-07 period, which in the five window days is the period that just ended). The landing rule R-07 is unchanged.
+  - WP5-UX2-Q2 (2026-10-14, "Q-1 a, Q-2 a"): the company may use the font for its logo/wordmark, so the wordmark ships as vector outlines (the font file is never committed); in the dark theme the wordmark uses lighter tints.
+- **Plan and addenda:** WP5-UX2-PLAN ([task](tasks/WP5-UX2-PLAN.md); client-only design, mockup, slicing); PLAN2 (Current period button: targets, visibility, editor behaviour, phone fit); PLAN3 (logo, phone header clock, three-button row, rename inventory); PLAN4 (wordmark, theme legibility, font facts).
+- **Slices (one line each; each followed by a FREEZE commit):**
+  - T01 `af6207c`: Dark mode toggle in the main navigation.
+  - T02 `d0d21e1`: clearer hover, switch and label-picker selection.
+  - T03 `70ecb12`: mark the day open in the Day editor.
+  - T04 `54dda11`: Today and Current period buttons.
+  - T05 `fa2e679`: C&D logo in the top bar.
+  - T06 `3f5a3b3`: two-line wordmark beside the logo.
+  - T07 `9864400`: Light/Dark theme toggle with icons.
+  - T08 `608572f`: "Check in/out" wording (three server message texts included).
+  - T09 `f70a5c0`: check in/out in the phone top bar.
+  - T10 `d1a20a7`: documentation of the round (docs/04, docs/10, docs/12, EN and VI).
+- **Fix rounds (one line each; each followed by a FREEZE commit):**
+  - FIX1 `b1b725b`: the three Low findings of WP5-UX2-AUDIT (Today after the reporting-zone midnight, the 320 px Review row in docs/04, the inactive Today focus ring) and R-UX2A-2 (a unit test against the old clock wording).
+  - FIX2 `a643794`: a calendar-independent test for the inactive-Today focus ring.
+- **Gates and audits:**
+  - WP5-UX2-GATE PASS on `d1a20a7` (digest `20e7a7c8…`).
+  - WP5-UX2-AUDIT, FIX REQUIRED ([WP5_UX2_REVIEW](WP5_UX2_REVIEW.md)): three Low findings (01 Today inert after the reporting-zone midnight; 02 docs omit the 320 px Review row; 03 the inactive Today focus ring dimmed to 2.70:1) and optional risks R-UX2A-1..R-UX2A-5; closed by FIX1.
+  - WP5-UX2-REGATE FAIL on `b1b725b`: a calendar-dependent test failed in the simulated-clock sweep (8 failed in two of three full runs); fixed by FIX2. NAS NOT VERIFIED.
+  - WP5-UX2-REGATE2 PASS, NAS NOT VERIFIED ([task](tasks/WP5-UX2-REGATE2.md)): real-clock full e2e 448 passed / 42 skipped / 0 failed; simulated-clock runs inside and outside the five-day window, 0 failed; drill `--wp3` 208 PASS / 0 FAIL; 1,882 unit tests.
+  - WP5-UX2-AUDIT2 PASS ([WP5_UX2_REVIEW2](WP5_UX2_REVIEW2.md)), optional risks R-UX2A2-1..R-UX2A2-4. It supersedes WP5-UX-AUDIT-AB9.
+- **Accepted identity:**
+  - Release commit `a6437943403fc416240fd13a787a8c4748af3e84` (WP5-UX2-FIX2-FREEZE, pushed); source digest `229df806aeaaa886ab11ee83556746ee65eda6c81a596dcd180d80d5d0b04db3`, 815 files, `handoff/` excluded.
+  - Reference image `sha256:6d1844425345a6e64a962689c01c03143a225abf33df02bcdaa20c8dcc05695a` (110,024,344 bytes, `linux/amd64`, REGATE2 drill build), removed after the gate.
+  - Product boundary: the round changed the client UI, wording and tests. `dist/server` differs from 90b98ef only in the wording of three error messages in `services/timesheetCommands.js` and one comment (GATE, REGATE and REGATE2 evidence); no business rule, calculation, schema, API or PDF change.
+- **docs/10 entries:** the entries for WP5-UX-Q1 and WP5-UX-Q2, carried from round 1, were recorded in docs/10 (EN and VI) in this round (T10), together with the decisions of round 2.
+- **Carried optional backlog (by ID; none blocks acceptance):** R-UX2A-1..R-UX2A-5 and R-UX2A2-1..R-UX2A2-4 (above); R-B7-1..R-B7-4, R-AB8-1..R-AB8-4, R-AB9-1..R-AB9-6, and the B6 and A7 risks (see the section above). The older carried risks still apply.
+- **Open optional owner question WP5-UX2-Q3 (blocks nothing; default (a) keep):** in the five days from the Monday after a period ends to its payroll Friday, the period that Today opens shows the badge "future"; option (b) would show "in progress" there (a small client wording change plus docs/04; the server is unchanged).
+- **Pilot packet:** [WP5_PILOT_PACKET](WP5_PILOT_PACKET.md) and its `.vi.md` are refreshed to the identity above (sections 0, 3, 5, 6 and 10); D-1..D-15 (all pending) and the unsigned authorization record are unchanged.
+- **Separation of three outcomes:** software readiness of WP1–WP5 on `a643794` / `229df806…`: accepted by REGATE2 and AUDIT2, with the NAS still NOT VERIFIED; owner permission: not requested and not given; pilot result: none, no pilot has run.

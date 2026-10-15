@@ -287,11 +287,44 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   khi mờ không còn phụ thuộc lịch; focus-ring.spec đạt ở 10-17, 12-31, 10-26, 10-27 và
   đồng hồ thật; e2e đầy đủ 448/0 với đồng hồ thật (sau một lần chạy lại vì lỗi bộ đệm) và
   ở 2026-10-17; unit 1882; verify 0; digest 229df806 (815 file).
-- Tiếp theo: WP5-UX2-FIX2-FREEZE (committer, chạy một mình), rồi WP5-UX2-REGATE2 và
-  WP5-UX2-AUDIT2.
-- Đang chưa commit: `tests/e2e/focus-ring.spec.ts`, board, checkpoint này (+ en), kết quả
-  và bằng chứng FIX1-FREEZE, bản ghi và bằng chứng regate, bản ghi FIX2 và FIX2-FREEZE,
-  bằng chứng FIX2.
+- Xong WP5-UX2-FIX2-FREEZE: a6437943403fc416240fd13a787a8c4748af3e84 trên main, đã push
+  (190 đường dẫn gồm bằng chứng REGATE; digest 229df806, 815 file; mọi kiểm tra exit 0;
+  một heredoc rỗng đưa vào cat).
+- Đang chạy: WP5-UX2-REGATE2 (verifier, sonnet) trên a643794 / 229df806 (các mục gate WP5
+  có drill, ranh giới, dist giống hệt b1b725b, phạm vi sửa một file, quét trong và ngoài
+  khoảng 5 ngày). Sau đó audit opus mới WP5-UX2-AUDIT2.
+- WP5-UX2-REGATE2 PASS (verifier, tự báo claude-sonnet-5-5; NAS chưa kiểm) trên a643794 /
+  229df806 (ba dạng digest bằng nhau): verify 1882; e2e đồng hồ thật 448/0/42; AC-13 x3
+  cùng Tokyo và New York; drill 208/0, image
+  sha256:6d1844425345a6e64a962689c01c03143a225abf33df02bcdaa20c8dcc05695a (đã xoá);
+  dist/server chỉ khác 90b98ef ở timesheetCommands.js; dist/ giống hệt b1b725b; phạm vi sửa
+  chỉ focus-ring.spec.ts (+4/-0); 9 lần quét đều 0 lỗi, gồm toàn bộ test ở 2026-10-17 và
+  2026-12-31.
+- Board: current_source_digest 229df806; WP5-UX-AUDIT-AB9 và sáu audit trỏ tới nó nay có
+  superseded_by WP5-UX2-AUDIT2.
+- WP5-UX2-AUDIT2 PASS (opus mới, tự báo claude-opus-5-5; không phải auditor vòng đầu) trên
+  a643794 / 229df806, không có lỗi: 01-03 và R-UX2A-2 đã đóng, kiểm bằng đồng hồ giả lập và
+  đo viền focus của chính auditor; npm test 1882 x2; e2e 448/0/42 với đồng hồ thật và ngoài
+  khoảng 5 ngày; AC-13 1/1; 11 đột biến, 14 lần bắt trong 15 lần chạy; từ d1a20a7 chỉ 11
+  đường dẫn của vòng sửa đổi, dist/server vẫn chỉ khác 90b98ef ở ba câu thông báo; rủi ro
+  R-UX2A-1, -3, -4, -5 và mới (không bắt buộc) R-UX2A2-1..4. Bản review:
+  `handoff/delivery/WP5_UX2_REVIEW2.vi.md` (+ en).
+- Đang nghiệm thu lại: coordinator đã cập nhật STATE (WP5 trên a643794 / 229df806, review
+  WP5_UX2_REVIEW2) và NEXT_ACTION (EN/VI); đang chạy WP5-UX2-ACCEPT-DOCS (light, sonnet:
+  định danh pilot packet và WP5 handoff, EN/VI); sau đó commit nghiệm thu WP5-UX2-ACCEPT và
+  chuyển board về `software_ready`.
+- Xong WP5-UX2-ACCEPT-DOCS (light, tự báo claude-sonnet-5-5): pilot packet (EN/VI) cập nhật
+  định danh a643794 / 229df806 / REGATE2 / image 6d184442 / AUDIT2, ghi đúng nguồn gốc phía
+  server; WP5 handoff (EN/VI) thêm mục "Nghiệm thu lại sau vòng thay đổi UI lần 2
+  (WP5-UX2)"; song ngữ khớp và preflight đạt; digest không đổi. Agent còn việc chạy nền sau
+  khi bàn giao nên coordinator đã dừng nó (TaskStop).
+- Tiếp theo: WP5-UX2-ACCEPT (committer, chạy một mình; chỉ handoff), rồi board chuyển về
+  `software_ready` (bước chuyển cuối này để chưa commit). **WP5 được nghiệm thu lại trên
+  a643794 / 229df806; vòng thay đổi UI lần 2 đã khép lại.** Việc tiếp theo của chủ dự án:
+  duyệt pilot packet và trả lời D-1..D-15 (WP5-UX2-Q3 không bắt buộc).
+- Đang chưa commit (chỉ handoff): board, STATE, NEXT_ACTION (+ en), checkpoint này (+ en),
+  cặp pilot packet và WP5 handoff, kết quả và bằng chứng FIX2-FREEZE, bản ghi và bằng chứng
+  REGATE2, AUDIT2 và ACCEPT-DOCS, cặp review, brief ACCEPT.
 
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 

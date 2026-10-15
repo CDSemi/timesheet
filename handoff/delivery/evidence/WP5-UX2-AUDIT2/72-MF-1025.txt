@@ -1,0 +1,104 @@
+== mutation MF-stale-decision, run MF-1025 (e2e, 2026-10-26T06:59:20Z), start 2026-10-15T13:33:01Z
+MF-stale-decision: src/client/TimesheetScreen.tsx: applied
+-- mutated lines (diff -r export/src mut/src):
+diff -r <task>/export/src/client/TimesheetScreen.tsx <task>/mut/src/client/TimesheetScreen.tsx
+237c237
+<       const jump = todayJump({ today: fresh.today_local, current: fresh.current, inProgress: fresh.in_progress, shown: view.period, editDate });
+---
+>       const jump = todayJump({ today: periods?.today_local ?? fresh.today_local, current: fresh.current, inProgress: fresh.in_progress, shown: view.period, editDate });
+build:client exit=0
+== mut-MF-1025: real start 2026-10-15T13:33:02Z, simulated start 2026-10-26T06:59:20Z, AB8_SHIFT_MS=926777841, export mut
+process clock 2026-10-26T06:59:20.119Z (Date.now 1792997960129); America/Los_Angeles Sun, 2026-10-25, 23:59:20; shift ms 926777841; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/today.spec.ts -g left open across --output=<task>/pw-mut-MF-1025
+
+Running 2 tests using 2 workers
+
+  x  1 [mobile] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (44.8s)
+  x  2 [desktop] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (44.8s)
+
+
+  1) [desktop] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('.period-bar').locator('.period-name')
+    Expected: "10/26/2026→ to 11/08/2026"
+    Received: "10/12/2026→ to 10/25/2026"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" locator('.period-bar').locator('.period-name') with timeout 7000ms
+      - waiting for locator('.period-bar').locator('.period-name')
+        18 × locator resolved to <strong class="period-name">…</strong>
+           - unexpected value "10/12/2026→ to 10/25/2026"
+
+
+      67 | /** The sheet shows this period (its name in the bar) and, when it contains `today`, only that day carries the Today tag. */
+      68 | async function expectShown(page: Page, period: PeriodFacts, today: string) {
+    > 69 |   await expect(periodName(page)).toHaveText(rangeText(period));
+         |                                  ^
+      70 |   await expect(page.locator('[data-day]')).toHaveCount(14);
+      71 |   const showsToday = contains(period, today);
+      72 |   await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(showsToday ? 1 : 0);
+        at expectShown (<task>\mut\tests\e2e\today.spec.ts:69:34)
+        at <task>\mut\tests\e2e\today.spec.ts:585:13
+
+    Error Context: ..\pw-mut-MF-1025\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MF-1025\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MF-1025\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('.period-bar').locator('.period-name')
+    Expected: "10/26/2026→ to 11/08/2026"
+    Received: "10/12/2026→ to 10/25/2026"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" locator('.period-bar').locator('.period-name') with timeout 7000ms
+      - waiting for locator('.period-bar').locator('.period-name')
+        18 × locator resolved to <strong class="period-name">…</strong>
+           - unexpected value "10/12/2026→ to 10/25/2026"
+
+
+      67 | /** The sheet shows this period (its name in the bar) and, when it contains `today`, only that day carries the Today tag. */
+      68 | async function expectShown(page: Page, period: PeriodFacts, today: string) {
+    > 69 |   await expect(periodName(page)).toHaveText(rangeText(period));
+         |                                  ^
+      70 |   await expect(page.locator('[data-day]')).toHaveCount(14);
+      71 |   const showsToday = contains(period, today);
+      72 |   await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(showsToday ? 1 : 0);
+        at expectShown (<task>\mut\tests\e2e\today.spec.ts:69:34)
+        at <task>\mut\tests\e2e\today.spec.ts:585:13
+
+    Error Context: ..\pw-mut-MF-1025\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MF-1025\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MF-1025\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+    [mobile] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+exit=1
+process clock 2026-10-26T07:00:07.792Z (Date.now 1792998007803); America/Los_Angeles Mon, 2026-10-26, 00:00:07; shift ms 926777841; instanceof true
+== mut-MF-1025 real end 2026-10-15T13:33:49Z
+restored src/client/components/PeriodBar.tsx: identical to the clean export
+restored src/client/TimesheetScreen.tsx: identical to the clean export
+restored src/client/styles.css: identical to the clean export
+restored src/client/components/ClockOutDialog.tsx: identical to the clean export
+restored src/client/components/ClockPanel.tsx: identical to the clean export
+rebuild after restore exit=0
+== end 2026-10-15T13:33:51Z

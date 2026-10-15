@@ -1,0 +1,26 @@
+"""Fills @@NAME@@ placeholders of a draft from files named <prefix>-<NAME>.txt (multi-line blocks) and writes the result.
+Usage: fill.py <draft> <block dir> <prefix> <output>. Fails when a placeholder stays unfilled."""
+import re
+import sys
+from pathlib import Path
+
+sys.stdout.reconfigure(encoding="utf-8")
+draft = Path(sys.argv[1]).read_text(encoding="utf-8")
+blocks = Path(sys.argv[2])
+prefix = sys.argv[3]
+output = Path(sys.argv[4])
+
+
+def block(match: re.Match) -> str:
+    name = match.group(1)
+    path = blocks / f"{prefix}-{name}.txt"
+    if not path.is_file():
+        return match.group(0)
+    return path.read_text(encoding="utf-8").rstrip("\n")
+
+
+filled = re.sub(r"@@([A-Z0-9]+)@@", block, draft)
+left = sorted(set(re.findall(r"@@([A-Z0-9]+)@@", filled)))
+output.write_bytes(filled.replace("\r\n", "\n").encode("utf-8"))
+print(f"wrote {output.name}; unfilled: {left}")
+sys.exit(1 if left else 0)

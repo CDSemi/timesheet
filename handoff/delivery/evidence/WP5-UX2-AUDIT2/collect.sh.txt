@@ -1,0 +1,13 @@
+# Copies the masked LF evidence into the repository evidence folder (only that folder). Log: out/99-collect.txt
+. <task>/env.sh
+cd $T
+LIST=""
+for f in out/*.txt; do
+  case "$f" in
+    out/tmp-*|out/ex-*|out/lstree-*|out/*-build.txt|out/*-rebuild.txt|out/06-*-ci.txt|out/06-*-build.txt|out/fixtures-exports.txt|out/prior-*|out/ls-evidence.txt|out/13-dist-*-q.txt|out/13-dist-domain-diff.txt) ;;
+    *) LIST="$LIST $f" ;;
+  esac
+done
+SCRIPTS="env.sh digest.sh mandatory.sh prep.sh cmpdist.sh run-shift.sh sweep.sh probes.sh mutations.sh mutrun.sh mutate.py parity.py ringcalc.py counts.py a11ysum.py mutsum.py mask.py board_extract.py collect.sh probe-now.mjs shiftclock.mjs zz-audit2-control.spec.ts zz-audit2-midnight.spec.ts zz-audit2-requests.spec.ts zz-audit2-row.spec.ts zz-audit2-a11y.spec.ts 00-README.txt"
+"$PY" -I $T/mask.py $T $E $LIST $SCRIPTS > $T/out/99-collect.txt 2>&1
+echo "mask exit=$?" >> $T/out/99-collect.txt

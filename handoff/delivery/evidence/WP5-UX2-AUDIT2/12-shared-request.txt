@@ -1,0 +1,10 @@
+1:import { useEffect, useMemo, useRef } from 'react';
+12: * on each request. The page shows only what the share holds: an action the share does not allow is
+13: * absent. A refused request asks the server whether the share still exists (`refreshShares`); when
+52:  const onRefused = useMemo(
+60:  const request = useMemo(() => sharedRequest(ownerId, onRefused), [ownerId, onRefused]);
+69:        <TimesheetScreen user={user} shared={{ ownerName: share.owner.display_name, canEdit: abilities.editTimesheets, request }} />
+71:      {resolved === 'ot' && abilities.viewOt && <SharingOt request={request} ownerName={share.owner.display_name} />}
+73:        <SharingRevisions request={request} ownerId={ownerId} ownerName={share.owner.display_name} items={share.items} onRefused={onRefused} />
+57:export const ownRequest: Requester = (method, path, body) => api(method, `/api${path}`, body);
+63:export function sharedRequest(ownerId: string, onRefused: (caught: unknown) => Promise<void>): Requester {

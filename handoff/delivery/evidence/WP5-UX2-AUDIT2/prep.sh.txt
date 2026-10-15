@@ -1,0 +1,11 @@
+# Installs and builds the probe copy (px), the mutation copy (mut) and the 90b98ef export (old). Log: out/06-prep.txt
+. <task>/env.sh
+OUTF=$T/out/06-prep.txt
+: > $OUTF
+for d in px mut old; do
+  (cd $T/$d && node.exe "$NPM_CLI" ci) > $T/out/06-$d-ci.txt 2>&1
+  echo "$d npm ci exit=$? deprecation_lines=$(grep -ci deprecat $T/out/06-$d-ci.txt)" >> $OUTF
+  (cd $T/$d && node.exe "$NPM_CLI" run build) > $T/out/06-$d-build.txt 2>&1
+  echo "$d build exit=$? deprecation_lines=$(grep -ci deprecat $T/out/06-$d-build.txt)" >> $OUTF
+done
+echo "end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $OUTF

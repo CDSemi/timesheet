@@ -1,0 +1,179 @@
+import type { Page } from '@playwright/test';
+import { expect, newPerson, type PeriodsCurrent, test } from './fixtures.ts';
+
+/*
+ * WP5-UX2-AUDIT2 task-local probe (never part of the repository). The new focus and visibility re-reads of the periods
+ * (WP5-UX2-FIX1): count every /api request on focus changes, on keyboard walks, on dispatched window focus and visibility
+ * events, after a refresh (no loop), and in a shared view (only the share's routes, no check in/out, no own routes).
+ */
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Tokyo' });
+
+const log = (line: string) => console.log(`AUDIT2 ${line}`);
+const bar = (page: Page) => page.locator('.period-bar');
+const todayButton = (page: Page) => bar(page).getByRole('button', { name: 'Today', exact: true });
+const isWindow = (periods: PeriodsCurrent) => periods.current.payroll_date !== periods.in_progress.payroll_date;
+
+function recordApi(page: Page): string[] {
+  const list: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/api/')) list.push(`${request.method()} ${url.pathname}`);
+  });
+  return list;
+}
+
+async function settle(page: Page, ms = 1200) {
+  await page.waitForTimeout(ms);
+}
+
+/** Runs the probes on a page that shows the timesheet; returns a summary line per probe. */
+async function probe(label: string, page: Page, periodsRoute: string, own: boolean) {
+  const list = recordApi(page);
+  await settle(page, 1500);
+  let mark = list.length;
+  const since = () => list.slice(mark);
+  const reads = (entries: string[]) => entries.filter((entry) => entry === `GET ${periodsRoute}`).length;
+
+  // 1. Keyboard walks. Window focus and blur events are counted in the page: an element focus change inside the document fires
+  // none; leaving the document past its last stop (to the browser) and coming back is a real window blur and focus.
+  await page.evaluate(
+    "(() => { window.__a2 = { focus: 0, blur: 0 }; window.addEventListener('focus', () => { window.__a2.focus += 1; }); window.addEventListener('blur', () => { window.__a2.blur += 1; }); })()",
+  );
+  const startTop = "(() => { const start = document.createElement('div'); start.tabIndex = -1; document.body.prepend(start); start.focus(); start.remove(); })()";
+  // 1a. Twenty Tab presses from the top: they stay inside the page.
+  await page.evaluate(startTop);
+  await page.evaluate('(() => { window.__a2.focus = 0; window.__a2.blur = 0; })()');
+  mark = list.length;
+  for (let index = 0; index < 20; index += 1) await page.keyboard.press('Tab');
+  await settle(page);
+  const inside = since();
+  const insideEvents = await page.evaluate<{ focus: number; blur: number }>('window.__a2');
+  log(`${label} tab-walk-20-inside window_focus=${insideEvents.focus} window_blur=${insideEvents.blur} calls=${JSON.stringify(inside)}`);
+  expect(insideEvents.focus, 'no window focus event inside the page').toBe(0);
+  expect(inside, 'element focus changes make no request').toEqual([]);
+  // 1b. Sixty Tab presses forward and twenty back: past the last stop the focus leaves the document and comes back.
+  await page.evaluate(startTop);
+  await page.evaluate('(() => { window.__a2.focus = 0; window.__a2.blur = 0; })()');
+  mark = list.length;
+  for (let index = 0; index < 60; index += 1) await page.keyboard.press('Tab');
+  for (let index = 0; index < 20; index += 1) await page.keyboard.press('Shift+Tab');
+  await settle(page);
+  const walk = since();
+  const walkEvents = await page.evaluate<{ focus: number; blur: number }>('window.__a2');
+  log(`${label} tab-walk-80-wrapping window_focus=${walkEvents.focus} window_blur=${walkEvents.blur} calls=${JSON.stringify(walk)}`);
+  expect(reads(walk), 'at most one read per window focus (the document regaining focus), none per element').toBeLessThanOrEqual(walkEvents.focus);
+  if (walkEvents.focus > 0) expect(reads(walk)).toBeGreaterThanOrEqual(1);
+  expect(walk.filter((entry) => entry !== `GET ${periodsRoute}`)).toEqual([]);
+
+  // 2. Element focus by script on every focusable element of the period bar and the toolbar.
+  mark = list.length;
+  const focused = await page.evaluate(
+    "(() => { const all = [...document.querySelectorAll('.period-bar button, .period-bar a, .tools button, .tools input')]; for (const element of all) element.focus(); return all.length; })()",
+  );
+  await settle(page);
+  const scripted = since();
+  log(`${label} scripted-focus elements=${focused} calls=${JSON.stringify(scripted)}`);
+  expect(scripted).toEqual([]);
+
+  // 3. One dispatched window focus: one read of the view's periods route and nothing else; then nothing more (no loop).
+  mark = list.length;
+  await page.evaluate("window.dispatchEvent(new Event('focus'))");
+  await settle(page, 3000);
+  const oneFocus = since();
+  log(`${label} one-window-focus calls=${JSON.stringify(oneFocus)}`);
+  expect(oneFocus).toEqual([`GET ${periodsRoute}`]);
+
+  // 4. Ten focus events 50 ms apart (a user switching windows fast): bounded, one read at a time.
+  mark = list.length;
+  for (let index = 0; index < 10; index += 1) {
+    await page.evaluate("window.dispatchEvent(new Event('focus'))");
+    await page.waitForTimeout(50);
+  }
+  await settle(page, 3000);
+  const burst = since();
+  log(`${label} ten-focus-50ms reads=${reads(burst)} other=${JSON.stringify(burst.filter((entry) => entry !== `GET ${periodsRoute}`))}`);
+  expect(reads(burst)).toBeLessThanOrEqual(10);
+  expect(burst.filter((entry) => entry !== `GET ${periodsRoute}`)).toEqual([]);
+
+  // 5. Ten focus events in one task: one read.
+  mark = list.length;
+  await page.evaluate("(() => { for (let index = 0; index < 10; index += 1) window.dispatchEvent(new Event('focus')); })()");
+  await settle(page, 2000);
+  const sameTick = since();
+  log(`${label} ten-focus-one-task calls=${JSON.stringify(sameTick)}`);
+  expect(sameTick).toEqual([`GET ${periodsRoute}`]);
+
+  // 6. The tab becomes visible: every request listed.
+  mark = list.length;
+  await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+  await settle(page, 3000);
+  const visible = since();
+  log(`${label} visibility-visible reads=${reads(visible)} calls=${JSON.stringify(visible)}`);
+  if (!own) expect(visible).toEqual([`GET ${periodsRoute}`]);
+
+  // 7. Hidden: nothing.
+  mark = list.length;
+  await page.evaluate(
+    "(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); })()",
+  );
+  await settle(page);
+  const hidden = since();
+  await page.evaluate('(() => { delete document.visibilityState; })()');
+  log(`${label} visibility-hidden calls=${JSON.stringify(hidden)}`);
+  expect(hidden).toEqual([]);
+
+  // 8. Real activation of another tab and back (does the browser fire window focus here?).
+  const counter = await page.evaluate("(() => { window.__audit2Focus = 0; window.addEventListener('focus', () => { window.__audit2Focus += 1; }); return 0; })()");
+  mark = list.length;
+  const other = await page.context().newPage();
+  await other.goto('about:blank');
+  await other.bringToFront();
+  await page.bringToFront();
+  await settle(page, 2000);
+  const realFocus = since();
+  const fired = await page.evaluate('window.__audit2Focus');
+  await other.close();
+  log(`${label} bringToFront-other-then-back focus_events=${fired} (counter start ${counter}) calls=${JSON.stringify(realFocus)}`);
+
+  // 9. A press on the inactive Today: exactly one read of the periods route, nothing else.
+  if ((await todayButton(page).getAttribute('aria-disabled')) !== 'true') {
+    await todayButton(page).click();
+    await expect(todayButton(page)).toHaveAttribute('aria-disabled', 'true');
+    await settle(page);
+  }
+  mark = list.length;
+  await todayButton(page).click({ force: true });
+  await settle(page);
+  const press = since();
+  log(`${label} inactive-press calls=${JSON.stringify(press)}`);
+  expect(press).toEqual([`GET ${periodsRoute}`]);
+  return list;
+}
+
+test('AUDIT2 requests: own view', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.setTimeout(120_000);
+  const periods = await employeeSeed.periodsCurrent();
+  log(`own project=${testInfo.project.name} server_today=${periods.today_local} window=${isWindow(periods)}`);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const list = await probe(`own/${testInfo.project.name}`, page, '/api/periods/current', true);
+  expect(list.filter((entry) => entry.includes('/api/shared/'))).toEqual([]);
+});
+
+test('AUDIT2 requests: shared view (view share)', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(150_000);
+  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner', signature: 'none' });
+  const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee', signature: 'none' });
+  await owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  const all = recordApi(page);
+  await signInPageAs(grantee.account, `#/shared/${owner.account.id}/timesheet`);
+  await expect(page.locator('[data-share-bar-title]')).toBeVisible();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await probe(`shared/${testInfo.project.name}`, page, `/api/shared/${owner.account.id}/periods/current`, false);
+  const outside = all.filter(
+    (entry) => entry.includes('/api/clock') || entry === 'GET /api/periods/current' || entry.startsWith('GET /api/timesheets') || entry.startsWith('GET /api/finalization'),
+  );
+  log(`shared/${testInfo.project.name} all-calls-outside-the-share=${JSON.stringify(outside)} total=${all.length}`);
+  expect(outside, 'no check in/out and no own route in a shared view').toEqual([]);
+});

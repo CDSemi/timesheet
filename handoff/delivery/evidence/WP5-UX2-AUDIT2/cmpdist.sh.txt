@@ -1,0 +1,19 @@
+# Compares the built dist/ of 90b98ef (old) with a643794 (export). Log: out/13-dist.txt and out/13-dist-diff.txt
+. <task>/env.sh
+OUTF=$T/out/13-dist.txt
+: > $OUTF
+for part in server domain client; do
+  a=$(cd $T/old/dist/$part && find . -type f | wc -l)
+  b=$(cd $T/export/dist/$part && find . -type f | wc -l)
+  diff -rq $T/old/dist/$part $T/export/dist/$part > $T/out/13-dist-$part-q.txt 2>&1
+  echo "dist/$part files old=$a new=$b differing_or_missing=$(wc -l < $T/out/13-dist-$part-q.txt)" >> $OUTF
+done
+sed "s|$T|<task>|g" $T/out/13-dist-server-q.txt >> $OUTF
+diff -r $T/old/dist/server $T/export/dist/server > $T/out/13-dist-diff.txt 2>&1
+echo "dist/server diff exit=$? lines=$(wc -l < $T/out/13-dist-diff.txt)" >> $OUTF
+diff -r $T/old/dist/domain $T/export/dist/domain > $T/out/13-dist-domain-diff.txt 2>&1
+echo "dist/domain diff exit=$? lines=$(wc -l < $T/out/13-dist-domain-diff.txt)" >> $OUTF
+cd $REPO
+git diff --stat $OLD $SHA -- src/server src/domain migrations >> $OUTF
+git diff --stat $PREV $SHA -- src/server src/domain migrations scripts package.json package-lock.json Dockerfile compose.example.yaml vite.config.ts vitest.config.ts playwright.config.ts eslint.config.js tsconfig.base.json tsconfig.client.json tsconfig.json tsconfig.server.json tsconfig.test.json src/client/public src/client/index.html > $T/out/13-config-diff-d1.txt
+echo "config/server/public diff d1a20a7..a643794 lines=$(wc -l < $T/out/13-config-diff-d1.txt)" >> $OUTF

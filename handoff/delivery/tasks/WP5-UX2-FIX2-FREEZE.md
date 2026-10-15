@@ -155,4 +155,12 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(The committer appends results here.)
+Self-reported model: claude-sonnet-5-5
+
+- Pre-HEAD = origin/main = b1b725b7361d55e7aed70656051359153e457b5c; no extra commits; nothing pre-staged.
+- Commit a6437943403fc416240fd13a787a8c4748af3e84 on main; pushed yes; remote SHA the same.
+- Digest before add and ls-tree digest of new HEAD: both 229df806aeaaa886ab11ee83556746ee65eda6c81a596dcd180d80d5d0b04db3 (815 files).
+- Staged 190: 1 source (tests/e2e/focus-ring.spec.ts); 189 handoff: 4 modified (board, checkpoint pair, FIX1-FREEZE record), 3 task records (REGATE, FIX2, this brief), evidence FIX1-FREEZE 2 txt, REGATE 152 txt + 6 synthetic png, FIX2 22 txt.
+- Other modified tracked handoff files: none.
+- Checks (all exit 0): node v24.21.0; precommit 190 files, 0 findings; diff --cached --check; JSON parse; validate_orchestration PASS; check_recovery 106 probes; validate_package --preflight PASS.
+- No fix, mask or stop. Evidence: handoff/delivery/evidence/WP5-UX2-FIX2-FREEZE/ (checks.txt, commit-message.txt), unstaged. Deviation: none material (an empty heredoc was fed to cat while creating a helper file, not to node or python).

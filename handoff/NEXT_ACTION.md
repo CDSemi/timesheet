@@ -8,9 +8,9 @@
 - WP4 accepted: WP4-REGATE4 PASS and final independent rechecks WP4-RECHECK-A
   attempt 4 and WP4-RECHECK-B4 PASS at 546cdda, digest 26fcc969.
 - WP5 accepted (software readiness), re-accepted after the owner-requested UI change
-  round: WP5-UX-REGATE8 PASS and the final independent recheck WP5-UX-AUDIT-AB9 PASS
-  (areas A and B) at 90b98ef, digest 57e2974c (first acceptance: 014bd47, digest
-  150420e7).
+  round 2: WP5-UX2-REGATE2 PASS and the final independent recheck WP5-UX2-AUDIT2 PASS at
+  a643794, digest 229df806 (earlier acceptances: 90b98ef / 57e2974c after round 1, and
+  014bd47 / 150420e7).
 - UI change round (owner request 2026-10-08, done): the Timesheet page now follows the
   sample Excel timesheet layout, with a friendlier shell, on desktop and phone (plan and
   mockup: task WP5-UX-PLAN, `handoff/delivery/design/WP5-UX/mockup.html`). The owner
@@ -19,16 +19,19 @@
   calendar-independent e2e tests) changed the client UI and tests only; no server or
   business change. Optional backlog for the pilot fix round: see the
   [WP5 handoff](delivery/WP5_HANDOFF.md).
-- UI change round 2 (owner request 2026-10-14, running): six Timesheet-page changes (a
-  highlighted column for the day open in the Day editor, a lighter Label-picker selection,
-  a dark/light theme toggle in the main navigation, a clearer hover on toggle buttons, an
-  explicit Today button, and Show details as a switch). It runs as the WP5 change round
-  WP5-UX2 before pilot activation: plan WP5-UX2-PLAN (running), slices with freezes, a
-  package-final gate, a fresh independent audit, then the WP5 re-accept and a pilot-packet
-  identity refresh. WP5 stays accepted on 90b98ef until then.
+- UI change round 2 (owner requests 2026-10-14, done): the day open in the Day editor is
+  highlighted; the Label picker selection is lighter; a Light/Dark theme control; clearer
+  hover and pressed looks; Today and Current period buttons; Show details as a switch; the
+  C&D logo and two-line wordmark; check in/out in the phone top bar; one-row phone period
+  buttons ("Sign off" when narrow); "Check in/out" wording; "Due" as a label; an arrow in
+  period ranges; no company line on the on-screen sheet (the PDF keeps it). Slices T01..T10
+  and fix rounds FIX1..FIX2; client UI, tests and docs, plus three server error-message
+  texts; no business change. Optional owner question WP5-UX2-Q3 (the "future" badge on the
+  period Today opens in the five window days; default: keep) and optional backlog: see the
+  [WP5 handoff](delivery/WP5_HANDOFF.md).
 - Pilot: the concrete [pilot packet](delivery/WP5_PILOT_PACKET.md) is ready for owner
-  review (release identity 90b98ef / 57e2974c; refreshed after round 2). Owner permission
-  has not been requested, there is no pilot result, and the NAS is NOT VERIFIED.
+  review (release identity a643794 / 229df806). Owner permission has not been requested,
+  there is no pilot result, and the NAS is NOT VERIFIED.
 
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),
@@ -57,21 +60,19 @@ Do not change billing or permission settings.
 ~~~
 
 Current route:
-1. **Done: WP5 accepted, then re-accepted after the UI change round.** The first
-   acceptance record was committed at dd0c7d1; the re-acceptance on 90b98ef / 57e2974c
-   (WP5-UX-AUDIT-AB9) is in the [WP5 handoff](delivery/WP5_HANDOFF.md).
+1. **Done: WP5 accepted, then re-accepted after each UI change round.** The first
+   acceptance record was committed at dd0c7d1; the re-acceptances on 90b98ef / 57e2974c
+   (WP5-UX-AUDIT-AB9) and on a643794 / 229df806 (WP5-UX2-AUDIT2) are in the
+   [WP5 handoff](delivery/WP5_HANDOFF.md).
 2. **Done: GOV-RECOVERY.** `check_recovery.py` no longer inherits the live mission
    status (fix frozen at 7f750e9, gate PASS,
    [GOV recovery review](delivery/GOV_RECOVERY_REVIEW.md) PASS). The board records the
    mission as `software_ready`.
-3. **Running: UI change round 2 (WP5-UX2).** The plan is done (mockup in
-   `handoff/delivery/design/WP5-UX2/`; addenda PLAN2 and PLAN3 for the Today/Current
-   period pair, the logo, the phone header clock and the "Check in/out" wording). Slice
-   WP5-UX2-T01 (Dark mode toggle) is done and being frozen; slices T02-T08 follow, then
-   the gate, a fresh audit and the re-accept. Resume the coordinator with the entry prompt
-   above if the session stops.
-4. **Owner, at any time: review the pilot.** Read the
-   [pilot packet](delivery/WP5_PILOT_PACKET.md) and answer D-1..D-15.
+3. **Done: UI change round 2 (WP5-UX2).** Re-accepted on a643794 / 229df806 (gate
+   WP5-UX2-REGATE2, audit WP5-UX2-AUDIT2 PASS); the pilot packet identity is refreshed.
+4. **Next, owner: review the pilot.** Read the
+   [pilot packet](delivery/WP5_PILOT_PACKET.md) and answer D-1..D-15 (and, optionally,
+   WP5-UX2-Q3).
    - D-1, D-7, D-8 and D-13 are needed before activation.
    - An answer that differs from the current default causes a fix round (fix, freeze,
      gate, independent audit) before activation.

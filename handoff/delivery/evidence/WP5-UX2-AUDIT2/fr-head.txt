@@ -1,0 +1,65 @@
+import type { Locator, Page } from '@playwright/test';
+import * as shared from './contrast.ts';
+import { ANY_DAY_BUTTON_NAME } from './dayButton.ts';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX-B4-01: the shared focus indicator is a UI component boundary under WCAG 2.2 SC 1.4.11
+ * (with 2.4.7), so the ring colour that touches the outside must reach 3:1 against the surface it
+ * sits on. The check reads the real computed box-shadow of a focused button, link, phone tab and
+ * sheet date, and the shared token against every surface token, in the light and the dark theme.
+ * Data are synthetic; nothing is computed by the application.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const MINIMUM_RATIO = 3;
+
+type Rgba = [number, number, number, number];
+
+interface Layer {
+  colour: Rgba;
+  inset: boolean;
+  spread: number;
+}
+
+function parseColour(text: string): Rgba {
+  const numbers = (/rgba?\(([^)]*)\)/.exec(text)?.[1] ?? '').split(/[\s,/]+/).filter((part) => part !== '').map(Number);
+  const [r = 0, g = 0, b = 0, a = 1] = numbers;
+  return [r, g, b, a];
+}
+
+function parseLayers(boxShadow: string): Layer[] {
+  if (boxShadow === 'none') return [];
+  return boxShadow.split(/,\s*(?=rgba?\()/).map((layer) => {
+    const lengths = (layer.replace(/rgba?\([^)]*\)/, '').match(/-?\d+(\.\d+)?px/g) ?? []).map(parseFloat);
+    return { colour: parseColour(layer), inset: layer.includes('inset'), spread: lengths[3] ?? 0 };
+  });
+}
+
+/** The layer that touches the outside edge of the indicator: the widest outset layer, or the thinnest inset one. */
+function outermost(layers: Layer[]): Layer | undefined {
+11:export type Rgba = [number, number, number, number];
+13:export interface Layer {
+23:export function parseColour(text: string): Rgba {
+29:export function parseLayers(boxShadow: string): Layer[] {
+38:export function outermost(layers: Layer[]): Layer | undefined {
+44:export function over(top: Rgba, bottom: Rgba): Rgba {
+51:export function luminance([r, g, b]: Rgba): number {
+59:export function contrast(a: Rgba, b: Rgba): number {
+65:export function backdropOf(backdrops: string[]): Rgba {
+70:export async function backdropsAbove(locator: Locator): Promise<string[]> {
+80:export type StyleProperty = 'boxShadow' | 'color' | 'backgroundColor' | 'borderTopColor' | 'backgroundImage';
+83:export async function settledStyle(locator: Locator, property: StyleProperty): Promise<string> {
+101:export async function computedStyle(locator: Locator, property: StyleProperty): Promise<string> {
+109:export async function focusFromKeyboard(locator: Locator, painted: Locator = locator): Promise<void> {
+117:export interface RingMeasure {
+131:export async function measureFocusRing(locator: Locator): Promise<RingMeasure> {
+151:export async function flattenedBackground(locator: Locator): Promise<Rgba> {
+157:export async function imageColour(locator: Locator): Promise<Rgba> {
+162:export interface PseudoStyle {
+182:export async function readPseudo(locator: Locator, pseudo: '::before' | '::after'): Promise<PseudoStyle> {
+207:export async function settledPseudo(locator: Locator, pseudo: '::before' | '::after'): Promise<PseudoStyle> {
+224:export async function tokenColour(page: Page, token: string): Promise<Rgba> {
+242:export async function paintedPixel(page: Page, x: number, y: number): Promise<Rgba> {
+264:export function sameColour(a: Rgba, b: Rgba, tolerance = 3): boolean {
+269:export async function textContrast(locator: Locator): Promise<number> {

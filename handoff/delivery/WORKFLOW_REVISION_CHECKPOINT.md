@@ -282,10 +282,45 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   12-31, 10-26, 10-27 and the real clock; full e2e 448/0 on the real clock (after one
   buffer-error rerun) and at 2026-10-17; unit 1882; verify 0; digest 229df806 (815
   files).
-- Next: WP5-UX2-FIX2-FREEZE (committer, alone), then WP5-UX2-REGATE2 and WP5-UX2-AUDIT2.
-- Uncommitted now: `tests/e2e/focus-ring.spec.ts`, the board, this checkpoint (+ vi), the
-  FIX1-FREEZE results and evidence, the regate record and evidence, the FIX2 and
-  FIX2-FREEZE records, the FIX2 evidence.
+- WP5-UX2-FIX2-FREEZE done: a6437943403fc416240fd13a787a8c4748af3e84 on main, pushed (190
+  paths incl. the REGATE evidence; digests 229df806, 815 files; every check exit 0; one
+  empty heredoc fed to cat).
+- Running: WP5-UX2-REGATE2 (verifier, sonnet) on a643794 / 229df806 (WP5 gate items with
+  the drill, boundary, dist identity with b1b725b, the one-file fix scope, a sweep inside
+  and outside the window). Then the fresh opus WP5-UX2-AUDIT2.
+- WP5-UX2-REGATE2 PASS (verifier, self-reported claude-sonnet-5-5; NAS NOT VERIFIED) on
+  a643794 / 229df806 (three forms equal): verify 1882; real-clock e2e 448/0/42; AC-13 x3
+  plus Tokyo and New York; drill 208/0, image
+  sha256:6d1844425345a6e64a962689c01c03143a225abf33df02bcdaa20c8dcc05695a (removed);
+  dist/server differs from 90b98ef only in timesheetCommands.js; dist/ byte-identical to
+  b1b725b; fix scope only focus-ring.spec.ts (+4/-0); 9 sweep runs 0 failed, including
+  the full suite at 2026-10-17 and 2026-12-31.
+- Board: current_source_digest 229df806; WP5-UX-AUDIT-AB9 and the six audits that pointed
+  to it now carry superseded_by WP5-UX2-AUDIT2.
+- WP5-UX2-AUDIT2 PASS (fresh opus, self-reported claude-opus-5-5; not the first round's
+  auditor) on a643794 / 229df806, no findings: 01-03 and R-UX2A-2 closed with its own
+  simulated-clock and ring probes; npm test 1882 x2; e2e 448/0/42 on the real clock and
+  outside the window; AC-13 1/1; 11 mutants, 14 catches in 15 runs; only the 11 fix paths
+  changed since d1a20a7, dist/server still differs from 90b98ef only in the three
+  message texts; risks R-UX2A-1, -3, -4, -5 and new optional R-UX2A2-1..4. Review:
+  `handoff/delivery/WP5_UX2_REVIEW2.md` (+ vi).
+- Re-accept in progress: STATE (WP5 on a643794 / 229df806, review WP5_UX2_REVIEW2) and
+  NEXT_ACTION (EN/VI) updated by the coordinator; running WP5-UX2-ACCEPT-DOCS (light,
+  sonnet: pilot packet identity and WP5 handoff, EN/VI); then the accept commit
+  WP5-UX2-ACCEPT and the flip to `software_ready`.
+- WP5-UX2-ACCEPT-DOCS done (light, self-reported claude-sonnet-5-5): pilot packet (EN/VI)
+  refreshed to a643794 / 229df806 / REGATE2 / image 6d184442 / AUDIT2 with corrected
+  server provenance; WP5 handoff (EN/VI) section "Re-acceptance after UI change round 2
+  (WP5-UX2)"; parity and preflight pass; digest unchanged. Background work left after
+  hand-back was stopped by the coordinator (TaskStop).
+- Next: WP5-UX2-ACCEPT (committer, alone; handoff only), then the board flips to
+  `software_ready` (that last flip stays uncommitted). **WP5 is re-accepted on
+  a643794 / 229df806; UI change round 2 is closed.** Next owner action: review the pilot
+  packet and answer D-1..D-15 (optional WP5-UX2-Q3).
+- Uncommitted now (handoff only): the board, STATE, NEXT_ACTION (+ vi), this checkpoint
+  (+ vi), the pilot packet and WP5 handoff pairs, the FIX2-FREEZE results and evidence,
+  the REGATE2, AUDIT2 and ACCEPT-DOCS records and evidence, the review pair, the ACCEPT
+  brief.
 
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 

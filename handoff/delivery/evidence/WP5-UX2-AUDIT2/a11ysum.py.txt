@@ -1,0 +1,70 @@
+"""Summarises the AUDIT2 a11y probe logs (AXE, WALK, ORDER, RING, ACTIVE lines). Usage: a11ysum.py <log>..."""
+import re
+import sys
+
+sys.stdout.reconfigure(encoding="utf-8")
+KEYS = ("stops", "no_ring", "hidden", "under24", "bar_under44", "opacity_below_1")
+for name in sys.argv[1:]:
+    text = open(name, encoding="utf-8", errors="replace").read()
+    lines = [line[len("AUDIT2 "):] for line in text.splitlines() if line.startswith("AUDIT2 ")]
+    axe = [line for line in lines if line.startswith("AXE ")]
+    walks = [line for line in lines if line.startswith("WALK ")]
+    rings = [line for line in lines if line.startswith("RING ")]
+    actives = [line for line in lines if line.startswith("ACTIVE ")]
+    orders = [line for line in lines if line.startswith("ORDER ")]
+    print(f"== {name.split('/')[-1]}")
+    for line in lines:
+        if line.startswith("a11y "):
+            print(f"  {line}")
+    per: dict[tuple[str, str], int] = {}
+    scans: dict[str, int] = {}
+    examples: dict[str, str] = {}
+    for line in axe:
+        project = re.search(r"project=(\w+)", line).group(1)
+        scans[project] = scans.get(project, 0) + 1
+        match = re.search(r"violations=(.*)$", line)
+        value = match.group(1) if match else "none"
+        if value == "none":
+            per[(project, "none")] = per.get((project, "none"), 0) + 1
+            continue
+        for part in value.split("; "):
+            rule = part.split("(")[0]
+            per[(project, rule)] = per.get((project, rule), 0) + 1
+            examples.setdefault(f"{project} {rule}", part[:260])
+    print(f"axe scans per project {scans}; scans per (project, rule or none) {per}")
+    for key, value in examples.items():
+        print(f"  example {key}: {value}")
+    totals = {key: 0 for key in KEYS}
+    sideways = set()
+    details = {}
+    for line in walks:
+        for key in KEYS:
+            match = re.search(rf"\b{key}=(\d+)", line)
+            if match:
+                totals[key] += int(match.group(1))
+        match = re.search(r"sideways=(-?\d+)", line)
+        if match:
+            sideways.add(int(match.group(1)))
+        match = re.search(r"details=(\[.*\])$", line)
+        if match and match.group(1) != "[]":
+            details[match.group(1)] = details.get(match.group(1), 0) + 1
+    print(f"walks {len(walks)}; totals {totals}; sideways values {sorted(sideways)}")
+    for detail, count in details.items():
+        print(f"  walk detail x{count}: {detail[:300]}")
+    order_pattern = re.compile(r"^.*?current_period=\d+ ")
+    print(f"distinct period-bar orders: {sorted({order_pattern.sub('', line) for line in orders})}")
+    lowest = None
+    for line in rings:
+        match = re.search(r"lowest=([\d.]+)", line)
+        if match:
+            value = float(match.group(1))
+            lowest = value if lowest is None else min(lowest, value)
+    print(f"inactive Today ring measurements {len(rings)}; lowest side (best of three depths) ring/card {lowest}")
+    for line in rings:
+        print(f"  {re.sub(r' outside=.*?ring', ' ring', line)[:330]}")
+    seen = set()
+    for line in actives:
+        key = re.sub(r"^.*?(color=)", r"\1", line)
+        if key not in seen:
+            seen.add(key)
+            print(f"  active Today: {key}")

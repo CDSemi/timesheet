@@ -1,0 +1,28 @@
+# Usage: bash mutrun.sh <mutation id> <run label> <kind: e2e|unit> <target: real|UTC ISO> [args...]
+# Applies one mutation in the scratch export $T/mut, rebuilds the client, runs the given tests, restores every mutated file from
+# git and checks it equals the clean export byte for byte. Log: out/72-<label>.txt
+. <task>/env.sh
+ID=$1; L=$2; KIND=$3; TARGET=$4; shift 4
+OUTF=$T/out/72-$L.txt
+: > $OUTF
+echo "== mutation $ID, run $L ($KIND, $TARGET), start $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $OUTF
+"$PY" -I $T/mutate.py $T/mut $ID >> $OUTF 2>&1 || { echo "mutation not applied" >> $OUTF; exit 3; }
+echo "-- mutated lines (diff -r export/src mut/src):" >> $OUTF
+diff -r $T/export/src $T/mut/src | sed "s|$T|<task>|g" >> $OUTF 2>&1
+if [ "$KIND" = "e2e" ]; then
+  (cd $T/mut && node.exe "$NPM_CLI" run build:client) > $T/out/72-$L-build.txt 2>&1
+  echo "build:client exit=$?" >> $OUTF
+  bash $T/run-shift.sh mut-$L $TARGET $T/mut "$@" >> $OUTF 2>&1
+else
+  (cd $T/mut && node.exe node_modules/vitest/vitest.mjs run "$@") >> $OUTF 2>&1
+  echo "vitest exit=$?" >> $OUTF
+fi
+for f in src/client/components/PeriodBar.tsx src/client/TimesheetScreen.tsx src/client/styles.css src/client/components/ClockOutDialog.tsx src/client/components/ClockPanel.tsx; do
+  git -C $REPO show $SHA:$f > $T/mut/$f
+  if cmp -s $T/mut/$f $T/export/$f; then echo "restored $f: identical to the clean export" >> $OUTF; else echo "restored $f: DIFFERS" >> $OUTF; fi
+done
+if [ "$KIND" = "e2e" ]; then
+  (cd $T/mut && node.exe "$NPM_CLI" run build:client) > $T/out/72-$L-rebuild.txt 2>&1
+  echo "rebuild after restore exit=$?" >> $OUTF
+fi
+echo "== end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $OUTF

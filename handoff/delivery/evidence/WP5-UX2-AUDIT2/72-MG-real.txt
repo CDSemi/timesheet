@@ -1,0 +1,91 @@
+== mutation MG-own-route-in-shared, run MG-real (e2e, real), start 2026-10-15T13:38:50Z
+MG-own-route-in-shared: src/client/TimesheetScreen.tsx: applied
+-- mutated lines (diff -r export/src mut/src):
+diff -r <task>/export/src/client/TimesheetScreen.tsx <task>/mut/src/client/TimesheetScreen.tsx
+165c165
+<       request<CurrentPeriods>('GET', '/periods/current')
+---
+>       ownRequest<CurrentPeriods>('GET', '/periods/current')
+build:client exit=0
+== mut-MG-real: real start 2026-10-15T13:38:51Z, simulated start real, AB8_SHIFT_MS=0, export mut
+process clock 2026-10-15T13:38:51.124Z (Date.now 1792071531134); America/Los_Angeles Thu, 2026-10-15, 06:38:51; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/today.spec.ts -g re-read --output=<task>/pw-mut-MG-real
+
+Running 6 tests using 2 workers
+
+  ok 1 [desktop] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (2.3s)
+  ok 2 [mobile] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (2.4s)
+  ok 3 [desktop] › tests\e2e\today.spec.ts:660:1 › the periods are re-read when the window regains focus or the tab becomes visible (the person's own view) (3.1s)
+  ok 4 [mobile] › tests\e2e\today.spec.ts:660:1 › the periods are re-read when the window regains focus or the tab becomes visible (the person's own view) (3.1s)
+  x  5 [desktop] › tests\e2e\today.spec.ts:665:1 › the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view) (1.5m)
+  x  6 [mobile] › tests\e2e\today.spec.ts:665:1 › the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view) (1.5m)
+
+
+  1) [desktop] › tests\e2e\today.spec.ts:665:1 › the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view) 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: page.waitForResponse: Test timeout of 90000ms exceeded.
+
+      534 |
+      535 | /** The next response of the server's periods route (set up before the action that causes it). */
+    > 536 | const periodsResponse = (page: Page, path: string) => page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === path);
+          |                                                            ^
+      537 |
+      538 | test('a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself', async ({
+      539 |   page,
+        at periodsResponse (<task>\mut\tests\e2e\today.spec.ts:536:60)
+        at expectRefreshTriggers (<task>\mut\tests\e2e\today.spec.ts:626:14)
+        at <task>\mut\tests\e2e\today.spec.ts:678:3
+
+    Error Context: ..\pw-mut-MG-real\today-the-periods-are-re-r-0068c-omes-visible-a-shared-view--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MG-real\today-the-periods-are-re-r-0068c-omes-visible-a-shared-view--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MG-real\today-the-periods-are-re-r-0068c-omes-visible-a-shared-view--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\today.spec.ts:665:1 › the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view) 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: page.waitForResponse: Test timeout of 90000ms exceeded.
+
+      534 |
+      535 | /** The next response of the server's periods route (set up before the action that causes it). */
+    > 536 | const periodsResponse = (page: Page, path: string) => page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === path);
+          |                                                            ^
+      537 |
+      538 | test('a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself', async ({
+      539 |   page,
+        at periodsResponse (<task>\mut\tests\e2e\today.spec.ts:536:60)
+        at expectRefreshTriggers (<task>\mut\tests\e2e\today.spec.ts:626:14)
+        at <task>\mut\tests\e2e\today.spec.ts:678:3
+
+    Error Context: ..\pw-mut-MG-real\today-the-periods-are-re-r-0068c-omes-visible-a-shared-view--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MG-real\today-the-periods-are-re-r-0068c-omes-visible-a-shared-view--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MG-real\today-the-periods-are-re-r-0068c-omes-visible-a-shared-view--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\today.spec.ts:665:1 › the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view) 
+    [mobile] › tests\e2e\today.spec.ts:665:1 › the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view) 
+  4 passed (1.6m)
+exit=1
+process clock 2026-10-15T13:40:29.510Z (Date.now 1792071629520); America/Los_Angeles Thu, 2026-10-15, 06:40:29; shift ms 0; instanceof true
+== mut-MG-real real end 2026-10-15T13:40:29Z
+restored src/client/components/PeriodBar.tsx: identical to the clean export
+restored src/client/TimesheetScreen.tsx: identical to the clean export
+restored src/client/styles.css: identical to the clean export
+restored src/client/components/ClockOutDialog.tsx: identical to the clean export
+restored src/client/components/ClockPanel.tsx: identical to the clean export
+rebuild after restore exit=0
+== end 2026-10-15T13:40:30Z

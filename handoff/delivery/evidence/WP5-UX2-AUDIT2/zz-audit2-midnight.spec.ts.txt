@@ -1,0 +1,307 @@
+import type { Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import {
+  type CalendarSchedule,
+  createAccountByAdminApi,
+  expect,
+  type PeriodFacts,
+  type PeriodsCurrent,
+  SeedClient,
+  seedSecondCalendar,
+  starterPolicyBody,
+  test,
+} from './fixtures.ts';
+
+/*
+ * WP5-UX2-AUDIT2 task-local probe (never part of the repository). Finding WP5-UX2-AUDIT-01: a page left open across the
+ * reporting-zone midnight. Run under the FIX10 simulated wall clock (shiftclock.mjs) a minute or two before a midnight. The
+ * browser clock is NOT shifted (real 2026-10-15) and the device zone is far from the reporting zone, so any use of the device
+ * date or zone would show. Every /api request of each page is recorded with the time it was made.
+ */
+
+const us = (date: string) => `${date.slice(5, 7)}/${date.slice(8, 10)}/${date.slice(0, 4)}`;
+const range = (period: PeriodFacts) => `${us(period.period_start)}→ to ${us(period.period_end)}`;
+const plain = (period: PeriodFacts) => `${us(period.period_start)} to ${us(period.period_end)}`;
+const weekday = (date: string) => new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
+const contains = (period: PeriodFacts, date: string) => period.period_start <= date && date <= period.period_end;
+const isWindow = (periods: PeriodsCurrent) => periods.current.payroll_date !== periods.in_progress.payroll_date;
+const bar = (page: Page) => page.locator('.period-bar');
+const todayButton = (page: Page) => bar(page).getByRole('button', { name: 'Today', exact: true });
+const currentButton = (page: Page) => bar(page).getByRole('button', { name: 'Current period', exact: true });
+const periodName = (page: Page) => bar(page).locator('.period-name');
+const jumpStatus = (page: Page) => page.locator('[data-period-jump-status]');
+const log = (line: string) => console.log(`AUDIT2 ${line}`);
+
+function secondsToMidnight(zone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date());
+  const part = (type: string) => Number(parts.find((entry) => entry.type === type)?.value ?? Number.NaN);
+  return 86_400 - (part('hour') * 3600 + part('minute') * 60 + part('second'));
+}
+
+interface Recorded {
+  at: string;
+  call: string;
+}
+
+function recordApi(page: Page): Recorded[] {
+  const list: Recorded[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/api/')) list.push({ at: new Date().toISOString(), call: `${request.method()} ${url.pathname}` });
+  });
+  return list;
+}
+
+const calls = (list: Recorded[], from: number) => list.slice(from).map((entry) => entry.call);
+
+async function tagDate(page: Page): Promise<string | null> {
+  const tagged = page.locator('[data-sheet] [data-day].today');
+  return (await tagged.count()) === 0 ? null : tagged.getAttribute('data-day');
+}
+
+async function state(page: Page): Promise<string> {
+  const name = await periodName(page).textContent();
+  const disabled = await todayButton(page).getAttribute('aria-disabled');
+  const description = await todayButton(page).evaluate((element) => {
+    const id = element.getAttribute('aria-describedby');
+    return id === null ? '' : (element.ownerDocument.getElementById(id)?.textContent ?? '');
+  });
+  const current = await currentButton(page).count();
+  const status = await jumpStatus(page).textContent();
+  return `period="${name}" today_aria_disabled=${disabled} today_description="${description}" tag=${await tagDate(page)} current_period_button=${current} live="${status}"`;
+}
+
+async function deviceDate(page: Page): Promise<string> {
+  return page.evaluate('new Intl.DateTimeFormat("en-CA").format(new Date())');
+}
+
+async function waitForNewDate(read: () => Promise<PeriodsCurrent>, old: string): Promise<PeriodsCurrent> {
+  let after = await read();
+  await expect
+    .poll(
+      async () => {
+        after = await read();
+        return after.today_local;
+      },
+      { message: 'the server date passes the reporting-zone midnight', timeout: 240_000, intervals: [1000] },
+    )
+    .not.toBe(old);
+  return after;
+}
+
+/**
+ * The common flow on one page (own or shared): reach the inactive Today on the period that contains today, press it while not
+ * away (control), wait past midnight, show that the page is stale, then press Today and check the decision from the fresh answer.
+ * Two more tabs check the window-focus and the visibility re-reads.
+ */
+async function acrossMidnight(input: {
+  label: string;
+  page: Page;
+  tabs: Page[];
+  read: () => Promise<PeriodsCurrent>;
+  route: string;
+  forbidden: (call: string) => boolean;
+}) {
+  const { label, page, tabs, read, route, forbidden } = input;
+  const all = [page, ...tabs];
+  const records = all.map((tab) => recordApi(tab));
+  const before = await read();
+  log(`${label} start server_today=${before.today_local} zone=${before.reporting_zone} seconds_to_midnight=${secondsToMidnight(before.reporting_zone)} window=${isWindow(before)} current=${before.current.period_start}..${before.current.period_end} in_progress=${before.in_progress.period_start}..${before.in_progress.period_end}`);
+  for (const tab of all) await expect(tab.locator('[data-day]')).toHaveCount(14);
+  const landed = await read();
+  expect(landed.today_local, 'every tab landed before midnight (the crossing is real)').toBe(before.today_local);
+  log(`${label} device_date=${await deviceDate(page)} (browser clock is real, not shifted)`);
+  // Reach the inactive Today on the period that contains today, on every tab.
+  for (const tab of all) {
+    if ((await todayButton(tab).getAttribute('aria-disabled')) !== 'true') {
+      await todayButton(tab).click();
+      await expect(periodName(tab)).toHaveText(range(landed.in_progress));
+    }
+    await expect(todayButton(tab)).toHaveAttribute('aria-disabled', 'true');
+  }
+  const shown = landed.in_progress;
+  log(`${label} before-midnight ${await state(page)}`);
+  // Control: a press on the inactive Today while not away re-reads once and changes nothing.
+  await page.waitForTimeout(800);
+  const beforeControl = await state(page);
+  let mark = records[0]?.length ?? 0;
+  const controlRead = page.waitForResponse((response) => new URL(response.url()).pathname === route);
+  await todayButton(page).click({ force: true });
+  await controlRead;
+  await page.waitForTimeout(800);
+  const controlCalls = calls(records[0] ?? [], mark);
+  const afterControl = await state(page);
+  log(`${label} control-press calls=${JSON.stringify(controlCalls)} unchanged=${beforeControl === afterControl}`);
+  expect(controlCalls, 'a press while not away makes exactly one read of the periods').toEqual([`GET ${route}`]);
+  expect(afterControl, 'a press while not away changes nothing').toBe(beforeControl);
+  // Wait past midnight; nothing touches the pages meanwhile.
+  const waitMarks = records.map((list) => list.length);
+  const after = await waitForNewDate(read, before.today_local);
+  await page.waitForTimeout(1500);
+  const idleCalls = records.map((list, index) => calls(list, waitMarks[index] ?? 0));
+  log(`${label} after-midnight server_today=${after.today_local} window=${isWindow(after)} current=${after.current.period_start}..${after.current.period_end} in_progress=${after.in_progress.period_start}..${after.in_progress.period_end}`);
+  log(`${label} calls-while-idle ${JSON.stringify(idleCalls)}`);
+  for (const list of idleCalls) expect(list, 'no request while the pages sit untouched (no polling, no loop)').toEqual([]);
+  log(`${label} stale (no event yet) ${await state(page)}`);
+  await expect(todayButton(page), 'stale: the untouched page still shows the inactive Today').toHaveAttribute('aria-disabled', 'true');
+  const stillShows = contains(shown, after.today_local);
+  const expectAfter = async (tab: Page, how: string, pressed: boolean) => {
+    if (stillShows) {
+      await expect(periodName(tab)).toHaveText(range(shown));
+      await expect.poll(() => tagDate(tab), { message: `${how}: the tag moves to the new date` }).toBe(after.today_local);
+      await expect(todayButton(tab)).toHaveAttribute('aria-disabled', 'true');
+    } else if (pressed) {
+      await expect(periodName(tab)).toHaveText(range(after.in_progress));
+      await expect.poll(() => tagDate(tab), { message: `${how}: the tag is on the new date` }).toBe(after.today_local);
+      await expect(jumpStatus(tab)).toHaveText(`Showing today, ${weekday(after.today_local)} ${us(after.today_local)}, in the period ${plain(after.in_progress)}`);
+      await expect(todayButton(tab)).toHaveAttribute('aria-disabled', 'true');
+      await expect(tab.locator(`[data-day="${after.today_local}"]`)).toBeInViewport();
+    } else {
+      // A refresh alone never navigates: the old period stays, Today becomes active.
+      await expect(periodName(tab)).toHaveText(range(shown));
+      await expect(todayButton(tab)).not.toHaveAttribute('aria-disabled', /.*/);
+      await expect.poll(() => tagDate(tab)).toBe(null);
+    }
+    const currentExpected = isWindow(after) && (pressed && !stillShows ? after.in_progress : shown).payroll_date !== after.current.payroll_date;
+    await expect(currentButton(tab), `${how}: Current period follows the fresh periods`).toHaveCount(currentExpected ? 1 : 0);
+  };
+  // Tab 0: a press on the (stale) inactive Today.
+  mark = records[0]?.length ?? 0;
+  await todayButton(page).click({ force: true });
+  await expectAfter(page, 'press', true);
+  await page.waitForTimeout(800);
+  log(`${label} after-press ${await state(page)} calls=${JSON.stringify(calls(records[0] ?? [], mark))}`);
+  // Tab 1: the window regains focus (dispatched; the listener is the same as for a real focus).
+  if (tabs[0] !== undefined) {
+    const tab = tabs[0];
+    log(`${label} tab-focus stale ${await state(tab)}`);
+    mark = records[1]?.length ?? 0;
+    await tab.evaluate("window.dispatchEvent(new Event('focus'))");
+    await expectAfter(tab, 'window focus', false);
+    await tab.waitForTimeout(800);
+    log(`${label} tab-focus after ${await state(tab)} calls=${JSON.stringify(calls(records[1] ?? [], mark))}`);
+  }
+  // Tab 2: the tab becomes visible.
+  if (tabs[1] !== undefined) {
+    const tab = tabs[1];
+    log(`${label} tab-visible stale ${await state(tab)}`);
+    mark = records[2]?.length ?? 0;
+    await tab.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+    await expectAfter(tab, 'visibility', false);
+    await tab.waitForTimeout(800);
+    log(`${label} tab-visible after ${await state(tab)} calls=${JSON.stringify(calls(records[2] ?? [], mark))}`);
+  }
+  const offending = records.flatMap((list) => list.map((entry) => entry.call)).filter(forbidden);
+  log(`${label} forbidden-calls=${JSON.stringify(offending)}`);
+  expect(offending, 'no request outside the view').toEqual([]);
+}
+
+test.describe('own view, device zone Pacific/Kiritimati', () => {
+  test.use({ locale: 'en-US', timezoneId: 'Pacific/Kiritimati' });
+
+  test('AUDIT2 own view across the reporting-zone midnight', async ({ page, context, employeeSeed, signInThroughUi }, testInfo) => {
+    test.setTimeout(420_000);
+    const start = await employeeSeed.periodsCurrent();
+    const seconds = secondsToMidnight(start.reporting_zone);
+    log(`own project=${testInfo.project.name} seconds_to_midnight_at_start=${seconds}`);
+    expect(seconds, 'the probe runs a few minutes before the reporting-zone midnight (simulated clock)').toBeLessThanOrEqual(240);
+    await signInThroughUi();
+    const second = await context.newPage();
+    await second.goto('/');
+    const third = await context.newPage();
+    await third.goto('/');
+    await acrossMidnight({
+      label: `own/${testInfo.project.name}`,
+      page,
+      tabs: [second, third],
+      read: () => employeeSeed.periodsCurrent(),
+      route: '/api/periods/current',
+      forbidden: (call) => call.includes('/api/shared/'),
+    });
+  });
+});
+
+test.describe('own view, an active Today on the next period across its first midnight', () => {
+  test.use({ locale: 'en-US', timezoneId: 'Pacific/Kiritimati' });
+
+  test('AUDIT2 own view: Next before midnight, press the active Today after it', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+    test.setTimeout(420_000);
+    const start = await employeeSeed.periodsCurrent();
+    const seconds = secondsToMidnight(start.reporting_zone);
+    log(`edge project=${testInfo.project.name} seconds_to_midnight_at_start=${seconds} server_today=${start.today_local}`);
+    expect(seconds, 'the probe runs a few minutes before the reporting-zone midnight (simulated clock)').toBeLessThanOrEqual(240);
+    const records = recordApi(page);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await bar(page).getByRole('button', { name: 'Next period', exact: true }).click();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await expect(todayButton(page)).not.toHaveAttribute('aria-disabled', /.*/);
+    // Scroll to the end of the page, so a scroll to today's day would show.
+    await page.evaluate('window.scrollTo(0, document.documentElement.scrollHeight)');
+    log(`edge/${testInfo.project.name} before-midnight ${await state(page)} scrollY=${String(await page.evaluate('Math.round(window.scrollY)'))}`);
+    const after = await waitForNewDate(() => employeeSeed.periodsCurrent(), start.today_local);
+    log(`edge/${testInfo.project.name} after-midnight server_today=${after.today_local} in_progress=${after.in_progress.period_start}..${after.in_progress.period_end}`);
+    log(`edge/${testInfo.project.name} stale ${await state(page)}`);
+    const mark = records.length;
+    await todayButton(page).click();
+    await page.waitForTimeout(1500);
+    log(
+      `edge/${testInfo.project.name} after-press ${await state(page)} scrollY=${String(await page.evaluate('Math.round(window.scrollY)'))} today_in_viewport=${String(
+        await page.locator(`[data-day="${after.today_local}"]`).evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          return box.bottom > 0 && box.top < window.innerHeight;
+        }),
+      )} calls=${JSON.stringify(calls(records, mark))}`,
+    );
+    await expect.poll(() => tagDate(page)).toBe(after.today_local);
+  });
+});
+
+test.describe('shared view, owner reports in Pacific/Kiritimati, grantee device Pacific/Pago_Pago', () => {
+  test.use({ locale: 'en-US', timezoneId: 'Pacific/Pago_Pago' });
+
+  test('AUDIT2 shared view across the owner reporting-zone midnight', async ({ page, context, adminSeed, builtServer, signInPageAs }, testInfo) => {
+    test.setTimeout(420_000);
+    const calendar = await adminSeed.call<{
+      payroll: { anchor_payroll_date: string; cycle_days: number; period_start_offset_days: number; period_end_offset_days: number; due_offset_days: number; due_local_time: string };
+    }>('GET', '/api/calendar');
+    const schedule: CalendarSchedule = {
+      reportingZone: 'Pacific/Kiritimati',
+      anchorPayrollDate: calendar.payroll.anchor_payroll_date,
+      cycleDays: calendar.payroll.cycle_days,
+      periodStartOffsetDays: calendar.payroll.period_start_offset_days,
+      periodEndOffsetDays: calendar.payroll.period_end_offset_days,
+      dueOffsetDays: calendar.payroll.due_offset_days,
+      dueLocalTime: calendar.payroll.due_local_time,
+    };
+    const ownerAccount = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Far Owner', calendarId: seedSecondCalendar(builtServer, schedule) });
+    const ownerApi = await new SeedClient(builtServer.origin).signIn(ownerAccount.email, ownerAccount.password);
+    const ownerStart = await ownerApi.periodsCurrent();
+    await ownerApi.call('POST', '/api/policies', starterPolicyBody(addDays(ownerStart.today_local, -400)), 201);
+    const granteeAccount = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Near Grantee' });
+    const granteeApi = await new SeedClient(builtServer.origin).signIn(granteeAccount.email, granteeAccount.password);
+    const granteeStart = await granteeApi.periodsCurrent();
+    await granteeApi.call('POST', '/api/policies', starterPolicyBody(addDays(granteeStart.today_local, -400)), 201);
+    await ownerApi.call('POST', '/api/shares', { grantee_email: granteeAccount.email, items: { timesheets: 'edit', ot_read: false, pdf_download: false } }, 201);
+    const seconds = secondsToMidnight(ownerStart.reporting_zone);
+    log(`shared project=${testInfo.project.name} owner_zone=${ownerStart.reporting_zone} owner_today=${ownerStart.today_local} grantee_zone=${granteeStart.reporting_zone} grantee_today=${granteeStart.today_local} seconds_to_owner_midnight=${seconds}`);
+    expect(seconds, 'the probe runs a few minutes before the owner reporting-zone midnight (simulated clock)').toBeLessThanOrEqual(240);
+    const hash = `#/shared/${ownerAccount.id}/timesheet`;
+    await signInPageAs(granteeAccount, hash);
+    await expect(page.locator('[data-share-bar-title]')).toBeVisible();
+    const second = await context.newPage();
+    await second.goto(`/${hash}`);
+    const third = await context.newPage();
+    await third.goto(`/${hash}`);
+    await acrossMidnight({
+      label: `shared/${testInfo.project.name}`,
+      page,
+      tabs: [second, third],
+      read: () => ownerApi.periodsCurrent(),
+      route: `/api/shared/${ownerAccount.id}/periods/current`,
+      forbidden: (call) => call.startsWith('GET /api/periods/') || call.includes('/api/clock') || call.startsWith('GET /api/timesheets') || call.startsWith('POST /api/clock'),
+    });
+    const granteeAfter = await granteeApi.periodsCurrent();
+    log(`shared project=${testInfo.project.name} grantee_today_after=${granteeAfter.today_local} (the grantee's own date did not move: ${granteeAfter.today_local === granteeStart.today_local})`);
+  });
+});

@@ -1,0 +1,27 @@
+# Usage: bash sweep.sh   (run after the real-clock main run and rest; sequential, each run with its own output folder)
+# America/Los_Angeles instants converted to UTC (PDT -7 until 2026-11-01 02:00, PST -8 after; 2027-03-14 02:00 PST->PDT).
+cd <task>
+run() {
+  label=$1; instant=$2; shift 2
+  bash run-shift.sh "$label" "$instant" "$@" > "logs/sweep-$label.txt" 2>&1
+  echo "$label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/sweep-progress.txt
+}
+FOUR="tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/shell.spec.ts tests/e2e/sharing.spec.ts tests/e2e/focus-ring.spec.ts"
+# Control first: the server reports the simulated today_local.
+cp zz-control.spec.ts export/tests/e2e/zz-control.spec.ts
+CONTROL_TODAY=2026-10-30 bash run-shift.sh ctl-p 2026-10-30T17:00:00Z tests/e2e/zz-control.spec.ts > logs/control-p.txt 2>&1
+bash run-shift.sh ctl-real real tests/e2e/zz-control.spec.ts > logs/control-real.txt 2>&1
+rm -f export/tests/e2e/zz-control.spec.ts
+# Midnight e2e of finding 01 (40 s before the reporting-zone midnight)
+run mid-1025 2026-10-26T06:59:20Z tests/e2e/today.spec.ts -g "left open across"
+run mid-1031 2026-11-01T06:59:20Z tests/e2e/today.spec.ts -g "left open across"
+# FULL suite, both projects
+run full-1026-0030 2026-10-26T07:30:00Z
+run full-1017-1000 2026-10-17T17:00:00Z
+run full-1231-2330 2027-01-01T07:30:00Z
+# Four specs, both projects
+run four-1027-1800 2026-10-28T01:00:00Z $FOUR
+run four-1101-0130 2026-11-01T08:30:00Z $FOUR
+run four-0314-0330 2027-03-14T10:30:00Z $FOUR
+run four-0101-0030 2027-01-01T08:30:00Z $FOUR
+echo done > logs/sweep.done

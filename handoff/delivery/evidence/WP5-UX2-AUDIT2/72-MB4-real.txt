@@ -1,0 +1,153 @@
+== mutation MB4-no-guard, run MB4-real (e2e, real), start 2026-10-15T13:38:34Z
+MB4-no-guard: src/client/TimesheetScreen.tsx: applied
+-- mutated lines (diff -r export/src mut/src):
+diff -r <task>/export/src/client/TimesheetScreen.tsx <task>/mut/src/client/TimesheetScreen.tsx
+163d162
+<       if (refreshing.current) return;
+build:client exit=0
+== mut-MB4-real: real start 2026-10-15T13:38:35Z, simulated start real, AB8_SHIFT_MS=0, export mut
+process clock 2026-10-15T13:38:35.816Z (Date.now 1792071515826); America/Los_Angeles Thu, 2026-10-15, 06:38:35; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/today.spec.ts -g re-read --output=<task>/pw-mut-MB4-real
+
+Running 6 tests using 2 workers
+
+  ok 2 [desktop] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (2.3s)
+  ok 1 [mobile] › tests\e2e\today.spec.ts:538:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (2.3s)
+  x  4 [mobile] › tests\e2e\today.spec.ts:660:1 › the periods are re-read when the window regains focus or the tab becomes visible (the person's own view) (2.1s)
+  x  3 [desktop] › tests\e2e\today.spec.ts:660:1 › the periods are re-read when the window regains focus or the tab becomes visible (the person's own view) (2.1s)
+  x  5 [desktop] › tests\e2e\today.spec.ts:665:1 › the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view) (2.9s)
+  x  6 [mobile] › tests\e2e\today.spec.ts:665:1 › the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view) (3.0s)
+
+
+  1) [desktop] › tests\e2e\today.spec.ts:660:1 › the periods are re-read when the window regains focus or the tab becomes visible (the person's own view) 
+
+    Error: two focus events together read the periods once
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 2
+
+      635 |   await read;
+      636 |   await page.waitForTimeout(400);
+    > 637 |   expect(reads.count(), 'two focus events together read the periods once').toBe(1);
+          |                                                                            ^
+      638 |   // The tab becoming visible reads the periods. In the person's own view the check in/out state (WP5-UX2-T09) also reacts to that event:
+      639 |   // its own lookup reads the periods and the sheet's reload reads them again, so the screen's read is the third. A shared view has no
+      640 |   // check in/out, so there it is exactly one read.
+        at expectRefreshTriggers (<task>\mut\tests\e2e\today.spec.ts:637:76)
+        at <task>\mut\tests\e2e\today.spec.ts:662:3
+
+    Error Context: ..\pw-mut-MB4-real\today-the-periods-are-re-r-698a8-ible-the-person-s-own-view--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MB4-real\today-the-periods-are-re-r-698a8-ible-the-person-s-own-view--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MB4-real\today-the-periods-are-re-r-698a8-ible-the-person-s-own-view--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\e2e\today.spec.ts:665:1 › the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view) 
+
+    Error: two focus events together read the periods once
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 2
+
+      635 |   await read;
+      636 |   await page.waitForTimeout(400);
+    > 637 |   expect(reads.count(), 'two focus events together read the periods once').toBe(1);
+          |                                                                            ^
+      638 |   // The tab becoming visible reads the periods. In the person's own view the check in/out state (WP5-UX2-T09) also reacts to that event:
+      639 |   // its own lookup reads the periods and the sheet's reload reads them again, so the screen's read is the third. A shared view has no
+      640 |   // check in/out, so there it is exactly one read.
+        at expectRefreshTriggers (<task>\mut\tests\e2e\today.spec.ts:637:76)
+        at <task>\mut\tests\e2e\today.spec.ts:678:3
+
+    Error Context: ..\pw-mut-MB4-real\today-the-periods-are-re-r-0068c-omes-visible-a-shared-view--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MB4-real\today-the-periods-are-re-r-0068c-omes-visible-a-shared-view--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MB4-real\today-the-periods-are-re-r-0068c-omes-visible-a-shared-view--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [mobile] › tests\e2e\today.spec.ts:660:1 › the periods are re-read when the window regains focus or the tab becomes visible (the person's own view) 
+
+    Error: two focus events together read the periods once
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 2
+
+      635 |   await read;
+      636 |   await page.waitForTimeout(400);
+    > 637 |   expect(reads.count(), 'two focus events together read the periods once').toBe(1);
+          |                                                                            ^
+      638 |   // The tab becoming visible reads the periods. In the person's own view the check in/out state (WP5-UX2-T09) also reacts to that event:
+      639 |   // its own lookup reads the periods and the sheet's reload reads them again, so the screen's read is the third. A shared view has no
+      640 |   // check in/out, so there it is exactly one read.
+        at expectRefreshTriggers (<task>\mut\tests\e2e\today.spec.ts:637:76)
+        at <task>\mut\tests\e2e\today.spec.ts:662:3
+
+    Error Context: ..\pw-mut-MB4-real\today-the-periods-are-re-r-698a8-ible-the-person-s-own-view--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MB4-real\today-the-periods-are-re-r-698a8-ible-the-person-s-own-view--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MB4-real\today-the-periods-are-re-r-698a8-ible-the-person-s-own-view--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [mobile] › tests\e2e\today.spec.ts:665:1 › the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view) 
+
+    Error: two focus events together read the periods once
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 2
+
+      635 |   await read;
+      636 |   await page.waitForTimeout(400);
+    > 637 |   expect(reads.count(), 'two focus events together read the periods once').toBe(1);
+          |                                                                            ^
+      638 |   // The tab becoming visible reads the periods. In the person's own view the check in/out state (WP5-UX2-T09) also reacts to that event:
+      639 |   // its own lookup reads the periods and the sheet's reload reads them again, so the screen's read is the third. A shared view has no
+      640 |   // check in/out, so there it is exactly one read.
+        at expectRefreshTriggers (<task>\mut\tests\e2e\today.spec.ts:637:76)
+        at <task>\mut\tests\e2e\today.spec.ts:678:3
+
+    Error Context: ..\pw-mut-MB4-real\today-the-periods-are-re-r-0068c-omes-visible-a-shared-view--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MB4-real\today-the-periods-are-re-r-0068c-omes-visible-a-shared-view--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MB4-real\today-the-periods-are-re-r-0068c-omes-visible-a-shared-view--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    [desktop] › tests\e2e\today.spec.ts:660:1 › the periods are re-read when the window regains focus or the tab becomes visible (the person's own view) 
+    [desktop] › tests\e2e\today.spec.ts:665:1 › the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view) 
+    [mobile] › tests\e2e\today.spec.ts:660:1 › the periods are re-read when the window regains focus or the tab becomes visible (the person's own view) 
+    [mobile] › tests\e2e\today.spec.ts:665:1 › the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view) 
+  2 passed (12.3s)
+exit=1
+process clock 2026-10-15T13:38:48.539Z (Date.now 1792071528549); America/Los_Angeles Thu, 2026-10-15, 06:38:48; shift ms 0; instanceof true
+== mut-MB4-real real end 2026-10-15T13:38:48Z
+restored src/client/components/PeriodBar.tsx: identical to the clean export
+restored src/client/TimesheetScreen.tsx: identical to the clean export
+restored src/client/styles.css: identical to the clean export
+restored src/client/components/ClockOutDialog.tsx: identical to the clean export
+restored src/client/components/ClockPanel.tsx: identical to the clean export
+rebuild after restore exit=0
+== end 2026-10-15T13:38:49Z

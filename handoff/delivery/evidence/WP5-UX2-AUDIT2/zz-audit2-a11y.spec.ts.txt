@@ -1,0 +1,211 @@
+import { readFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import * as shared from './contrast.ts';
+import { expect, type PeriodsCurrent, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX2-AUDIT2 task-local probe (never part of the repository). WCAG 2.2 AA of the period bar and the inactive Today after
+ * WP5-UX2-FIX1: an axe-core scan (task-local copy of axe-core 4.14.0, injected with the CSP bypassed in this probe context only),
+ * a keyboard walk of the Timesheet page, and the painted focus ring of the inactive Today, at 1440 (desktop project) and at 390
+ * and 320 (mobile project), in the light and dark theme and both manual overrides.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh', bypassCSP: true });
+
+const AXE = readFileSync(process.env.AUDIT2_AXE ?? '', 'utf8');
+const SHOTS = process.env.AUDIT2_SHOTS === '1';
+const log = (line: string) => console.log(`AUDIT2 ${line}`);
+const bar = (page: Page) => page.locator('.period-bar');
+const todayButton = (page: Page) => bar(page).getByRole('button', { name: 'Today', exact: true });
+const nextButton = (page: Page) => bar(page).getByRole('button', { name: 'Next period', exact: true });
+const isWindow = (periods: PeriodsCurrent) => periods.current.payroll_date !== periods.in_progress.payroll_date;
+
+const SITUATIONS = [
+  { name: 'light', scheme: 'light', stored: null },
+  { name: 'dark', scheme: 'dark', stored: null },
+  { name: 'light-device-manual-dark', scheme: 'light', stored: 'dark' },
+  { name: 'dark-device-manual-light', scheme: 'dark', stored: 'light' },
+] as const;
+
+interface Stop {
+  description: string;
+  ring: string;
+  visiblePoints: number;
+  width: number;
+  height: number;
+  opacity: number;
+  inPeriodBar: boolean;
+}
+
+const STOP_SCRIPT = `(() => {
+  const element = document.activeElement;
+  if (element === null || element === document.body) return null;
+  const describe = (node) => {
+    const name = (node.getAttribute('aria-label') ?? node.textContent ?? '').trim().replace(/\\s+/g, ' ').slice(0, 40);
+    return node.tagName.toLowerCase() + (node.getAttribute('type') ? '[' + node.getAttribute('type') + ']' : '') + ' "' + name + '"';
+  };
+  const ringOf = (node) => {
+    const style = getComputedStyle(node);
+    const hasShadow = style.boxShadow !== 'none' && /\\d+px/.test(style.boxShadow);
+    // A transparent outline (kept for forced-colors mode) is not a visible ring.
+    const transparent = style.outlineColor === 'transparent' || /rgba\\([^)]*,\\s*0\\)$/.test(style.outlineColor);
+    const hasOutline = style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0 && !transparent;
+    return hasShadow || hasOutline;
+  };
+  let painter = null;
+  for (let node = element, depth = 0; node !== null && depth < 3; node = node.parentElement, depth += 1) {
+    if (ringOf(node)) { painter = node; break; }
+  }
+  let opacity = 1;
+  for (let node = painter ?? element; node !== null; node = node.parentElement) opacity *= parseFloat(getComputedStyle(node).opacity);
+  const box = (painter ?? element).getBoundingClientRect();
+  const own = element.getBoundingClientRect();
+  const points = [[0.5, 0.5], [0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85]];
+  let visible = 0;
+  for (const [fx, fy] of points) {
+    const x = box.left + box.width * fx;
+    const y = box.top + box.height * fy;
+    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+    const hit = document.elementFromPoint(x, y);
+    if (hit !== null && (hit === element || element.contains(hit) || hit.contains(element) || (painter !== null && (painter === hit || painter.contains(hit))))) visible += 1;
+  }
+  return {
+    description: describe(element),
+    ring: painter === null ? 'none' : (painter === element ? 'self' : 'ancestor ' + painter.tagName.toLowerCase()),
+    visiblePoints: visible,
+    width: Math.round(own.width * 10) / 10,
+    height: Math.round(own.height * 10) / 10,
+    opacity,
+    inPeriodBar: element.closest('.period-bar') !== null,
+  };
+})()`;
+
+async function walk(page: Page, limit = 140): Promise<Stop[]> {
+  await page.evaluate('window.scrollTo(0, 0)');
+  // Start the sequential navigation at the very top of the document (a temporary focus target, removed at once).
+  await page.evaluate("(() => { const start = document.createElement('div'); start.tabIndex = -1; document.body.prepend(start); start.focus(); start.remove(); })()");
+  const stops: Stop[] = [];
+  let first: string | null = null;
+  for (let index = 0; index < limit; index += 1) {
+    await page.keyboard.press('Tab');
+    await page.waitForTimeout(40);
+    const stop = await page.evaluate<Stop | null>(STOP_SCRIPT);
+    if (stop === null) break;
+    const key = `${stop.description}@${index}`;
+    if (first === null) first = stop.description;
+    else if (stop.description === first && index > 5) break;
+    stops.push(stop);
+    void key;
+  }
+  return stops;
+}
+
+async function axe(page: Page): Promise<string> {
+  await page.addScriptTag({ content: AXE });
+  const result = await page.evaluate<{ violations: Array<{ id: string; impact: string; nodes: Array<{ target: string[] }> }> }>(
+    "axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] }, resultTypes: ['violations'] })",
+  );
+  return result.violations.map((violation) => `${violation.id}(${violation.impact})x${violation.nodes.length}[${violation.nodes.slice(0, 3).map((node) => node.target.join(' ')).join(' | ')}]`).join('; ');
+}
+
+async function inactiveTodayRing(page: Page): Promise<string> {
+  const today = todayButton(page);
+  // Reach it by keyboard from the control before it (Next period), as a user does.
+  await nextButton(page).focus();
+  await page.keyboard.press('Tab');
+  await expect(today).toBeFocused();
+  await page.waitForTimeout(400);
+  const box = await today.boundingBox();
+  if (box === null) return 'no box';
+  const card = await shared.tokenColour(page, '--card');
+  const accent = await shared.tokenColour(page, '--accent');
+  const samples: string[] = [];
+  let lowest = Number.POSITIVE_INFINITY;
+  // The ring is a 1px card gap and 2px of accent outside the border box. The 1x1 clip snaps to device pixels, so each side is
+  // sampled at three depths inside the accent band (1.0, 1.75 and 2.5 px out) and the strongest pixel of the side counts.
+  for (const [name, dx, dy, ox, oy] of [
+    ['left', -1, 0, box.x, box.y + box.height / 2],
+    ['right', 1, 0, box.x + box.width, box.y + box.height / 2],
+    ['top', 0, -1, box.x + box.width / 2, box.y],
+    ['bottom', 0, 1, box.x + box.width / 2, box.y + box.height],
+  ] as const) {
+    let best = 0;
+    let bestPixel: number[] = [];
+    for (const depth of [1.0, 1.75, 2.5]) {
+      const pixel = await shared.paintedPixel(page, ox + dx * depth, oy + dy * depth);
+      const ratio = shared.contrast(pixel, card);
+      if (ratio > best) {
+        best = ratio;
+        bestPixel = pixel.slice(0, 3);
+      }
+    }
+    lowest = Math.min(lowest, best);
+    samples.push(`${name} ${bestPixel.join(',')}=${best.toFixed(2)}`);
+  }
+  const outside = await shared.paintedPixel(page, box.x - 6, box.y + box.height / 2);
+  const style = await today.evaluate((element) => {
+    const computed = getComputedStyle(element);
+    let opacity = 1;
+    for (let node: Element | null = element; node !== null; node = node.parentElement) opacity *= parseFloat(getComputedStyle(node).opacity);
+    return `opacity_chain=${opacity} color=${computed.color} border=${computed.borderTopColor} background=${computed.backgroundColor} cursor=${computed.cursor}`;
+  });
+  const text = await shared.textContrast(today);
+  return `card=${card.slice(0, 3).join(',')} accent=${accent.slice(0, 3).join(',')} outside=${outside.slice(0, 3).join(',')} ring[${samples.join(' ')}] lowest=${lowest.toFixed(2)} text=${text.toFixed(2)} ${style}`;
+}
+
+for (const situation of SITUATIONS) {
+  test(`AUDIT2 a11y (${situation.name})`, async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+    test.setTimeout(600_000);
+    const desktop = testInfo.project.name === 'desktop';
+    const widths = desktop ? [1440] : [390, 320];
+    const periods = await employeeSeed.periodsCurrent();
+    await page.emulateMedia({ colorScheme: situation.scheme, reducedMotion: 'reduce' });
+    if (situation.stored !== null) await page.addInitScript(`try { localStorage.setItem('timesheet.theme', '${situation.stored}'); } catch {}`);
+    await page.setViewportSize({ width: widths[0] ?? 1440, height: desktop ? 900 : 844 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    log(`a11y project=${testInfo.project.name} situation=${situation.name} server_today=${periods.today_local} window=${isWindow(periods)}`);
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: desktop ? 900 : 844 });
+      for (const step of ['landing', 'next', 'next2'] as const) {
+        // Back to the landing period each time (a full reload; a same-hash goto would not reload), then the steps.
+        await page.reload();
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        await expect(bar(page).locator('.period-name')).toBeVisible();
+        if (step !== 'landing') await nextButton(page).click();
+        if (step === 'next2') await nextButton(page).click();
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        await page.waitForTimeout(500);
+        const inactive = (await todayButton(page).getAttribute('aria-disabled')) === 'true';
+        const current = await bar(page).getByRole('button', { name: 'Current period', exact: true }).count();
+        const prefix = `project=${testInfo.project.name} situation=${situation.name} width=${width} step=${step} today=${inactive ? 'inactive' : 'active'} current_period=${current}`;
+        const violations = await axe(page);
+        log(`AXE ${prefix} violations=${violations === '' ? 'none' : violations}`);
+        const stops = await walk(page);
+        const noRing = stops.filter((stop) => stop.ring === 'none');
+        const hidden = stops.filter((stop) => stop.visiblePoints === 0);
+        const small = stops.filter((stop) => stop.width < 24 || stop.height < 24);
+        const phoneSmall = desktop ? [] : stops.filter((stop) => stop.inPeriodBar && (stop.width < 44 || stop.height < 44));
+        const dimmed = stops.filter((stop) => stop.opacity < 1);
+        const barOrder = stops.filter((stop) => stop.inPeriodBar).map((stop) => stop.description);
+        const scroll = await page.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth');
+        log(
+          `WALK ${prefix} stops=${stops.length} no_ring=${noRing.length} hidden=${hidden.length} under24=${small.length} bar_under44=${phoneSmall.length} opacity_below_1=${dimmed.length} sideways=${String(scroll)} details=${JSON.stringify(
+            [...noRing, ...hidden, ...small, ...phoneSmall, ...dimmed].map((stop) => `${stop.description} ${stop.width}x${stop.height} ring=${stop.ring} vis=${stop.visiblePoints} op=${stop.opacity}`),
+          )}`,
+        );
+        log(`ORDER ${prefix} ${JSON.stringify(barOrder)}`);
+        if (inactive) {
+          const ring = await inactiveTodayRing(page);
+          log(`RING ${prefix} ${ring}`);
+          if (SHOTS && (situation.name === 'light' || situation.name === 'dark') && width !== 320 && step !== 'next2') {
+            const box = await bar(page).boundingBox();
+            if (box !== null) await page.screenshot({ path: screenshotPath(`audit2-inactive-today-${testInfo.project.name}-${situation.name}-${step}-synthetic.png`), clip: { x: Math.max(0, box.x), y: Math.max(0, box.y), width: Math.min(box.width, width), height: box.height } });
+          }
+        } else {
+          const style = await todayButton(page).evaluate((element) => `color=${getComputedStyle(element).color} border=${getComputedStyle(element).borderTopColor}`);
+          log(`ACTIVE ${prefix} ${style} text=${(await shared.textContrast(todayButton(page))).toFixed(2)}`);
+        }
+      }
+    }
+  });
+}

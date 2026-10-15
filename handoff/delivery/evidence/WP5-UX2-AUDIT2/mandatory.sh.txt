@@ -1,0 +1,19 @@
+# Mandatory static/unit checks in the clean export of a643794. Each step logs to out/05-<step>.txt; exits to out/05-exits.txt.
+. <task>/env.sh
+cd $T/export || exit 2
+: > $T/out/05-exits.txt
+echo "node $(node --version), start $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $T/out/05-exits.txt
+step() {
+  name=$1; shift
+  node.exe "$NPM_CLI" "$@" > $T/out/05-$name.txt 2>&1
+  rc=$?
+  dep=$(grep -ci "deprecat" $T/out/05-$name.txt)
+  echo "$name exit=$rc deprecation_lines=$dep end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $T/out/05-exits.txt
+}
+step ci ci
+step typecheck run typecheck
+step lint run lint
+step test run test
+step build run build
+step smoke run smoke
+step test2 run test

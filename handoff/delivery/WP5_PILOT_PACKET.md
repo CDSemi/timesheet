@@ -15,17 +15,19 @@ This is the concrete packet the owner reviews before authorizing real sending. E
 
 | Field | Value |
 |---|---|
-| Release commit (WP5-UX-FIX10-FREEZE, pushed; the WP5 snapshot re-accepted after the UI change round) | `90b98efc395c3894a21a909b6d361eadc6fc2bd9` |
-| Source digest (`npm run digest`, `handoff/` excluded; digest of record of WP5-UX-REGATE8) | `57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d`, 795 files; recomputed before and after this task, unchanged |
-| Gate and final audit | WP5-UX-REGATE8 PASS, NAS NOT VERIFIED ([task](tasks/WP5-UX-REGATE8.md)): real-clock full e2e 210 passed / 26 skipped / 0 failed; simulated-clock sweep of 7 instants, 0 failed; drill `--wp3` 208 PASS / 0 FAIL; 1,831 unit tests. WP5-UX-AUDIT-AB9 PASS, combined areas A and B ([review](WP5_UX_REVIEW_AB9.md)); it supersedes WP5-UX-AUDIT-A6 and the audits before it |
+| Release commit (WP5-UX2-FIX2-FREEZE, pushed; the WP5 snapshot re-accepted after UI change round 2) | `a6437943403fc416240fd13a787a8c4748af3e84` |
+| Source digest (`npm run digest`, `handoff/` excluded; digest of record of WP5-UX2-REGATE2) | `229df806aeaaa886ab11ee83556746ee65eda6c81a596dcd180d80d5d0b04db3`, 815 files; recomputed before and after this task, unchanged |
+| Gate and final audit | WP5-UX2-REGATE2 PASS, NAS NOT VERIFIED ([task](tasks/WP5-UX2-REGATE2.md)): real-clock full e2e 448 passed / 42 skipped / 0 failed; simulated-clock runs inside and outside the five-day window, 0 failed; drill `--wp3` 208 PASS / 0 FAIL; 1,882 unit tests. WP5-UX2-AUDIT2 PASS ([review](WP5_UX2_REVIEW2.md)); it follows WP5-UX2-AUDIT, FIX REQUIRED with three Low findings that the fix round closed ([review](WP5_UX2_REVIEW.md)), and it supersedes WP5-UX-AUDIT-AB9, the acceptance on `90b98ef` / `57e2974c…` |
 | Version in `package.json` | `0.1.0` (does not identify the release; the commit and digest do) |
-| Reference image ID (WP5-UX-REGATE8 drill build, development workstation, `linux/amd64`, 110,014,793 bytes; the image has been removed) | `sha256:dec7b4856a8220743c513a955a840d399e4be0d74970a89801ea39b6d7898327` |
+| Reference image ID (WP5-UX2-REGATE2 drill build, development workstation, `linux/amd64`, 110,024,344 bytes; the image has been removed) | `sha256:6d1844425345a6e64a962689c01c03143a225abf33df02bcdaa20c8dcc05695a` |
 | Image ID built on the NAS | `<image-id>` (the owner records it at build time, [runbook](../../docs/11_OPERATIONS_RUNBOOK.md) section 1 step 8; a rebuild of the same source gives another ID) |
 | Release declaration | none declared, no tag; recommended at the owner's pilot authorization; owner decision pending (D-14) |
 
 The reference image ID names the drill image of the gate on the developer workstation. It is not the NAS image, and that image was removed after the gate. A change of any file outside `handoff/` changes the commit and the digest, and this identity must then be refreshed.
 
 **UI change round (WP5-UX).** After the packet was first written at `014bd47`, the owner asked on 2026-10-08 for a more beautiful, easier UI with the Timesheet page laid out like the sample Excel workbook. The owner answered E-1..E-7 as recommended, and WP5-UX-Q1 and WP5-UX-Q2 with "a". The round changed the client UI and the tests only (plus a display-only hours:minutes formatter); there is no server change and no business-rule change. It was gated again (WP5-UX-REGATE8) and finally audited (WP5-UX-AUDIT-AB9, [review](WP5_UX_REVIEW_AB9.md)), which is why the identity above differs from the first release identity `014bd47` / `150420e7…`. The record is in [WP5 handoff](WP5_HANDOFF.md), section "Re-acceptance after the UI change round (WP5-UX)".
+
+**UI change round 2 (WP5-UX2).** On 2026-10-14 the owner asked for further Timesheet-page changes (highlight of the open day column, a lighter label-picker selection, a Light/Dark toggle in the main navigation, clearer hover on toggle buttons, Today and Current period buttons, a slide switch for "Show details"), then the C&D logo with a two-line wordmark, the check in/out controls in the phone top bar and "Check in/out" wording. WP5-UX2-Q1 was answered with both buttons (Today opens the period that contains today; Current period returns to the period the page opens on) and WP5-UX2-Q2 with "a" (outlines of the wordmark, lighter tints in the dark theme). The round changed the client UI, wording and tests, and the wording of three server error messages (plus one comment); there is no business-rule, calculation, schema, API or PDF change. It was gated again (WP5-UX2-REGATE2) and finally audited (WP5-UX2-AUDIT2, [review](WP5_UX2_REVIEW2.md)), which is why the identity above differs from `90b98ef` / `57e2974c…`. The record is in [WP5 handoff](WP5_HANDOFF.md), section "Re-acceptance after UI change round 2 (WP5-UX2)".
 
 Evidence for this packet is in `handoff/delivery/evidence/WP5-PILOT/` (index in section 11).
 
@@ -86,7 +88,7 @@ Recommended; owner decision pending (D-12): the first period is signed off by ha
 
 All samples were generated from a clean `git archive` export of commit `74d5bfe` (the gated freeze), built with `npm ci` and `build:server`, with the production services and job handlers, fixed clocks, capture mode and synthetic users at `example.invalid`. `PRODUCTION_SENDING_ENABLED` was never set and nothing was sent. The calendar is the synthetic seed calendar: period 2026-09-14 to 2026-09-27, payroll date 2026-10-02, reporting zone `America/Los_Angeles`. Real dates will differ.
 
-Provenance of these samples: produced at 74d5bfe (WP5-GATE). The email and PDF samples come from the server. `dist/server` (180 files) is byte-identical between 74d5bfe, 014bd47 and the release commit 90b98ef: 74d5bfe equals 014bd47 (WP5-RECHECK, 230 `dist/` files), 014bd47 equals 255ba17 (WP5-UX-AUDIT-A7), and 255ba17 equals 3670a6c and 90b98ef (WP5-UX-AUDIT-AB9, clean `npm ci` and `npm run build` exports, `diff -r` exit 0). The samples therefore still represent the release. The UI change round changed the client bundle only (the 46 `dist/domain` files are identical from 5e104e1 on; since 014bd47 only the display formatter `src/domain/format.ts` was added, +13 lines, WP5-UX-AUDIT-A6), so the screens differ from the samples' era while the messages and PDFs do not.
+Provenance of these samples: produced at 74d5bfe (WP5-GATE). The email and PDF samples come from the server. `dist/server` (180 files) is byte-identical between 74d5bfe, 014bd47 and 90b98ef: 74d5bfe equals 014bd47 (WP5-RECHECK, 230 `dist/` files), 014bd47 equals 255ba17 (WP5-UX-AUDIT-A7), and 255ba17 equals 3670a6c and 90b98ef (WP5-UX-AUDIT-AB9, clean `npm ci` and `npm run build` exports, `diff -r` exit 0). The release commit a643794 differs from them in `dist/server` only in the wording of three error messages in `services/timesheetCommands.js` and one comment (WP5-UX2-GATE, WP5-UX2-REGATE and WP5-UX2-REGATE2 evidence); no template or PDF change. The samples therefore still represent the release. The UI change round changed the client bundle only (the 46 `dist/domain` files are identical from 5e104e1 on; since 014bd47 only the display formatter `src/domain/format.ts` was added, +13 lines, WP5-UX-AUDIT-A6), so the screens differ from the samples' era while the messages and PDFs do not.
 
 Each message is saved as one `.txt` (subject, raw headers, decoded body, PDF facts), and each PDF page as a `*-synthetic.png` render. Every render was viewed after it was made. Each PDF has one page; its stored hash equals the captured attachment.
 
@@ -166,7 +168,7 @@ Application settings. The "documented default" column is the design default ([04
 
 Source: the container drill of the gate, synthetic data, capture mode, Docker Desktop on a developer workstation (`linux/amd64`), image `sha256:0addd2000b42...9fd8`. `npm run drill:container -- --wp3 <previous build>`: stages 33, 31, 57, 35, 27 and 23 checks = 208 PASS, 0 FAIL (`handoff/delivery/evidence/WP5-GATE/07-drill.txt`).
 
-Provenance of these figures: the table was first produced at 74d5bfe (WP5-GATE). The release commit 90b98ef passed the same container drill again in WP5-UX-REGATE8 (`--wp3`, 208 PASS / 0 FAIL, the same 208 checks, image `sha256:dec7b4856a8220743c513a955a840d399e4be0d74970a89801ea39b6d7898327`), so the pass counts hold for the release; the per-figure values below (milliseconds, byte counts, write counts) are the WP5-GATE run's; the WP5-UX-REGATE8 record states the check counts (33/31/57/35/27/23), not these values. The server code the drill exercises, `dist/server`, is byte-identical between 74d5bfe and 90b98ef (see section 3); the client changed in the UI round and is not part of the restore figures.
+Provenance of these figures: the table was first produced at 74d5bfe (WP5-GATE). The release commit a643794 passed the same container drill again in WP5-UX2-REGATE2 (`--wp3`, 208 PASS / 0 FAIL, the same 208 checks, image `sha256:6d1844425345a6e64a962689c01c03143a225abf33df02bcdaa20c8dcc05695a`), so the pass counts hold for the release; the per-figure values below (milliseconds, byte counts, write counts) are the WP5-GATE run's; the WP5-UX2-REGATE2 record states the check counts (33/31/57/35/27/23), not these values. The server code the drill exercises, `dist/server`, is byte-identical between 74d5bfe and 90b98ef and differs in a643794 only in three message texts and one comment (see section 3); the client changed in the UI rounds and is not part of the restore figures.
 
 | Figure | Value |
 |---|---|
@@ -213,9 +215,9 @@ The pilot is the first installation, so there is no older production schema or i
 
 | Field | Value |
 |---|---|
-| Release commit | `90b98efc395c3894a21a909b6d361eadc6fc2bd9` |
-| Source digest | `57e2974c35cc104f3c2cb5d930c24d9bb15b89661be395d16a827e64ee4b761d` (795 files, `handoff/` excluded) |
-| Image ID built on the NAS | `<image-id>` (reference build of the WP5-UX-REGATE8 drill, development machine, 110,014,793 bytes, removed after the gate: `sha256:dec7b4856a8220743c513a955a840d399e4be0d74970a89801ea39b6d7898327`) |
+| Release commit | `a6437943403fc416240fd13a787a8c4748af3e84` |
+| Source digest | `229df806aeaaa886ab11ee83556746ee65eda6c81a596dcd180d80d5d0b04db3` (815 files, `handoff/` excluded) |
+| Image ID built on the NAS | `<image-id>` (reference build of the WP5-UX2-REGATE2 drill, development machine, 110,024,344 bytes, removed after the gate: `sha256:6d1844425345a6e64a962689c01c03143a225abf33df02bcdaa20c8dcc05695a`) |
 | Pre-activation backup | `<backup-name>` (taken in runbook section 13 step 3) |
 | Manifest hash of that backup | `<manifest-sha256>` |
 | Separate-device copy of the backup and the capture-mode `<env-file>` | where it is kept (private copy) |
@@ -308,7 +310,8 @@ After the first real send, record provider acceptance and recipient receipt (fac
 - Section 4 lists documented defaults, not the owner's choices; the owner's values are not known here.
 - The reference image ID belongs to a build that was removed after the gate; the NAS build records its own.
 - The pilot has not run, the NAS is NOT VERIFIED, no authorization is requested or given, and there is no pilot result.
-- Optional backlog for the pilot fix round, by ID only (none blocks the re-acceptance): R-B7-1..R-B7-4 ([WP5_UX_REVIEW_B7](WP5_UX_REVIEW_B7.md)); R-AB8-1..R-AB8-4 ([WP5_UX_REVIEW_AB8](WP5_UX_REVIEW_AB8.md)); R-AB9-1..R-AB9-6 ([WP5_UX_REVIEW_AB9](WP5_UX_REVIEW_AB9.md)); and the B6 and A7 risks ([WP5_UX_REVIEW_B6](WP5_UX_REVIEW_B6.md), [WP5_UX_REVIEW_A7](WP5_UX_REVIEW_A7.md)).
+- Optional backlog for the pilot fix round, by ID only (none blocks the re-acceptance): R-B7-1..R-B7-4 ([WP5_UX_REVIEW_B7](WP5_UX_REVIEW_B7.md)); R-AB8-1..R-AB8-4 ([WP5_UX_REVIEW_AB8](WP5_UX_REVIEW_AB8.md)); R-AB9-1..R-AB9-6 ([WP5_UX_REVIEW_AB9](WP5_UX_REVIEW_AB9.md)); and the B6 and A7 risks ([WP5_UX_REVIEW_B6](WP5_UX_REVIEW_B6.md), [WP5_UX_REVIEW_A7](WP5_UX_REVIEW_A7.md)); from UI change round 2: R-UX2A-1..R-UX2A-5 ([WP5_UX2_REVIEW](WP5_UX2_REVIEW.md)) and R-UX2A2-1..R-UX2A2-4 ([WP5_UX2_REVIEW2](WP5_UX2_REVIEW2.md)).
+- Open optional owner question WP5-UX2-Q3 (does not block anything; default (a) keep): in the five days from the Monday after a period ends to its payroll Friday, the period that Today opens shows the badge "future"; option (b) would show "in progress" there (a small client wording change plus docs/04, server unchanged).
 
 ## 11. Evidence index
 

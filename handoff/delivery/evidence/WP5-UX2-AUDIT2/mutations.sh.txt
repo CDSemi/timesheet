@@ -1,0 +1,34 @@
+# The WP5-UX2-AUDIT2 mutation runs, one at a time, in the scratch copy $T/mut. Progress: out/72-progress.txt
+. <task>/env.sh
+P=$T/out/72-progress.txt
+: > $P
+m() {
+  echo "start $2 $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P
+  bash $T/mutrun.sh "$@"
+  echo "end $2 $(date -u +%Y-%m-%dT%H:%M:%SZ) $(grep -E '^exit=|vitest exit=' $T/out/72-$2.txt | tr '\n' ' ')" >> $P
+}
+# (The two unit mutations of the wording test, MD and MD2, ran earlier by hand with mutrun.sh: out/72-MD-unit.txt, 72-MD2-unit.txt.)
+# The inactive-press re-read removed: the real-clock branch of the midnight test, and its crossing branch under the preload.
+m MA-press-guard MA-real e2e real tests/e2e/today.spec.ts -g "left open across"
+m MA-press-guard MA-1025 e2e 2026-10-26T06:59:20Z tests/e2e/today.spec.ts -g "left open across"
+# The press decides from the stale periods (survives on the real clock by design; the preload crossing must catch it).
+m MF-stale-decision MF-real e2e real tests/e2e/today.spec.ts -g "left open across"
+m MF-stale-decision MF-1025 e2e 2026-10-26T06:59:20Z tests/e2e/today.spec.ts -g "left open across"
+# The focus or the visibility re-read removed, both removed, and the one-read-at-a-time guard removed.
+m MB1-no-focus MB1-real e2e real tests/e2e/today.spec.ts -g "re-read"
+m MB2-no-visibility MB2-real e2e real tests/e2e/today.spec.ts -g "re-read"
+m MB3-no-refresh MB3-1025 e2e 2026-10-26T06:59:20Z tests/e2e/today.spec.ts -g "left open across"
+m MB4-no-guard MB4-real e2e real tests/e2e/today.spec.ts -g "re-read"
+m MG-own-route-in-shared MG-real e2e real tests/e2e/today.spec.ts -g "re-read"
+# The opacity rule restored, and the inactive Today's ring removed: inside the window (real clock) and outside (2026-11-04).
+m MC-opacity MC-real e2e real tests/e2e/focus-ring.spec.ts -g "inactive Today"
+m MC-opacity MC-1104 e2e 2026-11-04T23:00:00Z tests/e2e/focus-ring.spec.ts -g "inactive Today"
+m ME-no-ring ME-real e2e real tests/e2e/focus-ring.spec.ts -g "inactive Today"
+m ME-no-ring ME-1104 e2e 2026-11-04T23:00:00Z tests/e2e/focus-ring.spec.ts -g "inactive Today"
+# Baseline (no mutation) of the same selections, for comparison.
+echo "start baseline $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P
+bash $T/run-shift.sh base-fr-1104 2026-11-04T23:00:00Z $T/mut tests/e2e/focus-ring.spec.ts -g "inactive Today" > $T/out/72-base-fr-1104.txt 2>&1
+bash $T/run-shift.sh base-today-real real $T/mut tests/e2e/today.spec.ts -g "left open across|re-read" > $T/out/72-base-today-real.txt 2>&1
+echo "end baseline $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P
+bash $T/digest.sh mut-after $T/mut
+echo "mutations done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P
