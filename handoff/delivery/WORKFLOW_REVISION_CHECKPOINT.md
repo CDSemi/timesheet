@@ -260,11 +260,32 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   describe the below-330px row and the new press behaviour; inactive dimming by colour,
   ring 6.09-6.79; wording unit test catches all 5 reverts; unit 1882; e2e desktop
   216/0/29, mobile 232/0/13; preflight and verify 0; digest ac1895d9 (815 files).
-- Next: WP5-UX2-FIX1-FREEZE (committer, alone), then WP5-UX2-REGATE and the fresh
-  WP5-UX2-AUDIT2. The optional owner question WP5-UX2-Q3 stays open (default a).
-- Uncommitted now: the FIX1 source and docs (11 paths), the board, this checkpoint
-  (+ vi), the T10-FREEZE results and evidence, the gate and audit records and evidence,
-  the review pair, the FIX1 and FIX1-FREEZE records, the FIX1 evidence.
+- WP5-UX2-FIX1-FREEZE done: b1b725b7361d55e7aed70656051359153e457b5c on main, pushed (418
+  paths incl. the gate, audit and FIX1 evidence; digests ac1895d9, 815 files; every check
+  exit 0; one stray `node -e`).
+- Running: WP5-UX2-REGATE (verifier, sonnet) on b1b725b / ac1895d9: WP5 gate items with
+  the drill (new release image), boundary, the 11-path fix scope, the findings observed
+  fixed, a reduced sweep and the round checks. Then the fresh opus WP5-UX2-AUDIT2. The
+  optional owner question WP5-UX2-Q3 stays open (default a).
+- WP5-UX2-REGATE FAIL (verifier, self-reported claude-sonnet-5-5) on b1b725b / ac1895d9:
+  everything passed (verify 1882, real-clock e2e 448/0, AC-13, drill 208 PASS with image
+  2d269f87…, boundary, fix scope, findings 01-03 and R-UX2A-2 observed fixed, round
+  checks) except the full simulated-clock runs outside the window (2026-10-17 and
+  2026-12-31): 8 failures each in the new `focus-ring.spec.ts:407` tests, whose focus step
+  only works on window days. The product is fine (direct focus probes show the full
+  ring). FIX1 had run only today.spec outside the window.
+- Coordinator decision: tests-only WP5-UX2-FIX2 (worker, sonnet) makes that focus step
+  calendar-independent and runs the full suite outside the window too; then FIX2-FREEZE,
+  WP5-UX2-REGATE2 and the fresh WP5-UX2-AUDIT2.
+- WP5-UX2-FIX2 done (worker, self-reported claude-sonnet-5-5; tests only): the
+  inactive-Today focus step is calendar-independent; focus-ring.spec passes at 10-17,
+  12-31, 10-26, 10-27 and the real clock; full e2e 448/0 on the real clock (after one
+  buffer-error rerun) and at 2026-10-17; unit 1882; verify 0; digest 229df806 (815
+  files).
+- Next: WP5-UX2-FIX2-FREEZE (committer, alone), then WP5-UX2-REGATE2 and WP5-UX2-AUDIT2.
+- Uncommitted now: `tests/e2e/focus-ring.spec.ts`, the board, this checkpoint (+ vi), the
+  FIX1-FREEZE results and evidence, the regate record and evidence, the FIX2 and
+  FIX2-FREEZE records, the FIX2 evidence.
 
 ## Update 2026-10-08: owner-requested UI change round (WP5)
 

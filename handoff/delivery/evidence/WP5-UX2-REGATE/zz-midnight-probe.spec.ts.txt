@@ -1,0 +1,52 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, test } from './fixtures.ts';
+
+/*
+ * WP5-UX2-REGATE probe (task-local, never part of the repository): observes finding WP5-UX2-AUDIT-01 with printed values.
+ * Run under the simulated-clock preload a few seconds before the reporting-zone midnight. The page signs in BEFORE midnight,
+ * the probe waits until the server's today_local changes, then (1) records the stale state, (2) presses Today,
+ * (3) records the period, the Today tag and the live-region text. A first inactive press BEFORE the midnight (control) must
+ * leave the sheet and the live region unchanged.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+const OUT = process.env.GATE_OUT ?? '';
+function note(line: string): void {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'obs-midnight.txt'), `${line}\n`);
+}
+
+test('observe the midnight press', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.setTimeout(240_000);
+  const project = testInfo.project.name;
+  const before = await employeeSeed.periodsCurrent();
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const today = page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true });
+  const name = page.locator('.period-bar .period-name');
+  const status = page.locator('[data-period-jump-status]');
+  const tag = async () => (await page.locator('[data-sheet] [data-day].today').count()) === 0 ? 'none' : await page.locator('[data-sheet] [data-day].today').getAttribute('data-day');
+  const state = async (label: string) => {
+    note(`[${project}] ${label}: server today_local=${(await employeeSeed.periodsCurrent()).today_local} period="${(await name.textContent())?.trim()}" todayTag=${await tag()} todayAriaDisabled=${await today.getAttribute('aria-disabled')} liveRegion="${(await status.textContent())?.trim()}"`);
+  };
+  note(`[${project}] server date at sign-in ${before.today_local}; clock ${new Date().toISOString()}`);
+  await state('signed in, before midnight');
+  // Control: a press while not away leaves the sheet and the live region unchanged.
+  if ((await today.getAttribute('aria-disabled')) === 'true') {
+    const nameBefore = await name.textContent();
+    const statusBefore = await status.textContent();
+    await today.click({ force: true });
+    await page.waitForTimeout(700);
+    expect(await name.textContent()).toBe(nameBefore);
+    expect(await status.textContent()).toBe(statusBefore);
+    await state('control: inactive press before midnight (unchanged)');
+  }
+  await expect
+    .poll(async () => (await employeeSeed.periodsCurrent()).today_local, { timeout: 150_000, intervals: [1000] })
+    .not.toBe(before.today_local);
+  await state('server date moved on, page not touched (stale)');
+  await today.click({ force: true });
+  await page.waitForTimeout(1200);
+  await state('after pressing Today');
+  await page.screenshot({ path: join(process.env.E2E_SCREENSHOT_DIR ?? '.', `regate-midnight-${project}-synthetic.png`), animations: 'disabled' });
+});

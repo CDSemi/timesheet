@@ -266,11 +266,32 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   10-31); tài liệu mô tả hàng Review dưới 330px và cách bấm mới; làm mờ bằng màu, viền
   focus 6.09-6.79; test chữ bắt cả 5 lần đổi ngược; unit 1882; e2e desktop 216/0/29,
   mobile 232/0/13; preflight và verify 0; digest ac1895d9 (815 file).
-- Tiếp theo: WP5-UX2-FIX1-FREEZE (committer, chạy một mình), rồi WP5-UX2-REGATE và audit
-  mới WP5-UX2-AUDIT2. Câu hỏi không bắt buộc WP5-UX2-Q3 vẫn mở (mặc định a).
-- Đang chưa commit: source và tài liệu FIX1 (11 đường dẫn), board, checkpoint này (+ en),
-  kết quả và bằng chứng T10-FREEZE, bản ghi và bằng chứng gate và audit, cặp review, bản
-  ghi FIX1 và FIX1-FREEZE, bằng chứng FIX1.
+- Xong WP5-UX2-FIX1-FREEZE: b1b725b7361d55e7aed70656051359153e457b5c trên main, đã push (418
+  đường dẫn, gồm bằng chứng gate, audit và FIX1; digest ac1895d9, 815 file; mọi kiểm tra
+  exit 0; một lần `node -e` thừa).
+- Đang chạy: WP5-UX2-REGATE (verifier, sonnet) trên b1b725b / ac1895d9: các mục gate WP5
+  có drill (image phát hành mới), ranh giới, phạm vi sửa 11 đường dẫn, kiểm các lỗi đã
+  sửa, quét rút gọn và các kiểm tra riêng của vòng. Sau đó audit opus mới WP5-UX2-AUDIT2.
+  Câu hỏi không bắt buộc WP5-UX2-Q3 vẫn mở (mặc định a).
+- WP5-UX2-REGATE FAIL (verifier, tự báo claude-sonnet-5-5) trên b1b725b / ac1895d9: mọi
+  mục đều đạt (verify 1882, e2e đồng hồ thật 448/0, AC-13, drill 208 PASS với image
+  2d269f87…, ranh giới, phạm vi sửa, lỗi 01-03 và R-UX2A-2 đã sửa, các kiểm tra của vòng)
+  trừ hai lần chạy toàn bộ với đồng hồ giả lập ngoài khoảng 5 ngày (2026-10-17 và
+  2026-12-31): mỗi lần 8 lỗi ở các test mới `focus-ring.spec.ts:407`, vì bước focus chỉ
+  chạy được trong khoảng 5 ngày. Sản phẩm không lỗi (focus trực tiếp vẫn thấy viền đầy
+  đủ). FIX1 chỉ chạy today.spec ngoài khoảng đó.
+- Quyết định coordinator: WP5-UX2-FIX2 chỉ sửa test (worker, sonnet) để bước focus không
+  phụ thuộc lịch và chạy toàn bộ test cả ngoài khoảng 5 ngày; rồi FIX2-FREEZE,
+  WP5-UX2-REGATE2 và audit mới WP5-UX2-AUDIT2.
+- Xong WP5-UX2-FIX2 (worker, tự báo claude-sonnet-5-5; chỉ sửa test): bước focus của Today
+  khi mờ không còn phụ thuộc lịch; focus-ring.spec đạt ở 10-17, 12-31, 10-26, 10-27 và
+  đồng hồ thật; e2e đầy đủ 448/0 với đồng hồ thật (sau một lần chạy lại vì lỗi bộ đệm) và
+  ở 2026-10-17; unit 1882; verify 0; digest 229df806 (815 file).
+- Tiếp theo: WP5-UX2-FIX2-FREEZE (committer, chạy một mình), rồi WP5-UX2-REGATE2 và
+  WP5-UX2-AUDIT2.
+- Đang chưa commit: `tests/e2e/focus-ring.spec.ts`, board, checkpoint này (+ en), kết quả
+  và bằng chứng FIX1-FREEZE, bản ghi và bằng chứng regate, bản ghi FIX2 và FIX2-FREEZE,
+  bằng chứng FIX2.
 
 ## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
 

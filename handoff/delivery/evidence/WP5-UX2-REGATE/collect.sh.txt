@@ -1,0 +1,37 @@
+. <task>/env.sh
+mkdir -p $E
+cd $T
+cp logs/control-p.txt out/03-control-p.txt
+cp logs/control-real.txt out/03-control-real.txt
+cp obs/obs-headers.txt out/62-obs-headers.txt
+cp obs/obs-bars.txt out/62-obs-bars.txt
+cp obs/obs-shared.txt out/62-obs-shared.txt
+cp obs/obs-targets.txt out/62-obs-targets.txt
+cp obs/obs-away-widths.txt out/62-obs-away-widths-real-clock.txt
+cp obs/obs-inactive-today.txt out/62-obs-inactive-today-real-clock.txt
+cp obs-old/obs-headers.txt out/62-obs-headers-old-90b98ef.txt
+cp obs-sim/obs-away-widths.txt out/62-obs-away-widths-sim-1026-0030.txt
+cp obs-sim/obs-away.txt out/62-obs-away-budget-sim-1026-0030.txt
+cp obs-sim/obs-inactive-today.txt out/62-obs-inactive-today-sim.txt
+cp obs-sim2/obs-inactive-today.txt out/62-obs-inactive-today-sim-1231.txt
+cp obs-sim/obs-midnight.txt out/62-obs-midnight.txt
+for f in logs/sweep-*.txt logs/rerun-focus-1017.txt logs/probe-real.txt logs/probe-real2.txt logs/probe-old.txt logs/probe-out-1017.txt logs/probe-win-1026.txt logs/probe-out-1231.txt logs/probe-mid-1025.txt logs/probe-mid-1031.txt logs/drill-run.txt logs/cmp-dist.txt; do
+  case "$f" in logs/sweep-main.txt) continue;; esac
+  cp $f out/$(basename $f)
+done
+cd $T/out
+for f in *.txt; do
+  case "$f" in ex-files.txt|ex-hashes.txt|ex-sorted.txt|lstree-sorted.txt|keys-list.txt|51-*-files.txt|51-*-hashes.txt|e2e-nonok.txt|e2e-ok-other.txt|userWording-copy.txt) continue;; esac
+  node $T/mask.mjs "$T/out/$f" "$E/$f"
+done
+for s in env.sh digest.sh run-main.sh run-rest.sh run-drill.sh run-shift.sh sweep.sh cmp-dist.sh cfg.sh keys.sh probes-sim.sh collect.sh; do node $T/mask.mjs "$T/$s" "$E/$s.txt"; done
+for s in mask.mjs zone.mjs run-tz.mjs tzprobe.mjs tzchild.mjs contrast5.mjs shiftclock.mjs probe-now.mjs; do node $T/mask.mjs "$T/$s" "$E/$s.txt"; done
+for s in zz-control.spec.ts zz-gate-probe.spec.ts zz-regate-probe.spec.ts zz-away-share.spec.ts zz-midnight-probe.spec.ts; do node $T/mask.mjs "$T/$s" "$E/$s.txt"; done
+# screenshots (synthetic only; at most six)
+cp $T/shots-probe-win-1026/regate-inactive-today-focus-desktop-light-synthetic.png $E/
+cp $T/shots-probe-win-1026/regate-inactive-today-focus-desktop-dark-synthetic.png $E/
+cp $T/shots-probe-out-1017/regate-inactive-today-focus-phone-light-synthetic.png $E/
+cp $T/shots-probe-out-1017/regate-inactive-today-focus-phone-dark-synthetic.png $E/
+cp $T/shots-probe-win-1026/regate-phone-320-away-period-bar-synthetic.png $E/
+cp $T/shots-probe-win-1026/regate-phone-320-away-first-screen-synthetic.png $E/
+ls $E | wc -l

@@ -1,0 +1,40 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, newPerson, test } from './fixtures.ts';
+
+/* WP5-UX2-GATE (task-local): the away state (Next pressed from the landing period) at 390x844, with and without a received share. */
+const OUT = process.env.GATE_OUT ?? '';
+const SHARE_ITEMS = { timesheets: 'view', ot_read: false, pdf_download: false };
+
+for (const [situation, zone] of [
+  ['zone note', 'Asia/Ho_Chi_Minh'],
+  ['no zone note', 'America/Los_Angeles'],
+] as const) {
+  for (const withShare of [false, true]) {
+    test.describe(`away ${situation} share=${withShare}`, () => {
+      test.use({ timezoneId: zone, locale: 'en-US' });
+      test('first day row above the tab bar', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+        test.skip(!isMobile, 'Phone only');
+        const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Tab Order User', signature: 'none' });
+        const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner', signature: 'none' });
+        if (withShare) await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
+        const periods = await me.api.call<{ today_local: string; current: { payroll_date: string }; in_progress: { payroll_date: string } }>('GET', '/api/periods/current');
+        await signInPageAs(me.account);
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        await page.getByRole('button', { name: 'Next period', exact: true }).click();
+        await expect(page.getByRole('button', { name: 'Current period', exact: true })).toHaveCount(1);
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        await page.evaluate('window.scrollTo(0, 0)');
+        const first = await page.locator('[data-day]').first().boundingBox();
+        const tabs = await page.locator('.shell-tabs').boundingBox();
+        const bar = await page.locator('header.shell-bar').boundingBox();
+        const bottom = (first?.y ?? 0) + (first?.height ?? 0);
+        const window = periods.current.payroll_date !== periods.in_progress.payroll_date;
+        const line = `AWAY ${situation} share=${withShare} today_local=${periods.today_local} window=${window} firstRowBottom=${bottom} tabBarTop=${tabs?.y} bar.h=${bar?.height} headroom=${((tabs?.y ?? 0) - bottom).toFixed(1)}`;
+        console.log(line);
+        if (OUT !== '') appendFileSync(join(OUT, 'obs-away.txt'), `${line}\n`);
+        expect(bottom).toBeLessThanOrEqual((tabs?.y ?? 0) + 0.5);
+      });
+    });
+  }
+}

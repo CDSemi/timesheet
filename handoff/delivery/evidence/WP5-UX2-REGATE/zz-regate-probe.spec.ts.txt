@@ -1,0 +1,114 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX2-REGATE probe (task-local, never part of the repository):
+ *  - the inactive Today with its focus ring, screenshots in light and dark (desktop and phone),
+ *  - the away state (Next period from the landing period, in the Current-period window) at 390/375/360/320: 44px targets,
+ *    no sideways scroll, the Review link row, the first day row against the tab bar, and a 320px screenshot.
+ */
+const OUT = process.env.GATE_OUT ?? '';
+function note(file: string, line: string): void {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, file), `${line}\n`);
+}
+const SHARE_ITEMS = { timesheets: 'view', ot_read: false, pdf_download: false };
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`inactive Today with its focus ring (${theme})`, async ({ page, adminSeed, builtServer, signInPageAs, isMobile }, testInfo) => {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Reviewer', signature: 'none' });
+    await signInPageAs(me.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const today = page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true });
+    if ((await today.getAttribute('aria-disabled')) !== 'true') {
+      await today.focus();
+      await page.keyboard.press('Enter');
+    }
+    await expect(today).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    if (!(await today.evaluate((element) => element === element.ownerDocument.activeElement))) {
+      // Outside the Current-period window Today is inactive on landing and nothing in the page has focus: the keyboard walk does not reach it.
+      note('obs-inactive-today.txt', `[${testInfo.project.name}] ${theme}: Shift+Tab then Tab did NOT focus Today (focus-ring spec step); focusing it directly`);
+      await page.keyboard.press('Shift');
+      await today.focus();
+    }
+    await expect(today).toBeFocused();
+    await page.waitForTimeout(600);
+    const style = await today.evaluate((element) => {
+      const s = getComputedStyle(element);
+      return { color: s.color, border: s.borderTopColor, shadow: s.boxShadow, outline: s.outlineStyle + ' ' + s.outlineColor + ' ' + s.outlineWidth, bg: s.backgroundColor };
+    });
+    note('obs-inactive-today.txt', `[${testInfo.project.name}] ${theme}: focused style ${JSON.stringify(style)}`);
+    await page.waitForTimeout(400);
+    const box = await today.boundingBox();
+    if (box === null) throw new Error('no box');
+    const clip = { x: Math.max(0, box.x - 24), y: Math.max(0, box.y - 16), width: Math.min(360, box.width + 160), height: box.height + 32 };
+    await page.screenshot({ path: screenshotPath(`regate-inactive-today-focus-${isMobile ? 'phone' : 'desktop'}-${theme}-synthetic.png`), clip, animations: 'disabled' });
+    const opacity = await today.evaluate((element) => getComputedStyle(element).opacity);
+    note('obs-inactive-today.txt', `[${testInfo.project.name}] ${theme}: opacity=${opacity} box=${Math.round(box.width)}x${Math.round(box.height)}`);
+  });
+}
+
+for (const width of [390, 375, 360, 320]) {
+  for (const withShare of [false, true]) {
+    test(`away state at ${width}px share=${withShare}: targets, scroll, Review row`, async ({ page, adminSeed, builtServer, signInPageAs, isMobile }, testInfo) => {
+      test.skip(!isMobile, 'Phone only');
+      test.setTimeout(120_000);
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+      const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Reviewer', signature: 'none' });
+      const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner', signature: 'none' });
+      if (withShare) await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
+      await signInPageAs(me.account);
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await page.getByRole('button', { name: 'Next period', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Current period', exact: true })).toHaveCount(1);
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await page.evaluate('window.scrollTo(0, 0)');
+      const facts = await page.evaluate(() => {
+        const rect = (selector: string) => {
+          const el = document.querySelector<HTMLElement>(selector);
+          if (el === null) return null;
+          const r = el.getBoundingClientRect();
+          return { x: r.x, y: r.y, w: r.width, h: r.height, text: (el.textContent ?? '').trim() };
+        };
+        const sel = 'button, a[href], select, input:not([type="checkbox"]):not([type="hidden"]), label.pick, label.inline, [role="button"], [role="tab"]';
+        const small: Array<{ name: string; w: number; h: number }> = [];
+        let count = 0;
+        for (const el of Array.from(document.querySelectorAll<HTMLElement>(sel))) {
+          const r = el.getBoundingClientRect();
+          const style = getComputedStyle(el);
+          if (r.width === 0 || r.height === 0 || style.visibility === 'hidden' || style.display === 'none') continue;
+          count += 1;
+          if (r.width < 44 || r.height < 44) small.push({ name: (el.textContent ?? '').trim().slice(0, 30) || el.getAttribute('aria-label') || el.tagName, w: Math.round(r.width), h: Math.round(r.height) });
+        }
+        return {
+          today: rect('[data-period-today]'),
+          current: rect('[data-period-current]'),
+          review: rect('.period-bar .review-link, .period-bar a[href*="review"]'),
+          tabs: rect('.shell-tabs'),
+          first: rect('[data-day]'),
+          bar: rect('header.shell-bar'),
+          scroll: document.documentElement.scrollWidth,
+          inner: window.innerWidth,
+          count,
+          small,
+        };
+      });
+      const reviewOwnRow = facts.review !== null && facts.today !== null && facts.review.y >= facts.today.y + facts.today.h - 1;
+      note(
+        'obs-away-widths.txt',
+        `[${testInfo.project.name}] width=${width} share=${withShare} today=${Math.round(facts.today?.w ?? 0)}x${Math.round(facts.today?.h ?? 0)}@y${Math.round(facts.today?.y ?? 0)} current=${Math.round(facts.current?.w ?? 0)}x${Math.round(facts.current?.h ?? 0)}@y${Math.round(facts.current?.y ?? 0)} review=${Math.round(facts.review?.w ?? 0)}x${Math.round(facts.review?.h ?? 0)}@y${Math.round(facts.review?.y ?? 0)} reviewOwnRow=${reviewOwnRow} reviewText="${facts.review?.text}" controls=${facts.count} below44=${facts.small.length} ${JSON.stringify(facts.small)} scrollWidth=${facts.scroll} innerWidth=${facts.inner} firstRowBottom=${((facts.first?.y ?? 0) + (facts.first?.h ?? 0)).toFixed(1)} tabBarTop=${facts.tabs?.y} bar.h=${facts.bar?.h}`,
+      );
+      expect(facts.small.length).toBe(0);
+      expect(facts.scroll).toBeLessThanOrEqual(facts.inner);
+      if (width === 320 && !withShare) {
+        await page.locator('.period-bar').screenshot({ path: screenshotPath('regate-phone-320-away-period-bar-synthetic.png'), animations: 'disabled' });
+        await page.screenshot({ path: screenshotPath('regate-phone-320-away-first-screen-synthetic.png'), animations: 'disabled' });
+      }
+    });
+  }
+}

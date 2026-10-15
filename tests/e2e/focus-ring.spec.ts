@@ -416,7 +416,11 @@ for (const situation of THEME_SITUATIONS) {
       await page.keyboard.press('Enter');
     }
     await expect(today).toHaveAttribute('aria-disabled', 'true');
+    // Calendar-independent focus step: outside that window Today is already inactive on landing and nothing has focus, so start from
+    // the button itself, step away and come back by keyboard (it must stay in the tab order while inactive).
+    await today.focus();
     await page.keyboard.press('Shift+Tab');
+    await expect(today).not.toBeFocused();
     await page.keyboard.press('Tab');
     await expect(today).toBeFocused();
     const ring = await shared.measureFocusRing(today);

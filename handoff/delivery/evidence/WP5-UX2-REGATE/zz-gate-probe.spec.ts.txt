@@ -1,0 +1,232 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX2-GATE probe (task-local, never part of the repository): CSP and asset headers, bar heights and the
+ * --shell-bar-size token, the shared view without check in/out, 44px targets and sideways scroll at 390/375/360/320,
+ * and the synthetic screenshots. Every observation is appended to GATE_OUT/<file>.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const OUT = process.env.GATE_OUT ?? '';
+function note(file: string, line: string): void {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, file), `${line}\n`);
+}
+const SHARE_ITEMS = { timesheets: 'view', ot_read: false, pdf_download: false };
+const READER_NAME = 'Synthetic Tab Order User';
+const OWNER_NAME = 'Synthetic Owner';
+
+async function violationsInit(page: Page): Promise<void> {
+  await page.addInitScript({
+    content: `window.__cspViolations = []; document.addEventListener('securitypolicyviolation', (event) => window.__cspViolations.push(event.violatedDirective + ' ' + event.blockedURI));`,
+  });
+}
+async function violations(page: Page): Promise<string[]> {
+  return page.evaluate<string[]>('window.__cspViolations');
+}
+async function barSize(page: Page): Promise<{ height: number; token: string; rows: number }> {
+  return page.evaluate(() => {
+    const bar = document.querySelector('header.shell-bar') as HTMLElement;
+    const h = bar.getBoundingClientRect().height;
+    const token = document.documentElement.style.getPropertyValue('--shell-bar-size');
+    return { height: h, token, rows: 0 };
+  });
+}
+
+test('headers: CSP, theme-init.js and cd-logo.svg content types, no violation on load', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  const project = testInfo.project.name;
+  const index = await page.request.get('/');
+  const script = await page.request.get('/theme-init.js');
+  const logo = await page.request.get('/cd-logo.svg');
+  const csp = index.headers()['content-security-policy'] ?? '(none)';
+  note('obs-headers.txt', `[${project}] GET / status=${index.status()} content-type=${index.headers()['content-type']} csp=${csp}`);
+  note('obs-headers.txt', `[${project}] GET /theme-init.js status=${script.status()} content-type=${script.headers()['content-type']}`);
+  note('obs-headers.txt', `[${project}] GET /cd-logo.svg status=${logo.status()} content-type=${logo.headers()['content-type']}`);
+  const me = await newPerson(adminSeed, builtServer, { displayName: READER_NAME, signature: 'none' });
+  await violationsInit(page);
+  await page.goto('/');
+  await expect(page.getByLabel('Email')).toBeVisible();
+  note('obs-headers.txt', `[${project}] violations on the sign-in page load: ${JSON.stringify(await violations(page))}`);
+  await signInPageAs(me.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  note('obs-headers.txt', `[${project}] violations after sign-in: ${JSON.stringify(await violations(page))}`);
+  expect(await violations(page)).toEqual([]);
+  expect(script.status()).toBe(200);
+  expect(logo.status()).toBe(200);
+});
+
+test('bars: heights and --shell-bar-size, with and without a received share', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }, testInfo) => {
+  const project = testInfo.project.name;
+  const me = await newPerson(adminSeed, builtServer, { displayName: READER_NAME, signature: 'none' });
+  const owner = await newPerson(adminSeed, builtServer, { displayName: OWNER_NAME, signature: 'none' });
+  const widths = isMobile ? [390, 375, 360, 320] : [1600, 1440, 1280, 1024, 768];
+  await signInPageAs(me.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const withShare of [false, true]) {
+    if (withShare) {
+      await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
+      await page.reload();
+      await expect(page.locator('header.shell-bar .shell-switcher')).toBeVisible();
+    }
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: isMobile ? 844 : 900 });
+      await page.waitForTimeout(300);
+      const facts = await barSize(page);
+      const overflow = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+      note('obs-bars.txt', `[${project}] width=${width} share=${withShare} bar.height=${facts.height} --shell-bar-size=${facts.token} clientWidth=${overflow.client} scrollWidth=${overflow.scroll}`);
+      expect(parseFloat(facts.token)).toBeCloseTo(facts.height, 1);
+      expect(overflow.scroll).toBeLessThanOrEqual(overflow.client);
+    }
+  }
+});
+
+test('shared view: no check in/out control on either project', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }, testInfo) => {
+  const project = testInfo.project.name;
+  const me = await newPerson(adminSeed, builtServer, { displayName: READER_NAME, signature: 'none' });
+  const owner = await newPerson(adminSeed, builtServer, { displayName: OWNER_NAME, signature: 'none' });
+  await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
+  await signInPageAs(me.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const own = await page.getByRole('button', { name: /^Check (in|out)/ }).count();
+  const ownBar = await page.locator('.bar-clock').count();
+  note('obs-shared.txt', `[${project}] own view: Check in/out buttons=${own} bar-clock sections=${ownBar} (isMobile=${isMobile})`);
+  await page.locator('.shell-switcher select').selectOption({ label: OWNER_NAME });
+  await page.getByRole('form', { name: 'Shared with me' }).getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(page.locator('[data-share-bar-title]')).toContainText(OWNER_NAME);
+  await expect(page.locator('[data-day]').first()).toBeVisible();
+  const buttons = await page.getByRole('button', { name: /Check (in|out)/ }).count();
+  const barClock = await page.locator('.bar-clock, [data-clock]').count();
+  const regions = await page.getByRole('region', { name: /Check in and out/ }).count();
+  note('obs-shared.txt', `[${project}] shared view: Check in/out buttons=${buttons} bar-clock/data-clock=${barClock} regions=${regions}`);
+  expect(buttons).toBe(0);
+  expect(barClock).toBe(0);
+  expect(regions).toBe(0);
+});
+
+async function targetsOf(page: Page): Promise<{ count: number; small: unknown[]; scroll: number; inner: number }> {
+  return page.evaluate(() => {
+    const sel = 'button, a[href], select, input:not([type="checkbox"]):not([type="hidden"]), label.pick, label.inline, [role="button"], [role="tab"]';
+    const small: Array<{ name: string; w: number; h: number }> = [];
+    let count = 0;
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>(sel))) {
+      const r = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      if (r.width === 0 || r.height === 0 || style.visibility === 'hidden' || style.display === 'none') continue;
+      count += 1;
+      if (r.width < 44 || r.height < 44) small.push({ name: (el.textContent ?? '').trim().slice(0, 30) || el.getAttribute('aria-label') || el.tagName, w: Math.round(r.width), h: Math.round(r.height) });
+    }
+    return { count, small, scroll: document.documentElement.scrollWidth, inner: window.innerWidth };
+  });
+}
+
+test.describe('phone only', () => {
+  test.skip(({ isMobile }) => !isMobile, 'phone viewport probes');
+  for (const width of [390, 375, 360, 320]) {
+    for (const withShare of [false, true]) {
+      test(`targets and overflow at ${width}px, share=${withShare}`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+        test.setTimeout(120_000);
+        await page.setViewportSize({ width, height: 844 });
+        const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Reviewer' });
+        const owner = await newPerson(adminSeed, builtServer, { displayName: OWNER_NAME, signature: 'none' });
+        if (withShare) await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
+        const days = await me.api.displayedPeriodFreeWorkdays();
+        const [d1 = '', d2 = '', d3 = ''] = days;
+        await me.api.seedCompleteDay(d1);
+        await me.api.seedCompleteDay(d2);
+        await me.api.seedUnconfirmedBreaksDay(d3);
+        await signInPageAs(me.account);
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        const states: Array<[string, Awaited<ReturnType<typeof targetsOf>>]> = [];
+        states.push(['timesheet', await targetsOf(page)]);
+        await page.getByRole('button', { name: 'Change several days' }).click();
+        await page.getByLabel(`Select ${d1}`).check();
+        await page.getByLabel(`Select ${d2}`).check();
+        await expect(page.getByText('2 days selected')).toBeVisible();
+        states.push(['batch', await targetsOf(page)]);
+        await page.getByRole('button', { name: 'Done' }).click();
+        await page.getByLabel('Open a day').fill(d3);
+        await page.getByRole('button', { name: 'Open day', exact: true }).click();
+        await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+        states.push(['editor', await targetsOf(page)]);
+        await page.keyboard.press('Escape');
+        await page.goto(`/#/review/${me.payrollDate}`);
+        await expect(page.locator('[data-review-day]')).toHaveCount(14);
+        states.push(['review', await targetsOf(page)]);
+        for (const [name, t] of states) {
+          note('obs-targets.txt', `width=${width} share=${withShare} ${name}: controls=${t.count} below44=${t.small.length} scrollWidth=${t.scroll} innerWidth=${t.inner} ${JSON.stringify(t.small)}`);
+          expect(t.small.length).toBe(0);
+          expect(t.scroll).toBeLessThanOrEqual(t.inner);
+        }
+      });
+    }
+  }
+});
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`screenshots desktop 1440 (${theme}): the bar, the sheet with the open day column and Today, the controls`, async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+    test.skip(isMobile, 'Desktop only');
+    test.setTimeout(120_000);
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const me = await newPerson(adminSeed, builtServer, { displayName: READER_NAME, signature: 'none' });
+    const days = await me.api.displayedPeriodFreeWorkdays();
+    const [d1 = '', d2 = ''] = days;
+    await me.api.seedCompleteDay(d1);
+    await me.api.seedCompleteDay(d2);
+    await signInPageAs(me.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.mouse.move(0, 0);
+    await page.locator('header.shell-bar').screenshot({ path: screenshotPath(`gate-bar-1440-${theme}-synthetic.png`), animations: 'disabled' });
+    await page.getByLabel('Open a day').fill(d1);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+    await page.waitForTimeout(500);
+    await page.mouse.move(0, 0);
+    await page.screenshot({ path: screenshotPath(`gate-sheet-open-day-today-1440-${theme}-synthetic.png`), animations: 'disabled' });
+    if (theme === 'light') {
+      await page.getByRole('switch', { name: 'Show details', exact: true }).check();
+      await page.locator('.tools').screenshot({ path: screenshotPath('gate-show-details-switch-synthetic.png'), animations: 'disabled' });
+      await page.getByRole('switch', { name: 'Show details', exact: true }).uncheck();
+      await page.locator('header.shell-bar .theme-switch').screenshot({ path: screenshotPath('gate-theme-control-synthetic.png'), animations: 'disabled' });
+      const trigger = page.locator('[data-label-picker] button[aria-label^="Label for"]:not([aria-label$="not set"])').first();
+      await trigger.scrollIntoViewIfNeeded();
+      await page.keyboard.press('Shift');
+      await trigger.focus();
+      await page.keyboard.press('Enter');
+      const list = page.getByRole('listbox');
+      await expect(list).toBeFocused();
+      await page.keyboard.press('Home');
+      if ((await list.getByRole('option').first().getAttribute('aria-selected')) === 'true') await page.keyboard.press('ArrowDown');
+      await page.waitForTimeout(500);
+      const tb = await trigger.boundingBox();
+      const lb = await list.boundingBox();
+      if (tb !== null && lb !== null) {
+        const x = Math.max(0, Math.min(tb.x, lb.x) - 12);
+        const y = Math.max(0, tb.y - 12);
+        const right = Math.max(tb.x + tb.width, lb.x + lb.width) + 12;
+        const bottom = lb.y + lb.height + 12;
+        await page.screenshot({ path: screenshotPath('gate-label-picker-open-synthetic.png'), clip: { x, y, width: right - x, height: bottom - y }, animations: 'disabled' });
+      }
+      await page.keyboard.press('Escape');
+    }
+  });
+}
+
+for (const withShare of [false, true]) {
+  test(`screenshot phone 390: the first screen with the bar check in/out, share=${withShare}`, async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+    test.skip(!isMobile, 'Phone only');
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    const me = await newPerson(adminSeed, builtServer, { displayName: READER_NAME, signature: 'none' });
+    const owner = await newPerson(adminSeed, builtServer, { displayName: OWNER_NAME, signature: 'none' });
+    if (withShare) await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
+    await signInPageAs(me.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await expect(page.locator('.bar-clock')).toBeVisible();
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: screenshotPath(`gate-phone-390-first-screen-${withShare ? 'share' : 'noshare'}-synthetic.png`), animations: 'disabled' });
+  });
+}

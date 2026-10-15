@@ -1,0 +1,292 @@
+diff --git a/tests/client/periodJumpModel.test.ts b/tests/client/periodJumpModel.test.ts
+index be42157..360fd1a 100644
+--- a/tests/client/periodJumpModel.test.ts
++++ b/tests/client/periodJumpModel.test.ts
+@@ -141,6 +141,32 @@ describe('Today (todayJump)', () => {
+     });
+   }
+ 
++  it('decides from the fresh answer across the reporting-zone midnight: the stale answer says "not away", the next day\'s says "away" exactly when the period ended', () => {
++    // WP5-UX2-AUDIT-01: a page opened before midnight holds yesterday's answer; a press re-reads the server and judges the SAME shown period
++    // again with today's `today_local`. The oracle is the period's own last day, independent of the comparison in the model.
++    const firstOfDay = new Map<string, Step>();
++    for (const step of allSteps()) if (!firstOfDay.has(step.today)) firstOfDay.set(step.today, step);
++    let ended = 0;
++    let midPeriod = 0;
++    for (const [date, stale] of firstOfDay) {
++      const next = firstOfDay.get(addDays(date, 1));
++      if (next === undefined) continue;
++      const shown = stale.inProgress;
++      const before = todayJump({ today: stale.today, current: stale.current, inProgress: stale.inProgress, shown, editDate: null });
++      const after = todayJump({ today: next.today, current: next.current, inProgress: next.inProgress, shown, editDate: null });
++      expect(before.away, `${date}: before midnight the sheet shows today`).toBe(false);
++      const periodEnded = date === shown.period_end;
++      expect(after.away, `${next.today}: after midnight the sheet shows today only while the period lasts`).toBe(periodEnded);
++      if (periodEnded) {
++        ended += 1;
++        expect(after.targetPayrollDate, `${next.today}: the target is the period that now contains today`).toBe(next.inProgress.payroll_date);
++        expect(periodContains(next.inProgress, next.today)).toBe(true);
++      } else midPeriod += 1;
++    }
++    expect(ended, 'period-end midnights were exercised').toBeGreaterThan(0);
++    expect(midPeriod, 'mid-period midnights were exercised').toBeGreaterThan(0);
++  });
++
+   it('never reads the device clock: a clock years away changes nothing', () => {
+     const step = steps('2026-10-12', 1)[0];
+     if (step === undefined) throw new Error('no step');
+diff --git a/tests/e2e/focus-ring.spec.ts b/tests/e2e/focus-ring.spec.ts
+index 4986f45..df0a39a 100644
+--- a/tests/e2e/focus-ring.spec.ts
++++ b/tests/e2e/focus-ring.spec.ts
+@@ -389,3 +389,57 @@ for (const colorScheme of ['light', 'dark'] as const) {
+     }
+   });
+ }
++
++/*
++ * WP5-UX2-AUDIT-03 (owner decision WP5-UX-Q1 a): the inactive Today (`aria-disabled`, still focusable) is dimmed with colour tokens
++ * (muted text and the quiet line border), never with element opacity, so the shared focus ring around it is painted at full strength:
++ * at least 3:1 against the card in the light and the dark theme and with both manual overrides. The ring is read from the screenshot
++ * pixel in the middle of the accent band (the card-coloured 1px gap lies inside it), so a dimmed ring would be seen.
++ */
++const THEME_SITUATIONS = [
++  { name: 'light device', scheme: 'light', stored: null },
++  { name: 'dark device', scheme: 'dark', stored: null },
++  { name: 'light device, manual dark', scheme: 'light', stored: 'dark' },
++  { name: 'dark device, manual light', scheme: 'dark', stored: 'light' },
++] as const;
++
++for (const situation of THEME_SITUATIONS) {
++  test(`WP5-UX2-AUDIT-03: the focus ring of the inactive Today is painted at 3:1 (${situation.name})`, async ({ page, signInThroughUi }, testInfo) => {
++    await page.emulateMedia({ colorScheme: situation.scheme, reducedMotion: 'reduce' });
++    if (situation.stored !== null) await page.addInitScript(`try { localStorage.setItem('timesheet.theme', '${situation.stored}'); } catch {}`);
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    const today = page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true });
++    // On the five days after a period ends the page opens on the ended period and Today is active: pressing it makes it inactive.
++    if ((await today.getAttribute('aria-disabled')) !== 'true') {
++      await today.focus();
++      await page.keyboard.press('Enter');
++    }
++    await expect(today).toHaveAttribute('aria-disabled', 'true');
++    await page.keyboard.press('Shift+Tab');
++    await page.keyboard.press('Tab');
++    await expect(today).toBeFocused();
++    const ring = await shared.measureFocusRing(today);
++    const opacity = await today.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).opacity ?? '');
++    const box = await today.boundingBox();
++    expect(box, 'the inactive Today has a box').not.toBeNull();
++    const card = await shared.tokenColour(page, '--card');
++    const accent = await shared.tokenColour(page, '--accent');
++    // The shared ring is a 1px card gap, then 2px of accent, outside the border box: sample the middle of the accent band.
++    const pixel = await shared.paintedPixel(page, (box?.x ?? 0) - 2.5, (box?.y ?? 0) + (box?.height ?? 0) / 2);
++    const painted = shared.contrast(pixel, card);
++    const text = await shared.textContrast(today);
++    console.log(
++      `inactive Today ring ${testInfo.project.name} ${situation.name}: opacity ${opacity}; painted ${pixel.slice(0, 3).join(',')} on ${card.slice(0, 3).join(',')} = ${painted.toFixed(2)}:1; token ring/card ${ring.ringAgainstBackdrop.toFixed(2)}; text ${text.toFixed(2)}:1`,
++    );
++    // Within anti-aliasing of the sampled sub-pixel (16 per channel): a 0.6-opacity blend would be about 90 away on the red channel.
++    expect(shared.sameColour(pixel, accent, 16), `the painted ring ${pixel.slice(0, 3).join(',')} is the full accent ${accent.slice(0, 3).join(',')}`).toBe(true);
++    expect(painted, `painted ring ${pixel.slice(0, 3).join(',')} against the card ${card.slice(0, 3).join(',')}`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
++    // No element opacity: it would dim the ring with the button (that was 2.70:1 in the light theme at opacity 0.6).
++    expect(opacity, 'the inactive Today is dimmed with colours, not with opacity').toBe('1');
++    expect(ring.ringAgainstBackdrop, `ring against the card (${ring.layers})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
++    expect(ring.ringAgainstGap, `ring against its gap (${ring.layers})`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
++    // Dimmed by colour, still readable: the muted text keeps 4.5:1 on the card.
++    expect(text, 'the inactive Today text against its fill').toBeGreaterThanOrEqual(4.5);
++  });
++}
+diff --git a/tests/e2e/today.spec.ts b/tests/e2e/today.spec.ts
+index c2d158e..48f113c 100644
+--- a/tests/e2e/today.spec.ts
++++ b/tests/e2e/today.spec.ts
+@@ -1,6 +1,6 @@
+ import type { Locator, Page } from '@playwright/test';
+ import { dayButton } from './dayButton.ts';
+-import { expect, type PeriodFacts, type PeriodsCurrent, screenshotPath, test } from './fixtures.ts';
++import { expect, newPerson, type PeriodFacts, type PeriodsCurrent, screenshotPath, test } from './fixtures.ts';
+ 
+ /*
+  * WP5-UX2-T04: the "Today" and "Current period" buttons of the period bar, on both projects.
+@@ -504,6 +504,180 @@ test('the period bar: "Due" is a label like "Payroll date", and the range arrow
+   expect(spoken).toContain(' to ');
+ });
+ 
++/* ---- WP5-UX2-AUDIT-01: the server date moves on while the page stays open ------------------------------------- */
++
++/**
++ * Seconds from this process's clock until midnight in `zone`. The test runner shares the clock the server under test uses (the
++ * simulated-clock preload shifts every process by the same constant), so under the preload this is the server's own distance to
++ * the reporting-zone midnight. The browser's clock is never read.
++ */
++function secondsToMidnight(zone: string): number {
++  const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date());
++  const part = (type: string) => Number(parts.find((entry) => entry.type === type)?.value ?? Number.NaN);
++  return 86_400 - (part('hour') * 3600 + part('minute') * 60 + part('second'));
++}
++
++/** Counts the GET reads of one periods route the page makes from now on. */
++function periodReads(page: Page, path: string): { count: () => number; reset: () => void } {
++  let reads = 0;
++  page.on('request', (request) => {
++    if (request.method() === 'GET' && new URL(request.url()).pathname === path) reads += 1;
++  });
++  return { count: () => reads, reset: () => void (reads = 0) };
++}
++
++/** The date of the Today tag on the sheet, or null when the sheet shows another period. */
++async function tagDate(page: Page): Promise<string | null> {
++  const tagged = page.locator('[data-sheet] [data-day].today');
++  return (await tagged.count()) === 0 ? null : tagged.getAttribute('data-day');
++}
++
++/** The next response of the server's periods route (set up before the action that causes it). */
++const periodsResponse = (page: Page, path: string) => page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === path);
++
++test('a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself', async ({
++  page,
++  context,
++  employeeSeed,
++  signInThroughUi,
++}) => {
++  test.setTimeout(240_000);
++  const before = await employeeSeed.periodsCurrent();
++  // Only a run that starts within 90 s of the reporting-zone midnight (the gate runs it under the simulated-clock preload at
++  // 23:59:20) can cross it; every other run asserts the inactive press re-read below. No run is skipped.
++  const crossing = secondsToMidnight(before.reporting_zone) <= 90;
++  await landOn(page, signInThroughUi);
++  const shown = before.current;
++  // A second tab on the same session is the person who comes back to the page by focus alone, without pressing anything.
++  const other = crossing ? await context.newPage() : undefined;
++  if (other !== undefined) {
++    await other.goto('/');
++    await expect(other.locator('[data-day]')).toHaveCount(14);
++  }
++  const landed = await employeeSeed.periodsCurrent();
++
++  if (other !== undefined && landed.today_local === before.today_local) {
++    // The page was signed in before the server date moved on, so both tabs hold the old date. Wait for the new one.
++    let after = landed;
++    await expect
++      .poll(
++        async () => {
++          after = await employeeSeed.periodsCurrent();
++          return after.today_local;
++        },
++        { message: 'the server date passes the reporting-zone midnight', timeout: 150_000, intervals: [1000] },
++      )
++      .not.toBe(before.today_local);
++    const stillShowsToday = contains(shown, after.today_local);
++    // The tab nobody refreshed: no event reached it, so it still holds the old answer and its Today is as it was before midnight.
++    if (contains(shown, before.today_local)) await expectTodayActive(page, false);
++    await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(contains(shown, before.today_local) ? 1 : 0);
++    // A press on the inactive Today re-reads /periods/current and acts on the fresh answer.
++    await todayButton(page).click({ force: true });
++    if (stillShowsToday) {
++      // Fresh state: the shown period still holds today. The sheet and the live region stay, the Today tag follows the server date.
++      await expect(periodName(page)).toHaveText(rangeText(shown));
++      await expect.poll(() => tagDate(page), { message: 'the pressed tab tags the new date' }).toBe(after.today_local);
++      await expect(jumpStatus(page)).toHaveText('');
++      await expectTodayActive(page, false);
++    } else {
++      // Fresh state: today is in another period. The sheet jumps to it, the tag sits on the new date and the jump is announced.
++      await expectShown(page, after.in_progress, after.today_local);
++      await expect(jumpStatus(page)).toHaveText(`Showing today, ${weekday(after.today_local)} ${us(after.today_local)}, in the period ${plainRange(after.in_progress)}`);
++      await expectTodayActive(page, false);
++      await expect(page.locator(`[data-day="${after.today_local}"]`)).toBeInViewport();
++    }
++    // The other tab, which nobody pressed: a focus refresh alone moves the Today tag and the inactive state to the new date, with no reload.
++    await other.evaluate("window.dispatchEvent(new Event('focus'))");
++    await expect.poll(() => tagDate(other), { message: 'the refreshed tab tags the new date' }).toBe(stillShowsToday ? after.today_local : null);
++    await expectTodayActive(other, !stillShowsToday);
++    return;
++  }
++
++  // The real-clock part (no midnight in reach): a press on the inactive Today still re-reads /periods/current and, because the
++  // fresh answer is not away, leaves the sheet and the live region exactly as they are.
++  if (isWindow(landed)) {
++    await todayButton(page).click();
++    await expectShown(page, landed.in_progress, landed.today_local);
++  }
++  await expectTodayActive(page, false);
++  // The jump's own follow-up read of the periods has to be over before reads are counted.
++  await page.waitForTimeout(600);
++  const name = await periodName(page).textContent();
++  const status = await jumpStatus(page).textContent();
++  const reads = periodReads(page, '/api/periods/current');
++  const read = periodsResponse(page, '/api/periods/current');
++  await todayButton(page).click({ force: true });
++  await read;
++  await page.waitForTimeout(400);
++  expect(reads.count(), 'one /periods/current read for one press on the inactive Today').toBe(1);
++  expect(await periodName(page).textContent(), 'the period is unchanged').toBe(name);
++  expect(await jumpStatus(page).textContent(), 'the live region is untouched').toBe(status);
++  await expectTodayActive(page, false);
++  expect(await tagDate(page), 'the Today tag stays on the server date').toBe(landed.today_local);
++});
++
++/** The refresh triggers shared by the person's own view and a shared view: the window regaining focus, the tab becoming visible. */
++async function expectRefreshTriggers(page: Page, path: string, otherPath: string, ownView: boolean) {
++  await page.waitForTimeout(600);
++  const reads = periodReads(page, path);
++  const otherReads = periodReads(page, otherPath);
++  // Window focus: exactly one read.
++  let read = periodsResponse(page, path);
++  await page.evaluate("window.dispatchEvent(new Event('focus'))");
++  await read;
++  await page.waitForTimeout(300);
++  expect(reads.count(), 'window focus reads the periods once').toBe(1);
++  // Two focus events in one tick (a browser can fire more than one): one read at a time, not two.
++  reads.reset();
++  read = periodsResponse(page, path);
++  await page.evaluate("(() => { window.dispatchEvent(new Event('focus')); window.dispatchEvent(new Event('focus')); })()");
++  await read;
++  await page.waitForTimeout(400);
++  expect(reads.count(), 'two focus events together read the periods once').toBe(1);
++  // The tab becoming visible reads the periods. In the person's own view the check in/out state (WP5-UX2-T09) also reacts to that event:
++  // its own lookup reads the periods and the sheet's reload reads them again, so the screen's read is the third. A shared view has no
++  // check in/out, so there it is exactly one read.
++  reads.reset();
++  read = periodsResponse(page, path);
++  await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
++  await read;
++  await page.waitForTimeout(500);
++  if (ownView) expect(reads.count(), 'a visible tab reads the periods (check in/out lookup, sheet reload, and the screen)').toBeGreaterThanOrEqual(3);
++  else expect(reads.count(), 'a visible tab reads the periods once').toBe(1);
++  // A hidden tab reads nothing.
++  reads.reset();
++  await page.evaluate(
++    "(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); })()",
++  );
++  await page.waitForTimeout(600);
++  expect(reads.count(), 'a hidden tab reads nothing').toBe(0);
++  await page.evaluate("(() => { delete document.visibilityState; })()");
++  // Whatever the view, the reads go to its own route only.
++  expect(otherReads.count(), `no read of ${otherPath}`).toBe(0);
++}
++
++test('the periods are re-read when the window regains focus or the tab becomes visible (the person\'s own view)', async ({ page, signInThroughUi }) => {
++  await landOn(page, signInThroughUi);
++  await expectRefreshTriggers(page, '/api/periods/current', '/api/shared/none/periods/current', true);
++});
++
++test('the periods are re-read through the share when the window regains focus or the tab becomes visible (a shared view)', async ({
++  page,
++  adminSeed,
++  builtServer,
++  signInPageAs,
++}) => {
++  test.setTimeout(90_000);
++  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner', signature: 'none' });
++  const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee', signature: 'none' });
++  await owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
++  await signInPageAs(grantee.account, `#/shared/${owner.account.id}/timesheet`);
++  await expect(page.locator('[data-share-bar-title]')).toBeVisible();
++  await expect(page.locator('[data-day]')).toHaveCount(14);
++  await expectRefreshTriggers(page, `/api/shared/${owner.account.id}/periods/current`, '/api/periods/current', false);
++});
++
+ /* ---- Desktop widths --------------------------------------------------------------------------------------- */
+ 
+ test.describe('desktop widths', () => {
