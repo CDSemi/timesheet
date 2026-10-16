@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { Calculation, DayView, PolicyVersion, Session } from '../../src/client/api.ts';
+import type { Calculation, DayView, Period, PolicyVersion, Session } from '../../src/client/api.ts';
 import {
   cardBreaksText,
-  confirmBreaksDraft,
   dayBanner,
+  dayPeriodPill,
   deleteFacts,
   editorChips,
   editorTitle,
   quickBreaksOf,
-  quickBreaksRequest,
   sessionCardOf,
 } from '../../src/client/components/dayEditorModel.ts';
-import { buildSessionRequest, draftFromSession, resolveStart, suggestedRows } from '../../src/client/components/sessionModel.ts';
 
 const LA = 'America/Los_Angeles';
 const HCM = 'Asia/Ho_Chi_Minh';
@@ -100,51 +98,14 @@ describe('one-tap break confirmation of a saved session (R-02)', () => {
     expect(quickBreaksOf(session(), POLICY, HCM)?.rows.map((row) => row.start.time)).toEqual(['11:00', '13:00', '15:30']);
   });
 
-  it('sends exactly the body of the form flow: Suggest breaks, Confirm suggested breaks, Save changes', () => {
-    const saved = session();
-    const quick = quickBreaksOf(saved, POLICY, HCM);
-    if (quick === null) throw new Error('a quick confirmation is expected');
-    const viaQuick = quickBreaksRequest(saved, quick, 'confirm', ' late entry ');
-
-    const draft = draftFromSession(saved);
-    const start = resolveStart(draft);
-    if (!start.ok) throw new Error('start must resolve');
-    const viaForm = buildSessionRequest(
-      { ...draft, breaks: suggestedRows(start.utc, draft.zone, POLICY.breaks, String), mode: 'confirmed' },
-      { expectedVersion: saved.version, reason: ' late entry ' },
-    );
-    expect(viaQuick).toEqual(viaForm);
-    expect(viaQuick).toMatchObject({
-      start: { local: '2026-09-21T09:00', zone: LA, offset: '-07:00' },
-      end: { local: '2026-09-21T18:30', zone: LA, offset: '-07:00' },
-      input_zone: LA,
-      breaks_confirmed: true,
-      expected_version: 4,
-      reason: 'late entry',
-    });
-    expect(viaQuick.breaks.map((item) => item.start.local)).toEqual(['2026-09-21T11:00', '2026-09-21T13:00', '2026-09-21T15:30']);
-  });
-
-  it('confirms no breaks with an empty, confirmed list and no reason when none is typed', () => {
-    const saved = session();
-    const quick = quickBreaksOf(saved, POLICY, LA);
-    if (quick === null) throw new Error('a quick confirmation is expected');
-    const body = quickBreaksRequest(saved, quick, 'none', '');
-    expect(body.breaks).toEqual([]);
-    expect(body.breaks_confirmed).toBe(true);
-    expect(body.expected_version).toBe(4);
-    expect('reason' in body).toBe(false);
-  });
-
+  // The request of "Confirm breaks" (suggested rows, the rows already listed, or "no breaks taken") is proved against the old
+  // one-tap bodies in tests/client/breakRowsModel.test.ts, because the session dialog's model now builds it.
   it('offers the rows already listed with the session instead of new suggestions', () => {
     const listed = session({ breaks: [{ id: 'b1', start_utc: '2026-09-21T19:00:00Z', end_utc: '2026-09-21T19:20:00Z', counts_as_work: false }] });
     const quick = quickBreaksOf(listed, POLICY, LA);
     expect(quick?.kind).toBe('listed');
     expect(quick?.chips).toEqual(['12:00-12:20']);
-    if (quick === null) throw new Error('a quick confirmation is expected');
-    expect(quickBreaksRequest(listed, quick, 'confirm', '').breaks).toEqual([
-      { start: { local: '2026-09-21T12:00', zone: LA, offset: '-07:00' }, end: { local: '2026-09-21T12:20', zone: LA, offset: '-07:00' }, counts_as_work: false },
-    ]);
+    expect(quick?.rows.map((row) => [row.start.time, row.end.time])).toEqual([['12:00', '12:20']]);
   });
 
   it('offers only "no breaks" when a suggestion would fall outside the session or no policy breaks exist', () => {
@@ -157,37 +118,6 @@ describe('one-tap break confirmation of a saved session (R-02)', () => {
   it('offers nothing for a running session or one whose breaks are already confirmed', () => {
     expect(quickBreaksOf(session({ end_utc: null }), POLICY, LA)).toBeNull();
     expect(quickBreaksOf(session({ breaks_confirmed: true }), POLICY, LA)).toBeNull();
-  });
-});
-
-describe('the "Confirm breaks" entry opens the form with the one-tap choice selected (WP5-UX3-T07)', () => {
-  it('saving the draft unchanged sends the body the one-tap "confirm" sent: suggested rows, version and reason', () => {
-    const saved = session();
-    const quick = quickBreaksOf(saved, POLICY, HCM);
-    if (quick === null) throw new Error('a quick confirmation is expected');
-    const draft = confirmBreaksDraft(saved, quick);
-    expect(draft.mode).toBe('confirmed');
-    expect(draft.zone).toBe(LA);
-    expect(buildSessionRequest(draft, { expectedVersion: saved.version, reason: ' late entry ' })).toEqual(quickBreaksRequest(saved, quick, 'confirm', ' late entry '));
-  });
-
-  it('keeps the rows already listed with the session, as the one-tap "confirm as listed" did', () => {
-    const listed = session({ breaks: [{ id: 'b1', start_utc: '2026-09-21T19:00:00Z', end_utc: '2026-09-21T19:20:00Z', counts_as_work: false }] });
-    const quick = quickBreaksOf(listed, POLICY, LA);
-    if (quick === null) throw new Error('a quick confirmation is expected');
-    const draft = confirmBreaksDraft(listed, quick);
-    expect(draft.breaks).toHaveLength(1);
-    expect(buildSessionRequest(draft, { expectedVersion: listed.version, reason: '' })).toEqual(quickBreaksRequest(listed, quick, 'confirm', ''));
-  });
-
-  it('selects "no breaks taken" when no suggested break fits, as the one-tap "none" did', () => {
-    const short = session({ end_utc: '2026-09-21T17:30:00Z' });
-    const quick = quickBreaksOf(short, POLICY, LA);
-    if (quick === null) throw new Error('a quick confirmation is expected');
-    const draft = confirmBreaksDraft(short, quick);
-    expect(draft.mode).toBe('none');
-    expect(draft.breaks).toEqual([]);
-    expect(buildSessionRequest(draft, { expectedVersion: short.version, reason: '' })).toEqual(quickBreaksRequest(short, quick, 'none', ''));
   });
 });
 
@@ -212,6 +142,51 @@ describe('the chips under the panel title (U-19, U-20)', () => {
   it('takes the period bar pill when it is given, including "in progress", and the day relation otherwise', () => {
     expect(editorChips({ relation: 'future', pill: 'in-progress', ...zones })[0]).toEqual({ key: 'period', text: 'in progress', pill: 'in-progress' });
     expect(editorChips({ relation: 'old', pill: 'neutral', ...zones })[0]).toEqual({ key: 'period', text: 'old period', pill: 'old' });
+  });
+
+  describe('the pill of the period of the day itself (G-5 b, WP5-UX3-FIX2)', () => {
+    const period = (payroll_date: string, period_start: string, period_end: string, relation: Period['relation']): Period => ({
+      payroll_date,
+      period_start,
+      period_end,
+      due_local_date: payroll_date,
+      due_local_time: '07:00',
+      due_at_utc: `${payroll_date}T14:00:00Z`,
+      ...(relation === undefined ? {} : { relation }),
+    });
+    const ended = period('2026-10-16', '2026-09-28', '2026-10-11', 'current');
+    // The five window days: the period that contains today is still "future" for the edit rules, but "in progress" for the person.
+    const running = period('2026-10-30', '2026-10-12', '2026-10-25', 'future');
+    const windowPeriods = { current: ended, in_progress: running };
+    const runningCurrent = period('2026-10-30', '2026-10-12', '2026-10-25', 'current');
+    const samePeriods = { current: runningCurrent, in_progress: runningCurrent };
+
+    it('says "in progress" for every day of the period in progress, whichever period the sheet shows', () => {
+      expect(dayPeriodPill('2026-10-14', ended, windowPeriods)).toBe('in-progress');
+      expect(dayPeriodPill('2026-10-12', ended, windowPeriods)).toBe('in-progress');
+      expect(dayPeriodPill('2026-10-25', ended, windowPeriods)).toBe('in-progress');
+      // The shown period decides first when it holds the day, with the same rule as the bar.
+      expect(dayPeriodPill('2026-10-14', running, windowPeriods)).toBe('in-progress');
+    });
+
+    it('keeps "current" for a day of the ended period and leaves other periods to the server relation of the day', () => {
+      expect(dayPeriodPill('2026-10-05', ended, windowPeriods)).toBe('current');
+      expect(dayPeriodPill('2026-10-05', running, windowPeriods)).toBe('current');
+      expect(dayPeriodPill('2026-09-20', ended, windowPeriods)).toBeUndefined();
+      expect(dayPeriodPill('2026-10-26', ended, windowPeriods)).toBeUndefined();
+      expect(dayPeriodPill('2026-10-14', ended, null)).toBeUndefined();
+    });
+
+    it('never says "in progress" outside the window days: the period with today is the current one', () => {
+      expect(dayPeriodPill('2026-10-14', runningCurrent, samePeriods)).toBe('current');
+      expect(dayPeriodPill('2026-10-14', ended, samePeriods)).toBe('current');
+    });
+
+    it('feeds the editor chip: the day of the period in progress reads "in progress", not "future period"', () => {
+      const pill = dayPeriodPill('2026-10-14', ended, windowPeriods);
+      expect(editorChips({ relation: 'future', ...(pill === undefined ? {} : { pill }), ...zones })[0]).toEqual({ key: 'period', text: 'in progress', pill: 'in-progress' });
+      expect(editorChips({ relation: 'future', ...zones })[0]?.text).toBe('future period');
+    });
   });
 
   it('titles the panel with the accounting date as the person reads it', () => {

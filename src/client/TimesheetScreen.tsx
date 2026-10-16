@@ -17,13 +17,13 @@ import { BatchBar } from './components/BatchBar.tsx';
 import { BatchDialog } from './components/BatchDialog.tsx';
 import { ClockPanel } from './components/ClockPanel.tsx';
 import { DESKTOP_QUERY, useClock, useMedia } from './components/ClockProvider.tsx';
+import { dayPeriodPill } from './components/dayEditorModel.ts';
 import { batchEntries, staleDates, staleReloadMessage } from './components/dayModel.ts';
 import { describeError } from './components/errors.ts';
 import { displayZone } from './components/format.ts';
 import { currentLabelChoice, type LabelChoice, labelEntry, labelPreviewOutcome } from './components/labelPickerModel.ts';
 import { OpenDay } from './components/OpenDay.tsx';
 import { PeriodBar, type PeriodJumps } from './components/PeriodBar.tsx';
-import { periodPillKind } from './components/periodBarModel.ts';
 import { currentPeriodJump, currentStatusText, todayJump, todayStatusText } from './components/periodJumpModel.ts';
 import { usePeriodState } from './components/ReviewStatus.tsx';
 import { ShowDetailsSwitch } from './components/ShowDetailsSwitch.tsx';
@@ -587,7 +587,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
               bottomSheet={!desktop}
               dockSide={dockSide}
               refresh={editorRefresh}
-              periodPill={view.period.period_start <= editDate && editDate <= view.period.period_end ? periodPillKind(view.period, periods) : undefined}
+              periodPill={dayPeriodPill(editDate, view.period, periods)}
               onChanged={load}
               onClose={closeEditor}
               request={request}

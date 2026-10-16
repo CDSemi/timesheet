@@ -117,8 +117,8 @@ function PreviewResult({
       </p>
       {preview.affected_days.length > 0 && (
         <div data-diff="affected">
-          <h4>Days whose default label changes ({preview.affected_days.length})</h4>
-          <p className="hint muted">Explicit labels and manual dates are preserved; only default labels follow the calendar.</p>
+          <h4>Days whose default category changes ({preview.affected_days.length})</h4>
+          <p className="hint muted">Explicit categories and manual dates are preserved; only default categories follow the calendar.</p>
           <ul className="plain">
             {preview.affected_days.map((day) => (
               <li key={day.date} className="ot-line" data-affected-date={day.date}>

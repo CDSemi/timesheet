@@ -29,7 +29,7 @@ export function ProfileScreen({ user }: { user: User }) {
 
   return (
     <div className="stack profile-screen">
-      <h1>Profile</h1>
+      <h1 tabIndex={-1}>Profile</h1>
       <section className="card profile-card" aria-label="Your profile">
         <Avatar user={user} />
         <dl className="profile-facts">

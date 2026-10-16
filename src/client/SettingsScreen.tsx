@@ -154,7 +154,7 @@ export function SettingsScreen({ onSharesChanged }: { onSharesChanged: () => voi
 
   return (
     <div className="stack">
-      <h1>Settings</h1>
+      <h1 tabIndex={-1}>Settings</h1>
       <SubmissionSettingsSection />
       <SharingSection onChanged={onSharesChanged} />
       <section className="card stack" aria-label="Import from Excel">

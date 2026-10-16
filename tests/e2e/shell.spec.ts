@@ -656,6 +656,100 @@ for (const role of ['employee', 'admin'] as const) {
     await expect(page).toHaveURL(/#\/ot$/);
     await expect(panel).toHaveCount(0);
     await expect(identity).toHaveAttribute('aria-expanded', 'false');
+
+    // An entry used by keyboard closes the panel and moves focus to the heading of the page it opens (WP5-UX3-FIX2 item 1).
+    const heading = (name: string) => page.getByRole('heading', { name, level: 1 });
+    await identity.focus();
+    await page.keyboard.press('Enter');
+    await expect(panel.getByRole('link', { name: 'Profile' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/#\/settings\/profile$/);
+    await expect(panel).toHaveCount(0);
+    await expect(heading('Profile')).toBeFocused();
+    await identity.focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Tab');
+    await expect(panel.getByRole('link', { name: 'Settings' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/#\/settings$/);
+    await expect(panel).toHaveCount(0);
+    await expect(heading('Settings')).toBeFocused();
+    if (role === 'admin') {
+      // Administration loads on demand: focus lands on its heading once the screen is there.
+      await identity.focus();
+      await page.keyboard.press('Enter');
+      await panel.getByRole('link', { name: 'Administration' }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(/#\/settings\/admin$/);
+      await expect(heading('Administration')).toBeFocused();
+    }
+
+    // The entry of the page that is already shown changes no route: focus returns to the identity button.
+    const current = role === 'admin' ? 'Administration' : 'Settings';
+    await identity.focus();
+    await page.keyboard.press('Enter');
+    await panel.getByRole('link', { name: current }).focus();
+    await expect(panel.getByRole('link', { name: current })).toHaveAttribute('aria-current', 'page');
+    await page.keyboard.press('Enter');
+    await expect(panel).toHaveCount(0);
+    await expect(identity).toHaveAttribute('aria-expanded', 'false');
+    await expect(identity).toBeFocused();
+
+    // A pointer user sees no change: the heading takes focus, but not a visible focus ring.
+    await identity.click();
+    await panel.getByRole('link', { name: 'Profile' }).click();
+    await expect(page).toHaveURL(/#\/settings\/profile$/);
+    await expect(panel).toHaveCount(0);
+    await expect(heading('Profile')).toBeFocused();
+    expect(await page.evaluate<boolean>("document.activeElement?.matches(':focus-visible') ?? false"), 'no focus ring after a pointer press').toBe(false);
+  });
+}
+
+/**
+ * The phone's More panel follows the same rule as the desktop menu (WP5-UX3-FIX2 item 1): an entry used by keyboard closes the
+ * panel and moves focus to the heading of the new page; the entry of the page already shown returns focus to More.
+ */
+for (const role of ['employee', 'admin'] as const) {
+  test(`the More panel from the keyboard: an entry moves focus to the new page's heading, the shown page's entry returns it to More (${role})`, async ({
+    page,
+    builtServer,
+    signInPageAs,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signInPageAs(builtServer.credentials[role], '#/timesheet');
+    await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+    const panel = page.locator('#more-panel');
+    const heading = (name: string) => page.getByRole('heading', { name, level: 1 });
+    const useEntry = async (name: string) => {
+      await more.focus();
+      await page.keyboard.press('Enter');
+      await expect(panel).toBeVisible();
+      await panel.getByRole('link', { name, exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await expect(panel).toHaveCount(0);
+    };
+
+    await useEntry('Profile');
+    await expect(page).toHaveURL(/#\/settings\/profile$/);
+    await expect(heading('Profile')).toBeFocused();
+    await useEntry('Settings');
+    await expect(page).toHaveURL(/#\/settings$/);
+    await expect(heading('Settings')).toBeFocused();
+    await useEntry('Import');
+    await expect(page).toHaveURL(/#\/import$/);
+    await expect(heading('Import and opening balance')).toBeFocused();
+    if (role === 'admin') {
+      await useEntry('Administration');
+      await expect(page).toHaveURL(/#\/settings\/admin$/);
+      await expect(heading('Administration')).toBeFocused();
+    }
+
+    // The page already shown: the route does not change, so focus returns to More and the panel is closed.
+    const current = role === 'admin' ? 'Administration' : 'Import';
+    await useEntry(current);
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
+    await expect(more).toBeFocused();
   });
 }
 

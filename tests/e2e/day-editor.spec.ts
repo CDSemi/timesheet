@@ -702,6 +702,53 @@ test('a new session on a past day is pre-filled with the reference hours and the
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
 });
 
+/*
+ * WP5-UX3-FIX2 item 2 (mutant M18): the past-day rule compares the accounting date with the server's `today_local`. The browser
+ * clock is fixed to an instant whose device date differs from the server's date at any hour of the day (three days ahead, then a
+ * year behind), so a rule that read the device clock fails one of the two phases whatever time the suite runs.
+ */
+test('the suggested breaks follow the server date and never the device clock: a device clock three days ahead or a year behind changes nothing (U-23, G-3 a)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  const [past = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  const { todayLocal } = await employeeSeed.today();
+  expect(past < todayLocal, 'the past day lies before the server date').toBe(true);
+  await signInThroughUi();
+  for (const [label, deviceInstant] of [
+    ['three days ahead', `${addDays(todayLocal, 3)}T12:00:00Z`],
+    ['a year behind', `${addDays(todayLocal, -365)}T12:00:00Z`],
+  ] as const) {
+    await page.clock.setFixedTime(new Date(deviceInstant));
+    const deviceDate = await page.evaluate<string>("new Date().toLocaleDateString('en-CA')");
+    expect(deviceDate, `${label}: the device date is not the server date`).not.toBe(todayLocal);
+    expect(deviceDate > todayLocal, `${label}: the device date is ${deviceDate > todayLocal ? 'later' : 'earlier'} than the server date`).toBe(label === 'three days ahead');
+
+    // A past day gets the reference hours and the suggested breaks inside them.
+    const pastEditor = await openEditor(page, past);
+    await pastEditor.getByRole('button', { name: 'Add session' }).click();
+    const pastForm = sessionDialog(page, 'New session');
+    await expect(pastForm.locator('[data-prefill]'), `${label}: a past day is pre-filled with hours and breaks`).toHaveAttribute('data-prefill', 'hours-breaks');
+    await expect(pastForm.locator('[data-break]'), `${label}: a past day gets its suggested breaks`).toHaveCount(3);
+    await pastForm.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(pastForm).toHaveCount(0);
+    await pastEditor.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(pastEditor).toHaveCount(0);
+
+    // The server's today gets the hours only.
+    const todayEditor = await openEditor(page, todayLocal);
+    await todayEditor.getByRole('button', { name: 'Add session' }).click();
+    const todayForm = sessionDialog(page, 'New session');
+    await expect(todayForm.locator('[data-prefill]'), `${label}: the server's today is pre-filled with hours only`).toHaveAttribute('data-prefill', 'hours');
+    await expect(todayForm.locator('[data-break]'), `${label}: no break is suggested for the server's today`).toHaveCount(0);
+    await todayForm.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(todayForm).toHaveCount(0);
+    await todayEditor.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(todayEditor).toHaveCount(0);
+  }
+});
+
 test('Save with no break listed and the box unticked opens "No breaks listed": Escape and "Go back" return to "Add break"; each choice reaches the final confirmation and sends its body (G-4)', async ({
   page,
   employeeSeed,
@@ -2002,6 +2049,98 @@ test('phone chips at 390px: Check out lists breaks as chips with the "Break n" s
   }
 });
 
+test('Check out asks "Discard your changes?" on Cancel and Escape when its rows or the box changed, and closes at once when nothing changed (U-26)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  const run = await seedRunning(employeeSeed, 3, [[10, 10]]);
+  const bodies = recordCheckOuts(page);
+  const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+  const open = async () => {
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = checkOutDialog(page);
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('[data-break]')).toHaveCount(1);
+    return dialog;
+  };
+  try {
+    await signInThroughUi();
+    await expect(page.getByRole('region', { name: 'Check in and out' })).toContainText('Checked in since');
+
+    // Nothing changed: Cancel and Escape close at once, with no question.
+    let dialog = await open();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    dialog = await open();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+
+    // A row added: Cancel asks; "Keep editing" returns to the dialog with the added row and focus on the control that asked.
+    dialog = await open();
+    await addCheckOutBreak(page, dialog, 2, localAfter(run, 60), 15);
+    await expect(dialog.locator('[data-break]')).toHaveCount(2);
+    const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true });
+    await cancel.click();
+    await expect(discard).toBeVisible();
+    await expect(discard.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+    await expect(discard.getByRole('button', { name: 'Discard' })).toBeVisible();
+    await expect(page.getByRole('alertdialog', { name: 'Save this session?' })).toHaveCount(0);
+    await discard.getByRole('button', { name: 'Keep editing' }).click();
+    await expect(discard).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('[data-break]')).toHaveCount(2);
+    await expect(cancel).toBeFocused();
+
+    // Escape asks the same question; Escape inside the question means "Keep editing".
+    await page.keyboard.press('Escape');
+    await expect(discard).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(discard).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('[data-break]')).toHaveCount(2);
+    await page.keyboard.press('Escape');
+    await expect(discard).toBeVisible();
+
+    // Discard closes the dialog; nothing was sent and the session still runs with its saved break.
+    await discard.getByRole('button', { name: 'Discard' }).click();
+    await expect(discard).toHaveCount(0);
+    await expect(dialog).toHaveCount(0);
+    expect(bodies, 'nothing is sent on Discard').toEqual([]);
+    expect((await employeeSeed.dayView(run.todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(true);
+
+    // The next opening starts from the saved session again; ticking the box is a change too.
+    dialog = await open();
+    await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(discard).toBeVisible();
+    await discard.getByRole('button', { name: 'Discard' }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(bodies).toEqual([]);
+
+    // A change that is undone is no change: removing the added row again closes at once.
+    dialog = await open();
+    await addCheckOutBreak(page, dialog, 2, localAfter(run, 60), 15);
+    await removeCheckOutBreak(page, dialog, 2);
+    await expect(dialog.locator('[data-break]')).toHaveCount(1);
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+
+    // Check out itself stays its own explicit act: after a change it sends at once, with no notice and no confirmation.
+    dialog = await open();
+    await addCheckOutBreak(page, dialog, 2, localAfter(run, 60), 15);
+    await dialog.getByRole('button', { name: 'Check out with these breaks' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    expect(bodies).toHaveLength(1);
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+});
+
 test('Check in then Check out asks for break confirmation and sends the session version', async ({
   page,
   employeeSeed,
@@ -2109,6 +2248,8 @@ test('partial leave 240 with kind vacation saves; the kind is required; WFH is s
     await expect(fields.getByRole('heading', { name: 'Category and leave' })).toBeVisible();
     await expect(fields.getByRole('combobox', { name: /^Category/ })).toHaveCount(1);
     await expect(fields.getByRole('heading', { name: /^Label/ })).toHaveCount(0);
+    // FIX2 item 13: the calendar-default hint is the select's description, not a loose paragraph.
+    await expect(fields.getByRole('combobox', { name: /^Category/ })).toHaveAccessibleDescription('Calendar default. Saving records it as your choice.');
 
     // Leave is typed as hours and minutes (docs/04); 4 h 0 m is sent as the same 240 leave minutes.
     await expect(fields.getByLabel('Leave hours')).toHaveValue('0');
@@ -3682,6 +3823,9 @@ test('the label cell is a picker: a one-entry batch preview and its commit; reco
   expect((await person.api.dayView(workedDay)).category).toBe('Worked');
   await dialog.getByRole('button', { name: 'Review conflicts' }).click();
   await expect(dialog.locator(`[data-conflict-date="${workedDay}"]`)).toContainText('manual session');
+  // The step says "category" in its heading, its sentence and its checkbox (FIX2 item 4: no "day label" left).
+  await expect(dialog.getByText("Only the day's category changes.")).toBeVisible();
+  await expect(dialog).not.toContainText('day label');
   const confirmCommit = dialog.getByRole('button', { name: 'Confirm and commit' });
   await expect(confirmCommit).toBeDisabled();
   await dialog.getByLabel('I confirm the category change for these dates').check();

@@ -366,8 +366,26 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   22.5-24.3/255 trước, 2.1-2.8 sau); mục target-size của menu tài khoản được giải trình (62 trên
   73 độ rộng chồng lên một điều khiển). Unit 2130 đạt, e2e đầy đủ 0 lỗi; digest e4659145 (833
   file).
-- Đang chạy: WP5-UX3-FIX1-FREEZE (committer, sonnet; 11 đường dẫn của FIX1 cùng bản ghi và bằng
-  chứng của gate, đợt rà và FIX1). Sau đó FIX2 trên lần đóng băng này.
+- WP5-UX3-FIX1-FREEZE xong: 9187f31bee9c092041887d3ab034c492e33da0b5 trên main, đã push (348
+  file: 11 mã nguồn/test, 12 bản ghi task và file board, 325 file bằng chứng; digest e4659145,
+  833 file, trên HEAD cũng vậy; mọi kiểm tra trả về 0). Sơ suất: một lần chuyển hướng từ
+  here-document rỗng vào một file nháp.
+- WP5-UX3-FIX2 bàn giao lần đầu (worker-high, tự báo claude-sonnet-5-5): đã sửa các mục 1-11 và
+  13 (focus sau khi chọn mục menu tài khoản, M18 và M21 nay bị test bắt, nhãn kỳ trong editor
+  theo kỳ của chính ngày đó, chữ "category", docs/10 và docs/12, câu hỏi bỏ thay đổi ở Check out,
+  xóa helper không dùng và chuyển các kiểm tra đối chiếu sang test khác, hover có điều kiện, liên
+  kết dòng gợi ý). Unit 2131; e2e đầy đủ 0 lỗi (desktop 317, mobile 310); cả hai đồng hồ giả lập 0
+  lỗi; gói chính 487.17 kB; verify 0; digest 65a2296e (833 file). docs/04 còn thiếu câu về hỏi bỏ
+  thay đổi và quy tắc focus của menu tài khoản: Addendum 1 mở rộng phạm vi của worker sang cặp
+  docs/04 cho đúng hai điểm này.
+- WP5-UX3-FIX2 xong sau Addendum 1: chỉ cặp docs/04 thay đổi (dòng 7 quy tắc focus của menu tài
+  khoản, dòng 70 câu hỏi bỏ thay đổi ở Check out, cả EN và VI); khớp bản dịch, preflight PASS, unit
+  2131, verify 0; digest 262138e0 (833 file); 27 đường dẫn thay đổi ngoài handoff (13 client, 2
+  test unit, 6 e2e, 6 docs).
+- Đã soạn nháp brief WP5-UX3-REGATE (chạy lại mọi mục của gate lần 1, xác nhận các lý do FAIL đã
+  khắc phục, kiểm các hành vi của FIX2); commit đích và digest điền sau lần đóng băng. Đã đăng ký ở
+  trạng thái chờ.
+- Đang chạy: WP5-UX3-FIX2-FREEZE (committer, sonnet).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

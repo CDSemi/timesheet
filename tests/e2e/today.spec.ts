@@ -822,6 +822,56 @@ test('the Day editor chip says "in progress" for today in the five window days a
   }
 });
 
+// WP5-UX3-FIX2 item 3 (G-5 b): the chip is decided by the day's own period from the server's periods, however the day was opened.
+test('the Day editor chip reads the pill of the period of its own day, opened through "Open a day", the sheet or Today', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  if (testInfo.project.name === 'desktop') await page.setViewportSize({ width: 1440, height: 800 });
+  const periods = await employeeSeed.periodsCurrent();
+  const today = periods.today_local;
+  await landOn(page, signInThroughUi);
+  const chip = editor(page).locator('[data-chip="period"]');
+  // The sheet shows the opening (current) period throughout the "Open a day" part, so the days below are outside or inside it.
+  await expect(periodName(page)).toHaveText(rangeText(periods.current));
+  const openADay = async (date: string, expected: string) => {
+    await page.getByLabel('Open a day').fill(date);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    await expect(editor(page)).toHaveAttribute('data-day-editor', date);
+    await expect(chip, `${date}: chip of a day opened through Open a day`).toHaveText(expected);
+    await editor(page).getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(editor(page)).toHaveCount(0);
+  };
+  const dayAfter = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+  // A day of the period before the opening one is old; a day of the opening period is current.
+  await openADay(dayAfter(periods.current.period_start, -1), 'old period');
+  await openADay(periods.current.period_start, 'current period');
+  // The period that contains today: "in progress" in the five window days (the opening period is the ended one then), else the current one.
+  await openADay(periods.in_progress.period_start, isWindow(periods) ? 'in progress' : 'current period');
+  await openADay(periods.in_progress.period_end, isWindow(periods) ? 'in progress' : 'current period');
+  await openADay(today, isWindow(periods) ? 'in progress' : 'current period');
+  // The period after the one in progress is future, in both branches.
+  await openADay(dayAfter(periods.in_progress.period_end, 1), 'future period');
+
+  if (isWindow(periods)) {
+    // Opened from the sheet of that period (Today), and again through Open a day while that period is shown: the same word.
+    await todayButton(page).click();
+    await expectShown(page, periods.in_progress, today);
+    await dayButton(page, periods.in_progress.period_end).click();
+    await expect(chip).toHaveText('in progress');
+    await editor(page).getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(editor(page)).toHaveCount(0);
+    await openADay(periods.in_progress.period_start, 'in progress');
+    // A day of the ended period, opened while the sheet shows the period in progress, still reads "current period".
+    await openADay(periods.current.period_end, 'current period');
+  } else {
+    expect(periods.in_progress.payroll_date, 'outside the window the period with today is the current one').toBe(periods.current.payroll_date);
+    await expect(page.locator('.chip-in-progress, .badge.in-progress')).toHaveCount(0);
+  }
+});
+
 test('the inactive Today differs from the active one by more than hue: a dashed border, and the focus ring is the same', async ({ page, employeeSeed, signInThroughUi }) => {
   const periods = await employeeSeed.periodsCurrent();
   await landOn(page, signInThroughUi);

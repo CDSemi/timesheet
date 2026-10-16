@@ -116,31 +116,40 @@ test('an employee sees no Administration anywhere and the page makes no /api/adm
   expect(adminRequests, 'admin requests made by an employee page').toEqual([]);
 });
 
-test('Profile shows the display name, email, role and reporting zone, read only, with the note', async ({ page, builtServer, adminSeed, signInPageAs }, testInfo) => {
-  const person = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Profile Person' });
-  const personApi = await new SeedClient(builtServer.origin).signIn(person.email, person.password);
-  const periods = await personApi.call<{ reporting_zone: string }>('GET', '/api/periods/current');
+// The device zone differs from the saved reporting zone (America/Los_Angeles): the Profile page must show the saved zone
+// and never this device's zone (AGENTS rule 7; WP5-UX3-FIX2 item 7, mutant M21).
+test.describe('Profile in a device zone that differs from the reporting zone', () => {
+  test.use({ timezoneId: 'Asia/Tokyo' });
 
-  await signInPageAs(person, '#/settings/profile');
-  await expect(heading(page, 'Profile')).toBeVisible();
-  const facts = page.getByRole('region', { name: 'Your profile' });
-  await expect(facts.locator('[data-profile="display-name"]')).toHaveText('Synthetic Profile Person');
-  await expect(facts.locator('[data-profile="email"]')).toHaveText(person.email);
-  await expect(facts.locator('[data-profile="role"]')).toHaveText('Employee');
-  await expect(facts.locator('[data-profile="zone"]')).toHaveText(periods.reporting_zone);
-  for (const label of ['Display name', 'Email', 'Role', 'Reporting zone']) await expect(facts.getByText(label, { exact: true })).toBeVisible();
-  await expect(page.getByText('An administrator changes display names.')).toBeVisible();
-  // Read only: nothing on the page can be edited.
-  await expect(page.locator('main').locator('input, textarea, select')).toHaveCount(0);
-  await expect(page.locator('main').getByRole('button')).toHaveCount(0);
-  await page.screenshot({ path: screenshotPath(`profile-${testInfo.project.name}-synthetic.png`), fullPage: true });
+  test('Profile shows the display name, email, role and reporting zone, read only, with the note', async ({ page, builtServer, adminSeed, signInPageAs }, testInfo) => {
+    const person = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Profile Person' });
+    const personApi = await new SeedClient(builtServer.origin).signIn(person.email, person.password);
+    const periods = await personApi.call<{ reporting_zone: string }>('GET', '/api/periods/current');
+    expect(periods.reporting_zone, 'the saved reporting zone differs from the device zone of this test').not.toBe('Asia/Tokyo');
 
-  // An administrator's Profile names the role.
-  await (await openAccount(page)).getByRole('button', { name: 'Sign out' }).click();
-  await signInPageAs(builtServer.credentials.admin, '#/settings/profile');
-  await expect(heading(page, 'Profile')).toBeVisible();
-  await expect(page.locator('[data-profile="role"]')).toHaveText('Administrator');
-  await expect(page.locator('[data-profile="email"]')).toHaveText(builtServer.credentials.admin.email);
+    await signInPageAs(person, '#/settings/profile');
+    await expect(heading(page, 'Profile')).toBeVisible();
+    expect(await page.evaluate<string>('Intl.DateTimeFormat().resolvedOptions().timeZone'), 'the device zone of the page').toBe('Asia/Tokyo');
+    const facts = page.getByRole('region', { name: 'Your profile' });
+    await expect(facts.locator('[data-profile="display-name"]')).toHaveText('Synthetic Profile Person');
+    await expect(facts.locator('[data-profile="email"]')).toHaveText(person.email);
+    await expect(facts.locator('[data-profile="role"]')).toHaveText('Employee');
+    await expect(facts.locator('[data-profile="zone"]')).toHaveText(periods.reporting_zone);
+    await expect(facts.locator('[data-profile="zone"]')).not.toHaveText('Asia/Tokyo');
+    for (const label of ['Display name', 'Email', 'Role', 'Reporting zone']) await expect(facts.getByText(label, { exact: true })).toBeVisible();
+    await expect(page.getByText('An administrator changes display names.')).toBeVisible();
+    // Read only: nothing on the page can be edited.
+    await expect(page.locator('main').locator('input, textarea, select')).toHaveCount(0);
+    await expect(page.locator('main').getByRole('button')).toHaveCount(0);
+    await page.screenshot({ path: screenshotPath(`profile-${testInfo.project.name}-synthetic.png`), fullPage: true });
+
+    // An administrator's Profile names the role.
+    await (await openAccount(page)).getByRole('button', { name: 'Sign out' }).click();
+    await signInPageAs(builtServer.credentials.admin, '#/settings/profile');
+    await expect(heading(page, 'Profile')).toBeVisible();
+    await expect(page.locator('[data-profile="role"]')).toHaveText('Administrator');
+    await expect(page.locator('[data-profile="email"]')).toHaveText(builtServer.credentials.admin.email);
+  });
 });
 
 test('the Settings sections nav and the Profile page fit a 320px screen with 44px targets', async ({ page, builtServer, signInPageAs }) => {

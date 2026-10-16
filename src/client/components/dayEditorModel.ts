@@ -2,27 +2,20 @@ import { suggestBreaks } from '../../domain/breaks.ts';
 import { isoWeekday } from '../../domain/dates.ts';
 import { parseUtcInstant } from '../../domain/instants.ts';
 import { formatInZone, localDateOf } from '../../domain/zones.ts';
-import type { DayView, PeriodRelation, PolicyVersion, Session, SessionRequest } from '../api.ts';
+import type { DayView, Period, PeriodRelation, PolicyVersion, Session } from '../api.ts';
 import { savedBreakMinutes } from './breakRowsModel.ts';
 import { WEEKDAYS } from './dayModel.ts';
 import { usDate, usShortDate } from './format.ts';
-import { PERIOD_PILL_WORDS, type PeriodPillKind, viewingZoneText, zoneNoteVisible } from './periodBarModel.ts';
+import { PERIOD_PILL_WORDS, type PeriodPillKind, periodPillKind, viewingZoneText, zoneNoteVisible } from './periodBarModel.ts';
 import { sessionRange } from './sheetModel.ts';
-import {
-  type BreakRow,
-  buildSessionRequest,
-  draftFromSession,
-  type SessionDraft,
-  suggestedRows,
-  toBreakRules,
-} from './sessionModel.ts';
+import { type BreakRow, draftFromSession, suggestedRows, toBreakRules } from './sessionModel.ts';
 
 /*
- * Pure logic of the day editor panel (WP5-UX-T04): the banner at its top and the one-tap break
- * confirmation of a saved session. Nothing here computes business minutes. The one-tap action
- * builds exactly the body the session form sends after "Suggest breaks" and "Confirm suggested
- * breaks" (PUT /api/sessions/:id with the loaded version); the suggestions come from the shared
- * `suggestBreaks`, and the server still checks every rule.
+ * Pure logic of the day editor panel (WP5-UX-T04): the banner at its top, the breaks "Confirm breaks"
+ * offers for a saved session (`quickBreaksOf`: the session dialog opens with them listed) and the
+ * session cards. Nothing here computes business minutes. The request is built by the session dialog's
+ * model (`buildSessionDialogRequest`); the suggestions come from the shared `suggestBreaks`, and the
+ * server still checks every rule.
  */
 
 export interface DayBanner {
@@ -85,28 +78,26 @@ export function quickBreaksOf(session: Session, policy: PolicyVersion | undefine
   };
 }
 
-/**
- * The session update of a one-tap choice: `confirm` sends the quick rows with breaks confirmed,
- * `none` confirms that no break was taken. Start, end and zone stay as saved (pinned by offset),
- * and the version the editor loaded goes with it.
- */
-export function quickBreaksRequest(session: Session, quick: QuickBreaks, choice: 'confirm' | 'none', reason: string): SessionRequest {
-  const draft = draftFromSession(session);
-  const confirmed = choice === 'confirm' ? { breaks: quick.rows, mode: 'confirmed' as const } : { breaks: [], mode: 'none' as const };
-  return buildSessionRequest({ ...draft, ...confirmed }, { expectedVersion: session.version, reason });
-}
-
-/**
- * The form draft behind the "Confirm breaks" entry (WP5-UX3-T07): the session as saved, with the breaks the old
- * one-tap rule offered (`quickBreaksOf`) selected as the ones taken. Saving it unchanged sends exactly the body
- * `quickBreaksRequest` built for "confirm" (listed or suggested rows) or, when nothing fits, for "none".
- */
-export function confirmBreaksDraft(session: Session, quick: QuickBreaks): SessionDraft {
-  const draft = draftFromSession(session);
-  return quick.kind === 'none' ? { ...draft, breaks: [], mode: 'none' } : { ...draft, breaks: quick.rows, mode: 'confirmed' };
-}
-
 /* ---- Header chips (U-19, U-20) ----------------------------------------------------------------------- */
+
+/**
+ * The period pill of a day's own period, for the editor chip (G-5 b, WP5-UX3-FIX2): the shown period when it contains the day,
+ * else the server's `in_progress` or `current` period when it does, so a day opened through "Open a day" or "Today" reads the same
+ * word as the bar shows for its period ("in progress" in the five window days). Undefined when none of them contains the day: the
+ * server's own relation of the day then decides. Dates are accounting dates compared as text; nothing reads a clock or a zone.
+ */
+export function dayPeriodPill(
+  date: string,
+  shown: Pick<Period, 'payroll_date' | 'period_start' | 'period_end' | 'relation'>,
+  periods: { current: Period; in_progress: Period } | null,
+): PeriodPillKind | undefined {
+  const contains = (period: Pick<Period, 'period_start' | 'period_end'>) => period.period_start <= date && date <= period.period_end;
+  if (contains(shown)) return periodPillKind(shown, periods);
+  if (periods === null) return undefined;
+  if (contains(periods.in_progress)) return periodPillKind(periods.in_progress, periods);
+  if (contains(periods.current)) return periodPillKind(periods.current, periods);
+  return undefined;
+}
 
 export interface EditorChip {
   key: 'period' | 'times' | 'day' | 'view-only';

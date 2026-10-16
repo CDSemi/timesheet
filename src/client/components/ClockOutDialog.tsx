@@ -1,4 +1,4 @@
-import { type SubmitEvent, useEffect, useId, useRef, useState } from 'react';
+import { type KeyboardEvent, type SubmitEvent, useEffect, useId, useRef, useState } from 'react';
 import { parseUtcInstant } from '../../domain/instants.ts';
 import { api, ApiRequestError, type PolicyVersion, type Session } from '../api.ts';
 import { applyBreakEdit, breakDateVisible } from './breakChipModel.ts';
@@ -14,11 +14,13 @@ import {
   serverBreakRowError,
   type SessionDialogDraft,
   sessionDialogDraftFromSession,
+  sessionDialogIsDirty,
   setNoBreaks,
   suggestionRows,
 } from './breakRowsModel.ts';
 import { BreakRows } from './BreakRows.tsx';
 import { BreakSubDialog } from './BreakSubDialog.tsx';
+import { ConfirmDialog } from './ConfirmDialog.tsx';
 import { describeError, isStaleVersion } from './errors.ts';
 import { instantText } from './format.ts';
 import { policyOn } from './sessionModel.ts';
@@ -28,7 +30,9 @@ import { policyOn } from './sessionModel.ts';
  * the T06 model) and the E-1 rules of Check out (R-01, R-02): an empty list with "Confirm no breaks taken" unticked omits `breaks`,
  * so the session is checked out with its breaks not confirmed; listed rows or the ticked box confirm the breaks and replace the
  * saved rows (`buildCheckOutDialogRequest`). Check out is its own explicit act: the submit button says which of the three it does,
- * and there is neither the "No breaks listed" notice nor a second confirmation.
+ * and there is neither the "No breaks listed" notice nor a second confirmation. Leaving without checking out (Cancel, Escape and the
+ * browser's close request) asks "Discard your changes?" when the rows or the box changed (owner decision U-26, as in the session
+ * dialog) and closes at once when nothing changed; that question is not a confirmation of the check-out.
  *
  * The running session's version goes with the request, so a session changed elsewhere answers 409 stale_version instead of being
  * overwritten. The server ends the session at its own current second, so the session has no end yet: a break row always has its own
@@ -55,7 +59,10 @@ export function ClockOutDialog({
   const keys = useRef(0);
   /** The draft just before "Add break" added a row, so Cancel in that row's sub-dialog can restore it exactly. */
   const beforeAdd = useRef<SessionDialogDraft | null>(null);
-  const [draft, setDraft] = useState<SessionDialogDraft>(() => sessionDialogDraftFromSession(session));
+  const [starting] = useState<SessionDialogDraft>(() => sessionDialogDraftFromSession(session));
+  const [draft, setDraft] = useState<SessionDialogDraft>(starting);
+  /** The "Discard your changes?" question while it is open, with the control to return focus to. */
+  const [discard, setDiscard] = useState<{ opener: HTMLElement | null } | null>(null);
   const [policies, setPolicies] = useState<PolicyVersion[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<ReadonlyMap<string, BreakRowError>>(new Map());
@@ -191,8 +198,35 @@ export function ClockOutDialog({
     }
   }
 
+  /** Cancel, Escape and the browser's close request: ask first when the rows or the box changed (U-26), else close at once. */
+  function requestClose(opener: HTMLElement | null) {
+    if (discard !== null || busy) return;
+    if (sessionDialogIsDirty(starting, draft)) setDiscard({ opener });
+    else onClose();
+  }
+
+  function keyDown(event: KeyboardEvent<HTMLDialogElement>) {
+    if (event.key !== 'Escape') return;
+    // An Escape typed inside a dialog nested in this one (the "Break n" sub-dialog or the question) belongs to that dialog.
+    if (event.target instanceof Element && event.target.closest('dialog') !== event.currentTarget) return;
+    event.preventDefault();
+    event.stopPropagation();
+    requestClose(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  }
+
   return (
-    <dialog ref={dialog} className="dialog dialog-wide" aria-labelledby="clock-out-title" onClose={onClose}>
+    <dialog
+      ref={dialog}
+      className="dialog dialog-wide"
+      aria-labelledby="clock-out-title"
+      onKeyDown={keyDown}
+      onCancel={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        requestClose(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+      }}
+      onClose={onClose}
+    >
       <form className="stack" onSubmit={submit} noValidate>
         <h2 id="clock-out-title">Check out</h2>
         <p>
@@ -266,7 +300,7 @@ export function ClockOutDialog({
         )}
         {reasonMissing && <p className="muted hint">Enter a reason for this old period above to check out.</p>}
         <div className="dialog-actions">
-          <button type="button" className="secondary" onClick={() => dialog.current?.close()}>
+          <button type="button" className="secondary" onClick={(event) => requestClose(event.currentTarget)}>
             Cancel
           </button>
           <button type="submit" disabled={busy || stale || reasonMissing}>
@@ -274,7 +308,7 @@ export function ClockOutDialog({
           </button>
         </div>
       </form>
-      {sub !== null && subRow !== undefined && (
+      {sub !== null && subRow !== undefined && discard === null && (
         <BreakSubDialog
           key={sub.key}
           row={subRow}
@@ -285,6 +319,18 @@ export function ClockOutDialog({
           onDone={(edited) => doneSub(sub.key, edited)}
           onCancel={() => cancelSub(sub.key, sub.isNew)}
           onRemove={() => removeSub(sub.key)}
+        />
+      )}
+      {discard !== null && (
+        <ConfirmDialog
+          title="Discard your changes?"
+          message="You changed the breaks of this check-out. If you leave now, nothing is saved and the session keeps running."
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          tone="danger"
+          opener={discard.opener}
+          onConfirm={onClose}
+          onCancel={() => setDiscard(null)}
         />
       )}
     </dialog>

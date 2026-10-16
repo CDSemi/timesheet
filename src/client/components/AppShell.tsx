@@ -34,6 +34,69 @@ export function useHashRoute(role: User['role']): AppRoute {
   return routeOfHash(hash);
 }
 
+/** How long a screen that loads on demand may take before an account entry stops waiting to focus its heading. */
+const HEADING_WAIT_MS = 5000;
+
+/**
+ * Focus after an account entry (WP5-UX3-FIX2 item 1, WCAG 2.2 SC 2.4.3): the entry's panel unmounts with the focused link, which
+ * would leave focus on the page body. `entryUsed(hash, returnFocus)` runs when an entry is used: when the address does not change
+ * (the entry of the page already shown) focus returns to the opener at once; otherwise the next screen takes focus on its main
+ * heading (`h1`, made focusable with `tabindex="-1"`: a programmatic target that shows a ring only to a keyboard user). A screen
+ * that loads on demand has no heading yet, so the shell waits for it (bounded), and gives up when the person has already moved focus
+ * elsewhere. The route is the single source of truth: the focus follows the route change, not the click.
+ */
+function useRouteHeadingFocus(route: RouteId | 'shared', mainRef: { current: HTMLElement | null }) {
+  const wanted = useRef<AppRoute['id'] | null>(null);
+
+  useEffect(() => {
+    const target = wanted.current;
+    if (target === null) return;
+    if (target !== route) {
+      wanted.current = null;
+      return;
+    }
+    const main = mainRef.current;
+    if (main === null) return;
+    const takeFocus = (): boolean => {
+      const active = document.activeElement;
+      // The person moved on while the screen was loading: leave focus where they put it.
+      if (active !== null && active !== document.body) return true;
+      const heading = main.querySelector<HTMLElement>('h1');
+      if (heading === null) return false;
+      if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+      heading.focus();
+      return true;
+    };
+    if (takeFocus()) {
+      wanted.current = null;
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      if (takeFocus()) {
+        wanted.current = null;
+        observer.disconnect();
+      }
+    });
+    observer.observe(main, { childList: true, subtree: true });
+    const giveUp = window.setTimeout(() => {
+      wanted.current = null;
+      observer.disconnect();
+    }, HEADING_WAIT_MS);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(giveUp);
+    };
+  }, [route, mainRef]);
+
+  return function entryUsed(hash: string, returnFocus: () => void) {
+    if (window.location.hash === hash) {
+      returnFocus();
+      return;
+    }
+    wanted.current = routeOfHash(hash).id;
+  };
+}
+
 export function AppShell({
   user,
   route,
@@ -61,6 +124,8 @@ export function AppShell({
   const moreButton = useRef<HTMLButtonElement>(null);
   const tabsRef = useRef<HTMLElement>(null);
   const barRef = useRef<HTMLElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const entryUsed = useRouteHeadingFocus(route, mainRef);
   // The sticky bar wraps (52 to 107px); scroll padding follows its real height (WP5-UX-AX-01).
   useBlockSizeProperty(barRef, '--shell-bar-size');
   const { tabs, more } = mobileRoutesFor(user.role);
@@ -115,9 +180,9 @@ export function AppShell({
         </nav>
         <SharingSwitcher received={received} ownerId={sharedOwnerId} />
         {/* Always the signed-in user, also in a shared view (the owner of a shared timesheet is named by the page). */}
-        <AccountMenu user={user} current={menuCurrent} onSignOut={() => void signOut()} />
+        <AccountMenu user={user} current={menuCurrent} onEntry={entryUsed} onSignOut={() => void signOut()} />
       </header>
-      <main className="page">
+      <main ref={mainRef} className="page">
         {flash !== null && (
           <div className="flash" role="status" data-flash="share-ended">
             <p>{flash}</p>
@@ -147,7 +212,16 @@ export function AppShell({
         </button>
         {moreOpen && (
           <div id="more-panel" className="account-panel more-panel">
-            <AccountContent user={user} layout="phone" current={route} onNavigate={() => setMoreOpen(false)} onSignOut={() => void signOut()} />
+            <AccountContent
+              user={user}
+              layout="phone"
+              current={route}
+              onNavigate={(hash) => {
+                setMoreOpen(false);
+                entryUsed(hash, () => moreButton.current?.focus());
+              }}
+              onSignOut={() => void signOut()}
+            />
           </div>
         )}
       </nav>

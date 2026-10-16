@@ -176,6 +176,49 @@ describe('untouched saved and suggested rows keep their pinned instants', () => 
     expect(JSON.stringify(request.breaks)).toBe(JSON.stringify(old));
   });
 
+  // "Confirm breaks" (WP5-UX3-T07): the session dialog opens with the suggested breaks that fit listed (SessionDialog); saving it
+  // unchanged sends the body the old one-tap confirmation sent (moved here from the removed `quickBreaksRequest` tests).
+  it('"Confirm breaks" with suggested rows sends the body the old one-tap confirmation sent: pinned instants, version and trimmed reason', () => {
+    const saved = savedSession({ breaks_confirmed: false, breaks: [], end_utc: '2026-09-22T01:30:00Z' });
+    const rows = suggestionRows(policy(), utc(saved.start_utc), utc(saved.end_utc ?? ''), saved.input_zone, String);
+    const draft = { ...sessionDialogDraftFromSession(saved), rows };
+    const request = sessionRequest(draft, { allowUnconfirmed: false, expectedVersion: saved.version, reason: ' late entry ' });
+
+    const oldDraft = draftFromSession(saved);
+    const old = buildSessionRequest(
+      { ...oldDraft, breaks: suggestedRows(utc(saved.start_utc), oldDraft.zone, DEFAULT_BREAKS, String), mode: 'confirmed' },
+      { expectedVersion: saved.version, reason: ' late entry ' },
+    );
+    expect(JSON.stringify(request)).toBe(JSON.stringify(old));
+    expect(request).toMatchObject({
+      start: { local: '2026-09-21T09:00', zone: LA, offset: '-07:00' },
+      end: { local: '2026-09-21T18:30', zone: LA, offset: '-07:00' },
+      input_zone: LA,
+      breaks_confirmed: true,
+      expected_version: 4,
+      reason: 'late entry',
+    });
+    expect(request.breaks.map((item) => item.start.local)).toEqual(['2026-09-21T11:00', '2026-09-21T13:00', '2026-09-21T15:30']);
+  });
+
+  it('"Confirm breaks" with the rows already listed sends them pinned in the session zone, and the ticked box sends an empty confirmed list without a reason', () => {
+    const listed = savedSession({
+      breaks_confirmed: false,
+      breaks: [{ id: 'b1', start_utc: '2026-09-21T19:00:00Z', end_utc: '2026-09-21T19:20:00Z', counts_as_work: false }],
+    });
+    expect(sessionRequest(sessionDialogDraftFromSession(listed), { allowUnconfirmed: false, expectedVersion: 4 }).breaks).toEqual([
+      { start: { local: '2026-09-21T12:00', zone: LA, offset: '-07:00' }, end: { local: '2026-09-21T12:20', zone: LA, offset: '-07:00' }, counts_as_work: false },
+    ]);
+
+    const bare = savedSession({ breaks_confirmed: false, breaks: [] });
+    const none = sessionRequest(setNoBreaks(sessionDialogDraftFromSession(bare), true), { allowUnconfirmed: false, expectedVersion: 4, reason: '' });
+    const old = buildSessionRequest({ ...draftFromSession(bare), breaks: [], mode: 'none' }, { expectedVersion: 4, reason: '' });
+    expect(JSON.stringify(none)).toBe(JSON.stringify(old));
+    expect(none.breaks).toEqual([]);
+    expect(none.breaks_confirmed).toBe(true);
+    expect('reason' in none).toBe(false);
+  });
+
   it('a row keeps its pin only while unchanged and in the zone it was pinned in', () => {
     const row = rowsFromSession(savedSession())[0] as BreakRowDraft;
     expect(rowKeepsPin(row, LA)).toBe(true);

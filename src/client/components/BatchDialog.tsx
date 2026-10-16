@@ -130,7 +130,7 @@ export function BatchDialog({
           <h2 id="batch-title" ref={heading} tabIndex={stepChanged ? -1 : undefined}>
             Recorded work conflicts with the new category
           </h2>
-          <p>No work session is edited or deleted. Only the day label changes.</p>
+          <p>No work session is edited or deleted. Only the day&apos;s category changes.</p>
           <ul className="plain conflict-list">
             {details.map(({ conflict, sessions }) => (
               <li key={conflict.work_date} data-conflict-date={conflict.work_date}>

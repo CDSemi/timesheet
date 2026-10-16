@@ -68,7 +68,7 @@ Each line gives the limit and where the rule or step is. None is a known defect 
 - **Partial leave is not visible on the PDF (R-WA2).** A day with 4 h work and 4 h leave prints as worked time with its OT; the leave minutes do not appear. The owner judges whether payroll needs them.
 - **Days without records read "Worked" on an automatic PDF (R-WA8).** This is the owner's decision F-1 and F-Q1 (no automatic indicator, default labels), see [10 Decisions](10_DECISIONS_AND_SOURCES.md); the pilot sample shows it.
 - **The outcome notice after downtime recovery is inexact (R-WA1).** It says the period was submitted "at the deadline" although a recovered submission is produced later; the PDF date is correct.
-- **Unconfirmed breaks.** Check out is refused with 422 while a break row is unconfirmed, and future break rows on an open session are refused; confirm the breaks first: "Confirm breaks" on the session card opens the session dialog, where Save confirms the listed breaks or "Confirm no breaks taken" ([02 Time and OT](02_TIME_AND_OT_RULES.md)).
+- **Unconfirmed breaks.** Check out is refused with 422 while a break row is unconfirmed, and future break rows on an open session are refused; confirm the breaks first. A refused Check out is resolved in the Check out dialog itself: list the breaks taken in its break rows, or tick "Confirm no breaks taken". "Confirm breaks" on a session card applies to ended sessions: it opens the session dialog, where Save confirms the listed breaks or "Confirm no breaks taken" ([02 Time and OT](02_TIME_AND_OT_RULES.md)).
 
 ### Accounts, import and balances
 

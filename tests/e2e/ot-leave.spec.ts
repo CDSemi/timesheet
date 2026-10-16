@@ -118,6 +118,7 @@ test('reserve, partial use, cancel the rest and reverse, with history', async ({
   // E-2: the day label (none) and the recorded use differ; the screen only informs.
   const warning = page.locator('[data-warning="mismatch"]');
   await expect(warning).toBeVisible();
+  await expect(warning.getByRole('heading', { name: 'Day category and recorded use differ' })).toBeVisible();
   await expect(warning.locator(`[data-mismatch-date="${todayLocal}"]`)).toContainText('Nothing is spent automatically');
   await page.screenshot({ path: screenshotPath(`ot-after-use-${project}-synthetic.png`), fullPage: true });
 

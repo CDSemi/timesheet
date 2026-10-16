@@ -11,7 +11,9 @@ import { ThemeToggle } from './ThemeToggle.tsx';
  * The pattern is a disclosure button with a non-modal panel (`aria-expanded`, `aria-controls`), not an ARIA `menu`: the
  * links, the native Theme radio group and the Sign out button keep their own semantics and the Tab order. Opening it by
  * keyboard moves focus to the first entry; Escape closes it and returns focus to the button; a press outside, a change of
- * the address and Tab past the last entry close it.
+ * the address and Tab past the last entry close it. Using an entry closes it too, and focus is never dropped on the page
+ * body: a new page takes it on its main heading, and the entry of the page already shown returns it to the button (the shell
+ * does the first, see `AppShell`).
  */
 
 /** The one account menu of the page (a phone shows the "More" panel instead, so there is never a second one). */
@@ -81,7 +83,8 @@ export function Avatar({ user }: { user: Pick<User, 'display_name' | 'email'> })
 /**
  * The account content shared by the desktop menu and the phone's "More" panel: the header (avatar, full name, email, the
  * role of an administrator), the entries, the Theme control and Sign out. `current` is the id of the entry that marks the
- * screen shown; `onNavigate` runs when an entry is used (the panel closes).
+ * screen shown; `onNavigate` runs with the entry's address when an entry is used (the panel closes, and the shell decides where
+ * focus goes: the new page's heading, or the opener when the address does not change).
  */
 export function AccountContent({
   user,
@@ -93,7 +96,7 @@ export function AccountContent({
   user: User;
   layout: AccountLayout;
   current: string;
-  onNavigate: () => void;
+  onNavigate: (hash: string) => void;
   onSignOut: () => void;
 }) {
   const role = roleLabel(user.role);
@@ -109,7 +112,7 @@ export function AccountContent({
       </div>
       <hr className="account-sep" />
       {accountItems(user.role, layout).map((item) => (
-        <a key={item.id} className="nav-link account-item" href={item.hash} aria-current={item.id === current ? 'page' : undefined} onClick={onNavigate}>
+        <a key={item.id} className="nav-link account-item" href={item.hash} aria-current={item.id === current ? 'page' : undefined} onClick={() => onNavigate(item.hash)}>
           <ItemIcon id={item.id} />
           {item.label}
         </a>
@@ -133,7 +136,18 @@ export function AccountContent({
 }
 
 /** The identity button of the top bar and its panel (shown from 768px; below it the "More" panel holds the same content). */
-export function AccountMenu({ user, current, onSignOut }: { user: User; current: string; onSignOut: () => void }) {
+export function AccountMenu({
+  user,
+  current,
+  onEntry,
+  onSignOut,
+}: {
+  user: User;
+  current: string;
+  /** An entry was used: the shell moves focus to the new page's heading, or runs `returnFocus` when the address does not change. */
+  onEntry: (hash: string, returnFocus: () => void) => void;
+  onSignOut: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -208,7 +222,16 @@ export function AccountMenu({ user, current, onSignOut }: { user: User; current:
       </button>
       {open && (
         <div ref={panelRef} id={ACCOUNT_MENU_ID} className="account-panel account-menu" role="group" aria-label="Account">
-          <AccountContent user={user} layout="desktop" current={current} onNavigate={close} onSignOut={onSignOut} />
+          <AccountContent
+            user={user}
+            layout="desktop"
+            current={current}
+            onNavigate={(hash) => {
+              close();
+              onEntry(hash, () => buttonRef.current?.focus());
+            }}
+            onSignOut={onSignOut}
+          />
         </div>
       )}
     </div>

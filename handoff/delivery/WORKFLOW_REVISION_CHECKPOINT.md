@@ -342,8 +342,23 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   joins 22.5-24.3/255 before, 2.1-2.8 after); the account-menu target-size item is justified (62
   of 73 widths overlap a control). Unit 2130 passed, full e2e 0 failed; digest e4659145 (833
   files).
-- Running now: WP5-UX3-FIX1-FREEZE (committer, sonnet; the 11 FIX1 paths plus the gate, sweep
-  and FIX1 records and evidence). Then FIX2 on that freeze.
+- WP5-UX3-FIX1-FREEZE done: 9187f31bee9c092041887d3ab034c492e33da0b5 on main, pushed (348 files:
+  11 source/tests, 12 task records and board files, 325 evidence files; digest e4659145, 833
+  files, on HEAD too; every check 0). Slip: one empty here-document redirect into a scratch file.
+- WP5-UX3-FIX2 first hand-back (worker-high, self-reported claude-sonnet-5-5): items 1-11 and
+  13 fixed (focus after an account entry, M18 and M21 now caught, editor chip by the day's own
+  period, "category" wording, docs/10 and docs/12, Check out discard question, unused helpers
+  removed with their oracles moved, hover gating, hint link). Unit 2131; full e2e 0 failed
+  (desktop 317, mobile 310); both simulated clocks 0 failed; main chunk 487.17 kB; verify 0;
+  digest 65a2296e (833 files). docs/04 still lacks the discard sentence and the account-menu
+  focus rule: Addendum 1 extends the worker's paths to the docs/04 pair for exactly these.
+- WP5-UX3-FIX2 done after Addendum 1: only the docs/04 pair changed (line 7 account-menu focus
+  rule, line 70 Check out discard sentence, EN and VI); parity OK, preflight PASS, unit 2131,
+  verify 0; digest 262138e0 (833 files); 27 changed paths outside handoff (13 client, 2 unit
+  test, 6 e2e, 6 docs).
+- Draft brief WP5-UX3-REGATE written (every attempt-1 gate item again, the FAIL reasons closed,
+  the FIX2 behaviours); target and digest are filled after the freeze. Registered pending.
+- Running now: WP5-UX3-FIX2-FREEZE (committer, sonnet).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

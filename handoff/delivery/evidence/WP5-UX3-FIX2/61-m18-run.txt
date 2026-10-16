@@ -1,0 +1,95 @@
+== m18: real start 2026-10-16T14:38:37Z, simulated start real, AB8_SHIFT_MS=0
+process clock 2026-10-16T14:38:37.460Z (Date.now 1792161517469); America/Los_Angeles Fri, 2026-10-16, 07:38; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts -g a new session on a past day is pre-filled|server date and never --output=<task>/pw-m18
+
+Running 4 tests using 2 workers
+
+PREFILL server today 2026-10-16, device date 2026-10-16 (Asia/Saigon), past day 2026-10-09
+PREFILL server today 2026-10-16, device date 2026-10-16 (Asia/Saigon), past day 2026-10-09
+  ok 1 [desktop] › tests\e2e\day-editor.spec.ts:593:1 › a new session on a past day is pre-filled with the reference hours and the suggested breaks inside them; today gets the hours only, whatever the device zone (U-23, G-3 a) (2.5s)
+  ok 2 [mobile] › tests\e2e\day-editor.spec.ts:593:1 › a new session on a past day is pre-filled with the reference hours and the suggested breaks inside them; today gets the hours only, whatever the device zone (U-23, G-3 a) (2.5s)
+  x  4 [mobile] › tests\e2e\day-editor.spec.ts:710:1 › the suggested breaks follow the server date and never the device clock: a device clock three days ahead or a year behind changes nothing (U-23, G-3 a) (8.3s)
+  x  3 [desktop] › tests\e2e\day-editor.spec.ts:710:1 › the suggested breaks follow the server date and never the device clock: a device clock three days ahead or a year behind changes nothing (U-23, G-3 a) (8.3s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:710:1 › the suggested breaks follow the server date and never the device clock: a device clock three days ahead or a year behind changes nothing (U-23, G-3 a)
+
+    Error: three days ahead: the server's today is pre-filled with hours only
+
+    expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  getByRole('dialog', { name: 'New session', exact: true }).locator('[data-prefill]')
+    Expected: "hours"
+    Received: "hours-breaks"
+    Timeout:  7000ms
+
+    Call log:
+      - three days ahead: the server's today is pre-filled with hours only getByRole('dialog', { name: 'New session', exact: true }).locator('[data-prefill]') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: 'New session', exact: true }).locator('[data-prefill]')
+        18 × locator resolved to <p class="prefill-note" data-prefill="hours-breaks">…</p>
+           - unexpected value "hours-breaks"
+
+
+      741 |     await todayEditor.getByRole('button', { name: 'Add session' }).click();
+      742 |     const todayForm = sessionDialog(page, 'New session');
+    > 743 |     await expect(todayForm.locator('[data-prefill]'), `${label}: the server's today is pre-filled with hours only`).toHaveAttribute('data-prefill', 'hours');
+          |                                                                                                                     ^
+      744 |     await expect(todayForm.locator('[data-break]'), `${label}: no break is suggested for the server's today`).toHaveCount(0);
+      745 |     await todayForm.getByRole('button', { name: 'Cancel', exact: true }).click();
+      746 |     await expect(todayForm).toHaveCount(0);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:743:117
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX2\pw-m18\day-editor-the-suggested-b-2f10c-changes-nothing-U-23-G-3-a--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX2\pw-m18\day-editor-the-suggested-b-2f10c-changes-nothing-U-23-G-3-a--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX2\pw-m18\day-editor-the-suggested-b-2f10c-changes-nothing-U-23-G-3-a--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\day-editor.spec.ts:710:1 › the suggested breaks follow the server date and never the device clock: a device clock three days ahead or a year behind changes nothing (U-23, G-3 a)
+
+    Error: three days ahead: the server's today is pre-filled with hours only
+
+    expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  getByRole('dialog', { name: 'New session', exact: true }).locator('[data-prefill]')
+    Expected: "hours"
+    Received: "hours-breaks"
+    Timeout:  7000ms
+
+    Call log:
+      - three days ahead: the server's today is pre-filled with hours only getByRole('dialog', { name: 'New session', exact: true }).locator('[data-prefill]') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: 'New session', exact: true }).locator('[data-prefill]')
+        18 × locator resolved to <p class="prefill-note" data-prefill="hours-breaks">…</p>
+           - unexpected value "hours-breaks"
+
+
+      741 |     await todayEditor.getByRole('button', { name: 'Add session' }).click();
+      742 |     const todayForm = sessionDialog(page, 'New session');
+    > 743 |     await expect(todayForm.locator('[data-prefill]'), `${label}: the server's today is pre-filled with hours only`).toHaveAttribute('data-prefill', 'hours');
+          |                                                                                                                     ^
+      744 |     await expect(todayForm.locator('[data-break]'), `${label}: no break is suggested for the server's today`).toHaveCount(0);
+      745 |     await todayForm.getByRole('button', { name: 'Cancel', exact: true }).click();
+      746 |     await expect(todayForm).toHaveCount(0);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:743:117
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX2\pw-m18\day-editor-the-suggested-b-2f10c-changes-nothing-U-23-G-3-a--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX2\pw-m18\day-editor-the-suggested-b-2f10c-changes-nothing-U-23-G-3-a--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX2\pw-m18\day-editor-the-suggested-b-2f10c-changes-nothing-U-23-G-3-a--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:710:1 › the suggested breaks follow the server date and never the device clock: a device clock three days ahead or a year behind changes nothing (U-23, G-3 a)
+    [mobile] › tests\e2e\day-editor.spec.ts:710:1 › the suggested breaks follow the server date and never the device clock: a device clock three days ahead or a year behind changes nothing (U-23, G-3 a)
+  2 passed (13.4s)
+exit=1
+process clock 2026-10-16T14:38:51.216Z (Date.now 1792161531225); America/Los_Angeles Fri, 2026-10-16, 07:38; shift ms 0; instanceof true
+== m18 real end 2026-10-16T14:38:51Z

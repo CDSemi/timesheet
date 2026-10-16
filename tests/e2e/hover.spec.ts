@@ -549,6 +549,49 @@ for (const situation of SITUATIONS) {
   });
 }
 
+/* ---- The sheet day columns (WP5-UX3-FIX2 item 11, AGENTS UI rule 3) ---------------------------------------- */
+
+/**
+ * A tap must not leave a tint on a sheet day column of a touch screen of 768px or more: every `.sheet-day` hover rule that paints
+ * (the column tint and the lifted column's tint) sits inside `@media (hover: hover)`. The read-only sheet's two reset rules only
+ * undo that tint and may stay outside. The browser's own parsed style sheets are read, so the check does not depend on a device.
+ */
+test('the sheet day hover rules exist only under (hover: hover); where the device can hover, a day column tints under the pointer', async ({
+  page,
+  signInThroughUi,
+}) => {
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const rules = await page.evaluate<{ ungated: string[]; gated: string[] }>(`(() => {
+    const result = { ungated: [], gated: [] };
+    const visit = (list, hoverOnly) => {
+      for (const rule of Array.from(list)) {
+        if (rule instanceof CSSMediaRule) {
+          visit(rule.cssRules, hoverOnly || /hover:\\s*hover/.test(rule.media.mediaText));
+        } else if (rule instanceof CSSStyleRule && /\\.sheet-day[^,{]*:hover/.test(rule.selectorText) && !rule.selectorText.startsWith('.sheet-review')) {
+          (hoverOnly ? result.gated : result.ungated).push(rule.selectorText);
+        }
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets)) visit(sheet.cssRules, false);
+    return result;
+  })()`);
+  expect(rules.ungated, 'sheet day hover rules outside (hover: hover)').toEqual([]);
+  expect(rules.gated.some((selector) => selector.includes('[data-lift]')), 'the lifted column tint is a gated hover rule').toBe(true);
+  expect(rules.gated.some((selector) => !selector.includes('[data-lift]') && !selector.includes('.sheet-date')), 'the day column tint is a gated hover rule').toBe(true);
+
+  if (await canHover(page)) {
+    // A day column that is neither lifted nor selected tints under the pointer and returns to rest when it leaves.
+    const day = page.locator('.sheet-day[data-day]:not([data-lift]):not(.selected):not(.nonworking)').first();
+    await page.mouse.move(0, 0);
+    const rest = await settledStyle(day, 'backgroundColor');
+    await day.hover({ position: { x: 4, y: 4 } });
+    expect(await settledStyle(day, 'backgroundColor'), 'a hovered day column differs from rest').not.toBe(rest);
+    await page.mouse.move(0, 0);
+    expect(await settledStyle(day, 'backgroundColor'), 'the day column returns to rest').toBe(rest);
+  }
+});
+
 /* ---- Synthetic captures for the record: hover, pressed, the switch and the picker, light and dark ---------- */
 
 for (const theme of ['light', 'dark'] as const) {

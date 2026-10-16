@@ -138,3 +138,20 @@ staged count per group; other modified handoff files; every check with its exit 
 fix, masking or stop reason.
 
 ## Results
+
+- Self-reported model: claude-sonnet-5-5. Node v24.21.0.
+- Pre-HEAD cecfceb61c7f15216c8f188e8b7059c9f075247d (= origin/main); nothing pre-staged.
+- Post-HEAD / commit SHA 9187f31bee9c092041887d3ab034c492e33da0b5; pushed yes; remote SHA
+  9187f31bee9c092041887d3ab034c492e33da0b5 (branch main, dry-run and push exit 0). No tag.
+- Digest before add and on the new HEAD via ls-tree: e4659145c15f07915d05d831df0478b3026bbedb0d3ec5dc8382b3db03bfd833
+  (833 files) both times.
+- Staged 348: source/test 11; modified handoff 8; new task records 4; evidence T10-FREEZE 2,
+  GATE 217, SWEEP 31, FIX1 75 (all names end .txt or -synthetic.png).
+- Other modified handoff files: none beyond the listed 8; diff stat and whitespace-ignoring
+  stat identical (19 files, 934 insertions, 60 deletions), so no line-ending-only changes.
+- Checks and exit codes: node version 0; digest 0; git add 0; precommit-check 0 (348 files,
+  0 findings); diff --cached --check 0; JSON parse 0; validate_orchestration 0;
+  check_recovery 0 (106 probes); validate_package --preflight 0 (PASS); commit 0.
+- No fixes, no masking, no stop reason. Evidence in evidence/WP5-UX3-FIX1-FREEZE/ (unstaged).
+- Note: one empty scratch file was created with a shell redirect from an empty here-document by
+  mistake (nothing fed to an interpreter); it lives in the temp folder only.

@@ -98,7 +98,11 @@ export function DayFieldsForm({
       <div className="label-row">
         <label className="label-select">
           Category
-          <select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value as DayCategory })}>
+          <select
+            value={draft.category}
+            onChange={(event) => setDraft({ ...draft, category: event.target.value as DayCategory })}
+            aria-describedby={day.category_source === 'default' ? `${id}-category-hint` : undefined}
+          >
             {CATEGORIES.map((category) => (
               <option key={category} value={category}>
                 {category}
@@ -111,7 +115,11 @@ export function DayFieldsForm({
           Worked from home (WFH)
         </label>
       </div>
-      {day.category_source === 'default' && <p className="muted hint">Calendar default. Saving records it as your choice.</p>}
+      {day.category_source === 'default' && (
+        <p id={`${id}-category-hint`} className="muted hint">
+          Calendar default. Saving records it as your choice.
+        </p>
+      )}
       <fieldset className="leave-fields" aria-describedby={`${id}-leave-hint`}>
         <legend>Partial leave</legend>
         <div className="leave-grid">

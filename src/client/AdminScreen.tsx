@@ -84,7 +84,7 @@ export function AdminScreen({ user }: { user: User }) {
 
   return (
     <div className="stack admin-screen">
-      <h1>Administration</h1>
+      <h1 tabIndex={-1}>Administration</h1>
       <p className="hint muted">
         Accounts, company calendar and operations status. This screen never shows anyone's timesheet details: entries, sessions, OT, leave, notes,
         history, exports, templates or message content.

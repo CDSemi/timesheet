@@ -240,7 +240,7 @@ export function OtScreen() {
       <Balances balance={data.summary} provisional={data.summary.provisional_minutes} />
       {warnings.length > 0 && (
         <section className="warn-box stack" aria-label="Leave label mismatch" data-warning="mismatch">
-          <h2>Day label and recorded use differ</h2>
+          <h2>Day category and recorded use differ</h2>
           <ul className="plain">
             {warnings.map((day) => (
               <li key={day.work_date} data-mismatch-date={day.work_date}>
