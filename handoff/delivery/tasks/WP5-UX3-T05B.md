@@ -21,8 +21,8 @@
 - Profile/routing: timesheet-worker-high (effort high, fixed by the profile); requested
   model sonnet; no override. Routing: size M, risk M (focus and Escape regressions across the
   mode switch, B3-01), novelty yes. Task record in English.
-- Base: HEAD = origin/main = the WP5-UX3-T05-FREEZE commit (board `commit_sha`), or a later
-  commit that changes only `handoff/`; source digest
+- Base: HEAD = origin/main = 699b1b304390ae556c89c6d3a9ee652a00da5182 (the T05 freeze), or
+  a later commit that changes only `handoff/`; source digest
   23b394dd4450fe9365865ca08a127f7d2d874b6a0c767ccc04a2e523e7306b7a (827 files). Record HEAD,
   `git status --short` and the digest before you edit. Uncommitted coordinator files under
   `handoff/` are expected: never touch them.
@@ -139,3 +139,118 @@ the main chunk size, verify exit code, the final full 64-hex digest and file cou
 evidence files, the background-task confirmation, any stop, conflict or deviation.
 
 ## Results
+
+Self-reported model: claude-sonnet-5-5 (timesheet-worker-high, effort high). Attempt 1.
+
+### Baseline (before the first edit)
+
+HEAD 699b1b304390ae556c89c6d3a9ee652a00da5182; `git status --short` showed only the coordinator's
+`handoff/` files; digest 23b394dd4450fe9365865ca08a127f7d2d874b6a0c767ccc04a2e523e7306b7a (827 files);
+Node v24.21.0. Evidence `baseline.txt`, `digest-before.txt`.
+
+### Implementation
+
+- `src/client/styles.css`: `.week-grid` columns `minmax(var(--sheet-col-min), var(--track))` (108px token);
+  the side-by-side media query moved from 1200px to 1360px (literal, with a comment) and now also holds
+  `.page:has(.sheet-area.with-editor) { max-width: var(--page-max-editor) }`; the floating side panel
+  `.day-panel-side` keeps `--elev-3`, `--radius-lg` and `min(var(--editor-width), 100vw - 24px)`, its backdrop is
+  `--scrim-side`, and `.day-panel-side[data-side='left']` docks it at the left edge; the section comment is updated.
+- `src/client/TimesheetScreen.tsx`: `WIDE_QUERY` is `(min-width: 1360px)`; `dockAwayFrom(workDate)` scrolls the
+  edited column into view (`scrollIntoView({ block: 'nearest' })`) and returns `left` when the column's centre is
+  right of the viewport centre, else `right`; a layout effect (it runs before the editor's own effect shows the
+  dialog) stores it while the editor floats (desktop-width and not wide); `DayEditor` receives `dockSide`.
+- `src/client/DayEditor.tsx`: optional `dockSide` prop and `data-side` on the modal side panel only (not on the
+  panel beside the sheet nor the bottom sheet); comments say 1360px. The mode-switch code is unchanged (the
+  `modal` prop carries the threshold), so the B3-01 deferred switch, Escape order, focus move and return, AX-01
+  scroll padding and the editing marker and `aria-current` are untouched.
+- Rule as implemented: from 1360px the editor is non-modal beside the sheet and the page cap lifts to 1600px;
+  from 768 to 1359px it is the modal side panel floating over `--scrim-side`, docked away from the edited column,
+  column scrolled into view; below 768px the bottom sheet as before.
+- Deviation (needed, small): `.sheet-week { overflow-x: auto }` from 768 to 899px only. Seven 108px columns plus the
+  label column need 850px and the page padding 32px, so from 768 to about 881px the grid would overflow the page; the
+  existing tests "no sideways scroll" at 768 and 820 (`timesheet.spec.ts` meta line tests) would fail. The week card
+  scrolls sideways inside itself there instead of breaking words. The lift shadows of a column are clipped by that
+  scroll box in that range only.
+
+### Tests
+
+Changed assertions and why none is weakened (all line numbers are in the final files):
+
+- `tests/e2e/day-editor.spec.ts:920` "the day editor is a side panel on a desktop ..." sets the window to 1440x800 on
+  the desktop project: the same non-modal and beside-the-sheet assertions, now at a width where that is the rule
+  (the project's 1280px window floats the panel). Assertions unchanged.
+- `day-editor.spec.ts:1003` B-02 keyboard walk (AX-01) list `[768, 1024]` became `[768, 1024, 1280, 1359]`: added
+  widths, nothing removed; this is the AX-01 walk in the floating panel at 1280.
+- `day-editor.spec.ts:1038-1075` "at 1280px the panel stays beside the sheet and Escape closes it" became two cases:
+  1280 (modal, floats) and 1366 (non-modal, beside). The beside case keeps every old assertion (focus on another
+  sheet control, Show details focus and the Escape closes / focus returns steps, the latter now also asserted); the
+  modal case keeps Escape closes and focus returns, and skips only the "focus() on an inert sheet control" steps that
+  cannot apply while the page is inert.
+- `day-editor.spec.ts:1581-1643` B3-01: the crossing moved from 1200 to 1360 (start 1440; paths "1440 to 1280" and
+  "1280 back to 1440"; `width >= 1360` at 1625; comments; the screenshot names `fix5-review-on-top-w1280/w1440`).
+  Every assertion of the old paths is kept.
+- New `day-editor.spec.ts:1078-1380` describe "WP5-UX3-T05B" (3 tests, desktop project): floating at 1280 and 1359
+  (modal, `.sheet-area` without `with-editor`, grid width equals the closed width, no column changes, every word fits
+  its cell, 400px panel, Escape and focus return); dock side for Monday (right), Saturday and Sunday (left), column
+  box does not meet the panel box, column scrolled into view from an off-screen position, backdrop equals
+  `--scrim-side`; beside at 1360, 1366, 1440, 1920 (non-modal, every column >= 108px, no word wider than its cell,
+  no sideways scroll, page 1600px at 1920, panel right of the sheet, Escape from a sheet control and focus return).
+  Data on a private server: the longest holiday "Observed Independence Day", an overnight session 22:00 to 02:30,
+  two sessions on one day; dates from the server's displayed period (no fixed date, no clock).
+- `tests/e2e/timesheet.spec.ts:37` (constant `EDITOR_BESIDE_SHEET`, 1445x800) and the per-test
+  `setViewportSize` at 609, 660, 814, 942, 1039, 1134, 1298, 1354, 1420 (marker, Show details with the editor, lifted
+  and framed editing column, pixel frame, picker in the editing column, Today bar with editing marker, contrast on the
+  editing day, lifted runs, picker over a lifted neighbour): viewport only; they act on the sheet while the editor is
+  open, which needs it beside the sheet. 1445 rather than 1440: columns are then exactly 129px, so the pixel probes of
+  the 1px inset frame (cut by the run's clip-path) read whole pixels; at 1440 (128.29px columns) the unchanged test
+  "lifted columns form runs" failed 3 of 3 times at "frame at the left inner edge" (a sub-pixel softening that exists
+  at any fractional column edge, also before this task; not changed here).
+- `tests/e2e/today.spec.ts:241`: viewport 1440x800 on the desktop project for "Today moves an open Day editor":
+  viewport only.
+- No `skip`, `fixme` or `.only` added; no assertion removed.
+- `keyboard-access.spec.ts`, `focus-ring.spec.ts`, `sharing.spec.ts`: unchanged, they passed unchanged.
+
+### Checks (actual results; evidence in `handoff/delivery/evidence/WP5-UX3-T05B/`)
+
+- Step 1/2: Node v24.21.0; HEAD and digest above.
+- Reproduction before the test edits: desktop project, 14 failed / 261 passed / 30 skipped
+  (`e2e-desktop-before-test-changes.txt`): `day-editor.spec.ts` (4), `timesheet.spec.ts` (9), `today.spec.ts` (1), all
+  because the editor now floats (modal) at the project's 1280px window.
+- Step 3: `npm run typecheck` exit 0, `npm run lint` exit 0, `npm test` exit 0: 93 files, 2075 tests passed.
+- Step 4: `npm run build` exit 0; main chunk `index-BWG5g5tI.js` 453.27 kB (gzip 133.22 kB), CSS 69.02 kB; no
+  chunk-size advisory.
+- Step 5: `npm run test:e2e` (build, then both projects), alone, `E2E_SCREENSHOT_DIR` and the output folder in the task
+  folder, real clock: 622 tests, 0 failed, 561 passed, 61 skipped (the project guards that already existed).
+  desktop: 281 passed, 30 skipped; mobile: 280 passed, 31 skipped. This is the final tree (the full suite was run once
+  before and once after the last test edit; both 561 passed).
+- Column widths with the editor open (the new test, light): 1360 -> 116.8px; 1366 -> 117.7px; 1440 -> 128.3px;
+  1920 -> 151.1px (page 1600px); floating at 1280 and 1359 the sheet keeps its 1168px grid and 153.4px columns.
+  Dock (1280): Monday right (panel x 868-1268, column x 149-302); Saturday left (panel x 12-412, column x 916-1070);
+  Sunday left (column x 1070-1223).
+- 390x844 first-screen budgets (unchanged tests, passed): first day row bottom 658.4px with the zone note and
+  559.5px without, 710.4px / 611.5px with a received share, tab bar top 788px, shell bar 60px (112px with a share).
+- Step 6 mutation: `WIDE_QUERY` and the CSS media query set back to 1200px, rebuilt, desktop run of the T05B, B-02 and
+  B3-01 tests: 5 failed, 6 passed (`e2e-mutation-breakpoint-1200.txt`). Failed: "at 1280px the panel floats (modal)",
+  the 1280/1359 floating test (soft checks report "the editor is modal" false, `with-editor` present, and the
+  no-squeeze check: grid expected 1168, received 832, i.e. columns under 108px), the dock test (not modal, no
+  `data-side`), and both B3-01 paths. Reverted (both edits), then rebuilt by the later full run and `verify`.
+- Step 7: Grep of the changed files and the test diff for emails and user-profile paths: none; the evidence logs hold
+  only `timesheet@0.1.0` and `employee2@example.invalid`; `[ \t]+$` in the six changed files: none; `git diff --check`
+  exit 0; each file ends with exactly one newline.
+- Step 8: `npm run verify` (SMOKE_PORT 48705, DATA_DIR and DATABASE_PATH in the task folder) exit 0: typecheck, lint,
+  93 files / 2075 tests, build, "SMOKE PASSED".
+- Step 9 (last command): `npm run digest`:
+  a17a0ce82faac6f99e3fc0e53bdb02289784776efce6e969966bcf5dcb14aeb9  (827 files, handoff/ excluded), exit 0.
+- Evidence files: `baseline.txt`, `digest-before.txt`, `typecheck.txt`, `lint.txt`, `unit-tests.txt`,
+  `e2e-desktop-before-test-changes.txt`, `e2e-full-final.txt`, `e2e-mutation-breakpoint-1200.txt`, `verify.txt`,
+  `digest-after.txt`, and six screenshots `editor-floating-w1280`, `editor-floating-docked-left-w1280`,
+  `editor-beside-w1366`, `editor-beside-w1920`, `editor-w1359`, `fix5-review-on-top-w1280` (all `-synthetic.png`).
+
+### Notes for the coordinator
+
+- Not committed or pushed. No install, no server, API, domain, schema or CSP change.
+- Conflict/observation: the `.sheet-day[data-lift]` pixel probes of the editing frame are sensitive to fractional column
+  edges (pre-existing); the test window is 1445px for that reason.
+- No background task of mine is still running.
+
+Status: done

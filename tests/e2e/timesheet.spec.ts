@@ -27,6 +27,15 @@ import { expect, screenshotPath, type SeedClient, test } from './fixtures.ts';
  */
 test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
 
+/**
+ * WP5-UX3-T05B: below 1360px the Day editor floats as a modal panel and the page behind is inert. A desktop test that works on the
+ * sheet while the editor is open therefore runs in a window where the editor stands beside the sheet (the project's own window is 1280px).
+ * 1445px, not 1440: with the page uncapped to 1600px the seven columns are then exactly 129px wide, so a column's left and right edges
+ * fall on whole pixels and the pixel probes of the editing frame (a 1px inset ring cut by the run's clip-path) read it exactly. At a
+ * fractional column edge the clip softens that ring's outer pixel, which those probes were never written for.
+ */
+const EDITOR_BESIDE_SHEET = { width: 1445, height: 800 };
+
 test.beforeEach(({ page }) => {
   // A CSP violation shows up as a console error. The signed-out probe answers 401 by design and
   // the stale-version test makes the server answer 409 on purpose; nothing else is expected.
@@ -597,6 +606,7 @@ test('the day open in the Day editor is marked on that day only, moves with the 
   signInThroughUi,
 }, testInfo) => {
   const desktop = testInfo.project.name === 'desktop';
+  if (desktop) await page.setViewportSize(EDITOR_BESIDE_SHEET);
   const [first = '', second = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
   await signInThroughUi();
   await expect(page.locator('[data-day]')).toHaveCount(14);
@@ -647,6 +657,7 @@ test('the marker stays with the editor across Show details and a period change, 
   signInThroughUi,
 }, testInfo) => {
   const desktop = testInfo.project.name === 'desktop';
+  if (desktop) await page.setViewportSize(EDITOR_BESIDE_SHEET);
   const { dates } = await shownPeriod(employeeSeed);
   const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
   const lastShown = dates.at(-1) ?? '';
@@ -800,6 +811,7 @@ test('the day open in the Day editor is a lifted column with an inset 1px accent
 }, testInfo) => {
   test.setTimeout(60_000);
   const desktop = testInfo.project.name === 'desktop';
+  if (desktop) await page.setViewportSize(EDITOR_BESIDE_SHEET);
   const [first = '', second = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
   await signInThroughUi();
   await expect(page.locator('[data-day]')).toHaveCount(14);
@@ -927,6 +939,7 @@ test('desktop: the inset frame and the Day-cell fill are painted over every cell
 }, testInfo) => {
   test.setTimeout(120_000);
   const project = testInfo.project.name;
+  if (project === 'desktop') await page.setViewportSize(EDITOR_BESIDE_SHEET);
   const [first = '', second = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
   await signInThroughUi();
   await expect(page.locator('[data-day]')).toHaveCount(14);
@@ -1023,6 +1036,7 @@ for (const width of [390, 375, 360, 320]) {
 
 test('an open label picker list stays above the neighbouring columns, also in the editing column', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
   const desktop = testInfo.project.name === 'desktop';
+  if (desktop) await page.setViewportSize(EDITOR_BESIDE_SHEET);
   const [first = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
   await signInThroughUi();
   await expect(page.locator('[data-day]')).toHaveCount(14);
@@ -1117,6 +1131,7 @@ test('the Today bar is painted over the day head, with the Today tag, and stays 
 }, testInfo) => {
   test.setTimeout(90_000);
   const desktop = testInfo.project.name === 'desktop';
+  if (desktop) await page.setViewportSize(EDITOR_BESIDE_SHEET);
   await signInThroughUi();
   const today = await showToday(page, employeeSeed);
   const unit = page.locator(`[data-day="${today}"]`);
@@ -1280,6 +1295,7 @@ test('the frame and text keep their contrast on every surface of the editing day
 }, testInfo) => {
   test.setTimeout(90_000);
   const desktop = testInfo.project.name === 'desktop';
+  if (desktop) await page.setViewportSize(EDITOR_BESIDE_SHEET);
   const [workday = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
   const { nonworking } = await shownPeriod(employeeSeed);
   const dayOff = nonworking[0] ?? '';
@@ -1335,6 +1351,7 @@ test('lifted columns form runs: one shadow around the group, 4px corners on the 
 }, testInfo) => {
   test.setTimeout(90_000);
   const desktop = testInfo.project.name === 'desktop';
+  if (desktop) await page.setViewportSize(EDITOR_BESIDE_SHEET);
   const { dates } = await shownPeriod(employeeSeed);
   // The first band is Monday to Sunday: Mon, Tue and Wed form a run, Thu is a gap, Fri stands alone.
   const [monday = '', tuesday = '', wednesday = '', thursday = '', friday = ''] = dates;
@@ -1400,6 +1417,7 @@ test('lifted columns form runs: one shadow around the group, 4px corners on the 
 
 test('an open label picker stays above a lifted neighbour: the list of one column covers the open (lifted) column beside it', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop', 'The lifted editing column and the picker are the desktop sheet');
+  await page.setViewportSize(EDITOR_BESIDE_SHEET);
   const { dates } = await shownPeriod(employeeSeed);
   // Tuesday's list opens to the right over Wednesday, which is the open (lifted) column.
   const [, tuesday = '', wednesday = ''] = dates;

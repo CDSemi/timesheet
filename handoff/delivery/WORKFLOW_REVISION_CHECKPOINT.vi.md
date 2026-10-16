@@ -219,6 +219,25 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Đã viết brief T05B (Day editor nổi dưới 1360px) và đăng ký ở trạng thái chờ.
 - Đang chạy: WP5-UX3-T05-FREEZE (committer, chạy một mình; 15 đường dẫn mã nguồn/test cùng 30
   đường dẫn handoff).
+- WP5-UX3-T05-FREEZE xong: 699b1b304390ae556c89c6d3a9ee652a00da5182 trên main, đã push (45
+  đường dẫn; digest 23b394dd, 827 file; mọi bước kiểm exit 0).
+- Đang chạy: WP5-UX3-T05B (worker-high, sonnet; Day editor nổi dưới 1360px, độ rộng cột tối
+  thiểu) trên 699b1b3 / 23b394dd.
+- WP5-UX3-T05B xong (worker-high, tự báo claude-sonnet-5-5; kết quả tự báo, chưa phải bằng
+  chứng độc lập): cột tối thiểu 108px; panel đứng cạnh bảng từ 1360px (trang rộng tối đa
+  1600px khi đang sửa); từ 768 đến 1359px là panel nổi dạng modal có nền mờ nhẹ, nằm phía đối
+  diện cột đang sửa; cột rộng 116.8 / 117.7 / 151.1px ở 1360 / 1366 / 1920; unit 2075; e2e
+  đầy đủ desktop 281, mobile 280, 0 lỗi; đột biến bị bắt; ngân sách màn hình đầu không đổi;
+  gói chính 453.27 kB; verify 0; digest a17a0ce8 (827 file). Sai lệch: từ 768 đến 899px thẻ
+  tuần tự cuộn ngang bên trong; test pixel của nhóm cột nổi chạy ở 1445px vì cạnh cột lẻ pixel
+  ở 1440.
+- Quyết định của coordinator: danh sách điểm cần audit (quy tắc transition chung, màu hover,
+  tải lại trang khi tải gói lỗi, quét axe thật, cuộn ngang trong thẻ ở 768-899px và khả năng
+  có đường nối ở nhóm cột nổi tại độ rộng lẻ, thanh trên cùng hẹp lại ở 1024-1279px, chữ Open
+  a day ở 360px) đưa vào brief của gate và audit.
+- Đã viết brief T07 và đăng ký ở trạng thái chờ.
+- Đang chạy: WP5-UX3-T05B-FREEZE (committer, chạy một mình; 6 đường dẫn mã nguồn/test cùng 25
+  đường dẫn handoff).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

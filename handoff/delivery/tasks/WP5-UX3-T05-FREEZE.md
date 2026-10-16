@@ -126,3 +126,17 @@ staged count per group; other modified handoff files; every check with its exit 
 fix, masking or stop reason.
 
 ## Results
+
+- Pre-HEAD 83c32d2fbc57af00ef251a06024b39e641a677ce (= origin/main). Post-HEAD / commit
+  699b1b304390ae556c89c6d3a9ee652a00da5182 on main; pushed yes; remote SHA equal.
+- Digest before add and on the new HEAD (ls-tree): 23b394dd4450fe9365865ca08a127f7d2d874b6a0c767ccc04a2e523e7306b7a,
+  827 files, both.
+- Staged 45: 15 source/tests, 30 handoff (5 modified, 2 task records, 23 evidence; the T05
+  evidence folder held 21). Nothing was pre-staged. No other modified handoff files; no
+  unstaged diff after staging.
+- Checks (exit): node v24.21.0 (0); HEAD/origin (0); digest (0); git add (0); precommit
+  45 files, 0 findings (0); diff --cached --check (0); JSON parse (0); validate_orchestration
+  PASS (0); check_recovery 106 probes PASS (0); validate_package --preflight PASS (0);
+  post-commit digest match; commit (0); fetch, dry-run, push (0).
+- No masking, no fix, no deviation. Evidence: evidence/WP5-UX3-T05-FREEZE/checks.txt and
+  commit-message.txt (unstaged). No tag. This results text is unstaged.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { addDays } from '../domain/dates.ts';
 import {
   ApiRequestError,
@@ -35,11 +35,28 @@ import { DayEditor } from './DayEditor.tsx';
  */
 
 /**
- * From this width the day editor is a non-modal panel in its own column beside the sheet. Below it
- * the editor is modal (a side panel from 768px, a bottom sheet below that), so it never covers a
- * control that can still take focus.
+ * From this width the day editor is a non-modal panel in its own column beside the sheet, which keeps its
+ * seven columns at their readable width. 1360px is the same literal as the media query in styles.css (a media
+ * query cannot read a custom property). Below it the editor is modal and floats (a side panel from 768px, a
+ * bottom sheet below that), so it never covers a control that can still take focus.
  */
-const WIDE_QUERY = '(min-width: 1200px)';
+const WIDE_QUERY = '(min-width: 1360px)';
+
+/** Which side the floating (modal) side panel docks on: away from the edited column, so the column stays visible. */
+type DockSide = 'left' | 'right';
+
+/**
+ * Scrolls the edited column into view (vertically; a sideways scroll only when the sheet itself scrolls sideways) and
+ * returns the side away from it: the panel goes left when the column's centre is right of the window's centre. A date
+ * that is not on the sheet (opened through "Open a day") leaves the panel on the right.
+ */
+function dockAwayFrom(workDate: string): DockSide {
+  const column = document.querySelector<HTMLElement>(`[data-day="${workDate}"]`);
+  if (column === null) return 'right';
+  column.scrollIntoView({ block: 'nearest' });
+  const box = column.getBoundingClientRect();
+  return box.left + box.width / 2 > document.documentElement.clientWidth / 2 ? 'left' : 'right';
+}
 
 /**
  * Moves focus back to a day's own button (found by the day's `data-day`, never by its accessible
@@ -179,6 +196,16 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [request]);
+
+  // The floating side panel (a modal editor on a desktop-width window narrower than WIDE_QUERY) docks away from the edited
+  // column. A layout effect runs before the editor's own effect shows the dialog, so the column is scrolled into view first.
+  // The side is read again when the edited day or the mode changes; the editor itself stays mounted across a mode change.
+  const floating = desktop && !wide;
+  const [dockSide, setDockSide] = useState<DockSide>('right');
+  useLayoutEffect(() => {
+    if (editDate === null || !floating) return;
+    setDockSide(dockAwayFrom(editDate));
+  }, [editDate, floating]);
 
   // The clock state looks the running session up again with every load: this page reports the period it loaded.
   const reportView = clock?.reportView;
@@ -557,6 +584,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
               todayLocal={todayLocal}
               modal={!wide}
               bottomSheet={!desktop}
+              dockSide={dockSide}
               refresh={editorRefresh}
               onChanged={load}
               onClose={closeEditor}

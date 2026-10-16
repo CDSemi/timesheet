@@ -203,6 +203,24 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   (a real axe scan goes to the gate and audit area A).
 - T05B brief written (floating editor below 1360px) and registered pending.
 - Running: WP5-UX3-T05-FREEZE (committer, alone; 15 source/test paths plus 30 handoff paths).
+- WP5-UX3-T05-FREEZE done: 699b1b304390ae556c89c6d3a9ee652a00da5182 on main, pushed (45
+  paths; digest 23b394dd, 827 files; every check exit 0).
+- Running: WP5-UX3-T05B (worker-high, sonnet; floating Day editor below 1360px, minimum
+  column width) on 699b1b3 / 23b394dd.
+- WP5-UX3-T05B done (worker-high, self-reported claude-sonnet-5-5; reported, not independent
+  proof): 108px minimum columns; side panel from 1360px (page cap 1600px while editing);
+  floating modal side panel with a light backdrop from 768 to 1359px, docked away from the
+  edited column; columns 116.8 / 117.7 / 151.1px at 1360 / 1366 / 1920; unit 2075; full e2e
+  desktop 281, mobile 280, 0 failed; mutation caught; budgets unchanged; main chunk 453.27
+  kB; verify 0; digest a17a0ce8 (827 files). Deviations: week cards scroll sideways inside
+  themselves from 768 to 899px; the lift-run pixel test runs at 1445px because of a
+  fractional column edge at 1440.
+- Coordinator decision: an audit-focus list (universal transition rule, hover colour, chunk
+  retry reload, real axe scan, the 768-899px inner scroll and possible lift-run seams at
+  fractional widths, the 1024-1279px bar tightening, the 360px Open-a-day words) goes into
+  the gate and audit briefs.
+- T07 brief written and registered pending.
+- Running: WP5-UX3-T05B-FREEZE (committer, alone; 6 source/test paths plus 25 handoff paths).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

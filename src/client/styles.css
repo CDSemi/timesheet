@@ -2414,11 +2414,22 @@ textarea {
 /* Desktop: one grid per week; the visual row-label column is hidden from screen readers. */
 .week-grid {
   display: grid;
-  grid-template-columns: var(--sheet-label-col) repeat(var(--sheet-days), minmax(0, var(--track)));
+  grid-template-columns: var(--sheet-label-col) repeat(var(--sheet-days), minmax(var(--sheet-col-min), var(--track)));
   grid-template-rows:
     minmax(var(--row-day), auto) minmax(var(--row-date), auto) minmax(var(--row-label), auto)
     minmax(var(--row-time), auto) minmax(var(--row-ot), auto) minmax(var(--row-check), auto);
   border: var(--hairline) solid var(--sheet-rule);
+}
+
+/*
+ * Seven columns of at least --sheet-col-min and the label column need 850px, plus the 32px page padding and a classic
+ * scrollbar: a narrower window (768 to 899px) scrolls the week card sideways instead of breaking words inside the
+ * columns. (Literal width: a media query cannot read a custom property.)
+ */
+@media (min-width: 768px) and (max-width: 899px) {
+  .sheet-week {
+    overflow-x: auto;
+  }
 }
 
 .week-grid.with-details {
@@ -3264,12 +3275,14 @@ textarea {
 /* ---- Day editor panel and bottom sheet, in-cell label picker (WP5-UX-T04) ------- */
 
 /*
- * One native <dialog> for the day editor. From 1200px it is a non-modal panel in its own column
- * beside the sheet (the sheet keeps its seven columns). Below 1200px it is modal, so the page
- * behind is inert and the panel never hides a control that can still take focus: a side panel
- * fixed at the right edge from 768px, a bottom sheet of at most 86% of the height below that.
- * Inside: a sticky head, then the banner, the times, label and leave, and the figures, each
- * section separated by a soft rule.
+ * One native <dialog> for the day editor. From 1360px it is a non-modal panel in its own column
+ * beside the sheet (the sheet keeps its seven columns at their readable width, and the page cap
+ * lifts to --page-max-editor while it is open). Below 1360px it is modal, so the page behind is
+ * inert and the panel never hides a control that can still take focus: from 768px a floating side
+ * panel over a light backdrop (--scrim-side), docked on the side away from the edited column
+ * (`data-side`), a bottom sheet of at most 86% of the height below that. Inside: a sticky head,
+ * then the banner, the times, label and leave, and the figures, each section separated by a soft
+ * rule.
  */
 .sheet-area {
   display: grid;
@@ -3317,11 +3330,22 @@ textarea {
   height: auto;
 }
 
-.day-panel-side::backdrop {
-  background: var(--scrim);
+/* Docked on the left when the edited column lies in the right half of the window, so the column stays visible. */
+.day-panel-side[data-side='left'] {
+  inset: calc(var(--bar-height) + var(--space-3)) auto var(--space-3) var(--space-3);
 }
 
-@media (min-width: 1200px) {
+/* The floating panel dims the page less than a dialog: the edited column stays readable for orientation. */
+.day-panel-side::backdrop {
+  background: var(--scrim-side);
+}
+
+/* 1360px (literal: a media query cannot read a custom property) is the width at which WIDE_QUERY in TimesheetScreen.tsx switches too. */
+@media (min-width: 1360px) {
+  .page:has(.sheet-area.with-editor) {
+    max-width: var(--page-max-editor);
+  }
+
   .sheet-area.with-editor {
     grid-template-columns: minmax(0, var(--track)) var(--editor-width);
   }

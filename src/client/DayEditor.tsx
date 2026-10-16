@@ -22,10 +22,11 @@ function otherModalOpen(editor: HTMLDialogElement): boolean {
 }
 
 /**
- * Day editor (WP5-UX-T04, owner decision E-3 a). From 1200px it is a non-modal panel in its own
- * column beside the sheet, so the sheet stays usable. Below that (`modal`) it is modal and traps
- * focus, so the page behind is inert and no focusable control can be hidden by it (WCAG 2.4.11):
- * a side panel from 768px, a bottom sheet below (`bottomSheet`). All are one native `<dialog>`
+ * Day editor (WP5-UX-T04, owner decision E-3 a). From 1360px it is a non-modal panel in its own
+ * column beside the sheet, so the sheet stays usable at its readable column width. Below that
+ * (`modal`) it is modal and traps focus, so the page behind is inert and no focusable control can
+ * be hidden by it (WCAG 2.4.11): a floating side panel from 768px, docked away from the edited
+ * column (`dockSide`), a bottom sheet below (`bottomSheet`). All are one native `<dialog>`
  * named by its heading ("Day editor ..."): focus moves to the heading on open, Escape closes it
  * wherever focus is (unless a nested dialog takes Escape first) and so does Close; the caller
  * returns focus to the day's button.
@@ -44,6 +45,7 @@ export function DayEditor({
   todayLocal,
   modal,
   bottomSheet,
+  dockSide = 'right',
   refresh = 0,
   onChanged,
   onClose,
@@ -54,10 +56,12 @@ export function DayEditor({
   displayZone: string;
   reportingZone: string;
   todayLocal: string | null;
-  /** True below 1200px: a modal dialog with an inert page. False: the non-modal panel beside the sheet. */
+  /** True below 1360px: a modal dialog with an inert page. False: the non-modal panel beside the sheet. */
   modal: boolean;
-  /** True below 768px: the modal dialog is a bottom sheet. Otherwise a side panel at the right edge. */
+  /** True below 768px: the modal dialog is a bottom sheet. Otherwise a floating side panel. */
   bottomSheet: boolean;
+  /** The edge the floating side panel docks to (away from the edited column). Unused by the panel beside the sheet and the bottom sheet. */
+  dockSide?: 'left' | 'right';
   /** Raised by the page after it changed this day elsewhere (the label picker or a batch): the editor reloads. */
   refresh?: number;
   /** Called after every successful write so the period behind the editor can refresh. */
@@ -90,7 +94,7 @@ export function DayEditor({
   const firstRefresh = useRef(refresh);
 
   // Opens the panel (non-modal) or the bottom sheet (modal) and moves focus to the heading. A switch
-  // between the two while open (the window crossed 1200px) re-opens the same element in the other mode.
+  // between the two while open (the window crossed 1360px) re-opens the same element in the other mode.
   // WP5-UX-B3-01: re-showing it while another modal dialog is open (a label review, the check-out
   // dialog) would stack the editor above that dialog and take its focus and its Escape. The switch then
   // waits until no other modal dialog is left (closed or removed), so the open dialog keeps both.
@@ -244,6 +248,7 @@ export function DayEditor({
       className={`day-panel ${bottomSheet ? 'day-panel-sheet' : 'day-panel-side'}`}
       aria-labelledby="day-editor-title"
       data-day-editor={workDate}
+      data-side={modal && !bottomSheet ? dockSide : undefined}
       onKeyDown={keyDown}
       onCancel={(event) => {
         event.preventDefault();

@@ -1,0 +1,243 @@
+
+Running 11 tests using 1 worker
+
+  ok  1 [desktop] › tests\e2e\day-editor.spec.ts:1004:5 › WP5-UX-B-02: below 1360px the floating panel never hides a focused sheet control › at 768px no focused sheet control lies under the open panel, and Escape closes it from the sheet (2.4s)
+  ok  2 [desktop] › tests\e2e\day-editor.spec.ts:1004:5 › WP5-UX-B-02: below 1360px the floating panel never hides a focused sheet control › at 1024px no focused sheet control lies under the open panel, and Escape closes it from the sheet (2.1s)
+  ok  3 [desktop] › tests\e2e\day-editor.spec.ts:1004:5 › WP5-UX-B-02: below 1360px the floating panel never hides a focused sheet control › at 1280px no focused sheet control lies under the open panel, and Escape closes it from the sheet (2.2s)
+  ok  4 [desktop] › tests\e2e\day-editor.spec.ts:1004:5 › WP5-UX-B-02: below 1360px the floating panel never hides a focused sheet control › at 1359px no focused sheet control lies under the open panel, and Escape closes it from the sheet (2.2s)
+  x   5 [desktop] › tests\e2e\day-editor.spec.ts:1042:5 › WP5-UX-B-02: below 1360px the floating panel never hides a focused sheet control › at 1280px the panel floats (modal) and Escape closes it wherever focus is (757ms)
+  ok  6 [desktop] › tests\e2e\day-editor.spec.ts:1042:5 › WP5-UX-B-02: below 1360px the floating panel never hides a focused sheet control › at 1366px the panel stays beside the sheet and Escape closes it wherever focus is (972ms)
+  x   7 [desktop] › tests\e2e\day-editor.spec.ts:1196:3 › WP5-UX3-T05B: the Day editor floats below 1360px and stands beside readable columns from 1360px › at 1280 and 1359 the editor is a modal panel over a sheet that keeps its full width and every word fits its cell (15.1s)
+  x   8 [desktop] › tests\e2e\day-editor.spec.ts:1241:3 › WP5-UX3-T05B: the Day editor floats below 1360px and stands beside readable columns from 1360px › the floating panel docks away from the edited column (left for Saturday and Sunday, right for Monday), over the lighter backdrop, with the column scrolled into view (935ms)
+BESIDE 1360: columns 116.8-116.9px, grid 912.0px, page 1360px, 95 words, widest takes 102% of its box; 1366: columns 117.7-117.7px, grid 918.0px, page 1366px, 95 words, widest takes 102% of its box; 1440: columns 128.3-128.3px, grid 992.0px, page 1440px, 95 words, widest takes 102% of its box; 1920: columns 151.1-151.1px, grid 1152.0px, page 1600px, 95 words, widest takes 102% of its box
+  ok  9 [desktop] › tests\e2e\day-editor.spec.ts:1293:3 › WP5-UX3-T05B: the Day editor floats below 1360px and stands beside readable columns from 1360px › from 1360 the editor is a non-modal panel beside the sheet, every column is at least 108px and no word is wider than its cell (2.3s)
+  x  10 [desktop] › tests\e2e\day-editor.spec.ts:1589:5 › WP5-UX-B3-01: a review dialog open over the editor keeps Escape and focus when the window crosses 1360px › 1440 to 1280: the review stays on top and focused, Escape closes it first and then the editor (8.0s)
+  x  11 [desktop] › tests\e2e\day-editor.spec.ts:1589:5 › WP5-UX-B3-01: a review dialog open over the editor keeps Escape and focus when the window crosses 1360px › 1280 back to 1440: the review stays on top and focused, Escape closes it first and then the editor (8.2s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:1042:5 › WP5-UX-B-02: below 1360px the floating panel never hides a focused sheet control › at 1280px the panel floats (modal) and Escape closes it wherever focus is 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      1052 |       const editor = page.getByRole('dialog', { name: /Day editor/ });
+      1053 |       await expect(editor).toBeVisible();
+    > 1054 |       expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(modal);
+           |                                                                             ^
+      1055 |       // Focus on another sheet control: beside the sheet it takes the focus; a modal panel leaves the page inert, so focus stays in the panel.
+      1056 |       await dayButton(other).focus();
+      1057 |       if (!modal) await expect(dayButton(other)).toBeFocused();
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:1054:77
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX-B-02-bel-7b7ce-closes-it-wherever-focus-is-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX-B-02-bel-7b7ce-closes-it-wherever-focus-is-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX-B-02-bel-7b7ce-closes-it-wherever-focus-is-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\e2e\day-editor.spec.ts:1196:3 › WP5-UX3-T05B: the Day editor floats below 1360px and stands beside readable columns from 1360px › at 1280 and 1359 the editor is a modal panel over a sheet that keeps its full width and every word fits its cell 
+
+    Error: 1280px: the editor is modal
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      1218 |       await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+      1219 |       // Soft, so a regression of the threshold reports the squeeze measured below as well as the mode.
+    > 1220 |       expect.soft(await editor.evaluate((element) => element.matches(':modal')), `${width}px: the editor is modal`).toBe(true);
+           |                                                                                                                     ^
+      1221 |       await expect.soft(page.locator('.sheet-area')).not.toHaveClass(/with-editor/);
+      1222 |       await expect.soft(editor).toHaveAttribute('data-side', /^(left|right)$/);
+      1223 |       const open = await sheetFacts(page);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:1220:117
+
+    Error: expect(locator).not.toHaveClass(expected) failed
+
+    Locator: locator('.sheet-area')
+    Expected pattern: not /with-editor/
+    Received string: "sheet-area with-editor"
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "soft not toHaveClass" locator('.sheet-area') with timeout 7000ms
+      - waiting for locator('.sheet-area')
+        18 × locator resolved to <div class="sheet-area with-editor">…</div>
+           - unexpected value "sheet-area with-editor"
+
+
+      1219 |       // Soft, so a regression of the threshold reports the squeeze measured below as well as the mode.
+      1220 |       expect.soft(await editor.evaluate((element) => element.matches(':modal')), `${width}px: the editor is modal`).toBe(true);
+    > 1221 |       await expect.soft(page.locator('.sheet-area')).not.toHaveClass(/with-editor/);
+           |                                                          ^
+      1222 |       await expect.soft(editor).toHaveAttribute('data-side', /^(left|right)$/);
+      1223 |       const open = await sheetFacts(page);
+      1224 |       expect(open.grid, `${width}px: the sheet keeps its full width with the panel open`).toBeCloseTo(closed.grid, 0);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:1221:58
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator: getByRole('dialog', { name: /Day editor/ })
+    Expected pattern: /^(left|right)$/
+    Received string:  ""
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "soft toHaveAttribute" getByRole('dialog', { name: /Day editor/ }) with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ })
+        18 × locator resolved to <dialog open="" data-day-editor="2026-09-28" class="day-panel day-panel-side" aria-labelledby="day-editor-title">…</dialog>
+           - unexpected value "null"
+
+
+      1220 |       expect.soft(await editor.evaluate((element) => element.matches(':modal')), `${width}px: the editor is modal`).toBe(true);
+      1221 |       await expect.soft(page.locator('.sheet-area')).not.toHaveClass(/with-editor/);
+    > 1222 |       await expect.soft(editor).toHaveAttribute('data-side', /^(left|right)$/);
+           |                                 ^
+      1223 |       const open = await sheetFacts(page);
+      1224 |       expect(open.grid, `${width}px: the sheet keeps its full width with the panel open`).toBeCloseTo(closed.grid, 0);
+      1225 |       expect(open.columns.map(Math.round), `${width}px: no column changes width`).toEqual(closed.columns.map(Math.round));
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:1222:33
+
+    Error: 1280px: the sheet keeps its full width with the panel open
+
+    expect(received).toBeCloseTo(expected, precision)
+
+    Expected: 1168
+    Received: 832
+
+    Expected precision:    0
+    Expected difference: < 0.5
+    Received difference:   336
+
+      1222 |       await expect.soft(editor).toHaveAttribute('data-side', /^(left|right)$/);
+      1223 |       const open = await sheetFacts(page);
+    > 1224 |       expect(open.grid, `${width}px: the sheet keeps its full width with the panel open`).toBeCloseTo(closed.grid, 0);
+           |                                                                                           ^
+      1225 |       expect(open.columns.map(Math.round), `${width}px: no column changes width`).toEqual(closed.columns.map(Math.round));
+      1226 |       expect(open.tooWide, `${width}px open: words wider than their cell`).toEqual([]);
+      1227 |       expect(open.words, `${width}px: the probe measured the cells' words`).toBeGreaterThan(50);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:1224:91
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX3-T05B-th-fa3a9-nd-every-word-fits-its-cell-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX3-T05B-th-fa3a9-nd-every-word-fits-its-cell-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX3-T05B-th-fa3a9-nd-every-word-fits-its-cell-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [desktop] › tests\e2e\day-editor.spec.ts:1241:3 › WP5-UX3-T05B: the Day editor floats below 1360px and stands beside readable columns from 1360px › the floating panel docks away from the edited column (left for Saturday and Sunday, right for Monday), over the lighter backdrop, with the column scrolled into view 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      1264 |       const editor = page.getByRole('dialog', { name: /Day editor/ });
+      1265 |       await expect(editor).toBeVisible();
+    > 1266 |       expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(true);
+           |                                                                             ^
+      1267 |       await expect(editor).toHaveAttribute('data-side', side);
+      1268 |       const [panel, edited] = [await editor.boundingBox(), await column.boundingBox()];
+      1269 |       expect(panel && edited, `${date}: both boxes are painted`).toBeTruthy();
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:1266:77
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX3-T05B-th-1f03c-e-column-scrolled-into-view-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX3-T05B-th-1f03c-e-column-scrolled-into-view-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX3-T05B-th-1f03c-e-column-scrolled-into-view-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [desktop] › tests\e2e\day-editor.spec.ts:1589:5 › WP5-UX-B3-01: a review dialog open over the editor keeps Escape and focus when the window crosses 1360px › 1440 to 1280: the review stays on top and focused, Escape closes it first and then the editor 
+
+    Error: expect(locator).not.toHaveClass(expected) failed
+
+    Locator: locator('.sheet-area')
+    Expected pattern: not /with-editor/
+    Received string: "sheet-area with-editor"
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "not toHaveClass" locator('.sheet-area') with timeout 7000ms
+      - waiting for locator('.sheet-area')
+        18 × locator resolved to <div class="sheet-area with-editor">…</div>
+           - unexpected value "sheet-area with-editor"
+
+
+      1575 |   const area = page.locator('.sheet-area');
+      1576 |   if (wide) await expect(area).toHaveClass(/with-editor/);
+    > 1577 |   else await expect(area).not.toHaveClass(/with-editor/);
+           |                               ^
+      1578 |   await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 100))))');
+      1579 | }
+      1580 |
+        at settleAfterResize (D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:1577:31)
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:1625:15
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX-B3-01-a--ae8a4-t-first-and-then-the-editor-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX-B3-01-a--ae8a4-t-first-and-then-the-editor-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX-B3-01-a--ae8a4-t-first-and-then-the-editor-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [desktop] › tests\e2e\day-editor.spec.ts:1589:5 › WP5-UX-B3-01: a review dialog open over the editor keeps Escape and focus when the window crosses 1360px › 1280 back to 1440: the review stays on top and focused, Escape closes it first and then the editor 
+
+    Error: expect(locator).not.toHaveClass(expected) failed
+
+    Locator: locator('.sheet-area')
+    Expected pattern: not /with-editor/
+    Received string: "sheet-area with-editor"
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "not toHaveClass" locator('.sheet-area') with timeout 7000ms
+      - waiting for locator('.sheet-area')
+        18 × locator resolved to <div class="sheet-area with-editor">…</div>
+           - unexpected value "sheet-area with-editor"
+
+
+      1575 |   const area = page.locator('.sheet-area');
+      1576 |   if (wide) await expect(area).toHaveClass(/with-editor/);
+    > 1577 |   else await expect(area).not.toHaveClass(/with-editor/);
+           |                               ^
+      1578 |   await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 100))))');
+      1579 | }
+      1580 |
+        at settleAfterResize (D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:1577:31)
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:1625:15
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX-B3-01-a--b49ae-t-first-and-then-the-editor-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX-B3-01-a--b49ae-t-first-and-then-the-editor-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05B\pw4\timesheet-e2e-output\day-editor-WP5-UX-B3-01-a--b49ae-t-first-and-then-the-editor-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:1042:5 › WP5-UX-B-02: below 1360px the floating panel never hides a focused sheet control › at 1280px the panel floats (modal) and Escape closes it wherever focus is 
+    [desktop] › tests\e2e\day-editor.spec.ts:1196:3 › WP5-UX3-T05B: the Day editor floats below 1360px and stands beside readable columns from 1360px › at 1280 and 1359 the editor is a modal panel over a sheet that keeps its full width and every word fits its cell 
+    [desktop] › tests\e2e\day-editor.spec.ts:1241:3 › WP5-UX3-T05B: the Day editor floats below 1360px and stands beside readable columns from 1360px › the floating panel docks away from the edited column (left for Saturday and Sunday, right for Monday), over the lighter backdrop, with the column scrolled into view 
+    [desktop] › tests\e2e\day-editor.spec.ts:1589:5 › WP5-UX-B3-01: a review dialog open over the editor keeps Escape and focus when the window crosses 1360px › 1440 to 1280: the review stays on top and focused, Escape closes it first and then the editor 
+    [desktop] › tests\e2e\day-editor.spec.ts:1589:5 › WP5-UX-B3-01: a review dialog open over the editor keeps Escape and focus when the window crosses 1360px › 1280 back to 1440: the review stays on top and focused, Escape closes it first and then the editor 
+  6 passed (1.0m)
+exit 1
