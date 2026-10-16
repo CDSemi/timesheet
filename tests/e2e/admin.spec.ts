@@ -7,6 +7,7 @@ import {
   type CalendarSchedule,
   createAccountByAdminApi,
   expect,
+  openAccount,
   SeedClient,
   screenshotPath,
   seedSecondCalendar,
@@ -53,21 +54,16 @@ interface ApiPeriods {
   current: { payroll_date: string; period_start: string; period_end: string };
 }
 
-/** Below 768px the shell shows the bottom tab bar, where Settings, Import, Admin and Sign out sit under "More". */
+/**
+ * Below 768px the shell shows the bottom tab bar, where Settings, Import, Administration and Sign out sit under "More";
+ * from 768px they are in the account menu under the identity button (`openAccount` opens whichever is shown).
+ */
 function isPhone(page: Page): boolean {
   return (page.viewportSize()?.width ?? Number.POSITIVE_INFINITY) < 768;
 }
 
-/** Opens "More" on a phone (once; an open panel stays open). The desktop bar has nothing to open. */
-async function openMoreOnPhone(page: Page) {
-  if (!isPhone(page)) return;
-  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
-  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-}
-
 async function openAdmin(page: Page) {
-  await openMoreOnPhone(page);
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' }).click();
+  await (await openAccount(page)).getByRole('link', { name: 'Administration' }).click();
   await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
 }
 
@@ -197,9 +193,9 @@ test('settings: preview the effect, then create; the day figures equal the previ
   await signInPageAs(person, '#/settings');
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
   await expect(page.getByText('You have no policy version yet')).toBeVisible();
-  await openMoreOnPhone(page);
-  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
-  if (isPhone(page)) await page.keyboard.press('Escape');
+  await expect((await openAccount(page)).getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#account-menu, #more-panel')).toHaveCount(0);
 
   const form = page.getByRole('form', { name: 'New policy version' });
   await expect(form.getByLabel('Effective from')).toHaveValue(boundary);
@@ -408,34 +404,28 @@ test('payroll exception needs a reason and is recorded once', async ({ page, bui
 });
 
 test.describe('navigation', () => {
-  test('Settings for everyone, Admin for administrators only', async ({ page, builtServer, signInThroughUi, signInPageAs }) => {
+  test('Settings for everyone, Administration for administrators only', async ({ page, builtServer, signInThroughUi, signInPageAs }) => {
     await signInThroughUi();
     const nav = page.getByRole('navigation', { name: 'Main' });
     const phone = isPhone(page);
-    // The desktop bar lists Settings (Import is a link inside Settings); the phone's tab bar lists the three
-    // frequent screens and "More" holds Settings, Import and, for administrators, Admin.
+    // Both the desktop bar and the phone's tab bar list the three frequent screens only. Settings, Import (phone;
+    // the desktop links to it from Settings) and, for administrators, Administration are in the account menu under
+    // the identity button, or under "More" on a phone.
     const frequent = ['Timesheet', 'Overtime', 'History'];
-    if (phone) {
-      await expect(nav.getByRole('link')).toHaveText(frequent);
-      await openMoreOnPhone(page);
-      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings', 'Import']);
-    } else {
-      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings']);
-    }
+    await expect(nav.getByRole('link')).toHaveText(frequent);
+    const employeeEntries = phone ? ['Profile', 'Settings', 'Import'] : ['Profile', 'Settings'];
+    const employeeMenu = await openAccount(page);
+    await expect(employeeMenu.getByRole('link')).toHaveText(employeeEntries);
+    await expect(employeeMenu.getByRole('link', { name: 'Administration' })).toHaveCount(0);
     await page.evaluate("window.location.hash = '#/admin'");
     await expect(page).toHaveURL(/#\/timesheet$/);
-    await openMoreOnPhone(page);
-    await nav.getByRole('link', { name: 'Settings' }).click();
+    await (await openAccount(page)).getByRole('link', { name: 'Settings' }).click();
     await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-    await openMoreOnPhone(page);
-    await page.getByRole('button', { name: 'Sign out' }).click();
+    await (await openAccount(page)).getByRole('button', { name: 'Sign out' }).click();
 
     await signInPageAs(builtServer.credentials.admin);
-    if (phone) {
-      await openMoreOnPhone(page);
-      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings', 'Import', 'Admin']);
-    } else {
-      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings', 'Admin']);
-    }
+    const adminMenu = await openAccount(page);
+    await expect(adminMenu.getByRole('link')).toHaveText([...employeeEntries, 'Administration']);
+    await expect(adminMenu).toContainText('Administrator');
   });
 });

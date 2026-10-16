@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { dayButton, dayButtonName } from './dayButton.ts';
-import { type BuiltServer, expect, newPerson, type Person, type SeedClient, test } from './fixtures.ts';
+import { type BuiltServer, expect, newPerson, openAccount, type Person, type SeedClient, test } from './fixtures.ts';
 
 /*
  * WP5-UX-FIX7: the WCAG 2.2 AA keyboard and screen-reader items of the accessibility sweep
@@ -256,9 +256,8 @@ test('WP5-UX-AX-05: each day button and "End share" carry their visible text in 
   await check('View');
 
   // The owner's "End share" button: visible "End share", name "End share with {name}".
-  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
-  if (await more.isVisible()) await more.click();
-  await page.getByRole('button', { name: 'Sign out' }).click();
+  // Sign out is in the account menu (desktop) or the More panel (phone).
+  await (await openAccount(page)).getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
   await signInPageAs(world.owner.account, '#/settings');
   const end = page.getByRole('list', { name: 'Shares I gave' }).getByRole('button', { name: `End share with ${ME}`, exact: true });

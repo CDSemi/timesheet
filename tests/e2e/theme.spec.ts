@@ -1,12 +1,13 @@
 import type { Locator, Page } from '@playwright/test';
 import { backdropOf, backdropsAbove, contrast, flattenedBackground, focusFromKeyboard, measureFocusRing, over, parseColour, settledStyle, textContrast } from './contrast.ts';
-import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+import { expect, newPerson, openAccount, screenshotPath, test } from './fixtures.ts';
 
 /*
  * WP5-UX2-T01: the theme control of the main navigation. Two states, the device's theme until the
  * first choice, a per-device choice kept in local storage (`timesheet.theme`), applied before the first
  * paint by a same-origin script (the content security policy forbids inline scripts). Desktop: the
- * control is in the top bar; phone: in the More panel. Nothing here depends on the date or the time of day.
+ * control is in the account menu under the identity button of the top bar (WP5-UX3-T02; it was in the bar itself);
+ * phone: in the More panel. Nothing here depends on the date or the time of day.
  *
  * WP5-UX2-T07: the control is a "Theme" radio group of two native radios, "Light" (sun icon) and "Dark" (moon
  * icon), instead of a pressed "Dark mode" button. The checked radio is the theme in effect (the device's before
@@ -39,6 +40,8 @@ const MIN_TEXT = 4.5;
 const MIN_NON_TEXT = 3;
 
 interface ThemeControl {
+  /** The account menu (desktop) or the More panel (phone) that holds the control. */
+  panel: Locator;
   group: Locator;
   /** The native radio of each option (invisible, covers its segment). */
   radio: Record<Theme, Locator>;
@@ -46,14 +49,10 @@ interface ThemeControl {
   segment: Record<Theme, Locator>;
 }
 
-/** The theme control of this viewport: the top bar's on a desktop, the More panel's on a phone (opened if closed). */
-async function themeControl(page: Page, isMobile: boolean): Promise<ThemeControl> {
-  if (isMobile) {
-    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
-    await expect(more).toBeVisible();
-    if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-  }
-  const group = page.getByRole('radiogroup', { name: 'Theme', exact: true });
+/** The theme control of this viewport: the account menu's on a desktop, the More panel's on a phone (opened if closed). */
+async function themeControl(page: Page): Promise<ThemeControl> {
+  const panel = await openAccount(page);
+  const group = panel.getByRole('radiogroup', { name: 'Theme', exact: true });
   await expect(group).toBeVisible();
   const radio = {
     light: group.getByRole('radio', { name: OPTION_NAME.light, exact: true }),
@@ -61,7 +60,7 @@ async function themeControl(page: Page, isMobile: boolean): Promise<ThemeControl
   };
   await expect(radio.light).toBeVisible();
   await expect(radio.dark).toBeVisible();
-  return { group, radio, segment: { light: radio.light.locator('xpath=..'), dark: radio.dark.locator('xpath=..') } };
+  return { panel, group, radio, segment: { light: radio.light.locator('xpath=..'), dark: radio.dark.locator('xpath=..') } };
 }
 
 /** Exactly the radio of `theme` is checked. */
@@ -99,10 +98,10 @@ async function expectPainted(page: Page, theme: Theme, explicit: boolean): Promi
 
 /* ---- The control: group, names, icons ------------------------------------------------------------------ */
 
-test('the theme control is a "Theme" radio group of two native radios, Light and Dark, with aria-hidden icons', async ({ page, signInThroughUi, isMobile }) => {
+test('the theme control is a "Theme" radio group of two native radios, Light and Dark, with aria-hidden icons', async ({ page, signInThroughUi }) => {
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await signInThroughUi();
-  const control = await themeControl(page, isMobile);
+  const control = await themeControl(page);
   // One visible group named "Theme" (the other placement is not displayed at this width); no "Dark mode" button.
   await expect(page.getByRole('radiogroup')).toHaveCount(1);
   await expect(control.group.getByRole('radio')).toHaveCount(2);
@@ -135,10 +134,10 @@ test('the theme control is a "Theme" radio group of two native radios, Light and
 /* ---- Default: the device decides until the first choice ------------------------------------------------ */
 
 for (const media of ['light', 'dark'] as const) {
-  test(`without a stored choice the app follows the device (${media}) and the control shows it`, async ({ page, signInThroughUi, isMobile }) => {
+  test(`without a stored choice the app follows the device (${media}) and the control shows it`, async ({ page, signInThroughUi }) => {
     await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
     await signInThroughUi();
-    const control = await themeControl(page, isMobile);
+    const control = await themeControl(page);
     await expectPainted(page, media, false);
     await expectChecked(control, media);
     expect((await themeState(page)).stored).toBeNull();
@@ -153,11 +152,10 @@ for (const media of ['light', 'dark'] as const) {
   test(`choosing the other option switches the theme, stores it and survives a reload (${media} device)`, async ({
     page,
     signInThroughUi,
-    isMobile,
   }, testInfo) => {
     await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
     await signInThroughUi();
-    const control = await themeControl(page, isMobile);
+    const control = await themeControl(page);
     const opposite: Theme = media === 'dark' ? 'light' : 'dark';
 
     await control.radio[opposite].click();
@@ -170,7 +168,7 @@ for (const media of ['light', 'dark'] as const) {
 
     // The choice persists after a reload (still signed in: the session cookie).
     await page.reload();
-    const again = await themeControl(page, isMobile);
+    const again = await themeControl(page);
     await expectPainted(page, opposite, true);
     await expectChecked(again, opposite);
 
@@ -186,7 +184,7 @@ for (const media of ['light', 'dark'] as const) {
 
 for (const media of ['light', 'dark'] as const) {
   for (const stored of ['light', 'dark'] as const) {
-    test(`a stored ${stored} choice wins on a ${media} device, also on the sign-in page`, async ({ page, signInThroughUi, isMobile }) => {
+    test(`a stored ${stored} choice wins on a ${media} device, also on the sign-in page`, async ({ page, signInThroughUi }) => {
       await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
       await seedStoredTheme(page, stored);
       await page.goto('/');
@@ -194,7 +192,7 @@ for (const media of ['light', 'dark'] as const) {
       await expectPainted(page, stored, true);
 
       await signInThroughUi();
-      const control = await themeControl(page, isMobile);
+      const control = await themeControl(page);
       await expectPainted(page, stored, true);
       await expectChecked(control, stored);
     });
@@ -239,7 +237,7 @@ for (const [media, stored] of [
   });
 }
 
-test('the theme script is a same-origin file: no violation, JavaScript content type, CSP unchanged', async ({ page, signInThroughUi, isMobile }) => {
+test('the theme script is a same-origin file: no violation, JavaScript content type, CSP unchanged', async ({ page, signInThroughUi }) => {
   await page.addInitScript({
     content: `window.__cspViolations = []; document.addEventListener('securitypolicyviolation', (event) => window.__cspViolations.push(event.violatedDirective + ' ' + event.blockedURI));`,
   });
@@ -272,7 +270,7 @@ test('the theme script is a same-origin file: no violation, JavaScript content t
 
   // Using the control (setting the attribute, storing the choice) triggers no violation.
   await signInThroughUi();
-  const control = await themeControl(page, isMobile);
+  const control = await themeControl(page);
   await control.radio.dark.check();
   await expectChecked(control, 'dark');
   await expectPainted(page, 'dark', true);
@@ -281,10 +279,10 @@ test('the theme script is a same-origin file: no violation, JavaScript content t
 
 /* ---- Hover cannot erase the checked look (the specificity defect of the generic quiet-button hover) ------ */
 
-test('the pointer on the checked segment keeps it checked: a solid accent fill with on-accent text', async ({ page, signInThroughUi, isMobile }) => {
+test('the pointer on the checked segment keeps it checked: a solid accent fill with on-accent text', async ({ page, signInThroughUi }) => {
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await signInThroughUi();
-  const control = await themeControl(page, isMobile);
+  const control = await themeControl(page);
   await control.radio.dark.click();
   await expectChecked(control, 'dark');
   const segment = control.segment.dark;
@@ -308,13 +306,13 @@ test('the pointer on the checked segment keeps it checked: a solid accent fill w
 
 /* ---- Blocked storage, and other tabs ------------------------------------------------------------------ */
 
-test('blocked storage does not break the control: the choice lasts for the page', async ({ page, signInThroughUi, isMobile }) => {
+test('blocked storage does not break the control: the choice lasts for the page', async ({ page, signInThroughUi }) => {
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await page.addInitScript({
     content: `Object.defineProperty(window, 'localStorage', { configurable: true, get() { throw new DOMException('blocked', 'SecurityError'); } });`,
   });
   await signInThroughUi();
-  const control = await themeControl(page, isMobile);
+  const control = await themeControl(page);
   await expectPainted(page, 'light', false);
   await expectChecked(control, 'light');
 
@@ -328,10 +326,10 @@ test('blocked storage does not break the control: the choice lasts for the page'
   await expectChecked(control, 'light');
 });
 
-test('a storage event keeps a second tab in step', async ({ page, signInThroughUi, isMobile }) => {
+test('a storage event keeps a second tab in step', async ({ page, signInThroughUi }) => {
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await signInThroughUi();
-  const control = await themeControl(page, isMobile);
+  const control = await themeControl(page);
 
   const second = await page.context().newPage();
   second.on('pageerror', (error) => {
@@ -339,7 +337,7 @@ test('a storage event keeps a second tab in step', async ({ page, signInThroughU
   });
   await second.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await second.goto('/#/timesheet');
-  const secondControl = await themeControl(second, isMobile);
+  const secondControl = await themeControl(second);
   await expectPainted(second, 'light', false);
   await expectChecked(secondControl, 'light');
 
@@ -372,21 +370,19 @@ for (const { name, media, stored } of CASES) {
     await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
     if (stored !== null) await seedStoredTheme(page, stored);
     await signInThroughUi();
-    const control = await themeControl(page, isMobile);
+    const control = await themeControl(page);
     const effective: Theme = stored ?? media;
     const other: Theme = effective === 'dark' ? 'light' : 'dark';
     await expectPainted(page, effective, stored !== null);
     await expectChecked(control, effective);
 
     // Tab reaches the group at its checked radio (one tab stop), and the next Tab leaves it for Sign out.
-    const before = isMobile
-      ? page.locator('#more-panel').getByRole('link').last()
-      : page.getByRole('banner').getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings', exact: true });
+    const before = control.panel.getByRole('link').last();
     await before.focus();
     await page.keyboard.press('Tab');
     await expect(control.radio[effective], 'Tab lands on the checked radio').toBeFocused();
     await page.keyboard.press('Tab');
-    await expect(page.getByRole('button', { name: 'Sign out', exact: true }), 'the group is one tab stop').toBeFocused();
+    await expect(control.panel.getByRole('button', { name: 'Sign out', exact: true }), 'the group is one tab stop').toBeFocused();
     await page.keyboard.press('Shift+Tab');
     await expect(control.radio[effective], 'Shift+Tab returns to the checked radio').toBeFocused();
 
@@ -418,7 +414,7 @@ for (const { name, media, stored } of CASES) {
     await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
     if (stored !== null) await seedStoredTheme(page, stored);
     await signInThroughUi();
-    const control = await themeControl(page, isMobile);
+    const control = await themeControl(page);
     const effective: Theme = stored ?? media;
     const other: Theme = effective === 'dark' ? 'light' : 'dark';
     await expectPainted(page, effective, stored !== null);
@@ -489,11 +485,11 @@ test('screenshots: the theme control in the bar or the More panel, light and dar
   await signInThroughUi();
   for (const media of THEMES) {
     await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
-    const control = await themeControl(page, isMobile);
+    const control = await themeControl(page);
     await expectPainted(page, media, false);
     await page.mouse.move(0, 0);
-    const surface = isMobile ? page.locator('#more-panel') : page.locator('header.shell-bar');
-    await surface.screenshot({ path: screenshotPath(`t07-${isMobile ? 'more' : 'bar'}-${media}-${testInfo.project.name}-synthetic.png`), animations: 'disabled' });
+    // The surface that holds the control: the account menu on a desktop, the More panel on a phone.
+    await control.panel.screenshot({ path: screenshotPath(`t07-${isMobile ? 'more' : 'menu'}-${media}-${testInfo.project.name}-synthetic.png`), animations: 'disabled' });
     if (isMobile) continue;
     const unchecked: Theme = media === 'light' ? 'dark' : 'light';
     const segment = control.segment[unchecked];

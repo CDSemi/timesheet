@@ -12,7 +12,7 @@ import {
   settledStyle,
   textContrast,
 } from './contrast.ts';
-import { expect, screenshotPath, test } from './fixtures.ts';
+import { expect, openAccount, screenshotPath, test } from './fixtures.ts';
 
 /*
  * WP5-UX2-T02: a hover that can be seen, a pressed look that hover cannot erase, the "Show details" slide
@@ -101,15 +101,23 @@ interface Control {
   boundary: boolean;
   /** A control with text keeps it readable (4.5:1) on the hover fill. */
   text: boolean;
-  find: (page: Page) => Locator;
+  /** A control inside the account menu opens it first (the menu is the last thing the loop touches). */
+  find: (page: Page) => Locator | Promise<Locator>;
 }
 
+/*
+ * WP5-UX3-T02: Sign out left the top bar for the account menu, so the bar's own quiet button (the identity button) and
+ * two entries of the opened menu (the Sign out button and the Settings link) carry the hover criterion that the bar's
+ * Sign out carried before; the criterion itself is unchanged (a visible fill, an accent boundary where there is one, readable text).
+ */
 const CONTROLS: readonly Control[] = [
   { name: 'quiet button (Change several days)', boundary: true, text: true, find: (page) => page.getByRole('button', { name: 'Change several days', exact: true }) },
   { name: 'secondary button (Next period)', boundary: true, text: true, find: (page) => page.getByRole('button', { name: 'Next period', exact: true }) },
-  { name: 'secondary button (Sign out)', boundary: true, text: true, find: (page) => page.getByRole('banner').getByRole('button', { name: 'Sign out', exact: true }) },
+  { name: 'identity button (bar)', boundary: true, text: true, find: (page) => page.getByRole('banner').getByRole('button', { name: /, account menu$/ }) },
   { name: 'navigation link (Overtime)', boundary: false, text: true, find: (page) => page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Overtime', exact: true }) },
   { name: 'switch track (Show details)', boundary: true, text: false, find: (page) => page.getByRole('switch', { name: 'Show details', exact: true }) },
+  { name: 'menu button (Sign out)', boundary: true, text: true, find: async (page) => (await openAccount(page)).getByRole('button', { name: 'Sign out', exact: true }) },
+  { name: 'menu link (Settings)', boundary: false, text: true, find: async (page) => (await openAccount(page)).getByRole('link', { name: 'Settings', exact: true }) },
 ];
 
 for (const situation of SITUATIONS) {
@@ -122,7 +130,7 @@ for (const situation of SITUATIONS) {
     }
     const measured: string[] = [];
     for (const control of CONTROLS) {
-      const locator = control.find(page);
+      const locator = await control.find(page);
       await locator.scrollIntoViewIfNeeded();
       await page.mouse.move(0, 0);
       const surface = backdropOf(await backdropsAbove(locator));

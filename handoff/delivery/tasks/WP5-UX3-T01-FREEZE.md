@@ -148,3 +148,9 @@ fix or stop reason.
 - Digest before add e9e8d117... (819 files) OK. Staged 44 (12 source/docs + 32 handoff); precommit exit 0.
 - `git diff --cached --check` exit 2: tests/e2e/surfaces.spec.ts:242 new blank line at EOF (source file; not an allowed fix).
 - The 44 paths remain staged. Details: evidence/WP5-UX3-T01-FREEZE/checks.txt.
+
+### Attempt 2 results
+
+- Pre-HEAD 3968e15; commit e2f3d7492160d389c18903285994bedec56df51e on main; pushed yes; remote SHA equal.
+- Digests: before add and on new HEAD a4f127cc4a10c8b311811b244be2a82fa87bcd636615b89c765d5be5d2411d86 (819 files).
+- Staged 48 (12 source/docs + 36 handoff). All checks 1-11 exit 0 (diff --check 0). No deviation, no tag.

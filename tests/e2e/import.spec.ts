@@ -3,7 +3,7 @@ import { type Page } from '@playwright/test';
 import { addDays } from '../../src/domain/dates.ts';
 import { buildSyntheticWorkbook } from '../support/syntheticWorkbook.ts';
 import { namedDayButton } from './dayButton.ts';
-import { type BuiltServer, expect, newPerson, type Person, screenshotPath, SeedClient, statusInPage, test } from './fixtures.ts';
+import { type BuiltServer, expect, newPerson, openAccount, type Person, screenshotPath, SeedClient, statusInPage, test } from './fixtures.ts';
 
 /*
  * WP4-T11: the workbook import and the opening balance, on both viewports. Every workbook is generated in memory with
@@ -91,16 +91,12 @@ async function decisionsFor(person: Person, id: string, importDays: readonly str
   }));
 }
 
-/** Below 768px the shell shows the bottom tab bar, where Settings, Import, Admin and Sign out sit under "More". */
+/**
+ * Below 768px the shell shows the bottom tab bar, where Settings, Import, Administration and Sign out sit under "More";
+ * from 768px they are in the account menu under the identity button (`openAccount` opens whichever is shown).
+ */
 function isPhone(page: Page): boolean {
   return (page.viewportSize()?.width ?? Number.POSITIVE_INFINITY) < 768;
-}
-
-/** Opens "More" on a phone (once; an open panel stays open). The desktop bar has nothing to open. */
-async function openMoreOnPhone(page: Page) {
-  if (!isPhone(page)) return;
-  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
-  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
 }
 
 test('upload, preview with source cells, decide, confirm and commit; the same workbook is already imported', async (
@@ -112,10 +108,10 @@ test('upload, preview with source cells, decide, confirm and commit; the same wo
   const bytes = workbookFor(layout.payrollDate);
   await signInPageAs(person.account, '#/import');
 
-  const nav = page.getByRole('navigation', { name: 'Main' });
-  // Import is its own entry under "More" on a phone; the desktop bar marks Settings, the screen it is reached from.
-  await openMoreOnPhone(page);
-  await expect(nav.getByRole('link', { name: isPhone(page) ? 'Import' : 'Settings' })).toHaveAttribute('aria-current', 'page');
+  // Import is its own entry under "More" on a phone; the desktop menu marks Settings, the screen it is reached from.
+  const account = await openAccount(page);
+  await expect(account.getByRole('link', { name: isPhone(page) ? 'Import' : 'Settings' })).toHaveAttribute('aria-current', 'page');
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('heading', { name: 'Import and opening balance' })).toBeVisible();
 
   // 1. Upload: only a file is needed; nothing is stored until it is sent.
@@ -395,18 +391,18 @@ test('the opening balance: validation, confirmation, a repeat that changes nothi
 
 test('the Import entry is for the signed-in person and is not part of the administrator views', async ({ page, builtServer, signInPageAs }) => {
   await signInPageAs(builtServer.credentials.admin, '#/admin');
-  const nav = page.getByRole('navigation', { name: 'Main' });
-  await openMoreOnPhone(page);
-  await expect(nav.getByRole('link', { name: 'Admin' })).toHaveAttribute('aria-current', 'page');
+  const account = await openAccount(page);
+  await expect(account.getByRole('link', { name: 'Administration' })).toHaveAttribute('aria-current', 'page');
   // The Admin view itself (both projects) has no import or opening-balance controls.
   await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Import a workbook' })).toHaveCount(0);
   await expect(page.locator('main')).not.toContainText('Opening OT balance');
   if (isPhone(page)) {
-    await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
+    await expect(account.getByRole('link', { name: 'Import' })).toBeVisible();
   } else {
-    // The desktop bar reaches Import through the "Import from Excel" link in Settings.
-    await nav.getByRole('link', { name: 'Settings' }).click();
+    // The desktop menu reaches Import through the "Import from Excel" link in Settings (Import is not a menu entry).
+    await expect(account.getByRole('link', { name: 'Import' })).toHaveCount(0);
+    await account.getByRole('link', { name: 'Settings' }).click();
     await expect(page.getByRole('link', { name: 'Import from Excel' })).toBeVisible();
   }
   await expect(page.getByRole('heading', { name: 'Import a workbook' })).toHaveCount(0);

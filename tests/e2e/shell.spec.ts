@@ -1,5 +1,6 @@
-import type { Page } from '@playwright/test';
-import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+import type { Locator, Page } from '@playwright/test';
+import { parseColour, textContrast, tokenColour } from './contrast.ts';
+import { expect, newPerson, openAccount, screenshotPath, test } from './fixtures.ts';
 
 /*
  * Shell smoke on both viewports: sign in, the app shell with its hash route, and the existing
@@ -32,13 +33,13 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
   await expect(nav.getByRole('link', { name: 'Timesheet' })).toHaveAttribute('aria-current', 'page');
   await expect(page).toHaveURL(/#\/timesheet$/);
   if (project === 'mobile') {
-    // Phone: three tabs and "More"; the less frequent entries and Sign out open from it.
+    // Phone: three tabs and "More"; the account entries (Profile, Settings, Import) and Sign out open from it.
     await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History']);
     const more = nav.getByRole('button', { name: 'More' });
     await expect(more).toHaveAttribute('aria-expanded', 'false');
     await more.click();
     await expect(more).toHaveAttribute('aria-expanded', 'true');
-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings', 'Import']);
+    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Profile', 'Settings', 'Import']);
     await expect(nav.getByRole('button', { name: 'Sign out' })).toBeVisible();
     await expect(nav.getByRole('radiogroup', { name: 'Theme', exact: true })).toBeVisible();
     await page.screenshot({ path: screenshotPath(`shell-more-${project}-synthetic.png`) });
@@ -52,14 +53,46 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
       expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
     }
   } else {
-    // Desktop: the top bar lists the main screens (Import is a link inside Settings) and has Sign out.
-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings']);
-    await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
-    await expect(page.getByRole('banner').getByRole('radiogroup', { name: 'Theme', exact: true })).toBeVisible();
+    // Desktop: the top bar lists the three main screens only; Settings, Theme and Sign out are in the account
+    // menu under the identity button (the same items are still reachable, one step further).
+    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History']);
+    const banner = page.getByRole('banner');
+    await expect(banner.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
+    await expect(banner.getByRole('radiogroup', { name: 'Theme', exact: true })).toHaveCount(0);
+    await expect(banner.getByRole('link', { name: 'Settings' })).toHaveCount(0);
+    const account = await openAccount(page);
+    await expect(account.getByRole('link', { name: 'Settings' })).toBeVisible();
+    await expect(account.getByRole('button', { name: 'Sign out' })).toBeVisible();
+    await expect(account.getByRole('radiogroup', { name: 'Theme', exact: true })).toBeVisible();
+    await account.screenshot({ path: screenshotPath(`shell-account-menu-${project}-synthetic.png`), animations: 'disabled' });
   }
 });
 
-test('the Theme control: first control of the top bar group on a desktop, between the entries and Sign out in More on a phone', async ({
+/*
+ * WP5-UX3-T02 (owner decisions U-03 to U-05): the identity block at the right end of the bar from 768px (display name
+ * over email, then the initials avatar and a chevron) discloses the account menu: header, Profile, Settings,
+ * Administration (administrators), Theme, Sign out. On a phone the same content is the "More" panel and the bar has
+ * no avatar. The synthetic seed accounts are "Example Employee" (employee@example.invalid) and "Example Admin".
+ */
+const EMPLOYEE = { name: 'Example Employee', email: 'employee@example.invalid', initials: 'EE' } as const;
+
+interface IdentityLook {
+  nameWeight: number;
+  nameSize: number;
+  emailSize: number;
+  nameColour: string;
+  emailColour: string;
+  nameRight: number;
+  emailRight: number;
+  avatarLeft: number;
+  avatarWidth: number;
+  avatarHeight: number;
+  avatarRadius: number;
+  button: number;
+  inner: number;
+}
+
+test('the account menu (desktop) and the More panel (phone): header, entries, Theme between the entries and Sign out, 44px targets on a phone', async ({
   page,
   signInThroughUi,
   isMobile,
@@ -70,12 +103,20 @@ test('the Theme control: first control of the top bar group on a desktop, betwee
     const nav = page.getByRole('navigation', { name: 'Main' });
     await nav.getByRole('button', { name: 'More' }).click();
     const panel = page.locator('#more-panel');
+    // The header (the former "more-who" line): avatar, full name and email; no role line for an employee.
+    const head = panel.locator('.account-head');
+    await expect(head.locator('.account-name')).toHaveText(EMPLOYEE.name);
+    await expect(head.locator('.account-email')).toHaveText(EMPLOYEE.email);
+    await expect(head.locator('.avatar')).toHaveText(EMPLOYEE.initials);
+    await expect(head.locator('.avatar')).toHaveAttribute('aria-hidden', 'true');
+    await expect(panel.getByText('Administrator')).toHaveCount(0);
+    await expect(panel.getByRole('link')).toHaveText(['Profile', 'Settings', 'Import']);
     await expect(panel.getByRole('button')).toHaveText(['Sign out']);
     const control = panel.getByRole('radiogroup', { name: 'Theme', exact: true });
     await expect(control.getByRole('radio')).toHaveCount(2);
     await expect(control.locator('label')).toHaveText(['Light', 'Dark']);
     await expect(control.getByRole('radio', { checked: true })).toHaveCount(1);
-    // The control sits after the last entry (Settings, Import) and before Sign out; 44px targets.
+    // The control sits after the last entry (Profile, Settings, Import) and before Sign out; 44px targets.
     const controlBox = await control.boundingBox();
     const lastLink = await panel.getByRole('link').last().boundingBox();
     const signOut = await panel.getByRole('button', { name: 'Sign out' }).boundingBox();
@@ -86,20 +127,106 @@ test('the Theme control: first control of the top bar group on a desktop, betwee
       expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
       expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
     }
-    // The compact phone top bar has no theme control.
+    // The compact phone top bar has no theme control, no identity button and no avatar (the first screen pays nothing).
     await expect(page.locator('.shell-bar .theme-switch').filter({ visible: true })).toHaveCount(0);
-  } else {
-    const group = page.locator('.shell-user');
-    await expect(group.getByRole('button')).toHaveText(['Sign out']);
-    const control = group.getByRole('radiogroup', { name: 'Theme', exact: true });
-    await expect(control.locator('label')).toHaveText(['Light', 'Dark']);
-    await expect(control.getByRole('radio', { checked: true })).toHaveCount(1);
-    const controlBox = await control.boundingBox();
-    const nameBox = await group.locator('.muted').boundingBox();
-    expect(controlBox?.x ?? Number.POSITIVE_INFINITY).toBeLessThan(nameBox?.x ?? 0);
-    // The More panel exists on a phone only.
-    await expect(page.locator('#more-panel')).toHaveCount(0);
+    await expect(page.locator('.shell-bar button.identity').filter({ visible: true })).toHaveCount(0);
+    await expect(page.locator('.shell-bar .avatar').filter({ visible: true })).toHaveCount(0);
+    return;
   }
+
+  const banner = page.getByRole('banner');
+  const identity = banner.getByRole('button', { name: /, account menu$/ });
+  // One button: its accessible name is the visible name and email plus a hidden ", account menu" (SC 2.5.3).
+  await expect(identity).toHaveCount(1);
+  await expect(identity).toHaveAccessibleName(new RegExp(`^${EMPLOYEE.name}\\s+employee@example\\.invalid\\s*,\\s*account menu$`));
+  await expect(identity.locator('.identity-name')).toHaveText(EMPLOYEE.name);
+  await expect(identity.locator('.identity-email')).toHaveText(EMPLOYEE.email);
+  await expect(identity.locator('.avatar')).toHaveText(EMPLOYEE.initials);
+  await expect(identity.locator('.avatar')).toHaveAttribute('aria-hidden', 'true');
+  await expect(identity.locator('svg[aria-hidden="true"]')).toHaveCount(1);
+  await expect(identity.locator('img')).toHaveCount(0);
+  await expect(identity).toHaveAttribute('aria-expanded', 'false');
+  await expect(identity).toHaveAttribute('aria-controls', 'account-menu');
+  await expect(page.locator('#account-menu')).toHaveCount(0);
+  // The name is bold in the text colour, the email smaller in the muted colour, both right-aligned before the 36px avatar.
+  const look = await page.evaluate<IdentityLook>(`(() => {
+    const button = document.querySelector('header.shell-bar button.identity');
+    const part = (selector) => {
+      const element = button.querySelector(selector);
+      return { css: getComputedStyle(element), box: element.getBoundingClientRect() };
+    };
+    const name = part('.identity-name');
+    const email = part('.identity-email');
+    const avatar = part('.avatar');
+    return {
+      nameWeight: Number(name.css.fontWeight),
+      nameSize: parseFloat(name.css.fontSize),
+      emailSize: parseFloat(email.css.fontSize),
+      nameColour: name.css.color,
+      emailColour: email.css.color,
+      nameRight: name.box.right,
+      emailRight: email.box.right,
+      avatarLeft: avatar.box.left,
+      avatarWidth: avatar.box.width,
+      avatarHeight: avatar.box.height,
+      avatarRadius: parseFloat(avatar.css.borderTopLeftRadius),
+      button: button.getBoundingClientRect().right,
+      inner: window.innerWidth,
+    };
+  })()`);
+  expect(look.nameWeight, 'the display name is bold').toBeGreaterThanOrEqual(600);
+  expect(look.emailSize, 'the email is smaller than the name').toBeLessThan(look.nameSize);
+  expect(parseColour(look.nameColour), 'the name is in the text colour').toEqual(await tokenColour(page, '--text'));
+  expect(parseColour(look.emailColour), 'the email is in the muted colour').toEqual(await tokenColour(page, '--muted'));
+  expect(Math.abs(look.nameRight - look.emailRight), 'name and email are right-aligned to one edge').toBeLessThanOrEqual(1);
+  expect(look.nameRight, 'the text ends before the avatar').toBeLessThanOrEqual(look.avatarLeft);
+  expect(look.avatarWidth).toBeCloseTo(36, 0);
+  expect(look.avatarHeight).toBeCloseTo(36, 0);
+  expect(look.avatarRadius, 'the avatar is round').toBeGreaterThanOrEqual(18);
+  expect(look.button, 'the button is at the right end of the bar').toBeGreaterThan(look.inner - 48);
+
+  await identity.click();
+  const panel = page.locator('#account-menu');
+  await expect(panel).toBeVisible();
+  await expect(identity).toHaveAttribute('aria-expanded', 'true');
+  await expect(panel.locator('.account-head .account-name')).toHaveText(EMPLOYEE.name);
+  await expect(panel.locator('.account-head .account-email')).toHaveText(EMPLOYEE.email);
+  await expect(panel.locator('.account-head .avatar')).toHaveText(EMPLOYEE.initials);
+  await expect(panel.getByText('Administrator')).toHaveCount(0);
+  await expect(panel.getByRole('link')).toHaveText(['Profile', 'Settings']);
+  await expect(panel.getByRole('button')).toHaveText(['Sign out']);
+  const control = panel.getByRole('radiogroup', { name: 'Theme', exact: true });
+  await expect(control.locator('label')).toHaveText(['Light', 'Dark']);
+  await expect(control.getByRole('radio', { checked: true })).toHaveCount(1);
+  // Order from the top: header, Profile, Settings, Theme, Sign out.
+  const ys = [
+    await panel.locator('.account-head').boundingBox(),
+    await panel.getByRole('link', { name: 'Profile' }).boundingBox(),
+    await panel.getByRole('link', { name: 'Settings' }).boundingBox(),
+    await control.boundingBox(),
+    await panel.getByRole('button', { name: 'Sign out' }).boundingBox(),
+  ].map((box) => box?.y ?? Number.NaN);
+  expect([...ys].sort((a, b) => a - b), 'header, Profile, Settings, Theme, Sign out in that order').toEqual(ys);
+  // Right-aligned under the button, inside the viewport and below the identity button.
+  const panelBox = await panel.boundingBox();
+  const buttonBox = await identity.boundingBox();
+  expect(Math.abs((panelBox?.x ?? 0) + (panelBox?.width ?? 0) - ((buttonBox?.x ?? 0) + (buttonBox?.width ?? 0)))).toBeLessThanOrEqual(1);
+  expect(panelBox?.y ?? 0, 'the menu opens below the button, never under the sticky bar').toBeGreaterThanOrEqual((buttonBox?.y ?? 0) + (buttonBox?.height ?? 0));
+  expect((panelBox?.x ?? 0) + (panelBox?.width ?? 0)).toBeLessThanOrEqual(look.inner);
+  // The menu is painted above the page: its centre hits the panel, not what is under it.
+  const onTop = await page.evaluate<boolean>(`(() => {
+    const panel = document.querySelector('#account-menu');
+    const rect = panel.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return hit !== null && panel.contains(hit);
+  })()`);
+  expect(onTop, 'the menu is above the page content').toBe(true);
+  // Clicking the button again closes it.
+  await identity.click();
+  await expect(panel).toHaveCount(0);
+  await expect(identity).toHaveAttribute('aria-expanded', 'false');
+  // The More panel exists on a phone only.
+  await expect(page.locator('#more-panel')).toHaveCount(0);
 });
 
 /*
@@ -294,21 +421,26 @@ async function focusedLabel(page: Page): Promise<string> {
   );
 }
 
-test('desktop Tab order: navigation links, Theme (one stop), Sign out', async ({ page, signInThroughUi }) => {
+/** The identity button of the bar: the visible name and email plus the hidden ", account menu". */
+const identityButton = (page: Page): Locator => page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+
+test('desktop Tab order: navigation links, then the identity button (the menu entries are not stops while it is closed)', async ({ page, signInThroughUi }) => {
   // The top bar is the desktop layout: both projects use a desktop-sized window here.
   await page.setViewportSize({ width: 1280, height: 800 });
   await signInThroughUi();
   const nav = page.getByRole('banner').getByRole('navigation', { name: 'Main' });
   await nav.getByRole('link', { name: 'Timesheet' }).focus();
   const order: string[] = [];
-  for (let step = 0; step < 5; step += 1) {
+  for (let step = 0; step < 3; step += 1) {
     await page.keyboard.press('Tab');
     order.push(await focusedLabel(page));
   }
-  expect(order.slice(0, 5)).toEqual(['Overtime', 'History', 'Settings', 'Theme', 'Sign out']);
+  expect(order.slice(0, 2)).toEqual(['Overtime', 'History']);
+  expect(order[2], 'the identity button follows the navigation').toContain(EMPLOYEE.name);
+  await expect(identityButton(page)).toBeFocused();
 });
 
-test('desktop Tab order with the sharing switcher: navigation links, switcher, Theme, Sign out', async ({
+test('desktop Tab order with the sharing switcher: navigation links, switcher, identity button', async ({
   page,
   adminSeed,
   builtServer,
@@ -323,11 +455,303 @@ test('desktop Tab order with the sharing switcher: navigation links, switcher, T
   const nav = page.getByRole('banner').getByRole('navigation', { name: 'Main' });
   await nav.getByRole('link', { name: 'Timesheet' }).focus();
   const order: string[] = [];
-  for (let step = 0; step < 7; step += 1) {
+  for (let step = 0; step < 5; step += 1) {
     await page.keyboard.press('Tab');
     order.push(await focusedLabel(page));
   }
-  expect(order).toEqual(['Overtime', 'History', 'Settings', 'select', 'Open', 'Theme', 'Sign out']);
+  expect(order.slice(0, 4)).toEqual(['Overtime', 'History', 'select', 'Open']);
+  expect(order[4], 'the identity button follows the switcher').toContain('Synthetic Tab Order User');
+  await expect(identityButton(page)).toBeFocused();
+});
+
+/**
+ * The menu from the keyboard (U-04): Enter or Space on the button opens it and moves focus to the first entry; Tab and
+ * Shift+Tab walk Profile, Settings, (Administration), Theme (one stop), Sign out; Escape closes it and returns focus to
+ * the button; Tab past the last entry, a press outside and a change of the address close it.
+ */
+for (const role of ['employee', 'admin'] as const) {
+  test(`the account menu from the keyboard: open, Tab order, Escape returns focus, outside press and address change close it (${role})`, async ({
+    page,
+    builtServer,
+    signInPageAs,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInPageAs(builtServer.credentials[role]);
+    await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+    const identity = identityButton(page);
+    const panel = page.locator('#account-menu');
+    const entries = role === 'admin' ? ['Profile', 'Settings', 'Administration'] : ['Profile', 'Settings'];
+
+    // Enter opens it and focus goes to the first entry; the header names the role of an administrator only.
+    await identity.focus();
+    await page.keyboard.press('Enter');
+    await expect(identity).toHaveAttribute('aria-expanded', 'true');
+    await expect(panel.getByRole('link', { name: 'Profile' })).toBeFocused();
+    await expect(panel.getByText('Administrator')).toHaveCount(role === 'admin' ? 1 : 0);
+    // Tab walks the entries, the Theme group as one stop (its checked radio), then Sign out.
+    const order = ['Profile'];
+    for (let step = 0; step < entries.length + 1; step += 1) {
+      await page.keyboard.press('Tab');
+      order.push(await focusedLabel(page));
+    }
+    expect(order).toEqual([...entries, 'Theme', 'Sign out']);
+    // Shift+Tab walks back to the button through the same stops.
+    for (let step = 0; step < entries.length + 2; step += 1) await page.keyboard.press('Shift+Tab');
+    await expect(identity).toBeFocused();
+    await expect(identity).toHaveAttribute('aria-expanded', 'true');
+
+    // Escape closes it and returns focus to the button, also from the last entry and from the Theme radio.
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(identity).toHaveAttribute('aria-expanded', 'false');
+    await expect(identity).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(panel.getByRole('link', { name: 'Profile' })).toBeFocused();
+    await panel.getByRole('button', { name: 'Sign out' }).focus();
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(identity).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(identity).toHaveAttribute('aria-expanded', 'true');
+    await expect(panel.getByRole('link', { name: 'Profile' })).toBeFocused();
+    await panel.getByRole('radio', { checked: true }).focus();
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(identity).toBeFocused();
+
+    // Tab past the last entry closes it (focus has left it).
+    await page.keyboard.press('Enter');
+    await panel.getByRole('button', { name: 'Sign out' }).focus();
+    await page.keyboard.press('Tab');
+    await expect(panel).toHaveCount(0);
+    await expect(identity).toHaveAttribute('aria-expanded', 'false');
+
+    // A pointer press outside closes it; opening with the pointer leaves focus on the button.
+    await identity.click();
+    await expect(panel).toBeVisible();
+    await expect(identity).toBeFocused();
+    await page.getByRole('heading', { name: 'Timesheet', exact: true }).click();
+    await expect(panel).toHaveCount(0);
+    await expect(identity).toHaveAttribute('aria-expanded', 'false');
+
+    // A change of the address closes it.
+    await identity.click();
+    await expect(panel).toBeVisible();
+    await page.evaluate("window.location.hash = '#/ot'");
+    await expect(page).toHaveURL(/#\/ot$/);
+    await expect(panel).toHaveCount(0);
+    await expect(identity).toHaveAttribute('aria-expanded', 'false');
+  });
+}
+
+/*
+ * The identity block always shows the signed-in user, also while a shared timesheet is on screen (the owner is named
+ * by the page title and the share bar); on a phone the same user is in the More panel header.
+ */
+test('a shared view keeps the signed-in user in the bar (the identity button, or the More header on a phone), never the owner', async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+}) => {
+  test.setTimeout(90_000);
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Bar Grantee', signature: 'none' });
+  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Bar Owner', signature: 'none' });
+  await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  await signInPageAs(me.account, `#/shared/${owner.account.id}`);
+  await expect(page.locator('[data-share-bar]')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Synthetic Bar Owner/ }).first()).toBeVisible();
+  const account = await openAccount(page);
+  await expect(account.locator('.account-head .account-name')).toHaveText('Synthetic Bar Grantee');
+  await expect(account.locator('.account-head .account-email')).toHaveText(me.account.email);
+  await expect(account).not.toContainText('Synthetic Bar Owner');
+  if (!(await page.locator('#more-panel').isVisible())) {
+    const identity = identityButton(page);
+    await expect(identity.locator('.identity-name')).toHaveText('Synthetic Bar Grantee');
+    await expect(identity.locator('.identity-email')).toHaveText(me.account.email);
+    await expect(identity).not.toContainText('Synthetic Bar Owner');
+  }
+});
+
+/** Four theme situations as the round-2 specs use them: a light and a dark device, and the manual choice both ways. */
+const SITUATIONS: ReadonlyArray<{ name: string; media: 'light' | 'dark'; stored: 'light' | 'dark' | null }> = [
+  { name: 'light device', media: 'light', stored: null },
+  { name: 'dark device', media: 'dark', stored: null },
+  { name: 'light device, manual dark', media: 'light', stored: 'dark' },
+  { name: 'dark device, manual light', media: 'dark', stored: 'light' },
+];
+
+for (const situation of SITUATIONS) {
+  test(`the identity block and the menu header keep 4.5:1 text contrast: name, email, avatar initials, role (${situation.name})`, async ({ page, builtServer, signInPageAs, isMobile }) => {
+    test.skip(isMobile, 'The identity button is a desktop-width control; the phone header is checked with the More panel');
+    await page.emulateMedia({ colorScheme: situation.media, reducedMotion: 'reduce' });
+    if (situation.stored !== null) {
+      await page.addInitScript({
+        content: `try { if (!sessionStorage.getItem('e2e-theme-seeded')) { localStorage.setItem('timesheet.theme', ${JSON.stringify(situation.stored)}); sessionStorage.setItem('e2e-theme-seeded', '1'); } } catch (error) {}`,
+      });
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInPageAs(builtServer.credentials.admin);
+    const identity = identityButton(page);
+    await expect(identity).toBeVisible();
+    const measured: string[] = [];
+    const check = async (label: string, locator: Locator) => {
+      const ratio = await textContrast(locator);
+      expect(ratio, `${label} (${situation.name})`).toBeGreaterThanOrEqual(4.5);
+      measured.push(`${label} ${ratio.toFixed(2)}`);
+    };
+    await check('bar name', identity.locator('.identity-name'));
+    await check('bar email', identity.locator('.identity-email'));
+    await check('bar avatar initials', identity.locator('.avatar'));
+    // Under the pointer the button gains a tint: the email still reads on it.
+    if (await page.evaluate<boolean>("window.matchMedia('(hover: hover)').matches")) {
+      await identity.hover();
+      await check('bar email, hovered', identity.locator('.identity-email'));
+      await page.mouse.move(0, 0);
+    }
+    await identity.click();
+    const panel = page.locator('#account-menu');
+    await expect(panel).toBeVisible();
+    await check('menu name', panel.locator('.account-name'));
+    await check('menu email', panel.locator('.account-email'));
+    await check('menu role', panel.locator('.account-role'));
+    await check('menu avatar initials', panel.locator('.avatar'));
+    await check('menu Profile', panel.getByRole('link', { name: 'Profile' }));
+    await check('menu Sign out', panel.getByRole('button', { name: 'Sign out' }));
+    console.log(`identity contrast ${situation.name}: ${measured.join('; ')}`);
+  });
+}
+
+/* A display name far longer than 14rem is cut by an ellipsis: no wrapping, no overflow, the bar stays one row. */
+for (const width of [1024, 1280]) {
+  test(`a long display name is truncated in the identity button at ${width}px: one bar row, no horizontal overflow, the menu header shows it in full`, async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'The identity button is a desktop-width control');
+    const longName = 'Synthetic Person With An Exceptionally Long Display Name For Truncation';
+    const me = await newPerson(adminSeed, builtServer, { displayName: longName, signature: 'none' });
+    await page.setViewportSize({ width, height: 800 });
+    await signInPageAs(me.account, '#/timesheet');
+    const identity = identityButton(page);
+    await expect(identity).toBeVisible();
+    const facts = await page.evaluate<{ bar: number; scroll: number; inner: number; text: number; max: number; nameClipped: boolean; right: number }>(`(() => {
+      const bar = document.querySelector('header.shell-bar');
+      const button = bar.querySelector('button.identity');
+      const probe = document.createElement('div');
+      probe.style.cssText = 'position:absolute;visibility:hidden;width:var(--identity-max)';
+      document.body.append(probe);
+      const max = probe.getBoundingClientRect().width;
+      probe.remove();
+      const clipped = (selector) => { const element = button.querySelector(selector); return element.scrollWidth > element.clientWidth; };
+      return {
+        bar: bar.getBoundingClientRect().height,
+        scroll: document.documentElement.scrollWidth,
+        inner: window.innerWidth,
+        text: button.querySelector('.identity-text').getBoundingClientRect().width,
+        max,
+        nameClipped: clipped('.identity-name'),
+        right: button.getBoundingClientRect().right,
+      };
+    })()`);
+    expect(facts.max, '--identity-max is 14rem').toBeCloseTo(210, 0);
+    expect(facts.text, 'the identity text never exceeds --identity-max').toBeLessThanOrEqual(facts.max + 0.5);
+    expect(facts.nameClipped, 'the long name is cut by an ellipsis').toBe(true);
+    expect(facts.bar, 'the bar stays one row (at most 64px)').toBeLessThanOrEqual(64);
+    expect(facts.scroll, 'no horizontal overflow').toBeLessThanOrEqual(facts.inner);
+    expect(facts.right, 'the button ends inside the viewport').toBeLessThanOrEqual(facts.inner);
+    // The accessible name still carries the full visible text (SC 2.5.3), and the menu header wraps it in full.
+    await expect(identity).toHaveAccessibleName(new RegExp(`^${longName}\\s+${me.account.email.replace(/[.]/g, '\\.')}\\s*,\\s*account menu$`));
+    await identity.click();
+    const head = page.locator('#account-menu .account-head');
+    await expect(head.locator('.account-name')).toHaveText(longName);
+    await expect(head.locator('.account-email')).toHaveText(me.account.email);
+    const panelFits = await page.evaluate<boolean>(`(() => { const panel = document.querySelector('#account-menu'); return panel.scrollWidth <= panel.clientWidth && panel.getBoundingClientRect().right <= window.innerWidth; })()`);
+    expect(panelFits, 'the menu holds the long name without sideways scroll').toBe(true);
+    console.log(`identity long name ${width}px: bar ${facts.bar}px, text ${facts.text}px of ${facts.max}px, button right edge ${facts.right} of ${facts.inner}`);
+  });
+}
+
+/* ---- The phone's More panel holds the same account content and fits every phone width --------------- */
+
+for (const width of [390, 375, 360, 320]) {
+  for (const role of ['employee', 'admin'] as const) {
+    test(`the More panel at ${width}px (${role}): header, Profile, Settings, Import${role === 'admin' ? ', Administration' : ''}, Theme, Sign out; 44px targets and inside the screen`, async ({
+      page,
+      builtServer,
+      signInPageAs,
+    }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await signInPageAs(builtServer.credentials[role], '#/timesheet');
+      const panel = await openAccount(page);
+      await expect(page.locator('#more-panel')).toBeVisible();
+      await expect(panel.locator('.account-head .account-name')).toHaveText(role === 'admin' ? 'Example Admin' : EMPLOYEE.name);
+      await expect(panel.locator('.account-head .account-email')).toHaveText(`${role}@example.invalid`);
+      await expect(panel.locator('.account-head .avatar')).toHaveText(role === 'admin' ? 'EA' : EMPLOYEE.initials);
+      await expect(panel.getByText('Administrator')).toHaveCount(role === 'admin' ? 1 : 0);
+      await expect(panel.getByRole('link')).toHaveText(role === 'admin' ? ['Profile', 'Settings', 'Import', 'Administration'] : ['Profile', 'Settings', 'Import']);
+      await expect(panel.getByRole('radiogroup', { name: 'Theme', exact: true })).toBeVisible();
+      await expect(panel.getByRole('button')).toHaveText(['Sign out']);
+      await expect(page.locator('.shell-bar .avatar').filter({ visible: true }), 'no avatar in the phone bar').toHaveCount(0);
+      const viewport = await page.evaluate<{ client: number; scroll: number }>('({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth })');
+      const box = await panel.boundingBox();
+      expect(box?.x ?? -1, 'the panel starts inside the screen').toBeGreaterThanOrEqual(0);
+      expect((box?.x ?? 0) + (box?.width ?? 0), 'the panel ends inside the screen').toBeLessThanOrEqual(viewport.client + 0.5);
+      expect(box?.y ?? -1, 'the panel top is on the screen').toBeGreaterThanOrEqual(0);
+      expect(viewport.scroll, 'no horizontal scroll').toBeLessThanOrEqual(viewport.client);
+      const sizes: string[] = [];
+      for (const target of await panel.locator('a, button, label.theme-option, input[type="radio"]').all()) {
+        const rect = await target.boundingBox();
+        const label = (await target.textContent())?.trim() || (await target.getAttribute('value')) || 'target';
+        expect(rect?.height ?? 0, `${label} height`).toBeGreaterThanOrEqual(44);
+        expect(rect?.width ?? 0, `${label} width`).toBeGreaterThanOrEqual(44);
+        sizes.push(`${Math.round(rect?.width ?? 0)}x${Math.round(rect?.height ?? 0)}`);
+      }
+      console.log(`More panel ${role} ${width}px: x ${box?.x} y ${box?.y} w ${box?.width} h ${box?.height}, targets ${sizes.join('/')}`);
+      if (role === 'admin' && (width === 390 || width === 320)) await page.screenshot({ path: screenshotPath(`more-panel-admin-${width}-synthetic.png`), animations: 'disabled' });
+    });
+  }
+}
+
+/* ---- Every screen stays reachable through the menu or More (Settings, Import, Administration, Sign out) -- */
+
+test('every screen stays reachable: an employee reaches Settings and Import, an administrator Administration, both Sign out (menu on a desktop, More on a phone)', async ({
+  page,
+  builtServer,
+  signInPageAs,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const phone = testInfo.project.name === 'mobile';
+  await signInPageAs(builtServer.credentials.employee, '#/timesheet');
+  await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+  await (await openAccount(page)).getByRole('link', { name: 'Settings' }).click();
+  await expect(page).toHaveURL(/#\/settings$/);
+  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  if (phone) {
+    await (await openAccount(page)).getByRole('link', { name: 'Import' }).click();
+  } else {
+    // The desktop reaches Import from Settings; the menu keeps Profile, Settings and Administration.
+    await page.getByRole('link', { name: 'Import from Excel' }).click();
+  }
+  await expect(page).toHaveURL(/#\/import$/);
+  await expect(page.getByRole('heading', { name: 'Import and opening balance' })).toBeVisible();
+  await (await openAccount(page)).getByRole('link', { name: 'Profile' }).click();
+  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  await (await openAccount(page)).getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+
+  await signInPageAs(builtServer.credentials.admin, '#/timesheet');
+  await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+  await (await openAccount(page)).getByRole('link', { name: 'Administration' }).click();
+  await expect(page).toHaveURL(/#\/admin$/);
+  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+  // The account area marks the screen being shown.
+  await expect((await openAccount(page)).getByRole('link', { name: 'Administration' })).toHaveAttribute('aria-current', 'page');
+  await (await openAccount(page)).getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
 });
 
 test('an unknown hash falls back to the timesheet route', async ({ page, signInThroughUi }) => {

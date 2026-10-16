@@ -146,6 +146,23 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   surfaces.spec 26/26; lint 0; verify 0; digest a4f127cc (819 files); index untouched.
 - Running: WP5-UX3-T01-FREEZE attempt 2 (committer, alone; 12 source/docs paths plus 36
   handoff paths, digest a4f127cc).
+- WP5-UX3-T01-FREEZE attempt 2 done: e2f3d7492160d389c18903285994bedec56df51e on main,
+  pushed (48 paths; digest a4f127cc, 819 files; every check exit 0). Coordinator slip
+  recorded on the board (an agent-ID edit of the board while the commit ran).
+- Running: WP5-UX3-T02 (worker-high, sonnet; identity block, account menu, phone More,
+  desktop nav without Settings/Admin, wordmark from 1024px) on e2f3d74 / a4f127cc.
+- WP5-UX3-T02 done (worker-high, self-reported claude-sonnet-5-5; reported, not independent
+  proof): AccountMenu and accountModel (identity button, disclosure menu, keyboard, Escape and
+  focus return, shared More content); desktop nav Timesheet/Overtime/History; Administration
+  still `#/admin`, Profile `#/settings` until T03; wordmark from 1024px, hidden 1024-1279px
+  with a share (tighter gap and nav padding there so the bar stays one row); assertions in 12
+  specs moved to the menu, each listed; unit 2045; full e2e desktop 246/0/30, mobile
+  257/0/19; mutation caught; budgets unchanged; verify 0; digest c938aa6f (822 files). The
+  client JS chunk reached 502.77 kB (Vite 500 kB advisory).
+- Coordinator decision: code-split in T03 (lazy Administration and Import screens), no limit
+  raise; later slices record the chunk size; the gate checks there is no advisory. T03 brief
+  written and registered pending.
+- Running: WP5-UX3-T02-FREEZE (committer, alone; 19 source/test paths plus 26 handoff paths).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

@@ -2,11 +2,12 @@ import { useId, useSyncExternalStore } from 'react';
 import { effectiveTheme, readStoredTheme, THEME_KEY, type Theme, type ThemeStorage, writeStoredTheme } from './themeModel.ts';
 
 /*
- * The theme control of the main navigation (WP5-UX2-T01; a Light/Dark segmented control since WP5-UX2-T07).
+ * The theme control (WP5-UX2-T01; a Light/Dark segmented control since WP5-UX2-T07; it sits in the account
+ * menu of the desktop bar and in the phone's More panel since WP5-UX3-T02, behaviour and storage unchanged).
  * The theme in effect is the person's choice (local storage, per device) or, until the first choice, the
  * device's (the media query below).
  * `data-theme` on <html> carries an explicit choice for the stylesheet; with no choice the attribute is
- * absent and the CSS follows the device by itself. Every toggle in the page (the desktop bar and the
+ * absent and the CSS follows the device by itself. Every toggle in the page (the account menu and the
  * phone's More panel) reads the same store, and a `storage` event keeps other tabs in step.
  */
 
@@ -103,8 +104,8 @@ const OPTIONS: ReadonlyArray<{ theme: Theme; label: string }> = [
  */
 export function ThemeToggle({ className }: { className?: string }) {
   const theme = useSyncExternalStore(subscribe, currentTheme);
-  // The bar's control and the More panel's are both in the page (one hidden by the layout): each is its own
-  // radio group, or checking a radio of one would uncheck the same-named radio of the other.
+  // The account menu's control and the More panel's can both be in the page (one hidden by the layout): each is its
+  // own radio group, or checking a radio of one would uncheck the same-named radio of the other.
   const groupName = `theme-${useId()}`;
   return (
     <div role="radiogroup" aria-label="Theme" className={className === undefined ? 'theme-switch' : `theme-switch ${className}`}>

@@ -1,12 +1,12 @@
 import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { api, type ReceivedShare, type User } from '../api.ts';
+import { AccountContent, AccountMenu } from './AccountMenu.tsx';
 import { BarClock } from './BarClock.tsx';
 import { BrandWordmark } from './BrandWordmark.tsx';
 import { ClockProvider } from './ClockProvider.tsx';
 import { parseReviewHash, reviewHash } from './reviewModel.ts';
 import { SharingSwitcher } from './SharingSwitcher.tsx';
 import { parseSharedHash, type SharedView } from './sharingModel.ts';
-import { ThemeToggle } from './ThemeToggle.tsx';
 import { useBlockSizeProperty } from './useBlockSize.ts';
 
 /**
@@ -14,16 +14,17 @@ import { useBlockSizeProperty } from './useBlockSize.ts';
  * balance, F-1) and Settings are for everyone; Admin is listed for administrators only. Hiding
  * the entry is a convenience: the server answers 403 on every admin route, so an employee who
  * types #/admin gets the timesheet and no data. `tab` marks the entries of the phone's bottom tab
- * bar; the others sit under "More". `desktop` is false for Import, which the desktop bar reaches
- * through a link in Settings (the `#/import` route works everywhere).
+ * bar; the others sit under "More". `desktop` marks the entries of the desktop top bar: only
+ * Timesheet, Overtime and History; Settings, Import and Admin are reached through the account menu
+ * (the `#/import` route works everywhere and the desktop also links to it from Settings).
  */
 export const ROUTES = [
   { id: 'timesheet', hash: '#/timesheet', label: 'Timesheet', adminOnly: false, tab: true, desktop: true },
   { id: 'ot', hash: '#/ot', label: 'Overtime', adminOnly: false, tab: true, desktop: true },
   { id: 'history', hash: '#/history', label: 'History', adminOnly: false, tab: true, desktop: true },
-  { id: 'settings', hash: '#/settings', label: 'Settings', adminOnly: false, tab: false, desktop: true },
+  { id: 'settings', hash: '#/settings', label: 'Settings', adminOnly: false, tab: false, desktop: false },
   { id: 'import', hash: '#/import', label: 'Import', adminOnly: false, tab: false, desktop: false },
-  { id: 'admin', hash: '#/admin', label: 'Admin', adminOnly: true, tab: false, desktop: true },
+  { id: 'admin', hash: '#/admin', label: 'Admin', adminOnly: true, tab: false, desktop: false },
 ] as const;
 
 export type RouteId = (typeof ROUTES)[number]['id'];
@@ -37,7 +38,7 @@ export function desktopRoutesFor(role: User['role']) {
   return routesFor(role).filter((route) => route.desktop);
 }
 
-/** The entries of the phone's tab bar, then those under "More" (Settings, Import, Admin for administrators). */
+/** The entries of the phone's tab bar, then the screens under "More" (Settings, Import, Admin for administrators). */
 export function mobileRoutesFor(role: User['role']) {
   const all = routesFor(role);
   return { tabs: all.filter((route) => route.tab), more: all.filter((route) => !route.tab) };
@@ -123,8 +124,8 @@ export function AppShell({
   // The sticky bar wraps (52 to 107px); scroll padding follows its real height (WP5-UX-AX-01).
   useBlockSizeProperty(barRef, '--shell-bar-size');
   const { tabs, more } = mobileRoutesFor(user.role);
-  // Import belongs under Settings on the desktop bar; on the phone it is its own entry under "More".
-  const desktopCurrent = route === 'import' ? 'settings' : route;
+  // Import belongs under Settings in the desktop menu; on the phone it is its own entry under "More".
+  const menuCurrent = route === 'import' ? 'settings' : route;
   const moreCurrent = more.some((item) => item.id === route);
 
   async function signOut() {
@@ -167,19 +168,14 @@ export function AppShell({
         <BarClock />
         <nav className="shell-nav" aria-label="Main">
           {desktopRoutesFor(user.role).map((item) => (
-            <a key={item.id} className="nav-link" href={item.hash} aria-current={item.id === desktopCurrent ? 'page' : undefined}>
+            <a key={item.id} className="nav-link" href={item.hash} aria-current={item.id === route ? 'page' : undefined}>
               {item.label}
             </a>
           ))}
         </nav>
         <SharingSwitcher received={received} ownerId={sharedOwnerId} />
-        <div className="shell-user">
-          <ThemeToggle />
-          <span className="muted">{user.display_name}</span>
-          <button type="button" className="secondary" onClick={signOut}>
-            Sign out
-          </button>
-        </div>
+        {/* Always the signed-in user, also in a shared view (the owner of a shared timesheet is named by the page). */}
+        <AccountMenu user={user} current={menuCurrent} onSignOut={() => void signOut()} />
       </header>
       <main className="page">
         {flash !== null && (
@@ -210,23 +206,8 @@ export function AppShell({
           More
         </button>
         {moreOpen && (
-          <div id="more-panel" className="more-panel">
-            <span className="more-who muted">{user.display_name}</span>
-            {more.map((item) => (
-              <a
-                key={item.id}
-                className="nav-link"
-                href={item.hash}
-                aria-current={item.id === route ? 'page' : undefined}
-                onClick={() => setMoreOpen(false)}
-              >
-                {item.label}
-              </a>
-            ))}
-            <ThemeToggle className="more-theme" />
-            <button type="button" className="more-action" onClick={signOut}>
-              Sign out
-            </button>
+          <div id="more-panel" className="account-panel more-panel">
+            <AccountContent user={user} layout="phone" current={route} onNavigate={() => setMoreOpen(false)} onSignOut={() => void signOut()} />
           </div>
         )}
       </nav>

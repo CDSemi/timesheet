@@ -153,6 +153,26 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   surfaces.spec 26/26; lint 0; verify 0; digest a4f127cc (819 file); không động vào index.
 - Đang chạy: WP5-UX3-T01-FREEZE lần 2 (committer, chạy một mình; 12 đường dẫn mã nguồn/tài
   liệu cùng 36 đường dẫn handoff, digest a4f127cc).
+- WP5-UX3-T01-FREEZE lần 2 xong: e2f3d7492160d389c18903285994bedec56df51e trên main, đã push
+  (48 đường dẫn; digest a4f127cc, 819 file; mọi bước kiểm exit 0). Lỗi nhỏ của coordinator
+  đã ghi trên board (sửa mã agent trên board khi commit đang chạy).
+- Đang chạy: WP5-UX3-T02 (worker-high, sonnet; khối nhận diện, menu tài khoản, More trên
+  điện thoại, thanh menu máy tính bỏ Settings/Admin, chữ thương hiệu từ 1024px) trên
+  e2f3d74 / a4f127cc.
+- WP5-UX3-T02 xong (worker-high, tự báo claude-sonnet-5-5; kết quả tự báo, chưa phải bằng
+  chứng độc lập): AccountMenu và accountModel (nút nhận diện, menu mở rộng, bàn phím, Escape
+  và trả focus, nội dung More dùng chung); thanh menu máy tính chỉ còn Timesheet/Overtime/
+  History; Administration vẫn trỏ `#/admin`, Profile trỏ `#/settings` cho tới T03; chữ thương
+  hiệu từ 1024px, ẩn ở 1024-1279px khi có chia sẻ (khoảng cách và lề menu hẹp hơn ở khoảng đó
+  để thanh vẫn một hàng); khẳng định trong 12 spec chuyển sang đi qua menu, có liệt kê; unit
+  2045; e2e đầy đủ desktop 246/0/30, mobile 257/0/19; đột biến bị bắt; ngân sách màn hình đầu
+  không đổi; verify 0; digest c938aa6f (822 file). Gói JS phía client đạt 502.77 kB (Vite cảnh
+  báo 500 kB).
+- Quyết định của coordinator: tách gói ở T03 (nạp chậm màn hình Administration và Import),
+  không nâng giới hạn; các phần sau ghi kích thước gói; gate kiểm không còn cảnh báo. Đã viết
+  brief T03 và đăng ký ở trạng thái chờ.
+- Đang chạy: WP5-UX3-T02-FREEZE (committer, chạy một mình; 19 đường dẫn mã nguồn/test cùng 26
+  đường dẫn handoff).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

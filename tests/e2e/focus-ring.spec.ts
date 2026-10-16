@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import * as shared from './contrast.ts';
 import { ANY_DAY_BUTTON_NAME } from './dayButton.ts';
-import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+import { expect, newPerson, openAccount, screenshotPath, test } from './fixtures.ts';
 
 /*
  * WP5-UX-B4-01: the shared focus indicator is a UI component boundary under WCAG 2.2 SC 1.4.11
@@ -233,6 +233,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
       ['sheet date', sheetDate],
     ];
     if (project === 'mobile') controls.push(['phone tab', nav.getByRole('link', { name: 'History' })]);
+    // WP5-UX3-T02: the identity button of the top bar (the bar is not displayed on a phone).
+    else controls.push(['identity button', page.getByRole('banner').getByRole('button', { name: /, account menu$/ })]);
     for (const [name, locator] of controls) {
       const probe = await focusedProbe(locator);
       measured[name] = Math.round(expectRing(name, probe) * 100) / 100;
@@ -327,7 +329,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
    * A theme segment is painted by the label of its invisible radio: the radio takes the focus, the label shows the ring.
    * "Show details" is a switch now and has its own test below.
    */
-  test(`WP5-UX-AX-04: a pressed toggle and a checked theme segment still show the focus ring (${colorScheme})`, async ({ page, signInThroughUi, isMobile }) => {
+  test(`WP5-UX-AX-04: a pressed toggle and a checked theme segment still show the focus ring (${colorScheme})`, async ({ page, signInThroughUi }) => {
     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
     await signInThroughUi();
     await expect(page.locator('[data-day]')).toHaveCount(14);
@@ -354,11 +356,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await several.click();
     await expect(several).toHaveAttribute('aria-pressed', 'false');
 
-    // The theme control of a phone lives in the More panel, which is opened if closed.
-    if (isMobile) {
-      const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
-      if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-    }
+    // The theme control lives in the account menu (desktop) or the More panel (phone), which is opened if closed.
+    await openAccount(page);
     const group = page.getByRole('radiogroup', { name: 'Theme', exact: true });
     for (const option of ['Light', 'Dark']) {
       const radio = group.getByRole('radio', { name: option, exact: true });

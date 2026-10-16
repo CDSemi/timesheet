@@ -9,6 +9,7 @@ import {
   type CreatedAccount,
   createAccountByAdminApi,
   expect,
+  openAccount,
   SeedClient,
   screenshotPath,
   starterPolicyBody,
@@ -196,6 +197,10 @@ test('an employee cannot read the status routes and the Admin screen is not offe
   await signInThroughUi();
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' })).toHaveCount(0);
+  // The administration entry is in the account menu (More on a phone) for administrators only.
+  const account = await openAccount(page);
+  await expect(account.getByRole('link', { name: 'Settings' })).toBeVisible();
+  await expect(account.getByRole('link', { name: /^Admin/ })).toHaveCount(0);
   for (const path of ['/api/admin/operations', '/api/admin/submissions']) {
     const status = await page.evaluate<number>(`fetch(${JSON.stringify(path)}, { credentials: 'same-origin' }).then((response) => response.status)`);
     expect(status, path).toBe(403);

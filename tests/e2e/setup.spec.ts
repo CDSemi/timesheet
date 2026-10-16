@@ -5,7 +5,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { screenshotPath } from './fixtures.ts';
+import { openAccount, screenshotPath } from './fixtures.ts';
 
 /*
  * First-time setup (WP4-T03). A fresh instance as the operator leaves it after `cli.js bootstrap --config`:
@@ -157,10 +157,8 @@ test('first-time setup creates the administrator once and never returns', async 
     await page.getByLabel('Password').fill(password);
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
-    // The desktop bar shows Sign out in the banner; on a phone it sits under "More" in the tab bar.
-    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
-    const signOut = (await more.isVisible()) ? page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Sign out' }) : page.getByRole('banner').getByRole('button', { name: 'Sign out' });
-    if (await more.isVisible()) await more.click();
+    // Sign out sits in the account menu under the identity button (desktop) or under "More" in the tab bar (phone).
+    const signOut = (await openAccount(page)).getByRole('button', { name: 'Sign out' });
     await expect(signOut).toBeVisible();
 
     // Setup is closed for good: a fresh visit shows the sign-in form, and the status says so.

@@ -256,13 +256,26 @@
   --shell-brand-inner-gap: var(--space-3);
   /*
    * The bar's column gap, and the total gap between the brand and the navigation (owner: "a little further
-   * from the text and logo, so it is balanced"). The wordmark shows from 1440px, where the gap grows one step.
+   * from the text and logo, so it is balanced"). The wordmark shows from 1024px (U-06), where the gap grows one step.
    */
   --shell-gap: var(--space-5);
+  --shell-gap-tight: var(--space-4);
+  --nav-pad-x-tight: var(--space-2);
   --shell-brand-gap: var(--space-5);
   --layer-bar: 3;
+  /* The account menu opens above the sticky bar's own content (and so above the page, whose layers are lower) */
+  --layer-menu: 4;
   --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(28 36 48 / 0.06);
-  --more-width: 16rem;
+  /*
+   * The account area (U-03 to U-05): the identity button's name and email truncate at --identity-max, the avatar is
+   * 36px, the panel (desktop menu and the phone's "More" panel) is 18.5rem wide, and the chevron turns over when it is open.
+   */
+  --identity-max: 14rem;
+  --avatar-size: 36px;
+  --account-width: 18.5rem;
+  --account-icon-size: 18px;
+  --chevron-open-transform: rotate(180deg);
+  --line-height-tight: 1.25;
   /* The theme control (WP5-UX2-T07): the sun and moon icon size, the segment's side padding, the raised focused segment */
   --theme-icon-size: 16px;
   --theme-option-pad-x: 8px;
@@ -509,8 +522,8 @@ body {
 }
 
 /*
- * The brand is the traced C&D logo (WP5-UX2-T05, a fixed-colour mark) and, from 1440px, the two-line wordmark
- * (WP5-UX2-T06); its one name is the visually hidden text. Both graphics are decorative.
+ * The brand is the traced C&D logo (WP5-UX2-T05, a fixed-colour mark) and, from 1024px, the two-line wordmark
+ * (WP5-UX2-T06, U-06); its one name is the visually hidden text. Both graphics are decorative.
  */
 .shell-brand {
   display: inline-flex;
@@ -541,19 +554,36 @@ body {
 }
 
 /*
- * Custom properties cannot drive a media query: 1440px is the wordmark breakpoint. Measured on the built app: with
- * a "Shared with me" switcher and a 20-character display name the one-row bar needs 1408px with the wordmark
- * (1376px for 16 characters) and a 16-character share owner; below that it wraps to two rows, so the wordmark
- * waits for 1440px, which also leaves room for a vertical scrollbar. A longer owner or user name widens the bar
- * further and wraps it as it already did at narrower widths.
+ * Custom properties cannot drive a media query: 1024px is the wordmark breakpoint (U-06). The navigation has only
+ * Timesheet, Overtime and History and the person sits in one identity button truncated at --identity-max, so the
+ * bar without a "Shared with me" switcher needs about 800px with the wordmark and stays one row from 1024px. With
+ * the switcher it needs about 1250px, so the wordmark is hidden below 1280px while the switcher is in the bar (a bar
+ * that is already tight keeps its single row) and shows at 1280px and wider. The gap from the brand to the menu is
+ * one step wider wherever the wordmark shows.
  */
-@media (min-width: 1440px) {
-  :root {
+@media (min-width: 1024px) {
+  .shell-bar {
     --shell-brand-gap: var(--space-6);
   }
 
   .wordmark {
     display: block;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .shell-bar:has(.shell-switcher) {
+    --shell-brand-gap: var(--space-5);
+    /* Without the wordmark the bar with a switcher and a 14rem identity still needs about 1030px: tighter column gaps and menu links win the rest */
+    --shell-gap: var(--shell-gap-tight);
+  }
+
+  .shell-bar:has(.shell-switcher) .wordmark {
+    display: none;
+  }
+
+  .shell-bar:has(.shell-switcher) .shell-nav .nav-link {
+    padding-inline: var(--nav-pad-x-tight);
   }
 }
 
@@ -594,9 +624,102 @@ body {
   font-weight: var(--font-weight-strong);
 }
 
+/*
+ * The identity button (U-03): the display name (bold) over the email (smaller, muted), both right-aligned and
+ * truncated at --identity-max, then the initials avatar and a chevron. It is a quiet button: no fill at rest, the hover
+ * tint and an accent boundary under the pointer, a light fill while the menu is open (the chevron also turns over, so
+ * the state is not shown by colour alone).
+ */
 .shell-user {
+  position: relative;
   align-items: center;
-  gap: var(--space-3);
+}
+
+button.identity {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--avatar-size);
+  padding: 0 var(--space-2);
+  border-color: transparent;
+  background: transparent;
+  color: var(--text);
+  text-align: right;
+}
+
+.identity-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+  max-width: var(--identity-max);
+  line-height: var(--line-height-tight);
+}
+
+.identity-name,
+.identity-email {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-heavy);
+}
+
+.identity-email {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+}
+
+.identity-chevron {
+  flex: none;
+  width: var(--account-icon-size);
+  height: var(--account-icon-size);
+  color: var(--muted);
+  transition: var(--transition);
+}
+
+button.identity[aria-expanded='true'] {
+  background: var(--off);
+  border-color: var(--accent-line);
+}
+
+button.identity[aria-expanded='true'] .identity-chevron {
+  transform: var(--chevron-open-transform);
+}
+
+@media (hover: hover) {
+  button.identity:hover:not(:disabled) {
+    background: var(--hover-fill);
+    border-color: var(--accent);
+    box-shadow: none;
+    color: var(--text);
+  }
+
+  /* The tint is darker than the bar: the email takes the full text colour so it keeps 4.5:1 on it. */
+  button.identity:hover:not(:disabled) .identity-email {
+    color: var(--text);
+  }
+}
+
+/* The initials avatar: no image; the name and email beside it carry the information. */
+.avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  border-radius: var(--radius-pill);
+  background: var(--avatar-bg);
+  color: var(--avatar-ink);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-heavy);
+  line-height: 1;
 }
 
 .shell-tabs {
@@ -647,51 +770,115 @@ body {
   color: var(--accent);
 }
 
-/* The "More" panel rises above the tab bar and holds the less frequent entries. */
-.more-panel {
-  position: absolute;
-  right: var(--space-2);
-  bottom: 100%;
+/*
+ * The account panel (U-04): the desktop menu under the identity button and the phone's "More" panel hold the same
+ * content, a header (avatar, full name, email, role), the entries, the Theme control and Sign out, on a menu surface
+ * (--elev-3, --radius-lg). The panel scrolls inside the viewport rather than growing past it.
+ */
+.account-panel {
   display: flex;
   flex-direction: column;
-  width: var(--more-width);
+  width: var(--account-width);
   max-width: calc(100vw - 2 * var(--space-2));
-  margin-bottom: var(--space-2);
   padding: var(--space-2);
+  overflow-y: auto;
   border-radius: var(--radius-lg);
   background: var(--card);
   box-shadow: var(--elev-3);
 }
 
-.more-who {
+/* The desktop menu: right-aligned under the button, above the bar's own content (SC 2.4.11: never under the bar). */
+.account-menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: var(--layer-menu);
+  max-height: calc(100dvh - var(--shell-bar-size) - 2 * var(--space-2));
+}
+
+/* The phone's panel rises above the tab bar. */
+.more-panel {
+  position: absolute;
+  right: var(--space-2);
+  bottom: 100%;
+  max-height: calc(100dvh - var(--tabbar-height) - 2 * var(--space-2));
+  margin-bottom: var(--space-2);
+}
+
+.account-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
+}
+
+.account-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
+}
+
+.account-name {
+  font-weight: var(--font-weight-heavy);
+}
+
+.account-email,
+.account-role {
+  color: var(--muted);
   font-size: var(--font-size-xs);
 }
 
-.more-panel .nav-link,
-.more-panel .more-action {
-  justify-content: flex-start;
-  min-height: var(--tap-min);
-  width: 100%;
+.account-sep {
+  margin: var(--space-1) 0;
+  border: 0;
+  border-top: var(--hairline) solid var(--line-soft);
 }
 
-.more-panel .more-action {
+.account-panel .nav-link,
+.account-panel .account-action {
+  justify-content: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap-min);
+  color: var(--text);
+}
+
+.account-panel .nav-link[aria-current='page'] {
+  color: var(--accent);
+}
+
+.account-icon {
+  flex: none;
+  width: var(--account-icon-size);
+  height: var(--account-icon-size);
+}
+
+button.account-action {
   border-color: transparent;
   background: transparent;
-  color: var(--accent);
   text-align: left;
 }
 
 @media (hover: hover) {
-  .more-panel .more-action:hover:not(:disabled):not([aria-pressed='true']) {
+  button.account-action:hover:not(:disabled) {
     background: var(--hover-fill);
     border-color: var(--accent);
     box-shadow: none;
   }
+}
 
-  .more-panel .more-action:focus-visible:hover:not(:disabled) {
-    box-shadow: var(--focus-ring);
-  }
+.account-theme-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+}
+
+.account-theme-label {
+  font-size: var(--font-size-sm);
 }
 
 /*
@@ -780,14 +967,8 @@ body {
   }
 }
 
-/* In the More panel the control spans the panel and each segment is a 44px target. */
-.more-panel .theme-switch {
-  display: flex;
-  width: 100%;
-}
-
-.more-panel .theme-option {
-  flex: 1;
+/* In the account panel each segment is a 44px target. */
+.account-panel .theme-option {
   min-height: var(--tap-min);
 }
 

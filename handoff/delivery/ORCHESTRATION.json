@@ -28,8 +28,12 @@
   "current_source_digest": "229df806aeaaa886ab11ee83556746ee65eda6c81a596dcd180d80d5d0b04db3",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX3-T01-FREEZE",
+  "next_task_id": "WP5-UX3-T02-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-15",
+      "observation": "Coordinator slip: right after resuming the WP5-UX3-T01-FREEZE committer for attempt 2, the coordinator wrote the agent ID into ORCHESTRATION.json while the commit task ran (rule: no coordinator writes while a commit task runs). The commit e2f3d74 may therefore hold the board without that one field; the working tree has it and the next commit carries it. Rule kept: record agent IDs of commit tasks only after their hand-back. Also: WP5-UX3-T01-FREEZE attempt 1 stopped on a blank line at EOF in a new test file; later worker briefs ask for a whitespace check (Grep '[ \\t]+$' and the last lines) of every new or changed file before the digest."
+    },
     {
       "date": "2026-10-15",
       "observation": "WP5-UX3-PLAN step 0: the owner committed the coordinator's post-WP5-UX2-ACCEPT records himself as b4d9dd87fd47531ff84eba40189153ab83562677 (author huysrc, 'chore(handoff): return the mission to software_ready after WP5-UX2', 6 handoff files, pushed; HEAD = origin/main). Source digest unchanged (229df806). Later freeze briefs use b4d9dd8 as the expected base HEAD."
@@ -293,7 +297,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "3968e15fe528bfbdf956a9b3c8aeaad8e348c57b",
+    "last_commit": "e2f3d7492160d389c18903285994bedec56df51e",
     "unpushed": []
   },
   "owner_decisions": [
@@ -471,6 +475,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-15",
+      "basis": "WP5-UX3-T02: the client JS chunk grew to 502.77 kB (498.53 kB at T01), so the Vite build prints its 500 kB chunk-size advisory for the first time; T07, T08 and T08B will add more client code. It is not a deprecation (AGENTS rule 11), but hiding it by raising the limit would only defer the cost, and employees download admin-only code today.",
+      "decision": "Code-split instead of raising the limit: slice T03 (which already restructures the Settings and Administration routes in App.tsx) loads the Administration and Import screens lazily (React.lazy with dynamic import, same-origin chunks under the unchanged CSP, an accessible loading state, focus and heading behaviour unchanged), and records the main chunk size before and after; the build must print no chunk-size advisory. Every later slice records the main chunk size; the package gate checks that the build prints no advisory."
+    },
     {
       "date": "2026-10-15",
       "basis": "WP5-UX3-PLAN2 done: measured squeeze beside the panel (89.4px columns, mid-word breaks, no element overlap), a 1360px rule with a floating modal panel below it, square sheets with grouped 4px lifted columns, phone break rows only from 382px with chips below, the G-4 notice, the 'in progress' pill and two new slices. On the owner's likely 1280-1366px screen the editor will always float; on common 390/375/360px phones the breaks will show as chips, which follows the owner's N-1 fallback rule but may surprise him.",
@@ -20714,7 +20723,7 @@
       "id": "WP5-UX3-T01-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX3-T01"
       ],
@@ -20727,8 +20736,8 @@
         "risk": "L",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
       "agent_id": "a818b19a6e46005d0",
       "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
@@ -20745,19 +20754,25 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX3-T01-FREEZE.md",
       "report": "handoff/delivery/tasks/WP5-UX3-T01-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-T01-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-UX3-T01-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "3968e15fe528bfbdf956a9b3c8aeaad8e348c57b",
+      "branch": "main",
+      "commit_sha": "e2f3d7492160d389c18903285994bedec56df51e",
+      "pushed": true,
       "source_digest": "a4f127cc4a10c8b311811b244be2a82fa87bcd636615b89c765d5be5d2411d86",
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Committer attempt 2: re-stage the 12 source/docs paths and 36 handoff paths with explicit paths, digest a4f127cc, every check, commit on main and push."
+      "decision": "committed and pushed on attempt 2 (same committer resumed): 48 paths (12 source/docs, 36 handoff incl. 27 T01 evidence files); HEAD was 3968e15 = origin/main; digests a4f127cc (819 files) before add, on the new HEAD and after the commit; node v24.21.0; precommit PASS (48 files, 0 findings), diff --cached --check 0, JSON parse (script file), validate_orchestration, check_recovery (106), preflight exit 0; remote main = e2f3d74; no tag; no deviation.",
+      "next_action": "None; WP5-UX3-T02 on e2f3d74 / a4f127cc."
     },
     {
       "id": "WP5-UX3-T02",
       "package": "WP5",
       "kind": "implement",
-      "status": "pending",
+      "status": "done",
       "depends_on": [
         "WP5-UX3-T01-FREEZE"
       ],
@@ -20770,11 +20785,11 @@
         "risk": "M",
         "novelty": true
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
+      "agent_id": "a692bcf56fedcbca5",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
       "attempt": 1,
       "owned_paths": [
         "src/client/components/AppShell.tsx",
@@ -20802,13 +20817,120 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX3-T02.md",
       "report": "handoff/delivery/tasks/WP5-UX3-T02.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-T02/step2-head-status.txt",
+        "handoff/delivery/evidence/WP5-UX3-T02/step2-digest-before.txt",
+        "handoff/delivery/evidence/WP5-UX3-T02/step3-typecheck.txt",
+        "handoff/delivery/evidence/WP5-UX3-T02/step3-lint.txt",
+        "handoff/delivery/evidence/WP5-UX3-T02/step3-unit.txt",
+        "handoff/delivery/evidence/WP5-UX3-T02/step4-e2e-full.txt",
+        "handoff/delivery/evidence/WP5-UX3-T02/step5-mutation.txt",
+        "handoff/delivery/evidence/WP5-UX3-T02/step7-verify.txt",
+        "handoff/delivery/evidence/WP5-UX3-T02/step8-digest.txt",
+        "handoff/delivery/evidence/WP5-UX3-T02/shell-account-menu-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX3-T02/more-panel-admin-390-synthetic.png"
+      ],
+      "baseline_commit": "e2f3d7492160d389c18903285994bedec56df51e",
+      "source_digest": "c938aa6fcd55a15f1edd6fc28462981b33188de9462d6d60f9a8fcde19a7b72c",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (reported, not independent proof): pure accountModel.ts (initials, role label, item list per role and layout); AccountMenu.tsx (identity button: bold name over muted email, right-aligned, truncated at 14rem, 36px aria-hidden initials avatar, chevron, hidden ', account menu'; disclosure with aria-expanded/aria-controls and a non-modal panel; keyboard open focuses the first item; Escape closes with preventDefault and returns focus; outside press, hash change and focus leaving close it) and AccountContent shared by the desktop menu and the phone More panel; desktop bar Timesheet, Overtime, History; the bar always shows the signed-in user. Link targets: Administration keeps #/admin, Profile points to #/settings (T03 changes only PROFILE_HASH and ADMIN_HASH). Wordmark from 1024px, hidden 1024-1279px with the share switcher; deviation: in that range with a share the bar wrapped at 1024, so the column gap is 16px and the nav padding 8px there (tokens). Assertions changed in shell, hover, logo, theme, focus-ring, admin, admin-status, isolation, import, sharing, setup and keyboard-access specs, each listed with file:line as not weakened; fixtures.ts openAccount helper. Unit 92 files / 2045; full e2e 0 failed (desktop 246/30, mobile 257/19); mutation (Escape without focus return) failed 2 of 2, reverted; budgets 559.5 / 611.5 / 658.4 / 710.4 of 788; contrast email 5.83-6.56; verify 0 (SMOKE_PORT 48621); digest c938aa6f (822 files). Note: the client JS chunk is now 502.77 kB (498.53 at T01), so Vite prints its 500 kB advisory (not a deprecation). No whitespace defect; nothing left running.",
+      "next_action": "None; WP5-UX3-T02-FREEZE (committer alone)."
+    },
+    {
+      "id": "WP5-UX3-T02-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX3-T02"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX3-T02-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX3-T02-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-T02-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-T02-FREEZE.md",
       "evidence": [],
-      "baseline_commit": null,
-      "source_digest": "e9e8d11720dc3da2a627191b29ba7084198d5e202dba314db28e3f50617006ab",
+      "baseline_commit": "e2f3d7492160d389c18903285994bedec56df51e",
+      "source_digest": "c938aa6fcd55a15f1edd6fc28462981b33188de9462d6d60f9a8fcde19a7b72c",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Worker after the T01 freeze: identity block, account menu, phone More content, desktop nav without Settings/Admin, wordmark rule; then WP5-UX3-T02-FREEZE."
+      "next_action": "Committer: stage the 19 T02 paths and the 26 listed handoff paths, run the checks, commit on main and push."
+    },
+    {
+      "id": "WP5-UX3-T03",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "pending",
+      "depends_on": [
+        "WP5-UX3-T02-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": null,
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/App.tsx",
+        "src/client/components/AppShell.tsx",
+        "src/client/SettingsScreen.tsx",
+        "src/client/AdminScreen.tsx",
+        "src/client/ImportScreen.tsx",
+        "src/client/ProfileScreen.tsx",
+        "src/client/components/SettingsNav.tsx",
+        "src/client/components/routeModel.ts",
+        "src/client/components/accountModel.ts",
+        "src/client/components/AccountMenu.tsx",
+        "src/client/styles.css",
+        "tests/client/routeModel.test.ts",
+        "tests/client/accountModel.test.ts",
+        "tests/e2e/settings-routes.spec.ts",
+        "tests/e2e/admin.spec.ts",
+        "tests/e2e/admin-status.spec.ts",
+        "tests/e2e/admin-users.spec.ts",
+        "tests/e2e/import.spec.ts",
+        "tests/e2e/isolation.spec.ts",
+        "tests/e2e/history-settings.spec.ts",
+        "tests/e2e/shell.spec.ts",
+        "handoff/delivery/tasks/WP5-UX3-T03.md",
+        "handoff/delivery/evidence/WP5-UX3-T03"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-T03.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-T03.md",
+      "evidence": [],
+      "baseline_commit": null,
+      "source_digest": "c938aa6fcd55a15f1edd6fc28462981b33188de9462d6d60f9a8fcde19a7b72c",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Worker after the T02 freeze: Settings sub-pages, Profile, routes and the #/admin redirect, lazy Admin and Import screens; then WP5-UX3-T03-FREEZE."
     }
   ],
   "future_packages": [

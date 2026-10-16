@@ -5,7 +5,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { type Page, test as base, expect } from '@playwright/test';
+import { type Locator, type Page, test as base, expect } from '@playwright/test';
 import { addDays } from '../../src/domain/dates.ts';
 import { syntheticSignaturePng } from '../../src/server/seed.ts';
 import { type DeadlinePeriodFacts, displayedPeriodSeedDay, laterDeadlineFor } from './displayedSeed.ts';
@@ -700,6 +700,28 @@ export async function statusInPage(page: Page, method: string, path: string, bod
     ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
   };
   return page.evaluate<number>(`fetch(${JSON.stringify(path)}, ${JSON.stringify(init)}).then((response) => response.status)`);
+}
+
+/* ---- The account area of the shell ---------------------------------------------- */
+
+/**
+ * WP5-UX3-T02: opens the account content and returns its container. From 768px that is the account menu under the
+ * identity button of the top bar (`#account-menu`); below it the "More" panel of the tab bar (`#more-panel`). Both hold
+ * the same entries (Profile, Settings, Administration for administrators, Theme, Sign out; Import on a phone), so a spec
+ * reaches Settings, Import, Administration or Sign out through `(await openAccount(page)).getByRole('link', { name })`.
+ * A panel that is already open is left open.
+ */
+export async function openAccount(page: Page): Promise<Locator> {
+  // The shell (and so the layout) is there once the navigation is: right after a sign-in it may not be yet.
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+  const phone = await more.isVisible();
+  const opener = phone ? more : page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+  await expect(opener).toBeVisible();
+  if ((await opener.getAttribute('aria-expanded')) !== 'true') await opener.click();
+  const panel = page.locator(phone ? '#more-panel' : '#account-menu');
+  await expect(panel).toBeVisible();
+  return panel;
 }
 
 /* ---- Fixtures --------------------------------------------------------------- */

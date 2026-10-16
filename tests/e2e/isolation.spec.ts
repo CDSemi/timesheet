@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { type Page } from '@playwright/test';
 import {
   type CreatedAccount,
   createAccountByAdminApi,
   expect,
+  openAccount,
   SeedClient,
   screenshotPath,
   starterPolicyBody,
@@ -39,15 +39,12 @@ interface Owner {
   note: string;
 }
 
-/** Employee 1 gets a complete day and a private note; the helper undoes it afterwards. */
-/** On a phone Settings, Import, Admin and Sign out sit under "More" in the tab bar; opens it when shown and closed. */
-async function openMoreOnPhone(page: Page) {
-  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
-  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
-  if (!(await more.isVisible())) return;
-  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-}
+/*
+ * Settings, Import, Administration and Sign out are in the account menu under the identity button (768px and wider)
+ * or under "More" in the tab bar (phone): `openAccount` opens whichever is shown.
+ */
 
+/** Employee 1 gets a complete day and a private note; the helper undoes it afterwards. */
 async function seedOwner(employee: SeedClient): Promise<Owner> {
   // A day of the period the page displays; pastFreeWorkdays() can return an in-progress period's day that is not on the page.
   const workDate = await employee.displayedSeedDay();
@@ -114,6 +111,8 @@ test('a second employee cannot reach employee 1 by hash swap or by id swap', asy
       await expect(page.locator('main')).not.toContainText(owner.note);
     }
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' })).toHaveCount(0);
+    await expect((await openAccount(page)).getByRole('link', { name: /^Admin/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
 
     // API id swap from the page, with the page's own session.
     await expectForeignSessionRefused(page, owner);
@@ -148,8 +147,8 @@ test('an admin cannot open employee data through any admin screen', async (
   const owner = await seedOwner(employeeSeed);
   try {
     await signInPageAs(builtServer.credentials.admin);
-    await openMoreOnPhone(page);
-    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' }).click();
+    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+    await (await openAccount(page)).getByRole('link', { name: 'Administration' }).click();
     await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
     await expect(page.locator('li.user-row').first()).toBeVisible();
 
@@ -198,12 +197,22 @@ test('an admin cannot open employee data through any admin screen', async (
 test('an employee sees no Admin entry and the server refuses the admin routes', async ({ page, signInThroughUi }) => {
   await signInThroughUi();
   const nav = page.getByRole('navigation', { name: 'Main' });
-  await openMoreOnPhone(page);
-  await expect(nav.getByRole('link', { name: 'Settings' })).toBeVisible();
+  await expect(nav).toBeVisible();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const adminRequests: string[] = [];
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/admin/')) adminRequests.push(`${request.method()} ${request.url()}`);
+  });
+  const account = await openAccount(page);
+  await expect(account.getByRole('link', { name: 'Settings' })).toBeVisible();
+  await expect(account.getByRole('link', { name: /^Admin/ })).toHaveCount(0);
   await expect(nav.getByRole('link', { name: 'Admin' })).toHaveCount(0);
   await page.evaluate("window.location.hash = '#/admin'");
   await expect(page).toHaveURL(/#\/timesheet$/);
   await expect(page.getByRole('heading', { name: 'Administration' })).toHaveCount(0);
+  // The employee's page never asks for an admin route at all (the entry is hidden and the screen is not rendered).
+  await page.waitForLoadState('networkidle');
+  expect(adminRequests, 'admin requests made by an employee page').toEqual([]);
   expect(await statusInPage(page, 'GET', '/api/admin/users')).toBe(403);
   expect(await statusInPage(page, 'PATCH', '/api/admin/users/anything', { display_name: 'Synthetic Takeover' })).toBe(403);
   expect(await statusInPage(page, 'POST', '/api/admin/users/anything/deactivate', {})).toBe(403);
