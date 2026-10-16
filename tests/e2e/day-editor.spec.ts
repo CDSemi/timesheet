@@ -10,8 +10,10 @@ import { type BuiltServer, expect, newPerson, type Person, screenshotPath, SeedC
  * break confirmation and a stale version; category, partial leave and WFH with the OT mismatch
  * notice; the reason prompt for old periods; and future days shown as upcoming. WP5-UX-T04: the
  * editor is a non-modal side panel on a desktop and a modal bottom sheet on a phone (focus in and
- * back out), one tap confirms suggested breaks with the same session update, and the sheet's label
- * cell is a picker that previews and commits one batch entry (reason and conflicts unchanged).
+ * back out), "Confirm breaks" sends the same session update the one-tap buttons sent, and the sheet's
+ * label cell is a picker that previews and commits one batch entry (reason and conflicts unchanged).
+ * WP5-UX3-T08: sessions are added and edited in the session dialog (pre-fill, break rows, the
+ * "No breaks listed" notice, the "Save this session?" and "Discard your changes?" confirmations).
  *
  * The browser zone (Asia/Ho_Chi_Minh) differs from the reporting zone on purpose. Dates derive
  * from the API, never the test machine's date, except the two DST days, which are fixed past
@@ -92,8 +94,53 @@ async function typeInputZone(form: Locator, zone: string) {
   await form.getByLabel('Input zone').fill(zone);
 }
 
+/*
+ * WP5-UX3-T08 (U-21, U-24 to U-26): a session is added and edited in its own modal dialog, named "New session" or "Edit
+ * session", and every Save goes through the final "Save this session?" confirmation before anything is sent.
+ */
+function sessionDialog(page: Page, name: 'New session' | 'Edit session'): Locator {
+  return page.getByRole('dialog', { name, exact: true });
+}
+
+function saveConfirmation(page: Page): Locator {
+  return page.getByRole('alertdialog', { name: 'Save this session?' });
+}
+
+function noBreaksNotice(page: Page): Locator {
+  return page.getByRole('alertdialog', { name: 'No breaks listed' });
+}
+
 async function chooseNoBreaks(form: Locator) {
-  await form.getByRole('radio', { name: /No breaks taken/ }).check();
+  await form.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+}
+
+/** Save in the session dialog (the listed breaks or the ticked box: no notice), then Save in "Save this session?". */
+async function saveSession(page: Page, form: Locator): Promise<void> {
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  const confirm = saveConfirmation(page);
+  await expect(confirm).toBeVisible();
+  await expect(noBreaksNotice(page)).toHaveCount(0);
+  await confirm.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(confirm).toHaveCount(0);
+}
+
+/** Removes every listed break row (the pre-filled suggestions of a past day, for example). */
+async function removeAllBreaks(form: Locator): Promise<void> {
+  const rows = form.locator('[data-break]');
+  for (let count = await rows.count(); count > 0; count -= 1) {
+    await form.getByRole('button', { name: `Remove break ${count}`, exact: true }).click();
+  }
+  await expect(rows).toHaveCount(0);
+}
+
+/** The value of the start time of break n, the minutes and its computed end text. */
+function breakRow(form: Locator, index: number): { row: Locator; date: Locator; time: Locator; minutes: Locator } {
+  return {
+    row: form.locator(`[data-break="${index}"]`),
+    date: form.getByLabel(`Break ${index} date`, { exact: true }),
+    time: form.getByLabel(`Break ${index} start time`, { exact: true }),
+    minutes: form.getByLabel(`Break ${index} minutes`, { exact: true }),
+  };
 }
 
 test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, confirmed gives R 8h 00m and credit 0', async ({
@@ -103,6 +150,10 @@ test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, conf
 }, testInfo) => {
   const project = testInfo.project.name;
   const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  const posts: Array<Record<string, unknown>> = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === `/api/days/${date}/sessions`) posts.push(request.postDataJSON() as Record<string, unknown>);
+  });
   try {
     await signInThroughUi();
     // The grid (desktop) or the day list (mobile) opens the editor.
@@ -115,29 +166,43 @@ test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, conf
     await expect(editor.getByRole('list', { name: 'About this day' }).getByText(`Day in ${LA}`)).toBeVisible();
 
     await editor.getByRole('button', { name: 'Add session' }).click();
-    const form = editor.getByRole('form', { name: 'New session' });
+    const form = sessionDialog(page, 'New session');
+    await expect(form).toBeVisible();
+    expect(await form.evaluate((element) => element.matches(':modal')), 'the session dialog is modal').toBe(true);
     // R-07: the default is the current display zone; Los Angeles is chosen explicitly below.
     await expect(form.getByLabel('Input zone')).toHaveValue(await browserZone(page));
     await typeInputZone(form, LA);
     await form.getByLabel('Start time', { exact: true }).fill('09:00');
     await form.getByLabel('End time', { exact: true }).fill('18:00');
-    await form.getByRole('button', { name: 'Suggest breaks' }).click();
 
-    // R-02: a 09:00 arrival moves the default breaks to 11:00, 13:00 and 15:30, unconfirmed.
+    // R-02: the pre-filled suggestions of this past day follow the 09:00 arrival to 11:00, 13:00 and 15:30 (15, 30 and 15 minutes).
     const expected = [
-      ['11:00', '11:15'],
-      ['13:00', '13:30'],
-      ['15:30', '15:45'],
+      ['11:00', '15', 'ends 11:15'],
+      ['13:00', '30', 'ends 13:30'],
+      ['15:30', '15', 'ends 15:45'],
     ] as const;
-    for (const [index, [from, to]] of expected.entries()) {
-      await expect(form.getByLabel(`Break ${index + 1} from time`)).toHaveValue(from);
-      await expect(form.getByLabel(`Break ${index + 1} to time`)).toHaveValue(to);
+    await expect(form.locator('[data-break]')).toHaveCount(3);
+    for (const [index, [from, minutes, end]] of expected.entries()) {
+      const row = breakRow(form, index + 1);
+      await expect(row.time).toHaveValue(from);
+      await expect(row.minutes).toHaveValue(minutes);
+      await expect(row.row).toContainText(end);
+      await expect(row.row).toContainText('suggested');
     }
-    await expect(form.getByRole('radio', { name: /Breaks not confirmed yet/ })).toBeChecked();
+    await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
 
-    // Unknown stays pending: saved without confirming, the day is not complete and OT is pending.
-    await form.getByRole('button', { name: 'Save session' }).click();
+    // Unknown stays possible: with no break listed and the box unticked, Save asks first and can leave the breaks unconfirmed.
+    await removeAllBreaks(form);
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    await noBreaksNotice(page).getByRole('button', { name: 'Leave breaks unconfirmed for now' }).click();
+    const unknown = saveConfirmation(page);
+    await expect(unknown.locator('.confirm-facts')).toContainText('Breaks not confirmed: OT for this day stays pending');
+    await expect(unknown).not.toHaveAccessibleDescription(/Saving confirms/);
+    expect(posts, 'nothing is sent before the final Save').toEqual([]);
+    await unknown.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(editor.getByText('Session saved.')).toBeVisible();
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toMatchObject({ breaks: [], breaks_confirmed: false, input_zone: LA });
     await expect(figure(editor, 'status')).toContainText('confirm breaks');
     await expect(editor.getByText('OT for this day stays pending')).toBeVisible();
     await expect(figure(editor, 'credited')).toHaveText('none');
@@ -151,17 +216,24 @@ test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, conf
     await expect(editor.locator('[data-figure-label="expected-finish"]')).toContainText('derived');
     await expect(editor.locator('[data-figure-note="expected-finish"]')).toContainText('Display only');
 
-    // Confirm the suggested breaks of the saved session (edit with the version it loaded).
+    // Confirm the suggested breaks of the saved session (edit with the version it loaded): with rows listed, Save goes straight to the final confirmation.
     await editor.getByRole('button', { name: /^Edit session/ }).click();
-    const edit = editor.getByRole('form', { name: 'Edit session' });
-    await expect(edit.getByRole('radio', { name: /Breaks not confirmed yet/ })).toBeChecked();
-    await expect(edit.getByLabel('Break 3 to time')).toHaveValue('15:45');
-    await edit.getByRole('button', { name: 'Confirm suggested breaks' }).click();
-    await expect(edit.getByRole('radio', { name: /Breaks confirmed as listed/ })).toBeChecked();
-    await edit.getByRole('button', { name: 'Save changes' }).click();
+    const edit = sessionDialog(page, 'Edit session');
+    await expect(edit.locator('[data-break]')).toHaveCount(0);
+    await edit.getByRole('button', { name: 'Suggest breaks' }).click();
+    await expect(breakRow(edit, 3).time).toHaveValue('15:30');
+    await expect(breakRow(edit, 3).row).toContainText('ends 15:45');
+    await edit.getByRole('button', { name: 'Save', exact: true }).click();
+    const confirmed = saveConfirmation(page);
+    await expect(noBreaksNotice(page)).toHaveCount(0);
+    await expect(confirmed.locator('.confirm-facts')).toContainText('3 breaks (15, 30, 15 min)');
+    await expect(confirmed.locator('.confirm-facts')).toContainText(`09:00-18:00 (${LA})`);
+    await expect(confirmed).toHaveAccessibleDescription('Saving confirms these breaks as the breaks you took.');
+    await confirmed.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(editor.getByText('Session saved.')).toBeVisible();
 
-    // R 480 and credit 0, exactly as the server shows them.
+    // R 480 and credit 0, exactly as the server shows them; the card says the breaks are confirmed.
+    await expect(editor.locator('.session-card [data-session-state]')).toHaveText('Breaks confirmed');
     await expect(figure(editor, 'status')).toContainText('complete');
     await expect(figure(editor, 'regular')).toHaveText('8h 00m');
     await expect(figure(editor, 'eligible')).toHaveText('0m');
@@ -200,7 +272,7 @@ test('manual entry defaults its input zone to the display zone and stores the in
     await expect(chips.getByText(`Day in ${LA}`)).toBeVisible();
     await expect(chips.getByText(`Times in ${displayZone}`)).toBeVisible();
     await editor.getByRole('button', { name: 'Add session' }).click();
-    const form = editor.getByRole('form', { name: 'New session' });
+    const form = sessionDialog(page, 'New session');
     // The explanation of the input zone moved next to the field where the zone is chosen.
     await expect(form.getByText(`they are shown in ${displayZone} elsewhere`)).toBeVisible();
     await expect(form.getByLabel('Input zone')).toHaveValue(displayZone);
@@ -211,10 +283,13 @@ test('manual entry defaults its input zone to the display zone and stores the in
     // 22:00 to 23:30 in the display zone is the same instant as another wall time in Los Angeles
     // (08:00 to 09:30 under PDT, 07:00 to 08:30 under PST). The expectation is derived with Intl from
     // the real date, so the test holds in every season; the accounting date stays the same either way.
+    // The pre-filled end (17:00 in Los Angeles) lies on the next date in the display zone, so the end date is typed too.
+    await form.getByLabel('Start date', { exact: true }).fill(date);
     await form.getByLabel('Start time', { exact: true }).fill('22:00');
+    await form.getByLabel('End date', { exact: true }).fill(date);
     await form.getByLabel('End time', { exact: true }).fill('23:30');
     await chooseNoBreaks(form);
-    await form.getByRole('button', { name: 'Save session' }).click();
+    await saveSession(page, form);
     await expect(editor.getByText('Session saved.')).toBeVisible();
     await expect(editor.getByText(`Entered by hand in ${displayZone}`)).toBeVisible();
     await snap(page, 'day-editor-display-zone-default', project);
@@ -231,19 +306,25 @@ test('manual entry defaults its input zone to the display zone and stores the in
 
     // An edited session keeps its saved input zone; it is not reset to the default.
     await editor.getByRole('button', { name: /^Edit session/ }).click();
-    const edit = editor.getByRole('form', { name: 'Edit session' });
+    const edit = sessionDialog(page, 'Edit session');
     await expect(edit.getByLabel('Input zone')).toHaveValue(displayZone);
-    await edit.getByRole('button', { name: 'Cancel' }).click();
+    // Nothing changed, so Cancel closes at once.
+    await edit.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(edit).toHaveCount(0);
 
     // The default can still be changed explicitly: the same kind of wall time typed in Los Angeles is another instant.
     await editor.getByRole('button', { name: 'Add session' }).click();
-    const second = editor.getByRole('form', { name: 'New session' });
+    const second = sessionDialog(page, 'New session');
     await expect(second.getByLabel('Input zone')).toHaveValue(displayZone);
     await typeInputZone(second, LA);
+    // Untouched pre-filled times follow the input zone: the reference hours read as typed in Los Angeles.
+    await expect(second.getByLabel('Start date', { exact: true })).toHaveValue(date);
+    await expect(second.getByLabel('Start time', { exact: true })).toHaveValue('08:00');
+    await expect(second.getByLabel('End time', { exact: true })).toHaveValue('17:00');
     await second.getByLabel('Start time', { exact: true }).fill('03:00');
     await second.getByLabel('End time', { exact: true }).fill('04:00');
     await chooseNoBreaks(second);
-    await second.getByRole('button', { name: 'Save session' }).click();
+    await saveSession(page, second);
     await expect(editor.getByText('Session saved.')).toBeVisible();
     const later = (await employeeSeed.dayView(date)).sessions.find((session) => session.input_zone === LA);
     expect(wallClock(later?.start_utc ?? '', LA)).toBe('03:00:00');
@@ -265,21 +346,24 @@ test('an overnight entry needs its explicit end date and is saved with it', asyn
     await signInThroughUi();
     const editor = await openEditor(page, workDate);
     await editor.getByRole('button', { name: 'Add session' }).click();
-    const form = editor.getByRole('form', { name: 'New session' });
+    const form = sessionDialog(page, 'New session');
     await typeInputZone(form, LA);
     await form.getByLabel('Start time', { exact: true }).fill('22:00');
     await form.getByLabel('End time', { exact: true }).fill('03:00');
     await chooseNoBreaks(form);
-    // The end date still equals the start date, so the server refuses an end before the start.
+    // The end date still equals the start date, so the server refuses an end before the start (after the final confirmation).
     await expect(form.locator('[data-overnight]')).toHaveCount(0);
-    await form.getByRole('button', { name: 'Save session' }).click();
+    await saveSession(page, form);
     await expect(form.getByRole('alert')).toContainText('end_not_after_start');
 
     await form.getByLabel('End date', { exact: true }).fill(nextDate);
     await expect(form.locator('[data-overnight]')).toContainText(`ends on ${nextDate}`);
     await expect(form.locator('[data-overnight]')).toContainText(`accounting date ${workDate}`);
     await snap(page, 'day-editor-overnight', project);
-    await form.getByRole('button', { name: 'Save session' }).click();
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    // The confirmation shows the later end date as +1.
+    await expect(saveConfirmation(page).locator('.confirm-facts')).toContainText(`22:00-03:00+1 (${LA})`);
+    await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
     await expect(editor.getByText('Session saved.')).toBeVisible();
 
     const stored = (await employeeSeed.dayView(workDate)).sessions[0];
@@ -305,7 +389,9 @@ test('a repeated local time (DST fold) in an explicit input zone needs a choice 
     const editor = await openEditor(page, FOLD_DAY);
     await editor.getByLabel('Reason for editing an old or finalized period').fill('Entering a past Sydney shift');
     await editor.getByRole('button', { name: 'Add session' }).click();
-    const form = editor.getByRole('form', { name: 'New session' });
+    const form = sessionDialog(page, 'New session');
+    // The old period's reason is the editor's one reason state: the dialog shows the same field with the same words.
+    await expect(form.getByLabel('Reason for editing an old or finalized period')).toHaveValue('Entering a past Sydney shift');
     await form.getByLabel('Input zone').fill('Australia/Sydney');
     await form.getByLabel('Start date', { exact: true }).fill('2026-04-05');
     await form.getByLabel('Start time', { exact: true }).fill('02:30');
@@ -313,7 +399,9 @@ test('a repeated local time (DST fold) in an explicit input zone needs a choice 
     await form.getByLabel('End time', { exact: true }).fill('04:30');
     await chooseNoBreaks(form);
 
-    await form.getByRole('button', { name: 'Save session' }).click();
+    // The question comes before any confirmation: nothing is asked or sent until the time is placed.
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(saveConfirmation(page)).toHaveCount(0);
     const prompt = form.locator('[data-problem="fold"]');
     await expect(prompt).toBeVisible();
     await expect(prompt).toContainText('happens twice in Australia/Sydney');
@@ -323,7 +411,7 @@ test('a repeated local time (DST fold) in an explicit input zone needs a choice 
     await snap(page, 'day-editor-dst-fold', project);
 
     await prompt.getByRole('radio', { name: 'Later time, UTC offset +10:00' }).check();
-    await form.getByRole('button', { name: 'Save session' }).click();
+    await saveSession(page, form);
     await expect(editor.getByText('Session saved.')).toBeVisible();
 
     // The server stored the later instant: 02:30 at +10:00 is 16:30 UTC on the 4th; the end is 04:30 +10:00.
@@ -333,9 +421,9 @@ test('a repeated local time (DST fold) in an explicit input zone needs a choice 
     expect(stored?.input_zone).toBe('Australia/Sydney');
     // Editing the saved session pins its instant, so the question does not come back.
     await editor.getByRole('button', { name: /^Edit session/ }).click();
-    const edit = editor.getByRole('form', { name: 'Edit session' });
+    const edit = sessionDialog(page, 'Edit session');
     await expect(edit.getByLabel('Start time', { exact: true })).toHaveValue('02:30');
-    await edit.getByRole('button', { name: 'Save changes' }).click();
+    await saveSession(page, edit);
     await expect(editor.getByText('Session saved.')).toBeVisible();
     expect((await employeeSeed.dayView(FOLD_DAY)).sessions[0]?.start_utc).toBe('2026-04-04T16:30:00Z');
   } finally {
@@ -359,7 +447,7 @@ test('changing the input zone of a saved session re-reads the typed wall times i
     await signInThroughUi();
     const editor = await openEditor(page, date);
     await editor.getByRole('button', { name: /^Edit session/ }).click();
-    const edit = editor.getByRole('form', { name: 'Edit session' });
+    const edit = sessionDialog(page, 'Edit session');
     await expect(edit.getByLabel('Input zone')).toHaveValue(LA);
     await expect(edit.getByLabel('Start time', { exact: true })).toHaveValue('09:00');
 
@@ -367,9 +455,10 @@ test('changing the input zone of a saved session re-reads the typed wall times i
     await typeInputZone(edit, LONDON);
     await expect(edit.getByLabel('Start time', { exact: true })).toHaveValue('09:00');
     await expect(edit.getByLabel('End time', { exact: true })).toHaveValue('18:00');
+    await expect(breakRow(edit, 1).time).toHaveValue('11:00');
     expect((await employeeSeed.dayView(date)).sessions[0]?.start_utc).toBe(before?.start_utc);
     await snap(page, 'day-editor-zone-change', project);
-    await edit.getByRole('button', { name: 'Save changes' }).click();
+    await saveSession(page, edit);
     await expect(editor.getByText('Session saved.')).toBeVisible();
 
     const after = (await employeeSeed.dayView(date)).sessions[0];
@@ -392,9 +481,11 @@ test('an unchanged edit keeps the saved zone and instants', async ({ page, emplo
     await signInThroughUi();
     const editor = await openEditor(page, date);
     await editor.getByRole('button', { name: /^Edit session/ }).click();
-    const edit = editor.getByRole('form', { name: 'Edit session' });
+    const edit = sessionDialog(page, 'Edit session');
     await edit.getByLabel('Start time', { exact: true }).fill('09:15');
-    await edit.getByRole('button', { name: 'Save changes' }).click();
+    // A saved session's rows do not follow the start (only a new session's untouched suggestions do).
+    await expect(breakRow(edit, 1).time).toHaveValue('11:00');
+    await saveSession(page, edit);
     await expect(editor.getByText('Session saved.')).toBeVisible();
     const after = (await employeeSeed.dayView(date)).sessions[0];
     expect(after?.input_zone).toBe(LA);
@@ -418,28 +509,29 @@ test('changing the input zone to one where the same wall time is repeated asks f
     const editor = await openEditor(page, day);
     await editor.getByLabel('Reason for editing an old or finalized period').fill('Entering a past shift');
     await editor.getByRole('button', { name: 'Add session' }).click();
-    const form = editor.getByRole('form', { name: 'New session' });
+    const form = sessionDialog(page, 'New session');
     await typeInputZone(form, LA);
     await form.getByLabel('Start time', { exact: true }).fill('02:30');
     await form.getByLabel('End time', { exact: true }).fill('04:30');
     await chooseNoBreaks(form);
-    await form.getByRole('button', { name: 'Save session' }).click();
+    await saveSession(page, form);
     await expect(editor.getByText('Session saved.')).toBeVisible();
     const before = (await employeeSeed.dayView(day)).sessions[0];
     expect(before?.start_utc).toBe('2026-04-05T09:30:00Z');
 
     await editor.getByRole('button', { name: /^Edit session/ }).click();
-    const edit = editor.getByRole('form', { name: 'Edit session' });
+    const edit = sessionDialog(page, 'Edit session');
     await typeInputZone(edit, 'Australia/Sydney');
-    await edit.getByRole('button', { name: 'Save changes' }).click();
-    // The repeated time is not guessed from the Los Angeles offset: the form asks, and nothing is saved.
+    await edit.getByRole('button', { name: 'Save', exact: true }).click();
+    // The repeated time is not guessed from the Los Angeles offset: the dialog asks, and nothing is confirmed or saved.
     const prompt = edit.locator('[data-problem="fold"]');
     await expect(prompt).toBeVisible();
     await expect(prompt).toContainText('happens twice in Australia/Sydney');
+    await expect(saveConfirmation(page)).toHaveCount(0);
     expect((await employeeSeed.dayView(day)).sessions[0]?.start_utc).toBe(before?.start_utc);
 
     await prompt.getByRole('radio', { name: 'Earlier time, UTC offset +11:00' }).check();
-    await edit.getByRole('button', { name: 'Save changes' }).click();
+    await saveSession(page, edit);
     await expect(editor.getByText('Session saved.')).toBeVisible();
     const after = (await employeeSeed.dayView(day)).sessions[0];
     expect(after?.input_zone).toBe('Australia/Sydney');
@@ -462,28 +554,367 @@ test('a local time that does not exist (DST gap) is explained and can move to th
     const editor = await openEditor(page, GAP_DAY);
     await editor.getByLabel('Reason for editing an old or finalized period').fill('Entering a past shift');
     await editor.getByRole('button', { name: 'Add session' }).click();
-    const form = editor.getByRole('form', { name: 'New session' });
+    const form = sessionDialog(page, 'New session');
     await typeInputZone(form, LA);
     await form.getByLabel('Start time', { exact: true }).fill('02:30');
     await form.getByLabel('End time', { exact: true }).fill('05:00');
     await chooseNoBreaks(form);
-    await form.getByRole('button', { name: 'Save session' }).click();
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
 
     const prompt = form.locator('[data-problem="gap"]');
     await expect(prompt).toContainText(`2026-03-08 02:30 does not exist in ${LA}`);
+    await expect(saveConfirmation(page)).toHaveCount(0);
     expect((await employeeSeed.dayView(GAP_DAY)).sessions).toHaveLength(0);
     await snap(page, 'day-editor-dst-gap', project);
 
     await prompt.getByRole('button', { name: 'Use 03:30 on 2026-03-08' }).click();
     await expect(form.getByLabel('Start time', { exact: true })).toHaveValue('03:30');
     await expect(form.locator('[data-problem="gap"]')).toHaveCount(0);
-    await form.getByRole('button', { name: 'Save session' }).click();
+    await saveSession(page, form);
     await expect(editor.getByText('Session saved.')).toBeVisible();
     // 03:30 PDT (-07:00) is 10:30 UTC.
     expect((await employeeSeed.dayView(GAP_DAY)).sessions[0]?.start_utc).toBe('2026-03-08T10:30:00Z');
   } finally {
     await employeeSeed.clearSessions(GAP_DAY);
   }
+});
+
+/* ---- WP5-UX3-T08: pre-fill, the G-4 notice, Cancel, break rows ------------------------------------------------- */
+
+/** The POST bodies the page sends to create sessions on a date. */
+function recordSessionPosts(page: Page, date: string): Array<Record<string, unknown>> {
+  const posts: Array<Record<string, unknown>> = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === `/api/days/${date}/sessions`) posts.push(request.postDataJSON() as Record<string, unknown>);
+  });
+  return posts;
+}
+
+test('a new session on a past day is pre-filled with the reference hours and the suggested breaks inside them; today gets the hours only, whatever the device zone (U-23, G-3 a)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const [past = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  const posts = recordSessionPosts(page, past);
+  await signInThroughUi();
+  const displayZone = await browserZone(page);
+  expect(displayZone, 'the device zone differs from the reporting zone').not.toBe(LA);
+  const editor = await openEditor(page, past);
+  const add = editor.getByRole('button', { name: 'Add session' });
+  await add.click();
+  const form = sessionDialog(page, 'New session');
+  await expect(form).toHaveAccessibleDescription(`${editorTitleOf(past)} · accounting date in ${LA}`);
+  // The reference hours 08:00-17:00 are wall-clock times on the accounting date in Los Angeles, shown in the input zone (the display zone).
+  const start = wallTimeIn(past, '08:00', LA, displayZone);
+  const end = wallTimeIn(past, '17:00', LA, displayZone);
+  await expect(form.getByLabel('Start date', { exact: true })).toHaveValue(start.slice(0, 10));
+  await expect(form.getByLabel('Start time', { exact: true })).toHaveValue(start.slice(11));
+  await expect(form.getByLabel('End date', { exact: true })).toHaveValue(end.slice(0, 10));
+  await expect(form.getByLabel('End time', { exact: true })).toHaveValue(end.slice(11));
+  await expect(form.locator('[data-prefill]')).toHaveText(
+    `Pre-filled from your reference hours (08:00-17:00 in ${LA}) and suggested breaks. Change them to the times you worked.`,
+  );
+  // The three suggested breaks of an 08:00 arrival (10:00, 12:00 and 14:30 in Los Angeles), in the input zone, tagged.
+  await expect(form.locator('[data-break]')).toHaveCount(3);
+  for (const [index, [time, minutes]] of [['10:00', '15'], ['12:00', '30'], ['14:30', '15']].entries()) {
+    const row = breakRow(form, index + 1);
+    const local = wallTimeIn(past, time ?? '', LA, displayZone);
+    await expect(row.date).toHaveValue(local.slice(0, 10));
+    await expect(row.time).toHaveValue(local.slice(11));
+    await expect(row.minutes).toHaveValue(minutes ?? '');
+    await expect(row.row.locator('.break-tag')).toHaveText('suggested');
+  }
+  await snap(page, 'session-dialog-prefill', project);
+
+  // Read in Los Angeles the same reference hours show as typed; the suggestions follow the start until a row is changed.
+  await typeInputZone(form, LA);
+  await expect(form.getByLabel('Start time', { exact: true })).toHaveValue('08:00');
+  await expect(form.getByLabel('End time', { exact: true })).toHaveValue('17:00');
+  await expect(form.locator('[data-prefill]')).toHaveText('Pre-filled from your reference hours (08:00-17:00) and suggested breaks. Change them to the times you worked.');
+  await expect(breakRow(form, 1).time).toHaveValue('10:00');
+  await form.getByLabel('Start time', { exact: true }).fill('08:30');
+  await expect(breakRow(form, 1).time).toHaveValue('10:30');
+  await expect(breakRow(form, 3).time).toHaveValue('15:00');
+  await breakRow(form, 2).minutes.fill('45');
+  await expect(breakRow(form, 2).row.locator('.break-tag')).toHaveCount(0);
+  await expect(breakRow(form, 2).row).toContainText('ends 13:15');
+  await form.getByLabel('Start time', { exact: true }).fill('09:00');
+  await expect(breakRow(form, 1).time, 'an edited list no longer follows the start').toHaveValue('10:30');
+
+  // Cancel after a change asks first: Keep editing (the initial focus) keeps every value, Discard closes and sends nothing.
+  const cancel = form.getByRole('button', { name: 'Cancel', exact: true });
+  await cancel.click();
+  const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+  await expect(discard).toBeVisible();
+  await expect(discard.getByRole('button')).toHaveText(['Keep editing', 'Discard']);
+  await expect(discard.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+  await discard.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(discard).toHaveCount(0);
+  await expect(cancel).toBeFocused();
+  await expect(form.getByLabel('Start time', { exact: true })).toHaveValue('09:00');
+  await expect(breakRow(form, 2).minutes).toHaveValue('45');
+  // The Close button asks the same.
+  await form.getByRole('button', { name: 'Close', exact: true }).click();
+  await discard.getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await expect(add).toBeFocused();
+  expect(posts).toEqual([]);
+  expect((await employeeSeed.dayView(past)).sessions).toHaveLength(0);
+  await editor.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(editor).toHaveCount(0);
+
+  // Today: the day with the Today tag, which the page takes from the server (`today_local`), never from the device clock.
+  const before = (await employeeSeed.today()).todayLocal;
+  const todayButton = page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true });
+  if ((await todayButton.getAttribute('aria-disabled')) !== 'true') await todayButton.click();
+  const tagged = page.locator('[data-day].today').first();
+  await expect(tagged).toBeVisible();
+  const today = (await tagged.getAttribute('data-day')) ?? '';
+  const after = (await employeeSeed.today()).todayLocal;
+  expect([before, after], 'the page shows the server date as today').toContain(today);
+  const deviceDate = await page.evaluate<string>("new Date().toLocaleDateString('en-CA')");
+  console.log(`PREFILL server today ${today}, device date ${deviceDate} (${displayZone}), past day ${past}`);
+  const todayEditor = await openEditor(page, today);
+  await todayEditor.getByRole('button', { name: 'Add session' }).click();
+  const todayForm = sessionDialog(page, 'New session');
+  const todayStart = wallTimeIn(today, '08:00', LA, displayZone);
+  await expect(todayForm.getByLabel('Start date', { exact: true })).toHaveValue(todayStart.slice(0, 10));
+  await expect(todayForm.getByLabel('Start time', { exact: true })).toHaveValue(todayStart.slice(11));
+  await expect(todayForm.locator('[data-prefill]')).toHaveText(`Pre-filled from your reference hours (08:00-17:00 in ${LA}). Change them to the times you worked.`);
+  await expect(todayForm.locator('[data-break]'), 'no break is suggested for today').toHaveCount(0);
+  await expect(todayForm.getByText('No breaks listed.')).toBeVisible();
+  // Nothing changed, so Cancel closes at once, without a question.
+  await todayForm.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(todayForm).toHaveCount(0);
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+});
+
+test('Save with no break listed and the box unticked opens "No breaks listed": Escape and "Go back" return to "Add break"; each choice reaches the final confirmation and sends its body (G-4)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  const posts = recordSessionPosts(page, date);
+  try {
+    await signInThroughUi();
+    const editor = await openEditor(page, date);
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = sessionDialog(page, 'New session');
+    await typeInputZone(form, LA);
+    await removeAllBreaks(form);
+    const save = form.getByRole('button', { name: 'Save', exact: true });
+    const addBreak = form.getByRole('button', { name: 'Add break' });
+    await save.click();
+
+    const notice = noBreaksNotice(page);
+    await expect(notice).toBeVisible();
+    expect(await notice.evaluate((element) => element.matches(':modal')), 'the notice is modal').toBe(true);
+    await expect(notice).toHaveAccessibleDescription(/This session has no breaks listed, and "Confirm no breaks taken" is not ticked\. What do you want to do\?/);
+    await expect(notice.getByRole('button')).toHaveText(['Confirm no breaks taken', 'Leave breaks unconfirmed for now', 'Go back and add breaks']);
+    const back = notice.getByRole('button', { name: 'Go back and add breaks' });
+    await expect(back).toBeFocused();
+    await expect(saveConfirmation(page)).toHaveCount(0);
+    await snap(page, 'session-dialog-no-breaks-notice', project);
+
+    // Escape is "Go back": only the notice closes and focus is on "Add break".
+    await page.keyboard.press('Escape');
+    await expect(notice).toHaveCount(0);
+    await expect(form).toBeVisible();
+    await expect(addBreak).toBeFocused();
+    await save.click();
+    await back.click();
+    await expect(notice).toHaveCount(0);
+    await expect(addBreak).toBeFocused();
+
+    // "Leave breaks unconfirmed for now": the confirmation says so and has no confirming sentence; Back keeps the values.
+    await save.click();
+    await notice.getByRole('button', { name: 'Leave breaks unconfirmed for now' }).click();
+    const confirm = saveConfirmation(page);
+    await expect(confirm).toBeVisible();
+    await expect(confirm.locator('.confirm-facts dt')).toHaveText(['Day', 'Time', 'Breaks']);
+    await expect(confirm.locator('.confirm-facts dd')).toHaveText([editorTitleOf(date), `08:00-17:00 (${LA})`, 'Breaks not confirmed: OT for this day stays pending']);
+    await expect(confirm).toHaveAccessibleDescription('Unconfirmed breaks keep OT for this day pending until you confirm them.');
+    await expect(confirm.getByRole('button')).toHaveText(['Back', 'Save']);
+    await expect(confirm.getByRole('button', { name: 'Back' })).toBeFocused();
+    await confirm.getByRole('button', { name: 'Back' }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(save).toBeFocused();
+    await expect(form.getByLabel('Start time', { exact: true })).toHaveValue('08:00');
+    await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+
+    // "Confirm no breaks taken": the box is ticked in the dialog (seen after Back) and the confirmation says "No breaks taken".
+    await save.click();
+    await notice.getByRole('button', { name: 'Confirm no breaks taken' }).click();
+    await expect(confirm.locator('.confirm-facts dd').nth(2)).toHaveText('No breaks taken');
+    await expect(confirm).toHaveAccessibleDescription('Saving confirms these breaks as the breaks you took.');
+    await snap(page, 'session-dialog-save-confirmation', project);
+    await confirm.getByRole('button', { name: 'Back' }).click();
+    await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).toBeChecked();
+    expect(posts, 'nothing is sent before a final Save').toEqual([]);
+    // With the box ticked, Save goes straight to the confirmation and sends the empty confirmed list.
+    await save.click();
+    await expect(confirm).toBeVisible();
+    await expect(notice).toHaveCount(0);
+    await confirm.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toMatchObject({ breaks: [], breaks_confirmed: true, input_zone: LA });
+    await expect(editor.locator('.session-card [data-session-state]')).toHaveText(['No breaks taken']);
+
+    // A second session through "Leave breaks unconfirmed for now" sends breaks_confirmed false and keeps OT pending.
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const second = sessionDialog(page, 'New session');
+    await typeInputZone(second, LA);
+    await second.getByLabel('Start time', { exact: true }).fill('18:00');
+    await second.getByLabel('End time', { exact: true }).fill('19:00');
+    await expect(second.locator('[data-break]'), 'no suggestion fits a one-hour session').toHaveCount(0);
+    await second.getByRole('button', { name: 'Save', exact: true }).click();
+    await noBreaksNotice(page).getByRole('button', { name: 'Leave breaks unconfirmed for now' }).click();
+    await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    expect(posts).toHaveLength(2);
+    expect(posts[1]).toMatchObject({ breaks: [], breaks_confirmed: false, input_zone: LA });
+    await expect(editor.locator('[data-banner="attention"]')).toContainText('Breaks are not confirmed yet.');
+    await expect(figure(editor, 'credited')).toHaveText('none');
+    const stored = await employeeSeed.dayView(date);
+    expect(stored.sessions.map((session) => session.breaks_confirmed).sort()).toEqual([false, true]);
+  } finally {
+    await employeeSeed.clearSessions(date);
+  }
+});
+
+test('a break that starts at a repeated or a missing local time asks first, naming "Break 1", and stores the chosen instant (R-07)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  try {
+    await signInThroughUi();
+    // Sydney falls back on 2026-04-05: 02:30 happens twice (+11:00, then +10:00). The session 01:00-05:00 there is on the 4th in Los Angeles.
+    let editor = await openEditor(page, FOLD_DAY);
+    await editor.getByLabel('Reason for editing an old or finalized period').fill('Entering a past Sydney shift with a break');
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    let form = sessionDialog(page, 'New session');
+    await form.getByLabel('Input zone').fill('Australia/Sydney');
+    await form.getByLabel('Start date', { exact: true }).fill('2026-04-05');
+    await form.getByLabel('Start time', { exact: true }).fill('01:00');
+    await form.getByLabel('End date', { exact: true }).fill('2026-04-05');
+    await form.getByLabel('End time', { exact: true }).fill('05:00');
+    await removeAllBreaks(form);
+    await form.getByRole('button', { name: 'Add break' }).click();
+    let row = breakRow(form, 1);
+    await expect(row.date, 'a new break starts on the start date, and focus goes to it').toBeFocused();
+    await expect(row.date).toHaveValue('2026-04-05');
+    await row.time.fill('02:30');
+    await row.minutes.fill('15');
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    const fold = row.row.locator('[data-problem="fold"]');
+    await expect(fold).toContainText('Break 1: 2026-04-05 02:30 happens twice in Australia/Sydney');
+    await expect(saveConfirmation(page)).toHaveCount(0);
+    await fold.getByRole('radio', { name: 'Later time, UTC offset +10:00' }).check();
+    await expect(row.row).toContainText('ends 02:45');
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(saveConfirmation(page).locator('.confirm-facts')).toContainText('1 break (15 min)');
+    await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    const folded = (await employeeSeed.dayView(FOLD_DAY)).sessions[0];
+    expect(folded).toMatchObject({ start_utc: '2026-04-04T14:00:00Z', end_utc: '2026-04-04T19:00:00Z', breaks_confirmed: true });
+    // The later 02:30 (+10:00) is 16:30 UTC; the end is 15 minutes of elapsed time after it.
+    expect(folded?.breaks.map((item) => [item.start_utc, item.end_utc])).toEqual([['2026-04-04T16:30:00Z', '2026-04-04T16:45:00Z']]);
+    await editor.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(editor).toHaveCount(0);
+
+    // Los Angeles springs forward on 2026-03-08: 02:30 does not exist. The row offers the first valid time.
+    editor = await openEditor(page, GAP_DAY);
+    await editor.getByLabel('Reason for editing an old or finalized period').fill('Entering a past shift with a break');
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    form = sessionDialog(page, 'New session');
+    await typeInputZone(form, LA);
+    await form.getByLabel('Start time', { exact: true }).fill('01:00');
+    await form.getByLabel('End time', { exact: true }).fill('05:00');
+    await removeAllBreaks(form);
+    await form.getByRole('button', { name: 'Add break' }).click();
+    row = breakRow(form, 1);
+    await row.time.fill('02:30');
+    await row.minutes.fill('15');
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    const gap = row.row.locator('[data-problem="gap"]');
+    await expect(gap).toContainText(`Break 1: 2026-03-08 02:30 does not exist in ${LA}`);
+    await gap.getByRole('button', { name: 'Use 03:30 on 2026-03-08' }).click();
+    await expect(row.time).toHaveValue('03:30');
+    await expect(gap).toHaveCount(0);
+    await saveSession(page, form);
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    // 03:30 PDT (-07:00) is 10:30 UTC.
+    expect((await employeeSeed.dayView(GAP_DAY)).sessions[0]?.breaks.map((item) => [item.start_utc, item.end_utc])).toEqual([['2026-03-08T10:30:00Z', '2026-03-08T10:45:00Z']]);
+  } finally {
+    await employeeSeed.clearSessions(FOLD_DAY);
+    await employeeSeed.clearSessions(GAP_DAY);
+  }
+});
+
+test('break rows are one line in the 720px dialog and two lines (Break n, then date, time, minutes and remove) at a 430px phone (U-24)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+  isMobile,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  await signInThroughUi();
+  const lines: string[] = [];
+  for (const width of isMobile ? [430] : [1280, 430]) {
+    await page.setViewportSize({ width, height: width < 768 ? 932 : 800 });
+    const editor = await openEditor(page, date);
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = sessionDialog(page, 'New session');
+    await expect(form.locator('[data-break]')).toHaveCount(3);
+    const facts = await form.evaluate((dialog) => {
+      const box = (element: { getBoundingClientRect: () => { top: number; bottom: number; left: number; right: number; height: number } } | null) => {
+        const rect = element?.getBoundingClientRect();
+        return rect === undefined ? { top: 0, bottom: 0, left: 0, right: 0, middle: 0 } : { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, middle: rect.top + rect.height / 2 };
+      };
+      const body = dialog.querySelector('.session-dialog-body');
+      return {
+        dialog: dialog.getBoundingClientRect().width,
+        overflow: body === null ? 99 : body.scrollWidth - body.clientWidth,
+        rows: [...dialog.querySelectorAll('[data-break]')].map((row) => ({
+          height: row.getBoundingClientRect().height,
+          right: row.getBoundingClientRect().right,
+          num: box(row.querySelector('.break-num')),
+          date: box(row.querySelector('input[type="date"]')),
+          time: box(row.querySelector('input[type="time"]')),
+          minutes: box(row.querySelector('input[type="number"]')),
+          remove: box(row.querySelector('button.break-remove')),
+        })),
+      };
+    });
+    expect(facts.overflow, `${width}px: the dialog body does not scroll sideways`).toBeLessThanOrEqual(0);
+    for (const [index, row] of facts.rows.entries()) {
+      const name = `${width}px break ${index + 1}`;
+      // Date, time, minutes and remove always share one line, inside the row.
+      for (const part of [row.time, row.minutes, row.remove]) expect(Math.abs(part.middle - row.date.middle), `${name}: one line of fields`).toBeLessThanOrEqual(2);
+      expect(row.remove.right, `${name}: the remove button stays inside the row`).toBeLessThanOrEqual(row.right + 0.5);
+      if (width === 1280) {
+        expect(Math.abs(row.num.middle - row.date.middle), `${name}: "Break n" on the same line`).toBeLessThanOrEqual(2);
+        expect(row.height, `${name}: one line (a two-line row is about 92px)`).toBeLessThan(64);
+      } else {
+        expect(row.num.bottom, `${name}: "Break n" on its own line above the fields`).toBeLessThanOrEqual(row.date.top + 0.5);
+      }
+    }
+    if (width === 1280) expect(facts.dialog, 'the desktop dialog is 720px wide').toBeCloseTo(720, 0);
+    lines.push(`${width}: dialog ${facts.dialog.toFixed(0)}px, row ${(facts.rows[0]?.height ?? 0).toFixed(1)}px`);
+    await snap(page, `session-dialog-rows-w${width}`, project);
+    await page.keyboard.press('Escape');
+    await expect(form).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+  }
+  console.log(`BREAK-ROWS ${lines.join('; ')}`);
 });
 
 test('Check in then Check out asks for break confirmation and sends the session version', async ({
@@ -781,7 +1212,7 @@ test('a stale session version at save reports the conflict', async ({ page, empl
     await signInThroughUi();
     const editor = await openEditor(page, date);
     await editor.getByRole('button', { name: /^Edit session/ }).click();
-    const edit = editor.getByRole('form', { name: 'Edit session' });
+    const edit = sessionDialog(page, 'Edit session');
     // Another device changes the session after the editor loaded it.
     const session = (await employeeSeed.dayView(date)).sessions[0];
     await employeeSeed.call('PUT', `/api/sessions/${session?.id}`, {
@@ -793,9 +1224,9 @@ test('a stale session version at save reports the conflict', async ({ page, empl
       expected_version: session?.version,
     });
     await edit.getByLabel('End time', { exact: true }).fill('17:45');
-    await edit.getByRole('button', { name: 'Save changes' }).click();
+    await saveSession(page, edit);
     await expect(editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' })).toBeVisible();
-    await expect(editor.getByRole('form', { name: 'Edit session' })).toHaveCount(0);
+    await expect(edit).toHaveCount(0);
   } finally {
     await employeeSeed.clearSessions(date);
   }
@@ -1036,21 +1467,30 @@ test('mobile: the editor fits the screen and every control is at least 44 by 44'
   await signInThroughUi();
   const editor = await openEditor(page, date);
   await editor.getByRole('button', { name: 'Add session' }).click();
-  const form = editor.getByRole('form', { name: 'New session' });
+  const form = sessionDialog(page, 'New session');
   await form.getByLabel('Start time', { exact: true }).fill('09:00');
   await form.getByRole('button', { name: 'Suggest breaks' }).click();
   await expect(form.locator('[data-break]')).toHaveCount(3);
   await snap(page, 'day-editor-mobile', 'mobile');
 
-  const overflow = await page.evaluate<{ page: number; dialog: number }>(`(() => {
+  // The session dialog is the whole screen below 768px, and neither it nor the editor under it scrolls sideways.
+  const viewport = page.viewportSize() ?? { width: 0, height: 0 };
+  const box = (await form.boundingBox()) ?? { x: -1, y: -1, width: 0, height: 0 };
+  expect(Math.abs(box.width - viewport.width), 'full width').toBeLessThanOrEqual(1);
+  expect(Math.abs(box.height - viewport.height), 'full height').toBeLessThanOrEqual(1);
+  const overflow = await page.evaluate<{ page: number; dialog: number; session: number }>(`(() => {
     const dialog = document.querySelector('dialog[open]');
+    const session = document.querySelector('dialog[data-session-dialog]');
+    const body = session === null ? null : session.querySelector('.session-dialog-body');
     return {
       page: document.documentElement.scrollWidth - window.innerWidth,
       dialog: dialog === null ? -1 : dialog.scrollWidth - dialog.clientWidth,
+      session: body === null ? 99 : body.scrollWidth - body.clientWidth,
     };
   })()`);
   expect(overflow.page).toBeLessThanOrEqual(0);
   expect(overflow.dialog).toBeLessThanOrEqual(0);
+  expect(overflow.session, 'the session dialog does not scroll sideways').toBeLessThanOrEqual(0);
 
   const controls = editor.locator('button, select, textarea, label.inline, input:not([type="checkbox"]):not([type="radio"])');
   const count = await controls.count();
@@ -1750,7 +2190,7 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
 
 // WP5-UX3-T07: "Confirm breaks" replaced the one-tap buttons. It opens the session form with the breaks the one-tap rule offered
 // selected; saving sends the same session update, with the version the editor loaded.
-test('"Confirm breaks" opens the session form with the suggested breaks selected; Save sends the same session update and its version', async ({
+test('"Confirm breaks" opens the session dialog with the suggested breaks listed; Save, then the confirmation, sends the same session update and its version', async ({
   page,
   employeeSeed,
   signInThroughUi,
@@ -1779,21 +2219,35 @@ test('"Confirm breaks" opens the session form with the suggested breaks selected
     await expect(editor.getByRole('button', { name: /Confirm suggested breaks|No breaks taken|Confirm breaks as listed/ })).toHaveCount(0);
     await card.scrollIntoViewIfNeeded();
     await page.screenshot({ path: screenshotPath(`${project === 'desktop' ? 'editor-panel' : 'editor-sheet'}-${project}-synthetic.png`), animations: 'disabled' });
-    await card.getByRole('button', { name: /^Confirm breaks/ }).click();
+    const confirmButton = card.getByRole('button', { name: /^Confirm breaks/ });
+    await confirmButton.click();
 
-    // The session form is the editing surface: the suggested breaks follow the arrival (R-02), typed in the session's input zone,
-    // and are selected as the breaks taken. Nothing is sent until Save.
-    const form = editor.getByRole('form', { name: 'Edit session' });
-    await expect(form.getByRole('radio', { name: /Breaks confirmed as listed/ })).toBeChecked();
-    await expect(form.getByRole('radio', { name: /No breaks taken/ })).not.toBeChecked();
-    for (const [index, [from, to]] of [['11:00', '11:15'], ['13:00', '13:30'], ['15:30', '15:45']].entries()) {
-      await expect(form.getByLabel(`Break ${index + 1} from time`)).toHaveValue(from ?? '');
-      await expect(form.getByLabel(`Break ${index + 1} to time`)).toHaveValue(to ?? '');
+    // The session dialog is the editing surface: the suggested breaks follow the arrival (R-02), typed in the session's input
+    // zone, listed (and so confirmed by Save, U-25) with their "suggested" tag. Nothing is sent until the final Save.
+    const form = sessionDialog(page, 'Edit session');
+    await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+    await expect(form.locator('[data-break]')).toHaveCount(3);
+    for (const [index, [from, minutes, end]] of [['11:00', '15', 'ends 11:15'], ['13:00', '30', 'ends 13:30'], ['15:30', '15', 'ends 15:45']].entries()) {
+      const row = breakRow(form, index + 1);
+      await expect(row.time).toHaveValue(from ?? '');
+      await expect(row.minutes).toHaveValue(minutes ?? '');
+      await expect(row.row).toContainText(end ?? '');
+      await expect(row.row).toContainText('suggested');
     }
     expect(puts).toEqual([]);
     expect((await employeeSeed.dayView(date)).sessions[0]?.breaks_confirmed).toBe(false);
 
-    await form.getByRole('button', { name: 'Save changes' }).click();
+    // Unchanged, Cancel closes at once and focus returns to "Confirm breaks".
+    await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(form).toHaveCount(0);
+    await expect(confirmButton).toBeFocused();
+    await confirmButton.click();
+
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    const confirm = saveConfirmation(page);
+    await expect(confirm.locator('.confirm-facts')).toContainText('3 breaks (15, 30, 15 min)');
+    expect(puts, 'nothing is sent before the final Save').toEqual([]);
+    await confirm.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(editor.getByText('Session saved.')).toBeVisible();
     await expect(editor.locator('[data-banner]')).toHaveCount(0);
     await expect(figure(editor, 'status')).toContainText('complete');
@@ -1862,18 +2316,23 @@ test('"Confirm breaks" in an old period waits for the reason before it can save,
     await signInThroughUi();
     const editor = await openEditor(page, OLD_DAY);
     await editor.getByRole('button', { name: /^Confirm breaks/ }).click();
-    const form = editor.getByRole('form', { name: 'Edit session' });
-    // The one-tap "No breaks taken" is now the radio of the form; the form cannot be saved without the reason.
-    await form.getByRole('radio', { name: /No breaks taken/ }).check();
-    const save = form.getByRole('button', { name: 'Save changes' });
+    const form = sessionDialog(page, 'Edit session');
+    // The one-tap "No breaks taken" is now the box of the dialog; the dialog cannot be saved without the reason.
+    await chooseNoBreaks(form);
+    await expect(form.locator('[data-break]'), 'the ticked box hides the rows').toHaveCount(0);
+    const save = form.getByRole('button', { name: 'Save', exact: true });
     await expect(save).toBeDisabled();
     await expect(form.getByText('Enter a reason for this old period above to save.')).toBeVisible();
 
-    await editor.getByLabel('Reason for editing an old or finalized period').fill('Confirming a past day (synthetic)');
+    // The dialog shows the editor's one reason field: typed here, it is the same text in the panel.
+    await form.getByLabel('Reason for editing an old or finalized period').fill('Confirming a past day (synthetic)');
     await expect(save).toBeEnabled();
     expect(bodies).toEqual([]);
     await save.click();
+    await expect(saveConfirmation(page).locator('.confirm-facts')).toContainText('No breaks taken');
+    await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
     await expect(editor.getByText('Session saved.')).toBeVisible();
+    await expect(editor.getByLabel('Reason for editing an old or finalized period')).toHaveValue('Confirming a past day (synthetic)');
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toMatchObject({ breaks: [], breaks_confirmed: true, reason: 'Confirming a past day (synthetic)' });
     const after = (await employeeSeed.dayView(OLD_DAY)).sessions[0];
@@ -1884,7 +2343,7 @@ test('"Confirm breaks" in an old period waits for the reason before it can save,
   }
 });
 
-test('"Confirm breaks" selects "No breaks taken" when no suggested break fits inside the session, and Save sends the empty confirmed list', async ({
+test('"Confirm breaks" lists nothing when no suggested break fits inside the session; Save asks, and "Confirm no breaks taken" sends the empty confirmed list', async ({
   page,
   employeeSeed,
   signInThroughUi,
@@ -1901,11 +2360,18 @@ test('"Confirm breaks" selects "No breaks taken" when no suggested break fits in
     await signInThroughUi();
     const editor = await openEditor(page, date);
     await editor.getByRole('button', { name: /^Confirm breaks/ }).click();
-    const form = editor.getByRole('form', { name: 'Edit session' });
-    await expect(form.getByRole('radio', { name: /No breaks taken/ })).toBeChecked();
+    const form = sessionDialog(page, 'Edit session');
+    // Nothing is decided for the person: no row is offered and the box stays unticked, so Save first asks (G-4).
+    await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
     await expect(form.locator('[data-break]')).toHaveCount(0);
     expect(puts).toEqual([]);
-    await form.getByRole('button', { name: 'Save changes' }).click();
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    await noBreaksNotice(page).getByRole('button', { name: 'Confirm no breaks taken' }).click();
+    const confirm = saveConfirmation(page);
+    await expect(confirm.locator('.confirm-facts')).toContainText('No breaks taken');
+    await expect(confirm).toHaveAccessibleDescription('Saving confirms these breaks as the breaks you took.');
+    expect(puts).toEqual([]);
+    await confirm.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(editor.getByText('Session saved.')).toBeVisible();
     expect(puts).toHaveLength(1);
     expect(puts[0]).toMatchObject({ breaks: [], breaks_confirmed: true, expected_version: before?.version, input_zone: LA });
@@ -2145,6 +2611,139 @@ test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape a
       await expect(dayButton).toBeFocused();
       expect(batch.map((body) => body.mode)).toEqual(['preview']);
       expect((await person.api.dayView(workedDay)).category).toBe('Worked');
+    });
+  }
+});
+
+/* ---- WP5-UX3-T08: the session dialog, its notice and confirmations nested in the editor (B3-01 lesson) ---------- */
+
+test.describe('WP5-UX3-T08: Escape closes only the top dialog, and focus returns where it was', () => {
+  test.skip(({ isMobile }) => isMobile, 'The panel beside the sheet and the floating panel are desktop-project layouts (the bottom sheet runs the same dialogs in the tests above)');
+
+  for (const { width, modal } of [
+    { width: 1366, modal: false },
+    { width: 1280, modal: true },
+  ]) {
+    test(`at ${width}px (${modal ? 'floating modal' : 'non-modal'} editor): the confirmation, the discard question, the session dialog, then the editor`, async ({
+      page,
+      employeeSeed,
+      signInThroughUi,
+    }) => {
+      const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+      const posts = recordSessionPosts(page, date);
+      await page.setViewportSize({ width, height: 800 });
+      await signInThroughUi();
+      const dayButton = namedDayButton(page, date, 'Edit');
+      await dayButton.click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toBeVisible();
+      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(modal);
+      const add = editor.getByRole('button', { name: 'Add session' });
+      await add.click();
+      const form = sessionDialog(page, 'New session');
+      await expect(form.getByRole('heading', { name: 'New session' })).toBeFocused();
+
+      // The pre-filled rows are listed, so Save opens the final confirmation directly; its Escape closes it alone.
+      const save = form.getByRole('button', { name: 'Save', exact: true });
+      await save.click();
+      const confirm = saveConfirmation(page);
+      await expect(confirm.getByRole('button', { name: 'Back' })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(confirm).toHaveCount(0);
+      await expect(form, 'the first Escape closes only the confirmation, not the session dialog').toBeVisible();
+      await expect(editor).toBeVisible();
+      await expect(save).toBeFocused();
+
+      // After a change, Escape asks "Discard your changes?"; its Escape keeps editing, with focus back on the field.
+      const minutes = breakRow(form, 1).minutes;
+      await minutes.fill('20');
+      await page.keyboard.press('Escape');
+      const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+      await expect(discard.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(discard).toHaveCount(0);
+      await expect(form).toBeVisible();
+      await expect(minutes).toBeFocused();
+      await expect(minutes).toHaveValue('20');
+      await page.keyboard.press('Escape');
+      await discard.getByRole('button', { name: 'Discard', exact: true }).click();
+      await expect(form).toHaveCount(0);
+      await expect(editor).toBeVisible();
+      await expect(add).toBeFocused();
+
+      // Unchanged, Escape closes the session dialog at once; the next Escape closes the editor.
+      await add.click();
+      await expect(form).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(form).toHaveCount(0);
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+      await expect(editor).toBeVisible();
+      await expect(add).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+      await expect(dayButton).toBeFocused();
+      expect(posts).toEqual([]);
+    });
+  }
+
+  for (const path of [
+    { name: '1440 to 1280', widths: [1280], endsWide: false },
+    { name: '1280 back to 1440', widths: [1280, 1440], endsWide: true },
+  ]) {
+    test(`${path.name}: the final confirmation stays on top and focused while the window crosses 1360px; Escape closes it, then the session dialog, then the editor`, async ({
+      page,
+      employeeSeed,
+      signInThroughUi,
+    }) => {
+      const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+      const posts = recordSessionPosts(page, date);
+      await page.setViewportSize({ width: 1440, height: 800 });
+      await signInThroughUi();
+      const dayButton = namedDayButton(page, date, 'Edit');
+      await dayButton.click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toBeVisible();
+      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+      const add = editor.getByRole('button', { name: 'Add session' });
+      await add.click();
+      const form = sessionDialog(page, 'New session');
+      await form.getByRole('button', { name: 'Save', exact: true }).click();
+      const confirm = saveConfirmation(page);
+      await expect(confirm.getByRole('button', { name: 'Back' })).toBeFocused();
+
+      for (const width of path.widths) {
+        await page.setViewportSize({ width, height: 800 });
+        await settleAfterResize(page, width >= 1360);
+        const state = await dialogStates(page);
+        const confirmState = state.dialogs.find((dialog) => dialog.name === 'Save this session?');
+        expect(confirmState, `the confirmation stays open, modal, on top and focused at ${width}px`).toMatchObject({ modal: true, focus: true, onTop: true });
+        // The confirmation is nested in the session dialog, so "contains the hit" is true for both; the hit test above decides which is on top.
+        expect(state.dialogs.find((dialog) => dialog.name === 'New session'), `the session dialog stays open under it at ${width}px`).toMatchObject({ modal: true });
+        expect(state.dialogs.some((dialog) => dialog.name.startsWith('Day editor')), `the editor is still open at ${width}px`).toBe(true);
+        await expect(confirm.getByRole('button', { name: 'Back' })).toBeFocused();
+      }
+
+      await page.keyboard.press('Escape');
+      await expect(confirm).toHaveCount(0);
+      await expect(form).toBeVisible();
+      await expect(form.getByRole('button', { name: 'Save', exact: true })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(form).toHaveCount(0);
+      await expect(editor).toBeVisible();
+      if (path.endsWide) {
+        // Back to the non-modal panel beside the sheet: focus is on the button that opened the dialog.
+        expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+        await expect(add).toBeFocused();
+      } else {
+        // Below 1360px the editor switches to the floating modal panel only now, and holds focus.
+        await expect.poll(async () => editor.evaluate((element) => element.matches(':modal'))).toBe(true);
+        await expect.poll(async () => editor.evaluate((element) => element.matches(':focus-within'))).toBe(true);
+      }
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(dayButton).toBeFocused();
+      expect(posts).toEqual([]);
     });
   }
 });

@@ -130,3 +130,13 @@ staged count per group; other modified handoff files; every check with its exit 
 fix, masking or stop reason.
 
 ## Results
+
+- Pre-HEAD 5c0dad8e41fddc25306e8f2ff28424f815af32ef (= origin/main); commit
+  f8117a48cd856ee09494e54c64d6f09dbc20b234 on main; pushed yes; remote SHA the same; no tag.
+- Digests: before add and on new HEAD both a3cbc3f460d20c0f56736ce09a6b09ab7a7815cb738323ddd8f358a20ec540f0 (829 files).
+- Staged 44: 15 source/tests, 29 handoff (5 modified, 2 task records, 22 evidence; T07 evidence had 20 files).
+- Other modified handoff files: none beyond the 5 listed (stat: 5 files, 281 insertions, 20 deletions, same with eol-ignore).
+- Checks (all exit 0): node v24.21.0; precommit PASS 44 files; diff --cached --check; JSON parse;
+  validate_orchestration PASS; check_recovery PASS 106; validate_package --preflight PASS.
+  Details in evidence/WP5-UX3-T07-FREEZE/checks.txt.
+- No masking, no fixes, no deviation.

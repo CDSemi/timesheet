@@ -237,6 +237,28 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   brackets in the dialog name (audit focus).
 - T08 brief written (opus, size_risk) and registered pending.
 - Running: WP5-UX3-T07-FREEZE (committer, alone; 15 source/test paths plus 29 handoff paths).
+- WP5-UX3-T07-FREEZE done: f8117a48cd856ee09494e54c64d6f09dbc20b234 on main, pushed (44
+  paths; digest a3cbc3f4, 829 files; every check exit 0).
+- Running: WP5-UX3-T08 (worker-high, opus, size_risk; session dialog, break rows, automatic
+  pre-fill, G-4 notice, save and discard confirmations, nested dialogs, the editor "in
+  progress" chip prop) on f8117a4 / a3cbc3f4.
+- Owner answered (verbatim on the board): WP5-UX3-Q6 b (the break date field only when the
+  session crosses midnight or has no end) and 24-hour chip times. Coordinator decision: T08's
+  scope is not changed mid-run; T08B applies the rule at every width and re-measures the
+  chip threshold. No owner question is open in this round.
+- WP5-UX3-T08 done (worker-high, self-reported claude-opus-5-5; reported, not independent
+  proof): SessionDialog and BreakRows (SessionForm.tsx deleted, BreaksEditor kept for T09);
+  pre-fill; "No breaks listed" notice with three choices, always "Save this session?";
+  "Discard your changes?"; nested-dialog rules; editor "in progress" chip; unit 2091; full
+  e2e desktop 298, mobile 292, 0 failed; simulated clock at the fold, the gap and before
+  midnight pass; three mutations caught; budgets unchanged; main chunk 477.22 kB; verify 0;
+  probe digest da580f1e (830 files). Deviations: `suggestionRows` built in SessionDialog
+  without a unit test (moved into the model in T08B); "Confirm breaks" with no fitting
+  suggestion now asks through the notice (accepted, audit focus B).
+- T08B brief written (Q6 b date rule, chips and sub-dialog, phone spacing, model helper) and
+  registered pending.
+- Running: WP5-UX3-T08-FREEZE (committer, alone; 10 source/test paths incl. a deletion plus 35
+  handoff paths; digest checked after staging).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

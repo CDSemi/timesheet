@@ -1,0 +1,117 @@
+MUTATION mut-b: suggested breaks pre-filled for today's date (<= in pastDaySuggestedRows, breakRowsModel.ts:547)
+$ git diff -- src/client
+diff --git a/src/client/components/breakRowsModel.ts b/src/client/components/breakRowsModel.ts
+index 70445cf..51642a9 100644
+--- a/src/client/components/breakRowsModel.ts
++++ b/src/client/components/breakRowsModel.ts
+@@ -544,7 +544,7 @@ export interface SuggestionContext {
+ export function pastDaySuggestedRows(context: SuggestionContext, session: { startUtc: EpochSeconds; endUtc: EpochSeconds }, zone: string): BreakRowDraft[] {
+   const { workDate, todayLocal, policy } = context;
+   if (policy === undefined || todayLocal === null || !isCivilDate(workDate) || !isCivilDate(todayLocal)) return [];
+-  if (!(workDate < todayLocal)) return [];
++  if (!(workDate <= todayLocal)) return [];
+   return suggestBreaks(session.startUtc, toBreakRules(policy.breaks))
+     .filter((item) => item.startUtc >= session.startUtc && item.endUtc <= session.endUtc)
+     .map((item, index) => pinnedRow(context.keyOf(index), 'suggested', zone, item.startUtc, item.endUtc, item.countsAsWork));
+$ npm run build:client
+
+> timesheet@0.1.0 build:client
+> vite build
+
+vite v8.3.1 building client environment for production...
+transforming...
+✓ 130 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/index.html                         0.50 kB │ gzip:   0.29 kB
+dist/client/assets/index-DFASUPxZ.css         76.36 kB │ gzip:  13.92 kB
+dist/client/assets/ImportScreen-Ckb8VdiX.js   23.82 kB │ gzip:   6.39 kB │ map:    71.07 kB
+dist/client/assets/AdminScreen-JXI5iYkQ.js    31.54 kB │ gzip:   8.69 kB │ map:    93.06 kB
+dist/client/assets/index-DZGCUtTt.js         477.22 kB │ gzip: 140.05 kB │ map: 2,029.53 kB
+
+✓ built in 269ms
+build exit=0
+$ playwright test tests/e2e/day-editor.spec.ts -g "pre-filled with the reference"
+
+Running 2 tests using 2 workers
+
+PREFILL server today 2026-10-15, device date 2026-10-16 (Asia/Saigon), past day 2026-10-09
+PREFILL server today 2026-10-15, device date 2026-10-16 (Asia/Saigon), past day 2026-10-09
+  x  1 [desktop] › tests\e2e\day-editor.spec.ts:593:1 › a new session on a past day is pre-filled with the reference hours and the suggested breaks inside them; today gets the hours only, whatever the device zone (U-23, G-3 a) (9.5s)
+  x  2 [mobile] › tests\e2e\day-editor.spec.ts:593:1 › a new session on a past day is pre-filled with the reference hours and the suggested breaks inside them; today gets the hours only, whatever the device zone (U-23, G-3 a) (9.5s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:593:1 › a new session on a past day is pre-filled with the reference hours and the suggested breaks inside them; today gets the hours only, whatever the device zone (U-23, G-3 a)
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('dialog', { name: 'New session', exact: true }).locator('[data-prefill]')
+    Expected: "Pre-filled from your reference hours (08:00-17:00 in America/Los_Angeles). Change them to the times you worked."
+    Received: "Pre-filled from your reference hours (08:00-17:00 in America/Los_Angeles) and suggested breaks. Change them to the times you worked."
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('dialog', { name: 'New session', exact: true }).locator('[data-prefill]') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: 'New session', exact: true }).locator('[data-prefill]')
+        18 × locator resolved to <p class="prefill-note" data-prefill="hours-breaks">…</p>
+           - unexpected value "Pre-filled from your reference hours (08:00-17:00 in America/Los_Angeles) and suggested breaks. Change them to the times you worked."
+
+
+      683 |   await expect(todayForm.getByLabel('Start date', { exact: true })).toHaveValue(todayStart.slice(0, 10));
+      684 |   await expect(todayForm.getByLabel('Start time', { exact: true })).toHaveValue(todayStart.slice(11));
+    > 685 |   await expect(todayForm.locator('[data-prefill]')).toHaveText(`Pre-filled from your reference hours (08:00-17:00 in ${LA}). Change them to the times you worked.`);
+          |                                                     ^
+      686 |   await expect(todayForm.locator('[data-break]'), 'no break is suggested for today').toHaveCount(0);
+      687 |   await expect(todayForm.getByText('No breaks listed.')).toBeVisible();
+      688 |   // Nothing changed, so Cancel closes at once, without a question.
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:685:53
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-b\timesheet-e2e-output\day-editor-a-new-session-o-23ba2-the-device-zone-U-23-G-3-a--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-b\timesheet-e2e-output\day-editor-a-new-session-o-23ba2-the-device-zone-U-23-G-3-a--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-b\timesheet-e2e-output\day-editor-a-new-session-o-23ba2-the-device-zone-U-23-G-3-a--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\day-editor.spec.ts:593:1 › a new session on a past day is pre-filled with the reference hours and the suggested breaks inside them; today gets the hours only, whatever the device zone (U-23, G-3 a)
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('dialog', { name: 'New session', exact: true }).locator('[data-prefill]')
+    Expected: "Pre-filled from your reference hours (08:00-17:00 in America/Los_Angeles). Change them to the times you worked."
+    Received: "Pre-filled from your reference hours (08:00-17:00 in America/Los_Angeles) and suggested breaks. Change them to the times you worked."
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('dialog', { name: 'New session', exact: true }).locator('[data-prefill]') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: 'New session', exact: true }).locator('[data-prefill]')
+        18 × locator resolved to <p class="prefill-note" data-prefill="hours-breaks">…</p>
+           - unexpected value "Pre-filled from your reference hours (08:00-17:00 in America/Los_Angeles) and suggested breaks. Change them to the times you worked."
+
+
+      683 |   await expect(todayForm.getByLabel('Start date', { exact: true })).toHaveValue(todayStart.slice(0, 10));
+      684 |   await expect(todayForm.getByLabel('Start time', { exact: true })).toHaveValue(todayStart.slice(11));
+    > 685 |   await expect(todayForm.locator('[data-prefill]')).toHaveText(`Pre-filled from your reference hours (08:00-17:00 in ${LA}). Change them to the times you worked.`);
+          |                                                     ^
+      686 |   await expect(todayForm.locator('[data-break]'), 'no break is suggested for today').toHaveCount(0);
+      687 |   await expect(todayForm.getByText('No breaks listed.')).toBeVisible();
+      688 |   // Nothing changed, so Cancel closes at once, without a question.
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:685:53
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-b\timesheet-e2e-output\day-editor-a-new-session-o-23ba2-the-device-zone-U-23-G-3-a--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-b\timesheet-e2e-output\day-editor-a-new-session-o-23ba2-the-device-zone-U-23-G-3-a--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-b\timesheet-e2e-output\day-editor-a-new-session-o-23ba2-the-device-zone-U-23-G-3-a--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:593:1 › a new session on a past day is pre-filled with the reference hours and the suggested breaks inside them; today gets the hours only, whatever the device zone (U-23, G-3 a)
+    [mobile] › tests\e2e\day-editor.spec.ts:593:1 › a new session on a past day is pre-filled with the reference hours and the suggested breaks inside them; today gets the hours only, whatever the device zone (U-23, G-3 a)
+exit=1

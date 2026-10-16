@@ -41,15 +41,15 @@ function BreakTable({ card }: { card: SessionCard }) {
 /**
  * The sessions of a day as cards (WP5-UX3-T07, owner decision U-21): the range in the display zone, a state pill, where it
  * came from, and the saved breaks as a table (start date, start time and minutes). The card only shows what is saved;
- * every change goes through the session form (Edit, Add session, or "Confirm breaks" for a session whose breaks are
- * not confirmed). In a read-only editor the card has no button at all.
+ * every change goes through the session dialog (Edit, Add session, or "Confirm breaks" for a session whose breaks are
+ * not confirmed). The pressed button is passed on, so focus can return to it when the dialog closes. In a read-only editor
+ * the card has no button at all.
  */
 export function SessionList({
   sessions,
   workDate,
   zone,
   readOnly,
-  canConfirm,
   onEdit,
   onConfirmBreaks,
   onDelete,
@@ -59,10 +59,8 @@ export function SessionList({
   /** The display zone every time is shown in (R-07). */
   zone: string;
   readOnly: boolean;
-  /** False while a session form is open: "Confirm breaks" then waits, as the old one-tap buttons did. */
-  canConfirm: boolean;
-  onEdit: (session: Session) => void;
-  onConfirmBreaks: (session: Session) => void;
+  onEdit: (session: Session, button: HTMLButtonElement) => void;
+  onConfirmBreaks: (session: Session, button: HTMLButtonElement) => void;
   /** The button is passed on so focus can return to it when the confirmation is cancelled. */
   onDelete: (session: Session, button: HTMLButtonElement) => void;
 }) {
@@ -86,8 +84,12 @@ export function SessionList({
             {card.attentionText !== null && (
               <div className="session-attention" data-session-attention>
                 <p>{card.attentionText}</p>
-                {!readOnly && canConfirm && (
-                  <button type="button" onClick={() => onConfirmBreaks(session)} aria-label={`Confirm breaks of ${card.range}`}>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={(event: MouseEvent<HTMLButtonElement>) => onConfirmBreaks(session, event.currentTarget)}
+                    aria-label={`Confirm breaks of ${card.range}`}
+                  >
                     Confirm breaks
                   </button>
                 )}
@@ -95,7 +97,12 @@ export function SessionList({
             )}
             {!readOnly && (
               <div className="button-row">
-                <button type="button" className="secondary" onClick={() => onEdit(session)} aria-label={`Edit session ${session.id}`}>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={(event: MouseEvent<HTMLButtonElement>) => onEdit(session, event.currentTarget)}
+                  aria-label={`Edit session ${session.id}`}
+                >
                   Edit
                 </button>
                 <button

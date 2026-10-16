@@ -1,0 +1,151 @@
+MUTATION (a): "Leave breaks unconfirmed for now" sends breaks_confirmed: true (SessionDialog.tsx noticeLeaveUnconfirmed)
+$ npm run build:client
+1
+$ playwright test tests/e2e/day-editor.spec.ts -g "No breaks listed|09:00 to 18:00"
+
+Running 4 tests using 2 workers
+
+  x  2 [mobile] › tests\e2e\day-editor.spec.ts:146:1 › 09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, confirmed gives R 8h 00m and credit 0 (2.0s)
+  x  1 [desktop] › tests\e2e\day-editor.spec.ts:146:1 › 09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, confirmed gives R 8h 00m and credit 0 (2.1s)
+  x  4 [desktop] › tests\e2e\day-editor.spec.ts:694:1 › Save with no break listed and the box unticked opens "No breaks listed": Escape and "Go back" return to "Add break"; each choice reaches the final confirmation and sends its body (G-4) (3.0s)
+  x  3 [mobile] › tests\e2e\day-editor.spec.ts:694:1 › Save with no break listed and the box unticked opens "No breaks listed": Escape and "Go back" return to "Add break"; each choice reaches the final confirmation and sends its body (G-4) (3.1s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:146:1 › 09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, confirmed gives R 8h 00m and credit 0
+
+    Error: expect(received).toMatchObject(expected)
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "breaks": Array [],
+    -   "breaks_confirmed": false,
+    +   "breaks_confirmed": true,
+        "input_zone": "America/Los_Angeles",
+      }
+
+      203 |     await expect(editor.getByText('Session saved.')).toBeVisible();
+      204 |     expect(posts).toHaveLength(1);
+    > 205 |     expect(posts[0]).toMatchObject({ breaks: [], breaks_confirmed: false, input_zone: LA });
+          |                      ^
+      206 |     await expect(figure(editor, 'status')).toContainText('confirm breaks');
+      207 |     await expect(editor.getByText('OT for this day stays pending')).toBeVisible();
+      208 |     await expect(figure(editor, 'credited')).toHaveText('none');
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:205:22
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-a\timesheet-e2e-output\day-editor-09-00-to-18-00--6bf49-gives-R-8h-00m-and-credit-0-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-a\timesheet-e2e-output\day-editor-09-00-to-18-00--6bf49-gives-R-8h-00m-and-credit-0-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-a\timesheet-e2e-output\day-editor-09-00-to-18-00--6bf49-gives-R-8h-00m-and-credit-0-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\e2e\day-editor.spec.ts:694:1 › Save with no break listed and the box unticked opens "No breaks listed": Escape and "Go back" return to "Add break"; each choice reaches the final confirmation and sends its body (G-4)
+
+    Error: expect(received).toMatchObject(expected)
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "breaks": Array [],
+    -   "breaks_confirmed": false,
+    +   "breaks_confirmed": true,
+        "input_zone": "America/Los_Angeles",
+      }
+
+      778 |     await expect(editor.getByText('Session saved.')).toBeVisible();
+      779 |     expect(posts).toHaveLength(2);
+    > 780 |     expect(posts[1]).toMatchObject({ breaks: [], breaks_confirmed: false, input_zone: LA });
+          |                      ^
+      781 |     await expect(editor.locator('[data-banner="attention"]')).toContainText('Breaks are not confirmed yet.');
+      782 |     await expect(figure(editor, 'credited')).toHaveText('none');
+      783 |     const stored = await employeeSeed.dayView(date);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:780:22
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-a\timesheet-e2e-output\day-editor-Save-with-no-br-1f855-ion-and-sends-its-body-G-4--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-a\timesheet-e2e-output\day-editor-Save-with-no-br-1f855-ion-and-sends-its-body-G-4--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-a\timesheet-e2e-output\day-editor-Save-with-no-br-1f855-ion-and-sends-its-body-G-4--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [mobile] › tests\e2e\day-editor.spec.ts:146:1 › 09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, confirmed gives R 8h 00m and credit 0
+
+    Error: expect(received).toMatchObject(expected)
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "breaks": Array [],
+    -   "breaks_confirmed": false,
+    +   "breaks_confirmed": true,
+        "input_zone": "America/Los_Angeles",
+      }
+
+      203 |     await expect(editor.getByText('Session saved.')).toBeVisible();
+      204 |     expect(posts).toHaveLength(1);
+    > 205 |     expect(posts[0]).toMatchObject({ breaks: [], breaks_confirmed: false, input_zone: LA });
+          |                      ^
+      206 |     await expect(figure(editor, 'status')).toContainText('confirm breaks');
+      207 |     await expect(editor.getByText('OT for this day stays pending')).toBeVisible();
+      208 |     await expect(figure(editor, 'credited')).toHaveText('none');
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:205:22
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-a\timesheet-e2e-output\day-editor-09-00-to-18-00--6bf49-gives-R-8h-00m-and-credit-0-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-a\timesheet-e2e-output\day-editor-09-00-to-18-00--6bf49-gives-R-8h-00m-and-credit-0-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-a\timesheet-e2e-output\day-editor-09-00-to-18-00--6bf49-gives-R-8h-00m-and-credit-0-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [mobile] › tests\e2e\day-editor.spec.ts:694:1 › Save with no break listed and the box unticked opens "No breaks listed": Escape and "Go back" return to "Add break"; each choice reaches the final confirmation and sends its body (G-4)
+
+    Error: expect(received).toMatchObject(expected)
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "breaks": Array [],
+    -   "breaks_confirmed": false,
+    +   "breaks_confirmed": true,
+        "input_zone": "America/Los_Angeles",
+      }
+
+      778 |     await expect(editor.getByText('Session saved.')).toBeVisible();
+      779 |     expect(posts).toHaveLength(2);
+    > 780 |     expect(posts[1]).toMatchObject({ breaks: [], breaks_confirmed: false, input_zone: LA });
+          |                      ^
+      781 |     await expect(editor.locator('[data-banner="attention"]')).toContainText('Breaks are not confirmed yet.');
+      782 |     await expect(figure(editor, 'credited')).toHaveText('none');
+      783 |     const stored = await employeeSeed.dayView(date);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:780:22
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-a\timesheet-e2e-output\day-editor-Save-with-no-br-1f855-ion-and-sends-its-body-G-4--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-a\timesheet-e2e-output\day-editor-Save-with-no-br-1f855-ion-and-sends-its-body-G-4--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T08\tmp-mut-a\timesheet-e2e-output\day-editor-Save-with-no-br-1f855-ion-and-sends-its-body-G-4--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:146:1 › 09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, confirmed gives R 8h 00m and credit 0
+    [desktop] › tests\e2e\day-editor.spec.ts:694:1 › Save with no break listed and the box unticked opens "No breaks listed": Escape and "Go back" return to "Add break"; each choice reaches the final confirmation and sends its body (G-4)
+    [mobile] › tests\e2e\day-editor.spec.ts:146:1 › 09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, confirmed gives R 8h 00m and credit 0
+    [mobile] › tests\e2e\day-editor.spec.ts:694:1 › Save with no break listed and the box unticked opens "No breaks listed": Escape and "Go back" return to "Add break"; each choice reaches the final confirmation and sends its body (G-4)
+exit=1

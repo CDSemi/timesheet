@@ -38,8 +38,9 @@
   updated the mockup (floating editor below 1360px, square week sheets, phone break chips,
   the "in progress" pill). The governance change of the AGENTS.md UI section is accepted
   (WP5-UX3-GOV-AUDIT PASS at 79b9a53, [GOV UX3 review](delivery/GOV_UX3_REVIEW.md)). Next:
-  slices T01..T10, each with a freeze, then the gate and independent audits. Optional owner question WP5-UX3-Q6
-  (phone break rows or chips; board `pending_owner_question_4`) blocks only T08B.
+  slices T01..T10, each with a freeze, then the gate and independent audits. The owner
+  answered WP5-UX3-Q6 with b (the break date field only for overnight sessions) and 24-hour
+  chip times; no owner question is open in this round.
 - Pilot: the concrete [pilot packet](delivery/WP5_PILOT_PACKET.md) is ready for owner
   review (release identity a643794 / 229df806). Owner permission has not been requested,
   there is no pilot result, and the NAS is NOT VERIFIED.

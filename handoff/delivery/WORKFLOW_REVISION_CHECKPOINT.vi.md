@@ -256,6 +256,28 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Đã viết brief T08 (opus, size_risk) và đăng ký ở trạng thái chờ.
 - Đang chạy: WP5-UX3-T07-FREEZE (committer, chạy một mình; 15 đường dẫn mã nguồn/test cùng 29
   đường dẫn handoff).
+- WP5-UX3-T07-FREEZE xong: f8117a48cd856ee09494e54c64d6f09dbc20b234 trên main, đã push (44
+  đường dẫn; digest a3cbc3f4, 829 file; mọi bước kiểm exit 0).
+- Đang chạy: WP5-UX3-T08 (worker-high, opus, size_risk; hộp thoại phiên giờ, hàng giờ nghỉ,
+  tự điền sẵn, thông báo G-4, xác nhận lưu và bỏ thay đổi, quy tắc hộp thoại lồng nhau, prop
+  nhãn "in progress" cho editor) trên f8117a4 / a3cbc3f4.
+- Chủ dự án đã trả lời (nguyên văn trên board): WP5-UX3-Q6 là b (chỉ hiện ô ngày của giờ nghỉ
+  khi phiên qua nửa đêm hoặc chưa có giờ kết thúc) và chip dùng giờ 24h. Quyết định của
+  coordinator: không đổi phạm vi T08 khi đang chạy; T08B áp dụng quy tắc này ở mọi độ rộng và đo
+  lại ngưỡng chuyển sang chip. Vòng này không còn câu hỏi nào đang mở.
+- WP5-UX3-T08 xong (worker-high, tự báo claude-opus-5-5; kết quả tự báo, chưa phải bằng chứng
+  độc lập): SessionDialog và BreakRows (xóa SessionForm.tsx, giữ BreaksEditor cho T09); tự điền
+  sẵn; thông báo "No breaks listed" ba lựa chọn, luôn có "Save this session?"; "Discard your
+  changes?"; quy tắc hộp thoại lồng nhau; nhãn "in progress" trong editor; unit 2091; e2e đầy
+  đủ desktop 298, mobile 292, 0 lỗi; đồng hồ giả lập ở giờ lùi, giờ tiến và trước nửa đêm đều
+  đạt; ba đột biến bị bắt; ngân sách màn hình đầu không đổi; gói chính 477.22 kB; verify 0;
+  digest tạm da580f1e (830 file). Sai lệch: `suggestionRows` viết trong SessionDialog, chưa có
+  unit test (chuyển vào model ở T08B); "Confirm breaks" khi không có giờ nghỉ gợi ý phù hợp nay
+  hỏi qua thông báo (chấp nhận, điểm audit vùng B).
+- Đã viết brief T08B (quy tắc ô ngày theo Q6 b, chip và hộp thoại con, khoảng cách trên điện
+  thoại, hàm model) và đăng ký ở trạng thái chờ.
+- Đang chạy: WP5-UX3-T08-FREEZE (committer, chạy một mình; 10 đường dẫn mã nguồn/test gồm một
+  file bị xóa, cùng 35 đường dẫn handoff; digest kiểm sau khi stage).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

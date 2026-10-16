@@ -783,6 +783,45 @@ test('the period pill follows the server: "in progress" only for the period that
   }
 });
 
+// WP5-UX3-T08 (the T07 open point): the Day editor's period chip reads the pill the period bar shows for its period.
+test('the Day editor chip says "in progress" for today in the five window days and "current period" for a day of the current period', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  // Below 1360px the editor floats as a modal panel over an inert page; the desktop project uses the panel beside the sheet.
+  if (testInfo.project.name === 'desktop') await page.setViewportSize({ width: 1440, height: 800 });
+  const periods = await employeeSeed.periodsCurrent();
+  const today = periods.today_local;
+  await landOn(page, signInThroughUi);
+  const chip = editor(page).locator('[data-chip="period"]');
+
+  // A day of the opening (current) period: "current period" in both branches.
+  const opening = today === periods.current.period_start ? periods.current.period_end : periods.current.period_start;
+  await dayButton(page, opening).click();
+  await expect(editor(page)).toHaveAttribute('data-day-editor', opening);
+  await expect(chip).toHaveText('current period');
+  await page.keyboard.press('Escape');
+  await expect(editor(page)).toHaveCount(0);
+
+  if (isWindow(periods)) {
+    // Today opens the period that contains today; its editor chip says "in progress" (blue), as the bar's pill does.
+    await todayButton(page).click();
+    await expectShown(page, periods.in_progress, today);
+    await dayButton(page, today).click();
+    await expect(editor(page)).toHaveAttribute('data-day-editor', today);
+    await expect(chip).toHaveText('in progress');
+    await expect(chip).toHaveClass(/\bchip-in-progress\b/);
+    await expect(relationPill(page)).toHaveText('in progress');
+  } else {
+    // Outside the window today is in the current period, so its chip says "current period"; nothing says "in progress".
+    await dayButton(page, today).click();
+    await expect(editor(page)).toHaveAttribute('data-day-editor', today);
+    await expect(chip).toHaveText('current period');
+    await expect(page.locator('.chip-in-progress, .badge.in-progress')).toHaveCount(0);
+  }
+});
+
 test('the inactive Today differs from the active one by more than hue: a dashed border, and the focus ring is the same', async ({ page, employeeSeed, signInThroughUi }) => {
   const periods = await employeeSeed.periodsCurrent();
   await landOn(page, signInThroughUi);

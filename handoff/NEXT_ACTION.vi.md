@@ -40,9 +40,9 @@
   chip giờ nghỉ trên điện thoại, nhãn "in progress"). Thay đổi quản trị cho mục UI trong
   AGENTS.md đã được nghiệm thu (WP5-UX3-GOV-AUDIT PASS tại 79b9a53,
   [GOV UX3 review](delivery/GOV_UX3_REVIEW.vi.md)). Tiếp theo: các phần T01..T10, mỗi phần
-  một lần đóng băng, rồi gate và các audit độc lập. Câu hỏi không bắt
-  buộc WP5-UX3-Q6 (hàng hay chip cho giờ nghỉ trên điện thoại; `pending_owner_question_4`
-  trên board) chỉ chặn T08B.
+  một lần đóng băng, rồi gate và các audit độc lập. Chủ dự án đã trả lời
+  WP5-UX3-Q6 là b (chỉ hiện ô ngày của giờ nghỉ khi phiên qua đêm) và chip dùng giờ 24h; vòng
+  này không còn câu hỏi nào đang mở.
 - Pilot: [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) cụ thể đã sẵn để chủ dự án duyệt
   (định danh bản phát hành a643794 / 229df806). Chưa xin phép chủ dự án, chưa có kết quả
   pilot, NAS chưa được kiểm.

@@ -182,6 +182,9 @@
   --break-date-w: 7.6rem;
   --break-time-w: 6.8rem;
   --break-min-w: 5.6rem;
+  /* The session dialog on a desktop (WP5-UX3-T08) and the padding of its head, body and foot from 768px */
+  --session-dialog-width: 720px;
+  --dialog-pad: var(--space-5);
 
   /* Sheet rules and heads (the Excel-style form); state is always paired with text or a shape */
   --sheet-rule: #cdd5df;
@@ -3720,6 +3723,326 @@ button.icon-button .icon {
 
 .day-panel .break-row > button {
   justify-self: start;
+}
+
+/*
+ * The session dialog (WP5-UX3-T08, U-21 and U-24): a modal nested in the Day editor, 720px wide on a desktop and the whole
+ * screen below 768px. A head with the title and the accounting date, a body that scrolls (the pre-fill note, the reason of an
+ * old period, Time and Breaks) and a foot with Cancel and Save that stays in view. Its class names are its own, so the
+ * editor's narrow-panel rules (`.day-panel .time-pair`, `.day-panel .break-row`) never reach it.
+ */
+.session-dialog {
+  width: min(var(--session-dialog-width), var(--dialog-fit));
+  padding: 0;
+  overflow: hidden;
+}
+
+.session-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.session-dialog-head {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--dialog-pad);
+  border-bottom: var(--hairline) solid var(--line);
+  background: var(--panel-head);
+}
+
+.session-dialog-title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.session-dialog-title p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.session-dialog-form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.session-dialog-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-height: 0;
+  padding: var(--space-4) var(--dialog-pad);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.session-dialog-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.session-times {
+  display: grid;
+  grid-template-columns: minmax(0, var(--track));
+  gap: var(--space-3);
+}
+
+.session-dialog-foot {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--dialog-pad);
+  border-top: var(--hairline) solid var(--line-soft);
+  background: var(--panel-head);
+}
+
+/* The pre-filled values are marked in words (U-23): an inset note on the accent tint with an information glyph. */
+.prefill-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: var(--font-size-sm);
+}
+
+.prefill-note .icon {
+  margin-top: var(--space-0);
+  color: var(--accent);
+}
+
+/* The G-4 notice: its three choices stacked at full width. */
+.notice-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/*
+ * Break rows (U-24): tinted strips with a 1px boundary, 8px apart. The list is a size container. Below 42rem a row has two
+ * lines, "Break n" with its end and the suggested tag, then date, start time, minutes and remove at their fixed widths (one
+ * line from 25.5rem); a narrower list wraps that line where it must, so nothing scrolls sideways (the chips are T08B).
+ * From 42rem everything sits on one line. Breakpoints are literals: a container query cannot read a custom property.
+ */
+.break-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.break-entries {
+  container: break-list / inline-size;
+  display: grid;
+  gap: var(--break-row-gap);
+}
+
+.break-entry {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--off);
+}
+
+/* A row that cannot be saved: the error colour on its boundary and a thicker leading rule (a shape cue, not colour alone). */
+.break-entry.has-error {
+  border-color: var(--error);
+  box-shadow: inset var(--rail) 0 0 var(--error);
+}
+
+.break-entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+
+.break-num {
+  font-weight: var(--font-weight-heavy);
+  white-space: nowrap;
+}
+
+.break-info {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.break-end {
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+.break-tag {
+  padding: var(--hairline) var(--space-2);
+  border: var(--hairline) solid var(--accent-line);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-strong);
+}
+
+.break-entry-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.break-field {
+  min-width: 0;
+}
+
+/* Narrow side padding, so a native date (mm/dd/yyyy) and a 12-hour time (hh:mm AM) stay readable at the fixed widths. */
+.break-field input {
+  width: 100%;
+  min-width: 0;
+  padding-inline: var(--space-1);
+}
+
+.break-date {
+  flex: 1 1 var(--break-date-w);
+  max-width: var(--break-date-w);
+}
+
+/* The time takes the room the line has left, so a 12-hour time ("12:00 AM") is not clipped where there is room for it. */
+.break-time {
+  flex: 1 1 var(--break-time-w);
+}
+
+.break-minutes {
+  flex: 1 1 var(--break-min-w);
+  max-width: var(--break-min-w);
+}
+
+/* A 36px square (44px on touch and below 768px through the control rule). */
+button.break-remove {
+  flex: none;
+  width: var(--control-height);
+  height: var(--control-height);
+  margin-left: auto;
+}
+
+.break-message {
+  margin: 0;
+}
+
+.break-error {
+  color: var(--error);
+  font-size: var(--font-size-sm);
+}
+
+/* Below 25.5rem the fields take the whole line width they get, two to a line where they fit. */
+@container break-list (width < 25.5rem) {
+  .break-date,
+  .break-minutes {
+    max-width: none;
+  }
+}
+
+@container break-list (width >= 42rem) {
+  .break-entry {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+  }
+
+  .break-entry-head,
+  .break-entry-fields {
+    display: contents;
+  }
+
+  .break-num {
+    order: 0;
+  }
+
+  .break-date {
+    order: 1;
+  }
+
+  .break-time {
+    order: 2;
+  }
+
+  .break-minutes {
+    order: 3;
+  }
+
+  .break-info {
+    flex: 1 1 auto;
+    order: 4;
+  }
+
+  button.break-remove {
+    order: 5;
+  }
+
+  .break-message {
+    flex-basis: 100%;
+    order: 6;
+  }
+}
+
+/* From 768px the start and the end sit side by side. */
+@media (min-width: 768px) {
+  .session-times {
+    grid-template-columns: repeat(var(--cols-2), minmax(0, var(--track)));
+  }
+}
+
+/* Below 768px the dialog is the whole screen, with the phone spacing (N-2) and two equal buttons in a foot that stays in view. */
+@media (max-width: 767px) {
+  .session-dialog {
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  .session-dialog-head {
+    min-height: var(--dialog-head-min-phone);
+    padding: var(--dialog-bar-pad-phone) var(--dialog-pad-phone);
+  }
+
+  .session-dialog-body {
+    gap: var(--dialog-section-gap-phone);
+    padding: var(--dialog-pad-phone);
+  }
+
+  .session-dialog-section {
+    gap: var(--dialog-field-gap-phone);
+  }
+
+  .session-dialog-foot {
+    flex-wrap: nowrap;
+    padding: var(--dialog-bar-pad-phone) var(--dialog-pad-phone) calc(var(--dialog-bar-pad-phone) + env(safe-area-inset-bottom));
+  }
+
+  .session-dialog-foot button {
+    flex: 1 1 0;
+  }
 }
 
 /*

@@ -1,19 +1,25 @@
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type DayView, ownRequest, type PolicyVersion, type Requester, type Session } from './api.ts';
 import { ConfirmDialog } from './components/ConfirmDialog.tsx';
-import { confirmBreaksDraft, dayBanner, deleteFacts, editorChips, editorTitle, quickBreaksOf } from './components/dayEditorModel.ts';
+import { dayBanner, deleteFacts, editorChips, editorTitle } from './components/dayEditorModel.ts';
 import { DayFieldsForm } from './components/DayFieldsForm.tsx';
 import { DayFigures } from './components/DayFigures.tsx';
 import { describeError, isStaleVersion } from './components/errors.ts';
 import type { PeriodPillKind } from './components/periodBarModel.ts';
-import { expectedFinishText, inputZoneChoices, policyOn, type SessionDraft } from './components/sessionModel.ts';
-import { SessionForm } from './components/SessionForm.tsx';
+import { SessionDialog } from './components/SessionDialog.tsx';
+import { expectedFinishText, inputZoneChoices, policyOn } from './components/sessionModel.ts';
 import { SessionList } from './components/SessionList.tsx';
 import { useBlockSizeProperty } from './components/useBlockSize.ts';
 import { formatDuration } from '../domain/format.ts';
 
-/** `draft` is set when the form was opened by "Confirm breaks": it starts with the breaks to confirm selected. */
-type Editing = { kind: 'none' } | { kind: 'new' } | { kind: 'edit'; sessionId: string; draft?: SessionDraft };
+/**
+ * The open session dialog and the button that opened it (Add session, Edit or "Confirm breaks"); focus returns there when the
+ * dialog closes without a save. `confirm` is set for "Confirm breaks": the dialog then starts with the breaks to confirm.
+ */
+type Editing =
+  | { kind: 'none' }
+  | { kind: 'new'; opener: HTMLElement | null }
+  | { kind: 'edit'; sessionId: string; opener: HTMLElement | null; confirm: boolean };
 
 const LEAVE_KIND_TEXT = { vacation: 'vacation', sick: 'sick', ot: 'OT' } as const;
 
@@ -33,16 +39,18 @@ function otherModalOpen(editor: HTMLDialogElement): boolean {
  * returns focus to the day's button.
  *
  * Order inside: the head (the accounting date, then chips for the period and the zones), the banner
- * of what the day still needs, the times (a card per session with its break table; Edit, Delete and
- * "Confirm breaks" open the session form or the delete confirmation), category and leave, then the
- * server's figures. Every write carries the version the editor loaded and, for an old or finalized
- * period, a reason (one reason state, shared by the panel, the form and the delete confirmation);
- * a stale version reloads the day and says so. In a view-only shared view or an imported period
- * (`readOnly`) the editor only shows the day: the reason, the add, edit and delete controls and the
- * day fields form are absent, not disabled.
+ * of what the day still needs, the times (a card per session with its break table; Add session, Edit
+ * and "Confirm breaks" open the session dialog, Delete the delete confirmation), category and leave,
+ * then the server's figures. Every write carries the version the editor loaded and, for an old or
+ * finalized period, a reason (one reason state, shared by the panel, the session dialog and the
+ * delete confirmation); a stale version reloads the day and says so. In a view-only shared view or an
+ * imported period (`readOnly`) the editor only shows the day: the reason, the add, edit and delete
+ * controls and the day fields form are absent, not disabled.
  *
- * Nested dialogs (WP5-UX-B3-01): the delete confirmation is a modal dialog inside this one. It owns
- * Escape and focus while it is open, and this editor ignores an Escape whose target lies in it.
+ * Nested dialogs (WP5-UX-B3-01): the session dialog (with its notice and confirmations) and the delete
+ * confirmation are modal dialogs inside this one, one on top at a time. Each owns Escape and focus
+ * while it is open, this editor ignores an Escape whose target lies in another dialog, and its switch
+ * between modal and non-modal on crossing 1360px waits until no other modal dialog is open.
  */
 export function DayEditor({
   workDate,
@@ -100,8 +108,10 @@ export function DayEditor({
   const [notice, setNotice] = useState<string | null>(null);
   const [staleNotice, setStaleNotice] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  /** Raised after a delete or a "Confirm breaks" save: focus moves to the Times heading once the page has settled. */
+  /** Raised after a delete or a session save: focus moves to the Times heading once the page has settled. */
   const [focusTimes, setFocusTimes] = useState(0);
+  /** Set when the session dialog closed without a save: focus returns to its opener once the dialog is gone. */
+  const [returnFocus, setReturnFocus] = useState<{ target: HTMLElement | null } | null>(null);
   /** Remounts the forms after a reload, so they start from the reloaded day. */
   const [generation, setGeneration] = useState(0);
   const firstRefresh = useRef(refresh);
@@ -172,6 +182,14 @@ export function DayEditor({
   useEffect(() => {
     if (focusTimes > 0) timesHeading.current?.focus();
   }, [focusTimes]);
+
+  // The session dialog was cancelled or discarded: back to the button that opened it (the Times heading if it is gone).
+  useEffect(() => {
+    if (returnFocus === null) return;
+    const target = returnFocus.target;
+    if (target !== null && target.isConnected) target.focus();
+    else timesHeading.current?.focus();
+  }, [returnFocus]);
 
   // The page changed this day behind the editor: read it again and restart the forms from it.
   useEffect(() => {
@@ -244,19 +262,16 @@ export function DayEditor({
     }
   }
 
-  /**
-   * "Confirm breaks": opens the session form for the session with the breaks the old one-tap rule offered selected (its
-   * saved rows, else the suggested ones inside it). Nothing is sent until Save, and Save sends the body the one-tap
-   * buttons used to send.
-   */
-  function confirmBreaks(session: Session) {
-    const quick = quickBreaksOf(session, policy, displayZone);
-    startEditing({ kind: 'edit', sessionId: session.id, ...(quick === null ? {} : { draft: confirmBreaksDraft(session, quick) }) });
+  /** Cancel or Discard in the session dialog: nothing was saved; focus goes back to the button that opened it. */
+  function closeSessionDialog() {
+    const opener = editing.kind === 'none' ? null : editing.opener;
+    setEditing({ kind: 'none' });
+    setReturnFocus({ target: opener });
   }
 
   function keyDown(event: KeyboardEvent<HTMLDialogElement>) {
     if (event.key !== 'Escape') return;
-    // An Escape typed inside a dialog nested in this one (the delete confirmation) belongs to that dialog.
+    // An Escape typed inside a dialog nested in this one (the session dialog, a confirmation) belongs to that dialog.
     if (event.target instanceof Element && event.target.closest('dialog') !== event.currentTarget) return;
     event.preventDefault();
     event.stopPropagation();
@@ -369,8 +384,8 @@ export function DayEditor({
                 <h3 id="day-editor-times" ref={timesHeading} tabIndex={-1}>
                   Times
                 </h3>
-                {!readOnly && editing.kind === 'none' && (
-                  <button type="button" className="secondary" onClick={() => startEditing({ kind: 'new' })}>
+                {!readOnly && (
+                  <button type="button" className="secondary" onClick={(event) => startEditing({ kind: 'new', opener: event.currentTarget })}>
                     <svg className="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                       <path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                     </svg>
@@ -384,47 +399,10 @@ export function DayEditor({
                 workDate={workDate}
                 zone={displayZone}
                 readOnly={readOnly}
-                canConfirm={editing.kind === 'none'}
-                onEdit={(session) => startEditing({ kind: 'edit', sessionId: session.id })}
-                onConfirmBreaks={confirmBreaks}
+                onEdit={(session, button) => startEditing({ kind: 'edit', sessionId: session.id, opener: button, confirm: false })}
+                onConfirmBreaks={(session, button) => startEditing({ kind: 'edit', sessionId: session.id, opener: button, confirm: true })}
                 onDelete={askDelete}
               />
-              {!readOnly && editing.kind === 'new' && (
-                <SessionForm
-                  key={`new-${generation}`}
-                  workDate={workDate}
-                  displayZone={displayZone}
-                  zones={zones}
-                  policy={policy}
-                  reason={reason}
-                  reasonRequired={reasonRequired}
-                  onSaved={(next) => saved(next, 'Session saved.')}
-                  onStale={stale}
-                  onCancel={() => setEditing({ kind: 'none' })}
-                  request={request}
-                />
-              )}
-              {!readOnly && editingSession !== undefined && editing.kind === 'edit' && (
-                <SessionForm
-                  key={`${editingSession.id}-${editingSession.version}-${generation}-${editing.draft === undefined ? 'edit' : 'confirm'}`}
-                  workDate={workDate}
-                  session={editingSession}
-                  {...(editing.draft === undefined ? {} : { initialDraft: editing.draft })}
-                  displayZone={displayZone}
-                  zones={zones}
-                  policy={policy}
-                  reason={reason}
-                  reasonRequired={reasonRequired}
-                  onSaved={(next) => {
-                    saved(next, 'Session saved.');
-                    // A save that began at "Confirm breaks" ends at the Times heading, where the one-tap buttons used to leave focus.
-                    if (editing.draft !== undefined) setFocusTimes((value) => value + 1);
-                  }}
-                  onStale={stale}
-                  onCancel={() => setEditing({ kind: 'none' })}
-                  request={request}
-                />
-              )}
             </section>
 
             {readOnly ? (
@@ -469,6 +447,32 @@ export function DayEditor({
           </>
         )}
       </div>
+
+      {!readOnly && day !== null && (editing.kind === 'new' || editingSession !== undefined) && (
+        <SessionDialog
+          key={editingSession === undefined ? `new-${generation}` : `${editingSession.id}-${editingSession.version}-${generation}`}
+          workDate={workDate}
+          reportingZone={reportingZone}
+          displayZone={displayZone}
+          zones={zones}
+          todayLocal={todayLocal}
+          policy={policy}
+          {...(editingSession === undefined ? {} : { session: editingSession, confirmBreaks: editing.kind === 'edit' && editing.confirm })}
+          reason={reason}
+          reasonRequired={reasonRequired}
+          onReasonChange={setReason}
+          onSaved={(next) => {
+            saved(next, 'Session saved.');
+            setFocusTimes((value) => value + 1);
+          }}
+          onStale={() => {
+            stale();
+            setFocusTimes((value) => value + 1);
+          }}
+          onClose={closeSessionDialog}
+          request={request}
+        />
+      )}
 
       {!readOnly && deletingSession !== undefined && (
         <ConfirmDialog

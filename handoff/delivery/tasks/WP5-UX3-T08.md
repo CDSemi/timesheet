@@ -51,8 +51,9 @@
 - Profile/routing: timesheet-worker-high (effort high, fixed by the profile); requested
   model opus; override reason size_risk (break entry feeds worked minutes and OT credit,
   risk H; nested-dialog regressions of the B3-01 kind; size M-L). Task record in English.
-- Base: HEAD = origin/main = the WP5-UX3-T07-FREEZE commit (board `commit_sha`), or a later
-  commit that changes only `handoff/`; source digest as recorded by that freeze. Record HEAD,
+- Base: HEAD = origin/main = f8117a48cd856ee09494e54c64d6f09dbc20b234 (the T07 freeze), or
+  a later commit that changes only `handoff/`; source digest
+  a3cbc3f460d20c0f56736ce09a6b09ab7a7815cb738323ddd8f358a20ec540f0 (829 files). Record HEAD,
   `git status --short` and the digest before you edit. Uncommitted coordinator files under
   `handoff/` are expected: never touch them.
 
@@ -241,3 +242,132 @@ chunk size, verify exit code, the final full 64-hex digest (or probe digest) and
 the evidence files, the background-task confirmation, any stop, conflict or deviation.
 
 ## Results
+
+**Baseline (2026-10-15, before any edit; log `step2-pre-edit.log` in the task folder).** Node `v24.21.0`; HEAD
+`f8117a48cd856ee09494e54c64d6f09dbc20b234`; `git status --short`: only the coordinator files under `handoff/` (ORCHESTRATION.json,
+WORKFLOW_REVISION_CHECKPOINT.md and .vi.md, tasks/WP5-UX3-T07-FREEZE.md, tasks/WP5-UX3-T08.md, evidence/WP5-UX3-T07-FREEZE/);
+`npm run digest`: `a3cbc3f460d20c0f56736ce09a6b09ab7a7815cb738323ddd8f358a20ec540f0` (829 files), exit 0. Matches the brief.
+
+Step 1 (reading) done: brief, PLAN B8/C/F/H, PLAN2 items 4, 6 and 9, T06 model, T07 record, mockup A5/A5b/A5c, the current
+DayEditor, SessionForm, BreaksEditor, SessionList, ConfirmDialog, TimeProblemPrompt, LocalTimeField and the e2e spec.
+
+Checkpoint 2 (implementation and first e2e pass): `SessionDialog.tsx` and `BreakRows.tsx` added, `SessionForm.tsx`
+deleted (plain `rm`; nothing imported it), `DayEditor.tsx`, `SessionList.tsx`, `TimeProblemPrompt.tsx`, `styles.css`,
+`TimesheetScreen.tsx` (periodPill only) changed; `day-editor.spec.ts` and `today.spec.ts` rewritten/extended. Typecheck exit 0;
+`day-editor.spec.ts` alone on both projects: 98 passed after fixing one wrong assertion of my own new crossing test
+(nested dialogs are DOM-nested, so "contains the hit point" is true for the session dialog under the confirmation).
+
+Checkpoint 3 (gate steps 3-7 done): typecheck 0, lint 0, unit 93 files / 2091 tests passed, build 0 (main chunk 477.22 kB),
+full e2e 590 passed (desktop 298, mobile 292), 66 skipped, 0 failed; three simulated-clock runs of day-editor.spec.ts 83 passed /
+17 skipped / 0 failed each; today.spec.ts at 2026-10-26T16:00:00Z 31 passed; mutations (a) 4 failed, (b) 2 failed, (c) 4 failed,
+each reverted; after the reverts day-editor.spec.ts 83 passed. Remaining: privacy/whitespace checks, verify, digest, evidence.
+
+### Final result
+
+**Files.** Added `src/client/components/SessionDialog.tsx`, `src/client/components/BreakRows.tsx`. Deleted
+`src/client/components/SessionForm.tsx` (plain `rm`, unstaged). Changed `src/client/DayEditor.tsx`,
+`src/client/components/SessionList.tsx` (entry points pass the pressed button; the `canConfirm` prop is gone because the dialog
+is modal), `src/client/components/TimeProblemPrompt.tsx` (takes `chosen` and an optional `label` such as "Break 1" instead of
+the old form draft; unique radio group name), `src/client/TimesheetScreen.tsx` (the `periodPill` prop and its import only),
+`src/client/styles.css` (session dialog, break rows, G-4 choices, two new tokens `--session-dialog-width` and `--dialog-pad`),
+`tests/e2e/day-editor.spec.ts`, `tests/e2e/today.spec.ts`. Unchanged: `breakRowsModel.ts` (T06 contract), `ConfirmDialog.tsx`,
+`BreaksEditor.tsx` and `LocalTimeField.tsx` (the Check out dialog still uses them until T09), `dayEditorModel.ts`
+(`quickBreaksRequest` kept as the unit-test oracle), `tests/client/dayEditorModel.test.ts`, `sharing.spec.ts`,
+`keyboard-access.spec.ts` (no change needed). No server, API, domain, schema or CSP change; request shapes unchanged.
+
+**Flow as implemented.** Add session, Edit and "Confirm breaks" open the modal session dialog (720px, full screen below 768px;
+title "New session"/"Edit session", described by "{weekday} {MM/DD/YYYY} · accounting date in {reporting zone}"; sections Time
+and Breaks; the input-zone explanation sits under the field; the old-period reason field is bound to the editor's one reason
+state). Save: `buildSessionDialogRequest` validates first (session gap/fold prompt, or row messages with the gap/fold prompt
+inside the row naming "Break n"; nothing opens and nothing is sent while a problem remains). With no break listed and the box
+unticked it opens the `alertdialog` "No breaks listed" (three stacked buttons, "Go back and add breaks" focused, Escape = Go
+back, focus then on "Add break"); "Confirm no breaks taken" ticks the box in the draft (`setNoBreaks`) and builds with
+`allowUnconfirmed: false`; "Leave breaks unconfirmed for now" builds with `allowUnconfirmed: true`. Then always the
+`ConfirmDialog` "Save this session?" with Day, Time (`08:00-17:00 (zone)`, `+1` for a later end date) and Breaks
+(`breaksSummary`), the sentence "Saving confirms these breaks as the breaks you took." (unconfirmed case: "Unconfirmed breaks keep
+OT for this day pending until you confirm them."), buttons Back (focus returns to Save, values kept) and Save (POST or PUT with
+today's body). Server errors: `serverBreakRowError` marks the row; a time problem shows the prompt; others are a form alert;
+a stale version closes the dialog and shows the editor's stale notice. Cancel, Close (X) and Escape: `sessionDialogIsDirty`
+true opens "Discard your changes?" (Keep editing focused, Discard danger); otherwise the dialog closes at once.
+
+**Pre-fill (G-3 a).** New sessions only, when `policyOn` finds a policy: `referenceHours(policy, workDate, reportingZone,
+inputZone)` then `applyReferenceHours`; suggested rows through `reshiftSuggestions`/`pastDaySuggestedRows` with the server's
+`todayLocal` (only before it, only inside the session), re-shifted on every start or end change until a row is changed (the
+model's `breaksEdited`). While no time was typed, a new input zone shows the same reference hours in that zone. Note:
+"Pre-filled from your reference hours (08:00-17:00[ in {reporting zone} when the input zone differs])[ and suggested breaks].
+Change them to the times you worked."; untouched suggestions carry a "suggested" tag.
+
+**Nested dialogs.** One modal on top at a time (editor, session dialog, notice or confirmation, all DOM-nested in the editor).
+The session dialog handles its own `cancel` (preventDefault, stopPropagation, its close path) and its Escape keydown (ignored
+when the target is inside a nested dialog); the notice and the confirmations stop their Escape; the editor ignores Escape from
+other dialogs and its re-show on crossing 1360px waits while another modal is open (existing B3-01 code). Focus: confirmation
+to its opener; session dialog to Add session / Edit / Confirm breaks after Cancel or Discard, to the "Times" heading after a
+save (and after a stale answer).
+
+**Commands and results** (masked logs in `handoff/delivery/evidence/WP5-UX3-T08/`): 01 baseline (above). 02 `npm run typecheck`
+exit 0. 03 `npm run lint` exit 0. 04 `npm test` 93 files, 2091 tests passed, exit 0. 05 `npm run build` exit 0, main chunk
+`index-BMEYhCm0.js` 477.22 kB (gzip 140.05 kB; T07 had 458.49 kB), no chunk-size advisory. 06 `npm run test:e2e` alone, TEMP
+and `E2E_SCREENSHOT_DIR` in the task folder: 590 passed (desktop 298, mobile 292), 66 skipped (desktop 30, mobile 36,
+project-specific layouts), 0 failed, 14.6 min, exit 0; no `ERR_NO_BUFFER_SPACE`, no ECONNRESET. 07-09 simulated clock
+(FIX10 `shiftclock.mjs` copied to the task folder only), `day-editor.spec.ts` on both projects, each alone with its own output:
+
+| Simulated start (UTC) | Passed | Failed | Skipped |
+|---|---|---|---|
+| 2026-11-01T08:45:00Z (fall-back fold) | 83 | 0 | 17 |
+| 2027-03-14T10:30:00Z (spring-forward gap) | 83 | 0 | 17 |
+| 2026-10-27T06:58:30Z (90 s before reporting-zone midnight) | 83 | 0 | 17 |
+
+14 `today.spec.ts` at 2026-10-26T16:00:00Z (window day, the "in progress" chip branch): 31 passed, 5 skipped, 0 failed.
+10-12 mutations, each alone, rebuilt, reverted: (a) "Leave breaks unconfirmed for now" sends `breaks_confirmed: true`: 4 failed
+(day-editor `:146` and `:694`, both projects, POST body); (b) `pastDaySuggestedRows` `<=` (temporarily in breakRowsModel.ts:547):
+2 failed (`:593` today's dialog has rows); (c) the final confirmation's cancel (Escape) also runs the session dialog's close
+(both close): 4 failed (`:2627` x2, `:2693` x2). 13 after the reverts (`git status` shows breakRowsModel.ts unchanged):
+day-editor.spec.ts 83 passed, 0 failed. 15 `npm run verify` (SMOKE_PORT 48741, DATA_DIR and DATABASE_PATH in the task folder):
+exit 0, "SMOKE PASSED". 16 `npm run digest` exit 1 (the unstaged deletion of SessionForm.tsx; git hash-object cannot read it),
+then the probe (same algorithm over the files present, i.e. the digest once the deletion is staged):
+`da580f1ec4df94fc438fc3594892657d41ded922e978519b7b9a4471e83f31d4` (830 files, handoff/ excluded). Nothing under src or tests
+changed after verify.
+
+**Privacy and whitespace.** Grep of the changed files and the evidence: only `example.invalid` addresses, no user-profile
+path; every changed or new file: no trailing whitespace, no CR, exactly one final newline (helper check in the task folder).
+
+**First-screen budgets 390x844 (unchanged):** landing 559.45 (no zone note) / 658.41 (zone note) of tab bar 788; received share
+611.45 / 710.41; away 658.41 / 559.45.
+
+**Changed assertions (final file:line; none removed or weakened; no skip, fixme or .only added).**
+`day-editor.spec.ts:146`: the radios and "Suggest/Confirm suggested breaks" became the pre-filled rows (start time, minutes,
+"ends", tag) shifted to 11:00/13:00/15:30, the unknown save goes through the notice and its POST body is asserted
+(`breaks: []`, `breaks_confirmed: false`), the confirmed save through Suggest breaks and the confirmation; the figure and
+stored-instant assertions are unchanged, the "Breaks confirmed" card pill is added. `:258`: the end date is typed because the
+pre-filled end lies on the next date in the display zone (an explicit input, the stored-instant assertions unchanged); Cancel
+now asserts the dialog closes at once; the reference hours following the input zone are added. `:337`, `:380`, `:434`, `:476`,
+`:500`, `:546`: the form became the dialog and Save goes through the confirmation; prompts, radios and stored instants
+unchanged; added: no confirmation before a time prompt, the dialog's reason field, rows not following a saved session's start.
+`:1208`: the stale check asserts the dialog is gone. `:1464`: adds the full-screen and no-sideways-scroll checks of the dialog.
+`:2193` ("Confirm breaks"): the radios became the listed rows; the PUT path, version, zone, start, end, three rows and no
+reason are the same; added Cancel without change closes and returns focus, and the confirmation summary. `:2297`: the "No
+breaks taken" radio became the box; Save disabled until the reason, typed in the dialog's field and seen in the panel; same
+body. `:2346`: the pre-ticked "No breaks taken" radio is replaced by an empty unticked list and the notice's "Confirm no breaks
+taken"; the body assertion (`breaks: []`, `breaks_confirmed: true`, version, zone) is the same. New: `:593` pre-fill, today
+without rows, Discard/Keep editing; `:694` G-4 notice; `:790` break fold and gap prompts; `:860` row layouts at 720 and 430;
+`:2620` nested Escape at 1366 and 1280 and while crossing 1360px; `today.spec.ts:787` the editor chip.
+
+**Deviations and open points for the coordinator.**
+1. T06 gap: there is no model function for suggestion rows without the past-day rule, which "Suggest breaks" (any day) and
+   "Confirm breaks" (today's ended session) need. `SessionDialog.tsx` builds them (`suggestionRows`) from the shared
+   `suggestBreaks` and the exported `BreakRowDraft` type; the T06 contract is unchanged. It has no unit test (tests cannot import
+   `.tsx` and no new `.ts` file is an owned path); e2e `:146` and `:2193` cover it. A later model slice could move it.
+2. "Confirm breaks" with no fitting suggestion no longer pre-ticks "No breaks taken": the list is empty and unticked and Save
+   asks through the notice (the person decides; same body).
+3. `periodPill` is passed only while the editor's date lies in the shown period (otherwise the day's own relation), because
+   "Current period" can show another period while the editor stays on today; the brief's literal prop would then mislabel it.
+4. The X button is named "Close" (the mockup says "Cancel"), so the dialog has one "Cancel" button.
+5. Below 25.5rem the fields line of a row wraps (remove on its own line at 390px) to keep no sideways scroll until T08B's chips;
+   the time field takes free room and break inputs have narrower side padding, so en-US dates and 12-hour times are not clipped.
+6. `confirmBreaksDraft` in `dayEditorModel.ts` is no longer used by the app (removal is not in my owned scope); docs/04 lines
+   16, 25, 63, 64 and 70 still describe the old form (slice T10).
+7. Runtime-rule slips (read-only, no effect on results): one grep piped into `head`, one `tail -c` redirected to a file, and the
+   mutation (a) command piped the client build into `grep -c` through `> /dev/stdout`. No other rule was broken.
+8. No background task is left running (the full e2e run ended with exit 0; every later command ran in the foreground).
+
+Status: done
