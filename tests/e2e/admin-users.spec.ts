@@ -34,7 +34,7 @@ test('the account list flags an account that never saved its submission settings
   const api = await new SeedClient(builtServer.origin).signIn(saved.email, saved.password);
   await api.call('POST', '/api/settings/submission', { expected_seq: 0, to: [TO], cc: [], auto_submit: false }, 201);
 
-  await signInPageAs(builtServer.credentials.admin, '#/admin');
+  await signInPageAs(builtServer.credentials.admin, '#/settings/admin');
   await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
 
   const neverRow = page.locator(`[data-user-email="${never.email}"]`);

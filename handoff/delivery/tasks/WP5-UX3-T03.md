@@ -27,8 +27,9 @@
   model sonnet; no override. Routing: size M, risk H (authorization surface: the client must
   never show or request admin data for an employee; the server stays unchanged), novelty no.
   Task record in English.
-- Base: HEAD = origin/main = the WP5-UX3-T02-FREEZE commit (board `commit_sha`), or a later
-  commit that changes only `handoff/`; source digest as recorded by that freeze. Record HEAD,
+- Base: HEAD = origin/main = aa64999240ab0d5822ca371a0c8e24436d27f30a (the T02 freeze), or
+  a later commit that changes only `handoff/`; source digest
+  c938aa6fcd55a15f1edd6fc28462981b33188de9462d6d60f9a8fcde19a7b72c (822 files). Record HEAD,
   `git status --short` and the digest before you edit. Uncommitted coordinator files under
   `handoff/` are expected: never touch them.
 
@@ -163,3 +164,89 @@ result, the server/domain diff result, verify exit code, the final full 64-hex d
 count, the evidence files, the background-task confirmation, any stop, conflict or deviation.
 
 ## Results
+
+Status: done. Self-reported model: claude-sonnet-5-5 (timesheet-worker-high).
+
+### Files changed
+
+- New: `src/client/components/routeModel.ts` (pure route model), `src/client/components/SettingsNav.tsx`,
+  `src/client/ProfileScreen.tsx`, `tests/client/routeModel.test.ts`,
+  `tests/e2e/settings-routes.spec.ts`.
+- Changed: `src/client/App.tsx` (routes, Settings area, lazy Administration and Import with a
+  `Suspense` status fallback and a chunk-failure boundary), `src/client/components/AppShell.tsx`
+  (`ROUTES`, `canonicalHash` and `routeOfHash` moved to `routeModel.ts`; the hook stays),
+  `src/client/components/accountModel.ts` (the hashes now come from `routeModel.ts`: Profile
+  `#/settings/profile`, Administration `#/settings/admin`), `src/client/styles.css`
+  (`.settings-nav`, `.screen-loading`, `.chunk-error`, Profile; tokens `--profile-avatar-size`,
+  `--profile-label-width`, `--profile-facts-basis`, no colour added), `tests/client/accountModel.test.ts`.
+  `AccountMenu.tsx`, `SettingsScreen.tsx`, `AdminScreen.tsx` and `ImportScreen.tsx` are unchanged:
+  the menu already marks the entry whose id equals the shown route id, and the lazy imports use
+  `.then((module) => ({ default: module.X }))`, so no export shape changed.
+
+### Routes as implemented
+
+`#/settings` Personal (h1 Settings), `#/settings/profile` Profile (h1 Profile, read only),
+`#/settings/admin` Administration (h1 Administration; rendered only when `user.role === 'admin'`, and
+`routesFor` lists it for an administrator only). `#/admin`: administrator `replaceState` to
+`#/settings/admin`; employee falls back to `#/timesheet`. `#/settings/admin` for an employee: the same
+fallback, with no admin request. Unknown sub-paths (`#/settings/unknown`, `#/settings/`,
+`#/settings/admin/users`) fall back to `#/timesheet`. `#/import` stays (Personal link, phone More).
+The Settings sections nav (`aria-label="Settings sections"`, `aria-current="page"`) is built from
+`settingsSectionsFor(role)`, so an employee never gets the Administration link.
+
+### Changed e2e assertions (none removed or weakened; no `skip`, `fixme` or `.only` added)
+
+- `tests/e2e/admin-status.spec.ts:142` and `:252`, `admin-users.spec.ts:37`, `import.spec.ts:393`:
+  the first address `#/admin` is now `#/settings/admin` (the new address of the same screen, the same
+  heading and region assertions follow; the old address is covered in `settings-routes.spec.ts`).
+- `tests/e2e/isolation.spec.ts:108`: `#/settings/admin` added to the hash-swap list (stronger).
+  `:197-219`: the `/api/admin/` request listener moved before the sign-in (covers the whole visit) and
+  the loop checks both `#/admin` and `#/settings/admin` for the fallback and no Administration heading.
+- `tests/e2e/shell.spec.ts:742-744`: the Profile entry now opens Profile, so the old assertion "heading
+  Settings" became URL `#/settings/profile`, heading Profile and `aria-current` on the Profile entry
+  (the same kind of check with the correct target). `:751`: URL `/#\/settings\/admin$/` instead of
+  `/#\/admin$/` (the new canonical address).
+- `tests/e2e/history-settings.spec.ts`: no change needed (it starts at `#/settings`, still Personal with
+  h1 Settings).
+- `tests/client/accountModel.test.ts`: the Profile and Administration targets updated and a new test that
+  every entry id equals the route id of its hash.
+
+### Gates
+
+- Chunks: before `index-Bk7aSmeQ.js` 502.77 kB with the chunk-size advisory; after
+  `index-Ckg8x0HL.js` 452.08 kB, `AdminScreen-C-BtA4HC.js` 31.54 kB, `ImportScreen-BPCtBr7b.js`
+  23.82 kB, `index-BCSV3gM_.css` 64.93 kB, no advisory (hashes of the last build).
+- `npm test`: 93 files, 2059 tests passed (new `routeModel.test.ts` included).
+- Full e2e (`npm run test:e2e`, real clock): 523 passed, 0 failed, 49 skipped (existing project
+  conditions, none in `settings-routes.spec.ts`); desktop 256 passed (30 skipped), mobile 267 passed
+  (19 skipped). `settings-routes.spec.ts` alone: 20 of 20.
+- Mutation: role check dropped in `App.tsx` and `routesFor`; `settings-routes.spec.ts` failed 2 (the
+  employee test, both projects), `isolation.spec.ts` failed 4 (employee tests, both projects),
+  `routeModel.test.ts` failed 2. Reverted; the final verify ran on the reverted code.
+- `git diff --stat -- src/server src/domain`: empty.
+- Whitespace: no `[ \t]+$` and no blank line at EOF in the new or changed files. Privacy: no email other
+  than the full synthetic `example.invalid` form and no user-profile path in changed files or evidence.
+- `npm run verify` (SMOKE_PORT 48641, DATA_DIR and DATABASE_PATH in the task folder): exit 0, smoke passed.
+- Final `npm run digest`: `e5b3faf96c7856fdf5e8c3c85072270e3b7112f100ba364efe2a5331bb367564` (827 files).
+- No background task is left running (the full e2e and the wait loop both finished).
+- Evidence: `handoff/delivery/evidence/WP5-UX3-T03/` step logs `step1` to `step10`, `it-e2e-new.txt`,
+  `profile-desktop-synthetic.png`, `profile-mobile-synthetic.png`.
+
+### Deviation
+
+The retry of a failed chunk reloads the page (see below); an in-place retry did not work.
+
+### Earlier checkpoint notes
+
+- Base: HEAD `aa64999240ab0d5822ca371a0c8e24436d27f30a`; `git status --short` before editing showed only the
+  coordinator files under `handoff/` (ORCHESTRATION.json, WORKFLOW_REVISION_CHECKPOINT*.md,
+  WP5-UX3-T02-FREEZE.md, WP5-UX3-T03.md, evidence/WP5-UX3-T02-FREEZE/); digest before
+  `c938aa6fcd55a15f1edd6fc28462981b33188de9462d6d60f9a8fcde19a7b72c` (822 files); Node v24.21.0.
+- Main chunk before: `index-Bk7aSmeQ.js` 502.77 kB (advisory printed). After:
+  `index-DnUpdWtO.js` 452.20 kB, `ImportScreen-DieXT7Mb.js` 23.82 kB, `AdminScreen-C0aXhjSl.js`
+  31.54 kB, CSS 64.93 kB; no chunk-size advisory.
+- Retry decision: an in-place retry (new `React.lazy`) failed in Chromium, because the browser keeps a
+  failed module request for the life of the page; the "Try again" button therefore reloads the page at
+  the same address (cookie and hash survive).
+- `npm run typecheck`, `npm run lint`, `npm test` (93 files, 2059 tests) green; new spec
+  `tests/e2e/settings-routes.spec.ts` 20/20 on both projects.

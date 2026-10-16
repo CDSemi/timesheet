@@ -163,6 +163,18 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   raise; later slices record the chunk size; the gate checks there is no advisory. T03 brief
   written and registered pending.
 - Running: WP5-UX3-T02-FREEZE (committer, alone; 19 source/test paths plus 26 handoff paths).
+- WP5-UX3-T02-FREEZE done: aa64999240ab0d5822ca371a0c8e24436d27f30a on main, pushed (45
+  paths; digest c938aa6f, 822 files; every check exit 0).
+- Running: WP5-UX3-T03 (worker-high, sonnet; Settings sub-pages, Profile, routes and the
+  `#/admin` redirect, lazy Administration and Import screens) on aa64999 / c938aa6f.
+- WP5-UX3-T03 done (worker-high, self-reported claude-sonnet-5-5; reported, not independent
+  proof): routeModel, SettingsNav, ProfileScreen; `#/admin` replaced by `#/settings/admin`
+  for admins, timesheet fallback for employees; lazy Admin and Import (main chunk 502.77 ->
+  452.08 kB, no advisory); unit 2059; full e2e desktop 256, mobile 267, 0 failed; mutation
+  caught; no server/domain diff; verify 0; digest e5b3faf9 (827 files). Deviation: the
+  chunk-load "Try again" reloads the page.
+- T04 brief written and registered pending.
+- Running: WP5-UX3-T03-FREEZE (committer, alone; 15 source/test paths plus 28 handoff paths).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

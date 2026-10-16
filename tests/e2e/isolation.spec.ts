@@ -105,7 +105,7 @@ test('a second employee cannot reach employee 1 by hash swap or by id swap', asy
     await expect(page.locator('main')).not.toContainText(owner.note);
 
     // Hash swap: no route takes an id, and the admin route falls back to the employee's own timesheet.
-    for (const hash of ['#/admin', '#/admin/users', `#/timesheet/${owner.sessionId}`, `#/sessions/${owner.sessionId}`]) {
+    for (const hash of ['#/admin', '#/settings/admin', '#/admin/users', `#/timesheet/${owner.sessionId}`, `#/sessions/${owner.sessionId}`]) {
       await page.evaluate(`window.location.hash = ${JSON.stringify(hash)}`);
       await expect(page).toHaveURL(/#\/timesheet$/);
       await expect(page.locator('main')).not.toContainText(owner.note);
@@ -195,21 +195,25 @@ test('an admin cannot open employee data through any admin screen', async (
 });
 
 test('an employee sees no Admin entry and the server refuses the admin routes', async ({ page, signInThroughUi }) => {
-  await signInThroughUi();
-  const nav = page.getByRole('navigation', { name: 'Main' });
-  await expect(nav).toBeVisible();
-  await expect(page.locator('[data-day]')).toHaveCount(14);
+  // The listener is attached before the sign-in: it covers the whole visit.
   const adminRequests: string[] = [];
   page.on('request', (request) => {
     if (new URL(request.url()).pathname.startsWith('/api/admin/')) adminRequests.push(`${request.method()} ${request.url()}`);
   });
+  await signInThroughUi();
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  await expect(nav).toBeVisible();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
   const account = await openAccount(page);
   await expect(account.getByRole('link', { name: 'Settings' })).toBeVisible();
   await expect(account.getByRole('link', { name: /^Admin/ })).toHaveCount(0);
   await expect(nav.getByRole('link', { name: 'Admin' })).toHaveCount(0);
-  await page.evaluate("window.location.hash = '#/admin'");
-  await expect(page).toHaveURL(/#\/timesheet$/);
-  await expect(page.getByRole('heading', { name: 'Administration' })).toHaveCount(0);
+  // The old address and the new Settings sub-page both fall back to the timesheet, with no Administration heading.
+  for (const hash of ['#/admin', '#/settings/admin']) {
+    await page.evaluate(`window.location.hash = ${JSON.stringify(hash)}`);
+    await expect(page).toHaveURL(/#\/timesheet$/);
+    await expect(page.getByRole('heading', { name: 'Administration' })).toHaveCount(0);
+  }
   // The employee's page never asks for an admin route at all (the entry is hidden and the screen is not rendered).
   await page.waitForLoadState('networkidle');
   expect(adminRequests, 'admin requests made by an employee page').toEqual([]);

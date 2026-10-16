@@ -1,0 +1,56 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/routeModel.test.ts (13 tests | 2 failed) 10ms
+   ❯ canonicalHash for Settings and Administration (7)
+     × keeps #/settings/admin for an administrator and sends an employee to the timesheet 4ms
+   ❯ routes per role (2)
+     × lists Administration for an administrator only 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/routeModel.test.ts > canonicalHash for Settings and Administration > keeps #/settings/admin for an administrator and sends an employee to the timesheet
+AssertionError: expected '#/settings/admin' to be '#/timesheet' // Object.is equality
+
+Expected: "#/timesheet"
+Received: "#/settings/admin"
+
+ ❯ tests/client/routeModel.test.ts:25:59
+     23|   it('keeps #/settings/admin for an administrator and sends an employe…
+     24|     expect(canonicalHash('#/settings/admin', 'admin')).toBe('#/setting…
+     25|     expect(canonicalHash('#/settings/admin', 'employee')).toBe('#/time…
+       |                                                           ^
+     26|   });
+     27|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/client/routeModel.test.ts > routes per role > lists Administration for an administrator only
+AssertionError: expected [ 'settings', 'profile', …(2) ] to deeply equal [ 'settings', 'profile', 'import' ]
+
+- Expected
++ Received
+
+  [
+    "settings",
+    "profile",
+    "import",
++   "admin",
+  ]
+
+ ❯ tests/client/routeModel.test.ts:67:29
+     65|     const ids = (role: 'admin' | 'employee') => mobileRoutesFor(role).…
+     66|     expect(ids('admin')).toEqual(['settings', 'profile', 'import', 'ad…
+     67|     expect(ids('employee')).toEqual(['settings', 'profile', 'import']);
+       |                             ^
+     68|   });
+     69|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 26 passed (28)
+   Start at  19:13:56
+   Duration  422ms (import 59%, transform 37%, tests 3%, worker 1%)
+

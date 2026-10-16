@@ -4,6 +4,8 @@
  * so the rules are unit tested (tests/client/accountModel.test.ts).
  */
 
+import { ADMIN_HASH, IMPORT_HASH, PROFILE_HASH, SETTINGS_HASH } from './routeModel.ts';
+
 /** The role as the session user reports it. */
 export type AccountRole = 'admin' | 'employee';
 
@@ -19,14 +21,10 @@ export interface AccountItem {
 }
 
 /*
- * Profile and Administration become pages of the Settings area in the next slice (`#/settings/profile` and
- * `#/settings/admin`). Until then Profile opens Settings, which holds the personal data, and Administration keeps
- * today's address; the next slice changes these two constants only.
+ * Profile and Administration are pages of the Settings area (WP5-UX3-T03): `#/settings/profile` and `#/settings/admin`.
+ * The addresses live in routeModel.ts, the one place that knows the routes. The entry whose `id` equals the shown route
+ * is marked as the current one (AccountContent compares `id` with the route id).
  */
-const PROFILE_HASH = '#/settings';
-const SETTINGS_HASH = '#/settings';
-const IMPORT_HASH = '#/import';
-const ADMIN_HASH = '#/admin';
 
 /** The first letter (Unicode) of a word, or an empty string when the word has none (punctuation, digits). */
 function firstLetter(word: string): string {

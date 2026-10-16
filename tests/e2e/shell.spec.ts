@@ -739,14 +739,16 @@ test('every screen stays reachable: an employee reaches Settings and Import, an 
   await expect(page).toHaveURL(/#\/import$/);
   await expect(page.getByRole('heading', { name: 'Import and opening balance' })).toBeVisible();
   await (await openAccount(page)).getByRole('link', { name: 'Profile' }).click();
-  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/#\/settings\/profile$/);
+  await expect(page.getByRole('heading', { name: 'Profile', level: 1 })).toBeVisible();
+  await expect((await openAccount(page)).getByRole('link', { name: 'Profile' })).toHaveAttribute('aria-current', 'page');
   await (await openAccount(page)).getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
 
   await signInPageAs(builtServer.credentials.admin, '#/timesheet');
   await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
   await (await openAccount(page)).getByRole('link', { name: 'Administration' }).click();
-  await expect(page).toHaveURL(/#\/admin$/);
+  await expect(page).toHaveURL(/#\/settings\/admin$/);
   await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
   // The account area marks the screen being shown.
   await expect((await openAccount(page)).getByRole('link', { name: 'Administration' })).toHaveAttribute('aria-current', 'page');

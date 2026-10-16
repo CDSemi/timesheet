@@ -272,6 +272,10 @@
    */
   --identity-max: 14rem;
   --avatar-size: 36px;
+  /* The Profile page (WP5-UX3-T03): a larger avatar and the width of the label column of its read-only facts */
+  --profile-avatar-size: 56px;
+  --profile-label-width: 9rem;
+  --profile-facts-basis: 14rem;
   --account-width: 18.5rem;
   --account-icon-size: 18px;
   --chevron-open-transform: rotate(180deg);
@@ -1052,6 +1056,74 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+/*
+ * The Settings sections (WP5-UX3-T03): Personal, Profile and Administration as links above the page's own heading, one
+ * row that wraps on a narrow screen. The links are the shell's `.nav-link` (rest, hover, current, focus ring, 44px
+ * targets below 768px and with a coarse pointer), so only the row and its hairline rule are new.
+ */
+.settings-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding-bottom: var(--space-1);
+  border-bottom: var(--hairline) solid var(--line);
+}
+
+/* A screen's chunk is on its way, or could not be loaded (WP5-UX3-T03). */
+.screen-loading {
+  margin: 0;
+  padding: var(--space-3) 0;
+}
+
+.chunk-error {
+  max-width: var(--page-narrow);
+}
+
+/* Profile: the avatar beside the read-only name, email, role and reporting zone. */
+.profile-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.profile-card .avatar {
+  --avatar-size: var(--profile-avatar-size);
+  font-size: var(--font-size-lg);
+}
+
+.profile-facts {
+  display: flex;
+  flex: 1 1 var(--profile-facts-basis);
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+}
+
+.profile-facts > div {
+  display: grid;
+  grid-template-columns: var(--profile-label-width) minmax(0, var(--track));
+  gap: var(--space-1) var(--space-3);
+}
+
+.profile-facts dt {
+  color: var(--muted);
+}
+
+.profile-facts dd {
+  margin: 0;
+  font-weight: var(--font-weight-strong);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 479px) {
+  .profile-facts > div {
+    grid-template-columns: minmax(0, var(--track));
+    gap: 0;
+  }
 }
 
 /* ---- Controls ------------------------------------------------------------- */

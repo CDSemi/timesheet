@@ -390,7 +390,7 @@ test('the opening balance: validation, confirmation, a repeat that changes nothi
 });
 
 test('the Import entry is for the signed-in person and is not part of the administrator views', async ({ page, builtServer, signInPageAs }) => {
-  await signInPageAs(builtServer.credentials.admin, '#/admin');
+  await signInPageAs(builtServer.credentials.admin, '#/settings/admin');
   const account = await openAccount(page);
   await expect(account.getByRole('link', { name: 'Administration' })).toHaveAttribute('aria-current', 'page');
   // The Admin view itself (both projects) has no import or opening-balance controls.

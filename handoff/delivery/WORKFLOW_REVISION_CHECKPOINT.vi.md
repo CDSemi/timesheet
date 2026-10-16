@@ -173,6 +173,19 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   brief T03 và đăng ký ở trạng thái chờ.
 - Đang chạy: WP5-UX3-T02-FREEZE (committer, chạy một mình; 19 đường dẫn mã nguồn/test cùng 26
   đường dẫn handoff).
+- WP5-UX3-T02-FREEZE xong: aa64999240ab0d5822ca371a0c8e24436d27f30a trên main, đã push (45
+  đường dẫn; digest c938aa6f, 822 file; mọi bước kiểm exit 0).
+- Đang chạy: WP5-UX3-T03 (worker-high, sonnet; trang con của Settings, Profile, route và
+  chuyển hướng `#/admin`, nạp chậm màn hình Administration và Import) trên aa64999 / c938aa6f.
+- WP5-UX3-T03 xong (worker-high, tự báo claude-sonnet-5-5; kết quả tự báo, chưa phải bằng
+  chứng độc lập): routeModel, SettingsNav, ProfileScreen; `#/admin` chuyển sang
+  `#/settings/admin` với admin, nhân viên quay về timesheet; nạp chậm Admin và Import (gói
+  chính 502.77 -> 452.08 kB, hết cảnh báo); unit 2059; e2e đầy đủ desktop 256, mobile 267, 0
+  lỗi; đột biến bị bắt; không có thay đổi server/domain; verify 0; digest e5b3faf9 (827 file).
+  Sai lệch: nút "Try again" khi tải gói lỗi sẽ tải lại trang.
+- Đã viết brief T04 và đăng ký ở trạng thái chờ.
+- Đang chạy: WP5-UX3-T03-FREEZE (committer, chạy một mình; 15 đường dẫn mã nguồn/test cùng 28
+  đường dẫn handoff).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

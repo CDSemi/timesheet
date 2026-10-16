@@ -1,11 +1,12 @@
-import { type SubmitEvent, useCallback, useEffect, useState } from 'react';
+import { Component, lazy, type ReactNode, type SubmitEvent, Suspense, useCallback, useEffect, useState } from 'react';
 import { api, ApiRequestError, type ReceivedShare, type SetupStatus, type SharesResponse, type User } from './api.ts';
-import { AdminScreen } from './AdminScreen.tsx';
 import { AppShell, useHashRoute } from './components/AppShell.tsx';
+import { isSettingsRoute } from './components/routeModel.ts';
+import { SettingsNav } from './components/SettingsNav.tsx';
 import { shareEndedMessage } from './components/sharingModel.ts';
 import { HistoryScreen } from './HistoryScreen.tsx';
-import { ImportScreen } from './ImportScreen.tsx';
 import { OtScreen } from './OtScreen.tsx';
+import { ProfileScreen } from './ProfileScreen.tsx';
 import { ReviewScreen } from './ReviewScreen.tsx';
 import { SettingsScreen } from './SettingsScreen.tsx';
 import { SetupScreen } from './SetupScreen.tsx';
@@ -82,6 +83,59 @@ function useReceivedShares() {
   return { received, refresh };
 }
 
+/*
+ * The Administration and Import screens load on demand (WP5-UX3-T03): a person who never opens them does not download
+ * their code, and the main bundle stays under the build's chunk-size advisory. Each is a same-origin chunk (the content
+ * security policy is unchanged). The chunk of the shown screen is requested when its address is first shown.
+ */
+const AdminScreen = lazy(() => import('./AdminScreen.tsx').then((module) => ({ default: module.AdminScreen })));
+const ImportScreen = lazy(() => import('./ImportScreen.tsx').then((module) => ({ default: module.ImportScreen })));
+
+/**
+ * Shows a readable message and a retry when a screen's chunk cannot be loaded (offline, a stale deployment), never a blank
+ * page. The retry reloads the page at the same address: a browser remembers a failed module request for the life of the
+ * page, and React keeps a failed lazy component failed, so only a fresh page asks the server again. The sign-in cookie and
+ * the address survive; nothing else is on screen yet (the screen never rendered).
+ */
+class ChunkBoundary extends Component<{ label: string; children: ReactNode }, { failed: boolean }> {
+  override state = { failed: false };
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  override render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <section className="card stack chunk-error" role="alert" aria-label={`${this.props.label} could not be loaded`}>
+        <p className="error">{this.props.label} could not be loaded. Check the connection and try again.</p>
+        <div className="button-row">
+          <button type="button" onClick={() => window.location.reload()}>
+            Try again
+          </button>
+        </div>
+      </section>
+    );
+  }
+}
+
+/** One lazily loaded screen: a polite status while the chunk loads, the screen when it has, and a retry when loading fails. */
+function Deferred({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <ChunkBoundary label={label}>
+      <Suspense
+        fallback={
+          <p className="muted screen-loading" role="status">
+            Loading {label}…
+          </p>
+        }
+      >
+        {children}
+      </Suspense>
+    </ChunkBoundary>
+  );
+}
+
 function SignedIn({ user, onSignedOut }: { user: User; onSignedOut: () => void }) {
   const route = useHashRoute(user.role);
   const { received, refresh } = useReceivedShares();
@@ -118,9 +172,24 @@ function SignedIn({ user, onSignedOut }: { user: User; onSignedOut: () => void }
       {route.id === 'review' && <ReviewScreen key={route.payrollDate} payrollDate={route.payrollDate} />}
       {route.id === 'ot' && <OtScreen />}
       {route.id === 'history' && <HistoryScreen />}
-      {route.id === 'import' && <ImportScreen />}
-      {route.id === 'settings' && <SettingsScreen onSharesChanged={() => void refresh()} />}
-      {route.id === 'admin' && user.role === 'admin' && <AdminScreen user={user} />}
+      {route.id === 'import' && (
+        <Deferred label="Import">
+          <ImportScreen />
+        </Deferred>
+      )}
+      {isSettingsRoute(route.id) && (
+        <div className="stack settings-area">
+          <SettingsNav role={user.role} current={route.id} />
+          {route.id === 'settings' && <SettingsScreen onSharesChanged={() => void refresh()} />}
+          {route.id === 'profile' && <ProfileScreen user={user} />}
+          {/* The server refuses every admin route for an employee; the client also never renders or requests it. */}
+          {route.id === 'admin' && user.role === 'admin' && (
+            <Deferred label="Administration">
+              <AdminScreen user={user} />
+            </Deferred>
+          )}
+        </div>
+      )}
       {route.id === 'shared' && (
         <SharedTimesheetScreen
           key={route.ownerId}

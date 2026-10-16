@@ -125,3 +125,12 @@ staged count per group; other modified handoff files; every check with its exit 
 fix or stop reason.
 
 ## Results
+
+- Pre-HEAD e2f3d7492160d389c18903285994bedec56df51e; commit
+  aa64999240ab0d5822ca371a0c8e24436d27f30a; pushed yes; remote SHA the same. No tag.
+- Digest before add and on new HEAD: c938aa6fcd55a15f1edd6fc28462981b33188de9462d6d60f9a8fcde19a7b72c (822 files).
+- Staged 45 = 19 source/tests + 26 handoff (T02 evidence folder: 17 files).
+- No other modified handoff files; no fixes; no stops.
+- Checks all exit 0 (details in evidence/WP5-UX3-T02-FREEZE/checks.txt); precommit 45 files,
+  validate_orchestration PASS, check_recovery 106 probes PASS, validate_package preflight PASS.
+- Deviation: none (first PATH glob attempt printed v26, redone with the brief's exact PATH, v24.21.0).

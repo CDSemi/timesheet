@@ -139,7 +139,7 @@ test('the admin sees pipeline states, a fault code and recipients, and no timesh
   expect(row.recipients.effective).toEqual({ to: [TO], cc: [CC] });
   expect(row.recipients.frozen).toEqual({ to: [TO], cc: [CC] });
 
-  await signInPageAs(builtServer.credentials.admin, '#/admin');
+  await signInPageAs(builtServer.credentials.admin, '#/settings/admin');
   await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
   const status = page.getByRole('region', { name: 'Operations status' });
   await expect(status).toBeVisible();
@@ -249,7 +249,7 @@ function seedPausedInstance(databasePath: string): void {
 test('a paused instance shows why, how many sends are held, an old backup and the disk space', async ({ page, privateServer }, testInfo) => {
   const project = testInfo.project.name;
   seedPausedInstance(privateServer.databasePath);
-  await page.goto(`${privateServer.origin}/#/admin`);
+  await page.goto(`${privateServer.origin}/#/settings/admin`);
   await page.getByLabel('Email').fill(privateServer.credentials.admin.email);
   await page.getByLabel('Password').fill(privateServer.credentials.admin.password);
   await page.getByRole('button', { name: 'Sign in' }).click();

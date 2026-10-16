@@ -1,0 +1,149 @@
+
+Running 6 tests using 2 workers
+
+  x  2 [mobile] › tests\e2e\isolation.spec.ts:90:1 › a second employee cannot reach employee 1 by hash swap or by id swap (8.4s)
+  x  1 [desktop] › tests\e2e\isolation.spec.ts:90:1 › a second employee cannot reach employee 1 by hash swap or by id swap (8.4s)
+  ok 3 [mobile] › tests\e2e\isolation.spec.ts:143:1 › an admin cannot open employee data through any admin screen (2.0s)
+  ok 4 [desktop] › tests\e2e\isolation.spec.ts:143:1 › an admin cannot open employee data through any admin screen (2.0s)
+  x  6 [desktop] › tests\e2e\isolation.spec.ts:197:1 › an employee sees no Admin entry and the server refuses the admin routes (7.7s)
+  x  5 [mobile] › tests\e2e\isolation.spec.ts:197:1 › an employee sees no Admin entry and the server refuses the admin routes (7.7s)
+
+
+  1) [desktop] › tests\e2e\isolation.spec.ts:90:1 › a second employee cannot reach employee 1 by hash swap or by id swap 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /#\/timesheet$/
+    Received string:  "http://127.0.0.1:61934/#/settings/admin"
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 7000ms
+        18 × locator resolved to <html lang="en">…</html>
+           - unexpected value "http://127.0.0.1:61934/#/settings/admin"
+
+
+      108 |     for (const hash of ['#/admin', '#/settings/admin', '#/admin/users', `#/timesheet/${owner.sessionId}`, `#/sessions/${owner.sessionId}`]) {
+      109 |       await page.evaluate(`window.location.hash = ${JSON.stringify(hash)}`);
+    > 110 |       await expect(page).toHaveURL(/#\/timesheet$/);
+          |                          ^
+      111 |       await expect(page.locator('main')).not.toContainText(owner.note);
+      112 |     }
+      113 |     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' })).toHaveCount(0);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\isolation.spec.ts:110:26
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T03\timesheet-e2e-output\isolation-a-second-employe-1aa67--by-hash-swap-or-by-id-swap-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T03\timesheet-e2e-output\isolation-a-second-employe-1aa67--by-hash-swap-or-by-id-swap-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T03\timesheet-e2e-output\isolation-a-second-employe-1aa67--by-hash-swap-or-by-id-swap-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\e2e\isolation.spec.ts:197:1 › an employee sees no Admin entry and the server refuses the admin routes 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /#\/timesheet$/
+    Received string:  "http://127.0.0.1:55702/#/settings/admin"
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 7000ms
+        18 × locator resolved to <html lang="en">…</html>
+           - unexpected value "http://127.0.0.1:55702/#/settings/admin"
+
+
+      212 |   for (const hash of ['#/admin', '#/settings/admin']) {
+      213 |     await page.evaluate(`window.location.hash = ${JSON.stringify(hash)}`);
+    > 214 |     await expect(page).toHaveURL(/#\/timesheet$/);
+          |                        ^
+      215 |     await expect(page.getByRole('heading', { name: 'Administration' })).toHaveCount(0);
+      216 |   }
+      217 |   // The employee's page never asks for an admin route at all (the entry is hidden and the screen is not rendered).
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\isolation.spec.ts:214:24
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T03\timesheet-e2e-output\isolation-an-employee-sees-4f7a5-er-refuses-the-admin-routes-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T03\timesheet-e2e-output\isolation-an-employee-sees-4f7a5-er-refuses-the-admin-routes-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T03\timesheet-e2e-output\isolation-an-employee-sees-4f7a5-er-refuses-the-admin-routes-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [mobile] › tests\e2e\isolation.spec.ts:90:1 › a second employee cannot reach employee 1 by hash swap or by id swap 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /#\/timesheet$/
+    Received string:  "http://127.0.0.1:61933/#/settings/admin"
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 7000ms
+        18 × locator resolved to <html lang="en">…</html>
+           - unexpected value "http://127.0.0.1:61933/#/settings/admin"
+
+
+      108 |     for (const hash of ['#/admin', '#/settings/admin', '#/admin/users', `#/timesheet/${owner.sessionId}`, `#/sessions/${owner.sessionId}`]) {
+      109 |       await page.evaluate(`window.location.hash = ${JSON.stringify(hash)}`);
+    > 110 |       await expect(page).toHaveURL(/#\/timesheet$/);
+          |                          ^
+      111 |       await expect(page.locator('main')).not.toContainText(owner.note);
+      112 |     }
+      113 |     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' })).toHaveCount(0);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\isolation.spec.ts:110:26
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T03\timesheet-e2e-output\isolation-a-second-employe-1aa67--by-hash-swap-or-by-id-swap-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T03\timesheet-e2e-output\isolation-a-second-employe-1aa67--by-hash-swap-or-by-id-swap-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T03\timesheet-e2e-output\isolation-a-second-employe-1aa67--by-hash-swap-or-by-id-swap-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [mobile] › tests\e2e\isolation.spec.ts:197:1 › an employee sees no Admin entry and the server refuses the admin routes 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /#\/timesheet$/
+    Received string:  "http://127.0.0.1:55701/#/settings/admin"
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 7000ms
+        18 × locator resolved to <html lang="en">…</html>
+           - unexpected value "http://127.0.0.1:55701/#/settings/admin"
+
+
+      212 |   for (const hash of ['#/admin', '#/settings/admin']) {
+      213 |     await page.evaluate(`window.location.hash = ${JSON.stringify(hash)}`);
+    > 214 |     await expect(page).toHaveURL(/#\/timesheet$/);
+          |                        ^
+      215 |     await expect(page.getByRole('heading', { name: 'Administration' })).toHaveCount(0);
+      216 |   }
+      217 |   // The employee's page never asks for an admin route at all (the entry is hidden and the screen is not rendered).
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\isolation.spec.ts:214:24
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T03\timesheet-e2e-output\isolation-an-employee-sees-4f7a5-er-refuses-the-admin-routes-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T03\timesheet-e2e-output\isolation-an-employee-sees-4f7a5-er-refuses-the-admin-routes-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T03\timesheet-e2e-output\isolation-an-employee-sees-4f7a5-er-refuses-the-admin-routes-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    [desktop] › tests\e2e\isolation.spec.ts:90:1 › a second employee cannot reach employee 1 by hash swap or by id swap 
+    [desktop] › tests\e2e\isolation.spec.ts:197:1 › an employee sees no Admin entry and the server refuses the admin routes 
+    [mobile] › tests\e2e\isolation.spec.ts:90:1 › a second employee cannot reach employee 1 by hash swap or by id swap 
+    [mobile] › tests\e2e\isolation.spec.ts:197:1 › an employee sees no Admin entry and the server refuses the admin routes 
+  2 passed (23.9s)

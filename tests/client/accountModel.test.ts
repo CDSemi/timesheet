@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { accountItems, initialsOf, roleLabel } from '../../src/client/components/accountModel.ts';
+import { routeOfHash } from '../../src/client/components/routeModel.ts';
 
 describe('initialsOf', () => {
   it('uses one letter for a one-word name', () => {
@@ -74,10 +75,15 @@ describe('accountItems', () => {
     }
   });
 
-  it('points Administration at the existing admin screen and Import at its screen', () => {
+  it('points Profile and Administration at their Settings sub-pages, Settings at Personal and Import at its screen', () => {
     const phone = accountItems('admin', 'phone');
-    expect(phone.find((item) => item.id === 'admin')?.hash).toBe('#/admin');
+    expect(phone.find((item) => item.id === 'profile')?.hash).toBe('#/settings/profile');
+    expect(phone.find((item) => item.id === 'admin')?.hash).toBe('#/settings/admin');
     expect(phone.find((item) => item.id === 'import')?.hash).toBe('#/import');
     expect(phone.find((item) => item.id === 'settings')?.hash).toBe('#/settings');
+  });
+
+  it('gives every entry the id of the route that shows it, so the shown route marks its entry as current', () => {
+    for (const item of accountItems('admin', 'phone')) expect(routeOfHash(item.hash).id).toBe(item.id);
   });
 });
