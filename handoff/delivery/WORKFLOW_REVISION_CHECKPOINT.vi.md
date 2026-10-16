@@ -203,6 +203,22 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Đã viết brief T05 và đăng ký ở trạng thái chờ.
 - Đang chạy: WP5-UX3-T04-FREEZE (committer, chạy một mình; 11 đường dẫn mã nguồn/test cùng 38
   đường dẫn handoff).
+- WP5-UX3-T04-FREEZE xong: 83c32d2fbc57af00ef251a06024b39e641a677ce trên main, đã push (49
+  đường dẫn; digest 025b46cf, 827 file; mọi bước kiểm exit 0).
+- Đang chạy: WP5-UX3-T05 (worker-high, sonnet; nhóm cột nổi, viền cột đang sửa và tô nền ô
+  Day, tên Category/Status, hình "No times") trên 83c32d2 / 025b46cf.
+- WP5-UX3-T05 xong (worker-high, tự báo claude-sonnet-5-5; kết quả tự báo, chưa phải bằng
+  chứng độc lập): `liftRuns` theo từng tuần, cắt bóng ở cạnh trong, bo 4px ở góc ngoài; viền
+  trong của cột đang sửa và tô nền ô Day (bỏ gạch chân và hai thanh bên); "Category"/"Status"
+  trên màn hình; "No times" là vòng tròn gạch chéo; unit 2075; e2e đầy đủ desktop 275, mobile
+  280, 0 lỗi; hai đột biến bị bắt; ngân sách màn hình đầu không đổi; gói chính 452.86 kB;
+  verify 0; digest 23b394dd (827 file). Còn lại ngoài phạm vi: hình vuông "No times" trong
+  reviewModel và chữ "label change" trong duyệt hàng loạt (chuyển sang T07), Label/Check trong
+  docs/04 (T10); R-UX2A-4 kiểm bằng test mô phỏng (quét axe thật chuyển cho gate và audit vùng
+  A).
+- Đã viết brief T05B (Day editor nổi dưới 1360px) và đăng ký ở trạng thái chờ.
+- Đang chạy: WP5-UX3-T05-FREEZE (committer, chạy một mình; 15 đường dẫn mã nguồn/test cùng 30
+  đường dẫn handoff).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

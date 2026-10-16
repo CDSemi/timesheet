@@ -16,6 +16,19 @@ export type LabelChoice = DayCategory | typeof WORK_FROM_HOME;
 /** The picker's options in the Excel order: the app categories, then the WFH shortcut. */
 export const LABEL_CHOICES: readonly LabelChoice[] = [...CATEGORIES, WORK_FROM_HOME];
 
+/**
+ * The accessible name of a day's picker button and of its list (round 3, G-2 a: the row is "Category"). The list is named
+ * "Category for {date}"; the button adds what its cell shows, every visible line in order (the label, the holiday or
+ * leave line under it, the note marker), so the visible text is part of the name (SC 2.5.3, R-UX2A2-3).
+ */
+export function labelPickerName(workDate: string, label: { main: string; lines: readonly string[]; note: boolean }): string {
+  const shown = [label.main === '' ? 'not set' : label.main, ...label.lines, ...(label.note ? ['Note'] : [])];
+  return `${labelPickerListName(workDate)}: ${shown.join(', ')}`;
+}
+
+/** The accessible name of the open list: "Category for {date}". */
+export const labelPickerListName = (workDate: string): string => `Category for ${workDate}`;
+
 /** The option that matches the day now; null when the calendar gives the day no category. */
 export function currentLabelChoice(day: DayView): LabelChoice | null {
   if (day.category === null) return null;

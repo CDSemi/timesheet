@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DayBatchPreview, DayEntry, DayView } from '../../src/client/api.ts';
-import { currentLabelChoice, LABEL_CHOICES, labelEntry, labelPreviewOutcome } from '../../src/client/components/labelPickerModel.ts';
+import { currentLabelChoice, LABEL_CHOICES, labelEntry, labelPickerListName, labelPickerName, labelPreviewOutcome } from '../../src/client/components/labelPickerModel.ts';
 
 function day(overrides: Partial<DayView> = {}): DayView {
   return {
@@ -55,6 +55,20 @@ function entry(version: number): DayEntry {
 describe('in-cell label picker (E-3 a)', () => {
   it('offers the app categories in order, then Work from home', () => {
     expect(LABEL_CHOICES).toEqual(['Worked', 'Off', 'Vacation', 'Sick', 'Holiday', 'Shutdown', 'Work from home']);
+  });
+
+  it('names the picker "Category for {date}: {visible lines}" with every visible line, so the visible text is in the name (R-UX2A2-3)', () => {
+    expect(labelPickerListName('2026-11-30')).toBe('Category for 2026-11-30');
+    expect(labelPickerName('2026-11-30', { main: 'Worked', lines: [], note: false })).toBe('Category for 2026-11-30: Worked');
+    // A holiday cell shows the holiday name and a second line "Holiday": both are in the name.
+    expect(labelPickerName('2026-11-26', { main: 'Synthetic Holiday', lines: ['Holiday'], note: false })).toBe('Category for 2026-11-26: Synthetic Holiday, Holiday');
+    // Leave, the Work from home line and the note marker follow in the order the cell shows them.
+    expect(labelPickerName('2026-11-27', { main: 'Off', lines: ['Work from home', 'Leave 2:30'], note: true })).toBe(
+      'Category for 2026-11-27: Off, Work from home, Leave 2:30, Note',
+    );
+    // A day without a category says so (the old suffix is kept for the hover test's filter).
+    expect(labelPickerName('2026-11-28', { main: '', lines: [], note: false })).toBe('Category for 2026-11-28: not set');
+    expect(labelPickerName('2026-11-28', { main: '', lines: [], note: false })).not.toContain('Label');
   });
 
   it('shows the current label, with Work from home for a worked WFH day and none without a category', () => {

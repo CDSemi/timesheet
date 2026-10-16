@@ -1,6 +1,6 @@
 import { type KeyboardEvent, type MouseEvent, useId, useRef, useState } from 'react';
 import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.tsx';
-import { LABEL_CHOICES, type LabelChoice } from './labelPickerModel.ts';
+import { LABEL_CHOICES, type LabelChoice, labelPickerListName, labelPickerName } from './labelPickerModel.ts';
 import { dayButtonName, dayClass, DETAIL_ROWS, type SheetDay, type SheetWeek } from './sheetModel.ts';
 
 /** The in-cell label picker of the sheet (E-3 a): what each day's label is now, and what a pick does. */
@@ -114,7 +114,7 @@ export function LabelPicker({ day, picker }: { day: SheetDay; picker: LabelPicke
     }
   }
 
-  const name = `Label for ${day.workDate}: ${day.label.main === '' ? 'not set' : day.label.main}`;
+  const name = labelPickerName(day.workDate, day.label);
   return (
     // The picker acts by itself: a click inside never also opens the day editor.
     <div className={`label-picker${open ? ' open' : ''}`} data-label-picker={day.workDate} onClick={(event) => event.stopPropagation()}>
@@ -142,7 +142,7 @@ export function LabelPicker({ day, picker }: { day: SheetDay; picker: LabelPicke
           className="label-list"
           role="listbox"
           tabIndex={-1}
-          aria-label={`Label for ${day.workDate}`}
+          aria-label={labelPickerListName(day.workDate)}
           aria-activedescendant={`${id}-option-${active}`}
           onKeyDown={listKey}
           onBlur={(event) => {
@@ -220,8 +220,8 @@ function DetailLine({ day, editing }: { day: SheetDay; editing: boolean }) {
 }
 
 /**
- * One week of the sheet below 768px: a 4-column table (Day | Label | Time | OT), one row per day
- * (`[data-day]`), so a phone never scrolls sideways. The Check status folds into the Day cell as
+ * One week of the sheet below 768px: a 4-column table (Day | Category | Time | OT), one row per day
+ * (`[data-day]`), so a phone never scrolls sideways. The Status folds into the Day cell as
  * words plus a shape, and the Time cell carries the attention tint.
  */
 export function SheetWeekTable({ week, details, actions }: { week: SheetWeek; details: boolean; actions: DayActions }) {
@@ -242,7 +242,7 @@ export function SheetWeekTable({ week, details, actions }: { week: SheetWeek; de
         <thead>
           <tr>
             <th scope="col">Day</th>
-            <th scope="col">Label</th>
+            <th scope="col">Category</th>
             <th scope="col">Time</th>
             <th scope="col">OT</th>
           </tr>
@@ -289,6 +289,8 @@ function DayRows({ day, details, actions, verb }: { day: SheetDay; details: bool
                 data-day-button
               >
                 <span className="t-weekday">{day.weekday}</span>
+                {/* A real space between the spans: the visible text reads "Mon 09/28", which the name contains (SC 2.5.3, R-UX2A-4). */}
+                {' '}
                 <span className="mono">{day.dateText}</span>
               </button>
             )}

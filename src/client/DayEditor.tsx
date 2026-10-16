@@ -425,10 +425,10 @@ export function DayEditor({
 
             {readOnly ? (
               <section className="editor-section stack" aria-label="Day fields">
-                <h3>Label and leave</h3>
+                <h3>Category and leave</h3>
                 <dl className="facts" data-day-fields="read-only">
                   <div>
-                    <dt>Label</dt>
+                    <dt>Category</dt>
                     <dd>{day.category ?? 'none'}</dd>
                   </div>
                   <div>

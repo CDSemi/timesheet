@@ -1,0 +1,106 @@
+
+Running 3 tests using 1 worker
+
+  x  1 [desktop] › tests\e2e\timesheet.spec.ts:796:1 › the day open in the Day editor is a lifted column with an inset 1px accent frame and a filled Day cell (no underline, rails or column fill); the phone row has a 1px frame (2.5s)
+  x  2 [desktop] › tests\e2e\timesheet.spec.ts:923:1 › desktop: the inset frame and the Day-cell fill are painted over every cell, there is no underline, rail or column fill, and a neighbouring day is left alone, in both themes (2.4s)
+  x  3 [desktop] › tests\e2e\timesheet.spec.ts:1331:1 › lifted columns form runs: one shadow around the group, 4px corners on the outer corners only, no shadow on a lifted neighbour, a gap ends the run (5.6s)
+
+
+  1) [desktop] › tests\e2e\timesheet.spec.ts:796:1 › the day open in the Day editor is a lifted column with an inset 1px accent frame and a filled Day cell (no underline, rails or column fill); the phone row has a 1px frame
+
+    Error: one inset 1px frame
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        Array [
+    -     true,
+    +     false,
+          0,
+          0,
+          1,
+        ],
+      ]
+
+      833 |       expect([after.borderStartWidth, after.borderEndWidth], 'no 2px side rails').toEqual([0, 0]);
+      834 |       const frame = parseLayers(after.boxShadow).filter((layer) => layer.colour[3] > 0);
+    > 835 |       expect(frame.map((layer) => [layer.inset, layer.offsetX, layer.offsetY, layer.spread]), 'one inset 1px frame').toEqual([[true, 0, 0, 1]]);
+          |                                                                                                                      ^
+      836 |       expect(sameRgb(frame[0]?.colour ?? [0, 0, 0, 0], accentColour, 0)).toBe(true);
+      837 |       // The Day cell is filled with --day-editing-head and carries no underline.
+      838 |       const head = column.locator('.d-day');
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\timesheet.spec.ts:835:118
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05\pw-mutB\timesheet-the-day-open-in--aa879-e-phone-row-has-a-1px-frame-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05\pw-mutB\timesheet-the-day-open-in--aa879-e-phone-row-has-a-1px-frame-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05\pw-mutB\timesheet-the-day-open-in--aa879-e-phone-row-has-a-1px-frame-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\e2e\timesheet.spec.ts:923:1 › desktop: the inset frame and the Day-cell fill are painted over every cell, there is no underline, rail or column fill, and a neighbouring day is left alone, in both themes
+
+    Error: light: left frame over "d-day" (details false)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      953 |       for (const cell of boxes.cells) {
+      954 |         const y = Math.floor(cell.box.top + cell.box.height / 2);
+    > 955 |         expect(await paintedWithin(page, [boxes.host.left, boxes.host.left + 1], [y, y], accent), `${appearance.name}: left frame over "${cell.className}" (details ${details})`).toBe(true);
+          |                                                                                                                                                                                   ^
+      956 |         expect(await paintedWithin(page, [boxes.host.right - 3, boxes.host.right - 1], [y, y], accent), `${appearance.name}: right frame over "${cell.className}" (details ${details})`).toBe(true);
+      957 |         // No 2px rail: the pixels three and four columns in are the cell's own colour, not accent.
+      958 |         expect(await paintedWithin(page, [boxes.host.left + 3, boxes.host.left + 4], [y, y], accent), `${appearance.name}: no rail beside the frame over "${cell.className}"`).toBe(false);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\timesheet.spec.ts:955:179
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05\pw-mutB\timesheet-desktop-the-inse-2ca24-s-left-alone-in-both-themes-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05\pw-mutB\timesheet-desktop-the-inse-2ca24-s-left-alone-in-both-themes-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05\pw-mutB\timesheet-desktop-the-inse-2ca24-s-left-alone-in-both-themes-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [desktop] › tests\e2e\timesheet.spec.ts:1331:1 › lifted columns form runs: one shadow around the group, 4px corners on the outer corners only, no shadow on a lifted neighbour, a gap ends the run
+
+    Error: frame at the left inner edge over "d-day"
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      1377 |   for (const cell of [openBoxes.cells[0], openBoxes.cells[2]]) {
+      1378 |     const cellY = Math.floor((cell?.box.top ?? 0) + (cell?.box.height ?? 0) / 2);
+    > 1379 |     expect(await paintedWithin(page, [openBoxes.host.left, openBoxes.host.left + 1], [cellY, cellY], accent), `frame at the left inner edge over "${cell?.className}"`).toBe(true);
+           |                                                                                                                                                                         ^
+      1380 |     expect(await paintedWithin(page, [openBoxes.host.right - 3, openBoxes.host.right - 1], [cellY, cellY], accent), `frame at the right inner edge over "${cell?.className}"`).toBe(true);
+      1381 |   }
+      1382 |
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\timesheet.spec.ts:1379:169
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05\pw-mutB\timesheet-lifted-columns-f-26c01-eighbour-a-gap-ends-the-run-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05\pw-mutB\timesheet-lifted-columns-f-26c01-eighbour-a-gap-ends-the-run-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T05\pw-mutB\timesheet-lifted-columns-f-26c01-eighbour-a-gap-ends-the-run-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    [desktop] › tests\e2e\timesheet.spec.ts:796:1 › the day open in the Day editor is a lifted column with an inset 1px accent frame and a filled Day cell (no underline, rails or column fill); the phone row has a 1px frame
+    [desktop] › tests\e2e\timesheet.spec.ts:923:1 › desktop: the inset frame and the Day-cell fill are painted over every cell, there is no underline, rail or column fill, and a neighbouring day is left alone, in both themes
+    [desktop] › tests\e2e\timesheet.spec.ts:1331:1 › lifted columns form runs: one shadow around the group, 4px corners on the outer corners only, no shadow on a lifted neighbour, a gap ends the run

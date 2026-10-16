@@ -7,8 +7,8 @@ import { completenessOf, type StatusShape, WEEKDAYS } from './dayModel.ts';
 import { usDate, usShortDate } from './format.ts';
 
 /*
- * Pure display mapping of the timesheet sheet: the Excel form's rows (Day, Date, Label, Time, OT)
- * plus a Check row, filled from the server's day view (WP5-UX-PLAN section B). Every minute shown
+ * Pure display mapping of the timesheet sheet: the Excel form's rows (Day, Date, Category, Time, OT)
+ * plus a Status row, filled from the server's day view (WP5-UX-PLAN section B). Every minute shown
  * is a server field formatted as h:mm; nothing here adds, subtracts or compares minutes, derives a
  * status from the device clock, or reproduces a workbook formula (no 8.5-hour daily OT, no
  * Sunday-less or decimal total, no TODAY() date, no seeded weekend times). Dates are the saved
@@ -21,18 +21,56 @@ import { usDate, usShortDate } from './format.ts';
  */
 export const SHEET_TITLE = 'Time sheet for salaried exempt employees';
 
-/** The visual row names; each cell repeats its row name for screen readers. */
-export const SHEET_ROWS = { day: 'Day', date: 'Date', label: 'Label', time: 'Time', ot: 'OT (h:mm)', check: 'Check' } as const;
+/**
+ * The visual row names; each cell repeats its row name for screen readers. The keys are code names: `label` is the
+ * day category row (shown as "Category", the word of the PDF and of the API) and `check` the status row (shown as
+ * "Status": it only displays the server's calculation status and toggles nothing).
+ */
+export const SHEET_ROWS = { day: 'Day', date: 'Date', label: 'Category', time: 'Time', ot: 'OT (h:mm)', check: 'Status' } as const;
 export const DETAIL_ROWS = { regular: 'Worked on a workday', offCalendar: 'Worked on a day off' } as const;
 
 export type CheckKey = 'complete' | 'running' | 'open_session' | 'confirm_breaks' | 'missing' | 'upcoming' | 'error';
 
-/** The Check cell: words plus a shape (never colour alone). Blank days have no check. */
+/** The Status cell: words plus a shape (never colour alone). Blank days have no status. */
 export interface SheetCheck {
   key: CheckKey;
   text: string;
-  /** `live` is the running-session marker; it is static under reduced motion. */
-  shape: StatusShape | 'live';
+  /**
+   * `live` is the running-session marker; it is static under reduced motion. `slashed` (a ring with a diagonal bar)
+   * is "No times": nothing on the sheet looks like an empty checkbox.
+   */
+  shape: StatusShape | 'live' | 'slashed';
+}
+
+/** The words of the Status cell for an expected day without any session. */
+export const NO_TIMES_TEXT = 'No times';
+
+/**
+ * The shape a Status badge draws. The review sheet builds its own cells (reviewModel.ts) and still hands "No times" a
+ * square, so the badge decides from the words too: every "No times" is the slashed ring, "Missing record" keeps its square.
+ */
+export function checkShape(check: Pick<SheetCheck, 'text' | 'shape'>): SheetCheck['shape'] {
+  return check.text === NO_TIMES_TEXT ? 'slashed' : check.shape;
+}
+
+/** Where a lifted day sits in a run of adjacent lifted days of one week band (see `liftRuns`). */
+export type LiftRun = 'single' | 'start' | 'mid' | 'end';
+
+/**
+ * The run position of every day of one week band. A day is "lifted" when it is selected for a batch change or open in
+ * the Day editor. Adjacent lifted days form one run: `start` and `end` carry the outer corners and `mid` none, a lone
+ * lifted day is `single`; a day that is not lifted has no position (null). The flags are the days of ONE band in order,
+ * so a run never spans two bands.
+ */
+export function liftRuns(lifted: readonly boolean[]): Array<LiftRun | null> {
+  return lifted.map((on, index) => {
+    if (!on) return null;
+    const before = index > 0 && lifted[index - 1] === true;
+    const after = lifted[index + 1] === true;
+    if (before && after) return 'mid';
+    if (before) return 'end';
+    return after ? 'start' : 'single';
+  });
 }
 
 export interface SheetLabel {
@@ -209,7 +247,9 @@ export function sheetCheck(day: DayView, todayLocal: string | null): SheetCheck 
       return { key: 'confirm_breaks', text: 'Confirm breaks', shape: 'diamond' };
     case 'missing':
       // The server has no calculation for an expected day: normally no times at all.
-      return { key: 'missing', text: day.sessions.length === 0 ? 'No times' : 'Missing record', shape: 'square' };
+      return day.sessions.length === 0
+        ? { key: 'missing', text: NO_TIMES_TEXT, shape: 'slashed' }
+        : { key: 'missing', text: 'Missing record', shape: 'square' };
     case 'upcoming':
       return { key: 'upcoming', text: 'Upcoming', shape: 'bar' };
     case 'error':

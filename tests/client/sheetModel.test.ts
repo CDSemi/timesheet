@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Calculation, DayEntry, DayView, FinalizationResponse, Session } from '../../src/client/api.ts';
 import {
+  checkShape,
   dayButtonName,
   dayClass,
+  liftRuns,
+  NO_TIMES_TEXT,
   overtimeTotal,
+  SHEET_ROWS,
   sessionRange,
   sheetCheck,
   sheetDay,
@@ -174,9 +178,76 @@ describe('sheetCheck', () => {
 
   it('uses the server date for upcoming and missing, and leaves a day that needs nothing blank', () => {
     const past = day('2026-11-30', { calculation: calculation('no_records') });
-    expect(sheetCheck(past, '2026-12-03')).toEqual({ key: 'missing', text: 'No times', shape: 'square' });
+    // "No times" is a slashed ring (U-16): nothing on the sheet looks like an empty checkbox; "Missing record" keeps its square.
+    expect(sheetCheck(past, '2026-12-03')).toEqual({ key: 'missing', text: 'No times', shape: 'slashed' });
     expect(sheetCheck(day('2026-12-04', { calculation: calculation('no_records') }), '2026-12-03')).toEqual({ key: 'upcoming', text: 'Upcoming', shape: 'bar' });
     expect(sheetCheck(day('2026-12-05', { attendance_expected: false }), '2026-12-03')).toBeNull();
+  });
+});
+
+describe('the row names (G-2 a, U-16)', () => {
+  it('names the day category row "Category" and the status row "Status"; the keys stay code names', () => {
+    expect(SHEET_ROWS).toEqual({ day: 'Day', date: 'Date', label: 'Category', time: 'Time', ot: 'OT (h:mm)', check: 'Status' });
+    expect(Object.values(SHEET_ROWS)).not.toContain('Label');
+    expect(Object.values(SHEET_ROWS)).not.toContain('Check');
+  });
+
+  it('draws "No times" as the slashed ring wherever its words appear, and every other status as before', () => {
+    expect(NO_TIMES_TEXT).toBe('No times');
+    // The review sheet builds its own cell with a square; the badge still draws the ring for those words.
+    expect(checkShape({ text: 'No times', shape: 'square' })).toBe('slashed');
+    expect(checkShape({ text: 'No times', shape: 'slashed' })).toBe('slashed');
+    expect(checkShape({ text: 'Missing record', shape: 'square' })).toBe('square');
+    expect(checkShape({ text: 'Running', shape: 'live' })).toBe('live');
+    expect(checkShape({ text: 'Complete', shape: 'circle' })).toBe('circle');
+  });
+});
+
+describe('liftRuns (lifted columns: batch-selected or open in the editor)', () => {
+  const week = (...days: number[]) => liftRuns(Array.from({ length: 7 }, (_, index) => days.includes(index)));
+
+  it('gives no run position to a band without a lifted day', () => {
+    expect(week()).toEqual([null, null, null, null, null, null, null]);
+  });
+
+  it('gives one lifted day the position single, wherever it stands in the band', () => {
+    expect(week(0)).toEqual(['single', null, null, null, null, null, null]);
+    expect(week(3)).toEqual([null, null, null, 'single', null, null, null]);
+    expect(week(6)).toEqual([null, null, null, null, null, null, 'single']);
+  });
+
+  it('marks two adjacent lifted days start and end, three start, mid and end, and a longer run start, mids and end', () => {
+    expect(week(1, 2)).toEqual([null, 'start', 'end', null, null, null, null]);
+    expect(week(0, 1, 2)).toEqual(['start', 'mid', 'end', null, null, null, null]);
+    expect(week(2, 3, 4, 5)).toEqual([null, null, 'start', 'mid', 'mid', 'end', null]);
+    expect(week(0, 1, 2, 3, 4, 5, 6)).toEqual(['start', 'mid', 'mid', 'mid', 'mid', 'mid', 'end']);
+  });
+
+  it('keeps a gap between two runs: each side is its own run, a lone day beside a gap is single', () => {
+    expect(week(0, 1, 3)).toEqual(['start', 'end', null, 'single', null, null, null]);
+    expect(week(0, 2, 4)).toEqual(['single', null, 'single', null, 'single', null, null]);
+    expect(week(0, 1, 3, 4, 5)).toEqual(['start', 'end', null, 'start', 'mid', 'end', null]);
+  });
+
+  it('treats the day open in the editor like any lifted day: inside a run, at its end, or beside it with a gap', () => {
+    // Selected Mon, Tue, Wed; the editor is on Tue (inside), Wed (at the end) or Fri (beside, with a gap).
+    const selected = [0, 1, 2];
+    expect(week(...selected, 1)).toEqual(['start', 'mid', 'end', null, null, null, null]);
+    expect(week(...selected, 3)).toEqual(['start', 'mid', 'mid', 'end', null, null, null]);
+    expect(week(...selected, 4)).toEqual(['start', 'mid', 'end', null, 'single', null, null]);
+  });
+
+  it('is computed per band, so a run never spans two bands: Sat and Sun of one band, Mon of the next', () => {
+    const first = liftRuns([false, false, false, false, false, true, true]);
+    const second = liftRuns([true, false, false, false, false, false, false]);
+    expect(first).toEqual([null, null, null, null, null, 'start', 'end']);
+    expect(second).toEqual(['single', null, null, null, null, null, null]);
+  });
+
+  it('follows the band of a period: a partial band (fewer than seven days) and an empty one', () => {
+    expect(liftRuns([true, true])).toEqual(['start', 'end']);
+    expect(liftRuns([true])).toEqual(['single']);
+    expect(liftRuns([])).toEqual([]);
   });
 });
 

@@ -6,6 +6,8 @@ import {
   dayButtonName,
   dayClass,
   DETAIL_ROWS,
+  liftRuns,
+  type LiftRun,
   overtimeTotal,
   SHEET_ROWS,
   SHEET_TITLE,
@@ -32,8 +34,11 @@ function RowName({ name }: { name: string }) {
   return <span className="sr-only">{name}: </span>;
 }
 
-/** One day of the desktop sheet: a column of cells on the week's shared rows (CSS subgrid). */
-function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boolean; actions: DayActions }) {
+/**
+ * One day of the desktop sheet: a column of cells on the week's shared rows (CSS subgrid). `lift` is the day's place in a
+ * run of adjacent lifted days (`liftRuns`); the column carries it as `data-lift`, and the style sheet draws the raise.
+ */
+function SheetDayColumn({ day, details, actions, lift }: { day: SheetDay; details: boolean; actions: DayActions; lift: LiftRun | null }) {
   const verb = dayVerb(actions);
   const picker = labelPickerOf(actions);
   const hasTime = day.time.ranges.length > 0 || day.time.note !== null;
@@ -45,6 +50,7 @@ function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boo
       data-day={review ? undefined : day.workDate}
       data-review-day={review ? day.workDate : undefined}
       data-editing={editing ? 'true' : undefined}
+      data-lift={lift ?? undefined}
       role="group"
       aria-label={day.name}
       onClick={review ? undefined : openOnClick(day.workDate, actions.onEdit)}
@@ -110,8 +116,10 @@ function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boo
   );
 }
 
-/** One Monday to Sunday band of the desktop sheet, with the Excel rows Day, Date, Label, Time, OT and Check. */
+/** One Monday to Sunday band of the desktop sheet, with the Excel rows Day, Date, Category, Time, OT and Status. */
 function SheetWeekGrid({ week, details, actions }: { week: SheetWeek; details: boolean; actions: DayActions }) {
+  // A day is lifted while it is selected for a batch change or open in the Day editor; runs never cross a band.
+  const runs = liftRuns(week.days.map((day) => actions.selected.has(day.workDate) || isEditingDay(day, actions)));
   return (
     <section className="sheet-week" aria-label={`Week ${week.index}, ${week.rangeName}`}>
       <div className="week-bar">
@@ -133,8 +141,8 @@ function SheetWeekGrid({ week, details, actions }: { week: SheetWeek; details: b
             </>
           )}
         </div>
-        {week.days.map((day) => (
-          <SheetDayColumn key={day.workDate} day={day} details={details} actions={actions} />
+        {week.days.map((day, index) => (
+          <SheetDayColumn key={day.workDate} day={day} details={details} actions={actions} lift={runs[index] ?? null} />
         ))}
       </div>
     </section>

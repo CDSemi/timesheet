@@ -241,6 +241,7 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
   await expect(page.getByRole('button', { name: dayButtonName('Edit', workDay) })).toHaveCount(0);
   // The label cells are plain text: no in-cell label picker without edit rights.
   await expect(page.locator('[data-label-picker]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Category for / })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^Label for / })).toHaveCount(0);
   await expect(page.getByRole('link', { name: /review/i })).toHaveCount(0);
   // The owner's signature lines and review state are not part of a shared view.
@@ -335,8 +336,8 @@ test('the owner changes the share to edit; the grantee edits a day without Check
   // The in-cell label picker writes through the share as well (a one-entry batch preview, then its
   // commit, under /api/shared/:ownerId). It runs on the same day before the notes edit, which stays
   // the newest change; "Work from home" keeps the category Worked, so no conflict review is needed.
-  await page.getByRole('button', { name: new RegExp(`^Label for ${workDay}`) }).click();
-  await page.getByRole('listbox', { name: `Label for ${workDay}` }).getByRole('option', { name: 'Work from home', exact: true }).click();
+  await page.getByRole('button', { name: new RegExp(`^Category for ${workDay}`) }).click();
+  await page.getByRole('listbox', { name: `Category for ${workDay}` }).getByRole('option', { name: 'Work from home', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Saved 1 day.');
   expect(await owner.api.dayView(workDay)).toMatchObject({ category: 'Worked', wfh: true });
   expect(recorded.list.filter((entry) => entry.endsWith('/days/batch'))).toEqual([

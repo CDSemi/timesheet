@@ -189,9 +189,7 @@
   --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(28 36 48 / 0.045) 7px 8px);
   --day-hover: rgb(31 95 191 / 0.04);
   --day-selected: rgb(31 95 191 / 0.09);
-  /* The day open in the Day editor: a fill behind the cells (10 % keeps muted text at 4.5:1 on the non-working tint) */
-  --day-editing: rgb(31 95 191 / 0.10);
-  /* The Day cell of the open column (used by the sheet-marker slice); the accent is 4.82:1 on it */
+  /* The Day cell of the column open in the Day editor (and of its phone row); the accent is 4.82:1 on it */
   --day-editing-head: #d8e6fa;
   --attention-bg: #fff4dc;
   --attention-ink: #7a4f00;
@@ -232,6 +230,8 @@
   --layer-panel: 2;
   --layer-popup: 2;
   --layer-marker: 1;
+  /* A lifted sheet column (selected or open) rises over its neighbours; an open label picker (--layer-popup) stays above it */
+  --layer-lift: 1;
   --sheet-handle-width: 40px;
   --sheet-handle-height: 4px;
   --picker-min: 11rem;
@@ -385,7 +385,6 @@
     --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(230 233 238 / 0.04) 7px 8px);
     --day-hover: rgb(110 168 255 / 0.06);
     --day-selected: rgb(110 168 255 / 0.14);
-    --day-editing: rgb(110 168 255 / 0.16);
     --attention-bg: #33290f;
     --attention-ink: #f0c25a;
     --accent-strong: #8dbbff;
@@ -451,7 +450,6 @@
   --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(230 233 238 / 0.04) 7px 8px);
   --day-hover: rgb(110 168 255 / 0.06);
   --day-selected: rgb(110 168 255 / 0.14);
-  --day-editing: rgb(110 168 255 / 0.16);
   --attention-bg: #33290f;
   --attention-ink: #f0c25a;
   --accent-strong: #8dbbff;
@@ -1896,6 +1894,15 @@ input[type='checkbox'].switch-input:focus-visible {
   border: var(--rule) solid currentColor;
 }
 
+/* "No times": a ring with a diagonal bar (a slashed circle), so nothing on the sheet looks like an empty checkbox. */
+.shape-slashed {
+  border: var(--rule) solid currentColor;
+  border-radius: var(--shape-round);
+  background:
+    linear-gradient(to top right, transparent calc(50% - var(--hairline)), currentColor calc(50% - var(--hairline)), currentColor calc(50% + var(--hairline)), transparent calc(50% + var(--hairline)))
+    border-box;
+}
+
 .shape-triangle {
   clip-path: var(--shape-triangle-clip);
 }
@@ -2303,7 +2310,7 @@ textarea {
 
 /*
  * The form people know from the Excel template and the PDF: header block, two Monday to Sunday
- * week bands with the rows Day, Date, Label, Time, OT (and Check), Overtime Total bottom right and
+ * week bands with the rows Day, Date, Category, Time, OT (and Status), Overtime Total bottom right and
  * the signature lines. From 768px each band is a CSS grid whose day columns share the band's rows
  * (subgrid); below it each band is a 4-column table. Non-working days of the server calendar are
  * tinted and hatched (a non-colour cue); every status keeps its words and shape.
@@ -2589,67 +2596,122 @@ textarea {
   background: var(--sheet-head-off);
 }
 
-.sheet-day.selected,
 .sheet-table tr.selected td {
   background-color: var(--day-selected);
 }
 
 /*
- * Day markers of a desktop column (WP5-UX2-T03). The day head and an attention cell have opaque
- * backgrounds, so a shadow or border on the column itself is painted over there (the Today bar was hidden
- * and the batch ring broken). Two layers out of grid flow (absolute, so the subgrid does not move) fix it:
- * `::before` sits behind the cells and carries the editing fill, `::after` sits over the cells, ignores the
- * pointer and draws the Today bar, the batch ring and the editing side rails. The states combine on one
- * column: today = top bar, selected = ring, editing = rails + head underline + fill.
+ * Day markers of a desktop column (round 3, U-13 and U-14, G-1 b). A column is lifted while it is selected for a batch
+ * change or open in the Day editor: it rises by --lift-y, takes the card background and casts --elev-lift. The sheet model
+ * gives each lifted day its place in a run of adjacent lifted days of the band (`data-lift`: single, start, mid, end), so
+ * a run reads as one raised group: the 4px corners (--radius-lift) sit on the run's outer corners only, and the clip-path
+ * cuts the shadow at an inner edge (--lift-clip reaches past the deepest shadow layer elsewhere), so one shadow surrounds
+ * the group and no column casts onto a lifted neighbour. Batch selection adds the --day-selected tint; the checked
+ * selection box stays the state indicator. The open column adds a 1px accent frame and fills the Day cell with
+ * --day-editing-head (no thick underline, no side rails). The Today bar stays on the head. Hover tints only; lifting
+ * means state. Reduced motion shortens the transition, so the lift is a static state.
+ *
+ * The head and an attention cell have opaque backgrounds, so a border on the column itself would be painted over there.
+ * `::after` is a layer out of the grid flow (absolute, so the subgrid does not move) over the cells, inset in the
+ * column's box (the clip never cuts it), that ignores the pointer and draws the Today bar and the editing frame.
  */
 .sheet-day {
   --marker-bar: 0 0 0 0 transparent;
-  --marker-ring: 0 0 0 0 transparent;
+  --marker-frame: 0 0 0 0 transparent;
+  --tint-layer: linear-gradient(transparent, transparent);
+  --pattern-layer: linear-gradient(transparent, transparent);
+  --lift-out: calc(-1 * var(--lift-clip));
   isolation: isolate;
+}
+
+.sheet-day.nonworking {
+  --pattern-layer: var(--hatch);
+}
+
+.sheet-day.selected {
+  --tint-layer: linear-gradient(var(--day-selected), var(--day-selected));
 }
 
 .sheet-day.today {
   --marker-bar: inset 0 var(--sheet-today-bar) 0 var(--accent);
 }
 
-.sheet-day.selected {
-  --marker-ring: inset 0 0 0 var(--rule) var(--accent);
+.sheet-day.editing {
+  --marker-frame: inset 0 0 0 var(--hairline) var(--accent);
 }
 
-.sheet-day.editing::before,
+.sheet-day[data-lift] {
+  z-index: var(--layer-lift);
+  border-radius: var(--radius-lift);
+  background-color: var(--card);
+  background-image: var(--tint-layer), var(--pattern-layer);
+  box-shadow: var(--elev-lift);
+  transform: translateY(var(--lift-y));
+}
+
+.sheet-day.nonworking[data-lift] {
+  background-color: var(--day-nonworking);
+}
+
+.sheet-day[data-lift]:hover:not(.selected) {
+  --tint-layer: linear-gradient(var(--day-hover), var(--day-hover));
+}
+
+.sheet-day[data-lift='start'] {
+  border-radius: var(--radius-lift) 0 0 var(--radius-lift);
+  clip-path: inset(var(--lift-out) 0 var(--lift-out) var(--lift-out));
+}
+
+.sheet-day[data-lift='mid'] {
+  border-radius: 0;
+  clip-path: inset(var(--lift-out) 0);
+}
+
+.sheet-day[data-lift='end'] {
+  border-radius: 0 var(--radius-lift) var(--radius-lift) 0;
+  clip-path: inset(var(--lift-out) var(--lift-out) var(--lift-out) 0);
+}
+
+/* The opaque Day cell is rounded with its column, so it never pokes out of an outer corner. */
+.sheet-day[data-lift='single'] > .d-day {
+  border-radius: var(--radius-lift) var(--radius-lift) 0 0;
+}
+
+.sheet-day[data-lift='start'] > .d-day {
+  border-radius: var(--radius-lift) 0 0 0;
+}
+
+.sheet-day[data-lift='end'] > .d-day {
+  border-radius: 0 var(--radius-lift) 0 0;
+}
+
 .sheet-day.today::after,
-.sheet-day.selected::after,
 .sheet-day.editing::after {
   content: '';
   position: absolute;
   inset: 0;
+  z-index: var(--layer-marker);
+  border-radius: inherit;
+  box-shadow: var(--marker-bar), var(--marker-frame);
   pointer-events: none;
   transition: var(--transition);
 }
 
-.sheet-day.editing::before {
-  z-index: calc(-1 * var(--layer-marker));
-  background: var(--day-editing);
-}
-
-.sheet-day.today::after,
-.sheet-day.selected::after,
-.sheet-day.editing::after {
-  z-index: var(--layer-marker);
-  box-shadow: var(--marker-bar), var(--marker-ring);
-}
-
-.sheet-day.editing::after {
-  border-inline: var(--rule) solid var(--accent);
-}
-
 .sheet-day.editing > .d-day {
-  box-shadow: inset 0 calc(-1 * var(--rail)) 0 var(--accent);
+  background: var(--day-editing-head);
 }
 
-/* The isolated column would hold its open picker list under the next column; it rises while the list is open. */
+/*
+ * The isolated column would hold its open picker list under the next column; it rises while the list is open, and its
+ * clip is lifted so the list (wider than the column) is not cut. A picker is only offered outside batch mode, where the
+ * lifted column is the open one alone, so no neighbour's shadow meets it.
+ */
 .sheet-day:has(.label-picker.open) {
   z-index: var(--layer-popup);
+}
+
+.sheet-day[data-lift]:has(.label-picker.open) {
+  clip-path: none;
 }
 
 .today-tag {
@@ -2724,27 +2786,24 @@ textarea {
 }
 
 /*
- * The row of the day open in the Day editor (WP5-UX2-T03): a fill layer above the hatching and attention
- * colours (background-image layers over the cell's own colour) and a frame of inset 2px accent shadows:
- * top and bottom on every cell, the left edge on the first, the right edge on the last. With "Show details"
- * the row opens its frame downwards and the detail row closes it (sides and bottom).
+ * The row of the day open in the Day editor (round 3, U-13): a 1px accent frame, inset shadows on top and bottom of
+ * every cell, on the left edge of the first and the right edge of the last, and the Day cell filled with
+ * --day-editing-head (the hatching of a non-working day stays on the cells; the Day cell keeps its image layer). With
+ * "Show details" the row opens its frame downwards and the detail row closes it (sides and bottom). A table row does
+ * not lift: a selected row is the tint and the checked box.
  */
 .sheet-table tr.editing td,
 .sheet-table tr.editing-detail td {
-  --frame-top: inset 0 var(--rule) 0 var(--accent);
-  --frame-bottom: inset 0 calc(-1 * var(--rule)) 0 var(--accent);
+  --frame-top: inset 0 var(--hairline) 0 var(--accent);
+  --frame-bottom: inset 0 calc(-1 * var(--hairline)) 0 var(--accent);
   --frame-start: 0 0 0 0 transparent;
   --frame-end: 0 0 0 0 transparent;
-  background-image: linear-gradient(var(--day-editing), var(--day-editing));
   box-shadow: var(--frame-top), var(--frame-bottom), var(--frame-start), var(--frame-end);
 }
 
-.sheet-table tr.editing.nonworking td {
-  background-image: linear-gradient(var(--day-editing), var(--day-editing)), var(--hatch);
-}
-
 .sheet-table tr.editing td:first-child {
-  --frame-start: inset var(--rule) 0 0 var(--accent);
+  --frame-start: inset var(--hairline) 0 0 var(--accent);
+  background-color: var(--day-editing-head);
 }
 
 .sheet-table tr.editing.today td:first-child {
@@ -2752,7 +2811,7 @@ textarea {
 }
 
 .sheet-table tr.editing td:last-child {
-  --frame-end: inset calc(-1 * var(--rule)) 0 0 var(--accent);
+  --frame-end: inset calc(-1 * var(--hairline)) 0 0 var(--accent);
 }
 
 .sheet-table tr.editing-open td {
@@ -2761,8 +2820,8 @@ textarea {
 
 .sheet-table tr.editing-detail td {
   --frame-top: 0 0 0 0 transparent;
-  --frame-start: inset var(--rule) 0 0 var(--accent);
-  --frame-end: inset calc(-1 * var(--rule)) 0 0 var(--accent);
+  --frame-start: inset var(--hairline) 0 0 var(--accent);
+  --frame-end: inset calc(-1 * var(--hairline)) 0 0 var(--accent);
 }
 
 /* In batch mode a narrow Day cell puts the selection box above the day button (WP5-UX-AX-10, SC 1.4.10). */

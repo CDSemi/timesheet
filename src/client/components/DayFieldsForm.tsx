@@ -7,7 +7,7 @@ import { buildDayEntryRequest, CATEGORIES, dayFieldsDraft, LEAVE_KINDS, leaveHin
 const KIND_TEXT: Record<LeaveKind, string> = { vacation: 'Vacation', sick: 'Sick', ot: 'OT' };
 
 /**
- * Label (category), partial leave typed as hours and minutes with its kind, WFH and notes. The
+ * Category, partial leave typed as hours and minutes with its kind, WFH and notes. The
  * hours and minutes become the same integer leave minutes the day endpoint always took. The E-2
  * notice appears when the server reports that the day's OT-kind leave differs from consumed OT
  * leave; it informs only, and this form never spends, reserves or releases OT.
@@ -88,7 +88,7 @@ export function DayFieldsForm({
     // noValidate keeps the browser's own popups out: the leave fields are checked by parseLeaveInput, which also
     // sees the browser's bad-input flag, and its message is shown beside the fields (role alert, aria-invalid).
     <form className="editor-form editor-section stack" onSubmit={save} aria-label="Day fields" noValidate>
-      <h3>Label and leave</h3>
+      <h3>Category and leave</h3>
       {mismatch !== null && (
         <p className="warn-box" role="status" data-warning="ot-leave-mismatch">
           <strong>Notice.</strong> {mismatch}
@@ -96,7 +96,7 @@ export function DayFieldsForm({
       )}
       <div className="label-row">
         <label>
-          Label
+          Category
           <select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value as DayCategory })}>
             {CATEGORIES.map((category) => (
               <option key={category} value={category}>

@@ -459,7 +459,13 @@ for (const colorScheme of ['light', 'dark'] as const) {
       const view = element.ownerDocument.defaultView;
       const chain = [element];
       for (let node = element.parentElement; node; node = node.parentElement) chain.push(node);
-      return { colour: view?.getComputedStyle(element).color ?? '', backdrops: chain.map((node) => view?.getComputedStyle(node).backgroundColor ?? '') };
+      // A selected column keeps its tint as the top background layer (a one-colour gradient) over its card colour (round 3).
+      const layers = chain.flatMap((node) => {
+        const style = view?.getComputedStyle(node);
+        const tint = /^linear-gradient\((rgba?\([^)]*\))/.exec(style?.backgroundImage ?? '')?.[1];
+        return tint === undefined ? [style?.backgroundColor ?? ''] : [tint, style?.backgroundColor ?? ''];
+      });
+      return { colour: view?.getComputedStyle(element).color ?? '', backdrops: layers };
     });
     const background = composite(rendered.backdrops);
     const ratio = contrast(over(parseColour(rendered.colour), background), background);

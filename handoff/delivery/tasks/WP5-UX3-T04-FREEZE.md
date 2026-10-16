@@ -130,3 +130,12 @@ staged count per group; other modified handoff files; every check with its exit 
 fix, masking or stop reason.
 
 ## Results
+
+- Pre-HEAD 7cd8c592ba57d7f4a12013bacced948de0fb8c42 (= origin/main); commit
+  83c32d2fbc57af00ef251a06024b39e641a677ce on main; pushed yes; remote SHA equals the commit.
+- Digests: before add and on the new HEAD both 025b46cf3a8b33fa183321c39e9b9c758e2de4171da531637b377004c91b85c4 (827 files).
+- Staged 49: 11 source/tests, 38 handoff (5 modified, 2 task records, 31 evidence; T04 evidence 29).
+- All checks exit 0, details in evidence/WP5-UX3-T04-FREEZE/checks.txt (precommit 49 files, 0
+  findings; validate_orchestration PASS; check_recovery 106; preflight PASS).
+- Node: the first unmodified shell call printed v26.10.0; after the PATH export v24.21.0 was used for every Node command.
+- Masking: none. Fixes: none. No tag. Deviations: none.

@@ -565,6 +565,10 @@ test('partial leave 240 with kind vacation saves; the kind is required; WFH is s
     const fields = editor.getByRole('form', { name: 'Day fields' });
     await expect(fields.getByText('Calendar default. Saving records it as your choice.')).toBeVisible();
     await expect(editor.locator('[data-warning="ot-leave-mismatch"]')).toHaveCount(0);
+    // Round 3 (G-2 a): the field and its section are named "Category", the word of the sheet row and of the PDF.
+    await expect(fields.getByRole('heading', { name: 'Category and leave' })).toBeVisible();
+    await expect(fields.getByRole('combobox', { name: /^Category/ })).toHaveCount(1);
+    await expect(fields.getByRole('heading', { name: /^Label/ })).toHaveCount(0);
 
     // Leave is typed as hours and minutes (docs/04); 4 h 0 m is sent as the same 240 leave minutes.
     await expect(fields.getByLabel('Leave hours')).toHaveValue('0');
@@ -825,9 +829,20 @@ test('future days show as upcoming from the server date, past days without a rec
   expect(futureDay, 'a future expected workday within four weeks').not.toBe('');
 
   await signInThroughUi();
-  // The sheet's Check words: a past expected day without times says "No times" (status key missing).
+  // The sheet's Status words: a past expected day without times says "No times" (status key missing).
   await expect(page.locator(`[data-day="${pastDay}"]`)).toContainText('No times');
   await expect(page.locator(`[data-day="${pastDay}"] [data-check="missing"]`)).toHaveCount(1);
+  // Round 3 (U-16): "No times" is a slashed ring, not a hollow square, so nothing on the sheet looks like an empty checkbox.
+  const noTimes = page.locator(`[data-day="${pastDay}"] [data-check="missing"] .shape`);
+  await expect(noTimes).toHaveClass(/\bshape-slashed\b/);
+  await expect(noTimes).not.toHaveClass(/\bshape-square\b/);
+  const ring = await noTimes.evaluate((element) => {
+    const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+    return { radius: style?.borderTopLeftRadius ?? '', border: style?.borderTopWidth ?? '', image: style?.backgroundImage ?? '' };
+  });
+  expect(ring.radius, 'a ring, not a square').not.toBe('0px');
+  expect(ring.border, 'the ring has an outline').toBe('2px');
+  expect(ring.image, 'the diagonal bar is a gradient in the ring').toMatch(/^linear-gradient\(/);
   const next = page.getByRole('button', { name: 'Next period' });
   const row = page.locator(`[data-day="${futureDay}"]`);
   for (let step = 0; step < 4 && (await row.count()) === 0; step += 1) {
@@ -1163,8 +1178,8 @@ test('the label cell is a picker: a one-entry batch preview and its commit; reco
   });
   await signInPageAs(person.account, '#/timesheet');
   await expect(page.locator('[data-day]')).toHaveCount(14);
-  const pickerOf = (workDate: string) => page.getByRole('button', { name: new RegExp(`^Label for ${workDate}`) });
-  const listOf = (workDate: string) => page.getByRole('listbox', { name: `Label for ${workDate}` });
+  const pickerOf = (workDate: string) => page.getByRole('button', { name: new RegExp(`^Category for ${workDate}`) });
+  const listOf = (workDate: string) => page.getByRole('listbox', { name: `Category for ${workDate}` });
 
   // 1. A current day without recorded work: preview, then the commit of the same entry; no dialog, no editor.
   const picker = pickerOf(plainDay);
@@ -1316,8 +1331,8 @@ test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape a
       await expect(editor).toBeVisible();
       await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
       expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
-      await page.getByRole('button', { name: new RegExp(`^Label for ${workedDay}`) }).click();
-      await page.getByRole('listbox', { name: `Label for ${workedDay}` }).getByRole('option', { name: 'Off', exact: true }).click();
+      await page.getByRole('button', { name: new RegExp(`^Category for ${workedDay}`) }).click();
+      await page.getByRole('listbox', { name: `Category for ${workedDay}` }).getByRole('option', { name: 'Off', exact: true }).click();
       const review = page.getByRole('dialog', { name: `Review label change for ${workedDay}` });
       await expect(review).toBeVisible();
       await expect.poll(async () => review.evaluate((element) => element.matches(':focus-within'))).toBe(true);
@@ -1351,7 +1366,7 @@ test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape a
       if (path.endsWide) {
         // From 1200px the editor is the non-modal panel; focus is back on the picker that opened the review.
         expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
-        await expect(page.getByRole('button', { name: new RegExp(`^Label for ${workedDay}`) })).toBeFocused();
+        await expect(page.getByRole('button', { name: new RegExp(`^Category for ${workedDay}`) })).toBeFocused();
       } else {
         // Below 1200px the editor now is the modal panel and holds focus; the page behind is inert.
         await expect.poll(async () => editor.evaluate((element) => element.matches(':modal'))).toBe(true);

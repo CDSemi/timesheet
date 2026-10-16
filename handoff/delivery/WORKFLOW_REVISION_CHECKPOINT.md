@@ -189,6 +189,20 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   day" words hide at 320 only; toolbar separator from 768px.
 - T05 brief written and registered pending.
 - Running: WP5-UX3-T04-FREEZE (committer, alone; 11 source/test paths plus 38 handoff paths).
+- WP5-UX3-T04-FREEZE done: 83c32d2fbc57af00ef251a06024b39e641a677ce on main, pushed (49
+  paths; digest 025b46cf, 827 files; every check exit 0).
+- Running: WP5-UX3-T05 (worker-high, sonnet; lift runs, editor frame and Day-cell fill,
+  Category/Status names, the "No times" shape) on 83c32d2 / 025b46cf.
+- WP5-UX3-T05 done (worker-high, self-reported claude-sonnet-5-5; reported, not independent
+  proof): `liftRuns` per week band, clipped inner shadows, 4px outer corners; inset editor
+  frame and filled Day cell (underline and rails gone); "Category"/"Status" on screen;
+  slashed-ring "No times"; unit 2075; full e2e desktop 275, mobile 280, 0 failed; two
+  mutations caught; budgets unchanged; main chunk 452.86 kB; verify 0; digest 23b394dd (827
+  files). Left outside its paths: reviewModel's square "No times" glyph and the batch-review
+  "label change" wording (to T07), docs/04 Label/Check (T10); R-UX2A-4 via an emulating test
+  (a real axe scan goes to the gate and audit area A).
+- T05B brief written (floating editor below 1360px) and registered pending.
+- Running: WP5-UX3-T05-FREEZE (committer, alone; 15 source/test paths plus 30 handoff paths).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

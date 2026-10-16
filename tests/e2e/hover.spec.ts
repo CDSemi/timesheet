@@ -455,7 +455,7 @@ for (const situation of SITUATIONS) {
     isMobile,
   }) => {
     await prepare(page, situation, signInThroughUi);
-    const trigger = page.locator('[data-label-picker] button[aria-label^="Label for"]:not([aria-label$="not set"])').first();
+    const trigger = page.locator('[data-label-picker] button[aria-label^="Category for"]:not([aria-label$="not set"])').first();
     await trigger.scrollIntoViewIfNeeded();
     await page.keyboard.press('Shift');
     await trigger.focus();
@@ -576,7 +576,7 @@ for (const theme of ['light', 'dark'] as const) {
     await tools.screenshot({ path: screenshotPath(`t02-switch-off-hover-${theme}-${project}-synthetic.png`), animations: 'disabled' });
     await page.mouse.move(0, 0);
 
-    const trigger = page.locator('[data-label-picker] button[aria-label^="Label for"]:not([aria-label$="not set"])').first();
+    const trigger = page.locator('[data-label-picker] button[aria-label^="Category for"]:not([aria-label$="not set"])').first();
     await trigger.scrollIntoViewIfNeeded();
     await page.keyboard.press('Shift');
     await trigger.focus();

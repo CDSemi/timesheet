@@ -1,5 +1,5 @@
 import type { DayDisplay, StatusShape } from './dayModel.ts';
-import type { SheetCheck, SheetLabel, SheetOt, SheetTime } from './sheetModel.ts';
+import { checkShape, type SheetCheck, type SheetLabel, type SheetOt, type SheetTime } from './sheetModel.ts';
 
 /*
  * The status badges and the cell contents of a day, shared by the desktop sheet and the phone
@@ -7,7 +7,7 @@ import type { SheetCheck, SheetLabel, SheetOt, SheetTime } from './sheetModel.ts
  */
 
 /** A status is always a shape plus words; the shape is decoration for the eye, never the only signal. */
-function Shape({ shape }: { shape: StatusShape }) {
+function Shape({ shape }: { shape: StatusShape | 'slashed' }) {
   return <span className={`shape shape-${shape}`} aria-hidden="true" />;
 }
 
@@ -60,11 +60,12 @@ export function OtContent({ ot }: { ot: SheetOt }) {
   );
 }
 
-/** The Check cell of the sheet: words plus a shape; a running session has the live marker (static under reduced motion). */
+/** The Status cell of the sheet: words plus a shape; a running session has the live marker (static under reduced motion). */
 export function CheckBadge({ check }: { check: SheetCheck }) {
+  const shape = checkShape(check);
   return (
     <span className={`status status-${check.key}`} data-check={check.key}>
-      {check.shape === 'live' ? <span className="shape live-dot" aria-hidden="true" /> : <Shape shape={check.shape} />}
+      {shape === 'live' ? <span className="shape live-dot" aria-hidden="true" /> : <Shape shape={shape} />}
       {check.text}
     </span>
   );
