@@ -1,4 +1,6 @@
-import { type RefObject, useEffect, useId, useRef } from 'react';
+import { type RefObject, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { BreakChip } from './BreakChip.tsx';
+import { breakListLayout, type BreakListLayout } from './breakChipModel.ts';
 import { breakLabel, type BreakRowDraft, type BreakRowError, type BreakRowPatch, breakRowEnd } from './breakRowsModel.ts';
 import { usShortDate } from './format.ts';
 import type { TimeProblem } from './sessionModel.ts';
@@ -16,24 +18,29 @@ function endText(row: BreakRowDraft, index: number, zone: string): string | null
 }
 
 /**
- * The break area of the session dialog (WP5-UX3-T08, owner decisions U-21 and U-24): one "Confirm no breaks taken" box, the
- * list of breaks, "Suggest breaks" and "Add break". A break is its start date, its start time and its minutes; the end is
- * computed (`breakRowEnd`) and shown as text. A pre-filled suggestion carries a "suggested" tag until its row is changed.
- * Ticking the box hides and disables the rows; they stay in the draft and come back when it is unticked.
+ * The break area of the session dialog (WP5-UX3-T08 and T08B, owner decisions U-21, U-24, N-1 and Q6 b): one "Confirm no breaks
+ * taken" box, the list of breaks, "Suggest breaks" and "Add break". A break is its start time and its minutes, and its start
+ * date only when `showDate` (the session crosses local midnight or has no end; otherwise the dialog keeps every row on the
+ * session date); the end is computed (`breakRowEnd`) and shown as text. A pre-filled suggestion carries a "suggested" tag until
+ * its row is changed. Ticking the box hides and disables the rows; they stay in the draft and come back when it is unticked.
  *
- * The rows are a size container: one line from 42rem, two lines from 25.5rem ("Break n" with its end, then date, time, minutes
- * and remove), and below that the second line wraps where it must (the phone chips are slice T08B). Every change goes through
- * the T06 model (`editBreakRow`, `addBreakRow`, `removeBreakRow`, `setNoBreaks`) in the dialog; nothing is sent from here.
+ * The list adapts to its own width: one line from 42rem (a CSS container query), two lines ("Break n" with its end, then the
+ * fields) below it, and below the width where the fields of the row no longer fit (`breakListLayout`, measured) each break is a
+ * chip (`BreakChip`) that opens the "Break n" sub-dialog, which the session dialog renders. Every change goes through the T06
+ * model in the dialog; nothing is sent from here.
  */
 export function BreakRows({
   rows,
   noBreaks,
   zone,
+  showDate,
   errors,
+  focusErrors,
   note,
   addBreak,
   onEdit,
   onAdd,
+  onOpenBreak,
   onRemove,
   onNoBreaks,
   onSuggest,
@@ -44,14 +51,21 @@ export function BreakRows({
   noBreaks: boolean;
   /** The input zone the rows are typed in. */
   zone: string;
+  /** True while a row has its own date field (an overnight session, or none yet). */
+  showDate: boolean;
   /** The message of each row that cannot be saved as it is, by row key. */
   errors: ReadonlyMap<string, BreakRowError>;
+  /** Counts the refused saves; each one moves focus to the first marked chip when the list shows chips. */
+  focusErrors: number;
   /** What "Suggest breaks" did (or why it could not), shown under the buttons. */
   note: string | null;
   /** The "Add break" button, so the dialog can return focus to it (G-4 "Go back and add breaks"). */
   addBreak: RefObject<HTMLButtonElement | null>;
   onEdit: (key: string, patch: BreakRowPatch) => void;
-  onAdd: () => void;
+  /** Adds an empty row on the session date and returns its key. */
+  onAdd: () => string;
+  /** Opens the sub-dialog of a chip; `isNew` is true for the row just added. */
+  onOpenBreak: (key: string, isNew: boolean) => void;
   onRemove: (key: string) => void;
   onNoBreaks: (noBreaks: boolean) => void;
   onSuggest: () => void;
@@ -59,23 +73,49 @@ export function BreakRows({
   onGap: (key: string, problem: TimeProblem) => void;
 }) {
   const id = useId();
+  const area = useRef<HTMLDivElement>(null);
   const elements = useRef(new Map<string, HTMLElement>());
   const focusAfter = useRef<FocusAfter | null>(null);
+  const [layout, setLayout] = useState<BreakListLayout>('rows');
 
-  // After an add or a remove, focus stays in the list (SC 2.4.3): the new row's date, the next row's remove button, or Add break.
+  // The list width decides rows or chips (the thresholds are in breakChipModel.ts). Measured before the first paint and on resize.
+  useLayoutEffect(() => {
+    const element = area.current;
+    if (element === null) return;
+    const measure = () => {
+      const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      setLayout(breakListLayout(element.clientWidth, rem, showDate));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [showDate]);
+
+  const chips = layout === 'chips';
+
+  // After an add or a remove, focus stays in the list (SC 2.4.3): the new row's first field, the next row's remove button, or Add break.
   useEffect(() => {
     const after = focusAfter.current;
     if (after === null) return;
     focusAfter.current = null;
     if (after.kind === 'new') {
       const last = rows.at(-1);
-      if (last !== undefined) elements.current.get(`${last.key}:date`)?.focus();
+      if (last !== undefined) (elements.current.get(`${last.key}:date`) ?? elements.current.get(`${last.key}:time`))?.focus();
     } else if (after.kind === 'remove') {
       elements.current.get(`${after.key}:remove`)?.focus();
     } else {
       addBreak.current?.focus();
     }
   }, [rows, addBreak]);
+
+  // A refused Save marks the chips that cannot be saved; focus goes to the first of them (SC 3.3.1, 2.4.3).
+  useEffect(() => {
+    if (focusErrors === 0 || !chips) return;
+    const first = rows.find((row) => errors.has(row.key));
+    if (first !== undefined) elements.current.get(`${first.key}:chip`)?.focus();
+    // Only a new refusal moves focus; the list and the messages are read as they are at that moment.
+  }, [focusErrors]);
 
   const keep = (name: string) => (element: HTMLElement | null) => {
     if (element === null) elements.current.delete(name);
@@ -89,14 +129,14 @@ export function BreakRows({
   }
 
   return (
-    <div className="break-area">
+    <div className="break-area" ref={area}>
       <label className="inline break-none">
         <input type="checkbox" checked={noBreaks} onChange={(event) => onNoBreaks(event.target.checked)} />
         Confirm no breaks taken
       </label>
       {!noBreaks && rows.length === 0 && <p className="muted hint">No breaks listed.</p>}
       {!noBreaks && rows.length > 0 && (
-        <ul className="plain break-entries" aria-label="Break list">
+        <ul className={chips ? 'plain break-entries break-chips' : 'plain break-entries'} aria-label="Break list" data-layout={layout}>
           {rows.map((row, index) => {
             const label = breakLabel(index);
             const error = errors.get(row.key);
@@ -105,6 +145,27 @@ export function BreakRows({
             const describedBy = invalid && error.problem === null ? errorId : undefined;
             const end = endText(row, index, zone);
             const suggested = row.origin === 'suggested' && !row.edited;
+            if (chips) {
+              return (
+                <li key={row.key} className={invalid ? 'break-entry break-entry-chip has-error' : 'break-entry break-entry-chip'} data-break={index + 1} data-origin={row.origin}>
+                  <BreakChip
+                    row={row}
+                    index={index}
+                    zone={zone}
+                    overnight={showDate}
+                    suggested={suggested}
+                    describedBy={invalid ? errorId : undefined}
+                    chipRef={keep(`${row.key}:chip`)}
+                    onOpen={() => onOpenBreak(row.key, false)}
+                  />
+                  {invalid && (
+                    <p className="break-message break-error" id={errorId}>
+                      {error.message}
+                    </p>
+                  )}
+                </li>
+              );
+            }
             return (
               <li key={row.key} className={invalid ? 'break-entry has-error' : 'break-entry'} data-break={index + 1} data-origin={row.origin}>
                 <div className="break-entry-head">
@@ -115,21 +176,24 @@ export function BreakRows({
                   </span>
                 </div>
                 <div className="break-entry-fields">
-                  <label className="break-field break-date">
-                    <span className="sr-only">{label} date</span>
-                    <input
-                      ref={keep(`${row.key}:date`)}
-                      type="date"
-                      value={row.start.date}
-                      onChange={(event) => onEdit(row.key, { date: event.target.value })}
-                      aria-invalid={invalid || undefined}
-                      aria-describedby={describedBy}
-                      required
-                    />
-                  </label>
+                  {showDate && (
+                    <label className="break-field break-date">
+                      <span className="sr-only">{label} date</span>
+                      <input
+                        ref={keep(`${row.key}:date`)}
+                        type="date"
+                        value={row.start.date}
+                        onChange={(event) => onEdit(row.key, { date: event.target.value })}
+                        aria-invalid={invalid || undefined}
+                        aria-describedby={describedBy}
+                        required
+                      />
+                    </label>
+                  )}
                   <label className="break-field break-time">
                     <span className="sr-only">{label} start time</span>
                     <input
+                      ref={keep(`${row.key}:time`)}
                       type="time"
                       step={row.start.time.length > 5 ? 1 : 60}
                       value={row.start.time}
@@ -200,6 +264,10 @@ export function BreakRows({
           className="secondary"
           disabled={noBreaks}
           onClick={() => {
+            if (chips) {
+              onOpenBreak(onAdd(), true);
+              return;
+            }
             focusAfter.current = { kind: 'new' };
             onAdd();
           }}

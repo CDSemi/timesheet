@@ -182,6 +182,8 @@
   --break-date-w: 7.6rem;
   --break-time-w: 6.8rem;
   --break-min-w: 5.6rem;
+  /* The "Break n" sub-dialog (WP5-UX3-T08B) */
+  --break-dialog-width: 26rem;
   /* The session dialog on a desktop (WP5-UX3-T08) and the padding of its head, body and foot from 768px */
   --session-dialog-width: 720px;
   --dialog-pad: var(--space-5);
@@ -3833,10 +3835,12 @@ button.icon-button .icon {
 }
 
 /*
- * Break rows (U-24): tinted strips with a 1px boundary, 8px apart. The list is a size container. Below 42rem a row has two
- * lines, "Break n" with its end and the suggested tag, then date, start time, minutes and remove at their fixed widths (one
- * line from 25.5rem); a narrower list wraps that line where it must, so nothing scrolls sideways (the chips are T08B).
- * From 42rem everything sits on one line. Breakpoints are literals: a container query cannot read a custom property.
+ * Break rows (U-24, N-1, Q6 b): tinted strips with a 1px boundary, 8px apart. The list is a size container. Below 42rem a row
+ * has two lines, "Break n" with its end and the suggested tag, then [date], start time, minutes and remove (the date field exists
+ * only for a session that crosses local midnight); a narrower list wraps that line where it must, so nothing scrolls sideways.
+ * From 42rem everything sits on one line. Below the measured width where the fields of a row no longer fit (breakChipModel.ts,
+ * `breakListLayout`, the script decides) each break is a chip. Breakpoints are literals: a container query cannot read a
+ * custom property.
  */
 .break-area {
   display: flex;
@@ -4000,6 +4004,97 @@ button.break-remove {
   .break-message {
     flex-basis: 100%;
     order: 6;
+  }
+}
+
+/*
+ * A break as a chip (N-1): the strip holds one full-width button of at least 44px that reads the break in 24-hour time, with the
+ * "suggested" tag and a chevron; its message (a row that cannot be saved) sits under it inside the strip, and the strip's
+ * leading rule and error boundary mark it, as they mark a row.
+ */
+.break-entry-chip {
+  gap: 0;
+  padding: 0;
+}
+
+button.break-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: var(--space-2) var(--space-3);
+  border-color: transparent;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.break-chip-main {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+button.break-chip .break-chip-chevron {
+  margin-right: 0;
+  color: var(--muted);
+}
+
+.break-entry-chip > .break-message {
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+/*
+ * The "Break n" sub-dialog (the third modal level): a small centred card with the break's fields stacked, the computed end, and a
+ * foot with "Remove break" (quiet, in the error colour) on the left and Cancel and Done on the right. A foot too narrow for all
+ * three wraps, Remove on its own line first.
+ */
+.break-dialog {
+  width: min(var(--break-dialog-width), var(--dialog-fit));
+  padding: 0;
+  overflow: auto;
+}
+
+.break-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dialog-field-gap-phone);
+  padding: var(--space-4);
+}
+
+.break-dialog-body > p {
+  margin: 0;
+}
+
+.break-ends {
+  font-size: var(--font-size-sm);
+}
+
+.break-dialog-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--hairline) solid var(--line-soft);
+  background: var(--panel-head);
+}
+
+.break-dialog-remove {
+  margin-right: auto;
+}
+
+button.quiet-danger {
+  color: var(--error);
+}
+
+@media (hover: hover) {
+  button.quiet.quiet-danger:hover:not(:disabled):not([aria-pressed='true']) {
+    background: var(--off);
+    border-color: var(--error);
+    color: var(--error);
   }
 }
 

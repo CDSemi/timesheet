@@ -1,0 +1,89 @@
+== mut-a2: real start 2026-10-16T07:38:08Z, simulated start real, AB8_SHIFT_MS=0
+$ node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts -g Q6 b --reporter=list --output=<task>/pw-mut-a2
+
+Running 4 tests using 2 workers
+
+  x  1 [mobile] › tests\e2e\day-editor.spec.ts:1023:1 › Q6 b: a same-day session shows no break date field at 1366 and on a phone and its breaks follow the session date; an overnight session shows the field (8.5s)
+  x  2 [desktop] › tests\e2e\day-editor.spec.ts:1023:1 › Q6 b: a same-day session shows no break date field at 1366 and on a phone and its breaks follow the session date; an overnight session shows the field (8.6s)
+BREAK-LAYOUT same-day 430px: rows, list 398.0px, row 91.8px; same-day 390px: rows, list 358.0px, row 91.8px; same-day 375px: rows, list 343.0px, row 91.8px; same-day 360px: rows, list 328.0px, row 91.8px; same-day 320px: rows, list 288.0px, row 91.8px; same-day 300px: rows, list 268.0px, row 91.8px; same-day 299px: chips, list 267.0px, row 63.5px; overnight 430px: rows, list 398.0px, row 91.8px; overnight 422px: rows, list 390.0px, row 91.8px; overnight 421px: chips, list 389.0px, row 46.0px; overnight 390px: chips, list 358.0px, row 63.5px; overnight 375px: chips, list 343.0px, row 63.5px; overnight 360px: chips, list 328.0px, row 63.5px; overnight 320px: chips, list 288.0px, row 63.5px
+BREAK-LAYOUT same-day 430px: rows, list 398.0px, row 91.8px; same-day 390px: rows, list 358.0px, row 91.8px; same-day 375px: rows, list 343.0px, row 91.8px; same-day 360px: rows, list 328.0px, row 91.8px; same-day 320px: rows, list 288.0px, row 91.8px; same-day 300px: rows, list 268.0px, row 91.8px; same-day 299px: chips, list 267.0px, row 63.5px; overnight 430px: rows, list 398.0px, row 91.8px; overnight 422px: rows, list 390.0px, row 91.8px; overnight 421px: chips, list 389.0px, row 46.0px; overnight 390px: chips, list 358.0px, row 63.5px; overnight 375px: chips, list 343.0px, row 63.5px; overnight 360px: chips, list 328.0px, row 63.5px; overnight 320px: chips, list 288.0px, row 63.5px
+  ok 3 [mobile] › tests\e2e\day-editor.spec.ts:1122:1 › break list layout by its width: one line at 1366, two lines from 430 to 320 for a same-day session, chips where a row no longer fits (U-24, N-1, Q6 b) (3.8s)
+  ok 4 [desktop] › tests\e2e\day-editor.spec.ts:1122:1 › break list layout by its width: one line at 1366, two lines from 430 to 320 for a same-day session, chips where a row no longer fits (U-24, N-1, Q6 b) (3.9s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:1023:1 › Q6 b: a same-day session shows no break date field at 1366 and on a phone and its breaks follow the session date; an overnight session shows the field
+
+    Error: the hidden break dates followed the session date, so nothing is refused
+
+    expect(locator).toBeVisible() failed
+
+    Locator: getByRole('alertdialog', { name: 'Save this session?' })
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - the hidden break dates followed the session date, so nothing is refused getByRole('alertdialog', { name: 'Save this session?' }) with timeout 7000ms
+      - waiting for getByRole('alertdialog', { name: 'Save this session?' })
+
+
+      1084 |     await form.getByRole('button', { name: 'Save', exact: true }).click();
+      1085 |     // A break left on the old date would lie before the session and be refused here, before the confirmation.
+    > 1086 |     await expect(saveConfirmation(page), 'the hidden break dates followed the session date, so nothing is refused').toBeVisible();
+           |                                                                                                                     ^
+      1087 |     await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
+      1088 |     await expect.poll(() => bodies.length).toBe(1);
+      1089 |     // The hidden rows followed the session date: every instant is on `other`, the minutes typed stay.
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:1086:117
+
+    Error Context: <task>\pw-mut-a2\day-editor-Q6-b-a-same-day-ecdab-ght-session-shows-the-field-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    <task>\pw-mut-a2\day-editor-Q6-b-a-same-day-ecdab-ght-session-shows-the-field-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace <task>\pw-mut-a2\day-editor-Q6-b-a-same-day-ecdab-ght-session-shows-the-field-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\day-editor.spec.ts:1023:1 › Q6 b: a same-day session shows no break date field at 1366 and on a phone and its breaks follow the session date; an overnight session shows the field
+
+    Error: the hidden break dates followed the session date, so nothing is refused
+
+    expect(locator).toBeVisible() failed
+
+    Locator: getByRole('alertdialog', { name: 'Save this session?' })
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - the hidden break dates followed the session date, so nothing is refused getByRole('alertdialog', { name: 'Save this session?' }) with timeout 7000ms
+      - waiting for getByRole('alertdialog', { name: 'Save this session?' })
+
+
+      1084 |     await form.getByRole('button', { name: 'Save', exact: true }).click();
+      1085 |     // A break left on the old date would lie before the session and be refused here, before the confirmation.
+    > 1086 |     await expect(saveConfirmation(page), 'the hidden break dates followed the session date, so nothing is refused').toBeVisible();
+           |                                                                                                                     ^
+      1087 |     await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
+      1088 |     await expect.poll(() => bodies.length).toBe(1);
+      1089 |     // The hidden rows followed the session date: every instant is on `other`, the minutes typed stay.
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:1086:117
+
+    Error Context: <task>\pw-mut-a2\day-editor-Q6-b-a-same-day-ecdab-ght-session-shows-the-field-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    <task>\pw-mut-a2\day-editor-Q6-b-a-same-day-ecdab-ght-session-shows-the-field-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace <task>\pw-mut-a2\day-editor-Q6-b-a-same-day-ecdab-ght-session-shows-the-field-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:1023:1 › Q6 b: a same-day session shows no break date field at 1366 and on a phone and its breaks follow the session date; an overnight session shows the field
+    [mobile] › tests\e2e\day-editor.spec.ts:1023:1 › Q6 b: a same-day session shows no break date field at 1366 and on a phone and its breaks follow the session date; an overnight session shows the field
+  2 passed (17.3s)
+exit=1
+== mut-a2 real end 2026-10-16T07:38:25Z

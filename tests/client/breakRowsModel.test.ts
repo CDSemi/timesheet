@@ -31,6 +31,7 @@ import {
   sessionDialogIsDirty,
   setNoBreaks,
   type SuggestionContext,
+  suggestionRows,
   UNCONFIRMED_BLOCKED_MESSAGE,
 } from '../../src/client/components/breakRowsModel.ts';
 import {
@@ -675,6 +676,102 @@ describe('past-day suggestions', () => {
     expect(reshiftSuggestions(saved, context('2026-09-21', '2026-10-15'))).toBe(saved);
     const gap = dialog({ start: field('2027-03-14', '02:30'), end: field('2027-03-14', '17:00') });
     expect(reshiftSuggestions(gap, context('2027-03-14', '2027-03-20'))).toBe(gap);
+  });
+});
+
+describe('suggestion rows without the past-day rule (WP5-UX3-T08B)', () => {
+  const keyOf = (index: number) => `k${index}`;
+  const times = (rows: readonly BreakRowDraft[]) => rows.map((row) => [row.start.date, row.start.time, row.start.offset, row.minutes]);
+
+  it('shifts the policy breaks by the start and keeps the ones inside a closed session, pinned and untouched', () => {
+    const start = utc('2026-10-14T15:00:00Z');
+    const rows = suggestionRows(policy(), start, utc('2026-10-15T00:00:00Z'), LA, keyOf);
+    expect(rows.map((row) => [row.key, row.origin, row.edited, row.countsAsWork])).toEqual([
+      ['k0', 'suggested', false, false],
+      ['k1', 'suggested', false, false],
+      ['k2', 'suggested', false, false],
+    ]);
+    expect(times(rows)).toEqual([
+      ['2026-10-14', '10:00', '-07:00', '15'],
+      ['2026-10-14', '12:00', '-07:00', '30'],
+      ['2026-10-14', '14:30', '-07:00', '15'],
+    ]);
+    expect(rows[0]?.pinned).toEqual({ zone: LA, startUtc: utc('2026-10-14T17:00:00Z'), endUtc: utc('2026-10-14T17:15:00Z') });
+    // The same rows as the past-day function builds for a past day: one place builds suggested rows.
+    expect(rows).toEqual(pastDaySuggestedRows({ workDate: '2026-10-14', todayLocal: '2026-10-15', policy: policy(), keyOf }, { startUtc: start, endUtc: utc('2026-10-15T00:00:00Z') }, LA));
+  });
+
+  it('keeps only the breaks that end inside the session; a break ending exactly at the end is inside', () => {
+    const start = utc('2026-10-14T15:00:00Z');
+    expect(suggestionRows(policy(), start, utc('2026-10-14T19:00:00Z'), LA, keyOf).map((row) => row.start.time)).toEqual(['10:00']);
+    expect(suggestionRows(policy(), start, utc('2026-10-14T17:15:00Z'), LA, keyOf).map((row) => row.start.time)).toEqual(['10:00']);
+    expect(suggestionRows(policy(), start, utc('2026-10-14T17:14:59Z'), LA, keyOf)).toEqual([]);
+  });
+
+  it('keeps all of them while the session has no end, and has no past-day rule: any date, today or later', () => {
+    const rows = suggestionRows(policy(), utc('2030-06-03T15:00:00Z'), null, LA, keyOf);
+    expect(times(rows)).toEqual([
+      ['2030-06-03', '10:00', '-07:00', '15'],
+      ['2030-06-03', '12:00', '-07:00', '30'],
+      ['2030-06-03', '14:30', '-07:00', '15'],
+    ]);
+  });
+
+  it('carries the policy flag counts_as_work and an empty policy gives none', () => {
+    const paid = policy({ breaks: [{ start_offset_minutes: 60, duration_minutes: 10, counts_as_work: true }] });
+    expect(suggestionRows(paid, utc('2026-10-14T15:00:00Z'), null, LA, keyOf).map((row) => [row.countsAsWork, row.minutes])).toEqual([[true, '10']]);
+    expect(suggestionRows(policy({ breaks: [] }), utc('2026-10-14T15:00:00Z'), null, LA, keyOf)).toEqual([]);
+  });
+
+  it('shows them in the input zone', () => {
+    const rows = suggestionRows(policy(), utc('2026-10-14T15:00:00Z'), utc('2026-10-15T00:00:00Z'), HCM, keyOf);
+    expect(times(rows)).toEqual([
+      ['2026-10-15', '00:00', '+07:00', '15'],
+      ['2026-10-15', '02:00', '+07:00', '30'],
+      ['2026-10-15', '04:30', '+07:00', '15'],
+    ]);
+  });
+
+  it('spring forward in Los Angeles: the offsets are elapsed time, so the wall clock skips the missing hour', () => {
+    // 2027-03-14 00:00 PST = 08:00Z; the clocks jump 02:00 -> 03:00 at 10:00Z.
+    const rows = suggestionRows(policy(), utc('2027-03-14T08:00:00Z'), utc('2027-03-14T16:00:00Z'), LA, keyOf);
+    expect(times(rows)).toEqual([
+      ['2027-03-14', '03:00', '-07:00', '15'],
+      ['2027-03-14', '05:00', '-07:00', '30'],
+      ['2027-03-14', '07:30', '-07:00', '15'],
+    ]);
+  });
+
+  it('fall back in Los Angeles: the second 01:00 is pinned by its own offset', () => {
+    // 2026-11-01 00:00 PDT = 07:00Z; the clocks return 02:00 PDT -> 01:00 PST at 09:00Z.
+    const rows = suggestionRows(policy(), utc('2026-11-01T07:00:00Z'), utc('2026-11-01T16:00:00Z'), LA, keyOf);
+    expect(times(rows)).toEqual([
+      ['2026-11-01', '01:00', '-08:00', '15'],
+      ['2026-11-01', '03:00', '-08:00', '30'],
+      ['2026-11-01', '05:30', '-08:00', '15'],
+    ]);
+    expect(rows[0]?.pinned?.startUtc).toBe(utc('2026-11-01T09:00:00Z'));
+  });
+
+  it('a session across local midnight: each row has its own local date', () => {
+    // 20:00 PDT on the 14th to 06:00 PDT on the 15th.
+    const rows = suggestionRows(policy(), utc('2026-10-15T03:00:00Z'), utc('2026-10-15T13:00:00Z'), LA, keyOf);
+    expect(times(rows)).toEqual([
+      ['2026-10-14', '22:00', '-07:00', '15'],
+      ['2026-10-15', '00:00', '-07:00', '30'],
+      ['2026-10-15', '02:30', '-07:00', '15'],
+    ]);
+  });
+
+  it('an untouched suggested row sends its pinned instants as a request part', () => {
+    const rows = suggestionRows(policy(), utc('2026-10-14T15:00:00Z'), utc('2026-10-15T00:00:00Z'), LA, keyOf);
+    const draft = dialog({ rows, start: field('2026-10-14', '08:00'), end: field('2026-10-14', '17:00') });
+    const request = sessionRequest(draft, { allowUnconfirmed: false });
+    expect(request.breaks.map((item) => [item.start.local, item.end.local])).toEqual([
+      ['2026-10-14T10:00', '2026-10-14T10:15'],
+      ['2026-10-14T12:00', '2026-10-14T12:30'],
+      ['2026-10-14T14:30', '2026-10-14T14:45'],
+    ]);
   });
 });
 

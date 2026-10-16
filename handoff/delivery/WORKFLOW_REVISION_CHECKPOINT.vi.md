@@ -278,6 +278,23 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   thoại, hàm model) và đăng ký ở trạng thái chờ.
 - Đang chạy: WP5-UX3-T08-FREEZE (committer, chạy một mình; 10 đường dẫn mã nguồn/test gồm một
   file bị xóa, cùng 35 đường dẫn handoff; digest kiểm sau khi stage).
+- WP5-UX3-T08-FREEZE xong: 1a33c574ee6f5ec5d02008e6077eb4e8b2ce3415 trên main, đã push (45
+  đường dẫn; digest sau khi stage và trên HEAD là da580f1e, 830 file, khớp digest tạm; mọi bước
+  kiểm exit 0; một lỗi nhỏ chuyển hướng ra null device sau khi push).
+- Đang chạy: WP5-UX3-T08B (worker-high, sonnet; quy tắc ô ngày theo Q6 b, chip và hộp thoại
+  con "Break n", khoảng cách trên điện thoại, chuyển suggestionRows vào model) trên 1a33c57 /
+  da580f1e.
+- WP5-UX3-T08B xong (worker-high, tự báo claude-sonnet-5-5; kết quả tự báo, chưa phải bằng
+  chứng độc lập): ô ngày của giờ nghỉ chỉ hiện với phiên qua đêm hoặc chưa có giờ kết thúc, các
+  dòng theo ngày của phiên; dòng cùng ngày vừa tới 268px (mọi điện thoại), dòng qua đêm vừa tới
+  390px, hẹp hơn thì là chip có hộp thoại con "Break n"; unit 2126; e2e đầy đủ desktop 305,
+  mobile 299, 0 lỗi; đồng hồ giả lập ở giờ lùi và giờ tiến đều đạt; hai đột biến bị bắt; ngân
+  sách màn hình đầu không đổi; gói chính 484.15 kB; verify 0; digest dd620f70 (834 file). Hộp
+  thoại phiên mới với ba giờ nghỉ gợi ý ở 390x844 phải cuộn 297px (thanh nút dưới cùng cố định):
+  đưa vào điểm audit. Lỗi nhỏ: một heredoc, một `| head -0`, hai lần đọc `tail -c`.
+- Đã viết brief T09 và đăng ký ở trạng thái chờ.
+- Đang chạy: WP5-UX3-T08B-FREEZE (committer, chạy một mình; 10 đường dẫn mã nguồn/test cùng 31
+  đường dẫn handoff).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

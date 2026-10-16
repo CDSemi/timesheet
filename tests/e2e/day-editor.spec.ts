@@ -594,6 +594,7 @@ test('a new session on a past day is pre-filled with the reference hours and the
   page,
   employeeSeed,
   signInThroughUi,
+  isMobile,
 }, testInfo) => {
   const project = testInfo.project.name;
   const [past = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
@@ -616,14 +617,22 @@ test('a new session on a past day is pre-filled with the reference hours and the
   await expect(form.locator('[data-prefill]')).toHaveText(
     `Pre-filled from your reference hours (08:00-17:00 in ${LA}) and suggested breaks. Change them to the times you worked.`,
   );
-  // The three suggested breaks of an 08:00 arrival (10:00, 12:00 and 14:30 in Los Angeles), in the input zone, tagged.
+  // The three suggested breaks of an 08:00 arrival (10:00, 12:00 and 14:30 in Los Angeles), in the input zone, tagged. In the display
+  // zone the reference hours cross local midnight, so each row has its own date (Q6 b); on a phone (390px) the list is chips (T08B).
   await expect(form.locator('[data-break]')).toHaveCount(3);
+  await expect(form.getByRole('list', { name: 'Break list' })).toHaveAttribute('data-layout', isMobile ? 'chips' : 'rows');
   for (const [index, [time, minutes]] of [['10:00', '15'], ['12:00', '30'], ['14:30', '15']].entries()) {
     const row = breakRow(form, index + 1);
     const local = wallTimeIn(past, time ?? '', LA, displayZone);
-    await expect(row.date).toHaveValue(local.slice(0, 10));
-    await expect(row.time).toHaveValue(local.slice(11));
-    await expect(row.minutes).toHaveValue(minutes ?? '');
+    if (isMobile) {
+      const end = new Date(Date.parse(`${local}:00Z`) + Number(minutes) * 60_000).toISOString().slice(11, 16);
+      const chip = row.row.getByRole('button');
+      await expect(chip).toHaveAccessibleName(`Break ${index + 1} · ${usFullDate(local.slice(0, 10))} ${local.slice(11)} to ${end} suggested, edit`);
+    } else {
+      await expect(row.date).toHaveValue(local.slice(0, 10));
+      await expect(row.time).toHaveValue(local.slice(11));
+      await expect(row.minutes).toHaveValue(minutes ?? '');
+    }
     await expect(row.row.locator('.break-tag')).toHaveText('suggested');
   }
   await snap(page, 'session-dialog-prefill', project);
@@ -807,8 +816,10 @@ test('a break that starts at a repeated or a missing local time asks first, nami
     await removeAllBreaks(form);
     await form.getByRole('button', { name: 'Add break' }).click();
     let row = breakRow(form, 1);
-    await expect(row.date, 'a new break starts on the start date, and focus goes to it').toBeFocused();
-    await expect(row.date).toHaveValue('2026-04-05');
+    // Q6 b: the session starts and ends on 2026-04-05, so the new break has no date field; it is on the start date and focus
+    // goes to its first field, the start time.
+    await expect(row.date, 'no date field for a same-day session').toHaveCount(0);
+    await expect(row.time, 'focus goes to the new break').toBeFocused();
     await row.time.fill('02:30');
     await row.minutes.fill('15');
     await form.getByRole('button', { name: 'Save', exact: true }).click();
@@ -915,6 +926,697 @@ test('break rows are one line in the 720px dialog and two lines (Break n, then d
     await expect(editor).toHaveCount(0);
   }
   console.log(`BREAK-ROWS ${lines.join('; ')}`);
+});
+
+/* ---- WP5-UX3-T08B: the Q6 b date rule, the list layouts by width, the break chips and the "Break n" sub-dialog ---------- */
+
+/** `YYYY-MM-DD` as a chip prints it (`MM/DD/YYYY`), written out here so the test does not reuse the app's formatter. */
+function usFullDate(date: string): string {
+  return `${date.slice(5, 7)}/${date.slice(8, 10)}/${date.slice(0, 4)}`;
+}
+
+/** A wall clock `YYYY-MM-DD HH:mm` plus whole minutes, by arithmetic on the text alone (no zone, so no DST). */
+function plusMinutes(local: string, minutes: number): string {
+  return new Date(Date.parse(`${local.replace(' ', 'T')}:00Z`) + minutes * 60_000).toISOString().slice(0, 16).replace('T', ' ');
+}
+
+/** The accessible name of a chip: label, start (with the date for an overnight session), "to", end, the tag, ", edit". */
+function chipName(index: number, start: string, minutes: number, options: { overnight: boolean; suggested: boolean }): string {
+  const from = options.overnight ? `${usFullDate(start.slice(0, 10))} ${start.slice(11)}` : start.slice(11);
+  return `Break ${index} · ${from} to ${plusMinutes(start, minutes).slice(11)}${options.suggested ? ' suggested' : ''}, edit`;
+}
+
+function breakChip(form: Locator, index: number): Locator {
+  return form.locator(`[data-break="${index}"] button.break-chip`);
+}
+
+/** The "Break n" sub-dialog, the third modal level. */
+function breakDialog(page: Page, index: number): Locator {
+  return page.getByRole('dialog', { name: `Break ${index}`, exact: true });
+}
+
+async function settleLayout(page: Page) {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 100))))');
+}
+
+interface Box {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  width: number;
+  height: number;
+  middle: number;
+}
+
+interface ListFacts {
+  layout: string;
+  list: number;
+  bodyOverflow: number;
+  rows: Array<{ height: number; right: number; num: Box | null; date: Box | null; time: Box | null; minutes: Box | null; remove: Box | null; chip: Box | null }>;
+}
+
+/** The geometry of the break list in the open session dialog: its layout, its width, and each row's parts. */
+function listFacts(form: Locator): Promise<ListFacts> {
+  return form.evaluate((dialog): ListFacts => {
+    const box = (element: { getBoundingClientRect: () => { top: number; bottom: number; left: number; right: number; width: number; height: number } } | null): Box | null => {
+      if (element === null) return null;
+      const rect = element.getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height, middle: rect.top + rect.height / 2 };
+    };
+    const list = dialog.querySelector('.break-entries');
+    const body = dialog.querySelector('.session-dialog-body');
+    return {
+      layout: list?.getAttribute('data-layout') ?? 'none',
+      list: list === null ? 0 : list.getBoundingClientRect().width,
+      bodyOverflow: body === null ? 99 : body.scrollWidth - body.clientWidth,
+      rows: [...dialog.querySelectorAll('[data-break]')].map((row) => ({
+        height: row.getBoundingClientRect().height,
+        right: row.getBoundingClientRect().right,
+        num: box(row.querySelector('.break-num')),
+        date: box(row.querySelector('input[type="date"]')),
+        time: box(row.querySelector('input[type="time"]')),
+        minutes: box(row.querySelector('input[type="number"]')),
+        remove: box(row.querySelector('button.break-remove')),
+        chip: box(row.querySelector('button.break-chip')),
+      })),
+    };
+  });
+}
+
+interface SentBreak {
+  start: { local: string; zone: string };
+  end: { local: string; zone: string };
+  counts_as_work: boolean;
+}
+
+function breaksOf(body: Record<string, unknown> | undefined): SentBreak[] {
+  return (body?.breaks ?? []) as SentBreak[];
+}
+
+const SYNTHETIC_REFUSAL = {
+  status: 422,
+  contentType: 'application/json',
+  body: JSON.stringify({ error: { code: 'synthetic_refusal', message: 'Synthetic refusal for the test.' } }),
+} as const;
+
+test('Q6 b: a same-day session shows no break date field at 1366 and on a phone and its breaks follow the session date; an overnight session shows the field', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+  isMobile,
+}) => {
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  const other = addDays(date, -1);
+  const bodies: Array<Record<string, unknown>> = [];
+  let refuse = true;
+  // The first save is refused by a synthetic answer, so a session on another date is never written; the second goes through.
+  await page.route(`**/api/days/${date}/sessions`, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    bodies.push(route.request().postDataJSON() as Record<string, unknown>);
+    if (refuse) await route.fulfill(SYNTHETIC_REFUSAL);
+    else await route.continue();
+  });
+  try {
+    await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1366, height: 800 });
+    await signInThroughUi();
+    const editor = await openEditor(page, date);
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = sessionDialog(page, 'New session');
+    await typeInputZone(form, LA);
+    const list = form.getByRole('list', { name: 'Break list' });
+    const dateFields = form.getByLabel(/^Break \d date$/);
+    const startDate = form.getByLabel('Start date', { exact: true });
+    const endDate = form.getByLabel('End date', { exact: true });
+
+    // Same day (08:00-17:00 in Los Angeles): no date field, the rows are on the session date.
+    await expect(form.locator('[data-break]')).toHaveCount(3);
+    await expect(list).toHaveAttribute('data-layout', 'rows');
+    await expect(dateFields, 'a same-day session has no break date field').toHaveCount(0);
+    await expect(list.locator('input[type="date"]')).toHaveCount(0);
+    await expect(breakRow(form, 1).time).toHaveValue('10:00');
+
+    // The end moves to the next date: the session crosses local midnight, so each break has its date (chips on a phone).
+    await endDate.fill(addDays(date, 1));
+    if (isMobile) {
+      await expect(list).toHaveAttribute('data-layout', 'chips');
+      await expect(breakChip(form, 1)).toHaveAccessibleName(chipName(1, `${date} 10:00`, 15, { overnight: true, suggested: true }));
+    } else {
+      await expect(dateFields).toHaveCount(3);
+      for (const index of [1, 2, 3]) await expect(breakRow(form, index).date).toHaveValue(date);
+    }
+    await endDate.fill(date);
+    await expect(dateFields).toHaveCount(0);
+    await expect(list).toHaveAttribute('data-layout', 'rows');
+
+    // Change a break so the suggestions stop following the start, then move the whole session to another date.
+    await breakRow(form, 1).minutes.fill('20');
+    await startDate.fill(other);
+    // Start and end now differ, so the field is back, still on the old date (the end has not moved yet).
+    if (isMobile) await expect(breakChip(form, 2)).toHaveAccessibleName(chipName(2, `${date} 12:00`, 30, { overnight: true, suggested: true }));
+    else for (const index of [1, 2, 3]) await expect(breakRow(form, index).date).toHaveValue(date);
+    await endDate.fill(other);
+    await expect(dateFields).toHaveCount(0);
+    await expect(list).toHaveAttribute('data-layout', 'rows');
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    // A break left on the old date would lie before the session and be refused here, before the confirmation.
+    await expect(saveConfirmation(page), 'the hidden break dates followed the session date, so nothing is refused').toBeVisible();
+    await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => bodies.length).toBe(1);
+    // The hidden rows followed the session date: every instant is on `other`, the minutes typed stay.
+    expect(bodies[0]).toMatchObject({ start: { local: `${other}T08:00` }, end: { local: `${other}T17:00` }, input_zone: LA });
+    expect(breaksOf(bodies[0]).map((item) => [item.start.local, item.end.local])).toEqual([
+      [`${other}T10:00`, `${other}T10:20`],
+      [`${other}T12:00`, `${other}T12:30`],
+      [`${other}T14:30`, `${other}T14:45`],
+    ]);
+    await expect(saveConfirmation(page)).toHaveCount(0);
+    await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.getByRole('alertdialog', { name: 'Discard your changes?' }).getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(form).toHaveCount(0);
+
+    // A same-day session on its own date saves its breaks on that date (nothing hidden is lost on the way to the server).
+    refuse = false;
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const second = sessionDialog(page, 'New session');
+    await typeInputZone(second, LA);
+    await expect(second.getByLabel(/^Break \d date$/)).toHaveCount(0);
+    await saveSession(page, second);
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    expect(bodies).toHaveLength(2);
+    expect(breaksOf(bodies[1]).map((item) => [item.start.local, item.end.local])).toEqual([
+      [`${date}T10:00`, `${date}T10:15`],
+      [`${date}T12:00`, `${date}T12:30`],
+      [`${date}T14:30`, `${date}T14:45`],
+    ]);
+    const stored = (await employeeSeed.dayView(date)).sessions[0];
+    expect(stored?.breaks.map((item) => `${wallClock(item.start_utc, LA)}-${wallClock(item.end_utc, LA)}`)).toEqual(['10:00:00-10:15:00', '12:00:00-12:30:00', '14:30:00-14:45:00']);
+  } finally {
+    await employeeSeed.clearSessions(date);
+  }
+});
+
+test('break list layout by its width: one line at 1366, two lines from 430 to 320 for a same-day session, chips where a row no longer fits (U-24, N-1, Q6 b)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+  isMobile,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  const lines: string[] = [];
+  await page.setViewportSize({ width: 430, height: 932 });
+  await signInThroughUi();
+  const editor = await openEditor(page, date);
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form = sessionDialog(page, 'New session');
+  await typeInputZone(form, LA);
+  await expect(form.locator('[data-break]')).toHaveCount(3);
+
+  // Same-day rows: the fields line (start time, minutes, remove) shares one line under "Break n", at every phone width, and
+  // keeps doing so down to the measured threshold, 268px of list (a 300px window); one pixel less is chips.
+  const sameDay: Array<[number, 'rows' | 'chips']> = [[430, 'rows'], [390, 'rows'], [375, 'rows'], [360, 'rows'], [320, 'rows'], [300, 'rows'], [299, 'chips']];
+  for (const [width, layout] of sameDay) {
+    await page.setViewportSize({ width, height: 932 });
+    await settleLayout(page);
+    const facts = await listFacts(form);
+    const name = `same day, ${width}px`;
+    expect(facts.layout, `${name}: layout`).toBe(layout);
+    expect(facts.list, `${name}: the list is the window less 2 x 16px of padding`).toBeCloseTo(width - 32, 0);
+    expect(facts.bodyOverflow, `${name}: no sideways scroll`).toBeLessThanOrEqual(0);
+    for (const [index, row] of facts.rows.entries()) {
+      const label = `${name}, break ${index + 1}`;
+      if (layout === 'rows') {
+        expect(row.date, `${label}: no date field`).toBeNull();
+        const parts = [row.time, row.minutes, row.remove];
+        for (const part of parts) {
+          expect(part, `${label}: part present`).not.toBeNull();
+          expect(Math.abs((part?.middle ?? 0) - (row.time?.middle ?? 0)), `${label}: one line of fields`).toBeLessThanOrEqual(2);
+          expect(part?.height ?? 0, `${label}: a 44px target`).toBeGreaterThanOrEqual(43.9);
+        }
+        expect(row.remove?.right ?? 0, `${label}: remove stays inside the strip`).toBeLessThanOrEqual(row.right + 0.5);
+        expect(row.num?.bottom ?? 99, `${label}: "Break n" on its own line above the fields`).toBeLessThanOrEqual((row.time?.top ?? 0) + 0.5);
+      } else {
+        expect(row.chip?.height ?? 0, `${label}: a 44px chip`).toBeGreaterThanOrEqual(43.9);
+      }
+    }
+    lines.push(`same-day ${width}px: ${layout}, list ${facts.list.toFixed(1)}px, row ${(facts.rows[0]?.height ?? 0).toFixed(1)}px`);
+  }
+
+  // Overnight (the end on the next date): the date field joins the fields line, which needs 390px of list (a 422px window).
+  await endDate(form).fill(addDays(date, 1));
+  const overnight: Array<[number, 'rows' | 'chips']> = [[430, 'rows'], [422, 'rows'], [421, 'chips'], [390, 'chips'], [375, 'chips'], [360, 'chips'], [320, 'chips']];
+  for (const [width, layout] of overnight) {
+    await page.setViewportSize({ width, height: 932 });
+    await settleLayout(page);
+    const facts = await listFacts(form);
+    const name = `overnight, ${width}px`;
+    expect(facts.layout, `${name}: layout`).toBe(layout);
+    expect(facts.list, `${name}: list width`).toBeCloseTo(width - 32, 0);
+    expect(facts.bodyOverflow, `${name}: no sideways scroll`).toBeLessThanOrEqual(0);
+    for (const [index, row] of facts.rows.entries()) {
+      const label = `${name}, break ${index + 1}`;
+      if (layout === 'rows') {
+        for (const part of [row.date, row.time, row.minutes, row.remove]) {
+          expect(part, `${label}: part present`).not.toBeNull();
+          expect(Math.abs((part?.middle ?? 0) - (row.date?.middle ?? 0)), `${label}: one line of fields`).toBeLessThanOrEqual(2);
+          expect(part?.height ?? 0, `${label}: a 44px target`).toBeGreaterThanOrEqual(43.9);
+        }
+        expect(row.remove?.right ?? 0, `${label}: remove stays inside the strip`).toBeLessThanOrEqual(row.right + 0.5);
+      } else {
+        expect(row.chip?.height ?? 0, `${label}: a 44px chip`).toBeGreaterThanOrEqual(43.9);
+        expect(row.chip?.right ?? 0, `${label}: the chip stays inside the strip`).toBeLessThanOrEqual(row.right + 0.5);
+      }
+    }
+    lines.push(`overnight ${width}px: ${layout}, list ${facts.list.toFixed(1)}px, row ${(facts.rows[0]?.height ?? 0).toFixed(1)}px`);
+    if (width === 430 || width === 360) await snap(page, `session-dialog-breaks-overnight-w${width}`, project);
+  }
+  await page.setViewportSize({ width: 360, height: 932 });
+  await endDate(form).fill(date);
+  await settleLayout(page);
+  await snap(page, 'session-dialog-breaks-sameday-w360', project);
+  console.log(`BREAK-LAYOUT ${lines.join('; ')}`);
+
+  // From a desktop window both kinds of session keep one line: the dialog is 720px, its list 680px.
+  if (!isMobile) {
+    await page.setViewportSize({ width: 1366, height: 800 });
+    await settleLayout(page);
+    for (const crossing of [false, true]) {
+      if (crossing) await endDate(form).fill(addDays(date, 1));
+      const facts = await listFacts(form);
+      expect(facts.layout, `1366px, ${crossing ? 'overnight' : 'same day'}`).toBe('rows');
+      for (const row of facts.rows) {
+        expect(Math.abs((row.num?.middle ?? 0) - (row.time?.middle ?? 99)), '1366px: "Break n" on the same line').toBeLessThanOrEqual(2);
+        expect(row.height, '1366px: one line').toBeLessThan(64);
+        expect(row.date !== null, `1366px: the date field is shown only when the session crosses midnight (${crossing})`).toBe(crossing);
+      }
+    }
+  }
+});
+
+/** The End date field of the session dialog. */
+function endDate(form: Locator): Locator {
+  return form.getByLabel('End date', { exact: true });
+}
+
+test('phone break chips: names, the Break n sub-dialog with Done, Cancel, Escape, Remove and Add, and where focus goes; nothing is sent before the session Save (N-1)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const [past = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInThroughUi();
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    const { pathname } = new URL(request.url());
+    if (request.method() !== 'GET' && pathname.startsWith('/api/')) writes.push(`${request.method()} ${pathname}`);
+  });
+  const displayZone = await browserZone(page);
+  const editor = await openEditor(page, past);
+  const add = editor.getByRole('button', { name: 'Add session' });
+  await add.click();
+  const form = sessionDialog(page, 'New session');
+  const list = form.getByRole('list', { name: 'Break list' });
+  // The reference hours cross local midnight in the display zone, so this is an overnight session: chips with the date.
+  await expect(list).toHaveAttribute('data-layout', 'chips');
+  const startOf = (time: string) => wallTimeIn(past, time, LA, displayZone);
+  const planned = [['10:00', 15], ['12:00', 30], ['14:30', 15]] as const;
+  for (const [index, [time, minutes]] of planned.entries()) {
+    const chip = breakChip(form, index + 1);
+    await expect(chip).toHaveAccessibleName(chipName(index + 1, startOf(time), minutes, { overnight: true, suggested: true }));
+    // The visible text is label, start, an arrow, end; the arrow is decoration and the name says "to".
+    await expect(chip.locator('.break-chip-main')).toContainText(`Break ${index + 1} · ${usFullDate(startOf(time).slice(0, 10))} ${startOf(time).slice(11)} →`);
+    await expect(chip.locator('[aria-hidden="true"]').filter({ hasText: '→' })).toHaveCount(1);
+    await expect(chip.locator('.break-tag')).toHaveText('suggested');
+    expect((await chip.boundingBox())?.height ?? 0, 'a 44px chip').toBeGreaterThanOrEqual(43.9);
+  }
+  await expect(form.getByLabel(/^Break \d (date|start time|minutes)$/), 'chips carry no inline fields').toHaveCount(0);
+  await snap(page, 'session-dialog-chips', project);
+
+  // Opening a chip: the third modal level on top, focus on its first field (the date of an overnight session).
+  const chip2 = breakChip(form, 2);
+  const sub = breakDialog(page, 2);
+  const field = (name: string) => sub.getByLabel(name, { exact: true });
+  await chip2.click();
+  await expect(sub).toBeVisible();
+  expect(await sub.evaluate((element) => element.matches(':modal')), 'the sub-dialog is modal').toBe(true);
+  await expect(field('Date')).toBeFocused();
+  await expect(field('Date')).toHaveValue(startOf('12:00').slice(0, 10));
+  await expect(field('Start time')).toHaveValue(startOf('12:00').slice(11));
+  await expect(field('Minutes')).toHaveValue('30');
+  await expect(sub.getByText(/^Ends /)).toHaveText(`Ends ${plusMinutes(startOf('12:00'), 30).slice(11)} (${displayZone})`);
+  await expect(sub.getByRole('button')).toHaveText(['Remove break', 'Cancel', 'Done']);
+  const stack = await dialogStates(page);
+  expect(stack.dialogs.find((dialog) => dialog.name === 'Break 2'), 'the sub-dialog is on top and focused').toMatchObject({ modal: true, focus: true, onTop: true });
+  expect(stack.dialogs.find((dialog) => dialog.name === 'New session'), 'the session dialog stays open under it').toMatchObject({ modal: true });
+  expect(stack.dialogs.some((dialog) => dialog.name.startsWith('Day editor')), 'the editor stays open under both').toBe(true);
+  await snap(page, 'session-dialog-break-subdialog', project);
+
+  // Escape closes only the sub-dialog; the session dialog and the editor ignore it. Focus returns to the chip.
+  await page.keyboard.press('Escape');
+  await expect(sub).toHaveCount(0);
+  await expect(form).toBeVisible();
+  await expect(editor).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await expect(chip2).toBeFocused();
+
+  // Cancel and Escape after an edit discard it; focus returns to the chip.
+  const unchanged = chipName(2, startOf('12:00'), 30, { overnight: true, suggested: true });
+  for (const how of ['Cancel', 'Escape'] as const) {
+    await chip2.click();
+    await field('Minutes').fill('45');
+    await expect(sub.getByText(/^Ends /)).toHaveText(`Ends ${plusMinutes(startOf('12:00'), 45).slice(11)} (${displayZone})`);
+    if (how === 'Cancel') await sub.getByRole('button', { name: 'Cancel', exact: true }).click();
+    else await page.keyboard.press('Escape');
+    await expect(sub).toHaveCount(0);
+    await expect(chip2).toBeFocused();
+    await expect(chip2).toHaveAccessibleName(unchanged);
+  }
+  await chip2.click();
+  await expect(field('Minutes'), 'the discarded edit is gone').toHaveValue('30');
+  await page.keyboard.press('Escape');
+
+  // Done applies the edit to the draft (the tag goes with the change) and focus goes to the updated chip; nothing is sent.
+  await chip2.click();
+  await field('Minutes').fill('45');
+  await sub.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(sub).toHaveCount(0);
+  await expect(chip2).toBeFocused();
+  await expect(chip2).toHaveAccessibleName(chipName(2, startOf('12:00'), 45, { overnight: true, suggested: false }));
+  await expect(chip2.locator('.break-tag')).toHaveCount(0);
+  await expect(breakChip(form, 1).locator('.break-tag')).toHaveText('suggested');
+  // Enter in a field is Done.
+  const chip3 = breakChip(form, 3);
+  await chip3.click();
+  await field3(page, 3, 'Minutes').fill('20');
+  await field3(page, 3, 'Minutes').press('Enter');
+  await expect(breakDialog(page, 3)).toHaveCount(0);
+  await expect(chip3).toHaveAccessibleName(chipName(3, startOf('14:30'), 20, { overnight: true, suggested: false }));
+  await expect(chip3).toBeFocused();
+  expect(writes, 'Done sends nothing').toEqual([]);
+
+  // Add break: a new row on the session start date opens its sub-dialog; Cancel removes it and focus goes to Add break.
+  const addBreak = form.getByRole('button', { name: 'Add break' });
+  await addBreak.click();
+  const sub4 = breakDialog(page, 4);
+  await expect(sub4).toBeVisible();
+  await expect(form.locator('[data-break]')).toHaveCount(4);
+  await expect(field3(page, 4, 'Date')).toBeFocused();
+  await expect(field3(page, 4, 'Date')).toHaveValue(startOf('08:00').slice(0, 10));
+  await expect(field3(page, 4, 'Start time')).toHaveValue('');
+  await expect(field3(page, 4, 'Minutes')).toHaveValue('');
+  await sub4.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(sub4).toHaveCount(0);
+  await expect(form.locator('[data-break]')).toHaveCount(3);
+  await expect(addBreak).toBeFocused();
+  // Add break, fill it in on the date of the first break, Done: the new chip is named and focused.
+  await addBreak.click();
+  await field3(page, 4, 'Date').fill(startOf('10:00').slice(0, 10));
+  await field3(page, 4, 'Start time').fill('03:00');
+  await field3(page, 4, 'Minutes').fill('10');
+  await sub4.getByRole('button', { name: 'Done', exact: true }).click();
+  const chip4 = breakChip(form, 4);
+  await expect(chip4).toHaveAccessibleName(chipName(4, `${startOf('10:00').slice(0, 10)} 03:00`, 10, { overnight: true, suggested: false }));
+  await expect(chip4).toBeFocused();
+
+  // Remove: focus goes to the next chip, else the previous, else Add break.
+  await chip4.click();
+  await breakDialog(page, 4).getByRole('button', { name: 'Remove break', exact: true }).click();
+  await expect(form.locator('[data-break]')).toHaveCount(3);
+  await expect(chip3, 'the last chip removed: focus goes to the previous').toBeFocused();
+  await chip2.click();
+  await sub.getByRole('button', { name: 'Remove break', exact: true }).click();
+  await expect(form.locator('[data-break]')).toHaveCount(2);
+  await expect(breakChip(form, 2), 'a middle chip removed: focus goes to the next, now Break 2').toBeFocused();
+  await expect(breakChip(form, 2)).toHaveAccessibleName(chipName(2, startOf('14:30'), 20, { overnight: true, suggested: false }));
+  await breakChip(form, 2).click();
+  await breakDialog(page, 2).getByRole('button', { name: 'Remove break', exact: true }).click();
+  await expect(breakChip(form, 1)).toBeFocused();
+  await breakChip(form, 1).click();
+  await breakDialog(page, 1).getByRole('button', { name: 'Remove break', exact: true }).click();
+  await expect(form.locator('[data-break]')).toHaveCount(0);
+  await expect(addBreak, 'the only chip removed: focus goes to Add break').toBeFocused();
+  await expect(form.getByText('No breaks listed.')).toBeVisible();
+  expect(writes, 'nothing is sent before the session Save').toEqual([]);
+
+  // Leaving the dialog asks, because the breaks changed; nothing was ever sent.
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('alertdialog', { name: 'Discard your changes?' }).getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await expect(add).toBeFocused();
+  expect(writes).toEqual([]);
+  expect((await employeeSeed.dayView(past)).sessions).toHaveLength(0);
+});
+
+/** A field of the open "Break n" sub-dialog. */
+function field3(page: Page, index: number, name: 'Date' | 'Start time' | 'Minutes'): Locator {
+  return breakDialog(page, index).getByLabel(name, { exact: true });
+}
+
+test('phone break chips: a row that cannot be saved and a server refusal mark the chip, show the message under it and move focus; the saved request has the same shape and values', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  const [past = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const bodies: Array<Record<string, unknown>> = [];
+  let live = false;
+  await page.route(`**/api/days/${past}/sessions`, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    bodies.push(route.request().postDataJSON() as Record<string, unknown>);
+    if (live) await route.continue();
+    else {
+      await route.fulfill({
+        status: 422,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'break_outside_session', message: 'A break lies outside the session.', details: { break_index: 1 } } }),
+      });
+    }
+  });
+  try {
+    await signInThroughUi();
+    const displayZone = await browserZone(page);
+    const editor = await openEditor(page, past);
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = sessionDialog(page, 'New session');
+    await expect(form.getByRole('list', { name: 'Break list' })).toHaveAttribute('data-layout', 'chips');
+    const startOf = (time: string) => wallTimeIn(past, time, LA, displayZone);
+    const save = form.getByRole('button', { name: 'Save', exact: true });
+    const entry = (index: number) => form.locator(`[data-break="${index}"]`);
+
+    // Break 3 gets the start time of Break 2: it overlaps. Save is refused before the confirmation.
+    await breakChip(form, 3).click();
+    await field3(page, 3, 'Start time').fill(startOf('12:00').slice(11));
+    await breakDialog(page, 3).getByRole('button', { name: 'Done', exact: true }).click();
+    await save.click();
+    await expect(saveConfirmation(page)).toHaveCount(0);
+    await expect(entry(3)).toHaveClass(/has-error/);
+    await expect(entry(1)).not.toHaveClass(/has-error/);
+    await expect(entry(3).getByText('Break 3 overlaps Break 2.')).toBeVisible();
+    await expect(breakChip(form, 3), 'the message is the chip\'s description').toHaveAccessibleDescription('Break 3 overlaps Break 2.');
+    await expect(breakChip(form, 3), 'focus moves to the first marked chip').toBeFocused();
+    await expect(form.getByRole('alert')).toContainText('A break cannot be saved as it is.');
+    await snap(page, 'session-dialog-chip-error', test.info().project.name);
+    // The sub-dialog shows the same message, and the message goes once the break is changed.
+    await breakChip(form, 3).click();
+    await expect(breakDialog(page, 3).getByText('Break 3 overlaps Break 2.')).toBeVisible();
+    await field3(page, 3, 'Start time').fill(startOf('14:30').slice(11));
+    await expect(breakDialog(page, 3).getByText('Break 3 overlaps Break 2.')).toHaveCount(0);
+    await breakDialog(page, 3).getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(entry(3)).not.toHaveClass(/has-error/);
+
+    // A refusal from the server that names a break (break_index 1 is Break 2) marks that chip and moves focus to it.
+    await save.click();
+    await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => bodies.length).toBe(1);
+    await expect(saveConfirmation(page)).toHaveCount(0);
+    await expect(entry(2)).toHaveClass(/has-error/);
+    await expect(entry(2).getByText('Break 2 lies outside the session.')).toBeVisible();
+    await expect(breakChip(form, 2)).toHaveAccessibleDescription('Break 2 lies outside the session.');
+    await expect(breakChip(form, 2)).toBeFocused();
+
+    // Saved for real: the same body shape as the rows send, the local values typed or pinned, nothing else.
+    live = true;
+    await save.click();
+    await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    expect(bodies).toHaveLength(2);
+    const body = bodies[1];
+    expect(Object.keys(body ?? {}).sort()).toEqual(['breaks', 'breaks_confirmed', 'end', 'input_zone', 'start']);
+    expect(body).toMatchObject({ input_zone: displayZone, breaks_confirmed: true, start: { local: startOf('08:00').replace(' ', 'T'), zone: displayZone }, end: { local: startOf('17:00').replace(' ', 'T'), zone: displayZone } });
+    expect(breaksOf(body).map((item) => [item.start.local, item.end.local, item.start.zone, item.counts_as_work])).toEqual(
+      [['10:00', 15], ['12:00', 30], ['14:30', 15]].map(([time, minutes]) => [
+        startOf(String(time)).replace(' ', 'T'),
+        plusMinutes(startOf(String(time)), Number(minutes)).replace(' ', 'T'),
+        displayZone,
+        false,
+      ]),
+    );
+    const stored = (await employeeSeed.dayView(past)).sessions[0];
+    expect(stored?.breaks).toHaveLength(3);
+    expect(stored?.breaks_confirmed).toBe(true);
+  } finally {
+    await employeeSeed.clearSessions(past);
+  }
+});
+
+test('the Break n sub-dialog fits a 320px window: no sideways scroll, a wrapping foot, 44px targets', async ({ page, employeeSeed, signInThroughUi }) => {
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await signInThroughUi();
+  const editor = await openEditor(page, date);
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form = sessionDialog(page, 'New session');
+  await expect(form.getByRole('list', { name: 'Break list' })).toHaveAttribute('data-layout', 'chips');
+  await breakChip(form, 1).click();
+  const sub = breakDialog(page, 1);
+  await expect(sub).toBeVisible();
+  const facts = await sub.evaluate((dialog) => {
+    const rect = dialog.getBoundingClientRect();
+    const controls = [...dialog.querySelectorAll('input, button')].map((control) => {
+      const box = control.getBoundingClientRect();
+      return { name: control.textContent || control.getAttribute('type') || '', width: box.width, height: box.height, right: box.right };
+    });
+    return { left: rect.left, right: rect.right, scroll: dialog.scrollWidth - dialog.clientWidth, controls };
+  });
+  expect(facts.left, 'inside the window').toBeGreaterThanOrEqual(0);
+  expect(facts.right, 'inside the window').toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
+  expect(facts.scroll, 'no sideways scroll in the sub-dialog').toBeLessThanOrEqual(0);
+  for (const control of facts.controls) {
+    expect(control.height, `${control.name}: 44px high`).toBeGreaterThanOrEqual(43.9);
+    expect(control.right, `${control.name}: inside the dialog`).toBeLessThanOrEqual(facts.right + 0.5);
+  }
+  expect(await page.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth'), 'the page does not scroll sideways').toBeLessThanOrEqual(0);
+  await page.keyboard.press('Escape');
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(form).toHaveCount(0);
+});
+
+test('phone break chips: a break at a repeated or a missing local time asks inside the sub-dialog, naming "Break 1", and stores the chosen instant (R-07)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  /** Opens a new overnight session (it ends the next day, so the list shows chips) with no break listed. */
+  async function newOvernightSession(day: string, zone: string, from: [string, string], to: [string, string]) {
+    const editor = await openEditor(page, day);
+    await editor.getByLabel('Reason for editing an old or finalized period').fill('Entering a past shift with a break (synthetic)');
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = sessionDialog(page, 'New session');
+    await form.getByLabel('Input zone').fill(zone);
+    await form.getByLabel('Start date', { exact: true }).fill(from[0]);
+    await form.getByLabel('Start time', { exact: true }).fill(from[1]);
+    await form.getByLabel('End date', { exact: true }).fill(to[0]);
+    await form.getByLabel('End time', { exact: true }).fill(to[1]);
+    await expect(form.getByRole('list', { name: 'Break list' })).toHaveAttribute('data-layout', 'chips');
+    // Remove the pre-filled suggestions through each sub-dialog, then add the one break.
+    for (let count = await form.locator('[data-break]').count(); count > 0; count -= 1) {
+      await breakChip(form, 1).click();
+      await breakDialog(page, 1).getByRole('button', { name: 'Remove break', exact: true }).click();
+    }
+    await expect(form.locator('[data-break]')).toHaveCount(0);
+    await form.getByRole('button', { name: 'Add break' }).click();
+    return { editor, form, sub: breakDialog(page, 1) };
+  }
+  try {
+    await signInThroughUi();
+    // Sydney falls back on 2026-04-05: 02:30 happens twice (+11:00, then +10:00). The session runs from 22:00 on the 4th to 05:00
+    // on the 5th (it crosses local midnight, so the list is chips and the sub-dialog has a Date); the break is the later 02:30.
+    const fold = await newOvernightSession(FOLD_DAY, 'Australia/Sydney', ['2026-04-04', '22:00'], ['2026-04-05', '05:00']);
+    await expect(field3(page, 1, 'Date')).toHaveValue('2026-04-04');
+    await field3(page, 1, 'Date').fill('2026-04-05');
+    await field3(page, 1, 'Start time').fill('02:30');
+    await field3(page, 1, 'Minutes').fill('15');
+    const foldPrompt = fold.sub.locator('[data-problem="fold"]');
+    await expect(foldPrompt).toContainText('Break 1: 2026-04-05 02:30 happens twice in Australia/Sydney');
+    await expect(fold.sub.getByText(/^Ends /), 'no end is shown while the start is not placed').toHaveCount(0);
+    await foldPrompt.getByRole('radio', { name: 'Later time, UTC offset +10:00' }).check();
+    await expect(fold.sub.getByText(/^Ends /)).toHaveText('Ends 02:45 (Australia/Sydney)');
+    await fold.sub.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(breakChip(fold.form, 1)).toHaveAccessibleName('Break 1 · 04/05/2026 02:30 to 02:45, edit');
+    await saveSession(page, fold.form);
+    await expect(fold.editor.getByText('Session saved.')).toBeVisible();
+    const folded = (await employeeSeed.dayView(FOLD_DAY)).sessions[0];
+    expect(folded?.breaks.map((item) => [item.start_utc, item.end_utc])).toEqual([['2026-04-04T16:30:00Z', '2026-04-04T16:45:00Z']]);
+    await fold.editor.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(fold.editor).toHaveCount(0);
+
+    // Los Angeles springs forward on 2026-03-08: 02:30 does not exist; the sub-dialog offers the first valid time.
+    const gap = await newOvernightSession(GAP_DAY, LA, ['2026-03-08', '00:30'], ['2026-03-09', '00:30']);
+    await field3(page, 1, 'Start time').fill('02:30');
+    await field3(page, 1, 'Minutes').fill('15');
+    const gapPrompt = gap.sub.locator('[data-problem="gap"]');
+    await expect(gapPrompt).toContainText(`Break 1: 2026-03-08 02:30 does not exist in ${LA}`);
+    await gapPrompt.getByRole('button', { name: 'Use 03:30 on 2026-03-08' }).click();
+    await expect(field3(page, 1, 'Start time')).toHaveValue('03:30');
+    await expect(gapPrompt).toHaveCount(0);
+    await expect(gap.sub.getByText(/^Ends /)).toHaveText(`Ends 03:45 (${LA})`);
+    await gap.sub.getByRole('button', { name: 'Done', exact: true }).click();
+    await saveSession(page, gap.form);
+    await expect(gap.editor.getByText('Session saved.')).toBeVisible();
+    // 03:30 PDT (-07:00) is 10:30 UTC.
+    expect((await employeeSeed.dayView(GAP_DAY)).sessions[0]?.breaks.map((item) => [item.start_utc, item.end_utc])).toEqual([['2026-03-08T10:30:00Z', '2026-03-08T10:45:00Z']]);
+  } finally {
+    await employeeSeed.clearSessions(FOLD_DAY);
+    await employeeSeed.clearSessions(GAP_DAY);
+  }
+});
+
+test('phone dialog spacing at 390x844: 16px sides, 20px between sections, 8px between breaks, a foot with two 44px buttons in view; the fit is recorded for chips and rows (N-2)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInThroughUi();
+  const editor = await openEditor(page, date);
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form = sessionDialog(page, 'New session');
+  await expect(form.locator('[data-break]')).toHaveCount(3);
+  const lines: string[] = [];
+  for (const variant of ['overnight chips', 'same-day rows'] as const) {
+    if (variant === 'same-day rows') await typeInputZone(form, LA);
+    await expect(form.getByRole('list', { name: 'Break list' })).toHaveAttribute('data-layout', variant === 'overnight chips' ? 'chips' : 'rows');
+    await settleLayout(page);
+    const body = form.locator('.session-dialog-body');
+    await expect(body, `${variant}: 16px on both sides`).toHaveCSS('padding-left', '16px');
+    await expect(body, `${variant}: 16px on both sides`).toHaveCSS('padding-right', '16px');
+    await expect(body, `${variant}: 20px between the sections`).toHaveCSS('row-gap', '20px');
+    await expect(form.locator('.session-dialog-section').first(), `${variant}: 12px between the fields of a section`).toHaveCSS('row-gap', '12px');
+    await expect(form.locator('.break-entries'), `${variant}: 8px between the breaks`).toHaveCSS('row-gap', '8px');
+    const entries = form.locator('[data-break]');
+    for (let index = 1; index < (await entries.count()); index += 1) {
+      const above = await entries.nth(index - 1).boundingBox();
+      const below = await entries.nth(index).boundingBox();
+      expect((below?.y ?? 0) - ((above?.y ?? 0) + (above?.height ?? 0)), `${variant}: 8px between break ${index} and ${index + 1}`).toBeCloseTo(8, 0);
+    }
+    const buttons = form.locator('.session-dialog-foot button');
+    await expect(buttons, `${variant}: Cancel and Save`).toHaveCount(2);
+    const first = await buttons.nth(0).boundingBox();
+    const second = await buttons.nth(1).boundingBox();
+    expect(first?.height ?? 0, `${variant}: 44px buttons`).toBeGreaterThanOrEqual(43.9);
+    expect(second?.height ?? 0, `${variant}: 44px buttons`).toBeGreaterThanOrEqual(43.9);
+    expect(Math.abs((first?.width ?? 0) - (second?.width ?? 1)), `${variant}: two equal buttons`).toBeLessThanOrEqual(1);
+    const foot = await form.locator('.session-dialog-foot').boundingBox();
+    expect(Math.abs((foot?.y ?? 0) + (foot?.height ?? 0) - 844), `${variant}: the foot stays at the bottom of the screen`).toBeLessThanOrEqual(1);
+    const bodyScroll = await body.evaluate((element) => element.scrollHeight - element.clientHeight);
+    const bodyClient = await body.evaluate((element) => element.clientHeight);
+    lines.push(`${variant}: body ${bodyClient}px, scrolls ${bodyScroll}px, ${bodyScroll <= 1 ? 'fits' : 'scrolls'} at 390x844`);
+    await snap(page, variant === 'overnight chips' ? 'session-dialog-phone-chips' : 'session-dialog-phone-rows', project);
+  }
+  console.log(`PHONE-FIT ${lines.join('; ')}`);
 });
 
 test('Check in then Check out asks for break confirmation and sends the session version', async ({

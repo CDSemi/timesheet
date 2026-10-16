@@ -551,6 +551,24 @@ export function pastDaySuggestedRows(context: SuggestionContext, session: { star
 }
 
 /**
+ * The policy's suggested breaks shifted by a start instant (the shared `suggestBreaks`), keeping only those that lie inside the
+ * session (all of them while it has no end yet), as untouched "suggested" rows pinned in the input zone. Unlike
+ * `pastDaySuggestedRows` it has no past-day rule: it serves "Suggest breaks" and "Confirm breaks", which the person asks for
+ * (the server still refuses a break that has not happened). Row keys come from `keyOf(index)`.
+ */
+export function suggestionRows(
+  policy: PolicyVersion,
+  startUtc: EpochSeconds,
+  endUtc: EpochSeconds | null,
+  zone: string,
+  keyOf: (index: number) => string,
+): BreakRowDraft[] {
+  return suggestBreaks(startUtc, toBreakRules(policy.breaks))
+    .filter((item) => item.startUtc >= startUtc && (endUtc === null || item.endUtc <= endUtc))
+    .map((item, index) => pinnedRow(keyOf(index), 'suggested', zone, item.startUtc, item.endUtc, item.countsAsWork));
+}
+
+/**
  * Places the suggestions again from the current start and end, until the person edits a break
  * row: a draft whose rows were changed, or that holds any row not suggested, is returned as it is,
  * and so is one whose start or end cannot be resolved yet. The caller decides when to call it.

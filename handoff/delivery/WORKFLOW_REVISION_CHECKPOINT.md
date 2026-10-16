@@ -259,6 +259,21 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   registered pending.
 - Running: WP5-UX3-T08-FREEZE (committer, alone; 10 source/test paths incl. a deletion plus 35
   handoff paths; digest checked after staging).
+- WP5-UX3-T08-FREEZE done: 1a33c574ee6f5ec5d02008e6077eb4e8b2ce3415 on main, pushed (45
+  paths; digest after staging and on HEAD da580f1e, 830 files, equal to the probe; every check
+  exit 0; one null-device slip after the push).
+- Running: WP5-UX3-T08B (worker-high, sonnet; Q6 b date rule, chips and the "Break n"
+  sub-dialog, phone spacing, suggestionRows into the model) on 1a33c57 / da580f1e.
+- WP5-UX3-T08B done (worker-high, self-reported claude-sonnet-5-5; reported, not independent
+  proof): break date field only for overnight or open sessions, rows follow the session date;
+  same-day rows down to 268px (every phone), overnight rows down to 390px, chips below with a
+  "Break n" sub-dialog; unit 2126; full e2e desktop 305, mobile 299, 0 failed; simulated clock
+  at the fold and the gap pass; two mutations caught; budgets unchanged; main chunk 484.15 kB;
+  verify 0; digest dd620f70 (834 files). The 390x844 new-session dialog with three suggested
+  breaks scrolls 297px (footer sticky): added to the audit focus. Slips: one heredoc, one
+  `| head -0`, two `tail -c` reads.
+- T09 brief written and registered pending.
+- Running: WP5-UX3-T08B-FREEZE (committer, alone; 10 source/test paths plus 31 handoff paths).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

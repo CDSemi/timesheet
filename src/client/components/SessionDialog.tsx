@@ -1,5 +1,4 @@
 import { type KeyboardEvent, type SubmitEvent, useEffect, useId, useRef, useState } from 'react';
-import { suggestBreaks } from '../../domain/breaks.ts';
 import { diffDays, isCivilDate } from '../../domain/dates.ts';
 import { type EpochSeconds, parseUtcInstant } from '../../domain/instants.ts';
 import {
@@ -34,8 +33,11 @@ import {
   sessionDialogIsDirty,
   setNoBreaks,
   type SuggestionContext,
+  suggestionRows,
 } from './breakRowsModel.ts';
+import { applyBreakEdit, breakDateVisible, followSessionDate } from './breakChipModel.ts';
 import { BreakRows } from './BreakRows.tsx';
+import { BreakSubDialog } from './BreakSubDialog.tsx';
 import { ConfirmDialog } from './ConfirmDialog.tsx';
 import { type ConfirmFact, editorTitle, quickBreaksOf } from './dayEditorModel.ts';
 import { describeError, isStaleVersion } from './errors.ts';
@@ -43,44 +45,16 @@ import { usShortDate } from './format.ts';
 import { LocalTimeField } from './LocalTimeField.tsx';
 import {
   emptyField,
-  fieldFromInstant,
   fieldLocal,
   gapReplacement,
   type LocalField,
   resolveStart,
   type TimeProblem,
   timeProblemOf,
-  toBreakRules,
 } from './sessionModel.ts';
 import { TimeProblemPrompt } from './TimeProblemPrompt.tsx';
 
 /* ---- Pure helpers of the dialog ---------------------------------------------------------------------------------------- */
-
-/**
- * The policy's suggested breaks shifted by a start instant (the shared `suggestBreaks`), keeping only those that lie inside the
- * session (all of them while it has no end yet), as untouched "suggested" rows pinned in the input zone. This is what "Suggest
- * breaks" places and what "Confirm breaks" offers for a session without saved rows; unlike the automatic pre-fill
- * (`pastDaySuggestedRows`, past days only) the person asks for it, and the server still refuses a break that has not happened.
- */
-function suggestionRows(
-  policy: PolicyVersion,
-  startUtc: EpochSeconds,
-  endUtc: EpochSeconds | null,
-  zone: string,
-  keyOf: (index: number) => string,
-): BreakRowDraft[] {
-  return suggestBreaks(startUtc, toBreakRules(policy.breaks))
-    .filter((item) => item.startUtc >= startUtc && (endUtc === null || item.endUtc <= endUtc))
-    .map((item, index) => ({
-      key: keyOf(index),
-      origin: 'suggested',
-      start: fieldFromInstant(zone, item.startUtc),
-      minutes: String(Math.floor((item.endUtc - item.startUtc) / 60)),
-      countsAsWork: item.countsAsWork,
-      pinned: { zone, startUtc: item.startUtc, endUtc: item.endUtc },
-      edited: false,
-    }));
-}
 
 /** A typed field resolved in a zone with the shared resolver; null when it is empty or cannot be placed. */
 function fieldInstant(field: LocalField, zone: string): EpochSeconds | null {
@@ -197,9 +171,14 @@ const UNCONFIRMED_SENTENCE = 'Unconfirmed breaks keep OT for this day pending un
  * the final "Save this session?" confirmation. Only after its Save is the existing `SessionRequest` sent (`allowUnconfirmed`
  * only for "Leave breaks unconfirmed for now"). Cancel, Escape and Close ask "Discard your changes?" when the draft changed.
  *
- * Nested dialogs (WP5-UX-B3-01): one modal on top at a time (this dialog, then the notice or a confirmation). This dialog handles
- * its own `cancel` event and its own Escape, stops both from reaching the editor, and ignores an Escape that belongs to a
- * dialog nested in it. The editor returns focus to the button that opened it, or to "Times" after a save.
+ * Break dates (WP5-UX3-T08B, owner answer Q6 b): a break row has its own date field only when the session crosses local midnight
+ * in the input zone or has no end (`breakDateVisible`); otherwise every break is on the session start date and follows it when the
+ * date or the input zone changes (`followSessionDate`, applied by `settle`). Where the break list is too narrow for the rows it
+ * shows chips; a chip opens the "Break n" sub-dialog (`BreakSubDialog`), whose Done, Cancel and Remove edit the draft only.
+ *
+ * Nested dialogs (WP5-UX-B3-01): one modal on top at a time (this dialog, then the notice, a confirmation or the "Break n"
+ * sub-dialog). This dialog handles its own `cancel` event and its own Escape, stops both from reaching the editor, and ignores an
+ * Escape that belongs to a dialog nested in it. The editor returns focus to the button that opened it, or to "Times" after a save.
  */
 export function SessionDialog({
   workDate,
@@ -246,6 +225,8 @@ export function SessionDialog({
   const saveButton = useRef<HTMLButtonElement>(null);
   const addBreak = useRef<HTMLButtonElement>(null);
   const keys = useRef(0);
+  /** The draft just before "Add break" added a row, so Cancel in that row's sub-dialog can restore it exactly. */
+  const beforeAdd = useRef<SessionDialogDraft | null>(null);
   const isNew = session === undefined;
   const context: SuggestionContext = { workDate, todayLocal, policy, keyOf: (index) => `suggested-${index}` };
 
@@ -274,6 +255,12 @@ export function SessionDialog({
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [focusAdd, setFocusAdd] = useState(0);
+  /** The break chip whose "Break n" sub-dialog is open (third modal level), and whether its row was just added. */
+  const [sub, setSub] = useState<{ key: string; isNew: boolean } | null>(null);
+  /** Counts the refused saves with marked rows; the break list moves focus to the first marked chip on each. */
+  const [errorFocus, setErrorFocus] = useState(0);
+  /** Where focus goes once the sub-dialog is gone: a chip by row key, else "Add break". */
+  const [chipFocus, setChipFocus] = useState<{ count: number; key: string | null }>({ count: 0, key: null });
 
   useEffect(() => {
     const element = dialog.current;
@@ -287,15 +274,29 @@ export function SessionDialog({
     if (focusAdd > 0) addBreak.current?.focus();
   }, [focusAdd]);
 
+  // The sub-dialog is already out of the document here, so the page behind is no longer inert.
+  useEffect(() => {
+    if (chipFocus.count === 0) return;
+    const chip = chipFocus.key === null ? null : dialog.current?.querySelector<HTMLElement>(`[data-chip-key="${CSS.escape(chipFocus.key)}"]`);
+    (chip ?? addBreak.current)?.focus();
+  }, [chipFocus]);
+
   const zone = draft.zone.trim();
   const reasonMissing = reasonRequired && reason.trim() === '';
   const overnight = draft.end.date !== '' && draft.start.date !== '' && draft.end.date > draft.start.date;
+  /** Owner answer Q6 b: a break has its own date field only when the session crosses local midnight or has no end. */
+  const showBreakDate = breakDateVisible(draft.start.date, draft.end.date);
+  const subIndex = sub === null ? -1 : draft.rows.findIndex((row) => row.key === sub.key);
+  const subRow = subIndex < 0 ? undefined : draft.rows[subIndex];
   const title = isNew ? 'New session' : 'Edit session';
   const subtitle = `${editorTitle(workDate)} · accounting date in ${reportingZone}`;
 
-  /** New sessions only: the suggestions follow the start until a break row is changed (the model decides when they stop). */
+  /**
+   * After a change of the times or the zone: new sessions re-shift the suggestions until a break row is changed (the model decides
+   * when they stop), and while no date field is shown every break follows the session date (Q6 b).
+   */
   function settle(next: SessionDialogDraft): SessionDialogDraft {
-    return isNew ? reshiftSuggestions(next, context) : next;
+    return followSessionDate(isNew ? reshiftSuggestions(next, context) : next);
   }
 
   function clearMessages() {
@@ -373,6 +374,38 @@ export function SessionDialog({
     if (built.problem !== null) setProblem(built.problem);
     else if (built.message !== null) setError(built.message);
     setRowErrors(new Map(built.rowErrors.map((item) => [item.key, item])));
+    if (built.rowErrors.length > 0) setErrorFocus((value) => value + 1);
+  }
+
+  /** The "Break n" sub-dialog ended: close it and put focus where the flow decided (null: "Add break"). */
+  function closeSub(focusKey: string | null) {
+    setSub(null);
+    setChipFocus((value) => ({ count: value.count + 1, key: focusKey }));
+  }
+
+  function doneSub(key: string, edited: BreakRowDraft) {
+    setDraft(settle(applyBreakEdit(draft, key, edited)));
+    withoutRowError(key);
+    closeSub(key);
+  }
+
+  /** Cancel discards the edit; a row that was only just added by "Add break" goes with it, and the draft is as it was before. */
+  function cancelSub(key: string, isNew: boolean) {
+    if (isNew) {
+      setDraft(beforeAdd.current ?? removeBreakRow(draft, key));
+      closeSub(null);
+    } else {
+      closeSub(key);
+    }
+  }
+
+  /** Remove: focus goes to the next chip, else the previous, else "Add break". */
+  function removeSub(key: string) {
+    const at = draft.rows.findIndex((row) => row.key === key);
+    const neighbour = draft.rows[at + 1] ?? draft.rows[at - 1];
+    setRowErrors(new Map());
+    setDraft(removeBreakRow(draft, key));
+    closeSub(neighbour === undefined ? null : neighbour.key);
   }
 
   function build(next: SessionDialogDraft, allowUnconfirmed: boolean): SessionDialogBuild {
@@ -453,6 +486,7 @@ export function SessionDialog({
         const rowError = serverBreakRowError(caught.code, caught.details, sent);
         if (rowError !== null) {
           setRowErrors(new Map([[rowError.key, rowError]]));
+          setErrorFocus((value) => value + 1);
           return;
         }
         const found = timeProblemOf(caught.code, caught.details);
@@ -571,7 +605,9 @@ export function SessionDialog({
               rows={draft.rows}
               noBreaks={draft.noBreaks}
               zone={zone}
+              showDate={showBreakDate}
               errors={rowErrors}
+              focusErrors={errorFocus}
               note={note}
               addBreak={addBreak}
               onEdit={(key, patch) => {
@@ -580,9 +616,13 @@ export function SessionDialog({
               }}
               onAdd={() => {
                 keys.current += 1;
+                const key = `new-${keys.current}`;
+                beforeAdd.current = draft;
                 setRowErrors(new Map());
-                setDraft(addBreakRow(draft, `new-${keys.current}`));
+                setDraft(addBreakRow(draft, key));
+                return key;
               }}
+              onOpenBreak={(key, isNew) => setSub({ key, isNew })}
               onRemove={(key) => {
                 setRowErrors(new Map());
                 setDraft(removeBreakRow(draft, key));
@@ -636,6 +676,19 @@ export function SessionDialog({
           opener={saveButton.current}
           onConfirm={() => void send(step.request, step.sent)}
           onCancel={() => setStep({ kind: 'edit' })}
+        />
+      )}
+      {sub !== null && subRow !== undefined && step.kind === 'edit' && (
+        <BreakSubDialog
+          key={sub.key}
+          row={subRow}
+          index={subIndex}
+          zone={zone}
+          showDate={showBreakDate}
+          message={rowErrors.get(sub.key)?.message ?? null}
+          onDone={(edited) => doneSub(sub.key, edited)}
+          onCancel={() => cancelSub(sub.key, sub.isNew)}
+          onRemove={() => removeSub(sub.key)}
         />
       )}
       {step.kind === 'discard' && (

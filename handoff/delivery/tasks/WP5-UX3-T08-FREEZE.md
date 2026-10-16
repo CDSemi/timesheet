@@ -136,3 +136,14 @@ staging and on HEAD; staged count per group; other modified handoff files; every
 its exit code; any fix, masking or stop reason.
 
 ## Results
+
+- Pre-HEAD f8117a48cd856ee09494e54c64d6f09dbc20b234 (= origin/main); commit
+  1a33c574ee6f5ec5d02008e6077eb4e8b2ce3415 on main; pushed yes; remote SHA equal.
+- Digest after staging and on HEAD (ls-tree): da580f1ec4df94fc438fc3594892657d41ded922e978519b7b9a4471e83f31d4, 830 files.
+- Staged 45: 10 source/test (2 new, 1 deleted, 7 modified) + 35 handoff (7 modified, 2 task
+  records, 26 evidence incl. 24 in T08). No other modified handoff files. No masking.
+- Checks (all exit 0): node v24.21.0; precommit PASS 45 files; diff --check; JSON parse;
+  validate_orchestration PASS; check_recovery 106 probes PASS; validate_package preflight PASS.
+- Evidence: evidence/WP5-UX3-T08-FREEZE/checks.txt and commit-message.txt (unstaged).
+- Deviation: one stray `--help` run of source-digest with output sent to the null device,
+  after the push; no effect.
