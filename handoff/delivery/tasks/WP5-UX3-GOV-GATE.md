@@ -4,8 +4,10 @@
   gate; attempt 1; depends on WP5-UX3-GOV-FREEZE (done).
 - Profile/routing: timesheet-verifier, requested sonnet/medium, no override. Routing:
   size S, risk M, novelty no. Records in English.
-- Target: the WP5-UX3-GOV-FREEZE commit (board `WP5-UX3-GOV-FREEZE.commit_sha`). HEAD must
-  equal it and nothing outside `handoff/` may differ from it. Writable: this report and
+- Target: the WP5-UX3-GOV-FREEZE commit 79b9a53c13b1542877a587dd0ca00fe295d1f8b6 (board
+  `WP5-UX3-GOV-FREEZE.commit_sha`; pushed). HEAD must equal it and nothing outside
+  `handoff/` may differ from it. Uncommitted coordinator records under `handoff/` are
+  expected. Writable: this report and
   `handoff/delivery/evidence/WP5-UX3-GOV-GATE/` only. Change no source, doc, governance or
   state file.
 - Context: the owner asked on 2026-10-15 to stop enforcing the industrial style and use a
@@ -60,3 +62,14 @@ At most 150 words, beginning with 'Self-reported model: ...': HEAD, both digests
 check with its exit code and counts, the changed paths, the wording result, the decision.
 
 ## Results
+
+Verifier model: claude-sonnet-5-5. Evidence: `handoff/delivery/evidence/WP5-UX3-GOV-GATE/checks.txt`.
+
+- HEAD 79b9a53c13b1542877a587dd0ca00fe295d1f8b6; only handoff/ paths in status. Node v24.21.0.
+- Digest before and after: a682f15323b7204010060b9619cc38b29cc5afd331c01f7c7622d8be06408d8b (817 files).
+- validate_orchestration exit 0 (PASS, 379 tasks); check_recovery exit 0 (106 probes); validate_package --preflight exit 0 (scenario total 91).
+- npm run verify exit 0 (90 files, 1950 tests, smoke passed; port 48560).
+- git diff --check exit 0; non-handoff changed paths: AGENTS.md, AGENTS.vi.md; governance paths changed: the same two.
+- Wording: all 7 forbidden terms 0; required headings, 4 items each, tokens present; section text equals B2 blocks (cmp exit 0, both).
+
+Decision: PASS

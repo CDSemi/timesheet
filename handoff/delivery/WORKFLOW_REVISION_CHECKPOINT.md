@@ -101,6 +101,25 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   common phones; default chips) blocks only T08B.
 - Running: WP5-UX3-GOV-FREEZE (committer, alone; AGENTS pair plus 32 handoff paths). Then
   WP5-UX3-GOV-GATE and WP5-UX3-GOV-AUDIT (registered pending).
+- WP5-UX3-GOV-FREEZE done: 79b9a53c13b1542877a587dd0ca00fe295d1f8b6 on main, pushed (34
+  paths; digests a682f153, 817 files; every check exit 0; no checks.txt evidence, results
+  in the brief only).
+- Running: WP5-UX3-GOV-GATE (verifier, sonnet) on 79b9a53 / a682f153. Then the fresh opus
+  WP5-UX3-GOV-AUDIT.
+- WP5-UX3-GOV-GATE PASS (verifier, self-reported claude-sonnet-5-5) on 79b9a53: digest
+  a682f153 before and after; validators, check_recovery 106, preflight 91, verify 1950;
+  only AGENTS.md and AGENTS.vi.md changed outside handoff/; forbidden wording 0; section
+  byte-equal to the B2 blocks.
+- Running: WP5-UX3-GOV-AUDIT (fresh auditor, opus) on 79b9a53 / a682f153.
+- WP5-UX3-GOV-AUDIT PASS (fresh auditor, self-reported claude-opus-5-5), no findings:
+  HEAD = reviewed_commit = 79b9a53, digest a682f153 at start, end and final check; both
+  sections byte-equal to B2; EN/VI equivalent; only the AGENTS pair changed among
+  governance paths; validators pass. Review `handoff/delivery/GOV_UX3_REVIEW.md` (+ vi).
+  Risks R1 (docs/04 line 87 "High-density"), R2 (durations through the one `--transition`)
+  and R3 (stale injected AGENTS copy: the on-disk text wins) folded into the T01 brief; R4,
+  R5 and R6 (GLOSSARY.md) in the governance backlog. **WP5-UX3-GOV accepted on 79b9a53.**
+- Running: WP5-UX3-GOV-ACCEPT (committer, alone; 28 handoff paths). T01 registered pending
+  (worker-high, sonnet), dispatched after the accept commit.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

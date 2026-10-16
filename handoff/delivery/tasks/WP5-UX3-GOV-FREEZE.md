@@ -159,3 +159,14 @@ Push per the profile. Append to this brief:
 - any fix applied or the stop reason.
 
 ## Results
+
+Self-reported model: claude-sonnet-5-5 (timesheet-committer).
+
+- Pre-HEAD = origin/main = 5c8355df8d60fdeb85b551eb0e5a09e8f18a6334 (branch main; no merge or rebase).
+- Commit SHA: 79b9a53c13b1542877a587dd0ca00fe295d1f8b6. Pushed: yes. Remote SHA: 79b9a53c13b1542877a587dd0ca00fe295d1f8b6. No tag.
+- Digest before add: a682f153... (817 files). Digest of HEAD ls-tree: a682f153... (817 files). Equal.
+- Staged 34: 2 governance (AGENTS.md, AGENTS.vi.md); 32 handoff = 8 modified, 5 task records, 8 renders, 11 evidence (9 GOV + 2 T06-FREEZE).
+- Other modified tracked handoff files: none beyond the listed ones. No unexpected paths; nothing unstaged beforehand.
+- Checks (exit): node --version v24.21.0 (portable); source-digest 0; git add 0; precommit-check 0 (34 files, 0 findings); git diff --cached --check 0; JSON parse 0; validate_orchestration 0; check_recovery 0 (106 probes); validate_package --preflight 0; fetch 0; push --dry-run 0; push 0.
+- Fixes/masking: none. Only CRLF-to-LF warnings on 4 GOV evidence txt files at add.
+- Raw outputs in D:\.claude-tmp\timesheet\WP5-UX3-GOV-FREEZE. This brief's results remain unstaged.

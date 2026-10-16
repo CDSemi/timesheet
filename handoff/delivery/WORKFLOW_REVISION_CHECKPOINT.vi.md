@@ -105,6 +105,25 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   trên điện thoại phổ biến; mặc định chip) chỉ chặn T08B.
 - Đang chạy: WP5-UX3-GOV-FREEZE (committer, chạy một mình; cặp AGENTS cùng 32 đường dẫn
   handoff). Sau đó WP5-UX3-GOV-GATE và WP5-UX3-GOV-AUDIT (đã đăng ký, đang chờ).
+- WP5-UX3-GOV-FREEZE xong: 79b9a53c13b1542877a587dd0ca00fe295d1f8b6 trên main, đã push (34
+  đường dẫn; digest a682f153, 817 file; mọi bước kiểm exit 0; không có file bằng chứng
+  checks.txt, kết quả chỉ ghi trong brief).
+- Đang chạy: WP5-UX3-GOV-GATE (verifier, sonnet) trên 79b9a53 / a682f153. Sau đó audit opus
+  mới WP5-UX3-GOV-AUDIT.
+- WP5-UX3-GOV-GATE PASS (verifier, tự báo claude-sonnet-5-5) trên 79b9a53: digest a682f153
+  trước và sau; các validator, check_recovery 106, preflight 91, verify 1950; ngoài
+  handoff/ chỉ AGENTS.md và AGENTS.vi.md thay đổi; không còn từ bị cấm; nội dung mục khớp
+  từng byte với khối B2.
+- Đang chạy: WP5-UX3-GOV-AUDIT (auditor mới, opus) trên 79b9a53 / a682f153.
+- WP5-UX3-GOV-AUDIT PASS (auditor mới, tự báo claude-opus-5-5), không có phát hiện: HEAD =
+  reviewed_commit = 79b9a53, digest a682f153 lúc đầu, lúc cuối và lần kiểm cuối; cả hai mục
+  khớp từng byte với B2; EN/VI tương đương; trong các đường dẫn quản trị chỉ cặp AGENTS thay
+  đổi; các validator đạt. Review `handoff/delivery/GOV_UX3_REVIEW.vi.md` (+ en). Rủi ro R1
+  (docs/04 dòng 87 "High-density"), R2 (thời lượng qua một `--transition` duy nhất) và R3
+  (bản AGENTS nạp sẵn đã cũ: bản trên đĩa được ưu tiên) đưa vào brief T01; R4, R5 và R6
+  (GLOSSARY.md) vào backlog quản trị. **WP5-UX3-GOV đã nghiệm thu trên 79b9a53.**
+- Đang chạy: WP5-UX3-GOV-ACCEPT (committer, chạy một mình; 28 đường dẫn handoff). T01 đã
+  đăng ký ở trạng thái chờ (worker-high, sonnet), giao sau commit nghiệm thu.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

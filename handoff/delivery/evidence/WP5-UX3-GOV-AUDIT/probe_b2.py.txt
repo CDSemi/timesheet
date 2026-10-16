@@ -1,0 +1,81 @@
+"""WP5-UX3-GOV-AUDIT probe: compare the AGENTS UI sections at the freeze commit with the
+WP5-UX3-PLAN B2 fenced blocks, check line endings, forbidden wording and section placement.
+Read-only: uses `git show <commit>:<path>` and prints a report to stdout."""
+import re
+import subprocess
+import sys
+
+sys.stdout.reconfigure(encoding="utf-8")
+COMMIT = sys.argv[1]
+PARENT = sys.argv[2]
+
+
+def show(rev, path):
+    return subprocess.run(["git", "show", f"{rev}:{path}"], capture_output=True, check=True).stdout
+
+
+def section(text, heading_prefix):
+    lines = text.split("\n")
+    start = next(i for i, line in enumerate(lines) if line.startswith(heading_prefix))
+    end = len(lines)
+    for j in range(start + 1, len(lines)):
+        if lines[j].startswith("#"):
+            end = j
+            break
+    block = lines[start:end]
+    while block and block[-1] == "":
+        block.pop()
+    return start + 1, block
+
+
+plan = show(COMMIT, "handoff/delivery/tasks/WP5-UX3-PLAN.md").decode("utf-8")
+fences = re.findall(r"```markdown\n(.*?)\n```", plan.split("#### B2.")[1].split("#### B3.")[0], re.S)
+print("plan B2 fenced blocks:", len(fences))
+
+results = {}
+for name, heading, fence in (
+    ("AGENTS.md", "### Frontend and UI/UX standards", fences[0]),
+    ("AGENTS.vi.md", "### Tiêu chuẩn giao diện và UI/UX", fences[1]),
+):
+    raw = show(COMMIT, name)
+    print(f"--- {name} at {COMMIT[:7]}")
+    print("  bytes:", len(raw), "CR bytes:", raw.count(b"\r"), "ends with LF:", raw.endswith(b"\n"),
+          "BOM:", raw.startswith(b"\xef\xbb\xbf"))
+    text = raw.decode("utf-8")
+    first_line, block = section(text, heading)
+    print("  section starts at line", first_line, "and has", len(block), "lines; last line is the file's last:",
+          first_line + len(block) - 1 == len(text.rstrip("\n").split("\n")))
+    equal = "\n".join(block) == fence
+    results[name] = equal
+    print("  section equals PLAN B2 fence byte-for-byte:", equal)
+    if not equal:
+        for k, (a, b) in enumerate(zip(block, fence.split("\n"))):
+            if a != b:
+                print("  first difference at section line", k + 1)
+                print("   agents:", repr(a))
+                print("   plan:  ", repr(b))
+                break
+    lowered = text.lower()
+    for term in ("industrial", "b2b", "semiconductor", "công nghiệp", "bán dẫn", "transition: all", "300ms",
+                 "300 ms", "4px", "c&d semi", "taste skills integration", "unified frontend", "high-end industrial",
+                 "orchestrate three skills", "phải thực thi nghiêm ngặt", "mày "):
+        print(f"  count {term!r}:", lowered.count(term))
+    item_lines = [line for line in block if re.match(r"^\d+\. \*\*", line)]
+    print("  numbered items:", len(item_lines))
+    for needle in ("src/client/styles.css", "both dark sets" if name == "AGENTS.md" else "cả hai bộ tối",
+                   "--transition", "prefers-reduced-motion", "WCAG 2.2 AA", "44px", "768px",
+                   "stitch-design-taste", "design-taste-frontend", "high-end-visual-design",
+                   "mobile-first" if name == "AGENTS.md" else "ưu tiên điện thoại trước", "never `all`"
+                   if name == "AGENTS.md" else "không dùng `all`"):
+        print(f"  contains {needle!r}:", needle in "\n".join(block))
+
+    old = show(PARENT, name).decode("utf-8")
+    old_lines = old.rstrip("\n").split("\n")
+    new_lines = text.rstrip("\n").split("\n")
+    print("  lines before:", len(old_lines), "after:", len(new_lines))
+    prefix = 0
+    while prefix < min(len(old_lines), len(new_lines)) and old_lines[prefix] == new_lines[prefix]:
+        prefix += 1
+    print("  unchanged leading lines:", prefix, "(section starts at", first_line, ")")
+
+print("RESULT:", "EQUAL" if all(results.values()) else "DIFFERENT")

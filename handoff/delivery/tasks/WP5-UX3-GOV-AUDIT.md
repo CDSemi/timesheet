@@ -7,7 +7,8 @@
   `.vi.md` bilingual (REVIEW template in `handoff/templates/`).
 - Author separation: you did not write WP5-UX3-GOV or WP5-UX3-PLAN (their agent IDs are on
   the board). Treat their reports as claims.
-- Target: the WP5-UX3-GOV-FREEZE commit (board `commit_sha`) with the gate digest
+- Target: the WP5-UX3-GOV-FREEZE commit 79b9a53c13b1542877a587dd0ca00fe295d1f8b6 (gate
+  WP5-UX3-GOV-GATE PASS, board) with the gate digest
   a682f15323b7204010060b9619cc38b29cc5afd331c01f7c7622d8be06408d8b (817 files). Record HEAD,
   the digest before and after, and `reviewed_commit`. Any change outside `handoff/`
   invalidates the audit.
@@ -66,3 +67,47 @@ REQUIRED / NOT VERIFIED with findings. Return at most 200 words, beginning with 
 self-reported model.
 
 ## Results
+
+### Attempt 1 (2026-10-15T23:58Z to 2026-10-16T00:08Z UTC; self-reported model claude-opus-5-5)
+
+- Decision: **PASS**. Findings: no proven defect. Review pair: `handoff/delivery/GOV_UX3_REVIEW.md`
+  and `.vi.md`.
+- Identity: HEAD 79b9a53c13b1542877a587dd0ca00fe295d1f8b6 before, after and at the final
+  check; reviewed_commit 79b9a53c13b1542877a587dd0ca00fe295d1f8b6 (= origin/main by
+  `git ls-remote`); digest a682f15323b7204010060b9619cc38b29cc5afd331c01f7c7622d8be06408d8b
+  (817 files) before, after and at the final check; Node v24.21.0; workflow Python 3.12.14.
+  The working tree changed under handoff/ only. A new coordinator brief
+  `tasks/WP5-UX3-T01.md` appeared during the audit.
+- Checks run (evidence in `handoff/delivery/evidence/WP5-UX3-GOV-AUDIT/`, masked LF):
+  1. `git diff 5c8355d..79b9a53`: AGENTS.md and AGENTS.vi.md are the only paths outside
+     handoff/ and the only governance paths changed. `diff --check` exit 0. Nothing
+     changed outside handoff/ in the working tree. (`git-scope.txt`)
+  2. `probe_b2.py`: both sections equal the PLAN B2 fences byte for byte. They are LF
+     only, with no BOM, and sit at the end of each file. There are no industrial, B2B or
+     semiconductor terms and no `transition: all` or 300 ms. Each file has 4 numbered
+     items. (`probe-b2.txt`, `probe_b2.py.txt`)
+  3. `git grep` over the governance paths, DEVELOPMENT and README: no old wording.
+     CLAUDE.md and CLAUDE.vi.md only import AGENTS.md. The three skills exist.
+     GLOSSARY.md and docs/adr are absent (this existed before).
+     (`gov-grep.txt`, `csp-grep.txt`)
+  4. `validate_orchestration.py` PASS (379 tasks), `check_recovery.py` PASS (106) and
+     `validate_package.py --preflight` PASS (91 scenarios), all exit 0. Preflight was
+     rerun after the review pair was written: PASS, 112 pairs, exit 0.
+     (`validate-orchestration.txt`, `check-recovery.txt`, `preflight.txt`, `final.txt`)
+  5. Board model count: the strongest actual model is claude-opus-5-5, so the reviewer is
+     not weaker than any author. (`models.txt`)
+- Risks, not defects (details in the review):
+  - R1: docs/04 line 87 "High-density" (EN/VI) is not named in the T01 docs scope.
+  - R2: keep the lift and fast durations expressed through the single `--transition`.
+  - R3: the stale injected AGENTS copy contradicts the new section. T01 briefs should say
+    that the on-disk text wins, or the client should be restarted.
+  - R4: disabled and inactive dimming against "never colour alone" (information).
+  - R5: optional wording.
+  - R6: missing GLOSSARY.md (backlog).
+- Deviations: the first run of `probe_b2.py` stopped with a cp1252 UnicodeEncodeError
+  (`python -I` ignores `PYTHONIOENCODING`). The probe now reconfigures stdout to UTF-8 and
+  the rerun passed. No stdin feeding, no pipe into head or tail, no null-device redirect,
+  no recursive delete and no cmd.exe. Files were created only in the task folder, this
+  evidence folder, the review pair and this Results section. Nothing is left running.
+- Next action: the coordinator records WP5-UX3-GOV-AUDIT PASS on 79b9a53 / a682f153 and
+  adds R1 to R3 to the WP5-UX3-T01 brief before dispatch.

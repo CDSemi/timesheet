@@ -37,8 +37,10 @@
   `handoff/delivery/design/WP5-UX3/mockup.html`); phần T06 (model dòng giờ nghỉ) đã đóng
   băng ở 5c8355d. Chủ dự án đã trả lời G-1..G-5 (G-1 b kèm thay đổi); phụ lục
   WP5-UX3-PLAN2 đã cập nhật mockup (Day editor nổi dưới 1360px, bảng tuần không bo góc,
-  chip giờ nghỉ trên điện thoại, nhãn "in progress"). Đang chạy: chuỗi quản trị cho mục UI
-  trong AGENTS.md (đóng băng, gate, audit mới), sau đó các phần T01..T10. Câu hỏi không bắt
+  chip giờ nghỉ trên điện thoại, nhãn "in progress"). Thay đổi quản trị cho mục UI trong
+  AGENTS.md đã được nghiệm thu (WP5-UX3-GOV-AUDIT PASS tại 79b9a53,
+  [GOV UX3 review](delivery/GOV_UX3_REVIEW.vi.md)). Tiếp theo: các phần T01..T10, mỗi phần
+  một lần đóng băng, rồi gate và các audit độc lập. Câu hỏi không bắt
   buộc WP5-UX3-Q6 (hàng hay chip cho giờ nghỉ trên điện thoại; `pending_owner_question_4`
   trên board) chỉ chặn T08B.
 - Pilot: [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) cụ thể đã sẵn để chủ dự án duyệt
