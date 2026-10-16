@@ -274,6 +274,24 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   `| head -0`, two `tail -c` reads.
 - T09 brief written and registered pending.
 - Running: WP5-UX3-T08B-FREEZE (committer, alone; 10 source/test paths plus 31 handoff paths).
+- WP5-UX3-T08B-FREEZE done: f89573b89435b651f5d7cdca7811b972a82087bc on main, pushed (41
+  paths; digest dd620f70, 834 files; every check exit 0).
+- Running: WP5-UX3-T09 (worker-high, sonnet; Check out dialog on the new break rows with E-1,
+  BreaksEditor deletion if unused, batch-review "category" strings) on f89573b / dd620f70.
+- WP5-UX3-T09 first hand-back (self-reported claude-sonnet-5-5): Check out on BreakRows with
+  E-1 (ticked: `breaks: []` confirmed; rows: confirmed, replace; empty unticked: `breaks`
+  omitted); BreaksEditor.tsx deleted; unit 2126; full e2e 614/0/66; mutation caught; verify
+  0; probe digest 2038dfc7 (833 files). Left: two batch strings in BatchDialog.tsx (assertion
+  in keyboard-access.spec.ts) and the "Saving" hint inside Check out. T10 brief written.
+- Running: T09 Addendum 1 (the same worker; owned paths extended for exactly those two
+  points), then full e2e, verify and a new probe digest.
+- T09 Addendum 1 done: the two batch strings say "category" (BatchDialog.tsx, assertion in
+  keyboard-access.spec.ts:382); BreakRows hint "Checking out ..." in the Check out dialog; unit
+  2126; full e2e 614/0/66; verify 0; probe digest 1fc57bce (833 files). Two code comments still
+  say "new label" (server schemas.ts and client api.ts; not user-visible; left).
+- Gate brief WP5-UX3-GATE written (target filled after the T10 freeze); T10 registered pending.
+- Running: WP5-UX3-T09-FREEZE (committer, alone; 9 source/test paths incl. the BreaksEditor.tsx
+  deletion plus 29 handoff paths; digest checked after staging).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

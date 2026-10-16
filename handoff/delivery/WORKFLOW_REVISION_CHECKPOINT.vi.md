@@ -295,6 +295,26 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Đã viết brief T09 và đăng ký ở trạng thái chờ.
 - Đang chạy: WP5-UX3-T08B-FREEZE (committer, chạy một mình; 10 đường dẫn mã nguồn/test cùng 31
   đường dẫn handoff).
+- WP5-UX3-T08B-FREEZE xong: f89573b89435b651f5d7cdca7811b972a82087bc trên main, đã push (41
+  đường dẫn; digest dd620f70, 834 file; mọi bước kiểm exit 0).
+- Đang chạy: WP5-UX3-T09 (worker-high, sonnet; hộp thoại Check out dùng dòng giờ nghỉ mới với
+  E-1, xóa BreaksEditor nếu không còn dùng, chữ "category" trong duyệt hàng loạt) trên f89573b /
+  dd620f70.
+- WP5-UX3-T09 bàn giao lần đầu (tự báo claude-sonnet-5-5): Check out dùng BreakRows với E-1
+  (tick ô: `breaks: []` đã xác nhận; có dòng: xác nhận và thay; danh sách trống không tick: bỏ
+  `breaks`); xóa BreaksEditor.tsx; unit 2126; e2e đầy đủ 614/0/66; đột biến bị bắt; verify 0;
+  digest tạm 2038dfc7 (833 file). Còn lại: hai chuỗi duyệt hàng loạt trong BatchDialog.tsx
+  (khẳng định trong keyboard-access.spec.ts) và câu gợi ý "Saving" trong Check out. Đã viết brief
+  T10.
+- Đang chạy: T09 phụ lục 1 (cùng worker; mở rộng đường dẫn sở hữu đúng cho hai điểm đó), rồi e2e
+  đầy đủ, verify và digest tạm mới.
+- T09 phụ lục 1 xong: hai chuỗi duyệt hàng loạt ghi "category" (BatchDialog.tsx, khẳng định trong
+  keyboard-access.spec.ts:382); câu gợi ý "Checking out ..." trong hộp thoại Check out; unit 2126;
+  e2e đầy đủ 614/0/66; verify 0; digest tạm 1fc57bce (833 file). Còn hai chú thích trong code ghi
+  "new label" (schemas.ts phía server và api.ts phía client; người dùng không thấy; giữ nguyên).
+- Đã viết brief gate WP5-UX3-GATE (điền đích sau khi đóng băng T10); T10 đăng ký ở trạng thái chờ.
+- Đang chạy: WP5-UX3-T09-FREEZE (committer, chạy một mình; 9 đường dẫn mã nguồn/test gồm việc xóa
+  BreaksEditor.tsx, cùng 29 đường dẫn handoff; digest kiểm sau khi stage).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

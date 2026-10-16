@@ -127,3 +127,13 @@ staged count per group; other modified handoff files; every check with its exit 
 fix, masking or stop reason.
 
 ## Results
+
+- Pre-HEAD 1a33c574ee6f5ec5d02008e6077eb4e8b2ce3415 (= origin/main). Commit
+  f89573b89435b651f5d7cdca7811b972a82087bc on main; pushed yes; remote SHA the same.
+- Digest before add and on the new HEAD (git ls-tree): dd620f70e47c55a0b2fb1dcce215d390bb5156bf47da8a470f22a19d8ed21355,
+  834 files, both equal.
+- Staged 41: 10 source/tests (4 new, 6 modified) + 31 handoff (T08B evidence 22: 14 txt, 8 png).
+- Other modified handoff files: the 5 expected ones; both stats identical, no line-ending-only change.
+- Checks (all exit 0): node v24.21.0; precommit 41 files 0 findings; diff --check clean; JSON parse; validate_orchestration PASS; check_recovery PASS 106; validate_package --preflight PASS.
+  Details in evidence/WP5-UX3-T08B-FREEZE/checks.txt.
+- No masking, no whitespace fix, no stop. Evidence folder (checks.txt, commit-message.txt) and this Results section left unstaged.

@@ -128,7 +128,7 @@ export function BatchDialog({
       ) : (
         <div className="stack">
           <h2 id="batch-title" ref={heading} tabIndex={stepChanged ? -1 : undefined}>
-            Recorded work conflicts with the new label
+            Recorded work conflicts with the new category
           </h2>
           <p>No work session is edited or deleted. Only the day label changes.</p>
           <ul className="plain conflict-list">
@@ -150,7 +150,7 @@ export function BatchDialog({
           </ul>
           <label className="inline">
             <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
-            I confirm the label change for these dates
+            I confirm the category change for these dates
           </label>
           {error !== null && (
             <p className="error" role="alert">

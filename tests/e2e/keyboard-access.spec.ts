@@ -379,7 +379,7 @@ test('WP5-UX-AX-08: the batch review returns focus to "Preview changes" and move
   await openReview();
   await dialog.getByRole('button', { name: 'Review conflicts' }).focus();
   await page.keyboard.press('Enter');
-  await expect(dialog.getByRole('heading', { name: 'Recorded work conflicts with the new label' }), 'the conflicts step heading').toBeFocused();
+  await expect(dialog.getByRole('heading', { name: 'Recorded work conflicts with the new category' }), 'the conflicts step heading').toBeFocused();
   await dialog.getByRole('button', { name: 'Back', exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(dialog.getByRole('heading', { name: 'Review category change' }), 'the review step heading').toBeFocused();

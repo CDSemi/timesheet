@@ -298,7 +298,7 @@ test('Check in/out: in the top bar on every own screen of a phone, as the card i
   // Checking out from the bar ends the session, flips the bar to Check in and puts focus on the bar button again.
   await page.waitForTimeout(1_500);
   await checkOut.click();
-  await dialog.getByRole('radio', { name: /No breaks taken/ }).check();
+  await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
   await dialog.getByRole('button', { name: 'Check out, no breaks taken' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(barGroup).toContainText('Checked out');
@@ -451,7 +451,7 @@ test('the title row: check in/out right of the h1 on a desktop (no card), the ph
   await page.locator('.page-head').screenshot({ path: screenshotPath(`title-row-${testInfo.project.name}-checked-in-synthetic.png`), animations: 'disabled' });
   await page.waitForTimeout(1_500);
   await group.getByRole('button', { name: 'Check out', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Check out' }).getByRole('radio', { name: /No breaks taken/ }).check();
+  await page.getByRole('dialog', { name: 'Check out' }).getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
   await page.getByRole('dialog', { name: 'Check out' }).getByRole('button', { name: 'Check out, no breaks taken' }).click();
   await expect(group).toContainText('Checked out');
 });

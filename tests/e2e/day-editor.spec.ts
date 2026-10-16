@@ -1619,6 +1619,384 @@ test('phone dialog spacing at 390x844: 16px sides, 20px between sections, 8px be
   console.log(`PHONE-FIT ${lines.join('; ')}`);
 });
 
+/*
+ * WP5-UX3-T09 (owner decision U-24, E-1): the Check out dialog uses the break rows (and on a phone the chips and the "Break n"
+ * sub-dialog) of the session dialog, with its own rules: an empty list with the box unticked omits `breaks` and checks out with the
+ * breaks not confirmed; listed rows or the ticked box confirm and replace the saved rows. The submit button says which of the three
+ * it does; there is no "No breaks listed" notice and no second confirmation. The running session is moved three hours back through
+ * the API first, so that breaks fit inside it; the server's clock decides the check-out instant, never the test.
+ */
+interface RunningSeed {
+  id: string;
+  version: number;
+  startMs: number;
+  todayLocal: string;
+}
+
+/** An instant as the server writes it: whole seconds and `Z`. */
+function instantAt(ms: number): string {
+  return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/** A running session that started `hoursAgo` hours ago (input zone Los Angeles), with saved breaks given as [minutes after the start, minutes]; the day is cleared first. */
+async function seedRunning(seed: SeedClient, hoursAgo: number, saved: ReadonlyArray<readonly [number, number]> = []): Promise<RunningSeed> {
+  const { todayLocal } = await seed.today();
+  await seed.clearSessions(todayLocal);
+  const started = await seed.call<{ session: { id: string; version: number; start_utc: string } }>('POST', '/api/clock/in', { input_zone: LA }, 201);
+  const startMs = Date.parse(started.session.start_utc) - hoursAgo * 3_600_000;
+  const moved = await seed.call<{ session: { id: string; version: number } }>('PUT', `/api/sessions/${started.session.id}`, {
+    start: instantAt(startMs),
+    end: null,
+    input_zone: LA,
+    breaks: saved.map(([after, minutes]) => ({
+      start: instantAt(startMs + after * 60_000),
+      end: instantAt(startMs + (after + minutes) * 60_000),
+      counts_as_work: false,
+    })),
+    breaks_confirmed: false,
+    expected_version: started.session.version,
+  });
+  return { id: moved.session.id, version: moved.session.version, startMs, todayLocal };
+}
+
+/** The Los Angeles wall clock `YYYY-MM-DD HH:mm` of the running session's start plus whole minutes. */
+function localAfter(run: RunningSeed, minutes: number): string {
+  return dateTimeIn(instantAt(run.startMs + minutes * 60_000), LA);
+}
+
+function checkOutDialog(page: Page): Locator {
+  return page.getByRole('dialog', { name: 'Check out', exact: true });
+}
+
+/** Records the body of every POST /api/clock/out the page sends. */
+function recordCheckOuts(page: Page): Array<Record<string, unknown>> {
+  const bodies: Array<Record<string, unknown>> = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/clock/out') bodies.push(request.postDataJSON() as Record<string, unknown>);
+  });
+  return bodies;
+}
+
+/** The break area shows chips below this window width (the Check out list always has a date field, so its rows need the width of an overnight row). */
+function showsChips(page: Page): boolean {
+  return (page.viewportSize()?.width ?? 1280) < 600;
+}
+
+/** Add break, then the row's fields (rows) or the sub-dialog's fields and Done (chips): date, start time, minutes. */
+async function addCheckOutBreak(page: Page, dialog: Locator, index: number, start: string, minutes: number): Promise<void> {
+  await dialog.getByRole('button', { name: 'Add break' }).click();
+  if (showsChips(page)) {
+    const sub = breakDialog(page, index);
+    await expect(sub).toBeVisible();
+    await field3(page, index, 'Date').fill(start.slice(0, 10));
+    await field3(page, index, 'Start time').fill(start.slice(11));
+    await field3(page, index, 'Minutes').fill(String(minutes));
+    await sub.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(sub).toHaveCount(0);
+  } else {
+    const row = breakRow(dialog, index);
+    await row.date.fill(start.slice(0, 10));
+    await row.time.fill(start.slice(11));
+    await row.minutes.fill(String(minutes));
+  }
+}
+
+async function removeCheckOutBreak(page: Page, dialog: Locator, index: number): Promise<void> {
+  if (showsChips(page)) {
+    await breakChip(dialog, index).click();
+    await breakDialog(page, index).getByRole('button', { name: 'Remove break', exact: true }).click();
+  } else {
+    await dialog.getByRole('button', { name: `Remove break ${index}`, exact: true }).click();
+  }
+}
+
+async function sessionById(seed: SeedClient, workDate: string, id: string) {
+  const found = (await seed.dayView(workDate)).sessions.find((session) => session.id === id);
+  expect(found, 'the checked-out session is in the day').toBeDefined();
+  return found;
+}
+
+test('Check out with listed breaks: the listed rows are confirmed and replace the saved rows, and the request is the same shape (E-1)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const run = await seedRunning(employeeSeed, 3, [[10, 10]]);
+  const bodies = recordCheckOuts(page);
+  try {
+    await signInThroughUi();
+    await expect(page.getByRole('region', { name: 'Check in and out' })).toContainText('Checked in since');
+    await expect(page.getByRole('button', { name: 'Check in' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = checkOutDialog(page);
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Running since');
+    // The break area of the session dialog: no three-way mode, one box, the saved break as Break 1.
+    await expect(dialog.getByRole('heading', { name: 'Breaks', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('radio')).toHaveCount(0);
+    await expect(dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+    await expect(dialog.getByRole('button', { name: 'Suggest breaks' })).toBeVisible();
+    // The closing hint names the act of this dialog: Check out, not Save.
+    await expect(dialog.getByText('Checking out confirms the breaks listed here.')).toBeVisible();
+    await expect(dialog.getByText(/Saving confirms/)).toHaveCount(0);
+    await expect(dialog.locator('[data-break]')).toHaveCount(1);
+    await expect(dialog.locator('[data-break="1"]')).toHaveAttribute('data-origin', 'saved');
+    await expect(dialog.getByRole('list', { name: 'Break list' })).toHaveAttribute('data-layout', showsChips(page) ? 'chips' : 'rows');
+    await expect(dialog.getByRole('button', { name: 'Check out with these breaks' })).toBeVisible();
+
+    // A second break, typed: the listed set is what Check out sends. There is no notice and no second confirmation.
+    await addCheckOutBreak(page, dialog, 2, localAfter(run, 60), 15);
+    await expect(dialog.locator('[data-break]')).toHaveCount(2);
+    await snap(page, 'clock-out-dialog', project);
+    await dialog.getByRole('button', { name: 'Check out with these breaks' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(page.getByText('Checked out.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Check in' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Check out' })).toHaveCount(0);
+
+    // The request: breaks, breaks_confirmed and the session version, nothing else; the local times are those of the rows.
+    expect(bodies).toHaveLength(1);
+    const body = bodies[0];
+    expect(Object.keys(body ?? {}).sort()).toEqual(['breaks', 'breaks_confirmed', 'expected_version']);
+    expect(body).toMatchObject({ breaks_confirmed: true, expected_version: run.version });
+    const sent = breaksOf(body);
+    expect(sent).toHaveLength(2);
+    expect(sent[0]?.start.local.startsWith(localAfter(run, 10).replace(' ', 'T'))).toBe(true);
+    expect(sent[1]).toMatchObject({
+      start: { local: localAfter(run, 60).replace(' ', 'T'), zone: LA },
+      end: { local: plusMinutes(localAfter(run, 60), 15).replace(' ', 'T'), zone: LA },
+      counts_as_work: false,
+    });
+    const closed = await sessionById(employeeSeed, run.todayLocal, run.id);
+    expect(closed?.end_utc).not.toBeNull();
+    expect(closed?.breaks_confirmed).toBe(true);
+    expect(closed?.breaks).toHaveLength(2);
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+});
+
+test('Check out with "Confirm no breaks taken" ticked: the rows are hidden, the saved rows are replaced by an empty confirmed list', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  const run = await seedRunning(employeeSeed, 3, [[10, 10]]);
+  const bodies = recordCheckOuts(page);
+  try {
+    await signInThroughUi();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = checkOutDialog(page);
+    await expect(dialog.locator('[data-break]')).toHaveCount(1);
+    await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+    await expect(dialog.locator('[data-break]')).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Add break' })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Suggest breaks' })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Check out, no breaks taken' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Check out, no breaks taken' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(page.getByText('Checked out.')).toBeVisible();
+
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toEqual({ breaks: [], breaks_confirmed: true, expected_version: run.version });
+    const closed = await sessionById(employeeSeed, run.todayLocal, run.id);
+    expect(closed?.end_utc).not.toBeNull();
+    expect(closed?.breaks_confirmed).toBe(true);
+    expect(closed?.breaks, 'the saved break was replaced').toHaveLength(0);
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+});
+
+test('Check out with nothing listed and the box unticked omits breaks: the session ends with its breaks not confirmed (E-1)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  const run = await seedRunning(employeeSeed, 3);
+  const bodies = recordCheckOuts(page);
+  try {
+    await signInThroughUi();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = checkOutDialog(page);
+    await expect(dialog.getByText('No breaks listed.')).toBeVisible();
+    await expect(dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+    // Check out is its own explicit act: the button names the outcome and the G-4 notice is not used.
+    await dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(page.getByText('Checked out.')).toBeVisible();
+
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0], 'the list is omitted, not sent empty').toEqual({ breaks_confirmed: false, expected_version: run.version });
+    expect(Object.keys(bodies[0] ?? {})).not.toContain('breaks');
+    const closed = await sessionById(employeeSeed, run.todayLocal, run.id);
+    expect(closed?.end_utc).not.toBeNull();
+    expect(closed?.breaks_confirmed).toBe(false);
+    expect(closed?.breaks).toHaveLength(0);
+
+    // The day says so, and OT stays pending.
+    const editor = await openEditor(page, run.todayLocal);
+    await expect(editor.locator('[data-session-state]')).toHaveText('Breaks not confirmed');
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+});
+
+test('Check out refusals: suggested breaks that end after now, and a future_break refusal that names a break, mark that row or chip and keep the session running', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  const run = await seedRunning(employeeSeed, 3);
+  const bodies = recordCheckOuts(page);
+  let mocked = true;
+  await page.route('**/api/clock/out', async (route) => {
+    if (route.request().method() !== 'POST' || !mocked) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 422,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'future_break', message: 'A break cannot end later than five minutes from now', details: { break_index: 1 } },
+      }),
+    });
+  });
+  const running = async () => (await employeeSeed.dayView(run.todayLocal)).sessions.some((session) => session.end_utc === null);
+  try {
+    await signInThroughUi();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = checkOutDialog(page);
+    await expect(dialog).toBeVisible();
+
+    // Suggestions follow the arrival (2, 4 and 6.5 hours after it); the box is cleared and the rows are listed.
+    await dialog.getByRole('button', { name: 'Suggest breaks' }).click();
+    await expect(dialog.locator('[data-break]')).toHaveCount(3);
+    await expect(dialog.getByText('Suggested from your arrival.')).toBeVisible();
+    const submit = dialog.getByRole('button', { name: 'Check out with these breaks' });
+
+    // A refusal that names Break 2 (break_index 1) marks that row or chip, with the message as its description.
+    await submit.click();
+    await expect.poll(() => bodies.length).toBe(1);
+    const entry = (index: number) => dialog.locator(`[data-break="${index}"]`);
+    const future = 'Break 2 ends later than five minutes from now. Only breaks already taken can be saved.';
+    await expect(entry(2)).toHaveClass(/has-error/);
+    await expect(entry(2).getByText(future)).toBeVisible();
+    await expect(entry(1)).not.toHaveClass(/has-error/);
+    await expect(entry(3)).not.toHaveClass(/has-error/);
+    await expect(dialog.getByRole('alert')).toContainText('A break cannot be saved as it is.');
+    if (showsChips(page)) {
+      await expect(breakChip(dialog, 2)).toHaveAccessibleDescription(future);
+      await expect(breakChip(dialog, 2), 'focus moves to the marked chip').toBeFocused();
+    } else {
+      await expect(breakRow(dialog, 2).time).toHaveAccessibleDescription(future);
+    }
+    expect(await running()).toBe(true);
+
+    // The real server: breaks that end after the check-out lie outside the session. Nothing is saved and the dialog stays.
+    mocked = false;
+    await submit.click();
+    await expect(dialog.getByRole('alert').last()).toContainText('inside their work session');
+    await expect(dialog.locator('.has-error')).toHaveCount(0);
+    expect(bodies).toHaveLength(2);
+    expect(await running()).toBe(true);
+
+    // Only Break 1 fits inside the three hours: removing the other two checks out with it.
+    await removeCheckOutBreak(page, dialog, 3);
+    await removeCheckOutBreak(page, dialog, 2);
+    await expect(dialog.locator('[data-break]')).toHaveCount(1);
+    await submit.click();
+    await expect(dialog).toHaveCount(0);
+    expect(bodies).toHaveLength(3);
+    const closed = await sessionById(employeeSeed, run.todayLocal, run.id);
+    expect(closed?.end_utc).not.toBeNull();
+    expect(closed?.breaks_confirmed).toBe(true);
+    expect(closed?.breaks).toHaveLength(1);
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+});
+
+test('phone chips at 390px: Check out lists breaks as chips with the "Break n" sub-dialog, Escape and Cancel stay inside it, and Done sends the row', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const run = await seedRunning(employeeSeed, 3);
+  const bodies = recordCheckOuts(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  try {
+    await signInThroughUi();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = checkOutDialog(page);
+    await expect(dialog).toBeVisible();
+    const add = dialog.getByRole('button', { name: 'Add break' });
+
+    // Add break opens the sub-dialog on the session date; Cancel removes the new row and focus goes back to Add break.
+    await add.click();
+    const sub = breakDialog(page, 1);
+    await expect(sub).toBeVisible();
+    expect(await sub.evaluate((element) => element.matches(':modal'))).toBe(true);
+    await expect(field3(page, 1, 'Date')).toBeFocused();
+    await expect(field3(page, 1, 'Date')).toHaveValue(localAfter(run, 0).slice(0, 10));
+    await sub.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(sub).toHaveCount(0);
+    await expect(dialog.locator('[data-break]')).toHaveCount(0);
+    await expect(add).toBeFocused();
+    await expect(dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' })).toBeVisible();
+
+    // Add it again, fill it in, Done: a chip named in 24-hour time with the date, and Check out names the rows.
+    const start = localAfter(run, 45);
+    await addCheckOutBreak(page, dialog, 1, start, 20);
+    const chip = breakChip(dialog, 1);
+    await expect(dialog.getByRole('list', { name: 'Break list' })).toHaveAttribute('data-layout', 'chips');
+    await expect(chip).toHaveAccessibleName(chipName(1, start, 20, { overnight: true, suggested: false }));
+    await expect(chip).toBeFocused();
+    expect((await chip.boundingBox())?.height ?? 0, 'a 44px chip').toBeGreaterThanOrEqual(43.9);
+    await expect(dialog.getByRole('button', { name: 'Check out with these breaks' })).toBeVisible();
+    await snap(page, 'clock-out-dialog-chips', project);
+
+    // Escape closes only the sub-dialog; the Check out dialog stays open and focus returns to the chip.
+    await chip.click();
+    await expect(sub).toBeVisible();
+    await snap(page, 'clock-out-break-subdialog', project);
+    await page.keyboard.press('Escape');
+    await expect(sub).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    await expect(chip).toBeFocused();
+    expect(bodies, 'nothing is sent before Check out').toEqual([]);
+
+    // Enter inside the sub-dialog is Done, never Check out.
+    await chip.click();
+    await field3(page, 1, 'Minutes').fill('25');
+    await field3(page, 1, 'Minutes').press('Enter');
+    await expect(sub).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    expect(bodies).toEqual([]);
+    await expect(chip).toHaveAccessibleName(chipName(1, start, 25, { overnight: true, suggested: false }));
+
+    await dialog.getByRole('button', { name: 'Check out with these breaks' }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(bodies).toHaveLength(1);
+    expect(Object.keys(bodies[0] ?? {}).sort()).toEqual(['breaks', 'breaks_confirmed', 'expected_version']);
+    expect(bodies[0]).toMatchObject({ breaks_confirmed: true, expected_version: run.version });
+    expect(breaksOf(bodies[0])).toMatchObject([
+      { start: { local: start.replace(' ', 'T'), zone: LA }, end: { local: plusMinutes(start, 25).replace(' ', 'T'), zone: LA }, counts_as_work: false },
+    ]);
+    const closed = await sessionById(employeeSeed, run.todayLocal, run.id);
+    expect(closed?.breaks).toHaveLength(1);
+    expect(closed?.breaks_confirmed).toBe(true);
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+});
+
 test('Check in then Check out asks for break confirmation and sends the session version', async ({
   page,
   employeeSeed,
@@ -1628,6 +2006,7 @@ test('Check in then Check out asks for break confirmation and sends the session 
   const { todayLocal } = await employeeSeed.today();
   await signInThroughUi();
   await clockIn(page, employeeSeed, todayLocal);
+  const bodies = recordCheckOuts(page);
 
   // One state-aware button: checked in shows only Check out, with the running state in words.
   await expect(page.getByRole('button', { name: 'Check out' })).toBeVisible();
@@ -1638,23 +2017,27 @@ test('Check in then Check out asks for break confirmation and sends the session 
   const dialog = page.getByRole('dialog', { name: 'Check out' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Running since');
-  await expect(dialog.getByRole('radio', { name: /Breaks not confirmed yet/ })).toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
   await expect(dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' })).toBeVisible();
 
-  // Suggestions follow the arrival; confirming breaks that end after the check-out is refused.
+  // Suggestions follow the arrival; listing breaks that end after the check-out is refused.
   await dialog.getByRole('button', { name: 'Suggest breaks' }).click();
   await expect(dialog.locator('[data-break]')).toHaveCount(3);
-  await dialog.getByRole('button', { name: 'Confirm suggested breaks' }).click();
-  await snap(page, 'clock-out-dialog', project);
+  await expect(dialog.getByRole('button', { name: 'Check out with these breaks' })).toBeVisible();
   await dialog.getByRole('button', { name: 'Check out with these breaks' }).click();
   await expect(dialog.getByRole('alert')).toContainText('inside their work session');
   expect((await employeeSeed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(true);
+  expect(bodies).toHaveLength(1);
+  expect(bodies[0]).toMatchObject({ breaks_confirmed: true });
+  expect(breaksOf(bodies[0])).toHaveLength(3);
 
   // Confirming that no break was taken ends the session with confirmed, empty breaks.
-  await dialog.getByRole('radio', { name: /No breaks taken/ }).check();
+  await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
   await dialog.getByRole('button', { name: 'Check out, no breaks taken' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByText('Checked out.')).toBeVisible();
+  expect(bodies).toHaveLength(2);
+  expect(bodies[1]).toEqual({ breaks: [], breaks_confirmed: true, expected_version: bodies[0]?.expected_version });
   // After the check-out the panel offers Check in again.
   await expect(page.getByRole('button', { name: 'Check in' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Check out' })).toHaveCount(0);
@@ -1668,11 +2051,12 @@ test('a stale session version at Check out says so, reloads and then checks out'
   const { todayLocal } = await employeeSeed.today();
   await signInThroughUi();
   await clockIn(page, employeeSeed, todayLocal);
+  const bodies = recordCheckOuts(page);
 
   await page.getByRole('button', { name: 'Check out' }).click();
   const dialog = page.getByRole('dialog', { name: 'Check out' });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole('radio', { name: /No breaks taken/ }).check();
+  await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
 
   // Another device edits the running session after the dialog loaded its version.
   const running = (await employeeSeed.dayView(todayLocal)).sessions.find((session) => session.end_utc === null);
@@ -1689,16 +2073,22 @@ test('a stale session version at Check out says so, reloads and then checks out'
   await dialog.getByRole('button', { name: 'Check out, no breaks taken' }).click();
   await expect(dialog.getByRole('alert').first()).toContainText('This session changed since it was loaded');
   expect((await employeeSeed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(true);
+  // The refused request carried the version the dialog loaded, which is no longer the session's version.
+  expect(bodies).toHaveLength(1);
+  expect(bodies[0]).toEqual({ breaks: [], breaks_confirmed: true, expected_version: running?.version });
+  await expect(dialog.getByRole('button', { name: 'Check out, no breaks taken' })).toBeDisabled();
   await dialog.getByRole('button', { name: 'Reload' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByText('reloaded')).toBeVisible();
 
   await page.getByRole('button', { name: 'Check out' }).click();
   const again = page.getByRole('dialog', { name: 'Check out' });
-  await again.getByRole('radio', { name: /No breaks taken/ }).check();
+  await again.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
   await again.getByRole('button', { name: 'Check out, no breaks taken' }).click();
   await expect(again).toHaveCount(0);
   expect((await employeeSeed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(false);
+  expect(bodies).toHaveLength(2);
+  expect(bodies[1]?.expected_version, 'the second request carries the reloaded version').toBe((running?.version ?? 0) + 1);
 });
 
 test('partial leave 240 with kind vacation saves; the kind is required; WFH is saved', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
@@ -3154,7 +3544,7 @@ test('the label cell is a picker: a one-entry batch preview and its commit; reco
   await pickerOf(workedDay).click();
   await listOf(workedDay).getByRole('option', { name: 'Off', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: `Review label change for ${workedDay}` })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: `Review category change for ${workedDay}` })).toBeVisible();
   await expect(dialog.locator(`[data-preview-date="${workedDay}"]`)).toContainText('to Off');
   // WP5-UX3-T07: the preview says "category change", the word of the Category row, not "label change".
   await expect(dialog.locator(`[data-preview-date="${workedDay}"]`)).toContainText('category change');
@@ -3165,7 +3555,7 @@ test('the label cell is a picker: a one-entry batch preview and its commit; reco
   await expect(dialog.locator(`[data-conflict-date="${workedDay}"]`)).toContainText('manual session');
   const confirmCommit = dialog.getByRole('button', { name: 'Confirm and commit' });
   await expect(confirmCommit).toBeDisabled();
-  await dialog.getByLabel('I confirm the label change for these dates').check();
+  await dialog.getByLabel('I confirm the category change for these dates').check();
   await confirmCommit.click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('Saved 1 day.');
@@ -3264,7 +3654,7 @@ test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape a
       expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
       await page.getByRole('button', { name: new RegExp(`^Category for ${workedDay}`) }).click();
       await page.getByRole('listbox', { name: `Category for ${workedDay}` }).getByRole('option', { name: 'Off', exact: true }).click();
-      const review = page.getByRole('dialog', { name: `Review label change for ${workedDay}` });
+      const review = page.getByRole('dialog', { name: `Review category change for ${workedDay}` });
       await expect(review).toBeVisible();
       await expect.poll(async () => review.evaluate((element) => element.matches(':focus-within'))).toBe(true);
 
@@ -3272,7 +3662,7 @@ test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape a
         await page.setViewportSize({ width, height: 800 });
         await settleAfterResize(page, width >= 1360);
         const state = await dialogStates(page);
-        const reviewState = state.dialogs.find((dialog) => dialog.name.startsWith('Review label change'));
+        const reviewState = state.dialogs.find((dialog) => dialog.name.startsWith('Review category change'));
         const editorState = state.dialogs.find((dialog) => dialog.name.startsWith('Day editor'));
         expect(editorState, `the editor is still open at ${width}px`).toBeDefined();
         expect(reviewState, `the review stays open, modal, on top and focused at ${width}px`).toMatchObject({ modal: true, focus: true, onTop: true });

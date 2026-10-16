@@ -1,0 +1,15 @@
+WP5-UX3-T09 privacy and whitespace checks (Grep tool results, run before verify and the digest)
+
+Changed source and test files: src/client/components/ClockOutDialog.tsx, src/client/TimesheetScreen.tsx,
+tests/e2e/day-editor.spec.ts, tests/e2e/shell.spec.ts; deleted: src/client/components/BreaksEditor.tsx.
+
+1. Trailing whitespace, pattern [ \t]+$ over the four changed files: 0 matches.
+2. Last two bytes of each changed file (tail -c 2 | od -c): "}" + newline for the two .tsx files, ";" + newline for the
+   two spec files, so each ends with exactly one final newline and no blank line.
+3. E-mail addresses and user-profile paths in the added lines of `git diff -U0 -- tests src`
+   (pattern @[a-z0-9-]+\.|huyng|C:\\Users|AppData): 0 matches.
+4. The evidence .txt files were written through a masking copy (ANSI and CR removed, trailing spaces trimmed,
+   user-profile paths and non-.invalid e-mail addresses masked); a Grep for @, Users\, huyng and AppData over them
+   finds only "timesheet@0.1.0" (the package name and version) and the synthetic example.invalid addresses.
+5. Trailing whitespace over the evidence .txt files after the final copy: 0 matches.
+6. No `.skip`, `fixme`, `.only` or `test.slow` in the added lines of the diff of tests and src.

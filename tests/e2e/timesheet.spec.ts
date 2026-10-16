@@ -400,12 +400,12 @@ test('batch edit: preview, conflict dialog for a clock session, confirmed commit
   expect((await employeeSeed.dayView(workDate)).category).toBe(before.category);
 
   await dialog.getByRole('button', { name: 'Review conflicts' }).click();
-  await expect(dialog.getByRole('heading', { name: 'Recorded work conflicts with the new label' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Recorded work conflicts with the new category' })).toBeVisible();
   await expect(dialog.locator(`[data-conflict-date="${workDate}"]`)).toContainText('clock session');
   const commit = dialog.getByRole('button', { name: 'Confirm and commit' });
   await expect(commit).toBeDisabled();
   await page.screenshot({ path: screenshotPath(`batch-conflict-${testInfo.project.name}-synthetic.png`) });
-  await dialog.getByLabel('I confirm the label change for these dates').check();
+  await dialog.getByLabel('I confirm the category change for these dates').check();
   await commit.click();
 
   await expect(page.getByRole('status')).toContainText('Saved 1 day.');

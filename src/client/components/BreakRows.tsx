@@ -46,6 +46,7 @@ export function BreakRows({
   onSuggest,
   onFold,
   onGap,
+  action = 'Saving',
 }: {
   rows: readonly BreakRowDraft[];
   noBreaks: boolean;
@@ -71,6 +72,8 @@ export function BreakRows({
   onSuggest: () => void;
   onFold: (key: string, fold: 0 | 1) => void;
   onGap: (key: string, problem: TimeProblem) => void;
+  /** The act that confirms the listed breaks, named in the closing hint: "Saving" (session dialog) or "Checking out". */
+  action?: 'Saving' | 'Checking out';
 }) {
   const id = useId();
   const area = useRef<HTMLDivElement>(null);
@@ -284,7 +287,7 @@ export function BreakRows({
         </p>
       )}
       <p className="muted hint">
-        Saving confirms the breaks listed here. Leave the list empty and the box unticked if you do not know yet: OT for the day then stays
+        {action} confirms the breaks listed here. Leave the list empty and the box unticked if you do not know yet: OT for the day then stays
         pending.
       </p>
     </div>

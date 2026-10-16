@@ -604,7 +604,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
           zone={displayZone}
           error={dialogError}
           busy={busy}
-          title={previewSource.kind === 'label' ? `Review label change for ${previewSource.entry.work_date}` : undefined}
+          title={previewSource.kind === 'label' ? `Review category change for ${previewSource.entry.work_date}` : undefined}
           onCommit={commitBatch}
           onClose={closePreview}
         />
