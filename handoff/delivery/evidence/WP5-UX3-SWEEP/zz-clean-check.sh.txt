@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# After the mutants: every tracked file of the export still has its cecfceb blob, except my recorded probe changes.
+T=/d/.claude-tmp/timesheet/WP5-UX3-SWEEP
+OUT=$T/out/clean-check.txt
+cd $T/src
+: > $T/out/export-after.txt
+while IFS= read -r line; do
+  f=${line% *}
+  printf '%s %s\n' "$f" "$(git hash-object --no-filters -- "$f")" >> $T/out/export-after.txt
+done < $T/out/lstree.txt
+LC_ALL=C sort -o $T/out/export-after.txt $T/out/export-after.txt
+diff $T/out/lstree.txt $T/out/export-after.txt > $OUT 2>&1
+echo "diff exit=$?" >> $OUT
+ls $T/backup >> $OUT

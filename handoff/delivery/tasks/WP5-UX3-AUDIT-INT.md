@@ -8,8 +8,9 @@
   `handoff/delivery/WP5_UX3_REVIEW_INT.md` and `.vi.md`.
 - Author separation: you did not write any WP5-UX3 task and you are neither the area A nor
   the area B auditor.
-- Target: `reviewed_commit` = TARGET_SHA with the gate digest TARGET_DIGEST (the same as both
-  area audits). Record HEAD, the digest before and after and `reviewed_commit`.
+- Target: `reviewed_commit` = cecfceb61c7f15216c8f188e8b7059c9f075247d with the gate digest
+  29ac25945fbefa0c86f28aa9c8537e6d2ccd341a161ab70bc7bfc0acf3ff15e7 (833 files; the same as
+  both area audits). Record HEAD, the digest before and after and `reviewed_commit`.
 
 ## Scope
 

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Copies masked LF text evidence into the repository evidence folder.
+T=/d/.claude-tmp/timesheet/WP5-UX3-SWEEP
+E=/d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX3-SWEEP
+mkdir -p $E
+copy() {
+  sed -e 's/\r$//' -e 's#[Cc]:[\\/][Uu]sers[\\/][^\\/ ]*#<user>#g' -e 's#/c/Users/[^/ ]*#<user>#g' "$T/out/$1" > "$E/$2"
+}
+copy digest.txt 01-digest-export.txt
+copy ci-sum.txt 02-ci-build.txt
+copy unit-probe-clean.txt 10-unit-probe-run.txt
+copy unit-probe-bodies.txt 11-request-bodies-old-vs-new.txt
+copy e2e-probe1.txt 20-e2e-probe-run.txt
+copy e2e-probe-probe1.txt 21-e2e-probe-observations.txt
+copy e2e-old.txt 22-e2e-a643794-run.txt
+copy e2e-probe-old.txt 23-e2e-a643794-observations.txt
+copy mutants-summary.txt 30-mutants-summary.txt
+copy css-scan.txt 40-css-scan-target.txt
+copy css-scan-old.txt 41-css-scan-a643794.txt
+copy parity-04_UX_AND_SETTINGS.txt 42-docs04-en-vi-number-parity.txt
+copy label-words.txt 43-label-words.txt
+copy clean-check.txt 50-export-clean-after-mutants.txt
+copy netstat-range.txt 51-ports-after.txt
+cp $T/probes/clean-check.sh $E/zz-clean-check.sh.txt
+cp $T/probes/copy-evidence.sh $E/zz-copy-evidence.sh.txt
+cp $T/probes/digest.sh $E/zz-digest.sh.txt
+cp $T/probes/e2e.sh $E/zz-e2e.sh.txt
+cp $T/probes/e2e-old.sh $E/zz-e2e-old.sh.txt
+cp $T/probes/mutants.sh $E/zz-mutants.sh.txt
+cp $T/probes/mutants.json $E/zz-mutants.json.txt
+cp $T/old/tests/e2e/zz-sweep-old.spec.ts $E/zz-sweep-old.spec.ts.txt
+cp $T/probes/wait-for.mjs $E/zz-wait-for.mjs.txt
+cp $T/probes/unit-probe.sh $E/zz-unit-probe.sh.txt
+grep -rl "<user-name>" $E > $T/out/evidence-user-check.txt
+echo "user grep exit=$?" >> $T/out/evidence-user-check.txt
+ls $E >> $T/out/evidence-user-check.txt

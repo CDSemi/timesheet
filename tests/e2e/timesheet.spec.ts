@@ -456,6 +456,13 @@ test('batch edit: a stale version shows the reload message naming the date', asy
 }) => {
   const free = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
   const workDate = free.at(-1) ?? '';
+  // A known start (WP5-UX3-FIX1): "free" means no session, but an earlier test of this worker (same server and account) may have
+  // saved a day entry on this date, so the day is put back to a plain worked day before the page loads it. The UI's Sick and the
+  // other session's Vacation are then both real changes from it.
+  await employeeSeed.resetDay(workDate);
+  const loaded = await employeeSeed.dayView(workDate);
+  expect(loaded.category, 'the day starts as a plain worked day').toBe('Worked');
+  expect(loaded.entry, 'the day has the entry the page loads').not.toBeNull();
   await signInThroughUi();
   await page.getByRole('button', { name: 'Change several days' }).click();
   await page.getByLabel(`Select ${workDate}`).check();
@@ -466,8 +473,9 @@ test('batch edit: a stale version shows the reload message naming the date', asy
   const commit = dialog.getByRole('button', { name: 'Commit changes' });
   await expect(commit).toBeEnabled();
 
-  // Another session changes the same day between preview and commit.
-  await employeeSeed.commitCategory(workDate, 'Vacation', null);
+  // Another session changes the same day between preview and commit: it reads the day's current version, as a client does.
+  await employeeSeed.commitCategory(workDate, 'Vacation', (await employeeSeed.dayView(workDate)).entry?.version ?? null);
+  expect((await employeeSeed.dayView(workDate)).entry?.version, 'the other session moved the version past the one the page loaded').not.toBe(loaded.entry?.version);
   await commit.click();
 
   const alert = page.getByRole('alert').filter({ hasText: 'changed since this period was loaded' });
@@ -733,12 +741,29 @@ interface LiftLook {
   /** Top-left, top-right, bottom-right, bottom-left. */
   radii: [string, string, string, string];
   transitionDuration: string;
+  /** The column's `::before` layer, which casts the shadow of a column in a run (WP5-UX3-FIX1). */
+  layer: { content: string; boxShadow: string; position: string; zIndex: string; pointerEvents: string; top: string; right: string; bottom: string; left: string };
+  /** The column's --lift-clip, as computed (the reach of the run layer is twice it). */
+  liftClip: string;
 }
 
 async function readLook(column: Locator): Promise<LiftLook> {
   return column.evaluate((element) => {
     const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+    const before = element.ownerDocument.defaultView?.getComputedStyle(element, '::before');
     return {
+      layer: {
+        content: before?.content ?? '',
+        boxShadow: before?.boxShadow ?? '',
+        position: before?.position ?? '',
+        zIndex: before?.zIndex ?? '',
+        pointerEvents: before?.pointerEvents ?? '',
+        top: before?.top ?? '',
+        right: before?.right ?? '',
+        bottom: before?.bottom ?? '',
+        left: before?.left ?? '',
+      },
+      liftClip: style?.getPropertyValue('--lift-clip').trim() ?? '',
       lift: element.getAttribute('data-lift'),
       transform: style?.transform ?? '',
       boxShadow: style?.boxShadow ?? '',
@@ -777,14 +802,38 @@ const RUN_LOOK = {
   end: { clip: 'inset(-32px -32px -32px 0px)', radii: ['0px', '4px', '4px', '0px'] },
 } as const;
 
-/** A lifted column: raised by --lift-y, casting --elev-lift, above its neighbours, with the corners and the clip of its run position. */
+/**
+ * A lifted column: raised by --lift-y, casting --elev-lift, above its neighbours, with the corners and the clip of its run position.
+ * A lone column casts the shadow itself. A column of a run (WP5-UX3-FIX1) casts it from its `::before` layer, behind its cells,
+ * whose box reaches twice --lift-clip past each inner edge (under the lifted neighbour, where the clip cuts it), so the shadow at
+ * an inner join is the full shadow of one long box.
+ */
 async function expectLifted(page: Page, look: LiftLook, run: keyof typeof RUN_LOOK, label: string) {
+  const elevLift = await tokenShadow(page, '--elev-lift');
   expect(look.lift, `${label}: run position`).toBe(run);
   expect(look.transform, `${label}: raised by --lift-y`).toBe(LIFT_MATRIX);
-  expect(look.boxShadow, `${label}: casts --elev-lift`).toBe(await tokenShadow(page, '--elev-lift'));
   expect(look.zIndex, `${label}: above its neighbours`).toBe('1');
   expect(look.clipPath, `${label}: clip of the shadow`).toBe(RUN_LOOK[run].clip);
   expect(look.radii, `${label}: corners (4px on the run's outer corners only)`).toEqual(RUN_LOOK[run].radii);
+  if (run === 'single') {
+    expect(look.boxShadow, `${label}: casts --elev-lift`).toBe(elevLift);
+    expect(look.layer.content, `${label}: no shadow layer`).toBe('none');
+    return;
+  }
+  expect(look.boxShadow, `${label}: the column itself casts no shadow in a run`).toBe('none');
+  const reach = `${-2 * parseFloat(look.liftClip)}px`;
+  expect(look.liftClip, `${label}: --lift-clip`).toMatch(/^\d+(\.\d+)?px$/);
+  expect(look.layer, `${label}: the run layer casts --elev-lift behind the cells, reaching past each inner edge`).toEqual({
+    content: '""',
+    boxShadow: elevLift,
+    position: 'absolute',
+    zIndex: '-1',
+    pointerEvents: 'none',
+    top: '0px',
+    bottom: '0px',
+    left: run === 'start' ? '0px' : reach,
+    right: run === 'end' ? '0px' : reach,
+  });
 }
 
 /**
@@ -796,6 +845,28 @@ async function paintedWithin(page: Page, [x0, x1]: [number, number], [y0, y1]: [
     for (let x = Math.floor(x0); x <= Math.ceil(x1); x += 1) if (sameRgb(await paintedPixel(page, x, y), colour, 3)) return true;
   }
   return false;
+}
+
+/**
+ * Another day of the week band of `workDate` (WP5-UX3-FIX1): a column of the same week grid, so its box top is the flat top a
+ * lift is measured from, whatever the weekday of today. A free workday of that band when there is one, otherwise any other day
+ * of the band except today (its column carries the Today layer). A band is a Monday-to-Sunday week of the sheet, as the
+ * sheet groups it; the Monday is calendar arithmetic on the server's dates, not a clock read.
+ */
+async function bandNeighbour(employeeSeed: SeedClient, workDate: string): Promise<string> {
+  const { dates, todayLocal } = await shownPeriod(employeeSeed);
+  expect(dates, `${workDate} is on the shown sheet`).toContain(workDate);
+  const mondayOf = (date: string) => {
+    const day = new Date(`${date}T00:00:00Z`);
+    day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
+    return day.toISOString().slice(0, 10);
+  };
+  const band = dates.filter((date) => mondayOf(date) === mondayOf(workDate));
+  const others = band.filter((date) => date !== workDate && date !== todayLocal);
+  const free = await employeeSeed.displayedPeriodFreeWorkdays();
+  const neighbour = others.find((date) => free.includes(date)) ?? others[0] ?? '';
+  expect(neighbour, `another day of the week band of ${workDate} (${band.join(', ')})`).not.toBe('');
+  return neighbour;
 }
 
 /** The colour of the first colour stop of a background image (a one-colour gradient is a layer), or null when there is none. */
@@ -812,7 +883,9 @@ test('the day open in the Day editor is a lifted column with an inset 1px accent
   test.setTimeout(60_000);
   const desktop = testInfo.project.name === 'desktop';
   if (desktop) await page.setViewportSize(EDITOR_BESIDE_SHEET);
-  const [first = '', second = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
+  const [first = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  // The flat column the raise is measured against lies in the same week band (grid) as the open day, on every day of the year.
+  const second = await bandNeighbour(employeeSeed, first);
   await signInThroughUi();
   await expect(page.locator('[data-day]')).toHaveCount(14);
   await openDay(page, first);
@@ -863,7 +936,9 @@ test('the day open in the Day editor is a lifted column with an inset 1px accent
       const other = await settledLook(neighbour);
       expect([other.lift, other.transform, other.boxShadow, other.clipPath]).toEqual([null, 'none', 'none', 'none']);
       expect((await settledPseudo(neighbour, '::after')).content).toBe('none');
-      // The lifted column stands 3px higher than its neighbour (the raise, measured on the boxes).
+      // The lifted column stands 3px higher than its neighbour (the raise, measured on the boxes) in the same week card.
+      const sameCard = await neighbour.evaluate((element, date) => element.closest('.sheet-week') === element.ownerDocument.querySelector(`[data-day="${date}"]`)?.closest('.sheet-week'), first);
+      expect(sameCard, 'the neighbour is in the week card of the open day').toBe(true);
       const [lifted, flat] = [await columnBoxes(column), await columnBoxes(neighbour)];
       expect(Math.round((flat.host.top - lifted.host.top) * 10) / 10, 'the column is raised by --lift-y').toBe(3);
     }
@@ -1412,6 +1487,21 @@ test('lifted columns form runs: one shadow around the group, 4px corners on the 
   const surface = await tokenColour(page, '--sheet-head');
   const outside = await paintedPixel(page, Math.floor(mondayBoxes.host.left) - 4, y);
   expect(sameRgb(outside, surface, 1), `left of the run ${outside.join(',')} carries the group's shadow, not the plain ${surface.map(Math.round).join(',')}`).toBe(false);
+  // WP5-UX3-FIX1: the shadow cast under the run is continuous across each inner join. Two CSS px under the run's bottom edge (whole
+  // pixels, so no fractional edge matters), the pixel at the join is as dark as the shadow 14px to either side; the notch the old
+  // per-column shadows left there was about 21/255 lighter. The shadow itself is there: the join is darker than the same row under
+  // the middle of Thursday, the gap day (no lifted shadow reaches 70px into it).
+  const luminance = ([r, g, b]: Rgba) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const shadowRow = Math.ceil(mondayBoxes.host.bottom) + 2;
+  const gap = (await columnBoxes(column(thursday))).host;
+  const plain = luminance(await paintedPixel(page, Math.round((gap.left + gap.right) / 2), shadowRow));
+  for (const join of [mondayBoxes.host.right, (await columnBoxes(column(tuesday))).host.right]) {
+    const x = Math.round(join);
+    const [atJoin, before, after] = [await paintedPixel(page, x, shadowRow), await paintedPixel(page, x - 14, shadowRow), await paintedPixel(page, x + 14, shadowRow)];
+    const sides = (luminance(before) + luminance(after)) / 2;
+    expect(Math.abs(luminance(atJoin) - sides), `under the join at x ${join.toFixed(2)}: ${luminance(atJoin).toFixed(1)} against ${sides.toFixed(1)} beside it`).toBeLessThanOrEqual(6);
+    expect(luminance(atJoin), `under the join at x ${join.toFixed(2)}: the run's shadow (${luminance(atJoin).toFixed(1)}) against the gap day's row (${plain.toFixed(1)})`).toBeLessThan(plain - 6);
+  }
   await page.screenshot({ path: screenshotPath('lift-runs-desktop-light-synthetic.png'), animations: 'disabled' });
 });
 
@@ -1504,13 +1594,18 @@ test('the rows are named Category and Status; a picker is named by every visible
       date: button.closest('[data-label-picker]')?.getAttribute('data-label-picker') ?? '',
       hasLabel: button.querySelector('.cell-main') !== null,
       lines: [...button.querySelectorAll('.cell-main, .cell-sub, .cell-note')].map((line) => (line.textContent ?? '').trim()),
+      // The text nodes as axe reads the visible text (it joins them without adding spaces between block elements).
+      text: button.querySelector('.label-trigger-text')?.textContent ?? '',
     })),
   );
   expect(triggers, 'a picker for each day').toHaveLength(14);
   for (const trigger of triggers) {
-    // A cell without a label shows only its lines; the name says "not set" in the label's place.
+    // A cell without a label shows only its lines; the name says "not set" in the label's place. The lines are joined by a space,
+    // and the button's text separates them by a space too, so the visible words are one run inside the name (WP5-UX3-FIX1).
     const parts = trigger.hasLabel ? trigger.lines : ['not set', ...trigger.lines];
-    expect(trigger.name, `picker name of ${trigger.date}`).toBe(`Category for ${trigger.date}: ${parts.join(', ')}`);
+    expect(trigger.name, `picker name of ${trigger.date}`).toBe(`Category for ${trigger.date}: ${parts.join(' ')}`);
+    expect(trigger.text, `the text of the picker of ${trigger.date}`).toBe(trigger.lines.join(' '));
+    expect(trigger.name, `the name of ${trigger.date} contains its visible text`).toContain(trigger.text);
   }
 });
 

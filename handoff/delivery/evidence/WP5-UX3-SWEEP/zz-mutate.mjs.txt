@@ -1,0 +1,26 @@
+// Applies or reverts one mutant of mutants.json in the export. Usage: node mutate.mjs <apply|revert> <id> <exportRoot> <backupDir>
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [action, id, root, backups] = process.argv.slice(2);
+const mutants = JSON.parse(readFileSync(new URL('./mutants.json', import.meta.url), 'utf8'));
+const mutant = mutants.find((item) => item.id === id);
+if (mutant === undefined) throw new Error(`unknown mutant ${id}`);
+const file = join(root, mutant.file);
+const backup = join(backups, `${id}.orig`);
+if (action === 'apply') {
+  const text = readFileSync(file, 'utf8');
+  const count = text.split(mutant.old).length - 1;
+  if (count !== 1) throw new Error(`${id}: expected exactly one match, found ${count}`);
+  copyFileSync(file, backup);
+  writeFileSync(file, text.replace(mutant.old, mutant.new));
+  process.stdout.write(`applied ${id} to ${mutant.file}\n`);
+} else if (action === 'revert') {
+  if (!existsSync(backup)) throw new Error(`${id}: no backup`);
+  copyFileSync(backup, file);
+  process.stdout.write(`reverted ${id}\n`);
+} else if (action === 'e2e') {
+  process.stdout.write(`${JSON.stringify(mutant.e2e ?? [])}\n`);
+} else {
+  throw new Error(`unknown action ${action}`);
+}

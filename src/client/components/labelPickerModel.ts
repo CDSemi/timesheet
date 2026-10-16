@@ -19,11 +19,12 @@ export const LABEL_CHOICES: readonly LabelChoice[] = [...CATEGORIES, WORK_FROM_H
 /**
  * The accessible name of a day's picker button and of its list (round 3, G-2 a: the row is "Category"). The list is named
  * "Category for {date}"; the button adds what its cell shows, every visible line in order (the label, the holiday or
- * leave line under it, the note marker), so the visible text is part of the name (SC 2.5.3, R-UX2A2-3).
+ * leave line under it, the note marker), so the visible text is part of the name (SC 2.5.3, R-UX2A2-3). The lines are
+ * joined by a space, as the button's text reads them (WP5-UX3-FIX1), so no punctuation splits the visible words.
  */
 export function labelPickerName(workDate: string, label: { main: string; lines: readonly string[]; note: boolean }): string {
   const shown = [label.main === '' ? 'not set' : label.main, ...label.lines, ...(label.note ? ['Note'] : [])];
-  return `${labelPickerListName(workDate)}: ${shown.join(', ')}`;
+  return `${labelPickerListName(workDate)}: ${shown.join(' ')}`;
 }
 
 /** The accessible name of the open list: "Category for {date}". */

@@ -1,0 +1,51 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, newPerson, test } from './fixtures.ts';
+
+/* WP5-UX3-GATE task-local debug probe: where does keyboard focus on the Sunday Edit button go at 800px (week card scrolls inside itself)? */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+test.skip(({ isMobile }) => isMobile, 'Desktop project');
+const OUT = process.env.GATE_OUT ?? '';
+const rec = (line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'week-debug.txt'), `${line}\n`);
+};
+
+for (const details of [false, true]) {
+  for (const width of [800, 768, 860]) {
+    test(`focus travel at ${width}px details=${details}`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+      test.setTimeout(120_000);
+      await page.setViewportSize({ width, height: 900 });
+      const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Week Debug', signature: 'none' });
+      await signInPageAs(me.account, '#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      if (details) await page.getByRole('switch', { name: 'Show details' }).check();
+      await page.waitForTimeout(400);
+      const sunday = await page.locator('.sheet-week').first().locator('[data-day]').last().getAttribute('data-day');
+      const sat = await page.locator('.sheet-week').first().locator('[data-day]').nth(5).getAttribute('data-day');
+      await page.keyboard.press('Shift');
+      await page.locator(`[data-day="${sat}"] [data-day-button]`).focus();
+      await page.keyboard.press('Tab');
+      for (let i = 0; i < 10; i += 1) {
+        const day = await page.evaluate(() => (document.activeElement as HTMLElement).closest('[data-day]')?.getAttribute('data-day') ?? '');
+        const isButton = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.hasAttribute('data-day-button') ?? false);
+        if (isButton && day === sunday) break;
+        await page.keyboard.press('Tab');
+      }
+      const samples: string[] = [];
+      for (const delay of [0, 100, 300, 600, 1000, 2000]) {
+        await page.waitForTimeout(delay === 0 ? 0 : delay);
+        const info = await page.evaluate(() => {
+          const el = document.activeElement as HTMLElement;
+          const week = el.closest('.sheet-week') as HTMLElement;
+          const r = el.getBoundingClientRect();
+          const w = week.getBoundingClientRect();
+          return { left: Math.round(r.left - w.left), right: Math.round(r.right - w.left), card: Math.round(w.width), scrollLeft: week.scrollLeft, scrollX: window.scrollX, scrollY: Math.round(window.scrollY), ring: getComputedStyle(el).boxShadow !== 'none', behaviour: getComputedStyle(week).scrollBehavior };
+        });
+        samples.push(`+${delay}ms ${JSON.stringify(info)}`);
+      }
+      rec(`FOCUS-DEBUG ${width}px details=${details} sunday ${sunday}: ${samples.join(' ; ')}`);
+      await page.screenshot({ path: join(process.env.GATE_TASK ?? '', `tmp/weekdbg-${width}-${details}.png`) });
+    });
+  }
+}

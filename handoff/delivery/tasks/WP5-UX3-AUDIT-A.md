@@ -9,8 +9,9 @@
   `handoff/templates/`).
 - Author separation: you did not write any WP5-UX3 task (their agent IDs are on the board).
   Treat every worker, planner and verifier report as a claim.
-- Target: `reviewed_commit` = the WP5-UX3-T10-FREEZE commit (TARGET_SHA) with the gate digest
-  TARGET_DIGEST. Record HEAD, the digest before and after (three forms as the gate did) and
+- Target: `reviewed_commit` = TARGET_SHA = cecfceb61c7f15216c8f188e8b7059c9f075247d (the
+  WP5-UX3-T10-FREEZE commit) with the gate digest TARGET_DIGEST =
+  29ac25945fbefa0c86f28aa9c8537e6d2ccd341a161ab70bc7bfc0acf3ff15e7 (833 files). Record HEAD, the digest before and after (three forms as the gate did) and
   `reviewed_commit`. Any change outside `handoff/` invalidates the audit; run on a clean
   export or a scratch clone at TARGET_SHA if the working tree is not clean outside
   `handoff/`.

@@ -1,0 +1,21 @@
+// WP5-UX3-GATE task-local: numeric seam check under the bottom edge and along the inner boundaries of a lifted run.
+// Usage: node seam.mjs <png> <dpr> <boundary device x list comma separated> <bottomEdgeY device>
+import { readFileSync } from 'node:fs';
+import { decodePng, lum, pixel } from './zz-png.ts';
+
+const [file, dprText, xs, bottomText] = process.argv.slice(2);
+const image = decodePng(readFileSync(file));
+const dpr = Number(dprText);
+const bottom = Number(bottomText);
+const L = (x, y) => Math.round(lum(pixel(image, x, y)) * 10) / 10;
+for (const xb of xs.split(',').map(Number)) {
+  console.log(`boundary x=${xb}`);
+  for (let dy = -2; dy <= 8 * dpr; dy += Math.max(1, dpr)) {
+    const y = bottom + dy;
+    const row = [];
+    for (let dx = -4; dx <= 4; dx += 1) row.push(L(xb + dx, y));
+    const ref = (L(xb - 14 * dpr, y) + L(xb + 14 * dpr, y)) / 2;
+    const dev = Math.max(...row.map((v) => Math.abs(v - ref)));
+    console.log(`  y=${y} (edge${dy >= 0 ? '+' : ''}${dy}) ref ${ref.toFixed(1)} row ${row.join(' ')} maxdev ${dev.toFixed(1)}`);
+  }
+}

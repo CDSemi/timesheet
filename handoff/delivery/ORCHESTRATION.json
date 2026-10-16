@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "ux3-round-slices",
+  "phase": "ux3-round-fix1-and-sweep",
   "coordinator_session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,8 +28,12 @@
   "current_source_digest": "229df806aeaaa886ab11ee83556746ee65eda6c81a596dcd180d80d5d0b04db3",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX3-T10-FREEZE",
+  "next_task_id": "WP5-UX3-FIX1-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-16",
+      "observation": "WP5-UX3-GATE (verifier, sonnet) broke runtime rules again despite capitalised lines in the brief and the dispatch prompt: a pipe into head, null-device redirects, cat heredocs and one mistyped 'rm -rf /dev/null' (it failed; nothing removed). Workers in round 3 also slipped with head/tail pipes and one heredoc. None changed a file outside its owned paths and none left a process running. Strengthens the GOV backlog candidate: an explicit denylist in the worker, verifier and committer profiles (a later GOV cycle)."
+    },
     {
       "date": "2026-10-15",
       "observation": "Coordinator slip: right after resuming the WP5-UX3-T01-FREEZE committer for attempt 2, the coordinator wrote the agent ID into ORCHESTRATION.json while the commit task ran (rule: no coordinator writes while a commit task runs). The commit e2f3d74 may therefore hold the board without that one field; the working tree has it and the next commit carries it. Rule kept: record agent IDs of commit tasks only after their hand-back. Also: WP5-UX3-T01-FREEZE attempt 1 stopped on a blank line at EOF in a new test file; later worker briefs ask for a whitespace check (Grep '[ \\t]+$' and the last lines) of every new or changed file before the digest."
@@ -299,7 +303,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "4b5403dbd4a6bbe4fe46925fa6129ad7f1c93a56",
+    "last_commit": "cecfceb61c7f15216c8f188e8b7059c9f075247d",
     "unpushed": []
   },
   "owner_decisions": [
@@ -483,6 +487,16 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-16",
+      "basis": "WP5-UX3-SWEEP (read-only, opus) on cecfceb: 2 Medium, 6 Low, 5 Info findings outside the FIX1 items; 22 mutants, M18 and M21 survive. Finding 8 asks whether the Check out dialog, which now edits break rows like the session dialog, must ask 'Discard your changes?' on a changed Cancel (U-26); finding 12 is an API-only Check out case that follows E-1.",
+      "decision": "WP5-UX3-FIX2 after FIX1 (single writer), timesheet-worker-high with model sonnet (no override; size M, risk M): findings 1 (focus target after a menu entry: the new page's main heading on a route change, the identity button when the route does not change; same for the phone More panel), 2 (device-zone-independent past-day test that fails for M18 at any hour), 3 (editor chip from the day's own period: 'in progress' for every in-progress day in the window days, Open-a-day path tested), 4 (BatchDialog 'day's category'; also OtScreen and HolidayImport user-visible 'label' wording to 'category'; ImportPreview 'Label as read' stays because it names the workbook's own column), 5, 6 and 9 (docs/12 and docs/10 EN/VI corrections), 7 (Profile test in a device zone that differs from the reporting zone), 8 (yes: the Check out dialog asks 'Discard your changes?' on Cancel or Escape with changed rows or box, consistent with U-26; still no G-4 notice and no final confirmation there), 10 (remove the unused helpers or keep them test-only with a comment; their oracle tests stay meaningful), 11 (gate that hover rule under (hover: hover) together with its pre-existing sibling), 13 (aria-describedby for the hint). Finding 12 is accepted as documented E-1 behaviour (API-only; docs/10 risk line) and joins the audit-focus list for area B. Then FIX1-FREEZE and FIX2-FREEZE (or one combined freeze if FIX1 is still unfrozen when FIX2 ends), WP5-UX3-REGATE and the audits."
+    },
+    {
+      "date": "2026-10-16",
+      "basis": "WP5-UX3-GATE FAIL on cecfceb / 29ac2594 with three reasons (a calendar-dependent lifted-column test plus a seed flake; keyboard focus clipped in the new 768-899px week-card scroll; three serious axe items) and one visual defect measured on the lifted runs (a shadow notch at each inner join). Everything else passed, including the server byte-identity and the full real-clock e2e. Earlier rounds lost several cycles to audits that found one defect at a time.",
+      "decision": "One fix round now, with a read-only defect sweep beside it so that the regate and the fresh audits meet a clean snapshot: (1) WP5-UX3-FIX1 on timesheet-worker-high with model opus (override size_risk: six heterogeneous items incl. a flaky-seed diagnosis, a focus-visibility fix inside a scroll container and a shadow redesign; size L, risk M): the Tuesday-proof lifted-column test, the 409 seed flake, focus always fully visible inside the week card at 768-899px (or no inner scroll there, whichever keeps every word whole and every focused control visible; justify), the two label-content-name-mismatch items, the target-size item under the open account menu (fix by placement if possible, else a recorded justification for the auditors), and a notch-free run shadow (continuous under inner joins, still no shadow over a lifted neighbour). (2) In parallel WP5-UX3-SWEEP on timesheet-planner with model opus (override size_risk), read-only, on a clean git-archive export of cecfceb in its temp folder: an audit-style defect sweep of areas A and B (the audit briefs' scopes) that lists every further defect with severity, file:line and reproduction, excluding the FIX1 items; no fixes. (3) Then WP5-UX3-FIX2 for the sweep findings if any (same worker if possible), one freeze per fix task, WP5-UX3-REGATE (the full gate items again) and the area audits A and B plus the integration audit on the regated commit."
+    },
     {
       "date": "2026-10-15",
       "basis": "WP5-UX3-T08 built suggestion rows without the past-day gate (for 'Suggest breaks' on any day and 'Confirm breaks' on today's ended session) inside SessionDialog.tsx with no unit test, because no model file was owned; 'Confirm breaks' with no fitting suggestion now asks through the G-4 notice instead of pre-ticking 'No breaks taken'.",
@@ -21818,7 +21832,7 @@
       "id": "WP5-UX3-T10-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX3-T10"
       ],
@@ -21831,10 +21845,10 @@
         "risk": "L",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a7ee6757dc4f8c61d",
       "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
       "attempt": 1,
       "owned_paths": [
@@ -21843,20 +21857,26 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX3-T10-FREEZE.md",
       "report": "handoff/delivery/tasks/WP5-UX3-T10-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-T10-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-UX3-T10-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "4b5403dbd4a6bbe4fe46925fa6129ad7f1c93a56",
+      "branch": "main",
+      "commit_sha": "cecfceb61c7f15216c8f188e8b7059c9f075247d",
+      "pushed": true,
       "source_digest": "29ac25945fbefa0c86f28aa9c8537e6d2ccd341a161ab70bc7bfc0acf3ff15e7",
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Committer: stage the 6 docs paths and the 20 listed handoff paths, run the checks, commit on main and push (package-final freeze)."
+      "decision": "committed and pushed on attempt 1 (package-final freeze of round 3): 26 paths (6 docs, 20 handoff incl. 6 T10 evidence files and the three audit briefs); HEAD was 4b5403d = origin/main; working-tree set matched; digests 29ac2594 (833 files) before add and on the new HEAD; node v24.21.0; precommit PASS (26 files, 0 findings), diff --cached --check, JSON parse, validate_orchestration (406 tasks), check_recovery (106), preflight (112 pairs, 91 scenarios) exit 0; remote main = cecfceb; no tag; no deviation.",
+      "next_action": "None; WP5-UX3-GATE on cecfceb / 29ac2594."
     },
     {
       "id": "WP5-UX3-GATE",
       "package": "WP5",
       "kind": "gate",
-      "status": "pending",
-      "freeze_commit": null,
+      "status": "done",
+      "freeze_commit": "cecfceb61c7f15216c8f188e8b7059c9f075247d",
       "depends_on": [
         "WP5-UX3-T10-FREEZE"
       ],
@@ -21869,11 +21889,11 @@
         "risk": "H",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
+      "agent_id": "a2faa0ac6b1edba7d",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
       "attempt": 1,
       "owned_paths": [
         "handoff/delivery/tasks/WP5-UX3-GATE.md",
@@ -21881,13 +21901,26 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX3-GATE.md",
       "report": "handoff/delivery/tasks/WP5-UX3-GATE.md",
-      "evidence": [],
-      "baseline_commit": null,
-      "source_digest": null,
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-GATE/00-nonhandoff-status-after.txt",
+        "handoff/delivery/evidence/WP5-UX3-GATE/01-digest-export-before.txt",
+        "handoff/delivery/evidence/WP5-UX3-GATE/01-digest-export-after.txt",
+        "handoff/delivery/evidence/WP5-UX3-GATE/03-verify.txt",
+        "handoff/delivery/evidence/WP5-UX3-GATE/04-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX3-GATE/07-drill.txt",
+        "handoff/delivery/evidence/WP5-UX3-GATE/40-contrast.txt",
+        "handoff/delivery/evidence/WP5-UX3-GATE/51-dist-diff-old.txt",
+        "handoff/delivery/evidence/WP5-UX3-GATE/80-seam-1440.txt",
+        "handoff/delivery/evidence/WP5-UX3-GATE/84-sweep-table.txt",
+        "handoff/delivery/evidence/WP5-UX3-GATE/axefind.txt"
+      ],
+      "baseline_commit": "cecfceb61c7f15216c8f188e8b7059c9f075247d",
+      "source_digest": "29ac25945fbefa0c86f28aa9c8537e6d2ccd341a161ab70bc7bfc0acf3ff15e7",
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Verifier after the package-final freeze: WP5 gate items, server boundary against a643794, round scope, simulated-clock sweep, round-specific checks incl. the audit-focus measurements and a real axe scan."
+      "decision": "FAIL",
+      "gate_notes": "FAIL (NAS items NOT VERIFIED) on cecfceb, digest 29ac2594 (833 files) equal in three forms before and after. Passed: npm ci, lint (no deprecation line), verify (2126); real-clock full e2e 614 passed / 66 skipped / 0 failed (desktop 310, mobile 304); AC-13 x3 plus Tokyo and New York; drill --wp3 208 PASS (image sha256:de5e99b8..., removed, project empty); compose, keys, npm audit, validators (106 probes), precommit self-test; PDF unchanged; npm test x3; dist/server and dist/domain byte-identical to a643794; server/domain diff empty; every changed path maps to a slice; deletions only SessionForm.tsx and BreaksEditor.tsx; CSP identical, no violations; lazy chunks load; main chunk 484.26 kB, no advisory; contrast card/page 1.14/1.15, lowest text 4.61, lowest ring 5.33, hover >= 1.23; desktop bar one row 1024-1920 with the wordmark rule; Day editor floating at 1280/1359, beside from 1360 with columns >= 108px and no word wider than its cell; shared views and employee admin checks pass. FAIL reasons: (1) simulated-clock sweep: timesheet.spec.ts:807 (lifted editor column) fails on Tuesdays (2026-10-20 and 2026-11-03: neighbours chosen across two week bands, -309.6 vs 3; calendar-dependent test), and a mobile flake timesheet.spec.ts:452 (409 stale_version at its own seed at 2026-11-28; rerun passed); (2) keyboard focus clipped inside the week card from 768 to about 880px (new inner scroll from T05B: at 800px the Sunday date button is 1 of 56px visible and the card does not scroll on focus; Saturday/Sunday Category clipped; a643794 has no inner scroll there); (3) real axe 4.14.0 (84 scans): three serious items: label-content-name-mismatch on the two-line holiday category trigger (name inserts a comma), label-content-name-mismatch on the phone suggested-break chips (name 'to ..., edit' vs visible arrow and 'suggested'), target-size on 'Today' partly covered by the open account menu. Also measured: the lifted run's cast shadow has a faint notch at each inner join (~9px wide, about half strength, same at every width and DPR); the 390x844 session dialog scrolls 297px (rows) / 259px (chips) with the first field and the sticky footer visible. Slips: a head pipe, null-device uses, cat heredocs and one mistyped rm -rf /dev/null (failed, nothing removed); nothing left running.",
+      "next_action": "None; fix round WP5-UX3-FIX1 (coordinator_decisions 2026-10-16), then a freeze and WP5-UX3-REGATE."
     },
     {
       "id": "WP5-UX3-AUDIT-A",
@@ -22010,6 +22043,224 @@
       "author_agent_ids": [],
       "decision": null,
       "next_action": "Fresh opus auditor after both area audits PASS: the integration pass whose PASS re-accepts WP5; superseded_by targets move here when the gate records the new digest."
+    },
+    {
+      "id": "WP5-UX3-FIX1",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX3-T10-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "size_risk",
+      "routing": {
+        "size": "L",
+        "risk": "M",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a96e41f7ee27175f4",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/styles.css",
+        "src/client/components/TimesheetSheet.tsx",
+        "src/client/components/SheetWeekTable.tsx",
+        "src/client/components/sheetModel.ts",
+        "src/client/components/labelPickerModel.ts",
+        "src/client/components/BreakChip.tsx",
+        "src/client/components/breakChipModel.ts",
+        "src/client/components/AccountMenu.tsx",
+        "src/client/TimesheetScreen.tsx",
+        "tests/e2e/timesheet.spec.ts",
+        "tests/e2e/day-editor.spec.ts",
+        "tests/e2e/shell.spec.ts",
+        "tests/e2e/fixtures.ts",
+        "tests/client/sheetModel.test.ts",
+        "tests/client/labelPickerModel.test.ts",
+        "tests/client/breakChipModel.test.ts",
+        "handoff/delivery/tasks/WP5-UX3-FIX1.md",
+        "handoff/delivery/evidence/WP5-UX3-FIX1"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-FIX1.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-FIX1.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-FIX1/01-digest-before.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/log-rep1-1020.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/log-rep2-five-1128-mobile.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/log-full-real.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/full-real-counts.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/sim-item1-summary.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/sim-item2-summary.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/a11y-after.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/menu-summary.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/seam-before.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/seam-after2.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/log-mut3.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/log-mut7.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/log-verify.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX1/log-digest-after.txt"
+      ],
+      "baseline_commit": "cecfceb61c7f15216c8f188e8b7059c9f075247d",
+      "source_digest": "e4659145c15f07915d05d831df0478b3026bbedb0d3ec5dc8382b3db03bfd833",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (reported, not independent proof): (1) the lifted-column test takes its neighbour from the open day's own week (bandNeighbour, same-card assertion), 3px assertion unchanged, passes at six simulated instants and the real clock; (2) the 409 flake reproduced (an earlier test in the same worker left a day entry and the seed sent version null): the test resets the day and seeds with the current version; five specs 136/136/136 at 2026-11-28; (3) week-card focus at 768-899px, option (a): a focus handler (revealDelta, unit-tested) plus scroll padding, grid min-width and list inset (option (b) would need 822px against a 736px card); a new keyboard walk passes; (4) the category picker name joins the lines with spaces; (5) the break chip's name comes from its content ('Edit Break 1 · ... to ... suggested', no aria-label; deviation: 'Edit' leads instead of a trailing ', edit'); (6) target-size under the open account menu justified, not changed (62 of 73 widths overlap a control; no placement removes it); (7) run-shadow notch removed with a run-level ::before shadow layer: under the joins 22.5-24.3/255 before, 2.1-2.8 after (residual: dark theme at DPR 2 one device pixel 6-7/255). Changed: styles.css, TimesheetSheet.tsx, SheetWeekTable.tsx, sheetModel.ts, labelPickerModel.ts, BreakChip.tsx, breakChipModel.ts (comment), timesheet.spec.ts, day-editor.spec.ts, sheetModel.test.ts, labelPickerModel.test.ts (each changed assertion listed). Unit 2130; full e2e desktop 311/0/30, mobile 304/0/37; axe 0 serious except item 6; mutations for items 3 and 7 caught; main chunk 485.28 kB; verify 0; digest e4659145 (833 files). Slip: one '| head -c 0' no-op; nothing left running.",
+      "next_action": "None; WP5-UX3-FIX1-FREEZE (committer alone), then WP5-UX3-FIX2."
+    },
+    {
+      "id": "WP5-UX3-FIX1-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX3-FIX1"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX3-FIX1-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX3-FIX1-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-FIX1-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-FIX1-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "cecfceb61c7f15216c8f188e8b7059c9f075247d",
+      "source_digest": "e4659145c15f07915d05d831df0478b3026bbedb0d3ec5dc8382b3db03bfd833",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Committer: stage the 11 FIX1 paths and the listed handoff records and evidence folders (gate, sweep, FIX1), run the checks, commit on main and push."
+    },
+    {
+      "id": "WP5-UX3-SWEEP",
+      "package": "WP5",
+      "kind": "plan",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX3-T10-FREEZE"
+      ],
+      "profile": "timesheet-planner",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "size_risk",
+      "routing": {
+        "size": "L",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a8db64f694966b0b3",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX3-SWEEP.md",
+        "handoff/delivery/evidence/WP5-UX3-SWEEP"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-SWEEP.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-SWEEP.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-SWEEP/01-digest-export.txt",
+        "handoff/delivery/evidence/WP5-UX3-SWEEP/11-request-bodies-old-vs-new.txt",
+        "handoff/delivery/evidence/WP5-UX3-SWEEP/21-e2e-probe-observations.txt",
+        "handoff/delivery/evidence/WP5-UX3-SWEEP/23-e2e-a643794-observations.txt",
+        "handoff/delivery/evidence/WP5-UX3-SWEEP/30-mutants-summary.txt",
+        "handoff/delivery/evidence/WP5-UX3-SWEEP/40-css-scan-target.txt",
+        "handoff/delivery/evidence/WP5-UX3-SWEEP/43-label-words.txt",
+        "handoff/delivery/evidence/WP5-UX3-SWEEP/51-ports-after.txt"
+      ],
+      "baseline_commit": "cecfceb61c7f15216c8f188e8b7059c9f075247d",
+      "source_digest": "29ac25945fbefa0c86f28aa9c8537e6d2ccd341a161ab70bc7bfc0acf3ff15e7",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "sweep delivered (read-only on a clean export of cecfceb, digest verified; no fix): 2 Medium, 6 Low, 5 Info. Medium: (1) choosing an account-menu entry by keyboard drops focus to body (AccountMenu.tsx:112, :144-146, :209-213; a643794 kept focus on the bar link); (2) mutant M18 (past-day rule on the device date) survives because day-editor.spec.ts:593 runs in Asia/Ho_Chi_Minh, whose date equals Los Angeles from 07:00 to 17:00 UTC (product code correct). Low: (3) the editor chip says 'future period' for an in-progress day opened through Open a day (TimesheetScreen.tsx:590); (4) BatchDialog.tsx:133 'day label'; (5) docs/12:71 points a refused Check out to 'Confirm breaks', which running sessions lack; (6) docs/10:240 main chunk 452 kB vs 484 kB; (7) mutant M21 (Profile shows the device zone) survives (settings-routes.spec.ts:10 runs in the reporting zone); (8) the Check out dialog drops changed rows on Cancel/Escape without 'Discard your changes?' (U-26). Info: (9) docs/10:226 wrong section reference; (10) unused quickBreaksRequest/confirmBreaksDraft; (11) ungated hover rule styles.css:2755; (12) Check out with saved unconfirmed rows on a running session (API only): removing every row omits the list so the server keeps them (E-1); (13) the Category hint not linked by aria-describedby (DayFieldsForm.tsx:114). Clean: request bodies equal by instant in eight cases, untouched edit byte-identical; breaks_confirmed on every path; nothing sent on Cancel, Discard or Done; pre-fill uses the server date; dialog-stack Escape and focus; docs/04 numbers and EN/VI parity. Mutation: 22 mutants, 20 caught (M18, M21 survive). Slip: one read-only pipe into head; nothing left running.",
+      "next_action": "None; findings feed WP5-UX3-FIX2 after FIX1 (coordinator_decisions 2026-10-16)."
+    },
+    {
+      "id": "WP5-UX3-FIX2",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "pending",
+      "depends_on": [
+        "WP5-UX3-FIX1-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": null,
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/components/AccountMenu.tsx",
+        "src/client/components/AppShell.tsx",
+        "src/client/App.tsx",
+        "src/client/SettingsScreen.tsx",
+        "src/client/ProfileScreen.tsx",
+        "src/client/AdminScreen.tsx",
+        "src/client/TimesheetScreen.tsx",
+        "src/client/DayEditor.tsx",
+        "src/client/components/dayEditorModel.ts",
+        "src/client/components/BatchDialog.tsx",
+        "src/client/OtScreen.tsx",
+        "src/client/components/HolidayImport.tsx",
+        "src/client/components/ClockOutDialog.tsx",
+        "src/client/components/DayFieldsForm.tsx",
+        "src/client/styles.css",
+        "tests/client/dayEditorModel.test.ts",
+        "tests/client/breakRowsModel.test.ts",
+        "tests/e2e/shell.spec.ts",
+        "tests/e2e/day-editor.spec.ts",
+        "tests/e2e/today.spec.ts",
+        "tests/e2e/settings-routes.spec.ts",
+        "tests/e2e/timesheet.spec.ts",
+        "tests/e2e/import.spec.ts",
+        "tests/e2e/ot-leave.spec.ts",
+        "tests/e2e/hover.spec.ts",
+        "docs/10_DECISIONS_AND_SOURCES.md",
+        "docs/10_DECISIONS_AND_SOURCES.vi.md",
+        "docs/12_RELEASE_NOTES.md",
+        "docs/12_RELEASE_NOTES.vi.md",
+        "handoff/delivery/tasks/WP5-UX3-FIX2.md",
+        "handoff/delivery/evidence/WP5-UX3-FIX2"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-FIX2.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-FIX2.md",
+      "evidence": [],
+      "baseline_commit": null,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Worker after the FIX1 freeze: sweep findings 1-11 and 13 per the coordinator decision of 2026-10-16; then WP5-UX3-FIX2-FREEZE, WP5-UX3-REGATE and the audits."
     }
   ],
   "future_packages": [

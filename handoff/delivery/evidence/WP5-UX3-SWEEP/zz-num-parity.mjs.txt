@@ -1,0 +1,21 @@
+// Compares the numeric tokens (with units) and backticked tokens of an EN doc and its VI translation, line by line.
+// Usage: node num-parity.mjs <en.md> <vi.md> <out.txt>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [en, vi, outFile] = process.argv.slice(2);
+const a = readFileSync(en, 'utf8').split('\n');
+const b = readFileSync(vi, 'utf8').split('\n');
+const tokens = (line) =>
+  [...line.matchAll(/`[^`]+`|\d+(?:[.,]\d+)?\s?(?:px|rem|ms|kB|%|:1)?|#\/[a-z/]+/g)]
+    .map((m) => m[0].replace(',', '.').replace(/\s/g, ''))
+    .sort();
+const out = [];
+const n = Math.max(a.length, b.length);
+for (let i = 0; i < n; i += 1) {
+  const x = tokens(a[i] ?? '');
+  const y = tokens(b[i] ?? '');
+  const onlyEn = x.filter((t) => !y.includes(t));
+  const onlyVi = y.filter((t) => !x.includes(t));
+  if (onlyEn.length > 0 || onlyVi.length > 0) out.push(`line ${i + 1}: EN-only [${onlyEn.join(' ')}] VI-only [${onlyVi.join(' ')}]`);
+}
+writeFileSync(outFile, `${out.join('\n')}\n`);

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Usage: e2e.sh <label> <playwright args...>  (runs in the export; output to out/e2e-<label>.txt)
+source /d/.claude-tmp/timesheet/WP5-UX3-SWEEP/probes/env.sh
+label=$1
+shift
+cd $T/src
+export SWEEP_E2E_OUT=$(cygpath -w $T/out/e2e-probe-$label.txt)
+node.exe node_modules/@playwright/test/cli.js test "$@" --output=$(cygpath -w $T/tmp/pw-$label) > $T/out/e2e-$label.raw.txt 2>&1
+code=$?
+sed 's/\x1b\[[0-9;]*m//g' $T/out/e2e-$label.raw.txt > $T/out/e2e-$label.txt
+echo "exit=$code" >> $T/out/e2e-$label.txt

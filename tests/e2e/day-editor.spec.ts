@@ -627,7 +627,9 @@ test('a new session on a past day is pre-filled with the reference hours and the
     if (isMobile) {
       const end = new Date(Date.parse(`${local}:00Z`) + Number(minutes) * 60_000).toISOString().slice(11, 16);
       const chip = row.row.getByRole('button');
-      await expect(chip).toHaveAccessibleName(`Break ${index + 1} · ${usFullDate(local.slice(0, 10))} ${local.slice(11)} to ${end} suggested, edit`);
+      await expect(chip).toHaveAccessibleName(`Edit Break ${index + 1} · ${usFullDate(local.slice(0, 10))} ${local.slice(11)} to ${end} suggested`);
+      // The name comes from the content (a hidden "Edit", the visible words, a hidden "to" for the arrow), not from aria-label.
+      await expect(chip).not.toHaveAttribute('aria-label', /.*/);
     } else {
       await expect(row.date).toHaveValue(local.slice(0, 10));
       await expect(row.time).toHaveValue(local.slice(11));
@@ -940,10 +942,13 @@ function plusMinutes(local: string, minutes: number): string {
   return new Date(Date.parse(`${local.replace(' ', 'T')}:00Z`) + minutes * 60_000).toISOString().slice(0, 16).replace('T', ' ');
 }
 
-/** The accessible name of a chip: label, start (with the date for an overnight session), "to", end, the tag, ", edit". */
+/**
+ * The accessible name of a chip, from its content (WP5-UX3-FIX1): the hidden "Edit", then the label, the start (with the date for an
+ * overnight session), the hidden "to" for the arrow, the end and the tag.
+ */
 function chipName(index: number, start: string, minutes: number, options: { overnight: boolean; suggested: boolean }): string {
   const from = options.overnight ? `${usFullDate(start.slice(0, 10))} ${start.slice(11)}` : start.slice(11);
-  return `Break ${index} · ${from} to ${plusMinutes(start, minutes).slice(11)}${options.suggested ? ' suggested' : ''}, edit`;
+  return `Edit Break ${index} · ${from} to ${plusMinutes(start, minutes).slice(11)}${options.suggested ? ' suggested' : ''}`;
 }
 
 function breakChip(form: Locator, index: number): Locator {
@@ -1543,7 +1548,7 @@ test('phone break chips: a break at a repeated or a missing local time asks insi
     await foldPrompt.getByRole('radio', { name: 'Later time, UTC offset +10:00' }).check();
     await expect(fold.sub.getByText(/^Ends /)).toHaveText('Ends 02:45 (Australia/Sydney)');
     await fold.sub.getByRole('button', { name: 'Done', exact: true }).click();
-    await expect(breakChip(fold.form, 1)).toHaveAccessibleName('Break 1 · 04/05/2026 02:30 to 02:45, edit');
+    await expect(breakChip(fold.form, 1)).toHaveAccessibleName('Edit Break 1 · 04/05/2026 02:30 to 02:45');
     await saveSession(page, fold.form);
     await expect(fold.editor.getByText('Session saved.')).toBeVisible();
     const folded = (await employeeSeed.dayView(FOLD_DAY)).sessions[0];
@@ -3277,6 +3282,130 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
       await expect(namedDayButton(page, data.twoSessions, 'Edit')).toBeFocused();
     }
     console.log(`BESIDE ${lines.join('; ')}`);
+  });
+});
+
+/* ---- WP5-UX3-FIX1: from 768 to 899px the week card scrolls sideways; keyboard focus is always fully in view ---------- */
+
+/** Where the focused control and its focus indicator lie against the visible box of its week card (viewport pixels). */
+interface FocusFit {
+  name: string;
+  inCard: boolean;
+  /** How far the focus indicator reaches outside the control: the widest outer box-shadow layer without blur, or a painted outline. */
+  reach: number;
+  /** Room between the indicator's box and each edge of the card's visible box; negative means clipped. */
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  scrollLeft: number;
+}
+
+const FOCUS_FIT = `(() => {
+  const el = document.activeElement;
+  if (el === null || el === document.body) return null;
+  const card = el.closest('.sheet-week');
+  const name = (el.getAttribute('aria-label') || el.textContent || el.tagName).replace(/\\s+/g, ' ').trim().slice(0, 40);
+  if (card === null) return { name, inCard: false, reach: 0, left: 0, right: 0, top: 0, bottom: 0, scrollLeft: 0 };
+  const style = getComputedStyle(el);
+  let reach = 0;
+  for (const layer of style.boxShadow === 'none' ? [] : style.boxShadow.split(/,(?![^(]*\\))/)) {
+    if (layer.includes('inset')) continue;
+    const [x = 0, y = 0, blur = 0, spread = 0] = layer.replace(/(rgba?|color)\\([^)]*\\)/g, '').trim().split(/\\s+/).map(parseFloat).filter((n) => !Number.isNaN(n));
+    if (blur === 0 && spread > 0) reach = Math.max(reach, spread + Math.max(Math.abs(x), Math.abs(y)));
+  }
+  const painted = style.outlineStyle !== 'none' && !/transparent|rgba\\([^)]*,\\s*0\\)$/.test(style.outlineColor);
+  if (painted) reach = Math.max(reach, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+  const box = el.getBoundingClientRect();
+  const frame = card.getBoundingClientRect();
+  const left = frame.left + card.clientLeft;
+  const top = frame.top + card.clientTop;
+  return {
+    name,
+    inCard: true,
+    reach,
+    left: box.left - reach - left,
+    right: left + card.clientWidth - (box.right + reach),
+    top: box.top - reach - top,
+    bottom: top + card.clientHeight - (box.bottom + reach),
+    scrollLeft: card.scrollLeft,
+  };
+})()`;
+
+/** Half a pixel of rounding at a fractional edge is allowed. */
+const FITS = (fit: FocusFit) => Math.min(fit.left, fit.right, fit.top, fit.bottom) >= -0.5;
+
+test.describe('WP5-UX3-FIX1: from 768 to 899px every focused sheet control is fully visible in its scrolling week card', () => {
+  test.skip(({ isMobile }) => isMobile, 'The 7-column sheet is a desktop-project layout');
+  test.use({ timezoneId: LA });
+
+  test('Tab, Shift+Tab and the picker arrows at 768, 800, 820, 860 and 899: each focused control and its ring lie inside the card, words stay whole, the page never scrolls sideways', async ({
+    page,
+    privateServer,
+  }) => {
+    test.setTimeout(240_000);
+    const data = await seedLongContent(privateServer);
+    await page.setViewportSize({ width: 768, height: 900 });
+    await signInToPrivate(page, privateServer, data.person);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByRole('switch', { name: 'Show details' }).check();
+    await expect(page.locator('.sheet-main')).toContainText('Independence');
+    const cards = page.locator('.sheet-week');
+    const lines: string[] = [];
+    for (const width of [768, 800, 820, 860, 899]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const batch of [false, true]) {
+        if (batch) await page.getByRole('button', { name: 'Change several days' }).click();
+        await expect(page.getByRole('checkbox', { name: /^Select \d{4}-\d{2}-\d{2}$/ })).toHaveCount(batch ? 14 : 0);
+        const facts = await sheetFacts(page);
+        expect(facts.tooWide, `${width}px: words wider than their cell`).toEqual([]);
+        expect(facts.words, `${width}px: the probe measured the cells' words`).toBeGreaterThan(50);
+        expect(facts.scrollOverflow, `${width}px: the page never scrolls sideways`).toBeLessThanOrEqual(0);
+        const scrolls = await cards.first().evaluate((card) => card.scrollWidth > card.clientWidth);
+        // The label column and seven 108px columns need 850px: the card scrolls at 768 to 860, and at 899 (867px) it does not.
+        expect(scrolls, `${width}px: the week card scrolls sideways while the columns need more room than the card`).toBe(width <= 860);
+        const controls = page.locator('.sheet-week button, .sheet-week input');
+        const expected = await controls.count();
+        for (const direction of ['Tab', 'Shift+Tab'] as const) {
+          for (const card of await cards.all()) await card.evaluate((element) => element.scrollTo({ left: 0, top: 0, behavior: 'instant' }));
+          await (direction === 'Tab' ? controls.first() : controls.last()).focus();
+          // Focus from the keyboard: the first key press makes the indicator :focus-visible.
+          await page.keyboard.press('Shift');
+          let stops = 0;
+          for (let step = 0; step <= expected; step += 1) {
+            const fit = await page.evaluate<FocusFit | null>(FOCUS_FIT);
+            if (fit === null || !fit.inCard) break;
+            stops += 1;
+            expect(FITS(fit), `${width}px ${batch ? 'batch' : 'details'} ${direction}: "${fit.name}" and its ${fit.reach}px ring lie inside the card (room l ${fit.left.toFixed(1)} r ${fit.right.toFixed(1)} t ${fit.top.toFixed(1)} b ${fit.bottom.toFixed(1)}, scrollLeft ${fit.scrollLeft})`).toBe(true);
+            await page.keyboard.press(direction);
+          }
+          expect(stops, `${width}px ${direction}: every control of both week cards was reached`).toBe(expected);
+        }
+        if (batch) await page.getByRole('button', { name: 'Done' }).click();
+      }
+      // The picker of the last column of each card: Enter opens its list (focus moves into it), the arrows move; the list and its
+      // ring lie inside the card, and Escape returns focus to the trigger with the card back at its top.
+      for (const card of await cards.all()) {
+        await card.evaluate((element) => element.scrollTo({ left: 0, top: 0, behavior: 'instant' }));
+        const trigger = card.locator('.label-trigger').last();
+        await trigger.focus();
+        await page.keyboard.press('Shift');
+        const onTrigger = await page.evaluate<FocusFit | null>(FOCUS_FIT);
+        expect(onTrigger !== null && FITS(onTrigger), `${width}px: the last column's picker is fully visible: ${JSON.stringify(onTrigger)}`).toBe(true);
+        await page.keyboard.press('Enter');
+        await expect(card.getByRole('listbox')).toBeFocused();
+        for (const key of ['ArrowDown', 'ArrowDown', 'End', 'Home']) {
+          await page.keyboard.press(key);
+          const onList = await page.evaluate<FocusFit | null>(FOCUS_FIT);
+          expect(onList !== null && FITS(onList), `${width}px ${key}: the open list and its ring are inside the card: ${JSON.stringify(onList)}`).toBe(true);
+        }
+        await page.keyboard.press('Escape');
+        await expect(trigger).toBeFocused();
+        expect(await card.evaluate((element) => element.scrollTop), `${width}px: the card is back at its top once the list closes`).toBe(0);
+      }
+      lines.push(`${width}: ${await cards.first().evaluate((card) => `${card.scrollWidth}/${card.clientWidth}`)}`);
+    }
+    console.log(`FOCUS-IN-CARD ${lines.join('; ')}`);
   });
 });
 

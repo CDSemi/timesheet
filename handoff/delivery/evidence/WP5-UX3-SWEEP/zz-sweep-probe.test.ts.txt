@@ -1,0 +1,161 @@
+// WP5-UX3-SWEEP probe (export only, never in the repository): the old form's request (sessionModel.buildSessionRequest,
+// the body SessionForm/BreaksEditor sent at a643794) against the new dialog's request (breakRowsModel) for the same typed
+// values, resolved with the server's own resolver call (timesheetCommands.ts:180).
+import { writeFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import type { LocalInstantInput, Session, SessionRequest, ClockOutRequest } from '../../src/client/api.ts';
+import {
+  addBreakRow,
+  buildCheckOutDialogRequest,
+  buildSessionDialogRequest,
+  changeDialogZone,
+  chooseBreakRowFold,
+  editBreakRow,
+  newSessionDialogDraft,
+  sessionDialogDraftFromSession,
+  type SessionDialogDraft,
+} from '../../src/client/components/breakRowsModel.ts';
+import { followSessionDate } from '../../src/client/components/breakChipModel.ts';
+import { buildClockOutRequest, buildSessionRequest, changeZone, draftFromSession, type LocalField, type SessionDraft } from '../../src/client/components/sessionModel.ts';
+import { formatInZone, resolveLocalDateTime } from '../../src/domain/zones.ts';
+
+const LA = 'America/Los_Angeles';
+const HCM = 'Asia/Ho_Chi_Minh';
+const out: string[] = [];
+
+function utc(input: LocalInstantInput): string {
+  const seconds = resolveLocalDateTime(input.local, input.zone, { fold: input.fold ?? null, offset: input.offset ?? null }).utc;
+  return formatInZone('UTC', seconds);
+}
+
+function instants(request: SessionRequest | ClockOutRequest): unknown {
+  const r = request as SessionRequest & ClockOutRequest;
+  return {
+    start: r.start === undefined ? null : utc(r.start),
+    end: r.end === undefined ? null : utc(r.end),
+    breaks: r.breaks === undefined ? 'omitted' : r.breaks.map((b) => [utc(b.start), utc(b.end), b.counts_as_work]),
+    breaks_confirmed: r.breaks_confirmed,
+    input_zone: r.input_zone,
+    expected_version: r.expected_version,
+    reason: r.reason,
+  };
+}
+
+function field(date: string, time: string, fold: 0 | 1 | null = null): LocalField {
+  return { date, time, fold, offset: null };
+}
+
+interface Typed {
+  name: string;
+  zone: string;
+  start: [string, string, (0 | 1)?];
+  end: [string, string, (0 | 1)?];
+  /** start date, start time, minutes, start fold, old end date, old end time, old end fold */
+  breaks: Array<[string, string, number, (0 | 1 | null), string, string, (0 | 1 | null)]>;
+}
+
+function oldBody(typed: Typed): SessionRequest {
+  const draft: SessionDraft = {
+    zone: typed.zone,
+    start: field(typed.start[0], typed.start[1], typed.start[2] ?? null),
+    end: field(typed.end[0], typed.end[1], typed.end[2] ?? null),
+    breaks: typed.breaks.map(([d, t, , f, ed, et, ef], i) => ({ key: `k${i}`, start: field(d, t, f), end: field(ed, et, ef), countsAsWork: false })),
+    mode: 'confirmed',
+  };
+  return buildSessionRequest(draft);
+}
+
+function newBody(typed: Typed): SessionRequest {
+  let draft: SessionDialogDraft = newSessionDialogDraft(typed.start[0], typed.zone);
+  draft = { ...draft, start: field(typed.start[0], typed.start[1], typed.start[2] ?? null), end: field(typed.end[0], typed.end[1], typed.end[2] ?? null) };
+  typed.breaks.forEach(([d, t, m, f], i) => {
+    draft = addBreakRow(draft, `n${i}`);
+    draft = editBreakRow(draft, `n${i}`, { date: d, time: t, minutes: String(m) });
+    if (f !== null) draft = chooseBreakRowFold(draft, `n${i}`, f);
+  });
+  draft = followSessionDate(draft);
+  const built = buildSessionDialogRequest(draft, { allowUnconfirmed: false });
+  if (!built.ok) throw new Error(`${typed.name}: ${JSON.stringify(built)}`);
+  return built.request;
+}
+
+const CASES: Typed[] = [
+  { name: 'same-day LA', zone: LA, start: ['2026-10-14', '09:00'], end: ['2026-10-14', '17:30'], breaks: [['2026-10-14', '11:00', 15, null, '2026-10-14', '11:15', null], ['2026-10-14', '13:00', 30, null, '2026-10-14', '13:30', null]] },
+  { name: 'overnight LA, break across midnight', zone: LA, start: ['2026-10-14', '22:00'], end: ['2026-10-15', '06:00'], breaks: [['2026-10-14', '23:50', 20, null, '2026-10-15', '00:10', null], ['2026-10-15', '02:00', 30, null, '2026-10-15', '02:30', null]] },
+  { name: 'fall-back fold, earlier 01:45 +30 (old end 01:15 later)', zone: LA, start: ['2026-11-01', '00:30'], end: ['2026-11-01', '04:00'], breaks: [['2026-11-01', '01:45', 30, 0, '2026-11-01', '01:15', 1]] },
+  { name: 'fall-back fold, later 01:45 +30', zone: LA, start: ['2026-11-01', '00:30'], end: ['2026-11-01', '04:00'], breaks: [['2026-11-01', '01:45', 30, 1, '2026-11-01', '02:15', null]] },
+  { name: 'spring-forward, break 03:00 +15 after gap replacement', zone: LA, start: ['2027-03-14', '01:00'], end: ['2027-03-14', '05:00'], breaks: [['2027-03-14', '03:00', 15, null, '2027-03-14', '03:15', null]] },
+  { name: 'spring-forward, break 01:50 +20 across the gap', zone: LA, start: ['2027-03-14', '01:00'], end: ['2027-03-14', '05:00'], breaks: [['2027-03-14', '01:50', 20, null, '2027-03-14', '03:10', null]] },
+  { name: 'input zone Asia/Ho_Chi_Minh', zone: HCM, start: ['2026-10-14', '08:00'], end: ['2026-10-14', '17:00'], breaks: [['2026-10-14', '10:00', 15, null, '2026-10-14', '10:15', null]] },
+  { name: 'HCM overnight', zone: HCM, start: ['2026-10-14', '20:00'], end: ['2026-10-15', '03:00'], breaks: [['2026-10-14', '23:45', 30, null, '2026-10-15', '00:15', null]] },
+];
+
+function savedSession(): Session {
+  return {
+    id: 's1',
+    work_date: '2026-11-01',
+    source: 'manual',
+    start_utc: '2026-11-01T07:30:00Z',
+    end_utc: '2026-11-01T12:00:00Z',
+    input_zone: LA,
+    breaks_confirmed: true,
+    breaks: [
+      { id: 'b1', start_utc: '2026-11-01T08:45:00Z', end_utc: '2026-11-01T09:15:00Z', counts_as_work: false },
+      { id: 'b2', start_utc: '2026-11-01T09:50:00Z', end_utc: '2026-11-01T10:05:37Z', counts_as_work: false },
+    ],
+    version: 4,
+  } as unknown as Session;
+}
+
+describe('sweep probe: old form vs new dialog request instants', () => {
+  for (const typed of CASES) {
+    it(typed.name, () => {
+      const a = instants(oldBody(typed));
+      const b = instants(newBody(typed));
+      out.push(`CASE ${typed.name}\n old=${JSON.stringify(a)}\n new=${JSON.stringify(b)}\n raw_new=${JSON.stringify(newBody(typed))}\n equal=${JSON.stringify(a) === JSON.stringify(b)}`);
+      expect(b).toEqual(a);
+    });
+  }
+
+  it('untouched edit of a saved session (fold day, a break with seconds)', () => {
+    const s = savedSession();
+    const old = buildSessionRequest(draftFromSession(s), { expectedVersion: 4 });
+    const built = buildSessionDialogRequest(sessionDialogDraftFromSession(s), { allowUnconfirmed: false, expectedVersion: 4 });
+    if (!built.ok) throw new Error('not built');
+    out.push(`CASE untouched edit\n old=${JSON.stringify(old)}\n new=${JSON.stringify(built.request)}\n bytes_equal=${JSON.stringify(old) === JSON.stringify(built.request)}`);
+    expect(JSON.stringify(built.request)).toBe(JSON.stringify(old));
+  });
+
+  it('zone round trip on a saved session (LA -> HCM -> LA) keeps every instant', () => {
+    const s = savedSession();
+    const oldDraft = changeZone(changeZone(draftFromSession(s), HCM), LA);
+    const newDraft = changeDialogZone(changeDialogZone(sessionDialogDraftFromSession(s), HCM), LA);
+    const old = buildSessionRequest(oldDraft, { expectedVersion: 4 });
+    const built = buildSessionDialogRequest(newDraft, { allowUnconfirmed: false, expectedVersion: 4 });
+    out.push(`CASE zone round trip\n old=${JSON.stringify(old)}\n new=${built.ok ? JSON.stringify(built.request) : JSON.stringify(built)}`);
+    expect(true).toBe(true);
+  });
+
+  it('session date moved one day earlier on a same-day session: hidden break dates follow (Q6 b)', () => {
+    let draft = newSessionDialogDraft('2026-10-14', LA);
+    draft = { ...draft, start: field('2026-10-14', '09:00'), end: field('2026-10-14', '17:00') };
+    draft = addBreakRow(draft, 'n0');
+    draft = editBreakRow(draft, 'n0', { time: '12:00', minutes: '30' });
+    draft = followSessionDate({ ...draft, start: field('2026-10-13', '09:00'), end: field('2026-10-13', '17:00') });
+    const built = buildSessionDialogRequest(draft, { allowUnconfirmed: false });
+    out.push(`CASE date move\n new=${built.ok ? JSON.stringify(built.request) : JSON.stringify(built)}`);
+    expect(built.ok).toBe(true);
+  });
+
+  it('check out: untouched saved rows of a running session (old default pending vs new default)', () => {
+    const s = { ...savedSession(), end_utc: null, breaks_confirmed: false } as unknown as Session;
+    const old = buildClockOutRequest(draftFromSession(s), 4);
+    const draft = sessionDialogDraftFromSession(s);
+    const built = buildCheckOutDialogRequest({ session: s, rows: draft.rows, noBreaks: draft.noBreaks, expectedVersion: 4 });
+    out.push(`CASE checkout untouched saved rows\n old_default=${JSON.stringify(old)}\n new_default=${built.ok ? JSON.stringify(built.request) : JSON.stringify(built)}`);
+    const removed = buildCheckOutDialogRequest({ session: s, rows: [], noBreaks: false, expectedVersion: 4 });
+    out.push(` new_after_removing_all_rows=${removed.ok ? JSON.stringify(removed.request) : JSON.stringify(removed)}`);
+    writeFileSync(process.env.SWEEP_OUT ?? 'zz-sweep-probe.txt', `${out.join('\n')}\n`);
+    expect(true).toBe(true);
+  });
+});

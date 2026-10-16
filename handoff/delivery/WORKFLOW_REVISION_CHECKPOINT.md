@@ -307,6 +307,43 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   paths). Then WP5-UX3-GATE on that commit; when the gate records the new digest, the current
   WP5 PASS (WP5-UX2-AUDIT2) and every audit pointing to it get superseded_by
   WP5-UX3-AUDIT-INT.
+- WP5-UX3-T10-FREEZE done (package-final freeze): cecfceb61c7f15216c8f188e8b7059c9f075247d on
+  main, pushed (26 paths; digest 29ac2594, 833 files; every check exit 0).
+- Running: WP5-UX3-GATE (verifier, sonnet; package-final) on cecfceb / 29ac2594: WP5 gate items
+  with the drill, server and domain byte-identical to a643794, round scope, a ten-instant
+  simulated-clock sweep, the round-specific checks with the audit-focus measurements and a real
+  axe scan.
+- WP5-UX3-GATE FAIL (verifier, self-reported claude-sonnet-5-5; NAS NOT VERIFIED) on cecfceb /
+  29ac2594 (three forms equal): everything else passed (verify 2126, real-clock e2e 614/0/66,
+  AC-13, drill 208 PASS, dist/server and dist/domain byte-identical to a643794, scope, CSP,
+  contrast, bar, floating rule). FAIL reasons: (1) `timesheet.spec.ts:807` fails on Tuesdays
+  (neighbours across two week bands) and a mobile seed flake at `:452` (409); (2) keyboard focus
+  clipped in the 768-899px week-card scroll; (3) axe: two label-content-name-mismatch items and
+  a target-size item under the open account menu. Also measured: a faint notch in the run
+  shadow at inner joins; the 390x844 session dialog scrolls 297/259px with first field and
+  footer visible.
+- Coordinator decision: one fix round. Running in parallel: WP5-UX3-FIX1 (worker-high, opus,
+  size_risk; the seven items) and WP5-UX3-SWEEP (planner, opus, read-only on a clean export of
+  cecfceb; audit-style defect sweep of areas A and B excluding the FIX1 items). Then FIX2 for
+  any sweep findings, freezes, WP5-UX3-REGATE and the audits.
+- WP5-UX3-SWEEP done (planner, self-reported claude-opus-5-5; read-only): 2 Medium (focus lost
+  after an account-menu entry; mutant M18, the device-date past-day rule, survives), 6 Low (editor
+  chip for an in-progress day opened through Open a day; "day label" wording; docs/12 Check out
+  remedy; docs/10 chunk figure; mutant M21 Profile zone survives; no discard question in the Check
+  out dialog), 5 Info; request bodies, breaks_confirmed paths, nothing sent on Cancel/Discard/Done,
+  server-date pre-fill and dialog Escape/focus clean; 22 mutants, 20 caught.
+- Coordinator decision: WP5-UX3-FIX2 (worker-high, sonnet) after the FIX1 freeze covers findings
+  1-11 and 13 (Check out gets the discard question per U-26); finding 12 (API-only E-1 case)
+  accepted and added to audit focus B. FIX2 registered pending.
+- WP5-UX3-FIX1 done (worker-high, self-reported claude-opus-5-5): the lifted-column test keeps
+  its neighbour in the open day's week; the batch stale-version seed uses the current version;
+  week-card focus is scrolled fully into view at 768-899px; the category picker and break chip
+  names contain their visible text; one run-level shadow layer removes the notch (under the
+  joins 22.5-24.3/255 before, 2.1-2.8 after); the account-menu target-size item is justified (62
+  of 73 widths overlap a control). Unit 2130 passed, full e2e 0 failed; digest e4659145 (833
+  files).
+- Running now: WP5-UX3-FIX1-FREEZE (committer, sonnet; the 11 FIX1 paths plus the gate, sweep
+  and FIX1 records and evidence). Then FIX2 on that freeze.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

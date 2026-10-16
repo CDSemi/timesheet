@@ -7,6 +7,7 @@ import {
   liftRuns,
   NO_TIMES_TEXT,
   overtimeTotal,
+  revealDelta,
   SHEET_ROWS,
   sessionRange,
   sheetCheck,
@@ -248,6 +249,31 @@ describe('liftRuns (lifted columns: batch-selected or open in the editor)', () =
     expect(liftRuns([true, true])).toEqual(['start', 'end']);
     expect(liftRuns([true])).toEqual(['single']);
     expect(liftRuns([])).toEqual([]);
+  });
+});
+
+describe('revealDelta (WP5-UX3-FIX1: a focused control is scrolled fully into its week card)', () => {
+  // The card's visible span less its 8px scroll padding: 8 to 728 of a 736px card.
+  const view = { start: 8, end: 728 };
+
+  it('leaves a control that lies fully inside the view where it is, edges included', () => {
+    expect(revealDelta(view, { start: 100, end: 200 })).toBe(0);
+    expect(revealDelta(view, { start: 8, end: 728 })).toBe(0);
+  });
+
+  it('scrolls forward by the part past the end, also when only a sliver is visible (the Sunday button at 800px)', () => {
+    expect(revealDelta(view, { start: 727, end: 783 })).toBe(55);
+    expect(revealDelta(view, { start: 760, end: 868 })).toBe(140);
+  });
+
+  it('scrolls back by the part before the start', () => {
+    expect(revealDelta(view, { start: -100, end: 8 })).toBe(-108);
+    expect(revealDelta(view, { start: 5, end: 60 })).toBe(-3);
+  });
+
+  it('keeps the start edge in view when the control is larger than the view', () => {
+    expect(revealDelta(view, { start: 300, end: 1100 })).toBe(292);
+    expect(revealDelta(view, { start: -50, end: 900 })).toBe(-58);
   });
 });
 

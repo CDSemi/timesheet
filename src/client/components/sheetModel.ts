@@ -73,6 +73,24 @@ export function liftRuns(lifted: readonly boolean[]): Array<LiftRun | null> {
   });
 }
 
+/** One axis of a box: its start and end edges in the same coordinates (viewport pixels). */
+export interface Span {
+  start: number;
+  end: number;
+}
+
+/**
+ * How far a scrolling week card must scroll on one axis so a focused control lies inside the card's visible span (WP5-UX3-FIX1;
+ * the card scrolls sideways from 768 to 899px). `view` is the card's visible span less its scroll padding, which clears the
+ * focus ring; `target` is the control. Negative scrolls back, positive forward, 0 leaves the card where it is. A control larger
+ * than the view keeps its start edge in view.
+ */
+export function revealDelta(view: Span, target: Span): number {
+  if (target.start < view.start) return target.start - view.start;
+  if (target.end > view.end) return Math.min(target.end - view.end, target.start - view.start);
+  return 0;
+}
+
 export interface SheetLabel {
   /** The day label: the category, the holiday name, or "Work from home". Empty when the calendar has none. */
   main: string;

@@ -1,0 +1,137 @@
+// WP5-UX3-SWEEP probes (export only, never in the repository). They record what happens; the asserts are soft.
+import { appendFileSync } from 'node:fs';
+import type { Locator, Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { expect, test } from './fixtures.ts';
+
+const OUT = process.env.SWEEP_E2E_OUT ?? 'zz-sweep-e2e.txt';
+function log(project: string, line: string) {
+  appendFileSync(OUT, `[${project}] ${line}\n`);
+}
+
+async function active(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const el = document.activeElement;
+    if (el === null) return 'null';
+    const name = el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 60);
+    return `${el.tagName.toLowerCase()}${el.id === '' ? '' : `#${el.id}`}${el.className === '' ? '' : `.${String(el.className).replace(/\s+/g, '.')}`} "${name}"`;
+  });
+}
+
+async function openEditor(page: Page, workDate: string): Promise<Locator> {
+  await page.getByLabel('Open a day').fill(workDate);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+  return editor;
+}
+
+test.describe('desktop probes', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop only');
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('S1 account menu: keyboard opening, Settings by Enter, where focus goes', async ({ page, signInThroughUi }, testInfo) => {
+    const p = testInfo.project.name;
+    await signInThroughUi();
+    const identity = page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+    await expect(identity).toBeVisible();
+    await identity.focus();
+    await page.keyboard.press('Enter');
+    log(p, `S1 after Enter on identity: ${await active(page)}`);
+    await page.keyboard.press('Tab');
+    log(p, `S1 after Tab: ${await active(page)}`);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.location.hash === '#/settings');
+    await page.waitForTimeout(500);
+    log(p, `S1 after Enter on Settings: hash=${await page.evaluate(() => window.location.hash)} panel=${await page.locator('#account-menu').count()} focus=${await active(page)}`);
+    // Theme radios inside the menu, then Escape.
+    await identity.focus();
+    await page.keyboard.press('Enter');
+    const radios = page.locator('#account-menu input[type="radio"]');
+    await radios.first().focus();
+    await page.keyboard.press('ArrowRight');
+    log(p, `S1 radio after ArrowRight: ${await active(page)} checked=${await page.locator('#account-menu input[type="radio"]:checked').getAttribute('value')}`);
+    await page.keyboard.press('Escape');
+    log(p, `S1 after Escape from radio: panel=${await page.locator('#account-menu').count()} focus=${await active(page)}`);
+    // Profile by Enter while already there.
+    await page.goto('/#/settings/profile');
+    await expect(page.getByRole('heading', { name: 'Profile', level: 1 })).toBeVisible();
+    await identity.focus();
+    await page.keyboard.press('Enter');
+    log(p, `S1 menu on Profile: first focus ${await active(page)}`);
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(400);
+    log(p, `S1 Enter on Profile while on Profile: panel=${await page.locator('#account-menu').count()} focus=${await active(page)}`);
+  });
+
+  test('S2 editor chip and period pill in the window days', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+    const p = testInfo.project.name;
+    const periods = await employeeSeed.periodsCurrent();
+    log(p, `S2 today ${periods.today_local} current ${periods.current.period_start}..${periods.current.period_end} in_progress ${periods.in_progress.period_start}..${periods.in_progress.period_end}`);
+    await signInThroughUi();
+    await expect(page.locator('.period-bar')).toBeVisible();
+    const date = periods.in_progress.period_start === periods.current.period_start ? addDays(periods.current.period_end, 3) : addDays(periods.in_progress.period_start, 2);
+    log(p, `S2 bar pill on open: ${(await page.locator('.period-bar .badge, .period-bar .pill').allInnerTexts()).join('|')}`);
+    const editor = await openEditor(page, date);
+    log(p, `S2 chip for ${date} via Open a day (sheet shows ${periods.current.period_start}): ${await editor.locator('[data-chip="period"]').innerText()}`);
+    await editor.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.getByRole('button', { name: /Next/ }).first().click();
+    await page.waitForTimeout(800);
+    log(p, `S2 bar pill after Next: ${(await page.locator('.period-bar .badge, .period-bar .pill').allInnerTexts()).join('|')}`);
+    await page.locator(`[data-day="${date}"] [data-day-button]`).click();
+    const editor2 = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor2).toBeVisible();
+    log(p, `S2 chip for ${date} via the sheet of its period: ${await editor2.locator('[data-chip="period"]').innerText()}`);
+  });
+
+  test('S4 non-modal editor and the account menu Escape; Save confirmation Back focus', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+    const p = testInfo.project.name;
+    const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+    await signInThroughUi();
+    const editor = await openEditor(page, date);
+    const identity = page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+    await identity.focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    log(p, `S4 after Escape in menu: menu=${await page.locator('#account-menu').count()} editorVisible=${await editor.isVisible()} focus=${await active(page)}`);
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = page.getByRole('dialog', { name: 'New session', exact: true });
+    await expect(form).toBeVisible();
+    log(p, `S4 session dialog open focus: ${await active(page)}`);
+    await form.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    const confirm = page.getByRole('alertdialog', { name: 'Save this session?' });
+    await expect(confirm).toBeVisible();
+    log(p, `S4 confirmation focus: ${await active(page)} facts=${(await confirm.locator('dd').allInnerTexts()).join(' | ')}`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    log(p, `S4 after Escape in confirmation: confirm=${await confirm.count()} form=${await form.count()} focus=${await active(page)}`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    log(p, `S4 after Escape in the dirty dialog: discard=${await page.getByRole('alertdialog', { name: 'Discard your changes?' }).count()} focus=${await active(page)}`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    log(p, `S4 after Escape in discard: discard=${await page.getByRole('alertdialog', { name: 'Discard your changes?' }).count()} form=${await form.count()} focus=${await active(page)}`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    log(p, `S4 after a second Escape in the dirty dialog: discard=${await page.getByRole('alertdialog', { name: 'Discard your changes?' }).count()} form=${await form.count()} focus=${await active(page)}`);
+  });
+});
+
+test.describe('phone probes', () => {
+  test.skip(({ isMobile }) => !isMobile, 'phone only');
+
+  test('S5 More panel: keyboard and the Settings entry', async ({ page, signInThroughUi }, testInfo) => {
+    const p = testInfo.project.name;
+    await signInThroughUi();
+    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+    await more.focus();
+    await page.keyboard.press('Enter');
+    log(p, `S5 after Enter on More: ${await active(page)} panel=${await page.locator('#more-panel').count()}`);
+    await page.keyboard.press('Tab');
+    log(p, `S5 after Tab: ${await active(page)}`);
+    await page.keyboard.press('Escape');
+    log(p, `S5 after Escape: panel=${await page.locator('#more-panel').count()} focus=${await active(page)}`);
+  });
+});

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Digest of record in two forms: git ls-tree on the commit, and git hash-object over the export.
+T=/d/.claude-tmp/timesheet/WP5-UX3-SWEEP
+R=/d/Dropbox/Work.CDSemi/timesheet
+OUT=$T/out/digest.txt
+cd "$R"
+git ls-tree -r --format='%(path) %(objectname)' cecfceb61c7f15216c8f188e8b7059c9f075247d > $T/out/lstree-raw.txt
+grep -v '^handoff/' $T/out/lstree-raw.txt | LC_ALL=C sort > $T/out/lstree.txt
+echo "lstree files: $(wc -l < $T/out/lstree.txt)" > $OUT
+echo "lstree sha: $(sha256sum < $T/out/lstree.txt)" >> $OUT
+cd "$T/src"
+find . -type f ! -path './handoff/*' ! -path './node_modules/*' ! -path './dist/*' | sed 's|^\./||' | LC_ALL=C sort > $T/out/export-files.txt
+: > $T/out/export-list.txt
+while IFS= read -r f; do
+  printf '%s %s\n' "$f" "$(git hash-object --no-filters -- "$f")" >> $T/out/export-list.txt
+done < $T/out/export-files.txt
+LC_ALL=C sort -o $T/out/export-list.txt $T/out/export-list.txt
+echo "export files: $(wc -l < $T/out/export-list.txt)" >> $OUT
+echo "export sha: $(sha256sum < $T/out/export-list.txt)" >> $OUT
+cmp $T/out/export-list.txt $T/out/lstree.txt >> $OUT 2>&1
+echo "cmp exit=$?" >> $OUT

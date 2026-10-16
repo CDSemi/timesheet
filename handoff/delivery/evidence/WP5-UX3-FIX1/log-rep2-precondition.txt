@@ -1,0 +1,46 @@
+== rep2-precondition: real start 2026-10-16T12:41:53Z, simulated start 2026-11-28T18:00:00Z, AB8_SHIFT_MS=3734286780
+process clock 2026-11-28T18:00:00.092Z (Date.now 1795888800106); America/Los_Angeles Sat, 2026-11-28, 10:00; shift ms 3734286780; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/timesheet.spec.ts:452 --project=mobile --output=<task>/pw-rep2-precondition
+
+Running 1 test using 1 worker
+
+  x  1 [mobile] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date (1.1s)
+
+
+  1) [mobile] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date
+
+    Error: POST /api/days/batch: {"error":{"code":"stale_version","message":"This record changed since it was loaded; reload and review it again","details":{"work_dates":["2026-11-23"]}}}
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 409
+
+       at fixtures.ts:400
+
+      398 |     const response = await this.raw(method, path, body);
+      399 |     const text = await response.text();
+    > 400 |     expect(response.status, `${method} ${path}: ${text}`).toBe(expectedStatus);
+          |                                                           ^
+      401 |     return JSON.parse(text) as T;
+      402 |   }
+      403 |
+        at SeedClient.call (<repo>\tests\e2e\fixtures.ts:400:59)
+        at SeedClient.commitCategory (<repo>\tests\e2e\fixtures.ts:549:5)
+        at <repo>\tests\e2e\timesheet.spec.ts:471:3
+
+    Error Context: <task>\pw-rep2-precondition\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    <task>\pw-rep2-precondition\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace <task>\pw-rep2-precondition\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [mobile] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date
+exit=1
+process clock 2026-11-28T18:00:04.223Z (Date.now 1795888804232); America/Los_Angeles Sat, 2026-11-28, 10:00; shift ms 3734286780; instanceof true
+== rep2-precondition real end 2026-10-16T12:41:57Z

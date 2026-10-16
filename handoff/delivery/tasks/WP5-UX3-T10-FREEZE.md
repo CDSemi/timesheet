@@ -120,3 +120,13 @@ staged count per group; other modified handoff files; every check with its exit 
 fix, masking or stop reason.
 
 ## Results
+
+- Pre-HEAD 4b5403dbd4a6bbe4fe46925fa6129ad7f1c93a56 (= origin/main); post-HEAD and commit
+  cecfceb61c7f15216c8f188e8b7059c9f075247d; pushed yes; remote SHA the same; branch main; no tag.
+- Digests: before add 29ac2594... (833 files); ls-tree of new HEAD 29ac2594... (833 files).
+- Staged 26: 6 docs, 8 modified handoff, 4 new task records, 8 evidence. No other modified
+  handoff files; nothing pre-staged; no masking; no fixes.
+- Checks (all exit 0): node v24.21.0; precommit PASS 26 files; diff --cached --check empty;
+  JSON parse ok; validate_orchestration PASS (406 tasks); check_recovery PASS (106);
+  validate_package --preflight PASS. Details in evidence/WP5-UX3-T10-FREEZE/checks.txt.
+- Left unstaged: this brief's results and the evidence folder files.

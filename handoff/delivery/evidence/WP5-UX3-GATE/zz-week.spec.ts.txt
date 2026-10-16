@@ -1,0 +1,79 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, newPerson, test } from './fixtures.ts';
+
+/*
+ * WP5-UX3-GATE task-local probe (never part of the repository): audit focus 4. The week card scrolls sideways inside itself from 768 to 899px
+ * (data-table reflow exception): the page must not scroll sideways, and a focused control must be brought into view with its ring visible.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+test.skip(({ isMobile }) => isMobile, 'Desktop project');
+const OUT = process.env.GATE_OUT ?? '';
+const rec = (line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'week.txt'), `${line}\n`);
+};
+
+for (const width of [768, 800, 820, 860, 899, 900, 1024]) {
+  test(`week card at ${width}px: inner scroll, page scroll and focus visibility`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width, height: 900 });
+    const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Week Reader', signature: 'none' });
+    const free = await me.api.displayedPeriodFreeWorkdays();
+    if (free[0] !== undefined) await me.api.seedCompleteDay(free[0]);
+    await signInPageAs(me.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByRole('switch', { name: 'Show details' }).check();
+    await page.waitForTimeout(300);
+    const facts = await page.evaluate(() => {
+      const weeks = [...document.querySelectorAll('.sheet-week')];
+      const root = document.documentElement;
+      return {
+        page: { scroll: root.scrollWidth, client: root.clientWidth },
+        weeks: weeks.map((w) => {
+          const s = getComputedStyle(w);
+          const grid = w.querySelector('.week-grid');
+          return { scrollWidth: w.scrollWidth, clientWidth: w.clientWidth, overflowX: s.overflowX, grid: grid ? Math.round(grid.getBoundingClientRect().width) : null, columns: [...w.querySelectorAll('.sheet-day')].slice(0, 7).map((c) => Math.round(c.getBoundingClientRect().width)) };
+        }),
+      };
+    });
+    rec(`WEEK ${width}px: page ${facts.page.scroll}/${facts.page.client}; weeks ${JSON.stringify(facts.weeks)}`);
+    // Tab through the first week's controls; each focused control must end up inside the card's visible area, ring included.
+    await page.locator('.sheet-week').first().evaluate((w) => (w as HTMLElement).scrollTo({ left: 0 }));
+    const first = page.locator('.sheet-week').first().locator('button, input, [tabindex="0"]').first();
+    await first.focus();
+    await page.keyboard.press('Shift');
+    await page.waitForTimeout(500);
+    const rows: string[] = [];
+    let hidden = 0;
+    let stops = 0;
+    for (let i = 0; i < 40; i += 1) {
+      const info = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        const week = el?.closest('.sheet-week') as HTMLElement | null;
+        if (!el || !week) return null;
+        const r = el.getBoundingClientRect();
+        const w = week.getBoundingClientRect();
+        const shadow = getComputedStyle(el).boxShadow;
+        return {
+          name: (el.getAttribute('aria-label') || el.textContent || el.tagName).replace(/\s+/g, ' ').trim().slice(0, 28),
+          left: r.left - w.left,
+          rightGap: w.right - r.right,
+          card: w.width,
+          scrollLeft: week.scrollLeft,
+          ring: shadow !== 'none',
+          focusVisible: el.matches(':focus-visible'),
+        };
+      });
+      if (info === null) break;
+      stops += 1;
+      const ringVisible = info.left >= 2 && info.rightGap >= 2;
+      if (!ringVisible) hidden += 1;
+      if (!ringVisible || i < 3) rows.push(`${info.name} left ${info.left.toFixed(1)} rightGap ${info.rightGap.toFixed(1)} scrollLeft ${info.scrollLeft} ring ${info.ring} focus-visible ${info.focusVisible}`);
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(500);
+    }
+    rec(`WEEK ${width}px focus: ${stops} stops in the first week card, ${hidden} with the ring (2px margin) outside the card's visible area${rows.length ? ' :: ' + rows.slice(0, 8).join(' | ') : ''}`);
+    expect(facts.page.scroll).toBeLessThanOrEqual(facts.page.client);
+  });
+}

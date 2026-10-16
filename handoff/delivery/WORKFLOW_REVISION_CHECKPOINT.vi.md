@@ -330,6 +330,44 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   liệu cùng 20 đường dẫn handoff). Sau đó WP5-UX3-GATE trên commit đó; khi gate ghi digest mới,
   bản PASS hiện tại của WP5 (WP5-UX2-AUDIT2) và mọi audit trỏ tới nó được gắn superseded_by
   WP5-UX3-AUDIT-INT.
+- WP5-UX3-T10-FREEZE xong (đóng băng cuối gói): cecfceb61c7f15216c8f188e8b7059c9f075247d trên
+  main, đã push (26 đường dẫn; digest 29ac2594, 833 file; mọi bước kiểm exit 0).
+- Đang chạy: WP5-UX3-GATE (verifier, sonnet; gate cuối gói) trên cecfceb / 29ac2594: các mục gate
+  WP5 kèm kiểm thử container, server và domain giống từng byte bản a643794, phạm vi vòng, đồng hồ
+  giả lập ở mười thời điểm, các kiểm riêng của vòng gồm các phép đo điểm audit và một lần quét axe
+  thật.
+- WP5-UX3-GATE FAIL (verifier, tự báo claude-sonnet-5-5; NAS chưa kiểm) trên cecfceb / 29ac2594
+  (ba dạng digest khớp): mọi mục khác đều đạt (verify 2126, e2e đồng hồ thật 614/0/66, AC-13,
+  kiểm thử container 208 PASS, dist/server và dist/domain giống từng byte a643794, phạm vi, CSP,
+  độ tương phản, thanh trên cùng, quy tắc panel nổi). Lý do FAIL: (1) `timesheet.spec.ts:807`
+  hỏng vào các ngày thứ Ba (hai cột kề nằm ở hai tuần khác nhau) và một lỗi chập chờn khi tạo
+  dữ liệu ở `:452` trên điện thoại (409); (2) focus bàn phím bị che trong vùng cuộn ngang của thẻ
+  tuần ở 768-899px; (3) axe: hai lỗi label-content-name-mismatch và một lỗi target-size dưới menu
+  tài khoản đang mở. Đo thêm: bóng của nhóm cột nổi có vết khuyết mờ ở chỗ nối; hộp thoại phiên giờ
+  390x844 phải cuộn 297/259px, ô đầu và thanh nút vẫn hiện.
+- Quyết định của coordinator: một vòng sửa. Chạy song song: WP5-UX3-FIX1 (worker-high, opus,
+  size_risk; bảy mục) và WP5-UX3-SWEEP (planner, opus, chỉ đọc trên bản xuất sạch của cecfceb;
+  rà lỗi kiểu audit cho vùng A và B, trừ các mục của FIX1). Sau đó FIX2 cho các lỗi rà được (nếu
+  có), các lần đóng băng, WP5-UX3-REGATE và các audit.
+- WP5-UX3-SWEEP xong (planner, tự báo claude-opus-5-5; chỉ đọc): 2 mức trung bình (mất focus sau
+  khi chọn một mục menu tài khoản; đột biến M18, quy tắc ngày đã qua theo ngày của máy, không bị
+  test bắt), 6 mức nhẹ (nhãn kỳ trong editor khi mở ngày đang diễn ra qua Open a day; chữ "day
+  label"; cách khắc phục Check out trong docs/12; số kích thước gói trong docs/10; đột biến M21 về
+  múi giờ ở Profile không bị bắt; hộp thoại Check out không hỏi bỏ thay đổi), 5 ghi chú; dữ liệu gửi
+  đi, các nhánh breaks_confirmed, không gửi gì khi Cancel/Discard/Done, điền sẵn theo ngày server và
+  Escape/focus của các hộp thoại đều sạch; 22 đột biến, bắt được 20.
+- Quyết định của coordinator: WP5-UX3-FIX2 (worker-high, sonnet) sau lần đóng băng FIX1 xử lý các
+  mục 1-11 và 13 (Check out có câu hỏi bỏ thay đổi theo U-26); mục 12 (trường hợp E-1 chỉ qua API)
+  được chấp nhận và thêm vào điểm audit vùng B. FIX2 đã đăng ký ở trạng thái chờ.
+- WP5-UX3-FIX1 xong (worker-high, tự báo claude-opus-5-5): test cột nổi giữ cột kề trong cùng
+  tuần với ngày đang mở; dữ liệu mẫu của test phiên bản cũ dùng phiên bản hiện tại; focus trong
+  thẻ tuần luôn được cuộn vào tầm nhìn đầy đủ ở 768-899px; tên truy cập của ô chọn Category và chip
+  giờ nghỉ chứa đúng chữ hiển thị; một lớp bóng chung cho cả nhóm cột xóa vết khuyết (dưới chỗ nối
+  22.5-24.3/255 trước, 2.1-2.8 sau); mục target-size của menu tài khoản được giải trình (62 trên
+  73 độ rộng chồng lên một điều khiển). Unit 2130 đạt, e2e đầy đủ 0 lỗi; digest e4659145 (833
+  file).
+- Đang chạy: WP5-UX3-FIX1-FREEZE (committer, sonnet; 11 đường dẫn của FIX1 cùng bản ghi và bằng
+  chứng của gate, đợt rà và FIX1). Sau đó FIX2 trên lần đóng băng này.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

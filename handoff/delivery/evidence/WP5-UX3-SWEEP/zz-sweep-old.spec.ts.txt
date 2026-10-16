@@ -1,0 +1,28 @@
+// WP5-UX3-SWEEP baseline probe on a643794 (export only): where focus is after Settings is used by keyboard from the desktop bar.
+import { appendFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { test } from './fixtures.ts';
+
+const OUT = process.env.SWEEP_E2E_OUT ?? 'zz-sweep-old.txt';
+
+async function active(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const el = document.activeElement;
+    if (el === null) return 'null';
+    const name = el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 60);
+    return `${el.tagName.toLowerCase()}${el.className === '' ? '' : `.${String(el.className).replace(/\s+/g, '.')}`} "${name}"`;
+  });
+}
+
+test.use({ viewport: { width: 1440, height: 900 } });
+
+test('OLD S1 Settings link by keyboard: where focus goes', async ({ page, signInThroughUi, isMobile }, testInfo) => {
+  test.skip(isMobile, 'desktop only');
+  await signInThroughUi();
+  const link = page.getByRole('navigation', { name: 'Main' }).first().getByRole('link', { name: 'Settings' }).first();
+  await link.focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.location.hash === '#/settings');
+  await page.waitForTimeout(500);
+  appendFileSync(OUT, `[${testInfo.project.name}] OLD S1 after Enter on Settings: hash=${await page.evaluate(() => window.location.hash)} focus=${await active(page)}\n`);
+});

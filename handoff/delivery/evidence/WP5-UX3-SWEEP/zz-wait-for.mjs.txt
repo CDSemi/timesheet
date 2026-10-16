@@ -1,0 +1,15 @@
+// Waits until a file contains a pattern or the timeout passes. Usage: node wait-for.mjs <file> <pattern> <timeoutSeconds>
+import { existsSync, readFileSync } from 'node:fs';
+
+const [file, pattern, timeout] = process.argv.slice(2);
+const until = Date.now() + Number(timeout) * 1000;
+const check = () => existsSync(file) && readFileSync(file, 'utf8').includes(pattern);
+const timer = setInterval(() => {
+  if (check()) {
+    clearInterval(timer);
+    process.stdout.write(`found ${pattern}\n`);
+  } else if (Date.now() > until) {
+    clearInterval(timer);
+    process.stdout.write(`timeout waiting for ${pattern}\n`);
+  }
+}, 5000);

@@ -1,0 +1,66 @@
+// Runs mutants in the export: apply, full unit suite, client build, targeted e2e, revert. Usage: node run-mutants.mjs <exportRoot> <outDir> <backupDir> <id...>
+// Pass the id "BASE" to run the unit suite only, unmutated.
+import { spawnSync } from 'node:child_process';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [root, outDir, backups, ...ids] = process.argv.slice(2);
+const node = process.execPath;
+const here = new URL('.', import.meta.url);
+const mutants = JSON.parse(readFileSync(new URL('./mutants.json', here), 'utf8'));
+const strip = (text) => text.replace(/\x1b\[[0-9;]*m/g, '');
+
+function run(args, label, file) {
+  const started = Date.now();
+  const result = spawnSync(node, args, { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, env: process.env });
+  const text = strip(`${result.stdout ?? ''}\n${result.stderr ?? ''}`);
+  appendFileSync(file, `==== ${label}: exit ${result.status} (${Math.round((Date.now() - started) / 1000)} s)\n${text}\n`);
+  return { status: result.status, text };
+}
+
+function unitSummary(text) {
+  const files = /Test Files\s+([^\n]+)/.exec(text)?.[1] ?? '?';
+  const tests = /Tests\s+([^\n]+)/.exec(text)?.[1] ?? '?';
+  const failed = [...text.matchAll(/(?:FAIL|×)\s+([^\n]+)/g)].map((m) => m[1].trim()).slice(0, 6);
+  return `files ${files.trim()}; tests ${tests.trim()}${failed.length > 0 ? `; first failures: ${failed.join(' || ')}` : ''}`;
+}
+
+function e2eSummary(text) {
+  const counts = [...text.matchAll(/^\s+(\d+) (passed|failed|skipped|flaky|did not run)/gm)].map((m) => `${m[1]} ${m[2]}`).join(', ');
+  const failed = [...text.matchAll(/^\s+\d+\) \[(desktop|mobile)\] › ([^\n]+)/gm)].map((m) => `[${m[1]}] ${m[2].trim()}`).slice(0, 6);
+  return `${counts}${failed.length > 0 ? `; failed: ${failed.join(' || ')}` : ''}`;
+}
+
+for (const id of ids) {
+  const file = join(outDir, `mut-${id}.txt`);
+  writeFileSync(file, '');
+  if (id === 'BASE') {
+    const unit = run(['node_modules/vitest/vitest.mjs', 'run'], 'unit (unmutated)', file);
+    appendFileSync(join(outDir, 'mutants-summary.txt'), `BASE unit exit ${unit.status}: ${unitSummary(unit.text)}\n`);
+    continue;
+  }
+  const mutant = mutants.find((item) => item.id === id);
+  const apply = run([new URL('./mutate.mjs', here).pathname.replace(/^\/([A-Za-z]:)/, '$1'), 'apply', id, root, backups], 'apply', file);
+  if (apply.status !== 0) {
+    appendFileSync(join(outDir, 'mutants-summary.txt'), `${id} NOT APPLIED\n`);
+    continue;
+  }
+  try {
+    const unit = run(['node_modules/vitest/vitest.mjs', 'run'], 'unit', file);
+    let e2eLine = 'e2e not run';
+    if (Array.isArray(mutant.e2e) && mutant.e2e.length > 0) {
+      const build = run(['node_modules/vite/bin/vite.js', 'build'], 'vite build', file);
+      if (build.status !== 0) e2eLine = 'build failed';
+      else {
+        const e2e = run(['node_modules/@playwright/test/cli.js', 'test', ...mutant.e2e, `--output=${join(process.env.TEMP ?? outDir, `pw-${id}`)}`], `e2e ${mutant.e2e.join(' ')}`, file);
+        e2eLine = `e2e exit ${e2e.status}: ${e2eSummary(e2e.text)}`;
+      }
+    }
+    appendFileSync(
+      join(outDir, 'mutants-summary.txt'),
+      `${id} (${mutant.area}) ${mutant.what} [${mutant.file}]\n  unit exit ${unit.status}: ${unitSummary(unit.text)}\n  ${e2eLine}\n`,
+    );
+  } finally {
+    run([new URL('./mutate.mjs', here).pathname.replace(/^\/([A-Za-z]:)/, '$1'), 'revert', id, root, backups], 'revert', file);
+  }
+}

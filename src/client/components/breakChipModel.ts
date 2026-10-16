@@ -59,7 +59,10 @@ export function applyBreakEdit(draft: SessionDialogDraft, key: string, edited: B
   return next;
 }
 
-/** The parts of a chip: `text` is what is shown, `spoken` reads the arrow as "to" for a screen reader. */
+/**
+ * The parts of a chip: `text` is what is shown, `spoken` reads the arrow as "to", as a screen reader hears the chip (its
+ * accessible name is "Edit", then `spoken`, then "suggested" while the row is untouched; BreakChip.tsx).
+ */
 export interface BreakChipText {
   /** "Break 1" */
   label: string;

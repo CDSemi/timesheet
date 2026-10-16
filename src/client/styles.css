@@ -241,6 +241,8 @@
   --layer-marker: 1;
   /* A lifted sheet column (selected or open) rises over its neighbours; an open label picker (--layer-popup) stays above it */
   --layer-lift: 1;
+  /* A layer under the content of its own stacking context: the shadow layer of a lifted run's column (WP5-UX3-FIX1) */
+  --layer-under: -1;
   --sheet-handle-width: 40px;
   --sheet-handle-height: 4px;
   /* The panel header (WP5-UX3-T07): a 38px icon button (44px on touch, see the control rule), the title size and a confirmation's width */
@@ -2512,11 +2514,30 @@ textarea {
 /*
  * Seven columns of at least --sheet-col-min and the label column need 850px, plus the 32px page padding and a classic
  * scrollbar: a narrower window (768 to 899px) scrolls the week card sideways instead of breaking words inside the
- * columns. (Literal width: a media query cannot read a custom property.)
+ * columns. (Literal width: a media query cannot read a custom property.) A focused control is scrolled fully into the
+ * card with --focus-clearance around it (the card's scroll padding, read by the sheet's focus handler; WP5-UX3-FIX1), and
+ * the grid's box spans all its columns, so its frame closes after the last one. The card also scrolls down while an open
+ * category list reaches past its bottom; an empty layer --focus-clearance tall under the list gives the list's focus ring
+ * room to come into view.
  */
 @media (min-width: 768px) and (max-width: 899px) {
   .sheet-week {
     overflow-x: auto;
+    scroll-padding: var(--focus-clearance);
+  }
+
+  .sheet-week .week-grid {
+    min-width: calc(var(--sheet-label-col) + var(--sheet-days) * var(--sheet-col-min) + 2 * var(--hairline));
+  }
+
+  .sheet-week .label-list::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: var(--hairline);
+    height: var(--focus-clearance);
+    pointer-events: none;
   }
 }
 
@@ -2720,6 +2741,8 @@ textarea {
   --tint-layer: linear-gradient(transparent, transparent);
   --pattern-layer: linear-gradient(transparent, transparent);
   --lift-out: calc(-1 * var(--lift-clip));
+  /* How far a run's shadow layer reaches past an inner edge: twice the clip, past the blur of the deepest shadow layer */
+  --lift-reach: calc(2 * var(--lift-out));
   isolation: isolate;
 }
 
@@ -2769,6 +2792,46 @@ textarea {
 .sheet-day[data-lift='end'] {
   border-radius: 0 var(--radius-lift) var(--radius-lift) 0;
   clip-path: inset(var(--lift-out) var(--lift-out) var(--lift-out) 0);
+}
+
+/*
+ * One continuous shadow under and over a run (WP5-UX3-FIX1). A column's own shadow fades towards each end of its box, so two
+ * clipped column shadows met at an inner join with a lighter notch. In a run the column casts no shadow itself; a layer behind
+ * its cells (`::before`, under the content of the column's isolated stacking context) casts --elev-lift from a box that reaches
+ * --lift-reach past each inner edge, under the lifted neighbour, and the column's clip cuts it at that edge. So at a join both
+ * columns paint the full shadow of one long box, and the clip still keeps every shadow off a lifted neighbour. The layer's box
+ * stays transparent (an outer shadow is never painted inside its own box) and ignores the pointer. A lone column keeps its own.
+ */
+.sheet-day[data-lift='start'],
+.sheet-day[data-lift='mid'],
+.sheet-day[data-lift='end'] {
+  box-shadow: none;
+}
+
+.sheet-day[data-lift='start']::before,
+.sheet-day[data-lift='mid']::before,
+.sheet-day[data-lift='end']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: var(--layer-under);
+  border-radius: inherit;
+  box-shadow: var(--elev-lift);
+  pointer-events: none;
+  transition: var(--transition);
+}
+
+.sheet-day[data-lift='start']::before {
+  right: var(--lift-reach);
+}
+
+.sheet-day[data-lift='mid']::before {
+  right: var(--lift-reach);
+  left: var(--lift-reach);
+}
+
+.sheet-day[data-lift='end']::before {
+  left: var(--lift-reach);
 }
 
 /* The opaque Day cell is rounded with its column, so it never pokes out of an outer corner. */
@@ -4299,8 +4362,9 @@ button.quiet-danger {
   text-align: left;
 }
 
+/* Aligned to the end of the last two columns, inset by --space-1 so its 3px focus ring stays inside the sheet (WP5-UX3-FIX1). */
 .sheet-day:nth-last-child(-n + 2) .label-list {
-  right: 0;
+  right: var(--space-1);
   left: auto;
 }
 

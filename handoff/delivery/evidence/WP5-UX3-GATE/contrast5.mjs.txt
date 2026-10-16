@@ -1,0 +1,106 @@
+// WP5-UX-REGATE5: WCAG 2.x contrast of design-token pairs read from src/client/styles.css (light :root and the dark
+// media block): the REGATE4 pairs plus --ok on every surface with and without the --day-selected tint (AX-09).
+import { readFileSync } from 'node:fs';
+
+const css = readFileSync(process.argv[2], 'utf8');
+const rootStart = css.indexOf(':root {');
+const rootEnd = css.indexOf('\n}', rootStart);
+const light = css.slice(rootStart, rootEnd);
+const darkStart = css.indexOf('@media (prefers-color-scheme: dark)');
+const darkEnd = css.indexOf('\n}', css.indexOf('\n  }', darkStart) + 1);
+const dark = css.slice(darkStart, darkEnd);
+
+function tokens(block) {
+  const out = {};
+  for (const m of block.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\s*;/g)) out[m[1]] = m[2];
+  return out;
+}
+function tint(block) {
+  const m = /--day-selected:\s*rgb\((\d+)\s+(\d+)\s+(\d+)\s*\/\s*([0-9.]+)\)/.exec(block);
+  return m ? { rgb: [Number(m[1]), Number(m[2]), Number(m[3])], a: Number(m[4]) } : null;
+}
+const lightTokens = tokens(light);
+const darkTokens = { ...lightTokens, ...tokens(dark) };
+const lightTint = tint(light);
+const darkTint = tint(dark) ?? lightTint;
+
+const toRgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+function lumRgb(rgb) {
+  const lin = rgb.map((v) => v / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+}
+function ratioRgb(a, b) {
+  const [x, y] = [lumRgb(a), lumRgb(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+const ratio = (a, b) => ratioRgb(toRgb(a), toRgb(b));
+const mixTint = (bgHex, t) => toRgb(bgHex).map((c, i) => c * (1 - t.a) + t.rgb[i] * t.a);
+
+const pairs = [
+  ['attention-ink', 'attention-bg', 'text'],
+  ['muted', 'day-nonworking', 'text'],
+  ['accent', 'sheet-head', 'text'],
+  ['text', 'day-nonworking', 'text'],
+  ['muted', 'sheet-head', 'text'],
+  ['muted', 'sheet-head-off', 'text'],
+  ['text', 'sheet-head', 'text'],
+  ['text', 'sheet-head-off', 'text'],
+  ['accent', 'day-nonworking', 'text'],
+  ['accent', 'sheet-head-off', 'text'],
+  ['accent-strong', 'sheet-head', 'text'],
+  ['muted', 'card', 'text'],
+  ['muted', 'bg', 'text'],
+  ['text', 'card', 'text'],
+  ['text', 'bg', 'text'],
+  ['accent', 'card', 'text'],
+  ['accent', 'bg', 'text'],
+  ['on-accent', 'accent', 'text'],
+  ['on-accent', 'accent-strong', 'text'],
+  ['text', 'attention-bg', 'text'],
+  ['muted', 'attention-bg', 'text'],
+  ['error', 'card', 'text'],
+  ['ok', 'card', 'text'],
+  ['warn', 'card', 'text'],
+  ['error', 'day-nonworking', 'text'],
+  ['warn', 'day-nonworking', 'text'],
+  ['sheet-rule-strong', 'card', 'ui'],
+  ['accent', 'card', 'ui'],
+  ['accent', 'bg', 'ui'],
+  ['accent', 'sheet-head', 'ui'],
+  ['accent', 'sheet-head-off', 'ui'],
+  ['accent', 'day-nonworking', 'ui'],
+  ['accent', 'attention-bg', 'ui'],
+  ['card', 'accent', 'ui'],
+];
+
+let below = 0;
+for (const [name, set, t] of [['light', lightTokens, lightTint], ['dark', darkTokens, darkTint]]) {
+  console.log(`${name} --day-selected tint: ${JSON.stringify(t)}; --ok ${set.ok}`);
+  for (const [fg, bg, kind] of pairs) {
+    if (!set[fg] || !set[bg]) {
+      console.log(`${name}  ${fg} on ${bg}: MISSING TOKEN`);
+      continue;
+    }
+    const r = ratio(set[fg], set[bg]);
+    const need = kind === 'text' ? 4.5 : 3;
+    const ok = r >= need;
+    if (!ok) below += 1;
+    console.log(`${name.padEnd(5)} ${kind.padEnd(4)} ${fg} ${set[fg]} on ${bg} ${set[bg]} = ${r.toFixed(2)}:1 ${ok ? 'ok' : 'BELOW ' + need}`);
+  }
+  // AX-09: --ok on every surface, without and with the selection tint.
+  for (const surface of ['card', 'bg', 'off', 'sheet-head', 'sheet-head-off', 'day-nonworking', 'attention-bg']) {
+    if (!set[surface]) {
+      console.log(`${name} ok on ${surface}: MISSING TOKEN`);
+      continue;
+    }
+    const plain = ratio(set.ok, set[surface]);
+    const mixed = mixTint(set[surface], t);
+    const tinted = ratioRgb(toRgb(set.ok), mixed);
+    for (const [label, r] of [['plain', plain], ['with --day-selected', tinted]]) {
+      const good = r >= 4.5;
+      if (!good) below += 1;
+      console.log(`${name.padEnd(5)} text --ok ${set.ok} on ${surface} ${label} = ${r.toFixed(2)}:1 ${good ? 'ok' : 'BELOW 4.5'}`);
+    }
+  }
+}
+console.log(`pairs below threshold: ${below}`);

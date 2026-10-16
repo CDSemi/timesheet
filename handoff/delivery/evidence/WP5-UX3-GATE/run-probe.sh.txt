@@ -1,0 +1,21 @@
+# Usage: bash run-probe.sh <label> <spec file name in the task folder, zz-*.spec.ts> [playwright args...]
+# One Playwright run of a task-local probe in the scratch export (export-probe: the target commit, never the repository), own output folder.
+. <task>/env.sh
+L=$1; SPEC=$2; shift 2
+EXP=${PROBE_EXPORT:-$T/export-probe}
+mkdir -p $T/pw-$L $T/obs
+for f in zz-lib.ts zz-png.ts zz-a11y.spec.ts zz-layout.spec.ts zz-lift.spec.ts zz-phone.spec.ts zz-headers.spec.ts zz-shots.spec.ts zz-week.spec.ts zz-weekdbg.spec.ts zz-dom.spec.ts zz-measure.spec.ts zz-focus.spec.ts; do
+  [ -f $T/$f ] && cp $T/$f $EXP/tests/e2e/$f
+done
+export GATE_OUT="$TW\\obs"
+export GATE_TASK="$TW"
+export GATE_LABEL=${GATE_LABEL:-target}
+export AXE_PATH="$TW\\axe\\node_modules\\axe-core\\axe.min.js"
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+mkdir -p $T/shots-$L
+export NODE_OPTIONS="--trace-deprecation"
+cd "$EXP" || exit 2
+echo "== $L: $(date -u +%Y-%m-%dT%H:%M:%SZ) spec $SPEC"
+node.exe node_modules/@playwright/test/cli.js test tests/e2e/$SPEC "$@" --output="$TW\\pw-$L"
+echo "exit=$?"
+echo "== $L end $(date -u +%Y-%m-%dT%H:%M:%SZ)"

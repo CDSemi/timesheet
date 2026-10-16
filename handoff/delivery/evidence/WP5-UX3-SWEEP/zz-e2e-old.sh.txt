@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Runs the a643794 baseline probe in the old export, one worker, ports 48992-48999.
+source /d/.claude-tmp/timesheet/WP5-UX3-SWEEP/probes/env.sh
+cd $T/old
+export SWEEP_E2E_OUT=$(cygpath -w $T/out/e2e-probe-old.txt)
+node.exe node_modules/@playwright/test/cli.js test tests/e2e/zz-sweep-old.spec.ts --project=desktop --workers=1 --output=$(cygpath -w $T/tmp/pw-old) > $T/out/e2e-old.raw.txt 2>&1
+code=$?
+sed 's/\x1b\[[0-9;]*m//g' $T/out/e2e-old.raw.txt > $T/out/e2e-old.txt
+echo "exit=$code" >> $T/out/e2e-old.txt

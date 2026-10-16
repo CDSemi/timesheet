@@ -1,0 +1,52 @@
+// Scans styles.css: :hover selectors outside @media (hover: hover), literal radius/shadow/duration values outside tokens,
+// and custom properties defined in :root but missing in one of the dark sets. Usage: node css-scan.mjs <styles.css> <out.txt>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, outFile] = process.argv.slice(2);
+const css = readFileSync(file, 'utf8');
+const lines = css.split('\n');
+const out = [];
+
+// Track @media nesting by brace depth.
+const stack = [];
+let depth = 0;
+let pendingAt = null;
+lines.forEach((line, index) => {
+  const n = index + 1;
+  const stripped = line.replace(/\/\*.*?\*\//g, '');
+  const at = /^\s*@(media|container|supports)\s*([^{]*)\{?/.exec(stripped);
+  if (at) pendingAt = `${at[1]} ${at[2].trim()}`;
+  for (const ch of stripped) {
+    if (ch === '{') {
+      depth += 1;
+      stack.push(pendingAt);
+      pendingAt = null;
+    } else if (ch === '}') {
+      depth -= 1;
+      stack.pop();
+    }
+  }
+  if (/:hover/.test(stripped) && !/^\s*\*/.test(line)) {
+    const inHover = stack.some((item) => item !== null && /hover:\s*hover/.test(item));
+    if (!inHover) out.push(`HOVER-OUTSIDE ${n}: ${line.trim()}`);
+  }
+});
+
+// Root vs dark sets.
+function block(re) {
+  const m = re.exec(css);
+  return m === null ? '' : m[1];
+}
+function props(text) {
+  return new Set([...text.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
+}
+out.push(`transition-all: ${(css.match(/transition:\s*all/g) ?? []).length}`);
+for (const [i, line] of lines.entries()) {
+  const s = line.replace(/\/\*.*?\*\//g, '');
+  if (/^\s*--/.test(s)) continue;
+  if (/border-radius:\s*\d+(px|rem)/.test(s)) out.push(`LITERAL-RADIUS ${i + 1}: ${line.trim()}`);
+  if (/box-shadow:\s*[^v;]*\d+px/.test(s) && !/var\(/.test(s)) out.push(`LITERAL-SHADOW ${i + 1}: ${line.trim()}`);
+  if (/transition(-duration)?:\s*[^v;]*\d+m?s/.test(s)) out.push(`LITERAL-DURATION ${i + 1}: ${line.trim()}`);
+  if (/#[0-9a-fA-F]{3,8}\b|rgb\(/.test(s) && !/^\s*--/.test(s)) out.push(`LITERAL-COLOUR ${i + 1}: ${line.trim()}`);
+}
+writeFileSync(outFile, `${out.join('\n')}\n`);

@@ -1,3 +1,4 @@
+import type { FocusEvent } from 'react';
 import type { FinalizationResponse, TimesheetView } from '../api.ts';
 import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.tsx';
 import { minutesText, usDate } from './format.ts';
@@ -9,6 +10,7 @@ import {
   liftRuns,
   type LiftRun,
   overtimeTotal,
+  revealDelta,
   SHEET_ROWS,
   SHEET_TITLE,
   type SheetDay,
@@ -116,12 +118,37 @@ function SheetDayColumn({ day, details, actions, lift }: { day: SheetDay; detail
   );
 }
 
+/**
+ * From 768 to 899px the week card scrolls sideways inside itself (styles.css). The browser leaves a partly visible control
+ * where it is when it takes focus, so the card is scrolled until the focused control lies inside its visible box less its
+ * scroll padding (`--focus-clearance`, wider than the focus ring). A card that does not scroll is left alone.
+ */
+function revealFocused(event: FocusEvent<HTMLElement>) {
+  const card = event.currentTarget;
+  const style = getComputedStyle(card);
+  if (style.overflowX === 'visible' || !(event.target instanceof Element)) return;
+  const padding = (value: string) => Number.parseFloat(value) || 0;
+  const box = card.getBoundingClientRect();
+  const left = box.left + card.clientLeft;
+  const top = box.top + card.clientTop;
+  const target = event.target.getBoundingClientRect();
+  const dx = revealDelta(
+    { start: left + padding(style.scrollPaddingLeft), end: left + card.clientWidth - padding(style.scrollPaddingRight) },
+    { start: target.left, end: target.right },
+  );
+  const dy = revealDelta(
+    { start: top + padding(style.scrollPaddingTop), end: top + card.clientHeight - padding(style.scrollPaddingBottom) },
+    { start: target.top, end: target.bottom },
+  );
+  if (dx !== 0 || dy !== 0) card.scrollBy({ left: dx, top: dy, behavior: 'instant' });
+}
+
 /** One Monday to Sunday band of the desktop sheet, with the Excel rows Day, Date, Category, Time, OT and Status. */
 function SheetWeekGrid({ week, details, actions }: { week: SheetWeek; details: boolean; actions: DayActions }) {
   // A day is lifted while it is selected for a batch change or open in the Day editor; runs never cross a band.
   const runs = liftRuns(week.days.map((day) => actions.selected.has(day.workDate) || isEditingDay(day, actions)));
   return (
-    <section className="sheet-week" aria-label={`Week ${week.index}, ${week.rangeName}`}>
+    <section className="sheet-week" aria-label={`Week ${week.index}, ${week.rangeName}`} onFocus={revealFocused}>
       <div className="week-bar">
         <strong>WEEK {week.index}</strong>
         <span className="mono muted">{week.rangeText}</span>

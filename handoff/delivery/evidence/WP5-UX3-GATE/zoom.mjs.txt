@@ -1,0 +1,22 @@
+// WP5-UX3-GATE task-local: enlarge a region of a PNG (nearest neighbour) into a new PNG for visual inspection.
+// Usage: node zoom.mjs <in.png> <x> <y> <w> <h> <scale> <out.png> [dpr]
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [input, x, y, w, h, scale, output] = process.argv.slice(2);
+const root = '<task>';
+const { chromium } = await import(pathToFileURL(join(root, 'export-probe', 'node_modules', 'playwright-core', 'index.mjs')).href);
+const html = join(root, 'tmp', 'zoom.html');
+const s = Number(scale);
+writeFileSync(
+  html,
+  `<!doctype html><body style="margin:0;background:#fff"><div style="width:${Number(w) * s}px;height:${Number(h) * s}px;overflow:hidden;position:relative"><img src="${pathToFileURL(input).href}" style="position:absolute;left:0;top:0;image-rendering:pixelated;transform-origin:0 0;transform:translate(${-Number(x) * s}px,${-Number(y) * s}px) scale(${s})"></div></body>`,
+);
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const page = await browser.newPage({ viewport: { width: Number(w) * s, height: Number(h) * s } });
+await page.goto(pathToFileURL(html).href);
+await page.waitForTimeout(300);
+await page.screenshot({ path: output });
+await browser.close();
+console.log(`wrote ${output}`);

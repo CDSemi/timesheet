@@ -1,4 +1,4 @@
-import { type KeyboardEvent, type MouseEvent, useId, useRef, useState } from 'react';
+import { Fragment, type KeyboardEvent, type MouseEvent, useId, useRef, useState } from 'react';
 import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.tsx';
 import { LABEL_CHOICES, type LabelChoice, labelPickerListName, labelPickerName } from './labelPickerModel.ts';
 import { dayButtonName, dayClass, DETAIL_ROWS, type SheetDay, type SheetWeek } from './sheetModel.ts';
@@ -52,6 +52,25 @@ export function ReviewNote({ day }: { day: SheetDay }) {
 /** The label picker of a day, or null when the label is plain text (view only, imported, batch mode). */
 export function labelPickerOf(actions: DayActions): LabelPickerActions | null {
   return actions.label !== undefined && actions.editable && !actions.locked && !actions.selecting ? actions.label : null;
+}
+
+/**
+ * The visible lines of a picker trigger, as `LabelContent` draws them (one line each), with a real space between them: the
+ * button's text then reads "Observed Independence Day Holiday", the words of its name in the same order (SC 2.5.3,
+ * WP5-UX3-FIX1). The space changes nothing on screen, since every line is a block.
+ */
+function PickerLines({ label }: { label: SheetDay['label'] }) {
+  const lines = [
+    ...(label.main === '' ? [] : [{ key: 'main', className: 'cell-main', text: label.main }]),
+    ...label.lines.map((line, index) => ({ key: `${index}-${line}`, className: 'cell-sub', text: line })),
+    ...(label.note ? [{ key: 'note', className: 'cell-note', text: 'Note' }] : []),
+  ];
+  return lines.map((line, index) => (
+    <Fragment key={line.key}>
+      {index > 0 && ' '}
+      <span className={line.className}>{line.text}</span>
+    </Fragment>
+  ));
 }
 
 /**
@@ -131,7 +150,7 @@ export function LabelPicker({ day, picker }: { day: SheetDay; picker: LabelPicke
         onKeyDown={buttonKey}
       >
         <span className="label-trigger-text">
-          <LabelContent label={day.label} />
+          <PickerLines label={day.label} />
         </span>
         <span className="label-caret" aria-hidden="true" />
       </button>
