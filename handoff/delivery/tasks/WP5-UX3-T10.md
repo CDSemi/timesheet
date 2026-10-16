@@ -21,8 +21,9 @@
 - Profile/routing: timesheet-worker (effort medium, fixed by the profile); requested model
   sonnet; no override. Routing: size M, risk L (documents only; one rule rewrite already
   decided by the owner), novelty no. Task record in English.
-- Base: HEAD = origin/main = the WP5-UX3-T09-FREEZE commit (board `commit_sha`), or a later
-  commit that changes only `handoff/`; source digest as recorded by that freeze (docs are
+- Base: HEAD = origin/main = 4b5403dbd4a6bbe4fe46925fa6129ad7f1c93a56 (the T09 freeze), or
+  a later commit that changes only `handoff/`; source digest
+  1fc57bce41b5be16ff4e3e364f1c6496bf237af87e1dc996e5effb520beacb46 (833 files; docs are
   inside the digest, so it changes). Record HEAD, `git status --short` and the digest before
   you edit. Uncommitted coordinator files under `handoff/` are expected: never touch them.
 
@@ -136,3 +137,72 @@ counts, preflight and verify exit codes, the final full 64-hex digest and file c
 evidence files, any deviation.
 
 ## Results
+
+Self-reported model: claude-sonnet-5-5 (timesheet-worker, effort medium). Documents only; no source, test, server or governance file touched.
+
+**Base (before any edit).** Node v24.21.0; HEAD 4b5403dbd4a6bbe4fe46925fa6129ad7f1c93a56; `git status --short` showed only the
+coordinator's `handoff/` files; `npm run digest` 1fc57bce41b5be16ff4e3e364f1c6496bf237af87e1dc996e5effb520beacb46 (833 files), exit 0
+(evidence `step2-head-status-digest-before.txt`).
+
+**Files changed and sections touched.**
+- `docs/04_UX_AND_SETTINGS.md` and `.vi.md`: App shell row (identity block, account menu, wordmark rule, phone More); Timesheet,
+  Day editor and Settings/admin rows; line 16 (U-23 rule); Breaks default (line 25); "Timesheet sheet" (Category/Status rows, "No times"
+  ring, Category cell, marker rewrite with lift, frame, 108px columns and the 768-899px week-card scroll, phone rows and the measured
+  first-screen numbers); "Period bar, check in/out and batch mode" (two-row card, pills incl. "in progress", phone buttons with
+  "Current", check in/out on the title row, toolbar); "Day editor" (1360px rule and the floating panel, header chips, session cards,
+  session dialog with pre-fill, break rows and chips with the "Break n" sub-dialog, Save/notice/confirmation/Discard, Delete
+  confirmation, Check out dialog, WFH); "Editing and review" line; Theme location in the Visual standard. The Visual standard
+  tokens written by T01 were checked against the code records and left as they are.
+- `docs/10_DECISIONS_AND_SOURCES.md` and `.vi.md`: the 2026-10-08 list clause replaced per PLAN section C; a pointer added to
+  T01's E-8 note; new sections "Owner decisions - 2026-10-15 (UI change round 3)" (request U-01..U-27 in groups, G-1 b with its three
+  shape conditions and the floating rule, G-2 a, G-3 a with the rule rewrite and its effect, G-4 owner variant, G-5 b also answering
+  WP5-UX2-Q3, N-1, N-2, Q6 b, 24-hour chip times) and "Coordinator decisions - UI change round 3" (G-4 trigger, floating = modal side
+  panel below 1360px, code-split instead of a limit raise, account-menu pattern, read-only Profile, "Status", 24-hour displayed times
+  with native inputs, the other adopted defaults and the known 390x844 fit limit).
+- `docs/12_RELEASE_NOTES.md` and `.vi.md`: a "WP5 change round 3" bullet group (look, account menu, header, sheet, Day editor, limits)
+  and the "Unconfirmed breaks" limit line (Confirm breaks opens the dialog).
+
+**U-23 rule text placed (EN, docs/04 line 16; VI in the pair).** "Actual clock values are never stored from a schedule: a time becomes
+an actual value only when the person saves it. The new-session dialog pre-fills the start and end with the reference hours of the policy
+effective on that date (wall-clock times on the accounting date in the saved reporting zone, shown in the input zone) and, for a date
+before today in the reporting zone (the server's date), the suggested breaks that lie inside them; pre-filled values are marked as such
+and stay editable, and Save asks for confirmation first." The docs/10 clause (EN line 182, VI line 183) now reads "canonical: actual clock
+values are never stored from a schedule; the new-session dialog may pre-fill the reference hours as marked, editable values, see document 04".
+
+**T01 E-8 note check.** Present in docs/10 (EN line 118, VI line 119) and accurate against `styles.css` records (radius 6/8/12/pill, sheets
+and footer 0, lifted 4px, one `--transition` of 180 ms on listed properties, plain CSS kept); only a pointer to the round-3 record was added.
+
+**Sweep.** Fixed in the EN/VI pairs: "Label" as the row/field/picker/column name, "Check" as the row name, the check in/out card, Settings
+and Admin as main-bar items, the 1200px editor breakpoint, "Save session" and the one-tap break buttons, the long-note-free header, the
+rails/underline/ring markers, the 330px Review-link rule, "Review label change", the `Dark mode` wording in docs/04. Kept, with the reason:
+docs/10 entries for E-1..E-7 (2026-10-08) and UX2-1..UX2-4 (2026-10-14) and the 2026-10-03 E-8 line, and docs/12 rounds 1 and 2 (they
+record decisions and releases as they were; docs/12 round 3 states that it supersedes them where they differ); "label"/"labels" meaning the
+default day categories or import labels in docs/01, 02, 05, 06, 07, 11 and DEVELOPMENT (business rules and API field names, unchanged);
+"Check in/out" and "Check the ..." verbs (not the row). No match in README*.md. No `4px`/`300 ms` remains as a current rule (only as the
+superseded E-8 history and the 4px lifted-column radius). docs/08 untouched.
+
+**Checks (all in order).**
+1. Node v24.21.0 first on PATH.
+2. HEAD, status and digest recorded above.
+4. EN/VI parity (`step4-parity.txt`): headings 04 9/9, 10 25/25, 12 9/9; list bullets 04 35/35, 10 92/92, 12 45/45 (sub-bullets 25/25,
+   numbered items 5/5); table rows 04 26/26, 10 31/31; links 12 42/42; the VI files keep their pre-existing extra translation-note line
+   (04 links 0/1, lines 106/108; 10 links 15/16, lines 246/247; 12 107/107).
+5. `validate_package.py --preflight` (python from `<user>/.cache/codex-runtimes/...`): exit 0, status PASS, 112 translation pairs,
+   2252 local links, 91 scenarios (`step5-preflight.txt`).
+6. Privacy and whitespace: Grep for e-mail addresses and user-profile paths over the six changed files: none; Grep `[ \t]+$`: none; each
+   file ends with exactly one `\n` (`step6-eof-check.txt`); `git diff --check` exit 0.
+7. `npm run verify` (SMOKE_PORT 48790, DATA_DIR and DATABASE_PATH in the task folder): exit 0, 94 files / 2126 tests passed,
+   SMOKE PASSED (`step7-verify.txt`).
+8. `npm run digest` LAST: exit 0, 29ac25945fbefa0c86f28aa9c8537e6d2ccd341a161ab70bc7bfc0acf3ff15e7 (833 files, handoff/ excluded)
+   (`step8-digest-after.txt`). Nothing outside `handoff/` changed after it.
+
+**Evidence** (`handoff/delivery/evidence/WP5-UX3-T10/`): `step2-head-status-digest-before.txt`, `step4-parity.txt`, `step5-preflight.txt`,
+`step6-eof-check.txt`, `step7-verify.txt`, `step8-digest-after.txt`.
+
+**Deviations and notes.** (1) Where a slice record did not state a value, docs follow the slice record and the code (for example the Check out
+dialog always shows the break date field, T09 item 2, which differs from Q6 b for completed sessions and is recorded in docs/10 and docs/04).
+(2) The earlier-round text in docs/10 and docs/12 was kept as history rather than rewritten. (3) docs/04 now carries several long bullets in the
+Day editor section; both languages have the same bullet count. (4) The digest was not rerun after the Results edit because `handoff/` is
+outside the digest. No background task is running; no commit, push or install; the coordinator's `handoff/` files were not touched.
+
+Status: done

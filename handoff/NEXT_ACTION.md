@@ -37,8 +37,9 @@
   5c8355d. The owner answered G-1..G-5 (G-1 b with changes); the addendum WP5-UX3-PLAN2
   updated the mockup (floating editor below 1360px, square week sheets, phone break chips,
   the "in progress" pill). The governance change of the AGENTS.md UI section is accepted
-  (WP5-UX3-GOV-AUDIT PASS at 79b9a53, [GOV UX3 review](delivery/GOV_UX3_REVIEW.md)). Next:
-  slices T01..T10, each with a freeze, then the gate and independent audits. The owner
+  (WP5-UX3-GOV-AUDIT PASS at 79b9a53, [GOV UX3 review](delivery/GOV_UX3_REVIEW.md)). Slices
+  T01-T10 (with T05B and T08B) are implemented and frozen; next: the package-final gate
+  WP5-UX3-GATE, the fresh area audits A and B, the integration audit, and the WP5 re-accept. The owner
   answered WP5-UX3-Q6 with b (the break date field only for overnight sessions) and 24-hour
   chip times; no owner question is open in this round.
 - Pilot: the concrete [pilot packet](delivery/WP5_PILOT_PACKET.md) is ready for owner

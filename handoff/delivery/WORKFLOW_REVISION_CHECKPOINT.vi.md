@@ -315,6 +315,21 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Đã viết brief gate WP5-UX3-GATE (điền đích sau khi đóng băng T10); T10 đăng ký ở trạng thái chờ.
 - Đang chạy: WP5-UX3-T09-FREEZE (committer, chạy một mình; 9 đường dẫn mã nguồn/test gồm việc xóa
   BreaksEditor.tsx, cùng 29 đường dẫn handoff; digest kiểm sau khi stage).
+- WP5-UX3-T09-FREEZE xong: 4b5403dbd4a6bbe4fe46925fa6129ad7f1c93a56 trên main, đã push (38 đường
+  dẫn; digest sau khi stage và trên HEAD là 1fc57bce, 833 file; mọi bước kiểm exit 0).
+- Đang chạy: WP5-UX3-T10 (worker, sonnet; docs/04, 10, 12 EN và VI, câu quy tắc mới U-23, rà chữ
+  cũ còn sót) trên 4b5403d / 1fc57bce. Lần đóng băng của nó là lần đóng băng cuối của gói.
+- WP5-UX3-T10 xong (worker, tự báo claude-sonnet-5-5; kết quả tự báo, chưa phải bằng chứng độc
+  lập): docs/04, docs/10 và docs/12 (EN và VI) mô tả vòng 3; câu quy tắc U-23 đặt nguyên văn ở
+  docs/04 dòng 16 và thay mệnh đề trong docs/10; đã kiểm ghi chú E-8 của T01; rà và sửa tên cũ
+  còn sót (giữ các mục lịch sử); số đếm song ngữ khớp; preflight PASS; verify 0; digest 29ac2594
+  (833 file).
+- Đã cập nhật `next_role` trong STATE và NEXT_ACTION (EN/VI) (các phần đã xong; tiếp theo là gate
+  và audit). Gate, audit vùng A và B và audit tích hợp đã đăng ký ở trạng thái chờ cùng brief.
+- Đang chạy: WP5-UX3-T10-FREEZE (lần đóng băng cuối gói; committer, chạy một mình; 6 file tài
+  liệu cùng 20 đường dẫn handoff). Sau đó WP5-UX3-GATE trên commit đó; khi gate ghi digest mới,
+  bản PASS hiện tại của WP5 (WP5-UX2-AUDIT2) và mọi audit trỏ tới nó được gắn superseded_by
+  WP5-UX3-AUDIT-INT.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

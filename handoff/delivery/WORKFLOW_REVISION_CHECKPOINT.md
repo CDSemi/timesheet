@@ -292,6 +292,21 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - Gate brief WP5-UX3-GATE written (target filled after the T10 freeze); T10 registered pending.
 - Running: WP5-UX3-T09-FREEZE (committer, alone; 9 source/test paths incl. the BreaksEditor.tsx
   deletion plus 29 handoff paths; digest checked after staging).
+- WP5-UX3-T09-FREEZE done: 4b5403dbd4a6bbe4fe46925fa6129ad7f1c93a56 on main, pushed (38 paths;
+  digest after staging and on HEAD 1fc57bce, 833 files; every check exit 0).
+- Running: WP5-UX3-T10 (worker, sonnet; docs/04, 10, 12 EN and VI, the U-23 rule rewrite, the
+  stale-wording sweep) on 4b5403d / 1fc57bce. Its freeze is the package-final freeze.
+- WP5-UX3-T10 done (worker, self-reported claude-sonnet-5-5; reported, not independent proof):
+  docs/04, docs/10 and docs/12 (EN and VI) describe round 3; the U-23 rule placed verbatim at
+  docs/04 line 16 and the docs/10 clause replaced; T01's E-8 note checked; sweep fixed stale
+  names (history entries kept); parity counts equal; preflight PASS; verify 0; digest 29ac2594
+  (833 files).
+- STATE `next_role` and NEXT_ACTION (EN/VI) updated (slices done; gate and audits next). Gate,
+  area audits A and B and the integration audit registered pending with their briefs.
+- Running: WP5-UX3-T10-FREEZE (package-final freeze; committer, alone; 6 docs plus 20 handoff
+  paths). Then WP5-UX3-GATE on that commit; when the gate records the new digest, the current
+  WP5 PASS (WP5-UX2-AUDIT2) and every audit pointing to it get superseded_by
+  WP5-UX3-AUDIT-INT.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

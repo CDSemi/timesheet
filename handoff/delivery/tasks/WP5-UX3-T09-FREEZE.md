@@ -130,3 +130,12 @@ staging and on HEAD; staged count per group; other modified handoff files; every
 its exit code; any fix, masking or stop reason.
 
 ## Results
+
+- Pre-HEAD f89573b (= origin/main); post-HEAD and commit 4b5403dbd4a6bbe4fe46925fa6129ad7f1c93a56;
+  pushed yes; remote SHA 4b5403dbd4a6bbe4fe46925fa6129ad7f1c93a56; no tag.
+- Digest after staging and on HEAD (ls-tree): both 1fc57bce41b5be16ff4e3e364f1c6496bf237af87e1dc996e5effb520beacb46 (833 files).
+- Staged 38: 9 source/tests (1 deleted, 8 modified) + 29 handoff.
+- Other modified handoff files: none. No fix, masking or stop.
+- Checks (all exit 0): node v24.21.0; precommit PASS 38 files; diff --cached --check; JSON parse;
+  validate_orchestration PASS; check_recovery 106 probes PASS; validate_package --preflight PASS.
+  Detail in evidence/WP5-UX3-T09-FREEZE/checks.txt.
