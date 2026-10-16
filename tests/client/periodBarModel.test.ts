@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { DayView, Session } from '../../src/client/api.ts';
-import { clockedInText, dueInWords, dueInZoneText, dueParts, reviewShortLabel, runningSessionOf, viewingZoneText, weekdayName, zoneNoteVisible } from '../../src/client/components/periodBarModel.ts';
+import {
+  clockedInText,
+  dueInWords,
+  dueInZoneText,
+  dueParts,
+  PERIOD_PILL_WORDS,
+  periodPillKind,
+  reviewShortLabel,
+  runningSessionOf,
+  viewingZoneText,
+  weekdayName,
+  zoneNoteVisible,
+} from '../../src/client/components/periodBarModel.ts';
 
 function session(id: string, start: string, end: string | null): Session {
   return { id, work_date: '2026-12-03', start_utc: start, end_utc: end, input_zone: 'America/Los_Angeles', source: 'clock', breaks_confirmed: false, version: 1, breaks: [] };
@@ -48,6 +60,58 @@ describe('reviewShortLabel', () => {
     for (const label of ['Review & sign off', 'Review now', 'Review or correct']) {
       expect(label.toLowerCase()).toContain(reviewShortLabel(label).toLowerCase());
     }
+  });
+});
+
+/*
+ * The pill of the shown period (U-09, G-5 b). The periods are the server's `current` (R-07: the ended period during the five window days
+ * after it ends) and `in_progress` (the period that contains today). Synthetic payroll dates: 2026-10-30 (the period 10/12-10/25),
+ * 2026-11-13 (10/26-11/08) and 2026-10-16 (the period before), the way the server numbers them.
+ */
+describe('periodPillKind', () => {
+  const OLD = { payroll_date: '2026-10-16', relation: 'old' as const };
+  const ENDED = { payroll_date: '2026-10-30', relation: 'current' as const };
+  const NEXT = { payroll_date: '2026-11-13', relation: 'future' as const };
+
+  /** A normal day (mid-period): the period with today is the current one. */
+  const normalDay = { current: { payroll_date: '2026-10-30' }, in_progress: { payroll_date: '2026-10-30' } };
+  /** A window day (the five days after 10/25): current is the ended period, in_progress the one that contains today. */
+  const windowDay = { current: { payroll_date: '2026-10-30' }, in_progress: { payroll_date: '2026-11-13' } };
+
+  it('keeps the server relation on a normal day, whatever the period', () => {
+    expect(periodPillKind(OLD, normalDay)).toBe('old');
+    expect(periodPillKind(ENDED, normalDay)).toBe('current');
+    expect(periodPillKind(NEXT, normalDay)).toBe('future');
+  });
+
+  it('reads "in progress" only for the period with today while the period before it is still the current one', () => {
+    expect(periodPillKind(NEXT, windowDay)).toBe('in-progress');
+    // The ended period stays current and the older one old: only today's period changes.
+    expect(periodPillKind(ENDED, windowDay)).toBe('current');
+    expect(periodPillKind(OLD, windowDay)).toBe('old');
+    // The period after today's is still future.
+    expect(periodPillKind({ payroll_date: '2026-11-27', relation: 'future' }, windowDay)).toBe('future');
+  });
+
+  it('decides from the payroll dates, not from the relation word (the edit-reason relation of that period stays future)', () => {
+    expect(NEXT.relation).toBe('future');
+    expect(periodPillKind({ payroll_date: NEXT.payroll_date }, windowDay)).toBe('in-progress');
+  });
+
+  it('uses the periods of the owner in a shared view exactly like the own view (one function, same inputs)', () => {
+    const ownersPeriods = { current: { payroll_date: '2026-10-30' }, in_progress: { payroll_date: '2026-11-13' } };
+    expect(periodPillKind(NEXT, ownersPeriods)).toBe(periodPillKind(NEXT, windowDay));
+    expect(periodPillKind(NEXT, ownersPeriods)).toBe('in-progress');
+  });
+
+  it('is neutral without a relation, and falls back to the relation while the periods are not known', () => {
+    expect(periodPillKind({ payroll_date: '2026-10-30' }, normalDay)).toBe('neutral');
+    expect(periodPillKind({ payroll_date: '2026-11-13' }, null)).toBe('neutral');
+    expect(periodPillKind(NEXT, null)).toBe('future');
+  });
+
+  it('has a word for every coloured kind and none for the grey one', () => {
+    expect(PERIOD_PILL_WORDS).toEqual({ old: 'old', current: 'current', future: 'future', 'in-progress': 'in progress', neutral: '' });
   });
 });
 

@@ -128,3 +128,13 @@ staged count per group; other modified handoff files; every check with its exit 
 fix or stop reason.
 
 ## Results
+
+- Pre-HEAD aa64999240ab0d5822ca371a0c8e24436d27f30a (= origin/main); post-HEAD and
+  commit 7cd8c592ba57d7f4a12013bacced948de0fb8c42; pushed yes; remote main equals it. No tag.
+- Digests: before add and on new HEAD both e5b3faf96c7856fdf5e8c3c85072270e3b7112f100ba364efe2a5331bb367564 (827 files).
+- Staged 43: 15 source/tests + 28 handoff (T03 evidence folder had 19 files).
+- Other modified handoff files: none beyond the listed ones.
+- Checks (all exit 0): node v24.21.0; HEAD/origin; digest; git add; precommit PASS (43 files);
+  diff --cached --check; JSON parse; validate_orchestration PASS; check_recovery PASS (106);
+  validate_package --preflight PASS (first try wrong path, exit 127, rerun exit 0).
+- No fixes, no masking, no stop. Details in evidence/WP5-UX3-T03-FREEZE/checks.txt.

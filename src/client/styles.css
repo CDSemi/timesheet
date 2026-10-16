@@ -131,7 +131,9 @@
   --order-first: -1;
   --tap-min: 44px;
   --date-field-min: 8.5rem;
-  --open-day-label-min: 14.25rem;
+  /* The widest "Open a day" row on a wide screen; below 21rem of row width (a phone) its words are hidden (U-18, a container query). */
+  --open-day-max: 26rem;
+  --open-day-basis: 22rem;
   --control-check-size: 1.25rem;
   --shape-size: 0.7rem;
   --shape-round: 50%;
@@ -204,13 +206,15 @@
    */
   --hover-fill: rgb(31 95 191 / 0.14);
   --control-height: 36px;
-  --clock-width: 26rem;
+  /* Check in/out in the title row (U-07): a compact 38px button on a pointer device, 44px on touch (see .clock-group) */
   --clock-button-min: 9rem;
-  --clock-button-height: 44px;
+  --clock-button-height: 38px;
   /* The side padding of the three buttons in that row on a phone, so all three fit one row at 360px */
   --cta-pad-x: 10px;
-  /* The width the period title block keeps beside the buttons from 768px; below it the buttons wrap under the title */
+  /* The width the period title block keeps beside the buttons from 768px; below it the pills wrap under the dates */
   --period-main-min: 10rem;
+  /* The meta line of the period card (payroll date, due, "Times in"): row gap, then column gap (U-10) */
+  --period-meta-gap: var(--space-1) calc(var(--space-5) + var(--space-1));
 
   /* Sheet geometry */
   --editor-width: 400px;
@@ -1279,10 +1283,12 @@ button:disabled {
  * Inactive but focusable (WP5-UX2-T04, "Today" while the sheet already shows today): dimmed with the muted text and the quiet line
  * border, never with element opacity (WP5-UX2-AUDIT-03). Opacity would dim the focus ring with the button (2.70:1 in the light theme at
  * 0.6, below the owner-decided 3:1); colours leave the ring at full strength in the light theme, the dark theme and both manual
- * overrides. The only element that uses this rule is the "Today" button of the period bar. No press movement.
+ * overrides. The border is dashed, so the inactive look differs from an active button by more than colour (R-UX2A2-1); the ring is a
+ * box-shadow and is unchanged. The only element that uses this rule is the "Today" button of the period bar. No press movement.
  */
 button.secondary[aria-disabled='true'] {
   border-color: var(--line);
+  border-style: dashed;
   color: var(--muted);
   cursor: not-allowed;
 }
@@ -1347,14 +1353,48 @@ button[aria-disabled='true']:active {
   border: var(--hairline) solid var(--line);
 }
 
+/*
+ * Pills (U-09, G-5). The period bar's statuses (Draft, Revision, ...) and the period relation are filled, outlined pills on
+ * the round radius. A status word is the neutral grey pill; the relation takes a hue (old amber, current green, future pink,
+ * in progress blue). Every pill keeps its words, so the hue is never the only cue, and each ink is at least 4.5:1 on its
+ * fill in the light and both dark sets. A tone class (badge-ok, badge-warn, badge-error) further down still sets the ink and
+ * the outline of a neutral pill; :where() keeps the neutral rule at the specificity of a plain .badge for that reason.
+ */
+:where(.period-title) .badge,
+.badge.current,
+.badge.old,
+.badge.future,
+.badge.in-progress {
+  padding: var(--hairline) var(--space-2);
+  border-radius: var(--radius-pill);
+  border-color: var(--pill-neutral-line);
+  background: var(--pill-neutral-bg);
+  color: var(--pill-neutral-ink);
+  font-weight: var(--font-weight-strong);
+}
+
 .badge.current {
-  border-color: var(--ok);
-  color: var(--ok);
+  border-color: var(--pill-current-line);
+  background: var(--pill-current-bg);
+  color: var(--pill-current-ink);
 }
 
 .badge.old {
-  border-color: var(--warn);
-  color: var(--warn);
+  border-color: var(--pill-old-line);
+  background: var(--pill-old-bg);
+  color: var(--pill-old-ink);
+}
+
+.badge.future {
+  border-color: var(--pill-future-line);
+  background: var(--pill-future-bg);
+  color: var(--pill-future-ink);
+}
+
+.badge.in-progress {
+  border-color: var(--pill-progress-line);
+  background: var(--pill-progress-bg);
+  color: var(--pill-progress-ink);
 }
 
 .table-wrap {
@@ -1405,7 +1445,7 @@ tr.nonworking td {
   white-space: nowrap;
 }
 
-/* Period bar and clock panel (WP5-UX-T03): which period, its one status, the clock, then the tools. */
+/* The period bar (WP5-UX-T03): which period, its one status and the way to review it, then the tools. Check in/out is in the title row (U-07). */
 .workbar {
   display: grid;
   grid-template-columns: minmax(0, var(--track));
@@ -1414,8 +1454,9 @@ tr.nonworking td {
 }
 
 /*
- * From 768px the card sits beside the clock card, so at the narrow end of that range it is only about 330px wide. The title block keeps
- * a readable minimum (`--period-main-min`) and the button group wraps below it instead of squeezing it (WP5-UX2-T04).
+ * The period card is full width (U-07). From 768px it is a two-row grid (see the 768px block): row 1 the previous button, the dates with
+ * their pills, then Next, Today, Current period and the review link; row 2 the meta line. Below 768px the phone grid further down applies.
+ * The title block keeps a readable minimum (`--period-main-min`) and its pills wrap under the dates instead of squeezing it (WP5-UX2-T04).
  */
 .period-bar {
   display: flex;
@@ -1454,7 +1495,7 @@ tr.nonworking td {
 .period-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
+  gap: var(--period-meta-gap);
   margin: 0;
   color: var(--muted);
   font-size: var(--font-size-sm);
@@ -1514,12 +1555,38 @@ tr.nonworking td {
   background: var(--off);
 }
 
-.clock-panel {
-  display: flex;
-  flex-wrap: wrap;
+/*
+ * Check in/out in the title row (U-07, 768px and wider): not a card. The status words are right-aligned over the date line, beside
+ * the button; a failed check in or out is a full line under both. The button is 38px, and 44px with a coarse pointer.
+ */
+.clock-group {
+  display: grid;
+  grid-template-columns: minmax(0, var(--track)) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-0) var(--space-3);
+  min-width: 0;
+  margin-inline-start: auto;
+}
+
+.clock-group .clock-state {
+  align-items: flex-end;
+  text-align: end;
+}
+
+.clock-group .clock-button {
+  min-height: var(--clock-button-height);
+  padding-block: var(--space-1);
+}
+
+@media (pointer: coarse) {
+  .clock-group .clock-button {
+    min-height: var(--tap-min);
+  }
+}
+
+.clock-group .clock-error {
+  grid-column: 1 / -1;
+  text-align: end;
 }
 
 .clock-state {
@@ -1536,7 +1603,7 @@ tr.nonworking td {
   color: var(--muted);
 }
 
-.clock-panel[data-clock='in'] .clock-now {
+.clock-group[data-clock='in'] .clock-now {
   color: var(--ok);
 }
 
@@ -1555,9 +1622,10 @@ tr.nonworking td {
   margin-right: var(--space-2);
 }
 
+/* The base is the 44px target (the phone bar's button); the title row's compact group lowers it to --clock-button-height on a pointer device. */
 .clock-button {
   min-width: var(--clock-button-min);
-  min-height: var(--clock-button-height);
+  min-height: var(--tap-min);
   font-size: var(--font-size-md);
 }
 
@@ -1568,7 +1636,7 @@ tr.nonworking td {
 }
 
 /*
- * Check in/out in the phone's top bar (WP5-UX2-T09, below 768px; the card above shows from 768px). The group sits at the
+ * Check in/out in the phone's top bar (WP5-UX2-T09, below 768px; the title row's group above shows from 768px). The group sits at the
  * right of the logo and never wraps below it: its widest allowed size is the room left beside the logo, so a narrow bar
  * wraps the status words inside the group instead (the "Shared with me" switcher is what wraps to a second row). The button
  * keeps the 44px target; the bar's measured height (--shell-bar-size) follows.
@@ -1636,17 +1704,50 @@ tr.nonworking td {
 .tools {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+}
+
+/* "Open a day" is one row at every width; its container is the row itself (see .open-day), so the left group takes the free width. */
+.tools-left {
+  flex: 1 1 var(--open-day-basis);
+  min-width: 0;
+}
+
+.tools-left:empty {
+  display: none;
 }
 
 .tools-left,
 .tools-right {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--space-2);
+}
+
+/*
+ * The right group (U-12): "Show details" and "Change several days" are two groups, a --toolbar-group-gap apart with a 1px --line
+ * separator centred in that gap (a pseudo-element of the second one, so the gap itself equals the token). The phone keeps the tighter
+ * gap and no separator, because the two often wrap there (see the phone rules).
+ */
+.tools-right {
+  gap: var(--toolbar-group-gap);
+}
+
+.tools-right > button {
+  position: relative;
+}
+
+.tools-right > button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(-0.5 * var(--toolbar-group-gap) - var(--hairline));
+  width: var(--hairline);
+  background: var(--line);
 }
 
 /*
@@ -1922,14 +2023,60 @@ textarea {
   flex-direction: column;
 }
 
+/*
+ * The title row and the two-row period card (768px and wider; U-07, U-10). The title row is a wrapping flex row: the title on the
+ * left, the check in/out group on the right. The period card is a grid: row 1 holds the previous button, the dates with their pills,
+ * and the button group (Next, Today, Current period, review); row 2 holds the meta line across the full width under a hairline. The
+ * wrappers dissolve, so the dates, the pills and the meta line are placed on one grid; the notes of the card follow on their own rows.
+ */
 @media (min-width: 768px) {
-  .workbar {
-    grid-template-columns: minmax(0, var(--track)) var(--clock-width);
-    align-items: stretch;
+  .page-head h1 {
+    margin: 0;
   }
 
-  .clock-panel {
+  .period-bar {
+    display: grid;
+    grid-template-columns: auto minmax(var(--period-main-min), var(--track)) auto;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .period-main {
+    display: contents;
+  }
+
+  .period-bar > .period-step {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .period-title {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .period-actions {
+    grid-column: 3;
+    grid-row: 1;
     flex-wrap: nowrap;
+    margin-left: 0;
+  }
+
+  .period-cta {
+    flex: none;
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  .period-meta {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding-top: var(--space-3);
+    border-top: var(--hairline) solid var(--line);
+  }
+
+  .period-main > :not(.period-title, .period-meta) {
+    grid-column: 1 / -1;
   }
 }
 
@@ -2001,14 +2148,18 @@ textarea {
    * (one line, in rem of the 15px root; container conditions cannot read custom properties):
    *   with Current period (Today 62.3 + Current period 121.8 + two 8px gaps = 200.1px before the review link):
    *     "Review & sign off" / "Review or correct" 140.1px: full from 22.8rem (342px), "Sign off" / "Review" 75.1px / 69.8px from
-   *     18.4rem (276px), else the link takes its own row (full label); "Review now" 102.9px: full from 20.2rem (303px), "Review" from 18.1rem.
+   *     18.4rem (276px); "Review now" 102.9px: full from 20.2rem (303px), "Review" from 18.1rem.
+   *   below those widths the Current period button shows "Current" (73.2px, U-17; its name stays "Current period", SC 2.5.3), so Today 62.3
+   *     + Current 73.2 + Sign off 75.1 + two 8px gaps = 226.6px stay on one row: down to 15.4rem (231px, 4px of room for the system font,
+   *     R-UX2A-3); "Review now" shortens to "Review" at the same widths, which needs 221.3px, so its row holds down to 15.1rem (227px).
+   *     Below those widths (no real phone; 320px gives a 264px container) the review link takes its own row with the full label.
    *   without Current period (Today 62.3 + one 8px gap = 70.3px): the long labels fit in full from 14.1rem (211px), "Review now" from 11.6rem.
    */
   .period-cta {
     container: period-cta / inline-size;
   }
 
-  @container period-cta (18.4rem <= width < 22.8rem) {
+  @container period-cta (15.4rem <= width < 22.8rem) {
     .period-cta[data-current] > .review-link[data-label-size='long'] > .review-full {
       display: none;
     }
@@ -2018,13 +2169,23 @@ textarea {
     }
   }
 
-  @container period-cta (width < 18.4rem) {
+  @container period-cta (15.4rem <= width < 18.4rem) {
+    .period-cta[data-current]:has(> .review-link[data-label-size='long']) > [data-period-current] > .jump-full {
+      display: none;
+    }
+
+    .period-cta[data-current]:has(> .review-link[data-label-size='long']) > [data-period-current]::after {
+      content: attr(data-short);
+    }
+  }
+
+  @container period-cta (width < 15.4rem) {
     .period-cta[data-current] > .review-link[data-label-size='long'] {
       flex-basis: 100%;
     }
   }
 
-  @container period-cta (18.1rem <= width < 20.2rem) {
+  @container period-cta (15.1rem <= width < 20.2rem) {
     .period-cta[data-current] > .review-link[data-label-size='short'] > .review-full {
       display: none;
     }
@@ -2034,7 +2195,17 @@ textarea {
     }
   }
 
-  @container period-cta (width < 18.1rem) {
+  @container period-cta (15.1rem <= width < 18.1rem) {
+    .period-cta[data-current]:has(> .review-link[data-label-size='short']) > [data-period-current] > .jump-full {
+      display: none;
+    }
+
+    .period-cta[data-current]:has(> .review-link[data-label-size='short']) > [data-period-current]::after {
+      content: attr(data-short);
+    }
+  }
+
+  @container period-cta (width < 15.1rem) {
     .period-cta[data-current] > .review-link[data-label-size='short'] {
       flex-basis: 100%;
     }
@@ -2095,36 +2266,16 @@ textarea {
     width: 100%;
   }
 
-  .tools-left:empty {
-    display: none;
-  }
-
-  /* The label sits beside its date field, so the row stays one control high where it fits. */
-  .tools .open-day {
-    flex-wrap: wrap;
-    align-items: center;
-    width: 100%;
-  }
-
-  /* The label keeps a full date beside it; when that and the button do not fit, the button wraps below. */
-  .tools .open-day label {
-    flex: 1 1 var(--open-day-label-min);
-    flex-direction: row;
-    align-items: center;
-    gap: var(--space-2);
-    min-width: var(--open-day-label-min);
-    white-space: nowrap;
-  }
-
-  .tools .open-day input {
-    flex: 1;
-    min-width: var(--date-field-min);
-  }
-
-  /* One row where the switch and the button fit (390px and wider); narrower, the button wraps below instead of scrolling sideways. */
+  /* One row where the switch and the button fit (390px and wider); narrower, the button wraps below instead of scrolling sideways. The two wrap
+     often here, so the phone keeps the tight gap and has no separator (the groups of the toolbar are a --toolbar-group-gap apart from 768px). */
   .tools-right {
     flex-wrap: wrap;
     align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .tools-right > button::before {
+    content: none;
   }
 
   .tools-right button {
@@ -2858,11 +3009,54 @@ textarea {
 
 /* ---- Day editor and Clock out dialog ----------------------------------------- */
 
+/*
+ * "Open a day" (U-11, U-18): the words, the date field and the button are one row at every width. The row is a size container: where
+ * it is narrower than 21rem (text 76 + 8 + date field 127.5 + 8 + button 95.7 = 315.2px; a phone of 360px or less) the words are hidden
+ * visually, while the <label> still names the field "Open a day". The field keeps at least a full date (--date-field-min).
+ */
 .open-day {
+  container: open-day / inline-size;
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--space-2);
+  width: 100%;
+  max-width: var(--open-day-max);
+}
+
+.open-day label {
+  flex: 1 1 0;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.open-day-text {
+  font-weight: var(--font-weight-strong);
+}
+
+/* A zero width keeps the browser's own date-field width out of the sizing: the row gives the field the room that is left, never less than a full date. */
+.open-day input {
+  flex: 1 1 0;
+  width: 0;
+  min-width: var(--date-field-min);
+}
+
+.open-day button {
+  flex: none;
+  white-space: nowrap;
+}
+
+@container open-day (width < 21rem) {
+  .open-day-text {
+    position: absolute;
+    width: var(--hairline);
+    height: var(--hairline);
+    overflow: hidden;
+    clip-path: var(--clip-hidden);
+    white-space: nowrap;
+  }
 }
 
 .dialog-wide {

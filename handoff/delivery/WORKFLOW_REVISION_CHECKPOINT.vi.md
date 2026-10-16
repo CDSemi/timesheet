@@ -186,6 +186,23 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Đã viết brief T04 và đăng ký ở trạng thái chờ.
 - Đang chạy: WP5-UX3-T03-FREEZE (committer, chạy một mình; 15 đường dẫn mã nguồn/test cùng 28
   đường dẫn handoff).
+- WP5-UX3-T03-FREEZE xong: 7cd8c592ba57d7f4a12013bacced948de0fb8c42 trên main, đã push (43
+  đường dẫn; digest e5b3faf9, 827 file; mọi bước kiểm exit 0).
+- Đang chạy: WP5-UX3-T04 (worker-high, sonnet; hàng tiêu đề có check in/out, nhãn kỳ gồm "in
+  progress", hàng thông tin kỳ, hàng Open a day, giãn cách thanh công cụ, quy tắc màn hình
+  hẹp) trên 7cd8c59 / e5b3faf9.
+- WP5-UX3-T04 xong (worker-high, tự báo claude-sonnet-5-5; kết quả tự báo, chưa phải bằng
+  chứng độc lập): hàm nhãn kỳ dựa trên dữ liệu kỳ của server ("in progress" xanh dương trong
+  5 ngày cửa sổ; old hổ phách, current xanh lá, future hồng, trung tính xám); hàng tiêu đề có
+  check in/out; thẻ kỳ hai hàng; hàng Open a day; giãn cách thanh công cụ; "Sign off" /
+  "Current" khi hẹp; giao diện Today khi không hoạt động; unit 2065; e2e đầy đủ desktop
+  267/0/30, mobile 274/0/23; đồng hồ giả lập 20/10, 26/10, 30/10 đều đạt; đột biến bị bắt;
+  ngân sách màn hình đầu không đổi; gói chính 452.40 kB; verify 0; digest 025b46cf (827 file).
+  Sai lệch: kiểm việc xuống dòng bằng tên múi giờ dài; chữ "Open a day" chỉ ẩn ở 320; vạch
+  phân cách thanh công cụ từ 768px.
+- Đã viết brief T05 và đăng ký ở trạng thái chờ.
+- Đang chạy: WP5-UX3-T04-FREEZE (committer, chạy một mình; 11 đường dẫn mã nguồn/test cùng 38
+  đường dẫn handoff).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

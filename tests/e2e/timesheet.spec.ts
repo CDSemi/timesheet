@@ -1175,3 +1175,275 @@ test('rails and text keep their contrast on every surface of the editing day: ca
   testInfo.annotations.push({ type: 'editing-contrast', description: notes.join('; ') });
   for (const note of notes) console.log(`editing contrast (${testInfo.project.name}) ${note}`);
 });
+
+/* ---- WP5-UX3-T04: the pills, the meta row, "Open a day" and the toolbar (U-09 .. U-12, U-18) -----------------------------------
+ *
+ * Every date comes from the server and the displayed period. The pills are probed with one element of each kind appended to the period
+ * title, because "in progress" shows on the five window days only; the displayed pills (old, current, future, or in progress) are read
+ * as they are and compared with their probe.
+ */
+
+const PILL_KINDS = ['old', 'current', 'future', 'in-progress', 'neutral'] as const;
+
+test('the pills: each ink is at least 4.5:1 on its fill, the five fills differ, the words stay, and the displayed pill is its kind (four theme situations)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  // The displayed pills carry words: the opening period is "current"; Previous is "old". Next is "future", or "in progress" on a window day.
+  const title = page.locator('.period-title');
+  const periods = await employeeSeed.periodsCurrent();
+  const inWindow = periods.current.payroll_date !== periods.in_progress.payroll_date;
+  await expect(title.locator('.badge.current')).toHaveText('current');
+  await page.getByRole('button', { name: 'Next period' }).click();
+  await expect(title.locator(inWindow ? '.badge.in-progress' : '.badge.future')).toHaveText(inWindow ? 'in progress' : 'future');
+  await expect(title.locator(inWindow ? '.badge.future' : '.badge.in-progress')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(title.locator('.badge.current')).toHaveText('current');
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(title.locator('.badge.old')).toHaveText('old');
+  // One probe of each kind, in the same container, so the same cascade applies (a neutral pill is a plain badge in the title).
+  await title.evaluate((element, kinds) => {
+    for (const kind of kinds) {
+      const probe = element.ownerDocument.createElement('span');
+      probe.className = kind === 'neutral' ? 'badge' : `badge ${kind}`;
+      probe.dataset.pillProbe = kind;
+      probe.textContent = kind === 'neutral' ? 'Draft' : kind.replace('-', ' ');
+      element.append(probe);
+    }
+  }, PILL_KINDS);
+  const probe = (kind: string) => title.locator(`[data-pill-probe="${kind}"]`);
+  const measured: string[] = [];
+  for (const appearance of APPEARANCES) {
+    await applyAppearance(page, appearance);
+    const fills: Rgba[] = [];
+    for (const kind of PILL_KINDS) {
+      const pill = probe(kind);
+      const fill = over(parseColour(await computedStyle(pill, 'backgroundColor')), backdropOf(await backdropsAbove(pill)));
+      const ink = parseColour(await computedStyle(pill, 'color'));
+      const ratio = contrast(over(ink, fill), fill);
+      expect(fill[3], `${appearance.name}: the ${kind} pill fill is opaque`).toBe(1);
+      expect(ratio, `${appearance.name}: ${kind} ink on its fill`).toBeGreaterThanOrEqual(4.5);
+      // The pill is a pill (round corners) with a visible outline, and its words are real text.
+      const shape = await pill.evaluate((element) => {
+        const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+        return { radius: style?.borderTopLeftRadius ?? '', border: style?.borderTopWidth ?? '' };
+      });
+      expect(parseFloat(shape.radius), `${kind}: the pill radius`).toBeGreaterThan(50);
+      expect(shape.border, `${kind}: an outline`).toBe('1px');
+      await expect(pill).not.toHaveText('');
+      fills.push(fill);
+      measured.push(`${appearance.name} ${kind} ${ratio.toFixed(2)}:1`);
+    }
+    // The five fills differ (the colour is never the only cue, but it is not one colour either).
+    for (const [index, fill] of fills.entries()) {
+      for (const other of fills.slice(index + 1)) expect(sameColour(fill, other, 3), `${appearance.name}: two pill fills are the same colour`).toBe(false);
+    }
+    // The displayed "old" pill is the old probe, painted the same.
+    const shown = title.locator('.badge.old').first();
+    expect(parseColour(await computedStyle(shown, 'backgroundColor'))).toEqual(parseColour(await computedStyle(probe('old'), 'backgroundColor')));
+    expect(parseColour(await computedStyle(shown, 'color'))).toEqual(parseColour(await computedStyle(probe('old'), 'color')));
+  }
+  await applyAppearance(page, APPEARANCES[0] as Appearance);
+  testInfo.annotations.push({ type: 'pill-contrast', description: measured.join('; ') });
+  console.log(`pill contrast (${testInfo.project.name}) ${measured.join('; ')}`);
+});
+
+test('desktop: the meta line is under the title row of the card on one row at 1280 and wraps, without overflow, when its three parts do not fit', async ({
+  page,
+  signInThroughUi,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'The two-row period card is the 768px and wider layout');
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const card = page.locator('section.period-bar');
+  const meta = card.locator('.period-meta');
+  const parts = meta.locator(':scope > span');
+  await expect(parts).toHaveCount(3);
+  const tops = async () => Promise.all((await parts.all()).map(async (part) => (await part.boundingBox())?.y ?? Number.NaN));
+  const rowGap = async () =>
+    meta.evaluate((element) => {
+      const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+      return { row: parseFloat(style?.rowGap ?? 'NaN'), column: parseFloat(style?.columnGap ?? 'NaN') };
+    });
+  // Row 1 (the buttons and the dates) is above the meta line, which spans the card under a hairline.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const cardBox = await card.boundingBox();
+  const metaBox = await meta.boundingBox();
+  const firstRow = await card.getByRole('button', { name: 'Today', exact: true }).boundingBox();
+  expect(metaBox?.y ?? 0, 'the meta line is under the first row').toBeGreaterThan((firstRow?.y ?? 0) + (firstRow?.height ?? 0));
+  expect((metaBox?.width ?? 0) + 2 * 16, 'the meta line spans the width of the card').toBeGreaterThanOrEqual((cardBox?.width ?? 0) - 1);
+  const rule = await meta.evaluate((element) => {
+    const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+    return { width: style?.borderTopWidth ?? '', style: style?.borderTopStyle ?? '' };
+  });
+  expect(rule, 'a hairline above the meta line').toEqual({ width: '1px', style: 'solid' });
+  expect(await rowGap(), 'gap 4px 28px (B4)').toEqual({ row: 4, column: 28 });
+  const wide = await tops();
+  expect(Math.max(...wide) - Math.min(...wide), 'one row at 1280').toBeLessThanOrEqual(2);
+  // The natural width of the three parts and their gaps is the most the line can need.
+  const need = (await Promise.all((await parts.all()).map(async (part) => (await part.boundingBox())?.width ?? 0))).reduce((sum, width) => sum + width, 0) + 2 * 28;
+  console.log(`META natural width ${need}px of a card inner ${(metaBox?.width ?? 0) - 0}px at 1280`);
+  for (const width of [820, 768]) {
+    await page.setViewportSize({ width, height: 800 });
+    const inner = (await meta.boundingBox())?.width ?? 0;
+    const rows = new Set((await tops()).map((top) => Math.round(top)));
+    console.log(`META width=${width} inner=${inner} rows=${rows.size} need=${need}`);
+    // The parts wrap exactly when they do not fit on one line: more than one row if and only if the line needs more than the card gives.
+    if (need > inner) expect(rows.size, `${width}px: the parts wrap onto a second row`).toBeGreaterThan(1);
+    else expect(rows.size, `${width}px: the parts fit one row`).toBe(1);
+    // Wrapped or not, nothing leaves the card and nothing scrolls sideways.
+    for (const part of await parts.all()) {
+      const box = await part.boundingBox();
+      expect((box?.x ?? 0) + (box?.width ?? 0), `${width}px: a part stays inside the card`).toBeLessThanOrEqual(((await card.boundingBox())?.x ?? 0) + ((await card.boundingBox())?.width ?? 0) + 0.5);
+    }
+    expect(await page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), `${width}px: no sideways scroll`).toBe(true);
+  }
+});
+
+test.describe('a long display zone name', () => {
+  // The "Times in {zone}" part grows with the zone name, so the three parts of the meta line (payroll date, due, times) need more than the
+  // card gives at 820px while they still fit on one row at 1280px: the deterministic case of "one row at 1280, wrapped at 820".
+  test.use({ timezoneId: 'America/North_Dakota/New_Salem' });
+
+  test('desktop: the meta line is one row at 1280 and wraps onto a second row at 820 and 768, inside the card', async ({ page, signInThroughUi }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'The two-row period card is the 768px and wider layout');
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const card = page.locator('section.period-bar');
+    const parts = card.locator('.period-meta > span');
+    await expect(parts).toHaveCount(3);
+    await expect(parts.nth(2)).toHaveText('Times in America/North_Dakota/New_Salem');
+    const tops = async () => Promise.all((await parts.all()).map(async (part) => Math.round((await part.boundingBox())?.y ?? Number.NaN)));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const wide = await tops();
+    expect(new Set(wide).size, 'one row at 1280').toBe(1);
+    const need = (await Promise.all((await parts.all()).map(async (part) => (await part.boundingBox())?.width ?? 0))).reduce((sum, width) => sum + width, 0) + 2 * 28;
+    for (const width of [820, 768]) {
+      await page.setViewportSize({ width, height: 800 });
+      const cardBox = await card.boundingBox();
+      const inner = (cardBox?.width ?? 0) - 2 * 16;
+      // The precondition of the case: the three parts need more than the card gives.
+      expect(need, `${width}px: the parts need more than the ${inner}px the card gives`).toBeGreaterThan(inner);
+      const rows = new Set(await tops());
+      console.log(`META long zone width=${width} inner=${inner} need=${need} rows=${rows.size}`);
+      expect(rows.size, `${width}px: the parts wrap onto a second row`).toBe(2);
+      for (const part of await parts.all()) {
+        const box = await part.boundingBox();
+        expect((box?.x ?? 0) + (box?.width ?? 0), `${width}px: a part stays inside the card`).toBeLessThanOrEqual((cardBox?.x ?? 0) + (cardBox?.width ?? 0) + 0.5);
+      }
+      expect(await page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), `${width}px: no sideways scroll`).toBe(true);
+    }
+    await page.setViewportSize({ width: 820, height: 800 });
+    await card.screenshot({ path: screenshotPath('period-card-meta-wrapped-w820-synthetic.png'), animations: 'disabled' });
+  });
+});
+
+test('"Open a day": the words, the date field and the button share one row; the words are hidden below 21rem and the field is still named', async ({
+  page,
+  signInThroughUi,
+}, testInfo) => {
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const row = page.locator('.tools .open-day');
+  const text = row.locator('.open-day-text');
+  const field = page.getByLabel('Open a day');
+  const button = row.getByRole('button', { name: 'Open day', exact: true });
+  await expect(field).toHaveCount(1);
+  const threshold = await page.evaluate<number>("parseFloat(getComputedStyle(document.documentElement).fontSize) * 21");
+  const widths = testInfo.project.name === 'desktop' ? [1280, 1024, 768] : [600, 390, 375, 360, 320];
+  const lines: string[] = [];
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 844 });
+    const [rowBox, fieldBox, buttonBox] = [await row.boundingBox(), await field.boundingBox(), await button.boundingBox()];
+    expect(rowBox && fieldBox && buttonBox, `${width}px: the row is painted`).toBeTruthy();
+    // One row: the field and the button are centred on the same line (the control heights can differ by a few pixels).
+    const centre = (box: { y: number; height: number } | null) => (box?.y ?? 0) + (box?.height ?? 0) / 2;
+    expect(Math.abs(centre(fieldBox) - centre(buttonBox)), `${width}px: the field and the button share a row`).toBeLessThanOrEqual(3);
+    expect((fieldBox?.x ?? 0) + (fieldBox?.width ?? 0), `${width}px: the button is right of the field`).toBeLessThanOrEqual((buttonBox?.x ?? 0) + 0.5);
+    expect((buttonBox?.x ?? 0) + (buttonBox?.width ?? 0), `${width}px: the button is inside the row`).toBeLessThanOrEqual((rowBox?.x ?? 0) + (rowBox?.width ?? 0) + 0.5);
+    const hidden = (rowBox?.width ?? 0) < threshold;
+    const textBox = await text.boundingBox();
+    if (hidden) {
+      // Visually hidden (a 1px clipped box), never removed: the label still names the field.
+      expect(textBox?.width ?? 99, `${width}px: the words are hidden`).toBeLessThanOrEqual(1.5);
+    } else {
+      expect(textBox?.width ?? 0, `${width}px: the words are shown`).toBeGreaterThan(40);
+      expect(Math.abs(centre(textBox) - centre(fieldBox)), `${width}px: the words share the row`).toBeLessThanOrEqual(6);
+      expect((textBox?.x ?? 0) + (textBox?.width ?? 0), `${width}px: the words come before the field`).toBeLessThanOrEqual((fieldBox?.x ?? 0) + 0.5);
+    }
+    await expect(field, `${width}px: the field is named`).toHaveAccessibleName('Open a day');
+    expect(await page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), `${width}px: no sideways scroll`).toBe(true);
+    lines.push(`${width}: row ${rowBox?.width}px, words ${hidden ? 'hidden' : 'shown'}, field ${fieldBox?.width}px`);
+  }
+  console.log(`OPENDAY (${testInfo.project.name}) ${lines.join('; ')}`);
+  if (testInfo.project.name === 'mobile') {
+    // The sheet area has no card padding since T01, so the row is the viewport less the 32px page padding: 358px at 390 and 328px at 360
+    // (both at least 21rem = 315px: words, field and button fit, so the words show) and 288px at 320 (below it: the words are hidden).
+    for (const width of [390, 360]) {
+      await page.setViewportSize({ width, height: 844 });
+      expect((await row.boundingBox())?.width ?? 0, `${width}px: the row`).toBeCloseTo(width - 32, 0);
+      expect((await text.boundingBox())?.width ?? 0, `${width}px: the words are shown`).toBeGreaterThan(40);
+    }
+    await page.setViewportSize({ width: 320, height: 844 });
+    expect((await row.boundingBox())?.width ?? 0, '320px: the row').toBeCloseTo(288, 0);
+    expect((await text.boundingBox())?.width ?? 99, '320px: the words are hidden').toBeLessThanOrEqual(1.5);
+  } else {
+    for (const width of [1280, 768]) {
+      await page.setViewportSize({ width, height: 844 });
+      expect((await text.boundingBox())?.width ?? 0, `${width}px: the words are shown on a wide screen`).toBeGreaterThan(40);
+    }
+  }
+});
+
+test('desktop toolbar: the gap between "Show details" and "Change several days" is the token with a 1px separator, and the button is outlined until pressed', async ({
+  page,
+  signInThroughUi,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'The group gap is the 768px and wider toolbar; a phone keeps the tight gap');
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const tokenPx = await page.evaluate<number>(
+    "(() => { const probe = document.createElement('div'); probe.style.width = 'var(--toolbar-group-gap)'; document.body.append(probe); const px = probe.getBoundingClientRect().width; probe.remove(); return px; })()",
+  );
+  expect(tokenPx, 'the token is 24px').toBe(24);
+  const batch = page.getByRole('button', { name: 'Change several days', exact: true });
+  const details = page.locator('.tools-right label.switch');
+  for (const width of [1280, 1024, 768]) {
+    await page.setViewportSize({ width, height: 800 });
+    const [detailsBox, batchBox] = [await details.boundingBox(), await batch.boundingBox()];
+    expect(Math.abs((batchBox?.x ?? 0) - ((detailsBox?.x ?? 0) + (detailsBox?.width ?? 0)) - tokenPx), `${width}px: the gap equals the token`).toBeLessThanOrEqual(0.5);
+    const centre = (box: { y: number; height: number } | null) => (box?.y ?? 0) + (box?.height ?? 0) / 2;
+    expect(Math.abs(centre(detailsBox) - centre(batchBox)), `${width}px: one row`).toBeLessThanOrEqual(2);
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  // The separator: a 1px --line rule in the middle of the gap, as tall as the button.
+  const separator = await batch.evaluate((element) => {
+    const style = element.ownerDocument.defaultView?.getComputedStyle(element, '::before');
+    const host = element.getBoundingClientRect();
+    return { content: style?.content ?? '', width: style?.width ?? '', background: style?.backgroundColor ?? '', height: parseFloat(style?.height ?? '0'), hostHeight: host.height };
+  });
+  expect(separator.content).not.toBe('none');
+  expect(separator.width).toBe('1px');
+  expect(parseColour(separator.background), 'the separator is the line token').toEqual(await tokenColour(page, '--line'));
+  expect(Math.abs(separator.height - (separator.hostHeight - 2)), 'as tall as the button').toBeLessThanOrEqual(1);
+  // Outlined secondary at rest (its edge is visible), the solid accent when pressed (the round-2 rule).
+  await expect(batch).toHaveClass(/\bsecondary\b/);
+  await expect(batch).toHaveAttribute('aria-pressed', 'false');
+  await page.mouse.move(0, 0);
+  const rest = {
+    border: parseColour(await settledStyle(batch, 'borderTopColor')),
+    fill: parseColour(await settledStyle(batch, 'backgroundColor')),
+  };
+  expect(rest.border[3], 'a visible outline at rest').toBeGreaterThan(0.3);
+  const card = await tokenColour(page, '--card');
+  expect(sameColour(rest.fill, card, 3), 'the resting fill is the card colour').toBe(true);
+  await batch.click();
+  await expect(batch).toHaveAttribute('aria-pressed', 'true');
+  await page.mouse.move(0, 0);
+  const accent = await tokenColour(page, '--accent');
+  expect(sameColour(parseColour(await settledStyle(batch, 'backgroundColor')), accent, 3), 'pressed is the solid accent').toBe(true);
+  await page.screenshot({ path: screenshotPath('toolbar-desktop-pressed-synthetic.png'), clip: { x: 0, y: 0, width: 1280, height: 520 }, animations: 'disabled' });
+});

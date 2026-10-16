@@ -8,7 +8,7 @@ export function clockPhase(running: Session | null | undefined): 'checking' | 'o
 }
 
 /**
- * The status words of the check in/out control, shared by the desktop card and the phone's bar so the
+ * The status words of the check in/out control, shared by the desktop title row and the phone's bar so the
  * two never differ. Checked in shows "Checked in since HH:MM" with a live dot (static: a ringed shape,
  * not an animation) and the date line. `running` is undefined while the first check is on its way.
  */
@@ -57,16 +57,17 @@ export function ClockButton({
 }
 
 /**
- * Check in/out as a card in the Timesheet page (768px and wider). It reads the one clock state of the
- * ClockProvider and renders nothing without it (a shared view has no provider state). Below 768px the
- * same state shows in the top bar instead (BarClock); the two are never rendered together.
+ * Check in/out as a compact group on the right of the Timesheet page's title row (768px and wider): the status words right-aligned
+ * over the date line, then the one button. It is not a card. It reads the one clock state of the ClockProvider and renders nothing
+ * without it (a shared view has no provider state). Below 768px the same state shows in the top bar instead (BarClock); the two are
+ * never rendered together.
  */
 export function ClockPanel() {
   const clock = useClock();
   if (clock === null) return null;
   const { running, zone, error } = clock;
   return (
-    <section className="card clock-panel" aria-label="Check in and out" data-clock={clockPhase(running)}>
+    <section className="clock-group" aria-label="Check in and out" data-clock={clockPhase(running)}>
       <ClockStatus running={running} zone={zone} />
       <ClockButton running={running} onCheckIn={() => void clock.checkIn()} onCheckOut={() => void clock.openCheckOut()} />
       {error !== null && (

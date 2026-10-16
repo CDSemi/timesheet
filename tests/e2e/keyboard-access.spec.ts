@@ -232,6 +232,37 @@ test.describe('WP5-UX-AX-01 on the mobile project', () => {
   }
 });
 
+/* ---- WP5-UX3-T04: the check in/out group moved to the title row ------------------------------------------------- */
+
+test('WP5-UX3-T04: the check in/out group of the title row is one tab stop between the top bar and the period card, in the visual order', async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Desktop widths: a phone keeps check in/out in the top bar');
+  test.setTimeout(90_000);
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Tab Person', signature: 'none' });
+  await signInPageAs(me.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const button = page.locator('.page-head').getByRole('region', { name: 'Check in and out' }).getByRole('button', { name: 'Check in', exact: true });
+  const previous = page.locator('.period-bar').getByRole('button', { name: 'Previous period', exact: true });
+  await button.focus();
+  await expect(button).toBeFocused();
+  // Forward: the next stop is the period card, not something further down the page.
+  await page.keyboard.press('Tab');
+  await expect(previous).toBeFocused();
+  // Backward: from the button the previous stop is in the top bar, so the group is exactly one stop between the two.
+  await page.keyboard.press('Shift+Tab');
+  await expect(button).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  expect(await page.evaluate("document.activeElement !== null && document.activeElement.closest('.shell-bar') !== null"), 'the stop before the group is in the top bar').toBe(true);
+  // The visual order agrees: the title row is above the period card, and the button is above Previous.
+  const [buttonBox, previousBox] = [await button.boundingBox(), await previous.boundingBox()];
+  expect((buttonBox?.y ?? 0) + (buttonBox?.height ?? 0), 'the group is above the period card').toBeLessThanOrEqual(previousBox?.y ?? 0);
+});
+
 /* ---- WP5-UX-AX-05: label in name (SC 2.5.3) ------------------------------------------------------- */
 
 test('WP5-UX-AX-05: each day button and "End share" carry their visible text in the accessible name', async ({ page, adminSeed, builtServer, signInPageAs }) => {

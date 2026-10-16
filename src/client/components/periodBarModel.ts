@@ -44,6 +44,35 @@ export function reviewShortLabel(label: string): string {
   return label;
 }
 
+/** What the pill of a period says and how it is coloured. `in-progress` is the fifth hue of the pill set; `neutral` is the grey one. */
+export type PeriodPillKind = 'old' | 'current' | 'future' | 'in-progress' | 'neutral';
+
+/** The visible word of each pill kind. The relation words are the server's own; the hue is never the only cue. */
+export const PERIOD_PILL_WORDS: Record<PeriodPillKind, string> = {
+  old: 'old',
+  current: 'current',
+  future: 'future',
+  'in-progress': 'in progress',
+  neutral: '',
+};
+
+/**
+ * The pill of the shown period, from the server's values only (G-5 b; never the device clock or the display zone). It is the
+ * server's relation (`old`, `current`, `future`), except in the five window days after a period ends: there `current` is the ended
+ * period and `in_progress` the one that contains today, and the period whose payroll date equals `in_progress` reads `in progress`.
+ * The edit-reason rules still use the server's own relation (that period stays `future` for them). A period without a relation is
+ * `neutral`. A shared view passes the owner's periods, so both views follow one rule.
+ */
+export function periodPillKind(
+  period: Pick<Period, 'payroll_date' | 'relation'>,
+  periods: { current: Pick<Period, 'payroll_date'>; in_progress: Pick<Period, 'payroll_date'> } | null,
+): PeriodPillKind {
+  if (periods !== null && periods.in_progress.payroll_date !== periods.current.payroll_date && period.payroll_date === periods.in_progress.payroll_date) {
+    return 'in-progress';
+  }
+  return period.relation ?? 'neutral';
+}
+
 /** The due instant in the display zone, formatted like the bar: `Wed 10/14/2026, 07:00`. Display only; the instant and zone are unchanged. */
 export function dueInZoneText(dueAtUtc: string, zone: string): string {
   const local = formatInZone(zone, parseUtcInstant(dueAtUtc));

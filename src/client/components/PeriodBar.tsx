@@ -1,10 +1,10 @@
 import { useRef } from 'react';
-import type { TimesheetView } from '../api.ts';
+import type { CurrentPeriods, TimesheetView } from '../api.ts';
 import { reviewStatus } from './dayModel.ts';
 import { gridStatus } from './deliveryModel.ts';
 import { usDate } from './format.ts';
 import { ImportedBadge, ImportedNote } from './ImportStatus.tsx';
-import { dueInZoneText, dueParts, reviewShortLabel, viewingZoneText, weekdayName, zoneNoteVisible } from './periodBarModel.ts';
+import { PERIOD_PILL_WORDS, dueInZoneText, dueParts, periodPillKind, reviewShortLabel, viewingZoneText, weekdayName, zoneNoteVisible } from './periodBarModel.ts';
 import { CURRENT_PERIOD_DESCRIPTION, todayDescription } from './periodJumpModel.ts';
 import { type PeriodState, ReviewLink } from './ReviewStatus.tsx';
 import { SubmissionStatusLine } from './SubmissionStatus.tsx';
@@ -34,6 +34,7 @@ export function PeriodBar({
   own = true,
   state,
   jumps,
+  periods = null,
 }: {
   view: TimesheetView;
   zone: string;
@@ -44,9 +45,12 @@ export function PeriodBar({
   state: PeriodState | null;
   /** "Today" and "Current period"; absent until the server's periods are known. */
   jumps?: PeriodJumps;
+  /** The server's current and in-progress periods (the owner's, in a shared view): they decide the "in progress" pill. Null until known. */
+  periods?: Pick<CurrentPeriods, 'current' | 'in_progress'> | null;
 }) {
   const todayButton = useRef<HTMLButtonElement>(null);
   const { period } = view;
+  const pill = periodPillKind(period, periods);
   const due = dueParts(period, view.reporting_zone);
   // F-2: an imported period is read-only history. It has no review or delivery state, and its sign and submit are off.
   const imported = view.timesheet.imported_unverified;
@@ -69,7 +73,8 @@ export function PeriodBar({
             <span className="sr-only"> to </span>
             {usDate(period.period_end)}
           </strong>
-          <span className={`badge ${period.relation ?? ''}`}>{period.relation}</span>
+          {/* The pill carries its words (never colour alone): the server's relation, or "in progress" in the five window days. */}
+          {pill !== 'neutral' && <span className={`badge ${pill}`}>{PERIOD_PILL_WORDS[pill]}</span>}
           {imported ? <ImportedBadge /> : status !== null ? <SubmissionStatusLine status={status} /> : <span className="badge">{reviewStatus(view.timesheet)}</span>}
         </div>
         <p className="period-meta">
@@ -145,8 +150,11 @@ export function PeriodBar({
                       jumps.onCurrent();
                     }}
                     data-period-current
+                    aria-label="Current period"
+                    data-short="Current"
                   >
-                    Current period
+                    {/* On the narrowest phones the style sheet hides this text and draws the short form (data-short); the name stays "Current period" (SC 2.5.3). */}
+                    <span className="jump-full">Current period</span>
                   </button>
                   <span id="period-current-note" className="sr-only">
                     {CURRENT_PERIOD_DESCRIPTION}

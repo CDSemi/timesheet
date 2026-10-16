@@ -248,16 +248,19 @@ test('Check in/out: in the top bar on every own screen of a phone, as the card i
   const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Clock Person', signature: 'none' });
   await signInPageAs(person.account, '#/ot');
   const barGroup = page.getByRole('banner').getByRole('region', { name: 'Check in and out' });
-  const card = page.locator('.clock-panel');
+  // WP5-UX3-T04 (U-07): the desktop group is no longer a card; it sits in the title row of the Timesheet page (`.clock-group`).
+  // `.clock-panel` (the removed card) must not exist in any state; on a phone neither element exists in the page.
+  const card = page.locator('.clock-group');
   const control = page.getByRole('button', { name: CHECK_CONTROL });
 
   if (!isMobile) {
-    // Desktop: the bar never holds the control; the card is in the Timesheet page only.
+    // Desktop: the bar never holds the control; the group is in the Timesheet page's title row only.
     await expect(page.getByRole('navigation', { name: 'Main' }).first()).toBeVisible();
     await expect(control).toHaveCount(0);
     await expect(barGroup).toHaveCount(0);
     await page.goto('/#/timesheet');
     await expect(card).toBeVisible();
+    await expect(page.locator('.clock-panel')).toHaveCount(0);
     await expect(card.getByRole('button', { name: 'Check in', exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Check in and out' })).toHaveCount(1);
     await expect(barGroup).toHaveCount(0);
@@ -346,17 +349,129 @@ for (const hash of ['', '/timesheet', '/ot', '/revisions']) {
     for (const name of CHECK_NAMES) await expect(page.getByRole('button', { name }), name).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^(Check|Clock) (in|out)/ })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Check in and out' })).toHaveCount(0);
-    await expect(page.locator('.clock-panel, .bar-clock')).toHaveCount(0);
+    await expect(page.locator('.clock-panel, .clock-group, .bar-clock')).toHaveCount(0);
     // The state is not read in a shared view: no clock call and none of the person's own period reads.
     await page.waitForTimeout(500);
     const own = requests.filter((entry) => /\/api\/(clock|periods\/current|timesheets\/)/.test(entry) && !entry.includes('/api/shared/'));
     expect(own, 'own clock and period requests in a shared view').toEqual([]);
-    // Back to the person's own screens the control returns (a phone: in the bar; a desktop: in the Timesheet page card).
+    // Back to the person's own screens the control returns (a phone: in the bar; a desktop: in the Timesheet page's title row).
     await page.evaluate("window.location.hash = '#/timesheet'");
     await expect(page.getByRole('button', { name: CHECK_CONTROL })).toHaveCount(1);
     await expect(page.getByRole('region', { name: 'Check in and out' })).toContainText('Checked in since');
   });
 }
+
+/*
+ * WP5-UX3-T04 (U-07, U-08): the title row of the Timesheet page. From 768px the check in/out group sits on the right of the h1 in the same
+ * row box (no card around it); a phone keeps the top-bar group and the visually hidden page head; a shared view has no check in/out. There
+ * is no name line under the title in the own view or in a shared view (the shared h1 still says "{owner}'s timesheet").
+ */
+test('the title row: check in/out right of the h1 on a desktop (no card), the phone head unchanged, and no name line under the title', async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+  isMobile,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Title Person', signature: 'none' });
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const head = page.locator('.page-head');
+  const heading = head.getByRole('heading', { name: 'Timesheet', level: 1 });
+  await expect(heading).toHaveCount(1);
+  // U-08: nothing under the title but the heading itself and, from 768px, the check in/out group; the person's name is not printed there.
+  await expect(head.locator('p')).toHaveCount(0);
+  await expect(head).not.toContainText('Synthetic Title Person');
+  await expect(head).not.toContainText('Signed in as');
+  await expect(page.locator('.clock-panel')).toHaveCount(0);
+
+  if (isMobile) {
+    // A phone: the page head is visually hidden (a 1px clipped box), the clock lives in the top bar only.
+    await expect(page.locator('.clock-group')).toHaveCount(0);
+    const box = await head.boundingBox();
+    expect(box?.height ?? 99, 'the phone page head is visually hidden').toBeLessThanOrEqual(1.5);
+    await expect(page.getByRole('banner').getByRole('region', { name: 'Check in and out' })).toBeVisible();
+    return;
+  }
+
+  const group = head.getByRole('region', { name: 'Check in and out' });
+  await expect(group).toBeVisible();
+  await expect(page.getByRole('banner').getByRole('region', { name: 'Check in and out' })).toHaveCount(0);
+  const measure = async () => {
+    const [headBox, titleBox, groupBox, buttonBox] = await Promise.all([
+      head.boundingBox(),
+      heading.boundingBox(),
+      group.boundingBox(),
+      group.getByRole('button').boundingBox(),
+    ]);
+    expect(headBox, 'head box').not.toBeNull();
+    expect(titleBox, 'title box').not.toBeNull();
+    expect(groupBox, 'group box').not.toBeNull();
+    expect(buttonBox, 'button box').not.toBeNull();
+    return { headBox: headBox as NonNullable<typeof headBox>, titleBox: titleBox as NonNullable<typeof titleBox>, groupBox: groupBox as NonNullable<typeof groupBox>, buttonBox: buttonBox as NonNullable<typeof buttonBox> };
+  };
+  for (const width of [768, 1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 800 });
+    const { headBox, titleBox, groupBox, buttonBox } = await measure();
+    // The same row box: the group starts right of the h1's right edge, and the two share vertical space inside the head.
+    expect(groupBox.x, `${width}px: the group is right of the title`).toBeGreaterThanOrEqual(titleBox.x + titleBox.width);
+    const overlap = Math.min(titleBox.y + titleBox.height, groupBox.y + groupBox.height) - Math.max(titleBox.y, groupBox.y);
+    expect(overlap, `${width}px: the title and the group share the row`).toBeGreaterThan(0);
+    expect(groupBox.y, `${width}px: the group is inside the head`).toBeGreaterThanOrEqual(headBox.y - 0.5);
+    expect(groupBox.y + groupBox.height, `${width}px: the group is inside the head`).toBeLessThanOrEqual(headBox.y + headBox.height + 0.5);
+    // Right-aligned: the group ends at the head's right edge.
+    expect(Math.abs(groupBox.x + groupBox.width - (headBox.x + headBox.width)), `${width}px: the group is right-aligned`).toBeLessThanOrEqual(1);
+    // The compact button: 38px on a pointer device (44px is the touch size, tested by the generic 44px rule).
+    expect(buttonBox.height, `${width}px: the compact button`).toBeCloseTo(38, 0);
+    // Not a card: no surface of its own.
+    const surface = await group.evaluate((element) => {
+      const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+      return { shadow: style?.boxShadow ?? '', background: style?.backgroundColor ?? '', padding: style?.paddingTop ?? '' };
+    });
+    expect(surface.shadow, `${width}px: no card shadow`).toBe('none');
+    expect(surface.background, `${width}px: no card fill`).toBe('rgba(0, 0, 0, 0)');
+    expect(await page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), `${width}px: no sideways scroll`).toBe(true);
+    // The period card is full width: its right edge is the head's right edge.
+    const period = await page.locator('.period-bar').boundingBox();
+    expect(Math.abs((period?.x ?? 0) + (period?.width ?? 0) - (headBox.x + headBox.width)), `${width}px: the period card is full width`).toBeLessThanOrEqual(1);
+  }
+
+  // Checked in: the status words are right-aligned over the date line, beside the button.
+  await group.getByRole('button', { name: 'Check in', exact: true }).click();
+  await expect(group).toContainText('Checked in since');
+  const now = await group.locator('.clock-now').boundingBox();
+  const line = await group.locator('.clock-state .hint').boundingBox();
+  const button = await group.getByRole('button', { name: 'Check out', exact: true }).boundingBox();
+  expect(now && line && button, 'status words and button are painted').toBeTruthy();
+  expect(Math.abs((now?.x ?? 0) + (now?.width ?? 0) - ((line?.x ?? 0) + (line?.width ?? 0))), 'the status words and the date line share their right edge').toBeLessThanOrEqual(1);
+  expect((now?.x ?? 0) + (now?.width ?? 0), 'the words end left of the button').toBeLessThanOrEqual(button?.x ?? 0);
+  expect(line?.y ?? 0, 'the date line is under the words').toBeGreaterThan((now?.y ?? 0) + (now?.height ?? 0) - 1);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.locator('.page-head').screenshot({ path: screenshotPath(`title-row-${testInfo.project.name}-checked-in-synthetic.png`), animations: 'disabled' });
+  await page.waitForTimeout(1_500);
+  await group.getByRole('button', { name: 'Check out', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Check out' }).getByRole('radio', { name: /No breaks taken/ }).check();
+  await page.getByRole('dialog', { name: 'Check out' }).getByRole('button', { name: 'Check out, no breaks taken' }).click();
+  await expect(group).toContainText('Checked out');
+});
+
+test('a shared view has no check in/out in the title row and no name line under its title', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+  test.setTimeout(90_000);
+  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Title Owner', signature: 'none' });
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Title Grantee', signature: 'none' });
+  await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  await signInPageAs(me.account, `#/shared/${owner.account.id}/timesheet`);
+  await expect(page.locator('[data-share-bar]')).toBeVisible();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const head = page.locator('.page-head');
+  await expect(head.getByRole('heading', { name: "Synthetic Title Owner's timesheet", level: 1 })).toHaveCount(1);
+  await expect(head.locator('p')).toHaveCount(0);
+  await expect(head).not.toContainText('Signed in as');
+  await expect(head).not.toContainText('Synthetic Title Grantee');
+  await expect(head.locator('.clock-group, .clock-panel, button')).toHaveCount(0);
+  await expect(page.locator('.clock-group, .clock-panel, .bar-clock')).toHaveCount(0);
+});
 
 for (const width of [390, 375, 360, 320]) {
   for (const withShare of [false, true]) {

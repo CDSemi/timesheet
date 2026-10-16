@@ -96,7 +96,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editDate, setEditDate] = useState<string | null>(null);
-  // The one check in/out state (null in a shared view, which has none). The desktop card shows here; below 768px the top bar does.
+  // The one check in/out state (null in a shared view, which has none). The desktop title row shows it here; below 768px the top bar does.
   const clock = useClock();
   // Review and delivery status of the shown period, from the server's fields; re-read with every edit.
   // A shared view has no status line: the finalization and delivery routes are the owner's own.
@@ -447,17 +447,15 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
 
   return (
     <div>
+      {/* The title row (U-07, U-08): the title on the left, check in/out on the right from 768px. No name line under the title. */}
       <header className="toolbar page-head">
-        <div>
-          <h1>{shared === undefined ? 'Timesheet' : `${shared.ownerName}'s timesheet`}</h1>
-          <p className="muted">{shared === undefined ? user.display_name : `Signed in as ${user.display_name}`}</p>
-        </div>
+        <h1>{shared === undefined ? 'Timesheet' : `${shared.ownerName}'s timesheet`}</h1>
+        {own && desktop && <ClockPanel />}
       </header>
 
       {view !== null && (
         <div className="workbar">
-          <PeriodBar view={view} zone={displayZone} onMove={move} own={own} state={periodState} jumps={jumps} />
-          {own && desktop && <ClockPanel />}
+          <PeriodBar view={view} zone={displayZone} onMove={move} own={own} state={periodState} jumps={jumps} periods={periods} />
         </div>
       )}
 
@@ -471,7 +469,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
                 {canEdit && (
                   <button
                     type="button"
-                    className="quiet"
+                    className="secondary"
                     aria-pressed={batchOn}
                     disabled={imported}
                     aria-describedby={imported ? 'imported-reason' : undefined}

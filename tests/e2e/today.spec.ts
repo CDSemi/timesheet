@@ -1,4 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
+import { backdropOf, backdropsAbove, computedStyle, contrast, focusFromKeyboard, measureFocusRing, over, parseColour, settledStyle } from './contrast.ts';
 import { dayButton } from './dayButton.ts';
 import { expect, newPerson, type PeriodFacts, type PeriodsCurrent, screenshotPath, test } from './fixtures.ts';
 
@@ -333,6 +334,17 @@ async function visibleLabel(review: Locator): Promise<string> {
   });
 }
 
+/** What the user sees on the Current period button: its full text, or the short form the style sheet draws when the full text is hidden (U-17). */
+async function visibleJumpLabel(button: Locator): Promise<string> {
+  return button.evaluate((element) => {
+    const view = element.ownerDocument.defaultView;
+    if (view === null) throw new Error('no window');
+    const full = element.querySelector('.jump-full');
+    if (full !== null && view.getComputedStyle(full).display !== 'none') return full.textContent?.trim() ?? '';
+    return view.getComputedStyle(element, '::after').content.replace(/^"|"$/g, '');
+  });
+}
+
 async function tops(controls: Locator[]): Promise<number[]> {
   return Promise.all(controls.map(async (control) => (await control.boundingBox())?.y ?? Number.NaN));
 }
@@ -386,7 +398,7 @@ test.describe('phone', () => {
     }
   });
 
-  test('away: the review link is never wrapped: the short form beside Today and Current period at 390, 375 and 360, the full label where it fits', async ({
+  test('away: the review link is never wrapped: the short form beside Today and Current period at 390, 375 and 360, "Current" and the short form beside Today at 320, the full label where it fits', async ({
     page,
     employeeSeed,
     signInThroughUi,
@@ -395,7 +407,8 @@ test.describe('phone', () => {
     await landOn(page, signInThroughUi);
     await awayState(page, periods);
     const withCurrent = isWindow(periods);
-    // 600px is a wide phone (below the 768px layout): the full label fits beside both buttons. 320 is too narrow for three buttons in one row.
+    // 600px is a wide phone (below the 768px layout): the full label fits beside both buttons. At 320 "Current period" shows as "Current" (U-17)
+    // so Today, Current and the review link still share one 44px row (WP5-UX3-T04 replaces the former 320px own-row expectation: stricter, one row fewer).
     for (const width of [600, 390, 375, 360, 320]) {
       await page.setViewportSize({ width, height: 844 });
       const [today, review] = [todayButton(page), reviewLink(page)];
@@ -407,17 +420,19 @@ test.describe('phone', () => {
       const full = ((await review.textContent()) ?? '').trim();
       const sharesRow = spread <= ROW_TOLERANCE;
       const shown = await visibleLabel(review);
-      // Short only for a long label in the three-button row at 390, 375 and 360; everywhere else the full label is shown.
-      const expectShort = withCurrent && full.length > 12 && [390, 375, 360].includes(width);
+      // Short only for a long label in the three-button row at 390, 375, 360 and 320; everywhere else the full label is shown.
+      const expectShort = withCurrent && (width === 320 || (full.length > 12 && [390, 375, 360].includes(width)));
       if (expectShort) expect(shown, `${width}px: the short form`).toBe(SHORT_FORM[full]);
       else expect(shown, `${width}px: the full label`).toBe(full);
-      if (width === 320 && withCurrent) {
-        // The three do not fit one row at 320: Today and Current period share one, the review link takes its own row with the full label.
-        expect(Math.abs((rowTops[0] ?? 0) - (rowTops[1] ?? 0)), '320px: Today and Current period share a row').toBeLessThanOrEqual(ROW_TOLERANCE);
-        expect(sharesRow, '320px: the review link is on its own row').toBe(false);
-      } else {
-        expect(sharesRow, `${width}px: all ${controls.length} controls share a row`).toBe(true);
+      if (withCurrent) {
+        // "Current period" in full from 360 to 600; "Current" only at 320, where the container is 264px (below 18.1rem). The name never changes (SC 2.5.3).
+        const currentShown = await visibleJumpLabel(currentButton(page));
+        if (width === 320) expect(currentShown, '320px: the short form of Current period').toBe('Current');
+        else expect(currentShown, `${width}px: Current period in full`).toBe('Current period');
+        await expect(currentButton(page)).toHaveAccessibleName('Current period');
+        expect('current period', `${width}px: the name contains the visible text`).toContain(currentShown.toLowerCase());
       }
+      expect(sharesRow, `${width}px: all ${controls.length} controls share a row`).toBe(true);
       // One line in every state: 44px high (the 61.5px two-line button is gone).
       expect(reviewBox?.height ?? 0, `${width}px: Review is one line, 44px high`).toBeGreaterThanOrEqual(44);
       expect(reviewBox?.height ?? 0, `${width}px: Review is one line, 44px high`).toBeLessThanOrEqual(45);
@@ -676,6 +691,148 @@ test('the periods are re-read through the share when the window regains focus or
   await expect(page.locator('[data-share-bar-title]')).toBeVisible();
   await expect(page.locator('[data-day]')).toHaveCount(14);
   await expectRefreshTriggers(page, `/api/shared/${owner.account.id}/periods/current`, '/api/periods/current', false);
+});
+
+/* ---- WP5-UX3-T04, G-5 (b): the "in progress" pill ----------------------------------------------------------------- */
+
+/** The period relation pill of the bar (the status badges that follow it are not part of the set). */
+const relationPill = (page: Page) => bar(page).locator('.period-title > .badge:is(.old, .current, .future, .in-progress)');
+
+/** The ink of a pill against its fill, in a theme situation (the page is switched like the other specs do: media plus the manual attribute). */
+async function pillInkContrast(pill: Locator): Promise<number> {
+  const fill = parseColour(await computedStyle(pill, 'backgroundColor'));
+  const flat = over(fill, backdropOf(await backdropsAbove(pill)));
+  const ink = parseColour(await computedStyle(pill, 'color'));
+  return contrast(over(ink, flat), flat);
+}
+
+const THEME_SITUATIONS = [
+  { name: 'light device', scheme: 'light', theme: null },
+  { name: 'dark device', scheme: 'dark', theme: null },
+  { name: 'light device, manual dark', scheme: 'light', theme: 'dark' },
+  { name: 'dark device, manual light', scheme: 'dark', theme: 'light' },
+] as const;
+
+async function showSituation(page: Page, situation: (typeof THEME_SITUATIONS)[number]) {
+  await page.emulateMedia({ colorScheme: situation.scheme });
+  await page.locator('html').evaluate((root, theme) => {
+    if (theme === null) root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', theme);
+  }, situation.theme);
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(450);
+}
+
+test('the period pill follows the server: "in progress" only for the period that contains today during the five window days, "current" for the period before it', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  const periods = await employeeSeed.periodsCurrent();
+  const today = periods.today_local;
+  await landOn(page, signInThroughUi);
+  const pill = relationPill(page);
+  const inProgressPills = bar(page).locator('.badge.in-progress');
+  // The page opens on the R-07 current period: "current" in both branches, and never "in progress" there.
+  await expect(periodName(page)).toHaveText(rangeText(periods.current));
+  await expect(pill).toHaveCount(1);
+  await expect(pill).toHaveText('current');
+  await expect(inProgressPills).toHaveCount(0);
+
+  if (isWindow(periods)) {
+    // The five window days: Today opens the period that contains today, and it reads "in progress" (blue), not "future".
+    await todayButton(page).click();
+    await expectShown(page, periods.in_progress, today);
+    await expect(pill).toHaveText('in progress');
+    await expect(pill).toHaveClass(/\bin-progress\b/);
+    await expect(bar(page).locator('.badge.future')).toHaveCount(0);
+    // Its ink keeps 4.5:1 on its fill in the four theme situations.
+    for (const situation of THEME_SITUATIONS) {
+      await showSituation(page, situation);
+      expect(await pillInkContrast(pill), `${situation.name}: the in progress pill`).toBeGreaterThanOrEqual(4.5);
+    }
+    await showSituation(page, THEME_SITUATIONS[0]);
+    // Current period shows the ended period, still "current"; the one before it is "old".
+    await currentButton(page).click();
+    await expectShown(page, periods.current, today);
+    await expect(pill).toHaveText('current');
+    await previousButton(page).click();
+    await expect(pill).toHaveText('old');
+    await expect(inProgressPills).toHaveCount(0);
+    // The period after the one in progress is "future".
+    await todayButton(page).click();
+    await expectShown(page, periods.in_progress, today);
+    await nextButton(page).click();
+    await expect(pill).toHaveText('future');
+    await expect(inProgressPills).toHaveCount(0);
+  } else {
+    // Outside the window: no "in progress" anywhere, the next period is "future" and the previous one "old". The opposite fact is the window's.
+    expect(periods.in_progress.payroll_date, 'outside the window the period with today is the current one').toBe(periods.current.payroll_date);
+    await nextButton(page).click();
+    await expect(periodName(page)).not.toHaveText(rangeText(periods.current));
+    await expect(pill).toHaveText('future');
+    await expect(inProgressPills).toHaveCount(0);
+    await previousButton(page).click();
+    await expect(periodName(page)).toHaveText(rangeText(periods.current));
+    await expect(pill).toHaveText('current');
+    await previousButton(page).click();
+    await expect(pill).toHaveText('old');
+    await expect(inProgressPills).toHaveCount(0);
+  }
+});
+
+test('the inactive Today differs from the active one by more than hue: a dashed border, and the focus ring is the same', async ({ page, employeeSeed, signInThroughUi }) => {
+  const periods = await employeeSeed.periodsCurrent();
+  await landOn(page, signInThroughUi);
+  const read = async (active: boolean) => {
+    await expectTodayActive(page, active);
+    await page.mouse.move(0, 0);
+    const border = await settledStyle(todayButton(page), 'borderTopColor');
+    const look = await todayButton(page).evaluate((element) => {
+      const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+      return { borderStyle: style?.borderTopStyle ?? '', borderWidth: style?.borderTopWidth ?? '' };
+    });
+    await focusFromKeyboard(todayButton(page));
+    const ring = await measureFocusRing(todayButton(page));
+    expect(ring.ringAgainstBackdrop, `${active ? 'active' : 'inactive'} Today: the focus ring against the card`).toBeGreaterThanOrEqual(3);
+    return { ...look, border, ring: ring.layers };
+  };
+  let active: Awaited<ReturnType<typeof read>>;
+  let inactive: Awaited<ReturnType<typeof read>>;
+  if (isWindow(periods)) {
+    // The opening period is the ended one: Today is active; after the jump the sheet shows today and Today is inactive.
+    active = await read(true);
+    await todayButton(page).click();
+    await expectShown(page, periods.in_progress, periods.today_local);
+    inactive = await read(false);
+  } else {
+    inactive = await read(false);
+    await nextButton(page).click();
+    active = await read(true);
+  }
+  expect(active.borderStyle, 'active Today has a solid border').toBe('solid');
+  expect(inactive.borderStyle, 'inactive Today has a dashed border').toBe('dashed');
+  expect(inactive.borderWidth).toBe(active.borderWidth);
+  expect(inactive.ring, 'the focus ring is the same on both').toBe(active.ring);
+});
+
+test('a shared view reads the pill from the periods of the owner: the same "in progress" rule', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+  test.setTimeout(90_000);
+  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Pill Owner', signature: 'none' });
+  const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Pill Grantee', signature: 'none' });
+  await owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  const periods = await owner.api.call<PeriodsCurrent>('GET', '/api/periods/current');
+  await signInPageAs(grantee.account, `#/shared/${owner.account.id}/timesheet`);
+  await expect(page.locator('[data-share-bar-title]')).toBeVisible();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const pill = relationPill(page);
+  await expect(periodName(page)).toHaveText(rangeText(periods.current));
+  await expect(pill).toHaveText('current');
+  await nextButton(page).click();
+  await expect(periodName(page)).not.toHaveText(rangeText(periods.current));
+  // The next period after the opening one: "in progress" in the window, "future" otherwise (both facts, from the owner's server values).
+  await expect(pill).toHaveText(isWindow(periods) ? 'in progress' : 'future');
+  await expect(bar(page).locator(isWindow(periods) ? '.badge.future' : '.badge.in-progress')).toHaveCount(0);
 });
 
 /* ---- Desktop widths --------------------------------------------------------------------------------------- */

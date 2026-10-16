@@ -1,0 +1,233 @@
+== mut-1020: real start 2026-10-16T03:01:22Z, simulated start 2026-10-20T17:00:00Z, AB8_SHIFT_MS=395917992
+process clock 2026-10-20T17:00:00.119Z (Date.now 1792515600132); America/Los_Angeles Tue, 2026-10-20, 10:00; shift ms 395917992; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts -g period pill follows|pills: each ink|shared view reads the pill|opening period|badge --output=<task>/pw-mut-1020
+
+Running 8 tests using 2 workers
+
+  ok 1 [desktop] › tests\e2e\today.spec.ts:131:1 › Today opens the period that contains today (Current period appears only in the window and returns to the opening period) (1.9s)
+  x  2 [desktop] › tests\e2e\timesheet.spec.ts:1188:1 › the pills: each ink is at least 4.5:1 on its fill, the five fills differ, the words stay, and the displayed pill is its kind (four theme situations) (8.4s)
+  x  3 [desktop] › tests\e2e\today.spec.ts:726:1 › the period pill follows the server: "in progress" only for the period that contains today during the five window days, "current" for the period before it (7.8s)
+  x  4 [mobile] › tests\e2e\timesheet.spec.ts:1188:1 › the pills: each ink is at least 4.5:1 on its fill, the five fills differ, the words stay, and the displayed pill is its kind (four theme situations) (8.1s)
+  x  5 [desktop] › tests\e2e\today.spec.ts:819:1 › a shared view reads the pill from the periods of the owner: the same "in progress" rule (8.3s)
+  ok 6 [mobile] › tests\e2e\today.spec.ts:131:1 › Today opens the period that contains today (Current period appears only in the window and returns to the opening period) (1.5s)
+  x  7 [mobile] › tests\e2e\today.spec.ts:726:1 › the period pill follows the server: "in progress" only for the period that contains today during the five window days, "current" for the period before it (7.7s)
+  x  8 [mobile] › tests\e2e\today.spec.ts:819:1 › a shared view reads the pill from the periods of the owner: the same "in progress" rule (8.2s)
+
+
+  1) [desktop] › tests\e2e\timesheet.spec.ts:1188:1 › the pills: each ink is at least 4.5:1 on its fill, the five fills differ, the words stay, and the displayed pill is its kind (four theme situations)
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('.period-title').locator('.badge.current')
+    Expected: "current"
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" locator('.period-title').locator('.badge.current') with timeout 7000ms
+      - waiting for locator('.period-title').locator('.badge.current')
+
+
+      1197 |   const periods = await employeeSeed.periodsCurrent();
+      1198 |   const inWindow = periods.current.payroll_date !== periods.in_progress.payroll_date;
+    > 1199 |   await expect(title.locator('.badge.current')).toHaveText('current');
+           |                                                 ^
+      1200 |   await page.getByRole('button', { name: 'Next period' }).click();
+      1201 |   await expect(title.locator(inWindow ? '.badge.in-progress' : '.badge.future')).toHaveText(inWindow ? 'in progress' : 'future');
+      1202 |   await expect(title.locator(inWindow ? '.badge.future' : '.badge.in-progress')).toHaveCount(0);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\timesheet.spec.ts:1199:49
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\timesheet-the-pills-each-i-f7df1-kind-four-theme-situations--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\timesheet-the-pills-each-i-f7df1-kind-four-theme-situations--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\timesheet-the-pills-each-i-f7df1-kind-four-theme-situations--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\e2e\today.spec.ts:726:1 › the period pill follows the server: "in progress" only for the period that contains today during the five window days, "current" for the period before it
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('.period-bar').locator('.period-title > .badge:is(.old, .current, .future, .in-progress)')
+    Expected: "current"
+    Received: "in progress"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" locator('.period-bar').locator('.period-title > .badge:is(.old, .current, .future, .in-progress)') with timeout 7000ms
+      - waiting for locator('.period-bar').locator('.period-title > .badge:is(.old, .current, .future, .in-progress)')
+        18 × locator resolved to <span class="badge in-progress">in progress</span>
+           - unexpected value "in progress"
+
+
+      737 |   await expect(periodName(page)).toHaveText(rangeText(periods.current));
+      738 |   await expect(pill).toHaveCount(1);
+    > 739 |   await expect(pill).toHaveText('current');
+          |                      ^
+      740 |   await expect(inProgressPills).toHaveCount(0);
+      741 |
+      742 |   if (isWindow(periods)) {
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\today.spec.ts:739:22
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\today-the-period-pill-foll-219a2-nt-for-the-period-before-it-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\today-the-period-pill-foll-219a2-nt-for-the-period-before-it-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\today-the-period-pill-foll-219a2-nt-for-the-period-before-it-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [desktop] › tests\e2e\today.spec.ts:819:1 › a shared view reads the pill from the periods of the owner: the same "in progress" rule
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('.period-bar').locator('.period-title > .badge:is(.old, .current, .future, .in-progress)')
+    Expected: "current"
+    Received: "in progress"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" locator('.period-bar').locator('.period-title > .badge:is(.old, .current, .future, .in-progress)') with timeout 7000ms
+      - waiting for locator('.period-bar').locator('.period-title > .badge:is(.old, .current, .future, .in-progress)')
+        18 × locator resolved to <span class="badge in-progress">in progress</span>
+           - unexpected value "in progress"
+
+
+      828 |   const pill = relationPill(page);
+      829 |   await expect(periodName(page)).toHaveText(rangeText(periods.current));
+    > 830 |   await expect(pill).toHaveText('current');
+          |                      ^
+      831 |   await nextButton(page).click();
+      832 |   await expect(periodName(page)).not.toHaveText(rangeText(periods.current));
+      833 |   // The next period after the opening one: "in progress" in the window, "future" otherwise (both facts, from the owner's server values).
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\today.spec.ts:830:22
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\today-a-shared-view-reads--8d3a1-r-the-same-in-progress-rule-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\today-a-shared-view-reads--8d3a1-r-the-same-in-progress-rule-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\today-a-shared-view-reads--8d3a1-r-the-same-in-progress-rule-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [mobile] › tests\e2e\timesheet.spec.ts:1188:1 › the pills: each ink is at least 4.5:1 on its fill, the five fills differ, the words stay, and the displayed pill is its kind (four theme situations)
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('.period-title').locator('.badge.current')
+    Expected: "current"
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" locator('.period-title').locator('.badge.current') with timeout 7000ms
+      - waiting for locator('.period-title').locator('.badge.current')
+
+
+      1197 |   const periods = await employeeSeed.periodsCurrent();
+      1198 |   const inWindow = periods.current.payroll_date !== periods.in_progress.payroll_date;
+    > 1199 |   await expect(title.locator('.badge.current')).toHaveText('current');
+           |                                                 ^
+      1200 |   await page.getByRole('button', { name: 'Next period' }).click();
+      1201 |   await expect(title.locator(inWindow ? '.badge.in-progress' : '.badge.future')).toHaveText(inWindow ? 'in progress' : 'future');
+      1202 |   await expect(title.locator(inWindow ? '.badge.future' : '.badge.in-progress')).toHaveCount(0);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\timesheet.spec.ts:1199:49
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\timesheet-the-pills-each-i-f7df1-kind-four-theme-situations--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\timesheet-the-pills-each-i-f7df1-kind-four-theme-situations--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\timesheet-the-pills-each-i-f7df1-kind-four-theme-situations--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [mobile] › tests\e2e\today.spec.ts:726:1 › the period pill follows the server: "in progress" only for the period that contains today during the five window days, "current" for the period before it
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('.period-bar').locator('.period-title > .badge:is(.old, .current, .future, .in-progress)')
+    Expected: "current"
+    Received: "in progress"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" locator('.period-bar').locator('.period-title > .badge:is(.old, .current, .future, .in-progress)') with timeout 7000ms
+      - waiting for locator('.period-bar').locator('.period-title > .badge:is(.old, .current, .future, .in-progress)')
+        18 × locator resolved to <span class="badge in-progress">in progress</span>
+           - unexpected value "in progress"
+
+
+      737 |   await expect(periodName(page)).toHaveText(rangeText(periods.current));
+      738 |   await expect(pill).toHaveCount(1);
+    > 739 |   await expect(pill).toHaveText('current');
+          |                      ^
+      740 |   await expect(inProgressPills).toHaveCount(0);
+      741 |
+      742 |   if (isWindow(periods)) {
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\today.spec.ts:739:22
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\today-the-period-pill-foll-219a2-nt-for-the-period-before-it-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\today-the-period-pill-foll-219a2-nt-for-the-period-before-it-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\today-the-period-pill-foll-219a2-nt-for-the-period-before-it-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) [mobile] › tests\e2e\today.spec.ts:819:1 › a shared view reads the pill from the periods of the owner: the same "in progress" rule
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('.period-bar').locator('.period-title > .badge:is(.old, .current, .future, .in-progress)')
+    Expected: "current"
+    Received: "in progress"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" locator('.period-bar').locator('.period-title > .badge:is(.old, .current, .future, .in-progress)') with timeout 7000ms
+      - waiting for locator('.period-bar').locator('.period-title > .badge:is(.old, .current, .future, .in-progress)')
+        18 × locator resolved to <span class="badge in-progress">in progress</span>
+           - unexpected value "in progress"
+
+
+      828 |   const pill = relationPill(page);
+      829 |   await expect(periodName(page)).toHaveText(rangeText(periods.current));
+    > 830 |   await expect(pill).toHaveText('current');
+          |                      ^
+      831 |   await nextButton(page).click();
+      832 |   await expect(periodName(page)).not.toHaveText(rangeText(periods.current));
+      833 |   // The next period after the opening one: "in progress" in the window, "future" otherwise (both facts, from the owner's server values).
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\today.spec.ts:830:22
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\today-a-shared-view-reads--8d3a1-r-the-same-in-progress-rule-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\today-a-shared-view-reads--8d3a1-r-the-same-in-progress-rule-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-T04\pw-mut-1020\today-a-shared-view-reads--8d3a1-r-the-same-in-progress-rule-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6 failed
+    [desktop] › tests\e2e\timesheet.spec.ts:1188:1 › the pills: each ink is at least 4.5:1 on its fill, the five fills differ, the words stay, and the displayed pill is its kind (four theme situations)
+    [desktop] › tests\e2e\today.spec.ts:726:1 › the period pill follows the server: "in progress" only for the period that contains today during the five window days, "current" for the period before it
+    [desktop] › tests\e2e\today.spec.ts:819:1 › a shared view reads the pill from the periods of the owner: the same "in progress" rule
+    [mobile] › tests\e2e\timesheet.spec.ts:1188:1 › the pills: each ink is at least 4.5:1 on its fill, the five fills differ, the words stay, and the displayed pill is its kind (four theme situations)
+    [mobile] › tests\e2e\today.spec.ts:726:1 › the period pill follows the server: "in progress" only for the period that contains today during the five window days, "current" for the period before it
+    [mobile] › tests\e2e\today.spec.ts:819:1 › a shared view reads the pill from the periods of the owner: the same "in progress" rule
+  2 passed (46.7s)
+exit=1
+process clock 2026-10-20T17:00:47.379Z (Date.now 1792515647390); America/Los_Angeles Tue, 2026-10-20, 10:00; shift ms 395917992; instanceof true
+== mut-1020 real end 2026-10-16T03:02:09Z

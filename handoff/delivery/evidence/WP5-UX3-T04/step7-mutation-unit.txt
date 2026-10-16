@@ -1,0 +1,53 @@
+
+> timesheet@0.1.0 test
+> vitest run tests/client/periodBarModel.test.ts
+
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/periodBarModel.test.ts (18 tests | 2 failed) 13ms
+   ❯ periodPillKind (6)
+     × keeps the server relation on a normal day, whatever the period 4ms
+     × is neutral without a relation, and falls back to the relation while the periods are not known 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/periodBarModel.test.ts > periodPillKind > keeps the server relation on a normal day, whatever the period
+AssertionError: expected 'in-progress' to be 'current' // Object.is equality
+
+Expected: "current"
+Received: "in-progress"
+
+ ❯ tests/client/periodBarModel.test.ts:83:46
+     81|   it('keeps the server relation on a normal day, whatever the period',…
+     82|     expect(periodPillKind(OLD, normalDay)).toBe('old');
+     83|     expect(periodPillKind(ENDED, normalDay)).toBe('current');
+       |                                              ^
+     84|     expect(periodPillKind(NEXT, normalDay)).toBe('future');
+     85|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/client/periodBarModel.test.ts > periodPillKind > is neutral without a relation, and falls back to the relation while the periods are not known
+AssertionError: expected 'in-progress' to be 'neutral' // Object.is equality
+
+Expected: "neutral"
+Received: "in-progress"
+
+ ❯ tests/client/periodBarModel.test.ts:108:71
+    106|
+    107|   it('is neutral without a relation, and falls back to the relation wh…
+    108|     expect(periodPillKind({ payroll_date: '2026-10-30' }, normalDay)).…
+       |                                                                       ^
+    109|     expect(periodPillKind({ payroll_date: '2026-11-13' }, null)).toBe(…
+    110|     expect(periodPillKind(NEXT, null)).toBe('future');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 16 passed (18)
+   Start at  20:01:13
+   Duration  383ms (import 57%, transform 35%, tests 5%, worker 2%)
+
+exit=1

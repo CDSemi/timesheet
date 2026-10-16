@@ -175,6 +175,20 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   chunk-load "Try again" reloads the page.
 - T04 brief written and registered pending.
 - Running: WP5-UX3-T03-FREEZE (committer, alone; 15 source/test paths plus 28 handoff paths).
+- WP5-UX3-T03-FREEZE done: 7cd8c592ba57d7f4a12013bacced948de0fb8c42 on main, pushed (43
+  paths; digest e5b3faf9, 827 files; every check exit 0).
+- Running: WP5-UX3-T04 (worker-high, sonnet; title row with check in/out, pills incl. "in
+  progress", meta row, Open a day row, toolbar spacing, narrow rules) on 7cd8c59 / e5b3faf9.
+- WP5-UX3-T04 done (worker-high, self-reported claude-sonnet-5-5; reported, not independent
+  proof): pill function from server periods ("in progress" blue in the window days; old
+  amber, current green, future pink, neutral grey); title row with check in/out; two-row
+  period card; Open a day row; toolbar spacing; narrow "Sign off" / "Current"; inactive
+  Today look; unit 2065; full e2e desktop 267/0/30, mobile 274/0/23; simulated clock 10-20,
+  10-26, 10-30 all pass; mutation caught; budgets unchanged; main chunk 452.40 kB; verify 0;
+  digest 025b46cf (827 files). Deviations: meta wrap tested with a long zone name; "Open a
+  day" words hide at 320 only; toolbar separator from 768px.
+- T05 brief written and registered pending.
+- Running: WP5-UX3-T04-FREEZE (committer, alone; 11 source/test paths plus 38 handoff paths).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 
