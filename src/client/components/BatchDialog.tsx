@@ -4,8 +4,8 @@ import { conflictDetails } from './dayModel.ts';
 import { sessionText } from './format.ts';
 
 const STATUS_TEXT: Record<DayBatchPreview['entries'][number]['status'], string> = {
-  create: 'new label',
-  update: 'label change',
+  create: 'new category',
+  update: 'category change',
   unchanged: 'no change',
   stale: 'changed elsewhere',
   invalid: 'not valid',

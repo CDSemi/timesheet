@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { Calculation, DayView, PolicyVersion, Session } from '../../src/client/api.ts';
-import { dayBanner, quickBreaksOf, quickBreaksRequest } from '../../src/client/components/dayEditorModel.ts';
+import {
+  cardBreaksText,
+  confirmBreaksDraft,
+  dayBanner,
+  deleteFacts,
+  editorChips,
+  editorTitle,
+  quickBreaksOf,
+  quickBreaksRequest,
+  sessionCardOf,
+} from '../../src/client/components/dayEditorModel.ts';
 import { buildSessionRequest, draftFromSession, resolveStart, suggestedRows } from '../../src/client/components/sessionModel.ts';
 
 const LA = 'America/Los_Angeles';
@@ -147,6 +157,141 @@ describe('one-tap break confirmation of a saved session (R-02)', () => {
   it('offers nothing for a running session or one whose breaks are already confirmed', () => {
     expect(quickBreaksOf(session({ end_utc: null }), POLICY, LA)).toBeNull();
     expect(quickBreaksOf(session({ breaks_confirmed: true }), POLICY, LA)).toBeNull();
+  });
+});
+
+describe('the "Confirm breaks" entry opens the form with the one-tap choice selected (WP5-UX3-T07)', () => {
+  it('saving the draft unchanged sends the body the one-tap "confirm" sent: suggested rows, version and reason', () => {
+    const saved = session();
+    const quick = quickBreaksOf(saved, POLICY, HCM);
+    if (quick === null) throw new Error('a quick confirmation is expected');
+    const draft = confirmBreaksDraft(saved, quick);
+    expect(draft.mode).toBe('confirmed');
+    expect(draft.zone).toBe(LA);
+    expect(buildSessionRequest(draft, { expectedVersion: saved.version, reason: ' late entry ' })).toEqual(quickBreaksRequest(saved, quick, 'confirm', ' late entry '));
+  });
+
+  it('keeps the rows already listed with the session, as the one-tap "confirm as listed" did', () => {
+    const listed = session({ breaks: [{ id: 'b1', start_utc: '2026-09-21T19:00:00Z', end_utc: '2026-09-21T19:20:00Z', counts_as_work: false }] });
+    const quick = quickBreaksOf(listed, POLICY, LA);
+    if (quick === null) throw new Error('a quick confirmation is expected');
+    const draft = confirmBreaksDraft(listed, quick);
+    expect(draft.breaks).toHaveLength(1);
+    expect(buildSessionRequest(draft, { expectedVersion: listed.version, reason: '' })).toEqual(quickBreaksRequest(listed, quick, 'confirm', ''));
+  });
+
+  it('selects "no breaks taken" when no suggested break fits, as the one-tap "none" did', () => {
+    const short = session({ end_utc: '2026-09-21T17:30:00Z' });
+    const quick = quickBreaksOf(short, POLICY, LA);
+    if (quick === null) throw new Error('a quick confirmation is expected');
+    const draft = confirmBreaksDraft(short, quick);
+    expect(draft.mode).toBe('none');
+    expect(draft.breaks).toEqual([]);
+    expect(buildSessionRequest(draft, { expectedVersion: short.version, reason: '' })).toEqual(quickBreaksRequest(short, quick, 'none', ''));
+  });
+});
+
+describe('the chips under the panel title (U-19, U-20)', () => {
+  const zones = { displayZone: LA, reportingZone: LA, readOnly: false };
+
+  it('names the period and the display zone, and the reporting zone only when the two zones differ', () => {
+    expect(editorChips({ relation: 'future', ...zones })).toEqual([
+      { key: 'period', text: 'future period', pill: 'future' },
+      { key: 'times', text: `Times in ${LA}` },
+    ]);
+    const apart = editorChips({ relation: 'old', displayZone: HCM, reportingZone: LA, readOnly: false });
+    expect(apart.map((chip) => chip.text)).toEqual(['old period', `Times in ${HCM}`, `Day in ${LA}`]);
+    expect(editorChips({ relation: 'current', ...zones }).map((chip) => chip.key)).not.toContain('day');
+  });
+
+  it('adds "View only" while the editor cannot change anything', () => {
+    expect(editorChips({ relation: 'current', ...zones, readOnly: true }).map((chip) => chip.text)).toEqual(['current period', `Times in ${LA}`, 'View only']);
+    expect(editorChips({ relation: 'current', ...zones }).map((chip) => chip.key)).not.toContain('view-only');
+  });
+
+  it('takes the period bar pill when it is given, including "in progress", and the day relation otherwise', () => {
+    expect(editorChips({ relation: 'future', pill: 'in-progress', ...zones })[0]).toEqual({ key: 'period', text: 'in progress', pill: 'in-progress' });
+    expect(editorChips({ relation: 'old', pill: 'neutral', ...zones })[0]).toEqual({ key: 'period', text: 'old period', pill: 'old' });
+  });
+
+  it('titles the panel with the accounting date as the person reads it', () => {
+    expect(editorTitle('2026-10-12')).toBe('Mon 10/12/2026');
+    expect(editorTitle('2026-10-18')).toBe('Sun 10/18/2026');
+  });
+});
+
+describe('the session cards of the panel (U-21)', () => {
+  const brk = (id: string, start: string, end: string) => ({ id, start_utc: start, end_utc: end, counts_as_work: false });
+  // 11:00-11:15, 13:00-13:30 and 15:30-15:45 Los Angeles (PDT) on 2026-09-21.
+  const threeBreaks = [
+    brk('b1', '2026-09-21T18:00:00Z', '2026-09-21T18:15:00Z'),
+    brk('b2', '2026-09-21T20:00:00Z', '2026-09-21T20:30:00Z'),
+    brk('b3', '2026-09-21T22:30:00Z', '2026-09-21T22:45:00Z'),
+  ];
+
+  it('a session with confirmed breaks is "Breaks confirmed" with its table in the display zone and the saved minutes', () => {
+    const card = sessionCardOf(session({ breaks_confirmed: true, breaks: threeBreaks }), '2026-09-21', LA);
+    expect(card).toMatchObject({ state: 'confirmed', stateText: 'Breaks confirmed', range: '09:00-18:30', startDate: null, emptyText: null, attentionText: null, runningText: null });
+    expect(card.caption).toBe('Breaks of 09:00-18:30');
+    expect(card.breaks.map((item) => [item.number, item.date, item.start, item.minutes])).toEqual([
+      [1, '09/21', '11:00', 15],
+      [2, '09/21', '13:00', 30],
+      [3, '09/21', '15:30', 15],
+    ]);
+    expect(cardBreaksText(card)).toBe('3 breaks (15, 30, 15 min)');
+  });
+
+  it('shows the same breaks in another display zone, with their date there and the end on a later local day as +1', () => {
+    // Ho Chi Minh is UTC+7: the session reads 23:00 to 08:30 the next day and the breaks start at 01:00, 03:00 and 05:30 on 09/22.
+    const card = sessionCardOf(session({ breaks_confirmed: true, breaks: threeBreaks }), '2026-09-21', HCM);
+    expect(card.range).toBe('23:00-08:30+1');
+    expect(card.breaks.map((item) => `${item.date} ${item.start}`)).toEqual(['09/22 01:00', '09/22 03:00', '09/22 05:30']);
+    expect(card.breaks.map((item) => item.minutes)).toEqual([15, 30, 15]);
+  });
+
+  it('a session confirmed without breaks is "No breaks taken", with its empty state and no table rows', () => {
+    const card = sessionCardOf(session({ breaks_confirmed: true }), '2026-09-21', LA);
+    expect(card).toMatchObject({ state: 'none', stateText: 'No breaks taken', emptyText: 'No breaks taken', attentionText: null });
+    expect(card.breaks).toEqual([]);
+    expect(cardBreaksText(card)).toBe('No breaks taken');
+  });
+
+  it('a session whose breaks are not confirmed asks for them: OT stays pending, listed rows are still shown', () => {
+    const bare = sessionCardOf(session(), '2026-09-21', LA);
+    expect(bare).toMatchObject({ state: 'unconfirmed', stateText: 'Breaks not confirmed', attentionText: 'OT stays pending until breaks are confirmed.', emptyText: null });
+    expect(cardBreaksText(bare)).toBe('Breaks not confirmed');
+    const listed = sessionCardOf(session({ breaks: threeBreaks.slice(0, 1) }), '2026-09-21', LA);
+    expect(listed.state).toBe('unconfirmed');
+    expect(listed.breaks).toHaveLength(1);
+    expect(cardBreaksText(listed)).toBe('1 break (15 min), not confirmed');
+  });
+
+  it('a running session shows "Running since" and no table, whatever its breaks', () => {
+    const card = sessionCardOf(session({ end_utc: null, breaks: threeBreaks }), '2026-09-21', LA);
+    expect(card).toMatchObject({ state: 'running', stateText: 'Running', range: '09:00', runningText: 'Running since 09:00', attentionText: null });
+    expect(card.breaks).toEqual([]);
+  });
+
+  it('names where the session came from: entered by hand in its input zone, or checked in and out', () => {
+    expect(sessionCardOf(session(), '2026-09-21', HCM).source).toBe(`Entered by hand in ${LA}`);
+    expect(sessionCardOf(session({ source: 'clock' }), '2026-09-21', HCM).source).toBe('Checked in and out');
+  });
+
+  it('marks a session that starts on another local date than its accounting date', () => {
+    // The session starts at 22:30 on 09/20 in Los Angeles: on its own accounting date 09/20 nothing is added, on 09/21 the start date is.
+    const card = sessionCardOf(session({ start_utc: '2026-09-21T05:30:00Z', end_utc: '2026-09-21T09:30:00Z' }), '2026-09-20', LA);
+    expect(card.startDate).toBeNull();
+    const other = sessionCardOf(session({ start_utc: '2026-09-21T05:30:00Z', end_utc: '2026-09-21T09:30:00Z' }), '2026-09-21', LA);
+    expect(other.startDate).toBe('09/20');
+  });
+
+  it('lists the day, the time with its zone and the breaks of a session for the delete confirmation', () => {
+    const facts = deleteFacts(session({ breaks_confirmed: true, breaks: threeBreaks }), '2026-09-21', LA);
+    expect(facts).toEqual([
+      { label: 'Day', value: 'Mon 09/21/2026' },
+      { label: 'Time', value: `09:00-18:30 (${LA})` },
+      { label: 'Breaks', value: '3 breaks (15, 30, 15 min)' },
+    ]);
   });
 });
 

@@ -32,6 +32,8 @@
   /* A destructive action: the text on it is --on-danger (6.57:1 and 8.39:1 against the fill) */
   --danger: #b42318;
   --on-danger: #ffffff;
+  /* The destructive button under the pointer: one step stronger, with the same ink */
+  --danger-strong: #8f1d14;
   /* The initials avatar (no photo): fill and ink */
   --avatar-bg: #dbe7f9;
   --avatar-ink: #163f7d;
@@ -151,6 +153,8 @@
   --dialog-fit: 92vw;
   --dialog-fit-wide: 96vw;
   --select-min: 10rem;
+  /* The room the Category select may shrink to before the WFH checkbox wraps below it (U-27) */
+  --label-select-basis: 8rem;
   --switcher-select-min: 6rem;
   --switcher-basis: 16rem;
   --facts-min: 11rem;
@@ -234,6 +238,12 @@
   --layer-lift: 1;
   --sheet-handle-width: 40px;
   --sheet-handle-height: 4px;
+  /* The panel header (WP5-UX3-T07): a 38px icon button (44px on touch, see the control rule), the title size and a confirmation's width */
+  --icon-size: 16px;
+  --icon-button-size: 38px;
+  --font-size-panel-title: 1.15rem;
+  --confirm-width: 28rem;
+  --confirm-label-width: 5rem;
   --picker-min: 11rem;
   --caret-size: 4px;
   --check-width: 5px;
@@ -351,6 +361,7 @@
     --warn: #e3b341;
     --danger: #ff8a80;
     --on-danger: #1a0b0a;
+    --danger-strong: #ffb0a8;
     --avatar-bg: #25395a;
     --avatar-ink: #cfe0ff;
     --pill-current-bg: #163628;
@@ -416,6 +427,7 @@
   --warn: #e3b341;
   --danger: #ff8a80;
   --on-danger: #1a0b0a;
+  --danger-strong: #ffb0a8;
   --avatar-bg: #25395a;
   --avatar-ink: #cfe0ff;
   --pill-current-bg: #163628;
@@ -1206,6 +1218,13 @@ button.secondary {
   color: var(--accent);
 }
 
+/* A destructive confirmation (WP5-UX3-T07): the danger fill with its own ink, one step stronger under the pointer. */
+button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--on-danger);
+}
+
 button.quiet {
   background: transparent;
   border-color: transparent;
@@ -1255,6 +1274,11 @@ button.secondary[aria-pressed='true'] {
     background: var(--accent-strong);
     border-color: var(--accent-strong);
     box-shadow: none;
+  }
+
+  button.danger:hover:not(:disabled) {
+    background: var(--danger-strong);
+    border-color: var(--danger-strong);
   }
 
   /* An inactive button (aria-disabled) keeps its resting look under the pointer, as a disabled one does. */
@@ -2015,6 +2039,65 @@ textarea {
 .dialog h2 {
   margin: 0;
   font-size: var(--font-size-lg);
+}
+
+/*
+ * A confirmation (WP5-UX3-T07, U-22): a head with the question, a body with what it is about (an inset facts box on
+ * --off) and a foot on the panel-head surface that holds the two buttons, the safe one first. It sits on the top layer
+ * above the Day editor, so it needs no z-index.
+ */
+.confirm-dialog {
+  width: min(var(--confirm-width), var(--dialog-fit));
+  padding: 0;
+  overflow: auto;
+}
+
+.confirm-head {
+  padding: var(--space-4);
+  border-bottom: var(--hairline) solid var(--line-soft);
+}
+
+.confirm-body {
+  padding: var(--space-4);
+}
+
+.confirm-body > p {
+  margin: 0;
+}
+
+.confirm-facts {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--off);
+}
+
+.confirm-facts > div {
+  display: grid;
+  grid-template-columns: var(--confirm-label-width) minmax(0, var(--track));
+  gap: var(--space-3);
+}
+
+.confirm-facts dt {
+  color: var(--muted);
+}
+
+.confirm-facts dd {
+  margin: 0;
+  font-weight: var(--font-weight-strong);
+  overflow-wrap: anywhere;
+}
+
+.confirm-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--hairline) solid var(--line-soft);
+  background: var(--panel-head);
 }
 
 .preview-list li,
@@ -3220,20 +3303,6 @@ textarea {
   border-top: var(--hairline) solid var(--line-soft);
 }
 
-.session-item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-3);
-  padding: var(--space-2) 0;
-  border-bottom: var(--hairline) solid var(--line-soft);
-}
-
-.session-item .hint {
-  flex-basis: 100%;
-}
-
 .time-problem,
 .warn-box {
   margin: 0;
@@ -3391,45 +3460,122 @@ textarea {
   background: var(--sheet-rule);
 }
 
+/* The header stands out from the body: its own surface (--panel-head) and a --line rule under it (U-20). The panel's own corners clip it. */
 .day-panel .editor-head {
   position: sticky;
   top: 0;
   z-index: var(--layer-sticky);
   align-items: flex-start;
   padding: var(--space-3) var(--space-4);
-  background: var(--card);
-  border-bottom: var(--hairline) solid var(--line-soft);
+  background: var(--panel-head);
+  border-bottom: var(--hairline) solid var(--line);
 }
 
 .day-panel .editor-head > button {
   flex: none;
 }
 
+/* A 38px square icon button (44px on touch through the control rule above); the glyph is drawn in currentColor. */
+button.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: var(--icon-button-size);
+  height: var(--icon-button-size);
+  padding: 0;
+}
+
+.icon {
+  flex: none;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  vertical-align: middle;
+}
+
+button .icon {
+  margin-right: var(--space-1);
+}
+
+button.icon-button .icon {
+  margin-right: 0;
+}
+
 .editor-title {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .day-panel h2 {
   margin: 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-panel-title);
+  font-weight: var(--font-weight-heavy);
   letter-spacing: var(--letter-spacing-tight);
 }
 
 .day-panel h3 {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-1) var(--space-2);
   margin: 0;
   font-size: var(--font-size-base);
 }
 
-.day-panel h3 .hint {
-  font-weight: normal;
+/* The hidden ISO date in the panel title reads "(2026-10-12)" in the accessible name; the brackets are generated, not text. */
+.iso-date::before {
+  content: '(';
+}
+
+.iso-date::after {
+  content: ')';
+}
+
+/* The chips under the title: the period pill and the zones. Words always; the hue of a period chip repeats its word. */
+.editor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+
+.chip {
+  display: inline-block;
+  padding: var(--hairline) var(--space-2);
+  border: var(--hairline) solid var(--pill-neutral-line);
+  border-radius: var(--radius-pill);
+  background: var(--pill-neutral-bg);
+  color: var(--pill-neutral-ink);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-strong);
+  overflow-wrap: anywhere;
+}
+
+.chip-current {
+  border-color: var(--pill-current-line);
+  background: var(--pill-current-bg);
+  color: var(--pill-current-ink);
+}
+
+.chip-old {
+  border-color: var(--pill-old-line);
+  background: var(--pill-old-bg);
+  color: var(--pill-old-ink);
+}
+
+.chip-future {
+  border-color: var(--pill-future-line);
+  background: var(--pill-future-bg);
+  color: var(--pill-future-ink);
+}
+
+.chip-in-progress {
+  border-color: var(--pill-progress-line);
+  background: var(--pill-progress-bg);
+  color: var(--pill-progress-ink);
+}
+
+.editor-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 /* Headings take focus only as the editor's starting point; they are not controls, so no ring. */
@@ -3470,56 +3616,100 @@ textarea {
   color: var(--error);
 }
 
-.day-panel .session-item {
+/*
+ * Session cards (WP5-UX3-T07, U-21): one inset card per session on the card surface, a hairline ring instead of a heavy
+ * border. The head holds the range and the state pill; below it the source, the break table or the empty state, and the
+ * Edit and Delete buttons. The pill carries its words, so its hue is never the only cue.
+ */
+.session-list {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
-.session-line {
+.session-card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  box-shadow: var(--elev-1);
+}
+
+.session-card > p {
+  margin: 0;
+}
+
+.session-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.session-range {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-heavy);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--hairline) var(--space-2);
+  border: var(--hairline) solid var(--pill-neutral-line);
+  border-radius: var(--radius-pill);
+  background: var(--pill-neutral-bg);
+  color: var(--pill-neutral-ink);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-strong);
+}
+
+.pill-confirmed,
+.pill-none,
+.pill-running {
+  border-color: var(--pill-current-line);
+  background: var(--pill-current-bg);
+  color: var(--pill-current-ink);
+}
+
+.pill-unconfirmed {
+  border-color: var(--pill-old-line);
+  background: var(--pill-old-bg);
+  color: var(--pill-old-ink);
+}
+
+.break-table caption {
+  padding-bottom: var(--space-1);
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  text-align: left;
+}
+
+.break-table th,
+.break-table td {
+  padding: var(--space-1) var(--space-2);
+}
+
+.break-table th:last-child,
+.break-table td:last-child {
+  text-align: right;
+}
+
+.session-attention {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2) var(--space-3);
-}
-
-.session-time {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-strong);
-}
-
-.quick-breaks {
-  display: grid;
-  gap: var(--space-2);
   padding: var(--space-3);
   border-radius: var(--radius);
-  background: var(--off);
-}
-
-.break-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.break-chip {
-  padding: var(--space-1) var(--space-2);
-  border: var(--hairline) dashed var(--sheet-rule-strong);
-  border-radius: var(--radius);
-  background: var(--card);
+  background: var(--attention-bg);
+  color: var(--attention-ink);
   font-size: var(--font-size-sm);
 }
 
-/* Each action keeps its label on one line; they share a row when it fits and stack when it does not. */
-.quick-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.quick-actions button {
-  flex: 1 1 auto;
-  white-space: nowrap;
+.session-attention p {
+  margin: 0;
 }
 
 /* The panel is narrow: times, breaks and leave stack instead of sitting four abreast. */
@@ -3532,11 +3722,24 @@ textarea {
   justify-self: start;
 }
 
+/*
+ * Category and WFH on one row (U-27): the select takes the room that is left (it may shrink to 8rem), the checkbox keeps
+ * its own width. A row narrower than both wraps the checkbox below the select instead of overflowing (320px).
+ */
 .label-row {
-  display: grid;
-  grid-template-columns: minmax(0, var(--track)) auto;
-  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: var(--space-3);
+}
+
+.label-row .label-select {
+  flex: 1 1 var(--label-select-basis);
+  min-width: 0;
+}
+
+.label-row .label-wfh {
+  flex: none;
 }
 
 .leave-fields {
@@ -3572,20 +3775,12 @@ textarea {
 }
 
 @media (max-width: 767px) {
-  .label-row {
-    grid-template-columns: minmax(0, var(--track));
-  }
-
   .leave-grid {
     grid-template-columns: repeat(var(--cols-2), minmax(0, var(--track)));
   }
 
   .leave-grid label:last-child {
     grid-column: 1 / -1;
-  }
-
-  .quick-actions {
-    flex-direction: column;
   }
 
   .editor-actions button {

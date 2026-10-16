@@ -238,6 +238,24 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Đã viết brief T07 và đăng ký ở trạng thái chờ.
 - Đang chạy: WP5-UX3-T05B-FREEZE (committer, chạy một mình; 6 đường dẫn mã nguồn/test cùng 25
   đường dẫn handoff).
+- WP5-UX3-T05B-FREEZE xong: 5c0dad8e41fddc25306e8f2ff28424f815af32ef trên main, đã push (31
+  đường dẫn; digest a17a0ce8, 827 file; mọi bước kiểm exit 0; một lỗi nhỏ `| head -0`).
+- Đang chạy: WP5-UX3-T07 (worker-high, sonnet; phần đầu Day editor và các nhãn, thẻ phiên giờ,
+  hộp xác nhận xóa, hàng WFH, "No times" ở Review và chữ "category change") trên 5c0dad8 /
+  a17a0ce8.
+- Chủ dự án báo chưa thấy câu hỏi nào (nguyên văn trên board); WP5-UX3-Q6 (giờ nghỉ trên điện
+  thoại dạng hàng hay chip; nay khuyến nghị b, chỉ hiện ô ngày khi phiên qua đêm) và câu không
+  bắt buộc về giờ 24h/AM-PM trên chip được hỏi lại riêng. Chỉ chặn T08B.
+- WP5-UX3-T07 xong (worker-high, tự báo claude-sonnet-5-5; kết quả tự báo, chưa phải bằng
+  chứng độc lập): phần đầu có nhãn, thẻ phiên giờ có bảng giờ nghỉ, "Confirm breaks", hộp
+  ConfirmDialog dùng chung cho xóa, WFH cùng hàng Category, vòng tròn ở Review và chữ ở phần
+  xem trước; unit 2091; e2e desktop 289, mobile 287, 0 lỗi; hai đột biến bị bắt; ngân sách màn
+  hình đầu không đổi; gói chính 458.49 kB; verify 0; digest a3cbc3f4 (829 file). Còn mở: prop
+  nhãn "in progress" cho editor (sang T08), ba chuỗi "label" trong duyệt hàng loạt (sang T09),
+  dấu ngoặc tạo bằng CSS trong tên hộp thoại (điểm audit).
+- Đã viết brief T08 (opus, size_risk) và đăng ký ở trạng thái chờ.
+- Đang chạy: WP5-UX3-T07-FREEZE (committer, chạy một mình; 15 đường dẫn mã nguồn/test cùng 29
+  đường dẫn handoff).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

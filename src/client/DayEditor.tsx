@@ -1,18 +1,19 @@
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type DayView, ownRequest, type PolicyVersion, type Requester, type Session, type SessionResponse } from './api.ts';
-import { dayBanner, type QuickBreaks, quickBreaksOf, quickBreaksRequest } from './components/dayEditorModel.ts';
+import { type DayView, ownRequest, type PolicyVersion, type Requester, type Session } from './api.ts';
+import { ConfirmDialog } from './components/ConfirmDialog.tsx';
+import { confirmBreaksDraft, dayBanner, deleteFacts, editorChips, editorTitle, quickBreaksOf } from './components/dayEditorModel.ts';
 import { DayFieldsForm } from './components/DayFieldsForm.tsx';
 import { DayFigures } from './components/DayFigures.tsx';
 import { describeError, isStaleVersion } from './components/errors.ts';
-import { sessionText } from './components/format.ts';
-import { expectedFinishText, inputZoneChoices, policyOn } from './components/sessionModel.ts';
+import type { PeriodPillKind } from './components/periodBarModel.ts';
+import { expectedFinishText, inputZoneChoices, policyOn, type SessionDraft } from './components/sessionModel.ts';
 import { SessionForm } from './components/SessionForm.tsx';
+import { SessionList } from './components/SessionList.tsx';
 import { useBlockSizeProperty } from './components/useBlockSize.ts';
-import { WEEKDAYS } from './components/dayModel.ts';
 import { formatDuration } from '../domain/format.ts';
-import { isoWeekday } from '../domain/dates.ts';
 
-type Editing = { kind: 'none' } | { kind: 'new' } | { kind: 'edit'; sessionId: string };
+/** `draft` is set when the form was opened by "Confirm breaks": it starts with the breaks to confirm selected. */
+type Editing = { kind: 'none' } | { kind: 'new' } | { kind: 'edit'; sessionId: string; draft?: SessionDraft };
 
 const LEAVE_KIND_TEXT = { vacation: 'vacation', sick: 'sick', ot: 'OT' } as const;
 
@@ -31,12 +32,17 @@ function otherModalOpen(editor: HTMLDialogElement): boolean {
  * wherever focus is (unless a nested dialog takes Escape first) and so does Close; the caller
  * returns focus to the day's button.
  *
- * Order inside: the banner of what the day still needs, the times (sessions and breaks, with a
- * one-tap confirmation of suggested or listed breaks), label and leave, then the server's figures.
- * Every write carries the version the editor loaded and, for an old or finalized period, a reason;
+ * Order inside: the head (the accounting date, then chips for the period and the zones), the banner
+ * of what the day still needs, the times (a card per session with its break table; Edit, Delete and
+ * "Confirm breaks" open the session form or the delete confirmation), category and leave, then the
+ * server's figures. Every write carries the version the editor loaded and, for an old or finalized
+ * period, a reason (one reason state, shared by the panel, the form and the delete confirmation);
  * a stale version reloads the day and says so. In a view-only shared view or an imported period
  * (`readOnly`) the editor only shows the day: the reason, the add, edit and delete controls and the
  * day fields form are absent, not disabled.
+ *
+ * Nested dialogs (WP5-UX-B3-01): the delete confirmation is a modal dialog inside this one. It owns
+ * Escape and focus while it is open, and this editor ignores an Escape whose target lies in it.
  */
 export function DayEditor({
   workDate,
@@ -47,6 +53,7 @@ export function DayEditor({
   bottomSheet,
   dockSide = 'right',
   refresh = 0,
+  periodPill,
   onChanged,
   onClose,
   request = ownRequest,
@@ -64,6 +71,8 @@ export function DayEditor({
   dockSide?: 'left' | 'right';
   /** Raised by the page after it changed this day elsewhere (the label picker or a batch): the editor reloads. */
   refresh?: number;
+  /** The pill of the shown period as the period bar draws it (it can say "in progress"); the day's own relation when absent. */
+  periodPill?: PeriodPillKind;
   /** Called after every successful write so the period behind the editor can refresh. */
   onChanged: () => void;
   /** Ends the editor; the caller unmounts it and returns focus to the day's button. */
@@ -75,7 +84,7 @@ export function DayEditor({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const head = useRef<HTMLElement>(null);
-  // The sticky head is 123 to 166px tall; the panel's scroll padding follows it (WP5-UX-AX-01).
+  // The sticky head is about 80px tall (more when its chips wrap); the panel's scroll padding follows it (WP5-UX-AX-01).
   useBlockSizeProperty(head, '--editor-head-size', dialog);
   const heading = useRef<HTMLHeadingElement>(null);
   const timesHeading = useRef<HTMLHeadingElement>(null);
@@ -83,12 +92,16 @@ export function DayEditor({
   const [policies, setPolicies] = useState<PolicyVersion[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Editing>({ kind: 'none' });
+  /** The id of the session whose delete confirmation is open, and the Delete button that opened it. */
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteOpener, setDeleteOpener] = useState<HTMLElement | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [reason, setReason] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [staleNotice, setStaleNotice] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [quickBusy, setQuickBusy] = useState(false);
+  /** Raised after a delete or a "Confirm breaks" save: focus moves to the Times heading once the page has settled. */
+  const [focusTimes, setFocusTimes] = useState(0);
   /** Remounts the forms after a reload, so they start from the reloaded day. */
   const [generation, setGeneration] = useState(0);
   const firstRefresh = useRef(refresh);
@@ -155,6 +168,11 @@ export function DayEditor({
     void load();
   }, [load]);
 
+  // After the page has settled (the confirmation is gone and the list is redrawn) focus goes to the Times heading.
+  useEffect(() => {
+    if (focusTimes > 0) timesHeading.current?.focus();
+  }, [focusTimes]);
+
   // The page changed this day behind the editor: read it again and restart the forms from it.
   useEffect(() => {
     if (refresh === firstRefresh.current) return;
@@ -198,7 +216,17 @@ export function DayEditor({
     onChanged();
   }
 
+  function askDelete(session: Session, button: HTMLElement) {
+    setNotice(null);
+    setActionError(null);
+    setDeleteOpener(button);
+    setDeleting(session.id);
+  }
+
+  /** The delete request of today, sent after the confirmation: the loaded version and, for an old period, the reason. */
   async function remove(session: Session) {
+    if (reasonMissing) return;
+    setDeleteBusy(true);
     setActionError(null);
     try {
       const body: { expected_version: number; reason?: string } = { expected_version: session.version };
@@ -206,41 +234,49 @@ export function DayEditor({
       const response = await request<{ deleted: boolean; day: DayView }>('DELETE', `/sessions/${session.id}`, body);
       setDeleting(null);
       saved(response.day, 'Session deleted.');
+      setFocusTimes((value) => value + 1);
     } catch (caught) {
       setDeleting(null);
       if (isStaleVersion(caught)) stale();
       else setActionError(describeError(caught));
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
-  /** The one-tap break confirmation: the same session update the form sends, with the loaded version. */
-  async function confirmQuick(session: Session, quick: QuickBreaks, choice: 'confirm' | 'none') {
-    if (reasonMissing) return;
-    setQuickBusy(true);
-    setActionError(null);
-    try {
-      const response = await request<SessionResponse>('PUT', `/sessions/${session.id}`, quickBreaksRequest(session, quick, choice, reason));
-      saved(response.day, choice === 'confirm' ? 'Breaks confirmed.' : 'Confirmed: no breaks taken.');
-      timesHeading.current?.focus();
-    } catch (caught) {
-      if (isStaleVersion(caught)) stale();
-      else setActionError(describeError(caught));
-    } finally {
-      setQuickBusy(false);
-    }
+  /**
+   * "Confirm breaks": opens the session form for the session with the breaks the old one-tap rule offered selected (its
+   * saved rows, else the suggested ones inside it). Nothing is sent until Save, and Save sends the body the one-tap
+   * buttons used to send.
+   */
+  function confirmBreaks(session: Session) {
+    const quick = quickBreaksOf(session, policy, displayZone);
+    startEditing({ kind: 'edit', sessionId: session.id, ...(quick === null ? {} : { draft: confirmBreaksDraft(session, quick) }) });
   }
 
   function keyDown(event: KeyboardEvent<HTMLDialogElement>) {
     if (event.key !== 'Escape') return;
+    // An Escape typed inside a dialog nested in this one (the delete confirmation) belongs to that dialog.
+    if (event.target instanceof Element && event.target.closest('dialog') !== event.currentTarget) return;
     event.preventDefault();
     event.stopPropagation();
     onClose();
   }
 
-  const weekday = WEEKDAYS[isoWeekday(workDate) - 1] ?? '';
   const editingSession =
     editing.kind === 'edit' ? day?.sessions.find((session) => session.id === editing.sessionId) : undefined;
+  const deletingSession = deleting === null ? undefined : day?.sessions.find((session) => session.id === deleting);
   const banner = day === null ? null : dayBanner(day);
+  const chips =
+    day === null
+      ? []
+      : editorChips({
+          relation: day.edit.period_relation,
+          ...(periodPill === undefined ? {} : { pill: periodPill }),
+          displayZone,
+          reportingZone,
+          readOnly,
+        });
 
   return (
     <dialog
@@ -258,19 +294,31 @@ export function DayEditor({
       {bottomSheet && <div className="sheet-handle" aria-hidden="true" />}
       <header ref={head} className="editor-head">
         <div className="editor-title">
+          {/*
+            The dialog is named "Day editor Mon 10/12/2026 (2026-10-12)": the role and the ISO date are hidden text around the date as
+            the person reads it. The brackets are generated content (.iso-date), so the heading's text still ends with the ISO date.
+          */}
           <h2 id="day-editor-title" ref={heading} tabIndex={-1}>
-            {readOnly ? 'Day' : 'Day editor'} <span className="mono">{`${weekday} ${workDate}`}</span>
+            <span className="sr-only">{readOnly ? 'Day ' : 'Day editor '}</span>
+            {editorTitle(workDate)}{' '}
+            <span className="sr-only iso-date">{workDate}</span>
           </h2>
-          {day !== null && (
-            <p className="muted hint">
-              {readOnly
-                ? `Accounting date ${workDate} in the reporting zone ${reportingZone}. Times are shown in ${displayZone}. Period: ${day.edit.period_relation}.`
-                : `Accounting date ${workDate} in the reporting zone ${reportingZone}. Times below are typed in an input zone you choose; they are shown in ${displayZone} elsewhere. Period: ${day.edit.period_relation}.`}
-            </p>
+          {chips.length > 0 && (
+            <ul className="plain editor-chips" aria-label="About this day">
+              {chips.map((chip) => (
+                <li key={chip.key}>
+                  <span className={chip.pill === undefined ? 'chip' : `chip chip-${chip.pill}`} data-chip={chip.key}>
+                    {chip.text}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
-        <button type="button" className="quiet" onClick={onClose}>
-          Close
+        <button type="button" className="quiet icon-button" onClick={onClose} aria-label="Close">
+          <svg className="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path d="M3 3l10 10M13 3L3 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
         </button>
       </header>
 
@@ -317,90 +365,35 @@ export function DayEditor({
             )}
 
             <section className="editor-section stack" aria-labelledby="day-editor-times">
-              <h3 id="day-editor-times" ref={timesHeading} tabIndex={-1}>
-                Times <span className="muted hint">shown in {displayZone}</span>
-              </h3>
-              {day.sessions.length === 0 && <p className="muted">No session recorded for this day.</p>}
-              <ul className="plain session-list">
-                {day.sessions.map((session) => {
-                  const quick = readOnly || editing.kind !== 'none' ? null : quickBreaksOf(session, policy, displayZone);
-                  const text = sessionText(session, workDate, displayZone);
-                  return (
-                    <li key={session.id} className="session-item" data-session={session.id}>
-                      <div className="session-line">
-                        <span className="mono session-time">{text}</span>
-                        {!readOnly && (
-                          <span className="button-row">
-                            <button
-                              type="button"
-                              className="secondary"
-                              onClick={() => startEditing({ kind: 'edit', sessionId: session.id })}
-                              aria-label={`Edit session ${session.id}`}
-                            >
-                              Edit
-                            </button>
-                            {deleting === session.id ? (
-                              <button type="button" onClick={() => void remove(session)}>
-                                Confirm delete
-                              </button>
-                            ) : (
-                              <button type="button" className="secondary" onClick={() => setDeleting(session.id)} aria-label={`Delete session ${session.id}`}>
-                                Delete
-                              </button>
-                            )}
-                          </span>
-                        )}
-                      </div>
-                      <span className="muted hint">
-                        {session.source} session, entered in {session.input_zone}
-                        {session.end_utc === null ? '' : `, ${session.breaks.length} break(s) recorded`}
-                      </span>
-                      {quick !== null && (
-                        <div className="quick-breaks" role="group" aria-label={`Breaks of the session ${text}`} data-quick-breaks={quick.kind}>
-                          {quick.chips.length > 0 && (
-                            <ul className="plain break-chips" aria-label={quick.kind === 'suggested' ? 'Suggested breaks' : 'Listed breaks'}>
-                              {quick.chips.map((chip, index) => (
-                                <li key={`${index}-${chip}`} className="mono break-chip">
-                                  {chip}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                          <p className="muted hint">
-                            {quick.kind === 'suggested'
-                              ? 'Suggested from the session start. Nothing is saved until you confirm.'
-                              : quick.kind === 'listed'
-                                ? 'Listed with the session but not confirmed yet.'
-                                : 'No suggested break fits this session. Edit it to list the breaks you took.'}
-                          </p>
-                          <div className="quick-actions">
-                            {quick.kind !== 'none' && (
-                              <button type="button" disabled={quickBusy || reasonMissing} onClick={() => void confirmQuick(session, quick, 'confirm')}>
-                                {quick.kind === 'suggested' ? 'Confirm suggested breaks' : 'Confirm breaks as listed'}
-                              </button>
-                            )}
-                            <button type="button" className="secondary" disabled={quickBusy || reasonMissing} onClick={() => void confirmQuick(session, quick, 'none')}>
-                              No breaks taken
-                            </button>
-                          </div>
-                          {reasonMissing && <p className="muted hint">Enter a reason for this old period above to confirm.</p>}
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-              {!readOnly && editing.kind === 'none' && (
-                <div className="button-row">
+              <div className="editor-section-head">
+                <h3 id="day-editor-times" ref={timesHeading} tabIndex={-1}>
+                  Times
+                </h3>
+                {!readOnly && editing.kind === 'none' && (
                   <button type="button" className="secondary" onClick={() => startEditing({ kind: 'new' })}>
+                    <svg className="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                      <path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
                     Add session
                   </button>
-                </div>
-              )}
+                )}
+              </div>
+              {day.sessions.length === 0 && <p className="muted">No session recorded for this day.</p>}
+              <SessionList
+                sessions={day.sessions}
+                workDate={workDate}
+                zone={displayZone}
+                readOnly={readOnly}
+                canConfirm={editing.kind === 'none'}
+                onEdit={(session) => startEditing({ kind: 'edit', sessionId: session.id })}
+                onConfirmBreaks={confirmBreaks}
+                onDelete={askDelete}
+              />
               {!readOnly && editing.kind === 'new' && (
                 <SessionForm
                   key={`new-${generation}`}
                   workDate={workDate}
+                  displayZone={displayZone}
                   zones={zones}
                   policy={policy}
                   reason={reason}
@@ -411,16 +404,22 @@ export function DayEditor({
                   request={request}
                 />
               )}
-              {!readOnly && editingSession !== undefined && (
+              {!readOnly && editingSession !== undefined && editing.kind === 'edit' && (
                 <SessionForm
-                  key={`${editingSession.id}-${editingSession.version}-${generation}`}
+                  key={`${editingSession.id}-${editingSession.version}-${generation}-${editing.draft === undefined ? 'edit' : 'confirm'}`}
                   workDate={workDate}
                   session={editingSession}
+                  {...(editing.draft === undefined ? {} : { initialDraft: editing.draft })}
+                  displayZone={displayZone}
                   zones={zones}
                   policy={policy}
                   reason={reason}
                   reasonRequired={reasonRequired}
-                  onSaved={(next) => saved(next, 'Session saved.')}
+                  onSaved={(next) => {
+                    saved(next, 'Session saved.');
+                    // A save that began at "Confirm breaks" ends at the Times heading, where the one-tap buttons used to leave focus.
+                    if (editing.draft !== undefined) setFocusTimes((value) => value + 1);
+                  }}
                   onStale={stale}
                   onCancel={() => setEditing({ kind: 'none' })}
                   request={request}
@@ -470,6 +469,28 @@ export function DayEditor({
           </>
         )}
       </div>
+
+      {!readOnly && deletingSession !== undefined && (
+        <ConfirmDialog
+          title="Delete this session?"
+          message="The session and its breaks are deleted. Worked time and OT of the day are calculated again."
+          facts={deleteFacts(deletingSession, workDate, displayZone)}
+          confirmLabel="Delete session"
+          tone="danger"
+          confirmDisabled={reasonMissing}
+          busy={deleteBusy}
+          opener={deleteOpener}
+          onConfirm={() => void remove(deletingSession)}
+          onCancel={() => setDeleting(null)}
+        >
+          {reasonRequired && (
+            <label className="editor-reason">
+              Reason for editing an old or finalized period
+              <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={2} maxLength={500} required />
+            </label>
+          )}
+        </ConfirmDialog>
+      )}
     </dialog>
   );
 }

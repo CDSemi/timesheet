@@ -94,8 +94,9 @@ export function DayFieldsForm({
           <strong>Notice.</strong> {mismatch}
         </p>
       )}
+      {/* U-27: the select and the WFH box share a row; the box wraps below the select only when the row is too narrow. */}
       <div className="label-row">
-        <label>
+        <label className="label-select">
           Category
           <select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value as DayCategory })}>
             {CATEGORIES.map((category) => (
@@ -104,13 +105,13 @@ export function DayFieldsForm({
               </option>
             ))}
           </select>
-          {day.category_source === 'default' && <span className="muted hint">Calendar default. Saving records it as your choice.</span>}
         </label>
-        <label className="inline">
+        <label className="inline label-wfh">
           <input type="checkbox" checked={draft.wfh} onChange={(event) => setDraft({ ...draft, wfh: event.target.checked })} />
           Worked from home (WFH)
         </label>
       </div>
+      {day.category_source === 'default' && <p className="muted hint">Calendar default. Saving records it as your choice.</p>}
       <fieldset className="leave-fields" aria-describedby={`${id}-leave-hint`}>
         <legend>Partial leave</legend>
         <div className="leave-grid">

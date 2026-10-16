@@ -227,6 +227,9 @@ test('an imported period shows "Imported, unverified" with edit, sign and submit
   await namedDayButton(page, layout.cacheDay, 'View').click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add session' })).toHaveCount(0);
+  // WP5-UX3-T07: the panel of an imported day names itself view only and offers no session action at all.
+  await expect(page.getByRole('list', { name: 'About this day' }).getByText('View only', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^(Edit|Delete) session|^Confirm breaks/ })).toHaveCount(0);
   await page.keyboard.press('Escape');
   const status = await statusInPage(page, 'PUT', `/api/days/${layout.cacheDay}`, {
     category: 'Off',

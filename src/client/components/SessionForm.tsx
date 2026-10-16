@@ -29,6 +29,8 @@ import { TimeProblemPrompt } from './TimeProblemPrompt.tsx';
 export function SessionForm({
   workDate,
   session,
+  initialDraft,
+  displayZone,
   zones,
   policy,
   reason,
@@ -41,6 +43,10 @@ export function SessionForm({
   workDate: string;
   /** The session being edited; absent for a new one. */
   session?: Session;
+  /** The draft to start from instead of the saved session (the "Confirm breaks" entry selects the breaks to confirm). */
+  initialDraft?: SessionDraft;
+  /** The zone times are shown in elsewhere; the input-zone hint names it. */
+  displayZone?: string;
   /** Zones offered for the input zone (any IANA zone can be typed); the first is the default (the current display zone, R-07). */
   zones: readonly string[];
   policy: PolicyVersion | undefined;
@@ -53,8 +59,8 @@ export function SessionForm({
   request?: Requester;
 }) {
   const formId = useId();
-  const [draft, setDraft] = useState<SessionDraft>(() =>
-    session === undefined ? newSessionDraft(workDate, zones[0] ?? 'UTC') : draftFromSession(session),
+  const [draft, setDraft] = useState<SessionDraft>(
+    () => initialDraft ?? (session === undefined ? newSessionDraft(workDate, zones[0] ?? 'UTC') : draftFromSession(session)),
   );
   const [problem, setProblem] = useState<TimeProblem | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +136,8 @@ export function SessionForm({
           required
         />
         <span className="muted hint">
-          The IANA zone the times below are typed in. It is saved with the session and never regroups the day.
+          The IANA zone the times below are typed in
+          {displayZone === undefined ? '' : `; they are shown in ${displayZone} elsewhere`}. It is saved with the session and never regroups the day.
         </span>
       </label>
       <datalist id={`${formId}-zones`}>

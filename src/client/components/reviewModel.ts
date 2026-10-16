@@ -21,7 +21,7 @@ import {
 import { describeError } from './errors.ts';
 import { WEEKDAYS } from './dayModel.ts';
 import { minutesText, usShortDate } from './format.ts';
-import { breaksNote, hm, type SheetCheck, type SheetDay, type SheetOt, type SheetWeek, sessionRange, sheetLabel, weeksOf } from './sheetModel.ts';
+import { breaksNote, hm, NO_TIMES_TEXT, type SheetCheck, type SheetDay, type SheetOt, type SheetWeek, sessionRange, sheetLabel, weeksOf } from './sheetModel.ts';
 
 /*
  * Pure logic for the review and sign-off screen. Every business value on that screen (minutes,
@@ -450,7 +450,10 @@ function reviewCheck(day: SnapshotDay): SheetCheck | null {
       return { key: 'confirm_breaks', text: 'Confirm breaks', shape: 'diamond' };
     default:
       if (!day.attendance_expected) return null;
-      return { key: 'missing', text: day.sessions.length === 0 ? 'No times' : 'Missing record', shape: 'square' };
+      // "No times" is the slashed ring, as on the Timesheet page (U-16); "Missing record" keeps its square.
+      return day.sessions.length === 0
+        ? { key: 'missing', text: NO_TIMES_TEXT, shape: 'slashed' }
+        : { key: 'missing', text: 'Missing record', shape: 'square' };
   }
 }
 

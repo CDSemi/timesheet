@@ -217,6 +217,14 @@ test('the review shows the server content for all 14 days, then the sign-off sub
     else if (day.completeness === 'incomplete' || day.completeness === 'incomplete_breaks') await expect(ot, `${day.work_date} OT`).toHaveText('pending');
     else await expect(ot, `${day.work_date} OT`).toHaveCount(0);
   }
+  // WP5-UX3-T07 (U-16): an expected day without a record reads "No times" with the slashed ring, the same shape as on the Timesheet page.
+  const noTimes = page.locator('[data-review-day] [data-check="missing"]:visible');
+  expect(await noTimes.count(), 'the period holds expected days without a record').toBeGreaterThan(0);
+  for (const badge of await noTimes.all()) {
+    await expect(badge).toContainText('No times');
+    await expect(badge.locator('.shape')).toHaveClass(/\bshape-slashed\b/);
+    await expect(badge.locator('.shape')).not.toHaveClass(/\bshape-square\b/);
+  }
   const completeRow = page.locator(`[data-review-day="${completeDay}"]`);
   await expect(completeRow).toContainText('Complete');
   await expect(completeRow).toContainText('3 breaks');

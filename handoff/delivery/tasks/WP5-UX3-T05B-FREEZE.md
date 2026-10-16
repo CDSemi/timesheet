@@ -121,3 +121,14 @@ staged count per group; other modified handoff files; every check with its exit 
 fix, masking or stop reason.
 
 ## Results
+
+- Pre-HEAD 699b1b304390ae556c89c6d3a9ee652a00da5182 (= origin/main); commit
+  5c0dad8e41fddc25306e8f2ff28424f815af32ef on main; pushed yes; remote SHA the same; no tag.
+- Digest before add and on the new HEAD (ls-tree): a17a0ce82faac6f99e3fc0e53bdb02289784776efce6e969966bcf5dcb14aeb9
+  (827 files) both times.
+- Staged 31: 6 source/tests + 25 handoff (5 modified, 2 task records, 18 evidence: 2 T05-FREEZE,
+  16 T05B). Other modified handoff files: none beyond the 5 listed; `git diff --stat` and the
+  ignore-eol stat were identical (11 files, 713 insertions, 76 deletions), no line-ending-only change.
+- Checks 1-11 all exit 0 (details in evidence/WP5-UX3-T05B-FREEZE/checks.txt); precommit 31 files,
+  0 findings; validate_orchestration PASS; check_recovery 106; preflight PASS.
+- No fix, no masking, no stop. Deviation: one harmless `| head -0` in a grep probe (no output used).

@@ -253,10 +253,14 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
   await namedDayButton(page, workDay, 'View').click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('heading', { name: new RegExp(`Day .*${workDay}`) })).toBeVisible();
+  // WP5-UX3-T07: a view-only day says so in a chip under the title.
+  await expect(dialog.getByRole('list', { name: 'About this day' }).getByText('View only', { exact: true })).toBeVisible();
   await expect(dialog.locator('[data-day-fields="read-only"]')).toContainText(note);
-  for (const name of ['Add session', 'Save day fields', 'Confirm delete']) {
+  // "Confirm delete" became the confirmation's "Delete session" button; neither exists, nor does "Confirm breaks" or the confirmation itself.
+  for (const name of ['Add session', 'Save day fields', 'Delete session', 'Confirm breaks']) {
     await expect(dialog.getByRole('button', { name }), name).toHaveCount(0);
   }
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: /^(Edit|Delete) session/ })).toHaveCount(0);
   await expect(dialog.locator('textarea')).toHaveCount(0);
   await page.screenshot({ path: screenshotPath(`sharing-view-only-day-${project}-synthetic.png`), animations: 'disabled' });

@@ -221,6 +221,22 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   the gate and audit briefs.
 - T07 brief written and registered pending.
 - Running: WP5-UX3-T05B-FREEZE (committer, alone; 6 source/test paths plus 25 handoff paths).
+- WP5-UX3-T05B-FREEZE done: 5c0dad8e41fddc25306e8f2ff28424f815af32ef on main, pushed (31
+  paths; digest a17a0ce8, 827 files; every check exit 0; one `| head -0` slip).
+- Running: WP5-UX3-T07 (worker-high, sonnet; editor header and chips, session cards, delete
+  confirmation, WFH row, review "No times" and "category change") on 5c0dad8 / a17a0ce8.
+- The owner said he had not seen any question (verbatim on the board); WP5-UX3-Q6 (phone
+  break rows or chips; now recommended b, date field only for overnight sessions) and the
+  optional 24-hour/AM-PM chip item were re-asked on their own. They block only T08B.
+- WP5-UX3-T07 done (worker-high, self-reported claude-sonnet-5-5; reported, not independent
+  proof): header with chips, session cards with break tables, "Confirm breaks", reusable
+  ConfirmDialog for delete, WFH on the Category row, review ring and preview words; unit
+  2091; e2e desktop 289, mobile 287, 0 failed; two mutations caught; budgets unchanged; main
+  chunk 458.49 kB; verify 0; digest a3cbc3f4 (829 files). Open points: the editor's "in
+  progress" chip prop (to T08), three batch-review "label" strings (to T09), generated-content
+  brackets in the dialog name (audit focus).
+- T08 brief written (opus, size_risk) and registered pending.
+- Running: WP5-UX3-T07-FREEZE (committer, alone; 15 source/test paths plus 29 handoff paths).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

@@ -496,6 +496,14 @@ describe('the review payload on the sheet', () => {
     expect(cell({ completeness: 'calculation_error', calculation_error: 'overlap' })).toMatchObject({ ot: 'na', check: 'error' });
   });
 
+  it('draws "No times" as the slashed ring and "Missing record" as the square, like the Timesheet page (U-16)', () => {
+    const noTimes = reviewSheetDay(day('2026-09-29', { completeness: 'no_records' }), zone);
+    expect(noTimes.check).toEqual({ key: 'missing', text: 'No times', shape: 'slashed' });
+    // Times without a calculation are not "no times": the record is missing and keeps its square.
+    const missing = reviewSheetDay(day('2026-09-29', { completeness: 'no_records', sessions: [session('2026-09-29', '09:00', '17:00')] }), zone);
+    expect(missing.check).toEqual({ key: 'missing', text: 'Missing record', shape: 'square' });
+  });
+
   it('writes the label, the leave line and the note in full', () => {
     const holiday = reviewSheetDay(day('2026-11-26', { day_class: 'nonworking', holiday_name: 'Synthetic Day', category: 'Holiday' }), zone);
     expect(holiday).toMatchObject({ nonworking: true, label: { main: 'Synthetic Day', lines: ['Holiday'], note: false } });
