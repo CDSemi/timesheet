@@ -1,0 +1,40 @@
+// WP5-UX3-AUDIT-A item 11: durations of the two regate timeout tests (and the slowest tests) in Playwright list logs.
+// Usage: node durations.mjs <out.txt> <log> [<log> ...]
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [out, ...logs] = process.argv.slice(2);
+const lines = [];
+const toMs = (text) => {
+  const m = /\(([\d.]+)(ms|s|m)\)\s*$/.exec(text);
+  if (m === null) return null;
+  const v = Number(m[1]);
+  return m[2] === 'ms' ? v : m[2] === 's' ? v * 1000 : v * 60000;
+};
+for (const log of logs) {
+  const text = readFileSync(log, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
+  const rows = text.split(/\r?\n/).filter((l) => /^\s+(ok|x|-|✓|✘)\s+\d+ \[/.test(l));
+  const pick = (re) => rows.filter((l) => re.test(l));
+  const theme = pick(/theme\.spec\.ts:413/);
+  const open = pick(/timesheet\.spec\.ts:1799/);
+  const describe = (set, wantDesktop = false) => {
+    const d = set.map((l) => ({ ok: /^\s+ok/.test(l), ms: toMs(l), project: /\[(\w[\w-]*)\]/.exec(l)?.[1] }));
+    const mob = d.filter((x) => (wantDesktop ? x.project === 'desktop' : x.project !== 'desktop'));
+    const ms = mob.map((x) => x.ms ?? 0).sort((a, b) => a - b);
+    const fails = mob.filter((x) => !x.ok).length;
+    return `${mob.length} mobile runs, ${fails} failed, durations ms min ${ms[0] ?? '-'} median ${ms[Math.floor(ms.length / 2)] ?? '-'} max ${ms.at(-1) ?? '-'} [${ms.join(' ')}]`;
+  };
+  const all = rows.map((l) => ({ l, ms: toMs(l) ?? 0 })).sort((a, b) => b.ms - a.ms);
+  const summary = text.split(/\r?\n/).filter((l) => /^\s+\d+ (passed|failed|skipped|flaky|did not run)/.test(l) || /^exit=/.test(l)).map((l) => l.trim());
+  const fails = rows.filter((l) => /^\s+(x|✘)\s/.test(l)).map((l) => l.trim().slice(0, 200));
+  lines.push(`== ${log.replace(/^.*[\\/]/, '')}: ${summary.join('; ')}`);
+  lines.push(`  theme.spec.ts:413 (mobile): ${describe(theme)}`);
+  lines.push(`  timesheet.spec.ts:1799 (mobile): ${describe(open)}`);
+  lines.push(`  theme.spec.ts:413 (desktop, 30 s budget): ${describe(theme, true).replace('mobile runs', 'desktop runs')}`);
+  // Tests with the default 30 s budget that used more than 60% of it (setTimeout tests are listed too; check them by hand).
+  const near = rows.map((l) => ({ l, ms: toMs(l) ?? 0 })).filter((x) => x.ms >= 18000 && x.ms < 60000).map((x) => `${(x.ms / 1000).toFixed(1)}s ${x.l.trim().replace(/^\S+\s+\d+\s+/, '').slice(0, 70)}`);
+  lines.push(`  tests between 18 and 60 s: ${near.length} ${near.join(' | ')}`);
+  lines.push(`  failed lines: ${fails.length ? fails.join(' || ') : 'none'}`);
+  lines.push(`  slowest five: ${all.slice(0, 5).map((x) => `${(x.ms / 1000).toFixed(1)}s ${x.l.trim().replace(/^\S+\s+\d+\s+/, '').slice(0, 90)}`).join(' | ')}`);
+}
+writeFileSync(out, lines.join('\n') + '\n');
+console.log(lines.join('\n'));

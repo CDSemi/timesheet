@@ -1,0 +1,45 @@
+
+Running 8 tests using 1 worker
+
+  ok 1 [desktop] › tests\e2e\zz-a-sheet.spec.ts:137:1 › editor frame on every row and surface, light and dark, DPR 1 (18.6s)
+  ok 2 [desktop] › tests\e2e\zz-a-sheet.spec.ts:169:1 › 108px minimum and word fit at extra widths; dock side for every weekday (15.6s)
+  ok 3 [desktop] › tests\e2e\zz-a-sheet.spec.ts:212:1 › 768-899px: keyboard through the week cards, every focused control and ring inside the visible card (4.9s)
+  x  4 [desktop] › tests\e2e\zz-a-sheet.spec.ts:255:1 › names: Category and Status rows, the "No times" shape, the editor header chips and the WFH row (2.0m)
+  -  5 [mobile] › tests\e2e\zz-a-sheet.spec.ts:137:1 › editor frame on every row and surface, light and dark, DPR 1
+  -  6 [mobile] › tests\e2e\zz-a-sheet.spec.ts:169:1 › 108px minimum and word fit at extra widths; dock side for every weekday
+  -  7 [mobile] › tests\e2e\zz-a-sheet.spec.ts:212:1 › 768-899px: keyboard through the week cards, every focused control and ring inside the visible card
+  -  8 [mobile] › tests\e2e\zz-a-sheet.spec.ts:255:1 › names: Category and Status rows, the "No times" shape, the editor header chips and the WFH row
+
+
+  1) [desktop] › tests\e2e\zz-a-sheet.spec.ts:255:1 › names: Category and Status rows, the "No times" shape, the editor header chips and the WFH row 
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.boundingBox: Test timeout of 120000ms exceeded.
+    Call log:
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByLabel('Category', { exact: true })
+
+
+      283 |   const select = editor.getByLabel('Category', { exact: true });
+      284 |   const wfh = editor.getByLabel('Worked from home (WFH)');
+    > 285 |   const [sb, wb] = [await select.boundingBox(), await wfh.boundingBox()];
+          |                                  ^
+      286 |   note('sheet.txt', `editor labelledby ${name}; head text "${head.replace(/\s+/g, ' ')}"; Category select bottom ${((sb?.y ?? 0) + (sb?.height ?? 0)).toFixed(1)} WFH bottom ${((wb?.y ?? 0) + (wb?.height ?? 0)).toFixed(1)} same row ${Math.abs((sb?.y ?? 0) + (sb?.height ?? 0) - (wb?.y ?? 0) - (wb?.height ?? 0)) < 14}`);
+      287 |   void LA;
+      288 | });
+        at <task>\export-p\tests\e2e\zz-a-sheet.spec.ts:285:34
+
+    Error Context: ..\pw-zz-a-sheet\zz-a-sheet-names-Category--15c68-eader-chips-and-the-WFH-row-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-zz-a-sheet\zz-a-sheet-names-Category--15c68-eader-chips-and-the-WFH-row-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-zz-a-sheet\zz-a-sheet-names-Category--15c68-eader-chips-and-the-WFH-row-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\zz-a-sheet.spec.ts:255:1 › names: Category and Status rows, the "No times" shape, the editor header chips and the WFH row 
+  4 skipped
+  3 passed (2.8m)

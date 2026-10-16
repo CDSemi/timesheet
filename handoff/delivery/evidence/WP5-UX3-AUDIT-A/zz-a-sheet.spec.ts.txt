@@ -1,0 +1,288 @@
+import type { Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { expect, newPerson, SeedClient, test, type BuiltServer, type Person } from './fixtures.ts';
+import { namedDayButton } from './dayButton.ts';
+import { note, shot } from './zz-alib.ts';
+import { decodePng, pixel } from './zz-png.ts';
+
+/*
+ * WP5-UX3-AUDIT-A items 1, 5 and 6 (task-local probe, never in the repository): the editor frame as painted on every row
+ * and surface (light and dark, DPR 1 and 2), the 108px minimum and word fit at extra widths, the floating panel's dock side
+ * for every weekday, the 768-899px card scroll by keyboard, Category/Status names and the "No times" shape, the editor
+ * header and WFH row.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+test.skip(({ isMobile }) => isMobile, 'desktop project');
+
+const LA = 'America/Los_Angeles';
+
+function channel(v: number): number {
+  const s = v / 255;
+  return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+}
+function contrast(a: [number, number, number], b: [number, number, number]): number {
+  const la = 0.2126 * channel(a[0]) + 0.7152 * channel(a[1]) + 0.0722 * channel(a[2]);
+  const lb = 0.2126 * channel(b[0]) + 0.7152 * channel(b[1]) + 0.0722 * channel(b[2]);
+  const [hi, lo] = la > lb ? [la, lb] : [lb, la];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+interface Seeded {
+  person: Person;
+  dates: string[];
+  holiday: string;
+  unconfirmed: string;
+  complete: string;
+}
+
+async function seed(server: BuiltServer): Promise<Seeded> {
+  const admin = await new SeedClient(server.origin).signIn(server.credentials.admin.email, server.credentials.admin.password);
+  const person = await newPerson(admin, server, { displayName: 'Synthetic Frame Reader', signature: 'none' });
+  const sheet = await person.api.call<{ period: { period_start: string }; days: Array<{ work_date: string }> }>('GET', `/api/timesheets/${person.payrollDate}`);
+  const holiday = addDays(sheet.period.period_start, 1);
+  const calendar = await admin.call<{ id: string }>('GET', '/api/calendar');
+  const csv = ['date,name,kind', `${holiday},Observed Independence Day,holiday`].join('\n');
+  const body = { calendar_id: calendar.id, year: Number(holiday.slice(0, 4)), effective_from: sheet.period.period_start, csv, remove_dates: [] };
+  const preview = await admin.call<{ preview_hash: string }>('POST', '/api/admin/calendar/import/preview', body);
+  await admin.call('POST', '/api/admin/calendar/import/commit', { ...body, preview_hash: preview.preview_hash }, 201);
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  const unconfirmed = free[0] ?? '';
+  const complete = free[1] ?? '';
+  if (unconfirmed !== '') await person.api.seedUnconfirmedBreaksDay(unconfirmed);
+  if (complete !== '') await person.api.seedCompleteDay(complete);
+  return { person, dates: sheet.days.map((d) => d.work_date), holiday, unconfirmed, complete };
+}
+
+async function signIn(page: Page, server: BuiltServer, person: Person) {
+  await page.goto(`${server.origin}/#/timesheet`);
+  await page.getByLabel('Email').fill(person.account.email);
+  await page.getByLabel('Password').fill(person.account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+}
+
+/** The editor frame of an open column, read from a screenshot: per row, the frame pixel at both edges against the surface 3px inside. */
+async function framePixels(page: Page, date: string, dpr: number, label: string) {
+  const column = page.locator(`.week-grid [data-day="${date}"]`);
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(250);
+  const box = await column.boundingBox();
+  if (box === null) return;
+  const rows = await column.evaluate((c) => [...c.children].filter((n) => n.tagName === 'DIV').map((n) => {
+    const r = n.getBoundingClientRect();
+    return { name: n.className, y: r.top + r.height / 2 };
+  }));
+  const clip = { x: Math.floor(box.x) - 4, y: Math.floor(box.y) - 4, width: Math.ceil(box.width) + 8, height: Math.ceil(box.height) + 8 };
+  const png = await page.screenshot({ clip, scale: 'device', animations: 'disabled', caret: 'hide' });
+  const im = decodePng(png);
+  const out: string[] = [];
+  let lowest = 99;
+  for (const row of rows) {
+    const y = Math.round((row.y - clip.y) * dpr);
+    // Find the most accent-like (most blue-dominant) device column within the first and last 3 device px of the column box.
+    const leftEdge = Math.round((box.x - clip.x) * dpr);
+    const rightEdge = Math.round((box.x + box.width - clip.x) * dpr);
+    const pick = (from: number, to: number) => {
+      let best = from;
+      let score = -999;
+      for (let x = from; x <= to; x += 1) {
+        const [r, g, b] = pixel(im, x, y);
+        const s = b - (r + g) / 2;
+        if (s > score) {
+          score = s;
+          best = x;
+        }
+      }
+      return best;
+    };
+    const xl = pick(leftEdge - 1, leftEdge + 2 * dpr);
+    const xr = pick(rightEdge - 2 * dpr - 2, rightEdge);
+    const frameL = pixel(im, xl, y);
+    const frameR = pixel(im, xr, y);
+    const insideL = pixel(im, xl + 3 * dpr, y);
+    const insideR = pixel(im, xr - 3 * dpr, y);
+    const cl = contrast(frameL, insideL);
+    const cr = contrast(frameR, insideR);
+    lowest = Math.min(lowest, cl, cr);
+    out.push(`${row.name}: L ${cl.toFixed(2)} (${frameL.join(',')} on ${insideL.join(',')}) R ${cr.toFixed(2)} (${frameR.join(',')} on ${insideR.join(',')})`);
+  }
+  note('sheet.txt', `frame ${label}: lowest ${lowest.toFixed(2)} | ${out.join(' | ')}`);
+  return png;
+}
+
+const SHEET_FACTS = `(() => {
+  const context = document.createElement('canvas').getContext('2d');
+  let tightest = 0; let words = 0; const tooWide = [];
+  const columns = [...document.querySelectorAll('.week-grid .sheet-day')].map((c) => c.getBoundingClientRect().width);
+  for (const cell of document.querySelectorAll('.week-grid .sheet-day > div')) {
+    const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const text = node.textContent ?? '';
+      if (text.trim() === '') continue;
+      let host = node.parentElement;
+      while (host !== null && getComputedStyle(host).display === 'inline') host = host.parentElement;
+      if (host === null || host.clientWidth <= 2) continue;
+      const style = getComputedStyle(host);
+      const room = host.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      context.font = [style.fontStyle, style.fontWeight, style.fontSize, style.fontFamily].join(' ');
+      for (const word of text.split(/\\s+/)) { if (word === '') continue; const w = context.measureText(word).width; words += 1; tightest = Math.max(tightest, w / room); if (w > room + 0.5) tooWide.push(word + ' ' + w.toFixed(1) + '>' + room.toFixed(1)); }
+    }
+  }
+  // Rendered overlap: any cell child whose scrollWidth exceeds its clientWidth.
+  const overflowing = [...document.querySelectorAll('.week-grid .sheet-day > div, .week-grid .sheet-day > div *')].filter((e) => e.clientWidth > 2 && e.scrollWidth > e.clientWidth + 1).length;
+  const root = document.documentElement;
+  return { min: Math.min(...columns), max: Math.max(...columns), words, tightest, tooWide, overflowing, sideways: root.scrollWidth - root.clientWidth };
+})()`;
+
+test('editor frame on every row and surface, light and dark, DPR 1', async ({ page, privateServer }) => {
+  test.setTimeout(240_000);
+  const data = await seed(privateServer);
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    for (const width of [1366, 1440, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      if (theme === 'light' && width === 1366) await signIn(page, privateServer, data.person);
+      const sat = data.dates[5] ?? '';
+      for (const [kind, date] of [
+        ['holiday (non-working)', data.holiday],
+        ['unconfirmed (attention)', data.unconfirmed],
+        ['complete', data.complete],
+        ['Saturday (non-working)', sat],
+      ] as const) {
+        if (date === '') continue;
+        await namedDayButton(page, date, 'Edit').click();
+        const editor = page.getByRole('dialog', { name: /Day editor/ });
+        await expect(editor).toBeVisible();
+        await page.waitForTimeout(300);
+        const png = await framePixels(page, date, 1, `${theme} ${width} ${kind} ${date}`);
+        if (png !== undefined && theme === 'light' && width === 1440 && kind.startsWith('unconfirmed')) {
+          const { writeFileSync } = await import('node:fs');
+          writeFileSync(shot('frame-attention-1440-light.png'), png);
+        }
+        await page.keyboard.press('Escape');
+        await expect(editor).toHaveCount(0);
+      }
+    }
+  }
+});
+
+test('108px minimum and word fit at extra widths; dock side for every weekday', async ({ page, privateServer }) => {
+  test.setTimeout(240_000);
+  const data = await seed(privateServer);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, privateServer, data.person);
+  await page.getByRole('switch', { name: 'Show details' }).check();
+  const lines: string[] = [];
+  for (const width of [900, 1024, 1279, 1359, 1360, 1400, 1536, 1600, 1680, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.waitForTimeout(200);
+    const closed = (await page.evaluate(SHEET_FACTS)) as { min: number; max: number; tightest: number; tooWide: string[]; overflowing: number; sideways: number };
+    await namedDayButton(page, data.holiday, 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await page.waitForTimeout(300);
+    const modal = await editor.evaluate((e) => e.matches(':modal'));
+    const open = (await page.evaluate(SHEET_FACTS)) as typeof closed;
+    lines.push(
+      `${width}: closed min ${closed.min.toFixed(1)} tight ${(closed.tightest * 100).toFixed(0)}% tooWide ${closed.tooWide.length} overflowing ${closed.overflowing} sideways ${closed.sideways}; editor ${modal ? 'modal' : 'beside'} min ${open.min.toFixed(1)} max ${open.max.toFixed(1)} tight ${(open.tightest * 100).toFixed(0)}% tooWide ${open.tooWide.length} [${open.tooWide.join('; ')}] overflowing ${open.overflowing} sideways ${open.sideways}`,
+    );
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+  }
+  note('sheet.txt', `widths: ${lines.join(' | ')}`);
+  // Dock side for every weekday of week 1 and week 2 at 1280 and 1024.
+  for (const width of [1280, 1024]) {
+    await page.setViewportSize({ width, height: 800 });
+    const docks: string[] = [];
+    for (const date of data.dates) {
+      await namedDayButton(page, date, 'Edit').click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toBeVisible();
+      await page.waitForTimeout(200);
+      const [panel, col] = [await editor.boundingBox(), await page.locator(`.week-grid [data-day="${date}"]`).boundingBox()];
+      const separate = (col?.x ?? 0) + (col?.width ?? 0) <= (panel?.x ?? 0) + 0.5 || (panel?.x ?? 0) + (panel?.width ?? 0) <= (col?.x ?? 0) + 0.5;
+      docks.push(`${date.slice(5)} ${await editor.getAttribute('data-side')} ${separate ? 'clear' : 'OVERLAP'}`);
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+    }
+    note('sheet.txt', `dock ${width}: ${docks.join(', ')}`);
+  }
+});
+
+test('768-899px: keyboard through the week cards, every focused control and ring inside the visible card', async ({ page, privateServer }) => {
+  test.setTimeout(240_000);
+  const data = await seed(privateServer);
+  await page.setViewportSize({ width: 820, height: 900 });
+  await signIn(page, privateServer, data.person);
+  for (const details of [false, true]) {
+    if (details) await page.getByRole('switch', { name: 'Show details' }).check();
+    for (const width of [768, 820, 880, 899]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForTimeout(250);
+      await page.locator('.sheet-week').first().evaluate((c) => c.scrollTo(0, 0));
+      await page.getByRole('button', { name: 'Change several days' }).focus();
+      let bad = 0;
+      let stops = 0;
+      const misses: string[] = [];
+      for (let i = 0; i < 40; i += 1) {
+        await page.keyboard.press('Tab');
+        const fact = await page.evaluate(() => {
+          const a = document.activeElement as HTMLElement | null;
+          const card = a?.closest('.sheet-week');
+          if (a === null || card === null || card === undefined) return null;
+          const r = a.getBoundingClientRect();
+          const c = card.getBoundingClientRect();
+          const ring = 3;
+          const ok = r.left - ring >= c.left - 0.5 && r.right + ring <= c.left + card.clientWidth + 0.5;
+          return { ok, name: (a.getAttribute('aria-label') ?? a.textContent ?? '').trim().slice(0, 40), room: Math.min(r.left - c.left, c.left + card.clientWidth - r.right) };
+        });
+        if (fact === null) {
+          if (stops > 0) break;
+          continue;
+        }
+        stops += 1;
+        if (!fact.ok) {
+          bad += 1;
+          misses.push(`${fact.name} room ${fact.room.toFixed(1)}`);
+        }
+      }
+      const sideways = await page.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth');
+      note('sheet.txt', `card walk ${width} details ${details}: stops ${stops}, ring outside the visible card ${bad} ${misses.join('; ')}; page sideways ${sideways}`);
+    }
+  }
+});
+
+test('names: Category and Status rows, the "No times" shape, the editor header chips and the WFH row', async ({ page, privateServer }) => {
+  test.setTimeout(120_000);
+  const data = await seed(privateServer);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, privateServer, data.person);
+  const rowLabels = await page.locator('.week-grid').first().locator('.row-labels > div').allTextContents();
+  const shape = await page.locator('.week-grid').first().evaluate((g) => {
+    const s = [...g.querySelectorAll('.d-check *')].find((e) => (e.textContent ?? '').includes('No times'));
+    const marker = s?.parentElement?.querySelector('[class*="shape"], .shape, [data-shape]') as HTMLElement | null;
+    if (marker === null || marker === undefined) return 'no marker found';
+    const cs = getComputedStyle(marker);
+    const before = getComputedStyle(marker, '::before');
+    return `class "${marker.className}" radius ${cs.borderRadius} border ${cs.borderTopWidth} ${cs.borderTopStyle} bg ${cs.backgroundColor} before content ${before.content} transform ${before.transform} width ${before.width}`;
+  });
+  note('sheet.txt', `row labels: ${rowLabels.join(' / ')}; No times marker: ${shape}`);
+  const radii = await page.evaluate(() => {
+    const r = (sel: string) => {
+      const e = document.querySelector(sel);
+      return e === null ? `${sel}: none` : `${sel}: radius ${getComputedStyle(e).borderRadius} shadow ${getComputedStyle(e).boxShadow === 'none' ? 'none' : 'set'}`;
+    };
+    return [r('.sheet-week'), r('.sheet-footer'), r('.period-bar'), r('.page-head'), r('.tools'), r('header.shell-bar')].join(' | ');
+  });
+  note('sheet.txt', `shapes: ${radii}`);
+  await namedDayButton(page, data.unconfirmed, 'Edit').click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  const name = await editor.evaluate((e) => e.getAttribute('aria-labelledby'));
+  const head = await editor.locator('.day-panel-head, header').first().innerText().catch(() => '');
+  const select = editor.locator('.label-row select');
+  const wfh = editor.locator('.label-row .label-wfh');
+  const [sb, wb] = [await select.boundingBox(), await wfh.boundingBox()];
+  note('sheet.txt', `editor labelledby ${name}; head text "${head.replace(/\s+/g, ' ')}"; Category select bottom ${((sb?.y ?? 0) + (sb?.height ?? 0)).toFixed(1)} WFH bottom ${((wb?.y ?? 0) + (wb?.height ?? 0)).toFixed(1)} same row ${Math.abs((sb?.y ?? 0) + (sb?.height ?? 0) - (wb?.y ?? 0) - (wb?.height ?? 0)) < 14}`);
+  void LA;
+});

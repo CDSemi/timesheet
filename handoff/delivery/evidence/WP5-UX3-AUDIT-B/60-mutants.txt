@@ -1,0 +1,163 @@
+=== A01 2026-10-16T19:02:48Z
+A01 applied to src/client/components/breakRowsModel.ts: session dialog: breaks_confirmed always true (Leave unconfirmed would confirm)
+build exit 0
+unit exit 1       Tests  4 failed | 2127 passed (2131)
+e2e desktop exit 1   2 failed   62 passed (3.5m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:146:1 › 09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, confirmed gives R 8h 00m and credit 0
+  2) [desktop] › tests\e2e\day-editor.spec.ts:752:1 › Save with no break listed and the box unticked opens "No breaks listed": Escape and "Go back" return to "Add break"; each choice reaches the f
+     × session mode, G-4 allowUnconfirmed true: an empty unticked list saves breaks unknown 7ms
+     × dry run prints the counts and removes nothing; it is the only way to run backup prune 51498ms
+     × rejects a bad file with exit 1 and writes nothing 32264ms
+     × takes 3 consistent backups while finalizations, PDFs, signatures, day edits and ledger posts continue 37610ms
+ FAIL  tests/client/breakRowsModel.test.ts > breaks_confirmed > session mode, G-4 allowUnconfirmed true: an empty unticked list saves breaks unknown
+ FAIL  tests/integration/backup-prune.test.ts > cli.js backup --prune and backup prune --dry-run > dry run prints the counts and removes nothing; it is the only way to run backup prune
+ FAIL  tests/integration/backup.test.ts > backup while a writer loop runs (AC-11) > takes 3 consistent backups while finalizations, PDFs, signatures, day edits and ledger posts continue
+ FAIL  tests/integration/bootstrap.test.ts > CLI bootstrap --config > rejects a bad file with exit 1 and writes nothing
+A01 reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+=== A02 2026-10-16T19:08:04Z
+A02 applied to src/client/components/breakRowsModel.ts: past-day comparison <= (today pre-fills suggested breaks)
+build exit 0
+unit exit 1       Tests  2 failed | 2129 passed (2131)
+e2e desktop exit 1   2 failed   62 passed (2.9m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:593:1 › a new session on a past day is pre-filled with the reference hours and the suggested breaks inside them; today gets the hours only, whatever t
+  2) [desktop] › tests\e2e\day-editor.spec.ts:710:1 › the suggested breaks follow the server date and never the device clock: a device clock three days ahead or a year behind changes nothing (U-23
+     × today_local itself, later dates and an unknown today get none 10ms
+     × nothing is re-shifted for today, for saved rows or while the start cannot be resolved 2ms
+ FAIL  tests/client/breakRowsModel.test.ts > past-day suggestions > today_local itself, later dates and an unknown today get none
+ FAIL  tests/client/breakRowsModel.test.ts > past-day suggestions > nothing is re-shifted for today, for saved rows or while the start cannot be resolved
+A02 reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+=== A03 2026-10-16T19:12:01Z
+A03 applied to src/client/components/breakRowsModel.ts: end sent as start wall clock + minutes on the start date, no offset (not elapsed UTC)
+build exit 0
+unit exit 1       Tests  9 failed | 2122 passed (2131)
+e2e desktop exit 1   2 failed   62 passed (2.9m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:848:1 › a break that starts at a repeated or a missing local time asks first, naming "Break 1", and stores the chosen instant (R-07)
+  2) [desktop] › tests\e2e\day-editor.spec.ts:1556:1 › phone break chips: a break at a repeated or a missing local time asks inside the sub-dialog, naming "Break 1", and stores the chosen instant
+     × in America/Los_Angeles the end is the start instant plus the minutes, sent with its offset 10ms
+     × in Asia/Ho_Chi_Minh (reporting zone America/Los_Angeles) the same rule applies in the input zone 4ms
+     × a break across local midnight simply ends on the next local date 1ms
+     × editing only the minutes of a saved row keeps its start offset and recomputes the end 2ms
+     × a 30-minute break from the first 01:45 (PDT) ends 30 elapsed minutes later, at 01:15 PST 1ms
+     × the second 01:45 (PST) ends at 02:15 PST 1ms
+     × a break across the fall-back hour lasts its minutes of elapsed time, not the wall-clock difference 1ms
+     × 2027-03-14 02:30 returns the gap result; the replacement is the first valid time after it 1ms
+     × the request carries the same instants as for a typed date: 2026-10-16 10:00 for 15 minutes 10ms
+ FAIL  tests/client/breakChipModel.test.ts > followSessionDate: a hidden row date is the session date > the request carries the same instants as for a typed date: 2026-10-16 10:00 for 15 minutes
+ FAIL  tests/client/breakRowsModel.test.ts > start plus minutes to request, end pinned by offset > in America/Los_Angeles the end is the start instant plus the minutes, sent with its offset
+ FAIL  tests/client/breakRowsModel.test.ts > start plus minutes to request, end pinned by offset > in Asia/Ho_Chi_Minh (reporting zone America/Los_Angeles) the same rule applies in the input zone
+ FAIL  tests/client/breakRowsModel.test.ts > start plus minutes to request, end pinned by offset > a break across local midnight simply ends on the next local date
+ FAIL  tests/client/breakRowsModel.test.ts > start plus minutes to request, end pinned by offset > editing only the minutes of a saved row keeps its start offset and recomputes the end
+ FAIL  tests/client/breakRowsModel.test.ts > DST in America/Los_Angeles > a 30-minute break from the first 01:45 (PDT) ends 30 elapsed minutes later, at 01:15 PST
+ FAIL  tests/client/breakRowsModel.test.ts > DST in America/Los_Angeles > the second 01:45 (PST) ends at 02:15 PST
+ FAIL  tests/client/breakRowsModel.test.ts > DST in America/Los_Angeles > a break across the fall-back hour lasts its minutes of elapsed time, not the wall-clock difference
+ FAIL  tests/client/breakRowsModel.test.ts > DST in America/Los_Angeles > 2027-03-14 02:30 returns the gap result; the replacement is the first valid time after it
+A03 reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+=== A04 2026-10-16T19:15:59Z
+A04 applied to src/client/components/breakChipModel.ts: hidden row date follows the session date but keeps the stale pin (not marked edited)
+build exit 0
+unit exit 1       Tests  2 failed | 2129 passed (2131)
+e2e desktop exit 1   1 failed   63 passed (2.5m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:1075:1 › Q6 b: a same-day session shows no break date field at 1366 and on a phone and its breaks follow the session date; an overnight session shows
+     × moves a row to a changed session date and marks it changed, so its pin is dropped 13ms
+     × exactly one revision, one ledger set and one send, whichever side wins (20 rounds) 30073ms
+ FAIL  tests/client/breakChipModel.test.ts > followSessionDate: a hidden row date is the session date > moves a row to a changed session date and marks it changed, so its pin is dropped
+ FAIL  tests/integration/deadline-race.test.ts > manual sign-off racing the deadline job (AC-07, WP3-T10) > exactly one revision, one ledger set and one send, whichever side wins (20 rounds)
+A04 reverted src/client/components/breakChipModel.ts: identical to the clean export = True
+=== A05 2026-10-16T19:19:38Z
+A05 applied to src/client/components/SessionDialog.tsx: G-4 trigger never fires (empty unticked list is refused instead of asking)
+build exit 0
+unit exit 0       Tests  2131 passed (2131)
+e2e desktop exit 1   3 failed   61 passed (3.5m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:146:1 › 09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, confirmed gives R 8h 00m and credit 0
+  2) [desktop] › tests\e2e\day-editor.spec.ts:752:1 › Save with no break listed and the box unticked opens "No breaks listed": Escape and "Go back" return to "Add break"; each choice reaches the f
+  3) [desktop] › tests\e2e\day-editor.spec.ts:3708:1 › "Confirm breaks" lists nothing when no suggested break fits inside the session; Save asks, and "Confirm no breaks taken" sends the empty conf
+A05 reverted src/client/components/SessionDialog.tsx: identical to the clean export = True
+=== A06 2026-10-16T19:24:11Z
+A06 applied to src/client/components/breakRowsModel.ts: Check out omitted list sent with breaks_confirmed true
+build exit 0
+unit exit 1       Tests  1 failed | 2130 passed (2131)
+e2e desktop exit 0   64 passed (2.0m)
+     × breaksPayload exposes the same rule for both modes 9ms
+ FAIL  tests/client/breakRowsModel.test.ts > breaks_confirmed > breaksPayload exposes the same rule for both modes
+A06 reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+=== A07 2026-10-16T19:27:09Z
+A07 applied to src/client/components/BreakSubDialog.tsx: sub-dialog Done applies nothing (hands back the original row)
+build exit 0
+unit exit 0       Tests  2131 passed (2131)
+e2e desktop exit 1   4 failed   60 passed (2.6m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:1277:1 › phone break chips: names, the Break n sub-dialog with Done, Cancel, Escape, Remove and Add, and where focus goes; nothing is sent before the
+  2) [desktop] › tests\e2e\day-editor.spec.ts:1433:1 › phone break chips: a row that cannot be saved and a server refusal mark the chip, show the message under it and move focus; the saved request
+  3) [desktop] › tests\e2e\day-editor.spec.ts:1556:1 › phone break chips: a break at a repeated or a missing local time asks inside the sub-dialog, naming "Break 1", and stores the chosen instant
+  4) [desktop] › tests\e2e\day-editor.spec.ts:1977:1 › phone chips at 390px: Check out lists breaks as chips with the "Break n" sub-dialog, Escape and Cancel stay inside it, and Done sends the row
+A07 reverted src/client/components/BreakSubDialog.tsx: identical to the clean export = True
+=== A08 2026-10-16T19:30:43Z
+A08 applied to src/client/components/ConfirmDialog.tsx: Escape in a confirmation confirms (nested Escape)
+build exit 0
+unit exit 0       Tests  2131 passed (2131)
+e2e desktop exit 1   8 failed   56 passed (3.3m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:2052:1 › Check out asks "Discard your changes?" on Cancel and Escape when its rows or the box changed, and closes at once when nothing changed (U-26)
+  2) [desktop] › tests\e2e\day-editor.spec.ts:2492:1 › deleting a session opens a confirmation with the day and time; Cancel has focus, Escape cancels, "Delete session" sends the version
+  3) [desktop] › tests\e2e\day-editor.spec.ts:2603:3 › the default window: Escape closes the delete confirmation first and then the editor; focus is where it was
+  4) [desktop] › tests\e2e\day-editor.spec.ts:2603:3 › 1440px (the non-modal panel beside the sheet): Escape closes the delete confirmation first and then the editor; focus is where it was
+  5) [desktop] › tests\e2e\day-editor.spec.ts:3992:5 › WP5-UX3-T08: Escape closes only the top dialog, and focus returns where it was › at 1366px (non-modal editor): the confirmation, the discar
+  6) [desktop] › tests\e2e\day-editor.spec.ts:3992:5 › WP5-UX3-T08: Escape closes only the top dialog, and focus returns where it was › at 1280px (floating modal editor): the confirmation, the d
+  7) [desktop] › tests\e2e\day-editor.spec.ts:4058:5 › WP5-UX3-T08: Escape closes only the top dialog, and focus returns where it was › 1440 to 1280: the final confirmation stays on top and focu
+  8) [desktop] › tests\e2e\day-editor.spec.ts:4058:5 › WP5-UX3-T08: Escape closes only the top dialog, and focus returns where it was › 1280 back to 1440: the final confirmation stays on top and
+A08 reverted src/client/components/ConfirmDialog.tsx: identical to the clean export = True
+=== A09 2026-10-16T19:34:56Z
+A09 applied to src/client/components/SessionDialog.tsx: M18: past-day rule on the device date
+build exit 0
+unit exit 0       Tests  2131 passed (2131)
+e2e desktop exit 1   2 failed   62 passed (2.4m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:593:1 › a new session on a past day is pre-filled with the reference hours and the suggested breaks inside them; today gets the hours only, whatever t
+  2) [desktop] › tests\e2e\day-editor.spec.ts:710:1 › the suggested breaks follow the server date and never the device clock: a device clock three days ahead or a year behind changes nothing (U-23
+A09 reverted src/client/components/SessionDialog.tsx: identical to the clean export = True
+=== A10 2026-10-16T19:38:20Z
+A10 applied to src/client/components/breakRowsModel.ts: Check out listed rows sent unconfirmed
+build exit 0
+unit exit 1       Tests  1 failed | 2130 passed (2131)
+e2e desktop exit 1   4 failed   60 passed (2.3m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:1771:1 › Check out with listed breaks: the listed rows are confirmed and replace the saved rows, and the request is the same shape (E-1)
+  2) [desktop] › tests\e2e\day-editor.spec.ts:1901:1 › Check out refusals: suggested breaks that end after now, and a future_break refusal that names a break, mark that row or chip and keep the se
+  3) [desktop] › tests\e2e\day-editor.spec.ts:1977:1 › phone chips at 390px: Check out lists breaks as chips with the "Break n" sub-dialog, Escape and Cancel stay inside it, and Done sends the row
+  4) [desktop] › tests\e2e\day-editor.spec.ts:2144:1 › Check in then Check out asks for break confirmation and sends the session version
+     × check out mode: the ticked box and listed rows confirm and replace the saved rows 8ms
+ FAIL  tests/client/breakRowsModel.test.ts > breaks_confirmed > check out mode: the ticked box and listed rows confirm and replace the saved rows
+A10 reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+=== A11 2026-10-16T19:41:34Z
+A11 applied to src/client/components/breakRowsModel.ts: a confirmed-none session opens with the box unticked
+build exit 0
+unit exit 1       Tests  1 failed | 2130 passed (2131)
+e2e desktop exit 1   2 failed   62 passed (2.5m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:380:1 › a repeated local time (DST fold) in an explicit input zone needs a choice and stores the chosen instant
+  2) [desktop] › tests\e2e\day-editor.spec.ts:500:1 › changing the input zone to one where the same wall time is repeated asks for a choice again
+     × a saved session with confirmed none opens with the box ticked and resends the same body 8ms
+ FAIL  tests/client/breakRowsModel.test.ts > untouched saved and suggested rows keep their pinned instants > a saved session with confirmed none opens with the box ticked and resends the same body
+A11 reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+=== A12 2026-10-16T19:45:01Z
+A12 applied to src/client/components/breakRowsModel.ts: an edited pinned row still sends its pinned instants
+build exit 0
+unit exit 1       Tests  3 failed | 2128 passed (2131)
+e2e desktop exit 1   4 failed   60 passed (2.5m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:593:1 › a new session on a past day is pre-filled with the reference hours and the suggested breaks inside them; today gets the hours only, whatever t
+  2) [desktop] › tests\e2e\day-editor.spec.ts:1075:1 › Q6 b: a same-day session shows no break date field at 1366 and on a phone and its breaks follow the session date; an overnight session shows
+  3) [desktop] › tests\e2e\day-editor.spec.ts:1277:1 › phone break chips: names, the Break n sub-dialog with Done, Cancel, Escape, Remove and Add, and where focus goes; nothing is sent before the
+  4) [desktop] › tests\e2e\day-editor.spec.ts:1433:1 › phone break chips: a row that cannot be saved and a server refusal mark the chip, show the message under it and move focus; the saved request
+     × a row keeps its pin only while unchanged and in the zone it was pinned in 9ms
+     × editing only the minutes of a saved row keeps its start offset and recomputes the end 3ms
+     × moves a row to a changed session date and marks it changed, so its pin is dropped 9ms
+ FAIL  tests/client/breakChipModel.test.ts > followSessionDate: a hidden row date is the session date > moves a row to a changed session date and marks it changed, so its pin is dropped
+ FAIL  tests/client/breakRowsModel.test.ts > untouched saved and suggested rows keep their pinned instants > a row keeps its pin only while unchanged and in the zone it was pinned in
+ FAIL  tests/client/breakRowsModel.test.ts > start plus minutes to request, end pinned by offset > editing only the minutes of a saved row keeps its start offset and recomputes the end
+A12 reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+mutants-done
+=== A13 2026-10-16T19:49:17Z
+A13 applied to src/client/components/breakRowsModel.ts: Check out request: the omission branch says breaks_confirmed true (server answers 422 breaks_required)
+build exit 0
+unit exit 1       Tests  1 failed | 2130 passed (2131)
+e2e desktop exit 1   1 failed   63 passed (2.3m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:1866:1 › Check out with nothing listed and the box unticked omits breaks: the session ends with its breaks not confirmed (E-1)
+     × check out mode: an empty unticked list omits breaks, so they stay unconfirmed (E-1) 9ms
+ FAIL  tests/client/breakRowsModel.test.ts > breaks_confirmed > check out mode: an empty unticked list omits breaks, so they stay unconfirmed (E-1)
+A13 reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+mutants-done

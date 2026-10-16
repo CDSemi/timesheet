@@ -186,3 +186,16 @@ Append to this brief:
 - any fix, masking or stop reason.
 
 ## Results
+
+- Pre-HEAD 9187f31bee9c092041887d3ab034c492e33da0b5; post-HEAD and commit
+  7ce4e95a0c4477374e981132d93b11aedab2e384; pushed yes; remote main equals the commit.
+- Digest before add and on the new HEAD (ls-tree): 262138e0c94c90dc0287e6de87e69f2aabfa68d3bd7bdb6262322c1e2b8f0191
+  (833 files) both times.
+- Staged 66: 27 non-handoff paths, 5 modified handoff records, 2 new task records,
+  2 FIX1-FREEZE evidence files, 30 FIX2 evidence files. Nothing was pre-staged.
+- Other modified handoff files: none (unstaged diff empty).
+- Checks, all exit 0: Node v24.21.0; HEAD check; digest; add; precommit (66 files, 0
+  findings); diff check; JSON parse; validate_orchestration; check_recovery (106);
+  validate_package preflight; post-commit digest. Push dry-run and push exit 0.
+- No masking, no fixes, no stop. Evidence: evidence/WP5-UX3-FIX2-FREEZE/checks.txt and
+  commit-message.txt (unstaged).

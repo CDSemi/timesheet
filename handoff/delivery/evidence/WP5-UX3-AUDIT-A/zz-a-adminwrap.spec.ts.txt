@@ -1,0 +1,40 @@
+import { readFileSync } from 'node:fs';
+import { expect, test } from './fixtures.ts';
+import { note, shot } from './zz-alib.ts';
+
+/*
+ * WP5-UX3-AUDIT-A item 7 (task-local probe): Administration on a phone once a period has been submitted on the worker's
+ * server (run after review.spec.ts:172 in the same worker): which element makes the "Submissions and delivery" table
+ * scroll sideways, and what axe says about it.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const AXE = readFileSync('<task>\\axe\\node_modules\\axe-core\\axe.min.js', 'utf8');
+
+test('phone Administration with a submitted period: the submissions table, its overflow and axe', async ({ page, builtServer, signInPageAs, isMobile }) => {
+  test.skip(!isMobile, 'phone');
+  await signInPageAs(builtServer.credentials.admin, '#/settings/admin');
+  await expect(page.getByRole('heading', { level: 1, name: 'Administration' })).toBeVisible();
+  await expect(page.locator('.ops-table tbody tr').first()).toBeVisible({ timeout: 15_000 });
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.waitForTimeout(300);
+    const facts = await page.evaluate(() => {
+      const wrap = document.querySelector('section[aria-label="Submissions and delivery"] .table-wrap') as HTMLElement | null;
+      if (wrap === null) return 'no table';
+      const w = wrap.getBoundingClientRect();
+      const wide = [...wrap.querySelectorAll('td, th, td *')]
+        .map((e) => ({ e: e as HTMLElement, r: (e as HTMLElement).getBoundingClientRect() }))
+        .filter(({ r }) => r.right > w.right + 0.5)
+        .slice(0, 4)
+        .map(({ e, r }) => `${e.tagName.toLowerCase()}${e.className ? `.${e.className}` : ''} "${(e.textContent ?? '').trim().slice(0, 40)}" right ${r.right.toFixed(0)}`);
+      return `wrap ${wrap.clientWidth} scrollWidth ${wrap.scrollWidth}, rows ${wrap.querySelectorAll('tbody tr').length}, focusable inside ${wrap.querySelectorAll('a[href],button,input,[tabindex]').length}, tabindex ${wrap.getAttribute('tabindex')}; past the right edge: ${wide.join(' | ')}; page sideways ${document.documentElement.scrollWidth - document.documentElement.clientWidth}`;
+    });
+    if ((await page.evaluate('typeof window.axe')) !== 'object') await page.evaluate(AXE);
+    const axe = await page.evaluate(`axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22a','wcag22aa'] }, resultTypes: ['violations'] }).then((r) => r.violations.map((v) => v.id + ' x' + v.nodes.length + ' ' + v.nodes.map((n) => n.target.join(' ')).join(',')).join('; '))`);
+    note('adminwrap.txt', `phone ${width}: ${facts}; axe violations: ${String(axe) || 'none'}`);
+    const section = page.locator('section[aria-label="Submissions and delivery"]');
+    await section.scrollIntoViewIfNeeded();
+    if (width === 390) await section.screenshot({ path: shot('admin-submissions-phone-390-light.png') });
+  }
+});

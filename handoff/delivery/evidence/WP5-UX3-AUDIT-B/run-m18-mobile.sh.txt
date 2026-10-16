@@ -1,0 +1,15 @@
+# M18 (A09) on the mobile project: the old past-day test (:593) and the FIX2 test (:710), then revert.
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+O=$T/out
+M=$T/mut
+{
+  echo "=== A09 mobile $(date -u +%Y-%m-%dT%H:%M:%SZ) (UTC hour $(date -u +%H); Asia/Ho_Chi_Minh date differs from Los Angeles outside 07:00-17:00 UTC)"
+  "$PY" -I $T/mutate.py $T/mutants.json $M $T/export apply A09
+  (cd $M && npm run build:client > $O/63-a09-build.txt 2>&1; echo "build exit $?")
+  (cd $M && node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts:593 tests/e2e/day-editor.spec.ts:710 --output="$TW\\pw-m18" > $O/63-a09-e2e.txt 2>&1; echo "e2e both projects exit $?")
+  grep -E '^\s+(ok|x|✘)\s+[0-9]+ \[' $O/63-a09-e2e.txt | sed 's/\x1b\[[0-9;]*m//g' | cut -c1-200
+  "$PY" -I $T/mutate.py $T/mutants.json $M $T/export revert A09
+  (cd $M && npm run build:client > $O/63-a09-rebuild.txt 2>&1; echo "rebuild exit $?")
+  "$PY" -I $T/cmp_dist.py $T/export $M dist/client
+} > $O/63-m18.txt 2>&1

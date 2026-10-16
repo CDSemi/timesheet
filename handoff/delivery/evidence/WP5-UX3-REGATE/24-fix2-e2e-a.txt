@@ -1,0 +1,230 @@
+diff --git a/tests/e2e/ot-leave.spec.ts b/tests/e2e/ot-leave.spec.ts
+index e914667..961246a 100644
+--- a/tests/e2e/ot-leave.spec.ts
++++ b/tests/e2e/ot-leave.spec.ts
+@@ -120,2 +120,3 @@ test('reserve, partial use, cancel the rest and reverse, with history', async ({
+   await expect(warning).toBeVisible();
++  await expect(warning.getByRole('heading', { name: 'Day category and recorded use differ' })).toBeVisible();
+   await expect(warning.locator(`[data-mismatch-date="${todayLocal}"]`)).toContainText('Nothing is spent automatically');
+diff --git a/tests/e2e/settings-routes.spec.ts b/tests/e2e/settings-routes.spec.ts
+index a1ae88f..48c9c46 100644
+--- a/tests/e2e/settings-routes.spec.ts
++++ b/tests/e2e/settings-routes.spec.ts
+@@ -118,27 +118,36 @@ test('an employee sees no Administration anywhere and the page makes no /api/adm
+ 
+-test('Profile shows the display name, email, role and reporting zone, read only, with the note', async ({ page, builtServer, adminSeed, signInPageAs }, testInfo) => {
+-  const person = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Profile Person' });
+-  const personApi = await new SeedClient(builtServer.origin).signIn(person.email, person.password);
+-  const periods = await personApi.call<{ reporting_zone: string }>('GET', '/api/periods/current');
+-
+-  await signInPageAs(person, '#/settings/profile');
+-  await expect(heading(page, 'Profile')).toBeVisible();
+-  const facts = page.getByRole('region', { name: 'Your profile' });
+-  await expect(facts.locator('[data-profile="display-name"]')).toHaveText('Synthetic Profile Person');
+-  await expect(facts.locator('[data-profile="email"]')).toHaveText(person.email);
+-  await expect(facts.locator('[data-profile="role"]')).toHaveText('Employee');
+-  await expect(facts.locator('[data-profile="zone"]')).toHaveText(periods.reporting_zone);
+-  for (const label of ['Display name', 'Email', 'Role', 'Reporting zone']) await expect(facts.getByText(label, { exact: true })).toBeVisible();
+-  await expect(page.getByText('An administrator changes display names.')).toBeVisible();
+-  // Read only: nothing on the page can be edited.
+-  await expect(page.locator('main').locator('input, textarea, select')).toHaveCount(0);
+-  await expect(page.locator('main').getByRole('button')).toHaveCount(0);
+-  await page.screenshot({ path: screenshotPath(`profile-${testInfo.project.name}-synthetic.png`), fullPage: true });
+-
+-  // An administrator's Profile names the role.
+-  await (await openAccount(page)).getByRole('button', { name: 'Sign out' }).click();
+-  await signInPageAs(builtServer.credentials.admin, '#/settings/profile');
+-  await expect(heading(page, 'Profile')).toBeVisible();
+-  await expect(page.locator('[data-profile="role"]')).toHaveText('Administrator');
+-  await expect(page.locator('[data-profile="email"]')).toHaveText(builtServer.credentials.admin.email);
++// The device zone differs from the saved reporting zone (America/Los_Angeles): the Profile page must show the saved zone
++// and never this device's zone (AGENTS rule 7; WP5-UX3-FIX2 item 7, mutant M21).
++test.describe('Profile in a device zone that differs from the reporting zone', () => {
++  test.use({ timezoneId: 'Asia/Tokyo' });
++
++  test('Profile shows the display name, email, role and reporting zone, read only, with the note', async ({ page, builtServer, adminSeed, signInPageAs }, testInfo) => {
++    const person = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Profile Person' });
++    const personApi = await new SeedClient(builtServer.origin).signIn(person.email, person.password);
++    const periods = await personApi.call<{ reporting_zone: string }>('GET', '/api/periods/current');
++    expect(periods.reporting_zone, 'the saved reporting zone differs from the device zone of this test').not.toBe('Asia/Tokyo');
++
++    await signInPageAs(person, '#/settings/profile');
++    await expect(heading(page, 'Profile')).toBeVisible();
++    expect(await page.evaluate<string>('Intl.DateTimeFormat().resolvedOptions().timeZone'), 'the device zone of the page').toBe('Asia/Tokyo');
++    const facts = page.getByRole('region', { name: 'Your profile' });
++    await expect(facts.locator('[data-profile="display-name"]')).toHaveText('Synthetic Profile Person');
++    await expect(facts.locator('[data-profile="email"]')).toHaveText(person.email);
++    await expect(facts.locator('[data-profile="role"]')).toHaveText('Employee');
++    await expect(facts.locator('[data-profile="zone"]')).toHaveText(periods.reporting_zone);
++    await expect(facts.locator('[data-profile="zone"]')).not.toHaveText('Asia/Tokyo');
++    for (const label of ['Display name', 'Email', 'Role', 'Reporting zone']) await expect(facts.getByText(label, { exact: true })).toBeVisible();
++    await expect(page.getByText('An administrator changes display names.')).toBeVisible();
++    // Read only: nothing on the page can be edited.
++    await expect(page.locator('main').locator('input, textarea, select')).toHaveCount(0);
++    await expect(page.locator('main').getByRole('button')).toHaveCount(0);
++    await page.screenshot({ path: screenshotPath(`profile-${testInfo.project.name}-synthetic.png`), fullPage: true });
++
++    // An administrator's Profile names the role.
++    await (await openAccount(page)).getByRole('button', { name: 'Sign out' }).click();
++    await signInPageAs(builtServer.credentials.admin, '#/settings/profile');
++    await expect(heading(page, 'Profile')).toBeVisible();
++    await expect(page.locator('[data-profile="role"]')).toHaveText('Administrator');
++    await expect(page.locator('[data-profile="email"]')).toHaveText(builtServer.credentials.admin.email);
++  });
+ });
+diff --git a/tests/e2e/timesheet.spec.ts b/tests/e2e/timesheet.spec.ts
+index ff58e33..5c5c356 100644
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -458,2 +458,9 @@ test('batch edit: a stale version shows the reload message naming the date', asy
+   const workDate = free.at(-1) ?? '';
++  // A known start (WP5-UX3-FIX1): "free" means no session, but an earlier test of this worker (same server and account) may have
++  // saved a day entry on this date, so the day is put back to a plain worked day before the page loads it. The UI's Sick and the
++  // other session's Vacation are then both real changes from it.
++  await employeeSeed.resetDay(workDate);
++  const loaded = await employeeSeed.dayView(workDate);
++  expect(loaded.category, 'the day starts as a plain worked day').toBe('Worked');
++  expect(loaded.entry, 'the day has the entry the page loads').not.toBeNull();
+   await signInThroughUi();
+@@ -468,4 +475,5 @@ test('batch edit: a stale version shows the reload message naming the date', asy
+ 
+-  // Another session changes the same day between preview and commit.
+-  await employeeSeed.commitCategory(workDate, 'Vacation', null);
++  // Another session changes the same day between preview and commit: it reads the day's current version, as a client does.
++  await employeeSeed.commitCategory(workDate, 'Vacation', (await employeeSeed.dayView(workDate)).entry?.version ?? null);
++  expect((await employeeSeed.dayView(workDate)).entry?.version, 'the other session moved the version past the one the page loaded').not.toBe(loaded.entry?.version);
+   await commit.click();
+@@ -735,2 +743,6 @@ interface LiftLook {
+   transitionDuration: string;
++  /** The column's `::before` layer, which casts the shadow of a column in a run (WP5-UX3-FIX1). */
++  layer: { content: string; boxShadow: string; position: string; zIndex: string; pointerEvents: string; top: string; right: string; bottom: string; left: string };
++  /** The column's --lift-clip, as computed (the reach of the run layer is twice it). */
++  liftClip: string;
+ }
+@@ -740,3 +752,16 @@ async function readLook(column: Locator): Promise<LiftLook> {
+     const style = element.ownerDocument.defaultView?.getComputedStyle(element);
++    const before = element.ownerDocument.defaultView?.getComputedStyle(element, '::before');
+     return {
++      layer: {
++        content: before?.content ?? '',
++        boxShadow: before?.boxShadow ?? '',
++        position: before?.position ?? '',
++        zIndex: before?.zIndex ?? '',
++        pointerEvents: before?.pointerEvents ?? '',
++        top: before?.top ?? '',
++        right: before?.right ?? '',
++        bottom: before?.bottom ?? '',
++        left: before?.left ?? '',
++      },
++      liftClip: style?.getPropertyValue('--lift-clip').trim() ?? '',
+       lift: element.getAttribute('data-lift'),
+@@ -779,7 +804,12 @@ const RUN_LOOK = {
+ 
+-/** A lifted column: raised by --lift-y, casting --elev-lift, above its neighbours, with the corners and the clip of its run position. */
++/**
++ * A lifted column: raised by --lift-y, casting --elev-lift, above its neighbours, with the corners and the clip of its run position.
++ * A lone column casts the shadow itself. A column of a run (WP5-UX3-FIX1) casts it from its `::before` layer, behind its cells,
++ * whose box reaches twice --lift-clip past each inner edge (under the lifted neighbour, where the clip cuts it), so the shadow at
++ * an inner join is the full shadow of one long box.
++ */
+ async function expectLifted(page: Page, look: LiftLook, run: keyof typeof RUN_LOOK, label: string) {
++  const elevLift = await tokenShadow(page, '--elev-lift');
+   expect(look.lift, `${label}: run position`).toBe(run);
+   expect(look.transform, `${label}: raised by --lift-y`).toBe(LIFT_MATRIX);
+-  expect(look.boxShadow, `${label}: casts --elev-lift`).toBe(await tokenShadow(page, '--elev-lift'));
+   expect(look.zIndex, `${label}: above its neighbours`).toBe('1');
+@@ -787,2 +817,21 @@ async function expectLifted(page: Page, look: LiftLook, run: keyof typeof RUN_LO
+   expect(look.radii, `${label}: corners (4px on the run's outer corners only)`).toEqual(RUN_LOOK[run].radii);
++  if (run === 'single') {
++    expect(look.boxShadow, `${label}: casts --elev-lift`).toBe(elevLift);
++    expect(look.layer.content, `${label}: no shadow layer`).toBe('none');
++    return;
++  }
++  expect(look.boxShadow, `${label}: the column itself casts no shadow in a run`).toBe('none');
++  const reach = `${-2 * parseFloat(look.liftClip)}px`;
++  expect(look.liftClip, `${label}: --lift-clip`).toMatch(/^\d+(\.\d+)?px$/);
++  expect(look.layer, `${label}: the run layer casts --elev-lift behind the cells, reaching past each inner edge`).toEqual({
++    content: '""',
++    boxShadow: elevLift,
++    position: 'absolute',
++    zIndex: '-1',
++    pointerEvents: 'none',
++    top: '0px',
++    bottom: '0px',
++    left: run === 'start' ? '0px' : reach,
++    right: run === 'end' ? '0px' : reach,
++  });
+ }
+@@ -800,2 +849,24 @@ async function paintedWithin(page: Page, [x0, x1]: [number, number], [y0, y1]: [
+ 
++/**
++ * Another day of the week band of `workDate` (WP5-UX3-FIX1): a column of the same week grid, so its box top is the flat top a
++ * lift is measured from, whatever the weekday of today. A free workday of that band when there is one, otherwise any other day
++ * of the band except today (its column carries the Today layer). A band is a Monday-to-Sunday week of the sheet, as the
++ * sheet groups it; the Monday is calendar arithmetic on the server's dates, not a clock read.
++ */
++async function bandNeighbour(employeeSeed: SeedClient, workDate: string): Promise<string> {
++  const { dates, todayLocal } = await shownPeriod(employeeSeed);
++  expect(dates, `${workDate} is on the shown sheet`).toContain(workDate);
++  const mondayOf = (date: string) => {
++    const day = new Date(`${date}T00:00:00Z`);
++    day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
++    return day.toISOString().slice(0, 10);
++  };
++  const band = dates.filter((date) => mondayOf(date) === mondayOf(workDate));
++  const others = band.filter((date) => date !== workDate && date !== todayLocal);
++  const free = await employeeSeed.displayedPeriodFreeWorkdays();
++  const neighbour = others.find((date) => free.includes(date)) ?? others[0] ?? '';
++  expect(neighbour, `another day of the week band of ${workDate} (${band.join(', ')})`).not.toBe('');
++  return neighbour;
++}
++
+ /** The colour of the first colour stop of a background image (a one-colour gradient is a layer), or null when there is none. */
+@@ -814,3 +885,5 @@ test('the day open in the Day editor is a lifted column with an inset 1px accent
+   if (desktop) await page.setViewportSize(EDITOR_BESIDE_SHEET);
+-  const [first = '', second = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
++  const [first = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
++  // The flat column the raise is measured against lies in the same week band (grid) as the open day, on every day of the year.
++  const second = await bandNeighbour(employeeSeed, first);
+   await signInThroughUi();
+@@ -865,3 +938,5 @@ test('the day open in the Day editor is a lifted column with an inset 1px accent
+       expect((await settledPseudo(neighbour, '::after')).content).toBe('none');
+-      // The lifted column stands 3px higher than its neighbour (the raise, measured on the boxes).
++      // The lifted column stands 3px higher than its neighbour (the raise, measured on the boxes) in the same week card.
++      const sameCard = await neighbour.evaluate((element, date) => element.closest('.sheet-week') === element.ownerDocument.querySelector(`[data-day="${date}"]`)?.closest('.sheet-week'), first);
++      expect(sameCard, 'the neighbour is in the week card of the open day').toBe(true);
+       const [lifted, flat] = [await columnBoxes(column), await columnBoxes(neighbour)];
+@@ -1414,2 +1489,17 @@ test('lifted columns form runs: one shadow around the group, 4px corners on the
+   expect(sameRgb(outside, surface, 1), `left of the run ${outside.join(',')} carries the group's shadow, not the plain ${surface.map(Math.round).join(',')}`).toBe(false);
++  // WP5-UX3-FIX1: the shadow cast under the run is continuous across each inner join. Two CSS px under the run's bottom edge (whole
++  // pixels, so no fractional edge matters), the pixel at the join is as dark as the shadow 14px to either side; the notch the old
++  // per-column shadows left there was about 21/255 lighter. The shadow itself is there: the join is darker than the same row under
++  // the middle of Thursday, the gap day (no lifted shadow reaches 70px into it).
++  const luminance = ([r, g, b]: Rgba) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
++  const shadowRow = Math.ceil(mondayBoxes.host.bottom) + 2;
++  const gap = (await columnBoxes(column(thursday))).host;
++  const plain = luminance(await paintedPixel(page, Math.round((gap.left + gap.right) / 2), shadowRow));
++  for (const join of [mondayBoxes.host.right, (await columnBoxes(column(tuesday))).host.right]) {
++    const x = Math.round(join);
++    const [atJoin, before, after] = [await paintedPixel(page, x, shadowRow), await paintedPixel(page, x - 14, shadowRow), await paintedPixel(page, x + 14, shadowRow)];
++    const sides = (luminance(before) + luminance(after)) / 2;
++    expect(Math.abs(luminance(atJoin) - sides), `under the join at x ${join.toFixed(2)}: ${luminance(atJoin).toFixed(1)} against ${sides.toFixed(1)} beside it`).toBeLessThanOrEqual(6);
++    expect(luminance(atJoin), `under the join at x ${join.toFixed(2)}: the run's shadow (${luminance(atJoin).toFixed(1)}) against the gap day's row (${plain.toFixed(1)})`).toBeLessThan(plain - 6);
++  }
+   await page.screenshot({ path: screenshotPath('lift-runs-desktop-light-synthetic.png'), animations: 'disabled' });
+@@ -1506,2 +1596,4 @@ test('the rows are named Category and Status; a picker is named by every visible
+       lines: [...button.querySelectorAll('.cell-main, .cell-sub, .cell-note')].map((line) => (line.textContent ?? '').trim()),
++      // The text nodes as axe reads the visible text (it joins them without adding spaces between block elements).
++      text: button.querySelector('.label-trigger-text')?.textContent ?? '',
+     })),
+@@ -1510,5 +1602,8 @@ test('the rows are named Category and Status; a picker is named by every visible
+   for (const trigger of triggers) {
+-    // A cell without a label shows only its lines; the name says "not set" in the label's place.
++    // A cell without a label shows only its lines; the name says "not set" in the label's place. The lines are joined by a space,
++    // and the button's text separates them by a space too, so the visible words are one run inside the name (WP5-UX3-FIX1).
+     const parts = trigger.hasLabel ? trigger.lines : ['not set', ...trigger.lines];
+-    expect(trigger.name, `picker name of ${trigger.date}`).toBe(`Category for ${trigger.date}: ${parts.join(', ')}`);
++    expect(trigger.name, `picker name of ${trigger.date}`).toBe(`Category for ${trigger.date}: ${parts.join(' ')}`);
++    expect(trigger.text, `the text of the picker of ${trigger.date}`).toBe(trigger.lines.join(' '));
++    expect(trigger.name, `the name of ${trigger.date} contains its visible text`).toContain(trigger.text);
+   }

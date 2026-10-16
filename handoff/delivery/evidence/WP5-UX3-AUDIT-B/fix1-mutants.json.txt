@@ -1,0 +1,14 @@
+{
+  "T1": {
+    "what": "test seed as before FIX1: the other session commits with version null over an existing entry",
+    "file": "tests/e2e/timesheet.spec.ts",
+    "old": "await employeeSeed.commitCategory(workDate, 'Vacation', (await employeeSeed.dayView(workDate)).entry?.version ?? null);",
+    "new": "await employeeSeed.commitCategory(workDate, 'Vacation', null);"
+  },
+  "S1": {
+    "what": "server: a stale batch version is accepted",
+    "file": "src/server/services/dayEntries.ts",
+    "old": "const stale = existing === undefined ? input.expected_version !== null : input.expected_version !== existing.version;",
+    "new": "const stale = false;"
+  }
+}

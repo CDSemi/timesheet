@@ -1,0 +1,70 @@
+import { writeFileSync } from 'node:fs';
+import type { Locator, Page } from '@playwright/test';
+import { expect, newPerson, test } from './fixtures.ts';
+import { namedDayButton } from './dayButton.ts';
+import { note, shot } from './zz-alib.ts';
+
+/*
+ * WP5-UX3-AUDIT-A item 7 (task-local probe, never in the repository): the keyboard focus ring of the sheet's date button and
+ * Category picker while the mouse pointer rests on them (desktop, a device that can hover), light and dark; and the date
+ * button after Escape closes the Day editor opened by a click (focus returns there, the pointer has not moved).
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+test.skip(({ isMobile }) => isMobile, 'desktop project');
+
+async function look(target: Locator): Promise<string> {
+  return target.evaluate((e) => `shadow ${getComputedStyle(e).boxShadow} | outline ${getComputedStyle(e).outlineStyle} ${getComputedStyle(e).outlineColor} | hover ${e.matches(':hover')} focus-visible ${e.matches(':focus-visible')} focused ${e === document.activeElement}`);
+}
+
+async function crop(page: Page, target: Locator, file: string) {
+  const box = await target.boundingBox();
+  if (box === null) return;
+  writeFileSync(file, await page.screenshot({ clip: { x: box.x - 8, y: box.y - 8, width: box.width + 16, height: box.height + 16 }, animations: 'disabled', caret: 'hide' }));
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`focus ring under the pointer: date button and Category picker (${theme})`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+    test.setTimeout(120_000);
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Ring Reader', signature: 'none' });
+    const day = (await me.api.displayedPeriodFreeWorkdays())[0] ?? '';
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInPageAs(me.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const date = namedDayButton(page, day, 'Edit');
+    const picker = page.getByRole('button', { name: new RegExp(`^Category for ${day}`) });
+    // 1. Keyboard focus with the pointer elsewhere, then with the pointer resting on the control.
+    for (const [name, target] of [
+      ['date button', date],
+      ['Category picker', picker],
+    ] as const) {
+      await page.mouse.move(0, 0);
+      await page.keyboard.press('Shift');
+      await target.focus();
+      await page.waitForTimeout(300);
+      const away = await look(target);
+      if (theme === 'light') await crop(page, target, shot(`ring-${name.replace(' ', '-')}-pointer-away-${theme}.png`));
+      await target.hover();
+      await page.waitForTimeout(300);
+      const over = await look(target);
+      if (theme === 'light') await crop(page, target, shot(`ring-${name.replace(' ', '-')}-pointer-over-${theme}.png`));
+      note('ring.txt', `${theme} ${name}: keyboard focus, pointer away: ${away} || pointer over it: ${over}`);
+    }
+    // 2. Click the date (opens the editor beside the sheet at 1440), Escape: focus returns to the date under the pointer.
+    await date.click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await page.waitForTimeout(300);
+    note('ring.txt', `${theme} after click on the date and Escape: ${await look(date)}`);
+    // 3. Same with the floating panel at 1280.
+    await page.setViewportSize({ width: 1280, height: 860 });
+    await date.click();
+    await expect(editor).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await page.waitForTimeout(300);
+    note('ring.txt', `${theme} 1280 after click on the date and Escape: ${await look(date)}`);
+  });
+}

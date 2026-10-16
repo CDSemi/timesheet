@@ -1,6 +1,6 @@
 import { type KeyboardEvent, type SubmitEvent, useEffect, useId, useRef, useState } from 'react';
 import { diffDays, isCivilDate } from '../../domain/dates.ts';
-import { type EpochSeconds, parseUtcInstant } from '../../domain/instants.ts';
+import type { EpochSeconds } from '../../domain/instants.ts';
 import {
   ApiRequestError,
   type DayView,
@@ -20,6 +20,7 @@ import {
   buildSessionDialogRequest,
   changeDialogZone,
   chooseBreakRowFold,
+  confirmBreaksRows,
   editBreakRow,
   newSessionDialogDraft,
   referenceHours,
@@ -39,7 +40,7 @@ import { applyBreakEdit, breakDateVisible, followSessionDate } from './breakChip
 import { BreakRows } from './BreakRows.tsx';
 import { BreakSubDialog } from './BreakSubDialog.tsx';
 import { ConfirmDialog } from './ConfirmDialog.tsx';
-import { type ConfirmFact, editorTitle, quickBreaksOf } from './dayEditorModel.ts';
+import { type ConfirmFact, editorTitle } from './dayEditorModel.ts';
 import { describeError, isStaleVersion } from './errors.ts';
 import { usShortDate } from './format.ts';
 import { LocalTimeField } from './LocalTimeField.tsx';
@@ -240,11 +241,10 @@ export function SessionDialog({
       return { draft, prefill: draft.rows.length > 0 ? 'hours-breaks' : 'hours' };
     }
     const saved = sessionDialogDraftFromSession(session);
-    if (!confirmBreaks || saved.rows.length > 0 || policy === undefined || session.end_utc === null) return { draft: saved, prefill: null };
-    // The old one-tap rule (`quickBreaksOf`): the suggestions are offered only when every one of them fits inside the session.
-    if (quickBreaksOf(session, policy, displayZone)?.kind !== 'suggested') return { draft: saved, prefill: null };
-    const rows = suggestionRows(policy, parseUtcInstant(session.start_utc), parseUtcInstant(session.end_utc), session.input_zone, (index) => `confirm-${session.id}-${index}`);
-    return { draft: { ...saved, rows }, prefill: null };
+    if (!confirmBreaks) return { draft: saved, prefill: null };
+    // "Confirm breaks" lists the suggested breaks that lie inside the session (docs/04), none when no suggestion fits.
+    const rows = confirmBreaksRows(session, policy, (index) => `confirm-${session.id}-${index}`);
+    return { draft: rows.length === 0 ? saved : { ...saved, rows }, prefill: null };
   });
   const [draft, setDraft] = useState<SessionDialogDraft>(starting.draft);
   const [timesTouched, setTimesTouched] = useState(false);

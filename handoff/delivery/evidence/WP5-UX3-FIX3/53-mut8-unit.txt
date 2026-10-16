@@ -1,0 +1,118 @@
+
+ RUN  v5.0.2 <repo>
+
+ ❯ tests/client/breakRowsModel.test.ts (92 tests | 5 failed) 28ms
+   ❯ "Confirm breaks" rows (WP5-UX3-FIX3 item 8) (9)
+     × 09:00-12:00 lists the suggestions inside the session 4ms
+     × 09:00-14:00 lists the suggestions inside the session 1ms
+     × 09:00-11:15, the first ends exactly at the end lists the suggestions inside the session 0ms
+     × the rows are untouched suggestions pinned in the session input zone, with their own keys 0ms
+     × saving the listed rows sends them as the same instants the session dialog sends for any untouched suggestion 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > "Confirm breaks" rows (WP5-UX3-FIX3 item 8) > 09:00-12:00 lists the suggestions inside the session
+ FAIL  tests/client/breakRowsModel.test.ts > "Confirm breaks" rows (WP5-UX3-FIX3 item 8) > 09:00-11:15, the first ends exactly at the end lists the suggestions inside the session
+AssertionError: expected [] to deeply equal [ [ '11:00', '15' ] ]
+
+- Expected
++ Received
+
+- [
+-   [
+-     "11:00",
+-     "15",
+-   ],
+- ]
++ []
+
+ ❯ tests/client/breakRowsModel.test.ts:894:35
+    892|     ['09:00-11:14, the first ends one minute after the end', '2026-09-…
+    893|   ])('%s lists the suggestions inside the session', (_name, endUtc, ex…
+    894|     expect(starts(ended(endUtc))).toEqual(expected);
+       |                                   ^
+    895|   });
+    896|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > "Confirm breaks" rows (WP5-UX3-FIX3 item 8) > 09:00-14:00 lists the suggestions inside the session
+AssertionError: expected [] to deeply equal [ Array(2) ]
+
+- Expected
++ Received
+
+- [
+-   [
+-     "11:00",
+-     "15",
+-   ],
+-   [
+-     "13:00",
+-     "30",
+-   ],
+- ]
++ []
+
+ ❯ tests/client/breakRowsModel.test.ts:894:35
+    892|     ['09:00-11:14, the first ends one minute after the end', '2026-09-…
+    893|   ])('%s lists the suggestions inside the session', (_name, endUtc, ex…
+    894|     expect(starts(ended(endUtc))).toEqual(expected);
+       |                                   ^
+    895|   });
+    896|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > "Confirm breaks" rows (WP5-UX3-FIX3 item 8) > the rows are untouched suggestions pinned in the session input zone, with their own keys
+AssertionError: expected [] to deeply equal [ [ 'confirm-s1-0', …(3) ], …(1) ]
+
+- Expected
++ Received
+
+- [
+-   [
+-     "confirm-s1-0",
+-     "suggested",
+-     false,
+-     false,
+-   ],
+-   [
+-     "confirm-s1-1",
+-     "suggested",
+-     false,
+-     false,
+-   ],
+- ]
++ []
+
+ ❯ tests/client/breakRowsModel.test.ts:899:84
+    897|   it('the rows are untouched suggestions pinned in the session input z…
+    898|     const rows = confirmBreaksRows(ended('2026-09-21T21:00:00Z'), poli…
+    899|     expect(rows.map((row) => [row.key, row.origin, row.edited, row.cou…
+       |                                                                                    ^
+    900|       ['confirm-s1-0', 'suggested', false, false],
+    901|       ['confirm-s1-1', 'suggested', false, false],
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > "Confirm breaks" rows (WP5-UX3-FIX3 item 8) > saving the listed rows sends them as the same instants the session dialog sends for any untouched suggestion
+Error: expected a request, got {"ok":false,"message":"List the breaks you took, or tick \"Confirm no breaks taken\".","problem":null,"rowErrors":[]}
+ ❯ sessionRequest tests/client/breakRowsModel.test.ts:115:24
+    113| function sessionRequest(draft: SessionDialogDraft, options: Parameters…
+    114|   const built = buildSessionDialogRequest(draft, options);
+    115|   if (!built.ok) throw new Error(`expected a request, got ${JSON.strin…
+       |                        ^
+    116|   return built.request;
+    117| }
+ ❯ tests/client/breakRowsModel.test.ts:916:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 87 passed (92)
+   Start at  14:18:03
+   Duration  441ms (import 48%, transform 43%, tests 9%, worker 1%)
+
+exit 1

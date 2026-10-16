@@ -193,6 +193,115 @@ test('the admin sees pipeline states, a fault code and recipients, and no timesh
   expect(writes, 'refreshing sends no write request').toEqual([]);
 });
 
+/*
+ * Test-only (as in history-settings.spec.ts): an uncertain delivery attempt is what a sender that died after handing the message to
+ * the mail server leaves behind. No route creates one, so a child process writes it into the temporary database of the BUILT server
+ * through its own database module: a send job that needs intervention and an attempt that went sending, then uncertain with the
+ * fault code `lease_expired_while_sending`, copying the envelope of the person's last attempt.
+ */
+const SEED_UNCERTAIN_SCRIPT = `
+const [dbUrl] = process.argv.slice(1, 2);
+const { openDatabase } = await import(dbUrl);
+const { randomUUID } = await import('node:crypto');
+const env = process.env;
+const db = openDatabase(env.SEED_DB_PATH);
+try {
+  const last = db.prepare('SELECT user_id, envelope_json, attachment_id FROM delivery_attempts WHERE revision_id = ? ORDER BY started_at DESC LIMIT 1').get(env.SEED_REVISION_ID);
+  if (last === undefined) throw new Error('no delivery attempt to copy the envelope from');
+  const now = new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z');
+  const jobId = randomUUID();
+  const attemptId = randomUUID();
+  db.prepare("INSERT INTO jobs (id, user_id, revision_id, kind, business_key, payload_json, state, attempts, next_run_at, last_error, created_at, updated_at) VALUES (?, ?, ?, 'send_email', ?, ?, 'intervention', 1, ?, 'delivery_uncertain', ?, ?)").run(jobId, last.user_id, env.SEED_REVISION_ID, 'e2e-uncertain:' + jobId, JSON.stringify({ revision_id: env.SEED_REVISION_ID }), now, now, now);
+  db.prepare("INSERT INTO delivery_attempts (id, job_id, user_id, revision_id, attempt_no, channel, envelope_json, attachment_id, message_id, state, started_at, updated_at) VALUES (?, ?, ?, ?, 1, 'email', ?, ?, ?, 'sending', ?, ?)").run(attemptId, jobId, last.user_id, env.SEED_REVISION_ID, last.envelope_json, last.attachment_id, '<e2e-' + attemptId + '@timesheet.invalid>', now, now);
+  db.prepare("UPDATE delivery_attempts SET state = 'uncertain', provider_response = 'lease_expired_while_sending', updated_at = ? WHERE id = ?").run(now, attemptId);
+  process.stdout.write(attemptId);
+} finally {
+  db.close();
+}
+`;
+
+function seedUncertainAttempt(databasePath: string, revisionId: string): string {
+  const root = resolve(import.meta.dirname, '..', '..');
+  const databaseModule = pathToFileURL(join(root, 'dist', 'server', 'db', 'database.js')).href;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', SEED_UNCERTAIN_SCRIPT, databaseModule], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, SEED_DB_PATH: databasePath, SEED_REVISION_ID: revisionId },
+  });
+  if (result.status !== 0) throw new Error(`uncertain-attempt seeding failed with ${result.status}: ${result.stderr}`);
+  expect(result.stdout, 'seeded attempt id').not.toBe('');
+  return result.stdout;
+}
+
+/*
+ * WP5-UX3-FIX3 item 6: the longest words of the "Submissions and delivery" rows, the delivery state "Delivery recorded as uncertain" and
+ * the fault code `lease_expired_while_sending`, stay inside the card at 390 and 320px: the badge and the code wrap, so the table wrapper
+ * does not scroll sideways (a scrollable region with no keyboard access, axe scrollable-region-focusable) and the page does not either.
+ * The uncertain attempt is written by the test-only seed above, after a real sign-off and a delivered first attempt; the employee then
+ * records the decision "mark delivered" through the API, which turns the badge from "Decision needed" into the long state under test.
+ */
+test('phone Administration: a long delivery state and a long fault code stay inside the card, with no sideways scroll at 390 and 320px', async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+}, testInfo) => {
+  test.setTimeout(180_000);
+  const project = testInfo.project.name;
+  const account = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Operator Beta' });
+  const api = await new SeedClient(builtServer.origin).signIn(account.email, account.password);
+  const { todayLocal, currentPayrollDate } = await api.today();
+  await api.call('POST', '/api/policies', starterPolicyBody(addDays(todayLocal, -400)), 201);
+  await api.call('POST', '/api/settings/submission', { expected_seq: 0, to: [TO], cc: [CC], auto_submit: false }, 201);
+  await uploadSignature(builtServer, account);
+  const [workDay = ''] = await api.displayedPeriodFreeWorkdays();
+  expect(workDay, 'a past free workday in the displayed period').not.toBe('');
+  await api.seedCompleteDay(workDay);
+  const review = await api.call<{ expected_version: number; payload_hash: string }>('GET', `/api/timesheets/${currentPayrollDate}/review`);
+  const signed = await api.call<{ revision: { id: string } }>(
+    'POST',
+    `/api/timesheets/${currentPayrollDate}/signoff`,
+    { expected_version: review.expected_version, reviewed_hash: review.payload_hash, signer_name: 'Synthetic Operator', incomplete_evidence_acknowledged: true },
+    201,
+  );
+  const mine = async () => (await adminSeed.call<{ submissions: ApiSubmission[] }>('GET', '/api/admin/submissions?limit=500')).submissions.find((row) => row.user_id === account.id);
+  await expect
+    .poll(async () => (await mine())?.delivery.state, { timeout: 150_000, intervals: [2_000], message: 'a final first delivery state' })
+    .toMatch(/^(accepted|failed_permanent)$/);
+  // Attempts are ordered by their start second: wait past it so the seeded attempt is the newest.
+  await new Promise((resolveWait) => setTimeout(resolveWait, 1_500));
+  const attemptId = seedUncertainAttempt(builtServer.databasePath, signed.revision.id);
+  await expect.poll(async () => (await mine())?.delivery.state, { message: 'the seeded uncertain state is the latest' }).toBe('uncertain');
+  await api.call('POST', `/api/deliveries/${attemptId}/decision`, { decision: 'mark_delivered' });
+
+  await signInPageAs(builtServer.credentials.admin, '#/settings/admin');
+  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+  const card = page.getByRole('region', { name: 'Submissions and delivery' });
+  const personRow = card.locator(`[data-submission-user="${account.id}"]`);
+  await expect(personRow).toHaveCount(1);
+  await expect(personRow.locator('[data-status="delivery"]')).toHaveText('Delivery recorded as uncertain');
+  await expect(personRow.locator('.ops-code').filter({ hasText: 'lease_expired_while_sending' })).toHaveCount(1);
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await personRow.scrollIntoViewIfNeeded();
+    const wrap = card.locator('.table-wrap');
+    const scroll = await wrap.evaluate((element) => ({ client: element.clientWidth, scroll: element.scrollWidth }));
+    expect(scroll.scroll, `${width}px: the table wrapper has nothing to scroll sideways (${scroll.scroll} against ${scroll.client})`).toBeLessThanOrEqual(scroll.client);
+    // Every word of the row (cells, badges, codes) ends inside the card.
+    const outside = await card.evaluate((element, userId) => {
+      const right = element.getBoundingClientRect().right;
+      const row = element.querySelector(`[data-submission-user="${userId}"]`);
+      if (row === null) return ['row missing'];
+      return [...row.querySelectorAll('th, td, td *')]
+        .filter((item) => item.getBoundingClientRect().right > right + 0.5)
+        .map((item) => `${item.tagName.toLowerCase()}.${item.className} ends at ${item.getBoundingClientRect().right.toFixed(1)} past ${right.toFixed(1)}`);
+    }, account.id);
+    expect(outside, `${width}px: no part of the row lies past the card`).toEqual([]);
+    await expectNoSidewaysScroll(page);
+    await card.screenshot({ path: screenshotPath(`admin-submissions-uncertain-${width}-${project}-synthetic.png`) });
+  }
+});
+
 test('an employee cannot read the status routes and the Admin screen is not offered', async ({ page, signInThroughUi }) => {
   await signInThroughUi();
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();

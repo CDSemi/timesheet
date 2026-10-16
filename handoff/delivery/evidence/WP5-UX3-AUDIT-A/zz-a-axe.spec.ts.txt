@@ -1,0 +1,177 @@
+import { readFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, openAccount, test } from './fixtures.ts';
+import { namedDayButton } from './dayButton.ts';
+import { note } from './zz-alib.ts';
+
+/*
+ * WP5-UX3-AUDIT-A item 7 (task-local probe, never in the repository): a real axe-core 4.14.0 scan (WCAG 2.0/2.1/2.2 A and AA
+ * tags) of the main screens on both projects, light and dark, with the engine read from the task folder and evaluated
+ * through the DevTools protocol (nothing added to package.json). Plus the accessible name of the Day editor dialog, whose
+ * brackets are CSS generated content, from the browser's accessibility tree and from axe's own name computation.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const AXE = readFileSync('<task>\\axe\\node_modules\\axe-core\\axe.min.js', 'utf8');
+const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'];
+
+interface AxeSummary {
+  violations: Array<{ id: string; impact: string | null; nodes: Array<{ target: string[]; failureSummary?: string }> }>;
+  incomplete: Array<{ id: string; nodes: unknown[] }>;
+  passes: number;
+}
+
+async function scan(page: Page, label: string): Promise<number> {
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(400);
+  const has = await page.evaluate('typeof window.axe');
+  if (has !== 'object') await page.evaluate(AXE);
+  const result = (await page.evaluate(`axe.run(document, { runOnly: { type: 'tag', values: ${JSON.stringify(TAGS)} }, resultTypes: ['violations', 'incomplete'] }).then((r) => ({
+    violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => ({ target: n.target, failureSummary: n.failureSummary })) })),
+    incomplete: r.incomplete.map((v) => ({ id: v.id, nodes: v.nodes })),
+    passes: r.passes.length,
+  }))`)) as AxeSummary;
+  const v = result.violations.map((x) => `${x.id}(${x.impact}) x${x.nodes.length} ${x.nodes.map((n) => `${n.target.join(' ')}: ${(n.failureSummary ?? '').replace(/\s+/g, ' ').slice(0, 160)}`).join(' || ')}`);
+  const inc = result.incomplete.map((x) => `${x.id} x${x.nodes.length}`).join(', ');
+  note('axe.txt', `${label}: violations ${result.violations.length}${v.length ? ` :: ${v.join(' ## ')}` : ''}; incomplete [${inc}]`);
+  return result.violations.length;
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`axe scan of the main screens (${theme})`, async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+    test.setTimeout(300_000);
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Axe Reader', signature: 'none' });
+    const free = await me.api.displayedPeriodFreeWorkdays();
+    const day = free[0] ?? '';
+    const other = free[1] ?? '';
+    if (day !== '') await me.api.seedCompleteDay(day);
+    if (other !== '') await me.api.seedUnconfirmedBreaksDay(other);
+    const project = isMobile ? 'phone 390' : 'desktop';
+    if (!isMobile) await page.setViewportSize({ width: 1366, height: 900 });
+    await signInPageAs(me.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await scan(page, `${theme} ${project} timesheet`);
+    // Editor open (beside at 1366, bottom sheet on a phone), then the session dialog, its confirmation, the delete confirmation.
+    await namedDayButton(page, day, 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await expect(editor.getByRole('heading', { name: 'Times' })).toBeVisible();
+    await scan(page, `${theme} ${project} day editor`);
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const session = page.getByRole('dialog', { name: /New session/ });
+    await expect(session).toBeVisible();
+    await scan(page, `${theme} ${project} session dialog`);
+    await session.getByRole('button', { name: 'Cancel' }).click();
+    const discard = page.getByRole('alertdialog', { name: /Discard/ });
+    if (await discard.isVisible().catch(() => false)) await discard.getByRole('button', { name: 'Discard' }).click();
+    await expect(session).toHaveCount(0);
+    await editor.getByRole('button', { name: /^Delete/ }).first().click();
+    const confirm = page.getByRole('alertdialog', { name: /Delete this session/ });
+    await expect(confirm).toBeVisible();
+    await scan(page, `${theme} ${project} delete confirmation`);
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    if (!isMobile) {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await namedDayButton(page, day, 'Edit').click();
+      await expect(editor).toBeVisible();
+      await scan(page, `${theme} desktop 1280 floating editor`);
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+      await page.setViewportSize({ width: 1366, height: 900 });
+      await page.getByRole('button', { name: 'Change several days' }).click();
+      for (const date of [day, other]) if (date !== '') await page.getByLabel(`Select ${date}`).check();
+      await scan(page, `${theme} desktop batch selection`);
+      await page.getByRole('button', { name: 'Done' }).click();
+    }
+    // Account menu / More panel, then the Settings pages.
+    await openAccount(page);
+    await scan(page, `${theme} ${project} account panel open`);
+    await page.goto('/#/settings');
+    await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+    await scan(page, `${theme} ${project} settings personal`);
+    await page.goto('/#/settings/profile');
+    await expect(page.getByRole('heading', { level: 1, name: 'Profile' })).toBeVisible();
+    await scan(page, `${theme} ${project} profile`);
+    await page.goto('/#/ot');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await scan(page, `${theme} ${project} overtime`);
+  });
+}
+
+test('the account menu open over the period bar at 1280 and 1440: axe target-size, and a press on an uncovered sliver', async ({ page, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'desktop');
+  test.setTimeout(120_000);
+  await signInPageAs(builtServer.credentials.employee);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const width of [1280, 1440, 1296]) {
+    await page.setViewportSize({ width, height: 900 });
+    const panel = await openAccount(page);
+    await scan(page, `light desktop ${width} account menu open (target-size check)`);
+    // Which controls lie partly under the panel, and how much of each is uncovered.
+    const box = await panel.boundingBox();
+    const under = await page.evaluate((p) => {
+      if (p === null) return [];
+      const out: string[] = [];
+      for (const e of document.querySelectorAll('main button, main a[href]')) {
+        const r = e.getBoundingClientRect();
+        if (r.width === 0) continue;
+        const ix = Math.max(0, Math.min(r.right, p.x + p.width) - Math.max(r.left, p.x));
+        const iy = Math.max(0, Math.min(r.bottom, p.y + p.height) - Math.max(r.top, p.y));
+        if (ix > 0 && iy > 0) out.push(`${(e.textContent ?? '').trim().slice(0, 24)} ${r.width.toFixed(1)}x${r.height.toFixed(1)} uncovered width ${(r.width - ix).toFixed(1)}`);
+      }
+      return out;
+    }, box);
+    note('axe.txt', `menu open at ${width}: panel ${JSON.stringify(box)}; controls under it: ${under.join(' | ')}`);
+    await page.keyboard.press('Escape');
+  }
+  // A press on the sliver of "Today" left uncovered at 1296 (FIX1's example): the menu closes and the press reaches Today.
+  await page.setViewportSize({ width: 1296, height: 900 });
+  const panel = await openAccount(page);
+  const today = page.getByRole('button', { name: 'Today', exact: true });
+  const [t, p] = [await today.boundingBox(), await panel.boundingBox()];
+  if (t !== null && p !== null && t.x < p.x) {
+    await page.mouse.click((t.x + p.x) / 2, t.y + t.height / 2);
+    await page.waitForTimeout(400);
+    note('axe.txt', `sliver press at x ${((t.x + p.x) / 2).toFixed(1)} (Today ${t.x.toFixed(1)}-${(t.x + t.width).toFixed(1)}, panel from ${p.x.toFixed(1)}): menu visible ${await panel.isVisible()}, focused Today ${await today.evaluate((e) => e === document.activeElement)}`);
+  } else {
+    note('axe.txt', `sliver press: no sliver at 1296 (Today ${JSON.stringify(t)}, panel ${JSON.stringify(p)})`);
+  }
+});
+
+test('axe scan of Administration (admin), light and dark', async ({ page, builtServer, signInPageAs, isMobile }) => {
+  test.setTimeout(180_000);
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    if (theme === 'light') await signInPageAs(builtServer.credentials.admin, '#/settings/admin');
+    else await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'Administration' })).toBeVisible();
+    await page.waitForTimeout(800);
+    await scan(page, `${theme} ${isMobile ? 'phone 390' : 'desktop 1280'} administration`);
+  }
+});
+
+test('the Day editor dialog name with CSS generated brackets: accessibility tree and axe', async ({ page, adminSeed, builtServer, signInPageAs, browserName, isMobile }) => {
+  test.setTimeout(120_000);
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Name Reader', signature: 'none' });
+  const day = (await me.api.displayedPeriodFreeWorkdays())[0] ?? '';
+  await signInPageAs(me.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await namedDayButton(page, day, 'Edit').click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  const snapshot = await editor.ariaSnapshot();
+  const firstLine = snapshot.split('\n')[0] ?? '';
+  const session = await page.context().newCDPSession(page);
+  await session.send('Accessibility.enable');
+  const tree = (await session.send('Accessibility.getFullAXTree')) as { nodes: Array<{ role?: { value?: string }; name?: { value?: string; sources?: unknown } }> };
+  const dialogs = tree.nodes.filter((n) => n.role?.value === 'dialog').map((n) => n.name?.value ?? '');
+  const headingText = await page.locator('#day-editor-title').textContent();
+  if ((await page.evaluate('typeof window.axe')) !== 'object') await page.evaluate(AXE);
+  const axeName = await page.evaluate(`(() => { const d = document.querySelector('dialog[data-day-editor]'); axe.setup(); const n = axe.commons.text.accessibleTextVirtual(axe.utils.getNodeFromTree(d)); axe.teardown(); return n; })()`);
+  const version = page.context().browser()?.version() ?? '';
+  note('name.txt', `${browserName} ${version} ${isMobile ? 'mobile' : 'desktop'}: aria snapshot "${firstLine.trim()}"; CDP AX tree dialog name(s) ${JSON.stringify(dialogs)}; heading textContent "${(headingText ?? '').replace(/\s+/g, ' ')}"; axe accessibleText "${String(axeName)}"`);
+  await expect(editor).toHaveAccessibleName(new RegExp(`^Day editor \\w{3} \\d{2}/\\d{2}/\\d{4} \\(${day}\\)$`));
+});

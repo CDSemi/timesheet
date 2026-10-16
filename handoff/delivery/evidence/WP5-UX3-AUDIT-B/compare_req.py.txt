@@ -1,0 +1,92 @@
+"""Compares the request bodies and stored sessions captured on a643794 (base) and the target. Usage: python compare_req.py <base.jsonl> <target.jsonl> <out.txt>"""
+import json
+import sys
+
+
+def load(path):
+    out = {}
+    for line in open(path, encoding='utf-8'):
+        line = line.strip()
+        if not line:
+            continue
+        item = json.loads(line)
+        out[item['case']] = item
+    return out
+
+
+def final_write(item):
+    ok = [w for w in item.get('writes', []) if w['status'] in (200, 201)]
+    return ok[-1] if ok else None
+
+
+def canon(value):
+    return json.dumps(value, sort_keys=True, ensure_ascii=False)
+
+
+base = load(sys.argv[1])
+target = load(sys.argv[2])
+lines = []
+summary = []
+for case in base:
+    if case in ('context', 'errors'):
+        continue
+    b = base[case]
+    t = target.get(case)
+    lines.append(f'=== {case}')
+    if t is None or 'error' in b or 'error' in t:
+        lines.append(f'  MISSING or ERROR base={b.get("error")} target={None if t is None else t.get("error")}')
+        summary.append((case, 'ERROR'))
+        continue
+    bw, tw = final_write(b), final_write(t)
+    refused_b = [w['status'] for w in b['writes'] if w['status'] not in (200, 201)]
+    refused_t = [w['status'] for w in t['writes'] if w['status'] not in (200, 201)]
+    lines.append(f'  writes base={len(b["writes"])} (refused {refused_b}) target={len(t["writes"])} (refused {refused_t})')
+    lines.append(f'  base   {bw["method"]} {bw["path"].split("/")[2]} {canon(bw["body"])}')
+    lines.append(f'  target {tw["method"]} {tw["path"].split("/")[2]} {canon(tw["body"])}')
+    bb, tb = bw['body'], tw['body']
+    same_bytes = canon(bb) == canon(tb)
+    keys_b = sorted(bb.keys())
+    keys_t = sorted(tb.keys())
+    lines.append(f'  body byte-identical: {same_bytes}; top keys equal: {keys_b == keys_t} ({keys_b} vs {keys_t})')
+    # Session start/end and break starts compared as sent; break ends compared through the stored instants.
+    detail = []
+    for key in ('start', 'end', 'input_zone', 'breaks_confirmed', 'reason', 'expected_version'):
+        if key in bb or key in tb:
+            eq = canon(bb.get(key)) == canon(tb.get(key))
+            if key == 'expected_version':
+                eq = (key in bb) == (key in tb)
+            detail.append(f'{key}={"=" if eq else "DIFF"}')
+    brb = bb.get('breaks')
+    brt = tb.get('breaks')
+    if brb is None or brt is None:
+        detail.append(f'breaks present base={brb is not None} target={brt is not None}')
+    else:
+        detail.append(f'breaks count {len(brb)}/{len(brt)}')
+        for i, (x, y) in enumerate(zip(brb, brt)):
+            detail.append(f'b{i + 1}.start={"=" if canon(x["start"]) == canon(y["start"]) else "DIFF"} b{i + 1}.end={"=" if canon(x["end"]) == canon(y["end"]) else "differs-as-sent"} b{i + 1}.cw={"=" if x["counts_as_work"] == y["counts_as_work"] else "DIFF"}')
+    lines.append('  ' + '; '.join(detail))
+    sb, st = b['stored'], t['stored']
+    if case.startswith('C2'):
+        # Check-out sessions run at the current time; compare what does not depend on it.
+        def shape(sessions):
+            return [(s['input_zone'], s['breaks_confirmed'], len(s['breaks']), [(b2[0][11:16], b2[1][11:16]) for b2 in s['breaks']]) for s in sessions]
+        stored_eq = shape(sb) == shape(st)
+        lines.append(f'  stored (zone, confirmed, breaks) base={shape(sb)} target={shape(st)} equal={stored_eq}')
+        lines.append(f'  ui base={canon(b.get("ui"))}')
+        lines.append(f'  ui target={canon(t.get("ui"))}')
+    else:
+        stored_eq = canon(sb) == canon(st)
+        lines.append(f'  stored equal: {stored_eq}')
+        lines.append(f'  stored base={canon(sb)}')
+        if not stored_eq:
+            lines.append(f'  stored target={canon(st)}')
+        if t.get('ui'):
+            lines.append(f'  ui target={canon(t.get("ui"))}')
+        if b.get('ui'):
+            lines.append(f'  ui base={canon(b.get("ui"))}')
+    summary.append((case, f'stored={"EQUAL" if stored_eq else "DIFF"} bytes={"IDENTICAL" if same_bytes else "differ"}'))
+lines.append('')
+lines.append('SUMMARY')
+for case, text in summary:
+    lines.append(f'  {case}: {text}')
+open(sys.argv[3], 'w', encoding='utf-8', newline='\n').write('\n'.join(lines) + '\n')

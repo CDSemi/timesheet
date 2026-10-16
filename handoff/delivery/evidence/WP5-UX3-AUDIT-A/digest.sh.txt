@@ -1,0 +1,22 @@
+# Usage: bash digest.sh <tag>   (tag = before|after). Three digest forms on the pristine export.
+. <task>/env.sh
+TAG=$1
+cd $T/export || exit 2
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' -not -path './.git/*' -not -path './test-results/*' -not -path './playwright-report/*' | sed 's|^\./||' | LC_ALL=C sort > $T/out/ex-files-$TAG.txt
+rm -f $T/out/ex-hashes-$TAG.txt
+while IFS= read -r f; do
+  h=$(git hash-object --no-filters -- "$f")
+  printf '%s %s\n' "$f" "$h" >> $T/out/ex-hashes-$TAG.txt
+done < $T/out/ex-files-$TAG.txt
+LC_ALL=C sort $T/out/ex-hashes-$TAG.txt > $T/out/ex-sorted-$TAG.txt
+echo "export form: $(sha256sum $T/out/ex-sorted-$TAG.txt | cut -d' ' -f1) lines $(wc -l < $T/out/ex-sorted-$TAG.txt)" > $T/out/01-digest-export-$TAG.txt
+cd $REPO
+git ls-tree -r --format='%(path) %(objectname)' $TARGET | grep -v '^handoff/' | LC_ALL=C sort > $T/out/lstree-sorted-$TAG.txt
+echo "ls-tree form: $(sha256sum $T/out/lstree-sorted-$TAG.txt | cut -d' ' -f1) lines $(wc -l < $T/out/lstree-sorted-$TAG.txt)" > $T/out/01-digest-lstree-$TAG.txt
+cmp $T/out/ex-sorted-$TAG.txt $T/out/lstree-sorted-$TAG.txt && echo "export list byte-identical to ls-tree list" >> $T/out/01-digest-lstree-$TAG.txt
+npm run digest > $T/out/01-digest-npm-$TAG.txt 2>&1
+echo "npm run digest exit $?" >> $T/out/01-digest-npm-$TAG.txt
+git rev-parse HEAD > $T/out/01-head-$TAG.txt
+git status --short -- . ':!handoff' > $T/out/01-nonhandoff-status-$TAG.txt
+echo "nonhandoff status lines: $(wc -l < $T/out/01-nonhandoff-status-$TAG.txt)" >> $T/out/01-head-$TAG.txt
+cat $T/out/01-digest-export-$TAG.txt $T/out/01-digest-lstree-$TAG.txt $T/out/01-digest-npm-$TAG.txt $T/out/01-head-$TAG.txt

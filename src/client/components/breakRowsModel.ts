@@ -372,9 +372,11 @@ export function checkBreakRows(rows: readonly BreakRowDraft[], inputZone: string
 /**
  * How Save and Check out treat the breaks. Session dialog: `allowUnconfirmed` is the owner's G-4
  * choice for an empty list with the box unticked (true: save with breaks unknown; false: block).
- * Check out keeps E-1: an empty unticked list omits `breaks`.
+ * Check out keeps E-1: an empty unticked list omits `breaks` (the saved rows stay, unconfirmed), except
+ * when the dialog started with saved rows (`hadSavedRows`) and the person removed them all: the empty
+ * unconfirmed list is then sent, the complete set, which replaces the rows the dialog no longer shows.
  */
-export type BreaksSaveMode = { kind: 'session'; allowUnconfirmed: boolean } | { kind: 'checkout' };
+export type BreaksSaveMode = { kind: 'session'; allowUnconfirmed: boolean } | { kind: 'checkout'; hadSavedRows?: boolean };
 
 export const UNCONFIRMED_BLOCKED_MESSAGE = 'List the breaks you took, or tick "Confirm no breaks taken".';
 
@@ -388,7 +390,7 @@ export function breaksPayload(
 ): BreaksPayload {
   if (input.noBreaks) return { ok: true, breaks: [], breaksConfirmed: true };
   if (input.rows.length === 0) {
-    if (mode.kind === 'checkout') return { ok: true, breaks: undefined, breaksConfirmed: false };
+    if (mode.kind === 'checkout') return { ok: true, breaks: mode.hadSavedRows === true ? [] : undefined, breaksConfirmed: false };
     if (mode.allowUnconfirmed) return { ok: true, breaks: [], breaksConfirmed: false };
     return { ok: false, message: UNCONFIRMED_BLOCKED_MESSAGE, rowErrors: [] };
   }
@@ -439,7 +441,10 @@ export type CheckOutBuild = { ok: true; request: ClockOutRequest } | { ok: false
 
 /**
  * The POST /api/clock/out body (E-1): a listed set or the ticked box confirms and replaces the
- * saved rows; an empty unticked list omits `breaks`, so the breaks stay unconfirmed. The rows are
+ * saved rows. An empty unticked list means "no break confirmed": when the dialog started without
+ * saved rows it omits `breaks`, so the breaks stay unconfirmed; when it started with saved rows (the
+ * person removed them all) it sends the empty unconfirmed list, the complete set, which replaces them
+ * (WP5-UX3-FIX3 item 7: the dialog shows no rows, so the server must keep none). The rows are
  * typed in the session's input zone and checked against its start (it has no end yet).
  */
 export function buildCheckOutDialogRequest(input: {
@@ -454,7 +459,10 @@ export function buildCheckOutDialogRequest(input: {
     startUtc: parseUtcInstant(session.start_utc),
     endUtc: session.end_utc === null ? null : parseUtcInstant(session.end_utc),
   };
-  const payload = breaksPayload({ rows: input.rows, noBreaks: input.noBreaks, zone: session.input_zone, bounds }, { kind: 'checkout' });
+  const payload = breaksPayload(
+    { rows: input.rows, noBreaks: input.noBreaks, zone: session.input_zone, bounds },
+    { kind: 'checkout', hadSavedRows: session.breaks.length > 0 },
+  );
   if (!payload.ok) return { ok: false, message: payload.message, rowErrors: payload.rowErrors };
   const request: ClockOutRequest =
     payload.breaks === undefined
@@ -566,6 +574,18 @@ export function suggestionRows(
   return suggestBreaks(startUtc, toBreakRules(policy.breaks))
     .filter((item) => item.startUtc >= startUtc && (endUtc === null || item.endUtc <= endUtc))
     .map((item, index) => pinnedRow(keyOf(index), 'suggested', zone, item.startUtc, item.endUtc, item.countsAsWork));
+}
+
+/**
+ * The rows the session dialog opens with when "Confirm breaks" is pressed on a saved session (docs/04: the saved rows, or, when it
+ * has none, the suggested breaks that lie inside the session; WP5-UX3-FIX3 item 8). Only an ended session whose breaks are not
+ * confirmed and that has no saved row is offered suggestions, each one that fits (`suggestionRows`), so a 09:00-14:00 session gets
+ * the first two of three and a session that fits none gets nothing, which Save then asks about through the G-4 notice. The saved
+ * rows themselves come from `sessionDialogDraftFromSession`; this function returns none for a session that has them.
+ */
+export function confirmBreaksRows(session: Session, policy: PolicyVersion | undefined, keyOf: (index: number) => string): BreakRowDraft[] {
+  if (policy === undefined || session.end_utc === null || session.breaks_confirmed || session.breaks.length > 0) return [];
+  return suggestionRows(policy, parseUtcInstant(session.start_utc), parseUtcInstant(session.end_utc), session.input_zone, keyOf);
 }
 
 /**

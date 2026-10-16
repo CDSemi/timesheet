@@ -1,0 +1,15 @@
+# Usage: bash load.sh <label>  -> appends one load-context sample to $T/out/load-context.txt
+T=<task>
+B=<audit-b-task>
+{
+  echo "== $(date -u +%Y-%m-%dT%H:%M:%SZ) $1"
+  echo "  node.exe processes (all users of this machine): $(tasklist //FI "IMAGENAME eq node.exe" //NH | grep -c node.exe)"
+  echo "  msedge.exe processes: $(tasklist //FI "IMAGENAME eq msedge.exe" //NH | grep -c msedge.exe)"
+  if [ -d "$B" ]; then
+    echo "  AUDIT-B folder entries modified in the last 3 minutes (depth 3): $(find "$B" -maxdepth 3 -newermt '-3 minutes' | wc -l)"
+  else
+    echo "  AUDIT-B folder absent"
+  fi
+  typeperf "\\Processor(_Total)\\% Processor Time" -sc 3 > $T/tmp/typeperf.txt 2>&1
+  echo "  CPU % (3 samples, 1 s): $(grep -E '^"[0-9]' $T/tmp/typeperf.txt | sed 's/.*,"\([0-9.]*\)"/\1/' | tr '\n' ' ')"
+} >> $T/out/load-context.txt

@@ -1,0 +1,85 @@
+
+Running 4 tests using 1 worker
+
+seeded entry on 2026-09-28: version 1
+  ok 1 [desktop] › tests\e2e\aaa-audb-seed.spec.ts:7:1 › an earlier test leaves a day entry on the oldest free workday (166ms)
+  x  2 [desktop] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date (8.5s)
+seeded entry on 2026-09-28: version 1
+  ok 3 [mobile] › tests\e2e\aaa-audb-seed.spec.ts:7:1 › an earlier test leaves a day entry on the oldest free workday (115ms)
+  x  4 [mobile] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date (9.2s)
+
+
+  1) [desktop] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('alert').filter({ hasText: 'changed since this period was loaded' })
+    Expected substring: "2026-09-28"
+    Received string:    "Some dates changed since this period was loaded. Nothing was saved. Reload the period, review the new labels and try again.Reload period"
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "toContainText" getByRole('alert').filter({ hasText: 'changed since this period was loaded' }) with timeout 7000ms
+      - waiting for getByRole('alert').filter({ hasText: 'changed since this period was loaded' })
+        18 × locator resolved to <div role="alert" class="stale">…</div>
+           - unexpected value "Some dates changed since this period was loaded. Nothing was saved. Reload the period, review the new labels and try again.Reload period"
+
+
+      480 |
+      481 |   const alert = page.getByRole('alert').filter({ hasText: 'changed since this period was loaded' });
+    > 482 |   await expect(alert).toContainText(workDate);
+          |                       ^
+      483 |   await expect(alert).toContainText('Nothing was saved');
+      484 |   await expect(dialog).toHaveCount(0);
+      485 |   expect((await employeeSeed.dayView(workDate)).category).toBe('Vacation');
+        at <task>\mut2\tests\e2e\timesheet.spec.ts:482:23
+
+    Error Context: ..\pw-fix1-stale-accepted\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-fix1-stale-accepted\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-fix1-stale-accepted\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('alert').filter({ hasText: 'changed since this period was loaded' })
+    Expected substring: "2026-09-28"
+    Received string:    "Some dates changed since this period was loaded. Nothing was saved. Reload the period, review the new labels and try again.Reload period"
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "toContainText" getByRole('alert').filter({ hasText: 'changed since this period was loaded' }) with timeout 7000ms
+      - waiting for getByRole('alert').filter({ hasText: 'changed since this period was loaded' })
+        18 × locator resolved to <div role="alert" class="stale">…</div>
+           - unexpected value "Some dates changed since this period was loaded. Nothing was saved. Reload the period, review the new labels and try again.Reload period"
+
+
+      480 |
+      481 |   const alert = page.getByRole('alert').filter({ hasText: 'changed since this period was loaded' });
+    > 482 |   await expect(alert).toContainText(workDate);
+          |                       ^
+      483 |   await expect(alert).toContainText('Nothing was saved');
+      484 |   await expect(dialog).toHaveCount(0);
+      485 |   expect((await employeeSeed.dayView(workDate)).category).toBe('Vacation');
+        at <task>\mut2\tests\e2e\timesheet.spec.ts:482:23
+
+    Error Context: ..\pw-fix1-stale-accepted\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-fix1-stale-accepted\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-fix1-stale-accepted\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date
+    [mobile] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date
+  2 passed (25.5s)

@@ -1,0 +1,149 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX3-AUDIT-B task-local probe (never part of the repository), target build, phone project: the session dialog's break list
+ * as rows or chips at 430/390/375/360/320 for a same-day and an overnight session (N-1, Q6 b), the chip text (24-hour), the
+ * 390x844 fit and scroll (N-2), the 44px targets inside the dialog and its sub-dialog, no sideways scroll; plus "Confirm breaks"
+ * on a session where only some suggestions fit (desktop part at the end).
+ */
+const OUT = process.env.AUDB_OUT ?? '';
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+function rec(line: string) {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'phone.txt'), `${line}\n`);
+}
+
+async function measure(page: Page, form: Locator, label: string) {
+  const facts = await form.evaluate((dialog) => {
+    const body = dialog.querySelector('.session-dialog-body') as HTMLElement | null;
+    const foot = dialog.querySelector('.session-dialog-foot') as HTMLElement | null;
+    const head = dialog.querySelector('.session-dialog-head') as HTMLElement | null;
+    const list = dialog.querySelector('.break-area') as HTMLElement | null;
+    const first = dialog.querySelector('input') as HTMLElement | null;
+    const r = (el: Element | null) => (el === null ? null : el.getBoundingClientRect());
+    const small: string[] = [];
+    for (const el of dialog.querySelectorAll<HTMLElement>('button, input, select, textarea, [role="checkbox"]')) {
+      const box = el.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      const target = el.closest('label') ?? el;
+      const t = target.getBoundingClientRect();
+      if (Math.min(box.height, t.height) < 44 || box.width < 24) small.push(`${el.tagName.toLowerCase()}[${(el.getAttribute('aria-label') ?? (el as HTMLInputElement).type ?? '').slice(0, 24)}] ${box.width.toFixed(0)}x${box.height.toFixed(0)}`);
+    }
+    return {
+      layout: dialog.querySelector('[data-layout]')?.getAttribute('data-layout') ?? 'empty',
+      listWidth: list?.clientWidth ?? null,
+      bodyScroll: body === null ? null : body.scrollHeight - body.clientHeight,
+      head: r(head)?.height ?? null,
+      footTop: r(foot)?.top ?? null,
+      footBottom: r(foot)?.bottom ?? null,
+      firstInputTop: r(first)?.top ?? null,
+      firstInputBottom: r(first)?.bottom ?? null,
+      viewport: window.innerHeight,
+      docScroll: document.documentElement.scrollWidth - window.innerWidth,
+      dialogScrollX: dialog.scrollWidth - dialog.clientWidth,
+      small,
+      chipTexts: [...dialog.querySelectorAll('.break-entry-chip button')].map((b) => (b.textContent ?? '').replace(/\s+/g, ' ').trim()),
+    };
+  });
+  rec(`${label}: ${JSON.stringify(facts)}`);
+  return facts;
+}
+
+test('phone: rows or chips by width, 390x844 fit, 44px targets, no sideways scroll', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(!isMobile, 'Phone project');
+  test.setTimeout(300_000);
+  const who = await newPerson(adminSeed, builtServer, { signature: 'none' });
+  const free = await who.api.displayedPeriodFreeWorkdays();
+  const day = free[0] ?? '';
+  await signInPageAs(who.account);
+  for (const width of [430, 390, 375, 360, 320]) {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.getByLabel('Open a day').fill(day);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = page.getByRole('dialog', { name: 'New session', exact: true });
+    await expect(form).toBeVisible();
+    await page.waitForTimeout(300);
+    const same = await measure(page, form, `W${width} same-day (pre-filled, 3 suggestions)`);
+    if (width === 390) {
+      await page.screenshot({ path: screenshotPath('audb-phone-390x844-same-day-rows-synthetic.png') });
+      // Scrolled to the end: the footer stays in view.
+      await form.locator('.session-dialog-body').evaluate((body) => body.scrollTo(0, body.scrollHeight));
+      await page.waitForTimeout(200);
+      await measure(page, form, 'W390 same-day scrolled to the end');
+      await form.locator('.session-dialog-body').evaluate((body) => body.scrollTo(0, 0));
+    }
+    // Overnight: end on the next date.
+    await form.getByLabel('End date', { exact: true }).fill(addDays(day, 1));
+    await page.waitForTimeout(300);
+    await measure(page, form, `W${width} overnight`);
+    if (width === 390) await page.screenshot({ path: screenshotPath('audb-phone-390x844-overnight-chips-synthetic.png') });
+    if (same.layout === 'chips' || width <= 390) {
+      const chip = form.locator('.break-entry-chip button').first();
+      if ((await chip.count()) > 0) {
+        await chip.click();
+        const sub = page.getByRole('dialog', { name: /^Break \d$/ });
+        await expect(sub).toBeVisible();
+        const subFacts = await sub.evaluate((dialog) =>
+          [...dialog.querySelectorAll<HTMLElement>('button, input')].map((el) => {
+            const b = el.getBoundingClientRect();
+            return `${el.tagName.toLowerCase()}:${(el.textContent ?? (el as HTMLInputElement).type).trim().slice(0, 16)} ${b.width.toFixed(0)}x${b.height.toFixed(0)}`;
+          }),
+        );
+        rec(`W${width} sub-dialog controls: ${JSON.stringify(subFacts)}`);
+        await sub.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(sub).toHaveCount(0);
+      }
+    }
+    await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    if (await discard.isVisible().catch(() => false)) await discard.getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(form).toHaveCount(0);
+    await editor.getByRole('button', { name: 'Close', exact: true }).first().click();
+    await expect(editor).toHaveCount(0);
+  }
+});
+
+test('desktop: "Confirm breaks" where only some suggested breaks fit', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'Desktop project');
+  const who = await newPerson(adminSeed, builtServer, { signature: 'none' });
+  const free = await who.api.displayedPeriodFreeWorkdays();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const [date, end] of [
+    [free[0] ?? '', '12:00'],
+    [free[1] ?? '', '14:00'],
+    [free[2] ?? '', '18:00'],
+  ] as const) {
+    await who.api.createSession(date, '09:00', end, null);
+  }
+  await signInPageAs(who.account);
+  for (const [date, end] of [
+    [free[0] ?? '', '12:00'],
+    [free[1] ?? '', '14:00'],
+    [free[2] ?? '', '18:00'],
+  ] as const) {
+    await page.getByLabel('Open a day').fill(date);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+    await editor.getByRole('button', { name: /^Confirm breaks of/ }).click();
+    const form = page.getByRole('dialog', { name: 'Edit session', exact: true });
+    await expect(form).toBeVisible();
+    const rows: string[] = [];
+    for (let n = 1; n <= (await form.locator('[data-break]').count()); n += 1) rows.push((await form.locator(`[data-break="${n}"]`).innerText()).replace(/\s+/g, ' '));
+    await form.getByRole('button', { name: 'Suggest breaks', exact: true }).click();
+    const suggested = await form.locator('[data-break]').count();
+    rec(`C 09:00-${end} on ${date}: Confirm breaks lists ${rows.length} rows ${JSON.stringify(rows)}; Suggest breaks then lists ${suggested}`);
+    await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    if (await discard.isVisible().catch(() => false)) await discard.getByRole('button', { name: 'Discard', exact: true }).click();
+    await editor.getByRole('button', { name: 'Close', exact: true }).first().click();
+  }
+});

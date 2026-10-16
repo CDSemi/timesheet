@@ -1,0 +1,26 @@
+# FIX1 item 2 probes in the second scratch export (mut2). Usage: bash run-fix1.sh
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+O=$T/out
+M=$T/mut2
+cp $T/aaa-audb-seed.spec.ts $M/tests/e2e/
+cd $M
+run() {
+  node node_modules/@playwright/test/cli.js test tests/e2e/aaa-audb-seed.spec.ts tests/e2e/timesheet.spec.ts:452 --workers=1 --output="$TW\\pw-fix1-$1" > $O/61-fix1-$1.txt 2>&1
+  echo "$1 exit $? $(grep -E '^ +[0-9]+ (passed|failed|flaky|skipped)' $O/61-fix1-$1.txt | tr '\n' ' ')" >> $O/61-fix1-exits.txt
+}
+# 1. Baseline with the precondition (an entry left on the seeded date), both projects.
+run baseline
+# 2. The test's seed as before FIX1 (version null, no reset): the precondition must reproduce the 409.
+"$PY" -I $T/mutate.py $T/fix1-mutants.json $M $T/export apply T1 >> $O/61-fix1-exits.txt
+run old-seed
+"$PY" -I $T/mutate.py $T/fix1-mutants.json $M $T/export revert T1 >> $O/61-fix1-exits.txt
+# 3. The server accepts a stale batch version: the test must fail (it still proves the refusal).
+"$PY" -I $T/mutate.py $T/fix1-mutants.json $M $T/export apply S1 >> $O/61-fix1-exits.txt
+npm run build:server > $O/61-fix1-build-s1.txt 2>&1; echo "build:server S1 exit $?" >> $O/61-fix1-exits.txt
+run stale-accepted
+"$PY" -I $T/mutate.py $T/fix1-mutants.json $M $T/export revert S1 >> $O/61-fix1-exits.txt
+npm run build:server > $O/61-fix1-build-restore.txt 2>&1; echo "build:server restore exit $?" >> $O/61-fix1-exits.txt
+"$PY" -I $T/cmp_dist.py $T/export $M dist/server >> $O/61-fix1-exits.txt 2>&1
+rm -f $M/tests/e2e/aaa-audb-seed.spec.ts
+echo fix1-done >> $O/61-fix1-exits.txt

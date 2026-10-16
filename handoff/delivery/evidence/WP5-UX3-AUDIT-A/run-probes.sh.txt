@@ -1,0 +1,13 @@
+# WP5-UX3-AUDIT-A: the task-local probes in export-p, real clock, one worker, each spec its own output folder.
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+cd $T/export-p || exit 2
+for spec in "$@"; do
+  name=$(basename $spec .spec.ts)
+  export E2E_SCREENSHOT_DIR="$TW\\shots-$name"
+  bash $T/load.sh "probe $name start"
+  echo "== $name start $(date -u +%H:%M:%SZ)" >> $T/out/probe-times.txt
+  node node_modules/@playwright/test/cli.js test --config=playwright.audit.config.ts tests/e2e/$spec --output="$TW\\pw-$name" > $T/logs/probe-$name.txt 2>&1
+  echo "== $name exit $? end $(date -u +%H:%M:%SZ)" >> $T/out/probe-times.txt
+done
+echo probes-done > $T/out/probes.done

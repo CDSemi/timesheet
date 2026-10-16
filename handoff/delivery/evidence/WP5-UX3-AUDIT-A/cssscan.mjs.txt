@@ -1,0 +1,95 @@
+// WP5-UX3-AUDIT-A task-local: static scan of styles.css.
+// 1) every rule whose selector has :hover, with the at-rule chain around it (is it inside @media (hover: hover)?)
+// 2) custom-property parity of :root (light) and the two dark sets
+// 3) literal colours / radii / shadows / durations outside the token blocks
+// Usage: node cssscan.mjs <styles.css> <out.txt>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, out] = process.argv.slice(2);
+const css = readFileSync(file, 'utf8');
+const lines = [];
+// Strip comments but keep line numbers.
+const text = css.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
+const lineOf = (index) => text.slice(0, index).split('\n').length;
+
+// Tokenise blocks.
+const stack = [];
+let start = 0;
+const rules = [];
+for (let i = 0; i < text.length; i += 1) {
+  const c = text[i];
+  if (c === '{') {
+    const prelude = text.slice(start, i).trim();
+    stack.push({ prelude, line: lineOf(i), bodyStart: i + 1 });
+    start = i + 1;
+  } else if (c === '}') {
+    const top = stack.pop();
+    if (top) {
+      const body = text.slice(top.bodyStart, i);
+      rules.push({ prelude: top.prelude, line: top.line, chain: stack.map((s) => s.prelude), body });
+    }
+    start = i + 1;
+  } else if (c === ';' && stack.length === 0) {
+    start = i + 1;
+  }
+}
+
+lines.push('== :hover rules and their at-rule chain');
+let ungated = 0;
+for (const r of rules) {
+  if (!r.prelude.includes(':hover')) continue;
+  const gated = r.chain.some((p) => /@media[^{]*\(hover:\s*hover\)/.test(p));
+  const decls = r.body.replace(/\s+/g, ' ').trim();
+  if (!gated) ungated += 1;
+  lines.push(`${gated ? 'gated  ' : 'UNGATED'} line ${r.line}: ${r.prelude.replace(/\s+/g, ' ')} { ${decls.slice(0, 160)} } chain=[${r.chain.join(' | ')}]`);
+}
+lines.push(`ungated :hover rules: ${ungated}`);
+
+// Parity.
+const props = (body) => {
+  const map = new Map();
+  for (const m of body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) map.set(m[1], m[2].replace(/\s+/g, ' ').trim());
+  return map;
+};
+const rootRule = rules.find((r) => r.prelude === ':root' && r.chain.length === 0);
+const darkMedia = rules.find((r) => r.prelude === ":root:not([data-theme='light'])" && r.chain.some((p) => p.includes('prefers-color-scheme: dark')));
+const darkManual = rules.find((r) => r.prelude === ":root[data-theme='dark']" && r.chain.length === 0);
+const light = props(rootRule.body);
+const d1 = props(darkMedia.body);
+const d2 = props(darkManual.body);
+lines.push('== parity');
+lines.push(`light tokens ${light.size}, dark (media) ${d1.size}, dark (manual) ${d2.size}`);
+const diff12 = [];
+for (const [k, v] of d1) if (d2.get(k) !== v) diff12.push(`${k}: media=${v} manual=${d2.get(k)}`);
+for (const [k] of d2) if (!d1.has(k)) diff12.push(`${k}: only in manual`);
+lines.push(`dark sets differ: ${diff12.length}`);
+for (const d of diff12) lines.push(`  ${d}`);
+const notInLight = [...d1.keys()].filter((k) => !light.has(k));
+lines.push(`dark tokens missing from :root: ${notInLight.length} ${notInLight.join(' ')}`);
+const isColour = (v) => /#[0-9a-f]{3,8}\b|rgb\(|hsl\(/i.test(v);
+const lightColours = [...light].filter(([, v]) => isColour(v)).map(([k]) => k);
+const colourNoDark = lightColours.filter((k) => !d1.has(k));
+lines.push(`light colour-valued tokens ${lightColours.length}; without a dark value: ${colourNoDark.length} ${colourNoDark.join(' ')}`);
+
+// Literals outside the token blocks.
+lines.push('== literal values in rule bodies outside :root / dark sets (colour, px radius, shadow, duration)');
+let literals = 0;
+for (const r of rules) {
+  if (r === rootRule || r === darkMedia || r === darkManual) continue;
+  for (const m of r.body.matchAll(/([\w-]+)\s*:\s*([^;]+);/g)) {
+    const [, prop, value] = m;
+    if (prop.startsWith('--')) continue;
+    const v = value.trim();
+    const colour = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i.test(v) && !/var\(/.test(v.replace(/rgba?\([^)]*var[^)]*\)/g, ''));
+    const radius = /radius/.test(prop) && /\d+px/.test(v);
+    const shadow = /shadow/.test(prop) && /\d+px/.test(v) && !/^var\(/.test(v);
+    const duration = /(transition|animation)/.test(prop) && /\d+m?s/.test(v);
+    if (colour || radius || shadow || duration) {
+      literals += 1;
+      lines.push(`  line ${r.line}: ${r.prelude.replace(/\s+/g, ' ').slice(0, 90)} { ${prop}: ${v.slice(0, 120)} }`);
+    }
+  }
+}
+lines.push(`literal count: ${literals}`);
+writeFileSync(out, lines.join('\n') + '\n');
+console.log(`wrote ${out}: ungated ${ungated}, dark diff ${diff12.length}, literals ${literals}`);

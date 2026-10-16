@@ -1,0 +1,14 @@
+# After the mandatory run: chain A (probes beside mutants), then item 11 (single at the instant, single on the real
+# clock, then two suites at once).
+T=<task>
+until [ -f $T/out/main.done ]; do sleep 5; done
+echo "chain-all start $(date -u +%H:%M:%SZ)" >> $T/out/chain-times.txt
+bash $T/chain-a.sh
+echo "chain-a end $(date -u +%H:%M:%SZ)" >> $T/out/chain-times.txt
+bash $T/run-item11.sh single
+echo "i11 single end $(date -u +%H:%M:%SZ)" >> $T/out/chain-times.txt
+bash $T/run-item11.sh real
+echo "i11 real end $(date -u +%H:%M:%SZ)" >> $T/out/chain-times.txt
+bash $T/run-item11.sh double
+echo "i11 double end $(date -u +%H:%M:%SZ)" >> $T/out/chain-times.txt
+echo all-done > $T/out/all.done

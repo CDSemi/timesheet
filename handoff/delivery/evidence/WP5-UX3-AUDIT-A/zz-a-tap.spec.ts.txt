@@ -1,0 +1,50 @@
+import { expect, newPerson, test } from './fixtures.ts';
+import { note } from './zz-alib.ts';
+
+/*
+ * WP5-UX3-AUDIT-A item 2/7 (task-local probe, never in the repository): on a phone (no hover), does a tap leave a hover look
+ * on the sheet's Category picker, on a button link or on a form field? docs/04 "Hover and pressed" and AGENTS UI rule 3.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+test.skip(({ isMobile }) => !isMobile, 'phone project');
+
+test('phone: the look of the Category picker, a button link and a field after a tap', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+  test.setTimeout(120_000);
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Tap Reader', signature: 'none' });
+  const day = (await me.api.displayedPeriodFreeWorkdays())[0] ?? '';
+  await signInPageAs(me.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const media = await page.evaluate(() => ({ hover: matchMedia('(hover: hover)').matches, coarse: matchMedia('(pointer: coarse)').matches }));
+  const trigger = page.getByRole('button', { name: new RegExp(`^Category for ${day}`) });
+  const look = async () => trigger.evaluate((e) => `bg ${getComputedStyle(e).backgroundColor} shadow ${getComputedStyle(e).boxShadow} border ${getComputedStyle(e).borderTopColor} hover ${e.matches(':hover')} focus-visible ${e.matches(':focus-visible')}`);
+  const rest = await look();
+  await trigger.tap();
+  await expect(page.getByRole('listbox', { name: `Category for ${day}` })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(400);
+  const afterEscape = await look();
+  // Tap somewhere neutral (the page heading area) and read again.
+  await page.mouse.click(5, 300);
+  await page.waitForTimeout(400);
+  const afterElsewhere = await look();
+  note('tap.txt', `phone media ${JSON.stringify(media)}; Category picker ${day} at rest: ${rest} | after tap and Escape: ${afterEscape} | after a tap elsewhere: ${afterElsewhere}`);
+  // The Settings page: a button link ("Import from Excel") and an input, tapped.
+  await page.goto('/#/settings');
+  await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+  const link = page.locator('a.button-link').first();
+  const field = page.locator('main input[type="text"], main input[type="email"], main input:not([type])').first();
+  const linkRest = await link.evaluate((e) => `bg ${getComputedStyle(e).backgroundColor} shadow ${getComputedStyle(e).boxShadow === 'none' ? 'none' : 'set'}`);
+  await link.dispatchEvent('pointerover');
+  await link.hover().catch(() => undefined);
+  const linkHover = await link.evaluate((e) => `bg ${getComputedStyle(e).backgroundColor} shadow ${getComputedStyle(e).boxShadow === 'none' ? 'none' : 'set'} hover ${e.matches(':hover')}`);
+  let fieldNote = 'no text field';
+  if ((await field.count()) > 0) {
+    const fRest = await field.evaluate((e) => getComputedStyle(e).borderTopColor);
+    await field.tap();
+    await page.mouse.click(5, 120);
+    await page.waitForTimeout(300);
+    const fAfter = await field.evaluate((e) => `${getComputedStyle(e).borderTopColor} hover ${e.matches(':hover')}`);
+    fieldNote = `field border at rest ${fRest}, after a tap and a tap elsewhere ${fAfter}`;
+  }
+  note('tap.txt', `button link at rest: ${linkRest}; with the pointer over it: ${linkHover}; ${fieldNote}`);
+});

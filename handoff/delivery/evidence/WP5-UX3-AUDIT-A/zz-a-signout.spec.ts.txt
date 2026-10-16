@@ -1,0 +1,29 @@
+import { expect, openAccount, test } from './fixtures.ts';
+import { note, shot } from './zz-alib.ts';
+
+/* WP5-UX3-AUDIT-A item 1/3 (task-local probe): the space between each account entry's icon and its words (desktop menu, phone More). */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+test('icon-to-text space of the account entries and Sign out', async ({ page, signInThroughUi, isMobile }) => {
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const panel = await openAccount(page);
+  const rows = await panel.evaluate((p) => {
+    const out: string[] = [];
+    for (const item of p.querySelectorAll('a.account-item, button.account-action')) {
+      const icon = item.querySelector('svg')?.getBoundingClientRect();
+      const textNode = [...item.childNodes].find((n) => n.nodeType === 3 && (n.textContent ?? '').trim() !== '');
+      if (icon === undefined || textNode === undefined) continue;
+      const range = document.createRange();
+      range.selectNodeContents(textNode);
+      const t = range.getBoundingClientRect();
+      const cs = getComputedStyle(item);
+      out.push(`${(textNode.textContent ?? '').trim()}: display ${cs.display}, gap ${cs.columnGap}, icon right ${icon.right.toFixed(1)} text left ${t.left.toFixed(1)} space ${(t.left - icon.right).toFixed(1)}px, icon centre ${(icon.top + icon.height / 2).toFixed(1)} text centre ${(t.top + t.height / 2).toFixed(1)}`);
+    }
+    return out;
+  });
+  note('signout.txt', `${isMobile ? 'phone More' : 'desktop menu'}: ${rows.join(' | ')}`);
+  const button = panel.getByRole('button', { name: 'Sign out' });
+  const box = await button.boundingBox();
+  if (box !== null) await page.screenshot({ path: shot(`signout-${isMobile ? 'phone' : 'desktop'}.png`), clip: { x: box.x - 6, y: box.y - 40, width: box.width + 12, height: box.height + 46 } });
+});

@@ -1,0 +1,60 @@
+
+ RUN  v5.0.2 <task>/export-m
+
+ ❯ tests/client/dayEditorModel.test.ts (21 tests | 2 failed) 34ms
+   ❯ the chips under the panel title (U-19, U-20) (8)
+     ❯ the pill of the period of the day itself (G-5 b, WP5-UX3-FIX2) (4)
+       × says "in progress" for every day of the period in progress, whichever period the sheet shows 6ms
+       × feeds the editor chip: the day of the period in progress reads "in progress", not "future period" 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/dayEditorModel.test.ts > the chips under the panel title (U-19, U-20) > the pill of the period of the day itself (G-5 b, WP5-UX3-FIX2) > says "in progress" for every day of the period in progress, whichever period the sheet shows
+AssertionError: expected undefined to be 'in-progress' // Object.is equality
+
+- Expected:
+"in-progress"
+
++ Received:
+undefined
+
+ ❯ tests/client/dayEditorModel.test.ts:165:65
+    163|
+    164|     it('says "in progress" for every day of the period in progress, wh…
+    165|       expect(dayPeriodPill('2026-10-14', ended, windowPeriods)).toBe('…
+       |                                                                 ^
+    166|       expect(dayPeriodPill('2026-10-12', ended, windowPeriods)).toBe('…
+    167|       expect(dayPeriodPill('2026-10-25', ended, windowPeriods)).toBe('…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/client/dayEditorModel.test.ts > the chips under the panel title (U-19, U-20) > the pill of the period of the day itself (G-5 b, WP5-UX3-FIX2) > feeds the editor chip: the day of the period in progress reads "in progress", not "future period"
+AssertionError: expected { key: 'period', …(2) } to deeply equal { key: 'period', …(2) }
+
+- Expected
++ Received
+
+  {
+    "key": "period",
+-   "pill": "in-progress",
+-   "text": "in progress",
++   "pill": "future",
++   "text": "future period",
+  }
+
+ ❯ tests/client/dayEditorModel.test.ts:187:105
+    185|     it('feeds the editor chip: the day of the period in progress reads…
+    186|       const pill = dayPeriodPill('2026-10-14', ended, windowPeriods);
+    187|       expect(editorChips({ relation: 'future', ...(pill === undefined …
+       |                                                                                                         ^
+    188|       expect(editorChips({ relation: 'future', ...zones })[0]?.text).t…
+    189|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 93 passed (94)
+      Tests  2 failed | 2129 passed (2131)
+   Start at  12:19:04
+   Duration  75.57s (tests 93%, import 5%, transform 2%)
+

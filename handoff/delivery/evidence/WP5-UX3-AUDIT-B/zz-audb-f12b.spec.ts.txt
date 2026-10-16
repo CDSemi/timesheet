@@ -1,0 +1,59 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, newPerson, test } from './fixtures.ts';
+
+/*
+ * WP5-UX3-AUDIT-B task-local probe (never part of the repository): sweep finding 12, second variant. A running session (API-only seed)
+ * has a saved unconfirmed break that ends a few minutes after now (allowed on an open session). The person removes it in the Check out
+ * dialog and checks out with the list empty: the omitted list keeps the saved row, so the server refuses with 422.
+ */
+const OUT = process.env.AUDB_OUT ?? '';
+const LA = 'America/Los_Angeles';
+test.use({ locale: 'en-US', timezoneId: LA });
+
+function rec(line: string) {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'f12b.txt'), `${line}\n`);
+}
+
+test('finding 12: removing a saved row that ends after now, then Check out with the list empty', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'Desktop project');
+  const who = await newPerson(adminSeed, builtServer, { signature: 'none' });
+  const { todayLocal } = await who.api.today();
+  const clock = (ms: number) => new Intl.DateTimeFormat('en-GB', { timeZone: LA, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(ms));
+  const now = Date.now();
+  const at = (time: string) => ({ local: `${todayLocal}T${time}`, zone: LA });
+  await who.api.call(
+    'POST',
+    `/api/days/${todayLocal}/sessions`,
+    {
+      start: at(clock(now - 2 * 3600_000)),
+      end: null,
+      input_zone: LA,
+      breaks_confirmed: false,
+      breaks: [{ start: at(clock(now + 60_000)), end: at(clock(now + 4 * 60_000)), counts_as_work: false }],
+    },
+    201,
+  );
+  const writes: string[] = [];
+  page.on('response', (response) => {
+    if (response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/clock/out') writes.push(`${response.status()} ${response.request().postData() ?? ''}`);
+  });
+  await page.setViewportSize({ width: 1366, height: 800 });
+  await signInPageAs(who.account);
+  await page.getByRole('button', { name: 'Check out', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Check out' });
+  await expect(dialog).toBeVisible();
+  rec(`G1 opened: rows=${await dialog.locator('[data-break]').count()} submit="${await dialog.locator('button[type="submit"]').innerText()}"`);
+  await dialog.getByRole('button', { name: 'Remove break 1', exact: true }).click();
+  await dialog.locator('button[type="submit"]').click();
+  await expect(dialog.getByRole('alert').first()).toBeVisible();
+  rec(`G2 after Check out with the list empty: dialog open=${await dialog.isVisible()} alerts="${(await dialog.getByRole('alert').allInnerTexts()).join(' | ')}" rows shown=${await dialog.locator('[data-break]').count()} writes=${JSON.stringify(writes)}`);
+  // The remedy in the dialog itself: tick "Confirm no breaks taken".
+  await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+  await dialog.locator('button[type="submit"]').click();
+  await expect(dialog).toHaveCount(0);
+  const stored = await who.api.dayView(todayLocal);
+  rec(`G3 after ticking the box: writes=${JSON.stringify(writes)} stored=${JSON.stringify(stored.sessions.map((s) => ({ confirmed: s.breaks_confirmed, breaks: s.breaks.length })))}`);
+  await who.api.clearSessions(todayLocal);
+});

@@ -1,0 +1,70 @@
+== repro6: real start 2026-10-16T21:06:07Z, simulated start real, AB8_SHIFT_MS=0
+$ node node_modules/@playwright/test/cli.js test tests/e2e/admin-status.spec.ts -g phone Administration --output=<task>/pw-repro6
+
+Running 2 tests using 2 workers
+
+  x  2 [mobile] › tests\e2e\admin-status.spec.ts:243:1 › phone Administration: a long delivery state and a long fault code stay inside the card, with no sideways scroll at 390 and 320px (18.8s)
+  x  1 [desktop] › tests\e2e\admin-status.spec.ts:243:1 › phone Administration: a long delivery state and a long fault code stay inside the card, with no sideways scroll at 390 and 320px (1.3m)
+
+
+  1) [desktop] › tests\e2e\admin-status.spec.ts:243:1 › phone Administration: a long delivery state and a long fault code stay inside the card, with no sideways scroll at 390 and 320px
+
+    Error: 390px: the table wrapper has nothing to scroll sideways (359 against 326)
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 326
+    Received:    359
+
+      287 |     const wrap = card.locator('.table-wrap');
+      288 |     const scroll = await wrap.evaluate((element) => ({ client: element.clientWidth, scroll: element.scrollWidth }));
+    > 289 |     expect(scroll.scroll, `${width}px: the table wrapper has nothing to scroll sideways (${scroll.scroll} against ${scroll.client})`).toBeLessThanOrEqual(scroll.client);
+          |                                                                                                                                       ^
+      290 |     // Every word of the row (cells, badges, codes) ends inside the card.
+      291 |     const outside = await card.evaluate((element, userId) => {
+      292 |       const right = element.getBoundingClientRect().right;
+        at <repo>\tests\e2e\admin-status.spec.ts:289:135
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX3\pw-repro6\admin-status-phone-Adminis-91e02-ays-scroll-at-390-and-320px-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX3\pw-repro6\admin-status-phone-Adminis-91e02-ays-scroll-at-390-and-320px-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX3\pw-repro6\admin-status-phone-Adminis-91e02-ays-scroll-at-390-and-320px-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\admin-status.spec.ts:243:1 › phone Administration: a long delivery state and a long fault code stay inside the card, with no sideways scroll at 390 and 320px
+
+    Error: 390px: the table wrapper has nothing to scroll sideways (359 against 326)
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 326
+    Received:    359
+
+      287 |     const wrap = card.locator('.table-wrap');
+      288 |     const scroll = await wrap.evaluate((element) => ({ client: element.clientWidth, scroll: element.scrollWidth }));
+    > 289 |     expect(scroll.scroll, `${width}px: the table wrapper has nothing to scroll sideways (${scroll.scroll} against ${scroll.client})`).toBeLessThanOrEqual(scroll.client);
+          |                                                                                                                                       ^
+      290 |     // Every word of the row (cells, badges, codes) ends inside the card.
+      291 |     const outside = await card.evaluate((element, userId) => {
+      292 |       const right = element.getBoundingClientRect().right;
+        at <repo>\tests\e2e\admin-status.spec.ts:289:135
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX3\pw-repro6\admin-status-phone-Adminis-91e02-ays-scroll-at-390-and-320px-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX3\pw-repro6\admin-status-phone-Adminis-91e02-ays-scroll-at-390-and-320px-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX3\pw-repro6\admin-status-phone-Adminis-91e02-ays-scroll-at-390-and-320px-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\admin-status.spec.ts:243:1 › phone Administration: a long delivery state and a long fault code stay inside the card, with no sideways scroll at 390 and 320px
+    [mobile] › tests\e2e\admin-status.spec.ts:243:1 › phone Administration: a long delivery state and a long fault code stay inside the card, with no sideways scroll at 390 and 320px
+exit=1
+== repro6 real end 2026-10-16T21:07:27Z

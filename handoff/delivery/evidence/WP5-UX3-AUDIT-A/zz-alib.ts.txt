@@ -1,0 +1,17 @@
+import { appendFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+/* WP5-UX3-AUDIT-A task-local probe helpers (never in the repository). */
+export const TASK = '<task>';
+export const OBS = join(TASK, 'obs');
+mkdirSync(OBS, { recursive: true });
+
+export function note(file: string, line: string): void {
+  appendFileSync(join(OBS, file), `${line}\n`);
+}
+
+export function shot(name: string): string {
+  const dir = join(TASK, 'shots-audit');
+  mkdirSync(dir, { recursive: true });
+  return join(dir, name);
+}

@@ -1,0 +1,24 @@
+// WP5-UX3-AUDIT-A: EN/VI parity of numbers and code tokens line by line. Usage: node parity.mjs <en.md> <vi.md> <out.txt>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [en, vi, out] = process.argv.slice(2);
+const a = readFileSync(en, 'utf8').split(/\r?\n/);
+const b = readFileSync(vi, 'utf8').split(/\r?\n/);
+const tokens = (line) => {
+  const code = [...line.matchAll(/`([^`]+)`/g)].map((m) => `\`${m[1]}\``);
+  const nums = [...line.replace(/`[^`]+`/g, ' ').matchAll(/\d+(?:[.:]\d+)*(?:px|rem|ms|%|dvh|vw)?/g)].map((m) => m[0]);
+  return [...code, ...nums].sort().join(' ');
+};
+const lines = [`EN ${a.length} lines, VI ${b.length} lines`];
+let diffs = 0;
+for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+  const ta = tokens(a[i] ?? '');
+  const tb = tokens(b[i] ?? '');
+  if (ta !== tb) {
+    diffs += 1;
+    lines.push(`line ${i + 1}: EN [${ta}] VI [${tb}]`);
+  }
+}
+lines.push(`lines with different tokens: ${diffs}`);
+writeFileSync(out, lines.join('\n') + '\n');
+console.log(`${out}: ${diffs} differing lines`);

@@ -1,0 +1,95 @@
+== mut8: real start 2026-10-16T21:18:05Z, simulated start real, AB8_SHIFT_MS=0
+$ node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts -g Confirm breaks --output=<task>/pw-mut8
+
+Running 8 tests using 2 workers
+
+  ok 2 [desktop] › tests\e2e\day-editor.spec.ts:3636:1 › "Confirm breaks" opens the session dialog with the suggested breaks listed; Save, then the confirmation, sends the same session update and its version (1.8s)
+  ok 1 [mobile] › tests\e2e\day-editor.spec.ts:3636:1 › "Confirm breaks" opens the session dialog with the suggested breaks listed; Save, then the confirmation, sends the same session update and its version (1.9s)
+  x  3 [desktop] › tests\e2e\day-editor.spec.ts:3743:1 › "Confirm breaks" lists the suggested breaks that lie inside a 09:00 to 14:00 session (two of three); Save sends those two (8.0s)
+  x  4 [mobile] › tests\e2e\day-editor.spec.ts:3743:1 › "Confirm breaks" lists the suggested breaks that lie inside a 09:00 to 14:00 session (two of three); Save sends those two (8.0s)
+  ok 5 [desktop] › tests\e2e\day-editor.spec.ts:3791:1 › "Confirm breaks" in an old period waits for the reason before it can save, and sends it (AC-04) (1.6s)
+  ok 6 [mobile] › tests\e2e\day-editor.spec.ts:3791:1 › "Confirm breaks" in an old period waits for the reason before it can save, and sends it (AC-04) (1.6s)
+  ok 7 [desktop] › tests\e2e\day-editor.spec.ts:3840:1 › "Confirm breaks" lists nothing when no suggested break fits inside the session; Save asks, and "Confirm no breaks taken" sends the empty confirmed list (1.1s)
+  ok 8 [mobile] › tests\e2e\day-editor.spec.ts:3840:1 › "Confirm breaks" lists nothing when no suggested break fits inside the session; Save asks, and "Confirm no breaks taken" sends the empty confirmed list (1.1s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:3743:1 › "Confirm breaks" lists the suggested breaks that lie inside a 09:00 to 14:00 session (two of three); Save sends those two
+
+    Error: the two suggestions inside the session are listed
+
+    expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('dialog', { name: 'Edit session', exact: true }).locator('[data-break]')
+    Expected: 2
+    Received: 0
+    Timeout:  7000ms
+
+    Call log:
+      - the two suggestions inside the session are listed getByRole('dialog', { name: 'Edit session', exact: true }).locator('[data-break]') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: 'Edit session', exact: true }).locator('[data-break]')
+        18 × locator resolved to 0 elements
+           - unexpected value "0"
+
+
+      3760 |     const form = sessionDialog(page, 'Edit session');
+      3761 |     await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+    > 3762 |     await expect(form.locator('[data-break]'), 'the two suggestions inside the session are listed').toHaveCount(2);
+           |                                                                                                     ^
+      3763 |     for (const [index, [from, minutes, end]] of [['11:00', '15', 'ends 11:15'], ['13:00', '30', 'ends 13:30']].entries()) {
+      3764 |       const row = breakRow(form, index + 1);
+      3765 |       await expect(row.time).toHaveValue(from ?? '');
+        at <repo>\tests\e2e\day-editor.spec.ts:3762:101
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX3\pw-mut8\day-editor--Confirm-breaks-8625b--three-Save-sends-those-two-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX3\pw-mut8\day-editor--Confirm-breaks-8625b--three-Save-sends-those-two-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX3\pw-mut8\day-editor--Confirm-breaks-8625b--three-Save-sends-those-two-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\day-editor.spec.ts:3743:1 › "Confirm breaks" lists the suggested breaks that lie inside a 09:00 to 14:00 session (two of three); Save sends those two
+
+    Error: the two suggestions inside the session are listed
+
+    expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('dialog', { name: 'Edit session', exact: true }).locator('[data-break]')
+    Expected: 2
+    Received: 0
+    Timeout:  7000ms
+
+    Call log:
+      - the two suggestions inside the session are listed getByRole('dialog', { name: 'Edit session', exact: true }).locator('[data-break]') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: 'Edit session', exact: true }).locator('[data-break]')
+        18 × locator resolved to 0 elements
+           - unexpected value "0"
+
+
+      3760 |     const form = sessionDialog(page, 'Edit session');
+      3761 |     await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+    > 3762 |     await expect(form.locator('[data-break]'), 'the two suggestions inside the session are listed').toHaveCount(2);
+           |                                                                                                     ^
+      3763 |     for (const [index, [from, minutes, end]] of [['11:00', '15', 'ends 11:15'], ['13:00', '30', 'ends 13:30']].entries()) {
+      3764 |       const row = breakRow(form, index + 1);
+      3765 |       await expect(row.time).toHaveValue(from ?? '');
+        at <repo>\tests\e2e\day-editor.spec.ts:3762:101
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX3\pw-mut8\day-editor--Confirm-breaks-8625b--three-Save-sends-those-two-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX3\pw-mut8\day-editor--Confirm-breaks-8625b--three-Save-sends-those-two-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX3-FIX3\pw-mut8\day-editor--Confirm-breaks-8625b--three-Save-sends-those-two-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:3743:1 › "Confirm breaks" lists the suggested breaks that lie inside a 09:00 to 14:00 session (two of three); Save sends those two
+    [mobile] › tests\e2e\day-editor.spec.ts:3743:1 › "Confirm breaks" lists the suggested breaks that lie inside a 09:00 to 14:00 session (two of three); Save sends those two
+  6 passed (18.3s)
+exit=1
+== mut8 real end 2026-10-16T21:18:23Z

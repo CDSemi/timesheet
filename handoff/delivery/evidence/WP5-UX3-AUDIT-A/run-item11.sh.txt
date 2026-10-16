@@ -1,0 +1,21 @@
+# WP5-UX3-AUDIT-A item 11. Usage: bash run-item11.sh <phase>
+#  single: the whole suite plus the mobile-rep project (the two regate tests x REP_EACH) at 2027-01-01T07:30:00Z (FIX10
+#          preload), in export-p, alone (as far as this task goes; the area-B auditor may be running).
+#  double: two whole suites at once: export-p on the real clock with mobile-rep, and export-m at the instant with mobile-rep.
+. <task>/env.sh
+cp $T/export-p/playwright.rep.config.ts $T/export-m/playwright.rep.config.ts
+export REP_EACH=4
+case "$1" in
+  single)
+    bash $T/run-shift.sh i11-single-1231 2027-01-01T07:30:00Z --config=playwright.rep.config.ts > $T/logs/i11-single-1231.txt 2>&1
+    ;;
+  real)
+    bash $T/run-shift.sh i11-single-real real --config=playwright.rep.config.ts > $T/logs/i11-single-real.txt 2>&1
+    ;;
+  double)
+    bash $T/run-shift.sh i11-double-real real --config=playwright.rep.config.ts > $T/logs/i11-double-real.txt 2>&1 &
+    SHIFT_EXPORT=$T/export-m bash $T/run-shift.sh i11-double-1231 2027-01-01T07:30:00Z --config=playwright.rep.config.ts > $T/logs/i11-double-1231.txt 2>&1
+    wait
+    ;;
+esac
+echo "$1 done $(date -u +%H:%M:%SZ)" >> $T/out/i11.done

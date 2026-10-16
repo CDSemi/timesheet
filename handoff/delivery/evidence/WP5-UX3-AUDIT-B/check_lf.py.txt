@@ -1,0 +1,20 @@
+"""Counts CR bytes and trailing blanks in the evidence text files. Usage: python check_lf.py <dir>"""
+import os
+import sys
+
+root = sys.argv[1]
+prefix = sys.argv[2] if len(sys.argv) > 2 else ''
+suffix = '.md' if prefix else '.txt'
+bad = 0
+count = 0
+for name in sorted(os.listdir(root)):
+    if not name.endswith(suffix) or not name.startswith(prefix):
+        continue
+    count += 1
+    data = open(os.path.join(root, name), 'rb').read()
+    cr = data.count(b'\r')
+    trailing = sum(1 for line in data.split(b'\n') if line.rstrip(b' \t') != line)
+    if cr or trailing:
+        bad += 1
+        print(f'{name}: CR {cr}, trailing-blank lines {trailing}')
+print(f'{count} text files checked; {bad} with CR or trailing blanks')

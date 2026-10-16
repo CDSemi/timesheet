@@ -1,0 +1,48 @@
+"""Print the actions of a Playwright trace.zip with wall times (task-local probe, WP5-UX3-AUDIT-A).
+
+Usage: python -I trace_actions.py <trace.zip> <out.txt>
+"""
+import json
+import sys
+import zipfile
+
+src, out = sys.argv[1], sys.argv[2]
+lines = []
+with zipfile.ZipFile(src) as z:
+    names = z.namelist()
+    lines.append("entries: " + ", ".join(n for n in names if not n.startswith("resources/")))
+    for name in names:
+        if not name.endswith(".trace"):
+            continue
+        lines.append("== " + name)
+        befores = {}
+        for raw in z.read(name).decode("utf-8", "replace").splitlines():
+            try:
+                ev = json.loads(raw)
+            except ValueError:
+                continue
+            t = ev.get("type")
+            if t == "context-options":
+                lines.append("context wallTime %s monotonic %s" % (ev.get("wallTime"), ev.get("monotonicTime")))
+            elif t == "before":
+                befores[ev.get("callId")] = ev
+            elif t == "after":
+                b = befores.get(ev.get("callId"), {})
+                start = b.get("startTime")
+                end = ev.get("endTime")
+                dur = (end - start) if isinstance(start, (int, float)) and isinstance(end, (int, float)) else None
+                err = ev.get("error")
+                title = b.get("title") or (str(b.get("class")) + "." + str(b.get("method")))
+                params = json.dumps(b.get("params", {}))[:160]
+                lines.append("%10.1f %8s %s %s%s" % (start or -1, ("%.0f" % dur) if dur is not None else "?", title, params, ("  ERROR " + json.dumps(err)[:300]) if err else ""))
+            elif t in ("log",):
+                pass
+            elif t == "console":
+                lines.append("console %s %s" % (ev.get("time"), str(ev.get("text"))[:200]))
+            elif t == "error":
+                lines.append("pageerror %s" % (json.dumps(ev)[:300]))
+        for cid, b in befores.items():
+            pass
+with open(out, "w", encoding="utf-8", newline="\n") as f:
+    f.write("\n".join(lines) + "\n")
+print("wrote", out, len(lines))

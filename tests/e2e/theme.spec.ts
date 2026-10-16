@@ -68,6 +68,23 @@ async function expectChecked(control: ThemeControl, theme: Theme): Promise<void>
   for (const option of THEMES) await expect(control.radio[option], `${OPTION_NAME[option]} is ${option === theme ? '' : 'not '}checked`).toBeChecked({ checked: option === theme });
 }
 
+/**
+ * Runs a settled measurement of `contrast.ts` again, at most twice more, when its own 7 s poll timed out. Each settled read waits 400 ms
+ * inside that poll, so a stall of the host for about 20 s (the regate saw one freeze two browsers at once) expired the poll whatever the
+ * product did. The measurement and the assertions on its result are unchanged; a state that never settles still fails after the three
+ * tries, and any other error is thrown at once (WP5-UX3-FIX3 item 12, R8).
+ */
+async function surviveStall<T>(measure: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await measure();
+    } catch (error) {
+      const timedOut = error instanceof Error && /Timeout \d+ms exceeded|is settled/.test(error.message);
+      if (!timedOut || attempt === 3) throw error;
+    }
+  }
+}
+
 /** Whether the device can hover (the hover look exists only there). */
 async function canHover(page: Page): Promise<boolean> {
   return page.evaluate<boolean>("window.matchMedia('(hover: hover)').matches");
@@ -411,6 +428,9 @@ for (const { name, media, stored } of CASES) {
   });
 
   test(`contrast of the checked and the unchecked segment: rest, hover and focus (${name})`, async ({ page, signInThroughUi, isMobile }) => {
+    // About 32 (phone) to 44 (desktop) settled reads of 400 ms each already take 15 to 25 s of the default 30 s, so a host stall of about
+    // 20 s (seen once in the regate) failed the test whatever the product did. An explicit budget; no wait or assertion is changed.
+    test.setTimeout(120_000);
     await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
     if (stored !== null) await seedStoredTheme(page, stored);
     await signInThroughUi();
@@ -421,11 +441,12 @@ for (const { name, media, stored } of CASES) {
     const hover = await canHover(page);
 
     /** The segment's indicator against the surface behind it: its fill when checked, else its boundary. */
-    const indicator = async (segment: Locator, checked: boolean): Promise<number> => {
-      const backdrop = backdropOf(await backdropsAbove(segment));
-      const colour = checked ? await flattenedBackground(segment) : over(parseColour(await settledStyle(segment, 'borderTopColor')), backdrop);
-      return contrast(colour, backdrop);
-    };
+    const indicator = async (segment: Locator, checked: boolean): Promise<number> =>
+      surviveStall(async () => {
+        const backdrop = backdropOf(await backdropsAbove(segment));
+        const colour = checked ? await flattenedBackground(segment) : over(parseColour(await settledStyle(segment, 'borderTopColor')), backdrop);
+        return contrast(colour, backdrop);
+      });
 
     const measured: string[] = [];
     // Two states: the one in effect now, then (after choosing the other) the opposite one.
@@ -438,7 +459,7 @@ for (const { name, media, stored } of CASES) {
         const label = `${checked ? 'checked' : 'unchecked'} ${OPTION_NAME[theme]}`;
         await page.mouse.move(0, 0);
 
-        const restText = await textContrast(segment);
+        const restText = await surviveStall(() => textContrast(segment));
         const restIndicator = await indicator(segment, checked);
         expect(restText, `${label}: text at rest`).toBeGreaterThanOrEqual(MIN_TEXT);
         expect(restIndicator, `${label}: boundary or fill at rest`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
@@ -446,7 +467,7 @@ for (const { name, media, stored } of CASES) {
         let hovered = 'no hover on this device';
         if (hover) {
           await segment.hover();
-          const hoverText = await textContrast(segment);
+          const hoverText = await surviveStall(() => textContrast(segment));
           const hoverIndicator = await indicator(segment, checked);
           expect(hoverText, `${label}: text hovered`).toBeGreaterThanOrEqual(MIN_TEXT);
           expect(hoverIndicator, `${label}: boundary or fill hovered`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
@@ -454,12 +475,12 @@ for (const { name, media, stored } of CASES) {
           await page.mouse.move(0, 0);
         }
 
-        await focusFromKeyboard(control.radio[theme], segment);
-        const ring = await measureFocusRing(segment);
+        await surviveStall(() => focusFromKeyboard(control.radio[theme], segment));
+        const ring = await surviveStall(() => measureFocusRing(segment));
         expect(ring.ringAgainstBackdrop, `${label}: focus ring against the surface (${ring.layers})`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
         expect(ring.ringAgainstGap, `${label}: focus ring against its gap (${ring.layers})`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
         if (checked) expect(ring.gapAgainstFill ?? 0, `${label}: focus gap against the accent fill (${ring.layers})`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
-        const focusText = await textContrast(segment);
+        const focusText = await surviveStall(() => textContrast(segment));
         expect(focusText, `${label}: text focused`).toBeGreaterThanOrEqual(MIN_TEXT);
         await control.radio[theme].evaluate((element) => element.blur());
         measured.push(

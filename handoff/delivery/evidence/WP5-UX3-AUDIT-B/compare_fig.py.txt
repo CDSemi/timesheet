@@ -1,0 +1,41 @@
+"""Compares the figures recorded on both servers for both body sources. Usage: python compare_fig.py <figures-base.jsonl> <figures-target.jsonl> <out.txt>"""
+import json
+import sys
+
+KEYS = ['calculation', 'calculation_error', 'deficit', 'sheetDay', 'sheetTotals', 'sheetState', 'reviewDay', 'unresolved', 'reviewTotals', 'otProposals', 'deficitProposals']
+
+
+def load(path):
+    out = {}
+    for line in open(path, encoding='utf-8'):
+        if line.strip():
+            item = json.loads(line)
+            out[(item['source'], item['case'])] = item
+    return out
+
+
+a = load(sys.argv[1])
+b = load(sys.argv[2])
+lines = []
+cases = sorted({case for (_, case) in a})
+all_equal = True
+for case in cases:
+    variants = {f'{srv}-server/{src}-body': d.get((src, case)) for srv, d in (('base', a), ('target', b)) for src in ('base', 'target')}
+    ref = variants['base-server/base-body']
+    diffs = []
+    for name, item in variants.items():
+        if item is None:
+            diffs.append(f'{name}: missing')
+            continue
+        for key in KEYS:
+            if json.dumps(item.get(key), sort_keys=True) != json.dumps(ref.get(key), sort_keys=True):
+                diffs.append(f'{name}: {key} differs')
+    calc = ref.get('calculation') or {}
+    summary = {k: calc.get(k) for k in ('status', 'regular_minutes', 'nonworking_minutes', 'eligible_minutes', 'credited_minutes') if k in calc}
+    lines.append(f'{case}: 4 variants equal={not diffs} calc={json.dumps(summary)} deficit={ref.get("deficit")} unresolved={json.dumps(ref.get("unresolved"))} sheetState={json.dumps(ref.get("sheetState"))}')
+    for d in diffs:
+        lines.append(f'    {d}')
+    all_equal = all_equal and not diffs
+lines.append(f'ALL EQUAL: {all_equal} ({len(cases)} cases x 4 variants; keys {", ".join(KEYS)})')
+open(sys.argv[3], 'w', encoding='utf-8', newline='\n').write('\n'.join(lines) + '\n')
+print(lines[-1])

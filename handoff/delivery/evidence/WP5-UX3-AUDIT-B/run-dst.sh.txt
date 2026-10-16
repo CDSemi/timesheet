@@ -1,0 +1,9 @@
+# day-editor.spec.ts under the FIX10 simulated clock at two DST instants, both projects, on the clean target export.
+. <task>/env.sh
+O=$T/out
+for I in 2026-11-01T08:45:00Z 2027-03-14T10:30:00Z; do
+  L=dst-$(echo $I | tr -d ':-' | cut -c1-13)
+  bash $T/run-shift.sh $L export $I tests/e2e/day-editor.spec.ts > $O/50-$L.txt 2>&1
+  echo "$L $(grep -m1 -o 'exit=[0-9]*' $O/50-$L.txt)" >> $O/50-dst-exits.txt
+done
+echo dst-done > $O/dst.done

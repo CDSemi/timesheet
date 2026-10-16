@@ -1,0 +1,27 @@
+"""Compares built files of two exports by SHA-256. Usage: python cmp_dist.py <exportA> <exportB> <subdir> [<subdir> ...]"""
+import hashlib
+import os
+import sys
+
+a, b = sys.argv[1], sys.argv[2]
+for sub in sys.argv[3:]:
+    def listing(root):
+        out = {}
+        base = os.path.join(root, sub)
+        for folder, _, files in os.walk(base):
+            for name in files:
+                path = os.path.join(folder, name)
+                out[os.path.relpath(path, base).replace('\\', '/')] = hashlib.sha256(open(path, 'rb').read()).hexdigest()
+        return out
+
+    la, lb = listing(a), listing(b)
+    only_a = sorted(set(la) - set(lb))
+    only_b = sorted(set(lb) - set(la))
+    diff = sorted(k for k in set(la) & set(lb) if la[k] != lb[k])
+    print(f'{sub}: files {len(la)} vs {len(lb)}; only in first {len(only_a)}; only in second {len(only_b)}; hash differences {len(diff)}')
+    for k in only_a[:20]:
+        print(f'  only first: {k}')
+    for k in only_b[:20]:
+        print(f'  only second: {k}')
+    for k in diff[:20]:
+        print(f'  differs: {k}')

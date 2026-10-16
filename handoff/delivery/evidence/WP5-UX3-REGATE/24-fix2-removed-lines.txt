@@ -1,0 +1,35 @@
+9:-      await expect(chip).toHaveAccessibleName(`Break ${index + 1} · ${usFullDate(local.slice(0, 10))} ${local.slice(11)} to ${end} suggested, edit`);
+74:-/** The accessible name of a chip: label, start (with the date for an overnight session), "to", end, the tag, ", edit". */
+81:-  return `Break ${index} · ${from} to ${plusMinutes(start, minutes).slice(11)}${options.suggested ? ' suggested' : ''}, edit`;
+90:-    await expect(breakChip(fold.form, 1)).toHaveAccessibleName('Break 1 · 04/05/2026 02:30 to 02:45, edit');
+418:-test('Profile shows the display name, email, role and reporting zone, read only, with the note', async ({ page, builtServer, adminSeed, signInPageAs }, testInfo) => {
+419:-  const person = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Profile Person' });
+420:-  const personApi = await new SeedClient(builtServer.origin).signIn(person.email, person.password);
+421:-  const periods = await personApi.call<{ reporting_zone: string }>('GET', '/api/periods/current');
+423:-  await signInPageAs(person, '#/settings/profile');
+424:-  await expect(heading(page, 'Profile')).toBeVisible();
+425:-  const facts = page.getByRole('region', { name: 'Your profile' });
+426:-  await expect(facts.locator('[data-profile="display-name"]')).toHaveText('Synthetic Profile Person');
+427:-  await expect(facts.locator('[data-profile="email"]')).toHaveText(person.email);
+428:-  await expect(facts.locator('[data-profile="role"]')).toHaveText('Employee');
+429:-  await expect(facts.locator('[data-profile="zone"]')).toHaveText(periods.reporting_zone);
+430:-  for (const label of ['Display name', 'Email', 'Role', 'Reporting zone']) await expect(facts.getByText(label, { exact: true })).toBeVisible();
+431:-  await expect(page.getByText('An administrator changes display names.')).toBeVisible();
+432:-  // Read only: nothing on the page can be edited.
+433:-  await expect(page.locator('main').locator('input, textarea, select')).toHaveCount(0);
+434:-  await expect(page.locator('main').getByRole('button')).toHaveCount(0);
+435:-  await page.screenshot({ path: screenshotPath(`profile-${testInfo.project.name}-synthetic.png`), fullPage: true });
+437:-  // An administrator's Profile names the role.
+438:-  await (await openAccount(page)).getByRole('button', { name: 'Sign out' }).click();
+439:-  await signInPageAs(builtServer.credentials.admin, '#/settings/profile');
+440:-  await expect(heading(page, 'Profile')).toBeVisible();
+441:-  await expect(page.locator('[data-profile="role"]')).toHaveText('Administrator');
+442:-  await expect(page.locator('[data-profile="email"]')).toHaveText(builtServer.credentials.admin.email);
+607:-  // Another session changes the same day between preview and commit.
+608:-  await employeeSeed.commitCategory(workDate, 'Vacation', null);
+649:-/** A lifted column: raised by --lift-y, casting --elev-lift, above its neighbours, with the corners and the clip of its run position. */
+660:-  expect(look.boxShadow, `${label}: casts --elev-lift`).toBe(await tokenShadow(page, '--elev-lift'));
+719:-  const [first = '', second = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
+730:-      // The lifted column stands 3px higher than its neighbour (the raise, measured on the boxes).
+769:-    // A cell without a label shows only its lines; the name says "not set" in the label's place.
+773:-    expect(trigger.name, `picker name of ${trigger.date}`).toBe(`Category for ${trigger.date}: ${parts.join(', ')}`);

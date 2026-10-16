@@ -358,7 +358,84 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   test, 6 e2e, 6 docs).
 - Draft brief WP5-UX3-REGATE written (every attempt-1 gate item again, the FAIL reasons closed,
   the FIX2 behaviours); target and digest are filled after the freeze. Registered pending.
-- Running now: WP5-UX3-FIX2-FREEZE (committer, sonnet).
+- WP5-UX3-FIX2-FREEZE done: 7ce4e95a0c4477374e981132d93b11aedab2e384 on main, pushed (66 files;
+  digest 262138e0, 833 files, on HEAD too; every check 0; no slip reported).
+- Running now: WP5-UX3-REGATE (verifier, sonnet) on 7ce4e95 / 262138e0. Then fresh audits A and
+  B retargeted to it, AUDIT-INT and the WP5 re-accept.
+- While the regate runs, the briefs AUDIT-A, AUDIT-B and AUDIT-INT were retargeted to 7ce4e95 /
+  262138e0 and WP5-UX3-REGATE, with a fix-round scope item each and new port ranges (A
+  48940-48969, B 48970-48999). The board entries are retargeted only after a regate PASS.
+- WP5-UX3-REGATE done (verifier, self-reported claude-sonnet-5-5): PASS (NAS items NOT VERIFIED) on
+  7ce4e95 / 262138e0, digest equal in three forms before and after.
+  - Every attempt-1 FAIL reason is closed: the Tuesday runs and both 11-28 runs ended 0 failed;
+    48 focus walks at 768-899px with no ring clipped; axe (a) and (b) gone, (c) as justified.
+  - Real-clock e2e 627 passed, 0 failed; verify 2131; drill 208 PASS; server and domain
+    byte-identical to a643794; FIX2 behaviours confirmed.
+  - Deviation: the first FULL run at 2026-12-31 23:30 failed two mobile tests by timeout
+    (theme.spec.ts:413, timesheet.spec.ts:1799). The rerun passed and both tests passed 15 of
+    15 alone. The DPR 2 seam crops were not repeated.
+- Coordinator decision: the PASS is recorded with that deviation. Fresh AUDIT-A judges both
+  tests under load and repeats the DPR 2 seams; a test-or-product cause is FIX REQUIRED.
+  current_source_digest is 262138e0. WP5-UX2-AUDIT2 and the seven audits that pointed to it
+  now name WP5-UX3-AUDIT-INT. The board entries for the audits are retargeted to 7ce4e95 and
+  the regate.
+- Running now: WP5-UX3-AUDIT-A and WP5-UX3-AUDIT-B (fresh auditors, opus/xhigh, read-only,
+  in parallel).
+- WP5-UX3-AUDIT-B done (self-reported claude-opus-5-5): FIX REQUIRED with two Low findings.
+  - F-UX3B-1 (sweep finding 12): Check out with saved unconfirmed rows (API-only state): after
+    removing every row, the dialog shows an empty list but the server keeps the rows (or answers
+    422). The dialog never says so.
+  - F-UX3B-2: "Confirm breaks" lists suggestions only when all fit; docs/04 line 65 says it
+    lists those inside the session.
+  - Everything else in area B passed: request integrity (25 cases), confirmation semantics,
+    pre-fill, figures, dialogs, phone, the fix-round items, 13 of 13 mutants. Full e2e 627 / 0
+    failed; digest 262138e0 before and after.
+  - Optional risks R-UX3B-1..7 are in the review.
+- AUDIT-A is still running. The fix round is decided after it returns, so that one fix covers
+  both areas.
+- WP5-UX3-AUDIT-A done (self-reported claude-opus-5-5): FIX REQUIRED.
+  - F-UX3A-01, Medium: the focus ring disappears under the pointer on the sheet's date button
+    and weakens on the Category picker. This also happens after the Escape return from the
+    editor, and it already existed in a643794.
+  - F-UX3A-02..06, Low:
+    - ungated hover rules;
+    - the identity button is 38px high with a coarse pointer;
+    - the Sign out icon has no gap to its text;
+    - the More panel's Escape focus return is untested (mutant A4 survives);
+    - the phone Administration table scrolls sideways with a long delivery badge (axe
+      serious).
+  - Item 11: the regate's two timeouts are load noise (one 21 s host stall; 125 of 125 passes
+    in five full runs).
+  - The DPR 2 seams are clean.
+  - Mandatory checks: full e2e 627 passed, 0 failed; digest 262138e0 before and after.
+- Coordinator decision: one fix task, WP5-UX3-FIX3 (worker-high, sonnet), for F-UX3A-01..06 and
+  F-UX3B-1..2, plus R-UX3B-3, R-UX3B-4, R1 (docs) and R8 (test budget).
+  - F-UX3B-1: Check out sends the empty list unconfirmed when the person removed every saved
+    row. It replaces them, so what the dialog shows is what is recorded. With no saved rows
+    at the start, the list stays omitted (E-1).
+  - F-UX3B-2: the code follows docs/04 line 65 (list the suggestions inside the session).
+  - No server change.
+  - After FIX3: FIX3-FREEZE, WP5-UX3-REGATE2, fresh AUDIT-A2 and AUDIT-B2, AUDIT-INT.
+- Running now: WP5-UX3-FIX3.
+- WP5-UX3-FIX3 done (worker-high, self-reported claude-sonnet-5-5): all twelve items done.
+  - Focus ring under the pointer (four controls); seven hover rules gated, with a full scan;
+    identity 44px under a coarse pointer; Sign out flex; More Escape test (A4 caught); phone
+    Administration wrap.
+  - Check out: the empty unconfirmed list when every saved row was removed. The server was
+    verified first, and the dialog shows a note.
+  - "Confirm breaks" lists the suggestions inside the session.
+  - The wording and docs fixes; theme.spec.ts budget plus a stall retry.
+  - Unit 2141; full e2e 645 passed, 0 failed; both simulated clocks 0 failed; theme x5 380
+    passed; mutants caught; main chunk 486.81 kB; verify 0; digest d1d903cf (833 files; 20
+    changed paths).
+- Before the freeze, the WP5-UX3-REGATE evidence folder holds four `.log` files that are
+  neither `.txt` nor referenced. The regate verifier (same agent) is asked to turn them into
+  masked LF `.txt`, or to delete exact duplicates, and to record that. Then WP5-UX3-FIX3-FREEZE.
+- Evidence hygiene done: none of the four was a duplicate. Each became a masked LF `.log.txt`
+  copy (nothing needed masking), and the originals were removed. The step is recorded in the
+  REGATE Results; the decision is unchanged.
+- Running now: WP5-UX3-FIX3-FREEZE (committer, sonnet; the 20 FIX3 paths, the records, the
+  review pairs and five evidence folders).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

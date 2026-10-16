@@ -322,6 +322,17 @@ async function expectNoStickyHover(page: Page, situation: string): Promise<void>
   await expect(details).not.toBeChecked();
   expect(await settledStyle(details, 'backgroundColor'), 'switch track after two taps equals rest').toBe(trackRest);
   expect(await settledStyle(details, 'borderTopColor'), 'switch border after two taps equals rest').toBe(borderRest);
+  // The sheet's Category picker keeps no hover look after a tap either (WP5-UX3-FIX3 item 2): tap opens the list, a second tap closes it.
+  const picker = page.locator('[data-label-picker] button[aria-label^="Category for"]').first();
+  await picker.scrollIntoViewIfNeeded();
+  const pickerRest = { background: await settledStyle(picker, 'backgroundColor'), border: await settledStyle(picker, 'borderTopColor'), shadow: await settledStyle(picker, 'boxShadow') };
+  await picker.tap();
+  await expect(picker).toHaveAttribute('aria-expanded', 'true');
+  await picker.tap();
+  await expect(picker).toHaveAttribute('aria-expanded', 'false');
+  expect(await settledStyle(picker, 'backgroundColor'), `Category picker: background after a tap equals rest (${situation})`).toBe(pickerRest.background);
+  expect(await settledStyle(picker, 'borderTopColor'), `Category picker: border after a tap equals rest (${situation})`).toBe(pickerRest.border);
+  expect(await settledStyle(picker, 'boxShadow'), `Category picker: shadow after a tap equals rest (${situation})`).toBe(pickerRest.shadow);
 }
 
 /* ---- The "Show details" slide switch ----------------------------------------------------------------------- */
@@ -549,14 +560,21 @@ for (const situation of SITUATIONS) {
   });
 }
 
-/* ---- The sheet day columns (WP5-UX3-FIX2 item 11, AGENTS UI rule 3) ---------------------------------------- */
+/* ---- Every hover rule of the style sheet (WP5-UX3-FIX2 item 11, WP5-UX3-FIX3 item 2, AGENTS UI rule 3) ------- */
 
 /**
- * A tap must not leave a tint on a sheet day column of a touch screen of 768px or more: every `.sheet-day` hover rule that paints
- * (the column tint and the lifted column's tint) sits inside `@media (hover: hover)`. The read-only sheet's two reset rules only
- * undo that tint and may stay outside. The browser's own parsed style sheets are read, so the check does not depend on a device.
+ * Hover rules that may stay outside `@media (hover: hover)`: only reset rules that paint nothing new, each with its reason. There is
+ * none: the read-only sheet's two reset rules sit inside the media block too, so a tap can never leave a tint behind.
  */
-test('the sheet day hover rules exist only under (hover: hover); where the device can hover, a day column tints under the pointer', async ({
+const UNGATED_HOVER_ALLOWLIST: ReadonlyArray<{ selector: string; reason: string }> = [];
+
+/**
+ * A tap must not leave a hover look on a touch screen: EVERY rule of the application's style sheet whose selector uses `:hover`
+ * (the day column tint, the lifted column's tint, the Category picker, the form fields, the table rows, the button links and the
+ * rest) sits inside `@media (hover: hover)`, except the explicit allowlist above. The browser's own parsed style sheets are read, so
+ * the check does not depend on a device and a new ungated hover rule fails here at once.
+ */
+test('every hover rule of the style sheet exists only under (hover: hover); where the device can hover, a day column tints under the pointer', async ({
   page,
   signInThroughUi,
 }) => {
@@ -568,15 +586,28 @@ test('the sheet day hover rules exist only under (hover: hover); where the devic
       for (const rule of Array.from(list)) {
         if (rule instanceof CSSMediaRule) {
           visit(rule.cssRules, hoverOnly || /hover:\\s*hover/.test(rule.media.mediaText));
-        } else if (rule instanceof CSSStyleRule && /\\.sheet-day[^,{]*:hover/.test(rule.selectorText) && !rule.selectorText.startsWith('.sheet-review')) {
-          (hoverOnly ? result.gated : result.ungated).push(rule.selectorText);
+        } else if (rule instanceof CSSStyleRule) {
+          if (rule.selectorText.includes(':hover')) (hoverOnly ? result.gated : result.ungated).push(rule.selectorText);
+        } else if (rule instanceof CSSGroupingRule) {
+          visit(rule.cssRules, hoverOnly);
         }
       }
     };
     for (const sheet of Array.from(document.styleSheets)) visit(sheet.cssRules, false);
     return result;
   })()`);
-  expect(rules.ungated, 'sheet day hover rules outside (hover: hover)').toEqual([]);
+  const allowed = new Set(UNGATED_HOVER_ALLOWLIST.map((entry) => entry.selector));
+  expect(
+    rules.ungated.filter((selector) => !allowed.has(selector)),
+    'hover rules outside (hover: hover)',
+  ).toEqual([]);
+  expect(rules.gated.length, 'the style sheet has gated hover rules to scan').toBeGreaterThan(20);
+  for (const needle of ['.sheet .label-trigger', 'input:hover', 'tbody tr:hover', '.button-link:hover', '.sheet-review .sheet-day']) {
+    expect(
+      rules.gated.some((selector) => selector.includes(needle)),
+      `the hover rule "${needle}" is a gated hover rule`,
+    ).toBe(true);
+  }
   expect(rules.gated.some((selector) => selector.includes('[data-lift]')), 'the lifted column tint is a gated hover rule').toBe(true);
   expect(rules.gated.some((selector) => !selector.includes('[data-lift]') && !selector.includes('.sheet-date')), 'the day column tint is a gated hover rule').toBe(true);
 
@@ -591,6 +622,94 @@ test('the sheet day hover rules exist only under (hover: hover); where the devic
     expect(await settledStyle(day, 'backgroundColor'), 'the day column returns to rest').toBe(rest);
   }
 });
+
+/* ---- The focus ring under the pointer (WP5-UX3-FIX3 item 1, SC 2.4.7) ------------------------------------- */
+
+/** True when the element is focused, matches `:focus-visible` and has the pointer over it (the precondition of the ring checks). */
+async function focusedAndHovered(locator: Locator): Promise<{ focus: boolean; focusVisible: boolean; hover: boolean }> {
+  return locator.evaluate((element) => ({
+    focus: element === element.ownerDocument.activeElement,
+    focusVisible: element.matches(':focus-visible'),
+    hover: element.matches(':hover'),
+  }));
+}
+
+/**
+ * Keyboard focus puts the shared ring on a control, and the pointer resting on that control must not take it away. Compared with
+ * the same focused control while the pointer is elsewhere: the ring is painted, equal to the pointer-away ring, and meets 3:1.
+ */
+async function expectRingUnderPointer(page: Page, control: Locator, kind: 'shared' | 'inset', label: string): Promise<void> {
+  await control.scrollIntoViewIfNeeded();
+  await page.mouse.move(0, 0);
+  await control.evaluate((element) => element.blur());
+  await page.keyboard.press('Shift');
+  await control.focus();
+  await expect(control).toBeFocused();
+  const away = await settledStyle(control, 'boxShadow');
+  await control.hover();
+  const state = await focusedAndHovered(control);
+  expect(state, `${label}: focused by keyboard with the pointer on it`).toEqual({ focus: true, focusVisible: true, hover: true });
+  const under = await settledStyle(control, 'boxShadow');
+  expect(under, `${label}: the ring under the pointer equals the ring with the pointer away`).toBe(away);
+  const layers = parseLayers(under);
+  const surface = backdropOf(await backdropsAbove(control));
+  if (kind === 'shared') {
+    const outset = layers.filter((layer) => !layer.inset && layer.spread > 0);
+    expect(outset.length, `${label}: the shared ring has its card gap and its accent ring (${under})`).toBeGreaterThanOrEqual(2);
+    const ring = outset.reduce((a, b) => (b.spread > a.spread ? b : a));
+    expect(ring.spread, `${label}: the shared ring is 3px`).toBe(3);
+    expect(contrast(over(ring.colour, surface), surface), `${label}: ring against its surface`).toBeGreaterThanOrEqual(NON_TEXT);
+  } else {
+    expect(layers, `${label}: one inset ring layer (${under})`).toHaveLength(1);
+    expect(layers[0]?.inset, `${label}: the ring is inset`).toBe(true);
+    expect(layers[0]?.spread, `${label}: the inset ring is 2px`).toBe(2);
+    const fill = await flattenedBackground(control);
+    expect(contrast(over(layers[0]?.colour ?? [0, 0, 0, 1], fill), fill), `${label}: inset ring against the hovered fill`).toBeGreaterThanOrEqual(NON_TEXT);
+  }
+  await page.mouse.move(0, 0);
+}
+
+for (const situation of SITUATIONS.slice(0, 2)) {
+  test(`the keyboard focus ring stays under the pointer on the sheet's date button, Category picker and phone day button, also after Escape returns focus from the Day editor (${situation.name})`, async ({
+    page,
+    signInThroughUi,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await prepare(page, situation, signInThroughUi);
+    // A touch device has no pointer resting on a control: the mobile project proves the tap side in the hover tests above.
+    if (!(await canHover(page))) return;
+    const day = page.locator('.sheet-day[data-day]:not(.nonworking)').first();
+    const date = day.locator('[data-day-button]');
+    const picker = day.locator('[data-label-picker] button[aria-label^="Category for"]');
+    await expectRingUnderPointer(page, date, 'shared', `date button (${situation.name})`);
+    await expectRingUnderPointer(page, picker, 'inset', `Category picker (${situation.name})`);
+
+    // Click the date (the editor opens beside the sheet at 1440), then Escape: focus returns to the date button, pointer still on it.
+    const workDate = (await day.getAttribute('data-day')) ?? '';
+    await date.click();
+    const editor = page.getByRole('dialog', { name: new RegExp(`^Day editor .*${workDate}`) });
+    await expect(editor).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await expect(date).toBeFocused();
+    await date.hover();
+    expect(await focusedAndHovered(date), `date button after Escape (${situation.name})`).toEqual({ focus: true, focusVisible: true, hover: true });
+    const afterEscape = await settledStyle(date, 'boxShadow');
+    const outset = parseLayers(afterEscape).filter((layer) => !layer.inset && layer.spread > 0);
+    expect(outset.length, `a ring is painted on the date button after the Escape return (${afterEscape})`).toBeGreaterThanOrEqual(2);
+    const surface = backdropOf(await backdropsAbove(date));
+    const ring = outset.reduce((a, b) => (b.spread > a.spread ? b : a));
+    expect(contrast(over(ring.colour, surface), surface), `ring after the Escape return (${situation.name})`).toBeGreaterThanOrEqual(NON_TEXT);
+    await page.mouse.move(0, 0);
+
+    // A phone-width window on a device that can hover: the day button of the phone table keeps the shared ring too.
+    await page.setViewportSize({ width: 390, height: 844 });
+    const phoneDay = page.locator('[data-day]:not(.nonworking) [data-day-button]').first();
+    await expect(phoneDay).toBeVisible();
+    await expectRingUnderPointer(page, phoneDay, 'shared', `phone day button (${situation.name})`);
+    console.log(`ring under the pointer ${situation.name}: date, Category picker, phone day button and the Escape return keep their ring`);
+  });
+}
 
 /* ---- Synthetic captures for the record: hover, pressed, the switch and the picker, light and dark ---------- */
 

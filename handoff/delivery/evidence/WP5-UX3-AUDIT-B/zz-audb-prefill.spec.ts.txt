@@ -1,0 +1,95 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { expect, newPerson, type Person, test } from './fixtures.ts';
+
+/*
+ * WP5-UX3-AUDIT-B task-local probe (never part of the repository), target build only. Pre-fill of the new-session dialog (G-3 a):
+ * reference hours on new sessions; suggested breaks only for an accounting date before the server's today_local, never the device
+ * clock. The browser clock is fixed to the runner's (possibly simulated) instant, so the device date can differ from the reporting-zone
+ * date; two device zones. Near the reporting-zone midnight the probe waits for the server's date to change and checks again.
+ */
+const OUT = process.env.AUDB_OUT ?? '';
+const LA = 'America/Los_Angeles';
+
+function rec(line: string) {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'prefill.txt'), `${line}\n`);
+}
+
+async function probeDay(page: Page, label: string, date: string) {
+  await page.getByLabel('Open a day').fill(date);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form = page.getByRole('dialog', { name: 'New session', exact: true });
+  await expect(form).toBeVisible();
+  const prefill = (await form.locator('[data-prefill]').count()) > 0 ? await form.locator('[data-prefill]').getAttribute('data-prefill') : 'none';
+  const note = (await form.locator('[data-prefill]').count()) > 0 ? (await form.locator('[data-prefill]').innerText()).replace(/\s+/g, ' ') : '';
+  const fields = {
+    zone: await form.getByLabel('Input zone').inputValue(),
+    start: `${await form.getByLabel('Start date', { exact: true }).inputValue()} ${await form.getByLabel('Start time', { exact: true }).inputValue()}`,
+    end: `${await form.getByLabel('End date', { exact: true }).inputValue()} ${await form.getByLabel('End time', { exact: true }).inputValue()}`,
+  };
+  const rows: string[] = [];
+  const count = await form.locator('[data-break]').count();
+  for (let n = 1; n <= count; n += 1) rows.push((await form.locator(`[data-break="${n}"]`).innerText()).replace(/\s+/g, ' '));
+  rec(`${label} ${date}: prefill=${prefill} rows=${count} ${JSON.stringify(fields)} rowsText=${JSON.stringify(rows)} note="${note}"`);
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+  if (await discard.isVisible().catch(() => false)) await discard.getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await editor.getByRole('button', { name: 'Close', exact: true }).first().click();
+  await expect(editor).toHaveCount(0);
+  return { prefill, count };
+}
+
+for (const zone of ['Asia/Ho_Chi_Minh', 'America/New_York'] as const) {
+  test.describe(`device zone ${zone}`, () => {
+    test.use({ locale: 'en-US', timezoneId: zone });
+    test(`pre-fill decided by the server date (${zone})`, async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+      test.skip(isMobile, 'Desktop project');
+      test.setTimeout(300_000);
+      const who: Person = await newPerson(adminSeed, builtServer, { signature: 'none' });
+      // The device clock equals the runner's clock (the simulated instant under the FIX10 preload).
+      await page.clock.setFixedTime(Date.now());
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await signInPageAs(who.account);
+      await expect(page.getByRole('button', { name: 'Open day', exact: true })).toBeVisible();
+      const first = await who.api.periodsCurrent();
+      const device = await page.evaluate(() => `${new Date().toLocaleDateString('en-CA')} ${new Date().toTimeString().slice(0, 8)} ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
+      rec(`=== ${zone}: runner now ${new Date().toISOString()}; server today_local ${first.today_local} (${first.reporting_zone}); device clock ${device}`);
+      const today = first.today_local;
+      const r1 = await probeDay(page, 'before', addDays(today, -1));
+      const r2 = await probeDay(page, 'before', today);
+      const r3 = await probeDay(page, 'before', addDays(today, 1));
+      expect(r1.prefill).toBe('hours-breaks');
+      expect(r2.prefill).toBe('hours');
+      expect(r3.prefill).toBe('hours');
+      // Near the reporting-zone midnight: wait until the server's date changes (at most 150 s), then once more without a reload
+      // (the page's own today), and after a reload (the periods read again).
+      const deadline = Date.now() + 150_000;
+      let next = first.today_local;
+      while (next === first.today_local && Date.now() < deadline) {
+        await page.waitForTimeout(5_000);
+        next = (await who.api.periodsCurrent()).today_local;
+      }
+      if (next === first.today_local) {
+        rec(`=== ${zone}: the server date did not change within the wait (not near the reporting-zone midnight)`);
+        return;
+      }
+      rec(`=== ${zone}: the server date changed to ${next} at runner ${new Date().toISOString()}`);
+      await probeDay(page, 'after-no-reload', today);
+      await page.reload();
+      await expect(page.getByRole('button', { name: 'Open day', exact: true })).toBeVisible();
+      const s1 = await probeDay(page, 'after-reload', today);
+      const s2 = await probeDay(page, 'after-reload', next);
+      expect(s1.prefill).toBe('hours-breaks');
+      expect(s2.prefill).toBe('hours');
+      void LA;
+    });
+  });
+}

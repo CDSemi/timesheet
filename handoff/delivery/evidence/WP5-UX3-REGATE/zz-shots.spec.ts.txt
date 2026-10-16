@@ -1,0 +1,116 @@
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+import { applySituation, openAccountMenu, seedLongContent, SITUATIONS, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX3-REGATE task-local probe (never part of the repository): the synthetic screenshots for the owner and the auditors.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 200))))');
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  const situation = SITUATIONS.find((s) => s.slug === theme)!;
+  test(`desktop screenshots (${theme})`, async ({ page, privateServer, isMobile }) => {
+    test.skip(isMobile, 'Desktop project');
+    test.setTimeout(240_000);
+    await applySituation(page, situation);
+    const data = await seedLongContent(privateServer, 'Synthetic Shot Person');
+    for (const width of [1440, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      if (width === 1440) await signInTo(page, privateServer, data.person.account);
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await page.getByRole('switch', { name: 'Show details' }).check();
+      await settle(page);
+      await page.evaluate('window.scrollTo(0, 0)');
+      await openAccountMenu(page);
+      await settle(page);
+      await page.mouse.move(0, 0);
+      await page.screenshot({ path: screenshotPath(`ux3regate-account-menu-${width}-${theme}-synthetic.png`), clip: { x: 0, y: 0, width, height: 360 }, animations: 'disabled' });
+      await page.keyboard.press('Escape');
+      if (width === 1440 && theme === 'light') {
+        // A lifted run of three days and a single day (batch selection).
+        await page.getByRole('button', { name: 'Change several days' }).click();
+        for (const index of [1, 2, 3, 5]) await page.getByLabel(`Select ${data.dates[index]}`).check();
+        await settle(page);
+        await page.mouse.move(0, 0);
+        await page.screenshot({ path: screenshotPath('ux3regate-lifted-run-1440-light-synthetic.png'), animations: 'disabled' });
+        await page.getByRole('button', { name: 'Done' }).click();
+        // The period card with the pills: previous (old), current.
+        await page.getByRole('button', { name: 'Previous period', exact: true }).click();
+        await settle(page);
+        await page.locator('section.period-bar').screenshot({ path: screenshotPath('ux3regate-period-card-old-light-synthetic.png'), animations: 'disabled' });
+        await page.getByRole('button', { name: 'Next period', exact: true }).click();
+        await settle(page);
+      }
+      await namedDayButton(page, data.twoSessions, 'Edit').click();
+      await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+      await settle(page);
+      await page.mouse.move(0, 0);
+      if (!(width === 1280 && theme === 'dark') || true) {
+        await page.screenshot({ path: screenshotPath(`ux3regate-sheet-editor-${width}-${theme}-synthetic.png`), animations: 'disabled' });
+      }
+      await page.keyboard.press('Escape');
+    }
+    if (theme === 'light') {
+      // The session dialog with the notice (desktop).
+      await page.setViewportSize({ width: 1366, height: 900 });
+      const free = await data.person.api.displayedPeriodFreeWorkdays();
+      const date = free.find((d) => d !== data.overnight && d !== data.twoSessions);
+      if (date !== undefined) {
+        await page.getByLabel('Open a day').fill(date);
+        await page.getByRole('button', { name: 'Open day', exact: true }).click();
+        const ed = page.getByRole('dialog', { name: /Day editor/ });
+        await ed.getByRole('button', { name: 'Add session' }).click();
+        const form = page.getByRole('dialog', { name: 'New session', exact: true });
+        await expect(form).toBeVisible();
+        for (let count = await form.locator('[data-break]').count(); count > 0; count -= 1) {
+          await form.getByRole('button', { name: `Remove break ${count}`, exact: true }).click();
+        }
+        await form.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(page.getByRole('alertdialog', { name: 'No breaks listed' })).toBeVisible();
+        await settle(page);
+        await page.mouse.move(0, 0);
+        await page.screenshot({ path: screenshotPath('ux3regate-session-dialog-notice-1366-light-synthetic.png'), animations: 'disabled' });
+      }
+    }
+  });
+}
+
+test('administrator: Settings with the Administration sub-page (1280, light)', async ({ page, builtServer, isMobile }) => {
+  test.skip(isMobile, 'Desktop project');
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await signInTo(page, builtServer, builtServer.credentials.admin, '#/settings/admin');
+  await expect(page.locator('main.page')).toBeVisible();
+  await page.waitForTimeout(1_200);
+  await page.mouse.move(0, 0);
+  await page.screenshot({ path: screenshotPath('ux3regate-settings-administration-1280-light-synthetic.png'), animations: 'disabled' });
+});
+
+test('phone 390: the session dialog with rows and with chips', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(!isMobile, 'Phone project');
+  test.setTimeout(120_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Phone Shot', signature: 'none' });
+  const [date = ''] = await me.api.displayedPeriodFreeWorkdays();
+  await signInPageAs(me.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByLabel('Open a day').fill(date);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form = page.getByRole('dialog', { name: 'New session', exact: true });
+  await expect(form).toBeVisible();
+  await expect(form.getByRole('list', { name: 'Break list' })).toHaveAttribute('data-layout', 'chips');
+  await settle(page);
+  await page.screenshot({ path: screenshotPath('ux3regate-phone-390-session-dialog-chips-synthetic.png'), animations: 'disabled' });
+  await form.getByLabel('Input zone').fill('America/Los_Angeles');
+  await expect(form.getByRole('list', { name: 'Break list' })).toHaveAttribute('data-layout', 'rows');
+  await settle(page);
+  await page.screenshot({ path: screenshotPath('ux3regate-phone-390-session-dialog-rows-synthetic.png'), animations: 'disabled' });
+});

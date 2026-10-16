@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Calculation, DayView, Period, PolicyVersion, Session } from '../../src/client/api.ts';
+import type { Calculation, DayView, Period, Session } from '../../src/client/api.ts';
 import {
   cardBreaksText,
   dayBanner,
@@ -7,30 +7,11 @@ import {
   deleteFacts,
   editorChips,
   editorTitle,
-  quickBreaksOf,
   sessionCardOf,
 } from '../../src/client/components/dayEditorModel.ts';
 
 const LA = 'America/Los_Angeles';
 const HCM = 'Asia/Ho_Chi_Minh';
-
-const DEFAULT_BREAKS = [
-  { start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false },
-  { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false },
-  { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false },
-];
-
-const POLICY: PolicyVersion = {
-  id: 'policy-1',
-  seq: 1,
-  effective_from: '2026-01-01',
-  required_minutes: 480,
-  threshold_minutes: 30,
-  rounding_step_minutes: 30,
-  reference_start: '08:00',
-  reference_end: '17:00',
-  breaks: DEFAULT_BREAKS,
-};
 
 /** 09:00 to 18:30 Los Angeles (PDT) on 2026-09-21, breaks not confirmed. */
 function session(overrides: Partial<Session> = {}): Session {
@@ -87,39 +68,6 @@ function day(overrides: Partial<DayView> = {}): DayView {
     ...overrides,
   };
 }
-
-describe('one-tap break confirmation of a saved session (R-02)', () => {
-  it('suggests the policy breaks shifted by the session start, shown in the display zone (R-07)', () => {
-    const quick = quickBreaksOf(session(), POLICY, LA);
-    expect(quick?.kind).toBe('suggested');
-    expect(quick?.chips).toEqual(['11:00-11:15', '13:00-13:30', '15:30-15:45']);
-    // The same breaks seen from Ho Chi Minh City (UTC+7); the rows stay in the session's input zone.
-    expect(quickBreaksOf(session(), POLICY, HCM)?.chips).toEqual(['01:00-01:15', '03:00-03:30', '05:30-05:45']);
-    expect(quickBreaksOf(session(), POLICY, HCM)?.rows.map((row) => row.start.time)).toEqual(['11:00', '13:00', '15:30']);
-  });
-
-  // The request of "Confirm breaks" (suggested rows, the rows already listed, or "no breaks taken") is proved against the old
-  // one-tap bodies in tests/client/breakRowsModel.test.ts, because the session dialog's model now builds it.
-  it('offers the rows already listed with the session instead of new suggestions', () => {
-    const listed = session({ breaks: [{ id: 'b1', start_utc: '2026-09-21T19:00:00Z', end_utc: '2026-09-21T19:20:00Z', counts_as_work: false }] });
-    const quick = quickBreaksOf(listed, POLICY, LA);
-    expect(quick?.kind).toBe('listed');
-    expect(quick?.chips).toEqual(['12:00-12:20']);
-    expect(quick?.rows.map((row) => [row.start.time, row.end.time])).toEqual([['12:00', '12:20']]);
-  });
-
-  it('offers only "no breaks" when a suggestion would fall outside the session or no policy breaks exist', () => {
-    // 09:00 to 10:30: the first suggested break (11:00) is after the end; never deduct future breaks.
-    expect(quickBreaksOf(session({ end_utc: '2026-09-21T17:30:00Z' }), POLICY, LA)).toEqual({ kind: 'none', rows: [], chips: [] });
-    expect(quickBreaksOf(session(), undefined, LA)?.kind).toBe('none');
-    expect(quickBreaksOf(session(), { ...POLICY, breaks: [] }, LA)?.kind).toBe('none');
-  });
-
-  it('offers nothing for a running session or one whose breaks are already confirmed', () => {
-    expect(quickBreaksOf(session({ end_utc: null }), POLICY, LA)).toBeNull();
-    expect(quickBreaksOf(session({ breaks_confirmed: true }), POLICY, LA)).toBeNull();
-  });
-});
 
 describe('the chips under the panel title (U-19, U-20)', () => {
   const zones = { displayZone: LA, reportingZone: LA, readOnly: false };

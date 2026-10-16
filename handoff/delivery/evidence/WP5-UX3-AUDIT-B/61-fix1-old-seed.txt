@@ -1,0 +1,79 @@
+
+Running 4 tests using 1 worker
+
+seeded entry on 2026-09-28: version 1
+  ok 1 [desktop] › tests\e2e\aaa-audb-seed.spec.ts:7:1 › an earlier test leaves a day entry on the oldest free workday (221ms)
+  x  2 [desktop] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date (1.9s)
+seeded entry on 2026-09-28: version 1
+  ok 3 [mobile] › tests\e2e\aaa-audb-seed.spec.ts:7:1 › an earlier test leaves a day entry on the oldest free workday (116ms)
+  x  4 [mobile] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date (1.3s)
+
+
+  1) [desktop] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date
+
+    Error: POST /api/days/batch: {"error":{"code":"stale_version","message":"This record changed since it was loaded; reload and review it again","details":{"work_dates":["2026-09-28"]}}}
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 409
+
+       at fixtures.ts:400
+
+      398 |     const response = await this.raw(method, path, body);
+      399 |     const text = await response.text();
+    > 400 |     expect(response.status, `${method} ${path}: ${text}`).toBe(expectedStatus);
+          |                                                           ^
+      401 |     return JSON.parse(text) as T;
+      402 |   }
+      403 |
+        at SeedClient.call (<task>\mut2\tests\e2e\fixtures.ts:400:59)
+        at SeedClient.commitCategory (<task>\mut2\tests\e2e\fixtures.ts:549:5)
+        at <task>\mut2\tests\e2e\timesheet.spec.ts:477:3
+
+    Error Context: ..\pw-fix1-old-seed\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-fix1-old-seed\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-fix1-old-seed\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date
+
+    Error: POST /api/days/batch: {"error":{"code":"stale_version","message":"This record changed since it was loaded; reload and review it again","details":{"work_dates":["2026-09-28"]}}}
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 409
+
+       at fixtures.ts:400
+
+      398 |     const response = await this.raw(method, path, body);
+      399 |     const text = await response.text();
+    > 400 |     expect(response.status, `${method} ${path}: ${text}`).toBe(expectedStatus);
+          |                                                           ^
+      401 |     return JSON.parse(text) as T;
+      402 |   }
+      403 |
+        at SeedClient.call (<task>\mut2\tests\e2e\fixtures.ts:400:59)
+        at SeedClient.commitCategory (<task>\mut2\tests\e2e\fixtures.ts:549:5)
+        at <task>\mut2\tests\e2e\timesheet.spec.ts:477:3
+
+    Error Context: ..\pw-fix1-old-seed\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-fix1-old-seed\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-fix1-old-seed\timesheet-batch-edit-a-sta-bf88b-oad-message-naming-the-date-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date
+    [mobile] › tests\e2e\timesheet.spec.ts:452:1 › batch edit: a stale version shows the reload message naming the date
+  2 passed (15.8s)

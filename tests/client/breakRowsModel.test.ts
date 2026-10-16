@@ -12,6 +12,7 @@ import {
   changeDialogZone,
   checkBreakRows,
   chooseBreakRowFold,
+  confirmBreaksRows,
   editBreakRow,
   newBreakRow,
   newSessionDialogDraft,
@@ -539,6 +540,60 @@ describe('breaks_confirmed', () => {
     expect(breaksPayload(input, { kind: 'session', allowUnconfirmed: true })).toEqual({ ok: true, breaks: [], breaksConfirmed: false });
   });
 
+  /*
+   * WP5-UX3-FIX3 item 7 (E-1, the three starting cases of the Check out dialog). The dialog starts from the saved rows of the running
+   * session. An empty list with the box unticked omits `breaks` only when there were no saved rows; when the person removed saved
+   * rows, the empty unconfirmed list is the complete set that replaces them (the dialog shows no rows, so none may be kept).
+   */
+  describe('check out mode, by what the dialog started with', () => {
+    const running = (overrides: Partial<Session> = {}) => savedSession({ end_utc: null, breaks_confirmed: false, version: 7, ...overrides });
+
+    it('started with saved rows, all removed, box unticked: the empty unconfirmed list replaces them', () => {
+      const session = running();
+      expect(session.breaks).toHaveLength(2);
+      const removed = sessionDialogDraftFromSession(session).rows.reduce((draft, row) => removeBreakRow(draft, row.key), sessionDialogDraftFromSession(session));
+      expect(removed.rows).toEqual([]);
+      const built = buildCheckOutDialogRequest({ session, rows: removed.rows, noBreaks: removed.noBreaks, expectedVersion: 7 });
+      expect(built).toEqual({ ok: true, request: { breaks: [], breaks_confirmed: false, expected_version: 7 } });
+      expect(breaksPayload({ rows: [], noBreaks: false, zone: LA, bounds: null }, { kind: 'checkout', hadSavedRows: true })).toEqual({
+        ok: true,
+        breaks: [],
+        breaksConfirmed: false,
+      });
+    });
+
+    it('started with no saved row and nothing listed, box unticked: the list stays omitted (breaks unconfirmed, no rows touched)', () => {
+      const session = running({ breaks: [] });
+      const built = buildCheckOutDialogRequest({ session, rows: [], noBreaks: false, expectedVersion: 7 });
+      expect(built).toEqual({ ok: true, request: { breaks_confirmed: false, expected_version: 7 } });
+      if (built.ok) expect('breaks' in built.request).toBe(false);
+    });
+
+    it('started with saved rows and some kept: the listed set confirms and replaces them; the ticked box confirms none', () => {
+      const session = running();
+      const kept = sessionDialogDraftFromSession(session).rows.slice(0, 1);
+      const listed = buildCheckOutDialogRequest({ session, rows: kept, noBreaks: false, expectedVersion: 7 });
+      expect(listed.ok && listed.request.breaks_confirmed).toBe(true);
+      expect(listed.ok && listed.request.breaks).toHaveLength(1);
+      // Ticking the box wins over the rows and over the removal: an empty confirmed list.
+      expect(buildCheckOutDialogRequest({ session, rows: kept, noBreaks: true, expectedVersion: 7 })).toEqual({
+        ok: true,
+        request: { breaks: [], breaks_confirmed: true, expected_version: 7 },
+      });
+      expect(buildCheckOutDialogRequest({ session, rows: [], noBreaks: true, expectedVersion: 7 })).toEqual({
+        ok: true,
+        request: { breaks: [], breaks_confirmed: true, expected_version: 7 },
+      });
+    });
+
+    it('rows added to a session that had none are the listed set (confirmed)', () => {
+      const session = running({ breaks: [] });
+      const built = buildCheckOutDialogRequest({ session, rows: [typedRow('a', '2026-09-21', '12:00', '15')], noBreaks: false, expectedVersion: 7 });
+      expect(built.ok && built.request.breaks_confirmed).toBe(true);
+      expect(built.ok && built.request.breaks).toHaveLength(1);
+    });
+  });
+
   it('session-level gaps come before the breaks: zone, start, end and a repeated session start', () => {
     expect(buildSessionDialogRequest(dialog({ zone: ' ' }), SESSION_OPTIONS)).toMatchObject({ ok: false, message: 'Enter the input zone.' });
     expect(buildSessionDialogRequest(dialog({ start: field('2026-10-14', '') }), SESSION_OPTIONS)).toMatchObject({
@@ -815,6 +870,64 @@ describe('suggestion rows without the past-day rule (WP5-UX3-T08B)', () => {
       ['2026-10-14T12:00', '2026-10-14T12:30'],
       ['2026-10-14T14:30', '2026-10-14T14:45'],
     ]);
+  });
+});
+
+/*
+ * WP5-UX3-FIX3 item 8 (coordinator decision on F-UX3B-2): "Confirm breaks" on a saved, unconfirmed session lists the suggested breaks that
+ * lie inside the session (docs/04 line 65), not all or nothing. 09:00 Los Angeles is 16:00Z on 2026-09-21; the default policy suggests
+ * 11:00-11:15, 13:00-13:30 and 15:30-15:45 for that start.
+ */
+describe('"Confirm breaks" rows (WP5-UX3-FIX3 item 8)', () => {
+  const keyOf = (index: number) => `confirm-s1-${index}`;
+  const ended = (endUtc: string, overrides: Partial<Session> = {}) => savedSession({ end_utc: endUtc, breaks: [], breaks_confirmed: false, ...overrides });
+  const starts = (session: Session, p: PolicyVersion = policy()) => confirmBreaksRows(session, p, keyOf).map((row) => [row.start.time, row.minutes]);
+
+  it.each([
+    ['09:00-12:00', '2026-09-21T19:00:00Z', [['11:00', '15']]],
+    ['09:00-14:00', '2026-09-21T21:00:00Z', [['11:00', '15'], ['13:00', '30']]],
+    ['09:00-18:00', '2026-09-22T01:00:00Z', [['11:00', '15'], ['13:00', '30'], ['15:30', '15']]],
+    ['09:00-10:30, none fits', '2026-09-21T17:30:00Z', []],
+    ['09:00-11:15, the first ends exactly at the end', '2026-09-21T18:15:00Z', [['11:00', '15']]],
+    ['09:00-11:14, the first ends one minute after the end', '2026-09-21T18:14:00Z', []],
+  ])('%s lists the suggestions inside the session', (_name, endUtc, expected) => {
+    expect(starts(ended(endUtc))).toEqual(expected);
+  });
+
+  it('the rows are untouched suggestions pinned in the session input zone, with their own keys', () => {
+    const rows = confirmBreaksRows(ended('2026-09-21T21:00:00Z'), policy(), keyOf);
+    expect(rows.map((row) => [row.key, row.origin, row.edited, row.countsAsWork])).toEqual([
+      ['confirm-s1-0', 'suggested', false, false],
+      ['confirm-s1-1', 'suggested', false, false],
+    ]);
+    expect(rows[0]?.start).toEqual(field('2026-09-21', '11:00', { offset: '-07:00' }));
+    expect(rows[0]?.pinned).toEqual({ zone: LA, startUtc: utc('2026-09-21T18:00:00Z'), endUtc: utc('2026-09-21T18:15:00Z') });
+    // Same instants, shown in another input zone (Ho Chi Minh City is UTC+7).
+    const hcm = confirmBreaksRows(ended('2026-09-21T21:00:00Z', { input_zone: HCM }), policy(), keyOf);
+    expect(hcm.map((row) => [row.start.date, row.start.time, row.start.offset])).toEqual([
+      ['2026-09-22', '01:00', '+07:00'],
+      ['2026-09-22', '03:00', '+07:00'],
+    ]);
+  });
+
+  it('saving the listed rows sends them as the same instants the session dialog sends for any untouched suggestion', () => {
+    const session = ended('2026-09-21T21:00:00Z');
+    const draft = { ...sessionDialogDraftFromSession(session), rows: confirmBreaksRows(session, policy(), keyOf) };
+    const request = sessionRequest(draft, { allowUnconfirmed: false, expectedVersion: session.version });
+    expect(request.breaks_confirmed).toBe(true);
+    expect(request.breaks.map((item) => [item.start.local, item.end.local])).toEqual([
+      ['2026-09-21T11:00', '2026-09-21T11:15'],
+      ['2026-09-21T13:00', '2026-09-21T13:30'],
+    ]);
+  });
+
+  it('offers nothing without a policy, without policy breaks, for a running session, a confirmed one or one that has saved rows', () => {
+    const closed = '2026-09-22T01:00:00Z';
+    expect(confirmBreaksRows(ended(closed), undefined, keyOf)).toEqual([]);
+    expect(starts(ended(closed), policy({ breaks: [] }))).toEqual([]);
+    expect(starts(savedSession({ end_utc: null, breaks: [], breaks_confirmed: false }))).toEqual([]);
+    expect(starts(ended(closed, { breaks_confirmed: true }))).toEqual([]);
+    expect(starts(savedSession({ end_utc: closed, breaks_confirmed: false }))).toEqual([]);
   });
 });
 

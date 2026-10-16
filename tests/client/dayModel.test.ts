@@ -209,6 +209,12 @@ describe('stale version messages', () => {
     expect(message).toContain('Nothing was saved');
     expect(staleReloadMessage([])).toContain('Some dates');
   });
+
+  it('uses the owner word "category" (G-2 a), never "labels" (WP5-UX3-FIX3 item 9)', () => {
+    const message = staleReloadMessage(['2026-09-30']);
+    expect(message).toBe('2026-09-30 changed since this period was loaded. Nothing was saved. Reload the period, review the new categories and try again.');
+    expect(message.toLowerCase()).not.toContain('label');
+  });
 });
 
 describe('reviewStatus', () => {

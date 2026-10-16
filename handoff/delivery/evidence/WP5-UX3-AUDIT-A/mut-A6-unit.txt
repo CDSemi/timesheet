@@ -1,0 +1,155 @@
+
+ RUN  v5.0.2 <task>/export-m
+
+ ❯ tests/integration/backup-prune.test.ts (15 tests | 1 failed) 60677ms
+   ❯ cli.js backup --prune and backup prune --dry-run (4)
+     × dry run prints the counts and removes nothing; it is the only way to run backup prune 32357ms
+ ❯ tests/client/dayEditorModel.test.ts (21 tests | 2 failed) 30ms
+   ❯ the chips under the panel title (U-19, U-20) (8)
+     ❯ the pill of the period of the day itself (G-5 b, WP5-UX3-FIX2) (4)
+       × says "in progress" for every day of the period in progress, whichever period the sheet shows 6ms
+       × feeds the editor chip: the day of the period in progress reads "in progress", not "future period" 4ms
+ ❯ tests/client/periodBarModel.test.ts (18 tests | 3 failed) 24ms
+   ❯ periodPillKind (6)
+     × reads "in progress" only for the period with today while the period before it is still the current one 7ms
+     × decides from the payroll dates, not from the relation word (the edit-reason relation of that period stays future) 2ms
+     × uses the periods of the owner in a shared view exactly like the own view (one function, same inputs) 1ms
+ ❯ tests/integration/restore.test.ts (32 tests | 7 skipped) 84151ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11)
+Error: Hook timed out in 10000ms.
+If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".
+ ❯ tests/integration/restore.test.ts:237:3
+    235|   const clock = new MutableClock(LATER);
+    236|
+    237|   beforeAll(async () => {
+       |   ^
+    238|     source = await buildSource();
+    239|     target = join(scratch('timesheet-t06-restore-'), 'instance');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11)
+TypeError: Cannot read properties of undefined (reading 'close')
+ ❯ tests/integration/restore.test.ts:247:14
+    245|
+    246|   afterAll(() => {
+    247|     restored.close();
+       |              ^
+    248|     source.t.close();
+    249|     rmSync(dirname(target), { recursive: true, force: true });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/dayEditorModel.test.ts > the chips under the panel title (U-19, U-20) > the pill of the period of the day itself (G-5 b, WP5-UX3-FIX2) > says "in progress" for every day of the period in progress, whichever period the sheet shows
+AssertionError: expected 'current' to be 'in-progress' // Object.is equality
+
+Expected: "in-progress"
+Received: "current"
+
+ ❯ tests/client/dayEditorModel.test.ts:165:65
+    163|
+    164|     it('says "in progress" for every day of the period in progress, wh…
+    165|       expect(dayPeriodPill('2026-10-14', ended, windowPeriods)).toBe('…
+       |                                                                 ^
+    166|       expect(dayPeriodPill('2026-10-12', ended, windowPeriods)).toBe('…
+    167|       expect(dayPeriodPill('2026-10-25', ended, windowPeriods)).toBe('…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  tests/client/dayEditorModel.test.ts > the chips under the panel title (U-19, U-20) > the pill of the period of the day itself (G-5 b, WP5-UX3-FIX2) > feeds the editor chip: the day of the period in progress reads "in progress", not "future period"
+AssertionError: expected { key: 'period', …(2) } to deeply equal { key: 'period', …(2) }
+
+- Expected
++ Received
+
+  {
+    "key": "period",
+-   "pill": "in-progress",
+-   "text": "in progress",
++   "pill": "current",
++   "text": "current period",
+  }
+
+ ❯ tests/client/dayEditorModel.test.ts:187:105
+    185|     it('feeds the editor chip: the day of the period in progress reads…
+    186|       const pill = dayPeriodPill('2026-10-14', ended, windowPeriods);
+    187|       expect(editorChips({ relation: 'future', ...(pill === undefined …
+       |                                                                                                         ^
+    188|       expect(editorChips({ relation: 'future', ...zones })[0]?.text).t…
+    189|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  tests/client/periodBarModel.test.ts > periodPillKind > reads "in progress" only for the period with today while the period before it is still the current one
+AssertionError: expected 'current' to be 'in-progress' // Object.is equality
+
+Expected: "in-progress"
+Received: "current"
+
+ ❯ tests/client/periodBarModel.test.ts:88:45
+     86|
+     87|   it('reads "in progress" only for the period with today while the per…
+     88|     expect(periodPillKind(NEXT, windowDay)).toBe('in-progress');
+       |                                             ^
+     89|     // The ended period stays current and the older one old: only toda…
+     90|     expect(periodPillKind(ENDED, windowDay)).toBe('current');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  tests/client/periodBarModel.test.ts > periodPillKind > decides from the payroll dates, not from the relation word (the edit-reason relation of that period stays future)
+AssertionError: expected 'current' to be 'in-progress' // Object.is equality
+
+Expected: "in-progress"
+Received: "current"
+
+ ❯ tests/client/periodBarModel.test.ts:98:76
+     96|   it('decides from the payroll dates, not from the relation word (the …
+     97|     expect(NEXT.relation).toBe('future');
+     98|     expect(periodPillKind({ payroll_date: NEXT.payroll_date }, windowD…
+       |                                                                            ^
+     99|   });
+    100|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  tests/client/periodBarModel.test.ts > periodPillKind > uses the periods of the owner in a shared view exactly like the own view (one function, same inputs)
+AssertionError: expected 'current' to be 'in-progress' // Object.is equality
+
+Expected: "in-progress"
+Received: "current"
+
+ ❯ tests/client/periodBarModel.test.ts:104:49
+    102|     const ownersPeriods = { current: { payroll_date: '2026-10-30' }, i…
+    103|     expect(periodPillKind(NEXT, ownersPeriods)).toBe(periodPillKind(NE…
+    104|     expect(periodPillKind(NEXT, ownersPeriods)).toBe('in-progress');
+       |                                                 ^
+    105|   });
+    106|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  tests/integration/backup-prune.test.ts > cli.js backup --prune and backup prune --dry-run > dry run prints the counts and removes nothing; it is the only way to run backup prune
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/integration/backup-prune.test.ts:371:3
+    369|   });
+    370|
+    371|   it('dry run prints the counts and removes nothing; it is the only wa…
+       |   ^
+    372|     const { target } = seededTarget('dry');
+    373|     const before = readdirSync(target).sort();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  4 failed | 90 passed (94)
+      Tests  6 failed | 2118 passed | 7 skipped (2131)
+   Start at  12:02:52
+   Duration  98.49s (tests 84%, import 9%, transform 7%)
+

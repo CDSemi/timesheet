@@ -1,0 +1,14 @@
+import { expect, test } from './fixtures.ts';
+
+/*
+ * WP5-UX3-AUDIT-B task-local probe (never part of the repository): the precondition of the FIX1 409 flake. Runs first in the same
+ * worker (same server and account) and leaves a day entry on the date the batch stale-version test seeds, as an earlier test can.
+ */
+test('an earlier test leaves a day entry on the oldest free workday', async ({ employeeSeed }) => {
+  const free = await employeeSeed.displayedPeriodFreeWorkdays();
+  const workDate = free.at(-1) ?? '';
+  await employeeSeed.putDay(workDate, { notes: 'left by an earlier test (audit probe)' });
+  const day = await employeeSeed.dayView(workDate);
+  console.log(`seeded entry on ${workDate}: version ${day.entry?.version}`);
+  expect(day.entry).not.toBeNull();
+});

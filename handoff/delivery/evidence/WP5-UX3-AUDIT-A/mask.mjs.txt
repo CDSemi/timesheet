@@ -1,0 +1,39 @@
+// WP5-UX3-AUDIT-A: masks a text file for the evidence folder (LF, no ANSI, task/repo/profile paths and the account name
+// replaced, any e-mail address that is not the synthetic @example.invalid form replaced). Usage: node mask.mjs <in> <out>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+let text = readFileSync(input, 'utf8');
+text = text.replace(/\x1b\[[0-9;]*m/g, '');
+text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+const bs = String.fromCharCode(92);
+const forms = (win, label) => {
+  // win is like <task>
+  const parts = win.split('/');
+  const drive = win[0];
+  const rest = win.slice(2);
+  return [
+    parts.join(bs + bs + bs + bs),
+    parts.join(bs + bs),
+    parts.join(bs),
+    win,
+    `/${drive.toLowerCase()}${rest}`,
+    `/${drive.toUpperCase()}${rest}`,
+    `${drive.toLowerCase()}:${rest}`,
+    `${drive.toLowerCase()}:${rest.split('/').join(bs)}`,
+    `file:///${win}`,
+  ].map((f) => [f, label]);
+};
+const pairs = [
+  ...forms('<task>', '<task>'),
+  ...forms('<regate-task>', '<regate-task>'),
+  ...forms('<audit-b-task>', '<audit-b-task>'),
+  ...forms('<claude-tmp>', '<claude-tmp>'),
+  ...forms('<repo>', '<repo>'),
+];
+pairs.sort((a, b) => b[0].length - a[0].length);
+for (const [f, label] of pairs) text = text.split(f).join(label);
+const user = process.env.USERNAME ?? '';
+if (user) text = text.split(user).join('<user>');
+text = text.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, (match) => (/@example\.invalid$/i.test(match) ? match : '<email>'));
+writeFileSync(output, text);

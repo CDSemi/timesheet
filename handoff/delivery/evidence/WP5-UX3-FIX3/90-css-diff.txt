@@ -1,0 +1,187 @@
+diff --git a/src/client/styles.css b/src/client/styles.css
+index acc9e37..35f48c9 100644
+--- a/src/client/styles.css
++++ b/src/client/styles.css
+@@ -672,6 +672,13 @@ button.identity {
+   text-align: right;
+ }
+
++/* More specific than the generic touch rule (`button`), so the identity button has its own: a touch screen of 768px or more shows this bar. */
++@media (max-width: 767px), (pointer: coarse) {
++  button.identity {
++    min-height: var(--tap-min);
++  }
++}
++
+ .identity-text {
+   display: flex;
+   flex-direction: column;
+@@ -783,10 +790,14 @@ button.identity[aria-expanded='true'] .identity-chevron {
+     color: var(--text);
+     box-shadow: none;
+   }
++
++  /* After the hover rule at the same specificity: a tab with keyboard focus keeps its ring under the pointer. */
++  .shell-tabs .tab:focus-visible:hover:not(:disabled) {
++    box-shadow: var(--focus-ring-inset);
++  }
+ }
+
+-.shell-tabs .tab:focus-visible,
+-.shell-tabs .tab:focus-visible:hover:not(:disabled) {
++.shell-tabs .tab:focus-visible {
+   box-shadow: var(--focus-ring-inset);
+ }
+
+@@ -880,7 +891,10 @@ button.identity[aria-expanded='true'] .identity-chevron {
+   height: var(--account-icon-size);
+ }
+
++/* A flex row like the links beside it, so the icon gap and the vertical alignment are the same as Profile's (a button is not flex by default). */
+ button.account-action {
++  display: flex;
++  align-items: center;
+   border-color: transparent;
+   background: transparent;
+   text-align: left;
+@@ -1173,10 +1187,13 @@ textarea {
+   transition: var(--transition);
+ }
+
+-input:hover,
+-select:hover,
+-textarea:hover {
+-  border-color: var(--muted);
++/* Hover only where the device can hover: a tap leaves no hover look behind (WP5-UX3-FIX3 item 2, AGENTS UI rule 3). */
++@media (hover: hover) {
++  input:hover,
++  select:hover,
++  textarea:hover {
++    border-color: var(--muted);
++  }
+ }
+
+ /*
+@@ -1454,8 +1471,10 @@ tbody tr {
+   transition: var(--transition);
+ }
+
+-tbody tr:hover {
+-  background: var(--off);
++@media (hover: hover) {
++  tbody tr:hover {
++    background: var(--off);
++  }
+ }
+
+ tr.nonworking th,
+@@ -2643,6 +2662,11 @@ textarea {
+     color: var(--accent);
+     text-decoration-color: currentColor;
+   }
++
++  /* Keyboard focus keeps the shared ring under the pointer (WP5-UX3-FIX3 item 1, SC 2.4.7): more specific than the hover rule above. */
++  .sheet .sheet-date:focus-visible:hover:not(:disabled) {
++    box-shadow: var(--focus-ring);
++  }
+ }
+
+ .sheet .sheet-date:focus-visible {
+@@ -3022,6 +3046,11 @@ textarea {
+     background: var(--day-hover);
+     box-shadow: none;
+   }
++
++  /* Keyboard focus keeps the shared ring under the pointer (WP5-UX3-FIX3 item 1, SC 2.4.7). */
++  .sheet .sheet-day-button:focus-visible:hover:not(:disabled) {
++    box-shadow: var(--focus-ring);
++  }
+ }
+
+ .sheet-day-button .mono {
+@@ -4317,10 +4346,20 @@ button.quiet-danger {
+   text-align: left;
+ }
+
+-.sheet .label-trigger:hover:not(:disabled) {
+-  background: var(--day-hover);
+-  border-color: transparent;
+-  box-shadow: inset 0 0 0 var(--hairline) var(--accent-line);
++/*
++ * Hover only where the device can hover (a tap leaves no tint, WP5-UX3-FIX3 item 2); keyboard focus keeps its 2px inset ring under the
++ * pointer (item 1, SC 2.4.7): the focus-and-hover rule is more specific than the hover rule above it.
++ */
++@media (hover: hover) {
++  .sheet .label-trigger:hover:not(:disabled) {
++    background: var(--day-hover);
++    border-color: transparent;
++    box-shadow: inset 0 0 0 var(--hairline) var(--accent-line);
++  }
++
++  .sheet .label-trigger:focus-visible:hover:not(:disabled) {
++    box-shadow: inset 0 0 0 var(--rule) var(--accent);
++  }
+ }
+
+ /* The open picker marks its trigger with a 1px accent line (the list owns the focus); keyboard focus keeps the 2px indicator. */
+@@ -4535,9 +4574,16 @@ button.quiet-danger {
+   transition: var(--transition);
+ }
+
+-.button-link:hover {
+-  background: var(--off);
+-  box-shadow: var(--elev-1);
++/* Hover only where the device can hover; keyboard focus keeps the shared ring under the pointer (the hover shadow is more specific than the ring). */
++@media (hover: hover) {
++  .button-link:hover {
++    background: var(--off);
++    box-shadow: var(--elev-1);
++  }
++
++  .button-link:focus-visible:hover {
++    box-shadow: var(--focus-ring);
++  }
+ }
+
+ .history-list {
+@@ -4826,12 +4872,15 @@ textarea.mono {
+   cursor: default;
+ }
+
+-.sheet-review .sheet-day:hover:not(.nonworking) {
+-  background-color: transparent;
+-}
++/* Reset rules of the hover tint above, so they sit in the same hover-only block: a tap on a touch screen has no tint to undo. */
++@media (hover: hover) {
++  .sheet-review .sheet-day:hover:not(.nonworking) {
++    background-color: transparent;
++  }
+
+-.sheet-review .sheet-day.nonworking:hover {
+-  background-color: var(--day-nonworking);
++  .sheet-review .sheet-day.nonworking:hover {
++    background-color: var(--day-nonworking);
++  }
+ }
+
+ .sheet-date-text {
+@@ -4930,6 +4979,19 @@ textarea.mono {
+     grid-column: span var(--cols-2);
+   }
+
++  /*
++   * A long delivery state ("Delivery recorded as uncertain") and an unbroken fault code (`lease_expired_while_sending`) wrap inside
++   * their half of the row instead of running past the card, so the table wrapper never scrolls sideways on a phone (WP5-UX3-FIX3 item 6).
++   */
++  .ops-table .badge {
++    white-space: normal;
++    overflow-wrap: anywhere;
++  }
++
++  .ops-table .ops-code {
++    overflow-wrap: anywhere;
++  }
++
+   .ops-table td::before {
+     display: block;
+     content: attr(data-label);

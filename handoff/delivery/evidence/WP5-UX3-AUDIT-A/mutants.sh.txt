@@ -1,0 +1,46 @@
+# WP5-UX3-AUDIT-A item 8: area-A mutants in the scratch export export-m (never the repository). Each is applied alone,
+# the full unit suite runs on the source, the client is rebuilt, the listed e2e specs run on both projects, then the file
+# is restored from its copy. Real clock.
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+O=$T/out/mut
+mkdir -p $O
+M=$T/export-m
+cd $M || exit 2
+S=$O/summary.txt
+run_mut() {
+  id=$1; file=$2; expr=$3; shift 3
+  cp "$file" "$T/tmp/mut-orig"
+  sed -i "$expr" "$file"
+  if cmp -s "$file" "$T/tmp/mut-orig"; then echo "$id: NOT APPLIED ($file $expr)" >> $S; return; fi
+  diff "$T/tmp/mut-orig" "$file" > $O/$id-diff.txt
+  echo "$id start $(date -u +%H:%M:%S)" >> $S
+  node node_modules/vitest/vitest.mjs run > $O/$id-unit.txt 2>&1; u=$?
+  npm run build:client > $O/$id-build.txt 2>&1; b=$?
+  export E2E_SCREENSHOT_DIR="$TW\\shots-mut"
+  node node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-mut-$id" > $O/$id-e2e.txt 2>&1; e=$?
+  cp "$T/tmp/mut-orig" "$file"
+  uf=$(grep -E 'Tests .*failed' $O/$id-unit.txt | tr -s ' ')
+  ef=$(grep -cE '^\s+x ' $O/$id-e2e.txt)
+  ep=$(grep -E '^\s+[0-9]+ (passed|failed|skipped|flaky)' $O/$id-e2e.txt | tr -s ' ' | tr '\n' ' ')
+  echo "$id unit_exit=$u [$uf] build=$b e2e_exit=$e e2e_failed_lines=$ef [$ep] specs: $*" >> $S
+}
+F=src/client
+run_mut A1 $F/components/sheetModel.ts "71s/return 'end'/return 'mid'/" tests/e2e/timesheet.spec.ts
+run_mut A2 $F/styles.css "2862s/var(--layer-marker)/var(--layer-under)/" tests/e2e/timesheet.spec.ts tests/e2e/focus-ring.spec.ts
+run_mut A3 $F/styles.css "599s/(max-width: 1279px)/(max-width: 1199px)/" tests/e2e/logo.spec.ts
+run_mut A4 $F/components/AppShell.tsx "161s/moreButton.current?.focus();/void 0;/" tests/e2e/shell.spec.ts tests/e2e/theme.spec.ts
+run_mut A5 $F/TimesheetScreen.tsx "44s/1360px/1300px/" tests/e2e/day-editor.spec.ts --project=desktop
+run_mut A6 $F/components/periodBarModel.ts "71s/return 'in-progress';/return 'current';/" tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts
+run_mut A7 $F/components/routeModel.ts "44s/!route.adminOnly || role === 'admin'/true || role === 'admin'/" tests/e2e/settings-routes.spec.ts tests/e2e/isolation.spec.ts tests/e2e/admin.spec.ts tests/e2e/shell.spec.ts
+run_mut A8 $F/components/SheetWeekTable.tsx "264s/>Category</>Label</" tests/e2e/timesheet.spec.ts tests/e2e/sharing.spec.ts --project=mobile
+run_mut A9 $F/components/AppShell.tsx "38s/= 5000;/= 0;/" tests/e2e/shell.spec.ts tests/e2e/settings-routes.spec.ts
+run_mut A10 $F/components/dayEditorModel.ts "97s/if (contains(periods.in_progress))/if (false \&\& contains(periods.in_progress))/" tests/e2e/today.spec.ts tests/e2e/day-editor.spec.ts
+run_mut A11 $F/components/AccountMenu.tsx "196s/if (open && next/if (false \&\& open \&\& next/" tests/e2e/shell.spec.ts tests/e2e/theme.spec.ts
+# Restore check: rebuild the client and compare every mutated file with the pristine export.
+npm run build:client > $O/restore-build.txt 2>&1
+echo "restore build exit $? $(grep -o 'index-[A-Za-z0-9_-]*\.js' $O/restore-build.txt | tr '\n' ' ')" >> $S
+for f in components/sheetModel.ts styles.css components/AppShell.tsx TimesheetScreen.tsx components/periodBarModel.ts components/routeModel.ts components/SheetWeekTable.tsx components/dayEditorModel.ts components/AccountMenu.tsx; do
+  cmp -s $M/src/client/$f $T/export/src/client/$f && echo "restored $f" >> $S || echo "DIFFERS $f" >> $S
+done
+echo mut-done > $O/mut.done

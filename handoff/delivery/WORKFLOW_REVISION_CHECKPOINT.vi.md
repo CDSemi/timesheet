@@ -385,7 +385,86 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Đã soạn nháp brief WP5-UX3-REGATE (chạy lại mọi mục của gate lần 1, xác nhận các lý do FAIL đã
   khắc phục, kiểm các hành vi của FIX2); commit đích và digest điền sau lần đóng băng. Đã đăng ký ở
   trạng thái chờ.
-- Đang chạy: WP5-UX3-FIX2-FREEZE (committer, sonnet).
+- WP5-UX3-FIX2-FREEZE xong: 7ce4e95a0c4477374e981132d93b11aedab2e384 trên main, đã push (66 file;
+  digest 262138e0, 833 file, trên HEAD cũng vậy; mọi kiểm tra trả về 0; không báo sơ suất nào).
+- Đang chạy: WP5-UX3-REGATE (verifier, sonnet) trên 7ce4e95 / 262138e0. Sau đó các audit độc lập A
+  và B nhắm lại vào lần gate này, AUDIT-INT và nghiệm thu lại WP5.
+- Trong lúc chạy lại gate, các brief AUDIT-A, AUDIT-B và AUDIT-INT đã được nhắm lại vào 7ce4e95 /
+  262138e0 và WP5-UX3-REGATE, mỗi brief thêm một mục cho vòng sửa, cùng dải cổng mới (A
+  48940-48969, B 48970-48999). Các mục trên board chỉ được nhắm lại sau khi gate chạy lại đạt PASS.
+- WP5-UX3-REGATE xong (verifier, tự báo claude-sonnet-5-5): PASS (các mục NAS NOT VERIFIED) trên
+  7ce4e95 / 262138e0, digest bằng nhau ở cả ba dạng trước và sau.
+  - Mọi lý do FAIL của lần 1 đều đã khắc phục: các lần chạy vào thứ Ba và cả hai lần ngày 28/11
+    đều 0 lỗi; 48 lượt đi phím ở 768-899px, không vòng focus nào bị che; axe (a) và (b) đã hết,
+    (c) đúng như phần giải trình.
+  - e2e theo đồng hồ thật: 627 đạt, 0 lỗi; verify 2131; drill 208 PASS; server và domain giống
+    hệt từng byte so với a643794; các hành vi của FIX2 đều đúng.
+  - Điểm lệch: lần chạy FULL đầu tiên ở mốc 31/12 23:30 hỏng hai test mobile do timeout
+    (theme.spec.ts:413, timesheet.spec.ts:1799). Chạy lại thì đạt, và chạy riêng thì cả hai
+    test đạt 15/15. Phần cắt ảnh kiểm vết nối ở DPR 2 không được làm lại.
+- Quyết định của coordinator: ghi nhận PASS kèm điểm lệch này. AUDIT-A (agent mới) đánh giá hai
+  test đó khi chạy dưới tải và làm lại phần kiểm vết nối ở DPR 2; nếu nguyên nhân nằm ở test hoặc
+  sản phẩm thì kết luận là FIX REQUIRED. current_source_digest là 262138e0. WP5-UX2-AUDIT2 và bảy
+  audit từng trỏ tới nó nay trỏ tới WP5-UX3-AUDIT-INT. Các mục audit trên board đã được nhắm lại
+  vào 7ce4e95 và lần gate chạy lại này.
+- Đang chạy: WP5-UX3-AUDIT-A và WP5-UX3-AUDIT-B (auditor mới, opus/xhigh, chỉ đọc, song song).
+- WP5-UX3-AUDIT-B xong (tự báo claude-opus-5-5): FIX REQUIRED với hai lỗi mức Low.
+  - F-UX3B-1 (mục 12 của đợt rà): khi một phiên đang chạy đã có dòng nghỉ lưu sẵn nhưng chưa xác
+    nhận (trạng thái chỉ tạo được qua API), nếu xóa hết các dòng trong hộp thoại Check out thì
+    hộp thoại hiện danh sách rỗng nhưng server vẫn giữ các dòng đó (hoặc trả lỗi 422). Hộp thoại
+    không hề nói điều này.
+  - F-UX3B-2: "Confirm breaks" chỉ liệt kê giờ nghỉ gợi ý khi tất cả đều nằm trong phiên; docs/04
+    dòng 65 lại nói nó liệt kê những giờ nghỉ nằm trong phiên.
+  - Mọi phần khác của vùng B đều đạt: tính toàn vẹn của dữ liệu gửi đi (25 trường hợp), ngữ
+    nghĩa xác nhận, điền sẵn, số liệu, hộp thoại, điện thoại, các mục của vòng sửa, 13/13 đột
+    biến bị bắt. e2e đầy đủ 627 đạt, 0 lỗi; digest 262138e0 trước và sau.
+  - Các rủi ro tùy chọn R-UX3B-1..7 nằm trong bản review.
+- AUDIT-A vẫn đang chạy. Vòng sửa sẽ được quyết sau khi audit này xong, để một lần sửa bao luôn cả
+  hai vùng.
+- WP5-UX3-AUDIT-A xong (tự báo claude-opus-5-5): FIX REQUIRED.
+  - F-UX3A-01, mức trung bình: vòng focus biến mất khi con trỏ chuột nằm trên nút ngày của bảng
+    và mờ đi trên ô chọn Category. Lỗi này cũng xảy ra sau khi nhấn Escape để quay về từ editor,
+    và đã có từ a643794.
+  - F-UX3A-02..06, mức Low:
+    - các luật hover chưa gắn điều kiện;
+    - nút tài khoản chỉ cao 38px khi dùng con trỏ thô;
+    - biểu tượng Sign out dính sát chữ;
+    - việc Escape trả focus ở bảng More chưa có test (đột biến A4 không bị bắt);
+    - bảng Administration trên điện thoại cuộn ngang khi có nhãn trạng thái giao dài (axe mức
+      nghiêm trọng).
+  - Mục 11: hai lần timeout của lần gate chạy lại là nhiễu do tải (một lần máy khựng 21 giây;
+    125/125 lần đạt trong năm lần chạy đầy đủ).
+  - Vết nối ở DPR 2 sạch.
+  - Các kiểm tra bắt buộc: e2e đầy đủ 627 đạt, 0 lỗi; digest 262138e0 trước và sau.
+- Quyết định của coordinator: một task sửa WP5-UX3-FIX3 (worker-high, sonnet) cho F-UX3A-01..06
+  và F-UX3B-1..2, cùng R-UX3B-3, R-UX3B-4, R1 (tài liệu) và R8 (thời gian chờ của test).
+  - F-UX3B-1: khi người dùng xóa hết các dòng nghỉ đã lưu, Check out gửi danh sách rỗng chưa xác
+    nhận để thay các dòng đó, nên những gì hộp thoại hiện đúng bằng những gì được lưu. Khi lúc
+    mở không có dòng nào đã lưu thì vẫn bỏ trống danh sách (E-1).
+  - F-UX3B-2: code làm theo docs/04 dòng 65 (liệt kê các giờ nghỉ gợi ý nằm trong phiên).
+  - Không sửa server.
+  - Sau FIX3: FIX3-FREEZE, WP5-UX3-REGATE2, các audit mới AUDIT-A2 và AUDIT-B2, rồi AUDIT-INT.
+- Đang chạy: WP5-UX3-FIX3.
+- WP5-UX3-FIX3 xong (worker-high, tự báo claude-sonnet-5-5): xong cả mười hai mục.
+  - Vòng focus dưới con trỏ chuột (bốn điều khiển); gắn điều kiện cho bảy luật hover, kèm một test
+    quét toàn bộ; nút tài khoản cao 44px với con trỏ thô; Sign out dùng flex; test Escape ở bảng
+    More (bắt được A4); bảng Administration trên điện thoại xuống dòng.
+  - Check out gửi danh sách rỗng chưa xác nhận khi người dùng đã xóa hết các dòng đã lưu. Server
+    đã được kiểm trước, và hộp thoại hiện một ghi chú.
+  - "Confirm breaks" liệt kê các giờ nghỉ gợi ý nằm trong phiên.
+  - Sửa chữ và tài liệu; theme.spec.ts có thêm thời gian chờ và cơ chế thử lại khi máy khựng.
+  - Unit 2141; e2e đầy đủ 645 đạt, 0 lỗi; cả hai đồng hồ giả lập 0 lỗi; theme x5 380 đạt; các
+    đột biến đều bị bắt; gói chính 486.81 kB; verify 0; digest d1d903cf (833 file; 20 đường dẫn
+    thay đổi).
+- Trước khi commit: thư mục bằng chứng của WP5-UX3-REGATE còn bốn file `.log`, không phải `.txt`
+  và không được nhắc đến ở đâu. Đã nhờ chính verifier của lần gate đó chuyển chúng thành `.txt`
+  LF đã che dữ liệu (hoặc xóa nếu trùng y hệt file khác) và ghi lại việc này. Sau đó là
+  WP5-UX3-FIX3-FREEZE.
+- Đã dọn bằng chứng: không file nào trùng với file khác. Mỗi file được chép thành bản `.log.txt` LF
+  (không có gì cần che) và bản gốc đã bị xóa. Việc này được ghi trong phần Results của REGATE;
+  kết luận không đổi.
+- Đang chạy: WP5-UX3-FIX3-FREEZE (committer, sonnet; 20 đường dẫn của FIX3, các bản ghi, các cặp
+  review và năm thư mục bằng chứng).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

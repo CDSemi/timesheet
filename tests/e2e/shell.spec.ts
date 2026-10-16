@@ -750,6 +750,24 @@ for (const role of ['employee', 'admin'] as const) {
     await useEntry(current);
     await expect(more).toHaveAttribute('aria-expanded', 'false');
     await expect(more).toBeFocused();
+
+    // Escape inside the opened panel closes it and returns focus to More, as Escape does in the desktop menu (WP5-UX3-FIX3 item 5).
+    await more.focus();
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeVisible();
+    await expect(more).toHaveAttribute('aria-expanded', 'true');
+    await panel.getByRole('link', { name: current, exact: true }).focus();
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
+    await expect(more).toBeFocused();
+    // From the last entry too (Sign out is not a link), so the focus return is not tied to one entry.
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeVisible();
+    await panel.getByRole('button', { name: 'Sign out' }).focus();
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(more).toBeFocused();
   });
 }
 
@@ -1019,3 +1037,68 @@ test('mobile: no horizontal overflow and tap targets of at least 44px', async ({
     expect(box?.width ?? 0, `${name} width`).toBeGreaterThanOrEqual(44);
   }
 });
+
+/*
+ * WP5-UX3-FIX3 item 3: a touch screen of 768px or more (a tablet in landscape) shows the top bar with a coarse pointer, and every
+ * control of the bar is then at least 44px high (AGENTS UI rule 3, docs/04 "Visual standard"). The identity button used to keep its own
+ * 36px minimum (a more specific selector than the touch rule), so it measured 38px.
+ */
+test.describe('WP5-UX3-FIX3: with a coarse pointer the top bar has no control under 44px', () => {
+  test.use({ hasTouch: true, isMobile: false, viewport: { width: 1024, height: 900 } });
+
+  test('1024x900 with touch: the identity button, the navigation links and the switcher are at least 44px high', async ({ page, signInThroughUi }) => {
+    await signInThroughUi();
+    const identity = identityButton(page);
+    await expect(identity).toBeVisible();
+    expect(await page.evaluate<boolean>("window.matchMedia('(pointer: coarse)').matches"), 'the window reports a coarse pointer').toBe(true);
+    const bar = page.getByRole('banner');
+    const controls = await bar.locator('a, button, select, input:not([type="checkbox"]):not([type="radio"])').evaluateAll((elements) =>
+      elements
+        .map((element) => ({ name: (element.textContent ?? '').trim().slice(0, 30) || element.getAttribute('aria-label') || element.tagName, box: element.getBoundingClientRect() }))
+        .filter((item) => item.box.width > 0 && item.box.height > 0)
+        .map((item) => ({ name: item.name, height: item.box.height })),
+    );
+    expect(controls.length, 'the bar has the navigation links and the identity button').toBeGreaterThanOrEqual(4);
+    for (const control of controls) expect(control.height, `${control.name} is at least 44px high`).toBeGreaterThanOrEqual(43.9);
+    const box = await identity.boundingBox();
+    expect(box?.height ?? 0, 'the identity button').toBeGreaterThanOrEqual(43.9);
+    console.log(`bar controls with a coarse pointer: ${controls.map((item) => `${item.name} ${item.height}`).join('; ')}`);
+  });
+});
+
+/*
+ * WP5-UX3-FIX3 item 4: the Sign out entry has the same icon gap (12px, --space-3) and the same vertical alignment as Profile and
+ * Settings, in the desktop menu and in the phone More panel (the entry is a button, which used to be display: block, so the gap did nothing).
+ */
+for (const { name, width, height } of [
+  { name: 'account menu at 1280', width: 1280, height: 800 },
+  { name: 'phone More panel at 390', width: 390, height: 844 },
+] as const) {
+  test(`Sign out keeps the 12px icon gap and the vertical alignment of Profile and Settings (${name})`, async ({ page, signInThroughUi }) => {
+    await page.setViewportSize({ width, height });
+    await signInThroughUi();
+    const panel = await openAccount(page);
+    const measure = async (entry: Locator) =>
+      entry.evaluate((element) => {
+        const icon = element.querySelector('svg')?.getBoundingClientRect();
+        const text = [...element.childNodes].find((node) => node.nodeType === 3 && (node.textContent ?? '').trim() !== '');
+        if (icon === undefined || text === undefined) return null;
+        const range = element.ownerDocument.createRange();
+        range.selectNodeContents(text);
+        const words = range.getBoundingClientRect();
+        return { gap: words.left - icon.right, offset: icon.top + icon.height / 2 - (words.top + words.height / 2) };
+      });
+    const profile = await measure(panel.getByRole('link', { name: 'Profile', exact: true }));
+    const settings = await measure(panel.getByRole('link', { name: 'Settings', exact: true }));
+    const signOut = await measure(panel.getByRole('button', { name: 'Sign out', exact: true }));
+    expect(profile, 'Profile has an icon and words').not.toBeNull();
+    expect(signOut, 'Sign out has an icon and words').not.toBeNull();
+    for (const [label, entry] of [['Profile', profile], ['Settings', settings], ['Sign out', signOut]] as const) {
+      expect(entry?.gap ?? -1, `${label}: the icon gap is 12px`).toBeGreaterThanOrEqual(11.5);
+      expect(entry?.gap ?? 99, `${label}: the icon gap is 12px`).toBeLessThanOrEqual(12.5);
+      expect(Math.abs(entry?.offset ?? 99), `${label}: the icon centre is level with the words`).toBeLessThanOrEqual(1.5);
+    }
+    expect(Math.abs((signOut?.offset ?? 99) - (profile?.offset ?? 0)), 'Sign out aligns like Profile').toBeLessThanOrEqual(1);
+    console.log(`account entries (${name}): Profile ${JSON.stringify(profile)}; Settings ${JSON.stringify(settings)}; Sign out ${JSON.stringify(signOut)}`);
+  });
+}

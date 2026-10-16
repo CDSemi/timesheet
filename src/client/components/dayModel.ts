@@ -140,5 +140,5 @@ export function staleDates(details: Record<string, unknown> | undefined): string
 
 export function staleReloadMessage(dates: readonly string[]): string {
   const named = dates.length === 0 ? 'Some dates' : dates.join(', ');
-  return `${named} changed since this period was loaded. Nothing was saved. Reload the period, review the new labels and try again.`;
+  return `${named} changed since this period was loaded. Nothing was saved. Reload the period, review the new categories and try again.`;
 }

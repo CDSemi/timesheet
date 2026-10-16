@@ -1,0 +1,112 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX3-REGATE task-local probe (never part of the repository): FIX2 item 1 measured independently of the repository's tests.
+ * Records what has focus after an account-menu entry (desktop) or a More entry (phone), whether the ring shows, and the pointer case.
+ */
+test.use({ locale: 'en-US' });
+const OUT = process.env.GATE_OUT ?? '';
+const rec = (line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'fix2.txt'), `${line}\n`);
+};
+
+async function focusFacts(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const el = document.activeElement as HTMLElement | null;
+    if (el === null) return 'none';
+    const cs = getComputedStyle(el);
+    const ring = cs.boxShadow !== 'none' || (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0);
+    return `${el.tagName.toLowerCase()} "${(el.textContent ?? '').trim().slice(0, 30)}" tabindex=${el.getAttribute('tabindex')} focus-visible=${el.matches(':focus-visible')} ring-painted=${ring}`;
+  });
+}
+
+for (const role of ['employee', 'admin'] as const) {
+  test(`desktop 1280: account menu entries by keyboard and by pointer (${role})`, async ({ page, builtServer, signInPageAs, isMobile }) => {
+    test.skip(isMobile, 'Desktop project');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInPageAs(builtServer.credentials[role]);
+    const identity = page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+    const panel = page.locator('#account-menu');
+    const h1 = (name: string) => page.getByRole('heading', { name, level: 1 });
+    const entries = role === 'admin' ? ['Profile', 'Settings', 'Administration'] : ['Profile', 'Settings'];
+    for (const name of entries) {
+      await identity.focus();
+      await page.keyboard.press('Enter');
+      await expect(panel).toBeVisible();
+      await panel.getByRole('link', { name, exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await expect(panel).toHaveCount(0);
+      const heading = name === 'Administration' ? 'Administration' : name;
+      await expect(h1(heading)).toBeFocused();
+      rec(`DESKTOP ${role} keyboard ${name}: ${await focusFacts(page)}`);
+      expect(await page.evaluate<boolean>("document.activeElement?.matches(':focus-visible') ?? false")).toBe(true);
+      if (name === 'Profile') {
+        await page.waitForTimeout(300);
+        await page.screenshot({ path: screenshotPath(`ux3regate-account-heading-focus-1280-${role}-synthetic.png`), clip: { x: 0, y: 0, width: 1280, height: 300 }, animations: 'disabled' });
+      }
+    }
+    // The same page again: focus returns to the identity button.
+    const current = entries[entries.length - 1] ?? '';
+    await identity.focus();
+    await page.keyboard.press('Enter');
+    await panel.getByRole('link', { name: current, exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(panel).toHaveCount(0);
+    await expect(identity).toBeFocused();
+    rec(`DESKTOP ${role} same page (${current}): focus on identity button -> ${await focusFacts(page)}`);
+    // Pointer: heading takes focus, no visible ring.
+    await identity.click();
+    await panel.getByRole('link', { name: 'Profile', exact: true }).click();
+    await expect(h1('Profile')).toBeFocused();
+    const facts = await focusFacts(page);
+    rec(`DESKTOP ${role} pointer Profile: ${facts}`);
+    expect(facts).toContain('focus-visible=false');
+    expect(facts).toContain('ring-painted=false');
+  });
+
+  test(`phone 390: More panel entries by keyboard and by pointer (${role})`, async ({ page, builtServer, signInPageAs, isMobile }) => {
+    test.skip(!isMobile, 'Phone project');
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signInPageAs(builtServer.credentials[role], '#/timesheet');
+    await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+    const panel = page.locator('#more-panel');
+    const h1 = (name: string) => page.getByRole('heading', { name, level: 1 });
+    const entries = role === 'admin' ? ['Profile', 'Settings', 'Administration'] : ['Profile', 'Settings'];
+    for (const name of entries) {
+      await more.focus();
+      await page.keyboard.press('Enter');
+      await expect(panel).toBeVisible();
+      await panel.getByRole('link', { name, exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await expect(panel).toHaveCount(0);
+      await expect(h1(name)).toBeFocused();
+      rec(`PHONE ${role} keyboard ${name}: ${await focusFacts(page)}`);
+      expect(await page.evaluate<boolean>("document.activeElement?.matches(':focus-visible') ?? false")).toBe(true);
+      if (name === 'Profile' && role === 'employee') {
+        await page.waitForTimeout(300);
+        await page.screenshot({ path: screenshotPath('ux3regate-phone-more-heading-focus-390-synthetic.png'), animations: 'disabled' });
+      }
+    }
+    const current = entries[entries.length - 1] ?? '';
+    await more.focus();
+    await page.keyboard.press('Enter');
+    await panel.getByRole('link', { name: current, exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(panel).toHaveCount(0);
+    await expect(more).toBeFocused();
+    rec(`PHONE ${role} same page (${current}): focus on More -> ${await focusFacts(page)}`);
+    await more.click();
+    await panel.getByRole('link', { name: 'Profile', exact: true }).click();
+    await expect(h1('Profile')).toBeFocused();
+    const facts = await focusFacts(page);
+    rec(`PHONE ${role} pointer Profile: ${facts}`);
+    expect(facts).toContain('focus-visible=false');
+    expect(facts).toContain('ring-painted=false');
+  });
+}

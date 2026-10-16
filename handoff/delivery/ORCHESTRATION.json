@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "ux3-round-fix1-and-sweep",
+  "phase": "ux3-round-fix3",
   "coordinator_session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -25,10 +25,10 @@
     "observed_at": "2026-10-15",
     "note": "Main session runs Opus 5.5 by owner choice (system context claude-opus-5-5); session ID inferred from the session scratchpad path. Earlier coordinator sessions: 44e3451e-da20-4a12-94bb-6b94fc5f531e, d5029c61-21ee-4f70-9252-41ab1589f937, 11acfabe-25ef-48b5-ac28-73ce2d74ecee."
   },
-  "current_source_digest": "229df806aeaaa886ab11ee83556746ee65eda6c81a596dcd180d80d5d0b04db3",
+  "current_source_digest": "262138e0c94c90dc0287e6de87e69f2aabfa68d3bd7bdb6262322c1e2b8f0191",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX3-FIX2-FREEZE",
+  "next_task_id": "WP5-UX3-FIX3-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-16",
@@ -307,7 +307,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "9187f31bee9c092041887d3ab034c492e33da0b5",
+    "last_commit": "7ce4e95a0c4477374e981132d93b11aedab2e384",
     "unpushed": []
   },
   "owner_decisions": [
@@ -491,6 +491,16 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-16",
+      "basis": "WP5-UX3-AUDIT-A FIX REQUIRED (F-UX3A-01 Medium: the focus ring disappears under the pointer on the sheet's date button and weakens on the Category picker; F-UX3A-02..06 Low: ungated hover rules, the 38px identity button with a coarse pointer, the Sign out icon gap, the More-panel Escape focus return untested, the phone Administration table scrolling sideways) and WP5-UX3-AUDIT-B FIX REQUIRED (F-UX3B-1 Low: the Check out dialog shows an empty list while the server keeps removed saved rows; F-UX3B-2 Low: 'Confirm breaks' all-or-nothing against docs/04 line 65), both on 7ce4e95 / 262138e0. AUDIT-A judged the regate's two timeouts as load noise (one 21 s host stall; 125 of 125 passes) and the DPR 2 seams clean. Optional risks R-UX3B-3 (docs/12 line 71 first sentence), R-UX3B-4 ('labels' in the batch stale-version alert), R1 (docs/04 line 46 frame contrast stated without the scrim limit) and R8 (theme.spec.ts:413 budget) are cheap and touch the same files.",
+      "decision": "One fix task, WP5-UX3-FIX3, on timesheet-worker-high with model sonnet (no override; size M, risk M; like FIX2), for F-UX3A-01..06 and F-UX3B-1..2 plus R-UX3B-3, R-UX3B-4, R1 (docs) and R8 (test budget without weakening). F-UX3B-1, a behaviour choice inside the existing API contract: when the Check out dialog opened with saved rows and the person removed them all with the box unticked, Check out sends the empty list unconfirmed (breaks [] with breaks_confirmed false: the complete unconfirmed set, which replaces the saved rows), so what the dialog shows is what is recorded (U-24, U-25); with no saved rows at the start and nothing listed or ticked the list stays omitted (E-1 unchanged); no server change; the worker stops if the server refuses that request. F-UX3B-2: the code follows docs/04 line 65 (list the suggested breaks that lie inside the session, as the new-session pre-fill does; none fits: nothing listed and Save asks through the G-4 notice); when suggestions appear is unchanged. Other optional risks stay recorded (R-UX3B-1, -2, -5, -6, -7; R2-R7, R9). Then WP5-UX3-FIX3-FREEZE, WP5-UX3-REGATE2 on the new freeze, fresh rechecks WP5-UX3-AUDIT-A2 and WP5-UX3-AUDIT-B2 in parallel, and WP5-UX3-AUDIT-INT."
+    },
+    {
+      "date": "2026-10-16",
+      "basis": "WP5-UX3-REGATE (verifier, sonnet) on 7ce4e95 / 262138e0 decided PASS: every attempt-1 FAIL reason closed and every item passed, 12 of 13 simulated-clock runs clean at the first attempt. The first FULL run at 2026-12-31 23:30 LA failed two mobile tests by timeout (theme.spec.ts:413 'computed color is settled', 7 s; timesheet.spec.ts:1799, 30 s test timeout). That is outside the brief's rerun allowance (network or buffer errors only); the whole-suite rerun passed and both tests passed 15 of 15 alone at that instant. The verifier also did not repeat the DPR 2 seam crops. Attempt 1 counted its seed flake as a failure, and that flake proved to be a test bug.",
+      "decision": "The regate PASS is recorded with this deviation, not as a clean pass, and the cause is settled by independent audit instead of a third gate run. The fresh area-A auditor must judge both tests by its own runs and reading: each repeated under full-suite load on the mobile project, at that simulated instant and on the real clock, and what each waits for (a fixed wait shorter than a transition, a race, or a slow product path). A test that can fail at realistic load with no product defect, or a product delay behind it, is a FIX REQUIRED finding; load noise with a reason is an optional risk. AUDIT-A also repeats the DPR 2 seam crops of the lifted runs. AUDIT-INT confirms the outcome. current_source_digest becomes 262138e0. WP5-UX2-AUDIT2 and the seven audits that pointed to it now name WP5-UX3-AUDIT-INT in superseded_by (no chain). AUDIT-A and AUDIT-B run in parallel (two active subagents, both read-only) on opus/xhigh as the profile fixes."
+    },
     {
       "date": "2026-10-16",
       "basis": "WP5-UX3-SWEEP (read-only, opus) on cecfceb: 2 Medium, 6 Low, 5 Info findings outside the FIX1 items; 22 mutants, M18 and M21 survive. Finding 8 asks whether the Check out dialog, which now edits break rows like the session dialog, must ask 'Discard your changes?' on a changed Cancel (U-26); finding 12 is an API-only Check out case that follows E-1.",
@@ -13298,7 +13308,7 @@
       "package": "WP5",
       "kind": "audit",
       "status": "done",
-      "superseded_by": "WP5-UX2-AUDIT2",
+      "superseded_by": "WP5-UX3-AUDIT-INT",
       "reviewed_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
       "depends_on": [
         "WP5-REGATE2",
@@ -16132,7 +16142,7 @@
       "package": "WP5",
       "kind": "audit",
       "status": "done",
-      "superseded_by": "WP5-UX2-AUDIT2",
+      "superseded_by": "WP5-UX3-AUDIT-INT",
       "reviewed_commit": "589bcff5541a603abad696a3303dbea11cccb4a7",
       "depends_on": [
         "WP5-UX-REGATE"
@@ -16421,7 +16431,7 @@
       "package": "WP5",
       "kind": "audit",
       "status": "done",
-      "superseded_by": "WP5-UX2-AUDIT2",
+      "superseded_by": "WP5-UX3-AUDIT-INT",
       "reviewed_commit": "a2ea7a48ca7dbb275f5d1f7c3a3003b1658080cb",
       "depends_on": [
         "WP5-UX-REGATE2"
@@ -16702,7 +16712,7 @@
       "package": "WP5",
       "kind": "audit",
       "status": "done",
-      "superseded_by": "WP5-UX2-AUDIT2",
+      "superseded_by": "WP5-UX3-AUDIT-INT",
       "reviewed_commit": "edaaa852370128ca9bdf206d730f3849346ba994",
       "depends_on": [
         "WP5-UX-REGATE3"
@@ -17863,7 +17873,7 @@
       "package": "WP5",
       "kind": "audit",
       "status": "done",
-      "superseded_by": "WP5-UX2-AUDIT2",
+      "superseded_by": "WP5-UX3-AUDIT-INT",
       "reviewed_commit": "90b98efc395c3894a21a909b6d361eadc6fc2bd9",
       "depends_on": [
         "WP5-UX-REGATE8"
@@ -18091,7 +18101,7 @@
       "package": "WP5",
       "kind": "audit",
       "status": "done",
-      "superseded_by": "WP5-UX2-AUDIT2",
+      "superseded_by": "WP5-UX3-AUDIT-INT",
       "reviewed_commit": "bf954c0b371ad9a5fe461a603c5d476ea210e66c",
       "depends_on": [
         "WP5-UX-REGATE5"
@@ -18300,7 +18310,7 @@
       "package": "WP5",
       "kind": "audit",
       "status": "done",
-      "superseded_by": "WP5-UX2-AUDIT2",
+      "superseded_by": "WP5-UX3-AUDIT-INT",
       "reviewed_commit": "5e104e14dad71268a9185920c04ed0ee2a4b31c2",
       "depends_on": [
         "WP5-UX-REGATE4"
@@ -20122,6 +20132,7 @@
       "package": "WP5",
       "kind": "audit",
       "status": "done",
+      "superseded_by": "WP5-UX3-AUDIT-INT",
       "reviewed_commit": "a6437943403fc416240fd13a787a8c4748af3e84",
       "depends_on": [
         "WP5-UX2-REGATE2"
@@ -21930,10 +21941,10 @@
       "id": "WP5-UX3-AUDIT-A",
       "package": "WP5",
       "kind": "audit",
-      "status": "pending",
-      "reviewed_commit": null,
+      "status": "done",
+      "reviewed_commit": "7ce4e95a0c4477374e981132d93b11aedab2e384",
       "depends_on": [
-        "WP5-UX3-GATE"
+        "WP5-UX3-REGATE"
       ],
       "profile": "timesheet-auditor",
       "requested_model": "opus",
@@ -21944,11 +21955,11 @@
         "risk": "M",
         "novelty": true
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
+      "agent_id": "a86e1ea01994c05f3",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
       "attempt": 1,
       "owned_paths": [
         "handoff/delivery/tasks/WP5-UX3-AUDIT-A.md",
@@ -21958,22 +21969,53 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX3-AUDIT-A.md",
       "report": "handoff/delivery/tasks/WP5-UX3-AUDIT-A.md",
-      "evidence": [],
-      "baseline_commit": null,
-      "source_digest": null,
-      "reviewed_digest": null,
+      "evidence": [
+        "handoff/delivery/WP5_UX3_REVIEW_A.md",
+        "handoff/delivery/WP5_UX3_REVIEW_A.vi.md",
+        "handoff/delivery/evidence/WP5-UX3-AUDIT-A/00-README.txt",
+        "handoff/delivery/evidence/WP5-UX3-AUDIT-A/01-digest-export-before.txt",
+        "handoff/delivery/evidence/WP5-UX3-AUDIT-A/01-digest-export-after.txt",
+        "handoff/delivery/evidence/WP5-UX3-AUDIT-A/obs-ring.txt",
+        "handoff/delivery/evidence/WP5-UX3-AUDIT-A/obs-tap.txt",
+        "handoff/delivery/evidence/WP5-UX3-AUDIT-A/obs-coarse.txt",
+        "handoff/delivery/evidence/WP5-UX3-AUDIT-A/obs-signout.txt",
+        "handoff/delivery/evidence/WP5-UX3-AUDIT-A/obs-adminwrap.txt",
+        "handoff/delivery/evidence/WP5-UX3-AUDIT-A/obs-seam.txt"
+      ],
+      "baseline_commit": "7ce4e95a0c4477374e981132d93b11aedab2e384",
+      "source_digest": "262138e0c94c90dc0287e6de87e69f2aabfa68d3bd7bdb6262322c1e2b8f0191",
+      "reviewed_digest": "262138e0c94c90dc0287e6de87e69f2aabfa68d3bd7bdb6262322c1e2b8f0191",
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Fresh opus auditor after the gate PASS: area A (visual, shell, settings, sheet, accessibility), in parallel with area B."
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "F-UX3A-01 Medium: the keyboard focus ring disappears under the mouse pointer on the sheet's date button (styles.css:2638-2650, hover rule 0,4,0 sets box-shadow none over the 0,3,0 focus-visible ring) and drops to a 1px ~2:1 line on the sheet's Category picker (styles.css:4320-4333), also after Escape returns focus from the Day editor at 1440 (docs/04 line 62); pre-existing in a643794; AGENTS UI rule 3, WCAG 2.4.7.",
+        "F-UX3A-02 Low: .sheet .label-trigger:hover (styles.css:4320-4324) and three older rules (input/select/textarea:hover :1176-1180, tbody tr:hover :1457-1459, .button-link:hover :4538-4541) are not under @media (hover: hover), so a tap leaves the hover look on touch screens (docs/04 line 92); FIX2 item 11 partly done.",
+        "F-UX3A-03 Low: button.identity stays 38px high with a coarse pointer at 768px and up (styles.css:663-673 outranks the 44px touch rule at :1330-1339); docs/04 line 93.",
+        "F-UX3A-04 Low: the Sign out entry's icon touches its words in the account menu and the phone More panel (button.account-action is display:block, so the 12px gap of .account-panel .account-action does nothing; styles.css:864-871, 883-887; AccountMenu.tsx:128-133).",
+        "F-UX3A-05 Low (test strength): mutant A4 removing the phone More panel's Escape focus return (AppShell.tsx:161) is not caught (shell.spec.ts:588 checks Escape only for the desktop menu; the More test at :713 checks entries only).",
+        "F-UX3A-06 Low (pre-existing): on a phone the Administration 'Submissions and delivery' table scrolls sideways once a long delivery badge or fault code shows (.ops-table .badge nowrap, styles.css:4881-4884, 4897-4926; OperationsStatus.tsx:329 .table-wrap not focusable); axe scrollable-region-focusable (serious) at 390 and 320; WCAG 1.4.10, 2.1.1."
+      ],
+      "notes": [
+        "Fresh context, self-reported claude-opus-5-5, equal to the strongest author model (opus); in parallel with AUDIT-B.",
+        "Digest 262138e0 (833 files) before and after in three forms; HEAD 7ce4e95 before and after.",
+        "Item 11 (regate timeouts): load noise, not a tight wait and not a product delay: one host stall of about 21 s froze both workers' browsers at the same moment (page creation 21.8 s in one worker, a 400 ms wait 21.0 s in the other); in five full runs (the regate instant, the real clock, two suites at once) both tests passed 125 of 125. theme.spec.ts:413 uses up to 84% of its 30 s budget (risk R8).",
+        "DPR 2 seams: clean in light and dark; worst light deviation under the joins 3.0/255 (attempt-1 gate 22.5-28.5); dark keeps a one-device-pixel dip of 8.4-9.5/255 (risk R3).",
+        "Fix round: GATE attempt-1 area-A reasons closed (focus at 768-899px, axe a and b) and c accepted as justified (R2); SWEEP area-A findings 1, 3, 4, 7, 13 closed, 11 closed for .sheet-day but not the picker rule (F-UX3A-02).",
+        "Mandatory: npm ci, typecheck, lint, build exit 0; npm test 2131 twice; AC-13 1/1; FULL e2e real clock 627 passed / 67 skipped / 0 failed; 10 of 11 mutants caught (A4 survives, F-UX3A-05).",
+        "Optional risks: R1 the editor frame under the side scrim below 1360px is 4.14:1 light and 2.79:1 dark on the Day-cell fill (page inert; docs/04 line 46 states 4.82:1 without that limit); R2 account-menu target-size flags at 1280/1440 (accepted justification); R3 dark DPR 2 seam dip; R4 dialog-name brackets as CSS content (no second engine); R5 a lazy screen slower than 5 s leaves focus on body; R6 integration-test timeouts under heavy load (restore.test.ts hook 10 s, backup-prune 30 s); R7 More keeps focus on More when opened by keyboard; R8 theme.spec.ts:413 has no budget of its own (fixed 400 ms settle checks use 50-84% of 30 s); R9 note on appended probe blocks in obs files.",
+        "Not verified: a second browser engine for the dialog name (none installed).",
+        "Slips: two pipes into head -n 0 and one 2>/dev/null (no effect); nothing left running."
+      ],
+      "next_action": "None; WP5-UX3-FIX3 for F-UX3A-01..06 and F-UX3B-1..2 (coordinator_decisions 2026-10-16), then a freeze, WP5-UX3-REGATE2 and fresh rechecks."
     },
     {
       "id": "WP5-UX3-AUDIT-B",
       "package": "WP5",
       "kind": "audit",
-      "status": "pending",
-      "reviewed_commit": null,
+      "status": "done",
+      "reviewed_commit": "7ce4e95a0c4477374e981132d93b11aedab2e384",
       "depends_on": [
-        "WP5-UX3-GATE"
+        "WP5-UX3-REGATE"
       ],
       "profile": "timesheet-auditor",
       "requested_model": "opus",
@@ -21984,11 +22026,11 @@
         "risk": "H",
         "novelty": true
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
+      "agent_id": "a5ec67dc3fe32bb69",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
       "attempt": 1,
       "owned_paths": [
         "handoff/delivery/tasks/WP5-UX3-AUDIT-B.md",
@@ -21998,13 +22040,34 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX3-AUDIT-B.md",
       "report": "handoff/delivery/tasks/WP5-UX3-AUDIT-B.md",
-      "evidence": [],
-      "baseline_commit": null,
-      "source_digest": null,
-      "reviewed_digest": null,
+      "evidence": [
+        "handoff/delivery/WP5_UX3_REVIEW_B.md",
+        "handoff/delivery/WP5_UX3_REVIEW_B.vi.md",
+        "handoff/delivery/evidence/WP5-UX3-AUDIT-B/00-README.txt",
+        "handoff/delivery/evidence/WP5-UX3-AUDIT-B/01-digest-export-before.txt",
+        "handoff/delivery/evidence/WP5-UX3-AUDIT-B/01-digest-export-after.txt",
+        "handoff/delivery/evidence/WP5-UX3-AUDIT-B/01-head-after.txt"
+      ],
+      "baseline_commit": "7ce4e95a0c4477374e981132d93b11aedab2e384",
+      "source_digest": "262138e0c94c90dc0287e6de87e69f2aabfa68d3bd7bdb6262322c1e2b8f0191",
+      "reviewed_digest": "262138e0c94c90dc0287e6de87e69f2aabfa68d3bd7bdb6262322c1e2b8f0191",
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Fresh opus auditor after the gate PASS: area B (break entry integrity, dialogs, pre-fill, Check out), in parallel with area A."
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "F-UX3B-1 Low (sweep finding 12): with saved unconfirmed rows on a running session (API-only precondition), removing every row in the Check out dialog shows 'No breaks listed' and 'Check out, breaks unconfirmed', but the list is omitted and the server keeps the removed rows (or answers 422 saved_break_after_clock_out when a row ends after now); the dialog never says so (breakRowsModel.ts:389-391, ClockOutDialog.tsx:103, BreakRows.tsx:289-292). Matches E-1 at the API and a643794's outcome, but the round-3 dialog makes the list look complete (U-24, U-25).",
+        "F-UX3B-2 Low: 'Confirm breaks' lists no suggestion unless every one fits (SessionDialog.tsx:243-247, dayEditorModel.ts:73, the old all-or-nothing quickBreaksOf rule), while docs/04 line 65 (EN and VI) says it lists the suggested breaks that lie inside the session; 09:00-12:00 and 09:00-14:00 sessions open with 0 rows."
+      ],
+      "notes": [
+        "Fresh context, self-reported claude-opus-5-5, equal to the strongest author model (opus); 2026-10-16 18:15Z to about 20:05Z, in parallel with AUDIT-A.",
+        "Digest 262138e0 (833 files) before and after in three equal forms; HEAD 7ce4e95 before and after; nothing outside handoff changed.",
+        "PASS parts: request integrity (25 cases from both UIs, stored instants equal, untouched cases byte-identical, only the documented explicit end offset differs); confirmation semantics (R-02, D-02, E-1 at the API, G-4 notice; summary equals body; Cancel, Discard, Go back, Back and sub-dialog Done send nothing); pre-fill from the server today_local only; figures (dist/server and dist/domain byte-identical; 20 bodies x 2 servers x 2 sources identical); dialogs and phone (stack, Escape, focus, B3-01, view-only, reason; rows/chips by width, 24-hour chips, 44px, no sideways scroll); audit-focus 8 PASS and 9 (N-2 holds).",
+        "Fix round: FIX1 seed PASS; FIX2 item 2 PASS (M18 fails :710 and :593 on both projects); items 5, 8 and 10 PASS (all five removed-test proofs held).",
+        "Mutants 13 of 13 caught (A06 by the unit suite only; its request-level twin A13 by unit and e2e).",
+        "Mandatory: typecheck 0, lint 0, npm test x2 (94 files, 2131), build 487.17 kB no advisory, AC-13 1/1, FULL e2e real clock 627 passed / 67 skipped / 0 failed, day-editor.spec.ts under FIX10 at 2026-11-01T08:45Z and 2027-03-14T10:30Z 112 passed / 18 skipped / 0 failed each.",
+        "Optional risks: R-UX3B-1 focus after a 1360px mode switch with the session dialog open goes to the editor heading (docs/04 line 68 says the opener); R-UX3B-2 a page left open across the reporting-zone midnight keeps the old today_local until periods are re-read (conservative); R-UX3B-3 docs/12 line 71 first sentence says Check out is refused while a break row is unconfirmed, but the refusals are saved_break_after_clock_out and future_break; R-UX3B-4 (area A) dayModel.ts:143 batch stale-version alert says 'review the new labels'; R-UX3B-5 the pre-fill's pinned offset is sent when the typed start equals it (same instant); R-UX3B-6 integration-test timeouts at 30 s inside two mutant unit runs under heavy parallel load; R-UX3B-7 a filled minutes field shows only the number.",
+        "Slips (read-only, no effect): one pipe into head, two pipes into tail, one 2>/dev/null, one python -c no-op; nothing left running."
+      ],
+      "next_action": "None; a fix round for F-UX3B-1 and F-UX3B-2 together with any AUDIT-A findings (coordinator decision after AUDIT-A returns), then a freeze, a regate and fresh rechecks."
     },
     {
       "id": "WP5-UX3-AUDIT-INT",
@@ -22013,7 +22076,7 @@
       "status": "pending",
       "reviewed_commit": null,
       "depends_on": [
-        "WP5-UX3-GATE",
+        "WP5-UX3-REGATE",
         "WP5-UX3-AUDIT-A",
         "WP5-UX3-AUDIT-B"
       ],
@@ -22046,7 +22109,7 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Fresh opus auditor after both area audits PASS: the integration pass whose PASS re-accepts WP5; superseded_by targets move here when the gate records the new digest."
+      "next_action": "Fresh opus auditor on 7ce4e95 / 262138e0 after both area audits PASS: the integration pass whose PASS re-accepts WP5 (WP5-UX2-AUDIT2 and the seven audits that pointed to it now name this audit in superseded_by)."
     },
     {
       "id": "WP5-UX3-FIX1",
@@ -22294,9 +22357,186 @@
       "id": "WP5-UX3-FIX2-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX3-FIX2"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a02e167fb1389e662",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX3-FIX2-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX3-FIX2-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-FIX2-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-FIX2-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-FIX2-FREEZE/checks.txt"
+      ],
+      "baseline_commit": "9187f31bee9c092041887d3ab034c492e33da0b5",
+      "branch": "main",
+      "commit_sha": "7ce4e95a0c4477374e981132d93b11aedab2e384",
+      "pushed": true,
+      "source_digest": "262138e0c94c90dc0287e6de87e69f2aabfa68d3bd7bdb6262322c1e2b8f0191",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed 7ce4e95 on main (remote equal; no tag): 66 staged files (27 outside handoff, 5 modified handoff records, 2 new task records, FIX1-FREEZE evidence 2, FIX2 evidence 30); digest 262138e0 (833 files) before git add and on HEAD via ls-tree; every check exit 0 (node v24.21.0, precommit 66 files 0 findings, diff --cached --check, JSON parse, validate_orchestration, check_recovery 106 probes, validate_package --preflight, fetch, push dry-run and push); no fix, masking or stop; no rule slip reported.",
+      "next_action": "None; WP5-UX3-REGATE on 7ce4e95 / 262138e0."
+    },
+    {
+      "id": "WP5-UX3-REGATE",
+      "package": "WP5",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "7ce4e95a0c4477374e981132d93b11aedab2e384",
+      "depends_on": [
+        "WP5-UX3-FIX2-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ae3af2c04907ac68f",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX3-REGATE.md",
+        "handoff/delivery/evidence/WP5-UX3-REGATE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-REGATE.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-REGATE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-REGATE/01-digest-export-before.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/01-digest-export-after.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/01-nonhandoff-status-after.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/03b-verify.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/04-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/07-drill.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/24-removed5.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/40-contrast.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/51-dist-diff-old.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/84-sweep-table.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/log-sweep-full-1231.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/log-sweep-rep-1231.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/obs-weekreg.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/obs-violations-target.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE/obs-fix2.txt"
+      ],
+      "baseline_commit": "7ce4e95a0c4477374e981132d93b11aedab2e384",
+      "source_digest": "262138e0c94c90dc0287e6de87e69f2aabfa68d3bd7bdb6262322c1e2b8f0191",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "gate_notes": "PASS (NAS items NOT VERIFIED) on 7ce4e95, digest 262138e0 (833 files) equal in three forms before and after; recorded with one deviation (coordinator_decisions 2026-10-16, regate timeouts). Item 1: npm ci, lint (no deprecation line), verify (94 files, 2131 tests; main chunk 487.17 kB, no advisory) exit 0 on a fresh export (a first export with a stray git init failed verify on the tracked-font test; not a product defect); real-clock FULL e2e 627 passed / 67 skipped / 0 failed (desktop 317/30, mobile 310/37); AC-13 x3, Tokyo, New York; npm test x3; drill --wp3 208 PASS (image removed, project empty); compose, keys, npm audit, validators (106 probes), precommit self-test exit 0. Item 2: server/domain diff empty, dist/server and dist/domain byte-identical to a643794. Item 3: 80 paths, all within slice or fix owned paths (FIX1 11, FIX2 27); deletions only SessionForm.tsx and BreaksEditor.tsx; skips only project-conditional; of FIX2's five removed unit tests four are held by the moved oracles and the fifth (preselecting 'no breaks taken') is a retired behaviour covered by day-editor.spec.ts:3708. Item 4: 13 simulated-clock runs; 2026-10-20 and 2026-11-03 (Tuesdays) FULL 627/0 failed; 2026-11-28 five specs twice 289/0 failed; 2026-12-31 23:30 FULL first run 625 passed, 2 failed on mobile by timeout (theme.spec.ts:413 'computed color is settled' 7 s; timesheet.spec.ts:1799 30 s), outside the network/buffer rerun allowance; full rerun 627/0 failed and both tests 15 of 15 alone at that instant; every other run 0 failed. Attempt-1 FAIL reasons closed: Tuesday lifted-column test and 409 seed flake; week-card focus at 768-899px (48 walks, 0 rings clipped); axe (a) and (b) gone, (c) target-size on Today under the open menu unchanged and matching the FIX1 justification (4 of 84 scans). Item 5 as attempt 1 (contrast, 44px targets, budgets, bar, Day editor, lifted runs at DPR 1 continuous; the DPR 2 seam script was not repeated). FIX2 behaviours confirmed (account-menu and More focus, Check out discard, editor chip at 2026-10-26T16Z, category wording, hover gating, describedby, docs parity with 487 kB). 14 screenshots. Slips: git init in the first export; head -0/-n 0, null-device and tail pipes (no effect). Nothing left running.",
+      "next_action": "None; WP5-UX3-AUDIT-A and WP5-UX3-AUDIT-B in parallel on 7ce4e95 / 262138e0, then WP5-UX3-AUDIT-INT."
+    },
+    {
+      "id": "WP5-UX3-FIX3",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP5-UX3-AUDIT-A",
+      "depends_on": [
+        "WP5-UX3-FIX2-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a61d450ff073015d9",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/styles.css",
+        "src/client/components/AccountMenu.tsx",
+        "src/client/components/AppShell.tsx",
+        "src/client/components/OperationsStatus.tsx",
+        "src/client/components/breakRowsModel.ts",
+        "src/client/components/ClockOutDialog.tsx",
+        "src/client/components/BreakRows.tsx",
+        "src/client/components/SessionDialog.tsx",
+        "src/client/components/dayEditorModel.ts",
+        "src/client/components/dayModel.ts",
+        "tests/client/breakRowsModel.test.ts",
+        "tests/client/dayEditorModel.test.ts",
+        "tests/client/dayModel.test.ts",
+        "tests/e2e/hover.spec.ts",
+        "tests/e2e/timesheet.spec.ts",
+        "tests/e2e/shell.spec.ts",
+        "tests/e2e/day-editor.spec.ts",
+        "tests/e2e/admin-status.spec.ts",
+        "tests/e2e/theme.spec.ts",
+        "tests/e2e/keyboard-access.spec.ts",
+        "docs/04_UX_AND_SETTINGS.md",
+        "docs/04_UX_AND_SETTINGS.vi.md",
+        "docs/10_DECISIONS_AND_SOURCES.md",
+        "docs/10_DECISIONS_AND_SOURCES.vi.md",
+        "docs/12_RELEASE_NOTES.md",
+        "docs/12_RELEASE_NOTES.vi.md",
+        "handoff/delivery/tasks/WP5-UX3-FIX3.md",
+        "handoff/delivery/evidence/WP5-UX3-FIX3"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-FIX3.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-FIX3.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-FIX3/40-fixed1.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/51-mutA4-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/52-mut7-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/53-mut8-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/54-mut4a-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/55-stall-with-wrapper.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/55-stall-without-wrapper.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/70-e2e-full-real-counts.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/71-sim-20261026T1600.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/71-sim-20261101T0845.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/72-theme-repeat5.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/73-verify.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/74-digest-after.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/82-preflight.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX3/admin-submissions-uncertain-390-mobile-synthetic.png"
+      ],
+      "baseline_commit": "7ce4e95a0c4477374e981132d93b11aedab2e384",
+      "source_digest": "d1d903cfb148d1bcc74131af3e1aeebed0f1892143e0ede3950ddee335b839ca",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (reported, not independent proof). 1 focus-visible:hover rules (0,5,0) restore the ring under the pointer for the date button, the Category picker, the phone day button and .button-link; e2e hover.spec.ts:673 both themes incl. the Escape return at 1440; 2 seven ungated hover rules gated (incl. two .sheet-review resets and the shell-tab focus rule), hover.spec.ts:577 scans every :hover rule with an empty allowlist, phone tap check :325-335; 3 button.identity min-height --tap-min under (max-width: 767px), (pointer: coarse), shell.spec.ts:1046; 4 Sign out display:flex, shell.spec.ts:1077; 5 More Escape focus return shell.spec.ts:754-768 (mutant A4 fails 4 tests); 6 phone .ops-table badge and .ops-code wrap, admin-status.spec.ts:243 at 390 and 320, task-local axe 0 violations; 7 server verified first (omitted list 422, breaks [] unconfirmed 200 replacing rows), breaksPayload hadSavedRows sends breaks [] unconfirmed when saved rows were all removed, ClockOutDialog note 'The saved breaks you removed are deleted at Check out...', unit breakRowsModel.test.ts:543-600, e2e day-editor.spec.ts:1924, docs/04 line 70 and docs/10 E-1 line 238 EN/VI; 8 confirmBreaksRows (wrapper over suggestionRows) lists the suggestions inside the session, quickBreaksOf removed with its 4 unit tests (pins mapped to breakRowsModel.test.ts:877-932), e2e day-editor.spec.ts:3743, docs/10 line 245 EN/VI; 9 dayModel.ts:143 'categories'; 10 docs/12 line 71 names the real refusals; 11 docs/04 line 46 states the limit (4.14:1 light, 2.79-3.27:1 dark under the scrim below 1360px); 12 theme.spec.ts 120 s budget plus surviveStall (repeats a settled measurement up to twice on its own poll timeout; assertions unchanged; a 21 s stall injection passes with it and fails without). 20 changed paths outside handoff (6 src/client, 3 tests/client, 5 tests/e2e, 6 docs). npm test 94 files / 2141; build main chunk 486.81 kB, no advisory; full e2e real clock 645 passed / 67 skipped / 0 failed (desktop 326/30, mobile 319/37); sim clocks 2026-10-26T16Z and 2026-11-01T08:45Z 151 passed / 23 skipped / 0 failed each; theme.spec.ts x5 380 passed; mutants caught (A4, omission, all-or-nothing, three focus rules); parity OK; preflight PASS (114 pairs); verify 0; digest d1d903cf (833 files). Slips: one pipe into head -0; a duplicated background launch (one ENOENT artifact failure, passed later). Nothing left running.",
+      "next_action": "None; WP5-UX3-FIX3-FREEZE (committer alone) after the WP5-UX3-REGATE evidence hygiene step, then WP5-UX3-REGATE2."
+    },
+    {
+      "id": "WP5-UX3-FIX3-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX3-FIX3"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -22314,56 +22554,18 @@
       "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP5-UX3-FIX2-FREEZE.md",
-        "handoff/delivery/evidence/WP5-UX3-FIX2-FREEZE"
+        "handoff/delivery/tasks/WP5-UX3-FIX3-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX3-FIX3-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP5-UX3-FIX2-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP5-UX3-FIX2-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP5-UX3-FIX3-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-FIX3-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "9187f31bee9c092041887d3ab034c492e33da0b5",
-      "source_digest": "262138e0c94c90dc0287e6de87e69f2aabfa68d3bd7bdb6262322c1e2b8f0191",
+      "baseline_commit": "7ce4e95a0c4477374e981132d93b11aedab2e384",
+      "source_digest": "d1d903cfb148d1bcc74131af3e1aeebed0f1892143e0ede3950ddee335b839ca",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Committer: stage the 27 FIX2 paths and the listed handoff records and evidence folders (FIX1-FREEZE, FIX2), run the checks, commit on main and push."
-    },
-    {
-      "id": "WP5-UX3-REGATE",
-      "package": "WP5",
-      "kind": "gate",
-      "status": "pending",
-      "freeze_commit": null,
-      "depends_on": [
-        "WP5-UX3-FIX2-FREEZE"
-      ],
-      "profile": "timesheet-verifier",
-      "requested_model": "sonnet",
-      "requested_effort": "medium",
-      "model_override_reason": null,
-      "routing": {
-        "size": "L",
-        "risk": "H",
-        "novelty": false
-      },
-      "actual_model": null,
-      "actual_source": null,
-      "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
-      "attempt": 1,
-      "owned_paths": [
-        "handoff/delivery/tasks/WP5-UX3-REGATE.md",
-        "handoff/delivery/evidence/WP5-UX3-REGATE"
-      ],
-      "prompt": "handoff/delivery/tasks/WP5-UX3-REGATE.md",
-      "report": "handoff/delivery/tasks/WP5-UX3-REGATE.md",
-      "evidence": [],
-      "baseline_commit": null,
-      "source_digest": null,
-      "reviewed_digest": null,
-      "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Verifier on the FIX2 freeze: every WP5-UX3-GATE item again, the attempt-1 FAIL reasons closed, the FIX2 behaviours; then AUDIT-A and AUDIT-B retargeted to it."
+      "next_action": "Committer: stage the 20 FIX3 paths, the listed handoff records and review pairs and the five evidence folders (FIX2-FREEZE, REGATE, AUDIT-A, AUDIT-B, FIX3), run the checks, commit on main and push."
     }
   ],
   "future_packages": [

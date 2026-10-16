@@ -1,0 +1,419 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, type Person, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX3-AUDIT-B task-local probe (never part of the repository), target build only: what is sent (nothing) on Cancel, Discard,
+ * Go back, Back and the sub-dialog's Done; the dialog stack (one modal on top, Escape closes only the top, focus returns to the
+ * opener) including repeated Escape presses; B3-01 across 1360px; the Check out discard question (FIX2 item 8); view-only shares;
+ * the reason field in old periods. Each observation is recorded in obs/dialogs.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const OUT = process.env.AUDB_OUT ?? '';
+const LA = 'America/Los_Angeles';
+const REASON = 'audit probe reason';
+const OLD = '2026-05-12';
+
+function rec(line: string) {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'dialogs.txt'), `${line}\n`);
+}
+
+function watchWrites(page: Page): string[] {
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    const method = request.method();
+    if (method === 'GET') return;
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/') && !path.startsWith('/api/auth/')) writes.push(`${method} ${path}`);
+  });
+  return writes;
+}
+
+async function stack(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const dialogs = [...document.querySelectorAll('dialog')]
+      .filter((d) => d.open)
+      .map((d) => {
+        const labelId = d.getAttribute('aria-labelledby');
+        const name = (labelId === null ? '' : (document.getElementById(labelId.split(' ')[0] ?? '')?.textContent ?? '')).trim().slice(0, 40);
+        return `${name}${d.matches(':modal') ? '[modal]' : '[non-modal]'}`;
+      });
+    const a = document.activeElement as HTMLElement | null;
+    const active = a === null ? 'none' : `${a.tagName.toLowerCase()} "${(a.getAttribute('aria-label') ?? a.textContent ?? '').trim().slice(0, 40)}"`;
+    return `open=[${dialogs.join(' > ')}] active=${active}`;
+  });
+}
+
+async function openEditor(page: Page, workDate: string): Promise<Locator> {
+  await page.getByLabel('Open a day').fill(workDate);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+  return editor;
+}
+
+const sessionDialog = (page: Page, name = 'New session') => page.getByRole('dialog', { name, exact: true });
+const confirmBox = (page: Page, name: string) => page.getByRole('alertdialog', { name });
+
+async function person(adminSeed: Parameters<typeof newPerson>[0], builtServer: Parameters<typeof newPerson>[1]): Promise<Person> {
+  return newPerson(adminSeed, builtServer, { signature: 'none' });
+}
+
+test('desktop: nothing is sent on Cancel, Discard, Go back or Back; Escape closes only the top; focus returns', async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Desktop project');
+  test.setTimeout(240_000);
+  const who = await person(adminSeed, builtServer);
+  const free = await who.api.displayedPeriodFreeWorkdays();
+  const day = free[0] ?? '';
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signInPageAs(who.account);
+  const writes = watchWrites(page);
+  const editor = await openEditor(page, day);
+  rec(`D1 editor open at 1280: ${await stack(page)}`);
+  const add = editor.getByRole('button', { name: 'Add session' });
+  await add.click();
+  const form = sessionDialog(page);
+  await expect(form).toBeVisible();
+  rec(`D1 session dialog: ${await stack(page)}`);
+  // Unchanged: Cancel closes at once, focus back to Add session.
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  rec(`D2 unchanged Cancel: ${await stack(page)} writes=${writes.length}`);
+  await expect(add).toBeFocused();
+  // Changed: Escape asks; Keep editing; Escape again asks; Escape in the question keeps editing; repeated presses.
+  await add.click();
+  await expect(form).toBeVisible();
+  await form.getByLabel('Start time', { exact: true }).fill('09:15');
+  for (let round = 1; round <= 4; round += 1) {
+    await page.keyboard.press('Escape');
+    const discard = confirmBox(page, 'Discard your changes?');
+    const asked = await discard.isVisible().catch(() => false);
+    rec(`D3 Escape #${round * 2 - 1} on the changed dialog: question shown=${asked} ${await stack(page)}`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    rec(`D3 Escape #${round * 2} inside the question: ${await stack(page)} question count=${await discard.count()} dialog visible=${await form.isVisible()}`);
+  }
+  // Is the session dialog still usable after the repeated presses? Cancel must ask again.
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const again = await confirmBox(page, 'Discard your changes?').isVisible().catch(() => false);
+  rec(`D4 Cancel after repeated Escape: question shown=${again} ${await stack(page)}`);
+  if (again) {
+    await confirmBox(page, 'Discard your changes?').getByRole('button', { name: 'Discard', exact: true }).click();
+  } else {
+    await page.keyboard.press('Escape');
+  }
+  await expect(form).toHaveCount(0);
+  rec(`D4 after Discard: ${await stack(page)} writes=${JSON.stringify(writes)}`);
+
+  // Notice: Go back (button and Escape) sends nothing and focuses Add break.
+  await add.click();
+  await expect(form).toBeVisible();
+  const rows = form.locator('[data-break]');
+  for (let count = await rows.count(); count > 0; count -= 1) await form.getByRole('button', { name: `Remove break ${count}`, exact: true }).click();
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  const notice = confirmBox(page, 'No breaks listed');
+  await expect(notice).toBeVisible();
+  rec(`D5 notice: ${await stack(page)}`);
+  await notice.getByRole('button', { name: 'Go back and add breaks', exact: true }).click();
+  await expect(notice).toHaveCount(0);
+  rec(`D5 after Go back: ${await stack(page)}`);
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(notice).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(notice).toHaveCount(0);
+  rec(`D5 after Escape in the notice: ${await stack(page)}`);
+  // Leave unconfirmed -> final confirmation -> Back: nothing sent; Escape in the confirmation = Back.
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await notice.getByRole('button', { name: 'Leave breaks unconfirmed for now', exact: true }).click();
+  const saveBox = confirmBox(page, 'Save this session?');
+  await expect(saveBox).toBeVisible();
+  rec(`D6 final confirmation: ${await stack(page)} text=${(await saveBox.innerText()).replace(/\s+/g, ' ')}`);
+  await saveBox.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(saveBox).toHaveCount(0);
+  rec(`D6 after Back: ${await stack(page)}`);
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await notice.getByRole('button', { name: 'Confirm no breaks taken', exact: true }).click();
+  await expect(saveBox).toBeVisible();
+  rec(`D7 confirm-none final confirmation: text=${(await saveBox.innerText()).replace(/\s+/g, ' ')}`);
+  await page.keyboard.press('Escape');
+  await expect(saveBox).toHaveCount(0);
+  const ticked = await form.getByRole('checkbox', { name: 'Confirm no breaks taken' }).isChecked();
+  rec(`D7 after Escape in the confirmation: ${await stack(page)} box ticked=${ticked}`);
+  rec(`D8 writes before any Save: ${JSON.stringify(writes)}`);
+  // Now save: one POST, focus to the Times heading.
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(saveBox).toBeVisible();
+  await saveBox.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await expect(editor.getByRole('heading', { name: 'Times', exact: true })).toBeFocused();
+  rec(`D9 after Save: ${await stack(page)} writes=${JSON.stringify(writes)}`);
+  // Delete confirmation: Escape closes only it; focus back to Delete.
+  const del = editor.getByRole('button', { name: /^Delete session/ });
+  await del.click();
+  const delBox = confirmBox(page, 'Delete this session?');
+  await expect(delBox).toBeVisible();
+  rec(`D10 delete confirmation: ${await stack(page)}`);
+  await page.keyboard.press('Escape');
+  await expect(delBox).toHaveCount(0);
+  rec(`D10 after Escape: ${await stack(page)} writes=${writes.length}`);
+  await page.keyboard.press('Escape');
+  rec(`D11 Escape with only the editor: ${await stack(page)}`);
+  await who.api.clearSessions(day);
+});
+
+test('desktop: B3-01 across 1360px with the session dialog open, and the reason field in an old period', async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Desktop project');
+  test.setTimeout(180_000);
+  const who = await person(adminSeed, builtServer);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInPageAs(who.account);
+  const writes = watchWrites(page);
+  const editor = await openEditor(page, OLD);
+  rec(`B1 editor at 1440 (old day): ${await stack(page)}`);
+  const panelReason = editor.getByLabel('Reason for editing an old or finalized period');
+  rec(`B1 panel reason fields=${await panelReason.count()}`);
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form = sessionDialog(page);
+  await expect(form).toBeVisible();
+  const dialogReason = form.getByLabel('Reason for editing an old or finalized period');
+  rec(`B2 session dialog reason fields=${await dialogReason.count()} Save disabled=${await form.getByRole('button', { name: 'Save', exact: true }).isDisabled()}`);
+  await dialogReason.fill(REASON);
+  rec(`B2 after typing the reason: Save disabled=${await form.getByRole('button', { name: 'Save', exact: true }).isDisabled()}`);
+  await form.getByLabel('Start time', { exact: true }).fill('09:15');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.waitForTimeout(400);
+  rec(`B3 resized to 1280 with the changed session dialog open: ${await stack(page)}`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  rec(`B3 Escape (changed dialog): ${await stack(page)}`);
+  await confirmBox(page, 'Discard your changes?').getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await page.waitForTimeout(400);
+  rec(`B4 after Discard at 1280: ${await stack(page)}`);
+  // The reason typed in the dialog is the editor's reason state.
+  rec(`B4 panel reason value="${await editor.getByLabel('Reason for editing an old or finalized period').inputValue()}"`);
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  await expect(form).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(400);
+  rec(`B5 resized to 1440 with the session dialog open: ${await stack(page)}`);
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await page.waitForTimeout(400);
+  rec(`B6 after Cancel at 1440: ${await stack(page)} writes=${JSON.stringify(writes)}`);
+});
+
+test('phone 390: sub-dialog Done and Cancel send nothing; Escape in the sub-dialog closes only it', async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Phone project');
+  test.setTimeout(180_000);
+  const who = await person(adminSeed, builtServer);
+  const free = await who.api.displayedPeriodFreeWorkdays();
+  const day = free[0] ?? '';
+  await signInPageAs(who.account);
+  const writes = watchWrites(page);
+  const editor = await openEditor(page, day);
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form = sessionDialog(page);
+  await expect(form).toBeVisible();
+  // An overnight session shows chips at 390.
+  await form.getByLabel('End date', { exact: true }).fill(new Date(Date.parse(`${day}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10));
+  await form.getByLabel('Start time', { exact: true }).fill('22:00');
+  await form.getByLabel('End time', { exact: true }).fill('06:00');
+  await form.getByRole('button', { name: 'Add break', exact: true }).click();
+  const sub = page.getByRole('dialog', { name: /^Break \d$/ });
+  const layout = await form.locator('[data-layout]').getAttribute('data-layout').catch(() => 'none');
+  rec(`P1 layout=${layout} sub open=${await sub.isVisible().catch(() => false)} ${await stack(page)}`);
+  if (await sub.isVisible().catch(() => false)) {
+    await sub.getByLabel('Start time', { exact: true }).fill('23:50');
+    await sub.getByLabel('Minutes', { exact: true }).fill('20');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    rec(`P2 Escape in a new row's sub-dialog: ${await stack(page)} rows=${await form.locator('[data-break]').count()}`);
+    await form.getByRole('button', { name: 'Add break', exact: true }).click();
+    await sub.getByLabel('Start time', { exact: true }).fill('23:50');
+    await sub.getByLabel('Minutes', { exact: true }).fill('20');
+    await sub.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(sub).toHaveCount(0);
+    rec(`P3 Done: ${await stack(page)} chip="${(await form.locator('[data-break="1"]').innerText()).replace(/\s+/g, ' ')}" writes=${JSON.stringify(writes)}`);
+    await form.locator('[data-break="1"] button').first().click();
+    await expect(sub).toBeVisible();
+    await sub.getByLabel('Minutes', { exact: true }).fill('45');
+    await sub.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(sub).toHaveCount(0);
+    rec(`P4 Cancel keeps the row: chip="${(await form.locator('[data-break="1"]').innerText()).replace(/\s+/g, ' ')}" ${await stack(page)} writes=${JSON.stringify(writes)}`);
+  }
+  await page.screenshot({ path: screenshotPath('audb-phone-390-chips-synthetic.png') });
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await confirmBox(page, 'Discard your changes?').getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  rec(`P5 after Discard: ${await stack(page)} writes=${JSON.stringify(writes)}`);
+});
+
+test('desktop: Check out discard question (FIX2 item 8) and Check out sends at once', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'Desktop project');
+  test.setTimeout(180_000);
+  const who = await person(adminSeed, builtServer);
+  const { todayLocal } = await who.api.today();
+  await page.setViewportSize({ width: 1366, height: 800 });
+  await signInPageAs(who.account);
+  const writes = watchWrites(page);
+  await page.getByRole('button', { name: 'Check in', exact: true }).click();
+  await expect.poll(async () => (await who.api.dayView(todayLocal)).sessions.some((s) => s.end_utc === null)).toBe(true);
+  await page.waitForTimeout(1_500);
+  const opener = page.getByRole('button', { name: 'Check out', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Check out' });
+  const discard = confirmBox(page, 'Discard your changes?');
+  writes.splice(0, writes.length);
+  // No change: Cancel and Escape close at once.
+  await opener.click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  rec(`O1 unchanged Cancel: closed; focus on opener=${await opener.evaluate((e) => e === document.activeElement)}`);
+  await opener.click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  rec(`O2 unchanged Escape: closed; focus on opener=${await opener.evaluate((e) => e === document.activeElement)}`);
+  // A change: Cancel asks; Keep editing keeps the row and returns focus to Cancel.
+  await opener.click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Add break', exact: true }).click();
+  const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true });
+  await cancel.click();
+  rec(`O3 changed Cancel: question=${await discard.isVisible()} ${await stack(page)}`);
+  await discard.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  rec(`O3 Keep editing: rows=${await dialog.locator('[data-break]').count()} focus on Cancel=${await cancel.evaluate((e) => e === document.activeElement)}`);
+  await page.keyboard.press('Escape');
+  rec(`O4 changed Escape: question=${await discard.isVisible()} ${await stack(page)}`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  rec(`O4 Escape in the question: ${await stack(page)}`);
+  // Browser close request (dialog.requestClose) with a change.
+  const supported = await dialog.evaluate((element) => typeof (element as HTMLDialogElement & { requestClose?: () => void }).requestClose === 'function');
+  if (supported) {
+    await dialog.evaluate((element) => (element as HTMLDialogElement & { requestClose: () => void }).requestClose());
+    await page.waitForTimeout(150);
+    rec(`O5 requestClose with a change: question=${await discard.isVisible().catch(() => false)} ${await stack(page)}`);
+    if (await discard.isVisible().catch(() => false)) await discard.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  } else {
+    rec('O5 requestClose not supported by this browser');
+  }
+  // Undo: remove the added row -> no change -> closes at once.
+  await dialog.getByRole('button', { name: 'Remove break 1', exact: true }).click();
+  await cancel.click();
+  await page.waitForTimeout(150);
+  rec(`O6 undone change Cancel: dialog count=${await dialog.count()} question=${await discard.count()}`);
+  // The box ticked then Discard: nothing sent.
+  if ((await dialog.count()) === 0) {
+    await opener.click();
+    await expect(dialog).toBeVisible();
+  }
+  await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+  await cancel.click();
+  await discard.getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  rec(`O7 box ticked then Discard: writes=${JSON.stringify(writes)} focus on opener=${await opener.evaluate((e) => e === document.activeElement)}`);
+  // Check out sends at once: no notice, no confirmation.
+  await opener.click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+  await dialog.getByRole('button', { name: 'Check out, no breaks taken', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  rec(`O8 Check out: alertdialogs=${await page.getByRole('alertdialog').count()} writes=${JSON.stringify(writes)}`);
+  await who.api.clearSessions(todayLocal);
+});
+
+test('desktop: a view-only share opens no editing dialog', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'Desktop project');
+  test.setTimeout(180_000);
+  const owner = await newPerson(adminSeed, builtServer, { signature: 'none', displayName: 'Synthetic Owner' });
+  const grantee = await person(adminSeed, builtServer);
+  const free = await owner.api.displayedPeriodFreeWorkdays();
+  const day = free[0] ?? '';
+  await owner.api.seedCompleteDay(day);
+  await owner.api.createSession(free[1] ?? '', '09:00', '18:00', null);
+  await owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInPageAs(grantee.account);
+  const writes = watchWrites(page);
+  await page.locator('.shell-switcher select').selectOption({ label: 'Synthetic Owner' });
+  await page.getByRole('form', { name: 'Shared with me' }).getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(page.locator('[data-share-bar]')).toBeVisible();
+  rec(`S0 shared view toolbar: Open a day fields=${await page.getByLabel('Open a day').count()}`);
+  for (const date of [day, free[1] ?? '']) {
+    await namedDayButton(page, date, 'View').click();
+    const editor = page.getByRole('dialog', { name: /^Day / });
+    await expect(editor).toBeVisible();
+    const counts = {
+      add: await editor.getByRole('button', { name: 'Add session' }).count(),
+      edit: await editor.getByRole('button', { name: /^Edit session/ }).count(),
+      del: await editor.getByRole('button', { name: /^Delete session/ }).count(),
+      confirm: await editor.getByRole('button', { name: /^Confirm breaks/ }).count(),
+      checkIn: await page.getByRole('button', { name: /^Check (in|out)$/ }).count(),
+      chips: (await editor.locator('[data-chip]').allInnerTexts()).join(' | '),
+      cards: await editor.locator('.session-card').count(),
+    };
+    rec(`S1 view-only ${date}: ${JSON.stringify(counts)}`);
+    await editor.getByRole('button', { name: 'Close', exact: true }).first().click();
+  }
+  rec(`S2 writes in the shared view: ${JSON.stringify(writes)}`);
+  await owner.api.clearSessions(day);
+  await owner.api.clearSessions(free[1] ?? '');
+});
+
+test('desktop: finding 12 after the check-out (the removed saved row comes back)', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'Desktop project');
+  test.setTimeout(180_000);
+  const who = await person(adminSeed, builtServer);
+  const { todayLocal } = await who.api.today();
+  const at = (time: string) => ({ local: `${todayLocal}T${time}`, zone: LA });
+  await who.api.call(
+    'POST',
+    `/api/days/${todayLocal}/sessions`,
+    { start: at('07:00'), end: null, input_zone: LA, breaks_confirmed: false, breaks: [{ start: at('08:00'), end: at('08:15'), counts_as_work: false }] },
+    201,
+  );
+  await page.setViewportSize({ width: 1366, height: 800 });
+  await signInPageAs(who.account);
+  await page.getByRole('button', { name: 'Check out', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Check out' });
+  await expect(dialog).toBeVisible();
+  rec(`F1 opened with the saved unconfirmed row: rows=${await dialog.locator('[data-break]').count()} submit="${await dialog.locator('button[type="submit"]').innerText()}"`);
+  await page.screenshot({ path: screenshotPath('audb-f12-checkout-saved-row-1366-synthetic.png') });
+  await dialog.getByRole('button', { name: 'Remove break 1', exact: true }).click();
+  rec(`F2 after removing it: submit="${await dialog.locator('button[type="submit"]').innerText()}" text="${(await dialog.innerText()).replace(/\s+/g, ' ')}"`);
+  await page.screenshot({ path: screenshotPath('audb-f12-checkout-removed-1366-synthetic.png') });
+  await dialog.locator('button[type="submit"]').click();
+  await expect(dialog).toHaveCount(0);
+  const editor = await openEditor(page, todayLocal);
+  const card = editor.locator('.session-card').first();
+  rec(`F3 the card after the check-out: "${(await card.innerText()).replace(/\s+/g, ' ')}"`);
+  await page.screenshot({ path: screenshotPath('audb-f12-card-after-1366-synthetic.png') });
+  const stored = await who.api.dayView(todayLocal);
+  rec(`F4 stored: ${JSON.stringify(stored.sessions.map((s) => ({ confirmed: s.breaks_confirmed, breaks: s.breaks.map((b) => [b.start_utc, b.end_utc]) })))}`);
+  await who.api.clearSessions(todayLocal);
+});

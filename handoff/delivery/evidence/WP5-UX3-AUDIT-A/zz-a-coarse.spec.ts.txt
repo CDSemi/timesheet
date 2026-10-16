@@ -1,0 +1,55 @@
+import { expect, newPerson, openAccount, test } from './fixtures.ts';
+import { namedDayButton } from './dayButton.ts';
+import { note } from './zz-alib.ts';
+
+/*
+ * WP5-UX3-AUDIT-A item 7 (task-local probe, never in the repository): AGENTS UI rule 3 "44px targets below 768px and with a
+ * coarse pointer" on a 1024px touch screen (desktop layout), and the hover look left after a tap on such a screen.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles', hasTouch: true });
+test.skip(({ isMobile }) => isMobile, 'desktop layout with touch');
+
+test('1024px touch screen: target sizes of the new controls and sticky hover after a tap', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+  test.setTimeout(180_000);
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Touch Reader', signature: 'none' });
+  const free = await me.api.displayedPeriodFreeWorkdays();
+  if (free[0] !== undefined) await me.api.seedUnconfirmedBreaksDay(free[0]);
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await signInPageAs(me.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const media = await page.evaluate(() => ({ coarse: matchMedia('(pointer: coarse)').matches, anyCoarse: matchMedia('(any-pointer: coarse)').matches, hover: matchMedia('(hover: hover)').matches }));
+  note('coarse.txt', `media at 1024 with touch: ${JSON.stringify(media)}`);
+  const measure = async (label: string) => {
+    const small = await page.evaluate(() => {
+      const out: string[] = [];
+      for (const e of document.querySelectorAll('button, a[href], input:not([type=hidden]), select, [role=switch]')) {
+        const el = e as HTMLElement;
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+        const cs = getComputedStyle(el);
+        if (cs.visibility === 'hidden' || r.width <= 2) continue;
+        if (r.height < 43.5 || r.width < 23.5) out.push(`${el.tagName.toLowerCase()} "${(el.getAttribute('aria-label') ?? el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 40)}" ${r.width.toFixed(0)}x${r.height.toFixed(0)}`);
+      }
+      return out;
+    });
+    note('coarse.txt', `${label}: controls under 44px high (or 24px wide): ${small.length} :: ${small.join(' | ')}`);
+  };
+  await measure('timesheet 1024 touch');
+  await openAccount(page);
+  await measure('account menu open 1024 touch');
+  await page.keyboard.press('Escape');
+  await namedDayButton(page, free[0] ?? '', 'Edit').tap();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await measure('editor open 1024 touch');
+  await page.keyboard.press('Escape');
+  // Sticky hover: tap a Category trigger, close its list, and read the trigger's look with the pointer still there.
+  const trigger = page.getByRole('button', { name: new RegExp(`^Category for ${free[0] ?? ''}`) });
+  const rest = await trigger.evaluate((e) => `${getComputedStyle(e).backgroundColor} | ${getComputedStyle(e).boxShadow}`);
+  await trigger.tap();
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  const after = await trigger.evaluate((e) => `${getComputedStyle(e).backgroundColor} | ${getComputedStyle(e).boxShadow} | hover ${e.matches(':hover')} focus-visible ${e.matches(':focus-visible')}`);
+  note('coarse.txt', `Category trigger at rest: ${rest}; after a tap and Escape: ${after}`);
+});

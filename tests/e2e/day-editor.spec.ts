@@ -1898,6 +1898,87 @@ test('Check out with nothing listed and the box unticked omits breaks: the sessi
   }
 });
 
+/*
+ * WP5-UX3-FIX3 item 7 (coordinator decision on F-UX3B-1): when the Check out dialog opened with saved break rows and the person removed
+ * all of them with the box unticked, Check out sends the complete unconfirmed set, `breaks: []` with `breaks_confirmed: false`, which
+ * replaces the saved rows; it used to omit the list, so the server kept rows the dialog no longer showed (and refused a saved break that
+ * ended after the check-out with 422 saved_break_after_clock_out). When the dialog opened with no saved rows the list stays omitted (E-1).
+ */
+test('the server replaces saved breaks with an empty unconfirmed list at Check out, also a saved break that ends after now (E-1)', async ({ employeeSeed }) => {
+  // One saved break from 177 to 182 minutes after the start: it ends about two minutes after "now" (a save allows up to five).
+  const run = await seedRunning(employeeSeed, 3, [[177, 5]]);
+  try {
+    const refused = await employeeSeed.call<{ error: { code: string } }>('POST', '/api/clock/out', { breaks_confirmed: false, expected_version: run.version }, 422);
+    expect(refused.error.code, 'an omitted list cannot keep a saved break that ends after the check-out').toBe('saved_break_after_clock_out');
+    expect((await employeeSeed.dayView(run.todayLocal)).sessions.some((session) => session.end_utc === null), 'the refused check-out leaves the session running').toBe(true);
+    await employeeSeed.call('POST', '/api/clock/out', { breaks: [], breaks_confirmed: false, expected_version: run.version });
+    const closed = await sessionById(employeeSeed, run.todayLocal, run.id);
+    expect(closed?.end_utc).not.toBeNull();
+    expect(closed?.breaks_confirmed).toBe(false);
+    expect(closed?.breaks, 'the saved break was replaced by the empty list').toHaveLength(0);
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+});
+
+test('Check out after every saved break was removed (box unticked) sends an empty unconfirmed list that replaces them, and the dialog says what will be recorded (E-1)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  // Two saved rows; the second ends after "now", so an omitted list would be refused for a break the dialog no longer shows.
+  const run = await seedRunning(employeeSeed, 3, [
+    [10, 10],
+    [177, 5],
+  ]);
+  const bodies = recordCheckOuts(page);
+  try {
+    await signInThroughUi();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = checkOutDialog(page);
+    await expect(dialog).toBeVisible();
+    const removedNote = dialog.getByText('The saved breaks you removed are deleted at Check out.');
+    await expect(dialog.locator('[data-break]')).toHaveCount(2);
+    await expect(dialog.getByRole('button', { name: 'Check out with these breaks' })).toBeVisible();
+    await expect(removedNote).toHaveCount(0);
+
+    // One row left: still a listed set, no note.
+    await removeCheckOutBreak(page, dialog, 2);
+    await expect(dialog.locator('[data-break]')).toHaveCount(1);
+    await expect(removedNote).toHaveCount(0);
+
+    // Every saved row removed with the box unticked: the dialog says what Check out records.
+    await removeCheckOutBreak(page, dialog, 1);
+    await expect(dialog.locator('[data-break]')).toHaveCount(0);
+    await expect(dialog.getByText('No breaks listed.')).toBeVisible();
+    await expect(dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+    await expect(removedNote).toBeVisible();
+    await expect(dialog.getByRole('status').filter({ hasText: 'The saved breaks you removed are deleted at Check out.' })).toContainText('Breaks stay unconfirmed and OT for the day stays pending.');
+    await expect(dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' })).toBeVisible();
+
+    // The box takes over the note: ticked, the empty list is confirmed; unticked again, the note returns.
+    await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+    await expect(removedNote).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Check out, no breaks taken' })).toBeVisible();
+    await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).uncheck();
+    await expect(removedNote).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(page.getByText('Checked out.')).toBeVisible();
+
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0], 'the empty list is sent, unconfirmed: the complete set that replaces the saved rows').toEqual({ breaks: [], breaks_confirmed: false, expected_version: run.version });
+    const closed = await sessionById(employeeSeed, run.todayLocal, run.id);
+    expect(closed?.end_utc).not.toBeNull();
+    expect(closed?.breaks_confirmed).toBe(false);
+    expect(closed?.breaks, 'the removed saved breaks are gone').toHaveLength(0);
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+});
+
 test('Check out refusals: suggested breaks that end after now, and a future_break refusal that names a break, mark that row or chip and keep the session running', async ({
   page,
   employeeSeed,
@@ -3651,6 +3732,57 @@ test('"Confirm breaks" opens the session dialog with the suggested breaks listed
       '15:30:00-15:45:00',
     ]);
     expect((await employeeSeed.dayView(date)).calculation?.status).toBe('complete');
+  } finally {
+    await employeeSeed.clearSessions(date);
+  }
+});
+
+// WP5-UX3-FIX3 item 8 (coordinator decision on F-UX3B-2): "Confirm breaks" lists the suggested breaks that lie inside the session, as
+// docs/04 says and as the new-session pre-fill does, not all or nothing. A session of 09:00 to 14:00 fits the first two suggestions
+// (11:00 and 13:00) but not the third (15:30); the dialog used to open with none.
+test('"Confirm breaks" lists the suggested breaks that lie inside a 09:00 to 14:00 session (two of three); Save sends those two', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  const puts: Array<Record<string, unknown>> = [];
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && new URL(request.url()).pathname.startsWith('/api/sessions/')) puts.push(request.postDataJSON() as Record<string, unknown>);
+  });
+  try {
+    await employeeSeed.createSession(date, '09:00', '14:00', null);
+    const before = (await employeeSeed.dayView(date)).sessions[0];
+    expect(before?.breaks_confirmed).toBe(false);
+    await signInThroughUi();
+    const editor = await openEditor(page, date);
+    await editor.getByRole('button', { name: /^Confirm breaks/ }).click();
+    const form = sessionDialog(page, 'Edit session');
+    await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+    await expect(form.locator('[data-break]'), 'the two suggestions inside the session are listed').toHaveCount(2);
+    for (const [index, [from, minutes, end]] of [['11:00', '15', 'ends 11:15'], ['13:00', '30', 'ends 13:30']].entries()) {
+      const row = breakRow(form, index + 1);
+      await expect(row.time).toHaveValue(from ?? '');
+      await expect(row.minutes).toHaveValue(minutes ?? '');
+      await expect(row.row).toContainText(end ?? '');
+      await expect(row.row).toContainText('suggested');
+    }
+    expect(puts).toEqual([]);
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    const confirm = saveConfirmation(page);
+    await expect(confirm.locator('.confirm-facts')).toContainText('2 breaks (15, 30 min)');
+    await confirm.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ breaks_confirmed: true, expected_version: before?.version, input_zone: LA });
+    const sent = (puts[0]?.breaks ?? []) as Array<{ start: { local: string }; end: { local: string } }>;
+    expect(sent.map((item) => [item.start.local, item.end.local])).toEqual([
+      [`${date}T11:00`, `${date}T11:15`],
+      [`${date}T13:00`, `${date}T13:30`],
+    ]);
+    const after = (await employeeSeed.dayView(date)).sessions[0];
+    expect(after?.breaks_confirmed).toBe(true);
+    expect(after?.breaks).toHaveLength(2);
   } finally {
     await employeeSeed.clearSessions(date);
   }

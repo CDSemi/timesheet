@@ -1,0 +1,23 @@
+# Copies masked LF evidence into the repository's evidence folder (handoff/ only). Usage: bash collect.sh
+. <task>/env.sh
+mkdir -p $E
+m() { node $T/mask.mjs "$1" "$E/$2"; }
+O=$T/out
+for f in 00-export.txt 01-digest-export-before.txt 01-digest-lstree-before.txt 01-digest-npm-before.txt 01-head-before.txt 01-nonhandoff-status-before.txt \
+  01-digest-export-after.txt 01-digest-lstree-after.txt 01-digest-npm-after.txt 01-head-after.txt 01-nonhandoff-status-after.txt \
+  02-ci-exit.txt main-times.txt 10-typecheck.txt 11-lint.txt 12-npmtest-1.txt 12-npmtest-2.txt 13-build.txt 14-ac13.txt 15-e2e-real.txt 15-e2e-real-counts.txt \
+  20-cssscan.txt 20-cssscan-a643794.txt 30-build-p.txt 31-shiftclock-sha.txt 40-server-diff.txt 41-fixround-stat.txt 50-durations-regate.txt 51-durations-mine.txt \
+  52-durations-item11.txt mut-caught.txt 60-parity-docs04.txt 70-item11-regate-traces.raw.txt load-context.txt slips.txt probe-times.txt probe-list.txt chain-times.txt i11.done ms-playwright.txt; do
+  n="${f%.raw.txt}"; n="${n%.txt}.txt"; [ -f "$O/$f" ] && m "$O/$f" "$n"
+done
+for f in $T/obs/*.txt; do [ -f "$f" ] && m "$f" "obs-$(basename $f)"; done
+for f in $T/logs/probe-*.txt $T/logs/i11-*.txt; do [ -f "$f" ] && m "$f" "log-$(basename $f)"; done
+if [ -d $O/mut ]; then for f in $O/mut/*.txt; do m "$f" "mut-$(basename $f)"; done; fi
+# Scripts as .txt (never runnable from the repository).
+for f in env.sh digest.sh load.sh run-main.sh run-shift.sh run-probes.sh run-item11.sh chain-a.sh chain-all.sh mutants.sh collect.sh; do m "$T/$f" "$f.txt"; done
+for f in mask.mjs cssscan.mjs durations.mjs parity.mjs; do m "$T/$f" "$f.txt"; done
+m "$T/trace_actions.py" trace_actions.py.txt
+for f in zz-alib.ts zz-a-seam.spec.ts zz-a-shell.spec.ts zz-a-sheet.spec.ts zz-a-axe.spec.ts zz-a-coarse.spec.ts zz-a-shots.spec.ts zz-a-tap.spec.ts zz-a-ring.spec.ts zz-a-signout.spec.ts zz-a-adminwrap.spec.ts zz-png.ts; do m "$T/export-p/tests/e2e/$f" "$f.txt"; done
+m "$T/export-p/playwright.rep.config.ts" playwright.rep.config.ts.txt
+m "$T/export-p/playwright.audit.config.ts" playwright.audit.config.ts.txt
+echo "collected $(ls $E | wc -l) files"

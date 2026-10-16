@@ -1,0 +1,80 @@
+{
+  "A01": {
+    "what": "session dialog: breaks_confirmed always true (Leave unconfirmed would confirm)",
+    "file": "src/client/components/breakRowsModel.ts",
+    "old": "    breaks_confirmed: payload.breaksConfirmed,\n  };",
+    "new": "    breaks_confirmed: true,\n  };"
+  },
+  "A02": {
+    "what": "past-day comparison <= (today pre-fills suggested breaks)",
+    "file": "src/client/components/breakRowsModel.ts",
+    "old": "if (!(workDate < todayLocal)) return [];",
+    "new": "if (!(workDate <= todayLocal)) return [];"
+  },
+  "A03": {
+    "what": "end sent as start wall clock + minutes on the start date, no offset (not elapsed UTC)",
+    "file": "src/client/components/breakRowsModel.ts",
+    "old": "\n        end: toLocalInput(fieldFromInstant(zone, endUtc), zone),",
+    "new": "\n        end: { local: `${row.start.date}T${String(Math.floor((Number(row.start.time.slice(0, 2)) * 60 + Number(row.start.time.slice(3, 5)) + minutes.minutes) / 60) % 24).padStart(2, '0')}:${String((Number(row.start.time.slice(3, 5)) + minutes.minutes) % 60).padStart(2, '0')}`, zone },"
+  },
+  "A04": {
+    "what": "hidden row date follows the session date but keeps the stale pin (not marked edited)",
+    "file": "src/client/components/breakChipModel.ts",
+    "old": "{ ...row, start: editField(row.start, { date }), edited: true }",
+    "new": "{ ...row, start: { ...row.start, date } }"
+  },
+  "A05": {
+    "what": "G-4 trigger never fires (empty unticked list is refused instead of asking)",
+    "file": "src/client/components/SessionDialog.tsx",
+    "old": "const unlisted = !draft.noBreaks && draft.rows.length === 0;",
+    "new": "const unlisted = false;"
+  },
+  "A06": {
+    "what": "Check out omitted list sent with breaks_confirmed true",
+    "file": "src/client/components/breakRowsModel.ts",
+    "old": "if (mode.kind === 'checkout') return { ok: true, breaks: undefined, breaksConfirmed: false };",
+    "new": "if (mode.kind === 'checkout') return { ok: true, breaks: undefined, breaksConfirmed: true };"
+  },
+  "A07": {
+    "what": "sub-dialog Done applies nothing (hands back the original row)",
+    "file": "src/client/components/BreakSubDialog.tsx",
+    "old": "    onDone(edit);",
+    "new": "    onDone(row);"
+  },
+  "A08": {
+    "what": "Escape in a confirmation confirms (nested Escape)",
+    "file": "src/client/components/ConfirmDialog.tsx",
+    "old": "        event.stopPropagation();\n        onCancel();",
+    "new": "        event.stopPropagation();\n        onConfirm();"
+  },
+  "A09": {
+    "what": "M18: past-day rule on the device date",
+    "file": "src/client/components/SessionDialog.tsx",
+    "old": "{ workDate, todayLocal, policy, keyOf",
+    "new": "{ workDate, todayLocal: new Date().toLocaleDateString('en-CA'), policy, keyOf"
+  },
+  "A10": {
+    "what": "Check out listed rows sent unconfirmed",
+    "file": "src/client/components/breakRowsModel.ts",
+    "old": "item.request), breaksConfirmed: true };",
+    "new": "item.request), breaksConfirmed: mode.kind === 'session' };"
+  },
+  "A11": {
+    "what": "a confirmed-none session opens with the box unticked",
+    "file": "src/client/components/breakRowsModel.ts",
+    "old": "noBreaks: session.breaks_confirmed && session.breaks.length === 0,",
+    "new": "noBreaks: false,"
+  },
+  "A13": {
+    "what": "Check out request: the omission branch says breaks_confirmed true (server answers 422 breaks_required)",
+    "file": "src/client/components/breakRowsModel.ts",
+    "old": "? { breaks_confirmed: false, expected_version: input.expectedVersion }",
+    "new": "? { breaks_confirmed: true, expected_version: input.expectedVersion }"
+  },
+  "A12": {
+    "what": "an edited pinned row still sends its pinned instants",
+    "file": "src/client/components/breakRowsModel.ts",
+    "old": "return row.pinned !== null && !row.edited && row.pinned.zone === zone.trim();",
+    "new": "return row.pinned !== null && row.pinned.zone === zone.trim();"
+  }
+}

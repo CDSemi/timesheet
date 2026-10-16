@@ -1,0 +1,935 @@
+diff --git a/tests/client/breakRowsModel.test.ts b/tests/client/breakRowsModel.test.ts
+index 2f157d7..f96ba5f 100644
+--- a/tests/client/breakRowsModel.test.ts
++++ b/tests/client/breakRowsModel.test.ts
+@@ -178,0 +179,43 @@ describe('untouched saved and suggested rows keep their pinned instants', () =>
++  // "Confirm breaks" (WP5-UX3-T07): the session dialog opens with the suggested breaks that fit listed (SessionDialog); saving it
++  // unchanged sends the body the old one-tap confirmation sent (moved here from the removed `quickBreaksRequest` tests).
++  it('"Confirm breaks" with suggested rows sends the body the old one-tap confirmation sent: pinned instants, version and trimmed reason', () => {
++    const saved = savedSession({ breaks_confirmed: false, breaks: [], end_utc: '2026-09-22T01:30:00Z' });
++    const rows = suggestionRows(policy(), utc(saved.start_utc), utc(saved.end_utc ?? ''), saved.input_zone, String);
++    const draft = { ...sessionDialogDraftFromSession(saved), rows };
++    const request = sessionRequest(draft, { allowUnconfirmed: false, expectedVersion: saved.version, reason: ' late entry ' });
++
++    const oldDraft = draftFromSession(saved);
++    const old = buildSessionRequest(
++      { ...oldDraft, breaks: suggestedRows(utc(saved.start_utc), oldDraft.zone, DEFAULT_BREAKS, String), mode: 'confirmed' },
++      { expectedVersion: saved.version, reason: ' late entry ' },
++    );
++    expect(JSON.stringify(request)).toBe(JSON.stringify(old));
++    expect(request).toMatchObject({
++      start: { local: '2026-09-21T09:00', zone: LA, offset: '-07:00' },
++      end: { local: '2026-09-21T18:30', zone: LA, offset: '-07:00' },
++      input_zone: LA,
++      breaks_confirmed: true,
++      expected_version: 4,
++      reason: 'late entry',
++    });
++    expect(request.breaks.map((item) => item.start.local)).toEqual(['2026-09-21T11:00', '2026-09-21T13:00', '2026-09-21T15:30']);
++  });
++
++  it('"Confirm breaks" with the rows already listed sends them pinned in the session zone, and the ticked box sends an empty confirmed list without a reason', () => {
++    const listed = savedSession({
++      breaks_confirmed: false,
++      breaks: [{ id: 'b1', start_utc: '2026-09-21T19:00:00Z', end_utc: '2026-09-21T19:20:00Z', counts_as_work: false }],
++    });
++    expect(sessionRequest(sessionDialogDraftFromSession(listed), { allowUnconfirmed: false, expectedVersion: 4 }).breaks).toEqual([
++      { start: { local: '2026-09-21T12:00', zone: LA, offset: '-07:00' }, end: { local: '2026-09-21T12:20', zone: LA, offset: '-07:00' }, counts_as_work: false },
++    ]);
++
++    const bare = savedSession({ breaks_confirmed: false, breaks: [] });
++    const none = sessionRequest(setNoBreaks(sessionDialogDraftFromSession(bare), true), { allowUnconfirmed: false, expectedVersion: 4, reason: '' });
++    const old = buildSessionRequest({ ...draftFromSession(bare), breaks: [], mode: 'none' }, { expectedVersion: 4, reason: '' });
++    expect(JSON.stringify(none)).toBe(JSON.stringify(old));
++    expect(none.breaks).toEqual([]);
++    expect(none.breaks_confirmed).toBe(true);
++    expect('reason' in none).toBe(false);
++  });
++
+diff --git a/tests/client/dayEditorModel.test.ts b/tests/client/dayEditorModel.test.ts
+index 8a0af10..37ced50 100644
+--- a/tests/client/dayEditorModel.test.ts
++++ b/tests/client/dayEditorModel.test.ts
+@@ -2 +2 @@ import { describe, expect, it } from 'vitest';
+-import type { Calculation, DayView, PolicyVersion, Session } from '../../src/client/api.ts';
++import type { Calculation, DayView, Period, PolicyVersion, Session } from '../../src/client/api.ts';
+@@ -5 +4,0 @@ import {
+-  confirmBreaksDraft,
+@@ -6,0 +6 @@ import {
++  dayPeriodPill,
+@@ -11 +10,0 @@ import {
+-  quickBreaksRequest,
+@@ -14 +12,0 @@ import {
+-import { buildSessionRequest, draftFromSession, resolveStart, suggestedRows } from '../../src/client/components/sessionModel.ts';
+@@ -103,36 +101,2 @@ describe('one-tap break confirmation of a saved session (R-02)', () => {
+-  it('sends exactly the body of the form flow: Suggest breaks, Confirm suggested breaks, Save changes', () => {
+-    const saved = session();
+-    const quick = quickBreaksOf(saved, POLICY, HCM);
+-    if (quick === null) throw new Error('a quick confirmation is expected');
+-    const viaQuick = quickBreaksRequest(saved, quick, 'confirm', ' late entry ');
+-
+-    const draft = draftFromSession(saved);
+-    const start = resolveStart(draft);
+-    if (!start.ok) throw new Error('start must resolve');
+-    const viaForm = buildSessionRequest(
+-      { ...draft, breaks: suggestedRows(start.utc, draft.zone, POLICY.breaks, String), mode: 'confirmed' },
+-      { expectedVersion: saved.version, reason: ' late entry ' },
+-    );
+-    expect(viaQuick).toEqual(viaForm);
+-    expect(viaQuick).toMatchObject({
+-      start: { local: '2026-09-21T09:00', zone: LA, offset: '-07:00' },
+-      end: { local: '2026-09-21T18:30', zone: LA, offset: '-07:00' },
+-      input_zone: LA,
+-      breaks_confirmed: true,
+-      expected_version: 4,
+-      reason: 'late entry',
+-    });
+-    expect(viaQuick.breaks.map((item) => item.start.local)).toEqual(['2026-09-21T11:00', '2026-09-21T13:00', '2026-09-21T15:30']);
+-  });
+-
+-  it('confirms no breaks with an empty, confirmed list and no reason when none is typed', () => {
+-    const saved = session();
+-    const quick = quickBreaksOf(saved, POLICY, LA);
+-    if (quick === null) throw new Error('a quick confirmation is expected');
+-    const body = quickBreaksRequest(saved, quick, 'none', '');
+-    expect(body.breaks).toEqual([]);
+-    expect(body.breaks_confirmed).toBe(true);
+-    expect(body.expected_version).toBe(4);
+-    expect('reason' in body).toBe(false);
+-  });
+-
++  // The request of "Confirm breaks" (suggested rows, the rows already listed, or "no breaks taken") is proved against the old
++  // one-tap bodies in tests/client/breakRowsModel.test.ts, because the session dialog's model now builds it.
+@@ -144,4 +108 @@ describe('one-tap break confirmation of a saved session (R-02)', () => {
+-    if (quick === null) throw new Error('a quick confirmation is expected');
+-    expect(quickBreaksRequest(listed, quick, 'confirm', '').breaks).toEqual([
+-      { start: { local: '2026-09-21T12:00', zone: LA, offset: '-07:00' }, end: { local: '2026-09-21T12:20', zone: LA, offset: '-07:00' }, counts_as_work: false },
+-    ]);
++    expect(quick?.rows.map((row) => [row.start.time, row.end.time])).toEqual([['12:00', '12:20']]);
+@@ -163,31 +123,0 @@ describe('one-tap break confirmation of a saved session (R-02)', () => {
+-describe('the "Confirm breaks" entry opens the form with the one-tap choice selected (WP5-UX3-T07)', () => {
+-  it('saving the draft unchanged sends the body the one-tap "confirm" sent: suggested rows, version and reason', () => {
+-    const saved = session();
+-    const quick = quickBreaksOf(saved, POLICY, HCM);
+-    if (quick === null) throw new Error('a quick confirmation is expected');
+-    const draft = confirmBreaksDraft(saved, quick);
+-    expect(draft.mode).toBe('confirmed');
+-    expect(draft.zone).toBe(LA);
+-    expect(buildSessionRequest(draft, { expectedVersion: saved.version, reason: ' late entry ' })).toEqual(quickBreaksRequest(saved, quick, 'confirm', ' late entry '));
+-  });
+-
+-  it('keeps the rows already listed with the session, as the one-tap "confirm as listed" did', () => {
+-    const listed = session({ breaks: [{ id: 'b1', start_utc: '2026-09-21T19:00:00Z', end_utc: '2026-09-21T19:20:00Z', counts_as_work: false }] });
+-    const quick = quickBreaksOf(listed, POLICY, LA);
+-    if (quick === null) throw new Error('a quick confirmation is expected');
+-    const draft = confirmBreaksDraft(listed, quick);
+-    expect(draft.breaks).toHaveLength(1);
+-    expect(buildSessionRequest(draft, { expectedVersion: listed.version, reason: '' })).toEqual(quickBreaksRequest(listed, quick, 'confirm', ''));
+-  });
+-
+-  it('selects "no breaks taken" when no suggested break fits, as the one-tap "none" did', () => {
+-    const short = session({ end_utc: '2026-09-21T17:30:00Z' });
+-    const quick = quickBreaksOf(short, POLICY, LA);
+-    if (quick === null) throw new Error('a quick confirmation is expected');
+-    const draft = confirmBreaksDraft(short, quick);
+-    expect(draft.mode).toBe('none');
+-    expect(draft.breaks).toEqual([]);
+-    expect(buildSessionRequest(draft, { expectedVersion: short.version, reason: '' })).toEqual(quickBreaksRequest(short, quick, 'none', ''));
+-  });
+-});
+-
+@@ -216,0 +147,45 @@ describe('the chips under the panel title (U-19, U-20)', () => {
++  describe('the pill of the period of the day itself (G-5 b, WP5-UX3-FIX2)', () => {
++    const period = (payroll_date: string, period_start: string, period_end: string, relation: Period['relation']): Period => ({
++      payroll_date,
++      period_start,
++      period_end,
++      due_local_date: payroll_date,
++      due_local_time: '07:00',
++      due_at_utc: `${payroll_date}T14:00:00Z`,
++      ...(relation === undefined ? {} : { relation }),
++    });
++    const ended = period('2026-10-16', '2026-09-28', '2026-10-11', 'current');
++    // The five window days: the period that contains today is still "future" for the edit rules, but "in progress" for the person.
++    const running = period('2026-10-30', '2026-10-12', '2026-10-25', 'future');
++    const windowPeriods = { current: ended, in_progress: running };
++    const runningCurrent = period('2026-10-30', '2026-10-12', '2026-10-25', 'current');
++    const samePeriods = { current: runningCurrent, in_progress: runningCurrent };
++
++    it('says "in progress" for every day of the period in progress, whichever period the sheet shows', () => {
++      expect(dayPeriodPill('2026-10-14', ended, windowPeriods)).toBe('in-progress');
++      expect(dayPeriodPill('2026-10-12', ended, windowPeriods)).toBe('in-progress');
++      expect(dayPeriodPill('2026-10-25', ended, windowPeriods)).toBe('in-progress');
++      // The shown period decides first when it holds the day, with the same rule as the bar.
++      expect(dayPeriodPill('2026-10-14', running, windowPeriods)).toBe('in-progress');
++    });
++
++    it('keeps "current" for a day of the ended period and leaves other periods to the server relation of the day', () => {
++      expect(dayPeriodPill('2026-10-05', ended, windowPeriods)).toBe('current');
++      expect(dayPeriodPill('2026-10-05', running, windowPeriods)).toBe('current');
++      expect(dayPeriodPill('2026-09-20', ended, windowPeriods)).toBeUndefined();
++      expect(dayPeriodPill('2026-10-26', ended, windowPeriods)).toBeUndefined();
++      expect(dayPeriodPill('2026-10-14', ended, null)).toBeUndefined();
++    });
++
++    it('never says "in progress" outside the window days: the period with today is the current one', () => {
++      expect(dayPeriodPill('2026-10-14', runningCurrent, samePeriods)).toBe('current');
++      expect(dayPeriodPill('2026-10-14', ended, samePeriods)).toBe('current');
++    });
++
++    it('feeds the editor chip: the day of the period in progress reads "in progress", not "future period"', () => {
++      const pill = dayPeriodPill('2026-10-14', ended, windowPeriods);
++      expect(editorChips({ relation: 'future', ...(pill === undefined ? {} : { pill }), ...zones })[0]).toEqual({ key: 'period', text: 'in progress', pill: 'in-progress' });
++      expect(editorChips({ relation: 'future', ...zones })[0]?.text).toBe('future period');
++    });
++  });
++
+diff --git a/tests/client/labelPickerModel.test.ts b/tests/client/labelPickerModel.test.ts
+index 824c15b..1685147 100644
+--- a/tests/client/labelPickerModel.test.ts
++++ b/tests/client/labelPickerModel.test.ts
+@@ -63,5 +63,4 @@ describe('in-cell label picker (E-3 a)', () => {
+-    // A holiday cell shows the holiday name and a second line "Holiday": both are in the name.
+-    expect(labelPickerName('2026-11-26', { main: 'Synthetic Holiday', lines: ['Holiday'], note: false })).toBe('Category for 2026-11-26: Synthetic Holiday, Holiday');
+-    // Leave, the Work from home line and the note marker follow in the order the cell shows them.
+-    expect(labelPickerName('2026-11-27', { main: 'Off', lines: ['Work from home', 'Leave 2:30'], note: true })).toBe(
+-      'Category for 2026-11-27: Off, Work from home, Leave 2:30, Note',
++    // A holiday cell shows the holiday name and a second line "Holiday": both are in the name, joined by a space as the button's
++    // text reads them, so the visible words stay one unbroken run (axe label-content-name-mismatch, WP5-UX3-FIX1).
++    expect(labelPickerName('2026-11-26', { main: 'Observed Independence Day', lines: ['Holiday'], note: false })).toBe(
++      'Category for 2026-11-26: Observed Independence Day Holiday',
+@@ -68,0 +68,5 @@ describe('in-cell label picker (E-3 a)', () => {
++    expect(labelPickerName('2026-11-26', { main: 'Synthetic Holiday', lines: ['Holiday'], note: false })).toBe('Category for 2026-11-26: Synthetic Holiday Holiday');
++    // Leave, the Work from home line and the note marker follow in the order the cell shows them.
++    expect(labelPickerName('2026-11-27', { main: 'Off', lines: ['Work from home', 'Leave 2:30'], note: true })).toBe('Category for 2026-11-27: Off Work from home Leave 2:30 Note');
++    // Nothing but the date prefix and the visible lines: no comma between the lines.
++    expect(labelPickerName('2026-11-27', { main: 'Off', lines: ['Work from home', 'Leave 2:30'], note: true }).split(': ')[1]).not.toContain(',');
+diff --git a/tests/client/sheetModel.test.ts b/tests/client/sheetModel.test.ts
+index 512b7c0..a4955be 100644
+--- a/tests/client/sheetModel.test.ts
++++ b/tests/client/sheetModel.test.ts
+@@ -9,0 +10 @@ import {
++  revealDelta,
+@@ -253,0 +255,25 @@ describe('liftRuns (lifted columns: batch-selected or open in the editor)', () =
++describe('revealDelta (WP5-UX3-FIX1: a focused control is scrolled fully into its week card)', () => {
++  // The card's visible span less its 8px scroll padding: 8 to 728 of a 736px card.
++  const view = { start: 8, end: 728 };
++
++  it('leaves a control that lies fully inside the view where it is, edges included', () => {
++    expect(revealDelta(view, { start: 100, end: 200 })).toBe(0);
++    expect(revealDelta(view, { start: 8, end: 728 })).toBe(0);
++  });
++
++  it('scrolls forward by the part past the end, also when only a sliver is visible (the Sunday button at 800px)', () => {
++    expect(revealDelta(view, { start: 727, end: 783 })).toBe(55);
++    expect(revealDelta(view, { start: 760, end: 868 })).toBe(140);
++  });
++
++  it('scrolls back by the part before the start', () => {
++    expect(revealDelta(view, { start: -100, end: 8 })).toBe(-108);
++    expect(revealDelta(view, { start: 5, end: 60 })).toBe(-3);
++  });
++
++  it('keeps the start edge in view when the control is larger than the view', () => {
++    expect(revealDelta(view, { start: 300, end: 1100 })).toBe(292);
++    expect(revealDelta(view, { start: -50, end: 900 })).toBe(-58);
++  });
++});
++
+diff --git a/tests/e2e/day-editor.spec.ts b/tests/e2e/day-editor.spec.ts
+index 0241c72..fe982f6 100644
+--- a/tests/e2e/day-editor.spec.ts
++++ b/tests/e2e/day-editor.spec.ts
+@@ -630 +630,3 @@ test('a new session on a past day is pre-filled with the reference hours and the
+-      await expect(chip).toHaveAccessibleName(`Break ${index + 1} · ${usFullDate(local.slice(0, 10))} ${local.slice(11)} to ${end} suggested, edit`);
++      await expect(chip).toHaveAccessibleName(`Edit Break ${index + 1} · ${usFullDate(local.slice(0, 10))} ${local.slice(11)} to ${end} suggested`);
++      // The name comes from the content (a hidden "Edit", the visible words, a hidden "to" for the arrow), not from aria-label.
++      await expect(chip).not.toHaveAttribute('aria-label', /.*/);
+@@ -702,0 +705,47 @@ test('a new session on a past day is pre-filled with the reference hours and the
++/*
++ * WP5-UX3-FIX2 item 2 (mutant M18): the past-day rule compares the accounting date with the server's `today_local`. The browser
++ * clock is fixed to an instant whose device date differs from the server's date at any hour of the day (three days ahead, then a
++ * year behind), so a rule that read the device clock fails one of the two phases whatever time the suite runs.
++ */
++test('the suggested breaks follow the server date and never the device clock: a device clock three days ahead or a year behind changes nothing (U-23, G-3 a)', async ({
++  page,
++  employeeSeed,
++  signInThroughUi,
++}) => {
++  const [past = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
++  const { todayLocal } = await employeeSeed.today();
++  expect(past < todayLocal, 'the past day lies before the server date').toBe(true);
++  await signInThroughUi();
++  for (const [label, deviceInstant] of [
++    ['three days ahead', `${addDays(todayLocal, 3)}T12:00:00Z`],
++    ['a year behind', `${addDays(todayLocal, -365)}T12:00:00Z`],
++  ] as const) {
++    await page.clock.setFixedTime(new Date(deviceInstant));
++    const deviceDate = await page.evaluate<string>("new Date().toLocaleDateString('en-CA')");
++    expect(deviceDate, `${label}: the device date is not the server date`).not.toBe(todayLocal);
++    expect(deviceDate > todayLocal, `${label}: the device date is ${deviceDate > todayLocal ? 'later' : 'earlier'} than the server date`).toBe(label === 'three days ahead');
++
++    // A past day gets the reference hours and the suggested breaks inside them.
++    const pastEditor = await openEditor(page, past);
++    await pastEditor.getByRole('button', { name: 'Add session' }).click();
++    const pastForm = sessionDialog(page, 'New session');
++    await expect(pastForm.locator('[data-prefill]'), `${label}: a past day is pre-filled with hours and breaks`).toHaveAttribute('data-prefill', 'hours-breaks');
++    await expect(pastForm.locator('[data-break]'), `${label}: a past day gets its suggested breaks`).toHaveCount(3);
++    await pastForm.getByRole('button', { name: 'Cancel', exact: true }).click();
++    await expect(pastForm).toHaveCount(0);
++    await pastEditor.getByRole('button', { name: 'Close', exact: true }).click();
++    await expect(pastEditor).toHaveCount(0);
++
++    // The server's today gets the hours only.
++    const todayEditor = await openEditor(page, todayLocal);
++    await todayEditor.getByRole('button', { name: 'Add session' }).click();
++    const todayForm = sessionDialog(page, 'New session');
++    await expect(todayForm.locator('[data-prefill]'), `${label}: the server's today is pre-filled with hours only`).toHaveAttribute('data-prefill', 'hours');
++    await expect(todayForm.locator('[data-break]'), `${label}: no break is suggested for the server's today`).toHaveCount(0);
++    await todayForm.getByRole('button', { name: 'Cancel', exact: true }).click();
++    await expect(todayForm).toHaveCount(0);
++    await todayEditor.getByRole('button', { name: 'Close', exact: true }).click();
++    await expect(todayEditor).toHaveCount(0);
++  }
++});
++
+@@ -943 +992,4 @@ function plusMinutes(local: string, minutes: number): string {
+-/** The accessible name of a chip: label, start (with the date for an overnight session), "to", end, the tag, ", edit". */
++/**
++ * The accessible name of a chip, from its content (WP5-UX3-FIX1): the hidden "Edit", then the label, the start (with the date for an
++ * overnight session), the hidden "to" for the arrow, the end and the tag.
++ */
+@@ -946 +998 @@ function chipName(index: number, start: string, minutes: number, options: { over
+-  return `Break ${index} · ${from} to ${plusMinutes(start, minutes).slice(11)}${options.suggested ? ' suggested' : ''}, edit`;
++  return `Edit Break ${index} · ${from} to ${plusMinutes(start, minutes).slice(11)}${options.suggested ? ' suggested' : ''}`;
+@@ -1546 +1598 @@ test('phone break chips: a break at a repeated or a missing local time asks insi
+-    await expect(breakChip(fold.form, 1)).toHaveAccessibleName('Break 1 · 04/05/2026 02:30 to 02:45, edit');
++    await expect(breakChip(fold.form, 1)).toHaveAccessibleName('Edit Break 1 · 04/05/2026 02:30 to 02:45');
+@@ -1999,0 +2052,92 @@ test('phone chips at 390px: Check out lists breaks as chips with the "Break n" s
++test('Check out asks "Discard your changes?" on Cancel and Escape when its rows or the box changed, and closes at once when nothing changed (U-26)', async ({
++  page,
++  employeeSeed,
++  signInThroughUi,
++}) => {
++  const run = await seedRunning(employeeSeed, 3, [[10, 10]]);
++  const bodies = recordCheckOuts(page);
++  const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
++  const open = async () => {
++    await page.getByRole('button', { name: 'Check out' }).click();
++    const dialog = checkOutDialog(page);
++    await expect(dialog).toBeVisible();
++    await expect(dialog.locator('[data-break]')).toHaveCount(1);
++    return dialog;
++  };
++  try {
++    await signInThroughUi();
++    await expect(page.getByRole('region', { name: 'Check in and out' })).toContainText('Checked in since');
++
++    // Nothing changed: Cancel and Escape close at once, with no question.
++    let dialog = await open();
++    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
++    await expect(dialog).toHaveCount(0);
++    await expect(page.getByRole('alertdialog')).toHaveCount(0);
++    dialog = await open();
++    await page.keyboard.press('Escape');
++    await expect(dialog).toHaveCount(0);
++    await expect(page.getByRole('alertdialog')).toHaveCount(0);
++
++    // A row added: Cancel asks; "Keep editing" returns to the dialog with the added row and focus on the control that asked.
++    dialog = await open();
++    await addCheckOutBreak(page, dialog, 2, localAfter(run, 60), 15);
++    await expect(dialog.locator('[data-break]')).toHaveCount(2);
++    const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true });
++    await cancel.click();
++    await expect(discard).toBeVisible();
++    await expect(discard.getByRole('button', { name: 'Keep editing' })).toBeFocused();
++    await expect(discard.getByRole('button', { name: 'Discard' })).toBeVisible();
++    await expect(page.getByRole('alertdialog', { name: 'Save this session?' })).toHaveCount(0);
++    await discard.getByRole('button', { name: 'Keep editing' }).click();
++    await expect(discard).toHaveCount(0);
++    await expect(dialog).toBeVisible();
++    await expect(dialog.locator('[data-break]')).toHaveCount(2);
++    await expect(cancel).toBeFocused();
++
++    // Escape asks the same question; Escape inside the question means "Keep editing".
++    await page.keyboard.press('Escape');
++    await expect(discard).toBeVisible();
++    await page.keyboard.press('Escape');
++    await expect(discard).toHaveCount(0);
++    await expect(dialog).toBeVisible();
++    await expect(dialog.locator('[data-break]')).toHaveCount(2);
++    await page.keyboard.press('Escape');
++    await expect(discard).toBeVisible();
++
++    // Discard closes the dialog; nothing was sent and the session still runs with its saved break.
++    await discard.getByRole('button', { name: 'Discard' }).click();
++    await expect(discard).toHaveCount(0);
++    await expect(dialog).toHaveCount(0);
++    expect(bodies, 'nothing is sent on Discard').toEqual([]);
++    expect((await employeeSeed.dayView(run.todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(true);
++
++    // The next opening starts from the saved session again; ticking the box is a change too.
++    dialog = await open();
++    await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
++    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
++    await expect(discard).toBeVisible();
++    await discard.getByRole('button', { name: 'Discard' }).click();
++    await expect(dialog).toHaveCount(0);
++    expect(bodies).toEqual([]);
++
++    // A change that is undone is no change: removing the added row again closes at once.
++    dialog = await open();
++    await addCheckOutBreak(page, dialog, 2, localAfter(run, 60), 15);
++    await removeCheckOutBreak(page, dialog, 2);
++    await expect(dialog.locator('[data-break]')).toHaveCount(1);
++    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
++    await expect(dialog).toHaveCount(0);
++    await expect(page.getByRole('alertdialog')).toHaveCount(0);
++
++    // Check out itself stays its own explicit act: after a change it sends at once, with no notice and no confirmation.
++    dialog = await open();
++    await addCheckOutBreak(page, dialog, 2, localAfter(run, 60), 15);
++    await dialog.getByRole('button', { name: 'Check out with these breaks' }).click();
++    await expect(dialog).toHaveCount(0);
++    await expect(page.getByRole('alertdialog')).toHaveCount(0);
++    expect(bodies).toHaveLength(1);
++  } finally {
++    await employeeSeed.clearSessions(run.todayLocal);
++  }
++});
++
+@@ -2106,0 +2251,2 @@ test('partial leave 240 with kind vacation saves; the kind is required; WFH is s
++    // FIX2 item 13: the calendar-default hint is the select's description, not a loose paragraph.
++    await expect(fields.getByRole('combobox', { name: /^Category/ })).toHaveAccessibleDescription('Calendar default. Saving records it as your choice.');
+@@ -3282,0 +3429,124 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
++/* ---- WP5-UX3-FIX1: from 768 to 899px the week card scrolls sideways; keyboard focus is always fully in view ---------- */
++
++/** Where the focused control and its focus indicator lie against the visible box of its week card (viewport pixels). */
++interface FocusFit {
++  name: string;
++  inCard: boolean;
++  /** How far the focus indicator reaches outside the control: the widest outer box-shadow layer without blur, or a painted outline. */
++  reach: number;
++  /** Room between the indicator's box and each edge of the card's visible box; negative means clipped. */
++  left: number;
++  right: number;
++  top: number;
++  bottom: number;
++  scrollLeft: number;
++}
++
++const FOCUS_FIT = `(() => {
++  const el = document.activeElement;
++  if (el === null || el === document.body) return null;
++  const card = el.closest('.sheet-week');
++  const name = (el.getAttribute('aria-label') || el.textContent || el.tagName).replace(/\\s+/g, ' ').trim().slice(0, 40);
++  if (card === null) return { name, inCard: false, reach: 0, left: 0, right: 0, top: 0, bottom: 0, scrollLeft: 0 };
++  const style = getComputedStyle(el);
++  let reach = 0;
++  for (const layer of style.boxShadow === 'none' ? [] : style.boxShadow.split(/,(?![^(]*\\))/)) {
++    if (layer.includes('inset')) continue;
++    const [x = 0, y = 0, blur = 0, spread = 0] = layer.replace(/(rgba?|color)\\([^)]*\\)/g, '').trim().split(/\\s+/).map(parseFloat).filter((n) => !Number.isNaN(n));
++    if (blur === 0 && spread > 0) reach = Math.max(reach, spread + Math.max(Math.abs(x), Math.abs(y)));
++  }
++  const painted = style.outlineStyle !== 'none' && !/transparent|rgba\\([^)]*,\\s*0\\)$/.test(style.outlineColor);
++  if (painted) reach = Math.max(reach, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
++  const box = el.getBoundingClientRect();
++  const frame = card.getBoundingClientRect();
++  const left = frame.left + card.clientLeft;
++  const top = frame.top + card.clientTop;
++  return {
++    name,
++    inCard: true,
++    reach,
++    left: box.left - reach - left,
++    right: left + card.clientWidth - (box.right + reach),
++    top: box.top - reach - top,
++    bottom: top + card.clientHeight - (box.bottom + reach),
++    scrollLeft: card.scrollLeft,
++  };
++})()`;
++
++/** Half a pixel of rounding at a fractional edge is allowed. */
++const FITS = (fit: FocusFit) => Math.min(fit.left, fit.right, fit.top, fit.bottom) >= -0.5;
++
++test.describe('WP5-UX3-FIX1: from 768 to 899px every focused sheet control is fully visible in its scrolling week card', () => {
++  test.skip(({ isMobile }) => isMobile, 'The 7-column sheet is a desktop-project layout');
++  test.use({ timezoneId: LA });
++
++  test('Tab, Shift+Tab and the picker arrows at 768, 800, 820, 860 and 899: each focused control and its ring lie inside the card, words stay whole, the page never scrolls sideways', async ({
++    page,
++    privateServer,
++  }) => {
++    test.setTimeout(240_000);
++    const data = await seedLongContent(privateServer);
++    await page.setViewportSize({ width: 768, height: 900 });
++    await signInToPrivate(page, privateServer, data.person);
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    await page.getByRole('switch', { name: 'Show details' }).check();
++    await expect(page.locator('.sheet-main')).toContainText('Independence');
++    const cards = page.locator('.sheet-week');
++    const lines: string[] = [];
++    for (const width of [768, 800, 820, 860, 899]) {
++      await page.setViewportSize({ width, height: 900 });
++      for (const batch of [false, true]) {
++        if (batch) await page.getByRole('button', { name: 'Change several days' }).click();
++        await expect(page.getByRole('checkbox', { name: /^Select \d{4}-\d{2}-\d{2}$/ })).toHaveCount(batch ? 14 : 0);
++        const facts = await sheetFacts(page);
++        expect(facts.tooWide, `${width}px: words wider than their cell`).toEqual([]);
++        expect(facts.words, `${width}px: the probe measured the cells' words`).toBeGreaterThan(50);
++        expect(facts.scrollOverflow, `${width}px: the page never scrolls sideways`).toBeLessThanOrEqual(0);
++        const scrolls = await cards.first().evaluate((card) => card.scrollWidth > card.clientWidth);
++        // The label column and seven 108px columns need 850px: the card scrolls at 768 to 860, and at 899 (867px) it does not.
++        expect(scrolls, `${width}px: the week card scrolls sideways while the columns need more room than the card`).toBe(width <= 860);
++        const controls = page.locator('.sheet-week button, .sheet-week input');
++        const expected = await controls.count();
++        for (const direction of ['Tab', 'Shift+Tab'] as const) {
++          for (const card of await cards.all()) await card.evaluate((element) => element.scrollTo({ left: 0, top: 0, behavior: 'instant' }));
++          await (direction === 'Tab' ? controls.first() : controls.last()).focus();
++          // Focus from the keyboard: the first key press makes the indicator :focus-visible.
++          await page.keyboard.press('Shift');
++          let stops = 0;
++          for (let step = 0; step <= expected; step += 1) {
++            const fit = await page.evaluate<FocusFit | null>(FOCUS_FIT);
++            if (fit === null || !fit.inCard) break;
++            stops += 1;
++            expect(FITS(fit), `${width}px ${batch ? 'batch' : 'details'} ${direction}: "${fit.name}" and its ${fit.reach}px ring lie inside the card (room l ${fit.left.toFixed(1)} r ${fit.right.toFixed(1)} t ${fit.top.toFixed(1)} b ${fit.bottom.toFixed(1)}, scrollLeft ${fit.scrollLeft})`).toBe(true);
++            await page.keyboard.press(direction);
++          }
++          expect(stops, `${width}px ${direction}: every control of both week cards was reached`).toBe(expected);
++        }
++        if (batch) await page.getByRole('button', { name: 'Done' }).click();
++      }
++      // The picker of the last column of each card: Enter opens its list (focus moves into it), the arrows move; the list and its
++      // ring lie inside the card, and Escape returns focus to the trigger with the card back at its top.
++      for (const card of await cards.all()) {
++        await card.evaluate((element) => element.scrollTo({ left: 0, top: 0, behavior: 'instant' }));
++        const trigger = card.locator('.label-trigger').last();
++        await trigger.focus();
++        await page.keyboard.press('Shift');
++        const onTrigger = await page.evaluate<FocusFit | null>(FOCUS_FIT);
++        expect(onTrigger !== null && FITS(onTrigger), `${width}px: the last column's picker is fully visible: ${JSON.stringify(onTrigger)}`).toBe(true);
++        await page.keyboard.press('Enter');
++        await expect(card.getByRole('listbox')).toBeFocused();
++        for (const key of ['ArrowDown', 'ArrowDown', 'End', 'Home']) {
++          await page.keyboard.press(key);
++          const onList = await page.evaluate<FocusFit | null>(FOCUS_FIT);
++          expect(onList !== null && FITS(onList), `${width}px ${key}: the open list and its ring are inside the card: ${JSON.stringify(onList)}`).toBe(true);
++        }
++        await page.keyboard.press('Escape');
++        await expect(trigger).toBeFocused();
++        expect(await card.evaluate((element) => element.scrollTop), `${width}px: the card is back at its top once the list closes`).toBe(0);
++      }
++      lines.push(`${width}: ${await cards.first().evaluate((card) => `${card.scrollWidth}/${card.clientWidth}`)}`);
++    }
++    console.log(`FOCUS-IN-CARD ${lines.join('; ')}`);
++  });
++});
++
+@@ -3555,0 +3826,3 @@ test('the label cell is a picker: a one-entry batch preview and its commit; reco
++  // The step says "category" in its heading, its sentence and its checkbox (FIX2 item 4: no "day label" left).
++  await expect(dialog.getByText("Only the day's category changes.")).toBeVisible();
++  await expect(dialog).not.toContainText('day label');
+diff --git a/tests/e2e/hover.spec.ts b/tests/e2e/hover.spec.ts
+index 406df80..9424bc5 100644
+--- a/tests/e2e/hover.spec.ts
++++ b/tests/e2e/hover.spec.ts
+@@ -551,0 +552,43 @@ for (const situation of SITUATIONS) {
++/* ---- The sheet day columns (WP5-UX3-FIX2 item 11, AGENTS UI rule 3) ---------------------------------------- */
++
++/**
++ * A tap must not leave a tint on a sheet day column of a touch screen of 768px or more: every `.sheet-day` hover rule that paints
++ * (the column tint and the lifted column's tint) sits inside `@media (hover: hover)`. The read-only sheet's two reset rules only
++ * undo that tint and may stay outside. The browser's own parsed style sheets are read, so the check does not depend on a device.
++ */
++test('the sheet day hover rules exist only under (hover: hover); where the device can hover, a day column tints under the pointer', async ({
++  page,
++  signInThroughUi,
++}) => {
++  await signInThroughUi();
++  await expect(page.locator('[data-day]')).toHaveCount(14);
++  const rules = await page.evaluate<{ ungated: string[]; gated: string[] }>(`(() => {
++    const result = { ungated: [], gated: [] };
++    const visit = (list, hoverOnly) => {
++      for (const rule of Array.from(list)) {
++        if (rule instanceof CSSMediaRule) {
++          visit(rule.cssRules, hoverOnly || /hover:\\s*hover/.test(rule.media.mediaText));
++        } else if (rule instanceof CSSStyleRule && /\\.sheet-day[^,{]*:hover/.test(rule.selectorText) && !rule.selectorText.startsWith('.sheet-review')) {
++          (hoverOnly ? result.gated : result.ungated).push(rule.selectorText);
++        }
++      }
++    };
++    for (const sheet of Array.from(document.styleSheets)) visit(sheet.cssRules, false);
++    return result;
++  })()`);
++  expect(rules.ungated, 'sheet day hover rules outside (hover: hover)').toEqual([]);
++  expect(rules.gated.some((selector) => selector.includes('[data-lift]')), 'the lifted column tint is a gated hover rule').toBe(true);
++  expect(rules.gated.some((selector) => !selector.includes('[data-lift]') && !selector.includes('.sheet-date')), 'the day column tint is a gated hover rule').toBe(true);
++
++  if (await canHover(page)) {
++    // A day column that is neither lifted nor selected tints under the pointer and returns to rest when it leaves.
++    const day = page.locator('.sheet-day[data-day]:not([data-lift]):not(.selected):not(.nonworking)').first();
++    await page.mouse.move(0, 0);
++    const rest = await settledStyle(day, 'backgroundColor');
++    await day.hover({ position: { x: 4, y: 4 } });
++    expect(await settledStyle(day, 'backgroundColor'), 'a hovered day column differs from rest').not.toBe(rest);
++    await page.mouse.move(0, 0);
++    expect(await settledStyle(day, 'backgroundColor'), 'the day column returns to rest').toBe(rest);
++  }
++});
++
+diff --git a/tests/e2e/ot-leave.spec.ts b/tests/e2e/ot-leave.spec.ts
+index e914667..961246a 100644
+--- a/tests/e2e/ot-leave.spec.ts
++++ b/tests/e2e/ot-leave.spec.ts
+@@ -120,0 +121 @@ test('reserve, partial use, cancel the rest and reverse, with history', async ({
++  await expect(warning.getByRole('heading', { name: 'Day category and recorded use differ' })).toBeVisible();
+diff --git a/tests/e2e/settings-routes.spec.ts b/tests/e2e/settings-routes.spec.ts
+index a1ae88f..48c9c46 100644
+--- a/tests/e2e/settings-routes.spec.ts
++++ b/tests/e2e/settings-routes.spec.ts
+@@ -119,25 +119,34 @@ test('an employee sees no Administration anywhere and the page makes no /api/adm
+-test('Profile shows the display name, email, role and reporting zone, read only, with the note', async ({ page, builtServer, adminSeed, signInPageAs }, testInfo) => {
+-  const person = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Profile Person' });
+-  const personApi = await new SeedClient(builtServer.origin).signIn(person.email, person.password);
+-  const periods = await personApi.call<{ reporting_zone: string }>('GET', '/api/periods/current');
+-
+-  await signInPageAs(person, '#/settings/profile');
+-  await expect(heading(page, 'Profile')).toBeVisible();
+-  const facts = page.getByRole('region', { name: 'Your profile' });
+-  await expect(facts.locator('[data-profile="display-name"]')).toHaveText('Synthetic Profile Person');
+-  await expect(facts.locator('[data-profile="email"]')).toHaveText(person.email);
+-  await expect(facts.locator('[data-profile="role"]')).toHaveText('Employee');
+-  await expect(facts.locator('[data-profile="zone"]')).toHaveText(periods.reporting_zone);
+-  for (const label of ['Display name', 'Email', 'Role', 'Reporting zone']) await expect(facts.getByText(label, { exact: true })).toBeVisible();
+-  await expect(page.getByText('An administrator changes display names.')).toBeVisible();
+-  // Read only: nothing on the page can be edited.
+-  await expect(page.locator('main').locator('input, textarea, select')).toHaveCount(0);
+-  await expect(page.locator('main').getByRole('button')).toHaveCount(0);
+-  await page.screenshot({ path: screenshotPath(`profile-${testInfo.project.name}-synthetic.png`), fullPage: true });
+-
+-  // An administrator's Profile names the role.
+-  await (await openAccount(page)).getByRole('button', { name: 'Sign out' }).click();
+-  await signInPageAs(builtServer.credentials.admin, '#/settings/profile');
+-  await expect(heading(page, 'Profile')).toBeVisible();
+-  await expect(page.locator('[data-profile="role"]')).toHaveText('Administrator');
+-  await expect(page.locator('[data-profile="email"]')).toHaveText(builtServer.credentials.admin.email);
++// The device zone differs from the saved reporting zone (America/Los_Angeles): the Profile page must show the saved zone
++// and never this device's zone (AGENTS rule 7; WP5-UX3-FIX2 item 7, mutant M21).
++test.describe('Profile in a device zone that differs from the reporting zone', () => {
++  test.use({ timezoneId: 'Asia/Tokyo' });
++
++  test('Profile shows the display name, email, role and reporting zone, read only, with the note', async ({ page, builtServer, adminSeed, signInPageAs }, testInfo) => {
++    const person = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Profile Person' });
++    const personApi = await new SeedClient(builtServer.origin).signIn(person.email, person.password);
++    const periods = await personApi.call<{ reporting_zone: string }>('GET', '/api/periods/current');
++    expect(periods.reporting_zone, 'the saved reporting zone differs from the device zone of this test').not.toBe('Asia/Tokyo');
++
++    await signInPageAs(person, '#/settings/profile');
++    await expect(heading(page, 'Profile')).toBeVisible();
++    expect(await page.evaluate<string>('Intl.DateTimeFormat().resolvedOptions().timeZone'), 'the device zone of the page').toBe('Asia/Tokyo');
++    const facts = page.getByRole('region', { name: 'Your profile' });
++    await expect(facts.locator('[data-profile="display-name"]')).toHaveText('Synthetic Profile Person');
++    await expect(facts.locator('[data-profile="email"]')).toHaveText(person.email);
++    await expect(facts.locator('[data-profile="role"]')).toHaveText('Employee');
++    await expect(facts.locator('[data-profile="zone"]')).toHaveText(periods.reporting_zone);
++    await expect(facts.locator('[data-profile="zone"]')).not.toHaveText('Asia/Tokyo');
++    for (const label of ['Display name', 'Email', 'Role', 'Reporting zone']) await expect(facts.getByText(label, { exact: true })).toBeVisible();
++    await expect(page.getByText('An administrator changes display names.')).toBeVisible();
++    // Read only: nothing on the page can be edited.
++    await expect(page.locator('main').locator('input, textarea, select')).toHaveCount(0);
++    await expect(page.locator('main').getByRole('button')).toHaveCount(0);
++    await page.screenshot({ path: screenshotPath(`profile-${testInfo.project.name}-synthetic.png`), fullPage: true });
++
++    // An administrator's Profile names the role.
++    await (await openAccount(page)).getByRole('button', { name: 'Sign out' }).click();
++    await signInPageAs(builtServer.credentials.admin, '#/settings/profile');
++    await expect(heading(page, 'Profile')).toBeVisible();
++    await expect(page.locator('[data-profile="role"]')).toHaveText('Administrator');
++    await expect(page.locator('[data-profile="email"]')).toHaveText(builtServer.credentials.admin.email);
++  });
+diff --git a/tests/e2e/shell.spec.ts b/tests/e2e/shell.spec.ts
+index 1eb7a75..ba473b2 100644
+--- a/tests/e2e/shell.spec.ts
++++ b/tests/e2e/shell.spec.ts
+@@ -658,0 +659,94 @@ for (const role of ['employee', 'admin'] as const) {
++
++    // An entry used by keyboard closes the panel and moves focus to the heading of the page it opens (WP5-UX3-FIX2 item 1).
++    const heading = (name: string) => page.getByRole('heading', { name, level: 1 });
++    await identity.focus();
++    await page.keyboard.press('Enter');
++    await expect(panel.getByRole('link', { name: 'Profile' })).toBeFocused();
++    await page.keyboard.press('Enter');
++    await expect(page).toHaveURL(/#\/settings\/profile$/);
++    await expect(panel).toHaveCount(0);
++    await expect(heading('Profile')).toBeFocused();
++    await identity.focus();
++    await page.keyboard.press('Enter');
++    await page.keyboard.press('Tab');
++    await expect(panel.getByRole('link', { name: 'Settings' })).toBeFocused();
++    await page.keyboard.press('Enter');
++    await expect(page).toHaveURL(/#\/settings$/);
++    await expect(panel).toHaveCount(0);
++    await expect(heading('Settings')).toBeFocused();
++    if (role === 'admin') {
++      // Administration loads on demand: focus lands on its heading once the screen is there.
++      await identity.focus();
++      await page.keyboard.press('Enter');
++      await panel.getByRole('link', { name: 'Administration' }).focus();
++      await page.keyboard.press('Enter');
++      await expect(page).toHaveURL(/#\/settings\/admin$/);
++      await expect(heading('Administration')).toBeFocused();
++    }
++
++    // The entry of the page that is already shown changes no route: focus returns to the identity button.
++    const current = role === 'admin' ? 'Administration' : 'Settings';
++    await identity.focus();
++    await page.keyboard.press('Enter');
++    await panel.getByRole('link', { name: current }).focus();
++    await expect(panel.getByRole('link', { name: current })).toHaveAttribute('aria-current', 'page');
++    await page.keyboard.press('Enter');
++    await expect(panel).toHaveCount(0);
++    await expect(identity).toHaveAttribute('aria-expanded', 'false');
++    await expect(identity).toBeFocused();
++
++    // A pointer user sees no change: the heading takes focus, but not a visible focus ring.
++    await identity.click();
++    await panel.getByRole('link', { name: 'Profile' }).click();
++    await expect(page).toHaveURL(/#\/settings\/profile$/);
++    await expect(panel).toHaveCount(0);
++    await expect(heading('Profile')).toBeFocused();
++    expect(await page.evaluate<boolean>("document.activeElement?.matches(':focus-visible') ?? false"), 'no focus ring after a pointer press').toBe(false);
++  });
++}
++
++/**
++ * The phone's More panel follows the same rule as the desktop menu (WP5-UX3-FIX2 item 1): an entry used by keyboard closes the
++ * panel and moves focus to the heading of the new page; the entry of the page already shown returns focus to More.
++ */
++for (const role of ['employee', 'admin'] as const) {
++  test(`the More panel from the keyboard: an entry moves focus to the new page's heading, the shown page's entry returns it to More (${role})`, async ({
++    page,
++    builtServer,
++    signInPageAs,
++  }) => {
++    await page.setViewportSize({ width: 390, height: 844 });
++    await signInPageAs(builtServer.credentials[role], '#/timesheet');
++    await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
++    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++    const panel = page.locator('#more-panel');
++    const heading = (name: string) => page.getByRole('heading', { name, level: 1 });
++    const useEntry = async (name: string) => {
++      await more.focus();
++      await page.keyboard.press('Enter');
++      await expect(panel).toBeVisible();
++      await panel.getByRole('link', { name, exact: true }).focus();
++      await page.keyboard.press('Enter');
++      await expect(panel).toHaveCount(0);
++    };
++
++    await useEntry('Profile');
++    await expect(page).toHaveURL(/#\/settings\/profile$/);
++    await expect(heading('Profile')).toBeFocused();
++    await useEntry('Settings');
++    await expect(page).toHaveURL(/#\/settings$/);
++    await expect(heading('Settings')).toBeFocused();
++    await useEntry('Import');
++    await expect(page).toHaveURL(/#\/import$/);
++    await expect(heading('Import and opening balance')).toBeFocused();
++    if (role === 'admin') {
++      await useEntry('Administration');
++      await expect(page).toHaveURL(/#\/settings\/admin$/);
++      await expect(heading('Administration')).toBeFocused();
++    }
++
++    // The page already shown: the route does not change, so focus returns to More and the panel is closed.
++    const current = role === 'admin' ? 'Administration' : 'Import';
++    await useEntry(current);
++    await expect(more).toHaveAttribute('aria-expanded', 'false');
++    await expect(more).toBeFocused();
+diff --git a/tests/e2e/timesheet.spec.ts b/tests/e2e/timesheet.spec.ts
+index ff58e33..5c5c356 100644
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -458,0 +459,7 @@ test('batch edit: a stale version shows the reload message naming the date', asy
++  // A known start (WP5-UX3-FIX1): "free" means no session, but an earlier test of this worker (same server and account) may have
++  // saved a day entry on this date, so the day is put back to a plain worked day before the page loads it. The UI's Sick and the
++  // other session's Vacation are then both real changes from it.
++  await employeeSeed.resetDay(workDate);
++  const loaded = await employeeSeed.dayView(workDate);
++  expect(loaded.category, 'the day starts as a plain worked day').toBe('Worked');
++  expect(loaded.entry, 'the day has the entry the page loads').not.toBeNull();
+@@ -469,2 +476,3 @@ test('batch edit: a stale version shows the reload message naming the date', asy
+-  // Another session changes the same day between preview and commit.
+-  await employeeSeed.commitCategory(workDate, 'Vacation', null);
++  // Another session changes the same day between preview and commit: it reads the day's current version, as a client does.
++  await employeeSeed.commitCategory(workDate, 'Vacation', (await employeeSeed.dayView(workDate)).entry?.version ?? null);
++  expect((await employeeSeed.dayView(workDate)).entry?.version, 'the other session moved the version past the one the page loaded').not.toBe(loaded.entry?.version);
+@@ -735,0 +744,4 @@ interface LiftLook {
++  /** The column's `::before` layer, which casts the shadow of a column in a run (WP5-UX3-FIX1). */
++  layer: { content: string; boxShadow: string; position: string; zIndex: string; pointerEvents: string; top: string; right: string; bottom: string; left: string };
++  /** The column's --lift-clip, as computed (the reach of the run layer is twice it). */
++  liftClip: string;
+@@ -740,0 +753 @@ async function readLook(column: Locator): Promise<LiftLook> {
++    const before = element.ownerDocument.defaultView?.getComputedStyle(element, '::before');
+@@ -741,0 +755,12 @@ async function readLook(column: Locator): Promise<LiftLook> {
++      layer: {
++        content: before?.content ?? '',
++        boxShadow: before?.boxShadow ?? '',
++        position: before?.position ?? '',
++        zIndex: before?.zIndex ?? '',
++        pointerEvents: before?.pointerEvents ?? '',
++        top: before?.top ?? '',
++        right: before?.right ?? '',
++        bottom: before?.bottom ?? '',
++        left: before?.left ?? '',
++      },
++      liftClip: style?.getPropertyValue('--lift-clip').trim() ?? '',
+@@ -780 +805,6 @@ const RUN_LOOK = {
+-/** A lifted column: raised by --lift-y, casting --elev-lift, above its neighbours, with the corners and the clip of its run position. */
++/**
++ * A lifted column: raised by --lift-y, casting --elev-lift, above its neighbours, with the corners and the clip of its run position.
++ * A lone column casts the shadow itself. A column of a run (WP5-UX3-FIX1) casts it from its `::before` layer, behind its cells,
++ * whose box reaches twice --lift-clip past each inner edge (under the lifted neighbour, where the clip cuts it), so the shadow at
++ * an inner join is the full shadow of one long box.
++ */
+@@ -781,0 +812 @@ async function expectLifted(page: Page, look: LiftLook, run: keyof typeof RUN_LO
++  const elevLift = await tokenShadow(page, '--elev-lift');
+@@ -784 +814,0 @@ async function expectLifted(page: Page, look: LiftLook, run: keyof typeof RUN_LO
+-  expect(look.boxShadow, `${label}: casts --elev-lift`).toBe(await tokenShadow(page, '--elev-lift'));
+@@ -787,0 +818,19 @@ async function expectLifted(page: Page, look: LiftLook, run: keyof typeof RUN_LO
++  if (run === 'single') {
++    expect(look.boxShadow, `${label}: casts --elev-lift`).toBe(elevLift);
++    expect(look.layer.content, `${label}: no shadow layer`).toBe('none');
++    return;
++  }
++  expect(look.boxShadow, `${label}: the column itself casts no shadow in a run`).toBe('none');
++  const reach = `${-2 * parseFloat(look.liftClip)}px`;
++  expect(look.liftClip, `${label}: --lift-clip`).toMatch(/^\d+(\.\d+)?px$/);
++  expect(look.layer, `${label}: the run layer casts --elev-lift behind the cells, reaching past each inner edge`).toEqual({
++    content: '""',
++    boxShadow: elevLift,
++    position: 'absolute',
++    zIndex: '-1',
++    pointerEvents: 'none',
++    top: '0px',
++    bottom: '0px',
++    left: run === 'start' ? '0px' : reach,
++    right: run === 'end' ? '0px' : reach,
++  });
+@@ -800,0 +850,22 @@ async function paintedWithin(page: Page, [x0, x1]: [number, number], [y0, y1]: [
++/**
++ * Another day of the week band of `workDate` (WP5-UX3-FIX1): a column of the same week grid, so its box top is the flat top a
++ * lift is measured from, whatever the weekday of today. A free workday of that band when there is one, otherwise any other day
++ * of the band except today (its column carries the Today layer). A band is a Monday-to-Sunday week of the sheet, as the
++ * sheet groups it; the Monday is calendar arithmetic on the server's dates, not a clock read.
++ */
++async function bandNeighbour(employeeSeed: SeedClient, workDate: string): Promise<string> {
++  const { dates, todayLocal } = await shownPeriod(employeeSeed);
++  expect(dates, `${workDate} is on the shown sheet`).toContain(workDate);
++  const mondayOf = (date: string) => {
++    const day = new Date(`${date}T00:00:00Z`);
++    day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
++    return day.toISOString().slice(0, 10);
++  };
++  const band = dates.filter((date) => mondayOf(date) === mondayOf(workDate));
++  const others = band.filter((date) => date !== workDate && date !== todayLocal);
++  const free = await employeeSeed.displayedPeriodFreeWorkdays();
++  const neighbour = others.find((date) => free.includes(date)) ?? others[0] ?? '';
++  expect(neighbour, `another day of the week band of ${workDate} (${band.join(', ')})`).not.toBe('');
++  return neighbour;
++}
++
+@@ -815 +886,3 @@ test('the day open in the Day editor is a lifted column with an inset 1px accent
+-  const [first = '', second = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
++  const [first = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
++  // The flat column the raise is measured against lies in the same week band (grid) as the open day, on every day of the year.
++  const second = await bandNeighbour(employeeSeed, first);
+@@ -866 +939,3 @@ test('the day open in the Day editor is a lifted column with an inset 1px accent
+-      // The lifted column stands 3px higher than its neighbour (the raise, measured on the boxes).
++      // The lifted column stands 3px higher than its neighbour (the raise, measured on the boxes) in the same week card.
++      const sameCard = await neighbour.evaluate((element, date) => element.closest('.sheet-week') === element.ownerDocument.querySelector(`[data-day="${date}"]`)?.closest('.sheet-week'), first);
++      expect(sameCard, 'the neighbour is in the week card of the open day').toBe(true);
+@@ -1414,0 +1490,15 @@ test('lifted columns form runs: one shadow around the group, 4px corners on the
++  // WP5-UX3-FIX1: the shadow cast under the run is continuous across each inner join. Two CSS px under the run's bottom edge (whole
++  // pixels, so no fractional edge matters), the pixel at the join is as dark as the shadow 14px to either side; the notch the old
++  // per-column shadows left there was about 21/255 lighter. The shadow itself is there: the join is darker than the same row under
++  // the middle of Thursday, the gap day (no lifted shadow reaches 70px into it).
++  const luminance = ([r, g, b]: Rgba) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
++  const shadowRow = Math.ceil(mondayBoxes.host.bottom) + 2;
++  const gap = (await columnBoxes(column(thursday))).host;
++  const plain = luminance(await paintedPixel(page, Math.round((gap.left + gap.right) / 2), shadowRow));
++  for (const join of [mondayBoxes.host.right, (await columnBoxes(column(tuesday))).host.right]) {
++    const x = Math.round(join);
++    const [atJoin, before, after] = [await paintedPixel(page, x, shadowRow), await paintedPixel(page, x - 14, shadowRow), await paintedPixel(page, x + 14, shadowRow)];
++    const sides = (luminance(before) + luminance(after)) / 2;
++    expect(Math.abs(luminance(atJoin) - sides), `under the join at x ${join.toFixed(2)}: ${luminance(atJoin).toFixed(1)} against ${sides.toFixed(1)} beside it`).toBeLessThanOrEqual(6);
++    expect(luminance(atJoin), `under the join at x ${join.toFixed(2)}: the run's shadow (${luminance(atJoin).toFixed(1)}) against the gap day's row (${plain.toFixed(1)})`).toBeLessThan(plain - 6);
++  }
+@@ -1506,0 +1597,2 @@ test('the rows are named Category and Status; a picker is named by every visible
++      // The text nodes as axe reads the visible text (it joins them without adding spaces between block elements).
++      text: button.querySelector('.label-trigger-text')?.textContent ?? '',
+@@ -1511 +1603,2 @@ test('the rows are named Category and Status; a picker is named by every visible
+-    // A cell without a label shows only its lines; the name says "not set" in the label's place.
++    // A cell without a label shows only its lines; the name says "not set" in the label's place. The lines are joined by a space,
++    // and the button's text separates them by a space too, so the visible words are one run inside the name (WP5-UX3-FIX1).
+@@ -1513 +1606,3 @@ test('the rows are named Category and Status; a picker is named by every visible
+-    expect(trigger.name, `picker name of ${trigger.date}`).toBe(`Category for ${trigger.date}: ${parts.join(', ')}`);
++    expect(trigger.name, `picker name of ${trigger.date}`).toBe(`Category for ${trigger.date}: ${parts.join(' ')}`);
++    expect(trigger.text, `the text of the picker of ${trigger.date}`).toBe(trigger.lines.join(' '));
++    expect(trigger.name, `the name of ${trigger.date} contains its visible text`).toContain(trigger.text);
+diff --git a/tests/e2e/today.spec.ts b/tests/e2e/today.spec.ts
+index e740e89..48388a7 100644
+--- a/tests/e2e/today.spec.ts
++++ b/tests/e2e/today.spec.ts
+@@ -824,0 +825,50 @@ test('the Day editor chip says "in progress" for today in the five window days a
++// WP5-UX3-FIX2 item 3 (G-5 b): the chip is decided by the day's own period from the server's periods, however the day was opened.
++test('the Day editor chip reads the pill of the period of its own day, opened through "Open a day", the sheet or Today', async ({
++  page,
++  employeeSeed,
++  signInThroughUi,
++}, testInfo) => {
++  if (testInfo.project.name === 'desktop') await page.setViewportSize({ width: 1440, height: 800 });
++  const periods = await employeeSeed.periodsCurrent();
++  const today = periods.today_local;
++  await landOn(page, signInThroughUi);
++  const chip = editor(page).locator('[data-chip="period"]');
++  // The sheet shows the opening (current) period throughout the "Open a day" part, so the days below are outside or inside it.
++  await expect(periodName(page)).toHaveText(rangeText(periods.current));
++  const openADay = async (date: string, expected: string) => {
++    await page.getByLabel('Open a day').fill(date);
++    await page.getByRole('button', { name: 'Open day', exact: true }).click();
++    await expect(editor(page)).toHaveAttribute('data-day-editor', date);
++    await expect(chip, `${date}: chip of a day opened through Open a day`).toHaveText(expected);
++    await editor(page).getByRole('button', { name: 'Close', exact: true }).click();
++    await expect(editor(page)).toHaveCount(0);
++  };
++  const dayAfter = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
++
++  // A day of the period before the opening one is old; a day of the opening period is current.
++  await openADay(dayAfter(periods.current.period_start, -1), 'old period');
++  await openADay(periods.current.period_start, 'current period');
++  // The period that contains today: "in progress" in the five window days (the opening period is the ended one then), else the current one.
++  await openADay(periods.in_progress.period_start, isWindow(periods) ? 'in progress' : 'current period');
++  await openADay(periods.in_progress.period_end, isWindow(periods) ? 'in progress' : 'current period');
++  await openADay(today, isWindow(periods) ? 'in progress' : 'current period');
++  // The period after the one in progress is future, in both branches.
++  await openADay(dayAfter(periods.in_progress.period_end, 1), 'future period');
++
++  if (isWindow(periods)) {
++    // Opened from the sheet of that period (Today), and again through Open a day while that period is shown: the same word.
++    await todayButton(page).click();
++    await expectShown(page, periods.in_progress, today);
++    await dayButton(page, periods.in_progress.period_end).click();
++    await expect(chip).toHaveText('in progress');
++    await editor(page).getByRole('button', { name: 'Close', exact: true }).click();
++    await expect(editor(page)).toHaveCount(0);
++    await openADay(periods.in_progress.period_start, 'in progress');
++    // A day of the ended period, opened while the sheet shows the period in progress, still reads "current period".
++    await openADay(periods.current.period_end, 'current period');
++  } else {
++    expect(periods.in_progress.payroll_date, 'outside the window the period with today is the current one').toBe(periods.current.payroll_date);
++    await expect(page.locator('.chip-in-progress, .badge.in-progress')).toHaveCount(0);
++  }
++});
++

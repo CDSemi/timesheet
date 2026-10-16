@@ -1,0 +1,18 @@
+# Mandatory checks on the clean export (real clock). Sequential.
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+O=$T/out
+cd $T/export
+s() { echo "$1 start $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $O/main-times.txt; }
+f() { echo "$1 end $(date -u +%Y-%m-%dT%H:%M:%SZ) exit $2" >> $O/main-times.txt; }
+s typecheck; npm run typecheck > $O/10-typecheck.txt 2>&1; r=$?; f typecheck $r
+s lint; npm run lint > $O/11-lint.txt 2>&1; r=$?; f lint $r
+s test1; npm test > $O/12-npmtest-1.txt 2>&1; r=$?; f test1 $r
+s test2; npm test > $O/12-npmtest-2.txt 2>&1; r=$?; f test2 $r
+s build; npm run build > $O/13-build.txt 2>&1; r=$?; f build $r
+s ac13; node node_modules/vitest/vitest.mjs run tests/integration/ac13-two-week.test.ts > $O/14-ac13.txt 2>&1; r=$?; f ac13 $r
+export E2E_SCREENSHOT_DIR="$TW\\shots-real"
+bash $T/load.sh "e2e-real start"
+s e2e-real; node node_modules/@playwright/test/cli.js test --output="$TW\\pw-real" > $O/15-e2e-real.txt 2>&1; r=$?; f e2e-real $r
+bash $T/load.sh "e2e-real end"
+echo main-done > $O/main.done

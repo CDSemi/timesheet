@@ -1,0 +1,92 @@
+import { appendFileSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { addDays, diffDays } from '../../src/domain/dates.ts';
+import { expect, newPerson, test } from './fixtures.ts';
+
+/*
+ * WP5-UX3-AUDIT-B task-local probe (never part of the repository): the server's figures for equivalent requests. The final request
+ * bodies captured from both UIs (req-base.jsonl, req-target.jsonl) are sent again, each to a fresh synthetic person, and the day
+ * calculation, the deficit, the sheet's day state, the review payload's day and its unresolved items, the period totals and the
+ * sign-off state are recorded. Run on a643794 and on the target; the comparison is done outside.
+ */
+const OUT = process.env.AUDB_OUT ?? '';
+const BUILD = process.env.AUDB_BUILD ?? 'unknown';
+const REASON = 'audit probe reason';
+const ANCHOR = '2026-10-02';
+
+function payrollDateOf(date: string): string {
+  // Periods run Monday to Sunday over two weeks and are paid on the Friday five days after their end, every 14 days from the anchor.
+  const steps = Math.ceil(diffDays(addDays(date, 5), ANCHOR) / 14);
+  return addDays(ANCHOR, steps * 14);
+}
+
+function strip(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(strip);
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) {
+      if (key === 'id' || key.endsWith('_id') || key === 'version' || key.endsWith('_at') || key.endsWith('_utc_recorded')) continue;
+      out[key] = strip(item);
+    }
+    return out;
+  }
+  return value;
+}
+
+interface Captured {
+  case: string;
+  date?: string;
+  writes?: Array<{ method: string; path: string; status: number; body: Record<string, unknown> }>;
+}
+
+test('figures for the captured request bodies', async ({ adminSeed, builtServer, isMobile }) => {
+  test.skip(isMobile, 'Desktop project only');
+  test.setTimeout(600_000);
+  for (const source of ['base', 'target'] as const) {
+    const lines = readFileSync(join(OUT, `req-${source}.jsonl`), 'utf8').split('\n').filter((line) => line.trim() !== '');
+    for (const line of lines) {
+      const item = JSON.parse(line) as Captured;
+      if (!/^[KE]\d/.test(item.case) || item.date === undefined) continue;
+      const ok = (item.writes ?? []).filter((w) => w.status === 200 || w.status === 201);
+      const last = ok.at(-1);
+      if (last === undefined) continue;
+      const body: Record<string, unknown> = { ...last.body };
+      delete body.expected_version;
+      if (body.reason === undefined) body.reason = REASON;
+      const who = await newPerson(adminSeed, builtServer, { signature: 'none' });
+      const { todayLocal } = await who.api.today();
+      // The current-period case needs no reason; an old one does. A reason is accepted either way.
+      await who.api.call('POST', `/api/days/${item.date}/sessions`, body, 201);
+      const day = await who.api.call<Record<string, unknown>>('GET', `/api/days/${item.date}`);
+      const payroll = payrollDateOf(item.date);
+      const sheet = await who.api.call<{ days: Array<Record<string, unknown>>; totals: unknown; timesheet: unknown }>('GET', `/api/timesheets/${payroll}`);
+      const review = await who.api.call<{ payload: { days?: Array<Record<string, unknown>>; unresolved_inputs?: Array<Record<string, unknown>>; totals?: unknown; ot_proposals?: unknown; deficit_proposals?: unknown } }>(
+        'GET',
+        `/api/timesheets/${payroll}/review`,
+      );
+      const sheetDay = sheet.days.find((d) => d.work_date === item.date) ?? null;
+      const reviewDay = (review.payload.days ?? []).find((d) => d.work_date === item.date) ?? null;
+      const record = {
+        server: BUILD,
+        source,
+        case: item.case,
+        date: item.date,
+        payroll,
+        todayLocal,
+        calculation: strip(day.calculation),
+        calculation_error: day.calculation_error,
+        deficit: day.deficit_minutes,
+        sheetDay: strip({ calculation: sheetDay?.calculation, deficit_minutes: sheetDay?.deficit_minutes, attendance_expected: sheetDay?.attendance_expected }),
+        sheetTotals: sheet.totals,
+        sheetState: strip(sheet.timesheet),
+        reviewDay: strip(reviewDay),
+        unresolved: strip((review.payload.unresolved_inputs ?? []).filter((u) => u.work_date === item.date)),
+        reviewTotals: strip(review.payload.totals ?? null),
+        otProposals: strip(review.payload.ot_proposals ?? null),
+        deficitProposals: strip(review.payload.deficit_proposals ?? null),
+      };
+      if (OUT !== '') appendFileSync(join(OUT, `figures-${BUILD}.jsonl`), `${JSON.stringify(record)}\n`);
+      expect(record.calculation).not.toBeUndefined();
+    }
+  }
+});

@@ -1,0 +1,18 @@
+# Usage: bash run-mutants.sh <id> [<id> ...]   Each mutant: apply, client build, full vitest, day-editor.spec.ts (desktop), revert.
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+O=$T/out
+M=$T/mut
+for id in "$@"; do
+  {
+    echo "=== $id $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    "$PY" -I $T/mutate.py $T/mutants.json $M $T/export apply $id || { echo "apply failed"; continue; }
+    (cd $M && npm run build:client > $O/60-$id-build.txt 2>&1; echo "build exit $?")
+    (cd $M && node node_modules/vitest/vitest.mjs run > $O/60-$id-unit.txt 2>&1; echo "unit exit $? $(grep -E '^ +Tests ' $O/60-$id-unit.txt)")
+    (cd $M && node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts --project=desktop --output="$TW\\pw-mut-$id" > $O/60-$id-e2e.txt 2>&1; echo "e2e desktop exit $? $(grep -E '^ +[0-9]+ (passed|failed|flaky)' $O/60-$id-e2e.txt | tr '\n' ' ')")
+    grep -E '^\s+[0-9]+\) \[' $O/60-$id-e2e.txt | sed 's/\x1b\[[0-9;]*m//g' | cut -c1-200
+    grep -E 'FAIL |×' $O/60-$id-unit.txt | sed 's/\x1b\[[0-9;]*m//g' | cut -c1-200
+    "$PY" -I $T/mutate.py $T/mutants.json $M $T/export revert $id
+  } >> $O/60-mutants.txt 2>&1
+done
+echo mutants-done >> $O/60-mutants.txt

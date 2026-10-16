@@ -27,8 +27,9 @@ import { policyOn } from './sessionModel.ts';
 
 /**
  * Check out with the break rows of the session dialog (WP5-UX3-T09, owner decision U-24; `BreakRows`, the "Break n" sub-dialog and
- * the T06 model) and the E-1 rules of Check out (R-01, R-02): an empty list with "Confirm no breaks taken" unticked omits `breaks`,
- * so the session is checked out with its breaks not confirmed; listed rows or the ticked box confirm the breaks and replace the
+ * the T06 model) and the E-1 rules of Check out (R-01, R-02): an empty list with "Confirm no breaks taken" unticked checks out with
+ * the breaks not confirmed (it omits `breaks` when the session had no saved row; when the person removed every saved row it sends the
+ * empty unconfirmed list, which replaces them, and the dialog says so); listed rows or the ticked box confirm the breaks and replace the
  * saved rows (`buildCheckOutDialogRequest`). Check out is its own explicit act: the submit button says which of the three it does,
  * and there is neither the "No breaks listed" notice nor a second confirmation. Leaving without checking out (Cancel, Escape and the
  * browser's close request) asks "Discard your changes?" when the rows or the box changed (owner decision U-26, as in the session
@@ -101,6 +102,8 @@ export function ClockOutDialog({
   const subRow = subIndex < 0 ? undefined : draft.rows[subIndex];
   const reasonMissing = reasonNeeded && reason.trim() === '';
   const submitLabel = draft.noBreaks ? 'Check out, no breaks taken' : draft.rows.length > 0 ? 'Check out with these breaks' : 'Check out, breaks unconfirmed';
+  // The dialog opened with saved rows and every one was removed (box unticked): Check out sends the empty unconfirmed list, which replaces them.
+  const removedSaved = session.breaks.length > 0 && draft.rows.length === 0 && !draft.noBreaks;
 
   function withoutRowError(key: string) {
     if (!rowErrors.has(key)) return;
@@ -273,6 +276,11 @@ export function ClockOutDialog({
               withoutRowError(key);
             }}
           />
+          {removedSaved && (
+            <p className="muted hint" role="status" data-checkout-note="removed-saved">
+              The saved breaks you removed are deleted at Check out. Breaks stay unconfirmed and OT for the day stays pending.
+            </p>
+          )}
         </section>
         {reasonNeeded && (
           <label>

@@ -1,22 +1,28 @@
 # WP5-UX3-AUDIT-INT dispatch brief (integration pass)
 
 - Mission/task: timesheet-software-readiness / WP5-UX3-AUDIT-INT; package WP5; kind audit;
-  attempt 1; depends on WP5-UX3-GATE (PASS) and on WP5-UX3-AUDIT-A and WP5-UX3-AUDIT-B (both
-  PASS); fresh context; this is the audit whose PASS re-accepts WP5 after UI change round 3.
+  attempt 1; depends on WP5-UX3-REGATE (PASS) and on WP5-UX3-AUDIT-A and WP5-UX3-AUDIT-B
+  (both PASS); fresh context; this is the audit whose PASS re-accepts WP5 after UI change
+  round 3. WP5-UX3-GATE attempt 1 on cecfceb failed; the fix round (WP5-UX3-FIX1,
+  WP5-UX3-SWEEP, WP5-UX3-FIX2) and the regate are part of what you integrate.
 - Profile/routing: timesheet-auditor, requested opus/xhigh, no override. Routing: size M,
   risk M, novelty no. Task record in English; review pair
   `handoff/delivery/WP5_UX3_REVIEW_INT.md` and `.vi.md`.
 - Author separation: you did not write any WP5-UX3 task and you are neither the area A nor
   the area B auditor.
-- Target: `reviewed_commit` = cecfceb61c7f15216c8f188e8b7059c9f075247d with the gate digest
-  29ac25945fbefa0c86f28aa9c8537e6d2ccd341a161ab70bc7bfc0acf3ff15e7 (833 files; the same as
-  both area audits). Record HEAD, the digest before and after and `reviewed_commit`.
+- Target: `reviewed_commit` = 7ce4e95a0c4477374e981132d93b11aedab2e384 with the regate
+  digest 262138e0c94c90dc0287e6de87e69f2aabfa68d3bd7bdb6262322c1e2b8f0191 (833 files; the
+  same as both area audits). Record HEAD, the digest before and after and
+  `reviewed_commit`.
 
 ## Scope
 
-1. Both area reviews and the gate record: the same commit and digest; every finding closed
-   or accepted as an optional risk with a reason; no area left unaudited (map every owner item
-   U-01..U-27, N-1, N-2 and every answer G-1..G-5, Q6 to the area that judged it).
+1. Both area reviews and the regate record: the same commit and digest; every finding
+   closed or accepted as an optional risk with a reason; no area left unaudited (map every
+   owner item U-01..U-27, N-1, N-2, every answer G-1..G-5, Q6 and the 24-hour chip answer to
+   the area that judged it); every attempt-1 gate FAIL reason and every sweep finding 1-13
+   closed, justified (the account-menu target-size item) or accepted (finding 12) with an
+   area verdict.
 2. Cross-area behaviour, by your own probes: the floating editor at 1280 with the session
    dialog, a sub-dialog and a confirmation stacked (Escape order, focus returns, inert page);
    the account menu while the editor is open (1366, non-modal) and on a phone; a shared view
