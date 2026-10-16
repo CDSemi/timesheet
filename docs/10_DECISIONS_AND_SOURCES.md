@@ -113,6 +113,10 @@ Basis: WP2-PLAN section E; none changes a confirmed requirement.
 
 - R-05 applied to corrections: a correction that raises a deficit debit is a new debit of the increase. The increase is checked against the available balance (`canDebit`); when the balance cannot cover it, the increase stays pending with no ledger entry (no silent overdraft). A correction that lowers a posted credit after it was spent is still kept and flagged for reconciliation (R-06, LG-08), because it states a historical fact. This applies the existing R-05 and R-06 and changes no confirmed requirement. Source: WP2-ADV-REVIEW (ADV-A-02), task WP2-ADVFIX.
 
+## Owner decision — 2026-10-15 (UI change round 3, style)
+
+- U-01 and G-1 (b): a modern, friendly business style replaces the industrial direction, and the week sheets are square. The round-3 token system in document 04 ("Visual standard") replaces the E-8 radius and motion values: the 4px radius becomes the radius scale (6px, 8px, 12px, pills; week sheets and the sheet footer 0; lifted columns 4px) and the 300 ms ease-out transition on all properties becomes one transition token with 180 ms standard easing on listed properties (never `all`). E-8 stays as history, and its other half stays in force: plain CSS and custom properties, no framework. The AGENTS.md section "Frontend and UI/UX standards" (task WP5-UX3-GOV) carries the rule for agents. Source: WP5-UX3-PLAN, task WP5-UX3-T01.
+
 ## Coordinator decision — WP2-T08 calendar reassignment finding (2026-10-03, reversible; the owner may veto)
 
 - A calendar change through `PATCH /api/admin/users/:id` is refused with 409 `calendar_in_use` while the user has any timesheet, day entry, session, ledger entry or leave request. A refused edit writes nothing (a combined PATCH applies none of its fields) and creates no audit event. The calendar may change only for an account without such data. Display name and role edits are unaffected.

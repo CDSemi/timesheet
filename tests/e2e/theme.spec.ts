@@ -15,8 +15,8 @@ import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
 test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
 
 const STORAGE_KEY = 'timesheet.theme';
-/** The computed `--bg` of the two themes (body background): #12161c and #f6f7f9. */
-const BG = { dark: 'rgb(18, 22, 28)', light: 'rgb(246, 247, 249)' } as const;
+/** The computed `--bg` of the two themes (body background): #0e1217 and #edf0f5 (round 3, WP5-UX3-T01; was #12161c and #f6f7f9). */
+const BG = { dark: 'rgb(14, 18, 23)', light: 'rgb(237, 240, 245)' } as const;
 
 type Theme = 'light' | 'dark';
 
@@ -166,7 +166,7 @@ for (const media of ['light', 'dark'] as const) {
     await page.screenshot({ path: screenshotPath(`t01-theme-${opposite}-${testInfo.project.name}-synthetic.png`), animations: 'disabled' });
     const chosen = await themeState(page);
     expect(chosen.stored).toBe(opposite);
-    expect(chosen.token).toBe(opposite === 'dark' ? '#12161c' : '#f6f7f9');
+    expect(chosen.token).toBe(opposite === 'dark' ? '#0e1217' : '#edf0f5');
 
     // The choice persists after a reload (still signed in: the session cookie).
     await page.reload();

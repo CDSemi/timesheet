@@ -279,22 +279,24 @@ export function TimesheetSheet({
         ),
       )}
 
-      <div className="sheet-foot">
-        <div className="foot-notes">
-          {total.pendingNote !== null && <p className="pending-note">{total.pendingNote}</p>}
-          <p className="muted hint">Provisional: OT is added to your balance when the period is finalized.</p>
-          <Legend today />
+      <div className="sheet-footer">
+        <div className="sheet-foot">
+          <div className="foot-notes">
+            {total.pendingNote !== null && <p className="pending-note">{total.pendingNote}</p>}
+            <p className="muted hint">Provisional: OT is added to your balance when the period is finalized.</p>
+            <Legend today />
+          </div>
+          <div className="ot-total" role="group" aria-label="Overtime total">
+            <span className="ot-total-label">Overtime Total :</span>
+            <span className="ot-total-value mono" data-ot-total={view.totals.provisional_credited_minutes}>
+              {total.text}
+            </span>
+            <span className="ot-total-unit">h:mm</span>
+          </div>
         </div>
-        <div className="ot-total" role="group" aria-label="Overtime total">
-          <span className="ot-total-label">Overtime Total :</span>
-          <span className="ot-total-value mono" data-ot-total={view.totals.provisional_credited_minutes}>
-            {total.text}
-          </span>
-          <span className="ot-total-unit">h:mm</span>
-        </div>
-      </div>
 
-      {signatures && <SignatureStrip payrollDate={period.payroll_date} finalization={finalization} reportingZone={view.reporting_zone} />}
+        {signatures && <SignatureStrip payrollDate={period.payroll_date} finalization={finalization} reportingZone={view.reporting_zone} />}
+      </div>
     </article>
   );
 }
@@ -355,27 +357,29 @@ export function ReviewSheet({
         ),
       )}
 
-      <div className="sheet-foot">
-        <div className="foot-notes">
-          {total.pendingNote !== null && <p className="pending-note">{total.pendingNote}</p>}
-          <Legend today={false} />
-          <dl className="facts review-totals" aria-label="Period totals from the server">
-            <div data-total="credited">
-              <dt>OT credit if signed now</dt>
-              <dd data-minutes={totalCredited}>{minutesText(totalCredited)}</dd>
-            </div>
-            <div data-total="pending">
-              <dt>Days pending OT evidence</dt>
-              <dd>{pendingDays}</dd>
-            </div>
-          </dl>
-        </div>
-        <div className="ot-total" role="group" aria-label="Overtime total">
-          <span className="ot-total-label">Overtime Total :</span>
-          <span className="ot-total-value mono" data-ot-total={totalCredited}>
-            {total.text}
-          </span>
-          <span className="ot-total-unit">h:mm</span>
+      <div className="sheet-footer">
+        <div className="sheet-foot">
+          <div className="foot-notes">
+            {total.pendingNote !== null && <p className="pending-note">{total.pendingNote}</p>}
+            <Legend today={false} />
+            <dl className="facts review-totals" aria-label="Period totals from the server">
+              <div data-total="credited">
+                <dt>OT credit if signed now</dt>
+                <dd data-minutes={totalCredited}>{minutesText(totalCredited)}</dd>
+              </div>
+              <div data-total="pending">
+                <dt>Days pending OT evidence</dt>
+                <dd>{pendingDays}</dd>
+              </div>
+            </dl>
+          </div>
+          <div className="ot-total" role="group" aria-label="Overtime total">
+            <span className="ot-total-label">Overtime Total :</span>
+            <span className="ot-total-value mono" data-ot-total={totalCredited}>
+              {total.text}
+            </span>
+            <span className="ot-total-unit">h:mm</span>
+          </div>
         </div>
       </div>
     </article>

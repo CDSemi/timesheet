@@ -187,7 +187,7 @@ for (const scenario of [
     await signInThroughUi();
     await expectLogo(page);
     const painted = scenario.stored ?? scenario.media;
-    await expect(page.locator('body')).toHaveCSS('background-color', painted === 'dark' ? 'rgb(18, 22, 28)' : 'rgb(246, 247, 249)');
+    await expect(page.locator('body')).toHaveCSS('background-color', painted === 'dark' ? 'rgb(14, 18, 23)' : 'rgb(237, 240, 245)');
     await expectWordmarkColours(page, painted);
     expect(await violations(page), 'no Content-Security-Policy violation').toEqual([]);
     if (scenario.stored !== null || scenario.name === 'dark device') {

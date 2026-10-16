@@ -1,40 +1,94 @@
 /*
- * Design tokens (owner decision E-8): plain CSS, a 4px radius, high density, and one shared
- * 300 ms ease-out transition. Every colour, space and shadow below is a custom property;
- * rules further down use only these values. Custom properties cannot drive media queries,
- * so the one layout breakpoint is the documented 768px literal.
+ * Design tokens (round 3, owner decision U-01 of 2026-10-15: a modern, friendly business style; it replaces the
+ * 4px radius and the 300 ms transition of E-8, which stays as history). Plain CSS custom properties. Every colour,
+ * space, radius, shadow and duration below is a token; rules further down use only these values. The surfaces step
+ * from the page (--bg) to cards (--card) and are lifted by the --elev-* scale (a hairline ring plus soft layered
+ * shadows; the dark levels carry a light ring because a shadow alone is invisible on a dark page). Custom
+ * properties cannot drive media queries, so the layout breakpoints are the documented px literals.
  */
 :root {
   color-scheme: light dark;
 
-  /* Surfaces and text */
-  --bg: #f6f7f9;
+  /* Surfaces and text. --bg is the page, --card the raised surface, --off a quiet inset surface inside a card. */
+  --bg: #edf0f5;
   --card: #ffffff;
   --text: #1c2430;
   --muted: #5b6675;
-  --line: #d9dee5;
-  --line-soft: #e8ecf1;
-  --off: #eef1f5;
+  --line: #d5dbe3;
+  --line-soft: #e6eaf0;
+  --off: #f4f6f9;
+  --field-bg: #ffffff;
+  --panel-head: #f2f5fa;
+  --row-alt: #f7f9fb;
 
   /* One accent, plus semantic status colours that are always paired with text */
   --accent: #1f5fbf;
   --on-accent: #ffffff;
+  --accent-soft: #e7effb;
   --error: #b42318;
   /* 4.5:1 or more on every light surface token, also under the selection tint (WP5-UX-AX-09, SC 1.4.3) */
   --ok: #136a42;
   --warn: #8a5a00;
+  /* A destructive action: the text on it is --on-danger (6.57:1 and 8.39:1 against the fill) */
+  --danger: #b42318;
+  --on-danger: #ffffff;
+  /* The initials avatar (no photo): fill and ink */
+  --avatar-bg: #dbe7f9;
+  --avatar-ink: #163f7d;
 
-  /* Shape and motion */
-  --radius: 4px;
-  --duration: 300ms;
-  --ease: ease-out;
-  --transition: all var(--duration) var(--ease);
+  /*
+   * Period and status pills: a tinted fill, an ink of at least 4.5:1 on it and a decorative outline. The fills differ
+   * in hue (green, amber, pink, grey, blue); the pill always carries its words, so the hue is never the only cue.
+   */
+  --pill-current-bg: #e2f4e9;
+  --pill-current-ink: #0f5d39;
+  --pill-current-line: #86c9a3;
+  --pill-old-bg: #fcefd3;
+  --pill-old-ink: #7a4b00;
+  --pill-old-line: #dfb35a;
+  --pill-future-bg: #fde6f0;
+  --pill-future-ink: #9f1857;
+  --pill-future-line: #ee9cc0;
+  --pill-neutral-bg: #eef1f5;
+  --pill-neutral-ink: #4c5664;
+  --pill-neutral-line: #cfd6df;
+  --pill-progress-bg: #e3eefc;
+  --pill-progress-ink: #174a9c;
+  --pill-progress-line: #9dbdf0;
 
-  /* Tinted multi-layer shadows (tint is the text colour, never pure black) */
-  --shadow-panel: 0 0 0 1px rgb(28 36 48 / 0.06), 0 1px 2px rgb(28 36 48 / 0.04), 0 4px 12px rgb(28 36 48 / 0.05),
-    0 12px 32px rgb(28 36 48 / 0.04);
-  --shadow-overlay: 0 0 0 1px rgb(28 36 48 / 0.1), 0 2px 4px rgb(28 36 48 / 0.08), 0 8px 24px rgb(28 36 48 / 0.1),
-    0 24px 64px rgb(28 36 48 / 0.08);
+  /*
+   * Shape. The radius scale: inputs and chips 6px, buttons and inset panels 8px, cards, dialogs, panels and menus
+   * 12px, pills and the avatar round. A week sheet is square (the Excel form, owner decision G-1 b) and a lifted
+   * (selected or open) sheet column has a 4px corner.
+   */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --radius-sheet: 0;
+  --radius-lift: 4px;
+
+  /*
+   * Motion. --transition lists only the properties that change (never `all`). It is declared on every element (see the
+   * universal rule below) so that an element can pick the fast or the slow duration by setting --transition-duration
+   * on itself; no rule writes its own `transition` value.
+   */
+  --duration-fast: 120ms;
+  --duration: 180ms;
+  --duration-slow: 260ms;
+  --transition-duration: var(--duration);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /*
+   * Elevation: a hairline ring plus soft layered shadows. bar = the shell bar; 1 = cards and the period bar; 2 = week
+   * sheets, the footer card and the docked editor; 3 = menus, dialogs and the floating panel; lift = a lifted sheet column.
+   */
+  --elev-bar: 0 1px 0 rgb(20 30 50 / 0.08), 0 2px 8px rgb(20 30 50 / 0.05);
+  --elev-1: 0 0 0 1px rgb(20 30 50 / 0.06), 0 1px 2px rgb(20 30 50 / 0.06), 0 2px 6px rgb(20 30 50 / 0.04);
+  --elev-2: 0 0 0 1px rgb(20 30 50 / 0.07), 0 2px 4px rgb(20 30 50 / 0.06), 0 8px 24px -6px rgb(20 30 50 / 0.16);
+  --elev-3: 0 0 0 1px rgb(20 30 50 / 0.08), 0 4px 8px rgb(20 30 50 / 0.08), 0 16px 40px -8px rgb(20 30 50 / 0.24);
+  --elev-lift: 0 0 0 1px rgb(20 30 50 / 0.06), 0 6px 12px -2px rgb(20 30 50 / 0.14), 0 14px 28px -8px rgb(31 95 191 / 0.3);
   /*
    * Focus (WCAG 2.2 SC 1.4.11, technique C40): a solid two-colour ring, a 1px card-coloured gap inside a
    * 2px solid accent ring. The accent reaches 3:1 against every surface token in both themes, and the gap
@@ -43,6 +97,8 @@
   --focus-ring: 0 0 0 1px var(--card), 0 0 0 3px var(--accent);
   --focus-ring-inset: inset 0 0 0 2px var(--accent), inset 0 0 0 3px var(--card);
   --scrim: rgb(18 22 28 / 0.5);
+  /* A lighter backdrop for the floating side panel: the edited sheet column stays readable for orientation */
+  --scrim-side: rgb(18 22 28 / 0.18);
   /* A sheet of white paper: the signature image is dark ink on it in both themes (as on the PDF) */
   --paper: #ffffff;
 
@@ -84,6 +140,8 @@
   --clip-hidden: inset(50%);
   --layer-sticky: 1;
   --page-max: 1200px;
+  /* The page width while the Day editor is open beside the sheet (used by the editor slice) */
+  --page-max-editor: 1600px;
   --page-narrow: 380px;
   --dialog-width: 36rem;
   --dialog-width-wide: 56rem;
@@ -102,6 +160,23 @@
   --signature-max-height: 6rem;
   --mail-body-max-height: 18rem;
 
+  /* Sheet columns (used by the sheet slices): the narrowest readable day column, the lift offset and the shadow clip */
+  --sheet-col-min: 7.2rem;
+  --lift-clip: 32px;
+  --lift-y: -3px;
+  --toolbar-group-gap: var(--space-5);
+
+  /* Phone dialogs and break rows (used by the session-dialog slices) */
+  --dialog-pad-phone: var(--space-4);
+  --dialog-bar-pad-phone: var(--space-3);
+  --dialog-head-min-phone: 56px;
+  --dialog-section-gap-phone: 20px;
+  --dialog-field-gap-phone: var(--space-3);
+  --break-row-gap: var(--space-2);
+  --break-date-w: 7.6rem;
+  --break-time-w: 6.8rem;
+  --break-min-w: 5.6rem;
+
   /* Sheet rules and heads (the Excel-style form); state is always paired with text or a shape */
   --sheet-rule: #cdd5df;
   --sheet-rule-soft: #e3e8ee;
@@ -114,6 +189,8 @@
   --day-selected: rgb(31 95 191 / 0.09);
   /* The day open in the Day editor: a fill behind the cells (10 % keeps muted text at 4.5:1 on the non-working tint) */
   --day-editing: rgb(31 95 191 / 0.10);
+  /* The Day cell of the open column (used by the sheet-marker slice); the accent is 4.82:1 on it */
+  --day-editing-head: #d8e6fa;
   --attention-bg: #fff4dc;
   --attention-ink: #7a4f00;
 
@@ -205,11 +282,13 @@
   --root-font-size: 15px;
   --root-line-height: 1.45;
   --font-weight-normal: 400;
+  --font-weight-medium: 500;
   --font-weight-strong: 600;
-  --letter-spacing-tight: -0.01em;
-  --font-size-h1: 1.4rem;
-  --font-size-base: 1rem;
   --font-weight-heavy: 700;
+  --letter-spacing-tight: -0.01em;
+  --letter-spacing-h1: -0.015em;
+  --font-size-h1: 1.6rem;
+  --font-size-base: 1rem;
   --font-size-2xs: 0.72rem;
   --font-size-display: 1.5rem;
   --font-size-xs: 0.8rem;
@@ -233,22 +312,49 @@
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #12161c;
+    --bg: #0e1217;
     --card: #1a2029;
     --text: #e6e9ee;
     --muted: #9aa5b4;
-    --line: #2c3440;
-    --line-soft: #232a34;
-    --off: #202733;
+    --line: #323b48;
+    --line-soft: #262e3a;
+    --off: #212834;
+    --field-bg: #141920;
+    --panel-head: #232b37;
+    --row-alt: #1e2530;
     --accent: #6ea8ff;
     --on-accent: #0b1220;
+    --accent-soft: #22324a;
     --error: #ff8a80;
     --ok: #5fd29a;
     --warn: #e3b341;
-    --shadow-panel: 0 0 0 1px rgb(4 8 14 / 0.4), 0 1px 2px rgb(4 8 14 / 0.3), 0 4px 12px rgb(4 8 14 / 0.3),
-      0 12px 32px rgb(4 8 14 / 0.25);
-    --shadow-overlay: 0 0 0 1px rgb(4 8 14 / 0.6), 0 2px 4px rgb(4 8 14 / 0.4), 0 8px 24px rgb(4 8 14 / 0.45),
-      0 24px 64px rgb(4 8 14 / 0.4);
+    --danger: #ff8a80;
+    --on-danger: #1a0b0a;
+    --avatar-bg: #25395a;
+    --avatar-ink: #cfe0ff;
+    --pill-current-bg: #163628;
+    --pill-current-ink: #7fe0b0;
+    --pill-current-line: #2f7a55;
+    --pill-old-bg: #3a2d0f;
+    --pill-old-ink: #f0c25a;
+    --pill-old-line: #8a6a1f;
+    --pill-future-bg: #3d1a2d;
+    --pill-future-ink: #f9a8d4;
+    --pill-future-line: #b04c80;
+    --pill-neutral-bg: #262e3a;
+    --pill-neutral-ink: #b3bdca;
+    --pill-neutral-line: #3a4452;
+    --pill-progress-bg: #1b2d4a;
+    --pill-progress-ink: #a9c8ff;
+    --pill-progress-line: #3f6fb3;
+    --scrim-side: rgb(0 0 0 / 0.38);
+    --day-editing-head: #24395a;
+    --elev-bar: 0 1px 0 rgb(255 255 255 / 0.06), 0 2px 10px rgb(0 0 0 / 0.45);
+    --elev-1: 0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.03);
+    --elev-2: 0 0 0 1px rgb(255 255 255 / 0.08), 0 2px 4px rgb(0 0 0 / 0.35), 0 10px 28px -6px rgb(0 0 0 / 0.6),
+      inset 0 1px 0 rgb(255 255 255 / 0.04);
+    --elev-3: 0 0 0 1px rgb(255 255 255 / 0.1), 0 6px 12px rgb(0 0 0 / 0.45), 0 18px 44px -8px rgb(0 0 0 / 0.7);
+    --elev-lift: 0 0 0 1px rgb(110 168 255 / 0.28), 0 8px 16px -4px rgb(0 0 0 / 0.55), 0 16px 32px -10px rgb(0 0 0 / 0.75);
     --sheet-rule: #36404d;
     --sheet-rule-soft: #29313c;
     --sheet-rule-strong: #5d6a7b;
@@ -272,22 +378,49 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #12161c;
+  --bg: #0e1217;
   --card: #1a2029;
   --text: #e6e9ee;
   --muted: #9aa5b4;
-  --line: #2c3440;
-  --line-soft: #232a34;
-  --off: #202733;
+  --line: #323b48;
+  --line-soft: #262e3a;
+  --off: #212834;
+  --field-bg: #141920;
+  --panel-head: #232b37;
+  --row-alt: #1e2530;
   --accent: #6ea8ff;
   --on-accent: #0b1220;
+  --accent-soft: #22324a;
   --error: #ff8a80;
   --ok: #5fd29a;
   --warn: #e3b341;
-  --shadow-panel: 0 0 0 1px rgb(4 8 14 / 0.4), 0 1px 2px rgb(4 8 14 / 0.3), 0 4px 12px rgb(4 8 14 / 0.3),
-    0 12px 32px rgb(4 8 14 / 0.25);
-  --shadow-overlay: 0 0 0 1px rgb(4 8 14 / 0.6), 0 2px 4px rgb(4 8 14 / 0.4), 0 8px 24px rgb(4 8 14 / 0.45),
-    0 24px 64px rgb(4 8 14 / 0.4);
+  --danger: #ff8a80;
+  --on-danger: #1a0b0a;
+  --avatar-bg: #25395a;
+  --avatar-ink: #cfe0ff;
+  --pill-current-bg: #163628;
+  --pill-current-ink: #7fe0b0;
+  --pill-current-line: #2f7a55;
+  --pill-old-bg: #3a2d0f;
+  --pill-old-ink: #f0c25a;
+  --pill-old-line: #8a6a1f;
+  --pill-future-bg: #3d1a2d;
+  --pill-future-ink: #f9a8d4;
+  --pill-future-line: #b04c80;
+  --pill-neutral-bg: #262e3a;
+  --pill-neutral-ink: #b3bdca;
+  --pill-neutral-line: #3a4452;
+  --pill-progress-bg: #1b2d4a;
+  --pill-progress-ink: #a9c8ff;
+  --pill-progress-line: #3f6fb3;
+  --scrim-side: rgb(0 0 0 / 0.38);
+  --day-editing-head: #24395a;
+  --elev-bar: 0 1px 0 rgb(255 255 255 / 0.06), 0 2px 10px rgb(0 0 0 / 0.45);
+  --elev-1: 0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.03);
+  --elev-2: 0 0 0 1px rgb(255 255 255 / 0.08), 0 2px 4px rgb(0 0 0 / 0.35), 0 10px 28px -6px rgb(0 0 0 / 0.6),
+    inset 0 1px 0 rgb(255 255 255 / 0.04);
+  --elev-3: 0 0 0 1px rgb(255 255 255 / 0.1), 0 6px 12px rgb(0 0 0 / 0.45), 0 18px 44px -8px rgb(0 0 0 / 0.7);
+  --elev-lift: 0 0 0 1px rgb(110 168 255 / 0.28), 0 8px 16px -4px rgb(0 0 0 / 0.55), 0 16px 32px -10px rgb(0 0 0 / 0.75);
   --sheet-rule: #36404d;
   --sheet-rule-soft: #29313c;
   --sheet-rule-strong: #5d6a7b;
@@ -314,7 +447,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   :root {
+    --duration-fast: 0.01ms;
     --duration: 0.01ms;
+    --duration-slow: 0.01ms;
   }
 }
 
@@ -322,6 +457,16 @@
 *::before,
 *::after {
   box-sizing: border-box;
+  /*
+   * The one shared transition: only the properties that actually change, never `all` (which also animates layout).
+   * It is declared here, on every element and pseudo-element, so that an element which needs the fast or the slow
+   * duration sets --transition-duration on itself (for example `--transition-duration: var(--duration-slow)`) and
+   * still uses `transition: var(--transition)`. The durations become 0.01ms under prefers-reduced-motion above.
+   */
+  --transition:
+    color var(--transition-duration) var(--ease-standard), background-color var(--transition-duration) var(--ease-standard),
+    background-position var(--transition-duration) var(--ease-standard), border-color var(--transition-duration) var(--ease-standard),
+    box-shadow var(--transition-duration) var(--ease-standard), transform var(--transition-duration) var(--ease-standard);
 }
 
 body {
@@ -360,7 +505,7 @@ body {
   min-height: var(--bar-height-compact);
   padding: var(--space-2) var(--space-4);
   background: var(--card);
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--elev-bar);
 }
 
 /*
@@ -513,9 +658,9 @@ body {
   max-width: calc(100vw - 2 * var(--space-2));
   margin-bottom: var(--space-2);
   padding: var(--space-2);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--card);
-  box-shadow: var(--shadow-overlay);
+  box-shadow: var(--elev-3);
 }
 
 .more-who {
@@ -710,14 +855,15 @@ html {
 h1 {
   margin: 0 0 var(--space-1);
   font-size: var(--font-size-h1);
-  letter-spacing: var(--letter-spacing-tight);
+  font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-h1);
 }
 
 .card {
   min-width: 0;
   background: var(--card);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-panel);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elev-1);
   padding: var(--space-4);
 }
 
@@ -747,8 +893,8 @@ textarea {
   font: inherit;
   padding: var(--space-2);
   border: var(--hairline) solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bg);
+  border-radius: var(--radius-sm);
+  background: var(--field-bg);
   color: var(--text);
   transition: var(--transition);
 }
@@ -834,14 +980,19 @@ button.secondary[aria-pressed='true'] {
   button:hover:not(:disabled) {
     background: var(--accent-strong);
     border-color: var(--accent-strong);
-    box-shadow: var(--shadow-panel);
+    box-shadow: var(--elev-1);
   }
 
+  /*
+   * A quiet or secondary button may sit directly on the page surface (the toolbar, round 3), where the hover tint is
+   * darker than over a card; the text steps to the stronger accent so it keeps 4.5:1 on the visible hover fill.
+   */
   button.secondary:hover:not(:disabled):not([aria-pressed='true']),
   button.quiet:hover:not(:disabled):not([aria-pressed='true']) {
     background: var(--hover-fill);
     border-color: var(--accent);
     box-shadow: none;
+    color: var(--accent-strong);
   }
 
   button.quiet[aria-pressed='true']:hover:not(:disabled),
@@ -856,6 +1007,7 @@ button.secondary[aria-pressed='true'] {
     background: var(--card);
     border-color: var(--line);
     box-shadow: none;
+    color: var(--muted);
   }
 
   button:focus-visible:hover:not(:disabled),
@@ -938,7 +1090,7 @@ button[aria-disabled='true']:active {
 .badge {
   font-size: var(--font-size-xs);
   padding: var(--hairline) var(--space-2);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   border: var(--hairline) solid var(--line);
 }
 
@@ -1272,7 +1424,7 @@ input[type='checkbox'].switch-input {
   margin: 0;
   padding: 0;
   border: var(--hairline) solid var(--muted);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   /* The card colour at rest, so the hover tint differs from it by at least 1.20:1 (it would be 1.08:1 over --off in the light theme). */
   background-color: var(--card);
   background-image: linear-gradient(var(--muted), var(--muted));
@@ -1463,7 +1615,7 @@ textarea {
   gap: var(--space-3);
   padding: var(--space-3);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--elev-1);
   color: var(--warn);
 }
 
@@ -1477,10 +1629,10 @@ textarea {
   max-height: var(--dialog-max-height);
   padding: var(--space-4);
   border: 0;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--card);
   color: var(--text);
-  box-shadow: var(--shadow-overlay);
+  box-shadow: var(--elev-3);
 }
 
 .dialog::backdrop {
@@ -1492,7 +1644,7 @@ textarea {
  * (WP5-UX-AX-03, SC 2.4.7). Step headings take focus only as a starting point: not controls, so no ring.
  */
 .dialog:focus-visible {
-  box-shadow: var(--focus-ring-inset), var(--shadow-overlay);
+  box-shadow: var(--focus-ring-inset), var(--elev-3);
 }
 
 .dialog [tabindex='-1']:focus-visible {
@@ -1677,9 +1829,8 @@ textarea {
     flex: none;
   }
 
-  .sheet-area > .card {
+  .sheet-area > .sheet-main {
     gap: var(--space-2);
-    padding: var(--space-3);
   }
 
   .tools {
@@ -1761,7 +1912,7 @@ textarea {
   --sheet-leading: 1.25;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
   min-width: 0;
 }
 
@@ -1809,8 +1960,28 @@ textarea {
   font-weight: var(--font-weight-strong);
 }
 
+/*
+ * Round 3 (U-02): the sheet stands out from the page. The toolbar and the form header sit on the page surface; every
+ * week band is its own raised card (--elev-2, square corners: the Excel form, owner decision G-1 b) with its header
+ * strip (the week number and range); the footer (legend, Overtime Total, signatures) is a second card of the same
+ * kind. The cells stay square inside the card.
+ */
 .sheet-week {
   min-width: 0;
+  border-radius: var(--radius-sheet);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+
+.sheet-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-sheet);
+  background: var(--card);
+  box-shadow: var(--elev-2);
 }
 
 .week-bar {
@@ -2079,7 +2250,7 @@ textarea {
 
 .today-tag {
   padding: 0 var(--space-1);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--font-size-2xs);
@@ -2331,7 +2502,7 @@ textarea {
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
   border: var(--rule) solid var(--sheet-rule-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--sheet-head);
 }
 
@@ -2354,7 +2525,6 @@ textarea {
   display: grid;
   grid-template-columns: var(--sheet-signature-cols);
   gap: var(--space-5) var(--space-6);
-  margin-top: var(--space-2);
 }
 
 .sig {
@@ -2395,6 +2565,11 @@ textarea {
 
   .sheet {
     gap: var(--space-3);
+  }
+
+  .sheet-footer {
+    gap: var(--space-3);
+    padding: var(--space-3);
   }
 
   .form-head {
@@ -2548,7 +2723,7 @@ textarea {
   padding: var(--space-3);
   border: 0;
   border-radius: var(--radius);
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--elev-1);
   color: var(--warn);
 }
 
@@ -2597,14 +2772,26 @@ textarea {
   align-items: start;
 }
 
+/*
+ * The column that holds the toolbar, the messages and the sheet. It keeps the `card` class for its layout role (the
+ * tests and the editor grid find it there) but has no surface of its own since round 3: the toolbar and the form
+ * header sit on the page, and the week bands and the footer are the cards.
+ */
+.sheet-area > .card.sheet-main {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .day-panel {
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--card);
   color: var(--text);
-  box-shadow: var(--shadow-overlay);
+  box-shadow: var(--elev-3);
   overflow: auto;
   overscroll-behavior: contain;
   /* A focused control scrolls clear of the sticky editor head (WP5-UX-AX-01, SC 2.4.11). */
@@ -2613,7 +2800,7 @@ textarea {
 
 /* The scrolling panel is a keyboard stop of its own: an inset ring the overflow cannot clip (WP5-UX-AX-03). */
 .day-panel:focus-visible {
-  box-shadow: var(--focus-ring-inset), var(--shadow-overlay);
+  box-shadow: var(--focus-ring-inset), var(--elev-3);
 }
 
 .day-panel-side {
@@ -2644,11 +2831,11 @@ textarea {
     top: calc(var(--shell-bar-size) + var(--share-bar-size) + var(--space-3));
     width: auto;
     max-height: calc(100dvh - var(--shell-bar-size) - var(--share-bar-size) - 2 * var(--space-3));
-    box-shadow: var(--shadow-panel);
+    box-shadow: var(--elev-2);
   }
 
   .day-panel-side:focus-visible {
-    box-shadow: var(--focus-ring-inset), var(--shadow-panel);
+    box-shadow: var(--focus-ring-inset), var(--elev-2);
   }
 }
 
@@ -2658,7 +2845,7 @@ textarea {
   width: 100%;
   max-width: 100%;
   max-height: var(--editor-sheet-max-height);
-  border-radius: var(--radius) var(--radius) 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -2670,7 +2857,7 @@ textarea {
   width: var(--sheet-handle-width);
   height: var(--sheet-handle-height);
   margin: var(--space-2) auto 0;
-  border-radius: var(--radius);
+  border-radius: var(--radius-pill);
   background: var(--sheet-rule);
 }
 
@@ -2960,9 +3147,9 @@ textarea {
   margin: 0;
   padding: var(--space-1);
   list-style: none;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--card);
-  box-shadow: var(--shadow-overlay);
+  box-shadow: var(--elev-3);
   color: var(--text);
   font-size: var(--font-size-sm);
   font-weight: normal;
@@ -2979,7 +3166,7 @@ textarea {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: var(--transition);
 }
@@ -2991,7 +3178,7 @@ textarea {
  * heavier weight and a check shape, so it is not shown by colour alone (SC 1.4.1).
  */
 .label-list:focus-visible {
-  box-shadow: var(--focus-ring), var(--shadow-overlay);
+  box-shadow: var(--focus-ring), var(--elev-3);
 }
 
 .label-option.active {
@@ -3065,9 +3252,9 @@ textarea {
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--card);
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--elev-1);
 }
 
 .ot-leave-head {
@@ -3134,7 +3321,7 @@ textarea {
 
 .button-link:hover {
   background: var(--off);
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--elev-1);
 }
 
 .history-list {
@@ -3148,9 +3335,9 @@ textarea {
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--card);
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--elev-1);
 }
 
 .history-head {
@@ -3328,9 +3515,9 @@ textarea.mono {
   max-width: min(var(--signature-max-width), 100%);
   max-height: var(--signature-max-height);
   padding: var(--space-2);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--paper);
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--elev-1);
 }
 
 /*
@@ -3356,11 +3543,12 @@ textarea.mono {
   }
 }
 
+/* The sheet's own week and footer cards stand on the page, so the block around them has no surface of its own. */
 .review-sheet-block {
-  padding: var(--space-4);
-  border-radius: var(--radius);
-  background: var(--card);
-  box-shadow: var(--shadow-panel);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .review-sheet-intro {
@@ -3601,7 +3789,7 @@ code {
   padding: var(--space-3);
   border-radius: var(--radius);
   background: var(--card);
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--elev-1);
   color: var(--warn);
 }
 
@@ -3614,9 +3802,9 @@ code {
 .share-bar {
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--card);
-  box-shadow: inset var(--space-1) 0 0 0 var(--accent), var(--shadow-panel);
+  box-shadow: inset var(--space-1) 0 0 0 var(--accent), var(--elev-1);
 }
 
 .share-bar-head {

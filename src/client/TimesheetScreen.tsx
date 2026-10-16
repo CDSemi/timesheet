@@ -463,7 +463,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
 
       {view !== null && (
         <div className={`sheet-area${editDate !== null && wide ? ' with-editor' : ''}`}>
-          <section className="card stack">
+          <section className="card stack sheet-main">
             <div className="tools">
               <div className="tools-left">{canEdit && <OpenDay onOpen={openEditor} />}</div>
               <div className="tools-right">

@@ -163,3 +163,94 @@ describe('src/client/styles.css theme sets', () => {
     expect(stripComments(css).match(/prefers-color-scheme/g) ?? []).toHaveLength(1);
   });
 });
+
+/*
+ * WP5-UX3-T01 (round 3): the new token system. A colour or shadow token must have a light value in `:root` and the
+ * same dark value in BOTH dark sets; a shape, motion or layout token is theme-independent and lives in `:root` only.
+ */
+const THEMED_TOKENS = [
+  '--bg',
+  '--card',
+  '--off',
+  '--line',
+  '--line-soft',
+  '--field-bg',
+  '--panel-head',
+  '--row-alt',
+  '--accent-soft',
+  '--day-editing-head',
+  '--avatar-bg',
+  '--avatar-ink',
+  '--danger',
+  '--on-danger',
+  '--scrim-side',
+  '--elev-bar',
+  '--elev-1',
+  '--elev-2',
+  '--elev-3',
+  '--elev-lift',
+  ...['current', 'old', 'future', 'neutral', 'progress'].flatMap((kind) => [`--pill-${kind}-bg`, `--pill-${kind}-ink`, `--pill-${kind}-line`]),
+] as const;
+
+const SHARED_TOKENS: Record<string, string> = {
+  '--radius-sm': '6px',
+  '--radius': '8px',
+  '--radius-lg': '12px',
+  '--radius-pill': '999px',
+  '--radius-sheet': '0',
+  '--radius-lift': '4px',
+  '--duration-fast': '120ms',
+  '--duration': '180ms',
+  '--duration-slow': '260ms',
+  '--ease-standard': 'cubic-bezier(0.2, 0, 0, 1)',
+  '--ease-out': 'cubic-bezier(0.16, 1, 0.3, 1)',
+  '--font-weight-normal': '400',
+  '--font-weight-medium': '500',
+  '--font-weight-strong': '600',
+  '--font-weight-heavy': '700',
+  '--font-size-h1': '1.6rem',
+  '--lift-clip': '32px',
+  '--sheet-col-min': '7.2rem',
+  '--page-max-editor': '1600px',
+  '--dialog-pad-phone': 'var(--space-4)',
+  '--dialog-section-gap-phone': '20px',
+  '--dialog-field-gap-phone': 'var(--space-3)',
+  '--break-row-gap': 'var(--space-2)',
+  '--break-date-w': '7.6rem',
+  '--break-time-w': '6.8rem',
+  '--break-min-w': '5.6rem',
+};
+
+describe('src/client/styles.css round-3 token system', () => {
+  const sets = themeSets(css);
+
+  it.each(THEMED_TOKENS)('%s has a light value and the same value in both dark sets', (name) => {
+    expect(sets.light[name], `${name} in :root`).toBeDefined();
+    expect(sets.mediaDark[name], `${name} in the media dark set`).toBeDefined();
+    expect(sets.manualDark[name], `${name} in the manual dark set`).toBeDefined();
+    expect(sets.mediaDark[name]).toBe(sets.manualDark[name]);
+  });
+
+  it.each(['--bg', '--field-bg', '--panel-head', '--elev-1', '--elev-2', '--elev-3', '--pill-future-bg'])('%s differs between the light and the dark theme', (name) => {
+    expect(sets.light[name]).not.toBe(sets.mediaDark[name]);
+  });
+
+  it.each(Object.entries(SHARED_TOKENS))('%s is %s in :root and is not redefined by a theme', (name, value) => {
+    expect(sets.light[name]).toBe(value);
+    expect(sets.mediaDark[name]).toBeUndefined();
+    expect(sets.manualDark[name]).toBeUndefined();
+  });
+
+  it('removes the old elevation and motion tokens (no alias is left)', () => {
+    const everywhere = Object.keys({ ...sets.light, ...sets.mediaDark, ...sets.manualDark });
+    expect(everywhere.filter((name) => ['--shadow-panel', '--shadow-overlay', '--ease'].includes(name))).toEqual([]);
+    expect(stripComments(css)).not.toMatch(/var\(--(shadow-panel|shadow-overlay|ease)\)/);
+  });
+
+  it('writes the light --bg darker than --card so the page and the cards are two steps', () => {
+    expect(sets.light['--bg']).toBe('#edf0f5');
+    expect(sets.light['--card']).toBe('#ffffff');
+    expect(sets.mediaDark['--bg']).toBe('#0e1217');
+    expect(sets.mediaDark['--card']).toBe('#1a2029');
+  });
+});

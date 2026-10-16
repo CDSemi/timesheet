@@ -109,3 +109,22 @@ staged count per group; other modified handoff files; every check with its exit 
 fix or stop reason.
 
 ## Results
+
+- Model: claude-sonnet-5-5. Node: v24.21.0 (Node 24 path first on PATH).
+- Pre-HEAD 79b9a53c13b1542877a587dd0ca00fe295d1f8b6 (= origin/main). Commit
+  3968e15fe528bfbdf956a9b3c8aeaad8e348c57b on main; pushed yes (dry-run ok);
+  remote SHA 3968e15fe528bfbdf956a9b3c8aeaad8e348c57b. No tag.
+- Digests: working tree before add a682f153...8d8b (817 files); `git ls-tree` of new HEAD
+  a682f153...8d8b (817 files); equal.
+- Staged 28: modified 9, new records 4 (2 review, T01 brief, this brief), evidence 15
+  (1 freeze, 1 gate, 13 audit). Own evidence (checks.txt, commit-message.txt) unstaged.
+- Other modified handoff files: none beyond the 9; `git diff --stat` and the ignore-eol
+  stat identical (9 files, 267 insertions, 37 deletions).
+- Checks (exit): node --version 0; HEAD/origin 0; digest 0; git add 0; precommit-check 0
+  (28 files, 0 findings); diff --cached --check 0; JSON parse 0; validate_orchestration 0
+  (PASS); check_recovery 0 (PASS, 106); validate_package --preflight 0 (PASS);
+  post-commit ls-tree digest equal.
+- Deviations: first `node --version` ran Node 26 until the Node 24 PATH was corrected
+  (no node script ran under 26). One diagnostic `node scripts/source-digest.mjs --help`
+  call redirected output to the null device, against the rules; harmless, no effect.
+  No fixes or masking needed.

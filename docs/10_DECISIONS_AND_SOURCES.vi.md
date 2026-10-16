@@ -114,6 +114,10 @@ Cơ sở: mục E của WP2-PLAN; không quyết định nào đổi yêu cầu 
 
 - Áp dụng R-05 cho khoản sửa: sửa làm tăng một khoản trừ thiếu giờ là một khoản trừ mới bằng phần tăng. Phần tăng được kiểm với số dư khả dụng (`canDebit`); nếu số dư không đủ thì phần tăng ở trạng thái chờ, không ghi dòng sổ nào (không âm thầm âm). Sửa giảm một khoản cộng đã bị tiêu vẫn được giữ và đánh dấu đối chiếu (R-06, LG-08) vì nó nêu một sự thật lịch sử. Đây là áp dụng R-05 và R-06 hiện có, không đổi yêu cầu đã xác nhận. Nguồn: WP2-ADV-REVIEW (ADV-A-02), task WP2-ADVFIX.
 
+## Quyết định của chủ — 2026-10-15 (vòng chỉnh UI thứ 3, phong cách)
+
+- U-01 và G-1 (b): phong cách doanh nghiệp hiện đại, thân thiện thay cho hướng công nghiệp, và bảng tuần có góc vuông. Hệ token vòng 3 trong tài liệu 04 ("Chuẩn hình ảnh") thay các giá trị bo góc và chuyển động của E-8: bo góc 4px thành thang bo góc (6px, 8px, 12px, nhãn tròn; bảng tuần và chân bảng 0; cột được nâng 4px) và transition 300 ms ease-out cho mọi thuộc tính thành một token transition với 180 ms, easing chuẩn, chỉ trên các thuộc tính được liệt kê (không bao giờ `all`). E-8 giữ lại làm lịch sử, và nửa còn lại của nó vẫn hiệu lực: CSS thuần và custom property, không framework. Mục "Frontend and UI/UX standards" của AGENTS.md (task WP5-UX3-GOV) mang quy tắc cho các agent. Nguồn: WP5-UX3-PLAN, task WP5-UX3-T01.
+
 ## Quyết định của coordinator — phát hiện đổi lịch của WP2-T08 (2026-10-03, đảo ngược được; chủ có thể phủ quyết)
 
 - Đổi lịch qua `PATCH /api/admin/users/:id` bị từ chối bằng 409 `calendar_in_use` khi user có bất kỳ timesheet, ngày, phiên làm việc, dòng sổ cái hay yêu cầu nghỉ nào. Lần sửa bị từ chối không ghi gì (PATCH gộp không áp dụng trường nào) và không tạo audit event. Chỉ đổi lịch được cho tài khoản chưa có dữ liệu đó. Sửa tên hiển thị và vai trò không bị ảnh hưởng.

@@ -33,8 +33,8 @@
 - Profile/routing: timesheet-worker-high (effort high, fixed by the profile); requested
   model sonnet; no override. Routing: size M, risk M (every screen's look; contrast and
   focus-ring promises), novelty yes (new token system). Task record in English.
-- Base: HEAD = origin/main = the GOV accept commit (WP5-UX3-GOV-ACCEPT, handoff only, after
-  79b9a53c13b1542877a587dd0ca00fe295d1f8b6), or a later commit that changes only `handoff/`. Source digest
+- Base: HEAD = origin/main = 3968e15fe528bfbdf956a9b3c8aeaad8e348c57b (the GOV accept
+  commit, handoff only), or a later commit that changes only `handoff/`. Source digest
   a682f15323b7204010060b9619cc38b29cc5afd331c01f7c7622d8be06408d8b (817 files). Record both
   before you edit anything. Uncommitted coordinator files under `handoff/` are expected:
   never touch them.
@@ -183,3 +183,129 @@ the final full 64-hex digest and file count, the evidence files, the background-
 confirmation, any stop, conflict or deviation.
 
 ## Results
+
+### Final result
+
+Self-reported model: claude-sonnet-5-5. Evidence: `handoff/delivery/evidence/WP5-UX3-T01/` (`checks.txt`
+and the raw logs, 10 `surfaces-*.txt` measurement files, 4 desktop screenshots ending in `-synthetic.png`).
+
+- Files changed: `src/client/styles.css`, `src/client/TimesheetScreen.tsx`,
+  `src/client/components/TimesheetSheet.tsx`, `tests/client/cssThemeParity.test.ts`,
+  `tests/client/styleTokens.test.ts` (new), `tests/e2e/surfaces.spec.ts` (new), value-only
+  assertion updates in `tests/e2e/theme.spec.ts` and `tests/e2e/logo.spec.ts`,
+  `docs/04_UX_AND_SETTINGS.md` and `.vi.md`, `docs/10_DECISIONS_AND_SOURCES.md` and `.vi.md`, this brief
+  and the evidence folder.
+- Value-only updates of old-token assertions (the page `--bg` changed on purpose; no assertion
+  removed or weakened, the check is the same computed-value comparison with the new value):
+  `tests/e2e/theme.spec.ts:19` `BG` dark `rgb(18, 22, 28)` to `rgb(14, 18, 23)` and light
+  `rgb(246, 247, 249)` to `rgb(237, 240, 245)` (comment line 18 too); `tests/e2e/theme.spec.ts:169`
+  `'#12161c'`/`'#f6f7f9'` to `'#0e1217'`/`'#edf0f5'`; `tests/e2e/logo.spec.ts:190` the same two body
+  background values in `rgb(...)` form. No assertion pinned the 4px radius or the 300 ms duration.
+- Tokens (`styles.css`): light in `:root`, the same dark values in BOTH dark sets (parity test): `--bg`
+  #edf0f5 / #0e1217, `--off`, `--line`, `--line-soft`, new `--field-bg` (input fill, was `--bg`),
+  `--panel-head`, `--row-alt`, `--accent-soft`, `--day-editing-head`, `--avatar-bg/-ink`,
+  `--danger/--on-danger`, 15 pill tokens (current, old, future pink, neutral, progress), `--scrim-side`,
+  `--elev-bar/-1/-2/-3/-lift` (dark levels with a light ring and inset highlight). Shared in `:root`:
+  `--radius-sm` 6px, `--radius` 8px, `--radius-lg` 12px, `--radius-pill`, `--radius-sheet` 0,
+  `--radius-lift` 4px; `--duration-fast/-/-slow` 120/180/260ms, `--ease-standard`, `--ease-out`,
+  `--transition-duration`; `--font-weight-medium`, h1 1.6rem heavy with `--letter-spacing-h1`;
+  `--page-max-editor`, `--sheet-col-min`, `--lift-clip`, `--lift-y`, `--toolbar-group-gap`, the phone
+  dialog spacing and the three break width tokens. `--shadow-panel`, `--shadow-overlay` and `--ease` are
+  gone (no alias; the parity test pins this). Reduced motion sets the three durations to 0.01ms.
+- `--transition` is declared in the universal rule (`*, *::before, *::after`) so an element can set
+  `--transition-duration` locally (GOV audit R2) and still write `transition: var(--transition)`; a
+  `:root` declaration would freeze the duration. It lists colour, background-color, background-position
+  (the Show details thumb), border-color, box-shadow and transform; never `all`. Every `transition`
+  declaration in the file is `var(--transition)` (pinned by the new test).
+- Week-sheet structure: the sheet column (`section.card.stack.sheet-main`, the class `card` is kept
+  because `day-editor.spec.ts:920` selects `.sheet-area > section.card`) has no surface; the toolbar and
+  the form header sit on the page; each `section.sheet-week` (already one per week in the page and the
+  review sheet, grid on desktop, table on phones) is a card: `--card`, `--elev-2`, `--radius-sheet` 0,
+  with its existing `.week-bar` header strip (week number and range); the footer is one new
+  `div.sheet-footer` (legend, Overtime Total, signature strip) with the same square `--elev-2` card
+  (square because it is part of the sheet form; the period bar, dialogs, panels and menus use the 12px
+  step). The review block `.review-sheet-block` lost its own card surface so cards are not nested. Sheet
+  cells stay square. Markers (`.sheet-day.*`) are untouched (T05).
+- Other CSS changes forced by U-02: a quiet or secondary button now steps to `--accent-strong` text on
+  hover (the "Change several days" button sits on the darker page, where accent text on the hover tint
+  was 4.39:1 against the 4.5:1 rule in `hover.spec.ts`; no accent text can meet both 4.5:1 and the 1.20:1
+  hover step there); the inactive "Today" button keeps its muted text on hover.
+- Contrast (computed from the browser, both projects, four theme situations): card on page 1.14:1 light,
+  1.15:1 dark (period bar, both week cards, footer; the promise is 1.12); `--panel-head` on card 1.09 / 1.15,
+  `--row-alt` 1.06, `--sheet-head` 1.17 / 1.13; the shared focus ring on the toolbar (page), the period
+  bar, a week band and the footer: 5.33:1 minimum light (page), 6.09 on cards; 6.79:1 dark (7.79 on the
+  page); ring against its gap 6.09 / 6.79. The toolbar and form header backdrop equals the page (1:1).
+- Tests: unit 91 files, 2031 tests (was 90 files, 1950: `styleTokens.test.ts` 11 tests, the parity file
+  gains 70 token-system tests); full e2e 516 tests: 474 passed, 0 failed, 42 skipped (project guards),
+  desktop 229 passed / 29 skipped, mobile 245 / 13; the new `surfaces.spec.ts` runs 13 tests on each
+  project (4 surface, 4 focus-ring, 1 motion, 4 no-scroll, each theme situation). First full run: 10
+  failures (hover 2, logo 8), fixed as described above; the final run is clean.
+- Budget numbers (390x844, tab bar top 788, first day row bottom): landing own 559.45 without the zone
+  note, 658.41 with it; away state 559.45 / 658.41; with a received share 611.45 without the zone note and
+  710.41 with it (shell bar 112px). All pass.
+- `npm run verify` exit 0 (SMOKE_PORT 48600, DATA_DIR and DATABASE_PATH in the task folder); preflight PASS
+  (91 scenarios). Final digest e9e8d11720dc3da2a627191b29ba7084198d5e202dba314db28e3f50617006ab (819 files).
+- Deviations and notes: (1) two of my shell commands wrongly used a `| tail`/`> /dev/null` or a
+  `| head`/`2>/dev/null` form (read-only listings, no effect on files); no stdin script, no `rm -r`. (2)
+  `tests/e2e/surfaces.spec.ts` writes measurement text files into `E2E_SCREENSHOT_DIR`. (3) The input
+  boundary contrast (hairline `--line` on a white field, about 1.4:1) is unchanged from before and is not
+  in this slice. (4) No background task is left running; ports 48600-48619 are free (`netstat`).
+- Not done on purpose (later slices): identity menu, Settings, period pills and header rows, lift runs and
+  markers, floating panel rule, editor panel and dialogs.
+
+### Checkpoint 1 (implementation written; full e2e running)
+
+- Base before any edit: `git rev-parse HEAD` 3968e15fe528bfbdf956a9b3c8aeaad8e348c57b; `git status --short`
+  showed only the coordinator's `handoff/` files (ORCHESTRATION.json, WORKFLOW_REVISION_CHECKPOINT
+  .md/.vi.md, tasks/WP5-UX3-GOV-ACCEPT.md, tasks/WP5-UX3-T01.md, evidence/WP5-UX3-GOV-ACCEPT/);
+  `npm run digest` a682f15323b7204010060b9619cc38b29cc5afd331c01f7c7622d8be06408d8b (817 files).
+  Node v24.21.0. Raw logs in `D:\.claude-tmp\timesheet\WP5-UX3-T01\`.
+- AGENTS.md read from disk: section "Frontend and UI/UX standards" (the old injected copy was ignored).
+- Written: tokens and surfaces in `src/client/styles.css`; `TimesheetScreen.tsx` (class `sheet-main` on
+  the sheet column); `TimesheetSheet.tsx` (new wrapper `div.sheet-footer` around `.sheet-foot` and the
+  signature strip, in both the page sheet and the review sheet); tests `cssThemeParity.test.ts`
+  (extended), `styleTokens.test.ts` (new), `surfaces.spec.ts` (new); docs/04 and docs/10 (EN and VI).
+
+Status: done
+
+## Addendum 1 (coordinator, 2026-10-15)
+
+WP5-UX3-T01-FREEZE attempt 1 stopped before committing: `git diff --cached --check` reports
+`tests/e2e/surfaces.spec.ts:242: new blank line at EOF`. The committer may not edit source.
+
+1. Remove only the extra blank line at the end of `tests/e2e/surfaces.spec.ts` (the file
+   must end with exactly one newline). Change nothing else.
+2. Check every other file you changed or created in this slice for the same kind of defect
+   (trailing whitespace, a blank line at EOF, a missing final newline): Grep each file for
+   `[ \t]+$` and read its last lines with the Read tool. Fix only such whitespace defects in
+   your owned files and list them.
+3. Do not touch the git index: 44 paths are staged by the committer and must stay staged;
+   no `git add`, `git restore` or `git reset`.
+4. Rerun `tests/e2e/surfaces.spec.ts` on both projects (alone), `npm run lint`, then
+   `npm run verify` (`SMOKE_PORT` in 48600-48619, `DATA_DIR` and `DATABASE_PATH` in the task
+   folder) and `npm run digest` LAST.
+5. Append "Addendum 1 results" below (files fixed, spec counts, verify exit code, the new
+   full digest and file count) and finish with "Status: done". Copy the masked logs into the
+   evidence folder with new names (`addendum1-*.txt`).
+
+Same runtime rules as the brief (no stdin scripts, no head/tail pipes, no null-device
+redirects, no recursive deletes, no cmd.exe, no PID kills).
+
+### Addendum 1 results
+
+- Fixed: `tests/e2e/surfaces.spec.ts` (the extra blank line at EOF removed; 241 lines, last line `}`).
+  Grep for `[ \t]+$` found no trailing whitespace in any changed or new file (`styles.css`,
+  `TimesheetScreen.tsx`, `TimesheetSheet.tsx`, `cssThemeParity.test.ts`, `styleTokens.test.ts`,
+  `surfaces.spec.ts`, `theme.spec.ts`, `logo.spec.ts`, the four docs); the last lines of all of them
+  end in content with a final newline. Working-tree `git diff --check` exit 0; `git diff --cached
+  --check` still reports the old staged blob (line 242) until the committer restages the file. The git
+  index was not touched.
+- `surfaces.spec.ts` alone: 26 passed (13 desktop, 13 mobile), 0 failed. `npm run lint` exit 0.
+- `npm run verify` exit 0 (SMOKE_PORT 48601, DATA_DIR and DATABASE_PATH in the task folder): 91 files,
+  2031 tests, SMOKE PASSED.
+- New digest, last command: a4f127cc4a10c8b311811b244be2a82fa87bcd636615b89c765d5be5d2411d86 (819 files).
+  It differs from the first final digest only by the removed blank line.
+- Logs: `handoff/delivery/evidence/WP5-UX3-T01/addendum1-surfaces.txt`, `addendum1-lint.txt`,
+  `addendum1-verify.txt`, `addendum1-digest.txt`. Nothing is left running; ports 48600-48619 free.
+
+Status: done

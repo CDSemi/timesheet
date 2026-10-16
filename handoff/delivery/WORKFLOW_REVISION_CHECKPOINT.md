@@ -120,6 +120,32 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   R5 and R6 (GLOSSARY.md) in the governance backlog. **WP5-UX3-GOV accepted on 79b9a53.**
 - Running: WP5-UX3-GOV-ACCEPT (committer, alone; 28 handoff paths). T01 registered pending
   (worker-high, sonnet), dispatched after the accept commit.
+- WP5-UX3-GOV-ACCEPT done: 3968e15fe528bfbdf956a9b3c8aeaad8e348c57b on main, pushed (28
+  handoff paths; digest a682f153 unchanged; every check exit 0; one null-device slip).
+- Running: WP5-UX3-T01 (worker-high, sonnet; tokens and surfaces, docs/04 visual standard
+  incl. line 87, docs/10 E-8 note) on 3968e15 / a682f153.
+- WP5-UX3-T01 done (worker-high, self-reported claude-sonnet-5-5; reported, not independent
+  proof): round-3 tokens in light and both dark sets; `--transition` declared in the
+  universal rule with a local `--transition-duration`, never `all`; each week a square
+  `--elev-2` card, the footer its own card, toolbar and form header on the page; quiet
+  buttons step to `--accent-strong` on hover (beyond the brief, for 4.5:1 on the darker page);
+  value-only updates of the old page colour in theme.spec and logo.spec; card on page
+  1.14 / 1.15; unit 2031; full e2e desktop 229/0/29, mobile 245/0/13; budgets 559.45 /
+  658.41 own, 611.45 / 710.41 with a share; verify 0; digest e9e8d117 (819 files). Notes for
+  the audit: the universal-selector transition declaration. Slips: two read-only commands with
+  a head/tail pipe or a null-device redirect.
+- T02 brief written (identity block, account menu, More, wordmark) and registered pending.
+- Running: WP5-UX3-T01-FREEZE (committer, alone; 12 source/docs paths plus 32 handoff paths).
+- WP5-UX3-T01-FREEZE attempt 1 stopped before commit: `git diff --cached --check` exit 2 on
+  a blank line at EOF in `tests/e2e/surfaces.spec.ts:242` (source; the committer may not fix
+  it). 44 paths stay staged; digest e9e8d117 matched; precommit PASS.
+- Running: WP5-UX3-T01 Addendum 1 (the same worker resumed): remove that blank line, check
+  the other slice files for whitespace defects, rerun the spec, lint, verify and the digest;
+  the index stays untouched. Then T01-FREEZE attempt 2 with the new digest.
+- T01 Addendum 1 done: only the EOF blank line removed; no other whitespace defect;
+  surfaces.spec 26/26; lint 0; verify 0; digest a4f127cc (819 files); index untouched.
+- Running: WP5-UX3-T01-FREEZE attempt 2 (committer, alone; 12 source/docs paths plus 36
+  handoff paths, digest a4f127cc).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

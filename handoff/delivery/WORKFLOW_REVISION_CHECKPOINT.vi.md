@@ -124,6 +124,35 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   (GLOSSARY.md) vào backlog quản trị. **WP5-UX3-GOV đã nghiệm thu trên 79b9a53.**
 - Đang chạy: WP5-UX3-GOV-ACCEPT (committer, chạy một mình; 28 đường dẫn handoff). T01 đã
   đăng ký ở trạng thái chờ (worker-high, sonnet), giao sau commit nghiệm thu.
+- WP5-UX3-GOV-ACCEPT xong: 3968e15fe528bfbdf956a9b3c8aeaad8e348c57b trên main, đã push (28
+  đường dẫn handoff; digest a682f153 không đổi; mọi bước kiểm exit 0; một lỗi nhỏ chuyển
+  hướng ra null device).
+- Đang chạy: WP5-UX3-T01 (worker-high, sonnet; token và bề mặt, mục visual standard của
+  docs/04 gồm cả dòng 87, ghi chú E-8 ở docs/10) trên 3968e15 / a682f153.
+- WP5-UX3-T01 xong (worker-high, tự báo claude-sonnet-5-5; kết quả tự báo, chưa phải bằng
+  chứng độc lập): token vòng 3 ở bộ sáng và cả hai bộ tối; `--transition` khai báo ở quy tắc
+  chung cho mọi phần tử với `--transition-duration` cục bộ, không dùng `all`; mỗi tuần là một
+  thẻ `--elev-2` góc vuông, phần cuối bảng là một thẻ riêng, thanh công cụ và phần đầu biểu
+  mẫu nằm trên nền trang; nút phụ chuyển sang `--accent-strong` khi hover (ngoài brief, để
+  đạt 4.5:1 trên nền trang đậm hơn); chỉ đổi giá trị màu nền cũ trong theme.spec và logo.spec;
+  thẻ trên nền 1.14 / 1.15; unit 2031; e2e đầy đủ desktop 229/0/29, mobile 245/0/13; ngân sách
+  màn hình đầu 559.45 / 658.41 khi xem của mình, 611.45 / 710.41 khi có chia sẻ; verify 0;
+  digest e9e8d117 (819 file). Ghi chú cho audit: khai báo transition ở quy tắc chung. Lỗi
+  nhỏ: hai lệnh chỉ đọc dùng pipe head/tail hoặc chuyển hướng ra null device.
+- Đã viết brief T02 (khối nhận diện, menu tài khoản, More, chữ thương hiệu) và đăng ký ở
+  trạng thái chờ.
+- Đang chạy: WP5-UX3-T01-FREEZE (committer, chạy một mình; 12 đường dẫn mã nguồn/tài liệu
+  cùng 32 đường dẫn handoff).
+- WP5-UX3-T01-FREEZE lần 1 dừng trước khi commit: `git diff --cached --check` exit 2 vì một
+  dòng trống ở cuối file `tests/e2e/surfaces.spec.ts:242` (mã nguồn; committer không được
+  sửa). 44 đường dẫn vẫn được stage; digest e9e8d117 khớp; precommit PASS.
+- Đang chạy: WP5-UX3-T01 phụ lục 1 (cùng worker được tiếp tục): xóa dòng trống đó, kiểm các
+  file khác của phần này xem có lỗi khoảng trắng, chạy lại spec, lint, verify và digest;
+  không động vào index. Sau đó T01-FREEZE lần 2 với digest mới.
+- T01 phụ lục 1 xong: chỉ xóa dòng trống cuối file; không còn lỗi khoảng trắng nào khác;
+  surfaces.spec 26/26; lint 0; verify 0; digest a4f127cc (819 file); không động vào index.
+- Đang chạy: WP5-UX3-T01-FREEZE lần 2 (committer, chạy một mình; 12 đường dẫn mã nguồn/tài
+  liệu cùng 36 đường dẫn handoff, digest a4f127cc).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 
