@@ -40,10 +40,28 @@
   chip giờ nghỉ trên điện thoại, nhãn "in progress"). Thay đổi quản trị cho mục UI trong
   AGENTS.md đã được nghiệm thu (WP5-UX3-GOV-AUDIT PASS tại 79b9a53,
   [GOV UX3 review](delivery/GOV_UX3_REVIEW.vi.md)). Các phần T01-T10 (cùng T05B và T08B) đã
-  làm xong và đóng băng; tiếp theo: gate cuối gói WP5-UX3-GATE, các audit độc lập vùng A và B,
-  audit tích hợp, rồi nghiệm thu lại WP5. Chủ dự án đã trả lời
-  WP5-UX3-Q6 là b (chỉ hiện ô ngày của giờ nghỉ khi phiên qua đêm) và chip dùng giờ 24h; vòng
-  này không còn câu hỏi nào đang mở.
+  làm xong và đóng băng. Chủ dự án đã trả lời WP5-UX3-Q6 là b (chỉ hiện ô ngày của giờ nghỉ
+  khi phiên qua đêm) và chip dùng giờ 24h; vòng này không còn câu hỏi nào đang mở.
+  - Tiến độ đến nay:
+    - Gate đầu tiên của gói không đạt trên cecfceb. FIX1 (9187f31) và FIX2 (7ce4e95) đã sửa.
+    - Gate chạy lại đạt trên 7ce4e95, kèm một điểm lệch timeout đã ghi lại.
+    - Audit vùng A và B tìm ra tám lỗi (một lỗi mức trung bình). FIX3 đã sửa và đóng băng ở
+      a78ada5 (digest d1d903cf).
+  - **Tạm dừng vì usage ngày 2026-10-16.** Lần chạy lại gate thứ hai WP5-UX3-REGATE2 bị dừng
+    giữa chừng.
+  - **Đã resume ngày 2026-10-19 và đối soát xong.** Không còn gì sót lại, và HEAD = origin/main
+    = a78ada5. Chủ dự án đã trả lời WP5-UX3-Q7 là (a): nội dung mới của AGENTS.md được đưa vào
+    repo, dòng về runbook theo quy ước `.vi.md` và các cụm từ thuộc dự án khác bị xóa. Việc này
+    chạy qua chuỗi GOV (GOV2, đóng băng, gate, audit) trước khi chạy lại gate; lần chạy lại gate
+    sau đó nhắm vào commit đóng băng GOV2.
+  - **Việc tiếp theo khi resume:**
+    1. Giao một agent đối soát: tiến trình còn chạy, project Docker `ts-wp5-ux3regate2`, bằng
+       chứng dở dang và các bản ghi coordinator chưa commit.
+    2. Chạy lại WP5-UX3-REGATE2 (lần 2).
+    3. Các audit kiểm lại mới WP5-UX3-AUDIT-A2 và -B2 (đã có brief).
+    4. Audit tích hợp và nghiệm thu lại WP5.
+  - Chi tiết: [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), mục "Tạm dừng vì
+    usage (2026-10-16)".
 - Pilot: [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) cụ thể đã sẵn để chủ dự án duyệt
   (định danh bản phát hành a643794 / 229df806). Chưa xin phép chủ dự án, chưa có kết quả
   pilot, NAS chưa được kiểm.

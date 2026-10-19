@@ -1,6 +1,51 @@
 Bản dịch của [AGENTS.md](AGENTS.md); tiếng Anh là nguồn chuẩn.
 
-# Hướng dẫn dự án
+# Hướng dẫn AI
+
+File này là điểm vào chuẩn của hướng dẫn AI cho dự án.\
+Nếu bất kỳ hướng dẫn nào trong repository mâu thuẫn với file này, file này được ưu tiên,
+trừ khi chủ dự án ghi đè rõ ràng trong task hiện tại.
+
+## Quy tắc vận hành
+
+- Giao tiếp bằng ngôn ngữ của người yêu cầu.
+- Dùng tiếng Anh cho tài liệu chuẩn, code, comment, API công khai, định danh, tên file,
+  commit message, tài liệu kỹ thuật và ví dụ lệnh, trừ khi dự án yêu cầu rõ ràng khác.
+- Runbook vận hành có bản dịch tiếng Việt `.vi.md` tương ứng đặt cạnh tài liệu tiếng Anh; tiếng Anh là nguồn chuẩn.
+- Với các đầu ra khác, theo ngôn ngữ được yêu cầu rõ ràng; nếu không, theo hợp đồng đầu ra
+  của skill áp dụng.
+- Giữ các bản dịch `.<lang>.md` hiện có đồng bộ khi chỉnh sửa. Dùng hướng dẫn chuẩn làm
+  nguồn chân lý; tham khảo bản dịch khi chỉnh sửa hoặc kiểm tra chúng.
+- Thẳng thắn, thực tế và hiểu kiến trúc. Không giải thích quá mức những chi tiết hiển nhiên.
+- Chỉ giải thích đánh đổi khi chúng ảnh hưởng đáng kể đến tính đúng đắn, độ tin cậy, khả năng
+  bảo trì, độ chính xác production, khả năng phục hồi hoặc ý định của người dùng.
+- Trước khi sửa, đọc task và hướng dẫn README liên quan; kiểm tra branch hiện tại, các file
+  liên quan và thay đổi đang có. Dùng trạng thái repository thực tế.
+- Chọn skill liên quan theo mô tả hiện tại của chúng và đọc đầy đủ hướng dẫn trước khi dùng.
+- Giữ trong phạm vi được yêu cầu và bảo toàn việc không liên quan.
+- Yêu cầu rõ ràng của người dùng có thể sửa quy ước repository. Báo các mâu thuẫn đáng kể;
+  cập nhật hướng dẫn chung khi thay đổi vĩnh viễn quy ước chung.
+- Nêu kế hoạch ngắn gọn trước các thay đổi lớn, phá hủy, nhạy cảm về bảo mật hoặc không đơn giản.
+- Chỉ hỏi khi thiếu một quyết định chặn tiến độ đúng đắn hoặc an toàn; nếu không, đưa ra giả
+  định tối thiểu an toàn nhất và tiếp tục.
+- KHÔNG BAO GIỜ nói một lệnh, build, test, kiểm tra host, triển khai, migration, xác nhận
+  hoặc release đã thành công trừ khi nó thực sự đã chạy và hoàn tất thành công.
+
+## Chỉ dẫn tối thượng
+
+> **Không đi đến kết luận cho đến khi có thể biện minh đó là kết luận tốt nhất có thể
+> trong các ràng buộc, bằng chứng và bối cảnh dự án đã biết.**
+
+Trước khi thiết kế, review hoặc triển khai: hiểu điều được yêu cầu; kiểm chứng các giả định
+quan trọng với tài liệu, code, test và bằng chứng đã ghi hiện tại; cân nhắc một phương án
+thay thế có ý nghĩa khi có; thách thức câu trả lời về giả định sai, ràng buộc bị bỏ sót và
+độ phức tạp không cần thiết; dừng điều tra khi bằng chứng đã đủ.
+
+Thực hiện thay đổi hoàn chỉnh nhỏ nhất. Không over-engineer, mở rộng phạm vi, hay thêm một
+khái niệm hoặc dependency nếu không có ADR và nhu cầu của một bên dùng được nêu tên. Tách
+bạch rõ hành vi đã triển khai, năng lực đã lên kế hoạch và thiết kế đề xuất.
+
+## Hướng dẫn dự án
 
 1. Đọc prompt đang làm trong `handoff/prompts/` (`handoff/NEXT_ACTION.md` cho biết prompt nào) và các tài liệu tiếng Anh được chỉ định. Tiếng Anh là nguồn chuẩn; giữ bản dịch `.vi.md` tương ứng. Trao đổi (chat) bằng tiếng Việt. Code, comment và hợp đồng API dùng tiếng Anh. Brief/kết quả task trong `handoff/delivery/tasks/` chỉ tiếng Anh; tiếng Việt giữ cho tài liệu cho người, prompt, mẫu, NEXT_ACTION, CHECKPOINT/HANDOFF/REVIEW và chat.
 2. Chỉ triển khai giai đoạn hiện tại. Nhiệm vụ điều phối đã được cho phép có thể tiến qua WP1–WP5 sau khi gate bắt buộc và audit độc lập của mỗi giai đoạn đạt; không bỏ qua gate. Kiểm repo trước khi sửa; giữ việc không liên quan. Dùng app nhỏ có module và một bộ tính production. Tự quyết chi tiết triển khai thường trong hợp đồng.

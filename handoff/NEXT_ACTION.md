@@ -38,10 +38,30 @@
   updated the mockup (floating editor below 1360px, square week sheets, phone break chips,
   the "in progress" pill). The governance change of the AGENTS.md UI section is accepted
   (WP5-UX3-GOV-AUDIT PASS at 79b9a53, [GOV UX3 review](delivery/GOV_UX3_REVIEW.md)). Slices
-  T01-T10 (with T05B and T08B) are implemented and frozen; next: the package-final gate
-  WP5-UX3-GATE, the fresh area audits A and B, the integration audit, and the WP5 re-accept. The owner
-  answered WP5-UX3-Q6 with b (the break date field only for overnight sessions) and 24-hour
-  chip times; no owner question is open in this round.
+  T01-T10 (with T05B and T08B) are implemented and frozen. The owner answered WP5-UX3-Q6
+  with b (the break date field only for overnight sessions) and 24-hour chip times; no
+  owner question is open in this round.
+  - Progress so far:
+    - The first package gate failed on cecfceb. FIX1 (9187f31) and FIX2 (7ce4e95) fixed
+      it.
+    - The regate passed on 7ce4e95, with one recorded timeout deviation.
+    - The area audits A and B found eight findings (one Medium). FIX3 fixed them, frozen at
+      a78ada5 (digest d1d903cf).
+  - **Paused for usage on 2026-10-16.** The second regate WP5-UX3-REGATE2 was interrupted
+    mid-run.
+  - **Resumed on 2026-10-19 and reconciled.** There are no leftovers, and HEAD = origin/main
+    = a78ada5. The owner answered WP5-UX3-Q7 with (a): the new AGENTS.md text joins the
+    repository, with the runbook line on the `.vi.md` convention and project-foreign
+    phrases removed. It runs the GOV chain (GOV2, freeze, gate, audit) before the regate,
+    which then targets the GOV2 freeze.
+  - **Next on resume:**
+    1. A delegated reconciliation: live processes, the Docker project `ts-wp5-ux3regate2`,
+       partial evidence, and the uncommitted coordinator records.
+    2. WP5-UX3-REGATE2 rerun as attempt 2.
+    3. The fresh rechecks WP5-UX3-AUDIT-A2 and -B2 (briefs ready).
+    4. The integration audit and the WP5 re-accept.
+  - Details: [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), section "Paused for
+    usage (2026-10-16)".
 - Pilot: the concrete [pilot packet](delivery/WP5_PILOT_PACKET.md) is ready for owner
   review (release identity a643794 / 229df806). Owner permission has not been requested,
   there is no pilot result, and the NAS is NOT VERIFIED.

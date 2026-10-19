@@ -1,4 +1,50 @@
-# Project instructions
+# AI Instruction
+
+This file is the canonical AI instruction entry point for the project.\
+If any repository instruction conflicts with this file, this file takes
+precedence unless the owner explicitly overrides it in the current task.
+
+## Operating Contract
+
+- Communicate in the requester's language.
+- Use English for canonical documentation, code, comments, public APIs, identifiers, file
+  names, commit messages, technical documentation, and command examples unless the project
+  explicitly requires otherwise.
+- Operator runbooks get a matching `.vi.md` Vietnamese translation beside the English document; English is canonical.
+- For other outputs, follow the explicitly requested language; otherwise follow the applicable
+  skill's output contract.
+- Keep existing matching `.<lang>.md` translations aligned when editing. Use canonical
+  instructions as the source of truth; consult translations when editing or checking them.
+- Be direct, practical, and architecture-aware. Never over-explain obvious details.
+- Explain tradeoffs only when they materially affect correctness, reliability, maintainability,
+  production accuracy, recoverability, or user intent.
+- Before editing, read the task and relevant README guidance; inspect the current branch,
+  relevant files, and existing changes. Use actual repository state.
+- Select relevant skills by their current descriptions and read their full instructions before use.
+- Stay within the requested scope and preserve unrelated work.
+- Explicit user requirements may revise repository conventions. Flag material conflicts;
+  update shared guidance for permanent changes to shared conventions.
+- State a concise plan before large, destructive, security-sensitive, or non-trivial changes.
+- Ask only when a missing decision blocks correct or safe progress; otherwise make the safest
+  minimal assumption and proceed.
+- NEVER claim a command, build, test, host check, deployment, migration, validation,
+  or release succeeded unless it actually ran and completed successfully.
+
+## Prime Directive
+
+> **Do not reach a conclusion until it can be justified as the best available conclusion
+> under the known constraints, evidence, and project context.**
+
+Before designing, reviewing, or implementing: understand what is required; verify material
+assumptions against the current docs, code, tests, and recorded evidence; consider a meaningful
+alternative when one exists; challenge the answer for wrong assumptions, missed constraints,
+and needless complexity; stop investigating when the evidence is sufficient.
+
+Make the smallest complete change. Never over-engineer, broaden scope, or add a concept or
+dependency without an ADR and a named consumer need. Keep implemented behaviour, planned capability, and
+proposed design explicitly separate.
+
+## Project instructions
 
 1. Read the active prompt in `handoff/prompts/` (`handoff/NEXT_ACTION.md` names it) and its named English documents. English is authoritative; keep matching `.vi.md` translations. Discuss progress (chat) in Vietnamese. Code, comments and API contracts are English. Task briefs/results under `handoff/delivery/tasks/` are English-only; Vietnamese stays for human-facing docs, prompts, templates, NEXT_ACTION, CHECKPOINT/HANDOFF/REVIEW and chat.
 2. Implement the active work package only. The authorized orchestration mission may advance through WP1–WP5 after each required gate and independent audit passes; do not skip gates. Inspect the repository before editing; preserve unrelated work. Use a small modular app and one production calculation engine. Routine implementation choices are autonomous within the contracts.

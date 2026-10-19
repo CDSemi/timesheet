@@ -196,3 +196,18 @@ Append to this brief:
 - any fix, masking or stop reason.
 
 ## Results
+
+- Pre-HEAD 7ce4e95a0c4477374e981132d93b11aedab2e384 (= origin/main); post-HEAD and commit
+  a78ada5edbf5339d4502df57e9f195d11c0b5d28; pushed yes; remote SHA a78ada5e (same).
+- Digest before add and on the new HEAD via ls-tree:
+  d1d903cfb148d1bcc74131af3e1aeebed0f1892143e0ede3950ddee335b839ca (833 files) both.
+- Staged 550: 20 outside handoff/, 8 modified handoff records, 6 new records, 516 evidence
+  files. Evidence folders: FIX2-FREEZE 2, REGATE 213, AUDIT-A 161, AUDIT-B 92, FIX3 48; all
+  names ended .txt or -synthetic.png.
+- Other modified handoff files: none beyond the listed (diff stat and the ignore-eol stat
+  were identical, content changes only in listed files).
+- Checks (exit codes): node v24.21.0 (0); digest (0); git add (0); precommit-check PASS 550
+  files, 0 findings (0); diff --cached --check (0); JSON parse (0); validate_orchestration
+  (0); check_recovery (0); validate_package --preflight (0); fetch, push dry-run, push (0);
+  post-commit ls-tree digest matches.
+- No fix, no masking, no stop. Evidence in evidence/WP5-UX3-FIX3-FREEZE/ stays unstaged.

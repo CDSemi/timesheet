@@ -436,6 +436,123 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   REGATE Results; the decision is unchanged.
 - Running now: WP5-UX3-FIX3-FREEZE (committer, sonnet; the 20 FIX3 paths, the records, the
   review pairs and five evidence folders).
+- WP5-UX3-FIX3-FREEZE done: a78ada5edbf5339d4502df57e9f195d11c0b5d28 on main, pushed.
+  - 550 files: 20 outside handoff, 14 records, 516 evidence files.
+  - Digest d1d903cf (833 files), on HEAD too.
+  - Every check 0; precommit found 0 findings.
+- Running now: WP5-UX3-REGATE2 (verifier, sonnet) on a78ada5 / d1d903cf.
+  - Gate items 1, 2, 3, 5 and 6 again.
+  - A reduced simulated-clock sweep: FIX3 changes no time computation, so 5 FULL instants
+    (including both DST changes) and 4 five-spec instants.
+  - Each audit finding closed, measured.
+  - A full axe scan.
+- Then fresh rechecks AUDIT-A2 and AUDIT-B2, then AUDIT-INT.
+- While REGATE2 runs:
+  - Recheck briefs written: WP5-UX3-AUDIT-A2 and WP5-UX3-AUDIT-B2. Each covers its findings
+    closed, regression from FIX3's diff, at least six mutants and the mandatory checks;
+    ports A2 49080-49109, B2 49110-49139.
+  - The AUDIT-INT brief is retargeted to a78ada5 / d1d903cf, REGATE2, A2 and B2 (ports
+    49140-49159).
+  - Board entries are registered only after a REGATE2 PASS.
+
+### Paused for usage (2026-10-16)
+
+- The owner asked to pause because usage is nearly exhausted. The coordinator stopped
+  WP5-UX3-REGATE2 attempt 1 (agent afc3cf1073f2699f5) with TaskStop, mid-run.
+- Board state:
+  - mission status `paused_usage`;
+  - WP5-UX3-REGATE2 `interrupted`, with an `interruption` note;
+  - next_task_id WP5-UX3-REGATE2;
+  - current_source_digest still 262138e0. It becomes d1d903cf only at a REGATE2 PASS.
+- Last pushed commit: a78ada5edbf5339d4502df57e9f195d11c0b5d28 (WP5-UX3-FIX3-FREEZE; digest
+  d1d903cf, 833 files). Nothing is committed locally and unpushed.
+- Uncommitted coordinator records since a78ada5 (all under `handoff/`):
+  - modified: `delivery/ORCHESTRATION.json`, `delivery/STATE.json`, this checkpoint pair,
+    `NEXT_ACTION.md` and `.vi.md`, `delivery/tasks/WP5-UX3-FIX3-FREEZE.md` (committer
+    results), `delivery/tasks/WP5-UX3-AUDIT-INT.md` (retargeted);
+  - new: `delivery/tasks/WP5-UX3-REGATE2.md` (brief; may hold partial attempt-1 Results),
+    `delivery/tasks/WP5-UX3-AUDIT-A2.md`, `delivery/tasks/WP5-UX3-AUDIT-B2.md`,
+    `delivery/evidence/WP5-UX3-FIX3-FREEZE/` (`checks.txt`, `commit-message.txt`), and
+    possibly partial `delivery/evidence/WP5-UX3-REGATE2/`.
+  - The deferred checkpoint commit: the next freeze or accept commit carries these records.
+    The partial REGATE2 evidence is committed only if every name ends in `.txt` or
+    `-synthetic.png`.
+- Possible leftovers of the stopped verifier, unknown and to be reconciled:
+  - Playwright, server or browser processes on ports 49040-49079;
+  - the task folder `D:\.claude-tmp\timesheet\WP5-UX3-REGATE2` (exports, build output);
+  - the Docker compose project `ts-wp5-ux3regate2` and its drill image.
+
+  No source, docs or tests are expected to have changed: a verifier never edits them.
+- **Resume steps** (RESUME.md, docs/08):
+  1. Start with `claude --resume b5de56d1-fb31-4dc5-b74f-70e9473e1a0a` or a new session
+     with the entry prompt.
+  2. Delegate reconciliation to a verifier:
+     - `git status --short` (only the records above);
+     - the working-tree digest d1d903cf;
+     - HEAD = origin/main = a78ada5;
+     - no live process of REGATE2;
+     - `docker ps --all --filter name=ts-wp5-ux3regate2` empty (remove that project and its
+       drill image by exact name if present);
+     - list the partial evidence.
+  3. Rerun WP5-UX3-REGATE2 as attempt 2 with a fresh verifier and the same brief. The
+     attempt-1 partial Results stay as history under "Attempt 1 (interrupted)".
+  4. On PASS:
+     - set current_source_digest to d1d903cf;
+     - register WP5-UX3-AUDIT-A2 and -B2 and dispatch them in parallel (fresh opus
+       auditors; briefs ready);
+     - retarget the WP5-UX3-AUDIT-INT board entry to a78ada5 / d1d903cf and to REGATE2,
+       A2 and B2.
+  5. Then AUDIT-INT, and the WP5 re-accept (pilot packet identity, WP5_HANDOFF EN/VI,
+     STATE, NEXT_ACTION, accept commit, board back to `software_ready`).
+
+### Resumed (2026-10-19)
+
+- The owner resumed the session (same coordinator session ID). The board mission status is
+  back to `running`.
+- AGENTS.md on disk changed during the pause. It now starts with an "AI Instruction"
+  header, an Operating Contract and a Prime Directive; the project instructions 1-13 and the
+  UI section are unchanged in substance. The coordinator does not inspect git, so the
+  reconciliation finds out whether this change is committed, who made it, and whether
+  AGENTS.vi.md and the preflight still match.
+- Running now: the read-only reconciliation WP5-UX3-RESUME-RECON (verifier, sonnet; board
+  `auxiliary_lookups`). Its only write is removing the REGATE2 Docker leftovers, if present.
+- WP5-UX3-RESUME-RECON done.
+  - HEAD = origin/main = a78ada5; no later commit. The handoff changes are exactly the
+    records listed in the pause section.
+  - Outside handoff/, only AGENTS.md is modified and uncommitted: 48 lines added (AI
+    Instruction header, Operating Contract, Prime Directive), items 1-13 and the UI section
+    unchanged. AGENTS.vi.md, CLAUDE files, `.claude/` and docs/08 are unchanged.
+  - Working-tree digest 54cb9a3d against the HEAD digest d1d903cf; the difference is
+    AGENTS.md only.
+  - Both validators exit 0.
+  - No leftover process or Docker object; REGATE2 attempt 1 left no Results and no
+    evidence.
+- Owner question WP5-UX3-Q7 (board `open_owner_question_ux3_q7`): adopt the new AGENTS.md
+  text in the repository before the regate (with an AGENTS.vi.md translation), keep it local,
+  or let the owner handle it. A sub-question asks about the runbook-mirror line. The mission
+  is `blocked` on this answer because the regate target depends on it.
+- The owner answered WP5-UX3-Q7, verbatim on the board: (a). The runbook line follows the
+  `.vi.md` convention, and project-foreign phrases ("shop-floor", "step type", "probe kind",
+  "manifest key" and similar) are removed.
+- Coordinator decision: a GOV chain, because AGENTS.md is a governance path.
+  1. WP5-UX3-GOV2 (worker, sonnet) edits AGENTS.md and translates AGENTS.vi.md.
+  2. WP5-UX3-GOV2-FREEZE commits it together with the pending handoff records.
+  3. WP5-UX3-GOV2-GATE runs on that commit.
+  4. The fresh opus GOV2-AUDIT and REGATE2 attempt 2 then run in parallel.
+  REGATE2, A2, B2 and INT are retargeted to the GOV2 freeze, and the GOV accept records go
+  with the next WP5 commit.
+- Running now: WP5-UX3-GOV2. The mission status is back to `running`.
+- WP5-UX3-GOV2 done (worker, self-reported claude-sonnet-5-5).
+  - Runbook line now on the `.vi.md` convention.
+  - Removed: "shop-floor aware"; "step type", "task mode", "probe kind", "template
+    variable" and "manifest key"; "CI run". "CI evidence" became "recorded evidence"; the
+    repository has no CI.
+  - Kept, with Grep evidence: production accuracy, host check, deployment, migration,
+    release, recoverability, consumer need, public API, ADR.
+  - AGENTS.vi.md translated: 9 headings in each file.
+  - Items 1-13 to the end are byte-equal to a78ada5.
+  - Validators PASS; digest b35dddd5 (833 files).
+- Running now: WP5-UX3-GOV2-FREEZE (committer, alone).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

@@ -465,6 +465,122 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   kết luận không đổi.
 - Đang chạy: WP5-UX3-FIX3-FREEZE (committer, sonnet; 20 đường dẫn của FIX3, các bản ghi, các cặp
   review và năm thư mục bằng chứng).
+- WP5-UX3-FIX3-FREEZE xong: a78ada5edbf5339d4502df57e9f195d11c0b5d28 trên main, đã push.
+  - 550 file: 20 ngoài handoff, 14 bản ghi, 516 file bằng chứng.
+  - Digest d1d903cf (833 file), trên HEAD cũng vậy.
+  - Mọi kiểm tra trả về 0; precommit không phát hiện gì.
+- Đang chạy: WP5-UX3-REGATE2 (verifier, sonnet) trên a78ada5 / d1d903cf.
+  - Chạy lại các mục 1, 2, 3, 5 và 6 của gate.
+  - Đợt quét theo đồng hồ giả lập rút gọn, vì FIX3 không đổi phép tính thời gian nào: 5 mốc chạy
+    FULL (gồm cả hai lần đổi giờ mùa) và 4 mốc chạy năm spec.
+  - Đo để xác nhận từng lỗi của audit đã khắc phục.
+  - Quét axe đầy đủ.
+- Sau đó là các audit kiểm lại mới AUDIT-A2 và AUDIT-B2, rồi AUDIT-INT.
+- Trong lúc REGATE2 chạy:
+  - Đã soạn brief cho hai audit kiểm lại WP5-UX3-AUDIT-A2 và WP5-UX3-AUDIT-B2. Mỗi brief gồm: xác
+    nhận các lỗi đã khắc phục, kiểm hồi quy từ phần thay đổi của FIX3, ít nhất sáu đột biến và
+    các kiểm tra bắt buộc; dải cổng A2 49080-49109, B2 49110-49139.
+  - Brief AUDIT-INT đã được nhắm lại vào a78ada5 / d1d903cf, REGATE2, A2 và B2 (cổng
+    49140-49159).
+  - Các mục trên board chỉ được đăng ký sau khi REGATE2 đạt PASS.
+
+### Tạm dừng vì usage (2026-10-16)
+
+- Chủ dự án yêu cầu tạm dừng vì usage sắp hết. Coordinator đã dừng WP5-UX3-REGATE2 lần 1
+  (agent afc3cf1073f2699f5) bằng TaskStop khi đang chạy dở.
+- Trạng thái board:
+  - mission ở `paused_usage`;
+  - WP5-UX3-REGATE2 ở `interrupted`, kèm ghi chú `interruption`;
+  - next_task_id là WP5-UX3-REGATE2;
+  - current_source_digest vẫn là 262138e0. Nó chỉ thành d1d903cf khi REGATE2 đạt PASS.
+- Commit đã push gần nhất: a78ada5edbf5339d4502df57e9f195d11c0b5d28 (WP5-UX3-FIX3-FREEZE;
+  digest d1d903cf, 833 file). Không có commit nào nằm ở máy mà chưa push.
+- Bản ghi coordinator chưa commit kể từ a78ada5 (đều nằm trong `handoff/`):
+  - sửa: `delivery/ORCHESTRATION.json`, `delivery/STATE.json`, cặp checkpoint này,
+    `NEXT_ACTION.md` và `.vi.md`, `delivery/tasks/WP5-UX3-FIX3-FREEZE.md` (kết quả của
+    committer), `delivery/tasks/WP5-UX3-AUDIT-INT.md` (đã nhắm lại);
+  - mới: `delivery/tasks/WP5-UX3-REGATE2.md` (brief; có thể có Results dở dang của lần 1),
+    `delivery/tasks/WP5-UX3-AUDIT-A2.md`, `delivery/tasks/WP5-UX3-AUDIT-B2.md`,
+    `delivery/evidence/WP5-UX3-FIX3-FREEZE/` (`checks.txt`, `commit-message.txt`), và có thể
+    cả thư mục `delivery/evidence/WP5-UX3-REGATE2/` dở dang.
+  - Commit checkpoint được hoãn: lần commit đóng băng hoặc nghiệm thu tiếp theo sẽ mang theo
+    các bản ghi này. Bằng chứng dở dang của REGATE2 chỉ được commit nếu mọi tên file kết thúc
+    bằng `.txt` hoặc `-synthetic.png`.
+- Những thứ có thể còn sót lại từ verifier bị dừng (chưa rõ, cần đối soát):
+  - tiến trình Playwright, server hoặc trình duyệt trên các cổng 49040-49079;
+  - thư mục task `D:\.claude-tmp\timesheet\WP5-UX3-REGATE2` (bản xuất, kết quả build);
+  - project Docker compose `ts-wp5-ux3regate2` và image drill của nó.
+
+  Không có thay đổi nào ở mã nguồn, tài liệu hay test: verifier không bao giờ sửa chúng.
+- **Các bước khi resume** (theo RESUME.md và docs/08):
+  1. Mở bằng `claude --resume b5de56d1-fb31-4dc5-b74f-70e9473e1a0a`, hoặc mở phiên mới với
+     prompt khởi đầu.
+  2. Giao một verifier đối soát:
+     - `git status --short` (chỉ có các bản ghi ở trên);
+     - digest của working tree là d1d903cf;
+     - HEAD = origin/main = a78ada5;
+     - không còn tiến trình nào của REGATE2;
+     - `docker ps --all --filter name=ts-wp5-ux3regate2` rỗng (nếu còn thì xóa project đó và
+       image drill của nó theo đúng tên);
+     - liệt kê bằng chứng dở dang.
+  3. Chạy lại WP5-UX3-REGATE2 (lần 2) bằng một verifier mới với cùng brief. Results dở dang
+     của lần 1 được giữ làm lịch sử dưới mục "Attempt 1 (interrupted)".
+  4. Nếu PASS:
+     - đặt current_source_digest thành d1d903cf;
+     - đăng ký WP5-UX3-AUDIT-A2 và -B2 rồi giao chạy song song (auditor opus mới; đã có
+       brief);
+     - nhắm lại mục WP5-UX3-AUDIT-INT trên board vào a78ada5 / d1d903cf và vào REGATE2, A2,
+       B2.
+  5. Sau đó là AUDIT-INT và nghiệm thu lại WP5 (định danh trong pilot packet, WP5_HANDOFF
+     EN/VI, STATE, NEXT_ACTION, commit nghiệm thu, board trở về `software_ready`).
+
+### Đã resume (2026-10-19)
+
+- Chủ dự án đã resume phiên (cùng session ID của coordinator). Trạng thái mission trên board
+  trở lại `running`.
+- AGENTS.md trên đĩa đã thay đổi trong lúc tạm dừng. File giờ bắt đầu bằng tiêu đề "AI
+  Instruction", phần Operating Contract và Prime Directive; các mục hướng dẫn dự án 1-13 và mục
+  UI về nội dung không đổi. Coordinator không tự kiểm git, nên bước đối soát sẽ tìm hiểu thay
+  đổi này đã được commit chưa, do ai làm, và AGENTS.vi.md cùng preflight có còn khớp không.
+- Đang chạy: bước đối soát chỉ đọc WP5-UX3-RESUME-RECON (verifier, sonnet; nằm trong
+  `auxiliary_lookups` của board). Việc ghi duy nhất của nó là xóa phần Docker còn sót của
+  REGATE2, nếu có.
+- WP5-UX3-RESUME-RECON xong.
+  - HEAD = origin/main = a78ada5; không có commit nào sau đó. Các thay đổi trong handoff đúng
+    là các bản ghi đã liệt kê ở mục tạm dừng.
+  - Ngoài handoff/, chỉ có AGENTS.md bị sửa và chưa commit: thêm 48 dòng (tiêu đề AI
+    Instruction, Operating Contract, Prime Directive), các mục 1-13 và mục UI không đổi.
+    AGENTS.vi.md, các file CLAUDE, `.claude/` và docs/08 không đổi.
+  - Digest working tree là 54cb9a3d, digest của HEAD là d1d903cf; khác nhau chỉ ở AGENTS.md.
+  - Cả hai validator trả về 0.
+  - Không còn tiến trình hay đối tượng Docker nào sót lại; REGATE2 lần 1 không để lại Results
+    hay bằng chứng.
+- Câu hỏi cho chủ dự án WP5-UX3-Q7 (`open_owner_question_ux3_q7` trên board): đưa nội dung mới
+  của AGENTS.md vào repo trước khi chạy lại gate (kèm bản dịch AGENTS.vi.md), giữ nó ở máy,
+  hay để chủ dự án tự xử lý. Có thêm một câu hỏi phụ về dòng nói đến bản tiếng Việt của
+  runbook. Mission đang ở `blocked` chờ câu trả lời, vì commit đích của gate phụ thuộc vào nó.
+- Chủ dự án đã trả lời WP5-UX3-Q7 (nguyên văn trên board): chọn (a). Dòng về runbook theo quy
+  ước `.vi.md`, và các cụm từ thuộc dự án khác ("shop-floor", "step type", "probe kind",
+  "manifest key" và tương tự) bị xóa.
+- Quyết định của coordinator: chạy chuỗi GOV, vì AGENTS.md là file quản trị.
+  1. WP5-UX3-GOV2 (worker, sonnet) sửa AGENTS.md và dịch AGENTS.vi.md.
+  2. WP5-UX3-GOV2-FREEZE commit thay đổi này cùng các bản ghi handoff đang chờ.
+  3. WP5-UX3-GOV2-GATE chạy trên commit đó.
+  4. Sau đó GOV2-AUDIT (opus, agent mới) và REGATE2 lần 2 chạy song song.
+  REGATE2, A2, B2 và INT được nhắm lại vào commit đóng băng GOV2, còn các bản ghi nghiệm thu
+  GOV đi kèm lần commit WP5 tiếp theo.
+- Đang chạy: WP5-UX3-GOV2. Trạng thái mission đã trở lại `running`.
+- WP5-UX3-GOV2 xong (worker, tự báo claude-sonnet-5-5).
+  - Dòng về runbook nay theo quy ước `.vi.md`.
+  - Đã xóa: "shop-floor aware"; "step type", "task mode", "probe kind", "template variable"
+    và "manifest key"; "CI run". "CI evidence" đổi thành "recorded evidence", vì repo không có
+    CI.
+  - Giữ lại, có bằng chứng Grep: production accuracy, host check, deployment, migration,
+    release, recoverability, consumer need, public API, ADR.
+  - Đã dịch AGENTS.vi.md: mỗi file có 9 tiêu đề.
+  - Từ mục 1-13 đến cuối file giống từng byte so với a78ada5.
+  - Các validator PASS; digest b35dddd5 (833 file).
+- Đang chạy: WP5-UX3-GOV2-FREEZE (committer, chạy một mình).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 
