@@ -1,0 +1,17 @@
+. <task>/env.sh
+cd $T
+for f in logs/sweep-full-*.txt logs/sweep-five-*.txt; do
+  [ -f "$f" ] || continue
+  d_ok=$(grep -cE '^\s+ok\s+[0-9]+ \[desktop\]' $f)
+  m_ok=$(grep -cE '^\s+ok\s+[0-9]+ \[mobile\]' $f)
+  d_sk=$(grep -cE '^\s+-\s+[0-9]+ \[desktop\]' $f)
+  m_sk=$(grep -cE '^\s+-\s+[0-9]+ \[mobile\]' $f)
+  d_f=$(grep -cE '^\s+x\s+[0-9]+ \[desktop\]' $f)
+  m_f=$(grep -cE '^\s+x\s+[0-9]+ \[mobile\]' $f)
+  ex=$(grep -E '^exit=' $f)
+  pas=$(grep -E '^\s+[0-9]+ passed' $f)
+  echo "$f | desktop ok/skip/fail $d_ok/$d_sk/$d_f | mobile $m_ok/$m_sk/$m_f | $ex | $pas | dep=$(grep -ci deprecat $f)"
+done
+for f in logs/control-*.txt; do
+  echo "$f | $(grep -E '^CONTROL desktop' $f | cut -c1-300)"
+done

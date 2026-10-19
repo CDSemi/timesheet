@@ -141,3 +141,13 @@ Append to this brief:
 - any fix, masking or stop reason.
 
 ## Results
+
+- Model: Self-reported claude-sonnet-5-5. Node v24.21.0.
+- Pre-HEAD = origin/main = a78ada5edbf5339d4502df57e9f195d11c0b5d28.
+- Commit ceb86b6b18bd0e8fabd93f47672cd87f3899b92f; pushed; remote SHA the same.
+- Digest before add: b35dddd5... (833 files); git ls-tree digest of new HEAD: b35dddd5... (833).
+- Staged: 21 (2 governance, 8 modified handoff, 5 new task records, 6 evidence files).
+- Exit codes: add 0, precommit-check 0 (21 files, 0 findings), diff --cached --check 0,
+  JSON parse 0, validate_orchestration 0, check_recovery 0, validate_package --preflight 0,
+  commit 0, dry-run 0, push 0.
+- No fix, masking or stop. Evidence in evidence/WP5-UX3-GOV2-FREEZE/ (unstaged).

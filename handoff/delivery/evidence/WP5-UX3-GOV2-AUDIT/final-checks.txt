@@ -1,0 +1,64 @@
+#### source: final_checks.txt
+date_utc: 2026-10-19T19:13:58Z
+$ <python> handoff/delivery/validate_package.py --preflight
+{
+  "status": "PASS",
+  "mode": "preflight",
+  "translation_pairs": 115,
+  "local_links": 2259,
+  "ot_scenarios": 33,
+  "time_scenarios": 32,
+  "deficit_scenarios": 16,
+  "ledger_accounting_scenarios": 10,
+  "scenario_total": 91,
+  "application_tests_executed": false
+}
+exit=0
+$ <python> handoff/delivery/validate_orchestration.py
+{
+  "status": "PASS",
+  "profiles": 9,
+  "tasks": 419,
+  "active_tasks": 2,
+  "application_acceptance_verified": false,
+  "claude_runtime_verified": false
+}
+exit=0
+$ CR bytes / trailing whitespace in the review pair, the brief and the evidence (expect none)
+handoff/delivery/GOV_UX3_REVIEW2.md CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/GOV_UX3_REVIEW2.vi.md CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/tasks/WP5-UX3-GOV2-AUDIT.md CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/candidates.sh.txt CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/candidates.txt CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/check-recovery.txt CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/checks-run1-aborted.txt CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/checks.txt CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/consistency.txt CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/digest-after.txt CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/digest-before.txt CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/digest.sh.txt CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/mask_evidence.py.txt CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/models.txt CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/owner-diff.txt CR=0 trailing_ws_lines=1 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/owner-text.txt CR=0 trailing_ws_lines=4 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/owner_text.sh.txt CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/run_checks.sh.txt CR=0 trailing_ws_lines=0 last_char=\n
+handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/text_checks.py.txt CR=0 trailing_ws_lines=0 last_char=\n
+$ git status --short -- . ':!handoff'   (expect empty)
+exit=0
+#### source: digest_final.txt
+label: final
+date_utc: 2026-10-19T19:14:02Z
+$ git rev-parse HEAD
+ceb86b6b18bd0e8fabd93f47672cd87f3899b92f
+exit=0
+$ node --version (Node 24 by full path)
+v24.21.0
+exit=0
+$ node scripts/source-digest.mjs
+b35dddd5f5d4a8d3dccf52daa7e397969939748b1eb0151263fd50febf7ebb48  (833 files, handoff/ excluded)
+exit=0
+$ git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum  (cross-check)
+files: 833
+b35dddd5f5d4a8d3dccf52daa7e397969939748b1eb0151263fd50febf7ebb48 *-
+exit=0

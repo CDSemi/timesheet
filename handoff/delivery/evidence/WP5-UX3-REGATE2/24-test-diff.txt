@@ -1,0 +1,872 @@
+diff --git a/tests/client/breakRowsModel.test.ts b/tests/client/breakRowsModel.test.ts
+index f96ba5f..3496fe5 100644
+--- a/tests/client/breakRowsModel.test.ts
++++ b/tests/client/breakRowsModel.test.ts
+@@ -12,6 +12,7 @@ import {
+   changeDialogZone,
+   checkBreakRows,
+   chooseBreakRowFold,
++  confirmBreaksRows,
+   editBreakRow,
+   newBreakRow,
+   newSessionDialogDraft,
+@@ -539,6 +540,60 @@ describe('breaks_confirmed', () => {
+     expect(breaksPayload(input, { kind: 'session', allowUnconfirmed: true })).toEqual({ ok: true, breaks: [], breaksConfirmed: false });
+   });
+
++  /*
++   * WP5-UX3-FIX3 item 7 (E-1, the three starting cases of the Check out dialog). The dialog starts from the saved rows of the running
++   * session. An empty list with the box unticked omits `breaks` only when there were no saved rows; when the person removed saved
++   * rows, the empty unconfirmed list is the complete set that replaces them (the dialog shows no rows, so none may be kept).
++   */
++  describe('check out mode, by what the dialog started with', () => {
++    const running = (overrides: Partial<Session> = {}) => savedSession({ end_utc: null, breaks_confirmed: false, version: 7, ...overrides });
++
++    it('started with saved rows, all removed, box unticked: the empty unconfirmed list replaces them', () => {
++      const session = running();
++      expect(session.breaks).toHaveLength(2);
++      const removed = sessionDialogDraftFromSession(session).rows.reduce((draft, row) => removeBreakRow(draft, row.key), sessionDialogDraftFromSession(session));
++      expect(removed.rows).toEqual([]);
++      const built = buildCheckOutDialogRequest({ session, rows: removed.rows, noBreaks: removed.noBreaks, expectedVersion: 7 });
++      expect(built).toEqual({ ok: true, request: { breaks: [], breaks_confirmed: false, expected_version: 7 } });
++      expect(breaksPayload({ rows: [], noBreaks: false, zone: LA, bounds: null }, { kind: 'checkout', hadSavedRows: true })).toEqual({
++        ok: true,
++        breaks: [],
++        breaksConfirmed: false,
++      });
++    });
++
++    it('started with no saved row and nothing listed, box unticked: the list stays omitted (breaks unconfirmed, no rows touched)', () => {
++      const session = running({ breaks: [] });
++      const built = buildCheckOutDialogRequest({ session, rows: [], noBreaks: false, expectedVersion: 7 });
++      expect(built).toEqual({ ok: true, request: { breaks_confirmed: false, expected_version: 7 } });
++      if (built.ok) expect('breaks' in built.request).toBe(false);
++    });
++
++    it('started with saved rows and some kept: the listed set confirms and replaces them; the ticked box confirms none', () => {
++      const session = running();
++      const kept = sessionDialogDraftFromSession(session).rows.slice(0, 1);
++      const listed = buildCheckOutDialogRequest({ session, rows: kept, noBreaks: false, expectedVersion: 7 });
++      expect(listed.ok && listed.request.breaks_confirmed).toBe(true);
++      expect(listed.ok && listed.request.breaks).toHaveLength(1);
++      // Ticking the box wins over the rows and over the removal: an empty confirmed list.
++      expect(buildCheckOutDialogRequest({ session, rows: kept, noBreaks: true, expectedVersion: 7 })).toEqual({
++        ok: true,
++        request: { breaks: [], breaks_confirmed: true, expected_version: 7 },
++      });
++      expect(buildCheckOutDialogRequest({ session, rows: [], noBreaks: true, expectedVersion: 7 })).toEqual({
++        ok: true,
++        request: { breaks: [], breaks_confirmed: true, expected_version: 7 },
++      });
++    });
++
++    it('rows added to a session that had none are the listed set (confirmed)', () => {
++      const session = running({ breaks: [] });
++      const built = buildCheckOutDialogRequest({ session, rows: [typedRow('a', '2026-09-21', '12:00', '15')], noBreaks: false, expectedVersion: 7 });
++      expect(built.ok && built.request.breaks_confirmed).toBe(true);
++      expect(built.ok && built.request.breaks).toHaveLength(1);
++    });
++  });
++
+   it('session-level gaps come before the breaks: zone, start, end and a repeated session start', () => {
+     expect(buildSessionDialogRequest(dialog({ zone: ' ' }), SESSION_OPTIONS)).toMatchObject({ ok: false, message: 'Enter the input zone.' });
+     expect(buildSessionDialogRequest(dialog({ start: field('2026-10-14', '') }), SESSION_OPTIONS)).toMatchObject({
+@@ -818,6 +873,64 @@ describe('suggestion rows without the past-day rule (WP5-UX3-T08B)', () => {
+   });
+ });
+
++/*
++ * WP5-UX3-FIX3 item 8 (coordinator decision on F-UX3B-2): "Confirm breaks" on a saved, unconfirmed session lists the suggested breaks that
++ * lie inside the session (docs/04 line 65), not all or nothing. 09:00 Los Angeles is 16:00Z on 2026-09-21; the default policy suggests
++ * 11:00-11:15, 13:00-13:30 and 15:30-15:45 for that start.
++ */
++describe('"Confirm breaks" rows (WP5-UX3-FIX3 item 8)', () => {
++  const keyOf = (index: number) => `confirm-s1-${index}`;
++  const ended = (endUtc: string, overrides: Partial<Session> = {}) => savedSession({ end_utc: endUtc, breaks: [], breaks_confirmed: false, ...overrides });
++  const starts = (session: Session, p: PolicyVersion = policy()) => confirmBreaksRows(session, p, keyOf).map((row) => [row.start.time, row.minutes]);
++
++  it.each([
++    ['09:00-12:00', '2026-09-21T19:00:00Z', [['11:00', '15']]],
++    ['09:00-14:00', '2026-09-21T21:00:00Z', [['11:00', '15'], ['13:00', '30']]],
++    ['09:00-18:00', '2026-09-22T01:00:00Z', [['11:00', '15'], ['13:00', '30'], ['15:30', '15']]],
++    ['09:00-10:30, none fits', '2026-09-21T17:30:00Z', []],
++    ['09:00-11:15, the first ends exactly at the end', '2026-09-21T18:15:00Z', [['11:00', '15']]],
++    ['09:00-11:14, the first ends one minute after the end', '2026-09-21T18:14:00Z', []],
++  ])('%s lists the suggestions inside the session', (_name, endUtc, expected) => {
++    expect(starts(ended(endUtc))).toEqual(expected);
++  });
++
++  it('the rows are untouched suggestions pinned in the session input zone, with their own keys', () => {
++    const rows = confirmBreaksRows(ended('2026-09-21T21:00:00Z'), policy(), keyOf);
++    expect(rows.map((row) => [row.key, row.origin, row.edited, row.countsAsWork])).toEqual([
++      ['confirm-s1-0', 'suggested', false, false],
++      ['confirm-s1-1', 'suggested', false, false],
++    ]);
++    expect(rows[0]?.start).toEqual(field('2026-09-21', '11:00', { offset: '-07:00' }));
++    expect(rows[0]?.pinned).toEqual({ zone: LA, startUtc: utc('2026-09-21T18:00:00Z'), endUtc: utc('2026-09-21T18:15:00Z') });
++    // Same instants, shown in another input zone (Ho Chi Minh City is UTC+7).
++    const hcm = confirmBreaksRows(ended('2026-09-21T21:00:00Z', { input_zone: HCM }), policy(), keyOf);
++    expect(hcm.map((row) => [row.start.date, row.start.time, row.start.offset])).toEqual([
++      ['2026-09-22', '01:00', '+07:00'],
++      ['2026-09-22', '03:00', '+07:00'],
++    ]);
++  });
++
++  it('saving the listed rows sends them as the same instants the session dialog sends for any untouched suggestion', () => {
++    const session = ended('2026-09-21T21:00:00Z');
++    const draft = { ...sessionDialogDraftFromSession(session), rows: confirmBreaksRows(session, policy(), keyOf) };
++    const request = sessionRequest(draft, { allowUnconfirmed: false, expectedVersion: session.version });
++    expect(request.breaks_confirmed).toBe(true);
++    expect(request.breaks.map((item) => [item.start.local, item.end.local])).toEqual([
++      ['2026-09-21T11:00', '2026-09-21T11:15'],
++      ['2026-09-21T13:00', '2026-09-21T13:30'],
++    ]);
++  });
++
++  it('offers nothing without a policy, without policy breaks, for a running session, a confirmed one or one that has saved rows', () => {
++    const closed = '2026-09-22T01:00:00Z';
++    expect(confirmBreaksRows(ended(closed), undefined, keyOf)).toEqual([]);
++    expect(starts(ended(closed), policy({ breaks: [] }))).toEqual([]);
++    expect(starts(savedSession({ end_utc: null, breaks: [], breaks_confirmed: false }))).toEqual([]);
++    expect(starts(ended(closed, { breaks_confirmed: true }))).toEqual([]);
++    expect(starts(savedSession({ end_utc: closed, breaks_confirmed: false }))).toEqual([]);
++  });
++});
++
+ describe('summary texts', () => {
+   it('lists the minutes of the rows, says none, or says not confirmed', () => {
+     const rows = [
+diff --git a/tests/client/dayEditorModel.test.ts b/tests/client/dayEditorModel.test.ts
+index 37ced50..7fbe3de 100644
+--- a/tests/client/dayEditorModel.test.ts
++++ b/tests/client/dayEditorModel.test.ts
+@@ -1,5 +1,5 @@
+ import { describe, expect, it } from 'vitest';
+-import type { Calculation, DayView, Period, PolicyVersion, Session } from '../../src/client/api.ts';
++import type { Calculation, DayView, Period, Session } from '../../src/client/api.ts';
+ import {
+   cardBreaksText,
+   dayBanner,
+@@ -7,31 +7,12 @@ import {
+   deleteFacts,
+   editorChips,
+   editorTitle,
+-  quickBreaksOf,
+   sessionCardOf,
+ } from '../../src/client/components/dayEditorModel.ts';
+
+ const LA = 'America/Los_Angeles';
+ const HCM = 'Asia/Ho_Chi_Minh';
+
+-const DEFAULT_BREAKS = [
+-  { start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false },
+-  { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false },
+-  { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false },
+-];
+-
+-const POLICY: PolicyVersion = {
+-  id: 'policy-1',
+-  seq: 1,
+-  effective_from: '2026-01-01',
+-  required_minutes: 480,
+-  threshold_minutes: 30,
+-  rounding_step_minutes: 30,
+-  reference_start: '08:00',
+-  reference_end: '17:00',
+-  breaks: DEFAULT_BREAKS,
+-};
+-
+ /** 09:00 to 18:30 Los Angeles (PDT) on 2026-09-21, breaks not confirmed. */
+ function session(overrides: Partial<Session> = {}): Session {
+   return {
+@@ -88,39 +69,6 @@ function day(overrides: Partial<DayView> = {}): DayView {
+   };
+ }
+
+-describe('one-tap break confirmation of a saved session (R-02)', () => {
+-  it('suggests the policy breaks shifted by the session start, shown in the display zone (R-07)', () => {
+-    const quick = quickBreaksOf(session(), POLICY, LA);
+-    expect(quick?.kind).toBe('suggested');
+-    expect(quick?.chips).toEqual(['11:00-11:15', '13:00-13:30', '15:30-15:45']);
+-    // The same breaks seen from Ho Chi Minh City (UTC+7); the rows stay in the session's input zone.
+-    expect(quickBreaksOf(session(), POLICY, HCM)?.chips).toEqual(['01:00-01:15', '03:00-03:30', '05:30-05:45']);
+-    expect(quickBreaksOf(session(), POLICY, HCM)?.rows.map((row) => row.start.time)).toEqual(['11:00', '13:00', '15:30']);
+-  });
+-
+-  // The request of "Confirm breaks" (suggested rows, the rows already listed, or "no breaks taken") is proved against the old
+-  // one-tap bodies in tests/client/breakRowsModel.test.ts, because the session dialog's model now builds it.
+-  it('offers the rows already listed with the session instead of new suggestions', () => {
+-    const listed = session({ breaks: [{ id: 'b1', start_utc: '2026-09-21T19:00:00Z', end_utc: '2026-09-21T19:20:00Z', counts_as_work: false }] });
+-    const quick = quickBreaksOf(listed, POLICY, LA);
+-    expect(quick?.kind).toBe('listed');
+-    expect(quick?.chips).toEqual(['12:00-12:20']);
+-    expect(quick?.rows.map((row) => [row.start.time, row.end.time])).toEqual([['12:00', '12:20']]);
+-  });
+-
+-  it('offers only "no breaks" when a suggestion would fall outside the session or no policy breaks exist', () => {
+-    // 09:00 to 10:30: the first suggested break (11:00) is after the end; never deduct future breaks.
+-    expect(quickBreaksOf(session({ end_utc: '2026-09-21T17:30:00Z' }), POLICY, LA)).toEqual({ kind: 'none', rows: [], chips: [] });
+-    expect(quickBreaksOf(session(), undefined, LA)?.kind).toBe('none');
+-    expect(quickBreaksOf(session(), { ...POLICY, breaks: [] }, LA)?.kind).toBe('none');
+-  });
+-
+-  it('offers nothing for a running session or one whose breaks are already confirmed', () => {
+-    expect(quickBreaksOf(session({ end_utc: null }), POLICY, LA)).toBeNull();
+-    expect(quickBreaksOf(session({ breaks_confirmed: true }), POLICY, LA)).toBeNull();
+-  });
+-});
+-
+ describe('the chips under the panel title (U-19, U-20)', () => {
+   const zones = { displayZone: LA, reportingZone: LA, readOnly: false };
+
+diff --git a/tests/client/dayModel.test.ts b/tests/client/dayModel.test.ts
+index 075c8a6..b54a811 100644
+--- a/tests/client/dayModel.test.ts
++++ b/tests/client/dayModel.test.ts
+@@ -209,6 +209,12 @@ describe('stale version messages', () => {
+     expect(message).toContain('Nothing was saved');
+     expect(staleReloadMessage([])).toContain('Some dates');
+   });
++
++  it('uses the owner word "category" (G-2 a), never "labels" (WP5-UX3-FIX3 item 9)', () => {
++    const message = staleReloadMessage(['2026-09-30']);
++    expect(message).toBe('2026-09-30 changed since this period was loaded. Nothing was saved. Reload the period, review the new categories and try again.');
++    expect(message.toLowerCase()).not.toContain('label');
++  });
+ });
+
+ describe('reviewStatus', () => {
+diff --git a/tests/e2e/admin-status.spec.ts b/tests/e2e/admin-status.spec.ts
+index db3c6e5..d6791a8 100644
+--- a/tests/e2e/admin-status.spec.ts
++++ b/tests/e2e/admin-status.spec.ts
+@@ -193,6 +193,115 @@ test('the admin sees pipeline states, a fault code and recipients, and no timesh
+   expect(writes, 'refreshing sends no write request').toEqual([]);
+ });
+
++/*
++ * Test-only (as in history-settings.spec.ts): an uncertain delivery attempt is what a sender that died after handing the message to
++ * the mail server leaves behind. No route creates one, so a child process writes it into the temporary database of the BUILT server
++ * through its own database module: a send job that needs intervention and an attempt that went sending, then uncertain with the
++ * fault code `lease_expired_while_sending`, copying the envelope of the person's last attempt.
++ */
++const SEED_UNCERTAIN_SCRIPT = `
++const [dbUrl] = process.argv.slice(1, 2);
++const { openDatabase } = await import(dbUrl);
++const { randomUUID } = await import('node:crypto');
++const env = process.env;
++const db = openDatabase(env.SEED_DB_PATH);
++try {
++  const last = db.prepare('SELECT user_id, envelope_json, attachment_id FROM delivery_attempts WHERE revision_id = ? ORDER BY started_at DESC LIMIT 1').get(env.SEED_REVISION_ID);
++  if (last === undefined) throw new Error('no delivery attempt to copy the envelope from');
++  const now = new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z');
++  const jobId = randomUUID();
++  const attemptId = randomUUID();
++  db.prepare("INSERT INTO jobs (id, user_id, revision_id, kind, business_key, payload_json, state, attempts, next_run_at, last_error, created_at, updated_at) VALUES (?, ?, ?, 'send_email', ?, ?, 'intervention', 1, ?, 'delivery_uncertain', ?, ?)").run(jobId, last.user_id, env.SEED_REVISION_ID, 'e2e-uncertain:' + jobId, JSON.stringify({ revision_id: env.SEED_REVISION_ID }), now, now, now);
++  db.prepare("INSERT INTO delivery_attempts (id, job_id, user_id, revision_id, attempt_no, channel, envelope_json, attachment_id, message_id, state, started_at, updated_at) VALUES (?, ?, ?, ?, 1, 'email', ?, ?, ?, 'sending', ?, ?)").run(attemptId, jobId, last.user_id, env.SEED_REVISION_ID, last.envelope_json, last.attachment_id, '<e2e-' + attemptId + '@timesheet.invalid>', now, now);
++  db.prepare("UPDATE delivery_attempts SET state = 'uncertain', provider_response = 'lease_expired_while_sending', updated_at = ? WHERE id = ?").run(now, attemptId);
++  process.stdout.write(attemptId);
++} finally {
++  db.close();
++}
++`;
++
++function seedUncertainAttempt(databasePath: string, revisionId: string): string {
++  const root = resolve(import.meta.dirname, '..', '..');
++  const databaseModule = pathToFileURL(join(root, 'dist', 'server', 'db', 'database.js')).href;
++  const result = spawnSync(process.execPath, ['--input-type=module', '-e', SEED_UNCERTAIN_SCRIPT, databaseModule], {
++    cwd: root,
++    encoding: 'utf8',
++    env: { ...process.env, SEED_DB_PATH: databasePath, SEED_REVISION_ID: revisionId },
++  });
++  if (result.status !== 0) throw new Error(`uncertain-attempt seeding failed with ${result.status}: ${result.stderr}`);
++  expect(result.stdout, 'seeded attempt id').not.toBe('');
++  return result.stdout;
++}
++
++/*
++ * WP5-UX3-FIX3 item 6: the longest words of the "Submissions and delivery" rows, the delivery state "Delivery recorded as uncertain" and
++ * the fault code `lease_expired_while_sending`, stay inside the card at 390 and 320px: the badge and the code wrap, so the table wrapper
++ * does not scroll sideways (a scrollable region with no keyboard access, axe scrollable-region-focusable) and the page does not either.
++ * The uncertain attempt is written by the test-only seed above, after a real sign-off and a delivered first attempt; the employee then
++ * records the decision "mark delivered" through the API, which turns the badge from "Decision needed" into the long state under test.
++ */
++test('phone Administration: a long delivery state and a long fault code stay inside the card, with no sideways scroll at 390 and 320px', async ({
++  page,
++  adminSeed,
++  builtServer,
++  signInPageAs,
++}, testInfo) => {
++  test.setTimeout(180_000);
++  const project = testInfo.project.name;
++  const account = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Operator Beta' });
++  const api = await new SeedClient(builtServer.origin).signIn(account.email, account.password);
++  const { todayLocal, currentPayrollDate } = await api.today();
++  await api.call('POST', '/api/policies', starterPolicyBody(addDays(todayLocal, -400)), 201);
++  await api.call('POST', '/api/settings/submission', { expected_seq: 0, to: [TO], cc: [CC], auto_submit: false }, 201);
++  await uploadSignature(builtServer, account);
++  const [workDay = ''] = await api.displayedPeriodFreeWorkdays();
++  expect(workDay, 'a past free workday in the displayed period').not.toBe('');
++  await api.seedCompleteDay(workDay);
++  const review = await api.call<{ expected_version: number; payload_hash: string }>('GET', `/api/timesheets/${currentPayrollDate}/review`);
++  const signed = await api.call<{ revision: { id: string } }>(
++    'POST',
++    `/api/timesheets/${currentPayrollDate}/signoff`,
++    { expected_version: review.expected_version, reviewed_hash: review.payload_hash, signer_name: 'Synthetic Operator', incomplete_evidence_acknowledged: true },
++    201,
++  );
++  const mine = async () => (await adminSeed.call<{ submissions: ApiSubmission[] }>('GET', '/api/admin/submissions?limit=500')).submissions.find((row) => row.user_id === account.id);
++  await expect
++    .poll(async () => (await mine())?.delivery.state, { timeout: 150_000, intervals: [2_000], message: 'a final first delivery state' })
++    .toMatch(/^(accepted|failed_permanent)$/);
++  // Attempts are ordered by their start second: wait past it so the seeded attempt is the newest.
++  await new Promise((resolveWait) => setTimeout(resolveWait, 1_500));
++  const attemptId = seedUncertainAttempt(builtServer.databasePath, signed.revision.id);
++  await expect.poll(async () => (await mine())?.delivery.state, { message: 'the seeded uncertain state is the latest' }).toBe('uncertain');
++  await api.call('POST', `/api/deliveries/${attemptId}/decision`, { decision: 'mark_delivered' });
++
++  await signInPageAs(builtServer.credentials.admin, '#/settings/admin');
++  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
++  const card = page.getByRole('region', { name: 'Submissions and delivery' });
++  const personRow = card.locator(`[data-submission-user="${account.id}"]`);
++  await expect(personRow).toHaveCount(1);
++  await expect(personRow.locator('[data-status="delivery"]')).toHaveText('Delivery recorded as uncertain');
++  await expect(personRow.locator('.ops-code').filter({ hasText: 'lease_expired_while_sending' })).toHaveCount(1);
++  for (const width of [390, 320]) {
++    await page.setViewportSize({ width, height: 844 });
++    await personRow.scrollIntoViewIfNeeded();
++    const wrap = card.locator('.table-wrap');
++    const scroll = await wrap.evaluate((element) => ({ client: element.clientWidth, scroll: element.scrollWidth }));
++    expect(scroll.scroll, `${width}px: the table wrapper has nothing to scroll sideways (${scroll.scroll} against ${scroll.client})`).toBeLessThanOrEqual(scroll.client);
++    // Every word of the row (cells, badges, codes) ends inside the card.
++    const outside = await card.evaluate((element, userId) => {
++      const right = element.getBoundingClientRect().right;
++      const row = element.querySelector(`[data-submission-user="${userId}"]`);
++      if (row === null) return ['row missing'];
++      return [...row.querySelectorAll('th, td, td *')]
++        .filter((item) => item.getBoundingClientRect().right > right + 0.5)
++        .map((item) => `${item.tagName.toLowerCase()}.${item.className} ends at ${item.getBoundingClientRect().right.toFixed(1)} past ${right.toFixed(1)}`);
++    }, account.id);
++    expect(outside, `${width}px: no part of the row lies past the card`).toEqual([]);
++    await expectNoSidewaysScroll(page);
++    await card.screenshot({ path: screenshotPath(`admin-submissions-uncertain-${width}-${project}-synthetic.png`) });
++  }
++});
++
+ test('an employee cannot read the status routes and the Admin screen is not offered', async ({ page, signInThroughUi }) => {
+   await signInThroughUi();
+   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+diff --git a/tests/e2e/day-editor.spec.ts b/tests/e2e/day-editor.spec.ts
+index fe982f6..8107424 100644
+--- a/tests/e2e/day-editor.spec.ts
++++ b/tests/e2e/day-editor.spec.ts
+@@ -1898,6 +1898,87 @@ test('Check out with nothing listed and the box unticked omits breaks: the sessi
+   }
+ });
+
++/*
++ * WP5-UX3-FIX3 item 7 (coordinator decision on F-UX3B-1): when the Check out dialog opened with saved break rows and the person removed
++ * all of them with the box unticked, Check out sends the complete unconfirmed set, `breaks: []` with `breaks_confirmed: false`, which
++ * replaces the saved rows; it used to omit the list, so the server kept rows the dialog no longer showed (and refused a saved break that
++ * ended after the check-out with 422 saved_break_after_clock_out). When the dialog opened with no saved rows the list stays omitted (E-1).
++ */
++test('the server replaces saved breaks with an empty unconfirmed list at Check out, also a saved break that ends after now (E-1)', async ({ employeeSeed }) => {
++  // One saved break from 177 to 182 minutes after the start: it ends about two minutes after "now" (a save allows up to five).
++  const run = await seedRunning(employeeSeed, 3, [[177, 5]]);
++  try {
++    const refused = await employeeSeed.call<{ error: { code: string } }>('POST', '/api/clock/out', { breaks_confirmed: false, expected_version: run.version }, 422);
++    expect(refused.error.code, 'an omitted list cannot keep a saved break that ends after the check-out').toBe('saved_break_after_clock_out');
++    expect((await employeeSeed.dayView(run.todayLocal)).sessions.some((session) => session.end_utc === null), 'the refused check-out leaves the session running').toBe(true);
++    await employeeSeed.call('POST', '/api/clock/out', { breaks: [], breaks_confirmed: false, expected_version: run.version });
++    const closed = await sessionById(employeeSeed, run.todayLocal, run.id);
++    expect(closed?.end_utc).not.toBeNull();
++    expect(closed?.breaks_confirmed).toBe(false);
++    expect(closed?.breaks, 'the saved break was replaced by the empty list').toHaveLength(0);
++  } finally {
++    await employeeSeed.clearSessions(run.todayLocal);
++  }
++});
++
++test('Check out after every saved break was removed (box unticked) sends an empty unconfirmed list that replaces them, and the dialog says what will be recorded (E-1)', async ({
++  page,
++  employeeSeed,
++  signInThroughUi,
++}) => {
++  // Two saved rows; the second ends after "now", so an omitted list would be refused for a break the dialog no longer shows.
++  const run = await seedRunning(employeeSeed, 3, [
++    [10, 10],
++    [177, 5],
++  ]);
++  const bodies = recordCheckOuts(page);
++  try {
++    await signInThroughUi();
++    await page.getByRole('button', { name: 'Check out' }).click();
++    const dialog = checkOutDialog(page);
++    await expect(dialog).toBeVisible();
++    const removedNote = dialog.getByText('The saved breaks you removed are deleted at Check out.');
++    await expect(dialog.locator('[data-break]')).toHaveCount(2);
++    await expect(dialog.getByRole('button', { name: 'Check out with these breaks' })).toBeVisible();
++    await expect(removedNote).toHaveCount(0);
++
++    // One row left: still a listed set, no note.
++    await removeCheckOutBreak(page, dialog, 2);
++    await expect(dialog.locator('[data-break]')).toHaveCount(1);
++    await expect(removedNote).toHaveCount(0);
++
++    // Every saved row removed with the box unticked: the dialog says what Check out records.
++    await removeCheckOutBreak(page, dialog, 1);
++    await expect(dialog.locator('[data-break]')).toHaveCount(0);
++    await expect(dialog.getByText('No breaks listed.')).toBeVisible();
++    await expect(dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
++    await expect(removedNote).toBeVisible();
++    await expect(dialog.getByRole('status').filter({ hasText: 'The saved breaks you removed are deleted at Check out.' })).toContainText('Breaks stay unconfirmed and OT for the day stays pending.');
++    await expect(dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' })).toBeVisible();
++
++    // The box takes over the note: ticked, the empty list is confirmed; unticked again, the note returns.
++    await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
++    await expect(removedNote).toHaveCount(0);
++    await expect(dialog.getByRole('button', { name: 'Check out, no breaks taken' })).toBeVisible();
++    await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).uncheck();
++    await expect(removedNote).toBeVisible();
++
++    await dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' }).click();
++    await expect(dialog).toHaveCount(0);
++    await expect(page.getByRole('alertdialog')).toHaveCount(0);
++    await expect(page.getByText('Checked out.')).toBeVisible();
++
++    expect(bodies).toHaveLength(1);
++    expect(bodies[0], 'the empty list is sent, unconfirmed: the complete set that replaces the saved rows').toEqual({ breaks: [], breaks_confirmed: false, expected_version: run.version });
++    const closed = await sessionById(employeeSeed, run.todayLocal, run.id);
++    expect(closed?.end_utc).not.toBeNull();
++    expect(closed?.breaks_confirmed).toBe(false);
++    expect(closed?.breaks, 'the removed saved breaks are gone').toHaveLength(0);
++  } finally {
++    await employeeSeed.clearSessions(run.todayLocal);
++  }
++});
++
+ test('Check out refusals: suggested breaks that end after now, and a future_break refusal that names a break, mark that row or chip and keep the session running', async ({
+   page,
+   employeeSeed,
+@@ -3656,6 +3737,57 @@ test('"Confirm breaks" opens the session dialog with the suggested breaks listed
+   }
+ });
+
++// WP5-UX3-FIX3 item 8 (coordinator decision on F-UX3B-2): "Confirm breaks" lists the suggested breaks that lie inside the session, as
++// docs/04 says and as the new-session pre-fill does, not all or nothing. A session of 09:00 to 14:00 fits the first two suggestions
++// (11:00 and 13:00) but not the third (15:30); the dialog used to open with none.
++test('"Confirm breaks" lists the suggested breaks that lie inside a 09:00 to 14:00 session (two of three); Save sends those two', async ({
++  page,
++  employeeSeed,
++  signInThroughUi,
++}) => {
++  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
++  const puts: Array<Record<string, unknown>> = [];
++  page.on('request', (request) => {
++    if (request.method() === 'PUT' && new URL(request.url()).pathname.startsWith('/api/sessions/')) puts.push(request.postDataJSON() as Record<string, unknown>);
++  });
++  try {
++    await employeeSeed.createSession(date, '09:00', '14:00', null);
++    const before = (await employeeSeed.dayView(date)).sessions[0];
++    expect(before?.breaks_confirmed).toBe(false);
++    await signInThroughUi();
++    const editor = await openEditor(page, date);
++    await editor.getByRole('button', { name: /^Confirm breaks/ }).click();
++    const form = sessionDialog(page, 'Edit session');
++    await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
++    await expect(form.locator('[data-break]'), 'the two suggestions inside the session are listed').toHaveCount(2);
++    for (const [index, [from, minutes, end]] of [['11:00', '15', 'ends 11:15'], ['13:00', '30', 'ends 13:30']].entries()) {
++      const row = breakRow(form, index + 1);
++      await expect(row.time).toHaveValue(from ?? '');
++      await expect(row.minutes).toHaveValue(minutes ?? '');
++      await expect(row.row).toContainText(end ?? '');
++      await expect(row.row).toContainText('suggested');
++    }
++    expect(puts).toEqual([]);
++    await form.getByRole('button', { name: 'Save', exact: true }).click();
++    const confirm = saveConfirmation(page);
++    await expect(confirm.locator('.confirm-facts')).toContainText('2 breaks (15, 30 min)');
++    await confirm.getByRole('button', { name: 'Save', exact: true }).click();
++    await expect(editor.getByText('Session saved.')).toBeVisible();
++    expect(puts).toHaveLength(1);
++    expect(puts[0]).toMatchObject({ breaks_confirmed: true, expected_version: before?.version, input_zone: LA });
++    const sent = (puts[0]?.breaks ?? []) as Array<{ start: { local: string }; end: { local: string } }>;
++    expect(sent.map((item) => [item.start.local, item.end.local])).toEqual([
++      [`${date}T11:00`, `${date}T11:15`],
++      [`${date}T13:00`, `${date}T13:30`],
++    ]);
++    const after = (await employeeSeed.dayView(date)).sessions[0];
++    expect(after?.breaks_confirmed).toBe(true);
++    expect(after?.breaks).toHaveLength(2);
++  } finally {
++    await employeeSeed.clearSessions(date);
++  }
++});
++
+ test('"Confirm breaks" in an old period waits for the reason before it can save, and sends it (AC-04)', async ({ page, employeeSeed, signInThroughUi }) => {
+   const bodies: Array<Record<string, unknown>> = [];
+   page.on('request', (request) => {
+diff --git a/tests/e2e/hover.spec.ts b/tests/e2e/hover.spec.ts
+index 9424bc5..fad7905 100644
+--- a/tests/e2e/hover.spec.ts
++++ b/tests/e2e/hover.spec.ts
+@@ -322,6 +322,17 @@ async function expectNoStickyHover(page: Page, situation: string): Promise<void>
+   await expect(details).not.toBeChecked();
+   expect(await settledStyle(details, 'backgroundColor'), 'switch track after two taps equals rest').toBe(trackRest);
+   expect(await settledStyle(details, 'borderTopColor'), 'switch border after two taps equals rest').toBe(borderRest);
++  // The sheet's Category picker keeps no hover look after a tap either (WP5-UX3-FIX3 item 2): tap opens the list, a second tap closes it.
++  const picker = page.locator('[data-label-picker] button[aria-label^="Category for"]').first();
++  await picker.scrollIntoViewIfNeeded();
++  const pickerRest = { background: await settledStyle(picker, 'backgroundColor'), border: await settledStyle(picker, 'borderTopColor'), shadow: await settledStyle(picker, 'boxShadow') };
++  await picker.tap();
++  await expect(picker).toHaveAttribute('aria-expanded', 'true');
++  await picker.tap();
++  await expect(picker).toHaveAttribute('aria-expanded', 'false');
++  expect(await settledStyle(picker, 'backgroundColor'), `Category picker: background after a tap equals rest (${situation})`).toBe(pickerRest.background);
++  expect(await settledStyle(picker, 'borderTopColor'), `Category picker: border after a tap equals rest (${situation})`).toBe(pickerRest.border);
++  expect(await settledStyle(picker, 'boxShadow'), `Category picker: shadow after a tap equals rest (${situation})`).toBe(pickerRest.shadow);
+ }
+
+ /* ---- The "Show details" slide switch ----------------------------------------------------------------------- */
+@@ -549,14 +560,21 @@ for (const situation of SITUATIONS) {
+   });
+ }
+
+-/* ---- The sheet day columns (WP5-UX3-FIX2 item 11, AGENTS UI rule 3) ---------------------------------------- */
++/* ---- Every hover rule of the style sheet (WP5-UX3-FIX2 item 11, WP5-UX3-FIX3 item 2, AGENTS UI rule 3) ------- */
+
+ /**
+- * A tap must not leave a tint on a sheet day column of a touch screen of 768px or more: every `.sheet-day` hover rule that paints
+- * (the column tint and the lifted column's tint) sits inside `@media (hover: hover)`. The read-only sheet's two reset rules only
+- * undo that tint and may stay outside. The browser's own parsed style sheets are read, so the check does not depend on a device.
++ * Hover rules that may stay outside `@media (hover: hover)`: only reset rules that paint nothing new, each with its reason. There is
++ * none: the read-only sheet's two reset rules sit inside the media block too, so a tap can never leave a tint behind.
+  */
+-test('the sheet day hover rules exist only under (hover: hover); where the device can hover, a day column tints under the pointer', async ({
++const UNGATED_HOVER_ALLOWLIST: ReadonlyArray<{ selector: string; reason: string }> = [];
++
++/**
++ * A tap must not leave a hover look on a touch screen: EVERY rule of the application's style sheet whose selector uses `:hover`
++ * (the day column tint, the lifted column's tint, the Category picker, the form fields, the table rows, the button links and the
++ * rest) sits inside `@media (hover: hover)`, except the explicit allowlist above. The browser's own parsed style sheets are read, so
++ * the check does not depend on a device and a new ungated hover rule fails here at once.
++ */
++test('every hover rule of the style sheet exists only under (hover: hover); where the device can hover, a day column tints under the pointer', async ({
+   page,
+   signInThroughUi,
+ }) => {
+@@ -568,15 +586,28 @@ test('the sheet day hover rules exist only under (hover: hover); where the devic
+       for (const rule of Array.from(list)) {
+         if (rule instanceof CSSMediaRule) {
+           visit(rule.cssRules, hoverOnly || /hover:\\s*hover/.test(rule.media.mediaText));
+-        } else if (rule instanceof CSSStyleRule && /\\.sheet-day[^,{]*:hover/.test(rule.selectorText) && !rule.selectorText.startsWith('.sheet-review')) {
+-          (hoverOnly ? result.gated : result.ungated).push(rule.selectorText);
++        } else if (rule instanceof CSSStyleRule) {
++          if (rule.selectorText.includes(':hover')) (hoverOnly ? result.gated : result.ungated).push(rule.selectorText);
++        } else if (rule instanceof CSSGroupingRule) {
++          visit(rule.cssRules, hoverOnly);
+         }
+       }
+     };
+     for (const sheet of Array.from(document.styleSheets)) visit(sheet.cssRules, false);
+     return result;
+   })()`);
+-  expect(rules.ungated, 'sheet day hover rules outside (hover: hover)').toEqual([]);
++  const allowed = new Set(UNGATED_HOVER_ALLOWLIST.map((entry) => entry.selector));
++  expect(
++    rules.ungated.filter((selector) => !allowed.has(selector)),
++    'hover rules outside (hover: hover)',
++  ).toEqual([]);
++  expect(rules.gated.length, 'the style sheet has gated hover rules to scan').toBeGreaterThan(20);
++  for (const needle of ['.sheet .label-trigger', 'input:hover', 'tbody tr:hover', '.button-link:hover', '.sheet-review .sheet-day']) {
++    expect(
++      rules.gated.some((selector) => selector.includes(needle)),
++      `the hover rule "${needle}" is a gated hover rule`,
++    ).toBe(true);
++  }
+   expect(rules.gated.some((selector) => selector.includes('[data-lift]')), 'the lifted column tint is a gated hover rule').toBe(true);
+   expect(rules.gated.some((selector) => !selector.includes('[data-lift]') && !selector.includes('.sheet-date')), 'the day column tint is a gated hover rule').toBe(true);
+
+@@ -592,6 +623,94 @@ test('the sheet day hover rules exist only under (hover: hover); where the devic
+   }
+ });
+
++/* ---- The focus ring under the pointer (WP5-UX3-FIX3 item 1, SC 2.4.7) ------------------------------------- */
++
++/** True when the element is focused, matches `:focus-visible` and has the pointer over it (the precondition of the ring checks). */
++async function focusedAndHovered(locator: Locator): Promise<{ focus: boolean; focusVisible: boolean; hover: boolean }> {
++  return locator.evaluate((element) => ({
++    focus: element === element.ownerDocument.activeElement,
++    focusVisible: element.matches(':focus-visible'),
++    hover: element.matches(':hover'),
++  }));
++}
++
++/**
++ * Keyboard focus puts the shared ring on a control, and the pointer resting on that control must not take it away. Compared with
++ * the same focused control while the pointer is elsewhere: the ring is painted, equal to the pointer-away ring, and meets 3:1.
++ */
++async function expectRingUnderPointer(page: Page, control: Locator, kind: 'shared' | 'inset', label: string): Promise<void> {
++  await control.scrollIntoViewIfNeeded();
++  await page.mouse.move(0, 0);
++  await control.evaluate((element) => element.blur());
++  await page.keyboard.press('Shift');
++  await control.focus();
++  await expect(control).toBeFocused();
++  const away = await settledStyle(control, 'boxShadow');
++  await control.hover();
++  const state = await focusedAndHovered(control);
++  expect(state, `${label}: focused by keyboard with the pointer on it`).toEqual({ focus: true, focusVisible: true, hover: true });
++  const under = await settledStyle(control, 'boxShadow');
++  expect(under, `${label}: the ring under the pointer equals the ring with the pointer away`).toBe(away);
++  const layers = parseLayers(under);
++  const surface = backdropOf(await backdropsAbove(control));
++  if (kind === 'shared') {
++    const outset = layers.filter((layer) => !layer.inset && layer.spread > 0);
++    expect(outset.length, `${label}: the shared ring has its card gap and its accent ring (${under})`).toBeGreaterThanOrEqual(2);
++    const ring = outset.reduce((a, b) => (b.spread > a.spread ? b : a));
++    expect(ring.spread, `${label}: the shared ring is 3px`).toBe(3);
++    expect(contrast(over(ring.colour, surface), surface), `${label}: ring against its surface`).toBeGreaterThanOrEqual(NON_TEXT);
++  } else {
++    expect(layers, `${label}: one inset ring layer (${under})`).toHaveLength(1);
++    expect(layers[0]?.inset, `${label}: the ring is inset`).toBe(true);
++    expect(layers[0]?.spread, `${label}: the inset ring is 2px`).toBe(2);
++    const fill = await flattenedBackground(control);
++    expect(contrast(over(layers[0]?.colour ?? [0, 0, 0, 1], fill), fill), `${label}: inset ring against the hovered fill`).toBeGreaterThanOrEqual(NON_TEXT);
++  }
++  await page.mouse.move(0, 0);
++}
++
++for (const situation of SITUATIONS.slice(0, 2)) {
++  test(`the keyboard focus ring stays under the pointer on the sheet's date button, Category picker and phone day button, also after Escape returns focus from the Day editor (${situation.name})`, async ({
++    page,
++    signInThroughUi,
++  }) => {
++    await page.setViewportSize({ width: 1440, height: 900 });
++    await prepare(page, situation, signInThroughUi);
++    // A touch device has no pointer resting on a control: the mobile project proves the tap side in the hover tests above.
++    if (!(await canHover(page))) return;
++    const day = page.locator('.sheet-day[data-day]:not(.nonworking)').first();
++    const date = day.locator('[data-day-button]');
++    const picker = day.locator('[data-label-picker] button[aria-label^="Category for"]');
++    await expectRingUnderPointer(page, date, 'shared', `date button (${situation.name})`);
++    await expectRingUnderPointer(page, picker, 'inset', `Category picker (${situation.name})`);
++
++    // Click the date (the editor opens beside the sheet at 1440), then Escape: focus returns to the date button, pointer still on it.
++    const workDate = (await day.getAttribute('data-day')) ?? '';
++    await date.click();
++    const editor = page.getByRole('dialog', { name: new RegExp(`^Day editor .*${workDate}`) });
++    await expect(editor).toBeVisible();
++    await page.keyboard.press('Escape');
++    await expect(editor).toHaveCount(0);
++    await expect(date).toBeFocused();
++    await date.hover();
++    expect(await focusedAndHovered(date), `date button after Escape (${situation.name})`).toEqual({ focus: true, focusVisible: true, hover: true });
++    const afterEscape = await settledStyle(date, 'boxShadow');
++    const outset = parseLayers(afterEscape).filter((layer) => !layer.inset && layer.spread > 0);
++    expect(outset.length, `a ring is painted on the date button after the Escape return (${afterEscape})`).toBeGreaterThanOrEqual(2);
++    const surface = backdropOf(await backdropsAbove(date));
++    const ring = outset.reduce((a, b) => (b.spread > a.spread ? b : a));
++    expect(contrast(over(ring.colour, surface), surface), `ring after the Escape return (${situation.name})`).toBeGreaterThanOrEqual(NON_TEXT);
++    await page.mouse.move(0, 0);
++
++    // A phone-width window on a device that can hover: the day button of the phone table keeps the shared ring too.
++    await page.setViewportSize({ width: 390, height: 844 });
++    const phoneDay = page.locator('[data-day]:not(.nonworking) [data-day-button]').first();
++    await expect(phoneDay).toBeVisible();
++    await expectRingUnderPointer(page, phoneDay, 'shared', `phone day button (${situation.name})`);
++    console.log(`ring under the pointer ${situation.name}: date, Category picker, phone day button and the Escape return keep their ring`);
++  });
++}
++
+ /* ---- Synthetic captures for the record: hover, pressed, the switch and the picker, light and dark ---------- */
+
+ for (const theme of ['light', 'dark'] as const) {
+diff --git a/tests/e2e/shell.spec.ts b/tests/e2e/shell.spec.ts
+index ba473b2..c6fa53f 100644
+--- a/tests/e2e/shell.spec.ts
++++ b/tests/e2e/shell.spec.ts
+@@ -750,6 +750,24 @@ for (const role of ['employee', 'admin'] as const) {
+     await useEntry(current);
+     await expect(more).toHaveAttribute('aria-expanded', 'false');
+     await expect(more).toBeFocused();
++
++    // Escape inside the opened panel closes it and returns focus to More, as Escape does in the desktop menu (WP5-UX3-FIX3 item 5).
++    await more.focus();
++    await page.keyboard.press('Enter');
++    await expect(panel).toBeVisible();
++    await expect(more).toHaveAttribute('aria-expanded', 'true');
++    await panel.getByRole('link', { name: current, exact: true }).focus();
++    await page.keyboard.press('Escape');
++    await expect(panel).toHaveCount(0);
++    await expect(more).toHaveAttribute('aria-expanded', 'false');
++    await expect(more).toBeFocused();
++    // From the last entry too (Sign out is not a link), so the focus return is not tied to one entry.
++    await page.keyboard.press('Enter');
++    await expect(panel).toBeVisible();
++    await panel.getByRole('button', { name: 'Sign out' }).focus();
++    await page.keyboard.press('Escape');
++    await expect(panel).toHaveCount(0);
++    await expect(more).toBeFocused();
+   });
+ }
+
+@@ -1019,3 +1037,68 @@ test('mobile: no horizontal overflow and tap targets of at least 44px', async ({
+     expect(box?.width ?? 0, `${name} width`).toBeGreaterThanOrEqual(44);
+   }
+ });
++
++/*
++ * WP5-UX3-FIX3 item 3: a touch screen of 768px or more (a tablet in landscape) shows the top bar with a coarse pointer, and every
++ * control of the bar is then at least 44px high (AGENTS UI rule 3, docs/04 "Visual standard"). The identity button used to keep its own
++ * 36px minimum (a more specific selector than the touch rule), so it measured 38px.
++ */
++test.describe('WP5-UX3-FIX3: with a coarse pointer the top bar has no control under 44px', () => {
++  test.use({ hasTouch: true, isMobile: false, viewport: { width: 1024, height: 900 } });
++
++  test('1024x900 with touch: the identity button, the navigation links and the switcher are at least 44px high', async ({ page, signInThroughUi }) => {
++    await signInThroughUi();
++    const identity = identityButton(page);
++    await expect(identity).toBeVisible();
++    expect(await page.evaluate<boolean>("window.matchMedia('(pointer: coarse)').matches"), 'the window reports a coarse pointer').toBe(true);
++    const bar = page.getByRole('banner');
++    const controls = await bar.locator('a, button, select, input:not([type="checkbox"]):not([type="radio"])').evaluateAll((elements) =>
++      elements
++        .map((element) => ({ name: (element.textContent ?? '').trim().slice(0, 30) || element.getAttribute('aria-label') || element.tagName, box: element.getBoundingClientRect() }))
++        .filter((item) => item.box.width > 0 && item.box.height > 0)
++        .map((item) => ({ name: item.name, height: item.box.height })),
++    );
++    expect(controls.length, 'the bar has the navigation links and the identity button').toBeGreaterThanOrEqual(4);
++    for (const control of controls) expect(control.height, `${control.name} is at least 44px high`).toBeGreaterThanOrEqual(43.9);
++    const box = await identity.boundingBox();
++    expect(box?.height ?? 0, 'the identity button').toBeGreaterThanOrEqual(43.9);
++    console.log(`bar controls with a coarse pointer: ${controls.map((item) => `${item.name} ${item.height}`).join('; ')}`);
++  });
++});
++
++/*
++ * WP5-UX3-FIX3 item 4: the Sign out entry has the same icon gap (12px, --space-3) and the same vertical alignment as Profile and
++ * Settings, in the desktop menu and in the phone More panel (the entry is a button, which used to be display: block, so the gap did nothing).
++ */
++for (const { name, width, height } of [
++  { name: 'account menu at 1280', width: 1280, height: 800 },
++  { name: 'phone More panel at 390', width: 390, height: 844 },
++] as const) {
++  test(`Sign out keeps the 12px icon gap and the vertical alignment of Profile and Settings (${name})`, async ({ page, signInThroughUi }) => {
++    await page.setViewportSize({ width, height });
++    await signInThroughUi();
++    const panel = await openAccount(page);
++    const measure = async (entry: Locator) =>
++      entry.evaluate((element) => {
++        const icon = element.querySelector('svg')?.getBoundingClientRect();
++        const text = [...element.childNodes].find((node) => node.nodeType === 3 && (node.textContent ?? '').trim() !== '');
++        if (icon === undefined || text === undefined) return null;
++        const range = element.ownerDocument.createRange();
++        range.selectNodeContents(text);
++        const words = range.getBoundingClientRect();
++        return { gap: words.left - icon.right, offset: icon.top + icon.height / 2 - (words.top + words.height / 2) };
++      });
++    const profile = await measure(panel.getByRole('link', { name: 'Profile', exact: true }));
++    const settings = await measure(panel.getByRole('link', { name: 'Settings', exact: true }));
++    const signOut = await measure(panel.getByRole('button', { name: 'Sign out', exact: true }));
++    expect(profile, 'Profile has an icon and words').not.toBeNull();
++    expect(signOut, 'Sign out has an icon and words').not.toBeNull();
++    for (const [label, entry] of [['Profile', profile], ['Settings', settings], ['Sign out', signOut]] as const) {
++      expect(entry?.gap ?? -1, `${label}: the icon gap is 12px`).toBeGreaterThanOrEqual(11.5);
++      expect(entry?.gap ?? 99, `${label}: the icon gap is 12px`).toBeLessThanOrEqual(12.5);
++      expect(Math.abs(entry?.offset ?? 99), `${label}: the icon centre is level with the words`).toBeLessThanOrEqual(1.5);
++    }
++    expect(Math.abs((signOut?.offset ?? 99) - (profile?.offset ?? 0)), 'Sign out aligns like Profile').toBeLessThanOrEqual(1);
++    console.log(`account entries (${name}): Profile ${JSON.stringify(profile)}; Settings ${JSON.stringify(settings)}; Sign out ${JSON.stringify(signOut)}`);
++  });
++}
+diff --git a/tests/e2e/theme.spec.ts b/tests/e2e/theme.spec.ts
+index 8d9dbb2..54ef576 100644
+--- a/tests/e2e/theme.spec.ts
++++ b/tests/e2e/theme.spec.ts
+@@ -68,6 +68,23 @@ async function expectChecked(control: ThemeControl, theme: Theme): Promise<void>
+   for (const option of THEMES) await expect(control.radio[option], `${OPTION_NAME[option]} is ${option === theme ? '' : 'not '}checked`).toBeChecked({ checked: option === theme });
+ }
+
++/**
++ * Runs a settled measurement of `contrast.ts` again, at most twice more, when its own 7 s poll timed out. Each settled read waits 400 ms
++ * inside that poll, so a stall of the host for about 20 s (the regate saw one freeze two browsers at once) expired the poll whatever the
++ * product did. The measurement and the assertions on its result are unchanged; a state that never settles still fails after the three
++ * tries, and any other error is thrown at once (WP5-UX3-FIX3 item 12, R8).
++ */
++async function surviveStall<T>(measure: () => Promise<T>): Promise<T> {
++  for (let attempt = 1; ; attempt += 1) {
++    try {
++      return await measure();
++    } catch (error) {
++      const timedOut = error instanceof Error && /Timeout \d+ms exceeded|is settled/.test(error.message);
++      if (!timedOut || attempt === 3) throw error;
++    }
++  }
++}
++
+ /** Whether the device can hover (the hover look exists only there). */
+ async function canHover(page: Page): Promise<boolean> {
+   return page.evaluate<boolean>("window.matchMedia('(hover: hover)').matches");
+@@ -411,6 +428,9 @@ for (const { name, media, stored } of CASES) {
+   });
+
+   test(`contrast of the checked and the unchecked segment: rest, hover and focus (${name})`, async ({ page, signInThroughUi, isMobile }) => {
++    // About 32 (phone) to 44 (desktop) settled reads of 400 ms each already take 15 to 25 s of the default 30 s, so a host stall of about
++    // 20 s (seen once in the regate) failed the test whatever the product did. An explicit budget; no wait or assertion is changed.
++    test.setTimeout(120_000);
+     await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
+     if (stored !== null) await seedStoredTheme(page, stored);
+     await signInThroughUi();
+@@ -421,11 +441,12 @@ for (const { name, media, stored } of CASES) {
+     const hover = await canHover(page);
+
+     /** The segment's indicator against the surface behind it: its fill when checked, else its boundary. */
+-    const indicator = async (segment: Locator, checked: boolean): Promise<number> => {
+-      const backdrop = backdropOf(await backdropsAbove(segment));
+-      const colour = checked ? await flattenedBackground(segment) : over(parseColour(await settledStyle(segment, 'borderTopColor')), backdrop);
+-      return contrast(colour, backdrop);
+-    };
++    const indicator = async (segment: Locator, checked: boolean): Promise<number> =>
++      surviveStall(async () => {
++        const backdrop = backdropOf(await backdropsAbove(segment));
++        const colour = checked ? await flattenedBackground(segment) : over(parseColour(await settledStyle(segment, 'borderTopColor')), backdrop);
++        return contrast(colour, backdrop);
++      });
+
+     const measured: string[] = [];
+     // Two states: the one in effect now, then (after choosing the other) the opposite one.
+@@ -438,7 +459,7 @@ for (const { name, media, stored } of CASES) {
+         const label = `${checked ? 'checked' : 'unchecked'} ${OPTION_NAME[theme]}`;
+         await page.mouse.move(0, 0);
+
+-        const restText = await textContrast(segment);
++        const restText = await surviveStall(() => textContrast(segment));
+         const restIndicator = await indicator(segment, checked);
+         expect(restText, `${label}: text at rest`).toBeGreaterThanOrEqual(MIN_TEXT);
+         expect(restIndicator, `${label}: boundary or fill at rest`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
+@@ -446,7 +467,7 @@ for (const { name, media, stored } of CASES) {
+         let hovered = 'no hover on this device';
+         if (hover) {
+           await segment.hover();
+-          const hoverText = await textContrast(segment);
++          const hoverText = await surviveStall(() => textContrast(segment));
+           const hoverIndicator = await indicator(segment, checked);
+           expect(hoverText, `${label}: text hovered`).toBeGreaterThanOrEqual(MIN_TEXT);
+           expect(hoverIndicator, `${label}: boundary or fill hovered`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
+@@ -454,12 +475,12 @@ for (const { name, media, stored } of CASES) {
+           await page.mouse.move(0, 0);
+         }
+
+-        await focusFromKeyboard(control.radio[theme], segment);
+-        const ring = await measureFocusRing(segment);
++        await surviveStall(() => focusFromKeyboard(control.radio[theme], segment));
++        const ring = await surviveStall(() => measureFocusRing(segment));
+         expect(ring.ringAgainstBackdrop, `${label}: focus ring against the surface (${ring.layers})`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
+         expect(ring.ringAgainstGap, `${label}: focus ring against its gap (${ring.layers})`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
+         if (checked) expect(ring.gapAgainstFill ?? 0, `${label}: focus gap against the accent fill (${ring.layers})`).toBeGreaterThanOrEqual(MIN_NON_TEXT);
+-        const focusText = await textContrast(segment);
++        const focusText = await surviveStall(() => textContrast(segment));
+         expect(focusText, `${label}: text focused`).toBeGreaterThanOrEqual(MIN_TEXT);
+         await control.radio[theme].evaluate((element) => element.blur());
+         measured.push(

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Usage: digest.sh <label>
+# Records HEAD, the npm digest (scripts/source-digest.mjs on Node 24) and the git ls-tree
+# cross-check digest of HEAD (excluding handoff/).
+label="$1"
+out="/d/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT/digest_${label}.txt"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+NODE="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin/node.exe"
+cd /d/Dropbox/Work.CDSemi/timesheet || exit 2
+{
+  echo "label: ${label}"
+  echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "\$ git rev-parse HEAD"
+  git rev-parse HEAD
+  echo "exit=$?"
+  echo "\$ node --version (Node 24 by full path)"
+  "$NODE" --version
+  echo "exit=$?"
+  echo "\$ node scripts/source-digest.mjs"
+  "$NODE" scripts/source-digest.mjs
+  echo "exit=$?"
+  echo "\$ git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum  (cross-check)"
+  git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort > "/d/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT/lstree_${label}.lst"
+  echo "files: $(wc -l < "/d/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT/lstree_${label}.lst")"
+  sha256sum < "/d/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT/lstree_${label}.lst"
+  echo "exit=$?"
+} > "$out" 2>&1

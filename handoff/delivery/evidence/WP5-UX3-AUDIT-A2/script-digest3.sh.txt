@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# WP5-UX3-AUDIT-A2: the digest in three forms (export, ls-tree, npm run digest), HEAD and non-handoff status.
+# Usage: digest3.sh <label> <export-dir-name>   (the export dir is created from TARGET when it does not exist)
+set -u
+source /d/.claude-tmp/timesheet/WP5-UX3-AUDIT-A2/env.sh
+label="$1"
+exp="$T/$2"
+out="$T/digest-$label"
+mkdir -p "$out"
+date -u +%Y-%m-%dT%H:%M:%SZ > "$out/when.txt"
+git -C "$REPO" rev-parse HEAD > "$out/head.txt"
+git -C "$REPO" rev-parse origin/main >> "$out/head.txt"
+git -C "$REPO" status --short > "$out/status-all.txt"
+grep -v '^.. handoff/' "$out/status-all.txt" > "$out/status-nonhandoff.txt"
+echo "non-handoff status lines: $(wc -l < "$out/status-nonhandoff.txt")" >> "$out/head.txt"
+# ls-tree form
+git -C "$REPO" ls-tree -r --format='%(path) %(objectname)' "$TARGET" | grep -v '^handoff/' | LC_ALL=C sort > "$out/lstree.list"
+echo "ls-tree form: $(sha256sum < "$out/lstree.list" | cut -c1-64) lines $(wc -l < "$out/lstree.list")" > "$out/lstree.txt"
+# export form
+if [ ! -d "$exp" ]; then
+  mkdir -p "$exp"
+  git -C "$REPO" archive --format=tar "$TARGET" | tar -x -C "$exp"
+  echo "export created from $TARGET exit $?" > "$out/export-created.txt"
+fi
+( cd "$exp" && find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' | sed 's|^\./||' | LC_ALL=C sort > "$out/export-files.txt" )
+( cd "$exp" && git hash-object --no-filters --stdin-paths < "$out/export-files.txt" > "$out/export-blobs.txt" )
+paste -d' ' "$out/export-files.txt" "$out/export-blobs.txt" > "$out/export.list"
+echo "export form ($2): $(sha256sum < "$out/export.list" | cut -c1-64) lines $(wc -l < "$out/export.list")" > "$out/export.txt"
+if cmp -s "$out/export.list" "$out/lstree.list"; then echo "export list byte-identical to ls-tree list" >> "$out/lstree.txt"; else echo "export list DIFFERS from ls-tree list" >> "$out/lstree.txt"; fi
+if [ -d "$exp/.git" ]; then echo "export has a .git folder" >> "$out/export.txt"; else echo "export has no .git folder" >> "$out/export.txt"; fi
+# npm run digest in the repository
+( cd "$REPO" && npmrun run digest > "$out/npm-digest.txt" 2>&1; echo "exit $?" >> "$out/npm-digest.txt" )
+echo "target digest of record: $TARGET_DIGEST" > "$out/summary.txt"
+cat "$out/when.txt" "$out/head.txt" "$out/export.txt" "$out/lstree.txt" "$out/npm-digest.txt" >> "$out/summary.txt"

@@ -1,0 +1,20 @@
+// WP5-UX3-AUDIT-A2 task-local seed (never in the repository): the same test-only uncertain delivery attempt that
+// tests/e2e/admin-status.spec.ts writes, run from a file (argv: database module URL). Env: SEED_DB_PATH, SEED_REVISION_ID.
+const [dbUrl] = process.argv.slice(2, 3);
+const { openDatabase } = await import(dbUrl);
+const { randomUUID } = await import('node:crypto');
+const env = process.env;
+const db = openDatabase(env.SEED_DB_PATH);
+try {
+  const last = db.prepare('SELECT user_id, envelope_json, attachment_id FROM delivery_attempts WHERE revision_id = ? ORDER BY started_at DESC LIMIT 1').get(env.SEED_REVISION_ID);
+  if (last === undefined) throw new Error('no delivery attempt to copy the envelope from');
+  const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const jobId = randomUUID();
+  const attemptId = randomUUID();
+  db.prepare("INSERT INTO jobs (id, user_id, revision_id, kind, business_key, payload_json, state, attempts, next_run_at, last_error, created_at, updated_at) VALUES (?, ?, ?, 'send_email', ?, ?, 'intervention', 1, ?, 'delivery_uncertain', ?, ?)").run(jobId, last.user_id, env.SEED_REVISION_ID, 'a2-uncertain:' + jobId, JSON.stringify({ revision_id: env.SEED_REVISION_ID }), now, now, now);
+  db.prepare("INSERT INTO delivery_attempts (id, job_id, user_id, revision_id, attempt_no, channel, envelope_json, attachment_id, message_id, state, started_at, updated_at) VALUES (?, ?, ?, ?, 1, 'email', ?, ?, ?, 'sending', ?, ?)").run(attemptId, jobId, last.user_id, env.SEED_REVISION_ID, last.envelope_json, last.attachment_id, '<a2-' + attemptId + '@timesheet.invalid>', now, now);
+  db.prepare("UPDATE delivery_attempts SET state = 'uncertain', provider_response = 'lease_expired_while_sending', updated_at = ? WHERE id = ?").run(now, attemptId);
+  process.stdout.write(attemptId);
+} finally {
+  db.close();
+}

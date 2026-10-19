@@ -1,0 +1,162 @@
+=== B1-remove-some (L removed, A kept)
+  base step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after removing L", "rows": 1, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  base POST /api/clock/out 200 {"breaks":[{"start":{"local":"2026-10-19T08:00","zone":"America/Los_Angeles","offset":"-07:00"},"end":{"local":"2026-10-19T08:15","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false}],"breaks_confirmed":true,"expected_version":1} <ok>
+  base stored sessions=[{"running": false, "confirmed": true, "breaks": ["2026-10-19T15:00:00Z..2026-10-19T15:15:00Z"], "version": 2}] calc={"status": "complete", "provisional": true, "credited": 0, "excludedBreakSeconds": 900}
+  target step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after removing L", "rows": 1, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  target POST /api/clock/out 200 {"breaks":[{"start":{"local":"2026-10-19T08:00","zone":"America/Los_Angeles","offset":"-07:00"},"end":{"local":"2026-10-19T08:15","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false}],"breaks_confirmed":true,"expected_version":1} <ok>
+  target stored sessions=[{"running": false, "confirmed": true, "breaks": ["2026-10-19T15:00:00Z..2026-10-19T15:15:00Z"], "version": 2}] calc={"status": "complete", "provisional": true, "credited": 0, "excludedBreakSeconds": 900}
+  bodies identical between builds: True
+=== B2-remove-all-unticked
+  base step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after removing L", "rows": 1, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after removing A", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  base step {"step": "after submit", "dialogOpen": true, "alerts": ["A saved break ends after this Check out; resubmit the complete list of breaks to replace it (saved_break_after_clock_out)"], "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  base POST /api/clock/out 422 {"breaks_confirmed":false,"expected_version":1} {"error":{"code":"saved_break_after_clock_out","message":"A saved break ends after this Check out; resubmit the complete list of breaks to replace it","details":{"break_ids":["1346fbd2-2625-4f9f-8e47-2af1cc38c1fc"]}}}
+  base stored sessions=[{"running": true, "confirmed": false, "breaks": ["2026-10-19T15:00:00Z..2026-10-19T15:15:00Z", "2026-10-19T22:13:00Z..2026-10-19T22:16:00Z"], "version": 1}] calc={"status": "incomplete", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  target step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after removing L", "rows": 1, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after removing A", "rows": 0, "label": "Check out, breaks unconfirmed", "note": "The saved breaks you removed are deleted at Check out. Breaks stay unconfirmed and OT for the day stays pending.", "noteIsStatus": true, "box": false, "emptyText": true}
+  target step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  target POST /api/clock/out 200 {"breaks":[],"breaks_confirmed":false,"expected_version":1} <ok>
+  target stored sessions=[{"running": false, "confirmed": false, "breaks": [], "version": 2}] calc={"status": "incomplete_breaks", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  bodies identical between builds: False
+=== B3-remove-all-then-tick
+  base step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after removing both", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  base step {"step": "after ticking", "rows": 0, "label": "Check out, no breaks taken", "note": null, "noteIsStatus": false, "box": true, "emptyText": false}
+  base step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  base POST /api/clock/out 200 {"breaks":[],"breaks_confirmed":true,"expected_version":1} <ok>
+  base stored sessions=[{"running": false, "confirmed": true, "breaks": [], "version": 2}] calc={"status": "complete", "provisional": true, "credited": 0, "excludedBreakSeconds": 0}
+  target step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after removing both", "rows": 0, "label": "Check out, breaks unconfirmed", "note": "The saved breaks you removed are deleted at Check out. Breaks stay unconfirmed and OT for the day stays pending.", "noteIsStatus": true, "box": false, "emptyText": true}
+  target step {"step": "after ticking", "rows": 0, "label": "Check out, no breaks taken", "note": null, "noteIsStatus": false, "box": true, "emptyText": false}
+  target step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  target POST /api/clock/out 200 {"breaks":[],"breaks_confirmed":true,"expected_version":1} <ok>
+  target stored sessions=[{"running": false, "confirmed": true, "breaks": [], "version": 2}] calc={"status": "complete", "provisional": true, "credited": 0, "excludedBreakSeconds": 0}
+  bodies identical between builds: True
+=== B4-add-a-row (L removed, A kept, one typed row)
+  base step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after adding", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  base POST /api/clock/out 200 {"breaks":[{"start":{"local":"2026-10-19T08:00","zone":"America/Los_Angeles","offset":"-07:00"},"end":{"local":"2026-10-19T08:15","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false},{"start":{"local":"2026-10-19T09:00","zone":"America/Los_Angeles"},"end":{"local":"2026-10-19T09:10","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false}],"breaks_confirmed":true,"expected_version":1} <ok>
+  base stored sessions=[{"running": false, "confirmed": true, "breaks": ["2026-10-19T15:00:00Z..2026-10-19T15:15:00Z", "2026-10-19T16:00:00Z..2026-10-19T16:10:00Z"], "version": 2}] calc={"status": "complete", "provisional": true, "credited": 0, "excludedBreakSeconds": 1500}
+  target step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after adding", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  target POST /api/clock/out 200 {"breaks":[{"start":{"local":"2026-10-19T08:00","zone":"America/Los_Angeles","offset":"-07:00"},"end":{"local":"2026-10-19T08:15","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false},{"start":{"local":"2026-10-19T09:00","zone":"America/Los_Angeles"},"end":{"local":"2026-10-19T09:10","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false}],"breaks_confirmed":true,"expected_version":1} <ok>
+  target stored sessions=[{"running": false, "confirmed": true, "breaks": ["2026-10-19T15:00:00Z..2026-10-19T15:15:00Z", "2026-10-19T16:00:00Z..2026-10-19T16:10:00Z"], "version": 2}] calc={"status": "complete", "provisional": true, "credited": 0, "excludedBreakSeconds": 1500}
+  bodies identical between builds: True
+=== B4b-remove-all-then-add-a-row
+  base step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after adding", "rows": 1, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  base POST /api/clock/out 200 {"breaks":[{"start":{"local":"2026-10-19T09:00","zone":"America/Los_Angeles"},"end":{"local":"2026-10-19T09:10","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false}],"breaks_confirmed":true,"expected_version":1} <ok>
+  base stored sessions=[{"running": false, "confirmed": true, "breaks": ["2026-10-19T16:00:00Z..2026-10-19T16:10:00Z"], "version": 2}] calc={"status": "complete", "provisional": true, "credited": 0, "excludedBreakSeconds": 600}
+  target step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after adding", "rows": 1, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  target POST /api/clock/out 200 {"breaks":[{"start":{"local":"2026-10-19T09:00","zone":"America/Los_Angeles"},"end":{"local":"2026-10-19T09:10","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false}],"breaks_confirmed":true,"expected_version":1} <ok>
+  target stored sessions=[{"running": false, "confirmed": true, "breaks": ["2026-10-19T16:00:00Z..2026-10-19T16:10:00Z"], "version": 2}] calc={"status": "complete", "provisional": true, "credited": 0, "excludedBreakSeconds": 600}
+  bodies identical between builds: True
+=== B4c-add-a-row-keeping-both-saved (L stays listed)
+  base step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after adding", "rows": 3, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after submit", "dialogOpen": true, "alerts": ["Breaks must lie inside their work session (break_outside_session)"], "rows": 3, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base POST /api/clock/out 422 {"breaks":[{"start":{"local":"2026-10-19T08:00","zone":"America/Los_Angeles","offset":"-07:00"},"end":{"local":"2026-10-19T08:15","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false},{"start":{"local":"2026-10-19T15:13","zone":"America/Los_Angeles","offset":"-07:00"},"end":{"local":"2026-10-19T15:16","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false},{"start":{"local":"2026-10-19T09:00","zone":"America/Los_Angeles"},"end":{"local":"2026-10-19T09:10","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false}],"breaks_confirmed":true,"expected_version":1} {"error":{"code":"break_outside_session","message":"Breaks must lie inside their work session","details":{}}}
+  base stored sessions=[{"running": true, "confirmed": false, "breaks": ["2026-10-19T15:00:00Z..2026-10-19T15:15:00Z", "2026-10-19T22:13:00Z..2026-10-19T22:16:00Z"], "version": 1}] calc={"status": "incomplete", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  target step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after adding", "rows": 3, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after submit", "dialogOpen": true, "alerts": ["Breaks must lie inside their work session (break_outside_session)"], "rows": 3, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target POST /api/clock/out 422 {"breaks":[{"start":{"local":"2026-10-19T08:00","zone":"America/Los_Angeles","offset":"-07:00"},"end":{"local":"2026-10-19T08:15","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false},{"start":{"local":"2026-10-19T15:14","zone":"America/Los_Angeles","offset":"-07:00"},"end":{"local":"2026-10-19T15:17","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false},{"start":{"local":"2026-10-19T09:00","zone":"America/Los_Angeles"},"end":{"local":"2026-10-19T09:10","zone":"America/Los_Angeles","offset":"-07:00"},"counts_as_work":false}],"breaks_confirmed":true,"expected_version":1} {"error":{"code":"break_outside_session","message":"Breaks must lie inside their work session","details":{}}}
+  target stored sessions=[{"running": true, "confirmed": false, "breaks": ["2026-10-19T15:00:00Z..2026-10-19T15:15:00Z", "2026-10-19T22:14:00Z..2026-10-19T22:17:00Z"], "version": 1}] calc={"status": "incomplete", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  bodies identical between builds: True
+=== B5-no-saved-rows
+  base step {"step": "opened", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  base step {"step": "as opened", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  base step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  base POST /api/clock/out 200 {"breaks_confirmed":false,"expected_version":1} <ok>
+  base stored sessions=[{"running": false, "confirmed": false, "breaks": [], "version": 2}] calc={"status": "incomplete_breaks", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  target step {"step": "opened", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  target step {"step": "as opened", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  target step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  target POST /api/clock/out 200 {"breaks_confirmed":false,"expected_version":1} <ok>
+  target stored sessions=[{"running": false, "confirmed": false, "breaks": [], "version": 2}] calc={"status": "incomplete_breaks", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  bodies identical between builds: True
+=== B5b-no-saved-rows-add-then-remove
+  base step {"step": "opened", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  base step {"step": "after add and remove", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  base step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  base POST /api/clock/out 200 {"breaks_confirmed":false,"expected_version":1} <ok>
+  base stored sessions=[{"running": false, "confirmed": false, "breaks": [], "version": 2}] calc={"status": "incomplete_breaks", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  target step {"step": "opened", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  target step {"step": "after add and remove", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  target step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  target POST /api/clock/out 200 {"breaks_confirmed":false,"expected_version":1} <ok>
+  target stored sessions=[{"running": false, "confirmed": false, "breaks": [], "version": 2}] calc={"status": "incomplete_breaks", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  bodies identical between builds: True
+=== B6-remove-all-add-then-remove
+  base step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after add and remove", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  base step {"step": "after submit", "dialogOpen": true, "alerts": ["A saved break ends after this Check out; resubmit the complete list of breaks to replace it (saved_break_after_clock_out)"], "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  base POST /api/clock/out 422 {"breaks_confirmed":false,"expected_version":1} {"error":{"code":"saved_break_after_clock_out","message":"A saved break ends after this Check out; resubmit the complete list of breaks to replace it","details":{"break_ids":["fd796f08-bce3-4b37-be6a-05d70a5b01b0"]}}}
+  base stored sessions=[{"running": true, "confirmed": false, "breaks": ["2026-10-19T15:00:00Z..2026-10-19T15:15:00Z", "2026-10-19T22:13:00Z..2026-10-19T22:16:00Z"], "version": 1}] calc={"status": "incomplete", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  target step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after add and remove", "rows": 0, "label": "Check out, breaks unconfirmed", "note": "The saved breaks you removed are deleted at Check out. Breaks stay unconfirmed and OT for the day stays pending.", "noteIsStatus": true, "box": false, "emptyText": true}
+  target step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  target POST /api/clock/out 200 {"breaks":[],"breaks_confirmed":false,"expected_version":1} <ok>
+  target stored sessions=[{"running": false, "confirmed": false, "breaks": [], "version": 2}] calc={"status": "incomplete_breaks", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  bodies identical between builds: False
+=== B7-single-late-row-removed
+  base step {"step": "opened", "rows": 1, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after removing L", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  base step {"step": "after submit", "dialogOpen": true, "alerts": ["A saved break ends after this Check out; resubmit the complete list of breaks to replace it (saved_break_after_clock_out)"], "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  base POST /api/clock/out 422 {"breaks_confirmed":false,"expected_version":1} {"error":{"code":"saved_break_after_clock_out","message":"A saved break ends after this Check out; resubmit the complete list of breaks to replace it","details":{"break_ids":["cee24ce7-fe9e-49d8-a23e-edaa6a0f3b23"]}}}
+  base stored sessions=[{"running": true, "confirmed": false, "breaks": ["2026-10-19T22:13:00Z..2026-10-19T22:16:00Z"], "version": 1}] calc={"status": "incomplete", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  target step {"step": "opened", "rows": 1, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after removing L", "rows": 0, "label": "Check out, breaks unconfirmed", "note": "The saved breaks you removed are deleted at Check out. Breaks stay unconfirmed and OT for the day stays pending.", "noteIsStatus": true, "box": false, "emptyText": true}
+  target step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  target POST /api/clock/out 200 {"breaks":[],"breaks_confirmed":false,"expected_version":1} <ok>
+  target stored sessions=[{"running": false, "confirmed": false, "breaks": [], "version": 2}] calc={"status": "incomplete_breaks", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  bodies identical between builds: False
+=== B8-remove-all-then-cancel-discard
+  base step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after removing both", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  base step {"step": "after discard", "dialogOpen": false}
+  base stored sessions=[{"running": true, "confirmed": false, "breaks": ["2026-10-19T15:00:00Z..2026-10-19T15:15:00Z", "2026-10-19T22:13:00Z..2026-10-19T22:16:00Z"], "version": 1}] calc={"status": "incomplete", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  target step {"step": "opened", "rows": 2, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after removing both", "rows": 0, "label": "Check out, breaks unconfirmed", "note": "The saved breaks you removed are deleted at Check out. Breaks stay unconfirmed and OT for the day stays pending.", "noteIsStatus": true, "box": false, "emptyText": true}
+  target step {"step": "after discard", "dialogOpen": false}
+  target stored sessions=[{"running": true, "confirmed": false, "breaks": ["2026-10-19T15:00:00Z..2026-10-19T15:15:00Z", "2026-10-19T22:15:00Z..2026-10-19T22:18:00Z"], "version": 1}] calc={"status": "incomplete", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  bodies identical between builds: True
+=== B9-saved-row-already-confirmed-removed (API-only state)
+  base step {"step": "opened", "rows": 1, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  base step {"step": "after removing A", "rows": 0, "label": "Check out, breaks unconfirmed", "note": null, "noteIsStatus": false, "box": false, "emptyText": true}
+  base step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  base POST /api/clock/out 200 {"breaks_confirmed":false,"expected_version":1} <ok>
+  base stored sessions=[{"running": false, "confirmed": false, "breaks": ["2026-10-19T15:00:00Z..2026-10-19T15:15:00Z"], "version": 2}] calc={"status": "incomplete_breaks", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  target step {"step": "opened", "rows": 1, "label": "Check out with these breaks", "note": null, "noteIsStatus": false, "box": false, "emptyText": false}
+  target step {"step": "after removing A", "rows": 0, "label": "Check out, breaks unconfirmed", "note": "The saved breaks you removed are deleted at Check out. Breaks stay unconfirmed and OT for the day stays pending.", "noteIsStatus": true, "box": false, "emptyText": true}
+  target step {"step": "after submit", "dialogOpen": false, "alerts": []}
+  target POST /api/clock/out 200 {"breaks":[],"breaks_confirmed":false,"expected_version":1} <ok>
+  target stored sessions=[{"running": false, "confirmed": false, "breaks": [], "version": 2}] calc={"status": "incomplete_breaks", "provisional": true, "credited": null, "excludedBreakSeconds": null}
+  bodies identical between builds: False
+=== errors: base={'project': 'desktop', 'case': 'errors', 'errors': []}
+    target={'project': 'desktop', 'case': 'errors', 'errors': []}
+
+SUMMARY (base vs target)
+  B1-remove-some (L removed, A kept): bodies IDENTICAL
+  B2-remove-all-unticked: bodies DIFFER
+  B3-remove-all-then-tick: bodies IDENTICAL
+  B4-add-a-row (L removed, A kept, one typed row): bodies IDENTICAL
+  B4b-remove-all-then-add-a-row: bodies IDENTICAL
+  B4c-add-a-row-keeping-both-saved (L stays listed): bodies IDENTICAL
+  B5-no-saved-rows: bodies IDENTICAL
+  B5b-no-saved-rows-add-then-remove: bodies IDENTICAL
+  B6-remove-all-add-then-remove: bodies DIFFER
+  B7-single-late-row-removed: bodies DIFFER
+  B8-remove-all-then-cancel-discard: bodies IDENTICAL
+  B9-saved-row-already-confirmed-removed (API-only state): bodies DIFFER

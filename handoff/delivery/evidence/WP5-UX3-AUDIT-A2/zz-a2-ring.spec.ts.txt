@@ -1,0 +1,207 @@
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+import { activeInfo, awayAndUnder, describe, note, settle, shot, walk } from './zz-a2lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-A2 (task-local probe, never in the repository): F-UX3A-01 closed? The keyboard focus ring with the pointer away and
+ * resting on the focused control, for the date button, the Category picker, button links, the phone day button and the phone tabs,
+ * the Escape return from the Day editor at 1440, and keyboard walks of the Timesheet page, the account menu, Settings and the phone
+ * More panel on a device that can hover. Light and dark device. Lines go to obs/ring.txt and obs/walk.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+test.skip(({ isMobile }) => isMobile, 'a device that can hover (desktop project)');
+
+async function keyboardFocus(page: Page, control: Locator): Promise<void> {
+  await control.scrollIntoViewIfNeeded();
+  await page.mouse.move(0, 0);
+  await control.evaluate((element) => (element as HTMLElement).blur());
+  await page.keyboard.press('Shift');
+  await control.focus();
+  await expect(control).toBeFocused();
+}
+
+async function check(page: Page, control: Locator, label: string): Promise<boolean> {
+  await keyboardFocus(page, control);
+  const { away, under } = await awayAndUnder(page);
+  const d = describe(label, away, under);
+  note('ring.txt', d.line);
+  return !d.bad && under !== null && under.hover;
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`A2 ring under the pointer and keyboard walks (${theme})`, async ({ page, signInThroughUi }) => {
+    test.setTimeout(600_000);
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    note('ring.txt', `==== ${theme} 1440 ${new Date().toISOString()} (hover: hover) ${await page.evaluate("matchMedia('(hover: hover)').matches")}`);
+    const day = page.locator('.sheet-day[data-day]:not(.nonworking)').first();
+    const date = day.locator('[data-day-button]');
+    const picker = day.locator('[data-label-picker] button[aria-label^="Category for"]');
+    const results: string[] = [];
+    results.push(`date ${await check(page, date, `${theme} date button`)}`);
+    // a screenshot of the date button focused with the pointer resting on it
+    await keyboardFocus(page, date);
+    const box = await date.boundingBox();
+    if (box !== null) {
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await settle(page, 200);
+      if (theme === 'light') await page.screenshot({ path: shot(`a2-ring-date-under-pointer-1440-${theme}-synthetic.png`), clip: { x: Math.max(0, box.x - 60), y: Math.max(0, box.y - 40), width: 260, height: 140 } });
+      await page.mouse.move(0, 0);
+    }
+    results.push(`picker ${await check(page, picker, `${theme} Category picker`)}`);
+    const reviewLink = page.locator('a.review-link').first();
+    if ((await reviewLink.count()) > 0) results.push(`review link ${await check(page, reviewLink, `${theme} button link (period bar review link)`)}`);
+    const sigLink = page.locator('a[data-sheet-review-link]').first();
+    if ((await sigLink.count()) > 0) results.push(`sig link ${await check(page, sigLink, `${theme} button link (signature Review link)`)}`);
+    const identity = page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+    results.push(`identity ${await check(page, identity, `${theme} identity button`)}`);
+    const navLink = page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Overtime', exact: true });
+    results.push(`nav link ${await check(page, navLink, `${theme} navigation link`)}`);
+    const quiet = page.getByRole('button', { name: 'Change several days', exact: true });
+    results.push(`quiet ${await check(page, quiet, `${theme} quiet button`)}`);
+    const secondary = page.getByRole('button', { name: 'Next period', exact: true });
+    results.push(`secondary ${await check(page, secondary, `${theme} secondary button`)}`);
+    const details = page.getByRole('switch', { name: 'Show details', exact: true });
+    results.push(`switch ${await check(page, details, `${theme} Show details switch`)}`);
+
+    // Escape return from the Day editor at 1440 (beside the sheet): focus back on the date button, pointer still on it.
+    const workDate = (await day.getAttribute('data-day')) ?? '';
+    await date.click();
+    const editor = page.getByRole('dialog', { name: new RegExp(`^Day editor .*${workDate}`) });
+    await expect(editor).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await expect(date).toBeFocused();
+    await date.hover();
+    await settle(page, 150);
+    const afterEscape = await activeInfo(page);
+    await page.mouse.move(0, 0);
+    await settle(page, 150);
+    const afterEscapeAway = await activeInfo(page);
+    const de = describe(`${theme} date button after the Escape return (1440, editor beside)`, afterEscapeAway, afterEscape);
+    note('ring.txt', de.line);
+    results.push(`escape ${!de.bad && afterEscape?.hover === true}`);
+    note('ring.txt', `summary ${theme} 1440: ${results.join(', ')}`);
+
+    // Keyboard walk of the Timesheet page from the top.
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate(() => window.scrollTo(0, 0));
+    note('walk.txt', `==== ${theme} Timesheet 1440 ${new Date().toISOString()}`);
+    let first = '';
+    await walk(page, 'walk.txt', `${theme} timesheet`, 80, async () => {
+      const info = await activeInfo(page);
+      if (info === null) return false;
+      if (first === '') {
+        first = info.desc;
+        return false;
+      }
+      return info.desc === first;
+    });
+
+    // The account menu: keyboard open (focus on Profile), walk until it closes; Escape returns focus to the identity button.
+    note('walk.txt', `==== ${theme} account menu 1440`);
+    await keyboardFocus(page, identity);
+    await page.keyboard.press('Enter');
+    const menu = page.locator('#account-menu');
+    await expect(menu).toBeVisible();
+    {
+      const { away, under } = await awayAndUnder(page);
+      note('walk.txt', describe(`${theme} menu first entry`, away, under).line);
+    }
+    await walk(page, 'walk.txt', `${theme} account menu`, 12, async () => (await menu.count()) === 0 || !(await menu.isVisible()));
+    await keyboardFocus(page, identity);
+    await page.keyboard.press('Enter');
+    await expect(menu).toBeVisible();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+    await expect(identity).toBeFocused();
+    {
+      const { away, under } = await awayAndUnder(page);
+      note('walk.txt', describe(`${theme} identity button after Escape in the menu`, away, under).line);
+    }
+
+    // Settings.
+    note('walk.txt', `==== ${theme} Settings 1440`);
+    await page.evaluate(() => {
+      window.location.hash = '#/settings';
+    });
+    await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+    await settle(page, 400);
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate(() => window.scrollTo(0, 0));
+    first = '';
+    await walk(page, 'walk.txt', `${theme} settings`, 50, async () => {
+      const info = await activeInfo(page);
+      if (info === null) return false;
+      if (first === '') {
+        first = info.desc;
+        return false;
+      }
+      return info.desc === first;
+    });
+
+    // A phone-width window on a device that can hover: the phone day button, the tabs and the More panel.
+    await page.evaluate(() => {
+      window.location.hash = '#/timesheet';
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await settle(page, 400);
+    note('ring.txt', `==== ${theme} 390 (hover device)`);
+    const phoneDay = page.locator('[data-day]:not(.nonworking) [data-day-button]').first();
+    const r390: string[] = [];
+    r390.push(`phone day ${await check(page, phoneDay, `${theme} phone day button`)}`);
+    const tab = page.locator('.shell-tabs a.tab:not([aria-current])').first();
+    r390.push(`tab ${await check(page, tab, `${theme} phone tab (not current)`)}`);
+    const currentTab = page.locator('.shell-tabs a.tab[aria-current]').first();
+    r390.push(`current tab ${await check(page, currentTab, `${theme} phone tab (current)`)}`);
+    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+    r390.push(`more ${await check(page, more, `${theme} More tab`)}`);
+    const phoneReview = page.locator('a.review-link').first();
+    if ((await phoneReview.count()) > 0 && (await phoneReview.isVisible())) r390.push(`phone review link ${await check(page, phoneReview, `${theme} phone review link`)}`);
+    const phonePicker = page.locator('[data-day]:not(.nonworking) [data-label-picker] button[aria-label^="Category for"]').first();
+    if ((await phonePicker.count()) > 0 && (await phonePicker.isVisible())) r390.push(`phone picker ${await check(page, phonePicker, `${theme} phone Category picker`)}`);
+    note('ring.txt', `summary ${theme} 390: ${r390.join(', ')}`);
+
+    note('walk.txt', `==== ${theme} phone More panel 390 (hover device)`);
+    await keyboardFocus(page, more);
+    await page.keyboard.press('Enter');
+    const panel = page.locator('#more-panel');
+    await expect(panel).toBeVisible();
+    await walk(page, 'walk.txt', `${theme} More panel`, 14, async () => (await panel.count()) === 0 || !(await panel.isVisible()));
+    // The panel does not close when focus leaves it (see obs/more.txt); close it with More before the Escape check.
+    if (await panel.isVisible()) {
+      note('walk.txt', `${theme} More panel still open after the walk left it`);
+      await more.focus();
+      await page.keyboard.press('Enter');
+      await expect(panel).toHaveCount(0);
+    }
+    await keyboardFocus(page, more);
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeVisible();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(more).toBeFocused();
+    {
+      const { away, under } = await awayAndUnder(page);
+      note('walk.txt', describe(`${theme} More after Escape in the panel`, away, under).line);
+    }
+    note('walk.txt', `==== ${theme} phone Timesheet 390 (hover device)`);
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate(() => window.scrollTo(0, 0));
+    first = '';
+    await walk(page, 'walk.txt', `${theme} phone timesheet`, 70, async () => {
+      const info = await activeInfo(page);
+      if (info === null) return false;
+      if (first === '') {
+        first = info.desc;
+        return false;
+      }
+      return info.desc === first;
+    });
+  });
+}

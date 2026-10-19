@@ -1,0 +1,36 @@
+"""Compares dist/server and dist/domain of two builds file by file. Usage: python cmp_dist.py <base dir> <target dir> <out.txt>"""
+import hashlib
+import os
+import sys
+
+base, target, out = sys.argv[1:4]
+lines = []
+for sub in ('dist/server', 'dist/domain', 'dist/client'):
+    def files(root):
+        result = {}
+        top = os.path.join(root, sub)
+        for folder, _dirs, names in os.walk(top):
+            for name in names:
+                path = os.path.join(folder, name)
+                rel = os.path.relpath(path, top).replace('\\', '/')
+                result[rel] = hashlib.sha256(open(path, 'rb').read()).hexdigest()
+        return result
+
+    b = files(base)
+    t = files(target)
+    only_b = sorted(set(b) - set(t))
+    only_t = sorted(set(t) - set(b))
+    differ = sorted(k for k in set(b) & set(t) if b[k] != t[k])
+    lines.append(f'{sub}: base {len(b)} files, target {len(t)} files, only base {len(only_b)}, only target {len(only_t)}, differing {len(differ)}')
+    if sub == 'dist/client':
+        for k in only_b:
+            lines.append(f'  only base: {k}')
+        for k in only_t:
+            lines.append(f'  only target: {k}')
+        for k in differ:
+            lines.append(f'  differs: {k}')
+    else:
+        for k in only_b + only_t + differ:
+            lines.append(f'  DIFF: {k}')
+open(out, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines) + '\n')
+print('\n'.join(lines))

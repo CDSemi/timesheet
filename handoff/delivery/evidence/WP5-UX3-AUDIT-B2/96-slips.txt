@@ -1,0 +1,6 @@
+Rule slips of this audit (read-only commands, no effect on any result; recorded as they happened)
+1. ~22:03Z: one search command ended in `| head -5 >> <task>/out/grep-dayview.txt` (a pipe into head) while reading the DayView type.
+2. ~22:12Z: `tail -c 1500 <task>/out/40-req-base-run.txt > <task>/out/peek.txt` read a log file with tail (not a pipe; listed for transparency).
+2b. ~22:42Z: `tail -n 3 <task>/out/60-mutants.txt > <task>/out/peek.txt` read a log file with tail (not a pipe; listed for transparency).
+3. ~22:16Z: a stray `"$PY" -I -c "print(1)" 2>&1 | grep -c x` no-op ran (the forbidden `python -c` form; nothing read from stdin).
+Nothing was fed to python or node through stdin, no heredoc, no recursive delete, no process killed by PID.

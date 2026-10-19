@@ -1,0 +1,106 @@
+date_utc: 2026-10-19T19:07:04Z
+$ <python> --version
+Python 3.12.14
+exit=0
+$ git rev-parse HEAD origin/main
+ceb86b6b18bd0e8fabd93f47672cd87f3899b92f
+ceb86b6b18bd0e8fabd93f47672cd87f3899b92f
+exit=0
+$ git diff --name-only a78ada5..ceb86b6 -- . ':!handoff'
+AGENTS.md
+AGENTS.vi.md
+exit=0
+$ git diff --name-only a78ada5..ceb86b6 (all paths)
+AGENTS.md
+AGENTS.vi.md
+handoff/NEXT_ACTION.md
+handoff/NEXT_ACTION.vi.md
+handoff/delivery/ORCHESTRATION.json
+handoff/delivery/STATE.json
+handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+handoff/delivery/evidence/WP5-UX3-FIX3-FREEZE/checks.txt
+handoff/delivery/evidence/WP5-UX3-FIX3-FREEZE/commit-message.txt
+handoff/delivery/evidence/WP5-UX3-GOV2/cand.txt
+handoff/delivery/evidence/WP5-UX3-GOV2/cand2.txt
+handoff/delivery/evidence/WP5-UX3-GOV2/post.txt
+handoff/delivery/evidence/WP5-UX3-GOV2/pre.txt
+handoff/delivery/tasks/WP5-UX3-AUDIT-A2.md
+handoff/delivery/tasks/WP5-UX3-AUDIT-B2.md
+handoff/delivery/tasks/WP5-UX3-AUDIT-INT.md
+handoff/delivery/tasks/WP5-UX3-FIX3-FREEZE.md
+handoff/delivery/tasks/WP5-UX3-GOV2-FREEZE.md
+handoff/delivery/tasks/WP5-UX3-GOV2.md
+handoff/delivery/tasks/WP5-UX3-REGATE2.md
+exit=0
+$ governance paths changed in a78ada5..ceb86b6 (docs/08 'Governance scope' list)
+AGENTS.md
+AGENTS.vi.md
+exit=0
+$ git diff --check a78ada5..ceb86b6
+exit=0
+$ git diff --numstat a78ada5..ceb86b6 -- AGENTS.md AGENTS.vi.md
+47	1	AGENTS.md
+46	1	AGENTS.vi.md
+exit=0
+$ git status --short -- . ':!handoff'   (expect empty)
+exit=0
+$ <python> -I <task>/text_checks.py <repo> <task>
+== 1. Format (ceb86b6 blobs)
+[OK] AGENTS.md no BOM
+[OK] AGENTS.md no CR bytes: CR count 0
+[OK] AGENTS.md ends with exactly one LF
+[OK] AGENTS.md no trailing whitespace: 0 lines
+[OK] AGENTS.md valid UTF-8
+[OK] AGENTS.vi.md no BOM
+[OK] AGENTS.vi.md no CR bytes: CR count 0
+[OK] AGENTS.vi.md ends with exactly one LF
+[OK] AGENTS.vi.md no trailing whitespace: 0 lines
+[OK] AGENTS.vi.md valid UTF-8
+== 2. Working tree equals ceb86b6 for the AGENTS pair
+[OK] git diff --quiet ceb86b6 -- AGENTS.md AGENTS.vi.md: exit 0
+== 3. Unchanged sections (Project instructions heading to end of file)
+[OK] AGENTS.md heading found once in each: new [46] base [0]
+     heading new='## Project instructions' base='# Project instructions'
+[OK] AGENTS.md heading level change is exactly '# ' -> '## '
+[OK] AGENTS.md everything after the heading byte-equal to a78ada5: 37 vs 37 lines
+     lines before heading: base 0, new 46
+[OK] AGENTS.vi.md heading found once in each: new [47] base [2]
+Traceback (most recent call last):
+  File "D:\.claude-tmp\timesheet\WP5-UX3-GOV2-AUDIT\text_checks.py", line 65, in <module>
+    print(f"     heading new={nh!r} base={bh!r}")
+  File "C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 22-23: character maps to <undefined>
+exit=1
+$ <python> handoff/delivery/validate_package.py --preflight
+{
+  "status": "PASS",
+  "mode": "preflight",
+  "translation_pairs": 114,
+  "local_links": 2258,
+  "ot_scenarios": 33,
+  "time_scenarios": 32,
+  "deficit_scenarios": 16,
+  "ledger_accounting_scenarios": 10,
+  "scenario_total": 91,
+  "application_tests_executed": false
+}
+exit=0
+$ <python> handoff/delivery/validate_orchestration.py
+{
+  "status": "PASS",
+  "profiles": 9,
+  "tasks": 419,
+  "active_tasks": 2,
+  "application_acceptance_verified": false,
+  "claude_runtime_verified": false
+}
+exit=0
+$ <python> handoff/delivery/check_recovery.py
+exit=0
+  "status": "PASS",
+  "count": 106,
+  "actual_board_modified": false,
+  "claude_dispatch_executed": false

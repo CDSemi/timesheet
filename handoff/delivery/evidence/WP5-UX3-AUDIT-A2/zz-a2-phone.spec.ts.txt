@@ -1,0 +1,49 @@
+import { expect, test } from './fixtures.ts';
+import { note, settle } from './zz-a2lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-A2 (task-local probe, never in the repository): REGATE2 observation 2. The first day row of the phone Timesheet at
+ * 390x844 against the tab bar, at landing and in the away states (next and previous period), with the device zone equal to the
+ * reporting zone and with another device zone (the zone note). Lines go to obs/phone.txt.
+ */
+for (const zone of ['America/Los_Angeles', 'Asia/Tokyo']) {
+  test.describe(`device zone ${zone}`, () => {
+    test.use({ locale: 'en-US', timezoneId: zone });
+    test(`A2 phone first screen 390x844 (${zone})`, async ({ page, signInThroughUi, isMobile }) => {
+      test.skip(!isMobile, 'mobile project');
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await signInThroughUi();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await settle(page, 500);
+      const measure = async (label: string) => {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await settle(page, 300);
+        const m = await page.evaluate(() => {
+          const row = document.querySelector('[data-day]');
+          const tabs = document.querySelector('.shell-tabs');
+          const title = document.querySelector('.period-title, [data-period-title]');
+          const cta = document.querySelector('.period-cta');
+          const pills = [...document.querySelectorAll('.period-bar [class*="pill"], .period-card [class*="pill"]')].map((p) => (p.textContent ?? '').trim()).filter(Boolean);
+          return {
+            row: row?.getBoundingClientRect().bottom ?? -1,
+            tabs: tabs?.getBoundingClientRect().top ?? -1,
+            title: (title?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60),
+            cta: (cta?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80),
+            pills: pills.slice(0, 6).join(' | '),
+            zoneNote: document.querySelector('.zone-note') !== null,
+          };
+        });
+        note('phone.txt', `${zone} ${label}: first row bottom ${m.row.toFixed(1)} tab bar top ${m.tabs.toFixed(1)} room ${(m.tabs - m.row).toFixed(1)}; zone note ${m.zoneNote}; title "${m.title}"; buttons "${m.cta}"; pills "${m.pills}"`);
+      };
+      await measure('landing');
+      const next = page.getByRole('button', { name: 'Next period', exact: true });
+      await next.click();
+      await settle(page, 600);
+      await measure('away: next period');
+      await page.getByRole('button', { name: 'Previous period', exact: true }).click();
+      await page.getByRole('button', { name: 'Previous period', exact: true }).click();
+      await settle(page, 600);
+      await measure('away: previous period');
+    });
+  });
+}

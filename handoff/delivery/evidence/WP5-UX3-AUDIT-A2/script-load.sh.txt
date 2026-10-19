@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# WP5-UX3-AUDIT-A2: one load sample (process counts and the area-B folder's latest file time), appended to load-context.txt.
+# Usage: load.sh <label>
+T=/d/.claude-tmp/timesheet/WP5-UX3-AUDIT-A2
+out="$T/load-context.txt"
+now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+tasklist //FO CSV > "$T/tmp-tasklist.csv" 2>&1
+nodes=$(grep -c '"node.exe"' "$T/tmp-tasklist.csv")
+edges=$(grep -c '"msedge.exe"' "$T/tmp-tasklist.csv")
+b2="(no folder)"
+if [ -d /d/.claude-tmp/timesheet/WP5-UX3-AUDIT-B2 ]; then
+  b2=$(find /d/.claude-tmp/timesheet/WP5-UX3-AUDIT-B2 -maxdepth 3 -type f -newermt '-2 minutes' -not -path '*/node_modules/*' 2>&1 | wc -l)
+  b2="$b2 files changed in the last 2 min (depth 3)"
+fi
+echo "$now [$1] node.exe=$nodes msedge.exe=$edges area-B folder: $b2" >> "$out"

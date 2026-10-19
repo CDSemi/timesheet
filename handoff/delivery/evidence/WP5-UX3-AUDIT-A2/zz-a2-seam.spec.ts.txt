@@ -1,0 +1,157 @@
+import { writeFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, test } from './fixtures.ts';
+import { note, shot } from './zz-a2lib.ts';
+import { decodePng, type Image, lum, pixel } from './zz-a2png.ts';
+
+/*
+ * WP5-UX3-AUDIT-A2 (the first-pass item-12 probe, re-run on the target) (task-local probe, never in the repository): the lifted runs at device pixel ratio 2, at 1440 and
+ * at widths with fractional column edges, light and dark. A run of three (Tue-Thu) and a single day (Sat) of week 1 in batch
+ * mode. Numbers go to obs/seam.txt; crops and 6x zooms of the inner joins to shots-audit/.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles', deviceScaleFactor: 2 });
+test.skip(({ isMobile }) => isMobile, 'desktop project');
+
+interface Geometry {
+  lefts: number[];
+  rights: number[];
+  tops: number[];
+  bottoms: number[];
+}
+
+async function geometry(page: Page): Promise<Geometry> {
+  return page.evaluate<Geometry>(() => {
+    const cols = [...(document.querySelectorAll('.week-grid')[0]?.querySelectorAll('.sheet-day') ?? [])];
+    const rects = cols.map((c) => c.getBoundingClientRect());
+    return { lefts: rects.map((r) => r.left), rights: rects.map((r) => r.right), tops: rects.map((r) => r.top), bottoms: rects.map((r) => r.bottom) };
+  });
+}
+
+const L = (image: Image, x: number, y: number) => lum(pixel(image, Math.max(0, Math.min(image.width - 1, x)), Math.max(0, Math.min(image.height - 1, y))));
+const r1 = (v: number) => Math.round(v * 10) / 10;
+
+/** Worst deviation, over rows y0..y1, of the pixels within +-4 device px of x against the mean 28 device px to either side. */
+function joinDeviation(image: Image, x: number, y0: number, y1: number): { worst: number; row: number; profile: string } {
+  let worst = 0;
+  let row = y0;
+  const rows: string[] = [];
+  for (let y = y0; y !== y1 + Math.sign(y1 - y0); y += Math.sign(y1 - y0) || 1) {
+    const ref = (L(image, x - 28, y) + L(image, x + 28, y)) / 2;
+    let dev = 0;
+    for (let dx = -4; dx <= 4; dx += 1) dev = Math.max(dev, Math.abs(L(image, x + dx, y) - ref));
+    rows.push(`${y - y0}:${r1(dev)}`);
+    if (dev > worst) {
+      worst = dev;
+      row = y;
+    }
+    if (y === y1) break;
+  }
+  return { worst: r1(worst), row, profile: rows.join(' ') };
+}
+
+async function zoom(page: Page, png: Buffer, x: number, y: number, w: number, h: number, scale: number, file: string) {
+  const viewer = await page.context().newPage();
+  await viewer.setViewportSize({ width: w * scale, height: h * scale });
+  await viewer.setContent(
+    `<body style="margin:0;background:#fff"><div style="width:${w * scale}px;height:${h * scale}px;overflow:hidden;position:relative"><img src="data:image/png;base64,${png.toString('base64')}" style="position:absolute;left:0;top:0;image-rendering:pixelated;transform-origin:0 0;transform:translate(${-x * scale}px,${-y * scale}px) scale(${scale})"></div></body>`,
+  );
+  await viewer.waitForTimeout(200);
+  writeFileSync(file, await viewer.screenshot({ scale: 'css' }));
+  await viewer.close();
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`A2 DPR 2 lifted runs: seams, gaps and shadow over a neighbour (${theme})`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+    test.setTimeout(300_000);
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Seam Reader', signature: 'none' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInPageAs(me.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const dates = await page.locator('.week-grid').first().locator('.sheet-day').evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-day') ?? ''));
+    expect(dates.length).toBe(7);
+    await page.getByRole('button', { name: 'Change several days' }).click();
+    for (const width of [1440, 1445, 1367, 1601]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForTimeout(300);
+      for (const date of dates) await page.getByLabel(`Select ${date}`).uncheck();
+      await page.mouse.move(0, 0);
+      const g0 = await geometry(page);
+      await page.evaluate((top) => window.scrollTo(0, Math.max(0, window.scrollY + top - 100)), Math.min(...g0.tops));
+      await page.waitForTimeout(200);
+      const base = await geometry(page);
+      const clip = {
+        x: Math.max(0, Math.floor(base.lefts[0] ?? 0) - 8),
+        y: Math.max(0, Math.floor(Math.min(...base.tops)) - 16),
+        width: 0,
+        height: 0,
+      };
+      clip.width = Math.min(width - clip.x, Math.ceil((base.rights[6] ?? 0) + 8) - clip.x);
+      clip.height = Math.min(900 - clip.y, Math.ceil(Math.max(...base.bottoms) - Math.min(...base.tops)) + 48);
+      const basePng = await page.screenshot({ clip, scale: 'device', animations: 'disabled', caret: 'hide' });
+      for (const index of [1, 2, 3, 5]) await page.getByLabel(`Select ${dates[index]}`).check();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(300);
+      const lifted = await geometry(page);
+      const liftedPng = await page.screenshot({ clip, scale: 'device', animations: 'disabled', caret: 'hide' });
+      writeFileSync(shot(`a2-seam-dpr2-run-${width}-${theme}-synthetic.png`), liftedPng);
+      const b = decodePng(basePng);
+      const im = decodePng(liftedPng);
+      const s = 2;
+      const dx = (cssX: number) => Math.round((cssX - clip.x) * s);
+      const dy = (cssY: number) => Math.round((cssY - clip.y) * s);
+      const frac = (v: number) => r1((v - Math.floor(v)) * 100) / 100;
+      note('seam.txt', `== ${theme} width ${width} DPR 2: column rights (CSS) ${lifted.rights.map((v) => v.toFixed(2)).join(' ')}; fractions ${lifted.rights.map(frac).join(' ')}; run top ${lifted.tops[1]?.toFixed(2)} bottom ${lifted.bottoms[1]?.toFixed(2)} (unlifted bottom ${base.bottoms[1]?.toFixed(2)})`);
+      const runBottom = dy(lifted.bottoms[1] ?? 0);
+      const runTop = dy(lifted.tops[1] ?? 0);
+      for (const [name, k] of [['inner join 1|2', 1], ['inner join 2|3', 2]] as const) {
+        const x = dx(lifted.rights[k] ?? 0);
+        const below = joinDeviation(im, x, runBottom + 1, runBottom + 24);
+        const belowBase = joinDeviation(b, x, runBottom + 1, runBottom + 24);
+        const above = joinDeviation(im, x, runTop - 1, runTop - 12);
+        // Inside the run: mean luminance of the device columns x-3..x+3 over the body rows, lifted and baseline.
+        const rows: [number, number] = [runTop + Math.round((runBottom - runTop) * 0.45), runTop + Math.round((runBottom - runTop) * 0.8)];
+        const inside = (image: Image) => {
+          const out: number[] = [];
+          for (let off = -3; off <= 3; off += 1) {
+            let sum = 0;
+            for (let y = rows[0]; y < rows[1]; y += 1) sum += L(image, x + off, y);
+            out.push(r1(sum / (rows[1] - rows[0])));
+          }
+          return out;
+        };
+        note('seam.txt', `  ${name} device x ${x}: under the run (24 device rows) worst ${below.worst} at +${below.row - runBottom - 1} [baseline same rows ${belowBase.worst}]; above the run (12 rows) worst ${above.worst}`);
+        note('seam.txt', `    under-run profile ${below.profile}`);
+        note('seam.txt', `    inside the run, columns x-3..x+3: lifted [${inside(im).join(' ')}] baseline [${inside(b).join(' ')}]`);
+        await zoom(page, liftedPng, Math.max(0, x - 40), Math.max(0, runBottom - 30), 80, 60, 6, shot(`a2-seam-dpr2-join${k}-zoom6-${width}-${theme}-synthetic.png`));
+      }
+      // The single day (col 5) and its unselected neighbours 4 and 6: how far the shadow reaches onto them (body rows).
+      for (const [name, k] of [['neighbour 0 (left of run)', 0], ['neighbour 4 (between)', 4], ['neighbour 6 (right of single)', 6]] as const) {
+        const left = dx(base.lefts[k] ?? 0);
+        const right = dx(base.rights[k] ?? 0);
+        const rows: [number, number] = [runTop + Math.round((runBottom - runTop) * 0.45), runTop + Math.round((runBottom - runTop) * 0.8)];
+        let reach = 0;
+        let max = 0;
+        for (let x = left + 1; x < right - 1; x += 1) {
+          let diff = 0;
+          for (let y = rows[0]; y < rows[1]; y += 1) diff += L(b, x, y) - L(im, x, y);
+          const d = diff / (rows[1] - rows[0]);
+          if (Math.abs(d) > 0.8) reach += 1;
+          max = Math.max(max, Math.abs(d));
+        }
+        note('seam.txt', `  ${name}: device columns darker than baseline by >0.8: ${reach} of ${right - left}; max ${r1(max)}`);
+      }
+      // A lifted neighbour never receives a shadow: compare the run's middle column body against an unlifted-but-selected look is
+      // not possible, so read the computed shadow of each run column and its ::before layer.
+      const styles = await page.evaluate(() => {
+        const cols = [...(document.querySelectorAll('.week-grid')[0]?.querySelectorAll('.sheet-day') ?? [])];
+        return cols.map((c) => {
+          const cs = getComputedStyle(c);
+          const before = getComputedStyle(c, '::before');
+          return `${c.getAttribute('data-lift') ?? '-'} shadow=${cs.boxShadow === 'none' ? 'none' : 'set'} clip=${cs.clipPath} before=${before.content === 'none' ? 'none' : `${before.left}/${before.right}`}`;
+        });
+      });
+      note('seam.txt', `  columns: ${styles.join(' | ')}`);
+    }
+  });
+}

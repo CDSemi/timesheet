@@ -1,0 +1,31 @@
+"""Applies or reverts one mutant in the scratch export. Usage: python mutate.py <mutants.json> <mut dir> <clean dir> apply|revert|check <id>"""
+import filecmp
+import json
+import os
+import shutil
+import sys
+
+defs = json.load(open(sys.argv[1], encoding='utf-8'))
+mut_dir, clean_dir, action, ident = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+item = defs[ident]
+target = os.path.join(mut_dir, item['file'])
+clean = os.path.join(clean_dir, item['file'])
+if action == 'apply':
+    if not filecmp.cmp(clean, target, shallow=False):
+        print(f'{ident}: {item["file"]} is not clean before applying')
+        sys.exit(4)
+    text = open(target, encoding='utf-8', newline='').read()
+    count = text.count(item['old'])
+    if count != 1:
+        print(f'{ident}: expected exactly one occurrence, found {count}')
+        sys.exit(2)
+    open(target, 'w', encoding='utf-8', newline='').write(text.replace(item['old'], item['new']))
+    print(f'{ident} applied to {item["file"]}: {item["what"]}')
+elif action == 'revert':
+    shutil.copyfile(clean, target)
+    same = filecmp.cmp(clean, target, shallow=False)
+    print(f'{ident} reverted {item["file"]}: identical to the clean export = {same}')
+    sys.exit(0 if same else 3)
+else:
+    same = filecmp.cmp(clean, target, shallow=False)
+    print(f'{ident} check {item["file"]}: identical = {same}')

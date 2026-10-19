@@ -1,0 +1,18 @@
+// Usage: node analyze-measure.mjs <measure.txt> : text sweep lines: count, below required, minimum ratio per situation.
+import { readFileSync } from 'node:fs';
+const lines = readFileSync(process.argv[2], 'utf8').split('\n');
+const by = new Map();
+for (const line of lines) {
+  const m = line.match(/^\[([^\]]+)\] text .*? ([0-9.]+):1 \(needs ([0-9.]+);/);
+  if (!m) continue;
+  const [, sit, r, need] = m;
+  const e = by.get(sit) ?? { n: 0, below: 0, min: 99, where: '' };
+  e.n += 1;
+  if (Number(r) < Number(need)) e.below += 1;
+  if (Number(r) < e.min) {
+    e.min = Number(r);
+    e.where = line.slice(0, 140);
+  }
+  by.set(sit, e);
+}
+for (const [sit, e] of by) console.log(`${sit}: text lines ${e.n}, below required ${e.below}, lowest ${e.min}  <- ${e.where}`);

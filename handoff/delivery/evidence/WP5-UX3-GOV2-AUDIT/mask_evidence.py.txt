@@ -1,0 +1,53 @@
+"""Copy WP5-UX3-GOV2-AUDIT logs into the repository evidence folder as masked LF .txt files.
+
+Usage: python -I mask_evidence.py <taskdir> <evidencedir>
+Each output is the concatenation of its sources (with a '#### source: <name>' header),
+CRLF/CR converted to LF, the Windows account name replaced by <user>, the workflow Python
+path replaced by <python>, exactly one final newline. Stops if a source is not UTF-8.
+"""
+import os
+import re
+import sys
+
+TASK, EVID = sys.argv[1], sys.argv[2]
+ACCOUNT = os.path.basename(os.environ.get("USERPROFILE", "")) or "\x00none"
+
+PLAN = {
+    "digest-before.txt": ["head_before.txt", "status_before.txt", "digest_before.txt"],
+    "digest-after.txt": ["digest_after.txt", "status_after.txt", "lsremote.txt"],
+    "owner-text.txt": ["owner_text.txt"],
+    "owner-diff.txt": ["../WP5-UX3-GOV2/agents.diff"],
+    "candidates.txt": ["candidates.txt", "candidates2.txt", "vi_terms2.txt"],
+    "consistency.txt": ["consistency_grep.txt", "commit_skill.txt", "linelen.txt"],
+    "checks.txt": ["checks_raw.txt"],
+    "checks-run1-aborted.txt": ["checks_raw_run1.txt"],
+    "check-recovery.txt": ["check_recovery_raw.json"],
+    "models.txt": ["models.txt"],
+    "digest.sh.txt": ["digest.sh"],
+    "owner_text.sh.txt": ["owner_text.sh"],
+    "candidates.sh.txt": ["candidates.sh"],
+    "run_checks.sh.txt": ["run_checks.sh"],
+    "text_checks.py.txt": ["text_checks.py"],
+    "mask_evidence.py.txt": ["mask_evidence.py"],
+    "final-checks.txt": ["final_checks.txt", "digest_final.txt"],
+    "final_checks.sh.txt": ["final_checks.sh"],
+}
+
+os.makedirs(EVID, exist_ok=True)
+for out_name, sources in PLAN.items():
+    parts = []
+    for src in sources:
+        raw = open(os.path.join(TASK, src), "rb").read()
+        text = raw.decode("utf-8")  # raises on non-UTF-8 input
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        text = re.sub(r"[A-Za-z]:[\\/]Users[\\/]" + re.escape(ACCOUNT), r"C:\\Users\\<user>", text)
+        text = re.sub(r"/c/Users/" + re.escape(ACCOUNT), "/c/Users/<user>", text)
+        text = text.replace(ACCOUNT, "<user>")
+        text = re.sub(r"\S*codex-primary-runtime[\\/]dependencies[\\/]python[\\/]python\.exe", "<python>", text)
+        if len(sources) > 1:
+            parts.append(f"#### source: {os.path.basename(src)}\n")
+        parts.append(text.rstrip("\n") + "\n")
+    body = "".join(parts)
+    with open(os.path.join(EVID, out_name), "wb") as fh:
+        fh.write(body.encode("utf-8"))
+    print(f"wrote {out_name} ({len(body.encode('utf-8'))} bytes, account hits after masking: {body.count(ACCOUNT)})")

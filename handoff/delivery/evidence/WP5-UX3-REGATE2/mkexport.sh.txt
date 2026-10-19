@@ -1,0 +1,13 @@
+. <task>/env.sh
+cd $REPO
+for d in export export-v export-probe export-old; do
+  mkdir -p $T/$d
+done
+git archive $TARGET | tar -x -C $T/export
+git archive $TARGET | tar -x -C $T/export-v
+git archive $TARGET | tar -x -C $T/export-probe
+git archive a643794 | tar -x -C $T/export-old
+ls $T/export | wc -l
+ls -a $T/export-v | wc -l
+ls -a $T/export-v > $T/out/ls-export-v.txt
+echo done

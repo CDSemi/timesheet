@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# WP5-UX3-AUDIT-A2: copy masked LF .txt evidence and the chosen -synthetic.png screenshots into the evidence folder.
+set -u
+source /d/.claude-tmp/timesheet/WP5-UX3-AUDIT-A2/env.sh
+E="$REPO/handoff/delivery/evidence/WP5-UX3-AUDIT-A2"
+mkdir -p "$E"
+m() { node.exe "$T/mask.mjs" "$1" "$E/$2"; }
+for phase in before after; do
+  d="$T/digest-$phase"
+  [ -d "$d" ] || continue
+  m "$d/export.txt" "01-digest-export-$phase.txt"
+  m "$d/lstree.txt" "01-digest-lstree-$phase.txt"
+  m "$d/npm-digest.txt" "01-digest-npm-$phase.txt"
+  m "$d/head.txt" "01-head-$phase.txt"
+  m "$d/status-nonhandoff.txt" "01-nonhandoff-status-$phase.txt"
+  m "$d/when.txt" "01-when-$phase.txt"
+done
+m "$T/logs/setup.txt" "02-ci-exit.txt"
+for f in 10-typecheck 11-lint 12-npmtest-1 12-npmtest-2 13-build 14-ac13 main-times 30-build-p probe-times; do
+  [ -f "$T/logs/$f.txt" ] && m "$T/logs/$f.txt" "$f.txt"
+done
+for f in "$T"/logs/15-*.txt; do m "$f" "$(basename "$f")"; done
+m "$T/load-context.txt" "load-context.txt"
+for f in "$T"/obs/*.txt; do m "$f" "obs-$(basename "$f")"; done
+for f in "$T"/logs/probe-*.txt; do m "$f" "log-$(basename "$f")"; done
+[ -f "$T/mut-summary.txt" ] && m "$T/mut-summary.txt" "mut-summary.txt"
+mkdir -p "$T/tmp-collect"
+for f in "$T"/logs/mut-*-diff.txt; do [ -f "$f" ] && { grep -v '^warning: ' "$f" > "$T/tmp-collect/$(basename "$f")"; m "$T/tmp-collect/$(basename "$f")" "$(basename "$f")"; }; done
+for f in "$T"/logs/mut-*-e2e.txt "$T"/logs/mut-*-unit.txt; do [ -f "$f" ] && m "$f" "$(basename "$f")"; done
+for f in "$T"/export-p/tests/e2e/zz-a2*.ts "$T"/export-p/playwright.a2.config.ts; do m "$f" "$(basename "$f").txt"; done
+for f in env.sh digest3.sh load.sh setup.sh mandatory.sh mutate.mjs mutants.sh run-mutants.sh run-probes.sh collect.sh mask.mjs seed-uncertain.mjs; do m "$T/$f" "script-$f.txt"; done
+[ -f "$T/axe/version.txt" ] && m "$T/axe/version.txt" "axe-version.txt"
+[ -f "$T/static-summary.txt" ] && m "$T/static-summary.txt" "16-static-summary.txt"
+[ -f "$T/notes-extra.txt" ] && m "$T/notes-extra.txt" "notes-extra.txt"
+if [ -f "$T/shots-keep.txt" ]; then
+  while read -r name; do [ -n "$name" ] && cp "$T/shots/$name" "$E/$name"; done < "$T/shots-keep.txt"
+fi
+ls "$E" > "$T/evidence-list.txt"

@@ -1,0 +1,73 @@
+"""Compares the raw request bodies and stored results of two builds. Usage: python compare_req.py <base.jsonl> <target.jsonl> <out.txt> [intended case prefixes...]"""
+import json
+import re
+import sys
+
+
+def load(path):
+    out = {}
+    for line in open(path, encoding='utf-8'):
+        line = line.strip()
+        if not line:
+            continue
+        item = json.loads(line)
+        out[item['case']] = item
+    return out
+
+
+def shape(write):
+    path = re.sub(r'/sessions/[0-9a-f-]{8,}$', '/sessions/<id>', write.get('path', '/api/clock/out'))
+    return (write.get('method', 'POST'), path, write['status'], write['raw'])
+
+
+base = load(sys.argv[1])
+target = load(sys.argv[2])
+intended = tuple(sys.argv[4:])
+lines = []
+summary = []
+for case in base:
+    if case in ('context', 'errors', 'checkout-times'):
+        lines.append(f'=== {case}: base={json.dumps({k: v for k, v in base[case].items() if k != "build"})} target={json.dumps({k: v for k, v in target.get(case, {}).items() if k != "build"})}')
+        continue
+    b = base[case]
+    t = target.get(case)
+    lines.append(f'=== {case}')
+    if t is None or 'error' in b or 'error' in t:
+        lines.append(f'  MISSING or ERROR base={b.get("error")} target={None if t is None else t.get("error")}')
+        summary.append((case, 'ERROR'))
+        continue
+    bw = [shape(w) for w in b.get('writes', [])]
+    tw = [shape(w) for w in t.get('writes', [])]
+    same = bw == tw
+    for w in bw:
+        lines.append(f'  base   {w[0]} {w[1]} {w[2]} {w[3]}')
+    for w in tw:
+        lines.append(f'  target {w[0]} {w[1]} {w[2]} {w[3]}')
+    def norm(stored):
+        # Check-out cases end at the current second (and a Check in starts at it): those instants are run-dependent.
+        if not case.startswith('C2'):
+            return stored
+        out = []
+        for s in stored or []:
+            s = dict(s)
+            s['end_utc'] = '<now>' if s.get('end_utc') else s.get('end_utc')
+            if s.get('source') == 'clock':
+                s['start_utc'] = '<now>'
+            out.append(s)
+        return out
+
+    sb = json.dumps(norm(b.get('stored')), sort_keys=True)
+    st = json.dumps(norm(t.get('stored')), sort_keys=True)
+    stored_eq = sb == st
+    lines.append(f'  writes byte-identical (method, path, status, raw body): {same}; stored equal: {stored_eq}')
+    if not stored_eq:
+        lines.append(f'  stored base={sb}')
+        lines.append(f'  stored target={st}')
+    kind = 'INTENDED CHANGE' if case.startswith(intended) and intended else 'unchanged expected'
+    summary.append((case, f'{kind}: bodies {"IDENTICAL" if same else "DIFFER"}, stored {"EQUAL" if stored_eq else "DIFF"}'))
+lines.append('')
+lines.append('SUMMARY')
+for case, text in summary:
+    lines.append(f'  {case}: {text}')
+open(sys.argv[3], 'w', encoding='utf-8', newline='\n').write('\n'.join(lines) + '\n')
+print('\n'.join(lines[-(len(summary) + 1):]))

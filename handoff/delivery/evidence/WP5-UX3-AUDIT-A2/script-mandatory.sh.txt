@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# WP5-UX3-AUDIT-A2 mandatory checks in the pristine export: typecheck, lint, npm test twice, build, AC-13, FULL e2e (real clock).
+# Usage: mandatory.sh [static|e2e|e2e2]
+set -u
+source /d/.claude-tmp/timesheet/WP5-UX3-AUDIT-A2/env.sh
+cd "$T/export" || exit 9
+L="$T/logs"
+times="$L/main-times.txt"
+step() {
+  local name="$1"; shift
+  local start; start=$(date -u +%H:%M:%SZ)
+  bash "$T/load.sh" "$name start"
+  "$@" > "$L/$name.txt" 2>&1
+  local rc=$?
+  bash "$T/load.sh" "$name end"
+  echo "$name exit $rc ($start to $(date -u +%H:%M:%SZ))" >> "$times"
+}
+mode="${1:-static}"
+if [ "$mode" = static ]; then
+  step 10-typecheck npmrun run typecheck
+  step 11-lint npmrun run lint
+  step 12-npmtest-1 npmrun test
+  step 12-npmtest-2 npmrun test
+  step 13-build npmrun run build
+  step 14-ac13 node.exe node_modules/vitest/vitest.mjs run tests/integration/ac13-two-week.test.ts
+fi
+if [ "$mode" = e2e ] || [ "$mode" = e2e2 ]; then
+  out="$T/pw-out-$mode"
+  mkdir -p "$out"
+  step "15-$mode-real" node.exe node_modules/@playwright/test/cli.js test --output "$out"
+fi

@@ -1,0 +1,428 @@
+diff --git a/src/client/components/ClockOutDialog.tsx b/src/client/components/ClockOutDialog.tsx
+index fcc5258..dfb8fcd 100644
+--- a/src/client/components/ClockOutDialog.tsx
++++ b/src/client/components/ClockOutDialog.tsx
+@@ -27,8 +27,9 @@ import { policyOn } from './sessionModel.ts';
+
+ /**
+  * Check out with the break rows of the session dialog (WP5-UX3-T09, owner decision U-24; `BreakRows`, the "Break n" sub-dialog and
+- * the T06 model) and the E-1 rules of Check out (R-01, R-02): an empty list with "Confirm no breaks taken" unticked omits `breaks`,
+- * so the session is checked out with its breaks not confirmed; listed rows or the ticked box confirm the breaks and replace the
++ * the T06 model) and the E-1 rules of Check out (R-01, R-02): an empty list with "Confirm no breaks taken" unticked checks out with
++ * the breaks not confirmed (it omits `breaks` when the session had no saved row; when the person removed every saved row it sends the
++ * empty unconfirmed list, which replaces them, and the dialog says so); listed rows or the ticked box confirm the breaks and replace the
+  * saved rows (`buildCheckOutDialogRequest`). Check out is its own explicit act: the submit button says which of the three it does,
+  * and there is neither the "No breaks listed" notice nor a second confirmation. Leaving without checking out (Cancel, Escape and the
+  * browser's close request) asks "Discard your changes?" when the rows or the box changed (owner decision U-26, as in the session
+@@ -101,6 +102,8 @@ export function ClockOutDialog({
+   const subRow = subIndex < 0 ? undefined : draft.rows[subIndex];
+   const reasonMissing = reasonNeeded && reason.trim() === '';
+   const submitLabel = draft.noBreaks ? 'Check out, no breaks taken' : draft.rows.length > 0 ? 'Check out with these breaks' : 'Check out, breaks unconfirmed';
++  // The dialog opened with saved rows and every one was removed (box unticked): Check out sends the empty unconfirmed list, which replaces them.
++  const removedSaved = session.breaks.length > 0 && draft.rows.length === 0 && !draft.noBreaks;
+
+   function withoutRowError(key: string) {
+     if (!rowErrors.has(key)) return;
+@@ -273,6 +276,11 @@ export function ClockOutDialog({
+               withoutRowError(key);
+             }}
+           />
++          {removedSaved && (
++            <p className="muted hint" role="status" data-checkout-note="removed-saved">
++              The saved breaks you removed are deleted at Check out. Breaks stay unconfirmed and OT for the day stays pending.
++            </p>
++          )}
+         </section>
+         {reasonNeeded && (
+           <label>
+diff --git a/src/client/components/SessionDialog.tsx b/src/client/components/SessionDialog.tsx
+index b461eb3..9b3d997 100644
+--- a/src/client/components/SessionDialog.tsx
++++ b/src/client/components/SessionDialog.tsx
+@@ -1,6 +1,6 @@
+ import { type KeyboardEvent, type SubmitEvent, useEffect, useId, useRef, useState } from 'react';
+ import { diffDays, isCivilDate } from '../../domain/dates.ts';
+-import { type EpochSeconds, parseUtcInstant } from '../../domain/instants.ts';
++import type { EpochSeconds } from '../../domain/instants.ts';
+ import {
+   ApiRequestError,
+   type DayView,
+@@ -20,6 +20,7 @@ import {
+   buildSessionDialogRequest,
+   changeDialogZone,
+   chooseBreakRowFold,
++  confirmBreaksRows,
+   editBreakRow,
+   newSessionDialogDraft,
+   referenceHours,
+@@ -39,7 +40,7 @@ import { applyBreakEdit, breakDateVisible, followSessionDate } from './breakChip
+ import { BreakRows } from './BreakRows.tsx';
+ import { BreakSubDialog } from './BreakSubDialog.tsx';
+ import { ConfirmDialog } from './ConfirmDialog.tsx';
+-import { type ConfirmFact, editorTitle, quickBreaksOf } from './dayEditorModel.ts';
++import { type ConfirmFact, editorTitle } from './dayEditorModel.ts';
+ import { describeError, isStaleVersion } from './errors.ts';
+ import { usShortDate } from './format.ts';
+ import { LocalTimeField } from './LocalTimeField.tsx';
+@@ -240,11 +241,10 @@ export function SessionDialog({
+       return { draft, prefill: draft.rows.length > 0 ? 'hours-breaks' : 'hours' };
+     }
+     const saved = sessionDialogDraftFromSession(session);
+-    if (!confirmBreaks || saved.rows.length > 0 || policy === undefined || session.end_utc === null) return { draft: saved, prefill: null };
+-    // The old one-tap rule (`quickBreaksOf`): the suggestions are offered only when every one of them fits inside the session.
+-    if (quickBreaksOf(session, policy, displayZone)?.kind !== 'suggested') return { draft: saved, prefill: null };
+-    const rows = suggestionRows(policy, parseUtcInstant(session.start_utc), parseUtcInstant(session.end_utc), session.input_zone, (index) => `confirm-${session.id}-${index}`);
+-    return { draft: { ...saved, rows }, prefill: null };
++    if (!confirmBreaks) return { draft: saved, prefill: null };
++    // "Confirm breaks" lists the suggested breaks that lie inside the session (docs/04), none when no suggestion fits.
++    const rows = confirmBreaksRows(session, policy, (index) => `confirm-${session.id}-${index}`);
++    return { draft: rows.length === 0 ? saved : { ...saved, rows }, prefill: null };
+   });
+   const [draft, setDraft] = useState<SessionDialogDraft>(starting.draft);
+   const [timesTouched, setTimesTouched] = useState(false);
+diff --git a/src/client/components/breakRowsModel.ts b/src/client/components/breakRowsModel.ts
+index 0aa65d6..c14ba7f 100644
+--- a/src/client/components/breakRowsModel.ts
++++ b/src/client/components/breakRowsModel.ts
+@@ -372,9 +372,11 @@ export function checkBreakRows(rows: readonly BreakRowDraft[], inputZone: string
+ /**
+  * How Save and Check out treat the breaks. Session dialog: `allowUnconfirmed` is the owner's G-4
+  * choice for an empty list with the box unticked (true: save with breaks unknown; false: block).
+- * Check out keeps E-1: an empty unticked list omits `breaks`.
++ * Check out keeps E-1: an empty unticked list omits `breaks` (the saved rows stay, unconfirmed), except
++ * when the dialog started with saved rows (`hadSavedRows`) and the person removed them all: the empty
++ * unconfirmed list is then sent, the complete set, which replaces the rows the dialog no longer shows.
+  */
+-export type BreaksSaveMode = { kind: 'session'; allowUnconfirmed: boolean } | { kind: 'checkout' };
++export type BreaksSaveMode = { kind: 'session'; allowUnconfirmed: boolean } | { kind: 'checkout'; hadSavedRows?: boolean };
+
+ export const UNCONFIRMED_BLOCKED_MESSAGE = 'List the breaks you took, or tick "Confirm no breaks taken".';
+
+@@ -388,7 +390,7 @@ export function breaksPayload(
+ ): BreaksPayload {
+   if (input.noBreaks) return { ok: true, breaks: [], breaksConfirmed: true };
+   if (input.rows.length === 0) {
+-    if (mode.kind === 'checkout') return { ok: true, breaks: undefined, breaksConfirmed: false };
++    if (mode.kind === 'checkout') return { ok: true, breaks: mode.hadSavedRows === true ? [] : undefined, breaksConfirmed: false };
+     if (mode.allowUnconfirmed) return { ok: true, breaks: [], breaksConfirmed: false };
+     return { ok: false, message: UNCONFIRMED_BLOCKED_MESSAGE, rowErrors: [] };
+   }
+@@ -439,7 +441,10 @@ export type CheckOutBuild = { ok: true; request: ClockOutRequest } | { ok: false
+
+ /**
+  * The POST /api/clock/out body (E-1): a listed set or the ticked box confirms and replaces the
+- * saved rows; an empty unticked list omits `breaks`, so the breaks stay unconfirmed. The rows are
++ * saved rows. An empty unticked list means "no break confirmed": when the dialog started without
++ * saved rows it omits `breaks`, so the breaks stay unconfirmed; when it started with saved rows (the
++ * person removed them all) it sends the empty unconfirmed list, the complete set, which replaces them
++ * (WP5-UX3-FIX3 item 7: the dialog shows no rows, so the server must keep none). The rows are
+  * typed in the session's input zone and checked against its start (it has no end yet).
+  */
+ export function buildCheckOutDialogRequest(input: {
+@@ -454,7 +459,10 @@ export function buildCheckOutDialogRequest(input: {
+     startUtc: parseUtcInstant(session.start_utc),
+     endUtc: session.end_utc === null ? null : parseUtcInstant(session.end_utc),
+   };
+-  const payload = breaksPayload({ rows: input.rows, noBreaks: input.noBreaks, zone: session.input_zone, bounds }, { kind: 'checkout' });
++  const payload = breaksPayload(
++    { rows: input.rows, noBreaks: input.noBreaks, zone: session.input_zone, bounds },
++    { kind: 'checkout', hadSavedRows: session.breaks.length > 0 },
++  );
+   if (!payload.ok) return { ok: false, message: payload.message, rowErrors: payload.rowErrors };
+   const request: ClockOutRequest =
+     payload.breaks === undefined
+@@ -568,6 +576,18 @@ export function suggestionRows(
+     .map((item, index) => pinnedRow(keyOf(index), 'suggested', zone, item.startUtc, item.endUtc, item.countsAsWork));
+ }
+
++/**
++ * The rows the session dialog opens with when "Confirm breaks" is pressed on a saved session (docs/04: the saved rows, or, when it
++ * has none, the suggested breaks that lie inside the session; WP5-UX3-FIX3 item 8). Only an ended session whose breaks are not
++ * confirmed and that has no saved row is offered suggestions, each one that fits (`suggestionRows`), so a 09:00-14:00 session gets
++ * the first two of three and a session that fits none gets nothing, which Save then asks about through the G-4 notice. The saved
++ * rows themselves come from `sessionDialogDraftFromSession`; this function returns none for a session that has them.
++ */
++export function confirmBreaksRows(session: Session, policy: PolicyVersion | undefined, keyOf: (index: number) => string): BreakRowDraft[] {
++  if (policy === undefined || session.end_utc === null || session.breaks_confirmed || session.breaks.length > 0) return [];
++  return suggestionRows(policy, parseUtcInstant(session.start_utc), parseUtcInstant(session.end_utc), session.input_zone, keyOf);
++}
++
+ /**
+  * Places the suggestions again from the current start and end, until the person edits a break
+  * row: a draft whose rows were changed, or that holds any row not suggested, is returned as it is,
+diff --git a/src/client/components/dayEditorModel.ts b/src/client/components/dayEditorModel.ts
+index 9b4eb1a..904098a 100644
+--- a/src/client/components/dayEditorModel.ts
++++ b/src/client/components/dayEditorModel.ts
+@@ -1,21 +1,17 @@
+-import { suggestBreaks } from '../../domain/breaks.ts';
+ import { isoWeekday } from '../../domain/dates.ts';
+ import { parseUtcInstant } from '../../domain/instants.ts';
+ import { formatInZone, localDateOf } from '../../domain/zones.ts';
+-import type { DayView, Period, PeriodRelation, PolicyVersion, Session } from '../api.ts';
++import type { DayView, Period, PeriodRelation, Session } from '../api.ts';
+ import { savedBreakMinutes } from './breakRowsModel.ts';
+ import { WEEKDAYS } from './dayModel.ts';
+ import { usDate, usShortDate } from './format.ts';
+ import { PERIOD_PILL_WORDS, type PeriodPillKind, periodPillKind, viewingZoneText, zoneNoteVisible } from './periodBarModel.ts';
+ import { sessionRange } from './sheetModel.ts';
+-import { type BreakRow, draftFromSession, suggestedRows, toBreakRules } from './sessionModel.ts';
+
+ /*
+- * Pure logic of the day editor panel (WP5-UX-T04): the banner at its top, the breaks "Confirm breaks"
+- * offers for a saved session (`quickBreaksOf`: the session dialog opens with them listed) and the
+- * session cards. Nothing here computes business minutes. The request is built by the session dialog's
+- * model (`buildSessionDialogRequest`); the suggestions come from the shared `suggestBreaks`, and the
+- * server still checks every rule.
++ * Pure logic of the day editor panel (WP5-UX-T04): the banner at its top and the session cards. Nothing here
++ * computes business minutes. The breaks "Confirm breaks" opens the session dialog with (`confirmBreaksRows`) and
++ * the request are built by the session dialog's model (`breakRowsModel`); the server still checks every rule.
+  */
+
+ export interface DayBanner {
+@@ -37,47 +33,6 @@ export function dayBanner(day: DayView): DayBanner | null {
+   }
+ }
+
+-/**
+- * The breaks a one-tap confirmation would save for a session whose breaks are not confirmed:
+- * `listed` = the rows already saved with it, `suggested` = the policy breaks shifted by its start,
+- * `none` = nothing to confirm except "no breaks taken" (no policy, no policy breaks, or a suggested
+- * break that does not lie inside the session, which the server would refuse).
+- */
+-export interface QuickBreaks {
+-  kind: 'listed' | 'suggested' | 'none';
+-  /** The rows sent with a confirmation, pinned by offset in the session's input zone. */
+-  rows: BreakRow[];
+-  /** Each break as `HH:MM-HH:MM` in the display zone (R-07). */
+-  chips: string[];
+-}
+-
+-function clock(zone: string, instant: number): string {
+-  return formatInZone(zone, instant).slice(11, 16);
+-}
+-
+-/** Null for a running session or one whose breaks are already confirmed: nothing to offer. */
+-export function quickBreaksOf(session: Session, policy: PolicyVersion | undefined, displayZone: string): QuickBreaks | null {
+-  if (session.end_utc === null || session.breaks_confirmed) return null;
+-  if (session.breaks.length > 0) {
+-    return {
+-      kind: 'listed',
+-      rows: draftFromSession(session).breaks,
+-      chips: session.breaks.map((item) => `${clock(displayZone, parseUtcInstant(item.start_utc))}-${clock(displayZone, parseUtcInstant(item.end_utc))}`),
+-    };
+-  }
+-  if (policy === undefined || policy.breaks.length === 0) return { kind: 'none', rows: [], chips: [] };
+-  const start = parseUtcInstant(session.start_utc);
+-  const end = parseUtcInstant(session.end_utc);
+-  const suggestions = suggestBreaks(start, toBreakRules(policy.breaks));
+-  // An instant comparison only: a suggestion outside the session would be refused by the server.
+-  if (suggestions.some((item) => item.startUtc < start || item.endUtc > end)) return { kind: 'none', rows: [], chips: [] };
+-  return {
+-    kind: 'suggested',
+-    rows: suggestedRows(start, session.input_zone, policy.breaks, (index) => `quick-${session.id}-${index}`),
+-    chips: suggestions.map((item) => `${clock(displayZone, item.startUtc)}-${clock(displayZone, item.endUtc)}`),
+-  };
+-}
+-
+ /* ---- Header chips (U-19, U-20) ----------------------------------------------------------------------- */
+
+ /**
+diff --git a/src/client/components/dayModel.ts b/src/client/components/dayModel.ts
+index 97e2b4f..8deefe8 100644
+--- a/src/client/components/dayModel.ts
++++ b/src/client/components/dayModel.ts
+@@ -140,5 +140,5 @@ export function staleDates(details: Record<string, unknown> | undefined): string
+
+ export function staleReloadMessage(dates: readonly string[]): string {
+   const named = dates.length === 0 ? 'Some dates' : dates.join(', ');
+-  return `${named} changed since this period was loaded. Nothing was saved. Reload the period, review the new labels and try again.`;
++  return `${named} changed since this period was loaded. Nothing was saved. Reload the period, review the new categories and try again.`;
+ }
+diff --git a/src/client/styles.css b/src/client/styles.css
+index acc9e37..35f48c9 100644
+--- a/src/client/styles.css
++++ b/src/client/styles.css
+@@ -672,6 +672,13 @@ button.identity {
+   text-align: right;
+ }
+
++/* More specific than the generic touch rule (`button`), so the identity button has its own: a touch screen of 768px or more shows this bar. */
++@media (max-width: 767px), (pointer: coarse) {
++  button.identity {
++    min-height: var(--tap-min);
++  }
++}
++
+ .identity-text {
+   display: flex;
+   flex-direction: column;
+@@ -783,10 +790,14 @@ button.identity[aria-expanded='true'] .identity-chevron {
+     color: var(--text);
+     box-shadow: none;
+   }
++
++  /* After the hover rule at the same specificity: a tab with keyboard focus keeps its ring under the pointer. */
++  .shell-tabs .tab:focus-visible:hover:not(:disabled) {
++    box-shadow: var(--focus-ring-inset);
++  }
+ }
+
+-.shell-tabs .tab:focus-visible,
+-.shell-tabs .tab:focus-visible:hover:not(:disabled) {
++.shell-tabs .tab:focus-visible {
+   box-shadow: var(--focus-ring-inset);
+ }
+
+@@ -880,7 +891,10 @@ button.identity[aria-expanded='true'] .identity-chevron {
+   height: var(--account-icon-size);
+ }
+
++/* A flex row like the links beside it, so the icon gap and the vertical alignment are the same as Profile's (a button is not flex by default). */
+ button.account-action {
++  display: flex;
++  align-items: center;
+   border-color: transparent;
+   background: transparent;
+   text-align: left;
+@@ -1173,10 +1187,13 @@ textarea {
+   transition: var(--transition);
+ }
+
+-input:hover,
+-select:hover,
+-textarea:hover {
+-  border-color: var(--muted);
++/* Hover only where the device can hover: a tap leaves no hover look behind (WP5-UX3-FIX3 item 2, AGENTS UI rule 3). */
++@media (hover: hover) {
++  input:hover,
++  select:hover,
++  textarea:hover {
++    border-color: var(--muted);
++  }
+ }
+
+ /*
+@@ -1454,8 +1471,10 @@ tbody tr {
+   transition: var(--transition);
+ }
+
+-tbody tr:hover {
+-  background: var(--off);
++@media (hover: hover) {
++  tbody tr:hover {
++    background: var(--off);
++  }
+ }
+
+ tr.nonworking th,
+@@ -2643,6 +2662,11 @@ textarea {
+     color: var(--accent);
+     text-decoration-color: currentColor;
+   }
++
++  /* Keyboard focus keeps the shared ring under the pointer (WP5-UX3-FIX3 item 1, SC 2.4.7): more specific than the hover rule above. */
++  .sheet .sheet-date:focus-visible:hover:not(:disabled) {
++    box-shadow: var(--focus-ring);
++  }
+ }
+
+ .sheet .sheet-date:focus-visible {
+@@ -3022,6 +3046,11 @@ textarea {
+     background: var(--day-hover);
+     box-shadow: none;
+   }
++
++  /* Keyboard focus keeps the shared ring under the pointer (WP5-UX3-FIX3 item 1, SC 2.4.7). */
++  .sheet .sheet-day-button:focus-visible:hover:not(:disabled) {
++    box-shadow: var(--focus-ring);
++  }
+ }
+
+ .sheet-day-button .mono {
+@@ -4317,10 +4346,20 @@ button.quiet-danger {
+   text-align: left;
+ }
+
+-.sheet .label-trigger:hover:not(:disabled) {
+-  background: var(--day-hover);
+-  border-color: transparent;
+-  box-shadow: inset 0 0 0 var(--hairline) var(--accent-line);
++/*
++ * Hover only where the device can hover (a tap leaves no tint, WP5-UX3-FIX3 item 2); keyboard focus keeps its 2px inset ring under the
++ * pointer (item 1, SC 2.4.7): the focus-and-hover rule is more specific than the hover rule above it.
++ */
++@media (hover: hover) {
++  .sheet .label-trigger:hover:not(:disabled) {
++    background: var(--day-hover);
++    border-color: transparent;
++    box-shadow: inset 0 0 0 var(--hairline) var(--accent-line);
++  }
++
++  .sheet .label-trigger:focus-visible:hover:not(:disabled) {
++    box-shadow: inset 0 0 0 var(--rule) var(--accent);
++  }
+ }
+
+ /* The open picker marks its trigger with a 1px accent line (the list owns the focus); keyboard focus keeps the 2px indicator. */
+@@ -4535,9 +4574,16 @@ button.quiet-danger {
+   transition: var(--transition);
+ }
+
+-.button-link:hover {
+-  background: var(--off);
+-  box-shadow: var(--elev-1);
++/* Hover only where the device can hover; keyboard focus keeps the shared ring under the pointer (the hover shadow is more specific than the ring). */
++@media (hover: hover) {
++  .button-link:hover {
++    background: var(--off);
++    box-shadow: var(--elev-1);
++  }
++
++  .button-link:focus-visible:hover {
++    box-shadow: var(--focus-ring);
++  }
+ }
+
+ .history-list {
+@@ -4826,12 +4872,15 @@ textarea.mono {
+   cursor: default;
+ }
+
+-.sheet-review .sheet-day:hover:not(.nonworking) {
+-  background-color: transparent;
+-}
++/* Reset rules of the hover tint above, so they sit in the same hover-only block: a tap on a touch screen has no tint to undo. */
++@media (hover: hover) {
++  .sheet-review .sheet-day:hover:not(.nonworking) {
++    background-color: transparent;
++  }
+
+-.sheet-review .sheet-day.nonworking:hover {
+-  background-color: var(--day-nonworking);
++  .sheet-review .sheet-day.nonworking:hover {
++    background-color: var(--day-nonworking);
++  }
+ }
+
+ .sheet-date-text {
+@@ -4930,6 +4979,19 @@ textarea.mono {
+     grid-column: span var(--cols-2);
+   }
+
++  /*
++   * A long delivery state ("Delivery recorded as uncertain") and an unbroken fault code (`lease_expired_while_sending`) wrap inside
++   * their half of the row instead of running past the card, so the table wrapper never scrolls sideways on a phone (WP5-UX3-FIX3 item 6).
++   */
++  .ops-table .badge {
++    white-space: normal;
++    overflow-wrap: anywhere;
++  }
++
++  .ops-table .ops-code {
++    overflow-wrap: anywhere;
++  }
++
+   .ops-table td::before {
+     display: block;
+     content: attr(data-label);

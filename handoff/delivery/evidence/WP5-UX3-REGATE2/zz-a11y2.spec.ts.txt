@@ -1,0 +1,57 @@
+import { expect, test } from './fixtures.ts';
+import { applySituation, scanState, SITUATIONS } from './zz-lib.ts';
+import { seedLongDelivery, seedRunning } from './zz-seed.ts';
+
+/*
+ * WP5-UX3-REGATE2 task-local probe (never part of the repository): axe (WCAG 2.2 AA tags), text-contrast and focus-ring sweeps of the
+ * two states added after the attempt-1 list: the phone Administration page with the long delivery state, and the Check out dialog
+ * with the removal note. Four theme situations each. Output: GATE_OUT/a11y-scan.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+async function settle(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 200))))');
+}
+
+for (const situation of SITUATIONS) {
+  test(`phone Administration with the long delivery state (${situation.name})`, async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+    test.skip(!isMobile, 'Mobile project');
+    test.setTimeout(240_000);
+    await applySituation(page, situation);
+    const { account } = await seedLongDelivery(adminSeed, builtServer, `Synthetic Scan ${situation.slug}`);
+    await signInPageAs(builtServer.credentials.admin, '#/settings/admin');
+    await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+    const card = page.getByRole('region', { name: 'Submissions and delivery' });
+    await expect(card.locator(`[data-submission-user="${account.id}"] [data-status="delivery"]`)).toHaveText('Delivery recorded as uncertain');
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await card.locator(`[data-submission-user="${account.id}"]`).scrollIntoViewIfNeeded();
+      await settle(page);
+      await scanState(page, `Phone Administration, long delivery state, ${width}`, { tag: `phone-admin-long/${situation.slug}`, rings: true });
+    }
+  });
+
+  test(`Check out dialog with the removal note (${situation.name})`, async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+    test.skip(isMobile, 'Desktop project');
+    test.setTimeout(180_000);
+    await applySituation(page, situation);
+    const run = await seedRunning(employeeSeed, 3, [[10, 10], [177, 5]]);
+    try {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await signInThroughUi();
+      await page.getByRole('button', { name: 'Check out' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Check out', exact: true });
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole('button', { name: 'Remove break 2', exact: true }).click();
+      await dialog.getByRole('button', { name: 'Remove break 1', exact: true }).click();
+      await expect(dialog.getByText('The saved breaks you removed are deleted at Check out.')).toBeVisible();
+      await settle(page);
+      await scanState(page, 'Check out dialog with the removal note, 1280', { tag: `checkout-note/${situation.slug}`, rings: true });
+      await page.keyboard.press('Escape');
+      const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+      if (await discard.isVisible().catch(() => false)) await discard.getByRole('button', { name: 'Discard' }).click();
+    } finally {
+      await employeeSeed.clearSessions(run.todayLocal);
+    }
+  });
+}

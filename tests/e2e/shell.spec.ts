@@ -771,6 +771,64 @@ for (const role of ['employee', 'admin'] as const) {
   });
 }
 
+/**
+ * WP5-UX3-FIX4 item 1: the More panel closes when keyboard focus leaves the tab bar, as the desktop menu does ("Tab past Sign out").
+ * An open panel left behind would cover the controls that take focus next (WCAG 2.2 SC 2.4.11). Escape, a press on More, a press
+ * outside and a page change keep working. The window is a phone width on both projects (the desktop project is a narrow window).
+ */
+test('the More panel closes when focus leaves it: Tab past Sign out, then the next control is not hidden; a press on More still toggles it', async ({
+  page,
+  builtServer,
+  signInPageAs,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInPageAs(builtServer.credentials.employee, '#/timesheet');
+  await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+  const panel = page.locator('#more-panel');
+
+  // Tab past the last entry: the panel closes (focus has left the tab bar) and More stays a closed toggle.
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
+  await panel.getByRole('button', { name: 'Sign out' }).focus();
+  await page.keyboard.press('Tab');
+  await expect(panel).toHaveCount(0);
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
+  // The next stop is a control of the page, and nothing paints over it.
+  await page.keyboard.press('Tab');
+  await expect(panel).toHaveCount(0);
+  const next = await page.locator(':focus').evaluate((active) => {
+    const box = active.getBoundingClientRect();
+    const top = active.ownerDocument.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return { name: active.tagName.toLowerCase(), visible: box.width > 0 && box.height > 0 && top !== null && active.contains(top) };
+  });
+  expect(next.name, 'focus lands on a control after the panel closed').not.toBe('body');
+  expect(next.visible, 'the control focused next is not hidden').toBe(true);
+
+  // Shift+Tab out of the first stop of the bar (backwards) leaves too: open it again with the keyboard, go back past the first tab.
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
+  await page.getByRole('navigation', { name: 'Main' }).locator('a.tab').first().focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(panel).toHaveCount(0);
+
+  // Focus moving between the bar's own controls keeps it open; a press on More toggles it without a flicker (close, then open again).
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
+  await panel.getByRole('link', { name: 'Settings', exact: true }).focus();
+  await more.click();
+  await expect(panel).toHaveCount(0);
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
+  await more.click();
+  await expect(panel).toBeVisible();
+  await expect(more).toHaveAttribute('aria-expanded', 'true');
+  await panel.getByRole('link', { name: 'Settings', exact: true }).focus();
+  await expect(panel).toBeVisible();
+});
+
 /*
  * The identity block always shows the signed-in user, also while a shared timesheet is on screen (the owner is named
  * by the page title and the share bar); on a phone the same user is in the More panel header.
@@ -1086,7 +1144,13 @@ for (const { name, width, height } of [
         const range = element.ownerDocument.createRange();
         range.selectNodeContents(text);
         const words = range.getBoundingClientRect();
-        return { gap: words.left - icon.right, offset: icon.top + icon.height / 2 - (words.top + words.height / 2) };
+        const entry = element.getBoundingClientRect();
+        return {
+          gap: words.left - icon.right,
+          offset: icon.top + icon.height / 2 - (words.top + words.height / 2),
+          iconStart: icon.left - entry.left,
+          wordsStart: words.left - entry.left,
+        };
       });
     const profile = await measure(panel.getByRole('link', { name: 'Profile', exact: true }));
     const settings = await measure(panel.getByRole('link', { name: 'Settings', exact: true }));
@@ -1099,6 +1163,11 @@ for (const { name, width, height } of [
       expect(Math.abs(entry?.offset ?? 99), `${label}: the icon centre is level with the words`).toBeLessThanOrEqual(1.5);
     }
     expect(Math.abs((signOut?.offset ?? 99) - (profile?.offset ?? 0)), 'Sign out aligns like Profile').toBeLessThanOrEqual(1);
+    // WP5-UX3-FIX4 item 3: the icon and the words start at the same inline position inside the entry as Profile's (12px and 42px).
+    for (const [label, entry] of [['Settings', settings], ['Sign out', signOut]] as const) {
+      expect(Math.abs((entry?.iconStart ?? 99) - (profile?.iconStart ?? 0)), `${label}: the icon starts where Profile's does`).toBeLessThanOrEqual(0.5);
+      expect(Math.abs((entry?.wordsStart ?? 99) - (profile?.wordsStart ?? 0)), `${label}: the words start where Profile's do`).toBeLessThanOrEqual(0.5);
+    }
     console.log(`account entries (${name}): Profile ${JSON.stringify(profile)}; Settings ${JSON.stringify(settings)}; Sign out ${JSON.stringify(signOut)}`);
   });
 }

@@ -1,0 +1,436 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { expect, newPerson, type Person, test } from './fixtures.ts';
+
+/*
+ * WP5-UX3-AUDIT-B2 task-local probe (never part of the repository). The first-pass request matrix of WP5-UX3-AUDIT-B
+ * (zz-audb-req.spec.ts, its new-dialog branch only) run unchanged in its steps on the 7ce4e95 build and on the target, so the
+ * raw request bodies of both builds can be compared byte for byte. AUDB_LABEL names the build in the output file.
+ * Desktop project only, device zone Asia/Ho_Chi_Minh as in the first pass.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+test.skip(({ isMobile }) => isMobile, 'Desktop project only');
+
+const LABEL = process.env.AUDB_LABEL ?? 'unknown';
+const OUT = process.env.AUDB_OUT ?? '';
+const LA = 'America/Los_Angeles';
+const SYD = 'Australia/Sydney';
+const HCM = 'Asia/Ho_Chi_Minh';
+const NY = 'America/New_York';
+const REASON = 'audit probe reason';
+
+function rec(item: Record<string, unknown>) {
+  const line = JSON.stringify({ build: LABEL, ...item });
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, `req-${LABEL}.jsonl`), `${line}\n`);
+}
+
+interface Brk {
+  date: string;
+  time: string;
+  minutes: number;
+}
+
+type Answer = { kind: 'radio'; name: string } | { kind: 'button'; name: string };
+
+interface Write {
+  method: string;
+  path: string;
+  status: number;
+  raw: string;
+  body: unknown;
+}
+
+function watch(page: Page): Write[] {
+  const writes: Write[] = [];
+  page.on('response', (response) => {
+    const request = response.request();
+    const path = new URL(request.url()).pathname;
+    if (!['POST', 'PUT'].includes(request.method())) return;
+    if (!/^\/api\/(days\/[^/]+\/sessions|sessions\/[^/]+|clock\/out)$/.test(path)) return;
+    writes.push({ method: request.method(), path, status: response.status(), raw: request.postData() ?? '', body: request.postDataJSON() as unknown });
+  });
+  return writes;
+}
+
+async function openEditor(page: Page, workDate: string): Promise<Locator> {
+  await page.getByLabel('Open a day').fill(workDate);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+  const reason = editor.getByLabel('Reason for editing an old or finalized period');
+  if ((await reason.count()) > 0) await reason.first().fill(REASON);
+  return editor;
+}
+
+async function closeEditor(page: Page) {
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  if ((await editor.count()) > 0) {
+    await editor.getByRole('button', { name: 'Close', exact: true }).first().click();
+    await expect(editor).toHaveCount(0);
+  }
+}
+
+async function stored(person: Person, date: string) {
+  const day = await person.api.dayView(date);
+  return day.sessions.map((s) => ({
+    start_utc: s.start_utc,
+    end_utc: s.end_utc,
+    input_zone: s.input_zone,
+    breaks_confirmed: s.breaks_confirmed,
+    breaks: s.breaks.map((b) => [b.start_utc, b.end_utc]),
+    source: s.source,
+  }));
+}
+
+interface Times {
+  zone: string;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+}
+
+async function fillTimes(form: Locator, times: Partial<Times>) {
+  if (times.zone !== undefined) await form.getByLabel('Input zone').fill(times.zone);
+  if (times.startDate !== undefined) await form.getByLabel('Start date', { exact: true }).fill(times.startDate);
+  if (times.startTime !== undefined) await form.getByLabel('Start time', { exact: true }).fill(times.startTime);
+  if (times.endDate !== undefined) await form.getByLabel('End date', { exact: true }).fill(times.endDate);
+  if (times.endTime !== undefined) await form.getByLabel('End time', { exact: true }).fill(times.endTime);
+}
+
+async function removeAll(form: Locator) {
+  const rows = form.locator('[data-break]');
+  for (let count = await rows.count(); count > 0; count -= 1) {
+    await form.getByRole('button', { name: `Remove break ${count}`, exact: true }).click();
+  }
+  await expect(rows).toHaveCount(0);
+}
+
+async function typeRows(form: Locator, rows: readonly Brk[]) {
+  for (const [i, row] of rows.entries()) {
+    await form.getByRole('button', { name: 'Add break', exact: true }).click();
+    const n = i + 1;
+    const date = form.getByLabel(`Break ${n} date`, { exact: true });
+    if ((await date.count()) > 0) await date.fill(row.date);
+    await form.getByLabel(`Break ${n} start time`, { exact: true }).fill(row.time);
+    await form.getByLabel(`Break ${n} minutes`, { exact: true }).fill(String(row.minutes));
+  }
+}
+
+async function save(page: Page, form: Locator, answers: readonly Answer[], notice: string | null) {
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  for (const answer of answers) {
+    if (answer.kind === 'radio') {
+      const radio = form.getByRole('radio', { name: answer.name, exact: true });
+      await expect(radio).toBeVisible();
+      await radio.check();
+    } else {
+      const button = form.getByRole('button', { name: answer.name, exact: true });
+      await expect(button).toBeVisible();
+      await button.click();
+    }
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+  }
+  if (notice !== null) {
+    const box = page.getByRole('alertdialog', { name: 'No breaks listed' });
+    await expect(box).toBeVisible();
+    await box.getByRole('button', { name: notice, exact: true }).click();
+  }
+  const confirm = page.getByRole('alertdialog', { name: 'Save this session?' });
+  await expect(confirm).toBeVisible();
+  const facts = (await confirm.locator('.confirm-facts').innerText()).replace(/\s+/g, ' ');
+  const message = await confirm.locator('.confirm-message').innerText();
+  await confirm.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(form).toHaveCount(0);
+  return { facts, message };
+}
+
+interface NewCase {
+  id: string;
+  date: string;
+  times: Times;
+  mode: 'rows' | 'none' | 'pending' | 'notice-none' | 'suggested-kept';
+  rows: Brk[];
+  answers?: Answer[];
+}
+
+function lc(date: string, time: string) {
+  return { local: `${date}T${time}`, zone: LA };
+}
+
+test('request bodies of the same typed values', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+  test.setTimeout(900_000);
+  const person = await newPerson(adminSeed, builtServer, { signature: 'none' });
+  const writes = watch(page);
+  const errors: string[] = [];
+  const { todayLocal } = await person.api.today();
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  const cur = free[0] ?? '';
+  rec({ case: 'context', todayLocal, cur, free, startedAt: new Date().toISOString() });
+  await signInPageAs(person.account);
+  await expect(page.getByRole('button', { name: 'Open day', exact: true })).toBeVisible();
+
+  const earlier11 = { kind: 'radio', name: 'Earlier time, UTC offset +11:00' } as const;
+  const later10 = { kind: 'radio', name: 'Later time, UTC offset +10:00' } as const;
+  const gapUse = { kind: 'button', name: 'Use 03:30 on 2026-03-08' } as const;
+
+  const cases: NewCase[] = [
+    {
+      id: 'K01-same-day-LA-current',
+      date: cur,
+      times: { zone: LA, startDate: cur, startTime: '09:00', endDate: cur, endTime: '18:00' },
+      mode: 'rows',
+      rows: [
+        { date: cur, time: '11:00', minutes: 15 },
+        { date: cur, time: '13:00', minutes: 30 },
+        { date: cur, time: '15:30', minutes: 15 },
+      ],
+    },
+    { id: 'K01b-suggested-kept-LA-current', date: cur, times: { zone: LA, startDate: cur, startTime: '09:00', endDate: cur, endTime: '18:00' }, mode: 'suggested-kept', rows: [] },
+    {
+      id: 'K02-overnight-LA-break-across-midnight-old-day',
+      date: '2026-05-12',
+      times: { zone: LA, startDate: '2026-05-12', startTime: '22:00', endDate: '2026-05-13', endTime: '06:00' },
+      mode: 'rows',
+      rows: [
+        { date: '2026-05-12', time: '23:50', minutes: 20 },
+        { date: '2026-05-13', time: '02:00', minutes: 30 },
+      ],
+    },
+    {
+      id: 'K03-fold-earlier-Sydney',
+      date: '2026-04-04',
+      times: { zone: SYD, startDate: '2026-04-05', startTime: '01:00', endDate: '2026-04-05', endTime: '04:00' },
+      mode: 'rows',
+      rows: [{ date: '2026-04-05', time: '02:30', minutes: 45 }],
+      answers: [earlier11],
+    },
+    {
+      id: 'K04-fold-later-Sydney',
+      date: '2026-04-04',
+      times: { zone: SYD, startDate: '2026-04-05', startTime: '01:00', endDate: '2026-04-05', endTime: '04:00' },
+      mode: 'rows',
+      rows: [{ date: '2026-04-05', time: '02:30', minutes: 45 }],
+      answers: [later10],
+    },
+    {
+      id: 'K05-gap-start-LA',
+      date: '2026-03-08',
+      times: { zone: LA, startDate: '2026-03-08', startTime: '00:30', endDate: '2026-03-08', endTime: '05:00' },
+      mode: 'rows',
+      rows: [{ date: '2026-03-08', time: '02:30', minutes: 15 }],
+      answers: [gapUse],
+    },
+    {
+      id: 'K06-across-gap-LA',
+      date: '2026-03-08',
+      times: { zone: LA, startDate: '2026-03-08', startTime: '00:30', endDate: '2026-03-08', endTime: '05:00' },
+      mode: 'rows',
+      rows: [{ date: '2026-03-08', time: '01:50', minutes: 20 }],
+    },
+    {
+      id: 'K07-HCM-same-day-next-local-date',
+      date: '2026-05-14',
+      times: { zone: HCM, startDate: '2026-05-15', startTime: '08:00', endDate: '2026-05-15', endTime: '12:00' },
+      mode: 'rows',
+      rows: [{ date: '2026-05-15', time: '10:00', minutes: 15 }],
+    },
+    {
+      id: 'K08-NY-overnight-break-across-midnight',
+      date: '2026-05-18',
+      times: { zone: NY, startDate: '2026-05-18', startTime: '20:00', endDate: '2026-05-19', endTime: '02:00' },
+      mode: 'rows',
+      rows: [{ date: '2026-05-18', time: '23:55', minutes: 10 }],
+    },
+    { id: 'K09-no-breaks-box', date: '2026-05-19', times: { zone: LA, startDate: '2026-05-19', startTime: '08:00', endDate: '2026-05-19', endTime: '12:00' }, mode: 'none', rows: [] },
+    { id: 'K10-unconfirmed', date: '2026-05-20', times: { zone: LA, startDate: '2026-05-20', startTime: '08:00', endDate: '2026-05-20', endTime: '12:00' }, mode: 'pending', rows: [] },
+    { id: 'K11-notice-confirm-none', date: '2026-05-20', times: { zone: LA, startDate: '2026-05-20', startTime: '08:00', endDate: '2026-05-20', endTime: '12:00' }, mode: 'notice-none', rows: [] },
+  ];
+
+  for (const item of cases) {
+    const before = writes.length;
+    try {
+      const editor = await openEditor(page, item.date);
+      await editor.getByRole('button', { name: 'Add session' }).click();
+      let ui: Record<string, unknown> = {};
+      const form = page.getByRole('dialog', { name: 'New session', exact: true });
+      await expect(form).toBeVisible();
+      ui.prefill = await form.locator('[data-prefill]').getAttribute('data-prefill').catch(() => null);
+      await fillTimes(form, item.times);
+      if (item.mode !== 'suggested-kept') await removeAll(form);
+      else ui.keptRows = await form.locator('[data-break]').count();
+      if (item.mode === 'none') await form.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+      if (item.mode === 'rows') await typeRows(form, item.rows);
+      const notice = item.mode === 'pending' ? 'Leave breaks unconfirmed for now' : item.mode === 'notice-none' ? 'Confirm no breaks taken' : null;
+      ui = { ...ui, ...(await save(page, form, item.answers ?? [], notice)) };
+      rec({ case: item.id, date: item.date, writes: writes.slice(before), stored: await stored(person, item.date), ui });
+      await closeEditor(page);
+    } catch (caught) {
+      errors.push(`${item.id}: ${String(caught).slice(0, 400)}`);
+      rec({ case: item.id, error: String(caught).slice(0, 800), writes: writes.slice(before) });
+      await page.keyboard.press('Escape').catch(() => undefined);
+      await page.goto('/');
+    }
+    await person.api.clearSessions(item.date, REASON);
+  }
+
+  /* ---- edits of saved sessions ---- */
+  interface EditCase {
+    id: string;
+    date: string;
+    seed: Record<string, unknown>;
+    act: 'none' | 'end' | 'dates' | 'zone' | 'roundtrip' | 'confirm';
+  }
+  const seedBody = (date: string, start: string, end: string, breaks: Array<[string, string]>, confirmed: boolean) => ({
+    start: lc(date, start),
+    end: lc(date, end),
+    input_zone: LA,
+    breaks_confirmed: confirmed,
+    breaks: breaks.map(([a, b]) => ({ start: lc(date, a), end: lc(date, b), counts_as_work: false })),
+    reason: REASON,
+  });
+  const edits: EditCase[] = [
+    { id: 'E12-untouched-seconds', date: '2026-05-21', seed: seedBody('2026-05-21', '08:00:30', '17:00', [['10:00:15', '10:15:15'], ['12:00', '12:30']], true), act: 'none' },
+    { id: 'E13-end-only', date: '2026-05-22', seed: seedBody('2026-05-22', '08:00', '17:00', [['10:00', '10:15'], ['12:00', '12:30']], true), act: 'end' },
+    { id: 'E14-session-date-change', date: '2026-05-25', seed: seedBody('2026-05-25', '09:00', '12:00', [['10:00', '10:15']], true), act: 'dates' },
+    { id: 'E15-zone-change-to-HCM', date: '2026-05-27', seed: seedBody('2026-05-27', '09:00', '12:00', [['10:00', '10:15']], true), act: 'zone' },
+    { id: 'E16-zone-roundtrip', date: '2026-05-28', seed: seedBody('2026-05-28', '09:00', '12:00', [['10:00', '10:15']], true), act: 'roundtrip' },
+    { id: 'E17-confirm-suggested', date: '2026-05-29', seed: seedBody('2026-05-29', '09:00', '18:00', [], false), act: 'confirm' },
+    { id: 'E18-confirm-listed', date: '2026-06-01', seed: seedBody('2026-06-01', '09:00', '18:00', [['12:00', '12:20']], false), act: 'confirm' },
+    { id: 'E19-confirm-none-fits', date: '2026-06-02', seed: seedBody('2026-06-02', '09:00', '10:00', [], false), act: 'confirm' },
+    {
+      id: 'E20-untouched-fold-day-Sydney',
+      date: '2026-04-04',
+      seed: {
+        start: { local: '2026-04-05T01:00', zone: 'Australia/Sydney' },
+        end: { local: '2026-04-05T04:00', zone: 'Australia/Sydney' },
+        input_zone: 'Australia/Sydney',
+        breaks_confirmed: true,
+        breaks: [{ start: { local: '2026-04-05T02:30', zone: 'Australia/Sydney', fold: 1 }, end: { local: '2026-04-05T03:15', zone: 'Australia/Sydney' }, counts_as_work: false }],
+        reason: REASON,
+      },
+      act: 'none',
+    },
+  ];
+  for (const item of edits) {
+    await person.api.call('POST', `/api/days/${item.date}/sessions`, item.seed, 201);
+    const seeded = await stored(person, item.date);
+    const before = writes.length;
+    try {
+      const editor = await openEditor(page, item.date);
+      let ui: Record<string, unknown> = {};
+      if (item.act === 'confirm') {
+        await editor.getByRole('button', { name: /^Confirm breaks of/ }).click();
+        const form = page.getByRole('dialog', { name: 'Edit session', exact: true });
+        await expect(form).toBeVisible();
+        const rows = await form.locator('[data-break]').count();
+        ui.rows = rows;
+        ui = { ...ui, ...(await save(page, form, [], rows === 0 ? 'Confirm no breaks taken' : null)) };
+      } else {
+        await editor.getByRole('button', { name: /^Edit session/ }).click();
+        const form = page.getByRole('dialog', { name: 'Edit session', exact: true });
+        await expect(form).toBeVisible();
+        if (item.act === 'end') await fillTimes(form, { endTime: '18:00' });
+        if (item.act === 'dates') {
+          await fillTimes(form, { startDate: '2026-05-26', endDate: '2026-05-26' });
+          ui.dateFieldShown = await form.getByLabel('Break 1 date', { exact: true }).count();
+        }
+        if (item.act === 'zone') await fillTimes(form, { zone: HCM });
+        if (item.act === 'roundtrip') {
+          await fillTimes(form, { zone: HCM });
+          await fillTimes(form, { zone: LA });
+        }
+        ui = { ...ui, ...(await save(page, form, [], null)) };
+      }
+      rec({ case: item.id, date: item.date, seeded, writes: writes.slice(before), stored: await stored(person, item.date), ui });
+      await closeEditor(page);
+    } catch (caught) {
+      errors.push(`${item.id}: ${String(caught).slice(0, 400)}`);
+      rec({ case: item.id, error: String(caught).slice(0, 800), writes: writes.slice(before) });
+      await page.keyboard.press('Escape').catch(() => undefined);
+      await page.goto('/');
+    }
+    await person.api.clearSessions(item.date, REASON);
+  }
+
+  /* ---- Check out ---- */
+  const laClock = (ms: number) => new Intl.DateTimeFormat('en-GB', { timeZone: LA, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(ms));
+  const now = Date.now();
+  // Fixed wall times when the Los Angeles clock is past 10:00, so both builds type the same values.
+  const fixed = Number(laClock(now).slice(0, 2)) >= 10;
+  const startAt = fixed ? '07:00' : laClock(now - 3 * 3600_000);
+  const breakAt = fixed ? '08:00' : laClock(now - 2 * 3600_000);
+  const breakEnd = fixed ? '08:15' : laClock(now - 2 * 3600_000 + 15 * 60_000);
+  rec({ case: 'checkout-times', fixed, startAt, breakAt, breakEnd });
+  interface OutCase {
+    id: string;
+    seed: 'clock' | 'manual' | 'manual-row';
+    act: 'box' | 'empty' | 'row' | 'remove-saved';
+  }
+  const outs: OutCase[] = [
+    { id: 'C20-checkout-box', seed: 'clock', act: 'box' },
+    { id: 'C21-checkout-empty', seed: 'clock', act: 'empty' },
+    { id: 'C22-checkout-row', seed: 'manual', act: 'row' },
+    { id: 'C23-checkout-remove-saved-unconfirmed', seed: 'manual-row', act: 'remove-saved' },
+  ];
+  for (const item of outs) {
+    const before = writes.length;
+    try {
+      if (item.seed === 'clock') {
+        await page.goto('/');
+        await page.getByRole('button', { name: 'Check in', exact: true }).click();
+        await expect.poll(async () => (await person.api.dayView(todayLocal)).sessions.some((s) => s.end_utc === null)).toBe(true);
+        await page.waitForTimeout(1_500);
+      } else {
+        await person.api.call(
+          'POST',
+          `/api/days/${todayLocal}/sessions`,
+          {
+            start: lc(todayLocal, startAt),
+            end: null,
+            input_zone: LA,
+            breaks_confirmed: false,
+            breaks: item.seed === 'manual-row' ? [{ start: lc(todayLocal, breakAt), end: lc(todayLocal, breakEnd), counts_as_work: false }] : [],
+          },
+          201,
+        );
+        await page.goto('/');
+      }
+      const seeded = await stored(person, todayLocal);
+      await page.getByRole('button', { name: 'Check out', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Check out' });
+      await expect(dialog).toBeVisible();
+      const submit = dialog.locator('button[type="submit"]');
+      const ui: Record<string, unknown> = { defaultLabel: await submit.innerText(), defaultRows: await dialog.locator('[data-break]').count() };
+      if (item.act === 'box') await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+      if (item.act === 'row') {
+        await dialog.getByRole('button', { name: 'Add break', exact: true }).click();
+        await dialog.getByLabel('Break 1 date', { exact: true }).fill(todayLocal);
+        await dialog.getByLabel('Break 1 start time', { exact: true }).fill(breakAt);
+        await dialog.getByLabel('Break 1 minutes', { exact: true }).fill('15');
+      }
+      if (item.act === 'remove-saved') {
+        await dialog.getByRole('button', { name: 'Remove break 1', exact: true }).click();
+        ui.afterRemoveText = (await dialog.innerText()).replace(/\s+/g, ' ').slice(0, 900);
+      }
+      ui.submitLabel = await submit.innerText();
+      await submit.click();
+      await expect(dialog).toHaveCount(0);
+      await expect.poll(async () => (await person.api.dayView(todayLocal)).sessions.every((s) => s.end_utc !== null)).toBe(true);
+      rec({ case: item.id, date: todayLocal, seeded, writes: writes.slice(before), stored: await stored(person, todayLocal), ui });
+    } catch (caught) {
+      errors.push(`${item.id}: ${String(caught).slice(0, 400)}`);
+      rec({ case: item.id, error: String(caught).slice(0, 800), writes: writes.slice(before) });
+      await page.keyboard.press('Escape').catch(() => undefined);
+    }
+    const open = (await person.api.dayView(todayLocal)).sessions.find((s) => s.end_utc === null);
+    if (open !== undefined) await person.api.call('POST', '/api/clock/out', { breaks_confirmed: false, expected_version: open.version }).catch(() => undefined);
+    await person.api.clearSessions(todayLocal, REASON);
+  }
+  rec({ case: 'errors', errors });
+  expect(errors).toEqual([]);
+});

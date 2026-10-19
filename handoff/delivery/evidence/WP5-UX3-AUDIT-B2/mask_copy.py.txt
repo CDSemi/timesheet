@@ -1,0 +1,38 @@
+"""Copies task files into the evidence folder as masked LF text. Usage: python mask_copy.py <evidence dir> <src> <dest name> [<src> <dest name> ...]"""
+import os
+import re
+import sys
+
+ANSI = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
+EMAIL = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
+user = os.environ.get('USERNAME', '') or os.path.basename(os.environ.get('USERPROFILE', ''))
+replacements = [
+    ('D:\\\\.claude-tmp\\\\timesheet\\\\WP5-UX3-AUDIT-B2', '<task>'),
+    ('<task>', '<task>'),
+    ('<task>', '<task>'),
+    ('<task>', '<task>'),
+    ('D:\\\\Dropbox\\\\Work.CDSemi\\\\timesheet', '<repo>'),
+    ('<repo>', '<repo>'),
+    ('<repo>', '<repo>'),
+    ('<repo>', '<repo>'),
+]
+dest_dir = sys.argv[1]
+os.makedirs(dest_dir, exist_ok=True)
+args = sys.argv[2:]
+for src, name in zip(args[0::2], args[1::2]):
+    raw = open(src, 'rb').read().decode('utf-8', errors='replace')
+    text = ANSI.sub('', raw).replace('\r\n', '\n').replace('\r', '\n')
+    for old, new in replacements:
+        text = text.replace(old, new)
+    if user:
+        text = re.sub(re.escape(user), '<user>', text, flags=re.IGNORECASE)
+
+    def mask(match):
+        value = match.group(0)
+        return value if value.lower().endswith('@example.invalid') else '<email>'
+
+    text = EMAIL.sub(mask, text)
+    text = '\n'.join(line.rstrip() for line in text.split('\n'))
+    text = text.rstrip('\n') + '\n'
+    open(os.path.join(dest_dir, name), 'w', encoding='utf-8', newline='\n').write(text)
+    print(f'{name}: {len(text)} chars')

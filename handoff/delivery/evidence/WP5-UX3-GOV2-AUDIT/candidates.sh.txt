@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Candidate-phrase evidence for the owner-fidelity judgement. Searches tracked files at
+# ceb86b6 (git grep on the commit, so the working tree and handoff records do not matter),
+# excluding AGENTS.md/AGENTS.vi.md themselves; handoff/ is reported separately because it
+# holds the coordinator's own records about this change.
+T=/d/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT
+cd /d/Dropbox/Work.CDSemi/timesheet || exit 2
+C=ceb86b6
+out=$T/candidates.txt
+x() { # label, git grep args...
+  local label="$1"; shift
+  echo "== $label"
+  echo "-- outside handoff/ (excluding AGENTS pair): files"
+  git grep -l "$@" $C -- . ':!handoff' ':!AGENTS.md' ':!AGENTS.vi.md' | sed "s/^$C://"
+  echo "-- outside handoff/: matching lines (count)"
+  git grep -c "$@" $C -- . ':!handoff' ':!AGENTS.md' ':!AGENTS.vi.md' | sed "s/^$C://"
+  echo "-- handoff/prompts and handoff/templates: files"
+  git grep -l "$@" $C -- handoff/prompts handoff/templates | sed "s/^$C://"
+}
+{
+  echo "\$ git ls-tree $C -- .github docs/adr docs/runbooks GLOSSARY.md"
+  git ls-tree $C -- .github docs/adr docs/runbooks GLOSSARY.md
+  echo "exit=$? (empty = none of them exist)"
+  x "shop-floor / shop floor" -i -E 'shop[- ]floor'
+  x "step type" -i -E 'step[- ]types?\b'
+  x "task mode" -i -E 'task[- ]modes?\b'
+  x "probe kind" -i -E 'probe[- ]kinds?\b'
+  x "template variable" -i -E 'template[- ]variables?\b'
+  x "manifest key / manifest" -i -E 'manifest'
+  x "CI (word, case-sensitive)" -w -E 'CI'
+  x "continuous integration / GitHub Actions / pipeline" -i -E 'continuous integration|github actions|workflows?/|\bpipelines?\b'
+  x "production accuracy" -i -E 'production accuracy'
+  x "production (word)" -i -w -E 'production'
+  x "host check(s) / host-check / host checks" -i -E 'host[- ]checks?\b'
+  x "host (word)" -i -w -E 'host'
+  x "runbook" -i -E 'runbooks?'
+  x "operator" -i -w -E 'operators?'
+  x "ADR" -w -E 'ADRs?'
+  x "public API" -i -E 'public api'
+  x "README" -E 'README'
+  x "consumer need / named consumer" -i -E 'consumer'
+  x "recoverability" -i -E 'recoverab'
+  x "requester" -i -E 'requester'
+  x "output contract" -i -E 'output contract'
+  x "recorded evidence" -i -E 'recorded evidence'
+  echo "== docs/runbook-like files and their .vi.md pairs at $C"
+  git ls-tree -r --name-only $C -- docs | grep -i -E 'run|operat|deploy|restore|backup|pilot'
+} > "$out" 2>&1
+echo "exit=$?" >> "$out"

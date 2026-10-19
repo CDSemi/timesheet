@@ -1,0 +1,127 @@
+date_utc: 2026-10-19T19:07:18Z
+$ <python> --version
+Python 3.12.14
+exit=0
+$ git rev-parse HEAD origin/main
+ceb86b6b18bd0e8fabd93f47672cd87f3899b92f
+ceb86b6b18bd0e8fabd93f47672cd87f3899b92f
+exit=0
+$ git diff --name-only a78ada5..ceb86b6 -- . ':!handoff'
+AGENTS.md
+AGENTS.vi.md
+exit=0
+$ git diff --name-only a78ada5..ceb86b6 (all paths)
+AGENTS.md
+AGENTS.vi.md
+handoff/NEXT_ACTION.md
+handoff/NEXT_ACTION.vi.md
+handoff/delivery/ORCHESTRATION.json
+handoff/delivery/STATE.json
+handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+handoff/delivery/evidence/WP5-UX3-FIX3-FREEZE/checks.txt
+handoff/delivery/evidence/WP5-UX3-FIX3-FREEZE/commit-message.txt
+handoff/delivery/evidence/WP5-UX3-GOV2/cand.txt
+handoff/delivery/evidence/WP5-UX3-GOV2/cand2.txt
+handoff/delivery/evidence/WP5-UX3-GOV2/post.txt
+handoff/delivery/evidence/WP5-UX3-GOV2/pre.txt
+handoff/delivery/tasks/WP5-UX3-AUDIT-A2.md
+handoff/delivery/tasks/WP5-UX3-AUDIT-B2.md
+handoff/delivery/tasks/WP5-UX3-AUDIT-INT.md
+handoff/delivery/tasks/WP5-UX3-FIX3-FREEZE.md
+handoff/delivery/tasks/WP5-UX3-GOV2-FREEZE.md
+handoff/delivery/tasks/WP5-UX3-GOV2.md
+handoff/delivery/tasks/WP5-UX3-REGATE2.md
+exit=0
+$ governance paths changed in a78ada5..ceb86b6 (docs/08 'Governance scope' list)
+AGENTS.md
+AGENTS.vi.md
+exit=0
+$ git diff --check a78ada5..ceb86b6
+exit=0
+$ git diff --numstat a78ada5..ceb86b6 -- AGENTS.md AGENTS.vi.md
+47	1	AGENTS.md
+46	1	AGENTS.vi.md
+exit=0
+$ git status --short -- . ':!handoff'   (expect empty)
+exit=0
+$ <python> -I <task>/text_checks.py <repo> <task>
+== 1. Format (ceb86b6 blobs)
+[OK] AGENTS.md no BOM
+[OK] AGENTS.md no CR bytes: CR count 0
+[OK] AGENTS.md ends with exactly one LF
+[OK] AGENTS.md no trailing whitespace: 0 lines
+[OK] AGENTS.md valid UTF-8
+[OK] AGENTS.vi.md no BOM
+[OK] AGENTS.vi.md no CR bytes: CR count 0
+[OK] AGENTS.vi.md ends with exactly one LF
+[OK] AGENTS.vi.md no trailing whitespace: 0 lines
+[OK] AGENTS.vi.md valid UTF-8
+== 2. Working tree equals ceb86b6 for the AGENTS pair
+[OK] git diff --quiet ceb86b6 -- AGENTS.md AGENTS.vi.md: exit 0
+== 3. Unchanged sections (Project instructions heading to end of file)
+[OK] AGENTS.md heading found once in each: new [46] base [0]
+     heading new='## Project instructions' base='# Project instructions'
+[OK] AGENTS.md heading level change is exactly '# ' -> '## '
+[OK] AGENTS.md everything after the heading byte-equal to a78ada5: 37 vs 37 lines
+     lines before heading: base 0, new 46
+[OK] AGENTS.vi.md heading found once in each: new [47] base [2]
+     heading new='## Hướng dẫn dự án' base='# Hướng dẫn dự án'
+[OK] AGENTS.vi.md heading level change is exactly '# ' -> '## '
+[OK] AGENTS.vi.md everything after the heading byte-equal to a78ada5: 37 vs 37 lines
+[OK] AGENTS.vi.md translation preface line unchanged: 'Bản dịch của [AGENTS.md](AGENTS.md); tiếng Anh là nguồn chuẩn.'
+     lines before heading: base 2, new 47
+== 4. Owner text vs ceb86b6 (EN): only the expected edits
+[OK] owner has 'Operator runbooks get a Vietnamese mirror under '...
+[OK] owner has 'Be direct, practical, architecture-aware, and sh'...
+[OK] owner has 'build, test, CI run, host check,'...
+[OK] owner has 'tests, and CI evidence;'...
+[OK] owner has 'or add a concept, dependency, step type, task mo'...
+[OK] owner text with exactly these 5 replacements == ceb86b6 AGENTS.md (whitespace-normalised)
+[OK] owner and ceb86b6 identical from '## Project instructions' to end
+[OK] owner and ceb86b6 identical title + precedence paragraph
+== 5. EN/VI parity of the additions
+     EN headings: [(1, 'AI Instruction'), (2, 'Operating Contract'), (2, 'Prime Directive'), (2, 'Project instructions'), (2, 'Agent skills'), (3, 'Issue tracker'), (3, 'Triage labels'), (3, 'Domain docs'), (3, 'Frontend and UI/UX standards')]
+     VI headings: [(1, 'Hướng dẫn AI'), (2, 'Quy tắc vận hành'), (2, 'Chỉ dẫn tối thượng'), (2, 'Hướng dẫn dự án'), (2, 'Skill dành cho agent'), (3, 'Theo dõi issue'), (3, 'Nhãn phân loại'), (3, 'Tài liệu miền'), (3, 'Tiêu chuẩn giao diện và UI/UX')]
+[OK] same heading count and levels in order: 9 vs 9
+[OK] same code tokens in the additions: EN ['`.vi.md`', '`.<lang>.md`'] VI ['`.vi.md`', '`.<lang>.md`']
+[OK] same numbers in the additions: EN [] VI []
+[OK] same Operating Contract bullet count: EN 14 VI 14
+[OK] same blockquote line count: EN 2 VI 2
+[OK] same backslash hard line break count: EN 1 VI 1
+[OK] same bold marker count: EN 2 VI 2
+[OK] AGENTS.md has none of the removed phrases: []
+[OK] AGENTS.vi.md has none of the removed phrases: []
+== summary
+checks 35, failed 0
+exit=0
+$ <python> handoff/delivery/validate_package.py --preflight
+{
+  "status": "PASS",
+  "mode": "preflight",
+  "translation_pairs": 114,
+  "local_links": 2258,
+  "ot_scenarios": 33,
+  "time_scenarios": 32,
+  "deficit_scenarios": 16,
+  "ledger_accounting_scenarios": 10,
+  "scenario_total": 91,
+  "application_tests_executed": false
+}
+exit=0
+$ <python> handoff/delivery/validate_orchestration.py
+{
+  "status": "PASS",
+  "profiles": 9,
+  "tasks": 419,
+  "active_tasks": 2,
+  "application_acceptance_verified": false,
+  "claude_runtime_verified": false
+}
+exit=0
+$ <python> handoff/delivery/check_recovery.py
+exit=0
+  "status": "PASS",
+  "count": 106,
+  "actual_board_modified": false,
+  "claude_dispatch_executed": false

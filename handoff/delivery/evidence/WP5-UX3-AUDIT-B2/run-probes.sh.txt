@@ -1,0 +1,14 @@
+# All task-local probes, sequentially, on the 7ce4e95 build (probe-base) and the target (probe-target). Usage: bash run-probes.sh
+. <task>/env.sh
+O=$T/out
+echo "probes start $(date -u +%Y-%m-%dT%H:%M:%SZ)" > $O/40-probe-exits.txt
+for pair in "base:probe-base" "target:probe-target"; do
+  b=${pair%%:*}; d=${pair#*:}
+  bash $T/run-probe.sh req-$b $d $b zz-audb2-req.spec.ts --project=desktop > $O/40-req-$b-run.txt 2>&1
+  echo "req $b $(grep -o 'exit=[0-9]*' $O/40-req-$b-run.txt) $(date -u +%H:%M:%SZ)" >> $O/40-probe-exits.txt
+  bash $T/run-probe.sh co-$b $d $b zz-audb2-checkout.spec.ts > $O/41-checkout-$b-run.txt 2>&1
+  echo "checkout $b $(grep -o 'exit=[0-9]*' $O/41-checkout-$b-run.txt) $(date -u +%H:%M:%SZ)" >> $O/40-probe-exits.txt
+  bash $T/run-probe.sh cf-$b $d $b zz-audb2-confirm.spec.ts --project=desktop > $O/42-confirm-$b-run.txt 2>&1
+  echo "confirm $b $(grep -o 'exit=[0-9]*' $O/42-confirm-$b-run.txt) $(date -u +%H:%M:%SZ)" >> $O/40-probe-exits.txt
+done
+echo "probes end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $O/40-probe-exits.txt

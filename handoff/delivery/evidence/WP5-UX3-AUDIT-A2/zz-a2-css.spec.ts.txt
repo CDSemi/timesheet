@@ -1,0 +1,216 @@
+import { writeFileSync } from 'node:fs';
+import { expect, openAccount, test } from './fixtures.ts';
+import { note, r2, settle, shot } from './zz-a2lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-A2 (task-local probe, never in the repository): F-UX3A-02 (hover gating by a stylesheet scan, a tap on the phone
+ * project), F-UX3A-03 (44px with a coarse pointer at 768, 1024 and 1280, and below 768), F-UX3A-04 (the Sign out entry against
+ * Profile and Settings: gap, vertical alignment and the icon's start inside the entry). Lines go to obs/css.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+interface HoverRule {
+  selector: string;
+  media: string[];
+  gated: boolean;
+  decl: string;
+  nested: boolean;
+}
+
+test('A2 stylesheet scan of every :hover rule', async ({ page, signInThroughUi }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const scan = await page.evaluate(() => {
+    const rules: HoverRule[] = [];
+    const sheets: string[] = [];
+    let total = 0;
+    const visit = (list: CSSRuleList, media: string[]) => {
+      for (const rule of Array.from(list)) {
+        total += 1;
+        if (rule instanceof CSSMediaRule) {
+          visit(rule.cssRules, [...media, rule.media.mediaText]);
+        } else if (rule instanceof CSSStyleRule) {
+          if (rule.selectorText.includes(':hover')) {
+            rules.push({
+              selector: rule.selectorText,
+              media,
+              gated: media.some((text) => text.trim() === '(hover: hover)'),
+              decl: rule.style.cssText,
+              nested: false,
+            });
+          }
+          // CSS nesting: a style rule can hold nested rules.
+          const nested = (rule as unknown as { cssRules?: CSSRuleList }).cssRules;
+          if (nested !== undefined && nested.length > 0) {
+            for (const inner of Array.from(nested)) {
+              if (inner instanceof CSSStyleRule && inner.selectorText.includes(':hover')) {
+                rules.push({ selector: `${rule.selectorText} >> ${inner.selectorText}`, media, gated: media.some((text) => text.trim() === '(hover: hover)'), decl: inner.style.cssText, nested: true });
+              }
+            }
+          }
+        } else if (rule instanceof CSSGroupingRule) {
+          visit(rule.cssRules, [...media, `@${rule.constructor.name}`]);
+        }
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets)) {
+      sheets.push(`${sheet.href ?? 'inline'} rules=${sheet.cssRules.length}`);
+      visit(sheet.cssRules, []);
+    }
+    const adopted = document.adoptedStyleSheets.length;
+    const otherHover = [...document.querySelectorAll('style')].length;
+    return { rules, sheets, total, adopted, otherHover };
+  });
+  note('css.txt', `==== stylesheet scan (${testInfo.project.name}) ${new Date().toISOString()}: sheets ${scan.sheets.join('; ')}; rules visited ${scan.total}; adopted sheets ${scan.adopted}; <style> elements ${scan.otherHover}`);
+  const ungated = scan.rules.filter((rule) => !rule.gated);
+  note('css.txt', `hover rules ${scan.rules.length}, gated ${scan.rules.length - ungated.length}, ungated ${ungated.length}, nested ${scan.rules.filter((r) => r.nested).length}`);
+  for (const rule of scan.rules) note('css.txt', `  ${rule.gated ? 'gated  ' : 'UNGATED'} [${rule.media.join(' / ')}] ${rule.selector} { ${rule.decl} }`);
+  const media = new Set(scan.rules.flatMap((rule) => rule.media));
+  note('css.txt', `media texts above hover rules: ${[...media].join(' | ')}`);
+});
+
+test('A2 a tap on the phone Category picker leaves no hover look', async ({ page, signInThroughUi, isMobile }, testInfo) => {
+  test.skip(!isMobile, 'mobile project (touch)');
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    if (scheme === 'light') await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const hoverMedia = await page.evaluate("matchMedia('(hover: hover)').matches");
+    const picker = page.locator('[data-label-picker] button[aria-label^="Category for"]').first();
+    await picker.scrollIntoViewIfNeeded();
+    await settle(page, 200);
+    const read = async () =>
+      picker.evaluate((element) => {
+        const cs = getComputedStyle(element);
+        return { bg: cs.backgroundColor, border: cs.borderTopColor, shadow: cs.boxShadow, hover: element.matches(':hover'), focus: element === document.activeElement, fv: element.matches(':focus-visible') };
+      });
+    const rest = await read();
+    await picker.tap();
+    await expect(picker).toHaveAttribute('aria-expanded', 'true');
+    await picker.tap();
+    await expect(picker).toHaveAttribute('aria-expanded', 'false');
+    await settle(page, 300);
+    const after = await read();
+    const same = rest.bg === after.bg && rest.border === after.border && rest.shadow === after.shadow;
+    note('css.txt', `tap (${testInfo.project.name}, ${scheme}) (hover: hover)=${hoverMedia}: rest ${JSON.stringify(rest)} after two taps ${JSON.stringify(after)} same look=${same}`);
+    // An input field: tap, then tap elsewhere; the border must equal rest.
+    const field = page.locator('input[type="date"]').first();
+    if ((await field.count()) > 0 && (await field.isVisible())) {
+      const fieldRest = await field.evaluate((element) => getComputedStyle(element).borderTopColor);
+      await field.tap();
+      await page.locator('h2, .period-title').first().tap({ force: true });
+      await settle(page, 300);
+      const fieldAfter = await field.evaluate((element) => ({ border: getComputedStyle(element).borderTopColor, hover: element.matches(':hover') }));
+      note('css.txt', `tap (${testInfo.project.name}, ${scheme}) date field: rest border ${fieldRest}, after a tap and a tap elsewhere ${JSON.stringify(fieldAfter)}`);
+    }
+  }
+});
+
+test('A2 coarse pointer: no control under 44px at 768, 1024 and 1280; below 768 with a fine pointer', async ({ browser, builtServer, isMobile }, testInfo) => {
+  test.skip(isMobile, 'desktop project makes its own contexts');
+  test.setTimeout(400_000);
+  const { email, password } = builtServer.credentials.employee;
+  const cases = [
+    { width: 768, touch: true },
+    { width: 1024, touch: true },
+    { width: 1280, touch: true },
+    { width: 767, touch: false },
+    { width: 390, touch: false },
+  ];
+  for (const { width, touch } of cases) {
+    const context = await browser.newContext({ baseURL: builtServer.origin, viewport: { width, height: 900 }, hasTouch: touch, isMobile: false, locale: 'en-US', timezoneId: 'America/Los_Angeles', reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    await page.goto('/');
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password').fill(password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await settle(page, 300);
+    const coarse = await page.evaluate("matchMedia('(pointer: coarse)').matches");
+    const hover = await page.evaluate("matchMedia('(hover: hover)').matches");
+    const measureAll = async (scope: string) =>
+      page.evaluate((sel) => {
+        const root = document.querySelector(sel) ?? document.body;
+        const out: { name: string; w: number; h: number; tag: string; cover: string }[] = [];
+        for (const element of root.querySelectorAll<HTMLElement>('a[href], button, select, input, textarea, [role="switch"], [tabindex]:not([tabindex="-1"])')) {
+          const r = element.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) continue;
+          const cs = getComputedStyle(element);
+          if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+          const label = element.closest('label');
+          const lr = label?.getBoundingClientRect();
+          const name = (element.getAttribute('aria-label') ?? element.textContent ?? element.getAttribute('name') ?? '').replace(/\s+/g, ' ').trim().slice(0, 30);
+          out.push({ name, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10, tag: `${element.tagName.toLowerCase()}${element.getAttribute('type') ? `[${element.getAttribute('type')}]` : ''}.${String(element.className).split(' ')[0]}`, cover: lr ? `label ${Math.round(lr.width * 10) / 10}x${Math.round(lr.height * 10) / 10}` : '' });
+        }
+        return out;
+      }, scope);
+    const bar = await measureAll('header');
+    const all = await measureAll('body');
+    const smallBar = bar.filter((item) => item.h < 43.9);
+    const small = all.filter((item) => item.h < 43.9 || (item.w < 43.9 && !item.tag.startsWith('input[checkbox]') && !item.tag.startsWith('input[radio]')));
+    const minBar = Math.min(...bar.map((item) => item.h));
+    note('css.txt', `==== ${width}px touch=${touch} (pointer: coarse)=${coarse} (hover: hover)=${hover} (${testInfo.project.name}): bar controls ${bar.length}, smallest height ${minBar}; under 44 in the bar: ${smallBar.length ? smallBar.map((i) => `${i.tag} "${i.name}" ${i.w}x${i.h}`).join('; ') : 'none'}`);
+    note('css.txt', `  page controls ${all.length}; under 44 (height, or width for non-checkbox): ${small.length ? small.map((i) => `${i.tag} "${i.name}" ${i.w}x${i.h} ${i.cover}`).join('; ') : 'none'}`);
+    if (width >= 768) {
+      const identity = page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+      const box = await identity.boundingBox();
+      note('css.txt', `  identity button ${r2(box?.width ?? 0)}x${r2(box?.height ?? 0)}`);
+      await identity.click();
+      await expect(page.locator('#account-menu')).toBeVisible();
+      const menu = await measureAll('#account-menu');
+      const smallMenu = menu.filter((item) => item.h < 43.9);
+      note('css.txt', `  account menu controls ${menu.length}; under 44: ${smallMenu.length ? smallMenu.map((i) => `${i.tag} "${i.name}" ${i.w}x${i.h} ${i.cover}`).join('; ') : 'none'}`);
+    }
+    await context.close();
+  }
+});
+
+test('A2 Sign out entry: gap, vertical alignment and the icon start, menu 1280 and More 390, light and dark', async ({ page, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', 'desktop project measures both widths');
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const { name, width, height } of [
+    { name: 'menu 1280', width: 1280, height: 800 },
+    { name: 'More 390', width: 390, height: 844 },
+  ]) {
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+      await page.setViewportSize({ width, height });
+      await settle(page, 300);
+      const panel = await openAccount(page);
+      const entries = await panel.evaluate((root) => {
+        const rows: string[] = [];
+        for (const element of root.querySelectorAll<HTMLElement>('.nav-link, .account-action')) {
+          const r = element.getBoundingClientRect();
+          const icon = element.querySelector('svg')?.getBoundingClientRect();
+          const text = [...element.childNodes].find((node) => node.nodeType === 3 && (node.textContent ?? '').trim() !== '');
+          const range = document.createRange();
+          if (text) range.selectNodeContents(text);
+          const words = text ? range.getBoundingClientRect() : undefined;
+          const cs = getComputedStyle(element);
+          rows.push(
+            `${(element.textContent ?? '').trim()} [${element.tagName.toLowerCase()} display=${cs.display} pad-left=${cs.paddingLeft} border-left=${cs.borderLeftWidth}] entry-left ${r.left.toFixed(1)} icon-start ${icon ? (icon.left - r.left).toFixed(1) : '-'} gap ${icon && words ? (words.left - icon.right).toFixed(1) : '-'} words-start ${words ? (words.left - r.left).toFixed(1) : '-'} centre-offset ${icon && words ? (icon.top + icon.height / 2 - (words.top + words.height / 2)).toFixed(2) : '-'} h ${r.height.toFixed(1)}`,
+          );
+        }
+        return rows;
+      });
+      note('css.txt', `==== Sign out ${name} ${scheme}: ${entries.join(' || ')}`);
+      if (scheme === 'light') {
+        const box = await panel.boundingBox();
+        if (box !== null) {
+          const png = await page.screenshot({ clip: { x: box.x, y: box.y, width: box.width, height: box.height }, scale: 'css' });
+          const viewer = await page.context().newPage();
+          const s = 2;
+          await viewer.setViewportSize({ width: Math.ceil(box.width * s), height: Math.ceil(box.height * s) });
+          await viewer.setContent(`<body style="margin:0"><img src="data:image/png;base64,${png.toString('base64')}" style="image-rendering:pixelated;width:${box.width * s}px;height:${box.height * s}px"></body>`);
+          await viewer.waitForTimeout(150);
+          writeFileSync(shot(`a2-account-entries-${name.replace(' ', '-')}-light-zoom2-synthetic.png`), await viewer.screenshot());
+          await viewer.close();
+        }
+      }
+      await page.keyboard.press('Escape');
+      await settle(page, 200);
+    }
+  }
+});

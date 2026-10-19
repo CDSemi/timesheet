@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Reconstruct the owner's uncommitted AGENTS.md (pre-worker) from the worker's captured diff
+# (index 2b33ed9..e8af2a2) applied to a78ada5:AGENTS.md, then prove the reconstruction:
+#  1) its git blob id starts with e8af2a2 (the diff's index line);
+#  2) substituting it into the a78ada5 tree list reproduces the recorded working-tree
+#     digest 54cb9a3d... (833 files) named in the WP5-UX3-Q7 question and the GOV2 brief.
+# Then diff the owner's text against ceb86b6:AGENTS.md (word-level and line-level).
+T=/d/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT
+W=$T/owner
+mkdir -p "$W"
+cd /d/Dropbox/Work.CDSemi/timesheet || exit 2
+out=$T/owner_text.txt
+{
+  echo "\$ git show a78ada5:AGENTS.md > owner/AGENTS.md ; git rev-parse a78ada5:AGENTS.md"
+  git show a78ada5:AGENTS.md > "$W/AGENTS.md"
+  git rev-parse a78ada5:AGENTS.md
+  echo "exit=$?"
+  echo "\$ patch -p1 -d owner < <worker task folder>/agents.diff"
+  patch -p1 -d "$W" < /d/.claude-tmp/timesheet/WP5-UX3-GOV2/agents.diff
+  echo "exit=$?"
+  echo "\$ git hash-object owner/AGENTS.md   (expect prefix e8af2a2)"
+  OWNER_BLOB=$(git hash-object "$W/AGENTS.md")
+  echo "$OWNER_BLOB"
+  echo "exit=$?"
+  echo "\$ git cat-file -t e8af2a2 (is the owner's blob in the object store?)"
+  git cat-file -t "$OWNER_BLOB" 2>&1
+  echo "exit=$?"
+  echo "\$ digest of a78ada5 tree (handoff/ excluded) with AGENTS.md blob replaced by the owner's blob (expect 54cb9a3d...)"
+  git ls-tree -r --format='%(path) %(objectname)' a78ada5 | grep -v '^handoff/' | sed "s/^AGENTS.md [0-9a-f]*$/AGENTS.md $OWNER_BLOB/" | LC_ALL=C sort > "$T/lstree_owner.lst"
+  echo "files: $(wc -l < "$T/lstree_owner.lst")"
+  sha256sum < "$T/lstree_owner.lst"
+  echo "\$ digest of a78ada5 tree itself (expect d1d903cf...)"
+  git ls-tree -r --format='%(path) %(objectname)' a78ada5 | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+  echo "\$ diff -u owner/AGENTS.md ceb86b6:AGENTS.md  (line-level)"
+  git show ceb86b6:AGENTS.md > "$T/AGENTS_new.md"
+  diff -u "$W/AGENTS.md" "$T/AGENTS_new.md"
+  echo "exit=$? (1 = differences shown)"
+  echo "\$ git diff --no-index --word-diff=plain owner/AGENTS.md AGENTS_new.md (word-level)"
+  git diff --no-index --word-diff=plain "$W/AGENTS.md" "$T/AGENTS_new.md"
+  echo "exit=$? (1 = differences shown)"
+} > "$out" 2>&1

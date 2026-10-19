@@ -1,0 +1,11 @@
+# After the mutants: the two mandatory DST runs on the clean export, then the survivors (sequential). Usage: bash run-after-mutants.sh
+. <task>/env.sh
+O=$T/out
+echo "after-mutants start $(date -u +%Y-%m-%dT%H:%M:%SZ)" > $O/62-after-mutants.txt
+bash $T/run-dst.sh
+echo "dst done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $O/62-after-mutants.txt
+bash $T/run-survivor.sh M6a zz-audb2-checkout.spec.ts --project=desktop
+echo "survivor M6a done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $O/62-after-mutants.txt
+bash $T/run-survivor.sh M5b zz-audb2-confirm.spec.ts --project=desktop
+echo "survivor M5b done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $O/62-after-mutants.txt
+echo "after-mutants end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $O/62-after-mutants.txt

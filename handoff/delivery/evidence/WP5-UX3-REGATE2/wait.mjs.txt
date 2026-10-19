@@ -1,0 +1,12 @@
+// Usage: node wait.mjs <file> <seconds>. Waits until the file exists or the time is up; prints which.
+import { existsSync } from 'node:fs';
+const [file, seconds] = process.argv.slice(2);
+const end = Date.now() + Number(seconds) * 1000;
+while (Date.now() < end) {
+  if (existsSync(file)) {
+    console.log(`found ${file}`);
+    process.exit(0);
+  }
+  await new Promise((done) => setTimeout(done, 5000));
+}
+console.log(`not yet ${file}`);

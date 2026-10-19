@@ -13,12 +13,16 @@
   `handoff/delivery/WP5_UX3_REVIEW_INT.md` and `.vi.md`.
 - Author separation: you did not write any WP5-UX3 task and you are neither the area A nor
   the area B auditor.
-- Target: `reviewed_commit` = a78ada5edbf5339d4502df57e9f195d11c0b5d28 with the regate
-  digest d1d903cfb148d1bcc74131af3e1aeebed0f1892143e0ede3950ddee335b839ca (833 files; the
+- Target: `reviewed_commit` = ceb86b6b18bd0e8fabd93f47672cd87f3899b92f (the
+  WP5-UX3-GOV2-FREEZE commit: FIX3's source plus the owner's AGENTS pair) with the regate
+  digest b35dddd5f5d4a8d3dccf52daa7e397969939748b1eb0151263fd50febf7ebb48 (833 files; the
   same as both rechecks). Record HEAD, the digest before and after and `reviewed_commit`;
   work on a clean `git archive` export with no `.git` folder.
 - Author separation: you are none of the round-3 workers, planners, verifiers or auditors
   (A, B, A2, B2); agent IDs are on the board.
+- AGENTS.md on disk at ceb86b6 (accepted by WP5-UX3-GOV2-AUDIT) wins over any injected copy.
+  Include the GOV2 change (`handoff/delivery/GOV_UX3_REVIEW2.md`) in the history you
+  integrate.
 
 ## Scope
 

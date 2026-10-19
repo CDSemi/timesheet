@@ -1,0 +1,68 @@
+=== M1 2026-10-19T22:19:11Z
+M1 applied to src/client/components/breakRowsModel.ts: hadSavedRows ignored: Check out omits the list whenever nothing is listed or ticked (the pre-FIX3 rule)
+build exit 0
+unit exit 1       Tests  1 failed | 2140 passed (2141)
+e2e desktop exit 1  1 failed  1 skipped  66 passed (2.2m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:1924:1 › Check out after every saved break was removed (box unticked) sends an empty unconfirmed list that replaces them, and the dialog says what will be recorded (E-1)
+       × started with saved rows, all removed, box unticked: the empty unconfirmed list replaces them 11ms
+ FAIL  tests/client/breakRowsModel.test.ts > breaks_confirmed > check out mode, by what the dialog started with > started with saved rows, all removed, box unticked: the empty unconfirmed list replaces them
+M1 reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+=== M2 2026-10-19T22:22:22Z
+M2 applied to src/client/components/breakRowsModel.ts: hadSavedRows always true: an empty unticked Check out sends breaks [] even when the dialog opened with no saved row
+build exit 0
+unit exit 1       Tests  2 failed | 2139 passed (2141)
+e2e desktop exit 1  1 failed  1 skipped  66 passed (1.9m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:1866:1 › Check out with nothing listed and the box unticked omits breaks: the session ends with its breaks not confirmed (E-1)
+     × check out mode: an empty unticked list omits breaks, so they stay unconfirmed (E-1) 7ms
+       × started with no saved row and nothing listed, box unticked: the list stays omitted (breaks unconfirmed, no rows touched) 2ms
+ FAIL  tests/client/breakRowsModel.test.ts > breaks_confirmed > check out mode: an empty unticked list omits breaks, so they stay unconfirmed (E-1)
+ FAIL  tests/client/breakRowsModel.test.ts > breaks_confirmed > check out mode, by what the dialog started with > started with no saved row and nothing listed, box unticked: the list stays omitted (breaks unconfirmed, no
+M2 reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+=== M3 2026-10-19T22:25:16Z
+M3 applied to src/client/components/breakRowsModel.ts: the confirmed flag on the empty list: after every saved row is removed (box unticked) the empty list is sent as confirmed
+build exit 0
+unit exit 1       Tests  1 failed | 2140 passed (2141)
+e2e desktop exit 1  1 failed  1 skipped  66 passed (2.0m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:1924:1 › Check out after every saved break was removed (box unticked) sends an empty unconfirmed list that replaces them, and the dialog says what will be recorded (E-1)
+       × started with saved rows, all removed, box unticked: the empty unconfirmed list replaces them 7ms
+ FAIL  tests/client/breakRowsModel.test.ts > breaks_confirmed > check out mode, by what the dialog started with > started with saved rows, all removed, box unticked: the empty unconfirmed list replaces them
+M3 reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+=== M4 2026-10-19T22:28:12Z
+M4 applied to src/client/components/breakRowsModel.ts: the inside filter's end comparison: <= becomes < (a suggestion ending exactly at the session end is dropped)
+build exit 0
+unit exit 1       Tests  2 failed | 2139 passed (2141)
+e2e desktop exit 0  1 skipped  67 passed (2.1m)
+     × keeps only the breaks that end inside the session; a break ending exactly at the end is inside 13ms
+     × 09:00-11:15, the first ends exactly at the end lists the suggestions inside the session 1ms
+ FAIL  tests/client/breakRowsModel.test.ts > suggestion rows without the past-day rule (WP5-UX3-T08B) > keeps only the breaks that end inside the session; a break ending exactly at the end is inside
+ FAIL  tests/client/breakRowsModel.test.ts > "Confirm breaks" rows (WP5-UX3-FIX3 item 8) > 09:00-11:15, the first ends exactly at the end lists the suggestions inside the session
+M4 reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+=== M5a 2026-10-19T22:31:19Z
+M5a applied to src/client/components/breakRowsModel.ts: the gate of confirmBreaksRows: the breaks_confirmed condition dropped (a confirmed session would be offered suggestions)
+build exit 0
+unit exit 1       Tests  1 failed | 2140 passed (2141)
+e2e desktop exit 0  1 skipped  67 passed (2.1m)
+     × offers nothing without a policy, without policy breaks, for a running session, a confirmed one or one that has saved rows 9ms
+ FAIL  tests/client/breakRowsModel.test.ts > "Confirm breaks" rows (WP5-UX3-FIX3 item 8) > offers nothing without a policy, without policy breaks, for a running session, a confirmed one or one that has saved rows
+M5a reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+=== M5b 2026-10-19T22:34:23Z
+M5b applied to src/client/components/breakRowsModel.ts: a past-day gate added to confirmBreaksRows (device clock in the input zone): today's ended session gets no suggestion
+build exit 0
+unit exit 0       Tests  2141 passed (2141)
+e2e desktop exit 0  1 skipped  67 passed (2.3m)
+M5b reverted src/client/components/breakRowsModel.ts: identical to the clean export = True
+=== M6a 2026-10-19T22:37:42Z
+M6a applied to src/client/components/ClockOutDialog.tsx: the note's condition ignores the saved rows: the removal note shows whenever the list is empty and the box unticked
+build exit 0
+unit exit 0       Tests  2141 passed (2141)
+e2e desktop exit 0  1 skipped  67 passed (1.9m)
+M6a reverted src/client/components/ClockOutDialog.tsx: identical to the clean export = True
+=== M6b 2026-10-19T22:40:34Z
+M6b applied to src/client/components/ClockOutDialog.tsx: the note's condition ignores the box: the removal note also shows while 'Confirm no breaks taken' is ticked
+build exit 0
+unit exit 0       Tests  2141 passed (2141)
+e2e desktop exit 1  1 failed  1 skipped  66 passed (2.1m)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:1924:1 › Check out after every saved break was removed (box unticked) sends an empty unconfirmed list that replaces them, and the dialog says what will be recorded (E-1)
+M6b reverted src/client/components/ClockOutDialog.tsx: identical to the clean export = True
+final clean client rebuild exit 0
+mutants-done 2026-10-19T22:43:35Z

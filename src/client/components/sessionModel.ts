@@ -297,7 +297,10 @@ export function toBreakRules(breaks: readonly PolicyBreak[]): BreakRule[] {
   }));
 }
 
-/** Suggested breaks shifted by the arrival; the rows are pinned by offset and stay unconfirmed. */
+/**
+ * Suggested breaks shifted by the arrival; the rows are pinned by offset and stay unconfirmed.
+ * Test oracle only: no production code calls it (the dialogs use `suggestionRows` in breakRowsModel.ts); the unit tests compare against it.
+ */
 export function suggestedRows(
   startUtc: EpochSeconds,
   zone: string,

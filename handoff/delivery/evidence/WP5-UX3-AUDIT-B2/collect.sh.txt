@@ -1,0 +1,60 @@
+# Copies the task outputs into the evidence folder as masked LF .txt (and the -synthetic.png screenshots). Usage: bash collect.sh
+. <task>/env.sh
+O=$T/out
+args=()
+add() { if [ -f "$1" ]; then args+=("$1" "$2"); else echo "missing: $1"; fi; }
+for tag in before after; do
+  add $O/01-digest-export-$tag.txt 01-digest-export-$tag.txt
+  add $O/01-digest-lstree-$tag.txt 01-digest-lstree-$tag.txt
+  add $O/01-digest-npm-$tag.txt 01-digest-npm-$tag.txt
+  add $O/01-head-$tag.txt 01-head-$tag.txt
+done
+add $O/10-main-exits.txt 10-main-exits.txt
+add $O/10-typecheck.txt 10-typecheck.txt
+add $O/10-lint.txt 10-lint.txt
+add $O/10-npmtest-1.txt 10-npmtest-1.txt
+add $O/10-npmtest-2.txt 10-npmtest-2.txt
+add $O/10-build.txt 10-build.txt
+add $O/10-ac13.txt 10-ac13.txt
+add $O/11-e2e-real.txt 11-e2e-real.txt
+add $O/20-fix3-diffstat.txt 20-fix3-diffstat.txt
+add $O/20-fix3-diff-src.txt 20-fix3-diff-src.txt
+add $O/20-fix3-numstat.txt 20-fix3-numstat.txt
+add $O/21-server-domain-a643-fix3.txt 21-server-domain-a643794-a78ada5-diff.txt
+add $O/21-server-domain-base-target.txt 21-server-domain-7ce4e95-target-diff.txt
+add $O/21-fix3-target-stat.txt 21-a78ada5-target-stat.txt
+add $O/22-quickbreaks-base.txt 22-quickbreaks-usage-7ce4e95.txt
+add $O/23-dist-compare.txt 23-dist-compare.txt
+add $O/24-docs-parity.txt 24-docs-parity.txt
+add $O/25-src-stat.txt 25-src-stat-7ce4e95-target.txt
+add $O/25-unchanged-files-stat.txt 25-unchanged-files-stat.txt
+add $O/30-setup-exits.txt 30-setup-exits.txt
+add $O/40-probe-exits.txt 40-probe-exits.txt
+for f in $O/40-*-run.txt $O/41-*-run.txt $O/42-*.txt $O/43-*.txt $O/44-*.txt $O/45-*.txt $O/46-*.txt $O/47-*.txt; do
+  [ -f "$f" ] && add "$f" "$(basename "$f")"
+done
+for f in $T/obs/*.jsonl; do
+  [ -f "$f" ] && add "$f" "obs-$(basename "$f").txt"
+done
+add $O/50-dst-exits.txt 50-dst-exits.txt
+for f in $O/50-dst-*.txt; do
+  [ -f "$f" ] && add "$f" "$(basename "$f")"
+done
+add $O/52-preload-sha.txt 52-preload-sha.txt
+add $O/60-mutants.txt 60-mutants.txt
+for f in $O/61-*.txt $O/62-*.txt; do
+  [ -f "$f" ] && add "$f" "$(basename "$f")"
+done
+add $O/90-load.txt 90-load.txt
+add $O/96-slips.txt 96-slips.txt
+for f in $O/97-*.txt $O/98-check-evidence.txt; do
+  [ -f "$f" ] && add "$f" "$(basename "$f")"
+done
+add $T/00-README.txt 00-README.txt
+for s in env.sh digest.sh digest-after.sh setup.sh run-main.sh run-probe.sh run-probes.sh run-shift.sh run-dst.sh run-mutants.sh run-survivor.sh run-after-mutants.sh collect.sh; do add $T/$s $s.txt; done
+for s in mutants.json mutate.py compare_req.py summarize_probe.py cmp_dist.py parity.py mask_copy.py check_lf.py pair_check.py shiftclock.mjs probe-now.mjs; do add $T/$s $s.txt; done
+for s in zz-audb2-req.spec.ts zz-audb2-checkout.spec.ts zz-audb2-confirm.spec.ts; do add $T/$s $s.txt; done
+"$PY" -I $T/mask_copy.py "$E" "${args[@]}" > $O/95-collect.txt 2>&1
+echo "mask_copy exit $?" >> $O/95-collect.txt
+for p in $T/shots/*-synthetic.png; do [ -f "$p" ] && cp "$p" "$E/" && echo "copied $(basename "$p")" >> $O/95-collect.txt; done
+echo "collect done" >> $O/95-collect.txt

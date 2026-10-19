@@ -1,0 +1,18 @@
+# Mandatory checks on the clean target export (sequential). Usage: bash run-main.sh
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+O=$T/out
+cd $T/export || exit 2
+echo "start $(date -u +%Y-%m-%dT%H:%M:%SZ) node $(node --version)" > $O/10-main-exits.txt
+npm run typecheck > $O/10-typecheck.txt 2>&1; echo "typecheck exit $? dep=$(grep -ci deprecat $O/10-typecheck.txt)" >> $O/10-main-exits.txt
+npm run lint > $O/10-lint.txt 2>&1; echo "lint exit $? dep=$(grep -ci deprecat $O/10-lint.txt)" >> $O/10-main-exits.txt
+for i in 1 2; do
+  npm test > $O/10-npmtest-$i.txt 2>&1; echo "npm test run $i exit $? dep=$(grep -ci deprecat $O/10-npmtest-$i.txt) $(grep -E '^ +(Test Files|Tests) ' $O/10-npmtest-$i.txt | tr -s ' ' | tr '\n' ' ')" >> $O/10-main-exits.txt
+done
+npm run build > $O/10-build.txt 2>&1; echo "build exit $? dep=$(grep -ci deprecat $O/10-build.txt) advisory=$(grep -ci 'larger than' $O/10-build.txt)" >> $O/10-main-exits.txt
+node node_modules/vitest/vitest.mjs run tests/integration/ac13-two-week.test.ts > $O/10-ac13.txt 2>&1; echo "ac13 exit $? dep=$(grep -ci deprecat $O/10-ac13.txt)" >> $O/10-main-exits.txt
+export NODE_OPTIONS="--trace-deprecation"
+echo "e2e start $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $O/10-main-exits.txt
+node node_modules/@playwright/test/cli.js test --output="$TW\\pw-main" > $O/11-e2e-real.txt 2>&1; echo "e2e real exit $?" >> $O/10-main-exits.txt
+echo "e2e end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $O/10-main-exits.txt
+echo main-done > $O/main.done

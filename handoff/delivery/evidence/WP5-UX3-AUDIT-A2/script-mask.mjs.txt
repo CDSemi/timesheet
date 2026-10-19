@@ -1,0 +1,17 @@
+// WP5-UX3-AUDIT-A2 task-local masker (never in the repository). Usage: node mask.mjs <source> <target.txt>
+// LF line ends, no ANSI codes, user-profile paths as <user>, any address other than the full synthetic example.invalid form as <email>.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [source, target] = process.argv.slice(2);
+if (!target.endsWith('.txt')) throw new Error('evidence names end in .txt');
+let text = readFileSync(source, 'utf8');
+text = text.replace(/\r\n?/g, '\n');
+// eslint-disable-next-line no-control-regex
+text = text.replace(/\u001b\[[0-9;?]*[A-Za-z]/g, '');
+text = text.replace(/[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s'"]+/gi, '<user>');
+text = text.replace(/\/[a-z]\/Users\/[^/\s'"]+/gi, '<user>');
+// An address is a local part, '@' and a domain starting with a letter (so "timesheet@0.1.0" and "@playwright/test" stay).
+text = text.replace(/[A-Za-z0-9._%+-]+@[A-Za-z][A-Za-z0-9.-]*/g, (match) => (/^[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+\.)*example\.invalid\.?$/.test(match) ? match : '<email>'));
+if (!text.endsWith('\n')) text += '\n';
+text = text.replace(/[ \t]+$/gm, '');
+writeFileSync(target, text);

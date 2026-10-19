@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# WP5-UX3-AUDIT-A2 mutant runs in export-m. Usage: mutants.sh <id> <spec...> [-- extra playwright args]
+# Applies the mutant, rebuilds, runs the given e2e specs on both projects, records the result, restores.
+set -u
+source /d/.claude-tmp/timesheet/WP5-UX3-AUDIT-A2/env.sh
+id="$1"; shift
+cd "$T/export-m" || exit 9
+L="$T/logs"
+sum="$T/mut-summary.txt"
+node.exe "$T/mutate.mjs" "$id" > "$L/mut-$id-apply.txt" 2>&1 || { echo "$id apply FAILED" >> "$sum"; exit 1; }
+git diff --no-index --stat "$T/export/src" "$T/export-m/src" > "$L/mut-$id-diff.txt" 2>&1
+git diff --no-index "$T/export/src" "$T/export-m/src" >> "$L/mut-$id-diff.txt" 2>&1
+npmrun run build > "$L/mut-$id-build.txt" 2>&1
+b=$?
+bash "$T/load.sh" "mut $id start"
+start=$(date -u +%H:%M:%SZ)
+mkdir -p "$T/pw-mut-$id"
+node.exe node_modules/@playwright/test/cli.js test --output "$T/pw-mut-$id" "$@" > "$L/mut-$id-e2e.txt" 2>&1
+rc=$?
+bash "$T/load.sh" "mut $id end"
+passed=$(grep -Eo '[0-9]+ passed' "$L/mut-$id-e2e.txt" | sed -n '$p')
+failed=$(grep -Eo '[0-9]+ failed' "$L/mut-$id-e2e.txt" | sed -n '$p')
+flaky=$(grep -Eo '[0-9]+ flaky' "$L/mut-$id-e2e.txt" | sed -n '$p')
+echo "$id: $(cat "$L/mut-$id-apply.txt" | tr -d '\r') | build exit $b | e2e exit $rc ($start to $(date -u +%H:%M:%SZ)): ${passed:-0 passed}, ${failed:-0 failed} ${flaky:-} | specs: $*" >> "$sum"
+node.exe "$T/mutate.mjs" restore > "$L/mut-$id-restore.txt" 2>&1
+for f in src/client/styles.css src/client/components/AppShell.tsx; do cmp -s "$T/export/$f" "$T/export-m/$f" || echo "$id restore MISMATCH $f" >> "$sum"; done

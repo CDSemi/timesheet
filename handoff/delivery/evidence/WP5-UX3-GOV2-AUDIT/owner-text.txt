@@ -1,0 +1,103 @@
+$ git show a78ada5:AGENTS.md > owner/AGENTS.md ; git rev-parse a78ada5:AGENTS.md
+2b33ed9e3cb33f04c54aba8e70f75f3d862c4cf8
+exit=0
+$ patch -p1 -d owner < <worker task folder>/agents.diff
+patching file AGENTS.md
+exit=0
+$ git hash-object owner/AGENTS.md   (expect prefix e8af2a2)
+e8af2a26a9c4fe4c7d7258ebbd1ded1969ab2a4b
+exit=0
+$ git cat-file -t e8af2a2 (is the owner's blob in the object store?)
+fatal: git cat-file: could not get object info
+exit=128
+$ digest of a78ada5 tree (handoff/ excluded) with AGENTS.md blob replaced by the owner's blob (expect 54cb9a3d...)
+files: 833
+54cb9a3dbfab3b07f4028625c9c74ec63d19bef1ae887774283696da52d7d110 *-
+$ digest of a78ada5 tree itself (expect d1d903cf...)
+d1d903cfb148d1bcc74131af3e1aeebed0f1892143e0ede3950ddee335b839ca *-
+$ diff -u owner/AGENTS.md ceb86b6:AGENTS.md  (line-level)
+--- /d/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT/owner/AGENTS.md	2026-10-19 12:03:08.043354200 -0700
++++ /d/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT/AGENTS_new.md	2026-10-19 12:03:08.375226100 -0700
+@@ -10,12 +10,12 @@
+ - Use English for canonical documentation, code, comments, public APIs, identifiers, file
+   names, commit messages, technical documentation, and command examples unless the project
+   explicitly requires otherwise.
+-- Operator runbooks get a Vietnamese mirror under `docs/runbooks/vi/`; English is canonical.
++- Operator runbooks get a matching `.vi.md` Vietnamese translation beside the English document; English is canonical.
+ - For other outputs, follow the explicitly requested language; otherwise follow the applicable
+   skill's output contract.
+ - Keep existing matching `.<lang>.md` translations aligned when editing. Use canonical
+   instructions as the source of truth; consult translations when editing or checking them.
+-- Be direct, practical, architecture-aware, and shop-floor aware. Never over-explain obvious details.
++- Be direct, practical, and architecture-aware. Never over-explain obvious details.
+ - Explain tradeoffs only when they materially affect correctness, reliability, maintainability,
+   production accuracy, recoverability, or user intent.
+ - Before editing, read the task and relevant README guidance; inspect the current branch,
+@@ -27,7 +27,7 @@
+ - State a concise plan before large, destructive, security-sensitive, or non-trivial changes.
+ - Ask only when a missing decision blocks correct or safe progress; otherwise make the safest
+   minimal assumption and proceed.
+-- NEVER claim a command, build, test, CI run, host check, deployment, migration, validation,
++- NEVER claim a command, build, test, host check, deployment, migration, validation,
+   or release succeeded unless it actually ran and completed successfully.
+ 
+ ## Prime Directive
+@@ -36,13 +36,12 @@
+ > under the known constraints, evidence, and project context.**
+ 
+ Before designing, reviewing, or implementing: understand what is required; verify material
+-assumptions against the current docs, code, tests, and CI evidence; consider a meaningful
++assumptions against the current docs, code, tests, and recorded evidence; consider a meaningful
+ alternative when one exists; challenge the answer for wrong assumptions, missed constraints,
+ and needless complexity; stop investigating when the evidence is sufficient.
+ 
+-Make the smallest complete change. Never over-engineer, broaden scope, or add a concept,
+-dependency, step type, task mode, probe kind, template variable, or manifest key without
+-an ADR and a named consumer need. Keep implemented behaviour, planned capability, and
++Make the smallest complete change. Never over-engineer, broaden scope, or add a concept or
++dependency without an ADR and a named consumer need. Keep implemented behaviour, planned capability, and
+ proposed design explicitly separate.
+ 
+ ## Project instructions
+exit=1 (1 = differences shown)
+$ git diff --no-index --word-diff=plain owner/AGENTS.md AGENTS_new.md (word-level)
+diff --git a/D:/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT/owner/AGENTS.md b/D:/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT/AGENTS_new.md
+index e8af2a2..94bdcd8 100644
+--- a/D:/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT/owner/AGENTS.md
++++ b/D:/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT/AGENTS_new.md
+@@ -10,12 +10,12 @@ precedence unless the owner explicitly overrides it in the current task.
+- Use English for canonical documentation, code, comments, public APIs, identifiers, file
+  names, commit messages, technical documentation, and command examples unless the project
+  explicitly requires otherwise.
+- Operator runbooks get a {+matching `.vi.md`+} Vietnamese [-mirror under `docs/runbooks/vi/`;-]{+translation beside the English document;+} English is canonical.
+- For other outputs, follow the explicitly requested language; otherwise follow the applicable
+  skill's output contract.
+- Keep existing matching `.<lang>.md` translations aligned when editing. Use canonical
+  instructions as the source of truth; consult translations when editing or checking them.
+- Be direct, practical,[-architecture-aware,-] and [-shop-floor aware.-]{+architecture-aware.+} Never over-explain obvious details.
+- Explain tradeoffs only when they materially affect correctness, reliability, maintainability,
+  production accuracy, recoverability, or user intent.
+- Before editing, read the task and relevant README guidance; inspect the current branch,
+@@ -27,7 +27,7 @@ precedence unless the owner explicitly overrides it in the current task.
+- State a concise plan before large, destructive, security-sensitive, or non-trivial changes.
+- Ask only when a missing decision blocks correct or safe progress; otherwise make the safest
+  minimal assumption and proceed.
+- NEVER claim a command, build, test,[-CI run,-] host check, deployment, migration, validation,
+  or release succeeded unless it actually ran and completed successfully.
+
+## Prime Directive
+@@ -36,13 +36,12 @@ precedence unless the owner explicitly overrides it in the current task.
+> under the known constraints, evidence, and project context.**
+
+Before designing, reviewing, or implementing: understand what is required; verify material
+assumptions against the current docs, code, tests, and [-CI-]{+recorded+} evidence; consider a meaningful
+alternative when one exists; challenge the answer for wrong assumptions, missed constraints,
+and needless complexity; stop investigating when the evidence is sufficient.
+
+Make the smallest complete change. Never over-engineer, broaden scope, or add a [-concept,-]
+[-dependency, step type, task mode, probe kind, template variable,-]{+concept+} or
+[-manifest key-]{+dependency+} without an ADR and a named consumer need. Keep implemented behaviour, planned capability, and
+proposed design explicitly separate.
+
+## Project instructions
+exit=1 (1 = differences shown)

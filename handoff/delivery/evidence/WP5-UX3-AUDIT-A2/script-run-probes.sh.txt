@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# WP5-UX3-AUDIT-A2: the task-local probes in export-p (one worker). Usage: run-probes.sh <label> [spec filters...]
+set -u
+source /d/.claude-tmp/timesheet/WP5-UX3-AUDIT-A2/env.sh
+label="$1"; shift
+cd "$T/export-p" || exit 9
+mkdir -p "$T/pw-probe-$label"
+bash "$T/load.sh" "probe $label start"
+start=$(date -u +%H:%M:%SZ)
+node.exe node_modules/@playwright/test/cli.js test -c playwright.a2.config.ts --output "$T/pw-probe-$label" "$@" > "$T/logs/probe-$label.txt" 2>&1
+rc=$?
+bash "$T/load.sh" "probe $label end"
+echo "probe $label exit $rc ($start to $(date -u +%H:%M:%SZ)) $*" >> "$T/logs/probe-times.txt"

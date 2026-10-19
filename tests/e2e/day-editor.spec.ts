@@ -1796,6 +1796,8 @@ test('Check out with listed breaks: the listed rows are confirmed and replace th
     await expect(dialog.locator('[data-break="1"]')).toHaveAttribute('data-origin', 'saved');
     await expect(dialog.getByRole('list', { name: 'Break list' })).toHaveAttribute('data-layout', showsChips(page) ? 'chips' : 'rows');
     await expect(dialog.getByRole('button', { name: 'Check out with these breaks' })).toBeVisible();
+    // The saved row is kept: nothing is deleted, so there is no removal note (WP5-UX3-FIX4 item 5).
+    await expect(dialog.getByText('The saved breaks you removed are deleted at Check out.')).toHaveCount(0);
 
     // A second break, typed: the listed set is what Check out sends. There is no notice and no second confirmation.
     await addCheckOutBreak(page, dialog, 2, localAfter(run, 60), 15);
@@ -1876,6 +1878,17 @@ test('Check out with nothing listed and the box unticked omits breaks: the sessi
     const dialog = checkOutDialog(page);
     await expect(dialog.getByText('No breaks listed.')).toBeVisible();
     await expect(dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+    // WP5-UX3-FIX4 item 5: nothing was saved, so nothing is deleted and the removal note is absent: as the dialog opens, and after a row
+    // is added and removed again (the list is still omitted).
+    const removedNote = dialog.getByText('The saved breaks you removed are deleted at Check out.');
+    await expect(dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' })).toBeVisible();
+    await expect(removedNote).toHaveCount(0);
+    await addCheckOutBreak(page, dialog, 1, localAfter(run, 60), 15);
+    await expect(dialog.locator('[data-break]')).toHaveCount(1);
+    await removeCheckOutBreak(page, dialog, 1);
+    await expect(dialog.locator('[data-break]')).toHaveCount(0);
+    await expect(dialog.getByText('No breaks listed.')).toBeVisible();
+    await expect(removedNote).toHaveCount(0);
     // Check out is its own explicit act: the button names the outcome and the G-4 notice is not used.
     await dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' }).click();
     await expect(dialog).toHaveCount(0);
@@ -3874,6 +3887,58 @@ test('"Confirm breaks" lists nothing when no suggested break fits inside the ses
     expect(after?.breaks).toHaveLength(0);
   } finally {
     await employeeSeed.clearSessions(date);
+  }
+});
+
+// WP5-UX3-FIX4 item 6 (R-B2-1, accepted for T08B): "Confirm breaks" has no past-day rule. A session that ended earlier today lists the
+// suggested breaks that lie inside it, like a session of a past day does. (The new-session pre-fill keeps its past-day rule.)
+test('"Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it', async ({ page, employeeSeed, signInThroughUi }) => {
+  // Started three hours ago and ended 30 minutes ago: of the policy's breaks (120, 240 and 390 minutes after the start) only the first lies inside.
+  const run = await seedRunning(employeeSeed, 3);
+  const puts: Array<Record<string, unknown>> = [];
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && new URL(request.url()).pathname.startsWith('/api/sessions/')) puts.push(request.postDataJSON() as Record<string, unknown>);
+  });
+  try {
+    await employeeSeed.call('PUT', `/api/sessions/${run.id}`, {
+      start: instantAt(run.startMs),
+      end: instantAt(run.startMs + 150 * 60_000),
+      input_zone: LA,
+      breaks: [],
+      breaks_confirmed: false,
+      expected_version: run.version,
+    });
+    const before = (await employeeSeed.dayView(run.todayLocal)).sessions[0];
+    expect(before?.end_utc, 'the session ended earlier today').not.toBeNull();
+    expect(before?.breaks_confirmed).toBe(false);
+    expect(before?.breaks).toHaveLength(0);
+    await signInThroughUi();
+    const editor = await openEditor(page, run.todayLocal);
+    await editor.getByRole('button', { name: /^Confirm breaks/ }).click();
+    const form = sessionDialog(page, 'Edit session');
+    await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+    await expect(form.locator('[data-break]'), 'the one suggestion inside the session is listed').toHaveCount(1);
+    const row = breakRow(form, 1);
+    await expect(row.time).toHaveValue(wallClock(instantAt(run.startMs + 120 * 60_000), LA));
+    await expect(row.minutes).toHaveValue('15');
+    await expect(row.row).toContainText('suggested');
+    expect(puts).toEqual([]);
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    const confirm = saveConfirmation(page);
+    await expect(confirm.locator('.confirm-facts')).toContainText('1 break (15 min)');
+    await confirm.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ breaks_confirmed: true, input_zone: LA });
+    const sent = (puts[0]?.breaks ?? []) as Array<{ start: { local: string }; end: { local: string } }>;
+    expect(sent, 'one break is sent').toHaveLength(1);
+    expect(sent[0]?.start.local.startsWith(localAfter(run, 120).replace(' ', 'T'))).toBe(true);
+    expect(sent[0]?.end.local.startsWith(localAfter(run, 135).replace(' ', 'T'))).toBe(true);
+    const after = (await employeeSeed.dayView(run.todayLocal)).sessions[0];
+    expect(after?.breaks_confirmed).toBe(true);
+    expect(after?.breaks).toHaveLength(1);
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
   }
 });
 

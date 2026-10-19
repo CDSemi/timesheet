@@ -1,0 +1,76 @@
+import type { Locator, Page } from '@playwright/test';
+import { backdropOf, backdropsAbove, contrast, flattenedBackground, over, parseColour, parseLayers, textContrast } from './contrast.ts';
+import { expect, test } from './fixtures.ts';
+import { note, r2, settle } from './zz-a2lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-A2 (task-local probe, never in the repository): the contrast sweep of the rules FIX3 changed, on a device that can
+ * hover, light and dark: the hover looks it moved into (hover: hover) (fields, table rows, button links, the Category picker) and the
+ * focus-and-hover rings it added (date button, picker, phone day button, button link, phone tab). Lines go to obs/contrast.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+test.skip(({ isMobile }) => isMobile, 'a device that can hover (desktop project)');
+
+async function hoverStep(page: Page, control: Locator, label: string, boundary: 'border' | 'inset' | 'none'): Promise<void> {
+  await control.scrollIntoViewIfNeeded();
+  await page.mouse.move(0, 0);
+  await settle(page, 150);
+  const surface = backdropOf(await backdropsAbove(control));
+  const rest = await flattenedBackground(control);
+  const restBorder = parseColour(await control.evaluate((e) => getComputedStyle(e).borderTopColor));
+  const restShadow = await control.evaluate((e) => getComputedStyle(e).boxShadow);
+  await control.hover();
+  await settle(page, 150);
+  const hovered = await flattenedBackground(control);
+  const cs = await control.evaluate((e) => ({ border: getComputedStyle(e).borderTopColor, shadow: getComputedStyle(e).boxShadow, hover: e.matches(':hover') }));
+  const step = contrast(rest, hovered);
+  let edge = 'n/a';
+  if (boundary === 'border') {
+    const b = over(parseColour(cs.border), surface);
+    edge = `border ${r2(contrast(b, surface))} (rest border ${r2(contrast(over(restBorder, surface), surface))})`;
+  } else if (boundary === 'inset') {
+    const layer = parseLayers(cs.shadow).find((l) => l.inset);
+    edge = layer ? `inset ${layer.spread}px line ${r2(contrast(over(layer.colour, hovered), hovered))} against the hover fill` : 'no inset line';
+  }
+  let text = 'n/a';
+  try {
+    text = String(r2(await textContrast(control)));
+  } catch {
+    text = 'unread';
+  }
+  note('contrast.txt', `${label}: hover=${cs.hover} fill step ${r2(step)} (rest ${rest.map((v) => Math.round(v)).join(',')} hover ${hovered.map((v) => Math.round(v)).join(',')}); ${edge}; text on hover ${text}; rest shadow ${restShadow === 'none' ? 'none' : 'set'} hover shadow ${cs.shadow === 'none' ? 'none' : cs.shadow.slice(0, 60)}`);
+  await page.mouse.move(0, 0);
+}
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`A2 contrast of the changed rules (${scheme})`, async ({ page, signInThroughUi }) => {
+    test.setTimeout(300_000);
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    note('contrast.txt', `==== ${scheme} 1440 ${new Date().toISOString()}`);
+    const field = page.locator('input[type="date"]:visible').first();
+    if ((await field.count()) > 0) await hoverStep(page, field, `${scheme} date field (input:hover border --muted)`, 'border');
+    const review = page.locator('a.review-link').first();
+    if ((await review.count()) > 0) await hoverStep(page, review, `${scheme} button link: period bar review link`, 'border');
+    const sig = page.locator('a[data-sheet-review-link]').first();
+    if ((await sig.count()) > 0) await hoverStep(page, sig, `${scheme} button link: signature Review link`, 'border');
+    const picker = page.locator('.sheet-day[data-day]:not(.nonworking) [data-label-picker] button[aria-label^="Category for"]').first();
+    await hoverStep(page, picker, `${scheme} Category picker`, 'inset');
+    const secondary = page.getByRole('button', { name: 'Next period', exact: true });
+    await hoverStep(page, secondary, `${scheme} reference: secondary button`, 'border');
+    // Table rows: the first tbody row that is on screen (Overtime or History lists).
+    for (const hash of ['#/overtime', '#/history']) {
+      await page.evaluate((h) => {
+        window.location.hash = h;
+      }, hash);
+      await settle(page, 1200);
+      const row = page.locator('tbody tr:visible').first();
+      if ((await row.count()) > 0) await hoverStep(page, row, `${scheme} ${hash} tbody tr (row hover --off)`, 'none');
+      else note('contrast.txt', `${scheme} ${hash}: no visible tbody row`);
+      const btnLinks = page.locator('a.button-link:visible');
+      if ((await btnLinks.count()) > 0) await hoverStep(page, btnLinks.first(), `${scheme} ${hash} first button link`, 'border');
+    }
+  });
+}

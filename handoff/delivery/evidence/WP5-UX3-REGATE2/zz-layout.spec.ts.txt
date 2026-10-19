@@ -1,0 +1,162 @@
+import type { Page } from '@playwright/test';
+import { isoWeekday } from '../../src/domain/dates.ts';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, test } from './fixtures.ts';
+import { note, seedLongContent, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX3-GATE task-local probe (never part of the repository): the Day editor layout by width (modal below 1360, beside the
+ * sheet from 1360), the dock side, and the desktop bar (one row, wordmark rule) with and without a received share.
+ * Observations are appended to GATE_OUT/layout.txt. Desktop project only.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+test.skip(({ isMobile }) => isMobile, 'Desktop project');
+
+const SHEET_FACTS = `(() => {
+  const context = document.createElement('canvas').getContext('2d');
+  const tooWide = [];
+  let words = 0;
+  let tightest = 0;
+  const columns = [...document.querySelectorAll('.week-grid .sheet-day')].map((column) => column.getBoundingClientRect().width);
+  for (const cell of document.querySelectorAll('.week-grid .sheet-day > div')) {
+    const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const text = node.textContent ?? '';
+      if (text.trim() === '') continue;
+      let host = node.parentElement;
+      while (host !== null && getComputedStyle(host).display === 'inline') host = host.parentElement;
+      if (host === null || host.clientWidth <= 2) continue;
+      const style = getComputedStyle(host);
+      const room = host.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      context.font = [style.fontStyle, style.fontWeight, style.fontSize, style.fontFamily].join(' ');
+      for (const word of text.split(/\\s+/)) {
+        if (word === '') continue;
+        const width = context.measureText(word).width;
+        words += 1;
+        tightest = Math.max(tightest, width / room);
+        if (width > room + 0.5) tooWide.push(word + ' ' + width.toFixed(1) + ' > ' + room.toFixed(1));
+      }
+    }
+  }
+  const root = document.documentElement;
+  return { columns, tooWide, grid: document.querySelector('.week-grid')?.getBoundingClientRect().width ?? 0, scrollOverflow: root.scrollWidth - root.clientWidth, page: document.querySelector('main.page')?.getBoundingClientRect().width ?? 0, words, tightest };
+})()`;
+
+interface Facts {
+  columns: number[];
+  tooWide: string[];
+  grid: number;
+  scrollOverflow: number;
+  page: number;
+  words: number;
+  tightest: number;
+}
+
+const sheetFacts = (page: Page) => page.evaluate<Facts>(SHEET_FACTS);
+
+test('Day editor layout by width: modal floating panel at 1280 and 1359, beside the sheet from 1360; dock side', async ({ page, privateServer }) => {
+  test.setTimeout(180_000);
+  const data = await seedLongContent(privateServer);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signInTo(page, privateServer, data.person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByRole('switch', { name: 'Show details' }).check();
+  await expect(page.locator('.sheet-main')).toContainText('Independence');
+  await expect(page.locator(`[data-day="${data.overnight}"]`)).toContainText('22:00');
+  note('layout.txt', `seeded: holiday ${data.holiday} "Observed Independence Day", overnight session ${data.overnight} 22:00-02:30+1, two sessions on ${data.twoSessions}`);
+  for (const width of [1280, 1359, 1360, 1366, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.waitForTimeout(250);
+    const closed = await sheetFacts(page);
+    await namedDayButton(page, data.twoSessions, 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+    await page.waitForTimeout(400);
+    const modal = await editor.evaluate((element) => element.matches(':modal'));
+    const withEditorClass = await page.locator('.sheet-area').evaluate((element) => element.classList.contains('with-editor'));
+    const side = await editor.getAttribute('data-side');
+    const open = await sheetFacts(page);
+    const panel = await editor.boundingBox();
+    const sheet = await page.locator('.sheet-area > section.card').boundingBox();
+    const beside = !modal && withEditorClass && (panel?.x ?? 0) + 0.5 >= (sheet?.x ?? 0) + (sheet?.width ?? 0);
+    note(
+      'layout.txt',
+      `editor ${width}px: modal=${modal} with-editor=${withEditorClass} data-side=${side} beside-the-sheet=${beside} | closed columns ${Math.min(...closed.columns).toFixed(1)}-${Math.max(...closed.columns).toFixed(1)} | open columns ${Math.min(...open.columns).toFixed(1)}-${Math.max(...open.columns).toFixed(1)} (every column >=108: ${Math.min(...open.columns) >= 107.5}) | words ${open.words}, wider-than-cell ${JSON.stringify(open.tooWide)}, widest takes ${(open.tightest * 100).toFixed(0)}% of its box | sideways scroll ${open.scrollOverflow} | page ${open.page.toFixed(1)}px | panel ${panel?.width.toFixed(0)}px at x ${panel?.x.toFixed(0)}, sheet ends ${((sheet?.x ?? 0) + (sheet?.width ?? 0)).toFixed(0)}`,
+    );
+    expect(open.tooWide).toEqual([]);
+    expect(Math.min(...open.columns)).toBeGreaterThanOrEqual(107.5);
+    expect(open.scrollOverflow).toBeLessThanOrEqual(0);
+    expect(modal).toBe(width < 1360);
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+  }
+  // Dock side for Monday and Saturday (and Sunday) at 1280.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  for (const weekday of [1, 6, 7]) {
+    const date = data.dates.find((d) => isoWeekday(d) === weekday) ?? '';
+    await namedDayButton(page, date, 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    const side = await editor.getAttribute('data-side');
+    const panel = await editor.boundingBox();
+    const col = await page.locator(`[data-day="${date}"]`).boundingBox();
+    const apart = (col?.x ?? 0) + (col?.width ?? 0) <= (panel?.x ?? 0) + 0.5 || (panel?.x ?? 0) + (panel?.width ?? 0) <= (col?.x ?? 0) + 0.5;
+    note('layout.txt', `dock 1280: ${date} weekday ${weekday} side=${side} panel x ${panel?.x.toFixed(0)}-${((panel?.x ?? 0) + (panel?.width ?? 0)).toFixed(0)} column x ${col?.x.toFixed(0)}-${((col?.x ?? 0) + (col?.width ?? 0)).toFixed(0)} panel does not cover the column=${apart}`);
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+  }
+});
+
+const SHARE_ITEMS = { timesheets: 'view', ot_read: false, pdf_download: false };
+
+test('desktop bar: one row at 1024, 1280, 1440 and 1920 with and without a share; wordmark rule', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+  test.setTimeout(180_000);
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Bar Reader', signature: 'none' });
+  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Bar Owner', signature: 'none' });
+  await signInPageAs(me.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const withShare of [false, true]) {
+    if (withShare) {
+      await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
+      await page.reload();
+      await expect(page.locator('header.shell-bar .shell-switcher')).toBeVisible();
+    }
+    for (const width of [1024, 1100, 1279, 1280, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForTimeout(300);
+      const facts = await page.evaluate(() => {
+        const bar = document.querySelector('header.shell-bar') as HTMLElement;
+        const rect = bar.getBoundingClientRect();
+        const parts: Array<{ name: string; top: number; bottom: number; left: number; right: number }> = [];
+        const consider = (name: string, el: Element | null) => {
+          if (!el) return;
+          const r = el.getBoundingClientRect();
+          const style = getComputedStyle(el);
+          if (r.width === 0 || r.height === 0 || style.visibility === 'hidden') return;
+          parts.push({ name, top: r.top, bottom: r.bottom, left: r.left, right: r.right });
+        };
+        consider('brand', bar.querySelector('.shell-brand'));
+        consider('nav', bar.querySelector('nav.shell-nav'));
+        consider('switcher', bar.querySelector('.shell-switcher'));
+        consider('clock', bar.querySelector('.bar-clock'));
+        consider('user', bar.querySelector('.shell-user'));
+        const word = bar.querySelector('svg.wordmark');
+        const wr = word?.getBoundingClientRect();
+        const wordmarkVisible = word !== null && word !== undefined && getComputedStyle(word).display !== 'none' && (wr?.width ?? 0) > 0;
+        const centre = (p: { top: number; bottom: number }) => (p.top + p.bottom) / 2;
+        const centres = parts.map(centre);
+        const identity = bar.querySelector('.identity-name')?.textContent ?? '';
+        const email = bar.querySelector('.identity-email')?.textContent ?? '';
+        const root = document.documentElement;
+        return { height: rect.height, parts, spread: centres.length ? Math.max(...centres) - Math.min(...centres) : 0, wordmarkVisible, wordmarkWidth: wr?.width ?? 0, identity, email, scroll: root.scrollWidth - root.clientWidth, token: root.style.getPropertyValue('--shell-bar-size') };
+      });
+      const oneRow = facts.spread <= 4 && facts.height <= 60;
+      note('layout.txt', `bar ${width}px share=${withShare}: height ${facts.height}px (--shell-bar-size ${facts.token}) one-row=${oneRow} (centre spread ${facts.spread.toFixed(1)}px over ${facts.parts.map((p) => p.name).join('/')}) wordmark visible=${facts.wordmarkVisible} (${facts.wordmarkWidth.toFixed(0)}px) identity="${facts.identity}" email-shown=${facts.email.endsWith('@example.invalid')} page sideways scroll ${facts.scroll}`);
+      if (width >= 1280 || (width === 1024 && !withShare)) expect(facts.wordmarkVisible, `wordmark at ${width} share=${withShare}`).toBe(true);
+      if (withShare && width >= 1024 && width <= 1279) expect(facts.wordmarkVisible, `wordmark hidden at ${width} share`).toBe(false);
+      if (width >= 1024) expect(oneRow, `one row at ${width} share=${withShare}`).toBe(true);
+      expect(facts.scroll).toBeLessThanOrEqual(0);
+    }
+  }
+});

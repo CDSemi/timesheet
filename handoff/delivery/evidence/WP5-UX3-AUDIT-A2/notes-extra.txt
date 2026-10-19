@@ -1,0 +1,49 @@
+WP5-UX3-AUDIT-A2 reading notes (reviewer's own reading of the target ceb86b6; line numbers are src/client/styles.css of the target)
+
+1. FIX3 area-A diff (git diff 7ce4e95..a78ada5 -- src tests docs; a78ada5..ceb86b6 changes only AGENTS.md and AGENTS.vi.md outside handoff/)
+   styles.css, area A: identity coarse height 676-680; tab focus split 787-802; Sign out flex 895-901; field hover gated 1190-1197;
+   table row hover gated 1474-1478; date focus-and-hover 2666-2669; phone day button focus-and-hover 3050-3053; picker hover gated and
+   focus-and-hover 4353-4363; button link hover gated and focus-and-hover 4578-4587; read-only sheet resets gated 4876-4884; phone
+   Administration badge and fault code wrap 4986-4993. Area B and text: breakRowsModel.ts, ClockOutDialog.tsx, SessionDialog.tsx,
+   dayEditorModel.ts, dayModel.ts:143 (string). Not changed: AppShell.tsx, AccountMenu.tsx, OperationsStatus.tsx, any server file.
+
+2. Specificity of the focus-and-hover rules (hover devices)
+   - .sheet .sheet-date:focus-visible:hover:not(:disabled) 0,5,0 beats .sheet .sheet-date:hover:not(:disabled) 0,4,0; with the
+     pointer on the column but not on the date, .sheet-day:hover .sheet-date 0,3,0 loses to the later .sheet .sheet-date:focus-visible
+     0,3,0 (2672).
+   - .sheet .label-trigger:focus-visible:hover:not(:disabled) 0,5,0 beats the hover rule 0,4,0; .label-picker.open .label-trigger
+     0,3,0 is the open state (the list owns focus then).
+   - .sheet .sheet-day-button:focus-visible:hover:not(:disabled) 0,5,0 beats .sheet .sheet-day-button:hover 0,4,0 (which beat the
+     generic button:focus-visible:hover 0,3,1 before FIX3).
+   - .button-link:focus-visible:hover 0,3,0 beats .button-link:hover 0,2,0 (whose elev-1 shadow replaced the global :focus-visible
+     ring 0,1,0 before FIX3).
+   - .shell-tabs .tab:focus-visible:hover:not(:disabled) 0,5,0 equals .shell-tabs .tab:hover:not(:disabled):not([aria-current])
+     0,5,0 and comes after it inside the same block; outside hover .shell-tabs .tab:focus-visible 0,3,0 beats .shell-tabs .tab 0,2,0.
+   - Not affected: button.identity:hover and button.account-action:hover 0,3,1 set box-shadow none but come before
+     button:focus-visible:hover:not(:disabled) 0,3,1 (1316); the secondary pressed and aria-disabled hover rules 0,4,1 come before
+     button.secondary:focus-visible:hover:not(:disabled) 0,4,1; button.quiet.quiet-danger:hover 0,5,1 sets no box-shadow;
+     .nav-link:hover, .theme-option:hover, the switch, field and row hover rules set no box-shadow.
+
+3. The stylesheet-wide hover scan (tests/e2e/hover.spec.ts:577-624)
+   - Reads document.styleSheets of the signed-in Timesheet page (one CSS file; the lazy chunks carry no CSS), descends into media
+     and grouping rules (container, supports, layer), fails on any style rule whose selector contains :hover outside a media rule
+     whose text matches /hover:\s*hover/; empty allowlist with a stated rule for entries.
+   - Not vacuous: it also requires more than 20 gated rules, five named needles, the lifted tint and the day tint.
+   - Limits: the gate test is textual. A rule under "(hover: hover), (pointer: coarse)", "not all and (hover: hover)" or
+     "(any-hover: hover)" counts as gated although it can apply on a touch screen (mutant M6b); a rule nested with CSS nesting inside a
+     style rule is not visited (the stylesheet uses no nesting today). Risk, not a defect of the target.
+
+4. surviveStall (tests/e2e/theme.spec.ts:77-86, used at :443-482)
+   - Retries a wrapped measurement at most twice more when the error message matches /Timeout \d+ms exceeded|is settled/, rethrows
+     anything else at once and after the third try. The wrapped measurements are contrast.ts settledStyle polls (message "the computed
+     <property> is settled", call log "Timeout 7000ms exceeded while waiting on the predicate") and focusFromKeyboard's outer poll;
+     toBeFocused fails with "Timed out ... waiting for expect(locator).toBeFocused()" and is not retried; Playwright actions have no
+     action timeout in this config (a test-timeout error reads "Test timeout of 120000ms exceeded", which does not match). So in this
+     test it retries only its own poll timeouts. Every wrapped call re-runs from the start (focusFromKeyboard re-focuses), so a retry
+     is idempotent. Every assertion on the values is unchanged; the budget is 120 s.
+   - A state that never settles still fails: it fails after three tries (about 3 x 7 s); a state that settles only after 7 to about
+     21 s would now pass where it failed before (the test runs under reduced motion, where the product's transitions are 0.01 ms).
+
+5. Sign out start offset (REGATE2 observation 1): .nav-link padding var(--space-1) var(--space-3) = 12px with no side border;
+   button padding var(--space-2) var(--button-pad-x) = 14px plus a 1px (transparent) border, so the icon starts at 15px and the words
+   at 45px, against 12px and 42px for Profile, Settings and Import (styles.css:625-635, 875-882, 895-901, 1218-1229).

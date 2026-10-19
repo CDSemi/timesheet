@@ -1,0 +1,16 @@
+# Usage: bash run-probe.sh <run label> <export dir name> <build label> <spec file in the task folder> [playwright args...]
+# Copies the task-local probe into the scratch export's tests/e2e (never the repository) and runs it with its own output folder.
+. <task>/env.sh
+L=$1; EXP=$T/$2; B=$3; SPEC=$4; shift 4
+mkdir -p $T/pw-$L $T/obs $T/shots
+cp $T/$SPEC $EXP/tests/e2e/$SPEC
+export AUDB_LABEL=$B
+export AUDB_OUT="$TW\\obs"
+export AUDB_SHOTS="$TW\\shots"
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+export NODE_OPTIONS="--trace-deprecation"
+cd "$EXP" || exit 2
+echo "== $L: $(date -u +%Y-%m-%dT%H:%M:%SZ) spec $SPEC build $B dir $2"
+node.exe node_modules/@playwright/test/cli.js test tests/e2e/$SPEC "$@" --output="$TW\\pw-$L"
+echo "exit=$?"
+echo "== $L end $(date -u +%Y-%m-%dT%H:%M:%SZ)"

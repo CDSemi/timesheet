@@ -1,0 +1,161 @@
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+import { note, settle, shot } from './zz-a2lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-A2 (task-local probe, never in the repository): the phone More panel opened from the keyboard, then Tab past its
+ * last entry (Sign out): does the panel close as the desktop account menu does (docs/04 line 7), where does focus go, is any focused
+ * control hidden behind the still-open panel (WCAG 2.2 SC 2.4.11), and does Escape close the panel from the page? Both projects at
+ * 390x844 (the desktop project is a narrow window on a device with a keyboard and a pointer). The desktop menu at 1280 is the
+ * comparison. Lines go to obs/more.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+interface Stop {
+  desc: string;
+  inPanel: boolean;
+  panelOpen: boolean;
+  covered: string;
+  rect: string;
+}
+
+async function stop(page: Page): Promise<Stop> {
+  return page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    const panel = document.getElementById('more-panel');
+    const name = active ? (active.getAttribute('aria-label') ?? active.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 36) : '';
+    const desc = active === null || active === document.body ? 'body' : `${active.tagName.toLowerCase()}${active.className ? `.${String(active.className).split(' ')[0]}` : ''} "${name}"`;
+    let covered = 'n/a';
+    let rect = '';
+    if (active && active !== document.body && panel) {
+      const r = active.getBoundingClientRect();
+      const p = panel.getBoundingClientRect();
+      rect = `${r.left.toFixed(0)},${r.top.toFixed(0)} ${r.width.toFixed(0)}x${r.height.toFixed(0)}`;
+      // Sample a 5x5 grid of points inside the focused control: how many are painted by the panel (or the tab bar) instead of it.
+      let hidden = 0;
+      let total = 0;
+      for (let i = 0; i < 5; i += 1) {
+        for (let j = 0; j < 5; j += 1) {
+          const x = r.left + ((i + 0.5) * r.width) / 5;
+          const y = r.top + ((j + 0.5) * r.height) / 5;
+          if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) continue;
+          total += 1;
+          const hit = document.elementFromPoint(x, y);
+          if (hit !== null && hit !== active && !active.contains(hit) && (panel.contains(hit) || hit.closest('.shell-tabs') !== null)) hidden += 1;
+        }
+      }
+      const inside = r.left >= p.left - 0.5 && r.right <= p.right + 0.5 && r.top >= p.top - 0.5 && r.bottom <= p.bottom + 0.5;
+      covered = `${hidden}/${total} sample points under the panel or tab bar${inside && !panel.contains(active) ? ' (box entirely inside the panel box)' : ''}`;
+    }
+    return { desc, inPanel: panel !== null && active !== null && panel.contains(active), panelOpen: panel !== null, covered, rect };
+  });
+}
+
+test('A2 phone More panel: Tab past Sign out, focus behind the open panel, Escape from the page', async ({ page, signInThroughUi }, testInfo) => {
+  test.setTimeout(240_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await settle(page, 400);
+  const project = testInfo.project.name;
+  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+  const panel = page.locator('#more-panel');
+  // Scroll the sheet so that day rows sit in the lower half of the window, where the panel opens.
+  await page.locator('[data-day]').nth(3).scrollIntoViewIfNeeded();
+  await settle(page, 300);
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
+  const pbox = await panel.boundingBox();
+  note('more.txt', `==== ${project} 390x844 ${new Date().toISOString()}: More panel box ${pbox ? `${pbox.x.toFixed(0)},${pbox.y.toFixed(0)} ${pbox.width.toFixed(0)}x${pbox.height.toFixed(0)}` : '-'}; focus after Enter: ${(await stop(page)).desc}`);
+  let leftPanel = -1;
+  let worst = '';
+  let shotTaken = false;
+  for (let index = 1; index <= 45; index += 1) {
+    await page.keyboard.press('Tab');
+    await settle(page, 60);
+    const s = await stop(page);
+    if (leftPanel < 0 && !s.inPanel && s.desc !== 'more') leftPanel = index;
+    note('more.txt', `  Tab ${index}: ${s.desc} in-panel=${s.inPanel} panel-open=${s.panelOpen} ${s.rect} ${s.covered}`);
+    if (s.panelOpen && !s.inPanel && /^(\d+)\/(\d+)/.test(s.covered)) {
+      const [, hidden = '0', total = '0'] = /^(\d+)\/(\d+)/.exec(s.covered) ?? [];
+      if (Number(hidden) > 0 && Number(hidden) === Number(total)) {
+        worst += `${worst ? '; ' : ''}Tab ${index} ${s.desc} entirely covered`;
+        if (!shotTaken && project === 'desktop') {
+          await page.screenshot({ path: shot('a2-more-panel-open-focus-hidden-390-light-synthetic.png') });
+          shotTaken = true;
+        }
+      }
+    }
+    if (!s.panelOpen) break;
+  }
+  note('more.txt', `  summary ${project}: focus left the panel at Tab ${leftPanel}; panel still open after that: ${await panel.isVisible()}; focused controls entirely hidden behind it: ${worst || 'none'}`);
+  // Escape while focus is on the page (outside the tab bar).
+  const before = await stop(page);
+  await page.keyboard.press('Escape');
+  await settle(page, 200);
+  const after = await stop(page);
+  note('more.txt', `  Escape with focus on ${before.desc} (in the tab bar: ${await page.evaluate(() => document.activeElement?.closest('.shell-tabs') !== null)}): panel open before ${before.panelOpen}, after ${after.panelOpen}`);
+});
+
+test('A2 phone More panel: Escape while a Category picker is focused behind the open panel', async ({ page, signInThroughUi }, testInfo) => {
+  test.setTimeout(240_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await settle(page, 400);
+  const project = testInfo.project.name;
+  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+  const panel = page.locator('#more-panel');
+  await page.locator('[data-day]').nth(3).scrollIntoViewIfNeeded();
+  await settle(page, 300);
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
+  let found: Stop | null = null;
+  for (let index = 1; index <= 30; index += 1) {
+    await page.keyboard.press('Tab');
+    await settle(page, 60);
+    const s = await stop(page);
+    if (s.panelOpen && !s.inPanel && s.desc.startsWith('button.label-trigger') && s.covered.startsWith('25/25')) {
+      found = s;
+      break;
+    }
+  }
+  if (found === null) {
+    note('more.txt', `==== ${project} Escape check: no covered picker reached`);
+    return;
+  }
+  if (project === 'desktop') await page.screenshot({ path: shot('a2-more-panel-covers-focused-picker-390-light-synthetic.png') });
+  await page.keyboard.press('Escape');
+  await settle(page, 200);
+  const after = await stop(page);
+  note('more.txt', `==== ${project} Escape check: focus on ${found.desc} ${found.rect} (${found.covered}); after Escape: focus ${after.desc}, panel open ${after.panelOpen}, ${after.covered}`);
+});
+
+test('A2 desktop account menu: Tab past Sign out closes it (comparison)', async ({ page, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', 'desktop project');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const identity = page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+  await identity.focus();
+  await page.keyboard.press('Enter');
+  const menu = page.locator('#account-menu');
+  await expect(menu).toBeVisible();
+  const steps: string[] = [];
+  for (let index = 1; index <= 6; index += 1) {
+    await page.keyboard.press('Tab');
+    await settle(page, 60);
+    const desc = await page.evaluate(() => {
+      const a = document.activeElement as HTMLElement | null;
+      return a ? `${a.tagName.toLowerCase()} "${(a.getAttribute('aria-label') ?? a.textContent ?? '').trim().slice(0, 24)}"` : 'none';
+    });
+    steps.push(`Tab ${index}: ${desc} menu-open=${await menu.isVisible()}`);
+    if (!(await menu.isVisible())) break;
+  }
+  note('more.txt', `==== desktop menu 1280 comparison: ${steps.join(' | ')}`);
+});

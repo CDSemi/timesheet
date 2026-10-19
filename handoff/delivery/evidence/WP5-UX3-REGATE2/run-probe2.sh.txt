@@ -1,0 +1,30 @@
+# Usage: bash run-probe2.sh <label> <spec> [<simulated instant UTC ISO>|real] [playwright args...]
+# Like run-probe.sh, but the observations go to obs2 (clean folder) and the run may use the FIX10 simulated clock.
+. <task>/env.sh
+L=$1; SPEC=$2; INSTANT=${3:-real}; shift 3
+EXP=${PROBE_EXPORT:-$T/export-probe}
+mkdir -p $T/pw-$L $T/obs2
+for f in zz-lib.ts zz-png.ts zz-a11y.spec.ts zz-layout.spec.ts zz-lift.spec.ts zz-phone.spec.ts zz-headers.spec.ts zz-shots.spec.ts zz-weekreg.spec.ts zz-dom.spec.ts zz-measure.spec.ts zz-focus.spec.ts zz-control.spec.ts zz-seed.ts zz-audit.spec.ts zz-a11y2.spec.ts; do
+  [ -f $T/$f ] && cp $T/$f $EXP/tests/e2e/$f
+done
+export GATE_OUT="$TW\\obs2"
+export GATE_TASK="$TW"
+export GATE_LABEL=${GATE_LABEL:-target}
+export AXE_PATH="$TW\\axe\\node_modules\\axe-core\\axe.min.js"
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+mkdir -p $T/shots-$L
+if [ "$INSTANT" = "real" ]; then
+  export NODE_OPTIONS="--trace-deprecation"
+  export AB8_SHIFT_MS=0
+else
+  TARGET_MS=$(date -u -d "$INSTANT" +%s%3N)
+  NOW_MS=$(date -u +%s%3N)
+  export AB8_SHIFT_MS=$((TARGET_MS - NOW_MS))
+  export NODE_OPTIONS="--trace-deprecation --import file:///$(cygpath -m $T)/shiftclock.mjs"
+fi
+cd "$EXP" || exit 2
+echo "== $L: $(date -u +%Y-%m-%dT%H:%M:%SZ) spec $SPEC instant $INSTANT shift $AB8_SHIFT_MS"
+node.exe $T/probe-now.mjs
+node.exe node_modules/@playwright/test/cli.js test tests/e2e/$SPEC "$@" --output="$TW\\pw-$L"
+echo "exit=$?"
+echo "== $L end $(date -u +%Y-%m-%dT%H:%M:%SZ)"

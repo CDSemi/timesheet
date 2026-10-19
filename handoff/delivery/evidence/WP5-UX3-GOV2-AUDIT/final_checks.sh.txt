@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Final checks after writing the review pair, the Results and the evidence: preflight (new pair and links),
+# the review pair's format, and the digest once more.
+T=/d/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT
+PY="$(cygpath -u <python>"
+REPO=/d/Dropbox/Work.CDSemi/timesheet
+cd "$REPO" || exit 2
+out=$T/final_checks.txt
+{
+  echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "\$ <python> handoff/delivery/validate_package.py --preflight"
+  "$PY" handoff/delivery/validate_package.py --preflight
+  echo "exit=$?"
+  echo "\$ <python> handoff/delivery/validate_orchestration.py"
+  "$PY" handoff/delivery/validate_orchestration.py
+  echo "exit=$?"
+  echo "\$ CR bytes / trailing whitespace in the review pair, the brief and the evidence (expect none)"
+  for f in handoff/delivery/GOV_UX3_REVIEW2.md handoff/delivery/GOV_UX3_REVIEW2.vi.md handoff/delivery/tasks/WP5-UX3-GOV2-AUDIT.md handoff/delivery/evidence/WP5-UX3-GOV2-AUDIT/*.txt; do
+    cr=$(tr -cd '\r' < "$f" | wc -c)
+    tw=$(grep -c -E '[[:blank:]]+$' "$f")
+    last=$(tail -c 1 "$f" | od -An -c | tr -d ' ')
+    echo "$f CR=$cr trailing_ws_lines=$tw last_char=$last"
+  done
+  echo "\$ git status --short -- . ':!handoff'   (expect empty)"
+  git status --short -- . ':!handoff'
+  echo "exit=$?"
+} > "$out" 2>&1
+bash "$T/digest.sh" final

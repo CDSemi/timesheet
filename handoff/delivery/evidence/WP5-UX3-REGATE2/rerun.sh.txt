@@ -1,0 +1,9 @@
+. <task>/env.sh
+cd $T
+echo "rerun started $(date -u +%Y-%m-%dT%H:%M:%SZ)" > logs/rerun-progress.txt
+P() { label=$1; spec=$2; shift 2; bash run-probe.sh "$label" "$spec" "$@" > "logs/probe-$label.txt" 2>&1; echo "probe $label finished $(date -u +%Y-%m-%dT%H:%M:%SZ) exit-line: $(grep -E '^exit=' logs/probe-$label.txt)" >> logs/rerun-progress.txt; }
+P audit2 zz-audit.spec.ts -g "F-UX3A-06|F-UX3B-2"
+P a11y2b zz-a11y2.spec.ts
+P a11yb zz-a11y.spec.ts
+P phoneb zz-phone.spec.ts -g "first screen"
+echo rerun-done > out/rerun.done

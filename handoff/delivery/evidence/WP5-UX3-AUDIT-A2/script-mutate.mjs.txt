@@ -1,0 +1,48 @@
+// WP5-UX3-AUDIT-A2 task-local mutator (never in the repository). Usage: node mutate.mjs <id>|restore
+// Each mutant replaces exactly one occurrence of a needle in a file of export-m, starting from the pristine export.
+import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const T = 'D:/.claude-tmp/timesheet/WP5-UX3-AUDIT-A2';
+const CSS = 'src/client/styles.css';
+const SHELL = 'src/client/components/AppShell.tsx';
+
+const MUTANTS = {
+  M1: { file: CSS, what: 'date button focus-under-hover rule removed', from: '  .sheet .sheet-date:focus-visible:hover:not(:disabled) {\n    box-shadow: var(--focus-ring);\n  }\n', to: '' },
+  M2: { file: CSS, what: 'Category picker focus-under-hover rule removed', from: '  .sheet .label-trigger:focus-visible:hover:not(:disabled) {\n    box-shadow: inset 0 0 0 var(--rule) var(--accent);\n  }\n', to: '' },
+  M3: { file: CSS, what: 'phone day button focus-under-hover rule removed', from: '  .sheet .sheet-day-button:focus-visible:hover:not(:disabled) {\n    box-shadow: var(--focus-ring);\n  }\n', to: '' },
+  M4: { file: CSS, what: 'button link focus-under-hover rule removed', from: '  .button-link:focus-visible:hover {\n    box-shadow: var(--focus-ring);\n  }\n', to: '' },
+  M5: { file: CSS, what: 'shell tab focus-under-hover rule removed (inside the hover block)', from: '  .shell-tabs .tab:focus-visible:hover:not(:disabled) {\n    box-shadow: var(--focus-ring-inset);\n  }\n', to: '' },
+  M6: { file: CSS, what: 'tbody tr:hover taken out of @media (hover: hover)', from: '@media (hover: hover) {\n  tbody tr:hover {\n    background: var(--off);\n  }\n}\n', to: 'tbody tr:hover {\n  background: var(--off);\n}\n' },
+  M6b: { file: CSS, what: 'tbody tr:hover gated by "(hover: hover), (pointer: coarse)" (applies on touch screens)', from: '@media (hover: hover) {\n  tbody tr:hover {', to: '@media (hover: hover), (pointer: coarse) {\n  tbody tr:hover {' },
+  M7: { file: CSS, what: 'coarse-pointer identity height rule removed', from: '@media (max-width: 767px), (pointer: coarse) {\n  button.identity {\n    min-height: var(--tap-min);\n  }\n}\n', to: '' },
+  M8: { file: CSS, what: 'Sign out entry flex removed', from: 'button.account-action {\n  display: flex;\n  align-items: center;\n', to: 'button.account-action {\n' },
+  M9: { file: CSS, what: 'phone delivery badge wrap removed', from: '  .ops-table .badge {\n    white-space: normal;\n    overflow-wrap: anywhere;\n  }\n', to: '' },
+  M10: { file: CSS, what: 'phone fault code wrap removed', from: '  .ops-table .ops-code {\n    overflow-wrap: anywhere;\n  }\n', to: '' },
+  M11: { file: SHELL, what: 'A4: More panel Escape keeps focus in the closed panel', from: '    moreButton.current?.focus();\n  }\n', to: '    void 0;\n  }\n' },
+  M12: {
+    file: CSS,
+    what: 'theme segments never settle: a 60 s linear transition on the listed properties',
+    from: '/* In the account panel each segment is a 44px target. */\n',
+    to: '/* A2 mutant M12 */\n.theme-option {\n  transition-duration: 60s !important;\n  transition-timing-function: linear !important;\n}\n\n/* In the account panel each segment is a 44px target. */\n',
+  },
+};
+
+const id = process.argv[2];
+const files = [CSS, SHELL];
+for (const file of files) copyFileSync(join(T, 'export', file), join(T, 'export-m', file));
+if (id === 'restore') {
+  console.log('restored');
+} else {
+  // A composite id such as M4+M5 applies each part in turn.
+  for (const part of id.split('+')) {
+    const mutant = MUTANTS[part];
+    if (mutant === undefined) throw new Error(`unknown mutant ${part}`);
+    const path = join(T, 'export-m', mutant.file);
+    const text = readFileSync(path, 'utf8');
+    const count = text.split(mutant.from).length - 1;
+    if (count !== 1) throw new Error(`${part}: needle found ${count} times`);
+    writeFileSync(path, text.replace(mutant.from, mutant.to));
+    console.log(`${part} applied to ${mutant.file}: ${mutant.what}`);
+  }
+}

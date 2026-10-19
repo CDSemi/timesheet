@@ -553,6 +553,89 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - Items 1-13 to the end are byte-equal to a78ada5.
   - Validators PASS; digest b35dddd5 (833 files).
 - Running now: WP5-UX3-GOV2-FREEZE (committer, alone).
+- WP5-UX3-GOV2-FREEZE done: ceb86b6b18bd0e8fabd93f47672cd87f3899b92f on main, pushed.
+  - 21 paths: the AGENTS pair plus the pending handoff records.
+  - Digest b35dddd5 (833 files), on HEAD too.
+  - Every check 0.
+- Running now, in parallel (two read-only verifiers):
+  - WP5-UX3-GOV2-GATE (sonnet) on ceb86b6;
+  - WP5-UX3-REGATE2 attempt 2 (sonnet), retargeted to ceb86b6 / b35dddd5.
+- Then: GOV2-AUDIT (fresh opus) after the GOV gate; the rechecks A2 and B2 after a REGATE2
+  PASS, with their briefs retargeted to ceb86b6 / b35dddd5.
+- While the gates run:
+  - The briefs AUDIT-A2, AUDIT-B2 and AUDIT-INT are retargeted to ceb86b6 / b35dddd5.
+  - The WP5-UX3-GOV2-AUDIT brief is written: owner fidelity, consistency with items 1-13,
+    docs/08, CLAUDE and the prompts, the translation, scope and format, and validators. It
+    runs no e2e.
+- WP5-UX3-GOV2-GATE done: PASS on ceb86b6 / b35dddd5.
+  - Scope: exactly the AGENTS pair.
+  - The owner's edits are in place.
+  - The sections after the Project instructions heading are byte-equal to a78ada5.
+  - EN/VI parity holds.
+  - Validators and verify pass (2141 tests).
+- Running now, in parallel: WP5-UX3-GOV2-AUDIT (fresh opus) and WP5-UX3-REGATE2 attempt 2.
+- WP5-UX3-GOV2-AUDIT done: PASS on ceb86b6 / b35dddd5, with no finding. WP5-UX3-GOV2 is
+  accepted.
+  - The auditor rebuilt the owner's original text and confirmed that the worker changed only
+    the named items.
+  - The CI removal is accepted.
+  - No contradiction with items 1-13, docs/08, CLAUDE or the prompts.
+  - Risks:
+    - R1 (owner note): "template variable" and "manifest key" exist here (email templates,
+      backup manifests), but the removal follows the owner's words.
+    - R2: "production accuracy" kept.
+    - R3-R5 and R8 go to the governance backlog.
+    - R9: agents in this session receive the owner's unedited injected AGENTS.md, so briefs
+      must say the on-disk text wins.
+- Still running: WP5-UX3-REGATE2 attempt 2.
+- WP5-UX3-REGATE2 attempt 2 done: PASS on ceb86b6 / b35dddd5. NAS, the DPR 2 seam scripts and
+  non-Chromium browsers are NOT VERIFIED.
+  - Real-clock e2e 645 passed / 0 failed; 2141 unit tests; drill 208 PASS.
+  - dist/server and dist/domain byte-identical to a643794.
+  - 5 FULL and 5 five-spec simulated-clock runs, 0 failed. One buffer error on 11-28 run 1
+    was within the rerun allowance.
+  - Every F-UX3A and F-UX3B finding closed.
+  - axe: only the justified target-size item.
+  - Observations: the Sign out icon sits 3px right of Profile's; the away first screen is
+    2.2px lower; the docs/10 label "after WP5-UX3-FIX2" is stale.
+- current_source_digest is b35dddd5. The AUDIT-INT entry now depends on REGATE2, A2 and B2.
+- Running now, in parallel: fresh opus rechecks WP5-UX3-AUDIT-A2, which also judges the
+  three observations and repeats the DPR 2 seams, and WP5-UX3-AUDIT-B2.
+- WP5-UX3-AUDIT-B2 done: FIX REQUIRED with one Low test-strength finding and no product
+  defect.
+  - F-UX3B2-1: no test proves that the removal note is absent on a plain Check out (mutant
+    M6a survives).
+  - F-UX3B-1 and F-UX3B-2 are closed; the behaviour choice is sound.
+  - Regression: 39 request cases are byte-identical to 7ce4e95.
+  - Full e2e 645 / 0 failed.
+  - Risks R-B2-1..5: R-B2-1 means no test pins "Confirm breaks" on today's ended session
+    (M5b survives).
+- AUDIT-A2 is still running. The fix is decided after it returns.
+- WP5-UX3-AUDIT-A2 done: FIX REQUIRED.
+  - F-UX3A2-1, Medium: on a phone width the More panel stays open after focus leaves it, so
+    12 of 14 focused Category pickers are hidden behind it. It dates from round 3.
+  - F-UX3A2-2, Low: the button-link and phone-tab focus-under-hover rules are unguarded by
+    tests.
+  - F-UX3A2-3, Low: the Sign out entry is 3px out of line.
+  - F-UX3A-01..06 are closed; F-UX3A-04 is closed except for that offset.
+  - DPR 2 seams are clean.
+  - Risk R-A2-1: the hover scan gates by text, so mutant M6b survives.
+  - Full e2e 645 / 0 failed after one allowed network-error rerun.
+- Coordinator decision: one bounded fix WP5-UX3-FIX4 (worker-high, sonnet).
+  - Scope: F-UX3A2-1..3 and F-UX3B2-1, plus the guards R-A2-1, R-B2-1 and R-B2-4, and the
+    docs/10 line 240 label. Each guard is proven by its mutant.
+  - Then FIX4-FREEZE, a reduced WP5-UX3-REGATE3, fresh rechecks A3 and B3, and AUDIT-INT.
+- Running now: WP5-UX3-FIX4.
+- WP5-UX3-FIX4 done (worker-high, self-reported claude-sonnet-5-5).
+  - More closes when focus leaves the tab bar.
+  - Sign out is aligned.
+  - New guards: button-link and phone-tab rings, the matchMedia hover scan, the removal-note
+    absence, and "Confirm breaks" on a session ended today.
+  - The suggestedRows comment and the docs/10 figure (487.01 kB).
+  - Mutants M1, M4, M5, M6b, M6a and M5b are all caught.
+  - Unit 2141; full e2e 651 passed / 0 failed; verify 0.
+  - Digest 245e9459 (833 files; 8 changed paths).
+- Running now: WP5-UX3-FIX4-FREEZE (committer, alone).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

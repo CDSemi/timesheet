@@ -1,0 +1,83 @@
+import { spawnSync } from 'node:child_process';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { expect, newPerson, test } from './fixtures.ts';
+import { axeScan, note, settle, shot, TASK } from './zz-a2lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-A2 (task-local probe, never in the repository): F-UX3A-06. The phone Administration "Submissions and delivery"
+ * table with the long delivery state ("Delivery recorded as uncertain") and the fault code `lease_expired_while_sending`, at 390 and
+ * 320, light and dark: wrapper and page sideways scroll, every part of the row inside the card, axe 4.14.0. The uncertain attempt is
+ * written by a seed FILE in the task folder (the same SQL as tests/e2e/admin-status.spec.ts), never through stdin or -e.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+interface ApiSubmission {
+  user_id: string;
+  delivery: { state: string };
+}
+
+test('A2 phone Administration with a long delivery state: no sideways scroll, axe', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(300_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Operator Gamma', signature: 'saved' });
+  const api = person.api;
+  const [workDay = ''] = await api.displayedPeriodFreeWorkdays();
+  expect(workDay).not.toBe('');
+  await api.seedCompleteDay(workDay);
+  const review = await api.call<{ expected_version: number; payload_hash: string }>('GET', `/api/timesheets/${person.payrollDate}/review`);
+  const signed = await api.call<{ revision: { id: string } }>(
+    'POST',
+    `/api/timesheets/${person.payrollDate}/signoff`,
+    { expected_version: review.expected_version, reviewed_hash: review.payload_hash, signer_name: 'Synthetic Operator', incomplete_evidence_acknowledged: true },
+    201,
+  );
+  const mine = async () => (await adminSeed.call<{ submissions: ApiSubmission[] }>('GET', '/api/admin/submissions?limit=500')).submissions.find((row) => row.user_id === person.account.id);
+  await expect.poll(async () => (await mine())?.delivery.state, { timeout: 150_000, intervals: [2_000] }).toMatch(/^(accepted|failed_permanent)$/);
+  await new Promise((r) => setTimeout(r, 1_500));
+  const root = resolve(import.meta.dirname, '..', '..');
+  const databaseModule = pathToFileURL(join(root, 'dist', 'server', 'db', 'database.js')).href;
+  const seeded = spawnSync(process.execPath, [join(TASK, 'seed-uncertain.mjs'), databaseModule], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, SEED_DB_PATH: builtServer.databasePath, SEED_REVISION_ID: signed.revision.id },
+  });
+  expect(seeded.status, seeded.stderr).toBe(0);
+  const attemptId = seeded.stdout;
+  await expect.poll(async () => (await mine())?.delivery.state).toBe('uncertain');
+  await api.call('POST', `/api/deliveries/${attemptId}/decision`, { decision: 'mark_delivered' });
+  await signInPageAs(builtServer.credentials.admin, '#/settings/admin');
+  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+  const card = page.getByRole('region', { name: 'Submissions and delivery' });
+  const row = card.locator(`[data-submission-user="${person.account.id}"]`);
+  await expect(row).toHaveCount(1);
+  await expect(row.locator('[data-status="delivery"]')).toHaveText('Delivery recorded as uncertain');
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await settle(page, 300);
+      await row.scrollIntoViewIfNeeded();
+      const m = await card.evaluate((element, id) => {
+        const wrap = element.querySelector('.table-wrap') as HTMLElement;
+        const right = element.getBoundingClientRect().right;
+        const r = element.querySelector(`[data-submission-user="${id}"]`);
+        const past = r ? [...r.querySelectorAll('th, td, td *')].filter((item) => item.getBoundingClientRect().right > right + 0.5).length : -1;
+        const badge = r?.querySelector('[data-status="delivery"]') as HTMLElement | null;
+        const code = r?.querySelector('.ops-code') as HTMLElement | null;
+        const bb = badge?.getBoundingClientRect();
+        const cb = code?.getBoundingClientRect();
+        const lineHeight = badge ? parseFloat(getComputedStyle(badge).lineHeight) : 0;
+        return {
+          wrap: `${wrap.clientWidth}/${wrap.scrollWidth}`,
+          page: `${document.documentElement.clientWidth}/${document.documentElement.scrollWidth}`,
+          past,
+          badge: bb ? `${bb.width.toFixed(1)}x${bb.height.toFixed(1)} lines~${lineHeight ? Math.round((bb.height - 4) / lineHeight) : '?'} radius ${badge ? getComputedStyle(badge).borderRadius : ''} ws ${badge ? getComputedStyle(badge).whiteSpace : ''}` : '-',
+          code: cb ? `${cb.width.toFixed(1)}x${cb.height.toFixed(1)} text "${(code?.textContent ?? '').trim()}"` : '-',
+        };
+      }, person.account.id);
+      note('admin.txt', `${testInfo.project.name} ${scheme} ${width}: wrapper client/scroll ${m.wrap}; page client/scroll ${m.page}; row parts past the card ${m.past}; badge ${m.badge}; code ${m.code}`);
+      await axeScan(page, `${testInfo.project.name} ${scheme} phone Administration ${width}`, 'admin.txt');
+      if (scheme === 'light' && testInfo.project.name === 'mobile') await card.screenshot({ path: shot(`a2-admin-submissions-${width}-${scheme}-synthetic.png`) });
+    }
+  }
+});

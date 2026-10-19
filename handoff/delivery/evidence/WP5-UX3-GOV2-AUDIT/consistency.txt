@@ -1,0 +1,201 @@
+#### source: consistency_grep.txt
+$ git grep -n -i -E "precedence|take[s]? priority|overrides?|outrank|wins\b|authoritative|canonical" ceb86b6 -- CLAUDE.md docs/08_AI_WORKFLOW_AND_BUDGET.md handoff/prompts .claude/agents docs/agents README.md DEVELOPMENT.md
+ceb86b6:.claude/agents/timesheet-coordinator.md:15:model per dispatch and record any override reason. Only timesheet-committer commits and
+ceb86b6:CLAUDE.md:6:[AGENTS.md](AGENTS.md), the active implementation prompt, and its canonical
+ceb86b6:DEVELOPMENT.md:3:Status: **WP1, WP2 and WP3 independently accepted; WP4 implemented (T01–T12 and the documentation task T13), awaiting the package-final gate WP4-GATE and independent audits; not accepted.** See the [WP4 handoff](handoff/delivery/WP4_HANDOFF.md), the [operations runbook](docs/11_OPERATIONS_RUNBOOK.md), the [WP3 handoff](handoff/delivery/WP3_HANDOFF.md), the [WP2 handoff](handoff/delivery/WP2_HANDOFF.md) and [next action](handoff/NEXT_ACTION.md). English is authoritative; [DEVELOPMENT.vi.md](DEVELOPMENT.vi.md) is the translation. Business rules live in [02 Time and OT](docs/02_TIME_AND_OT_RULES.md) and [03 Architecture](docs/03_ARCHITECTURE_AND_DATA.md); this guide only explains how to run the code.
+ceb86b6:DEVELOPMENT.md:75:- **Synthetic workbook generator.** `tests/support/syntheticWorkbook.ts` (`buildSyntheticWorkbook`, `readTemplateBytes`) clones the tracked template's bytes in memory at the ZIP level and adds dated period sheets (payroll date, synthetic names on `example.invalid`, per-day overrides, optional corrected formulas). It reads no clock and writes no file; the tracked template is never re-saved and its SHA-256 is asserted before every use.
+ceb86b6:README.md:5:English `.md` files are authoritative. Every `.vi.md` is a translation of the corresponding English file. JSON keys and enum values stay in English. The manifests in `handoff/delivery/` are historical snapshots of the r1.1 documentation package, not certification of the current repository; see [VALIDATION](handoff/delivery/VALIDATION.md).
+ceb86b6:README.md:40:| [02 Time and OT](docs/02_TIME_AND_OT_RULES.md) | Authoritative calculation/accounting rules |
+ceb86b6:docs/08_AI_WORKFLOW_AND_BUDGET.md:30:Caps: one retry at the starting tier, one at the escalated tier, then an owner blocker. De-escalate polish after an accepted Opus slice; at visible low-usage warnings drop planner/worker overrides to sonnet, never the auditor below the strongest author model. Not allowed without an owner decision: fable, best, opusplan (possible usage-credit billing), max/ultracode effort, speed changes. An auditor must be a different instance/context that did not author the reviewed change.
+ceb86b6:docs/08_AI_WORKFLOW_AND_BUDGET.md:32:Audit strength (one rule, no bypass): an auditor's model is never weaker than the strongest author model of the reviewed snapshot, and `validate_orchestration.py` enforces it. Authors are the `agent_id` and `previous_agent_ids` of every task in the same package whose kind is not gate, audit or commit, plus the audit's `author_agent_ids`; the same set drives auditor separation. If the required model is unavailable, checkpoint and wait or raise an owner blocker. A Sonnet auditor (`timesheet-auditor` with model override sonnet, reason `fallback_unavailable`; effort stays the profile's xhigh) is valid only when no author used Opus.
+ceb86b6:docs/08_AI_WORKFLOW_AND_BUDGET.md:34:Record per task: profile, requested model, `model_override_reason` (size_risk|novelty|escalation|fallback_unavailable|owner), `routing` {size, risk, novelty}, and self-reported `actual_model` plus `actual_source`. Effort changes only through profiles; profile edits may need a client restart (verify by dispatch; an unrecognized profile is a restart blocker). A client restart also refreshes the AGENTS/CLAUDE context injected into agents; a long-running session can hold a stale copy, so every non-coordinator profile reads AGENTS.md from disk at task start.
+ceb86b6:docs/08_AI_WORKFLOW_AND_BUDGET.md:36:Delegate read-only client/version/profile checks at startup. Record requested settings separately from actual observable settings; use null when not observable. Verify the installed client recognizes `agent`, `model`, `effort`, `Agent` and profiles. Restart if the new agents directory has not loaded. Account/managed controls can override project settings. If Opus is unavailable under the subscription, apply the audit-strength rule above (wait or blocker; no weaker auditor when an author used Opus). If effort is unsupported, use a supported level and record the fallback. The coordinator may amend only project profile configuration for supported fallbacks before dispatch, recording the reason. Never switch to API billing. If delegation is unavailable, save a configuration blocker instead of implementing in the main context.
+ceb86b6:docs/08_AI_WORKFLOW_AND_BUDGET.md:40:Follow [ORCHESTRATE](../handoff/prompts/ORCHESTRATE.md). Each brief includes task ID, package/prompt, canonical reading list, dependencies, baseline/digest, exact writable paths, output/evidence paths, rule/AC coverage and next step. Workers execute only that task, not the coordinator mission. Only the coordinator writes ORCHESTRATION.json, STATE.json and NEXT_ACTION.
+ceb86b6:docs/08_AI_WORKFLOW_AND_BUDGET.md:56:If state is damaged, recover the last committed board and reconcile task reports, source and logs before dispatch. Observed files/evidence outrank stale narrative; report discrepancies. Changed source identity invalidates an old audit pass.
+ceb86b6:docs/agents/issue-tracker.md:42:- **Blocking**: GitHub's **native issue dependencies**, the canonical, UI-visible representation. Add an edge with `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's numeric **database id** (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`, _not_ the `#number` or `node_id`). GitHub reports `issue_dependencies_summary.blocked_by` (open blockers only, the live gate). Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every blocker is closed.
+ceb86b6:docs/agents/issue-tracker.md:43:- **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
+ceb86b6:docs/agents/triage-labels.md:3:The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
+ceb86b6:handoff/prompts/WP1_IMPLEMENT.md:5:Implement **WP1 only**. Follow [AGENTS](../../AGENTS.md). Inspect the actual repository and preserve existing unrelated files before editing. Communicate in Vietnamese; code/comments and canonical docs are English with matching human-facing Vietnamese translations.
+ceb86b6:handoff/prompts/WP2_IMPLEMENT.md:5:Implement **WP2 only**. Follow [AGENTS](../../AGENTS.md). Inspect the actual repository and accepted earlier handoffs before editing. Communicate in Vietnamese; code/comments and canonical docs are English with matching human-facing Vietnamese translations.
+ceb86b6:handoff/prompts/WP2_REVIEW.md:14:Focus: Trace raw/provisional/posted/reserved/available amounts. Verify 480-minute leave conversion, no label-triggered spend, no double reservation/consumption, correction differences, reasons and preserved manual holiday overrides.
+ceb86b6:handoff/prompts/WP3_IMPLEMENT.md:5:Implement **WP3 only**. Follow [AGENTS](../../AGENTS.md). Inspect the actual repository and accepted earlier handoffs before editing. Communicate in Vietnamese; code/comments and canonical docs are English with matching human-facing Vietnamese translations.
+ceb86b6:handoff/prompts/WP4_IMPLEMENT.md:5:Implement **WP4 only**. Follow [AGENTS](../../AGENTS.md). Inspect the actual repository and accepted earlier handoffs before editing. Communicate in Vietnamese; code/comments and canonical docs are English with matching human-facing Vietnamese translations.
+ceb86b6:handoff/prompts/WP4_REVIEW.md:14:Focus: Inspect actual volume/permission/secret boundaries, WAL-consistent backup, migration compatibility and restore isolation. Verify formula/TODAY/blank history does not become authoritative balance/sign-off/sent state; imported periods never auto-send.
+ceb86b6:handoff/prompts/WP5_IMPLEMENT.md:5:Implement **WP5 only**. Follow [AGENTS](../../AGENTS.md). Inspect the actual repository and accepted earlier handoffs before editing. Communicate in Vietnamese; code/comments and canonical docs are English with matching human-facing Vietnamese translations.
+exit=0
+
+$ git grep -n -i -E "vietnamese|english|language" ceb86b6 -- CLAUDE.md handoff/prompts .claude/agents docs/agents .claude/settings.json ":!*.vi.md"
+ceb86b6:.claude/agents/timesheet-auditor.md:13:English task results/checkpoints (Vietnamese only in assigned human-facing documents)
+ceb86b6:.claude/agents/timesheet-auditor.md:27:documents, English task reports and task-local evidence. Never fix source under review.
+ceb86b6:.claude/agents/timesheet-committer.md:53:Report in English: pre/post HEAD, commit SHA, pushed, remote SHA, branch, staged list,
+ceb86b6:.claude/agents/timesheet-expert.md:13:English task results/checkpoints (Vietnamese only in assigned human-facing documents)
+ceb86b6:.claude/agents/timesheet-light.md:13:English task results/checkpoints (Vietnamese only in assigned human-facing documents)
+ceb86b6:.claude/agents/timesheet-light.md:24:business-rule decisions or acceptance audit. Preserve English/Vietnamese meaning.
+ceb86b6:.claude/agents/timesheet-planner.md:13:English task results/checkpoints (Vietnamese only in assigned human-facing documents)
+ceb86b6:.claude/agents/timesheet-planner.md:24:(English) and task-local diagnostic evidence. Return small tasks with dependencies,
+ceb86b6:.claude/agents/timesheet-verifier.md:13:English task results/checkpoints (Vietnamese only in assigned human-facing documents)
+ceb86b6:.claude/agents/timesheet-verifier.md:24:with synthetic data and task-local output paths. Write only assigned English
+ceb86b6:.claude/agents/timesheet-worker-high.md:13:English task results/checkpoints (Vietnamese only in assigned human-facing documents)
+ceb86b6:.claude/agents/timesheet-worker.md:13:English task results/checkpoints (Vietnamese only in assigned human-facing documents)
+ceb86b6:docs/agents/domain.md:45:If the concept you need isn't in the glossary yet, that's a signal: either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
+ceb86b6:handoff/prompts/FIX_FINDINGS.md:11:Update the English HANDOFF and Vietnamese translation with finding disposition, changed files/commit, commands/results, remaining unverified paths and one next review action. Save CHECKPOINT if interrupted. Do not call a fix independently accepted until the reviewer rechecks it.
+ceb86b6:handoff/prompts/ORCHESTRATE.md:20:   `handoff/delivery/tasks/` are English-only. Save the brief and board running status
+ceb86b6:handoff/prompts/ORCHESTRATE.md:31:   concise Vietnamese progress. FIX REQUIRED creates bounded fix + gate + audit
+ceb86b6:handoff/prompts/RESUME.md:19:5. Persist board and checkpoints after each result (task records English-only, package
+ceb86b6:handoff/prompts/WP1_IMPLEMENT.md:5:Implement **WP1 only**. Follow [AGENTS](../../AGENTS.md). Inspect the actual repository and preserve existing unrelated files before editing. Communicate in Vietnamese; code/comments and canonical docs are English with matching human-facing Vietnamese translations.
+ceb86b6:handoff/prompts/WP1_REVIEW.md:5:Independently review **WP1** under [AGENTS](../../AGENTS.md). Communicate in Vietnamese; produce English REVIEW with a Vietnamese translation. Do not trust claimed passes without evidence, rebuild the package or reopen accepted architecture.
+ceb86b6:handoff/prompts/WP2_IMPLEMENT.md:5:Implement **WP2 only**. Follow [AGENTS](../../AGENTS.md). Inspect the actual repository and accepted earlier handoffs before editing. Communicate in Vietnamese; code/comments and canonical docs are English with matching human-facing Vietnamese translations.
+ceb86b6:handoff/prompts/WP2_REVIEW.md:5:Independently review **WP2** under [AGENTS](../../AGENTS.md). Communicate in Vietnamese; produce English REVIEW with a Vietnamese translation. Do not trust claimed passes without evidence, rebuild the package or reopen accepted architecture.
+ceb86b6:handoff/prompts/WP3_IMPLEMENT.md:5:Implement **WP3 only**. Follow [AGENTS](../../AGENTS.md). Inspect the actual repository and accepted earlier handoffs before editing. Communicate in Vietnamese; code/comments and canonical docs are English with matching human-facing Vietnamese translations.
+ceb86b6:handoff/prompts/WP3_REVIEW.md:5:Independently review **WP3** under [AGENTS](../../AGENTS.md). Communicate in Vietnamese; produce English REVIEW with a Vietnamese translation. Do not trust claimed passes without evidence, rebuild the package or reopen accepted architecture.
+ceb86b6:handoff/prompts/WP4_IMPLEMENT.md:5:Implement **WP4 only**. Follow [AGENTS](../../AGENTS.md). Inspect the actual repository and accepted earlier handoffs before editing. Communicate in Vietnamese; code/comments and canonical docs are English with matching human-facing Vietnamese translations.
+ceb86b6:handoff/prompts/WP4_REVIEW.md:5:Independently review **WP4** under [AGENTS](../../AGENTS.md). Communicate in Vietnamese; produce English REVIEW with a Vietnamese translation. Do not trust claimed passes without evidence, rebuild the package or reopen accepted architecture.
+ceb86b6:handoff/prompts/WP5_IMPLEMENT.md:5:Implement **WP5 only**. Follow [AGENTS](../../AGENTS.md). Inspect the actual repository and accepted earlier handoffs before editing. Communicate in Vietnamese; code/comments and canonical docs are English with matching human-facing Vietnamese translations.
+ceb86b6:handoff/prompts/WP5_REVIEW.md:5:Independently review **WP5** under [AGENTS](../../AGENTS.md). Communicate in Vietnamese; produce English REVIEW with a Vietnamese translation. Do not trust claimed passes without evidence, rebuild the package or reopen accepted architecture.
+exit=0
+#### source: commit_skill.txt
+$ git grep -n -i -E "language|english|vietnam|locale|svn|git log" ceb86b6 -- .agents/skills/commit-message
+ceb86b6:.agents/skills/commit-message/SKILL.md:165:Before the message, report in the conversation's language, normally in one
+ceb86b6:.agents/skills/commit-message/SKILL.md:186:Write in English unless the user requests another language. Keep
+ceb86b6:.agents/skills/commit-message/SKILL.md:206:- Begin with exactly one plain-language, imperative summary line describing
+exit=0
+$ git ls-tree -r --name-only ceb86b6 -- .agents/skills/commit-message .claude/skills/commit-message
+.agents/skills/commit-message/SKILL.md
+.claude/skills/commit-message/SKILL.md
+exit=0
+$ git log --format=%s -n 30 ceb86b6 (commit message language sample)
+Adopt the owner's AI instruction header in AGENTS.md
+Freeze WP5-UX3-FIX3: round-3 audit findings
+Freeze WP5-UX3-FIX2: sweep findings of round 3
+Freeze WP5-UX3-FIX1: fixes for the round-3 package gate
+Freeze WP5-UX3-T10: round-3 documents (package-final freeze)
+Freeze WP5-UX3-T09: Check out dialog on the new break rows
+Freeze WP5-UX3-T08B: overnight-only break dates, break chips and sub-dialog
+Freeze WP5-UX3-T08: session dialog with break rows and confirmations
+Freeze WP5-UX3-T07: Day editor header, session cards and delete confirmation
+Freeze WP5-UX3-T05B: floating Day editor below 1360px
+Freeze WP5-UX3-T05: lifted column runs, editor frame, Category and Status
+Freeze WP5-UX3-T04: title row, period pills and meta row
+Freeze WP5-UX3-T03: Settings sub-pages, Profile and lazy admin screens
+Freeze WP5-UX3-T02: account menu, identity block and wordmark rule
+Freeze WP5-UX3-T01: round-3 tokens and raised week cards
+Accept WP5-UX3-GOV: modern style standard in AGENTS.md
+Freeze WP5-UX3-GOV: modern style standard in AGENTS.md
+Freeze WP5-UX3-T06: pure break-row model for the session and Check out dialogs
+chore(handoff): return the mission to software_ready after WP5-UX2
+Accept WP5 after UI change round 2 (a643794)
+Freeze WP5-UX2-FIX2: calendar-independent inactive-Today focus test
+Freeze WP5-UX2-FIX1: fix the three Low findings of WP5-UX2-AUDIT
+Freeze WP5-UX2-T10: document UI change round 2
+Freeze WP5-UX2-T09: check in/out in the phone top bar
+Freeze WP5-UX2-T08: "Check in/out" wording
+Freeze WP5-UX2-T07: Light/Dark theme toggle with icons
+Freeze WP5-UX2-T06: two-line wordmark beside the logo
+Freeze WP5-UX2-T05: C&D logo in the top bar
+Freeze WP5-UX2-T04: Today and Current period buttons
+Freeze WP5-UX2-T03: mark the day open in the Day editor
+exit=0
+#### source: linelen.txt
+$ git show ceb86b6:.editorconfig
+# Editor defaults for this repository (https://editorconfig.org).
+# Line endings are also enforced by .gitattributes.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Python follows PEP 8.
+[*.py]
+indent_size = 4
+
+# Windows-only helper scripts keep CRLF (see .gitattributes).
+[*.{bat,cmd,ps1}]
+end_of_line = crlf
+
+# Two trailing spaces are a Markdown line break.
+[*.md]
+trim_trailing_whitespace = false
+exit=0
+$ git show ceb86b6:.gitattributes
+# Normalize all text files to LF in the repository and in the working tree.
+* text=auto eol=lf
+
+# Windows-only helper scripts keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Never let scripts and container/config files drift, even on Windows checkouts.
+*.sh       text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.py       text eol=lf
+Dockerfile text eol=lf
+
+# Binary assets: no line-ending conversion or text diffs.
+*.xlsx  binary
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
+handoff/delivery/evidence/** -whitespace
+exit=0
+$ awk length>100 on ceb86b6:AGENTS.md (line: length)
+13: 117
+44: 104
+49: 443
+50: 378
+51: 295
+52: 257
+53: 158
+54: 205
+55: 144
+56: 174
+57: 371
+58: 109
+59: 291
+60: 396
+61: 411
+67: 112
+71: 185
+78: 440
+80: 339
+81: 397
+82: 376
+83: 212
+exit=0
+$ same on owner text
+18: 101
+50: 443
+51: 378
+52: 295
+53: 257
+54: 158
+55: 205
+56: 144
+57: 174
+58: 371
+59: 109
+60: 291
+61: 396
+62: 411
+68: 112
+72: 185
+79: 440
+81: 339
+82: 397
+83: 376
+84: 212
+exit=0

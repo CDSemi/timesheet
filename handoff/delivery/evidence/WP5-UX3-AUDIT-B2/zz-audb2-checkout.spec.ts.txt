@@ -1,0 +1,303 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { expect, newPerson, type Person, test } from './fixtures.ts';
+
+/*
+ * WP5-UX3-AUDIT-B2 task-local probe (never part of the repository): F-UX3B-1 recheck. For each starting case a fresh synthetic
+ * person gets a running session seeded through the API (POST /api/days/{today}/sessions with end null, as the first-pass
+ * auditor did) with saved unconfirmed rows: A 08:00-08:15 inside the session and L, which ends a few minutes after now. The
+ * Check out dialog is then driven through the UI; every POST /api/clock/out is captured raw with its status, and the stored
+ * session and the day's calculation are read back. AUDB_LABEL names the build. Both projects (rows on desktop, chips on a phone).
+ */
+const LABEL = process.env.AUDB_LABEL ?? 'unknown';
+const OUT = process.env.AUDB_OUT ?? '';
+const SHOTS = process.env.AUDB_SHOTS ?? '';
+const LA = 'America/Los_Angeles';
+const NOTE = 'The saved breaks you removed are deleted at Check out.';
+test.use({ locale: 'en-US', timezoneId: LA });
+
+function rec(project: string, item: Record<string, unknown>) {
+  const line = JSON.stringify({ build: LABEL, project, ...item });
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, `checkout-${LABEL}-${project}.jsonl`), `${line}\n`);
+}
+
+interface Write {
+  status: number;
+  raw: string;
+  response: string;
+}
+
+function watch(page: Page): Write[] {
+  const writes: Write[] = [];
+  page.on('response', async (response) => {
+    const request = response.request();
+    if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/clock/out') return;
+    let text = '';
+    try {
+      text = (await response.text()).slice(0, 300);
+    } catch {
+      text = '<unread>';
+    }
+    writes.push({ status: response.status(), raw: request.postData() ?? '', response: response.status() === 200 ? '<ok>' : text });
+  });
+  return writes;
+}
+
+const clock = (ms: number) => new Intl.DateTimeFormat('en-GB', { timeZone: LA, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(ms));
+
+async function chips(dialog: Locator): Promise<boolean> {
+  return (await dialog.getByRole('list', { name: 'Break list' }).getAttribute('data-layout')) === 'chips';
+}
+
+async function removeBreak(page: Page, dialog: Locator, index: number) {
+  if (await chips(dialog)) {
+    await dialog.locator(`[data-break="${index}"] button.break-chip`).click();
+    const sub = page.getByRole('dialog', { name: `Break ${index}`, exact: true });
+    await expect(sub).toBeVisible();
+    await sub.getByRole('button', { name: 'Remove break', exact: true }).click();
+    await expect(sub).toHaveCount(0);
+  } else {
+    await dialog.getByRole('button', { name: `Remove break ${index}`, exact: true }).click();
+  }
+}
+
+async function addBreak(page: Page, dialog: Locator, index: number, date: string, time: string, minutes: number) {
+  await dialog.getByRole('button', { name: 'Add break', exact: true }).click();
+  if (await chips(dialog)) {
+    const sub = page.getByRole('dialog', { name: `Break ${index}`, exact: true });
+    await expect(sub).toBeVisible();
+    await sub.getByLabel('Date', { exact: true }).fill(date);
+    await sub.getByLabel('Start time', { exact: true }).fill(time);
+    await sub.getByLabel('Minutes', { exact: true }).fill(String(minutes));
+    await sub.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(sub).toHaveCount(0);
+  } else {
+    await dialog.getByLabel(`Break ${index} date`, { exact: true }).fill(date);
+    await dialog.getByLabel(`Break ${index} start time`, { exact: true }).fill(time);
+    await dialog.getByLabel(`Break ${index} minutes`, { exact: true }).fill(String(minutes));
+  }
+}
+
+async function dialogState(dialog: Locator) {
+  const note = dialog.getByText(NOTE);
+  return {
+    rows: await dialog.locator('[data-break]').count(),
+    label: await dialog.locator('button[type="submit"]').innerText(),
+    note: (await note.count()) > 0 ? (await note.innerText()).trim() : null,
+    noteIsStatus: (await dialog.getByRole('status').filter({ hasText: NOTE }).count()) > 0,
+    box: await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).isChecked(),
+    emptyText: (await dialog.getByText('No breaks listed.').count()) > 0,
+  };
+}
+
+async function storedDay(person: Person, date: string) {
+  const day = await person.api.dayView(date);
+  const calc = (day as unknown as { calculation: { status: string; provisional: boolean; credited_minutes: number | null; excluded_break_seconds: number } | null }).calculation;
+  return {
+    sessions: day.sessions.map((s) => ({
+      running: s.end_utc === null,
+      confirmed: s.breaks_confirmed,
+      breaks: s.breaks.map((b) => `${b.start_utc}..${b.end_utc}`),
+      version: s.version,
+    })),
+    calc: calc === null ? null : { status: calc.status, provisional: calc.provisional, credited: calc.credited_minutes, excludedBreakSeconds: calc.excluded_break_seconds },
+  };
+}
+
+type Act = (page: Page, dialog: Locator, ctx: { today: string; steps: Array<Record<string, unknown>> }) => Promise<'submit' | 'cancel'>;
+
+interface Case {
+  id: string;
+  /** Saved rows: 'A' inside, 'L' ends after now. */
+  saved: Array<'A' | 'L'>;
+  /** The seeded session's breaks_confirmed (default false). */
+  confirmed?: boolean;
+  act: Act;
+}
+
+const step = async (dialog: Locator, ctx: { steps: Array<Record<string, unknown>> }, name: string) => {
+  ctx.steps.push({ step: name, ...(await dialogState(dialog)) });
+};
+
+const CASES: Case[] = [
+  {
+    id: 'B1-remove-some (L removed, A kept)',
+    saved: ['A', 'L'],
+    act: async (page, dialog, ctx) => {
+      await removeBreak(page, dialog, 2);
+      await step(dialog, ctx, 'after removing L');
+      return 'submit';
+    },
+  },
+  {
+    id: 'B2-remove-all-unticked',
+    saved: ['A', 'L'],
+    act: async (page, dialog, ctx) => {
+      await removeBreak(page, dialog, 2);
+      await step(dialog, ctx, 'after removing L');
+      await removeBreak(page, dialog, 1);
+      await step(dialog, ctx, 'after removing A');
+      if (SHOTS !== '') await dialog.screenshot({ path: join(SHOTS, `audb2-checkout-removed-all-${LABEL}-${page.viewportSize()?.width ?? 0}-synthetic.png`) });
+      return 'submit';
+    },
+  },
+  {
+    id: 'B3-remove-all-then-tick',
+    saved: ['A', 'L'],
+    act: async (page, dialog, ctx) => {
+      await removeBreak(page, dialog, 2);
+      await removeBreak(page, dialog, 1);
+      await step(dialog, ctx, 'after removing both');
+      await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+      await step(dialog, ctx, 'after ticking');
+      return 'submit';
+    },
+  },
+  {
+    id: 'B4-add-a-row (L removed, A kept, one typed row)',
+    saved: ['A', 'L'],
+    act: async (page, dialog, ctx) => {
+      await removeBreak(page, dialog, 2);
+      await addBreak(page, dialog, 2, ctx.today, '09:00', 10);
+      await step(dialog, ctx, 'after adding');
+      return 'submit';
+    },
+  },
+  {
+    id: 'B4b-remove-all-then-add-a-row',
+    saved: ['A', 'L'],
+    act: async (page, dialog, ctx) => {
+      await removeBreak(page, dialog, 2);
+      await removeBreak(page, dialog, 1);
+      await addBreak(page, dialog, 1, ctx.today, '09:00', 10);
+      await step(dialog, ctx, 'after adding');
+      return 'submit';
+    },
+  },
+  {
+    id: 'B4c-add-a-row-keeping-both-saved (L stays listed)',
+    saved: ['A', 'L'],
+    act: async (page, dialog, ctx) => {
+      await addBreak(page, dialog, 3, ctx.today, '09:00', 10);
+      await step(dialog, ctx, 'after adding');
+      return 'submit';
+    },
+  },
+  {
+    id: 'B5-no-saved-rows',
+    saved: [],
+    act: async (_page, dialog, ctx) => {
+      await step(dialog, ctx, 'as opened');
+      return 'submit';
+    },
+  },
+  {
+    id: 'B5b-no-saved-rows-add-then-remove',
+    saved: [],
+    act: async (page, dialog, ctx) => {
+      await addBreak(page, dialog, 1, ctx.today, '09:00', 10);
+      await removeBreak(page, dialog, 1);
+      await step(dialog, ctx, 'after add and remove');
+      return 'submit';
+    },
+  },
+  {
+    id: 'B6-remove-all-add-then-remove',
+    saved: ['A', 'L'],
+    act: async (page, dialog, ctx) => {
+      await removeBreak(page, dialog, 2);
+      await removeBreak(page, dialog, 1);
+      await addBreak(page, dialog, 1, ctx.today, '09:00', 10);
+      await removeBreak(page, dialog, 1);
+      await step(dialog, ctx, 'after add and remove');
+      return 'submit';
+    },
+  },
+  {
+    id: 'B7-single-late-row-removed',
+    saved: ['L'],
+    act: async (page, dialog, ctx) => {
+      await removeBreak(page, dialog, 1);
+      await step(dialog, ctx, 'after removing L');
+      return 'submit';
+    },
+  },
+  {
+    id: 'B8-remove-all-then-cancel-discard',
+    saved: ['A', 'L'],
+    act: async (page, dialog, ctx) => {
+      await removeBreak(page, dialog, 2);
+      await removeBreak(page, dialog, 1);
+      await step(dialog, ctx, 'after removing both');
+      return 'cancel';
+    },
+  },
+  {
+    id: 'B9-saved-row-already-confirmed-removed (API-only state)',
+    saved: ['A'],
+    confirmed: true,
+    act: async (page, dialog, ctx) => {
+      await removeBreak(page, dialog, 1);
+      await step(dialog, ctx, 'after removing A');
+      return 'submit';
+    },
+  },
+];
+
+test('F-UX3B-1 Check out starting cases', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(1_200_000);
+  const project = testInfo.project.name;
+  const errors: string[] = [];
+  for (const item of CASES) {
+    const person = await newPerson(adminSeed, builtServer, { signature: 'none' });
+    const { todayLocal } = await person.api.today();
+    const now = Date.now();
+    const at = (time: string) => ({ local: `${todayLocal}T${time}`, zone: LA });
+    const rows = item.saved.map((kind) =>
+      kind === 'A'
+        ? { start: at('08:00'), end: at('08:15'), counts_as_work: false }
+        : { start: at(clock(now + 60_000)), end: at(clock(now + 4 * 60_000)), counts_as_work: false },
+    );
+    const writes = watch(page);
+    const ctx = { today: todayLocal, steps: [] as Array<Record<string, unknown>> };
+    let seeded: unknown = null;
+    try {
+      await person.api.call('POST', `/api/days/${todayLocal}/sessions`, { start: at('07:00'), end: null, input_zone: LA, breaks_confirmed: item.confirmed ?? false, breaks: rows }, 201);
+      seeded = await storedDay(person, todayLocal);
+      await signInPageAs(person.account);
+      await page.getByRole('button', { name: 'Check out', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Check out' });
+      await expect(dialog).toBeVisible();
+      await step(dialog, ctx, 'opened');
+      const what = await item.act(page, dialog, ctx);
+      if (what === 'submit') {
+        await dialog.locator('button[type="submit"]').click();
+        await expect.poll(() => writes.length, { message: 'one check-out request' }).toBeGreaterThan(0);
+        await page.waitForTimeout(800);
+        const open = await dialog.isVisible();
+        ctx.steps.push({ step: 'after submit', dialogOpen: open, alerts: open ? await dialog.getByRole('alert').allInnerTexts() : [], ...(open ? await dialogState(dialog) : {}) });
+      } else {
+        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        const question = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+        await expect(question).toBeVisible();
+        await question.getByRole('button', { name: 'Discard', exact: true }).click();
+        await expect(dialog).toHaveCount(0);
+        await page.waitForTimeout(800);
+        ctx.steps.push({ step: 'after discard', dialogOpen: await dialog.isVisible() });
+      }
+      rec(project, { case: item.id, todayLocal, seeded, steps: ctx.steps, writes, stored: await storedDay(person, todayLocal) });
+    } catch (caught) {
+      errors.push(`${item.id}: ${String(caught).slice(0, 400)}`);
+      rec(project, { case: item.id, error: String(caught).slice(0, 800), steps: ctx.steps, writes });
+    }
+    page.removeAllListeners('response');
+    // Leave no running session behind.
+    const left = (await person.api.dayView(todayLocal)).sessions.find((s) => s.end_utc === null);
+    if (left !== undefined) await person.api.call('POST', '/api/clock/out', { breaks: [], breaks_confirmed: false, expected_version: left.version }).catch(() => undefined);
+    await page.context().clearCookies();
+  }
+  rec(project, { case: 'errors', errors });
+  expect(errors).toEqual([]);
+});

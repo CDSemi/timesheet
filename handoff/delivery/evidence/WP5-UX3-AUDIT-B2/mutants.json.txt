@@ -1,0 +1,50 @@
+{
+  "M1": {
+    "file": "src/client/components/breakRowsModel.ts",
+    "what": "hadSavedRows ignored: Check out omits the list whenever nothing is listed or ticked (the pre-FIX3 rule)",
+    "old": "if (mode.kind === 'checkout') return { ok: true, breaks: mode.hadSavedRows === true ? [] : undefined, breaksConfirmed: false };",
+    "new": "if (mode.kind === 'checkout') return { ok: true, breaks: undefined, breaksConfirmed: false };"
+  },
+  "M2": {
+    "file": "src/client/components/breakRowsModel.ts",
+    "what": "hadSavedRows always true: an empty unticked Check out sends breaks [] even when the dialog opened with no saved row",
+    "old": "{ kind: 'checkout', hadSavedRows: session.breaks.length > 0 },",
+    "new": "{ kind: 'checkout', hadSavedRows: true },"
+  },
+  "M3": {
+    "file": "src/client/components/breakRowsModel.ts",
+    "what": "the confirmed flag on the empty list: after every saved row is removed (box unticked) the empty list is sent as confirmed",
+    "old": "if (mode.kind === 'checkout') return { ok: true, breaks: mode.hadSavedRows === true ? [] : undefined, breaksConfirmed: false };",
+    "new": "if (mode.kind === 'checkout') return { ok: true, breaks: mode.hadSavedRows === true ? [] : undefined, breaksConfirmed: mode.hadSavedRows === true };"
+  },
+  "M4": {
+    "file": "src/client/components/breakRowsModel.ts",
+    "what": "the inside filter's end comparison: <= becomes < (a suggestion ending exactly at the session end is dropped)",
+    "old": ".filter((item) => item.startUtc >= startUtc && (endUtc === null || item.endUtc <= endUtc))",
+    "new": ".filter((item) => item.startUtc >= startUtc && (endUtc === null || item.endUtc < endUtc))"
+  },
+  "M5a": {
+    "file": "src/client/components/breakRowsModel.ts",
+    "what": "the gate of confirmBreaksRows: the breaks_confirmed condition dropped (a confirmed session would be offered suggestions)",
+    "old": "if (policy === undefined || session.end_utc === null || session.breaks_confirmed || session.breaks.length > 0) return [];",
+    "new": "if (policy === undefined || session.end_utc === null || session.breaks.length > 0) return [];"
+  },
+  "M5b": {
+    "file": "src/client/components/breakRowsModel.ts",
+    "what": "a past-day gate added to confirmBreaksRows (device clock in the input zone): today's ended session gets no suggestion",
+    "old": "if (policy === undefined || session.end_utc === null || session.breaks_confirmed || session.breaks.length > 0) return [];",
+    "new": "if (policy === undefined || session.end_utc === null || session.breaks_confirmed || session.breaks.length > 0 || !(session.work_date < new Intl.DateTimeFormat('en-CA', { timeZone: session.input_zone }).format(new Date()))) return [];"
+  },
+  "M6a": {
+    "file": "src/client/components/ClockOutDialog.tsx",
+    "what": "the note's condition ignores the saved rows: the removal note shows whenever the list is empty and the box unticked",
+    "old": "const removedSaved = session.breaks.length > 0 && draft.rows.length === 0 && !draft.noBreaks;",
+    "new": "const removedSaved = draft.rows.length === 0 && !draft.noBreaks;"
+  },
+  "M6b": {
+    "file": "src/client/components/ClockOutDialog.tsx",
+    "what": "the note's condition ignores the box: the removal note also shows while 'Confirm no breaks taken' is ticked",
+    "old": "const removedSaved = session.breaks.length > 0 && draft.rows.length === 0 && !draft.noBreaks;",
+    "new": "const removedSaved = session.breaks.length > 0 && draft.rows.length === 0;"
+  }
+}

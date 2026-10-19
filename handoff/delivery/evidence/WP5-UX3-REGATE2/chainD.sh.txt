@@ -1,0 +1,18 @@
+. <task>/env.sh
+cd $T
+docker version --format 'server {{.Server.Version}}' > out/15-docker-version.txt 2>&1
+bash cfg.sh > logs/cfg.txt 2>&1
+bash keys.sh > logs/keys.txt 2>&1
+bash run-drill.sh > logs/drill.txt 2>&1
+echo "drill finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/chainD-progress.txt
+P=ts-wp5-ux3regate2
+docker compose -p $P down -v > out/14-compose-down.txt 2>&1; echo "compose down exit $?" >> out/14-compose-down.txt
+docker image rm $P-timesheet:drill > out/14-image-rm.txt 2>&1; echo "image rm exit $?" >> out/14-image-rm.txt
+docker ps --all --filter name=$P > out/15-docker-ps.txt 2>&1
+docker images > out/15-images-after.txt 2>&1
+docker network ls --filter name=$P > out/15-networks.txt 2>&1
+docker volume ls --filter name=$P > out/15-volumes.txt 2>&1
+echo "cleanup finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/chainD-progress.txt
+bash sweep2.sh > logs/sweep2.txt 2>&1
+echo "sweep finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/chainD-progress.txt
+echo chainD-done > out/chainD.done

@@ -1,0 +1,29 @@
+. <task>/env.sh
+cd $T
+mkdir -p $E
+M() { node mask2.mjs "$1" "$2"; }
+# out/: already numbered names
+for f in out/*.txt; do
+  b=$(basename $f)
+  case $b in ex-files.txt|ex-hashes.txt|ex-sorted.txt|keys-list.txt) continue;; esac
+  M $f $E/$b
+done
+# logs/
+for f in logs/*.txt; do
+  b=$(basename $f)
+  case $b in grep-paths.txt|pa.txt|sp.txt|c1.txt|all.txt) continue;; esac
+  M $f $E/log-$b
+done
+# observations: obs = first (mixed) probe folder, obs2 = clean final runs
+for f in obs/*.txt; do M $f $E/obs1-$(basename $f); done
+for f in obs2/*.txt; do M $f $E/obs2-$(basename $f); done
+# scripts and probes
+for f in *.sh *.mjs; do
+  case $f in allscripts.txt) continue;; esac
+  M $f $E/$f.txt
+done
+for f in zz-*.ts; do
+  case $f in zz-checkout-shot.spec.ts|zz-fix2.spec.ts) continue;; esac
+  M $f $E/$f.txt
+done
+echo collected

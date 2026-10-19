@@ -1,0 +1,110 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, newPerson, test } from './fixtures.ts';
+import { parseColour, tokenColour, contrast, over, backdropOf, backdropsAbove } from './contrast.ts';
+import { signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX3-GATE task-local probe (never part of the repository): the remaining audit-focus items. (1) T01 hover text of the quiet and
+ * secondary buttons steps to --accent-strong, --transition reaches ::before and ::after; (2) T03 the chunk-load error "Try again" reloads
+ * the page and the screen then loads; (6) T04 the words "Open a day" are hidden only at 320 (the row is 328px at 360).
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUT = process.env.GATE_OUT ?? '';
+const rec = (line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'focus.txt'), `${line}\n`);
+};
+
+test('(6) the words "Open a day": visible or hidden by width, and the row width', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(120_000);
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Open Day', signature: 'none' });
+  await signInPageAs(me.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const width of [768, 430, 390, 375, 361, 360, 359, 340, 330, 321, 320]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.waitForTimeout(250);
+    const facts = await page.evaluate(() => {
+      const row = document.querySelector('.open-day') as HTMLElement;
+      const text = document.querySelector('.open-day-text') as HTMLElement;
+      const r = row.getBoundingClientRect();
+      const t = text.getBoundingClientRect();
+      const s = getComputedStyle(text);
+      const clipped = s.clip !== 'auto' || (t.width <= 1 && t.height <= 1) || s.position === 'absolute';
+      const input = document.querySelector('.open-day input') as HTMLElement;
+      const button = document.querySelector('.open-day button') as HTMLElement;
+      const rowTops = [r.top, input.getBoundingClientRect().top, button.getBoundingClientRect().top];
+      return { row: Math.round(r.width * 10) / 10, wordsBox: `${Math.round(t.width)}x${Math.round(t.height)}`, wordsHidden: clipped, position: s.position, oneRow: Math.max(...rowTops) - Math.min(...rowTops) < 12, label: (document.querySelector('.open-day label') as HTMLElement).textContent };
+    });
+    rec(`OPEN-A-DAY [${testInfo.project.name}] ${width}px: row ${facts.row}px, words box ${facts.wordsBox}, words hidden ${facts.wordsHidden} (position ${facts.position}), one row ${facts.oneRow}, label text "${facts.label}"`);
+  }
+});
+
+test('(1) hover text of the quiet and secondary buttons steps to --accent-strong; --transition is declared on the universal rule', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'Desktop project (hover)');
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Hover Text', signature: 'none' });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await signInPageAs(me.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const strong = await tokenColour(page, '--accent-strong');
+  const accent = await tokenColour(page, '--accent');
+  for (const [name, locator] of [
+    ['quiet "Change several days"', page.getByRole('button', { name: 'Change several days', exact: true })],
+    ['secondary "Next period"', page.getByRole('button', { name: 'Next period', exact: true })],
+  ] as const) {
+    await page.mouse.move(0, 0);
+    await page.waitForTimeout(150);
+    const rest = parseColour(await locator.evaluate((e) => getComputedStyle(e).color));
+    await locator.hover();
+    await page.waitForTimeout(250);
+    const hover = parseColour(await locator.evaluate((e) => getComputedStyle(e).color));
+    const same = (a: number[], b: number[]) => [0, 1, 2].every((i) => Math.abs((a[i] ?? 0) - (b[i] ?? 0)) <= 1);
+    const fill = over(parseColour(await locator.evaluate((e) => getComputedStyle(e).backgroundColor)), backdropOf(await backdropsAbove(locator)));
+    rec(`HOVER-TEXT ${name}: rest ${rest.slice(0, 3).map((v) => Math.round(v)).join(',')} (= --accent ${same(rest, accent)}), hover ${hover.slice(0, 3).map((v) => Math.round(v)).join(',')} (= --accent-strong ${same(hover, strong)}), hover text on its fill ${(Math.round(contrast(over(hover, fill), fill) * 100) / 100)}:1`);
+  }
+  const transitions = await page.evaluate(() => {
+    const out: string[] = [];
+    for (const sheet of [...document.styleSheets]) {
+      try {
+        for (const rule of [...sheet.cssRules]) {
+          if (rule instanceof CSSStyleRule && /^\*,\s*\*::before,\s*\*::after/.test(rule.selectorText) && rule.cssText.includes('transition')) out.push(rule.cssText.slice(0, 220));
+        }
+      } catch {
+        // cross-origin rules are not readable
+      }
+    }
+    return out;
+  });
+  rec(`TRANSITION universal rule(s): ${JSON.stringify(transitions)}`);
+  const pseudo = await page.locator('section.period-bar').evaluate((e) => ({ before: getComputedStyle(e, '::before').transitionProperty, after: getComputedStyle(e, '::after').transitionProperty, host: getComputedStyle(e).transitionProperty }));
+  rec(`TRANSITION computed on the period bar: host ${pseudo.host}, ::before ${pseudo.before}, ::after ${pseudo.after}`);
+});
+
+test('(2) a lazy chunk that fails to load shows "Try again", which reloads the page, and the screen then loads', async ({ page, builtServer, isMobile }, testInfo) => {
+  test.skip(isMobile, 'Desktop project');
+  test.setTimeout(120_000);
+  let blocked = 0;
+  let allow = false;
+  await page.route('**/assets/AdminScreen-*.js', (route) => {
+    if (allow) return route.continue();
+    blocked += 1;
+    return route.abort('failed');
+  });
+  await signInTo(page, builtServer, builtServer.credentials.admin, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.evaluate("window.__marker = 'before-reload'");
+  await page.goto(`${builtServer.origin}/#/settings/admin`);
+  const alert = page.getByRole('alert').filter({ hasText: 'could not be loaded' });
+  await expect(alert).toBeVisible();
+  rec(`CHUNK-ERROR [${testInfo.project.name}] blocked requests ${blocked}; alert text "${(await alert.innerText()).replace(/\s+/g, ' ')}"; accessible name ${await alert.getAttribute('aria-label')}`);
+  await page.evaluate("window.__marker = 'before-reload'");
+  allow = true;
+  const navigations: string[] = [];
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) navigations.push(frame.url().replace(builtServer.origin, ''));
+  });
+  await alert.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('heading', { name: /Administration|Users/i }).first()).toBeVisible({ timeout: 15_000 });
+  const marker = await page.evaluate("window.__marker ?? 'gone'");
+  rec(`CHUNK-ERROR [${testInfo.project.name}] after "Try again": page reloaded (window marker ${marker}), main-frame navigations ${JSON.stringify(navigations)}, URL hash ${new URL(page.url()).hash}, Administration content visible`);
+});

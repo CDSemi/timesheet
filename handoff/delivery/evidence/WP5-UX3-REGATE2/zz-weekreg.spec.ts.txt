@@ -1,0 +1,127 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, newPerson, test } from './fixtures.ts';
+
+/*
+ * WP5-UX3-REGATE task-local probe (never part of the repository): attempt-1 FAIL reason 2. From 768 to 899px the week card scrolls
+ * sideways inside itself; every focused control of a card (Tab and Shift+Tab, both cards, Show details off and on) must have its whole
+ * 3px focus ring inside the visible box of the card, and every Saturday and Sunday stop (date button, Category) must be visited.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+test.skip(({ isMobile }) => isMobile, 'Desktop project');
+const OUT = process.env.GATE_OUT ?? '';
+const RING = 3;
+const rec = (line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'weekreg.txt'), `${line}\n`);
+};
+
+interface Stop {
+  name: string;
+  weekday: number | null;
+  reach: number;
+  shadow: string;
+  leftRoom: number;
+  rightRoom: number;
+  topRoom: number;
+  bottomRoom: number;
+  scrollLeft: number;
+  focusVisible: boolean;
+  ringPainted: boolean;
+  kind: string;
+}
+
+const readStop = () => {
+  const el = document.activeElement as HTMLElement | null;
+  const week = el?.closest('.sheet-week') as HTMLElement | null;
+  if (!el || !week) return null;
+  const r = el.getBoundingClientRect();
+  const w = week.getBoundingClientRect();
+  const day = el.closest('[data-day]')?.getAttribute('data-day') ?? null;
+  const weekday = day === null ? null : new Date(`${day}T00:00:00Z`).getUTCDay();
+  const cs = getComputedStyle(el);
+  const label = (el.getAttribute('aria-label') || el.textContent || el.tagName).replace(/\s+/g, ' ').trim().slice(0, 40);
+  const ringPainted = cs.boxShadow !== 'none' || (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0);
+  const kind = el.tagName === 'BUTTON' && /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)|^\d/.test(label) ? 'button' : el.getAttribute('aria-haspopup') !== null || /Category/.test(label) ? 'category' : el.tagName.toLowerCase();
+  // The ring reach read from the control's own computed style: outer box-shadow layers (spread + offset) and the outline; inset layers reach nothing.
+  let reach = 0;
+  for (const layer of cs.boxShadow === 'none' ? [] : cs.boxShadow.split(/,(?![^(]*\))/)) {
+    if (layer.includes('inset')) continue;
+    const nums = (layer.match(/-?[\d.]+px/g) ?? []).map((n) => parseFloat(n));
+    reach = Math.max(reach, (nums[3] ?? 0) + Math.max(Math.abs(nums[0] ?? 0), Math.abs(nums[1] ?? 0)));
+  }
+  if (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0 && !(cs.outlineColor.endsWith(', 0)') || cs.outlineColor === 'transparent')) reach = Math.max(reach, parseFloat(cs.outlineWidth) + parseFloat(cs.outlineOffset || '0'));
+  return {
+    name: label,
+    weekday,
+    reach,
+    shadow: `${cs.boxShadow.replace(/rgba?\([^)]*\)/g, 'c').slice(0, 200)} outline ${cs.outlineStyle} ${cs.outlineWidth} ${cs.outlineColor}`,
+    leftRoom: r.left - reach - w.left,
+    rightRoom: w.right - (r.right + reach),
+    topRoom: r.top - reach - w.top,
+    bottomRoom: w.bottom - (r.bottom + reach),
+    scrollLeft: week.scrollLeft,
+    focusVisible: el.matches(':focus-visible'),
+    ringPainted,
+    kind,
+  };
+};
+
+for (const details of [false, true]) {
+  for (const width of [768, 800, 820, 860, 880, 899]) {
+    test(`regate week card at ${width}px, details ${details}: every focused control and its ring lie inside the card`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+      test.setTimeout(180_000);
+      await page.setViewportSize({ width, height: 900 });
+      const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Week Reader', signature: 'none' });
+      const free = await me.api.displayedPeriodFreeWorkdays();
+      if (free[0] !== undefined) await me.api.seedCompleteDay(free[0]);
+      await signInPageAs(me.account, '#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const sw = page.getByRole('switch', { name: 'Show details' });
+      if (details) await sw.check();
+      else await sw.uncheck();
+      await page.waitForTimeout(300);
+      const geometry = await page.evaluate(() => {
+        const root = document.documentElement;
+        return {
+          page: [root.scrollWidth, root.clientWidth],
+          weeks: [...document.querySelectorAll('.sheet-week')].map((w) => [w.scrollWidth, w.clientWidth]),
+        };
+      });
+      rec(`GEOM ${width}px details=${details}: page ${geometry.page.join('/')}; week cards scrollWidth/clientWidth ${JSON.stringify(geometry.weeks)}`);
+      expect(geometry.page[0]).toBeLessThanOrEqual(geometry.page[1] ?? 0);
+
+      for (const direction of ['Tab', 'Shift+Tab'] as const) {
+        for (const index of [0, 1]) {
+          const card = page.locator('.sheet-week').nth(index);
+          await card.evaluate((w) => (w as HTMLElement).scrollTo({ left: 0, top: 0 }));
+          const all = card.locator('button:not([disabled]), input:not([disabled]), [tabindex="0"]');
+          const count = await all.count();
+          const target = direction === 'Tab' ? all.first() : all.last();
+          await target.focus();
+          await page.keyboard.press('Shift');
+          await page.waitForTimeout(250);
+          const seen: Stop[] = [];
+          for (let i = 0; i < 90; i += 1) {
+            const stop = await page.evaluate(readStop);
+            if (stop === null) break;
+            // the focus must stay inside this card while we walk it
+            const inside = await page.evaluate((idx) => document.activeElement?.closest('.sheet-week') === document.querySelectorAll('.sheet-week')[idx], index);
+            if (!inside) break;
+            seen.push(stop);
+            await page.keyboard.press(direction);
+            await page.waitForTimeout(450);
+          }
+          const bad = seen.filter((s) => Math.min(s.leftRoom, s.rightRoom, s.topRoom, s.bottomRoom) < -0.5 || !s.focusVisible);
+          const weekend = seen.filter((s) => s.weekday === 0 || s.weekday === 6);
+          const weekendKinds = new Set(weekend.map((s) => `${s.weekday}:${s.kind}`));
+          const minRoom = seen.length === 0 ? NaN : Math.min(...seen.map((s) => Math.min(s.leftRoom, s.rightRoom, s.topRoom, s.bottomRoom)));
+          rec(`FOCUS ${width}px details=${details} ${direction} card ${index + 1}: ${seen.length} stops of ${count} controls; weekend stops ${weekend.length} (${[...weekendKinds].sort().join(', ')}); min ring room ${minRoom.toFixed(1)}px (reach read from the computed style, max ${Math.max(...seen.map((s) => s.reach))}px); ring painted on ${seen.filter((s) => s.ringPainted).length}; weekend stops [${weekend.map((s) => `${s.weekday}:${s.kind} sl${s.scrollLeft} R${s.rightRoom.toFixed(1)} L${s.leftRoom.toFixed(1)}`).join('; ')}]; sample ring [${seen.at(-1)?.shadow ?? ''}]; not fully inside or not focus-visible: ${bad.length}${bad.length ? ' :: ' + bad.slice(0, 4).map((s) => `${s.name} L${s.leftRoom.toFixed(1)} R${s.rightRoom.toFixed(1)} T${s.topRoom.toFixed(1)} B${s.bottomRoom.toFixed(1)} sl${s.scrollLeft} fv${s.focusVisible} reach${s.reach} [${s.shadow}]`).join(' | ') : ''}`);
+          expect(seen.length, 'stops visited').toBeGreaterThan(5);
+          expect(bad, 'focused controls with the ring outside the visible card').toEqual([]);
+          expect(weekendKinds.size, 'Saturday and Sunday stops visited').toBeGreaterThanOrEqual(2);
+        }
+      }
+    });
+  }
+}

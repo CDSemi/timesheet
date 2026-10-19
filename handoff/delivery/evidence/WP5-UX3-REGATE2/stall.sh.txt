@@ -1,0 +1,14 @@
+. <task>/env.sh
+# Proof that the surviveStall wrapper does not hide a real settle failure (scratch copy export-probe only; contrast.ts is restored afterwards).
+cd $T/export-probe
+cp tests/e2e/contrast.ts $T/contrast.ts.orig
+echo "before: $(grep -n 'return first === settled;' tests/e2e/contrast.ts)" > $T/out/80-stall.txt
+sed -i 's/return first === settled;/return false;/' tests/e2e/contrast.ts
+echo "after:  $(grep -n 'return false;' tests/e2e/contrast.ts | grep -v waitFor)" >> $T/out/80-stall.txt
+export NODE_OPTIONS="--trace-deprecation"
+mkdir -p $T/pw-stall
+node.exe node_modules/@playwright/test/cli.js test tests/e2e/theme.spec.ts --project=desktop -g "contrast of the checked and the unchecked segment" --output="$TW\\pw-stall" > $T/logs/stall-run.txt 2>&1
+echo "theme contrast tests with a never-settling poll: exit $?" >> $T/out/80-stall.txt
+cp $T/contrast.ts.orig tests/e2e/contrast.ts
+cmp tests/e2e/contrast.ts $T/export-v/tests/e2e/contrast.ts && echo "contrast.ts restored: identical to the gate export" >> $T/out/80-stall.txt
+echo stall-done > $T/out/stall.done

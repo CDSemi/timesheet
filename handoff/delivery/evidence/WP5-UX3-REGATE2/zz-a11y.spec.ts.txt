@@ -1,0 +1,206 @@
+import type { Locator, Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, test } from './fixtures.ts';
+import { applySituation, LA, note, openAccountMenu, scanState, seedLongContent, SITUATIONS, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX3-GATE task-local probe (never part of the repository): a real axe scan (WCAG 2.2 AA tags) with the text-contrast and
+ * focus-ring sweeps of the same states, in the four theme situations. Desktop states run on the desktop project, phone states on
+ * the mobile project. Every observation is appended to GATE_OUT/a11y-scan.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 150))))');
+}
+
+function sessionDialog(page: Page, name: 'New session' | 'Edit session'): Locator {
+  return page.getByRole('dialog', { name, exact: true });
+}
+
+async function openEditorByInput(page: Page, workDate: string): Promise<Locator> {
+  await page.getByLabel('Open a day').fill(workDate);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+  return editor;
+}
+
+for (const situation of SITUATIONS) {
+  test(`desktop states: axe, text and rings (${situation.name})`, async ({ page, privateServer, isMobile }) => {
+    test.skip(isMobile, 'Desktop project');
+    test.setTimeout(420_000);
+    const tag = `desktop/${situation.slug}`;
+    await applySituation(page, situation);
+    const data = await seedLongContent(privateServer);
+    const free = await data.person.api.displayedPeriodFreeWorkdays();
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await signInTo(page, privateServer, data.person.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByRole('switch', { name: 'Show details' }).check();
+
+    await scanState(page, 'Timesheet, editor closed, 1366', { tag, rings: true });
+
+    // Batch selection: three adjacent days selected (the selection checkbox state).
+    await page.getByRole('button', { name: 'Change several days' }).click();
+    const picks = data.dates.slice(2, 5);
+    for (const date of picks) await page.getByLabel(`Select ${date}`).check();
+    await settle(page);
+    await scanState(page, 'Timesheet, batch selection of 3 days, 1366', { tag, rings: false });
+    await page.getByRole('button', { name: 'Done' }).click();
+
+    await namedDayButton(page, data.twoSessions, 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Timesheet with the Day editor beside the sheet, 1366', { tag, rings: true });
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await settle(page);
+    await namedDayButton(page, data.twoSessions, 'Edit').click();
+    await expect(editor).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Timesheet with the Day editor as the floating modal panel, 1280', { tag, rings: true });
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+
+    const panel = await openAccountMenu(page);
+    await expect(panel).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Account menu open, 1280', { tag, rings: true });
+    await page.keyboard.press('Escape');
+
+    for (const [hash, label] of [['#/settings', 'Settings: Personal'], ['#/settings/profile', 'Settings: Profile']] as const) {
+      await page.goto(`${privateServer.origin}/${hash}`);
+      await expect(page.locator('main.page')).toBeVisible();
+      await settle(page);
+      await scanState(page, `${label}, 1280`, { tag, rings: true });
+    }
+    await page.goto(`${privateServer.origin}/#/timesheet`);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+
+    // Session dialog: the notice and the final confirmation.
+    const date = free.find((d) => d !== data.overnight && d !== data.twoSessions);
+    if (date === undefined) {
+      note('a11y-scan.txt', `[${tag}] session dialog states NOT SCANNED: no free past workday left in the displayed period`);
+    } else {
+      await page.setViewportSize({ width: 1366, height: 900 });
+      const ed = await openEditorByInput(page, date);
+      await ed.getByRole('button', { name: 'Add session' }).click();
+      const form = sessionDialog(page, 'New session');
+      await expect(form).toBeVisible();
+      await settle(page);
+      await scanState(page, 'Session dialog (New session, suggested breaks as rows), 1366', { tag, rings: true });
+      // The final confirmation with the listed breaks.
+      await form.getByRole('button', { name: 'Save', exact: true }).click();
+      const confirm = page.getByRole('alertdialog', { name: 'Save this session?' });
+      await expect(confirm).toBeVisible();
+      await settle(page);
+      await scanState(page, 'Session dialog with the final confirmation "Save this session?", 1366', { tag, rings: true });
+      await confirm.getByRole('button', { name: 'Back' }).click();
+      await expect(confirm).toHaveCount(0);
+      // The notice: remove every break, leave the box unticked, Save.
+      for (let count = await form.locator('[data-break]').count(); count > 0; count -= 1) {
+        await form.getByRole('button', { name: `Remove break ${count}`, exact: true }).click();
+      }
+      await form.getByRole('button', { name: 'Save', exact: true }).click();
+      const notice = page.getByRole('alertdialog', { name: 'No breaks listed' });
+      await expect(notice).toBeVisible();
+      await settle(page);
+      await scanState(page, 'Session dialog with the "No breaks listed" notice, 1366', { tag, rings: true });
+      await notice.getByRole('button', { name: /Go back/ }).click();
+      await expect(notice).toHaveCount(0);
+      await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+      const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+      if (await discard.isVisible().catch(() => false)) await discard.getByRole('button', { name: 'Discard' }).click();
+    }
+  });
+}
+
+for (const situation of SITUATIONS) {
+  test(`phone states: day buttons, More panel, session dialog, break sub-dialog (${situation.name})`, async ({ page, privateServer, isMobile }) => {
+    test.skip(!isMobile, 'Mobile project');
+    test.setTimeout(300_000);
+    const tag = `phone390/${situation.slug}`;
+    await applySituation(page, situation);
+    const data = await seedLongContent(privateServer, 'Synthetic Phone Sheet');
+    const free = await data.person.api.displayedPeriodFreeWorkdays();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signInTo(page, privateServer, data.person.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await settle(page);
+    await scanState(page, 'Phone Timesheet with the day buttons (R-UX2A-4), 390', { tag, rings: true });
+
+    await openAccountMenu(page);
+    await settle(page);
+    await scanState(page, 'Phone More panel open, 390', { tag, rings: true });
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' }).click();
+
+    const date = free.find((d) => d !== data.overnight && d !== data.twoSessions);
+    if (date === undefined) {
+      note('a11y-scan.txt', `[${tag}] session dialog states NOT SCANNED: no free past workday left`);
+      return;
+    }
+    const ed = await openEditorByInput(page, date);
+    await settle(page);
+    await scanState(page, 'Phone Day editor sheet, 390', { tag, rings: true });
+    await ed.getByRole('button', { name: 'Add session' }).click();
+    const form = sessionDialog(page, 'New session');
+    await expect(form).toBeVisible();
+    await expect(form.getByRole('list', { name: 'Break list' })).toHaveAttribute('data-layout', 'chips');
+    await settle(page);
+    await scanState(page, 'Phone session dialog (overnight, break chips), 390', { tag, rings: true });
+    await form.locator('[data-break="1"] button.break-chip').click();
+    const sub = page.getByRole('dialog', { name: 'Break 1', exact: true });
+    await expect(sub).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Phone break sub-dialog "Break 1", 390', { tag, rings: true });
+    await sub.getByRole('button', { name: 'Done', exact: true }).click();
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    const confirm = page.getByRole('alertdialog', { name: 'Save this session?' });
+    await expect(confirm).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Phone session dialog with the final confirmation, 390', { tag, rings: true });
+    await confirm.getByRole('button', { name: 'Back' }).click();
+    for (let count = await form.locator('[data-break]').count(); count > 0; count -= 1) {
+      await form.locator('[data-break="1"] button.break-chip').click();
+      await page.getByRole('dialog', { name: 'Break 1', exact: true }).getByRole('button', { name: 'Remove break', exact: true }).click();
+    }
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    const notice = page.getByRole('alertdialog', { name: 'No breaks listed' });
+    await expect(notice).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Phone session dialog with the notice, 390', { tag, rings: true });
+  });
+}
+
+for (const situation of SITUATIONS) {
+  test(`administrator: Settings sub-pages and Import (${situation.name})`, async ({ page, builtServer, isMobile }) => {
+    test.skip(isMobile, 'Desktop project');
+    test.setTimeout(240_000);
+    const tag = `admin/${situation.slug}`;
+    await applySituation(page, situation);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await signInTo(page, builtServer, builtServer.credentials.admin, '#/settings');
+    for (const [hash, label] of [
+      ['#/settings', 'Settings: Personal (administrator)'],
+      ['#/settings/profile', 'Settings: Profile (administrator)'],
+      ['#/settings/admin', 'Settings: Administration'],
+      ['#/import', 'Import'],
+    ] as const) {
+      await page.goto(`${builtServer.origin}/${hash}`);
+      await expect(page.locator('main.page')).toBeVisible();
+      await settle(page);
+      await page.waitForTimeout(500);
+      await scanState(page, `${label}, 1280`, { tag, rings: true });
+    }
+  });
+}
+
+test('shared reader: nothing to scan here (placeholder to keep newPerson imported)', async () => {
+  expect(typeof newPerson).toBe('function');
+  expect(LA).toBe('America/Los_Angeles');
+});

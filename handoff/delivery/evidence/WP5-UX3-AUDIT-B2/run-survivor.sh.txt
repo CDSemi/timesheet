@@ -1,0 +1,20 @@
+# Usage: bash run-survivor.sh <id> <probe spec> [probe playwright args...]
+# A mutant that survived the desktop day-editor run: apply, client build, then every spec that opens the Check out or the session
+# dialog, on both projects; then the task-local probe on the mutated build to show the mutant is live (not equivalent); revert, rebuild.
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+O=$T/out
+M=$T/mut
+id=$1; probe=$2; shift 2
+{
+  echo "=== survivor $id $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  "$PY" -I $T/mutate.py $T/mutants.json $M $T/export apply $id || { echo "apply failed"; exit 2; }
+  (cd $M && npm run build:client > $O/61-$id-build.txt 2>&1; echo "build exit $?")
+  (cd $M && node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts tests/e2e/shell.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/keyboard-access.spec.ts tests/e2e/focus-ring.spec.ts --output="$TW\\pw-surv-$id" > $O/61-$id-e2e-both.txt 2>&1; echo "e2e both projects exit $? $(grep -E '^ +[0-9]+ (passed|failed|flaky|skipped)' $O/61-$id-e2e-both.txt | tr -s ' ' | tr '\n' ' ')")
+  grep -E '^\s+[0-9]+\) \[' $O/61-$id-e2e-both.txt | sed 's/\x1b\[[0-9;]*m//g' | cut -c1-220
+  bash $T/run-probe.sh live-$id mut mut-$id $probe "$@" > $O/61-$id-probe-run.txt 2>&1
+  echo "live probe $probe on the mutated build: $(grep -o 'exit=[0-9]*' $O/61-$id-probe-run.txt)"
+  "$PY" -I $T/mutate.py $T/mutants.json $M $T/export revert $id
+  (cd $M && npm run build:client > $O/61-$id-rebuild.txt 2>&1; echo "clean client rebuild exit $?")
+  echo "=== survivor $id end $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} >> $O/61-survivors.txt 2>&1

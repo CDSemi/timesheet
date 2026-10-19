@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Runs the text checks, scope checks and the mandatory validators for WP5-UX3-GOV2-AUDIT.
+T=/d/.claude-tmp/timesheet/WP5-UX3-GOV2-AUDIT
+export TEMP="$(cygpath -w "$T")" TMP="$(cygpath -w "$T")"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+PY="$(cygpath -u <python>"
+REPO=/d/Dropbox/Work.CDSemi/timesheet
+cd "$REPO" || exit 2
+out=$T/checks_raw.txt
+{
+  echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "\$ <python> --version"
+  "$PY" --version
+  echo "exit=$?"
+  echo "\$ git rev-parse HEAD origin/main"
+  git rev-parse HEAD origin/main
+  echo "exit=$?"
+  echo "\$ git diff --name-only a78ada5..ceb86b6 -- . ':!handoff'"
+  git diff --name-only a78ada5..ceb86b6 -- . ':!handoff'
+  echo "exit=$?"
+  echo "\$ git diff --name-only a78ada5..ceb86b6 (all paths)"
+  git diff --name-only a78ada5..ceb86b6
+  echo "exit=$?"
+  echo "\$ governance paths changed in a78ada5..ceb86b6 (docs/08 'Governance scope' list)"
+  git diff --name-only a78ada5..ceb86b6 -- AGENTS.md AGENTS.vi.md CLAUDE.md CLAUDE.vi.md docs/08_AI_WORKFLOW_AND_BUDGET.md docs/08_AI_WORKFLOW_AND_BUDGET.vi.md handoff/prompts handoff/templates .claude .agents docs/agents 'handoff/delivery/validate_*.py' handoff/delivery/check_recovery.py scripts/precommit-check.mjs
+  echo "exit=$?"
+  echo "\$ git diff --check a78ada5..ceb86b6"
+  git diff --check a78ada5..ceb86b6
+  echo "exit=$?"
+  echo "\$ git diff --numstat a78ada5..ceb86b6 -- AGENTS.md AGENTS.vi.md"
+  git diff --numstat a78ada5..ceb86b6 -- AGENTS.md AGENTS.vi.md
+  echo "exit=$?"
+  echo "\$ git status --short -- . ':!handoff'   (expect empty)"
+  git status --short -- . ':!handoff'
+  echo "exit=$?"
+  echo "\$ <python> -I <task>/text_checks.py <repo> <task>"
+  "$PY" -I "$T/text_checks.py" "$REPO" "$T"
+  echo "exit=$?"
+  echo "\$ <python> handoff/delivery/validate_package.py --preflight"
+  "$PY" handoff/delivery/validate_package.py --preflight
+  echo "exit=$?"
+  echo "\$ <python> handoff/delivery/validate_orchestration.py"
+  "$PY" handoff/delivery/validate_orchestration.py
+  echo "exit=$?"
+  echo "\$ <python> handoff/delivery/check_recovery.py"
+  "$PY" handoff/delivery/check_recovery.py > "$T/check_recovery_raw.json" 2>&1
+  rc=$?
+  echo "exit=$rc"
+  grep -E '"status"|"count"|"actual_board_modified"|"claude_dispatch_executed"' "$T/check_recovery_raw.json"
+} > "$out" 2>&1

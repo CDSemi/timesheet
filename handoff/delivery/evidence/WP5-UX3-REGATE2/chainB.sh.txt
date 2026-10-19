@@ -1,0 +1,19 @@
+. <task>/env.sh
+cd $T
+P() { label=$1; spec=$2; shift 2; bash run-probe.sh "$label" "$spec" "$@" > "logs/probe-$label.txt" 2>&1; echo "probe $label finished $(date -u +%Y-%m-%dT%H:%M:%SZ) exit-line: $(grep -E '^exit=' logs/probe-$label.txt)" >> logs/chainB-progress.txt; }
+bash run-rest.sh > logs/rest.txt 2>&1; echo "rest finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/chainB-progress.txt
+bash cmp-dist.sh > logs/cmp-dist.txt 2>&1; echo "cmp-dist finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/chainB-progress.txt
+P audit zz-audit.spec.ts
+P a11y2 zz-a11y2.spec.ts
+P a11y zz-a11y.spec.ts
+P shots zz-shots.spec.ts
+P co zz-checkout-shot.spec.ts
+P layout zz-layout.spec.ts
+P lift zz-lift.spec.ts
+P phone zz-phone.spec.ts
+P measure zz-measure.spec.ts
+P focus zz-focus.spec.ts
+P headers zz-headers.spec.ts
+P dom zz-dom.spec.ts
+P week zz-weekreg.spec.ts --workers=1
+echo chainB-done > out/chainB.done

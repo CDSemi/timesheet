@@ -581,6 +581,91 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - Từ mục 1-13 đến cuối file giống từng byte so với a78ada5.
   - Các validator PASS; digest b35dddd5 (833 file).
 - Đang chạy: WP5-UX3-GOV2-FREEZE (committer, chạy một mình).
+- WP5-UX3-GOV2-FREEZE xong: ceb86b6b18bd0e8fabd93f47672cd87f3899b92f trên main, đã push.
+  - 21 đường dẫn: cặp AGENTS cùng các bản ghi handoff đang chờ.
+  - Digest b35dddd5 (833 file), trên HEAD cũng vậy.
+  - Mọi kiểm tra trả về 0.
+- Đang chạy song song (hai verifier chỉ đọc):
+  - WP5-UX3-GOV2-GATE (sonnet) trên ceb86b6;
+  - WP5-UX3-REGATE2 lần 2 (sonnet), đã nhắm lại vào ceb86b6 / b35dddd5.
+- Sau đó: GOV2-AUDIT (opus, agent mới) sau gate GOV; các audit kiểm lại A2 và B2 sau khi REGATE2
+  đạt PASS, với brief nhắm lại vào ceb86b6 / b35dddd5.
+- Trong lúc các gate chạy:
+  - Các brief AUDIT-A2, AUDIT-B2 và AUDIT-INT đã được nhắm lại vào ceb86b6 / b35dddd5.
+  - Đã soạn brief WP5-UX3-GOV2-AUDIT: độ trung thành với ý chủ dự án, tính nhất quán với các mục
+    1-13, docs/08, CLAUDE và các prompt, bản dịch, phạm vi và định dạng, và các validator.
+    Audit này không chạy e2e.
+- WP5-UX3-GOV2-GATE xong: PASS trên ceb86b6 / b35dddd5.
+  - Phạm vi: đúng cặp AGENTS.
+  - Các chỗ sửa theo ý chủ dự án đã có.
+  - Phần sau tiêu đề Project instructions giống từng byte so với a78ada5.
+  - Bản dịch EN/VI khớp nhau.
+  - Các validator và verify đều đạt (2141 test).
+- Đang chạy song song: WP5-UX3-GOV2-AUDIT (opus, agent mới) và WP5-UX3-REGATE2 lần 2.
+- WP5-UX3-GOV2-AUDIT xong: PASS trên ceb86b6 / b35dddd5, không có lỗi nào. WP5-UX3-GOV2 đã được
+  nghiệm thu.
+  - Auditor dựng lại nguyên văn bản gốc của chủ dự án và xác nhận worker chỉ sửa đúng các mục đã
+    nêu.
+  - Việc xóa "CI" được chấp nhận.
+  - Không có mâu thuẫn với các mục 1-13, docs/08, CLAUDE hay các prompt.
+  - Rủi ro:
+    - R1 (ghi chú cho chủ dự án): "template variable" và "manifest key" có tồn tại trong dự án
+      này (template email, manifest của bản sao lưu), nhưng việc xóa làm đúng theo lời chủ dự án.
+    - R2: giữ lại "production accuracy".
+    - R3-R5 và R8 đưa vào backlog quản trị.
+    - R9: các agent trong phiên này nhận bản AGENTS.md được nạp sẵn là bản chưa sửa của chủ dự
+      án, nên brief phải ghi rõ bản trên đĩa mới là bản có hiệu lực.
+- Vẫn đang chạy: WP5-UX3-REGATE2 lần 2.
+- WP5-UX3-REGATE2 lần 2 xong: PASS trên ceb86b6 / b35dddd5. NAS, các script kiểm vết nối ở DPR 2
+  và các trình duyệt ngoài Chromium là NOT VERIFIED.
+  - e2e theo đồng hồ thật 645 đạt / 0 lỗi; 2141 test unit; drill 208 PASS.
+  - dist/server và dist/domain giống từng byte so với a643794.
+  - 5 lần chạy FULL và 5 lần chạy năm spec theo đồng hồ giả lập, 0 lỗi. Một lỗi buffer ở lần
+    chạy đầu ngày 28/11 nằm trong phạm vi được phép chạy lại.
+  - Mọi lỗi F-UX3A và F-UX3B đều đã khắc phục.
+  - axe: chỉ còn mục target-size đã được giải trình.
+  - Nhận xét thêm: biểu tượng Sign out lệch phải 3px so với Profile; màn hình đầu ở trạng thái
+    away thấp hơn 2.2px; nhãn "after WP5-UX3-FIX2" trong docs/10 đã cũ.
+- current_source_digest là b35dddd5. Mục AUDIT-INT nay phụ thuộc vào REGATE2, A2 và B2.
+- Đang chạy song song: hai audit kiểm lại mới (opus) WP5-UX3-AUDIT-A2, có đánh giá thêm ba nhận xét
+  trên và làm lại phần kiểm vết nối ở DPR 2, và WP5-UX3-AUDIT-B2.
+- WP5-UX3-AUDIT-B2 xong: FIX REQUIRED với một lỗi mức Low về độ chặt của test, không có lỗi sản
+  phẩm.
+  - F-UX3B2-1: chưa có test nào chứng minh ghi chú xóa giờ nghỉ không hiện khi Check out bình
+    thường (đột biến M6a không bị bắt).
+  - F-UX3B-1 và F-UX3B-2 đã khắc phục; lựa chọn hành vi hợp lý.
+  - Hồi quy: 39 trường hợp dữ liệu gửi đi giống từng byte so với 7ce4e95.
+  - e2e đầy đủ 645 đạt / 0 lỗi.
+  - Rủi ro R-B2-1..5: R-B2-1 là chưa có test nào ghim "Confirm breaks" cho phiên đã kết thúc
+    trong hôm nay (đột biến M5b không bị bắt).
+- AUDIT-A2 vẫn đang chạy. Cách sửa sẽ được quyết sau khi audit này xong.
+- WP5-UX3-AUDIT-A2 xong: FIX REQUIRED.
+  - F-UX3A2-1, mức trung bình: ở độ rộng điện thoại, bảng More vẫn mở sau khi focus rời khỏi
+    nó, nên 12/14 ô chọn Category đang có focus bị che hoàn toàn. Lỗi có từ vòng 3.
+  - F-UX3A2-2, mức Low: chưa có test giữ hai luật vòng focus dưới con trỏ chuột của nút dạng
+    liên kết và tab điện thoại.
+  - F-UX3A2-3, mức Low: mục Sign out lệch 3px so với các mục khác.
+  - F-UX3A-01..06 đã khắc phục; F-UX3A-04 chỉ còn độ lệch nói trên.
+  - Vết nối ở DPR 2 sạch.
+  - Rủi ro R-A2-1: test quét hover chỉ kiểm theo chữ, nên đột biến M6b không bị bắt.
+  - e2e đầy đủ 645 đạt / 0 lỗi, sau một lần chạy lại được phép vì lỗi mạng.
+- Quyết định của coordinator: một lần sửa gọn WP5-UX3-FIX4 (worker-high, sonnet).
+  - Phạm vi: F-UX3A2-1..3 và F-UX3B2-1, cùng các test giữ R-A2-1, R-B2-1, R-B2-4, và nhãn ở
+    docs/10 dòng 240. Mỗi test giữ phải được chứng minh bằng đột biến tương ứng.
+  - Sau đó: FIX4-FREEZE, WP5-UX3-REGATE3 rút gọn, các audit kiểm lại mới A3 và B3, rồi
+    AUDIT-INT.
+- Đang chạy: WP5-UX3-FIX4.
+- WP5-UX3-FIX4 xong (worker-high, tự báo claude-sonnet-5-5).
+  - Bảng More đóng khi focus rời thanh tab.
+  - Sign out đã thẳng hàng.
+  - Các test giữ mới: vòng focus của nút dạng liên kết và tab điện thoại, test quét hover dùng
+    matchMedia, ghi chú xóa giờ nghỉ không hiện khi không cần, và "Confirm breaks" cho phiên đã
+    kết thúc hôm nay.
+  - Ghi chú cho suggestedRows và số liệu trong docs/10 (487.01 kB).
+  - Các đột biến M1, M4, M5, M6b, M6a và M5b đều bị bắt.
+  - Unit 2141; e2e đầy đủ 651 đạt / 0 lỗi; verify 0.
+  - Digest 245e9459 (833 file; 8 đường dẫn thay đổi).
+- Đang chạy: WP5-UX3-FIX4-FREEZE (committer, chạy một mình).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

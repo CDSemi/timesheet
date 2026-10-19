@@ -1,0 +1,148 @@
+import { appendFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { backdropOf, contrast, over, parseColour, parseLayers, type Rgba } from './contrast.ts';
+
+/* WP5-UX3-AUDIT-A2 task-local probe helpers (never in the repository). */
+export const TASK = 'D:/.claude-tmp/timesheet/WP5-UX3-AUDIT-A2';
+export const OBS = join(TASK, 'obs');
+mkdirSync(OBS, { recursive: true });
+
+export function note(file: string, line: string): void {
+  appendFileSync(join(OBS, file), `${line}\n`);
+}
+
+export function shot(name: string): string {
+  const dir = join(TASK, 'shots');
+  mkdirSync(dir, { recursive: true });
+  return join(dir, name);
+}
+
+export const r2 = (v: number) => Math.round(v * 100) / 100;
+
+export interface PaintInfo {
+  desc: string;
+  focusVisible: boolean;
+  hover: boolean;
+  shadow: string;
+  outline: string;
+  fill: string;
+  backdrops: string[];
+  rect: { x: number; y: number; w: number; h: number };
+  topAtCentre: boolean;
+}
+
+/** Reads the active element (or its painter: a theme radio paints its ring on the label) as painted now. */
+export async function activeInfo(page: Page): Promise<PaintInfo | null> {
+  return page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    if (active === null || active === document.body || active === document.documentElement) return null;
+    const painter = (active.closest('.theme-option') as HTMLElement | null) ?? active;
+    const view = window;
+    const cs = view.getComputedStyle(painter);
+    const backdrops: string[] = [];
+    for (let node = painter.parentElement; node; node = node.parentElement) backdrops.push(view.getComputedStyle(node).backgroundColor);
+    const r = painter.getBoundingClientRect();
+    const name = (active.getAttribute('aria-label') ?? active.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    const cls = typeof active.className === 'string' ? active.className.split(/\s+/).filter(Boolean).slice(0, 3).join('.') : '';
+    const role = active.getAttribute('role') ?? '';
+    const type = active.getAttribute('type') ?? '';
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const hit = document.elementFromPoint(cx, cy);
+    return {
+      desc: `${active.tagName.toLowerCase()}${type ? `[${type}]` : ''}${role ? `(${role})` : ''}${cls ? `.${cls}` : ''} "${name}"`,
+      focusVisible: active.matches(':focus-visible'),
+      hover: painter.matches(':hover'),
+      shadow: cs.boxShadow,
+      outline: `${cs.outlineStyle} ${cs.outlineWidth} ${cs.outlineColor}`,
+      fill: cs.backgroundColor,
+      backdrops,
+      rect: { x: r.left, y: r.top, w: r.width, h: r.height },
+      topAtCentre: hit !== null && (hit === painter || painter.contains(hit) || hit.contains(painter)),
+    };
+  });
+}
+
+/** The strongest indicator layer (spread >= 2, or a 1px-gap/3px pair) and its contrast: outset against the backdrop, inset against the own fill. */
+export function ringOf(info: PaintInfo): { ok: boolean; ratio: number; kind: string } {
+  const backdrop: Rgba = backdropOf(info.backdrops);
+  const fill = over(parseColour(info.fill), backdrop);
+  const layers = parseLayers(info.shadow).filter((layer) => layer.spread >= 2 && layer.offsetX === 0 && layer.offsetY === 0);
+  let best = 0;
+  let kind = 'none';
+  for (const layer of layers) {
+    const against = layer.inset ? fill : backdrop;
+    const ratio = contrast(over(layer.colour, against), against);
+    if (ratio > best) {
+      best = ratio;
+      kind = `${layer.inset ? 'inset' : 'outset'} ${layer.spread}px`;
+    }
+  }
+  return { ok: best >= 3, ratio: r2(best), kind };
+}
+
+export async function settle(page: Page, ms = 120): Promise<void> {
+  await page.waitForTimeout(ms);
+}
+
+/** Pointer away (top-left corner of the window), read; pointer on the painter's centre, read. */
+export async function awayAndUnder(page: Page): Promise<{ away: PaintInfo | null; under: PaintInfo | null }> {
+  await page.mouse.move(0, 0);
+  await settle(page);
+  const away = await activeInfo(page);
+  if (away === null) return { away, under: null };
+  await page.mouse.move(away.rect.x + away.rect.w / 2, away.rect.y + away.rect.h / 2);
+  await settle(page);
+  const under = await activeInfo(page);
+  await page.mouse.move(0, 0);
+  return { away, under };
+}
+
+export function describe(label: string, away: PaintInfo | null, under: PaintInfo | null): { line: string; bad: boolean } {
+  if (away === null) return { line: `${label}: body`, bad: false };
+  const ra = ringOf(away);
+  const ru = under === null ? { ok: false, ratio: 0, kind: 'n/a' } : ringOf(under);
+  const same = under !== null && under.shadow === away.shadow;
+  const bad = !away.focusVisible || !ra.ok || (under !== null && under.hover && !ru.ok);
+  const line = `${label}: ${away.desc} fv=${away.focusVisible} away=${ra.ok ? 'ring' : 'NO-RING'} ${ra.kind} ${ra.ratio} | under hover=${under?.hover} top=${under?.topAtCentre} ${ru.ok ? 'ring' : 'NO-RING'} ${ru.kind} ${ru.ratio} same=${same}${bad ? ' <<< CHECK' : ''}`;
+  return { line, bad };
+}
+
+/** Tab walk: up to `max` stops, each read with the pointer away and resting on the focused control. Stops early when `until` is true. */
+export async function walk(page: Page, file: string, title: string, max: number, until?: () => Promise<boolean>, key = 'Tab'): Promise<{ stops: number; bad: number; lines: string[] }> {
+  let bad = 0;
+  let stops = 0;
+  const lines: string[] = [];
+  for (let index = 0; index < max; index += 1) {
+    await page.keyboard.press(key);
+    await settle(page, 80);
+    if (until !== undefined && (await until())) break;
+    const { away, under } = await awayAndUnder(page);
+    if (away === null) continue;
+    stops += 1;
+    const d = describe(`${title} #${index + 1}`, away, under);
+    if (d.bad) bad += 1;
+    lines.push(d.line);
+    note(file, d.line);
+  }
+  note(file, `== ${title}: ${stops} stops, ${bad} flagged`);
+  return { stops, bad, lines };
+}
+
+export async function axeScan(page: Page, label: string, file: string): Promise<string[]> {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(join(TASK, 'axe', 'axe.min.js'), 'utf8');
+  await page.evaluate(source);
+  const result = await page.evaluate<{ violations: { id: string; impact: string; nodes: { target: string[] }[] }[]; incomplete: { id: string }[]; version: string }>(
+    `(async () => { const r = await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } }); return { version: window.axe.version, violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => ({ target: n.target })) })), incomplete: r.incomplete.map((v) => ({ id: v.id })) }; })()`,
+  );
+  const ids = result.violations.map((v) => `${v.id}(${v.impact}) ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`);
+  note(file, `axe ${result.version} ${label}: ${result.violations.length} violations${ids.length ? `: ${ids.join('; ')}` : ''}; incomplete ${[...new Set(result.incomplete.map((v) => v.id))].join(',')}`);
+  return ids;
+}
+
+export async function measureBox(locator: Locator): Promise<{ w: number; h: number }> {
+  const box = await locator.boundingBox();
+  return { w: r2(box?.width ?? 0), h: r2(box?.height ?? 0) };
+}

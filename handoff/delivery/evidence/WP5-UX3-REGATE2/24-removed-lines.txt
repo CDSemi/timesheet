@@ -1,0 +1,65 @@
+-import type { Calculation, DayView, Period, PolicyVersion, Session } from '../../src/client/api.ts';
+-  quickBreaksOf,
+-const DEFAULT_BREAKS = [
+-  { start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false },
+-  { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false },
+-  { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false },
+-];
+-const POLICY: PolicyVersion = {
+-  id: 'policy-1',
+-  seq: 1,
+-  effective_from: '2026-01-01',
+-  required_minutes: 480,
+-  threshold_minutes: 30,
+-  rounding_step_minutes: 30,
+-  reference_start: '08:00',
+-  reference_end: '17:00',
+-  breaks: DEFAULT_BREAKS,
+-};
+-describe('one-tap break confirmation of a saved session (R-02)', () => {
+-  it('suggests the policy breaks shifted by the session start, shown in the display zone (R-07)', () => {
+-    const quick = quickBreaksOf(session(), POLICY, LA);
+-    expect(quick?.kind).toBe('suggested');
+-    expect(quick?.chips).toEqual(['11:00-11:15', '13:00-13:30', '15:30-15:45']);
+-    // The same breaks seen from Ho Chi Minh City (UTC+7); the rows stay in the session's input zone.
+-    expect(quickBreaksOf(session(), POLICY, HCM)?.chips).toEqual(['01:00-01:15', '03:00-03:30', '05:30-05:45']);
+-    expect(quickBreaksOf(session(), POLICY, HCM)?.rows.map((row) => row.start.time)).toEqual(['11:00', '13:00', '15:30']);
+-  });
+-  // The request of "Confirm breaks" (suggested rows, the rows already listed, or "no breaks taken") is proved against the old
+-  // one-tap bodies in tests/client/breakRowsModel.test.ts, because the session dialog's model now builds it.
+-  it('offers the rows already listed with the session instead of new suggestions', () => {
+-    const listed = session({ breaks: [{ id: 'b1', start_utc: '2026-09-21T19:00:00Z', end_utc: '2026-09-21T19:20:00Z', counts_as_work: false }] });
+-    const quick = quickBreaksOf(listed, POLICY, LA);
+-    expect(quick?.kind).toBe('listed');
+-    expect(quick?.chips).toEqual(['12:00-12:20']);
+-    expect(quick?.rows.map((row) => [row.start.time, row.end.time])).toEqual([['12:00', '12:20']]);
+-  });
+-  it('offers only "no breaks" when a suggestion would fall outside the session or no policy breaks exist', () => {
+-    // 09:00 to 10:30: the first suggested break (11:00) is after the end; never deduct future breaks.
+-    expect(quickBreaksOf(session({ end_utc: '2026-09-21T17:30:00Z' }), POLICY, LA)).toEqual({ kind: 'none', rows: [], chips: [] });
+-    expect(quickBreaksOf(session(), undefined, LA)?.kind).toBe('none');
+-    expect(quickBreaksOf(session(), { ...POLICY, breaks: [] }, LA)?.kind).toBe('none');
+-  });
+-  it('offers nothing for a running session or one whose breaks are already confirmed', () => {
+-    expect(quickBreaksOf(session({ end_utc: null }), POLICY, LA)).toBeNull();
+-    expect(quickBreaksOf(session({ breaks_confirmed: true }), POLICY, LA)).toBeNull();
+-  });
+-});
+-/* ---- The sheet day columns (WP5-UX3-FIX2 item 11, AGENTS UI rule 3) ---------------------------------------- */
+- * A tap must not leave a tint on a sheet day column of a touch screen of 768px or more: every `.sheet-day` hover rule that paints
+- * (the column tint and the lifted column's tint) sits inside `@media (hover: hover)`. The read-only sheet's two reset rules only
+- * undo that tint and may stay outside. The browser's own parsed style sheets are read, so the check does not depend on a device.
+-test('the sheet day hover rules exist only under (hover: hover); where the device can hover, a day column tints under the pointer', async ({
+-        } else if (rule instanceof CSSStyleRule && /\\.sheet-day[^,{]*:hover/.test(rule.selectorText) && !rule.selectorText.startsWith('.sheet-review')) {
+-          (hoverOnly ? result.gated : result.ungated).push(rule.selectorText);
+-  expect(rules.ungated, 'sheet day hover rules outside (hover: hover)').toEqual([]);
+-    const indicator = async (segment: Locator, checked: boolean): Promise<number> => {
+-      const backdrop = backdropOf(await backdropsAbove(segment));
+-      const colour = checked ? await flattenedBackground(segment) : over(parseColour(await settledStyle(segment, 'borderTopColor')), backdrop);
+-      return contrast(colour, backdrop);
+-    };
+-        const restText = await textContrast(segment);
+-          const hoverText = await textContrast(segment);
+-        await focusFromKeyboard(control.radio[theme], segment);
+-        const ring = await measureFocusRing(segment);
+-        const focusText = await textContrast(segment);

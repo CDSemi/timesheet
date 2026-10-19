@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# WP5-UX3-AUDIT-A2: create the probe and mutant exports of TARGET and run npm ci in all three exports.
+set -u
+source /d/.claude-tmp/timesheet/WP5-UX3-AUDIT-A2/env.sh
+log="$T/logs/setup.txt"
+: > "$log"
+for name in export-p export-m; do
+  if [ ! -d "$T/$name" ]; then
+    mkdir -p "$T/$name"
+    git -C "$REPO" archive --format=tar "$TARGET" | tar -x -C "$T/$name"
+    echo "$name created exit $?" >> "$log"
+  fi
+done
+for name in export export-p export-m; do
+  start=$(date -u +%H:%M:%SZ)
+  ( cd "$T/$name" && npmrun ci > "$T/logs/ci-$name.txt" 2>&1 )
+  echo "npm ci $name exit $? ($start to $(date -u +%H:%M:%SZ))" >> "$log"
+done
+echo done >> "$log"

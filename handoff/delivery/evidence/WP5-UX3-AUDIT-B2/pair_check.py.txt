@@ -1,0 +1,35 @@
+"""The validate_package.py preflight checks (links, U+FFFD, translation pair, ID set) applied to given EN files only.
+Usage: python pair_check.py <out.txt> <en.md> [<en.md> ...]"""
+import re
+import sys
+from pathlib import Path
+
+ids = re.compile(r"\b(?:R-\d{2}|FR-\d{2}|AC-\d{2}|D-\d{2}|WP[1-5]|TM-\d{2}|OT-\d{2}|DF-\d{2}|LG-\d{2})\b")
+out = sys.argv[1]
+lines = []
+ok_all = True
+for name in sys.argv[2:]:
+    for p in (Path(name), Path(name).with_name(Path(name).stem + '.vi.md')):
+        body = p.read_text(encoding='utf-8')
+        bad_char = '�' in body
+        broken = []
+        links = 0
+        for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", body):
+            if re.match(r"[a-z]+://", target) or target.startswith(("#", "mailto:")):
+                continue
+            links += 1
+            if not (p.parent / target.split('#', 1)[0]).resolve().is_file():
+                broken.append(target)
+        ok = not bad_char and not broken
+        ok_all = ok_all and ok
+        lines.append(f'{p.name}: replacement chars {bad_char}, local links {links}, broken {broken}')
+    en = Path(name)
+    vi = en.with_name(en.stem + '.vi.md')
+    a = set(ids.findall(en.read_text(encoding='utf-8')))
+    b = set(ids.findall(vi.read_text(encoding='utf-8')))
+    same = a == b
+    ok_all = ok_all and same
+    lines.append(f'{en.name} / {vi.name}: translation present True, ID sets equal {same} ({sorted(a)}){"" if same else f" EN only {sorted(a - b)} VI only {sorted(b - a)}"}')
+lines.append(f'ALL OK: {ok_all}')
+open(out, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines) + '\n')
+print('\n'.join(lines))

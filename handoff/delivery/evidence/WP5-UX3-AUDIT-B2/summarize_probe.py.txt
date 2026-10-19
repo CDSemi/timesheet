@@ -1,0 +1,82 @@
+"""Summarizes the checkout and confirm probes of two builds side by side.
+Usage: python summarize_probe.py checkout|confirm <base.jsonl> <target.jsonl> <out.txt>"""
+import json
+import re
+import sys
+
+kind, base_path, target_path, out_path = sys.argv[1:5]
+
+
+def load(path):
+    out = {}
+    try:
+        for line in open(path, encoding='utf-8'):
+            line = line.strip()
+            if line:
+                item = json.loads(line)
+                out[item['case']] = item
+    except FileNotFoundError:
+        pass
+    return out
+
+
+def mask_late(raw):
+    # The late seeded row L starts and ends a few minutes after the run's own "now": mask times other than the fixed ones.
+    return re.sub(r'T(\d\d:\d\d)', lambda m: 'T' + (m.group(1) if m.group(1) in ('07:00', '08:00', '08:15', '09:00', '09:10') else '<late>'), raw)
+
+
+base = load(base_path)
+target = load(target_path)
+lines = []
+summary = []
+for case in list(target.keys()) + [c for c in base if c not in target]:
+    t = target.get(case)
+    b = base.get(case)
+    if case in ('context', 'errors'):
+        lines.append(f'=== {case}: base={None if b is None else {k: v for k, v in b.items() if k not in ("build",)}}')
+        lines.append(f'    target={None if t is None else {k: v for k, v in t.items() if k not in ("build",)}}')
+        continue
+    lines.append(f'=== {case}')
+    for name, item in (('base', b), ('target', t)):
+        if item is None:
+            lines.append(f'  {name}: not run')
+            continue
+        if 'error' in item:
+            lines.append(f'  {name}: ERROR {item["error"][:400]}')
+        if kind == 'checkout':
+            for s in item.get('steps', []):
+                lines.append(f'  {name} step {json.dumps(s, ensure_ascii=False)}')
+            for w in item.get('writes', []):
+                lines.append(f'  {name} POST /api/clock/out {w["status"]} {w["raw"]} {w.get("response", "")}')
+            st = item.get('stored')
+            if st is not None:
+                ses = st.get('sessions', [])
+                lines.append(f'  {name} stored sessions={json.dumps(ses)} calc={json.dumps(st.get("calc"))}')
+        else:
+            if 'rows' in item:
+                lines.append(f'  {name} rows={json.dumps(item["rows"], ensure_ascii=False)} box={item.get("box")} expectRows={item.get("expectRows")}')
+                lines.append(f'  {name} saved={json.dumps(item.get("saved"), ensure_ascii=False)}')
+            for w in item.get('writes', []) if isinstance(item.get('writes'), list) else []:
+                lines.append(f'  {name} {w["method"]} {w["path"]} {w["status"]} {w["raw"]}')
+            if 'stored' in item:
+                lines.append(f'  {name} stored={json.dumps(item["stored"])}')
+            for key in ('confirmRows', 'prefillRows', 'shiftedRows', 'confirmWrites', 'newWrites', 'breaksIdentical', 'storedBreaksIdentical', 'confirmStored', 'newStored', 'confirmedButtons', 'runningButtons'):
+                if key in item:
+                    lines.append(f'  {name} {key}={json.dumps(item[key], ensure_ascii=False)}')
+    if b is not None and t is not None and 'error' not in b and 'error' not in t:
+        if kind == 'checkout':
+            braw = [(w['status'], mask_late(w['raw'])) for w in b.get('writes', [])]
+            traw = [(w['status'], mask_late(w['raw'])) for w in t.get('writes', [])]
+        else:
+            braw = [(w['method'], w['path'], w['status'], w['raw']) for w in b.get('writes', [])] if isinstance(b.get('writes'), list) else []
+            traw = [(w['method'], w['path'], w['status'], w['raw']) for w in t.get('writes', [])] if isinstance(t.get('writes'), list) else []
+        same = braw == traw
+        lines.append(f'  bodies identical between builds: {same}')
+        summary.append(f'  {case}: bodies {"IDENTICAL" if same else "DIFFER"}')
+    elif t is not None:
+        summary.append(f'  {case}: target only' + (' (ERROR)' if 'error' in t else ''))
+lines.append('')
+lines.append('SUMMARY (base vs target)')
+lines.extend(summary)
+open(out_path, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines) + '\n')
+print('\n'.join(['SUMMARY'] + summary))

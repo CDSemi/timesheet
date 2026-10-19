@@ -569,6 +569,33 @@ for (const situation of SITUATIONS) {
 const UNGATED_HOVER_ALLOWLIST: ReadonlyArray<{ selector: string; reason: string }> = [];
 
 /**
+ * Every `:hover` rule of the page's parsed style sheets, split two ways: by the text of its enclosing media conditions (`ungated` has no
+ * `(hover: hover)` in any of them) and by what the browser says now (`applying` lists the rules whose enclosing media conditions ALL
+ * match on this device, so a hover look can paint here).
+ */
+async function collectHoverRules(page: Page): Promise<{ ungated: string[]; gated: string[]; applying: string[] }> {
+  return page.evaluate<{ ungated: string[]; gated: string[]; applying: string[] }>(`(() => {
+    const result = { ungated: [], gated: [], applying: [] };
+    const visit = (list, hoverOnly, applies) => {
+      for (const rule of Array.from(list)) {
+        if (rule instanceof CSSMediaRule) {
+          visit(rule.cssRules, hoverOnly || /hover:\\s*hover/.test(rule.media.mediaText), applies && window.matchMedia(rule.media.mediaText).matches);
+        } else if (rule instanceof CSSStyleRule) {
+          if (rule.selectorText.includes(':hover')) {
+            (hoverOnly ? result.gated : result.ungated).push(rule.selectorText);
+            if (applies) result.applying.push(rule.selectorText);
+          }
+        } else if (rule instanceof CSSGroupingRule) {
+          visit(rule.cssRules, hoverOnly, applies);
+        }
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets)) visit(sheet.cssRules, false, true);
+    return result;
+  })()`);
+}
+
+/**
  * A tap must not leave a hover look on a touch screen: EVERY rule of the application's style sheet whose selector uses `:hover`
  * (the day column tint, the lifted column's tint, the Category picker, the form fields, the table rows, the button links and the
  * rest) sits inside `@media (hover: hover)`, except the explicit allowlist above. The browser's own parsed style sheets are read, so
@@ -580,22 +607,7 @@ test('every hover rule of the style sheet exists only under (hover: hover); wher
 }) => {
   await signInThroughUi();
   await expect(page.locator('[data-day]')).toHaveCount(14);
-  const rules = await page.evaluate<{ ungated: string[]; gated: string[] }>(`(() => {
-    const result = { ungated: [], gated: [] };
-    const visit = (list, hoverOnly) => {
-      for (const rule of Array.from(list)) {
-        if (rule instanceof CSSMediaRule) {
-          visit(rule.cssRules, hoverOnly || /hover:\\s*hover/.test(rule.media.mediaText));
-        } else if (rule instanceof CSSStyleRule) {
-          if (rule.selectorText.includes(':hover')) (hoverOnly ? result.gated : result.ungated).push(rule.selectorText);
-        } else if (rule instanceof CSSGroupingRule) {
-          visit(rule.cssRules, hoverOnly);
-        }
-      }
-    };
-    for (const sheet of Array.from(document.styleSheets)) visit(sheet.cssRules, false);
-    return result;
-  })()`);
+  const rules = await collectHoverRules(page);
   const allowed = new Set(UNGATED_HOVER_ALLOWLIST.map((entry) => entry.selector));
   expect(
     rules.ungated.filter((selector) => !allowed.has(selector)),
@@ -623,6 +635,33 @@ test('every hover rule of the style sheet exists only under (hover: hover); wher
   }
 });
 
+/**
+ * WP5-UX3-FIX4 item 4: the scan above judges the TEXT of the media conditions. A touch screen (hover none, pointer coarse) judges what
+ * the browser matches: no hover rule may apply there, whatever its condition says (for example `(hover: hover), (pointer: coarse)` is
+ * textually gated and still applies on a phone). The touch device is the mobile project's own, and a touch context on the desktop project.
+ */
+test.describe('a touch screen', () => {
+  test.use({ hasTouch: true });
+
+  test('no hover rule of the style sheet applies where the device cannot hover', async ({ page, signInThroughUi }) => {
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    expect(
+      await page.evaluate<{ hover: boolean; coarse: boolean }>(
+        "({ hover: window.matchMedia('(hover: none)').matches, coarse: window.matchMedia('(pointer: coarse)').matches })",
+      ),
+      'the page is a touch screen: it cannot hover and its pointer is coarse',
+    ).toEqual({ hover: true, coarse: true });
+    const rules = await collectHoverRules(page);
+    expect(rules.gated.length + rules.ungated.length, 'the style sheet has hover rules to judge').toBeGreaterThan(20);
+    const allowed = new Set(UNGATED_HOVER_ALLOWLIST.map((entry) => entry.selector));
+    expect(
+      rules.applying.filter((selector) => !allowed.has(selector)),
+      'hover rules that apply on a touch screen',
+    ).toEqual([]);
+  });
+});
+
 /* ---- The focus ring under the pointer (WP5-UX3-FIX3 item 1, SC 2.4.7) ------------------------------------- */
 
 /** True when the element is focused, matches `:focus-visible` and has the pointer over it (the precondition of the ring checks). */
@@ -638,7 +677,7 @@ async function focusedAndHovered(locator: Locator): Promise<{ focus: boolean; fo
  * Keyboard focus puts the shared ring on a control, and the pointer resting on that control must not take it away. Compared with
  * the same focused control while the pointer is elsewhere: the ring is painted, equal to the pointer-away ring, and meets 3:1.
  */
-async function expectRingUnderPointer(page: Page, control: Locator, kind: 'shared' | 'inset', label: string): Promise<void> {
+async function expectRingUnderPointer(page: Page, control: Locator, kind: 'shared' | 'inset' | 'inset-gap', label: string): Promise<void> {
   await control.scrollIntoViewIfNeeded();
   await page.mouse.move(0, 0);
   await control.evaluate((element) => element.blur());
@@ -659,6 +698,12 @@ async function expectRingUnderPointer(page: Page, control: Locator, kind: 'share
     const ring = outset.reduce((a, b) => (b.spread > a.spread ? b : a));
     expect(ring.spread, `${label}: the shared ring is 3px`).toBe(3);
     expect(contrast(over(ring.colour, surface), surface), `${label}: ring against its surface`).toBeGreaterThanOrEqual(NON_TEXT);
+  } else if (kind === 'inset-gap') {
+    // The shared inset ring (`--focus-ring-inset`): a 2px accent ring and a 3px card-coloured gap layer inside the control.
+    expect(layers, `${label}: the inset ring and its gap layer (${under})`).toHaveLength(2);
+    expect(layers.map((layer) => [layer.inset, layer.spread]), `${label}: inset 2px ring, then inset 3px gap`).toEqual([[true, 2], [true, 3]]);
+    const fill = await flattenedBackground(control);
+    expect(contrast(over(layers[0]?.colour ?? [0, 0, 0, 1], fill), fill), `${label}: inset ring against the hovered fill`).toBeGreaterThanOrEqual(NON_TEXT);
   } else {
     expect(layers, `${label}: one inset ring layer (${under})`).toHaveLength(1);
     expect(layers[0]?.inset, `${label}: the ring is inset`).toBe(true);
@@ -683,6 +728,8 @@ for (const situation of SITUATIONS.slice(0, 2)) {
     const picker = day.locator('[data-label-picker] button[aria-label^="Category for"]');
     await expectRingUnderPointer(page, date, 'shared', `date button (${situation.name})`);
     await expectRingUnderPointer(page, picker, 'inset', `Category picker (${situation.name})`);
+    // A button link (the period bar's review link) keeps the shared ring under the pointer (WP5-UX3-FIX4 item 2: `.button-link:focus-visible:hover`).
+    await expectRingUnderPointer(page, page.locator('.period-cta a.button-link[data-review-link]'), 'shared', `button link (${situation.name})`);
 
     // Click the date (the editor opens beside the sheet at 1440), then Escape: focus returns to the date button, pointer still on it.
     const workDate = (await day.getAttribute('data-day')) ?? '';
@@ -707,7 +754,9 @@ for (const situation of SITUATIONS.slice(0, 2)) {
     const phoneDay = page.locator('[data-day]:not(.nonworking) [data-day-button]').first();
     await expect(phoneDay).toBeVisible();
     await expectRingUnderPointer(page, phoneDay, 'shared', `phone day button (${situation.name})`);
-    console.log(`ring under the pointer ${situation.name}: date, Category picker, phone day button and the Escape return keep their ring`);
+    // A tab that is not the current one keeps its inset ring under the pointer (WP5-UX3-FIX4 item 2: `.shell-tabs .tab:focus-visible:hover`).
+    await expectRingUnderPointer(page, page.locator('.shell-tabs a.tab:not([aria-current])').first(), 'inset-gap', `phone tab (${situation.name})`);
+    console.log(`ring under the pointer ${situation.name}: date, Category picker, button link, phone day button, phone tab and the Escape return keep their ring`);
   });
 }
 

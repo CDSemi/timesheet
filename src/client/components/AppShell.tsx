@@ -1,4 +1,4 @@
-import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type FocusEvent, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { api, type ReceivedShare, type User } from '../api.ts';
 import { AccountContent, AccountMenu } from './AccountMenu.tsx';
 import { BarClock } from './BarClock.tsx';
@@ -123,6 +123,7 @@ export function AppShell({
   const [moreOpen, setMoreOpen] = useState(false);
   const moreButton = useRef<HTMLButtonElement>(null);
   const tabsRef = useRef<HTMLElement>(null);
+  const tabbing = useRef(false);
   const barRef = useRef<HTMLElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const entryUsed = useRouteHeadingFocus(route, mainRef);
@@ -155,10 +156,21 @@ export function AppShell({
     return () => document.removeEventListener('pointerdown', closeOutside);
   }, [moreOpen]);
 
-  function closeOnEscape(event: KeyboardEvent<HTMLElement>) {
+  function onTabBarKeyDown(event: KeyboardEvent<HTMLElement>) {
+    // A Tab key may be taking focus out of the document (past the last entry, or back past the first tab): the blur then has no target.
+    tabbing.current = event.key === 'Tab';
     if (event.key !== 'Escape' || !moreOpen) return;
     setMoreOpen(false);
     moreButton.current?.focus();
+  }
+
+  // Focus that leaves the tab bar closes the panel, as the desktop menu does (WCAG 2.2 SC 2.4.11: an open panel must not cover the
+  // control that takes focus next). Focus moving between the bar's own controls keeps it open. A blur without a target (focus left the
+  // document, or a press on a button that does not take focus) closes only after a Tab key, so a press on More still toggles the panel.
+  function onTabBarBlur(event: FocusEvent<HTMLElement>) {
+    if (!moreOpen) return;
+    const next = event.relatedTarget;
+    if (next instanceof Node ? tabsRef.current?.contains(next) !== true : tabbing.current) setMoreOpen(false);
   }
 
   return (
@@ -193,7 +205,16 @@ export function AppShell({
         )}
         {children}
       </main>
-      <nav ref={tabsRef} className="shell-tabs" aria-label="Main" onKeyDown={closeOnEscape}>
+      <nav
+        ref={tabsRef}
+        className="shell-tabs"
+        aria-label="Main"
+        onKeyDown={onTabBarKeyDown}
+        onPointerDown={() => {
+          tabbing.current = false;
+        }}
+        onBlur={onTabBarBlur}
+      >
         {tabs.map((item) => (
           <a key={item.id} className="tab" href={item.hash} aria-current={item.id === route ? 'page' : undefined}>
             {item.label}

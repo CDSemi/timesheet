@@ -1,0 +1,139 @@
+"""Independent text checks for WP5-UX3-GOV2-AUDIT.
+
+Reads blobs from git (reviewed commit ceb86b6, base a78ada5) and the owner's reconstructed
+text (owner/AGENTS.md, proven by blob id e8af2a2 and digest 54cb9a3d), never the shared
+working tree, except a working-tree equality check. Writes a plain report to stdout.
+Usage: python text_checks.py <repo> <taskdir>
+"""
+import re
+import subprocess
+import sys
+
+sys.stdout.reconfigure(encoding="utf-8")
+REPO, TASK = sys.argv[1], sys.argv[2]
+NEW, BASE = "ceb86b6b18bd0e8fabd93f47672cd87f3899b92f", "a78ada5edbf5339d4502df57e9f195d11c0b5d28"
+
+
+def git(*args):
+    return subprocess.run(["git", "-C", REPO, *args], capture_output=True, check=False)
+
+
+def blob(rev, path):
+    r = git("show", f"{rev}:{path}")
+    if r.returncode != 0:
+        raise SystemExit(f"git show {rev}:{path} failed: {r.stderr!r}")
+    return r.stdout
+
+
+def report(label, ok, detail=""):
+    print(f"[{'OK' if ok else 'FAIL'}] {label}{(': ' + detail) if detail else ''}")
+    return ok
+
+
+results = []
+files = {
+    "AGENTS.md": (blob(NEW, "AGENTS.md"), blob(BASE, "AGENTS.md")),
+    "AGENTS.vi.md": (blob(NEW, "AGENTS.vi.md"), blob(BASE, "AGENTS.vi.md")),
+}
+
+print("== 1. Format (ceb86b6 blobs)")
+for name, (new, _) in files.items():
+    results.append(report(f"{name} no BOM", not new.startswith(b"\xef\xbb\xbf")))
+    cr_count = new.count(b"\r")
+    results.append(report(f"{name} no CR bytes", cr_count == 0, f"CR count {cr_count}"))
+    results.append(report(f"{name} ends with exactly one LF", new.endswith(b"\n") and not new.endswith(b"\n\n")))
+    trailing = [i + 1 for i, line in enumerate(new.split(b"\n")) if re.search(rb"[ \t]+$", line)]
+    results.append(report(f"{name} no trailing whitespace", not trailing, f"lines {trailing}" if trailing else "0 lines"))
+    try:
+        new.decode("utf-8")
+        results.append(report(f"{name} valid UTF-8", True))
+    except UnicodeDecodeError as exc:
+        results.append(report(f"{name} valid UTF-8", False, str(exc)))
+
+print("== 2. Working tree equals ceb86b6 for the AGENTS pair")
+r = git("diff", "--quiet", NEW, "--", "AGENTS.md", "AGENTS.vi.md")
+results.append(report("git diff --quiet ceb86b6 -- AGENTS.md AGENTS.vi.md", r.returncode == 0, f"exit {r.returncode}"))
+
+print("== 3. Unchanged sections (Project instructions heading to end of file)")
+markers = {"AGENTS.md": "Project instructions", "AGENTS.vi.md": "Hướng dẫn dự án"}
+for name, (new, base) in files.items():
+    nt, bt = new.decode("utf-8").split("\n"), base.decode("utf-8").split("\n")
+    m = markers[name]
+    ni = [i for i, l in enumerate(nt) if re.fullmatch(r"#+ " + re.escape(m), l)]
+    bi = [i for i, l in enumerate(bt) if re.fullmatch(r"#+ " + re.escape(m), l)]
+    results.append(report(f"{name} heading found once in each", len(ni) == 1 and len(bi) == 1, f"new {ni} base {bi}"))
+    nh, bh = nt[ni[0]], bt[bi[0]]
+    print(f"     heading new={nh!r} base={bh!r}")
+    results.append(report(f"{name} heading level change is exactly '# ' -> '## '", bh == "# " + m and nh == "## " + m))
+    tail_equal = nt[ni[0] + 1:] == bt[bi[0] + 1:]
+    results.append(report(f"{name} everything after the heading byte-equal to a78ada5", tail_equal,
+                          f"{len(nt) - ni[0] - 1} vs {len(bt) - bi[0] - 1} lines"))
+    pre_base = bt[:bi[0]]
+    pre_new = nt[:ni[0]]
+    if name == "AGENTS.vi.md":
+        results.append(report("AGENTS.vi.md translation preface line unchanged", pre_base[0] == pre_new[0], repr(pre_new[0])))
+    print(f"     lines before heading: base {len(pre_base)}, new {len(pre_new)}")
+
+print("== 4. Owner text vs ceb86b6 (EN): only the expected edits")
+owner = open(f"{TASK}/owner/AGENTS.md", "rb").read().decode("utf-8")
+new_en = files["AGENTS.md"][0].decode("utf-8")
+
+
+def norm(s):
+    return re.sub(r"\s+", " ", s).strip()
+
+
+edits = [
+    ("Operator runbooks get a Vietnamese mirror under `docs/runbooks/vi/`; English is canonical.",
+     "Operator runbooks get a matching `.vi.md` Vietnamese translation beside the English document; English is canonical."),
+    ("Be direct, practical, architecture-aware, and shop-floor aware.", "Be direct, practical, and architecture-aware."),
+    ("build, test, CI run, host check,", "build, test, host check,"),
+    ("tests, and CI evidence;", "tests, and recorded evidence;"),
+    ("or add a concept, dependency, step type, task mode, probe kind, template variable, or manifest key without",
+     "or add a concept or dependency without"),
+]
+o = norm(owner)
+for before, after in edits:
+    results.append(report(f"owner has {before[:48]!r}...", before in o))
+    o = o.replace(before, after)
+results.append(report("owner text with exactly these 5 replacements == ceb86b6 AGENTS.md (whitespace-normalised)", o == norm(new_en)))
+# line-wrap only differences: compare the non-normalised texts outside the edited paragraphs
+results.append(report("owner and ceb86b6 identical from '## Project instructions' to end",
+                      owner[owner.index("## Project instructions"):] == new_en[new_en.index("## Project instructions"):]))
+results.append(report("owner and ceb86b6 identical title + precedence paragraph",
+                      owner[:owner.index("## Operating Contract")] == new_en[:new_en.index("## Operating Contract")]))
+
+print("== 5. EN/VI parity of the additions")
+new_vi = files["AGENTS.vi.md"][0].decode("utf-8")
+
+
+def headings(t):
+    return [(len(m.group(1)), m.group(2)) for m in re.finditer(r"^(#+) (.+)$", t, re.M)]
+
+
+he, hv = headings(new_en), headings(new_vi)
+print("     EN headings:", he)
+print("     VI headings:", hv)
+results.append(report("same heading count and levels in order", [h[0] for h in he] == [h[0] for h in hv], f"{len(he)} vs {len(hv)}"))
+add_en = new_en[:new_en.index("## Project instructions")]
+add_vi = new_vi[new_vi.index("# Hướng dẫn AI"):new_vi.index("## Hướng dẫn dự án")]
+ce, cv = re.findall(r"`[^`]+`", add_en), re.findall(r"`[^`]+`", add_vi)
+results.append(report("same code tokens in the additions", sorted(ce) == sorted(cv), f"EN {ce} VI {cv}"))
+ne, nv = re.findall(r"\d+", add_en), re.findall(r"\d+", add_vi)
+results.append(report("same numbers in the additions", sorted(ne) == sorted(nv), f"EN {ne} VI {nv}"))
+be, bv = len(re.findall(r"^- ", add_en, re.M)), len(re.findall(r"^- ", add_vi, re.M))
+results.append(report("same Operating Contract bullet count", be == bv, f"EN {be} VI {bv}"))
+qe, qv = len(re.findall(r"^> ", add_en, re.M)), len(re.findall(r"^> ", add_vi, re.M))
+results.append(report("same blockquote line count", qe == qv, f"EN {qe} VI {qv}"))
+bse, bsv = add_en.count("\\\n"), add_vi.count("\\\n")
+results.append(report("same backslash hard line break count", bse == bsv, f"EN {bse} VI {bsv}"))
+bde, bdv = add_en.count("**"), add_vi.count("**")
+results.append(report("same bold marker count", bde == bdv, f"EN {bde} VI {bdv}"))
+for name, text in (("AGENTS.md", new_en), ("AGENTS.vi.md", new_vi)):
+    bad = [p for p in ("shop-floor", "shop floor", "step type", "task mode", "probe kind", "template variable",
+                       "manifest key", "docs/runbooks", "CI run", "CI evidence") if p.lower() in text.lower()]
+    results.append(report(f"{name} has none of the removed phrases", not bad, str(bad)))
+
+print("== summary")
+print(f"checks {len(results)}, failed {results.count(False)}")
+sys.exit(0 if all(results) else 1)
