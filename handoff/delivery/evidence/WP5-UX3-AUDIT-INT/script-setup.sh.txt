@@ -1,0 +1,17 @@
+# Creates the exports (never the repository): export (mandatory checks, already archived),
+# probe (target, task-local probes), mut (target, mutants), base (ceb86b6, pre-FIX4 comparison).
+# Usage: bash setup.sh
+. <task>/env.sh
+O=$T/out
+echo "setup start $(date -u +%Y-%m-%dT%H:%M:%SZ) node $(node --version)" > $O/30-setup-exits.txt
+(cd $T/export && npm ci > $O/30-ci-export.txt 2>&1; echo "ci export exit $?" >> $O/30-setup-exits.txt)
+for pair in "probe:$TARGET" "mut:$TARGET" "base:$BASE"; do
+  name=${pair%%:*}; sha=${pair#*:}
+  mkdir -p $T/$name
+  (cd $REPO && git archive $sha | tar -x -C $T/$name)
+  echo "archive $name $sha exit $?" >> $O/30-setup-exits.txt
+  (cd $T/$name && npm ci > $O/30-ci-$name.txt 2>&1; echo "ci $name exit $?" >> $O/30-setup-exits.txt)
+  (cd $T/$name && npm run build > $O/30-build-$name.txt 2>&1; echo "build $name exit $?" >> $O/30-setup-exits.txt)
+done
+echo "setup end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $O/30-setup-exits.txt
+echo done > $O/setup.done

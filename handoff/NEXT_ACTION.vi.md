@@ -7,10 +7,10 @@
   WP3-RECHECK-A lần 3 và WP3-RECHECK-BC3, đều PASS tại 49651c8, digest c31c300c.
 - WP4 đã nghiệm thu: WP4-REGATE4 PASS và hai lần kiểm tra lại độc lập cuối cùng,
   WP4-RECHECK-A lần 4 và WP4-RECHECK-B4, đều PASS tại 546cdda, digest 26fcc969.
-- WP5 đã nghiệm thu (độ sẵn sàng phần mềm), nghiệm thu lại sau vòng thay đổi UI lần 2
-  theo yêu cầu chủ dự án: WP5-UX2-REGATE2 PASS và lần kiểm tra lại độc lập cuối
-  WP5-UX2-AUDIT2 PASS tại a643794, digest 229df806 (các lần nghiệm thu trước: 90b98ef /
-  57e2974c sau vòng 1, và 014bd47 / 150420e7).
+- WP5 đã nghiệm thu (độ sẵn sàng phần mềm), nghiệm thu lại sau vòng thay đổi UI lần 3
+  theo yêu cầu chủ dự án: WP5-UX3-REGATE5 PASS và audit độc lập cuối WP5-UX3-AUDIT-INT PASS
+  tại 8e55710, digest 507de97c. Các lần nghiệm thu trước: a643794 / 229df806 sau vòng 2,
+  90b98ef / 57e2974c sau vòng 1, và 014bd47 / 150420e7.
 - Vòng thay đổi UI (chủ dự án yêu cầu 2026-10-08, đã xong): trang Timesheet theo bố cục
   bảng timesheet trong file Excel mẫu, khung app thân thiện hơn, trên máy tính và điện
   thoại (kế hoạch và mockup: task WP5-UX-PLAN, `handoff/delivery/design/WP5-UX/mockup.html`).
@@ -26,44 +26,30 @@
   dòng trên điện thoại ("Sign off" khi hẹp); chữ "Check in/out"; "Due" theo kiểu nhãn; mũi
   tên trong khoảng kỳ; bỏ dòng tên công ty trên bảng ở màn hình (PDF giữ nguyên). Các phần
   T01..T10 và vòng sửa FIX1..FIX2; đổi UI phía client, test và tài liệu, cùng ba câu thông
-  báo lỗi phía server; không đổi nghiệp vụ. Câu hỏi không bắt buộc WP5-UX2-Q3 (nhãn
-  "future" trên kỳ mà Today mở ra trong 5 ngày trước ngày trả lương; mặc định giữ nguyên)
-  và backlog không bắt buộc: xem [WP5 handoff](delivery/WP5_HANDOFF.vi.md).
-- Vòng thay đổi UI lần 3 (chủ dự án yêu cầu 2026-10-15, đang chạy): phong cách hiện đại
-  thay cho phong cách công nghiệp, menu nhận diện người dùng trên thanh trên cùng, bố cục
-  phần đầu trang và thanh kỳ, hiệu ứng nổi cho cột được chọn trên bảng, và Day editor với
-  hộp thoại riêng cho phiên giờ cùng vùng giờ nghỉ đơn giản hơn (27 mục, nguyên văn trên
-  board). Kế hoạch WP5-UX3-PLAN đã xong (mockup
-  `handoff/delivery/design/WP5-UX3/mockup.html`); phần T06 (model dòng giờ nghỉ) đã đóng
-  băng ở 5c8355d. Chủ dự án đã trả lời G-1..G-5 (G-1 b kèm thay đổi); phụ lục
-  WP5-UX3-PLAN2 đã cập nhật mockup (Day editor nổi dưới 1360px, bảng tuần không bo góc,
-  chip giờ nghỉ trên điện thoại, nhãn "in progress"). Thay đổi quản trị cho mục UI trong
-  AGENTS.md đã được nghiệm thu (WP5-UX3-GOV-AUDIT PASS tại 79b9a53,
-  [GOV UX3 review](delivery/GOV_UX3_REVIEW.vi.md)). Các phần T01-T10 (cùng T05B và T08B) đã
-  làm xong và đóng băng. Chủ dự án đã trả lời WP5-UX3-Q6 là b (chỉ hiện ô ngày của giờ nghỉ
-  khi phiên qua đêm) và chip dùng giờ 24h; vòng này không còn câu hỏi nào đang mở.
-  - Tiến độ đến nay:
-    - Gate đầu tiên của gói không đạt trên cecfceb. FIX1 (9187f31) và FIX2 (7ce4e95) đã sửa.
-    - Gate chạy lại đạt trên 7ce4e95, kèm một điểm lệch timeout đã ghi lại.
-    - Audit vùng A và B tìm ra tám lỗi (một lỗi mức trung bình). FIX3 đã sửa và đóng băng ở
-      a78ada5 (digest d1d903cf).
-  - **Tạm dừng vì usage ngày 2026-10-16.** Lần chạy lại gate thứ hai WP5-UX3-REGATE2 bị dừng
-    giữa chừng.
-  - **Đã resume ngày 2026-10-19 và đối soát xong.** Không còn gì sót lại, và HEAD = origin/main
-    = a78ada5. Chủ dự án đã trả lời WP5-UX3-Q7 là (a): nội dung mới của AGENTS.md được đưa vào
-    repo, dòng về runbook theo quy ước `.vi.md` và các cụm từ thuộc dự án khác bị xóa. Việc này
-    chạy qua chuỗi GOV (GOV2, đóng băng, gate, audit) trước khi chạy lại gate; lần chạy lại gate
-    sau đó nhắm vào commit đóng băng GOV2.
-  - **Việc tiếp theo khi resume:**
-    1. Giao một agent đối soát: tiến trình còn chạy, project Docker `ts-wp5-ux3regate2`, bằng
-       chứng dở dang và các bản ghi coordinator chưa commit.
-    2. Chạy lại WP5-UX3-REGATE2 (lần 2).
-    3. Các audit kiểm lại mới WP5-UX3-AUDIT-A2 và -B2 (đã có brief).
-    4. Audit tích hợp và nghiệm thu lại WP5.
-  - Chi tiết: [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), mục "Tạm dừng vì
-    usage (2026-10-16)".
+  báo lỗi phía server; không đổi nghiệp vụ. Backlog không bắt buộc: xem
+  [WP5 handoff](delivery/WP5_HANDOFF.vi.md). Câu hỏi không bắt buộc WP5-UX2-Q3 đã được thay
+  bằng câu trả lời G-5 (b) của vòng 3.
+- Vòng thay đổi UI lần 3 (chủ dự án yêu cầu 2026-10-15, xong 2026-10-19):
+  - Những gì đã đổi:
+    - phong cách hiện đại thay cho phong cách công nghiệp;
+    - menu nhận diện người dùng trên thanh trên cùng (Profile, Settings có Administration,
+      Sign out);
+    - bố cục phần đầu trang và thanh kỳ với nhãn old/current/in progress/future;
+    - hiệu ứng nổi cho cột được chọn trên bảng;
+    - Day editor dạng nổi dưới 1360px;
+    - hộp thoại phiên giờ riêng với các dòng giờ nghỉ, hoặc chip trên điện thoại;
+    - điền sẵn giá trị mặc định và gợi ý giờ nghỉ cho các ngày đã qua;
+    - thông báo khi chưa có giờ nghỉ và hộp xác nhận cuối trước khi lưu.
+  - Câu trả lời của chủ dự án: G-1..G-5, N-1, N-2, Q6 (b), chip giờ 24h, và Q7 (a, phần đầu
+    AGENTS.md của chủ dự án).
+  - Phần việc đã làm: các kế hoạch WP5-UX3-PLAN và PLAN2; các phần T01..T10 cùng T05B, T06 và
+    T08B; các vòng sửa FIX1..FIX6; và các thay đổi quản trị GOV (79b9a53) và GOV2 (ceb86b6).
+  - Phạm vi: UI phía client, test và tài liệu. dist/server và dist/domain giống từng byte so với
+    a643794; không đổi nghiệp vụ.
+  - Review cuối: [review tích hợp WP5 UX3](delivery/WP5_UX3_REVIEW_INT.vi.md).
+  - Backlog không bắt buộc: xem [WP5 handoff](delivery/WP5_HANDOFF.vi.md).
 - Pilot: [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) cụ thể đã sẵn để chủ dự án duyệt
-  (định danh bản phát hành a643794 / 229df806). Chưa xin phép chủ dự án, chưa có kết quả
+  (định danh bản phát hành 8e55710 / 507de97c). Chưa xin phép chủ dự án, chưa có kết quả
   pilot, NAS chưa được kiểm.
 
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
@@ -93,19 +79,21 @@ Không đổi billing hay cài đặt quyền.
 
 Luồng hiện tại:
 1. **Đã xong: WP5 đã nghiệm thu, rồi nghiệm thu lại sau mỗi vòng thay đổi UI.** Biên bản
-   nghiệm thu đầu đã commit ở dd0c7d1; các biên bản nghiệm thu lại trên 90b98ef / 57e2974c
-   (WP5-UX-AUDIT-AB9) và trên a643794 / 229df806 (WP5-UX2-AUDIT2) nằm trong
-   [WP5 handoff](delivery/WP5_HANDOFF.vi.md).
+   nghiệm thu đầu đã commit ở dd0c7d1. Các biên bản nghiệm thu lại nằm trong
+   [WP5 handoff](delivery/WP5_HANDOFF.vi.md):
+   - 90b98ef / 57e2974c (WP5-UX-AUDIT-AB9);
+   - a643794 / 229df806 (WP5-UX2-AUDIT2);
+   - 8e55710 / 507de97c (WP5-UX3-AUDIT-INT).
 2. **Đã xong: GOV-RECOVERY.** `check_recovery.py` không còn lấy trạng thái thật của
    mission (bản sửa đóng băng ở 7f750e9, gate PASS,
    [GOV recovery review](delivery/GOV_RECOVERY_REVIEW.vi.md) PASS). Board ghi mission là
    `software_ready`.
-3. **Đã xong: vòng thay đổi UI lần 2 (WP5-UX2).** Nghiệm thu lại trên a643794 / 229df806
-   (gate WP5-UX2-REGATE2, audit WP5-UX2-AUDIT2 PASS); định danh trong pilot packet đã cập
-   nhật.
+3. **Đã xong: vòng thay đổi UI lần 2 và lần 3.**
+   - WP5-UX2: nghiệm thu lại trên a643794 / 229df806.
+   - WP5-UX3: nghiệm thu lại trên 8e55710 / 507de97c (gate WP5-UX3-REGATE5, audit
+     WP5-UX3-AUDIT-INT PASS). Định danh trong pilot packet đã cập nhật.
 4. **Tiếp theo, chủ dự án: duyệt pilot.** Đọc
-   [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) và trả lời D-1..D-15 (và, nếu muốn,
-   WP5-UX2-Q3).
+   [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) và trả lời D-1..D-15.
    - D-1, D-7, D-8 và D-13 cần có trước khi kích hoạt.
    - Câu trả lời nào khác mặc định hiện tại sẽ kéo theo một vòng sửa (sửa, đóng băng,
      gate, audit độc lập) trước khi kích hoạt.

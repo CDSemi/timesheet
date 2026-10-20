@@ -1,0 +1,14 @@
+diff --git a/tests/e2e/hover.spec.ts b/tests/e2e/hover.spec.ts
+index 3927d1a..b5bf869 100644
+--- a/tests/e2e/hover.spec.ts
++++ b/tests/e2e/hover.spec.ts
+@@ -751,7 +751,8 @@ for (const situation of SITUATIONS.slice(0, 2)) {
+
+     // A phone-width window on a device that can hover: the day button of the phone table keeps the shared ring too.
+     await page.setViewportSize({ width: 390, height: 844 });
+-    const phoneDay = page.locator('[data-day]:not(.nonworking) [data-day-button]').first();
++    // Only the phone table's day button has the sheet-day-button class, so the visibility wait cannot resolve the desktop sheet button before the media-query layout swap.
++    const phoneDay = page.locator('[data-day]:not(.nonworking) .sheet-day-button').first();
+     await expect(phoneDay).toBeVisible();
+     await expectRingUnderPointer(page, phoneDay, 'shared', `phone day button (${situation.name})`);
+     // A tab that is not the current one keeps its inset ring under the pointer (WP5-UX3-FIX4 item 2: `.shell-tabs .tab:focus-visible:hover`).

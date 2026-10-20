@@ -1,0 +1,17 @@
+# Probe phase (sequential, after the mandatory full e2e). Usage: bash run-probes.sh
+. <task>/env.sh
+L=$T/logs
+mkdir -p $L
+echo "probes start $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $L/phase.txt
+# 1. Target probes, real clock, both projects.
+INT_OBS_TAG=target bash $T/run-pw.sh p-target probe real -c playwright.int.config.ts tests/e2e/zz-int-more.spec.ts tests/e2e/zz-int-signout.spec.ts tests/e2e/zz-int-stack.spec.ts tests/e2e/zz-int-menu-editor.spec.ts tests/e2e/zz-int-shared.spec.ts tests/e2e/zz-int-admin.spec.ts tests/e2e/zz-int-race.spec.ts tests/e2e/zz-int-pill.spec.ts --reporter=list
+# 2. Base (ceb86b6, pre-FIX4) comparison: the More walk and the account entries.
+INT_OBS_TAG=base bash $T/run-pw.sh p-base base real -c playwright.int.config.ts tests/e2e/zz-int-more.spec.ts tests/e2e/zz-int-signout.spec.ts -g "F-UX3A2-1|entries line up" --reporter=list
+# 3. The pill probe on a window day under the FIX10 clock (2026-10-26 09:00 PDT).
+INT_OBS_TAG=target-sim1026 bash $T/run-pw.sh p-pill-1026 probe 2026-10-26T16:00:00Z -c playwright.int.config.ts tests/e2e/zz-int-pill.spec.ts --reporter=list
+# 4. FIX5: the repository test alone at four instants (FIX10 clock), both projects.
+for I in 2026-10-20T07:30:00Z 2026-10-20T19:00:00Z 2026-10-21T06:45:00Z 2026-11-01T09:30:00Z; do
+  bash $T/run-pw.sh fix5-$(echo $I | tr -d ':-' | cut -c1-13) probe $I tests/e2e/day-editor.spec.ts -g "ended earlier today lists the suggested break" --reporter=list
+done
+echo "probes end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $L/phase.txt
+echo done > $T/out/probes.done

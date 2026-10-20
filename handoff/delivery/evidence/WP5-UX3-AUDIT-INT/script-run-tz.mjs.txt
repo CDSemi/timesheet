@@ -1,0 +1,8 @@
+// Runs vitest with TZ set in the child environment (Git Bash does not pass TZ through to Windows Node).
+// Usage (from the export root): node run-tz.mjs <IANA zone> <test files...>
+import { spawnSync } from 'node:child_process';
+const zone = process.argv[2];
+const files = process.argv.slice(3);
+const env = { ...process.env, TZ: zone };
+const r = spawnSync(process.execPath, ['node_modules/vitest/vitest.mjs', 'run', ...files], { cwd: process.cwd(), env, stdio: 'inherit' });
+process.exit(r.status ?? 1);

@@ -1,0 +1,154 @@
+import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+
+/* WP5-UX3-AUDIT-INT task-local probe helpers (never in the repository). Observations go to <task>/obs/<file>. */
+export const TASK = '<task>';
+const OBS = join(TASK, 'obs', process.env.INT_OBS_TAG ?? 'target');
+mkdirSync(OBS, { recursive: true });
+
+export function note(file: string, line: string): void {
+  appendFileSync(join(OBS, file), `${line}\n`);
+}
+
+export function shot(name: string): string {
+  const dir = join(TASK, 'shots');
+  mkdirSync(dir, { recursive: true });
+  return join(dir, name);
+}
+
+export async function settle(page: Page, ms = 120): Promise<void> {
+  await page.waitForTimeout(ms);
+}
+
+/** Two animation frames and a task: React has rendered and its effects ran. */
+export async function frames(page: Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 50))))');
+}
+
+export interface FocusStop {
+  desc: string;
+  inTabBar: boolean;
+  panelOpen: boolean;
+  hidden: number;
+  total: number;
+  rect: string;
+}
+
+/** The focused element: a short description, whether the More panel is open, and how many of 25 sample points inside it another element paints. */
+export async function focusStop(page: Page): Promise<FocusStop> {
+  return page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    const panel = document.getElementById('more-panel');
+    const name = active ? (active.getAttribute('aria-label') ?? active.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40) : '';
+    const desc =
+      active === null || active === document.body
+        ? 'body'
+        : `${active.tagName.toLowerCase()}${typeof active.className === 'string' && active.className ? `.${active.className.split(' ')[0]}` : ''} "${name}"`;
+    let hidden = 0;
+    let total = 0;
+    let rect = '';
+    if (active !== null && active !== document.body) {
+      const r = active.getBoundingClientRect();
+      rect = `${r.left.toFixed(0)},${r.top.toFixed(0)} ${r.width.toFixed(0)}x${r.height.toFixed(0)}`;
+      for (let i = 0; i < 5; i += 1) {
+        for (let j = 0; j < 5; j += 1) {
+          const x = r.left + ((i + 0.5) * r.width) / 5;
+          const y = r.top + ((j + 0.5) * r.height) / 5;
+          if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) continue;
+          total += 1;
+          const hit = document.elementFromPoint(x, y);
+          if (hit !== null && hit !== active && !active.contains(hit) && !hit.contains(active)) hidden += 1;
+        }
+      }
+    }
+    return { desc, inTabBar: active?.closest('.shell-tabs') != null, panelOpen: panel !== null, hidden, total, rect };
+  });
+}
+
+/** Open dialogs from bottom to top, modal or not, with the focused element. */
+export async function stack(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const dialogs = [...document.querySelectorAll('dialog')]
+      .filter((d) => d.open)
+      .map((d) => {
+        const labelId = d.getAttribute('aria-labelledby');
+        const name = (labelId === null ? (d.getAttribute('aria-label') ?? '') : (document.getElementById(labelId.split(' ')[0] ?? '')?.textContent ?? ''))
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 44);
+        return `${name}${d.matches(':modal') ? '[modal]' : '[non-modal]'}${d.contains(document.activeElement) ? '*' : ''}`;
+      });
+    const a = document.activeElement as HTMLElement | null;
+    const active = a === null ? 'none' : `${a.tagName.toLowerCase()} "${(a.getAttribute('aria-label') ?? a.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)}"`;
+    return `open=[${dialogs.join(' > ')}] active=${active}`;
+  });
+}
+
+/** Tries to focus the given outside element by script and by Tab presses: is the page behind the top modal inert? */
+export async function inertCheck(page: Page, outsideSelector: string, tabs = 30): Promise<string> {
+  const scripted = await page.evaluate((selector) => {
+    const outside = document.querySelector<HTMLElement>(selector);
+    if (outside === null) return 'no-outside-element';
+    const before = document.activeElement;
+    outside.focus();
+    const moved = document.activeElement === outside;
+    if (before instanceof HTMLElement && !moved) before.focus();
+    return moved ? 'FOCUSABLE' : 'inert';
+  }, outsideSelector);
+  let toPage = 0;
+  let toBrowser = 0;
+  const pageTargets = new Set<string>();
+  for (let index = 0; index < tabs; index += 1) {
+    await page.keyboard.press('Tab');
+    const inside = await page.evaluate(() => {
+      const top = [...document.querySelectorAll('dialog')].filter((d) => d.open && d.matches(':modal')).pop();
+      const active = document.activeElement;
+      if (top === undefined) return 'no-modal';
+      if (top.contains(active)) return 'in';
+      // Focus on the body: the document itself lost focus (the browser's own controls), which a modal dialog allows.
+      if (active === null || active === document.body || active === document.documentElement) return 'browser';
+      return `PAGE ${active.tagName.toLowerCase()} "${(active.getAttribute('aria-label') ?? active.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 30)}"`;
+    });
+    if (inside === 'browser') toBrowser += 1;
+    else if (inside.startsWith('PAGE')) {
+      toPage += 1;
+      pageTargets.add(inside);
+    }
+  }
+  return `script focus of ${outsideSelector}: ${scripted}; ${tabs} Tab presses: ${toPage} reached a page control outside the top modal${pageTargets.size ? ` (${[...pageTargets].join('; ')})` : ''}, ${toBrowser} passed through the browser (body focused)`;
+}
+
+export async function axeScan(page: Page, label: string, file: string): Promise<string[]> {
+  const source = readFileSync(join(TASK, 'axe', 'axe.min.js'), 'utf8');
+  await page.evaluate(source);
+  const result = await page.evaluate<{ violations: { id: string; impact: string; nodes: { target: string[] }[] }[]; incomplete: { id: string }[]; version: string }>(
+    `(async () => { const r = await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } }); return { version: window.axe.version, violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => ({ target: n.target })) })), incomplete: r.incomplete.map((v) => ({ id: v.id })) }; })()`,
+  );
+  const ids = result.violations.map((v) => `${v.id}(${v.impact}) ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`);
+  note(file, `axe ${result.version} ${label}: ${result.violations.length} violations${ids.length ? `: ${ids.join('; ')}` : ''}; incomplete ${[...new Set(result.incomplete.map((v) => v.id))].join(',')}`);
+  return ids;
+}
+
+/** Icon start, words start, gap and centre offset of an account entry, measured inside the entry box. */
+export async function entryGeometry(locator: Locator): Promise<{ iconStart: number; wordsStart: number; gap: number; offset: number; padL: string; border: string }> {
+  return locator.evaluate((element) => {
+    const icon = element.querySelector('svg');
+    const text = [...element.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim() !== '') ?? element.querySelector('span:not(.sr-only)');
+    const entry = element.getBoundingClientRect();
+    const iconBox = icon?.getBoundingClientRect();
+    const range = element.ownerDocument.createRange();
+    if (text) range.selectNodeContents(text);
+    const words = range.getBoundingClientRect();
+    const cs = getComputedStyle(element);
+    const r = (v: number) => Math.round(v * 100) / 100;
+    return {
+      iconStart: r((iconBox?.left ?? NaN) - entry.left),
+      wordsStart: r(words.left - entry.left),
+      gap: r(words.left - (iconBox?.right ?? NaN)),
+      offset: r((iconBox ? iconBox.top + iconBox.height / 2 : NaN) - (words.top + words.height / 2)),
+      padL: cs.paddingLeft,
+      border: `${cs.borderLeftWidth} ${cs.borderLeftStyle}`,
+    };
+  });
+}

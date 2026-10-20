@@ -1,0 +1,26 @@
+import json
+import sys
+
+path = sys.argv[1]
+out = sys.argv[2]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+
+tasks = data.get("tasks", [])
+lines = []
+lines.append("top-level keys: " + ", ".join(data.keys()))
+for t in tasks:
+    tid = t.get("id", "")
+    if not tid.startswith("WP5-UX3"):
+        continue
+    lines.append("=" * 80)
+    for k in ("id", "kind", "status", "profile", "requested_model", "actual_model", "agent_id",
+              "reviewed_commit", "baseline_commit", "source_digest", "reviewed_digest",
+              "author_agent_ids", "verdict", "decision", "depends_on", "superseded_by"):
+        if k in t:
+            v = t[k]
+            if isinstance(v, (list, dict)):
+                v = json.dumps(v, ensure_ascii=False)
+            lines.append(f"{k}: {v}")
+with open(out, "w", encoding="utf-8", newline="\n") as f:
+    f.write("\n".join(lines) + "\n")

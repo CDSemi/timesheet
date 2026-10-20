@@ -1,0 +1,11 @@
+# Probe phase 2: the repaired probes (toggle outside press, view-only share opened from the sheet, the inert check that tells
+# the browser's own focus from a page control, the pill probe with the sheet path), then the mutants. Usage: bash run-probes2.sh
+. <task>/env.sh
+L=$T/logs
+echo "probes2 start $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $L/phase.txt
+bash $T/install-probes.sh probe > $L/install-probes2.txt 2>&1
+INT_OBS_TAG=target-r2 bash $T/run-pw.sh p-target-r2 probe real -c playwright.int.config.ts tests/e2e/zz-int-more.spec.ts tests/e2e/zz-int-shared.spec.ts tests/e2e/zz-int-stack.spec.ts tests/e2e/zz-int-pill.spec.ts -g "toggles it|shared view|1280: floating|390 phone|period pill" --reporter=list
+INT_OBS_TAG=target-sim1026-r2 bash $T/run-pw.sh p-pill-1026-r2 probe 2026-10-26T16:00:00Z -c playwright.int.config.ts tests/e2e/zz-int-pill.spec.ts --reporter=list
+echo "probes2 end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $L/phase.txt
+bash $T/run-mutants.sh
+echo done > $T/out/probes2.done

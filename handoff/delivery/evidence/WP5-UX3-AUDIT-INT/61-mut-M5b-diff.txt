@@ -1,0 +1,11 @@
+diff --git "a/<task>\\probe\\src\\client\\components\\breakRowsModel.ts" "b/<task>\\mut\\src\\client\\components\\breakRowsModel.ts"
+index c14ba7f..ffde46a 100644
+--- "a/<task>\\probe\\src\\client\\components\\breakRowsModel.ts"
++++ "b/<task>\\mut\\src\\client\\components\\breakRowsModel.ts"
+@@ -585,6 +585,7 @@ export function suggestionRows(
+  */
+ export function confirmBreaksRows(session: Session, policy: PolicyVersion | undefined, keyOf: (index: number) => string): BreakRowDraft[] {
+   if (policy === undefined || session.end_utc === null || session.breaks_confirmed || session.breaks.length > 0) return [];
++  if (new Date(session.end_utc).toLocaleDateString('en-CA', { timeZone: session.input_zone }) >= new Date().toLocaleDateString('en-CA', { timeZone: session.input_zone })) return [];
+   return suggestionRows(policy, parseUtcInstant(session.start_utc), parseUtcInstant(session.end_utc), session.input_zone, keyOf);
+ }

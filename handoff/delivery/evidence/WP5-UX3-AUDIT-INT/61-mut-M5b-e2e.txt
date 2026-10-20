@@ -1,0 +1,95 @@
+$ <node24> <task>\mut\node_modules\@playwright\test\cli.js test tests/e2e/day-editor.spec.ts -g Confirm breaks --output=<task>\pw-mut-M5b --reporter=list
+(started 2026-10-20T05:36:37.324Z, ended 2026-10-20T05:36:54.025Z, exit 1)
+
+Running 10 tests using 2 workers
+
+  ok  1 [mobile] › tests\e2e\day-editor.spec.ts:3663:1 › "Confirm breaks" opens the session dialog with the suggested breaks listed; Save, then the confirmation, sends the same session update and its version (2.0s)
+  ok  2 [desktop] › tests\e2e\day-editor.spec.ts:3663:1 › "Confirm breaks" opens the session dialog with the suggested breaks listed; Save, then the confirmation, sends the same session update and its version (2.0s)
+  ok  3 [mobile] › tests\e2e\day-editor.spec.ts:3770:1 › "Confirm breaks" lists the suggested breaks that lie inside a 09:00 to 14:00 session (two of three); Save sends those two (1.2s)
+  ok  4 [desktop] › tests\e2e\day-editor.spec.ts:3770:1 › "Confirm breaks" lists the suggested breaks that lie inside a 09:00 to 14:00 session (two of three); Save sends those two (1.2s)
+  ok  5 [mobile] › tests\e2e\day-editor.spec.ts:3818:1 › "Confirm breaks" in an old period waits for the reason before it can save, and sends it (AC-04) (1.1s)
+  ok  6 [desktop] › tests\e2e\day-editor.spec.ts:3818:1 › "Confirm breaks" in an old period waits for the reason before it can save, and sends it (AC-04) (1.2s)
+  ok  7 [mobile] › tests\e2e\day-editor.spec.ts:3867:1 › "Confirm breaks" lists nothing when no suggested break fits inside the session; Save asks, and "Confirm no breaks taken" sends the empty confirmed list (1.1s)
+  ok  8 [desktop] › tests\e2e\day-editor.spec.ts:3867:1 › "Confirm breaks" lists nothing when no suggested break fits inside the session; Save asks, and "Confirm no breaks taken" sends the empty confirmed list (1.1s)
+  x   9 [mobile] › tests\e2e\day-editor.spec.ts:3941:1 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it (8.2s)
+  x  10 [desktop] › tests\e2e\day-editor.spec.ts:3941:1 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it (8.3s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:3941:1 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it
+
+    Error: the one suggestion inside the session is listed
+
+    expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('dialog', { name: 'Edit session', exact: true }).locator('[data-break]')
+    Expected: 1
+    Received: 0
+    Timeout:  7000ms
+
+    Call log:
+      - the one suggestion inside the session is listed getByRole('dialog', { name: 'Edit session', exact: true }).locator('[data-break]') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: 'Edit session', exact: true }).locator('[data-break]')
+        18 × locator resolved to 0 elements
+           - unexpected value "0"
+
+
+      3997 |   const form = sessionDialog(page, 'Edit session');
+      3998 |   await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+    > 3999 |   await expect(form.locator('[data-break]'), 'the one suggestion inside the session is listed').toHaveCount(1);
+           |                                                                                                 ^
+      4000 |   const row = breakRow(form, 1);
+      4001 |   await expect(row.time).toHaveValue(wallClock(instantAt(startMs + 120 * 60_000), zone));
+      4002 |   await expect(row.minutes).toHaveValue('15');
+        at <task>\mut\tests\e2e\day-editor.spec.ts:3999:97
+
+    Error Context: ..\pw-mut-M5b\day-editor--Confirm-breaks-3368d-eak-inside-it-Save-sends-it-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-M5b\day-editor--Confirm-breaks-3368d-eak-inside-it-Save-sends-it-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-M5b\day-editor--Confirm-breaks-3368d-eak-inside-it-Save-sends-it-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\day-editor.spec.ts:3941:1 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it
+
+    Error: the one suggestion inside the session is listed
+
+    expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('dialog', { name: 'Edit session', exact: true }).locator('[data-break]')
+    Expected: 1
+    Received: 0
+    Timeout:  7000ms
+
+    Call log:
+      - the one suggestion inside the session is listed getByRole('dialog', { name: 'Edit session', exact: true }).locator('[data-break]') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: 'Edit session', exact: true }).locator('[data-break]')
+        18 × locator resolved to 0 elements
+           - unexpected value "0"
+
+
+      3997 |   const form = sessionDialog(page, 'Edit session');
+      3998 |   await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+    > 3999 |   await expect(form.locator('[data-break]'), 'the one suggestion inside the session is listed').toHaveCount(1);
+           |                                                                                                 ^
+      4000 |   const row = breakRow(form, 1);
+      4001 |   await expect(row.time).toHaveValue(wallClock(instantAt(startMs + 120 * 60_000), zone));
+      4002 |   await expect(row.minutes).toHaveValue('15');
+        at <task>\mut\tests\e2e\day-editor.spec.ts:3999:97
+
+    Error Context: ..\pw-mut-M5b\day-editor--Confirm-breaks-3368d-eak-inside-it-Save-sends-it-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-M5b\day-editor--Confirm-breaks-3368d-eak-inside-it-Save-sends-it-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-M5b\day-editor--Confirm-breaks-3368d-eak-inside-it-Save-sends-it-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:3941:1 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it
+    [mobile] › tests\e2e\day-editor.spec.ts:3941:1 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it
+  8 passed (16.4s)

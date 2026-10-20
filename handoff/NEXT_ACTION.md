@@ -8,9 +8,9 @@
 - WP4 accepted: WP4-REGATE4 PASS and final independent rechecks WP4-RECHECK-A
   attempt 4 and WP4-RECHECK-B4 PASS at 546cdda, digest 26fcc969.
 - WP5 accepted (software readiness), re-accepted after the owner-requested UI change
-  round 2: WP5-UX2-REGATE2 PASS and the final independent recheck WP5-UX2-AUDIT2 PASS at
-  a643794, digest 229df806 (earlier acceptances: 90b98ef / 57e2974c after round 1, and
-  014bd47 / 150420e7).
+  round 3: WP5-UX3-REGATE5 PASS and the final independent audit WP5-UX3-AUDIT-INT PASS at
+  8e55710, digest 507de97c. Earlier acceptances: a643794 / 229df806 after round 2,
+  90b98ef / 57e2974c after round 1, and 014bd47 / 150420e7.
 - UI change round (owner request 2026-10-08, done): the Timesheet page now follows the
   sample Excel timesheet layout, with a friendlier shell, on desktop and phone (plan and
   mockup: task WP5-UX-PLAN, `handoff/delivery/design/WP5-UX/mockup.html`). The owner
@@ -26,44 +26,29 @@
   buttons ("Sign off" when narrow); "Check in/out" wording; "Due" as a label; an arrow in
   period ranges; no company line on the on-screen sheet (the PDF keeps it). Slices T01..T10
   and fix rounds FIX1..FIX2; client UI, tests and docs, plus three server error-message
-  texts; no business change. Optional owner question WP5-UX2-Q3 (the "future" badge on the
-  period Today opens in the five window days; default: keep) and optional backlog: see the
-  [WP5 handoff](delivery/WP5_HANDOFF.md).
-- UI change round 3 (owner requests 2026-10-15, running): a modern style instead of the
-  industrial one, a top-bar identity menu, header and period-bar layout, lifted sheet
-  selections, and a Day editor with a separate session dialog and a simpler break area
-  (27 items, verbatim on the board). The plan WP5-UX3-PLAN is done (mockup
-  `handoff/delivery/design/WP5-UX3/mockup.html`); slice T06 (break-row model) is frozen at
-  5c8355d. The owner answered G-1..G-5 (G-1 b with changes); the addendum WP5-UX3-PLAN2
-  updated the mockup (floating editor below 1360px, square week sheets, phone break chips,
-  the "in progress" pill). The governance change of the AGENTS.md UI section is accepted
-  (WP5-UX3-GOV-AUDIT PASS at 79b9a53, [GOV UX3 review](delivery/GOV_UX3_REVIEW.md)). Slices
-  T01-T10 (with T05B and T08B) are implemented and frozen. The owner answered WP5-UX3-Q6
-  with b (the break date field only for overnight sessions) and 24-hour chip times; no
-  owner question is open in this round.
-  - Progress so far:
-    - The first package gate failed on cecfceb. FIX1 (9187f31) and FIX2 (7ce4e95) fixed
-      it.
-    - The regate passed on 7ce4e95, with one recorded timeout deviation.
-    - The area audits A and B found eight findings (one Medium). FIX3 fixed them, frozen at
-      a78ada5 (digest d1d903cf).
-  - **Paused for usage on 2026-10-16.** The second regate WP5-UX3-REGATE2 was interrupted
-    mid-run.
-  - **Resumed on 2026-10-19 and reconciled.** There are no leftovers, and HEAD = origin/main
-    = a78ada5. The owner answered WP5-UX3-Q7 with (a): the new AGENTS.md text joins the
-    repository, with the runbook line on the `.vi.md` convention and project-foreign
-    phrases removed. It runs the GOV chain (GOV2, freeze, gate, audit) before the regate,
-    which then targets the GOV2 freeze.
-  - **Next on resume:**
-    1. A delegated reconciliation: live processes, the Docker project `ts-wp5-ux3regate2`,
-       partial evidence, and the uncommitted coordinator records.
-    2. WP5-UX3-REGATE2 rerun as attempt 2.
-    3. The fresh rechecks WP5-UX3-AUDIT-A2 and -B2 (briefs ready).
-    4. The integration audit and the WP5 re-accept.
-  - Details: [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), section "Paused for
-    usage (2026-10-16)".
+  texts; no business change. Optional backlog: see the
+  [WP5 handoff](delivery/WP5_HANDOFF.md). The optional question WP5-UX2-Q3 is superseded by
+  the round-3 answer G-5 (b).
+- UI change round 3 (owner requests 2026-10-15, done 2026-10-19):
+  - What changed:
+    - a modern style instead of the industrial one;
+    - a top-bar identity menu (Profile, Settings with Administration, Sign out);
+    - header and period-bar layout with old/current/in-progress/future pills;
+    - lifted sheet selections;
+    - a floating Day editor below 1360px;
+    - a separate session dialog with break rows, or chips on phones;
+    - pre-filled defaults and suggested breaks for past days;
+    - the no-breaks notice and a final save confirmation.
+  - Owner answers: G-1..G-5, N-1, N-2, Q6 (b), 24-hour chips, and Q7 (a, the owner's
+    AGENTS.md header).
+  - Work done: the plans WP5-UX3-PLAN and PLAN2; slices T01..T10 with T05B, T06 and T08B;
+    fix rounds FIX1..FIX6; and the governance changes GOV (79b9a53) and GOV2 (ceb86b6).
+  - Scope: client UI, tests and docs. dist/server and dist/domain are byte-identical to
+    a643794; no business change.
+  - Final review: [WP5 UX3 integration review](delivery/WP5_UX3_REVIEW_INT.md).
+  - Optional backlog: see the [WP5 handoff](delivery/WP5_HANDOFF.md).
 - Pilot: the concrete [pilot packet](delivery/WP5_PILOT_PACKET.md) is ready for owner
-  review (release identity a643794 / 229df806). Owner permission has not been requested,
+  review (release identity 8e55710 / 507de97c). Owner permission has not been requested,
   there is no pilot result, and the NAS is NOT VERIFIED.
 
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
@@ -94,18 +79,21 @@ Do not change billing or permission settings.
 
 Current route:
 1. **Done: WP5 accepted, then re-accepted after each UI change round.** The first
-   acceptance record was committed at dd0c7d1; the re-acceptances on 90b98ef / 57e2974c
-   (WP5-UX-AUDIT-AB9) and on a643794 / 229df806 (WP5-UX2-AUDIT2) are in the
-   [WP5 handoff](delivery/WP5_HANDOFF.md).
+   acceptance record was committed at dd0c7d1. The re-acceptances are in the
+   [WP5 handoff](delivery/WP5_HANDOFF.md):
+   - 90b98ef / 57e2974c (WP5-UX-AUDIT-AB9);
+   - a643794 / 229df806 (WP5-UX2-AUDIT2);
+   - 8e55710 / 507de97c (WP5-UX3-AUDIT-INT).
 2. **Done: GOV-RECOVERY.** `check_recovery.py` no longer inherits the live mission
    status (fix frozen at 7f750e9, gate PASS,
    [GOV recovery review](delivery/GOV_RECOVERY_REVIEW.md) PASS). The board records the
    mission as `software_ready`.
-3. **Done: UI change round 2 (WP5-UX2).** Re-accepted on a643794 / 229df806 (gate
-   WP5-UX2-REGATE2, audit WP5-UX2-AUDIT2 PASS); the pilot packet identity is refreshed.
+3. **Done: UI change rounds 2 and 3.**
+   - WP5-UX2: re-accepted on a643794 / 229df806.
+   - WP5-UX3: re-accepted on 8e55710 / 507de97c (gate WP5-UX3-REGATE5, audit
+     WP5-UX3-AUDIT-INT PASS). The pilot packet identity is refreshed.
 4. **Next, owner: review the pilot.** Read the
-   [pilot packet](delivery/WP5_PILOT_PACKET.md) and answer D-1..D-15 (and, optionally,
-   WP5-UX2-Q3).
+   [pilot packet](delivery/WP5_PILOT_PACKET.md) and answer D-1..D-15.
    - D-1, D-7, D-8 and D-13 are needed before activation.
    - An answer that differs from the current default causes a fix round (fix, freeze,
      gate, independent audit) before activation.

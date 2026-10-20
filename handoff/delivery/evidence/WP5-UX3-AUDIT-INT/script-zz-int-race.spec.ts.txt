@@ -1,0 +1,57 @@
+import { expect, test } from './fixtures.ts';
+import { note } from './zz-int-lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-INT (task-local probe): the FIX6 selector against the layout-swap race of hover.spec.ts:754. The matchMedia
+ * change event is deferred by 150 ms (as a slow host would), the window goes from 1440 to 390, and the locator of the phone day
+ * button is resolved at once, as the repository test does: the pre-FIX6 selector against the FIX6 selector, 20 rounds each.
+ * Lines go to obs/<tag>/race.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const DEFER = `(() => {
+  const add = MediaQueryList.prototype.addEventListener;
+  MediaQueryList.prototype.addEventListener = function (type, listener, options) {
+    if (type !== 'change' || typeof listener !== 'function') return add.call(this, type, listener, options);
+    return add.call(this, type, (event) => setTimeout(() => listener.call(this, event), 150), options);
+  };
+})();`;
+
+for (const [label, selector] of [
+  ['pre-FIX6 selector', '[data-day]:not(.nonworking) [data-day-button]'],
+  ['FIX6 selector', '[data-day]:not(.nonworking) .sheet-day-button'],
+] as const) {
+  test(`layout swap after a resize, change event deferred 150 ms: ${label}`, async ({ page, signInThroughUi, isMobile }) => {
+    test.skip(isMobile, 'a hover device: the desktop project');
+    test.setTimeout(240_000);
+    await page.addInitScript(DEFER);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    let stale = 0;
+    let detached = 0;
+    let failures = 0;
+    for (let round = 1; round <= 20; round += 1) {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await expect(page.locator('.sheet-day[data-day]').first()).toBeVisible();
+      await page.waitForTimeout(400);
+      await page.setViewportSize({ width: 390, height: 844 });
+      const phoneDay = page.locator(selector).first();
+      try {
+        await expect(phoneDay).toBeVisible({ timeout: 7_000 });
+        const handle = await phoneDay.elementHandle({ timeout: 2_000 });
+        const cls = (await handle?.getAttribute('class')) ?? '';
+        if (cls.includes('sheet-date')) stale += 1;
+        await page.waitForTimeout(400);
+        const connected = await handle?.evaluate((element) => element.isConnected);
+        if (connected === false) detached += 1;
+        // The action the repository test performs next.
+        await phoneDay.scrollIntoViewIfNeeded({ timeout: 5_000 });
+      } catch (error) {
+        failures += 1;
+        note('race.txt', `  ${label} round ${round}: ${String(error).split('\n')[0]}`);
+      }
+    }
+    note('race.txt', `${label}: 20 rounds, resolved the stale desktop button ${stale}, element detached afterwards ${detached}, action failures ${failures}`);
+  });
+}

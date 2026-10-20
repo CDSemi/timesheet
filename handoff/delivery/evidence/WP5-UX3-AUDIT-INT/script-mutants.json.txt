@@ -1,0 +1,74 @@
+[
+  {
+    "id": "MA1",
+    "what": "F-UX3A2-1 guard: the More close on focus-out removed (onTabBarBlur sets nothing)",
+    "file": "src/client/components/AppShell.tsx",
+    "search": ": tabbing.current) setMoreOpen(false);",
+    "replace": ": tabbing.current) void next;",
+    "specs": ["tests/e2e/shell.spec.ts"]
+  },
+  {
+    "id": "MA1b",
+    "what": "F-UX3A2-1 guard: only a blur with a target outside the bar closes (the AccountMenu rule; a targetless blur after Tab never closes)",
+    "file": "src/client/components/AppShell.tsx",
+    "search": ": tabbing.current) setMoreOpen(false);",
+    "replace": ": false) setMoreOpen(false);",
+    "specs": ["tests/e2e/shell.spec.ts"]
+  },
+  {
+    "id": "MA1c",
+    "what": "characterization: every targetless blur closes, whatever the last key (the Tab condition dropped)",
+    "file": "src/client/components/AppShell.tsx",
+    "search": ": tabbing.current) setMoreOpen(false);",
+    "replace": ": true) setMoreOpen(false);",
+    "specs": ["tests/e2e/shell.spec.ts"]
+  },
+  {
+    "id": "MA3",
+    "what": "F-UX3A2-3 guard: the Sign out inline padding removed",
+    "file": "src/client/styles.css",
+    "search": "  padding-inline: calc(var(--space-3) - var(--hairline));\n",
+    "replace": "",
+    "specs": ["tests/e2e/shell.spec.ts"]
+  },
+  {
+    "id": "M4",
+    "what": "F-UX3A2-2 guard: .button-link:focus-visible:hover removed",
+    "file": "src/client/styles.css",
+    "search": "  .button-link:focus-visible:hover {\n    box-shadow: var(--focus-ring);\n  }\n",
+    "replace": "",
+    "specs": ["tests/e2e/hover.spec.ts"]
+  },
+  {
+    "id": "M5",
+    "what": "F-UX3A2-2 guard: .shell-tabs .tab:focus-visible:hover:not(:disabled) removed",
+    "file": "src/client/styles.css",
+    "search": "  .shell-tabs .tab:focus-visible:hover:not(:disabled) {\n    box-shadow: var(--focus-ring-inset);\n  }\n",
+    "replace": "",
+    "specs": ["tests/e2e/hover.spec.ts"]
+  },
+  {
+    "id": "M6b",
+    "what": "R-A2-1 guard: tbody tr:hover under (hover: hover), (pointer: coarse)",
+    "file": "src/client/styles.css",
+    "search": "@media (hover: hover) {\n  tbody tr:hover {",
+    "replace": "@media (hover: hover), (pointer: coarse) {\n  tbody tr:hover {",
+    "specs": ["tests/e2e/hover.spec.ts"]
+  },
+  {
+    "id": "M6a",
+    "what": "F-UX3B2-1 guard: the removal note shown on every Check out with an empty unticked list (saved-rows condition dropped)",
+    "file": "src/client/components/ClockOutDialog.tsx",
+    "search": "const removedSaved = session.breaks.length > 0 && draft.rows.length === 0",
+    "replace": "const removedSaved = draft.rows.length === 0",
+    "specs": ["tests/e2e/day-editor.spec.ts", "-g", "Check out"]
+  },
+  {
+    "id": "M5b",
+    "what": "R-B2-1 guard: a past-day gate in confirmBreaksRows (device clock, input zone): nothing listed for a session that ended today",
+    "file": "src/client/components/breakRowsModel.ts",
+    "search": "  if (policy === undefined || session.end_utc === null || session.breaks_confirmed || session.breaks.length > 0) return [];\n  return suggestionRows(",
+    "replace": "  if (policy === undefined || session.end_utc === null || session.breaks_confirmed || session.breaks.length > 0) return [];\n  if (new Date(session.end_utc).toLocaleDateString('en-CA', { timeZone: session.input_zone }) >= new Date().toLocaleDateString('en-CA', { timeZone: session.input_zone })) return [];\n  return suggestionRows(",
+    "specs": ["tests/e2e/day-editor.spec.ts", "-g", "Confirm breaks"]
+  }
+]

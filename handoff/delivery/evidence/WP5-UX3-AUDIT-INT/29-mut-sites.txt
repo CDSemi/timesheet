@@ -1,0 +1,26 @@
+795:  .shell-tabs .tab:focus-visible:hover:not(:disabled) {
+901:  padding-inline: calc(var(--space-3) - var(--hairline));
+1479:  tbody tr:hover {
+4588:  .button-link:focus-visible:hover {
+106:  const removedSaved = session.breaks.length > 0 && draft.rows.length === 0 && !draft.noBreaks;
+279:          {removedSaved && (
+586:export function confirmBreaksRows(session: Session, policy: PolicyVersion | undefined, keyOf: (index: number) => string): BreakRowDraft[] {
+587-  if (policy === undefined || session.end_utc === null || session.breaks_confirmed || session.breaks.length > 0) return [];
+588-  return suggestionRows(policy, parseUtcInstant(session.start_utc), parseUtcInstant(session.end_utc), session.input_zone, keyOf);
+589-}
+590-
+591-/**
+592- * Places the suggestions again from the current start and end, until the person edits a break
+593- * row: a draft whose rows were changed, or that holds any row not suggested, is returned as it is,
+594- * and so is one whose start or end cannot be resolved yet. The caller decides when to call it.
+595- */
+596-export function reshiftSuggestions(draft: SessionDialogDraft, context: SuggestionContext): SessionDialogDraft {
+597-  if (draft.breaksEdited || draft.rows.some((row) => row.origin !== 'suggested')) return draft;
+598-  const zone = draft.zone.trim();
+599-  if (!fieldIsFilled(draft.start) || !fieldIsFilled(draft.end)) return draft;
+600-  const start = resolveField(draft.start, zone);
+144:    const close = () => setMoreOpen(false);
+153:      if (!(event.target instanceof Node) || tabsRef.current?.contains(event.target) !== true) setMoreOpen(false);
+163:    setMoreOpen(false);
+173:    if (next instanceof Node ? tabsRef.current?.contains(next) !== true : tabbing.current) setMoreOpen(false);
+241:                setMoreOpen(false);

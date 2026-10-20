@@ -1,0 +1,30 @@
+# Usage: bash run-pw.sh <label> <export dir name> <instant UTC ISO or "real"> [playwright args...]
+# One Playwright run in an export (real clock, or the FIX10 simulated wall clock: shiftclock.mjs copied unchanged into the task folder only).
+. <task>/env.sh
+L=$1; EXP=$T/$2; TARGET_I=$3; shift 3
+mkdir -p $T/pw-$L $T/shots-$L $T/logs
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+if [ "$TARGET_I" = "real" ]; then
+  export NODE_OPTIONS="--trace-deprecation"
+  export AB8_SHIFT_MS=0
+else
+  TARGET_MS=$(date -u -d "$TARGET_I" +%s%3N)
+  NOW_MS=$(date -u +%s%3N)
+  export AB8_SHIFT_MS=$((TARGET_MS - NOW_MS))
+  export NODE_OPTIONS="--trace-deprecation --import file:///$(cygpath -m $T)/shiftclock.mjs"
+fi
+{
+  echo "== $L: export $2, real start $(date -u +%Y-%m-%dT%H:%M:%SZ), simulated start $TARGET_I, AB8_SHIFT_MS=$AB8_SHIFT_MS"
+  node $T/probe-now.mjs
+  echo "\$ playwright test $* --output=<task>/pw-$L"
+} > $T/logs/run-$L.txt
+cd "$EXP" || exit 2
+node node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-$L" >> $T/logs/run-$L.txt 2>&1
+rc=$?
+{
+  echo "exit=$rc"
+  node $T/probe-now.mjs
+  echo "== $L real end $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} >> $T/logs/run-$L.txt
+echo "$L exit=$rc $(grep -E '^ +[0-9]+ (passed|failed|flaky|skipped|did not run)' $T/logs/run-$L.txt | tr -s ' ' | tr '\n' ' ')" >> $T/logs/run-index.txt
+exit $rc

@@ -1,0 +1,53 @@
+"""EN/VI parity of docs 04, 10 and 12: per file, headings, bullets and table rows, then the multiset of code tokens,
+numbers, quoted English strings and IDs, and line by line for the round-3 ranges (EN line n paired with the VI line holding the
+same heading offset). Usage: python parity.py <export dir> <out.txt>"""
+import re
+import sys
+from collections import Counter
+
+root, out = sys.argv[1:3]
+FILES = ['docs/04_UX_AND_SETTINGS', 'docs/10_DECISIONS_AND_SOURCES', 'docs/12_RELEASE_NOTES']
+
+
+def tokens(text):
+    code = re.findall(r'`[^`]+`', text)
+    quoted = [q for q in re.findall(r'"([^"]+)"', text) if re.search(r'[A-Za-z]', q)]
+    numbers = re.findall(r'\d+(?:[.:]\d+)*', text)
+    ids = re.findall(r'\b(?:[A-Z]{1,3}-\d+[a-z]?|WP\d[\w-]*)\b', text)
+    links = re.findall(r'\]\(([^)]+)\)', text)
+    return {'code': Counter(code), 'quoted': Counter(quoted), 'numbers': Counter(numbers), 'ids': Counter(ids), 'links': Counter(links)}
+
+
+def shape(lines):
+    return {
+        'headings': [len(l) - len(l.lstrip('#')) for l in lines if l.startswith('#')],
+        'bullets': sum(1 for l in lines if re.match(r'^\s*[-*] ', l)),
+        'table rows': sum(1 for l in lines if l.startswith('|')),
+    }
+
+
+report = []
+all_ok = True
+for base in FILES:
+    en_text = open(f'{root}/{base}.md', encoding='utf-8').read()
+    vi_text = open(f'{root}/{base}.vi.md', encoding='utf-8').read()
+    en_lines, vi_lines = en_text.split('\n'), vi_text.split('\n')
+    report.append(f'=== {base}: EN {len(en_lines)} lines, VI {len(vi_lines)} lines')
+    se, sv = shape(en_lines), shape(vi_lines)
+    for key in se:
+        same = se[key] == sv[key]
+        all_ok = all_ok and same
+        report.append(f'  {key}: {"equal" if same else "DIFFER"} ({se[key] if key != "headings" else len(se[key])} / {sv[key] if key != "headings" else len(sv[key])})')
+    te, tv = tokens(en_text), tokens(vi_text)
+    for key in te:
+        a, b = te[key], tv[key]
+        same = a == b
+        report.append(f'  {key}: {"equal" if same else "DIFFER"} ({sum(a.values())} / {sum(b.values())})')
+        if not same:
+            en_only = a - b
+            vi_only = b - a
+            report.append(f'    EN only: {sorted(en_only.elements())[:60]}')
+            report.append(f'    VI only: {sorted(vi_only.elements())[:60]}')
+report.append(f'shape checks all equal: {all_ok}')
+open(out, 'w', encoding='utf-8', newline='\n').write('\n'.join(report) + '\n')
+print('\n'.join(report))

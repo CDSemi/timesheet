@@ -212,3 +212,54 @@ Mục này được thêm sau phần nghiệm thu lại WP5-UX ở trên, phần
 - **Câu hỏi tùy chọn còn mở cho chủ sở hữu WP5-UX2-Q3 (không chặn gì; mặc định (a) giữ nguyên):** trong năm ngày từ thứ Hai sau khi kỳ kết thúc đến thứ Sáu payroll, kỳ mà Today mở ra hiện nhãn "future"; phương án (b) sẽ hiện "in progress" ở đó (một thay đổi nhỏ về cách diễn đạt ở client cộng với docs/04; server không đổi).
 - **Gói pilot:** [WP5_PILOT_PACKET](WP5_PILOT_PACKET.vi.md) và bản `.md` của nó đã được làm mới theo định danh trên (mục 0, 3, 5, 6 và 10); D-1..D-15 (tất cả còn chờ) và biên bản cho phép chưa ký không đổi.
 - **Tách ba kết quả:** phần mềm sẵn sàng của WP1–WP5 trên `a643794` / `229df806…`: được chấp nhận qua REGATE2 và AUDIT2, NAS vẫn NOT VERIFIED; quyền của chủ sở hữu: chưa yêu cầu và chưa cấp; kết quả pilot: chưa có, chưa chạy pilot nào.
+
+## Nghiệm thu lại sau vòng đổi giao diện 3 (WP5-UX3)
+
+Mục này được thêm sau phần nghiệm thu lại WP5-UX2 ở trên, phần đó giữ nguyên làm lịch sử (định danh `a643794` / `229df806…` của nó đã bị thay thế). Nguồn: board [ORCHESTRATION.json](ORCHESTRATION.json) (các tác vụ `WP5-UX3-*`, `owner_decisions` và `coordinator_decisions` từ 2026-10-15 đến 2026-10-19, `runtime_observations`) và các báo cáo nêu dưới đây. Kết quả được báo cáo không phải bằng chứng độc lập; bằng chứng độc lập là các audit.
+
+- **Yêu cầu của chủ sở hữu ngày 2026-10-15 (tóm tắt tiếng Anh; nguyên văn nằm trên board) và các câu trả lời:**
+  - Yêu cầu: thôi ép kiểu công nghiệp và dùng kiểu hiện đại (văn bản quản trị trong AGENTS.md); tương phản hơn giữa trang, card, panel và sheet, với week sheet nổi lên; khối danh tính trên thanh trên cùng (avatar canh phải, tên hiển thị phía trên email nhỏ hơn) mở ra menu gồm Light/Dark, Profile, Settings và Sign out (Settings và Admin rời menu chính; Administration thành một tab của Settings); trên màn hình lớn thấy wordmark, Check in/out nằm ở hàng tiêu đề trang, không có tên người dùng dưới tiêu đề, các nhãn old/current/future phân biệt rõ (future màu hồng), một hàng xuống dòng được cho payroll date, due và múi giờ, "Open a day" cạnh bộ chọn ngày; các cột được chọn và cột editor nổi lên bằng bóng nhẹ, cột editor được đánh dấu bằng nền ô Day; trên màn hình hẹp "Current" và ẩn chữ "Open a day" khi hàng không đủ chỗ; trong Day editor có ghi chú múi giờ ngắn, header mạnh hơn, phiên giờ mới/sửa trong hộp thoại riêng, xác nhận xóa rõ ràng, điền sẵn giờ mặc định và giờ nghỉ gợi ý, vùng giờ nghỉ đơn giản hơn, Save cũng xác nhận, và WFH trên hàng Category. Danh sách mục U-01..U-27 nằm ở [WP5-UX3-PLAN](tasks/WP5-UX3-PLAN.md).
+  - G-1..G-5 (2026-10-15): G-1 (b) duyệt mockup và hướng hiện đại với các chỉnh sửa (week sheet không bo góc; cột chọn bo 4px; các cột nổi liền nhau không đổ bóng đè nhau; cột của sheet không bao giờ bị ép đến mức nội dung chồng nhau, Day editor chuyển sang dạng nổi khi không đủ chỗ); G-2 (a) "Category" thay "Label" và "Status" thay "Check"; G-3 (a) tự động điền sẵn giờ tham chiếu và giờ nghỉ gợi ý cho ngày đã qua, với quy tắc được viết lại; G-4 (biến thể của chủ sở hữu) thông báo với ba lựa chọn khi nhấn Save mà chưa có giờ nghỉ và ô chưa được tick (xác nhận không nghỉ, tạm chưa xác nhận giờ nghỉ, hoặc hủy), rồi xác nhận lưu cuối cùng; G-5 (b) kỳ chứa hôm nay hiện "in progress" trong năm ngày của cửa sổ. Nó thay thế câu hỏi tùy chọn WP5-UX2-Q3. Các yêu cầu bổ sung cho điện thoại N-1 (chip giờ nghỉ với hộp thoại con) và N-2 (khoảng cách trong hộp thoại).
+  - WP5-UX3-Q6 (2026-10-15): (b) ô ngày của giờ nghỉ chỉ hiện khi phiên qua nửa đêm địa phương (hoặc chưa đặt giờ kết thúc); và chip giờ nghỉ dùng giờ 24 giờ.
+  - WP5-UX3-Q7 (2026-10-19): (a) văn bản AGENTS.md của chủ sở hữu (phần đầu AI Instruction, Operating Contract, Prime Directive) được đưa vào kho mã, với hai chỉnh sửa (dòng bản sao runbook theo quy ước `.vi.md` của kho này; bỏ các cụm từ không thuộc dự án).
+- **Kế hoạch và mockup:** WP5-UX3-PLAN ([tác vụ](tasks/WP5-UX3-PLAN.md); các mục U-01..U-27, việc viết lại quy tắc ở mục C, các câu hỏi G-1..G-5) và PLAN2 ([tác vụ](tasks/WP5-UX3-PLAN2.md); thiết kế dòng giờ nghỉ và hộp thoại phiên); mockup là `handoff/delivery/design/WP5-UX3/mockup.html` cùng mười ảnh dựng tổng hợp trong cùng thư mục.
+- **Thay đổi quản trị:** WP5-UX3-GOV (mục UI của AGENTS "Frontend and UI/UX standards"): freeze 79b9a53, WP5-UX3-GOV-AUDIT PASS ([GOV_UX3_REVIEW](GOV_UX3_REVIEW.vi.md)), được WP5-UX3-GOV-ACCEPT chấp nhận tại 3968e15. WP5-UX3-GOV2 (phần đầu AI Instruction của chủ sở hữu, Q7): freeze ceb86b6, WP5-UX3-GOV2-AUDIT PASS ([GOV_UX3_REVIEW2](GOV_UX3_REVIEW2.vi.md)).
+- **Các lát (mỗi lát một dòng; sau mỗi lát có một commit FREEZE):**
+  - T06 `5c8355d`: mô hình thuần của dòng giờ nghỉ và unit test (không có UI).
+  - T01 `e2f3d74`: token kiểu hiện đại và khung ứng dụng.
+  - T02 `aa64999`: khối danh tính, menu tài khoản, nội dung More trên điện thoại, điều hướng gọn hơn, quy tắc wordmark.
+  - T03 `7cd8c59`: các trang con của Settings (Personal, Profile, Administration), route, nạp lười.
+  - T04 `83c32d2`: phần đầu trang và thanh kỳ.
+  - T05 `699b1b3`: dấu chọn trên sheet, tên hàng "Category" và "Status", hình dạng "No times".
+  - T05B `5c0dad8`: quy tắc Day editor dạng nổi (cột sheet không bị ép).
+  - T07 `f8117a4`: panel Day editor (header, chip, thẻ phiên với bảng giờ nghỉ), xác nhận xóa, WFH trên hàng Category.
+  - T08 `1a33c57`: hộp thoại phiên (mới và sửa), dòng giờ nghỉ, "Confirm no breaks taken", điền sẵn, thông báo G-4, xác nhận lưu và bỏ.
+  - T08B `f89573b`: quy tắc ngày giờ nghỉ Q6 (b), chip giờ nghỉ với hộp thoại con, khoảng cách trên điện thoại, hàm gợi ý chuyển vào mô hình.
+  - T09 `4b5403d`: hộp thoại Check out dùng dòng giờ nghỉ mới; các chuỗi "label" còn lại thành "category".
+  - T10 `cecfceb`: tài liệu của vòng (docs/04, docs/10, docs/12, EN và VI) và việc viết lại quy tắc.
+- **Các vòng sửa (mỗi vòng một dòng; sau mỗi vòng có một commit FREEZE):**
+  - FIX1 `9187f31`: các phát hiện của WP5-UX3-GATE (test cột nổi phụ thuộc lịch vào thứ Ba và một lỗi seed chập chờn, focus bàn phím bị cắt trong thẻ tuần từ 768 đến khoảng 880 px, ba mục axe).
+  - FIX2 `7ce4e95`: các phát hiện của lượt quét chỉ đọc WP5-UX3-SWEEP ([tác vụ](tasks/WP5-UX3-SWEEP.md)).
+  - FIX3 `a78ada5`: F-UX3A-01..06 và F-UX3B-1..2 của AUDIT-A và AUDIT-B.
+  - FIX4 `8629441`: F-UX3A2-1..3 và F-UX3B2-1 của AUDIT-A2 và AUDIT-B2.
+  - FIX5 `5c101c1`: test "Confirm breaks hôm nay" của REGATE3 phụ thuộc giờ trong ngày, được làm cho không phụ thuộc giờ.
+  - FIX6 `8e55710`: cuộc đua hoán đổi bố cục trong một test hover của REGATE4, sau chẩn đoán WP5-UX3-DIAG1 ([tác vụ](tasks/WP5-UX3-DIAG1.md)).
+- **Các gate (NAS luôn NOT VERIFIED):**
+  - WP5-UX3-GATE FAIL tại `cecfceb` ([tác vụ](tasks/WP5-UX3-GATE.md)): một test cột nổi phụ thuộc lịch (các thứ Ba) và một lỗi seed chập chờn, focus bàn phím bị cắt trong thẻ tuần từ 768 đến khoảng 880 px, và ba mục axe mức serious; được FIX1 và FIX2 đóng.
+  - WP5-UX3-REGATE PASS tại `7ce4e95` ([tác vụ](tasks/WP5-UX3-REGATE.md)), được ghi nhận kèm một sai lệch về timeout của một lần chạy đồng hồ giả lập (`coordinator_decisions` trên board ngày 2026-10-16).
+  - WP5-UX3-REGATE2 PASS tại `ceb86b6` ([tác vụ](tasks/WP5-UX3-REGATE2.md)).
+  - WP5-UX3-REGATE3 FAIL tại `8629441` ([tác vụ](tasks/WP5-UX3-REGATE3.md)): test "Confirm breaks" của FIX4 hỏng giữa nửa đêm địa phương và khoảng 03:00 trên project điện thoại; được FIX5 đóng.
+  - WP5-UX3-REGATE4 FAIL tại `5c101c1` ([tác vụ](tasks/WP5-UX3-REGATE4.md)): mục gate 2 không đạt theo nghĩa chặt vì một cuộc đua trong test hover; test đã sửa, định danh và các bằng chứng mang sang vẫn đúng; được FIX6 đóng.
+  - WP5-UX3-REGATE5 PASS tại `8e55710` ([tác vụ](tasks/WP5-UX3-REGATE5.md)): các bản build giống hệt từng byte với REGATE3 và REGATE4 (các mục của chúng được mang sang); e2e đầy đủ đồng hồ thật 651 passed / 67 skipped / 0 failed; chạy đầy đủ đồng hồ giả lập ở một ngày trong cửa sổ và ở ngày đổi giờ DST, 0 failed; drill `--wp3` 208 PASS / 0 FAIL (REGATE3); 2.141 unit test; axe: chỉ còn mục kích thước mục tiêu của menu tài khoản đã được biện minh.
+- **Các audit:**
+  - WP5-UX3-AUDIT-A ([WP5_UX3_REVIEW_A](WP5_UX3_REVIEW_A.vi.md)) và AUDIT-B ([WP5_UX3_REVIEW_B](WP5_UX3_REVIEW_B.vi.md)) tại `7ce4e95`: FIX REQUIRED; các phát hiện F-UX3A-01..06 (vùng A) và F-UX3B-1..2 (vùng B); được FIX3 đóng.
+  - WP5-UX3-AUDIT-A2 ([WP5_UX3_REVIEW_A2](WP5_UX3_REVIEW_A2.vi.md)) và AUDIT-B2 ([WP5_UX3_REVIEW_B2](WP5_UX3_REVIEW_B2.vi.md)) tại `ceb86b6`: FIX REQUIRED; các phát hiện F-UX3A2-1..3 (một Medium, hai Low) và F-UX3B2-1 (Low, độ mạnh của test); được FIX4 đóng.
+  - WP5-UX3-AUDIT-INT PASS ([WP5_UX3_REVIEW_INT](WP5_UX3_REVIEW_INT.vi.md)) tại `8e55710` / `507de97c…`, không có phát hiện, các rủi ro tùy chọn R-INT-1..R-INT-4. Nó thay thế WP5-UX2-AUDIT2.
+- **Tạm dừng do giới hạn sử dụng:** nhiệm vụ tạm dừng ngày 2026-10-16 ở giới hạn sử dụng và tiếp tục ngày 2026-10-19 bằng việc đối chiếu HEAD với commit board cuối (a78ada5); board và checkpoint giữ hồ sơ.
+- **Định danh được chấp nhận:**
+  - Commit phát hành `8e557100d16b6b6eb86a48e00276835761aabfdf` (WP5-UX3-FIX6-FREEZE, đã push); source digest `507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6`, 833 tệp, không tính `handoff/`.
+  - Image tham chiếu `sha256:bcb0692cc99fe5c0b198dc26cff623045903f851f3d7069105b1df09bf9e493b` (110.042.848 byte, `linux/amd64`, bản build drill REGATE3 có byte giống hệt bản phát hành, máy trạm phát triển), đã xóa sau gate.
+  - Ranh giới sản phẩm: vòng này đổi giao diện client và tài liệu. `dist/server` và `dist/domain` giống hệt từng byte với a643794; không đổi quy tắc nghiệp vụ, phép tính, schema, API, PDF hay email.
+- **Backlog tùy chọn được mang theo (theo ID; không mục nào chặn nghiệm thu):** R-UX3B-1, R-UX3B-2, R-UX3B-5..R-UX3B-7 (WP5_UX3_REVIEW_B); phần còn lại của R-A2-1 và các rủi ro A2 R3, R5, R7 (WP5_UX3_REVIEW_A2); R-B2-2, R-B2-3, R-B2-5 (WP5_UX3_REVIEW_B2); R-INT-1..R-INT-4 (WP5_UX3_REVIEW_INT); các mục backlog quản trị R3-R5 và R8 của GOV_UX3_REVIEW2. Các rủi ro đã mang theo trước đó (R-UX2A-1..R-UX2A-5, R-UX2A2-1..R-UX2A2-4 và các mục cũ hơn đã liệt kê ở trên) vẫn áp dụng. WP5-UX2-Q3 được G-5 (b) thay thế.
+- **Gói pilot:** [WP5_PILOT_PACKET](WP5_PILOT_PACKET.vi.md) và bản `.md` của nó đã được làm mới theo định danh trên (mục 0, 3, 5, 6 và 10); D-1..D-15 (tất cả còn chờ) và biên bản cho phép chưa ký không đổi.
+- **Tách ba kết quả:** phần mềm sẵn sàng của WP1–WP5 trên `8e55710` / `507de97c…`: được chấp nhận qua REGATE5 và AUDIT-INT, NAS vẫn NOT VERIFIED; quyền của chủ sở hữu: chưa yêu cầu và chưa cấp; kết quả pilot: chưa có, chưa chạy pilot nào.

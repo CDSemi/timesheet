@@ -1,0 +1,129 @@
+import type { Page } from '@playwright/test';
+import { expect, newPerson, type Person, test } from './fixtures.ts';
+import { axeScan, frames, note, shot, stack } from './zz-int-lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-INT (task-local probe): a shared view (view only, then edit) with the round-3 header, the editor chips, the
+ * session cards and the dialogs. The bar always shows the signed-in grantee; view only shows no edit control and writes nothing;
+ * edit writes only under /api/shared/:ownerId and never offers Check in/out. Lines go to obs/<tag>/shared.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const FILE = 'shared.txt';
+
+function recordApi(page: Page): string[] {
+  const list: string[] = [];
+  page.on('request', (request) => {
+    const { pathname } = new URL(request.url());
+    if (pathname.startsWith('/api/')) list.push(`${request.method()} ${pathname}`);
+  });
+  return list;
+}
+
+function outsideShared(list: readonly string[], ownerId: string): string[] {
+  return list.filter((entry) => {
+    const path = entry.slice(entry.indexOf(' ') + 1);
+    return !path.startsWith(`/api/shared/${ownerId}/`) && path !== '/api/shares' && path !== '/api/auth/me' && path !== '/api/auth/login';
+  });
+}
+
+async function editorFacts(page: Page): Promise<string> {
+  const editor = page.getByRole('dialog', { name: /Day / });
+  await expect(editor).toBeVisible();
+  return editor.evaluate((dialog) => {
+    const chips = [...dialog.querySelectorAll('[data-chip]')].map((chip) => `${chip.getAttribute('data-chip')}="${(chip.textContent ?? '').trim()}"`).join(' ');
+    const buttons = [...dialog.querySelectorAll('button')].map((b) => (b.getAttribute('aria-label') ?? b.textContent ?? '').trim()).filter((t) => t !== '');
+    const named = (re: RegExp) => buttons.filter((t) => re.test(t)).length;
+    const cards = dialog.querySelectorAll('.session-card, [data-session]').length;
+    const tables = dialog.querySelectorAll('table').length;
+    return `chips ${chips || '-'}; session cards ${cards}; tables ${tables}; Add session ${named(/^Add session/)}, Edit ${named(/^Edit session/)}, Delete ${named(/^Delete session/)}, Confirm breaks ${named(/^Confirm breaks/)}`;
+  });
+}
+
+/** Opens a day from the sheet's own day button (a view-only share has no "Open a day" field). */
+async function openDay(page: Page, day: string, phone: boolean): Promise<void> {
+  const button = phone ? page.locator(`[data-day="${day}"] .sheet-day-button`) : page.locator(`.sheet-day[data-day="${day}"] [data-day-button]`);
+  await button.click();
+}
+
+async function people(adminSeed: Parameters<typeof newPerson>[0], builtServer: Parameters<typeof newPerson>[1]): Promise<{ owner: Person; grantee: Person; day: string; second: string }> {
+  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner', signature: 'none' });
+  const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee', signature: 'none' });
+  const free = await owner.api.displayedPeriodFreeWorkdays();
+  const [day = '', second = ''] = free;
+  await owner.api.seedCompleteDay(day);
+  await owner.api.seedUnconfirmedBreaksDay(second);
+  return { owner, grantee, day, second };
+}
+
+for (const access of ['view', 'edit'] as const) {
+  test(`shared view, ${access}: header, chips, session cards, dialogs and requests`, async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+    test.setTimeout(240_000);
+    const project = testInfo.project.name;
+    const { owner, grantee, day, second } = await people(adminSeed, builtServer);
+    await owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: access, ot_read: false, pdf_download: false } }, 201);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const recorded = recordApi(page);
+    await signInPageAs(grantee.account, `#/shared/${owner.account.id}/timesheet`);
+    await expect(page.getByRole('heading', { name: "Synthetic Owner's timesheet" })).toBeVisible();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await frames(page);
+    const width = page.viewportSize()?.width ?? 0;
+    const shareTitle = (await page.locator('[data-share-bar-title]').textContent()) ?? '';
+    const identity = page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+    const identityText = (await identity.isVisible()) ? ((await identity.textContent()) ?? '').replace(/\s+/g, ' ').trim() : 'hidden (phone)';
+    const checkButtons = await page.getByRole('button', { name: /^(Check in|Check out|Clock in|Clock out)$/ }).count();
+    const pill = await page.locator('.period-bar .badge').allTextContents();
+    note(FILE, `==== ${project} ${width}px ${access}: share bar "${shareTitle.trim()}"; identity "${identityText}"; Check in/out buttons ${checkButtons}; period pills ${JSON.stringify(pill)}`);
+    // The account content (menu or More) shows the grantee, not the owner.
+    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+    const panel = (await more.isVisible()) ? (await more.click(), page.locator('#more-panel')) : (await identity.click(), page.locator('#account-menu'));
+    await expect(panel).toBeVisible();
+    note(FILE, `  account content: "${((await panel.locator('.account-who').textContent()) ?? '').replace(/\s+/g, ' ').trim()}"`);
+    await page.keyboard.press('Escape');
+    // The toolbar: "Open a day" and "Change several days" only with edit rights.
+    note(FILE, `  toolbar: Open a day fields ${await page.getByLabel('Open a day').count()}, Change several days ${await page.getByRole('button', { name: 'Change several days' }).count()}, Category pickers ${await page.getByRole('button', { name: /^Category for / }).count()}`);
+    const phone = width < 768;
+    // The complete day: chips and session card.
+    await openDay(page, day, phone);
+    note(FILE, `  editor ${day}: ${await editorFacts(page)}; ${await stack(page)}`);
+    await axeScan(page, `shared ${access} editor ${project}`, FILE);
+    if (project === 'desktop') await page.screenshot({ path: shot(`int-shared-${access}-editor-${process.env.INT_OBS_TAG ?? 'target'}-synthetic.png`) });
+    await page.keyboard.press('Escape');
+    await frames(page);
+    // The unconfirmed day: "Confirm breaks" only with edit rights.
+    await openDay(page, second, phone);
+    note(FILE, `  editor ${second} (unconfirmed breaks): ${await editorFacts(page)}`);
+    const editor = page.getByRole('dialog', { name: /Day / });
+    if (access === 'edit') {
+      // Confirm breaks: the session dialog lists the suggestions; Save goes through "Save this session?"; the PUT is under /api/shared.
+      await editor.getByRole('button', { name: /^Confirm breaks/ }).click();
+      const form = page.getByRole('dialog', { name: 'Edit session', exact: true });
+      await expect(form).toBeVisible();
+      note(FILE, `  Confirm breaks dialog: rows ${await form.locator('[data-break]').count()}; ${await stack(page)}`);
+      await form.getByRole('button', { name: 'Save', exact: true }).click();
+      const confirm = page.getByRole('alertdialog', { name: 'Save this session?' });
+      await expect(confirm).toBeVisible();
+      const facts = ((await confirm.locator('.confirm-facts').textContent()) ?? '').replace(/\s+/g, ' ').trim();
+      await confirm.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(confirm).toHaveCount(0);
+      await expect(form).toHaveCount(0);
+      const puts = recorded.filter((entry) => entry.startsWith('PUT '));
+      note(FILE, `  saved through the share: confirmation "${facts}"; PUT requests ${JSON.stringify(puts)}`);
+      const view = await owner.api.dayView(second);
+      note(FILE, `  owner's day ${second} after the grantee's save: breaks_confirmed ${view.sessions[0]?.breaks_confirmed}, breaks ${view.sessions[0]?.breaks.length}`);
+      // Delete: the confirmation, then Cancel (nothing sent).
+      const before = recorded.length;
+      await editor.getByRole('button', { name: /^Delete session/ }).first().click();
+      const del = page.getByRole('alertdialog', { name: 'Delete this session?' });
+      await expect(del).toBeVisible();
+      note(FILE, `  delete confirmation: ${await stack(page)}`);
+      await del.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(del).toHaveCount(0);
+      note(FILE, `  Cancel: requests sent ${JSON.stringify(recorded.slice(before).filter((entry) => !entry.startsWith('GET ')))}`);
+    }
+    await page.keyboard.press('Escape');
+    const writes = recorded.filter((entry) => !entry.startsWith('GET '));
+    note(FILE, `  requests outside /api/shared/:ownerId (besides /api/shares, /api/auth/me, login): ${JSON.stringify(outsideShared(recorded, owner.account.id))}; writes ${JSON.stringify(writes)}`);
+  });
+}

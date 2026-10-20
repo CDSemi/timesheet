@@ -1,0 +1,88 @@
+import type { Page } from '@playwright/test';
+import { expect, newPerson, openAccount, test } from './fixtures.ts';
+import { frames, note } from './zz-int-lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-INT (task-local probe): Settings and Administration are reachable for an administrator in every layout: the
+ * account menu (from 768px) or the More panel (below), the Settings sections, the #/admin redirect, by pointer and by keyboard,
+ * with and without the "Shared with me" switcher in the bar. Lines go to obs/<tag>/admin.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const FILE = 'admin.txt';
+const WIDTHS = [
+  [1920, 1080],
+  [1440, 900],
+  [1366, 768],
+  [1280, 800],
+  [1100, 800],
+  [1024, 768],
+  [820, 1180],
+  [768, 1024],
+  [767, 900],
+  [430, 932],
+  [390, 844],
+  [360, 740],
+  [320, 640],
+] as const;
+
+async function barFacts(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const bar = document.querySelector('.shell-bar');
+    const r = bar?.getBoundingClientRect();
+    const scroll = document.documentElement.scrollWidth > document.documentElement.clientWidth;
+    const switcher = document.querySelector('.shell-switcher select') !== null;
+    return `bar height ${r?.height.toFixed(1)}; switcher ${switcher}; sideways scroll ${scroll}`;
+  });
+}
+
+for (const shared of [false, true]) {
+  test(`administrator reaches Settings and Administration at every width (${shared ? 'with' : 'without'} a received share)`, async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+    test.setTimeout(400_000);
+    const project = testInfo.project.name;
+    if (shared) {
+      const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Sharing Owner', signature: 'none' });
+      await owner.api.call('POST', '/api/shares', { grantee_email: builtServer.credentials.admin.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+    }
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await signInPageAs(builtServer.credentials.admin, '#/timesheet');
+    await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+    for (const [width, height] of WIDTHS) {
+      await page.setViewportSize({ width, height });
+      await page.evaluate("window.location.hash = '#/timesheet'");
+      await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+      await frames(page);
+      // Pointer: account content, Administration.
+      const panel = await openAccount(page);
+      const entries = (await panel.getByRole('link').allTextContents()).map((t) => t.trim());
+      await panel.getByRole('link', { name: 'Administration', exact: true }).click();
+      await expect(page).toHaveURL(/#\/settings\/admin$/);
+      await expect(page.getByRole('heading', { name: 'Administration', exact: true, level: 1 })).toBeVisible();
+      const sections = (await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link').allTextContents()).map((t) => t.trim());
+      // Settings sections: Personal, then Administration again from there.
+      await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Personal' }).click();
+      await expect(page.getByRole('heading', { name: 'Settings', exact: true, level: 1 })).toBeVisible();
+      await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Administration' }).click();
+      await expect(page.getByRole('heading', { name: 'Administration', exact: true, level: 1 })).toBeVisible();
+      // The old address.
+      await page.evaluate("window.location.hash = '#/admin'");
+      await expect(page).toHaveURL(/#\/settings\/admin$/);
+      await expect(page.getByRole('heading', { name: 'Administration', exact: true, level: 1 })).toBeVisible();
+      // Keyboard: open the account content with the keyboard, Settings entry, focus on the Settings heading.
+      await page.evaluate("window.location.hash = '#/timesheet'");
+      await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+      const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+      const phone = await more.isVisible();
+      const opener = phone ? more : page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+      await opener.focus();
+      await page.keyboard.press('Enter');
+      const keyPanel = page.locator(phone ? '#more-panel' : '#account-menu');
+      await expect(keyPanel).toBeVisible();
+      await keyPanel.getByRole('link', { name: 'Settings', exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(/#\/settings$/);
+      await expect.poll(async () => page.evaluate(() => `${document.activeElement?.tagName}:${document.activeElement?.textContent}`)).toBe('H1:Settings');
+      note(FILE, `${project} ${width}x${height} ${shared ? 'share' : 'own'}: ${phone ? 'More panel' : 'account menu'} entries ${JSON.stringify(entries)}; Settings sections ${JSON.stringify(sections)}; Administration by pointer, by section link and by #/admin OK; keyboard Settings entry focuses the Settings h1; ${await barFacts(page)}`);
+    }
+  });
+}

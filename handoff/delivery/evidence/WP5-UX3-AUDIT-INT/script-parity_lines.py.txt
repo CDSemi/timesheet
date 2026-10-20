@@ -1,0 +1,44 @@
+"""Line-by-line EN/VI parity for the round-3 ranges of docs 04, 10 and 12: numbers, code tokens, IDs and quoted strings that
+contain no Vietnamese letter (UI strings stay English in both). Usage: python parity_lines.py <export dir> <out.txt>"""
+import re
+import sys
+from collections import Counter
+
+root, out = sys.argv[1:3]
+# (file, EN first line, EN last line, VI offset)
+RANGES = [
+    ('docs/04_UX_AND_SETTINGS', 1, 106, 0),
+    ('docs/10_DECISIONS_AND_SOURCES', 219, 246, 1),
+    ('docs/12_RELEASE_NOTES', 35, 41, 0),
+    ('docs/12_RELEASE_NOTES', 71, 71, 0),
+]
+VI_LETTERS = re.compile(r'[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]', re.IGNORECASE)
+
+
+def tokens(text):
+    code = Counter(re.findall(r'`[^`]+`', text))
+    quoted = Counter(q for q in re.findall(r'"([^"]+)"', text) if re.search(r'[A-Za-z]', q) and not VI_LETTERS.search(q))
+    numbers = Counter(re.findall(r'\d+(?:[.:]\d+)*', text))
+    ids = Counter(re.findall(r'\b(?:[A-Z]{1,3}-\d+[a-z]?|WP\d[\w-]*)\b', text))
+    return {'code': code, 'quoted-en': quoted, 'numbers': numbers, 'ids': ids}
+
+
+report = []
+differ = 0
+checked = 0
+for base, first, last, offset in RANGES:
+    en = open(f'{root}/{base}.md', encoding='utf-8').read().split('\n')
+    vi = open(f'{root}/{base}.vi.md', encoding='utf-8').read().split('\n')
+    report.append(f'=== {base} EN {first}-{last}, VI offset {offset}')
+    for n in range(first, last + 1):
+        e, v = en[n - 1], vi[n - 1 + offset]
+        if e.strip() == '' and v.strip() == '':
+            continue
+        checked += 1
+        te, tv = tokens(e), tokens(v)
+        for key in te:
+            if te[key] != tv[key]:
+                differ += 1
+                report.append(f'  EN {n} / VI {n + offset} {key}: EN only {sorted((te[key] - tv[key]).elements())} VI only {sorted((tv[key] - te[key]).elements())}')
+report.append(f'lines checked {checked}, token differences {differ}')
+open(out, 'w', encoding='utf-8', newline='\n').write('\n'.join(report) + '\n')

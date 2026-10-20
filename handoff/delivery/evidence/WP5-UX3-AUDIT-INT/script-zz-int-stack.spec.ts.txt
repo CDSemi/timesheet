@@ -1,0 +1,188 @@
+import type { Locator, Page } from '@playwright/test';
+import { expect, newPerson, test } from './fixtures.ts';
+import { axeScan, frames, inertCheck, note, shot, stack } from './zz-int-lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-INT (task-local probe): cross-area dialog stacks. Desktop 1280: the floating (modal) Day editor, the session
+ * dialog, the "No breaks listed" notice and the "Save this session?" / "Discard your changes?" confirmations: Escape order, focus
+ * returns, the inert page. Phone 390: the Day editor sheet, the session dialog with break chips and the "Break n" sub-dialog,
+ * and the More panel while the sheet is open. Lines go to obs/<tag>/stack.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const FILE = 'stack.txt';
+const LA = 'America/Los_Angeles';
+
+function watchWrites(page: Page): string[] {
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    const method = request.method();
+    if (method === 'GET') return;
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/') && !path.startsWith('/api/auth/')) writes.push(`${method} ${path}`);
+  });
+  return writes;
+}
+
+async function openEditor(page: Page, workDate: string): Promise<Locator> {
+  await page.getByLabel('Open a day').fill(workDate);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+  return editor;
+}
+
+const box = (page: Page, name: string) => page.getByRole('alertdialog', { name });
+
+test('1280: floating editor > session dialog > notice / confirmation: Escape order, focus returns, inert page', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'desktop project');
+  test.setTimeout(240_000);
+  const who = await newPerson(adminSeed, builtServer, { signature: 'none' });
+  const [day = ''] = await who.api.displayedPeriodFreeWorkdays();
+  expect(day).not.toBe('');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signInPageAs(who.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const writes = watchWrites(page);
+  // Open from the sheet's date button, so the editor's focus return target is that button.
+  const dayButton = page.locator(`.sheet-day[data-day="${day}"] [data-day-button]`);
+  await dayButton.click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  note(FILE, `==== desktop 1280 day ${day}: L1 editor: ${await stack(page)}; dock ${await editor.getAttribute('data-side')}`);
+  note(FILE, `  L1 inert: ${await inertCheck(page, '.shell-bar .nav-link', 40)}`);
+  await axeScan(page, 'L1 floating editor 1280', FILE);
+  const add = editor.getByRole('button', { name: 'Add session' });
+  await add.click();
+  const form = page.getByRole('dialog', { name: 'New session', exact: true });
+  await expect(form).toBeVisible();
+  note(FILE, `  L2 session dialog: ${await stack(page)}`);
+  note(FILE, `  L2 inert (editor behind the session dialog): ${await inertCheck(page, '.day-editor button[aria-label="Close"], dialog[aria-labelledby="day-editor-title"] button', 40)}`);
+  // Clear the pre-filled suggestions, then Save: the notice (third level).
+  const rows = form.locator('[data-break]');
+  for (let count = await rows.count(); count > 0; count -= 1) await form.getByRole('button', { name: `Remove break ${count}`, exact: true }).click();
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  const notice = box(page, 'No breaks listed');
+  await expect(notice).toBeVisible();
+  note(FILE, `  L3 notice: ${await stack(page)}`);
+  note(FILE, `  L3 inert (session dialog behind the notice): ${await inertCheck(page, 'dialog[open] input', 20)}`);
+  await axeScan(page, 'L3 notice over session dialog over floating editor 1280', FILE);
+  await page.screenshot({ path: shot(`int-stack-notice-1280-${process.env.INT_OBS_TAG ?? 'target'}-synthetic.png`) });
+  await page.keyboard.press('Escape');
+  await expect(notice).toHaveCount(0);
+  note(FILE, `  Escape in the notice: ${await stack(page)} (expected focus: Add break)`);
+  // Notice again, Leave unconfirmed: the final confirmation; Escape = Back.
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(notice).toBeVisible();
+  await notice.getByRole('button', { name: 'Leave breaks unconfirmed for now', exact: true }).click();
+  const confirm = box(page, 'Save this session?');
+  await expect(confirm).toBeVisible();
+  note(FILE, `  L3 confirmation after Leave unconfirmed: ${await stack(page)}`);
+  await page.keyboard.press('Escape');
+  await expect(confirm).toHaveCount(0);
+  note(FILE, `  Escape in the confirmation: ${await stack(page)} (expected focus: Save)`);
+  // Escape in the changed session dialog: the discard question; Escape keeps editing; Escape again, then Discard.
+  await page.keyboard.press('Escape');
+  const discard = box(page, 'Discard your changes?');
+  await expect(discard).toBeVisible();
+  note(FILE, `  Escape in the changed session dialog: ${await stack(page)}`);
+  await page.keyboard.press('Escape');
+  await expect(discard).toHaveCount(0);
+  note(FILE, `  Escape in the discard question: ${await stack(page)}`);
+  await page.keyboard.press('Escape');
+  await expect(discard).toBeVisible();
+  await discard.getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  note(FILE, `  Discard: ${await stack(page)} (expected focus: Add session) add focused ${await add.evaluate((element) => element === document.activeElement)}`);
+  await page.keyboard.press('Escape');
+  await expect(editor).toHaveCount(0);
+  await frames(page);
+  note(FILE, `  Escape in the editor: ${await stack(page)}; focus back on the day's button ${await dayButton.evaluate((element) => element === document.activeElement)}`);
+  note(FILE, `  writes during the whole stack walk: ${JSON.stringify(writes)}`);
+});
+
+test('390 phone: editor sheet > session dialog with chips > "Break n" sub-dialog: Escape order and focus; More is unreachable while the sheet is open', async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+}, testInfo) => {
+  test.setTimeout(240_000);
+  const project = testInfo.project.name;
+  const who = await newPerson(adminSeed, builtServer, { signature: 'none' });
+  const free = await who.api.displayedPeriodFreeWorkdays();
+  const day = free.find((date) => free.includes(date)) ?? '';
+  expect(day).not.toBe('');
+  // An overnight session (22:00 to 02:00 the next day) with one saved break: chips at 390 (overnight rows need 390px of list).
+  const nextDay = new Date(`${day}T00:00:00Z`);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  const next = nextDay.toISOString().slice(0, 10);
+  await who.api.call(
+    'POST',
+    `/api/days/${day}/sessions`,
+    {
+      start: { local: `${day}T22:00:00`, zone: LA },
+      end: { local: `${next}T02:00:00`, zone: LA },
+      input_zone: LA,
+      breaks: [{ start: { local: `${next}T00:00:00`, zone: LA }, end: { local: `${next}T00:15:00`, zone: LA }, counts_as_work: false }],
+      breaks_confirmed: true,
+    },
+    201,
+  );
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInPageAs(who.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+  // More open, then a press on the day: the panel closes (outside press) and the sheet opens.
+  await more.click();
+  await expect(page.locator('#more-panel')).toBeVisible();
+  const dayButton = page.locator(`[data-day="${day}"] .sheet-day-button`);
+  await dayButton.click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  note(FILE, `==== ${project} 390 day ${day}: L1 sheet after a press with More open: More panel count ${await page.locator('#more-panel').count()}; ${await stack(page)}`);
+  const moreFocus = await more.evaluate((element) => {
+    (element as HTMLElement).focus();
+    return element === document.activeElement;
+  });
+  const hit = await page.evaluate(() => {
+    const more = [...document.querySelectorAll('.shell-tabs button.tab')][0];
+    if (!more) return 'no More';
+    const r = more.getBoundingClientRect();
+    const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return top === more ? 'More itself' : `${top?.tagName.toLowerCase()}.${String(top?.className ?? '').split(' ')[0]} (in a dialog: ${top?.closest('dialog') !== null})`;
+  });
+  note(FILE, `  More while the sheet is open: script focus ${moreFocus ? 'FOCUSABLE' : 'inert'}; element at its centre ${hit}`);
+  note(FILE, `  L1 inert: ${await inertCheck(page, '.shell-tabs a.tab', 30)}`);
+  const edit = editor.getByRole('button', { name: /^Edit session/ }).first();
+  await edit.click();
+  const form = page.getByRole('dialog', { name: 'Edit session', exact: true });
+  await expect(form).toBeVisible();
+  const layout = await form.getByRole('list', { name: 'Break list' }).getAttribute('data-layout');
+  note(FILE, `  L2 session dialog: layout ${layout}; ${await stack(page)}`);
+  const chip = form.locator('[data-break="1"] button').first();
+  await chip.click();
+  const sub = page.getByRole('dialog', { name: /^Break 1/ });
+  await expect(sub).toBeVisible();
+  note(FILE, `  L3 sub-dialog: ${await stack(page)}`);
+  note(FILE, `  L3 inert: ${await inertCheck(page, 'dialog[open] [data-break="1"] button', 20)}`);
+  await axeScan(page, `L3 Break 1 sub-dialog over session dialog over sheet 390 (${project})`, FILE);
+  if (project === 'mobile') await page.screenshot({ path: shot(`int-stack-subdialog-390-${process.env.INT_OBS_TAG ?? 'target'}-synthetic.png`) });
+  await page.keyboard.press('Escape');
+  await expect(sub).toHaveCount(0);
+  note(FILE, `  Escape in the sub-dialog: ${await stack(page)} (expected focus: the chip) chip focused ${await chip.evaluate((element) => element === document.activeElement)}`);
+  await page.keyboard.press('Escape');
+  await expect(form).toHaveCount(0);
+  note(FILE, `  Escape in the unchanged session dialog: ${await stack(page)} (expected focus: Edit) edit focused ${await edit.evaluate((element) => element === document.activeElement)}`);
+  await page.keyboard.press('Escape');
+  await expect(editor).toHaveCount(0);
+  await frames(page);
+  note(FILE, `  Escape in the sheet: ${await stack(page)}; focus back on the day's button ${await dayButton.evaluate((element) => element === document.activeElement)}`);
+  // After the sheet closes, More works again.
+  await more.click();
+  note(FILE, `  More after the sheet closed: panel ${await page.locator('#more-panel').count()}`);
+  await who.api.clearSessions(day);
+});

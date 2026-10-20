@@ -1,0 +1,43 @@
+"""Copies task-folder logs into the evidence folder as masked LF text: ANSI codes stripped, CR removed, trailing blanks
+removed, one final newline; the user profile, the task folder, the repository and the temp folder written as <user>, <task>,
+<repo>, <tmp>. PNG files are copied unchanged. Usage: python mask_copy.py <dest dir> <src>=<dest name> [...]"""
+import os
+import re
+import shutil
+import sys
+
+dest = sys.argv[1]
+os.makedirs(dest, exist_ok=True)
+user = os.environ.get('USERNAME', '') or os.path.basename(os.environ.get('USERPROFILE', ''))
+ANSI = re.compile(r'\x1b\[[0-9;?]*[A-Za-z]')
+REPLACEMENTS = [
+    (re.compile(r'D:[\\/]+\.claude-tmp[\\/]+timesheet[\\/]+WP5-UX3-AUDIT-INT', re.IGNORECASE), '<task>'),
+    (re.compile(r'/d/\.claude-tmp/timesheet/WP5-UX3-AUDIT-INT', re.IGNORECASE), '<task>'),
+    (re.compile(r'D:[\\/]+Dropbox[\\/]+Work\.CDSemi[\\/]+timesheet', re.IGNORECASE), '<repo>'),
+    (re.compile(r'/d/Dropbox/Work\.CDSemi/timesheet', re.IGNORECASE), '<repo>'),
+    (re.compile(r'D:[\\/]+\.claude-tmp[\\/]+claude[\\/]+[^\s"\'\\/]+', re.IGNORECASE), '<tmp>'),
+    # The portable Node 24 executable under the user profile, then any other path under the user profile.
+    (re.compile(r'C:[\\/]+Users[\\/]+[^\\/\s]+[\\/]+AppData[\\/]+Local[\\/]+timesheet-dev[\\/]+node-24\.21\.0[\\/]+node_modules[\\/]+node[\\/]+bin[\\/]+node(?:\.exe)?', re.IGNORECASE), '<node24>'),
+    (re.compile(r'(?:C:|/c)[\\/]+Users[\\/]+[^\\/\s]+', re.IGNORECASE), '<home>'),
+    # Probe text that joined a display name, a synthetic address and initials without spaces (textContent): add the spaces.
+    (re.compile(r'([A-Za-z])(synthetic-[0-9a-f]+@example\.invalid)'), r'\1 \2'),
+    (re.compile(r'(@example\.invalid)([A-Z])'), r'\1 \2'),
+]
+summary = []
+for pair in sys.argv[2:]:
+    src, name = pair.split('=', 1)
+    target = os.path.join(dest, name)
+    if name.endswith('.png'):
+        shutil.copyfile(src, target)
+        summary.append(f'png {name}')
+        continue
+    text = open(src, 'rb').read().decode('utf-8', errors='replace')
+    text = ANSI.sub('', text).replace('\r', '')
+    for pattern, value in REPLACEMENTS:
+        text = pattern.sub(value, text)
+    if user:
+        text = re.sub(re.escape(user), '<user>', text, flags=re.IGNORECASE)
+    text = '\n'.join(line.rstrip(' \t') for line in text.split('\n')).rstrip('\n') + '\n'
+    open(target, 'w', encoding='utf-8', newline='\n').write(text)
+    summary.append(f'txt {name} ({len(text)} chars)')
+print(f'copied {len(summary)} files')

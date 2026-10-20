@@ -746,6 +746,46 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
     đạt.
   - npm test 2141; verify 0; digest 507de97c.
 - Đang chạy: WP5-UX3-FIX6-FREEZE (committer, chạy một mình).
+- WP5-UX3-FIX6-FREEZE: lần 1 dừng ở validate_orchestration. Đó là sơ suất của coordinator: mục
+  REGATE4 trên board không có danh sách bằng chứng. Sau khi sửa board, lần 2 đã commit và push
+  8e557100d16b6b6eb86a48e00276835761aabfdf (88 đường dẫn; digest 507de97c, trên HEAD cũng vậy;
+  mọi kiểm tra trả về 0).
+- Đang chạy: WP5-UX3-REGATE5 tối thiểu (verifier, sonnet) trên 8e55710 / 507de97c.
+  - Gồm: định danh và bản build giống hệt, npm test, một lần e2e đầy đủ theo đồng hồ thật với quy
+    tắc lỗi buffer đã làm rõ, test vòng focus chạy lặp x30, và các validator.
+- Sau đó là WP5-UX3-AUDIT-INT trên 8e55710, với brief được nhắm lại.
+- WP5-UX3-REGATE5 xong: PASS trên 8e55710 / 507de97c.
+  - Chỉ hover.spec.ts thay đổi, và 236 file trong dist giống từng byte.
+  - npm test 2141; e2e đầy đủ theo đồng hồ thật 651 đạt / 0 lỗi, không cần chạy lại; test vòng
+    focus x30 được 60 lần đạt; các validator trả về 0.
+  - Các mục của REGATE3 và REGATE4 được giữ nguyên kết quả. Docker, NAS và các trình duyệt ngoài
+    Chromium không chạy ở bước này.
+- current_source_digest là 507de97c.
+- Đang chạy: WP5-UX3-AUDIT-INT (opus, agent mới) trên 8e55710. Đây là audit kiểm lại và tích hợp
+  cuối cùng; nếu đạt PASS thì WP5 được nghiệm thu lại.
+- WP5-UX3-AUDIT-INT xong: PASS, không có lỗi nào, trên 8e55710 / 507de97c. WP5 đã được nghiệm
+  thu lại.
+  - Mọi lỗi và test giữ của A2/B2 đều đã khắc phục, được auditor kiểm lại bằng thăm dò và đột biến
+    riêng.
+  - Mọi yêu cầu của chủ dự án (U-01..U-27, N-1, N-2, G-1..G-5, Q6, chip giờ, Q7) đều được đối
+    chiếu với review đã kiểm nó.
+  - Các kiểm tra liên vùng đều đạt; axe 0 lỗi; AC-13 đạt ở ba múi giờ.
+  - e2e theo đồng hồ thật 651 / 0.
+  - Rủi ro tùy chọn R-INT-1..4: R-INT-1 là một câu trong docs/04 về bảng More.
+- Đang chạy: WP5-UX3-ACCEPT-DOCS (light, sonnet). Task này cập nhật định danh trong pilot packet
+  và thêm mục vòng 3 vào WP5_HANDOFF, cả EN và VI.
+- Sau đó: coordinator cập nhật STATE và NEXT_ACTION, rồi commit nghiệm thu WP5-UX3-ACCEPT, board
+  trở về `software_ready`.
+- WP5-UX3-ACCEPT-DOCS xong.
+  - Pilot packet: định danh 8e55710 / 507de97c, nguồn gốc bản build server, số liệu drill của
+    REGATE3, WP5-UX2-Q3 được thay bằng G-5 (b), và backlog vòng 3 theo mã.
+  - WP5_HANDOFF: thêm một mục cho vòng 3.
+  - Bản EN/VI khớp nhau; preflight 0; digest không đổi.
+- STATE và NEXT_ACTION (EN và VI) nay ghi nhận việc nghiệm thu lại trên 8e55710 / 507de97c.
+- Đang chạy: commit nghiệm thu chỉ gồm handoff WP5-UX3-ACCEPT (committer, chạy một mình).
+  - Khi committer xong, coordinator chuyển board sang `software_ready` (next_task_id null, không
+    còn task nào đang chạy). Thay đổi này để chưa commit cho tới lần commit kế tiếp, như sau
+    vòng 2.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

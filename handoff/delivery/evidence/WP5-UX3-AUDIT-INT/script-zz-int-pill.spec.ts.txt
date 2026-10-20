@@ -1,0 +1,86 @@
+import type { Page } from '@playwright/test';
+import { expect, newPerson, test } from './fixtures.ts';
+import { frames, note, shot } from './zz-int-lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-INT (task-local probe): the "in progress" pill of the period bar and the Day editor's period chip (G-5 b), read
+ * from the server's periods, under the FIX10 simulated clock (a window day) and on the real clock. Lines go to obs/<tag>/pill.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const FILE = 'pill.txt';
+
+async function pills(page: Page): Promise<string> {
+  return page.locator('.period-bar').evaluate((bar) => {
+    const range = (bar.querySelector('.period-name')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const badges = [...bar.querySelectorAll('.badge')].map((b) => `${(b.textContent ?? '').trim()}[${b.className}]`).join(' ');
+    return `${range} ${badges}`;
+  });
+}
+
+async function chips(page: Page): Promise<string> {
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  return editor.evaluate((dialog) => [...dialog.querySelectorAll('[data-chip]')].map((chip) => `${chip.getAttribute('data-chip')}="${(chip.textContent ?? '').trim()}"[${chip.className}]`).join(' '));
+}
+
+test('period pill and editor chip by the server periods', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(240_000);
+  const project = testInfo.project.name;
+  const who = await newPerson(adminSeed, builtServer, { signature: 'none' });
+  const periods = await who.api.periodsCurrent();
+  const window = periods.current.payroll_date !== periods.in_progress.payroll_date;
+  const today = periods.today_local;
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await signInPageAs(who.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  note(
+    FILE,
+    `==== ${project} process clock ${new Date().toISOString()}; server today_local ${today}; current ${periods.current.period_start}..${periods.current.period_end} (payroll ${periods.current.payroll_date}); in progress ${periods.in_progress.period_start}..${periods.in_progress.period_end}; window day ${window}`,
+  );
+  note(FILE, `  landing pill: ${await pills(page)}`);
+  // Today through "Open a day".
+  await page.getByLabel('Open a day').fill(today);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  note(FILE, `  editor chips for today ${today} (Open a day): ${await chips(page)}`);
+  await page.keyboard.press('Escape');
+  await frames(page);
+  // A past day of the displayed period through "Open a day".
+  const [shown = ''] = await who.api.displayedPeriodFreeWorkdays();
+  if (shown !== '' && shown !== today) {
+    await page.getByLabel('Open a day').fill(shown);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    note(FILE, `  editor chips for ${shown} of the displayed period: ${await chips(page)}`);
+    await page.keyboard.press('Escape');
+    await frames(page);
+  }
+  // The Today button (when the displayed period does not contain today).
+  const todayButton = page.locator('[data-period-today]');
+  if ((await todayButton.count()) > 0 && (await todayButton.isEnabled()) && (await todayButton.getAttribute('aria-disabled')) !== 'true') {
+    await todayButton.click();
+    await frames(page);
+    note(FILE, `  after Today: ${await pills(page)}`);
+    // Today's cell on the sheet of the period that contains today.
+    const todayCell = project === 'mobile' ? page.locator(`[data-day="${today}"] .sheet-day-button`) : page.locator(`.sheet-day[data-day="${today}"] [data-day-button]`);
+    await todayCell.click();
+    note(FILE, `  editor chips for today from the sheet after Today: ${await chips(page)}`);
+    await page.keyboard.press('Escape');
+    await frames(page);
+    // Back to the period the page opened on, then Next: the same period through the step buttons.
+    await page.getByRole('button', { name: 'Previous period' }).click();
+    await frames(page);
+  }
+  // Next period: the bar pill, then today from the sheet.
+  await page.getByRole('button', { name: 'Next period' }).click();
+  await frames(page);
+  note(FILE, `  next period pill: ${await pills(page)}`);
+  const cell = project === 'mobile' ? page.locator(`[data-day="${today}"] .sheet-day-button`) : page.locator(`.sheet-day[data-day="${today}"] [data-day-button]`);
+  if ((await cell.count()) > 0) {
+    await cell.click();
+    note(FILE, `  editor chips for today from the sheet of the next period: ${await chips(page)}`);
+    if (project === 'desktop' && window) await page.screenshot({ path: shot(`int-pill-window-day-${process.env.INT_OBS_TAG ?? 'target'}-synthetic.png`) });
+    await page.keyboard.press('Escape');
+  } else {
+    note(FILE, '  today is not in the next period sheet');
+  }
+});

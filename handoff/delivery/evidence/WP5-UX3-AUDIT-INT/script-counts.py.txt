@@ -1,0 +1,31 @@
+"""Per-project counts of a Playwright list-reporter log (ok, x failed, skipped, flaky), deprecation and buffer/network lines,
+and the durations of named tests. Usage: python counts.py <log> <out.txt> [title substring ...]"""
+import re
+import sys
+
+log, out = sys.argv[1:3]
+names = sys.argv[3:]
+text = open(log, encoding='utf-8', errors='replace').read()
+lines = text.split('\n')
+counts = {}
+durations = []
+for line in lines:
+    m = re.match(r'^\s+(ok|✘|-|x)\s+\d+\s+\[(desktop|mobile)\]\s+›\s+(.*)$', line)
+    if m:
+        kind, project, rest = m.groups()
+        key = {'ok': 'passed', '✘': 'failed', 'x': 'failed', '-': 'skipped'}[kind]
+        counts.setdefault(project, {}).setdefault(key, 0)
+        counts[project][key] += 1
+        for name in names:
+            if name in rest:
+                durations.append(f'{kind} [{project}] {rest.strip()}')
+summary = [l.strip() for l in lines if re.match(r'^\s+\d+ (passed|failed|flaky|skipped|did not run)', l)]
+report = [f'log {log.split("/")[-1]}']
+for project in sorted(counts):
+    report.append(f'  {project}: ' + ', '.join(f'{k} {v}' for k, v in sorted(counts[project].items())))
+report.append(f'  reporter summary: {summary}')
+report.append(f'  deprecation lines: {sum(1 for l in lines if "eprecat" in l)}')
+report.append(f'  buffer or network error lines: {sum(1 for l in lines if re.search(r"ERR_NO_BUFFER_SPACE|ECONNRESET|ERR_CONNECTION|net::ERR", l))}')
+for d in durations:
+    report.append(f'  {d}')
+open(out, 'w', encoding='utf-8', newline='\n').write('\n'.join(report) + '\n')

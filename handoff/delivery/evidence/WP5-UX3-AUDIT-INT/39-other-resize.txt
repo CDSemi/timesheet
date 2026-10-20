@@ -1,0 +1,39 @@
+    const project = testInfo.project.name;
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+
+    const tokenRatios = await surfaceRatios(page);
+    const measured: Record<string, number> = {};
+    const nav = page.getByRole('navigation', { name: 'Main' });
+    const sheetDate = page.locator('[data-day] [data-day-button]').first();
+    await expect(sheetDate).toHaveAccessibleName(ANY_DAY_BUTTON_NAME);
+    const controls: Array<[string, Locator]> = [
+      ['button', page.getByRole('button', { name: 'Check in' })],
+      ['link', nav.getByRole('link', { name: 'Overtime' })],
+      ['sheet date', sheetDate],
+    ];
+    if (project === 'mobile') controls.push(['phone tab', nav.getByRole('link', { name: 'History' })]);
+    // WP5-UX3-T02: the identity button of the top bar (the bar is not displayed on a phone).
+----
+
+    record(project, situation, lines);
+    if (project === 'desktop') await page.screenshot({ path: screenshotPath(`t01-surfaces-${situation.slug}-${project}-synthetic.png`), fullPage: true, animations: 'disabled' });
+  });
+
+  test(`the shared focus ring reaches 3:1 on the page, the period bar, a week band and the footer (${situation.name})`, async ({ page, signInThroughUi }, testInfo) => {
+    await prepare(page, situation, signInThroughUi);
+    const lines: string[] = [`# ${testInfo.project.name} / ${situation.name}: focus ring on each new surface`];
+    const targets: { surface: string; control: Locator }[] = [
+      { surface: 'page (toolbar)', control: page.getByRole('button', { name: 'Change several days', exact: true }) },
+      { surface: 'period bar', control: page.getByRole('button', { name: 'Next period', exact: true }) },
+      { surface: 'week band', control: page.locator('[data-day-button]').first() },
+      { surface: 'footer', control: page.locator('[data-sheet-review-link]') },
+    ];
+    for (const { surface, control } of targets) {
+      await expect(control).toBeVisible();
+      await focusFromKeyboard(control);
+      const ring = await measureFocusRing(control);
+      lines.push(`${surface}: ring against backdrop ${round(ring.ringAgainstBackdrop)}:1, against gap ${round(ring.ringAgainstGap)}:1, gap against fill ${ring.gapAgainstFill === null ? 'n/a' : round(ring.gapAgainstFill)}:1`);
+      expect(ring.ringAgainstBackdrop, `${surface}: ring against the surface (${ring.layers})`).toBeGreaterThanOrEqual(NON_TEXT);
+      expect(ring.ringAgainstGap, `${surface}: ring against its gap`).toBeGreaterThanOrEqual(NON_TEXT);

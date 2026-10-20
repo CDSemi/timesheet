@@ -1,0 +1,101 @@
+$ <node24> <task>\mut\node_modules\@playwright\test\cli.js test tests/e2e/day-editor.spec.ts -g Check out --output=<task>\pw-mut-M6a --reporter=list
+(started 2026-10-20T05:36:08.461Z, ended 2026-10-20T05:36:36.754Z, exit 1)
+
+Running 20 tests using 2 workers
+
+  ok  2 [desktop] › tests\e2e\day-editor.spec.ts:1785:1 › Check out with listed breaks: the listed rows are confirmed and replace the saved rows, and the request is the same shape (E-1) (1.7s)
+  ok  1 [mobile] › tests\e2e\day-editor.spec.ts:1785:1 › Check out with listed breaks: the listed rows are confirmed and replace the saved rows, and the request is the same shape (E-1) (1.8s)
+  ok  3 [desktop] › tests\e2e\day-editor.spec.ts:1849:1 › Check out with "Confirm no breaks taken" ticked: the rows are hidden, the saved rows are replaced by an empty confirmed list (929ms)
+  ok  4 [mobile] › tests\e2e\day-editor.spec.ts:1849:1 › Check out with "Confirm no breaks taken" ticked: the rows are hidden, the saved rows are replaced by an empty confirmed list (949ms)
+  x   5 [desktop] › tests\e2e\day-editor.spec.ts:1882:1 › Check out with nothing listed and the box unticked omits breaks: the session ends with its breaks not confirmed (E-1) (7.9s)
+  x   6 [mobile] › tests\e2e\day-editor.spec.ts:1882:1 › Check out with nothing listed and the box unticked omits breaks: the session ends with its breaks not confirmed (E-1) (7.9s)
+  ok  7 [desktop] › tests\e2e\day-editor.spec.ts:1934:1 › the server replaces saved breaks with an empty unconfirmed list at Check out, also a saved break that ends after now (E-1) (614ms)
+  ok  8 [mobile] › tests\e2e\day-editor.spec.ts:1934:1 › the server replaces saved breaks with an empty unconfirmed list at Check out, also a saved break that ends after now (E-1) (660ms)
+  ok  9 [desktop] › tests\e2e\day-editor.spec.ts:1951:1 › Check out after every saved break was removed (box unticked) sends an empty unconfirmed list that replaces them, and the dialog says what will be recorded (E-1) (1.2s)
+  ok 10 [mobile] › tests\e2e\day-editor.spec.ts:1951:1 › Check out after every saved break was removed (box unticked) sends an empty unconfirmed list that replaces them, and the dialog says what will be recorded (E-1) (1.3s)
+  ok 11 [desktop] › tests\e2e\day-editor.spec.ts:2009:1 › Check out refusals: suggested breaks that end after now, and a future_break refusal that names a break, mark that row or chip and keep the session running (1.2s)
+  ok 12 [mobile] › tests\e2e\day-editor.spec.ts:2009:1 › Check out refusals: suggested breaks that end after now, and a future_break refusal that names a break, mark that row or chip and keep the session running (1.3s)
+  ok 13 [desktop] › tests\e2e\day-editor.spec.ts:2085:1 › phone chips at 390px: Check out lists breaks as chips with the "Break n" sub-dialog, Escape and Cancel stay inside it, and Done sends the row (1.5s)
+  ok 14 [mobile] › tests\e2e\day-editor.spec.ts:2085:1 › phone chips at 390px: Check out lists breaks as chips with the "Break n" sub-dialog, Escape and Cancel stay inside it, and Done sends the row (1.7s)
+  ok 15 [desktop] › tests\e2e\day-editor.spec.ts:2160:1 › Check out asks "Discard your changes?" on Cancel and Escape when its rows or the box changed, and closes at once when nothing changed (U-26) (2.1s)
+  ok 16 [mobile] › tests\e2e\day-editor.spec.ts:2160:1 › Check out asks "Discard your changes?" on Cancel and Escape when its rows or the box changed, and closes at once when nothing changed (U-26) (2.2s)
+  ok 17 [desktop] › tests\e2e\day-editor.spec.ts:2252:1 › Check in then Check out asks for break confirmation and sends the session version (2.6s)
+  ok 18 [mobile] › tests\e2e\day-editor.spec.ts:2252:1 › Check in then Check out asks for break confirmation and sends the session version (2.6s)
+  ok 19 [desktop] › tests\e2e\day-editor.spec.ts:2302:1 › a stale session version at Check out says so, reloads and then checks out (2.5s)
+  ok 20 [mobile] › tests\e2e\day-editor.spec.ts:2302:1 › a stale session version at Check out says so, reloads and then checks out (2.5s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:1882:1 › Check out with nothing listed and the box unticked omits breaks: the session ends with its breaks not confirmed (E-1)
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('dialog', { name: 'Check out', exact: true }).getByText('The saved breaks you removed are deleted at Check out.')
+    Expected: 0
+    Received: 1
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveCount" getByRole('dialog', { name: 'Check out', exact: true }).getByText('The saved breaks you removed are deleted at Check out.') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: 'Check out', exact: true }).getByText('The saved breaks you removed are deleted at Check out.')
+        18 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      1897 |     const removedNote = dialog.getByText('The saved breaks you removed are deleted at Check out.');
+      1898 |     await expect(dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' })).toBeVisible();
+    > 1899 |     await expect(removedNote).toHaveCount(0);
+           |                               ^
+      1900 |     await addCheckOutBreak(page, dialog, 1, localAfter(run, 60), 15);
+      1901 |     await expect(dialog.locator('[data-break]')).toHaveCount(1);
+      1902 |     await removeCheckOutBreak(page, dialog, 1);
+        at <task>\mut\tests\e2e\day-editor.spec.ts:1899:31
+
+    Error Context: ..\pw-mut-M6a\day-editor-Check-out-with--6f1e3-s-breaks-not-confirmed-E-1--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-M6a\day-editor-Check-out-with--6f1e3-s-breaks-not-confirmed-E-1--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-M6a\day-editor-Check-out-with--6f1e3-s-breaks-not-confirmed-E-1--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\day-editor.spec.ts:1882:1 › Check out with nothing listed and the box unticked omits breaks: the session ends with its breaks not confirmed (E-1)
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('dialog', { name: 'Check out', exact: true }).getByText('The saved breaks you removed are deleted at Check out.')
+    Expected: 0
+    Received: 1
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveCount" getByRole('dialog', { name: 'Check out', exact: true }).getByText('The saved breaks you removed are deleted at Check out.') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: 'Check out', exact: true }).getByText('The saved breaks you removed are deleted at Check out.')
+        18 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      1897 |     const removedNote = dialog.getByText('The saved breaks you removed are deleted at Check out.');
+      1898 |     await expect(dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' })).toBeVisible();
+    > 1899 |     await expect(removedNote).toHaveCount(0);
+           |                               ^
+      1900 |     await addCheckOutBreak(page, dialog, 1, localAfter(run, 60), 15);
+      1901 |     await expect(dialog.locator('[data-break]')).toHaveCount(1);
+      1902 |     await removeCheckOutBreak(page, dialog, 1);
+        at <task>\mut\tests\e2e\day-editor.spec.ts:1899:31
+
+    Error Context: ..\pw-mut-M6a\day-editor-Check-out-with--6f1e3-s-breaks-not-confirmed-E-1--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-M6a\day-editor-Check-out-with--6f1e3-s-breaks-not-confirmed-E-1--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-M6a\day-editor-Check-out-with--6f1e3-s-breaks-not-confirmed-E-1--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:1882:1 › Check out with nothing listed and the box unticked omits breaks: the session ends with its breaks not confirmed (E-1)
+    [mobile] › tests\e2e\day-editor.spec.ts:1882:1 › Check out with nothing listed and the box unticked omits breaks: the session ends with its breaks not confirmed (E-1)
+  18 passed (28.0s)

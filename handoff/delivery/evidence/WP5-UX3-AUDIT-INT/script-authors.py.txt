@@ -1,0 +1,30 @@
+"""Author set of package WP5 per docs/08 (agent_id and previous_agent_ids of every WP5 task whose kind is not gate, audit or
+commit), their actual models, and whether this auditor's agent ID is among them. Usage: python authors.py <board> <me> <out.txt>"""
+import json
+import sys
+from collections import Counter
+
+board, me, out = sys.argv[1:4]
+data = json.load(open(board, encoding='utf-8'))
+authors = {}
+models = Counter()
+for task in data['tasks']:
+    if task.get('package') != 'WP5' or task.get('kind') in ('gate', 'audit', 'commit'):
+        continue
+    ids = [task.get('agent_id')] + list(task.get('previous_agent_ids') or [])
+    for agent in ids:
+        if agent:
+            authors.setdefault(agent, set()).add(task['id'])
+    models[task.get('actual_model')] += 1
+round3 = sorted({a for a, tasks in authors.items() if any(t.startswith('WP5-UX3') for t in tasks)})
+lines = [
+    f'WP5 author agent IDs (non gate/audit/commit tasks, incl. previous_agent_ids): {len(authors)}',
+    f'actual models of those tasks: {dict(models)}',
+    f'round-3 author agent IDs: {len(round3)}',
+    f'this auditor {me} among the WP5 authors: {me in authors}',
+]
+# Round-3 audits and gates (the reviews being integrated) for the separation record.
+for task in data['tasks']:
+    if task['id'].startswith('WP5-UX3') and task.get('kind') in ('audit', 'gate', 'plan', 'diagnose'):
+        lines.append(f"  {task['id']} {task.get('kind')} {task.get('agent_id')} {task.get('actual_model')} {task.get('decision') if task.get('kind') in ('audit', 'gate') else ''}")
+open(out, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines) + '\n')

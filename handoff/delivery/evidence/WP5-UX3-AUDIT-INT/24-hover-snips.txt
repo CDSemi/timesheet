@@ -1,0 +1,150 @@
+      if (control.text) {
+        const ratio = await textContrast(locator);
+        expect(ratio, `${control.name}: text on the hover fill (${situation.name})`).toBeGreaterThanOrEqual(TEXT);
+        text = round(ratio).toString();
+      }
+      measured.push(`${control.name}: hover/rest ${round(delta)} boundary ${boundary} text ${text}`);
+    }
+    console.log(`hover ${situation.name}: ${measured.join('; ')}`);
+  });
+
+  test(`the phone tab hovers with the same fill; a tap leaves none (${situation.name})`, async ({ page, signInThroughUi }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await prepare(page, situation, signInThroughUi);
+    const tab = page.locator('.shell-tabs a.tab:not([aria-current])').first();
+    await expect(tab).toBeVisible();
+    if (!(await canHover(page))) {
+      // Touch: the More tab is never current, so a sticky hover would show on it after the tap.
+      const more = page.locator('.shell-tabs button.tab');
+      const rest = { background: await settledStyle(more, 'backgroundColor'), shadow: await settledStyle(more, 'boxShadow') };
+      await more.tap();
+      await expect(more).toHaveAttribute('aria-expanded', 'true');
+      expect({ background: await settledStyle(more, 'backgroundColor'), shadow: await settledStyle(more, 'boxShadow') }, `the More tab after a tap equals rest (${situation.name})`).toEqual(rest);
+      return;
+    }
+    await page.mouse.move(0, 0);
+    const rest = await flattenedBackground(tab);
+    await tab.hover();
+    const hovered = await flattenedBackground(tab);
+    const delta = contrast(rest, hovered);
+    expect(delta, `phone tab hover background against rest (${situation.name})`).toBeGreaterThanOrEqual(HOVER_DELTA);
+    const text = await textContrast(tab);
+    expect(text, `phone tab text on the hover fill (${situation.name})`).toBeGreaterThanOrEqual(TEXT);
+    // The current tab keeps its look under the pointer: accent text and the 2px rule.
+    const current = page.locator('.shell-tabs a.tab[aria-current]');
+    const currentRest = await settledStyle(current, 'color');
+    await current.hover();
+    expect(await settledStyle(current, 'color'), 'the current tab keeps its accent text under the pointer').toBe(currentRest);
+    console.log(`hover phone tab ${situation.name}: hover/rest ${round(delta)} text ${round(text)}`);
+  });
+
+  /*
+   * The pressed look: a solid accent fill that hover cannot erase (the generic quiet-button hover used to win
+   * over the pressed rule, so the pressed toggle looked unpressed under the pointer that had just clicked it).
+   */
+  test(`a pressed toggle keeps its pressed look while hovered, and hover and pressed differ by 3:1 (${situation.name})`, async ({ page, signInThroughUi }) => {
+    await prepare(page, situation, signInThroughUi);
+    const toggle = page.getByRole('button', { name: 'Change several days', exact: true });
+    const accent = await tokenColour(page, '--accent');
+    const accentStrong = await tokenColour(page, '--accent-strong');
+    const onAccent = await tokenColour(page, '--on-accent');
+    const surface = backdropOf(await backdropsAbove(toggle));
+-----
+            return { opacity: style?.opacity ?? '', cursor: style?.cursor ?? '' };
+          }),
+        { message: 'the disabled switch is dimmed and shows the not-allowed cursor' },
+      )
+      .toEqual({ opacity: '0.6', cursor: 'not-allowed' });
+    console.log(`switch ${situation.name}: ${measured.join('; ')}`);
+  });
+}
+
+for (const width of [390, 375, 360, 320]) {
+  test(`phone ${width}px: the switch label is a 44px target and the tools row fits without sideways scroll`, async ({ page, signInThroughUi }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const label = page.locator('label.inline.switch');
+    const button = page.getByRole('button', { name: 'Change several days', exact: true });
+    const labelBox = await label.boundingBox();
+    const buttonBox = await button.boundingBox();
+    const inputBox = await page.getByRole('switch', { name: 'Show details', exact: true }).boundingBox();
+    const viewport = await page.evaluate<{ client: number; scroll: number }>('({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth })');
+    expect(labelBox?.height ?? 0, 'switch label height').toBeGreaterThanOrEqual(44);
+    expect(labelBox?.width ?? 0, 'switch label width').toBeGreaterThanOrEqual(44);
+    expect(buttonBox?.height ?? 0, 'Change several days height').toBeGreaterThanOrEqual(44);
+    expect(inputBox?.height ?? 0, 'switch track height (SC 2.5.8, 24px)').toBeGreaterThanOrEqual(24);
+    expect((labelBox?.x ?? -1) + (labelBox?.width ?? 0), 'label inside the screen').toBeLessThanOrEqual(viewport.client + 0.5);
+    expect((buttonBox?.x ?? -1) + (buttonBox?.width ?? 0), 'button inside the screen').toBeLessThanOrEqual(viewport.client + 0.5);
+    expect(viewport.scroll, 'no horizontal scroll (scrollWidth against clientWidth)').toBeLessThanOrEqual(viewport.client);
+    const sameRow = Math.abs((labelBox?.y ?? 0) - (buttonBox?.y ?? 0)) < 4;
+    if (width >= 390) expect(sameRow, 'at 390px the switch and the button share one row').toBe(true);
+    console.log(
+      `tools row ${width}px: label ${labelBox?.width}x${labelBox?.height}, button ${buttonBox?.width}x${buttonBox?.height}, track ${inputBox?.width}x${inputBox?.height}, one row ${sameRow}, clientWidth ${viewport.client} scrollWidth ${viewport.scroll}`,
+    );
+  });
+}
+
+/* ---- The label picker: a lighter selection that is still obvious ------------------------------------------- */
+-----
+    expect(layers[0]?.spread, `${label}: the inset ring is 2px`).toBe(2);
+    const fill = await flattenedBackground(control);
+    expect(contrast(over(layers[0]?.colour ?? [0, 0, 0, 1], fill), fill), `${label}: inset ring against the hovered fill`).toBeGreaterThanOrEqual(NON_TEXT);
+  }
+  await page.mouse.move(0, 0);
+}
+
+for (const situation of SITUATIONS.slice(0, 2)) {
+  test(`the keyboard focus ring stays under the pointer on the sheet's date button, Category picker and phone day button, also after Escape returns focus from the Day editor (${situation.name})`, async ({
+    page,
+    signInThroughUi,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await prepare(page, situation, signInThroughUi);
+    // A touch device has no pointer resting on a control: the mobile project proves the tap side in the hover tests above.
+    if (!(await canHover(page))) return;
+    const day = page.locator('.sheet-day[data-day]:not(.nonworking)').first();
+    const date = day.locator('[data-day-button]');
+    const picker = day.locator('[data-label-picker] button[aria-label^="Category for"]');
+    await expectRingUnderPointer(page, date, 'shared', `date button (${situation.name})`);
+    await expectRingUnderPointer(page, picker, 'inset', `Category picker (${situation.name})`);
+    // A button link (the period bar's review link) keeps the shared ring under the pointer (WP5-UX3-FIX4 item 2: `.button-link:focus-visible:hover`).
+    await expectRingUnderPointer(page, page.locator('.period-cta a.button-link[data-review-link]'), 'shared', `button link (${situation.name})`);
+
+    // Click the date (the editor opens beside the sheet at 1440), then Escape: focus returns to the date button, pointer still on it.
+    const workDate = (await day.getAttribute('data-day')) ?? '';
+    await date.click();
+    const editor = page.getByRole('dialog', { name: new RegExp(`^Day editor .*${workDate}`) });
+    await expect(editor).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await expect(date).toBeFocused();
+    await date.hover();
+    expect(await focusedAndHovered(date), `date button after Escape (${situation.name})`).toEqual({ focus: true, focusVisible: true, hover: true });
+    const afterEscape = await settledStyle(date, 'boxShadow');
+    const outset = parseLayers(afterEscape).filter((layer) => !layer.inset && layer.spread > 0);
+    expect(outset.length, `a ring is painted on the date button after the Escape return (${afterEscape})`).toBeGreaterThanOrEqual(2);
+    const surface = backdropOf(await backdropsAbove(date));
+    const ring = outset.reduce((a, b) => (b.spread > a.spread ? b : a));
+    expect(contrast(over(ring.colour, surface), surface), `ring after the Escape return (${situation.name})`).toBeGreaterThanOrEqual(NON_TEXT);
+    await page.mouse.move(0, 0);
+
+    // A phone-width window on a device that can hover: the day button of the phone table keeps the shared ring too.
+    await page.setViewportSize({ width: 390, height: 844 });
+    // Only the phone table's day button has the sheet-day-button class, so the visibility wait cannot resolve the desktop sheet button before the media-query layout swap.
+    const phoneDay = page.locator('[data-day]:not(.nonworking) .sheet-day-button').first();
+    await expect(phoneDay).toBeVisible();
+    await expectRingUnderPointer(page, phoneDay, 'shared', `phone day button (${situation.name})`);
+    // A tab that is not the current one keeps its inset ring under the pointer (WP5-UX3-FIX4 item 2: `.shell-tabs .tab:focus-visible:hover`).
+    await expectRingUnderPointer(page, page.locator('.shell-tabs a.tab:not([aria-current])').first(), 'inset-gap', `phone tab (${situation.name})`);
+    console.log(`ring under the pointer ${situation.name}: date, Category picker, button link, phone day button, phone tab and the Escape return keep their ring`);
+  });
+}
+
+/* ---- Synthetic captures for the record: hover, pressed, the switch and the picker, light and dark ---------- */
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`synthetic captures of the controls (${theme})`, async ({ page, signInThroughUi }, testInfo) => {
+    const project = testInfo.project.name;
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    await signInThroughUi();

@@ -1,0 +1,103 @@
+import { expect, newPerson, test } from './fixtures.ts';
+import { axeScan, focusStop, frames, note, shot, stack } from './zz-int-lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-INT (task-local probe): the account menu while the Day editor is open beside the sheet at 1366 (non-modal):
+ * the menu paints above the editor, Escape closes only the menu, Tab past Sign out closes it, an outside press closes it, an
+ * entry leaves the screen. Lines go to obs/<tag>/menu-editor.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const FILE = 'menu-editor.txt';
+
+test('1366: account menu over the non-modal Day editor', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'desktop project');
+  test.setTimeout(180_000);
+  const who = await newPerson(adminSeed, builtServer, { signature: 'none' });
+  const [day = ''] = await who.api.displayedPeriodFreeWorkdays();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await signInPageAs(who.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const dayButton = page.locator(`.sheet-day[data-day="${day}"] [data-day-button]`);
+  await dayButton.click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  note(FILE, `==== desktop 1366 day ${day}: editor ${await stack(page)}`);
+  const identity = page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+  const menu = page.locator('#account-menu');
+  // Pointer: open the menu; it paints above the editor panel; every entry is on top at its centre.
+  await identity.click();
+  await expect(menu).toBeVisible();
+  const onTop = await menu.evaluate((panel) => {
+    const out: string[] = [];
+    for (const entry of panel.querySelectorAll('a, button, input')) {
+      const r = entry.getBoundingClientRect();
+      if (r.width === 0) continue;
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      out.push(`${(entry.textContent ?? entry.getAttribute('value') ?? '').trim().slice(0, 14) || entry.tagName}:${hit !== null && (entry === hit || entry.contains(hit) || panel.contains(hit)) ? 'top' : 'COVERED'}`);
+    }
+    return out.join(' ');
+  });
+  note(FILE, `  menu open by pointer: ${await stack(page)}; entries ${onTop}`);
+  await axeScan(page, 'account menu over the non-modal editor at 1366', FILE);
+  await page.screenshot({ path: shot(`int-menu-over-editor-1366-${process.env.INT_OBS_TAG ?? 'target'}-synthetic.png`) });
+  await page.keyboard.press('Escape');
+  await frames(page);
+  note(FILE, `  Escape: menu ${await menu.count()}, editor open ${await editor.isVisible()}, focus on identity ${await identity.evaluate((element) => element === document.activeElement)}`);
+  // Keyboard: Enter opens with focus on the first entry; Tab past Sign out closes it; the editor stays.
+  await identity.focus();
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeVisible();
+  const first = await focusStop(page);
+  await menu.getByRole('button', { name: 'Sign out' }).focus();
+  await page.keyboard.press('Tab');
+  await frames(page);
+  const after = await focusStop(page);
+  note(FILE, `  keyboard: first focus ${first.desc}; Tab past Sign out: menu ${await menu.count()}, focus ${after.desc} covered ${after.hidden}/${after.total}, editor open ${await editor.isVisible()}`);
+  // Outside press on the sheet closes the menu; the editor stays.
+  await identity.click();
+  await expect(menu).toBeVisible();
+  await page.getByRole('heading', { name: 'Timesheet', exact: true }).click();
+  await frames(page);
+  note(FILE, `  outside press: menu ${await menu.count()}, editor open ${await editor.isVisible()}`);
+  // An Escape from the editor (focus in it) with the menu closed closes the editor.
+  await editor.getByRole('heading').first().focus();
+  await page.keyboard.press('Escape');
+  await frames(page);
+  note(FILE, `  Escape in the editor: editor ${await editor.count()}, focus on the day button ${await dayButton.evaluate((element) => element === document.activeElement)}`);
+  // Editor again, then the Settings entry by keyboard: the screen changes, the editor goes, focus on the Settings heading.
+  await dayButton.click();
+  await expect(editor).toBeVisible();
+  await identity.focus();
+  await page.keyboard.press('Enter');
+  await menu.getByRole('link', { name: 'Settings', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#\/settings$/);
+  await expect.poll(async () => page.evaluate(() => document.activeElement?.tagName ?? '')).toBe('H1');
+  note(FILE, `  Settings entry with the editor open: ${await stack(page)}; menu ${await menu.count()}`);
+});
+
+test('1280: the floating (modal) editor keeps the bar inert: no menu while it is open', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'desktop project');
+  const who = await newPerson(adminSeed, builtServer, { signature: 'none' });
+  const [day = ''] = await who.api.displayedPeriodFreeWorkdays();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signInPageAs(who.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.locator(`.sheet-day[data-day="${day}"] [data-day-button]`).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  const identity = page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+  const focusable = await identity.evaluate((element) => {
+    (element as HTMLElement).focus();
+    return element === document.activeElement;
+  });
+  const hit = await identity.evaluate((element) => {
+    const r = element.getBoundingClientRect();
+    const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return top === element || element.contains(top) ? 'identity itself' : `${top?.tagName.toLowerCase()} (dialog ${top?.closest('dialog') !== null})`;
+  });
+  note(FILE, `==== desktop 1280 modal editor: identity button script focus ${focusable ? 'FOCUSABLE' : 'inert'}; element at its centre ${hit}`);
+});

@@ -212,3 +212,54 @@ This section is added after the WP5-UX re-acceptance above, which is kept unchan
 - **Open optional owner question WP5-UX2-Q3 (blocks nothing; default (a) keep):** in the five days from the Monday after a period ends to its payroll Friday, the period that Today opens shows the badge "future"; option (b) would show "in progress" there (a small client wording change plus docs/04; the server is unchanged).
 - **Pilot packet:** [WP5_PILOT_PACKET](WP5_PILOT_PACKET.md) and its `.vi.md` are refreshed to the identity above (sections 0, 3, 5, 6 and 10); D-1..D-15 (all pending) and the unsigned authorization record are unchanged.
 - **Separation of three outcomes:** software readiness of WP1–WP5 on `a643794` / `229df806…`: accepted by REGATE2 and AUDIT2, with the NAS still NOT VERIFIED; owner permission: not requested and not given; pilot result: none, no pilot has run.
+
+## Re-acceptance after UI change round 3 (WP5-UX3)
+
+This section is added after the WP5-UX2 re-acceptance above, which is kept unchanged as history (its identity `a643794` / `229df806…` is superseded). Sources: the board [ORCHESTRATION.json](ORCHESTRATION.json) (tasks `WP5-UX3-*`, `owner_decisions` and `coordinator_decisions` of 2026-10-15 to 2026-10-19, `runtime_observations`) and the reviews named below. A reported result is not independent proof; the independent proofs are the audits.
+
+- **Owner request of 2026-10-15 (English summary; the verbatim text stays on the board) and answers:**
+  - Request: stop enforcing the industrial style and use a modern style (governance text in AGENTS.md); more contrast between page, cards, panels and sheets, with the week sheet raised; a top-bar identity block (right-aligned avatar, display name over a smaller email) that opens a menu with Light/Dark, Profile, Settings and Sign out (Settings and Admin leave the main menu; Administration becomes a Settings tab); on large screens the wordmark visible, Check in/out on the page-title row, no user name under the title, distinct old/current/future pills (future pink), one wrapping row for payroll date, due and zone, "Open a day" beside its date picker; selected columns and the editor column lifted by a soft shadow, the editor column marked by a Day-cell fill; on narrow screens "Current" and a hidden "Open a day" text when the row does not fit; in the Day editor a short zone note, a stronger header, new/edit time sessions in a separate dialog, a clear delete confirmation, defaults and suggested breaks pre-filled, a simpler break area, Save also confirming, and WFH on the Category row. The item list U-01..U-27 is in [WP5-UX3-PLAN](tasks/WP5-UX3-PLAN.md).
+  - G-1..G-5 (2026-10-15): G-1 (b) approve the mockup and the modern direction with changes (no rounded week sheets; selection columns with a 4px radius; adjacent lifted columns must not shadow each other; sheet columns never squeezed until content overlaps, the Day editor floats when there is no room); G-2 (a) "Category" replaces "Label" and "Status" replaces "Check"; G-3 (a) automatic pre-fill of the reference hours and of suggested breaks for past days, with the rewritten rule; G-4 (owner variant) a notice with three choices when Save is pressed with no break and the box unticked (confirm no breaks, leave breaks unconfirmed for now, or cancel), then the final save confirmation; G-5 (b) the period that contains today shows "in progress" in the five window days. It supersedes the optional WP5-UX2-Q3. Added phone requests N-1 (break chips with a sub-dialog) and N-2 (dialog spacing).
+  - WP5-UX3-Q6 (2026-10-15): (b) the break date field shows only when the session crosses local midnight (or its end is not set); and the break chips use 24-hour times.
+  - WP5-UX3-Q7 (2026-10-19): (a) the owner's AGENTS.md text (AI Instruction header, Operating Contract, Prime Directive) joins the repository, with two edits (the runbook-mirror line follows this repository's `.vi.md` convention; project-foreign phrases removed).
+- **Plans and mockup:** WP5-UX3-PLAN ([task](tasks/WP5-UX3-PLAN.md); items U-01..U-27, the rule rewrite of section C, questions G-1..G-5) and PLAN2 ([task](tasks/WP5-UX3-PLAN2.md); the break-row and session-dialog design); the mockup is `handoff/delivery/design/WP5-UX3/mockup.html` with ten synthetic renders in the same folder.
+- **Governance changes:** WP5-UX3-GOV (the AGENTS UI section "Frontend and UI/UX standards"): freeze 79b9a53, WP5-UX3-GOV-AUDIT PASS ([GOV_UX3_REVIEW](GOV_UX3_REVIEW.md)), accepted by WP5-UX3-GOV-ACCEPT at 3968e15. WP5-UX3-GOV2 (the owner's AI Instruction header, Q7): freeze ceb86b6, WP5-UX3-GOV2-AUDIT PASS ([GOV_UX3_REVIEW2](GOV_UX3_REVIEW2.md)).
+- **Slices (one line each; each followed by a FREEZE commit):**
+  - T06 `5c8355d`: the pure break-row model and its unit tests (no UI).
+  - T01 `e2f3d74`: modern style tokens and the application shell.
+  - T02 `aa64999`: identity block, account menu, phone More content, slimmer navigation, wordmark rule.
+  - T03 `7cd8c59`: Settings sub-pages (Personal, Profile, Administration), routes, lazy loading.
+  - T04 `83c32d2`: page header and period bar.
+  - T05 `699b1b3`: sheet selection markers, the row names "Category" and "Status", the "No times" shape.
+  - T05B `5c0dad8`: the floating Day editor rule (no squeezed sheet columns).
+  - T07 `f8117a4`: Day editor panel (header, chips, session cards with break tables), delete confirmation, WFH on the Category row.
+  - T08 `1a33c57`: session dialog (new and edit), break rows, "Confirm no breaks taken", pre-fill, the G-4 notice, save and discard confirmations.
+  - T08B `f89573b`: Q6 (b) break-date rule, break chips with sub-dialog, phone spacing, the suggestion helper moved into the model.
+  - T09 `4b5403d`: the Check out dialog on the new break rows; remaining "label" strings become "category".
+  - T10 `cecfceb`: the documents of the round (docs/04, docs/10, docs/12, EN and VI) and the rule rewrite.
+- **Fix rounds (one line each; each followed by a FREEZE commit):**
+  - FIX1 `9187f31`: the findings of WP5-UX3-GATE (simulated-clock Tuesday test and a seed flake, week-card focus clipping from 768 to about 880 px, three axe items).
+  - FIX2 `7ce4e95`: the findings of the read-only WP5-UX3-SWEEP ([task](tasks/WP5-UX3-SWEEP.md)).
+  - FIX3 `a78ada5`: F-UX3A-01..06 and F-UX3B-1..2 of AUDIT-A and AUDIT-B.
+  - FIX4 `8629441`: F-UX3A2-1..3 and F-UX3B2-1 of AUDIT-A2 and AUDIT-B2.
+  - FIX5 `5c101c1`: REGATE3's time-of-day-dependent "Confirm breaks today" test, made hour-independent.
+  - FIX6 `8e55710`: REGATE4's layout-swap race in a hover test, after the diagnosis WP5-UX3-DIAG1 ([task](tasks/WP5-UX3-DIAG1.md)).
+- **Gates (NAS NOT VERIFIED throughout):**
+  - WP5-UX3-GATE FAIL on `cecfceb` ([task](tasks/WP5-UX3-GATE.md)): a calendar-dependent lifted-column test (Tuesdays) and a seed flake, keyboard focus clipped inside the week card from 768 to about 880 px, and three serious axe items; closed by FIX1 and FIX2.
+  - WP5-UX3-REGATE PASS on `7ce4e95` ([task](tasks/WP5-UX3-REGATE.md)), recorded with a deviation on the timeouts of one simulated-clock run (board `coordinator_decisions` of 2026-10-16).
+  - WP5-UX3-REGATE2 PASS on `ceb86b6` ([task](tasks/WP5-UX3-REGATE2.md)).
+  - WP5-UX3-REGATE3 FAIL on `8629441` ([task](tasks/WP5-UX3-REGATE3.md)): the FIX4 "Confirm breaks" test fails between local midnight and about 03:00 on the phone project; closed by FIX5.
+  - WP5-UX3-REGATE4 FAIL on `5c101c1` ([task](tasks/WP5-UX3-REGATE4.md)): gate item 2 strictly unmet by a race in a hover test; the fixed test, the identity and the carry-forward proofs held; closed by FIX6.
+  - WP5-UX3-REGATE5 PASS on `8e55710` ([task](tasks/WP5-UX3-REGATE5.md)): builds byte-identical to REGATE3 and REGATE4 (their items carry forward); real-clock full e2e 651 passed / 67 skipped / 0 failed; simulated-clock FULL runs at a window day and a DST change, 0 failed; drill `--wp3` 208 PASS / 0 FAIL (REGATE3); 2,141 unit tests; axe: only the justified account-menu target-size item.
+- **Audits:**
+  - WP5-UX3-AUDIT-A ([WP5_UX3_REVIEW_A](WP5_UX3_REVIEW_A.md)) and AUDIT-B ([WP5_UX3_REVIEW_B](WP5_UX3_REVIEW_B.md)) on `7ce4e95`: FIX REQUIRED; findings F-UX3A-01..06 (area A) and F-UX3B-1..2 (area B); closed by FIX3.
+  - WP5-UX3-AUDIT-A2 ([WP5_UX3_REVIEW_A2](WP5_UX3_REVIEW_A2.md)) and AUDIT-B2 ([WP5_UX3_REVIEW_B2](WP5_UX3_REVIEW_B2.md)) on `ceb86b6`: FIX REQUIRED; findings F-UX3A2-1..3 (one Medium, two Low) and F-UX3B2-1 (Low, test strength); closed by FIX4.
+  - WP5-UX3-AUDIT-INT PASS ([WP5_UX3_REVIEW_INT](WP5_UX3_REVIEW_INT.md)) on `8e55710` / `507de97c…`, no finding, optional risks R-INT-1..R-INT-4. It supersedes WP5-UX2-AUDIT2.
+- **Usage pause:** the mission paused on 2026-10-16 at a usage limit and resumed on 2026-10-19 with a reconciliation of HEAD against the last board commit (a78ada5); the board and the checkpoint carry the record.
+- **Accepted identity:**
+  - Release commit `8e557100d16b6b6eb86a48e00276835761aabfdf` (WP5-UX3-FIX6-FREEZE, pushed); source digest `507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6`, 833 files, `handoff/` excluded.
+  - Reference image `sha256:bcb0692cc99fe5c0b198dc26cff623045903f851f3d7069105b1df09bf9e493b` (110,042,848 bytes, `linux/amd64`, REGATE3 drill build of bytes identical to the release, development workstation), removed after the gate.
+  - Product boundary: the round changed the client UI and the documents. `dist/server` and `dist/domain` are byte-identical to a643794; no business rule, calculation, schema, API, PDF or email change.
+- **Carried optional backlog (by ID; none blocks acceptance):** R-UX3B-1, R-UX3B-2, R-UX3B-5..R-UX3B-7 (WP5_UX3_REVIEW_B); R-A2-1's residual and the A2 risks R3, R5, R7 (WP5_UX3_REVIEW_A2); R-B2-2, R-B2-3, R-B2-5 (WP5_UX3_REVIEW_B2); R-INT-1..R-INT-4 (WP5_UX3_REVIEW_INT); the governance backlog items R3-R5 and R8 of GOV_UX3_REVIEW2. The earlier carried risks (R-UX2A-1..R-UX2A-5, R-UX2A2-1..R-UX2A2-4 and the older ones listed above) still apply. WP5-UX2-Q3 is superseded by G-5 (b).
+- **Pilot packet:** [WP5_PILOT_PACKET](WP5_PILOT_PACKET.md) and its `.vi.md` are refreshed to the identity above (sections 0, 3, 5, 6 and 10); D-1..D-15 (all pending) and the unsigned authorization record are unchanged.
+- **Separation of three outcomes:** software readiness of WP1–WP5 on `8e55710` / `507de97c…`: accepted by REGATE5 and AUDIT-INT, with the NAS still NOT VERIFIED; owner permission: not requested and not given; pilot result: none, no pilot has run.

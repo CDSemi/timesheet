@@ -1,0 +1,27 @@
+import json
+import sys
+
+path = sys.argv[1]
+out = sys.argv[2]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+
+lines = []
+for key in ("answered_owner_question_ux3", "answered_owner_question_ux3_q6", "answered_owner_question_ux3_q7", "pending_owner_question"):
+    lines.append("=" * 30 + " " + key)
+    lines.append(json.dumps(data.get(key), ensure_ascii=False, indent=1))
+
+lines.append("=" * 30 + " owner_decisions (UX3-related, from 2026-10-15)")
+for d in data.get("owner_decisions", []):
+    s = json.dumps(d, ensure_ascii=False)
+    if any(tok in s for tok in ("U-0", "U-1", "U-2", "G-1", "G-2", "G-3", "G-4", "G-5", "N-1", "N-2", "Q6", "Q7", "24-hour", "UX3", "round 3")):
+        lines.append(json.dumps(d, ensure_ascii=False, indent=1))
+
+lines.append("=" * 30 + " coordinator_decisions (UX3-related)")
+for d in data.get("coordinator_decisions", []):
+    s = json.dumps(d, ensure_ascii=False)
+    if "UX3" in s:
+        lines.append(json.dumps(d, ensure_ascii=False, indent=1))
+
+with open(out, "w", encoding="utf-8", newline="\n") as f:
+    f.write("\n".join(lines) + "\n")

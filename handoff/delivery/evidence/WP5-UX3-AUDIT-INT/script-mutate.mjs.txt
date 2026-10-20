@@ -1,0 +1,19 @@
+// Applies one exact-string mutation to a file of the mutant export. The search text must occur exactly once.
+// Usage: node mutate.mjs <file> <search-json-string> <replace-json-string>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, searchJson, replaceJson] = process.argv.slice(2);
+if (file === undefined || searchJson === undefined || replaceJson === undefined) {
+  console.error('usage: node mutate.mjs <file> <search-json> <replace-json>');
+  process.exit(2);
+}
+const search = JSON.parse(searchJson);
+const replace = JSON.parse(replaceJson);
+const text = readFileSync(file, 'utf8');
+const count = text.split(search).length - 1;
+if (count !== 1) {
+  console.error(`expected exactly one occurrence, found ${count} in ${file}`);
+  process.exit(3);
+}
+writeFileSync(file, text.replace(search, replace));
+console.log(`mutated ${file}: ${JSON.stringify(search).slice(0, 120)} -> ${JSON.stringify(replace).slice(0, 120)}`);

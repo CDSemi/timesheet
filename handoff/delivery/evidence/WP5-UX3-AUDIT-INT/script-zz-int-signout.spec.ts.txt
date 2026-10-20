@@ -1,0 +1,48 @@
+import { expect, openAccount, test } from './fixtures.ts';
+import { entryGeometry, note, shot } from './zz-int-lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-INT (task-local probe): recheck of F-UX3A2-3. Every entry of the account menu (1280) and the More panel (390),
+ * employee and administrator, light and dark: icon start, words start, icon gap and centre offset inside the entry. Sign out must
+ * start within 0.5px of Profile. Lines go to obs/<tag>/signout.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+for (const role of ['employee', 'admin'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    for (const { name, width, height } of [
+      { name: 'menu 1280', width: 1280, height: 800 },
+      { name: 'More 390', width: 390, height: 844 },
+    ] as const) {
+      test(`entries line up (${role}, ${scheme}, ${name})`, async ({ page, builtServer, signInPageAs }, testInfo) => {
+        const project = testInfo.project.name;
+        await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+        await page.setViewportSize({ width, height });
+        await signInPageAs(builtServer.credentials[role], '#/timesheet');
+        await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+        const panel = await openAccount(page);
+        const entries = [
+          ...(await panel.getByRole('link').all()),
+          panel.getByRole('button', { name: 'Sign out', exact: true }),
+        ];
+        const rows: string[] = [];
+        let profile: { iconStart: number; wordsStart: number } | null = null;
+        let worst = 0;
+        for (const entry of entries) {
+          const label = ((await entry.textContent()) ?? '').trim();
+          const g = await entryGeometry(entry);
+          if (label === 'Profile') profile = g;
+          rows.push(`${label} icon ${g.iconStart} words ${g.wordsStart} gap ${g.gap} offset ${g.offset} pad-left ${g.padL} border ${g.border}`);
+        }
+        for (const entry of entries) {
+          const g = await entryGeometry(entry);
+          if (profile !== null) worst = Math.max(worst, Math.abs(g.iconStart - profile.iconStart), Math.abs(g.wordsStart - profile.wordsStart));
+        }
+        note('signout.txt', `${project} ${role} ${scheme} ${name}: ${rows.join(' | ')} || worst start difference against Profile ${Math.round(worst * 100) / 100}px`);
+        if (project === 'desktop' && role === 'admin' && scheme === 'light') {
+          await page.screenshot({ path: shot(`int-account-entries-${width}-${process.env.INT_OBS_TAG ?? 'target'}-synthetic.png`), clip: (await panel.boundingBox()) ?? undefined });
+        }
+      });
+    }
+  }
+}

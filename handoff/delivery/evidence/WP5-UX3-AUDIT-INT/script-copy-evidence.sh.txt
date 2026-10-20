@@ -1,0 +1,40 @@
+# Copies the masked evidence into the repository evidence folder (task-owned path). Usage: bash copy-evidence.sh
+. <task>/env.sh
+O=$T/out; G=$T/logs; B=$T/obs; S=$T/shots
+args=()
+for f in 01-digest-export-before 01-digest-lstree-before 01-digest-npm-before 01-head-before 01-digest-export-after 01-digest-lstree-after 01-digest-npm-after 01-head-after \
+  02-authors 10-main-exits 10-typecheck 10-lint 10-npmtest-1 10-npmtest-2 10-build 11-e2e-real 11-e2e-real-counts \
+  14-ac13-America_Los_Angeles 14-ac13-Asia_Tokyo 14-ac13-America_New_York 14-tzprobe-America_Los_Angeles 14-tzprobe-Asia_Tokyo 14-tzprobe-America_New_York \
+  20-fix4-stat 20-fix4-diff 21-fix5-stat 21-fix5-diff 22-fix6-stat 22-fix6-diff 23-names-base-target 24-hover-viewport 24-hover-snips \
+  29-mut-sites 30-setup-exits 30-ci-export 30-ci-probe 30-ci-mut 30-ci-base 30-build-probe 30-build-mut 30-build-base \
+  33-suggestedRows 34-dist-export-vs-probe 34-dist-export-vs-mut 34-dist-base-vs-target 35-boundary 36-governance 37-regate-tests 39-other-resize \
+  40-docs-parity 41-docs-parity-lines 41b-docs12-vi35 52-preload-sha 62-after-mutants 62-dist-export-vs-mut-after 96-slips axe-version \
+  mut-MA1-320 p-target-errors; do
+  args+=("$O/$f.txt=$f.txt")
+done
+for f in run-index phase run-p-target run-p-target-r2 run-p-base run-p-pill-1026 run-p-pill-1026-r2 run-fix5-20261020T0730 run-fix5-20261020T1900 \
+  run-fix5-20261021T0645 run-fix5-20261101T0930 mutants-summary mut-final-rebuild; do
+  args+=("$G/$f.txt=60-$f.txt")
+done
+for m in MA1 MA1b MA1c MA3 M4 M5 M6b M6a M5b; do
+  args+=("$G/mut-$m-diff.txt=61-mut-$m-diff.txt" "$G/mut-$m-e2e.txt=61-mut-$m-e2e.txt")
+done
+for tag in target target-r2 base target-sim1026 target-sim1026-r2; do
+  for f in $B/$tag/*.txt; do
+    args+=("$f=50-obs-$tag-$(basename $f)")
+  done
+done
+for f in zz-int-lib.ts zz-int-more.spec.ts zz-int-signout.spec.ts zz-int-stack.spec.ts zz-int-menu-editor.spec.ts zz-int-shared.spec.ts zz-int-admin.spec.ts zz-int-pill.spec.ts zz-int-race.spec.ts playwright.int.config.ts; do
+  args+=("$T/probe-src/$f=script-$f.txt")
+done
+for f in env.sh digest.sh setup.sh run-main.sh run-pw.sh run-probes.sh run-probes2.sh run-mutants.sh run-mutants.mjs mutate.mjs mutants.json install-probes.sh \
+  parity.py parity_lines.py cmp_dist.py counts.py authors.py board_summary.py board_owner.py mask_copy.py check_lf.py run-tz.mjs tzprobe.mjs tzchild.mjs probe-now.mjs copy-evidence.sh; do
+  args+=("$T/$f=script-$f.txt")
+done
+for f in int-more-hidden-focus-390-base-synthetic.png int-account-entries-1280-target-synthetic.png int-account-entries-1280-base-synthetic.png \
+  int-account-entries-390-target-synthetic.png int-menu-over-editor-1366-target-synthetic.png int-stack-notice-1280-target-r2-synthetic.png \
+  int-stack-subdialog-390-target-r2-synthetic.png int-shared-view-editor-target-r2-synthetic.png int-shared-edit-editor-target-r2-synthetic.png \
+  int-pill-window-day-target-sim1026-r2-synthetic.png; do
+  args+=("$S/$f=$f")
+done
+"$PY" -I $T/mask_copy.py "$E" "${args[@]}"

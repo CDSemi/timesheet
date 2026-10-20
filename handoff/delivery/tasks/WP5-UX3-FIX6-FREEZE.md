@@ -114,3 +114,13 @@ STOPPED, no commit. Pre-HEAD = origin/main = 5c101c1ca8ba5b9c1ede8b1ac8bad9f3804
   (validator line 305: the REGATE4 board entry needs a 64-hex source_digest and evidence).
 - check_recovery, validate_package, commit and ls-tree digest not run.
 - No fix, no masking. Details: evidence/WP5-UX3-FIX6-FREEZE/checks.txt.
+
+### Attempt 2
+
+Pre-HEAD 5c101c1; commit 8e557100d16b6b6eb86a48e00276835761aabfdf; pushed (5c101c1..8e55710
+on main); remote SHA 8e557100d16b6b6eb86a48e00276835761aabfdf.
+- Digest before add and ls-tree digest of HEAD: 507de97c (833 files) both.
+- 88 paths staged (the brief, with the attempt-1 Results, was staged; attempt 2 text is not).
+- Exits: precommit 0, diff --cached --check 0, JSON parse 0, validate_orchestration 0,
+  check_recovery 0 (106 probes), validate_package --preflight 0, commit 0, push 0.
+- No fix, no masking.

@@ -1,0 +1,34 @@
+"""Hashes every file under dist/ of two exports and lists the differences per top-level folder.
+Usage: python cmp_dist.py <export A> <export B> <out.txt>"""
+import hashlib
+import os
+import sys
+
+a, b, out = sys.argv[1:4]
+
+
+def hashes(root):
+    result = {}
+    base = os.path.join(root, 'dist')
+    for folder, _, files in os.walk(base):
+        for name in files:
+            path = os.path.join(folder, name)
+            rel = os.path.relpath(path, base).replace(os.sep, '/')
+            result[rel] = hashlib.sha256(open(path, 'rb').read()).hexdigest()
+    return result
+
+
+ha, hb = hashes(a), hashes(b)
+lines = [f'A {os.path.basename(a)}: {len(ha)} files; B {os.path.basename(b)}: {len(hb)} files']
+for top in sorted({k.split('/')[0] for k in ha} | {k.split('/')[0] for k in hb}):
+    ka = {k for k in ha if k.split('/')[0] == top}
+    kb = {k for k in hb if k.split('/')[0] == top}
+    differ = sorted(k for k in ka & kb if ha[k] != hb[k])
+    lines.append(f'  dist/{top}: A {len(ka)} files, B {len(kb)} files, only A {len(ka - kb)}, only B {len(kb - ka)}, same name different bytes {len(differ)}')
+    for k in sorted(ka - kb):
+        lines.append(f'    only A: {k}')
+    for k in sorted(kb - ka):
+        lines.append(f'    only B: {k}')
+    for k in differ:
+        lines.append(f'    differs: {k}')
+open(out, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines) + '\n')

@@ -1,0 +1,63 @@
+// WP5-UX3-AUDIT-INT: applies each mutant of mutants.json alone in the mutant export (a clean git archive of the target),
+// rebuilds the client, runs the listed e2e specs on both projects, then restores the file from the pristine probe export and
+// checks it is byte-equal. Usage (from anywhere): node run-mutants.mjs [id ...]
+import { spawnSync } from 'node:child_process';
+import { appendFileSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const T = '<task>';
+const MUT = join(T, 'mut');
+const PRISTINE = join(T, 'probe');
+const LOGS = join(T, 'logs');
+mkdirSync(LOGS, { recursive: true });
+const SUMMARY = join(LOGS, 'mutants-summary.txt');
+const all = JSON.parse(readFileSync(join(T, 'mutants.json'), 'utf8'));
+const wanted = process.argv.slice(2);
+const list = wanted.length === 0 ? all : all.filter((m) => wanted.includes(m.id));
+
+function run(label, command, args, cwd) {
+  const started = new Date().toISOString();
+  const result = spawnSync(command, args, { cwd, encoding: 'utf8', env: process.env, maxBuffer: 256 * 1024 * 1024, shell: false });
+  const out = `$ ${[command, ...args].join(' ')}\n(started ${started}, ended ${new Date().toISOString()}, exit ${result.status})\n${result.stdout ?? ''}${result.stderr ?? ''}`;
+  writeFileSync(join(LOGS, `${label}.txt`), out);
+  return { status: result.status, out };
+}
+
+function same(a, b) {
+  return Buffer.compare(readFileSync(a), readFileSync(b)) === 0;
+}
+
+const node = process.execPath;
+const vite = join(MUT, 'node_modules', 'vite', 'bin', 'vite.js');
+const pw = join(MUT, 'node_modules', '@playwright', 'test', 'cli.js');
+
+for (const m of list) {
+  const target = join(MUT, m.file);
+  const pristine = join(PRISTINE, m.file);
+  copyFileSync(pristine, target);
+  const apply = run(`mut-${m.id}-apply`, node, [join(T, 'mutate.mjs'), target, JSON.stringify(m.search), JSON.stringify(m.replace)], MUT);
+  if (apply.status !== 0) {
+    appendFileSync(SUMMARY, `${m.id}: APPLY FAILED (${apply.out.trim().split('\n').pop()})\n`);
+    copyFileSync(pristine, target);
+    continue;
+  }
+  const diff = spawnSync('git', ['diff', '--no-index', '--', pristine, target], { encoding: 'utf8' });
+  writeFileSync(join(LOGS, `mut-${m.id}-diff.txt`), diff.stdout ?? '');
+  const build = run(`mut-${m.id}-build`, node, [vite, 'build'], MUT);
+  if (build.status !== 0) {
+    appendFileSync(SUMMARY, `${m.id}: BUILD FAILED\n`);
+    copyFileSync(pristine, target);
+    continue;
+  }
+  const e2e = run(`mut-${m.id}-e2e`, node, [pw, 'test', ...m.specs, `--output=${join(T, `pw-mut-${m.id}`)}`, '--reporter=list'], MUT);
+  const counts = (e2e.out.match(/^\s+\d+ (passed|failed|flaky|skipped|did not run)/gm) ?? []).map((s) => s.trim()).join(', ');
+  const failures = [...new Set((e2e.out.match(/^\s+\d+\) \[(desktop|mobile)\] › [^\n]+/gm) ?? []).map((s) => s.trim()))];
+  copyFileSync(pristine, target);
+  const restored = same(pristine, target);
+  appendFileSync(
+    SUMMARY,
+    `${m.id} (${m.what}): e2e exit ${e2e.status} [${counts}] ${e2e.status === 0 ? 'SURVIVES' : 'CAUGHT'}; restored byte-equal ${restored}\n${failures.map((f) => `    ${f}`).join('\n')}${failures.length ? '\n' : ''}`,
+  );
+}
+const rebuild = run('mut-final-rebuild', node, [vite, 'build'], MUT);
+appendFileSync(SUMMARY, `final client rebuild exit ${rebuild.status} at ${new Date().toISOString()}\n`);

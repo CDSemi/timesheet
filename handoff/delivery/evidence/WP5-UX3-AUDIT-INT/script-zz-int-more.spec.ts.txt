@@ -1,0 +1,268 @@
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+import { focusStop, frames, note, settle, shot } from './zz-int-lib.ts';
+
+/*
+ * WP5-UX3-AUDIT-INT (task-local probe, never in the repository): recheck of F-UX3A2-1 and the blur handling FIX4 added to the
+ * phone More panel. Both projects at 390x844: the mobile project is a touch phone, the desktop project a narrow window on a device
+ * with a keyboard and a fine pointer. Lines go to obs/<tag>/more.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const FILE = 'more.txt';
+
+function moreButton(page: Page): Locator {
+  return page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+}
+
+async function press(page: Page, locator: Locator, touch: boolean): Promise<void> {
+  if (touch) await locator.tap();
+  else await locator.click();
+}
+
+/** Counts how often #more-panel is added and removed from now on (flicker detector). */
+async function watchPanel(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __moreLog: string[]; __moreObs?: MutationObserver };
+    w.__moreLog = [];
+    w.__moreObs?.disconnect();
+    const nav = document.querySelector('.shell-tabs');
+    if (nav === null) return;
+    w.__moreObs = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) if (node instanceof HTMLElement && node.id === 'more-panel') w.__moreLog.push('added');
+        for (const node of record.removedNodes) if (node instanceof HTMLElement && node.id === 'more-panel') w.__moreLog.push('removed');
+      }
+    });
+    w.__moreObs.observe(nav, { childList: true, subtree: true });
+  });
+}
+
+async function panelLog(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const w = window as unknown as { __moreLog: string[] };
+    const log = w.__moreLog.join(',');
+    w.__moreLog = [];
+    return log || '-';
+  });
+}
+
+async function signIn(page: Page, signInThroughUi: () => Promise<void>): Promise<void> {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await settle(page, 300);
+}
+
+test('F-UX3A2-1: Tab past Sign out closes More; a walk of the page afterwards finds no hidden focused control', async ({ page, signInThroughUi }, testInfo) => {
+  test.setTimeout(240_000);
+  const project = testInfo.project.name;
+  await signIn(page, signInThroughUi);
+  const more = moreButton(page);
+  const panel = page.locator('#more-panel');
+  // The sheet rows lie in the lower half of the window, where the panel opens (the A2 reproduction).
+  await page.locator('[data-day]').nth(3).scrollIntoViewIfNeeded();
+  await settle(page, 300);
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
+  const box = await panel.boundingBox();
+  note(FILE, `==== ${project} 390x844 walk: panel box ${box ? `${box.x.toFixed(0)},${box.y.toFixed(0)} ${box.width.toFixed(0)}x${box.height.toFixed(0)}` : '-'}`);
+  let leftAt = -1;
+  let closedAt = -1;
+  let hiddenStops = 0;
+  let partly = 0;
+  const seen = new Set<string>();
+  for (let index = 1; index <= 60; index += 1) {
+    await page.keyboard.press('Tab');
+    await frames(page);
+    const s = await focusStop(page);
+    if (leftAt < 0 && !s.inTabBar) leftAt = index;
+    if (closedAt < 0 && !s.panelOpen) closedAt = index;
+    const entire = s.total > 0 && s.hidden === s.total;
+    if (entire) hiddenStops += 1;
+    else if (s.hidden > 0) partly += 1;
+    seen.add(`${s.desc}@${s.rect}`);
+    note(FILE, `  Tab ${index}: ${s.desc} in-tab-bar=${s.inTabBar} panel-open=${s.panelOpen} ${s.rect} covered ${s.hidden}/${s.total}${entire ? ' <<< ENTIRELY HIDDEN' : ''}`);
+    if (entire && s.panelOpen && project === 'desktop') await page.screenshot({ path: shot(`int-more-hidden-focus-390-${process.env.INT_OBS_TAG ?? 'target'}-synthetic.png`) });
+  }
+  note(
+    FILE,
+    `  summary ${project}: focus left the tab bar at Tab ${leftAt}, panel closed at Tab ${closedAt}; ${seen.size} distinct stops; entirely hidden stops ${hiddenStops}; partly covered ${partly}; panel open at the end ${await panel.isVisible()}`,
+  );
+});
+
+test('More panel: Escape from an entry and from Sign out closes it and returns focus to More; Shift+Tab back past the first tab closes it', async ({ page, signInThroughUi }, testInfo) => {
+  test.setTimeout(120_000);
+  const project = testInfo.project.name;
+  await signIn(page, signInThroughUi);
+  const more = moreButton(page);
+  const panel = page.locator('#more-panel');
+  for (const entry of ['Settings', 'Sign out'] as const) {
+    await more.focus();
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeVisible();
+    const target = entry === 'Sign out' ? panel.getByRole('button', { name: 'Sign out' }) : panel.getByRole('link', { name: entry, exact: true });
+    await target.focus();
+    await page.keyboard.press('Escape');
+    await frames(page);
+    const focused = await more.evaluate((element) => element === document.activeElement);
+    note(FILE, `==== ${project} Escape from ${entry}: panel count ${await panel.count()}, focus on More ${focused}, aria-expanded ${await more.getAttribute('aria-expanded')}`);
+  }
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
+  await page.getByRole('navigation', { name: 'Main' }).locator('a.tab').first().focus();
+  await frames(page);
+  const openBefore = await panel.count();
+  await page.keyboard.press('Shift+Tab');
+  await frames(page);
+  const s = await focusStop(page);
+  note(FILE, `==== ${project} Shift+Tab from the first tab: panel open before ${openBefore === 1}, after ${s.panelOpen}; focus ${s.desc}, covered ${s.hidden}/${s.total}`);
+  // Moving between the bar's own controls keeps it open.
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
+  await page.keyboard.press('Shift+Tab');
+  await frames(page);
+  const inside = await focusStop(page);
+  note(FILE, `==== ${project} Shift+Tab from More to the last tab (inside the bar): panel open ${inside.panelOpen}, focus ${inside.desc}`);
+  await page.keyboard.press('Escape');
+});
+
+test('More panel: a press on More toggles it without flicker; an outside press closes it (touch on the phone, a click on the narrow window)', async ({ page, signInThroughUi }, testInfo) => {
+  test.setTimeout(120_000);
+  const project = testInfo.project.name;
+  const touch = project === 'mobile';
+  await signIn(page, signInThroughUi);
+  const more = moreButton(page);
+  const panel = page.locator('#more-panel');
+  await watchPanel(page);
+  await press(page, more, touch);
+  await expect(panel).toBeVisible();
+  note(FILE, `==== ${project} ${touch ? 'tap' : 'click'} More (closed): open ${await panel.isVisible()}, changes ${await panelLog(page)}`);
+  // Focus inside the panel, then a press on More: one close, no reopen.
+  await panel.getByRole('link', { name: 'Settings', exact: true }).focus();
+  await press(page, more, touch);
+  await frames(page);
+  note(FILE, `  ${touch ? 'tap' : 'click'} More with focus in the panel: open ${await panel.count()}, changes ${await panelLog(page)}, aria-expanded ${await more.getAttribute('aria-expanded')}`);
+  await press(page, more, touch);
+  await frames(page);
+  note(FILE, `  ${touch ? 'tap' : 'click'} More again: open ${await panel.count()}, changes ${await panelLog(page)}, aria-expanded ${await more.getAttribute('aria-expanded')}`);
+  // A press on the panel's own non-focusable header keeps it open.
+  const head = panel.locator('.account-head');
+  await press(page, head, touch);
+  await frames(page);
+  note(FILE, `  ${touch ? 'tap' : 'click'} the panel header: open ${await panel.count()}, changes ${await panelLog(page)}`);
+  // An outside press (the period title, plain text; the phone's page heading is for screen readers only) closes it.
+  await press(page, page.locator('.period-bar .period-name'), touch);
+  await frames(page);
+  note(FILE, `  ${touch ? 'tap' : 'click'} outside (period title text): open ${await panel.count()}, changes ${await panelLog(page)}`);
+  // An outside press on a focusable control of the page (a day button) closes it too.
+  await press(page, more, touch);
+  await expect(panel).toBeVisible();
+  await panelLog(page);
+  await press(page, page.getByRole('button', { name: 'Change several days', exact: true }), touch);
+  await frames(page);
+  note(FILE, `  ${touch ? 'tap' : 'click'} an outside control (Change several days): open ${await panel.count()}, changes ${await panelLog(page)}`);
+});
+
+test('More panel: a page change (tab link, address change) closes it; entries by keyboard and by pointer close it and move focus as FIX2 set', async ({ page, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(180_000);
+  const project = testInfo.project.name;
+  const touch = project === 'mobile';
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInPageAs(builtServer.credentials.admin, '#/timesheet');
+  await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+  const more = moreButton(page);
+  const panel = page.locator('#more-panel');
+  // Tab link.
+  await press(page, more, touch);
+  await expect(panel).toBeVisible();
+  await press(page, page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Overtime' }), touch);
+  await expect(page).toHaveURL(/#\/ot$/);
+  await frames(page);
+  note(FILE, `==== ${project} admin: tab link Overtime with the panel open: open ${await panel.count()}`);
+  // Address change.
+  await press(page, more, touch);
+  await expect(panel).toBeVisible();
+  await page.evaluate("window.location.hash = '#/history'");
+  await expect(page).toHaveURL(/#\/history$/);
+  await frames(page);
+  note(FILE, `  address change to #/history with the panel open: open ${await panel.count()}`);
+  // Entries by keyboard: focus on the new page's h1 with the ring; the shown page's entry returns focus to More.
+  for (const [entry, hash] of [
+    ['Profile', /#\/settings\/profile$/],
+    ['Settings', /#\/settings$/],
+    ['Administration', /#\/settings\/admin$/],
+    ['Import', /#\/import$/],
+  ] as const) {
+    await more.focus();
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeVisible();
+    await panel.getByRole('link', { name: entry, exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(hash);
+    await expect(panel).toHaveCount(0);
+    await expect.poll(async () => page.evaluate(() => document.activeElement?.tagName ?? '')).toBe('H1');
+    const h1 = await page.evaluate(() => ({ text: document.activeElement?.textContent ?? '', ring: document.activeElement?.matches(':focus-visible') ?? false }));
+    note(FILE, `  keyboard entry ${entry}: panel closed, focus h1 "${h1.text}" focus-visible ${h1.ring}`);
+  }
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await panel.getByRole('link', { name: 'Import', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await frames(page);
+  const back = await more.evaluate((element) => element === document.activeElement);
+  note(FILE, `  keyboard entry of the shown page (Import on Import): panel open ${await panel.count()}, focus on More ${back}`);
+  // Entry by pointer: the h1 takes focus without the ring.
+  await press(page, more, touch);
+  await expect(panel).toBeVisible();
+  await press(page, panel.getByRole('link', { name: 'Settings', exact: true }), touch);
+  await expect(page).toHaveURL(/#\/settings$/);
+  await expect.poll(async () => page.evaluate(() => document.activeElement?.tagName ?? '')).toBe('H1');
+  const pointerH1 = await page.evaluate(() => document.activeElement?.matches(':focus-visible') ?? false);
+  note(FILE, `  ${touch ? 'tap' : 'click'} entry Settings: panel open ${await panel.count()}, h1 focused, focus-visible ${pointerH1}`);
+  // The theme radios inside the panel: arrows change the theme and the panel stays open.
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
+  const radio = panel.getByRole('radio').first();
+  await radio.focus();
+  await page.keyboard.press('ArrowRight');
+  await frames(page);
+  note(FILE, `  ArrowRight in the Theme radios: panel open ${await panel.count()}, focus in the panel ${await panel.evaluate((element) => element.contains(document.activeElement))}`);
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('Escape');
+});
+
+test('desktop account menu at 1280 (comparison, unchanged by FIX4): Tab past Sign out, Escape, outside press', async ({ page, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', 'desktop project');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const identity = page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+  const menu = page.locator('#account-menu');
+  await identity.focus();
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeVisible();
+  await menu.getByRole('button', { name: 'Sign out' }).focus();
+  await page.keyboard.press('Tab');
+  await frames(page);
+  const s = await focusStop(page);
+  note(FILE, `==== desktop 1280 menu: Tab past Sign out: menu open ${await menu.count()}, focus ${s.desc}, covered ${s.hidden}/${s.total}`);
+  await identity.focus();
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('Escape');
+  await frames(page);
+  note(FILE, `  Escape: menu open ${await menu.count()}, focus on identity ${await identity.evaluate((element) => element === document.activeElement)}`);
+  await identity.click();
+  await expect(menu).toBeVisible();
+  await page.getByRole('heading', { name: 'Timesheet', exact: true }).click();
+  await frames(page);
+  note(FILE, `  outside press: menu open ${await menu.count()}`);
+});

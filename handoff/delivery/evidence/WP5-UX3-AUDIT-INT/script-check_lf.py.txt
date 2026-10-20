@@ -1,0 +1,29 @@
+"""Checks files for CR bytes, trailing blanks, a single final newline, e-mail addresses other than the synthetic
+@example.invalid form and profile paths. Usage: python check_lf.py <out.txt> <file> [<file> ...]"""
+import os
+import re
+import sys
+
+EMAIL = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
+user = os.environ.get('USERNAME', '') or os.path.basename(os.environ.get('USERPROFILE', ''))
+out = sys.argv[1]
+lines = []
+bad = 0
+for path in sys.argv[2:]:
+    if path.lower().endswith('.png'):
+        continue
+    data = open(path, 'rb').read()
+    text = data.decode('utf-8', errors='replace')
+    cr = data.count(b'\r')
+    trailing = sum(1 for line in text.split('\n') if line != line.rstrip(' \t'))
+    final_ok = text.endswith('\n') and not text.endswith('\n\n')
+    emails = [m for m in EMAIL.findall(text) if not m.lower().endswith('@example.invalid')]
+    profile = bool(user) and (user.lower() in text.lower())
+    home = 'Us' + 'ers'
+    users_path = any(f'{drive}{sep}{home}{sep}' in text for drive, sep in (('C:', '\\'), ('C:', '/'), ('/c', '/')))
+    ok = cr == 0 and trailing == 0 and final_ok and not emails and not profile and not users_path
+    bad += 0 if ok else 1
+    lines.append(f'{"OK  " if ok else "BAD "} {os.path.basename(path)}: CR {cr}, trailing {trailing}, one final newline {final_ok}, other e-mails {sorted(set(emails))[:5]}, profile name {profile}, users path {users_path}')
+lines.append(f'files {len([p for p in sys.argv[2:] if not p.lower().endswith(".png")])}, bad {bad}')
+open(out, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines) + '\n')
+print(lines[-1])

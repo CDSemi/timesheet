@@ -1,0 +1,189 @@
+diff --git a/tests/e2e/day-editor.spec.ts b/tests/e2e/day-editor.spec.ts
+index aa073b5..1e58be3 100644
+--- a/tests/e2e/day-editor.spec.ts
++++ b/tests/e2e/day-editor.spec.ts
+@@ -1,8 +1,22 @@
++import { spawnSync } from 'node:child_process';
++import { join, resolve } from 'node:path';
++import { pathToFileURL } from 'node:url';
+ import type { Locator, Page } from '@playwright/test';
+ import { addDays, isoWeekday } from '../../src/domain/dates.ts';
+ import { dateTimeIn, instantOfWallTime, wallTimeIn } from '../client/zoneOracle.ts';
+ import { namedDayButton } from './dayButton.ts';
+-import { type BuiltServer, expect, newPerson, type Person, screenshotPath, SeedClient, test } from './fixtures.ts';
++import {
++  type BuiltServer,
++  createAccountByAdminApi,
++  expect,
++  newPerson,
++  type Person,
++  screenshotPath,
++  SeedClient,
++  seedSecondCalendar,
++  starterPolicyBody,
++  test,
++} from './fixtures.ts';
+
+ /*
+  * Day editor on both projects: manual sessions with an explicit input zone, DST fold and gap
+@@ -3892,54 +3906,116 @@ test('"Confirm breaks" lists nothing when no suggested break fits inside the ses
+
+ // WP5-UX3-FIX4 item 6 (R-B2-1, accepted for T08B): "Confirm breaks" has no past-day rule. A session that ended earlier today lists the
+ // suggested breaks that lie inside it, like a session of a past day does. (The new-session pre-fill keeps its past-day rule.)
+-test('"Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it', async ({ page, employeeSeed, signInThroughUi }) => {
+-  // Started three hours ago and ended 30 minutes ago: of the policy's breaks (120, 240 and 390 minutes after the start) only the first lies inside.
+-  const run = await seedRunning(employeeSeed, 3);
++//
++// A calendar made by `seedSecondCalendar` has no version, so no day is a workday there. No public route sets up a first version, so, as
++// the fixtures do for the calendar itself, a child process calls the internal service of the BUILT server code (test code only).
++const SEED_FIRST_VERSION_SCRIPT = `
++const [dbUrl, calendarsUrl, clockUrl] = process.argv.slice(1, 4);
++const { openDatabase } = await import(dbUrl);
++const { createCalendarVersion } = await import(calendarsUrl);
++const { systemClock } = await import(clockUrl);
++const env = process.env;
++const db = openDatabase(env.SEED_DB_PATH);
++try {
++  createCalendarVersion(db, systemClock, { calendarId: env.SEED_CALENDAR_ID, effectiveFrom: '2026-01-01', weekdays: [1, 2, 3, 4, 5], dates: [] }, null);
++} finally {
++  db.close();
++}
++`;
++
++function seedFirstCalendarVersion(server: BuiltServer, calendarId: string): void {
++  const root = resolve(import.meta.dirname, '..', '..');
++  const dist = (file: string) => pathToFileURL(join(root, 'dist', 'server', file)).href;
++  const result = spawnSync(process.execPath, ['--input-type=module', '-e', SEED_FIRST_VERSION_SCRIPT, dist('db/database.js'), dist('services/calendars.js'), dist('clock.js')], {
++    cwd: root,
++    encoding: 'utf8',
++    env: { ...process.env, SEED_DB_PATH: server.databasePath, SEED_CALENDAR_ID: calendarId },
++  });
++  if (result.status !== 0) throw new Error(`calendar version seeding failed with ${result.status}: ${result.stderr}`);
++}
++
++// WP5-UX3-FIX5: the test must not depend on the hour. A session that started three hours ago crosses midnight before 03:00 in the
++// reporting zone, and the phone then lists the breaks as chips (the overnight layout). So the synthetic person gets a reporting zone
++// (a fixed-offset Etc/GMT zone, no DST) in which it is about noon right now, chosen from the current UTC hour: "today" always has room
++// for the whole session, and the accounting date is the server's own `today_local` for that person.
++test('"Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it', async ({
++  page,
++  adminSeed,
++  builtServer,
++  signInPageAs,
++}) => {
++  // Offset in -11..+12 hours that makes the local time 12:xx now. Etc/GMT zones carry the opposite sign (Etc/GMT-5 is UTC+5).
++  const offsetHours = ((23 - new Date().getUTCHours()) % 24) - 11;
++  const zone = offsetHours === 0 ? 'Etc/GMT' : offsetHours > 0 ? `Etc/GMT-${offsetHours}` : `Etc/GMT+${-offsetHours}`;
++  const calendar = await adminSeed.call<{
++    payroll: { anchor_payroll_date: string; cycle_days: number; period_start_offset_days: number; period_end_offset_days: number; due_offset_days: number; due_local_time: string };
++  }>('GET', '/api/calendar');
++  const calendarId = seedSecondCalendar(builtServer, {
++    reportingZone: zone,
++    anchorPayrollDate: calendar.payroll.anchor_payroll_date,
++    cycleDays: calendar.payroll.cycle_days,
++    periodStartOffsetDays: calendar.payroll.period_start_offset_days,
++    periodEndOffsetDays: calendar.payroll.period_end_offset_days,
++    dueOffsetDays: calendar.payroll.due_offset_days,
++    dueLocalTime: calendar.payroll.due_local_time,
++  });
++  seedFirstCalendarVersion(builtServer, calendarId);
++  const account = await createAccountByAdminApi(adminSeed, { calendarId, displayName: 'Synthetic Noon Zone' });
++  const api = await new SeedClient(builtServer.origin).signIn(account.email, account.password);
++  const today = await api.today();
++  expect(today.reportingZone, 'the synthetic person reports in the zone chosen from the UTC hour').toBe(zone);
++  await api.call('POST', '/api/policies', starterPolicyBody(addDays(today.todayLocal, -400)), 201);
++
++  // Started three hours ago and ended 30 minutes ago, on the server's today: of the policy's breaks (120, 240 and 390 minutes after the
++  // start) only the first lies inside. The session is seeded as the Check in and edit the other tests use.
++  const started = await api.call<{ session: { id: string; version: number; start_utc: string } }>('POST', '/api/clock/in', { input_zone: zone }, 201);
++  const startMs = Date.parse(started.session.start_utc) - 3 * 3_600_000;
++  await api.call('PUT', `/api/sessions/${started.session.id}`, {
++    start: instantAt(startMs),
++    end: instantAt(startMs + 150 * 60_000),
++    input_zone: zone,
++    breaks: [],
++    breaks_confirmed: false,
++    expected_version: started.session.version,
++  });
++  const localOf = (minutes: number) => dateTimeIn(instantAt(startMs + minutes * 60_000), zone);
++  expect(localOf(0).slice(0, 10), 'the whole session lies on the person\'s today').toBe(today.todayLocal);
++  expect(localOf(150).slice(0, 10)).toBe(today.todayLocal);
++
+   const puts: Array<Record<string, unknown>> = [];
+   page.on('request', (request) => {
+     if (request.method() === 'PUT' && new URL(request.url()).pathname.startsWith('/api/sessions/')) puts.push(request.postDataJSON() as Record<string, unknown>);
+   });
+-  try {
+-    await employeeSeed.call('PUT', `/api/sessions/${run.id}`, {
+-      start: instantAt(run.startMs),
+-      end: instantAt(run.startMs + 150 * 60_000),
+-      input_zone: LA,
+-      breaks: [],
+-      breaks_confirmed: false,
+-      expected_version: run.version,
+-    });
+-    const before = (await employeeSeed.dayView(run.todayLocal)).sessions[0];
+-    expect(before?.end_utc, 'the session ended earlier today').not.toBeNull();
+-    expect(before?.breaks_confirmed).toBe(false);
+-    expect(before?.breaks).toHaveLength(0);
+-    await signInThroughUi();
+-    const editor = await openEditor(page, run.todayLocal);
+-    await editor.getByRole('button', { name: /^Confirm breaks/ }).click();
+-    const form = sessionDialog(page, 'Edit session');
+-    await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+-    await expect(form.locator('[data-break]'), 'the one suggestion inside the session is listed').toHaveCount(1);
+-    const row = breakRow(form, 1);
+-    await expect(row.time).toHaveValue(wallClock(instantAt(run.startMs + 120 * 60_000), LA));
+-    await expect(row.minutes).toHaveValue('15');
+-    await expect(row.row).toContainText('suggested');
+-    expect(puts).toEqual([]);
+-    await form.getByRole('button', { name: 'Save', exact: true }).click();
+-    const confirm = saveConfirmation(page);
+-    await expect(confirm.locator('.confirm-facts')).toContainText('1 break (15 min)');
+-    await confirm.getByRole('button', { name: 'Save', exact: true }).click();
+-    await expect(editor.getByText('Session saved.')).toBeVisible();
+-    expect(puts).toHaveLength(1);
+-    expect(puts[0]).toMatchObject({ breaks_confirmed: true, input_zone: LA });
+-    const sent = (puts[0]?.breaks ?? []) as Array<{ start: { local: string }; end: { local: string } }>;
+-    expect(sent, 'one break is sent').toHaveLength(1);
+-    expect(sent[0]?.start.local.startsWith(localAfter(run, 120).replace(' ', 'T'))).toBe(true);
+-    expect(sent[0]?.end.local.startsWith(localAfter(run, 135).replace(' ', 'T'))).toBe(true);
+-    const after = (await employeeSeed.dayView(run.todayLocal)).sessions[0];
+-    expect(after?.breaks_confirmed).toBe(true);
+-    expect(after?.breaks).toHaveLength(1);
+-  } finally {
+-    await employeeSeed.clearSessions(run.todayLocal);
+-  }
++  const before = (await api.dayView(today.todayLocal)).sessions[0];
++  expect(before?.end_utc, 'the session ended earlier today').not.toBeNull();
++  expect(before?.breaks_confirmed).toBe(false);
++  expect(before?.breaks).toHaveLength(0);
++  await signInPageAs(account, '#/timesheet');
++  await expect(page.locator('[data-day]')).toHaveCount(14);
++  const editor = await openEditor(page, today.todayLocal);
++  await editor.getByRole('button', { name: /^Confirm breaks/ }).click();
++  const form = sessionDialog(page, 'Edit session');
++  await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
++  await expect(form.locator('[data-break]'), 'the one suggestion inside the session is listed').toHaveCount(1);
++  const row = breakRow(form, 1);
++  await expect(row.time).toHaveValue(wallClock(instantAt(startMs + 120 * 60_000), zone));
++  await expect(row.minutes).toHaveValue('15');
++  await expect(row.row).toContainText('suggested');
++  expect(puts).toEqual([]);
++  await form.getByRole('button', { name: 'Save', exact: true }).click();
++  const confirm = saveConfirmation(page);
++  await expect(confirm.locator('.confirm-facts')).toContainText('1 break (15 min)');
++  await confirm.getByRole('button', { name: 'Save', exact: true }).click();
++  await expect(editor.getByText('Session saved.')).toBeVisible();
++  expect(puts).toHaveLength(1);
++  expect(puts[0]).toMatchObject({ breaks_confirmed: true, input_zone: zone });
++  const sent = (puts[0]?.breaks ?? []) as Array<{ start: { local: string }; end: { local: string } }>;
++  expect(sent, 'one break is sent').toHaveLength(1);
++  expect(sent[0]?.start.local.startsWith(localOf(120).replace(' ', 'T'))).toBe(true);
++  expect(sent[0]?.end.local.startsWith(localOf(135).replace(' ', 'T'))).toBe(true);
++  const after = (await api.dayView(today.todayLocal)).sessions[0];
++  expect(after?.breaks_confirmed).toBe(true);
++  expect(after?.breaks).toHaveLength(1);
+ });
+
+ test('the label cell is a picker: a one-entry batch preview and its commit; recorded work and old periods still go through the review', async ({

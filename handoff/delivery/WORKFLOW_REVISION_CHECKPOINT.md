@@ -713,6 +713,43 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - The ring test x30 gave 60 passed; hover.spec.ts on both projects gave 70 passed.
   - npm test 2141; verify 0; digest 507de97c.
 - Running now: WP5-UX3-FIX6-FREEZE (committer, alone).
+- WP5-UX3-FIX6-FREEZE: attempt 1 stopped at validate_orchestration. It was a coordinator
+  slip: the REGATE4 entry had no evidence list. After the board fix, attempt 2 committed
+  and pushed 8e557100d16b6b6eb86a48e00276835761aabfdf (88 paths; digest 507de97c, on HEAD
+  too; every check 0).
+- Running now: the minimal WP5-UX3-REGATE5 (verifier, sonnet) on 8e55710 / 507de97c.
+  - It covers identity and build equality, npm test, one real-clock full e2e under the
+    clarified buffer-error rule, the ring test x30, and the validators.
+- Then WP5-UX3-AUDIT-INT on 8e55710, with its brief retargeted.
+- WP5-UX3-REGATE5 done: PASS on 8e55710 / 507de97c.
+  - Only hover.spec.ts changed, and the 236 dist files are byte-identical.
+  - npm test 2141; real-clock full e2e 651 passed / 0 failed with no rerun; ring test x30
+    60 passed; validators 0.
+  - REGATE3 and REGATE4 items carry forward. Docker, NAS and non-Chromium browsers are not
+    run here.
+- current_source_digest is 507de97c.
+- Running now: the fresh opus WP5-UX3-AUDIT-INT on 8e55710. It is the final recheck and
+  integration audit whose PASS re-accepts WP5.
+- WP5-UX3-AUDIT-INT done: PASS with no finding, on 8e55710 / 507de97c. WP5 is re-accepted.
+  - Every A2/B2 finding and guard is closed, by its own probes and mutants.
+  - Every owner item (U-01..U-27, N-1, N-2, G-1..G-5, Q6, the chips, Q7) is mapped to its
+    review.
+  - Cross-area checks hold; axe 0; AC-13 passes in three zones.
+  - Real-clock e2e 651 / 0.
+  - Optional risks R-INT-1..4: R-INT-1 is one docs/04 sentence on the More panel.
+- Running now: WP5-UX3-ACCEPT-DOCS (light, sonnet). It refreshes the pilot packet identity
+  and adds the round-3 section to WP5_HANDOFF, EN and VI.
+- Then STATE and NEXT_ACTION by the coordinator, and the WP5-UX3-ACCEPT commit with the
+  board back at `software_ready`.
+- WP5-UX3-ACCEPT-DOCS done.
+  - Pilot packet: identity 8e55710 / 507de97c, server provenance, REGATE3 drill figures,
+    WP5-UX2-Q3 superseded by G-5 (b), and the round-3 backlog by ID.
+  - WP5_HANDOFF: a round-3 section.
+  - EN/VI parity holds; preflight 0; digest unchanged.
+- STATE and NEXT_ACTION (EN and VI) now record the re-acceptance on 8e55710 / 507de97c.
+- Running now: the handoff-only accept commit WP5-UX3-ACCEPT (committer, alone).
+  - After it returns, the coordinator sets the board to `software_ready` (next_task_id null,
+    no running task). That flip stays uncommitted until the next commit, as after round 2.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 
