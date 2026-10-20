@@ -109,3 +109,14 @@ Append to this brief:
 - any fix, masking or stop reason.
 
 ## Results
+
+- Pre-HEAD 8e557100d16b6b6eb86a48e00276835761aabfdf (= origin/main). Post-HEAD / commit
+  1b96e9d36c4b32caab95d6c4638df7038134b189, pushed to main, remote SHA identical.
+- Digest before add and on the new HEAD via git ls-tree: 507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6 (833 files).
+- Staged 202: 12 modified records, 5 new records (incl. this brief), 185 evidence files
+  (FIX6-FREEZE 2, REGATE5 26, AUDIT-INT 156 with 10 synthetic png, ACCEPT-DOCS 1). All names
+  .txt or -synthetic.png.
+- Checks, all exit 0: node v24.21.0; precommit-check PASS (202 files, 0 findings);
+  diff --cached --check; JSON parse; validate_orchestration PASS; check_recovery PASS;
+  validate_package --preflight PASS; push dry-run and push; ls-tree digest matches.
+- No masking, no whitespace fix, no stop. Evidence in evidence/WP5-UX3-ACCEPT/ (unstaged).

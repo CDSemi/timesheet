@@ -786,6 +786,16 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - Khi committer xong, coordinator chuyển board sang `software_ready` (next_task_id null, không
     còn task nào đang chạy). Thay đổi này để chưa commit cho tới lần commit kế tiếp, như sau
     vòng 2.
+- WP5-UX3-ACCEPT xong: 1b96e9d36c4b32caab95d6c4638df7038134b189 trên main, đã push.
+  - 202 đường dẫn trong handoff, không có gì ngoài handoff.
+  - Digest 507de97c, không đổi.
+  - Mọi kiểm tra trả về 0.
+- **WP5 đã được nghiệm thu lại trên 8e55710 / 507de97c. Vòng thay đổi UI lần 3 đã kết thúc.**
+  - Board đã trở về `software_ready` (next_task_id null). Thay đổi trạng thái này, kết quả của
+    ACCEPT và mục ghi này để chưa commit cho tới lần commit kế tiếp.
+  - Tiếp theo, chủ dự án: duyệt pilot packet và trả lời D-1..D-15.
+  - NAS chưa được kiểm; pilot chưa được cho phép.
+  - Backlog không bắt buộc cho vòng sửa pilot, liệt kê theo mã, nằm trong WP5 handoff.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

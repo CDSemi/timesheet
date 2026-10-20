@@ -750,6 +750,16 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - Running now: the handoff-only accept commit WP5-UX3-ACCEPT (committer, alone).
   - After it returns, the coordinator sets the board to `software_ready` (next_task_id null,
     no running task). That flip stays uncommitted until the next commit, as after round 2.
+- WP5-UX3-ACCEPT done: 1b96e9d36c4b32caab95d6c4638df7038134b189 on main, pushed.
+  - 202 handoff paths and nothing outside handoff.
+  - Digest 507de97c, unchanged.
+  - Every check 0.
+- **WP5 is re-accepted on 8e55710 / 507de97c. UI change round 3 is closed.**
+  - The board is back at `software_ready` (next_task_id null). This flip, the ACCEPT
+    result and this entry stay uncommitted until the next commit.
+  - Next, owner: review the pilot packet and answer D-1..D-15.
+  - The NAS is NOT VERIFIED; the pilot is not authorized.
+  - Optional backlog for the pilot fix round, by ID, is in the WP5 handoff.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 
