@@ -1,0 +1,10 @@
+. <task>/env.sh
+cd $T
+echo "rerun2 started $(date -u +%Y-%m-%dT%H:%M:%SZ)" > logs/rerun2-progress.txt
+P() { label=$1; spec=$2; inst=$3; shift 3; bash run-probe2.sh "$label" "$spec" "$inst" "$@" > "logs/probe-$label.txt" 2>&1; echo "probe $label finished $(date -u +%Y-%m-%dT%H:%M:%SZ) exit-line: $(grep -E '^exit=' logs/probe-$label.txt)" >> logs/rerun2-progress.txt; }
+# The audit findings, clean (target only), on the real clock.
+P auditf zz-audit.spec.ts real
+# The attempt-1 axe state list needs ten free past workdays: the displayed period is wholly in the past at the simulated Monday 2026-10-26 09:00 Los Angeles.
+P a11yf zz-a11y.spec.ts 2026-10-26T16:00:00Z
+P a11y2f zz-a11y2.spec.ts 2026-10-26T16:00:00Z
+echo rerun2-done > out/rerun2.done

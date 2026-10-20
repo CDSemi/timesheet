@@ -666,6 +666,46 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - Unit 2141; e2e đầy đủ 651 đạt / 0 lỗi; verify 0.
   - Digest 245e9459 (833 file; 8 đường dẫn thay đổi).
 - Đang chạy: WP5-UX3-FIX4-FREEZE (committer, chạy một mình).
+- WP5-UX3-FIX4-FREEZE xong: 86294412ce15e221f6e0fbc782f0b52a332352be trên main, đã push.
+  - 581 file: 8 ngoài handoff, 18 bản ghi, 555 file bằng chứng.
+  - Digest 245e9459, trên HEAD cũng vậy.
+  - Mọi kiểm tra trả về 0.
+- Quyết định của coordinator: FIX4 nhỏ và không đụng tới logic thời gian, server hay dữ liệu gửi
+  đi.
+  - WP5-UX3-REGATE3 là bản rút gọn: mục 1 của gate đầy đủ, các mục 2 và 3, chạy FULL ở một ngày
+    trong khoảng 5 ngày trước ngày trả lương và một lần đổi giờ mùa, các hành vi và đột biến của
+    FIX4, các kiểm tra của vòng 3 mà FIX4 chạm tới, và quét axe đầy đủ.
+  - Không tách A3/B3: WP5-UX3-AUDIT-INT (agent mới) sẽ kiểm lại luôn các lỗi của A2/B2 và phần
+    thay đổi của FIX4, và chỉ phụ thuộc vào REGATE3.
+- Đang chạy: WP5-UX3-REGATE3 (verifier, sonnet) trên 8629441 / 245e9459.
+- Trong lúc REGATE3 chạy, brief AUDIT-INT đã được viết lại.
+  - Nay gồm: kiểm lại F-UX3A2-1..3, F-UX3B2-1, các test giữ và phần thay đổi của FIX4; tổng hợp
+    mọi review và gate của vòng 3, kể cả GOV2; các thăm dò liên vùng; AC-13 ở ba múi giờ; tài
+    liệu; và các kiểm tra bắt buộc kèm e2e đầy đủ.
+  - Nhắm vào 8629441 / 245e9459; chỉ phụ thuộc vào REGATE3.
+- Chủ dự án hỏi vì sao chỉ sửa AGENTS một chút mà phải chạy nhiều. Riêng chuỗi AGENTS mất khoảng
+  20 phút. Phần còn lại là vòng 3: REGATE2 bị dừng giữa chừng nên đằng nào cũng phải chạy lại, và
+  các audit kiểm lại tìm ra lỗi thật. Phần việc còn lại cần giữ ở mức tối thiểu.
+- WP5-UX3-REGATE3 xong: FAIL, chỉ ở mục 4.
+  - Test mới của FIX4 `day-editor.spec.ts:3895` phụ thuộc giờ trong ngày. Từ 00:00 đến khoảng
+    03:00, phiên giờ của nó vắt qua nửa đêm và điện thoại hiện dạng chip.
+  - Mọi mục khác đều đạt: e2e theo đồng hồ thật 651 / 0, drill, AC-13, ranh giới server, mọi hành
+    vi và đột biến của FIX4, và axe.
+- Quyết định của coordinator:
+  - WP5-UX3-FIX5 chỉ sửa test, do chính tác giả FIX4 làm tiếp.
+  - Sau đó là FIX5-FREEZE và một WP5-UX3-REGATE4 tối thiểu. Gate này chứng minh các bản build
+    giống từng byte so với 8629441, nên các mục khác của REGATE3 được giữ nguyên kết quả, và chỉ
+    chạy lại phần test.
+  - Rồi đến AUDIT-INT.
+- Đang chạy: WP5-UX3-FIX5.
+- WP5-UX3-FIX5 xong (chỉ sửa test).
+  - Test nay dùng một người dùng giả lập riêng, đặt ở múi giờ lệch cố định sao cho lúc chạy là
+    giữa trưa, và kiểm rằng phiên nằm đúng ngày hôm nay theo server.
+  - Test đạt lúc 00:30, 01:45, 02:00, 12:00 và 23:30 PDT và theo đồng hồ thật, trên cả hai
+    project.
+  - Đột biến M5b làm test hỏng cả lúc 01:45 lẫn 12:00.
+  - day-editor 120 đạt / 0 lỗi; verify 0; digest 95323f2d.
+- Đang chạy: WP5-UX3-FIX5-FREEZE (committer, chạy một mình).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

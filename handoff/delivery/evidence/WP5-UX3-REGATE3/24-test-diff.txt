@@ -1,0 +1,324 @@
+diff --git a/tests/e2e/day-editor.spec.ts b/tests/e2e/day-editor.spec.ts
+index 8107424..aa073b5 100644
+--- a/tests/e2e/day-editor.spec.ts
++++ b/tests/e2e/day-editor.spec.ts
+@@ -1796,6 +1796,8 @@ test('Check out with listed breaks: the listed rows are confirmed and replace th
+     await expect(dialog.locator('[data-break="1"]')).toHaveAttribute('data-origin', 'saved');
+     await expect(dialog.getByRole('list', { name: 'Break list' })).toHaveAttribute('data-layout', showsChips(page) ? 'chips' : 'rows');
+     await expect(dialog.getByRole('button', { name: 'Check out with these breaks' })).toBeVisible();
++    // The saved row is kept: nothing is deleted, so there is no removal note (WP5-UX3-FIX4 item 5).
++    await expect(dialog.getByText('The saved breaks you removed are deleted at Check out.')).toHaveCount(0);
+
+     // A second break, typed: the listed set is what Check out sends. There is no notice and no second confirmation.
+     await addCheckOutBreak(page, dialog, 2, localAfter(run, 60), 15);
+@@ -1876,6 +1878,17 @@ test('Check out with nothing listed and the box unticked omits breaks: the sessi
+     const dialog = checkOutDialog(page);
+     await expect(dialog.getByText('No breaks listed.')).toBeVisible();
+     await expect(dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
++    // WP5-UX3-FIX4 item 5: nothing was saved, so nothing is deleted and the removal note is absent: as the dialog opens, and after a row
++    // is added and removed again (the list is still omitted).
++    const removedNote = dialog.getByText('The saved breaks you removed are deleted at Check out.');
++    await expect(dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' })).toBeVisible();
++    await expect(removedNote).toHaveCount(0);
++    await addCheckOutBreak(page, dialog, 1, localAfter(run, 60), 15);
++    await expect(dialog.locator('[data-break]')).toHaveCount(1);
++    await removeCheckOutBreak(page, dialog, 1);
++    await expect(dialog.locator('[data-break]')).toHaveCount(0);
++    await expect(dialog.getByText('No breaks listed.')).toBeVisible();
++    await expect(removedNote).toHaveCount(0);
+     // Check out is its own explicit act: the button names the outcome and the G-4 notice is not used.
+     await dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' }).click();
+     await expect(dialog).toHaveCount(0);
+@@ -3877,6 +3890,58 @@ test('"Confirm breaks" lists nothing when no suggested break fits inside the ses
+   }
+ });
+
++// WP5-UX3-FIX4 item 6 (R-B2-1, accepted for T08B): "Confirm breaks" has no past-day rule. A session that ended earlier today lists the
++// suggested breaks that lie inside it, like a session of a past day does. (The new-session pre-fill keeps its past-day rule.)
++test('"Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it', async ({ page, employeeSeed, signInThroughUi }) => {
++  // Started three hours ago and ended 30 minutes ago: of the policy's breaks (120, 240 and 390 minutes after the start) only the first lies inside.
++  const run = await seedRunning(employeeSeed, 3);
++  const puts: Array<Record<string, unknown>> = [];
++  page.on('request', (request) => {
++    if (request.method() === 'PUT' && new URL(request.url()).pathname.startsWith('/api/sessions/')) puts.push(request.postDataJSON() as Record<string, unknown>);
++  });
++  try {
++    await employeeSeed.call('PUT', `/api/sessions/${run.id}`, {
++      start: instantAt(run.startMs),
++      end: instantAt(run.startMs + 150 * 60_000),
++      input_zone: LA,
++      breaks: [],
++      breaks_confirmed: false,
++      expected_version: run.version,
++    });
++    const before = (await employeeSeed.dayView(run.todayLocal)).sessions[0];
++    expect(before?.end_utc, 'the session ended earlier today').not.toBeNull();
++    expect(before?.breaks_confirmed).toBe(false);
++    expect(before?.breaks).toHaveLength(0);
++    await signInThroughUi();
++    const editor = await openEditor(page, run.todayLocal);
++    await editor.getByRole('button', { name: /^Confirm breaks/ }).click();
++    const form = sessionDialog(page, 'Edit session');
++    await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
++    await expect(form.locator('[data-break]'), 'the one suggestion inside the session is listed').toHaveCount(1);
++    const row = breakRow(form, 1);
++    await expect(row.time).toHaveValue(wallClock(instantAt(run.startMs + 120 * 60_000), LA));
++    await expect(row.minutes).toHaveValue('15');
++    await expect(row.row).toContainText('suggested');
++    expect(puts).toEqual([]);
++    await form.getByRole('button', { name: 'Save', exact: true }).click();
++    const confirm = saveConfirmation(page);
++    await expect(confirm.locator('.confirm-facts')).toContainText('1 break (15 min)');
++    await confirm.getByRole('button', { name: 'Save', exact: true }).click();
++    await expect(editor.getByText('Session saved.')).toBeVisible();
++    expect(puts).toHaveLength(1);
++    expect(puts[0]).toMatchObject({ breaks_confirmed: true, input_zone: LA });
++    const sent = (puts[0]?.breaks ?? []) as Array<{ start: { local: string }; end: { local: string } }>;
++    expect(sent, 'one break is sent').toHaveLength(1);
++    expect(sent[0]?.start.local.startsWith(localAfter(run, 120).replace(' ', 'T'))).toBe(true);
++    expect(sent[0]?.end.local.startsWith(localAfter(run, 135).replace(' ', 'T'))).toBe(true);
++    const after = (await employeeSeed.dayView(run.todayLocal)).sessions[0];
++    expect(after?.breaks_confirmed).toBe(true);
++    expect(after?.breaks).toHaveLength(1);
++  } finally {
++    await employeeSeed.clearSessions(run.todayLocal);
++  }
++});
++
+ test('the label cell is a picker: a one-entry batch preview and its commit; recorded work and old periods still go through the review', async ({
+   page,
+   adminSeed,
+diff --git a/tests/e2e/hover.spec.ts b/tests/e2e/hover.spec.ts
+index fad7905..3927d1a 100644
+--- a/tests/e2e/hover.spec.ts
++++ b/tests/e2e/hover.spec.ts
+@@ -568,6 +568,33 @@ for (const situation of SITUATIONS) {
+  */
+ const UNGATED_HOVER_ALLOWLIST: ReadonlyArray<{ selector: string; reason: string }> = [];
+
++/**
++ * Every `:hover` rule of the page's parsed style sheets, split two ways: by the text of its enclosing media conditions (`ungated` has no
++ * `(hover: hover)` in any of them) and by what the browser says now (`applying` lists the rules whose enclosing media conditions ALL
++ * match on this device, so a hover look can paint here).
++ */
++async function collectHoverRules(page: Page): Promise<{ ungated: string[]; gated: string[]; applying: string[] }> {
++  return page.evaluate<{ ungated: string[]; gated: string[]; applying: string[] }>(`(() => {
++    const result = { ungated: [], gated: [], applying: [] };
++    const visit = (list, hoverOnly, applies) => {
++      for (const rule of Array.from(list)) {
++        if (rule instanceof CSSMediaRule) {
++          visit(rule.cssRules, hoverOnly || /hover:\\s*hover/.test(rule.media.mediaText), applies && window.matchMedia(rule.media.mediaText).matches);
++        } else if (rule instanceof CSSStyleRule) {
++          if (rule.selectorText.includes(':hover')) {
++            (hoverOnly ? result.gated : result.ungated).push(rule.selectorText);
++            if (applies) result.applying.push(rule.selectorText);
++          }
++        } else if (rule instanceof CSSGroupingRule) {
++          visit(rule.cssRules, hoverOnly, applies);
++        }
++      }
++    };
++    for (const sheet of Array.from(document.styleSheets)) visit(sheet.cssRules, false, true);
++    return result;
++  })()`);
++}
++
+ /**
+  * A tap must not leave a hover look on a touch screen: EVERY rule of the application's style sheet whose selector uses `:hover`
+  * (the day column tint, the lifted column's tint, the Category picker, the form fields, the table rows, the button links and the
+@@ -580,22 +607,7 @@ test('every hover rule of the style sheet exists only under (hover: hover); wher
+ }) => {
+   await signInThroughUi();
+   await expect(page.locator('[data-day]')).toHaveCount(14);
+-  const rules = await page.evaluate<{ ungated: string[]; gated: string[] }>(`(() => {
+-    const result = { ungated: [], gated: [] };
+-    const visit = (list, hoverOnly) => {
+-      for (const rule of Array.from(list)) {
+-        if (rule instanceof CSSMediaRule) {
+-          visit(rule.cssRules, hoverOnly || /hover:\\s*hover/.test(rule.media.mediaText));
+-        } else if (rule instanceof CSSStyleRule) {
+-          if (rule.selectorText.includes(':hover')) (hoverOnly ? result.gated : result.ungated).push(rule.selectorText);
+-        } else if (rule instanceof CSSGroupingRule) {
+-          visit(rule.cssRules, hoverOnly);
+-        }
+-      }
+-    };
+-    for (const sheet of Array.from(document.styleSheets)) visit(sheet.cssRules, false);
+-    return result;
+-  })()`);
++  const rules = await collectHoverRules(page);
+   const allowed = new Set(UNGATED_HOVER_ALLOWLIST.map((entry) => entry.selector));
+   expect(
+     rules.ungated.filter((selector) => !allowed.has(selector)),
+@@ -623,6 +635,33 @@ test('every hover rule of the style sheet exists only under (hover: hover); wher
+   }
+ });
+
++/**
++ * WP5-UX3-FIX4 item 4: the scan above judges the TEXT of the media conditions. A touch screen (hover none, pointer coarse) judges what
++ * the browser matches: no hover rule may apply there, whatever its condition says (for example `(hover: hover), (pointer: coarse)` is
++ * textually gated and still applies on a phone). The touch device is the mobile project's own, and a touch context on the desktop project.
++ */
++test.describe('a touch screen', () => {
++  test.use({ hasTouch: true });
++
++  test('no hover rule of the style sheet applies where the device cannot hover', async ({ page, signInThroughUi }) => {
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    expect(
++      await page.evaluate<{ hover: boolean; coarse: boolean }>(
++        "({ hover: window.matchMedia('(hover: none)').matches, coarse: window.matchMedia('(pointer: coarse)').matches })",
++      ),
++      'the page is a touch screen: it cannot hover and its pointer is coarse',
++    ).toEqual({ hover: true, coarse: true });
++    const rules = await collectHoverRules(page);
++    expect(rules.gated.length + rules.ungated.length, 'the style sheet has hover rules to judge').toBeGreaterThan(20);
++    const allowed = new Set(UNGATED_HOVER_ALLOWLIST.map((entry) => entry.selector));
++    expect(
++      rules.applying.filter((selector) => !allowed.has(selector)),
++      'hover rules that apply on a touch screen',
++    ).toEqual([]);
++  });
++});
++
+ /* ---- The focus ring under the pointer (WP5-UX3-FIX3 item 1, SC 2.4.7) ------------------------------------- */
+
+ /** True when the element is focused, matches `:focus-visible` and has the pointer over it (the precondition of the ring checks). */
+@@ -638,7 +677,7 @@ async function focusedAndHovered(locator: Locator): Promise<{ focus: boolean; fo
+  * Keyboard focus puts the shared ring on a control, and the pointer resting on that control must not take it away. Compared with
+  * the same focused control while the pointer is elsewhere: the ring is painted, equal to the pointer-away ring, and meets 3:1.
+  */
+-async function expectRingUnderPointer(page: Page, control: Locator, kind: 'shared' | 'inset', label: string): Promise<void> {
++async function expectRingUnderPointer(page: Page, control: Locator, kind: 'shared' | 'inset' | 'inset-gap', label: string): Promise<void> {
+   await control.scrollIntoViewIfNeeded();
+   await page.mouse.move(0, 0);
+   await control.evaluate((element) => element.blur());
+@@ -659,6 +698,12 @@ async function expectRingUnderPointer(page: Page, control: Locator, kind: 'share
+     const ring = outset.reduce((a, b) => (b.spread > a.spread ? b : a));
+     expect(ring.spread, `${label}: the shared ring is 3px`).toBe(3);
+     expect(contrast(over(ring.colour, surface), surface), `${label}: ring against its surface`).toBeGreaterThanOrEqual(NON_TEXT);
++  } else if (kind === 'inset-gap') {
++    // The shared inset ring (`--focus-ring-inset`): a 2px accent ring and a 3px card-coloured gap layer inside the control.
++    expect(layers, `${label}: the inset ring and its gap layer (${under})`).toHaveLength(2);
++    expect(layers.map((layer) => [layer.inset, layer.spread]), `${label}: inset 2px ring, then inset 3px gap`).toEqual([[true, 2], [true, 3]]);
++    const fill = await flattenedBackground(control);
++    expect(contrast(over(layers[0]?.colour ?? [0, 0, 0, 1], fill), fill), `${label}: inset ring against the hovered fill`).toBeGreaterThanOrEqual(NON_TEXT);
+   } else {
+     expect(layers, `${label}: one inset ring layer (${under})`).toHaveLength(1);
+     expect(layers[0]?.inset, `${label}: the ring is inset`).toBe(true);
+@@ -683,6 +728,8 @@ for (const situation of SITUATIONS.slice(0, 2)) {
+     const picker = day.locator('[data-label-picker] button[aria-label^="Category for"]');
+     await expectRingUnderPointer(page, date, 'shared', `date button (${situation.name})`);
+     await expectRingUnderPointer(page, picker, 'inset', `Category picker (${situation.name})`);
++    // A button link (the period bar's review link) keeps the shared ring under the pointer (WP5-UX3-FIX4 item 2: `.button-link:focus-visible:hover`).
++    await expectRingUnderPointer(page, page.locator('.period-cta a.button-link[data-review-link]'), 'shared', `button link (${situation.name})`);
+
+     // Click the date (the editor opens beside the sheet at 1440), then Escape: focus returns to the date button, pointer still on it.
+     const workDate = (await day.getAttribute('data-day')) ?? '';
+@@ -707,7 +754,9 @@ for (const situation of SITUATIONS.slice(0, 2)) {
+     const phoneDay = page.locator('[data-day]:not(.nonworking) [data-day-button]').first();
+     await expect(phoneDay).toBeVisible();
+     await expectRingUnderPointer(page, phoneDay, 'shared', `phone day button (${situation.name})`);
+-    console.log(`ring under the pointer ${situation.name}: date, Category picker, phone day button and the Escape return keep their ring`);
++    // A tab that is not the current one keeps its inset ring under the pointer (WP5-UX3-FIX4 item 2: `.shell-tabs .tab:focus-visible:hover`).
++    await expectRingUnderPointer(page, page.locator('.shell-tabs a.tab:not([aria-current])').first(), 'inset-gap', `phone tab (${situation.name})`);
++    console.log(`ring under the pointer ${situation.name}: date, Category picker, button link, phone day button, phone tab and the Escape return keep their ring`);
+   });
+ }
+
+diff --git a/tests/e2e/shell.spec.ts b/tests/e2e/shell.spec.ts
+index c6fa53f..a32e930 100644
+--- a/tests/e2e/shell.spec.ts
++++ b/tests/e2e/shell.spec.ts
+@@ -771,6 +771,64 @@ for (const role of ['employee', 'admin'] as const) {
+   });
+ }
+
++/**
++ * WP5-UX3-FIX4 item 1: the More panel closes when keyboard focus leaves the tab bar, as the desktop menu does ("Tab past Sign out").
++ * An open panel left behind would cover the controls that take focus next (WCAG 2.2 SC 2.4.11). Escape, a press on More, a press
++ * outside and a page change keep working. The window is a phone width on both projects (the desktop project is a narrow window).
++ */
++test('the More panel closes when focus leaves it: Tab past Sign out, then the next control is not hidden; a press on More still toggles it', async ({
++  page,
++  builtServer,
++  signInPageAs,
++}) => {
++  await page.setViewportSize({ width: 390, height: 844 });
++  await signInPageAs(builtServer.credentials.employee, '#/timesheet');
++  await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
++  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++  const panel = page.locator('#more-panel');
++
++  // Tab past the last entry: the panel closes (focus has left the tab bar) and More stays a closed toggle.
++  await more.focus();
++  await page.keyboard.press('Enter');
++  await expect(panel).toBeVisible();
++  await panel.getByRole('button', { name: 'Sign out' }).focus();
++  await page.keyboard.press('Tab');
++  await expect(panel).toHaveCount(0);
++  await expect(more).toHaveAttribute('aria-expanded', 'false');
++  // The next stop is a control of the page, and nothing paints over it.
++  await page.keyboard.press('Tab');
++  await expect(panel).toHaveCount(0);
++  const next = await page.locator(':focus').evaluate((active) => {
++    const box = active.getBoundingClientRect();
++    const top = active.ownerDocument.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
++    return { name: active.tagName.toLowerCase(), visible: box.width > 0 && box.height > 0 && top !== null && active.contains(top) };
++  });
++  expect(next.name, 'focus lands on a control after the panel closed').not.toBe('body');
++  expect(next.visible, 'the control focused next is not hidden').toBe(true);
++
++  // Shift+Tab out of the first stop of the bar (backwards) leaves too: open it again with the keyboard, go back past the first tab.
++  await more.focus();
++  await page.keyboard.press('Enter');
++  await expect(panel).toBeVisible();
++  await page.getByRole('navigation', { name: 'Main' }).locator('a.tab').first().focus();
++  await page.keyboard.press('Shift+Tab');
++  await expect(panel).toHaveCount(0);
++
++  // Focus moving between the bar's own controls keeps it open; a press on More toggles it without a flicker (close, then open again).
++  await more.focus();
++  await page.keyboard.press('Enter');
++  await expect(panel).toBeVisible();
++  await panel.getByRole('link', { name: 'Settings', exact: true }).focus();
++  await more.click();
++  await expect(panel).toHaveCount(0);
++  await expect(more).toHaveAttribute('aria-expanded', 'false');
++  await more.click();
++  await expect(panel).toBeVisible();
++  await expect(more).toHaveAttribute('aria-expanded', 'true');
++  await panel.getByRole('link', { name: 'Settings', exact: true }).focus();
++  await expect(panel).toBeVisible();
++});
++
+ /*
+  * The identity block always shows the signed-in user, also while a shared timesheet is on screen (the owner is named
+  * by the page title and the share bar); on a phone the same user is in the More panel header.
+@@ -1086,7 +1144,13 @@ for (const { name, width, height } of [
+         const range = element.ownerDocument.createRange();
+         range.selectNodeContents(text);
+         const words = range.getBoundingClientRect();
+-        return { gap: words.left - icon.right, offset: icon.top + icon.height / 2 - (words.top + words.height / 2) };
++        const entry = element.getBoundingClientRect();
++        return {
++          gap: words.left - icon.right,
++          offset: icon.top + icon.height / 2 - (words.top + words.height / 2),
++          iconStart: icon.left - entry.left,
++          wordsStart: words.left - entry.left,
++        };
+       });
+     const profile = await measure(panel.getByRole('link', { name: 'Profile', exact: true }));
+     const settings = await measure(panel.getByRole('link', { name: 'Settings', exact: true }));
+@@ -1099,6 +1163,11 @@ for (const { name, width, height } of [
+       expect(Math.abs(entry?.offset ?? 99), `${label}: the icon centre is level with the words`).toBeLessThanOrEqual(1.5);
+     }
+     expect(Math.abs((signOut?.offset ?? 99) - (profile?.offset ?? 0)), 'Sign out aligns like Profile').toBeLessThanOrEqual(1);
++    // WP5-UX3-FIX4 item 3: the icon and the words start at the same inline position inside the entry as Profile's (12px and 42px).
++    for (const [label, entry] of [['Settings', settings], ['Sign out', signOut]] as const) {
++      expect(Math.abs((entry?.iconStart ?? 99) - (profile?.iconStart ?? 0)), `${label}: the icon starts where Profile's does`).toBeLessThanOrEqual(0.5);
++      expect(Math.abs((entry?.wordsStart ?? 99) - (profile?.wordsStart ?? 0)), `${label}: the words start where Profile's do`).toBeLessThanOrEqual(0.5);
++    }
+     console.log(`account entries (${name}): Profile ${JSON.stringify(profile)}; Settings ${JSON.stringify(settings)}; Sign out ${JSON.stringify(signOut)}`);
+   });
+ }

@@ -1,0 +1,26 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+cd $REPO
+mkdir -p $T/export-base $T/export-mut
+git archive ceb86b6 | tar -x -C $T/export-base
+git archive $TARGET | tar -x -C $T/export-mut
+# Mutant A4 (scratch copy only): AppShell.tsx line 161 `moreButton.current?.focus();` replaced by `void 0;`
+cd $T/export-mut
+echo "line 161 before: $(sed -n 161p src/client/components/AppShell.tsx)" > $T/out/60-mutA4.txt
+sed -i '161s/.*/    void 0;/' src/client/components/AppShell.tsx
+echo "line 161 after:  $(sed -n 161p src/client/components/AppShell.tsx)" >> $T/out/60-mutA4.txt
+git --no-pager diff --no-index --stat $T/export-v/src/client/components/AppShell.tsx $T/export-mut/src/client/components/AppShell.tsx >> $T/out/60-mutA4.txt 2>&1
+npm ci > $T/out/60-mut-ci.txt 2>&1; echo "mut ci exit $?" >> $T/out/60-mutA4.txt
+npm run build > $T/out/60-mut-build.txt 2>&1; echo "mut build exit $?" >> $T/out/60-mutA4.txt
+export AXE_PATH="$TW\\axe\\node_modules\\axe-core\\axe.min.js"
+export E2E_SCREENSHOT_DIR="$TW\\shots-mut"
+mkdir -p $T/shots-mut $T/pw-mut
+node.exe node_modules/@playwright/test/cli.js test tests/e2e/shell.spec.ts --output="$TW\\pw-mut" > $T/logs/mutA4-shell.txt 2>&1
+echo "mutant A4 shell.spec exit $?" >> $T/out/60-mutA4.txt
+# Negative control for the audit probes: the same probes against the base ceb86b6 build.
+cd $T/export-base
+npm ci > $T/out/61-base-ci.txt 2>&1; echo "base ci exit $?" > $T/out/61-base.txt
+npm run build > $T/out/61-base-build.txt 2>&1; echo "base build exit $?" >> $T/out/61-base.txt
+cd $T
+PROBE_EXPORT=$T/export-base bash run-probe.sh basectl zz-audit.spec.ts > logs/probe-basectl.txt 2>&1
+echo chainC-done > out/chainC.done

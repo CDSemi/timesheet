@@ -636,6 +636,45 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - Unit 2141; full e2e 651 passed / 0 failed; verify 0.
   - Digest 245e9459 (833 files; 8 changed paths).
 - Running now: WP5-UX3-FIX4-FREEZE (committer, alone).
+- WP5-UX3-FIX4-FREEZE done: 86294412ce15e221f6e0fbc782f0b52a332352be on main, pushed.
+  - 581 files: 8 outside handoff, 18 records, 555 evidence files.
+  - Digest 245e9459, on HEAD too.
+  - Every check 0.
+- Coordinator decision: FIX4 is small and touches no time, server or request logic.
+  - WP5-UX3-REGATE3 is reduced: gate item 1 in full, items 2 and 3, FULL runs at a window day
+    and a DST change, the FIX4 behaviours and mutants, the touched round checks, and a full
+    axe scan.
+  - No separate A3/B3: the fresh WP5-UX3-AUDIT-INT also rechecks the A2/B2 findings and
+    FIX4's diff, and depends on REGATE3 only.
+- Running now: WP5-UX3-REGATE3 (verifier, sonnet) on 8629441 / 245e9459.
+- While REGATE3 runs, the AUDIT-INT brief was rewritten.
+  - It now covers the recheck of F-UX3A2-1..3, F-UX3B2-1 and the FIX4 guards and diff,
+    the integration of all round-3 reviews and gates including GOV2, cross-area probes,
+    AC-13 in three zones, the docs, and the mandatory checks with a full e2e.
+  - Target 8629441 / 245e9459; it depends on REGATE3 only.
+- The owner asked why so much runs for a small AGENTS edit. The AGENTS chain itself took
+  about 20 minutes. The rest is round 3: the interrupted REGATE2 had to rerun anyway, and
+  the rechecks found real defects. Keep the remaining work minimal.
+- WP5-UX3-REGATE3 done: FAIL on item 4 only.
+  - FIX4's new test `day-editor.spec.ts:3895` depends on the time of day. Between 00:00
+    and about 03:00 its session crosses midnight, and the phone shows chips.
+  - Everything else passed: real-clock e2e 651 / 0, drill, AC-13, the boundary, every FIX4
+    behaviour and mutant, and axe.
+- Coordinator decision:
+  - WP5-UX3-FIX5 changes the test only, by the FIX4 author resumed.
+  - Then FIX5-FREEZE and a minimal WP5-UX3-REGATE4. It proves the builds are
+    byte-identical to 8629441's so REGATE3's other items carry forward, and reruns only
+    the tests.
+  - Then AUDIT-INT.
+- Running now: WP5-UX3-FIX5.
+- WP5-UX3-FIX5 done (test only).
+  - The test now uses its own synthetic person in a fixed-offset zone where it is midday
+    now, and asserts the server's today.
+  - It passes at 00:30, 01:45, 02:00, 12:00 and 23:30 PDT and on the real clock, on both
+    projects.
+  - M5b fails it at 01:45 and at 12:00.
+  - day-editor 120 passed / 0 failed; verify 0; digest 95323f2d.
+- Running now: WP5-UX3-FIX5-FREEZE (committer, alone).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

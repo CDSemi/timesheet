@@ -1,0 +1,149 @@
+import { spawnSync } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { crc32, deflateSync } from 'node:zlib';
+import { addDays } from '../../src/domain/dates.ts';
+import { type BuiltServer, type CreatedAccount, createAccountByAdminApi, expect, SeedClient, starterPolicyBody } from './fixtures.ts';
+
+/*
+ * WP5-UX3-REGATE3 task-local seeds (never part of the repository). Written independently of the repository's tests:
+ * a running session with saved unconfirmed rows, and the phone Administration state with a long delivery state.
+ */
+export const OUT = process.env.GATE_OUT ?? '';
+export function rec(file: string, line: string): void {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, file), `${line}\n`);
+}
+
+const LA = 'America/Los_Angeles';
+
+export function instantAt(ms: number): string {
+  return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+export interface RunningSeed {
+  id: string;
+  version: number;
+  startMs: number;
+  todayLocal: string;
+}
+
+/** A running session that started `hoursAgo` hours ago with saved unconfirmed breaks [minutes after the start, minutes]. */
+export async function seedRunning(seed: SeedClient, hoursAgo: number, saved: ReadonlyArray<readonly [number, number]> = []): Promise<RunningSeed> {
+  const { todayLocal } = await seed.today();
+  await seed.clearSessions(todayLocal);
+  const started = await seed.call<{ session: { id: string; version: number; start_utc: string } }>('POST', '/api/clock/in', { input_zone: LA }, 201);
+  const startMs = Date.parse(started.session.start_utc) - hoursAgo * 3_600_000;
+  const moved = await seed.call<{ session: { id: string; version: number } }>('PUT', `/api/sessions/${started.session.id}`, {
+    start: instantAt(startMs),
+    end: null,
+    input_zone: LA,
+    breaks: saved.map(([after, minutes]) => ({
+      start: instantAt(startMs + after * 60_000),
+      end: instantAt(startMs + (after + minutes) * 60_000),
+      counts_as_work: false,
+    })),
+    breaks_confirmed: false,
+    expected_version: started.session.version,
+  });
+  return { id: moved.session.id, version: moved.session.version, startMs, todayLocal };
+}
+
+/* ---- phone Administration: a long delivery state ------------------------------------------------------------------ */
+
+const TO = 'payroll-regate2@example.invalid';
+const CC = 'manager-regate2@example.invalid';
+
+function pngChunk(type: string, data: Uint8Array): Buffer {
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const out = Buffer.alloc(8 + data.length + 4);
+  out.writeUInt32BE(data.length, 0);
+  body.copy(out, 4);
+  out.writeUInt32BE(crc32(body), 8 + data.length);
+  return out;
+}
+
+function signaturePng(): Buffer {
+  const width = 160;
+  const height = 48;
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 2;
+  const rows: Buffer[] = [];
+  for (let y = 0; y < height; y += 1) {
+    const row = Buffer.alloc(1 + width * 3, 0xff);
+    row[0] = 0;
+    for (let x = 0; x < width; x += 1) {
+      if (Math.abs(y - (24 + Math.round(14 * Math.sin(x / 9)))) <= 1) row.fill(0x2a, 1 + x * 3, 4 + x * 3);
+    }
+    rows.push(row);
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', deflateSync(Buffer.concat(rows))),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+async function uploadSignature(server: BuiltServer, account: CreatedAccount): Promise<void> {
+  const login = await fetch(`${server.origin}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: server.origin },
+    body: JSON.stringify({ email: account.email, password: account.password }),
+  });
+  expect(login.status, 'account sign-in').toBe(200);
+  const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  const upload = await fetch(`${server.origin}/api/signatures`, {
+    method: 'POST',
+    headers: { 'content-type': 'image/png', origin: server.origin, cookie },
+    body: new Uint8Array(signaturePng()),
+  });
+  expect(upload.status, 'signature upload').toBe(201);
+}
+
+interface ApiSubmission {
+  user_id: string;
+  delivery: { state: string };
+}
+
+export async function seedLongDelivery(adminSeed: SeedClient, builtServer: BuiltServer, name: string): Promise<{ account: CreatedAccount }> {
+  const account = await createAccountByAdminApi(adminSeed, { displayName: name });
+  const api = await new SeedClient(builtServer.origin).signIn(account.email, account.password);
+  const { todayLocal, currentPayrollDate } = await api.today();
+  await api.call('POST', '/api/policies', starterPolicyBody(addDays(todayLocal, -400)), 201);
+  await api.call('POST', '/api/settings/submission', { expected_seq: 0, to: [TO], cc: [CC], auto_submit: false }, 201);
+  await uploadSignature(builtServer, account);
+  const [workDay = ''] = await api.displayedPeriodFreeWorkdays();
+  expect(workDay, 'a past free workday in the displayed period').not.toBe('');
+  await api.seedCompleteDay(workDay);
+  const review = await api.call<{ expected_version: number; payload_hash: string }>('GET', `/api/timesheets/${currentPayrollDate}/review`);
+  const signed = await api.call<{ revision: { id: string } }>(
+    'POST',
+    `/api/timesheets/${currentPayrollDate}/signoff`,
+    { expected_version: review.expected_version, reviewed_hash: review.payload_hash, signer_name: 'Synthetic Operator', incomplete_evidence_acknowledged: true },
+    201,
+  );
+  const mine = async () => (await adminSeed.call<{ submissions: ApiSubmission[] }>('GET', '/api/admin/submissions?limit=500')).submissions.find((row) => row.user_id === account.id);
+  await expect
+    .poll(async () => (await mine())?.delivery.state, { timeout: 150_000, intervals: [2_000], message: 'a final first delivery state' })
+    .toMatch(/^(accepted|failed_permanent)$/);
+  await new Promise((done) => setTimeout(done, 1_500));
+  const root = resolve(import.meta.dirname, '..', '..');
+  const databaseModule = pathToFileURL(join(root, 'dist', 'server', 'db', 'database.js')).href;
+  const seedScript = join(process.env.GATE_TASK ?? '', 'seed-uncertain.mjs');
+  const result = spawnSync(process.execPath, [seedScript, databaseModule], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, SEED_DB_PATH: builtServer.databasePath, SEED_REVISION_ID: signed.revision.id },
+  });
+  if (result.status !== 0) throw new Error(`uncertain-attempt seeding failed with ${result.status}: ${result.stderr}`);
+  const attemptId = result.stdout;
+  expect(attemptId, 'seeded attempt id').not.toBe('');
+  await expect.poll(async () => (await mine())?.delivery.state, { message: 'the seeded uncertain state is the latest' }).toBe('uncertain');
+  await api.call('POST', `/api/deliveries/${attemptId}/decision`, { decision: 'mark_delivered' });
+  return { account };
+}

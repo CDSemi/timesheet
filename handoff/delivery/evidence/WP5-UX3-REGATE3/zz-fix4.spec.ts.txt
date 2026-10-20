@@ -1,0 +1,436 @@
+import type { Locator, Page } from '@playwright/test';
+import { backdropOf, backdropsAbove, contrast, over, parseColour, parseLayers, settledStyle } from './contrast.ts';
+import { expect, openAccount, test } from './fixtures.ts';
+import { applySituation, scanState, SITUATIONS } from './zz-lib.ts';
+import { rec, seedRunning } from './zz-seed.ts';
+
+/*
+ * WP5-UX3-REGATE3 task-local probe (never part of the repository): the FIX4 behaviours measured on the build of the target.
+ * Observations go to GATE_OUT/fix4.txt. Written independently of the repository's tests.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+const FILE = 'fix4.txt';
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 200))))');
+}
+
+interface Stop {
+  tag: string;
+  name: string;
+  hidden: boolean;
+  inPanel: boolean;
+  inBar: boolean;
+  key: string;
+}
+
+async function stopInfo(page: Page): Promise<Stop | null> {
+  return page.evaluate<Stop | null>(`(() => {
+    const el = document.activeElement;
+    if (!el || el === document.body) return null;
+    const box = el.getBoundingClientRect();
+    const top = el.ownerDocument.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    const name = (el.getAttribute('aria-label') || el.textContent || el.getAttribute('name') || el.tagName).replace(/\\s+/g, ' ').trim().slice(0, 36);
+    return {
+      tag: el.tagName.toLowerCase(),
+      name,
+      hidden: !(box.width > 0 && box.height > 0 && top !== null && (el.contains(top) || top.contains(el) || (el.labels && Array.from(el.labels).some((l) => l.contains(top))))),
+      inPanel: Boolean(el.closest('#more-panel')),
+      inBar: Boolean(el.closest('.shell-tabs')),
+      key: el.tagName + '|' + name + '|' + Math.round(box.x) + ',' + Math.round(box.y),
+    };
+  })()`);
+}
+
+/* ---- the More panel: Tab past Sign out, Escape, toggling ---------------------------------------------------------------- */
+
+for (const role of ['employee', 'admin'] as const) {
+  test(`More panel at 390x844 (${role}): Tab past Sign out closes it; no focused control is hidden; Escape; toggle without flicker`, async ({ page, builtServer, signInPageAs }, info) => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signInPageAs(builtServer.credentials[role], '#/timesheet');
+    await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+    const panel = page.locator('#more-panel');
+    const proj = info.project.name;
+
+    // 1. Walk the panel with Tab from More, then past Sign out.
+    await more.focus();
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeVisible();
+    const inside: string[] = [];
+    for (let i = 0; i < 14; i += 1) {
+      await page.keyboard.press('Tab');
+      await settle(page);
+      const open = (await panel.count()) > 0;
+      const stop = await stopInfo(page);
+      if (!open) {
+        rec(FILE, `[${proj}/${role}] Tab ${i + 1}: panel CLOSED, focus now on ${stop ? `${stop.tag} "${stop.name}" hidden=${stop.hidden}` : 'document edge/body'}`);
+        break;
+      }
+      inside.push(`${stop?.tag}:"${stop?.name}"`);
+    }
+    rec(FILE, `[${proj}/${role}] panel stops walked before it closed (${inside.length}): ${inside.join(' | ')}`);
+    expect(inside.at(-1), 'the last stop in the panel is Sign out').toContain('Sign out');
+    await expect(panel).toHaveCount(0);
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
+
+    // 2. Walk every stop of the page after the close; none is hidden and the panel stays closed.
+    const seen = new Set<string>();
+    const hiddenStops: string[] = [];
+    let walked = 0;
+    let presses = 0;
+    for (let i = 0; i < 80; i += 1) {
+      await page.keyboard.press('Tab');
+      presses += 1;
+      const stop = await stopInfo(page);
+      if (stop === null) continue;
+      if (seen.has(stop.key)) continue;
+      seen.add(stop.key);
+      walked += 1;
+      if (stop.hidden) hiddenStops.push(`${stop.tag} "${stop.name}"`);
+    }
+    rec(FILE, `[${proj}/${role}] after the close: ${presses} Tab presses, ${walked} distinct stops, hidden ${hiddenStops.length} ${JSON.stringify(hiddenStops)}; panel count ${await panel.count()}`);
+    expect(walked).toBeGreaterThan(5);
+    expect(hiddenStops).toEqual([]);
+    await expect(panel).toHaveCount(0);
+
+    // 3. Backwards: Shift+Tab out of the first tab closes it.
+    await more.focus();
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeVisible();
+    await page.getByRole('navigation', { name: 'Main' }).locator('a.tab').first().focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(panel).toHaveCount(0);
+    rec(FILE, `[${proj}/${role}] Shift+Tab out of the first tab: panel closed`);
+
+    // 4. Escape closes it and returns focus to More; Escape from the last entry too.
+    await more.focus();
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeVisible();
+    await panel.getByRole('button', { name: 'Sign out', exact: true }).focus();
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(more).toBeFocused();
+    await more.click();
+    await expect(panel).toBeVisible();
+    await panel.getByRole('link', { name: 'Settings', exact: true }).focus();
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(more).toBeFocused();
+    rec(FILE, `[${proj}/${role}] Escape closes the panel and focus returns to More (from Sign out and from Settings)`);
+
+    // 5. A press on More toggles it without a flicker (mutation counts of #more-panel).
+    await page.evaluate(`(() => {
+      window.__mp = { added: 0, removed: 0 };
+      const watch = (list, key) => { for (const node of list) if (node.nodeType === 1 && (node.id === 'more-panel' || node.querySelector('#more-panel'))) window.__mp[key] += 1; };
+      new MutationObserver((records) => { for (const r of records) { watch(r.addedNodes, 'added'); watch(r.removedNodes, 'removed'); } }).observe(document.body, { childList: true, subtree: true });
+    })()`);
+    const counts = () => page.evaluate<{ added: number; removed: number }>('({ ...window.__mp })');
+    const reset = () => page.evaluate('window.__mp = { added: 0, removed: 0 }');
+    await more.click();
+    await expect(panel).toBeVisible();
+    const open1 = await counts();
+    await reset();
+    await panel.getByRole('link', { name: 'Settings', exact: true }).focus();
+    await reset();
+    await more.click();
+    await expect(panel).toHaveCount(0);
+    await settle(page);
+    const close1 = await counts();
+    await reset();
+    await more.click();
+    await expect(panel).toBeVisible();
+    await settle(page);
+    const open2 = await counts();
+    rec(FILE, `[${proj}/${role}] mutations: open ${JSON.stringify(open1)}; press More with focus inside ${JSON.stringify(close1)}; press More again ${JSON.stringify(open2)}`);
+    expect(close1, 'one removal and no re-add while closing').toEqual({ added: 0, removed: 1 });
+    expect(open2, 'one add and no removal while opening').toEqual({ added: 1, removed: 0 });
+
+    // 6. Focus between the bar's own controls keeps it open; an outside press closes it; a page change closes it.
+    await panel.getByRole('link', { name: 'Settings', exact: true }).focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(panel).toBeVisible();
+    await page.locator('header.shell-bar').click({ position: { x: 2, y: 2 } });
+    await expect(panel).toHaveCount(0);
+    await more.click();
+    await expect(panel).toBeVisible();
+    await panel.getByRole('link', { name: 'Settings', exact: true }).click();
+    await expect(panel).toHaveCount(0);
+    rec(FILE, `[${proj}/${role}] bar-internal focus keeps it open; outside press and page change close it`);
+  });
+}
+
+/* ---- Sign out alignment ------------------------------------------------------------------------------------------------- */
+
+for (const { name, width, height } of [
+  { name: 'account menu at 1280', width: 1280, height: 800 },
+  { name: 'phone More panel at 390', width: 390, height: 844 },
+] as const) {
+  for (const media of ['light', 'dark'] as const) {
+    test(`Sign out icon and words start where Profile's do (${name}, ${media})`, async ({ page, signInThroughUi, isMobile }) => {
+      test.skip(isMobile && width > 400, 'Desktop widths run on the desktop project');
+      await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
+      await page.setViewportSize({ width, height });
+      await signInThroughUi();
+      const panel = await openAccount(page);
+      const measure = (entry: Locator) =>
+        entry.evaluate((element) => {
+          const icon = element.querySelector('svg')?.getBoundingClientRect();
+          const text = [...element.childNodes].find((node) => node.nodeType === 3 && (node.textContent ?? '').trim() !== '');
+          if (icon === undefined || text === undefined) return null;
+          const range = element.ownerDocument.createRange();
+          range.selectNodeContents(text);
+          const words = range.getBoundingClientRect();
+          const box = element.getBoundingClientRect();
+          const pad = getComputedStyle(element).paddingLeft;
+          return { iconStart: icon.left - box.left, wordsStart: words.left - box.left, gap: words.left - icon.right, offset: icon.top + icon.height / 2 - (words.top + words.height / 2), pad };
+        });
+      const profile = await measure(panel.getByRole('link', { name: 'Profile', exact: true }));
+      const settings = await measure(panel.getByRole('link', { name: 'Settings', exact: true }));
+      const signOut = await measure(panel.getByRole('button', { name: 'Sign out', exact: true }));
+      rec(FILE, `SIGNOUT ${name} ${media}: Profile ${JSON.stringify(profile)}; Settings ${JSON.stringify(settings)}; Sign out ${JSON.stringify(signOut)}`);
+      expect(profile && settings && signOut).toBeTruthy();
+      expect(Math.abs((signOut?.iconStart ?? 99) - (profile?.iconStart ?? 0)), 'icon start').toBeLessThanOrEqual(0.5);
+      expect(Math.abs((signOut?.wordsStart ?? 99) - (profile?.wordsStart ?? 0)), 'words start').toBeLessThanOrEqual(0.5);
+      expect(Math.abs((settings?.iconStart ?? 99) - (profile?.iconStart ?? 0))).toBeLessThanOrEqual(0.5);
+      expect(Math.abs((signOut?.gap ?? 99) - (profile?.gap ?? 0))).toBeLessThanOrEqual(0.5);
+    });
+  }
+}
+
+/* ---- Contrast of the Sign out entry (rest, hover, focus) --------------------------------------------------------------- */
+
+for (const media of ['light', 'dark'] as const) {
+  test(`Sign out entry contrast in the account menu at 1280 (${media}): text, hover boundary and focus ring`, async ({ page, signInThroughUi, isMobile }) => {
+    test.skip(isMobile, 'Desktop project (hover device)');
+    await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInThroughUi();
+    const panel = await openAccount(page);
+    const entry = panel.getByRole('button', { name: 'Sign out', exact: true });
+    const surface = backdropOf(await backdropsAbove(entry));
+    const read = async () => ({
+      colour: parseColour(await settledStyle(entry, 'color')),
+      fill: parseColour(await settledStyle(entry, 'backgroundColor')),
+      border: parseColour(await settledStyle(entry, 'borderTopColor')),
+      shadow: await settledStyle(entry, 'boxShadow'),
+    });
+    await page.mouse.move(0, 0);
+    const rest = await read();
+    const restFill = over(rest.fill, surface);
+    const restText = contrast(over(rest.colour, restFill), restFill);
+    await entry.hover();
+    const hover = await read();
+    const hoverFill = over(hover.fill, surface);
+    const hoverText = contrast(over(hover.colour, hoverFill), hoverFill);
+    const hoverBorder = contrast(over(hover.border, surface), surface);
+    await page.mouse.move(0, 0);
+    await page.keyboard.press('Shift');
+    await entry.focus();
+    const focus = await read();
+    const ring = parseLayers(focus.shadow).filter((layer) => !layer.inset && layer.spread > 0).reduce((a, b) => (b.spread > a.spread ? b : a));
+    const ringRatio = contrast(over(ring.colour, surface), surface);
+    rec(FILE, `SIGNOUT-CONTRAST ${media}: rest text ${restText.toFixed(2)}; hover text ${hoverText.toFixed(2)}, hover boundary vs surface ${hoverBorder.toFixed(2)}, hover fill step ${contrast(hoverFill, surface).toFixed(2)}; focus ring ${ringRatio.toFixed(2)} (spread ${ring.spread})`);
+    expect(restText).toBeGreaterThanOrEqual(4.5);
+    expect(hoverText).toBeGreaterThanOrEqual(4.5);
+    expect(ringRatio).toBeGreaterThanOrEqual(3);
+  });
+}
+
+for (const media of ['light', 'dark'] as const) {
+  test(`Sign out entry text contrast in the phone More panel (${media})`, async ({ page, signInThroughUi }) => {
+    await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signInThroughUi();
+    const panel = await openAccount(page);
+    const entry = panel.getByRole('button', { name: 'Sign out', exact: true });
+    const surface = backdropOf(await backdropsAbove(entry));
+    const colour = parseColour(await settledStyle(entry, 'color'));
+    const fill = over(parseColour(await settledStyle(entry, 'backgroundColor')), surface);
+    const ratio = contrast(over(colour, fill), fill);
+    await page.keyboard.press('Shift');
+    await entry.focus();
+    const shadow = await settledStyle(entry, 'boxShadow');
+    const layers = parseLayers(shadow).filter((layer) => !layer.inset && layer.spread > 0);
+    const ring = layers.length ? layers.reduce((a, b) => (b.spread > a.spread ? b : a)) : null;
+    const ringRatio = ring ? contrast(over(ring.colour, surface), surface) : 0;
+    rec(FILE, `SIGNOUT-CONTRAST-PHONE ${media}: text ${ratio.toFixed(2)}; focus ring ${ringRatio.toFixed(2)}`);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(ringRatio).toBeGreaterThanOrEqual(3);
+    await page.keyboard.press('Escape');
+  });
+}
+
+/* ---- Focus under the pointer: button link and non-current phone tab -------------------------------------------------- */
+
+interface Facts {
+  focusVisible: boolean;
+  hover: boolean;
+  shadow: string;
+}
+
+async function facts(page: Page, control: Locator): Promise<Facts> {
+  await settle(page);
+  return control.evaluate((element) => ({ focusVisible: element.matches(':focus-visible'), hover: element.matches(':hover'), shadow: getComputedStyle(element).boxShadow }));
+}
+
+for (const media of ['light', 'dark'] as const) {
+  test(`focus ring under the pointer: button link and a non-current phone tab (${media})`, async ({ page, signInThroughUi, isMobile }) => {
+    test.skip(isMobile, 'Desktop project (a device that can hover)');
+    await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    expect(await page.evaluate<boolean>("window.matchMedia('(hover: hover)').matches")).toBe(true);
+    const underPointer = async (control: Locator, label: string, kind: 'shared' | 'inset-gap') => {
+      await control.scrollIntoViewIfNeeded();
+      await page.mouse.move(0, 0);
+      await control.evaluate((element) => element.blur());
+      await page.keyboard.press('Shift');
+      await control.focus();
+      const away = await facts(page, control);
+      await control.hover();
+      const under = await facts(page, control);
+      const layers = parseLayers(under.shadow).filter((layer) => layer.spread > 0);
+      const surface = backdropOf(await backdropsAbove(control));
+      let ratio = 0;
+      if (kind === 'shared') {
+        const ring = layers.filter((layer) => !layer.inset).reduce((a, b) => (b.spread > a.spread ? b : a), layers[0]!);
+        ratio = contrast(over(ring.colour, surface), surface);
+      } else {
+        const fill = over(parseColour(await settledStyle(control, 'backgroundColor')), surface);
+        ratio = contrast(over(layers[0]!.colour, fill), fill);
+      }
+      rec(FILE, `RING ${media} ${label}: away[fv=${away.focusVisible} hover=${away.hover}] under[fv=${under.focusVisible} hover=${under.hover}] layers=${layers.length} shadow=${under.shadow} equal-to-away=${under.shadow === away.shadow} ratio=${ratio.toFixed(2)}`);
+      expect(under.focusVisible && under.hover, `${label}: focus-visible and hover`).toBe(true);
+      expect(layers.length, `${label}: ring painted`).toBeGreaterThan(0);
+      expect(under.shadow, `${label}: ring under the pointer equals the pointer-away ring`).toBe(away.shadow);
+      expect(ratio, `${label}: ring ratio`).toBeGreaterThanOrEqual(3);
+      await page.mouse.move(0, 0);
+    };
+    await underPointer(page.locator('.period-cta a.button-link[data-review-link]'), 'button link (review link)', 'shared');
+    await page.setViewportSize({ width: 390, height: 844 });
+    const tab = page.locator('.shell-tabs a.tab:not([aria-current])').first();
+    await expect(tab).toBeVisible();
+    await underPointer(tab, 'non-current phone tab (hover device)', 'inset-gap');
+  });
+}
+
+/* ---- 44px in the More panel with a touch screen --------------------------------------------------------------------------- */
+
+test.describe('More panel targets with a touch screen', () => {
+  test.use({ hasTouch: true });
+  for (const width of [320, 390, 600, 767]) {
+    test(`bar and More panel controls are at least 44px at ${width}`, async ({ page, signInThroughUi }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await signInThroughUi();
+      const panel = await openAccount(page);
+      const coarse = await page.evaluate<boolean>("window.matchMedia('(pointer: coarse)').matches");
+      const sizes = async (scope: Locator) =>
+        scope.locator('a, button, select, input:not([type="checkbox"]):not([type="radio"])').evaluateAll((els) =>
+          els
+            .map((el) => ({ name: ((el.textContent ?? '').trim().slice(0, 24) || el.getAttribute('aria-label') || el.tagName).replace(/\s+/g, ' '), h: Math.round(el.getBoundingClientRect().height * 10) / 10, w: Math.round(el.getBoundingClientRect().width * 10) / 10 }))
+            .filter((item) => item.h > 0 && item.w > 0),
+        );
+      const inPanel = await sizes(panel);
+      const inBar = await sizes(page.getByRole('navigation', { name: 'Main' }));
+      const small = [...inPanel, ...inBar].filter((item) => item.h < 43.9 || item.w < 43.9);
+      rec(FILE, `TARGETS-MORE ${width}: coarse=${coarse} panel controls=${inPanel.length}, bar controls=${inBar.length}, under 44px (h or w)=${JSON.stringify(small)}`);
+      expect(coarse).toBe(true);
+      expect(inPanel.length).toBeGreaterThanOrEqual(3);
+      expect([...inPanel, ...inBar].filter((item) => item.h < 43.9)).toEqual([]);
+    });
+  }
+});
+
+/* ---- Check out removal note: absent when saved rows are kept ------------------------------------------------------------ */
+
+test('Check out removal note is absent with saved rows kept and on a plain Check out', async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+  test.skip(isMobile, 'Desktop project (rows)');
+  test.setTimeout(150_000);
+  const note = (dialog: Locator) => dialog.getByText('The saved breaks you removed are deleted at Check out.');
+  const run = await seedRunning(employeeSeed, 3, [[10, 10]]);
+  try {
+    await signInThroughUi();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Check out', exact: true });
+    await expect(dialog.locator('[data-break]')).toHaveCount(1);
+    await expect(note(dialog)).toHaveCount(0);
+    rec(FILE, `NOTE saved row kept: note count ${await note(dialog).count()}; submit "${((await dialog.getByRole('button', { name: /^Check out/ }).last().textContent()) ?? '').trim()}"`);
+    await dialog.getByRole('button', { name: 'Remove break 1', exact: true }).click();
+    await expect(note(dialog)).toBeVisible();
+    rec(FILE, `NOTE saved row removed: note visible`);
+    await page.keyboard.press('Escape');
+    const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    if (await discard.isVisible().catch(() => false)) await discard.getByRole('button', { name: 'Discard' }).click();
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+  const plain = await seedRunning(employeeSeed, 3, []);
+  try {
+    await page.reload();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Check out', exact: true });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('[data-break]')).toHaveCount(0);
+    await expect(note(dialog)).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' })).toBeVisible();
+    rec(FILE, `NOTE plain Check out: note count ${await note(dialog).count()}`);
+  } finally {
+    await employeeSeed.clearSessions(plain.todayLocal);
+  }
+});
+
+/* ---- "Confirm breaks" on a session that ended earlier today ---------------------------------------------------------------- */
+
+test('"Confirm breaks" on a session that ended earlier today lists the suggested break inside it', async ({ page, employeeSeed, signInThroughUi }) => {
+  test.setTimeout(150_000);
+  const run = await seedRunning(employeeSeed, 3, []);
+  try {
+    await employeeSeed.call('PUT', `/api/sessions/${run.id}`, {
+      start: new Date(run.startMs).toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      end: new Date(run.startMs + 150 * 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      input_zone: 'America/Los_Angeles',
+      breaks: [],
+      breaks_confirmed: false,
+      expected_version: run.version,
+    });
+    await signInThroughUi();
+    await page.getByLabel('Open a day').fill(run.todayLocal);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await editor.getByRole('button', { name: /^Confirm breaks/ }).click();
+    const form = page.getByRole('dialog', { name: 'Edit session', exact: true });
+    await expect(form).toBeVisible();
+    await settle(page);
+    const rows = await form.locator('[data-break]').count();
+    const minutes = rows > 0 ? await form.getByLabel('Break 1 minutes', { exact: true }).inputValue() : 'n/a';
+    rec(FILE, `CONFIRM-TODAY session ended 30 min ago today (started 3 h ago): rows listed=${rows} first minutes=${minutes}`);
+    expect(rows).toBe(1);
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+});
+
+/* ---- axe scans: More panel open, and after Tab out ---------------------------------------------------------------------- */
+
+for (const situation of SITUATIONS) {
+  test(`axe: phone More panel open, and after Tab out (${situation.name})`, async ({ page, builtServer, signInPageAs }) => {
+    test.setTimeout(150_000);
+    await applySituation(page, situation);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signInPageAs(builtServer.credentials.admin, '#/timesheet');
+    await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+    await more.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#more-panel')).toBeVisible();
+    await scanState(page, 'Phone More panel open (admin), 390', { tag: `more-open/${situation.slug}` });
+    await page.locator('#more-panel').getByRole('button', { name: 'Sign out', exact: true }).focus();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#more-panel')).toHaveCount(0);
+    await scanState(page, 'Phone after Tab out of the More panel (admin), 390', { tag: `more-tabbed-out/${situation.slug}` });
+  });
+}

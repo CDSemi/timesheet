@@ -1,0 +1,82 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, test } from './fixtures.ts';
+
+/*
+ * WP5-UX3-GATE task-local probe (never part of the repository), run against the target export and against the a643794 export:
+ * every response header of the app shell and its assets (the CSP must be identical), no securitypolicyviolation on load or on any
+ * screen, and (target only) the lazy Administration and Import chunks loading.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUT = process.env.GATE_OUT ?? '';
+const LABEL = process.env.GATE_LABEL ?? 'target';
+const OLD = process.env.GATE_OLD === '1';
+const rec = (file: string, line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, file), `${line}\n`);
+};
+
+async function violationsInit(page: Page): Promise<void> {
+  await page.addInitScript({
+    content: `window.__csp = []; document.addEventListener('securitypolicyviolation', (event) => window.__csp.push(event.violatedDirective + ' ' + event.blockedURI));`,
+  });
+}
+const violations = (page: Page) => page.evaluate<string[]>('window.__csp');
+
+test('headers: every response header of the shell and its assets, no violation on load', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }, testInfo) => {
+  const project = testInfo.project.name;
+  for (const path of ['/', '/theme-init.js', '/cd-logo.svg']) {
+    const response = await page.request.get(path);
+    const headers = Object.entries(response.headers())
+      .filter(([name]) => !['date', 'etag', 'last-modified', 'content-length', 'connection', 'keep-alive'].includes(name))
+      .sort(([a], [b]) => a.localeCompare(b));
+    for (const [name, value] of headers) rec(`headers-${LABEL}-${project}.txt`, `GET ${path} ${response.status()} ${name}: ${value}`);
+  }
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Header Reader', signature: 'none' });
+  const consoleErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  await violationsInit(page);
+  await page.goto('/');
+  await expect(page.getByLabel('Email')).toBeVisible();
+  rec(`violations-${LABEL}.txt`, `[${LABEL}/${project}] sign-in page load: ${JSON.stringify(await violations(page))}`);
+  await signInPageAs(me.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  rec(`violations-${LABEL}.txt`, `[${LABEL}/${project}] after sign-in (Timesheet): ${JSON.stringify(await violations(page))}`);
+  const hashes = OLD ? ['#/settings', '#/ot', '#/history'] : ['#/settings', '#/settings/profile', '#/ot', '#/history', '#/import'];
+  for (const hash of hashes) {
+    await page.goto(`${page.url().split('#')[0]}${hash}`);
+    await page.waitForTimeout(600);
+    rec(`violations-${LABEL}.txt`, `[${LABEL}/${project}] ${hash}: ${JSON.stringify(await violations(page))}`);
+  }
+  rec(`violations-${LABEL}.txt`, `[${LABEL}/${project}] console errors: ${JSON.stringify(consoleErrors)}`);
+  expect(await violations(page)).toEqual([]);
+  void isMobile;
+});
+
+test('target only: the lazy Administration and Import chunks load; the main chunk is small', async ({ page, builtServer, signInPageAs }, testInfo) => {
+  test.skip(OLD, 'Target only');
+  const project = testInfo.project.name;
+  const seen: string[] = [];
+  page.on('response', (response) => {
+    const url = new URL(response.url());
+    if (url.pathname.startsWith('/assets/') && url.pathname.endsWith('.js')) seen.push(`${response.status()} ${url.pathname} ${response.headers()['content-length'] ?? '?'} bytes content-type ${response.headers()['content-type']}`);
+  });
+  await violationsInit(page);
+  await signInPageAs(builtServer.credentials.admin, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  rec(`chunks-${LABEL}.txt`, `[${project}] after sign-in (admin): ${JSON.stringify(seen)}`);
+  seen.length = 0;
+  await page.goto(`${builtServer.origin}/#/settings/admin`);
+  await expect(page.locator('main.page')).toBeVisible();
+  await page.waitForTimeout(1_500);
+  rec(`chunks-${LABEL}.txt`, `[${project}] #/settings/admin: ${JSON.stringify(seen)} ; Administration content visible=${await page.getByRole('heading', { name: /Administration|Users|Admin/i }).first().isVisible()}`);
+  seen.length = 0;
+  await page.goto(`${builtServer.origin}/#/import`);
+  await page.waitForTimeout(1_500);
+  rec(`chunks-${LABEL}.txt`, `[${project}] #/import: ${JSON.stringify(seen)}`);
+  rec(`chunks-${LABEL}.txt`, `[${project}] violations ${JSON.stringify(await violations(page))}`);
+  expect(await violations(page)).toEqual([]);
+});

@@ -1,0 +1,162 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { backdropOf, backdropsAbove, contrast, flattenedBackground, over, parseColour, parseLayers, tokenColour, type Rgba } from './contrast.ts';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, openAccount, test } from './fixtures.ts';
+import { applySituation, SITUATIONS, textSweep } from './zz-lib.ts';
+import { decodePng, lum, pixel } from './zz-png.ts';
+
+/*
+ * WP5-UX3-GATE task-local probe (never part of the repository): card on page, hover, the editor frame and the selection
+ * checkbox against the thresholds of the gate (card on page >= 1.12, hover >= 1.20 with an accent boundary, state indicators >= 3:1).
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+test.skip(({ isMobile }) => isMobile, 'Desktop project');
+const OUT = process.env.GATE_OUT ?? '';
+const rec = (line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'measure.txt'), `${line}\n`);
+};
+const r2 = (v: number) => Math.round(v * 100) / 100;
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 200))))');
+}
+
+for (const situation of SITUATIONS) {
+  test(`card on page, hover, editor frame and selection checkbox (${situation.name})`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+    test.setTimeout(180_000);
+    const tag = situation.slug;
+    await applySituation(page, situation);
+    const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Measure Reader', signature: 'none' });
+    const free = await me.api.displayedPeriodFreeWorkdays();
+    if (free[0] !== undefined) await me.api.seedCompleteDay(free[0]);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInPageAs(me.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await settle(page);
+
+    // 0. Named text pieces: the period pills, the bar identity (name and email), the avatar initials, the account menu head, the chips.
+    const named = /badge|identity|avatar|account-|chip|break-tag|today-tag|status|pill/i;
+    const reportNamed = async (state: string) => {
+      const records = (await textSweep(page)).filter((r) => named.test(r.path));
+      for (const r of records) rec(`[${tag}] text ${state}: ${r.path} "${r.text}" ${r2(r.ratio)}:1 (needs ${r.required}; ${r.size}px/${r.weight}; fg ${r.fg.map((v) => Math.round(v)).join(',')} on ${r.bg.map((v) => Math.round(v)).join(',')}${r.image ? ', over an image layer' : ''})${r.ratio < r.required ? ' BELOW' : ''}`);
+    };
+    await reportNamed('Timesheet current period');
+    await page.getByRole('button', { name: 'Previous period', exact: true }).click();
+    await settle(page);
+    await reportNamed('Timesheet previous period (old pill)');
+    await page.getByRole('button', { name: 'Next period', exact: true }).click();
+    await page.getByRole('button', { name: 'Next period', exact: true }).click();
+    await settle(page);
+    await reportNamed('Timesheet next period (in progress pill)');
+    await page.getByRole('button', { name: 'Previous period', exact: true }).click();
+    await settle(page);
+    await openAccount(page);
+    await settle(page);
+    await reportNamed('account menu open');
+    await page.keyboard.press('Escape');
+
+    // 1. Card on page.
+    const pageBg = parseColour(await page.locator('body').evaluate((e) => getComputedStyle(e).backgroundColor));
+    for (const [name, locator] of [
+      ['period bar', page.locator('section.period-bar')],
+      ['week 1', page.locator('section.sheet-week').nth(0)],
+      ['week 2', page.locator('section.sheet-week').nth(1)],
+      ['footer', page.locator('.sheet-footer')],
+    ] as const) {
+      const fill = await flattenedBackground(locator);
+      rec(`[${tag}] card on page: ${name} ${r2(contrast(fill, pageBg))}:1 (threshold 1.12)`);
+    }
+
+    // 2. Hover: rest versus hovered fill, the accent boundary against its surface, and the text on the hovered fill.
+    const hoverTargets: Array<[string, () => Promise<Locator>]> = [
+      ['quiet button "Change several days"', async () => page.getByRole('button', { name: 'Change several days', exact: true })],
+      ['secondary button "Next period"', async () => page.getByRole('button', { name: 'Next period', exact: true })],
+      ['identity button (bar)', async () => page.getByRole('banner').getByRole('button', { name: /, account menu$/ })],
+      ['nav link "Overtime"', async () => page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Overtime', exact: true })],
+      ['account menu "Settings" link', async () => (await openAccount(page)).getByRole('link', { name: 'Settings', exact: true })],
+      ['account menu "Sign out" button', async () => (await openAccount(page)).getByRole('button', { name: 'Sign out', exact: true })],
+    ];
+    for (const [name, find] of hoverTargets) {
+      const locator = await find();
+      await page.mouse.move(0, 0);
+      await settle(page);
+      const surface = backdropOf(await backdropsAbove(locator));
+      const rest = await flattenedBackground(locator);
+      const restBorder = parseColour(await locator.evaluate((e) => getComputedStyle(e).borderTopColor));
+      await locator.hover();
+      await settle(page);
+      const hovered = await flattenedBackground(locator);
+      const border = over(parseColour(await locator.evaluate((e) => getComputedStyle(e).borderTopColor)), surface);
+      const text = parseColour(await locator.evaluate((e) => getComputedStyle(e).color));
+      rec(`[${tag}] hover ${name}: hover/rest ${r2(contrast(rest, hovered))}:1 (threshold 1.20), boundary on hover against its surface ${r2(contrast(border, surface))}:1 (rest border alpha ${restBorder[3]}), text on the hover fill ${r2(contrast(over(text, hovered), hovered))}:1`);
+    }
+    await page.mouse.move(0, 0);
+    await page.keyboard.press('Escape');
+
+    // 3. State indicators: the editor frame on the Day-cell fill and on the day head; the selection checkbox.
+    const date = free[0] ?? '';
+    await namedDayButton(page, date, 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await settle(page);
+    await page.mouse.move(0, 0);
+    const column = page.locator(`[data-day="${date}"]`);
+    const frame = await column.evaluate((e) => {
+      const s = getComputedStyle(e, '::after');
+      return { shadow: s.boxShadow, content: s.content, border: s.borderInlineStartWidth };
+    });
+    const layers = parseLayers(frame.shadow);
+    const frameLayer = layers.find((l) => l.inset && l.spread >= 1) ?? layers[0];
+    const dayFill = await tokenColour(page, '--day-editing-head');
+    const sheetHead = await tokenColour(page, '--sheet-head');
+    const card = await tokenColour(page, '--card');
+    const nonworking = await tokenColour(page, '--day-nonworking');
+    const attention = await tokenColour(page, '--attention-bg');
+    if (frameLayer !== undefined) {
+      const frameColour = over(frameLayer.colour, card);
+      rec(`[${tag}] editor frame (::after inset shadow ${frame.shadow}): frame colour ${frameColour.map((v) => Math.round(v)).join(',')} against Day-cell fill ${r2(contrast(frameColour, dayFill))}:1, against the day head ${r2(contrast(frameColour, sheetHead))}:1, against card ${r2(contrast(frameColour, card))}:1, non-working ${r2(contrast(frameColour, nonworking))}:1, attention ${r2(contrast(frameColour, attention))}:1 (threshold 3)`);
+    } else {
+      rec(`[${tag}] editor frame: no inset layer found (${frame.shadow})`);
+    }
+    // Painted pixel check of the frame on the head row and the Day cell: the 1px frame and its inner neighbour.
+    const box = await column.boundingBox();
+    const head = await column.locator('> div').first().boundingBox();
+    if (box !== null && head !== null) {
+      const shot = decodePng(await page.screenshot({ clip: { x: Math.floor(box.x) - 4, y: Math.floor(head.y) + 2, width: 12, height: 8 }, scale: 'css', animations: 'disabled' }));
+      const row = [] as string[];
+      for (let x = 0; x < shot.width; x += 1) row.push(pixel(shot, x, 4).join(','));
+      rec(`[${tag}] painted pixels across the left edge of the edited column at the Day cell (x ${Math.floor(box.x) - 4}..+11): ${row.join(' | ')}`);
+      const dark = [] as number[];
+      for (let x = 0; x < shot.width; x += 1) dark.push(Math.round(lum(pixel(shot, x, 4))));
+      rec(`[${tag}] luminance across the left edge: ${dark.join(' ')}`);
+    }
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+
+    // The selection checkbox (batch mode): checked and unchecked, against what it sits on.
+    await page.getByRole('button', { name: 'Change several days' }).click();
+    const pick = page.getByLabel(`Select ${date}`);
+    for (const checked of [false, true]) {
+      if (checked) await pick.check();
+      await page.mouse.move(0, 0);
+      await settle(page);
+      const b = await pick.boundingBox();
+      if (b === null) continue;
+      const shot = decodePng(await page.screenshot({ clip: { x: Math.floor(b.x) - 4, y: Math.floor(b.y) - 4, width: Math.ceil(b.width) + 8, height: Math.ceil(b.height) + 8 }, scale: 'css', animations: 'disabled' }));
+      const outside = pixel(shot, 1, 1);
+      const midY = Math.floor(shot.height / 2);
+      const asRgbaEarly = (p: [number, number, number]): Rgba => [p[0], p[1], p[2], 1];
+      let darkest: [number, number, number] = outside;
+      for (let x = 2; x < 9; x += 1) {
+        const p = pixel(shot, x, midY);
+        if (contrast(asRgbaEarly(p), asRgbaEarly(outside)) > contrast(asRgbaEarly(darkest), asRgbaEarly(outside))) darkest = p;
+      }
+      const centre = pixel(shot, Math.floor(shot.width / 2) - 3, Math.floor(shot.height / 2) + 3);
+      const asRgba = (p: [number, number, number]): Rgba => [p[0], p[1], p[2], 1];
+      rec(`[${tag}] selection checkbox ${checked ? 'checked' : 'unchecked'}: surface pixel ${outside.join(',')}, boundary pixel ${darkest.join(',')} -> ${r2(contrast(asRgba(darkest), asRgba(outside)))}:1 (threshold 3)${checked ? `, fill ${centre.join(',')} against the surface ${r2(contrast(asRgba(centre), asRgba(outside)))}:1` : ''}`);
+    }
+  });
+}

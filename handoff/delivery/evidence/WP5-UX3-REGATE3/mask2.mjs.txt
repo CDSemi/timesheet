@@ -1,0 +1,30 @@
+// Masks a text file for the evidence folder. Usage: node mask2.mjs <in> <out>
+// CR and ANSI removed, task and repository paths and the profile name masked, e-mail addresses other than the synthetic
+// example.invalid form masked, trailing whitespace stripped, exactly one final newline.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+let text = readFileSync(input, 'utf8');
+text = text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+const bs = String.fromCharCode(92);
+const forms = (win, label) => {
+  const parts = win.split('/');
+  return [parts.join(bs + bs + bs + bs), parts.join(bs + bs), parts.join(bs), win, '/' + win[0].toLowerCase() + win.slice(2)].map((f) => [f, label]);
+};
+const pairs = [
+  ...forms('<task>', '<task>'),
+  ...forms('<task>', '<task-parent>'),
+  ...forms('<repo>', '<repo>'),
+];
+for (const [f, label] of pairs) text = text.split(f).join(label);
+const user = process.env.USERNAME ?? '';
+if (user) text = text.split(user).join('<user>');
+text = text.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, (match) => (/@example\.invalid$/i.test(match) ? match : '<email>'));
+text = text.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]*\.?inval\b/g, '<email>');
+text = text
+  .split('\n')
+  .map((line) => line.replace(/[ \t]+$/, ''))
+  .join('\n');
+text = text.replace(/\n+$/, '') + '\n';
+writeFileSync(output, text);

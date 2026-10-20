@@ -1,0 +1,429 @@
+import type { Locator, Page } from '@playwright/test';
+import { backdropOf, backdropsAbove, contrast, over, parseColour, parseLayers, settledStyle } from './contrast.ts';
+import { expect, openAccount, screenshotPath, test } from './fixtures.ts';
+import { rec, seedLongDelivery, seedRunning } from './zz-seed.ts';
+import { runAxe } from './zz-lib.ts';
+
+/*
+ * WP5-UX3-REGATE3 task-local probe (never part of the repository): the eight audit findings of round 3, measured on the built target.
+ * Every observation goes to GATE_OUT/audit.txt. A test fails when its finding is not closed.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+const FILE = 'audit.txt';
+
+test.beforeEach(({ page }) => {
+  page.on('pageerror', (error) => {
+    throw error;
+  });
+});
+
+/* ---- F-UX3A-01 ---------------------------------------------------------------------------------------------------- */
+
+interface Facts {
+  focus: boolean;
+  focusVisible: boolean;
+  hover: boolean;
+  boxShadow: string;
+  outline: string;
+}
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 200))))');
+}
+
+async function facts(page: Page, control: Locator): Promise<Facts> {
+  await settle(page);
+  return control.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      focus: element === element.ownerDocument.activeElement,
+      focusVisible: element.matches(':focus-visible'),
+      hover: element.matches(':hover'),
+      boxShadow: style.boxShadow,
+      outline: `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor}`,
+    };
+  });
+}
+
+function ringPainted(value: Facts): boolean {
+  const layers = parseLayers(value.boxShadow).filter((layer) => layer.spread > 0 && layer.colour[3] > 0);
+  const outline = value.outline.startsWith('none') ? false : parseFloat(value.outline.split(' ')[1] ?? '0') > 0;
+  return layers.length > 0 || outline;
+}
+
+async function ringUnderPointer(page: Page, control: Locator, label: string, inset: boolean): Promise<void> {
+  await control.scrollIntoViewIfNeeded();
+  await page.mouse.move(0, 0);
+  await control.evaluate((element) => element.blur());
+  await page.keyboard.press('Shift');
+  await control.focus();
+  await expect(control).toBeFocused();
+  const away = await facts(page, control);
+  await control.hover();
+  const under = await facts(page, control);
+  const layers = parseLayers(under.boxShadow).filter((layer) => layer.spread > 0);
+  let ratio = 'n/a';
+  if (layers.length > 0 && !inset) {
+    const surface = backdropOf(await backdropsAbove(control));
+    const ring = layers.filter((layer) => !layer.inset).reduce((a, b) => (b.spread > a.spread ? b : a), layers[0]!);
+    ratio = contrast(over(ring.colour, surface), surface).toFixed(2);
+  }
+  rec(
+    FILE,
+    `A01 ${label}: away[focusVisible=${away.focusVisible} hover=${away.hover} shadow=${away.boxShadow} outline=${away.outline}] under-pointer[focusVisible=${under.focusVisible} hover=${under.hover} shadow=${under.boxShadow} outline=${under.outline}] ringVsSurface=${ratio}`,
+  );
+  expect(under.focusVisible && under.hover, `${label}: keyboard focus with the pointer on the control`).toBe(true);
+  expect(ringPainted(under), `${label}: ring painted under the pointer`).toBe(true);
+  expect(under.boxShadow, `${label}: ring under the pointer equals the ring with the pointer away`).toBe(away.boxShadow);
+  if (inset) expect(parseLayers(under.boxShadow).some((layer) => layer.inset && layer.spread === 2), `${label}: 2px inset ring`).toBe(true);
+  await page.mouse.move(0, 0);
+}
+
+for (const media of ['light', 'dark'] as const) {
+  test(`F-UX3A-01: focus ring under the pointer (${media})`, async ({ page, signInThroughUi, isMobile }) => {
+    test.skip(isMobile, 'Desktop project (a device that can hover)');
+    test.setTimeout(120_000);
+    await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    expect(await page.evaluate<boolean>("window.matchMedia('(hover: hover)').matches")).toBe(true);
+    const day = page.locator('.sheet-day[data-day]:not(.nonworking)').first();
+    const date = day.locator('[data-day-button]');
+    const picker = day.locator('[data-label-picker] button[aria-label^="Category for"]');
+    await ringUnderPointer(page, date, `${media} date button`, false);
+    await ringUnderPointer(page, picker, `${media} Category picker`, true);
+
+    // Escape return from the Day editor at 1440.
+    const workDate = (await day.getAttribute('data-day')) ?? '';
+    await date.click();
+    const editor = page.getByRole('dialog', { name: new RegExp(`^Day editor .*${workDate}`) });
+    await expect(editor).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await expect(date).toBeFocused();
+    await date.hover();
+    const afterEscape = await facts(page, date);
+    rec(FILE, `A01 ${media} date button after the Escape return from the Day editor at 1440: focusVisible=${afterEscape.focusVisible} hover=${afterEscape.hover} shadow=${afterEscape.boxShadow}`);
+    expect(afterEscape.focusVisible && afterEscape.hover).toBe(true);
+    expect(ringPainted(afterEscape), 'ring after the Escape return').toBe(true);
+    await settledStyle(date, 'boxShadow');
+    if (media === 'light') await page.screenshot({ path: screenshotPath('ux3regate2-ring-under-pointer-1440-light-synthetic.png'), clip: { x: 0, y: 120, width: 1440, height: 420 }, animations: 'disabled' });
+    await page.mouse.move(0, 0);
+
+    // The phone table's day button, on a device that can hover.
+    await page.setViewportSize({ width: 390, height: 844 });
+    const phoneDay = page.locator('[data-day]:not(.nonworking) [data-day-button]').first();
+    await expect(phoneDay).toBeVisible();
+    await ringUnderPointer(page, phoneDay, `${media} phone day button (390 window, hover device)`, false);
+
+    // A button link.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    let link: Locator | null = null;
+    for (const hash of ['#/timesheet', '#/history', '#/review', '#/settings']) {
+      await page.evaluate((h) => {
+        window.location.hash = h;
+      }, hash);
+      await settle(page);
+      const candidate = page.locator('a.button-link:visible').first();
+      if ((await candidate.count()) > 0) {
+        link = candidate;
+        rec(FILE, `A01 ${media} button link found at ${hash}: "${((await candidate.textContent()) ?? '').trim().slice(0, 40)}"`);
+        break;
+      }
+    }
+    expect(link, 'a visible button link exists on one of the pages').not.toBeNull();
+    if (link !== null) await ringUnderPointer(page, link, `${media} button link`, false);
+  });
+}
+
+/* ---- F-UX3A-02 ---------------------------------------------------------------------------------------------------- */
+
+test('F-UX3A-02: every :hover rule that exists sits inside @media (hover: hover)', async ({ page, signInThroughUi }) => {
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const scan = await page.evaluate(() => {
+    const ungated: string[] = [];
+    let gated = 0;
+    const visit = (list: CSSRuleList, ok: boolean): void => {
+      for (const rule of Array.from(list)) {
+        if (rule instanceof CSSMediaRule) visit(rule.cssRules, ok || /hover:\s*hover/.test(rule.media.mediaText));
+        else if (rule instanceof CSSStyleRule) {
+          if (rule.selectorText.includes(':hover')) {
+            if (ok) gated += 1;
+            else ungated.push(rule.selectorText);
+          }
+          if (rule.cssRules.length > 0) visit(rule.cssRules, ok);
+        } else if ('cssRules' in rule) visit((rule as unknown as CSSGroupingRule).cssRules, ok);
+      }
+    };
+    let sheets = 0;
+    for (const sheet of Array.from(document.styleSheets)) {
+      sheets += 1;
+      visit(sheet.cssRules, false);
+    }
+    return { ungated, gated, sheets };
+  });
+  rec(FILE, `A02 stylesheet scan: sheets=${scan.sheets} gated hover rules=${scan.gated} ungated=${scan.ungated.length} ${JSON.stringify(scan.ungated)}`);
+  expect(scan.ungated).toEqual([]);
+  expect(scan.gated).toBeGreaterThan(20);
+});
+
+for (const media of ['light', 'dark'] as const) {
+  test(`F-UX3A-02: a tap on the Category picker leaves no hover look (${media})`, async ({ page, signInThroughUi, isMobile }) => {
+    test.skip(!isMobile, 'Mobile project (touch)');
+    await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const picker = page.locator('[data-label-picker] button[aria-label^="Category for"]').first();
+    await picker.scrollIntoViewIfNeeded();
+    expect(await page.evaluate<boolean>("window.matchMedia('(hover: hover)').matches"), 'phone has no hover').toBe(false);
+    const read = async () => ({ bg: await settledStyle(picker, 'backgroundColor'), border: await settledStyle(picker, 'borderTopColor'), shadow: await settledStyle(picker, 'boxShadow') });
+    const rest = await read();
+    await picker.tap();
+    await expect(picker).toHaveAttribute('aria-expanded', 'true');
+    await picker.tap();
+    await expect(picker).toHaveAttribute('aria-expanded', 'false');
+    const after = await read();
+    rec(FILE, `A02 tap ${media}: rest=${JSON.stringify(rest)} after two taps=${JSON.stringify(after)} :hover matches=${await picker.evaluate((e) => e.matches(':hover'))}`);
+    expect(after).toEqual(rest);
+  });
+}
+
+/* ---- F-UX3A-03 ---------------------------------------------------------------------------------------------------- */
+
+test.describe('F-UX3A-03: touch targets of the bar', () => {
+  test.use({ hasTouch: true });
+  for (const width of [320, 360, 390, 600, 767, 768, 820, 1024, 1280]) {
+    test(`no bar control under 44px with a touch screen at ${width}`, async ({ page, signInThroughUi, isMobile }) => {
+      test.skip(isMobile && width >= 768, 'Tablet and wider widths run on the desktop project with hasTouch');
+      await page.setViewportSize({ width, height: 900 });
+      await signInThroughUi();
+      await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+      const coarse = await page.evaluate<boolean>("window.matchMedia('(pointer: coarse)').matches");
+      const selector = 'a, button, select, input:not([type="checkbox"]):not([type="radio"])';
+      const measure = async (scope: Locator, area: string) =>
+        scope.locator(selector).evaluateAll(
+          (elements, areaName) =>
+            elements
+              .map((element) => ({ area: areaName, name: ((element.textContent ?? '').trim().slice(0, 28) || element.getAttribute('aria-label') || element.tagName).replace(/\s+/g, ' '), box: element.getBoundingClientRect() }))
+              .filter((item) => item.box.width > 0 && item.box.height > 0)
+              .map((item) => ({ area: item.area, name: item.name, height: Math.round(item.box.height * 10) / 10, width: Math.round(item.box.width * 10) / 10 })),
+          area,
+        );
+      const bar = await measure(page.getByRole('banner'), 'banner');
+      const tabs = await measure(page.getByRole('navigation', { name: 'Main' }), 'main nav');
+      const all = [...bar, ...tabs];
+      const small = all.filter((item) => item.height < 43.9 || item.width < 43.9);
+      rec(FILE, `A03 width ${width} coarse=${coarse} controls=${all.length} (banner ${bar.length}, nav ${tabs.length}) smallest height=${Math.min(...all.map((i) => i.height))} smallest width=${Math.min(...all.map((i) => i.width))} under44=${JSON.stringify(small)}`);
+      expect(coarse, 'coarse pointer reported').toBe(true);
+      expect(all.length).toBeGreaterThanOrEqual(4);
+      expect(all.filter((item) => item.height < 43.9), 'no control under 44px high').toEqual([]);
+    });
+  }
+});
+
+/* ---- F-UX3A-04 ---------------------------------------------------------------------------------------------------- */
+
+for (const { name, width, height } of [
+  { name: 'account menu at 1280', width: 1280, height: 800 },
+  { name: 'phone More panel at 390', width: 390, height: 844 },
+] as const) {
+  for (const media of ['light', 'dark'] as const) {
+    test(`F-UX3A-04: Sign out gap and alignment equal Profile's (${name}, ${media})`, async ({ page, signInThroughUi, isMobile }) => {
+      test.skip(isMobile && width > 400, 'Desktop widths run on the desktop project');
+      await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
+      await page.setViewportSize({ width, height });
+      await signInThroughUi();
+      const panel = await openAccount(page);
+      const measure = async (entry: Locator) =>
+        entry.evaluate((element) => {
+          const icon = element.querySelector('svg')?.getBoundingClientRect();
+          const text = [...element.childNodes].find((node) => node.nodeType === 3 && (node.textContent ?? '').trim() !== '');
+          if (icon === undefined || text === undefined) return null;
+          const range = element.ownerDocument.createRange();
+          range.selectNodeContents(text);
+          const words = range.getBoundingClientRect();
+          const box = element.getBoundingClientRect();
+          return { gap: words.left - icon.right, centreOffset: icon.top + icon.height / 2 - (words.top + words.height / 2), iconLeftInEntry: icon.left - box.left, iconSize: icon.width, display: getComputedStyle(element).display };
+        });
+      const profile = await measure(panel.getByRole('link', { name: 'Profile', exact: true }));
+      const settings = await measure(panel.getByRole('link', { name: 'Settings', exact: true }));
+      const signOut = await measure(panel.getByRole('button', { name: 'Sign out', exact: true }));
+      rec(FILE, `A04 ${name} ${media}: Profile ${JSON.stringify(profile)}; Settings ${JSON.stringify(settings)}; Sign out ${JSON.stringify(signOut)}`);
+      expect(profile && signOut).toBeTruthy();
+      expect(Math.abs((signOut?.gap ?? 99) - (profile?.gap ?? 0)), 'icon gap equals Profile').toBeLessThanOrEqual(0.5);
+      expect(Math.abs((signOut?.centreOffset ?? 99) - (profile?.centreOffset ?? 0)), 'alignment equals Profile').toBeLessThanOrEqual(1);
+      // Observation only (not part of the finding): the horizontal start of the icon inside the entry.
+      rec(FILE, `A04 ${name} ${media}: horizontal icon start Sign out minus Profile = ${((signOut?.iconLeftInEntry ?? 0) - (profile?.iconLeftInEntry ?? 0)).toFixed(1)}px`);
+    });
+  }
+}
+
+/* ---- F-UX3A-06 ---------------------------------------------------------------------------------------------------- */
+
+for (const media of ['light', 'dark'] as const) {
+  test(`F-UX3A-06: phone Administration with the long delivery state (${media})`, async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+    test.skip(!isMobile, 'Mobile project');
+    test.setTimeout(240_000);
+    await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
+    const { account } = await seedLongDelivery(adminSeed, builtServer, `Synthetic Operator ${media}`);
+    await signInPageAs(builtServer.credentials.admin, '#/settings/admin');
+    await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+    const card = page.getByRole('region', { name: 'Submissions and delivery' });
+    const row = card.locator(`[data-submission-user="${account.id}"]`);
+    await expect(row).toHaveCount(1);
+    await expect(row.locator('[data-status="delivery"]')).toHaveText('Delivery recorded as uncertain');
+    await expect(row.locator('.ops-code').filter({ hasText: 'lease_expired_while_sending' })).toHaveCount(1);
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await row.scrollIntoViewIfNeeded();
+      await settle(page);
+      const wrap = await card.locator('.table-wrap').evaluate((element) => ({ client: element.clientWidth, scroll: element.scrollWidth }));
+      const page_ = await page.evaluate<{ scroll: number; inner: number }>('({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth })');
+      const axe = await runAxe(page);
+      const sideways = axe.violations.filter((violation) => violation.id === 'scrollable-region-focusable');
+      rec(
+        FILE,
+        `A06 ${media} ${width}: table-wrap client=${wrap.client} scroll=${wrap.scroll}; page scrollWidth=${page_.scroll} inner=${page_.inner}; axe ${axe.version} violations=${axe.violations.length} (${axe.violations.map((v) => `${v.id}x${v.nodes.length}`).join(', ') || 'none'}); scrollable-region-focusable=${sideways.length}`,
+      );
+      expect(wrap.scroll, `${width}: no sideways scroll inside the card`).toBeLessThanOrEqual(wrap.client);
+      expect(page_.scroll, `${width}: no sideways page scroll`).toBeLessThanOrEqual(page_.inner);
+      expect(sideways, `${width}: no scrollable-region-focusable`).toEqual([]);
+      if (media === 'light') await card.screenshot({ path: screenshotPath(`ux3regate2-phone-admin-long-delivery-${width}-synthetic.png`) });
+    }
+  });
+}
+
+/* ---- F-UX3B-1 ----------------------------------------------------------------------------------------------------- */
+
+test('F-UX3B-1: removing every saved row at Check out sends the empty unconfirmed list; no saved rows keeps the list omitted', async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+  test.skip(isMobile, 'Desktop project (rows)');
+  test.setTimeout(150_000);
+  const bodies: Array<Record<string, unknown>> = [];
+  const statuses: number[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/clock/out') bodies.push(request.postDataJSON() as Record<string, unknown>);
+  });
+  page.on('response', (response) => {
+    if (response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/clock/out') statuses.push(response.status());
+  });
+  const checkOut = () => page.getByRole('dialog', { name: 'Check out', exact: true });
+  const sessionOf = async (run: { todayLocal: string; id: string }) => (await employeeSeed.dayView(run.todayLocal)).sessions.find((s) => s.id === run.id);
+
+  // 1. Two saved rows, the second ends about two minutes after now (an omitted list is refused with 422 for it).
+  const run = await seedRunning(employeeSeed, 3, [[10, 10], [177, 5]]);
+  try {
+    await signInThroughUi();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = checkOut();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('[data-break]')).toHaveCount(2);
+    const note = dialog.getByText('The saved breaks you removed are deleted at Check out.');
+    await expect(note).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Remove break 2', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Remove break 1', exact: true }).click();
+    await expect(dialog.locator('[data-break]')).toHaveCount(0);
+    const box = dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' });
+    await expect(box).not.toBeChecked();
+    await expect(note).toBeVisible();
+    rec(FILE, `B1 note text: "${((await dialog.getByRole('status').filter({ hasText: 'The saved breaks you removed' }).textContent()) ?? '').replace(/\s+/g, ' ').trim()}"`);
+    rec(FILE, `B1 submit label: "${((await dialog.getByRole('button', { name: /^Check out/ }).last().textContent()) ?? '').trim()}"`);
+    await page.screenshot({ path: screenshotPath('ux3regate2-checkout-removal-note-1280-synthetic.png'), animations: 'disabled' });
+    await dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText('Checked out.')).toBeVisible();
+    const closed = await sessionOf(run);
+    rec(FILE, `B1 case saved rows removed: request=${JSON.stringify(bodies[0])} status=${statuses[0]} closed=${closed?.end_utc !== null} breaks_confirmed=${closed?.breaks_confirmed} rows=${closed?.breaks.length}`);
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toEqual({ breaks: [], breaks_confirmed: false, expected_version: run.version });
+    expect(statuses[0]).toBe(200);
+    expect(closed?.end_utc).not.toBeNull();
+    expect(closed?.breaks_confirmed).toBe(false);
+    expect(closed?.breaks).toHaveLength(0);
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+
+  // 2. No saved rows at the start: nothing listed, box unticked -> the list stays omitted.
+  const run2 = await seedRunning(employeeSeed, 3, []);
+  try {
+    await page.reload();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = checkOut();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('[data-break]')).toHaveCount(0);
+    await expect(dialog.getByText('The saved breaks you removed are deleted at Check out.')).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' }).click();
+    await expect(dialog).toHaveCount(0);
+    const sent = bodies[1];
+    const closed = await sessionOf(run2);
+    rec(FILE, `B1 case no saved rows: request=${JSON.stringify(sent)} 'breaks' in body=${sent !== undefined && 'breaks' in sent} status=${statuses[1]} unconfirmed=${closed?.breaks_confirmed === false}`);
+    expect(sent).toEqual({ breaks_confirmed: false, expected_version: run2.version });
+    expect(sent !== undefined && 'breaks' in sent).toBe(false);
+    expect(statuses[1]).toBe(200);
+  } finally {
+    await employeeSeed.clearSessions(run2.todayLocal);
+  }
+
+  // 3. A saved row that ends after now, removed: also no 422 (case 1 contained one; here only that single row).
+  const run3 = await seedRunning(employeeSeed, 3, [[177, 5]]);
+  try {
+    await page.reload();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = checkOut();
+    await expect(dialog.locator('[data-break]')).toHaveCount(1);
+    await dialog.getByRole('button', { name: 'Remove break 1', exact: true }).click();
+    await expect(dialog.getByText('The saved breaks you removed are deleted at Check out.')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Check out, breaks unconfirmed' }).click();
+    await expect(dialog).toHaveCount(0);
+    const closed = await sessionOf(run3);
+    rec(FILE, `B1 case single future saved row removed: request=${JSON.stringify(bodies[2])} status=${statuses[2]} rows=${closed?.breaks.length} unconfirmed=${closed?.breaks_confirmed === false}`);
+    expect(bodies[2]).toEqual({ breaks: [], breaks_confirmed: false, expected_version: run3.version });
+    expect(statuses[2]).toBe(200);
+    expect(closed?.breaks).toHaveLength(0);
+  } finally {
+    await employeeSeed.clearSessions(run3.todayLocal);
+  }
+});
+
+/* ---- F-UX3B-2 ----------------------------------------------------------------------------------------------------- */
+
+for (const [end, expected] of [['12:00', 1], ['14:00', 2], ['18:00', 3], ['10:30', 0]] as const) {
+  test(`F-UX3B-2: "Confirm breaks" on 09:00-${end} lists ${expected} row(s)`, async ({ page, employeeSeed, signInThroughUi }) => {
+    const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+    expect(date).not.toBe('');
+    try {
+      await employeeSeed.createSession(date, '09:00', end, null);
+      await signInThroughUi();
+      await page.getByLabel('Open a day').fill(date);
+      await page.getByRole('button', { name: 'Open day', exact: true }).click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toBeVisible();
+      await editor.getByRole('button', { name: /^Confirm breaks/ }).click();
+      const form = page.getByRole('dialog', { name: 'Edit session', exact: true });
+      await expect(form).toBeVisible();
+      await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
+      await settle(page);
+      const rows = form.locator('[data-break]');
+      const count = await rows.count();
+      const starts: string[] = [];
+      const minutes: string[] = [];
+      for (let index = 1; index <= count; index += 1) {
+        starts.push(await form.getByLabel(`Break ${index} start time`, { exact: true }).inputValue());
+        minutes.push(await form.getByLabel(`Break ${index} minutes`, { exact: true }).inputValue());
+      }
+      rec(FILE, `B2 09:00-${end}: rows=${count} starts=${JSON.stringify(starts)} minutes=${JSON.stringify(minutes)}`);
+      expect(count).toBe(expected);
+      if (expected === 0) {
+        await form.getByRole('button', { name: 'Save', exact: true }).click();
+        const notice = page.getByRole('alertdialog', { name: 'No breaks listed' });
+        await expect(notice).toBeVisible();
+        rec(FILE, `B2 09:00-${end}: Save asks through the "No breaks listed" notice: yes`);
+        await expect(page.getByRole('alertdialog', { name: 'Save this session?' })).toHaveCount(0);
+      }
+    } finally {
+      await employeeSeed.clearSessions(date);
+    }
+  });
+}

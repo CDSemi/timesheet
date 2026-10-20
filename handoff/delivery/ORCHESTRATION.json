@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "ux3-round-fix4",
+  "phase": "ux3-round-fix5",
   "coordinator_session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +28,7 @@
   "current_source_digest": "b35dddd5f5d4a8d3dccf52daa7e397969939748b1eb0151263fd50febf7ebb48",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX3-FIX4-FREEZE",
+  "next_task_id": "WP5-UX3-FIX5-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-16",
@@ -316,7 +316,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "ceb86b6b18bd0e8fabd93f47672cd87f3899b92f",
+    "last_commit": "86294412ce15e221f6e0fbc782f0b52a332352be",
     "unpushed": []
   },
   "owner_decisions": [
@@ -506,6 +506,16 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-19",
+      "basis": "WP5-UX3-REGATE3 FAIL on item 4 only: FIX4's new test day-editor.spec.ts:3895 depends on the time of day (between 00:00 and about 03:00 in the reporting zone its seeded session crosses midnight and the phone shows chips); everything else passed, including every FIX4 behaviour and mutant. The owner asked on 2026-10-19 why so much runs; keep the remaining work minimal.",
+      "decision": "WP5-UX3-FIX5, test only, by the FIX4 author resumed (timesheet-worker-high, sonnet; it knows the test): the test passes at any hour on both projects and still catches M5b. Then WP5-UX3-FIX5-FREEZE and a minimal WP5-UX3-REGATE4: prove that only tests/e2e/day-editor.spec.ts changed since 8629441 and that the client, server and domain builds are byte-identical to 8629441's, so REGATE3's passed items (drill, AC-13, boundary, FIX4 behaviours, axe, budgets) carry forward; rerun only npm test, the real-clock full e2e on both projects, the FULL runs at 2026-11-01T08:45Z and 2026-10-26T16:00Z, the fixed test alone at night and midday instants with M5b, and the validators. Then WP5-UX3-AUDIT-INT on the FIX5 freeze."
+    },
+    {
+      "date": "2026-10-19",
+      "basis": "WP5-UX3-FIX4 frozen at 8629441 (digest 245e9459): 3 client files (the More panel focus-out close, the Sign out padding, a comment), 3 e2e specs and the docs/10 figure; no time logic, server, domain or request change. Two full area rechecks plus an integration audit would re-audit mostly unchanged ground a third time.",
+      "decision": "WP5-UX3-REGATE3 (verifier, sonnet) is a reduced package-final gate: gate item 1 in full, items 2 and 3, FULL simulated-clock runs at a window day and a DST change only, the FIX4 behaviours and their mutant guards, the round-specific checks FIX4 touches, and a full axe scan. Then no separate A3/B3: the fresh opus WP5-UX3-AUDIT-INT also rechecks F-UX3A2-1..3 and F-UX3B2-1 and FIX4's diff, depends on WP5-UX3-REGATE3 only, and its PASS re-accepts WP5 (the FIX REQUIRED audits A, B, A2, B2 stay as history)."
+    },
     {
       "date": "2026-10-19",
       "basis": "WP5-UX3-AUDIT-A2 FIX REQUIRED on ceb86b6 / b35dddd5 (F-UX3A2-1 Medium: the More panel stays open after focus leaves it and hides focused pickers; F-UX3A2-2 Low: two focus-under-hover rules unguarded by tests; F-UX3A2-3 Low: Sign out 3px out of line; risk R-A2-1: the hover scan gates textually, M6b survives) and WP5-UX3-AUDIT-B2 FIX REQUIRED (F-UX3B2-1 Low: the removal note's absence on a plain Check out is untested, M6a survives; risk R-B2-1: no test pins 'Confirm breaks' on today's ended session, M5b survives; R-B2-4: suggestedRows lacks the test-only comment the FIX2 decision asked for). REGATE2 observation 3: docs/10 line 240 names the FIX2 build.",
@@ -22118,18 +22128,16 @@
       "package": "WP5",
       "kind": "audit",
       "status": "pending",
-      "reviewed_commit": "ceb86b6b18bd0e8fabd93f47672cd87f3899b92f",
+      "reviewed_commit": "86294412ce15e221f6e0fbc782f0b52a332352be",
       "depends_on": [
-        "WP5-UX3-REGATE2",
-        "WP5-UX3-AUDIT-A2",
-        "WP5-UX3-AUDIT-B2"
+        "WP5-UX3-REGATE3"
       ],
       "profile": "timesheet-auditor",
       "requested_model": "opus",
       "requested_effort": "xhigh",
       "model_override_reason": null,
       "routing": {
-        "size": "M",
+        "size": "L",
         "risk": "M",
         "novelty": false
       },
@@ -22153,7 +22161,7 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Fresh opus auditor on ceb86b6 / b35dddd5 after both rechecks (AUDIT-A2, AUDIT-B2) PASS: the integration pass whose PASS re-accepts WP5 (WP5-UX2-AUDIT2 and the seven audits that pointed to it name this audit in superseded_by)."
+      "next_action": "Fresh opus auditor on 8629441 / 245e9459 after the WP5-UX3-REGATE3 PASS: recheck of F-UX3A2-1..3, F-UX3B2-1 and FIX4's diff, plus the integration pass whose PASS re-accepts WP5 (WP5-UX2-AUDIT2 and the seven audits that pointed to it name this audit in superseded_by)."
     },
     {
       "id": "WP5-UX3-FIX1",
@@ -23045,7 +23053,7 @@
       "id": "WP5-UX3-FIX4-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX3-FIX4"
       ],
@@ -23058,10 +23066,10 @@
         "risk": "L",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "aab673ab47aebd1c2",
       "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
       "attempt": 1,
       "owned_paths": [
@@ -23070,13 +23078,147 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX3-FIX4-FREEZE.md",
       "report": "handoff/delivery/tasks/WP5-UX3-FIX4-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-FIX4-FREEZE/checks.txt"
+      ],
       "baseline_commit": "ceb86b6b18bd0e8fabd93f47672cd87f3899b92f",
+      "branch": "main",
+      "commit_sha": "86294412ce15e221f6e0fbc782f0b52a332352be",
+      "pushed": true,
       "source_digest": "245e9459a06c7d36ceb780d5e0de379be74303081d1d93b24c5469c24eca3f90",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed 8629441 on main (remote equal; no tag): 581 staged files (8 outside handoff, 8 modified handoff records, 10 new records, 555 evidence: GOV2-FREEZE 15, GOV2-GATE 1, GOV2-AUDIT 18, REGATE2 272, AUDIT-A2 106, AUDIT-B2 110, FIX4 33; every name .txt or -synthetic.png); digest 245e9459 (833 files) before git add and on HEAD via ls-tree; node v24.21.0; precommit 581 files 0 findings, diff --cached --check, JSON parse, validate_orchestration, check_recovery (106), preflight exit 0; no fix, masking or stop.",
+      "next_action": "None; WP5-UX3-REGATE3 on 8629441 / 245e9459."
+    },
+    {
+      "id": "WP5-UX3-REGATE3",
+      "package": "WP5",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "86294412ce15e221f6e0fbc782f0b52a332352be",
+      "depends_on": [
+        "WP5-UX3-FIX4-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a7261fcaf1e6b7464",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX3-REGATE3.md",
+        "handoff/delivery/evidence/WP5-UX3-REGATE3"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-REGATE3.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-REGATE3.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-REGATE3/log-sweep-full-1101.txt"
+      ],
+      "baseline_commit": "86294412ce15e221f6e0fbc782f0b52a332352be",
+      "source_digest": "245e9459a06c7d36ceb780d5e0de379be74303081d1d93b24c5469c24eca3f90",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "FAIL",
+      "gate_notes": "FAIL on gate item 4 only (NAS items NOT VERIFIED) on 8629441, digest 245e9459 (833 files) identical before and after. The FULL run at 2026-11-01T08:45Z (01:45 LA) failed one test: mobile tests/e2e/day-editor.spec.ts:3895, the new FIX4 test 'Confirm breaks on a session that ended earlier today' (expected the 'Break 1 start time' field, not found). Wall-clock dependence of the test: it seeds a session that started 3 hours ago, so between local midnight and about 03:00 the session crosses midnight and the 390px phone project lists the breaks as chips (overnight layout); repeated alone it failed twice at 01:45 and at 01:00 and passed at 12:00; the desktop project passed at every instant; a real-clock full run between 00:00 and 03:00 LA would fail too. Not a product defect ('Confirm breaks' measured correct). Passed: ci, lint, verify; real-clock full e2e 651 passed / 67 skipped / 0 failed (desktop 329/30, mobile 322/37); AC-13 x3 and Tokyo, New York; drill 208 PASS, Docker clean; check_recovery 106; npm test x3; server/domain diff empty and dist/server, dist/domain identical to a643794; scope exactly the 8 FIX4 paths, no assertion weakened, no skip/fixme/only; 2026-10-26T16:00Z FULL 0 failed; FIX4 behaviours (More closes after Tab past Sign out, 41 stops, 0 hidden; Escape returns to More; no flicker; Sign out aligned within 0.0px; rings under the pointer; the Check out note; Confirm breaks today) and mutants M1, M4, M5, M6a, M6b, M5b each failing; axe 26 states x 4 themes only the justified target-size item; 44px and first-screen budgets hold. Slips: pipes into head and null-device redirects (no effect); a first probe repaired and rerun. Nothing left running.",
+      "next_action": "None; WP5-UX3-FIX5 (test only, same worker as FIX4), WP5-UX3-FIX5-FREEZE, then the minimal WP5-UX3-REGATE4."
+    },
+    {
+      "id": "WP5-UX3-FIX5",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX3-FIX4-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a8f4f5e3891cdacbf",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "tests/e2e/day-editor.spec.ts",
+        "handoff/delivery/tasks/WP5-UX3-FIX5.md",
+        "handoff/delivery/evidence/WP5-UX3-FIX5"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-FIX5.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-FIX5.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-FIX5/10-real.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX5/sim-0030.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX5/sim-0145.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX5/sim-0200.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX5/sim-1200.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX5/sim-2330.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX5/mut-0145-result.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX5/mut-1200-result.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX5/mut-real-result.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX5/20-day-editor-full.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX5/50-verify.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX5/60-digest.txt"
+      ],
+      "baseline_commit": "86294412ce15e221f6e0fbc782f0b52a332352be",
+      "source_digest": "95323f2d44a2a5f0cc6708f281911858b3b8a8ed1d0c1b7fc32c8a4a0174b15f",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented, test only (reported, not independent proof): only tests/e2e/day-editor.spec.ts changed. The test (now :3941) creates its own synthetic person in a fixed-offset Etc/GMT reporting zone chosen from the UTC hour so local time is about 12:xx (offset ((23 - utcHour) mod 24) - 11), a second calendar via the fixtures' seedSecondCalendar plus a local helper seedFirstCalendarVersion that calls the built server's createCalendarVersion in a child process (test code only, like the fixtures), the starter policy, a session from 3 h ago to 30 min ago; asserts the zone and that start and end lie on the server's today_local, then the FIX4 checks at full strength (one suggested break, '1 break (15 min)', the PUT body, the stored session); rows layout at every hour; the finally clean-up dropped (a new person per run). Passes on both projects at 00:30, 01:45, 02:00, 12:00 and 23:30 PDT (FIX10 clock) and on the real clock; M5b (applied to the built bundle) fails it on both projects at 01:45 and 12:00 PDT and on the real clock. day-editor.spec.ts full 120 passed / 18 skipped / 0 failed; npm test 2141; lint, typecheck 0; verify 0; digest 95323f2d (833 files). Slips: the baseline digest was not run before the edit; one null-device redirect.",
+      "next_action": "None; WP5-UX3-FIX5-FREEZE (committer alone), then the minimal WP5-UX3-REGATE4."
+    },
+    {
+      "id": "WP5-UX3-FIX5-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX3-FIX5"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX3-FIX5-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX3-FIX5-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-FIX5-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-FIX5-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "86294412ce15e221f6e0fbc782f0b52a332352be",
+      "source_digest": "95323f2d44a2a5f0cc6708f281911858b3b8a8ed1d0c1b7fc32c8a4a0174b15f",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Committer: stage the 8 FIX4 paths, the listed handoff records, review pairs and seven evidence folders, run the checks, commit on main and push."
+      "next_action": "Committer: stage tests/e2e/day-editor.spec.ts and the listed handoff records and three evidence folders, run the checks, commit on main and push."
     }
   ],
   "future_packages": [

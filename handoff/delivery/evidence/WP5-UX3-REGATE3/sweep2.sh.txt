@@ -1,0 +1,23 @@
+# Usage: bash sweep2.sh   (after the real-clock main run, rest, probes, drill; sequential, each run with its own output folder)
+# America/Los_Angeles instants (PDT -7 until 2026-11-01 02:00, PST -8 after; 2027-03-14 02:00 PST->PDT).
+. <task>/env.sh
+cd $T
+PROBE=$T/export-probe
+run() {
+  label=$1; instant=$2; shift 2
+  bash run-shift.sh "$label" "$instant" "$@" > "logs/sweep-$label.txt" 2>&1
+  echo "$label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/sweep-progress.txt
+}
+control() {
+  label=$1; instant=$2; today=$3
+  CONTROL_TODAY=$today SHIFT_EXPORT=$PROBE bash run-shift.sh "ctl-$label" "$instant" tests/e2e/zz-control.spec.ts > "logs/control-$label.txt" 2>&1
+  echo "control $label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/sweep-progress.txt
+}
+FIVE="tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/day-editor.spec.ts tests/e2e/shell.spec.ts tests/e2e/sharing.spec.ts"
+cp zz-control.spec.ts $PROBE/tests/e2e/zz-control.spec.ts
+SHIFT_EXPORT=$PROBE bash run-shift.sh ctl-real real tests/e2e/zz-control.spec.ts > logs/control-real.txt 2>&1
+control i2 2026-10-26T16:00:00Z 2026-10-26
+control i4 2026-11-01T08:45:00Z 2026-11-01
+run full-1026 2026-10-26T16:00:00Z
+run full-1101 2026-11-01T08:45:00Z
+echo done > logs/sweep.done

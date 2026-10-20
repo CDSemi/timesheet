@@ -1,0 +1,76 @@
+. <task>/env.sh
+# FIX4 mutants, scratch copy export-mut only (a git archive of the target). Each is applied alone, built, run against the relevant spec on both
+# projects, then the source is restored from export-v (cmp) and the build is repeated.
+export NODE_OPTIONS="--trace-deprecation"
+M=$T/export-mut
+O=$T/out
+mkdir -p $M
+cd $REPO; git archive $TARGET | tar -x -C $M
+cd $M
+npm ci > $O/70-mut-ci.txt 2>&1; echo "mut ci exit $?" > $O/70-mutants.txt
+npm run build > $O/70-mut-build0.txt 2>&1; echo "baseline build exit $?" >> $O/70-mutants.txt
+APP=src/client/components/AppShell.tsx
+CSS=src/client/styles.css
+COD=src/client/components/ClockOutDialog.tsx
+BRM=src/client/components/breakRowsModel.ts
+
+restore() {
+  for f in $APP $CSS $COD $BRM; do cp $T/export-v/$f $M/$f; done
+  for f in $APP $CSS $COD $BRM; do cmp $T/export-v/$f $M/$f || echo "RESTORE MISMATCH $f" >> $O/70-mutants.txt; done
+}
+
+runmut() {
+  label=$1; spec=$2
+  cd $M
+  npm run build > $O/70-mut-$label-build.txt 2>&1; echo "== $label build exit $?" >> $O/70-mutants.txt
+  mkdir -p $T/pw-mut-$label $T/shots-mut-$label
+  export E2E_SCREENSHOT_DIR="$TW\\shots-mut-$label"
+  node.exe node_modules/@playwright/test/cli.js test $spec --output="$TW\\pw-mut-$label" > $T/logs/mut-$label.txt 2>&1
+  echo "== $label $spec exit $?" >> $O/70-mutants.txt
+  grep -E "^\s+[0-9]+ (passed|failed|skipped|flaky)" $T/logs/mut-$label.txt >> $O/70-mutants.txt
+  grep -E "^\s+[0-9]+\) \[" $T/logs/mut-$label.txt >> $O/70-mutants.txt
+  restore
+}
+
+# M1: the More-panel close on focus leaving the bar removed (the condition line of onTabBarBlur)
+echo "M1 line: $(sed -n 173p $APP)" >> $O/70-mutants.txt
+sed -i '173s/.*/    void next;/' $APP
+git --no-pager diff --no-index --stat $T/export-v/$APP $M/$APP >> $O/70-mutants.txt 2>&1
+runmut M1 tests/e2e/shell.spec.ts
+
+# M4: the .button-link:focus-visible:hover rule removed
+echo "M4 lines: $(sed -n 4587,4590p $CSS | tr '\n' '~')" >> $O/70-mutants.txt
+sed -i '4587,4590d' $CSS
+git --no-pager diff --no-index --stat $T/export-v/$CSS $M/$CSS >> $O/70-mutants.txt 2>&1
+runmut M4 tests/e2e/hover.spec.ts
+
+# M5: the .shell-tabs .tab:focus-visible:hover rule removed
+echo "M5 lines: $(sed -n 794,797p $CSS | tr '\n' '~')" >> $O/70-mutants.txt
+sed -i '794,797d' $CSS
+git --no-pager diff --no-index --stat $T/export-v/$CSS $M/$CSS >> $O/70-mutants.txt 2>&1
+runmut M5 tests/e2e/hover.spec.ts
+
+# M6b: tbody tr:hover under (hover: hover), (pointer: coarse)
+echo "M6b line: $(sed -n 1478p $CSS)" >> $O/70-mutants.txt
+sed -i '1478s/.*/@media (hover: hover), (pointer: coarse) {/' $CSS
+git --no-pager diff --no-index --stat $T/export-v/$CSS $M/$CSS >> $O/70-mutants.txt 2>&1
+runmut M6b tests/e2e/hover.spec.ts
+
+# M6a: the removal note shown on every Check out
+echo "M6a line: $(sed -n 279p $COD)" >> $O/70-mutants.txt
+sed -i '279s/{removedSaved && (/{(removedSaved || true) \&\& (/' $COD
+echo "M6a after: $(sed -n 279p $COD)" >> $O/70-mutants.txt
+git --no-pager diff --no-index --stat $T/export-v/$COD $M/$COD >> $O/70-mutants.txt 2>&1
+runmut M6a tests/e2e/day-editor.spec.ts
+
+# M5b: a past-day gate added to confirmBreaksRows (nothing listed for a session that ended on today's date in its input zone)
+echo "M5b line: $(sed -n 587p $BRM)" >> $O/70-mutants.txt
+sed -i "587s/.*/  if (policy === undefined || session.end_utc === null || session.breaks_confirmed || session.breaks.length > 0) return [];\n  const dayOf = (instant: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: session.input_zone }).format(instant);\n  if (dayOf(new Date(session.end_utc)) === dayOf(new Date())) return [];/" $BRM
+echo "M5b after: $(sed -n 587,590p $BRM | tr '\n' '~')" >> $O/70-mutants.txt
+git --no-pager diff --no-index --stat $T/export-v/$BRM $M/$BRM >> $O/70-mutants.txt 2>&1
+runmut M5b tests/e2e/day-editor.spec.ts
+
+cd $M
+npm run build > $O/70-mut-final-build.txt 2>&1; echo "== final rebuild after restore exit $?" >> $O/70-mutants.txt
+for f in $APP $CSS $COD $BRM; do cmp $T/export-v/$f $M/$f && echo "restored $f identical" >> $O/70-mutants.txt; done
+echo mutants-done > $O/mutants.done

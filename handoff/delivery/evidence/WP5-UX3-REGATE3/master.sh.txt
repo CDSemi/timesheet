@@ -1,0 +1,21 @@
+. <task>/env.sh
+cd $T
+step() { echo "$1 $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/master-progress.txt; }
+step start
+bash chainA.sh > logs/chainA.txt 2>&1; step chainA-done
+bash run-rest.sh > logs/rest.txt 2>&1; step rest-done
+bash cmp-dist.sh > logs/cmp-dist.txt 2>&1; step cmp-done
+docker version --format 'server {{.Server.Version}}' > out/15-docker-version.txt 2>&1
+bash cfg.sh > logs/cfg.txt 2>&1
+bash keys.sh > logs/keys.txt 2>&1
+bash run-drill.sh > logs/drill.txt 2>&1; step drill-done
+P=ts-wp5-ux3regate3
+docker compose -p $P down -v > out/14-compose-down.txt 2>&1; echo "compose down exit $?" >> out/14-compose-down.txt
+docker image rm $P-timesheet:drill > out/14-image-rm.txt 2>&1; echo "image rm exit $?" >> out/14-image-rm.txt
+docker ps --all --filter name=$P > out/15-docker-ps.txt 2>&1
+docker images > out/15-images-after.txt 2>&1
+docker network ls --filter name=$P > out/15-networks.txt 2>&1
+docker volume ls --filter name=$P > out/15-volumes.txt 2>&1
+step cleanup-done
+bash sweep2.sh > logs/sweep2.txt 2>&1; step sweep-done
+echo master-done > out/master.done

@@ -1,0 +1,7 @@
+// Prints the zone seen by a child process started the same way run-tz.mjs starts vitest (TZ in env).
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+const zone = process.argv[2];
+const child = fileURLToPath(new URL('./tzchild.mjs', import.meta.url));
+const r = spawnSync(process.execPath, [child], { env: { ...process.env, TZ: zone }, stdio: 'inherit' });
+process.exit(r.status ?? 1);

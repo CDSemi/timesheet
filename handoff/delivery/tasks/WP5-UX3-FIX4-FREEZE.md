@@ -161,3 +161,14 @@ Append to this brief:
 - any fix, masking or stop reason.
 
 ## Results
+
+- Pre-HEAD ceb86b6b18bd0e8fabd93f47672cd87f3899b92f (= origin/main). Post-HEAD / commit
+  86294412ce15e221f6e0fbc782f0b52a332352be, pushed to main, remote SHA identical.
+- Digest before add and on the new HEAD via git ls-tree: 245e9459a06c7d36ceb780d5e0de379be74303081d1d93b24c5469c24eca3f90 (833 files).
+- Staged 581: 8 outside handoff, 8 modified handoff records, 10 new records (incl. this brief),
+  555 evidence files. Evidence folders: GOV2-FREEZE 15, GOV2-GATE 1, GOV2-AUDIT 18,
+  REGATE2 272, AUDIT-A2 106, AUDIT-B2 110, FIX4 33. All names .txt or -synthetic.png.
+- Checks, all exit 0: node v24.21.0; precommit-check PASS (581 files, 0 findings);
+  diff --cached --check; JSON parse; validate_orchestration PASS; check_recovery PASS (106);
+  validate_package --preflight PASS; ls-tree digest matches.
+- No masking, no whitespace fix, no stop. Evidence in evidence/WP5-UX3-FIX4-FREEZE/ (unstaged).

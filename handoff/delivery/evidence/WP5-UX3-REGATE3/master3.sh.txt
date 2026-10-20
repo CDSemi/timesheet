@@ -1,0 +1,12 @@
+. <task>/env.sh
+cd $T
+while [ ! -f out/master2.done ]; do sleep 20; done
+step() { echo "$1 $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/master3-progress.txt; }
+step start
+bash run-probe2.sh fix4b zz-fix4.spec.ts real > logs/probe-fix4b.txt 2>&1; step fix4b-done
+G='ended earlier today lists the suggested break'
+bash run-shift.sh solo-1101 2026-11-01T08:45:00Z tests/e2e/day-editor.spec.ts -g "$G" > logs/solo-1101.txt 2>&1; step solo-1101-done
+bash run-shift.sh solo-1101b 2026-11-01T08:45:00Z tests/e2e/day-editor.spec.ts -g "$G" > logs/solo-1101b.txt 2>&1; step solo-1101b-done
+bash run-shift.sh solo-1026e 2026-10-26T08:00:00Z tests/e2e/day-editor.spec.ts -g "$G" > logs/solo-1026e.txt 2>&1; step solo-1026e-done
+bash run-shift.sh solo-1026n 2026-10-26T19:00:00Z tests/e2e/day-editor.spec.ts -g "$G" > logs/solo-1026n.txt 2>&1; step solo-1026n-done
+echo master3-done > out/master3.done

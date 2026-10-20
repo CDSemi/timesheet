@@ -1,0 +1,13 @@
+. <task>/env.sh
+cd $T
+while [ ! -f out/master.done ]; do sleep 20; done
+step() { echo "$1 $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/master2-progress.txt; }
+step start
+P() { label=$1; spec=$2; inst=$3; shift 3; bash run-probe2.sh "$label" "$spec" "$inst" "$@" > "logs/probe-$label.txt" 2>&1; echo "probe $label finished $(date -u +%Y-%m-%dT%H:%M:%SZ) exit-line: $(grep -E '^exit=' logs/probe-$label.txt)" >> logs/master2-progress.txt; }
+P fix4 zz-fix4.spec.ts real
+P audit zz-audit.spec.ts 2026-10-26T16:00:00Z
+P a11y zz-a11y.spec.ts 2026-10-26T16:00:00Z
+P a11y2 zz-a11y2.spec.ts 2026-10-26T16:00:00Z
+P phone zz-phone.spec.ts real
+bash mutants.sh > logs/mutants.txt 2>&1; step mutants-done
+echo master2-done > out/master2.done

@@ -1,0 +1,19 @@
+-  const rules = await page.evaluate<{ ungated: string[]; gated: string[] }>(`(() => {
+-    const result = { ungated: [], gated: [] };
+-    const visit = (list, hoverOnly) => {
+-      for (const rule of Array.from(list)) {
+-        if (rule instanceof CSSMediaRule) {
+-          visit(rule.cssRules, hoverOnly || /hover:\\s*hover/.test(rule.media.mediaText));
+-        } else if (rule instanceof CSSStyleRule) {
+-          if (rule.selectorText.includes(':hover')) (hoverOnly ? result.gated : result.ungated).push(rule.selectorText);
+-        } else if (rule instanceof CSSGroupingRule) {
+-          visit(rule.cssRules, hoverOnly);
+-        }
+-      }
+-    };
+-    for (const sheet of Array.from(document.styleSheets)) visit(sheet.cssRules, false);
+-    return result;
+-  })()`);
+-async function expectRingUnderPointer(page: Page, control: Locator, kind: 'shared' | 'inset', label: string): Promise<void> {
+-    console.log(`ring under the pointer ${situation.name}: date, Category picker, phone day button and the Escape return keep their ring`);
+-        return { gap: words.left - icon.right, offset: icon.top + icon.height / 2 - (words.top + words.height / 2) };

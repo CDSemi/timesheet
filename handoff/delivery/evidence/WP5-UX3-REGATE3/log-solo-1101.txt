@@ -1,0 +1,49 @@
+== solo-1101: real start 2026-10-20T01:32:56Z, simulated start 2026-11-01T08:45:00Z, AB8_SHIFT_MS=1062723854
+process clock 2026-11-01T08:45:00.097Z (Date.now 1793522700107); America/Los_Angeles Sun, 2026-11-01, 01:45; shift ms 1062723854; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts -g ended earlier today lists the suggested break --output=<task>/pw-solo-1101
+
+Running 2 tests using 2 workers
+
+  ok 1 [desktop] › tests\e2e\day-editor.spec.ts:3895:1 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it (1.5s)
+  x  2 [mobile] › tests\e2e\day-editor.spec.ts:3895:1 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it (8.4s)
+
+
+  1) [mobile] › tests\e2e\day-editor.spec.ts:3895:1 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it
+
+    Error: expect(locator).toHaveValue(expected) failed
+
+    Locator: getByRole('dialog', { name: 'Edit session', exact: true }).getByLabel('Break 1 start time', { exact: true })
+    Expected: "00:45:03"
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveValue" getByRole('dialog', { name: 'Edit session', exact: true }).getByLabel('Break 1 start time', { exact: true }) with timeout 7000ms
+      - waiting for getByRole('dialog', { name: 'Edit session', exact: true }).getByLabel('Break 1 start time', { exact: true })
+
+
+      3920 |     await expect(form.locator('[data-break]'), 'the one suggestion inside the session is listed').toHaveCount(1);
+      3921 |     const row = breakRow(form, 1);
+    > 3922 |     await expect(row.time).toHaveValue(wallClock(instantAt(run.startMs + 120 * 60_000), LA));
+           |                            ^
+      3923 |     await expect(row.minutes).toHaveValue('15');
+      3924 |     await expect(row.row).toContainText('suggested');
+      3925 |     expect(puts).toEqual([]);
+        at <task>\export-v\tests\e2e\day-editor.spec.ts:3922:28
+
+    Error Context: ..\pw-solo-1101\day-editor--Confirm-breaks-3368d-eak-inside-it-Save-sends-it-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-solo-1101\day-editor--Confirm-breaks-3368d-eak-inside-it-Save-sends-it-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-solo-1101\day-editor--Confirm-breaks-3368d-eak-inside-it-Save-sends-it-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [mobile] › tests\e2e\day-editor.spec.ts:3895:1 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it
+  1 passed (11.0s)
+exit=1
+process clock 2026-11-01T08:45:11.514Z (Date.now 1793522711524); America/Los_Angeles Sun, 2026-11-01, 01:45; shift ms 1062723854; instanceof true
+== solo-1101 real end 2026-10-20T01:33:07Z

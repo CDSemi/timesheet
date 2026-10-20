@@ -1,0 +1,317 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { expect, newPerson, test } from './fixtures.ts';
+import { note, openAccountMenu, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX3-GATE task-local probe (never part of the repository): the phone checks. First-screen budgets at 390x844, 44px targets
+ * and sideways scroll at phone widths, the session dialog at 390x844 with three suggested breaks, and rows versus chips by width.
+ * Observations are appended to GATE_OUT/phone.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const SHARE_ITEMS = { timesheets: 'view', ot_read: false, pdf_download: false };
+const OUT = process.env.GATE_OUT ?? '';
+const rec = (line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'phone.txt'), `${line}\n`);
+};
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 150))))');
+}
+
+/* ---- first screen budgets ------------------------------------------------------------------------------------------ */
+for (const [zoneState, zone] of [
+  ['zone note', 'Asia/Ho_Chi_Minh'],
+  ['no zone note', 'America/Los_Angeles'],
+] as const) {
+  for (const withShare of [false, true]) {
+    test.describe(`first screen ${zoneState} share=${withShare}`, () => {
+      test.use({ timezoneId: zone });
+      test('landing and away at 390x844', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+        test.skip(!isMobile, 'Phone only');
+        test.setTimeout(120_000);
+        await page.setViewportSize({ width: 390, height: 844 });
+        const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Budget Reader', signature: 'none' });
+        const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Budget Owner', signature: 'none' });
+        if (withShare) await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
+        const periods = await me.api.call<{ today_local: string; current: { payroll_date: string }; in_progress: { payroll_date: string } }>('GET', '/api/periods/current');
+        await signInPageAs(me.account, '#/timesheet');
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        await expect(page.locator('[data-zone-note]')).toHaveCount(zone === 'Asia/Ho_Chi_Minh' ? 1 : 0);
+        for (const state of ['landing', 'away'] as const) {
+          if (state === 'away') {
+            await page.getByRole('button', { name: 'Next period', exact: true }).click();
+            await expect(page.getByRole('button', { name: /^(Current period|Today)$/ })).toHaveCount(1);
+            await expect(page.locator('[data-day]')).toHaveCount(14);
+          }
+          await page.evaluate('window.scrollTo(0, 0)');
+          await settle(page);
+          const first = await page.locator('[data-day]').first().boundingBox();
+          const tabs = await page.locator('.shell-tabs').boundingBox();
+          const bar = await page.locator('header.shell-bar').boundingBox();
+          const bottom = (first?.y ?? 0) + (first?.height ?? 0);
+          const headroom = (tabs?.y ?? 0) - bottom;
+          rec(`FIRST-SCREEN 390x844 ${state} share=${withShare} ${zoneState}: first day row bottom ${bottom.toFixed(1)} of tab bar top ${tabs?.y}, headroom ${headroom.toFixed(1)}px, shell bar ${bar?.height}px, today_local ${periods.today_local}, current ${periods.current.payroll_date} in-progress ${periods.in_progress.payroll_date}`);
+          expect(bottom).toBeLessThanOrEqual((tabs?.y ?? 0) + 0.5);
+        }
+      });
+    });
+  }
+}
+
+/* ---- sideways scroll at nine widths, 44px targets below 768 ---------------------------------------------------------- */
+const TARGETS = `(() => {
+  const sel = 'button, a[href], select, textarea, input:not([type="hidden"]), summary, [role="button"], [role="tab"], [role="switch"], [role="link"], [role="checkbox"], [role="radio"], [role="menuitem"]';
+  const small = [];
+  let count = 0;
+  for (const el of document.querySelectorAll(sel)) {
+    let r = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    if (style.visibility === 'hidden' || style.display === 'none' || !el.checkVisibility()) continue;
+    // a checkbox or radio is hit through its label; a switch input is hit through its track
+    if (el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')) {
+      const label = el.closest('label') ?? (el.id ? document.querySelector('label[for="' + el.id + '"]') : null);
+      if (label) { const lr = label.getBoundingClientRect(); if (lr.width * lr.height > r.width * r.height) r = lr; }
+    }
+    if (r.width < 2 || r.height < 2) continue;
+    // WCAG 2.5.8 exempts an inline link in a sentence
+    const inline = el.tagName === 'A' && getComputedStyle(el).display === 'inline' && el.parentElement && (el.parentElement.textContent ?? '').trim().length > (el.textContent ?? '').trim().length + 6;
+    count += 1;
+    if (r.width < 43.9 || r.height < 43.9) small.push({ name: ((el.getAttribute('aria-label') || el.textContent || el.getAttribute('name') || el.tagName) + '').replace(/\\s+/g, ' ').trim().slice(0, 32), tag: el.tagName.toLowerCase(), cls: typeof el.className === 'string' ? el.className.slice(0, 30) : '', w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10, inline: Boolean(inline) });
+  }
+  const root = document.documentElement;
+  return { count, small, scroll: root.scrollWidth, client: root.clientWidth };
+})()`;
+
+interface Targets {
+  count: number;
+  small: Array<{ name: string; tag: string; cls: string; w: number; h: number; inline: boolean }>;
+  scroll: number;
+  client: number;
+}
+
+for (const width of [320, 360, 375, 390, 430, 600, 767]) {
+  test(`44px targets and sideways scroll at ${width}px`, async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+    test.skip(!isMobile, 'Phone project');
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width, height: 844 });
+    const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Target Reader', signature: 'none' });
+    const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Target Owner', signature: 'none' });
+    await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
+    const days = await me.api.displayedPeriodFreeWorkdays();
+    const [d1 = '', d2 = '', d3 = ''] = days;
+    await me.api.seedCompleteDay(d1);
+    await me.api.seedCompleteDay(d2);
+    await signInPageAs(me.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const states: Array<[string, Targets]> = [];
+    const grab = async (name: string) => {
+      await settle(page);
+      states.push([name, await page.evaluate<Targets>(TARGETS)]);
+    };
+    await grab('timesheet (share bar on)');
+    await page.getByRole('button', { name: 'Change several days' }).click();
+    await page.getByLabel(`Select ${d1}`).check();
+    await page.getByLabel(`Select ${d2}`).check();
+    await grab('timesheet batch selection');
+    await page.getByRole('button', { name: 'Done' }).click();
+    await page.getByLabel('Open a day').fill(d3);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await grab('Day editor sheet');
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = page.getByRole('dialog', { name: 'New session', exact: true });
+    await expect(form).toBeVisible();
+    const chip = form.locator('[data-break="1"] button.break-chip');
+    const layout = await form.getByRole('list', { name: 'Break list' }).getAttribute('data-layout');
+    await grab(`session dialog (${layout})`);
+    if ((await chip.count()) > 0) {
+      await chip.click();
+      await expect(page.getByRole('dialog', { name: 'Break 1', exact: true })).toBeVisible();
+      await grab('break sub-dialog');
+      await page.keyboard.press('Escape');
+    }
+    await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    if (await discard.isVisible().catch(() => false)) await discard.getByRole('button', { name: 'Discard' }).click();
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await openAccountMenu(page);
+    await grab('More panel');
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' }).click();
+    for (const [hash, name] of [['#/settings', 'Settings: Personal'], ['#/settings/profile', 'Settings: Profile'], [`#/review/${me.payrollDate}`, 'Review'], ['#/ot', 'Overtime'], ['#/history', 'History'], ['#/import', 'Import']] as const) {
+      await page.goto(`${builtServer.origin}/${hash}`);
+      await expect(page.locator('main.page')).toBeVisible();
+      await page.waitForTimeout(300);
+      await grab(name);
+    }
+    for (const [name, t] of states) {
+      const bad = t.small.filter((s) => !s.inline);
+      const exempt = t.small.filter((s) => s.inline);
+      rec(`TARGETS ${width}px ${name}: controls ${t.count}, below 44px ${bad.length}${exempt.length ? ` (+${exempt.length} inline links exempt)` : ''}, scrollWidth ${t.scroll} clientWidth ${t.client}${bad.length ? ' :: ' + JSON.stringify(bad.slice(0, 8)) : ''}`);
+      expect.soft(bad.length, `${width}px ${name}: controls below 44px`).toBe(0);
+      expect.soft(t.scroll, `${width}px ${name}: page sideways scroll`).toBeLessThanOrEqual(t.client);
+    }
+  });
+}
+
+for (const width of [320, 360, 375, 390, 768, 820, 1024, 1280, 1440]) {
+  test(`no page-level horizontal scroll at ${width}px (timesheet, editor open, settings)`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width, height: 900 });
+    const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Scroll Reader', signature: 'none' });
+    const free = await me.api.displayedPeriodFreeWorkdays();
+    if (free[0] !== undefined) await me.api.seedCompleteDay(free[0]);
+    await signInPageAs(me.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const metric = () => page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth, body: document.body.scrollWidth }));
+    const rows: string[] = [];
+    const m1 = await metric();
+    rows.push(`timesheet ${m1.scroll}/${m1.client}`);
+    await page.getByRole('switch', { name: 'Show details' }).check();
+    const m2 = await metric();
+    rows.push(`timesheet+details ${m2.scroll}/${m2.client}`);
+    await page.getByLabel('Open a day').fill(free[1] ?? free[0] ?? '');
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await page.waitForTimeout(400);
+    const m3 = await metric();
+    rows.push(`editor open ${m3.scroll}/${m3.client}`);
+    await page.keyboard.press('Escape');
+    for (const hash of ['#/settings', '#/settings/profile', '#/ot', '#/history']) {
+      await page.goto(`${builtServer.origin}/${hash}`);
+      await expect(page.locator('main.page')).toBeVisible();
+      await page.waitForTimeout(250);
+      const m = await metric();
+      rows.push(`${hash} ${m.scroll}/${m.client}`);
+    }
+    // 768-899: the week table scrolls inside its own card; the page must not.
+    const inner = await page.evaluate(() => {
+      const w = document.querySelector('.sheet-week');
+      return w ? { scrollWidth: w.scrollWidth, clientWidth: w.clientWidth } : null;
+    });
+    rec(`SCROLL ${width}px (page scrollWidth/clientWidth): ${rows.join('; ')}`);
+    expect.soft(Math.max(m1.scroll - m1.client, m2.scroll - m2.client, m3.scroll - m3.client), `${width}px: no page-level sideways scroll`).toBeLessThanOrEqual(0);
+    void inner;
+  });
+}
+
+/* ---- session dialog at 390x844, rows versus chips ------------------------------------------------------------------- */
+test('session dialog at 390x844 with three suggested breaks; rows versus chips by width', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(!isMobile, 'Phone project');
+  test.setTimeout(180_000);
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Dialog Reader', signature: 'none' });
+  const [date = ''] = await me.api.displayedPeriodFreeWorkdays();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInPageAs(me.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByLabel('Open a day').fill(date);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form: Locator = page.getByRole('dialog', { name: 'New session', exact: true });
+  await expect(form).toBeVisible();
+  await expect(form.locator('[data-break]')).toHaveCount(3);
+  const measure = async (label: string) => {
+    await settle(page);
+    const facts = await page.evaluate(() => {
+      const dialog = document.querySelector('dialog[open][aria-label="New session"], dialog[open]:has(.session-dialog-body)') as HTMLElement | null;
+      const body = document.querySelector('.session-dialog-body') as HTMLElement | null;
+      const foot = document.querySelector('.session-dialog-foot') as HTMLElement | null;
+      const first = body?.querySelector('input:not([type="hidden"]), select, textarea') as HTMLElement | null;
+      const fr = first?.getBoundingClientRect();
+      const br = body?.getBoundingClientRect();
+      const ft = foot?.getBoundingClientRect();
+      const buttons = [...(foot?.querySelectorAll('button') ?? [])].map((b) => Math.round(b.getBoundingClientRect().height * 10) / 10);
+      const inView = (r?: DOMRect) => (r ? r.top >= 0 && r.bottom <= window.innerHeight + 0.5 : false);
+      return {
+        dialogH: dialog?.getBoundingClientRect().height ?? 0,
+        bodyClient: body?.clientHeight ?? 0,
+        bodyScroll: (body?.scrollHeight ?? 0) - (body?.clientHeight ?? 0),
+        scrollTop: body?.scrollTop ?? 0,
+        firstName: first?.getAttribute('aria-label') ?? first?.id ?? first?.getAttribute('name') ?? first?.tagName ?? '',
+        firstLabel: (first?.closest('label')?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 30),
+        firstVisible: fr !== undefined && br !== undefined ? fr.top >= br.top - 0.5 && fr.bottom <= br.bottom + 0.5 : false,
+        firstTop: fr?.top ?? 0,
+        footTop: ft?.top ?? 0,
+        footBottom: ft?.bottom ?? 0,
+        footVisible: inView(ft),
+        buttons,
+        layout: document.querySelector('[aria-label="Break list"]')?.getAttribute('data-layout') ?? '',
+        pageScroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        inner: window.innerWidth,
+        listW: Math.round(document.querySelector('[aria-label="Break list"]')?.getBoundingClientRect().width ?? 0),
+      };
+    });
+    rec(`DIALOG ${label}: layout=${facts.layout} body ${facts.bodyClient}px scrolls ${facts.bodyScroll}px (scrollTop ${facts.scrollTop}); first field "${facts.firstLabel || facts.firstName}" top ${facts.firstTop.toFixed(1)} visible-at-rest=${facts.firstVisible}; foot ${facts.footTop.toFixed(1)}-${facts.footBottom.toFixed(1)} of 844 visible=${facts.footVisible}, buttons ${facts.buttons.join('/')}px; page sideways scroll ${facts.pageScroll}; window ${facts.inner}px, break list ${facts.listW}px`);
+    return facts;
+  };
+  await measure('390x844 overnight (display zone differs: break chips)');
+  await page.screenshot({ path: join(OUT, 'zz-dialog-390-chips.png') });
+  await form.getByLabel('Input zone').fill('America/Los_Angeles');
+  await measure('390x844 same-day (input zone = reporting zone: break rows)');
+  await page.screenshot({ path: join(OUT, 'zz-dialog-390-rows.png') });
+  const endDate = form.getByLabel('End date', { exact: true });
+  for (const kind of ['same-day', 'overnight'] as const) {
+    if (kind === 'overnight') await endDate.fill(addDays(date, 1));
+    else await endDate.fill(date);
+    for (const width of [430, 390, 375, 360, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await measure(`${kind} ${width}x844`);
+    }
+  }
+});
+
+test('shared view and the employee: no check in/out in a shared view, the bar shows the signed-in user, no /api/admin/ request from an employee', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }, testInfo) => {
+  test.setTimeout(120_000);
+  const project = testInfo.project.name;
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Shared Reader', signature: 'none' });
+  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Shared Owner', signature: 'none' });
+  await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
+  const requests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/api/')) requests.push(`${request.method()} ${url.pathname}`);
+  });
+  await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1366, height: 900 });
+  await signInPageAs(me.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const identity = async () => {
+    if (isMobile) {
+      await openAccountMenu(page);
+      const text = (await page.locator('#more-panel .account-head').innerText()).replace(/\s+/g, ' ');
+      await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' }).click();
+      return text;
+    }
+    return ((await page.locator('header.shell-bar .identity').innerText()) ?? '').replace(/\s+/g, ' ');
+  };
+  const own = await identity();
+  rec(`SHARED [${project}] own view identity: "${own}" ; check in/out buttons: ${await page.getByRole('button', { name: /^Check (in|out)/ }).count()}`);
+  await page.locator('.shell-switcher select').selectOption({ label: 'Synthetic Shared Owner' });
+  await page.getByRole('form', { name: 'Shared with me' }).getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(page.locator('[data-share-bar-title]')).toContainText('Synthetic Shared Owner');
+  await expect(page.locator('[data-day]').first()).toBeVisible();
+  const shared = await identity();
+  const buttons = await page.getByRole('button', { name: /Check (in|out)/ }).count();
+  const clock = await page.locator('.bar-clock, [data-clock]').count();
+  const regions = await page.getByRole('region', { name: /Check in and out/ }).count();
+  rec(`SHARED [${project}] shared view identity: "${shared}" ; check in/out buttons ${buttons}, bar-clock/data-clock ${clock}, check in/out regions ${regions}`);
+  expect(buttons + clock + regions).toBe(0);
+  expect(shared).toContain('Synthetic Shared Reader');
+  // An employee at the admin addresses: nothing under /api/admin/ is requested.
+  requests.length = 0;
+  for (const hash of ['#/settings/admin', '#/admin']) {
+    await page.goto(`${builtServer.origin}/${hash}`);
+    await page.waitForTimeout(1_200);
+    rec(`EMPLOYEE [${project}] at ${hash}: landed on ${new URL(page.url()).hash}; /api/admin/ requests: ${requests.filter((r) => r.includes('/api/admin/')).length}; all api requests ${JSON.stringify([...new Set(requests)])}`);
+    expect(requests.filter((r) => r.includes('/api/admin/'))).toEqual([]);
+  }
+  note('phone.txt', `done ${project}`);
+});

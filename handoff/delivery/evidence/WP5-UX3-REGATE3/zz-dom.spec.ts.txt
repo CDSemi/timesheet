@@ -1,0 +1,37 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, test } from './fixtures.ts';
+import { seedLongContent, signInTo } from './zz-lib.ts';
+
+/* WP5-UX3-GATE task-local debug probe: the DOM behind the two axe label-content-name-mismatch findings. */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+const OUT = process.env.GATE_OUT ?? '';
+const rec = (line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'dom.txt'), `${line}\n`);
+};
+
+test('label trigger of a holiday and a break chip: visible text against the accessible name', async ({ page, privateServer, isMobile }) => {
+  test.setTimeout(120_000);
+  const data = await seedLongContent(privateServer);
+  await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1366, height: 900 });
+  await signInTo(page, privateServer, data.person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const trigger = page.locator(`[data-label-picker="${data.holiday}"] .label-trigger`);
+  rec(`LABEL-TRIGGER [${isMobile ? 'mobile' : 'desktop'}] outerHTML: ${(await trigger.evaluate((e) => e.outerHTML)).slice(0, 700)}`);
+  rec(`LABEL-TRIGGER innerText: ${JSON.stringify(await trigger.innerText())}`);
+  const plain = page.locator(`[data-label-picker="${data.dates[2]}"] .label-trigger`);
+  rec(`LABEL-TRIGGER (a Worked day) outerHTML: ${(await plain.evaluate((e) => e.outerHTML)).slice(0, 400)}`);
+  if (isMobile) {
+    const free = await data.person.api.displayedPeriodFreeWorkdays();
+    const date = free.find((d) => d !== data.overnight && d !== data.twoSessions) ?? '';
+    await page.getByLabel('Open a day').fill(date);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = page.getByRole('dialog', { name: 'New session', exact: true });
+    const chip = form.locator('[data-break="1"] button.break-chip');
+    rec(`BREAK-CHIP outerHTML: ${(await chip.evaluate((e) => e.outerHTML)).slice(0, 900)}`);
+    rec(`BREAK-CHIP innerText: ${JSON.stringify(await chip.innerText())}`);
+  }
+});

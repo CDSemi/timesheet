@@ -1,0 +1,440 @@
+import { appendFileSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { contrast, over, parseColour, parseLayers, type Rgba } from './contrast.ts';
+import { expect, newPerson, type BuiltServer, type Person, SeedClient } from './fixtures.ts';
+
+/*
+ * WP5-UX3-GATE task-local probe library (never part of the repository; it lives only in the gate's scratch export).
+ * Every number is read from the browser's computed style or from a screenshot; nothing is computed by the application.
+ */
+export const LA = 'America/Los_Angeles';
+export const OUT = process.env.GATE_OUT ?? '';
+export const STORAGE_KEY = 'timesheet.theme';
+export type Theme = 'light' | 'dark';
+
+export interface Situation {
+  name: string;
+  slug: string;
+  media: Theme;
+  stored: Theme | null;
+}
+export const SITUATIONS: readonly Situation[] = [
+  { name: 'light device', slug: 'light', media: 'light', stored: null },
+  { name: 'dark device', slug: 'dark', media: 'dark', stored: null },
+  { name: 'light device, manual dark', slug: 'manual-dark', media: 'light', stored: 'dark' },
+  { name: 'dark device, manual light', slug: 'manual-light', media: 'dark', stored: 'light' },
+];
+
+export function note(file: string, line: string): void {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, file), `${line}\n`);
+}
+
+export async function seedStoredTheme(page: Page, theme: Theme): Promise<void> {
+  await page.addInitScript({
+    content: `try { if (!sessionStorage.getItem('e2e-theme-seeded')) { localStorage.setItem(${JSON.stringify(STORAGE_KEY)}, ${JSON.stringify(theme)}); sessionStorage.setItem('e2e-theme-seeded', '1'); } } catch (error) {}`,
+  });
+}
+
+export async function applySituation(page: Page, situation: Situation): Promise<void> {
+  await page.emulateMedia({ colorScheme: situation.media, reducedMotion: 'reduce' });
+  if (situation.stored !== null) await seedStoredTheme(page, situation.stored);
+}
+
+/* ---- the seeded content of PLAN2 (longest holiday name, an overnight session, two sessions on one day) ---------------- */
+export const LONGEST_HOLIDAY = 'Observed Independence Day';
+
+export interface LongContent {
+  person: Person;
+  overnight: string;
+  twoSessions: string;
+  dates: string[];
+  holiday: string;
+}
+
+export async function seedLongContent(server: BuiltServer, name = 'Synthetic Wide Sheet'): Promise<LongContent> {
+  const admin = await new SeedClient(server.origin).signIn(server.credentials.admin.email, server.credentials.admin.password);
+  const person = await newPerson(admin, server, { displayName: name, signature: 'none' });
+  const sheet = await person.api.call<{ period: { period_start: string }; days: Array<{ work_date: string }> }>('GET', `/api/timesheets/${person.payrollDate}`);
+  const holiday = addDays(sheet.period.period_start, 1);
+  const calendar = await admin.call<{ id: string }>('GET', '/api/calendar');
+  const csv = ['date,name,kind', `${holiday},${LONGEST_HOLIDAY},holiday`].join('\n');
+  const body = { calendar_id: calendar.id, year: Number(holiday.slice(0, 4)), effective_from: sheet.period.period_start, csv, remove_dates: [] };
+  const preview = await admin.call<{ preview_hash: string }>('POST', '/api/admin/calendar/import/preview', body);
+  const done = await admin.call<{ committed: boolean }>('POST', '/api/admin/calendar/import/commit', { ...body, preview_hash: preview.preview_hash }, 201);
+  expect(done.committed, 'the holiday import is committed').toBe(true);
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  expect(free.length, 'free past workdays').toBeGreaterThanOrEqual(3);
+  const overnight = free.at(-1) ?? '';
+  const twoSessions = free[0] ?? '';
+  const at = (date: string, time: string) => ({ local: `${date}T${time}`, zone: LA });
+  const add = (start: { local: string; zone: string }, end: { local: string; zone: string }) =>
+    person.api.call('POST', `/api/days/${start.local.slice(0, 10)}/sessions`, { start, end, input_zone: LA, breaks_confirmed: true, breaks: [] }, 201);
+  await add(at(overnight, '22:00'), at(addDays(overnight, 1), '02:30'));
+  await add(at(twoSessions, '08:00'), at(twoSessions, '12:00'));
+  await add(at(twoSessions, '13:00'), at(twoSessions, '23:30'));
+  // A complete day and an unconfirmed day so the sheet shows the common statuses.
+  const spare = free.filter((d) => d !== overnight && d !== twoSessions && d !== addDays(overnight, 1));
+  if (spare[0] !== undefined) await person.api.seedCompleteDay(spare[0]);
+  if (spare[1] !== undefined) await person.api.seedUnconfirmedBreaksDay(spare[1]);
+  return { person, overnight, twoSessions, dates: sheet.days.map((day) => day.work_date), holiday };
+}
+
+export async function signInTo(page: Page, server: BuiltServer, account: { email: string; password: string }, hash = '#/timesheet'): Promise<void> {
+  await page.goto(`${server.origin}/${hash}`);
+  await page.getByLabel('Email').fill(account.email);
+  await page.getByLabel('Password').fill(account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+}
+
+/* ---- text contrast: every visible text element against its composited backdrop ------------------------------------- */
+
+export interface TextRecord {
+  path: string;
+  text: string;
+  fg: Rgba;
+  bg: Rgba;
+  size: number;
+  weight: number;
+  large: boolean;
+  disabled: boolean;
+  image: boolean;
+  ratio: number;
+  required: number;
+}
+
+const TEXT_SWEEP = `(() => {
+  const parse = (css) => {
+    let m = css.match(/^rgba?\\(([^)]+)\\)$/);
+    if (m) { const p = m[1].split(/[,\\s/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; }
+    m = css.match(/^color\\(srgb ([^)]+)\\)$/);
+    if (m) { const p = m[1].split(/[\\s/]+/).filter(Boolean).map(Number); return [p[0] * 255, p[1] * 255, p[2] * 255, p.length > 3 ? p[3] : 1]; }
+    return [0, 0, 0, 0];
+  };
+  const overC = (top, bottom) => {
+    const a = top[3] + bottom[3] * (1 - top[3]);
+    if (a === 0) return [0, 0, 0, 0];
+    const mix = (i) => (top[i] * top[3] + bottom[i] * bottom[3] * (1 - top[3])) / a;
+    return [mix(0), mix(1), mix(2), a];
+  };
+  const records = [];
+  const seen = new Set();
+  const all = document.querySelectorAll('body *');
+  for (const el of all) {
+    if (['SCRIPT', 'STYLE', 'SVG', 'PATH', 'OPTION'].includes(el.tagName.toUpperCase())) continue;
+    let own = '';
+    for (const n of el.childNodes) if (n.nodeType === 3) own += n.textContent;
+    own = own.replace(/\\s+/g, ' ').trim();
+    const isField = el.tagName === 'INPUT' && !['checkbox', 'radio', 'hidden', 'file', 'button', 'submit', 'range'].includes(el.type);
+    const isSelect = el.tagName === 'SELECT';
+    if (isField) own = (el.value || el.placeholder || '').trim();
+    if (isSelect) own = (el.selectedOptions[0]?.textContent ?? '').trim();
+    if (own === '') continue;
+    const rect = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    if (rect.width <= 1 || rect.height <= 1 || style.visibility === 'hidden' || style.display === 'none') continue;
+    if (style.clip === 'rect(0px, 0px, 0px, 0px)' || (rect.width <= 1 && rect.height <= 1)) continue;
+    // an element hidden by an ancestor (inert closed dialog etc.)
+    if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
+    // fg with ancestors' opacity
+    let opacity = 1;
+    let image = false;
+    const stack = [];
+    for (let node = el; node; node = node.parentElement) {
+      const s = getComputedStyle(node);
+      opacity *= parseFloat(s.opacity);
+      stack.push(parse(s.backgroundColor));
+      if (s.backgroundImage !== 'none') image = true;
+    }
+    let bg = [255, 255, 255, 1];
+    for (let i = stack.length - 1; i >= 0; i -= 1) bg = overC(stack[i], bg);
+    const fgRaw = parse(style.color);
+    const fg = overC([fgRaw[0], fgRaw[1], fgRaw[2], fgRaw[3] * opacity], bg);
+    const size = parseFloat(style.fontSize);
+    const weight = parseInt(style.fontWeight, 10) || 400;
+    const large = size >= 24 || (size >= 18.66 && weight >= 700);
+    const disabled = Boolean(el.closest(':disabled, [aria-disabled="true"], fieldset:disabled'));
+    const id = el.id ? '#' + el.id : '';
+    const cls = typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\\s+/).slice(0, 3).join('.') : '';
+    const parent = el.parentElement ? (el.parentElement.className && typeof el.parentElement.className === 'string' ? '.' + el.parentElement.className.trim().split(/\\s+/)[0] : el.parentElement.tagName.toLowerCase()) : '';
+    const path = parent + ' > ' + el.tagName.toLowerCase() + id + cls;
+    const key = path + '|' + own.slice(0, 30);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    records.push({ path, text: own.slice(0, 40), fg, bg, size, weight, large, disabled, image });
+  }
+  return records;
+})()`;
+
+function luminanceOf([r, g, b]: Rgba): number {
+  const channel = (value: number) => {
+    const s = value / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+export async function textSweep(page: Page): Promise<TextRecord[]> {
+  const raw = await page.evaluate<Array<Omit<TextRecord, 'ratio' | 'required'>>>(TEXT_SWEEP);
+  return raw.map((record) => {
+    const [hi, lo] = [luminanceOf(record.fg), luminanceOf(record.bg)].sort((a, b) => b - a);
+    return { ...record, ratio: ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05), required: record.large ? 3 : 4.5 };
+  });
+}
+
+export interface TextSummary {
+  elements: number;
+  min: number;
+  minWhere: string;
+  below: TextRecord[];
+  belowDisabled: TextRecord[];
+  withImage: number;
+}
+
+export function summariseText(records: TextRecord[]): TextSummary {
+  const live = records.filter((r) => !r.disabled);
+  const min = live.reduce((m, r) => (r.ratio < m.ratio ? r : m), live[0] as TextRecord);
+  return {
+    elements: records.length,
+    min: min?.ratio ?? 0,
+    minWhere: min ? `${min.path} "${min.text}"` : '',
+    below: live.filter((r) => r.ratio < r.required - 0.005),
+    belowDisabled: records.filter((r) => r.disabled && r.ratio < r.required - 0.005),
+    withImage: records.filter((r) => r.image).length,
+  };
+}
+
+/* ---- focus rings: Tab through every stop of the state ------------------------------------------------------------- */
+
+export interface RingStop {
+  path: string;
+  name: string;
+  layers: string;
+  outline: string;
+  fill: Rgba;
+  backdrops: string[];
+  ringVsBackdrop: number | null;
+  ringVsGap: number | null;
+  gapVsFill: number | null;
+  insetRingVsFill: number | null;
+  outlineVsBackdrop: number | null;
+  painted: boolean;
+  min: number | null;
+  where: string;
+}
+
+const STOP_INFO = `(() => {
+  const el = document.activeElement;
+  if (!el || el === document.body) return null;
+  const s = getComputedStyle(el);
+  const stack = [];
+  for (let node = el.parentElement; node; node = node.parentElement) stack.push(getComputedStyle(node).backgroundColor);
+  const id = el.id ? '#' + el.id : '';
+  const cls = typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\\s+/).slice(0, 3).join('.') : '';
+  const label = (el.getAttribute('aria-label') || el.textContent || el.getAttribute('name') || el.getAttribute('type') || '').replace(/\\s+/g, ' ').trim().slice(0, 40);
+  const rect = el.getBoundingClientRect();
+  return {
+    path: el.tagName.toLowerCase() + id + cls,
+    name: label,
+    boxShadow: s.boxShadow,
+    outlineStyle: s.outlineStyle,
+    outlineWidth: s.outlineWidth,
+    outlineColor: s.outlineColor,
+    bg: s.backgroundColor,
+    stack,
+    visible: rect.width > 0 && rect.height > 0,
+    focusVisible: el.matches(':focus-visible'),
+    key: el.tagName + '|' + (el.id || '') + '|' + label + '|' + Math.round(rect.x) + ',' + Math.round(rect.y),
+  };
+})()`;
+
+function backdropOf(stack: string[]): Rgba {
+  return stack.reduceRight<Rgba>((below, css) => over(parseColour(css), below), [255, 255, 255, 1]);
+}
+
+export async function ringSweep(page: Page, maxStops = 70): Promise<{ stops: RingStop[]; cycled: boolean }> {
+  const stops: RingStop[] = [];
+  const seen = new Set<string>();
+  let cycled = false;
+  await page.keyboard.press('Shift');
+  for (let index = 0; index < maxStops; index += 1) {
+    await page.keyboard.press('Tab');
+    type Info = {
+      path: string;
+      name: string;
+      boxShadow: string;
+      outlineStyle: string;
+      outlineWidth: string;
+      outlineColor: string;
+      bg: string;
+      stack: string[];
+      visible: boolean;
+      focusVisible: boolean;
+      key: string;
+    } | null;
+    const hasRing = (value: Info) =>
+      value !== null &&
+      (parseLayers(value.boxShadow).some((layer) => layer.spread > 0 && layer.colour[3] > 0) ||
+        (value.outlineStyle !== 'none' && parseFloat(value.outlineWidth) > 0 && parseColour(value.outlineColor)[3] > 0));
+    await page.waitForTimeout(40);
+    let info = await page.evaluate<Info>(STOP_INFO);
+    // The ring appears on the next frame: read again (up to 5 times, 90 ms apart) before calling a stop unpainted.
+    for (let attempt = 0; attempt < 5 && info !== null && info.visible && !hasRing(info); attempt += 1) {
+      await page.waitForTimeout(90);
+      info = await page.evaluate<Info>(STOP_INFO);
+    }
+    if (info === null) continue;
+    if (seen.has(info.key)) {
+      cycled = true;
+      break;
+    }
+    seen.add(info.key);
+    if (!info.visible) continue;
+    const backdrop = backdropOf(info.stack);
+    const fill = over(parseColour(info.bg), backdrop);
+    const layers = parseLayers(info.boxShadow);
+    const outset = layers.filter((layer) => !layer.inset && layer.spread > 0 && layer.colour[3] >= 0.5);
+    const inset = layers.filter((layer) => layer.inset && layer.spread > 0 && layer.colour[3] >= 0.5);
+    const record: RingStop = {
+      path: info.path,
+      name: info.name,
+      layers: info.boxShadow,
+      outline: `${info.outlineStyle} ${info.outlineWidth} ${info.outlineColor}`,
+      fill,
+      backdrops: info.stack.slice(0, 1),
+      ringVsBackdrop: null,
+      ringVsGap: null,
+      gapVsFill: null,
+      insetRingVsFill: null,
+      outlineVsBackdrop: null,
+      painted: false,
+      min: null,
+      where: '',
+    };
+    const values: number[] = [];
+    if (outset.length >= 1) {
+      const ring = outset.reduce((a, b) => (b.spread > a.spread ? b : a));
+      const gap = outset.length >= 2 ? outset.reduce((a, b) => (b.spread < a.spread ? b : a)) : null;
+      const ringColour = over(ring.colour, backdrop);
+      record.ringVsBackdrop = contrast(ringColour, backdrop);
+      values.push(record.ringVsBackdrop);
+      if (gap !== null) {
+        const gapColour = over(gap.colour, backdrop);
+        record.ringVsGap = contrast(ringColour, gapColour);
+        values.push(record.ringVsGap);
+        if (fill[3] === 1) {
+          record.gapVsFill = contrast(gapColour, fill);
+        }
+      }
+      record.painted = true;
+    }
+    if (inset.length >= 1) {
+      // `inset 0 0 0 2px accent, inset 0 0 0 3px card`: the first, narrower layer is the visible ring on the edge; the wider one is the gap inside it.
+      const ring = inset.reduce((a, b) => (b.spread < a.spread ? b : a));
+      const gap = inset.length >= 2 ? inset.reduce((a, b) => (b.spread > a.spread ? b : a)) : null;
+      const base = fill[3] === 1 ? fill : backdrop;
+      const ringColour = over(ring.colour, base);
+      record.insetRingVsFill = contrast(ringColour, backdrop);
+      values.push(record.insetRingVsFill);
+      if (gap !== null) {
+        record.ringVsGap = contrast(ringColour, over(gap.colour, base));
+        values.push(record.ringVsGap);
+      }
+      record.painted = ring.colour[3] > 0;
+    }
+    if (info.outlineStyle !== 'none' && parseFloat(info.outlineWidth) > 0 && parseColour(info.outlineColor)[3] > 0) {
+      record.outlineVsBackdrop = contrast(over(parseColour(info.outlineColor), backdrop), backdrop);
+      values.push(record.outlineVsBackdrop);
+      record.painted = true;
+    }
+    record.min = values.length > 0 ? Math.min(...values) : null;
+    record.where = `${info.path} "${info.name}"`;
+    stops.push(record);
+  }
+  return { stops, cycled };
+}
+
+export function summariseRings(stops: RingStop[]) {
+  const painted = stops.filter((s) => s.painted);
+  const unpainted = stops.filter((s) => !s.painted);
+  const mins = painted.map((s) => s.min ?? 99);
+  const lowest = painted.reduce((m, s) => ((s.min ?? 99) < (m.min ?? 99) ? s : m), painted[0] as RingStop);
+  return { stops: stops.length, painted: painted.length, unpainted, min: mins.length ? Math.min(...mins) : 0, where: lowest ? lowest.where : '' };
+}
+
+/* ---- axe ---------------------------------------------------------------------------------------------------------- */
+
+const AXE_PATH = process.env.AXE_PATH ?? '';
+let axeSource = '';
+export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+
+export interface AxeResult {
+  violations: Array<{ id: string; impact: string | null; help: string; nodes: Array<{ target: unknown; html: string; summary: string }> }>;
+  incomplete: Array<{ id: string; nodes: number }>;
+  passes: number;
+  version: string;
+}
+
+export async function runAxe(page: Page): Promise<AxeResult> {
+  if (axeSource === '') axeSource = readFileSync(AXE_PATH, 'utf8');
+  const loaded = await page.evaluate<boolean>(`typeof window.axe !== 'undefined'`);
+  if (!loaded) await page.evaluate(axeSource);
+  return page.evaluate<AxeResult, string[]>(async (tags) => {
+    const axe = (window as unknown as { axe: { run: (context: Document, options: unknown) => Promise<Record<string, unknown>>; version: string } }).axe;
+    const result = (await axe.run(document, { runOnly: { type: 'tag', values: tags }, resultTypes: ['violations', 'incomplete', 'passes'] })) as {
+      violations: Array<{ id: string; impact: string | null; help: string; nodes: Array<{ target: unknown; html: string; failureSummary?: string }> }>;
+      incomplete: Array<{ id: string; nodes: unknown[] }>;
+      passes: unknown[];
+    };
+    return {
+      violations: result.violations.map((v) => ({
+        id: v.id,
+        impact: v.impact,
+        help: v.help,
+        nodes: v.nodes.map((n) => ({ target: n.target, html: n.html.slice(0, 160), summary: (n.failureSummary ?? '').replace(/\s+/g, ' ').slice(0, 260) })),
+      })),
+      incomplete: result.incomplete.map((i) => ({ id: i.id, nodes: i.nodes.length })),
+      passes: result.passes.length,
+      version: axe.version,
+    };
+  }, AXE_TAGS);
+}
+
+/** One state of one situation: axe, the text sweep and (optionally) the ring sweep, appended to the notes. */
+export async function scanState(page: Page, label: string, options: { rings?: boolean; tag: string }): Promise<{ violations: number; textBelow: number; ringMin: number | null; unpainted: number }> {
+  await page.waitForTimeout(250);
+  const axe = await runAxe(page);
+  const text = summariseText(await textSweep(page));
+  let ringMin: number | null = null;
+  let unpainted = 0;
+  const lines: string[] = [];
+  lines.push(`[${options.tag}] ${label}: axe ${axe.version} violations=${axe.violations.length} (${axe.violations.map((v) => `${v.id}x${v.nodes.length}`).join(', ') || 'none'}) incomplete=[${axe.incomplete.map((i) => `${i.id}x${i.nodes}`).join(', ')}] passes=${axe.passes}`);
+  for (const violation of axe.violations) {
+    for (const node of violation.nodes.slice(0, 6)) lines.push(`    VIOLATION ${violation.id} (${violation.impact}) ${JSON.stringify(node.target)} ${node.html} :: ${node.summary}`);
+  }
+  lines.push(
+    `[${options.tag}] ${label}: text elements=${text.elements} min=${text.min.toFixed(2)} (${text.minWhere}) below-required=${text.below.length} disabled-below=${text.belowDisabled.length} elements-over-an-image-layer=${text.withImage}`,
+  );
+  for (const record of text.below.slice(0, 12)) lines.push(`    TEXT-BELOW ${record.path} "${record.text}" ${record.ratio.toFixed(2)}:1 needs ${record.required} (${record.size}px/${record.weight}) fg=${record.fg.map((v) => Math.round(v)).join(',')} bg=${record.bg.map((v) => Math.round(v)).join(',')} image=${record.image}`);
+  if (options.rings === true) {
+    const rings = summariseRings((await ringSweep(page)).stops);
+    ringMin = rings.painted > 0 ? rings.min : null;
+    unpainted = rings.unpainted.length;
+    lines.push(`[${options.tag}] ${label}: tab stops=${rings.stops} ring-painted=${rings.painted} unpainted=${rings.unpainted.length} lowest ring ratio=${rings.min.toFixed(2)} (${rings.where})`);
+    for (const stop of rings.unpainted.slice(0, 8)) lines.push(`    RING-UNPAINTED ${stop.where} shadow=${stop.layers} outline=${stop.outline}`);
+  }
+  for (const line of lines) note('a11y-scan.txt', line);
+  return { violations: axe.violations.length, textBelow: text.below.length, ringMin, unpainted };
+}
+
+export async function openAccountMenu(page: Page): Promise<Locator> {
+  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+  const phone = await more.isVisible();
+  const opener = phone ? more : page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+  if ((await opener.getAttribute('aria-expanded')) !== 'true') await opener.click();
+  const panel = page.locator(phone ? '#more-panel' : '#account-menu');
+  await expect(panel).toBeVisible();
+  return panel;
+}
