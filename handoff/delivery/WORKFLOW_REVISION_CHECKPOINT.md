@@ -675,6 +675,44 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - M5b fails it at 01:45 and at 12:00.
   - day-editor 120 passed / 0 failed; verify 0; digest 95323f2d.
 - Running now: WP5-UX3-FIX5-FREEZE (committer, alone).
+- WP5-UX3-FIX5-FREEZE done: 5c101c1ca8ba5b9c1ede8b1ac8bad9f3804ab05d on main, pushed.
+  - 260 files: the spec, 8 records, 251 evidence files.
+  - Digest 95323f2d, on HEAD too.
+- Running now: the minimal WP5-UX3-REGATE4 (verifier, sonnet) on 5c101c1 / 95323f2d.
+  - It proves that only the spec changed and that the builds are byte-identical to
+    8629441's, so REGATE3's other items carry forward.
+  - It reruns npm test, the real-clock full e2e, FULL runs at the two instants, and the
+    fixed test at night with M5b.
+- Then WP5-UX3-AUDIT-INT on 5c101c1, with its brief retargeted.
+- WP5-UX3-REGATE4 done: FAIL on item 2 as written.
+  - Identity and build equality hold, so REGATE3's items carry forward.
+  - The fixed test and M5b pass, and both simulated FULL runs ended 651 / 0.
+  - Three real-clock full runs each had one different failure in an unchanged test:
+    - surfaces.spec.ts:215 and keyboard-access.spec.ts:444 hit a 30 s timeout waiting for
+      the sign-in page;
+    - hover.spec.ts:718, a FIX4 test, failed with "element not attached".
+  - The failing tests passed when repeated alone.
+- Running now: the read-only diagnosis WP5-UX3-DIAG1 (planner, sonnet). It classifies each
+  failure as a test race, a product defect or an environment or load event, with
+  evidence. The next step depends on its result.
+- WP5-UX3-DIAG1 done.
+  - Two failures are environment: `net::ERR_NO_BUFFER_SPACE` on the app bundle, a known host
+    buffer event; the existing rerun rule applies.
+  - hover.spec.ts:718 is a race in a FIX4 test: a stale desktop button is resolved before the
+    layout swap. A one-line selector fix is proved.
+  - A fourth full run passed 651 / 0.
+- Coordinator decision:
+  - WP5-UX3-FIX6 applies the one-line test fix.
+  - Then FIX6-FREEZE and a minimal REGATE5: identity, build equality, npm test, one real-clock
+    full e2e, the ring test repeated.
+  - Rule clarification: a failure showing ERR_NO_BUFFER_SPACE counts as a buffer error even
+    when it surfaces as a timeout.
+  - Then AUDIT-INT.
+- Running now: WP5-UX3-FIX6 (worker, sonnet).
+- WP5-UX3-FIX6 done: one selector line plus a comment in hover.spec.ts.
+  - The ring test x30 gave 60 passed; hover.spec.ts on both projects gave 70 passed.
+  - npm test 2141; verify 0; digest 507de97c.
+- Running now: WP5-UX3-FIX6-FREEZE (committer, alone).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

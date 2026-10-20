@@ -1,7 +1,10 @@
 # WP5-UX3-AUDIT-INT dispatch brief (final recheck and integration pass)
 
 - Mission/task: timesheet-software-readiness / WP5-UX3-AUDIT-INT; package WP5; kind audit;
-  attempt 1; depends on WP5-UX3-REGATE3 (PASS required). Fresh context.
+  attempt 1; depends on WP5-UX3-REGATE4 (PASS required). Fresh context.
+- WP5-UX3-REGATE3 on 8629441 failed only on one time-of-day dependent test. WP5-UX3-FIX5
+  fixed that test, frozen at 5c101c1. WP5-UX3-REGATE4 proved that the builds are identical
+  and reran the tests.
 - Its PASS re-accepts WP5 after UI change round 3. Per the coordinator decision of
   2026-10-19 ("WP5-UX3-FIX4 frozen at 8629441"), it is also the recheck of the A2/B2
   findings fixed by WP5-UX3-FIX4. No separate A3/B3 runs.
@@ -24,9 +27,9 @@
     template in `handoff/templates/`.
 - Author separation: you are none of the round-3 workers, planners, verifiers or auditors
   (A, B, A2, B2, GOV2); agent IDs are on the board. Treat every report as a claim.
-- Target: `reviewed_commit` = 86294412ce15e221f6e0fbc782f0b52a332352be (the
-  WP5-UX3-FIX4-FREEZE commit), with the regate digest
-  245e9459a06c7d36ceb780d5e0de379be74303081d1d93b24c5469c24eca3f90 (833 files).
+- Target: `reviewed_commit` = 5c101c1ca8ba5b9c1ede8b1ac8bad9f3804ab05d (the
+  WP5-UX3-FIX5-FREEZE commit), with the regate digest
+  95323f2d44a2a5f0cc6708f281911858b3b8a8ed1d0c1b7fc32c8a4a0174b15f (833 files).
   - Record HEAD, the digest before and after (three forms) and `reviewed_commit`.
   - Work on a clean `git archive` export with no `.git` folder (never `git init` it).
 - AGENTS.md on disk at the target wins over any injected copy. An injected copy may still
@@ -49,6 +52,8 @@
      both areas, including the blur handling of the More panel (a pointer press on More,
      an outside press, a page change, entries, Escape) on a touch phone and a desktop
      narrow window.
+   - FIX5's test (`git diff 86294412..5c101c1`): hour-independent, and no assertion
+     weaker than FIX4's version.
 2. **Integration of the round's records.**
    - All six area reviews (A, B, A2, B2 and the GOV reviews) and the gate records (GATE,
      REGATE, REGATE2, REGATE3).

@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "ux3-round-fix5",
+  "phase": "ux3-round-regate4",
   "coordinator_session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,8 +28,12 @@
   "current_source_digest": "b35dddd5f5d4a8d3dccf52daa7e397969939748b1eb0151263fd50febf7ebb48",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX3-FIX5-FREEZE",
+  "next_task_id": "WP5-UX3-FIX6-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-19",
+      "observation": "Coordinator slip: the WP5-UX3-REGATE4 board entry was marked done FAIL with an empty evidence list, so WP5-UX3-FIX6-FREEZE attempt 1 stopped at validate_orchestration ('Gate/audit lacks digest/execution evidence'), leaving its index staged and nothing committed. Fixed by listing REGATE4's evidence files (and DIAG1's) on the board; the same committer re-stages the board and reruns every check. Rule kept: a done gate or audit always lists at least one evidence file."
+    },
     {
       "date": "2026-10-16",
       "observation": "Rule slips continue after the gate observation below: WP5-UX3-FIX1-FREEZE (committer, sonnet) redirected one empty here-document into a scratch file in its temp folder; WP5-UX3-FIX2 (worker-high, sonnet) used one null-device redirect and two read-only pipes into head -c and tail. Nothing fed to an interpreter, no file outside owned paths, nothing left running. Same GOV backlog candidate (profile denylist)."
@@ -316,7 +320,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "86294412ce15e221f6e0fbc782f0b52a332352be",
+    "last_commit": "5c101c1ca8ba5b9c1ede8b1ac8bad9f3804ab05d",
     "unpushed": []
   },
   "owner_decisions": [
@@ -506,6 +510,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-19",
+      "basis": "WP5-UX3-REGATE4 FAIL on item 2: three real-clock full runs, each one failure. WP5-UX3-DIAG1 proved two of them (sign-in 30 s timeouts) are net::ERR_NO_BUFFER_SPACE on the app bundle (a host buffer event already seen in 11 earlier runs) and one (hover.spec.ts:718) is a race in a FIX4 test with a proved one-line fix; a fourth full run on the same bytes passed 651/0.",
+      "decision": "WP5-UX3-FIX6 (timesheet-worker, sonnet; size S, risk L): the one-line selector fix at hover.spec.ts:754 plus its comment. Then WP5-UX3-FIX6-FREEZE and a minimal WP5-UX3-REGATE5: identity, only hover.spec.ts changed since 5c101c1, builds byte-identical (REGATE3 and REGATE4 items carry forward), npm test, one real-clock full e2e on both projects, the ring test repeated. Rule clarification for this and later gates (an application of the existing rule, not a change): a failure whose trace or console shows net::ERR_NO_BUFFER_SPACE (or another network or buffer error) counts as a network or buffer error even when it surfaces as a timeout; the failed test is rerun alone once and both results are recorded. Then WP5-UX3-AUDIT-INT on the FIX6 freeze."
+    },
     {
       "date": "2026-10-19",
       "basis": "WP5-UX3-REGATE3 FAIL on item 4 only: FIX4's new test day-editor.spec.ts:3895 depends on the time of day (between 00:00 and about 03:00 in the reporting zone its seeded session crosses midnight and the phone shows chips); everything else passed, including every FIX4 behaviour and mutant. The owner asked on 2026-10-19 why so much runs; keep the remaining work minimal.",
@@ -22128,9 +22137,9 @@
       "package": "WP5",
       "kind": "audit",
       "status": "pending",
-      "reviewed_commit": "86294412ce15e221f6e0fbc782f0b52a332352be",
+      "reviewed_commit": "5c101c1ca8ba5b9c1ede8b1ac8bad9f3804ab05d",
       "depends_on": [
-        "WP5-UX3-REGATE3"
+        "WP5-UX3-REGATE4"
       ],
       "profile": "timesheet-auditor",
       "requested_model": "opus",
@@ -22161,7 +22170,7 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Fresh opus auditor on 8629441 / 245e9459 after the WP5-UX3-REGATE3 PASS: recheck of F-UX3A2-1..3, F-UX3B2-1 and FIX4's diff, plus the integration pass whose PASS re-accepts WP5 (WP5-UX2-AUDIT2 and the seven audits that pointed to it name this audit in superseded_by)."
+      "next_action": "Fresh opus auditor on 5c101c1 / 95323f2d after the WP5-UX3-REGATE4 PASS: recheck of F-UX3A2-1..3, F-UX3B2-1, FIX4's and FIX5's diffs, plus the integration pass whose PASS re-accepts WP5 (WP5-UX2-AUDIT2 and the seven audits that pointed to it name this audit in superseded_by)."
     },
     {
       "id": "WP5-UX3-FIX1",
@@ -23187,7 +23196,7 @@
       "id": "WP5-UX3-FIX5-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX3-FIX5"
       ],
@@ -23200,10 +23209,10 @@
         "risk": "L",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "ac549f2e3a21ccd9f",
       "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
       "attempt": 1,
       "owned_paths": [
@@ -23212,13 +23221,190 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX3-FIX5-FREEZE.md",
       "report": "handoff/delivery/tasks/WP5-UX3-FIX5-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-FIX5-FREEZE/checks.txt"
+      ],
       "baseline_commit": "86294412ce15e221f6e0fbc782f0b52a332352be",
+      "branch": "main",
+      "commit_sha": "5c101c1ca8ba5b9c1ede8b1ac8bad9f3804ab05d",
+      "pushed": true,
       "source_digest": "95323f2d44a2a5f0cc6708f281911858b3b8a8ed1d0c1b7fc32c8a4a0174b15f",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed 5c101c1 on main (remote equal; no tag): 260 staged (tests/e2e/day-editor.spec.ts, 5 modified records, 3 new records, 251 evidence: FIX4-FREEZE 2, REGATE3 227, FIX5 22); digest 95323f2d (833 files) before git add and on HEAD via ls-tree; node v24.21.0; precommit 0 findings, diff --cached --check, JSON parse, validate_orchestration, check_recovery, preflight exit 0; no masking, fix or stop. Slip: one stray 2>/dev/null on a no-op command.",
+      "next_action": "None; the minimal WP5-UX3-REGATE4 on 5c101c1 / 95323f2d."
+    },
+    {
+      "id": "WP5-UX3-REGATE4",
+      "package": "WP5",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "5c101c1ca8ba5b9c1ede8b1ac8bad9f3804ab05d",
+      "depends_on": [
+        "WP5-UX3-FIX5-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a711e9c1fbc1df5a2",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX3-REGATE4.md",
+        "handoff/delivery/evidence/WP5-UX3-REGATE4"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-REGATE4.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-REGATE4.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-REGATE4/00-README.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE4/01-digest-export-before.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE4/01-digest-lstree-before.txt",
+        "handoff/delivery/evidence/WP5-UX3-REGATE4/01-digest-npm-before.txt"
+      ],
+      "baseline_commit": "5c101c1ca8ba5b9c1ede8b1ac8bad9f3804ab05d",
+      "source_digest": "95323f2d44a2a5f0cc6708f281911858b3b8a8ed1d0c1b7fc32c8a4a0174b15f",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "FAIL",
+      "gate_notes": "FAIL on item 2 as written (NAS NOT VERIFIED); digest 95323f2d (833 files) unchanged before and after. Item 1 PASS: only tests/e2e/day-editor.spec.ts changed since 8629441 outside handoff/; dist/client, dist/server and dist/domain byte-identical (236 files each, 0 differences), so REGATE3's drill, AC-13, boundary, FIX4 behaviours, M1/M4/M5/M6a/M6b, axe, 44px, budgets and docs/10 carry forward. Item 2: npm ci, lint, npm test (2141), build exit 0, no deprecation line; three real-clock FULL e2e runs (2026-10-19 18:57-20:18 PDT) each with exactly one failure in an unrelated, unchanged test, none a network or buffer error: run 1 mobile surfaces.spec.ts:215 (30 s timeout waiting for the sign-in Email label), run 2 desktop hover.spec.ts:718 dark ('Element is not attached to the DOM' in scrollIntoViewIfNeeded; a FIX4 test), run 3 desktop keyboard-access.spec.ts:444 (30 s timeout waiting for the sign-in Email label); surfaces 8 passed x4 and hover 4 passed x3 when repeated alone, keyboard-access not repeated. Item 3 PASS: FULL 651 passed / 0 failed at 2026-11-01T08:45Z and 2026-10-26T16:00Z. Item 4 PASS: the fixed test passes at 00:30, 02:00 and 23:30 PDT; M5b (bundle, with the shift baked in) fails it at 01:45 and 12:00 PDT; no assertion weaker than FIX4's, three added. Item 5 PASS: validators exit 0, check_recovery 106. Slips: a first mutant script bug (redone), no-op head -0 pipes.",
+      "next_action": "None; read-only diagnosis WP5-UX3-DIAG1 of the three real-clock failures, then a decision (test fix or infrastructure finding) before a regate."
+    },
+    {
+      "id": "WP5-UX3-DIAG1",
+      "package": "WP5",
+      "kind": "diagnose",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX3-FIX5-FREEZE"
+      ],
+      "profile": "timesheet-planner",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a8ab2a09d83470edb",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX3-DIAG1.md",
+        "handoff/delivery/evidence/WP5-UX3-DIAG1"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-DIAG1.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-DIAG1.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-DIAG1/00-README.txt",
+        "handoff/delivery/evidence/WP5-UX3-DIAG1/20-full-real-clock.txt",
+        "handoff/delivery/evidence/WP5-UX3-DIAG1/30-trace-fail1-surfaces-network.txt",
+        "handoff/delivery/evidence/WP5-UX3-DIAG1/31-trace-fail3-keyboard-access-network.txt",
+        "handoff/delivery/evidence/WP5-UX3-DIAG1/32-trace-fail2-hover-calls.txt",
+        "handoff/delivery/evidence/WP5-UX3-DIAG1/41-diag-variant-matrix.txt"
+      ],
+      "baseline_commit": "5c101c1ca8ba5b9c1ede8b1ac8bad9f3804ab05d",
+      "source_digest": "95323f2d44a2a5f0cc6708f281911858b3b8a8ed1d0c1b7fc32c8a4a0174b15f",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "diagnosis delivered (read-only, no repository file edited): failures 1 (surfaces.spec.ts:215 mobile) and 3 (keyboard-access.spec.ts:444 desktop) are (c) environment: in both traces the single app bundle /assets/index-DyUV--8_.js fails with net::ERR_NO_BUFFER_SPACE about 45 ms after navigation, the SPA never mounts and fill waits out 30 s; the same error appears in 11 earlier evidence files (known transient Windows socket-buffer exhaustion on this host); handling: the existing network/buffer rerun rule applies (rerun the failed test alone); optional fixture hardening not recommended. Failure 2 (hover.spec.ts:718 desktop dark) is (a) a race in the FIX4 test: after setViewportSize(390) the locator at hover.spec.ts:754 ('[data-day]:not(.nonworking) [data-day-button]') can still resolve the desktop .sheet-date button until the matchMedia layout swap lands, which then detaches it; reproduced (2 of 20 with the change event deferred 30 ms); plain repeat 60/60 passed; fix: hover.spec.ts:754 to '[data-day]:not(.nonworking) .sheet-day-button' (phone table only), comment at 752; with it 0 stale resolutions and 0 failures in every variant. Not a product defect. Full real-clock run now (20:41-20:57 PDT): 651 passed / 67 skipped / 0 failed. Limits: the whole of hover.spec.ts was not repeat-run; the host event was not identified; one heredoc slip (an empty file, rewritten).",
+      "next_action": "None; WP5-UX3-FIX6 (the one-line test fix), WP5-UX3-FIX6-FREEZE, a minimal WP5-UX3-REGATE5, then WP5-UX3-AUDIT-INT."
+    },
+    {
+      "id": "WP5-UX3-FIX6",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX3-DIAG1"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "acf6febcfc061feee",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "tests/e2e/hover.spec.ts",
+        "handoff/delivery/tasks/WP5-UX3-FIX6.md",
+        "handoff/delivery/evidence/WP5-UX3-FIX6"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-FIX6.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-FIX6.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX3-FIX6/00-baseline.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX6/02-ring-x30.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX6/03-hover-both.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX6/04-test.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX6/08-verify.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX6/09-diff.txt",
+        "handoff/delivery/evidence/WP5-UX3-FIX6/10-digest.txt"
+      ],
+      "baseline_commit": "5c101c1ca8ba5b9c1ede8b1ac8bad9f3804ab05d",
+      "source_digest": "507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented, test only (reported): tests/e2e/hover.spec.ts line 754 selector now '[data-day]:not(.nonworking) .sheet-day-button' with one comment line on why; ring test x30 on desktop with 2 workers 60 passed; hover.spec.ts on both projects 70 passed; npm test 2141; lint 0; typecheck 0; whitespace clean; verify 0 (SMOKE_PORT 49290); digest 507de97c (833 files; baseline 95323f2d recorded before the edit). Nothing left running.",
+      "next_action": "None; WP5-UX3-FIX6-FREEZE (committer alone), then the minimal WP5-UX3-REGATE5."
+    },
+    {
+      "id": "WP5-UX3-FIX6-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX3-FIX6"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ac4654a5f1d90d356",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 2,
+      "attempt_1": "stopped at validate_orchestration exit 1 ('Gate/audit lacks digest/execution evidence: WP5-UX3-REGATE4', a coordinator board slip); nothing committed, index left staged (88 paths); precommit, diff --check and JSON parse exit 0. Attempt 2: the same committer re-stages the corrected board and reruns every check.",
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX3-FIX6-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX3-FIX6-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX3-FIX6-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX3-FIX6-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "5c101c1ca8ba5b9c1ede8b1ac8bad9f3804ab05d",
+      "source_digest": "507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Committer: stage tests/e2e/day-editor.spec.ts and the listed handoff records and three evidence folders, run the checks, commit on main and push."
+      "next_action": "Committer: stage tests/e2e/hover.spec.ts, the listed handoff records and four evidence folders, run the checks, commit on main and push."
     }
   ],
   "future_packages": [

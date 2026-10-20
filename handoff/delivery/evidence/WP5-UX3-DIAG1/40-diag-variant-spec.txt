@@ -1,0 +1,31 @@
+import { expect, test } from './fixtures.ts';
+
+/*
+ * Diagnostic copy of hover.spec.ts:753-756 (WP5-UX3-DIAG1): resize from 1440 to 390, then locate the phone day button, check it is
+ * visible and scroll it into view. The app swaps the layout in a useSyncExternalStore subscriber of a matchMedia 'change' event
+ * (ClockProvider.tsx useMedia). DIAG_DELAY (ms) defers that event handler, which models a change event that arrives late (a host stall
+ * between the resize and the next rendering opportunity). DIAG_FIXED=1 uses the phone-only class `.sheet-day-button` (the proposed fix).
+ */
+const DELAY = Number(process.env.DIAG_DELAY ?? '0');
+const SELECTOR = process.env.DIAG_FIXED === '1' ? '[data-day]:not(.nonworking) .sheet-day-button' : '[data-day]:not(.nonworking) [data-day-button]';
+
+test('resize to a phone width, then scroll the first day button into view', async ({ page, signInThroughUi }) => {
+  if (DELAY > 0) {
+    await page.addInitScript(`(() => {
+      const original = MediaQueryList.prototype.addEventListener;
+      MediaQueryList.prototype.addEventListener = function (type, listener, options) {
+        if (type !== 'change' || typeof listener !== 'function') return original.call(this, type, listener, options);
+        return original.call(this, type, (event) => { setTimeout(() => listener.call(this, event), ${DELAY}); }, options);
+      };
+    })()`);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInThroughUi();
+  await expect(page.locator('.sheet-day[data-day]').first()).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const phoneDay = page.locator(SELECTOR).first();
+  await expect(phoneDay).toBeVisible();
+  const cls = await phoneDay.evaluate((element) => element.className).catch((error: unknown) => `evaluate failed: ${String(error).slice(0, 80)}`);
+  console.log(`resolved class: ${cls}`);
+  await phoneDay.scrollIntoViewIfNeeded();
+});

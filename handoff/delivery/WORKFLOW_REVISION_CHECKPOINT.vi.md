@@ -706,6 +706,46 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - Đột biến M5b làm test hỏng cả lúc 01:45 lẫn 12:00.
   - day-editor 120 đạt / 0 lỗi; verify 0; digest 95323f2d.
 - Đang chạy: WP5-UX3-FIX5-FREEZE (committer, chạy một mình).
+- WP5-UX3-FIX5-FREEZE xong: 5c101c1ca8ba5b9c1ede8b1ac8bad9f3804ab05d trên main, đã push.
+  - 260 file: file spec, 8 bản ghi, 251 file bằng chứng.
+  - Digest 95323f2d, trên HEAD cũng vậy.
+- Đang chạy: WP5-UX3-REGATE4 tối thiểu (verifier, sonnet) trên 5c101c1 / 95323f2d.
+  - Gate này chứng minh chỉ file spec thay đổi và các bản build giống từng byte so với 8629441,
+    nên các mục khác của REGATE3 được giữ nguyên kết quả.
+  - Nó chỉ chạy lại npm test, e2e đầy đủ theo đồng hồ thật, chạy FULL ở hai mốc giả lập, và test
+    vừa sửa vào ban đêm kèm đột biến M5b.
+- Sau đó là WP5-UX3-AUDIT-INT trên 5c101c1, với brief được nhắm lại.
+- WP5-UX3-REGATE4 xong: FAIL ở mục 2 theo đúng tiêu chí đã viết.
+  - Định danh và bản build giống hệt nhau, nên các mục của REGATE3 được giữ nguyên kết quả.
+  - Test vừa sửa và đột biến M5b đều đạt, và hai lần chạy FULL theo đồng hồ giả lập đều 651 / 0.
+  - Ba lần chạy đầy đủ theo đồng hồ thật, mỗi lần hỏng một test khác nhau trong số các test
+    không đổi:
+    - surfaces.spec.ts:215 và keyboard-access.spec.ts:444 hết 30 giây chờ trang đăng nhập;
+    - hover.spec.ts:718, một test của FIX4, báo "element not attached".
+  - Các test hỏng đều đạt khi chạy lại riêng.
+- Đang chạy: bước chẩn đoán chỉ đọc WP5-UX3-DIAG1 (planner, sonnet). Nó xếp từng lỗi vào loại
+  race trong test, lỗi sản phẩm, hay sự cố môi trường hoặc tải máy, kèm bằng chứng. Bước tiếp
+  theo tùy vào kết quả này.
+- WP5-UX3-DIAG1 xong.
+  - Hai lỗi do môi trường: `net::ERR_NO_BUFFER_SPACE` khi tải gói JS của ứng dụng, một sự cố
+    buffer đã biết trên máy này; quy tắc cho chạy lại hiện có được áp dụng.
+  - hover.spec.ts:718 là một race trong test của FIX4: test bắt nhầm nút ngày của giao diện máy
+    tính trước khi bố cục kịp đổi sang điện thoại. Đã chứng minh được cách sửa bằng một dòng
+    selector.
+  - Lần chạy đầy đủ thứ tư đạt 651 / 0.
+- Quyết định của coordinator:
+  - WP5-UX3-FIX6 sửa đúng một dòng trong test.
+  - Sau đó là FIX6-FREEZE và một REGATE5 tối thiểu: định danh, bản build giống hệt, npm test,
+    một lần e2e đầy đủ theo đồng hồ thật, và chạy lặp test vòng focus.
+  - Làm rõ quy tắc: lỗi có dấu vết ERR_NO_BUFFER_SPACE được tính là lỗi buffer kể cả khi nó hiện
+    ra dưới dạng timeout.
+  - Rồi đến AUDIT-INT.
+- Đang chạy: WP5-UX3-FIX6 (worker, sonnet).
+- WP5-UX3-FIX6 xong: một dòng selector cùng một dòng chú thích trong hover.spec.ts.
+  - Test vòng focus chạy lặp x30 được 60 lần đạt; hover.spec.ts trên cả hai project được 70 lần
+    đạt.
+  - npm test 2141; verify 0; digest 507de97c.
+- Đang chạy: WP5-UX3-FIX6-FREEZE (committer, chạy một mình).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 
