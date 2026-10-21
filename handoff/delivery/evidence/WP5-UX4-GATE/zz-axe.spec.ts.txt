@@ -1,0 +1,179 @@
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, test } from './fixtures.ts';
+import { note, scanState, seedLongContent, signInTo, SITUATIONS, applySituation } from './zz-lib.ts';
+
+/*
+ * WP5-UX4-GATE task-local probe (never part of the repository): a real axe scan (WCAG 2.2 AA tags) plus the text-contrast sweep of every
+ * state the brief lists, in light and dark. Notes go to GATE_OUT/a11y-scan.txt. Desktop project.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const LA = 'America/Los_Angeles';
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 250))))');
+}
+
+for (const situation of SITUATIONS.filter((s) => s.slug === 'light' || s.slug === 'dark')) {
+  test(`employee states: axe, text (${situation.name})`, async ({ page, privateServer }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop');
+    test.setTimeout(420_000);
+    const tag = `employee/${situation.slug}`;
+    await applySituation(page, situation);
+    const data = await seedLongContent(privateServer, 'Synthetic Axe Person');
+    const free = await data.person.api.displayedPeriodFreeWorkdays();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInTo(page, privateServer, data.person.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByRole('switch', { name: 'Show worked hours' }).check();
+    await settle(page);
+    await scanState(page, 'Timesheet paper, editor closed, 1440', { tag });
+
+    // Drawer beside (1440)
+    await namedDayButton(page, data.twoSessions, 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await settle(page);
+    await expect(page.locator('.sheet-area')).toHaveAttribute('data-editor-layout', 'beside');
+    await scanState(page, 'Timesheet with the drawer beside the sheet, 1440', { tag });
+
+    // Discard prompt (unsaved note, then press another day)
+    await editor.getByLabel('Notes').fill('Synthetic unsaved note');
+    const other = data.dates.find((d) => d !== data.twoSessions && d !== data.holiday) ?? '';
+    await namedDayButton(page, other, 'Edit').click();
+    const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    await expect(prompt).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Discard prompt over the drawer, 1440', { tag });
+    await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await editor.getByLabel('Notes').fill('');
+    await page.keyboard.press('Escape');
+    if (await prompt.isVisible().catch(() => false)) await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(editor).toHaveCount(0);
+
+    // Floating (1280)
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await settle(page);
+    await namedDayButton(page, data.twoSessions, 'Edit').click();
+    await expect(editor).toBeVisible();
+    await settle(page);
+    await expect(page.locator('.sheet-area')).toHaveAttribute('data-editor-layout', 'floating');
+    await scanState(page, 'Timesheet with the drawer floating, 1280', { tag });
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+
+    // Session dialog (new session) + alert
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const date = free.find((d) => d !== data.overnight && d !== data.twoSessions);
+    if (date === undefined) {
+      note('a11y-scan.txt', `[${tag}] session dialog states NOT SCANNED: no free past workday`);
+    } else {
+      await page.getByLabel('Open a day').fill(date);
+      await page.getByRole('button', { name: 'Open day', exact: true }).click();
+      await expect(editor).toBeVisible();
+      await editor.getByRole('button', { name: 'Add session' }).click();
+      const form = page.getByRole('dialog', { name: 'New session', exact: true });
+      await expect(form).toBeVisible();
+      await form.getByLabel('Input zone').fill(LA);
+      await settle(page);
+      await scanState(page, 'Session dialog (New session) with zone first, Today/Now, suggested breaks, 1440', { tag });
+      // alert dialog by an aborted save
+      await form.getByLabel('End date', { exact: true }).fill(date);
+      for (let n = await form.locator('[data-break]').count(); n > 0; n -= 1) await form.getByRole('button', { name: `Remove break ${n}`, exact: true }).click();
+      await form.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+      await page.route('**/api/days/*/sessions', (route) => route.abort('failed'));
+      await form.getByRole('button', { name: 'Save', exact: true }).click();
+      await page.getByRole('alertdialog', { name: 'Save this session?' }).getByRole('button', { name: 'Save', exact: true }).click();
+      const alert = page.getByRole('alertdialog', { name: 'This session was not saved', exact: true });
+      await expect(alert).toBeVisible();
+      await settle(page);
+      await scanState(page, 'Alert dialog "This session was not saved", 1440', { tag });
+      await alert.getByRole('button', { name: 'OK', exact: true }).click();
+      await page.unroute('**/api/days/*/sessions');
+      await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+      const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+      if (await discard.isVisible().catch(() => false)) await discard.getByRole('button', { name: 'Discard' }).click();
+      await page.keyboard.press('Escape');
+    }
+
+    // Running-session edit: check in, open Edit on the running card
+    await page.getByRole('button', { name: 'Check in' }).click();
+    await expect(page.getByRole('button', { name: 'Check out' })).toBeVisible();
+    const { todayLocal } = await data.person.api.today();
+    await page.getByLabel('Open a day').fill(todayLocal);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    await expect(editor).toBeVisible();
+    await editor.locator('.session-card[data-state="running"]').getByRole('button', { name: /^Edit session/ }).click();
+    const edit = page.getByRole('dialog', { name: 'Edit session', exact: true });
+    await expect(edit).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Session dialog, running-session edit (no end yet), 1440', { tag });
+    await edit.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const d2 = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    if (await d2.isVisible().catch(() => false)) await d2.getByRole('button', { name: 'Discard' }).click();
+    await editor.getByRole('button', { name: 'Close', exact: true }).click();
+
+    // Check out dialog with its alert
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const co = page.getByRole('dialog', { name: 'Check out', exact: true });
+    await expect(co).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Check out dialog, 1440', { tag });
+    await page.route('**/api/clock/out', (route) => route.abort('failed'));
+    await co.getByRole('button', { name: /^Check out/ }).last().click();
+    const coAlert = page.getByRole('alertdialog', { name: 'This session was not saved', exact: true });
+    await expect(coAlert).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Check out dialog with its alert, 1440', { tag });
+    await coAlert.getByRole('button', { name: 'OK', exact: true }).click();
+    await page.unroute('**/api/clock/out');
+    await co.getByRole('button', { name: /^Check out/ }).last().click();
+    await expect(co).toHaveCount(0);
+
+    // Review 1440 and 1280
+    for (const width of [1440, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${privateServer.origin}/#/review/${data.person.payrollDate}`);
+      await expect(page.locator('[data-paper="review"]')).toBeVisible();
+      await settle(page);
+      await scanState(page, `Review and sign off, ${width}`, { tag });
+    }
+
+    // Settings > Personal with the export/import card and the preview dialog
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`${privateServer.origin}/#/settings`);
+    const card = page.getByRole('region', { name: 'Export and import settings' });
+    await expect(card).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Settings Personal with the Export and import card, 1280', { tag });
+    const [download] = await Promise.all([page.waitForEvent('download'), card.getByRole('button', { name: 'Export settings' }).click()]);
+    const { readFileSync } = await import('node:fs');
+    const parsed = JSON.parse(readFileSync(await download.path(), 'utf8')) as { data: { submission: { to: string[] } } };
+    parsed.data.submission.to = ['other-synthetic@example.invalid'];
+    await page.getByLabel('Import settings from a file (.json)').setInputFiles({ name: 'timesheet-settings-synthetic.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(parsed)) });
+    const dialog = page.getByRole('dialog', { name: 'Import settings' });
+    await expect(dialog).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Settings import preview dialog, 1280', { tag });
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+
+    // Profile with Change password
+    await page.goto(`${privateServer.origin}/#/settings/profile`);
+    await expect(page.getByRole('region', { name: 'Change password' })).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Profile with Change password, 1280', { tag });
+  });
+
+  test(`administrator states: axe, text (${situation.name})`, async ({ page, builtServer }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop');
+    test.setTimeout(120_000);
+    const tag = `admin/${situation.slug}`;
+    await applySituation(page, situation);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await signInTo(page, builtServer, builtServer.credentials.admin, '#/settings/admin');
+    await expect(page.getByRole('region', { name: 'Company calendar file' })).toBeVisible();
+    await settle(page);
+    await page.waitForTimeout(500);
+    await scanState(page, 'Administration with the Company calendar file card, 1280', { tag });
+  });
+}

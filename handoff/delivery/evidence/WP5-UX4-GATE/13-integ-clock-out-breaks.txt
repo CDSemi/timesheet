@@ -1,0 +1,39 @@
+
+ RUN  v5.0.2 <task>/export
+
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > F-01A: confirming the already saved break closes the session with exactly one break (R 541, credit 60) 240ms
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > F-01B: confirming zero breaks clears the saved break (R 556, E 76, credit 90) 202ms
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > replaces rather than appends: a different submitted break becomes the only stored break 199ms
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > records one clock_out audit event whose before/after show the replaced break set 201ms
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > keeps the saved breaks and the pending state when an unconfirmed Clock out omits the list 214ms
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > rolls back completely when the submitted set is invalid: still open, saved break intact, no audit event 216ms
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > requires expected_version 230ms
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > returns 409 stale_version and rolls back when the session changed since it was loaded 261ms
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > rejects a confirmed Clock out that omits the list 240ms
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > treats an unconfirmed submitted list as the complete set: it replaces the saved rows and stays pending 254ms
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > treats an unconfirmed empty list as present: it clears the saved rows and stays pending 241ms
+stderr | tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > rolls back a failure injected after the DELETE: the original break rows and IDs are restored
+Unhandled request error SqliteError: injected_fault
+    at recordAudit (<task>/export/src/server/services/audit.ts:32:5)
+    at audit (<task>/export/src/server/services/timesheetCommands.ts:131:3)
+    at sqliteTransaction.<anonymous> (<task>/export/src/server/services/timesheetCommands.ts:647:5)
+    at sqliteTransaction (<task>\export\node_modules\better-sqlite3\lib\methods\transaction.js:65:24)
+    at writeTransaction (<task>/export/src/server/db/database.ts:23:31)
+    at clockOut (<task>/export/src/server/services/timesheetCommands.ts:590:21)
+    at <task>/export/src/server/routes/api.ts:171:52
+    at dispatch (file:///<task>/export/node_modules/hono/dist/compose.js:35:11)
+    at <task>/export/src/server/http/auth.ts:31:5
+    at dispatch (file:///<task>/export/node_modules/hono/dist/compose.js:35:11) {
+  code: 'SQLITE_CONSTRAINT_TRIGGER'
+}
+
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > rolls back a failure injected after the DELETE: the original break rows and IDs are restored 258ms
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > answers 409 stale_version and rolls back when the session UPDATE changes no row 264ms
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > U4-11: editing the start of a running session, then Check out, computes the worked minutes from the new start 262ms
+ ✓ tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > gives a legacy saved break that ends after the Clock out instant a typed 422 and changes nothing 254ms
+
+ Test Files  1 passed (1)
+      Tests  15 passed (15)
+   Start at  01:54:41
+   Duration  5.23s (tests 69%, import 20%, transform 11%)
+

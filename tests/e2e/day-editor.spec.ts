@@ -1767,7 +1767,12 @@ function instantAt(ms: number): string {
 /** A running session that started `hoursAgo` hours ago (input zone Los Angeles), with saved breaks given as [minutes after the start, minutes]; the day is cleared first. */
 async function seedRunning(seed: SeedClient, hoursAgo: number, saved: ReadonlyArray<readonly [number, number]> = []): Promise<RunningSeed> {
   const { todayLocal } = await seed.today();
-  await seed.clearSessions(todayLocal);
+  // The session is moved `hoursAgo` hours back, so in the first hours after local midnight it reaches into the previous accounting date,
+  // where a check in and out left by an earlier test seconds before midnight would overlap it (422 overlapping_user_intervals). Every
+  // date the window reaches is cleared, not only today: the seed must not depend on the minute the clock shows. A minute of margin
+  // covers the seconds between this read and the server's check-in.
+  const reachedFrom = dateTimeIn(instantAt(Date.now() - hoursAgo * 3_600_000 - 60_000), LA).slice(0, 10);
+  for (let day = reachedFrom; day <= todayLocal; day = addDays(day, 1)) await seed.clearSessions(day);
   const started = await seed.call<{ session: { id: string; version: number; start_utc: string } }>('POST', '/api/clock/in', { input_zone: LA }, 201);
   const startMs = Date.parse(started.session.start_utc) - hoursAgo * 3_600_000;
   const moved = await seed.call<{ session: { id: string; version: number } }>('PUT', `/api/sessions/${started.session.id}`, {
@@ -3248,7 +3253,12 @@ test('the day editor is a side panel on a desktop and a modal bottom sheet on a 
   }
 });
 
-/** True when a focused element lies entirely inside the open editor's box (the editor hides it). */
+/**
+ * True when what is visible of a focused element lies entirely inside the open editor's box (the editor hides it): the element's box
+ * clipped to the window, so a control that rests a fraction of a pixel below the window counts by its visible part (SC 2.4.11). This
+ * check is independent of the product's rule (it does not import it): it allows half a pixel at each edge where the product allows one,
+ * so whatever it calls hidden the product's rule has also called covered and moved the drawer for.
+ */
 function focusHiddenByPanel(page: Page): Promise<{ hidden: boolean; outside: boolean; name: string }> {
   return page.evaluate(`(() => {
     const active = document.activeElement;
@@ -3258,7 +3268,13 @@ function focusHiddenByPanel(page: Page): Promise<{ hidden: boolean; outside: boo
     if (panel.contains(active)) return { hidden: false, outside: false, name };
     const a = active.getBoundingClientRect();
     const p = panel.getBoundingClientRect();
-    const hidden = a.left >= p.left && a.right <= p.right && a.top >= p.top && a.bottom <= p.bottom;
+    const root = document.documentElement;
+    const left = Math.max(a.left, 0);
+    const top = Math.max(a.top, 0);
+    const right = Math.min(a.right, root.clientWidth);
+    const bottom = Math.min(a.bottom, root.clientHeight);
+    const visible = right > left && bottom > top;
+    const hidden = visible && left >= p.left - 0.5 && right <= p.right + 0.5 && top >= p.top - 0.5 && bottom <= p.bottom + 0.5;
     return { hidden, outside: true, name };
   })()`);
 }
@@ -3465,6 +3481,69 @@ async function signInToPrivate(page: Page, server: BuiltServer, person: Person) 
   await page.getByLabel('Password').fill(person.account.password);
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
+
+/**
+ * The item-1 data of PLAN2 plus a complete day and a day with unconfirmed breaks, as the WP5-UX4-GATE walk seeded them: the extra
+ * statuses change the cell heights of week 2, which is where a control rested 0.23px below a 800px window (SC 2.4.11, WP5-UX4-FIX1).
+ */
+async function seedGateContent(server: BuiltServer): Promise<LongContent> {
+  const data = await seedLongContent(server);
+  const spare = (await data.person.api.displayedPeriodFreeWorkdays()).filter((date) => date !== addDays(data.overnight, 1));
+  if (spare[0] !== undefined) await data.person.api.seedCompleteDay(spare[0]);
+  if (spare[1] !== undefined) await data.person.api.seedUnconfirmedBreaksDay(spare[1]);
+  return data;
+}
+
+test.describe('WP5-UX4-FIX1 (SC 2.4.11): at 1280x800 no focused sheet control stays wholly under the floating drawer, whichever edge it starts on', () => {
+  test.skip(({ isMobile }) => isMobile, 'The floating side panel is a desktop-project layout');
+  test.use({ timezoneId: LA });
+
+  // The drawer starts docked right (Monday column) or docked left (Saturday column); the walk moves it as the focus demands, so both
+  // edges are exercised each time. The page holds the gate's seed: the longest holiday name, an overnight session and two sessions on a day.
+  for (const { start, side } of [
+    { start: 0, side: 'right' },
+    { start: 5, side: 'left' },
+  ] as const) {
+    test(`a Tab and Shift+Tab walk of 160 presses each, opened on a column that docks the drawer ${side}`, async ({ page, privateServer }) => {
+      test.setTimeout(240_000);
+      const data = await seedGateContent(privateServer);
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await signInToPrivate(page, privateServer, data.person);
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await expect(page.locator('.sheet-main')).toContainText('Independence');
+      await namedDayButton(page, data.dates[start] ?? '', 'Edit').click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toBeVisible();
+      await expect(page.locator('.sheet-area')).toHaveAttribute('data-editor-layout', 'floating');
+      await expect(editor).toHaveAttribute('data-side', side);
+      expect(page.viewportSize(), 'the window is 1280x800').toEqual({ width: 1280, height: 800 });
+
+      const sides = new Set<string>();
+      let stops = 0;
+      let redocks = 0;
+      for (const key of ['Tab', 'Shift+Tab']) {
+        if (key === 'Tab') await page.getByRole('switch', { name: 'Show worked hours' }).focus();
+        else await page.locator('.sheet-main a.sig-link').focus();
+        for (let step = 0; step < 160; step += 1) {
+          const before = await editor.getAttribute('data-side');
+          await page.keyboard.press(key);
+          let state = await focusHiddenByPanel(page);
+          if (state.hidden) {
+            await settleFrames(page);
+            state = await focusHiddenByPanel(page);
+            redocks += 1;
+          }
+          if (state.outside) stops += 1;
+          sides.add((await editor.getAttribute('data-side')) ?? '-');
+          expect(state.hidden, `${state.name} is wholly under the drawer after ${step + 1} ${key} presses (it was docked ${before})`).toBe(false);
+        }
+      }
+      console.log(`WALK 1280x800 opened ${side}: ${stops} sheet stops, ${redocks} re-docks, sides seen ${[...sides].join(',')}`);
+      expect(stops, 'the walk visited the sheet controls').toBeGreaterThan(60);
+      expect([...sides].sort(), 'the walk saw the drawer on both edges').toEqual(['left', 'right']);
+    });
+  }
+});
 
 test.describe('WP5-UX3-T05B: the Day editor floats below the layout rule and stands beside readable columns from it', () => {
   test.skip(({ isMobile }) => isMobile, 'The floating side panel and the 7-column sheet are desktop-project layouts');
@@ -4480,23 +4559,35 @@ test.describe('WP5-UX3-T08: Escape closes only the top dialog, and focus returns
 /* ---- WP5-UX4-T02 (round 4, U4-05 to U4-07): the non-modal drawer, its corners and the content-based layout rule ---------- */
 
 /**
- * The dates of the sheet's day columns that a pointer can reach now: wholly inside the window, clear of the open drawer, with their
- * day button on top at its own centre. `exclude` is left out (the open day).
+ * The dates of the sheet's day columns that a pointer can reach now: the column clear of the open drawer sideways, and the two things a
+ * test presses in it - the day button (wholly inside the window, on top at its own centre) and the time cell (its centre inside the
+ * window, with the cell itself on top there). The rest of the column may lie below the window: how tall a column is depends on what
+ * the page shows above it and in its cells (a notice, a running session, saved days), which a test must not depend on. `exclude` is
+ * left out (the open day).
  */
 function reachableDays(page: Page, exclude: string[]): Promise<string[]> {
   return page.evaluate<string[]>(`((exclude) => {
     const panel = document.querySelector('[data-day-editor]');
     const p = panel === null ? null : panel.getBoundingClientRect();
+    const width = document.documentElement.clientWidth;
+    const height = window.innerHeight;
     const out = [];
     for (const column of document.querySelectorAll('.week-grid [data-day]')) {
       const date = column.getAttribute('data-day');
       const button = column.querySelector('[data-day-button]');
-      if (date === null || button === null || exclude.includes(date)) continue;
+      const time = column.querySelector('.d-time');
+      if (date === null || button === null || time === null || exclude.includes(date)) continue;
       const box = column.getBoundingClientRect();
       const b = button.getBoundingClientRect();
-      const inWindow = box.left >= 0 && box.right <= document.documentElement.clientWidth && box.top >= 0 && box.bottom <= window.innerHeight;
-      const clear = p === null || box.right <= p.left || box.left >= p.right;
-      if (inWindow && clear && document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2) === button) out.push(date);
+      const t = time.getBoundingClientRect();
+      const [tx, ty] = [t.left + t.width / 2, t.top + t.height / 2];
+      const clear = box.left >= 0 && box.right <= width && (p === null || box.right <= p.left || box.left >= p.right);
+      const buttonInWindow = b.left >= 0 && b.right <= width && b.top >= 0 && b.bottom <= height;
+      const timeInWindow = tx >= 0 && tx < width && ty >= 0 && ty < height;
+      if (!clear || !buttonInWindow || !timeInWindow) continue;
+      const onButton = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2) === button;
+      const onTime = time.contains(document.elementFromPoint(tx, ty));
+      if (onButton && onTime) out.push(date);
     }
     return out;
   })(${JSON.stringify(exclude)})`);
@@ -5204,8 +5295,20 @@ async function namesContainVisibleText(dialog: Locator): Promise<string[]> {
 }
 
 /**
- * The text colour of an element against its own fill composited over what is behind it, read at once. These tests run with reduced
- * motion, so no colour transition is pending (the settled reads of contrast.ts wait 400 ms per read, too slow for a whole dialog).
+ * Waits until a theme switch has finished painting: two frames, then every running animation and transition of the document (a switch
+ * starts one on each element that has a colour, and a read before they finish sees the old theme's colour: 2.69:1 for the "Today" link
+ * in the dark theme). With reduced motion each lasts 0.01 ms, so this costs a few frames, where the settled reads of contrast.ts wait
+ * 400 ms per read, too slow for a whole dialog.
+ */
+async function settleTheme(page: Page): Promise<void> {
+  await page.evaluate(
+    `new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))).then(() => Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))))`,
+  );
+}
+
+/**
+ * The text colour of an element against its own fill composited over what is behind it, read at once. The caller has waited for the
+ * theme to settle (`settleTheme`), so no colour transition is pending.
  */
 async function textContrast(locator: Locator): Promise<number> {
   const text = parseColour(await computedStyle(locator, 'color'));
@@ -5278,6 +5381,7 @@ for (const width of [1440, 390]) {
       ] as const;
       for (const theme of ['light', 'dark'] as const) {
         await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+        await settleTheme(page);
         for (const [inputName, linkName] of pairs) {
           const input = await form.getByLabel(inputName, { exact: true }).boundingBox();
           const link = form.getByRole('button', { name: linkName, exact: true });
@@ -5637,6 +5741,7 @@ for (const width of [1440, 390]) {
           expect(await namesContainVisibleText(alert), 'names of the alert').toEqual([]);
           for (const theme of ['light', 'dark'] as const) {
             await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+            await settleTheme(page);
             expect(await textContrastProblems(alert), `text contrast of the alert (${theme})`).toEqual([]);
             const ok = alert.getByRole('button', { name: 'OK', exact: true });
             await focusFromKeyboard(ok);
@@ -5746,6 +5851,7 @@ test('U4-15: the Check out dialog opens the same alert for overlapping break row
     await expect(dialog.locator('p.error'), 'no error paragraph is left at the end of the Check out dialog').toHaveCount(0);
     for (const theme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      await settleTheme(page);
       expect(await namesContainVisibleText(alert), `names of the alert (${theme})`).toEqual([]);
       expect(await textContrastProblems(alert), `text contrast of the alert (${theme})`).toEqual([]);
       expect(await namesContainVisibleText(dialog), `names of the Check out dialog (${theme})`).toEqual([]);
@@ -5833,6 +5939,7 @@ test('U4-11: Edit on the running session shows no end and no "no breaks" box; Sa
     // control has a name, no id repeats, and the text reads at 4.5:1; in both themes.
     for (const theme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      await settleTheme(page);
       expect(await namesContainVisibleText(form), `names of the running-session dialog (${theme})`).toEqual([]);
       expect(await textContrastProblems(form), `text contrast of the running-session dialog (${theme})`).toEqual([]);
     }
@@ -5884,9 +5991,26 @@ test('U4-11: Edit on the running session shows no end and no "no breaks" box; Sa
     expect(checkOuts).toHaveLength(1);
     expect(checkOuts[0]).toMatchObject({ breaks_confirmed: true, expected_version: (run.version ?? 0) + 1 });
     const closed = await sessionById(employeeSeed, run.todayLocal, run.id);
-    const day = await employeeSeed.dayView(run.todayLocal);
+    // R-01: regular minutes are the minutes on scheduled weekdays, non-working minutes the rest (a weekend, a holiday), so the split of
+    // the worked minutes depends on the day class of the days the session spans (it started 3 h before now, and may begin the day before).
+    // The sum of the two is the worked time whatever the class, and it must count from the new start (the server's figure, 10 break minutes excluded).
+    const calculation = (await employeeSeed.call<{ calculation: { regular_minutes: number; nonworking_minutes: number; segments: Array<{ day_class: string }> } }>('GET', `/api/days/${run.todayLocal}`)).calculation;
     const grossMinutes = (Date.parse(closed?.end_utc ?? '') - newStartMs) / 60_000;
-    expect(Math.abs((day.calculation?.regular_minutes ?? 0) - (grossMinutes - 10)), 'regular minutes count from the new start').toBeLessThanOrEqual(1);
+    const workedMinutes = grossMinutes - 10;
+    const classes = new Set(calculation.segments.map((segment) => segment.day_class));
+    expect(classes.size, 'the session was split into at least one day segment').toBeGreaterThan(0);
+    // Each of the two figures is floored on its own, so their sum is within two minutes below the exact worked time and never above it.
+    expect(workedMinutes - (calculation.regular_minutes + calculation.nonworking_minutes), 'worked minutes (regular plus non-working) count from the new start').toBeGreaterThanOrEqual(0);
+    expect(workedMinutes - (calculation.regular_minutes + calculation.nonworking_minutes), 'worked minutes (regular plus non-working) count from the new start').toBeLessThan(2);
+    // On days of one class the whole figure is in the matching bucket: weekdays count regular, a weekend or holiday counts non-working.
+    if (classes.size === 1 && classes.has('normal')) {
+      expect(Math.abs(calculation.regular_minutes - workedMinutes), 'a weekday session counts regular minutes from the new start').toBeLessThanOrEqual(1);
+      expect(calculation.nonworking_minutes).toBe(0);
+    }
+    if (classes.size === 1 && classes.has('nonworking')) {
+      expect(calculation.regular_minutes, 'a weekend or holiday session counts no regular minutes').toBe(0);
+      expect(Math.abs(calculation.nonworking_minutes - workedMinutes), 'a weekend or holiday session counts non-working minutes from the new start').toBeLessThanOrEqual(1);
+    }
   } finally {
     await employeeSeed.clearSessions(run.todayLocal);
   }

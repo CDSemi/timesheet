@@ -1,0 +1,45 @@
+# Usage: bash collect.sh   (copies the task logs and scripts into the evidence folder as masked LF .txt files)
+source /d/.claude-tmp/timesheet/WP5-UX4-FIX1/env.sh
+cd $T
+put() { # put <source> <evidence name>
+  sed -e 's/<user>/<user>/g' -e 's/Employee<email>/Employee<email>/g' -e 's/\r$//' "$1" > "$E/$2"
+}
+for l in i1 i2 i3 j1 j2 j3; do put logs/control-$l.txt 20-control-$l.txt; done
+for l in s1026 s1101 s0314 s1027 s1231 s0101; do put logs/sweep-$l.txt 21-sweep-$l.txt; done
+put logs/repeat-keyboard-mobile.txt 30-repeat-keyboard-mobile.txt
+put logs/repeat-contrast.txt 30-repeat-contrast.txt
+put logs/full-e2e.txt 40-full-e2e.txt
+put logs/repro-2-sharing-base.txt 11-repro-2-sharing-base.txt
+put logs/fix-2-sharing.txt 11-fix-2-sharing.txt
+put logs/repro-3-u411-base.txt 12-repro-3-u411-base.txt
+put logs/repro-4-reach-base.txt 13-repro-4-reach-base.txt
+put logs/dbg-4.txt 13-dbg-4-reach-geometry.txt
+put logs/fix-4-reach.txt 13-fix-4-reach.txt
+put logs/probe-6-contrast.txt 15-probe-6-contrast-after-theme-switch.txt
+put logs/repro-7b-five.txt 16-repro-7-u414-base.txt
+put logs/repro-7c-five.txt 16-repro-7-u414-base-with-session-dump.txt
+put logs/fix-7-five.txt 16-fix-7-five.txt
+put logs/repro-7a-0005.txt 16-u414-at-0005-passes-on-base.txt
+put logs/repro-5-keyboard.txt 14-repro-5-delay-1500-passes.txt
+put logs/dbg-5c2.txt 14-dbg-5-card-arrival-varies.txt
+put logs/mutant-5.txt 61-mutant-5-wait-removed.txt
+put logs/mutant-6-1.txt 61-mutant-6-settle-noop-run1.txt
+put logs/mutant-6-2.txt 61-mutant-6-settle-noop-run2.txt
+put logs/mutant-6-3.txt 61-mutant-6-settle-noop-run3.txt
+put logs/typecheck.txt 70-typecheck.txt
+put logs/lint.txt 70-lint.txt
+put logs/npm-test.txt 70-npm-test.txt
+put logs/build-base.txt 70-build-base.txt
+put logs/build-final2.txt 70-build-final.txt
+put logs/diff-check.txt 70-diff-check.txt
+put env.sh 90-env.sh.txt
+put run-shift.sh 90-run-shift.sh.txt
+put shiftclock.mjs 90-shiftclock.mjs.txt
+put probe-now.mjs 90-probe-now.mjs.txt
+put zz-control.spec.ts 90-zz-control.spec.ts.txt
+put zz-contrast.spec.ts 90-zz-contrast.spec.ts.txt
+put sweep.sh 90-sweep.sh.txt
+put repeats.sh 90-repeats.sh.txt
+put collect.sh 90-collect.sh.txt
+diff keyboard-access.base.ts keyboard-access.repro-hack.ts.txt | sed -e 's/<user>/<user>/g' > "$E/50-repro-5-hold-and-release-hack.diff.txt"
+ls $E | wc -l

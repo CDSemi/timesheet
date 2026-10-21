@@ -20,6 +20,7 @@ import { DESKTOP_QUERY, useClock, useMedia } from './components/ClockProvider.ts
 import { ConfirmDialog } from './components/ConfirmDialog.tsx';
 import { dayPeriodPill } from './components/dayEditorModel.ts';
 import { batchEntries, staleDates, staleReloadMessage } from './components/dayModel.ts';
+import { whollyCovered } from './components/editorLayoutModel.ts';
 import { describeError } from './components/errors.ts';
 import { displayZone } from './components/format.ts';
 import { currentLabelChoice, type LabelChoice, labelEntry, labelPreviewOutcome } from './components/labelPickerModel.ts';
@@ -55,11 +56,6 @@ function dockAwayFrom(workDate: string): DockSide {
   column.scrollIntoView({ block: 'nearest' });
   const box = column.getBoundingClientRect();
   return box.left + box.width / 2 > document.documentElement.clientWidth / 2 ? 'left' : 'right';
-}
-
-/** True when `inner` lies wholly within `outer`: a control in this position behind the drawer is entirely hidden (WCAG 2.2 SC 2.4.11). */
-function whollyCovered(inner: DOMRect, outer: DOMRect): boolean {
-  return inner.width > 0 && inner.height > 0 && inner.left >= outer.left && inner.right <= outer.right && inner.top >= outer.top && inner.bottom <= outer.bottom;
 }
 
 /**
@@ -240,7 +236,10 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
       frame = requestAnimationFrame(() => {
         const panel = document.querySelector<HTMLElement>('[data-day-editor]');
         if (panel === null || !target.isConnected) return;
-        if (whollyCovered(target.getBoundingClientRect(), panel.getBoundingClientRect())) setDockSide((side) => (side === 'left' ? 'right' : 'left'));
+        const root = document.documentElement;
+        if (whollyCovered(target.getBoundingClientRect(), panel.getBoundingClientRect(), { width: root.clientWidth, height: root.clientHeight })) {
+          setDockSide((side) => (side === 'left' ? 'right' : 'left'));
+        }
       });
     };
     document.addEventListener('focusin', redock);

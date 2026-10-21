@@ -1,0 +1,48 @@
+148a149
+> let gateRelease: () => void = () => undefined; // TMPDEBUG
+165a167
+>       if (label.includes("Settings")) console.log("TMPDEBUG stop " + stop.name + " visible " + stop.visible + " " + stop.covers.join("|"));
+168a171
+>     if (process.env.FIX1_GATE === '1') { const n = await page.evaluate<string>('document.activeElement ? (document.activeElement.textContent || "") : ""'); if (n.includes('Import from Excel')) { gateRelease(); await page.waitForTimeout(400); } } // TMPDEBUG
+173c176,182
+< async function walkScreens(page: Page, world: World, signInPageAs: (credentials: { email: string; password: string }, startHash?: string) => Promise<void>, width: number) {
+---
+> async function walkScreens(
+>   page: Page,
+>   world: World,
+>   signInPageAs: (credentials: { email: string; password: string }, startHash?: string) => Promise<void>,
+>   width: number,
+>   options: { slowTransferMs?: number } = {},
+> ) {
+174a184,201
+>   // The export and import card of Settings loads on demand (a lazy chunk). A slow chunk arrives while a walk is under way and moves
+>   // everything below it, so a test can ask for one and show that the walk waits for the card.
+>   const slow = options.slowTransferMs;
+>   if (process.env.FIX1_GATE === '1') {
+>     const gate = new Promise<void>((done) => {
+>       gateRelease = done;
+>     });
+>     await page.route(/\/assets\/SettingsTransfer[^/]*\.js$/, async (route) => {
+>       await gate;
+>       await route.continue();
+>     }); // TMPDEBUG
+>   }
+>   if (slow !== undefined) {
+>     await page.route(/\/assets\/SettingsTransfer[^/]*\.js$/, async (route) => {
+>       await new Promise((done) => setTimeout(done, slow));
+>       await route.continue();
+>     });
+>   }
+182a210
+>   console.log('TMPDEBUG card count before walk ' + (await page.getByRole('region', { name: 'Export and import settings' }).count()) + ' loading ' + (await page.getByText('Loading export and import').count()));
+183a212
+>   console.log('TMPDEBUG card count after walk ' + (await page.getByRole('region', { name: 'Export and import settings' }).count()));
+232a262,269
+> 
+>   // WP5-UX4-FIX1: the walk of Settings used to start before the lazy export and import card had arrived, and the card's arrival moved the
+>   // focused control out of the window (once in 370 runs). With the chunk held back for 1.5 s on purpose the walk must still pass.
+>   test('Shift+Tab never stops on a hidden control at 360px with the export and import card arriving late', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+>     test.setTimeout(180_000);
+>     await page.setViewportSize({ width: 360, height: 740 });
+>     await walkScreens(page, await newWorld(adminSeed, builtServer), signInPageAs, 360, { slowTransferMs: Number(process.env.FIX1_SLOW ?? '1500') });
+>   });

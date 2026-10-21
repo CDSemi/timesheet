@@ -1,0 +1,45 @@
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -94 +98,2 @@ test.beforeEach(({ page }) => {
+-    const expected = /status of (401|409|422)/.test(message.text());
++    // A request the test itself aborts (U4-15, "no answer from the server") logs net::ERR_FAILED; only those tests allow it.
++    const expected = /status of (401|409|422)/.test(message.text()) || (allowNetworkConsoleError && /net::ERR_FAILED/.test(message.text()));
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -416 +421,4 @@ test('an overnight entry needs its explicit end date and is saved with it', asyn
+-    await expect(form.getByRole('alert')).toContainText('end_not_after_start');
++    // U4-15: the server's refusal is the "not saved" alert; its OK button gives the dialog back.
++    await expect(savedFailedAlert(page)).toContainText('end_not_after_start');
++    await savedFailedAlert(page).getByRole('button', { name: 'OK', exact: true }).click();
++    await expect(savedFailedAlert(page)).toHaveCount(0);
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -1538 +1551,0 @@ test('phone break chips: a row that cannot be saved and a server refusal mark th
+-    await expect(form.getByRole('alert')).toContainText('A break cannot be saved as it is.');
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -2097 +2112,3 @@ test('Check out refusals: suggested breaks that end after now, and a future_brea
+-    await expect(dialog.getByRole('alert')).toContainText('A break cannot be saved as it is.');
++    // U4-15: the refusal opens the alert (the message names Break 2); OK moves focus to the marked chip or row.
++    await expect(savedFailedAlert(page)).toContainText('Break 2 ends later than five minutes from now.');
++    await savedFailedAlert(page).getByRole('button', { name: 'OK', exact: true }).click();
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -2109 +2127,2 @@ test('Check out refusals: suggested breaks that end after now, and a future_brea
+-    await expect(dialog.getByRole('alert').last()).toContainText('inside their work session');
++    await expect(savedFailedAlert(page)).toContainText('inside their work session');
++    await savedFailedAlert(page).getByRole('button', { name: 'OK', exact: true }).click();
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -2325 +2344,4 @@ test('Check in then Check out asks for break confirmation and sends the session
+-  await expect(dialog.getByRole('alert')).toContainText('inside their work session');
++  // U4-15: the refusal is an alert dialog with one OK button, no longer a paragraph at the end of the dialog body.
++  await expect(savedFailedAlert(page)).toContainText('inside their work session');
++  await savedFailedAlert(page).getByRole('button', { name: 'OK', exact: true }).click();
++  await expect(savedFailedAlert(page)).toHaveCount(0);
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -3104 +3126,2 @@ test.describe('WP5-UX3-T07: cards read in the reporting zone', () => {
+-      await expect(runningCard).toContainText('Checked in and out');
++      // U4-11: a session that is still running was only checked in; "and out" is for a closed one.
++      await expect(runningCard.locator('.session-source')).toHaveText('Checked in');
+

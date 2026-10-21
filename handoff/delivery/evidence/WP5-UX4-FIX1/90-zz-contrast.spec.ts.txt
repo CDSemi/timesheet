@@ -1,0 +1,55 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, test } from './fixtures.ts';
+
+/*
+ * WP5-UX4-FIX1 task-local probe (never part of the repository): does a colour read right after emulateMedia see a
+ * transition that has not finished? It reads the "Today, start date" link of the new-session dialog straight after the
+ * switch (as the U4-12/13 test does) and again after the document's animations finished.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const READ = `(() => {
+  const link = [...document.querySelectorAll('dialog[open] button')].find((b) => b.getAttribute('aria-label') === 'Today, start date' || (b.textContent || '').trim() === 'Today');
+  if (!link) return null;
+  const parse = (css) => { const m = css.match(/rgba?\\(([^)]+)\\)/); const p = m[1].split(/[\\s,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; };
+  const over = (t, b) => { const a = t[3] + b[3] * (1 - t[3]); if (a === 0) return [0,0,0,0]; return [0,1,2].map((i) => (t[i] * t[3] + b[i] * b[3] * (1 - t[3])) / a).concat([a]); };
+  const stack = []; for (let n = link; n; n = n.parentElement) stack.push(parse(getComputedStyle(n).backgroundColor));
+  let bg = [255,255,255,1]; for (let i = stack.length - 1; i >= 0; i -= 1) bg = over(stack[i], bg);
+  const fg = over(parse(getComputedStyle(link).color), bg);
+  const lum = (c) => { const f = (v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+  const [hi, lo] = [lum(fg), lum(bg)].sort((a, b) => b - a);
+  return { ratio: (hi + 0.05) / (lo + 0.05), animations: document.getAnimations().length };
+})()`;
+
+test('probe: colour read straight after a theme switch', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(120_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Contrast Probe', signature: 'none' });
+  const [date = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await namedDayButton(page, date, 'Edit').click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  await expect(page.getByRole('dialog', { name: 'New session', exact: true })).toBeVisible();
+  const out = join(process.env.PROBE_OUT ?? '.', 'contrast-probe.txt');
+  const low: string[] = [];
+  let immediateMin = 99;
+  let settledMin = 99;
+  for (let round = 0; round < 40; round += 1) {
+    const theme = round % 2 === 0 ? 'dark' : 'light';
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    const immediate = await page.evaluate<{ ratio: number; animations: number } | null>(READ);
+    await page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(d)))');
+    await page.evaluate('Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined)))');
+    const settled = await page.evaluate<{ ratio: number; animations: number } | null>(READ);
+    immediateMin = Math.min(immediateMin, immediate?.ratio ?? 99);
+    settledMin = Math.min(settledMin, settled?.ratio ?? 99);
+    if ((immediate?.ratio ?? 99) < 4.5) low.push(`round ${round} ${theme} (${testInfo.project.name}): immediate ${immediate?.ratio.toFixed(2)} (animations ${immediate?.animations}), settled ${settled?.ratio.toFixed(2)}`);
+  }
+  const line = `PROBE ${testInfo.project.name}: 40 switches, lowest immediate ${immediateMin.toFixed(2)}, lowest settled ${settledMin.toFixed(2)}, immediate reads below 4.5: ${low.length}\n${low.join('\n')}\n`;
+  console.log(line);
+  appendFileSync(out, line);
+});

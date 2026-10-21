@@ -1,0 +1,124 @@
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -2724 +2771 @@ for (const { name, width } of [
+-      expect(modalEditor, width === 1440 ? 'the panel beside the sheet is not modal' : 'below 1360px the editor is modal').toBe(width !== 1440);
++      expect(modalEditor, isMobile ? 'the phone bottom sheet is modal' : 'the drawer is not modal').toBe(isMobile);
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -3221,2 +3279,7 @@ test.describe('WP5-UX-B-02: below 1360px the floating panel never hides a focuse
+-          const state = await focusHiddenByPanel(page);
+-          expect(state.hidden, `${state.name} is focused entirely under the panel after ${step + 1} ${key} presses`).toBe(false);
++          let state = await focusHiddenByPanel(page);
++          if (state.hidden) {
++            await settleFrames(page);
++            state = await focusHiddenByPanel(page);
++            redocks += 1;
++          }
++          expect(state.hidden, `${state.name} is focused entirely under the drawer after ${step + 1} ${key} presses (it was docked ${side})`).toBe(false);
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -3251,2 +3311,2 @@ test.describe('WP5-UX-B-02: below 1360px the floating panel never hides a focuse
+-      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(modal);
+-      // Focus on another sheet control: beside the sheet it takes the focus; a modal panel leaves the page inert, so focus stays in the panel.
++      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
++      // Focus on another sheet control takes the focus: the page is not inert.
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -3254 +3314 @@ test.describe('WP5-UX-B-02: below 1360px the floating panel never hides a focuse
+-      if (!modal) await expect(dayButton(other)).toBeFocused();
++      await expect(dayButton(other)).toBeFocused();
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -3261,4 +3321,2 @@ test.describe('WP5-UX-B-02: below 1360px the floating panel never hides a focuse
+-      if (!modal) {
+-        await page.getByRole('switch', { name: 'Show worked hours' }).focus();
+-        await expect(page.getByRole('switch', { name: 'Show worked hours' })).toBeFocused();
+-      }
++      await page.getByRole('switch', { name: 'Show worked hours' }).focus();
++      await expect(page.getByRole('switch', { name: 'Show worked hours' })).toBeFocused();
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -3417 +3475 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
+-      expect.soft(await editor.evaluate((element) => element.matches(':modal')), `${width}px: the editor is modal`).toBe(true);
++      expect.soft(await editor.evaluate((element) => element.matches(':modal')), `${width}px: the editor is not modal`).toBe(false);
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -3463 +3522 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
+-      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(true);
++      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -3471,10 +3530,2 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
+-      const colours = await editor.evaluate((element) => {
+-        const probe = element.ownerDocument.createElement('div');
+-        probe.style.backgroundColor = 'var(--scrim-side)';
+-        element.ownerDocument.body.append(probe);
+-        const token = element.ownerDocument.defaultView?.getComputedStyle(probe).backgroundColor ?? '';
+-        probe.remove();
+-        return { backdrop: element.ownerDocument.defaultView?.getComputedStyle(element, '::backdrop').backgroundColor ?? '', token };
+-      });
+-      expect(colours.backdrop, `${date}: the backdrop is the lighter side scrim`).toBe(colours.token);
+-      expect(colours.token, 'the token is a translucent colour').toMatch(/^rgba\(/);
++      // No backdrop: a non-modal dialog is not in the top layer, so the page behind it is neither dimmed nor inert.
++      expect(await page.locator('[inert]').count(), `${date}: nothing on the page is inert`).toBe(0);
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -3513 +3564,2 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
+-      await expect(editor).not.toHaveAttribute('data-side', /.*/);
++      await expect(page.locator('.sheet-area')).toHaveAttribute('data-editor-layout', 'beside');
++      await expect(editor).toHaveAttribute('data-side', 'right');
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -3519,5 +3571,5 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
+-      // The page cap lifts to --page-max-editor (1600px) while the editor is open, and the panel stands beside the sheet.
+-      expect(open.page, `${width}px: the page is wider than the 1200px cap while editing`).toBeGreaterThan(width >= 1632 ? 1599 : 1200);
+-      expect(open.page, `${width}px: the page stays within 1600px`).toBeLessThanOrEqual(1600.5);
+-      const [panel, sheet] = [await editor.boundingBox(), await page.locator('.sheet-area > section.card').boundingBox()];
+-      expect((panel?.x ?? 0) + 0.5, `${width}px: the panel is right of the sheet`).toBeGreaterThanOrEqual((sheet?.x ?? 0) + (sheet?.width ?? 0));
++      // The page cap grows by the drawer's room (--editor-reserve, 416px) while the editor is open, and the drawer stands beside the sheet.
++      expect(open.page, `${width}px: the page is wider than the 1200px cap while editing`).toBeGreaterThan(1200);
++      expect(open.page, `${width}px: the page stays within the cap plus the drawer's room`).toBeLessThanOrEqual(1616.5);
++      const [panel, sheet] = [await editor.boundingBox(), await page.locator('.sheet-area > section.paper').boundingBox()];
++      expect((panel?.x ?? 0) - 16 + 0.5, `${width}px: the drawer is right of the sheet, 16px or more clear`).toBeGreaterThanOrEqual((sheet?.x ?? 0) + (sheet?.width ?? 0));
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -4002 +4067,3 @@ test('"Confirm breaks" on a session that ended earlier today lists the suggested
+-  await expect(row.time).toHaveValue(wallClock(instantAt(startMs + 120 * 60_000), zone));
++  const breakStart = wallClock(instantAt(startMs + 120 * 60_000), zone);
++  expect(breakStart.endsWith(`:${String(seconds).padStart(2, '0')}`), 'the break starts at the pinned second').toBe(true);
++  await expect(row.time).toHaveValue(seconds === 0 ? breakStart.slice(0, 5) : breakStart);
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -4234,9 +4313,3 @@ test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape a
+-      if (path.endsWide) {
+-        // From 1360px the editor is the non-modal panel; focus is back on the picker that opened the review.
+-        expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+-        await expect(page.getByRole('button', { name: new RegExp(`^Category for ${workedDay}`) })).toBeFocused();
+-      } else {
+-        // Below 1360px the editor now is the floating modal panel and holds focus; the page behind is inert.
+-        await expect.poll(async () => editor.evaluate((element) => element.matches(':modal'))).toBe(true);
+-        await expect.poll(async () => editor.evaluate((element) => element.matches(':focus-within'))).toBe(true);
+-      }
++      // Beside the sheet or floating, the editor is the non-modal drawer; focus is back on the picker that opened the review.
++      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
++      await expect(page.getByRole('button', { name: new RegExp(`^Category for ${workedDay}`) })).toBeFocused();
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -4279 +4352 @@ test.describe('WP5-UX3-T08: Escape closes only the top dialog, and focus returns
+-      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(modal);
++      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -4372,9 +4445,3 @@ test.describe('WP5-UX3-T08: Escape closes only the top dialog, and focus returns
+-      if (path.endsWide) {
+-        // Back to the non-modal panel beside the sheet: focus is on the button that opened the dialog.
+-        expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+-        await expect(add).toBeFocused();
+-      } else {
+-        // Below 1360px the editor switches to the floating modal panel only now, and holds focus.
+-        await expect.poll(async () => editor.evaluate((element) => element.matches(':modal'))).toBe(true);
+-        await expect.poll(async () => editor.evaluate((element) => element.matches(':focus-within'))).toBe(true);
+-      }
++      // The drawer is non-modal beside the sheet and floating alike: focus is on the button that opened the dialog.
++      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
++      await expect(add).toBeFocused();
+

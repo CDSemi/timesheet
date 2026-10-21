@@ -1,0 +1,10 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+cd $T/export
+O=$T/out
+for f in password-change workbook-import opening-balance holiday-import sharing sharing-matrix clock-out-breaks delivery; do
+  node node_modules/vitest/vitest.mjs run tests/integration/$f.test.ts --reporter=verbose > $O/13-integ-$f.txt 2>&1
+  echo "$f exit $? : $(grep -E '^\s+Tests ' $O/13-integ-$f.txt | cut -c1-80) dep=$(grep -ci deprecat $O/13-integ-$f.txt)" >> $O/13-integ-exits.txt
+done
+cat $O/13-integ-exits.txt
+echo integ-done > $O/integ.done

@@ -1,0 +1,68 @@
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -3262,2 +3262,2 @@ test.describe('WP5-UX-B-02: below 1360px the floating panel never hides a focuse
+-        await page.getByRole('switch', { name: 'Show details' }).focus();
+-        await expect(page.getByRole('switch', { name: 'Show details' })).toBeFocused();
++        await page.getByRole('switch', { name: 'Show worked hours' }).focus();
++        await expect(page.getByRole('switch', { name: 'Show worked hours' })).toBeFocused();
+
+FILE a/tests/e2e/day-editor.spec.ts
+@@ -3614,2 +3614,3 @@ test.describe('WP5-UX3-FIX1: from 768 to 899px every focused sheet control is fu
+-        // The label column and seven 108px columns need 850px: the card scrolls at 768 to 860, and at 899 (867px) it does not.
+-        expect(scrolls, `${width}px: the week card scrolls sideways while the columns need more room than the card`).toBe(width <= 860);
++        // The label column and seven 108px columns need 850px; the card is the window less the page padding (32px) and the paper padding
++        // (32px, round 4): it scrolls from 768 to 913px (899px gives 835px) and at 920px (856px) it does not.
++        expect(scrolls, `${width}px: the week card scrolls sideways while the columns need more room than the card`).toBe(width <= 913);
+index fe8f201..3cefc3a 100644
+
+FILE a/tests/e2e/hover.spec.ts
+@@ -349,3 +349,3 @@ test('Show details is a native switch: role, off at load, Space and click toggle
+-  await expect(label).toHaveText('Show details');
+-  await expect(page.getByText('Show details', { exact: true })).toBeVisible();
+-  await expect(page.getByRole('button', { name: 'Show details' })).toHaveCount(0);
++  await expect(label).toHaveText('Show worked hours');
++  await expect(page.getByText('Show worked hours', { exact: true })).toBeVisible();
++  await expect(page.getByRole('button', { name: 'Show worked hours' })).toHaveCount(0);
+
+FILE a/tests/e2e/hover.spec.ts
+@@ -361 +361 @@ test('Show details is a native switch: role, off at load, Space and click toggle
+-  await expect(label).toHaveText('Show details');
++  await expect(label).toHaveText('Show worked hours');
+
+FILE a/tests/e2e/hover.spec.ts
+@@ -374 +374 @@ test('Show details is a native switch: role, off at load, Space and click toggle
+-  await expect(page.getByRole('switch', { name: 'Show details', exact: true })).not.toBeChecked();
++  await expect(page.getByRole('switch', { name: 'Show worked hours', exact: true })).not.toBeChecked();
+
+FILE a/tests/e2e/surfaces.spec.ts
+@@ -116,2 +125,6 @@ for (const situation of SITUATIONS) {
+-    const barCorners = await computed(periodBar, CORNERS);
+-    for (const corner of CORNERS) expect(barCorners[corner], `period bar ${corner}`).toBe('12px');
++    // (The phone paper is full-bleed and square, so it takes no corner there.)
++    for (const surface of surfaces.filter((item) => item.raised)) {
++      const corners = await computed(surface.locator, CORNERS);
++      const expected = surface.name === 'paper' && project === 'mobile' ? '0px' : '12px';
++      for (const corner of CORNERS) expect(corners[corner], `${surface.name} ${corner}`).toBe(expected);
++    }
+
+FILE a/tests/e2e/surfaces.spec.ts
+@@ -124 +136 @@ for (const situation of SITUATIONS) {
+-    expect(await footer.evaluate((element) => element.closest('.sheet-week') === null && element.parentElement?.classList.contains('sheet') === true)).toBe(true);
++    expect(await footer.evaluate((element) => element.closest('.sheet-week') === null && element.parentElement?.classList.contains('sheet') === true && element.closest('[data-paper]') !== null)).toBe
+
+FILE a/tests/e2e/surfaces.spec.ts
+@@ -133,3 +145,4 @@ for (const situation of SITUATIONS) {
+-      const ratio = contrast(backdrop, pageBackground);
+-      lines.push(`${name} backdrop against the page ${round(ratio)}:1`);
+-      expect(ratio, `${name} stands on the page`).toBeLessThan(1.01);
++      const ratio = contrast(backdrop, card);
++      lines.push(`${name} backdrop against the card ${round(ratio)}:1`);
++      expect(ratio, `${name} stands on the paper (the card colour)`).toBeLessThan(1.01);
++      expect(await page.locator(name).evaluate((element) => element.closest('[data-paper]') !== null), `${name} is inside the paper`).toBe(true);
+
+FILE a/tests/e2e/surfaces.spec.ts
+@@ -138,2 +151,2 @@ for (const situation of SITUATIONS) {
+-    expect((await computed(main, ['box-shadow']))['box-shadow'], 'the sheet column has no surface of its own').toBe('none');
+-    expect(parseColour(await computedStyle(main, 'backgroundColor'))[3], 'the sheet column is transparent').toBe(0);
++    expect((await computed(main, ['box-shadow']))['box-shadow'], 'the sheet column is the paper and is raised').not.toBe('none');
++    expect(parseColour(await computedStyle(main, 'backgroundColor'))[3], 'the paper is opaque').toBe(1);
+

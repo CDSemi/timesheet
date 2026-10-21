@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { besideNeed, DRAWER_MIN_WIDTH, editorLayout, type EditorLayoutInput, sheetRoomBeside } from '../../src/client/components/editorLayoutModel.ts';
+import { besideNeed, type Box, COVER_TOLERANCE, DRAWER_MIN_WIDTH, editorLayout, type EditorLayoutInput, sheetRoomBeside, whollyCovered } from '../../src/client/components/editorLayoutModel.ts';
 
 /**
  * The tokens of the style sheet at 15px per rem: --page-pad 16px on both sides, --editor-width 400px, --editor-gap 16px and
@@ -81,5 +81,64 @@ describe('editorLayout (U4-07)', () => {
     expect(besideNeed({ ...TOKENS, editorWidth: 440 })).toBe(need + 40);
     expect(editorLayout({ viewportWidth: need, ...TOKENS, editorWidth: 440 })).toBe('floating');
     expect(editorLayout({ viewportWidth: need + 40, ...TOKENS, editorWidth: 440 })).toBe('beside');
+  });
+});
+
+/**
+ * The floating drawer's re-dock rule (WCAG 2.2 SC 2.4.11). The numbers are the ones measured in the WP5-UX4-GATE walk at 1280x800:
+ * the "Edit 10/19" button rested at 764.23..800.23 in a window 800px high, under a drawer docked right at 880..1280 and 56..800.
+ */
+describe('whollyCovered (U4-05, SC 2.4.11)', () => {
+  const WINDOW = { width: 1280, height: 800 };
+  const DRAWER_RIGHT: Box = { left: 880, top: 56, right: 1280, bottom: 800 };
+  const control = (left: number, top: number, width: number, height: number): Box => ({ left, top, right: left + width, bottom: top + height });
+
+  it('covers a control wholly inside the drawer', () => {
+    expect(whollyCovered(control(900, 100, 120, 36), DRAWER_RIGHT, WINDOW)).toBe(true);
+    expect(whollyCovered(control(880, 56, 400, 744), DRAWER_RIGHT, WINDOW)).toBe(true);
+  });
+
+  it('covers a control that rests 0.23px below the window while all of its visible part lies under the drawer (the measured defect)', () => {
+    expect(whollyCovered(control(1000, 764.23, 100, 36), DRAWER_RIGHT, WINDOW)).toBe(true);
+  });
+
+  it('covers a control that sticks out of the window by more than the tolerance when the rest of it lies under the drawer', () => {
+    // 20px of the control lie below the window: nothing of them can be seen, so they cannot keep it uncovered.
+    expect(whollyCovered(control(1000, 780, 100, 40), DRAWER_RIGHT, WINDOW)).toBe(true);
+    // The same on the right edge of the window.
+    expect(whollyCovered(control(1270, 100, 40, 36), DRAWER_RIGHT, WINDOW)).toBe(true);
+  });
+
+  it('does not cover a control with any visible part beside the drawer', () => {
+    // Wholly clear of the drawer.
+    expect(whollyCovered(control(100, 100, 120, 36), DRAWER_RIGHT, WINDOW)).toBe(false);
+    // 30px of 120 stay left of the drawer's edge.
+    expect(whollyCovered(control(850, 100, 120, 36), DRAWER_RIGHT, WINDOW)).toBe(false);
+    // Above the drawer's top edge (the header band, 56px) by more than the tolerance.
+    expect(whollyCovered(control(900, 20, 100, 36), DRAWER_RIGHT, WINDOW)).toBe(false);
+    // Visible but not covered, whatever the window clips: the part below the window is ignored, the part beside the drawer is not.
+    expect(whollyCovered(control(860, 780, 100, 40), DRAWER_RIGHT, WINDOW)).toBe(false);
+  });
+
+  it('allows the tolerance at the drawer edges and no more', () => {
+    expect(COVER_TOLERANCE).toBe(1);
+    expect(whollyCovered(control(880 - COVER_TOLERANCE, 100, 100 + COVER_TOLERANCE, 36), DRAWER_RIGHT, WINDOW)).toBe(true);
+    expect(whollyCovered(control(880 - COVER_TOLERANCE - 0.5, 100, 100 + COVER_TOLERANCE + 0.5, 36), DRAWER_RIGHT, WINDOW)).toBe(false);
+  });
+
+  it('does not report a control that is wholly outside the window or has no size: there is nothing to uncover', () => {
+    expect(whollyCovered(control(1000, 810, 100, 36), DRAWER_RIGHT, WINDOW)).toBe(false);
+    expect(whollyCovered(control(1000, -60, 100, 36), DRAWER_RIGHT, WINDOW)).toBe(false);
+    expect(whollyCovered(control(1300, 100, 100, 36), DRAWER_RIGHT, WINDOW)).toBe(false);
+    expect(whollyCovered(control(1000, 100, 0, 36), DRAWER_RIGHT, WINDOW)).toBe(false);
+    expect(whollyCovered(control(1000, 100, 100, 0), DRAWER_RIGHT, WINDOW)).toBe(false);
+  });
+
+  it('reads a drawer docked left the same way', () => {
+    const left: Box = { left: 0, top: 56, right: 400, bottom: 800 };
+    expect(whollyCovered(control(20, 764.23, 100, 36), left, WINDOW)).toBe(true);
+    expect(whollyCovered(control(380, 100, 100, 36), left, WINDOW)).toBe(false);
+    // A control resting 0.4px left of the window edge is clipped to it.
+    expect(whollyCovered(control(-0.4, 100, 100, 36), left, WINDOW)).toBe(true);
   });
 });

@@ -1,0 +1,38 @@
+== t05: 2026-10-21T09:23:09Z spec zz-t05.spec.ts
+
+Running 6 tests using 2 workers
+
+  -  1 [mobile] › tests\e2e\zz-t05.spec.ts:43:1 › T05: export holds only allowlisted keys; import writes nothing before the confirmation; auto-submit stays off without the tick; a tampered file is refused
+EXPORT file name timesheet-settings-<date>.json; 34 key paths: format, schema_version, app_version, exported_at, scope, data, data.work_policy, data.work_policy.required_minutes, data.work_policy.threshold_minutes, data.work_policy.rounding_step_minutes, data.work_policy.reference_start, data.work_policy.reference_end, data.work_policy.breaks, data.work_policy.breaks.[]start_offset_minutes, data.work_policy.breaks.[]duration_minutes, data.work_policy.breaks.[]counts_as_work, data.work_policy.breaks.[]start_offset_minutes, data.work_policy.breaks.[]duration_minutes, data.work_policy.breaks.[]counts_as_work, data.work_policy.breaks.[]start_offset_minutes, data.work_policy.breaks.[]duration_minutes, data.work_policy.breaks.[]counts_as_work, data.work_policy.deficit_mode, data.submission, data.submission.to, data.submission.cc, data.submission.subject_template, data.submission.body_template, data.submission.show_ot_on_pdf, data.submission.reminder_offsets_minutes, data.submission.auto_note_enabled, data.submission.auto_note_text, data.submission.auto_submit, data.theme
+EXPORT forbidden substrings checked (17: signature id, auto_image, authorized, sha256, attachment, apply_to_overdue_drafts, account email/id/name, share grantee, opening, ledger, session, password, token): hits []
+IMPORT preview open: tick checked false; writes so far ["POST /api/policies/preview"]; policies 1 -> 1; submission seq 1 -> 1
+IMPORT cancelled: writes ["POST /api/policies/preview"] (only the read-only policy preview POST is allowed)
+IMPORT confirmed without the tick: writes ["POST /api/policies","POST /api/settings/submission"]; submission seq 1 -> 2; auto_submit file=true -> stored false; auto_image.authorized false; policies 1 -> 2
+TAMPER "unknown top-level key": refusal alert shown true; import preview dialog shown false; writes []
+TAMPER "schema_version 2": refusal alert shown true; import preview dialog shown false; writes []
+TAMPER "format changed": refusal alert shown true; import preview dialog shown false; writes []
+TAMPER "unknown key in data.submission": refusal alert shown true; import preview dialog shown false; writes []
+TAMPER "not JSON": refusal alert shown true; import preview dialog shown false; writes []
+  ok 2 [desktop] › tests\e2e\zz-t05.spec.ts:43:1 › T05: export holds only allowlisted keys; import writes nothing before the confirmation; auto-submit stays off without the tick; a tampered file is refused (2.6s)
+[mobile] employee at #/settings/admin: lands on #/timesheet; Company calendar file region count 0; company file input count 0
+[mobile] employee at #/admin: lands on #/timesheet; Company calendar file region count 0; company file input count 0
+[desktop] employee at #/settings/admin: lands on #/timesheet; Company calendar file region count 0; company file input count 0
+[mobile] employee at #/settings: lands on #/settings; Company calendar file region count 0; company file input count 0
+[mobile] employee /api/admin/ requests made by the page: 0 []
+[mobile] employee direct calls: GET /api/admin/users 403, POST calendar import preview 403, POST payroll-exceptions 403
+  ok 3 [mobile] › tests\e2e\zz-t05.spec.ts:112:1 › T05: an employee sees no company controls; the admin routes refuse the employee; employee pages make no /api/admin/ request (4.6s)
+  -  5 [mobile] › tests\e2e\zz-t05.spec.ts:135:1 › T05: the transfer chunk loads lazily (not on the Timesheet, on Settings)
+[desktop] employee at #/admin: lands on #/timesheet; Company calendar file region count 0; company file input count 0
+[desktop] employee at #/settings: lands on #/settings; Company calendar file region count 0; company file input count 0
+[desktop] employee /api/admin/ requests made by the page: 0 []
+[desktop] employee direct calls: GET /api/admin/users 403, POST calendar import preview 403, POST payroll-exceptions 403
+  ok 4 [desktop] › tests\e2e\zz-t05.spec.ts:112:1 › T05: an employee sees no company controls; the admin routes refuse the employee; employee pages make no /api/admin/ request (4.4s)
+CHUNKS Timesheet load: ["200 jsx-runtime-CEkb4Vnf.js 15025B","200 index-DSx42dfW.js 489141B"]
+CHUNKS Settings: ["200 SettingsTransfer-CGqvSC82.js 7680B","200 SettingsTransferFile-CgnSYcZl.js 26783B"]
+CHUNKS transfer chunk on the Timesheet: false; on Settings: true
+  ok 6 [desktop] › tests\e2e\zz-t05.spec.ts:135:1 › T05: the transfer chunk loads lazily (not on the Timesheet, on Settings) (2.0s)
+
+  2 skipped
+  4 passed (11.5s)
+exit=0
+== t05 end 2026-10-21T09:23:21Z

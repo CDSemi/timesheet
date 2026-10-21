@@ -1,0 +1,151 @@
+import { appendFileSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { createAccountByAdminApi, expect, newPerson, starterPolicyBody, statusInPage, test, type SeedClient } from './fixtures.ts';
+
+/*
+ * WP5-UX4-GATE task-local probe (never part of the repository): the settings export and import (T05), the employee / admin boundary,
+ * the lazy chunks and the admin requests of an employee page. The exported file is read in memory only and is never written to disk by
+ * this probe; only key names are recorded. Notes go to GATE_OUT/t05.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUT = process.env.GATE_OUT ?? '';
+const rec = (line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 't05.txt'), `${line}\n`);
+};
+
+const card = (page: Page) => page.getByRole('region', { name: 'Export and import settings' });
+const fileInput = (page: Page) => page.getByLabel('Import settings from a file (.json)');
+const importDialog = (page: Page) => page.getByRole('dialog', { name: 'Import settings' });
+
+function keyPaths(value: unknown, prefix = ''): string[] {
+  if (Array.isArray(value)) return value.flatMap((item) => keyPaths(item, `${prefix}[]`));
+  if (value !== null && typeof value === 'object') return Object.entries(value).flatMap(([k, v]) => [`${prefix}${k}`, ...keyPaths(v, `${prefix}${k}.`)]);
+  return [];
+}
+
+async function seedSource(adminSeed: SeedClient, server: Parameters<typeof newPerson>[1]) {
+  const person = await newPerson(adminSeed, server, { displayName: 'Synthetic Source Gate', to: ['payroll-synthetic@example.invalid'], cc: ['manager-synthetic@example.invalid'], autoSubmit: true, autoNote: { enabled: true, text: 'Submitted automatically (synthetic)' }, signature: 'authorized' });
+  const periods = await person.api.periodsCurrent();
+  await person.api.call('POST', '/api/policies', { ...starterPolicyBody(periods.current.period_start), deficit_mode: 'choose_at_signoff' }, 201);
+  const saved = (await person.api.call<{ settings: { seq: number; recipients: { to: string[]; cc: string[] } } }>('GET', '/api/settings/submission')).settings;
+  await person.api.call('POST', '/api/settings/submission', { expected_seq: saved.seq, to: saved.recipients.to, cc: saved.recipients.cc, auto_submit: true, show_ot_on_pdf: true, reminder_offsets_minutes: [2880, 90] }, 201);
+  await person.api.seedCompleteDay(await person.api.displayedSeedDay());
+  await person.api.call('POST', '/api/ot/opening-balance', { minutes: 90, as_of_date: addDays(periods.today_local, -30), reason: 'Synthetic opening balance', expected_version: 0 }, 201);
+  const reader = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Reader Gate' });
+  await person.api.call('POST', '/api/shares', { grantee_email: reader.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  const signatureId = (await person.api.call<{ signature: { id: string } }>('GET', '/api/signatures/current')).signature.id;
+  return { person, signatureId, reader };
+}
+
+test('T05: export holds only allowlisted keys; import writes nothing before the confirmation; auto-submit stays off without the tick; a tampered file is refused', async ({ page, builtServer, adminSeed, signInPageAs }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(120_000);
+  const { person, signatureId, reader } = await seedSource(adminSeed, builtServer);
+  await signInPageAs(person.account, '#/settings');
+  await expect(card(page)).toBeVisible();
+  const [download] = await Promise.all([page.waitForEvent('download'), card(page).getByRole('button', { name: 'Export settings' }).click()]);
+  const text = readFileSync(await download.path(), 'utf8');
+  const file = JSON.parse(text) as { data: Record<string, unknown> };
+  const paths = keyPaths(file);
+  rec(`EXPORT file name ${download.suggestedFilename().replace(/\d{4}-\d{2}-\d{2}/, '<date>')}; ${paths.length} key paths: ${paths.join(', ')}`);
+  const forbidden = [signatureId, 'auto_image', 'authorized', 'sha256', 'attachment', 'apply_to_overdue_drafts', person.account.email, person.account.id, 'Synthetic Source Gate', reader.email, 'Synthetic Reader Gate', 'opening', 'ledger', 'session', 'grantee', 'password', 'token'];
+  const hits = forbidden.filter((f) => text.toLowerCase().includes(f.toLowerCase()));
+  rec(`EXPORT forbidden substrings checked (${forbidden.length}: signature id, auto_image, authorized, sha256, attachment, apply_to_overdue_drafts, account email/id/name, share grantee, opening, ledger, session, password, token): hits ${JSON.stringify(hits.map((h) => (h.length > 12 ? '<value>' : h)))}`);
+  expect(hits).toEqual([]);
+
+  // import into a fresh account
+  await page.goto('about:blank');
+  await page.context().clearCookies();
+  const target = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Target Gate', to: ['other-synthetic@example.invalid'], signature: 'none' });
+  const before = (await target.api.call<{ settings: { seq: number; auto_submit: boolean; auto_image: { authorized: boolean } } }>('GET', '/api/settings/submission')).settings;
+  const policiesBefore = (await target.api.call<{ policies: unknown[] }>('GET', '/api/policies')).policies.length;
+  const writes: string[] = [];
+  page.on('request', (r) => { const p = new URL(r.url()).pathname; if (r.method() !== 'GET' && p.startsWith('/api/')) writes.push(`${r.method()} ${p}`); });
+  await signInPageAs(target.account, '#/settings');
+  await expect(card(page)).toBeVisible();
+  writes.length = 0;
+  await fileInput(page).setInputFiles({ name: 'timesheet-settings-synthetic.json', mimeType: 'application/json', buffer: Buffer.from(text) });
+  const dialog = importDialog(page);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('region', { name: 'Policy preview' })).toBeVisible();
+  const tick = dialog.getByLabel('Also turn automatic submission on');
+  rec(`IMPORT preview open: tick checked ${await tick.isChecked()}; writes so far ${JSON.stringify(writes)}; policies ${policiesBefore} -> ${(await target.api.call<{ policies: unknown[] }>('GET', '/api/policies')).policies.length}; submission seq ${before.seq} -> ${(await target.api.call<{ settings: { seq: number } }>('GET', '/api/settings/submission')).settings.seq}`);
+  expect(writes.filter((w) => w !== 'POST /api/policies/preview')).toEqual([]);
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  rec(`IMPORT cancelled: writes ${JSON.stringify(writes)} (only the read-only policy preview POST is allowed)`);
+  expect(writes.filter((w) => w !== 'POST /api/policies/preview')).toEqual([]);
+  // confirm without the tick
+  await fileInput(page).setInputFiles({ name: 'timesheet-settings-synthetic.json', mimeType: 'application/json', buffer: Buffer.from(text) });
+  await expect(dialog.getByRole('region', { name: 'Policy preview' })).toBeVisible();
+  writes.length = 0;
+  await dialog.getByRole('button', { name: /^Import \d+ changes?$/ }).click();
+  await expect(dialog).toHaveCount(0);
+  const after = (await target.api.call<{ settings: { seq: number; auto_submit: boolean; auto_image: { authorized: boolean } } }>('GET', '/api/settings/submission')).settings;
+  rec(`IMPORT confirmed without the tick: writes ${JSON.stringify(writes.filter((w) => !w.endsWith('/preview')))}; submission seq ${before.seq} -> ${after.seq}; auto_submit file=true -> stored ${after.auto_submit}; auto_image.authorized ${after.auto_image.authorized}; policies ${policiesBefore} -> ${(await target.api.call<{ policies: unknown[] }>('GET', '/api/policies')).policies.length}`);
+  expect(after.auto_submit).toBe(false);
+
+  // tampered files: unknown key, wrong version, wrong format, invalid json, foreign extra key in data
+  const tamper: Array<[string, (f: Record<string, unknown>) => string]> = [
+    ['unknown top-level key', (f) => JSON.stringify({ ...f, extra: 1 })],
+    ['schema_version 2', (f) => JSON.stringify({ ...f, schema_version: 2 })],
+    ['format changed', (f) => JSON.stringify({ ...f, format: 'other' })],
+    ['unknown key in data.submission', (f) => JSON.stringify({ ...f, data: { ...(f.data as object), submission: { ...((f.data as { submission: object }).submission), apply_to_overdue_drafts: true } } })],
+    ['not JSON', () => '{ this is not json'],
+  ];
+  for (const [label, make] of tamper) {
+    writes.length = 0;
+    await fileInput(page).setInputFiles({ name: 'tampered-synthetic.json', mimeType: 'application/json', buffer: Buffer.from(make(JSON.parse(text) as Record<string, unknown>)) });
+    const refusal = page.getByRole('alertdialog', { name: 'This file cannot be imported' });
+    const shown = await refusal.isVisible({ timeout: 4_000 }).catch(() => false);
+    const dlgShown = await importDialog(page).isVisible().catch(() => false);
+    rec(`TAMPER "${label}": refusal alert shown ${shown}; import preview dialog shown ${dlgShown}; writes ${JSON.stringify(writes)}`);
+    expect(shown).toBe(true);
+    expect(dlgShown).toBe(false);
+    expect(writes).toEqual([]);
+    await refusal.getByRole('button').first().click();
+  }
+});
+
+test('T05: an employee sees no company controls; the admin routes refuse the employee; employee pages make no /api/admin/ request', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(120_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Employee Gate', signature: 'none' });
+  const adminCalls: string[] = [];
+  page.on('request', (r) => { const p = new URL(r.url()).pathname; if (p.startsWith('/api/admin/')) adminCalls.push(`${r.method()} ${p}`); });
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const hash of ['#/settings/admin', '#/admin', '#/settings']) {
+    await page.goto(`${builtServer.origin}/${hash}`);
+    await page.waitForTimeout(1_200);
+    rec(`[${testInfo.project.name}] employee at ${hash}: lands on ${new URL(page.url()).hash}; Company calendar file region count ${await page.getByRole('region', { name: 'Company calendar file' }).count()}; company file input count ${await page.getByLabel('Import a company calendar file (.json)').count()}`);
+  }
+  rec(`[${testInfo.project.name}] employee /api/admin/ requests made by the page: ${adminCalls.length} ${JSON.stringify(adminCalls)}`);
+  expect(adminCalls).toEqual([]);
+  const statuses = [
+    await statusInPage(page, 'GET', '/api/admin/users'),
+    await statusInPage(page, 'POST', '/api/admin/calendar/import/preview', { calendar_id: 'x', year: 2026, effective_from: '2026-01-01', csv: 'date,name,kind', remove_dates: [] }),
+    await statusInPage(page, 'POST', '/api/admin/payroll-exceptions', {}),
+  ];
+  rec(`[${testInfo.project.name}] employee direct calls: GET /api/admin/users ${statuses[0]}, POST calendar import preview ${statuses[1]}, POST payroll-exceptions ${statuses[2]}`);
+  expect(statuses.every((s) => s === 403 || s === 404)).toBe(true);
+});
+
+test('T05: the transfer chunk loads lazily (not on the Timesheet, on Settings)', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Chunk Gate', signature: 'none' });
+  const seen: string[] = [];
+  page.on('response', (r) => { const u = new URL(r.url()); if (u.pathname.startsWith('/assets/') && u.pathname.endsWith('.js')) seen.push(`${r.status()} ${u.pathname.replace('/assets/', '')} ${r.headers()['content-length'] ?? '?'}B`); });
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  rec(`CHUNKS Timesheet load: ${JSON.stringify(seen)}`);
+  const onTimesheet = seen.some((s) => /SettingsTransfer/.test(s));
+  seen.length = 0;
+  await page.goto(`${builtServer.origin}/#/settings`);
+  await expect(card(page)).toBeVisible();
+  await page.waitForTimeout(800);
+  rec(`CHUNKS Settings: ${JSON.stringify(seen)}`);
+  rec(`CHUNKS transfer chunk on the Timesheet: ${onTimesheet}; on Settings: ${seen.some((s) => /SettingsTransfer/.test(s))}`);
+  expect(onTimesheet).toBe(false);
+});

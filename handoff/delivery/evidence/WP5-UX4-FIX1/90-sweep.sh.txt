@@ -1,0 +1,28 @@
+# Usage: bash sweep.sh   (sequential; each run has its own output folder; run after the final build)
+# America/Los_Angeles instants converted to UTC (PDT -7 until 2026-11-01 02:00, PST -8 after; 2027-03-14 02:00 PST->PDT).
+source /d/.claude-tmp/timesheet/WP5-UX4-FIX1/env.sh
+cd $T
+PROBE=/d/.claude-tmp/timesheet/WP5-UX4-GATE/export-probe
+control() {
+  label=$1; instant=$2; today=$3
+  CONTROL_TODAY=$today SHIFT_DIR=$PROBE bash run-shift.sh "ctl-$label" "$instant" tests/e2e/zz-control.spec.ts > "logs/control-$label.txt" 2>&1
+  echo "control $label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/sweep-progress.txt
+}
+run() {
+  label=$1; instant=$2; shift 2
+  bash run-shift.sh "$label" "$instant" "$@" > "logs/sweep-$label.txt" 2>&1
+  echo "$label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/sweep-progress.txt
+}
+THREE="tests/e2e/day-editor.spec.ts tests/e2e/sharing.spec.ts tests/e2e/keyboard-access.spec.ts"
+control i2 2026-11-01T08:45:00Z 2026-11-01
+control i3 2027-03-14T10:30:00Z 2027-03-14
+control j1 2026-10-27T06:58:30Z 2026-10-26
+control j2 2027-01-01T07:30:00Z 2026-12-31
+control j3 2027-01-01T08:30:00Z 2027-01-01
+run s1026 2026-10-26T16:00:00Z $THREE
+run s1101 2026-11-01T08:45:00Z $THREE
+run s0314 2027-03-14T10:30:00Z $THREE
+run s1027 2026-10-27T06:58:30Z $THREE
+run s1231 2027-01-01T07:30:00Z $THREE
+run s0101 2027-01-01T08:30:00Z $THREE
+echo done > logs/sweep.done

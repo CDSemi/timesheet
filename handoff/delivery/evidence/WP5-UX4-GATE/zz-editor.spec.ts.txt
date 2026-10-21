@@ -1,0 +1,225 @@
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, test } from './fixtures.ts';
+import { note } from './zz-lib.ts';
+import { seedLongContent, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX4-GATE task-local probe (never part of the repository): the Day editor drawer on the built target.
+ * Notes go to GATE_OUT/editor.txt. Desktop project only.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUTFILE = 'editor.txt';
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 200))))');
+}
+
+/** Resolves the four layout tokens the way the page does (a probe div whose children take var(--token) as their width). */
+async function tokens(page: Page): Promise<{ pad: number; editor: number; gap: number; sheet: number }> {
+  return page.evaluate(() => {
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;visibility:hidden;width:0;height:0;overflow:hidden';
+    const kids = ['--page-pad', '--editor-width', '--editor-gap', '--sheet-min-width'].map((t) => {
+      const c = document.createElement('div');
+      c.style.width = `var(${t})`;
+      probe.append(c);
+      return c;
+    });
+    document.body.append(probe);
+    const [pad, editor, gap, sheet] = kids.map((c) => c.getBoundingClientRect().width);
+    probe.remove();
+    return { pad: pad ?? 0, editor: editor ?? 0, gap: gap ?? 0, sheet: sheet ?? 0 };
+  });
+}
+
+/** Sets the viewport so that documentElement.clientWidth equals `target` (classic scrollbars are subtracted). */
+async function clientWidthTo(page: Page, target: number): Promise<number> {
+  let width = target;
+  for (let i = 0; i < 4; i += 1) {
+    await page.setViewportSize({ width: Math.round(width), height: 900 });
+    await page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(d)))');
+    const client = await page.evaluate<number>('document.documentElement.clientWidth');
+    if (client === target) return client;
+    width += target - client;
+  }
+  return page.evaluate<number>('document.documentElement.clientWidth');
+}
+
+test('layout rule sweep: need minus 1, need, need plus 1, 1024, 1280, 1440, 1920; corners on both sides; non-modal', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(240_000);
+  const data = await seedLongContent(privateServer, 'Synthetic Editor Sweep');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInTo(page, privateServer, data.person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const t = await tokens(page);
+  const need = t.pad * 2 + t.editor + t.gap + t.sheet;
+  note(OUTFILE, `TOKENS page-pad ${t.pad} (x2), editor ${t.editor}, gap ${t.gap}, sheet-min ${t.sheet}; in-page need = ${need}px`);
+  await namedDayButton(page, data.twoSessions, 'Edit').click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  const sweep: Array<[string, number]> = [['need-1', need - 1], ['need', need], ['need+1', need + 1], ['1024', 1024], ['1280', 1280], ['1440', 1440], ['1920', 1920]];
+  for (const [label, target] of sweep) {
+    const client = await clientWidthTo(page, target);
+    await settle(page);
+    const f = await page.evaluate(() => {
+      const area = document.querySelector('.sheet-area')!;
+      const ed = document.querySelector('[data-day-editor]') as HTMLElement;
+      const cols = [...document.querySelectorAll('.week-grid [data-day]')].map((c) => c.getBoundingClientRect().width);
+      const cells = [...document.querySelectorAll('.week-grid .sheet-day > div')].filter((c) => c.scrollWidth > c.clientWidth + 1).length;
+      const cards = [...document.querySelectorAll('.sheet-week')].filter((c) => c.scrollWidth > c.clientWidth).length;
+      const cs = getComputedStyle(ed);
+      return {
+        layout: area.getAttribute('data-editor-layout'), side: ed.getAttribute('data-side'), minCol: Math.min(...cols), cells, cards,
+        modal: ed.matches(':modal'), inert: document.querySelectorAll('[inert]').length, ariaModal: ed.getAttribute('aria-modal'),
+        radii: [cs.borderTopLeftRadius, cs.borderTopRightRadius, cs.borderBottomRightRadius, cs.borderBottomLeftRadius].join(' '),
+        pageScroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
+    note(OUTFILE, `SWEEP ${label} (clientWidth ${client}): layout ${f.layout}, side ${f.side}, min day column ${f.minCol.toFixed(1)}px, overflowing cells ${f.cells}, scrolling week cards ${f.cards}, modal ${f.modal}, aria-modal ${f.ariaModal}, inert elements ${f.inert}, corners TL TR BR BL = ${f.radii}, page sideways scroll ${f.pageScroll}`);
+  }
+  // corners on both sides in floating mode (1280): Monday column docks right, Saturday column docks left
+  await clientWidthTo(page, 1280);
+  for (const [label, index] of [['Monday', 0], ['Saturday', 5]] as const) {
+    const date = (await page.locator('[data-day]').nth(index).getAttribute('data-day')) ?? '';
+    if ((await editor.count()) > 0) {
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+    }
+    await namedDayButton(page, date, 'Edit').click();
+    await expect(editor).toHaveAttribute('data-day-editor', date);
+    await settle(page);
+    const g = await page.evaluate(() => {
+      const ed = document.querySelector('[data-day-editor]') as HTMLElement;
+      const cs = getComputedStyle(ed); const b = ed.getBoundingClientRect();
+      return { side: ed.getAttribute('data-side'), tl: cs.borderTopLeftRadius, tr: cs.borderTopRightRadius, br: cs.borderBottomRightRadius, bl: cs.borderBottomLeftRadius, left: b.left, right: document.documentElement.clientWidth - b.right, bottom: window.innerHeight - b.bottom };
+    });
+    note(OUTFILE, `CORNERS floating 1280 ${label}: side ${g.side}; TL ${g.tl} TR ${g.tr} BR ${g.br} BL ${g.bl}; gap to left edge ${g.left.toFixed(1)}, right edge ${g.right.toFixed(1)}, bottom ${g.bottom.toFixed(1)}`);
+  }
+  await clientWidthTo(page, 1440);
+  await settle(page);
+  const b = await page.evaluate(() => {
+    const ed = document.querySelector('[data-day-editor]') as HTMLElement; const cs = getComputedStyle(ed);
+    return { side: ed.getAttribute('data-side'), tl: cs.borderTopLeftRadius, tr: cs.borderTopRightRadius, br: cs.borderBottomRightRadius, bl: cs.borderBottomLeftRadius };
+  });
+  note(OUTFILE, `CORNERS beside 1440: side ${b.side}; TL ${b.tl} TR ${b.tr} BR ${b.br} BL ${b.bl}`);
+});
+
+/** True when the focused element's box lies wholly inside the drawer's box. */
+const HIDDEN_UNDER = `(() => {
+  const el = document.activeElement; const ed = document.querySelector('[data-day-editor]');
+  if (!el || !ed || ed.contains(el)) return null;
+  const r = el.getBoundingClientRect(); const p = ed.getBoundingClientRect();
+  if (r.width === 0 || r.height === 0) return null;
+  const wholly = r.left >= p.left - 0.5 && r.right <= p.right + 0.5 && r.top >= p.top - 0.5 && r.bottom <= p.bottom + 0.5;
+  return { wholly, name: (el.getAttribute('aria-label') || el.textContent || el.tagName).replace(/\\s+/g, ' ').trim().slice(0, 40) };
+})()`;
+
+for (const width of [768, 1024, 1280]) {
+  test(`keyboard walk at ${width}px never leaves a focused sheet control wholly under the drawer`, async ({ page, privateServer }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop');
+    test.setTimeout(240_000);
+    const data = await seedLongContent(privateServer, `Synthetic Walk ${width}`);
+    await page.setViewportSize({ width, height: 800 });
+    await signInTo(page, privateServer, data.person.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await namedDayButton(page, data.dates[0] ?? '', 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    for (const key of ['Tab', 'Shift+Tab']) {
+      // start at the first/last sheet control
+      if (key === 'Tab') await page.getByRole('switch', { name: 'Show worked hours' }).focus();
+      else await page.locator('.sheet-main a.sig-link').focus();
+      let hiddenAfterSettle = 0; let transient = 0; let stops = 0; const sides = new Set<string>();
+      for (let step = 0; step < 160; step += 1) {
+        await page.keyboard.press(key);
+        await page.waitForTimeout(60);
+        let r = await page.evaluate<{ wholly: boolean; name: string } | null>(HIDDEN_UNDER);
+        if (r?.wholly) { transient += 1; await settle(page); r = await page.evaluate<{ wholly: boolean; name: string } | null>(HIDDEN_UNDER); }
+        if (r !== null) { stops += 1; if (r.wholly) { hiddenAfterSettle += 1; note(OUTFILE, `  HIDDEN ${width} ${key}: ${r.name}`); } }
+        sides.add((await editor.getAttribute('data-side')) ?? '-');
+      }
+      note(OUTFILE, `WALK ${width}px ${key}: ${stops} sheet stops over 160 presses, wholly under the drawer after settling ${hiddenAfterSettle}, transient before the drawer re-docked ${transient}; sides seen ${[...sides].join(',')}`);
+    }
+  });
+}
+
+test('discard prompt: switch, Today, Next period and Escape, Keep editing and Discard', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(120_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Discard Gate', signature: 'none' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  const [a = '', b = ''] = free;
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+  const keep = prompt.getByRole('button', { name: 'Keep editing', exact: true });
+  const discard = prompt.getByRole('button', { name: 'Discard', exact: true });
+  const periodName = () => page.locator('.period-name').innerText();
+  const first = await periodName();
+  const dirty = async (date: string) => {
+    if ((await editor.count()) === 0 || (await editor.getAttribute('data-day-editor')) !== date) await namedDayButton(page, date, 'Edit').click();
+    await expect(editor).toHaveAttribute('data-day-editor', date);
+    await editor.getByLabel('Notes').fill('Synthetic unsaved note');
+  };
+  const record = async (trigger: string, after: () => Promise<void>) => {
+    await expect(prompt).toBeVisible();
+    const focused = await keep.evaluate((el) => el === document.activeElement);
+    const modal = await prompt.evaluate((el) => el.matches(':modal'));
+    note(OUTFILE, `DISCARD ${trigger}: prompt shown, modal ${modal}, Keep editing focused ${focused}, buttons ${await prompt.getByRole('button').allInnerTexts()}`);
+    await keep.click();
+    await expect(prompt).toHaveCount(0);
+    note(OUTFILE, `DISCARD ${trigger}: Keep editing -> editor still ${await editor.getAttribute('data-day-editor')}, notes value kept ${(await editor.getByLabel('Notes').inputValue()) === 'Synthetic unsaved note'}`);
+    await after();
+  };
+  // switch
+  await dirty(a);
+  await namedDayButton(page, b, 'Edit').click();
+  await record('switch to another day', async () => {
+    await namedDayButton(page, b, 'Edit').click();
+    await expect(prompt).toBeVisible();
+    await discard.click();
+    await expect(editor).toHaveAttribute('data-day-editor', b);
+    note(OUTFILE, `DISCARD switch: Discard -> editor on ${b}, notes now "${await editor.getByLabel('Notes').inputValue()}"`);
+  });
+  // Next period
+  await editor.getByLabel('Notes').fill('Synthetic unsaved note');
+  await page.getByRole('button', { name: 'Next period' }).click();
+  await record('Next period', async () => {
+    await page.getByRole('button', { name: 'Next period' }).click();
+    await expect(prompt).toBeVisible();
+    await discard.click();
+    await expect.poll(periodName).not.toBe(first);
+    note(OUTFILE, `DISCARD Next period: Discard -> period changed to "${await periodName()}"`);
+    await page.getByRole('button', { name: 'Previous period' }).click();
+    await expect.poll(periodName).toBe(first);
+  });
+  // Today (needs another period shown): go to previous period first (no edit)
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect.poll(periodName).not.toBe(first);
+  const prev = await periodName();
+  const today = page.locator('[data-period-today]');
+  await editor.getByLabel('Notes').fill('Synthetic unsaved note');
+  await today.click();
+  await record('Today', async () => {
+    await today.click();
+    await expect(prompt).toBeVisible();
+    await discard.click();
+    await expect.poll(periodName).not.toBe(prev);
+    note(OUTFILE, `DISCARD Today: Discard -> period "${await periodName()}"`);
+  });
+  // Escape
+  await expect(editor).toBeVisible();
+  await editor.getByLabel('Notes').fill('Synthetic unsaved note');
+  await page.keyboard.press('Escape');
+  await record('Escape', async () => {
+    await page.keyboard.press('Escape');
+    await expect(prompt).toBeVisible();
+    await discard.click();
+    await expect(page.getByRole('dialog', { name: /Day editor/ })).toHaveCount(0);
+    note(OUTFILE, 'DISCARD Escape: Discard -> editor closed');
+  });
+});

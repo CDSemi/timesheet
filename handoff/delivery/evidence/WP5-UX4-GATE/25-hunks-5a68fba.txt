@@ -1,0 +1,164 @@
+FILE a/tests/client/importModel.test.ts
+@@ -278 +279 @@ describe('signed minutes from the opening-balance form', () => {
+-    expect(parseSignedMinutes(input('credit', '0', '0'))).toEqual({ error: 'Enter at least 1 minute; an opening balance of zero is not recorded.' });
++    expect(parseSignedMinutes(input('credit', '0', '0'))).toEqual({ error: 'Enter at least 1 minute; the opening balance is already 0 until you record a value.' });
+
+FILE a/tests/client/importModel.test.ts
+@@ -315 +330,2 @@ describe('opening-balance form problems', () => {
+-    expect(openingFormProblems(valid, { needsAsOfDate: true })).toEqual({});
++    expect(openingFormProblems(valid, { mode: 'post' })).toEqual({});
++    expect(openingFormProblems({ ...valid, asOfDate: '' }, { mode: 'correct' })).toEqual({});
+
+FILE a/tests/client/importModel.test.ts
+@@ -318,3 +334,13 @@ describe('opening-balance form problems', () => {
+-  it('names every missing field', () => {
+-    const problems = openingFormProblems({ sign: 'credit', hours: '', minutes: '', asOfDate: '', reason: '  ', evidence: '' }, { needsAsOfDate: true });
+-    expect(Object.keys(problems).sort()).toEqual(['asOfDate', 'evidence', 'minutes', 'reason']);
++  it('names every missing field; the evidence is optional (F-1 (i))', () => {
++    const blank = { sign: 'credit' as const, hours: '', minutes: '', asOfDate: '', reason: '  ', evidence: '' };
++    expect(Object.keys(openingFormProblems(blank, { mode: 'post' })).sort()).toEqual(['asOfDate', 'minutes', 'reason']);
++    // A correction has no as-of date and may be 0 (D-5 a): only the reason is missing.
++    expect(Object.keys(openingFormProblems(blank, { mode: 'correct' })).sort()).toEqual(['reason']);
++    expect(openingFormProblems({ ...valid, evidence: '   ' }, { mode: 'post' })).toEqual({});
++    expect(openingFormProblems({ ...valid, asOfDate: '', evidence: '' }, { mode: 'correct' })).toEqual({});
++  });
++
++  it('D-5 a: the first value is non-zero; a correction may be 0', () => {
++    const zero = { ...valid, hours: '0', minutes: '0' };
++    expect(openingFormProblems(zero, { mode: 'post' }).minutes).toBe('Enter at least 1 minute; the opening balance is already 0 until you record a value.');
++    expect(openingFormProblems({ ...zero, asOfDate: '' }, { mode: 'correct' })).toEqual({});
+
+FILE a/tests/client/importModel.test.ts
+@@ -324,3 +350,4 @@ describe('opening-balance form problems', () => {
+-    expect(openingFormProblems({ ...valid, asOfDate: '2026-13-40' }, { needsAsOfDate: true }).asOfDate).toBeDefined();
+-    expect(openingFormProblems({ ...valid, asOfDate: '30/09/2026' }, { needsAsOfDate: true }).asOfDate).toBeDefined();
+-    expect(openingFormProblems({ ...valid, asOfDate: '' }, { needsAsOfDate: false })).toEqual({});
++    expect(openingFormProblems({ ...valid, asOfDate: '2026-13-40' }, { mode: 'post' }).asOfDate).toBeDefined();
++    expect(openingFormProblems({ ...valid, asOfDate: '30/09/2026' }, { mode: 'post' }).asOfDate).toBeDefined();
++    expect(openingFormProblems({ ...valid, asOfDate: '' }, { mode: 'post' }).asOfDate).toBeDefined();
++    expect(openingFormProblems({ ...valid, asOfDate: '' }, { mode: 'correct' })).toEqual({});
+
+FILE a/tests/client/importModel.test.ts
+@@ -330,3 +357,5 @@ describe('opening-balance form problems', () => {
+-    expect(openingFormProblems({ ...valid, reason: 'x'.repeat(2001) }, { needsAsOfDate: true }).reason).toBeDefined();
+-    expect(openingFormProblems({ ...valid, evidence: 'x'.repeat(2001) }, { needsAsOfDate: true }).evidence).toBeDefined();
+-    expect(openingFormProblems({ ...valid, reason: 'x'.repeat(2000), evidence: 'x'.repeat(2000) }, { needsAsOfDate: true })).toEqual({});
++    for (const mode of ['post', 'correct'] as const) {
++      expect(openingFormProblems({ ...valid, reason: 'x'.repeat(2001) }, { mode }).reason).toBeDefined();
++      expect(openingFormProblems({ ...valid, evidence: 'x'.repeat(2001) }, { mode }).evidence).toBe('The evidence reference can have at most 2000 characters.');
++      expect(openingFormProblems({ ...valid, reason: 'x'.repeat(2000), evidence: 'x'.repeat(2000) }, { mode })).toEqual({});
++    }
+
+FILE a/tests/client/importModel.test.ts
+@@ -342 +371 @@ describe('opening-balance error messages', () => {
+-    expect(openingBalanceErrorMessage(fail(422, 'invalid_minutes'))).toMatch(/non-zero/);
++    expect(openingBalanceErrorMessage(fail(422, 'invalid_minutes'))).toBe('Enter a signed whole number of minutes; only a correction may set the opening balance to 0.');
+
+FILE a/tests/client/importModel.test.ts
+@@ -344 +373,2 @@ describe('opening-balance error messages', () => {
+-    expect(openingBalanceErrorMessage(fail(422, 'evidence_required'))).toMatch(/evidence/);
++    // F-1 (i): the server no longer sends evidence_required; an unknown code falls back to the server text and code.
++    expect(openingBalanceErrorMessage(fail(422, 'evidence_required'))).toBe('server text (evidence_required)');
+index be4d404..36c9aed 100644
+
+FILE a/tests/e2e/import.spec.ts
+@@ -310 +313 @@ test('the opening balance: validation, confirmation, a repeat that changes nothi
+-  await expect(form).toContainText('An evidence reference is required.');
++  await expect(form).not.toContainText('An evidence reference is required.');
+
+FILE a/tests/e2e/settings-routes.spec.ts
+@@ -141,3 +142,10 @@ test.describe('Profile in a device zone that differs from the reporting zone', (
+-    // Read only: nothing on the page can be edited.
+-    await expect(page.locator('main').locator('input, textarea, select')).toHaveCount(0);
+-    await expect(page.locator('main').getByRole('button')).toHaveCount(0);
++    // The account facts stay read only: nothing in them can be edited.
++    await expect(facts.locator('input, textarea, select')).toHaveCount(0);
++    await expect(facts.getByRole('button')).toHaveCount(0);
++    // D-9 b: the only editable part of the page is the Change password card (three password fields and one button,
++    // plus the hidden account name for password managers); see profile.spec.ts for its behaviour.
++    const card = page.getByRole('region', { name: 'Change password' });
++    await expect(page.locator('main').locator('input:visible, textarea, select')).toHaveCount(3);
++    await expect(card.locator('input[type="password"]')).toHaveCount(3);
++    await expect(page.locator('main').getByRole('button')).toHaveCount(1);
++    await expect(card.getByRole('button', { name: 'Change password' })).toBeVisible();
+index 40595e6..70af8e5 100644
+
+FILE a/tests/integration/holiday-import.test.ts
+@@ -116 +116 @@ describe('preview', () => {
+-    expect(auditCount()).toBe(audits);
++    expect(auditCount()).toBe(audits + 1);
+
+FILE a/tests/integration/holiday-import.test.ts
+@@ -242 +245,10 @@ describe('preview', () => {
+-    expect(after.body).toEqual(before.body);
++    expect(after.body).not.toEqual(before.body);
++    expect(after.body.affected_days).toEqual([
++      { date: '2026-10-07', label_before: 'Worked', label_after: 'Holiday', default_labelled_entries: 2, explicit_overrides_preserved: 0 },
++      { date: '2026-10-08', label_before: 'Worked', label_after: 'Shutdown', default_labelled_entries: 0, explicit_overrides_preserved: 1 },
++      { date: '2026-12-24', label_before: 'Worked', label_after: 'Holiday', default_labelled_entries: 0, explicit_overrides_preserved: 0 },
++    ]);
++    // Only the counts differ: everything else is the same as before the entries existed.
++    const { affected_days: _afterDays, ...afterRest } = after.body;
++    const { affected_days: _beforeDays, ...beforeRest } = before.body;
++    expect(afterRest).toEqual(beforeRest);
+
+FILE a/tests/integration/holiday-import.test.ts
+@@ -247,2 +259,16 @@ describe('preview', () => {
+-    // No count keys of any employee data remain anywhere in the response.
+-    expect(body).not.toMatch(/default_labelled_entries|explicit_overrides_preserved|finalized_timesheets/);
++    // One audit event per preview: the actor, the calendar, the date range and how many dates carry counts; no names.
++    const events = t.db
++      .prepare("SELECT actor_user_id, owner_user_id, entity_type, entity_id, reason, before_json, after_json, via_share_id FROM audit_events WHERE operation = 'calendar.holiday_preview' ORDER BY rowi
++      .all() as Array<{ actor_user_id: string; owner_user_id: string | null; entity_type: string; entity_id: string; reason: string | null; before_json: string | null; after_json: string; via_share_i
++    expect(events).toHaveLength(2);
++    for (const event of events) {
++      expect(event).toMatchObject({ actor_user_id: t.userIds.admin, owner_user_id: null, entity_type: 'calendar', entity_id: t.calendarId, reason: null, before_json: null, via_share_id: null });
++    }
++    expect(events.map((event) => JSON.parse(event.after_json))).toEqual([
++      { calendar_id: t.calendarId, year: 2026, effective_from: BOUNDARY, date_from: '2026-10-07', date_to: '2026-12-24', affected_dates: 3, dates_with_counts: 0 },
++      { calendar_id: t.calendarId, year: 2026, effective_from: BOUNDARY, date_from: '2026-10-07', date_to: '2026-12-24', affected_dates: 3, dates_with_counts: 2 },
++    ]);
++    const audit = JSON.stringify(events);
++    for (const secret of [t.userIds.employee, t.emails.employee, t.emails.admin, 'Synthetic Company Day', 'Synthetic Shutdown', 'Synthetic Eve']) {
++      expect(audit).not.toContain(secret);
++    }
+
+FILE a/tests/integration/holiday-import.test.ts
+@@ -258,3 +284,14 @@ describe('preview', () => {
+-    expect(response.body.finalized_conflicts).toEqual([{ date: '2026-10-07' }]);
+-    // Two timesheets are finalized, yet no count of them leaves the server.
+-    expect(JSON.stringify(response.body)).not.toMatch(/finalized_timesheets/);
++    expect(response.body.finalized_conflicts).toEqual([{ date: '2026-10-07', finalized_timesheets: 2 }]);
++    // Finalized entries are not counted as open ones.
++    expect(response.body.affected_days).toEqual([
++      { date: '2026-10-07', label_before: 'Worked', label_after: 'Holiday', default_labelled_entries: 0, explicit_overrides_preserved: 0 },
++    ]);
++    const event = t.db.prepare("SELECT after_json FROM audit_events WHERE operation = 'calendar.holiday_preview'").pluck().get() as string;
++    expect(JSON.parse(event)).toMatchObject({ date_from: '2026-10-07', date_to: '2026-10-07', affected_dates: 1, dates_with_counts: 1 });
++  });
++
++  it('writes no preview audit event when the preview is refused', async () => {
++    const audits = auditCount();
++    expect((await preview(csv('2026-10-20,Synthetic Day'), { calendar_id: 'no-such-calendar' })).status).toBe(404);
++    expect((await preview(csv('2026-10-20,Synthetic Day'), { effective_from: '2026-02-30' })).status).toBe(422);
++    expect(auditCount()).toBe(audits);
+
+FILE a/tests/integration/holiday-import.test.ts
+@@ -276 +315,4 @@ describe('commit', () => {
+-    expect(auditCount()).toBe(auditsBefore + 1);
++    // The commit writes one event; the preview before it writes its own (F-2 (b)).
++    expect(auditCount()).toBe(auditsBefore + 2);
++    expect(operationCount('calendar_version.create')).toBe(createsBefore + 1);
++    expect(operationCount('calendar.holiday_preview')).toBe(1);
+index 010ad07..7596d02 100644
+
+FILE a/tests/integration/opening-balance.test.ts
+@@ -184 +185,0 @@ describe('POST /api/ot/opening-balance (F-3)', () => {
+-    expect((await postOpening(openingBody(60, { evidence_ref: '' }))).body.error.code).toBe('evidence_required');
+
+FILE a/tests/integration/sharing-matrix.test.ts
+@@ -315 +320 @@ describe('route inventory', () => {
+-    expect(outside).toEqual([...SELF_ONLY_BEFORE, ...SHARING_ADDED, ...IMPORTS_ADDED, ...OPENING_BALANCE_ADDED].sort());
++    expect(outside).toEqual([...SELF_ONLY_BEFORE, ...SHARING_ADDED, ...IMPORTS_ADDED, ...OPENING_BALANCE_ADDED, ...PASSWORD_ADDED].sort());
+index 72f6d0d..323afd3 100644
+

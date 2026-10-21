@@ -1032,6 +1032,51 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - That line is a template literal building a certificate header around `${b64}` at run
     time, with no key material. The coordinator read it.
   - Addendum 1 allows exactly that hit. A fresh committer runs attempt 2.
+- WP5-UX4-T06-FREEZE attempt 2 committed and pushed
+  a3042dd9c2f94dd2287ef04ed815db0fbf1838b6.
+  - 62 paths; digest 104ca9c3 on HEAD; every check 0.
+  - The round-4 source is complete: T04 5a68fba, T01 213bbdc, T02 b7cc063, T03 cda9c51,
+    T05 82d1ab4, T06 a3042dd.
+- Running now: WP5-UX4-GATE (verifier, sonnet) on a3042dd / 104ca9c3. It covers:
+  - the full WP5 gate;
+  - a server boundary limited to T04's eight files;
+  - the round scope;
+  - the simulated-clock sweep;
+  - the round-specific checks, including axe, contrast, CSP and chunks;
+  - `npm test` three times, watching for worker crashes.
+- WP5-UX4-GATE: **FAIL**.
+  - **Product defect (T02, SC 2.4.11).** At 1280x800, "Edit 10/19" stays wholly under the
+    left-docked floating drawer. `whollyCovered` compares strictly, and the button rests
+    0.23px below the window.
+  - **Date-dependent test defects:**
+    - `sharing.spec.ts:399` on window days;
+    - U4-11 on Sundays;
+    - U4-05 reachability on 2026-11-01.
+  - **Flakes:**
+    - `keyboard-access.spec.ts:227` (mobile; the only real-clock failure, 770 passed);
+    - the Today/Now contrast read;
+    - the U4-14 seed at 23:58:30.
+  - **Everything else passed:**
+    - ci, lint, verify, AC-13, the drill (208 PASS), audit, validators;
+    - `npm test` x3 with 0 worker crashes;
+    - the boundary: only T04's eight server files, `dist/domain` identical;
+    - the scope: 90 paths;
+    - the T01, T03, T04 and T05 measurements;
+    - axe 0 violations in 30 scans; CSP identical; main chunk 489 kB.
+- Running now: WP5-UX4-FIX1 (worker-high, sonnet).
+  - It reproduces and then fixes each finding.
+  - SC 2.4.11 is judged on the visible part of the control, with a tolerance, a unit test,
+    a 1280 walk and a mutant.
+  - The tests become deterministic, proven at the six gate instants and by 10x repeats.
+- WP5-UX4-FIX1 done (no stop). Each finding was reproduced first.
+  - SC 2.4.11 is fixed in a pure `whollyCovered`: clipped to the window, 1px tolerance, 7
+    unit cases, a 1280 walk docked on both edges, mutant caught.
+  - The window-day and Sunday cases are test defects; the product is right per docs/02.
+  - The keyboard flake is a layout shift: the lazy export card arrives mid-walk. The test
+    now waits. A product mitigation (reserving the card's height) is flagged for audit A.
+  - Results: 0 failed at the six instants; repeats 140/140 and 40/40; FULL e2e 774
+    passed, 0 failed; npm test 2226; digest b3e9c962.
+- Running now: WP5-UX4-FIX1-FREEZE (a fresh committer, alone), then WP5-UX4-REGATE.
 - Remaining after T06:
   - T06-FREEZE;
   - the round-4 package gate;

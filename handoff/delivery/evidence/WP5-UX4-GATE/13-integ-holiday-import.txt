@@ -1,0 +1,54 @@
+
+ RUN  v5.0.2 <task>/export
+
+ ✓ tests/integration/holiday-import.test.ts > access control on the admin import routes > answers 401 without a session and 403 to an employee on /api/admin/calendar/import/preview, changing nothing 279ms
+ ✓ tests/integration/holiday-import.test.ts > access control on the admin import routes > answers 401 without a session and 403 to an employee on /api/admin/calendar/import/commit, changing nothing 265ms
+ ✓ tests/integration/holiday-import.test.ts > access control on the admin import routes > rejects a cross-origin POST and unknown fields, and answers 404 for an unknown calendar 254ms
+ ✓ tests/integration/holiday-import.test.ts > preview > changes no version and no employee row, and writes exactly one preview audit event (F-2 (b)) 277ms
+ ✓ tests/integration/holiday-import.test.ts > preview > reports invalid dates, duplicates, empty names, out-of-year rows and formula cells, and gives no commit hash 277ms
+ ✓ tests/integration/holiday-import.test.ts > preview > diffs against the effective version: added, renamed, kind changed, removed and kept dates (E-4) 312ms
+ ✓ tests/integration/holiday-import.test.ts > preview > keeps every manual date when the CSV lists none of them and nothing is marked for removal 298ms
+ ✓ tests/integration/holiday-import.test.ts > preview > flags a removal of an unknown date, a CSV conflict and a past date, and blocks the commit 271ms
+ ✓ tests/integration/holiday-import.test.ts > preview > ignores CSV rows before the effective date and says so 337ms
+ ✓ tests/integration/holiday-import.test.ts > preview > refuses an effective date before the prospective boundary in the preview and names the earliest 303ms
+ ✓ tests/integration/holiday-import.test.ts > preview > lists the days whose default label changes, with zero counts when no employee has an entry on them 283ms
+ ✓ tests/integration/holiday-import.test.ts > preview > shows exact per-date counts of the employees' day entries, with no identity, and audits each preview (F-2 (b)) 314ms
+ ✓ tests/integration/holiday-import.test.ts > preview > reports a finalized period with its exact number of finalized timesheets and blocks the commit 332ms
+ ✓ tests/integration/holiday-import.test.ts > preview > writes no preview audit event when the preview is refused 295ms
+ ✓ tests/integration/holiday-import.test.ts > commit > creates one immutable version and one audit event from a matching preview 295ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses a missing, malformed, stale or mismatched preview hash and writes nothing 313ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses an effective date before the prospective boundary 318ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses an effective date earlier than the latest version 287ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses a CSV with issues or removal problems and writes nothing 300ms
+ ✓ tests/integration/holiday-import.test.ts > commit > treats an identical re-commit as a no-op: no new version, no audit event 310ms
+ ✓ tests/integration/holiday-import.test.ts > commit > removes a manual date only when the commit lists it explicitly 285ms
+stderr | tests/integration/holiday-import.test.ts > commit > rolls the version back when the audit event cannot be written
+Unhandled request error SqliteError: forced_audit_failure
+    at recordAudit (<task>/export/src/server/services/audit.ts:32:5)
+    at sqliteTransaction.<anonymous> (<task>/export/src/server/services/calendars.ts:193:7)
+    at sqliteTransaction (<task>\export\node_modules\better-sqlite3\lib\methods\transaction.js:65:24)
+    at createCalendarVersion (<task>/export/src/server/services/calendars.ts:204:6)
+    at sqliteTransaction.<anonymous> (<task>/export/src/server/services/holidayImport.ts:353:23)
+    at sqliteTransaction (<task>\export\node_modules\better-sqlite3\lib\methods\transaction.js:65:24)
+    at commitHolidayImport (<task>/export/src/server/services/holidayImport.ts:379:6)
+    at <task>/export/src/server/routes/admin.ts:215:20
+    at dispatch (file:///<task>/export/node_modules/hono/dist/compose.js:35:11)
+    at <task>/export/src/server/http/auth.ts:127:7 {
+  code: 'SQLITE_CONSTRAINT_TRIGGER'
+}
+
+ ✓ tests/integration/holiday-import.test.ts > commit > rolls the version back when the audit event cannot be written 302ms
+ ✓ tests/integration/holiday-import.test.ts > commit > keeps the classification of past dates and old finalized periods unchanged 350ms
+ ✓ tests/integration/holiday-import.test.ts > commit > preserves explicit labels and relabels default rows at read time (E-4) 305ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses a change that would alter a finalized timesheet, then accepts a later date 313ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > is empty before 1 October in the reporting zone and appears from then 570ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > is empty in the new year until the next 1 October 466ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > disappears once a committed version holds next-year dates 377ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > does not count a version that is not in force for next year 305ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > keeps the existing calendar fields 295ms
+
+ Test Files  1 passed (1)
+      Tests  30 passed (30)
+   Start at  01:54:07
+   Duration  11.22s (tests 85%, import 9%, transform 5%)
+

@@ -1,0 +1,39 @@
+
+ RUN  v5.0.2 <task>/export
+
+ ✓ tests/integration/workbook-import.test.ts > migration 0012 (imports) > is migration 12 and runs on a fresh database from 1 to the latest (13) 250ms
+ ✓ tests/integration/workbook-import.test.ts > migration 0012 (imports) > upgrades a populated schema 11 database to 12 (and 13) without touching existing rows 337ms
+ ✓ tests/integration/workbook-import.test.ts > migration 0012 (imports) > keeps a committed batch immutable and never deletes a batch 229ms
+ ✓ tests/integration/workbook-import.test.ts > preview > stores the source privately and reports the mapped days with their source cells, findings and plan 216ms
+ ✓ tests/integration/workbook-import.test.ts > preview > red-first (R-B2-1): a day takes its floating flag from the holiday its label matched, not from a cut name 228ms
+ ✓ tests/integration/workbook-import.test.ts > preview > returns the existing batch for the same upload and stores nothing new 245ms
+ ✓ tests/integration/workbook-import.test.ts > preview > D-6 a: at most 20 open previews per person; the 21st is refused with nothing stored, a re-upload still answers 200 742ms
+ ✓ tests/integration/workbook-import.test.ts > preview > D-6 a: the limit is also checked inside the write transaction, which removes the stored file again 586ms
+ ✓ tests/integration/workbook-import.test.ts > preview > never serves the stored source: no source route, and nothing under the static root 257ms
+ ✓ tests/integration/workbook-import.test.ts > commit > writes only imported_unverified timesheets, explicit day entries and owner audit rows 245ms
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first: an identical re-import changes no row count and returns the first batch 255ms
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first: two concurrent identical commits produce one committed batch 407ms
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first: a conflicting day without a decision refuses the commit and writes nothing 280ms
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first: never overwrites a finalized period 275ms
+ ✓ tests/integration/workbook-import.test.ts > commit > never overwrites an imported period from another workbook 283ms
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first (R3): a period that has ended but is not yet due is skip-only, so an import cannot make a live period unsignable 402ms
+ ✓ tests/integration/workbook-import.test.ts > commit > asks for a decision on unclear days: skip only, or skip or import for non-authoritative labels 313ms
+ ✓ tests/integration/workbook-import.test.ts > ownership (F-1): only the owner previews, reads and commits > red-first: another user cannot read or commit someone else's preview (404) 408ms
+ ✓ tests/integration/workbook-import.test.ts > ownership (F-1): only the owner previews, reads and commits > red-first: an administrator gets 404 for another person's import and has no route to import for anyone else 331ms
+ ✓ tests/integration/workbook-import.test.ts > ownership (F-1): only the owner previews, reads and commits > red-first: a share grantee cannot import for, read or commit the owner's imports 409ms
+ ✓ tests/integration/workbook-import.test.ts > imported periods are read-only history (F-2) > red-first: sign, submit and day or session edits answer 409 imported_period and post no ledger event 437ms
+ ✓ tests/integration/workbook-import.test.ts > imported periods are read-only history (F-2) > red-first: the timesheet read exposes imported_unverified as a boolean only (WP4-T11) 368ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > red-first: refuses oversized, macro-bearing and entity-bearing uploads and stores nothing 281ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > red-first (WP4-B-01, B-02): a small upload that would cost seconds or crash the mapping is a typed 422 and stores nothing 1556ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > red-first (RB-01, recheck r2): tags of any name shape and megabytes of cell text are a typed 422 or a bounded report, never a 500 509ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > red-first (RB-01): a report over the size cap is a typed 422 and stores nothing 275ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > red-first (RB-01, R-RB1): a failure while the report is serialized is a typed 422, never a 500 267ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > keeps the global 64 KiB JSON limit for every other route, including the commit 242ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > keeps the stored source through the orphan sweep 267ms
+ ✓ tests/integration/workbook-import.test.ts > imported periods are never automated (F-2, docs/05 imported history) > red-first: no reminder, overdue record, deadline finalization or send across simulated deadlines 994ms
+
+ Test Files  1 passed (1)
+      Tests  30 passed (30)
+   Start at  01:53:46
+   Duration  13.71s (tests 87%, import 8%, transform 4%)
+

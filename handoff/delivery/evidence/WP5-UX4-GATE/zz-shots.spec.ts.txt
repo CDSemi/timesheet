@@ -1,0 +1,126 @@
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+import { applySituation, seedLongContent, SITUATIONS, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX4-GATE task-local probe (never part of the repository): the synthetic screenshots for the owner and the auditors.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const LA = 'America/Los_Angeles';
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 250))))');
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  const situation = SITUATIONS.find((s) => s.slug === theme)!;
+  test(`desktop screenshots (${theme})`, async ({ page, privateServer }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop');
+    test.setTimeout(240_000);
+    await applySituation(page, situation);
+    const data = await seedLongContent(privateServer, 'Synthetic Shot Person');
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await signInTo(page, privateServer, data.person.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByRole('switch', { name: 'Show worked hours' }).check();
+    await settle(page);
+    await page.mouse.move(0, 0);
+    await page.screenshot({ path: screenshotPath(`ux4gate-timesheet-paper-1440-${theme}-synthetic.png`), animations: 'disabled', fullPage: true });
+    if (theme !== 'light') return;
+    // drawer beside at 1440
+    await namedDayButton(page, data.twoSessions, 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await settle(page);
+    await page.mouse.move(0, 0);
+    await page.screenshot({ path: screenshotPath('ux4gate-drawer-beside-1440-light-synthetic.png'), animations: 'disabled' });
+    // discard prompt
+    await editor.getByLabel('Notes').fill('Synthetic unsaved note');
+    const other = data.dates.find((d) => d !== data.twoSessions && d !== data.holiday) ?? '';
+    await namedDayButton(page, other, 'Edit').click();
+    const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    await expect(prompt).toBeVisible();
+    await settle(page);
+    await page.screenshot({ path: screenshotPath('ux4gate-discard-prompt-1440-light-synthetic.png'), animations: 'disabled' });
+    await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
+    await page.keyboard.press('Escape');
+    // floating at 1280
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await settle(page);
+    await namedDayButton(page, data.twoSessions, 'Edit').click();
+    await expect(editor).toBeVisible();
+    await settle(page);
+    await page.mouse.move(0, 0);
+    await page.screenshot({ path: screenshotPath('ux4gate-drawer-floating-1280-light-synthetic.png'), animations: 'disabled' });
+    await page.keyboard.press('Escape');
+    // session dialog with Today/Now at 1440
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const free = await data.person.api.displayedPeriodFreeWorkdays();
+    const date = free.find((d) => d !== data.overnight && d !== data.twoSessions) ?? '';
+    await page.getByLabel('Open a day').fill(date);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    await expect(editor).toBeVisible();
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = page.getByRole('dialog', { name: 'New session', exact: true });
+    await expect(form).toBeVisible();
+    await form.getByLabel('Input zone').fill(LA);
+    await settle(page);
+    await page.screenshot({ path: screenshotPath('ux4gate-session-dialog-today-now-1440-light-synthetic.png'), animations: 'disabled' });
+    // Review 1440
+    await page.goto(`${privateServer.origin}/#/review/${data.person.payrollDate}`);
+    await expect(page.locator('[data-paper="review"]')).toBeVisible();
+    await settle(page);
+    await page.screenshot({ path: screenshotPath('ux4gate-review-1440-light-synthetic.png'), animations: 'disabled', fullPage: true });
+    // Settings export/import preview
+    await page.goto(`${privateServer.origin}/#/settings`);
+    const card = page.getByRole('region', { name: 'Export and import settings' });
+    await expect(card).toBeVisible();
+    const [download] = await Promise.all([page.waitForEvent('download'), card.getByRole('button', { name: 'Export settings' }).click()]);
+    const { readFileSync } = await import('node:fs');
+    const parsed = JSON.parse(readFileSync(await download.path(), 'utf8')) as { data: { submission: { to: string[] } } };
+    parsed.data.submission.to = ['other-synthetic@example.invalid'];
+    await page.getByLabel('Import settings from a file (.json)').setInputFiles({ name: 'timesheet-settings-synthetic.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(parsed)) });
+    const dialog = page.getByRole('dialog', { name: 'Import settings' });
+    await expect(dialog).toBeVisible();
+    await settle(page);
+    await page.screenshot({ path: screenshotPath('ux4gate-settings-import-preview-1440-light-synthetic.png'), animations: 'disabled' });
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    // Profile
+    await page.goto(`${privateServer.origin}/#/settings/profile`);
+    await expect(page.getByRole('region', { name: 'Change password' })).toBeVisible();
+    await settle(page);
+    await page.screenshot({ path: screenshotPath('ux4gate-profile-change-password-1440-light-synthetic.png'), animations: 'disabled', fullPage: true });
+  });
+}
+
+test('administrator: Administration company card (1440, light)', async ({ page, builtServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await signInTo(page, builtServer, builtServer.credentials.admin, '#/settings/admin');
+  await expect(page.getByRole('region', { name: 'Company calendar file' })).toBeVisible();
+  await settle(page);
+  await page.getByRole('region', { name: 'Company calendar file' }).scrollIntoViewIfNeeded();
+  await page.mouse.move(0, 0);
+  await page.screenshot({ path: screenshotPath('ux4gate-admin-company-card-1440-light-synthetic.png'), animations: 'disabled' });
+});
+
+test('phone 390: the session dialog with Today and Now', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'phone');
+  test.setTimeout(120_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Phone Shot', signature: 'none' });
+  const [date = ''] = await me.api.displayedPeriodFreeWorkdays();
+  await signInPageAs(me.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByLabel('Open a day').fill(date);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form = page.getByRole('dialog', { name: 'New session', exact: true });
+  await expect(form).toBeVisible();
+  await form.getByLabel('Input zone').fill(LA);
+  await settle(page);
+  await page.screenshot({ path: screenshotPath('ux4gate-session-dialog-today-now-390-light-synthetic.png'), animations: 'disabled' });
+});

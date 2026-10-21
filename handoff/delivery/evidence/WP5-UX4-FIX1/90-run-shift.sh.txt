@@ -1,0 +1,25 @@
+# Usage: bash run-shift.sh <label> <target instant, UTC ISO or "real"> [playwright args...]
+# One Playwright run in the repository under a simulated wall clock (shiftclock.mjs), own output folder.
+# Based on the WP5-UX-FIX10 wrapper (shiftclock.mjs copied unchanged); the step reporter is not used.
+# SHIFT_DIR (default: the repository) is the directory the run happens in.
+source /d/.claude-tmp/timesheet/WP5-UX4-FIX1/env.sh
+L=$1; TARGET=$2; shift 2
+mkdir -p $T/pw-$L $T/shots-$L
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+if [ "$TARGET" = "real" ]; then
+  export NODE_OPTIONS="--trace-deprecation"
+  export AB8_SHIFT_MS=0
+else
+  TARGET_MS=$(date -u -d "$TARGET" +%s%3N)
+  NOW_MS=$(date -u +%s%3N)
+  export AB8_SHIFT_MS=$((TARGET_MS - NOW_MS))
+  export NODE_OPTIONS="--trace-deprecation --import file:///$(cygpath -m $T)/shiftclock.mjs"
+fi
+echo "== $L: real start $(date -u +%Y-%m-%dT%H:%M:%SZ), simulated start $TARGET, AB8_SHIFT_MS=$AB8_SHIFT_MS"
+node.exe $T/probe-now.mjs
+cd "${SHIFT_DIR:-$REPO}" || exit 2
+echo "\$ node node_modules/@playwright/test/cli.js test $* --output=<task>/pw-$L"
+node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-$L"
+echo "exit=$?"
+node.exe $T/probe-now.mjs
+echo "== $L real end $(date -u +%Y-%m-%dT%H:%M:%SZ)"

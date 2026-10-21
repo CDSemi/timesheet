@@ -1,0 +1,42 @@
+== dbg-b: real start 2026-10-21T10:33:30Z, simulated start 2026-11-01T20:00:00Z, AB8_SHIFT_MS=984389904
+process clock 2026-11-01T20:00:00.150Z (Date.now 1793563200161); America/Los_Angeles Sun, 2026-11-01, 12:00; shift ms 984389904; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts -g U4-11: Edit on the running session --project=desktop --output=<task>/pw-dbg-b
+
+Running 1 test using 1 worker
+
+  x  1 [desktop] › tests\e2e\day-editor.spec.ts:5802:1 › U4-11: Edit on the running session shows no end and no "no breaks" box; Save sends end null and the breaks unconfirmed; the card and the status follow the new start and Check out counts from it (4.9s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:5802:1 › U4-11: Edit on the running session shows no end and no "no breaks" box; Save sends end null and the breaks unconfirmed; the card and the status follow the new start and Check out counts from it 
+
+    Error: regular minutes count from the new start
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1
+    Received:    200.11666666666667
+
+      5887 |     const day = await employeeSeed.dayView(run.todayLocal);
+      5888 |     const grossMinutes = (Date.parse(closed?.end_utc ?? '') - newStartMs) / 60_000;
+    > 5889 |     expect(Math.abs((day.calculation?.regular_minutes ?? 0) - (grossMinutes - 10)), 'regular minutes count from the new start').toBeLessThanOrEqual(1);
+           |                                                                                                                                 ^
+      5890 |   } finally {
+      5891 |     await employeeSeed.clearSessions(run.todayLocal);
+      5892 |   }
+        at <task>\export\tests\e2e\day-editor.spec.ts:5889:129
+
+    Error Context: ..\pw-dbg-b\day-editor-U4-11-Edit-on-t-bdb1b-nd-Check-out-counts-from-it-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-dbg-b\day-editor-U4-11-Edit-on-t-bdb1b-nd-Check-out-counts-from-it-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-dbg-b\day-editor-U4-11-Edit-on-t-bdb1b-nd-Check-out-counts-from-it-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:5802:1 › U4-11: Edit on the running session shows no end and no "no breaks" box; Save sends end null and the breaks unconfirmed; the card and the status follow the new start and Check out counts from it 
+exit=1
+process clock 2026-11-01T20:00:08.490Z (Date.now 1793563208500); America/Los_Angeles Sun, 2026-11-01, 12:00; shift ms 984389904; instanceof true
+== dbg-b real end 2026-10-21T10:33:38Z

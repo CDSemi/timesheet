@@ -1,0 +1,72 @@
+== repro3: real start 2026-10-21T11:03:04Z, simulated start 2026-11-01T08:45:00Z, AB8_SHIFT_MS=942115489
+process clock 2026-11-01T08:45:00.088Z (Date.now 1793522700097); America/Los_Angeles Sun, 2026-11-01, 01:45; shift ms 942115489; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts -g U4-11: Edit on the running session --output=<task>/pw-repro3
+
+Running 2 tests using 2 workers
+
+  x  2 [mobile] › tests\e2e\day-editor.spec.ts:5876:1 › U4-11: Edit on the running session shows no end and no "no breaks" box; Save sends end null and the breaks unconfirmed; the card and the status follow the new start and Check out counts from it (3.9s)
+  x  1 [desktop] › tests\e2e\day-editor.spec.ts:5876:1 › U4-11: Edit on the running session shows no end and no "no breaks" box; Save sends end null and the breaks unconfirmed; the card and the status follow the new start and Check out counts from it (4.0s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:5876:1 › U4-11: Edit on the running session shows no end and no "no breaks" box; Save sends end null and the breaks unconfirmed; the card and the status follow the new start and Check out counts from it 
+
+    Error: regular minutes count from the new start
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1
+    Received:    200.1
+
+      5961 |     const day = await employeeSeed.dayView(run.todayLocal);
+      5962 |     const grossMinutes = (Date.parse(closed?.end_utc ?? '') - newStartMs) / 60_000;
+    > 5963 |     expect(Math.abs((day.calculation?.regular_minutes ?? 0) - (grossMinutes - 10)), 'regular minutes count from the new start').toBeLessThanOrEqual(1);
+           |                                                                                                                                 ^
+      5964 |   } finally {
+      5965 |     await employeeSeed.clearSessions(run.todayLocal);
+      5966 |   }
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:5963:129
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-repro3\day-editor-U4-11-Edit-on-t-bdb1b-nd-Check-out-counts-from-it-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-repro3\day-editor-U4-11-Edit-on-t-bdb1b-nd-Check-out-counts-from-it-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-repro3\day-editor-U4-11-Edit-on-t-bdb1b-nd-Check-out-counts-from-it-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\day-editor.spec.ts:5876:1 › U4-11: Edit on the running session shows no end and no "no breaks" box; Save sends end null and the breaks unconfirmed; the card and the status follow the new start and Check out counts from it 
+
+    Error: regular minutes count from the new start
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1
+    Received:    200.1
+
+      5961 |     const day = await employeeSeed.dayView(run.todayLocal);
+      5962 |     const grossMinutes = (Date.parse(closed?.end_utc ?? '') - newStartMs) / 60_000;
+    > 5963 |     expect(Math.abs((day.calculation?.regular_minutes ?? 0) - (grossMinutes - 10)), 'regular minutes count from the new start').toBeLessThanOrEqual(1);
+           |                                                                                                                                 ^
+      5964 |   } finally {
+      5965 |     await employeeSeed.clearSessions(run.todayLocal);
+      5966 |   }
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:5963:129
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-repro3\day-editor-U4-11-Edit-on-t-bdb1b-nd-Check-out-counts-from-it-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-repro3\day-editor-U4-11-Edit-on-t-bdb1b-nd-Check-out-counts-from-it-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-repro3\day-editor-U4-11-Edit-on-t-bdb1b-nd-Check-out-counts-from-it-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:5876:1 › U4-11: Edit on the running session shows no end and no "no breaks" box; Save sends end null and the breaks unconfirmed; the card and the status follow the new start and Check out counts from it 
+    [mobile] › tests\e2e\day-editor.spec.ts:5876:1 › U4-11: Edit on the running session shows no end and no "no breaks" box; Save sends end null and the breaks unconfirmed; the card and the status follow the new start and Check out counts from it 
+exit=1
+process clock 2026-11-01T08:45:07.508Z (Date.now 1793522707520); America/Los_Angeles Sun, 2026-11-01, 01:45; shift ms 942115489; instanceof true
+== repro3 real end 2026-10-21T11:03:12Z

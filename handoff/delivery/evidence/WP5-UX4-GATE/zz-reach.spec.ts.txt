@@ -1,0 +1,30 @@
+import { namedDayButton } from './dayButton.ts';
+import { expect, test } from './fixtures.ts';
+import { note } from './zz-lib.ts';
+
+/* WP5-UX4-GATE task-local debug probe (never part of the repository): why is no other day column reachable beside the drawer at the simulated 2026-11-01? */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+test('debug: columns beside the open drawer at 1440x800', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  const free = await employeeSeed.displayedPeriodFreeWorkdays();
+  note('reach.txt', `free workdays (newest first): ${free.join(', ')}; today ${(await employeeSeed.today()).todayLocal}; periods ${JSON.stringify(await employeeSeed.periodsCurrent())}`);
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await namedDayButton(page, free[0] ?? '', 'Edit').click();
+  await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+  await page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(d, 300))))');
+  const rows = await page.evaluate(() => {
+    const panel = document.querySelector('[data-day-editor]')!.getBoundingClientRect();
+    return [...document.querySelectorAll('.week-grid [data-day]')].map((column) => {
+      const date = column.getAttribute('data-day');
+      const button = column.querySelector('[data-day-button]')!;
+      const box = column.getBoundingClientRect();
+      const b = button.getBoundingClientRect();
+      const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+      return { date, inWindow: box.left >= 0 && box.right <= document.documentElement.clientWidth && box.top >= 0 && box.bottom <= window.innerHeight, colTop: Math.round(box.top), colBottom: Math.round(box.bottom), clear: box.right <= panel.left || box.left >= panel.right, hit: top === button, buttonY: Math.round(b.top + b.height / 2), innerHeight: window.innerHeight, scrollY: Math.round(window.scrollY) };
+    });
+  });
+  for (const r of rows) note('reach.txt', JSON.stringify(r));
+});

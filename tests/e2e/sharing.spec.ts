@@ -465,6 +465,12 @@ test("a grantee with edit rights can correct the start of the owner's running se
   try {
     await page.reload();
     await expect(bar(page).locator('[data-share-bar-title]')).toHaveText("Viewing Synthetic Owner's timesheets - view only");
+    // The sheet opens on the current period of R-07, which is the period just ended on the five days after it (the window days), so it
+    // does not always hold today. "Today" opens the period that contains today in the owner's zone (it is inactive, and not clicked, when
+    // the sheet shows today already).
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    if ((await page.locator(`[data-day="${todayLocal}"]`).count()) === 0) await page.locator('[data-period-today]').click();
+    await expect(page.locator(`[data-day="${todayLocal}"]`)).toBeVisible();
     await namedDayButton(page, todayLocal, 'View').click();
     const editor = page.getByRole('dialog', { name: /Day/ });
     await expect(editor.locator('.session-card[data-state="running"]')).toHaveCount(1);

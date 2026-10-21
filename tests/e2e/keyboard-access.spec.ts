@@ -144,12 +144,13 @@ async function focusLast(page: Page, scope: string): Promise<void> {
 
 /**
  * Shift+Tab from the last control of `scope` until focus leaves it (or cycles): every stop must show at
- * least one of its 25 sample points (SC 2.4.11). Returns the hidden stops and the number of stops.
+ * least one of its 25 sample points (SC 2.4.11). Returns the hidden stops, the number of stops and the name of each stop.
  */
-async function walkBackward(page: Page, scope: string, label: string): Promise<{ stops: number; hidden: string[] }> {
+async function walkBackward(page: Page, scope: string, label: string): Promise<{ stops: number; hidden: string[]; names: string[] }> {
   await focusLast(page, scope);
   const seen = new Set<number>();
   const hidden: string[] = [];
+  const names: string[] = [];
   let last: number | undefined;
   let repeats = 0;
   for (let index = 0; index < 160; index += 1) {
@@ -163,15 +164,30 @@ async function walkBackward(page: Page, scope: string, label: string): Promise<{
       repeats = 0;
       last = stop.key;
       seen.add(stop.key);
+      names.push(stop.name);
       if (stop.visible === 0) hidden.push(`${label}: ${stop.name} under ${stop.covers.join(', ')}`);
     }
     await page.keyboard.press('Shift+Tab');
   }
-  return { stops: seen.size, hidden };
+  return { stops: seen.size, hidden, names };
 }
 
-async function walkScreens(page: Page, world: World, signInPageAs: (credentials: { email: string; password: string }, startHash?: string) => Promise<void>, width: number) {
+async function walkScreens(
+  page: Page,
+  world: World,
+  signInPageAs: (credentials: { email: string; password: string }, startHash?: string) => Promise<void>,
+  width: number,
+  options: { slowTransferMs?: number } = {},
+) {
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  // A test can hold back the lazy chunk of Settings' export and import card, to show that the Settings walk waits for the card.
+  const slow = options.slowTransferMs;
+  if (slow !== undefined) {
+    await page.route(/\/assets\/SettingsTransfer[^/]*\.js$/, async (route) => {
+      await new Promise((done) => setTimeout(done, slow));
+      await route.continue();
+    });
+  }
   await signInPageAs(world.me.account, '#/timesheet');
   await expect(page.locator('[data-day]')).toHaveCount(14);
   await expect(page.getByRole('button', { name: /^Check (in|out)$/ })).toBeVisible();
@@ -180,7 +196,14 @@ async function walkScreens(page: Page, world: World, signInPageAs: (credentials:
   await page.goto('/#/settings');
   await expect(page.locator('[data-settings="sharing"]')).toBeVisible();
   await expect(page.getByRole('list', { name: 'Shares I received' })).toBeVisible();
-  results.push(await walkBackward(page, 'body', `${width} Settings`));
+  // The export and import card loads on demand (WP5-UX4-T05), and its arrival moves everything below it. A walk that is under way when it
+  // arrives can find the focused control ("Import from Excel", the next stop after the card) pushed out of the window: measured at the
+  // gate once in 370 runs, and reproduced on purpose by releasing the held chunk as the walk reached that link (WP5-UX4-FIX1). The walk
+  // therefore starts once the card is there, and covers its controls.
+  await expect(page.getByRole('region', { name: 'Export and import settings' })).toBeVisible();
+  const settings = await walkBackward(page, 'body', `${width} Settings`);
+  expect(settings.names, 'the Settings walk covers the lazily loaded export and import card').toContain('button "Export settings"');
+  results.push(settings);
 
   await page.goto(`/#/shared/${world.owner.account.id}`);
   await expect(page.locator('[data-share-bar]')).toBeVisible();
@@ -230,6 +253,13 @@ test.describe('WP5-UX-AX-01 on the mobile project', () => {
       await walkScreens(page, await newWorld(adminSeed, builtServer), signInPageAs, size.width);
     });
   }
+
+  // The card's chunk arrives 1.5 s late: the walk of Settings still waits for the card and covers its controls.
+  test('Shift+Tab never stops on a hidden control at 360px with the export and import card arriving late', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 360, height: 740 });
+    await walkScreens(page, await newWorld(adminSeed, builtServer), signInPageAs, 360, { slowTransferMs: 1500 });
+  });
 });
 
 /* ---- WP5-UX3-T04: the check in/out group moved to the title row ------------------------------------------------- */

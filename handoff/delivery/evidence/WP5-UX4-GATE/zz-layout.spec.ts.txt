@@ -1,0 +1,213 @@
+import type { Page } from '@playwright/test';
+import { contrast, flattenedBackground, parseColour, textContrast, tokenColour, computedStyle } from './contrast.ts';
+import { expect, newPerson, test } from './fixtures.ts';
+import { applySituation, note, SITUATIONS, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX4-GATE task-local probe (never part of the repository): round-4 layout facts measured on the built target.
+ * Notes go to GATE_OUT/layout.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const OUTFILE = 'layout.txt';
+const WIDTHS = [320, 360, 375, 390, 768, 820, 1024, 1280, 1440];
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 150))))');
+}
+
+const TARGETS = String.raw`(() => {
+  const out = [];
+  const sel = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [role="button"], [role="switch"], [role="tab"], [tabindex]:not([tabindex="-1"])';
+  for (const el of document.querySelectorAll(sel)) {
+    const s = getComputedStyle(el);
+    if (s.visibility === 'hidden' || s.display === 'none') continue;
+    if (!el.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })) continue;
+    if (el.closest('[inert]')) continue;
+    let r = el.getBoundingClientRect();
+    // a checkbox/radio/switch is clicked through its label: measure the label when the input is smaller than 44px
+    if ((el.type === 'checkbox' || el.type === 'radio') && el.closest('label')) { const lr = el.closest('label').getBoundingClientRect(); if (lr.width * lr.height > r.width * r.height) r = lr; }
+    if (r.width === 0 || r.height === 0) continue;
+    // inline links inside a sentence are exempt (WCAG 2.5.8 inline exception)
+    const inline = el.tagName === 'A' && !el.classList.contains('button-link') && getComputedStyle(el).display === 'inline';
+    if (r.width < 43.5 || r.height < 43.5) out.push({ tag: el.tagName.toLowerCase(), name: (el.getAttribute('aria-label') || el.textContent || el.getAttribute('name') || '').replace(/\s+/g, ' ').trim().slice(0, 40), w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10, inline });
+  }
+  return out;
+})()`;
+
+async function pageScroll(page: Page): Promise<{ scroll: number; client: number; inner: number }> {
+  return page.evaluate<{ scroll: number; client: number; inner: number }>('({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth, inner: window.innerWidth })');
+}
+
+test('scroll at nine widths and 44px targets below 768 on Timesheet, Settings, Profile, Review, Overtime, History, Import', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'widths are set through the viewport on the desktop project');
+  test.setTimeout(420_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Layout Person' });
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const hashes = ['#/timesheet', '#/settings', '#/settings/profile', `#/review/${person.payrollDate}`, '#/overtime', '#/history', '#/import'];
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const hash of hashes) {
+      await page.goto(`${builtServer.origin}/${hash}`);
+      await expect(page.locator('main.page, main').first()).toBeVisible();
+      await settle(page);
+      if (hash === '#/timesheet') await expect(page.locator('[data-day]')).toHaveCount(14);
+      const s = await pageScroll(page);
+      const over = s.scroll > s.inner;
+      note(OUTFILE, `SCROLL ${width}px ${hash.slice(0, 12)}: scrollWidth ${s.scroll} innerWidth ${s.inner} client ${s.client} ${over ? 'OVERFLOW' : 'ok'}`);
+      if (width < 768) {
+        const small = (await page.evaluate<Array<{ tag: string; name: string; w: number; h: number; inline: boolean }>>(TARGETS)).filter((t) => !t.inline);
+        note(OUTFILE, `TARGETS ${width}px ${hash.slice(0, 12)}: ${small.length} below 44px ${JSON.stringify(small.slice(0, 6))}`);
+      }
+    }
+    // Timesheet with details on, batch selection, and the editor open
+    await page.goto(`${builtServer.origin}/#/timesheet`);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByRole('switch', { name: 'Show worked hours' }).check();
+    await settle(page);
+    let s = await pageScroll(page);
+    note(OUTFILE, `SCROLL ${width}px timesheet+worked-hours: scrollWidth ${s.scroll} innerWidth ${s.inner} ${s.scroll > s.inner ? 'OVERFLOW' : 'ok'}`);
+    await page.getByRole('button', { name: 'Change several days', exact: true }).click();
+    await settle(page);
+    s = await pageScroll(page);
+    note(OUTFILE, `SCROLL ${width}px timesheet+batch: scrollWidth ${s.scroll} innerWidth ${s.inner} ${s.scroll > s.inner ? 'OVERFLOW' : 'ok'}`);
+    if (width < 768) {
+      const small = (await page.evaluate<Array<{ tag: string; name: string; w: number; h: number; inline: boolean }>>(TARGETS)).filter((t) => !t.inline);
+      note(OUTFILE, `TARGETS ${width}px timesheet+batch: ${small.length} below 44px ${JSON.stringify(small.slice(0, 6))}`);
+    }
+    await page.getByRole('button', { name: 'Change several days', exact: true }).click();
+    const first = page.locator('[data-day-button]').first();
+    await first.click();
+    await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+    await settle(page);
+    s = await pageScroll(page);
+    note(OUTFILE, `SCROLL ${width}px timesheet+editor: scrollWidth ${s.scroll} innerWidth ${s.inner} ${s.scroll > s.inner ? 'OVERFLOW' : 'ok'}`);
+    if (width < 768) {
+      const small = (await page.evaluate<Array<{ tag: string; name: string; w: number; h: number; inline: boolean }>>(TARGETS)).filter((t) => !t.inline);
+      note(OUTFILE, `TARGETS ${width}px editor: ${small.length} below 44px ${JSON.stringify(small.slice(0, 6))}`);
+    }
+    await page.keyboard.press('Escape');
+  }
+});
+
+test('paper parts, two signature rows, title gap from 768px, week header fills in four situations, phone first-row budget', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(240_000);
+  const phone = testInfo.project.name === 'mobile';
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Paper Person' });
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const paper = page.locator('[data-paper]');
+  const facts = await paper.evaluate((el) => ({
+    count: document.querySelectorAll('[data-paper]').length,
+    kind: el.getAttribute('data-paper'),
+    toolbar: el.querySelectorAll('.tools').length,
+    weeks: el.querySelectorAll('section.sheet-week').length,
+    footer: el.querySelectorAll('.sheet-footer').length,
+    sigs: el.querySelectorAll('.signatures .sig').length,
+    sigRowTops: [...new Set([...el.querySelectorAll('.signatures .sig')].map((s) => Math.round(s.getBoundingClientRect().top)))].length,
+    h1: el.querySelectorAll('h1').length,
+    periodCard: el.querySelectorAll('.period-bar, .workbar').length,
+    radius: getComputedStyle(el).borderTopLeftRadius,
+  }));
+  note(OUTFILE, `PAPER ${testInfo.project.name}: ${JSON.stringify(facts)}`);
+  if (!phone) {
+    for (const width of [768, 1024, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      const gap = await page.evaluate(() => document.querySelector('.workbar')!.getBoundingClientRect().top - document.querySelector('header.page-head')!.getBoundingClientRect().bottom);
+      note(OUTFILE, `TITLE-GAP ${width}px: ${gap}px`);
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+  } else {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const budget = await page.evaluate(() => ({ rowBottom: document.querySelector('[data-day]')!.getBoundingClientRect().bottom, tabs: [...document.querySelectorAll('nav[aria-label="Main"]')].map((n) => n.getBoundingClientRect()).find((r) => r.height > 0)!.top }));
+    note(OUTFILE, `PHONE-BUDGET 390x844: first day row bottom ${budget.rowBottom.toFixed(1)}px, tab bar top ${budget.tabs.toFixed(1)}px, headroom ${(budget.tabs - budget.rowBottom).toFixed(1)}px`);
+  }
+  // Week header and first column against the date cell, in the four situations, desktop only
+  if (!phone) {
+    for (const situation of SITUATIONS) {
+      await applySituation(page, situation);
+      await page.evaluate((stored) => { if (stored) localStorage.setItem('timesheet.theme', stored); else localStorage.removeItem('timesheet.theme'); }, situation.stored);
+      await page.reload();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      const date = await flattenedBackground(page.locator('.sheet-day:not(.nonworking):not(.today) > .d-date').first());
+      const bar = await flattenedBackground(page.locator('.week-bar').first());
+      const col = await flattenedBackground(page.locator('.row-labels').first());
+      const r = (v: number) => Math.round(v * 100) / 100;
+      const texts = [
+        await textContrast(page.locator('.week-bar strong').first()),
+        await textContrast(page.locator('.week-bar .mono').first()),
+        await textContrast(page.locator('.row-labels > div').nth(0)),
+        await textContrast(page.locator('.row-labels > div').nth(2)),
+        await textContrast(page.locator('.row-labels > div').nth(5)),
+      ];
+      note(OUTFILE, `WEEK-FILLS ${situation.name}: header vs date cell ${r(contrast(bar, date))}:1, first column vs date cell ${r(contrast(col, date))}:1, header fill ${bar.map(Math.round).join(',')}, column fill ${col.map(Math.round).join(',')}, date fill ${date.map(Math.round).join(',')}; text ratios ${texts.map(r).join(', ')} (min ${r(Math.min(...texts))})`);
+      const arrow = contrast(await tokenColour(page, '--muted'), await tokenColour(page, '--field-bg'));
+      const strong = await tokenColour(page, '--sheet-head-strong');
+      const pageBg = parseColour(await computedStyle(page.locator('body'), 'backgroundColor'));
+      const paperSurface = await flattenedBackground(page.locator('[data-paper]'));
+      note(OUTFILE, `TOKENS ${situation.name}: chevron(--muted on --field-bg) ${r(arrow)}:1; --sheet-head-strong vs --card ${r(contrast(strong, await tokenColour(page, '--card')))}:1; paper surface on page ${r(contrast(paperSurface, pageBg))}:1; --text on strong ${r(contrast(await tokenColour(page, '--text'), strong))}:1; --muted on strong ${r(contrast(await tokenColour(page, '--muted'), strong))}:1`);
+    }
+  }
+});
+
+const SCAN = String.raw`(() => {
+  const visible = (e) => { const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(e).visibility !== 'hidden'; };
+  const nameOf = (e) => e.getAttribute('aria-label') || (e.closest('label') ? e.closest('label').textContent.replace(/\s+/g,' ').trim().slice(0, 40) : e.tagName);
+  const switches = [...document.querySelectorAll('[role="switch"]')].filter(visible).map((e) => { const s = getComputedStyle(e); const b = e.getBoundingClientRect(); return { name: nameOf(e), appearance: s.appearance, radius: parseFloat(s.borderTopLeftRadius), h: b.height, w: b.width, thumb: s.backgroundImage.includes('radial-gradient') }; });
+  const selects = [...document.querySelectorAll('select')].filter(visible).map((e) => { const s = getComputedStyle(e); const pos = s.backgroundPositionX.split(/,(?![^(]*\))/).map((p) => p.trim()); const m = /calc\(100% - ([\d.]+)px\)/.exec(pos[pos.length - 1] || ''); return { name: nameOf(e), appearance: s.appearance, edge: m ? parseFloat(m[1]) + parseFloat(s.borderRightWidth) : NaN }; });
+  const boxes = [...document.querySelectorAll('input[type="checkbox"]:not([role="switch"])')].filter(visible).map((e) => {
+    const label = e.closest('label'); const b = e.getBoundingClientRect(); const c = b.top + b.height / 2;
+    let d = null; if (label) { const w = document.createTreeWalker(label, NodeFilter.SHOW_TEXT); for (let n = w.nextNode(); n; n = w.nextNode()) { if ((n.textContent || '').trim()) { const r = document.createRange(); r.selectNodeContents(n); const rr = r.getClientRects()[0]; if (rr) d = Math.abs(c - (rr.top + rr.height / 2)); break; } } }
+    let wfh = null; if (label && label.classList.contains('label-wfh')) { const sel = label.parentElement && label.parentElement.querySelector('select'); if (sel) { const sb = sel.getBoundingClientRect(); wfh = Math.abs(c - (sb.top + sb.height / 2)); } }
+    return { name: nameOf(e), delta: d, wfh };
+  });
+  return { switches, selects, boxes };
+})()`;
+
+test('controls in four situations: switch round, chevron 12px, checkbox centred (Timesheet, Day editor, Settings)', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(300_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Controls Person' });
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const situation of SITUATIONS) {
+    await applySituation(page, situation);
+    await page.evaluate((stored) => { if (stored) localStorage.setItem('timesheet.theme', stored); else localStorage.removeItem('timesheet.theme'); }, situation.stored);
+    for (const state of ['timesheet', 'editor', 'settings']) {
+      if (state === 'timesheet') { await page.goto(`${builtServer.origin}/#/timesheet`); await page.reload(); await expect(page.locator('[data-day]')).toHaveCount(14); }
+      if (state === 'editor') { await page.locator('[data-day-button]').first().click(); await expect(page.getByRole('dialog', { name: /Day editor/ }).getByRole('checkbox', { name: /Worked from home/ })).toBeVisible(); }
+      if (state === 'settings') { await page.goto(`${builtServer.origin}/#/settings`); await page.reload(); await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible(); }
+      await settle(page);
+      const f = await page.evaluate<{ switches: Array<{ name: string; appearance: string; radius: number; h: number; w: number; thumb: boolean }>; selects: Array<{ name: string; appearance: string; edge: number }>; boxes: Array<{ name: string; delta: number | null; wfh: number | null }> }>(SCAN);
+      const sw = f.switches.every((s) => s.appearance === 'none' && s.radius >= s.h / 2 && s.thumb);
+      const se = f.selects.every((s) => s.appearance === 'none' && Math.abs(s.edge - 12) <= 1);
+      const bx = f.boxes.every((b) => (b.delta ?? 0) <= 1 && (b.wfh ?? 0) <= 1);
+      note(OUTFILE, `CONTROLS ${situation.name} / ${state}: switches ${f.switches.length} (all round: ${sw}; radius/height ${f.switches.map((s) => `${s.radius}/${s.h}`).join(' ')}), selects ${f.selects.length} (chevron edge ${f.selects.map((s) => s.edge).join(' ')}; ok ${se}), checkboxes ${f.boxes.length} (max delta ${Math.max(0, ...f.boxes.map((b) => b.delta ?? 0)).toFixed(2)}px; WFH ${f.boxes.filter((b) => b.wfh !== null).map((b) => b.wfh!.toFixed(2)).join(',') || 'n/a'}; ok ${bx})`);
+      if (state === 'editor') await page.keyboard.press('Escape');
+    }
+  }
+});
+
+test('Review: two columns from 1330px and the grid is contained at 1280, 1330 and 1440', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Review Person' });
+  await signInPageAs(person.account, `#/review/${person.payrollDate}`);
+  await expect(page.locator('[data-paper="review"]')).toBeVisible();
+  for (const width of [1329, 1330, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await settle(page);
+    const r = await page.evaluate(() => {
+      const paper = document.querySelector('[data-paper="review"]')!.getBoundingClientRect();
+      const check = document.querySelector('.review-checklist')!.getBoundingClientRect();
+      const grids = [...document.querySelectorAll('[data-paper="review"] .week-grid')].map((g) => g.getBoundingClientRect().right);
+      const cards = [...document.querySelectorAll('[data-paper="review"] section.sheet-week')].map((c) => ({ s: c.scrollWidth, c: c.clientWidth }));
+      return { twoColumns: check.left >= paper.right - 0.5 && check.top < paper.bottom, paperRight: paper.right, checkLeft: check.left, gridRightMax: Math.max(...grids), cards, scroll: document.documentElement.scrollWidth, inner: window.innerWidth };
+    });
+    note(OUTFILE, `REVIEW ${width}px: two columns ${r.twoColumns}; paper right ${r.paperRight.toFixed(1)}, checklist left ${r.checkLeft.toFixed(1)}, grid right max ${r.gridRightMax.toFixed(1)}, week cards scroll/client ${JSON.stringify(r.cards)}, page scroll ${r.scroll}/${r.inner}`);
+  }
+});

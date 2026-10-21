@@ -1,0 +1,43 @@
+== dbg4: real start 2026-10-21T11:05:36Z, simulated start 2026-11-01T08:45:00Z, AB8_SHIFT_MS=941963374
+process clock 2026-11-01T08:45:00.085Z (Date.now 1793522700094); America/Los_Angeles Sun, 2026-11-01, 01:45; shift ms 941963374; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts -g at 1440px a press on another day switches --project=desktop --output=<task>/pw-dbg4
+
+Running 1 test using 1 worker
+
+TMPDEBUG {"panel":[1040,56,1440,800],"vw":1440,"ih":800,"sy":0,"cols":[["2026-10-26",125,549,249,806,true],["2026-10-27",249,549,372,806,true],["2026-10-28",372,549,496,806,true],["2026-10-29",496,549,620,806,true],["2026-10-30",620,546,744,803,true],["2026-10-31",744,549,867,806,true],["2026-11-01",867,549,991,806,true],["2026-11-02",125,862,249,1119,false],["2026-11-03",249,862,372,1119,false],["2026-11-04",372,862,496,1119,false],["2026-11-05",496,862,620,1119,false],["2026-11-06",620,862,744,1119,false],["2026-11-07",744,862,867,1119,false],["2026-11-08",867,862,991,1119,false]]}
+  x  1 [desktop] › tests\e2e\day-editor.spec.ts:4591:5 › WP5-UX4-T02 (U4-05): the drawer leaves the page usable; another day switches it and the open day unselects it › at 1440px a press on another day switches the drawer without closing it first, and a press on the open day closes it with focus kept (1.3s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:4591:5 › WP5-UX4-T02 (U4-05): the drawer leaves the page usable; another day switches it and the open day unselects it › at 1440px a press on another day switches the drawer without closing it first, and a press on the open day closes it with focus kept 
+
+    Error: a day column that a pointer reaches beside the open drawer (not 2026-10-30)
+
+    expect(received).not.toBe(expected) // Object.is equality
+
+    Expected: not ""
+
+      4581 |   const [date = ''] = await reachableDays(page, exclude);
+      4582 |   if (date === '') console.log('TMPDEBUG ' + await page.evaluate(`(() => { const p = document.querySelector('[data-day-editor]').getBoundingClientRect(); return JSON.stringify({ panel: [p.left, p.top, p.right, p.bottom], vw: document.documentElement.clientWidth, ih: window.innerHeight, sy: window.scrollY, cols: [...document.querySelectorAll('.week-grid [data-day]')].map((c) => { const b = c.getBoundingClientRect(); const bt = c.querySelector('[data-day-button]').getBoundingClientRect(); const hit = document.elementFromPoint(bt.left + bt.width / 2, bt.top + bt.height / 2); return [c.getAttribute('data-day'), Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom), hit === c.querySelector('[data-day-button]')]; }) }); })()`));
+    > 4583 |   expect(date,`a day column that a pointer reaches beside the open drawer (not ${exclude.join(', ')})`).not.toBe('');
+           |                                                                                                             ^
+      4584 |   return date;
+      4585 | }
+      4586 |
+        at firstReachableDay (D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:4583:109)
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:4613:21
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-dbg4\day-editor-WP5-UX4-T02-U4--b225a-y-closes-it-with-focus-kept-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-dbg4\day-editor-WP5-UX4-T02-U4--b225a-y-closes-it-with-focus-kept-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-dbg4\day-editor-WP5-UX4-T02-U4--b225a-y-closes-it-with-focus-kept-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:4591:5 › WP5-UX4-T02 (U4-05): the drawer leaves the page usable; another day switches it and the open day unselects it › at 1440px a press on another day switches the drawer without closing it first, and a press on the open day closes it with focus kept 
+exit=1
+process clock 2026-11-01T08:45:04.866Z (Date.now 1793522704875); America/Los_Angeles Sun, 2026-11-01, 01:45; shift ms 941963374; instanceof true
+== dbg4 real end 2026-10-21T11:05:41Z

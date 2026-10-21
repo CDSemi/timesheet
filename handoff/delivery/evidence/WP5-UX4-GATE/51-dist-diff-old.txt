@@ -1,0 +1,18 @@
+269a270,282
+> /**
+>  * F-Q5: a grantee never checks in or out for the owner, by any route. Through a share, a session
+>  * edit may not start a running session (an open new one, or an ended one reopened) or end a
+>  * running one: 409 `shared_clock_action`. The owner's own edits are unchanged, and so are shared
+>  * edits that keep an ended session ended or a running session running.
+>  */
+> function assertNoSharedClockAction(ctx, runningBefore, runningAfter) {
+>     if (ctx.viaShareId === undefined || runningBefore === runningAfter)
+>         return;
+>     throw new ApiError(409, 'shared_clock_action', runningAfter
+>         ? 'Only the owner can start a running session (Check in); enter an end time instead'
+>         : 'Only the owner can end a running session (Check out)');
+> }
+272a286
+>     assertNoSharedClockAction(ctx, false, input.end === null);
+296a311
+>         assertNoSharedClockAction(ctx, before.end_utc === null, input.end === null);

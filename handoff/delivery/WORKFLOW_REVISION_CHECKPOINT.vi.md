@@ -1067,6 +1067,52 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - Dòng đó là một template literal dựng phần đầu chứng chỉ quanh `${b64}` lúc chạy, không chứa
     khóa nào. Coordinator đã đọc dòng này.
   - Addendum 1 chỉ cho phép đúng trường hợp đó. Một committer mới chạy lần 2.
+- WP5-UX4-T06-FREEZE lần 2 đã commit và push a3042dd9c2f94dd2287ef04ed815db0fbf1838b6.
+  - 62 đường dẫn; digest 104ca9c3 trên HEAD; mọi kiểm tra trả về 0.
+  - Toàn bộ source của đợt 4 đã xong: T04 5a68fba, T01 213bbdc, T02 b7cc063, T03 cda9c51,
+    T05 82d1ab4, T06 a3042dd.
+- Đang chạy: WP5-UX4-GATE (verifier, sonnet) trên a3042dd / 104ca9c3. Phạm vi:
+  - gate WP5 đầy đủ;
+  - ranh giới server chỉ gồm tám file của T04;
+  - phạm vi của đợt;
+  - quét với đồng hồ giả lập;
+  - các kiểm tra riêng của đợt, gồm axe, độ tương phản, CSP và kích thước chunk;
+  - `npm test` ba lần, theo dõi worker có bị crash không.
+- WP5-UX4-GATE: **FAIL**.
+  - **Lỗi sản phẩm (T02, SC 2.4.11).** Ở 1280x800, nút "Edit 10/19" bị drawer nổi (đang neo bên
+    trái) che hoàn toàn. `whollyCovered` so sánh nghiêm ngặt, mà nút lại nằm lệch 0.23px dưới mép
+    cửa sổ.
+  - **Lỗi test phụ thuộc ngày:**
+    - `sharing.spec.ts:399` vào các ngày cửa sổ nộp;
+    - U4-11 vào Chủ nhật;
+    - U4-05 (kiểm tra chuột có bấm tới được cột ngày cạnh drawer) vào 2026-11-01.
+  - **Test flaky:**
+    - `keyboard-access.spec.ts:227` (mobile; là lỗi duy nhất khi chạy với đồng hồ thật, 770 test
+      đạt);
+    - phép đo độ tương phản của link Today/Now;
+    - dữ liệu seed của U4-14 lúc 23:58:30.
+  - **Mọi mục còn lại đều đạt:**
+    - ci, lint, verify, AC-13, drill (208 PASS), audit, các validator;
+    - `npm test` ba lần, worker không crash lần nào;
+    - ranh giới server: chỉ tám file của T04, `dist/domain` giống hệt;
+    - phạm vi: 90 đường dẫn;
+    - các phép đo của T01, T03, T04 và T05;
+    - axe 0 vi phạm trong 30 lần quét; CSP giống hệt; chunk chính 489 kB.
+- Đang chạy: WP5-UX4-FIX1 (worker-high, sonnet).
+  - Worker tái hiện từng lỗi trước rồi mới sửa.
+  - SC 2.4.11 được xét theo phần nhìn thấy của control, có dung sai, kèm unit test, một lượt duyệt
+    bàn phím ở 1280 và một đột biến.
+  - Các test được làm cho ổn định, chứng minh ở sáu thời điểm của gate và bằng 10 lần chạy lặp.
+- WP5-UX4-FIX1 xong, không phải dừng. Mỗi lỗi đều được tái hiện trước.
+  - SC 2.4.11 được sửa trong hàm thuần `whollyCovered`: cắt theo cửa sổ, dung sai 1px, 7 trường hợp
+    unit test, một lượt duyệt ở 1280 với drawer neo cả hai bên, đột biến bị bắt.
+  - Trường hợp ngày cửa sổ và Chủ nhật là lỗi của test; sản phẩm đúng theo docs/02.
+  - Test bàn phím flaky là do bố cục bị xô lệch: thẻ export tải lười đến giữa lúc đang duyệt. Test
+    nay chờ thẻ tải xong. Cách xử lý phía sản phẩm (giữ sẵn chiều cao cho thẻ) được chuyển cho audit
+    A xem xét.
+  - Kết quả: 0 lỗi ở sáu thời điểm; chạy lặp đạt 140/140 và 40/40; e2e đầy đủ 774 đạt, 0 lỗi; npm
+    test 2226; digest b3e9c962.
+- Đang chạy: WP5-UX4-FIX1-FREEZE (một committer mới, chạy một mình), sau đó là WP5-UX4-REGATE.
 - Còn lại sau T06:
   - T06-FREEZE;
   - gate cho cả đợt 4;

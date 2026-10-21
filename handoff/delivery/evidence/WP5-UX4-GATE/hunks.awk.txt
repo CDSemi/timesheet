@@ -1,0 +1,6 @@
+# Print only hunks that remove an assertion-like line, with file name.
+/^diff --git/ { file=$3; next }
+/^@@/ { if (hunk != "" && hasrm) { print "FILE " hfile; print hunk } hunk=$0 "\n"; hasrm=0; hfile=file; next }
+/^---|^\+\+\+/ { next }
+{ if ($0 ~ /^-.*(expect|assert|toBe|toEqual|toHave|toContain|toMatch)/) hasrm=1; hunk = hunk substr($0,1,200) "\n" }
+END { if (hunk != "" && hasrm) { print "FILE " hfile; print hunk } }

@@ -196,3 +196,23 @@ Return at most 80 words, beginning 'Self-reported model: ...'.
   the results under "### Attempt 2".
 
 ## Results
+
+Attempt 1 stopped before staging on the single `BEGIN` hit in `probe-script.txt:50`
+(cleared by Addendum 1).
+
+### Attempt 2
+
+- HEAD before: 82d1ab4d8300de139db88dbaa9f7b2d56d2650b0 (= origin/main). HEAD after and
+  commit SHA: a3042dd9c2f94dd2287ef04ed815db0fbf1838b6. Pushed: yes (dry-run 0, push 0).
+  Remote SHA: a3042dd9c2f94dd2287ef04ed815db0fbf1838b6. Branch main. No tag.
+- Digest before add and after commit: 104ca9c3f5e31959a23a9b509edfc6367dfef7d9b837e0e938db81641de8a5ae
+  (849 files), both equal.
+- Staged: 62 (17 outside handoff; 6 modified handoff records; 3 new task records
+  D8-DIAG, T06, T06-FREEZE; 2 T05-FREEZE evidence; 5 D8-DIAG evidence; 29 T06 evidence).
+  No extra handoff paths.
+- Checks, all exit 0: node v24.21.0; D8-DIAG grep (one allowed `BEGIN CERTIFICATE`
+  template literal with `${b64}` at probe-script.txt:50; no PRIVATE KEY, no long base64);
+  precommit-check PASS (0 findings); `git diff --cached --check`; JSON parse via
+  validate_orchestration.py; validate_orchestration.py PASS; check_recovery.py PASS (106);
+  validate_package.py --preflight PASS.
+- No fix, no masking, no stop. Details: `evidence/WP5-UX4-T06-FREEZE/checks.txt`.

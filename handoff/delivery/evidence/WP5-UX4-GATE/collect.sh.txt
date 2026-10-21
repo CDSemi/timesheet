@@ -1,0 +1,23 @@
+# Copies the masked evidence into handoff/delivery/evidence/WP5-UX4-GATE/ (masked LF .txt, scripts as .txt, 14 synthetic PNG).
+. <task>/env.sh
+mkdir -p $E
+m() { node.exe "$TW\\mask.mjs" "$1" "$2" >> <task>/tmp/mask-last.txt 2>&1; }
+cd $T/out
+for f in *.txt; do
+  case "$f" in ex-files.txt|ex-hashes.txt|ex-sorted.txt|lstree-sorted.txt|keys-list.txt|51-*-files.txt|51-*-hashes.txt|25-testdiff-*.txt|25-view1.txt|de-target.txt) continue;; esac
+  m "$T/out/$f" "$E/$f"
+done
+cd $T/logs
+for f in control-*.txt sweep-*.txt rerun-*.txt probe-*.txt cmp-dist.txt cfg.txt keys.txt; do
+  [ -f "$f" ] && m "$T/logs/$f" "$E/log-$f"
+done
+cd $T/obs
+for f in *.txt; do m "$T/obs/$f" "$E/obs-$f"; done
+cd $T/tmp/timesheet-e2e-screenshots
+for f in controls-*.txt surfaces-*.txt; do [ -f "$f" ] && m "$T/tmp/timesheet-e2e-screenshots/$f" "$E/e2e-$f"; done
+cd $T
+for s in env.sh digest.sh run-main.sh run-rest.sh run-integ.sh run-drill.sh run-shift.sh run-probe.sh rerun.sh sweep.sh cmp-dist.sh cfg.sh keys.sh collect.sh; do m "$T/$s" "$E/$s.txt"; done
+for s in mask.mjs zone.mjs run-tz.mjs tzprobe.mjs tzchild.mjs contrast5.mjs shiftclock.mjs probe-now.mjs hunks.awk zz-lib.ts zz-png.ts zz-layout.spec.ts zz-editor.spec.ts zz-session.spec.ts zz-axe.spec.ts zz-t05.spec.ts zz-headers.spec.ts zz-shots.spec.ts zz-walkdbg.spec.ts zz-reach.spec.ts zz-control.spec.ts; do m "$T/$s" "$E/$s.txt"; done
+cp $T/shots-shots/ux4gate-timesheet-paper-1440-light-synthetic.png $T/shots-shots/ux4gate-timesheet-paper-1440-dark-synthetic.png $T/shots-shots/ux4gate-drawer-beside-1440-light-synthetic.png $T/shots-shots/ux4gate-drawer-floating-1280-light-synthetic.png $T/shots-shots/ux4gate-discard-prompt-1440-light-synthetic.png $T/shots-shots/ux4gate-session-dialog-today-now-1440-light-synthetic.png $T/shots-shots/ux4gate-session-dialog-today-now-390-light-synthetic.png $T/shots-shots/ux4gate-review-1440-light-synthetic.png $T/shots-shots/ux4gate-settings-import-preview-1440-light-synthetic.png $T/shots-shots/ux4gate-admin-company-card-1440-light-synthetic.png $T/shots-shots/ux4gate-profile-change-password-1440-light-synthetic.png $T/shots-session4/ux4gate-running-edit-synthetic.png $T/shots-session2/ux4gate-alert-session-1440-synthetic.png $T/shots-session3/ux4gate-alert-checkout-390-synthetic.png $E/
+ls $E | wc -l
+ls $E/*.png | wc -l

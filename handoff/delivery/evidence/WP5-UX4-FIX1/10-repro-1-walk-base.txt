@@ -1,0 +1,72 @@
+== repro1: real start 2026-10-21T10:58:58Z, simulated start real, AB8_SHIFT_MS=0
+process clock 2026-10-21T10:58:58.859Z (Date.now 1792580338869); America/Los_Angeles Wed, 2026-10-21, 03:58; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts -g WP5-UX4-FIX1 --project=desktop --output=<task>/pw-repro1
+
+Running 2 tests using 1 worker
+
+  x  1 [desktop] › tests\e2e\day-editor.spec.ts:3502:5 › WP5-UX4-FIX1 (SC 2.4.11): at 1280x800 no focused sheet control stays wholly under the floating drawer, whichever edge it starts on › a Tab and Shift+Tab walk of 160 presses each, opened on a column that docks the drawer right (1.9s)
+  x  2 [desktop] › tests\e2e\day-editor.spec.ts:3502:5 › WP5-UX4-FIX1 (SC 2.4.11): at 1280x800 no focused sheet control stays wholly under the floating drawer, whichever edge it starts on › a Tab and Shift+Tab walk of 160 presses each, opened on a column that docks the drawer left (2.0s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:3502:5 › WP5-UX4-FIX1 (SC 2.4.11): at 1280x800 no focused sheet control stays wholly under the floating drawer, whichever edge it starts on › a Tab and Shift+Tab walk of 160 presses each, opened on a column that docks the drawer right 
+
+    Error: BUTTON Edit 10/19 (2026-10-19) is wholly under the drawer after 16 Tab presses (it was docked left)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      3531 |           if (state.outside) stops += 1;
+      3532 |           sides.add((await editor.getAttribute('data-side')) ?? '-');
+    > 3533 |           expect(state.hidden, `${state.name} is wholly under the drawer after ${step + 1} ${key} presses (it was docked ${before})`).toBe(false);
+           |                                                                                                                                       ^
+      3534 |         }
+      3535 |       }
+      3536 |       console.log(`WALK 1280x800 opened ${side}: ${stops} sheet stops, ${redocks} re-docks, sides seen ${[...sides].join(',')}`);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:3533:135
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-repro1\day-editor-WP5-UX4-FIX1-SC-bd45c-that-docks-the-drawer-right-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-repro1\day-editor-WP5-UX4-FIX1-SC-bd45c-that-docks-the-drawer-right-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-repro1\day-editor-WP5-UX4-FIX1-SC-bd45c-that-docks-the-drawer-right-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\e2e\day-editor.spec.ts:3502:5 › WP5-UX4-FIX1 (SC 2.4.11): at 1280x800 no focused sheet control stays wholly under the floating drawer, whichever edge it starts on › a Tab and Shift+Tab walk of 160 presses each, opened on a column that docks the drawer left 
+
+    Error: BUTTON Edit 10/19 (2026-10-19) is wholly under the drawer after 16 Tab presses (it was docked left)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      3531 |           if (state.outside) stops += 1;
+      3532 |           sides.add((await editor.getAttribute('data-side')) ?? '-');
+    > 3533 |           expect(state.hidden, `${state.name} is wholly under the drawer after ${step + 1} ${key} presses (it was docked ${before})`).toBe(false);
+           |                                                                                                                                       ^
+      3534 |         }
+      3535 |       }
+      3536 |       console.log(`WALK 1280x800 opened ${side}: ${stops} sheet stops, ${redocks} re-docks, sides seen ${[...sides].join(',')}`);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:3533:135
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-repro1\day-editor-WP5-UX4-FIX1-SC-062c3--that-docks-the-drawer-left-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-repro1\day-editor-WP5-UX4-FIX1-SC-062c3--that-docks-the-drawer-left-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX4-FIX1\pw-repro1\day-editor-WP5-UX4-FIX1-SC-062c3--that-docks-the-drawer-left-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:3502:5 › WP5-UX4-FIX1 (SC 2.4.11): at 1280x800 no focused sheet control stays wholly under the floating drawer, whichever edge it starts on › a Tab and Shift+Tab walk of 160 presses each, opened on a column that docks the drawer right 
+    [desktop] › tests\e2e\day-editor.spec.ts:3502:5 › WP5-UX4-FIX1 (SC 2.4.11): at 1280x800 no focused sheet control stays wholly under the floating drawer, whichever edge it starts on › a Tab and Shift+Tab walk of 160 presses each, opened on a column that docks the drawer left 
+exit=1
+process clock 2026-10-21T10:59:12.264Z (Date.now 1792580352274); America/Los_Angeles Wed, 2026-10-21, 03:59; shift ms 0; instanceof true
+== repro1 real end 2026-10-21T10:59:12Z

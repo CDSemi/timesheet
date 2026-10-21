@@ -1,0 +1,58 @@
+import { namedDayButton } from './dayButton.ts';
+import { expect, test } from './fixtures.ts';
+import { note, seedLongContent, signInTo } from './zz-lib.ts';
+
+/* WP5-UX4-GATE task-local debug probe (never part of the repository): is the drawer's re-dock slow, or does it never happen? */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const STATE = `(() => {
+  const el = document.activeElement; const ed = document.querySelector('[data-day-editor]');
+  if (!el || !ed) return null;
+  const r = el.getBoundingClientRect(); const p = ed.getBoundingClientRect();
+  return { name: (el.getAttribute('aria-label') || el.textContent || el.tagName).replace(/\\s+/g, ' ').trim().slice(0, 40), side: ed.getAttribute('data-side'),
+    inside: ed.contains(el), wholly: r.left >= p.left - 0.5 && r.right <= p.right + 0.5 && r.top >= p.top - 0.5 && r.bottom <= p.bottom + 0.5, scrollY: Math.round(window.scrollY), now: Math.round(performance.now()),
+    exact: 'button left ' + r.left + ' top ' + r.top + ' right ' + r.right + ' bottom ' + r.bottom + ' | drawer left ' + p.left + ' top ' + p.top + ' right ' + p.right + ' bottom ' + p.bottom + ' | innerHeight ' + window.innerHeight };
+})()`;
+
+const INSTALL = `(() => {
+  window.__log = [];
+  document.addEventListener('focusin', (e) => {
+    const t = e.target; if (!(t instanceof Element)) return;
+    window.__log.push('focusin ' + Math.round(performance.now()) + ' ' + (t.getAttribute('aria-label') || t.textContent || t.tagName).replace(/\\s+/g, ' ').trim().slice(0, 24));
+  });
+  const ed = document.querySelector('[data-day-editor]');
+  new MutationObserver(() => window.__log.push('side->' + ed.getAttribute('data-side') + ' ' + Math.round(performance.now()))).observe(ed, { attributes: true, attributeFilter: ['data-side'] });
+})()`;
+
+for (const instrument of [false, true]) {
+  test(`debug: Tab walk at 1280, passive instrumentation ${instrument}`, async ({ page, privateServer }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop');
+    test.setTimeout(240_000);
+    const data = await seedLongContent(privateServer, 'Synthetic Walk Debug');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInTo(page, privateServer, data.person.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await namedDayButton(page, data.dates[0] ?? '', 'Edit').click();
+    await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+    if (instrument) await page.evaluate(INSTALL);
+    await page.getByRole('switch', { name: 'Show worked hours' }).focus();
+    for (let step = 0; step < 60; step += 1) {
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(60);
+      const a = await page.evaluate<{ name: string; side: string; inside: boolean; wholly: boolean; scrollY: number; now: number } | null>(STATE);
+      if (a === null || a.inside || !a.wholly) continue;
+      await page.waitForTimeout(1000);
+      const b = await page.evaluate<{ wholly: boolean; side: string; scrollY: number; now: number } | null>(STATE);
+      note('walkdbg.txt', `[instrument ${instrument}] step ${step + 1}: "${a.name}" wholly under at 60 ms (side ${a.side}, t=${a.now}, exact ${(a as unknown as { exact: string }).exact}); after 1 s: wholly ${b?.wholly}, side ${b?.side}, scrollY ${b?.scrollY} (t=${b?.now})`);
+    }
+    if (instrument) {
+      const slice = await page.evaluate<string[]>(() => {
+        const log = (window as unknown as { __log: string[] }).__log;
+        const i = log.findIndex((line) => line.startsWith('focusin') && line.includes('Edit 10') && line.includes('19'));
+        return log.slice(Math.max(0, i - 3), i + 8);
+      });
+      note('walkdbg.txt', `log around Edit 10/19: ${JSON.stringify(slice)}`);
+    }
+    note('walkdbg.txt', `[instrument ${instrument}] walk done`);
+  });
+}

@@ -38,3 +38,29 @@ export function editorLayout(input: EditorLayoutInput): EditorLayout {
   if (input.viewportWidth < DRAWER_MIN_WIDTH) return 'bottom-sheet';
   return sheetRoomBeside(input) >= input.sheetMinWidth ? 'beside' : 'floating';
 }
+
+/** A box in CSS px from the window's top left corner: the part of a `DOMRect` that the coverage rule reads. */
+export interface Box {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** The slack, in CSS px, that the coverage rule allows at every edge: a browser rests a scrolled-to control a fraction of a pixel off the window. */
+export const COVER_TOLERANCE = 1;
+
+/**
+ * True when the visible part of `control` lies wholly under `cover` (WCAG 2.2 SC 2.4.11 Focus Not Obscured): the control's box
+ * clipped to the window, compared with the cover's box, with `COVER_TOLERANCE` of slack at each edge. A control whose only part
+ * outside the cover lies beyond the window is covered (nothing of it can be seen); a control with any visible part outside the cover
+ * is not. A control with no visible part at all (no size, or wholly outside the window) is not reported: there is nothing to uncover.
+ */
+export function whollyCovered(control: Box, cover: Box, viewport: { width: number; height: number }): boolean {
+  const left = Math.max(control.left, 0);
+  const top = Math.max(control.top, 0);
+  const right = Math.min(control.right, viewport.width);
+  const bottom = Math.min(control.bottom, viewport.height);
+  if (right <= left || bottom <= top) return false;
+  return left >= cover.left - COVER_TOLERANCE && right <= cover.right + COVER_TOLERANCE && top >= cover.top - COVER_TOLERANCE && bottom <= cover.bottom + COVER_TOLERANCE;
+}
