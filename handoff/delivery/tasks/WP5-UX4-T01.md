@@ -166,3 +166,118 @@ At most 200 words, beginning 'Self-reported model: ...'. Include:
 - any stop or deviation.
 
 ## Results
+
+Self-reported model: claude-sonnet-5-5 (timesheet-worker-high). Status: done. Evidence in
+`handoff/delivery/evidence/WP5-UX4-T01/` (checks.txt, controls-measurements.txt, mutants.txt,
+parity-docs04.txt, test-counts.txt, six `-synthetic.png`).
+
+### Base
+
+HEAD = origin/main = 5a68fba65bac6723ed3e66f33048b722d34c4656; digest before edit
+6e9e3001fe1f1ed352f446be19cc07c152d4cb61aa7ab0dce145f1fc6e1f8f41 (835 files); `git status --short`
+showed only the coordinator files under `handoff/`. Node v24.21.0.
+
+### Items and measured results (desktop and mobile projects, light and dark, real clock)
+
+1. U4-02 title gap: `--page-head-gap` = `--space-6` (32px) on `.page-head` (Timesheet) and, as the
+   difference to the stack gap, on `.review-head` (Review), from 768px; `p.card` under the Review head
+   loses its browser top margin. Measured 32px at 768, 1024, 1440, 1920 in both themes on both pages;
+   at 390 the head keeps its 12px margin.
+2. U4-03 paper: `[data-paper]` on `section.sheet-main` (Timesheet) and `section.review-sheet-block`
+   (Review), class `.paper`: `--paper-surface` (card), `--elev-paper` (`--elev-2`), `--radius-lg` from
+   768px, 16px padding, `overflow` visible, `--paper-gap` 16px. Week sheets and footer lose only their
+   shadow; weeks, toolbar, footer, signature rows unchanged. Paper on page 1.14:1 (light), 1.15:1 (dark).
+   Phone: full-bleed (negative inline margin), square, same 16px side padding: table 358px at 390 and
+   288px at 320, no sideways scroll; first day row bottom 571px (670 with zone note, 623 and 722 with a
+   received share, 574 and 673 away) against the tab bar at 788px (was 559, 658, 611, 710: +12px).
+   The week-card scroll window moved from 768-899px to 768-929px (+32px of paper padding).
+3. Week emphasis: `--sheet-head-strong` (light #dde5f0, both dark sets #2c3746) on the week header
+   row, the desktop first column and the phone table header. Fill against the date cell 1.27:1 light,
+   1.36:1 dark; `--text` 12.30:1 / 9.91:1, `--muted` 4.59:1 / 4.83:1 on it.
+4. U4-04 switches: every `[role=switch]` is round (radius 999px, height 24px, `appearance: none`, round
+   radial-gradient thumb); the two sharing switches have class `switch-input` in `label.inline.switch`.
+5. U4-08 select: `appearance: none`, `padding-inline-end` 34px, two-gradient chevron, right edge 12px
+   from the border (measured 12px on every select scanned), `--muted` 5.83:1 light and 7.07:1 dark on
+   `--field-bg`, no `url()`; forced colours give `appearance: auto` (tested).
+6. U4-09 checkbox: WFH centred on the Category field (0px off at 1440 and 390, both themes: label
+   `min-height` = field height, 44px on touch). Every checkbox label aligns its box on the first text
+   line (`align-items: flex-start`, margin `(1lh - box) / 2`; touch padding centres one line in 44px);
+   measured 0.88px at most on Timesheet batch, Day editor, session and Check out dialogs, Settings.
+   (Administration: its selects were scanned; its only checkbox, in the holiday preview, was not
+   reached by the scan and relies on the same label rule.)
+7. U4-10: "Show worked hours" is the visible text and accessible name; 40 test occurrences updated
+   (value only); no "Show details" string remains in `src/` (one comment in `sheetModel.ts:141` is
+   outside my paths: see Deviations), docs/04 or the tests.
+
+### Files changed
+
+- `src/client/styles.css`, `src/client/TimesheetScreen.tsx`, `src/client/ReviewScreen.tsx`,
+  `src/client/components/ReviewDays.tsx`, `ShowDetailsSwitch.tsx`, `SharingItemsFields.tsx`,
+  `TimesheetSheet.tsx` (comment only).
+- Tests: `tests/e2e/controls.spec.ts` (new, 20 tests per project), `surfaces.spec.ts`,
+  `timesheet.spec.ts`, `day-editor.spec.ts`, `hover.spec.ts`, `focus-ring.spec.ts`, `shell.spec.ts`.
+- Docs: `docs/04_UX_AND_SETTINGS.md` and `.vi.md`.
+- Not changed: `SheetWeekTable.tsx`, `DayFieldsForm.tsx`, `review.spec.ts`, `sharing.spec.ts`,
+  `theme.spec.ts`, `keyboard-access.spec.ts` (no edit was needed). No server change, no dependency.
+
+### Changed assertions (none weakened)
+
+- `surfaces.spec.ts:73-155` (first test of each theme situation): the week bands and the footer are
+  no longer "raised"; the paper and the period bar are. Now asserted: paper raised (ring plus 3 layers,
+  1.12:1 from the page, 12px corners, 0px on a phone), week 1, week 2 and footer have `box-shadow:
+  none`, 0px corners, the toolbar and form header sit inside `[data-paper]` on the card colour, the sheet
+  column is opaque and raised. Same number of surfaces checked, plus the paper.
+- `surfaces.spec.ts:200`, `hover.spec.ts` (15), `focus-ring.spec.ts` (5), `timesheet.spec.ts` (12),
+  `day-editor.spec.ts` (5), `shell.spec.ts` (2): the string "Show details" to "Show worked hours".
+- `day-editor.spec.ts:3604-3616`: widths 768, 800, 820, 860, 899 and 920 (was 899 as the last), and the
+  card scrolls while the window is at most 913px (was 860px). Reason: the paper's 32px of padding moves
+  the exact threshold; the test still asserts "scrolls if and only if the columns need more than the
+  card has", over a wider range (899px now scrolls and 920px, which still has the media rule, does not).
+- `timesheet.spec.ts:33-38`: `EDITOR_BESIDE_SHEET` 1445px to 1449px. Reason: the file's own comment
+  needs whole-pixel column edges (129px columns at 1445px); the paper padding made them 124.4px, so the
+  pixel probe of the 1px frame read an antialiased pixel. At 1449px the columns are 125px; probes
+  unchanged.
+
+### Tests
+
+- Unit: `npm test` exit 0, 95 files, 2155 tests passed.
+- Full e2e, final run (both projects, alone, real clock): 696 passed, 70 skipped, 0 failed. Desktop 352
+  passed, 31 skipped; mobile 344 passed, 39 skipped. No ERR_NO_BUFFER_SPACE.
+- Earlier full run (before fixes): 690 passed, 4 failed (desktop). Causes: (a) Review at 1280px: the
+  two-column switch at 1200px left the sheet 772px wide on a page capped at 1200px, so the 850px week
+  grid overflowed its card and a day cell covered a checklist radio (measured at 1440px with the paper:
+  scrollWidth 849 against clientWidth 740; without the paper the same arithmetic gives 850 against 772,
+  so the overflow pre-dates the paper); fixed by a 1330px switch and a page widened to `--page-max-editor` beside the
+  checklist (new containment test at 1440, 1330, 1280, 1024); (b) the 899px expectation and (c) the
+  1445px probe, both above; (d) my Check out test used a display name containing "Check Out" (an
+  accessible-name clash); renamed.
+- Mutants (each alone, failed, reverted; mutants.txt): paper wrapper removed (6 failures, e.g. count of
+  `[data-paper]`); title gap back to 12px (received 12, expected 32; 3 failures); one switch square
+  (`Final PDF downloads` radius 0, expected at least 12); WFH alignment rule removed (centre 9px off
+  desktop, 11.1px mobile).
+- Docs: EN/VI parity of docs/04 (parity-docs04.txt) holds line by line. `validate_package.py
+  --preflight` exit 1 on this host (Python without tzdata, `ZoneInfoNotFoundError`), not a content
+  finding; not run to success. Privacy and whitespace checks clean.
+- `npm run build`: no chunk advisory; main chunk `index-B14PGL2_.js` 490.24 kB (gzip 143.95 kB).
+- `npm run verify` (SMOKE_PORT 49371): exit 0.
+- Final `npm run digest`: 1921c36f444c8161a963e5c36e1857d682080255b44a5539dc899b60730160e6 (836 files).
+
+### Deviations and notes
+
+- The Review two-column switch moved from 1200px to 1330px with a page widened to 1600px beside the
+  checklist (see the earlier run, cause a); docs/04 states it. This is a consequence of the paper plus a
+  pre-existing overflow, not a new design choice; the owner may want to see the Review at 1280px as one
+  column.
+- `src/client/components/sheetModel.ts:141` still says "Show details" in a comment; the file is outside my
+  owned paths, so it is left for the coordinator or UX4-T06.
+- `docs/10` and `docs/12` were not touched (UX4-T06). No `skip`, `fixme` or `.only` was added.
+- Footer: it keeps its padding and layout; only its shadow goes (the paper carries one). Say so if the
+  owner wants a hairline frame on it.
+- Changed docs: the `--paper` token name already existed (white signature paper), so the new surface
+  tokens are `--paper-surface`, `--elev-paper`, `--paper-pad`, `--paper-gap` (no `--radius-paper`: the
+  scale token `--radius-lg` is used, which the radius-scale unit test requires).
+
+- preflight PASS with the workflow Python (exit 0, 118 translation pairs, 91 scenarios; evidence/preflight.txt). The
+  earlier exit 1 above was the default interpreter without tzdata.
+
+Status: done

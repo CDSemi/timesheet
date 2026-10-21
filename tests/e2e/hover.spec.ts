@@ -15,7 +15,7 @@ import {
 import { expect, openAccount, screenshotPath, test } from './fixtures.ts';
 
 /*
- * WP5-UX2-T02: a hover that can be seen, a pressed look that hover cannot erase, the "Show details" slide
+ * WP5-UX2-T02: a hover that can be seen, a pressed look that hover cannot erase, the "Show worked hours" slide
  * switch, and the lighter label-picker selection. Every number is read from the browser's computed style
  * (WCAG 2.x relative luminance); nothing is computed by the application. Hover rules exist only where the
  * device can hover, so the desktop project measures them and the mobile project proves a tap leaves none
@@ -115,7 +115,7 @@ const CONTROLS: readonly Control[] = [
   { name: 'secondary button (Next period)', boundary: true, text: true, find: (page) => page.getByRole('button', { name: 'Next period', exact: true }) },
   { name: 'identity button (bar)', boundary: true, text: true, find: (page) => page.getByRole('banner').getByRole('button', { name: /, account menu$/ }) },
   { name: 'navigation link (Overtime)', boundary: false, text: true, find: (page) => page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Overtime', exact: true }) },
-  { name: 'switch track (Show details)', boundary: true, text: false, find: (page) => page.getByRole('switch', { name: 'Show details', exact: true }) },
+  { name: 'switch track (Show worked hours)', boundary: true, text: false, find: (page) => page.getByRole('switch', { name: 'Show worked hours', exact: true }) },
   { name: 'menu button (Sign out)', boundary: true, text: true, find: async (page) => (await openAccount(page)).getByRole('button', { name: 'Sign out', exact: true }) },
   { name: 'menu link (Settings)', boundary: false, text: true, find: async (page) => (await openAccount(page)).getByRole('link', { name: 'Settings', exact: true }) },
 ];
@@ -314,7 +314,7 @@ async function expectNoStickyHover(page: Page, situation: string): Promise<void>
     expect(await settledStyle(control, 'boxShadow'), `${name}: shadow after a tap equals rest`).toBe(restShadow);
   }
   // The switch keeps no hover track either.
-  const details = page.getByRole('switch', { name: 'Show details', exact: true });
+  const details = page.getByRole('switch', { name: 'Show worked hours', exact: true });
   const trackRest = await settledStyle(details, 'backgroundColor');
   const borderRest = await settledStyle(details, 'borderTopColor');
   await details.tap();
@@ -335,20 +335,20 @@ async function expectNoStickyHover(page: Page, situation: string): Promise<void>
   expect(await settledStyle(picker, 'boxShadow'), `Category picker: shadow after a tap equals rest (${situation})`).toBe(pickerRest.shadow);
 }
 
-/* ---- The "Show details" slide switch ----------------------------------------------------------------------- */
+/* ---- The "Show worked hours" slide switch ----------------------------------------------------------------------- */
 
-test('Show details is a native switch: role, off at load, Space and click toggle it, 0 and 14 detail rows', async ({ page, signInThroughUi }) => {
+test('Show worked hours is a native switch: role, off at load, Space and click toggle it, 0 and 14 detail rows', async ({ page, signInThroughUi }) => {
   await signInThroughUi();
   await expect(page.locator('[data-day]')).toHaveCount(14);
-  const details = page.getByRole('switch', { name: 'Show details', exact: true });
+  const details = page.getByRole('switch', { name: 'Show worked hours', exact: true });
   await expect(details).toBeVisible();
   expect(await details.evaluate((element) => [element.tagName, element.getAttribute('type'), element.getAttribute('role')])).toEqual(['INPUT', 'checkbox', 'switch']);
   // The visible text is the label of the switch, and it never changes with the state.
   const label = page.locator('label.inline.switch');
   await expect(label).toHaveCount(1);
-  await expect(label).toHaveText('Show details');
-  await expect(page.getByText('Show details', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Show details' })).toHaveCount(0);
+  await expect(label).toHaveText('Show worked hours');
+  await expect(page.getByText('Show worked hours', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show worked hours' })).toHaveCount(0);
 
   await expect(details).not.toBeChecked();
   await expect(page.locator('[data-detail]')).toHaveCount(0);
@@ -358,7 +358,7 @@ test('Show details is a native switch: role, off at load, Space and click toggle
   await page.keyboard.press('Space');
   await expect(details).toBeChecked();
   await expect(page.locator('[data-detail="regular"]')).toHaveCount(14);
-  await expect(label).toHaveText('Show details');
+  await expect(label).toHaveText('Show worked hours');
 
   await details.click();
   await expect(details).not.toBeChecked();
@@ -371,13 +371,13 @@ test('Show details is a native switch: role, off at load, Space and click toggle
   // It is not persisted: a reload starts it off again, as before.
   await page.reload();
   await expect(page.locator('[data-day]')).toHaveCount(14);
-  await expect(page.getByRole('switch', { name: 'Show details', exact: true })).not.toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Show worked hours', exact: true })).not.toBeChecked();
 });
 
 for (const situation of SITUATIONS) {
-  test(`every state of the Show details switch reaches 3:1 (${situation.name})`, async ({ page, signInThroughUi }) => {
+  test(`every state of the Show worked hours switch reaches 3:1 (${situation.name})`, async ({ page, signInThroughUi }) => {
     await prepare(page, situation, signInThroughUi);
-    const details = page.getByRole('switch', { name: 'Show details', exact: true });
+    const details = page.getByRole('switch', { name: 'Show worked hours', exact: true });
     const hover = await canHover(page);
     const measured: string[] = [];
 
@@ -440,7 +440,7 @@ for (const width of [390, 375, 360, 320]) {
     const button = page.getByRole('button', { name: 'Change several days', exact: true });
     const labelBox = await label.boundingBox();
     const buttonBox = await button.boundingBox();
-    const inputBox = await page.getByRole('switch', { name: 'Show details', exact: true }).boundingBox();
+    const inputBox = await page.getByRole('switch', { name: 'Show worked hours', exact: true }).boundingBox();
     const viewport = await page.evaluate<{ client: number; scroll: number }>('({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth })');
     expect(labelBox?.height ?? 0, 'switch label height').toBeGreaterThanOrEqual(44);
     expect(labelBox?.width ?? 0, 'switch label width').toBeGreaterThanOrEqual(44);
@@ -771,7 +771,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.locator('[data-day]')).toHaveCount(14);
     const tools = page.locator('.tools');
     const toggle = page.getByRole('button', { name: 'Change several days', exact: true });
-    const details = page.getByRole('switch', { name: 'Show details', exact: true });
+    const details = page.getByRole('switch', { name: 'Show worked hours', exact: true });
 
     // Pressed with the pointer still on it where the device can hover (pressed and hovered); pressed alone on a touch device.
     await details.check();

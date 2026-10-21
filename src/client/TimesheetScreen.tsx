@@ -122,7 +122,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const imported = view?.timesheet.imported_unverified === true;
   // The same finalization and delivery reads as before; the sheet also takes its signature lines from them.
   const periodState = usePeriodState(view?.period.payroll_date ?? '', view?.timesheet.version, own && !imported && view !== null);
-  /** "Show details" of the toolbar: the worked-on-a-workday and worked-on-a-day-off rows of the sheet. */
+  /** "Show worked hours" of the toolbar: the worked-on-a-workday and worked-on-a-day-off rows of the sheet. */
   const [details, setDetails] = useState(false);
   /** Batch mode ("Change several days"): the selection boxes and the batch bar show only while it is on. */
   const [batchMode, setBatchMode] = useState(false);
@@ -476,6 +476,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   return (
     <div>
       {/* The title row (U-07, U-08): the title on the left, check in/out on the right from 768px. No name line under the title. */}
+      {/* Round 4 (U4-03): the toolbar, messages, batch bar and sheet stand on one paper surface; the title row and the period card stay outside it. */}
       <header className="toolbar page-head">
         <h1>{shared === undefined ? 'Timesheet' : `${shared.ownerName}'s timesheet`}</h1>
         {own && desktop && <ClockPanel />}
@@ -489,7 +490,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
 
       {view !== null && (
         <div className={`sheet-area${editDate !== null && wide ? ' with-editor' : ''}`}>
-          <section className="card stack sheet-main">
+          <section className="card stack sheet-main paper" data-paper="timesheet">
             <div className="tools">
               <div className="tools-left">{canEdit && <OpenDay onOpen={openEditor} />}</div>
               <div className="tools-right">

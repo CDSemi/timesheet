@@ -3259,8 +3259,8 @@ test.describe('WP5-UX-B-02: below 1360px the floating panel never hides a focuse
       await dayButton(date).click();
       await expect(editor).toBeVisible();
       if (!modal) {
-        await page.getByRole('switch', { name: 'Show details' }).focus();
-        await expect(page.getByRole('switch', { name: 'Show details' })).toBeFocused();
+        await page.getByRole('switch', { name: 'Show worked hours' }).focus();
+        await expect(page.getByRole('switch', { name: 'Show worked hours' })).toBeFocused();
       }
       await page.keyboard.press('Escape');
       await expect(editor).toHaveCount(0);
@@ -3399,7 +3399,7 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
     await page.setViewportSize({ width: 1280, height: 800 });
     await signInToPrivate(page, privateServer, data.person);
     await expect(page.locator('[data-day]')).toHaveCount(14);
-    await page.getByRole('switch', { name: 'Show details' }).check();
+    await page.getByRole('switch', { name: 'Show worked hours' }).check();
     await expect(page.locator(`[data-day="${data.overnight}"]`)).toContainText('22:00');
     await expect(page.locator('.sheet-main')).toContainText('Independence');
     const lines: string[] = [];
@@ -3496,7 +3496,7 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
     await page.setViewportSize({ width: 1360, height: 800 });
     await signInToPrivate(page, privateServer, data.person);
     await expect(page.locator('[data-day]')).toHaveCount(14);
-    await page.getByRole('switch', { name: 'Show details' }).check();
+    await page.getByRole('switch', { name: 'Show worked hours' }).check();
     await expect(page.locator('.sheet-main')).toContainText('Independence');
     const lines: string[] = [];
     for (const width of [1360, 1366, 1440, 1920]) {
@@ -3534,7 +3534,7 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
   });
 });
 
-/* ---- WP5-UX3-FIX1: from 768 to 899px the week card scrolls sideways; keyboard focus is always fully in view ---------- */
+/* ---- WP5-UX3-FIX1: from 768 to 929px (899px before the round-4 paper) the week card scrolls sideways; keyboard focus is always fully in view ---------- */
 
 /** Where the focused control and its focus indicator lie against the visible box of its week card (viewport pixels). */
 interface FocusFit {
@@ -3584,11 +3584,11 @@ const FOCUS_FIT = `(() => {
 /** Half a pixel of rounding at a fractional edge is allowed. */
 const FITS = (fit: FocusFit) => Math.min(fit.left, fit.right, fit.top, fit.bottom) >= -0.5;
 
-test.describe('WP5-UX3-FIX1: from 768 to 899px every focused sheet control is fully visible in its scrolling week card', () => {
+test.describe('WP5-UX3-FIX1: from 768 to 929px every focused sheet control is fully visible in its scrolling week card', () => {
   test.skip(({ isMobile }) => isMobile, 'The 7-column sheet is a desktop-project layout');
   test.use({ timezoneId: LA });
 
-  test('Tab, Shift+Tab and the picker arrows at 768, 800, 820, 860 and 899: each focused control and its ring lie inside the card, words stay whole, the page never scrolls sideways', async ({
+  test('Tab, Shift+Tab and the picker arrows at 768, 800, 820, 860, 899 and 920: each focused control and its ring lie inside the card, words stay whole, the page never scrolls sideways', async ({
     page,
     privateServer,
   }) => {
@@ -3597,11 +3597,11 @@ test.describe('WP5-UX3-FIX1: from 768 to 899px every focused sheet control is fu
     await page.setViewportSize({ width: 768, height: 900 });
     await signInToPrivate(page, privateServer, data.person);
     await expect(page.locator('[data-day]')).toHaveCount(14);
-    await page.getByRole('switch', { name: 'Show details' }).check();
+    await page.getByRole('switch', { name: 'Show worked hours' }).check();
     await expect(page.locator('.sheet-main')).toContainText('Independence');
     const cards = page.locator('.sheet-week');
     const lines: string[] = [];
-    for (const width of [768, 800, 820, 860, 899]) {
+    for (const width of [768, 800, 820, 860, 899, 920]) {
       await page.setViewportSize({ width, height: 900 });
       for (const batch of [false, true]) {
         if (batch) await page.getByRole('button', { name: 'Change several days' }).click();
@@ -3611,8 +3611,9 @@ test.describe('WP5-UX3-FIX1: from 768 to 899px every focused sheet control is fu
         expect(facts.words, `${width}px: the probe measured the cells' words`).toBeGreaterThan(50);
         expect(facts.scrollOverflow, `${width}px: the page never scrolls sideways`).toBeLessThanOrEqual(0);
         const scrolls = await cards.first().evaluate((card) => card.scrollWidth > card.clientWidth);
-        // The label column and seven 108px columns need 850px: the card scrolls at 768 to 860, and at 899 (867px) it does not.
-        expect(scrolls, `${width}px: the week card scrolls sideways while the columns need more room than the card`).toBe(width <= 860);
+        // The label column and seven 108px columns need 850px; the card is the window less the page padding (32px) and the paper padding
+        // (32px, round 4): it scrolls from 768 to 913px (899px gives 835px) and at 920px (856px) it does not.
+        expect(scrolls, `${width}px: the week card scrolls sideways while the columns need more room than the card`).toBe(width <= 913);
         const controls = page.locator('.sheet-week button, .sheet-week input');
         const expected = await controls.count();
         for (const direction of ['Tab', 'Shift+Tab'] as const) {

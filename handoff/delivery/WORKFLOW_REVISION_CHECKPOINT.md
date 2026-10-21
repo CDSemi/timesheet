@@ -838,6 +838,59 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - npm test 2155 passed / 0 failed; the five touched specs 29 + 29 passed; verify 0.
   - Digest 6e9e3001 (835 files); 33 changed paths.
 - Running now: WP5-UX4-T04-FREEZE (committer, alone).
+- WP5-UX4-T04-FREEZE.
+  - Attempt 1 stopped at the validators: the T01 placeholder had no brief, a coordinator
+    slip.
+  - After the T01 brief was written, attempt 2 committed and pushed
+    5a68fba65bac6723ed3e66f33048b722d34c4656 (71 paths; digest 6e9e3001, on HEAD too; every
+    check 0).
+- Running now: WP5-UX4-T01 (worker-high, sonnet) on 5a68fba / 6e9e3001.
+- WP5-UX4-T01 done (worker report; the round-4 audits check it independently).
+  - Delivered:
+    - a 32px title gap;
+    - the paper wrapping the toolbar, both weeks and the footer, which keeps its layout and
+      two signature rows;
+    - a stronger week header row and first column;
+    - round switches, a 12px select chevron, centred checkboxes;
+    - "Show worked hours".
+  - Results: unit 2155; full e2e 696 passed / 0 failed; 4 mutants caught; verify 0.
+  - preflight PASS with the workflow Python (a first exit 1 came from a Python without
+    tzdata). Digest 1921c36f (836 files); 16 changed paths outside handoff (1 new).
+  - Deviation for the owner: Review switches to two columns at 1330px (was 1200px)
+    because of an existing week-grid overflow at 1280px.
+  - Left over: the `sheetModel.ts:141` comment goes to UX4-T03.
+- Running now: WP5-UX4-T01-FREEZE (committer, alone).
+  - Attempt 1 stopped before staging on a brief error, a coordinator slip: the two
+    T04-FREEZE evidence files are untracked (`checks.txt`) or were not listed
+    (`commit-message.txt`). Nothing was staged.
+  - Addendum 1 lists both as new. The same committer resumes as attempt 2.
+  - Attempt 2: the client permission system denied the committer's `git add` twice. It read
+    the coordinator's decision as not user approval.
+    - The re-verification before the denial passed: HEAD = origin/main = 5a68fba; the 16
+      paths match; the T04-FREEZE evidence folder holds exactly the two `.txt` files.
+    - Nothing was staged or committed.
+  - Mission `blocked` on the owner's direct confirmation (WP5-UX4-FREEZE1-Q).
+    - (a) Stage including the two files.
+    - (b) Leave them out.
+  - Next: the same committer resumes after the owner's answer, quoting it verbatim.
+  - The owner answered "a" (stage including the two files). Mission `running`; the same
+    committer resumes attempt 2 with the owner's words quoted.
+  - A third `git add` denial: the permission system does not accept a relayed approval. This
+    matches the 2026-10-03 precedent.
+    - Pre-checks passed again. Nothing was staged.
+    - The denial was not routed around: no fresh committer was dispatched.
+  - Mission `blocked` on WP5-UX4-FREEZE2-Q.
+    - (a) A direct owner message naming the action and its risk, then the same committer
+      resumes.
+    - (b) A manual commit by the owner with exact commands, then a read-only recon.
+  - The owner chose (a) and sent the direct message (verbatim on the board). Mission
+    `running`; the same committer resumes attempt 2 quoting it. If it is denied again,
+    fall back to (b).
+  - A fourth denial of a plain explicit `git add`, reason "[Auto-Mode Bypass]". Not routed
+    around.
+  - Fallback (b): the owner commits manually.
+    - The message is in `evidence/WP5-UX4-T01-FREEZE/commit-message.txt`.
+    - Mission `blocked` until the commit lands. A read-only verifier recon then records it.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

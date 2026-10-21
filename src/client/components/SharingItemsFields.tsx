@@ -46,16 +46,23 @@ export function SharingItemsFields({
         </div>
       </div>
       <div className="share-item">
-        <label className="inline">
-          <input type="checkbox" role="switch" checked={items.ot_read} onChange={(event) => onChange({ ...items, ot_read: event.target.checked })} />
+        <label className="inline switch">
+          <input
+            type="checkbox"
+            role="switch"
+            className="switch-input"
+            checked={items.ot_read}
+            onChange={(event) => onChange({ ...items, ot_read: event.target.checked })}
+          />
           OT summary and ledger (read only)
         </label>
       </div>
       <div className="share-item">
-        <label className="inline">
+        <label className="inline switch">
           <input
             type="checkbox"
             role="switch"
+            className="switch-input"
             checked={items.pdf_download}
             aria-describedby={noteId}
             onChange={(event) => onChange({ ...items, pdf_download: event.target.checked })}

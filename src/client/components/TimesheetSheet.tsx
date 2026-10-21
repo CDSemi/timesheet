@@ -272,7 +272,7 @@ export function TimesheetSheet({
   todayLocal: string | null;
   desktop: boolean;
   actions: DayActions;
-  /** "Show details" of the toolbar: the worked-on-a-workday and worked-on-a-day-off rows. */
+  /** "Show worked hours" of the toolbar: the worked-on-a-workday and worked-on-a-day-off rows. */
   details: boolean;
   /** The period's finalization state for the signature lines; null while loading. */
   finalization: FinalizationResponse | null;

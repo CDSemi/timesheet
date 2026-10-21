@@ -161,7 +161,7 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
   const steps = checklistSteps(payload, form, imported).filter((step) => step.key !== 'sign' || done === null);
   return (
     <div className="review-screen stack">
-      <header className="toolbar">
+      <header className="toolbar review-head">
         <div>
           <h1 id="review-title" tabIndex={-1} ref={headingRef}>
             Review and sign off

@@ -875,6 +875,59 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - npm test 2155 đạt / 0 lỗi; năm spec liên quan 29 + 29 đạt; verify 0.
   - Digest 6e9e3001 (835 file); 33 đường dẫn thay đổi.
 - Đang chạy: WP5-UX4-T04-FREEZE (committer, chạy một mình).
+- WP5-UX4-T04-FREEZE.
+  - Lần 1 dừng ở bước validator: task T01 đặt chỗ sẵn chưa có brief, một sơ suất của coordinator.
+  - Sau khi viết brief T01, lần 2 đã commit và push 5a68fba65bac6723ed3e66f33048b722d34c4656
+    (71 đường dẫn; digest 6e9e3001, trên HEAD cũng vậy; mọi kiểm tra trả về 0).
+- Đang chạy: WP5-UX4-T01 (worker-high, sonnet) trên 5a68fba / 6e9e3001.
+- WP5-UX4-T01 xong (theo báo cáo của worker; các vòng audit của đợt 4 sẽ kiểm tra độc lập).
+  - Đã làm:
+    - khoảng cách dưới tiêu đề 32px;
+    - "tờ giấy" bao thanh công cụ, hai tuần và phần footer; footer giữ nguyên bố cục và hai hàng
+      chữ ký;
+    - hàng tiêu đề tuần và cột đầu đậm hơn;
+    - công tắc tròn, mũi tên combo cách mép 12px, checkbox căn giữa;
+    - "Show worked hours".
+  - Kết quả: unit 2155; e2e đầy đủ 696 đạt / 0 lỗi; bắt được 4 đột biến; verify 0.
+  - preflight PASS với Python của workflow (lần đầu trả về 1 do dùng một Python không có tzdata).
+    Digest 1921c36f (836 file); 16 đường dẫn thay đổi ngoài handoff (1 file mới).
+  - Điểm lệch cần báo chủ dự án: trang Review chuyển sang hai cột từ 1330px (trước là 1200px) vì
+    lưới tuần vốn đã tràn ở 1280px.
+  - Còn lại: chú thích ở `sheetModel.ts:141` chuyển cho UX4-T03.
+- Đang chạy: WP5-UX4-T01-FREEZE (committer, chạy một mình).
+  - Lần 1 dừng trước khi stage vì brief ghi sai, một sơ suất của coordinator: trong hai file evidence
+    của T04-FREEZE, `checks.txt` là file chưa được git theo dõi (không phải file đã sửa), còn
+    `commit-message.txt` không có trong danh sách. Chưa có file nào được stage.
+  - Addendum 1 ghi cả hai là file mới. Cùng committer đó chạy tiếp, tính là lần 2.
+  - Lần 2: hệ thống phân quyền của client chặn lệnh `git add` của committer hai lần. Nó không
+    coi quyết định của coordinator là sự chấp thuận của người dùng.
+    - Bước kiểm tra lại trước khi bị chặn đều đạt: HEAD = origin/main = 5a68fba; 16 đường dẫn
+      khớp; thư mục evidence của T04-FREEZE có đúng hai file `.txt`.
+    - Chưa có gì được stage hay commit.
+  - Mission ở trạng thái `blocked`, chờ chủ dự án xác nhận trực tiếp (WP5-UX4-FREEZE1-Q).
+    - (a) Stage cả hai file.
+    - (b) Bỏ hai file đó ra.
+  - Tiếp theo: cùng committer đó chạy tiếp sau khi chủ dự án trả lời, kèm trích dẫn nguyên văn câu
+    trả lời.
+  - Chủ dự án trả lời "a" (stage cả hai file). Mission chuyển về `running`; cùng committer đó chạy
+    tiếp lần 2, có trích nguyên văn câu trả lời của chủ dự án.
+  - `git add` bị chặn lần thứ ba: hệ thống phân quyền không chấp nhận sự chấp thuận do coordinator
+    chuyển lời. Việc này giống tiền lệ ngày 2026-10-03.
+    - Các kiểm tra trước đó lại đạt. Chưa có gì được stage.
+    - Không tìm cách lách việc chặn: không giao cho committer mới.
+  - Mission ở trạng thái `blocked`, chờ trả lời WP5-UX4-FREEZE2-Q.
+    - (a) Chủ dự án tự gửi một tin nhắn nêu rõ hành động và rủi ro, sau đó cùng committer đó chạy
+      tiếp.
+    - (b) Chủ dự án tự commit bằng các lệnh chính xác, sau đó một agent chỉ đọc kiểm tra lại.
+  - Chủ dự án chọn (a) và đã gửi tin nhắn trực tiếp (nguyên văn trên board). Mission chuyển về
+    `running`; cùng committer đó chạy tiếp lần 2, có trích nguyên văn tin nhắn. Nếu vẫn bị chặn thì
+    chuyển sang (b).
+  - Lệnh `git add` với danh sách file cụ thể bị chặn lần thứ tư, lý do "[Auto-Mode Bypass]". Không
+    tìm cách lách.
+  - Chuyển sang (b): chủ dự án tự commit.
+    - Nội dung commit nằm trong `evidence/WP5-UX4-T01-FREEZE/commit-message.txt`.
+    - Mission ở trạng thái `blocked` cho tới khi commit vào repo. Sau đó một verifier chỉ đọc kiểm
+      tra và ghi kết quả.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

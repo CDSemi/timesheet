@@ -30,11 +30,12 @@ test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
 /**
  * WP5-UX3-T05B: below 1360px the Day editor floats as a modal panel and the page behind is inert. A desktop test that works on the
  * sheet while the editor is open therefore runs in a window where the editor stands beside the sheet (the project's own window is 1280px).
- * 1445px, not 1440: with the page uncapped to 1600px the seven columns are then exactly 129px wide, so a column's left and right edges
+ * 1449px, not 1440: with the page uncapped to 1600px the seven columns are then exactly 125px wide, so a column's left and right edges
  * fall on whole pixels and the pixel probes of the editing frame (a 1px inset ring cut by the run's clip-path) read it exactly. At a
- * fractional column edge the clip softens that ring's outer pixel, which those probes were never written for.
+ * fractional column edge the clip softens that ring's outer pixel, which those probes were never written for. (It was 1445px, which
+ * gave 129px columns, until the round-4 paper sheet took 32px of padding from the sheet: 1449px restores whole columns.)
  */
-const EDITOR_BESIDE_SHEET = { width: 1445, height: 800 };
+const EDITOR_BESIDE_SHEET = { width: 1449, height: 800 };
 
 test.beforeEach(({ page }) => {
   // A CSP violation shows up as a console error. The signed-out probe answers 401 by design and
@@ -319,14 +320,14 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   await expect(dayRow(page, completeDay)).toContainText(range);
   await expect(dayRow(page, completeDay)).not.toContainText('09:00-18:00');
 
-  // A complete day shows Complete, its server OT as h:mm and, under Show details, 8:00 worked on a workday;
+  // A complete day shows Complete, its server OT as h:mm and, under Show worked hours, 8:00 worked on a workday;
   // unconfirmed breaks show Confirm breaks and pending OT.
   await expect(dayRow(page, completeDay)).toContainText('Complete');
   await expect(dayRow(page, completeDay).locator('[data-ot]')).toHaveText(formatHoursMinutes(complete.calculation?.credited_minutes ?? -1));
   await expect(dayRow(page, completeDay).locator('[data-cell="ot"]')).not.toContainText('pending');
   await expect(dayRow(page, pendingDay)).toContainText('Confirm breaks');
   await expect(dayRow(page, pendingDay).locator('[data-cell="ot"] [data-ot="pending"]')).toHaveText('pending');
-  const details = page.getByRole('switch', { name: 'Show details' });
+  const details = page.getByRole('switch', { name: 'Show worked hours' });
   await expect(details).not.toBeChecked();
   await expect(page.locator('[data-detail]')).toHaveCount(0);
   await details.click();
@@ -659,7 +660,7 @@ test('the day open in the Day editor is marked on that day only, moves with the 
   for (const button of await buttons.all()) await expect(button).toHaveAccessibleName(ANY_DAY_BUTTON_NAME);
 });
 
-test('the marker stays with the editor across Show details and a period change, and is absent while its date is not on the sheet', async ({
+test('the marker stays with the editor across Show worked hours and a period change, and is absent while its date is not on the sheet', async ({
   page,
   employeeSeed,
   signInThroughUi,
@@ -675,12 +676,12 @@ test('the marker stays with the editor across Show details and a period change, 
   await signInThroughUi();
   await expect(page.locator('[data-day]')).toHaveCount(14);
   // A phone's modal sheet makes the toolbar inert, so its switch is set first there; on a desktop the panel is beside the sheet.
-  if (!desktop) await page.getByRole('switch', { name: 'Show details' }).check();
+  if (!desktop) await page.getByRole('switch', { name: 'Show worked hours' }).check();
   await openDay(page, date);
   await expectMarkedOnly(page, date);
 
-  // Show details re-renders the sheet; the marker is kept and the layer still covers the whole column.
-  if (desktop) await page.getByRole('switch', { name: 'Show details' }).check();
+  // Show worked hours re-renders the sheet; the marker is kept and the layer still covers the whole column.
+  if (desktop) await page.getByRole('switch', { name: 'Show worked hours' }).check();
   await expect(page.locator('[data-detail]')).toHaveCount(28);
   await expectMarkedOnly(page, date);
 
@@ -898,7 +899,7 @@ test('the day open in the Day editor is a lifted column with an inset 1px accent
   if (desktop) {
     const column = page.locator(`[data-day="${first}"]`);
     for (const details of [false, true]) {
-      if (details) await page.getByRole('switch', { name: 'Show details' }).check();
+      if (details) await page.getByRole('switch', { name: 'Show worked hours' }).check();
       await expect(page.locator('[data-detail]')).toHaveCount(details ? 28 : 0);
       await page.mouse.move(0, 0);
       const look = await settledLook(column);
@@ -947,7 +948,7 @@ test('the day open in the Day editor is a lifted column with an inset 1px accent
     for (const details of [false, true]) {
       if (details) {
         await page.keyboard.press('Escape');
-        await page.getByRole('switch', { name: 'Show details' }).check();
+        await page.getByRole('switch', { name: 'Show worked hours' }).check();
         await openDay(page, first);
       }
       await expectMarkedOnly(page, first);
@@ -1026,7 +1027,7 @@ test('desktop: the inset frame and the Day-cell fill are painted over every cell
   await openDay(page, first);
   await expectMarkedOnly(page, first);
   for (const details of [false, true]) {
-    if (details) await page.getByRole('switch', { name: 'Show details' }).check();
+    if (details) await page.getByRole('switch', { name: 'Show worked hours' }).check();
     for (const appearance of APPEARANCES) {
       await applyAppearance(page, appearance);
       const accent = await tokenColour(page, '--accent');
@@ -1070,7 +1071,7 @@ test('desktop: the inset frame and the Day-cell fill are painted over every cell
   // The visual record: the column with and without the detail rows, light and dark.
   const column = page.locator(`[data-day="${first}"]`);
   for (const details of [false, true]) {
-    const toggle = page.getByRole('switch', { name: 'Show details' });
+    const toggle = page.getByRole('switch', { name: 'Show worked hours' });
     await (details ? toggle.check() : toggle.uncheck());
     for (const appearance of [APPEARANCES[0], APPEARANCES[1]] as Appearance[]) {
       await applyAppearance(page, appearance);
@@ -1094,7 +1095,7 @@ for (const width of [390, 375, 360, 320]) {
     await signInThroughUi();
     await expect(page.locator('[data-day]')).toHaveCount(14);
     await expect(page.locator('[data-sheet="phone"]')).toHaveCount(1);
-    await page.getByRole('switch', { name: 'Show details' }).check();
+    await page.getByRole('switch', { name: 'Show worked hours' }).check();
     await page.getByRole('button', { name: 'Change several days' }).click();
     await page.getByLabel(`Select ${first}`).check();
     await expectNoSidewaysScroll(page, `selected, details on, ${width}px`);
@@ -1853,7 +1854,7 @@ test('"Open a day": the words, the date field and the button share one row; the 
   }
 });
 
-test('desktop toolbar: the gap between "Show details" and "Change several days" is the token with a 1px separator, and the button is outlined until pressed', async ({
+test('desktop toolbar: the gap between "Show worked hours" and "Change several days" is the token with a 1px separator, and the button is outlined until pressed', async ({
   page,
   signInThroughUi,
 }, testInfo) => {

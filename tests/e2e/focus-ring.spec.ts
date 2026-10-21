@@ -313,7 +313,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     const field = page.getByLabel('Open a day');
     await expect(page.getByRole('button', { name: 'Open day', exact: true })).toBeDisabled();
     await page.keyboard.press('Shift');
-    await page.getByRole('switch', { name: 'Show details', exact: true }).focus();
+    await page.getByRole('switch', { name: 'Show worked hours', exact: true }).focus();
     await page.keyboard.press('Shift+Tab');
     await expect(field).toBeFocused();
     const ratio = expectRing('date field', { boxShadow: await settledShadow(field), backdrops: await backdropsOf(field, false) });
@@ -327,7 +327,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
    * look is a solid accent fill and the old pressed-ring special case is gone, so the shared ring itself must stay
    * visible on that fill (its card-coloured gap against the fill and the ring against the gap, 3:1 each).
    * A theme segment is painted by the label of its invisible radio: the radio takes the focus, the label shows the ring.
-   * "Show details" is a switch now and has its own test below.
+   * "Show worked hours" is a switch now and has its own test below.
    */
   test(`WP5-UX-AX-04: a pressed toggle and a checked theme segment still show the focus ring (${colorScheme})`, async ({ page, signInThroughUi }) => {
     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
@@ -367,12 +367,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
     }
   });
 
-  /* The "Show details" slide switch (WP5-UX2-T02) shows the shared ring in both states, also on its accent track. */
-  test(`the Show details switch shows the focus ring unchecked and checked (${colorScheme})`, async ({ page, signInThroughUi }) => {
+  /* The "Show worked hours" slide switch (WP5-UX2-T02) shows the shared ring in both states, also on its accent track. */
+  test(`the Show worked hours switch shows the focus ring unchecked and checked (${colorScheme})`, async ({ page, signInThroughUi }) => {
     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
     await signInThroughUi();
     await expect(page.locator('[data-day]')).toHaveCount(14);
-    const details = page.getByRole('switch', { name: 'Show details', exact: true });
+    const details = page.getByRole('switch', { name: 'Show worked hours', exact: true });
     for (const checked of [false, true]) {
       if (checked) await details.check();
       await expect(details).toBeChecked({ checked });

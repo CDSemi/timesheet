@@ -156,3 +156,9 @@ Append to this brief:
 - validate_orchestration.py exit 1 and check_recovery.py exit 1: "Prompt missing: WP5-UX4-T01"
   (the board's pending task WP5-UX4-T01 names a prompt file that does not exist).
 - The 70 paths remain staged. Details in evidence/WP5-UX4-T04-FREEZE/checks.txt.
+
+### Attempt 2
+
+- HEAD before 18c8fd916e86bb7f4d302a06813e5e17fdf3c1f0; after and remote 5a68fba65bac6723ed3e66f33048b722d34c4656; pushed.
+- Staged 71 (70 plus WP5-UX4-T01.md). Digest before and after commit: 6e9e3001fe1f1ed352f446be19cc07c152d4cb61aa7ab0dce145f1fc6e1f8f41 (835 files).
+- precommit, diff --check, JSON parse, validate_orchestration, check_recovery (106) and preflight all exit 0. No masking.

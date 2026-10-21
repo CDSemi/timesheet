@@ -70,7 +70,7 @@ async function computed(locator: Locator, properties: string[]): Promise<Record<
 const CORNERS = ['border-top-left-radius', 'border-top-right-radius', 'border-bottom-left-radius', 'border-bottom-right-radius'];
 
 for (const situation of SITUATIONS) {
-  test(`the page, the period bar, the week bands and the footer are separate surfaces: week bands and footer square and raised (${situation.name})`, async ({ page, signInThroughUi }, testInfo) => {
+  test(`the page, the period bar and the paper are separate raised surfaces; the week bands and the footer stand square on the paper (${situation.name})`, async ({ page, signInThroughUi }, testInfo) => {
     await prepare(page, situation, signInThroughUi);
     const project = testInfo.project.name;
     const lines: string[] = [`# ${project} / ${situation.name}: surfaces`];
@@ -86,11 +86,16 @@ for (const situation of SITUATIONS) {
     await expect(weeks).toHaveCount(2);
     await expect(footer).toHaveCount(1);
 
-    const surfaces: { name: string; locator: Locator }[] = [
-      { name: 'period bar', locator: periodBar },
-      { name: 'week 1', locator: weeks.nth(0) },
-      { name: 'week 2', locator: weeks.nth(1) },
-      { name: 'footer', locator: footer },
+    // Round 4 (U4-03): the toolbar, the week sheets and the footer stand on one paper. The paper and the period bar are the raised
+    // surfaces; the week sheets and the footer lose only their own outer shadow inside the paper (the frame and the header strip stay).
+    const paper = page.locator('[data-paper="timesheet"]');
+    await expect(paper).toHaveCount(1);
+    const surfaces: { name: string; locator: Locator; raised: boolean }[] = [
+      { name: 'period bar', locator: periodBar, raised: true },
+      { name: 'paper', locator: paper, raised: true },
+      { name: 'week 1', locator: weeks.nth(0), raised: false },
+      { name: 'week 2', locator: weeks.nth(1), raised: false },
+      { name: 'footer', locator: footer, raised: false },
     ];
     for (const surface of surfaces) {
       const fill = await flattenedBackground(surface.locator);
@@ -98,6 +103,11 @@ for (const situation of SITUATIONS) {
       lines.push(`card on page: ${surface.name} ${round(ratio)}:1`);
       expect(ratio, `${surface.name} against the page (${situation.name})`).toBeGreaterThanOrEqual(CARD_STEP);
       const style = await computed(surface.locator, ['box-shadow', ...CORNERS]);
+      lines.push(`${surface.name} box-shadow ${style['box-shadow']}`);
+      if (!surface.raised) {
+        expect(style['box-shadow'], `${surface.name} casts no shadow of its own inside the paper`).toBe('none');
+        continue;
+      }
       expect(style['box-shadow'], `${surface.name} is raised`).not.toBe('none');
       const layers = parseLayers(style['box-shadow'] ?? 'none');
       expect(layers.length, `${surface.name} carries a ring and soft layers (${style['box-shadow']})`).toBeGreaterThanOrEqual(3);
@@ -105,38 +115,41 @@ for (const situation of SITUATIONS) {
         layers.some((layer) => !layer.inset && layer.spread === 1 && layer.offsetX === 0 && layer.offsetY === 0),
         `${surface.name} has the 1px hairline ring`,
       ).toBe(true);
-      lines.push(`${surface.name} box-shadow ${style['box-shadow']}`);
     }
 
-    // The week bands and the footer are square; the period bar follows the radius scale (12px).
-    for (const surface of surfaces.slice(1)) {
+    // The week bands and the footer are square; the period bar and the paper follow the radius scale (12px).
+    for (const surface of surfaces.filter((item) => !item.raised)) {
       const corners = await computed(surface.locator, CORNERS);
       for (const corner of CORNERS) expect(corners[corner], `${surface.name} ${corner}`).toBe('0px');
     }
-    const barCorners = await computed(periodBar, CORNERS);
-    for (const corner of CORNERS) expect(barCorners[corner], `period bar ${corner}`).toBe('12px');
+    // (The phone paper is full-bleed and square, so it takes no corner there.)
+    for (const surface of surfaces.filter((item) => item.raised)) {
+      const corners = await computed(surface.locator, CORNERS);
+      const expected = surface.name === 'paper' && project === 'mobile' ? '0px' : '12px';
+      for (const corner of CORNERS) expect(corners[corner], `${surface.name} ${corner}`).toBe(expected);
+    }
 
-    // The footer is its own card: it holds the legend and the Overtime Total (and the signature lines on the owner's own sheet),
-    // and it is not nested in a week band or in another raised card.
+    // The footer holds the legend and the Overtime Total (and the signature lines on the owner's own sheet); it sits in the sheet, inside the paper, and not in a week band.
     await expect(footer.locator('.legend')).toHaveCount(1);
     await expect(footer.locator('.ot-total')).toHaveCount(1);
     await expect(footer.locator('.signatures')).toHaveCount(1);
-    expect(await footer.evaluate((element) => element.closest('.sheet-week') === null && element.parentElement?.classList.contains('sheet') === true)).toBe(true);
+    expect(await footer.evaluate((element) => element.closest('.sheet-week') === null && element.parentElement?.classList.contains('sheet') === true && element.closest('[data-paper]') !== null)).toBe(true);
 
     // The tokens behind the surfaces, as this theme resolves them (evidence for the contrast table).
     const card = await tokenColour(page, '--card');
-    for (const token of ['--panel-head', '--row-alt', '--sheet-head']) lines.push(`${token} on card ${round(contrast(await tokenColour(page, token), card))}:1`);
+    for (const token of ['--panel-head', '--row-alt', '--sheet-head', '--sheet-head-strong']) lines.push(`${token} on card ${round(contrast(await tokenColour(page, token), card))}:1`);
 
-    // The toolbar and the form header sit on the page: nothing painted behind them but the page.
+    // The toolbar and the form header sit on the paper: the surface behind them is the card colour, and the paper is what steps from the page.
     for (const name of ['.tools', 'header.form-head']) {
       const backdrop = backdropOf(await backdropsAbove(page.locator(name)));
-      const ratio = contrast(backdrop, pageBackground);
-      lines.push(`${name} backdrop against the page ${round(ratio)}:1`);
-      expect(ratio, `${name} stands on the page`).toBeLessThan(1.01);
+      const ratio = contrast(backdrop, card);
+      lines.push(`${name} backdrop against the card ${round(ratio)}:1`);
+      expect(ratio, `${name} stands on the paper (the card colour)`).toBeLessThan(1.01);
+      expect(await page.locator(name).evaluate((element) => element.closest('[data-paper]') !== null), `${name} is inside the paper`).toBe(true);
     }
     const main = page.locator('.sheet-area > .sheet-main');
-    expect((await computed(main, ['box-shadow']))['box-shadow'], 'the sheet column has no surface of its own').toBe('none');
-    expect(parseColour(await computedStyle(main, 'backgroundColor'))[3], 'the sheet column is transparent').toBe(0);
+    expect((await computed(main, ['box-shadow']))['box-shadow'], 'the sheet column is the paper and is raised').not.toBe('none');
+    expect(parseColour(await computedStyle(main, 'backgroundColor'))[3], 'the paper is opaque').toBe(1);
 
     record(project, situation, lines);
     if (project === 'desktop') await page.screenshot({ path: screenshotPath(`t01-surfaces-${situation.slug}-${project}-synthetic.png`), fullPage: true, animations: 'disabled' });
@@ -184,7 +197,7 @@ test('interactive transitions list the changing properties, are 180ms normally a
     { name: 'button (Next period)', locator: page.getByRole('button', { name: 'Next period', exact: true }) },
     { name: 'date field (Open a day)', locator: page.getByLabel('Open a day') },
     { name: 'sheet day', locator: page.locator('[data-day]').first() },
-    { name: 'switch (Show details)', locator: page.getByRole('switch', { name: 'Show details', exact: true }) },
+    { name: 'switch (Show worked hours)', locator: page.getByRole('switch', { name: 'Show worked hours', exact: true }) },
   ];
   const lines = [`# ${testInfo.project.name}: transitions`];
   for (const control of controls) {

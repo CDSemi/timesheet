@@ -1062,8 +1062,8 @@ test('the existing timesheet view works inside the shell', async ({ page, employ
     await expect(row).toContainText('Complete');
     await expect(row.locator('[data-check="complete"]')).toHaveCount(1);
     await expect(page.locator('[data-day]')).toHaveCount(14);
-    // The worked minutes of the sheet's detail row (Show details), as h:mm.
-    await page.getByRole('switch', { name: 'Show details' }).check();
+    // The worked minutes of the sheet's detail row (Show worked hours), as h:mm.
+    await page.getByRole('switch', { name: 'Show worked hours' }).check();
     await expect(page.locator(`[data-detail="regular"][data-detail-day="${workDate}"]`)).toHaveText('8:00');
 
     await page.screenshot({ path: screenshotPath(`timesheet-${testInfo.project.name}-synthetic.png`), fullPage: true });

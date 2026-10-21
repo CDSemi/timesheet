@@ -28,7 +28,7 @@ export function ReviewDays({ payload }: { payload: ReviewSnapshot }) {
   const desktop = useDesktop();
   const zone = payload.reporting_zone;
   return (
-    <section className="card review-sheet-block stack" aria-labelledby="review-days-title">
+    <section className="card review-sheet-block stack paper" data-paper="review" aria-labelledby="review-days-title">
       <div className="stack review-sheet-intro">
         <h2 id="review-days-title">What you sign</h2>
         <p className="muted hint">

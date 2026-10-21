@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mission_id": "timesheet-software-readiness",
-  "status": "running",
+  "status": "blocked",
   "authorized_scope": [
     "WP1",
     "WP2",
@@ -28,8 +28,12 @@
   "current_source_digest": "507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX4-T04-FREEZE",
+  "next_task_id": "WP5-UX4-T01-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-20",
+      "observation": "WP5-UX4-T01-FREEZE: attempt 1 stopped on a brief error (coordinator slip: T04-FREEZE checks.txt untracked, commit-message.txt unlisted). After Addendum 1 widened the staged set by those two files, the client permission system denied the committer's git add twice, treating the coordinator's decision as not user approval. Consistent with the earlier learning: a scope change to a commit after dispatch needs the owner's direct confirmation in chat. Rule kept: freeze briefs list every untracked handoff file found by a pre-dispatch status lookup, so no mid-run widening is needed."
+    },
     {
       "date": "2026-10-20",
       "observation": "Coordinator slip: a pending placeholder task (WP5-UX4-T01) was registered without its prompt file, so WP5-UX4-T04-FREEZE attempt 1 stopped at validate_orchestration and check_recovery ('Prompt missing: WP5-UX4-T01'), with 70 paths left staged and nothing committed. Fixed by writing the real T01 brief; the same committer re-stages the board and the new brief and reruns the checks. Rule kept: every task on the board, even pending, has its brief on disk."
@@ -300,6 +304,22 @@
     "question": "F-1 (= WP5-OWN-Q1, sharpened): opening OT balance: (i, recommended) starts at 0 with no entry; only the owner of the timesheet sets or changes it any time (administrators never see a personal balance); each change is a ledger entry with a short reason; evidence optional; a correction back to 0 allowed (D-5 a); (ii) no reason either (needs a ledger migration or a dummy reason); (iii) one value overwritten in place (new storage model, history lost). Also confirm no historical import for the pilot. F-2 (D-15 b contradiction): per-date counts in the administrator's holiday preview reveal a named colleague's recorded days in a small team, against docs/03 ('administrators see no timesheet details') and the WP2-A-01 audit fix: (a, recommended) keep removed; (b) restore exact counts with a written exception and an audit event; (c) counts only when 3 or more, else 'fewer than 3'. F-3 (export/import scope): (a, recommended) personal settings file plus an administrators' company-calendar file; (b) personal only; (c) everything including accounts. F-4 (import behaviour): (a, recommended) preview with a Now/In-the-file comparison, new versions, policy from a chosen date, auto-submit only with a separate tick; (b) apply at once; (c) merge field by field. F-5: approve the mockup (a) as drawn or (b) with named changes.",
     "blocking": "F-5 blocks UX4-T01..T03; F-1 and F-2 block UX4-T04; F-3 and F-4 block UX4-T05."
   },
+  "answered_owner_question_ux4_freeze2": {
+    "answered": "2026-10-20, owner chat (verbatim, option a): 'Tôi cho phép timesheet-committer chạy git add, commit và push lên repo công khai CDSemi/timesheet cho bộ file WP5-UX4-T01-FREEZE theo brief và Addendum 1, gồm cả 2 file evidence chưa được git theo dõi của T04-FREEZE (checks.txt, commit-message.txt). Tôi hiểu các file này sẽ thành công khai.'",
+    "id": "WP5-UX4-FREEZE2-Q",
+    "asked": "2026-10-20",
+    "source": "WP5-UX4-T01-FREEZE attempt 2: a third git add denial after the coordinator relayed the owner's 'a' verbatim; the permission system does not accept a relayed approval (consistent with the 2026-10-03 precedent: the user's own message must name the action and its specific risk).",
+    "question": "(a, recommended) The owner writes one direct chat message naming the action and its risk (git add, commit and push to the public repository CDSemi/timesheet of the WP5-UX4-T01-FREEZE set, including the two untracked T04-FREEZE evidence .txt files, accepting that they become public); the coordinator then resumes the same committer quoting that message. If it is denied again, fall back to (b). (b) The owner commits and pushes manually with exact commands from the coordinator (explicit paths, precommit check, the commit message); a read-only recon then verifies parent, set, leftovers and digest.",
+    "blocking": "WP5-UX4-T01-FREEZE and every later round-4 task."
+  },
+  "answered_owner_question_ux4_freeze1": {
+    "answered": "2026-10-20, owner chat (verbatim): 'a' (stage, commit and push the WP5-UX4-T01-FREEZE set per its brief with Addendum 1, including evidence/WP5-UX4-T04-FREEZE/checks.txt and commit-message.txt).",
+    "id": "WP5-UX4-FREEZE1-Q",
+    "asked": "2026-10-20",
+    "source": "WP5-UX4-T01-FREEZE attempt 2: the client permission system denied the committer's git add twice after the coordinator's Addendum 1 added two files to the staged set.",
+    "question": "Allow the committer to stage, commit and push the WP5-UX4-T01-FREEZE set as listed in its brief with Addendum 1: (a, recommended) yes, including the two T04-FREEZE evidence files evidence/WP5-UX4-T04-FREEZE/checks.txt and commit-message.txt (untracked records of commit 5a68fba; .txt, privacy check runs before commit); (b) yes, but leave those two files out (they stay untracked on disk; the brief is narrowed to exclude them).",
+    "blocking": "WP5-UX4-T01-FREEZE and every later round-4 task (T02 is the next source writer and must start from the frozen T01 commit)."
+  },
   "open_owner_question_wp5_own_q1": {
     "id": "WP5-OWN-Q1",
     "superseded_by": "WP5-UX4-F-1 (open_owner_question_ux4)",
@@ -348,10 +368,20 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "18c8fd916e86bb7f4d302a06813e5e17fdf3c1f0",
+    "last_commit": "5a68fba65bac6723ed3e66f33048b722d34c4656",
     "unpushed": []
   },
   "owner_decisions": [
+    {
+      "date": "2026-10-20",
+      "source": "owner chat (verbatim)",
+      "decision": "Answer to WP5-UX4-FREEZE2-Q (option a): 'Tôi cho phép timesheet-committer chạy git add, commit và push lên repo công khai CDSemi/timesheet cho bộ file WP5-UX4-T01-FREEZE theo brief và Addendum 1, gồm cả 2 file evidence chưa được git theo dõi của T04-FREEZE (checks.txt, commit-message.txt). Tôi hiểu các file này sẽ thành công khai.'"
+    },
+    {
+      "date": "2026-10-20",
+      "source": "owner chat (verbatim)",
+      "decision": "'a': answer to WP5-UX4-FREEZE1-Q. The committer stages, commits and pushes the WP5-UX4-T01-FREEZE set per its brief with Addendum 1, including the two T04-FREEZE evidence files evidence/WP5-UX4-T04-FREEZE/checks.txt and commit-message.txt."
+    },
     {
       "date": "2026-10-02",
       "source": "owner chat",
@@ -23679,9 +23709,10 @@
       "id": "WP5-UX4-T01",
       "package": "WP5",
       "kind": "implement",
-      "status": "pending",
+      "status": "done",
       "depends_on": [
-        "WP5-UX4-PLAN"
+        "WP5-UX4-PLAN",
+        "WP5-UX4-T04-FREEZE"
       ],
       "profile": "timesheet-worker-high",
       "requested_model": "sonnet",
@@ -23692,11 +23723,11 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
+      "agent_id": "a92d8e4a467bd6b4e",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
       "attempt": 1,
       "owned_paths": [
         "src/client/styles.css",
@@ -23727,13 +23758,28 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX4-T01.md",
       "report": "handoff/delivery/tasks/WP5-UX4-T01.md",
-      "evidence": [],
-      "baseline_commit": null,
-      "source_digest": null,
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX4-T01/checks.txt",
+        "handoff/delivery/evidence/WP5-UX4-T01/test-counts.txt",
+        "handoff/delivery/evidence/WP5-UX4-T01/mutants.txt",
+        "handoff/delivery/evidence/WP5-UX4-T01/controls-measurements.txt",
+        "handoff/delivery/evidence/WP5-UX4-T01/parity-docs04.txt",
+        "handoff/delivery/evidence/WP5-UX4-T01/preflight.txt",
+        "handoff/delivery/evidence/WP5-UX4-T01/ux4-t01-paper-timesheet-1440-light-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX4-T01/ux4-t01-paper-timesheet-1440-dark-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX4-T01/ux4-t01-paper-review-1440-light-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX4-T01/ux4-t01-paper-timesheet-390-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX4-T01/ux4-t01-controls-desktop-light-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX4-T01/ux4-t01-controls-mobile-light-synthetic.png"
+      ],
+      "baseline_commit": "5a68fba65bac6723ed3e66f33048b722d34c4656",
+      "source_digest": "1921c36f444c8161a963e5c36e1857d682080255b44a5539dc899b60730160e6",
       "reviewed_digest": null,
-      "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Worker after WP5-UX4-T04-FREEZE: U4-02 (32px), U4-03 paper with the toolbar, weeks and footer unchanged inside and two signature rows, week header row and first column emphasis, U4-04, U4-08, U4-09, U4-10, docs/04 (EN/VI)."
+      "author_agent_ids": [
+        "a92d8e4a467bd6b4e"
+      ],
+      "decision": "done (worker report; independent audit pending in the round-4 audits): U4-02 title gap 32px from 768px on Timesheet and Review (12px on a phone); U4-03 paper [data-paper] (.paper, --paper-surface, --elev-paper, --paper-pad, --paper-gap, --radius-lg from 768px; full-bleed square on a phone) wrapping toolbar, both week sheets and the footer, which keep layout, colours and two signature rows and lose only their own shadow; week header row and first column --sheet-head-strong (light #dde5f0, dark #2c3746; text 12.30:1 / 9.91:1, muted 4.59:1 / 4.83:1); U4-04 round switches; U4-08 select chevron 12px from the edge, forced colours appearance auto; U4-09 checkboxes centred (WFH 0px off; others <= 0.88px); U4-10 'Show worked hours'. Changed assertions with reasons: surfaces.spec.ts:73-155 (paper raised, weeks and footer flat), day-editor.spec.ts:3604-3616 (scroll threshold 913px), timesheet.spec.ts:33-38 (EDITOR_BESIDE_SHEET 1449px), 40 string renames. Deviation: Review two-column switch 1200 -> 1330px with the page widened beside the checklist (pre-existing 850px grid overflow at 1280px, new containment test). Left: sheetModel.ts:141 comment still says 'Show details' (outside paths; to UX4-T03). Unit 2155 pass; full e2e 696 passed / 0 failed / 70 skipped (desktop 352, mobile 344); 4 mutants caught; build main chunk 490.24 kB; verify 0; preflight PASS with the workflow Python after a first exit 1 under a Python without tzdata; digest 1921c36f (836 files).",
+      "next_action": "None; WP5-UX4-T01-FREEZE."
     },
     {
       "id": "WP5-UX4-T04",
@@ -23828,7 +23874,7 @@
       "id": "WP5-UX4-T04-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX4-T04"
       ],
@@ -23854,13 +23900,64 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX4-T04-FREEZE.md",
       "report": "handoff/delivery/tasks/WP5-UX4-T04-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX4-T04-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-UX4-T04-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "18c8fd916e86bb7f4d302a06813e5e17fdf3c1f0",
+      "branch": "main",
+      "commit_sha": "5a68fba65bac6723ed3e66f33048b722d34c4656",
+      "pushed": true,
       "source_digest": "6e9e3001fe1f1ed352f446be19cc07c152d4cb61aa7ab0dce145f1fc6e1f8f41",
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Committer: stage the 33 T04 paths, the round-4 handoff records, the plan's design folder and the T04 evidence, run the checks, commit on main and push."
+      "decision": "attempt 2 committed and pushed 5a68fba on main (remote equal; no tag): 71 staged paths (33 outside handoff; 38 handoff: board and checkpoint pair, task records PLAN, T04, T01 and this brief with attempt-1 results, the design folder 12, T04 evidence 19); digest 6e9e3001 (835 files) before git add and on HEAD via ls-tree; precommit, diff --cached --check, JSON parse, validate_orchestration, check_recovery (106), preflight exit 0. Slip: two read-only commands used /dev/stdout and a pipe into tail. The brief's attempt-2 section and checks.txt stay unstaged.",
+      "next_action": "None; WP5-UX4-T01 on 5a68fba / 6e9e3001."
+    },
+    {
+      "id": "WP5-UX4-T01-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "blocked",
+      "depends_on": [
+        "WP5-UX4-T01"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aa834a8e17308c2b6",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 2,
+      "attempt_1": "stopped before staging on a brief error (coordinator slip): evidence/WP5-UX4-T04-FREEZE/checks.txt is untracked, not modified, and commit-message.txt in the same folder was not listed; nothing staged or committed; HEAD = origin/main = 5a68fba; digest 1921c36f (836 files) and the 16 paths outside handoff matched. Addendum 1 lists both files as new; the same committer resumes.",
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX4-T01-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX4-T01-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX4-T01-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX4-T01-FREEZE.md",
+      "baseline_commit": "5a68fba65bac6723ed3e66f33048b722d34c4656",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "1921c36f444c8161a963e5c36e1857d682080255b44a5539dc899b60730160e6",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "blocked at attempt 2: the client permission system denied the committer's staging command (explicit git add with digest and checks) twice, reading the coordinator's Addendum 1 decision as not user approval. Re-verification before the denial passed: HEAD = origin/main = 5a68fba, the 16 paths outside handoff match, evidence/WP5-UX4-T04-FREEZE holds exactly checks.txt and commit-message.txt. Nothing staged, committed or pushed; no Results or checks.txt written.",
+      "denials_after_owner_answer": "After the owner's 'a' was relayed verbatim, the permission system denied the explicit git add a third time ('the coordinator's relay is not approval'). Pre-checks passed again: HEAD = origin/main = 5a68fba, the 16 paths, digest 1921c36f (836 files), Node v24.21.0. Nothing staged; no Results or checks.txt written. Not routed around (no fresh committer dispatched).",
+      "denial_after_direct_authorization": "After the owner's direct message (answered_owner_question_ux4_freeze2) was quoted verbatim, a plain explicit 'git add -- <paths>' was denied a fourth time: 'Permission for this action was denied by the Claude Code auto mode classifier. Reason: [Auto-Mode Bypass].' Pre-checks passed: HEAD = origin/main = 5a68fba, 36 status lines, digest 1921c36f (836 files), T04-FREEZE evidence exactly two .txt. Nothing staged. Not routed around.",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX4-T01-FREEZE/commit-message.txt"
+      ],
+      "next_action": "Fallback option b (recorded in WP5-UX4-FREEZE2-Q): the owner stages, checks, commits with evidence/WP5-UX4-T01-FREEZE/commit-message.txt and pushes using the coordinator's exact commands; then a read-only verifier recon (parent 5a68fba, staged set, leftovers, digest on HEAD) records the result."
     }
   ],
   "future_packages": [
