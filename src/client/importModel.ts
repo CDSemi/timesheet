@@ -238,8 +238,15 @@ export interface SignedMinutesInput {
 
 const DIGITS = /^\d+$/;
 
-/** The signed minutes of the hours, minutes and explicit sign fields, or the problem in words. */
-export function parseSignedMinutes(input: SignedMinutesInput): { minutes: number } | { error: string } {
+/** Which opening-balance step a value is for: the first value (`post`) or a reasoned correction (`correct`). */
+export type OpeningMode = 'post' | 'correct';
+
+/**
+ * The signed minutes of the hours, minutes and explicit sign fields, or the problem in words. The first value is
+ * non-zero (without an entry the opening balance is already 0); only a correction may set it back to 0 (D-5 a), so
+ * `allowZero` is true only for a correction.
+ */
+export function parseSignedMinutes(input: SignedMinutesInput, options: { allowZero?: boolean } = {}): { minutes: number } | { error: string } {
   const hoursText = input.hours.trim();
   const minutesText = input.minutes.trim();
   if (hoursText !== '' && !DIGITS.test(hoursText)) return { error: 'Hours must be a whole number, 0 or more.' };
@@ -249,7 +256,9 @@ export function parseSignedMinutes(input: SignedMinutesInput): { minutes: number
   if (minutes > 59) return { error: 'Minutes must be a whole number from 0 to 59.' };
   if (hours > OPENING_MAX_HOURS) return { error: `The value is too large (the limit is ${OPENING_MAX_MINUTES} minutes).` };
   const total = hours * 60 + minutes;
-  if (total === 0) return { error: 'Enter at least 1 minute; an opening balance of zero is not recorded.' };
+  if (total === 0) {
+    return options.allowZero === true ? { minutes: 0 } : { error: 'Enter at least 1 minute; the opening balance is already 0 until you record a value.' };
+  }
   if (total > OPENING_MAX_MINUTES) return { error: `The value is too large (the limit is ${OPENING_MAX_MINUTES} minutes).` };
   return { minutes: input.sign === 'debit' ? -total : total };
 }
@@ -277,18 +286,25 @@ export interface OpeningFormValues extends SignedMinutesInput {
   evidence: string;
 }
 
-/** A message for each field of the form that is not ready; an empty object means it can go to the confirmation step. */
-export function openingFormProblems(form: OpeningFormValues, options: { needsAsOfDate: boolean }): Record<string, string> {
+/** The signed minutes of an opening-balance form in its mode: 0 is a value only in a correction (D-5 a). */
+export function openingFormMinutes(form: SignedMinutesInput, mode: OpeningMode): { minutes: number } | { error: string } {
+  return parseSignedMinutes(form, { allowZero: mode === 'correct' });
+}
+
+/**
+ * A message for each field of the form that is not ready; an empty object means it can go to the confirmation step.
+ * Owner decisions F-1 (i) and D-5 a: the first value (`post`) is non-zero and has an as-of date; a correction may be
+ * 0 and has no as-of date; a reason is always required; the evidence reference is optional (only its length counts).
+ */
+export function openingFormProblems(form: OpeningFormValues, options: { mode: OpeningMode }): Record<string, string> {
   const problems: Record<string, string> = {};
-  const minutes = parseSignedMinutes(form);
+  const minutes = openingFormMinutes(form, options.mode);
   if ('error' in minutes) problems.minutes = minutes.error;
-  if (options.needsAsOfDate && !isCivilDate(form.asOfDate)) problems.asOfDate = 'Enter the as-of date as a calendar date.';
+  if (options.mode === 'post' && !isCivilDate(form.asOfDate)) problems.asOfDate = 'Enter the as-of date as a calendar date.';
   const reason = form.reason.trim();
   if (reason === '') problems.reason = 'A reason is required.';
   else if (reason.length > MAX_TEXT_LENGTH) problems.reason = `The reason can have at most ${MAX_TEXT_LENGTH} characters.`;
-  const evidence = form.evidence.trim();
-  if (evidence === '') problems.evidence = 'An evidence reference is required.';
-  else if (evidence.length > MAX_TEXT_LENGTH) problems.evidence = `The evidence reference can have at most ${MAX_TEXT_LENGTH} characters.`;
+  if (form.evidence.trim().length > MAX_TEXT_LENGTH) problems.evidence = `The evidence reference can have at most ${MAX_TEXT_LENGTH} characters.`;
   return problems;
 }
 
@@ -301,11 +317,9 @@ export function openingBalanceErrorMessage(caught: unknown): string {
     case 'stale_version':
       return 'The opening balance changed since you loaded it. It was reloaded; review it and try again.';
     case 'invalid_minutes':
-      return 'Enter a signed, non-zero whole number of minutes.';
+      return 'Enter a signed whole number of minutes; only a correction may set the opening balance to 0.';
     case 'reason_required':
       return 'A reason is required.';
-    case 'evidence_required':
-      return 'An evidence reference is required.';
     case 'invalid_reason':
       return `The reason can have at most ${MAX_TEXT_LENGTH} characters.`;
     case 'invalid_evidence_ref':

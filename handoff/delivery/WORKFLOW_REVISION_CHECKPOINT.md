@@ -761,6 +761,84 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - The NAS is NOT VERIFIED; the pilot is not authorized.
   - Optional backlog for the pilot fix round, by ID, is in the WP5 handoff.
 
+## Update 2026-10-20: owner request round 4 (WP5-UX4) and the pilot-decision answers
+
+- The owner sent, in one message, a 15-item UI request (verbatim on the board,
+  `owner_decisions` 2026-10-20) and the answers to D-1..D-15.
+  - The UI items include a settings export/import feature, a paper-sheet panel for
+    Timesheet and Review, round switches, panel corners, a content-based floating rule,
+    select and checkbox polish, "Show worked hours", editing today's running session, and
+    session-dialog changes.
+  - Answers that need code: D-5 a, D-6 a, D-9 b (change-password route), D-15 b (holiday
+    preview counts restored).
+  - Documentation only: D-1 a, D-7 a, D-8 a, D-11 a, D-12 a, D-13 a, D-14 b. Defaults
+    kept: D-2..D-4 a.
+  - D-10 as written conflicts with the canonical rule F-3 (evidence, reasoned
+    corrections) and with D-5 a. It is asked as WP5-OWN-Q1, recommending: start at 0,
+    every change a correction entry with a short reason and no evidence document, history
+    kept. The working assumption is no historical import.
+- The coordinator agreed to "Show worked hours": the switch adds exactly the two
+  worked-time rows (docs/04 line 41).
+- The mission is reopened (`running`, phase `ux4-plan`). The board flip to
+  `software_ready` after round 3 and the ACCEPT result are still uncommitted and travel
+  with the next commit.
+- Running now: WP5-UX4-PLAN (planner, opus, override size_risk). It is read-only and
+  writes the plan, a mockup update, the slicing and at most 8 owner questions.
+- WP5-UX4-PLAN done.
+  - 15 items, with measurements: title gap 12px; the WFH checkbox 7.6px low; an added
+    break's time box 265.6px against 192.5px; save errors off-screen.
+  - Editing a running session is refused only by the client; the server already accepts
+    it.
+  - Settings design: personal file plus a company-calendar file, client-only.
+  - Server slice T04: D-9 b password route, D-5 a, D-6 a, D-10, D-15.
+  - Slices T01..T06; about 18-20 dispatches.
+  - Mockup and 11 renders in `handoff/delivery/design/WP5-UX4/`.
+- A handoff-only commit 18c8fd9 was made outside the mission's committer, probably by the
+  owner (runtime observation). git.last_commit is set to it.
+- Owner questions F-1..F-5 are open (board `open_owner_question_ux4`):
+  - F-1 opening balance (it supersedes WP5-OWN-Q1);
+  - F-2 D-15 b against the privacy rule;
+  - F-3 export/import scope;
+  - F-4 import behaviour;
+  - F-5 mockup approval.
+- The mission is `blocked` on them. next_task_id is WP5-UX4-T01, pending on F-5.
+- The owner answered (verbatim on the board):
+  - F-1 i: no historical import for the pilot; production keeps the import.
+  - F-2 b: exact holiday-preview counts with a written privacy exception and an audit event.
+  - F-3 a and F-4 a.
+  - F-5 approved with changes:
+    - the title gap is 32px;
+    - the toolbar, weeks and footer keep today's style inside one paper sheet, and the
+      signatures and dates stay in two rows;
+    - the paper style is free;
+    - Today and Now are right-aligned;
+    - the week header row and first column get a stronger fill.
+  - Commit 18c8fd9 was the owner's.
+- Coordinator decision: slices in the order T04 (server), T01, T02, T03, T05, T06.
+  - T04 also enforces the existing rule F-Q5 with a shared clock guard, and rewrites the
+    canonical rules F-3 and the privacy exception in docs/03 and docs/10 (EN and VI).
+  - The alert dialog is reused in the Check out dialog.
+- Running now: WP5-UX4-T04 (worker-high, opus, override size_risk). The mission is
+  `running`, phase `ux4-slices`.
+- WP5-UX4-T04 first hand-back. Items 1-7 are done:
+  - the password route and Profile card;
+  - D-5 a, F-1 i and D-6 a;
+  - the F-2 b counts with an audit event;
+  - the shared clock guard, which also refuses reopening an ended session through a share;
+  - docs/03 and docs/10.
+- Results: unit 2152 passed / 1 failed; full e2e 0 real failures (one buffer error,
+  rerun passed); mutants caught.
+- The one failure is the route inventory in `tests/integration/ot-api.test.ts`, a path T04
+  does not own. Two leftovers sit outside its paths: `importModel.ts` (old opening-balance
+  rules) and `AdminScreen.tsx` (privacy sentence).
+- Addendum 1 extends the paths for exactly these. Running now: T04 Addendum 1, same worker.
+- WP5-UX4-T04 done after Addendum 1.
+  - The route inventory test is updated, the opening-balance rules now live in
+    `importModel.ts`, and the Administration intro carries the F-2 b exception.
+  - npm test 2155 passed / 0 failed; the five touched specs 29 + 29 passed; verify 0.
+  - Digest 6e9e3001 (835 files); 33 changed paths.
+- Running now: WP5-UX4-T04-FREEZE (committer, alone).
+
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 
 - Starting point: WP5 re-accepted on 90b98ef / 57e2974c (WP5-UX-AUDIT-AB9 PASS); last

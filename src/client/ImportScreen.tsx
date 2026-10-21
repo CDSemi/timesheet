@@ -1,5 +1,5 @@
 import { type SubmitEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { api, type ImportBatch, type ImportDecisionAction, type ImportResult, type ImportSummary, uploadWorkbook } from './api.ts';
+import { api, ApiRequestError, type ImportBatch, type ImportDecisionAction, type ImportResult, type ImportSummary, uploadWorkbook } from './api.ts';
 import { displayZone, instantText } from './components/format.ts';
 import { ImportCommit } from './components/ImportCommit.tsx';
 import { ImportDecisions } from './components/ImportDecisions.tsx';
@@ -28,6 +28,18 @@ const NOTICE_TEXT: Record<Notice, string> = {
 };
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+/**
+ * An upload refusal in words. The open-preview limit (owner decision D-6 a) gets its own sentence: the server's limit and
+ * the way out, since a preview cannot be deleted, only committed (every day may be skipped).
+ */
+function uploadErrorMessage(caught: unknown): string {
+  if (caught instanceof ApiRequestError && caught.code === 'import_preview_limit') {
+    const limit = typeof caught.details?.limit === 'number' ? caught.details.limit : 20;
+    return `You already have ${limit} open previews. Commit or finish one of them first (under Previous imports): a preview is cleared only by committing it, and every day may be skipped. Nothing was stored.`;
+  }
+  return importErrorMessage(caught);
+}
 
 function ResultPanel({ result }: { result: ImportResult }) {
   return (
@@ -131,7 +143,7 @@ export function ImportScreen() {
       show(answer.import, answer.created ? 'created' : answer.import.state === 'committed' ? 'already_imported' : 'existing_preview');
       await loadHistory();
     } catch (caught) {
-      setUploadError(importErrorMessage(caught));
+      setUploadError(uploadErrorMessage(caught));
     } finally {
       setBusy(false);
     }

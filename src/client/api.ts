@@ -431,7 +431,8 @@ export interface HolidayImportPreview {
   issue_count: number;
   removal_problems: unknown[];
   effective_from_problem: { code: string; message: string } | null;
-  finalized_conflicts: Array<{ date: string }>;
+  /** Exact counts per date (owner decision F-2 (b)); each preview is audited on the server. */
+  finalized_conflicts: Array<{ date: string; finalized_timesheets: number }>;
   diff: {
     added: HolidayRule[];
     renamed: HolidayChange[];
@@ -446,6 +447,10 @@ export interface HolidayImportPreview {
     date: string;
     label_before: string | null;
     label_after: string | null;
+    /** Employees' unfinalized day entries on this date that follow the default label (counts only, F-2 (b)). */
+    default_labelled_entries: number;
+    /** Employees' explicit labels on this date, which the import keeps (counts only, F-2 (b)). */
+    explicit_overrides_preserved: number;
   }>;
 }
 
@@ -606,21 +611,39 @@ export interface OpeningBalanceResult extends OpeningBalanceState {
   status: 'posted' | 'duplicate' | 'unchanged';
 }
 
-/** Body of POST /api/ot/opening-balance (`expected_version` is 0 for the first entry). */
+/**
+ * Body of POST /api/ot/opening-balance (`expected_version` is 0 for the first entry). The evidence is optional
+ * (F-1 (i)): a blank one is stored as "not provided".
+ */
 export interface OpeningBalanceRequest {
   minutes: number;
   as_of_date: string;
   reason: string;
-  evidence_ref: string;
+  evidence_ref?: string;
   expected_version: number;
 }
 
-/** Body of PUT /api/ot/opening-balance: the new value, a reason and the version the owner saw. */
+/**
+ * Body of PUT /api/ot/opening-balance: the new value (0 allowed, D-5 a), a reason, optional evidence (null when
+ * blank) and the version the owner saw.
+ */
 export interface OpeningBalanceCorrectionRequest {
   minutes: number;
   reason: string;
-  evidence_ref: string;
+  evidence_ref?: string;
   expected_version: number;
+}
+
+/** Body of POST /api/auth/password (D-9 b): the signed-in user's own password change; neither value is echoed. */
+export interface PasswordChangeRequest {
+  current_password: string;
+  new_password: string;
+}
+
+/** The answer of POST /api/auth/password: this session stays signed in, the user's other sessions were revoked. */
+export interface PasswordChangeResult {
+  changed: true;
+  sessions_revoked: number;
 }
 
 /** Body of POST /api/ot/leave. */

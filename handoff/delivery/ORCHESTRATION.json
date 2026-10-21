@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mission_id": "timesheet-software-readiness",
-  "status": "software_ready",
+  "status": "running",
   "authorized_scope": [
     "WP1",
     "WP2",
@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "software_ready_after_ux3",
+  "phase": "ux4-slices",
   "coordinator_session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,8 +28,16 @@
   "current_source_digest": "507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": null,
+  "next_task_id": "WP5-UX4-T04-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-20",
+      "observation": "Coordinator slip: a pending placeholder task (WP5-UX4-T01) was registered without its prompt file, so WP5-UX4-T04-FREEZE attempt 1 stopped at validate_orchestration and check_recovery ('Prompt missing: WP5-UX4-T01'), with 70 paths left staged and nothing committed. Fixed by writing the real T01 brief; the same committer re-stages the board and the new brief and reruns the checks. Rule kept: every task on the board, even pending, has its brief on disk."
+    },
+    {
+      "date": "2026-10-20",
+      "observation": "A commit outside the mission's committer: 18c8fd916e86bb7f4d302a06813e5e17fdf3c1f0 'docs(handoff): record the WP5-UX3-ACCEPT commit and return to software_ready' (6 files, all under handoff/), on main and pushed, found by WP5-UX4-PLAN's reconciliation. It reuses the coordinator's commit description, so it was most likely made by the owner. No path outside handoff/ changed; the source digest stays 507de97c. git.last_commit is set to it; the next commit task reports it as the base."
+    },
     {
       "date": "2026-10-19",
       "observation": "Coordinator slip: the WP5-UX3-REGATE4 board entry was marked done FAIL with an empty evidence list, so WP5-UX3-FIX6-FREEZE attempt 1 stopped at validate_orchestration ('Gate/audit lacks digest/execution evidence'), leaving its index staged and nothing committed. Fixed by listing REGATE4's evidence files (and DIAG1's) on the board; the same committer re-stages the board and reruns every check. Rule kept: a done gate or audit always lists at least one evidence file."
@@ -284,6 +292,26 @@
     "question": "The new AGENTS.md text (AI Instruction header, Operating Contract, Prime Directive; items 1-13 and the UI section unchanged): (a, recommended) adopt it in the repository before WP5-UX3-REGATE2: a light task translates the additions into AGENTS.vi.md (rule 1), the committer commits both, and the regate and rechecks target that commit, so the re-accepted identity includes it; (b) keep it local and uncommitted: commit tasks leave AGENTS.md unstaged and the gate and audits run on clean exports of a78ada5; (c) the owner commits or reverts it before the mission continues. Sub-question for (a): the line 'Operator runbooks get a Vietnamese mirror under docs/runbooks/vi/' differs from this repository's convention (a .vi.md beside each English document, e.g. docs/11); keep it as written (a future move of runbook translations), or adapt it to the .vi.md convention [recommended: adapt].",
     "blocking": "WP5-UX3-REGATE2 (its target commit and digest depend on the answer) and therefore the rechecks, AUDIT-INT and the WP5 re-accept. Nothing else is running."
   },
+  "answered_owner_question_ux4": {
+    "answered": "2026-10-20, owner chat (verbatim in owner_decisions): F-1 i (no historical import for the pilot; production keeps the import), F-2 b, F-3 a, F-4 a, F-5 approved with changes (title gap 32px; toolbar, weeks and footer unchanged inside one paper sheet; signatures and dates stay two rows; paper style free; Today/Now right-aligned; stronger week header row and first column).",
+    "id": "WP5-UX4-F-1..F-5",
+    "asked": "2026-10-20",
+    "source": "WP5-UX4-PLAN section F (handoff/delivery/tasks/WP5-UX4-PLAN.md); mockup handoff/delivery/design/WP5-UX4/mockup.html and 11 synthetic renders.",
+    "question": "F-1 (= WP5-OWN-Q1, sharpened): opening OT balance: (i, recommended) starts at 0 with no entry; only the owner of the timesheet sets or changes it any time (administrators never see a personal balance); each change is a ledger entry with a short reason; evidence optional; a correction back to 0 allowed (D-5 a); (ii) no reason either (needs a ledger migration or a dummy reason); (iii) one value overwritten in place (new storage model, history lost). Also confirm no historical import for the pilot. F-2 (D-15 b contradiction): per-date counts in the administrator's holiday preview reveal a named colleague's recorded days in a small team, against docs/03 ('administrators see no timesheet details') and the WP2-A-01 audit fix: (a, recommended) keep removed; (b) restore exact counts with a written exception and an audit event; (c) counts only when 3 or more, else 'fewer than 3'. F-3 (export/import scope): (a, recommended) personal settings file plus an administrators' company-calendar file; (b) personal only; (c) everything including accounts. F-4 (import behaviour): (a, recommended) preview with a Now/In-the-file comparison, new versions, policy from a chosen date, auto-submit only with a separate tick; (b) apply at once; (c) merge field by field. F-5: approve the mockup (a) as drawn or (b) with named changes.",
+    "blocking": "F-5 blocks UX4-T01..T03; F-1 and F-2 block UX4-T04; F-3 and F-4 block UX4-T05."
+  },
+  "open_owner_question_wp5_own_q1": {
+    "id": "WP5-OWN-Q1",
+    "superseded_by": "WP5-UX4-F-1 (open_owner_question_ux4)",
+    "asked": "2026-10-20",
+    "source": "Owner answer D-10 ('OT đầu kỳ mặc định là 0, cho phép sửa bất cứ lúc nào, không cần bằng chứng') against the canonical rule F-3 (docs/03 line 48, docs/10 line 153) and the owner's D-5 a.",
+    "question": "How should the opening OT balance work? (i, recommended) It starts at 0 (no entry); the owner or administrator can set or change it at any time; each change is stored as a correction entry with a short reason (no evidence document), so the history stays and D-5 a (a correction back to 0) fits; (ii) the same, but with no reason either; (iii) one plain value overwritten in place, with no history (conflicts with the ledger design and D-5 a). Also confirm: no historical workbook import for the pilot (recommended).",
+    "blocking": "Only the opening-balance slice of the round (the F-3 rule change in docs/03, docs/10 EN/VI and the code). The UI plan proceeds meanwhile."
+  },
+  "answered_owner_question_wp5_d": {
+    "answered": "2026-10-20, owner chat (verbatim in owner_decisions): D-1 a, D-2 a, D-3 a, D-4 a, D-5 a, D-6 a, D-7 a, D-8 a, D-9 b, D-10 a with changes (see WP5-OWN-Q1), D-11 a, D-12 a, D-13 a, D-14 b, D-15 b.",
+    "note": "The block below keeps the original question text as history."
+  },
   "pending_owner_question": {
     "id": "WP5-D-1..D-15",
     "asked": "2026-10-06",
@@ -320,7 +348,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "1b96e9d36c4b32caab95d6c4638df7038134b189",
+    "last_commit": "18c8fd916e86bb7f4d302a06813e5e17fdf3c1f0",
     "unpushed": []
   },
   "owner_decisions": [
@@ -507,9 +535,37 @@
       "source": "owner chat, direct reply typed by the owner to WP5-UX3-Q7",
       "verbatim": "(a) và sửa cho khớp quy ước .vi.md (xóa các cụm từ ko liên quan như “shop-floor”, “step type”, “probe kind”, “manifest key”...",
       "decision": "WP5-UX3-Q7 (a): the owner's new AGENTS.md text (AI Instruction header, Operating Contract, Prime Directive) joins the repository before WP5-UX3-REGATE2, with two edits: the runbook-mirror line follows this repository's convention (a matching .vi.md translation beside each English document, not docs/runbooks/vi/), and phrases that do not belong to this project are removed ('shop-floor', 'step type', 'probe kind', 'manifest key' and similar). AGENTS.vi.md gets the matching translation. As a governance path change it runs the docs/08 GOV chain (worker, freeze, gate, fresh audit); the WP5 regate and rechecks then target that freeze."
+    },
+    {
+      "date": "2026-10-20",
+      "source": "owner chat, request typed by the owner (UI change round 4, WP5-UX4)",
+      "verbatim": "Đầu tiên, tôi cần sửa:\n- chức năng export/import all settings\n- Tăng khoảng cách giữa phần title của trang Timesheet với panel nằm ngay kế nó sao cho đẹp mắt. Hiện tại chúng hơi sát nhau, nhìn hơi xấu.\n- Đưa các thành phàn tính từ \"Open a day\" .... + 2 Week sheets cho đến cuối trang (phần chữ ký) vào chung 1 panel, kểu giống như 1 tờ giấy sẽ gồm những phần thông tin này.\n- Tương tự, trang \"Review and sign off\" cũng cần trình bày giống như 1 tờ giấy như vậy.\n- Tôi muốn tất cả các toggle slide button (ví dụ \"Show details\"), có thiết kế modern kiểu tròn (giống như thiết kế trong mockup)\n- Cho phép click đổi / unselect column khi detail panel đang hiện. (hiện tại phải đóng panel mới select cột khác được)\n- Panel hiện bên nào thì các góc phía sát biên của phía đó không đc bo tròn. (chỉ bo tròn các góc hướng về phía week sheets)\n- Chỉ floating panel khi mà chiều rộng không đủ chỗ hiển thị week sheets + detail pannel. Nếu hiển thị week sheets + detail panel mà nội dung trong các cột trong week sheets bị overlap lên nhau thì mới cho detail panel floating.\n- Các combo box mặc định đang có dấu mũi tên sổ xuống hơi xấu (bị nằm sát cạnh), sửa lại cho modern hơn.\n- Các check box cần phải căn giữa (theo chiều dọc) so với các phần tử khác cùng dòng. (ví dụ hiện tại checkbox \"Worked from home (WFH)\" đang bị nằm lệch xuống dưới so với combobox Category.)\n- Đổi tên combobox \"Show details\" thành \"Show worked hours\" (bạn thấy OK không? nếu ko thì cho tôi biết ý kiến của bạn)\n- Với ngày hiện tại \"Today\", cho phép sửa start time sau khi check in (not check out yet). Hiện tại nó đòi phải nhập end date and time, trong khi chưa biết khi nào tan làm (chưa check out), cho nên phải đợi check out xong mới sửa start time được, rất bất tiện.\n- Trong New/edit session dialog:\n    + Đưa phần time zone lên trên mấy cái times (start/end)\n    + Dưới Start/end date: có 1 button dạng link \"Today\", khi click vào thì tự điền ngày hiện tại.\n    + Dưới Start/end time: có 1 button dạng link \"Now\", khi click vào thì tự điền giờ hiện tại.\n    + Khi Add break, break được add thêm có ô giờ hơi bự, lệch hẳn so với các ô giờ được tạo ra bởi suggest breaks. Tôi cần các thành phần trong các breaks phải alignment với nhau.\n    + Nếu có lỗi khi save thì cần hiện 1 dialog/notification riêng, không display thành 1 red message ngay dưới cuối dialog như hiện tại rất khó biết nếu không cuộn dialog xuống.",
+      "decision": "UI change round 4 (WP5-UX4) on the re-accepted snapshot 8e55710 / 507de97c: plan first (WP5-UX4-PLAN), then slices, gate and fresh audits per docs/08. The coordinator answers the rename question: 'Show worked hours' is accurate, because the switch adds exactly the rows 'Worked on a workday' and 'Worked on a day off' (docs/04 line 41)."
+    },
+    {
+      "date": "2026-10-20",
+      "source": "owner chat, answers typed by the owner to the pilot decisions D-1..D-15 (same message as the round-4 request)",
+      "verbatim": "Còn đây là các câu trả lời, nếu câu trả lời nào mâu thuẫn thì bạn hãy làm rõ cho tôi để tôi lựa chọn lại:\nD1.a\nD7.a\nD8.a\nD13.a\nD10.a : OT đầu kỳ mặc định là 0, cho phép sửa bất cứ lúc nào, không cần bằng chứng.\nD2.a\nD3.a\nD4.a\nD5.a\nD6.a\nD9.b\nD11.a\nD12.a\nD14.b\nD15.b",
+      "decision": "Recorded: D-1 a (rollback with JOB_RUNNER=off, no change), D-2 a, D-3 a, D-4 a (current defaults), D-5 a (allow an offsetting correction to a net zero: code change), D-6 a (at most 20 uncommitted previews per person: code change), D-7 a (at-least-once reminders), D-8 a (TLS failures stay temporary; document it), D-9 b (a self-service change-password route before others join: new feature), D-11 a, D-12 a (staged first activation), D-13 a (the NAS), D-14 b (first release declared after the pilot period), D-15 b (restore per-date counts in the holiday preview: reverses the WP2-A-01 privacy removal; code change). D-10 as written conflicts with the canonical opening-balance rule F-3 (docs/03 line 48, docs/10 line 153: signed non-zero minutes with an as-of date, reason and evidence, changed only by a reasoned correction) and with D-5 a; clarification asked as WP5-OWN-Q1. Assumption until told otherwise: no historical workbook import for the pilot (the D-10 recommendation)."
+    },
+    {
+      "date": "2026-10-20",
+      "source": "owner chat, answers typed by the owner to WP5-UX4 F-1..F-5",
+      "verbatim": "F1.i; Pilot không cần import lịch sử từ file excel, nhưng bản production cần cho phép import lịch sử.\nF2.b\nF3.a\nF4.a\nF5: Duyệt hầu hết như đã vẽ, ngoại trừ 1 số điểm:\n    + khoảng cách dưới tiêu đề tăng lên 32px;\n    + Giữ nguyên style, bố cục, màu sắc đang có của header (là phần Open a day, .... Change several days), 2 week sheets và phần footer (sau week sheets. Ví dụ như descriptions, Overtime total, signratures, dates) như hiện tại, đặc biệt là phần chữ ký và date (gồm 2 hàng như hiện tại), không được gom thành 1 hàng như trong mockup. Chỉ đơn giản đưa chúng vào cùng 1 \"tờ giấy\", ko thay đổi style, màu sắc và bố cục.\n    + Về style của \"tờ giấy\" thì bạn có thể design thoải mái, đẹp là được.\n    + hộp thoại phiên giờ: các link “Today”/”Now” canh phải theo các hộp input date/time tương ứng.\n    + Week sheet: tăng độ đậm màu cho dòng đầu tiên (Ví dụ \"WEEK 1  10/12/2026 - 10/18/2026\") và cột đầu tiên (\"Day\", \"Date\", \"Category\", \"Time\", ...) lên 1 chút (nhưng cần đảm bảo màu text không bị quá chìm), để chúng nổi bật hơn so với màu nền trong các date cells (Mon, Tue, Wed, ...)\n    \n(commit 18c8fd9 do tôi làm, cứ tiếp tục bình thường)",
+      "decision": "F-1 (i): the opening OT balance starts at 0 with no entry; only the timesheet's owner sets or changes it at any time; every change is a ledger entry with a short reason; evidence optional; a correction back to 0 allowed (D-5 a). No historical workbook import for the pilot, but the production app keeps the historical import (the existing WP4 feature stays). F-2 (b): the administrator's holiday-import preview shows exact per-date counts again, with an explicit written exception to the docs/03 privacy rule and an audit event per preview (reverses WP2-A-01 by owner decision, AGENTS rule 8). F-3 (a): a personal settings file plus an administrators' company-calendar file. F-4 (a): preview with a Now/In-the-file comparison, new versions, the work policy from a chosen date, auto-submit only with a separate tick. F-5: the mockup is approved with changes: the title gap is 32px; the toolbar (Open a day .. Change several days), both week sheets and the footer (legend, Overtime Total, signatures and dates in their current two rows) keep their current style, layout and colours and are only placed together on one paper sheet (the mockup's one-row signature layout is rejected); the paper's own style is free; the session dialog's Today and Now links are right-aligned under their date and time inputs; the week-sheet header row (for example 'WEEK 1  10/12/2026 - 10/18/2026') and the first column (Day, Date, Category, Time, ...) get a slightly stronger fill so they stand out from the date cells, with text contrast kept. Commit 18c8fd9 was made by the owner."
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-20",
+      "basis": "Owner answers F-1 i, F-2 b, F-3 a, F-4 a and F-5 with changes; the plan WP5-UX4-PLAN (slices T01-T06, order T04 first). The plan also found a pre-existing gap: a grantee with an edit share can PUT an end onto the owner's running session or POST an open session, a check out or check in by another name, which the existing rule F-Q5 forbids.",
+      "decision": "Slices in this order, one source writer at a time, each followed by its own freeze: UX4-T04 (server: D-9 b change-password route with its Profile card, D-5 a, D-6 a, D-10 per F-1 i, D-15 per F-2 b with the docs/03 exception and an audit event per preview, and the shared clock guard that enforces F-Q5; the canonical rule texts for F-3 and the privacy exception in docs/03 and docs/10, EN and VI) on timesheet-worker-high with model opus (override size_risk: authentication, ledger and privacy, size M, risk H); then UX4-T01 (U4-02 with 32px, U4-03 paper with the toolbar, weeks and footer unchanged inside it and signatures in two rows, U4-04, U4-08, U4-09, U4-10, plus the stronger week header row and first column), UX4-T02 (U4-05 non-modal floating panel, U4-06, U4-07), UX4-T03 (U4-11..U4-15 with Today/Now right-aligned), UX4-T05 (U4-01 per F-3 a and F-4 a), UX4-T06 (remaining docs and the pilot packet with D-1..D-15). Then one package-final gate, area audits A and B, and the integration audit. The planner's U4-15 suggestion to reuse the alert in the Check out dialog is accepted (same component, consistent behaviour)."
+    },
+    {
+      "date": "2026-10-20",
+      "basis": "Owner request of 2026-10-20 (UI change round 4: 15 items including a settings export/import feature and running-session start edits) and the owner's D-1..D-15 answers (code changes for D-5 a, D-6 a, D-9 b, D-15 b and the D-10 rule change; documentation for the rest). WP5 is accepted on 8e55710 / 507de97c (software_ready).",
+      "decision": "Reopen the mission for WP5-UX4 (package WP5). First one read-only plan WP5-UX4-PLAN on timesheet-planner with model opus (override size_risk: L size, H risk, novelty), covering the UI items, the settings export/import design questions, the pilot-decision changes, a mockup update, the slicing and the owner questions. The opening-balance contradiction is asked at once as WP5-OWN-Q1. Keep the round as small as the owner's words allow (AGENTS Prime Directive); fold cheap test or doc fixes into the slices instead of extra fix rounds where the rules allow."
+    },
     {
       "date": "2026-10-19",
       "basis": "WP5-UX3-REGATE4 FAIL on item 2: three real-clock full runs, each one failure. WP5-UX3-DIAG1 proved two of them (sign-in 30 s timeouts) are net::ERR_NO_BUFFER_SPACE on the app bundle (a host buffer event already seen in 11 earlier runs) and one (hover.spec.ts:718) is a race in a FIX4 test with a proved one-line fix; a fourth full run on the same bytes passed 651/0.",
@@ -23568,6 +23624,243 @@
       "author_agent_ids": [],
       "decision": "committed and pushed 1b96e9d on main (remote equal; no tag): 202 handoff paths, 0 outside handoff (12 modified, 5 new records, evidence 185: FIX6-FREEZE 2, REGATE5 26, AUDIT-INT 156 incl. 10 synthetic PNGs, ACCEPT-DOCS 1); digest 507de97c (833 files) before git add and on the new HEAD; precommit, diff --cached --check, JSON parse, validate_orchestration, check_recovery, preflight, push dry-run and push exit 0; no masking, fix or stop. Slip: one read piped into tail. WP5 re-accepted on 8e55710 / 507de97c; UI change round 3 closed.",
       "next_action": "None; the mission is software_ready again; the owner reviews the pilot packet and answers D-1..D-15."
+    },
+    {
+      "id": "WP5-UX4-PLAN",
+      "package": "WP5",
+      "kind": "plan",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX3-ACCEPT"
+      ],
+      "profile": "timesheet-planner",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "size_risk",
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a3f294195d4f4c99f",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX4-PLAN.md",
+        "handoff/delivery/design/WP5-UX4"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX4-PLAN.md",
+      "report": "handoff/delivery/tasks/WP5-UX4-PLAN.md",
+      "evidence": [
+        "handoff/delivery/design/WP5-UX4/mockup.html",
+        "handoff/delivery/design/WP5-UX4/mockup-b1-timesheet-paper-1440-synthetic.png",
+        "handoff/delivery/design/WP5-UX4/mockup-b2-timesheet-paper-390-synthetic.png",
+        "handoff/delivery/design/WP5-UX4/mockup-b3-review-paper-1440-synthetic.png",
+        "handoff/delivery/design/WP5-UX4/mockup-b4-controls-synthetic.png",
+        "handoff/delivery/design/WP5-UX4/mockup-b5-panel-beside-floating-synthetic.png",
+        "handoff/delivery/design/WP5-UX4/mockup-b6-floating-rule-synthetic.png",
+        "handoff/delivery/design/WP5-UX4/mockup-b7-session-dialog-synthetic.png",
+        "handoff/delivery/design/WP5-UX4/mockup-b8-running-session-edit-synthetic.png",
+        "handoff/delivery/design/WP5-UX4/mockup-b9-change-password-synthetic.png",
+        "handoff/delivery/design/WP5-UX4/mockup-b10-settings-export-import-synthetic.png",
+        "handoff/delivery/design/WP5-UX4/mockup-b11-phone-session-dialog-synthetic.png"
+      ],
+      "baseline_commit": "1b96e9d36c4b32caab95d6c4638df7038134b189",
+      "source_digest": "507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "plan delivered (read-only; HEAD 18c8fd9 = origin/main, one handoff-only commit after 1b96e9d; digest 507de97c unchanged). 15 items U4-01..U4-15 with measurements: title gap 12px; WFH checkbox 7.6px low; an added break row's time box 265.6px vs 192.5px suggested; save errors 77px (desktop) and 316px (phone) below the visible area; running-session edit refused only by the client ('Enter the end date and time.'; the server accepts end null); the side panel could sit beside the sheet from about 1298px (drawn ~1330px). Settings inventory and design (scope a: personal settings file plus an administrators' company-calendar file; no secrets exist in the DB; versioned JSON; preview then new versions; auto-submit only with a separate tick; client-only, existing routes). Pilot-decision changes sized: D-5 a (ledger, S, H), D-6 a (import quota 409 import_preview_limit, S, M), D-9 b (POST /api/auth/password, rate limit, other sessions revoked, audit; M, H), D-15 b (privacy reversal: contradicts docs/03:34 and WP2-A-01; asked as F-2), D-10 per WP5-OWN-Q1 (i: evidence optional, no migration; ii: migration; iii: new model; owner-only, administrators never see a personal balance), documentation answers. Slices UX4-T01 (paper, title gap, switches, selects, checkboxes, rename), T02 (edge drawer, non-modal floating, content-based rule), T03 (session dialog and running edit), T04 (server: D-9 b, D-5, D-6, D-10, D-15, optional shared-clock guard), T05 (settings export/import, client), T06 (docs and pilot packet); no GOV path; about 18-20 dispatches (about 14 if T01-T03 merge). Owner questions F-1 (opening balance), F-2 (D-15 b privacy), F-3 (export/import scope), F-4 (import behaviour), F-5 (mockup approval). Slip: one read-only pipe into head.",
+      "next_action": "None; the owner answers F-1..F-5; then UX4-T04 and the UI slices."
+    },
+    {
+      "id": "WP5-UX4-T01",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "pending",
+      "depends_on": [
+        "WP5-UX4-PLAN"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": null,
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/styles.css",
+        "src/client/TimesheetScreen.tsx",
+        "src/client/ReviewScreen.tsx",
+        "src/client/components/TimesheetSheet.tsx",
+        "src/client/components/SheetWeekTable.tsx",
+        "src/client/components/ReviewDays.tsx",
+        "src/client/components/ShowDetailsSwitch.tsx",
+        "src/client/components/SharingItemsFields.tsx",
+        "src/client/components/DayFieldsForm.tsx",
+        "tests/e2e/surfaces.spec.ts",
+        "tests/e2e/timesheet.spec.ts",
+        "tests/e2e/review.spec.ts",
+        "tests/e2e/hover.spec.ts",
+        "tests/e2e/focus-ring.spec.ts",
+        "tests/e2e/day-editor.spec.ts",
+        "tests/e2e/shell.spec.ts",
+        "tests/e2e/sharing.spec.ts",
+        "tests/e2e/theme.spec.ts",
+        "tests/e2e/keyboard-access.spec.ts",
+        "tests/e2e/controls.spec.ts",
+        "tests/client",
+        "docs/04_UX_AND_SETTINGS.md",
+        "docs/04_UX_AND_SETTINGS.vi.md",
+        "handoff/delivery/tasks/WP5-UX4-T01.md",
+        "handoff/delivery/evidence/WP5-UX4-T01"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX4-T01.md",
+      "report": "handoff/delivery/tasks/WP5-UX4-T01.md",
+      "evidence": [],
+      "baseline_commit": null,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Worker after WP5-UX4-T04-FREEZE: U4-02 (32px), U4-03 paper with the toolbar, weeks and footer unchanged inside and two signature rows, week header row and first column emphasis, U4-04, U4-08, U4-09, U4-10, docs/04 (EN/VI)."
+    },
+    {
+      "id": "WP5-UX4-T04",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX4-PLAN"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "size_risk",
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ac40529a094d001dc",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/routes/auth.ts",
+        "src/server/routes/ot.ts",
+        "src/server/routes/imports.ts",
+        "src/server/routes/admin.ts",
+        "src/server/routes/api.ts",
+        "src/server/auth/sessions.ts",
+        "src/server/auth/rateLimit.ts",
+        "src/server/auth/passwords.ts",
+        "src/server/http/schemas.ts",
+        "src/server/services/ledger.ts",
+        "src/server/services/workbookImport.ts",
+        "src/server/services/holidayImport.ts",
+        "src/server/services/timesheetCommands.ts",
+        "src/server/services/sharedActs.ts",
+        "src/server/services/audit.ts",
+        "src/client/ProfileScreen.tsx",
+        "src/client/api.ts",
+        "src/client/components/OpeningBalanceForm.tsx",
+        "src/client/components/OpeningBalancePanel.tsx",
+        "src/client/components/HolidayImport.tsx",
+        "src/client/ImportScreen.tsx",
+        "src/client/styles.css",
+        "tests/integration/password-change.test.ts",
+        "tests/integration/opening-balance.test.ts",
+        "tests/integration/workbook-import.test.ts",
+        "tests/integration/holiday-import.test.ts",
+        "tests/integration/sharing.test.ts",
+        "tests/integration/sharing-matrix.test.ts",
+        "tests/integration/user-admin.test.ts",
+        "tests/e2e/settings-routes.spec.ts",
+        "tests/e2e/profile.spec.ts",
+        "tests/e2e/import.spec.ts",
+        "tests/e2e/admin.spec.ts",
+        "docs/03_ARCHITECTURE_AND_DATA.md",
+        "docs/03_ARCHITECTURE_AND_DATA.vi.md",
+        "docs/10_DECISIONS_AND_SOURCES.md",
+        "docs/10_DECISIONS_AND_SOURCES.vi.md",
+        "tests/integration/ot-api.test.ts",
+        "src/client/importModel.ts",
+        "tests/client/importModel.test.ts",
+        "src/client/AdminScreen.tsx",
+        "handoff/delivery/tasks/WP5-UX4-T04.md",
+        "handoff/delivery/evidence/WP5-UX4-T04"
+      ],
+      "first_hand_back": "2026-10-20 (self-reported claude-opus-5-5): items 1-7 done: POST /api/auth/password (403 then 429 per user and address, 422 weak/unchanged, other sessions revoked in one transaction, audit without secrets) and a Profile card; D-5 a correction to 0; F-1 i evidence optional ('not provided'), as-of date defaults to today; D-6 a 20-preview limit (409 import_preview_limit, checked before the file write and in the transaction); F-2 b per-date holiday counts with one calendar.holiday_preview audit event per preview; shared clock guard 409 shared_clock_action (new open session, end on a running session, and reopening an ended session, the worker's reading of F-Q5); docs/03 and docs/10 EN/VI. npm test 2152 passed / 1 failed (tests/integration/ot-api.test.ts route inventory must list the new route; not owned); full e2e desktop 332/30/1 (ERR_NO_BUFFER_SPACE, rerun passed), mobile 326/37/0; mutants M1-M6 and M3b caught; parity and preflight PASS; build 490.08 kB; verify exit 1 on the ot-api assertion; digest 57f8f5db (835 files). Notes: importModel.ts (not owned) still carries the old opening-balance rules, overridden locally in the form; AdminScreen.tsx says it never shows timesheet details. Addendum 1 extends the owned paths for exactly these three.",
+      "prompt": "handoff/delivery/tasks/WP5-UX4-T04.md",
+      "report": "handoff/delivery/tasks/WP5-UX4-T04.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX4-T04/00-baseline.txt",
+        "handoff/delivery/evidence/WP5-UX4-T04/30-e2e-full.txt",
+        "handoff/delivery/evidence/WP5-UX4-T04/40-mutants.txt",
+        "handoff/delivery/evidence/WP5-UX4-T04/50-parity-preflight.txt",
+        "handoff/delivery/evidence/WP5-UX4-T04/A1-10-checks.txt",
+        "handoff/delivery/evidence/WP5-UX4-T04/A1-30-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX4-T04/A1-90-verify.txt",
+        "handoff/delivery/evidence/WP5-UX4-T04/A1-99-digest.txt",
+        "handoff/delivery/evidence/WP5-UX4-T04/profile-password-desktop-synthetic.png"
+      ],
+      "baseline_commit": "18c8fd916e86bb7f4d302a06813e5e17fdf3c1f0",
+      "source_digest": "6e9e3001fe1f1ed352f446be19cc07c152d4cb61aa7ab0dce145f1fc6e1f8f41",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented after addendum 1 (reported, not independent proof): items 1-7 as in first_hand_back; Addendum 1: ot-api.test.ts lists POST /api/auth/password (:519) and the preview comment (:511) is corrected; importModel.ts carries the opening-balance rules (evidence optional, 0 only in a correction, first value non-zero) and OpeningBalanceForm.tsx dropped its overrides; importModel.test.ts assertions changed per F-1 i with new tests at :283 and :343; AdminScreen.tsx intro states the F-2 b exception. F-Q5 reading recorded: reopening an ended session through a share is a check in by another route. npm test 2155 passed / 0 failed; the five touched specs 29 + 29 passed; full e2e earlier desktop 332/30/1 (buffer error, rerun passed), mobile 326/37/0; build 490.10 kB; verify 0; digest 6e9e3001 (835 files). 33 changed paths outside handoff (2 new: tests/e2e/profile.spec.ts, tests/integration/password-change.test.ts).",
+      "next_action": "None; WP5-UX4-T04-FREEZE (committer alone), then UX4-T01."
+    },
+    {
+      "id": "WP5-UX4-T04-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX4-T04"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ac65e9a4cad5d7952",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 2,
+      "attempt_1": "stopped at validate_orchestration and check_recovery ('Prompt missing: WP5-UX4-T01', a coordinator slip); nothing committed; 70 paths staged (33 outside handoff, 37 handoff); precommit, diff --check, JSON parse and preflight exit 0. Attempt 2: the same committer also stages the new T01 brief and re-stages the board, then reruns every check.",
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX4-T04-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX4-T04-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX4-T04-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX4-T04-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "18c8fd916e86bb7f4d302a06813e5e17fdf3c1f0",
+      "source_digest": "6e9e3001fe1f1ed352f446be19cc07c152d4cb61aa7ab0dce145f1fc6e1f8f41",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Committer: stage the 33 T04 paths, the round-4 handoff records, the plan's design folder and the T04 evidence, run the checks, commit on main and push."
     }
   ],
   "future_packages": [

@@ -20,6 +20,7 @@ import {
   ledgerEntryLabel,
   OPENING_MAX_MINUTES,
   openingBalanceErrorMessage,
+  openingFormMinutes,
   openingFormProblems,
   parseSignedMinutes,
   periodStateText,
@@ -275,8 +276,22 @@ describe('signed minutes from the opening-balance form', () => {
       const result = parseSignedMinutes(bad);
       expect('error' in result, JSON.stringify(bad)).toBe(true);
     }
-    expect(parseSignedMinutes(input('credit', '0', '0'))).toEqual({ error: 'Enter at least 1 minute; an opening balance of zero is not recorded.' });
+    expect(parseSignedMinutes(input('credit', '0', '0'))).toEqual({ error: 'Enter at least 1 minute; the opening balance is already 0 until you record a value.' });
     expect(parseSignedMinutes(input('credit', '0', '60'))).toEqual({ error: 'Minutes must be a whole number from 0 to 59.' });
+  });
+
+  it('D-5 a: reads 0 only when zero is allowed (a correction), and still refuses every malformed value then', () => {
+    for (const zero of [input('credit', '0', '0'), input('credit', '', ''), input('debit', '00', '0')]) {
+      expect(parseSignedMinutes(zero, { allowZero: true }), JSON.stringify(zero)).toEqual({ minutes: 0 });
+      expect('error' in parseSignedMinutes(zero), JSON.stringify(zero)).toBe(true);
+      expect('error' in parseSignedMinutes(zero, { allowZero: false }), JSON.stringify(zero)).toBe(true);
+    }
+    for (const bad of [input('credit', '1.5', '0'), input('credit', '-1', '0'), input('credit', '0', '60'), input('debit', '0', '-5'), input('credit', 'a', '0'), input('credit', '1666666', '41')]) {
+      expect('error' in parseSignedMinutes(bad, { allowZero: true }), JSON.stringify(bad)).toBe(true);
+    }
+    expect(parseSignedMinutes(input('debit', '1', '0'), { allowZero: true })).toEqual({ minutes: -60 });
+    expect(openingFormMinutes(input('credit', '0', '0'), 'correct')).toEqual({ minutes: 0 });
+    expect('error' in openingFormMinutes(input('credit', '0', '0'), 'post')).toBe(true);
   });
 
   it('refuses a value above the server bound and allows exactly the bound', () => {
@@ -312,24 +327,38 @@ describe('opening-balance form problems', () => {
   const valid = { sign: 'credit' as const, hours: '2', minutes: '30', asOfDate: '2026-09-30', reason: 'Carried over from the old sheet', evidence: 'Email 2026-10-01' };
 
   it('has no problem for a complete form', () => {
-    expect(openingFormProblems(valid, { needsAsOfDate: true })).toEqual({});
+    expect(openingFormProblems(valid, { mode: 'post' })).toEqual({});
+    expect(openingFormProblems({ ...valid, asOfDate: '' }, { mode: 'correct' })).toEqual({});
   });
 
-  it('names every missing field', () => {
-    const problems = openingFormProblems({ sign: 'credit', hours: '', minutes: '', asOfDate: '', reason: '  ', evidence: '' }, { needsAsOfDate: true });
-    expect(Object.keys(problems).sort()).toEqual(['asOfDate', 'evidence', 'minutes', 'reason']);
+  it('names every missing field; the evidence is optional (F-1 (i))', () => {
+    const blank = { sign: 'credit' as const, hours: '', minutes: '', asOfDate: '', reason: '  ', evidence: '' };
+    expect(Object.keys(openingFormProblems(blank, { mode: 'post' })).sort()).toEqual(['asOfDate', 'minutes', 'reason']);
+    // A correction has no as-of date and may be 0 (D-5 a): only the reason is missing.
+    expect(Object.keys(openingFormProblems(blank, { mode: 'correct' })).sort()).toEqual(['reason']);
+    expect(openingFormProblems({ ...valid, evidence: '   ' }, { mode: 'post' })).toEqual({});
+    expect(openingFormProblems({ ...valid, asOfDate: '', evidence: '' }, { mode: 'correct' })).toEqual({});
+  });
+
+  it('D-5 a: the first value is non-zero; a correction may be 0', () => {
+    const zero = { ...valid, hours: '0', minutes: '0' };
+    expect(openingFormProblems(zero, { mode: 'post' }).minutes).toBe('Enter at least 1 minute; the opening balance is already 0 until you record a value.');
+    expect(openingFormProblems({ ...zero, asOfDate: '' }, { mode: 'correct' })).toEqual({});
   });
 
   it('checks the as-of date as a real calendar date and only when the form has one', () => {
-    expect(openingFormProblems({ ...valid, asOfDate: '2026-13-40' }, { needsAsOfDate: true }).asOfDate).toBeDefined();
-    expect(openingFormProblems({ ...valid, asOfDate: '30/09/2026' }, { needsAsOfDate: true }).asOfDate).toBeDefined();
-    expect(openingFormProblems({ ...valid, asOfDate: '' }, { needsAsOfDate: false })).toEqual({});
+    expect(openingFormProblems({ ...valid, asOfDate: '2026-13-40' }, { mode: 'post' }).asOfDate).toBeDefined();
+    expect(openingFormProblems({ ...valid, asOfDate: '30/09/2026' }, { mode: 'post' }).asOfDate).toBeDefined();
+    expect(openingFormProblems({ ...valid, asOfDate: '' }, { mode: 'post' }).asOfDate).toBeDefined();
+    expect(openingFormProblems({ ...valid, asOfDate: '' }, { mode: 'correct' })).toEqual({});
   });
 
   it('limits the reason and the evidence to 2000 characters', () => {
-    expect(openingFormProblems({ ...valid, reason: 'x'.repeat(2001) }, { needsAsOfDate: true }).reason).toBeDefined();
-    expect(openingFormProblems({ ...valid, evidence: 'x'.repeat(2001) }, { needsAsOfDate: true }).evidence).toBeDefined();
-    expect(openingFormProblems({ ...valid, reason: 'x'.repeat(2000), evidence: 'x'.repeat(2000) }, { needsAsOfDate: true })).toEqual({});
+    for (const mode of ['post', 'correct'] as const) {
+      expect(openingFormProblems({ ...valid, reason: 'x'.repeat(2001) }, { mode }).reason).toBeDefined();
+      expect(openingFormProblems({ ...valid, evidence: 'x'.repeat(2001) }, { mode }).evidence).toBe('The evidence reference can have at most 2000 characters.');
+      expect(openingFormProblems({ ...valid, reason: 'x'.repeat(2000), evidence: 'x'.repeat(2000) }, { mode })).toEqual({});
+    }
   });
 });
 
@@ -339,9 +368,10 @@ describe('opening-balance error messages', () => {
   it('maps the WP4-T10 codes', () => {
     expect(openingBalanceErrorMessage(fail(409, 'opening_balance_exists', { minutes: 90, version: 2 }))).toMatch(/already recorded.*correction/i);
     expect(openingBalanceErrorMessage(fail(409, 'stale_version'))).toMatch(/changed since.*reloaded/i);
-    expect(openingBalanceErrorMessage(fail(422, 'invalid_minutes'))).toMatch(/non-zero/);
+    expect(openingBalanceErrorMessage(fail(422, 'invalid_minutes'))).toBe('Enter a signed whole number of minutes; only a correction may set the opening balance to 0.');
     expect(openingBalanceErrorMessage(fail(422, 'reason_required'))).toMatch(/reason/);
-    expect(openingBalanceErrorMessage(fail(422, 'evidence_required'))).toMatch(/evidence/);
+    // F-1 (i): the server no longer sends evidence_required; an unknown code falls back to the server text and code.
+    expect(openingBalanceErrorMessage(fail(422, 'evidence_required'))).toBe('server text (evidence_required)');
     expect(openingBalanceErrorMessage(fail(422, 'invalid_reason'))).toMatch(/reason.*2000/);
     expect(openingBalanceErrorMessage(fail(422, 'invalid_evidence_ref'))).toMatch(/evidence.*2000/);
     expect(openingBalanceErrorMessage(fail(404, 'not_found'))).toMatch(/No opening balance/);

@@ -797,6 +797,85 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - NAS chưa được kiểm; pilot chưa được cho phép.
   - Backlog không bắt buộc cho vòng sửa pilot, liệt kê theo mã, nằm trong WP5 handoff.
 
+## Cập nhật 2026-10-20: yêu cầu vòng 4 của chủ dự án (WP5-UX4) và các câu trả lời cho quyết định pilot
+
+- Trong cùng một tin nhắn, chủ dự án gửi yêu cầu 15 mục về giao diện (nguyên văn trên board,
+  `owner_decisions` 2026-10-20) và câu trả lời cho D-1..D-15.
+  - Các mục giao diện gồm: chức năng export/import settings; trang Timesheet và Review trình bày
+    như một tờ giấy; công tắc kiểu tròn; góc của panel; quy tắc nổi panel theo nội dung; chỉnh
+    combobox và checkbox; đổi tên thành "Show worked hours"; sửa phiên đang chạy của hôm nay; và
+    các thay đổi trong hộp thoại phiên giờ.
+  - Các câu trả lời cần sửa code: D-5 a, D-6 a, D-9 b (chức năng đổi mật khẩu), D-15 b (hiện lại
+    số đếm trong xem trước ngày nghỉ).
+  - Chỉ cần cập nhật tài liệu: D-1 a, D-7 a, D-8 a, D-11 a, D-12 a, D-13 a, D-14 b. Giữ mặc định:
+    D-2..D-4 a.
+  - D-10 như đã viết mâu thuẫn với quy tắc gốc F-3 (cần bằng chứng, chỉ sửa bằng bút toán có lý do)
+    và với D-5 a. Đã hỏi lại thành câu WP5-OWN-Q1, khuyến nghị: bắt đầu từ 0, mỗi lần đổi là một
+    bút toán sửa kèm lý do ngắn, không cần tài liệu làm bằng chứng, có giữ lịch sử. Tạm giả định là
+    không import lịch sử.
+- Coordinator đồng ý đổi tên thành "Show worked hours": công tắc này thêm đúng hai dòng giờ làm việc
+  (docs/04 dòng 41).
+- Mission được mở lại (`running`, phase `ux4-plan`). Việc chuyển board sang `software_ready` sau
+  vòng 3 và kết quả của ACCEPT vẫn chưa được commit, sẽ đi kèm lần commit kế tiếp.
+- Đang chạy: WP5-UX4-PLAN (planner, opus, override size_risk). Bước này chỉ đọc; nó viết kế hoạch,
+  cập nhật mockup, chia các phần việc và đưa ra tối đa 8 câu hỏi cho chủ dự án.
+- WP5-UX4-PLAN xong.
+  - 15 mục, kèm số đo: khoảng cách dưới tiêu đề 12px; checkbox WFH lệch xuống 7.6px; ô giờ của dòng
+    nghỉ thêm tay rộng 265.6px so với 192.5px; thông báo lỗi khi lưu nằm ngoài vùng nhìn thấy.
+  - Việc sửa phiên đang chạy chỉ bị chặn ở client; server đã cho phép sẵn.
+  - Thiết kế export/import settings: một file cài đặt cá nhân cộng một file lịch công ty, chỉ làm ở
+    client.
+  - Phần việc server T04: route đổi mật khẩu (D-9 b), D-5 a, D-6 a, D-10, D-15.
+  - Chia thành các phần T01..T06; khoảng 18-20 lần giao việc.
+  - Mockup và 11 ảnh minh họa nằm trong `handoff/delivery/design/WP5-UX4/`.
+- Có một commit chỉ gồm handoff, 18c8fd9, không do committer của mission tạo; nhiều khả năng do chủ
+  dự án (đã ghi trong runtime observations). git.last_commit đã đặt theo commit này.
+- Đang chờ chủ dự án trả lời F-1..F-5 (`open_owner_question_ux4` trên board):
+  - F-1 số dư OT đầu kỳ (thay cho WP5-OWN-Q1);
+  - F-2 D-15 b mâu thuẫn với quy tắc quyền riêng tư;
+  - F-3 phạm vi export/import;
+  - F-4 cách import hoạt động;
+  - F-5 duyệt mockup.
+- Mission đang ở `blocked` chờ các câu trả lời này. next_task_id là WP5-UX4-T01, đang chờ F-5.
+- Chủ dự án đã trả lời (nguyên văn trên board):
+  - F-1 i: pilot không import lịch sử; bản production vẫn giữ chức năng import.
+  - F-2 b: hiện số đếm chính xác trong xem trước ngày nghỉ, kèm một ngoại lệ quyền riêng tư được ghi
+    rõ và một sự kiện audit.
+  - F-3 a và F-4 a.
+  - F-5 duyệt kèm thay đổi:
+    - khoảng cách dưới tiêu đề là 32px;
+    - thanh công cụ, các tuần và phần cuối giữ nguyên kiểu dáng hiện tại, chỉ được đặt chung trong
+      một tờ giấy; phần chữ ký và ngày giữ hai hàng;
+    - kiểu dáng của tờ giấy được tự do thiết kế;
+    - các link Today và Now canh phải;
+    - dòng tiêu đề tuần và cột đầu tiên đậm màu hơn một chút.
+  - Commit 18c8fd9 do chủ dự án tạo.
+- Quyết định của coordinator: làm các phần theo thứ tự T04 (server), T01, T02, T03, T05, T06.
+  - T04 còn thực thi quy tắc hiện có F-Q5 bằng một chặn ở server cho thao tác check in/out qua
+    chia sẻ, và viết lại các quy tắc gốc F-3 và ngoại lệ quyền riêng tư trong docs/03 và docs/10
+    (EN và VI).
+  - Hộp thông báo lỗi cũng được dùng lại trong hộp thoại Check out.
+- Đang chạy: WP5-UX4-T04 (worker-high, opus, override size_risk). Mission ở `running`, phase
+  `ux4-slices`.
+- WP5-UX4-T04 bàn giao lần đầu. Đã xong các mục 1-7:
+  - route đổi mật khẩu và thẻ trên trang Profile;
+  - D-5 a, F-1 i và D-6 a;
+  - số đếm F-2 b kèm sự kiện audit;
+  - chặn check in/out qua chia sẻ, chặn luôn việc mở lại một phiên đã kết thúc qua chia sẻ;
+  - docs/03 và docs/10.
+- Kết quả: unit 2152 đạt / 1 lỗi; e2e đầy đủ không có lỗi thật (một lỗi buffer, chạy lại thì đạt);
+  các đột biến đều bị bắt.
+- Lỗi duy nhất là danh sách route trong `tests/integration/ot-api.test.ts`, file không thuộc phạm
+  vi của T04. Còn hai chỗ sót nằm ngoài phạm vi: `importModel.ts` (quy tắc số dư đầu kỳ cũ) và
+  `AdminScreen.tsx` (câu về quyền riêng tư).
+- Addendum 1 mở rộng phạm vi cho đúng ba file này. Đang chạy: T04 Addendum 1, cùng worker.
+- WP5-UX4-T04 xong sau Addendum 1.
+  - Đã cập nhật test danh sách route; quy tắc số dư đầu kỳ nay nằm trong `importModel.ts`; phần giới
+    thiệu trang Administration đã ghi ngoại lệ F-2 b.
+  - npm test 2155 đạt / 0 lỗi; năm spec liên quan 29 + 29 đạt; verify 0.
+  - Digest 6e9e3001 (835 file); 33 đường dẫn thay đổi.
+- Đang chạy: WP5-UX4-T04-FREEZE (committer, chạy một mình).
+
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 
 - Điểm xuất phát: WP5 đã nghiệm thu lại trên 90b98ef / 57e2974c (WP5-UX-AUDIT-AB9 PASS);

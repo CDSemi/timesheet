@@ -302,12 +302,15 @@ test('the opening balance: validation, confirmation, a repeat that changes nothi
   const form = panel.getByRole('form', { name: 'Record the opening balance' });
   const review = form.getByRole('button', { name: 'Review before posting' });
 
-  // Nothing is complete yet: each missing field is named and nothing is posted.
+  // Nothing is complete yet: each missing field is named and nothing is posted. The as-of date starts at today in the
+  // saved reporting zone and the evidence is optional (F-1 (i)); a cleared as-of date is named too.
+  await expect(form.getByLabel('As-of date')).toHaveValue(person.todayLocal);
+  await form.getByLabel('As-of date').fill('');
   await review.click();
   await expect(form).toContainText('Enter at least 1 minute');
   await expect(form).toContainText('Enter the as-of date');
   await expect(form).toContainText('A reason is required.');
-  await expect(form).toContainText('An evidence reference is required.');
+  await expect(form).not.toContainText('An evidence reference is required.');
   await form.getByLabel('Hours').fill('0');
   await form.getByLabel('Minutes (0 to 59)').fill('75');
   await review.click();
@@ -390,6 +393,91 @@ test('the opening balance: validation, confirmation, a repeat that changes nothi
 
   // Another person has no opening balance of their own to see.
   expect((await other.api.call<{ opening_balance: unknown }>('GET', '/api/ot/opening-balance')).opening_balance).toBeNull();
+});
+
+test('the opening balance without evidence, as of today, and a correction back to 0 (F-1 (i), D-5 a)', async ({ page, builtServer, adminSeed, signInPageAs }, testInfo) => {
+  const person = await freshPerson(builtServer, adminSeed);
+  await signInPageAs(person.account, '#/import');
+  const panel = page.getByRole('region', { name: 'Opening OT balance' });
+  await expect(panel).toHaveAttribute('data-opening-balance', 'none');
+  await expect(panel).toContainText('It is 0 until you enter it yourself');
+  const form = panel.getByRole('form', { name: 'Record the opening balance' });
+
+  // A first value without evidence and with the default as-of date (today in the saved reporting zone).
+  await expect(form.getByLabel('As-of date')).toHaveValue(person.todayLocal);
+  await form.getByLabel('Hours').fill('3');
+  await form.getByLabel('Reason', { exact: true }).fill('Synthetic balance carried over without a document');
+  await form.getByRole('button', { name: 'Review before posting' }).click();
+  await expect(panel.locator('[data-confirm-value]')).toHaveText('+3h 00m');
+  await expect(panel.locator('[data-confirm-evidence]')).toHaveText('not provided');
+  await panel.getByRole('button', { name: 'Confirm and post' }).click();
+  await expect(panel.locator('[data-opening-notice]')).toContainText('Recorded in your OT ledger');
+  await expect(panel.locator('[data-opening-current]')).toHaveAttribute('data-opening-current', '180');
+  await expect(panel.locator('[data-opening-evidence]')).toHaveText('not provided');
+  const opening = await person.api.call<{ opening_balance: { as_of_date: string; evidence_ref: string } }>('GET', '/api/ot/opening-balance');
+  expect(opening.opening_balance).toMatchObject({ as_of_date: person.todayLocal, evidence_ref: 'not provided' });
+
+  // A correction back to 0, again without evidence: one correction of minus the current value.
+  await panel.getByRole('button', { name: 'Correct the opening balance' }).click();
+  const correction = panel.getByRole('form', { name: 'Correct the opening balance' });
+  await expect(correction).toContainText('Enter 0 hours and 0 minutes to set the opening balance back to zero.');
+  await correction.getByLabel('Hours').fill('0');
+  await correction.getByLabel('Minutes (0 to 59)').fill('0');
+  await correction.getByLabel('Reason for the correction').fill('Synthetic: nothing was carried over after all');
+  await correction.getByRole('button', { name: 'Review before posting' }).click();
+  await expect(panel.locator('[data-confirm-change]')).toHaveText('+3h 00m to 0m');
+  await expect(panel.locator('[data-confirm-result]')).toHaveAttribute('data-confirm-result', '0');
+  await expect(panel.locator('[data-confirm-evidence]')).toHaveText('none');
+  await page.screenshot({ path: screenshotPath(`opening-balance-zero-${testInfo.project.name}-synthetic.png`), fullPage: true });
+  await panel.getByRole('button', { name: 'Confirm correction' }).click();
+  await expect(panel.locator('[data-opening-current]')).toHaveAttribute('data-opening-current', '0');
+  await expect(panel.locator('[data-opening-correction]')).toHaveCount(1);
+  await expect(panel.locator('[data-opening-correction]')).toContainText('Evidence: none');
+  const ledger = await person.api.call<{ entries: Array<{ entry_type: string; delta_minutes: number }> }>('GET', '/api/ot/ledger');
+  expect(ledger.entries.map((entry) => [entry.entry_type, entry.delta_minutes])).toEqual([
+    ['opening_balance', 180],
+    ['correction', -180],
+  ]);
+  expect((await person.api.call<{ posted_minutes: number }>('GET', '/api/ot/summary')).posted_minutes).toBe(0);
+});
+
+test('a 21st open preview is refused in words, nothing is stored, and the same file again still opens (D-6 a)', async ({ page, builtServer, adminSeed, signInPageAs }) => {
+  const person = await freshPerson(builtServer, adminSeed);
+  const payrollDate = layoutFor(person).payrollDate;
+  const variant = (index: number) => buildSyntheticWorkbook({ periods: [{ payrollDate, employee: `Synthetic Employee ${index}` }] });
+  const login = await fetch(`${builtServer.origin}/api/auth/login`, {
+    method: 'POST',
+    headers: { origin: builtServer.origin, 'content-type': 'application/json' },
+    body: JSON.stringify({ email: person.account.email, password: person.account.password }),
+  });
+  expect(login.status, 'login').toBe(200);
+  const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  for (let index = 0; index < 20; index += 1) {
+    const uploaded = await fetch(`${builtServer.origin}/api/imports`, {
+      method: 'POST',
+      headers: { origin: builtServer.origin, cookie, 'content-type': XLSX },
+      body: Buffer.from(variant(index)),
+    });
+    expect(uploaded.status, `preview ${index}`).toBe(201);
+  }
+
+  await signInPageAs(person.account, '#/import');
+  await expect(page.getByRole('heading', { name: 'Import and opening balance' })).toBeVisible();
+  await upload(page, variant(20));
+  await page.getByRole('button', { name: 'Upload and preview' }).click();
+  const refusal = page.locator('[data-error="upload"]');
+  await expect(refusal).toHaveText(
+    'You already have 20 open previews. Commit or finish one of them first (under Previous imports): a preview is cleared only by committing it, and every day may be skipped. Nothing was stored.',
+  );
+  await expect(refusal).toHaveAttribute('role', 'alert');
+  const imports = await person.api.call<{ imports: Array<{ state: string }> }>('GET', '/api/imports');
+  expect(imports.imports).toHaveLength(20);
+
+  // The same bytes as a stored preview are not a new preview: they open it again.
+  await upload(page, variant(0));
+  await page.getByRole('button', { name: 'Upload and preview' }).click();
+  await expect(page.locator('[data-import-notice="existing_preview"]')).toBeVisible();
+  await expect(refusal).toHaveCount(0);
 });
 
 test('the Import entry is for the signed-in person and is not part of the administrator views', async ({ page, builtServer, signInPageAs }) => {

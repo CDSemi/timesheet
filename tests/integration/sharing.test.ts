@@ -436,6 +436,59 @@ describe('access through /api/shared (AC-16)', () => {
     expect(deleted.status, JSON.stringify(deleted.body)).toBe(200);
   });
 
+  it('F-Q5: an edit grantee cannot check in or out by another route (409 shared_clock_action); the owner and ended-session edits are unchanged', async () => {
+    await granted(items('edit'));
+    const today = '2026-09-29';
+    const open = (from: string) => ({ ...sessionBody(today, from), end: null, breaks_confirmed: false });
+
+    // A new open (running) session through a share is a check in: refused, nothing written.
+    let before = personalState();
+    const checkIn = await t.request('POST', shared(`/days/${today}/sessions`), { cookie: grantee.cookie, body: open('08:00') });
+    expect(checkIn.status, JSON.stringify(checkIn.body)).toBe(409);
+    expect(checkIn.body.error.code).toBe('shared_clock_action');
+    expect(personalState()).toEqual(before);
+
+    // The owner may still start a running session by the same route.
+    const running = await t.request('POST', `/api/days/${today}/sessions`, { cookie: owner, body: open('08:00') });
+    expect(running.status, JSON.stringify(running.body)).toBe(201);
+    const runningId = running.body.session.id as string;
+
+    // An end on the running session through a share is a check out: refused, nothing written.
+    before = personalState();
+    const checkOut = await t.request('PUT', shared(`/sessions/${runningId}`), {
+      cookie: grantee.cookie,
+      body: { ...sessionBody(today, '08:00', '12:00'), expected_version: 1 },
+    });
+    expect(checkOut.status, JSON.stringify(checkOut.body)).toBe(409);
+    expect(checkOut.body.error.code).toBe('shared_clock_action');
+    expect(personalState()).toEqual(before);
+
+    // Correcting the start of the running session keeps it running: allowed through the share.
+    const startFix = await t.request('PUT', shared(`/sessions/${runningId}`), { cookie: grantee.cookie, body: { ...open('07:45'), expected_version: 1 } });
+    expect(startFix.status, JSON.stringify(startFix.body)).toBe(200);
+    expect(startFix.body.session).toMatchObject({ end_utc: null, version: 2 });
+
+    // The owner ends it as before.
+    const ended = await t.request('PUT', `/api/sessions/${runningId}`, { cookie: owner, body: { ...sessionBody(today, '07:45', '12:00'), expected_version: 2 } });
+    expect(ended.status, JSON.stringify(ended.body)).toBe(200);
+    expect(ended.body.session.end_utc).not.toBeNull();
+
+    // A shared edit of the ended session that keeps it ended is allowed; reopening it is a check in and is refused.
+    const edited = await t.request('PUT', shared(`/sessions/${runningId}`), {
+      cookie: grantee.cookie,
+      body: { ...sessionBody(today, '07:30', '12:00'), expected_version: 3 },
+    });
+    expect(edited.status, JSON.stringify(edited.body)).toBe(200);
+    before = personalState();
+    const reopen = await t.request('PUT', shared(`/sessions/${runningId}`), { cookie: grantee.cookie, body: { ...open('07:30'), expected_version: 4 } });
+    expect(reopen.status, JSON.stringify(reopen.body)).toBe(409);
+    expect(reopen.body.error.code).toBe('shared_clock_action');
+    expect(personalState()).toEqual(before);
+    // A closed new session through the share stays allowed.
+    const closed = await t.request('POST', shared('/days/2026-09-28/sessions'), { cookie: grantee.cookie, body: sessionBody('2026-09-28') });
+    expect(closed.status, JSON.stringify(closed.body)).toBe(201);
+  });
+
   it('never offers Clock in/out, sign-off, signatures, review, settings, leave, evidence, history or policies to a full grantee', async () => {
     postCredit(
       { db: t.db, clock: t.clock },

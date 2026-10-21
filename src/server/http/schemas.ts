@@ -32,6 +32,15 @@ export const loginBody = z.strictObject({
 });
 
 /**
+ * The signed-in user's own password change (D-9 b). Both passwords are checked by the route for exact codes
+ * (`current_password_incorrect`, `weak_password`, `password_unchanged`); neither is ever echoed or logged.
+ */
+export const passwordChangeBody = z.strictObject({
+  current_password: z.string().max(256),
+  new_password: z.string().max(256),
+});
+
+/**
  * The first administrator's setup (WP4-T03): the setup token typed from the operator's terminal, and the account.
  * The role is not an input and neither is the calendar: both come from the bootstrap itself.
  */
@@ -201,24 +210,28 @@ export const otLeaveReverseBody = z.strictObject({
 export type OtLeaveReverseBody = z.infer<typeof otLeaveReverseBody>;
 
 /*
- * The explicit opening OT balance (F-3, WP4-T10). The owner is the session user; the minutes are signed and
- * non-zero, and the service checks the exact codes (`invalid_minutes`, `reason_required`, `evidence_required`).
+ * The explicit opening OT balance (F-3 as revised by F-1 (i), WP5-UX4). The owner is the session user; the first
+ * value is signed and non-zero, and the service checks the exact codes (`invalid_minutes`, `reason_required`). The
+ * evidence reference is optional: blank or absent is stored as "not provided" on the opening entry.
  * `expected_version` is the opening balance version the owner saw: 0 when none was recorded.
  */
 export const openingBalanceBody = z.strictObject({
   minutes: z.number(),
   as_of_date: z.string().max(10),
   reason: z.string().max(2000),
-  evidence_ref: z.string().max(2000),
+  evidence_ref: z.string().max(2000).optional(),
   expected_version: z.number().int().min(0),
 });
 export type OpeningBalanceBody = z.infer<typeof openingBalanceBody>;
 
-/** A reasoned correction of the opening balance to `minutes`, with its own evidence, against the version seen. */
+/**
+ * A reasoned correction of the opening balance to `minutes` (0 allowed, D-5 a), with optional evidence (stored as
+ * null when blank or absent), against the version seen.
+ */
 export const openingBalanceCorrectionBody = z.strictObject({
   minutes: z.number(),
   reason: z.string().max(2000),
-  evidence_ref: z.string().max(2000),
+  evidence_ref: z.string().max(2000).optional(),
   expected_version: z.number().int().positive(),
 });
 export type OpeningBalanceCorrectionBody = z.infer<typeof openingBalanceCorrectionBody>;

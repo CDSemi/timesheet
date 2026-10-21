@@ -1,0 +1,62 @@
+==== verify.txt
+
+> timesheet@0.1.0 verify
+> npm run typecheck && npm run lint && npm test && npm run build && npm run smoke
+
+
+> timesheet@0.1.0 typecheck
+> tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json && tsc -p tsconfig.test.json
+
+
+> timesheet@0.1.0 lint
+> eslint .
+
+
+> timesheet@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/integration/ot-api.test.ts (25 tests | 1 failed) 26847ms
+   ❯ route inventory: no route posts a credit or debit (3)
+     × has no state-changing route outside the reviewed allowlist and none that names a posting 988ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > has no state-changing route outside the reviewed allowlist and none that names a posting
+AssertionError: expected [ 'DELETE /api/sessions/:id', …(47) ] to deeply equal [ 'DELETE /api/sessions/:id', …(46) ]
+
+- Expected
++ Received
+
+@@ -10,10 +10,11 @@
+    "POST /api/admin/users/:id/deactivate",
+    "POST /api/admin/users/:id/reactivate",
+    "POST /api/auth/bootstrap",
+    "POST /api/auth/login",
+    "POST /api/auth/logout",
++   "POST /api/auth/password",
+    "POST /api/clock/in",
+    "POST /api/clock/out",
+    "POST /api/days/:workDate/sessions",
+    "POST /api/days/batch",
+    "POST /api/deliveries/:id/decision",
+
+ ❯ tests/integration/ot-api.test.ts:503:22
+    501|   it('has no state-changing route outside the reviewed allowlist and n…
+    502|     const mutating = appRoutes().filter((route) => !route.startsWith('…
+    503|     expect(mutating).toEqual(
+       |                      ^
+    504|       [
+    505|         'DELETE /api/sessions/:id',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 94 passed (95)
+      Tests  1 failed | 2152 passed (2153)
+   Start at  18:43:46
+   Duration  60.45s (tests 90%, import 8%, transform 2%)
+
+exit 1

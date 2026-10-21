@@ -30,7 +30,7 @@ import { saveSignature } from '../../src/server/services/signatures.ts';
 import { saveSubmissionSettings } from '../../src/server/services/submissionSettings.ts';
 import { createSession } from '../../src/server/services/timesheetCommands.ts';
 import { createUser } from '../../src/server/services/users.ts';
-import { commitImport, previewImport, XLSX_MEDIA_TYPE } from '../../src/server/services/workbookImport.ts';
+import { commitImport, MAX_OPEN_PREVIEWS, previewImport, XLSX_MEDIA_TYPE } from '../../src/server/services/workbookImport.ts';
 import { makePng } from '../support/pdfText.ts';
 import {
   buildSyntheticWorkbook,
@@ -303,6 +303,65 @@ describe('preview', () => {
     expect(count('SELECT count(*) FROM imports')).toBe(1);
     expect(storedFiles()).toHaveLength(1);
     expect(count("SELECT count(*) FROM audit_events WHERE operation = 'import.preview'")).toBe(1);
+  });
+
+  it('D-6 a: at most 20 open previews per person; the 21st is refused with nothing stored, a re-upload still answers 200', async () => {
+    const variant = (index: number) => workbook([{ payrollDate: PB, employee: `Synthetic Employee ${index}` }]);
+    const first = await upload(variant(0));
+    expect(first.status, JSON.stringify(first.body)).toBe(201);
+    for (let index = 1; index < MAX_OPEN_PREVIEWS; index += 1) {
+      const response = await upload(variant(index));
+      expect(response.status, `${index}: ${JSON.stringify(response.body)}`).toBe(201);
+    }
+    expect(MAX_OPEN_PREVIEWS).toBe(20);
+    expect(count("SELECT count(*) FROM imports WHERE state = 'preview'")).toBe(20);
+    const before = { imports: count('SELECT count(*) FROM imports'), files: storedFiles().length, audits: count('SELECT count(*) FROM audit_events') };
+    expect(before.files).toBe(20);
+
+    const refused = await upload(variant(20));
+    expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+    expect(refused.body.error).toMatchObject({ code: 'import_preview_limit', message: 'Commit or finish one of your 20 open previews first', details: { limit: 20 } });
+    expect({ imports: count('SELECT count(*) FROM imports'), files: storedFiles().length, audits: count('SELECT count(*) FROM audit_events') }).toEqual(before);
+
+    // A re-upload of a stored preview is the idempotent read, not a new preview: still 200 at the limit.
+    const again = await upload(variant(0));
+    expect(again.status).toBe(200);
+    expect(again.body).toMatchObject({ created: false, import: { id: first.body.import.id, state: 'preview' } });
+
+    // Another person is unaffected by this person's previews.
+    const other = await account('other-importer@example.invalid', 'Synthetic Other Importer');
+    const theirs = await upload(variant(20), other.cookie);
+    expect(theirs.status, JSON.stringify(theirs.body)).toBe(201);
+
+    // Committing one preview (every day may be skipped) frees a place.
+    const committed = await commit(first.body.import.id, []);
+    expect(committed.status, JSON.stringify(committed.body)).toBe(200);
+    const freed = await upload(variant(21));
+    expect(freed.status, JSON.stringify(freed.body)).toBe(201);
+    expect(count("SELECT count(*) FROM imports WHERE state = 'preview' AND user_id = ?", t.userIds.employee)).toBe(20);
+  });
+
+  it('D-6 a: the limit is also checked inside the write transaction, which removes the stored file again', async () => {
+    for (let index = 0; index < MAX_OPEN_PREVIEWS - 1; index += 1) {
+      expect((await upload(workbook([{ payrollDate: PB, employee: `Synthetic Employee ${index}` }]))).status).toBe(201);
+    }
+    // A parallel upload lands between this upload's first check and its transaction (simulated by the file write).
+    const user = { id: t.userIds.employee, email: t.emails.employee, displayName: 'Example Employee', role: 'employee', calendarId: t.calendarId, sessionId: 'synthetic' } as SessionUser;
+    const racing = buildSyntheticWorkbook({ periods: [{ payrollDate: PB, employee: 'Synthetic Racer' }] });
+    const store = {
+      put(bytes: Uint8Array) {
+        previewImport({ db: t.db, clock: t.clock, files, user }, racing);
+        return files.put(bytes);
+      },
+      discard: (key: string) => files.discard(key),
+    } as unknown as FileStore;
+    const before = storedFiles().length;
+    expect(() => previewImport({ db: t.db, clock: t.clock, files: store, user }, workbook([{ payrollDate: PB, employee: 'Synthetic Late' }]))).toThrow(
+      expect.objectContaining({ status: 409, code: 'import_preview_limit' }),
+    );
+    expect(count("SELECT count(*) FROM imports WHERE state = 'preview'")).toBe(MAX_OPEN_PREVIEWS);
+    // Only the racer's file was added; the refused upload's file was removed again.
+    expect(storedFiles().length).toBe(before + 1);
   });
 
   it('never serves the stored source: no source route, and nothing under the static root', async () => {

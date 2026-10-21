@@ -7,6 +7,11 @@ interface Plan {
   preview: HolidayImportPreview;
 }
 
+/** "1 default entry", "2 default entries": a count with its noun. */
+function countText(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function RuleList({ title, rules, name }: { title: string; rules: Array<{ date: string; name: string; kind: string }>; name: string }) {
   if (rules.length === 0) return null;
   return (
@@ -27,7 +32,10 @@ function RuleList({ title, rules, name }: { title: string; rules: Array<{ date: 
   );
 }
 
-/** What the server found in the CSV and what the import would change; everything here is configuration. */
+/**
+ * What the server found in the CSV and what the import would change: configuration, plus exact per-date counts of the
+ * employees' entries and no identity (owner decision F-2 (b); the server audits each preview).
+ */
 function PreviewResult({
   preview,
   effectiveFrom,
@@ -62,7 +70,9 @@ function PreviewResult({
       )}
       {preview.finalized_conflicts.length > 0 && (
         <p className="error" role="alert" data-preview-problem="finalized_period_affected">
-          The change would alter days of a finalized timesheet: {preview.finalized_conflicts.map((item) => item.date).join(', ')}. Choose a later effective date.
+          The change would alter days of a finalized timesheet:{' '}
+          {preview.finalized_conflicts.map((item) => `${item.date} (${countText(item.finalized_timesheets, 'finalized timesheet')})`).join(', ')}. Choose a
+          later effective date.
         </p>
       )}
       {preview.removal_problems.length > 0 && (
@@ -118,13 +128,26 @@ function PreviewResult({
       {preview.affected_days.length > 0 && (
         <div data-diff="affected">
           <h4>Days whose default category changes ({preview.affected_days.length})</h4>
-          <p className="hint muted">Explicit categories and manual dates are preserved; only default categories follow the calendar.</p>
+          <p className="hint muted">
+            Explicit categories and manual dates are preserved; only default categories follow the calendar. The counts are employees' entries in open
+            timesheets; each preview is recorded in the audit log.
+          </p>
           <ul className="plain">
             {preview.affected_days.map((day) => (
-              <li key={day.date} className="ot-line" data-affected-date={day.date}>
+              <li
+                key={day.date}
+                className="ot-line"
+                data-affected-date={day.date}
+                data-default-entries={day.default_labelled_entries}
+                data-explicit-entries={day.explicit_overrides_preserved}
+              >
                 <span className="mono">{day.date}</span>
                 <span>
                   {day.label_before ?? 'none'} to {day.label_after ?? 'none'}
+                </span>
+                <span className="muted">
+                  {countText(day.default_labelled_entries, 'default entry', 'default entries')} follow,{' '}
+                  {countText(day.explicit_overrides_preserved, 'explicit category', 'explicit categories')} kept
                 </span>
               </li>
             ))}

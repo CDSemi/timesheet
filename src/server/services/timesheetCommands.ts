@@ -441,9 +441,27 @@ export function upsertDayEntry(ctx: CommandContext, workDateInput: string, input
   return getDayView(ctx.db, ctx.clock, ctx.user, workDate);
 }
 
+/**
+ * F-Q5: a grantee never checks in or out for the owner, by any route. Through a share, a session
+ * edit may not start a running session (an open new one, or an ended one reopened) or end a
+ * running one: 409 `shared_clock_action`. The owner's own edits are unchanged, and so are shared
+ * edits that keep an ended session ended or a running session running.
+ */
+function assertNoSharedClockAction(ctx: CommandContext, runningBefore: boolean, runningAfter: boolean): void {
+  if (ctx.viaShareId === undefined || runningBefore === runningAfter) return;
+  throw new ApiError(
+    409,
+    'shared_clock_action',
+    runningAfter
+      ? 'Only the owner can start a running session (Check in); enter an end time instead'
+      : 'Only the owner can end a running session (Check out)',
+  );
+}
+
 export function createSession(ctx: CommandContext, workDateInput: string, input: SessionBody) {
   const workDate = assertCivilDate(workDateInput, 'work_date');
   const inputZone = assertTimeZone(input.input_zone, 'input_zone');
+  assertNoSharedClockAction(ctx, false, input.end === null);
   const sessionId = writeTransaction(ctx.db, () => {
     const scope = loadScope(ctx.db, ctx.user);
     const edit = prepareEdit(ctx, scope, workDate, input.reason);
@@ -481,6 +499,7 @@ export function updateSession(ctx: CommandContext, sessionId: string, input: Ses
   const inputZone = assertTimeZone(input.input_zone, 'input_zone');
   const workDate = writeTransaction(ctx.db, () => {
     const before = requireSession(ctx, sessionId);
+    assertNoSharedClockAction(ctx, before.end_utc === null, input.end === null);
     if (before.version !== input.expected_version) throw staleVersion();
     const scope = loadScope(ctx.db, ctx.user);
     const edit = prepareEdit(ctx, scope, before.work_date, input.reason);

@@ -87,7 +87,8 @@ export function AdminScreen({ user }: { user: User }) {
       <h1 tabIndex={-1}>Administration</h1>
       <p className="hint muted">
         Accounts, company calendar and operations status. This screen never shows anyone's timesheet details: entries, sessions, OT, leave, notes,
-        history, exports, templates or message content.
+        history, exports, templates or message content. One exception: the holiday import preview shows, per changed date, how many employees'
+        entries it affects, with no names, and every preview is recorded in the audit log.
       </p>
       {warnings.map((warning) => (
         <section key={warning.code} className="warn-box stack" role="status" aria-label="Calendar warning" data-warning={warning.code}>

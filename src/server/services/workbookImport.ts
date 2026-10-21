@@ -487,9 +487,28 @@ function serializeReport(report: Omit<ImportReport, 'plan'> | ImportReport, maxB
 }
 
 /**
+ * At most this many uncommitted previews per person (owner decision D-6 a). Previews are immutable history and cannot
+ * be deleted; committing one (every day may be skipped) is the only way to free a place.
+ */
+export const MAX_OPEN_PREVIEWS = 20;
+
+/** 409 `import_preview_limit` when the owner already holds {@link MAX_OPEN_PREVIEWS} uncommitted previews. */
+function assertPreviewQuota(db: Db, userId: string): void {
+  const open = db.prepare("SELECT count(*) FROM imports WHERE user_id = ? AND state = 'preview'").pluck().get(userId) as number;
+  if (open >= MAX_OPEN_PREVIEWS) {
+    throw new ApiError(409, 'import_preview_limit', `Commit or finish one of your ${MAX_OPEN_PREVIEWS} open previews first`, {
+      limit: MAX_OPEN_PREVIEWS,
+    });
+  }
+}
+
+/**
  * Previews an upload of the owner. The same bytes under the same mapping version return the existing batch
  * (`created: false`) and store nothing. A refused package stores nothing and is 422 `workbook_rejected`, and so is a
  * report over `MAX_REPORT_BYTES` or any other failure to read, map or serialize the untrusted package (WP4-FIXB2).
+ * A new upload while the owner holds {@link MAX_OPEN_PREVIEWS} previews is 409 `import_preview_limit` and stores
+ * nothing: checked after the idempotency lookup and before the file is written, and again inside the write
+ * transaction (which removes the file again) so two parallel uploads cannot pass the limit together.
  * `limits` lowers the reader's limits or the report cap, for tests.
  */
 export function previewImport(ctx: ImportContext, bytes: Uint8Array, limits: PreviewLimits = {}): { created: boolean; batch: ImportBatchJson } {
@@ -499,6 +518,7 @@ export function previewImport(ctx: ImportContext, bytes: Uint8Array, limits: Pre
   const sha256 = sha256Hex(bytes);
   const known = findByKey(db, user.id, sha256, MAPPING_VERSION);
   if (known !== undefined) return { created: false, batch: batchJson(db, clock, user, known) };
+  assertPreviewQuota(db, user.id);
 
   let preview: WorkbookPreview;
   let report: Omit<ImportReport, 'plan'>;
@@ -519,6 +539,7 @@ export function previewImport(ctx: ImportContext, bytes: Uint8Array, limits: Pre
     outcome = writeTransaction(db, () => {
       const raced = findByKey(db, user.id, sha256, MAPPING_VERSION);
       if (raced !== undefined) return { created: false, row: raced };
+      assertPreviewQuota(db, user.id);
       const scope = loadScope(db, user);
       const plan = buildPlan(db, clock, scope, report.days);
       const reportJson = serializeReport({ ...report, plan }, maxReportBytes);

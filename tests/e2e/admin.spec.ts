@@ -372,6 +372,60 @@ test('holiday CSV: issue, boundary, stale hash, preview diff, commit and no-chan
   if (project === 'mobile') await expectNoHorizontalOverflow(page);
 });
 
+// Owner decision F-2 (b) (2026-10-20): the administrator's holiday preview shows exact per-date counts of the employees'
+// entries again (no names). A private server keeps the counts exact and the calendar of the shared worker untouched;
+// nothing is committed.
+test('holiday CSV preview shows exact per-date counts of the employees\' entries, without names (F-2 (b))', async ({ page, privateServer }, testInfo) => {
+  const server = privateServer;
+  const admin = await new SeedClient(server.origin).signIn(server.credentials.admin.email, server.credentials.admin.password);
+  const calendar = await admin.call<ApiCalendar>('GET', '/api/calendar');
+  const periods = await admin.call<ApiPeriods>('GET', '/api/periods/current');
+  const holidays = new Set(calendar.versions.at(-1)?.dates.map((item) => item.date) ?? []);
+  let date = periods.current.period_start;
+  while (holidays.has(date) && date < periods.today_local) date = addDays(date, 1);
+  expect(holidays.has(date), `${date} is not a calendar date yet`).toBe(false);
+  const year = Number(date.slice(0, 4));
+  const csv = `date,name,kind\n${date},Synthetic Count Day,holiday\n`;
+  const body = { calendar_id: calendar.id, year, effective_from: periods.current.period_start, csv, remove_dates: [] };
+  type Affected = { date: string; default_labelled_entries: number; explicit_overrides_preserved: number };
+  const affected = async () =>
+    (await admin.call<{ affected_days: Affected[] }>('POST', '/api/admin/calendar/import/preview', body)).affected_days.find((day) => day.date === date);
+  const before = await affected();
+  expect(before, 'the date changes its default category').toBeDefined();
+
+  // Two people label the date themselves: the explicit count rises by exactly two.
+  const names = ['Synthetic Count One', 'Synthetic Count Two'];
+  for (const displayName of names) {
+    const account = await createAccountByAdminApi(admin, { displayName });
+    const person = await new SeedClient(server.origin).signIn(account.email, account.password);
+    await person.call('PUT', `/api/days/${date}`, { category: 'Worked', leave_minutes: 0, wfh: false, notes: '' });
+  }
+  const after = await affected();
+  expect(after?.explicit_overrides_preserved).toBe((before?.explicit_overrides_preserved ?? 0) + 2);
+  expect(after?.default_labelled_entries).toBe(before?.default_labelled_entries);
+  const defaults = after?.default_labelled_entries ?? 0;
+  const explicit = after?.explicit_overrides_preserved ?? 0;
+
+  await page.goto(`${server.origin}/#/timesheet`);
+  await page.getByLabel('Email').fill(server.credentials.admin.email);
+  await page.getByLabel('Password').fill(server.credentials.admin.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await openAdmin(page);
+  const section = page.getByRole('form', { name: 'Holiday import' });
+  await section.getByLabel('Year of the dates').fill(String(year));
+  await section.getByLabel('Effective from').fill(periods.current.period_start);
+  await section.getByLabel('Paste the CSV rows').fill(csv);
+  await section.getByRole('button', { name: 'Preview import' }).click();
+  const row = section.locator(`[data-affected-date="${date}"]`);
+  await expect(row).toHaveAttribute('data-default-entries', String(defaults));
+  await expect(row).toHaveAttribute('data-explicit-entries', String(explicit));
+  await expect(row).toContainText(`${defaults} default ${defaults === 1 ? 'entry' : 'entries'} follow, ${explicit} explicit categories kept`);
+  await expect(section.locator('[data-diff="affected"]')).toContainText('each preview is recorded in the audit log');
+  // Counts only: no name of the people counted.
+  for (const name of names) await expect(section).not.toContainText(name);
+  await page.screenshot({ path: screenshotPath(`holiday-counts-${testInfo.project.name}-synthetic.png`), fullPage: true });
+});
+
 test('payroll exception needs a reason and is recorded once', async ({ page, builtServer, adminSeed, signInPageAs }, testInfo) => {
   const project = testInfo.project.name;
   const calendar = await adminSeed.call<ApiCalendar>('GET', '/api/calendar');

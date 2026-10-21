@@ -3,8 +3,9 @@ import type { OpeningBalance } from '../api.ts';
 import {
   openingBalanceErrorMessage,
   type OpeningFormValues,
+  openingFormMinutes,
   openingFormProblems,
-  parseSignedMinutes,
+  type OpeningMode,
   resultingPosted,
   type SignChoice,
   signedMinutesText,
@@ -26,27 +27,31 @@ const SIGN_TEXT: Record<SignChoice, string> = {
 };
 
 /**
- * The explicit opening OT balance (F-3) or its reasoned correction: an explicit sign, hours and minutes, an as-of date
- * (first entry only), a reason and an evidence reference, then a confirmation step that shows the resulting posted
- * balance. `onSubmit` resolves to an error message, or null when it succeeded or handled the refusal itself.
+ * The explicit opening OT balance (F-3 as revised by F-1 (i)) or its reasoned correction: an explicit sign, hours and
+ * minutes, an as-of date (first entry only, today by default), a reason and an optional evidence reference, then a
+ * confirmation step that shows the resulting posted balance. A correction may set the value back to 0 (D-5 a).
+ * `onSubmit` resolves to an error message, or null when it succeeded or handled the refusal itself.
  */
 export function OpeningBalanceForm({
   mode,
   opening,
   postedMinutes,
+  todayLocal = null,
   onSubmit,
   onCancel,
 }: {
-  mode: 'post' | 'correct';
+  mode: OpeningMode;
   opening: OpeningBalance | null;
   postedMinutes: number;
+  /** Today in the saved reporting zone as the server reports it (never the device clock); the as-of default. */
+  todayLocal?: string | null;
   onSubmit: (submission: OpeningSubmission) => Promise<string | null>;
   onCancel?: () => void;
 }) {
   const correcting = mode === 'correct';
   const [values, setValues] = useState<OpeningFormValues>(() => ({
     ...(correcting && opening !== null ? splitSignedMinutes(opening.minutes) : { sign: 'credit' as const, hours: '', minutes: '' }),
-    asOfDate: '',
+    asOfDate: correcting ? '' : (todayLocal ?? ''),
     reason: '',
     evidence: '',
   }));
@@ -73,12 +78,13 @@ export function OpeningBalanceForm({
     setStep('edit');
   }
 
-  const parsed = parseSignedMinutes(values);
+  const parsed = openingFormMinutes(values, mode);
   const set = (change: Partial<OpeningFormValues>) => setValues((current) => ({ ...current, ...change }));
+  const evidenceText = values.evidence.trim();
 
   function review(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    const problems = openingFormProblems(values, { needsAsOfDate: !correcting });
+    const problems = openingFormProblems(values, { mode });
     setShown(problems);
     setError(null);
     if (Object.keys(problems).length === 0) setStep('confirm');
@@ -89,7 +95,7 @@ export function OpeningBalanceForm({
     setBusy(true);
     setError(null);
     try {
-      const message = await onSubmit({ minutes: parsed.minutes, asOfDate: values.asOfDate, reason: values.reason.trim(), evidence: values.evidence.trim() });
+      const message = await onSubmit({ minutes: parsed.minutes, asOfDate: values.asOfDate, reason: values.reason.trim(), evidence: evidenceText });
       if (message !== null) setError(message);
     } catch (caught) {
       setError(openingBalanceErrorMessage(caught));
@@ -146,7 +152,7 @@ export function OpeningBalanceForm({
           </div>
           <div>
             <dt>Evidence</dt>
-            <dd>{values.evidence.trim()}</dd>
+            <dd data-confirm-evidence>{evidenceText === '' ? (correcting ? 'none' : 'not provided') : evidenceText}</dd>
           </div>
         </dl>
         <p className="hint">
@@ -219,6 +225,7 @@ export function OpeningBalanceForm({
           </label>
         )}
       </div>
+      {correcting && <p className="hint muted">Enter 0 hours and 0 minutes to set the opening balance back to zero.</p>}
       {shown.minutes !== undefined && (
         <p className="error" id={ids.minutes}>
           {shown.minutes}
@@ -247,7 +254,7 @@ export function OpeningBalanceForm({
         </p>
       )}
       <label>
-        Evidence reference (text, for example a message, document or ticket)
+        Evidence reference (optional text, for example a message, document or ticket)
         <input
           value={values.evidence}
           maxLength={2000}

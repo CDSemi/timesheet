@@ -546,7 +546,8 @@ export interface OpeningBalanceInput {
   minutes: number;
   asOfDate: CivilDate;
   reason: string;
-  evidenceRef: string;
+  /** Optional (F-1 (i)): blank or absent is stored as {@link OPENING_EVIDENCE_NOT_PROVIDED}. */
+  evidenceRef?: string | null;
   /** The version the owner saw: 0 when there was none. */
   expectedVersion: number;
 }
@@ -554,12 +555,12 @@ export interface OpeningBalanceInput {
 export interface OpeningBalanceCorrectionInput {
   userId: string;
   actorUserId: string;
-  /** The corrected value: signed, non-zero whole minutes. */
+  /** The corrected value: signed whole minutes; 0 returns the opening balance to zero (D-5 a). */
   minutes: number;
   /** Why the value changes (required). */
   reason: string;
-  /** The evidence of the corrected value (required). */
-  evidenceRef: string;
+  /** The evidence of the corrected value (optional, F-1 (i)): blank or absent is stored as null. */
+  evidenceRef?: string | null;
   /** The opening balance version the correction was made against. */
   expectedVersion: number;
 }
@@ -572,9 +573,15 @@ export interface OpeningBalanceResult {
   balance: LedgerBalance;
 }
 
-function assertOpeningMinutes(value: unknown): asserts value is number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value === 0 || Math.abs(value) > MAX_OPENING_MINUTES) {
-    throw new ApiError(422, 'invalid_minutes', `minutes must be a signed, non-zero whole number of at most ${MAX_OPENING_MINUTES} minutes`);
+/**
+ * The first opening value is signed and non-zero (no entry already means 0); a correction may also target 0, which
+ * returns the opening balance to zero by posting minus the current value (owner decision D-5 a).
+ */
+function assertOpeningMinutes(value: unknown, options: { allowZero: boolean }): asserts value is number {
+  const zeroRefused = value === 0 && !options.allowZero;
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || zeroRefused || Math.abs(value) > MAX_OPENING_MINUTES) {
+    const kind = options.allowZero ? 'signed' : 'signed, non-zero';
+    throw new ApiError(422, 'invalid_minutes', `minutes must be a ${kind} whole number of at most ${MAX_OPENING_MINUTES} minutes`);
   }
 }
 
@@ -582,6 +589,17 @@ function requiredText(value: unknown, max: number, missingCode: string, invalidC
   const text = typeof value === 'string' ? value.trim() : '';
   if (text === '') throw new ApiError(422, missingCode, `${field} is required`);
   if (text.length > max) throw new ApiError(422, invalidCode, `${field} must be at most ${max} characters`);
+  return text;
+}
+
+/** The fixed evidence text of an opening entry recorded without evidence (F-1 (i)): the schema keeps it non-null. */
+export const OPENING_EVIDENCE_NOT_PROVIDED = 'not provided';
+
+/** Optional evidence (F-1 (i)): the trimmed text, or null when blank or absent; over-long text is still refused. */
+function optionalEvidence(value: unknown): string | null {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (text === '') return null;
+  if (text.length > MAX_EVIDENCE_LENGTH) throw new ApiError(422, 'invalid_evidence_ref', `evidence_ref must be at most ${MAX_EVIDENCE_LENGTH} characters`);
   return text;
 }
 
@@ -618,18 +636,19 @@ export function getOpeningBalance(db: Db, userId: string): OpeningBalance | null
 }
 
 /**
- * Records the owner's explicit opening balance (F-3): signed, non-zero minutes with an as-of
- * date, a reason and an evidence reference, entered by the owner (never inferred from a
- * workbook). One per user: a repeat with the same content returns the stored entry
- * (`duplicate`) and appends nothing; any other content is 409 `opening_balance_exists`, so a
- * change always goes through {@link correctOpeningBalance}.
+ * Records the owner's explicit opening balance (F-3 as revised by F-1 (i)): signed, non-zero
+ * minutes with an as-of date and a reason, entered by the owner (never inferred from a
+ * workbook); the evidence reference is optional and a blank one is stored as "not provided".
+ * Until it is recorded the opening balance is 0 with no entry. One per user: a repeat with the
+ * same content returns the stored entry (`duplicate`) and appends nothing; any other content is
+ * 409 `opening_balance_exists`, so a change always goes through {@link correctOpeningBalance}.
  */
 export function postOpeningBalance(ctx: LedgerContext, input: OpeningBalanceInput): OpeningBalanceResult {
   const actorUserId = requireActor(input.actorUserId);
-  assertOpeningMinutes(input.minutes);
+  assertOpeningMinutes(input.minutes, { allowZero: false });
   const asOfDate = assertCivilDate(input.asOfDate, 'asOfDate');
   const reason = requiredText(input.reason, MAX_REASON_LENGTH, 'reason_required', 'invalid_reason', 'reason');
-  const evidenceRef = requiredText(input.evidenceRef, MAX_EVIDENCE_LENGTH, 'evidence_required', 'invalid_evidence_ref', 'evidence_ref');
+  const evidenceRef = optionalEvidence(input.evidenceRef) ?? OPENING_EVIDENCE_NOT_PROVIDED;
   assertVersion(input.expectedVersion, 0);
   const posting = normalizePosting({ userId: input.userId, sourceKey: OPENING_SOURCE_KEY, actorUserId, origin: 'manual', reason });
   return writeTransaction(ctx.db, () => {
@@ -657,17 +676,18 @@ export function postOpeningBalance(ctx: LedgerContext, input: OpeningBalanceInpu
 
 /**
  * Changes the owner's opening balance to `minutes` with one `correction` entry of the
- * difference, linked to the original, with its own reason and evidence (F-3, R-06). The
- * correction names the version it was made against: a retry of the same correction returns
- * it (`duplicate`), a different one at an old version is 409 `stale_version`, and the
- * current value appends nothing (`unchanged`). A truthful correction may make the balance
- * negative; it is kept and flagged (LG-08).
+ * difference, linked to the original, with its own reason and optional evidence (F-3, F-1 (i),
+ * R-06). A target of 0 is allowed (D-5 a): the entry posts minus the current value, and a
+ * balance already at 0 appends nothing. The correction names the version it was made against:
+ * a retry of the same correction returns it (`duplicate`), a different one at an old version
+ * is 409 `stale_version`, and the current value appends nothing (`unchanged`). A truthful
+ * correction may make the balance negative; it is kept and flagged (LG-08).
  */
 export function correctOpeningBalance(ctx: LedgerContext, input: OpeningBalanceCorrectionInput): OpeningBalanceResult {
   const actorUserId = requireActor(input.actorUserId);
-  assertOpeningMinutes(input.minutes);
+  assertOpeningMinutes(input.minutes, { allowZero: true });
   const reason = requiredText(input.reason, MAX_REASON_LENGTH, 'reason_required', 'invalid_reason', 'reason');
-  const evidenceRef = requiredText(input.evidenceRef, MAX_EVIDENCE_LENGTH, 'evidence_required', 'invalid_evidence_ref', 'evidence_ref');
+  const evidenceRef = optionalEvidence(input.evidenceRef);
   assertVersion(input.expectedVersion, 1);
   const posting = normalizePosting({
     userId: input.userId,

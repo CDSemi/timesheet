@@ -93,6 +93,8 @@ const NEVER: ReadonlyArray<readonly [method: string, path: string]> = [
   ['POST', '/shares'],
   ['GET', '/auth/me'],
   ['POST', '/auth/logout'],
+  // The signed-in user's own password change (WP5-UX4-T04, D-9 b): never through a share.
+  ['POST', '/auth/password'],
 ];
 
 /** The production inventory outside the sharing feature, as recorded before WP3-T13B (method, path, handlers). */
@@ -182,6 +184,9 @@ const IMPORTS_ADDED = ['GET /api/imports 2', 'GET /api/imports/:id 2', 'POST /ap
 
 /** The owner's explicit opening balance (WP4-T10, F-3): self-only routes, never reachable under /api/shared. */
 const OPENING_BALANCE_ADDED = ['GET /api/ot/opening-balance 2', 'POST /api/ot/opening-balance 2', 'PUT /api/ot/opening-balance 2'];
+
+/** The signed-in user's own password change (WP5-UX4-T04, D-9 b): self-only, never reachable under /api/shared. */
+const PASSWORD_ADDED = ['POST /api/auth/password 2'];
 
 const ITEM_SETS: ItemSet[] = (['none', 'view', 'edit'] as const).flatMap((timesheets) =>
   [false, true].flatMap((otRead) =>
@@ -312,7 +317,7 @@ describe('route inventory', () => {
 
   it('keeps every self-only /api route unchanged and adds only the reviewed sharing routes', () => {
     const outside = inventory().filter((route) => !route.includes(' /api/shared/'));
-    expect(outside).toEqual([...SELF_ONLY_BEFORE, ...SHARING_ADDED, ...IMPORTS_ADDED, ...OPENING_BALANCE_ADDED].sort());
+    expect(outside).toEqual([...SELF_ONLY_BEFORE, ...SHARING_ADDED, ...IMPORTS_ADDED, ...OPENING_BALANCE_ADDED, ...PASSWORD_ADDED].sort());
   });
 
   it('WP4-T02 drift guard: the shared write routes are exactly the five that record the audit marker', () => {

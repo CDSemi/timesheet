@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   api,
   ApiRequestError,
+  type CurrentPeriods,
   type OpeningBalanceCorrectionRequest,
   type OpeningBalanceRequest,
   type OpeningBalanceResult,
@@ -23,12 +24,14 @@ const RESULT_TEXT: Record<OpeningBalanceResult['status'], string> = {
 const RELOAD_CODES = new Set(['stale_version', 'opening_balance_exists']);
 
 /**
- * The owner's opening OT balance (F-3): the one OT carried in from before the app. It is recorded once, as signed
- * minutes with an as-of date, a reason and evidence, and is changed only by a reasoned correction. It is never
- * taken from workbook formulas, and an imported workbook posts no OT.
+ * The owner's opening OT balance (F-3 as revised by F-1 (i)): the one OT carried in from before the app. It is 0 with
+ * no entry until the owner records it, as signed minutes with an as-of date (today by default), a reason and optional
+ * evidence, and is changed only by a reasoned correction, which may set it back to 0 (D-5 a). It is never taken from
+ * workbook formulas, and an imported workbook posts no OT.
  */
 export function OpeningBalancePanel() {
   const [state, setState] = useState<OpeningBalanceState | null>(null);
+  const [todayLocal, setTodayLocal] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [correcting, setCorrecting] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -45,7 +48,13 @@ export function OpeningBalancePanel() {
 
   const load = useCallback(async () => {
     try {
-      setState(await api<OpeningBalanceState>('GET', '/api/ot/opening-balance'));
+      // Today in the saved reporting zone is only the as-of default: without it the date field starts empty.
+      const [opening, periods] = await Promise.all([
+        api<OpeningBalanceState>('GET', '/api/ot/opening-balance'),
+        api<CurrentPeriods>('GET', '/api/periods/current').catch(() => null),
+      ]);
+      setTodayLocal(periods?.today_local ?? null);
+      setState(opening);
       setLoadError(null);
     } catch (caught) {
       setLoadError(openingBalanceErrorMessage(caught));
@@ -101,8 +110,9 @@ export function OpeningBalancePanel() {
     <section className="card stack" aria-label="Opening OT balance" data-opening-balance={opening === null ? 'none' : 'recorded'}>
       <h2>Opening OT balance</h2>
       <p className="muted">
-        The opening balance is the only OT you carry in from before this app. Enter it yourself, with an as-of date, a reason and evidence. It is never read from
-        workbook formulas, and an imported workbook posts no OT. It is recorded once; a later change is a reasoned correction.
+        The opening balance is the only OT you carry in from before this app. It is 0 until you enter it yourself, with an as-of date and a reason; evidence is
+        optional. It is never read from workbook formulas, and an imported workbook posts no OT. It is recorded once; a later change, also back to 0, is a
+        reasoned correction.
       </p>
       {notice !== null && (
         <p className={notice.tone === 'ok' ? 'notice-ok' : 'notice'} role="status" tabIndex={-1} ref={noticeRef} data-opening-notice>
@@ -116,7 +126,7 @@ export function OpeningBalancePanel() {
       )}
       {state === null && loadError === null && <p className="muted">Loading…</p>}
       {state !== null && opening === null && (
-        <OpeningBalanceForm mode="post" opening={null} postedMinutes={state.balance.posted_minutes} onSubmit={submit} />
+        <OpeningBalanceForm mode="post" opening={null} postedMinutes={state.balance.posted_minutes} todayLocal={todayLocal} onSubmit={submit} />
       )}
       {state !== null && opening !== null && (
         <>
@@ -135,7 +145,7 @@ export function OpeningBalancePanel() {
             </div>
             <div>
               <dt>Evidence</dt>
-              <dd>{opening.evidence_ref ?? 'none'}</dd>
+              <dd data-opening-evidence>{opening.evidence_ref ?? 'none'}</dd>
             </div>
             <div>
               <dt>Recorded</dt>

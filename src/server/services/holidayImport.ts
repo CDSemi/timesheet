@@ -13,6 +13,7 @@ import {
 import type { Clock } from '../clock.ts';
 import type { Db } from '../db/database.ts';
 import { ApiError, notFound } from '../http/errors.ts';
+import { recordAudit } from './audit.ts';
 import {
   calendarExists,
   createCalendarVersion,
@@ -30,8 +31,10 @@ import {
  * immutable calendar version with one audit event. The import is a merge: dates the CSV does
  * not list stay (manual dates included) and only explicitly listed dates are removed.
  * Employee rows are never written: default day labels follow the calendar at read time and
- * explicit labels are never replaced. The preview reads calendar configuration only: no
- * result carries an employee identity or an employee-derived count (docs/01 "Initial boundary").
+ * explicit labels are never replaced. No result carries an employee identity. By owner decision
+ * F-2 (b) of 2026-10-20 (reversing WP2-A-01, docs/03 "Records" exception) the administrator's
+ * preview shows exact per-date counts of the employees' day entries and finalized timesheets,
+ * and every preview writes one `calendar.holiday_preview` audit event (counts, no names).
  */
 
 export interface HolidayImportInput {
@@ -48,15 +51,19 @@ interface EffectiveFromProblem {
   details: Record<string, unknown>;
 }
 
-/** A date-only signal: no count and no identity of the finalized timesheets leaves the server. */
+/** A date with finalized timesheets and their exact number (F-2 (b)); no identity leaves the server. */
 interface FinalizedConflict {
   date: CivilDate;
+  finalized_timesheets: number;
 }
 
+/** A changed date with the exact counts of the employees' unfinalized day entries on it (F-2 (b)); counts only. */
 interface AffectedDay {
   date: CivilDate;
   label_before: DayCategory | null;
   label_after: DayCategory | null;
+  default_labelled_entries: number;
+  explicit_overrides_preserved: number;
 }
 
 interface ImportPlan {
@@ -101,18 +108,22 @@ function categoryOn(versions: readonly CalendarVersion[], date: CivilDate): DayC
   }
 }
 
-/** Finalized timesheets of this calendar's pay periods that cover each date. */
+function placeholders(count: number): string {
+  return Array.from({ length: count }, () => '?').join(',');
+}
+
+/** Finalized timesheets of this calendar's pay periods that cover each date, with their number. */
 function finalizedConflictsFor(db: Db, calendarId: string, dates: readonly CivilDate[]): FinalizedConflict[] {
   const statement = db
     .prepare(
-      `SELECT EXISTS(
-         SELECT 1 FROM timesheets t JOIN pay_periods p ON p.id = t.pay_period_id
-          WHERE p.calendar_id = ? AND t.finalized_revision_no IS NOT NULL AND ? BETWEEN p.period_start AND p.period_end)`,
+      `SELECT count(*) FROM timesheets t JOIN pay_periods p ON p.id = t.pay_period_id
+        WHERE p.calendar_id = ? AND t.finalized_revision_no IS NOT NULL AND ? BETWEEN p.period_start AND p.period_end`,
     )
     .pluck();
   const conflicts: FinalizedConflict[] = [];
   for (const date of dates) {
-    if (statement.get(calendarId, date) === 1) conflicts.push({ date });
+    const count = statement.get(calendarId, date) as number;
+    if (count > 0) conflicts.push({ date, finalized_timesheets: count });
   }
   return conflicts;
 }
@@ -179,12 +190,12 @@ const issueJson = (issue: HolidayCsvIssue) => ({
 });
 
 /**
- * The changed dates whose default label differs before and after, from the calendar versions
- * alone. Nothing here reads employee rows: an administrator's preview must not reveal which
- * days an employee recorded (docs/01 "Initial boundary", docs/03 "Records"). Explicit labels
- * and manual dates are preserved by the commit; that is a rule, not a per-employee count.
+ * The changed dates whose default label differs before and after, with the exact counts of the
+ * employees' default-labelled and explicit day entries in unfinalized timesheets of users on
+ * this calendar (owner decision F-2 (b), the docs/03 "Records" exception). Counts only: no
+ * identity leaves here, and every preview is audited (`calendar.holiday_preview`).
  */
-function affectedDays(plan: ImportPlan): AffectedDay[] {
+function affectedDays(db: Db, plan: ImportPlan): AffectedDay[] {
   const { diff } = plan;
   const changedDates = [...diff.added.map((rule) => rule.date), ...diff.removed.map((rule) => rule.date), ...diff.kindChanged.map((item) => item.date)].sort();
   if (changedDates.length === 0) return [];
@@ -193,8 +204,26 @@ function affectedDays(plan: ImportPlan): AffectedDay[] {
     ...plan.versions,
     { id: 'preview', seq, effectiveFrom: plan.effectiveFrom, weekdays: plan.base.weekdays, dates: diff.next },
   ];
+  const rows = db
+    .prepare(
+      `SELECT d.work_date AS work_date, d.category_source AS source, count(*) AS entries
+         FROM day_entries d
+         JOIN users u ON u.id = d.user_id
+         JOIN timesheets t ON t.id = d.timesheet_id
+        WHERE u.calendar_id = ? AND t.finalized_revision_no IS NULL AND d.work_date IN (${placeholders(changedDates.length)})
+        GROUP BY d.work_date, d.category_source`,
+    )
+    .all(plan.input.calendarId, ...changedDates) as Array<{ work_date: CivilDate; source: 'default' | 'explicit'; entries: number }>;
+  const count = (date: CivilDate, source: 'default' | 'explicit') =>
+    rows.find((row) => row.work_date === date && row.source === source)?.entries ?? 0;
   return changedDates
-    .map((date) => ({ date, label_before: categoryOn(plan.versions, date), label_after: categoryOn(after, date) }))
+    .map((date) => ({
+      date,
+      label_before: categoryOn(plan.versions, date),
+      label_after: categoryOn(after, date),
+      default_labelled_entries: count(date, 'default'),
+      explicit_overrides_preserved: count(date, 'explicit'),
+    }))
     .filter((day) => day.label_before !== day.label_after);
 }
 
@@ -208,9 +237,44 @@ export function calendarVersionJson(version: CalendarVersion) {
   };
 }
 
-/** Dry run: validates the CSV, diffs it against the latest version and writes nothing. */
-export function previewHolidayImport(db: Db, clock: Clock, input: HolidayImportInput) {
-  const plan = planImport(db, clock, input);
+/**
+ * Dry run: validates the CSV, diffs it against the latest version and changes no calendar or
+ * employee row. Because it shows per-date counts of the employees' entries (F-2 (b)), it writes
+ * one `calendar.holiday_preview` audit event with the actor, the calendar, the date range of the
+ * changed dates and how many of them carry counts; never a name, an identity or the CSV.
+ */
+export function previewHolidayImport(db: Db, clock: Clock, input: HolidayImportInput, actorUserId: string) {
+  return db
+    .transaction(() => {
+      const preview = previewResult(db, planImport(db, clock, input));
+      const dates = [...new Set([...preview.affected_days.map((day) => day.date), ...preview.finalized_conflicts.map((conflict) => conflict.date)])].sort();
+      const counted = new Set([
+        ...preview.affected_days.filter((day) => day.default_labelled_entries + day.explicit_overrides_preserved > 0).map((day) => day.date),
+        ...preview.finalized_conflicts.map((conflict) => conflict.date),
+      ]);
+      recordAudit(db, clock, {
+        actorUserId,
+        ownerUserId: null,
+        operation: 'calendar.holiday_preview',
+        entityType: 'calendar',
+        entityId: input.calendarId,
+        after: {
+          calendar_id: input.calendarId,
+          year: input.year,
+          effective_from: preview.effective_from,
+          date_from: dates[0] ?? null,
+          date_to: dates.at(-1) ?? null,
+          affected_dates: preview.affected_days.length,
+          dates_with_counts: counted.size,
+        },
+      });
+      return preview;
+    })
+    .immediate();
+}
+
+function previewResult(db: Db, plan: ImportPlan) {
+  const { input } = plan;
   const commitable = canCommit(plan);
   const { diff } = plan;
   return {
@@ -240,7 +304,7 @@ export function previewHolidayImport(db: Db, clock: Clock, input: HolidayImportI
       ignored_past: diff.ignoredPast.map(ruleJson),
     },
     result_date_count: diff.next.length,
-    affected_days: affectedDays(plan),
+    affected_days: affectedDays(db, plan),
   };
 }
 

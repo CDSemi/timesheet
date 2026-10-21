@@ -21,7 +21,9 @@ import { createTestContext, la, LA, ORIGIN, type TestContext } from '../support/
  * imported period (F-2). The opening balance is signed, non-zero minutes with an as-of date, a reason and an evidence
  * reference; one per user; it changes only through a reasoned correction; it is the ledger entry type
  * `opening_balance` and is never inferred from a workbook. POST records it; PUT on the same path is the reasoned
- * correction (one `correction` entry). Today is 2026-09-29 (LA 13:00). Data is synthetic
+ * correction (one `correction` entry). Owner decisions of 2026-10-20 revise it: evidence is optional (F-1 (i), stored as
+ * "not provided" on the opening entry) and a correction may return the value to 0 (D-5 a); the first posting stays
+ * non-zero. Today is 2026-09-29 (LA 13:00). Data is synthetic
  * (example.invalid); the clock is injected.
  */
 
@@ -162,28 +164,89 @@ describe('POST /api/ot/opening-balance (F-3)', () => {
     expect(ledger.getBalance(t.db, t.userIds.employee).postedMinutes).toBe(500);
   });
 
-  it('red-first: refuses zero minutes, a missing reason, missing evidence and a missing as-of date, writing nothing', async () => {
+  it('red-first: refuses zero minutes, a missing reason, over-long evidence and a missing as-of date, writing nothing', async () => {
     const refused: Array<[string, Record<string, unknown>]> = [
       ['zero minutes', openingBody(0)],
       ['fractional minutes', openingBody(1.5)],
       ['blank reason', openingBody(60, { reason: '   ' })],
-      ['blank evidence', openingBody(60, { evidence_ref: ' ' })],
+      ['over-long evidence', openingBody(60, { evidence_ref: 'e'.repeat(2001) })],
       ['invalid as-of date', openingBody(60, { as_of_date: '2026-02-30' })],
     ];
     const { reason: _reason, ...noReason } = openingBody(60);
-    const { evidence_ref: _evidence, ...noEvidence } = openingBody(60);
     const { as_of_date: _asOf, ...noAsOf } = openingBody(60);
     const { minutes: _minutes, ...noMinutes } = openingBody(60);
-    refused.push(['missing reason', noReason], ['missing evidence', noEvidence], ['missing as-of date', noAsOf], ['missing minutes', noMinutes]);
+    refused.push(['missing reason', noReason], ['missing as-of date', noAsOf], ['missing minutes', noMinutes]);
     for (const [label, body] of refused) {
       const response = await postOpening(body);
       expect(response.status, `${label}: ${JSON.stringify(response.body)}`).toBe(422);
     }
+    // D-5 a leaves the first posting non-zero: only a correction may target 0.
     expect((await postOpening(openingBody(0))).body.error.code).toBe('invalid_minutes');
     expect((await postOpening(openingBody(60, { reason: '' }))).body.error.code).toBe('reason_required');
-    expect((await postOpening(openingBody(60, { evidence_ref: '' }))).body.error.code).toBe('evidence_required');
     expect(ledgerCount()).toBe(0);
     expect(ledgerAudits()).toBe(0);
+  });
+
+  it('F-1 (i): evidence is optional; a blank or missing reference is stored on the opening entry as "not provided"', async () => {
+    const { evidence_ref: _evidence, ...noEvidence } = openingBody(75);
+    const posted = await postOpening(noEvidence);
+    expect(posted.status, JSON.stringify(posted.body)).toBe(201);
+    expect(posted.body.opening_balance).toMatchObject({ minutes: 75, evidence_ref: 'not provided', version: 1 });
+    const row = t.db.prepare("SELECT evidence_ref, reason FROM ot_ledger WHERE user_id = ? AND entry_type = 'opening_balance'").get(t.userIds.employee) as any;
+    expect(row).toEqual({ evidence_ref: ledger.OPENING_EVIDENCE_NOT_PROVIDED, reason: 'Synthetic carried-in balance from the paper records' });
+    expect(ledger.OPENING_EVIDENCE_NOT_PROVIDED).toBe('not provided');
+    // A blank reference is the same content: the repeat is a duplicate, not a second entry.
+    const blank = await postOpening(openingBody(75, { evidence_ref: '   ' }));
+    expect(blank.status).toBe(200);
+    expect(blank.body.status).toBe('duplicate');
+    expect(ledgerCount()).toBe(1);
+    // A correction without evidence stores null, as before.
+    const { evidence_ref: _none, ...correctionWithout } = correctionBody(90, 1);
+    const corrected = await t.request('PUT', OPENING, { cookie: employee, body: correctionWithout });
+    expect(corrected.status, JSON.stringify(corrected.body)).toBe(201);
+    expect(corrected.body.opening_balance.corrections).toEqual([expect.objectContaining({ delta_minutes: 15, evidence_ref: null })]);
+    const blankCorrection = await t.request('PUT', OPENING, { cookie: employee, body: correctionBody(100, 2, { evidence_ref: ' ' }) });
+    expect(blankCorrection.status, JSON.stringify(blankCorrection.body)).toBe(201);
+    expect(blankCorrection.body.entry).toMatchObject({ delta_minutes: 10 });
+    expect(count("SELECT count(*) FROM ot_ledger WHERE user_id = ? AND entry_type = 'correction' AND evidence_ref IS NULL", t.userIds.employee)).toBe(2);
+    expect((await summary()).posted_minutes).toBe(100);
+  });
+
+  it('D-5 a: a correction to 0 posts one correction of minus the current value, the balance returns, and history is kept', async () => {
+    ledger.postCredit(
+      { db: t.db, clock: t.clock },
+      { userId: t.userIds.employee, sourceKey: 'synthetic-credit', minutes: 300, workDate: '2026-09-15', actorUserId: null, origin: 'system' },
+    );
+    const posted = await postOpening(openingBody(-150));
+    expect(posted.status).toBe(201);
+    expect((await summary()).posted_minutes).toBe(150);
+    const zero = await t.request('PUT', OPENING, { cookie: employee, body: correctionBody(0, 1) });
+    expect(zero.status, JSON.stringify(zero.body)).toBe(201);
+    expect(zero.body.status).toBe('posted');
+    expect(zero.body.entry).toMatchObject({ entry_type: 'correction', delta_minutes: 150, corrects_entry_id: posted.body.entry.id });
+    expect(zero.body.opening_balance).toMatchObject({ minutes: 0, original_minutes: -150, version: 2 });
+    // The balance is back to what it was without an opening balance, and it equals the sum of the deltas.
+    expect((await summary()).posted_minutes).toBe(300);
+    expect(sumOfDeltas()).toBe(300);
+    // History is kept: the original entry and the correction both stay, each with its audit event.
+    expect(
+      (t.db.prepare('SELECT entry_type, delta_minutes FROM ot_ledger WHERE user_id = ? ORDER BY rowid').all(t.userIds.employee) as any[]).map((row) => [row.entry_type, row.delta_minutes]),
+    ).toEqual([
+      ['credit', 300],
+      ['opening_balance', -150],
+      ['correction', 150],
+    ]);
+    expect(count("SELECT count(*) FROM audit_events WHERE owner_user_id = ? AND operation = 'ot_ledger.correction'", t.userIds.employee)).toBe(1);
+    // Already 0: nothing more is appended.
+    const again = await t.request('PUT', OPENING, { cookie: employee, body: correctionBody(0, 2) });
+    expect(again.status).toBe(200);
+    expect(again.body.status).toBe('unchanged');
+    expect(again.body.entry).toBeNull();
+    expect(ledgerCount()).toBe(3);
+    // A later non-zero value is again a correction.
+    const back = await t.request('PUT', OPENING, { cookie: employee, body: correctionBody(45, 2) });
+    expect(back.status).toBe(201);
+    expect(back.body.opening_balance).toMatchObject({ minutes: 45, version: 3 });
   });
 
   it('red-first: a different value without a correction is refused; a reasoned correction posts exactly one correction entry', async () => {
@@ -197,8 +260,8 @@ describe('POST /api/ot/opening-balance (F-3)', () => {
     }
     expect(ledgerCount()).toBe(1);
 
-    // A correction needs a reason and evidence.
-    for (const body of [correctionBody(200, 1, { reason: ' ' }), correctionBody(200, 1, { evidence_ref: '' }), correctionBody(0, 1)]) {
+    // A correction needs a reason and whole minutes (evidence is optional and 0 is allowed: see the F-1 (i) and D-5 a tests).
+    for (const body of [correctionBody(200, 1, { reason: ' ' }), correctionBody(1.5, 1), correctionBody(200, 1, { evidence_ref: 'e'.repeat(2001) })]) {
       expect((await t.request('PUT', OPENING, { cookie: employee, body })).status).toBe(422);
     }
     const { reason: _reason, ...withoutReason } = correctionBody(200, 1);

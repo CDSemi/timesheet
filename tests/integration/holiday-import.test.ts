@@ -103,7 +103,7 @@ describe('access control on the admin import routes', () => {
 });
 
 describe('preview', () => {
-  it('writes nothing: no version, no audit event, no employee row', async () => {
+  it('changes no version and no employee row, and writes exactly one preview audit event (F-2 (b))', async () => {
     await addSession(employee, '2026-10-07');
     const rows = dayEntryRows();
     const versions = versionCount();
@@ -113,7 +113,7 @@ describe('preview', () => {
     expect(response.body.can_commit).toBe(true);
     expect(response.body.preview_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(versionCount()).toBe(versions);
-    expect(auditCount()).toBe(audits);
+    expect(auditCount()).toBe(audits + 1);
     expect(dayEntryRows()).toEqual(rows);
   });
 
@@ -217,19 +217,22 @@ describe('preview', () => {
     expect(response.body.earliest_effective_from).toBe(BOUNDARY);
   });
 
-  it('lists the days whose default label changes from the calendar alone, with no employee-derived counts', async () => {
+  it('lists the days whose default label changes, with zero counts when no employee has an entry on them', async () => {
     const response = await preview(
       csv('2026-10-07,Synthetic Company Day', '2026-10-08,Synthetic Shutdown,closure', '2026-12-24,Synthetic Eve'),
     );
     expect(response.status).toBe(200);
     expect(response.body.affected_days).toEqual([
-      { date: '2026-10-07', label_before: 'Worked', label_after: 'Holiday' },
-      { date: '2026-10-08', label_before: 'Worked', label_after: 'Shutdown' },
-      { date: '2026-12-24', label_before: 'Worked', label_after: 'Holiday' },
+      { date: '2026-10-07', label_before: 'Worked', label_after: 'Holiday', default_labelled_entries: 0, explicit_overrides_preserved: 0 },
+      { date: '2026-10-08', label_before: 'Worked', label_after: 'Shutdown', default_labelled_entries: 0, explicit_overrides_preserved: 0 },
+      { date: '2026-12-24', label_before: 'Worked', label_after: 'Holiday', default_labelled_entries: 0, explicit_overrides_preserved: 0 },
     ]);
   });
 
-  it('answers identically whether or not employees have day entries on the affected dates (WP2-A-01)', async () => {
+  // Flipped by owner decision F-2 (b) of 2026-10-20 (reverses WP2-A-01): this test was "answers identically whether or
+  // not employees have day entries on the affected dates". The preview now shows exact per-date counts, still with no
+  // identity, and every preview is audited.
+  it('shows exact per-date counts of the employees\' day entries, with no identity, and audits each preview (F-2 (b))', async () => {
     const text = csv('2026-10-07,Synthetic Company Day', '2026-10-08,Synthetic Shutdown,closure', '2026-12-24,Synthetic Eve');
     const before = await preview(text);
     expect(before.status).toBe(200);
@@ -239,25 +242,59 @@ describe('preview', () => {
     await putExplicit(employee, '2026-10-08', 'Worked');
     const after = await preview(text);
     expect(after.status).toBe(200);
-    expect(after.body).toEqual(before.body);
+    expect(after.body).not.toEqual(before.body);
+    expect(after.body.affected_days).toEqual([
+      { date: '2026-10-07', label_before: 'Worked', label_after: 'Holiday', default_labelled_entries: 2, explicit_overrides_preserved: 0 },
+      { date: '2026-10-08', label_before: 'Worked', label_after: 'Shutdown', default_labelled_entries: 0, explicit_overrides_preserved: 1 },
+      { date: '2026-12-24', label_before: 'Worked', label_after: 'Holiday', default_labelled_entries: 0, explicit_overrides_preserved: 0 },
+    ]);
+    // Only the counts differ: everything else is the same as before the entries existed.
+    const { affected_days: _afterDays, ...afterRest } = after.body;
+    const { affected_days: _beforeDays, ...beforeRest } = before.body;
+    expect(afterRest).toEqual(beforeRest);
     const body = JSON.stringify(after.body);
     for (const secret of [t.userIds.employee, t.userIds.admin, t.emails.employee, t.emails.admin]) {
       expect(body).not.toContain(secret);
     }
-    // No count keys of any employee data remain anywhere in the response.
-    expect(body).not.toMatch(/default_labelled_entries|explicit_overrides_preserved|finalized_timesheets/);
+    // One audit event per preview: the actor, the calendar, the date range and how many dates carry counts; no names.
+    const events = t.db
+      .prepare("SELECT actor_user_id, owner_user_id, entity_type, entity_id, reason, before_json, after_json, via_share_id FROM audit_events WHERE operation = 'calendar.holiday_preview' ORDER BY rowid")
+      .all() as Array<{ actor_user_id: string; owner_user_id: string | null; entity_type: string; entity_id: string; reason: string | null; before_json: string | null; after_json: string; via_share_id: string | null }>;
+    expect(events).toHaveLength(2);
+    for (const event of events) {
+      expect(event).toMatchObject({ actor_user_id: t.userIds.admin, owner_user_id: null, entity_type: 'calendar', entity_id: t.calendarId, reason: null, before_json: null, via_share_id: null });
+    }
+    expect(events.map((event) => JSON.parse(event.after_json))).toEqual([
+      { calendar_id: t.calendarId, year: 2026, effective_from: BOUNDARY, date_from: '2026-10-07', date_to: '2026-12-24', affected_dates: 3, dates_with_counts: 0 },
+      { calendar_id: t.calendarId, year: 2026, effective_from: BOUNDARY, date_from: '2026-10-07', date_to: '2026-12-24', affected_dates: 3, dates_with_counts: 2 },
+    ]);
+    const audit = JSON.stringify(events);
+    for (const secret of [t.userIds.employee, t.emails.employee, t.emails.admin, 'Synthetic Company Day', 'Synthetic Shutdown', 'Synthetic Eve']) {
+      expect(audit).not.toContain(secret);
+    }
   });
 
-  it('reports a finalized period as a date-only signal and blocks the commit, without counts', async () => {
+  it('reports a finalized period with its exact number of finalized timesheets and blocks the commit', async () => {
     await addSession(employee, '2026-10-07');
     await addSession(admin, '2026-10-07');
     t.db.prepare('UPDATE timesheets SET finalized_revision_no = 1').run();
     const response = await preview(csv('2026-10-07,Synthetic Company Day'));
     expect(response.body.can_commit).toBe(false);
     expect(response.body.preview_hash).toBeNull();
-    expect(response.body.finalized_conflicts).toEqual([{ date: '2026-10-07' }]);
-    // Two timesheets are finalized, yet no count of them leaves the server.
-    expect(JSON.stringify(response.body)).not.toMatch(/finalized_timesheets/);
+    expect(response.body.finalized_conflicts).toEqual([{ date: '2026-10-07', finalized_timesheets: 2 }]);
+    // Finalized entries are not counted as open ones.
+    expect(response.body.affected_days).toEqual([
+      { date: '2026-10-07', label_before: 'Worked', label_after: 'Holiday', default_labelled_entries: 0, explicit_overrides_preserved: 0 },
+    ]);
+    const event = t.db.prepare("SELECT after_json FROM audit_events WHERE operation = 'calendar.holiday_preview'").pluck().get() as string;
+    expect(JSON.parse(event)).toMatchObject({ date_from: '2026-10-07', date_to: '2026-10-07', affected_dates: 1, dates_with_counts: 1 });
+  });
+
+  it('writes no preview audit event when the preview is refused', async () => {
+    const audits = auditCount();
+    expect((await preview(csv('2026-10-20,Synthetic Day'), { calendar_id: 'no-such-calendar' })).status).toBe(404);
+    expect((await preview(csv('2026-10-20,Synthetic Day'), { effective_from: '2026-02-30' })).status).toBe(422);
+    expect(auditCount()).toBe(audits);
   });
 });
 
@@ -267,13 +304,18 @@ describe('commit', () => {
   it('creates one immutable version and one audit event from a matching preview', async () => {
     const versionsBefore = versionCount();
     const auditsBefore = auditCount();
+    const operationCount = (operation: string) => t.db.prepare('SELECT count(*) FROM audit_events WHERE operation = ?').pluck().get(operation) as number;
+    const createsBefore = operationCount('calendar_version.create');
     const { previewed, commit } = await previewAndCommit(TEXT(), {}, { note: 'Synthetic 2026 holiday refresh' });
     expect(commit.status, JSON.stringify(commit.body)).toBe(201);
     expect(commit.body.committed).toBe(true);
     expect(commit.body.version).toMatchObject({ seq: 2, effective_from: BOUNDARY });
     expect(commit.body.preview_hash).toBe(previewed.body.preview_hash);
     expect(versionCount()).toBe(versionsBefore + 1);
-    expect(auditCount()).toBe(auditsBefore + 1);
+    // The commit writes one event; the preview before it writes its own (F-2 (b)).
+    expect(auditCount()).toBe(auditsBefore + 2);
+    expect(operationCount('calendar_version.create')).toBe(createsBefore + 1);
+    expect(operationCount('calendar.holiday_preview')).toBe(1);
 
     const versions = listCalendarVersions(t.db, t.calendarId);
     expect(versions).toHaveLength(2);

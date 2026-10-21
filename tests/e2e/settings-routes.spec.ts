@@ -2,7 +2,8 @@ import type { Page } from '@playwright/test';
 import { createAccountByAdminApi, expect, openAccount, SeedClient, screenshotPath, test } from './fixtures.ts';
 
 /*
- * WP5-UX3-T03: the Settings sub-pages (Personal, Profile, Administration), the read-only Profile page, the old `#/admin`
+ * WP5-UX3-T03: the Settings sub-pages (Personal, Profile, Administration), the Profile page (read-only facts; its
+ * change-password card since D-9 b is covered by profile.spec.ts), the old `#/admin`
  * address, and the lazily loaded Administration and Import screens, on both viewports. Accounts are synthetic
  * (example.invalid, run-time passwords). The server stays the authority on admin data: an employee's page must neither
  * show Administration nor ask for `/api/admin/` at all.
@@ -121,7 +122,7 @@ test('an employee sees no Administration anywhere and the page makes no /api/adm
 test.describe('Profile in a device zone that differs from the reporting zone', () => {
   test.use({ timezoneId: 'Asia/Tokyo' });
 
-  test('Profile shows the display name, email, role and reporting zone, read only, with the note', async ({ page, builtServer, adminSeed, signInPageAs }, testInfo) => {
+  test('Profile shows the display name, email, role and reporting zone read only, with the note, and the change-password card', async ({ page, builtServer, adminSeed, signInPageAs }, testInfo) => {
     const person = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Profile Person' });
     const personApi = await new SeedClient(builtServer.origin).signIn(person.email, person.password);
     const periods = await personApi.call<{ reporting_zone: string }>('GET', '/api/periods/current');
@@ -138,9 +139,16 @@ test.describe('Profile in a device zone that differs from the reporting zone', (
     await expect(facts.locator('[data-profile="zone"]')).not.toHaveText('Asia/Tokyo');
     for (const label of ['Display name', 'Email', 'Role', 'Reporting zone']) await expect(facts.getByText(label, { exact: true })).toBeVisible();
     await expect(page.getByText('An administrator changes display names.')).toBeVisible();
-    // Read only: nothing on the page can be edited.
-    await expect(page.locator('main').locator('input, textarea, select')).toHaveCount(0);
-    await expect(page.locator('main').getByRole('button')).toHaveCount(0);
+    // The account facts stay read only: nothing in them can be edited.
+    await expect(facts.locator('input, textarea, select')).toHaveCount(0);
+    await expect(facts.getByRole('button')).toHaveCount(0);
+    // D-9 b: the only editable part of the page is the Change password card (three password fields and one button,
+    // plus the hidden account name for password managers); see profile.spec.ts for its behaviour.
+    const card = page.getByRole('region', { name: 'Change password' });
+    await expect(page.locator('main').locator('input:visible, textarea, select')).toHaveCount(3);
+    await expect(card.locator('input[type="password"]')).toHaveCount(3);
+    await expect(page.locator('main').getByRole('button')).toHaveCount(1);
+    await expect(card.getByRole('button', { name: 'Change password' })).toBeVisible();
     await page.screenshot({ path: screenshotPath(`profile-${testInfo.project.name}-synthetic.png`), fullPage: true });
 
     // An administrator's Profile names the role.

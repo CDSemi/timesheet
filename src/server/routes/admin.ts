@@ -188,17 +188,24 @@ export function adminRoutes(deps: AppDeps) {
     return c.json({ user: accountJson(deps.db, account) });
   });
 
-  // Holiday CSV: preview writes nothing; commit needs the preview hash (E-4, AC-05, R-07).
+  // Holiday CSV: preview changes no calendar or employee row but writes one audit event, because it shows per-date
+  // counts of the employees' entries (F-2 (b)); commit needs the preview hash (E-4, AC-05, R-07).
   app.post('/calendar/import/preview', async (c) => {
+    const actor = c.get('user');
     const body = await readJson(c, holidayImportPreviewBody);
     return c.json(
-      previewHolidayImport(deps.db, deps.clock, {
-        calendarId: body.calendar_id,
-        year: body.year,
-        effectiveFrom: body.effective_from,
-        csv: body.csv,
-        removeDates: body.remove_dates ?? [],
-      }),
+      previewHolidayImport(
+        deps.db,
+        deps.clock,
+        {
+          calendarId: body.calendar_id,
+          year: body.year,
+          effectiveFrom: body.effective_from,
+          csv: body.csv,
+          removeDates: body.remove_dates ?? [],
+        },
+        actor.id,
+      ),
     );
   });
 
