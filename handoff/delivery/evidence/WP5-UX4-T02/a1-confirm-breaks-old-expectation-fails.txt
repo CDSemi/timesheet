@@ -1,0 +1,47 @@
+
+Running 2 tests using 1 worker
+
+  x  1 [desktop] › tests\e2e\day-editor.spec.ts:4090:3 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it (start at a whole minute) (8.3s)
+  ok 2 [desktop] › tests\e2e\day-editor.spec.ts:4090:3 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it (start at 17 s past the minute) (1.5s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:4090:3 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it (start at a whole minute) 
+
+    Error: expect(locator).toHaveValue(expected) failed
+
+    Locator:  getByRole('dialog', { name: 'Edit session', exact: true }).getByLabel('Break 1 start time', { exact: true })
+    Expected: "11:59:00"
+    Received: "11:59"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveValue" getByRole('dialog', { name: 'Edit session', exact: true }).getByLabel('Break 1 start time', { exact: true }) with timeout 7000ms
+      - waiting for getByRole('dialog', { name: 'Edit session', exact: true }).getByLabel('Break 1 start time', { exact: true })
+        18 × locator resolved to <input step="60" required="" type="time" value="11:59"/>
+           - unexpected value "11:59"
+
+
+      4067 |   const breakStart = wallClock(instantAt(startMs + 120 * 60_000), zone);
+      4068 |   expect(breakStart.endsWith(`:${String(seconds).padStart(2, '0')}`), 'the break starts at the pinned second').toBe(true);
+    > 4069 |   await expect(row.time).toHaveValue(breakStart);
+           |                          ^
+      4070 |   await expect(row.minutes).toHaveValue('15');
+      4071 |   await expect(row.row).toContainText('suggested');
+      4072 |   expect(puts).toEqual([]);
+        at confirmBreaksOnEndedSession (D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:4069:26)
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\day-editor.spec.ts:4096:5
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX4-T02\tmp\timesheet-e2e-output\day-editor--Confirm-breaks-81647-it-start-at-a-whole-minute--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX4-T02\tmp\timesheet-e2e-output\day-editor--Confirm-breaks-81647-it-start-at-a-whole-minute--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX4-T02\tmp\timesheet-e2e-output\day-editor--Confirm-breaks-81647-it-start-at-a-whole-minute--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:4090:3 › "Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it (start at a whole minute) 
+  1 passed (15.3s)
+exit=1

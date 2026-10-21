@@ -237,7 +237,7 @@ test('Today and Current period come in the order Previous, Next, Today, Current 
 
 test('Today moves an open Day editor to today; Current period leaves the editor as it is', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
   const desktop = testInfo.project.name === 'desktop';
-  // WP5-UX3-T05B: below 1360px the editor floats as a modal panel over an inert page, so Today is used with the editor beside the sheet.
+  // Round 4 (U4-07): the editor is a non-modal drawer; it stands beside the sheet from the layout rule's width (1330px) and floats over the sheet's edge below it, so Today is used with the editor beside the sheet.
   if (desktop) await page.setViewportSize({ width: 1440, height: 800 });
   const periods = await employeeSeed.periodsCurrent();
   const today = periods.today_local;
@@ -789,7 +789,7 @@ test('the Day editor chip says "in progress" for today in the five window days a
   employeeSeed,
   signInThroughUi,
 }, testInfo) => {
-  // Below 1360px the editor floats as a modal panel over an inert page; the desktop project uses the panel beside the sheet.
+  // Below the layout rule's width (1330px) the non-modal drawer floats over the sheet's edge; the desktop project uses it beside the sheet.
   if (testInfo.project.name === 'desktop') await page.setViewportSize({ width: 1440, height: 800 });
   const periods = await employeeSeed.periodsCurrent();
   const today = periods.today_local;

@@ -25,6 +25,7 @@ import {
   LabelPicker,
   labelPickerOf,
   openOnClick,
+  pressDay,
   REVIEW_ACTIONS,
   ReviewNote,
   SelectBox,
@@ -66,7 +67,7 @@ function SheetDayColumn({ day, details, actions, lift }: { day: SheetDay; detail
         {review ? (
           <span className="sheet-date-text">{day.dateText}</span>
         ) : (
-          <button type="button" className="sheet-date" onClick={() => actions.onEdit(day.workDate)} aria-label={dayButtonName(verb, day, 'sheet')} aria-current={editing ? 'true' : undefined} data-day-button>
+          <button type="button" className="sheet-date" onClick={pressDay(day.workDate, actions)} aria-label={dayButtonName(verb, day, 'sheet')} aria-current={editing ? 'true' : undefined} data-day-button>
             {day.dateText}
           </button>
         )}

@@ -891,6 +891,45 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - Fallback (b): the owner commits manually.
     - The message is in `evidence/WP5-UX4-T01-FREEZE/commit-message.txt`.
     - Mission `blocked` until the commit lands. A read-only verifier recon then records it.
+  - The owner reported "xong, đã push". Running now: WP5-UX4-T01-FREEZE-RECON (verifier,
+    read-only).
+- WP5-UX4-T01-FREEZE done: the owner's manual commit 213bbdc8a013c96e7144d59dd5802e467572779d.
+  - The recon passed all 8 checks: parent 5a68fba; message equal to the file; exactly 37
+    paths; digest 1921c36f in the tree and on HEAD; validators PASS; privacy scan 0 hits.
+  - Lesson (board runtime_observations): after a classifier denial, do not resume the same
+    agent for the same action.
+- Running now: WP5-UX4-T02 (worker-high, sonnet) on 213bbdc / 1921c36f.
+  - It covers U4-05 (a non-modal floating panel with switch, unselect and a discard guard),
+    U4-06 (the edge drawer) and U4-07 (the editorLayout rule).
+- WP5-UX4-T02 first hand-back.
+  - Reported done:
+    - non-modal drawer from 768px with switch and unselect;
+    - corners 0 / 12px;
+    - the switch at 1330px (overlay scrollbars) / 1345px (classic);
+    - unit 2164; mobile e2e 0 failed; mutants 1-6 caught; digest a56b26fd (839 files).
+  - Gaps:
+    - the Today button still moves an open editor without asking, which silently loses
+      edits;
+    - a clock-second dependent failure at `day-editor.spec.ts:3994` passed only on a rerun
+      outside the rerun rule;
+    - stale comments in `today.spec.ts`; `docs/12:39` goes to T06.
+  - Path deviation: `src/client/DayEditor.tsx`. The brief's path was a coordinator error.
+- Running now: T02 Addendum 1 (same worker). It guards every route that changes or closes the
+  open day, fixes the time-dependent assertion deterministically, fixes the comments, and adds
+  mutant 7.
+- WP5-UX4-T02 done after Addendum 1.
+  - One discard guard covers: day button or column, unselect, Open a day, Today,
+    Previous/Next period, Current period, Close and Escape.
+  - The Confirm-breaks failure was the test: the input holds HH:MM at 0 s. It now runs two
+    pinned cases.
+  - Full e2e: desktop 376 / mobile 347 passed, 0 failed, no reruns. Mutants 1-7 caught.
+    Digest 04e16199 (839 files).
+  - Not guarded by design: leaving the page through a link, and the reload after a label or
+    batch commit changed the open day.
+- Running now: WP5-UX4-T02-FREEZE.
+  - A fresh committer runs alone.
+  - The brief lists every path as dispatched. Extra WP5-UX4 task records and evidence are
+    allowed by a pattern set at dispatch.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

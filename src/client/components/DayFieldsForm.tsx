@@ -1,10 +1,16 @@
-import { type SubmitEvent, useId, useRef, useState } from 'react';
+import { type SubmitEvent, useEffect, useId, useRef, useState } from 'react';
 import { type DayCategory, type DayView, type LeaveKind, ownRequest, type Requester } from '../api.ts';
 import { describeError, isStaleVersion } from './errors.ts';
 import { invalidLeaveParts, LEAVE_MAX_HOURS, type LeaveInput, type LeaveParts } from './leaveInputModel.ts';
-import { buildDayEntryRequest, CATEGORIES, dayFieldsDraft, LEAVE_KINDS, leaveHint, otMismatchNotice } from './sessionModel.ts';
+import { buildDayEntryRequest, CATEGORIES, type DayFieldsDraft, dayFieldsDraft, LEAVE_KINDS, leaveHint, otMismatchNotice } from './sessionModel.ts';
 
 const KIND_TEXT: Record<LeaveKind, string> = { vacation: 'Vacation', sick: 'Sick', ot: 'OT' };
+
+/** The values of a draft as one comparable text; the bad-input flags count as false when absent, so typing and undoing is no edit. */
+function draftKey(draft: DayFieldsDraft): string {
+  const { category, leave, leaveKind, wfh, notes } = draft;
+  return JSON.stringify([category, leave.hours, leave.minutes, leave.hoursBad === true, leave.minutesBad === true, leaveKind, wfh, notes]);
+}
 
 /**
  * Category, partial leave typed as hours and minutes with its kind, WFH and notes. The
@@ -18,6 +24,7 @@ export function DayFieldsForm({
   reasonRequired,
   onSaved,
   onStale,
+  onDirtyChange,
   request = ownRequest,
 }: {
   day: DayView;
@@ -25,11 +32,19 @@ export function DayFieldsForm({
   reasonRequired: boolean;
   onSaved: (day: DayView) => void;
   onStale: () => void;
+  /** Called when the fields start or stop differing from the day as loaded or last saved (the unsaved-edit guard of the page). */
+  onDirtyChange?: (dirty: boolean) => void;
   /** The route set the write goes through: the caller's own by default, a share's when editing for an owner. */
   request?: Requester;
 }) {
   const id = useId();
   const [draft, setDraft] = useState(() => dayFieldsDraft(day));
+  // What the fields held when the day was loaded or last saved; the draft differing from it is an unsaved edit.
+  const [baseline, setBaseline] = useState(() => draftKey(dayFieldsDraft(day)));
+  const dirty = draftKey(draft) !== baseline;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
   const [error, setError] = useState<string | null>(null);
   // The refusal of the leave fields, shown beside them; the fields it names point to it.
   const [leaveError, setLeaveError] = useState<{ message: string; parts: LeaveParts } | null>(null);
@@ -75,7 +90,9 @@ export function DayFieldsForm({
     setError(null);
     setLeaveError(null);
     try {
-      onSaved(await request<DayView>('PUT', `/days/${day.work_date}`, built.request));
+      const next = await request<DayView>('PUT', `/days/${day.work_date}`, built.request);
+      setBaseline(draftKey(draft));
+      onSaved(next);
     } catch (caught) {
       if (isStaleVersion(caught)) onStale();
       else setError(describeError(caught));

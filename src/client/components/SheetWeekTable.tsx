@@ -18,7 +18,10 @@ export interface DayActions {
   /** The accounting date open in the Day editor, or null; the sheet marks that day's column (desktop) or row (phone). */
   editing: string | null;
   onToggle: (workDate: string) => void;
+  /** Opens the Day editor on the day, or switches an open editor to it (a press on the day's button, or anywhere on its column). */
   onEdit: (workDate: string) => void;
+  /** Closes the Day editor: a press on the open day's own button unselects it. */
+  onUnselect: () => void;
   /** False in a view-only shared view: no selection box, and the day only opens to read. */
   editable: boolean;
   /** True in batch mode ("Change several days"): the selection boxes show; otherwise the days carry none. */
@@ -37,6 +40,7 @@ export const REVIEW_ACTIONS: DayActions = {
   editing: null,
   onToggle: () => undefined,
   onEdit: () => undefined,
+  onUnselect: () => undefined,
   editable: false,
   selecting: false,
   locked: true,
@@ -190,7 +194,12 @@ export function LabelPicker({ day, picker }: { day: SheetDay; picker: LabelPicke
 /** "Edit" while the day can change, otherwise "View": the first word of the day button's name (`dayButtonName`). */
 export const dayVerb = (actions: Pick<DayActions, 'editable' | 'locked'>): 'Edit' | 'View' => (actions.editable && !actions.locked ? 'Edit' : 'View');
 
-/** A click anywhere on the day opens it, except on its own controls (they act themselves). */
+/** A press on the day's own button: on the open day it closes the editor (unselect), on any other day it opens or switches to it. */
+export function pressDay(workDate: string, actions: Pick<DayActions, 'editing' | 'onEdit' | 'onUnselect'>) {
+  return () => (actions.editing === workDate ? actions.onUnselect() : actions.onEdit(workDate));
+}
+
+/** A click anywhere on the day opens it (or switches the open editor to it), except on its own controls (they act themselves). */
 export function openOnClick(workDate: string, onEdit: (workDate: string) => void) {
   return (event: MouseEvent<HTMLElement>) => {
     if (event.target instanceof Element && event.target.closest('button, input, label, a') !== null) return;
@@ -302,7 +311,7 @@ function DayRows({ day, details, actions, verb }: { day: SheetDay; details: bool
               <button
                 type="button"
                 className="sheet-day-button"
-                onClick={() => actions.onEdit(day.workDate)}
+                onClick={pressDay(day.workDate, actions)}
                 aria-label={dayButtonName(verb, day, 'phone')}
                 aria-current={editing ? 'true' : undefined}
                 data-day-button

@@ -29,14 +29,15 @@ function otherModalOpen(editor: HTMLDialogElement): boolean {
 }
 
 /**
- * Day editor (WP5-UX-T04, owner decision E-3 a). From 1360px it is a non-modal panel in its own
- * column beside the sheet, so the sheet stays usable at its readable column width. Below that
- * (`modal`) it is modal and traps focus, so the page behind is inert and no focusable control can
- * be hidden by it (WCAG 2.4.11): a floating side panel from 768px, docked away from the edited
- * column (`dockSide`), a bottom sheet below (`bottomSheet`). All are one native `<dialog>`
- * named by its heading ("Day editor ..."): focus moves to the heading on open, Escape closes it
- * wherever focus is (unless a nested dialog takes Escape first) and so does Close; the caller
- * returns focus to the day's button.
+ * Day editor (WP5-UX-T04, owner decision E-3 a; round 4, U4-05 to U4-07). From 768px it is a non-modal
+ * drawer flush with a window edge (`dockSide`): no backdrop, no inert page, so another column of the
+ * sheet can be picked while it is open. Beside the sheet or floating over it is the page's decision
+ * (the layout rule in editorLayoutModel.ts); the page re-docks a floating drawer when a control behind
+ * it takes focus under it (WCAG 2.4.11). Below 768px (`bottomSheet`) it is a modal bottom sheet that
+ * traps focus. All are one native `<dialog>` named by its heading ("Day editor ..."): focus moves to
+ * the heading on open, Escape closes it wherever focus is (unless a nested dialog takes Escape first)
+ * and so does Close; the caller returns focus to the day's button. `onDirtyChange` reports whether the
+ * day fields or the reason hold edits that are not saved, so the page can ask before it drops them.
  *
  * Order inside: the head (the accounting date, then chips for the period and the zones), the banner
  * of what the day still needs, the times (a card per session with its break table; Add session, Edit
@@ -50,20 +51,20 @@ function otherModalOpen(editor: HTMLDialogElement): boolean {
  * Nested dialogs (WP5-UX-B3-01): the session dialog (with its notice and confirmations) and the delete
  * confirmation are modal dialogs inside this one, one on top at a time. Each owns Escape and focus
  * while it is open, this editor ignores an Escape whose target lies in another dialog, and its switch
- * between modal and non-modal on crossing 1360px waits until no other modal dialog is open.
+ * between modal and non-modal on crossing 768px waits until no other modal dialog is open.
  */
 export function DayEditor({
   workDate,
   displayZone,
   reportingZone,
   todayLocal,
-  modal,
   bottomSheet,
   dockSide = 'right',
   refresh = 0,
   periodPill,
   onChanged,
   onClose,
+  onDirtyChange,
   request = ownRequest,
   readOnly = false,
 }: {
@@ -71,12 +72,12 @@ export function DayEditor({
   displayZone: string;
   reportingZone: string;
   todayLocal: string | null;
-  /** True below 1360px: a modal dialog with an inert page. False: the non-modal panel beside the sheet. */
-  modal: boolean;
-  /** True below 768px: the modal dialog is a bottom sheet. Otherwise a floating side panel. */
+  /** True below 768px: a modal bottom sheet with an inert page. False: the non-modal drawer. */
   bottomSheet: boolean;
-  /** The edge the floating side panel docks to (away from the edited column). Unused by the panel beside the sheet and the bottom sheet. */
+  /** The window edge the drawer is flush with (the page picks it: always right beside the sheet, away from the edited column when floating). Unused by the bottom sheet. */
   dockSide?: 'left' | 'right';
+  /** Called when the day fields or the reason start or stop holding edits that are not saved. */
+  onDirtyChange?: (dirty: boolean) => void;
   /** Raised by the page after it changed this day elsewhere (the label picker or a batch): the editor reloads. */
   refresh?: number;
   /** The pill of the shown period as the period bar draws it (it can say "in progress"); the day's own relation when absent. */
@@ -90,6 +91,8 @@ export function DayEditor({
   /** True for a share without edit rights or an imported period: nothing in the editor can change the day. */
   readOnly?: boolean;
 }) {
+  /** Only the phone's bottom sheet is modal; the drawer never is, so the sheet behind it stays usable. */
+  const modal = bottomSheet;
   const dialog = useRef<HTMLDialogElement>(null);
   const head = useRef<HTMLElement>(null);
   // The sticky head is about 80px tall (more when its chips wrap); the panel's scroll padding follows it (WP5-UX-AX-01).
@@ -116,8 +119,8 @@ export function DayEditor({
   const [generation, setGeneration] = useState(0);
   const firstRefresh = useRef(refresh);
 
-  // Opens the panel (non-modal) or the bottom sheet (modal) and moves focus to the heading. A switch
-  // between the two while open (the window crossed 1360px) re-opens the same element in the other mode.
+  // Opens the drawer (non-modal) or the bottom sheet (modal) and moves focus to the heading. A switch
+  // between the two while open (the window crossed 768px) re-opens the same element in the other mode.
   // WP5-UX-B3-01: re-showing it while another modal dialog is open (a label review, the check-out
   // dialog) would stack the editor above that dialog and take its focus and its Escape. The switch then
   // waits until no other modal dialog is left (closed or removed), so the open dialog keeps both.
@@ -146,7 +149,7 @@ export function DayEditor({
     return () => observer.disconnect();
   }, [modal]);
 
-  // A non-modal panel leaves the sheet focusable, so Escape closes it wherever focus is. A nested
+  // A non-modal drawer leaves the sheet focusable, so Escape closes it wherever focus is. A nested
   // modal dialog (a review, the check-out dialog) takes Escape first, and so does a control that
   // already used the key (an open label picker). A modal editor closes through its own handlers.
   useEffect(() => {
@@ -204,7 +207,16 @@ export function DayEditor({
   const reasonRequired = day?.edit.reason_required ?? false;
   const reasonMissing = reasonRequired && reason.trim() === '';
 
+  // Unsaved edits (U4-05): the day fields form reports its own; a typed reason counts until a write has used it.
+  const [fieldsDirty, setFieldsDirty] = useState(false);
+  const [usedReason, setUsedReason] = useState('');
+  const dirty = fieldsDirty || (reason.trim() !== '' && reason !== usedReason);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
   function saved(next: DayView, text: string) {
+    setUsedReason(reason);
     setDay(next);
     setEditing({ kind: 'none' });
     setStaleNotice(false);
@@ -299,7 +311,7 @@ export function DayEditor({
       className={`day-panel ${bottomSheet ? 'day-panel-sheet' : 'day-panel-side'}`}
       aria-labelledby="day-editor-title"
       data-day-editor={workDate}
-      data-side={modal && !bottomSheet ? dockSide : undefined}
+      data-side={bottomSheet ? undefined : dockSide}
       onKeyDown={keyDown}
       onCancel={(event) => {
         event.preventDefault();
@@ -435,6 +447,7 @@ export function DayEditor({
               <DayFieldsForm
                 key={`fields-${generation}`}
                 day={day}
+                onDirtyChange={setFieldsDirty}
                 reason={reason}
                 reasonRequired={reasonRequired}
                 onSaved={(next) => saved(next, 'Day fields saved.')}

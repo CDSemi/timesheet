@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Locator, Page } from '@playwright/test';
+import { besideNeed, type EditorLayoutInput, editorLayout, sheetRoomBeside } from '../../src/client/components/editorLayoutModel.ts';
 import { addDays, isoWeekday } from '../../src/domain/dates.ts';
 import { dateTimeIn, instantOfWallTime, wallTimeIn } from '../client/zoneOracle.ts';
 import { namedDayButton } from './dayButton.ts';
@@ -41,6 +42,50 @@ const LA = 'America/Los_Angeles';
 const FOLD_DAY = '2026-04-04';
 const GAP_DAY = '2026-03-08';
 const OLD_DAY = '2026-05-12';
+
+/**
+ * The tokens of the Day editor's layout rule in px at the style sheet's 15px root (--page-pad 16px on both sides, --editor-width 400px,
+ * --editor-gap 16px, --sheet-min-width = 92px label column + 7 x 108px + 2px hairlines + 2 x 16px paper padding). A test below measures the
+ * page's own tokens and fails if these drift, so the widths derived from them here stay honest.
+ */
+const LAYOUT_TOKENS = { pagePadding: 32, editorWidth: 400, gap: 16, sheetMinWidth: 882 };
+/** The window width (without a classic scrollbar) from which the editor stands beside the sheet: 1330px. */
+const BESIDE_NEED = besideNeed(LAYOUT_TOKENS);
+
+/**
+ * The inputs of the layout rule as the page has them now: the four tokens resolved to px by a probe whose children take them as widths
+ * (rem, calc and the hairline included), the width of the window less a classic scrollbar, and that scrollbar.
+ */
+const LAYOUT_INPUT = `(() => {
+  const probe = document.createElement('div');
+  probe.style.position = 'absolute';
+  probe.style.visibility = 'hidden';
+  probe.style.width = '0';
+  probe.style.height = '0';
+  probe.style.overflow = 'hidden';
+  const children = ['--page-pad', '--editor-width', '--editor-gap', '--sheet-min-width'].map((token) => {
+    const child = document.createElement('div');
+    child.style.width = 'var(' + token + ')';
+    probe.append(child);
+    return child;
+  });
+  document.body.append(probe);
+  const [pagePad, editorWidth, gap, sheetMinWidth] = children.map((child) => child.getBoundingClientRect().width);
+  probe.remove();
+  return { viewportWidth: document.documentElement.clientWidth, pagePadding: 2 * pagePad, editorWidth, gap, sheetMinWidth, scrollbar: window.innerWidth - document.documentElement.clientWidth };
+})()`;
+
+type LayoutProbe = EditorLayoutInput & { scrollbar: number };
+
+function layoutInput(page: Page): Promise<LayoutProbe> {
+  return page.evaluate<LayoutProbe>(LAYOUT_INPUT);
+}
+
+/** Sets the window so that `document.documentElement.clientWidth` is `clientWidth`: a classic scrollbar, when there is one, adds its width. */
+async function setClientWidth(page: Page, clientWidth: number, height = 800): Promise<void> {
+  const { scrollbar } = await layoutInput(page);
+  await page.setViewportSize({ width: clientWidth + scrollbar, height });
+}
 
 test.beforeEach(({ page }) => {
   // A refused request (the server answers 401, 409 or 422 on purpose in these tests) logs a
@@ -2702,13 +2747,15 @@ test('in an old period the delete confirmation asks for the reason, waits for it
 
 /*
  * Nested dialogs (WP5-UX-B3-01): the confirmation is the only modal on top. Escape closes it and nothing else, at every
- * width: the modal bottom sheet of the mobile project, the floating panel at 1280 and the non-modal panel at 1440.
+ * width: the modal bottom sheet of the mobile project, the non-modal floating drawer at 1280 and the non-modal drawer beside the
+ * sheet at 1440 (round 4: the drawer is never modal from 768px).
  */
 for (const { name, width } of [
   { name: 'the default window', width: null },
   { name: '1440px (the non-modal panel beside the sheet)', width: 1440 },
 ]) {
   test(`${name}: Escape closes the delete confirmation first and then the editor; focus is where it was`, async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+    // Only the phone's bottom sheet is modal; the drawer (floating at the project's 1280px, beside the sheet at 1440px) never is.
     test.skip(width !== null && isMobile, 'The beside-the-sheet panel is a desktop-project layout');
     const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
     const deletes = recordSessionDeletes(page);
@@ -2721,7 +2768,7 @@ for (const { name, width } of [
       const editor = page.getByRole('dialog', { name: /Day editor/ });
       await expect(editor).toBeVisible();
       const modalEditor = await editor.evaluate((element) => element.matches(':modal'));
-      expect(modalEditor, width === 1440 ? 'the panel beside the sheet is not modal' : 'below 1360px the editor is modal').toBe(width !== 1440);
+      expect(modalEditor, isMobile ? 'the phone bottom sheet is modal' : 'the drawer is not modal').toBe(isMobile);
       const deleteButton = editor.getByRole('button', { name: /^Delete session/ });
       await deleteButton.click();
       const confirm = page.getByRole('alertdialog', { name: 'Delete this session?' });
@@ -3113,7 +3160,7 @@ test('the day editor is a side panel on a desktop and a modal bottom sheet on a 
   signInThroughUi,
 }, testInfo) => {
   const project = testInfo.project.name;
-  // WP5-UX3-T05B: the panel stands beside the sheet from 1360px; the 1280px window of the desktop project floats it (tested below).
+  // The panel stands beside the sheet from the width of the layout rule (1330px, U4-07); the 1280px window of the desktop project floats it (tested below).
   if (project === 'desktop') await page.setViewportSize({ width: 1440, height: 800 });
   const [date = '', other = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
   await signInThroughUi();
@@ -3193,16 +3240,24 @@ function focusHiddenByPanel(page: Page): Promise<{ hidden: boolean; outside: boo
   })()`);
 }
 
-test.describe('WP5-UX-B-02: below 1360px the floating panel never hides a focused sheet control', () => {
-  test.skip(({ isMobile }) => isMobile, 'The 768 to 1359px floating side panel is a desktop-project layout');
+/** Waits until React has rendered after a focus change and its effects (the drawer's re-dock runs in the next frame): two frames and a task. */
+function settleFrames(page: Page): Promise<unknown> {
+  return page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 50))))');
+}
 
-  // WP5-UX3-T05B: 1280 and 1359 were beside the sheet before; the keyboard walk now covers the floating panel there too (AX-01).
-  for (const width of [768, 1024, 1280, 1359]) {
-    test(`at ${width}px no focused sheet control lies under the open panel, and Escape closes it from the sheet`, async ({
+test.describe('WP5-UX-B-02 (round 4, U4-05): while the drawer floats, no focused sheet control ever lies wholly under it', () => {
+  test.skip(({ isMobile }) => isMobile, 'The 768px and wider floating drawer is a desktop-project layout');
+
+  // Every width from 768 to the switch point minus 1 floats the drawer. The sampled widths are the window's ends, the card-scroll
+  // threshold (913px) and its neighbours, the common laptop widths and the last floating width. The page is not inert, so the keyboard
+  // reaches every sheet control, and the drawer docks to the other edge whenever one of them would be hidden (SC 2.4.11).
+  for (const width of [768, 800, 913, 914, 1024, 1100, 1200, 1280, BESIDE_NEED - 1]) {
+    test(`at ${width}px a keyboard walk of the sheet never focuses a control wholly under the drawer, and Escape closes it from the sheet`, async ({
       page,
       employeeSeed,
       signInThroughUi,
     }) => {
+      test.setTimeout(90_000);
       const [date = '', other = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
       await page.setViewportSize({ width, height: 800 });
       await signInThroughUi();
@@ -3212,18 +3267,27 @@ test.describe('WP5-UX-B-02: below 1360px the floating panel never hides a focuse
       const editor = page.getByRole('dialog', { name: /Day editor/ });
       await expect(editor).toBeVisible();
       await expect(editor.getByRole('heading', { level: 2 })).toBeFocused();
+      await expect(page.locator('.sheet-area')).toHaveAttribute('data-editor-layout', 'floating');
       await page.screenshot({ path: screenshotPath(`editor-w${width}-synthetic.png`), animations: 'disabled' });
 
-      // Keyboard walk both ways: whatever takes focus is inside the panel, or is not entirely under it.
+      // Keyboard walk both ways: whatever takes focus is inside the drawer, or is not entirely under it (once the drawer has settled).
+      let redocks = 0;
       for (const key of ['Tab', 'Shift+Tab']) {
         for (let step = 0; step < 70; step += 1) {
+          const side = await editor.getAttribute('data-side');
           await page.keyboard.press(key);
-          const state = await focusHiddenByPanel(page);
-          expect(state.hidden, `${state.name} is focused entirely under the panel after ${step + 1} ${key} presses`).toBe(false);
+          let state = await focusHiddenByPanel(page);
+          if (state.hidden) {
+            await settleFrames(page);
+            state = await focusHiddenByPanel(page);
+            redocks += 1;
+          }
+          expect(state.hidden, `${state.name} is focused entirely under the drawer after ${step + 1} ${key} presses (it was docked ${side})`).toBe(false);
         }
       }
+      console.log(`SCAN ${width}px: ${redocks} re-docks during the walk`);
 
-      // Focus placed on a sheet control (when the page allows it at all): Escape still closes the panel.
+      // Focus placed on a sheet control: Escape still closes the drawer.
       await dayButton(other).focus();
       await page.keyboard.press('Escape');
       await expect(editor).toHaveCount(0);
@@ -3231,16 +3295,12 @@ test.describe('WP5-UX-B-02: below 1360px the floating panel never hides a focuse
     });
   }
 
-  // The same behaviour as before, moved to the measured threshold: at 1280 the panel floats (modal), at 1366 it stays beside the sheet.
-  for (const { width, modal } of [
-    { width: 1280, modal: true },
-    { width: 1366, modal: false },
+  // The drawer never makes the page inert, floating (1280px) or beside the sheet (1366px): focus can sit on a sheet control and Escape closes it.
+  for (const { width, name } of [
+    { width: 1280, name: 'floats over the sheet' },
+    { width: 1366, name: 'stands beside the sheet' },
   ]) {
-    test(`at ${width}px the panel ${modal ? 'floats (modal)' : 'stays beside the sheet'} and Escape closes it wherever focus is`, async ({
-      page,
-      employeeSeed,
-      signInThroughUi,
-    }) => {
+    test(`at ${width}px the drawer ${name}, is not modal, and Escape closes it wherever focus is`, async ({ page, employeeSeed, signInThroughUi }) => {
       const [date = '', other = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
       await page.setViewportSize({ width, height: 800 });
       await signInThroughUi();
@@ -3248,20 +3308,18 @@ test.describe('WP5-UX-B-02: below 1360px the floating panel never hides a focuse
       await dayButton(date).click();
       const editor = page.getByRole('dialog', { name: /Day editor/ });
       await expect(editor).toBeVisible();
-      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(modal);
-      // Focus on another sheet control: beside the sheet it takes the focus; a modal panel leaves the page inert, so focus stays in the panel.
+      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+      // Focus on another sheet control takes the focus: the page is not inert.
       await dayButton(other).focus();
-      if (!modal) await expect(dayButton(other)).toBeFocused();
+      await expect(dayButton(other)).toBeFocused();
       await page.keyboard.press('Escape');
       await expect(editor).toHaveCount(0);
       // Focus returns to the button of the day whose editor was open.
       await expect(dayButton(date)).toBeFocused();
       await dayButton(date).click();
       await expect(editor).toBeVisible();
-      if (!modal) {
-        await page.getByRole('switch', { name: 'Show worked hours' }).focus();
-        await expect(page.getByRole('switch', { name: 'Show worked hours' })).toBeFocused();
-      }
+      await page.getByRole('switch', { name: 'Show worked hours' }).focus();
+      await expect(page.getByRole('switch', { name: 'Show worked hours' })).toBeFocused();
       await page.keyboard.press('Escape');
       await expect(editor).toHaveCount(0);
       await expect(dayButton(date)).toBeFocused();
@@ -3269,7 +3327,7 @@ test.describe('WP5-UX-B-02: below 1360px the floating panel never hides a focuse
   }
 });
 
-/* ---- WP5-UX3-T05B: the floating panel below 1360px, readable sheet columns beside the panel from 1360px ---------- */
+/* ---- WP5-UX3-T05B, round 4 (U4-05 to U4-07): the floating drawer below the layout rule's width, readable sheet columns beside it from there ---------- */
 
 /** The longest seeded holiday name (reference/examples/holidays.2026.example.json): its words are the widest category text of a cell. */
 const LONGEST_HOLIDAY = 'Observed Independence Day';
@@ -3385,12 +3443,12 @@ async function signInToPrivate(page: Page, server: BuiltServer, person: Person) 
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
-test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands beside readable columns from 1360px', () => {
+test.describe('WP5-UX3-T05B: the Day editor floats below the layout rule and stands beside readable columns from it', () => {
   test.skip(({ isMobile }) => isMobile, 'The floating side panel and the 7-column sheet are desktop-project layouts');
   // The display zone is the reporting zone, so the seeded times read as typed ("22:00-02:30+1").
   test.use({ timezoneId: LA });
 
-  test('at 1280 and 1359 the editor is a modal panel over a sheet that keeps its full width and every word fits its cell', async ({
+  test('at 1280 and the last floating width the editor is a non-modal drawer over a sheet that keeps its full width and every word fits its cell', async ({
     page,
     privateServer,
   }) => {
@@ -3403,8 +3461,8 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
     await expect(page.locator(`[data-day="${data.overnight}"]`)).toContainText('22:00');
     await expect(page.locator('.sheet-main')).toContainText('Independence');
     const lines: string[] = [];
-    for (const width of [1280, 1359]) {
-      await page.setViewportSize({ width, height: 800 });
+    for (const width of [1280, BESIDE_NEED - 1]) {
+      await setClientWidth(page, width);
       const closed = await sheetFacts(page);
       expect(closed.tooWide, `${width}px closed: words wider than their cell`).toEqual([]);
       expect(Math.min(...closed.columns), `${width}px closed: the narrowest column`).toBeGreaterThanOrEqual(READABLE_COLUMN);
@@ -3414,8 +3472,9 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
       await expect(editor).toBeVisible();
       await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
       // Soft, so a regression of the threshold reports the squeeze measured below as well as the mode.
-      expect.soft(await editor.evaluate((element) => element.matches(':modal')), `${width}px: the editor is modal`).toBe(true);
+      expect.soft(await editor.evaluate((element) => element.matches(':modal')), `${width}px: the editor is not modal`).toBe(false);
       await expect.soft(page.locator('.sheet-area')).not.toHaveClass(/with-editor/);
+      await expect.soft(page.locator('.sheet-area')).toHaveAttribute('data-editor-layout', 'floating');
       await expect.soft(editor).toHaveAttribute('data-side', /^(left|right)$/);
       const open = await sheetFacts(page);
       expect(open.grid, `${width}px: the sheet keeps its full width with the panel open`).toBeCloseTo(closed.grid, 0);
@@ -3435,7 +3494,7 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
     console.log(`FLOATING ${lines.join('; ')}`);
   });
 
-  test('the floating panel docks away from the edited column (left for Saturday and Sunday, right for Monday), over the lighter backdrop, with the column scrolled into view', async ({
+  test('the floating drawer docks away from the edited column (left for Saturday and Sunday, right for Monday), without a backdrop, with the column scrolled into view', async ({
     page,
     privateServer,
   }) => {
@@ -3460,7 +3519,7 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
       await namedDayButton(page, date, 'Edit').dispatchEvent('click');
       const editor = page.getByRole('dialog', { name: /Day editor/ });
       await expect(editor).toBeVisible();
-      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(true);
+      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
       await expect(editor).toHaveAttribute('data-side', side);
       const [panel, edited] = [await editor.boundingBox(), await column.boundingBox()];
       expect(panel && edited, `${date}: both boxes are painted`).toBeTruthy();
@@ -3468,16 +3527,8 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
       expect(separate, `${date}: the column box ${JSON.stringify(edited)} does not meet the panel box ${JSON.stringify(panel)}`).toBe(true);
       expect((edited?.y ?? 0) + (edited?.height ?? 0), `${date}: the column was scrolled into view (its bottom)`).toBeGreaterThan(0);
       expect(edited?.y ?? 0, `${date}: the column was scrolled into view (its top)`).toBeLessThan(420);
-      const colours = await editor.evaluate((element) => {
-        const probe = element.ownerDocument.createElement('div');
-        probe.style.backgroundColor = 'var(--scrim-side)';
-        element.ownerDocument.body.append(probe);
-        const token = element.ownerDocument.defaultView?.getComputedStyle(probe).backgroundColor ?? '';
-        probe.remove();
-        return { backdrop: element.ownerDocument.defaultView?.getComputedStyle(element, '::backdrop').backgroundColor ?? '', token };
-      });
-      expect(colours.backdrop, `${date}: the backdrop is the lighter side scrim`).toBe(colours.token);
-      expect(colours.token, 'the token is a translucent colour').toMatch(/^rgba\(/);
+      // No backdrop: a non-modal dialog is not in the top layer, so the page behind it is neither dimmed nor inert.
+      expect(await page.locator('[inert]').count(), `${date}: nothing on the page is inert`).toBe(0);
       lines.push(`${date} (weekday ${isoWeekday(date)}): side ${side}, column x ${edited?.x.toFixed(0)}-${((edited?.x ?? 0) + (edited?.width ?? 0)).toFixed(0)}, panel x ${panel?.x.toFixed(0)}-${((panel?.x ?? 0) + (panel?.width ?? 0)).toFixed(0)}`);
       if (side === 'left' && isoWeekday(date) === 6) await page.screenshot({ path: screenshotPath('editor-floating-docked-left-w1280-synthetic.png'), animations: 'disabled' });
       await page.keyboard.press('Escape');
@@ -3487,20 +3538,20 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
     console.log(`DOCK ${lines.join('; ')}`);
   });
 
-  test('from 1360 the editor is a non-modal panel beside the sheet, every column is at least 108px and no word is wider than its cell', async ({
+  test('from the layout rule the editor is a drawer beside the sheet, every column is at least 108px and no word is wider than its cell', async ({
     page,
     privateServer,
   }) => {
     test.setTimeout(120_000);
     const data = await seedLongContent(privateServer);
-    await page.setViewportSize({ width: 1360, height: 800 });
+    await page.setViewportSize({ width: 1440, height: 800 });
     await signInToPrivate(page, privateServer, data.person);
     await expect(page.locator('[data-day]')).toHaveCount(14);
     await page.getByRole('switch', { name: 'Show worked hours' }).check();
     await expect(page.locator('.sheet-main')).toContainText('Independence');
     const lines: string[] = [];
-    for (const width of [1360, 1366, 1440, 1920]) {
-      await page.setViewportSize({ width, height: 800 });
+    for (const width of [BESIDE_NEED, 1366, 1440, 1920]) {
+      await setClientWidth(page, width);
       const closed = await sheetFacts(page);
       expect(closed.page, `${width}px closed: the page is capped at 1200px`).toBeLessThanOrEqual(1200.5);
 
@@ -3510,17 +3561,18 @@ test.describe('WP5-UX3-T05B: the Day editor floats below 1360px and stands besid
       await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
       expect(await editor.evaluate((element) => element.matches(':modal')), `${width}px: the editor is not modal`).toBe(false);
       await expect(page.locator('.sheet-area')).toHaveClass(/with-editor/);
-      await expect(editor).not.toHaveAttribute('data-side', /.*/);
+      await expect(page.locator('.sheet-area')).toHaveAttribute('data-editor-layout', 'beside');
+      await expect(editor).toHaveAttribute('data-side', 'right');
       const open = await sheetFacts(page);
       expect(Math.min(...open.columns), `${width}px: the narrowest column`).toBeGreaterThanOrEqual(READABLE_COLUMN);
       expect(open.tooWide, `${width}px: words wider than their cell`).toEqual([]);
       expect(open.words, `${width}px: the probe measured the cells' words`).toBeGreaterThan(50);
       expect(open.scrollOverflow, `${width}px: no sideways scroll`).toBeLessThanOrEqual(0);
-      // The page cap lifts to --page-max-editor (1600px) while the editor is open, and the panel stands beside the sheet.
-      expect(open.page, `${width}px: the page is wider than the 1200px cap while editing`).toBeGreaterThan(width >= 1632 ? 1599 : 1200);
-      expect(open.page, `${width}px: the page stays within 1600px`).toBeLessThanOrEqual(1600.5);
-      const [panel, sheet] = [await editor.boundingBox(), await page.locator('.sheet-area > section.card').boundingBox()];
-      expect((panel?.x ?? 0) + 0.5, `${width}px: the panel is right of the sheet`).toBeGreaterThanOrEqual((sheet?.x ?? 0) + (sheet?.width ?? 0));
+      // The page cap grows by the drawer's room (--editor-reserve, 416px) while the editor is open, and the drawer stands beside the sheet.
+      expect(open.page, `${width}px: the page is wider than the 1200px cap while editing`).toBeGreaterThan(1200);
+      expect(open.page, `${width}px: the page stays within the cap plus the drawer's room`).toBeLessThanOrEqual(1616.5);
+      const [panel, sheet] = [await editor.boundingBox(), await page.locator('.sheet-area > section.paper').boundingBox()];
+      expect((panel?.x ?? 0) - 16 + 0.5, `${width}px: the drawer is right of the sheet, 16px or more clear`).toBeGreaterThanOrEqual((sheet?.x ?? 0) + (sheet?.width ?? 0));
       lines.push(`${width}: columns ${Math.min(...open.columns).toFixed(1)}-${Math.max(...open.columns).toFixed(1)}px, grid ${open.grid.toFixed(1)}px, page ${open.page.toFixed(0)}px, ${open.words} words, widest takes ${(open.tightest * 100).toFixed(0)}% of its box`);
       if (width === 1366 || width === 1920) await page.screenshot({ path: screenshotPath(`editor-beside-w${width}-synthetic.png`), animations: 'disabled' });
 
@@ -3939,12 +3991,25 @@ function seedFirstCalendarVersion(server: BuiltServer, calendarId: string): void
 // reporting zone, and the phone then lists the breaks as chips (the overnight layout). So the synthetic person gets a reporting zone
 // (a fixed-offset Etc/GMT zone, no DST) in which it is about noon right now, chosen from the current UTC hour: "today" always has room
 // for the whole session, and the accounting date is the server's own `today_local` for that person.
-test('"Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it', async ({
-  page,
-  adminSeed,
-  builtServer,
-  signInPageAs,
-}) => {
+//
+// Addendum 1 (item 2): the browser's time input holds the shortest valid time string, "HH:MM" when the seconds are 0 and "HH:MM:SS"
+// otherwise. The session used to start at the server's own clock second, so the expected "HH:MM:SS" failed one run in sixty (at
+// 11:31:00 the input held "11:31"). The test is wrong, the product is consistent: the start's second is now pinned, the expected value
+// follows the input's rule exactly, and both cases run, whole minute (0 s) and not a whole minute (17 s).
+async function confirmBreaksOnEndedSession(
+  seconds: number,
+  {
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+  }: {
+    page: Page;
+    adminSeed: SeedClient;
+    builtServer: BuiltServer;
+    signInPageAs: (credentials: { email: string; password: string }, startHash?: string) => Promise<void>;
+  },
+): Promise<void> {
   // Offset in -11..+12 hours that makes the local time 12:xx now. Etc/GMT zones carry the opposite sign (Etc/GMT-5 is UTC+5).
   const offsetHours = ((23 - new Date().getUTCHours()) % 24) - 11;
   const zone = offsetHours === 0 ? 'Etc/GMT' : offsetHours > 0 ? `Etc/GMT-${offsetHours}` : `Etc/GMT+${-offsetHours}`;
@@ -3970,7 +4035,7 @@ test('"Confirm breaks" on a session that ended earlier today lists the suggested
   // Started three hours ago and ended 30 minutes ago, on the server's today: of the policy's breaks (120, 240 and 390 minutes after the
   // start) only the first lies inside. The session is seeded as the Check in and edit the other tests use.
   const started = await api.call<{ session: { id: string; version: number; start_utc: string } }>('POST', '/api/clock/in', { input_zone: zone }, 201);
-  const startMs = Date.parse(started.session.start_utc) - 3 * 3_600_000;
+  const startMs = Math.floor((Date.parse(started.session.start_utc) - 3 * 3_600_000) / 60_000) * 60_000 + seconds * 1000;
   await api.call('PUT', `/api/sessions/${started.session.id}`, {
     start: instantAt(startMs),
     end: instantAt(startMs + 150 * 60_000),
@@ -3999,7 +4064,9 @@ test('"Confirm breaks" on a session that ended earlier today lists the suggested
   await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).not.toBeChecked();
   await expect(form.locator('[data-break]'), 'the one suggestion inside the session is listed').toHaveCount(1);
   const row = breakRow(form, 1);
-  await expect(row.time).toHaveValue(wallClock(instantAt(startMs + 120 * 60_000), zone));
+  const breakStart = wallClock(instantAt(startMs + 120 * 60_000), zone);
+  expect(breakStart.endsWith(`:${String(seconds).padStart(2, '0')}`), 'the break starts at the pinned second').toBe(true);
+  await expect(row.time).toHaveValue(seconds === 0 ? breakStart.slice(0, 5) : breakStart);
   await expect(row.minutes).toHaveValue('15');
   await expect(row.row).toContainText('suggested');
   expect(puts).toEqual([]);
@@ -4017,7 +4084,18 @@ test('"Confirm breaks" on a session that ended earlier today lists the suggested
   const after = (await api.dayView(today.todayLocal)).sessions[0];
   expect(after?.breaks_confirmed).toBe(true);
   expect(after?.breaks).toHaveLength(1);
-});
+}
+
+for (const seconds of [0, 17]) {
+  test(`"Confirm breaks" on a session that ended earlier today lists the suggested break inside it; Save sends it (start at ${seconds === 0 ? 'a whole minute' : `${seconds} s past the minute`})`, async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+  }) => {
+    await confirmBreaksOnEndedSession(seconds, { page, adminSeed, builtServer, signInPageAs });
+  });
+}
 
 test('the label cell is a picker: a one-entry batch preview and its commit; recorded work and old periods still go through the review', async ({
   page,
@@ -4133,7 +4211,7 @@ test('the label cell is a picker: a one-entry batch preview and its commit; reco
   expect((await person.api.dayView(oldDay)).category).toBe('Sick');
 });
 
-/* ---- WP5-UX-B3-01: the editor switches mode across 1360px while a review dialog is open ---------- */
+/* ---- WP5-UX-B3-01 (round 4): the editor changes layout across the rule's width while a review dialog is open ---------- */
 
 /** What the open dialogs look like: which one holds focus and which one is on top at its own centre. */
 type DialogState = { name: string; modal: boolean; focus: boolean; onTop: boolean };
@@ -4163,10 +4241,11 @@ async function settleAfterResize(page: Page, wide: boolean) {
   await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 100))))');
 }
 
-test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape and focus when the window crosses 1360px', () => {
-  test.skip(({ isMobile }) => isMobile, 'Crossing 1360px is a desktop-project layout change');
+test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape and focus when the window crosses the layout rule', () => {
+  test.skip(({ isMobile }) => isMobile, 'Crossing the layout rule is a desktop-project layout change');
 
-  // WP5-UX3-T05B: the same two paths with the crossing moved from 1200 to 1360 (start 1440; the narrow width 1280 floats the panel).
+  // The same two paths (start 1440, beside the sheet; the narrow width 1280 floats the drawer). The drawer is never modal from 768px,
+  // so the crossing changes only whether the page is pushed aside: the review stays on top and focus does not move.
   for (const path of [
     { name: '1440 to 1280', widths: [1280], endsWide: false },
     { name: '1280 back to 1440', widths: [1280, 1440], endsWide: true },
@@ -4207,7 +4286,7 @@ test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape a
 
       for (const width of path.widths) {
         await page.setViewportSize({ width, height: 800 });
-        await settleAfterResize(page, width >= 1360);
+        await settleAfterResize(page, width >= BESIDE_NEED);
         const state = await dialogStates(page);
         const reviewState = state.dialogs.find((dialog) => dialog.name.startsWith('Review category change'));
         const editorState = state.dialogs.find((dialog) => dialog.name.startsWith('Day editor'));
@@ -4231,15 +4310,9 @@ test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape a
       await page.keyboard.press('Escape');
       await expect(review).toHaveCount(0);
       await expect(editor).toBeVisible();
-      if (path.endsWide) {
-        // From 1360px the editor is the non-modal panel; focus is back on the picker that opened the review.
-        expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
-        await expect(page.getByRole('button', { name: new RegExp(`^Category for ${workedDay}`) })).toBeFocused();
-      } else {
-        // Below 1360px the editor now is the floating modal panel and holds focus; the page behind is inert.
-        await expect.poll(async () => editor.evaluate((element) => element.matches(':modal'))).toBe(true);
-        await expect.poll(async () => editor.evaluate((element) => element.matches(':focus-within'))).toBe(true);
-      }
+      // Beside the sheet or floating, the editor is the non-modal drawer; focus is back on the picker that opened the review.
+      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+      await expect(page.getByRole('button', { name: new RegExp(`^Category for ${workedDay}`) })).toBeFocused();
       expect(batch.map((body) => body.mode)).toEqual(['preview']);
       expect((await person.api.dayView(workedDay)).category).toBe('Worked');
 
@@ -4259,11 +4332,11 @@ test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape a
 test.describe('WP5-UX3-T08: Escape closes only the top dialog, and focus returns where it was', () => {
   test.skip(({ isMobile }) => isMobile, 'The panel beside the sheet and the floating panel are desktop-project layouts (the bottom sheet runs the same dialogs in the tests above)');
 
-  for (const { width, modal } of [
-    { width: 1366, modal: false },
-    { width: 1280, modal: true },
+  for (const { width, layout } of [
+    { width: 1366, layout: 'beside the sheet' },
+    { width: 1280, layout: 'floating' },
   ]) {
-    test(`at ${width}px (${modal ? 'floating modal' : 'non-modal'} editor): the confirmation, the discard question, the session dialog, then the editor`, async ({
+    test(`at ${width}px (non-modal drawer, ${layout}): the confirmation, the discard question, the session dialog, then the editor`, async ({
       page,
       employeeSeed,
       signInThroughUi,
@@ -4276,7 +4349,7 @@ test.describe('WP5-UX3-T08: Escape closes only the top dialog, and focus returns
       await dayButton.click();
       const editor = page.getByRole('dialog', { name: /Day editor/ });
       await expect(editor).toBeVisible();
-      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(modal);
+      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
       const add = editor.getByRole('button', { name: 'Add session' });
       await add.click();
       const form = sessionDialog(page, 'New session');
@@ -4329,7 +4402,7 @@ test.describe('WP5-UX3-T08: Escape closes only the top dialog, and focus returns
     { name: '1440 to 1280', widths: [1280], endsWide: false },
     { name: '1280 back to 1440', widths: [1280, 1440], endsWide: true },
   ]) {
-    test(`${path.name}: the final confirmation stays on top and focused while the window crosses 1360px; Escape closes it, then the session dialog, then the editor`, async ({
+    test(`${path.name}: the final confirmation stays on top and focused while the window crosses the layout rule; Escape closes it, then the session dialog, then the editor`, async ({
       page,
       employeeSeed,
       signInThroughUi,
@@ -4352,7 +4425,7 @@ test.describe('WP5-UX3-T08: Escape closes only the top dialog, and focus returns
 
       for (const width of path.widths) {
         await page.setViewportSize({ width, height: 800 });
-        await settleAfterResize(page, width >= 1360);
+        await settleAfterResize(page, width >= BESIDE_NEED);
         const state = await dialogStates(page);
         const confirmState = state.dialogs.find((dialog) => dialog.name === 'Save this session?');
         expect(confirmState, `the confirmation stays open, modal, on top and focused at ${width}px`).toMatchObject({ modal: true, focus: true, onTop: true });
@@ -4369,15 +4442,9 @@ test.describe('WP5-UX3-T08: Escape closes only the top dialog, and focus returns
       await page.keyboard.press('Escape');
       await expect(form).toHaveCount(0);
       await expect(editor).toBeVisible();
-      if (path.endsWide) {
-        // Back to the non-modal panel beside the sheet: focus is on the button that opened the dialog.
-        expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
-        await expect(add).toBeFocused();
-      } else {
-        // Below 1360px the editor switches to the floating modal panel only now, and holds focus.
-        await expect.poll(async () => editor.evaluate((element) => element.matches(':modal'))).toBe(true);
-        await expect.poll(async () => editor.evaluate((element) => element.matches(':focus-within'))).toBe(true);
-      }
+      // The drawer is non-modal beside the sheet and floating alike: focus is on the button that opened the dialog.
+      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+      await expect(add).toBeFocused();
       await page.keyboard.press('Escape');
       await expect(editor).toHaveCount(0);
       await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -4385,4 +4452,646 @@ test.describe('WP5-UX3-T08: Escape closes only the top dialog, and focus returns
       expect(posts).toEqual([]);
     });
   }
+});
+
+/* ---- WP5-UX4-T02 (round 4, U4-05 to U4-07): the non-modal drawer, its corners and the content-based layout rule ---------- */
+
+/**
+ * The dates of the sheet's day columns that a pointer can reach now: wholly inside the window, clear of the open drawer, with their
+ * day button on top at its own centre. `exclude` is left out (the open day).
+ */
+function reachableDays(page: Page, exclude: string[]): Promise<string[]> {
+  return page.evaluate<string[]>(`((exclude) => {
+    const panel = document.querySelector('[data-day-editor]');
+    const p = panel === null ? null : panel.getBoundingClientRect();
+    const out = [];
+    for (const column of document.querySelectorAll('.week-grid [data-day]')) {
+      const date = column.getAttribute('data-day');
+      const button = column.querySelector('[data-day-button]');
+      if (date === null || button === null || exclude.includes(date)) continue;
+      const box = column.getBoundingClientRect();
+      const b = button.getBoundingClientRect();
+      const inWindow = box.left >= 0 && box.right <= document.documentElement.clientWidth && box.top >= 0 && box.bottom <= window.innerHeight;
+      const clear = p === null || box.right <= p.left || box.left >= p.right;
+      if (inWindow && clear && document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2) === button) out.push(date);
+    }
+    return out;
+  })(${JSON.stringify(exclude)})`);
+}
+
+async function firstReachableDay(page: Page, exclude: string[]): Promise<string> {
+  await settleFrames(page);
+  const [date = ''] = await reachableDays(page, exclude);
+  expect(date, `a day column that a pointer reaches beside the open drawer (not ${exclude.join(', ')})`).not.toBe('');
+  return date;
+}
+
+test.describe('WP5-UX4-T02 (U4-05): the drawer leaves the page usable; another day switches it and the open day unselects it', () => {
+  test.skip(({ isMobile }) => isMobile, 'The non-modal drawer is a desktop-project layout (the phone keeps its modal bottom sheet)');
+
+  for (const width of [768, 1024, 1280, 1440, 1920]) {
+    test(`at ${width}px a press on another day switches the drawer without closing it first, and a press on the open day closes it with focus kept`, async ({
+      page,
+      employeeSeed,
+      signInThroughUi,
+    }, testInfo) => {
+      const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+      await page.setViewportSize({ width, height: 800 });
+      await signInThroughUi();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      const button = (workDate: string) => namedDayButton(page, workDate, 'Edit');
+      const status = page.locator('[data-editor-status]');
+      await button(date).click();
+      await expect(editor).toHaveAttribute('data-day-editor', date);
+      await expect(editor.getByRole('heading', { level: 2 })).toBeFocused();
+
+      // The drawer does not lock the page: not modal, no aria-modal, nothing inert, no backdrop.
+      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+      expect(await editor.getAttribute('aria-modal')).toBeNull();
+      expect(await page.locator('[inert]').count()).toBe(0);
+
+      // A press on another day's button opens that day in the same drawer.
+      const first = await firstReachableDay(page, [date]);
+      await button(first).click();
+      await expect(editor).toHaveAttribute('data-day-editor', first);
+      await expect(page.getByRole('dialog')).toHaveCount(1);
+      await expect(editor.getByRole('heading', { level: 2 })).toHaveText(new RegExp(`${editorTitleOf(first)} ${first}$`));
+      await expect(editor.getByRole('heading', { level: 2 })).toBeFocused();
+
+      // So does a press anywhere on another column, not only on its button.
+      const second = await firstReachableDay(page, [first]);
+      await page.locator(`[data-day="${second}"] .d-time`).click();
+      await expect(editor).toHaveAttribute('data-day-editor', second);
+      await expect(page.getByRole('dialog')).toHaveCount(1);
+      expect(await page.locator('[inert]').count()).toBe(0);
+
+      // A press on the open day's own button closes the drawer; focus stays on it and a polite status says so.
+      await expect(status).toHaveAttribute('aria-live', 'polite');
+      await button(second).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(button(second)).toBeFocused();
+      await expect(status).toHaveText('Day editor closed');
+      if (width === 1440) await page.screenshot({ path: screenshotPath(`u4-05-unselected-w${width}-${testInfo.project.name}-synthetic.png`), animations: 'disabled' });
+
+      // The same with the keyboard: Enter opens the day, Enter on its button again closes it.
+      await button(second).focus();
+      await page.keyboard.press('Enter');
+      await expect(editor).toHaveAttribute('data-day-editor', second);
+      await expect(status).toHaveText('');
+      await button(second).focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(button(second)).toBeFocused();
+      await expect(status).toHaveText('Day editor closed');
+    });
+  }
+
+  for (const width of [1280, 1440]) {
+    test(`at ${width}px Tab goes from the sheet to the drawer and Shift+Tab leaves it`, async ({ page, employeeSeed, signInThroughUi }) => {
+      const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+      await page.setViewportSize({ width, height: 800 });
+      await signInThroughUi();
+      await namedDayButton(page, date, 'Edit').click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor.getByRole('heading', { level: 2 })).toBeFocused();
+      const inside = () => editor.evaluate((element) => element.contains(element.ownerDocument.activeElement));
+      // The last stop of the paper sheet is its review link; the drawer follows the sheet in the DOM.
+      const lastOfSheet = page.locator('.sheet-main a.sig-link');
+      await lastOfSheet.focus();
+      expect(await inside(), 'focus is on the sheet').toBe(false);
+      await page.keyboard.press('Tab');
+      expect(await inside(), 'Tab from the sheet reaches the drawer').toBe(true);
+      // The drawer's first stop is the Close button (a scrolling drawer can be a stop of its own before it); Shift+Tab from there leaves it
+      // for the sheet in at most two presses, onto the sheet's last control.
+      await editor.getByRole('button', { name: 'Close', exact: true }).focus();
+      let presses = 0;
+      while (await inside()) {
+        expect(presses, 'Shift+Tab leaves the drawer within two presses').toBeLessThan(2);
+        await page.keyboard.press('Shift+Tab');
+        presses += 1;
+      }
+      await expect(lastOfSheet).toBeFocused();
+    });
+  }
+
+  test('a control behind the floating drawer that takes focus wholly under it moves the drawer to the other edge', async ({ page, employeeSeed, signInThroughUi }) => {
+    const [first = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    // The Monday column of the first week: the drawer docks away from it, on the right.
+    const monday = (await page.locator('[data-day]').first().getAttribute('data-day')) ?? first;
+    await namedDayButton(page, monday, 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toHaveAttribute('data-side', 'right');
+    // The Sunday button of the first week lies wholly under the right-docked drawer.
+    const sunday = page.locator('[data-day]').nth(6).locator('[data-day-button]');
+    const hidden = async () => {
+      const [target, panel] = [await sunday.boundingBox(), await editor.boundingBox()];
+      expect(target && panel, 'both boxes are painted').toBeTruthy();
+      return (target?.x ?? 0) >= (panel?.x ?? 0) && (target?.x ?? 0) + (target?.width ?? 0) <= (panel?.x ?? 0) + (panel?.width ?? 0);
+    };
+    expect(await hidden(), 'the Sunday button is wholly under the drawer before it takes focus').toBe(true);
+    await sunday.focus();
+    await expect(editor).toHaveAttribute('data-side', 'left');
+    await expect(sunday).toBeFocused();
+    expect(await hidden(), 'the focused Sunday button is no longer under the drawer').toBe(false);
+    // A control that the drawer does not cover leaves it where it is: the toolbar's switch is clear of the left-docked drawer.
+    await page.getByRole('switch', { name: 'Show worked hours' }).focus();
+    await settleFrames(page);
+    await expect(editor).toHaveAttribute('data-side', 'left');
+    // The Monday button now lies wholly under the left-docked drawer, so focusing it moves the drawer back.
+    await namedDayButton(page, monday, 'Edit').focus();
+    await expect(editor).toHaveAttribute('data-side', 'right');
+  });
+});
+
+test.describe('WP5-UX4-T02 (U4-05): unsaved edits are never dropped silently by a switch or an unselect', () => {
+  test.skip(({ isMobile }) => isMobile, 'The switch and the unselect are desktop-project actions (the phone keeps its modal bottom sheet)');
+
+  for (const width of [1280, 1440]) {
+    test(`at ${width}px a switch and an unselect ask "Discard your changes?"; Keep editing leaves the values, Discard goes ahead; a saved day asks nothing`, async ({
+      page,
+      adminSeed,
+      builtServer,
+      signInPageAs,
+    }, testInfo) => {
+      test.setTimeout(60_000);
+      const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Discard', signature: 'none' });
+      const [a = ''] = need(await person.api.displayedPeriodFreeWorkdays(), 1);
+      await page.setViewportSize({ width, height: 800 });
+      await signInPageAs(person.account, '#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+      const keep = prompt.getByRole('button', { name: 'Keep editing', exact: true });
+      const discard = prompt.getByRole('button', { name: 'Discard', exact: true });
+      const button = (workDate: string) => namedDayButton(page, workDate, 'Edit');
+      const notes = editor.getByLabel('Notes');
+      const status = page.locator('[data-editor-status]');
+
+      await button(a).click();
+      await expect(editor).toHaveAttribute('data-day-editor', a);
+      await notes.fill('Synthetic unsaved note');
+      const b = await firstReachableDay(page, [a]);
+
+      // Switching asks first, and the question is modal over everything, the drawer included.
+      await button(b).click();
+      await expect(prompt).toBeVisible();
+      expect(await prompt.evaluate((element) => element.matches(':modal'))).toBe(true);
+      await expect(keep).toBeFocused();
+      await expect(editor).toHaveAttribute('data-day-editor', a);
+      await page.screenshot({ path: screenshotPath(`u4-05-discard-prompt-w${width}-${testInfo.project.name}-synthetic.png`), animations: 'disabled' });
+      await keep.click();
+      await expect(prompt).toHaveCount(0);
+      await expect(editor).toHaveAttribute('data-day-editor', a);
+      await expect(notes).toHaveValue('Synthetic unsaved note');
+
+      // A press on another column's cell asks the same; Discard switches and the new day starts clean.
+      await page.locator(`[data-day="${b}"] .d-time`).click();
+      await expect(prompt).toBeVisible();
+      await discard.click();
+      await expect(prompt).toHaveCount(0);
+      await expect(editor).toHaveAttribute('data-day-editor', b);
+      await expect(editor.getByLabel('Notes')).toHaveValue('');
+      await expect(editor.getByRole('heading', { level: 2 })).toBeFocused();
+
+      // Unselecting asks too: Keep editing keeps the drawer and the values, Discard closes it with the status.
+      await editor.getByLabel('Notes').fill('Another synthetic note');
+      await button(b).click();
+      await expect(prompt).toBeVisible();
+      await keep.click();
+      await expect(editor).toHaveAttribute('data-day-editor', b);
+      await expect(editor.getByLabel('Notes')).toHaveValue('Another synthetic note');
+      await expect(status).toHaveText('');
+      await button(b).click();
+      await expect(prompt).toBeVisible();
+      await discard.click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(button(b)).toBeFocused();
+      await expect(status).toHaveText('Day editor closed');
+
+      // Nothing was saved by any of this; after a save the fields are no longer an unsaved edit, so a switch asks nothing.
+      expect((await person.api.dayView(a)).entry?.notes ?? '').toBe('');
+      await button(a).click();
+      await editor.getByLabel('Notes').fill('Saved synthetic note');
+      await editor.getByRole('button', { name: 'Save day fields' }).click();
+      await expect(editor.getByText('Day fields saved.')).toBeVisible();
+      await button(b).click();
+      await expect(editor).toHaveAttribute('data-day-editor', b);
+      await expect(prompt).toHaveCount(0);
+      expect((await person.api.dayView(a)).entry?.notes).toBe('Saved synthetic note');
+    });
+  }
+
+  test('a reason typed for an old period is an unsaved edit: opening another day through "Open a day" asks first', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+    test.setTimeout(60_000);
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Reason Guard', signature: 'none' });
+    const [recent = ''] = need(await person.api.displayedPeriodFreeWorkdays(), 1);
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInPageAs(person.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const editor = await openEditor(page, OLD_DAY);
+    const reason = editor.getByLabel(/Reason for editing an old or finalized period/);
+    await expect(reason).toBeVisible();
+    // Opening the day that is already open changes nothing and asks nothing.
+    await page.getByLabel('Open a day').fill(OLD_DAY);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(editor).toHaveAttribute('data-day-editor', OLD_DAY);
+    // Without edits another day opens at once.
+    await page.getByLabel('Open a day').fill(recent);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    await expect(editor).toHaveAttribute('data-day-editor', recent);
+    await page.getByLabel('Open a day').fill(OLD_DAY);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    await expect(editor).toHaveAttribute('data-day-editor', OLD_DAY);
+
+    await reason.fill('Synthetic reason');
+    await page.getByLabel('Open a day').fill(recent);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    await expect(prompt).toBeVisible();
+    await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(editor).toHaveAttribute('data-day-editor', OLD_DAY);
+    await expect(reason).toHaveValue('Synthetic reason');
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    await expect(prompt).toBeVisible();
+    await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(editor).toHaveAttribute('data-day-editor', recent);
+  });
+});
+
+/** The geometry of the open drawer: its four computed corner radii, its gaps to the window and the top bar, and the paper's right edge. */
+interface DrawerGeometry {
+  side: string | null;
+  topLeft: string;
+  topRight: string;
+  bottomRight: string;
+  bottomLeft: string;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  barBottom: number;
+  paperRight: number;
+  modal: boolean;
+}
+
+const DRAWER_GEOMETRY = `(() => {
+  const panel = document.querySelector('[data-day-editor]');
+  const style = getComputedStyle(panel);
+  const box = panel.getBoundingClientRect();
+  const bar = document.querySelector('.shell-bar').getBoundingClientRect();
+  const paper = document.querySelector('.sheet-area > .paper').getBoundingClientRect();
+  return {
+    side: panel.getAttribute('data-side'),
+    topLeft: style.borderTopLeftRadius,
+    topRight: style.borderTopRightRadius,
+    bottomRight: style.borderBottomRightRadius,
+    bottomLeft: style.borderBottomLeftRadius,
+    left: box.left,
+    right: document.documentElement.clientWidth - box.right,
+    top: box.top,
+    bottom: window.innerHeight - box.bottom,
+    barBottom: bar.bottom,
+    paperRight: paper.right,
+    modal: panel.matches(':modal'),
+  };
+})()`;
+
+test.describe('WP5-UX4-T02 (U4-06): the drawer is flush with one window edge; the corners toward the sheet are round, the two on the edge are square', () => {
+  test.skip(({ isMobile }) => isMobile, 'The drawer is a desktop-project layout (the phone bottom sheet is checked below)');
+
+  for (const { name, width, column, side, layout } of [
+    { name: 'floating, docked right', width: 1280, column: 0, side: 'right', layout: 'floating' },
+    { name: 'floating, docked left', width: 1280, column: 5, side: 'left', layout: 'floating' },
+    { name: 'beside the sheet, docked right', width: 1440, column: 0, side: 'right', layout: 'beside' },
+  ]) {
+    test(`${name} at ${width}px`, async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+      need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+      await page.setViewportSize({ width, height: 800 });
+      await signInThroughUi();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const date = (await page.locator('[data-day]').nth(column).getAttribute('data-day')) ?? '';
+      await namedDayButton(page, date, 'Edit').click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toHaveAttribute('data-day-editor', date);
+      await expect(page.locator('.sheet-area')).toHaveAttribute('data-editor-layout', layout);
+      await expect(editor).toHaveAttribute('data-side', side);
+      await settleFrames(page);
+      const geometry = await page.evaluate<DrawerGeometry>(DRAWER_GEOMETRY);
+      const edge = side === 'right' ? { toward: [geometry.topLeft, geometry.bottomLeft], onEdge: [geometry.topRight, geometry.bottomRight] } : { toward: [geometry.topRight, geometry.bottomRight], onEdge: [geometry.topLeft, geometry.bottomLeft] };
+      expect(edge.onEdge, `${name}: the two corners on the window edge are square`).toEqual(['0px', '0px']);
+      expect(edge.toward, `${name}: the two corners toward the sheet are 12px`).toEqual(['12px', '12px']);
+      expect(side === 'right' ? geometry.right : geometry.left, `${name}: no gap to the window edge`).toBeCloseTo(0, 1);
+      expect(geometry.bottom, `${name}: no gap to the bottom of the window`).toBeCloseTo(0, 1);
+      expect(geometry.top, `${name}: the drawer starts under the top bar`).toBeCloseTo(geometry.barBottom, 0);
+      expect(geometry.modal, `${name}: not modal`).toBe(false);
+      if (layout === 'beside') {
+        // The page is pushed: the paper's right edge is at least 16px left of the drawer's left edge.
+        expect(geometry.paperRight, `${name}: the sheet is never under the drawer`).toBeLessThanOrEqual(geometry.left - 16 + 0.5);
+      }
+      if (width === 1280 && side === 'right') await page.screenshot({ path: screenshotPath(`u4-06-drawer-floating-right-w${width}-${testInfo.project.name}-synthetic.png`), animations: 'disabled' });
+      if (width === 1280 && side === 'left') await page.screenshot({ path: screenshotPath(`u4-06-drawer-floating-left-w${width}-${testInfo.project.name}-synthetic.png`), animations: 'disabled' });
+      if (layout === 'beside') await page.screenshot({ path: screenshotPath(`u4-06-drawer-beside-w${width}-${testInfo.project.name}-synthetic.png`), animations: 'disabled' });
+    });
+  }
+});
+
+test('WP5-UX4-T02 (U4-06): the phone keeps its modal bottom sheet with square bottom corners', async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+  test.skip(!isMobile, 'The bottom sheet is the phone project');
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  await signInThroughUi();
+  await namedDayButton(page, date, 'Edit').click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  const radii = await editor.evaluate((element) => {
+    const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+    return { modal: element.matches(':modal'), tl: style?.borderTopLeftRadius, tr: style?.borderTopRightRadius, br: style?.borderBottomRightRadius, bl: style?.borderBottomLeftRadius };
+  });
+  expect(radii).toEqual({ modal: true, tl: '12px', tr: '12px', br: '0px', bl: '0px' });
+});
+
+/** True when no cell of a day column is wider than its box. */
+const CELLS_FIT = `[...document.querySelectorAll('.week-grid .sheet-day > div')].filter((cell) => cell.scrollWidth > cell.clientWidth + 1).length`;
+/** True when no week card scrolls sideways. */
+const CARDS_FIT = `[...document.querySelectorAll('.sheet-week')].filter((card) => card.scrollWidth > card.clientWidth).length`;
+
+test.describe('WP5-UX4-T02 (U4-07): the editor floats only when the sheet and the drawer would not fit side by side', () => {
+  test.skip(({ isMobile }) => isMobile, 'The layout rule is a desktop-project behaviour');
+
+  test('the page tokens are the documented ones, the switch lands at 1330px, and every window width decides by the rule alone', async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }, testInfo) => {
+    test.setTimeout(120_000);
+    const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+
+    // The tokens the page resolves are the ones this file derives its widths from (a drift fails here, not silently elsewhere).
+    const tokens = await layoutInput(page);
+    expect(tokens.pagePadding).toBeCloseTo(LAYOUT_TOKENS.pagePadding, 3);
+    expect(tokens.editorWidth).toBeCloseTo(LAYOUT_TOKENS.editorWidth, 3);
+    expect(tokens.gap).toBeCloseTo(LAYOUT_TOKENS.gap, 3);
+    expect(tokens.sheetMinWidth).toBeCloseTo(LAYOUT_TOKENS.sheetMinWidth, 3);
+    const need1 = besideNeed(tokens);
+    expect(need1, 'the width from which the sheet fits beside the drawer, from the page tokens').toBeCloseTo(BESIDE_NEED, 3);
+
+    await namedDayButton(page, date, 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    const area = page.locator('.sheet-area');
+    const lines: string[] = [];
+    // The in-page need minus 1, the need and the need plus 1, then the widths of common windows.
+    for (const { width, mode } of [
+      { width: need1 - 1, mode: 'floating' },
+      { width: need1, mode: 'beside' },
+      { width: need1 + 1, mode: 'beside' },
+      { width: 1024, mode: 'floating' },
+      { width: 1280, mode: 'floating' },
+      { width: 1440, mode: 'beside' },
+      { width: 1920, mode: 'beside' },
+    ] as const) {
+      await setClientWidth(page, width);
+      await expect(area).toHaveAttribute('data-editor-layout', mode);
+      await settleFrames(page);
+      const live = await layoutInput(page);
+      expect(live.viewportWidth, `the window is ${width}px wide`).toBe(width);
+      expect(editorLayout(live), `${width}px: the model and the page agree`).toBe(mode);
+      await expect(editor).toBeVisible();
+      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+      if (mode === 'beside') {
+        await expect(area).toHaveClass(/with-editor/);
+        const facts = await sheetFacts(page);
+        expect(Math.min(...facts.columns), `${width}px: every day column is at least --sheet-col-min`).toBeGreaterThanOrEqual(READABLE_COLUMN);
+        expect(await page.evaluate<number>(CARDS_FIT), `${width}px: no week card scrolls sideways`).toBe(0);
+        expect(await page.evaluate<number>(CELLS_FIT), `${width}px: no cell overflows`).toBe(0);
+        expect(facts.tooWide, `${width}px: no word is wider than its cell`).toEqual([]);
+        expect(facts.scrollOverflow, `${width}px: the page does not scroll sideways`).toBeLessThanOrEqual(0);
+        expect(sheetRoomBeside(live), `${width}px: the room beside the drawer is at least the minimum sheet`).toBeGreaterThanOrEqual(live.sheetMinWidth);
+      } else {
+        await expect(area).not.toHaveClass(/with-editor/);
+        expect(sheetRoomBeside(live), `${width}px: the room beside the drawer is below the minimum sheet`).toBeLessThan(live.sheetMinWidth);
+      }
+      lines.push(`${width}px ${mode}: room ${sheetRoomBeside(live).toFixed(0)} of ${live.sheetMinWidth.toFixed(0)}`);
+      if (width === need1) await page.screenshot({ path: screenshotPath(`u4-07-rule-at-need-${testInfo.project.name}-synthetic.png`), animations: 'disabled' });
+    }
+    console.log(`RULE need ${need1}px (scrollbar ${tokens.scrollbar}px, window ${need1 + tokens.scrollbar}px): ${lines.join('; ')}`);
+
+    // One change per crossing, going up and going down, with the drawer open throughout (the same element stays open).
+    await page.evaluate(`(() => {
+      const area = document.querySelector('.sheet-area');
+      window.__layoutLog = [];
+      new MutationObserver(() => window.__layoutLog.push(area.getAttribute('data-editor-layout'))).observe(area, { attributes: true, attributeFilter: ['data-editor-layout'] });
+    })()`);
+    const up = [768, 1000, 1300, need1 - 3, need1 - 2, need1 - 1, need1, need1 + 1, need1 + 2, need1 + 3, 1500, 1920];
+    for (const [direction, widths] of [['up', up], ['down', [...up].reverse()]] as const) {
+      // Start at the first width of the direction, then count the changes of the rest.
+      await setClientWidth(page, widths[0] ?? 0);
+      await expect(area).toHaveAttribute('data-editor-layout', direction === 'up' ? 'floating' : 'beside');
+      await settleFrames(page);
+      await page.evaluate('window.__layoutLog = []');
+      for (const width of widths.slice(1)) {
+        await setClientWidth(page, width);
+        await settleFrames(page);
+      }
+      const log = await page.evaluate<string[]>('window.__layoutLog');
+      expect(log, `going ${direction} through ${need1}px changes the layout exactly once`).toEqual([direction === 'up' ? 'beside' : 'floating']);
+    }
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+  });
+});
+
+/* ---- WP5-UX4-T02 addendum 1: every route that moves or closes the open day asks before it drops unsaved edits ---------- */
+
+test.describe('WP5-UX4-T02 addendum 1: Today, a period step, Close and Escape ask "Discard your changes?" when the open editor holds unsaved edits', () => {
+  const promptOf = (page: Page) => page.getByRole('alertdialog', { name: 'Discard your changes?' });
+  const keepOf = (page: Page) => promptOf(page).getByRole('button', { name: 'Keep editing', exact: true });
+  const discardOf = (page: Page) => promptOf(page).getByRole('button', { name: 'Discard', exact: true });
+  const periodName = (page: Page) => page.locator('.period-name').innerText();
+  const editorOf = (page: Page) => page.getByRole('dialog', { name: /Day editor/ });
+
+  test('Today: with unsaved edits it asks before the sheet moves and the editor goes to today; Keep editing changes nothing, Discard goes ahead; without edits it asks nothing', async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'On a phone the modal bottom sheet makes Today unreachable while the editor is open');
+    test.setTimeout(60_000);
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Today Guard', signature: 'none' });
+    const { todayLocal } = await person.api.today();
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInPageAs(person.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const opened = await periodName(page);
+    // The sheet shows the previous period, and the editor is open on a day of an old period.
+    await page.getByRole('button', { name: 'Previous period' }).click();
+    await expect.poll(() => periodName(page)).not.toBe(opened);
+    const today = page.locator('[data-period-today]');
+
+    // Without an edit nothing asks: the editor goes to today and the sheet to today's period.
+    const shownBefore = await periodName(page);
+    let editor = await openEditor(page, OLD_DAY);
+    await today.click();
+    await expect(editor).toHaveAttribute('data-day-editor', todayLocal);
+    await expect.poll(() => periodName(page)).not.toBe(shownBefore);
+    const current = await periodName(page);
+    expect(await promptOf(page).count()).toBe(0);
+    await page.getByRole('button', { name: 'Previous period' }).click();
+    await expect.poll(() => periodName(page)).not.toBe(current);
+    const previous = await periodName(page);
+
+    // With an edit it asks first; Keep editing changes nothing, not the period shown either.
+    editor = await openEditor(page, OLD_DAY);
+    await editor.getByLabel('Notes').fill('Synthetic unsaved note');
+    await today.click();
+    await expect(promptOf(page)).toBeVisible();
+    await expect(keepOf(page)).toBeFocused();
+    await expect(editor).toHaveAttribute('data-day-editor', OLD_DAY);
+    expect(await periodName(page), 'the period is still the previous one while the question is open').toBe(previous);
+    await page.screenshot({ path: screenshotPath('u4-05-today-guard-desktop-synthetic.png'), animations: 'disabled' });
+    await keepOf(page).click();
+    await expect(promptOf(page)).toHaveCount(0);
+    await expect(editor).toHaveAttribute('data-day-editor', OLD_DAY);
+    await expect(editor.getByLabel('Notes')).toHaveValue('Synthetic unsaved note');
+    expect(await periodName(page), 'Keep editing leaves the period').toBe(previous);
+    await expect(today).toBeFocused();
+
+    // Discard goes ahead: today's period and the editor on today, with its own fields.
+    await today.click();
+    await expect(promptOf(page)).toBeVisible();
+    await discardOf(page).click();
+    await expect(promptOf(page)).toHaveCount(0);
+    await expect(editor).toHaveAttribute('data-day-editor', todayLocal);
+    await expect.poll(() => periodName(page)).toBe(current);
+    await expect(editor.getByLabel('Notes')).toHaveValue('');
+  });
+
+  test('Next period: with unsaved edits it asks before the period changes; Keep editing changes nothing, Discard goes ahead and restarts the open editor; without edits it asks nothing', async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'On a phone the modal bottom sheet makes the period bar unreachable while the editor is open');
+    test.setTimeout(60_000);
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Period Guard', signature: 'none' });
+    const [a = ''] = need(await person.api.displayedPeriodFreeWorkdays(), 1);
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInPageAs(person.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const first = await periodName(page);
+    const next = page.getByRole('button', { name: 'Next period' });
+    const editor = editorOf(page);
+
+    // Without an edit nothing asks.
+    await namedDayButton(page, a, 'Edit').click();
+    await expect(editor).toHaveAttribute('data-day-editor', a);
+    await next.click();
+    await expect.poll(() => periodName(page)).not.toBe(first);
+    expect(await promptOf(page).count()).toBe(0);
+    await expect(editor).toHaveAttribute('data-day-editor', a);
+    await page.getByRole('button', { name: 'Previous period' }).click();
+    await expect.poll(() => periodName(page)).toBe(first);
+
+    // With an edit it asks; Keep editing changes nothing, Discard steps and the editor starts again from the saved day.
+    await editor.getByLabel('Notes').fill('Synthetic unsaved note');
+    await next.click();
+    await expect(promptOf(page)).toBeVisible();
+    expect(await periodName(page)).toBe(first);
+    await keepOf(page).click();
+    await expect(promptOf(page)).toHaveCount(0);
+    expect(await periodName(page)).toBe(first);
+    await expect(editor.getByLabel('Notes')).toHaveValue('Synthetic unsaved note');
+    await expect(next).toBeFocused();
+    await next.click();
+    await expect(promptOf(page)).toBeVisible();
+    await discardOf(page).click();
+    await expect.poll(() => periodName(page)).not.toBe(first);
+    await expect(editor).toHaveAttribute('data-day-editor', a);
+    await expect(editor.getByLabel('Notes')).toHaveValue('');
+    // The restarted editor holds no edit: the next step asks nothing.
+    await page.getByRole('button', { name: 'Previous period' }).click();
+    await expect.poll(() => periodName(page)).toBe(first);
+    expect(await promptOf(page).count()).toBe(0);
+  });
+
+  test('Escape and the Close button: with unsaved edits they ask first (Escape on the question keeps editing), Keep editing leaves the editor and the values, Discard closes it; without edits they close at once', async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+    isMobile,
+  }) => {
+    test.setTimeout(60_000);
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Close Guard', signature: 'none' });
+    const [a = ''] = need(await person.api.displayedPeriodFreeWorkdays(), 1);
+    if (!isMobile) await page.setViewportSize({ width: 1440, height: 800 });
+    await signInPageAs(person.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const editor = editorOf(page);
+    const button = namedDayButton(page, a, 'Edit');
+    const notes = editor.getByLabel('Notes');
+    const close = editor.getByRole('button', { name: 'Close', exact: true });
+    const opensAndEdits = async () => {
+      await button.click();
+      await expect(editor).toHaveAttribute('data-day-editor', a);
+      await notes.fill('Synthetic unsaved note');
+    };
+
+    // Without an edit: Escape and Close close at once.
+    await button.click();
+    await expect(editor).toHaveAttribute('data-day-editor', a);
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await button.click();
+    await close.click();
+    await expect(editor).toHaveCount(0);
+    expect(await promptOf(page).count()).toBe(0);
+
+    // Escape with an edit: the question; Escape on the question is Keep editing (a nested modal takes Escape first).
+    await opensAndEdits();
+    await page.keyboard.press('Escape');
+    await expect(promptOf(page)).toBeVisible();
+    await expect(keepOf(page)).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(promptOf(page)).toHaveCount(0);
+    await expect(editor).toHaveAttribute('data-day-editor', a);
+    await expect(notes).toHaveValue('Synthetic unsaved note');
+    await expect(notes).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(promptOf(page)).toBeVisible();
+    await keepOf(page).click();
+    await expect(notes).toHaveValue('Synthetic unsaved note');
+    await page.keyboard.press('Escape');
+    await discardOf(page).click();
+    await expect(editor).toHaveCount(0);
+    await expect(button).toBeFocused();
+
+    // The Close button with an edit.
+    await opensAndEdits();
+    await close.click();
+    await expect(promptOf(page)).toBeVisible();
+    await keepOf(page).click();
+    await expect(editor).toHaveAttribute('data-day-editor', a);
+    await expect(notes).toHaveValue('Synthetic unsaved note');
+    await expect(close).toBeFocused();
+    await close.click();
+    await discardOf(page).click();
+    await expect(editor).toHaveCount(0);
+    await expect(button).toBeFocused();
+    // Nothing was saved by any of this.
+    expect((await person.api.dayView(a)).entry?.notes ?? '').toBe('');
+    // A fresh editor on the same day starts clean.
+    await button.click();
+    await expect(notes).toHaveValue('');
+  });
 });

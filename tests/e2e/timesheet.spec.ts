@@ -1,4 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
+import { besideNeed } from '../../src/client/components/editorLayoutModel.ts';
 import { formatHoursMinutes } from '../../src/domain/format.ts';
 import {
   backdropOf,
@@ -28,14 +29,20 @@ import { expect, screenshotPath, type SeedClient, test } from './fixtures.ts';
 test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
 
 /**
- * WP5-UX3-T05B: below 1360px the Day editor floats as a modal panel and the page behind is inert. A desktop test that works on the
- * sheet while the editor is open therefore runs in a window where the editor stands beside the sheet (the project's own window is 1280px).
- * 1449px, not 1440: with the page uncapped to 1600px the seven columns are then exactly 125px wide, so a column's left and right edges
- * fall on whole pixels and the pixel probes of the editing frame (a 1px inset ring cut by the run's clip-path) read it exactly. At a
- * fractional column edge the clip softens that ring's outer pixel, which those probes were never written for. (It was 1445px, which
- * gave 129px columns, until the round-4 paper sheet took 32px of padding from the sheet: 1449px restores whole columns.)
+ * Round 4 (U4-07): the Day editor stands beside the sheet from the width of the layout rule (`besideNeed`, 1330px with the documented tokens)
+ * and floats over it below that (a non-modal drawer, the page stays usable but its right columns lie under the drawer). A desktop test that
+ * works on the sheet while the editor is open therefore runs in a window where the editor stands beside the sheet (the project's own window is
+ * 1280px). The width is the rule's own need plus the room of 7 columns of 125px instead of 108px: the seven columns are then exactly 125px
+ * wide, so a column's left and right edges fall on whole pixels and the pixel probes of the editing frame (a 1px inset ring cut by the run's
+ * clip-path) read it exactly. At a fractional column edge the clip softens that ring's outer pixel, which those probes were never written for.
+ * (The documented tokens at the 15px root: page padding 32px, drawer 400px, gap 16px, minimum sheet 882px, a 108px minimum column.)
  */
-const EDITOR_BESIDE_SHEET = { width: 1449, height: 800 };
+const WHOLE_PIXEL_COLUMN = 125;
+const SHEET_MIN_COLUMN = 108;
+const EDITOR_BESIDE_SHEET = {
+  width: besideNeed({ pagePadding: 32, editorWidth: 400, gap: 16, sheetMinWidth: 882 }) + 7 * (WHOLE_PIXEL_COLUMN - SHEET_MIN_COLUMN),
+  height: 800,
+};
 
 test.beforeEach(({ page }) => {
   // A CSP violation shows up as a console error. The signed-out probe answers 401 by design and

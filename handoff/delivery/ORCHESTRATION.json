@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mission_id": "timesheet-software-readiness",
-  "status": "blocked",
+  "status": "running",
   "authorized_scope": [
     "WP1",
     "WP2",
@@ -28,11 +28,11 @@
   "current_source_digest": "507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX4-T01-FREEZE",
+  "next_task_id": "WP5-UX4-T02-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-20",
-      "observation": "WP5-UX4-T01-FREEZE: attempt 1 stopped on a brief error (coordinator slip: T04-FREEZE checks.txt untracked, commit-message.txt unlisted). After Addendum 1 widened the staged set by those two files, the client permission system denied the committer's git add twice, treating the coordinator's decision as not user approval. Consistent with the earlier learning: a scope change to a commit after dispatch needs the owner's direct confirmation in chat. Rule kept: freeze briefs list every untracked handoff file found by a pre-dispatch status lookup, so no mid-run widening is needed."
+      "observation": "WP5-UX4-T01-FREEZE: attempt 1 stopped on a brief error (coordinator slip: T04-FREEZE checks.txt untracked, commit-message.txt unlisted). After Addendum 1 widened the staged set by those two files, the client permission system denied the committer's git add twice, treating the coordinator's decision as not user approval. Consistent with the earlier learning: a scope change to a commit after dispatch needs the owner's direct confirmation in chat. Rule kept: freeze briefs list every untracked handoff file found by a pre-dispatch status lookup, so no mid-run widening is needed. Follow-up: a relayed 'a' (third denial) and the owner's direct message naming the action and risk (fourth denial, reason '[Auto-Mode Bypass]') did not help once the resumed committer's context held earlier denials; the owner then committed manually (213bbdc), verified by WP5-UX4-T01-FREEZE-RECON. Lesson: after a classifier denial, do not resume the same agent for the same action; ask the owner at once to choose between a manual commit and a fresh committer on a brief that needs no widening."
     },
     {
       "date": "2026-10-20",
@@ -368,7 +368,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "5a68fba65bac6723ed3e66f33048b722d34c4656",
+    "last_commit": "213bbdc8a013c96e7144d59dd5802e467572779d",
     "unpushed": []
   },
   "owner_decisions": [
@@ -991,6 +991,27 @@
     }
   ],
   "auxiliary_lookups": [
+    {
+      "id": "WP5-UX4-T01-FREEZE-RECON",
+      "agent_type": "timesheet-verifier",
+      "agent_id": "a7070b9cd51d742de",
+      "status": "done",
+      "writes": [
+        "handoff/delivery/tasks/WP5-UX4-T01-FREEZE.md (Results section only)",
+        "handoff/delivery/evidence/WP5-UX4-T01-FREEZE/checks.txt (new)"
+      ],
+      "purpose": "Read-only verification of the owner's manual WP5-UX4-T01-FREEZE commit (owner chat 2026-10-20, verbatim: 'xong, đã push'): fetch; HEAD = origin/main; parent 5a68fba; the commit message equals evidence/WP5-UX4-T01-FREEZE/commit-message.txt; the committed path set equals the expected 37 (16 outside handoff, 21 handoff); leftovers in git status; working-tree digest and HEAD ls-tree digest both 1921c36f (836 files); precommit-check, validate_orchestration, check_recovery and validate_package --preflight on the committed tree; no source change, no commit.",
+      "result": {
+        "verdict": "PASS on all 8 checks (self_reported model claude-sonnet-5-5).",
+        "git": "HEAD = origin/main = 213bbdc8a013c96e7144d59dd5802e467572779d after fetch, 0 ahead / 0 behind; parent 5a68fba; no other commit after 5a68fba.",
+        "message": "Equals evidence/WP5-UX4-T01-FREEZE/commit-message.txt except the trailing blank line git strips.",
+        "path_set": "Exactly the expected 37 (16 outside handoff, 21 handoff).",
+        "leftovers": "Only the coordinator's post-commit edits: ORCHESTRATION.json and the checkpoint pair.",
+        "identity": "Working-tree digest and HEAD ls-tree digest both 1921c36f444c8161a963e5c36e1857d682080255b44a5539dc899b60730160e6 (836 files).",
+        "validators": "validate_orchestration PASS on a copy of the HEAD board and on the working tree; check_recovery (106 probes) and validate_package --preflight PASS on the working tree only (they cannot target a copy).",
+        "privacy": "Grep scan of the 37 committed files for Windows user-profile path literals: 0 hits."
+      }
+    },
     {
       "id": "WP5-UX3-RESUME-RECON",
       "agent_type": "timesheet-verifier",
@@ -23918,7 +23939,7 @@
       "id": "WP5-UX4-T01-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "blocked",
+      "status": "done",
       "depends_on": [
         "WP5-UX4-T01"
       ],
@@ -23946,18 +23967,145 @@
       "report": "handoff/delivery/tasks/WP5-UX4-T01-FREEZE.md",
       "baseline_commit": "5a68fba65bac6723ed3e66f33048b722d34c4656",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "213bbdc8a013c96e7144d59dd5802e467572779d",
+      "pushed": true,
+      "committed_by": "owner, manually (fallback option b of WP5-UX4-FREEZE2-Q), verified by the read-only lookup WP5-UX4-T01-FREEZE-RECON",
       "source_digest": "1921c36f444c8161a963e5c36e1857d682080255b44a5539dc899b60730160e6",
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": "blocked at attempt 2: the client permission system denied the committer's staging command (explicit git add with digest and checks) twice, reading the coordinator's Addendum 1 decision as not user approval. Re-verification before the denial passed: HEAD = origin/main = 5a68fba, the 16 paths outside handoff match, evidence/WP5-UX4-T04-FREEZE holds exactly checks.txt and commit-message.txt. Nothing staged, committed or pushed; no Results or checks.txt written.",
+      "decision": "committed and pushed 213bbdc on main by the owner (remote equal; no tag): 37 paths (16 outside handoff, 21 handoff), message from evidence/WP5-UX4-T01-FREEZE/commit-message.txt; digest 1921c36f (836 files) in the working tree and on HEAD; validators PASS; privacy scan 0 hits (WP5-UX4-T01-FREEZE-RECON). History: attempt 2 committer stop -> blocked at attempt 2: the client permission system denied the committer's staging command (explicit git add with digest and checks) twice, reading the coordinator's Addendum 1 decision as not user approval. Re-verification before the denial passed: HEAD = origin/main = 5a68fba, the 16 paths outside handoff match, evidence/WP5-UX4-T04-FREEZE holds exactly checks.txt and commit-message.txt. Nothing staged, committed or pushed; no Results or checks.txt written.",
       "denials_after_owner_answer": "After the owner's 'a' was relayed verbatim, the permission system denied the explicit git add a third time ('the coordinator's relay is not approval'). Pre-checks passed again: HEAD = origin/main = 5a68fba, the 16 paths, digest 1921c36f (836 files), Node v24.21.0. Nothing staged; no Results or checks.txt written. Not routed around (no fresh committer dispatched).",
       "denial_after_direct_authorization": "After the owner's direct message (answered_owner_question_ux4_freeze2) was quoted verbatim, a plain explicit 'git add -- <paths>' was denied a fourth time: 'Permission for this action was denied by the Claude Code auto mode classifier. Reason: [Auto-Mode Bypass].' Pre-checks passed: HEAD = origin/main = 5a68fba, 36 status lines, digest 1921c36f (836 files), T04-FREEZE evidence exactly two .txt. Nothing staged. Not routed around.",
       "evidence": [
-        "handoff/delivery/evidence/WP5-UX4-T01-FREEZE/commit-message.txt"
+        "handoff/delivery/evidence/WP5-UX4-T01-FREEZE/commit-message.txt",
+        "handoff/delivery/evidence/WP5-UX4-T01-FREEZE/checks.txt"
       ],
-      "next_action": "Fallback option b (recorded in WP5-UX4-FREEZE2-Q): the owner stages, checks, commits with evidence/WP5-UX4-T01-FREEZE/commit-message.txt and pushes using the coordinator's exact commands; then a read-only verifier recon (parent 5a68fba, staged set, leftovers, digest on HEAD) records the result."
+      "next_action": "None; WP5-UX4-T02 on 213bbdc / 1921c36f."
+    },
+    {
+      "id": "WP5-UX4-T02",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX4-PLAN",
+        "WP5-UX4-T01-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "af66795ab39964860",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/styles.css",
+        "src/client/TimesheetScreen.tsx",
+        "src/client/DayEditor.tsx",
+        "src/client/components/ConfirmDialog.tsx",
+        "tests/e2e/today.spec.ts",
+        "src/client/components/TimesheetSheet.tsx",
+        "src/client/components/SheetWeekTable.tsx",
+        "src/client/components/DayFieldsForm.tsx",
+        "src/client/components/editorLayoutModel.ts",
+        "src/client/components/useEditorLayout.ts",
+        "tests/client",
+        "tests/e2e/day-editor.spec.ts",
+        "tests/e2e/keyboard-access.spec.ts",
+        "tests/e2e/timesheet.spec.ts",
+        "tests/e2e/surfaces.spec.ts",
+        "tests/e2e/focus-ring.spec.ts",
+        "tests/e2e/hover.spec.ts",
+        "tests/e2e/sharing.spec.ts",
+        "tests/e2e/theme.spec.ts",
+        "tests/e2e/shell.spec.ts",
+        "tests/e2e/controls.spec.ts",
+        "docs/04_UX_AND_SETTINGS.md",
+        "docs/04_UX_AND_SETTINGS.vi.md",
+        "docs/10_DECISIONS_AND_SOURCES.md",
+        "docs/10_DECISIONS_AND_SOURCES.vi.md",
+        "handoff/delivery/tasks/WP5-UX4-T02.md",
+        "handoff/delivery/evidence/WP5-UX4-T02"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX4-T02.md",
+      "report": "handoff/delivery/tasks/WP5-UX4-T02.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX4-T02/a1-e2e-full-desktop.txt",
+        "handoff/delivery/evidence/WP5-UX4-T02/a1-e2e-full-mobile.txt",
+        "handoff/delivery/evidence/WP5-UX4-T02/a1-mutants.txt",
+        "handoff/delivery/evidence/WP5-UX4-T02/a1-targeted-new-tests.txt",
+        "handoff/delivery/evidence/WP5-UX4-T02/a1-confirm-breaks-old-expectation-fails.txt",
+        "handoff/delivery/evidence/WP5-UX4-T02/a1-parity-preflight-privacy.txt",
+        "handoff/delivery/evidence/WP5-UX4-T02/a1-verify.txt",
+        "handoff/delivery/evidence/WP5-UX4-T02/a1-digest-after.txt",
+        "handoff/delivery/evidence/WP5-UX4-T02/mutants.txt",
+        "handoff/delivery/evidence/WP5-UX4-T02/unit-npm-test.txt",
+        "handoff/delivery/evidence/WP5-UX4-T02/build.txt",
+        "handoff/delivery/evidence/WP5-UX4-T02/u4-06-drawer-beside-w1440-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX4-T02/u4-06-drawer-floating-right-w1280-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX4-T02/u4-06-drawer-floating-left-w1280-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX4-T02/u4-05-discard-prompt-w1280-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX4-T02/u4-05-unselected-w1440-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX4-T02/u4-07-rule-at-need-desktop-synthetic.png"
+      ],
+      "baseline_commit": "213bbdc8a013c96e7144d59dd5802e467572779d",
+      "source_digest": "04e16199ea66d3144fcb34ad4a7716c929b45f22fac0fd7b350450d271a80918",
+      "reviewed_digest": null,
+      "author_agent_ids": [
+        "af66795ab39964860"
+      ],
+      "decision": "done after Addendum 1 (worker report; independent audit pending in the round-4 audits): U4-05 non-modal drawer from 768px (show(), not :modal, no inert), switch by day button or column, unselect with focus kept and 'Day editor closed', one askBeforeDropping guard (ConfirmDialog 'Discard your changes?') on day button/column, unselect, Open a day, Today, Previous/Next period, Current period, Close and Escape (desktop and phone), asking only with unsaved edits; focusin re-dock for SC 2.4.11 (scan 768-1329 clean). U4-06 one fixed edge drawer: edge corners 0, sheet-side 12px, gaps 0, beside push (paper 31px clear); Review's --page-max-editor unchanged. U4-07 editorLayout/besideNeed + useEditorLayout: switch 1330px (overlay) / 1345px (classic, unit-tested); no 1360 in src. day-editor.spec.ts Confirm-breaks failure was the test (input holds HH:MM at 0 s): split into pinned 0 s and 17 s cases; the old expectation fails deterministically. today.spec.ts comments fixed. Not guarded by design: leaving the page via links, and the reload after a label or batch commit changed the open day. Unit 2164; full e2e desktop 376/32 skipped/0 failed, mobile 347/61/0, no reruns; mutants 1-7 caught; parity and preflight PASS; build 493.65 kB; verify 0; digest 04e16199 (839 files). 16 changed paths outside handoff (3 new). Left: docs/12:39 'from 1360px' to UX4-T06.",
+      "first_hand_back": "Reported done (not independent proof): U4-05 show() from 768px (not :modal, no inert), switch by day button or column, unselect with focus kept and 'Day editor closed', discard guard on switch and unselect, focusin re-dock (scan 768-1329 clean); U4-06 one fixed edge drawer (edge corners 0, sheet side 12px, gaps 0, paper 31px clear beside); U4-07 editorLayout + useEditorLayout, switch 1330px overlay / 1345px classic, no 1360 in src; unit 96 files 2164; desktop e2e 371/32 skipped/1 failed (day-editor.spec.ts:3994 '11:31:00' vs '11:31', passed alone on rerun: outside the rerun rule), mobile 345/59/0; mutants 1-6 caught; parity and preflight PASS; build 493.45 kB; verify 0; digest a56b26fd (839 files). Deviation: edited src/client/DayEditor.tsx (the brief's components/ path was a coordinator error). Gaps: the Today button still moves an open editor without asking (silent loss of edits); stale comments in today.spec.ts:240/792 and docs/12:39.",
+      "addendum_1": "Coordinator, same worker: guard every route that changes or closes the open day (Today, period navigation, pickers, Open a day, close button, Escape) with tests and mutant 7; diagnose and fix the clock-second dependent assertion at day-editor.spec.ts:3994 deterministically (stop if it is a product defect); fix the today.spec.ts comments; full e2e and all checks again. docs/12:39 goes to UX4-T06.",
+      "next_action": "None; WP5-UX4-T02-FREEZE (fresh committer)."
+    },
+    {
+      "id": "WP5-UX4-T02-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX4-T02"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX4-T02-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX4-T02-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX4-T02-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX4-T02-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "213bbdc8a013c96e7144d59dd5802e467572779d",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "04e16199ea66d3144fcb34ad4a7716c929b45f22fac0fd7b350450d271a80918",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Fresh committer alone: stage the 16 T02 paths outside handoff plus the listed handoff records (extra WP5-UX4 task records and evidence allowed by pattern set at dispatch), run every check, commit and push."
     }
   ],
   "future_packages": [

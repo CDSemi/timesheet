@@ -17,6 +17,7 @@ import { BatchBar } from './components/BatchBar.tsx';
 import { BatchDialog } from './components/BatchDialog.tsx';
 import { ClockPanel } from './components/ClockPanel.tsx';
 import { DESKTOP_QUERY, useClock, useMedia } from './components/ClockProvider.tsx';
+import { ConfirmDialog } from './components/ConfirmDialog.tsx';
 import { dayPeriodPill } from './components/dayEditorModel.ts';
 import { batchEntries, staleDates, staleReloadMessage } from './components/dayModel.ts';
 import { describeError } from './components/errors.ts';
@@ -28,23 +29,20 @@ import { currentPeriodJump, currentStatusText, todayJump, todayStatusText } from
 import { usePeriodState } from './components/ReviewStatus.tsx';
 import { ShowDetailsSwitch } from './components/ShowDetailsSwitch.tsx';
 import { TimesheetSheet } from './components/TimesheetSheet.tsx';
+import { useEditorLayout } from './components/useEditorLayout.ts';
 import { DayEditor } from './DayEditor.tsx';
 
 /*
  * The documented layout breakpoint (DESKTOP_QUERY, shared with the check in/out control): the 7-column sheet from
- * 768px up, one table per week below it.
+ * 768px up, one table per week below it. From 768px the Day editor is a non-modal drawer; whether it stands beside the
+ * sheet (the page reserves its room) or floats over it is the rule of useEditorLayout, never a literal width.
  */
 
-/**
- * From this width the day editor is a non-modal panel in its own column beside the sheet, which keeps its
- * seven columns at their readable width. 1360px is the same literal as the media query in styles.css (a media
- * query cannot read a custom property). Below it the editor is modal and floats (a side panel from 768px, a
- * bottom sheet below that), so it never covers a control that can still take focus.
- */
-const WIDE_QUERY = '(min-width: 1360px)';
-
-/** Which side the floating (modal) side panel docks on: away from the edited column, so the column stays visible. */
+/** Which window edge the drawer is flush with: always the right beside the sheet; floating, away from the edited column so the column stays visible. */
 type DockSide = 'left' | 'right';
+
+/** The text of the polite status after the open day's button closed the Day editor. */
+const EDITOR_CLOSED_TEXT = 'Day editor closed';
 
 /**
  * Scrolls the edited column into view (vertically; a sideways scroll only when the sheet itself scrolls sideways) and
@@ -57,6 +55,11 @@ function dockAwayFrom(workDate: string): DockSide {
   column.scrollIntoView({ block: 'nearest' });
   const box = column.getBoundingClientRect();
   return box.left + box.width / 2 > document.documentElement.clientWidth / 2 ? 'left' : 'right';
+}
+
+/** True when `inner` lies wholly within `outer`: a control in this position behind the drawer is entirely hidden (WCAG 2.2 SC 2.4.11). */
+function whollyCovered(inner: DOMRect, outer: DOMRect): boolean {
+  return inner.width > 0 && inner.height > 0 && inner.left >= outer.left && inner.right <= outer.right && inner.top >= outer.top && inner.bottom <= outer.bottom;
 }
 
 /**
@@ -100,7 +103,10 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const request: Requester = shared?.request ?? ownRequest;
   const canEdit = shared === undefined || shared.canEdit;
   const desktop = useMedia(DESKTOP_QUERY);
-  const wide = useMedia(WIDE_QUERY);
+  // The Day editor's layout (U4-07): beside the sheet when the window leaves the sheet its minimum width, else floating. The media query
+  // decides the phone (a classic scrollbar makes the model's width up to 15px narrower than the query's), so a sliver reads as floating.
+  const beside = useEditorLayout() === 'beside' && desktop;
+  const floating = desktop && !beside;
   const [payrollDate, setPayrollDate] = useState<string | null>(null);
   /** The server's current local date and periods; days after that date show as upcoming. */
   const [periods, setPeriods] = useState<CurrentPeriods | null>(null);
@@ -137,6 +143,20 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   /** The element that opened the day editor, and the date whose button gets focus back when it closes. */
   const editorOpener = useRef<Element | null>(null);
   const returnFocusTo = useRef<string | null>(null);
+  /** True while the open editor holds day fields or a reason that are not saved (reported by the editor). */
+  const editorDirty = useRef(false);
+  const reportEditorDirty = useCallback((dirty: boolean) => {
+    editorDirty.current = dirty;
+  }, []);
+  /**
+   * The action waiting for the answer to "Discard your changes?" (a switch, an unselect, Close or Escape, Today, a period step): what
+   * it does once the edits are dropped, and the control to give focus back to when the person keeps editing.
+   */
+  const [discard, setDiscard] = useState<{ proceed: () => void; keep?: () => void; opener: HTMLElement | null } | null>(null);
+  /** Raised to remount the open editor from the saved day (the forms and the reason start again) when a navigation drops the edits. */
+  const [editorEpoch, setEditorEpoch] = useState(0);
+  /** The polite status after the open day's button closed the editor; cleared when an editor opens. */
+  const [editorStatus, setEditorStatus] = useState('');
   /** The date whose label picker gets focus back when its review dialog closes. */
   const returnToPicker = useRef<string | null>(null);
   /** What opened the batch review ("Preview changes"); it gets focus back when the review is cancelled. */
@@ -198,14 +218,36 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
     };
   }, [request]);
 
-  // The floating side panel (a modal editor on a desktop-width window narrower than WIDE_QUERY) docks away from the edited
-  // column. A layout effect runs before the editor's own effect shows the dialog, so the column is scrolled into view first.
-  // The side is read again when the edited day or the mode changes; the editor itself stays mounted across a mode change.
-  const floating = desktop && !wide;
+  // The floating drawer docks away from the edited column. A layout effect runs before the editor's own effect shows the dialog,
+  // so the column is scrolled into view first. The side is read again when the edited day or the mode changes; the editor itself
+  // stays mounted across a mode change.
   const [dockSide, setDockSide] = useState<DockSide>('right');
   useLayoutEffect(() => {
     if (editDate === null || !floating) return;
     setDockSide(dockAwayFrom(editDate));
+  }, [editDate, floating]);
+
+  // SC 2.4.11: the floating drawer does not make the page inert, so a control behind it can take focus. When it does and its box
+  // lies wholly under the drawer, the drawer docks to the other edge: a focused control is never entirely hidden. The box is read
+  // after the frame, when the browser has scrolled the control into view. Controls in dialogs (they sit above the drawer) are skipped.
+  useEffect(() => {
+    if (editDate === null || !floating) return;
+    let frame = 0;
+    const redock = (event: FocusEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || target.closest('dialog') !== null) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const panel = document.querySelector<HTMLElement>('[data-day-editor]');
+        if (panel === null || !target.isConnected) return;
+        if (whollyCovered(target.getBoundingClientRect(), panel.getBoundingClientRect())) setDockSide((side) => (side === 'left' ? 'right' : 'left'));
+      });
+    };
+    document.addEventListener('focusin', redock);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener('focusin', redock);
+    };
   }, [editDate, floating]);
 
   // The clock state looks the running session up again with every load: this page reports the period it loaded.
@@ -232,7 +274,15 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
     setNotice(clockNotice.text);
   }, [clockNotice]);
 
-  async function move(direction: -1 | 1) {
+  /** "Previous period" and "Next period": a step to another period asks first when the open editor holds unsaved edits (Discard restarts it from its saved day). */
+  function move(direction: -1 | 1) {
+    askBeforeDropping(() => {
+      if (editorDirty.current) restartEditor();
+      void moveNow(direction);
+    });
+  }
+
+  async function moveNow(direction: -1 | 1) {
     if (view === null) return;
     const date = direction < 0 ? addDays(view.period.period_start, -1) : addDays(view.period.period_end, 1);
     try {
@@ -263,29 +313,48 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
     try {
       const fresh = await request<CurrentPeriods>('GET', '/periods/current');
       const jump = todayJump({ today: fresh.today_local, current: fresh.current, inProgress: fresh.in_progress, shown: view.period, editDate });
-      setPeriods(fresh);
       if (!jump.away) {
         // The fresh answer decides, not the button's look: the sheet already shows today (and the open editor is on it), so nothing
         // moves. Only the periods are renewed, so the Today tag and the buttons follow the server's date.
+        setPeriods(fresh);
         if (wasAway) setJumpStatus(announced);
         return;
       }
-      setJumpStatus(null);
-      setPayrollDate(jump.targetPayrollDate);
-      setSelected(new Set());
-      setStaleNotice(null);
-      setNotice(null);
-      if (jump.moveEditorTo !== null) setEditDate(jump.moveEditorTo);
-      scrollToToday.current = fresh.today_local;
-      setJumpCount((count) => count + 1);
-      setJumpStatus(todayStatusText(fresh.today_local, fresh.in_progress));
+      // The jump moves the sheet to another period and an open editor to today: with unsaved edits it asks first (addendum 1).
+      // Keep editing leaves everything as it was, the hidden announcement included.
+      askBeforeDropping(() => {
+        setPeriods(fresh);
+        setJumpStatus(null);
+        setPayrollDate(jump.targetPayrollDate);
+        setSelected(new Set());
+        setStaleNotice(null);
+        setNotice(null);
+        if (jump.moveEditorTo !== null) {
+          editorDirty.current = false;
+          setEditDate(jump.moveEditorTo);
+        } else if (editorDirty.current) {
+          restartEditor();
+        }
+        scrollToToday.current = fresh.today_local;
+        setJumpCount((count) => count + 1);
+        setJumpStatus(todayStatusText(fresh.today_local, fresh.in_progress));
+      }, () => {
+        if (wasAway) setJumpStatus(announced);
+      });
     } catch (caught) {
       report(caught);
     }
   }
 
-  /** "Current period": returns to the R-07 current period the page opens on. It only navigates; an open editor stays as it is. */
-  async function jumpToCurrent() {
+  /** "Current period": returns to the R-07 current period the page opens on. It only navigates; an open editor stays as it is (after the discard question when it holds unsaved edits, which Discard drops). */
+  function jumpToCurrent() {
+    askBeforeDropping(() => {
+      if (editorDirty.current) restartEditor();
+      void jumpToCurrentNow();
+    });
+  }
+
+  async function jumpToCurrentNow() {
     if (view === null) return;
     setJumpStatus(null);
     try {
@@ -434,14 +503,74 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
     }
   }, [preview]);
 
+  /**
+   * The one guard of the Day editor (U4-05, addendum 1). Edits that are not saved are never dropped silently: every action that
+   * would change the open day, close the editor or move the sheet to another period runs `proceed` at once when nothing is unsaved,
+   * and otherwise first asks "Discard your changes?" and waits. Keep editing changes nothing; Discard drops the edits and goes ahead.
+   * Actions that stay on the same day and period (saving, reloading) are not guarded.
+   */
+  function askBeforeDropping(proceed: () => void, keep?: () => void) {
+    if (editDate === null || !editorDirty.current) {
+      proceed();
+      return;
+    }
+    const opener = document.activeElement;
+    setDiscard({ proceed, ...(keep === undefined ? {} : { keep }), opener: opener instanceof HTMLElement ? opener : null });
+  }
+
+  /** "Keep editing" of the question: nothing changes; an action that touched hidden state before asking puts it back. */
+  function keepEditing() {
+    discard?.keep?.();
+    setDiscard(null);
+  }
+
+  /** The open editor starts again from the saved day: a navigation dropped its edits but leaves it open on its day. */
+  function restartEditor() {
+    editorDirty.current = false;
+    setEditorEpoch((count) => count + 1);
+  }
+
+  /**
+   * Opens the Day editor on a day, or switches the open editor to it (U4-05); opening the day that is already open changes nothing.
+   */
   function openEditor(workDate: string) {
-    editorOpener.current = document.activeElement;
-    setEditDate(workDate);
+    if (workDate === editDate) return;
+    // What was pressed, read now: after a "Discard" the active element is the question's own button.
+    const pressed = document.activeElement;
+    askBeforeDropping(() => {
+      editorDirty.current = false;
+      editorOpener.current = pressed;
+      setEditorStatus('');
+      setEditDate(workDate);
+    });
   }
 
   function closeEditor() {
     if (editDate !== null) returnFocusTo.current = editDate;
+    editorDirty.current = false;
     setEditDate(null);
+  }
+
+  /** The editor's Close button and Escape. */
+  function requestClose() {
+    askBeforeDropping(closeEditor);
+  }
+
+  /** A press on the open day's own button: closes the editor (after the discard question when it holds unsaved edits) and says so. */
+  function unselectEditor() {
+    if (editDate === null) return;
+    askBeforeDropping(() => {
+      closeEditor();
+      setEditorStatus(EDITOR_CLOSED_TEXT);
+    });
+  }
+
+  /** "Discard" of the question: the action that was waiting goes ahead and the edits are dropped. */
+  function confirmDiscard() {
+    if (discard === null) return;
+    const { proceed } = discard;
+    setDiscard(null);
+    proceed();
   }
 
   // After the editor is gone (a modal sheet no longer makes the page inert), focus goes back to the day.
@@ -469,7 +598,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
           todayAway,
           currentVisible: currentPeriodJump({ current: periods.current, inProgress: periods.in_progress, shown: view.period }).visible,
           onToday: () => void jumpToToday(todayAway),
-          onCurrent: () => void jumpToCurrent(),
+          onCurrent: jumpToCurrent,
           status: notice === null ? jumpStatus : null,
         };
 
@@ -489,7 +618,14 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
       )}
 
       {view !== null && (
-        <div className={`sheet-area${editDate !== null && wide ? ' with-editor' : ''}`}>
+        <div className={`sheet-area${editDate !== null && beside ? ' with-editor' : ''}`} data-editor-layout={desktop ? (beside ? 'beside' : 'floating') : 'bottom-sheet'}>
+          {/*
+            A persistent live region (SC 4.1.3), as the period bar's: present from load, empty until the open day's button closed the editor.
+            It stands before the paper, so the paper stays the last block of the sheet area and the drawer follows it in the DOM.
+          */}
+          <p className="sr-only" aria-live="polite" aria-atomic="true" data-editor-status>
+            {editorStatus}
+          </p>
           <section className="card stack sheet-main paper" data-paper="timesheet">
             <div className="tools">
               <div className="tools-left">{canEdit && <OpenDay onOpen={openEditor} />}</div>
@@ -559,6 +695,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
                 editing: editDate,
                 onToggle: toggle,
                 onEdit: openEditor,
+                onUnselect: unselectEditor,
                 editable: canEdit,
                 selecting: batchOn,
                 locked: imported,
@@ -579,23 +716,36 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
 
           {editDate !== null && (
             <DayEditor
-              key={editDate}
+              key={`${editDate}:${editorEpoch}`}
               workDate={editDate}
               displayZone={displayZone}
               reportingZone={view.reporting_zone}
               todayLocal={todayLocal}
-              modal={!wide}
               bottomSheet={!desktop}
-              dockSide={dockSide}
+              dockSide={beside ? 'right' : dockSide}
               refresh={editorRefresh}
               periodPill={dayPeriodPill(editDate, view.period, periods)}
               onChanged={load}
-              onClose={closeEditor}
+              onClose={requestClose}
+              onDirtyChange={reportEditorDirty}
               request={request}
               readOnly={!canEdit || imported}
             />
           )}
         </div>
+      )}
+
+      {discard !== null && (
+        <ConfirmDialog
+          title="Discard your changes?"
+          message="The day fields or the reason you typed are not saved. Keep editing to go back to them, or discard them to continue."
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          tone="danger"
+          opener={discard.opener}
+          onConfirm={confirmDiscard}
+          onCancel={keepEditing}
+        />
       )}
 
       {preview !== null && view !== null && (

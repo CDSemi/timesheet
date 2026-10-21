@@ -163,3 +163,15 @@ Return at most 80 words, beginning 'Self-reported model: ...'.
   - Any other unexpected path still stops the commit.
 
 ## Results
+
+### Manual commit by the owner (verified by WP5-UX4-T01-FREEZE-RECON)
+
+- SHAs: HEAD = origin/main = 213bbdc8a013c96e7144d59dd5802e467572779d, ahead/behind 0/0. PASS
+- Parent: 5a68fba65bac6723ed3e66f33048b722d34c4656; no other commit after it. PASS
+- Message: matches commit-message.txt (only difference: a trailing blank line git strips). PASS
+- Path set: exactly the 37 expected paths (16 outside handoff, 15 M + 1 A; 21 under handoff). PASS
+- Leftovers: only ORCHESTRATION.json and the checkpoint pair (M). PASS
+- Digests: working tree and HEAD ls-tree both 1921c36f444c8161a963e5c36e1857d682080255b44a5539dc899b60730160e6 (836 files). PASS
+- Validators: validate_orchestration PASS on HEAD board copy and working tree; check_recovery PASS (106 probes) and validate_package --preflight PASS on the working tree only (cannot target a copy).
+- Privacy scan: 0 Windows user-profile path hits in the committed files. PASS
+- Evidence: handoff/delivery/evidence/WP5-UX4-T01-FREEZE/checks.txt

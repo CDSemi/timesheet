@@ -928,6 +928,45 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
     - Nội dung commit nằm trong `evidence/WP5-UX4-T01-FREEZE/commit-message.txt`.
     - Mission ở trạng thái `blocked` cho tới khi commit vào repo. Sau đó một verifier chỉ đọc kiểm
       tra và ghi kết quả.
+  - Chủ dự án báo "xong, đã push". Đang chạy: WP5-UX4-T01-FREEZE-RECON (verifier, chỉ đọc).
+- WP5-UX4-T01-FREEZE xong: commit thủ công của chủ dự án
+  213bbdc8a013c96e7144d59dd5802e467572779d.
+  - Recon đạt cả 8 bước kiểm tra: commit cha 5a68fba; nội dung commit khớp file; đúng 37 đường dẫn;
+    digest 1921c36f trên working tree và trên HEAD; các validator PASS; quét quyền riêng tư không
+    có kết quả nào.
+  - Bài học (ghi ở runtime_observations trên board): sau khi bị classifier chặn, không cho cùng
+    agent đó chạy lại cùng hành động.
+- Đang chạy: WP5-UX4-T02 (worker-high, sonnet) trên 213bbdc / 1921c36f.
+  - Phạm vi: U4-05 (panel nổi không chặn trang, có đổi ngày, bỏ chọn và hỏi trước khi bỏ thay đổi
+    chưa lưu), U4-06 (panel dạng drawer sát mép) và U4-07 (quy tắc editorLayout).
+- WP5-UX4-T02, lần báo cáo đầu.
+  - Đã làm theo báo cáo:
+    - drawer không chặn trang từ 768px, có đổi ngày và bỏ chọn;
+    - góc 0 / 12px;
+    - mốc chuyển chế độ 1330px (thanh cuộn dạng overlay) / 1345px (thanh cuộn thường);
+    - unit 2164; e2e mobile 0 lỗi; bắt được đột biến 1-6; digest a56b26fd (839 file).
+  - Còn hở:
+    - nút Today vẫn đổi ngày đang mở mà không hỏi, nên mất thay đổi chưa lưu mà không báo;
+    - một lỗi phụ thuộc giây đồng hồ ở `day-editor.spec.ts:3994`, chỉ đạt khi chạy lại, mà quy
+      tắc không cho phép chạy lại trường hợp này;
+    - chú thích cũ trong `today.spec.ts`; `docs/12:39` chuyển cho T06.
+  - Lệch đường dẫn: `src/client/DayEditor.tsx`. Brief ghi sai đường dẫn, lỗi của coordinator.
+- Đang chạy: Addendum 1 của T02 (cùng worker). Nội dung: hỏi trước ở mọi thao tác làm đổi hoặc đóng
+  ngày đang mở; sửa phép so sánh phụ thuộc thời gian để kết quả luôn ổn định; sửa chú thích; thêm
+  đột biến 7.
+- WP5-UX4-T02 xong sau Addendum 1.
+  - Một cơ chế hỏi trước dùng chung cho mọi thao tác: bấm nút ngày hoặc cột, bỏ chọn, Open a day,
+    Today, Previous/Next period, Current period, nút đóng và Escape.
+  - Lỗi Confirm-breaks là do test: ô giờ chỉ hiện HH:MM khi giây bằng 0. Test nay chạy hai trường
+    hợp với giây cố định.
+  - E2e đầy đủ: desktop 376 / mobile 347 đạt, 0 lỗi, không phải chạy lại. Bắt được đột biến 1-7.
+    Digest 04e16199 (839 file).
+  - Cố ý không hỏi: khi rời trang qua một liên kết, và khi tải lại sau khi một thay đổi label hoặc
+    thay đổi hàng loạt đã sửa đúng ngày đang mở.
+- Đang chạy: WP5-UX4-T02-FREEZE.
+  - Một committer mới chạy một mình.
+  - Brief liệt kê đủ mọi đường dẫn ngay từ khi giao. Các bản ghi task và evidence WP5-UX4 phát
+    sinh thêm được phép stage theo mẫu đặt sẵn lúc giao.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

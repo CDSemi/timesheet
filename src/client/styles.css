@@ -144,7 +144,9 @@
   --clip-hidden: inset(50%);
   --layer-sticky: 1;
   --page-max: 1200px;
-  /* The page width while the Day editor is open beside the sheet (used by the editor slice) */
+  /* The page's side padding (each side); the Day editor's layout rule reads it */
+  --page-pad: var(--space-4);
+  /* The page width of the Review page beside its checklist; the Timesheet page reserves the Day editor's room instead (--editor-reserve) */
   --page-max-editor: 1600px;
   /* The gap between the title row and the next block of Timesheet and of Review, from 768px (round 4, U4-02, owner answer F-5) */
   --page-head-gap: var(--space-6);
@@ -183,6 +185,13 @@
 
   /* Sheet columns (used by the sheet slices): the narrowest readable day column, the lift offset and the shadow clip */
   --sheet-col-min: 7.2rem;
+  --sheet-days: 7;
+  /*
+   * The narrowest paper (round 4, U4-07): the label column, seven columns of at least --sheet-col-min, the two hairlines of the week
+   * card and the paper's padding on both sides. The Day editor stands beside the sheet only when the window leaves the sheet this
+   * much (useEditorLayout reads this token, --page-pad, --editor-width and --editor-gap), otherwise it floats over the sheet.
+   */
+  --sheet-min-width: calc(var(--sheet-label-col) + var(--sheet-days) * var(--sheet-col-min) + 2 * var(--hairline) + 2 * var(--paper-pad));
   --lift-clip: 32px;
   --lift-y: -3px;
   --toolbar-group-gap: var(--space-5);
@@ -252,6 +261,8 @@
 
   /* Day editor (WP5-UX-T04): side panel beside the sheet, bottom sheet on a phone, in-cell label picker */
   --editor-gap: var(--space-4);
+  /* The room the page keeps for the Day editor drawer when it stands beside the sheet: the drawer and its gap */
+  --editor-reserve: calc(var(--editor-width) + var(--editor-gap));
   --editor-sheet-max-height: 86dvh;
   --layer-panel: 2;
   --layer-popup: 2;
@@ -1081,7 +1092,7 @@ html {
 .page {
   max-width: var(--page-max);
   margin: 0 auto;
-  padding: var(--space-4);
+  padding: var(--page-pad);
 }
 
 /* Room for the fixed tab bar below the last control of every screen. */
@@ -2516,7 +2527,6 @@ textarea {
  * tinted and hatched (a non-colour cue); every status keeps its words and shape.
  */
 .sheet {
-  --sheet-days: 7;
   --sheet-caps-spacing: 0.08em;
   --sheet-today-bar: calc(var(--rule) + var(--hairline));
   --sheet-signature-cols: 1.6fr 1fr;
@@ -3541,14 +3551,14 @@ textarea {
 /* ---- Day editor panel and bottom sheet, in-cell label picker (WP5-UX-T04) ------- */
 
 /*
- * One native <dialog> for the day editor. From 1360px it is a non-modal panel in its own column
- * beside the sheet (the sheet keeps its seven columns at their readable width, and the page cap
- * lifts to --page-max-editor while it is open). Below 1360px it is modal, so the page behind is
- * inert and the panel never hides a control that can still take focus: from 768px a floating side
- * panel over a light backdrop (--scrim-side), docked on the side away from the edited column
- * (`data-side`), a bottom sheet of at most 86% of the height below that. Inside: a sticky head,
- * then the banner, the times, label and leave, and the figures, each section separated by a soft
- * rule.
+ * One native <dialog> for the day editor. From 768px it is a non-modal drawer flush with one window edge, from under the top
+ * bar to the bottom of the window (round 4, U4-05 to U4-07): no backdrop, the page stays usable. When the window has room for
+ * the sheet and the drawer (`useEditorLayout`, the rule in editorLayoutModel.ts) the page is pushed aside and reserves the
+ * drawer's room (`.sheet-area.with-editor`, always on the right); otherwise the drawer floats over the sheet on the side away
+ * from the edited column (`data-side`), and docks to the other side when a control behind it takes focus under it. The two
+ * corners on the window edge are square and the two toward the sheet are rounded. Below 768px it is a modal bottom sheet of at
+ * most 86% of the height. Inside: a sticky head, then the banner, the times, label and leave, and the figures, each section
+ * separated by a soft rule.
  */
 .sheet-area {
   display: grid;
@@ -3610,51 +3620,39 @@ textarea {
   box-shadow: var(--focus-ring-inset), var(--elev-3);
 }
 
+/*
+ * The drawer (round 4, U4-06): beside the sheet and floating share this one geometry, a fixed column flush with a window edge from
+ * under the top bar (and the share bar) to the bottom of the window. Docked right its corners toward the sheet are rounded and the
+ * two on the edge are square; docked left is the mirror. There is no backdrop: the page stays usable.
+ */
 .day-panel-side {
   position: fixed;
-  inset: calc(var(--bar-height) + var(--space-3)) var(--space-3) var(--space-3) auto;
+  inset: calc(var(--shell-bar-size) + var(--share-bar-size)) 0 0 auto;
   z-index: var(--layer-panel);
-  width: min(var(--editor-width), calc(100vw - 2 * var(--space-3)));
+  width: var(--editor-width);
   height: auto;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
 }
 
-/* Docked on the left when the edited column lies in the right half of the window, so the column stays visible. */
+/* Docked on the left when the edited column lies in the right half of the window (floating only), so the column stays visible. */
 .day-panel-side[data-side='left'] {
-  inset: calc(var(--bar-height) + var(--space-3)) auto var(--space-3) var(--space-3);
+  inset: calc(var(--shell-bar-size) + var(--share-bar-size)) auto 0 0;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
 }
 
-/* The floating panel dims the page less than a dialog: the edited column stays readable for orientation. */
-.day-panel-side::backdrop {
-  background: var(--scrim-side);
+/*
+ * Beside the sheet (the window leaves the sheet its minimum width, see --sheet-min-width): the page keeps the drawer's room on the
+ * right, so the sheet is never under the drawer. The page cap grows by the same room, which keeps the sheet at the width it has
+ * without the drawer on a wide window.
+ */
+.page:has(.sheet-area.with-editor) {
+  max-width: calc(var(--page-max) + var(--editor-reserve));
+  padding-inline-end: calc(var(--page-pad) + var(--editor-reserve));
 }
 
-/* 1360px (literal: a media query cannot read a custom property) is the width at which WIDE_QUERY in TimesheetScreen.tsx switches too. */
-@media (min-width: 1360px) {
-  .page:has(.sheet-area.with-editor) {
-    max-width: var(--page-max-editor);
-  }
-
-  .sheet-area.with-editor {
-    grid-template-columns: minmax(0, var(--track)) var(--editor-width);
-  }
-
-  /* The narrower sheet beside the panel stacks its form header instead of squeezing the title. */
-  .sheet-area.with-editor .form-head {
-    grid-template-columns: var(--track);
-  }
-
-  .day-panel-side {
-    position: sticky;
-    inset: auto;
-    top: calc(var(--shell-bar-size) + var(--share-bar-size) + var(--space-3));
-    width: auto;
-    max-height: calc(100dvh - var(--shell-bar-size) - var(--share-bar-size) - 2 * var(--space-3));
-    box-shadow: var(--elev-2);
-  }
-
-  .day-panel-side:focus-visible {
-    box-shadow: var(--focus-ring-inset), var(--elev-2);
-  }
+/* The narrower sheet beside the drawer stacks its form header instead of squeezing the title. */
+.sheet-area.with-editor .form-head {
+  grid-template-columns: var(--track);
 }
 
 .day-panel-sheet {
