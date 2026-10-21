@@ -100,7 +100,7 @@ Bản cài mới chưa có lịch và chưa có quản trị viên. Bootstrap t�
    <compose> exec -T timesheet <cli> bootstrap --new-token
    ~~~
 
-5. Không bao giờ dán token vào chat, ticket hay log. Lệnh `seed` tổng hợp bị từ chối ở production; quản trị viên tạo các tài khoản thật trong ứng dụng. Mật khẩu là tạm thời và WP4 không có route đổi mật khẩu (quyết định E-11, xem [10 Quyết định](10_DECISIONS_AND_SOURCES.vi.md)).
+5. Không bao giờ dán token vào chat, ticket hay log. Lệnh `seed` tổng hợp bị từ chối ở production; quản trị viên tạo các tài khoản thật trong ứng dụng. Quản trị viên đặt mật khẩu tạm cho từng tài khoản mới (quyết định E-11, xem [10 Quyết định](10_DECISIONS_AND_SOURCES.vi.md)); điều đó vẫn giữ. Sau đó mỗi người tự đổi mật khẩu của mình ở trang Profile (quyết định của chủ D-9 (b), `POST /api/auth/password`): cần mật khẩu hiện tại, mật khẩu mới 12 đến 256 ký tự khác mật khẩu cũ, và các phiên khác của người đó bị đăng xuất.
 
 ## 4. Lịch backup
 
@@ -216,7 +216,7 @@ Bản build cũ từ chối CSDL của schema mới hơn, nên không bao giờ 
      <image> <cli> restore --from /backups/<paired-backup-name> --to /restore --keep-schema --confirm
    ~~~
 
-3. Khởi động image trước đó (tag `<previous-image>`, không bao giờ là bản build lại cùng tag) trên `<restore-dir>` với `JOB_RUNNER=off` trong môi trường, bằng `<compose-previous> up --detach --no-build` (nó dùng file env rollback). Schema cũ đã restore không có tạm dừng gửi ra ngoài, nên job tạo sau rollback không bị giữ: giữ bộ chạy tắt cho đến khi đối soát xong. Drill chỉ chứng minh bản build trước, khi bật bộ chạy, không gửi gì từ các job bị giữ (`JOB_RUNNER=off` là quy tắc đã ghi, không phải bước của drill).
+3. Khởi động image trước đó (tag `<previous-image>`, không bao giờ là bản build lại cùng tag) trên `<restore-dir>` với `JOB_RUNNER=off` trong môi trường, bằng `<compose-previous> up --detach --no-build` (nó dùng file env rollback). Schema cũ đã restore không có tạm dừng gửi ra ngoài, nên job tạo sau rollback không bị giữ: giữ bộ chạy tắt cho đến khi đối soát xong. Drill chỉ chứng minh bản build trước, khi bật bộ chạy, không gửi gì từ các job bị giữ (`JOB_RUNNER=off` là quy tắc đã ghi, không phải bước của drill). Quyết định của chủ (a), D-1: giữ `JOB_RUNNER=off` cho đến khi đối soát xong.
 4. Đối soát. Bản build trước không có lệnh `outbound`: việc đối soát diễn ra sau khi nâng cấp lại, làm migrate dữ liệu đã restore và cung cấp công cụ tạm dừng và giải phóng. Thay đổi thực hiện sau backup ghép đôi không có trong bản đã restore.
 5. Nếu từ backup chưa có migration nào được áp dụng (schema tương thích), image trước đó có thể khởi động trên dữ liệu đang chạy. Đường này chưa được diễn tập. **[owner NAS step, unverified]**
 
@@ -244,9 +244,9 @@ Làm mới image nền khi có bản vá bảo mật, và luôn làm cùng nhau:
 Dành cho những người của chủ sở hữu. Mỗi người chỉ nhập workbook của chính mình; quản trị viên không thể nhập cho ai khác (quyết định F-1 của chủ sở hữu). Ứng dụng không bao giờ đọc công thức, macro hay liên kết ngoài của workbook.
 
 1. Đăng nhập và mở Import (`#/import`). Tải lên một file `.xlsx` tối đa 2 MiB (workbook có macro bị từ chối). Bản xem trước liệt kê mọi ngày kèm ô nguồn, nhãn lạ, ngày trùng, ngày lễ thả nổi, các lỗi đã biết của template và xung đột với bản ghi hiện có. **[Drill stage 6]** (qua API; các màn hình được `tests/e2e/import.spec.ts` bao phủ)
-2. Quyết định cho từng ngày được liệt kê. Mặc định là bỏ qua; chỉ có các lựa chọn mà bản xem trước cho phép. Sau đó xem lại và commit. **[Drill stage 6]**
+2. Quyết định cho từng ngày được liệt kê. Mặc định là bỏ qua; chỉ có các lựa chọn mà bản xem trước cho phép. Sau đó xem lại và commit. **[Drill stage 6]** Mỗi người có tối đa 20 bản xem trước đang mở (chưa commit) (quyết định của chủ D-6 (a)): lần tải lên mới thứ 21 bị từ chối với 409 `import_preview_limit`, tải lại cùng file trả về bản xem trước đã có, và một bản xem trước chỉ được giải phóng bằng cách commit nó (được bỏ qua mọi ngày). Pilot không nhập lịch sử; production vẫn giữ việc nhập.
 3. Kỳ đã nhập hiển thị "Imported, unverified". Đó là lịch sử chỉ đọc: không sự kiện sổ cái, không sign-off hay nộp (409 `imported_period`), không nhắc hạn và không tự động gửi. Tải cùng file lần nữa, hoặc commit hai lần, không thay đổi gì ("Already imported"). **[Drill stage 6]**
-4. Số dư OT mở đầu là khoản OT mang sang duy nhất. Nhập số phút có dấu khác không, ngày hiệu lực, lý do và tham chiếu bằng chứng, rồi xác nhận. Khoản này được ghi một lần; lặp lại là không làm gì, còn giá trị khác bị từ chối. Chỉ thay đổi bằng một điều chỉnh có lý do (điều chỉnh làm số dư ròng về không bị từ chối, câu hỏi mở I-4). **[Drill stage 6]**
+4. Số dư OT mở đầu là khoản OT mang sang duy nhất. Nó bằng 0 cho đến khi chủ đặt (quyết định của chủ F-1 (i)). Nhập số phút có dấu khác không, ngày hiệu lực (điền sẵn là hôm nay) và lý do; tham chiếu bằng chứng là tùy chọn và nếu để trống thì lưu là "not provided". Khoản này được ghi một lần; lặp lại là không làm gì, còn giá trị khác bị từ chối. Chỉ thay đổi bằng một điều chỉnh có lý do, có thể đưa về 0 (D-5 (a)); điều chỉnh về đúng giá trị hiện tại thì không ghi gì. **[Drill stage 6]**
 5. Việc nhập không làm gì: không bao giờ tạo phiên làm việc hay giờ chấm công, OT, sign-off hay lần gửi; "Off day (overtime used)" bị bỏ qua (I-2); kỳ nháp của ứng dụng không bao giờ nhận ngày nhập (I-1); kỳ chưa kết thúc, hoặc đã kết thúc nhưng chưa đến hạn lương, chỉ được bỏ qua (I-3 và mặc định an toàn của nó, tài liệu 10).
 6. Giữ workbook cá nhân ngoài git, chat và image. Template được theo dõi là mẫu đã làm sạch và không bao giờ được lưu lại.
 
@@ -282,11 +282,11 @@ Quản trị viên thấy vận hành và gửi thư, không bao giờ thấy ch
 
 ## 13. Kích hoạt pilot
 
-Việc gửi thật và thời điểm kích hoạt cần chủ sở hữu cho phép rõ ràng ([06 Nghiệm thu](06_TEST_AND_ACCEPTANCE.vi.md)). Không làm gì trong mục này trước khi có phép đó. Sẵn sàng phần mềm, phép của chủ sở hữu, nhà cung cấp chấp nhận và người nhận đã nhận là bốn sự thật tách biệt; ghi từng cái riêng. Các lựa chọn dưới đây là khuyến nghị; owner decision pending (D-1 đến D-15 ở [WP5-PLAN](../handoff/delivery/tasks/WP5-PLAN.md) mục D). Các khóa cấu hình chỉ được nêu tên ở đây và giá trị của chúng chỉ nằm trong `<env-file>`. Trên DSM, các lệnh dữ liệu, backup và Docker ở mục 13 đến 16 cần quyền root (`sudo -i`): `<data-dir>` có quyền 700 và thuộc UID 10001. Trình duyệt có thể yêu cầu người vận hành gõ "allow pasting" trước khi một dòng dán vào console được chạy.
+Việc gửi thật và thời điểm kích hoạt cần chủ sở hữu cho phép rõ ràng ([06 Nghiệm thu](06_TEST_AND_ACCEPTANCE.vi.md)). Không làm gì trong mục này trước khi có phép đó. Sẵn sàng phần mềm, phép của chủ sở hữu, nhà cung cấp chấp nhận và người nhận đã nhận là bốn sự thật tách biệt; ghi từng cái riêng. Chủ đã trả lời D-1 đến D-15 ngày 2026-10-20 ([10 Quyết định](10_DECISIONS_AND_SOURCES.vi.md); các phương án ở [WP5-PLAN](../handoff/delivery/tasks/WP5-PLAN.md) mục D), và các lựa chọn dưới đây theo những câu trả lời đó. Các khóa cấu hình chỉ được nêu tên ở đây và giá trị của chúng chỉ nằm trong `<env-file>`. Trên DSM, các lệnh dữ liệu, backup và Docker ở mục 13 đến 16 cần quyền root (`sudo -i`): `<data-dir>` có quyền 700 và thuộc UID 10001. Trình duyệt có thể yêu cầu người vận hành gõ "allow pasting" trước khi một dòng dán vào console được chạy.
 
 1. Điều kiện tiên quyết. Nếu có điều nào sai, hãy dừng. **[owner NAS step, unverified]**
    - Phép nằm trong hồ sơ riêng của chủ sở hữu.
-   - Danh sách ở mục 2 đã được đánh dấu và ghi ngày (recommended; owner decision pending (D-13)); cho tới lúc đó NAS CHƯA ĐƯỢC KIỂM CHỨNG và kết quả là "phần mềm sẵn sàng, pilot đang chờ".
+   - Danh sách ở mục 2 đã được đánh dấu và ghi ngày (quyết định của chủ D-13 (a)); cho tới lúc đó NAS CHƯA ĐƯỢC KIỂM CHỨNG và kết quả là "phần mềm sẵn sàng, pilot đang chờ".
    - Backup, restore cô lập và đối soát (mục 4, 6, 7) đã chạy được trên NAS với dữ liệu tổng hợp.
    - `<release-commit>`, `<source-digest>` và `<image-id>` đã được ghi (mục 1 bước 8).
    - Các giá trị thật (`MAIL_FROM`, các khóa `SMTP_*`, `PUBLIC_BASE_URL`, `APP_ORIGINS`, `TRUSTED_PROXY_ADDRESSES`) nằm trong bản riêng của chủ sở hữu, ngoài git, chat và ảnh chụp màn hình.
@@ -325,17 +325,17 @@ Việc gửi thật và thời điểm kích hoạt cần chủ sở hữu cho p
    - Thời điểm không được ở quá khứ (422 `activation_in_past`) và bắt buộc có lý do (422 `reason_required`). Origin phải có trong `APP_ORIGINS` (403 `origin_rejected`).
    - Chỉ kỳ có hạn nộp bằng hoặc sau cả thời điểm này và thời điểm tự động nộp hiệu lực của chính tài khoản mới được tự động chốt; tài khoản chưa từng lưu cài đặt thì không bao giờ ([05 Nộp](05_SUBMISSION_AND_NOTIFICATIONS.vi.md) "Đến hạn và phục hồi"). Hãy chọn thời điểm sau khi kỳ đầu đã được ký xác nhận bằng tay.
    - Lệnh gọi được ghi audit. Kiểm tra trạng thái quản trị hiển thị thời điểm đó. Nó hiển thị theo múi giờ của trình duyệt và không có nhãn múi giờ, nên `2027-01-01T00:00:00Z` hiện thành ngày giờ địa phương của trình duyệt.
-6. Kỳ đầu theo giai đoạn (recommended; owner decision pending (D-12)).
+6. Kỳ đầu theo giai đoạn (quyết định của chủ D-12 (a)).
    - Ký xác nhận bằng tay với gửi thật; tắt tự động nộp; không có thời điểm kích hoạt.
    - Lần gửi thật đầu tiên đi tới địa chỉ của chính chủ sở hữu. Việc đổi người nhận không tới được một revision đã có (phong bì đã đổi cần một revision mới được xem, [05 Nộp](05_SUBMISSION_AND_NOTIFICATIONS.vi.md) "Sửa và gửi lại"), nên hãy đặt người nhận của kỳ đầu trong cài đặt của chủ sở hữu trước khi ký, và cùng chủ sở hữu quyết định bộ phận lương nhận thư của kỳ đầu hay một revision sau đó.
    - Giữ workbook Excel làm đối chiếu cho kỳ đó.
    - Bật tự động nộp từ kỳ kế tiếp (bước 5), và chỉ sau khi bước 7 đạt.
 7. Sau lần gửi thật đầu tiên. Nhà cung cấp chấp nhận và người nhận đã nhận là hai sự thật tách biệt; ghi từng cái cùng thời điểm của nó. **[owner NAS step, unverified]**
-   - Nhà cung cấp chấp nhận: lịch sử gửi của revision cho thấy lần thử ở trạng thái accepted kèm xác nhận của nhà cung cấp. Khi lỗi sẽ có mã lỗi đã được che: `smtp_auth_failed`, `smtp_tls_failed` và `smtp_config_invalid` là lỗi cấu hình cần sửa trong `<env-file>` rồi tạo lại container (bước 4). Lỗi xác minh chứng chỉ hiện được xếp là tạm thời: nó thử lại rồi cần can thiệp (khuyến nghị: xếp là vĩnh viễn; owner decision pending (D-8)).
+   - Nhà cung cấp chấp nhận: lịch sử gửi của revision cho thấy lần thử ở trạng thái accepted kèm xác nhận của nhà cung cấp. Khi lỗi sẽ có mã lỗi đã được che: `smtp_auth_failed`, `smtp_tls_failed` và `smtp_config_invalid` là lỗi cấu hình cần sửa trong `<env-file>` rồi tạo lại container (bước 4). Lỗi chứng chỉ TLS (không tin cậy, hết hạn hoặc sai tên máy) là tạm thời ở cả hai chế độ TLS: nó được thử lại, tổng cộng năm lần (sau 1, 5, 15 và 60 phút), rồi cần can thiệp, và hiện là `smtp_unavailable`; `smtp_tls_failed` chỉ xuất hiện khi máy chủ từ chối STARTTLS (quyết định của chủ (a), D-8: giữ nguyên và ghi tài liệu). Vì vậy việc đầu tiên cần kiểm tra sau khi đổi chứng chỉ hoặc máy chủ (chứng chỉ được gia hạn hoặc thay, tên máy chủ mới hoặc máy chủ thư mới) là chứng chỉ và tên máy của máy chủ SMTP, trước khi nghi ứng dụng.
    - Link: khi đã đặt thời điểm kích hoạt (bước 5), mở link của lời nhắc đầu tiên đến. Nó phải là `https://<nas-host>/#/review/<payroll-date>`, yêu cầu đăng nhập rồi mở màn hình review.
    - Người nhận đã nhận: chủ sở hữu xác nhận trong hộp thư rằng đúng một thư đã đến từ người gửi `MAIL_FROM`, có PDF, và PDF đó bằng bản trong ứng dụng (kể cả thư mục spam). Một thư được chấp nhận mà không bao giờ đến là việc của nhà cung cấp hoặc hộp thư, không phải kết quả của ứng dụng.
    - Một lần thử `uncertain` không được gửi lại một cách mù quáng: kiểm tra hộp thư và nhà cung cấp, rồi ghi quyết định vào lịch sử gửi trước (mục 7 bước 2, [05 Nộp](05_SUBMISSION_AND_NOTIFICATIONS.vi.md) "Gửi bền vững").
-   - Sau sự cố ở SMTP thật, một lời nhắc có thể đến hai lần (khuyến nghị: chấp nhận; owner decision pending (D-7)).
+   - Sau sự cố ở SMTP thật, một lời nhắc có thể đến hai lần (quyết định của chủ (a), D-7: chấp nhận; lời nhắc chỉ mang tính tư vấn).
    - Log và trạng thái không chứa mật khẩu hay token. Hãy backup sau kỳ thật đầu tiên (mục 4).
    - Có gì bất thường: hủy kích hoạt (mục 14).
 
@@ -360,7 +360,7 @@ Hủy kích hoạt khi một lần gửi sai hoặc bất ngờ, nhà cung cấp
 
 ## 15. Thẻ rollback cho lần cài đặt đầu tiên
 
-Pilot là lần cài đặt đầu tiên, nên không có schema hay image production cũ hơn để rollback về. Rollback nghĩa là dừng gửi thật và quay lại Excel. Hãy điền thẻ này trước khi kích hoạt. Bản riêng của chủ sở hữu giữ giá trị thật; bản được theo dõi chỉ giữ các chỗ giữ chỗ (recommended; owner decision pending (D-11)).
+Pilot là lần cài đặt đầu tiên, nên không có schema hay image production cũ hơn để rollback về. Rollback nghĩa là dừng gửi thật và quay lại Excel. Hãy điền thẻ này trước khi kích hoạt. Bản riêng của chủ sở hữu giữ giá trị thật; bản được theo dõi chỉ giữ các chỗ giữ chỗ (quyết định của chủ D-11 (a)).
 
 | Trường | Giá trị |
 |---|---|
@@ -377,7 +377,7 @@ Pilot là lần cài đặt đầu tiên, nên không có schema hay image produ
 3. Quay lại workbook Excel cho kỳ đó (bản riêng của chủ sở hữu; template được theo dõi chỉ là mẫu). Dữ liệu ứng dụng vẫn là hồ sơ về những gì đã nộp.
 4. Thư đã gửi không thu hồi được. Đọc từ lịch sử gửi xem những gì đã đi, để không gì bị gửi hay nhập hai lần bằng tay.
 5. Chỉ restore khi dữ liệu hỏng hoặc sai, không bao giờ đè lên dữ liệu đang chạy. Đối chiếu `sha256sum <backup-dir>/<backup-name>/manifest.json` với `<manifest-sha256>`, rồi restore `<backup-name>` cô lập (mục 6) vào một thư mục thật mới, và đối soát (mục 7). Instance đã restore bị tạm dừng, và các thay đổi sau backup đó không có trong nó. Với instance restore chỉ để kiểm tra, trỏ `TIMESHEET_ENV_FILE` tới bản sao được bảo vệ của `<env-file>` ở chế độ capture đã giữ ở mục 13 bước 3; file đang chạy chứa chế độ SMTP và cờ sau khi kích hoạt. Không bao giờ chạy hai hàng đợi.
-6. Quy tắc R-A3 (recommended; owner decision pending (D-1)): khi rollback restore một backup của schema cũ hơn, bản build cũ chạy với `JOB_RUNNER=off` cho tới khi đối soát xong (mục 8, Rollback). Ở lần cài đặt đầu tiên không có schema production cũ hơn, nên điều này chỉ quan trọng sau một lần nâng cấp sau này có thêm migration; hãy xem lại trước lần nâng cấp đó.
+6. Quy tắc R-A3 (quyết định của chủ (a), D-1: giữ `JOB_RUNNER=off` cho đến khi đối soát xong): khi rollback restore một backup của schema cũ hơn, bản build cũ chạy với `JOB_RUNNER=off` cho tới khi đối soát xong (mục 8, Rollback). Ở lần cài đặt đầu tiên không có schema production cũ hơn, nên điều này chỉ quan trọng sau một lần nâng cấp sau này có thêm migration; hãy xem lại trước lần nâng cấp đó.
 7. Để thử lại, lặp lại mục 13 từ bước tự kiểm tra với một backup trước kích hoạt mới.
 
 ## 16. Ghi chú vận hành cho pilot

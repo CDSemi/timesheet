@@ -34,6 +34,8 @@ Giới hạn theo tài khoản đối với tự nộp (cả hai chỉ thu hẹp
 
 Mặc định: trước hạn 24h, 2h; báo quá hạn nếu tắt tự nộp; báo kết quả sau tự nộp. Chống trùng theo user/kỳ/lần nhắc; ngừng nhắc thường khi đã chốt. Gộp các nhắc trước hạn bị lỡ thành một thông báo hiện tại hữu ích.
 
+Lời nhắc là ít nhất một lần (quyết định của chủ D-7 a, 2026-10-20). Job nhắc chạy lại sau sự cố thấy thư đã được ghi vào thư mục capture và coi như đã gửi; trên SMTP thật không có bản ghi như vậy, nên nếu tiến trình dừng sau khi máy chủ thư đã nhận thư và trước khi job được ghi là đã gửi thì lời nhắc có thể đến hai lần. Điều này được chấp nhận: lời nhắc chỉ mang tính tư vấn, và mất một lời nhắc có thể gây lỡ hạn. Lần gửi bài nộp không phải lời nhắc và giữ quy tắc kết quả không chắc chắn ở bảng gửi bên dưới.
+
 Email bắt buộc; ntfy bảo vệ là tùy chọn; hoãn SMS. Thử lại kênh không đồng nghĩa đã review. Deep link yêu cầu login đủ cho bản đầu.
 
 Nếu làm magic link: token ngẫu nhiên ngắn hạn, giới hạn hành động, lưu hash, gắn user/kỳ/revision, tiêu thụ một lần nguyên tử. GET—kể cả scanner—không ký/nộp/tiêu token. POST rõ cần origin/CSRF. Không cho toàn quyền tài khoản, không credential dùng lại hay dữ liệu riêng trong URL/log. Link cũ/hết hạn dẫn tới review/login mới.

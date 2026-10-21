@@ -34,6 +34,8 @@ Account bounds on automatic submission (both only narrow what is submitted; neit
 
 Default reminders: 24h and 2h before due, an overdue warning when auto-submit is off, and an outcome notice after automatic submission. Deduplicate by user/period/reminder occurrence; stop normal reminders after finalization. Collapse missed pre-deadline notices into one useful current notice.
 
+Reminders are at-least-once (owner decision D-7 a, 2026-10-20). A reminder job that runs again after a crash finds its message already captured and counts as sent; on real SMTP no such record exists, so if the process stops after the mail server accepted the message and before the job is recorded as sent, the reminder may arrive twice. This is accepted: reminders are advisory, and a lost reminder could cause a missed deadline. Submission deliveries are not reminders and keep the uncertain-outcome rule of the delivery table below.
+
 Email is mandatory; protected ntfy is optional; SMS deferred. Channel retries do not imply employee review. Login-required deep links are sufficient initially.
 
 If implementing magic links: random short-lived action-scoped tokens stored hashed, bound to user/period/revision, atomic single use. GET—including scanners—never signs/submits/consumes. Explicit POST requires origin/CSRF protection. No general account access, reusable credential or private data in URLs/logs. Expired/stale links lead to fresh review/login.

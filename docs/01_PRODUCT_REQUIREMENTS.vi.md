@@ -21,7 +21,7 @@ Công cụ timesheet cá nhân, sẵn nền tảng tài khoản riêng cho đồ
 | FR-13 | Lịch lễ công ty hằng năm và phiên bản quy tắc theo hiệu lực | WP2 |
 | FR-14 | Audit ai/lúc nào/trước-sau; lý do sửa kỳ cũ/đã chốt | WP1/WP2 |
 | FR-15 | Docker, lưu bền vững, backup/restore và phục hồi vận hành | WP4 |
-| FR-16 | Nhập Excel có kiểm soát và số dư OT đầu có bằng chứng | WP4 |
+| FR-16 | Nhập Excel có kiểm soát và số dư OT đầu tường minh | WP4 |
 | FR-17 | Chủ chia sẻ timesheet của mình, thu hồi được, bật/tắt từng mục (xem, sửa, OT chỉ đọc, PDF đã chốt); admin xem tình trạng không có chi tiết timesheet | WP3 |
 
 ## Lịch và loại ngày

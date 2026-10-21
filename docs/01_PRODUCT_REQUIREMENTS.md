@@ -21,7 +21,7 @@ A personal timesheet tool, ready for isolated coworker accounts later. Record at
 | FR-13 | Annual company holiday calendar and effective policy versions | WP2 |
 | FR-14 | Audit actor/time/before-after; require reasons for old/finalized edits | WP1/WP2 |
 | FR-15 | Docker, persistence, backup/restore and operational recovery | WP4 |
-| FR-16 | Controlled Excel import and evidenced opening OT balance | WP4 |
+| FR-16 | Controlled Excel import and explicit opening OT balance | WP4 |
 | FR-17 | Owner-granted, revocable sharing of one's own timesheets with per-item toggles (view, edit, read-only OT, final PDFs); admin status without timesheet details | WP3 |
 
 ## Calendar and attendance

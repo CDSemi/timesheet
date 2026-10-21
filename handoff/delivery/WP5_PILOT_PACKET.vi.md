@@ -6,7 +6,7 @@
 
 ## 0. Cách dùng gói này
 
-- **Bản được theo dõi trong git chỉ chứa placeholder và mẫu tổng hợp** (repository là công khai; quy tắc 4 của AGENTS). Sao chép tệp này ra một nơi riêng ngoài git và ghi giá trị thật ở đó. Tên máy chủ thật, địa chỉ, thông tin đăng nhập SMTP, chữ ký và dữ liệu cá nhân không bao giờ vào bản trong git, chat, ảnh chụp màn hình hay log. Khuyến nghị; quyết định của chủ sở hữu đang chờ (D-11).
+- **Bản được theo dõi trong git chỉ chứa placeholder và mẫu tổng hợp** (repository là công khai; quy tắc 4 của AGENTS). Sao chép tệp này ra một nơi riêng ngoài git và ghi giá trị thật ở đó. Tên máy chủ thật, địa chỉ, thông tin đăng nhập SMTP, chữ ký và dữ liệu cá nhân không bao giờ vào bản trong git, chat, ảnh chụp màn hình hay log. Quyết định của chủ sở hữu D-11 (a): gói được theo dõi giữ placeholder, giá trị thật nằm ở bản riêng của chủ sở hữu ngoài git.
 - Placeholder viết dạng `<như-này>`. Các placeholder dùng ở đây: `<nas-host>`, `<sender-address>`, `<owner-address>`, `<payroll-address>`, `<proxy-ip>`, `<release-commit>`, `<source-digest>`, `<image-id>`, `<backup-name>`, `<manifest-sha256>`, `<activation-instant-utc>` và các placeholder của runbook (`<compose>`, `<cli>`, `<env-file>`, `<data-dir>`, `<backup-dir>`, `<restore-dir>`).
 - Mọi ô `[ ]` dưới đây cố ý để trống. Chỉ chủ sở hữu tick ô, và chỉ cho việc chính chủ sở hữu đã làm hoặc đã quyết định.
 - Bốn sự kiện luôn được tách riêng: phần mềm sẵn sàng, quyền của chủ sở hữu, nhà cung cấp chấp nhận và người nhận đã nhận ([06 Nghiệm thu](../../docs/06_TEST_AND_ACCEPTANCE.vi.md)).
@@ -21,7 +21,7 @@
 | Phiên bản trong `package.json` | `0.1.0` (không định danh bản phát hành; commit và digest mới định danh) |
 | Image ID tham chiếu (bản build drill của WP5-UX3-REGATE3, máy trạm phát triển, có byte giống hệt bản phát hành, `linux/amd64`, 110.042.848 byte; image đã được xóa) | `sha256:bcb0692cc99fe5c0b198dc26cff623045903f851f3d7069105b1df09bf9e493b` |
 | Image ID build trên NAS | `<image-id>` (chủ sở hữu ghi lại lúc build, [runbook](../../docs/11_OPERATIONS_RUNBOOK.vi.md) mục 1 bước 8; build lại cùng mã nguồn cho ID khác) |
-| Tuyên bố phát hành | chưa tuyên bố, không có tag; khuyến nghị tuyên bố khi chủ sở hữu cho phép pilot; quyết định của chủ sở hữu đang chờ (D-14) |
+| Tuyên bố phát hành | chưa tuyên bố, không có tag. Quyết định của chủ sở hữu D-14 (b): bản phát hành đầu tiên được tuyên bố sau thời gian pilot, không phải lúc cho phép pilot; cho đến lúc đó các commit vẫn ở `main` theo quy tắc ở [08 Quy trình AI](../../docs/08_AI_WORKFLOW_AND_BUDGET.vi.md) và `git.release_declared` vẫn là false |
 
 Image ID tham chiếu là image drill của gate trên máy trạm phát triển. Nó không phải image trên NAS, và image đó đã được xóa sau gate. Nếu bất kỳ tệp nào ngoài `handoff/` thay đổi thì commit và digest đổi, và định danh này phải được làm mới.
 
@@ -30,6 +30,8 @@ Image ID tham chiếu là image drill của gate trên máy trạm phát triển
 **Vòng đổi giao diện 2 (WP5-UX2).** Ngày 2026-10-14 chủ sở hữu yêu cầu thêm các thay đổi trên trang Timesheet (tô sáng cả cột ngày đang mở, kiểu chọn nhẹ hơn trong bộ chọn nhãn, nút chuyển Light/Dark ở thanh điều hướng chính, hover rõ hơn trên các nút bật/tắt, nút Today và Current period, công tắc trượt cho "Show details"), rồi logo C&D với wordmark hai dòng, điều khiển check in/out trên thanh trên cùng ở điện thoại và cách gọi "Check in/out". WP5-UX2-Q1 được trả lời bằng cả hai nút (Today mở kỳ chứa hôm nay; Current period quay về kỳ mà trang mở ra) và WP5-UX2-Q2 bằng "a" (đường viền vector của wordmark, sắc nhạt hơn ở giao diện tối). Vòng này đổi giao diện client, cách gọi và các test, cùng cách diễn đạt của ba thông báo lỗi server (và một chú thích); không đổi quy tắc nghiệp vụ, phép tính, schema, API hay PDF. Nó đã được gate lại (WP5-UX2-REGATE2) và audit cuối (WP5-UX2-AUDIT2, [báo cáo](WP5_UX2_REVIEW2.vi.md)); vì vậy định danh ở trên khác `90b98ef` / `57e2974c…`. Hồ sơ nằm ở [bàn giao WP5](WP5_HANDOFF.vi.md), mục "Nghiệm thu lại sau vòng đổi giao diện 2 (WP5-UX2)".
 
 **Vòng đổi giao diện 3 (WP5-UX3).** Ngày 2026-10-15 chủ sở hữu yêu cầu kiểu hiện đại thay cho kiểu công nghiệp, menu danh tính trên thanh trên cùng (avatar, tên phía trên email; Light/Dark, Profile, Settings, Sign out), phần đầu trang và thanh kỳ được sắp lại, các cột được chọn nổi lên (có đổ bóng), và Day editor với hộp thoại phiên riêng cùng vùng giờ nghỉ đơn giản hơn (một ô "Confirm no breaks taken", mỗi giờ nghỉ một dòng, Suggest breaks và Add break). Chủ sở hữu đã trả lời G-1..G-5 (G-1 b có chỉnh sửa, G-2 a "Category", G-3 a điền sẵn, G-4 biến thể của chủ sở hữu, G-5 b nhãn "in progress"), Q6 (b), các chip 24 giờ và Q7 (a, phần đầu AI Instruction của chủ sở hữu trong AGENTS.md). Vòng này chỉ đổi giao diện client và tài liệu; không đổi server, quy tắc nghiệp vụ, phép tính, schema, API, PDF hay email (`dist/server` và `dist/domain` giống hệt từng byte với `a643794`). Nó đã được gate lại (WP5-UX3-REGATE5) và audit cuối (WP5-UX3-AUDIT-INT, [báo cáo](WP5_UX3_REVIEW_INT.vi.md)); vì vậy định danh ở trên khác `a643794` / `229df806…`. Hồ sơ nằm ở [bàn giao WP5](WP5_HANDOFF.vi.md), mục "Nghiệm thu lại sau vòng đổi giao diện 3 (WP5-UX3)".
+
+**Vòng đổi giao diện 4 (WP5-UX4), đang thực hiện.** Ngày 2026-10-20 chủ sở hữu yêu cầu vòng đổi giao diện thứ tư và trả lời các quyết định pilot D-1..D-15 (mục 8). Vòng này đổi giao diện client và, với các câu trả lời D-5 a, D-6 a, D-9 b, D-10 (là F-1 i) và D-15 b, đổi cả server (route đổi mật khẩu, quy tắc số dư đầu kỳ, giới hạn bản xem trước import, số đếm theo ngày trong xem trước ngày nghỉ kèm sự kiện audit) cùng một chốt chặn chấm công qua chia sẻ. Vòng này vẫn cần gate và các audit độc lập mới, nên định danh phát hành ở trên **chưa** được làm mới; nó được làm mới khi nghiệm thu lại. Hồ sơ sẽ nằm ở [bàn giao WP5](WP5_HANDOFF.vi.md).
 
 Bằng chứng của gói nằm ở `handoff/delivery/evidence/WP5-PILOT/` (mục lục ở mục 11).
 
@@ -78,7 +80,7 @@ Tương đương trên máy phát triển là mục 3: tám thư được captur
 
 ### Lần gửi thật đầu tiên
 
-Khuyến nghị; quyết định của chủ sở hữu đang chờ (D-12): kỳ đầu tiên được ký tay, auto-submit tắt, không đặt activation instant, và lần gửi thật đầu tiên đi đến địa chỉ riêng của chủ sở hữu.
+Quyết định của chủ sở hữu D-12 (a): kỳ đầu tiên được ký tay, auto-submit tắt, không đặt activation instant, và lần gửi thật đầu tiên đi đến địa chỉ riêng của chủ sở hữu.
 
 | Trường | Giá trị (chỉ ở bản riêng) |
 |---|---|
@@ -160,7 +162,7 @@ Cài đặt ứng dụng. Cột "mặc định đã ghi" là mặc định thi�
 | Dòng ghi chú | cài đặt nộp bài của user | tắt; chữ "Automatic submission" | bản riêng |
 | Ủy quyền ảnh tự động | lúc tải chữ ký, một ủy quyền riêng có audit (thu hồi được trong Settings) | chọn sẵn lúc tải lên; nếu bỏ chọn thì không có ảnh trên bản nộp tự động | bản riêng |
 | Người nhận, template | cài đặt nộp bài của user | mục 2 | bản riêng |
-| Số dư đầu kỳ | màn hình Import / `PUT /api/ot/opening-balance` | chưa có; một giá trị có dấu, khác 0, có bằng chứng, hoặc bắt đầu từ 0 (D-10) | bản riêng |
+| Số dư đầu kỳ | màn hình Import / `PUT /api/ot/opening-balance` | 0 cho đến khi chủ sở hữu đặt (D-10 a có thay đổi, F-1 i): một giá trị có dấu, khác 0, kèm ngày hiệu lực (mặc định là ngày đặt) và một lý do ngắn; bằng chứng tùy chọn (để trống thì lưu là "not provided"); một lần sửa có thể đưa về 0. Pilot không nhập workbook lịch sử | bản riêng |
 | Activation instant | `PUT /api/admin/automation/activation` từ console của quản trị viên đã đăng nhập (runbook mục 13 bước 5) | rỗng; chỉ đặt `<activation-instant-utc>` sau khi kỳ đầu đã được ký tay | bản riêng |
 | Kỳ pilot đầu tiên | do chủ sở hữu chọn trên chu kỳ 14 ngày | các ngày payroll tiếp tục 2026-10-02 + 14 ngày (2026-10-16, 2026-10-30, 2026-11-13, ...); mỗi kỳ hạn nộp thứ Ba trước đó 17:00 múi giờ báo cáo. Placeholder `<first-payroll-date>` | bản riêng |
 
@@ -232,11 +234,11 @@ Các bước (văn bản đầy đủ ở runbook mục 14 và 15):
 3. Quay về workbook Excel cho kỳ đó (bản riêng của chủ sở hữu).
 4. Thư đã gửi không thu hồi được; đọc lịch sử gửi để tránh nhập hai lần. Một kỳ nộp nhầm vẫn nằm trong hồ sơ và được sửa bằng hiệu chỉnh có lý do.
 5. Chỉ khôi phục khi dữ liệu hỏng hoặc sai, không bao giờ ghi đè lên dữ liệu live: kiểm tra hash manifest với `<manifest-sha256>`, khôi phục `<backup-name>` cô lập (biểu mẫu mục 5) và đối soát.
-6. Quy tắc tồn dư (khuyến nghị; quyết định của chủ sở hữu đang chờ (D-1)): sau rollback về schema cũ, bản build cũ chạy với `JOB_RUNNER=off` đến khi đối soát xong. Điều này chỉ quan trọng sau một nâng cấp về sau có thêm migration.
+6. Quy tắc tồn dư (quyết định của chủ sở hữu D-1 (a)): sau rollback về schema cũ, bản build cũ chạy với `JOB_RUNNER=off` đến khi đối soát xong. Điều này chỉ quan trọng sau một nâng cấp về sau có thêm migration.
 
 ## 7. Định danh bản phát hành và danh mục kiểm tra NAS
 
-Định danh bản phát hành: bảng ở mục 0. NAS **CHƯA ĐƯỢC XÁC MINH (NOT VERIFIED)** cho đến khi chủ sở hữu tick mọi mục dưới đây và ghi ngày. Đến lúc đó kết quả là "software ready, pilot pending" (khuyến nghị; quyết định của chủ sở hữu đang chờ (D-13)). Mọi mục là **[owner NAS step, unverified]**, sao từ [runbook](../../docs/11_OPERATIONS_RUNBOOK.vi.md) mục 2.
+Định danh bản phát hành: bảng ở mục 0. NAS **CHƯA ĐƯỢC XÁC MINH (NOT VERIFIED)** cho đến khi chủ sở hữu tick mọi mục dưới đây và ghi ngày. Đến lúc đó kết quả là "software ready, pilot pending" (quyết định của chủ sở hữu D-13 (a)). Mọi mục là **[owner NAS step, unverified]**, sao từ [runbook](../../docs/11_OPERATIONS_RUNBOOK.vi.md) mục 2.
 
 Thông tin NAS cần ghi (bản riêng): model NAS ______; phiên bản DSM ______; phiên bản Container Manager ______; `uname -m` ______; đường dẫn dữ liệu và backup ______; chủ thư mục UID/GID `10001` ______; NTP bật ______.
 
@@ -258,25 +260,25 @@ Tổng thể: danh mục NAS hoàn tất và ghi ngày ______ bởi ______. (Đ�
 
 ## 8. Quyết định của chủ sở hữu
 
-Cả mười lăm quyết định vẫn đang chờ: không quyết định nào được trả lời trong `owner_decisions` của board. Nguồn: [WP5-PLAN](tasks/WP5-PLAN.md) mục D. D-1, D-7, D-8 và D-13 phải được trả lời trước khi kích hoạt. Câu trả lời khác mặc định hiện tại của D-3, D-5, D-6 hoặc D-8 gây ra một vòng sửa (sửa, đóng băng, gate, audit độc lập) trước khi kích hoạt, và định danh phát hành ở mục 0 và 6 khi đó được làm mới. Tùy chọn (b) được khuyến nghị của D-8 khác mặc định hiện tại.
+Chủ sở hữu đã trả lời cả mười lăm quyết định ngày 2026-10-20 (`owner_decisions` của board, nguyên văn bằng tiếng Việt). Nguồn các phương án: [WP5-PLAN](tasks/WP5-PLAN.md) mục D; bản ghi quyết định là [10 Quyết định](../../docs/10_DECISIONS_AND_SOURCES.vi.md). D-1, D-7, D-8 và D-13 cần có câu trả lời trước khi kích hoạt và đã có. Năm câu trả lời làm đổi mã (D-5 a, D-6 a, D-9 b, D-10 là F-1 (i) và D-15 b, cùng một chốt chặn chấm công qua chia sẻ); chúng thuộc vòng đổi giao diện 4, vẫn cần gate và các audit độc lập, nên định danh phát hành ở mục 0 và 6 được làm mới khi nghiệm thu lại. D-11 (a) và D-13 (a): giá trị thật ở lại bản riêng của chủ sở hữu, và NAS vẫn NOT VERIFIED cho đến khi chủ sở hữu tick danh mục ở mục 7.
 
-| ID | Quyết định | Khuyến nghị (và lý do) | Câu trả lời hiện tại |
+| ID | Quyết định | Câu trả lời | Đã thay đổi gì |
 |---|---|---|---|
-| D-1 (R-A3) | Job tạo sau khi rollback về schema cũ không bị giữ | (a) giữ quy tắc đã ghi: bản build cũ chạy với `JOB_RUNNER=off` đến khi đối soát xong. Pilot là lần cài đầu tiên nên không có schema production cũ; (b) sẽ khiến công cụ restore đổi trạng thái nghiệp vụ | đang chờ |
-| D-2 (WP4-I-1) | Kỳ draft của ứng dụng có được nhận ngày import không | (a) không bao giờ, hiện tại; lựa chọn an toàn nhất và không phải đổi code | đang chờ |
-| D-3 (WP4-I-2) | "Off day (overtime used)" khi import | (b) import thành Off không ảnh hưởng ledger nếu import lịch sử trước pilot; nếu không thì giữ (a) bỏ qua và quyết định sau pilot | đang chờ |
-| D-4 (WP4-I-3) | Import kỳ chưa kết thúc | (a) không, hiện tại; lịch sử import giữ đầy đủ và chỉ đọc | đang chờ |
-| D-5 (WP4-I-4) | Sửa số dư đầu kỳ nhập sai về tổng bằng 0 | (a) có, bằng một hiệu chỉnh bù trừ có lý do, nếu có ghi số dư đầu kỳ lúc bắt đầu pilot | đang chờ |
-| D-6 (WP4-I-5) | Hạn mức cho các bản xem trước import chưa commit | (a) tối đa 20 mỗi người, sau pilot với pilot chỉ chủ sở hữu; trước pilot nếu có người khác tham gia | đang chờ |
-| D-7 (F-7) | Nhắc nhở sau sự cố crash trên SMTP thật có thể lặp một lần | (a) chấp nhận at-least-once; mất một nhắc nhở có thể gây lỡ hạn | đang chờ |
-| D-8 (F-7) | Lỗi chứng chỉ TLS được phân loại tạm thời (thử lại, rồi can thiệp) | (b) coi là lỗi cấu hình vĩnh viễn, hiện ngay, tùy theo đánh giá; nếu không thì giữ (a) và ghi tài liệu | đang chờ |
-| D-9 (E-11, F-7) | Nhóm pilot và mật khẩu (không có tự đổi mật khẩu) | (a) pilot chỉ chủ sở hữu, mật khẩu tạm đặt ngoài kênh; (b) thêm route đổi mật khẩu trước khi có người khác tham gia | đang chờ |
-| D-10 | Số dư đầu kỳ và lịch sử lúc bắt đầu pilot | ghi một số dư đầu kỳ có bằng chứng, hoặc bắt đầu từ 0; bỏ qua import lịch sử cho pilot | đang chờ |
-| D-11 | Giá trị pilot thật nằm ở đâu | (a) gói trong git với placeholder, giá trị thật ở bản riêng của chủ sở hữu ngoài git; repository là công khai | đang chờ |
-| D-12 | Phân giai đoạn lần kích hoạt thật đầu tiên | (a) kỳ đầu: sign-off tay với gửi thật, lần gửi thật đầu đến địa chỉ riêng của chủ sở hữu, auto-submit tắt và không có activation instant; bật tự động từ kỳ sau | đang chờ |
-| D-13 | Host pilot | (a) NAS sau runbook mục 1, 2, 4 và 6; NOT VERIFIED đến khi chủ sở hữu tick danh mục | đang chờ |
-| D-14 | Tuyên bố phát hành đầu tiên (`git.release_declared`) | (a) khi chủ sở hữu cho phép pilot; các bản sửa sau theo quy tắc nhánh và pull request. Agent không tạo tag | đang chờ |
-| D-15 (F-Q6) | Quyền riêng tư của xem trước ngày nghỉ | (a) giữ việc bỏ số đếm theo ngày; không ảnh hưởng pilot chỉ chủ sở hữu | đang chờ |
+| D-1 (R-A3) | Job tạo sau khi rollback về schema cũ không bị giữ | (a) giữ quy tắc: bản build cũ chạy với `JOB_RUNNER=off` đến khi đối soát xong | chỉ tài liệu (runbook mục 8 và 15) |
+| D-2 (WP4-I-1) | Kỳ draft của ứng dụng có được nhận ngày import không | (a) không bao giờ | chỉ tài liệu (mặc định hiện tại) |
+| D-3 (WP4-I-2) | "Off day (overtime used)" khi import | (a) bỏ qua | chỉ tài liệu (mặc định hiện tại) |
+| D-4 (WP4-I-3) | Import kỳ chưa kết thúc | (a) không | chỉ tài liệu (mặc định hiện tại) |
+| D-5 (WP4-I-4) | Sửa số dư đầu kỳ nhập sai về tổng bằng 0 | (a) có, bằng một hiệu chỉnh bù trừ có lý do | mã: một lần sửa có thể đưa số dư về 0 (số dư đã bằng 0 thì không ghi gì); tài liệu 03, 07, 11, 12 |
+| D-6 (WP4-I-5) | Hạn mức cho các bản xem trước import chưa commit | (a) tối đa 20 mỗi người | mã: lần tải lên mới thứ 21 bị từ chối (409 `import_preview_limit`); một bản xem trước chỉ được giải phóng bằng cách commit nó; tài liệu 07, 11, 12 |
+| D-7 (F-7) | Nhắc nhở sau sự cố crash trên SMTP thật có thể lặp một lần | (a) chấp nhận at-least-once | chỉ tài liệu (tài liệu 05, 12, runbook mục 13) |
+| D-8 (F-7) | Lỗi chứng chỉ TLS được phân loại tạm thời (thử lại, rồi can thiệp) | (a) giữ nguyên và ghi tài liệu | chỉ tài liệu (tài liệu 12, runbook mục 13): lỗi chứng chỉ được thử lại, tổng cộng năm lần, rồi can thiệp, hiện là `smtp_unavailable`; việc kiểm tra đầu tiên sau khi đổi chứng chỉ hoặc máy chủ |
+| D-9 (E-11, F-7) | Nhóm pilot và mật khẩu (không có tự đổi mật khẩu) | (b) thêm route đổi mật khẩu trước khi có người khác tham gia | mã: `POST /api/auth/password` và thẻ "Change password" ở Profile; mật khẩu tạm của admin vẫn giữ; tài liệu 03, 04, 11, 12 |
+| D-10 | Số dư đầu kỳ và lịch sử lúc bắt đầu pilot | (a) có thay đổi: mặc định 0, đổi được bất cứ lúc nào, không cần bằng chứng (F-1 i); pilot không import lịch sử | mã: lý do bắt buộc, bằng chứng tùy chọn ("not provided" khi để trống), ngày hiệu lực mặc định là ngày đặt, sửa về 0; tài liệu 01, 03, 07, 10, 11, 12; dòng ở mục 4 |
+| D-11 | Giá trị pilot thật nằm ở đâu | (a) gói trong git với placeholder, giá trị thật ở bản riêng của chủ sở hữu ngoài git | chỉ tài liệu (mục 0) |
+| D-12 | Phân giai đoạn lần kích hoạt thật đầu tiên | (a) kỳ đầu làm tay với gửi thật đến địa chỉ riêng của chủ sở hữu, auto-submit tắt, không có activation instant | chỉ tài liệu (mục 2, runbook mục 13 bước 6) |
+| D-13 | Host pilot | (a) NAS; NOT VERIFIED đến khi chủ sở hữu tick danh mục | chỉ tài liệu (mục 7) |
+| D-14 | Tuyên bố phát hành đầu tiên (`git.release_declared`) | (b) tuyên bố sau thời gian pilot | chỉ tài liệu (dòng tuyên bố ở mục 0, ô tick ở mục 9) |
+| D-15 (F-Q6) | Quyền riêng tư của xem trước ngày nghỉ | (b) khôi phục số đếm theo ngày | mã: số đếm chính xác theo ngày, không có danh tính, và một sự kiện audit `calendar.holiday_preview` cho mỗi lần xem trước; tài liệu 03, 10, 12 |
 
 Không phải quyết định, để chủ sở hữu lưu ý: danh sách ngày nghỉ công ty 2027 (đầu vào cài đặt); bản sao backup trên thiết bị riêng ([07 Vận hành](../../docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md)); cảnh báo host độc lập (runbook mục 11).
 
@@ -299,7 +301,7 @@ Quyền, phạm vi và điều kiện của chủ sở hữu:
 - [ ] Phê duyệt nội dung (mục 3) đã hoàn tất.
 - [ ] Gửi thật được cho phép cho: chỉ lần gửi thật đầu đến `<owner-address>` / cả `<payroll-address>` / phạm vi: ______
 - [ ] Việc đặt activation instant được cho phép: chưa / từ `<activation-instant-utc>`
-- [ ] Bản phát hành đầu tiên được tuyên bố khi cho phép này (D-14): có / không
+- [ ] Bản phát hành đầu tiên được tuyên bố sau thời gian pilot, không phải lúc cho phép này (D-14 b): đã tuyên bố ngày ______ (để trống đến lúc đó; `git.release_declared` vẫn là false)
 
 Chữ ký của chủ sở hữu hoặc tham chiếu đến hồ sơ riêng của chủ sở hữu: ______   Ngày và thời điểm UTC: ______
 

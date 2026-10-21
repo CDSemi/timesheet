@@ -165,3 +165,10 @@ Append to this brief:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+- HEAD before: cda9c5172b06d3651e94e75ff30e9b1edfae382e (= origin/main). HEAD after / commit SHA: 82d1ab4d8300de139db88dbaa9f7b2d56d2650b0.
+- Pushed: yes (dry-run 0, push 0). Remote SHA: 82d1ab4d8300de139db88dbaa9f7b2d56d2650b0. No tag.
+- Digest before add: b472767737b0ab9486466f258ab75bc0402a17eff01199cd9a3e167b8afba076 (849 files). Digest after commit (clean-tree source-digest.mjs of the new HEAD): the same value.
+- Staged: 52 = 17 outside handoff, 8 handoff records (ORCHESTRATION.json, checkpoint .md/.vi.md, T03-FREEZE brief, T03-FREEZE checks.txt and commit-message.txt, T05 record, this brief), 27 T05 evidence. No extra handoff paths.
+- Checks (all exit 0): node v24.21.0; precommit-check PASS 0 findings; diff --cached --check; JSON parse; validate_orchestration PASS; check_recovery PASS (106); validate_package --preflight PASS.
+- Fixes, masking, stops: none.

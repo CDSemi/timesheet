@@ -427,6 +427,25 @@ describe('SMTP adapter against the loopback sink (docs/05 failure table)', () =>
     expect(target.messages).toHaveLength(1);
   });
 
+  // D-8 (a): a certificate the client does not trust arrives as nodemailer ESOCKET, in both TLS modes. It is temporary
+  // (`smtp_unavailable`, retried, five attempts in all), never the permanent `smtp_tls_failed`, and no transaction starts.
+  for (const security of ['starttls', 'tls'] as const) {
+    it(`an untrusted certificate (${security}): failed_temporary smtp_unavailable, job queued, no transaction`, async () => {
+      const target = await sink({ implicitTls: security === 'tls' });
+      const { revisionId, sendJobId } = await finalized();
+      const config = loadDeliveryConfig({ ...smtpEnv(target.port), SMTP_SECURITY: security }, base());
+      expect(await runSend(createOutboundAdapter(config.outbound, { dataDir }))).toMatchObject({ claimed: 1, retried: 1 });
+      expect(attempts(revisionId).map((row) => [row.state, row.provider_response])).toEqual([['failed_temporary', 'smtp_unavailable']]);
+      expect(job(sendJobId)).toMatchObject({ state: 'queued', attempts: 1, last_error: 'smtp_unavailable' });
+      expect(target.transactions).toBe(0);
+      expect(target.messages).toHaveLength(0);
+      // The retry (1 minute later) with the certificate trusted is accepted: the job was not stuck.
+      t.clock.advanceSeconds(60);
+      expect(await runSend(createOutboundAdapter(config.outbound, { dataDir, smtp: { trustedCa: target.ca } }))).toMatchObject({ claimed: 1, succeeded: 1 });
+      expect(attempts(revisionId).map((row) => row.state)).toEqual(['failed_temporary', 'accepted']);
+    });
+  }
+
   it('pre-transfer failure (connection lost before DATA, or refused): temporary, retried, then accepted with a new attempt', async () => {
     const target = await sink({ behaviour: 'drop_before_data' });
     const { revisionId, sendJobId } = await finalized();

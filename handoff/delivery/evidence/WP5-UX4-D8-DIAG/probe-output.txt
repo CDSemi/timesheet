@@ -1,0 +1,66 @@
+== scenario 0
+node v24.21.0 nodemailer 10.0.14 smtp-server 3.19.17
+{"label":"control: valid cert, trusted","security":"tls","port":49450,"trusted":"trusted","bareTls":{"code":null,"message":"handshake ok"},"raw":{"events":[{"via":"connect-callback","code":null,"message":"connected (handshake ok)"}]},"adapter":{"kind":"accepted","code":null,"providerResponse":"250","ms":110}}
+sockets still open: 1
+exit=0
+== scenario 1
+node v24.21.0 nodemailer 10.0.14 smtp-server 3.19.17
+{"label":"untrusted/self-signed (system store)","security":"tls","port":49451,"trusted":"system-store","bareTls":{"code":"DEPTH_ZERO_SELF_SIGNED_CERT","message":"self-signed certificate; if the root CA is installed locally, try running Node.js with --use-system-ca"},"raw":{"events":[{"via":"error-event","code":"ESOCKET","command":"CONN","responseCode":null,"message":"self-signed certificate; if the root CA is installed locally, try running Node.js with --use-system-ca"}]},"adapter":{"kind":"failed_temporary","code":"smtp_unavailable","providerResponse":null,"ms":5}}
+sockets still open: 1
+exit=0
+== scenario 2
+node v24.21.0 nodemailer 10.0.14 smtp-server 3.19.17
+{"label":"expired (CA trusted)","security":"tls","port":49452,"trusted":"trusted","bareTls":{"code":"CERT_HAS_EXPIRED","message":"certificate has expired"},"raw":{"events":[{"via":"error-event","code":"ESOCKET","command":"CONN","responseCode":null,"message":"certificate has expired"}]},"adapter":{"kind":"failed_temporary","code":"smtp_unavailable","providerResponse":null,"ms":5}}
+sockets still open: 1
+exit=0
+== scenario 3
+node v24.21.0 nodemailer 10.0.14 smtp-server 3.19.17
+{"label":"hostname mismatch (CA trusted)","security":"tls","port":49453,"trusted":"trusted","bareTls":{"code":"ERR_TLS_CERT_ALTNAME_INVALID","message":"Hostname/IP does not match certificate's altnames: IP: 127.0.0.1 is not in the cert's list: "},"raw":{"events":[{"via":"error-event","code":"ESOCKET","command":"CONN","responseCode":null,"message":"Hostname/IP does not match certificate's altnames: IP: 127.0.0.1 is not in the cert's list: "}]},"adapter":{"kind":"failed_temporary","code":"smtp_unavailable","providerResponse":null,"ms":4}}
+sockets still open: 1
+exit=0
+== scenario 4
+node v24.21.0 nodemailer 10.0.14 smtp-server 3.19.17
+{"label":"control: valid cert, trusted","security":"starttls","port":49454,"trusted":"trusted","raw":{"events":[{"via":"connect-callback","code":null,"message":"connected (handshake ok)"}]},"adapter":{"kind":"accepted","code":null,"providerResponse":"250","ms":111}}
+sockets still open: 2
+exit=0
+== scenario 5
+node v24.21.0 nodemailer 10.0.14 smtp-server 3.19.17
+{"label":"untrusted/self-signed (system store)","security":"starttls","port":49455,"trusted":"system-store","raw":{"events":[{"via":"error-event","code":"ESOCKET","command":"CONN","responseCode":null,"message":"self-signed certificate; if the root CA is installed locally, try running Node.js with --use-system-ca"}]},"adapter":{"kind":"failed_temporary","code":"smtp_unavailable","providerResponse":null,"ms":107}}
+sockets still open: 2
+exit=0
+== scenario 6
+node v24.21.0 nodemailer 10.0.14 smtp-server 3.19.17
+{"label":"expired (CA trusted)","security":"starttls","port":49456,"trusted":"trusted","raw":{"events":[{"via":"error-event","code":"ESOCKET","command":"CONN","responseCode":null,"message":"certificate has expired"}]},"adapter":{"kind":"failed_temporary","code":"smtp_unavailable","providerResponse":null,"ms":107}}
+sockets still open: 2
+exit=0
+== scenario 7
+node v24.21.0 nodemailer 10.0.14 smtp-server 3.19.17
+{"label":"hostname mismatch (CA trusted)","security":"starttls","port":49457,"trusted":"trusted","raw":{"events":[{"via":"error-event","code":"ESOCKET","command":"CONN","responseCode":null,"message":"Hostname/IP does not match certificate's altnames: IP: 127.0.0.1 is not in the cert's list: "}]},"adapter":{"kind":"failed_temporary","code":"smtp_unavailable","providerResponse":null,"ms":106}}
+sockets still open: 2
+exit=0
+== scenario 8
+node v24.21.0 nodemailer 10.0.14 smtp-server 3.19.17
+{"label":"server refuses STARTTLS (502)","security":"starttls","port":49458,"trusted":"system-store","raw":{"events":[{"via":"error-event","code":"ETLS","command":"STARTTLS","responseCode":502,"message":"Error upgrading connection with STARTTLS: 502 5.5.1 STARTTLS not available"}]},"adapter":{"kind":"failed_permanent","code":"smtp_tls_failed","providerResponse":"502 5.5.1","ms":4}}
+sockets still open: 1
+exit=0
+== scenario 9
+node v24.21.0 nodemailer 10.0.14 smtp-server 3.19.17
+{"label":"server closes during STARTTLS upgrade","security":"starttls","port":49459,"trusted":"system-store","raw":{"events":[{"via":"error-event","code":"ESOCKET","command":"CONN","responseCode":null,"message":"Client network socket disconnected before secure TLS connection was established"}]},"adapter":{"kind":"failed_temporary","code":"smtp_unavailable","providerResponse":null,"ms":55}}
+sockets still open: 1
+exit=0
+== scenario 10
+node v24.21.0 nodemailer 10.0.14 smtp-server 3.19.17
+{"label":"implicit TLS to a plain-text server","security":"tls","port":49460,"trusted":"system-store","raw":{"events":[{"via":"error-event","code":"ESOCKET","command":"CONN","responseCode":null,"message":"90C10000:error:0A00010B:SSL routines:tls_validate_record_header:wrong version number:openssl\\ssl\\record\\methods\\tlsany_meth.c:78: "}]},"adapter":{"kind":"failed_temporary","code":"smtp_unavailable","providerResponse":null,"ms":2}}
+sockets still open: 1
+exit=0
+== classifier table
+node v24.21.0 nodemailer 10.0.14 smtp-server 3.19.17
+--- classifier table (classifySmtpFailure, stage connect) ---
+ETLS -> failed_permanent smtp_tls_failed
+EREQUIRETLS -> failed_permanent smtp_tls_failed
+ESOCKET -> failed_temporary smtp_unavailable
+ECONNECTION -> failed_temporary smtp_unavailable
+ETIMEDOUT -> failed_temporary smtp_timeout_before_data
+EPROTOCOL -> failed_temporary smtp_unavailable
+sockets still open: 0
+exit=0

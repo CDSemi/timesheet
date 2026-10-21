@@ -1028,6 +1028,50 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
     - file công ty chỉ áp dụng cho lịch của chính quản trị viên đó;
     - ngày lễ và payroll exceptions được ghi thành hai lần riêng.
 - Đang chạy: WP5-UX4-T05-FREEZE (một committer mới, chạy một mình).
+- WP5-UX4-T05-FREEZE đã commit và push 82d1ab4d8300de139db88dbaa9f7b2d56d2650b0: 52 đường dẫn;
+  digest b4727677 trên HEAD; mọi kiểm tra trả về 0.
+- Đang chạy: WP5-UX4-T06 (worker, sonnet; chỉ sửa docs) trên 82d1ab4 / b4727677.
+  - Docs: docs/01, 03, 05, 07, 10, 11 và 12 (+ vi), cùng các chỗ còn sót ở docs/04.
+  - Pilot packet §0, §4, §8 và §9, kèm bảng trả lời D-1..D-15.
+  - Mọi nội dung được đối chiếu với source đã đóng băng.
+  - Định danh bản phát hành giữ nguyên cho tới ACCEPT-DOCS.
+- WP5-UX4-T06, lần báo cáo đầu (chưa commit).
+  - Docs và pilot packet đã cập nhật theo brief: 9 cặp EN/VI khớp, preflight PASS, bảng đối chiếu
+    39 dòng, digest 32432deb.
+  - Còn một điểm chưa xác minh: D-8. `smtpAdapter.ts:46` xếp `ETLS` và `EREQUIRETLS` là lỗi vĩnh
+    viễn, trong khi docs ghi lỗi chứng chỉ sẽ được thử lại.
+- Đang chạy: WP5-UX4-D8-DIAG (planner, chỉ đọc). Agent quan sát từng chế độ bảo mật SMTP bằng một
+  listener TLS giả lập chạy cục bộ với chứng chỉ tự ký, rồi đề xuất câu chữ đúng.
+  - Worker T06 đang chờ, không chạy.
+  - Sau đó, hoặc một addendum của T06 sửa lại câu chữ D-8, hoặc hỏi chủ dự án nếu tiền đề của D-8 a
+    thay đổi.
+- WP5-UX4-D8-DIAG xong. Tiền đề vẫn đúng, nên không cần hỏi chủ dự án.
+  - Lỗi chứng chỉ ở cả hai chế độ đều đến dưới dạng `ESOCKET` và là lỗi tạm thời
+    `smtp_unavailable`: thử 5 lần, rồi cần người xử lý.
+  - Chỉ khi máy chủ từ chối STARTTLS mới ra `smtp_tls_failed`.
+  - Docs ghi đúng nhưng chưa nêu tên mã lỗi.
+- Đang chạy: Addendum 1 của T06 (cùng worker).
+  - Câu chữ D-8 chính xác hơn.
+  - Một test để giữ đúng hành vi trong `tests/integration/delivery.test.ts`, kèm đột biến.
+  - typecheck, lint, npm test, rồi digest ở bước cuối.
+- WP5-UX4-T06 xong sau Addendum 1.
+  - Câu chữ D-8 đã chính xác.
+  - Một test trong `delivery.test.ts` chạy cho cả STARTTLS lẫn TLS trực tiếp; đột biến của nó bị bắt.
+  - npm test 2219 đạt; digest 104ca9c3 (849 file).
+  - Ghi chú rủi ro cho gate: một test lỗi TLS không có lần gửi lại với chứng chỉ tin cậy đã làm
+    worker của vitest bị crash (0xC0000005) lúc dọn dẹp. Lần chạy probe đầu của D8-DIAG cũng bị
+    segfault. Test cuối có lần gửi lại tin cậy, giống test TLS trực tiếp đã có.
+- Đang chạy: WP5-UX4-T06-FREEZE (một committer mới, chạy một mình). Brief có thêm bước quét PEM và
+  khóa trong evidence của D8-DIAG.
+  - Lần 1 dừng trước khi stage. Bước quét bắt được chữ `BEGIN` ở `probe-script.txt:50`.
+  - Dòng đó là một template literal dựng phần đầu chứng chỉ quanh `${b64}` lúc chạy, không chứa
+    khóa nào. Coordinator đã đọc dòng này.
+  - Addendum 1 chỉ cho phép đúng trường hợp đó. Một committer mới chạy lần 2.
+- Còn lại sau T06:
+  - T06-FREEZE;
+  - gate cho cả đợt 4;
+  - audit khu vực A và B, rồi audit tích hợp;
+  - ACCEPT-DOCS và nghiệm thu lại WP5.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

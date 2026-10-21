@@ -991,6 +991,52 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
     - it applies to the administrator's own calendar;
     - the holiday commit and the payroll exceptions are separate writes.
 - Running now: WP5-UX4-T05-FREEZE (a fresh committer, alone).
+- WP5-UX4-T05-FREEZE committed and pushed 82d1ab4d8300de139db88dbaa9f7b2d56d2650b0: 52 paths;
+  digest b4727677 on HEAD; every check 0.
+- Running now: WP5-UX4-T06 (worker, sonnet; docs only) on 82d1ab4 / b4727677.
+  - Docs: docs/01, 03, 05, 07, 10, 11 and 12 (+ vi), plus leftovers in docs/04.
+  - Pilot packet §0, §4, §8 and §9, with the D-1..D-15 answer table.
+  - Claims are checked against the frozen source.
+  - The release identity is unchanged until ACCEPT-DOCS.
+- WP5-UX4-T06 first hand-back (not committed).
+  - The docs and the pilot packet are updated as briefed: parity 9 pairs, preflight PASS,
+    claim check 39 rows, digest 32432deb.
+  - One open claim: D-8. `smtpAdapter.ts:46` classes `ETLS` and `EREQUIRETLS` as
+    permanent, while the docs say a certificate failure is retried.
+- Running now: WP5-UX4-D8-DIAG (planner, read-only). It observes each SMTP security mode
+  with a local synthetic TLS listener and self-signed certificates, and proposes true
+  wording.
+  - The T06 worker waits; it is not running.
+  - Then either a T06 addendum aligns the D-8 wording, or the owner is asked if the
+    premise of D-8 a changes.
+- WP5-UX4-D8-DIAG done. The premise holds, so no owner question is needed.
+  - A certificate failure arrives as `ESOCKET` in both modes and is temporary
+    `smtp_unavailable`: five attempts, then intervention.
+  - Only a refused STARTTLS gives `smtp_tls_failed`.
+  - The docs were true but did not name the code.
+- Running now: T06 Addendum 1 (same worker).
+  - Precise D-8 wording.
+  - One pinning test in `tests/integration/delivery.test.ts`, with a mutant.
+  - typecheck, lint, npm test, then the digest last.
+- WP5-UX4-T06 done after Addendum 1.
+  - The D-8 wording is precise.
+  - One test body in `delivery.test.ts` covers both STARTTLS and implicit TLS; its mutant
+    was caught.
+  - npm test 2219 passed; digest 104ca9c3 (849 files).
+  - Risk note for the gate: a TLS-failure test without a trusted follow-up crashed the
+    vitest worker (0xC0000005) at teardown. D8-DIAG's first probe also segfaulted. The final
+    test sends a trusted follow-up, like the existing implicit-TLS test.
+- Running now: WP5-UX4-T06-FREEZE (a fresh committer, alone). Its brief adds a PEM and key
+  Grep on the D8-DIAG evidence.
+  - Attempt 1 stopped before staging. The Grep hit `BEGIN` at `probe-script.txt:50`.
+  - That line is a template literal building a certificate header around `${b64}` at run
+    time, with no key material. The coordinator read it.
+  - Addendum 1 allows exactly that hit. A fresh committer runs attempt 2.
+- Remaining after T06:
+  - T06-FREEZE;
+  - the round-4 package gate;
+  - area audits A and B, then the integration audit;
+  - ACCEPT-DOCS and the WP5 re-accept.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

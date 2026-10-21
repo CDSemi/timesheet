@@ -28,7 +28,7 @@
   "current_source_digest": "507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX4-T05-FREEZE",
+  "next_task_id": "WP5-UX4-T06-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-20",
@@ -368,7 +368,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "cda9c5172b06d3651e94e75ff30e9b1edfae382e",
+    "last_commit": "82d1ab4d8300de139db88dbaa9f7b2d56d2650b0",
     "unpushed": []
   },
   "owner_decisions": [
@@ -996,6 +996,27 @@
     }
   ],
   "auxiliary_lookups": [
+    {
+      "id": "WP5-UX4-D8-DIAG",
+      "agent_type": "timesheet-planner",
+      "agent_id": "a2fff27e972cf677f",
+      "status": "done",
+      "brief": "handoff/delivery/tasks/WP5-UX4-D8-DIAG.md",
+      "writes": [
+        "handoff/delivery/tasks/WP5-UX4-D8-DIAG.md (Results section only)",
+        "handoff/delivery/evidence/WP5-UX4-D8-DIAG/ (.txt only)",
+        "task folder D:\\.claude-tmp\\timesheet\\WP5-UX4-D8-DIAG (scripts, throwaway certificates)"
+      ],
+      "purpose": "Read-only diagnosis raised by WP5-UX4-T06: how the code at 82d1ab4 classifies a TLS certificate failure (untrusted, expired, hostname mismatch) in each SMTP security mode (implicit TLS, STARTTLS, requireTLS), observed with a local synthetic TLS/STARTTLS listener and self-signed certificates; per-document verdicts on the D-8 a wording; minimal true wording; a possible pinning test; whether the premise of the owner's D-8 a choice changes.",
+      "result": {
+        "observed": "Self-reported model claude-sonnet-5-5. On loopback with the real adapter, a certificate failure (untrusted, expired, hostname mismatch) in both tls and starttls modes arrives as nodemailer ESOCKET, not ETLS; the adapter returns failed_temporary smtp_unavailable: five attempts (retries after 1, 5, 15 and 60 minutes), then intervention; the owner sees smtp_unavailable. Only a server refusing STARTTLS (502) gives permanent smtp_tls_failed. EREQUIRETLS is unreachable; requireTLS is the STARTTLS mode.",
+        "doc_verdicts": "docs/11 §13, docs/12, docs/10 and pilot packet §8 (T06 working tree) are true for both modes; docs/05 has no D-8 text. Gap: none names smtp_unavailable.",
+        "wording": "A TLS certificate failure (untrusted, expired or wrong host name) is temporary in both modes: retried five times in all, then intervention, shown as smtp_unavailable (smtp_tls_failed only when the server refuses STARTTLS).",
+        "test_option": "tests/integration/delivery.test.ts: run the existing sink without trustedCa and assert failed_temporary smtp_unavailable, the job queued, and zero transactions.",
+        "owner_question": "None: the premise of D-8 a holds.",
+        "record": "handoff/delivery/tasks/WP5-UX4-D8-DIAG.md; evidence handoff/delivery/evidence/WP5-UX4-D8-DIAG/"
+      }
+    },
     {
       "id": "WP5-UX4-T01-FREEZE-RECON",
       "agent_type": "timesheet-verifier",
@@ -24340,9 +24361,129 @@
       "id": "WP5-UX4-T05-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX4-T05"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ae34f97197afcdc67",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX4-T05-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX4-T05-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX4-T05-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX4-T05-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX4-T05-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-UX4-T05-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "cda9c5172b06d3651e94e75ff30e9b1edfae382e",
+      "branch": "main",
+      "commit_sha": "82d1ab4d8300de139db88dbaa9f7b2d56d2650b0",
+      "pushed": true,
+      "source_digest": "b472767737b0ab9486466f258ab75bc0402a17eff01199cd9a3e167b8afba076",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed 82d1ab4 on main (remote equal; no tag): 52 staged (17 outside handoff, 8 records, 27 evidence); no extra handoff paths; digest b4727677 (849 files) before git add and on HEAD; Node v24.21.0, precommit, diff --cached --check, JSON parse, validate_orchestration, check_recovery (106) and preflight exit 0; no fix, masking or stop. Results, checks.txt and commit-message.txt stay unstaged.",
+      "next_action": "None; WP5-UX4-T06 (docs and pilot packet) on 82d1ab4 / b4727677."
+    },
+    {
+      "id": "WP5-UX4-T06",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX4-PLAN",
+        "WP5-UX4-T05-FREEZE"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aeb02a4427bbe14e5",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "docs/01_PRODUCT_REQUIREMENTS.md",
+        "docs/01_PRODUCT_REQUIREMENTS.vi.md",
+        "docs/03_ARCHITECTURE_AND_DATA.md",
+        "docs/03_ARCHITECTURE_AND_DATA.vi.md",
+        "docs/04_UX_AND_SETTINGS.md",
+        "docs/04_UX_AND_SETTINGS.vi.md",
+        "docs/05_SUBMISSION_AND_NOTIFICATIONS.md",
+        "docs/05_SUBMISSION_AND_NOTIFICATIONS.vi.md",
+        "docs/07_DEPLOYMENT_AND_OPERATIONS.md",
+        "docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md",
+        "docs/10_DECISIONS_AND_SOURCES.md",
+        "docs/10_DECISIONS_AND_SOURCES.vi.md",
+        "docs/11_OPERATIONS_RUNBOOK.md",
+        "docs/11_OPERATIONS_RUNBOOK.vi.md",
+        "docs/12_RELEASE_NOTES.md",
+        "docs/12_RELEASE_NOTES.vi.md",
+        "handoff/delivery/WP5_PILOT_PACKET.md",
+        "handoff/delivery/WP5_PILOT_PACKET.vi.md",
+        "tests/integration/delivery.test.ts",
+        "handoff/delivery/tasks/WP5-UX4-T06.md",
+        "handoff/delivery/evidence/WP5-UX4-T06"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX4-T06.md",
+      "report": "handoff/delivery/tasks/WP5-UX4-T06.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX4-T06/parity.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/preflight.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/diff-check.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/privacy-emails.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/privacy-other.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/a1-both.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/a1-whole-file2.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/a1-mutant-new.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/a1-src-diff.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/a1-parity.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/a1-preflight.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/a1-typecheck.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/a1-lint.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/a1-npm-test.txt",
+        "handoff/delivery/evidence/WP5-UX4-T06/a1-digest.txt"
+      ],
+      "baseline_commit": "82d1ab4d8300de139db88dbaa9f7b2d56d2650b0",
+      "source_digest": "104ca9c3f5e31959a23a9b509edfc6367dfef7d9b837e0e938db81641de8a5ae",
+      "reviewed_digest": null,
+      "author_agent_ids": [
+        "aeb02a4427bbe14e5"
+      ],
+      "decision": "done after Addendum 1 (worker report; independent audit pending): docs/01, 03, 04 (line 13), 05, 07, 10, 11, 12 (EN/VI) and the pilot packet (§0, §2, §4, §6, §7, §8 D-1..D-15 answer table, §9) per the owner's D answers and the round-4 build; release identity unchanged until ACCEPT-DOCS; claim-check 39 rows with file:line; D-8 statements now precise (certificate failure temporary in both TLS modes, five attempts after 1, 5, 15, 60 minutes then intervention, smtp_unavailable; smtp_tls_failed only when STARTTLS is refused; jobStore.ts:28-30, :293-294; smtpAdapter.ts:46, :57-61) and pinned by one new test body in tests/integration/delivery.test.ts for starttls and implicit tls (failed_temporary smtp_unavailable, job queued, 0 transactions, then a trusted retry succeeds); mutant ESOCKET-permanent caught; parity 9 pairs, preflight PASS, diff --check 0, typecheck 0, lint 0, npm test 97 files 2219 passed; digest 104ca9c3 (849 files). Risk note for the gate: a first test version without the trusted follow-up crashed the vitest worker with 0xC0000005 at teardown in the tls case (and D8-DIAG's first probe run also segfaulted); the follow-up send, as in the existing implicit-TLS test, removed it; the file ran 27/27 and the full suite once without a crash. 17 changed paths outside handoff (16 docs, 1 test).",
+      "first_hand_back": "Reported done, not committed (worker report): docs/01 FR-16 'explicit'; docs/03 password route and browser-only settings files; docs/04 line 13; docs/05 D-7 a; docs/07 opening balance, preview limit, no pilot import; docs/10 one 2026-10-20 entry (D-1..D-4, D-7, D-8, D-11..D-14); docs/11 §3, §8, §10, §13, §15; docs/12 round-4 entry, line 39 fixed, known limits, lines 75-88; pilot packet §0, §2, §4, §6, §7, §8 answer table D-1..D-15, §9; release identity unchanged. Parity 9 pairs equal; preflight PASS; git diff --check clean; claim-check 39 rows. Digest 32432deb (849 files). Open: row 20 (D-8, a TLS certificate failure retried then intervention) is not verified: smtpAdapter.ts:46 classes ETLS and EREQUIRETLS as permanent (smtp_tls_failed), so the statement holds only if a certificate failure arrives under another code. Slips: read-only pipes into head/tail, two rejected no-op edits.",
+      "addendum_1": "After WP5-UX4-D8-DIAG (premise of D-8 a holds; no owner question): name smtp_unavailable and the smtp_tls_failed exception in the D-8 statements (docs/11 §13, docs/12, docs/10 entry, packet §8, EN/VI) with the retry schedule cited; add one pinning test in tests/integration/delivery.test.ts (untrusted certificate -> failed_temporary smtp_unavailable, job queued, no transaction) with a mutant; parity, preflight, typecheck, lint, npm test, digest last.",
+      "next_action": "None; WP5-UX4-T06-FREEZE (fresh committer)."
+    },
+    {
+      "id": "WP5-UX4-T06-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX4-T06"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -24358,23 +24499,27 @@
       "actual_effort": null,
       "agent_id": null,
       "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
-      "attempt": 1,
-      "owned_paths": [
-        "handoff/delivery/tasks/WP5-UX4-T05-FREEZE.md",
-        "handoff/delivery/evidence/WP5-UX4-T05-FREEZE"
+      "attempt": 2,
+      "previous_agent_ids": [
+        "a0e274dd494be993b"
       ],
-      "prompt": "handoff/delivery/tasks/WP5-UX4-T05-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP5-UX4-T05-FREEZE.md",
+      "attempt_1": "stopped before staging (self_reported claude-sonnet-5-5): HEAD = origin/main = 82d1ab4, set matched, digest 104ca9c3 (849 files); the brief's PEM/key Grep hit 'BEGIN' once at evidence/WP5-UX4-D8-DIAG/probe-script.txt:50 (no PRIVATE KEY, no long base64). The coordinator read the line: a template literal building a certificate header around ${b64} at run time, no key material. Addendum 1 narrows the rule to allow exactly that hit; a fresh committer runs attempt 2.",
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX4-T06-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX4-T06-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX4-T06-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX4-T06-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "cda9c5172b06d3651e94e75ff30e9b1edfae382e",
+      "baseline_commit": "82d1ab4d8300de139db88dbaa9f7b2d56d2650b0",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "b472767737b0ab9486466f258ab75bc0402a17eff01199cd9a3e167b8afba076",
+      "source_digest": "104ca9c3f5e31959a23a9b509edfc6367dfef7d9b837e0e938db81641de8a5ae",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Fresh committer alone: stage the 17 T05 paths outside handoff plus the listed handoff records (dispatch-time pattern for extra WP5-UX4 records), run every check, commit and push."
+      "next_action": "Fresh committer alone: stage the 17 T06 paths outside handoff plus the listed handoff records (pilot packet pair, D8-DIAG and T06 records and evidence; dispatch-time pattern), PEM/key Grep on D8-DIAG evidence, run every check, commit and push."
     }
   ],
   "future_packages": [

@@ -100,7 +100,7 @@ A new installation has no calendar and no administrator. The bootstrap creates t
    <compose> exec -T timesheet <cli> bootstrap --new-token
    ~~~
 
-5. Never paste the token into chat, a ticket or a log. The synthetic `seed` command is refused in production; the administrator creates the real accounts in the application. Passwords are temporary and there is no change-password route in WP4 (decision E-11, see [10 Decisions](10_DECISIONS_AND_SOURCES.md)).
+5. Never paste the token into chat, a ticket or a log. The synthetic `seed` command is refused in production; the administrator creates the real accounts in the application. The administrator sets a temporary password for each new account (decision E-11, see [10 Decisions](10_DECISIONS_AND_SOURCES.md)); that stays. Each person then changes their own password on the Profile page (owner decision D-9 (b), `POST /api/auth/password`): the current password, a new one of 12 to 256 characters that differs from it, and the person's other sessions are signed out.
 
 ## 4. Backup schedule
 
@@ -216,7 +216,7 @@ An older build refuses a database from a newer schema, so never just start the o
      <image> <cli> restore --from /backups/<paired-backup-name> --to /restore --keep-schema --confirm
    ~~~
 
-3. Start the previous image (the tag `<previous-image>`, never a same-tag rebuild) on `<restore-dir>` with `JOB_RUNNER=off` in its environment, with `<compose-previous> up --detach --no-build` (it uses the rollback env file). A restored older schema has no outbound pause, so jobs created after the rollback are not held: keep the runner off until reconciliation is done. The drill proved only that the previous build with its runner on sent nothing from the held jobs (`JOB_RUNNER=off` is the documented rule, not a drill step).
+3. Start the previous image (the tag `<previous-image>`, never a same-tag rebuild) on `<restore-dir>` with `JOB_RUNNER=off` in its environment, with `<compose-previous> up --detach --no-build` (it uses the rollback env file). A restored older schema has no outbound pause, so jobs created after the rollback are not held: keep the runner off until reconciliation is done. The drill proved only that the previous build with its runner on sent nothing from the held jobs (`JOB_RUNNER=off` is the documented rule, not a drill step). Owner decision (a), D-1: keep `JOB_RUNNER=off` until reconciliation.
 4. Reconcile. The previous build has no `outbound` command: reconciliation happens after upgrading again, which migrates the restored data and gives the pause and the release tools. Changes made after the paired backup are not in the restored copy.
 5. If no migration was applied since the backup (a compatible schema), the previous image can start on the live data. This path is not drilled. **[owner NAS step, unverified]**
 
@@ -244,9 +244,9 @@ Refresh the base image when a security fix is published, and always together: th
 For the owner's people. Each person imports only their own workbook; an administrator cannot import for anyone else (owner decision F-1). The application never reads the workbook's formulas, macros or external links.
 
 1. Sign in and open Import (`#/import`). Upload one `.xlsx` file of at most 2 MiB (a macro-enabled workbook is refused). The preview lists every day with its source cell, the unknown labels, duplicates, floating holidays, the known defects of the template and the conflicts with existing records. **[Drill stage 6]** (API; the screens are covered by `tests/e2e/import.spec.ts`)
-2. Decide each listed day. The default is skip; only the choices the preview allows are offered. Then review and commit. **[Drill stage 6]**
+2. Decide each listed day. The default is skip; only the choices the preview allows are offered. Then review and commit. **[Drill stage 6]** A person may hold at most 20 open (uncommitted) previews (owner decision D-6 (a)): the 21st new upload is refused with 409 `import_preview_limit`, a repeat of the same file returns its existing preview, and a preview is cleared only by committing it (every day may be skipped). The pilot imports no history; production keeps the import.
 3. The imported period shows "Imported, unverified". It is read-only history: no ledger events, no sign-off or submission (409 `imported_period`), no reminders and no automatic sends. Uploading the same file again, or committing twice, changes nothing ("Already imported"). **[Drill stage 6]**
-4. The opening OT balance is the only OT carry-in. Enter signed non-zero minutes, an as-of date, a reason and an evidence reference, then confirm. It posts once; a repeat is a no-op, and a different value is refused. Change it only by a reasoned correction (a correction that would leave a net zero is refused, open question I-4). **[Drill stage 6]**
+4. The opening OT balance is the only OT carry-in. It is 0 until the owner sets it (owner decision F-1 (i)). Enter signed non-zero minutes, an as-of date (prefilled with today) and a reason; the evidence reference is optional and a blank one is stored as "not provided". It posts once; a repeat is a no-op, and a different value is refused. Change it only by a reasoned correction, which may return it to 0 (D-5 (a)); a correction to the current value posts nothing. **[Drill stage 6]**
 5. What the import does not do: it never creates work sessions or clock times, OT, sign-offs or sends; "Off day (overtime used)" is skipped (I-2); a draft period of the application never receives imported days (I-1); a period that has not ended, or has ended but is not yet due for payroll, is skip-only (I-3 and its safe default, document 10).
 6. Keep the personal workbook out of git, chat and the image. The tracked template is a sanitized sample and is never re-saved.
 
@@ -282,11 +282,11 @@ An administrator sees operations and delivery, never timesheet details (docs/03)
 
 ## 13. Pilot activation
 
-Real sending and the activation instant need the owner's explicit authorization ([06 Acceptance](06_TEST_AND_ACCEPTANCE.md)). Do nothing in this section before it. Software readiness, owner permission, provider acceptance and recipient receipt are four separate facts; record each on its own. The choices below are recommended; owner decision pending (D-1 to D-15 in [WP5-PLAN](../handoff/delivery/tasks/WP5-PLAN.md) section D). The configuration keys are named here and their values live only in `<env-file>`. On DSM the data, backup and Docker commands in sections 13 to 16 need root (`sudo -i`): `<data-dir>` is mode 700 and owned by UID 10001. A browser may ask the operator to type "allow pasting" before a pasted console line runs.
+Real sending and the activation instant need the owner's explicit authorization ([06 Acceptance](06_TEST_AND_ACCEPTANCE.md)). Do nothing in this section before it. Software readiness, owner permission, provider acceptance and recipient receipt are four separate facts; record each on its own. The owner answered D-1 to D-15 on 2026-10-20 ([10 Decisions](10_DECISIONS_AND_SOURCES.md); the options are in [WP5-PLAN](../handoff/delivery/tasks/WP5-PLAN.md) section D), and the choices below follow those answers. The configuration keys are named here and their values live only in `<env-file>`. On DSM the data, backup and Docker commands in sections 13 to 16 need root (`sudo -i`): `<data-dir>` is mode 700 and owned by UID 10001. A browser may ask the operator to type "allow pasting" before a pasted console line runs.
 
 1. Preconditions. If any is false, stop. **[owner NAS step, unverified]**
    - The authorization is in the owner's own record.
-   - The section 2 checklist is ticked and dated (recommended; owner decision pending (D-13)); until then the NAS is NOT VERIFIED and the result is "software ready, pilot pending".
+   - The section 2 checklist is ticked and dated (owner decision D-13 (a)); until then the NAS is NOT VERIFIED and the result is "software ready, pilot pending".
    - A backup, an isolated restore and the reconciliation (sections 4, 6, 7) worked on the NAS with synthetic data.
    - `<release-commit>`, `<source-digest>` and `<image-id>` are recorded (section 1 step 8).
    - The real values (`MAIL_FROM`, the `SMTP_*` keys, `PUBLIC_BASE_URL`, `APP_ORIGINS`, `TRUSTED_PROXY_ADDRESSES`) are in the owner's private copy, outside git, chat and screenshots.
@@ -325,17 +325,17 @@ Real sending and the activation instant need the owner's explicit authorization 
    - The instant must not be in the past (422 `activation_in_past`) and a reason is required (422 `reason_required`). The origin must be listed in `APP_ORIGINS` (403 `origin_rejected`).
    - Only a period whose due instant is on or after both this instant and the account's own auto-submit instant is finalized automatically; an account that never saved its settings never is ([05 Submission](05_SUBMISSION_AND_NOTIFICATIONS.md) "Deadline and recovery"). Choose an instant after the first period has been signed off by hand.
    - The call is audited. Check that the administrator status shows the instant. It shows it in the browser's zone without a zone label, so `2027-01-01T00:00:00Z` reads as the local date and time of the browser.
-6. The staged first period (recommended; owner decision pending (D-12)).
+6. The staged first period (owner decision D-12 (a)).
    - Manual sign-off with real sending; auto-submit off; no activation instant.
    - The first real send goes to the owner's own address. A change of recipients does not reach an existing revision (a changed envelope needs a new reviewed revision, [05 Submission](05_SUBMISSION_AND_NOTIFICATIONS.md) "Corrections and resends"), so set the recipients of the first period in the owner's settings before the sign-off, and decide with the owner whether payroll receives the first period's mail or a later revision.
    - Keep the Excel workbook as the comparison for that period.
    - Enable automation from the next period (step 5), and only after step 7 passes.
 7. After the first real send. Provider acceptance and recipient receipt are separate facts; record each with its instant. **[owner NAS step, unverified]**
-   - Provider acceptance: the delivery history of the revision shows the attempt as accepted with the provider's acknowledgement. A failure shows a redacted fault code: `smtp_auth_failed`, `smtp_tls_failed` and `smtp_config_invalid` are configuration faults to fix in `<env-file>` and recreate (step 4). A certificate verification failure is currently classified temporary: it retries and then needs intervention (recommended: classify it as permanent; owner decision pending (D-8)).
+   - Provider acceptance: the delivery history of the revision shows the attempt as accepted with the provider's acknowledgement. A failure shows a redacted fault code: `smtp_auth_failed`, `smtp_tls_failed` and `smtp_config_invalid` are configuration faults to fix in `<env-file>` and recreate (step 4). A TLS certificate failure (untrusted, expired or wrong host name) is temporary in both TLS modes: it is retried, five attempts in all (after 1, 5, 15 and 60 minutes), then needs intervention, and shows as `smtp_unavailable`; `smtp_tls_failed` appears only when the server refuses STARTTLS (owner decision (a), D-8: kept and documented). So the first check after a certificate or host change (a renewed or replaced certificate, a new host name or a new mail host) is the certificate and the host name of the SMTP server, before suspecting the application.
    - The link: once the activation instant is set (step 5), open the link of the first reminder that arrives. It must be `https://<nas-host>/#/review/<payroll-date>`, ask for sign-in and then open the review.
    - Recipient receipt: the owner confirms in the mailbox that exactly one message arrived from the `MAIL_FROM` sender, with the PDF, and that the PDF equals the one in the application (the spam folder included). An accepted message that never arrives is a provider or mailbox matter, not an application result.
    - An `uncertain` attempt is not sent again blindly: check the mailbox and the provider, then record the decision in the delivery history first (section 7 step 2, [05 Submission](05_SUBMISSION_AND_NOTIFICATIONS.md) "Durable delivery").
-   - After a crash on real SMTP a reminder may arrive twice (recommended: accept; owner decision pending (D-7)).
+   - After a crash on real SMTP a reminder may arrive twice (owner decision (a), D-7: accepted; reminders are advisory).
    - The logs and the status hold no password or token. Take a backup after the first real period (section 4).
    - Anything unexpected: deactivate (section 14).
 
@@ -360,7 +360,7 @@ Deactivate when a send is wrong or unexpected, the provider fails, or the owner 
 
 ## 15. Rollback card for the first installation
 
-The pilot is the first installation, so there is no older production schema or image to roll back to. Rolling back means stopping real sending and returning to Excel. Fill this card before activation. The owner's private copy holds the real values; the tracked copy holds only placeholders (recommended; owner decision pending (D-11)).
+The pilot is the first installation, so there is no older production schema or image to roll back to. Rolling back means stopping real sending and returning to Excel. Fill this card before activation. The owner's private copy holds the real values; the tracked copy holds only placeholders (owner decision D-11 (a)).
 
 | Field | Value |
 |---|---|
@@ -377,7 +377,7 @@ The pilot is the first installation, so there is no older production schema or i
 3. Fall back to the Excel workbook for the period (the owner's own copy; the tracked template is only a sample). The application data remain the record of what was submitted.
 4. Mail that was sent cannot be recalled. Read from the delivery history what went out, so that nothing is sent or entered twice by hand.
 5. Restore only if the data are damaged or wrong, never over the live data. Check `sha256sum <backup-dir>/<backup-name>/manifest.json` against `<manifest-sha256>`, then restore `<backup-name>` in isolation (section 6) into a new real folder, and reconcile (section 7). The restored instance is paused, and changes made after that backup are not in it. For an inspection-only restored instance, point `TIMESHEET_ENV_FILE` at the protected capture-mode copy of `<env-file>` kept in section 13 step 3; the live file holds the SMTP mode and the flag after activation. Never run two queues.
-6. The R-A3 rule (recommended; owner decision pending (D-1)): when a rollback restores a backup of an older schema, the older build runs with `JOB_RUNNER=off` until reconciliation is done (section 8, Rollback). On the first installation there is no older production schema, so this matters only after a later upgrade that adds a migration; revisit it before that upgrade.
+6. The R-A3 rule (owner decision (a), D-1: keep `JOB_RUNNER=off` until reconciliation): when a rollback restores a backup of an older schema, the older build runs with `JOB_RUNNER=off` until reconciliation is done (section 8, Rollback). On the first installation there is no older production schema, so this matters only after a later upgrade that adds a migration; revisit it before that upgrade.
 7. To try again, repeat section 13 from the self-test with a new pre-activation backup.
 
 ## 16. Pilot operator notes

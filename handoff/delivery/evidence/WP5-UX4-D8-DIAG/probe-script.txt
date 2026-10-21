@@ -1,0 +1,187 @@
+// WP5-UX4-D8-DIAG probe: how a TLS certificate failure is classified by the SMTP adapter.
+// Read-only use of the repository (imports the adapter and installed packages); throwaway
+// certificates exist in memory only and are never printed. Listeners: 127.0.0.1:49450-49469.
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { generateKeyPairSync, randomBytes, sign } from 'node:crypto';
+import net from 'node:net';
+import tls from 'node:tls';
+
+const REPO = 'D:/Dropbox/Work.CDSemi/timesheet';
+const require = createRequire(`${REPO}/package.json`);
+const { SMTPServer } = require('smtp-server');
+const SMTPConnection = require('nodemailer/lib/smtp-connection');
+const { createSmtpAdapter, classifySmtpFailure } = await import(pathToFileURL(`${REPO}/src/server/mail/smtpAdapter.ts`).href);
+
+const watchdog = setTimeout(() => {
+  console.log('WATCHDOG: exiting after 150 s');
+  process.exit(2);
+}, 150_000);
+watchdog.unref();
+
+// ------------------------------------------------------------ throwaway certificate ----
+const derLength = (n) => {
+  if (n < 0x80) return Buffer.from([n]);
+  const b = [];
+  for (let r = n; r > 0; r >>= 8) b.unshift(r & 0xff);
+  return Buffer.from([0x80 | b.length, ...b]);
+};
+const tlv = (tag, ...c) => {
+  const body = Buffer.concat(c);
+  return Buffer.concat([Buffer.from([tag]), derLength(body.length), body]);
+};
+const seq = (...i) => tlv(0x30, ...i);
+const oid = (hex) => tlv(0x06, Buffer.from(hex, 'hex'));
+const ECDSA_SHA256 = oid('2a8648ce3d040302');
+const COMMON_NAME = oid('550403');
+const utcTime = (d) => tlv(0x17, Buffer.from(d.toISOString().replace(/[-:T]/g, '').slice(2, 14) + 'Z', 'ascii'));
+
+function makeCertificate({ cn, dns, ips, notBefore, notAfter }) {
+  const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const name = seq(tlv(0x31, seq(COMMON_NAME, tlv(0x0c, Buffer.from(cn)))));
+  const serial = randomBytes(8);
+  serial[0] = (serial[0] & 0x7f) | 0x01;
+  const san = seq(...dns.map((d) => tlv(0x82, Buffer.from(d))), ...ips.map((ip) => tlv(0x87, Buffer.from(ip.split('.').map(Number)))));
+  const extensions = tlv(0xa3, seq(seq(oid('551d11'), tlv(0x04, san)), seq(oid('551d13'), tlv(0x01, Buffer.from([0xff])), tlv(0x04, seq(tlv(0x01, Buffer.from([0xff])))))));
+  const tbs = seq(tlv(0xa0, tlv(0x02, Buffer.from([2]))), tlv(0x02, serial), seq(ECDSA_SHA256), name, seq(utcTime(notBefore), utcTime(notAfter)), name, publicKey.export({ type: 'spki', format: 'der' }), extensions);
+  const sig = sign('sha256', tbs, privateKey);
+  const der = seq(tbs, seq(ECDSA_SHA256), tlv(0x03, Buffer.from([0]), sig));
+  const b64 = der.toString('base64').replace(/(.{64})/g, '$1\n').replace(/\n$/, '');
+  return { key: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(), cert: `-----BEGIN CERTIFICATE-----\n${b64}\n-----END CERTIFICATE-----\n` };
+}
+
+const now = Date.now();
+const H = 3_600_000;
+const certs = {
+  valid: () => makeCertificate({ cn: 'localhost', dns: ['localhost'], ips: ['127.0.0.1'], notBefore: new Date(now - H), notAfter: new Date(now + 24 * H) }),
+  expired: () => makeCertificate({ cn: 'localhost', dns: ['localhost'], ips: ['127.0.0.1'], notBefore: new Date(now - 48 * H), notAfter: new Date(now - 24 * H) }),
+  mismatch: () => makeCertificate({ cn: 'other.example.test', dns: ['other.example.test'], ips: [], notBefore: new Date(now - H), notAfter: new Date(now + 24 * H) }),
+};
+
+// ------------------------------------------------------------------ servers ----
+const sockets = new Set();
+const track = (server) => server.on('connection', (s) => { sockets.add(s); s.on('close', () => sockets.delete(s)); });
+
+async function startSmtp(port, implicit, material) {
+  const server = new SMTPServer({ key: material.key, cert: material.cert, minVersion: 'TLSv1.2', secure: implicit, logger: false, authOptional: true, disabledCommands: ['AUTH'], banner: 'probe' });
+  server.on('error', () => undefined);
+  track(server.server);
+  await new Promise((r) => server.listen(port, '127.0.0.1', r));
+  return { close: () => { for (const s of sockets) s.destroy(); return new Promise((r) => server.close(() => r())); } };
+}
+
+// A hand-written plain server: 'refuse' answers STARTTLS with 502, 'drop' says 220 then closes,
+// 'plain' just speaks plain SMTP (for an implicit-TLS client).
+async function startRaw(port, behaviour) {
+  const server = net.createServer((socket) => {
+    sockets.add(socket);
+    socket.on('close', () => sockets.delete(socket));
+    socket.on('error', () => undefined);
+    socket.write('220 probe ESMTP\r\n');
+    socket.on('data', (d) => {
+      const line = d.toString('latin1').toUpperCase();
+      if (line.startsWith('EHLO')) socket.write('250-probe\r\n250 STARTTLS\r\n');
+      else if (line.startsWith('STARTTLS')) {
+        if (behaviour === 'refuse') socket.write('502 5.5.1 STARTTLS not available\r\n');
+        else if (behaviour === 'drop') { socket.write('220 Ready to start TLS\r\n'); setTimeout(() => socket.destroy(), 50); }
+      }
+    });
+  });
+  await new Promise((r) => server.listen(port, '127.0.0.1', r));
+  return { close: () => { for (const s of sockets) s.destroy(); return new Promise((r) => server.close(() => r())); } };
+}
+
+// ---------------------------------------------------------------- observers ----
+const MESSAGE = { messageId: '<probe@example.test>', envelope: { from: 'a@example.test', to: ['b@example.test'] }, raw: Buffer.from('From: a@example.test\r\nTo: b@example.test\r\nSubject: probe\r\n\r\nbody\r\n'), pdf: new Uint8Array(0), pdfSha256: '' };
+
+function describe(error) {
+  if (!error) return null;
+  return { code: error.code ?? null, command: error.command ?? null, responseCode: error.responseCode ?? null, message: String(error.message).replace(/\s+/g, ' ').slice(0, 160) };
+}
+
+// The same SMTPConnection options the adapter builds (smtpAdapter.ts:79-92), but observed raw.
+function rawRun(port, security, trustedCa) {
+  return new Promise((resolve) => {
+    const events = [];
+    let done = false;
+    const connection = new SMTPConnection({
+      host: '127.0.0.1', port, secure: security === 'tls', requireTLS: security === 'starttls', name: 'example.test',
+      connectionTimeout: 30_000, greetingTimeout: 30_000, socketTimeout: 60_000, logger: false, debug: false, transactionLog: false,
+      tls: { minVersion: 'TLSv1.2', rejectUnauthorized: true, ...(trustedCa === undefined ? {} : { ca: trustedCa }) },
+    });
+    const finish = (extra) => {
+      if (done) return;
+      done = true;
+      connection.close();
+      resolve({ events, ...extra });
+    };
+    connection.on('error', (e) => { events.push({ via: 'error-event', ...describe(e) }); setTimeout(() => finish({}), 100); });
+    connection.connect((e) => {
+      events.push({ via: 'connect-callback', ...(e ? describe(e) : { code: null, message: 'connected (handshake ok)' }) });
+      setTimeout(() => finish({}), 100);
+    });
+  });
+}
+
+// What Node's TLS layer itself reports for the same trust and name check.
+function bareTls(port, trustedCa) {
+  return new Promise((resolve) => {
+    const socket = tls.connect({ host: '127.0.0.1', port, minVersion: 'TLSv1.2', rejectUnauthorized: true, ...(trustedCa === undefined ? {} : { ca: trustedCa }) }, () => { socket.destroy(); resolve({ code: null, message: 'handshake ok' }); });
+    socket.on('error', (e) => { socket.destroy(); resolve({ code: e.code ?? null, message: String(e.message).slice(0, 120) }); });
+  });
+}
+
+const rows = [];
+let port = 49450;
+
+async function scenario(label, security, serverKind, certKind, trust) {
+  const p = port++;
+  const material = certKind === undefined ? undefined : certs[certKind]();
+  let server;
+  if (serverKind === 'smtp') server = await startSmtp(p, security === 'tls', material);
+  else server = await startRaw(p, serverKind);
+  const trustedCa = trust === 'trusted' ? material.cert : undefined;
+  const out = { label, security, port: p, trusted: trust ?? 'system-store' };
+  try {
+    if (serverKind === 'smtp' && security === 'tls') out.bareTls = await bareTls(p, trustedCa);
+    out.raw = await rawRun(p, security, trustedCa);
+    const adapter = createSmtpAdapter({ host: '127.0.0.1', port: p, security, auth: null }, trustedCa === undefined ? { socketTimeoutMs: 5000 } : { trustedCa, socketTimeoutMs: 5000 });
+    const started = Date.now();
+    const outcome = await adapter.send(MESSAGE, { attemptId: 'probe' });
+    out.adapter = { kind: outcome.kind, code: outcome.code ?? null, providerResponse: outcome.providerResponse ?? null, ms: Date.now() - started };
+  } finally {
+    await server.close();
+  }
+  rows.push(out);
+  console.log(JSON.stringify(out));
+}
+
+console.log('node', process.version, 'nodemailer', require('nodemailer/package.json').version, 'smtp-server', require('smtp-server/package.json').version);
+// One scenario per process (argv[2] = index): an earlier all-in-one run crashed the runtime.
+const list = [];
+for (const security of ['tls', 'starttls']) {
+  list.push([`control: valid cert, trusted`, security, 'smtp', 'valid', 'trusted']);
+  list.push([`untrusted/self-signed (system store)`, security, 'smtp', 'valid', undefined]);
+  list.push([`expired (CA trusted)`, security, 'smtp', 'expired', 'trusted']);
+  list.push([`hostname mismatch (CA trusted)`, security, 'smtp', 'mismatch', 'trusted']);
+}
+// Non-certificate TLS failures, for contrast with where ETLS is really raised.
+list.push(['server refuses STARTTLS (502)', 'starttls', 'refuse']);
+list.push(['server closes during STARTTLS upgrade', 'starttls', 'drop']);
+list.push(['implicit TLS to a plain-text server', 'tls', 'refuse']);
+const index = Number(process.argv[2]);
+if (Number.isInteger(index) && index >= 0 && index < list.length) {
+  port = 49450 + index;
+  await scenario(...list[index]);
+  console.log('sockets still open:', sockets.size);
+  clearTimeout(watchdog);
+  process.exit(0);
+}
+
+console.log('--- classifier table (classifySmtpFailure, stage connect) ---');
+for (const code of ['ETLS', 'EREQUIRETLS', 'ESOCKET', 'ECONNECTION', 'ETIMEDOUT', 'EPROTOCOL']) {
+  const o = classifySmtpFailure({ code }, 'connect');
+  console.log(code, '->', o.kind, o.code);
+}
+console.log('sockets still open:', sockets.size);
+clearTimeout(watchdog);

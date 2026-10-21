@@ -6,7 +6,7 @@ This is the concrete packet the owner reviews before authorizing real sending. E
 
 ## 0. How to use this packet
 
-- **The tracked copy holds placeholders and synthetic samples only** (the repository is public; AGENTS rule 4). Copy this file to a private location outside git and write the real values there. Real host names, addresses, SMTP credentials, signatures and personal data never go into the tracked copy, chat, screenshots or logs. Recommended; owner decision pending (D-11).
+- **The tracked copy holds placeholders and synthetic samples only** (the repository is public; AGENTS rule 4). Copy this file to a private location outside git and write the real values there. Real host names, addresses, SMTP credentials, signatures and personal data never go into the tracked copy, chat, screenshots or logs. Owner decision D-11 (a): the tracked packet keeps placeholders, and the real values stay in the owner's private copy outside git.
 - Placeholders are written `<like-this>`. The ones used here: `<nas-host>`, `<sender-address>`, `<owner-address>`, `<payroll-address>`, `<proxy-ip>`, `<release-commit>`, `<source-digest>`, `<image-id>`, `<backup-name>`, `<manifest-sha256>`, `<activation-instant-utc>`, and the runbook placeholders (`<compose>`, `<cli>`, `<env-file>`, `<data-dir>`, `<backup-dir>`, `<restore-dir>`).
 - Every box `[ ]` below is empty on purpose. Only the owner ticks a box, and only for something the owner did or decided.
 - Four facts are kept apart throughout: software readiness, owner permission, provider acceptance and recipient receipt ([06 Acceptance](../../docs/06_TEST_AND_ACCEPTANCE.md)).
@@ -21,7 +21,7 @@ This is the concrete packet the owner reviews before authorizing real sending. E
 | Version in `package.json` | `0.1.0` (does not identify the release; the commit and digest do) |
 | Reference image ID (WP5-UX3-REGATE3 drill build, development workstation, of bytes identical to the release, `linux/amd64`, 110,042,848 bytes; the image has been removed) | `sha256:bcb0692cc99fe5c0b198dc26cff623045903f851f3d7069105b1df09bf9e493b` |
 | Image ID built on the NAS | `<image-id>` (the owner records it at build time, [runbook](../../docs/11_OPERATIONS_RUNBOOK.md) section 1 step 8; a rebuild of the same source gives another ID) |
-| Release declaration | none declared, no tag; recommended at the owner's pilot authorization; owner decision pending (D-14) |
+| Release declaration | none declared, no tag. Owner decision D-14 (b): the first release is declared after the pilot period, not at the pilot authorization; until then commits stay on `main` under the rule in [08 AI workflow](../../docs/08_AI_WORKFLOW_AND_BUDGET.md) and `git.release_declared` stays false |
 
 The reference image ID names the drill image of the gate on the developer workstation. It is not the NAS image, and that image was removed after the gate. A change of any file outside `handoff/` changes the commit and the digest, and this identity must then be refreshed.
 
@@ -30,6 +30,8 @@ The reference image ID names the drill image of the gate on the developer workst
 **UI change round 2 (WP5-UX2).** On 2026-10-14 the owner asked for further Timesheet-page changes (highlight of the open day column, a lighter label-picker selection, a Light/Dark toggle in the main navigation, clearer hover on toggle buttons, Today and Current period buttons, a slide switch for "Show details"), then the C&D logo with a two-line wordmark, the check in/out controls in the phone top bar and "Check in/out" wording. WP5-UX2-Q1 was answered with both buttons (Today opens the period that contains today; Current period returns to the period the page opens on) and WP5-UX2-Q2 with "a" (outlines of the wordmark, lighter tints in the dark theme). The round changed the client UI, wording and tests, and the wording of three server error messages (plus one comment); there is no business-rule, calculation, schema, API or PDF change. It was gated again (WP5-UX2-REGATE2) and finally audited (WP5-UX2-AUDIT2, [review](WP5_UX2_REVIEW2.md)), which is why the identity above differs from `90b98ef` / `57e2974c…`. The record is in [WP5 handoff](WP5_HANDOFF.md), section "Re-acceptance after UI change round 2 (WP5-UX2)".
 
 **UI change round 3 (WP5-UX3).** On 2026-10-15 the owner asked for a modern style in place of the industrial one, a top-bar identity menu (avatar, name over email; Light/Dark, Profile, Settings, Sign out), a reorganised page header and period bar, lifted (shadowed) selected columns, and a Day editor with a separate session dialog and a simpler break area (one "Confirm no breaks taken" box, one row per break, Suggest breaks and Add break). The owner answered G-1..G-5 (G-1 b with changes, G-2 a "Category", G-3 a pre-fill, G-4 owner variant, G-5 b "in progress" pill), Q6 (b), the 24-hour chips and Q7 (a, the owner's AI Instruction header in AGENTS.md). The round changed the client UI and the documents only; there is no server, business-rule, calculation, schema, API, PDF or email change (`dist/server` and `dist/domain` are byte-identical to `a643794`). It was gated again (WP5-UX3-REGATE5) and finally audited (WP5-UX3-AUDIT-INT, [review](WP5_UX3_REVIEW_INT.md)), which is why the identity above differs from `a643794` / `229df806…`. The record is in [WP5 handoff](WP5_HANDOFF.md), section "Re-acceptance after UI change round 3 (WP5-UX3)".
+
+**UI change round 4 (WP5-UX4), in progress.** On 2026-10-20 the owner asked for a fourth UI round and answered the pilot decisions D-1..D-15 (section 8). The round changes the client UI and, for the answers D-5 a, D-6 a, D-9 b, D-10 (as F-1 i) and D-15 b, the server (the change-password route, the opening-balance rules, the import preview limit, the holiday-preview counts with an audit event) plus a shared clock guard. It still needs its gate and fresh independent audits, so the release identity above is **not** refreshed yet; it is refreshed at re-acceptance. The record will be in [WP5 handoff](WP5_HANDOFF.md).
 
 Evidence for this packet is in `handoff/delivery/evidence/WP5-PILOT/` (index in section 11).
 
@@ -78,7 +80,7 @@ The development-machine equivalent is section 3: eight messages captured from th
 
 ### First real send
 
-Recommended; owner decision pending (D-12): the first period is signed off by hand, auto-submit is off, no activation instant is set, and the first real send goes to the owner's own address.
+Owner decision D-12 (a): the first period is signed off by hand, auto-submit is off, no activation instant is set, and the first real send goes to the owner's own address.
 
 | Field | Value (private copy only) |
 |---|---|
@@ -160,7 +162,7 @@ Application settings. The "documented default" column is the design default ([04
 | Note line | the user's submission settings | off; text "Automatic submission" | private copy |
 | Automatic image authorization | at signature upload, a separate audited authorization (revocable in Settings) | pre-selected at upload; if unticked, no image on automatic submissions | private copy |
 | Recipients, templates | the user's submission settings | section 2 | private copy |
-| Opening balance | Import screen / `PUT /api/ot/opening-balance` | none; one evidence-backed signed non-zero value, or start at zero (D-10) | private copy |
+| Opening balance | Import screen / `PUT /api/ot/opening-balance` | 0 until the owner sets it (D-10 a with changes, F-1 i): a signed non-zero value with an as-of date (default the day it is set) and a short reason; evidence optional (blank is stored as "not provided"); a correction may return it to 0. No historical workbook import for the pilot | private copy |
 | Activation instant | `PUT /api/admin/automation/activation` from the signed-in administrator's console (runbook section 13 step 5) | empty; set to `<activation-instant-utc>` only after the first period is signed off by hand | private copy |
 | First pilot period | the owner's choice on the 14-day cycle | payroll dates continue 2026-10-02 + 14 days (2026-10-16, 2026-10-30, 2026-11-13, ...); each is due the prior Tuesday 17:00 reporting zone. Placeholder `<first-payroll-date>` | private copy |
 
@@ -232,11 +234,11 @@ Steps (the full text is runbook sections 14 and 15):
 3. Fall back to the Excel workbook for the period (the owner's own copy).
 4. Sent mail cannot be recalled; read the delivery history to avoid a double entry. A period submitted in error stays on record and is corrected by a reasoned correction.
 5. Restore only if the data are damaged or wrong, never over the live data: check the manifest hash against `<manifest-sha256>`, restore `<backup-name>` in isolation (section 5 form) and reconcile.
-6. Residual rule (recommended; owner decision pending (D-1)): after a rollback to an older schema, the older build runs with `JOB_RUNNER=off` until reconciliation. It matters only after a later upgrade that adds a migration.
+6. Residual rule (owner decision D-1 (a)): after a rollback to an older schema, the older build runs with `JOB_RUNNER=off` until reconciliation. It matters only after a later upgrade that adds a migration.
 
 ## 7. Release identity and NAS checklist
 
-Release identity: the table in section 0. The NAS is **NOT VERIFIED** until the owner ticks every item below and dates it. Until then the result is "software ready, pilot pending" (recommended; owner decision pending (D-13)). Every item is an **[owner NAS step, unverified]**, copied from [runbook](../../docs/11_OPERATIONS_RUNBOOK.md) section 2.
+Release identity: the table in section 0. The NAS is **NOT VERIFIED** until the owner ticks every item below and dates it. Until then the result is "software ready, pilot pending" (owner decision D-13 (a)). Every item is an **[owner NAS step, unverified]**, copied from [runbook](../../docs/11_OPERATIONS_RUNBOOK.md) section 2.
 
 NAS facts to record (private copy): NAS model ______; DSM version ______; Container Manager version ______; `uname -m` ______; data and backup paths ______; folder owner UID/GID `10001` ______; NTP on ______.
 
@@ -258,25 +260,25 @@ Overall: NAS checklist complete and dated ______ by ______. (Empty means NOT VER
 
 ## 8. Owner decisions
 
-All fifteen are still pending: none is answered in the board's `owner_decisions`. Source: [WP5-PLAN](tasks/WP5-PLAN.md) section D. D-1, D-7, D-8 and D-13 must be answered before activation. An answer that differs from the current default for D-3, D-5, D-6 or D-8 causes a fix round (fix, freeze, gate, independent audit) before activation, and the release identity in sections 0 and 6 is then refreshed. The recommended D-8 option (b) differs from the current default.
+The owner answered all fifteen on 2026-10-20 (board `owner_decisions`, verbatim in Vietnamese). Source of the options: [WP5-PLAN](tasks/WP5-PLAN.md) section D; the decision record is [10 Decisions](../../docs/10_DECISIONS_AND_SOURCES.md). D-1, D-7, D-8 and D-13 needed an answer before activation and have one. Five answers changed code (D-5 a, D-6 a, D-9 b, D-10 as F-1 (i) and D-15 b, with a shared clock guard); they are part of UI change round 4, which still needs its gate and independent audits, so the release identity in sections 0 and 6 is refreshed at re-acceptance. D-11 (a) and D-13 (a): the real values stay in the owner's private copy, and the NAS stays NOT VERIFIED until the owner ticks the section 7 checklist.
 
-| ID | Decision | Recommendation (and why) | Current answer |
+| ID | Decision | Answer | What it changed |
 |---|---|---|---|
-| D-1 (R-A3) | Jobs created after a rollback to an older schema are not held | (a) keep the documented rule: the older build runs with `JOB_RUNNER=off` until reconciliation. The pilot is the first installation, so no older production schema exists; (b) would make a restore tool change business state | pending |
-| D-2 (WP4-I-1) | May a draft app period receive imported days | (a) never, current; the safest option and no code change | pending |
-| D-3 (WP4-I-2) | "Off day (overtime used)" on import | (b) import as Off with no ledger effect if history is imported before the pilot; otherwise keep (a) skip and decide after the pilot | pending |
-| D-4 (WP4-I-3) | Import an unended period | (a) no, current; imported history stays complete and read-only | pending |
-| D-5 (WP4-I-4) | Correct a mistaken opening balance to a net zero | (a) yes, by a reasoned offsetting correction, if an opening balance is recorded at pilot start | pending |
-| D-6 (WP4-I-5) | Quota on uncommitted import previews | (a) at most 20 per person, post-pilot for an owner-only pilot; before the pilot if others are onboarded | pending |
-| D-7 (F-7) | Reminder after a crash on real SMTP may repeat once | (a) accept at-least-once; a lost reminder could cause a missed deadline | pending |
-| D-8 (F-7) | TLS certificate failure is classified temporary (retries, then intervention) | (b) treat it as a permanent configuration fault, shown at once, subject to the assessment; otherwise keep (a) and document it | pending |
-| D-9 (E-11, F-7) | Pilot cohort and passwords (no self-service password change) | (a) owner-only pilot, temporary password set out of band; (b) a change-password route before anyone else is onboarded | pending |
-| D-10 | Opening balance and history at pilot start | record one evidence-backed opening balance, or start at zero; skip the historical import for the pilot | pending |
-| D-11 | Where the real pilot values live | (a) tracked packet with placeholders, real values in a private owner copy outside git; the repository is public | pending |
-| D-12 | Staging of the first real activation | (a) first period: manual sign-off with real sending, the first real send to the owner's own address, auto-submit off and no activation instant; automation from the next period | pending |
-| D-13 | Pilot host | (a) the NAS after runbook sections 1, 2, 4 and 6; NOT VERIFIED until the owner ticks the checklist | pending |
-| D-14 | First release declaration (`git.release_declared`) | (a) at the owner's pilot authorization; later fixes then follow the branch and pull request rule. Agents create no tag | pending |
-| D-15 (F-Q6) | Holiday-preview privacy | (a) keep the removal of per-date counts; no effect on an owner-only pilot | pending |
+| D-1 (R-A3) | Jobs created after a rollback to an older schema are not held | (a) keep the rule: the older build runs with `JOB_RUNNER=off` until reconciliation | documented only (runbook sections 8 and 15) |
+| D-2 (WP4-I-1) | May a draft app period receive imported days | (a) never | documented only (current default) |
+| D-3 (WP4-I-2) | "Off day (overtime used)" on import | (a) skip | documented only (current default) |
+| D-4 (WP4-I-3) | Import an unended period | (a) no | documented only (current default) |
+| D-5 (WP4-I-4) | Correct a mistaken opening balance to a net zero | (a) yes, by a reasoned offsetting correction | code: a correction may return the balance to 0 (a balance already at 0 posts nothing); docs 03, 07, 11, 12 |
+| D-6 (WP4-I-5) | Quota on uncommitted import previews | (a) at most 20 per person | code: the 21st new upload is refused (409 `import_preview_limit`); a preview is cleared only by committing it; docs 07, 11, 12 |
+| D-7 (F-7) | Reminder after a crash on real SMTP may repeat once | (a) accept at-least-once | documented only (docs 05, 12, runbook section 13) |
+| D-8 (F-7) | TLS certificate failure is classified temporary (retries, then intervention) | (a) keep and document it | documented only (docs 12, runbook section 13): a certificate failure is retried, five attempts in all, then intervention, shown as `smtp_unavailable`; the first check after a certificate or host change |
+| D-9 (E-11, F-7) | Pilot cohort and passwords (no self-service password change) | (b) a change-password route before anyone else is onboarded | code: `POST /api/auth/password` and the Profile "Change password" card; the administrator's temporary password stays; docs 03, 04, 11, 12 |
+| D-10 | Opening balance and history at pilot start | (a) with changes: default 0, may be changed at any time, no evidence needed (F-1 i); no historical import for the pilot | code: reason required, evidence optional ("not provided" when blank), as-of date defaults to the day it is set, correction to 0; docs 01, 03, 07, 10, 11, 12; section 4 row |
+| D-11 | Where the real pilot values live | (a) tracked packet with placeholders, real values in the owner's private copy outside git | documented only (section 0) |
+| D-12 | Staging of the first real activation | (a) first period manual with real sending to the owner's own address, auto-submit off, no activation instant | documented only (section 2, runbook section 13 step 6) |
+| D-13 | Pilot host | (a) the NAS; NOT VERIFIED until the owner ticks the checklist | documented only (section 7) |
+| D-14 | First release declaration (`git.release_declared`) | (b) declared after the pilot period | documented only (section 0 declaration row, section 9 checkbox) |
+| D-15 (F-Q6) | Holiday-preview privacy | (b) restore per-date counts | code: exact per-date counts with no identity and one `calendar.holiday_preview` audit event per preview; docs 03, 10, 12 |
 
 Not decisions, for the owner to note: the 2027 company holiday list (settings input); the separate-device backup copy ([07 Operations](../../docs/07_DEPLOYMENT_AND_OPERATIONS.md)); the independent host alert (runbook section 11).
 
@@ -299,7 +301,7 @@ Owner permission, scope and conditions:
 - [ ] The wording approval (section 3) is complete.
 - [ ] Real sending is authorized for: first real send to `<owner-address>` only / also to `<payroll-address>` / scope: ______
 - [ ] Setting the activation instant is authorized: not yet / from `<activation-instant-utc>`
-- [ ] The first release is declared at this authorization (D-14): yes / no
+- [ ] The first release is declared after the pilot period, not at this authorization (D-14 b): declared on ______ (leave empty until then; `git.release_declared` stays false)
 
 Owner signature or reference to the owner's own record: ______   Date and UTC instant: ______
 

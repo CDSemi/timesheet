@@ -1,0 +1,38 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/integration/delivery.test.ts (27 tests | 1 failed | 26 skipped) 481ms
+   ❯ SMTP adapter against the loopback sink (docs/05 failure table) (12)
+     × an untrusted certificate (starttls): failed_temporary smtp_unavailable, job queued, no transaction 480ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > an untrusted certificate (starttls): failed_temporary smtp_unavailable, job queued, no transaction
+AssertionError: expected { claimed: 1, succeeded: +0, …(3) } to match object { claimed: 1, retried: 1 }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "claimed": 1,
+-   "retried": 1,
++   "retried": 0,
+  }
+
+ ❯ tests/integration/delivery.test.ts:437:82
+    435|       const { revisionId, sendJobId } = await finalized();
+    436|       const config = loadDeliveryConfig({ ...smtpEnv(target.port), SMT…
+    437|       expect(await runSend(createOutboundAdapter(config.outbound, { da…
+       |                                                                                  ^
+    438|       expect(attempts(revisionId).map((row) => [row.state, row.provide…
+    439|       expect(job(sendJobId)).toMatchObject({ state: 'queued', attempts…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 26 skipped (27)
+   Start at  01:17:27
+   Duration  2.28s (import 52%, transform 26%, tests 22%)
+
