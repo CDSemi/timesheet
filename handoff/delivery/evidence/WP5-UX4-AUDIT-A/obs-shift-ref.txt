@@ -1,0 +1,44 @@
+# Usage: bash run-shift.sh <label> <target instant, UTC ISO or "real"> [playwright args...]
+# One Playwright run in the clean export under a simulated wall clock (FIX10's shiftclock.mjs, unchanged), own output folder.
+. /d/.claude-tmp/timesheet/WP5-UX4-REGATE/env.sh
+L=$1; TARGET=$2; shift 2
+mkdir -p $T/pw-$L $T/shots-$L
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+if [ "$TARGET" = "real" ]; then
+  export NODE_OPTIONS="--trace-deprecation"
+  export AB8_SHIFT_MS=0
+else
+  TARGET_MS=$(date -u -d "$TARGET" +%s%3N)
+  NOW_MS=$(date -u +%s%3N)
+  export AB8_SHIFT_MS=$((TARGET_MS - NOW_MS))
+  export NODE_OPTIONS="--trace-deprecation --import file:///$(cygpath -m $T)/shiftclock.mjs"
+fi
+echo "== $L: real start $(date -u +%Y-%m-%dT%H:%M:%SZ), simulated start $TARGET, AB8_SHIFT_MS=$AB8_SHIFT_MS"
+node.exe $T/probe-now.mjs
+cd "${SHIFT_EXPORT:-$T/export}" || exit 2
+echo "\$ node node_modules/@playwright/test/cli.js test $* --output=/d/.claude-tmp/timesheet/WP5-UX4-REGATE/pw-$L"
+node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-$L"
+echo "exit=$?"
+node.exe $T/probe-now.mjs
+echo "== $L real end $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+// WP5-UX-AUDIT-AB8 (copied unchanged for WP5-UX-FIX10): simulated wall clock for a whole e2e run, without any source change.
+// Loaded through NODE_OPTIONS=--import into the Playwright runner, its workers, the CLI and the built server
+// (the fixtures spawn them with ...process.env). Every process shifts Date by the SAME constant AB8_SHIFT_MS,
+// computed once by the wrapper, so elapsed time is real and all processes agree on "now".
+// The browser is not shifted; the client code never reads the browser clock (no Date.now / new Date( in src/client).
+const shift = Number(process.env.AB8_SHIFT_MS ?? '0');
+if (!Number.isFinite(shift)) throw new Error('AB8_SHIFT_MS must be a number');
+const RealDate = globalThis.Date;
+const shifted = new Proxy(RealDate, {
+  construct(target, args, newTarget) {
+    return Reflect.construct(target, args.length === 0 ? [RealDate.now() + shift] : args, newTarget);
+  },
+  apply() {
+    return new RealDate(RealDate.now() + shift).toString();
+  },
+  get(target, prop, receiver) {
+    if (prop === 'now') return () => RealDate.now() + shift;
+    return Reflect.get(target, prop, receiver);
+  },
+});
+globalThis.Date = shifted;

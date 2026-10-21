@@ -94,7 +94,7 @@ Mỗi dòng nêu giới hạn và nơi có quy tắc hoặc bước. Không dòn
 
 - **Chốt chặn hủy thay đổi không bao phủ mọi lối thoát.** Câu hỏi "Discard your changes?" bảo vệ việc chuyển ngày, nút của ngày đang mở, "Open a day", "Today", các nút chuyển kỳ, "Current period", Close và Escape. Nó không bảo vệ một liên kết rời khỏi trang Timesheet (thanh trên, "Review & sign off"), và không bảo vệ việc editor tải lại sau khi một lần commit nhãn hoặc hàng loạt đã đổi chính ngày đang mở.
 - **Giới hạn của file lịch công ty.** Không thể nhập các ngày làm việc trong tuần (không route nào đổi chúng), nên file có ngày làm việc khác với lịch bị từ chối. File áp dụng cho lịch của chính admin, lịch duy nhất mà trang đọc được. Mỗi lần nhập một năm ngày lễ. Ngoại lệ payroll đã có với giá trị khác sẽ được giữ, vì không sửa được ngoại lệ. Việc commit ngày lễ và từng ngoại lệ payroll là các lần ghi riêng, nên nếu lỗi giữa chừng thì báo cáo những gì đã được ghi.
-- **Thanh cuộn kiểu cũ.** Con số 1345px cho bố cục cạnh bảng với thanh cuộn kiểu cũ được một unit test tính từ các token; trình duyệt kiểm thử không giao diện không hiển thị được thanh cuộn kiểu cũ.
+- **Thanh cuộn kiểu cũ.** Con số 1345px cho bố cục cạnh bảng với thanh cuộn kiểu cũ được một unit test tính từ các token và được kiểm bằng một test trình duyệt chạy không có cờ mặc định `--hide-scrollbars` của chế độ không giao diện, nên thanh cuộn 15px được vẽ ra (trang giữ rãnh thanh cuộn ở mọi chiều cao trang, nhờ đó trình sửa không còn nhấp nháy giữa cạnh bảng và nổi). Các trình duyệt và hệ điều hành khác dùng thanh cuộn kiểu cũ chưa được thử.
 
 ### Vận hành
 

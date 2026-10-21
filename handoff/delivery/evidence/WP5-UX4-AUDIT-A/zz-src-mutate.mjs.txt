@@ -1,0 +1,65 @@
+// Applies one named mutant to a file of the mutant export (exactly one occurrence, else exit 3). Usage: node mutate.mjs <export> <id>
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [root, id] = process.argv.slice(2);
+
+const swapZone = (text) => {
+  const start = text.indexOf('            <label>\n              Input zone');
+  const endMarker = '            </datalist>\n';
+  const end = text.indexOf(endMarker, start);
+  const anchor = '            {overnight && (';
+  if (start < 0 || end < 0) return null;
+  const block = text.slice(start, end + endMarker.length);
+  const rest = text.slice(0, start) + text.slice(end + endMarker.length);
+  const at = rest.indexOf(anchor);
+  if (at < 0) return null;
+  return rest.slice(0, at) + block + rest.slice(at);
+};
+
+const MUTANTS = {
+  M1: ['src/client/TimesheetScreen.tsx', '<section className="card stack sheet-main paper" data-paper="timesheet">', '<section className="card stack sheet-main" data-paper="timesheet">'],
+  M2: ['src/client/styles.css', '--page-head-gap: var(--space-6);', '--page-head-gap: var(--space-3);'],
+  M3: ['src/client/styles.css', '--select-arrow-inset: 12px;', '--select-arrow-inset: 4px;'],
+  M4: ['src/client/components/editorLayoutModel.ts', 'export const COVER_TOLERANCE = 1;', 'export const COVER_TOLERANCE = 0;'],
+  M5: ['src/client/components/SheetWeekTable.tsx', 'return () => (actions.editing === workDate ? actions.onUnselect() : actions.onEdit(workDate));', 'return () => actions.onEdit(workDate);'],
+  M6: ['src/client/TimesheetScreen.tsx', '      askBeforeDropping(() => {\n        setPeriods(fresh);', '      ((proceed: () => void, _keep?: () => void) => proceed())(() => {\n        setPeriods(fresh);'],
+  M7: ['src/client/styles.css', "  inset: calc(var(--shell-bar-size) + var(--share-bar-size)) auto 0 0;\n  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;", "  inset: calc(var(--shell-bar-size) + var(--share-bar-size)) auto 0 0;\n  border-radius: var(--radius-lg) 0 0 var(--radius-lg);"],
+  M8: ['src/client/components/SessionDialog.tsx', swapZone],
+  M9: ['src/client/components/SessionDialog.tsx', '    else saveButton.current?.focus();', '    else heading.current?.focus();'],
+  M10: ['src/client/styles.css', '--break-time-slot-w: 9.6rem;', '--break-time-slot-w: 6.8rem;'],
+  M11: ['src/client/styles.css', '  --sheet-head-strong: #dde5f0;', '  --sheet-head-strong: #e9eef5;'],
+  M12: ['src/client/styles.css', '.local-cell > button.link-action {\n  align-self: flex-end;', '.local-cell > button.link-action {\n  align-self: flex-start;'],
+  M13: [
+    'src/client/TimesheetScreen.tsx',
+    '  function move(direction: -1 | 1) {\n    askBeforeDropping(() => {\n      if (editorDirty.current) restartEditor();\n      void moveNow(direction);\n    });\n  }',
+    '  function move(direction: -1 | 1) {\n    void moveNow(direction);\n    askBeforeDropping(() => {\n      if (editorDirty.current) restartEditor();\n    });\n  }',
+  ],
+  M14: ['src/client/DayEditor.tsx', "      if (document.querySelector('dialog:modal') !== null) return;\n      onClose();", "      if (document.querySelector('dialog:modal') !== null) return;"],
+};
+
+const spec = MUTANTS[id];
+if (spec === undefined) {
+  console.error(`unknown mutant ${id}`);
+  process.exit(2);
+}
+const file = join(root, spec[0]);
+const text = readFileSync(file, 'utf8');
+let next;
+if (typeof spec[1] === 'function') {
+  next = spec[1](text);
+  if (next === null) {
+    console.error(`${id}: anchors not found`);
+    process.exit(3);
+  }
+} else {
+  const count = text.split(spec[1]).length - 1;
+  if (count !== 1) {
+    console.error(`${id}: ${count} occurrences in ${spec[0]}`);
+    process.exit(3);
+  }
+  next = text.replace(spec[1], spec[2]);
+}
+writeFileSync(file, next);
+console.log(`${id}: mutated ${spec[0]}`);
+console.log(`FILE=${spec[0]}`);

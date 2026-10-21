@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# D-8 crash judgement outside vitest: the production adapter against an untrusted loopback certificate, 5 runs per case.
+source <task>/env.sh
+LOG="$TASK_DIR/logs/crash2"
+mkdir -p "$LOG"
+for mode in tls starttls; do
+  for variant in close-sink keep-sink wait; do
+    for i in 1 2 3 4 5; do
+      node "$TASK_DIR/crash-standalone.mjs" "<task>/clone" "$mode" "$variant" > "$LOG/$mode-$variant-$i.log" 2>&1
+      echo "exit=$?" >> "$LOG/$mode-$variant-$i.log"
+    done
+  done
+done
+echo done > "$LOG/crash2.done"

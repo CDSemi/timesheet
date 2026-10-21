@@ -1077,6 +1077,68 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - Results: 0 failed at the six instants; repeats 140/140 and 40/40; FULL e2e 774
     passed, 0 failed; npm test 2226; digest b3e9c962.
 - Running now: WP5-UX4-FIX1-FREEZE (a fresh committer, alone), then WP5-UX4-REGATE.
+- WP5-UX4-FIX1-FREEZE committed and pushed 0ddfeada1b66c82b066b179e901184ca5d857793.
+  - 319 paths, including the gate's 242 and FIX1's 62 evidence files.
+  - Digest b3e9c962 on HEAD; every check 0; key and PEM scan clean.
+- Running now: WP5-UX4-REGATE (verifier, sonnet) on 0ddfead / b3e9c962.
+  - Carry-forward needs `dist/server`, `dist/domain` and the lazy chunks byte-identical to
+    a3042dd.
+  - Reruns: core with `npm test` x3; real-clock FULL e2e; simulated FULL at three instants
+    plus seven specs at three; the 1280 walk docked on both sides; 10x repeats; focused
+    axe; the assertion check.
+- WP5-UX4-REGATE: **PASS** on 0ddfead / b3e9c962.
+  - `dist/server` and `dist/domain` are identical. The lazy chunks are identical once the
+    chunk file names are normalised, so the gate items carried forward.
+  - `npm test` x3: 2226 each, 0 crashes.
+  - Real-clock FULL e2e: 774 passed, 0 failed.
+  - Sweep: 0 failed (one buffer rerun).
+  - 2.4.11: 12 walks, 0 hidden.
+  - Repeats 140/140 and 40/40; axe 0.
+- Running now, in parallel: WP5-UX4-AUDIT-A and WP5-UX4-AUDIT-B (fresh opus auditors).
+  - Area A: visual, shell, Day editor, dialogs and accessibility.
+  - Area B: data, security, settings files, sessions and docs.
+- Then WP5-UX4-AUDIT-INT.
+- WP5-UX4-AUDIT-B: **FIX REQUIRED**, one Low finding.
+  - F-UX4B-1: five failed sign-ins with the email `password:<victim id>`, from the same
+    client address, put the victim's password change at 429 for 15 minutes. The two flows
+    share the limiter key space.
+  - Optional risks R-UX4B-1..8. They include R-UX4B-2: an edit grantee can delete the
+    owner's running session.
+  - Checks: npm test x2; nine integration files; delivery x21 with no crash; AC-13 Tokyo;
+    six e2e specs 239/0; 19 mutants all caught.
+  - The coordinator stopped a background task the auditor left running.
+- Waiting for WP5-UX4-AUDIT-A before the fix round: no source writer runs while an audit
+  runs.
+- WP5-UX4-AUDIT-A: **FIX REQUIRED**, 1 Medium and 3 Low.
+  - F-UX4A-1 (Medium): with a classic 15px scrollbar the drawer flaps beside/floating at
+    about 60 a second at 1330-1344px, within a band of window heights.
+  - F-UX4A-2: Escape from a sheet control with unsaved edits shows nothing (no
+    `preventDefault`).
+  - F-UX4A-3: Current period, then Keep editing, puts focus on Today.
+  - F-UX4A-4: docs/04 lines 67 and 108.
+  - Everything else passed: axe 0 in 102 scans; 2.4.11 0 in 96 walks; 14 mutants caught;
+    FULL e2e 773 passed (1 buffer rerun). The two unguarded routes and the lazy card shift
+    are acceptable.
+- Owner question WP5-UX4-R2-Q (R-UX4B-2: block an edit grantee deleting the owner's
+  running session?) is open. Recommendation: (a) block.
+- Running now: WP5-UX4-FIX2 (worker-high, sonnet).
+  - F-UX4A-1..4 and F-UX4B-1, with separate limiter key spaces.
+  - Cleanups for review-A risks 6 and 7.
+  - Reproduce first; mutants; a classic-scrollbar e2e repeated 5 times; FULL e2e.
+- WP5-UX4-FIX2 done.
+  - The flap fix is `html { overflow-y: scroll }`, because `scrollbar-gutter: stable` was
+    measured not to work. A classic track is now always drawn on desktop browsers that use
+    classic scrollbars.
+  - Escape now uses `preventDefault`.
+  - Current period moves focus only on proceed.
+  - The sign-in limiter key is now `login:<email>`; the address bucket stays shared, as
+    documented.
+  - Cleanups.
+  - Results: mutants caught; FULL e2e 779 passed, 0 failed; npm test 2226; digest 1c1c526f
+    (850 files).
+- The owner question WP5-UX4-R2-Q is still open. An answer (a) becomes a small FIX3.
+- Running now: WP5-UX4-FIX2-FREEZE (a fresh committer, alone), then REGATE2 and the
+  rechecks A2 and B2.
 - Remaining after T06:
   - T06-FREEZE;
   - the round-4 package gate;

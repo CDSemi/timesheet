@@ -1,0 +1,14 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+O=$T/out
+cd $T/export
+for i in 1 2 3; do
+  npm test > $O/12-npmtest-$i.txt 2>&1; echo "npm test run $i exit $? dep=$(grep -ci deprecat $O/12-npmtest-$i.txt) crash=$(grep -ciE 'worker|crash|0xC0000005|exited' $O/12-npmtest-$i.txt)" >> $O/12-npmtest-exits.txt
+done
+npm run verify > $O/03-verify.txt 2>&1; echo "verify exit $?" > $O/03-verify-exit.txt
+$PY handoff/delivery/validate_package.py --preflight > $O/11-validate_package.txt 2>&1; echo "validate_package exit $?" >> $O/11-exits.txt
+$PY handoff/delivery/validate_orchestration.py > $O/11-validate_orchestration.txt 2>&1; echo "validate_orchestration exit $?" >> $O/11-exits.txt
+$PY handoff/delivery/check_recovery.py > $O/11-check_recovery.txt 2>&1; echo "check_recovery exit $?" >> $O/11-exits.txt
+node scripts/precommit-check.mjs --self-test > $O/11-precommit-selftest.txt 2>&1; echo "precommit self-test exit $?" >> $O/11-exits.txt
+cat $O/12-npmtest-exits.txt $O/03-verify-exit.txt $O/11-exits.txt
+echo core-done > $O/core.done

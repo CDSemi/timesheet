@@ -1,0 +1,16 @@
+// Server side alone: the loopback test sink (implicit TLS or STARTTLS) for a fixed time, then close, wait, exit.
+// Usage: node crash-sink-only.mjs <clone-dir> <tls|starttls> <port-file> <open-ms>
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [clone, mode, portFile, openMs] = process.argv.slice(2);
+const { startSmtpSink } = await import(pathToFileURL(join(clone, 'tests/support/smtpSink.ts')).href);
+const sink = await startSmtpSink({ implicitTls: mode === 'tls' });
+writeFileSync(portFile, String(sink.port));
+process.stdout.write(`SINK listening\n`);
+await new Promise((resolve) => setTimeout(resolve, Number(openMs)));
+process.stdout.write(`SINK closing transactions=${sink.transactions}\n`);
+await sink.close();
+await new Promise((resolve) => setTimeout(resolve, 3000));
+process.stdout.write('SINK exiting normally\n');

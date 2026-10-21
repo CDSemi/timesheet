@@ -1,0 +1,49 @@
+import { expect, screenshotPath, test } from './fixtures.ts';
+import { dayBtn, drawer, note, seedAudit, signInTo } from './zz-alib.ts';
+
+/*
+ * WP5-UX4-AUDIT-A: two frames of the classic-scrollbar flap (finding F-1) at a 1340x1400 window, plus a 10 s count of layout changes.
+ * Classic scrollbars: Playwright's headless default `--hide-scrollbars` is dropped. Task-local; never part of the repository.
+ */
+test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } });
+
+test('classic-scrollbar flap frames', async ({ page, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop');
+  test.setTimeout(120_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const seed = await seedAudit(builtServer, 'Synthetic Flap Person');
+  await page.setViewportSize({ width: 1340, height: 900 });
+  await signInTo(page, builtServer, seed.person.account);
+  await dayBtn(page, seed.twoSessions).click();
+  await expect(drawer(page)).toBeVisible();
+  await page.setViewportSize({ width: 1340, height: 1400 });
+  await page.waitForTimeout(500);
+  const counted = await page.evaluate(
+    () =>
+      new Promise<{ flips: number; layouts: string[] }>((resolve) => {
+        const area = document.querySelector('[data-editor-layout]');
+        let flips = 0;
+        const seen = new Set<string>();
+        const mo = new MutationObserver(() => {
+          flips += 1;
+          seen.add(area?.getAttribute('data-editor-layout') ?? '');
+        });
+        if (area !== null) mo.observe(area, { attributes: true, attributeFilter: ['data-editor-layout'] });
+        setTimeout(() => {
+          mo.disconnect();
+          resolve({ flips, layouts: [...seen] });
+        }, 10_000);
+      }),
+  );
+  note('flap.txt', `classic 1340x1400: data-editor-layout changes in 10 s = ${counted.flips}; layouts seen ${JSON.stringify(counted.layouts)}; scrollbar ${await page.evaluate('window.innerWidth - document.documentElement.clientWidth')}px now`);
+  const taken = new Set<string>();
+  for (let i = 0; i < 40 && taken.size < 2; i += 1) {
+    const layout = (await page.locator('[data-editor-layout]').getAttribute('data-editor-layout')) ?? '';
+    if (!taken.has(layout)) {
+      await page.screenshot({ path: screenshotPath(`audita-flap-1340x1400-${layout}-synthetic.png`), animations: 'allow' });
+      taken.add(layout);
+    }
+    await page.waitForTimeout(7);
+  }
+  note('flap.txt', `frames captured: ${JSON.stringify([...taken])}`);
+});

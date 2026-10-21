@@ -1,0 +1,17 @@
+// Counts CR bytes in every file of a folder. Usage: node crcount.mjs <folder>
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+let files = 0;
+let withCr = 0;
+for (const name of readdirSync(dir)) {
+  if (!name.endsWith('.txt')) continue;
+  files += 1;
+  const bytes = readFileSync(join(dir, name));
+  if (bytes.includes(13)) {
+    withCr += 1;
+    console.log(`CR in ${name}`);
+  }
+}
+console.log(`txt files ${files}, with CR ${withCr}`);

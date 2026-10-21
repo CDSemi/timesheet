@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Mandatory checks part 1: typecheck, lint, npm test twice, build. Logs in the task folder.
+source <task>/env.sh
+cd "$CLONE" || exit 2
+LOG="$TASK_DIR/logs"
+mkdir -p "$LOG"
+node --version > "$LOG/node-version.txt"
+npm24 run typecheck > "$LOG/typecheck.log" 2>&1; echo "exit=$?" >> "$LOG/typecheck.log"
+npm24 run lint > "$LOG/lint.log" 2>&1; echo "exit=$?" >> "$LOG/lint.log"
+npm24 test > "$LOG/test-run1.log" 2>&1; echo "exit=$?" >> "$LOG/test-run1.log"
+npm24 test > "$LOG/test-run2.log" 2>&1; echo "exit=$?" >> "$LOG/test-run2.log"
+npm24 run build > "$LOG/build.log" 2>&1; echo "exit=$?" >> "$LOG/build.log"
+echo done > "$LOG/checks1.done"

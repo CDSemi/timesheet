@@ -1,0 +1,106 @@
+# Auditor client probe (tests/auditb/area-b-client.test.ts) under two device zones, TZ set through tzrun.mjs
+## probe-client-LA2
+TZPROBE zone=America/Los_Angeles TZenv=America/Los_Angeles offsetMin=420
+AUDITB hostile __proto__ at top {"ok":false,"ms":0,"problems":["file.__proto__ is not a setting this app knows. The file was not read."]}
+AUDITB hostile __proto__ in data {"ok":false,"ms":0,"problems":["data.__proto__ is not a setting this app knows. The file was not read."]}
+AUDITB hostile constructor.prototype in work_policy {"ok":false,"ms":0,"problems":["data.work_policy.constructor is not a setting this app knows. The file was not read."]}
+AUDITB hostile prototype key in submission {"ok":false,"ms":0,"problems":["data.submission.prototype is not a setting this app knows. The file was not read."]}
+AUDITB hostile apply_to_overdue_drafts in submission {"ok":false,"ms":0,"problems":["data.submission.apply_to_overdue_drafts is not a setting this app knows. The file was not read."]}
+AUDITB hostile signature in personal {"ok":false,"ms":0,"problems":["data.signature is not a setting this app knows. The file was not read."]}
+AUDITB hostile password in file {"ok":false,"ms":0,"problems":["file.password is not a setting this app knows. The file was not read."]}
+AUDITB hostile deep nesting in data {"ok":false,"ms":9,"problems":["data must be an object."]}
+AUDITB hostile deep nesting at top {"ok":false,"ms":10,"problems":["The file is not a settings file: its top level is not an object."]}
+AUDITB hostile deep objects in data {"ok":false,"ms":4,"problems":["data.a is not a setting this app knows. The file was not read."]}
+AUDITB hostile long string 190k {"ok":false,"ms":0,"problems":["data.submission.body_template must be text of at most 12000 characters."]}
+AUDITB hostile over the size limit {"ok":false,"ms":0,"problems":["This file is too large to be a settings file."]}
+AUDITB hostile wrong type: minutes as text {"ok":false,"ms":0,"problems":["data.work_policy.required_minutes must be a whole number from 1 to 1440."]}
+AUDITB hostile wrong type: breaks as object {"ok":false,"ms":0,"problems":["data.work_policy.breaks must be a list of at most 10 items."]}
+AUDITB hostile wrong type: to as text {"ok":false,"ms":0,"problems":["data.submission.to must be a list of at most 40 items."]}
+AUDITB hostile wrong type: auto_submit as text {"ok":false,"ms":0,"problems":["data.submission.auto_submit must be true or false."]}
+AUDITB hostile huge number {"ok":false,"ms":0,"problems":["data.work_policy.required_minutes must be a whole number from 1 to 1440."]}
+AUDITB hostile fraction {"ok":false,"ms":0,"problems":["data.work_policy.required_minutes must be a whole number from 1 to 1440."]}
+AUDITB hostile invalid time 24:00 {"ok":false,"ms":0,"problems":["data.work_policy.reference_start must be a clock time as HH:MM (00:00 to 23:59)."]}
+AUDITB hostile invalid time 7:5 {"ok":false,"ms":0,"problems":["data.work_policy.reference_start must be a clock time as HH:MM (00:00 to 23:59)."]}
+AUDITB hostile exported_at without zone {"ok":false,"ms":0,"problems":["exported_at: exported_at must be a UTC instant such as 2026-09-21T16:00:00Z."]}
+AUDITB hostile exported_at with offset {"ok":false,"ms":0,"problems":["exported_at: exported_at must be a UTC instant such as 2026-09-21T16:00:00Z."]}
+AUDITB hostile exported_at impossible date {"ok":false,"ms":0,"problems":["exported_at: exported_at must be a UTC instant such as 2026-09-21T16:00:00Z."]}
+AUDITB hostile schema version 2 {"ok":false,"ms":0,"problems":["This file uses schema version 2; this app reads version 1 only."]}
+AUDITB hostile other format {"ok":false,"ms":0,"problems":["The file is not a settings file of this app (its format is not \"timesheet-settings\")."]}
+AUDITB hostile company scope in personal import {"ok":false,"ms":0,"problems":["This is a company calendar file. Import it under Administration, not in your personal settings."]}
+AUDITB hostile not JSON {"ok":false,"ms":0,"problems":["The file is not valid JSON, so it cannot be a settings file."]}
+AUDITB hostile JSON with a byte-order mark {"ok":false,"ms":0,"problems":["The file is not valid JSON, so it cannot be a settings file."]}
+AUDITB hostile top-level array {"ok":false,"ms":0,"problems":["The file is not a settings file: its top level is not an object."]}
+AUDITB hostile top-level null {"ok":false,"ms":0,"problems":["The file is not a settings file: its top level is not an object."]}
+AUDITB hostile empty data {"ok":false,"ms":0,"problems":["The file holds neither a work policy nor submission settings."]}
+AUDITB hostile control characters in a key {"ok":false,"ms":0,"problems":["file.??[31mevil? is not a setting this app knows. The file was not read."]}
+AUDITB company hostile invalid holiday date {"ok":false}
+AUDITB company hostile formula name {"ok":false}
+AUDITB company hostile newline name {"ok":false}
+AUDITB company hostile duplicate date {"ok":false}
+AUDITB company hostile weekday 8 {"ok":false}
+AUDITB company hostile duplicate weekday {"ok":false}
+AUDITB company hostile zone not IANA {"ok":false}
+AUDITB company hostile due time 25:00 {"ok":false}
+AUDITB company hostile extra key in payroll {"ok":false}
+AUDITB request keys ["auto_note_enabled","auto_submit","body_template","cc","expected_seq","reminder_offsets_minutes","show_ot_on_pdf","subject_template","to"]
+AUDITB equal plan {"changeCount":0,"policy":false,"submission":false}
+AUDITB device {"TZ":"America/Los_Angeles","offsetMinutes":420,"resolved":"America/Los_Angeles"}
+AUDITB NY fall back {"first":{"date":"2026-11-01","time":"01:30","fold":null,"offset":null},"second":{"date":"2026-11-01","time":"01:30","fold":null,"offset":null}}
+ Test Files  1 passed (1)
+      Tests  41 passed (41)
+TZRUN exit=0
+exit=0
+
+## probe-client-Tokyo2
+TZPROBE zone=Asia/Tokyo TZenv=Asia/Tokyo offsetMin=-540
+AUDITB hostile __proto__ at top {"ok":false,"ms":0,"problems":["file.__proto__ is not a setting this app knows. The file was not read."]}
+AUDITB hostile __proto__ in data {"ok":false,"ms":0,"problems":["data.__proto__ is not a setting this app knows. The file was not read."]}
+AUDITB hostile constructor.prototype in work_policy {"ok":false,"ms":0,"problems":["data.work_policy.constructor is not a setting this app knows. The file was not read."]}
+AUDITB hostile prototype key in submission {"ok":false,"ms":0,"problems":["data.submission.prototype is not a setting this app knows. The file was not read."]}
+AUDITB hostile apply_to_overdue_drafts in submission {"ok":false,"ms":0,"problems":["data.submission.apply_to_overdue_drafts is not a setting this app knows. The file was not read."]}
+AUDITB hostile signature in personal {"ok":false,"ms":0,"problems":["data.signature is not a setting this app knows. The file was not read."]}
+AUDITB hostile password in file {"ok":false,"ms":0,"problems":["file.password is not a setting this app knows. The file was not read."]}
+AUDITB hostile deep nesting in data {"ok":false,"ms":8,"problems":["data must be an object."]}
+AUDITB hostile deep nesting at top {"ok":false,"ms":10,"problems":["The file is not a settings file: its top level is not an object."]}
+AUDITB hostile deep objects in data {"ok":false,"ms":3,"problems":["data.a is not a setting this app knows. The file was not read."]}
+AUDITB hostile long string 190k {"ok":false,"ms":0,"problems":["data.submission.body_template must be text of at most 12000 characters."]}
+AUDITB hostile over the size limit {"ok":false,"ms":0,"problems":["This file is too large to be a settings file."]}
+AUDITB hostile wrong type: minutes as text {"ok":false,"ms":0,"problems":["data.work_policy.required_minutes must be a whole number from 1 to 1440."]}
+AUDITB hostile wrong type: breaks as object {"ok":false,"ms":0,"problems":["data.work_policy.breaks must be a list of at most 10 items."]}
+AUDITB hostile wrong type: to as text {"ok":false,"ms":0,"problems":["data.submission.to must be a list of at most 40 items."]}
+AUDITB hostile wrong type: auto_submit as text {"ok":false,"ms":0,"problems":["data.submission.auto_submit must be true or false."]}
+AUDITB hostile huge number {"ok":false,"ms":0,"problems":["data.work_policy.required_minutes must be a whole number from 1 to 1440."]}
+AUDITB hostile fraction {"ok":false,"ms":0,"problems":["data.work_policy.required_minutes must be a whole number from 1 to 1440."]}
+AUDITB hostile invalid time 24:00 {"ok":false,"ms":0,"problems":["data.work_policy.reference_start must be a clock time as HH:MM (00:00 to 23:59)."]}
+AUDITB hostile invalid time 7:5 {"ok":false,"ms":0,"problems":["data.work_policy.reference_start must be a clock time as HH:MM (00:00 to 23:59)."]}
+AUDITB hostile exported_at without zone {"ok":false,"ms":0,"problems":["exported_at: exported_at must be a UTC instant such as 2026-09-21T16:00:00Z."]}
+AUDITB hostile exported_at with offset {"ok":false,"ms":0,"problems":["exported_at: exported_at must be a UTC instant such as 2026-09-21T16:00:00Z."]}
+AUDITB hostile exported_at impossible date {"ok":false,"ms":0,"problems":["exported_at: exported_at must be a UTC instant such as 2026-09-21T16:00:00Z."]}
+AUDITB hostile schema version 2 {"ok":false,"ms":0,"problems":["This file uses schema version 2; this app reads version 1 only."]}
+AUDITB hostile other format {"ok":false,"ms":0,"problems":["The file is not a settings file of this app (its format is not \"timesheet-settings\")."]}
+AUDITB hostile company scope in personal import {"ok":false,"ms":0,"problems":["This is a company calendar file. Import it under Administration, not in your personal settings."]}
+AUDITB hostile not JSON {"ok":false,"ms":0,"problems":["The file is not valid JSON, so it cannot be a settings file."]}
+AUDITB hostile JSON with a byte-order mark {"ok":false,"ms":0,"problems":["The file is not valid JSON, so it cannot be a settings file."]}
+AUDITB hostile top-level array {"ok":false,"ms":0,"problems":["The file is not a settings file: its top level is not an object."]}
+AUDITB hostile top-level null {"ok":false,"ms":0,"problems":["The file is not a settings file: its top level is not an object."]}
+AUDITB hostile empty data {"ok":false,"ms":0,"problems":["The file holds neither a work policy nor submission settings."]}
+AUDITB hostile control characters in a key {"ok":false,"ms":0,"problems":["file.??[31mevil? is not a setting this app knows. The file was not read."]}
+AUDITB company hostile invalid holiday date {"ok":false}
+AUDITB company hostile formula name {"ok":false}
+AUDITB company hostile newline name {"ok":false}
+AUDITB company hostile duplicate date {"ok":false}
+AUDITB company hostile weekday 8 {"ok":false}
+AUDITB company hostile duplicate weekday {"ok":false}
+AUDITB company hostile zone not IANA {"ok":false}
+AUDITB company hostile due time 25:00 {"ok":false}
+AUDITB company hostile extra key in payroll {"ok":false}
+AUDITB request keys ["auto_note_enabled","auto_submit","body_template","cc","expected_seq","reminder_offsets_minutes","show_ot_on_pdf","subject_template","to"]
+AUDITB equal plan {"changeCount":0,"policy":false,"submission":false}
+AUDITB device {"TZ":"Asia/Tokyo","offsetMinutes":-540,"resolved":"Asia/Tokyo"}
+AUDITB NY fall back {"first":{"date":"2026-11-01","time":"01:30","fold":null,"offset":null},"second":{"date":"2026-11-01","time":"01:30","fold":null,"offset":null}}
+ Test Files  1 passed (1)
+      Tests  41 passed (41)
+TZRUN exit=0
+exit=0
+
+## note: the first two runs (TZ given on the Git Bash command line) did not reach Node, and their baseline file was invalid (my error: reference hours vs required minutes, a nested-brace template); corrected before these runs

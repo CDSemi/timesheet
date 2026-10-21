@@ -1,0 +1,55 @@
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+import { dayBtn, drawer, note, seedAudit, settle, signInTo } from './zz-alib.ts';
+
+/*
+ * WP5-UX4-AUDIT-A probe 9: the discard guard on "Current period" (shown only on a window day). Run under the FIX10 simulated clock
+ * at a window instant. Task-local; never part of the repository.
+ */
+const F = 'current.txt';
+
+async function shownPeriod(page: Page): Promise<string> {
+  return (await page.locator('[data-paper="timesheet"] .form-fields').innerText()).replace(/\s+/g, ' ').trim();
+}
+
+async function activeName(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const el = document.activeElement;
+    return el === null ? 'null' : `${el.tagName.toLowerCase()}|${(el.getAttribute('aria-label') ?? el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)}`;
+  });
+}
+
+test('Current period: Keep editing and Discard with unsaved edits', async ({ page, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop drawer');
+  test.setTimeout(180_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const seed = await seedAudit(builtServer, 'Synthetic Current Person');
+  const periods = await seed.person.api.periodsCurrent();
+  note(F, `server today ${periods.today_local}; current ${periods.current.payroll_date}; in progress ${periods.in_progress.payroll_date}`);
+  await signInTo(page, builtServer, seed.person.account);
+  await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+  const opened = await shownPeriod(page);
+  // Today moves to the period that contains today; then "Current period" is offered.
+  await page.getByRole('button', { name: 'Today' }).click();
+  await expect.poll(() => shownPeriod(page)).not.toBe(opened);
+  const current = page.getByRole('button', { name: 'Current period' });
+  await expect(current).toBeVisible();
+  const away = await shownPeriod(page);
+  await dayBtn(page, periods.today_local).click();
+  await expect(drawer(page)).toBeVisible();
+  await drawer(page).getByLabel('Notes').fill('kept across Current period');
+  await current.focus();
+  await page.keyboard.press('Enter');
+  const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+  await expect(prompt).toBeVisible();
+  await prompt.getByRole('button', { name: 'Keep editing' }).click();
+  await settle(page);
+  note(F, `Keep editing: period kept=${(await shownPeriod(page)) === away}; note="${await drawer(page).getByLabel('Notes').inputValue()}"; Current period still shown=${await current.isVisible()}; focus=${await activeName(page)} (pressed: Current period)`);
+  await current.click();
+  await expect(prompt).toBeVisible();
+  await prompt.getByRole('button', { name: 'Discard' }).click();
+  await expect.poll(() => shownPeriod(page)).toBe(opened);
+  await settle(page);
+  note(F, `Discard: period back to the opened one=${(await shownPeriod(page)) === opened}; drawer=${await drawer(page).count()} note="${(await drawer(page).count()) > 0 ? await drawer(page).getByLabel('Notes').inputValue() : '-'}"; focus=${await activeName(page)}`);
+});

@@ -1,0 +1,341 @@
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+import { box, css, dayBtn, drawer, drawerState, note, seedAudit, setWidth, settle, signInTo } from './zz-alib.ts';
+
+/*
+ * WP5-UX4-AUDIT-A probe 2: the Day editor (U4-05, U4-06, U4-07). Task-local; never part of the repository.
+ */
+const F = 'editor.txt';
+
+async function shownPeriod(page: Page): Promise<string> {
+  return (await page.locator('[data-paper="timesheet"] .form-fields').innerText()).replace(/\s+/g, ' ').trim();
+}
+
+async function typeNote(page: Page, text: string): Promise<Locator> {
+  const notes = drawer(page).getByLabel('Notes');
+  await notes.fill(text);
+  return notes;
+}
+
+async function discardPrompt(page: Page): Promise<Locator> {
+  const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+  await expect(prompt).toBeVisible();
+  return prompt;
+}
+
+/** A period-bar button pressed from the keyboard (a floating drawer docked right lies over the bar's right end for a pointer). */
+async function pressBar(page: Page, name: string): Promise<void> {
+  await page.getByRole('button', { name, exact: true }).focus();
+  await settle(page);
+  await page.keyboard.press('Enter');
+}
+
+/** Dates whose day button (or time cell) lies wholly inside the window and clear of the open drawer, in sheet order. */
+async function clearOf(page: Page, dates: readonly string[], exclude: readonly string[], what: 'button' | 'cell'): Promise<string[]> {
+  return page.evaluate(
+    ({ dates, exclude, what }) => {
+      const d = document.querySelector('dialog[data-day-editor]')?.getBoundingClientRect();
+      const vw = document.documentElement.clientWidth;
+      const vh = document.documentElement.clientHeight;
+      const out: string[] = [];
+      for (const date of dates) {
+        if (exclude.includes(date)) continue;
+        const el = document.querySelector(what === 'button' ? `[data-day="${date}"] [data-day-button]` : `[data-day="${date}"] [data-cell="time"]`);
+        if (el === null) continue;
+        const r = el.getBoundingClientRect();
+        if (r.left < 0 || r.right > vw || r.top < 0 || r.bottom > vh) continue;
+        if (d !== undefined && r.right > d.left - 2 && r.left < d.right + 2) continue;
+        const hit = document.elementFromPoint(r.left + Math.min(6, r.width / 2), r.top + Math.min(6, r.height / 2));
+        if (hit === null || !(el === hit || el.contains(hit))) continue;
+        out.push(date);
+      }
+      return out;
+    },
+    { dates: [...dates], exclude: [...exclude], what },
+  );
+}
+
+async function activeName(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const el = document.activeElement;
+    if (el === null) return 'null';
+    return `${el.tagName.toLowerCase()}|${(el.getAttribute('aria-label') ?? el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 50)}`;
+  });
+}
+
+test.describe('audit A Day editor (desktop)', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop drawer');
+
+  test('non-modal, switch, unselect, focus order, Escape, corners, push', async ({ page, builtServer }) => {
+    test.setTimeout(240_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const seed = await seedAudit(builtServer, 'Synthetic Drawer Person');
+    await signInTo(page, builtServer, seed.person.account);
+    await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+    const week1 = seed.dates.slice(0, 7);
+    const left = week1[0] ?? '';
+    const right = week1[6] ?? '';
+    for (const width of [768, 1000, 1280, 1329, 1330, 1440, 1920]) {
+      await setWidth(page, width, 900);
+      await dayBtn(page, left).click();
+      await expect(drawer(page)).toBeVisible();
+      await settle(page);
+      const s1 = await drawerState(page);
+      const d = await box(drawer(page));
+      const r = await css(drawer(page), ['border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius', 'box-shadow']);
+      const paper = await box(page.locator('[data-paper="timesheet"]'));
+      const bar = await page.evaluate(() => document.querySelector('header[role="banner"], body > div header')?.getBoundingClientRect().bottom ?? null);
+      const vw = await page.evaluate<number>('document.documentElement.clientWidth');
+      const vh = await page.evaluate<number>('document.documentElement.clientHeight');
+      note(
+        F,
+        `${width} open ${left}: ${JSON.stringify(s1)} drawer [${d.left.toFixed(1)},${d.top.toFixed(1)},${d.right.toFixed(1)},${d.bottom.toFixed(1)}] edgeGap ${s1?.side === 'left' ? d.left.toFixed(1) : (vw - d.right).toFixed(1)} bottomGap ${(vh - d.bottom).toFixed(1)} barBottom ${bar} radii ${r['border-top-left-radius']}/${r['border-top-right-radius']}/${r['border-bottom-right-radius']}/${r['border-bottom-left-radius']} paperRight ${paper.right.toFixed(1)} clearance ${(d.left - paper.right).toFixed(1)}`,
+      );
+      // Switch to another day by its button (the rightmost day clear of the drawer), then by a press on a column's time cell, then unselect.
+      const target = (await clearOf(page, seed.dates, [left], 'button')).at(-1) ?? right;
+      await dayBtn(page, target).click();
+      await settle(page);
+      const s2 = await drawerState(page);
+      const d2 = await box(drawer(page));
+      const r2 = await css(drawer(page), ['border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius']);
+      note(F, `${width} switch to ${target}: ${JSON.stringify(s2)} drawer [${d2.left.toFixed(1)},${d2.right.toFixed(1)}] radii ${r2['border-top-left-radius']}/${r2['border-top-right-radius']}/${r2['border-bottom-right-radius']}/${r2['border-bottom-left-radius']}`);
+      const mid = (await clearOf(page, seed.dates, [target, left], 'cell'))[0];
+      if (mid !== undefined) {
+        const cell = page.locator(`[data-day="${mid}"] [data-cell="time"]`).first();
+        await cell.click({ position: { x: 4, y: 4 } });
+        await settle(page);
+        note(F, `${width} column press on ${mid}: ${JSON.stringify(await drawerState(page))}`);
+      } else {
+        note(F, `${width} column press: no time cell clear of the drawer`);
+      }
+      const openDate = (await drawerState(page))?.date ?? '';
+      await dayBtn(page, openDate).scrollIntoViewIfNeeded();
+      const openBtnBox = await box(dayBtn(page, openDate));
+      const d3 = await box(drawer(page));
+      const btnCovered = openBtnBox.right > d3.left - 1 && openBtnBox.left < d3.right + 1;
+      if (!btnCovered) {
+        await dayBtn(page, openDate).click();
+        await settle(page);
+        const status = await page.locator('[data-editor-status]').textContent();
+        note(F, `${width} unselect ${openDate}: drawer=${await drawer(page).count()} focus=${await activeName(page)} status="${status}"`);
+      } else {
+        await page.keyboard.press('Escape');
+        note(F, `${width} unselect skipped (button under drawer); closed by Escape`);
+      }
+      await expect(drawer(page)).toHaveCount(0);
+    }
+
+    // Focus order and Escape at 1280 (floating) and 1440 (beside).
+    for (const width of [1280, 1440]) {
+      await setWidth(page, width, 900);
+      await dayBtn(page, left).click();
+      await expect(drawer(page)).toBeVisible();
+      await settle(page);
+      const afterOpen = await activeName(page);
+      await page.keyboard.press('Tab');
+      const firstInDrawer = await activeName(page);
+      const inDrawer1 = await page.evaluate(() => document.activeElement?.closest('dialog[data-day-editor]') !== null);
+      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press('Shift+Tab');
+      const beforeDrawer = await activeName(page);
+      const inPaper = await page.evaluate(() => document.activeElement?.closest('[data-paper]') !== null);
+      // Escape from a sheet control closes the drawer and returns focus to the day's button.
+      await dayBtn(page, week1[2] ?? '').focus();
+      await page.keyboard.press('Escape');
+      await settle(page);
+      note(F, `${width} focus: on open "${afterOpen}"; Tab -> "${firstInDrawer}" inDrawer=${inDrawer1}; Shift+Tab x2 -> "${beforeDrawer}" inPaper=${inPaper}; Escape from a sheet day button -> drawer=${await drawer(page).count()} focus=${await activeName(page)}`);
+    }
+
+    // Escape while the account menu is open: the menu closes, the drawer stays.
+    await setWidth(page, 1440, 900);
+    await dayBtn(page, left).click();
+    await expect(drawer(page)).toBeVisible();
+    await page.getByRole('banner').getByRole('button', { name: /, account menu$/ }).click();
+    await expect(page.locator('#account-menu')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await settle(page);
+    note(F, `Escape with the account menu open: menu=${await page.locator('#account-menu').isVisible()} drawer=${await drawer(page).count()} focus=${await activeName(page)}`);
+    await page.keyboard.press('Escape');
+  });
+
+  test('discard guard on every route; Keep editing restores everything', async ({ page, builtServer }) => {
+    test.setTimeout(300_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const seed = await seedAudit(builtServer, 'Synthetic Guard Person');
+    await signInTo(page, builtServer, seed.person.account);
+    await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+    for (const width of [1280, 1440]) {
+      await setWidth(page, width, 900);
+      const a = seed.twoSessions;
+      const period0 = await shownPeriod(page);
+      // b: another day whose button is clear of the drawer opened on a.
+      await dayBtn(page, a).click();
+      await expect(drawer(page)).toBeVisible();
+      await settle(page);
+      const db = await box(drawer(page));
+      let b = '';
+      for (const date of seed.dates) {
+        if (date === a) continue;
+        const bb = await box(dayBtn(page, date));
+        if (bb.right <= db.left - 2 || bb.left >= db.right + 2) {
+          b = date;
+          break;
+        }
+      }
+      expect(b, 'a day clear of the drawer').not.toBe('');
+      await page.keyboard.press('Escape');
+      await expect(drawer(page)).toHaveCount(0);
+
+      async function openDirty(text: string): Promise<Locator> {
+        if ((await drawerState(page))?.date !== a) await dayBtn(page, a).click();
+        await expect(drawer(page)).toHaveAttribute('data-day-editor', a);
+        return typeNote(page, text);
+      }
+
+      async function route(name: string, act: () => Promise<void>, after: (discarded: boolean) => Promise<string>) {
+        // Keep editing
+        const notes = await openDirty(`kept ${name}`);
+        const pressedBefore = await activeName(page);
+        await act();
+        const prompt = await discardPrompt(page);
+        const initial = await activeName(page);
+        await prompt.getByRole('button', { name: 'Keep editing' }).click();
+        await settle(page);
+        const kept = {
+          date: (await drawerState(page))?.date ?? null,
+          note: await notes.inputValue().catch(() => '(gone)'),
+          period: (await shownPeriod(page)) === period0,
+          focus: await activeName(page),
+        };
+        // Discard
+        await openDirty(`dropped ${name}`);
+        await act();
+        const prompt2 = await discardPrompt(page);
+        await prompt2.getByRole('button', { name: 'Discard' }).click();
+        await settle(page);
+        const result = await after(true);
+        note(F, `${width} route ${name}: prompt initial focus "${initial}"; Keep -> ${JSON.stringify(kept)} (pressed "${pressedBefore}"); Discard -> ${result}`);
+        // Back to the start: the displayed period and a clean drawer on a.
+        if ((await shownPeriod(page)) !== period0) {
+          await pressBar(page, 'Today');
+          await expect.poll(() => shownPeriod(page)).toBe(period0);
+        }
+        if ((await drawer(page).count()) > 0) {
+          await page.keyboard.press('Escape');
+          if ((await page.getByRole('alertdialog', { name: 'Discard your changes?' }).count()) > 0) await page.getByRole('button', { name: 'Discard' }).click();
+        }
+        await expect(drawer(page)).toHaveCount(0);
+      }
+
+      const drawerFacts = async () => JSON.stringify({ state: await drawerState(page), note: (await drawer(page).count()) > 0 ? await drawer(page).getByLabel('Notes').inputValue() : null, period: (await shownPeriod(page)) === period0 ? 'same' : 'moved', focus: await activeName(page) });
+
+      await route('switch by day button', async () => dayBtn(page, b).click(), drawerFacts);
+      await route('unselect', async () => dayBtn(page, a).click(), drawerFacts);
+      await route('Open a day', async () => {
+        await page.locator('.open-day input[type="date"]').fill(b);
+        await page.getByRole('button', { name: 'Open day' }).click();
+      }, drawerFacts);
+      await route('Next period (keyboard)', async () => { await page.getByRole('button', { name: 'Next period' }).focus(); await settle(page); await page.keyboard.press('Enter'); }, drawerFacts);
+      await route('Previous period (keyboard)', async () => { await page.getByRole('button', { name: 'Previous period' }).focus(); await settle(page); await page.keyboard.press('Enter'); }, drawerFacts);
+      await route('Today (editor on a past day, keyboard)', async () => { await page.getByRole('button', { name: 'Today' }).focus(); await settle(page); await page.keyboard.press('Enter'); }, drawerFacts);
+      await route('Close button', async () => drawer(page).getByRole('button', { name: 'Close' }).click(), drawerFacts);
+      await route('Escape in drawer', async () => {
+        await drawer(page).getByLabel('Notes').focus();
+        await page.keyboard.press('Escape');
+      }, drawerFacts);
+      // Escape from a sheet control with unsaved edits: recorded without expecting the prompt (see diag.txt for the mechanism).
+      await dayBtn(page, a).click();
+      await typeNote(page, 'kept sheet Escape');
+      await dayBtn(page, b).focus();
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+      note(F, `${width} route Escape from a sheet control (dirty): prompt=${await page.getByRole('alertdialog', { name: 'Discard your changes?' }).count()} ${await drawerFacts()}`);
+      await drawer(page).getByRole('button', { name: 'Close' }).click();
+      await (await discardPrompt(page)).getByRole('button', { name: 'Discard' }).click();
+      await expect(drawer(page)).toHaveCount(0);
+
+      // Today when the sheet shows another period: Previous (no edits), then edits, then Today; Keep editing keeps the previous period.
+      await dayBtn(page, a).click();
+      await pressBar(page, 'Previous period');
+      await expect.poll(() => shownPeriod(page)).not.toBe(period0);
+      const prev = await shownPeriod(page);
+      await typeNote(page, 'kept across Today');
+      await pressBar(page, 'Today');
+      const prompt = await discardPrompt(page);
+      await prompt.getByRole('button', { name: 'Keep editing' }).click();
+      await settle(page);
+      note(F, `${width} Today from another period, Keep: period kept=${(await shownPeriod(page)) === prev} note="${await drawer(page).getByLabel('Notes').inputValue()}" focus=${await activeName(page)}`);
+      await pressBar(page, 'Today');
+      await (await discardPrompt(page)).getByRole('button', { name: 'Discard' }).click();
+      await expect.poll(() => shownPeriod(page)).toBe(period0);
+      note(F, `${width} Today from another period, Discard: ${await drawerFacts()}`);
+      await page.keyboard.press('Escape');
+      await expect(drawer(page)).toHaveCount(0);
+
+      // No edit, nothing asks: switch, Next, Close.
+      await dayBtn(page, a).click();
+      await dayBtn(page, b).click();
+      const asked1 = await page.getByRole('alertdialog', { name: 'Discard your changes?' }).count();
+      await page.keyboard.press('Escape');
+      note(F, `${width} no edit: switch asked=${asked1}; drawer after Escape=${await drawer(page).count()}`);
+    }
+  });
+
+  test('re-load after a label commit on the open day (unguarded route) and other paths', async ({ page, builtServer }) => {
+    test.setTimeout(180_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const seed = await seedAudit(builtServer, 'Synthetic Label Person');
+    await signInTo(page, builtServer, seed.person.account);
+    await setWidth(page, 1440, 900);
+    const day = seed.leave ?? seed.twoSessions;
+    await dayBtn(page, day).click();
+    await expect(drawer(page)).toBeVisible();
+    await typeNote(page, 'typed but not saved');
+    // In-cell category picker of the same day.
+    const picker = page.locator(`[data-label-picker="${day}"] button`).first();
+    const hasPicker = (await picker.count()) > 0;
+    if (hasPicker) {
+      await picker.click();
+      const option = page.getByRole('option', { name: 'Vacation' }).first();
+      if ((await option.count()) > 0) {
+        await option.click();
+        await settle(page);
+        const review = page.getByRole('dialog', { name: /Review category change/ });
+        if ((await review.count()) > 0) note(F, `label pick opened the review dialog`);
+        await page.waitForTimeout(800);
+        const asked = await page.getByRole('alertdialog', { name: 'Discard your changes?' }).count();
+        const noteNow = (await drawer(page).count()) > 0 ? await drawer(page).getByLabel('Notes').inputValue() : '(no drawer)';
+        note(F, `label pick on the open dirty day: asked=${asked} note now="${noteNow}"`);
+      } else note(F, 'label pick: no Vacation option found');
+    } else note(F, 'label pick: no picker on that day');
+  });
+});
+
+test.describe('audit A Day editor (phone)', () => {
+  test.skip(({ isMobile }) => !isMobile, 'phone sheet');
+
+  test('bottom sheet modal, guard on Close and Escape', async ({ page, builtServer }) => {
+    test.setTimeout(120_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const seed = await seedAudit(builtServer, 'Synthetic Sheet Person');
+    await signInTo(page, builtServer, seed.person.account);
+    await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+    await dayBtn(page, seed.twoSessions).click();
+    await expect(drawer(page)).toBeVisible();
+    await settle(page);
+    const st = await drawerState(page);
+    const b = await box(drawer(page));
+    const r = await css(drawer(page), ['border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius']);
+    note(F, `phone sheet: ${JSON.stringify(st)} box [${b.left},${b.top.toFixed(1)},${b.right},${b.bottom.toFixed(1)}] radii ${JSON.stringify(r)}`);
+    await typeNote(page, 'phone kept');
+    await drawer(page).getByRole('button', { name: 'Close' }).click();
+    const p1 = await discardPrompt(page);
+    await p1.getByRole('button', { name: 'Keep editing' }).click();
+    note(F, `phone Close Keep: drawer=${await drawer(page).count()} note="${await drawer(page).getByLabel('Notes').inputValue()}" focus=${await activeName(page)}`);
+    await page.keyboard.press('Escape');
+    const p2 = await discardPrompt(page);
+    await p2.getByRole('button', { name: 'Discard' }).click();
+    await settle(page);
+    note(F, `phone Escape Discard: drawer=${await drawer(page).count()} focus=${await activeName(page)}`);
+  });
+});

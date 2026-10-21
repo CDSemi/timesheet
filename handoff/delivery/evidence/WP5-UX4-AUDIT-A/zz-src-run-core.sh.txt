@@ -1,0 +1,21 @@
+# Core mandatory checks on the clean export of the target, then installs for the probe and mutant copies.
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+O=$T/out
+cd $T/export
+echo "node $(node --version) start $(date -u +%Y-%m-%dT%H:%M:%SZ)" > $O/02-core-exits.txt
+npm ci > $O/02-ci.txt 2>&1; echo "npm ci exit $?" >> $O/02-core-exits.txt
+npm run typecheck > $O/02-typecheck.txt 2>&1; echo "typecheck exit $?" >> $O/02-core-exits.txt
+npm run lint > $O/02-lint.txt 2>&1; echo "lint exit $? dep=$(grep -ci deprecat $O/02-lint.txt)" >> $O/02-core-exits.txt
+for i in 1 2; do
+  npm test > $O/03-npmtest-$i.txt 2>&1; echo "npm test run $i exit $? dep=$(grep -ci deprecat $O/03-npmtest-$i.txt) crash=$(grep -ciE '0xC0000005|worker exited|crash' $O/03-npmtest-$i.txt)" >> $O/02-core-exits.txt
+done
+npm run build > $O/04-build.txt 2>&1; echo "build exit $? advisory=$(grep -ci 'larger than' $O/04-build.txt) dep=$(grep -ci deprecat $O/04-build.txt)" >> $O/02-core-exits.txt
+node node_modules/vitest/vitest.mjs run tests/integration/ac13-two-week.test.ts > $O/05-ac13.txt 2>&1; echo "ac13 exit $? dep=$(grep -ci deprecat $O/05-ac13.txt)" >> $O/02-core-exits.txt
+echo "end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $O/02-core-exits.txt
+cd $T/export-probe
+npm ci > $O/02-ci-probe.txt 2>&1; echo "probe npm ci exit $?" >> $O/02-core-exits.txt
+npm run build > $O/04-build-probe.txt 2>&1; echo "probe build exit $?" >> $O/02-core-exits.txt
+cd $T/export-mut
+npm ci > $O/02-ci-mut.txt 2>&1; echo "mut npm ci exit $?" >> $O/02-core-exits.txt
+echo core-done > $O/core.done

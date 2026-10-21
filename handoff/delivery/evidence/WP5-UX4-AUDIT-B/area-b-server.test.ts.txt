@@ -1,0 +1,279 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { createUser } from '../../src/server/services/users.ts';
+import { createTestContext, la, type TestContext } from '../support/testApp.ts';
+
+/*
+ * WP5-UX4-AUDIT-B probes (auditor-written, scratch clone only; never committed). Synthetic data (example.invalid).
+ * Own oracle for docs/02 R-03/R-04: R = scheduled-weekday minutes, O = off-calendar minutes, B=480, N=30, M=30,
+ * E=max(0,R-B), A=E if E>N else 0, T=A+O, credit=M*(q+1 if 2r>M else q) with q=floor(T/M), r=T mod M.
+ */
+
+let t: TestContext | undefined;
+afterEach(() => t?.close());
+
+function oracle(regular: number, nonworking: number): { eligible: number; credit: number } {
+  const excess = Math.max(0, regular - 480);
+  const a = excess > 30 ? excess : 0;
+  const total = a + nonworking;
+  const q = Math.floor(total / 30);
+  const r = total % 30;
+  return { eligible: total, credit: 30 * (2 * r > 30 ? q + 1 : q) };
+}
+
+function log(label: string, value: unknown): void {
+  process.stdout.write(`AUDITB ${label} ${JSON.stringify(value)}\n`);
+}
+
+describe('U4-11 running-session edit, business effects (own oracle)', () => {
+  it('working day: start moved 09:00 -> 07:30 while running, Check out 17:45 with three confirmed breaks', async () => {
+    t = await createTestContext('2026-09-29T20:00:00Z'); // Tue 13:00 LA
+    const cookie = await t.login('employee');
+    const created = await t.request('POST', '/api/days/2026-09-29/sessions', {
+      cookie,
+      body: { start: la('2026-09-29T09:00'), end: null, input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: false },
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const id = created.body.session.id as string;
+    // The client's U4-11 body: end null, breaks_confirmed false, the loaded expected_version.
+    const edit = await t.request('PUT', `/api/sessions/${id}`, {
+      cookie,
+      body: { start: la('2026-09-29T07:30'), end: null, input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: false, expected_version: 1 },
+    });
+    expect(edit.status, JSON.stringify(edit.body)).toBe(200);
+    expect(edit.body.session).toMatchObject({ start_utc: '2026-09-29T14:30:00Z', end_utc: null, breaks_confirmed: false, version: 2 });
+    expect(edit.body.day.calculation).toMatchObject({ status: 'incomplete', credited_minutes: null });
+    t.clock.set('2026-09-30T00:45:00Z'); // 17:45 LA
+    const breaks = [
+      { start: la('2026-09-29T10:00'), end: la('2026-09-29T10:15'), counts_as_work: false },
+      { start: la('2026-09-29T12:00'), end: la('2026-09-29T12:30'), counts_as_work: false },
+      { start: la('2026-09-29T14:30'), end: la('2026-09-29T14:45'), counts_as_work: false },
+    ];
+    const out = await t.request('POST', '/api/clock/out', { cookie, body: { breaks, breaks_confirmed: true, expected_version: 2 } });
+    expect(out.status, JSON.stringify(out.body)).toBe(200);
+    log('working-day calculation', out.body.day.calculation);
+    // 07:30-17:45 = 615 min, less 60 excluded = 555 regular; E=75 > N -> T=75; q=2 r=15, 2r=30 is not > 30 -> 60 (midpoint down).
+    const expected = oracle(555, 0);
+    expect(expected).toEqual({ eligible: 75, credit: 60 });
+    expect(out.body.day.calculation).toMatchObject({ status: 'complete', regular_minutes: 555, eligible_minutes: expected.eligible, credited_minutes: expected.credit });
+  });
+
+  it('non-working day: Check in Saturday 10:30, start moved to 09:10, Check out 11:26 with no breaks confirmed', async () => {
+    t = await createTestContext('2026-10-03T17:30:00Z'); // Sat 10:30 LA
+    const cookie = await t.login('employee');
+    const inn = await t.request('POST', '/api/clock/in', { cookie, body: { input_zone: 'America/Los_Angeles' } });
+    expect(inn.status, JSON.stringify(inn.body)).toBe(201);
+    const id = inn.body.session.id as string;
+    expect(inn.body.session.work_date).toBe('2026-10-03');
+    const edit = await t.request('PUT', `/api/sessions/${id}`, {
+      cookie,
+      body: { start: la('2026-10-03T09:10'), end: null, input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: false, expected_version: 1 },
+    });
+    expect(edit.status, JSON.stringify(edit.body)).toBe(200);
+    expect(edit.body.session).toMatchObject({ start_utc: '2026-10-03T16:10:00Z', end_utc: null, source: 'clock', version: 2 });
+    t.clock.set('2026-10-03T18:26:00Z'); // 11:26 LA
+    const out = await t.request('POST', '/api/clock/out', { cookie, body: { breaks: [], breaks_confirmed: true, expected_version: 2 } });
+    expect(out.status, JSON.stringify(out.body)).toBe(200);
+    log('non-working-day calculation', out.body.day.calculation);
+    // 09:10-11:26 = 136 off-calendar minutes; T=136, q=4 r=16, 2r=32 > 30 -> 150.
+    const expected = oracle(0, 136);
+    expect(expected).toEqual({ eligible: 136, credit: 150 });
+    expect(out.body.day.calculation).toMatchObject({ status: 'complete', regular_minutes: 0, eligible_minutes: expected.eligible, credited_minutes: expected.credit });
+  });
+
+  it('E-1 unaffected: after a running edit with one saved row, Check out without a list keeps the row and the day stays incomplete', async () => {
+    t = await createTestContext('2026-09-29T20:00:00Z');
+    const cookie = await t.login('employee');
+    const created = await t.request('POST', '/api/days/2026-09-29/sessions', {
+      cookie,
+      body: { start: la('2026-09-29T09:00'), end: null, input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: false },
+    });
+    const id = created.body.session.id as string;
+    const row = { start: la('2026-09-29T11:00'), end: la('2026-09-29T11:15'), counts_as_work: false };
+    const edit = await t.request('PUT', `/api/sessions/${id}`, {
+      cookie,
+      body: { start: la('2026-09-29T08:00'), end: null, input_zone: 'America/Los_Angeles', breaks: [row], breaks_confirmed: false, expected_version: 1 },
+    });
+    expect(edit.status, JSON.stringify(edit.body)).toBe(200);
+    t.clock.set('2026-09-30T00:00:00Z');
+    const out = await t.request('POST', '/api/clock/out', { cookie, body: { breaks_confirmed: false, expected_version: 2 } });
+    expect(out.status, JSON.stringify(out.body)).toBe(200);
+    expect(out.body.session.breaks).toHaveLength(1);
+    expect(out.body.session.breaks[0]).toMatchObject({ start_utc: '2026-09-29T18:00:00Z', end_utc: '2026-09-29T18:15:00Z' });
+    expect(out.body.session).toMatchObject({ breaks_confirmed: false, start_utc: '2026-09-29T15:00:00Z' });
+    log('E-1 calculation', out.body.day.calculation);
+    expect(out.body.day.calculation.credited_minutes).toBeNull();
+  });
+
+  it('refusals on a running edit: future start, overlap and stale version change nothing', async () => {
+    t = await createTestContext('2026-09-29T20:00:00Z'); // 13:00 LA
+    const cookie = await t.login('employee');
+    const ended = await t.request('POST', '/api/days/2026-09-29/sessions', {
+      cookie,
+      body: { start: la('2026-09-29T06:00'), end: la('2026-09-29T07:00'), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true },
+    });
+    expect(ended.status, JSON.stringify(ended.body)).toBe(201);
+    const created = await t.request('POST', '/api/days/2026-09-29/sessions', {
+      cookie,
+      body: { start: la('2026-09-29T09:00'), end: null, input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: false },
+    });
+    const id = created.body.session.id as string;
+    const body = (start: string, version = 1) => ({ start: la(start), end: null, input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: false, expected_version: version });
+    const future = await t.request('PUT', `/api/sessions/${id}`, { cookie, body: body('2026-09-29T13:30') });
+    const overlap = await t.request('PUT', `/api/sessions/${id}`, { cookie, body: body('2026-09-29T06:30') });
+    const stale = await t.request('PUT', `/api/sessions/${id}`, { cookie, body: body('2026-09-29T08:00', 7) });
+    log('running refusals', {
+      future: [future.status, future.body.error?.code],
+      overlap: [overlap.status, overlap.body.error?.code],
+      stale: [stale.status, stale.body.error?.code],
+    });
+    expect(future.status).toBe(422);
+    expect(future.body.error.code).toBe('future_time');
+    expect([409, 422]).toContain(overlap.status);
+    expect(overlap.body.error.code).toBe('overlapping_user_intervals');
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.code).toBe('stale_version');
+    const after = await t.request('GET', `/api/sessions/${id}`, { cookie });
+    expect(after.body.session).toMatchObject({ start_utc: '2026-09-29T16:00:00Z', end_utc: null, version: 1 });
+    // Observation (pre-existing server contract, not round 4): an open session accepts breaks_confirmed true; Check out resets it.
+    const confirmedOpen = await t.request('PUT', `/api/sessions/${id}`, { cookie, body: { ...body('2026-09-29T08:00'), breaks_confirmed: true } });
+    log('running edit with breaks_confirmed true', [confirmedOpen.status, confirmedOpen.body.session?.breaks_confirmed, confirmedOpen.body.day?.calculation?.status]);
+  });
+});
+
+describe('F-Q5 shared clock guard, extra cases', () => {
+  it('a stale shared reopen is still shared_clock_action; owner reopen allowed; a view-only share cannot edit; shared delete of a running session', async () => {
+    t = await createTestContext('2026-09-29T20:00:00Z');
+    const owner = await t.login('employee');
+    const granteeEmail = 'auditb-grantee@example.invalid';
+    const granteePassword = '<synthetic-password>';
+    await createUser(t.db, t.clock, { email: granteeEmail, displayName: 'Synthetic Grantee', role: 'employee', password: granteePassword, calendarId: t.calendarId }, t.userIds.admin);
+    const login = await t.request('POST', '/api/auth/login', { body: { email: granteeEmail, password: granteePassword } });
+    const grantee = login.headers.get('set-cookie')?.split(';')[0] ?? '';
+    const share = await t.request('POST', '/api/shares', { cookie: owner, body: { grantee_email: granteeEmail, items: { timesheets: 'edit', ot_read: false, pdf_download: false } } });
+    expect(share.status, JSON.stringify(share.body)).toBe(201);
+    const shared = (path: string) => `/api/shared/${t?.userIds.employee}${path}`;
+    const endedBody = { start: la('2026-09-29T07:00'), end: la('2026-09-29T08:00'), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true };
+    const made = await t.request('POST', '/api/days/2026-09-29/sessions', { cookie: owner, body: endedBody });
+    const id = made.body.session.id as string;
+    const reopenStale = await t.request('PUT', shared(`/sessions/${id}`), { cookie: grantee, body: { ...endedBody, end: null, breaks_confirmed: false, expected_version: 9 } });
+    log('stale shared reopen', [reopenStale.status, reopenStale.body.error?.code]);
+    expect(reopenStale.status).toBe(409);
+    expect(reopenStale.body.error.code).toBe('shared_clock_action');
+    // Clock in/out are not shared routes at all.
+    const sharedClockIn = await t.request('POST', shared('/clock/in'), { cookie: grantee, body: { input_zone: 'America/Los_Angeles' } });
+    expect(sharedClockIn.status).toBe(404);
+    // The owner may reopen an ended session (F-Q5 limits grantees only).
+    const ownerReopen = await t.request('PUT', `/api/sessions/${id}`, { cookie: owner, body: { ...endedBody, end: null, breaks_confirmed: false, expected_version: 1 } });
+    expect(ownerReopen.status, JSON.stringify(ownerReopen.body)).toBe(200);
+    // A grantee may delete the running session (not a check in or out): recorded as an observation.
+    const del = await t.request('DELETE', shared(`/sessions/${id}`), { cookie: grantee, body: { expected_version: 2 } });
+    log('shared delete of a running session', [del.status, del.body?.error?.code ?? 'ok']);
+    // A view-only share cannot write at all.
+    const revoke = await t.request('PUT', `/api/shares/${share.body.share.id}`, { cookie: owner, body: { items: { timesheets: 'view', ot_read: false, pdf_download: false } } });
+    log('view share', [revoke.status, revoke.body?.error?.code ?? 'ok']);
+    const viewWrite = await t.request('POST', shared('/days/2026-09-29/sessions'), { cookie: grantee, body: { ...endedBody, start: la('2026-09-29T10:00'), end: la('2026-09-29T10:30') } });
+    log('view-only write', [viewWrite.status, viewWrite.body.error?.code]);
+    expect([403, 404]).toContain(viewWrite.status);
+  });
+});
+
+describe('D-5 a / F-1 (i) ledger, owner only', () => {
+  it('default 0 with no entry; first value non-zero; 0 correction once; unchanged posts nothing; admin and share never see it; append-only', async () => {
+    t = await createTestContext('2026-09-29T20:00:00Z');
+    const owner = await t.login('employee');
+    const admin = await t.login('admin');
+    const path = '/api/ot/opening-balance';
+    const empty = await t.request('GET', path, { cookie: owner });
+    expect(empty.body.opening_balance).toBeNull();
+    expect(empty.body.balance.posted_minutes).toBe(0);
+    const zeroFirst = await t.request('POST', path, { cookie: owner, body: { minutes: 0, as_of_date: '2026-09-29', reason: 'Synthetic', expected_version: 0 } });
+    expect(zeroFirst.status).toBe(422);
+    const first = await t.request('POST', path, { cookie: owner, body: { minutes: 95, as_of_date: '2026-09-29', reason: 'Synthetic opening', expected_version: 0 } });
+    expect(first.status, JSON.stringify(first.body)).toBe(201);
+    expect(first.body.opening_balance.evidence_ref).toBe('not provided');
+    const toZero = await t.request('PUT', path, { cookie: owner, body: { minutes: 0, reason: 'Synthetic mistake', expected_version: 1 } });
+    expect(toZero.status, JSON.stringify(toZero.body)).toBe(201);
+    log('correction to 0 entry', toZero.body.entry);
+    expect(toZero.body.entry).toMatchObject({ entry_type: 'correction', delta_minutes: -95 });
+    expect(toZero.body.opening_balance.corrections).toEqual([expect.objectContaining({ delta_minutes: -95, evidence_ref: null })]);
+    const again = await t.request('PUT', path, { cookie: owner, body: { minutes: 0, reason: 'Synthetic again', expected_version: 2 } });
+    expect(again.body.status).toBe('unchanged');
+    const rows = t.db.prepare('SELECT entry_type, delta_minutes FROM ot_ledger WHERE user_id = ? ORDER BY rowid').all(t.userIds.employee);
+    log('ledger rows after 95 -> 0 -> 0', rows);
+    expect(rows).toEqual([
+      { entry_type: 'opening_balance', delta_minutes: 95 },
+      { entry_type: 'correction', delta_minutes: -95 },
+    ]);
+    // The administrator reads only their own (none); no admin route names the employee's balance.
+    const adminOwn = await t.request('GET', path, { cookie: admin });
+    expect(adminOwn.body.opening_balance).toBeNull();
+    const adminUsers = await t.request('GET', '/api/admin/users', { cookie: admin });
+    log('admin users keys', adminUsers.status === 200 ? Object.keys(adminUsers.body.users?.[0] ?? {}) : adminUsers.status);
+    expect(JSON.stringify(adminUsers.body)).not.toMatch(/opening|posted_minutes|balance_minutes|ledger/);
+    const sharedRead = await t.request('GET', `/api/shared/${t.userIds.employee}/ot/opening-balance`, { cookie: admin });
+    expect([403, 404]).toContain(sharedRead.status);
+    // Append-only: update and delete are refused by the database.
+    expect(() => t?.db.prepare('UPDATE ot_ledger SET delta_minutes = 1 WHERE user_id = ?').run(t.userIds.employee)).toThrow();
+    expect(() => t?.db.prepare('DELETE FROM ot_ledger WHERE user_id = ?').run(t.userIds.employee)).toThrow();
+  });
+});
+
+describe('D-15 b holiday preview audit', () => {
+  it('a preview with CSV issues still returns counts and is audited; a refused one is not', async () => {
+    t = await createTestContext('2026-09-29T20:00:00Z');
+    const admin = await t.login('admin');
+    const count = () => t?.db.prepare("SELECT count(*) FROM audit_events WHERE operation = 'calendar.holiday_preview'").pluck().get() as number;
+    const preview = (csv: string, extra: Record<string, unknown> = {}) =>
+      t?.request('POST', '/api/admin/calendar/import/preview', { cookie: admin, body: { calendar_id: t.calendarId, year: 2026, effective_from: '2026-10-12', csv, ...extra } });
+    const issues = await preview('date,name,kind\n2026-11-11,Synthetic Day,holiday\nnot-a-date,Bad,holiday\n');
+    log('preview with issues', [issues?.status, issues?.body.can_commit, issues?.body.issue_count, issues?.body.affected_days]);
+    expect(count()).toBe(1);
+    const employee = await t.login('employee');
+    const notAdmin = await t.request('POST', '/api/admin/calendar/import/preview', { cookie: employee, body: { calendar_id: t.calendarId, year: 2026, effective_from: '2026-10-12', csv: 'date,name,kind\n' } });
+    expect(notAdmin.status).toBe(403);
+    expect(count()).toBe(1);
+    const keys = new Set<string>();
+    for (const day of issues?.body.affected_days ?? []) for (const key of Object.keys(day)) keys.add(key);
+    log('affected_days keys', [...keys]);
+  });
+});
+
+describe('D-9 b limiter keys', () => {
+  it('REPRO: failed sign-ins with the account text "password:<user id>" lock that user out of the password change', async () => {
+    t = await createTestContext('2026-10-20T20:00:00Z');
+    const victimEmail = 'auditb-victim@example.invalid';
+    const victimPassword = '<synthetic-password>';
+    const victimId = await createUser(t.db, t.clock, { email: victimEmail, displayName: 'Synthetic Victim', role: 'employee', password: victimPassword, calendarId: t.calendarId }, t.userIds.admin);
+    const login = await t.request('POST', '/api/auth/login', { body: { email: victimEmail, password: victimPassword } });
+    const victim = login.headers.get('set-cookie')?.split(';')[0] ?? '';
+    // An unauthenticated client at the same client address (no session at all) sends five failed sign-ins.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const failed = await t.request('POST', '/api/auth/login', { body: { email: `password:${victimId}`, password: '<synthetic-password>' } });
+      expect(failed.status).toBe(401);
+    }
+    const change = await t.request('POST', '/api/auth/password', { cookie: victim, body: { current_password: victimPassword, new_password: '<synthetic-password>' } });
+    log('victim password change after foreign sign-in failures', [change.status, change.body.error?.code, change.headers.get('retry-after')]);
+    // Expected for an independent per-user key: 200. Observed: see the log line.
+    expect([200, 429]).toContain(change.status);
+  });
+
+  it('context: password-change failures share the per-address bucket with sign-in (30 per window)', async () => {
+    t = await createTestContext('2026-10-20T20:00:00Z');
+    const email = 'auditb-signed-in@example.invalid';
+    const password = '<synthetic-password>';
+    await createUser(t.db, t.clock, { email, displayName: 'Synthetic Signed In', role: 'employee', password, calendarId: t.calendarId }, t.userIds.admin);
+    const login = await t.request('POST', '/api/auth/login', { body: { email, password } });
+    const cookie = login.headers.get('set-cookie')?.split(';')[0] ?? '';
+    let failures = 0;
+    // Four wrong current passwords, then one right current password with a too-short new one (422) resets only the account bucket.
+    for (let round = 0; round < 8; round += 1) {
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const wrong = await t.request('POST', '/api/auth/password', { cookie, body: { current_password: '<synthetic-password>', new_password: '<synthetic-password>' } });
+        if (wrong.status === 403) failures += 1;
+      }
+      await t.request('POST', '/api/auth/password', { cookie, body: { current_password: password, new_password: '<synthetic-password>' } });
+    }
+    const other = await t.loginResponse('admin');
+    log('admin sign-in at the same address after password-change failures', [failures, other.status, other.body?.error?.code]);
+  });
+});

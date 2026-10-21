@@ -1,0 +1,31 @@
+# T06 claim-check rows checked by the auditor at 0ddfead (source read in the scratch clone; line numbers verified with grep -n)
+
+| Row | T06 statement | Checked against (target) | Result |
+|---|---|---|---|
+| 1 | Password change for the session user only, not a shared route | routes/auth.ts:134 (`requireUser`); shares.ts:109-130 (SHARED_ROUTES) has no auth path; test and probe: `/api/shared/<id>/auth/password` 404 | holds |
+| 2 | Wrong current password 403 `current_password_incorrect`, session valid | routes/auth.ts:31, :148-150; `password-change.test.ts` 403 x5 then `/me` 200 | holds |
+| 3 | Counts on the sign-in limiter; 429 with Retry-After | routes/auth.ts:138-144, :149; rateLimit.ts:36-73 | holds (see F-UX4B-1 for the key space) |
+| 4 | New password outside 12-256 is 422 `weak_password` | routes/auth.ts:153-155; passwords.ts:14-25; ProfileScreen.tsx:8-9 | holds |
+| 5 | Equal to current is 422 `password_unchanged` | routes/auth.ts:157-159 (NFKC on both sides) | holds |
+| 6 | One transaction: hash, other sessions revoked (this one kept), audit without secret | routes/auth.ts:161-179 (`.immediate()`); sessions.ts:90 | holds |
+| 7 | Admin temporary password a separate, unchanged path | users.ts:125-130 (createUser, 12-256 check); `routes/admin.ts` diff limited to the holiday preview handler | holds |
+| 9 | Settings files made and read in the browser, no new route or record | settingsFileModel.ts:13-22; the server diff since 8e55710 holds only T04's eight files | holds |
+| 10 | A reminder job rerun after a crash finds the captured message; real SMTP has no such record | jobs/reminderJob.ts:23 | holds |
+| 12 | Opening balance 0 until set; first value non-zero; blank evidence stored "not provided" | ledger.ts:596, :646-651; probe: `opening_balance` null, 0 refused, "not provided" stored | holds |
+| 13 | A correction may return it to 0; the current value posts nothing | ledger.ts:580-587, :686-689, :712; probe: correction -95, then `unchanged` | holds |
+| 14 | At most 20 open previews; 409 `import_preview_limit`; same file returns the batch; nothing stored | workbookImport.ts:489-503, :521, :542, :570-574; `workbook-import.test.ts` D-6 a | holds |
+| 15 | A preview is cleared only by committing it | workbookImport.ts:489-492, :713 (`state = 'committed'`) | holds |
+| 16 | As-of date prefilled with today | OpeningBalanceForm.tsx:54 (`todayLocal` from `/api/periods/current` in OpeningBalancePanel) | holds |
+| 18 | D-1 .. D-15 answers | board `owner_decisions` 2026-10-20, verbatim: D1.a D2.a D3.a D4.a D5.a D6.a D7.a D8.a D9.b D10.a D11.a D12.a D13.a D14.b D15.b | holds |
+| 19 | `git.release_declared` false; commits on main until the first release | board `"release_declared": false`; docs/08 "Commits and pushes" | holds |
+| 20 | TLS certificate failure retried, then intervention | smtpAdapter.ts:40-61 (ESOCKET -> `smtp_unavailable`; ETLS/EREQUIRETLS permanent), jobStore.ts:28-30, :294; delivery.test.ts:430-447, 21 green runs | holds |
+| 30 | Running-session edit; "Set an end instead" owner only | SessionDialog.tsx:663-683 (`{!shared && (` at :669), DayEditor.tsx:474; e2e `sharing.spec.ts:399` passed on both projects; mutant E19 caught | holds |
+| 31 | Today and Now in the input zone | SessionDialog.tsx:331, :661, :684; sessionModel.ts:85-101 | holds |
+| 34 | A weekday difference is refused; applies to the admin's own calendar | settingsFileModel.ts:800-822; CompanyCalendarFile.tsx:310, :342 | holds |
+| 35 | One holiday year per import; an existing exception with other values is kept | settingsFileModel.ts:843-850, :867-883 | holds |
+| 36 | Holiday commit and payroll exceptions are separate writes, partial result reported | CompanyCalendarFile.tsx:120-148 ("Already written: ...", :141) | holds |
+| 37 | Holiday preview exact per-date counts, no identity, one audit event per preview | holidayImport.ts:55-67, :198-228, :246-274; probe keys; mutants M11, M12 caught | holds |
+| 38 | Shared clock guard 409 `shared_clock_action` for a start or an end through a share | timesheetCommands.ts:450-459, :464, :502; `sharing.test.ts`; probe | holds |
+
+24 rows checked; none contradicted. The server line numbers of T06's table (written at 82d1ab4) still match the target, because
+only client files and tests changed after T05 (FIX1: TimesheetScreen.tsx, editorLayoutModel.ts and tests).

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Digest of a clean git-archive export of the target, hashed with git hash-object --no-filters (handoff/ excluded).
+# Usage: bash digest-export.sh <label>
+source <task>/env.sh
+LABEL="$1"
+EXPORT="$TASK_DIR/export-$LABEL"
+mkdir -p "$EXPORT"
+git -C /d/Dropbox/Work.CDSemi/timesheet archive 0ddfeada1b66c82b066b179e901184ca5d857793 | tar -x -C "$EXPORT"
+cd "$EXPORT" || exit 2
+find . -type f | sed 's|^\./||' | grep -v '^handoff/' | LC_ALL=C sort > "$TASK_DIR/export-$LABEL-files.txt"
+git hash-object --no-filters --stdin-paths < "$TASK_DIR/export-$LABEL-files.txt" > "$TASK_DIR/export-$LABEL-blobs.txt"
+paste -d' ' "$TASK_DIR/export-$LABEL-files.txt" "$TASK_DIR/export-$LABEL-blobs.txt" > "$TASK_DIR/export-$LABEL-lines.txt"
+cd "$TASK_DIR" || exit 2
+sha256sum "export-$LABEL-lines.txt" > "digest-export-$LABEL.txt"
+wc -l < "export-$LABEL-lines.txt" >> "digest-export-$LABEL.txt"
+cmp "export-$LABEL-lines.txt" lstree-target.txt >> "digest-export-$LABEL.txt" 2>&1 && echo "lines identical to ls-tree form" >> "digest-export-$LABEL.txt"
+cat "digest-export-$LABEL.txt"

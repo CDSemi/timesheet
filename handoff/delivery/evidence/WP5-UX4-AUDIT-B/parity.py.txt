@@ -1,0 +1,73 @@
+"""EN/VI parity of the round-4 touched pairs at the target commit (auditor probe, read-only).
+
+For each pair: line count, headings, bullets, numbered items, table rows, fences, and the multiset of
+backticked spans, numbers with a unit-free form, and D-/F-/E- decision ids on the lines that changed since
+the base. Run: python -I parity.py <clone>
+"""
+import re
+import subprocess
+import sys
+from collections import Counter
+
+CLONE = sys.argv[1]
+BASE = "8e557100d16b6b6eb86a48e00276835761aabfdf"
+TARGET = "0ddfeada1b66c82b066b179e901184ca5d857793"
+PAIRS = [
+    "docs/01_PRODUCT_REQUIREMENTS",
+    "docs/03_ARCHITECTURE_AND_DATA",
+    "docs/04_UX_AND_SETTINGS",
+    "docs/05_SUBMISSION_AND_NOTIFICATIONS",
+    "docs/07_DEPLOYMENT_AND_OPERATIONS",
+    "docs/10_DECISIONS_AND_SOURCES",
+    "docs/11_OPERATIONS_RUNBOOK",
+    "docs/12_RELEASE_NOTES",
+    "handoff/delivery/WP5_PILOT_PACKET",
+]
+
+
+def show(rev, path):
+    return subprocess.run(["git", "-C", CLONE, "show", f"{rev}:{path}"], capture_output=True, text=True, encoding="utf-8").stdout
+
+
+def shape(text):
+    lines = text.split("\n")
+    return {
+        "lines": len(lines),
+        "headings": sum(1 for l in lines if re.match(r"^#{1,6} ", l)),
+        "bullets": sum(1 for l in lines if re.match(r"^\s*[-*] ", l)),
+        "numbered": sum(1 for l in lines if re.match(r"^\s*\d+\. ", l)),
+        "table_rows": sum(1 for l in lines if l.startswith("|")),
+        "fences": sum(1 for l in lines if l.strip().startswith("~~~") or l.strip().startswith("```")),
+    }
+
+
+def changed_lines(path):
+    diff = subprocess.run(["git", "-C", CLONE, "diff", "-U0", BASE, TARGET, "--", path], capture_output=True, text=True, encoding="utf-8").stdout
+    return [l[1:] for l in diff.split("\n") if l.startswith("+") and not l.startswith("+++")]
+
+
+def tokens(lines):
+    joined = "\n".join(lines)
+    codes = Counter(re.findall(r"`([^`]+)`", joined))
+    ids = Counter(re.findall(r"\b(?:D|F|E|U4|R|AC|FR)-\d+[a-z]?\b", joined))
+    nums = Counter(re.findall(r"(?<![\w.])\d{2,}(?![\w])", joined))
+    return codes, ids, nums
+
+
+out = []
+for base in PAIRS:
+    en, vi = base + ".md", base + ".vi.md"
+    se, sv = shape(show(TARGET, en)), shape(show(TARGET, vi))
+    ce, cv = changed_lines(en), changed_lines(vi)
+    te, tv = tokens(ce), tokens(cv)
+    out.append(f"== {base}")
+    out.append(f"shape EN {se}")
+    out.append(f"shape VI {sv}")
+    out.append(f"shape equal except lines: {all(se[k] == sv[k] for k in se if k != 'lines')}")
+    out.append(f"changed lines EN {len(ce)} VI {len(cv)}")
+    for label, a, b in (("code spans", te[0], tv[0]), ("decision ids", te[1], tv[1]), ("numbers", te[2], tv[2])):
+        only_en = a - b
+        only_vi = b - a
+        out.append(f"{label}: EN-only {dict(only_en)} VI-only {dict(only_vi)}")
+with open(sys.argv[2], "w", encoding="utf-8", newline="\n") as handle:
+    handle.write("\n".join(out) + "\n")

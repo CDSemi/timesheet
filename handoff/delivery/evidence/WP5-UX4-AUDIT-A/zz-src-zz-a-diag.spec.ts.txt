@@ -1,0 +1,51 @@
+import { expect, test } from './fixtures.ts';
+import { dayBtn, drawer, note, seedAudit, setWidth, settle, signInTo } from './zz-alib.ts';
+
+/* WP5-UX4-AUDIT-A diagnostic: Escape from a sheet control while the drawer holds unsaved edits. Task-local. */
+const F = 'diag.txt';
+
+test('Escape from a sheet day button with unsaved edits', async ({ page, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop');
+  test.setTimeout(120_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const seed = await seedAudit(builtServer, 'Synthetic Diag Person');
+  await signInTo(page, builtServer, seed.person.account);
+  await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+  await page.evaluate(() => {
+    (window as unknown as { __keys: string[] }).__keys = [];
+    document.addEventListener('keydown', (e) => (window as unknown as { __keys: string[] }).__keys.push(`${e.key} prevented=${e.defaultPrevented} target=${(e.target as Element).tagName}|${(e.target as Element).getAttribute('aria-label') ?? ''}`), true);
+    document.addEventListener('keydown', (e) => (window as unknown as { __keys: string[] }).__keys.push(`bubble ${e.key} prevented=${e.defaultPrevented}`));
+    document.addEventListener('cancel', (e) => (window as unknown as { __keys: string[] }).__keys.push(`cancel on ${(e.target as Element).getAttribute('role') ?? (e.target as Element).tagName} "${(e.target as Element).querySelector('h2')?.textContent ?? ''}"`), true);
+    new MutationObserver((records) => {
+      for (const r of records)
+        for (const n of r.addedNodes)
+          if (n instanceof Element && n.matches('dialog[role="alertdialog"]')) (window as unknown as { __keys: string[] }).__keys.push(`added alertdialog "${n.querySelector('h2')?.textContent ?? ''}"`);
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+  for (const width of [1280, 1440]) {
+    await setWidth(page, width, 900);
+    for (const [label, typed] of [['clean', false], ['dirty', true]] as const) {
+      await dayBtn(page, seed.twoSessions).click();
+      await expect(drawer(page)).toBeVisible();
+      if (typed) await drawer(page).getByLabel('Notes').fill('diag typed');
+      for (const other of [seed.dates[0] ?? '', seed.dates[2] ?? '']) {
+        if ((await drawer(page).count()) === 0) break;
+        await page.evaluate(() => ((window as unknown as { __keys: string[] }).__keys = []));
+        await dayBtn(page, other).focus();
+        await settle(page);
+        const focused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.tagName);
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(400);
+        const prompt = await page.getByRole('alertdialog', { name: 'Discard your changes?' }).count();
+        const keys = await page.evaluate(() => (window as unknown as { __keys: string[] }).__keys);
+        note(F, `${width} ${label} focus ${focused}: Escape -> prompt=${prompt} drawer=${await drawer(page).count()} keys=${JSON.stringify(keys)}`);
+        if (prompt > 0) await page.getByRole('button', { name: 'Keep editing' }).click();
+      }
+      if ((await drawer(page).count()) > 0) {
+        await drawer(page).getByRole('button', { name: 'Close' }).click();
+        if ((await page.getByRole('alertdialog', { name: 'Discard your changes?' }).count()) > 0) await page.getByRole('button', { name: 'Discard' }).click();
+      }
+      await expect(drawer(page)).toHaveCount(0);
+    }
+  }
+});

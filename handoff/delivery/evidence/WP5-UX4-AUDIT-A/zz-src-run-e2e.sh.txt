@@ -1,0 +1,11 @@
+# Usage: bash run-e2e.sh <label> [playwright args...]   (real clock, clean export, own output folder)
+. <task>/env.sh
+L=$1; shift
+mkdir -p $T/pw-$L $T/shots-$L
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+export NODE_OPTIONS="--trace-deprecation"
+cd $T/export
+echo "== $L start $(date -u +%Y-%m-%dT%H:%M:%SZ) LA $(TZ=America/Los_Angeles date +%Y-%m-%dT%H:%M:%S)"
+node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-$L"
+echo "exit=$?"
+echo "== $L end $(date -u +%Y-%m-%dT%H:%M:%SZ) LA $(TZ=America/Los_Angeles date +%Y-%m-%dT%H:%M:%S)"

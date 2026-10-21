@@ -5208,6 +5208,69 @@ test.describe('WP5-UX4-T02 addendum 1: Today, a period step, Close and Escape as
     await button.click();
     await expect(notes).toHaveValue('');
   });
+
+  // F-UX4A-2: Escape pressed on a control of the SHEET (not in the drawer) reaches the document handler. Unprevented, the same key press
+  // also closed the question that handler had just opened, so no question was seen and the drawer simply stayed.
+  for (const { width, layout } of [
+    { width: 1280, layout: 'floating' },
+    { width: 1440, layout: 'beside' },
+  ]) {
+    test(`Escape on a sheet control with unsaved edits asks "Discard your changes?" and the question stays open (${layout}, ${width}px); without edits it closes at once`, async ({
+      page,
+      adminSeed,
+      builtServer,
+      signInPageAs,
+      isMobile,
+    }) => {
+      test.skip(isMobile, 'On a phone the modal bottom sheet takes Escape itself; the document handler is the drawer');
+      test.setTimeout(60_000);
+      const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Sheet Escape', signature: 'none' });
+      const [a = '', b = ''] = need(await person.api.displayedPeriodFreeWorkdays(), 2);
+      await page.setViewportSize({ width, height: 800 });
+      await signInPageAs(person.account, '#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const editor = editorOf(page);
+      const notes = editor.getByLabel('Notes');
+      const elsewhere = namedDayButton(page, b, 'Edit');
+
+      // Without an edit: Escape from the sheet closes the drawer at once.
+      await namedDayButton(page, a, 'Edit').click();
+      await expect(editor).toHaveAttribute('data-day-editor', a);
+      await expect(page.locator('.sheet-area')).toHaveAttribute('data-editor-layout', layout);
+      await elsewhere.focus();
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+      expect(await promptOf(page).count()).toBe(0);
+
+      // With an edit: the question opens and STAYS open; Keep editing keeps the note and the drawer.
+      await namedDayButton(page, a, 'Edit').click();
+      await expect(editor).toHaveAttribute('data-day-editor', a);
+      await notes.fill('Synthetic unsaved note');
+      await elsewhere.focus();
+      await expect(elsewhere).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(promptOf(page)).toBeVisible();
+      await expect(keepOf(page)).toBeFocused();
+      // Not closed by the same key press: still there a moment later, with the drawer and the note behind it.
+      await page.waitForTimeout(300);
+      await expect(promptOf(page)).toBeVisible();
+      await expect(editor).toHaveAttribute('data-day-editor', a);
+      await keepOf(page).click();
+      await expect(promptOf(page)).toHaveCount(0);
+      await expect(editor).toHaveAttribute('data-day-editor', a);
+      await expect(notes).toHaveValue('Synthetic unsaved note');
+      await expect(elsewhere).toBeFocused();
+
+      // Discard closes the drawer and saves nothing.
+      await page.keyboard.press('Escape');
+      await expect(promptOf(page)).toBeVisible();
+      await page.waitForTimeout(300);
+      await expect(promptOf(page)).toBeVisible();
+      await discardOf(page).click();
+      await expect(editor).toHaveCount(0);
+      expect((await person.api.dayView(a)).entry?.notes ?? '').toBe('');
+    });
+  }
 });
 
 /* ===================================================================================================================

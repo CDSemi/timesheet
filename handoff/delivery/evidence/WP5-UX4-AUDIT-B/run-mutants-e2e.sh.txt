@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Two client mutants that the unit suite cannot see, checked against their e2e specs (desktop), then the target client is rebuilt.
+source <task>/env.sh
+cd "$CLONE" || exit 2
+LOG="$TASK_DIR/logs/mutants-e2e"
+mkdir -p "$LOG"
+export TEMP="<task>\\tmp"
+export TMP="$TEMP"
+export E2E_SCREENSHOT_DIR="<task>\\tmp\\screens"
+PW="$CLONE/node_modules/@playwright/test/cli.js"
+SUMMARY="$LOG/summary.txt"
+: > "$SUMMARY"
+
+emutant() {
+  local id="$1" file="$2" expr="$3" spec="$4"
+  sed -i "$expr" "$file"
+  if [ -z "$(git diff --numstat -- "$file")" ]; then echo "$id NOT-APPLIED" >> "$SUMMARY"; return; fi
+  git diff -- "$file" > "$LOG/$id.diff"
+  npm24 run build:client > "$LOG/$id-build.log" 2>&1
+  node "$PW" test "$spec" --project=desktop --reporter=list > "$LOG/$id.log" 2>&1
+  local code=$?
+  local counts
+  counts=$(grep -E "^\s+[0-9]+ (passed|failed|skipped|flaky)" "$LOG/$id.log" | tr -s ' ' | tr '\n' ' ')
+  if [ "$code" -ne 0 ]; then echo "$id CAUGHT exit=$code $counts" >> "$SUMMARY"; else echo "$id SURVIVED exit=$code $counts" >> "$SUMMARY"; fi
+  git checkout -- "$file"
+}
+
+emutant E16-expected-seq-zero src/client/components/settingsFileModel.ts 's/    expected_seq: current.seq,/    expected_seq: 0,/' tests/e2e/settings-transfer.spec.ts
+emutant E19-end-instead-in-share src/client/components/SessionDialog.tsx 's/{!shared \&\& (/{(shared || !shared) \&\& (/' tests/e2e/sharing.spec.ts
+npm24 run build:client > "$LOG/restore-build.log" 2>&1
+echo "restore build exit=$?" >> "$SUMMARY"
+git status --short -- src >> "$SUMMARY"
+echo done >> "$SUMMARY"

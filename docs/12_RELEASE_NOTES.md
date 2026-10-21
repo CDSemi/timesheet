@@ -94,7 +94,7 @@ Each line gives the limit and where the rule or step is. None is a known defect 
 
 - **The discard guard does not cover every way out.** The "Discard your changes?" question guards a day switch, the open day's button, "Open a day", "Today", the period steps, "Current period", Close and Escape. It does not guard a link that leaves the Timesheet page (the top bar, "Review & sign off"), and it does not guard the editor's reload after a label or batch commit changed the open day itself.
 - **Company calendar file limits.** Working weekdays cannot be imported (no route changes them), so a file whose weekdays differ from the calendar is refused. The file applies to the administrator's own calendar, the only one the page reads. One holiday year is imported at a time. A payroll exception that already exists with other values is kept, because an exception cannot be edited. The holiday commit and each payroll exception are separate writes, so a failure part-way reports what was already written.
-- **Classic scrollbars.** The 1345px figure for the beside layout with a classic scrollbar is computed from the tokens by a unit test; a classic scrollbar cannot be shown in the headless test browser.
+- **Classic scrollbars.** The 1345px figure for the beside layout with a classic scrollbar is computed from the tokens by a unit test and checked by a browser test that is launched without the headless default `--hide-scrollbars`, so a 15px scrollbar is drawn (the page keeps its track at every page height, which stopped the editor flapping between beside and floating). Other browsers and operating systems with classic scrollbars were not tried.
 
 ### Operations
 

@@ -1,0 +1,768 @@
+diff --git a/src/client/styles.css b/src/client/styles.css
+index 8050ea8..51dc69b 100644
+--- a/src/client/styles.css
++++ b/src/client/styles.css
+@@ -83,8 +83,8 @@
+   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+ 
+   /*
+-   * Elevation: a hairline ring plus soft layered shadows. bar = the shell bar; 1 = cards and the period bar; 2 = week
+-   * sheets, the footer card and the docked editor; 3 = menus, dialogs and the floating panel; lift = a lifted sheet column.
++   * Elevation: a hairline ring plus soft layered shadows. bar = the shell bar; 1 = cards and the period bar; 2 = the paper
++   * sheet (the week sheets and the footer card stand on it without a shadow of their own) and the docked editor; 3 = menus, dialogs and the floating panel; lift = a lifted sheet column.
+    */
+   --elev-bar: 0 1px 0 rgb(20 30 50 / 0.08), 0 2px 8px rgb(20 30 50 / 0.05);
+   --elev-1: 0 0 0 1px rgb(20 30 50 / 0.06), 0 1px 2px rgb(20 30 50 / 0.06), 0 2px 6px rgb(20 30 50 / 0.04);
+@@ -118,7 +118,7 @@
+   --rule: 2px;
+   /* The leading accent rail of the active label option (a shape cue, not a frame) */
+   --rail: calc(var(--rule) + var(--hairline));
+-  /* The "Show details" slide switch: a 44x24 track, an 18px thumb, a 3px inset, travel derived from them */
++  /* The slide switch (every role="switch"): a round 44x24 track, a round 18px thumb, a 3px inset, travel derived from them */
+   --switch-width: 44px;
+   --switch-height: 24px;
+   --switch-thumb: 18px;
+@@ -144,8 +144,21 @@
+   --clip-hidden: inset(50%);
+   --layer-sticky: 1;
+   --page-max: 1200px;
+-  /* The page width while the Day editor is open beside the sheet (used by the editor slice) */
++  /* The page's side padding (each side); the Day editor's layout rule reads it */
++  --page-pad: var(--space-4);
++  /* The page width of the Review page beside its checklist; the Timesheet page reserves the Day editor's room instead (--editor-reserve) */
+   --page-max-editor: 1600px;
++  /* The gap between the title row and the next block of Timesheet and of Review, from 768px (round 4, U4-02, owner answer F-5) */
++  --page-head-gap: var(--space-6);
++  /*
++   * The paper sheet (round 4, U4-03): the surface that holds the toolbar, the messages, the sheet and its footer. It is the card colour,
++   * lifted by --elev-paper (the --elev-2 step), with the card corner (--radius-lg) from 768px and padded like the sheet blocks; on a
++   * phone it is full-bleed and square (see the phone rule), so the sheet keeps its width. The week sheets inside lose only their own shadow.
++   */
++  --paper-surface: var(--card);
++  --elev-paper: var(--elev-2);
++  --paper-pad: var(--space-4);
++  --paper-gap: var(--space-4);
+   --page-narrow: 380px;
+   --dialog-width: 36rem;
+   --dialog-width-wide: 56rem;
+@@ -153,6 +166,10 @@
+   --dialog-fit: 92vw;
+   --dialog-fit-wide: 96vw;
+   --select-min: 10rem;
++  /* Every select (round 4, U4-08): a chevron of two gradient layers, 12px from the edge, and the end padding that keeps text clear of it */
++  --select-arrow-size: 7px;
++  --select-arrow-inset: 12px;
++  --select-pad-end: 34px;
+   /* The room the Category select may shrink to before the WFH checkbox wraps below it (U-27) */
+   --label-select-basis: 8rem;
+   --switcher-select-min: 6rem;
+@@ -168,6 +185,13 @@
+ 
+   /* Sheet columns (used by the sheet slices): the narrowest readable day column, the lift offset and the shadow clip */
+   --sheet-col-min: 7.2rem;
++  --sheet-days: 7;
++  /*
++   * The narrowest paper (round 4, U4-07): the label column, seven columns of at least --sheet-col-min, the two hairlines of the week
++   * card and the paper's padding on both sides. The Day editor stands beside the sheet only when the window leaves the sheet this
++   * much (useEditorLayout reads this token, --page-pad, --editor-width and --editor-gap), otherwise it floats over the sheet.
++   */
++  --sheet-min-width: calc(var(--sheet-label-col) + var(--sheet-days) * var(--sheet-col-min) + 2 * var(--hairline) + 2 * var(--paper-pad));
+   --lift-clip: 32px;
+   --lift-y: -3px;
+   --toolbar-group-gap: var(--space-5);
+@@ -180,8 +204,19 @@
+   --dialog-field-gap-phone: var(--space-3);
+   --break-row-gap: var(--space-2);
+   --break-date-w: 7.6rem;
++  /* The least a time takes in the two-line row, where it grows into the room that is left; breakChipModel.ts mirrors it in its thresholds */
+   --break-time-w: 6.8rem;
++  /*
++   * The fixed time slot of the one-line row (round 4, U4-14). "12:00:00 AM" with its picker icon needs 131px in en-US with a pointer
++   * and 139px with a touch screen (a probe field with an automatic width, 15px root); the slot adds 5px to the larger, so no time text
++   * is clipped. It is wider than --break-time-w, which stays because the chip threshold (breakChipModel.ts) counts it for the two-line row.
++   */
++  --break-time-slot-w: 9.6rem;
+   --break-min-w: 5.6rem;
++  /* The "Break n" slot of the one-line row, wide enough for "Break 12", so every row's fields start at the same x (round 4, U4-14) */
++  --break-num-w: 4.3rem;
++  /* A quiet link-style button under a field ("Today", "Now", "Set an end instead", round 4, U4-13): 28px on a pointer device, 44px on touch */
++  --link-action-height: 28px;
+   /* The "Break n" sub-dialog (WP5-UX3-T08B) */
+   --break-dialog-width: 26rem;
+   /* The session dialog on a desktop (WP5-UX3-T08) and the padding of its head, body and foot from 768px */
+@@ -193,6 +228,8 @@
+   --sheet-rule-soft: #e3e8ee;
+   --sheet-rule-strong: #8d9aab;
+   --sheet-head: #e9eef5;
++  /* The week header row and the first column (round 4, owner F-5): a step stronger than the date cells; --muted is 4.59:1 on it, 1.27:1 from the card */
++  --sheet-head-strong: #dde5f0;
+   --sheet-head-off: #e1e6ee;
+   --day-nonworking: #f0f2f5;
+   --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(28 36 48 / 0.045) 7px 8px);
+@@ -235,6 +272,8 @@
+ 
+   /* Day editor (WP5-UX-T04): side panel beside the sheet, bottom sheet on a phone, in-cell label picker */
+   --editor-gap: var(--space-4);
++  /* The room the page keeps for the Day editor drawer when it stands beside the sheet: the drawer and its gap */
++  --editor-reserve: calc(var(--editor-width) + var(--editor-gap));
+   --editor-sheet-max-height: 86dvh;
+   --layer-panel: 2;
+   --layer-popup: 2;
+@@ -398,6 +437,7 @@
+     --sheet-rule-soft: #29313c;
+     --sheet-rule-strong: #5d6a7b;
+     --sheet-head: #222a35;
++    --sheet-head-strong: #2c3746;
+     --sheet-head-off: #283140;
+     --day-nonworking: #1e252f;
+     --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(230 233 238 / 0.04) 7px 8px);
+@@ -464,6 +504,7 @@
+   --sheet-rule-soft: #29313c;
+   --sheet-rule-strong: #5d6a7b;
+   --sheet-head: #222a35;
++  --sheet-head-strong: #2c3746;
+   --sheet-head-off: #283140;
+   --day-nonworking: #1e252f;
+   --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(230 233 238 / 0.04) 7px 8px);
+@@ -1062,7 +1103,7 @@ html {
+ .page {
+   max-width: var(--page-max);
+   margin: 0 auto;
+-  padding: var(--space-4);
++  padding: var(--page-pad);
+ }
+ 
+ /* Room for the fixed tab bar below the last control of every screen. */
+@@ -1158,6 +1199,13 @@ h1 {
+   overflow-wrap: anywhere;
+ }
+ 
++/* Profile: the change-password card keeps its fields and notices to a readable width (D-9 b). */
++.password-card > form,
++.password-card > .notice-ok,
++.password-card > .error {
++  max-width: var(--page-narrow);
++}
++
+ @media (max-width: 479px) {
+   .profile-facts > div {
+     grid-template-columns: minmax(0, var(--track));
+@@ -1218,6 +1266,21 @@ input[type='radio'] {
+   accent-color: var(--accent);
+ }
+ 
++/*
++ * A checkbox is centred on the first line of its text (round 4, U4-09), so a label that wraps keeps the box beside the first line
++ * instead of the middle of the block: the label starts its items at the top and the box takes the half of the difference between a
++ * line and itself as a margin. On a phone or a coarse pointer the label is still 44px tall; its padding centres one line in it. A
++ * switch (a track, not a box) keeps the centring of its own label. `:where()` keeps these defaults below any rule of a component
++ * (the WFH box centres itself on the Category field).
++ */
++label.inline:where(:has(> input[type='checkbox']:not(.switch-input))) {
++  align-items: flex-start;
++}
++
++:where(label.inline > input[type='checkbox']:not(.switch-input)) {
++  margin-block: calc((1lh - var(--control-check-size)) / 2);
++}
++
+ /* Buttons: primary (accent fill, the default), secondary (card and accent border) and quiet (accent text only). */
+ button {
+   font: inherit;
+@@ -1370,6 +1433,11 @@ button[aria-disabled='true']:active {
+   label.inline {
+     padding-block: var(--space-2);
+   }
++
++  /* A checkbox label: one line is centred in the 44px (see the checkbox rule above); a wrapped label grows from there. */
++  label.inline:where(:has(> input[type='checkbox']:not(.switch-input))) {
++    padding-block: calc((var(--tap-min) - 1lh) / 2);
++  }
+ }
+ 
+ /* ---- Content -------------------------------------------------------------- */
+@@ -1780,7 +1848,7 @@ tr.nonworking td {
+ }
+ 
+ /*
+- * The right group (U-12): "Show details" and "Change several days" are two groups, a --toolbar-group-gap apart with a 1px --line
++ * The right group (U-12): "Show worked hours" and "Change several days" are two groups, a --toolbar-group-gap apart with a 1px --line
+  * separator centred in that gap (a pseudo-element of the second one, so the gap itself equals the token). The phone keeps the tighter
+  * gap and no separator, because the two often wrap there (see the phone rules).
+  */
+@@ -1803,9 +1871,9 @@ tr.nonworking td {
+ }
+ 
+ /*
+- * "Show details" is a slide switch (WP5-UX2-T02): a native checkbox with role="switch" and the visible text
+- * "Show details", drawn with `appearance: none`. The track is 44x24 with a 4px radius; the thumb is an 18px
+- * one-colour gradient layer placed with background-position (no pseudo-element), 3px from the track edge.
++ * Every role="switch" ("Show worked hours" and the two sharing switches) is a slide switch (WP5-UX2-T02, round in round 4, U4-04):
++ * a native checkbox with `appearance: none`. The track is 44x24 and round (--radius-pill); the thumb is an 18px round
++ * one-colour radial-gradient layer placed with background-position (no pseudo-element), 3px from the track edge.
+  * State is shown by the thumb position and the track fill, never by colour alone. Contrast of the track
+  * boundary and of the thumb is at least 3:1 in both themes and in every state (tests/e2e/hover.spec.ts).
+  */
+@@ -1830,10 +1898,10 @@ input[type='checkbox'].switch-input {
+   margin: 0;
+   padding: 0;
+   border: var(--hairline) solid var(--muted);
+-  border-radius: var(--radius-sm);
++  border-radius: var(--radius-pill);
+   /* The card colour at rest, so the hover tint differs from it by at least 1.20:1 (it would be 1.08:1 over --off in the light theme). */
+   background-color: var(--card);
+-  background-image: linear-gradient(var(--muted), var(--muted));
++  background-image: radial-gradient(circle closest-side, var(--muted) calc(100% - var(--hairline)), transparent 100%);
+   background-repeat: no-repeat;
+   background-size: var(--switch-thumb) var(--switch-thumb);
+   background-position: var(--switch-inset) center;
+@@ -1843,7 +1911,7 @@ input[type='checkbox'].switch-input {
+ input[type='checkbox'].switch-input:checked {
+   border-color: var(--accent);
+   background-color: var(--accent);
+-  background-image: linear-gradient(var(--on-accent), var(--on-accent));
++  background-image: radial-gradient(circle closest-side, var(--on-accent) calc(100% - var(--hairline)), transparent 100%);
+   background-position: calc(var(--switch-inset) + var(--switch-travel)) center;
+ }
+ 
+@@ -2014,6 +2082,32 @@ select {
+   min-width: var(--select-min);
+ }
+ 
++/*
++ * Every select (round 4, U4-08): the native arrow sat about 4px from the border and could not be aligned with the other fields, so
++ * the browser's arrow is dropped (`appearance: none`) and a chevron is drawn with two gradient layers (no url(), so the content
++ * security policy and both themes need nothing else). The arrow ends --select-arrow-inset from the border box and --muted is at
++ * least 3:1 on --field-bg in the light and both dark sets; the end padding keeps the text clear of it. Forced colours drop
++ * background images, so the native arrow comes back there.
++ */
++select {
++  appearance: none;
++  padding-inline-end: var(--select-pad-end);
++  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
++  background-position:
++    calc(100% - var(--select-arrow-inset) + var(--hairline) - var(--select-arrow-size)) center,
++    calc(100% - var(--select-arrow-inset) + var(--hairline)) center;
++  background-size: var(--select-arrow-size) var(--select-arrow-size);
++  background-repeat: no-repeat;
++}
++
++@media (forced-colors: active) {
++  select {
++    appearance: auto;
++    padding-inline-end: var(--space-2);
++    background-image: none;
++  }
++}
++
+ textarea {
+   resize: vertical;
+ }
+@@ -2130,6 +2224,30 @@ textarea {
+   background: var(--panel-head);
+ }
+ 
++/*
++ * The "not saved" alert (round 4, U4-15): a confirmation with one OK button. The title carries a triangle in the error colour (a shape
++ * beside the words, never colour alone); the messages are one line each, so a list of break rows reads as a list.
++ */
++.alert-head {
++  display: flex;
++  align-items: center;
++  gap: var(--space-2);
++}
++
++.alert-shape {
++  margin-right: 0;
++  color: var(--error);
++}
++
++.alert-messages {
++  display: grid;
++  gap: var(--space-2);
++}
++
++.alert-messages > li {
++  margin: 0;
++}
++
+ .preview-list li,
+ .conflict-list > li {
+   display: flex;
+@@ -2154,6 +2272,21 @@ textarea {
+     margin: 0;
+   }
+ 
++  /* Round 4 (U4-02, owner answer F-5): --page-head-gap (32px) between the title row and the next block. Review's flex column already
++     adds the --space-3 of its own gap, so its head takes the difference. Below 768px the head is as it was. */
++  .page-head {
++    margin-bottom: var(--page-head-gap);
++  }
++
++  .review-screen > .review-head {
++    margin-bottom: calc(var(--page-head-gap) - var(--space-3));
++  }
++
++  /* The mode introduction is a paragraph with a card surface: its browser top margin would add to the title gap. */
++  .review-screen > p.card {
++    margin-top: 0;
++  }
++
+   .period-bar {
+     display: grid;
+     grid-template-columns: auto minmax(var(--period-main-min), var(--track)) auto;
+@@ -2429,7 +2562,6 @@ textarea {
+  * tinted and hatched (a non-colour cue); every status keeps its words and shape.
+  */
+ .sheet {
+-  --sheet-days: 7;
+   --sheet-caps-spacing: 0.08em;
+   --sheet-today-bar: calc(var(--rule) + var(--hairline));
+   --sheet-signature-cols: 1.6fr 1fr;
+@@ -2485,10 +2617,10 @@ textarea {
+ }
+ 
+ /*
+- * Round 3 (U-02): the sheet stands out from the page. The toolbar and the form header sit on the page surface; every
+- * week band is its own raised card (--elev-2, square corners: the Excel form, owner decision G-1 b) with its header
+- * strip (the week number and range); the footer (legend, Overtime Total, signatures) is a second card of the same
+- * kind. The cells stay square inside the card.
++ * Round 3 (U-02): every week band is its own card (--elev-2, square corners: the Excel form, owner decision G-1 b) with its
++ * header strip (the week number and range); the footer (legend, Overtime Total, signatures) is a second card of the same
++ * kind. The cells stay square inside the card. Round 4 (U4-03): the bands and the footer stand on the paper sheet (`.paper`),
++ * which carries the shadow, so inside it they lose only their own outer shadow (the rule is with `.paper`).
+  */
+ .sheet-week {
+   min-width: 0;
+@@ -2516,7 +2648,7 @@ textarea {
+   padding: var(--space-1) var(--space-3);
+   border: var(--hairline) solid var(--sheet-rule);
+   border-bottom: 0;
+-  background: var(--sheet-head);
++  background: var(--sheet-head-strong);
+   font-size: var(--font-size-sm);
+ }
+ 
+@@ -2535,15 +2667,15 @@ textarea {
+ }
+ 
+ /*
+- * Seven columns of at least --sheet-col-min and the label column need 850px, plus the 32px page padding and a classic
+- * scrollbar: a narrower window (768 to 899px) scrolls the week card sideways instead of breaking words inside the
++ * Seven columns of at least --sheet-col-min and the label column need 850px, plus the 32px page padding, the 32px paper
++ * padding (round 4) and a classic scrollbar: a narrower window (768 to 929px) scrolls the week card sideways instead of breaking words inside the
+  * columns. (Literal width: a media query cannot read a custom property.) A focused control is scrolled fully into the
+  * card with --focus-clearance around it (the card's scroll padding, read by the sheet's focus handler; WP5-UX3-FIX1), and
+  * the grid's box spans all its columns, so its frame closes after the last one. The card also scrolls down while an open
+  * category list reaches past its bottom; an empty layer --focus-clearance tall under the list gives the list's focus ring
+  * room to come into view.
+  */
+-@media (min-width: 768px) and (max-width: 899px) {
++@media (min-width: 768px) and (max-width: 929px) {
+   .sheet-week {
+     overflow-x: auto;
+     scroll-padding: var(--focus-clearance);
+@@ -2577,7 +2709,7 @@ textarea {
+   grid-row: 1 / -1;
+   grid-template-rows: subgrid;
+   border-right: var(--hairline) solid var(--sheet-rule);
+-  background: var(--sheet-head);
++  background: var(--sheet-head-strong);
+ }
+ 
+ .row-labels > div {
+@@ -2955,7 +3087,7 @@ textarea {
+ .sheet-table th {
+   padding: var(--space-1) var(--space-2);
+   border-bottom: var(--hairline) solid var(--sheet-rule);
+-  background: var(--sheet-head);
++  background: var(--sheet-head-strong);
+   font-size: var(--font-size-2xs);
+   white-space: normal;
+ }
+@@ -2986,7 +3118,7 @@ textarea {
+  * The row of the day open in the Day editor (round 3, U-13): a 1px accent frame, inset shadows on top and bottom of
+  * every cell, on the left edge of the first and the right edge of the last, and the Day cell filled with
+  * --day-editing-head (the hatching of a non-working day stays on the cells; the Day cell keeps its image layer). With
+- * "Show details" the row opens its frame downwards and the detail row closes it (sides and bottom). A table row does
++ * "Show worked hours" the row opens its frame downwards and the detail row closes it (sides and bottom). A table row does
+  * not lift: a selected row is the tint and the checked box.
+  */
+ .sheet-table tr.editing td,
+@@ -3379,6 +3511,76 @@ textarea {
+   min-width: 0;
+ }
+ 
++/* A date or a time with its "Today" or "Now" link under it, flush with the input's right edge (round 4, U4-13, owner answer F-5). */
++.local-cell {
++  display: flex;
++  flex-direction: column;
++  gap: var(--space-1);
++  min-width: 0;
++}
++
++.local-cell > button.link-action {
++  align-self: flex-end;
++}
++
++/*
++ * A quiet link-style button (round 4, U4-13): the quiet look with an underline, no side padding so its text and its box end where the
++ * field above it ends, 28px high on a pointer device and 44px high and wide on touch (the control rule above gives the width; the
++ * touch rule below gives the height). Under the pointer only the text colour and the underline change: with no padding a fill
++ * would hug the words.
++ */
++button.link-action {
++  display: inline-flex;
++  align-items: center;
++  justify-content: flex-end;
++  min-height: var(--link-action-height);
++  padding: var(--space-0) 0;
++  font-size: var(--font-size-sm);
++  text-decoration: underline;
++}
++
++@media (hover: hover) {
++  button.quiet.link-action:hover:not(:disabled) {
++    background: transparent;
++    border-color: transparent;
++    color: var(--accent-strong);
++    text-decoration-thickness: var(--rule);
++  }
++}
++
++@media (max-width: 767px), (pointer: coarse) {
++  button.link-action {
++    min-height: var(--tap-min);
++  }
++}
++
++/* The running session's end (round 4, U4-11): a dashed inset box in place of the End fields. */
++.running-end {
++  display: flex;
++  flex-direction: column;
++  align-items: flex-start;
++  gap: var(--space-1);
++  min-width: 0;
++  padding: var(--space-3);
++  border: var(--hairline) dashed var(--line);
++  border-radius: var(--radius);
++  background: var(--off);
++}
++
++.running-end p {
++  margin: 0;
++}
++
++.running-end-title {
++  display: flex;
++  align-items: center;
++  font-weight: var(--font-weight-strong);
++}
++
++.running-end > button.link-action {
++  justify-content: flex-start;
++}
++
+ .breaks {
+   display: flex;
+   flex-direction: column;
+@@ -3454,14 +3656,14 @@ textarea {
+ /* ---- Day editor panel and bottom sheet, in-cell label picker (WP5-UX-T04) ------- */
+ 
+ /*
+- * One native <dialog> for the day editor. From 1360px it is a non-modal panel in its own column
+- * beside the sheet (the sheet keeps its seven columns at their readable width, and the page cap
+- * lifts to --page-max-editor while it is open). Below 1360px it is modal, so the page behind is
+- * inert and the panel never hides a control that can still take focus: from 768px a floating side
+- * panel over a light backdrop (--scrim-side), docked on the side away from the edited column
+- * (`data-side`), a bottom sheet of at most 86% of the height below that. Inside: a sticky head,
+- * then the banner, the times, label and leave, and the figures, each section separated by a soft
+- * rule.
++ * One native <dialog> for the day editor. From 768px it is a non-modal drawer flush with one window edge, from under the top
++ * bar to the bottom of the window (round 4, U4-05 to U4-07): no backdrop, the page stays usable. When the window has room for
++ * the sheet and the drawer (`useEditorLayout`, the rule in editorLayoutModel.ts) the page is pushed aside and reserves the
++ * drawer's room (`.sheet-area.with-editor`, always on the right); otherwise the drawer floats over the sheet on the side away
++ * from the edited column (`data-side`), and docks to the other side when a control behind it takes focus under it. The two
++ * corners on the window edge are square and the two toward the sheet are rounded. Below 768px it is a modal bottom sheet of at
++ * most 86% of the height. Inside: a sticky head, then the banner, the times, label and leave, and the figures, each section
++ * separated by a soft rule.
+  */
+ .sheet-area {
+   display: grid;
+@@ -3471,17 +3673,39 @@ textarea {
+ }
+ 
+ /*
+- * The column that holds the toolbar, the messages and the sheet. It keeps the `card` class for its layout role (the
+- * tests and the editor grid find it there) but has no surface of its own since round 3: the toolbar and the form
+- * header sit on the page, and the week bands and the footer are the cards.
++ * The paper sheet (round 4, U4-03, owner answer F-5). One surface holds the toolbar, the page messages, the batch bar, the form
++ * header, both week sheets, the legend, Overtime Total and the signature lines (Timesheet: `section.sheet-main`; Review and sign
++ * off: `section.review-sheet-block`, "What you sign" and the sheet; the checklist stays beside it). The title row and the period
++ * card stay outside. The toolbar, the week sheets and the footer keep their own style and layout; the week sheets and the footer
++ * lose only their outer shadow, because the paper carries it. The paper clips nothing (overflow stays visible): a lifted column's
++ * shadow, a label list and the editor column lift draw over it. On a phone the paper is full-bleed and square: it reaches the
++ * window edges, and its side padding equals the page padding, so the four-column table keeps its width.
+  */
+-.sheet-area > .card.sheet-main {
+-  padding: 0;
+-  border-radius: 0;
+-  background: transparent;
++.paper {
++  display: flex;
++  flex-direction: column;
++  gap: var(--paper-gap);
++  min-width: 0;
++  padding: var(--paper-pad);
++  border-radius: var(--radius-lg);
++  background: var(--paper-surface);
++  box-shadow: var(--elev-paper);
++}
++
++.paper .sheet-week,
++.paper .sheet-footer {
+   box-shadow: none;
+ }
+ 
++@media (max-width: 767px) {
++  .paper {
++    gap: var(--space-2);
++    margin-inline: calc(-1 * var(--space-4));
++    padding: var(--space-3) var(--space-4);
++    border-radius: 0;
++  }
++}
++
+ .day-panel {
+   margin: 0;
+   padding: 0;
+@@ -3501,51 +3725,39 @@ textarea {
+   box-shadow: var(--focus-ring-inset), var(--elev-3);
+ }
+ 
++/*
++ * The drawer (round 4, U4-06): beside the sheet and floating share this one geometry, a fixed column flush with a window edge from
++ * under the top bar (and the share bar) to the bottom of the window. Docked right its corners toward the sheet are rounded and the
++ * two on the edge are square; docked left is the mirror. There is no backdrop: the page stays usable.
++ */
+ .day-panel-side {
+   position: fixed;
+-  inset: calc(var(--bar-height) + var(--space-3)) var(--space-3) var(--space-3) auto;
++  inset: calc(var(--shell-bar-size) + var(--share-bar-size)) 0 0 auto;
+   z-index: var(--layer-panel);
+-  width: min(var(--editor-width), calc(100vw - 2 * var(--space-3)));
++  width: var(--editor-width);
+   height: auto;
++  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+ }
+ 
+-/* Docked on the left when the edited column lies in the right half of the window, so the column stays visible. */
++/* Docked on the left when the edited column lies in the right half of the window (floating only), so the column stays visible. */
+ .day-panel-side[data-side='left'] {
+-  inset: calc(var(--bar-height) + var(--space-3)) auto var(--space-3) var(--space-3);
++  inset: calc(var(--shell-bar-size) + var(--share-bar-size)) auto 0 0;
++  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+ }
+ 
+-/* The floating panel dims the page less than a dialog: the edited column stays readable for orientation. */
+-.day-panel-side::backdrop {
+-  background: var(--scrim-side);
++/*
++ * Beside the sheet (the window leaves the sheet its minimum width, see --sheet-min-width): the page keeps the drawer's room on the
++ * right, so the sheet is never under the drawer. The page cap grows by the same room, which keeps the sheet at the width it has
++ * without the drawer on a wide window.
++ */
++.page:has(.sheet-area.with-editor) {
++  max-width: calc(var(--page-max) + var(--editor-reserve));
++  padding-inline-end: calc(var(--page-pad) + var(--editor-reserve));
+ }
+ 
+-/* 1360px (literal: a media query cannot read a custom property) is the width at which WIDE_QUERY in TimesheetScreen.tsx switches too. */
+-@media (min-width: 1360px) {
+-  .page:has(.sheet-area.with-editor) {
+-    max-width: var(--page-max-editor);
+-  }
+-
+-  .sheet-area.with-editor {
+-    grid-template-columns: minmax(0, var(--track)) var(--editor-width);
+-  }
+-
+-  /* The narrower sheet beside the panel stacks its form header instead of squeezing the title. */
+-  .sheet-area.with-editor .form-head {
+-    grid-template-columns: var(--track);
+-  }
+-
+-  .day-panel-side {
+-    position: sticky;
+-    inset: auto;
+-    top: calc(var(--shell-bar-size) + var(--share-bar-size) + var(--space-3));
+-    width: auto;
+-    max-height: calc(100dvh - var(--shell-bar-size) - var(--share-bar-size) - 2 * var(--space-3));
+-    box-shadow: var(--elev-2);
+-  }
+-
+-  .day-panel-side:focus-visible {
+-    box-shadow: var(--focus-ring-inset), var(--elev-2);
+-  }
++/* The narrower sheet beside the drawer stacks its form header instead of squeezing the title. */
++.sheet-area.with-editor .form-head {
++  grid-template-columns: var(--track);
+ }
+ 
+ .day-panel-sheet {
+@@ -4081,24 +4293,34 @@ button.break-remove {
+     display: contents;
+   }
+ 
++  /*
++   * Fixed column slots (round 4, U4-14): "Break n", the date (when shown), the time and the minutes keep one width in every row, so the
++   * fields line up whatever the row's origin or its info text; only the info slot, which always holds text ("ends --:--" until the
++   * row resolves), takes the room that is left.
++   */
+   .break-num {
++    flex: 0 0 var(--break-num-w);
+     order: 0;
+   }
+ 
+   .break-date {
++    flex: 0 0 var(--break-date-w);
+     order: 1;
+   }
+ 
+   .break-time {
++    flex: 0 0 var(--break-time-slot-w);
+     order: 2;
+   }
+ 
+   .break-minutes {
++    flex: 0 0 var(--break-min-w);
+     order: 3;
+   }
+ 
++  /* A zero basis: the slot takes what the fixed slots leave and its words wrap inside it; an `auto` basis (its longest line) would push the remove button onto a second line. */
+   .break-info {
+-    flex: 1 1 auto;
++    flex: 1 1 0;
+     order: 4;
+   }
+ 
+@@ -4261,8 +4483,27 @@ button.quiet-danger {
+   min-width: 0;
+ }
+ 
++/*
++ * The WFH box is centred on the Category field (round 4, U4-09): the label is as tall as the select it sits beside (a line, the
++ * select's padding and its border) and centres its box and words in that height, while the row keeps it on the select's bottom edge.
++ * Wrapped below the select (a row narrower than both) it keeps the same height, so the box still sits on a field-high line.
++ */
+ .label-row .label-wfh {
+   flex: none;
++  align-items: center;
++  min-height: calc(1lh + 2 * var(--space-2) + 2 * var(--hairline));
++  padding-block: 0;
++}
++
++.label-row .label-wfh > input {
++  margin-block: 0;
++}
++
++/* On a phone or a coarse pointer the select is 44px tall (the control rule), and so is the box line beside it. */
++@media (max-width: 767px), (pointer: coarse) {
++  .label-row .label-wfh {
++    min-height: var(--tap-min);
++  }
+ }
+ 
+ .leave-fields {
+@@ -4788,8 +5029,12 @@ textarea.mono {
+ 
+ /*
+  * Review layout (WP5-UX-T05): "What you sign" is the read-only sheet, the checklist (three steps in
+- * an ordered list) sits beside it from 1200px and follows it below. Inside a step the existing
+- * review sections lose their own card surface; the step is the card.
++ * an ordered list) sits beside it from 1330px and follows it below. Inside a step the existing
++ * review sections lose their own card surface; the step is the card. 1330px (a literal: a media query cannot read a custom
++ * property) is the room the sheet needs beside the checklist: the label column and seven 108px columns (850px), the paper's
++ * 32px of padding (round 4), the checklist (380px), the 16px gap and the 32px page padding are 1310px, and a classic scrollbar
++ * takes 15px more. It was 1200px before the paper existed, on a page capped at 1200px, which left the sheet 772px beside the
++ * checklist: the week grid (850px) already overflowed its card by 78px at 1440px (found by the round-4 containment test).
+  */
+ .review-layout {
+   display: grid;
+@@ -4798,7 +5043,12 @@ textarea.mono {
+   align-items: start;
+ }
+ 
+-@media (min-width: 1200px) {
++@media (min-width: 1330px) {
++  /* The page cap (--page-max, 1200px) leaves the sheet 772px beside the checklist, less than its 850px: the page widens, as it does for the open Day editor. */
++  .page:has(.review-layout) {
++    max-width: var(--page-max-editor);
++  }
++
+   .review-layout {
+     grid-template-columns: minmax(0, var(--track)) var(--checklist-width);
+   }
+@@ -4809,14 +5059,7 @@ textarea.mono {
+   }
+ }
+ 
+-/* The sheet's own week and footer cards stand on the page, so the block around them has no surface of its own. */
+-.review-sheet-block {
+-  padding: 0;
+-  border-radius: 0;
+-  background: transparent;
+-  box-shadow: none;
+-}
+-
++/* "What you sign" is a paper sheet (see `.paper`): the heading, the hint and the sheet stand on one surface. */
+ .review-sheet-intro {
+   gap: var(--space-1);
+ }
+@@ -5308,3 +5551,46 @@ code {
+     text-align: left;
+   }
+ }
++
++/*
++ * Settings export and import (WP5-UX4-T05). The card lists what the file holds and never holds; the preview dialog is a wide
++ * confirmation whose body is the "Now / In the file" table. Cells wrap (a template or an address list is long); a changed value
++ * is bold and carries the word "changed", an unchanged one reads "same", so no state is shown by colour alone.
++ */
++.transfer-list {
++  display: grid;
++  gap: var(--space-1);
++  margin: 0;
++  padding-left: var(--space-4);
++}
++
++.transfer-file {
++  margin: var(--space-1) 0 0;
++  overflow-wrap: anywhere;
++}
++
++.transfer-table {
++  table-layout: fixed;
++}
++
++.transfer-table th,
++.transfer-table td {
++  white-space: normal;
++  overflow-wrap: anywhere;
++}
++
++.transfer-table th[scope='row'] {
++  width: 30%;
++  color: var(--text);
++  font-weight: var(--font-weight-normal);
++}
++
++.transfer-table .transfer-group th {
++  background: var(--off);
++  color: var(--text);
++}
++
++.transfer-flag {
++  color: var(--muted);
++  font-size: var(--font-size-xs);
++}

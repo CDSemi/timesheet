@@ -1,0 +1,94 @@
+// Contrast of the round-4 colour pairs, read from the token sets of styles.css (light :root, the device-dark set, the manual-dark set).
+// Usage: node contrast-tokens.mjs <styles.css>
+import { readFileSync } from 'node:fs';
+
+const css = readFileSync(process.argv[2], 'utf8');
+const block = (start) => {
+  const i = css.indexOf(start);
+  if (i < 0) throw new Error(`no block ${start}`);
+  let depth = 0;
+  for (let j = css.indexOf('{', i); j < css.length; j += 1) {
+    if (css[j] === '{') depth += 1;
+    if (css[j] === '}') {
+      depth -= 1;
+      if (depth === 0) return css.slice(i, j);
+    }
+  }
+  throw new Error('unbalanced');
+};
+const tokens = (text) => {
+  const out = {};
+  for (const m of text.matchAll(/(--[a-z0-9-]+):\s*([^;]+);/g)) if (!(m[1] in out)) out[m[1]] = m[2].trim();
+  return out;
+};
+const light = tokens(block(':root {'));
+const deviceDark = { ...light, ...tokens(block("  :root:not([data-theme='light']) {")) };
+const manualDark = { ...light, ...tokens(block(":root[data-theme='dark'] {")) };
+
+const resolve = (set, value, depth = 0) => {
+  const v = value.match(/^var\((--[a-z0-9-]+)\)$/);
+  if (v && depth < 10) return resolve(set, set[v[1]], depth + 1);
+  return value;
+};
+const rgb = (text) => {
+  const hex = text.match(/^#([0-9a-f]{6})$/i);
+  if (hex) return [0, 2, 4].map((k) => parseInt(hex[1].slice(k, k + 2), 16)).concat(1);
+  const m = text.match(/^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*(?:\/\s*([\d.]+))?\s*\)$/);
+  if (m) return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 1 : Number(m[4])];
+  throw new Error(`colour ${text}`);
+};
+const over = (top, bottom) => {
+  const a = top[3] + bottom[3] * (1 - top[3]);
+  const mix = (i) => (top[i] * top[3] + bottom[i] * bottom[3] * (1 - top[3])) / a;
+  return [mix(0), mix(1), mix(2), a];
+};
+const lum = ([r, g, b]) => {
+  const c = (v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * c(r) + 0.7152 * c(g) + 0.0722 * c(b);
+};
+const ratio = (a, b) => {
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+const colour = (set, name, base) => {
+  const c = rgb(resolve(set, set[name] ?? name));
+  return c[3] < 1 ? over(c, base) : c;
+};
+
+const PAIRS = [
+  ['paper (--paper-surface) on the page (--bg)', '--paper-surface', '--bg', 1.12],
+  ['--sheet-head-strong vs --card (date cell)', '--sheet-head-strong', '--card', null],
+  ['--sheet-head-strong vs --sheet-head', '--sheet-head-strong', '--sheet-head', null],
+  ['--text on --sheet-head-strong', '--text', '--sheet-head-strong', 4.5],
+  ['--muted on --sheet-head-strong', '--muted', '--sheet-head-strong', 4.5],
+  ['select chevron --muted on --field-bg', '--muted', '--field-bg', 3],
+  ['link action --accent on --card', '--accent', '--card', 4.5],
+  ['link action hover --accent-strong on --card', '--accent-strong', '--card', 4.5],
+  ['link hover vs rest (--accent-strong vs --accent)', '--accent-strong', '--accent', null],
+  ['transfer group head --text on --off', '--text', '--off', 4.5],
+  ['transfer flag --muted on --card', '--muted', '--card', 4.5],
+  ['running-end --text on --off', '--text', '--off', 4.5],
+  ['running-end hint --muted on --off', '--muted', '--off', 4.5],
+  ['switch thumb (off) --muted on --card', '--muted', '--card', 3],
+  ['switch thumb (on) --on-accent on --accent', '--on-accent', '--accent', 3],
+  ['switch track on vs --card', '--accent', '--card', 3],
+  ['alert --error on --card', '--error', '--card', 4.5],
+  ['focus ring --accent on --card', '--accent', '--card', 3],
+  ['focus ring --accent on --bg', '--accent', '--bg', 3],
+];
+
+for (const [label, set] of [['light', light], ['device dark', deviceDark], ['manual dark', manualDark]]) {
+  for (const [name, fg, bg, need] of PAIRS) {
+    const b = colour(set, bg, [255, 255, 255, 1]);
+    const f = colour(set, fg, b);
+    const r = ratio(f, b);
+    console.log(`${label.padEnd(12)} ${name.padEnd(52)} ${r.toFixed(2)}:1${need === null ? '' : need <= r ? ` >= ${need} ok` : ` < ${need} LOW`}`);
+  }
+}
+const same = Object.keys(tokens(block("  :root:not([data-theme='light']) {"))).filter((k) => deviceDark[k] !== manualDark[k]);
+console.log(`device-dark vs manual-dark differing tokens: ${same.length === 0 ? 'none' : same.join(', ')}`);
+const round4 = ['--sheet-head-strong'];
+for (const k of round4) console.log(`${k}: light ${light[k]} device-dark ${tokens(block("  :root:not([data-theme='light']) {"))[k]} manual-dark ${tokens(block(":root[data-theme='dark'] {"))[k]}`);

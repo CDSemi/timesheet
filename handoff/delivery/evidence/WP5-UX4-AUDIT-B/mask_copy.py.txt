@@ -1,0 +1,31 @@
+"""Copy task-folder files into the evidence folder as masked LF text (auditor helper).
+
+Usage: python -I mask_copy.py <evidence-dir> <source> <target-name> [<source> <target-name> ...]
+Masks: the task folder path (any slash form) -> <task>; Windows profile account -> <user>; ANSI escapes removed;
+synthetic password literals in probe sources -> <synthetic-password>; CRLF -> LF; exactly one final newline.
+"""
+import re
+import sys
+from pathlib import Path
+
+evidence = Path(sys.argv[1])
+pairs = sys.argv[2:]
+TASK_FORMS = [
+    "<task>",
+    "<task>",
+    "<task>",
+    "D:\\\\.claude-tmp\\\\timesheet\\\\WP5-UX4-AUDIT-B",
+]
+for index in range(0, len(pairs), 2):
+    source, name = Path(pairs[index]), pairs[index + 1]
+    text = source.read_text(encoding="utf-8", errors="replace")
+    text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
+    for form in TASK_FORMS:
+        text = text.replace(form, "<task>")
+    text = re.sub(r"(?i)(C:[\\/]+Users[\\/]+)[^\\/\s]+", r"\1<user>", text)
+    text = re.sub(r"(?i)(/c/Users/<user>/\s]+", r"\1<user>", text)
+    text = re.sub(r"((?:Password|password|PASSWORD)\s*[:=]\s*)'[^']*'", r"\1'<synthetic-password>'", text)
+    text = re.sub(r"(current_password: |new_password: )'[^']*'", r"\1'<synthetic-password>'", text)
+    text = text.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n") + "\n"
+    (evidence / name).write_text(text, encoding="utf-8", newline="\n")
+    print(f"wrote {name} ({len(text)} chars)")

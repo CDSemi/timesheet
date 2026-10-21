@@ -1,0 +1,8 @@
+# Limiter keys (D-9 b), from the server probe
+AUDITB victim password change after foreign sign-in failures [429,"rate_limited","900"]
+AUDITB admin sign-in at the same address after password-change failures [30,429,"rate_limited"]
+
+Reading: line 1 = [status, code, Retry-After] of the victim's correct password change after five failed sign-ins (no session) whose email text was password:<victim id>, from the same client address. Expected 200; observed 429 rate_limited, Retry-After 900 (F-UX4B-1).
+Line 2 = [403 count, admin sign-in status, code]: 30 wrong current passwords from one signed-in user (account bucket reset by a right current password with a short new one) then an administrator's sign-in from the same address: 429 (R-UX4B-5; sign-in attempts can do the same today).
+
+Code: src/server/routes/auth.ts:39-41 (sign-in account = normalizeEmail(body.email), trim + lower case only), :138 (password:${user.id}); src/server/auth/rateLimit.ts:36-41 (account:<address>:<account> and address:<address>, one map).

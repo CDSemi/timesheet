@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Auditor mutants on area-B behaviour, applied one at a time in the scratch clone and restored with git checkout.
+source <task>/env.sh
+cd "$CLONE" || exit 2
+LOG="$TASK_DIR/logs/mutants"
+mkdir -p "$LOG"
+VITEST="$CLONE/node_modules/vitest/vitest.mjs"
+SUMMARY="$LOG/summary.txt"
+: > "$SUMMARY"
+
+mutant() {
+  local id="$1" file="$2" expr="$3"; shift 3
+  sed -i "$expr" "$file"
+  local changed
+  changed=$(git diff --numstat -- "$file")
+  if [ -z "$changed" ]; then
+    echo "$id NOT-APPLIED ($file)" >> "$SUMMARY"
+    return
+  fi
+  git diff -- "$file" > "$LOG/$id.diff"
+  node "$VITEST" run "$@" > "$LOG/$id.log" 2>&1
+  local code=$?
+  local tests
+  tests=$(grep -E "Tests  " "$LOG/$id.log" | tr -s ' ')
+  if [ "$code" -ne 0 ]; then echo "$id CAUGHT exit=$code $tests" >> "$SUMMARY"; else echo "$id SURVIVED exit=$code $tests" >> "$SUMMARY"; fi
+  git checkout -- "$file"
+  if [ -n "$(git status --short -- src)" ]; then echo "$id RESTORE-FAILED" >> "$SUMMARY"; fi
+}
+
+TC=src/server/services/timesheetCommands.ts
+AUTH=src/server/routes/auth.ts
+LEDGER=src/server/services/ledger.ts
+WB=src/server/services/workbookImport.ts
+HI=src/server/services/holidayImport.ts
+SF=src/client/components/settingsFileModel.ts
+SM=src/client/components/sessionModel.ts
+BR=src/client/components/breakRowsModel.ts
+
+mutant M01-guard-removed "$TC" 's/  if (ctx.viaShareId === undefined || runningBefore === runningAfter) return;/  return;/' tests/integration/sharing.test.ts
+mutant M02-reopen-allowed "$TC" 's/assertNoSharedClockAction(ctx, before.end_utc === null, input.end === null);/assertNoSharedClockAction(ctx, before.end_utc === null, input.end === null \&\& before.end_utc === null);/' tests/integration/sharing.test.ts
+mutant M03-key-not-per-user "$AUTH" 's/const limitKey = `password:${user.id}`;/const limitKey = `password`;/' tests/integration/password-change.test.ts
+mutant M04-no-failure-recorded "$AUTH" 's/      deps.loginLimiter.recordFailure(address, limitKey, now);/      void limitKey;/' tests/integration/password-change.test.ts
+mutant M05-revoke-current-too "$AUTH" "s/revokeOtherAuthSessions(deps.db, deps.clock, user.id, user.sessionId)/revokeOtherAuthSessions(deps.db, deps.clock, user.id, '')/" tests/integration/password-change.test.ts
+mutant M06-no-revocation "$AUTH" 's/const revoked = revokeOtherAuthSessions(deps.db, deps.clock, user.id, user.sessionId);/const revoked = 0;/' tests/integration/password-change.test.ts
+mutant M07-unchanged-without-nfkc "$AUTH" "s/body.new_password.normalize('NFKC') === body.current_password.normalize('NFKC')/body.new_password === body.current_password/" tests/integration/password-change.test.ts
+mutant M08-zero-correction-refused "$LEDGER" 's/assertOpeningMinutes(input.minutes, { allowZero: true });/assertOpeningMinutes(input.minutes, { allowZero: false });/' tests/integration/opening-balance.test.ts
+mutant M09-quota-off-by-one "$WB" 's/  if (open >= MAX_OPEN_PREVIEWS) {/  if (open > MAX_OPEN_PREVIEWS) {/' tests/integration/workbook-import.test.ts
+mutant M10-no-quota-in-transaction "$WB" 's/^      assertPreviewQuota(db, user.id);$/      void 0;/' tests/integration/workbook-import.test.ts
+LINE=$(grep -n "recordAudit(db, clock, {" "$HI" | cut -d: -f1)
+mutant M11-preview-audit-removed "$HI" "${LINE}s/recordAudit(db, clock, {/void ({/" tests/integration/holiday-import.test.ts
+mutant M12-finalized-counted "$HI" 's/ AND t.finalized_revision_no IS NULL AND d.work_date IN/ AND d.work_date IN/' tests/integration/holiday-import.test.ts
+mutant M13-allowlist-overdue "$SF" "s/^    'auto_submit',$/    'auto_submit',\n    'apply_to_overdue_drafts',/" tests/client/settingsFileModel.test.ts
+mutant M14-builder-extra-key "$SF" 's/^    auto_submit: settings.auto_submit,$/    auto_submit: settings.auto_submit, seq: settings.seq,/' tests/client/settingsFileModel.test.ts
+mutant M15-tick-ignored "$SF" 's/  return fileValue ? tick || currentValue : false;/  return fileValue;/' tests/client/settingsFileModel.test.ts
+mutant M16-expected-seq-zero "$SF" 's/    expected_seq: current.seq,/    expected_seq: 0,/' tests/client/settingsFileModel.test.ts
+NOWLINE=$(grep -n "const text = formatInZone(zone, instant);" "$SM" | head -1 | cut -d: -f1)
+mutant M17-now-device-zone "$SM" "${NOWLINE}s/const text = formatInZone(zone, instant);/const text = new Date(instant * 1000 - new Date(instant * 1000).getTimezoneOffset() * 60000).toISOString();/" tests/client/sessionModel.test.ts
+RUNLINE=$(awk '/function buildRunningRequest/{f=1} f && /breaks_confirmed: false,/{print NR; exit}' "$BR")
+mutant M18-running-confirms-breaks "$BR" "${RUNLINE}s/breaks_confirmed: false,/breaks_confirmed: true,/" tests/client/breakRowsModel.test.ts tests/client/sessionModel.test.ts
+echo done >> "$SUMMARY"

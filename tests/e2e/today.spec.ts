@@ -286,6 +286,54 @@ test('Today moves an open Day editor to today; Current period leaves the editor 
   }
 });
 
+test('Current period with unsaved edits asks first: Keep editing leaves the period, the note and the focus on Current period; Discard goes to the current period', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'On a phone the modal bottom sheet makes the period bar unreachable while the editor is open');
+  await page.setViewportSize({ width: 1440, height: 800 });
+  const periods = await employeeSeed.periodsCurrent();
+  const today = periods.today_local;
+  await landOn(page, signInThroughUi);
+  if (!isWindow(periods)) {
+    // Opposite fact outside the window (the five days after a period ends are the only ones that offer Current period; a
+    // simulated wall clock on such a day runs the branch below): there is nothing to press, with an unsaved edit as without.
+    await dayButton(page, today).click();
+    await editor(page).getByLabel('Notes').fill('Synthetic unsaved note');
+    await expect(currentButton(page)).toHaveCount(0);
+    return;
+  }
+  // The window: Today opens the period in progress, where Current period shows.
+  await todayButton(page).click();
+  await expectShown(page, periods.in_progress, today);
+  await expect(currentButton(page)).toHaveCount(1);
+  await dayButton(page, today).click();
+  await expect(editor(page)).toHaveAttribute('data-day-editor', today);
+  const notes = editor(page).getByLabel('Notes');
+  await notes.fill('Synthetic unsaved note');
+  const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+
+  // Keep editing: nothing moved, and focus is back on the button that was pressed (not on Today).
+  await currentButton(page).focus();
+  await page.keyboard.press('Enter');
+  await expect(prompt).toBeVisible();
+  await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(prompt).toHaveCount(0);
+  await expect(periodName(page)).toHaveText(rangeText(periods.in_progress));
+  await expect(notes).toHaveValue('Synthetic unsaved note');
+  await expect(currentButton(page)).toHaveCount(1);
+  await expect(currentButton(page)).toBeFocused();
+
+  // Discard goes ahead: the opening period, the note dropped, and the button that was pressed has left the page.
+  await currentButton(page).click();
+  await expect(prompt).toBeVisible();
+  await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(periodName(page)).toHaveText(rangeText(periods.current));
+  await expect(currentButton(page)).toHaveCount(0);
+  await expect(editor(page).getByLabel('Notes')).toHaveValue('');
+});
+
 /* ---- Device zone ------------------------------------------------------------------------------------------- */
 
 test('the device zone never decides: with an Asia/Ho_Chi_Minh device the Today tag carries the server date of the reporting zone', async ({

@@ -1,0 +1,26 @@
+import json, sys
+p = r"D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\ORCHESTRATION.json"
+b = json.load(open(p, encoding="utf-8"))
+out = open(r"<task>\board_probe.txt", "w", encoding="utf-8", newline="\n")
+out.write("top keys: %s\n" % list(b.keys()))
+tasks = b.get("tasks", [])
+if isinstance(tasks, dict):
+    tasks = list(tasks.values())
+for t in tasks:
+    tid = t.get("id") or t.get("task_id")
+    if tid and tid.startswith("WP5-UX4"):
+        keep = {k: t.get(k) for k in ("id", "kind", "status", "profile", "requested_model", "actual_model", "model", "self_reported_model", "agent_id", "decision", "reviewed_commit", "commit_sha", "freeze_commit", "source_digest_before", "source_digest_after")}
+        out.write(json.dumps(keep, ensure_ascii=False) + "\n")
+        others = {k: v for k, v in t.items() if "model" in k}
+        out.write("  model fields: " + json.dumps(others, ensure_ascii=False) + "\n")
+def find(o, path=""):
+    if isinstance(o, dict):
+        for k, v in o.items():
+            if k in ("owner_decisions", "coordinator_decisions"):
+                out.write("FOUND %s/%s type=%s\n" % (path, k, type(v).__name__))
+            find(v, path + "/" + k)
+    elif isinstance(o, list):
+        for i, v in enumerate(o):
+            find(v, path + "[%d]" % i)
+find(b)
+out.close()

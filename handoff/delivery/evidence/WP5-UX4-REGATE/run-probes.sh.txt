@@ -1,0 +1,12 @@
+. <task>/env.sh
+cd $T
+for f in zz-regate-walk.spec.ts zz-regate-axe.spec.ts; do cp $f $T/export-probe/tests/e2e/$f; done
+bash run-probe.sh walk zz-regate-walk.spec.ts --project=desktop > logs/probe-walk.txt 2>&1
+echo "walk finished $(date -u +%H:%M:%S)" >> logs/probes-progress.txt
+bash run-probe.sh axe zz-regate-axe.spec.ts --project=desktop > logs/probe-axe.txt 2>&1
+echo "axe finished $(date -u +%H:%M:%S)" >> logs/probes-progress.txt
+bash rerun.sh rep-kb-mobile tests/e2e/keyboard-access.spec.ts --project=mobile --repeat-each=10 > logs/rerun-kb-mobile-x10.txt 2>&1
+echo "kb repeat finished $(date -u +%H:%M:%S)" >> logs/probes-progress.txt
+bash rerun.sh rep-contrast tests/e2e/day-editor.spec.ts -g "U4-12, U4-13" --repeat-each=10 > logs/rerun-contrast-x10.txt 2>&1
+echo "contrast repeat finished $(date -u +%H:%M:%S)" >> logs/probes-progress.txt
+echo probes-done > out/probes.done

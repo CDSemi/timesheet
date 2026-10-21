@@ -1,0 +1,10 @@
+# Dry check: each mutant applies exactly once, then the file is restored from the pristine export.
+. <task>/env.sh
+M=$T/export-mut
+for id in M1 M2 M3 M4 M5 M6 M7 M8 M9 M10 M11 M12 M13 M14; do
+  out=$(node $T/mutate.mjs $M $id 2>&1); rc=$?
+  FILE=$(echo "$out" | grep '^FILE=' | sed 's/^FILE=//')
+  echo "$id rc=$rc $FILE $(echo "$out" | grep -v '^FILE=')"
+  [ -n "$FILE" ] && cp $T/export/$FILE $M/$FILE
+done
+git diff --no-index --stat $T/export/src $M/src; echo "src diff exit $? (0 = identical)"

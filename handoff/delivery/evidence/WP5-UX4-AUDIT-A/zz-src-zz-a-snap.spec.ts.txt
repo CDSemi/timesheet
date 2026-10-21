@@ -1,0 +1,77 @@
+import { expect, test } from './fixtures.ts';
+import { applySituation, note, seedAudit, setWidth, settle, signInTo, SITUATIONS } from './zz-alib.ts';
+
+/*
+ * WP5-UX4-AUDIT-A probe 8: a computed-style snapshot of the toolbar, the week sheets and the footer (the owner's F-5: "keep the
+ * style, layout and colours ... only put them on one paper"). The same spec runs on the base build (8e55710, round 3 accepted)
+ * and on the target build; the two snapshots are compared outside the browser. Positions are relative to the first week sheet.
+ * Task-local; never part of the repository.
+ */
+const LABEL = process.env.SNAP_LABEL ?? 'target';
+
+const PROPS = [
+  'display', 'font-size', 'font-weight', 'font-family', 'line-height', 'color', 'background-color', 'background-image',
+  'border-top-width', 'border-top-style', 'border-top-color', 'border-left-width', 'border-left-color', 'border-top-left-radius',
+  'padding-top', 'padding-left', 'padding-right', 'padding-bottom', 'gap', 'grid-template-columns', 'justify-content', 'align-items', 'text-align', 'box-shadow',
+];
+
+const SNAP = `((props) => {
+  const week = document.querySelector('.sheet-week');
+  const origin = week ? week.getBoundingClientRect() : { left: 0, top: 0 };
+  const sel = [
+    ['tools', '.tools'], ['tools-left', '.tools-left'], ['tools-right', '.tools-right'], ['open-day', '.open-day'], ['open-day-input', '.open-day input'],
+    ['open-day-button', '.open-day button'], ['switch-label', '.tools-right label'], ['batch-button', '.tools-right > button'],
+    ['form-head', '.form-head'], ['form-title', '.form-title'], ['form-fields', '.form-fields'],
+    ['week1', '.sheet-week'], ['week-bar', '.week-bar'], ['week-bar-range', '.week-bar .muted'], ['week-grid', '.week-grid'],
+    ['row-labels', '.row-labels'], ['row-label-1', '.row-labels > *:nth-child(1)'], ['row-label-3', '.row-labels > *:nth-child(3)'],
+    ['day', '.sheet-day'], ['d-day', '.sheet-day .d-day'], ['d-date', '.sheet-day .d-date'], ['d-label', '.sheet-day .d-label'],
+    ['d-time', '.sheet-day .d-time'], ['d-ot', '.sheet-day .d-ot'], ['d-check', '.sheet-day .d-check'],
+    ['footer', '.sheet-footer'], ['foot', '.sheet-foot'], ['foot-notes', '.foot-notes'], ['legend', '.legend'], ['ot-total', '.ot-total'],
+    ['ot-total-label', '.ot-total-label'], ['ot-total-value', '.ot-total-value'], ['signatures', '.signatures'], ['sig1', '.signatures .sig:nth-child(1)'],
+    ['sig2', '.signatures .sig:nth-child(2)'], ['sig3', '.signatures .sig:nth-child(3)'], ['sig4', '.signatures .sig:nth-child(4)'],
+    ['sig-line', '.signatures .sig-line'], ['sig-cap', '.signatures .sig-cap'],
+  ];
+  const out = {};
+  for (const [key, s] of sel) {
+    const el = document.querySelector(s);
+    if (el === null) { out[key] = null; continue; }
+    const cs = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    const o = { x: Math.round((r.left - origin.left) * 10) / 10, y: Math.round((r.top - origin.top) * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 };
+    for (const p of props) o[p] = cs.getPropertyValue(p);
+    out[key] = o;
+  }
+  const weeks = [...document.querySelectorAll('.sheet-week')].map((w) => w.getBoundingClientRect());
+  const foot = document.querySelector('.sheet-footer')?.getBoundingClientRect();
+  const tools = document.querySelector('.tools')?.getBoundingClientRect();
+  const head = document.querySelector('.form-head')?.getBoundingClientRect();
+  out.gaps = {
+    toolsToHead: tools && head ? Math.round((head.top - tools.bottom) * 10) / 10 : null,
+    headToWeek1: head && weeks[0] ? Math.round((weeks[0].top - head.bottom) * 10) / 10 : null,
+    week1ToWeek2: weeks[1] ? Math.round((weeks[1].top - weeks[0].bottom) * 10) / 10 : null,
+    week2ToFooter: weeks[1] && foot ? Math.round((foot.top - weeks[1].bottom) * 10) / 10 : null,
+    weekWidth: weeks[0] ? Math.round(weeks[0].width * 10) / 10 : null,
+    footWidth: foot ? Math.round(foot.width * 10) / 10 : null,
+  };
+  return out;
+})`;
+
+test.describe('audit A style snapshot', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop snapshot at 1440 and 1024');
+
+  for (const situation of SITUATIONS.slice(0, 2)) {
+    test(`snapshot ${situation.slug}`, async ({ page, builtServer }) => {
+      test.setTimeout(120_000);
+      await applySituation(page, situation);
+      const seed = await seedAudit(builtServer, 'Synthetic Snapshot Person');
+      await signInTo(page, builtServer, seed.person.account);
+      await expect(page.locator('.sheet-week').first()).toBeVisible();
+      for (const width of [1440, 1024]) {
+        await setWidth(page, width, 900);
+        await settle(page);
+        const snap = await page.evaluate(`${SNAP}(${JSON.stringify(PROPS)})`);
+        note(`snap-${LABEL}.txt`, `${situation.slug} ${width} ${JSON.stringify(snap)}`);
+      }
+    });
+  }
+});

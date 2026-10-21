@@ -1,0 +1,186 @@
+import { readFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+import { admin, box, note, scan, seedAudit, settle, signInTo } from './zz-alib.ts';
+
+/*
+ * WP5-UX4-AUDIT-A probe 6: Settings export/import card and preview dialog, the company card, Profile Change password, and the lazy
+ * card's layout shift. Task-local; never part of the repository. The exported file is read in memory only and never saved.
+ */
+const F = 'settings.txt';
+
+async function activeName(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const el = document.activeElement;
+    if (el === null) return 'null';
+    return `${el.tagName.toLowerCase()}${el.getAttribute('type') ? `[${el.getAttribute('type')}]` : ''}|${(el.getAttribute('aria-label') ?? el.closest('label')?.textContent ?? el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 50)}`;
+  });
+}
+
+test.describe('audit A settings and profile (desktop)', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop');
+
+  test('export/import card, preview dialog table and focus', async ({ page, builtServer }) => {
+    test.setTimeout(180_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const seed = await seedAudit(builtServer, 'Synthetic Settings Person');
+    await signInTo(page, builtServer, seed.person.account, '#/settings');
+    const card = page.locator('[data-transfer="personal"]');
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    const cardFacts = await card.evaluate((root) => ({
+      heading: root.querySelector('h2')?.textContent,
+      labels: [...root.querySelectorAll('label')].map((l) => l.textContent?.replace(/\s+/g, ' ').trim()),
+      buttons: [...root.querySelectorAll('button')].map((b) => b.textContent?.replace(/\s+/g, ' ').trim()),
+      fileInput: (() => {
+        const i = root.querySelector('input[type="file"]');
+        if (i === null) return null;
+        return { labelled: i.closest('label') !== null, accept: i.getAttribute('accept'), visible: (i as HTMLElement).checkVisibility() };
+      })(),
+      text: (root.textContent ?? '').replace(/\s+/g, ' ').slice(0, 300),
+    }));
+    note(F, `personal card: ${JSON.stringify(cardFacts)}`);
+    // Export in memory, change one value, import it back.
+    const downloadPromise = page.waitForEvent('download');
+    await card.getByRole('button', { name: /^Export/ }).click();
+    const download = await downloadPromise;
+    const path = await download.path();
+    const file = JSON.parse(readFileSync(path, 'utf8')) as { data: { work_policy?: { required_minutes: number }; submission?: { subject_template?: string } } };
+    void file.data.work_policy;
+    if (file.data.submission !== undefined) file.data.submission.subject_template = 'Synthetic subject {PayrollDate}';
+    const buffer = Buffer.from(JSON.stringify(file));
+    const input = card.locator('input[type="file"]');
+    await input.setInputFiles({ name: 'synthetic-settings.json', mimeType: 'application/json', buffer });
+    const dialog = page.getByRole('dialog').filter({ has: page.locator('table.transfer-table') });
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
+    await settle(page);
+    const focusOnOpen = await activeName(page);
+    const table = await dialog.evaluate((root) => {
+      const t = root.querySelector('table.transfer-table');
+      return {
+        name: root.getAttribute('aria-labelledby') !== null,
+        caption: t?.querySelector('caption')?.textContent ?? null,
+        cols: [...(t?.querySelectorAll('thead th[scope="col"]') ?? [])].map((th) => th.textContent),
+        rowHeaders: t?.querySelectorAll('tbody th[scope="row"]').length ?? 0,
+        groups: [...(t?.querySelectorAll('th[scope="rowgroup"]') ?? [])].map((th) => th.textContent),
+        changed: [...(t?.querySelectorAll('.transfer-flag') ?? [])].map((s) => s.textContent).slice(0, 6),
+        rows: t?.querySelectorAll('tbody tr').length ?? 0,
+        tick: [...root.querySelectorAll('input[type="checkbox"]')].map((c) => c.closest('label')?.textContent ?? document.querySelector(`label[for="${c.id}"]`)?.textContent ?? '(no label)'),
+        dateLabel: [...root.querySelectorAll('input[type="date"]')].map((c) => document.querySelector(`label[for="${c.id}"]`)?.textContent ?? c.closest('label')?.textContent ?? '(no label)'),
+        buttons: [...root.querySelectorAll('button')].map((b) => b.textContent?.trim()),
+        overflowX: (root as HTMLElement).scrollWidth - (root as HTMLElement).clientWidth,
+      };
+    });
+    note(F, `preview dialog: focus on open "${focusOnOpen}"; ${JSON.stringify(table)}`);
+    await scan(page, 'axe.txt', '[desk light] import preview dialog');
+    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await scan(page, 'axe.txt', '[desk dark] import preview dialog');
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.screenshot({ path: (await import('./fixtures.ts')).screenshotPath('audita-import-preview-1440-synthetic.png') });
+    await page.keyboard.press('Escape');
+    await settle(page);
+    note(F, `preview Escape: dialog=${await dialog.count()} focus "${await activeName(page)}"`);
+  });
+
+  test('company card (admin) and the employee view', async ({ page, builtServer }) => {
+    test.setTimeout(120_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInTo(page, builtServer, builtServer.credentials.admin, '#/settings/admin');
+    const company = page.getByRole('region', { name: /Company calendar file/ }).or(page.locator('section').filter({ has: page.getByRole('heading', { name: 'Company calendar file' }) }));
+    await expect(company.first()).toBeVisible({ timeout: 15_000 });
+    const facts = await company.first().evaluate((root) => ({
+      heading: root.querySelector('h2, h3')?.textContent,
+      labels: [...root.querySelectorAll('label')].map((l) => l.textContent?.replace(/\s+/g, ' ').trim()),
+      buttons: [...root.querySelectorAll('button')].map((b) => b.textContent?.trim()),
+    }));
+    note(F, `company card: ${JSON.stringify(facts)}`);
+    void admin;
+  });
+
+  test('Profile Change password: labels, autocomplete, errors announced', async ({ page, builtServer }) => {
+    test.setTimeout(120_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const seed = await seedAudit(builtServer, 'Synthetic Profile Person');
+    await signInTo(page, builtServer, seed.person.account, '#/settings/profile');
+    const cardP = page.locator('[data-password-card]');
+    await expect(cardP).toBeVisible({ timeout: 15_000 });
+    const fields = await cardP.evaluate((root) =>
+      [...root.querySelectorAll('input')].map((i) => ({
+        type: i.type,
+        hidden: i.hidden,
+        autocomplete: i.getAttribute('autocomplete'),
+        label: i.closest('label')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+        describedby: i.getAttribute('aria-describedby') !== null,
+        invalid: i.getAttribute('aria-invalid'),
+      })),
+    );
+    note(F, `password fields: ${JSON.stringify(fields)}`);
+    const submit = cardP.getByRole('button', { name: 'Change password' });
+    await submit.click();
+    await settle(page);
+    const err1 = await cardP.locator('[data-error="password"]').evaluate((el) => ({ role: el.getAttribute('role'), text: el.textContent })).catch(() => null);
+    note(F, `empty submit: error ${JSON.stringify(err1)} focus "${await activeName(page)}" invalid=${JSON.stringify(await cardP.locator('input[aria-invalid]').count())}`);
+    // The same error again: does focus or the live region move again?
+    await submit.focus();
+    await submit.press('Enter');
+    await settle(page);
+    note(F, `same error again: focus "${await activeName(page)}"`);
+    await cardP.getByLabel('Current password').fill('wrong-current-password-synthetic');
+    await cardP.getByLabel('New password', { exact: true }).fill('Synthetic-new-passphrase-1');
+    await cardP.getByLabel('Confirm new password').fill('Synthetic-new-passphrase-2');
+    await submit.click();
+    await settle(page);
+    note(F, `mismatch: ${await cardP.locator('[data-error="password"]').textContent()} focus "${await activeName(page)}"`);
+    await cardP.getByLabel('Confirm new password').fill('Synthetic-new-passphrase-1');
+    await submit.click();
+    await expect(cardP.locator('[data-error="password"]')).toContainText(/current password|Nothing was changed/i, { timeout: 10_000 });
+    note(F, `wrong current: ${await cardP.locator('[data-error="password"]').textContent()} focus "${await activeName(page)}"`);
+  });
+
+  test('lazy card layout shift', async ({ page, builtServer }) => {
+    test.setTimeout(120_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const seed = await seedAudit(builtServer, 'Synthetic Shift Person');
+    for (const [label, width, height] of [['desktop', 1440, 900], ['phone-width', 360, 740]] as const) {
+      await page.setViewportSize({ width, height });
+      // Normal load: layout-shift entries and the card's arrival time.
+      await page.goto(`${builtServer.origin}/`);
+      if ((await page.getByLabel('Email').count()) > 0) {
+        await page.getByLabel('Email').fill(seed.person.account.email);
+        await page.getByLabel('Password').fill(seed.person.account.password);
+        await page.getByRole('button', { name: 'Sign in' }).click();
+        await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+      }
+      await page.evaluate(() => {
+        (window as unknown as { __shifts: number[] }).__shifts = [];
+        new PerformanceObserver((list) => {
+          for (const e of list.getEntries()) (window as unknown as { __shifts: number[] }).__shifts.push((e as unknown as { value: number }).value);
+        }).observe({ type: 'layout-shift' });
+      });
+      // Hold the chunk 1.5 s (the FIX1 reproduction) to see the shift of the card's neighbours.
+      let held = 0;
+      await page.route(/SettingsTransfer-.*\.js$/, async (route) => {
+        held += 1;
+        await new Promise((r) => setTimeout(r, 1500));
+        await route.continue();
+      });
+      await page.evaluate(() => {
+        window.location.hash = '#/settings';
+      });
+      const link = page.getByRole('link', { name: 'Import from Excel' });
+      await expect(link).toBeVisible({ timeout: 15_000 });
+      await page.waitForTimeout(300);
+      const before = await box(link);
+      const fallback = await page.locator('.screen-loading').count();
+      await expect(page.locator('[data-transfer="personal"]')).toBeVisible({ timeout: 15_000 });
+      await settle(page);
+      const after = await box(link);
+      const cardBox = await box(page.locator('[data-transfer="personal"]'));
+      const shifts = await page.evaluate(() => (window as unknown as { __shifts: number[] }).__shifts);
+      note(F, `${label}: chunk held=${held} fallback shown=${fallback}; "Import from Excel" top ${before.top.toFixed(1)} -> ${after.top.toFixed(1)} (shift ${(after.top - before.top).toFixed(1)}px); card height ${cardBox.height.toFixed(1)}; viewport h ${height}; layout-shift values ${JSON.stringify(shifts.map((v) => Math.round(v * 1000) / 1000))}`);
+      await page.unroute(/SettingsTransfer-.*\.js$/);
+    }
+  });
+});

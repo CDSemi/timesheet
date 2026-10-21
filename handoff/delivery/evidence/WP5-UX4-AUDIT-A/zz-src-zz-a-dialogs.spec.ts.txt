@@ -1,0 +1,227 @@
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+import { admin, box, dayBtn, drawer, LA, note, seedAudit, settle, signInTo } from './zz-alib.ts';
+import { newPerson } from './fixtures.ts';
+import { screenshotPath } from './fixtures.ts';
+
+/*
+ * WP5-UX4-AUDIT-A probe 5: the session and Check out dialogs (U4-11..U4-15), UI part. Task-local; never part of the repository.
+ */
+const F = 'dialogs.txt';
+
+async function activeName(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const el = document.activeElement;
+    if (el === null) return 'null';
+    const label = el.closest('label')?.textContent ?? '';
+    return `${el.tagName.toLowerCase()}${el.getAttribute('type') ? `[${el.getAttribute('type')}]` : ''}|${(el.getAttribute('aria-label') ?? (label || el.textContent) ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)}`;
+  });
+}
+
+async function linkFacts(dialog: Locator) {
+  return dialog.evaluate((root) => {
+    return [...root.querySelectorAll('button.link-action')].map((b) => {
+      const cell = b.closest('.local-cell');
+      const input = cell?.querySelector('input');
+      const rb = b.getBoundingClientRect();
+      const ri = input?.getBoundingClientRect();
+      const visible = (b.textContent ?? '').trim();
+      const name = b.getAttribute('aria-label') ?? visible;
+      return {
+        visible,
+        name,
+        nameHasVisible: name.toLowerCase().includes(visible.toLowerCase()),
+        rightDelta: ri === undefined ? null : Math.round((rb.right - ri.right) * 100) / 100,
+        size: [Math.round(rb.width * 10) / 10, Math.round(rb.height * 10) / 10],
+        below: ri === undefined ? null : rb.top >= ri.bottom - 0.5,
+      };
+    });
+  });
+}
+
+async function rowFacts(dialog: Locator) {
+  return dialog.evaluate((root) => {
+    const list = root.querySelector('.break-entries');
+    return {
+      layout: list?.getAttribute('data-layout') ?? null,
+      listWidth: list === null ? null : Math.round(list.getBoundingClientRect().width),
+      rows: [...root.querySelectorAll('.break-entry')].map((li) => {
+        const t = li.querySelector('.break-time input')?.getBoundingClientRect();
+        const m = li.querySelector('.break-minutes input')?.getBoundingClientRect();
+        const chip = li.querySelector('button')?.getBoundingClientRect();
+        return {
+          origin: li.getAttribute('data-origin'),
+          time: t === undefined ? null : [Math.round(t.left * 10) / 10, Math.round(t.width * 10) / 10],
+          minutes: m === undefined ? null : [Math.round(m.left * 10) / 10, Math.round(m.width * 10) / 10],
+          chip: t === undefined && chip !== undefined ? [Math.round(chip.left), Math.round(chip.width)] : null,
+        };
+      }),
+    };
+  });
+}
+
+async function timeOrder(dialog: Locator) {
+  return dialog.evaluate((root) => {
+    const section = root.querySelector('section[aria-labelledby$="-time"]') ?? root;
+    return [...section.querySelectorAll('input')].map((i) => {
+      const label = i.closest('label');
+      return `${(label?.firstChild?.textContent ?? '').trim()}@${Math.round(i.getBoundingClientRect().top)}`;
+    });
+  });
+}
+
+async function alertFacts(page: Page) {
+  const alert = page.getByRole('alertdialog', { name: 'This session was not saved' });
+  await expect(alert).toBeVisible();
+  await settle(page);
+  const b = await box(alert);
+  const vh = await page.evaluate<number>('window.innerHeight');
+  const vw = await page.evaluate<number>('window.innerWidth');
+  return {
+    alert,
+    facts: {
+      inView: b.top >= 0 && b.left >= 0 && b.bottom <= vh && b.right <= vw,
+      box: [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)],
+      viewport: [vw, vh],
+      focus: await activeName(page),
+      text: (await alert.innerText()).replace(/\s+/g, ' ').slice(0, 160),
+    },
+  };
+}
+
+test.describe('audit A dialogs', () => {
+  test('new session dialog: zone first, Today/Now, rows, alerts', async ({ page, builtServer, isMobile }) => {
+    test.setTimeout(240_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const seed = await seedAudit(builtServer, `Synthetic Dialog ${isMobile ? 'phone' : 'desk'}`);
+    const widths = isMobile ? [390] : [1440, 768];
+    await signInTo(page, builtServer, seed.person.account);
+    await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+    const free = await seed.person.api.displayedPeriodFreeWorkdays();
+    const freeDay = free.find((d) => d !== seed.leave) ?? free[0] ?? '';
+    for (const width of widths) {
+      if (!isMobile) await page.setViewportSize({ width, height: 900 });
+      await dayBtn(page, freeDay).click();
+      await expect(drawer(page)).toBeVisible();
+      await drawer(page).getByRole('button', { name: 'Add session' }).click();
+      const dialog = page.getByRole('dialog', { name: 'New session' });
+      await expect(dialog).toBeVisible();
+      await settle(page);
+      note(F, `${width} order (label@top): ${JSON.stringify(await timeOrder(dialog))}`);
+      // Tab order from the heading.
+      const tabs: string[] = [];
+      for (let i = 0; i < 9; i += 1) {
+        await page.keyboard.press('Tab');
+        tabs.push(await activeName(page));
+      }
+      note(F, `${width} Tab order: ${tabs.join(' > ')}`);
+      note(F, `${width} Today/Now: ${JSON.stringify(await linkFacts(dialog))}`);
+      note(F, `${width} rows before add: ${JSON.stringify(await rowFacts(dialog))}`);
+      const add = dialog.getByRole('button', { name: 'Add break' });
+      await add.click();
+      await settle(page);
+      note(F, `${width} rows after add: ${JSON.stringify(await rowFacts(dialog))}`);
+      if (!isMobile && width === 1440) await page.screenshot({ path: screenshotPath('audita-session-dialog-1440-synthetic.png') });
+      if (isMobile) await page.screenshot({ path: screenshotPath('audita-session-dialog-390-synthetic.png') });
+      // A row error: the added row is empty -> Save -> the alert lists it.
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      const first = await alertFacts(page);
+      note(F, `${width} row-error alert: ${JSON.stringify(first.facts)}; p.error in dialog=${await dialog.locator('p.error').count()}`);
+      await page.keyboard.press('Escape');
+      await settle(page);
+      note(F, `${width} after Escape on the alert: alert=${await first.alert.count()} focus=${await activeName(page)}`);
+      // Remove the empty row, then cancel the dialog without saving.
+      const removes = dialog.getByRole('button', { name: /^Remove break/ });
+      await removes.last().click();
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+      if ((await discard.count()) > 0) await discard.getByRole('button', { name: 'Discard' }).click();
+      await expect(dialog).toHaveCount(0);
+
+      // A server refusal: a new session on the two-session day overlaps (the dialog pre-fills 08:00-17:00).
+      await drawer(page).getByRole('button', { name: 'Close' }).click();
+      await expect(drawer(page)).toHaveCount(0);
+      await dayBtn(page, seed.twoSessions).click();
+      await expect(drawer(page)).toHaveAttribute('data-day-editor', seed.twoSessions);
+      await drawer(page).getByRole('button', { name: 'Add session' }).click();
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      const notice = page.getByRole('alertdialog', { name: 'No breaks listed' });
+      if ((await notice.count()) > 0) await notice.getByRole('button', { name: /Leave breaks unconfirmed/ }).click();
+      const confirm = page.getByRole('alertdialog', { name: 'Save this session?' });
+      await expect(confirm).toBeVisible();
+      await confirm.getByRole('button', { name: 'Save' }).click();
+      const second = await alertFacts(page);
+      note(F, `${width} server-refusal alert: ${JSON.stringify(second.facts)}; p.error in dialog=${await dialog.locator('p.error').count()}`);
+      if (!isMobile && width === 1440) await page.screenshot({ path: screenshotPath('audita-alert-1440-synthetic.png') });
+      await second.alert.getByRole('button', { name: 'OK' }).click();
+      await settle(page);
+      note(F, `${width} after OK: focus=${await activeName(page)}`);
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      if ((await discard.count()) > 0) await discard.getByRole('button', { name: 'Discard' }).click();
+      await expect(dialog).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      if ((await drawer(page).count()) > 0) await drawer(page).getByRole('button', { name: 'Close' }).click();
+      await expect(drawer(page)).toHaveCount(0);
+    }
+  });
+
+  test('running session edit and Check out alert', async ({ page, builtServer, isMobile }) => {
+    test.setTimeout(180_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const adm = await admin(builtServer);
+    const person = await newPerson(adm, builtServer, { displayName: `Synthetic Running ${isMobile ? 'phone' : 'desk'}`, signature: 'none' });
+    await person.api.call('POST', '/api/clock/in', { input_zone: LA }, 201);
+    if (!isMobile) await page.setViewportSize({ width: 1440, height: 900 });
+    await signInTo(page, builtServer, person.account);
+    await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+    await dayBtn(page, person.todayLocal).click();
+    await expect(drawer(page)).toBeVisible();
+    await drawer(page).getByRole('button', { name: /^Edit/ }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'Edit session' });
+    await expect(dialog).toBeVisible();
+    await settle(page);
+    const facts = await dialog.evaluate((root) => ({
+      subtitle: root.querySelector('.session-dialog-title p')?.textContent ?? '',
+      runningBox: root.querySelector('[data-running-end]')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+      endFields: root.querySelectorAll('[role="group"][aria-label="End"]').length,
+      setEnd: [...root.querySelectorAll('button')].some((b) => b.textContent?.trim() === 'Set an end instead'),
+      noBreaksBox: [...root.querySelectorAll('label')].some((l) => (l.textContent ?? '').includes('Confirm no breaks taken')),
+      hint: root.querySelector('[data-breaks-hint="running"]')?.textContent ?? null,
+    }));
+    note(F, `${isMobile ? 390 : 1440} running edit: ${JSON.stringify(facts)} links ${JSON.stringify(await linkFacts(dialog))}`);
+    await page.screenshot({ path: screenshotPath(`audita-running-edit-${isMobile ? 390 : 1440}-synthetic.png`) });
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    if ((await drawer(page).count()) > 0) await drawer(page).getByRole('button', { name: 'Close' }).click();
+    await expect(drawer(page)).toHaveCount(0);
+    // Check out with a future break: the alert, then focus on the marked row.
+    await page.getByRole('button', { name: 'Check out' }).first().click();
+    const out = page.getByRole('dialog', { name: 'Check out' });
+    await expect(out).toBeVisible();
+    const addBreak = out.getByRole('button', { name: 'Add break' });
+    await addBreak.click();
+    await settle(page);
+    const layout = await rowFacts(out);
+    note(F, `${isMobile ? 390 : 1440} check out rows: ${JSON.stringify(layout)}`);
+    if (layout.rows.some((r) => r.time !== null)) {
+      const later = await page.evaluate(() => {
+        const d = new Date(Date.now() + 3 * 3600 * 1000);
+        return new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+      });
+      const time = out.locator('.break-entry').last().locator('.break-time input');
+      await time.fill(later);
+      await out.locator('.break-entry').last().locator('.break-minutes input').fill('15');
+      await out.getByRole('button', { name: /^Check out/ }).last().click();
+      const alert = await alertFacts(page);
+      note(F, `${isMobile ? 390 : 1440} check-out alert: ${JSON.stringify(alert.facts)}; p.error=${await out.locator('p.error').count()}`);
+      await alert.alert.getByRole('button', { name: 'OK' }).click();
+      await settle(page);
+      note(F, `${isMobile ? 390 : 1440} check-out after OK focus=${await activeName(page)}`);
+    } else note(F, 'check out: chips layout; the future-break alert is covered by the gate on the phone');
+    await out.getByRole('button', { name: 'Cancel' }).first().click();
+    const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    if ((await discard.count()) > 0) await discard.getByRole('button', { name: 'Discard' }).click();
+  });
+});

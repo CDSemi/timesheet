@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Second pass of the standalone crash probe (the fixed script ends the keep-sink variant explicitly).
+source <task>/env.sh
+LOG="$TASK_DIR/logs/crash3"
+mkdir -p "$LOG"
+for mode in tls starttls; do
+  for variant in close-sink keep-sink wait; do
+    for i in 1 2 3 4 5; do
+      node "$TASK_DIR/crash-standalone.mjs" "<task>/clone" "$mode" "$variant" > "$LOG/$mode-$variant-$i.log" 2>&1
+      echo "exit=$?" >> "$LOG/$mode-$variant-$i.log"
+    done
+  done
+done
+echo done > "$LOG/crash3.done"

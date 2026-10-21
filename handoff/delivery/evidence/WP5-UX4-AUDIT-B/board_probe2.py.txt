@@ -1,0 +1,14 @@
+import json
+p = r"D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\ORCHESTRATION.json"
+b = json.load(open(p, encoding="utf-8"))
+out = open(r"<task>\board_probe2.txt", "w", encoding="utf-8", newline="\n")
+for key in ("owner_decisions", "coordinator_decisions"):
+    out.write("==== %s ====\n" % key)
+    for d in b[key]:
+        s = json.dumps(d, ensure_ascii=False)
+        if "2026-10-20" in s or "2026-10-21" in s:
+            out.write(json.dumps(d, ensure_ascii=False, indent=1) + "\n")
+for key in ("answered_owner_question_ux4", "answered_owner_question_ux4_freeze2", "answered_owner_question_ux4_freeze1", "open_owner_question_wp5_own_q1", "pending_owner_question", "current_source_digest", "status", "phase", "active_package"):
+    out.write("==== %s ====\n" % key)
+    out.write(json.dumps(b.get(key), ensure_ascii=False, indent=1) + "\n")
+out.close()

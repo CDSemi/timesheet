@@ -1,0 +1,65 @@
+import { namedDayButton } from './dayButton.ts';
+import { expect, test } from './fixtures.ts';
+import { note, seedLongContent, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX4-REGATE task-local probe (never part of the repository): the gate's Tab walk (WP5-UX4-GATE zz-editor.spec.ts) on the FIX1 target,
+ * with the gate's own measure (the focused control's raw box inside the drawer's box, 0.5 px slack, the method that caught the defect),
+ * 160 presses each way, the drawer opened on a column that docks it right (Monday) and on one that docks it left (Saturday).
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUTFILE = 'regate-walk.txt';
+
+async function settle(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 200))))');
+}
+
+const HIDDEN_UNDER = `(() => {
+  const el = document.activeElement; const ed = document.querySelector('[data-day-editor]');
+  if (!el || !ed || ed.contains(el)) return null;
+  const r = el.getBoundingClientRect(); const p = ed.getBoundingClientRect();
+  if (r.width === 0 || r.height === 0) return null;
+  const wholly = r.left >= p.left - 0.5 && r.right <= p.right + 0.5 && r.top >= p.top - 0.5 && r.bottom <= p.bottom + 0.5;
+  const visibleOutside = Math.max(r.left, 0) < Math.min(r.right, document.documentElement.clientWidth) && (r.left < p.left - 1 || r.right > p.right + 1);
+  return { wholly, visibleOutside, bottom: r.bottom, innerHeight: window.innerHeight, name: (el.getAttribute('aria-label') || el.textContent || el.tagName).replace(/\\s+/g, ' ').trim().slice(0, 40) };
+})()`;
+
+for (const width of [768, 1024, 1280]) {
+  for (const [startLabel, startIndex] of [['right-docking Monday', 0], ['left-docking Saturday', 5]] as const) {
+    test(`keyboard walk at ${width}px, opened on the ${startLabel}`, async ({ page, privateServer }, testInfo) => {
+      test.skip(testInfo.project.name !== 'desktop', 'desktop');
+      test.setTimeout(300_000);
+      const data = await seedLongContent(privateServer, `Synthetic Walk ${width} ${startIndex}`);
+      await page.setViewportSize({ width, height: 800 });
+      await signInTo(page, privateServer, data.person.account);
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await namedDayButton(page, data.dates[startIndex] ?? '', 'Edit').click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toBeVisible();
+      const startSide = await editor.getAttribute('data-side');
+      let totalHidden = 0;
+      for (const key of ['Tab', 'Shift+Tab']) {
+        if (key === 'Tab') await page.getByRole('switch', { name: 'Show worked hours' }).focus();
+        else await page.locator('.sheet-main a.sig-link').focus();
+        let hiddenAfterSettle = 0; let transient = 0; let stops = 0; let redocks = 0; const sides = new Set<string>();
+        let lastSide = await editor.getAttribute('data-side');
+        for (let step = 0; step < 160; step += 1) {
+          await page.keyboard.press(key);
+          await page.waitForTimeout(60);
+          let r = await page.evaluate<{ wholly: boolean; name: string; bottom: number; innerHeight: number } | null>(HIDDEN_UNDER);
+          if (r?.wholly) { transient += 1; await settle(page); r = await page.evaluate<{ wholly: boolean; name: string; bottom: number; innerHeight: number } | null>(HIDDEN_UNDER); }
+          if (r !== null) {
+            stops += 1;
+            if (r.wholly) { hiddenAfterSettle += 1; note(OUTFILE, `  HIDDEN ${width} ${key} (start ${startLabel}): ${r.name} bottom ${r.bottom} innerHeight ${r.innerHeight}`); }
+          }
+          const side = (await editor.getAttribute('data-side')) ?? '-';
+          sides.add(side);
+          if (side !== lastSide) { redocks += 1; lastSide = side; }
+        }
+        totalHidden += hiddenAfterSettle;
+        note(OUTFILE, `WALK ${width}px ${key} opened ${startLabel} (side ${startSide}): ${stops} sheet stops over 160 presses, wholly under the drawer after settling ${hiddenAfterSettle}, transient before re-dock ${transient}, re-docks ${redocks}; sides seen ${[...sides].join(',')}`);
+      }
+      expect(totalHidden, 'no focused sheet control stays wholly under the drawer').toBe(0);
+    });
+  }
+}

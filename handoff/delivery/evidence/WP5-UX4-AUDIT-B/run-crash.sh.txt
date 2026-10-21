@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Crash judgement for D-8: the untrusted-certificate test WITHOUT the trusted follow-up, 10 runs per TLS mode
+# (auditor variant in the scratch clone only), then AC-13 once under Asia/Tokyo through tzrun.mjs.
+source <task>/env.sh
+cd "$CLONE" || exit 2
+LOG="$TASK_DIR/logs/crash"
+mkdir -p "$LOG"
+VITEST="$CLONE/node_modules/vitest/vitest.mjs"
+for mode in tls starttls; do
+  for i in $(seq 1 10); do
+    node "$VITEST" run tests/auditb/delivery-crash.test.ts -t "untrusted certificate \\($mode\\)" > "$LOG/nofollow-$mode-$i.log" 2>&1
+    echo "exit=$?" >> "$LOG/nofollow-$mode-$i.log"
+  done
+done
+node "$TASK_DIR/tzrun.mjs" Asia/Tokyo "$CLONE" "$VITEST" run tests/integration/ac13-two-week.test.ts > "$TASK_DIR/logs/ac13-Asia_Tokyo.log" 2>&1
+echo "exit=$?" >> "$TASK_DIR/logs/ac13-Asia_Tokyo.log"
+node "$TASK_DIR/tzrun.mjs" America/Los_Angeles "$CLONE" "$VITEST" run tests/auditb/area-b-client.test.ts > "$TASK_DIR/logs/probe-client-LA2.log" 2>&1
+echo "exit=$?" >> "$TASK_DIR/logs/probe-client-LA2.log"
+node "$TASK_DIR/tzrun.mjs" Asia/Tokyo "$CLONE" "$VITEST" run tests/auditb/area-b-client.test.ts > "$TASK_DIR/logs/probe-client-Tokyo2.log" 2>&1
+echo "exit=$?" >> "$TASK_DIR/logs/probe-client-Tokyo2.log"
+node "$VITEST" run tests/auditb/area-b-server.test.ts > "$TASK_DIR/logs/probe-server-2.log" 2>&1
+echo "exit=$?" >> "$TASK_DIR/logs/probe-server-2.log"
+echo done > "$LOG/crash.done"

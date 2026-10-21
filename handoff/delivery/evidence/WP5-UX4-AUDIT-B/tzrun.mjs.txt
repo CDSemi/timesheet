@@ -1,0 +1,13 @@
+// Runs a command with TZ set in its environment (Git Bash may not pass TZ to native programs).
+// Usage: node tzrun.mjs <zone> <cwd> <args...>   (runs process.execPath with args)
+import { spawnSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const [zone, cwd, ...args] = process.argv.slice(2);
+const env = { ...process.env, TZ: zone };
+const probe = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), 'tzchild.mjs')], { env, encoding: 'utf8' });
+process.stdout.write(probe.stdout);
+const result = spawnSync(process.execPath, args, { cwd, env, stdio: 'inherit' });
+process.stdout.write(`TZRUN exit=${result.status}\n`);
+process.exit(result.status ?? 1);

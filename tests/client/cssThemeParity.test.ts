@@ -183,7 +183,6 @@ const THEMED_TOKENS = [
   '--avatar-ink',
   '--danger',
   '--on-danger',
-  '--scrim-side',
   '--elev-bar',
   '--elev-1',
   '--elev-2',

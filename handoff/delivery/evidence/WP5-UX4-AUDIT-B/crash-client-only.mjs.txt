@@ -1,0 +1,17 @@
+// Client side alone: the production SMTP adapter sends to a sink in another process whose certificate is not
+// trusted, then waits across the sink's close and exits normally.
+// Usage: node crash-client-only.mjs <clone-dir> <tls|starttls> <port-file> <wait-ms>
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [clone, mode, portFile, waitMs] = process.argv.slice(2);
+for (let i = 0; i < 100 && !existsSync(portFile); i += 1) await new Promise((resolve) => setTimeout(resolve, 100));
+const port = Number(readFileSync(portFile, 'utf8'));
+const { createSmtpAdapter } = await import(pathToFileURL(join(clone, 'src/server/mail/smtpAdapter.ts')).href);
+const adapter = createSmtpAdapter({ host: '127.0.0.1', port, security: mode, auth: null });
+const raw = Buffer.from('From: a@example.invalid\r\nTo: b@example.invalid\r\nSubject: synthetic\r\n\r\nsynthetic\r\n');
+const outcome = await adapter.send({ envelope: { from: 'a@example.invalid', to: ['b@example.invalid'] }, raw, messageId: '<x@example.invalid>' }, {});
+process.stdout.write(`CLIENT OUTCOME ${outcome.kind} ${outcome.code ?? ''}\n`);
+await new Promise((resolve) => setTimeout(resolve, Number(waitMs)));
+process.stdout.write('CLIENT exiting normally\n');

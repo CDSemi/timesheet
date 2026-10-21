@@ -1,0 +1,40 @@
+import { expect, screenshotPath, test } from './fixtures.ts';
+import { applySituation, dayBtn, drawer, seedAudit, setWidth, settle, signInTo, SITUATIONS } from './zz-alib.ts';
+
+/* WP5-UX4-AUDIT-A screenshots (synthetic data). SNAP_LABEL names the build (target or base). Task-local. */
+const LABEL = process.env.SNAP_LABEL ?? 'target';
+
+test.describe('audit A screenshots', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop');
+  for (const situation of SITUATIONS.slice(0, 2)) {
+    test(`timesheet ${situation.slug}`, async ({ page, builtServer }) => {
+      test.setTimeout(120_000);
+      await applySituation(page, situation);
+      const seed = await seedAudit(builtServer, 'Synthetic Shot Person');
+      await signInTo(page, builtServer, seed.person.account);
+      await expect(page.locator('.sheet-week').first()).toBeVisible();
+      await setWidth(page, 1440, 1000);
+      await settle(page);
+      await page.screenshot({ path: screenshotPath(`audita-${LABEL}-timesheet-1440-${situation.slug}-synthetic.png`), fullPage: true });
+      if (LABEL !== 'target') return;
+      if (situation.slug === 'light') {
+        await dayBtn(page, seed.twoSessions).click();
+        await expect(drawer(page)).toBeVisible();
+        await settle(page);
+        await page.screenshot({ path: screenshotPath('audita-drawer-beside-1440-light-synthetic.png') });
+        await page.keyboard.press('Escape');
+        await expect(drawer(page)).toHaveCount(0);
+        await setWidth(page, 1280, 800);
+        const last = seed.dates[6] ?? '';
+        await dayBtn(page, last).click();
+        await settle(page);
+        await page.screenshot({ path: screenshotPath('audita-drawer-floating-1280-light-synthetic.png') });
+        await page.keyboard.press('Escape');
+        await page.goto(`${builtServer.origin}/#/review/${seed.person.payrollDate}`);
+        await expect(page.locator('[data-paper="review"]')).toBeVisible({ timeout: 15_000 });
+        await setWidth(page, 1280, 900);
+        await page.screenshot({ path: screenshotPath('audita-review-1280-light-synthetic.png'), fullPage: true });
+      }
+    });
+  }
+});

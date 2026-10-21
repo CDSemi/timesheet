@@ -1,0 +1,94 @@
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+import { dayBtn, drawer, note, seedAudit, setWidth, settle, signInTo } from './zz-alib.ts';
+
+/*
+ * WP5-UX4-AUDIT-A probe 4: SC 2.4.11 walks with the auditor's own seed, at several floating widths, both dock sides, with and
+ * without batch mode (small selection boxes), at DPR 1 and DPR 2. A stop is "hidden" when the part of the focused control inside
+ * the window lies wholly under the drawer (0.5px slack). Task-local; never part of the repository.
+ */
+const F = 'walk.txt';
+
+const MEASURE = `(() => {
+  const el = document.activeElement;
+  const d = document.querySelector('dialog[data-day-editor]');
+  if (el === null || el === document.body || d === null) return null;
+  if (el.closest('dialog') !== null) return { inDialog: true };
+  const r = el.getBoundingClientRect();
+  const p = d.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+  const l = Math.max(r.left, 0), t = Math.max(r.top, 0), rr = Math.min(r.right, vw), b = Math.min(r.bottom, vh);
+  const name = (el.getAttribute('aria-label') || el.textContent || el.tagName).replace(/\\s+/g, ' ').trim().slice(0, 40);
+  if (rr <= l || b <= t) return { inDialog: false, offscreen: true, name, side: d.getAttribute('data-side') };
+  const hidden = l >= p.left - 0.5 && rr <= p.right + 0.5 && t >= p.top - 0.5 && b <= p.bottom + 0.5;
+  return { inDialog: false, offscreen: false, hidden, name, side: d.getAttribute('data-side'), box: [Math.round(l), Math.round(rr)], drawer: [Math.round(p.left), Math.round(p.right)] };
+})()`;
+
+type Stop = { inDialog: boolean; offscreen?: boolean; hidden?: boolean; name?: string; side?: string | null; box?: number[]; drawer?: number[] } | null;
+
+async function walk(page: Page, key: 'Tab' | 'Shift+Tab', presses: number) {
+  let stops = 0;
+  let hidden = 0;
+  let transient = 0;
+  let redocks = 0;
+  let lastSide: string | null | undefined;
+  const names: string[] = [];
+  for (let i = 0; i < presses; i += 1) {
+    await page.keyboard.press(key);
+    const early = (await page.evaluate(MEASURE)) as Stop;
+    await settle(page);
+    await page.waitForTimeout(20);
+    const late = (await page.evaluate(MEASURE)) as Stop;
+    if (late === null || late.inDialog) continue;
+    stops += 1;
+    if (early !== null && !early.inDialog && early.hidden === true) transient += 1;
+    if (lastSide !== undefined && late.side !== lastSide) redocks += 1;
+    lastSide = late.side;
+    if (late.hidden === true) {
+      hidden += 1;
+      names.push(`${late.name} ${JSON.stringify(late.box)} under ${JSON.stringify(late.drawer)} side=${late.side}`);
+    }
+  }
+  return { stops, hidden, transient, redocks, names };
+}
+
+for (const dpr of [1, 2]) {
+  test.describe(`audit A SC 2.4.11 walks DPR ${dpr}`, () => {
+    test.skip(({ isMobile }) => isMobile, 'desktop drawer');
+    test.use({ deviceScaleFactor: dpr });
+
+    for (const batch of [false, true]) {
+      test(`walks, batch=${batch}`, async ({ page, builtServer }) => {
+        test.setTimeout(600_000);
+        await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+        const seed = await seedAudit(builtServer, `Synthetic Walk ${dpr} ${batch}`);
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await signInTo(page, builtServer, seed.person.account);
+        await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+        if (batch) await page.getByRole('button', { name: 'Change several days' }).click();
+        const week1 = seed.dates.slice(0, 7);
+        for (const width of [768, 790, 900, 1024, 1180, 1329]) {
+          for (const start of [week1[0] ?? '', week1[6] ?? '']) {
+            await setWidth(page, width, 800);
+            await dayBtn(page, start).click();
+            await expect(drawer(page)).toBeVisible();
+            await settle(page);
+            const side = await drawer(page).getAttribute('data-side');
+            // Start the walk from the page top so the whole sheet is walked.
+            await page.locator('h1').first().evaluate((el) => {
+              (el as HTMLElement).setAttribute('tabindex', '-1');
+              (el as HTMLElement).focus();
+            });
+            const fwd = await walk(page, 'Tab', 130);
+            const back = await walk(page, 'Shift+Tab', 130);
+            note(F, `DPR${dpr} batch=${batch} ${width} open ${start} (side ${side}): Tab stops=${fwd.stops} hidden=${fwd.hidden} transient=${fwd.transient} redocks=${fwd.redocks}; Shift+Tab stops=${back.stops} hidden=${back.hidden} transient=${back.transient} redocks=${back.redocks}`);
+            for (const n of [...fwd.names, ...back.names].slice(0, 6)) note(F, `    HIDDEN ${n}`);
+            await page.keyboard.press('Escape');
+            if ((await drawer(page).count()) > 0) await page.keyboard.press('Escape');
+            await expect(drawer(page)).toHaveCount(0);
+          }
+        }
+      });
+    }
+  });
+}

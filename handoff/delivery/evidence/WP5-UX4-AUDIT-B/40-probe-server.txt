@@ -1,0 +1,27 @@
+# Auditor server probe (tests/auditb/area-b-server.test.ts in the scratch clone; final run)
+AUDITB working-day calculation {"status":"complete","provisional":true,"policy_version_id":"e3c20656-9cb0-4e61-a45b-9e8f54a3cf4b","gross_seconds":36900,"excluded_break_seconds":3600,"regular_seconds":33300,"nonworking_seconds":0,"regular_minutes":555,"nonworking_minutes":0,"normal_excess_minutes":75,"eligible_minutes":75,"credited_minutes":60,"segments":[{"local_date":"2026-09-29","day_class":"normal","reason":"scheduled_weekday","calendar_version_id":"8ac66666-d4af-4615-b80a-9b49e208279e","seconds":33300}]}
+AUDITB non-working-day calculation {"status":"complete","provisional":true,"policy_version_id":"e1aa2a50-ecaa-4fe7-90d1-d7cbd2b148ca","gross_seconds":8160,"excluded_break_seconds":0,"regular_seconds":0,"nonworking_seconds":8160,"regular_minutes":0,"nonworking_minutes":136,"normal_excess_minutes":0,"eligible_minutes":136,"credited_minutes":150,"segments":[{"local_date":"2026-10-03","day_class":"nonworking","reason":"unscheduled_weekday","calendar_version_id":"329eedc9-9f50-4694-b18c-eba33cef946a","seconds":8160}]}
+AUDITB E-1 calculation {"status":"incomplete_breaks","provisional":true,"policy_version_id":"b059993e-e2d2-4bc8-a062-9dabd3fb3110","gross_seconds":null,"excluded_break_seconds":null,"regular_seconds":null,"nonworking_seconds":null,"regular_minutes":null,"nonworking_minutes":null,"normal_excess_minutes":null,"eligible_minutes":null,"credited_minutes":null,"segments":[]}
+AUDITB running refusals {"future":[422,"future_time"],"overlap":[422,"overlapping_user_intervals"],"stale":[409,"stale_version"]}
+AUDITB running edit with breaks_confirmed true [200,true,"incomplete"]
+AUDITB stale shared reopen [409,"shared_clock_action"]
+AUDITB shared delete of a running session [200,"ok"]
+AUDITB view share [200,"ok"]
+AUDITB view-only write [403,"grant_scope"]
+AUDITB correction to 0 entry {"id":"e54d956e-fd48-4f2d-8fd8-e374b7be0d4b","entry_type":"correction","delta_minutes":-95,"source_key":"opening_balance:correction:1","source_ref":null,"corrects_entry_id":"652a2c24-cd84-4930-85a3-68c90a1d6d3e","leave_request_id":null,"work_date":null,"origin":"manual","reason":"Synthetic mistake","reconciliation_required":false,"posted_at":"2026-09-29T20:00:00Z","as_of_date":null}
+AUDITB ledger rows after 95 -> 0 -> 0 [{"entry_type":"opening_balance","delta_minutes":95},{"entry_type":"correction","delta_minutes":-95}]
+AUDITB admin users keys ["id","email","display_name","role","status","calendar_id","created_at","updated_at","not_set_up"]
+AUDITB preview with issues [200,false,1,[{"date":"2026-11-11","label_before":"Worked","label_after":"Holiday","default_labelled_entries":0,"explicit_overrides_preserved":0}]]
+AUDITB affected_days keys ["date","label_before","label_after","default_labelled_entries","explicit_overrides_preserved"]
+AUDITB victim password change after foreign sign-in failures [429,"rate_limited","900"]
+AUDITB admin sign-in at the same address after password-change failures [30,429,"rate_limited"]
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+exit=0
+
+## earlier runs (probe corrections, not product results)
+run 1: the refusal test also sent a confirmed open edit before reading the session back (my ordering error); run 2: my ledger assertion expected evidence_ref on the entry JSON, which carries it only in opening_balance.corrections
+logs/probe-server-1.log:      Tests  1 failed | 6 passed (7)
+logs/probe-server-1.log:exit=1
+logs/probe-server-2.log:      Tests  1 failed | 8 passed (9)
+logs/probe-server-2.log:exit=1

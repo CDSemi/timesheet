@@ -1113,6 +1113,72 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - Kết quả: 0 lỗi ở sáu thời điểm; chạy lặp đạt 140/140 và 40/40; e2e đầy đủ 774 đạt, 0 lỗi; npm
     test 2226; digest b3e9c962.
 - Đang chạy: WP5-UX4-FIX1-FREEZE (một committer mới, chạy một mình), sau đó là WP5-UX4-REGATE.
+- WP5-UX4-FIX1-FREEZE đã commit và push 0ddfeada1b66c82b066b179e901184ca5d857793.
+  - 319 đường dẫn, gồm 242 file evidence của gate và 62 file của FIX1.
+  - Digest b3e9c962 trên HEAD; mọi kiểm tra trả về 0; quét khóa và PEM sạch.
+- Đang chạy: WP5-UX4-REGATE (verifier, sonnet) trên 0ddfead / b3e9c962.
+  - Chỉ dùng lại kết quả cũ khi `dist/server`, `dist/domain` và các chunk tải lười giống hệt từng
+    byte với bản a3042dd.
+  - Chạy lại:
+    - phần lõi, với `npm test` ba lần;
+    - e2e đầy đủ với đồng hồ thật;
+    - toàn bộ test với đồng hồ giả lập ở ba thời điểm, cộng bảy spec ở ba thời điểm khác;
+    - lượt duyệt bàn phím ở 1280 với drawer neo cả hai bên;
+    - các test flaky chạy lặp 10 lần;
+    - axe cho các màn hình liên quan;
+    - kiểm tra các assertion đã đổi.
+- WP5-UX4-REGATE: **PASS** trên 0ddfead / b3e9c962.
+  - `dist/server` và `dist/domain` giống hệt. Các chunk tải lười giống hệt sau khi chuẩn hóa tên
+    file chunk, nên các mục của gate được dùng lại.
+  - `npm test` ba lần: 2226 mỗi lần, 0 crash.
+  - E2e đầy đủ với đồng hồ thật: 774 đạt, 0 lỗi.
+  - Quét với đồng hồ giả lập: 0 lỗi (một lần chạy lại vì lỗi buffer).
+  - 2.4.11: 12 lượt duyệt, không control nào bị che.
+  - Chạy lặp đạt 140/140 và 40/40; axe 0 vi phạm.
+- Đang chạy song song: WP5-UX4-AUDIT-A và WP5-UX4-AUDIT-B (hai auditor opus mới).
+  - Khu vực A: giao diện, shell, Day editor, hộp thoại và accessibility.
+  - Khu vực B: dữ liệu, bảo mật, file settings, phiên giờ và docs.
+- Sau đó là WP5-UX4-AUDIT-INT.
+- WP5-UX4-AUDIT-B: **FIX REQUIRED**, một lỗi mức Low.
+  - F-UX4B-1: năm lần đăng nhập sai với email `password:<id nạn nhân>`, từ cùng địa chỉ client,
+    khiến việc đổi mật khẩu của nạn nhân bị trả 429 trong 15 phút. Hai luồng dùng chung không gian
+    khóa của bộ giới hạn.
+  - Các rủi ro tùy chọn R-UX4B-1..8. Trong đó có R-UX4B-2: người được chia sẻ quyền sửa có thể xóa
+    phiên đang chạy của chủ timesheet.
+  - Kiểm tra: npm test hai lần; chín file test tích hợp; delivery chạy 21 lần không crash; AC-13
+    với Tokyo; sáu spec e2e 239/0; 19 đột biến đều bị bắt.
+  - Coordinator đã dừng một tác vụ nền mà auditor để sót.
+- Chờ WP5-UX4-AUDIT-A rồi mới mở vòng sửa: không chạy source writer khi audit đang chạy.
+- WP5-UX4-AUDIT-A: **FIX REQUIRED**, 1 lỗi Medium và 3 lỗi Low.
+  - F-UX4A-1 (Medium): khi dùng thanh cuộn thường 15px, drawer nhảy qua lại giữa "đứng cạnh bảng" và
+    "nổi" khoảng 60 lần mỗi giây ở độ rộng 1330-1344px, trong một khoảng chiều cao cửa sổ nhất định.
+  - F-UX4A-2: bấm Escape từ một control trên bảng khi đang có thay đổi chưa lưu thì không hiện gì
+    (thiếu `preventDefault`).
+  - F-UX4A-3: bấm Current period rồi chọn Keep editing thì focus nhảy sang Today.
+  - F-UX4A-4: docs/04 dòng 67 và 108.
+  - Mọi mục còn lại đều đạt: axe 0 vi phạm trong 102 lần quét; 2.4.11 không control nào bị che trong
+    96 lượt duyệt; 14 đột biến đều bị bắt; e2e đầy đủ 773 đạt (một lần chạy lại vì lỗi buffer). Hai
+    thao tác cố ý không hỏi trước và việc thẻ tải lười làm xô bố cục đều chấp nhận được.
+- Câu hỏi cho chủ dự án WP5-UX4-R2-Q (R-UX4B-2: có chặn người được chia sẻ quyền sửa xóa phiên đang
+  chạy của chủ không?) đang chờ trả lời. Khuyến nghị: (a) chặn.
+- Đang chạy: WP5-UX4-FIX2 (worker-high, sonnet).
+  - F-UX4A-1..4 và F-UX4B-1 (tách riêng không gian khóa của bộ giới hạn).
+  - Dọn dẹp rủi ro 6 và 7 của review A.
+  - Tái hiện lỗi trước; có đột biến; e2e với thanh cuộn thường chạy lặp 5 lần; e2e đầy đủ.
+- WP5-UX4-FIX2 xong.
+  - Cách sửa lỗi drawer nhảy qua lại là `html { overflow-y: scroll }`, vì đo thực tế cho thấy
+    `scrollbar-gutter: stable` không có tác dụng. Từ nay trình duyệt desktop dùng thanh cuộn thường
+    luôn hiện rãnh thanh cuộn.
+  - Escape nay có `preventDefault`.
+  - Current period chỉ chuyển focus khi người dùng đồng ý bỏ thay đổi.
+  - Khóa của bộ giới hạn đăng nhập nay là `login:<email>`; bộ đếm theo địa chỉ vẫn dùng chung, như
+    docs đã ghi.
+  - Các việc dọn dẹp.
+  - Kết quả: các đột biến đều bị bắt; e2e đầy đủ 779 đạt, 0 lỗi; npm test 2226; digest 1c1c526f
+    (850 file).
+- Câu hỏi WP5-UX4-R2-Q cho chủ dự án vẫn chờ trả lời. Nếu trả lời (a) sẽ thành một FIX3 nhỏ.
+- Đang chạy: WP5-UX4-FIX2-FREEZE (một committer mới, chạy một mình), sau đó là REGATE2 và hai lần
+  kiểm tra lại A2, B2.
 - Còn lại sau T06:
   - T06-FREEZE;
   - gate cho cả đợt 4;

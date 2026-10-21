@@ -1,0 +1,212 @@
+import { describe, expect, it } from 'vitest';
+import { resolveLocalDateTime } from '../../src/domain/zones.ts';
+import { applyNow, applyToday, nowField } from '../../src/client/components/sessionModel.ts';
+import {
+  ALLOWED_KEYS,
+  buildSubmissionRequest,
+  parseSettingsFile,
+  planPersonalImport,
+  resolveAutoSubmit,
+  SETTINGS_FILE_MAX_BYTES,
+} from '../../src/client/components/settingsFileModel.ts';
+
+/*
+ * WP5-UX4-AUDIT-B client probes (auditor-written, scratch clone only; never committed). Synthetic data only.
+ * Hostile settings files: none may be accepted, hang, throw or pollute a prototype. Now/Today in an input zone that
+ * differs from the device zone (run with TZ set to another zone), at midnight and at both DST edges.
+ */
+
+function log(label: string, value: unknown): void {
+  process.stdout.write(`AUDITB ${label} ${JSON.stringify(value)}\n`);
+}
+
+const head = { format: 'timesheet-settings', schema_version: 1, app_version: '0.1.0', exported_at: '2026-10-20T16:40:00Z', scope: 'personal' };
+const policy = { required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30, reference_start: '08:00', reference_end: '16:00', breaks: [], deficit_mode: 'ignore' };
+const submission = {
+  to: ['payroll@example.invalid'],
+  cc: [],
+  subject_template: 'Synthetic timesheet',
+  body_template: 'Attached.',
+  show_ot_on_pdf: true,
+  reminder_offsets_minutes: [1440, 120],
+  auto_note_enabled: false,
+  auto_note_text: '',
+  auto_submit: true,
+};
+const good = () => JSON.stringify({ ...head, data: { work_policy: policy, submission } });
+
+function timed<T>(fn: () => T): { value: T; ms: number } {
+  const start = performance.now();
+  const value = fn();
+  return { value, ms: Math.round(performance.now() - start) };
+}
+
+describe('hostile settings files (U4-01)', () => {
+  it('the well-formed baseline is accepted', () => {
+    const parsed = parseSettingsFile(good(), 'personal');
+    expect(parsed.ok).toBe(true);
+  });
+
+  const cases: Array<[string, string]> = [
+    ['__proto__ at top', good().replace('{"format"', '{"__proto__":{"polluted":"yes"},"format"')],
+    ['__proto__ in data', good().replace('"data":{', '"data":{"__proto__":{"polluted":"yes"},')],
+    ['constructor.prototype in work_policy', good().replace('"required_minutes"', '"constructor":{"prototype":{"polluted":"yes"}},"required_minutes"')],
+    ['prototype key in submission', good().replace('"to":', '"prototype":{"polluted":"yes"},"to":')],
+    ['apply_to_overdue_drafts in submission', good().replace('"to":', '"apply_to_overdue_drafts":true,"to":')],
+    ['signature in personal', good().replace('"data":{', '"data":{"signature":"iVBORw0KGgo",')],
+    ['password in file', good().replace('"format"', '"password":"x","format"')],
+    ['deep nesting in data', JSON.stringify({ ...head, data: 'X' }).replace('"X"', `${'['.repeat(90_000)}${']'.repeat(90_000)}`)],
+    ['deep nesting at top', `${'['.repeat(99_000)}${']'.repeat(99_000)}`],
+    ['deep objects in data', JSON.stringify({ ...head, data: 'X' }).replace('"X"', `${'{"a":'.repeat(30_000)}1${'}'.repeat(30_000)}`)],
+    ['long string 190k', good().replace('"Attached."', `"${'A'.repeat(190_000)}"`)],
+    ['over the size limit', good() + ' '.repeat(SETTINGS_FILE_MAX_BYTES)],
+    ['wrong type: minutes as text', good().replace('"required_minutes":480', '"required_minutes":"480"')],
+    ['wrong type: breaks as object', good().replace('"breaks":[]', '"breaks":{}')],
+    ['wrong type: to as text', good().replace('"to":["payroll@example.invalid"]', '"to":"payroll@example.invalid"')],
+    ['wrong type: auto_submit as text', good().replace('"auto_submit":true', '"auto_submit":"true"')],
+    ['huge number', good().replace('"required_minutes":480', '"required_minutes":1e400')],
+    ['fraction', good().replace('"required_minutes":480', '"required_minutes":480.5')],
+    ['invalid time 24:00', good().replace('"reference_start":"08:00"', '"reference_start":"24:00"')],
+    ['invalid time 7:5', good().replace('"reference_start":"08:00"', '"reference_start":"7:5"')],
+    ['exported_at without zone', good().replace('2026-10-20T16:40:00Z', '2026-10-20T16:40:00')],
+    ['exported_at with offset', good().replace('2026-10-20T16:40:00Z', '2026-10-20T16:40:00+07:00')],
+    ['exported_at impossible date', good().replace('2026-10-20T16:40:00Z', '2026-02-30T16:40:00Z')],
+    ['schema version 2', good().replace('"schema_version":1', '"schema_version":2')],
+    ['other format', good().replace('"timesheet-settings"', '"timesheet-settingz"')],
+    ['company scope in personal import', good().replace('"scope":"personal"', '"scope":"company"')],
+    ['not JSON', 'this is not json'],
+    ['JSON with a byte-order mark', `﻿${good()}`],
+    ['top-level array', '[1,2,3]'],
+    ['top-level null', 'null'],
+    ['empty data', JSON.stringify({ ...head, data: {} })],
+    ['control characters in a key', good().replace('"format"', '"\\u0000\\u001b[31mevil\\u0007":1,"format"')],
+  ];
+
+  for (const [label, text] of cases) {
+    it(`refuses: ${label}`, () => {
+      const { value, ms } = timed(() => parseSettingsFile(text, 'personal'));
+      log(`hostile ${label}`, { ok: value.ok, ms, problems: value.ok ? [] : value.problems.slice(0, 2).map((item) => item.slice(0, 120)) });
+      expect(value.ok).toBe(false);
+      expect(ms).toBeLessThan(2000);
+      expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+      expect(Object.prototype).not.toHaveProperty('polluted');
+    });
+  }
+
+  it('company-file hostile values are refused', () => {
+    const company = {
+      ...head,
+      scope: 'company',
+      data: {
+        reporting_zone: 'America/Los_Angeles',
+        payroll: { cycle_days: 14, anchor_payroll_date: '2026-10-09', period_start_offset_days: -18, period_end_offset_days: -5, due_offset_days: -3, due_local_time: '17:00' },
+        weekdays: [1, 2, 3, 4, 5],
+        holidays: [{ date: '2026-12-25', name: 'Synthetic Day', kind: 'holiday' }],
+        payroll_exceptions: [],
+      },
+    };
+    expect(parseSettingsFile(JSON.stringify(company), 'company').ok).toBe(true);
+    const variants: Array<[string, (value: typeof company) => unknown]> = [
+      ['invalid holiday date', (value) => ({ ...value, data: { ...value.data, holidays: [{ date: '2026-02-30', name: 'X', kind: 'holiday' }] } })],
+      ['formula name', (value) => ({ ...value, data: { ...value.data, holidays: [{ date: '2026-12-25', name: '=CMD()', kind: 'holiday' }] } })],
+      ['newline name', (value) => ({ ...value, data: { ...value.data, holidays: [{ date: '2026-12-25', name: 'a\nb', kind: 'holiday' }] } })],
+      ['duplicate date', (value) => ({ ...value, data: { ...value.data, holidays: [value.data.holidays[0], value.data.holidays[0]] } })],
+      ['weekday 8', (value) => ({ ...value, data: { ...value.data, weekdays: [1, 8] } })],
+      ['duplicate weekday', (value) => ({ ...value, data: { ...value.data, weekdays: [1, 1] } })],
+      ['zone not IANA', (value) => ({ ...value, data: { ...value.data, reporting_zone: 'PST' } })],
+      ['due time 25:00', (value) => ({ ...value, data: { ...value.data, payroll: { ...value.data.payroll, due_local_time: '25:00' } } })],
+      ['extra key in payroll', (value) => ({ ...value, data: { ...value.data, payroll: { ...value.data.payroll, users: [] } } })],
+    ];
+    for (const [label, change] of variants) {
+      const result = parseSettingsFile(JSON.stringify(change(company)), 'company');
+      log(`company hostile ${label}`, { ok: result.ok });
+      expect(result.ok, label).toBe(false);
+    }
+  });
+
+  it('duplicate keys: the last value wins, and auto-submit still needs the tick', () => {
+    const text = good().replace('"auto_submit":true', '"auto_submit":false,"auto_submit":true');
+    const parsed = parseSettingsFile(text, 'personal');
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.file.scope !== 'personal' || parsed.file.data.submission === undefined) return;
+    expect(parsed.file.data.submission.auto_submit).toBe(true);
+    const current = {
+      seq: 3,
+      is_default: false,
+      auto_submit: false,
+      recipients: { to: [], cc: [] },
+      subject_template: '',
+      body_template: '',
+      show_ot_on_pdf: false,
+      reminder_offsets_minutes: [],
+      auto_note: { enabled: false, text: '' },
+    } as never;
+    const request = buildSubmissionRequest(parsed.file.data.submission, current, false);
+    log('request keys', Object.keys(request).sort());
+    expect(request.auto_submit).toBe(false);
+    expect(request.expected_seq).toBe(3);
+    expect(Object.keys(request)).not.toContain('apply_to_overdue_drafts');
+    expect(buildSubmissionRequest(parsed.file.data.submission, current, true).auto_submit).toBe(true);
+    expect(resolveAutoSubmit(true, false, false)).toBe(false);
+    expect(resolveAutoSubmit(false, true, true)).toBe(false);
+    expect(resolveAutoSubmit(true, true, false)).toBe(true);
+    expect(ALLOWED_KEYS.submission).not.toContain('apply_to_overdue_drafts');
+  });
+
+  it('equal groups write nothing', () => {
+    const parsed = parseSettingsFile(good(), 'personal');
+    if (!parsed.ok || parsed.file.scope !== 'personal') throw new Error('baseline');
+    const current = {
+      policy: { id: 'p', seq: 1, effective_from: '2026-01-01', ...policy, note: null, created_at: '' },
+      submission: {
+        seq: 2,
+        is_default: false,
+        auto_submit: true,
+        recipients: { to: ['payroll@example.invalid'], cc: [] },
+        subject_template: 'Synthetic timesheet',
+        body_template: 'Attached.',
+        show_ot_on_pdf: true,
+        reminder_offsets_minutes: [1440, 120],
+        auto_note: { enabled: false, text: '' },
+      },
+      theme: 'light',
+    } as never;
+    const plan = planPersonalImport(parsed.file.data, current, { tick: false, effectiveFrom: '2026-11-01', fileName: 'x.json' });
+    log('equal plan', { changeCount: plan.changeCount, policy: plan.policy !== null, submission: plan.submission !== null });
+    expect(plan.changeCount).toBe(0);
+  });
+});
+
+describe('Now and Today in an input zone that differs from the device zone (AGENTS rule 7)', () => {
+  const at = (iso: string) => Math.floor(Date.parse(iso) / 1000);
+  it('reports the device zone of this run', () => {
+    log('device', { TZ: process.env.TZ ?? null, offsetMinutes: new Date('2026-10-20T15:00:00Z').getTimezoneOffset(), resolved: Intl.DateTimeFormat().resolvedOptions().timeZone });
+  });
+  it('midnight in Tokyo while the device is elsewhere', () => {
+    expect(nowField('Asia/Tokyo', at('2026-10-20T15:00:00Z'))).toEqual({ date: '2026-10-21', time: '00:00', fold: null, offset: null });
+    expect(nowField('Asia/Tokyo', at('2026-10-20T14:59:59Z'))).toMatchObject({ date: '2026-10-20', time: '23:59' });
+    expect(applyToday({ date: '2026-10-19', time: '08:15', fold: null, offset: null }, 'Asia/Tokyo', at('2026-10-20T15:00:00Z'))).toMatchObject({ date: '2026-10-21', time: '08:15' });
+    expect(applyNow({ date: '2026-10-19', time: '08:15', fold: 1, offset: '+09:00' }, 'Asia/Tokyo', at('2026-10-20T15:00:07Z'))).toEqual({ date: '2026-10-21', time: '00:00', fold: null, offset: null });
+  });
+  it('New York fall back: both 01:30 instants give 01:30 with no fold, and the domain then asks for the fold', () => {
+    const first = nowField('America/New_York', at('2026-11-01T05:30:00Z'));
+    const second = nowField('America/New_York', at('2026-11-01T06:30:00Z'));
+    log('NY fall back', { first, second });
+    expect(first).toMatchObject({ date: '2026-11-01', time: '01:30', fold: null });
+    expect(second).toMatchObject({ date: '2026-11-01', time: '01:30', fold: null });
+    expect(() => resolveLocalDateTime('2026-11-01T01:30', 'America/New_York', { fold: null })).toThrow(/occurs twice/);
+  });
+  it('New York spring forward: never a gap time', () => {
+    expect(nowField('America/New_York', at('2026-03-08T06:59:00Z'))).toMatchObject({ time: '01:59' });
+    expect(nowField('America/New_York', at('2026-03-08T07:00:00Z'))).toMatchObject({ time: '03:00' });
+  });
+  it('a saved instant from Now is the device instant floored to the minute, whatever the device zone', () => {
+    const instant = at('2026-10-20T15:07:45Z');
+    for (const zone of ['Asia/Tokyo', 'America/Los_Angeles', 'Australia/Lord_Howe', 'Asia/Kathmandu', 'UTC']) {
+      const field = nowField(zone, instant);
+      if (field === null) throw new Error(zone);
+      const saved = resolveLocalDateTime(`${field.date}T${field.time}`, zone, {}).utc;
+      expect(saved, zone).toBe(at('2026-10-20T15:07:00Z'));
+    }
+  });
+});

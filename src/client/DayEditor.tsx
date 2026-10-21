@@ -157,6 +157,9 @@ export function DayEditor({
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       if (document.querySelector('dialog:modal') !== null) return;
+      // The key press is used here: unprevented, the browser would also send its close request to the discard question
+      // that onClose opens (a modal dialog) and the question would close as "Keep editing" in the same press.
+      event.preventDefault();
       onClose();
     };
     document.addEventListener('keydown', closeOnEscape);

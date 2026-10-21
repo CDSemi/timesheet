@@ -27,6 +27,9 @@ export function userJson(user: Pick<SessionUser, 'id' | 'email' | 'displayName' 
 /** The limiter account of every setup attempt (not an email, so an address cannot be varied around the limit). */
 const SETUP_LIMIT_KEY = 'setup:first-administrator';
 
+/** The prefix of every sign-in limiter account: a typed email is never read as a `password:` or `setup:` key of the same limiter. */
+const SIGN_IN_LIMIT_PREFIX = 'login:';
+
 /** 403, never 401: the session is valid, only the typed current password is not (the client keeps the user signed in). */
 const currentPasswordIncorrect = (): ApiError => new ApiError(403, 'current_password_incorrect', 'The current password is not correct');
 
@@ -36,14 +39,17 @@ export function authRoutes(deps: AppDeps) {
   app.post('/login', async (c) => {
     const body = await readJson(c, loginBody);
     const address = resolveClientAddress(c, deps.config.trustedProxyAddresses ?? []);
-    const account = normalizeEmail(body.email);
+    const email = normalizeEmail(body.email);
+    // The limiter's account part for sign-in. The prefix keeps the typed text out of the other key spaces of the same
+    // limiter (`password:<user id>` of the password change, `setup:...`): no sign-in input can address their buckets.
+    const account = `${SIGN_IN_LIMIT_PREFIX}${email}`;
     const now = nowEpoch(deps.clock);
     const decision = deps.loginLimiter.check(address, account, now);
     if (!decision.allowed) {
       c.header('Retry-After', String(decision.retryAfterSeconds));
       throw new ApiError(429, 'rate_limited', 'Too many failed sign-in attempts; try again later');
     }
-    const user = findUserByEmail(deps.db, account);
+    const user = findUserByEmail(deps.db, email);
     const valid =
       user === undefined ? await verifyAgainstDummy(body.password) : await verifyPassword(body.password, user.password_hash);
     if (user === undefined || !valid || user.status !== 'active') {
@@ -127,7 +133,8 @@ export function authRoutes(deps: AppDeps) {
   /*
    * The signed-in user's own password change (D-9 b). Only the session user, never through a share (this router is not
    * in SHARED_ROUTES) and behind the same origin check as every write. A wrong current password is 403, not 401 (the
-   * session stays valid), and counts on the sign-in limiter under `password:<user id>` per client address. The new
+   * session stays valid), and counts on the sign-in limiter under `password:<user id>` per client address; sign-in keys carry
+   * the `login:` prefix, so no sign-in input can address this bucket (F-UX4B-1), and the per-address bucket stays shared. The new
    * hash, the revocation of every other session of the user and the audit event (no secret) are one transaction;
    * this session stays signed in. The administrator's temporary password (E-11) is a separate path and is unchanged.
    */

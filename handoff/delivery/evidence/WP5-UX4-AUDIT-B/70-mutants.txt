@@ -1,0 +1,308 @@
+# Auditor mutants (applied one at a time in the scratch clone; restored with git checkout; git status -- src clean after each)
+## unit and integration (vitest on the named files)
+M01-guard-removed CAUGHT exit=1  Tests 1 failed | 29 passed (30)
+M02-reopen-allowed CAUGHT exit=1  Tests 1 failed | 29 passed (30)
+M03-key-not-per-user CAUGHT exit=1  Tests 1 failed | 5 passed (6)
+M04-no-failure-recorded CAUGHT exit=1  Tests 1 failed | 5 passed (6)
+M05-revoke-current-too CAUGHT exit=1  Tests 2 failed | 4 passed (6)
+M06-no-revocation CAUGHT exit=1  Tests 1 failed | 5 passed (6)
+M07-unchanged-without-nfkc CAUGHT exit=1  Tests 1 failed | 5 passed (6)
+M08-zero-correction-refused CAUGHT exit=1  Tests 1 failed | 14 passed (15)
+M09-quota-off-by-one CAUGHT exit=1  Tests 2 failed | 28 passed (30)
+M10-no-quota-in-transaction CAUGHT exit=1  Tests 1 failed | 29 passed (30)
+M11-preview-audit-removed CAUGHT exit=1  Tests 4 failed | 26 passed (30)
+M12-finalized-counted CAUGHT exit=1  Tests 1 failed | 29 passed (30)
+M13-allowlist-overdue CAUGHT exit=1  Tests 1 failed | 31 passed (32)
+M14-builder-extra-key CAUGHT exit=1  Tests 4 failed | 28 passed (32)
+M15-tick-ignored CAUGHT exit=1  Tests 2 failed | 30 passed (32)
+M16-expected-seq-zero SURVIVED exit=0  Tests 32 passed (32)
+M17-now-device-zone CAUGHT exit=1  Tests 4 failed | 37 passed (41)
+M18-running-confirms-breaks CAUGHT exit=1  Tests 3 failed | 139 passed (142)
+done
+
+## e2e (desktop project, client rebuilt per mutant; target client rebuilt after, dist/client hashes identical to the target build)
+E16-expected-seq-zero CAUGHT exit=1  1 failed  5 passed (41.7s) 
+E19-end-instead-in-share CAUGHT exit=1  1 failed  2 skipped  5 passed (42.6s) 
+restore build exit=0
+done
+
+## diffs
+### M01-guard-removed.diff
+diff --git a/src/server/services/timesheetCommands.ts b/src/server/services/timesheetCommands.ts
+index 6a44c19..a1ec49e 100644
+--- a/src/server/services/timesheetCommands.ts
++++ b/src/server/services/timesheetCommands.ts
+@@ -448,7 +448,7 @@ export function upsertDayEntry(ctx: CommandContext, workDateInput: string, input
+  * edits that keep an ended session ended or a running session running.
+  */
+ function assertNoSharedClockAction(ctx: CommandContext, runningBefore: boolean, runningAfter: boolean): void {
+-  if (ctx.viaShareId === undefined || runningBefore === runningAfter) return;
++  return;
+   throw new ApiError(
+     409,
+     'shared_clock_action',
+### M02-reopen-allowed.diff
+diff --git a/src/server/services/timesheetCommands.ts b/src/server/services/timesheetCommands.ts
+index 6a44c19..2a4e98d 100644
+--- a/src/server/services/timesheetCommands.ts
++++ b/src/server/services/timesheetCommands.ts
+@@ -499,7 +499,7 @@ export function updateSession(ctx: CommandContext, sessionId: string, input: Ses
+   const inputZone = assertTimeZone(input.input_zone, 'input_zone');
+   const workDate = writeTransaction(ctx.db, () => {
+     const before = requireSession(ctx, sessionId);
+-    assertNoSharedClockAction(ctx, before.end_utc === null, input.end === null);
++    assertNoSharedClockAction(ctx, before.end_utc === null, input.end === null && before.end_utc === null);
+     if (before.version !== input.expected_version) throw staleVersion();
+     const scope = loadScope(ctx.db, ctx.user);
+     const edit = prepareEdit(ctx, scope, before.work_date, input.reason);
+### M03-key-not-per-user.diff
+diff --git a/src/server/routes/auth.ts b/src/server/routes/auth.ts
+index 61d6a43..784d282 100644
+--- a/src/server/routes/auth.ts
++++ b/src/server/routes/auth.ts
+@@ -135,7 +135,7 @@ export function authRoutes(deps: AppDeps) {
+     const user = c.get('user');
+     const body = await readJson(c, passwordChangeBody);
+     const address = resolveClientAddress(c, deps.config.trustedProxyAddresses ?? []);
+-    const limitKey = `password:${user.id}`;
++    const limitKey = `password`;
+     const now = nowEpoch(deps.clock);
+     const decision = deps.loginLimiter.check(address, limitKey, now);
+     if (!decision.allowed) {
+### M04-no-failure-recorded.diff
+diff --git a/src/server/routes/auth.ts b/src/server/routes/auth.ts
+index 61d6a43..838815a 100644
+--- a/src/server/routes/auth.ts
++++ b/src/server/routes/auth.ts
+@@ -146,7 +146,7 @@ export function authRoutes(deps: AppDeps) {
+       | string
+       | undefined;
+     if (storedHash === undefined || !(await verifyPassword(body.current_password, storedHash))) {
+-      deps.loginLimiter.recordFailure(address, limitKey, now);
++      void limitKey;
+       throw currentPasswordIncorrect();
+     }
+     deps.loginLimiter.recordSuccess(address, limitKey);
+### M05-revoke-current-too.diff
+diff --git a/src/server/routes/auth.ts b/src/server/routes/auth.ts
+index 61d6a43..cc1f4de 100644
+--- a/src/server/routes/auth.ts
++++ b/src/server/routes/auth.ts
+@@ -165,7 +165,7 @@ export function authRoutes(deps: AppDeps) {
+           .prepare("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ? AND password_hash = ? AND status = 'active'")
+           .run(newHash, nowUtc(deps.clock), user.id, storedHash);
+         if (updated.changes !== 1) throw currentPasswordIncorrect();
+-        const revoked = revokeOtherAuthSessions(deps.db, deps.clock, user.id, user.sessionId);
++        const revoked = revokeOtherAuthSessions(deps.db, deps.clock, user.id, '');
+         recordAudit(deps.db, deps.clock, {
+           actorUserId: user.id,
+           ownerUserId: user.id,
+### M06-no-revocation.diff
+diff --git a/src/server/routes/auth.ts b/src/server/routes/auth.ts
+index 61d6a43..a28e35b 100644
+--- a/src/server/routes/auth.ts
++++ b/src/server/routes/auth.ts
+@@ -165,7 +165,7 @@ export function authRoutes(deps: AppDeps) {
+           .prepare("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ? AND password_hash = ? AND status = 'active'")
+           .run(newHash, nowUtc(deps.clock), user.id, storedHash);
+         if (updated.changes !== 1) throw currentPasswordIncorrect();
+-        const revoked = revokeOtherAuthSessions(deps.db, deps.clock, user.id, user.sessionId);
++        const revoked = 0;
+         recordAudit(deps.db, deps.clock, {
+           actorUserId: user.id,
+           ownerUserId: user.id,
+### M07-unchanged-without-nfkc.diff
+diff --git a/src/server/routes/auth.ts b/src/server/routes/auth.ts
+index 61d6a43..a98a508 100644
+--- a/src/server/routes/auth.ts
++++ b/src/server/routes/auth.ts
+@@ -154,7 +154,7 @@ export function authRoutes(deps: AppDeps) {
+       throw new ApiError(422, 'weak_password', `Passwords must be ${MIN_PASSWORD_LENGTH}–${MAX_PASSWORD_LENGTH} characters`);
+     }
+     // The same normalization as the hash, so a new password that would hash like the current one counts as unchanged.
+-    if (body.new_password.normalize('NFKC') === body.current_password.normalize('NFKC')) {
++    if (body.new_password === body.current_password) {
+       throw new ApiError(422, 'password_unchanged', 'The new password must differ from the current one');
+     }
+     const newHash = await hashPassword(body.new_password);
+### M08-zero-correction-refused.diff
+diff --git a/src/server/services/ledger.ts b/src/server/services/ledger.ts
+index 0dba5f8..065722c 100644
+--- a/src/server/services/ledger.ts
++++ b/src/server/services/ledger.ts
+@@ -685,7 +685,7 @@ export function postOpeningBalance(ctx: LedgerContext, input: OpeningBalanceInpu
+  */
+ export function correctOpeningBalance(ctx: LedgerContext, input: OpeningBalanceCorrectionInput): OpeningBalanceResult {
+   const actorUserId = requireActor(input.actorUserId);
+-  assertOpeningMinutes(input.minutes, { allowZero: true });
++  assertOpeningMinutes(input.minutes, { allowZero: false });
+   const reason = requiredText(input.reason, MAX_REASON_LENGTH, 'reason_required', 'invalid_reason', 'reason');
+   const evidenceRef = optionalEvidence(input.evidenceRef);
+   assertVersion(input.expectedVersion, 1);
+### M09-quota-off-by-one.diff
+diff --git a/src/server/services/workbookImport.ts b/src/server/services/workbookImport.ts
+index 3dd6d7d..6250e64 100644
+--- a/src/server/services/workbookImport.ts
++++ b/src/server/services/workbookImport.ts
+@@ -495,7 +495,7 @@ export const MAX_OPEN_PREVIEWS = 20;
+ /** 409 `import_preview_limit` when the owner already holds {@link MAX_OPEN_PREVIEWS} uncommitted previews. */
+ function assertPreviewQuota(db: Db, userId: string): void {
+   const open = db.prepare("SELECT count(*) FROM imports WHERE user_id = ? AND state = 'preview'").pluck().get(userId) as number;
+-  if (open >= MAX_OPEN_PREVIEWS) {
++  if (open > MAX_OPEN_PREVIEWS) {
+     throw new ApiError(409, 'import_preview_limit', `Commit or finish one of your ${MAX_OPEN_PREVIEWS} open previews first`, {
+       limit: MAX_OPEN_PREVIEWS,
+     });
+### M10-no-quota-in-transaction.diff
+diff --git a/src/server/services/workbookImport.ts b/src/server/services/workbookImport.ts
+index 3dd6d7d..a10687c 100644
+--- a/src/server/services/workbookImport.ts
++++ b/src/server/services/workbookImport.ts
+@@ -539,7 +539,7 @@ export function previewImport(ctx: ImportContext, bytes: Uint8Array, limits: Pre
+     outcome = writeTransaction(db, () => {
+       const raced = findByKey(db, user.id, sha256, MAPPING_VERSION);
+       if (raced !== undefined) return { created: false, row: raced };
+-      assertPreviewQuota(db, user.id);
++      void 0;
+       const scope = loadScope(db, user);
+       const plan = buildPlan(db, clock, scope, report.days);
+       const reportJson = serializeReport({ ...report, plan }, maxReportBytes);
+### M11-preview-audit-removed.diff
+diff --git a/src/server/services/holidayImport.ts b/src/server/services/holidayImport.ts
+index e9ed7b0..1934435 100644
+--- a/src/server/services/holidayImport.ts
++++ b/src/server/services/holidayImport.ts
+@@ -252,7 +252,7 @@ export function previewHolidayImport(db: Db, clock: Clock, input: HolidayImportI
+         ...preview.affected_days.filter((day) => day.default_labelled_entries + day.explicit_overrides_preserved > 0).map((day) => day.date),
+         ...preview.finalized_conflicts.map((conflict) => conflict.date),
+       ]);
+-      recordAudit(db, clock, {
++      void ({
+         actorUserId,
+         ownerUserId: null,
+         operation: 'calendar.holiday_preview',
+### M12-finalized-counted.diff
+diff --git a/src/server/services/holidayImport.ts b/src/server/services/holidayImport.ts
+index e9ed7b0..c9e4bc3 100644
+--- a/src/server/services/holidayImport.ts
++++ b/src/server/services/holidayImport.ts
+@@ -210,7 +210,7 @@ function affectedDays(db: Db, plan: ImportPlan): AffectedDay[] {
+          FROM day_entries d
+          JOIN users u ON u.id = d.user_id
+          JOIN timesheets t ON t.id = d.timesheet_id
+-        WHERE u.calendar_id = ? AND t.finalized_revision_no IS NULL AND d.work_date IN (${placeholders(changedDates.length)})
++        WHERE u.calendar_id = ? AND d.work_date IN (${placeholders(changedDates.length)})
+         GROUP BY d.work_date, d.category_source`,
+     )
+     .all(plan.input.calendarId, ...changedDates) as Array<{ work_date: CivilDate; source: 'default' | 'explicit'; entries: number }>;
+### M13-allowlist-overdue.diff
+diff --git a/src/client/components/settingsFileModel.ts b/src/client/components/settingsFileModel.ts
+index 9e35abc..061db7b 100644
+--- a/src/client/components/settingsFileModel.ts
++++ b/src/client/components/settingsFileModel.ts
+@@ -49,6 +49,7 @@ export const ALLOWED_KEYS = {
+     'auto_note_enabled',
+     'auto_note_text',
+     'auto_submit',
++    'apply_to_overdue_drafts',
+   ],
+   company: ['reporting_zone', 'payroll', 'weekdays', 'holidays', 'payroll_exceptions'],
+   payroll: ['cycle_days', 'anchor_payroll_date', 'period_start_offset_days', 'period_end_offset_days', 'due_offset_days', 'due_local_time'],
+### M14-builder-extra-key.diff
+diff --git a/src/client/components/settingsFileModel.ts b/src/client/components/settingsFileModel.ts
+index 9e35abc..3b56fc0 100644
+--- a/src/client/components/settingsFileModel.ts
++++ b/src/client/components/settingsFileModel.ts
+@@ -173,7 +173,7 @@ function submissionData(settings: SubmissionSettings): SubmissionData {
+     reminder_offsets_minutes: [...settings.reminder_offsets_minutes],
+     auto_note_enabled: settings.auto_note.enabled,
+     auto_note_text: settings.auto_note.text,
+-    auto_submit: settings.auto_submit,
++    auto_submit: settings.auto_submit, seq: settings.seq,
+   };
+ }
+ 
+### M15-tick-ignored.diff
+diff --git a/src/client/components/settingsFileModel.ts b/src/client/components/settingsFileModel.ts
+index 9e35abc..4b0ad20 100644
+--- a/src/client/components/settingsFileModel.ts
++++ b/src/client/components/settingsFileModel.ts
+@@ -649,7 +649,7 @@ function samePolicy(a: PolicyData | null, b: PolicyData): boolean {
+  * the separate tick (or when it is already on); "off" in the file switches it off.
+  */
+ export function resolveAutoSubmit(fileValue: boolean, currentValue: boolean, tick: boolean): boolean {
+-  return fileValue ? tick || currentValue : false;
++  return fileValue;
+ }
+ 
+ function effectiveSubmission(file: SubmissionData, current: SubmissionSettings, tick: boolean): SubmissionData {
+### M16-expected-seq-zero.diff
+diff --git a/src/client/components/settingsFileModel.ts b/src/client/components/settingsFileModel.ts
+index 9e35abc..50b4fcc 100644
+--- a/src/client/components/settingsFileModel.ts
++++ b/src/client/components/settingsFileModel.ts
+@@ -744,7 +744,7 @@ export function buildPolicyRequest(policy: PolicyData, effectiveFrom: string, fi
+ export function buildSubmissionRequest(file: SubmissionData, current: SubmissionSettings, tick: boolean): SubmissionSettingsRequest {
+   const note = checkAutoNoteText(file.auto_note_text);
+   return {
+-    expected_seq: current.seq,
++    expected_seq: 0,
+     to: file.to,
+     cc: file.cc,
+     subject_template: file.subject_template,
+### M17-now-device-zone.diff
+diff --git a/src/client/components/sessionModel.ts b/src/client/components/sessionModel.ts
+index bd2fb18..524fd61 100644
+--- a/src/client/components/sessionModel.ts
++++ b/src/client/components/sessionModel.ts
+@@ -84,7 +84,7 @@ export function editField(field: LocalField, patch: Partial<Pick<LocalField, 'da
+  */
+ export function nowField(zone: string, instant: EpochSeconds): LocalField | null {
+   if (!isValidTimeZone(zone)) return null;
+-  const text = formatInZone(zone, instant);
++  const text = new Date(instant * 1000 - new Date(instant * 1000).getTimezoneOffset() * 60000).toISOString();
+   return { date: text.slice(0, 10), time: text.slice(11, 16), fold: null, offset: null };
+ }
+ 
+### M18-running-confirms-breaks.diff
+diff --git a/src/client/components/breakRowsModel.ts b/src/client/components/breakRowsModel.ts
+index 17d6f51..a1c2385 100644
+--- a/src/client/components/breakRowsModel.ts
++++ b/src/client/components/breakRowsModel.ts
+@@ -436,7 +436,7 @@ function buildRunningRequest(
+     end: null,
+     input_zone: zone,
+     breaks: checked.resolved.map((item) => item.request),
+-    breaks_confirmed: false,
++    breaks_confirmed: true,
+   };
+   if (options.expectedVersion !== undefined) request.expected_version = options.expectedVersion;
+   const reason = options.reason?.trim() ?? '';
+### E16-expected-seq-zero.diff
+diff --git a/src/client/components/settingsFileModel.ts b/src/client/components/settingsFileModel.ts
+index 9e35abc..50b4fcc 100644
+--- a/src/client/components/settingsFileModel.ts
++++ b/src/client/components/settingsFileModel.ts
+@@ -744,7 +744,7 @@ export function buildPolicyRequest(policy: PolicyData, effectiveFrom: string, fi
+ export function buildSubmissionRequest(file: SubmissionData, current: SubmissionSettings, tick: boolean): SubmissionSettingsRequest {
+   const note = checkAutoNoteText(file.auto_note_text);
+   return {
+-    expected_seq: current.seq,
++    expected_seq: 0,
+     to: file.to,
+     cc: file.cc,
+     subject_template: file.subject_template,
+### E19-end-instead-in-share.diff
+diff --git a/src/client/components/SessionDialog.tsx b/src/client/components/SessionDialog.tsx
+index 5e54c0a..851bf5f 100644
+--- a/src/client/components/SessionDialog.tsx
++++ b/src/client/components/SessionDialog.tsx
+@@ -666,7 +666,7 @@ export function SessionDialog({
+                     {NO_END_TEXT}{' '}
+                   </p>
+                   <p className="muted hint">It ends when you check out.</p>
+-                  {!shared && (
++                  {(shared || !shared) && (
+                     <button
+                       type="button"
+                       className="quiet link-action"

@@ -16,7 +16,8 @@ export interface PeriodJumps {
   /** True when "Current period" is rendered at all. */
   currentVisible: boolean;
   onToday: () => void;
-  onCurrent: () => void;
+  /** `moveFocus` puts focus on Today; the screen calls it only when the jump goes ahead (a "Keep editing" leaves focus on "Current period"). */
+  onCurrent: (moveFocus: () => void) => void;
   /** The visually hidden status line after the last jump, or null before any. */
   status: string | null;
 }
@@ -145,9 +146,9 @@ export function PeriodBar({
                     className="secondary period-jump"
                     aria-describedby="period-current-note"
                     onClick={() => {
-                      // The button leaves the page once the current period is shown, so focus goes to the next logical control first.
-                      todayButton.current?.focus();
-                      jumps.onCurrent();
+                      // The button leaves the page once the current period is shown, so focus goes to the next logical control first,
+                      // but only when the jump goes ahead: after "Keep editing" focus stays on this button.
+                      jumps.onCurrent(() => todayButton.current?.focus());
                     }}
                     data-period-current
                     aria-label="Current period"

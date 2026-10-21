@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Mandatory e2e specs of area B on both projects, real clock, against the target build (dist/ from run-checks1.sh).
+source <task>/env.sh
+cd "$CLONE" || exit 2
+LOG="$TASK_DIR/logs/e2e"
+mkdir -p "$LOG" "$TASK_DIR/tmp"
+export TEMP="<task>\\tmp"
+export TMP="$TEMP"
+export E2E_SCREENSHOT_DIR="<task>\\tmp\\screens"
+git rev-parse HEAD > "$LOG/head.txt"
+git status --short -- src tests/e2e > "$LOG/src-status.txt"
+node "$CLONE/node_modules/@playwright/test/cli.js" test \
+  tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts tests/e2e/import.spec.ts \
+  tests/e2e/admin.spec.ts tests/e2e/sharing.spec.ts tests/e2e/day-editor.spec.ts \
+  --reporter=list > "$LOG/run1.log" 2>&1
+echo "exit=$?" >> "$LOG/run1.log"
+echo done > "$LOG/e2e.done"

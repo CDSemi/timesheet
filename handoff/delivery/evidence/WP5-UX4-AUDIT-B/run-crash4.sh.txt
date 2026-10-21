@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Two processes: which side crashes after an untrusted implicit-TLS certificate? 3 runs per mode. Both scripts end by themselves.
+source <task>/env.sh
+LOG="$TASK_DIR/logs/crash4"
+mkdir -p "$LOG"
+CL="<task>/clone"
+for mode in tls starttls; do
+  for i in 1 2 3; do
+    PORTFILE="<task>/logs/crash4/port-$mode-$i.txt"
+    node "$TASK_DIR/crash-sink-only.mjs" "$CL" "$mode" "$PORTFILE" 4000 > "$LOG/sink-$mode-$i.log" 2>&1 &
+    SINKJOB=$!
+    node "$TASK_DIR/crash-client-only.mjs" "$CL" "$mode" "$PORTFILE" 8000 > "$LOG/client-$mode-$i.log" 2>&1
+    echo "exit=$?" >> "$LOG/client-$mode-$i.log"
+    wait "$SINKJOB"
+    echo "exit=$?" >> "$LOG/sink-$mode-$i.log"
+  done
+done
+echo done > "$LOG/crash4.done"

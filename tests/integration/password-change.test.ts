@@ -135,6 +135,26 @@ describe('POST /api/auth/password (D-9 b)', () => {
     expect((await change(here, person.password, syntheticPassword(20))).status).toBe(200);
   });
 
+  it('is not reachable from the sign-in route: failed sign-ins typed as the password-change key never limit the victim (F-UX4B-1)', async () => {
+    const victim = await signIn(person.email, person.password);
+    const oldHash = storedHash(person.id);
+    // From the victim's client address, with no session: the typed email text is the limiter's account part, so a name
+    // that equals the password-change key (`password:<user id>`, the id is known to every grantee) used to fill that bucket.
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      const failed = await t.request('POST', '/api/auth/login', { body: { email: `password:${person.id}`, password: syntheticPassword(16) } });
+      expect(failed.status, `attempt ${attempt}`).toBe(401);
+    }
+    // The victim's correct change goes through (200, not 429) and the new password works.
+    const next = syntheticPassword(20);
+    const response = await change(victim, person.password, next);
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(storedHash(person.id)).not.toBe(oldHash);
+    await signIn(person.email, next);
+    // The per-user limit on the change itself is intact: five wrong current passwords still end in 429.
+    for (let attempt = 1; attempt <= 5; attempt += 1) expect((await change(victim, `wrong-${syntheticPassword(16)}`, syntheticPassword(20))).status).toBe(403);
+    expect((await change(victim, next, syntheticPassword(20))).status).toBe(429);
+  });
+
   it('answers 422 weak_password outside 12-256 characters and 422 password_unchanged for the same password, changing nothing', async () => {
     const here = await signIn(person.email, person.password);
     const other = await signIn(person.email, person.password);

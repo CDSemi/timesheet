@@ -1,0 +1,144 @@
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+import { box, dayBtn, drawer, note, seedAudit, settle, signInTo } from './zz-alib.ts';
+
+/*
+ * WP5-UX4-AUDIT-A probe 3: the beside/floating rule (U4-07) with overlay and with classic scrollbars, one change per crossing,
+ * and a search for a flap when a classic scrollbar comes and goes with the mode. Task-local; never part of the repository.
+ */
+const F = 'rule.txt';
+/** With AUDIT_CLASSIC=1 the browser keeps its classic scrollbars (Playwright's headless default hides them). */
+const CLASSIC = process.env.AUDIT_CLASSIC === '1';
+if (CLASSIC) test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } });
+
+async function facts(page: Page) {
+  return page.evaluate(() => {
+    const area = document.querySelector('[data-editor-layout]');
+    const cols = [...document.querySelectorAll('.sheet-week')].flatMap((w) => [...w.querySelectorAll('.sheet-day')].map((c) => c.getBoundingClientRect().width));
+    const cards = [...document.querySelectorAll('.sheet-week .week-grid, .sheet-week')].map((g) => g.scrollWidth - g.clientWidth);
+    return {
+      inner: window.innerWidth,
+      client: document.documentElement.clientWidth,
+      scrollbar: window.innerWidth - document.documentElement.clientWidth,
+      layout: area?.getAttribute('data-editor-layout') ?? null,
+      withEditor: area?.classList.contains('with-editor') ?? false,
+      minCol: cols.length === 0 ? null : Math.round(Math.min(...cols) * 10) / 10,
+      cardOverflow: Math.max(0, ...cards),
+      pageH: document.documentElement.scrollHeight,
+    };
+  });
+}
+
+async function watchFlips(page: Page, ms: number): Promise<number> {
+  return page.evaluate(
+    (wait) =>
+      new Promise<number>((resolve) => {
+        const area = document.querySelector('[data-editor-layout]');
+        let flips = 0;
+        const mo = new MutationObserver((records) => {
+          for (const r of records) if (r.attributeName === 'data-editor-layout' || r.attributeName === 'class') flips += 1;
+        });
+        if (area !== null) mo.observe(area, { attributes: true, attributeFilter: ['data-editor-layout', 'class'] });
+        setTimeout(() => {
+          mo.disconnect();
+          resolve(flips);
+        }, wait);
+      }),
+    ms,
+  );
+}
+
+test.describe('audit A rule, overlay scrollbars (desktop)', () => {
+  test.skip(({ isMobile }) => isMobile || CLASSIC, 'desktop, overlay runs only');
+
+  test('sweep 1320..1340 up and down with the drawer open', async ({ page, builtServer }) => {
+    test.setTimeout(180_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const seed = await seedAudit(builtServer, 'Synthetic Rule Person');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInTo(page, builtServer, seed.person.account);
+    await dayBtn(page, seed.twoSessions).click();
+    await expect(drawer(page)).toBeVisible();
+    const tokens = await page.evaluate(() => {
+      const probe = document.createElement('div');
+      document.body.append(probe);
+      const read = (t: string) => {
+        probe.style.width = `var(${t})`;
+        return probe.getBoundingClientRect().width;
+      };
+      const out = { pagePad: read('--page-pad'), editor: read('--editor-width'), gap: read('--editor-gap'), sheetMin: read('--sheet-min-width'), colMin: read('--sheet-col-min') };
+      probe.remove();
+      return out;
+    });
+    const need = 2 * tokens.pagePad + tokens.editor + tokens.gap + tokens.sheetMin;
+    note(F, `tokens ${JSON.stringify(tokens)} need=${need}`);
+    let last: string | null = null;
+    let changes = 0;
+    const widths = [...Array.from({ length: 21 }, (_, i) => 1320 + i), ...Array.from({ length: 21 }, (_, i) => 1340 - i)];
+    for (const w of widths) {
+      await page.setViewportSize({ width: w, height: 900 });
+      await settle(page);
+      const f = await facts(page);
+      if (last !== null && f.layout !== last) changes += 1;
+      last = f.layout;
+      if (w >= 1327 && w <= 1333) note(F, `overlay ${w}: ${JSON.stringify(f)}`);
+    }
+    note(F, `overlay sweep: ${widths.length} steps, layout changes ${changes} (expected 2: one up, one down)`);
+    for (const w of [1024, 1280, 1329, 1330, 1331, 1440, 1920]) {
+      await page.setViewportSize({ width: w, height: 900 });
+      await settle(page);
+      note(F, `overlay ${w}: ${JSON.stringify(await facts(page))}`);
+    }
+  });
+});
+
+test.describe('audit A rule, classic scrollbars (desktop)', () => {
+  test.skip(({ isMobile }) => isMobile || !CLASSIC, 'desktop, AUDIT_CLASSIC=1 runs only');
+
+  test('switch point and flap search with a classic scrollbar', async ({ page, builtServer }) => {
+    test.setTimeout(240_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const seed = await seedAudit(builtServer, 'Synthetic Classic Person');
+    await page.setViewportSize({ width: 1440, height: 700 });
+    await signInTo(page, builtServer, seed.person.account);
+    await dayBtn(page, seed.twoSessions).click();
+    await expect(drawer(page)).toBeVisible();
+    await settle(page);
+    const first = await facts(page);
+    note(F, `classic probe at 1440x700: ${JSON.stringify(first)}`);
+    let last: string | null = null;
+    let changes = 0;
+    const widths = [...Array.from({ length: 13 }, (_, i) => 1338 + i), ...Array.from({ length: 13 }, (_, i) => 1350 - i)];
+    for (const w of widths) {
+      await page.setViewportSize({ width: w, height: 700 });
+      await settle(page);
+      const f = await facts(page);
+      if (last !== null && f.layout !== last) changes += 1;
+      last = f.layout;
+      if (w >= 1343 && w <= 1347) note(F, `classic h700 ${w}: ${JSON.stringify(f)}`);
+    }
+    note(F, `classic sweep at height 700: ${widths.length} steps, layout changes ${changes}`);
+    // Flap search: at a window width between 1330 and 1344 the mode decides whether the page is taller than the window.
+    for (const w of [1335, 1340, 1344]) {
+      await page.setViewportSize({ width: w, height: 3000 });
+      await settle(page);
+      const tall = await facts(page);
+      await page.setViewportSize({ width: w, height: 500 });
+      await settle(page);
+      const short = await facts(page);
+      note(F, `classic ${w}: tall window -> ${JSON.stringify(tall)}; short window -> ${JSON.stringify(short)}`);
+      const lo = Math.min(tall.pageH, short.pageH);
+      const hi = Math.max(tall.pageH, short.pageH);
+      if (hi > lo) {
+        for (const h of [lo + 1, Math.round((lo + hi) / 2), hi - 1]) {
+          await page.setViewportSize({ width: w, height: h });
+          await page.waitForTimeout(300);
+          const flips = await watchFlips(page, 1500);
+          const f = await facts(page);
+          note(F, `classic ${w}x${h} (page heights ${lo}..${hi}): flips in 1.5 s = ${flips}; now ${JSON.stringify(f)}`);
+        }
+      } else note(F, `classic ${w}: page height equal in both modes (${lo}); no flap window`);
+    }
+    void box;
+  });
+});

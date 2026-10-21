@@ -1,0 +1,109 @@
+import type { Page } from '@playwright/test';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+import { admin, applySituation, dayBtn, drawer, LA, note, scan, seedAudit, setWidth, settle, signInTo, SITUATIONS } from './zz-alib.ts';
+
+/*
+ * WP5-UX4-AUDIT-A probe 7: a real axe scan (WCAG 2.0/2.1/2.2 A and AA tags) plus a text-contrast sweep of the round-4 screens in
+ * the four theme situations, desktop and phone. The axe engine is loaded from the auditor's task folder (AXE_PATH); nothing is added
+ * to the repository. Task-local; never part of the repository.
+ */
+const F = 'axe.txt';
+
+async function closeAll(page: Page) {
+  for (let i = 0; i < 4; i += 1) {
+    if ((await page.locator('dialog[open]').count()) === 0) break;
+    await page.keyboard.press('Escape');
+    const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    if ((await discard.count()) > 0) await discard.getByRole('button', { name: 'Discard' }).click();
+    await page.waitForTimeout(100);
+  }
+}
+
+for (const situation of SITUATIONS) {
+  test(`axe round-4 screens - ${situation.slug}`, async ({ page, builtServer, isMobile }) => {
+    test.setTimeout(420_000);
+    const tag = `${isMobile ? 'phone' : 'desk'} ${situation.slug}`;
+    await applySituation(page, situation);
+    const seed = await seedAudit(builtServer, `Synthetic Axe ${situation.slug} ${isMobile ? 'p' : 'd'}`);
+    await signInTo(page, builtServer, seed.person.account);
+    await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+    let total = 0;
+    const add = (r: { violations: number }) => (total += r.violations);
+    if (!isMobile) await setWidth(page, 1440, 900);
+    add(await scan(page, F, `[${tag}] Timesheet paper`));
+    await dayBtn(page, seed.twoSessions).click();
+    await expect(drawer(page)).toBeVisible();
+    add(await scan(page, F, `[${tag}] drawer ${isMobile ? 'bottom sheet' : 'beside 1440'}`));
+    if (!isMobile) {
+      await setWidth(page, 1280, 800);
+      add(await scan(page, F, `[${tag}] drawer floating 1280 side ${await drawer(page).getAttribute('data-side')}`));
+      await setWidth(page, 900, 800);
+      add(await scan(page, F, `[${tag}] drawer floating 900 side ${await drawer(page).getAttribute('data-side')}`));
+      await setWidth(page, 1440, 900);
+    }
+    // The discard prompt.
+    await drawer(page).getByLabel('Notes').fill('axe dirty');
+    await drawer(page).getByRole('button', { name: 'Close' }).click();
+    await expect(page.getByRole('alertdialog', { name: 'Discard your changes?' })).toBeVisible();
+    add(await scan(page, F, `[${tag}] discard prompt`));
+    await page.getByRole('button', { name: 'Keep editing' }).click();
+    // The new-session dialog and its alert.
+    await drawer(page).getByRole('button', { name: 'Add session' }).click();
+    const dialog = page.getByRole('dialog', { name: 'New session' });
+    await expect(dialog).toBeVisible();
+    add(await scan(page, F, `[${tag}] new session dialog`));
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    const notice = page.getByRole('alertdialog', { name: 'No breaks listed' });
+    if ((await notice.count()) > 0) await notice.getByRole('button', { name: /Leave breaks unconfirmed/ }).click();
+    const confirm = page.getByRole('alertdialog', { name: 'Save this session?' });
+    if ((await confirm.count()) > 0) await confirm.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('alertdialog', { name: 'This session was not saved' })).toBeVisible();
+    add(await scan(page, F, `[${tag}] alert (overlap)`));
+    if (situation.slug === 'dark' && !isMobile) await page.screenshot({ path: screenshotPath('audita-alert-dark-1440-synthetic.png') });
+    await closeAll(page);
+    // Running session edit and the Check out dialog (a separate person who is checked in).
+    const adm = await admin(builtServer);
+    const runner = await newPerson(adm, builtServer, { displayName: `Synthetic Axe Run ${situation.slug}`, signature: 'none' });
+    await runner.api.call('POST', '/api/clock/in', { input_zone: LA }, 201);
+    await page.context().clearCookies();
+    await page.goto('about:blank');
+    await signInTo(page, builtServer, runner.account);
+    await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+    await dayBtn(page, runner.todayLocal).click();
+    await expect(drawer(page)).toBeVisible();
+    await drawer(page).getByRole('button', { name: /^Edit/ }).first().click();
+    await expect(page.getByRole('dialog', { name: 'Edit session' })).toBeVisible();
+    add(await scan(page, F, `[${tag}] running-session edit`));
+    await closeAll(page);
+    await page.getByRole('button', { name: 'Check out' }).first().click();
+    const out = page.getByRole('dialog', { name: 'Check out' });
+    await expect(out).toBeVisible();
+    add(await scan(page, F, `[${tag}] Check out dialog`));
+    await closeAll(page);
+    // Review.
+    await page.goto(`${builtServer.origin}/#/review/${runner.payrollDate}`);
+    await expect(page.locator('[data-paper="review"]')).toBeVisible({ timeout: 15_000 });
+    add(await scan(page, F, `[${tag}] Review ${isMobile ? 390 : 1440}`));
+    if (!isMobile) {
+      await setWidth(page, 1280, 800);
+      add(await scan(page, F, `[${tag}] Review 1280`));
+      await setWidth(page, 1440, 900);
+    }
+    // Settings (export/import card), Profile.
+    await page.goto(`${builtServer.origin}/#/settings`);
+    await expect(page.locator('[data-transfer="personal"]')).toBeVisible({ timeout: 15_000 });
+    add(await scan(page, F, `[${tag}] Settings personal`));
+    await page.goto(`${builtServer.origin}/#/settings/profile`);
+    await expect(page.locator('[data-password-card]')).toBeVisible({ timeout: 15_000 });
+    await page.locator('[data-password-card]').getByRole('button', { name: 'Change password' }).click();
+    await settle(page);
+    add(await scan(page, F, `[${tag}] Profile with a password error`));
+    // Administration (admin) with the company card.
+    await page.context().clearCookies();
+    await page.goto('about:blank');
+    await signInTo(page, builtServer, builtServer.credentials.admin, '#/settings/admin');
+    await expect(page.getByRole('heading', { name: 'Company calendar file' })).toBeVisible({ timeout: 15_000 });
+    add(await scan(page, F, `[${tag}] Administration`));
+    note(F, `[${tag}] TOTAL violations ${total}`);
+  });
+}

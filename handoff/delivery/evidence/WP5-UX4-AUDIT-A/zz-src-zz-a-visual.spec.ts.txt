@@ -1,0 +1,206 @@
+import { addDays } from '../../src/domain/dates.ts';
+import { expect, test } from './fixtures.ts';
+import { applySituation, box, css, note, noPageScrollX, ratio, seedAudit, setWidth, settle, signInTo, SITUATIONS } from './zz-alib.ts';
+
+/*
+ * WP5-UX4-AUDIT-A probe 1: owner fidelity of the visual items (U4-02, U4-03, F-5 header fill, U4-04, U4-08, U4-09, U4-10), Review
+ * paper and columns, page-level horizontal scroll and 44px targets. Task-local; never part of the repository.
+ */
+const F = 'visual.txt';
+
+test.describe('audit A visual (desktop)', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop measurements');
+
+  for (const situation of SITUATIONS) {
+    test(`paper, title gap, header fill, controls - ${situation.slug}`, async ({ page, builtServer }) => {
+      test.setTimeout(180_000);
+      await applySituation(page, situation);
+      const seed = await seedAudit(builtServer, `Synthetic Visual ${situation.slug}`);
+      await signInTo(page, builtServer, seed.person.account);
+      await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+      for (const width of [768, 1024, 1280, 1440, 1920]) {
+        await setWidth(page, width, 900);
+        const head = await box(page.locator('header.page-head'));
+        const card = await box(page.locator('.workbar'));
+        const paper = await box(page.locator('[data-paper="timesheet"]'));
+        const sx = await noPageScrollX(page);
+        note(F, `[${situation.slug}] Timesheet ${width}: title gap ${(card.top - head.bottom).toFixed(2)}px (head bottom ${head.bottom.toFixed(1)}, card top ${card.top.toFixed(1)}); card->paper ${(paper.top - card.bottom).toFixed(2)}px; scrollWidth ${sx.scrollWidth}/${sx.clientWidth}`);
+      }
+      await setWidth(page, 1440, 900);
+      // Containment
+      const contain = await page.evaluate(() => {
+        const paper = document.querySelector('[data-paper="timesheet"]');
+        const q = (sel: string) => [...document.querySelectorAll(sel)];
+        const inside = (sel: string) => q(sel).map((el) => paper?.contains(el) ?? false);
+        const sigs = q('.signatures .sig').map((el) => Math.round(el.getBoundingClientRect().top));
+        return {
+          papers: q('[data-paper]').length,
+          tools: inside('.tools'),
+          formHead: inside('.form-head'),
+          weeks: inside('.sheet-week'),
+          footer: inside('.sheet-footer'),
+          legend: inside('.legend'),
+          otTotal: inside('.ot-total'),
+          signatures: inside('.signatures'),
+          h1: inside('h1'),
+          periodCard: inside('.workbar'),
+          sigCount: sigs.length,
+          sigRows: [...new Set(sigs)].length,
+          sigCaps: q('.signatures .sig-cap').map((el) => el.textContent),
+        };
+      });
+      note(F, `[${situation.slug}] containment: ${JSON.stringify(contain)}`);
+      const paperCss = await css(page.locator('[data-paper="timesheet"]'), ['background-color', 'box-shadow', 'border-top-left-radius', 'padding-top', 'padding-left', 'row-gap', 'overflow']);
+      const pageBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+      note(F, `[${situation.slug}] paper css ${JSON.stringify(paperCss)} page bg ${pageBg} paper/page ${ratio(paperCss['background-color'] ?? '', pageBg).toFixed(3)}`);
+      const weekCss = await css(page.locator('.sheet-week').first(), ['box-shadow', 'border-top-width', 'border-top-color', 'border-top-left-radius', 'background-color']);
+      const footCss = await css(page.locator('.sheet-footer').first(), ['box-shadow', 'border-top-width', 'border-top-color', 'border-top-left-radius', 'background-color', 'padding-top']);
+      note(F, `[${situation.slug}] week css ${JSON.stringify(weekCss)}; footer css ${JSON.stringify(footCss)}`);
+      // Week header fill and first column vs the date cells; text on them.
+      const fills = await page.evaluate(() => {
+        const g = (sel: string) => {
+          const el = document.querySelector(sel);
+          if (el === null) return null;
+          const s = getComputedStyle(el);
+          return { bg: s.backgroundColor, color: s.color, text: (el.textContent ?? '').trim().slice(0, 30) };
+        };
+        const weekBar = g('.week-bar');
+        const weekBarMuted = g('.week-bar .muted');
+        const rowLabel = g('.row-labels > *');
+        const dayCell = g('.sheet-day:not(.nonworking) .d-day') ?? g('.sheet-day .d-day');
+        const dateCell = g('.sheet-day .d-date');
+        const timeCell = g('.sheet-day .d-time');
+        const day = document.querySelector('.sheet-day');
+        return { weekBar, weekBarMuted, rowLabel, dayCell, dateCell, timeCell, dayBg: day === null ? null : getComputedStyle(day).backgroundColor };
+      });
+      note(F, `[${situation.slug}] fills ${JSON.stringify(fills)}`);
+      if (fills.weekBar !== null && fills.timeCell !== null && fills.rowLabel !== null && fills.weekBarMuted !== null) {
+        const cell = fills.timeCell.bg === 'rgba(0, 0, 0, 0)' ? (fills.dayBg ?? '') : fills.timeCell.bg;
+        note(
+          F,
+          `[${situation.slug}] header/cell ${ratio(fills.weekBar.bg, cell).toFixed(3)}; first-col/cell ${ratio(fills.rowLabel.bg, cell).toFixed(3)}; header text ${ratio(fills.weekBar.color, fills.weekBar.bg).toFixed(2)}; header muted text ${ratio(fills.weekBarMuted.color, fills.weekBar.bg).toFixed(2)}; first-col text ${ratio(fills.rowLabel.color, fills.rowLabel.bg).toFixed(2)}`,
+        );
+      }
+      // Switch, select chevron and checkbox centring.
+      const sw = page.getByRole('switch', { name: 'Show worked hours' });
+      await expect(sw).toBeVisible();
+      note(F, `[${situation.slug}] switch: ${JSON.stringify(await css(sw, ['appearance', 'border-top-left-radius', 'width', 'height', 'background-image', 'background-size']))}`);
+      // Open a day editor to reach the selects and the WFH checkbox.
+      const day = seed.leave ?? seed.twoSessions;
+      await page.locator(`[data-day="${day}"] [data-day-button]`).first().click();
+      const editor = page.locator('dialog[data-day-editor]');
+      await expect(editor).toBeVisible();
+      const select = editor.locator('.label-select select').first();
+      await expect(select).toBeVisible();
+      const sel = await select.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { appearance: s.appearance, padEnd: s.paddingInlineEnd, image: s.backgroundImage.slice(0, 80), pos: s.backgroundPosition, size: s.backgroundSize, color: s.color, bg: s.backgroundColor, width: el.getBoundingClientRect().width };
+      });
+      note(F, `[${situation.slug}] select: ${JSON.stringify(sel)}`);
+      const wfh = editor.getByLabel('Worked from home (WFH)');
+      const cb = await box(wfh);
+      const sb = await box(select);
+      note(F, `[${situation.slug}] WFH checkbox centre ${(cb.top + cb.height / 2).toFixed(2)} vs Category centre ${(sb.top + sb.height / 2).toFixed(2)}: delta ${Math.abs(cb.top + cb.height / 2 - (sb.top + sb.height / 2)).toFixed(2)}px`);
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+    });
+  }
+
+  test('Review paper and columns, footer', async ({ page, builtServer }) => {
+    test.setTimeout(180_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const seed = await seedAudit(builtServer, 'Synthetic Review Person');
+    await signInTo(page, builtServer, seed.person.account, `#/review/${seed.person.payrollDate}`);
+    await expect(page.locator('[data-paper="review"]')).toBeVisible({ timeout: 15_000 });
+    for (const width of [768, 1024, 1280, 1329, 1330, 1440, 1920]) {
+      await setWidth(page, width, 900);
+      const facts = await page.evaluate(() => {
+        const paper = document.querySelector('[data-paper="review"]');
+        const list = document.querySelector('.review-checklist');
+        const head = document.querySelector('.review-head');
+        const p = paper?.getBoundingClientRect();
+        const l = list?.getBoundingClientRect();
+        const h = head?.getBoundingClientRect();
+        const next = head?.nextElementSibling?.getBoundingClientRect();
+        const grids = [...document.querySelectorAll('[data-paper="review"] .week-grid, [data-paper="review"] .sheet-week')].map((g) => ({ sw: g.scrollWidth, cw: g.clientWidth }));
+        const overflow = grids.some((g) => g.sw > g.cw + 1);
+        return {
+          sideBySide: p !== undefined && l !== undefined && Math.abs(p.top - l.top) < 40 && l.left >= p.right,
+          paper: p === undefined ? null : [Math.round(p.left), Math.round(p.right), Math.round(p.width)],
+          checklist: l === undefined ? null : [Math.round(l.left), Math.round(l.right), Math.round(l.top)],
+          titleGap: h === undefined || next === undefined ? null : Math.round((next.top - h.bottom) * 100) / 100,
+          overflow,
+          grids,
+          contains: { checklist: paper?.contains(list ?? null) ?? false, heading: paper?.querySelector('#review-days-title') !== null },
+          pageScroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      });
+      note(F, `Review ${width}: ${JSON.stringify(facts)}`);
+    }
+    await setWidth(page, 1440, 900);
+    const foot = await css(page.locator('[data-paper="review"] .sheet-footer').first(), ['box-shadow', 'border-top-width', 'border-top-style', 'border-top-color', 'background-color']);
+    note(F, `Review footer css ${JSON.stringify(foot)}`);
+  });
+
+  test('no page-level horizontal scroll on round-4 screens 320..1440 (desktop project widths)', async ({ page, builtServer }) => {
+    test.setTimeout(240_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const seed = await seedAudit(builtServer, 'Synthetic Scroll Person');
+    await signInTo(page, builtServer, seed.person.account);
+    await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+    const hashes = ['#/timesheet', `#/review/${seed.person.payrollDate}`, '#/settings', '#/settings/profile'];
+    for (const hash of hashes) {
+      await page.goto(`${builtServer.origin}/${hash}`);
+      await page.waitForLoadState('networkidle');
+      for (const width of [320, 360, 375, 390, 768, 820, 1024, 1280, 1329, 1330, 1440]) {
+        await setWidth(page, width, 800);
+        const sx = await noPageScrollX(page);
+        note(F, `scroll ${hash} ${width}: ${sx.scrollWidth - sx.clientWidth}`);
+      }
+    }
+    // Timesheet with the drawer open at every width (desktop drawer, floating or beside).
+    await page.goto(`${builtServer.origin}/#/timesheet`);
+    await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+    await page.locator(`[data-day="${seed.twoSessions}"] [data-day-button]`).first().click();
+    for (const width of [768, 820, 1024, 1280, 1329, 1330, 1440]) {
+      await setWidth(page, width, 800);
+      const sx = await noPageScrollX(page);
+      note(F, `scroll timesheet+drawer ${width}: ${sx.scrollWidth - sx.clientWidth}`);
+    }
+    void addDays;
+  });
+});
+
+test.describe('audit A visual (phone)', () => {
+  test.skip(({ isMobile }) => !isMobile, 'phone measurements');
+
+  test('phone paper, title, 44px targets', async ({ page, builtServer }) => {
+    test.setTimeout(180_000);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const seed = await seedAudit(builtServer, 'Synthetic Phone Person');
+    await signInTo(page, builtServer, seed.person.account);
+    await expect(page.locator('[data-paper="timesheet"]')).toBeVisible();
+    for (const width of [320, 360, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      await settle(page);
+      const facts = await page.evaluate(() => {
+        const paper = document.querySelector('[data-paper="timesheet"]')?.getBoundingClientRect();
+        const firstRow = document.querySelector('.sheet-phone [data-day]')?.getBoundingClientRect();
+        const tabbar = document.querySelector('nav[aria-label="Main"]')?.getBoundingClientRect();
+        const small = [...document.querySelectorAll('button, a[href], input, select, [role="switch"], summary')]
+          .filter((el) => el.checkVisibility())
+          .map((el) => ({ el, r: el.getBoundingClientRect() }))
+          .filter(({ r }) => r.width > 0 && r.height > 0 && (r.height < 43.5 || r.width < 43.5))
+          .map(({ el, r }) => `${el.tagName.toLowerCase()}${el.getAttribute('type') ? `[${el.getAttribute('type')}]` : ''} "${(el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 28)}" ${Math.round(r.width)}x${Math.round(r.height)}`);
+        return {
+          paper: paper === undefined ? null : [Math.round(paper.left), Math.round(paper.right)],
+          firstRowBottom: firstRow?.bottom ?? null,
+          tabTop: tabbar?.top ?? null,
+          small,
+          scroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      });
+      note(F, `phone ${width}: ${JSON.stringify(facts)}`);
+    }
+  });
+});

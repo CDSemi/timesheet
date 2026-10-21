@@ -1,0 +1,19 @@
+# Usage: bash run-shift-probe.sh <label> <target instant UTC ISO> <spec> [playwright args...]
+# A task-local probe under the FIX10 simulated wall clock (shiftclock.mjs copied unchanged), in export-probe, own output folder.
+. <task>/env.sh
+L=$1; TGT=$2; SPEC=$3; shift 3
+EXP=$T/export-probe
+mkdir -p $T/pw-$L $T/shots-$L
+for f in zz-alib.ts $SPEC; do cp $T/$f $EXP/tests/e2e/$f; done
+TARGET_MS=$(date -u -d "$TGT" +%s%3N)
+NOW_MS=$(date -u +%s%3N)
+export AB8_SHIFT_MS=$((TARGET_MS - NOW_MS))
+export NODE_OPTIONS="--trace-deprecation --import file:///$(cygpath -m $T)/shiftclock.mjs"
+export AUDIT_OUT="$TW\\obs"
+export AXE_PATH="$TW\\axe\\axe.min.js"
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+cd $EXP || exit 2
+echo "== $L real start $(date -u +%Y-%m-%dT%H:%M:%SZ), simulated $TGT, AB8_SHIFT_MS=$AB8_SHIFT_MS"
+node.exe node_modules/@playwright/test/cli.js test tests/e2e/$SPEC "$@" --output="$TW\\pw-$L"
+echo "exit=$?"
+echo "== $L end $(date -u +%Y-%m-%dT%H:%M:%SZ)"

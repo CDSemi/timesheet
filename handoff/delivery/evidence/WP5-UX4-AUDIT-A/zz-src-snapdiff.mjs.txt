@@ -1,0 +1,38 @@
+// Compares the base and target style snapshots (obs/snap-base.txt, obs/snap-target.txt). Usage: node snapdiff.mjs <base> <target>
+import { readFileSync } from 'node:fs';
+
+const read = (file) => {
+  const out = new Map();
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    const m = line.match(/^(\S+) (\d+) (\{.*\})$/);
+    if (m) out.set(`${m[1]} ${m[2]}`, JSON.parse(m[3]));
+  }
+  return out;
+};
+const base = read(process.argv[2]);
+const target = read(process.argv[3]);
+for (const [key, b] of base) {
+  const t = target.get(key);
+  if (t === undefined) {
+    console.log(`${key}: missing in target`);
+    continue;
+  }
+  console.log(`== ${key}`);
+  let same = 0;
+  for (const el of Object.keys(b)) {
+    const be = b[el];
+    const te = t[el];
+    if (be === null || te === null) {
+      if (be !== te) console.log(`  ${el}: base ${be === null ? 'absent' : 'present'} target ${te === null ? 'absent' : 'present'}`);
+      continue;
+    }
+    for (const prop of Object.keys(be)) {
+      if (JSON.stringify(be[prop]) === JSON.stringify(te[prop])) {
+        same += 1;
+        continue;
+      }
+      console.log(`  ${el}.${prop}: ${JSON.stringify(be[prop])} -> ${JSON.stringify(te[prop])}`);
+    }
+  }
+  console.log(`  (${same} equal values)`);
+}

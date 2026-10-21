@@ -1,0 +1,30 @@
+# Usage: bash digest.sh <tag>   (tag = before|after). Three digest forms of the target.
+. <task>/env.sh
+TAG=$1
+O=$T/out
+{
+  echo "date_utc $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "node $(node --version)"
+  cd $REPO
+  echo "repo HEAD $(git rev-parse HEAD)"
+  echo "origin/main $(git rev-parse origin/main)"
+  echo "status outside handoff (empty = clean):"
+  git status --porcelain -- . ':(exclude)handoff'
+  echo "end status"
+} > $O/01-identity-$TAG.txt 2>&1
+cd $T/export
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' -not -path './.git/*' -not -path './test-results/*' -not -path './playwright-report/*' | sed 's|^\./||' | LC_ALL=C sort > $O/ex-files.txt
+rm -f $O/ex-hashes.txt
+while IFS= read -r f; do
+  h=$(git hash-object --no-filters -- "$f")
+  printf '%s %s\n' "$f" "$h" >> $O/ex-hashes.txt
+done < $O/ex-files.txt
+LC_ALL=C sort $O/ex-hashes.txt > $O/ex-sorted.txt
+echo "export form: $(sha256sum $O/ex-sorted.txt | cut -d' ' -f1) lines $(wc -l < $O/ex-sorted.txt)" > $O/01-digest-export-$TAG.txt
+cd $REPO
+git ls-tree -r --format="%(path) %(objectname)" $TARGET | grep -v '^handoff/' | LC_ALL=C sort > $O/lstree-sorted.txt
+echo "ls-tree form: $(sha256sum $O/lstree-sorted.txt | cut -d' ' -f1) lines $(wc -l < $O/lstree-sorted.txt)" > $O/01-digest-lstree-$TAG.txt
+cmp $O/ex-sorted.txt $O/lstree-sorted.txt && echo "export list byte-identical to ls-tree list" >> $O/01-digest-lstree-$TAG.txt
+npm run digest > $O/01-digest-npm-$TAG.txt 2>&1
+echo "npm run digest exit $?" >> $O/01-digest-npm-$TAG.txt
+echo "expected $TARGET_DIGEST" >> $O/01-digest-npm-$TAG.txt

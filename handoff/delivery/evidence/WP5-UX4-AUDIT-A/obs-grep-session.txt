@@ -1,0 +1,40 @@
+40:import { AlertDialog } from './AlertDialog.tsx';
+56:import { LocalTimeField } from './LocalTimeField.tsx';
+126:      role="alertdialog"
+169:  | { kind: 'alert'; failure: SaveFailure }
+177:const NO_END_TEXT = 'No end yet: this session is running.';
+186: * is replaced by "No end yet: this session is running" and, for the owner only, "Set an end instead" (the way to close a forgotten
+190: * A failed save (a server refusal, no answer, a form message or break rows that cannot be saved) opens `AlertDialog` "This session
+287:  /** Counts the closed "not saved" alerts: focus then goes to the first marked row, else to Save. */
+289:  /** The same count of closed alerts that left marked rows; the break list moves focus to the first marked row or chip on each. */
+291:  /** Counts the presses of "Set an end instead": focus goes to the End date once its field is there. */
+310:  // The alert is already out of the document here, so the dialog behind is no longer inert: the first marked row, else Save.
+315:    // Only a closed alert moves focus; the marked rows are read as they are at that moment.
+318:  // "Set an end instead": the End date field exists now; the person types the end there.
+353:  /** A failed save: the "not saved" alert on top of the dialog (the markers of the rows stay where they are). */
+354:  function openAlert(failure: SaveFailure) {
+355:    setStep({ kind: 'alert', failure });
+433:   * A form that cannot be sent. A daylight-saving question (the session's or a row's) is a question, not a failure: it stays inline
+434:   * with its choices and opens no alert. Every other message, and the rows that cannot be saved as they are, go in the alert.
+648:              Input zone
+661:              <LocalTimeField label="Start" field={draft.start} zone={zone} onChange={(start) => changeTime('start', start)} />
+679:                      Set an end instead
+684:                <LocalTimeField label="End" field={draft.end} zone={zone} onChange={(end) => changeTime('end', end)} />
+764:      {step.kind === 'alert' && <AlertDialog title={SAVE_FAILED_TITLE} messages={step.failure.messages} hint={step.failure.hint} onClose={closeAlert} />}
+24:import { AlertDialog } from './AlertDialog.tsx';
+44: * saved) opens the same "This session was not saved" alert as the session dialog (U4-15; a stale version keeps its Reload panel);
+74:  /** The "not saved" alert while it is open (U4-15), the same one the session dialog uses. */
+75:  const [alert, setAlert] = useState<SaveFailure | null>(null);
+76:  /** Counts the closed alerts: focus then goes to the first marked row, else to the Check out button. */
+84:  /** Counts the closed alerts that left marked rows; the break list moves focus to the first marked row or chip on each. */
+98:  // The alert is already out of the document here, so the dialog behind is no longer inert: the first marked row, else Check out.
+103:    // Only a closed alert moves focus; the marked rows are read as they are at that moment.
+180:    if (busy || stale || reasonMissing || alert !== null) return;
+191:      // A daylight-saving question of a row stays inline with its choices (it is a question, not a failure); the rest go in the alert.
+223:    if (discard !== null || alert !== null || busy) return;
+309:          <div className="stale" role="alert">
+326:      {alert !== null && (
+327:        <AlertDialog
+329:          messages={alert.messages}
+330:          hint={alert.hint}
+337:      {sub !== null && subRow !== undefined && discard === null && alert === null && (

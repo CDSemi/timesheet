@@ -162,3 +162,12 @@ Append to this brief:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+- HEAD before a3042dd9c2f94dd2287ef04ed815db0fbf1838b6; after and commit SHA
+  0ddfeada1b66c82b066b179e901184ca5d857793; pushed to origin/main, remote SHA identical.
+- Digest before add and after commit: b3e9c962... (849 files), both equal.
+- Staged 319: 6 source/test, 4 modified handoff, 3 task records (GATE, FIX1, this brief),
+  242 GATE evidence, 62 FIX1 evidence, 2 T06-FREEZE evidence. No extra handoff paths.
+- Checks: precommit 0, diff --check 0, JSON parse 0, validate_orchestration 0,
+  check_recovery 0, validate_package --preflight 0, key/PEM scan 0 hits. Details in
+  evidence/WP5-UX4-FIX1-FREEZE/checks.txt. No fixes, masking or stops.

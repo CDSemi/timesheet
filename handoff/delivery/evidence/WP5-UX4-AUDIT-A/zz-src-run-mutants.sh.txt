@@ -1,0 +1,42 @@
+# Usage: bash run-mutants.sh <id> [<id> ...]   Applies each mutant alone in export-mut, builds the client, runs the tests that should
+# catch it, restores the file from the pristine export and checks it byte for byte. Results in out/60-mutants.txt, logs in logs/mut-<id>.txt.
+. <task>/env.sh
+M=$T/export-mut
+O=$T/out/60-mutants.txt
+cd $M
+e2e() { node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-mut" --reporter=line; }
+for id in "$@"; do
+  LOG=$T/logs/mut-$id.txt
+  echo "== $id start $(date -u +%Y-%m-%dT%H:%M:%SZ)" > $LOG
+  node $T/mutate.mjs $M $id >> $LOG 2>&1
+  rc=$?
+  FILE=$(grep '^FILE=' $LOG | sed 's/^FILE=//')
+  if [ $rc -ne 0 ] || [ -z "$FILE" ]; then echo "$id: mutation not applied (rc $rc)" >> $O; continue; fi
+  git diff --no-index --stat $T/export/$FILE $M/$FILE >> $LOG 2>&1
+  npm run build:client >> $LOG 2>&1; echo "build:client exit $?" >> $LOG
+  case $id in
+    M1) e2e tests/e2e/controls.spec.ts tests/e2e/surfaces.spec.ts --project=desktop -g "one paper holds|separate raised surfaces" >> $LOG 2>&1; t=$? ;;
+    M2) e2e tests/e2e/controls.spec.ts --project=desktop -g "32px above" >> $LOG 2>&1; t=$? ;;
+    M3) e2e tests/e2e/controls.spec.ts --project=desktop -g "select arrow" >> $LOG 2>&1; t=$? ;;
+    M4) node node_modules/vitest/vitest.mjs run tests/client/editorLayoutModel.test.ts >> $LOG 2>&1; u=$?; e2e tests/e2e/day-editor.spec.ts --project=desktop -g "WP5-UX4-FIX1 \(SC 2.4.11\)" >> $LOG 2>&1; t=$?; echo "unit exit $u" >> $LOG; [ $u -ne 0 ] && t=1 ;;
+    M5) e2e tests/e2e/day-editor.spec.ts --project=desktop -g "U4-05\): the drawer leaves the page usable" >> $LOG 2>&1; t=$? ;;
+    M6) e2e tests/e2e/day-editor.spec.ts --project=desktop -g "addendum 1" >> $LOG 2>&1; t=$? ;;
+    M7) e2e tests/e2e/day-editor.spec.ts --project=desktop -g "U4-06\): the drawer is flush" >> $LOG 2>&1; t=$? ;;
+    M8) e2e tests/e2e/day-editor.spec.ts --project=desktop -g "U4-12, U4-13" >> $LOG 2>&1; t=$? ;;
+    M9) e2e tests/e2e/day-editor.spec.ts --project=desktop -g "U4-15 at" >> $LOG 2>&1; t=$? ;;
+    M10) e2e tests/e2e/day-editor.spec.ts --project=desktop -g "U4-14" >> $LOG 2>&1; t=$? ;;
+    M11) e2e tests/e2e/controls.spec.ts --project=desktop -g "week header row and the first column|stronger week fills" >> $LOG 2>&1; t=$? ;;
+    M12) e2e tests/e2e/day-editor.spec.ts --project=desktop -g "U4-12, U4-13" >> $LOG 2>&1; t=$? ;;
+    M13) e2e tests/e2e/day-editor.spec.ts --project=desktop -g "addendum 1" >> $LOG 2>&1; t=$? ;;
+    M14) e2e tests/e2e/day-editor.spec.ts --project=desktop -g "U4-05|addendum 1" >> $LOG 2>&1; t=$? ;;
+    *) t=99 ;;
+  esac
+  cp $T/export/$FILE $M/$FILE
+  if cmp -s $T/export/$FILE $M/$FILE; then restored=yes; else restored=NO; fi
+  passed=$(grep -o '[0-9]* passed' $LOG | sed -n '$p'); failed=$(grep -o '[0-9]* failed' $LOG | sed -n '$p')
+  if [ $t -ne 0 ]; then verdict=CAUGHT; else verdict=SURVIVED; fi
+  echo "$id ($FILE): tests exit $t -> $verdict (last counts: ${passed:-0 passed}, ${failed:-0 failed}); restored=$restored" >> $O
+  echo "== $id end $(date -u +%Y-%m-%dT%H:%M:%SZ) verdict $verdict" >> $LOG
+done
+npm run build:client > $T/logs/mut-final-build.txt 2>&1; echo "final clean client build exit $?" >> $O
+git diff --no-index --stat $T/export/src $M/src >> $O 2>&1; echo "src diff exit $? (0 = identical)" >> $O

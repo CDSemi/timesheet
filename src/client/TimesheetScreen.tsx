@@ -346,8 +346,9 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   }
 
   /** "Current period": returns to the R-07 current period the page opens on. It only navigates; an open editor stays as it is (after the discard question when it holds unsaved edits, which Discard drops). */
-  function jumpToCurrent() {
+  function jumpToCurrent(moveFocus: () => void) {
     askBeforeDropping(() => {
+      moveFocus();
       if (editorDirty.current) restartEditor();
       void jumpToCurrentNow();
     });

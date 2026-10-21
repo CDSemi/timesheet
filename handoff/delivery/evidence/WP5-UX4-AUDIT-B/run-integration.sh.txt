@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Area-B integration files once each, then tests/integration/delivery.test.ts 20 times (separate vitest runs).
+source <task>/env.sh
+cd "$CLONE" || exit 2
+LOG="$TASK_DIR/logs/integration"
+mkdir -p "$LOG"
+VITEST="$CLONE/node_modules/vitest/vitest.mjs"
+for f in password-change opening-balance workbook-import holiday-import sharing sharing-matrix clock-out-breaks ot-api delivery; do
+  node "$VITEST" run "tests/integration/$f.test.ts" > "$LOG/$f.log" 2>&1
+  echo "exit=$?" >> "$LOG/$f.log"
+done
+for i in $(seq 1 20); do
+  node "$VITEST" run tests/integration/delivery.test.ts > "$LOG/delivery-repeat-$i.log" 2>&1
+  echo "exit=$?" >> "$LOG/delivery-repeat-$i.log"
+done
+echo done > "$LOG/integration.done"

@@ -84,7 +84,7 @@
 
   /*
    * Elevation: a hairline ring plus soft layered shadows. bar = the shell bar; 1 = cards and the period bar; 2 = the paper
-   * sheet (the week sheets and the footer card stand on it without a shadow of their own) and the docked editor; 3 = menus, dialogs and the floating panel; lift = a lifted sheet column.
+   * sheet (the week sheets and the footer card stand on it without a shadow of their own); 3 = the Day editor drawer (beside or floating), menus and dialogs; lift = a lifted sheet column.
    */
   --elev-bar: 0 1px 0 rgb(20 30 50 / 0.08), 0 2px 8px rgb(20 30 50 / 0.05);
   --elev-1: 0 0 0 1px rgb(20 30 50 / 0.06), 0 1px 2px rgb(20 30 50 / 0.06), 0 2px 6px rgb(20 30 50 / 0.04);
@@ -99,8 +99,6 @@
   --focus-ring: 0 0 0 1px var(--card), 0 0 0 3px var(--accent);
   --focus-ring-inset: inset 0 0 0 2px var(--accent), inset 0 0 0 3px var(--card);
   --scrim: rgb(18 22 28 / 0.5);
-  /* A lighter backdrop for the floating side panel: the edited sheet column stays readable for orientation */
-  --scrim-side: rgb(18 22 28 / 0.18);
   /* A sheet of white paper: the signature image is dark ink on it in both themes (as on the PDF) */
   --paper: #ffffff;
 
@@ -180,6 +178,8 @@
   --action-min: 14rem;
   --signature-max-width: 16rem;
   --checklist-width: 380px;
+  /* The row-header column of the settings file preview table (a share of the table, which uses a fixed layout) */
+  --transfer-row-head-width: 30%;
   --signature-max-height: 6rem;
   --mail-body-max-height: 18rem;
 
@@ -425,7 +425,6 @@
     --pill-progress-bg: #1b2d4a;
     --pill-progress-ink: #a9c8ff;
     --pill-progress-line: #3f6fb3;
-    --scrim-side: rgb(0 0 0 / 0.38);
     --day-editing-head: #24395a;
     --elev-bar: 0 1px 0 rgb(255 255 255 / 0.06), 0 2px 10px rgb(0 0 0 / 0.45);
     --elev-1: 0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.03);
@@ -492,7 +491,6 @@
   --pill-progress-bg: #1b2d4a;
   --pill-progress-ink: #a9c8ff;
   --pill-progress-line: #3f6fb3;
-  --scrim-side: rgb(0 0 0 / 0.38);
   --day-editing-head: #24395a;
   --elev-bar: 0 1px 0 rgb(255 255 255 / 0.06), 0 2px 10px rgb(0 0 0 / 0.45);
   --elev-1: 0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.03);
@@ -546,6 +544,17 @@
     color var(--transition-duration) var(--ease-standard), background-color var(--transition-duration) var(--ease-standard),
     background-position var(--transition-duration) var(--ease-standard), border-color var(--transition-duration) var(--ease-standard),
     box-shadow var(--transition-duration) var(--ease-standard), transform var(--transition-duration) var(--ease-standard);
+}
+
+/*
+ * A classic scrollbar's track is always there (F-UX4A-1). The Day editor's layout rule reads the document width, and the editor
+ * pushes the page taller or shorter by its layout; with a scrollbar that came and went with the page's height, the width the
+ * rule measured depended on the layout it chose and the editor flapped between beside and floating at the frame rate.
+ * `scrollbar-gutter: stable` does not reserve the track of the viewport in Chromium (measured), `overflow-y: scroll` does.
+ * Overlay and hidden scrollbars take no room, so nothing changes for them.
+ */
+html {
+  overflow-y: scroll;
 }
 
 body {
@@ -5580,7 +5589,7 @@ code {
 }
 
 .transfer-table th[scope='row'] {
-  width: 30%;
+  width: var(--transfer-row-head-width);
   color: var(--text);
   font-weight: var(--font-weight-normal);
 }

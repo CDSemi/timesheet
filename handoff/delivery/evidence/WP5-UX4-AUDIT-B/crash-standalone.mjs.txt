@@ -1,0 +1,20 @@
+// D-8 crash judgement outside vitest (auditor probe). The production SMTP adapter sends one synthetic message to the
+// loopback test sink whose self-signed certificate is NOT trusted, then the process ends normally.
+// Usage: node crash-standalone.mjs <clone-dir> <tls|starttls> <close-sink|keep-sink|wait>
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+const [clone, mode, variant] = process.argv.slice(2);
+const { startSmtpSink } = await import(pathToFileURL(join(clone, 'tests/support/smtpSink.ts')).href);
+const { createSmtpAdapter } = await import(pathToFileURL(join(clone, 'src/server/mail/smtpAdapter.ts')).href);
+
+const sink = await startSmtpSink({ implicitTls: mode === 'tls' });
+const adapter = createSmtpAdapter({ host: '127.0.0.1', port: sink.port, security: mode, auth: null });
+const raw = Buffer.from('From: a@example.invalid\r\nTo: b@example.invalid\r\nSubject: synthetic\r\n\r\nsynthetic\r\n');
+const outcome = await adapter.send({ envelope: { from: 'a@example.invalid', to: ['b@example.invalid'] }, raw, messageId: '<x@example.invalid>' }, {});
+process.stdout.write(`OUTCOME ${outcome.kind} ${outcome.code ?? ''} transactions=${sink.transactions}\n`);
+if (variant !== 'keep-sink') await sink.close();
+if (variant === 'wait') await new Promise((resolve) => setTimeout(resolve, 3000));
+process.stdout.write('EXITING normally\n');
+// The open sink would keep the event loop alive: end the keep-sink variant explicitly (the exit path still runs).
+if (variant === 'keep-sink') process.exit(0);
