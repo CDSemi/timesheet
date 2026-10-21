@@ -471,6 +471,7 @@ export function DayEditor({
           todayLocal={todayLocal}
           policy={policy}
           {...(editingSession === undefined ? {} : { session: editingSession, confirmBreaks: editing.kind === 'edit' && editing.confirm })}
+          shared={request !== ownRequest}
           reason={reason}
           reasonRequired={reasonRequired}
           onReasonChange={setReason}

@@ -294,6 +294,41 @@ describe('Clock out break-list contract (WP2-T01, decision E-1)', () => {
     expect(t.db.prepare('SELECT version FROM timesheets').pluck().get()).toBe(timesheetVersion);
   });
 
+  /*
+   * WP5-UX4-T03 (U4-11): the session dialog edits the start of today's running session with the body below (end null, breaks never
+   * confirmed, the loaded version). Check out afterwards must compute the worked minutes from the NEW start: this is the oracle
+   * that the client change cannot move a business figure by itself.
+   */
+  it('U4-11: editing the start of a running session, then Check out, computes the worked minutes from the new start', async () => {
+    const { t, cookie, sessionId } = await openSessionWithSavedBreak();
+    const edit = await t.request('PUT', `/api/sessions/${sessionId}`, {
+      cookie,
+      body: {
+        start: la('2026-09-29T08:00'),
+        end: null,
+        input_zone: 'America/Los_Angeles',
+        breaks: [SAVED_BREAK],
+        breaks_confirmed: false,
+        expected_version: 1,
+      },
+    });
+    expect(edit.status).toBe(200);
+    expect(edit.body.session).toMatchObject({ start_utc: '2026-09-29T15:00:00Z', end_utc: null, breaks_confirmed: false, version: 2 });
+    // While it runs nothing is computed: the day is incomplete and no minute is credited.
+    expect(edit.body.day.calculation).toMatchObject({ status: 'incomplete', credited_minutes: null });
+    const out = await clockOut(t, cookie, { breaks: [SAVED_BREAK], breaks_confirmed: true, expected_version: 2 });
+    expect(out.status).toBe(200);
+    // 08:00 to 18:16 is 10h16m, less the 15-minute break: 601 regular minutes (a 09:00 start gives 541, see F-01A), 121 eligible, credit 120.
+    expect(out.body.session).toMatchObject({ start_utc: '2026-09-29T15:00:00Z', end_utc: '2026-09-30T01:16:00Z', breaks_confirmed: true, version: 3 });
+    expect(out.body.day.calculation).toMatchObject({
+      status: 'complete',
+      regular_minutes: 601,
+      eligible_minutes: 121,
+      credited_minutes: 120,
+      excluded_break_seconds: 900,
+    });
+  });
+
   it('gives a legacy saved break that ends after the Clock out instant a typed 422 and changes nothing', async () => {
     const { t, cookie, sessionId } = await openSessionWithSavedBreak();
     // A row written before the future-break rule existed (direct insert; the API now refuses it).

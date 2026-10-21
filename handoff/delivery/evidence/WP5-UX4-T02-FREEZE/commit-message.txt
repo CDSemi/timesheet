@@ -1,0 +1,32 @@
+Freeze WP5-UX4-T02: Day editor as a non-modal edge drawer with a discard guard
+
+- feat(ui): from 768px the Day editor is a non-modal drawer flush with the window edge
+  (no backdrop, no inert page).
+  - Pressing another day or column switches it; pressing the open day closes it, keeping
+    focus and announcing "Day editor closed".
+  - A focused control is never wholly hidden: the drawer re-docks (WCAG 2.2 SC 2.4.11).
+- feat(ui): one "Discard your changes?" guard covers every route that moves or closes the
+  open day:
+  - a day button or column, unselect, Open a day;
+  - Today, Previous/Next period, Current period;
+  - Close and Escape.
+  It asks only when something is unsaved.
+- style(ui): the drawer's edge-side corners are square and its sheet-side corners keep
+  12px; in beside mode the drawer pushes the page.
+- feat(ui): the beside or floating choice comes from a pure layout model and the sheet's
+  minimum width. It switches at 1330px (1345px with a classic scrollbar) and replaces the
+  fixed 1360px value.
+- test: editorLayout unit tests; e2e for switch, unselect, the guard on each route, corners
+  and the layout sweep. The Confirm-breaks test is now deterministic, with pinned 0 s and
+  17 s starts.
+- docs: docs/04 and docs/10 (+ vi). The new docs/10 entry supersedes the 2026-10-15
+  modal floating-panel decision.
+- docs(handoff): the T01-FREEZE recon of the owner's commit 213bbdc, the T02 record and
+  evidence, the board and the checkpoint (+ vi).
+
+Task: WP5-UX4-T02 (U4-05, U4-06, U4-07; owner round-4 request, F-5 mockup approval)
+Gate: pending (round-4 package gate)
+Audit: pending (round-4 audits)
+Digest: 04e16199 (was 1921c36f)
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

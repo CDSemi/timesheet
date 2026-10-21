@@ -15,18 +15,19 @@ import {
   applyReferenceHours,
   type BreakRowDraft,
   type BreakRowError,
-  type BreaksSummary,
   breaksSummary,
   buildSessionDialogRequest,
   changeDialogZone,
   chooseBreakRowFold,
   confirmBreaksRows,
   editBreakRow,
+  endRunningDraft,
   newSessionDialogDraft,
   referenceHours,
   removeBreakRow,
   replaceBreakRowGap,
   reshiftSuggestions,
+  runningBreaksSummary,
   serverBreakRowError,
   type SessionDialogBuild,
   type SessionDialogDraft,
@@ -36,12 +37,21 @@ import {
   type SuggestionContext,
   suggestionRows,
 } from './breakRowsModel.ts';
+import { AlertDialog } from './AlertDialog.tsx';
 import { applyBreakEdit, breakDateVisible, followSessionDate } from './breakChipModel.ts';
 import { BreakRows } from './BreakRows.tsx';
 import { BreakSubDialog } from './BreakSubDialog.tsx';
 import { ConfirmDialog } from './ConfirmDialog.tsx';
-import { type ConfirmFact, editorTitle } from './dayEditorModel.ts';
-import { describeError, isStaleVersion } from './errors.ts';
+import {
+  type ConfirmFact,
+  editorTitle,
+  messageFailure,
+  requestFailure,
+  SAVE_FAILED_TITLE,
+  type SaveFailure,
+  rowsFailure,
+} from './dayEditorModel.ts';
+import { isStaleVersion } from './errors.ts';
 import { usShortDate } from './format.ts';
 import { LocalTimeField } from './LocalTimeField.tsx';
 import {
@@ -68,11 +78,15 @@ function holds(field: LocalField, problem: TimeProblem): boolean {
   return fieldLocal(field) === problem.local && field.offset === null;
 }
 
-/** The Time line of the Save confirmation: `08:00-17:00 (America/Los_Angeles)`, the start date when it is not the accounting date, `+1` for a later end date. */
+/**
+ * The Time line of the Save confirmation: `08:00-17:00 (America/Los_Angeles)`, the start date when it is not the accounting date, `+1`
+ * for a later end date; `07:45 - running (America/Los_Angeles)` for a session that has no end yet.
+ */
 function timeFact(draft: SessionDialogDraft, workDate: string): string {
   const { start, end } = draft;
-  const later = isCivilDate(start.date) && isCivilDate(end.date) ? diffDays(end.date, start.date) : 0;
   const prefix = start.date === workDate || !isCivilDate(start.date) ? '' : `${usShortDate(start.date)} `;
+  if (draft.running) return `${prefix}${start.time.slice(0, 5)} - running (${draft.zone.trim()})`;
+  const later = isCivilDate(start.date) && isCivilDate(end.date) ? diffDays(end.date, start.date) : 0;
   return `${prefix}${start.time.slice(0, 5)}-${end.time.slice(0, 5)}${later > 0 ? `+${later}` : ''} (${draft.zone.trim()})`;
 }
 
@@ -151,17 +165,30 @@ function NoBreaksNotice({ onConfirmNone, onLeaveUnconfirmed, onGoBack }: { onCon
 type Step =
   | { kind: 'edit' }
   | { kind: 'notice' }
-  | { kind: 'confirm'; request: SessionRequest; summary: BreaksSummary; facts: ConfirmFact[]; sent: { rows: readonly BreakRowDraft[]; noBreaks: boolean } }
+  | { kind: 'confirm'; request: SessionRequest; message: string; facts: ConfirmFact[]; sent: { rows: readonly BreakRowDraft[]; noBreaks: boolean } }
+  | { kind: 'alert'; failure: SaveFailure }
   | { kind: 'discard'; opener: HTMLElement | null };
 
 const CONFIRMS_SENTENCE = 'Saving confirms these breaks as the breaks you took.';
 const UNCONFIRMED_SENTENCE = 'Unconfirmed breaks keep OT for this day pending until you confirm them.';
+const RUNNING_SENTENCE = 'The session keeps running. You confirm the breaks when you check out.';
+
+/** The text of the running session's Time section where the end would be (U4-11). */
+const NO_END_TEXT = 'No end yet: this session is running.';
 
 /**
  * New or edit time session (WP5-UX3-T08, owner decisions U-21 and U-23 to U-26, G-3 a, G-4 owner variant). A modal `<dialog>`
  * nested in the Day editor: 720px on a desktop, the full screen below 768px. Title "New session" or "Edit session", the
- * accounting date and the reporting zone under it; a "Time" section (start and end with their own dates, the overnight note,
- * the input zone and its explanation) and a "Breaks" section (`BreakRows`).
+ * accounting date and the reporting zone under it; a "Time" section (the input zone and its explanation first, then the start and
+ * the end with their own dates, each with its "Today" or "Now" link, and the overnight note) and a "Breaks" section (`BreakRows`).
+ *
+ * Running session (WP5-UX4-T03, U4-11): Edit on a session without an end opens the same dialog with the subtitle "running"; the end
+ * is replaced by "No end yet: this session is running" and, for the owner only, "Set an end instead" (the way to close a forgotten
+ * Check out; a grantee must never check the owner out, so a shared view has no such button). Its rows are checked against the start,
+ * "Confirm no breaks taken" is not offered and Save sends `end: null` with the breaks never confirmed (Check out confirms them).
+ *
+ * A failed save (a server refusal, no answer, a form message or break rows that cannot be saved) opens `AlertDialog` "This session
+ * was not saved" (U4-15); closing it moves focus to the first marked row, else Save. The row and field markers stay in the dialog.
  *
  * Pre-fill (new sessions only, when a policy is effective on the date): the reference hours as wall-clock times on the
  * accounting date in the reporting zone, shown in the input zone; for a date before the server's `today_local` (never the
@@ -190,6 +217,7 @@ export function SessionDialog({
   policy,
   session,
   confirmBreaks = false,
+  shared = false,
   reason,
   reasonRequired,
   onReasonChange,
@@ -211,6 +239,8 @@ export function SessionDialog({
   session?: Session;
   /** Opened by "Confirm breaks": a session without saved rows starts with the suggested breaks that fit inside it. */
   confirmBreaks?: boolean;
+  /** True in a view of another person's timesheet (a share): a running session can then not be ended from here. */
+  shared?: boolean;
   reason: string;
   reasonRequired: boolean;
   onReasonChange: (reason: string) => void;
@@ -251,14 +281,17 @@ export function SessionDialog({
   const [step, setStep] = useState<Step>({ kind: 'edit' });
   const [problem, setProblem] = useState<TimeProblem | null>(null);
   const [rowErrors, setRowErrors] = useState<ReadonlyMap<string, BreakRowError>>(new Map());
-  const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [focusAdd, setFocusAdd] = useState(0);
+  /** Counts the closed "not saved" alerts: focus then goes to the first marked row, else to Save. */
+  const [afterAlert, setAfterAlert] = useState(0);
+  /** The same count of closed alerts that left marked rows; the break list moves focus to the first marked row or chip on each. */
+  const [errorFocus, setErrorFocus] = useState(0);
+  /** Counts the presses of "Set an end instead": focus goes to the End date once its field is there. */
+  const [focusEnd, setFocusEnd] = useState(0);
   /** The break chip whose "Break n" sub-dialog is open (third modal level), and whether its row was just added. */
   const [sub, setSub] = useState<{ key: string; isNew: boolean } | null>(null);
-  /** Counts the refused saves with marked rows; the break list moves focus to the first marked chip on each. */
-  const [errorFocus, setErrorFocus] = useState(0);
   /** Where focus goes once the sub-dialog is gone: a chip by row key, else "Add break". */
   const [chipFocus, setChipFocus] = useState<{ count: number; key: string | null }>({ count: 0, key: null });
 
@@ -273,6 +306,20 @@ export function SessionDialog({
   useEffect(() => {
     if (focusAdd > 0) addBreak.current?.focus();
   }, [focusAdd]);
+
+  // The alert is already out of the document here, so the dialog behind is no longer inert: the first marked row, else Save.
+  useEffect(() => {
+    if (afterAlert === 0) return;
+    if (rowErrors.size > 0) setErrorFocus((value) => value + 1);
+    else saveButton.current?.focus();
+    // Only a closed alert moves focus; the marked rows are read as they are at that moment.
+  }, [afterAlert]);
+
+  // "Set an end instead": the End date field exists now; the person types the end there.
+  useEffect(() => {
+    if (focusEnd === 0) return;
+    dialog.current?.querySelector<HTMLElement>('[role="group"][aria-label="End"] input[type="date"]')?.focus();
+  }, [focusEnd]);
 
   // The sub-dialog is already out of the document here, so the page behind is no longer inert.
   useEffect(() => {
@@ -289,7 +336,7 @@ export function SessionDialog({
   const subIndex = sub === null ? -1 : draft.rows.findIndex((row) => row.key === sub.key);
   const subRow = subIndex < 0 ? undefined : draft.rows[subIndex];
   const title = isNew ? 'New session' : 'Edit session';
-  const subtitle = `${editorTitle(workDate)} · accounting date in ${reportingZone}`;
+  const subtitle = `${editorTitle(workDate)}${draft.running ? ' · running' : ''} · accounting date in ${reportingZone}`;
 
   /**
    * After a change of the times or the zone: new sessions re-shift the suggestions until a break row is changed (the model decides
@@ -300,8 +347,17 @@ export function SessionDialog({
   }
 
   function clearMessages() {
-    setError(null);
     setRowErrors(new Map());
+  }
+
+  /** A failed save: the "not saved" alert on top of the dialog (the markers of the rows stay where they are). */
+  function openAlert(failure: SaveFailure) {
+    setStep({ kind: 'alert', failure });
+  }
+
+  function closeAlert() {
+    setStep({ kind: 'edit' });
+    setAfterAlert((value) => value + 1);
   }
 
   function changeTime(edge: 'start' | 'end', field: LocalField) {
@@ -347,7 +403,6 @@ export function SessionDialog({
   }
 
   function suggest() {
-    setError(null);
     if (policy === undefined) {
       setNote('No work policy is effective on this date, so no breaks can be suggested.');
       return;
@@ -365,16 +420,29 @@ export function SessionDialog({
       return;
     }
     setRowErrors(new Map());
-    setNote('Suggested from this session start. Change them to the breaks you took; saving confirms them.');
+    setNote(
+      draft.running
+        ? 'Suggested from this session start. Change them to the breaks you took, and list only breaks already taken; you confirm them when you check out.'
+        : 'Suggested from this session start. Change them to the breaks you took; saving confirms them.',
+    );
     // Placed on request: they no longer follow the start (another press places them again).
     setDraft({ ...draft, rows, noBreaks: false, breaksEdited: true });
   }
 
+  /**
+   * A form that cannot be sent. A daylight-saving question (the session's or a row's) is a question, not a failure: it stays inline
+   * with its choices and opens no alert. Every other message, and the rows that cannot be saved as they are, go in the alert.
+   */
   function showFailure(built: Extract<SessionDialogBuild, { ok: false }>) {
-    if (built.problem !== null) setProblem(built.problem);
-    else if (built.message !== null) setError(built.message);
     setRowErrors(new Map(built.rowErrors.map((item) => [item.key, item])));
-    if (built.rowErrors.length > 0) setErrorFocus((value) => value + 1);
+    if (built.problem !== null) {
+      setProblem(built.problem);
+      return;
+    }
+    const failed = built.rowErrors.filter((item) => item.problem === null);
+    if (failed.length > 0) openAlert(rowsFailure(failed.map((item) => item.message)));
+    else if (built.rowErrors.length > 0) setErrorFocus((value) => value + 1);
+    else if (built.message !== null) openAlert(messageFailure(built.message));
   }
 
   /** The "Break n" sub-dialog ended: close it and put focus where the flow decided (null: "Add break"). */
@@ -414,14 +482,15 @@ export function SessionDialog({
 
   function openConfirmation(sent: SessionDialogDraft, body: SessionRequest) {
     const summary = breaksSummary(sent.rows, sent.noBreaks);
+    const running = sent.running;
     setStep({
       kind: 'confirm',
       request: body,
-      summary,
+      message: running ? RUNNING_SENTENCE : summary.confirms ? CONFIRMS_SENTENCE : UNCONFIRMED_SENTENCE,
       facts: [
         { label: 'Day', value: editorTitle(workDate) },
         { label: 'Time', value: timeFact(sent, workDate) },
-        { label: 'Breaks', value: summary.text },
+        { label: 'Breaks', value: running ? runningBreaksSummary(sent.rows) : summary.text },
       ],
       sent: { rows: sent.rows, noBreaks: sent.noBreaks },
     });
@@ -432,7 +501,8 @@ export function SessionDialog({
     if (busy || reasonMissing || step.kind !== 'edit') return;
     clearMessages();
     setProblem(null);
-    const unlisted = !draft.noBreaks && draft.rows.length === 0;
+    // A running session has no "no breaks listed" question: its breaks are confirmed at Check out.
+    const unlisted = !draft.running && !draft.noBreaks && draft.rows.length === 0;
     // An empty unticked list is checked like a save with breaks unknown, so the time problems come first; the notice then asks.
     const built = build(draft, unlisted);
     if (!built.ok) {
@@ -486,7 +556,7 @@ export function SessionDialog({
         const rowError = serverBreakRowError(caught.code, caught.details, sent);
         if (rowError !== null) {
           setRowErrors(new Map([[rowError.key, rowError]]));
-          setErrorFocus((value) => value + 1);
+          openAlert(rowsFailure([rowError.message]));
           return;
         }
         const found = timeProblemOf(caught.code, caught.details);
@@ -495,7 +565,7 @@ export function SessionDialog({
           return;
         }
       }
-      setError(describeError(caught));
+      openAlert(requestFailure(caught));
     } finally {
       setBusy(false);
     }
@@ -574,22 +644,12 @@ export function SessionDialog({
 
           <section className="session-dialog-section" aria-labelledby={`${id}-time`}>
             <h3 id={`${id}-time`}>Time</h3>
-            <div className="session-times">
-              <LocalTimeField label="Start" field={draft.start} onChange={(start) => changeTime('start', start)} />
-              <LocalTimeField label="End" field={draft.end} onChange={(end) => changeTime('end', end)} />
-            </div>
-            {overnight && (
-              <p className="muted hint" data-overnight>
-                Overnight: this session ends on {draft.end.date}. It stays on accounting date {workDate}.
-              </p>
-            )}
-            {problem !== null && <TimeProblemPrompt problem={problem} chosen={chosenFold} onFold={chooseFold} onGap={takeGapReplacement} />}
             <label>
               Input zone
               <input type="text" list={`${id}-zones`} value={draft.zone} onChange={(event) => changeZone(event.target.value)} spellCheck={false} required />
               <span className="muted hint">
-                The IANA zone the times in this dialog are typed in; they are shown in {displayZone} elsewhere. It is saved with the session
-                and never regroups the day.
+                The zone the times below are typed in; they are shown in {displayZone} elsewhere. Saved with the session; it never moves the
+                day.
               </span>
             </label>
             <datalist id={`${id}-zones`}>
@@ -597,6 +657,39 @@ export function SessionDialog({
                 <option key={choice} value={choice} />
               ))}
             </datalist>
+            <div className="session-times">
+              <LocalTimeField label="Start" field={draft.start} zone={zone} onChange={(start) => changeTime('start', start)} />
+              {draft.running ? (
+                <div className="running-end" data-running-end>
+                  <p className="running-end-title">
+                    <span className="shape shape-circle status-running" aria-hidden="true" />
+                    {NO_END_TEXT}{' '}
+                  </p>
+                  <p className="muted hint">It ends when you check out.</p>
+                  {!shared && (
+                    <button
+                      type="button"
+                      className="quiet link-action"
+                      onClick={() => {
+                        setDraft(settle(endRunningDraft(draft)));
+                        setTimesTouched(true);
+                        setFocusEnd((value) => value + 1);
+                      }}
+                    >
+                      Set an end instead
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <LocalTimeField label="End" field={draft.end} zone={zone} onChange={(end) => changeTime('end', end)} />
+              )}
+            </div>
+            {overnight && (
+              <p className="muted hint" data-overnight>
+                Overnight: this session ends on {draft.end.date}. It stays on accounting date {workDate}.
+              </p>
+            )}
+            {problem !== null && <TimeProblemPrompt problem={problem} chosen={chosenFold} onFold={chooseFold} onGap={takeGapReplacement} />}
           </section>
 
           <section className="session-dialog-section" aria-labelledby={`${id}-breaks`}>
@@ -604,6 +697,7 @@ export function SessionDialog({
             <BreakRows
               rows={draft.rows}
               noBreaks={draft.noBreaks}
+              running={draft.running}
               zone={zone}
               showDate={showBreakDate}
               errors={rowErrors}
@@ -640,17 +734,6 @@ export function SessionDialog({
             />
           </section>
 
-          {rowErrors.size > 0 && (
-            <p className="error" role="alert">
-              {rowErrors.size === 1 ? 'A break cannot be saved as it is.' : 'Some breaks cannot be saved as they are.'} Check the breaks marked
-              above.
-            </p>
-          )}
-          {error !== null && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
           {reasonMissing && <p className="muted hint">Enter a reason for this old period above to save.</p>}
         </div>
 
@@ -668,7 +751,7 @@ export function SessionDialog({
       {step.kind === 'confirm' && (
         <ConfirmDialog
           title="Save this session?"
-          message={step.summary.confirms ? CONFIRMS_SENTENCE : UNCONFIRMED_SENTENCE}
+          message={step.message}
           facts={step.facts}
           confirmLabel="Save"
           cancelLabel="Back"
@@ -678,6 +761,7 @@ export function SessionDialog({
           onCancel={() => setStep({ kind: 'edit' })}
         />
       )}
+      {step.kind === 'alert' && <AlertDialog title={SAVE_FAILED_TITLE} messages={step.failure.messages} hint={step.failure.hint} onClose={closeAlert} />}
       {sub !== null && subRow !== undefined && step.kind === 'edit' && (
         <BreakSubDialog
           key={sub.key}

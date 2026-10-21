@@ -3,6 +3,8 @@ import type { Calculation, DayView, PolicyVersion, Session } from '../../src/cli
 import {
   applyFold,
   applyGapReplacement,
+  applyNow,
+  applyToday,
   breaksGap,
   buildClockOutRequest,
   buildDayEntryRequest,
@@ -20,6 +22,7 @@ import {
   inputZoneChoices,
   leaveHint,
   newSessionDraft,
+  nowField,
   otMismatchNotice,
   policyOn,
   problemApplies,
@@ -29,6 +32,7 @@ import {
   timeProblemOf,
   toLocalInput,
 } from '../../src/client/components/sessionModel.ts';
+import { parseUtcInstant } from '../../src/domain/instants.ts';
 
 const LA = 'America/Los_Angeles';
 const SYDNEY = 'Australia/Sydney';
@@ -479,5 +483,65 @@ describe('server figures, E-2 notice and day fields', () => {
     expect(leaveHint({ hours: '', minutes: '45' })).toBe('45m');
     expect(leaveHint({ hours: '', minutes: '' })).toBeNull();
     expect(leaveHint({ hours: '1.5', minutes: '' })).toBeNull();
+  });
+});
+
+describe('"Today" and "Now" read the instant in the input zone (WP5-UX4-T03, U4-13)', () => {
+  const at = (text: string) => parseUtcInstant(text);
+  const TOKYO = 'Asia/Tokyo';
+
+  it('gives the date and the minute of the same instant in each zone, with no seconds, fold or offset', () => {
+    // 15:30:45 UTC on 2026-10-20: Tokyo is already on 10/21, Los Angeles (PDT) is still on the morning of 10/20.
+    const instant = at('2026-10-20T15:30:45Z');
+    expect(nowField(TOKYO, instant)).toEqual({ date: '2026-10-21', time: '00:30', fold: null, offset: null });
+    expect(nowField(LA, instant)).toEqual({ date: '2026-10-20', time: '08:30', fold: null, offset: null });
+    expect(nowField('UTC', instant)).toEqual({ date: '2026-10-20', time: '15:30', fold: null, offset: null });
+    expect(nowField(SYDNEY, at('2026-10-20T14:30:10Z'))).toEqual({ date: '2026-10-21', time: '01:30', fold: null, offset: null });
+  });
+
+  it('turns over at local midnight of the zone, not of UTC', () => {
+    expect(nowField(LA, at('2026-10-21T06:59:59Z'))).toMatchObject({ date: '2026-10-20', time: '23:59' });
+    expect(nowField(LA, at('2026-10-21T07:00:00Z'))).toMatchObject({ date: '2026-10-21', time: '00:00' });
+    expect(nowField(TOKYO, at('2026-10-20T14:59:59Z'))).toMatchObject({ date: '2026-10-20', time: '23:59' });
+    expect(nowField(TOKYO, at('2026-10-20T15:00:00Z'))).toMatchObject({ date: '2026-10-21', time: '00:00' });
+  });
+
+  it('spring forward in Los Angeles: the wall clock jumps from 01:59 to 03:00, never 02:xx', () => {
+    expect(nowField(LA, at('2027-03-14T09:59:59Z'))).toMatchObject({ date: '2027-03-14', time: '01:59' });
+    expect(nowField(LA, at('2027-03-14T10:00:00Z'))).toMatchObject({ date: '2027-03-14', time: '03:00' });
+  });
+
+  it('fall back in Los Angeles: both instants of the repeated hour read the same wall time, which the resolver then asks about', () => {
+    const first = nowField(LA, at('2026-11-01T08:30:00Z'));
+    const second = nowField(LA, at('2026-11-01T09:30:00Z'));
+    expect(first).toEqual({ date: '2026-11-01', time: '01:30', fold: null, offset: null });
+    expect(second).toEqual(first);
+    // Like a typed 01:30 on that day: the shared resolver reports the repeated time, so the dialog shows the fold question.
+    const resolved = resolveStart(draft({ start: first ?? field('', '') }));
+    expect(resolved).toMatchObject({ ok: false, problem: { kind: 'ambiguous', local: '2026-11-01T01:30' } });
+    expect(nowField(LA, at('2026-11-01T09:59:59Z'))).toMatchObject({ time: '01:59' });
+    expect(nowField(LA, at('2026-11-01T10:00:00Z'))).toMatchObject({ time: '02:00' });
+  });
+
+  it('a name that is not a zone gives nothing (the field may be half typed)', () => {
+    expect(nowField('Asia/Toky', at('2026-10-20T15:30:45Z'))).toBeNull();
+    expect(nowField('', at('2026-10-20T15:30:45Z'))).toBeNull();
+    expect(applyToday(field('2026-10-20', '09:00'), 'nope', at('2026-10-20T15:30:45Z'))).toBeNull();
+    expect(applyNow(field('2026-10-20', '09:00'), 'nope', at('2026-10-20T15:30:45Z'))).toBeNull();
+  });
+
+  it('Today sets the date of the zone and keeps the time; like a typed change it drops the fold and the offset', () => {
+    const pinned = field('2026-10-19', '08:15', { offset: '-07:00', fold: 1 });
+    expect(applyToday(pinned, TOKYO, at('2026-10-20T15:30:45Z'))).toEqual({ date: '2026-10-21', time: '08:15', fold: null, offset: null });
+    expect(applyToday(pinned, LA, at('2026-10-20T15:30:45Z'))).toEqual({ date: '2026-10-20', time: '08:15', fold: null, offset: null });
+  });
+
+  it('Now sets the minute of the zone; the date moves too only when the field held another date', () => {
+    const instant = at('2026-10-20T15:30:45Z');
+    // Tokyo is on 10/21: a field on 10/20 gets the date as well, so the value is this instant.
+    expect(applyNow(field('2026-10-20', '09:00', { offset: '+09:00' }), TOKYO, instant)).toEqual({ date: '2026-10-21', time: '00:30', fold: null, offset: null });
+    // Already on the zone's date: only the time changes.
+    expect(applyNow(field('2026-10-21', '09:00'), TOKYO, instant)).toEqual({ date: '2026-10-21', time: '00:30', fold: null, offset: null });
+    expect(applyNow(field('', ''), LA, instant)).toEqual({ date: '2026-10-20', time: '08:30', fold: null, offset: null });
   });
 });

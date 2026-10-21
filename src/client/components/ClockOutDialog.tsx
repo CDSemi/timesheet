@@ -21,7 +21,9 @@ import {
 import { BreakRows } from './BreakRows.tsx';
 import { BreakSubDialog } from './BreakSubDialog.tsx';
 import { ConfirmDialog } from './ConfirmDialog.tsx';
-import { describeError, isStaleVersion } from './errors.ts';
+import { AlertDialog } from './AlertDialog.tsx';
+import { messageFailure, requestFailure, SAVE_FAILED_TITLE, type SaveFailure, rowsFailure } from './dayEditorModel.ts';
+import { isStaleVersion } from './errors.ts';
 import { instantText } from './format.ts';
 import { policyOn } from './sessionModel.ts';
 
@@ -38,7 +40,9 @@ import { policyOn } from './sessionModel.ts';
  * The running session's version goes with the request, so a session changed elsewhere answers 409 stale_version instead of being
  * overwritten. The server ends the session at its own current second, so the session has no end yet: a break row always has its own
  * date field (`breakDateVisible` with an empty end date), as for any session without an end. A server refusal that names a break
- * (`break_index`) marks that row, or its chip. The sub-dialog is rendered outside the form so that Enter in it never checks out.
+ * (`break_index`) marks that row, or its chip. Every failed Check out (a refusal, no answer, a form message or rows that cannot be
+ * saved) opens the same "This session was not saved" alert as the session dialog (U4-15; a stale version keeps its Reload panel);
+ * closing it moves focus to the first marked row, else to the Check out button. The sub-dialog is rendered outside the form so that Enter in it never checks out.
  */
 export function ClockOutDialog({
   session,
@@ -67,15 +71,19 @@ export function ClockOutDialog({
   const [policies, setPolicies] = useState<PolicyVersion[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<ReadonlyMap<string, BreakRowError>>(new Map());
-  const [error, setError] = useState<string | null>(null);
+  /** The "not saved" alert while it is open (U4-15), the same one the session dialog uses. */
+  const [alert, setAlert] = useState<SaveFailure | null>(null);
+  /** Counts the closed alerts: focus then goes to the first marked row, else to the Check out button. */
+  const [afterAlert, setAfterAlert] = useState(0);
   const [stale, setStale] = useState(false);
   const [reasonNeeded, setReasonNeeded] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   /** The break chip whose "Break n" sub-dialog is open, and whether its row was just added. */
   const [sub, setSub] = useState<{ key: string; isNew: boolean } | null>(null);
-  /** Counts the refused check-outs with marked rows; the break list moves focus to the first marked chip on each. */
+  /** Counts the closed alerts that left marked rows; the break list moves focus to the first marked row or chip on each. */
   const [errorFocus, setErrorFocus] = useState(0);
+  const submitButton = useRef<HTMLButtonElement>(null);
   /** Where focus goes once the sub-dialog is gone: a chip by row key, else "Add break". */
   const [chipFocus, setChipFocus] = useState<{ count: number; key: string | null }>({ count: 0, key: null });
 
@@ -86,6 +94,14 @@ export function ClockOutDialog({
       .then((response) => setPolicies(response.policies))
       .catch(() => setPolicies([]));
   }, []);
+
+  // The alert is already out of the document here, so the dialog behind is no longer inert: the first marked row, else Check out.
+  useEffect(() => {
+    if (afterAlert === 0) return;
+    if (rowErrors.size > 0) setErrorFocus((value) => value + 1);
+    else submitButton.current?.focus();
+    // Only a closed alert moves focus; the marked rows are read as they are at that moment.
+  }, [afterAlert]);
 
   // The sub-dialog is already out of the document here, so the page behind is no longer inert.
   useEffect(() => {
@@ -113,7 +129,6 @@ export function ClockOutDialog({
   }
 
   function suggest() {
-    setError(null);
     if (policy === undefined) {
       setNote('No work policy is effective on this date, so no breaks can be suggested.');
       return;
@@ -162,8 +177,7 @@ export function ClockOutDialog({
 
   async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || stale || reasonMissing) return;
-    setError(null);
+    if (busy || stale || reasonMissing || alert !== null) return;
     setRowErrors(new Map());
     const built = buildCheckOutDialogRequest({
       session,
@@ -173,9 +187,12 @@ export function ClockOutDialog({
       reason,
     });
     if (!built.ok) {
-      if (built.message !== null) setError(built.message);
       setRowErrors(new Map(built.rowErrors.map((item) => [item.key, item])));
-      if (built.rowErrors.length > 0) setErrorFocus((value) => value + 1);
+      // A daylight-saving question of a row stays inline with its choices (it is a question, not a failure); the rest go in the alert.
+      const failed = built.rowErrors.filter((item) => item.problem === null);
+      if (failed.length > 0) setAlert(rowsFailure(failed.map((item) => item.message)));
+      else if (built.rowErrors.length > 0) setErrorFocus((value) => value + 1);
+      else if (built.message !== null) setAlert(messageFailure(built.message));
       return;
     }
     setBusy(true);
@@ -190,11 +207,11 @@ export function ClockOutDialog({
           const rowError = serverBreakRowError(caught.code, caught.details, { rows: draft.rows, noBreaks: draft.noBreaks });
           if (rowError !== null) {
             setRowErrors(new Map([[rowError.key, rowError]]));
-            setErrorFocus((value) => value + 1);
+            setAlert(rowsFailure([rowError.message]));
             return;
           }
         }
-        setError(describeError(caught));
+        setAlert(requestFailure(caught));
       }
     } finally {
       setBusy(false);
@@ -203,7 +220,7 @@ export function ClockOutDialog({
 
   /** Cancel, Escape and the browser's close request: ask first when the rows or the box changed (U-26), else close at once. */
   function requestClose(opener: HTMLElement | null) {
-    if (discard !== null || busy) return;
+    if (discard !== null || alert !== null || busy) return;
     if (sessionDialogIsDirty(starting, draft)) setDiscard({ opener });
     else onClose();
   }
@@ -296,27 +313,28 @@ export function ClockOutDialog({
             </button>
           </div>
         )}
-        {rowErrors.size > 0 && (
-          <p className="error" role="alert">
-            {rowErrors.size === 1 ? 'A break cannot be saved as it is.' : 'Some breaks cannot be saved as they are.'} Check the breaks marked above.
-          </p>
-        )}
-        {error !== null && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
         {reasonMissing && <p className="muted hint">Enter a reason for this old period above to check out.</p>}
         <div className="dialog-actions">
           <button type="button" className="secondary" onClick={(event) => requestClose(event.currentTarget)}>
             Cancel
           </button>
-          <button type="submit" disabled={busy || stale || reasonMissing}>
+          <button ref={submitButton} type="submit" disabled={busy || stale || reasonMissing}>
             {submitLabel}
           </button>
         </div>
       </form>
-      {sub !== null && subRow !== undefined && discard === null && (
+      {alert !== null && (
+        <AlertDialog
+          title={SAVE_FAILED_TITLE}
+          messages={alert.messages}
+          hint={alert.hint}
+          onClose={() => {
+            setAlert(null);
+            setAfterAlert((value) => value + 1);
+          }}
+        />
+      )}
+      {sub !== null && subRow !== undefined && discard === null && alert === null && (
         <BreakSubDialog
           key={sub.key}
           row={subRow}

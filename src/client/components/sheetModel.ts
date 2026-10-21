@@ -138,7 +138,7 @@ export interface SheetDay {
   time: SheetTime;
   ot: SheetOt;
   check: SheetCheck | null;
-  /** The "Show details" rows, h:mm of the server's minutes; blank when the server has no value. */
+  /** The "Show worked hours" rows, h:mm of the server's minutes; blank when the server has no value. */
   details: { regular: string; offCalendar: string };
   /** The day's note in full. Only the read-only review sets it (the Timesheet page shows a "Note" marker). */
   noteText?: string;

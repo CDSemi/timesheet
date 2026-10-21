@@ -163,3 +163,12 @@ Append to this brief:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+- HEAD before: 213bbdc8a013c96e7144d59dd5802e467572779d; after: b7cc06352687d1bc8cd6953b284915584a21e4fd.
+- Commit b7cc063; pushed: yes (213bbdc..b7cc063); remote SHA b7cc06352687d1bc8cd6953b284915584a21e4fd.
+- Digest before add and ls-tree digest of new HEAD: both 04e16199ea66d3144fcb34ad4a7716c929b45f22fac0fd7b350450d271a80918 (839 files).
+- Staged 49: 16 outside handoff (13 modified, 3 new); handoff 33 (ORCHESTRATION.json, checkpoint pair, T01-FREEZE brief, T01-FREEZE checks.txt, T02.md, this brief, 26 T02 evidence files).
+- Extra handoff paths staged: none.
+- Checks: node v24.21.0; precommit-check 0; diff --check 2 then 0 after fix; JSON parse 0; validate_orchestration 0; check_recovery 0 (106); validate_package --preflight 0. Details in evidence/WP5-UX4-T02-FREEZE/checks.txt.
+- Fix: removed one trailing space at WP5-UX4-T01-FREEZE.md line 175 (allowed). No masking, no stop.
+- Deviation: JSON parse used `node -e` with a read-only script (runtime rule says no `node -e`); no other effect.

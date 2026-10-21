@@ -14,6 +14,7 @@ import {
   chooseBreakRowFold,
   confirmBreaksRows,
   editBreakRow,
+  endRunningDraft,
   newBreakRow,
   newSessionDialogDraft,
   parseBreakMinutes,
@@ -25,6 +26,7 @@ import {
   resolveBreakRow,
   rowKeepsPin,
   rowsFromSession,
+  runningBreaksSummary,
   savedBreakMinutes,
   serverBreakRowError,
   type SessionDialogDraft,
@@ -986,5 +988,100 @@ describe('dirty check for Cancel', () => {
   it('hidden rows do not count while the box is ticked in both states', () => {
     const ticked = setNoBreaks(start, true);
     expect(sessionDialogIsDirty(ticked, editBreakRow(ticked, 'a', { minutes: '45' }))).toBe(false);
+  });
+});
+
+/*
+ * WP5-UX4-T03, U4-11: Edit on today's running session. It has no end, so the draft keeps an empty end without a date (the rows then
+ * have their own date field), the request carries `end: null` and never confirms the breaks, which Check out does.
+ */
+describe('editing the start of a running session', () => {
+  const running = (overrides: Partial<Session> = {}) =>
+    savedSession({ end_utc: null, breaks_confirmed: false, source: 'clock', breaks: [], ...overrides });
+
+  it('opens with no end, no date for the end and the running flag; a confirmed-none flag is never carried over', () => {
+    const draft = sessionDialogDraftFromSession(running());
+    expect(draft.running).toBe(true);
+    expect(draft.end).toEqual({ date: '', time: '', fold: null, offset: null });
+    expect(draft.start).toMatchObject({ date: '2026-09-21', time: '09:00' });
+    // Legacy: a running session saved with confirmed breaks and none listed still shows no ticked box, which is hidden anyway.
+    expect(sessionDialogDraftFromSession(running({ breaks_confirmed: true })).noBreaks).toBe(false);
+    expect(sessionDialogDraftFromSession(savedSession()).running).toBe(false);
+    expect(newSessionDialogDraft('2026-10-14', LA).running).toBe(false);
+  });
+
+  it('saves with end null, breaks_confirmed false, the loaded version and the start as shown', () => {
+    const draft = sessionDialogDraftFromSession(running({ version: 7 }));
+    expect(sessionRequest(draft, { allowUnconfirmed: false, expectedVersion: 7 })).toEqual({
+      start: { local: '2026-09-21T09:00', zone: LA, offset: '-07:00' },
+      end: null,
+      input_zone: LA,
+      breaks: [],
+      breaks_confirmed: false,
+      expected_version: 7,
+    });
+  });
+
+  it('a moved start is sent as typed, in the input zone, and an empty list needs no G-4 choice', () => {
+    const draft = { ...sessionDialogDraftFromSession(running()), start: field('2026-09-21', '07:45') };
+    const request = sessionRequest(draft, { allowUnconfirmed: false, expectedVersion: 4, reason: ' why ' });
+    expect(request).toMatchObject({ start: { local: '2026-09-21T07:45', zone: LA }, end: null, breaks: [], breaks_confirmed: false, reason: 'why' });
+    expect(request.start.offset).toBeUndefined();
+  });
+
+  it('never confirms the breaks, with rows listed or with the hidden box ticked', () => {
+    const base = sessionDialogDraftFromSession(running());
+    const listed = sessionRequest({ ...base, rows: [typedRow('a', '2026-09-21', '10:00', '15')] }, { allowUnconfirmed: false });
+    expect(listed.breaks).toHaveLength(1);
+    expect(listed.breaks_confirmed).toBe(false);
+    const ticked = sessionRequest({ ...base, noBreaks: true, rows: [typedRow('a', '2026-09-21', '10:00', '15')] }, { allowUnconfirmed: false });
+    expect(ticked.breaks_confirmed).toBe(false);
+  });
+
+  it('checks the rows against the start only: a break after any end is fine, one before the start is a row error', () => {
+    const base = sessionDialogDraftFromSession(running());
+    expect(buildSessionDialogRequest({ ...base, rows: [typedRow('late', '2026-09-22', '23:00', '30')] }, { allowUnconfirmed: false }).ok).toBe(true);
+    const early = buildSessionDialogRequest({ ...base, rows: [typedRow('early', '2026-09-21', '08:50', '15')] }, { allowUnconfirmed: false });
+    expect(early).toEqual({
+      ok: false,
+      message: null,
+      problem: null,
+      rowErrors: [{ index: 0, key: 'early', label: 'Break 1', kind: 'before_start', message: 'Break 1 starts before the session starts.', problem: null }],
+    });
+  });
+
+  it('still needs the zone and the start; only the end is not asked for', () => {
+    const base = sessionDialogDraftFromSession(running());
+    expect(buildSessionDialogRequest({ ...base, zone: ' ' }, SESSION_OPTIONS)).toMatchObject({ ok: false, message: 'Enter the input zone.' });
+    expect(buildSessionDialogRequest({ ...base, start: field('2026-09-21', '') }, SESSION_OPTIONS)).toMatchObject({
+      ok: false,
+      message: 'Enter the start date and time.',
+    });
+    expect(buildSessionDialogRequest({ ...base, start: field('2026-03-08', '02:30') }, SESSION_OPTIONS)).toMatchObject({
+      ok: false,
+      problem: { kind: 'gap' },
+    });
+  });
+
+  it('"Set an end instead" returns to the ended-session flow: the end is asked for again and a listed or ticked choice confirms', () => {
+    const ended = endRunningDraft(sessionDialogDraftFromSession(running()));
+    expect(ended.running).toBe(false);
+    expect(ended.end).toEqual({ date: '2026-09-21', time: '', fold: null, offset: null });
+    expect(buildSessionDialogRequest(ended, SESSION_OPTIONS)).toMatchObject({ ok: false, message: 'Enter the end date and time.' });
+    const request = sessionRequest({ ...ended, end: field('2026-09-21', '17:00'), noBreaks: true });
+    expect(request).toMatchObject({ end: { local: '2026-09-21T17:00', zone: LA }, breaks: [], breaks_confirmed: true });
+  });
+
+  it('its Save confirmation says the breaks are confirmed at Check out', () => {
+    expect(runningBreaksSummary([])).toBe('No breaks listed, confirmed at Check out');
+    expect(runningBreaksSummary([typedRow('a', '2026-09-21', '10:00', '15')])).toBe('1 break, confirmed at Check out');
+    expect(runningBreaksSummary([typedRow('a', '2026-09-21', '10:00', '15'), typedRow('b', '2026-09-21', '12:00', '30')])).toBe('2 breaks, confirmed at Check out');
+  });
+
+  it('is dirty only after a change; switching to an end counts as one', () => {
+    const initial = sessionDialogDraftFromSession(running());
+    expect(sessionDialogIsDirty(initial, initial)).toBe(false);
+    expect(sessionDialogIsDirty(initial, { ...initial, start: field('2026-09-21', '07:45') })).toBe(true);
+    expect(sessionDialogIsDirty(initial, endRunningDraft(initial))).toBe(true);
   });
 });

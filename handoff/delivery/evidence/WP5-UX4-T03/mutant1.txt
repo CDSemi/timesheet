@@ -1,0 +1,103 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/breakRowsModel.test.ts (101 tests | 5 failed) 26ms
+   ❯ editing the start of a running session (9)
+     × saves with end null, breaks_confirmed false, the loaded version and the start as shown 3ms
+     × a moved start is sent as typed, in the input zone, and an empty list needs no G-4 choice 0ms
+     × never confirms the breaks, with rows listed or with the hidden box ticked 0ms
+     × checks the rows against the start only: a break after any end is fine, one before the start is a row error 2ms
+     × still needs the zone and the start; only the end is not asked for 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > editing the start of a running session > saves with end null, breaks_confirmed false, the loaded version and the start as shown
+Error: expected a request, got {"ok":false,"message":"Enter the end date and time.","problem":null,"rowErrors":[]}
+ ❯ sessionRequest tests/client/breakRowsModel.test.ts:117:24
+    115| function sessionRequest(draft: SessionDialogDraft, options: Parameters…
+    116|   const built = buildSessionDialogRequest(draft, options);
+    117|   if (!built.ok) throw new Error(`expected a request, got ${JSON.strin…
+       |                        ^
+    118|   return built.request;
+    119| }
+ ❯ tests/client/breakRowsModel.test.ts:1015:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > editing the start of a running session > a moved start is sent as typed, in the input zone, and an empty list needs no G-4 choice
+Error: expected a request, got {"ok":false,"message":"Enter the end date and time.","problem":null,"rowErrors":[]}
+ ❯ sessionRequest tests/client/breakRowsModel.test.ts:117:24
+    115| function sessionRequest(draft: SessionDialogDraft, options: Parameters…
+    116|   const built = buildSessionDialogRequest(draft, options);
+    117|   if (!built.ok) throw new Error(`expected a request, got ${JSON.strin…
+       |                        ^
+    118|   return built.request;
+    119| }
+ ❯ tests/client/breakRowsModel.test.ts:1027:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > editing the start of a running session > never confirms the breaks, with rows listed or with the hidden box ticked
+Error: expected a request, got {"ok":false,"message":"Enter the end date and time.","problem":null,"rowErrors":[]}
+ ❯ sessionRequest tests/client/breakRowsModel.test.ts:117:24
+    115| function sessionRequest(draft: SessionDialogDraft, options: Parameters…
+    116|   const built = buildSessionDialogRequest(draft, options);
+    117|   if (!built.ok) throw new Error(`expected a request, got ${JSON.strin…
+       |                        ^
+    118|   return built.request;
+    119| }
+ ❯ tests/client/breakRowsModel.test.ts:1034:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > editing the start of a running session > checks the rows against the start only: a break after any end is fine, one before the start is a row error
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/client/breakRowsModel.test.ts:1043:139
+    1041|   it('checks the rows against the start only: a break after any end is…
+    1042|     const base = sessionDialogDraftFromSession(running());
+    1043|     expect(buildSessionDialogRequest({ ...base, rows: [typedRow('late'…
+       |                                                                                                                                           ^
+    1044|     const early = buildSessionDialogRequest({ ...base, rows: [typedRow…
+    1045|     expect(early).toEqual({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  tests/client/breakRowsModel.test.ts > editing the start of a running session > still needs the zone and the start; only the end is not asked for
+AssertionError: expected { ok: false, …(3) } to match object { ok: false, problem: { kind: 'gap' } }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "ok": false,
+-   "problem": {
+-     "kind": "gap",
+-   },
++   "problem": null,
+  }
+
+ ❯ tests/client/breakRowsModel.test.ts:1060:106
+    1058|       message: 'Enter the start date and time.',
+    1059|     });
+    1060|     expect(buildSessionDialogRequest({ ...base, start: field('2026-03-…
+       |                                                                                                          ^
+    1061|       ok: false,
+    1062|       problem: { kind: 'gap' },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 96 passed (101)
+   Start at  23:49:59
+   Duration  485ms (import 51%, transform 40%, tests 8%, worker 1%)
+
+exit 1

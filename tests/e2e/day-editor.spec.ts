@@ -5,6 +5,7 @@ import type { Locator, Page } from '@playwright/test';
 import { besideNeed, type EditorLayoutInput, editorLayout, sheetRoomBeside } from '../../src/client/components/editorLayoutModel.ts';
 import { addDays, isoWeekday } from '../../src/domain/dates.ts';
 import { dateTimeIn, instantOfWallTime, wallTimeIn } from '../client/zoneOracle.ts';
+import { backdropOf, backdropsAbove, computedStyle, contrast, focusFromKeyboard, measureFocusRing, over, parseColour } from './contrast.ts';
 import { namedDayButton } from './dayButton.ts';
 import {
   type BuiltServer,
@@ -87,11 +88,15 @@ async function setClientWidth(page: Page, clientWidth: number, height = 800): Pr
   await page.setViewportSize({ width: clientWidth + scrollbar, height });
 }
 
+/** True only while a test aborts a request on purpose (see the console guard below). */
+let allowNetworkConsoleError = false;
+
 test.beforeEach(({ page }) => {
   // A refused request (the server answers 401, 409 or 422 on purpose in these tests) logs a
   // console error; anything else, such as a CSP violation, fails the test.
   page.on('console', (message) => {
-    const expected = /status of (401|409|422)/.test(message.text());
+    // A request the test itself aborts (U4-15, "no answer from the server") logs net::ERR_FAILED; only those tests allow it.
+    const expected = /status of (401|409|422)/.test(message.text()) || (allowNetworkConsoleError && /net::ERR_FAILED/.test(message.text()));
     expect(message.type() === 'error' && !expected, `console error: ${message.text()}`).toBe(false);
   });
   page.on('pageerror', (error) => {
@@ -413,7 +418,10 @@ test('an overnight entry needs its explicit end date and is saved with it', asyn
     // The end date still equals the start date, so the server refuses an end before the start (after the final confirmation).
     await expect(form.locator('[data-overnight]')).toHaveCount(0);
     await saveSession(page, form);
-    await expect(form.getByRole('alert')).toContainText('end_not_after_start');
+    // U4-15: the server's refusal is the "not saved" alert; its OK button gives the dialog back.
+    await expect(savedFailedAlert(page)).toContainText('end_not_after_start');
+    await savedFailedAlert(page).getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(savedFailedAlert(page)).toHaveCount(0);
 
     await form.getByLabel('End date', { exact: true }).fill(nextDate);
     await expect(form.locator('[data-overnight]')).toContainText(`ends on ${nextDate}`);
@@ -1197,6 +1205,9 @@ test('Q6 b: a same-day session shows no break date field at 1366 and on a phone 
     await expect(saveConfirmation(page), 'the hidden break dates followed the session date, so nothing is refused').toBeVisible();
     await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
     await expect.poll(() => bodies.length).toBe(1);
+    // U4-15: the synthetic refusal opens the alert; OK gives the dialog back before it is cancelled below.
+    await expect(savedFailedAlert(page)).toContainText('Synthetic refusal for the test.');
+    await savedFailedAlert(page).getByRole('button', { name: 'OK', exact: true }).click();
     // The hidden rows followed the session date: every instant is on `other`, the minutes typed stay.
     expect(bodies[0]).toMatchObject({ start: { local: `${other}T08:00` }, end: { local: `${other}T17:00` }, input_zone: LA });
     expect(breaksOf(bodies[0]).map((item) => [item.start.local, item.end.local])).toEqual([
@@ -1534,8 +1545,10 @@ test('phone break chips: a row that cannot be saved and a server refusal mark th
     await expect(entry(1)).not.toHaveClass(/has-error/);
     await expect(entry(3).getByText('Break 3 overlaps Break 2.')).toBeVisible();
     await expect(breakChip(form, 3), 'the message is the chip\'s description').toHaveAccessibleDescription('Break 3 overlaps Break 2.');
+    // U4-15: the alert lists the row by its name; OK moves focus to the first marked chip.
+    await expect(savedFailedAlert(page)).toContainText('Break 3 overlaps Break 2.');
+    await savedFailedAlert(page).getByRole('button', { name: 'OK', exact: true }).click();
     await expect(breakChip(form, 3), 'focus moves to the first marked chip').toBeFocused();
-    await expect(form.getByRole('alert')).toContainText('A break cannot be saved as it is.');
     await snap(page, 'session-dialog-chip-error', test.info().project.name);
     // The sub-dialog shows the same message, and the message goes once the break is changed.
     await breakChip(form, 3).click();
@@ -1550,6 +1563,8 @@ test('phone break chips: a row that cannot be saved and a server refusal mark th
     await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
     await expect.poll(() => bodies.length).toBe(1);
     await expect(saveConfirmation(page)).toHaveCount(0);
+    await expect(savedFailedAlert(page)).toContainText('Break 2 lies outside the session.');
+    await savedFailedAlert(page).getByRole('button', { name: 'OK', exact: true }).click();
     await expect(entry(2)).toHaveClass(/has-error/);
     await expect(entry(2).getByText('Break 2 lies outside the session.')).toBeVisible();
     await expect(breakChip(form, 2)).toHaveAccessibleDescription('Break 2 lies outside the session.');
@@ -2094,19 +2109,23 @@ test('Check out refusals: suggested breaks that end after now, and a future_brea
     await expect(entry(2).getByText(future)).toBeVisible();
     await expect(entry(1)).not.toHaveClass(/has-error/);
     await expect(entry(3)).not.toHaveClass(/has-error/);
-    await expect(dialog.getByRole('alert')).toContainText('A break cannot be saved as it is.');
+    // U4-15: the refusal opens the alert (the message names Break 2); OK moves focus to the marked chip or row.
+    await expect(savedFailedAlert(page)).toContainText('Break 2 ends later than five minutes from now.');
+    await savedFailedAlert(page).getByRole('button', { name: 'OK', exact: true }).click();
     if (showsChips(page)) {
       await expect(breakChip(dialog, 2)).toHaveAccessibleDescription(future);
       await expect(breakChip(dialog, 2), 'focus moves to the marked chip').toBeFocused();
     } else {
       await expect(breakRow(dialog, 2).time).toHaveAccessibleDescription(future);
+      await expect(breakRow(dialog, 2).time, 'focus moves to the marked row').toBeFocused();
     }
     expect(await running()).toBe(true);
 
     // The real server: breaks that end after the check-out lie outside the session. Nothing is saved and the dialog stays.
     mocked = false;
     await submit.click();
-    await expect(dialog.getByRole('alert').last()).toContainText('inside their work session');
+    await expect(savedFailedAlert(page)).toContainText('inside their work session');
+    await savedFailedAlert(page).getByRole('button', { name: 'OK', exact: true }).click();
     await expect(dialog.locator('.has-error')).toHaveCount(0);
     expect(bodies).toHaveLength(2);
     expect(await running()).toBe(true);
@@ -2322,7 +2341,10 @@ test('Check in then Check out asks for break confirmation and sends the session 
   await expect(dialog.locator('[data-break]')).toHaveCount(3);
   await expect(dialog.getByRole('button', { name: 'Check out with these breaks' })).toBeVisible();
   await dialog.getByRole('button', { name: 'Check out with these breaks' }).click();
-  await expect(dialog.getByRole('alert')).toContainText('inside their work session');
+  // U4-15: the refusal is an alert dialog with one OK button, no longer a paragraph at the end of the dialog body.
+  await expect(savedFailedAlert(page)).toContainText('inside their work session');
+  await savedFailedAlert(page).getByRole('button', { name: 'OK', exact: true }).click();
+  await expect(savedFailedAlert(page)).toHaveCount(0);
   expect((await employeeSeed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(true);
   expect(bodies).toHaveLength(1);
   expect(bodies[0]).toMatchObject({ breaks_confirmed: true });
@@ -3101,7 +3123,8 @@ test.describe('WP5-UX3-T07: cards read in the reporting zone', () => {
       await expect(runningCard.locator('[data-session-state]')).toHaveText('Running');
       await expect(runningCard.locator('.pill .live-dot')).toHaveCount(1);
       await expect(runningCard).toContainText(`Running since ${dateTimeIn(started.session.start_utc, LA).slice(11)}`);
-      await expect(runningCard).toContainText('Checked in and out');
+      // U4-11: a session that is still running was only checked in; "and out" is for a closed one.
+      await expect(runningCard.locator('.session-source')).toHaveText('Checked in');
       await expect(runningCard.getByRole('table')).toHaveCount(0);
       await expect(runningCard.getByRole('button', { name: /^Confirm breaks/ })).toHaveCount(0);
     } finally {
@@ -5095,3 +5118,875 @@ test.describe('WP5-UX4-T02 addendum 1: Today, a period step, Close and Escape as
     await expect(notes).toHaveValue('');
   });
 });
+
+/* ===================================================================================================================
+ * WP5-UX4-T03 (round 4): U4-11 the start of a running session, U4-12 the zone first, U4-13 "Today" and "Now",
+ * U4-14 aligned break rows, U4-15 the "not saved" alert. Nothing here changes a business figure: the server answers
+ * as before, so each test checks what the person sees and what the page sends.
+ * =================================================================================================================== */
+
+/** The one-button alert a failed save of the session dialog or the Check out dialog opens (U4-15). */
+function savedFailedAlert(page: Page): Locator {
+  return page.getByRole('alertdialog', { name: 'This session was not saved', exact: true });
+}
+
+/** The alert is on screen with its whole message in view: inside the window, never scrolled, each message inside the alert. */
+async function expectAlertInView(alert: Locator): Promise<void> {
+  await expect(alert).toBeVisible();
+  const facts = await alert.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      top: rect.top,
+      bottom: rect.bottom,
+      left: rect.left,
+      right: rect.right,
+      windowWidth: element.ownerDocument.documentElement.clientWidth,
+      windowHeight: element.ownerDocument.documentElement.clientHeight,
+      scrolls: element.scrollHeight > element.clientHeight + 0.5,
+      messages: [...element.querySelectorAll('.confirm-message')].map((message) => {
+        const box = message.getBoundingClientRect();
+        return { top: box.top, bottom: box.bottom, left: box.left, right: box.right, clipped: message.scrollWidth > message.clientWidth + 0.5 };
+      }),
+    };
+  });
+  expect(facts.top, 'the alert starts inside the window').toBeGreaterThanOrEqual(0);
+  expect(facts.bottom, 'the alert ends inside the window').toBeLessThanOrEqual(facts.windowHeight);
+  expect(facts.left).toBeGreaterThanOrEqual(0);
+  expect(facts.right).toBeLessThanOrEqual(facts.windowWidth);
+  expect(facts.scrolls, 'the alert does not scroll').toBe(false);
+  expect(facts.messages.length).toBeGreaterThan(0);
+  for (const message of facts.messages) {
+    expect(message.top).toBeGreaterThanOrEqual(facts.top);
+    expect(message.bottom).toBeLessThanOrEqual(facts.bottom);
+    expect(message.clipped, 'the message is not clipped').toBe(false);
+  }
+}
+
+/** Opens the new-session dialog of an open editor and fills it: zone, the four date and time fields, and the box that confirms no breaks. */
+async function fillNewSession(
+  page: Page,
+  editor: Locator,
+  zone: string,
+  start: readonly [string, string],
+  end: readonly [string, string],
+): Promise<Locator> {
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form = sessionDialog(page, 'New session');
+  await expect(form).toBeVisible();
+  await typeInputZone(form, zone);
+  await form.getByLabel('Start date', { exact: true }).fill(start[0]);
+  await form.getByLabel('Start time', { exact: true }).fill(start[1]);
+  await form.getByLabel('End date', { exact: true }).fill(end[0]);
+  await form.getByLabel('End time', { exact: true }).fill(end[1]);
+  await chooseNoBreaks(form);
+  return form;
+}
+
+/** True once a text node of the control reads like its accessible name: the name contains the visible words (SC 2.5.3, axe label-content-name-mismatch). */
+async function namesContainVisibleText(dialog: Locator): Promise<string[]> {
+  return dialog.evaluate((element) => {
+    const problems: string[] = [];
+    const normal = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    for (const control of element.querySelectorAll('button, [role="button"], a')) {
+      const visible = normal(control.textContent ?? '');
+      if (visible === '') continue;
+      const name = normal(control.getAttribute('aria-label') ?? control.textContent ?? '');
+      if (!name.includes(visible)) problems.push(`"${visible}" is not in the name "${name}"`);
+    }
+    for (const control of element.querySelectorAll('input:not([type="hidden"]), select, textarea, button')) {
+      const named = control.getAttribute('aria-label') !== null || control.closest('label') !== null || (control.textContent ?? '').trim() !== '';
+      if (!named && control.getAttribute('aria-labelledby') === null) problems.push(`an unnamed ${control.tagName.toLowerCase()}`);
+    }
+    const ids = [...element.querySelectorAll('[id]')].map((node) => node.id);
+    for (const id of new Set(ids)) if (ids.filter((other) => other === id).length > 1) problems.push(`the id ${id} is used twice`);
+    return problems;
+  });
+}
+
+/**
+ * The text colour of an element against its own fill composited over what is behind it, read at once. These tests run with reduced
+ * motion, so no colour transition is pending (the settled reads of contrast.ts wait 400 ms per read, too slow for a whole dialog).
+ */
+async function textContrast(locator: Locator): Promise<number> {
+  const text = parseColour(await computedStyle(locator, 'color'));
+  const fill = parseColour(await computedStyle(locator, 'backgroundColor'));
+  const behind = over(fill, backdropOf(await backdropsAbove(locator)));
+  return contrast(over(text, behind), behind);
+}
+
+/** The text of the dialog's own words against what is behind them: at least 4.5:1 for every leaf element with text. */
+async function textContrastProblems(dialog: Locator): Promise<string[]> {
+  const leaves = await dialog.locator('h2, h3, p, li, label, button, dt, dd, .hint, .muted, legend').all();
+  const problems: string[] = [];
+  for (const leaf of leaves) {
+    if (!(await leaf.isVisible())) continue;
+    if ((await leaf.innerText()).trim() === '') continue;
+    const ratio = await textContrast(leaf);
+    if (ratio < 4.5) problems.push(`${await leaf.evaluate((element) => `${element.tagName}.${element.getAttribute('class') ?? ''}`)} ${ratio.toFixed(2)}:1`);
+  }
+  return problems;
+}
+
+for (const width of [1440, 390]) {
+  test(`U4-12, U4-13 at ${width}: the zone is the first field of Time, the order is zone, start date, start time, end date, end time in the DOM, on screen and by Tab; "Today" and "Now" end where their inputs end, in both themes`, async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+    isMobile,
+  }, testInfo) => {
+    const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+    await page.setViewportSize({ width, height: width > 600 ? 1000 : 844 });
+    try {
+      await signInThroughUi();
+      const editor = await openEditor(page, date);
+      await editor.getByRole('button', { name: 'Add session' }).click();
+      const form = sessionDialog(page, 'New session');
+      await expect(form).toBeVisible();
+      const expected = ['Input zone', 'Start date', 'Start time', 'End date', 'End time'];
+
+      // DOM order and screen order of the five inputs of the Time section.
+      const inputs = await form.evaluate((dialog) => {
+        const section = dialog.querySelector('section[aria-labelledby$="-time"]');
+        return [...(section?.querySelectorAll('input') ?? [])].map((input) => {
+          const label = input.closest('label');
+          const name = [...(label?.childNodes ?? [])]
+            .filter((node) => node.nodeType === 3)
+            .map((node) => node.textContent ?? '')
+            .join('')
+            .trim();
+          const box = input.getBoundingClientRect();
+          return { name, x: box.x, y: box.y, tabindex: input.getAttribute('tabindex') };
+        });
+      });
+      expect(inputs.map((input) => input.name), 'DOM order').toEqual(expected);
+      for (let index = 1; index < inputs.length; index += 1) {
+        const [before, after] = [inputs[index - 1], inputs[index]];
+        const sameRow = Math.abs((before?.y ?? 0) - (after?.y ?? 0)) <= 1;
+        expect(sameRow ? (before?.x ?? 0) < (after?.x ?? 0) : (before?.y ?? 0) < (after?.y ?? 0), `${before?.name} comes before ${after?.name} on screen`).toBe(true);
+      }
+      expect(inputs.every((input) => input.tabindex === null), 'no tabindex changes the order').toBe(true);
+      await form.getByLabel('Input zone').focus();
+      await page.keyboard.press('Tab');
+      await expect(form.getByLabel('Start date', { exact: true }), 'Tab goes from the zone to the start date').toBeFocused();
+
+      // The link under each input ends where the input ends (owner answer F-5), is 44px high on a phone, and reads well in both themes.
+      const pairs = [
+        ['Start date', 'Today, start date'],
+        ['Start time', 'Now, start time'],
+        ['End date', 'Today, end date'],
+        ['End time', 'Now, end time'],
+      ] as const;
+      for (const theme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+        for (const [inputName, linkName] of pairs) {
+          const input = await form.getByLabel(inputName, { exact: true }).boundingBox();
+          const link = form.getByRole('button', { name: linkName, exact: true });
+          const box = await link.boundingBox();
+          expect(input, inputName).not.toBeNull();
+          expect(box, linkName).not.toBeNull();
+          if (input === null || box === null) continue;
+          expect(Math.abs(input.x + input.width - (box.x + box.width)), `${linkName} ends where ${inputName} ends (${theme})`).toBeLessThanOrEqual(1);
+          expect(box.y, `${linkName} is under its input`).toBeGreaterThanOrEqual(input.y + input.height - 1);
+          if (width < 768) {
+            expect(box.height, `${linkName} is 44px high on a phone`).toBeGreaterThanOrEqual(44);
+            expect(box.width, `${linkName} is 44px wide on a phone`).toBeGreaterThanOrEqual(44);
+          }
+          expect(await textContrast(link), `${linkName} text contrast (${theme})`).toBeGreaterThanOrEqual(4.5);
+        }
+        expect(await namesContainVisibleText(form), `names of the session dialog (${theme})`).toEqual([]);
+        expect(await textContrastProblems(form), `text contrast of the session dialog (${theme})`).toEqual([]);
+
+        // The shared focus ring on a link (3:1, SC 1.4.11) and, where the device can hover, a hover that keeps the text readable.
+        const today = form.getByRole('button', { name: 'Today, start date', exact: true });
+        await focusFromKeyboard(today);
+        const ring = await measureFocusRing(today);
+        expect(ring.ringAgainstBackdrop, `focus ring of "Today" (${theme})`).toBeGreaterThanOrEqual(3);
+        expect(ring.ringAgainstGap, `focus ring against its gap (${theme})`).toBeGreaterThanOrEqual(3);
+        if (!isMobile) {
+          await form.getByLabel('Input zone').focus();
+          await today.hover();
+          await page.waitForTimeout(400);
+          expect(await textContrast(today), `"Today" under the pointer (${theme})`).toBeGreaterThanOrEqual(4.5);
+          await page.mouse.move(0, 0);
+        }
+      }
+      await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+      await snap(page, `session-dialog-zone-first-${width}`, testInfo.project.name);
+    } finally {
+      await employeeSeed.clearSessions(date);
+    }
+  });
+}
+
+test.describe('Today and Now read the input zone, never the device zone (U4-13)', () => {
+  // The device is in Los Angeles; the dialog's input zone is Tokyo, which is already on the next calendar date at Los Angeles noon.
+  test.use({ timezoneId: LA });
+
+  test('with a frozen clock they fill the Tokyo date and time, and Save sends that local time with the Tokyo zone', async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }) => {
+    const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+    const TOKYO = 'Asia/Tokyo';
+    const noon = instantOfWallTime(date, '12:00', LA);
+    const [tokyoDate = '', tokyoTime = ''] = dateTimeIn(noon, TOKYO).split(' ');
+    expect(tokyoDate, 'Tokyo is a calendar day ahead of Los Angeles at noon').toBe(addDays(date, 1));
+    const posts = recordSessionPosts(page, date);
+    try {
+      await signInThroughUi();
+      const editor = await openEditor(page, date);
+      await page.clock.setFixedTime(new Date(noon));
+      await editor.getByRole('button', { name: 'Add session' }).click();
+      const form = sessionDialog(page, 'New session');
+      await expect(form).toBeVisible();
+      await expect(form.getByLabel('Input zone')).toHaveValue(LA);
+      await typeInputZone(form, TOKYO);
+
+      const startDate = form.getByLabel('Start date', { exact: true });
+      const startTime = form.getByLabel('Start time', { exact: true });
+      await form.getByRole('button', { name: 'Today, start date', exact: true }).click();
+      await expect(startDate, 'Today is the date in Tokyo, not the device date').toHaveValue(tokyoDate);
+      await form.getByRole('button', { name: 'Now, start time', exact: true }).click();
+      await expect(startTime, 'Now is the minute in Tokyo, not the device clock').toHaveValue(tokyoTime);
+
+      // "Now" on a field that holds another date moves the date too: the value is this instant.
+      await startDate.fill(date);
+      await form.getByRole('button', { name: 'Now, start time', exact: true }).click();
+      await expect(startDate).toHaveValue(tokyoDate);
+      await expect(startTime).toHaveValue(tokyoTime);
+
+      // The end: its own "Today" (pressed with the keyboard: a link is a button), then a time an hour later typed by hand.
+      await form.getByRole('button', { name: 'Today, end date', exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await expect(form.getByLabel('End date', { exact: true })).toHaveValue(tokyoDate);
+      const endTime = plusMinutes(`${tokyoDate} ${tokyoTime}`, 60).slice(11);
+      await form.getByLabel('End time', { exact: true }).fill(endTime);
+      await chooseNoBreaks(form);
+      await saveSession(page, form);
+      await expect(editor.getByText('Session saved.')).toBeVisible();
+
+      expect(posts).toHaveLength(1);
+      expect(posts[0]).toMatchObject({
+        input_zone: TOKYO,
+        start: { local: `${tokyoDate}T${tokyoTime}`, zone: TOKYO },
+        end: { local: `${tokyoDate}T${endTime}`, zone: TOKYO },
+      });
+      const stored = (await employeeSeed.dayView(date)).sessions[0];
+      expect(Date.parse(stored?.start_utc ?? ''), 'the stored instant is Los Angeles noon').toBe(Date.parse(noon));
+      expect(stored?.input_zone).toBe(TOKYO);
+    } finally {
+      await employeeSeed.clearSessions(date);
+    }
+  });
+
+  test('a change through a link is a typed change: the draft is dirty, so Cancel asks first; with no change it closes at once', async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }) => {
+    const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+    const noon = instantOfWallTime(date, '12:00', LA);
+    try {
+      await signInThroughUi();
+      const editor = await openEditor(page, date);
+      await page.clock.setFixedTime(new Date(noon));
+      await editor.getByRole('button', { name: 'Add session' }).click();
+      const form = sessionDialog(page, 'New session');
+      await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(form, 'nothing changed: Cancel closes at once').toHaveCount(0);
+
+      await editor.getByRole('button', { name: 'Add session' }).click();
+      await expect(form.getByLabel('Start time', { exact: true })).toHaveValue('08:00');
+      await form.getByRole('button', { name: 'Now, start time', exact: true }).click();
+      await expect(form.getByLabel('Start time', { exact: true })).toHaveValue('12:00');
+      await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(page.getByRole('alertdialog', { name: 'Discard your changes?' })).toBeVisible();
+      await page.getByRole('alertdialog', { name: 'Discard your changes?' }).getByRole('button', { name: 'Keep editing' }).click();
+      await expect(form).toBeVisible();
+    } finally {
+      await employeeSeed.clearSessions(date);
+    }
+  });
+});
+
+/** The geometry and clipping of every break row of an open dialog: the time and the minutes inputs and their text fit. */
+interface RowFit {
+  origin: string;
+  time: { x: number; width: number; clipped: boolean };
+  minutes: { x: number; width: number; clipped: boolean };
+  info: string;
+}
+
+/**
+ * The width a time field of a break row needs for its current value, in px: a hidden copy of the field with `width: auto`, which the
+ * browser sizes to its date-time fields, its padding and its picker icon. The copy sits in a copy of the field's label, so every
+ * style that reaches the field reaches the copy.
+ */
+function naturalTimeWidth(time: Locator): Promise<number> {
+  return time.evaluate((input) => {
+    const label = input.parentElement;
+    const holder = label?.parentElement;
+    if (label === null || label === undefined || holder === null || holder === undefined) return Number.NaN;
+    const copy = label.cloneNode(true) as typeof label;
+    copy.style.position = 'absolute';
+    copy.style.visibility = 'hidden';
+    copy.style.width = 'max-content';
+    copy.style.flex = 'none';
+    const probe = copy.querySelector('input');
+    if (probe === null) return Number.NaN;
+    probe.style.width = 'auto';
+    holder.append(copy);
+    const width = probe.getBoundingClientRect().width;
+    copy.remove();
+    return width;
+  });
+}
+
+function rowFits(dialog: Locator): Promise<RowFit[]> {
+  return dialog.evaluate((element): RowFit[] =>
+    [...element.querySelectorAll('[data-break]')].map((row) => {
+      const part = (selector: string) => {
+        const input = row.querySelector(selector);
+        const box = input?.getBoundingClientRect();
+        let clipped = input === null || input.scrollWidth > input.clientWidth;
+        // A date-time field clips its text inside, which `scrollWidth` does not report: compare with the width a copy sizes itself to.
+        const label = input?.parentElement;
+        if (input !== null && input !== undefined && label !== null && label !== undefined && label.parentElement !== null && selector.includes('time')) {
+          const copy = label.cloneNode(true) as typeof label;
+          copy.style.cssText = 'position:absolute;visibility:hidden;width:max-content;flex:none';
+          const probe = copy.querySelector('input');
+          if (probe !== null) {
+            probe.style.width = 'auto';
+            label.parentElement.append(copy);
+            clipped = clipped || (box?.width ?? 0) < probe.getBoundingClientRect().width - 0.5;
+            copy.remove();
+          }
+        }
+        return { x: box?.x ?? Number.NaN, width: box?.width ?? Number.NaN, clipped };
+      };
+      return {
+        origin: row.getAttribute('data-origin') ?? '',
+        time: part('input[type="time"]'),
+        minutes: part('input[type="number"]'),
+        info: row.querySelector('.break-info')?.textContent ?? '',
+      };
+    }),
+  );
+}
+
+/** The width of a custom property that holds a length, in px (a probe whose width takes it, so rem and calc are resolved). */
+function tokenWidth(page: Page, token: string): Promise<number> {
+  return page.locator('body').evaluate((body, name) => {
+    const probe = body.ownerDocument.createElement('div');
+    probe.style.cssText = `position:absolute;visibility:hidden;height:0;width:var(${name})`;
+    body.append(probe);
+    const width = probe.getBoundingClientRect().width;
+    probe.remove();
+    return width;
+  }, token);
+}
+
+/**
+ * Every row has the same time and minutes x and width (+-0.5px), whatever its origin or its info text, and no time text is clipped. In the
+ * one-line row (`fixedTime` given) the time is also exactly its slot wide: a slot that may grow would share the free room with the info.
+ */
+function expectRowsAligned(rows: readonly RowFit[], label: string, fixedTime?: number): void {
+  expect(rows.length, `${label}: rows`).toBeGreaterThan(1);
+  const [first] = rows;
+  for (const row of rows) {
+    if (fixedTime !== undefined) expect(Math.abs(row.time.width - fixedTime), `${label}: the time of a ${row.origin} row is exactly its fixed slot`).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(row.time.x - (first?.time.x ?? 0)), `${label}: time x of a ${row.origin} row (${row.info})`).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(row.time.width - (first?.time.width ?? 0)), `${label}: time width of a ${row.origin} row`).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(row.minutes.x - (first?.minutes.x ?? 0)), `${label}: minutes x of a ${row.origin} row`).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(row.minutes.width - (first?.minutes.width ?? 0)), `${label}: minutes width of a ${row.origin} row`).toBeLessThanOrEqual(0.5);
+    expect(row.time.clipped, `${label}: the time of a ${row.origin} row is not clipped`).toBe(false);
+    expect(row.minutes.clipped, `${label}: the minutes of a ${row.origin} row are not clipped`).toBe(false);
+  }
+}
+
+for (const width of [1440, 768, 390]) {
+  test(`U4-14 at ${width}: suggested, new and saved break rows keep one x and width for the time and the minutes, whatever the info text, and no time text is clipped, in the session and Check out dialogs`, async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }, testInfo) => {
+    const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+    await page.setViewportSize({ width, height: width > 600 ? 1000 : 844 });
+    try {
+      await signInThroughUi();
+      const editor = await openEditor(page, date);
+      // New session on a past day: three suggested rows, then "Add break" adds a new one with no end yet ("ends --:--").
+      await editor.getByRole('button', { name: 'Add session' }).click();
+      const form = sessionDialog(page, 'New session');
+      // In the reporting zone the reference hours stay on one date, so no break has its own date field and a phone shows rows, not chips.
+      await typeInputZone(form, LA);
+      await expect(form.locator('[data-break]')).toHaveCount(3);
+      await form.getByRole('button', { name: 'Add break' }).click();
+      await expect(form.locator('[data-break]')).toHaveCount(4);
+      let rows = await rowFits(form);
+      expect(rows.map((row) => row.origin)).toEqual(['suggested', 'suggested', 'suggested', 'new']);
+      expect(rows[3]?.info, 'the info slot of a new row always renders').toContain('ends --:--');
+      const slotWidth = await tokenWidth(page, '--break-time-slot-w');
+      // The one-line row (a list of 42rem or more) fixes the time slot; below it the two-line row lets the time share its line.
+      const oneLine = (await form.getByRole('list', { name: 'Break list' }).evaluate((list) => list.clientWidth)) >= 42 * 15;
+      expectRowsAligned(rows, `new session ${width}`, oneLine ? slotWidth : undefined);
+      if (width === 1440) await snap(page, 'session-dialog-aligned-rows', testInfo.project.name);
+      await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.getByRole('alertdialog', { name: 'Discard your changes?' }).getByRole('button', { name: 'Discard' }).click();
+
+      // A saved session whose breaks carry seconds ("12:00:00 AM" style times) plus an added row: the time input keeps its text in view.
+      await employeeSeed.createSession(date, '09:00', '18:00', [
+        ['11:00:30', '11:15:30'],
+        ['13:00:05', '13:30:05'],
+      ]);
+      await page.reload();
+      await openEditor(page, date);
+      await page.getByRole('button', { name: /^Edit session/ }).click();
+      const edit = sessionDialog(page, 'Edit session');
+      await edit.getByRole('button', { name: 'Add break' }).click();
+      await expect(edit.locator('[data-break]')).toHaveCount(3);
+      // The widest en-US time, "12:00:00 AM" with the picker icon, in the first row (typed with seconds, so the field shows them).
+      await breakRow(edit, 1).time.fill('00:00:00');
+      await expect(breakRow(edit, 1).time).toHaveValue('00:00:00');
+      // The measure behind --break-time-slot-w: the width the "12:00:00 AM" field needs, read from a probe field of the same style whose
+      // width is automatic (the browser sizes it to its fields and the picker icon). `scrollWidth` does not see this clipping.
+      const needed = await naturalTimeWidth(breakRow(edit, 1).time);
+      // The "Break n" slot holds "Break 12": a probe span of the same style, with the widest two-digit number, fits the slot.
+      const numbers = await edit.locator('[data-break="1"] .break-num').evaluate((span) => {
+        const probe = span.cloneNode(true) as typeof span;
+        probe.textContent = 'Break 12';
+        probe.style.cssText = 'position:absolute;visibility:hidden;flex:none;width:max-content';
+        span.parentElement?.append(probe);
+        const need = probe.getBoundingClientRect().width;
+        probe.remove();
+        return { need, slot: span.getBoundingClientRect().width };
+      });
+      console.log(`NUM-FIT ${width}px window: "Break 12" needs ${numbers.need.toFixed(1)}px, its slot is ${numbers.slot.toFixed(1)}px`);
+      if (width >= 768) expect(numbers.need, 'the "Break n" slot holds "Break 12"').toBeLessThanOrEqual(numbers.slot + 0.5);
+      const slot = (await breakRow(edit, 1).time.boundingBox())?.width ?? 0;
+      console.log(`TIME-FIT ${width}px window: "12:00:00 AM" needs ${needed.toFixed(1)}px, its slot is ${slot.toFixed(1)}px`);
+      expect(needed, 'the time slot holds the widest time').toBeLessThanOrEqual(slot + 0.5);
+      rows = await rowFits(edit);
+      expect(rows.map((row) => row.origin)).toEqual(['saved', 'saved', 'new']);
+      expectRowsAligned(rows, `saved session ${width}`, oneLine ? slotWidth : undefined);
+      await edit.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.getByRole('alertdialog', { name: 'Discard your changes?' }).getByRole('button', { name: 'Discard' }).click();
+    } finally {
+      await employeeSeed.clearSessions(date);
+    }
+  });
+}
+
+test('U4-14: the Check out dialog aligns its break rows too, saved and new, with the date field shown', async ({ page, employeeSeed, signInThroughUi }) => {
+  const run = await seedRunning(employeeSeed, 3, [
+    [10, 10],
+    [60, 15],
+  ]);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  try {
+    await signInThroughUi();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = checkOutDialog(page);
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Add break' }).click();
+    await expect(dialog.locator('[data-break]')).toHaveCount(3);
+    const rows = await rowFits(dialog);
+    expect(rows.map((row) => row.origin)).toEqual(['saved', 'saved', 'new']);
+    expectRowsAligned(rows, 'check out 1440', await tokenWidth(page, '--break-time-slot-w'));
+    await expect(dialog.locator('[data-break="1"] input[type="date"]'), 'the date field is shown at Check out').toHaveCount(1);
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+});
+
+/*
+ * U4-15: a failed save opens the alert "This session was not saved" (one OK button with the initial focus; Escape is OK). Focus then goes
+ * to the first marked row, else to Save. The four failures of the owner's list each show it, with the message fully in view, at 1440 and
+ * 390; nothing is left as an error paragraph at the end of the dialog body.
+ */
+for (const width of [1440, 390]) {
+  test(`U4-15 at ${width}: an overlap, a start or end in the future, a work-date mismatch and a network failure each open the alert in the session dialog; OK or Escape closes it and focus goes to Save`, async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }, testInfo) => {
+    const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+    const { todayLocal } = await employeeSeed.today();
+    await page.setViewportSize({ width, height: width > 600 ? 1000 : 844 });
+    try {
+      await employeeSeed.clearSessions(todayLocal);
+      await employeeSeed.createSession(date, '09:00', '10:00', []);
+      await signInThroughUi();
+      const checks: Array<{ name: string; day: string; start: readonly [string, string]; end: readonly [string, string]; message: RegExp }> = [
+        { name: 'overlap', day: date, start: [date, '09:30'], end: [date, '10:30'], message: /overlap/i },
+        { name: 'future', day: todayLocal, start: [todayLocal, '00:01'], end: [addDays(todayLocal, 1), '12:00'], message: /cannot end in the future/ },
+        { name: 'mismatch', day: date, start: [addDays(date, -3), '10:00'], end: [addDays(date, -3), '11:00'], message: /cannot belong to/ },
+      ];
+      for (const check of checks) {
+        const editor = await openEditor(page, check.day);
+        const form = await fillNewSession(page, editor, LA, check.start, check.end);
+        await saveSession(page, form);
+        const alert = savedFailedAlert(page);
+        await expectAlertInView(alert);
+        await expect(alert, `${check.name}: the message`).toContainText(check.message);
+        await expect(alert.getByRole('button', { name: 'OK', exact: true }), 'OK has the initial focus').toBeFocused();
+        await expect(alert.getByRole('button')).toHaveCount(1);
+        await expect(form.locator('p.error'), 'no error paragraph is left in the dialog body').toHaveCount(0);
+        if (check.name === 'overlap') {
+          expect(await namesContainVisibleText(alert), 'names of the alert').toEqual([]);
+          for (const theme of ['light', 'dark'] as const) {
+            await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+            expect(await textContrastProblems(alert), `text contrast of the alert (${theme})`).toEqual([]);
+            const ok = alert.getByRole('button', { name: 'OK', exact: true });
+            await focusFromKeyboard(ok);
+            const ring = await measureFocusRing(ok);
+            expect(ring.ringAgainstBackdrop, `focus ring of OK (${theme})`).toBeGreaterThanOrEqual(3);
+            expect(ring.gapAgainstFill ?? 0, `focus gap of OK (${theme})`).toBeGreaterThanOrEqual(3);
+          }
+          await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+          await snap(page, `session-alert-${width}`, testInfo.project.name);
+          await alert.getByRole('button', { name: 'OK', exact: true }).click();
+        } else {
+          await page.keyboard.press('Escape');
+        }
+        await expect(alert).toHaveCount(0);
+        await expect(form, 'the session dialog is still open').toBeVisible();
+        await expect(form.getByRole('button', { name: 'Save', exact: true }), 'focus goes to Save').toBeFocused();
+        await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await page.getByRole('alertdialog', { name: 'Discard your changes?' }).getByRole('button', { name: 'Discard' }).click();
+        await expect(form).toHaveCount(0);
+        await page.getByRole('button', { name: 'Close', exact: true }).first().click();
+        await expect(page.getByRole('dialog', { name: /Day editor/ })).toHaveCount(0);
+      }
+
+      // No answer from the server: the same alert, and the draft is intact, so the next Save works.
+      allowNetworkConsoleError = true;
+      let blocked = true;
+      await page.route(`**/api/days/${date}/sessions`, (route) => (blocked && route.request().method() === 'POST' ? route.abort('failed') : route.continue()));
+      const editor = await openEditor(page, date);
+      const form = await fillNewSession(page, editor, LA, [date, '11:00'], [date, '12:00']);
+      await saveSession(page, form);
+      const alert = savedFailedAlert(page);
+      await expectAlertInView(alert);
+      await expect(alert).toContainText('The request could not be sent');
+      await alert.getByRole('button', { name: 'OK', exact: true }).click();
+      await expect(form.getByRole('button', { name: 'Save', exact: true })).toBeFocused();
+      blocked = false;
+      await saveSession(page, form);
+      await expect(editor.getByText('Session saved.')).toBeVisible();
+    } finally {
+      allowNetworkConsoleError = false;
+      await employeeSeed.clearSessions(date);
+      await employeeSeed.clearSessions(todayLocal);
+    }
+  });
+
+  test(`U4-15 at ${width}: break rows that cannot be saved are listed by "Break n" in the alert; the row markers stay and focus goes to the first marked row`, async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }) => {
+    const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+    await page.setViewportSize({ width, height: width > 600 ? 1000 : 844 });
+    try {
+      await signInThroughUi();
+      const editor = await openEditor(page, date);
+      const form = await fillNewSession(page, editor, LA, [date, '09:00'], [date, '17:00']);
+      await form.getByRole('checkbox', { name: 'Confirm no breaks taken' }).uncheck();
+      await removeAllBreaks(form);
+      // Break 1 starts before the session, Break 2 has no minutes: two rows that cannot be saved as they are.
+      for (const [index, time] of [[1, '08:00'], [2, '12:00']] as const) {
+        await form.getByRole('button', { name: 'Add break' }).click();
+        const row = breakRow(form, index);
+        await row.time.fill(time);
+        if (index === 1) await row.minutes.fill('15');
+      }
+      await form.getByRole('button', { name: 'Save', exact: true }).click();
+      const alert = savedFailedAlert(page);
+      await expectAlertInView(alert);
+      await expect(alert.locator('li')).toHaveCount(2);
+      await expect(alert.locator('li').first()).toHaveText('Break 1 starts before the session starts.');
+      await expect(alert.locator('li').nth(1)).toContainText('Break 2:');
+      await expect(saveConfirmation(page)).toHaveCount(0);
+      await expect(form.locator('[data-break="1"]')).toHaveClass(/has-error/);
+      await expect(form.locator('[data-break="2"]')).toHaveClass(/has-error/);
+      await expect(form.locator('p.error')).toHaveCount(0);
+      await alert.getByRole('button', { name: 'OK', exact: true }).click();
+      await expect(alert).toHaveCount(0);
+      await expect(breakRow(form, 1).time, 'focus goes to the first marked row').toBeFocused();
+      await expect(form.locator('[data-break="1"]'), 'the marker stays').toHaveClass(/has-error/);
+    } finally {
+      await employeeSeed.clearSessions(date);
+    }
+  });
+}
+
+test('U4-15: the Check out dialog opens the same alert for overlapping break rows and for a network failure; OK moves focus to the marked row, else to Check out', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const run = await seedRunning(employeeSeed, 3);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  try {
+    await signInThroughUi();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = checkOutDialog(page);
+    await expect(dialog).toBeVisible();
+    // Break 2 starts inside Break 1: the rows cannot be saved as they are.
+    await addCheckOutBreak(page, dialog, 1, localAfter(run, 30), 30);
+    await addCheckOutBreak(page, dialog, 2, localAfter(run, 40), 15);
+    const submit = dialog.getByRole('button', { name: 'Check out with these breaks' });
+    await submit.click();
+    const alert = savedFailedAlert(page);
+    await expectAlertInView(alert);
+    await expect(alert).toContainText('Break 2 overlaps Break 1.');
+    await expect(alert.getByRole('button', { name: 'OK', exact: true })).toBeFocused();
+    await expect(dialog.locator('p.error'), 'no error paragraph is left at the end of the Check out dialog').toHaveCount(0);
+    for (const theme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      expect(await namesContainVisibleText(alert), `names of the alert (${theme})`).toEqual([]);
+      expect(await textContrastProblems(alert), `text contrast of the alert (${theme})`).toEqual([]);
+      expect(await namesContainVisibleText(dialog), `names of the Check out dialog (${theme})`).toEqual([]);
+      expect(await textContrastProblems(dialog), `text contrast of the Check out dialog (${theme})`).toEqual([]);
+    }
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await snap(page, 'check-out-alert', testInfo.project.name);
+    await alert.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(alert).toHaveCount(0);
+    await expect(breakRow(dialog, 2).time, 'focus goes to the marked row').toBeFocused();
+    expect((await employeeSeed.dayView(run.todayLocal)).sessions.some((session) => session.end_utc === null), 'the session still runs').toBe(true);
+
+    // A clean list and no answer from the server: the alert, then focus on the Check out button; the session still runs.
+    await removeCheckOutBreak(page, dialog, 2);
+    allowNetworkConsoleError = true;
+    let blocked = true;
+    await page.route('**/api/clock/out', (route) => (blocked ? route.abort('failed') : route.continue()));
+    await submit.click();
+    await expectAlertInView(alert);
+    await expect(alert).toContainText('The request could not be sent');
+    await escapeAndExpectFocus(page, alert, submit);
+    expect((await employeeSeed.dayView(run.todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(true);
+    blocked = false;
+    await submit.click();
+    await expect(dialog).toHaveCount(0);
+  } finally {
+    allowNetworkConsoleError = false;
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+});
+
+/* ---- U4-11: edit the start of today's running session ---------------------------------------------------------------- */
+
+/** Records the PUT bodies the page sends for one session. */
+function recordSessionPuts(page: Page, id: string): Array<Record<string, unknown>> {
+  const puts: Array<Record<string, unknown>> = [];
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && new URL(request.url()).pathname === `/api/sessions/${id}`) puts.push(request.postDataJSON() as Record<string, unknown>);
+  });
+  return puts;
+}
+
+/** Opens the Edit dialog of the running session of today from its card. */
+async function openRunningEdit(page: Page, todayLocal: string): Promise<{ editor: Locator; form: Locator }> {
+  const editor = await openEditor(page, todayLocal);
+  const card = editor.locator('.session-card[data-state="running"]');
+  await expect(card.locator('.session-source')).toHaveText('Checked in');
+  await card.getByRole('button', { name: /^Edit session/ }).click();
+  const form = sessionDialog(page, 'Edit session');
+  await expect(form).toBeVisible();
+  return { editor, form };
+}
+
+test('U4-11: Edit on the running session shows no end and no "no breaks" box; Save sends end null and the breaks unconfirmed; the card and the status follow the new start and Check out counts from it', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const run = await seedRunning(employeeSeed, 3, [[10, 10]]);
+  const puts = recordSessionPuts(page, run.id);
+  const checkOuts = recordCheckOuts(page);
+  try {
+    await signInThroughUi();
+    const displayZone = await browserZone(page);
+    const { editor, form } = await openRunningEdit(page, run.todayLocal);
+    await expect(form.locator('.session-dialog-title p')).toContainText(`accounting date in ${LA}`);
+    await expect(form.locator('.session-dialog-title p')).toContainText('running');
+    // The zone is first, the start follows; in place of the end there is the running box and the way to set an end.
+    await expect(form.getByLabel('Input zone')).toHaveValue(LA);
+    await expect(form.getByLabel('End date', { exact: true })).toHaveCount(0);
+    await expect(form.getByLabel('End time', { exact: true })).toHaveCount(0);
+    const box = form.locator('[data-running-end]');
+    await expect(box).toContainText('No end yet: this session is running. It ends when you check out.');
+    await expect(box.getByRole('button', { name: 'Set an end instead', exact: true })).toBeVisible();
+    // Breaks: the date field is shown (no end yet), no "no breaks" box, and the hint says they are confirmed at Check out.
+    await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).toHaveCount(0);
+    await expect(form.locator('[data-breaks-hint="running"]')).toContainText('You confirm the breaks when you check out');
+    // With no end the row has its own date field; a phone at 390px shows that row as a chip (it needs 390px of list), which reads its end as "→".
+    if (showsChips(page)) await expect(breakChip(form, 1)).toContainText('→');
+    else {
+      await expect(breakRow(form, 1).date).toHaveCount(1);
+      await expect(form.locator('[data-break="1"]')).toContainText('ends ');
+    }
+    // The accessibility rules we can check without a scanner (axe-core is not a dependency): names contain the visible words, every
+    // control has a name, no id repeats, and the text reads at 4.5:1; in both themes.
+    for (const theme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      expect(await namesContainVisibleText(form), `names of the running-session dialog (${theme})`).toEqual([]);
+      expect(await textContrastProblems(form), `text contrast of the running-session dialog (${theme})`).toEqual([]);
+    }
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await snap(page, 'running-session-edit', testInfo.project.name);
+
+    // Move the start half an hour earlier (the saved break stays inside the session).
+    const earlier = dateTimeIn(instantAt(run.startMs - 30 * 60_000), LA);
+    await form.getByLabel('Start date', { exact: true }).fill(earlier.slice(0, 10));
+    await form.getByLabel('Start time', { exact: true }).fill(earlier.slice(11));
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(noBreaksNotice(page), 'a running session asks no "No breaks listed" question').toHaveCount(0);
+    const confirm = saveConfirmation(page);
+    await expect(confirm.locator('.confirm-facts')).toContainText(`${earlier.slice(11)} - running`);
+    await expect(confirm.locator('.confirm-facts')).toContainText('1 break, confirmed at Check out');
+    await expect(confirm).not.toContainText('Saving confirms');
+    expect(puts, 'nothing is sent before the final Save').toEqual([]);
+    await confirm.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({
+      end: null,
+      breaks_confirmed: false,
+      expected_version: run.version,
+      input_zone: LA,
+      start: { local: earlier.replace(' ', 'T'), zone: LA },
+    });
+    expect(breaksOf(puts[0])).toHaveLength(1);
+
+    // The stored session still runs, from the new start; the card, the top bar and the status follow it.
+    const stored = await sessionById(employeeSeed, run.todayLocal, run.id);
+    expect(stored?.end_utc).toBeNull();
+    expect(stored?.breaks_confirmed).toBe(false);
+    expect(wallClock(stored?.start_utc ?? '', LA).slice(0, 5)).toBe(earlier.slice(11));
+    const newStartMs = Date.parse(stored?.start_utc ?? '');
+    const shownStart = wallClock(stored?.start_utc ?? '', displayZone).slice(0, 5);
+    const card = editor.locator('.session-card[data-state="running"]');
+    await expect(card.locator('[data-session-state]')).toHaveText('Running');
+    await expect(card).toContainText(`Running since ${shownStart}`);
+    await expect(card.locator('.session-source')).toHaveText('Checked in');
+    await expect(page.getByRole('region', { name: 'Check in and out' })).toContainText(`Checked in since ${shownStart}`);
+
+    // Check out afterwards: the worked minutes come from the new start (the server's figure, 10 break minutes excluded).
+    await editor.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = checkOutDialog(page);
+    await dialog.getByRole('button', { name: 'Check out with these breaks' }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(checkOuts).toHaveLength(1);
+    expect(checkOuts[0]).toMatchObject({ breaks_confirmed: true, expected_version: (run.version ?? 0) + 1 });
+    const closed = await sessionById(employeeSeed, run.todayLocal, run.id);
+    const day = await employeeSeed.dayView(run.todayLocal);
+    const grossMinutes = (Date.parse(closed?.end_utc ?? '') - newStartMs) / 60_000;
+    expect(Math.abs((day.calculation?.regular_minutes ?? 0) - (grossMinutes - 10)), 'regular minutes count from the new start').toBeLessThanOrEqual(1);
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+});
+
+for (const width of [1440, 390]) {
+  test(`U4-11 at ${width}: a start in the future and an overlap show the server's refusal in the alert; a stale version keeps its reload flow`, async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }) => {
+    const run = await seedRunning(employeeSeed, 3);
+    await page.setViewportSize({ width, height: width > 600 ? 1000 : 844 });
+    // An ended session before the running one, for the overlap.
+    await employeeSeed.call(
+      'POST',
+      `/api/days/${run.todayLocal}/sessions`,
+      { start: instantAt(run.startMs - 120 * 60_000), end: instantAt(run.startMs - 60 * 60_000), input_zone: LA, breaks: [], breaks_confirmed: true },
+      201,
+    );
+    try {
+      await signInThroughUi();
+      const { editor, form } = await openRunningEdit(page, run.todayLocal);
+
+      // A start in the future: refused by the server, shown in the alert; OK returns to the dialog with focus on Save.
+      await form.getByLabel('Start date', { exact: true }).fill(addDays(run.todayLocal, 1));
+      await form.getByLabel('Start time', { exact: true }).fill('10:00');
+      await form.getByRole('button', { name: 'Save', exact: true }).click();
+      await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
+      let alert = savedFailedAlert(page);
+      await expectAlertInView(alert);
+      await expect(alert).toContainText('future');
+      await alert.getByRole('button', { name: 'OK', exact: true }).click();
+      await expect(form.getByRole('button', { name: 'Save', exact: true })).toBeFocused();
+
+      // A start inside the earlier session: the overlap refusal.
+      const inside = dateTimeIn(instantAt(run.startMs - 90 * 60_000), LA);
+      await form.getByLabel('Start date', { exact: true }).fill(inside.slice(0, 10));
+      await form.getByLabel('Start time', { exact: true }).fill(inside.slice(11));
+      await form.getByRole('button', { name: 'Save', exact: true }).click();
+      await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
+      alert = savedFailedAlert(page);
+      await expectAlertInView(alert);
+      await expect(alert).toContainText(/overlap/i);
+      await alert.getByRole('button', { name: 'OK', exact: true }).click();
+      await expect((await employeeSeed.dayView(run.todayLocal)).sessions.find((session) => session.id === run.id)?.end_utc).toBeNull();
+
+      // Another device changes the session: the stale version is not an alert; the day editor's reload flow stays.
+      const current = await sessionById(employeeSeed, run.todayLocal, run.id);
+      await employeeSeed.call('PUT', `/api/sessions/${run.id}`, {
+        start: current?.start_utc,
+        end: null,
+        input_zone: LA,
+        breaks: [],
+        breaks_confirmed: false,
+        expected_version: current?.version,
+      });
+      await form.getByRole('button', { name: 'Save', exact: true }).click();
+      await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(savedFailedAlert(page)).toHaveCount(0);
+      await expect(editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' })).toBeVisible();
+      await expect(form).toHaveCount(0);
+    } finally {
+      await employeeSeed.clearSessions(run.todayLocal);
+    }
+  });
+}
+
+test('U4-11: "Set an end instead" turns the dialog into the ended-session flow and asks for the end; Save without it says so in the alert', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  const run = await seedRunning(employeeSeed, 3);
+  try {
+    await signInThroughUi();
+    const { form } = await openRunningEdit(page, run.todayLocal);
+    await form.getByRole('button', { name: 'Set an end instead', exact: true }).click();
+    await expect(form.locator('[data-running-end]')).toHaveCount(0);
+    await expect(form.getByLabel('End date', { exact: true })).toHaveValue(dateTimeIn(instantAt(run.startMs), LA).slice(0, 10));
+    await expect(form.getByLabel('End date', { exact: true }), 'focus goes to the new End date').toBeFocused();
+    await expect(form.getByLabel('End time', { exact: true })).toHaveValue('');
+    await expect(form.getByRole('checkbox', { name: 'Confirm no breaks taken' })).toBeVisible();
+    await expect(form.locator('.session-dialog-title p')).not.toContainText('running');
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    const alert = savedFailedAlert(page);
+    await expect(alert).toContainText('Enter the end date and time.');
+    await alert.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(form.getByRole('button', { name: 'Save', exact: true })).toBeFocused();
+    // The switch is a change: Cancel asks first.
+    await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.getByRole('alertdialog', { name: 'Discard your changes?' })).toBeVisible();
+  } finally {
+    await employeeSeed.clearSessions(run.todayLocal);
+  }
+});
+
+/** Escape acts as OK: the alert goes and focus is on the control the dialog hands it to. */
+async function escapeAndExpectFocus(page: Page, alert: Locator, control: Locator): Promise<void> {
+  await page.keyboard.press('Escape');
+  await expect(alert).toHaveCount(0);
+  await expect(control).toBeFocused();
+}

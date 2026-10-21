@@ -967,6 +967,39 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - Một committer mới chạy một mình.
   - Brief liệt kê đủ mọi đường dẫn ngay từ khi giao. Các bản ghi task và evidence WP5-UX4 phát
     sinh thêm được phép stage theo mẫu đặt sẵn lúc giao.
+- WP5-UX4-T02-FREEZE đã commit và push b7cc06352687d1bc8cd6953b284915584a21e4fd.
+  - 49 đường dẫn; digest 04e16199 trên HEAD; mọi kiểm tra trả về 0.
+  - Một lần sửa khoảng trắng được phép, trong `WP5-UX4-T01-FREEZE.md`.
+  - Sơ suất: dùng `node -e` một lần để kiểm tra JSON.
+- Quyết định của coordinator: dùng lại hộp thông báo lỗi của U4-15 trong hộp thoại Check out.
+- Đang chạy: WP5-UX4-T03 (worker-high, sonnet; rủi ro H nhưng đã có mẫu sẵn) trên b7cc063 /
+  04e16199.
+  - Phạm vi:
+    - U4-11: sửa giờ bắt đầu của phiên đang chạy;
+    - U4-12: time zone lên đầu;
+    - U4-13: Today/Now canh phải, theo time zone đã nhập;
+    - U4-14: hàng break thẳng cột;
+    - U4-15: hộp thông báo lỗi trong hộp thoại phiên giờ và Check out;
+    - chú thích ở `sheetModel.ts:141`.
+- WP5-UX4-T03 xong (theo báo cáo của worker; các vòng audit của đợt 4 sẽ kiểm tra độc lập).
+  - Sửa phiên đang chạy: test tích hợp ra 601 phút làm việc thường khi bắt đầu từ 08:00, so với 541
+    phút khi bắt đầu từ 09:00.
+  - Today và Now canh phải lệch không quá 1px; test với time zone Tokyo, máy đặt giờ LA và đồng hồ
+    cố định đều đạt.
+  - Các hàng break thẳng cột.
+  - Hộp thông báo lỗi chạy ở cả hai hộp thoại.
+  - Kết quả:
+    - vitest 2185; e2e đầy đủ desktop 394 và mobile 365 đạt, 0 lỗi, không phải chạy lại;
+    - bắt được đột biến 1-7;
+    - build 498.66 kB, chỉ thấp hơn ngưỡng cảnh báo 500 kB có 1.3 kB. **T05 phải tách code**;
+    - digest e3c7016b (840 file).
+  - Ghi chú:
+    - dự án không có axe-core, nên worker kiểm tra trực tiếp từng tiêu chí thay thế;
+    - sau lần chạy e2e đầy đủ, worker thêm một assertion chỉ ở test cho U4-14 và các test đó đạt
+      lại; gate sẽ chạy lại toàn bộ;
+    - sơ suất: có lệnh pipe vào `head` và một heredoc rỗng.
+- Đang chạy: WP5-UX4-T03-FREEZE. Một committer mới chạy một mình, với danh sách đường dẫn đầy đủ
+  đặt sẵn lúc giao.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

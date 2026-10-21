@@ -1,0 +1,23 @@
+WP5-UX4-T03 checks (timesheet-worker-high, Sonnet 5.5). Synthetic data only. `<user>` stands for the Windows profile folder.
+1. Node: v24.21.0 (portable, first on PATH). Task folder D:\.claude-tmp\timesheet\WP5-UX4-T03 (TEMP, TMP, DATA_DIR, DATABASE_PATH, SMOKE_PORT 49410).
+2. Base: HEAD b7cc06352687d1bc8cd6953b284915584a21e4fd. git status --short before editing: handoff/ files only. npm run digest before editing: 04e16199ea66d3144fcb34ad4a7716c929b45f22fac0fd7b350450d271a80918 (839 files), exit 0.
+3. typecheck exit 0; lint exit 0; npm test exit 0: 96 files, 2185 tests (tests/client 29 files 653 tests; tests/integration 56 files 1219 tests; the rest are domain/server/script tests).
+4. build exit 0, no chunk advisory; main chunk index-pTpmt4iB.js 498.66 kB (gzip 146.30 kB), css 82.71 kB. See final-build.txt.
+5. Full e2e on the real clock, alone, no rerun needed:
+   desktop: 394 passed, 32 skipped (existing project-conditional skips), 0 failed, exit 0 (final-e2e-desktop.txt)
+   mobile:  365 passed, 61 skipped (existing), 0 failed, exit 0 (final-e2e-mobile.txt)
+   Each project ran all 18 new tests (17 in day-editor.spec.ts, 1 in sharing.spec.ts).
+   After those runs the U4-14 test gained the fixed-slot assertion (mutant 5 below) and a `document` typing fix; typecheck, lint and build were rerun (exit 0) and `--grep "U4-1"` on day-editor.spec.ts ran again on both projects: 34 passed; sharing.spec.ts new test passed on desktop in the earlier batch (36 passed with day-editor U4-1x on both projects).
+6. Mutants, each applied alone, a test failed, then reverted (mutant1..7.txt):
+   1 running build requires an end again: breakRowsModel.test.ts 5 failed
+   2 Save sends breaks_confirmed true for a running session: breakRowsModel.test.ts 3 failed
+   3 Now converts with the device zone: sessionModel.test.ts 4 failed
+   4 zone field moved below the times: e2e U4-12, U4-13 at 1440 and 390 failed (DOM order)
+   5 break time slot `flex: 1 1`: e2e U4-14 1440, 768 and Check out failed (first attempt passed: the assertion that the time is exactly its slot wide was added, then it failed as required)
+   6 save error rendered inline: e2e U4-15 at 1440, 2 failed
+   7 "Set an end instead" shown in a shared view: sharing.spec.ts new test failed
+7. validate_package.py --preflight with <user>/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe: PASS, 118 translation pairs, exit 0. docs/04 and docs/10 EN/VI: same number of headings (9 and 28), the same paragraphs edited in both.
+8. git diff --check exit 0; no trailing whitespace in added lines; no personal data (huyng, gmail, C:\Users) in the diff or in this folder.
+9. npm run verify (typecheck, lint, test, build, smoke) exit 0, SMOKE PASSED (verify.txt not copied; see the task folder).
+10. npm run digest LAST: see the Results section of the brief.
+Notes: axe-core is not a dependency and was not installed; the axe rules that can be checked directly are asserted in day-editor.spec.ts (names contain the visible words, every control named, unique ids, 4.5:1 text, 3:1 focus ring) in both themes.

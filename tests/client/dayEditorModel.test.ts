@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Calculation, DayView, Period, Session } from '../../src/client/api.ts';
+import { ApiRequestError, type Calculation, type DayView, type Period, type Session } from '../../src/client/api.ts';
 import {
   cardBreaksText,
   dayBanner,
@@ -7,6 +7,10 @@ import {
   deleteFacts,
   editorChips,
   editorTitle,
+  messageFailure,
+  requestFailure,
+  SAVE_FAILED_TITLE,
+  rowsFailure,
   sessionCardOf,
 } from '../../src/client/components/dayEditorModel.ts';
 
@@ -200,6 +204,14 @@ describe('the session cards of the panel (U-21)', () => {
     expect(sessionCardOf(session({ source: 'clock' }), '2026-09-21', HCM).source).toBe('Checked in and out');
   });
 
+  it('a session that is still running says "Checked in" only, not "Checked in and out" (U4-11)', () => {
+    const card = sessionCardOf(session({ source: 'clock', end_utc: null }), '2026-09-21', HCM);
+    expect(card.source).toBe('Checked in');
+    expect(card.source).not.toContain('and out');
+    // Entered by hand keeps its own words, running or not.
+    expect(sessionCardOf(session({ end_utc: null }), '2026-09-21', HCM).source).toBe(`Entered by hand in ${LA}`);
+  });
+
   it('marks a session that starts on another local date than its accounting date', () => {
     // The session starts at 22:30 on 09/20 in Los Angeles: on its own accounting date 09/20 nothing is added, on 09/21 the start date is.
     const card = sessionCardOf(session({ start_utc: '2026-09-21T05:30:00Z', end_utc: '2026-09-21T09:30:00Z' }), '2026-09-20', LA);
@@ -215,6 +227,28 @@ describe('the session cards of the panel (U-21)', () => {
       { label: 'Time', value: `09:00-18:30 (${LA})` },
       { label: 'Breaks', value: '3 breaks (15, 30, 15 min)' },
     ]);
+  });
+});
+
+describe('the words of a failed save (U4-15)', () => {
+  it('a refusal of the server says its message and code; the title is the same for the session and the Check out dialog', () => {
+    expect(SAVE_FAILED_TITLE).toBe('This session was not saved');
+    const refused = requestFailure(new ApiRequestError(409, 'overlapping_user_intervals', 'This session overlaps another of your sessions'));
+    expect(refused.messages).toEqual(['This session overlaps another of your sessions (overlapping_user_intervals)']);
+    expect(refused.hint).toContain('Nothing was saved');
+  });
+
+  it('a request that got no answer is a connection failure, not a code', () => {
+    const lost = requestFailure(new TypeError('Failed to fetch'));
+    expect(lost.messages).toEqual(['The request could not be sent, or no answer came back.']);
+    expect(lost.hint).toContain('Check your connection');
+  });
+
+  it('a form message and the break rows keep their own wording, one line per row', () => {
+    expect(messageFailure('Enter the end date and time.').messages).toEqual(['Enter the end date and time.']);
+    const rows = rowsFailure(['Break 1 starts before the session starts.', 'Break 3 overlaps Break 2.']);
+    expect(rows.messages).toEqual(['Break 1 starts before the session starts.', 'Break 3 overlaps Break 2.']);
+    expect(rows.hint).toContain('marked in the list');
   });
 });
 

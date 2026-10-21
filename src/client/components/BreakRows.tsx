@@ -19,7 +19,7 @@ function endText(row: BreakRowDraft, index: number, zone: string): string | null
 
 /**
  * The break area of the session dialog (WP5-UX3-T08 and T08B, owner decisions U-21, U-24, N-1 and Q6 b): one "Confirm no breaks
- * taken" box, the list of breaks, "Suggest breaks" and "Add break". A break is its start time and its minutes, and its start
+ * taken" box (left out for a `running` session, U4-11), the list of breaks, "Suggest breaks" and "Add break". A break is its start time and its minutes, and its start
  * date only when `showDate` (the session crosses local midnight or has no end; otherwise the dialog keeps every row on the
  * session date); the end is computed (`breakRowEnd`) and shown as text. A pre-filled suggestion carries a "suggested" tag until
  * its row is changed. Ticking the box hides and disables the rows; they stay in the draft and come back when it is unticked.
@@ -47,6 +47,7 @@ export function BreakRows({
   onFold,
   onGap,
   action = 'Saving',
+  running = false,
 }: {
   rows: readonly BreakRowDraft[];
   noBreaks: boolean;
@@ -56,7 +57,7 @@ export function BreakRows({
   showDate: boolean;
   /** The message of each row that cannot be saved as it is, by row key. */
   errors: ReadonlyMap<string, BreakRowError>;
-  /** Counts the refused saves; each one moves focus to the first marked chip when the list shows chips. */
+  /** Counts the closed "not saved" alerts; each one moves focus to the first marked row's field, or to its chip when the list shows chips. */
   focusErrors: number;
   /** What "Suggest breaks" did (or why it could not), shown under the buttons. */
   note: string | null;
@@ -74,6 +75,8 @@ export function BreakRows({
   onGap: (key: string, problem: TimeProblem) => void;
   /** The act that confirms the listed breaks, named in the closing hint: "Saving" (session dialog) or "Checking out". */
   action?: 'Saving' | 'Checking out';
+  /** True for a session without an end (U4-11): no "Confirm no breaks taken" box, and the hint says the breaks are confirmed at Check out. */
+  running?: boolean;
 }) {
   const id = useId();
   const area = useRef<HTMLDivElement>(null);
@@ -112,12 +115,21 @@ export function BreakRows({
     }
   }, [rows, addBreak]);
 
-  // A refused Save marks the chips that cannot be saved; focus goes to the first of them (SC 3.3.1, 2.4.3).
+  // A refused Save marks the rows (or chips) that cannot be saved, and the dialog says so in its alert; when the alert is closed the
+  // dialog counts `focusErrors` and focus goes to the first marked row's field, or its chip (SC 3.3.1, 2.4.3). The field is the one
+  // the message is about: the minutes for a minutes message, the date while it is empty, else the start time.
   useEffect(() => {
-    if (focusErrors === 0 || !chips) return;
+    if (focusErrors === 0) return;
     const first = rows.find((row) => errors.has(row.key));
-    if (first !== undefined) elements.current.get(`${first.key}:chip`)?.focus();
-    // Only a new refusal moves focus; the list and the messages are read as they are at that moment.
+    if (first === undefined) return;
+    if (chips) {
+      elements.current.get(`${first.key}:chip`)?.focus();
+      return;
+    }
+    const kind = errors.get(first.key)?.kind;
+    const name = kind === 'minutes' ? 'minutes' : showDate && first.start.date === '' ? 'date' : 'time';
+    (elements.current.get(`${first.key}:${name}`) ?? elements.current.get(`${first.key}:time`))?.focus();
+    // Only a new closing of the alert moves focus; the list and the messages are read as they are at that moment.
   }, [focusErrors]);
 
   const keep = (name: string) => (element: HTMLElement | null) => {
@@ -133,10 +145,12 @@ export function BreakRows({
 
   return (
     <div className="break-area" ref={area}>
-      <label className="inline break-none">
-        <input type="checkbox" checked={noBreaks} onChange={(event) => onNoBreaks(event.target.checked)} />
-        Confirm no breaks taken
-      </label>
+      {!running && (
+        <label className="inline break-none">
+          <input type="checkbox" checked={noBreaks} onChange={(event) => onNoBreaks(event.target.checked)} />
+          Confirm no breaks taken
+        </label>
+      )}
       {!noBreaks && rows.length === 0 && <p className="muted hint">No breaks listed.</p>}
       {!noBreaks && rows.length > 0 && (
         <ul className={chips ? 'plain break-entries break-chips' : 'plain break-entries'} aria-label="Break list" data-layout={layout}>
@@ -174,7 +188,7 @@ export function BreakRows({
                 <div className="break-entry-head">
                   <span className="break-num">{label}</span>
                   <span className="break-info">
-                    {end !== null && <span className="break-end">{end}</span>}
+                    <span className="break-end">{end ?? 'ends --:--'}</span>
                     {suggested && <span className="break-tag">suggested</span>}
                   </span>
                 </div>
@@ -209,6 +223,7 @@ export function BreakRows({
                   <label className="break-field break-minutes">
                     <span className="sr-only">{label} minutes</span>
                     <input
+                      ref={keep(`${row.key}:minutes`)}
                       type="number"
                       inputMode="numeric"
                       min={1}
@@ -286,9 +301,10 @@ export function BreakRows({
           {note}
         </p>
       )}
-      <p className="muted hint">
-        {action} confirms the breaks listed here. Leave the list empty and the box unticked if you do not know yet: OT for the day then stays
-        pending.
+      <p className="muted hint" data-breaks-hint={running ? 'running' : undefined}>
+        {running
+          ? 'Only breaks you have already taken can be listed. You confirm the breaks when you check out; until then OT for the day stays pending.'
+          : `${action} confirms the breaks listed here. Leave the list empty and the box unticked if you do not know yet: OT for the day then stays pending.`}
       </p>
     </div>
   );

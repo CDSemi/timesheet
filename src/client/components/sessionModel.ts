@@ -4,7 +4,7 @@ import { formatDuration } from '../../domain/format.ts';
 import { type EpochSeconds, parseUtcInstant } from '../../domain/instants.ts';
 import { type BreakRule, excludedBreakMinutes } from '../../domain/policy.ts';
 import { effectiveVersionOn } from '../../domain/versions.ts';
-import { formatInZone, resolveLocalDateTime, resolveLocalDateTimeCompatible } from '../../domain/zones.ts';
+import { formatInZone, isValidTimeZone, resolveLocalDateTime, resolveLocalDateTimeCompatible } from '../../domain/zones.ts';
 import type {
   BreakRequest,
   ClockOutRequest,
@@ -27,7 +27,8 @@ import { type LeaveInput, leaveInputOf, parseLeaveInput } from './leaveInputMode
  * credited minutes, validation, UTC instants): this module only builds request bodies in the
  * exact shape of the server contract and maps server answers to display states. Where the
  * editor shows a suggestion or the expected finish it calls the shared domain functions
- * (suggestBreaks, expectedFinishUtc), never a second formula. The device clock is not used.
+ * (suggestBreaks, expectedFinishUtc), never a second formula. The device clock is not read here: the "Today" and "Now" links pass
+ * its instant to `nowField`, which reads it in the input zone.
  */
 
 /** A local date and time typed in an explicit input zone, plus how a repeated time was resolved. */
@@ -75,6 +76,30 @@ export function editField(field: LocalField, patch: Partial<Pick<LocalField, 'da
   return { ...field, ...patch, fold: null, offset: null };
 }
 
+/**
+ * The current minute in a zone as local fields (the "Today" and "Now" links of the session dialog, U4-13): the date and the
+ * `HH:MM` time, whose seconds are `:00` (R-01 minute entry), with no fold and no offset, like a typed value. The instant comes
+ * from the caller's device clock and is read in the given zone, never the device zone (AGENTS rule 7). Null while the zone is not a
+ * valid IANA name (it can be half typed).
+ */
+export function nowField(zone: string, instant: EpochSeconds): LocalField | null {
+  if (!isValidTimeZone(zone)) return null;
+  const text = formatInZone(zone, instant);
+  return { date: text.slice(0, 10), time: text.slice(11, 16), fold: null, offset: null };
+}
+
+/** "Today": the field's date becomes the current date in the zone; its time is kept. Null for an invalid zone. */
+export function applyToday(field: LocalField, zone: string, instant: EpochSeconds): LocalField | null {
+  const now = nowField(zone, instant);
+  return now === null ? null : editField(field, { date: now.date });
+}
+
+/** "Now": the time becomes the current minute in the zone, and the date too when it was another date (so the value is this instant). */
+export function applyNow(field: LocalField, zone: string, instant: EpochSeconds): LocalField | null {
+  const now = nowField(zone, instant);
+  return now === null ? null : editField(field, field.date === now.date ? { time: now.time } : { date: now.date, time: now.time });
+}
+
 export function fieldLocal(field: LocalField): string {
   return `${field.date}T${field.time}`;
 }
@@ -115,10 +140,11 @@ function breakRequests(draft: SessionDraft): BreakRequest[] {
  * The first reason a draft cannot be sent yet (an empty field), or null. This is not business
  * validation: the server still checks every rule and its answer is shown as it comes.
  */
-export function draftGap(draft: SessionDraft): string | null {
+export function draftGap(draft: SessionDraft, running = false): string | null {
   if (draft.zone.trim() === '') return 'Enter the input zone.';
   if (!fieldIsFilled(draft.start)) return 'Enter the start date and time.';
-  if (!fieldIsFilled(draft.end)) return 'Enter the end date and time.';
+  // A running session has no end to enter (U4-11).
+  if (!running && !fieldIsFilled(draft.end)) return 'Enter the end date and time.';
   return breaksGap(draft);
 }
 

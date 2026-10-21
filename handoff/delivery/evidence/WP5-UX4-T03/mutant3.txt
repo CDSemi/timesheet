@@ -1,0 +1,116 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/sessionModel.test.ts (41 tests | 4 failed) 20ms
+   ❯ "Today" and "Now" read the instant in the input zone (WP5-UX4-T03, U4-13) (7)
+     × gives the date and the minute of the same instant in each zone, with no seconds, fold or offset 5ms
+     × turns over at local midnight of the zone, not of UTC 2ms
+     × Today sets the date of the zone and keeps the time; like a typed change it drops the fold and the offset 1ms
+     × Now sets the minute of the zone; the date moves too only when the field held another date 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/sessionModel.test.ts > "Today" and "Now" read the instant in the input zone (WP5-UX4-T03, U4-13) > gives the date and the minute of the same instant in each zone, with no seconds, fold or offset
+AssertionError: expected { date: '2026-10-20', …(3) } to deeply equal { date: '2026-10-21', …(3) }
+
+- Expected
++ Received
+
+  {
+-   "date": "2026-10-21",
++   "date": "2026-10-20",
+    "fold": null,
+    "offset": null,
+-   "time": "00:30",
++   "time": "08:30",
+  }
+
+ ❯ tests/client/sessionModel.test.ts:496:38
+    494|     // 15:30:45 UTC on 2026-10-20: Tokyo is already on 10/21, Los Ange…
+    495|     const instant = at('2026-10-20T15:30:45Z');
+    496|     expect(nowField(TOKYO, instant)).toEqual({ date: '2026-10-21', tim…
+       |                                      ^
+    497|     expect(nowField(LA, instant)).toEqual({ date: '2026-10-20', time: …
+    498|     expect(nowField('UTC', instant)).toEqual({ date: '2026-10-20', tim…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/client/sessionModel.test.ts > "Today" and "Now" read the instant in the input zone (WP5-UX4-T03, U4-13) > turns over at local midnight of the zone, not of UTC
+AssertionError: expected { date: '2026-10-20', …(3) } to match object { date: '2026-10-20', time: '23:59' }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "date": "2026-10-20",
+-   "time": "23:59",
++   "time": "07:59",
+  }
+
+ ❯ tests/client/sessionModel.test.ts:505:57
+    503|     expect(nowField(LA, at('2026-10-21T06:59:59Z'))).toMatchObject({ d…
+    504|     expect(nowField(LA, at('2026-10-21T07:00:00Z'))).toMatchObject({ d…
+    505|     expect(nowField(TOKYO, at('2026-10-20T14:59:59Z'))).toMatchObject(…
+       |                                                         ^
+    506|     expect(nowField(TOKYO, at('2026-10-20T15:00:00Z'))).toMatchObject(…
+    507|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/client/sessionModel.test.ts > "Today" and "Now" read the instant in the input zone (WP5-UX4-T03, U4-13) > Today sets the date of the zone and keeps the time; like a typed change it drops the fold and the offset
+AssertionError: expected { date: '2026-10-20', …(3) } to deeply equal { date: '2026-10-21', …(3) }
+
+- Expected
++ Received
+
+  {
+-   "date": "2026-10-21",
++   "date": "2026-10-20",
+    "fold": null,
+    "offset": null,
+    "time": "08:15",
+  }
+
+ ❯ tests/client/sessionModel.test.ts:535:67
+    533|   it('Today sets the date of the zone and keeps the time; like a typed…
+    534|     const pinned = field('2026-10-19', '08:15', { offset: '-07:00', fo…
+    535|     expect(applyToday(pinned, TOKYO, at('2026-10-20T15:30:45Z'))).toEq…
+       |                                                                   ^
+    536|     expect(applyToday(pinned, LA, at('2026-10-20T15:30:45Z'))).toEqual…
+    537|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/client/sessionModel.test.ts > "Today" and "Now" read the instant in the input zone (WP5-UX4-T03, U4-13) > Now sets the minute of the zone; the date moves too only when the field held another date
+AssertionError: expected { date: '2026-10-20', …(3) } to deeply equal { date: '2026-10-21', …(3) }
+
+- Expected
++ Received
+
+  {
+-   "date": "2026-10-21",
++   "date": "2026-10-20",
+    "fold": null,
+    "offset": null,
+-   "time": "00:30",
++   "time": "08:30",
+  }
+
+ ❯ tests/client/sessionModel.test.ts:542:90
+    540|     const instant = at('2026-10-20T15:30:45Z');
+    541|     // Tokyo is on 10/21: a field on 10/20 gets the date as well, so t…
+    542|     expect(applyNow(field('2026-10-20', '09:00', { offset: '+09:00' })…
+       |                                                                                          ^
+    543|     // Already on the zone's date: only the time changes.
+    544|     expect(applyNow(field('2026-10-21', '09:00'), TOKYO, instant)).toE…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 37 passed (41)
+   Start at  23:50:18
+   Duration  341ms (import 48%, transform 42%, tests 9%, worker 1%)
+
+exit 1

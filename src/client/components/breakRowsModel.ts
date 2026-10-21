@@ -67,6 +67,11 @@ export interface SessionDialogDraft {
   zone: string;
   start: LocalField;
   end: LocalField;
+  /**
+   * True while the session being edited has no end yet (today's running session, U4-11). The end field is then empty with no date,
+   * which gives the break rows their own date field, the build sends `end: null` and never confirms the breaks (Check out does).
+   */
+  running: boolean;
   rows: BreakRowDraft[];
   /** "Confirm no breaks taken". While ticked the rows are kept but neither checked nor sent. */
   noBreaks: boolean;
@@ -132,20 +137,30 @@ export function rowKeepsPin(row: BreakRowDraft, zone: string): boolean {
 }
 
 export function newSessionDialogDraft(workDate: string, zone: string): SessionDialogDraft {
-  return { zone, start: emptyField(workDate), end: emptyField(workDate), rows: [], noBreaks: false, breaksEdited: false };
+  return { zone, start: emptyField(workDate), end: emptyField(workDate), running: false, rows: [], noBreaks: false, breaksEdited: false };
 }
 
-/** The dialog draft of a saved session; an unchanged save sends every saved instant again. */
+/**
+ * The dialog draft of a saved session; an unchanged save sends every saved instant again. A running session (no end) keeps an
+ * empty end without a date and shows no "no breaks" choice: its breaks are confirmed at Check out, so the box is never ticked.
+ */
 export function sessionDialogDraftFromSession(session: Session): SessionDialogDraft {
   const base = draftFromSession(session);
+  const running = session.end_utc === null;
   return {
     zone: base.zone,
     start: base.start,
-    end: base.end,
+    end: running ? emptyField('') : base.end,
+    running,
     rows: rowsFromSession(session),
-    noBreaks: session.breaks_confirmed && session.breaks.length === 0,
+    noBreaks: !running && session.breaks_confirmed && session.breaks.length === 0,
     breaksEdited: false,
   };
+}
+
+/** "Set an end instead": the running session becomes an ended one that still needs its end typed (the end date starts on the start date). */
+export function endRunningDraft(draft: SessionDialogDraft): SessionDialogDraft {
+  return { ...draft, running: false, end: emptyField(draft.start.date) };
 }
 
 function mapRow(draft: SessionDialogDraft, key: string, change: (row: BreakRowDraft) => BreakRowDraft): SessionDialogDraft {
@@ -404,6 +419,32 @@ export type SessionDialogBuild =
   | { ok: false; message: string | null; problem: TimeProblem | null; rowErrors: BreakRowError[] };
 
 /**
+ * The body for a running session (U4-11): `end: null`, the listed rows checked against the start only, and the breaks never
+ * confirmed (`breaks_confirmed: false`), because the person confirms them at Check out. There is no "no breaks" choice and no G-4
+ * question here. The server still checks the start (not later than now + 5 minutes, no overlap) and every break.
+ */
+function buildRunningRequest(
+  draft: SessionDialogDraft,
+  zone: string,
+  startUtc: EpochSeconds,
+  options: { expectedVersion?: number; reason?: string },
+): SessionDialogBuild {
+  const checked = checkBreakRows(draft.rows, zone, { startUtc, endUtc: null });
+  if (checked.errors.length > 0) return { ok: false, message: null, problem: null, rowErrors: checked.errors };
+  const request: SessionRequest = {
+    start: toLocalInput(draft.start, zone),
+    end: null,
+    input_zone: zone,
+    breaks: checked.resolved.map((item) => item.request),
+    breaks_confirmed: false,
+  };
+  if (options.expectedVersion !== undefined) request.expected_version = options.expectedVersion;
+  const reason = options.reason?.trim() ?? '';
+  if (reason !== '') request.reason = reason;
+  return { ok: true, request };
+}
+
+/**
  * The body of POST /api/days/:date/sessions or PUT /api/sessions/:id from the session dialog, in
  * the existing `SessionRequest` shape. Listed rows or the ticked box confirm the breaks (Save is
  * the confirmation, U-25); an empty unticked list follows `allowUnconfirmed` (G-4).
@@ -413,10 +454,11 @@ export function buildSessionDialogRequest(
   options: { allowUnconfirmed: boolean; expectedVersion?: number; reason?: string },
 ): SessionDialogBuild {
   const zone = draft.zone.trim();
-  const gap = draftGap({ zone, start: draft.start, end: draft.end, breaks: [], mode: 'none' });
+  const gap = draftGap({ zone, start: draft.start, end: draft.end, breaks: [], mode: 'none' }, draft.running);
   if (gap !== null) return { ok: false, message: gap, problem: null, rowErrors: [] };
   const start = resolveField(draft.start, zone);
   if (!start.ok) return { ok: false, message: start.message, problem: start.problem, rowErrors: [] };
+  if (draft.running) return buildRunningRequest(draft, zone, start.utc, options);
   const end = resolveField(draft.end, zone);
   if (!end.ok) return { ok: false, message: end.message, problem: end.problem, rowErrors: [] };
   const payload = breaksPayload(
@@ -624,6 +666,12 @@ export function breaksSummary(rows: readonly BreakRowDraft[], noBreaks: boolean)
   return { text: `${rows.length} ${rows.length === 1 ? 'break' : 'breaks'} (${minutes.join(', ')} min)`, confirms: true };
 }
 
+/** The Breaks line of the Save confirmation of a running session: the count, and that the person confirms them at Check out. */
+export function runningBreaksSummary(rows: readonly BreakRowDraft[]): string {
+  if (rows.length === 0) return 'No breaks listed, confirmed at Check out';
+  return `${rows.length} ${rows.length === 1 ? 'break' : 'breaks'}, confirmed at Check out`;
+}
+
 /** `9:00`, `09:00` and `09:00:00` are the same time; anything else compares as typed. */
 function timeKey(text: string): string {
   const match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(text.trim());
@@ -649,7 +697,7 @@ function fieldKey(field: LocalField): string {
  * box is ticked in both states (nothing of them would be saved).
  */
 export function sessionDialogIsDirty(initial: SessionDialogDraft, current: SessionDialogDraft): boolean {
-  if (initial.zone.trim() !== current.zone.trim()) return true;
+  if (initial.zone.trim() !== current.zone.trim() || initial.running !== current.running) return true;
   if (fieldKey(initial.start) !== fieldKey(current.start) || fieldKey(initial.end) !== fieldKey(current.end)) return true;
   if (initial.noBreaks !== current.noBreaks) return true;
   if (initial.noBreaks && current.noBreaks) return false;

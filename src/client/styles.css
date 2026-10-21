@@ -204,8 +204,19 @@
   --dialog-field-gap-phone: var(--space-3);
   --break-row-gap: var(--space-2);
   --break-date-w: 7.6rem;
+  /* The least a time takes in the two-line row, where it grows into the room that is left; breakChipModel.ts mirrors it in its thresholds */
   --break-time-w: 6.8rem;
+  /*
+   * The fixed time slot of the one-line row (round 4, U4-14). "12:00:00 AM" with its picker icon needs 131px in en-US with a pointer
+   * and 139px with a touch screen (a probe field with an automatic width, 15px root); the slot adds 5px to the larger, so no time text
+   * is clipped. It is wider than --break-time-w, which stays because the chip threshold (breakChipModel.ts) counts it for the two-line row.
+   */
+  --break-time-slot-w: 9.6rem;
   --break-min-w: 5.6rem;
+  /* The "Break n" slot of the one-line row, wide enough for "Break 12", so every row's fields start at the same x (round 4, U4-14) */
+  --break-num-w: 4.3rem;
+  /* A quiet link-style button under a field ("Today", "Now", "Set an end instead", round 4, U4-13): 28px on a pointer device, 44px on touch */
+  --link-action-height: 28px;
   /* The "Break n" sub-dialog (WP5-UX3-T08B) */
   --break-dialog-width: 26rem;
   /* The session dialog on a desktop (WP5-UX3-T08) and the padding of its head, body and foot from 768px */
@@ -1837,7 +1848,7 @@ tr.nonworking td {
 }
 
 /*
- * The right group (U-12): "Show details" and "Change several days" are two groups, a --toolbar-group-gap apart with a 1px --line
+ * The right group (U-12): "Show worked hours" and "Change several days" are two groups, a --toolbar-group-gap apart with a 1px --line
  * separator centred in that gap (a pseudo-element of the second one, so the gap itself equals the token). The phone keeps the tighter
  * gap and no separator, because the two often wrap there (see the phone rules).
  */
@@ -2211,6 +2222,30 @@ textarea {
   padding: var(--space-3) var(--space-4);
   border-top: var(--hairline) solid var(--line-soft);
   background: var(--panel-head);
+}
+
+/*
+ * The "not saved" alert (round 4, U4-15): a confirmation with one OK button. The title carries a triangle in the error colour (a shape
+ * beside the words, never colour alone); the messages are one line each, so a list of break rows reads as a list.
+ */
+.alert-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.alert-shape {
+  margin-right: 0;
+  color: var(--error);
+}
+
+.alert-messages {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.alert-messages > li {
+  margin: 0;
 }
 
 .preview-list li,
@@ -3083,7 +3118,7 @@ textarea {
  * The row of the day open in the Day editor (round 3, U-13): a 1px accent frame, inset shadows on top and bottom of
  * every cell, on the left edge of the first and the right edge of the last, and the Day cell filled with
  * --day-editing-head (the hatching of a non-working day stays on the cells; the Day cell keeps its image layer). With
- * "Show details" the row opens its frame downwards and the detail row closes it (sides and bottom). A table row does
+ * "Show worked hours" the row opens its frame downwards and the detail row closes it (sides and bottom). A table row does
  * not lift: a selected row is the tint and the checked box.
  */
 .sheet-table tr.editing td,
@@ -3474,6 +3509,76 @@ textarea {
 .local-field input {
   width: 100%;
   min-width: 0;
+}
+
+/* A date or a time with its "Today" or "Now" link under it, flush with the input's right edge (round 4, U4-13, owner answer F-5). */
+.local-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.local-cell > button.link-action {
+  align-self: flex-end;
+}
+
+/*
+ * A quiet link-style button (round 4, U4-13): the quiet look with an underline, no side padding so its text and its box end where the
+ * field above it ends, 28px high on a pointer device and 44px high and wide on touch (the control rule above gives the width; the
+ * touch rule below gives the height). Under the pointer only the text colour and the underline change: with no padding a fill
+ * would hug the words.
+ */
+button.link-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: var(--link-action-height);
+  padding: var(--space-0) 0;
+  font-size: var(--font-size-sm);
+  text-decoration: underline;
+}
+
+@media (hover: hover) {
+  button.quiet.link-action:hover:not(:disabled) {
+    background: transparent;
+    border-color: transparent;
+    color: var(--accent-strong);
+    text-decoration-thickness: var(--rule);
+  }
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  button.link-action {
+    min-height: var(--tap-min);
+  }
+}
+
+/* The running session's end (round 4, U4-11): a dashed inset box in place of the End fields. */
+.running-end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3);
+  border: var(--hairline) dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--off);
+}
+
+.running-end p {
+  margin: 0;
+}
+
+.running-end-title {
+  display: flex;
+  align-items: center;
+  font-weight: var(--font-weight-strong);
+}
+
+.running-end > button.link-action {
+  justify-content: flex-start;
 }
 
 .breaks {
@@ -4188,24 +4293,34 @@ button.break-remove {
     display: contents;
   }
 
+  /*
+   * Fixed column slots (round 4, U4-14): "Break n", the date (when shown), the time and the minutes keep one width in every row, so the
+   * fields line up whatever the row's origin or its info text; only the info slot, which always holds text ("ends --:--" until the
+   * row resolves), takes the room that is left.
+   */
   .break-num {
+    flex: 0 0 var(--break-num-w);
     order: 0;
   }
 
   .break-date {
+    flex: 0 0 var(--break-date-w);
     order: 1;
   }
 
   .break-time {
+    flex: 0 0 var(--break-time-slot-w);
     order: 2;
   }
 
   .break-minutes {
+    flex: 0 0 var(--break-min-w);
     order: 3;
   }
 
+  /* A zero basis: the slot takes what the fixed slots leave and its words wrap inside it; an `auto` basis (its longest line) would push the remove button onto a second line. */
   .break-info {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     order: 4;
   }
 

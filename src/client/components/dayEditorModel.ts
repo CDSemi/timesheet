@@ -1,9 +1,10 @@
 import { isoWeekday } from '../../domain/dates.ts';
 import { parseUtcInstant } from '../../domain/instants.ts';
 import { formatInZone, localDateOf } from '../../domain/zones.ts';
-import type { DayView, Period, PeriodRelation, Session } from '../api.ts';
+import { ApiRequestError, type DayView, type Period, type PeriodRelation, type Session } from '../api.ts';
 import { savedBreakMinutes } from './breakRowsModel.ts';
 import { WEEKDAYS } from './dayModel.ts';
+import { describeError } from './errors.ts';
 import { usDate, usShortDate } from './format.ts';
 import { PERIOD_PILL_WORDS, type PeriodPillKind, periodPillKind, viewingZoneText, zoneNoteVisible } from './periodBarModel.ts';
 import { sessionRange } from './sheetModel.ts';
@@ -133,7 +134,7 @@ export function sessionCardOf(session: Session, workDate: string, zone: string):
     id: session.id,
     range: range.text,
     startDate: range.startDate,
-    source: session.source === 'manual' ? `Entered by hand in ${session.input_zone}` : 'Checked in and out',
+    source: session.source === 'manual' ? `Entered by hand in ${session.input_zone}` : session.end_utc === null ? 'Checked in' : 'Checked in and out',
     caption: `Breaks of ${range.text}`,
   };
   if (session.end_utc === null) {
@@ -185,6 +186,35 @@ export function cardBreaksText(card: SessionCard): string {
   const minutes = ` (${card.breaks.map((item) => item.minutes).join(', ')} min)`;
   if (card.state === 'unconfirmed') return card.breaks.length === 0 ? 'Breaks not confirmed' : `${count}${minutes}, not confirmed`;
   return `${count}${minutes}`;
+}
+
+/* ---- Failed saves (U4-15) ---------------------------------------------------------------------------- */
+
+/** The title of the alert a failed save of the session dialog or the Check out dialog opens. */
+export const SAVE_FAILED_TITLE = 'This session was not saved';
+
+/** What the alert says: one line per message (a break row each) and a hint on what to do next. */
+export interface SaveFailure {
+  messages: string[];
+  hint: string;
+}
+
+const CHANGE_AND_RETRY = 'Nothing was saved. Change what the message names, then try again.';
+
+/** A refusal of the server, or a request that never got an answer. */
+export function requestFailure(caught: unknown): SaveFailure {
+  if (caught instanceof ApiRequestError) return { messages: [describeError(caught)], hint: CHANGE_AND_RETRY };
+  return { messages: ['The request could not be sent, or no answer came back.'], hint: 'Nothing was saved. Check your connection, then try again.' };
+}
+
+/** A message of the form check before anything is sent (an empty field, the unconfirmed breaks). */
+export function messageFailure(message: string): SaveFailure {
+  return { messages: [message], hint: CHANGE_AND_RETRY };
+}
+
+/** Break rows that cannot be saved as they are, listed by their "Break n" messages. */
+export function rowsFailure(messages: readonly string[]): SaveFailure {
+  return { messages: [...messages], hint: 'Nothing was saved. The breaks marked in the list need a change, then try again.' };
 }
 
 export interface ConfirmFact {

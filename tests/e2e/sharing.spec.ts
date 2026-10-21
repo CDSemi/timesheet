@@ -394,6 +394,87 @@ test('the owner changes the share to edit; the grantee edits a day without Check
   await expect(page.locator('[data-grantee-changes]')).toHaveCount(0);
 });
 
+/* ---- A grantee edits the start of the owner's running session (WP5-UX4-T03, U4-11) ---------------------------------------- */
+
+test("a grantee with edit rights can correct the start of the owner's running session but is never offered \"Set an end instead\"; a view-only grantee has no Edit at all", async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+}) => {
+  test.setTimeout(120_000);
+  const owner = await newPerson(adminSeed, builtServer, 'Synthetic Owner');
+  const grantee = await newPerson(adminSeed, builtServer, 'Synthetic Grantee');
+  const { todayLocal } = await owner.api.today();
+  await owner.api.clearSessions(todayLocal);
+  // The owner checks in and the start is moved three hours back, so the session has room for a correction (the grantee never checks in or out).
+  const started = await owner.api.call<{ session: { id: string; version: number; start_utc: string } }>('POST', '/api/clock/in', { input_zone: 'America/Los_Angeles' }, 201);
+  const startMs = Date.parse(started.session.start_utc) - 3 * 3_600_000;
+  const instant = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const moved = await owner.api.call<{ session: { id: string; version: number } }>('PUT', `/api/sessions/${started.session.id}`, {
+    start: instant(startMs),
+    end: null,
+    input_zone: 'America/Los_Angeles',
+    breaks: [],
+    breaks_confirmed: false,
+    expected_version: started.session.version,
+  });
+  await grantByApi(owner, grantee, { timesheets: 'edit', ot_read: false, pdf_download: false });
+  try {
+    await signInPageAs(grantee.account, `#/shared/${owner.account.id}/timesheet`);
+    await expect(bar(page).locator('[data-share-bar-title]')).toHaveText("Viewing Synthetic Owner's timesheets - can edit");
+    await page.getByLabel('Open a day').fill(todayLocal);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    const card = editor.locator('.session-card[data-state="running"]');
+    await expect(card.locator('.session-source')).toHaveText('Checked in');
+    await card.getByRole('button', { name: /^Edit session/ }).click();
+    const form = page.getByRole('dialog', { name: 'Edit session', exact: true });
+    await expect(form).toBeVisible();
+    // The running box stays, but a grantee cannot end the owner's session: there is no way to set an end from here.
+    await expect(form.locator('[data-running-end]')).toContainText('No end yet: this session is running.');
+    await expect(form.getByRole('button', { name: 'Set an end instead' })).toHaveCount(0);
+    await expect(form.getByLabel('End date', { exact: true })).toHaveCount(0);
+
+    // A correction of the start goes through the share and keeps the session running.
+    const earlier = new Date(startMs - 15 * 60_000).toLocaleString('sv-SE', { timeZone: 'America/Los_Angeles' }).slice(0, 16);
+    await form.getByLabel('Start date', { exact: true }).fill(earlier.slice(0, 10));
+    await form.getByLabel('Start time', { exact: true }).fill(earlier.slice(11));
+    const puts: Array<{ path: string; body: Record<string, unknown> }> = [];
+    page.on('request', (request) => {
+      if (request.method() === 'PUT' && request.url().includes('/sessions/')) puts.push({ path: new URL(request.url()).pathname, body: request.postDataJSON() as Record<string, unknown> });
+    });
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('alertdialog', { name: 'Save this session?' }).getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    expect(puts).toHaveLength(1);
+    expect(puts[0]?.path).toBe(`/api/shared/${owner.account.id}/sessions/${moved.session.id}`);
+    expect(puts[0]?.body).toMatchObject({ end: null, breaks_confirmed: false, expected_version: moved.session.version });
+    const stored = (await owner.api.dayView(todayLocal)).sessions.find((session) => session.id === moved.session.id);
+    expect(stored?.end_utc, 'the owner is still checked in').toBeNull();
+    // The dialog takes a start to the minute, so the stored start is the typed minute (the seconds of the old start are dropped).
+    expect(Date.parse(stored?.start_utc ?? '')).toBe(Math.floor((startMs - 15 * 60_000) / 60_000) * 60_000);
+  } finally {
+    await owner.api.clearSessions(todayLocal);
+  }
+
+  // A view-only grantee sees the card but has no Edit button, so no dialog and no "Today" or "Now" link exist for it.
+  await owner.api.call('POST', '/api/clock/in', { input_zone: 'America/Los_Angeles' }, 201);
+  await owner.api.call('PUT', `/api/shares/${await givenShareId(owner)}`, { items: { timesheets: 'view', ot_read: false, pdf_download: false } });
+  try {
+    await page.reload();
+    await expect(bar(page).locator('[data-share-bar-title]')).toHaveText("Viewing Synthetic Owner's timesheets - view only");
+    await namedDayButton(page, todayLocal, 'View').click();
+    const editor = page.getByRole('dialog', { name: /Day/ });
+    await expect(editor.locator('.session-card[data-state="running"]')).toHaveCount(1);
+    await expect(editor.getByRole('button', { name: /^Edit session/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^(Today|Now), / })).toHaveCount(0);
+  } finally {
+    await owner.api.clearSessions(todayLocal);
+  }
+});
+
 /* ---- OT and PDF items on and off ----------------------------------------------------------------- */
 
 test('the OT and PDF items: read-only OT, a revision list with a PDF download, and both absent again when switched off', async ({

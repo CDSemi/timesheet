@@ -930,6 +930,39 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - A fresh committer runs alone.
   - The brief lists every path as dispatched. Extra WP5-UX4 task records and evidence are
     allowed by a pattern set at dispatch.
+- WP5-UX4-T02-FREEZE committed and pushed b7cc06352687d1bc8cd6953b284915584a21e4fd.
+  - 49 paths; digest 04e16199 on HEAD; every check 0.
+  - One allowed whitespace fix, in `WP5-UX4-T01-FREEZE.md`.
+  - Slip: one `node -e` used for the JSON parse.
+- Coordinator decision: the U4-15 alert is reused in the Check out dialog.
+- Running now: WP5-UX4-T03 (worker-high, sonnet; risk H with an existing pattern) on b7cc063
+  / 04e16199.
+  - Scope:
+    - U4-11: edit the start of a running session;
+    - U4-12: zone first;
+    - U4-13: Today/Now, right-aligned, in the input zone;
+    - U4-14: aligned break rows;
+    - U4-15: the alert in the session and Check out dialogs;
+    - the `sheetModel.ts:141` comment.
+- WP5-UX4-T03 done (worker report; the round-4 audits check it independently).
+  - Running edit: the integration oracle gives 601 regular minutes from 08:00 against 541
+    from 09:00.
+  - Today and Now are right-aligned within 1px; the Tokyo-zone test with an LA device and a
+    frozen clock passes.
+  - The break rows are aligned.
+  - The alert works in both dialogs.
+  - Results:
+    - vitest 2185; full e2e desktop 394 and mobile 365 passed, 0 failed, no rerun;
+    - mutants 1-7 caught;
+    - build 498.66 kB, 1.3 kB under the 500 kB advisory. **T05 must split code**;
+    - digest e3c7016b (840 files).
+  - Notes:
+    - axe-core is not a dependency; direct checks were asserted instead;
+    - after the full e2e, a test-only U4-14 assertion was added and its tests passed again;
+      the gate reruns everything;
+    - slips: pipes into `head` and one empty heredoc.
+- Running now: WP5-UX4-T03-FREEZE. A fresh committer runs alone, with the full path list
+  set at dispatch.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 
