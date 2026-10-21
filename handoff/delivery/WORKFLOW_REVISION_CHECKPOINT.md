@@ -963,6 +963,34 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
     - slips: pipes into `head` and one empty heredoc.
 - Running now: WP5-UX4-T03-FREEZE. A fresh committer runs alone, with the full path list
   set at dispatch.
+- WP5-UX4-T03-FREEZE committed and pushed cda9c5172b06d3651e94e75ff30e9b1edfae382e.
+  - 47 paths; digest e3c7016b on HEAD; every check 0.
+  - Slip: one `/dev/null` redirect.
+- Running now: WP5-UX4-T05 (worker-high, sonnet; risk H for privacy and the auto-submit
+  flag, using the existing preview-then-confirm pattern) on cda9c51 / e3c7016b.
+  - Scope: settings export and import per F-3 a and F-4 a.
+  - Hard limits:
+    - client only; a missing route is a stop;
+    - an allowlist of keys;
+    - no write without a preview and one confirmation;
+    - a separate auto-submit tick;
+    - the company file for administrators only;
+    - the transfer code in a lazy chunk, so the main chunk stays under the 500 kB
+      advisory.
+- WP5-UX4-T05 done (worker report; audited later).
+  - Client only, no route missing.
+  - Personal file: work policy, submission and theme. Company file: zone, payroll, weekdays,
+    holidays and payroll exceptions.
+  - One confirmation; auto-submit only by its own tick.
+  - Main chunk 489.14 kB.
+  - Full e2e: desktop 400 / mobile 371 passed, 0 failed, no rerun. Mutants 1-6 caught (4
+    split into 4a and 4b). Digest b4727677 (849 files).
+  - Limits for the owner:
+    - a company file with different working weekdays is refused, because no route writes
+      them;
+    - it applies to the administrator's own calendar;
+    - the holiday commit and the payroll exceptions are separate writes.
+- Running now: WP5-UX4-T05-FREEZE (a fresh committer, alone).
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

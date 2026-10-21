@@ -1,0 +1,104 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/settingsFileModel.test.ts (32 tests | 4 failed) 32ms
+   ❯ what a personal export may hold (4)
+     × holds exactly the allowlisted keys and nothing of the signature, its authorization, ids or instants 5ms
+     × is read back by this app with every key allowlisted 2ms
+   ❯ a tampered or foreign file is refused before any preview (9)
+     × refuses an unknown key at the top and nested 2ms
+     × refuses values the server would refuse: an inconsistent reference day, a bad address, an empty recipient list 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/settingsFileModel.test.ts > what a personal export may hold > holds exactly the allowlisted keys and nothing of the signature, its authorization, ids or instants
+AssertionError: expected [ 'app_version', 'data', …(30) ] to deeply equal [ 'app_version', 'data', …(26) ]
+
+- Expected
++ Received
+
+@@ -1,9 +1,13 @@
+  [
+    "app_version",
+    "data",
+    "data.submission",
++   "data.submission.auto_image",
++   "data.submission.auto_image.authorized",
++   "data.submission.auto_image.authorized_at",
++   "data.submission.auto_image.signature_attachment_id",
+    "data.submission.auto_note_enabled",
+    "data.submission.auto_note_text",
+    "data.submission.auto_submit",
+    "data.submission.body_template",
+    "data.submission.cc",
+
+ ❯ tests/client/settingsFileModel.test.ts:190:40
+    188|     ];
+    189|     const file = exportPersonal();
+    190|     expect([...keyPaths(file)].sort()).toEqual([...expected].sort());
+       |                                        ^
+    191|     const text = serializeSettingsFile(file);
+    192|     for (const forbidden of [
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/client/settingsFileModel.test.ts > what a personal export may hold > is read back by this app with every key allowlisted
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/client/settingsFileModel.test.ts:228:23
+    226|   it('is read back by this app with every key allowlisted', () => {
+    227|     const result = parseSettingsFile(serializeSettingsFile(exportPerso…
+    228|     expect(result.ok).toBe(true);
+       |                       ^
+    229|     for (const key of Object.keys(ALLOWED_KEYS)) expect(ALLOWED_KEYS[k…
+    230|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/client/settingsFileModel.test.ts > a tampered or foreign file is refused before any preview > refuses an unknown key at the top and nested
+AssertionError: expected [ …(2) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ tests/client/settingsFileModel.test.ts:239:127
+    237|     expect(problemsOf(tampered((file) => (data(file).work_policy!.effe…
+    238|     expect(problemsOf(tampered((file) => (data(file).submission!.apply…
+    239|     expect(problemsOf(tampered((file) => (data(file).work_policy!.brea…
+       |                                                                                                                               ^
+    240|   });
+    241|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/client/settingsFileModel.test.ts > a tampered or foreign file is refused before any preview > refuses values the server would refuse: an inconsistent reference day, a bad address, an empty recipient list
+AssertionError: expected 'data.submission.auto_image is not a s…' to contain 'data.submission.to[0]'
+
+Expected: "data.submission.to[0]"
+Received: "data.submission.auto_image is not a setting this app knows. The file was not read."
+
+ ❯ tests/client/settingsFileModel.test.ts:271:104
+    269|   it('refuses values the server would refuse: an inconsistent referenc…
+    270|     expect(problemsOf(tampered((file) => (data(file).work_policy!.requ…
+    271|     expect(problemsOf(tampered((file) => (data(file).submission!.to = …
+       |                                                                                                        ^
+    272|     expect(problemsOf(tampered((file) => (data(file).submission!.to = …
+    273|     expect(problemsOf(tampered((file) => (data(file).submission!.auto_…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 28 passed (32)
+   Start at  00:45:32
+   Duration  413ms (import 53%, transform 35%, tests 11%, worker 1%)
+

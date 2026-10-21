@@ -3,6 +3,7 @@ import { api, ApiRequestError, type CurrentPeriods, type PolicyPreview as Policy
 import { describeError } from './components/errors.ts';
 import { PolicyFields } from './components/PolicyFields.tsx';
 import { PolicyPreview } from './components/PolicyPreview.tsx';
+import { SettingsTransferLoader } from './components/SettingsTransferLoader.tsx';
 import { SharingSection } from './components/SharingSettings.tsx';
 import { SubmissionSettingsSection } from './components/SubmissionSettings.tsx';
 import { canCreate, DEFICIT_MODE_LABELS, draftFromPolicy, draftToRequest, type PolicyDraft, requestSignature } from './components/policyModel.ts';
@@ -80,6 +81,8 @@ export function SettingsScreen({ onSharesChanged }: { onSharesChanged: () => voi
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // An import of a settings file wrote new versions: the submission section reads them again by starting over.
+  const [importCount, setImportCount] = useState(0);
 
   const reload = useCallback(async (resetDraft: boolean) => {
     try {
@@ -155,8 +158,14 @@ export function SettingsScreen({ onSharesChanged }: { onSharesChanged: () => voi
   return (
     <div className="stack">
       <h1 tabIndex={-1}>Settings</h1>
-      <SubmissionSettingsSection />
+      <SubmissionSettingsSection key={importCount} />
       <SharingSection onChanged={onSharesChanged} />
+      <SettingsTransferLoader
+        onImported={() => {
+          setImportCount((count) => count + 1);
+          void reload(true);
+        }}
+      />
       <section className="card stack" aria-label="Import from Excel">
         <h2>Import from Excel</h2>
         <p className="hint muted">Bring in your own workbook and set your opening overtime balance.</p>

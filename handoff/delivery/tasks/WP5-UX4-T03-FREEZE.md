@@ -161,3 +161,15 @@ Append to this brief:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+- Pre-HEAD b7cc06352687d1bc8cd6953b284915584a21e4fd (= origin/main). Post-HEAD / commit
+  cda9c5172b06d3651e94e75ff30e9b1edfae382e, pushed to main, remote SHA identical.
+- Digest before add and on the new HEAD via git ls-tree:
+  e3c7016ba45e0d5e9085071c87258cecdbd6c0a6827b144b6b7cbbaa542129d3 (840 files).
+- Staged 47: 21 outside handoff, 4 modified handoff records, 2 T02-FREEZE evidence files,
+  2 task records (T03 and this brief), 18 T03 evidence files (12 .txt, 6 -synthetic.png).
+  No extra handoff paths.
+- Checks, all exit 0: node v24.21.0; precommit-check PASS (47 files, 0 findings);
+  diff --cached --check; JSON parse; validate_orchestration PASS; check_recovery PASS (106);
+  validate_package --preflight PASS; ls-tree digest matches.
+- No masking, no whitespace fix, no stop. Evidence in evidence/WP5-UX4-T03-FREEZE/ (unstaged).

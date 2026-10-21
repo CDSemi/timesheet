@@ -1000,6 +1000,34 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
     - sơ suất: có lệnh pipe vào `head` và một heredoc rỗng.
 - Đang chạy: WP5-UX4-T03-FREEZE. Một committer mới chạy một mình, với danh sách đường dẫn đầy đủ
   đặt sẵn lúc giao.
+- WP5-UX4-T03-FREEZE đã commit và push cda9c5172b06d3651e94e75ff30e9b1edfae382e.
+  - 47 đường dẫn; digest e3c7016b trên HEAD; mọi kiểm tra trả về 0.
+  - Sơ suất: một lệnh redirect vào `/dev/null`.
+- Đang chạy: WP5-UX4-T05 (worker-high, sonnet; rủi ro H vì quyền riêng tư và cờ tự động nộp, dùng
+  mẫu xem trước rồi xác nhận đã có sẵn) trên cda9c51 / e3c7016b.
+  - Phạm vi: export/import settings theo F-3 a và F-4 a.
+  - Ràng buộc cứng:
+    - chỉ sửa client; thiếu route nào thì dừng lại;
+    - danh sách khóa được phép (allowlist);
+    - không ghi gì nếu chưa xem trước và xác nhận một lần;
+    - ô tick tự động nộp tách riêng;
+    - file lịch công ty chỉ dành cho quản trị viên;
+    - code chuyển settings nằm trong chunk tải lười (lazy), để chunk chính vẫn dưới ngưỡng cảnh báo
+      500 kB.
+- WP5-UX4-T05 xong (theo báo cáo của worker; sẽ audit sau).
+  - Chỉ sửa client, không thiếu route nào.
+  - File cá nhân: work policy, cài đặt nộp timesheet và theme. File công ty: time zone, payroll,
+    ngày làm việc trong tuần, ngày lễ và payroll exceptions.
+  - Xác nhận một lần; tự động nộp chỉ bật khi tick riêng.
+  - Chunk chính 489.14 kB.
+  - E2e đầy đủ: desktop 400 / mobile 371 đạt, 0 lỗi, không phải chạy lại. Bắt được đột biến 1-6
+    (đột biến 4 tách thành 4a và 4b). Digest b4727677 (849 file).
+  - Giới hạn cần báo chủ dự án:
+    - file công ty có ngày làm việc trong tuần khác lịch hiện tại sẽ bị từ chối, vì không có route
+      nào ghi được các ngày này;
+    - file công ty chỉ áp dụng cho lịch của chính quản trị viên đó;
+    - ngày lễ và payroll exceptions được ghi thành hai lần riêng.
+- Đang chạy: WP5-UX4-T05-FREEZE (một committer mới, chạy một mình).
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

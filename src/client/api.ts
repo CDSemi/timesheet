@@ -391,7 +391,22 @@ export interface CalendarInfo {
   id: string;
   name: string;
   reporting_zone: string;
-  payroll: { cycle_days: number; anchor_payroll_date: string };
+  payroll: {
+    cycle_days: number;
+    anchor_payroll_date: string;
+    period_start_offset_days: number;
+    period_end_offset_days: number;
+    due_offset_days: number;
+    due_local_time: string;
+  };
+  /** The calendar's versions, oldest first (append-only): ISO weekdays 1-7 and the dated holiday and closure rules. */
+  versions: Array<{
+    id: string;
+    seq: number;
+    effective_from: string;
+    weekdays: number[];
+    dates: Array<{ date: string; kind: 'holiday' | 'closure'; name: string }>;
+  }>;
   payroll_exceptions: Array<{
     nominal_payroll_date: string;
     payroll_date: string;
@@ -824,6 +839,8 @@ export interface SubmissionSettingsRequest {
   auto_note_enabled: boolean;
   auto_note_text?: string;
   show_ot_on_pdf: boolean;
+  /** Minutes before the deadline at which a reminder is sent (at most five); omitted keeps the saved value. */
+  reminder_offsets_minutes?: number[];
 }
 
 /** POST /api/settings/submission/preview: the caller's subject and body with sample values. */

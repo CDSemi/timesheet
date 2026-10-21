@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, type AdminUser, type AdminUserCreateRequest, type CalendarInfo, type CurrentPeriods, type User } from './api.ts';
 import { calendarOptions, defaultImportYear } from './components/adminModel.ts';
 import { type UserActions, UserCreateForm, UserRow } from './components/AdminUsers.tsx';
+import { CompanyCalendarFile } from './components/CompanyCalendarFile.tsx';
 import { describeError } from './components/errors.ts';
 import { HolidayImport } from './components/HolidayImport.tsx';
 import { OperationsStatus } from './components/OperationsStatus.tsx';
@@ -112,6 +113,7 @@ export function AdminScreen({ user }: { user: User }) {
         initialEffectiveFrom={data.periods.current.period_start}
         onCommitted={reload}
       />
+      <CompanyCalendarFile calendar={data.calendar} periods={data.periods} onImported={reload} />
       <PayrollExceptions calendars={calendars} exceptions={data.calendar.payroll_exceptions} onCreated={reload} />
     </div>
   );
