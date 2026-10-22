@@ -1,0 +1,27 @@
+WP5-UX5-T06 commands and exit codes (Git Bash, portable Node v24.21.0 first on PATH; no cmd.exe, no interactive shell, nothing fed to an
+interpreter through stdin; <task> = the task folder under the scratch drive, <export> = its clean export)
+
+Base: HEAD = origin/main = 69d63400486a977f10e022deea85026c6751b687 (WP5-UX5-T05B-FREEZE); digest a5dcb5a6e575b8ceae9fb79cc453b33898eb1202bdece5a5d9cbce03ad25b2db, 868 files (00-base.txt).
+
+1. node --version                                                              -> v24.21.0
+2. git archive 69d6340 | tar -x -C <task>/export                                exit 0 (clean export of the round-5 slice freeze)
+3. npm ci (in <export>; first try with the system npm shim, which runs on Node 26 and is refused by engine-strict: exit 1, EBADENGINE; second try
+   with the user-level npm running on Node 24, as in the dev-environment recipe)  exit 0
+4. npm run build:server (in <export>)                                            exit 0
+5. node make-samples.mjs   (TEMP, TMP, DATA_DIR, DATABASE_PATH, RUN_DIR inside <task>)  exit 0   04-make-samples.txt
+   production services and job handlers, fixed clocks, capture mode, example.invalid users; outbound mode printed: capture;
+   PRODUCTION_SENDING_ENABLED unset; 11 messages captured (6 with a PDF), no job in intervention or failed.
+   S2 without a reason was refused (422 reason_required) and then sent with a reason.
+6. node extract.mjs                                                            exit 0   05-extract.txt, msg-*, pdf-text-*, pilot-*-synthetic.png, sample-index.txt
+   6 PDFs, 1 page each, each stored hash equals the captured attachment (pdf_hash_ok true), 6 renders in the installed Edge (playwright-core
+   channel msedge); each PNG viewed with the image reader after it was made (S1 to S6).
+7. node ready-check.mjs (server on port 49800, own handle, stopped with child.kill)  exit 0   06-ready-check.txt
+   /api/health 200, /api/ready 200 (schema 15/15, data_dir_writable true); the server stopped through its handle (SIGTERM).
+8. node parity.mjs <en> <vi> for docs/04, docs/12, docs/11 and the pilot packet     exit 0 each   07-parity.txt   PARITY OK x4
+9. python handoff/delivery/validate_package.py --preflight (codex runtime Python)    exit 0   08-preflight.txt   PASS, 122 translation pairs, 2353 local links
+10. node scripts/precommit-check.mjs --self-test                                    exit 0   09-precommit-selftest.txt   (12 rules)
+11. git diff --check                                                               exit 0   10-diff-check.txt
+12. privacy scan of this folder: only example.invalid and timesheet.invalid addresses (Message-IDs), no profile path, no real name or host.
+13. npm run digest (last): see the Results of the brief (the digest moved only because of the docs).
+
+Ports used: 49800 only (one run). Nothing is left running by this task.

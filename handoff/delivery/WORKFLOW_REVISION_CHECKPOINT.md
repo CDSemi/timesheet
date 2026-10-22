@@ -1485,6 +1485,39 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - Running now: WP5-UX5-T05B-FREEZE (a fresh committer, alone). It stages 12 explicit paths
   plus the handoff records, including the draft T06 brief. The digest must be a5dcb5a6,
   checked on HEAD with `git ls-tree`.
+- WP5-UX5-T05B-FREEZE done: 69d63400486a977f10e022deea85026c6751b687 on main, pushed (26
+  paths: 12 outside `handoff/`, 14 handoff). Digest a5dcb5a6 (868 files) before staging
+  and from HEAD's `git ls-tree`; every check exit 0. All five source slices of round 5 are
+  frozen.
+- Running now: WP5-UX5-T06, docs and pilot packet (worker, sonnet; size L, risk M; base
+  69d6340 / a5dcb5a6; ports 49800-49819).
+  - It covers docs/04 and docs/12 (EN/VI), the pilot packet (EN/VI), and new synthetic
+    samples from a clean export of 69d6340, in capture mode.
+  - The release identity and drill figures are left for ACCEPT-DOCS. No source change: the
+    digest must stay a5dcb5a6.
+- Coordinator correction during T06: the source digest covers `docs/` (only `handoff/` is
+  excluded), so T06's docs edits move it. Sent by message, and recorded as Addendum 1.
+- T06 first hand-back.
+  - Docs updated: docs/04, docs/12 and docs/11 (EN/VI; docs/07 needed none), and the pilot
+    packet (EN/VI).
+  - Samples come from a clean export of 69d6340: S1-S6 and N1-N5. There are six one-page
+    PDFs with matching hashes, and the ready check shows schema 15.
+  - parity x4, preflight and the precommit self-test pass. Digest 318b3370 (868 files),
+    moved only by the six docs files.
+  - Gap: the owner's round-5 answers Q1 (the reference image) and Q2 (the footer texts)
+    are missing from packet section 8.
+- Running now: T06 Addendum 1 (the same worker) adds the two rows.
+- Draft brief ready: WP5-UX5-GATE (the gate of rounds 4 and 5).
+- WP5-UX5-T06 done after Addendum 1: the Q1 and Q2 rows are in packet section 8 (EN/VI).
+  Packet parity OK, preflight PASS, `git diff --check` 0. Digest 318b3370 (868 files),
+  unchanged by the addendum.
+- Running now: the lookup WP5-UX5-T06-PATHS (light, haiku, read-only).
+- T06-PATHS done. Outside `handoff/`: the 6 docs files, all modified. Nothing is staged,
+  and there is no `zz-*` file. Under `handoff/`, the only binaries are the six
+  `-synthetic.png` renders.
+- Running now: WP5-UX5-T06-FREEZE (a fresh committer, alone). It stages the 6 docs paths
+  plus the handoff records, including the pilot packet pair and the draft gate brief. The
+  digest must be 318b3370, checked on HEAD with `git ls-tree`.
 - Remaining after T06:
   - T06-FREEZE;
   - the round-5 package gate (it covers rounds 4 and 5);

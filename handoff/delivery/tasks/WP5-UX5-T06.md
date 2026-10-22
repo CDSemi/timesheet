@@ -173,8 +173,103 @@ If a needed path is not in "Owned paths", stop and report before editing.
 
 Return at most 120 words, beginning 'Self-reported model: ...'.
 
+## Addendum 1 (coordinator, 2026-10-22)
+
+- **Digest rule corrected** (sent by message during the run). The source digest covers
+  `docs/`; only `handoff/` is excluded. Your docs edits therefore move it. Record the new
+  digest, and prove with `git status --short` and `git diff --stat` that only your owned
+  docs files changed outside `handoff/`. This replaces check 8's "must equal the base".
+- **Section 8 of the pilot packet (EN and VI) misses two round-5 owner answers.** Add one
+  row for each, in the same style.
+  - **Q1 (2026-10-21).** The owner showed a filled workbook page as the PDF reference. It
+    was used for typography and proportions only. It holds personal data, so it is not
+    stored anywhere (AGENTS rule 4). What it changed: the PDF layout of UX5-T02.
+  - **Q2 (2026-10-21).** The footer texts are the copyright line proposed by the
+    coordinator, "© <year> C&D Semiconductor Services, Inc. All rights reserved.", on the
+    left, and the licence text "Internal use by C&D only" on the right. What it changed: the
+    PDF footer of UX5-T02.
+
+  Source on the board: `coordinator_decisions` 2026-10-21, the entry whose basis begins
+  "Owner answers Q0 a, Q1 ... and Q2". The Q0 a row you added stays.
+- **Then:**
+  1. Run `parity.mjs` on the packet pair.
+  2. Run `validate_package.py --preflight`.
+  3. Run `git diff --check`.
+  4. Run `npm run digest`, LAST. It is unchanged at 318b3370, because the packet is under
+     `handoff/`.
+  5. Write the results under "### Addendum 1" in Results.
+
 ## Base at dispatch
 
-(written by the coordinator before dispatch)
+- HEAD = origin/main = 69d63400486a977f10e022deea85026c6751b687 (WP5-UX5-T05B-FREEZE), or
+  a later commit that changes only `handoff/`.
+- Digest a5dcb5a6e575b8ceae9fb79cc453b33898eb1202bdece5a5d9cbce03ad25b2db (868 files). The
+  final digest must equal it.
+- The samples are generated from a clean `git archive` export of 69d6340.
 
 ## Results
+
+Self-reported model: claude-sonnet-5-5 (timesheet-worker). Attempt 1. Commands, exits and logs: `handoff/delivery/evidence/WP5-UX5-T06/01-commands.txt`
+and the numbered logs beside it (`<user>` not needed: no profile path is in the evidence).
+
+### Base (before any edit)
+- Node v24.21.0 first on PATH. HEAD 69d63400486a977f10e022deea85026c6751b687. `git status --short`: only `handoff/` paths (ORCHESTRATION.json,
+  WORKFLOW_REVISION_CHECKPOINT EN/VI, WP5-UX5-T05B-FREEZE.md, WP5-UX5-T06.md, the T05B-FREEZE evidence folder). Digest a5dcb5a6e575b8ceae9fb79cc453b33898eb1202bdece5a5d9cbce03ad25b2db (868 files).
+
+### Digest correction (coordinator message during the task)
+- The brief's check 8 ("the final digest must equal the base") does not hold: the digest covers `docs/`, so the docs edits move it, as the coordinator said.
+  Final `npm run digest` (last command): **318b3370450db99a96194249d4d9d7ae985a10a133f10994ba4acf219453635c (868 files)**; the file count is unchanged.
+- `git status --short` and `git diff --stat` (11-final.txt): outside `handoff/` the only changed paths are the six owned docs files
+  (docs/04, docs/11, docs/12, each with `.vi.md`). No `src/`, `tests/`, `scripts/` or package file changed. The digest moved only because of the docs.
+
+### Inventory (done before editing; no owned-path stop)
+- docs/04: lines still wrong after the slices were the History row ("explicit resend"), the "Email and PDF" PDF paragraph (old layout, "optional time/OT rows",
+  no split, no font), the missing statement that sign-off and send are separate and that the envelope is per send, and the settings-file bullet (no
+  `show_time_on_pdf`). Every other round-5 line was already current (the slices updated them) and was not re-worded.
+- docs/12: the release identity line (round 4 only), no round-5 entry, and two limits that round 5 changed, checked against the frozen code
+  (`drawCategory`, `fitText` in `src/server/pdf/`): partial leave IS printed ("Leave h:mm", R-WA2 no longer holds); a long holiday label is shrunk to 5 pt and
+  wrapped on two lines before it is cut. R-WA8 (days without records read "Worked") still holds (samples). "Send before the PDF" still holds.
+- Pilot packet: sections 0 (round-5 paragraph, refresh marker), 1 (schema 13 observation), 2 ("A change of recipients does not reach an existing revision",
+  "sign off and submit" self-test, "eight messages", first real send), 3 (everything), 4 (reminders, auto-submit, two new defaults, recipients row), 5 (marker and a
+  dangling "see section 3"), 6 and 7 (markers), 8 (round-5 decisions), 10 and 11. Drill figures, identity rows and the image ID were not changed.
+- docs/07: no line says a sign-off sends (its only "submit" is the imported-period refusal), so no edit. docs/11: two lines (section 13 step 2 "sign off and
+  submit", step 6 "A change of recipients does not reach an existing revision") were edited, EN and VI.
+- Sample scripts: `make-samples.mjs` had to change for the split (sign off through `signOffTimesheet` without `signerName`, an explicit send through
+  `sendDraft`/`sendRevision`, `reviseTimesheet` without sending, the reason refusal, extra people for S5 and S6, send records and variants in the log);
+  `extract.mjs` ran unchanged (it names files by recipient and revision); `ready-check.mjs` changed only the port (49800).
+
+### Samples (generated from a clean export of 69d6340)
+- `git archive` exit 0; `npm ci` exit 0 (the first try used the system npm shim on Node 26 and was refused by engine-strict, exit 1, EBADENGINE; the second used
+  the user-level npm on Node 24); `npm run build:server` exit 0; `make-samples.mjs` exit 0 (outbound mode capture, `PRODUCTION_SENDING_ENABLED` unset, 11 messages,
+  none in intervention); `extract.mjs` exit 0 (6 PDFs, 1 page each, `pdf_hash_ok` true for all); `ready-check.mjs` exit 0 (health 200, ready 200, schema 15).
+- S1 `5b31334f...`, S2 `5893e039...` (the send without a reason was refused 422 `reason_required`), S3 `fa4a8e4f...`, S4 `b8caaf08...`, S5 `039228bd...`,
+  S6 `c7ef7841...` (variant `t0o1`). Notices: five, not four (the new signed-not-sent reminder is N5). All six renders were viewed.
+- Evidence folder: 37 files (messages, PDF text, renders, sample index, the three scripts and the parity script as `.txt`, logs).
+
+### Docs written
+- docs/04 EN+VI: History row, settings-file bullet, "Email and PDF" (send paragraph, redesigned PDF).
+- docs/12 EN+VI: identity line, the round-5 scope bullet, two limits rewritten, a new "UI change round 5" limits section.
+- docs/11 EN+VI: two lines. Packet EN+VI: as listed in the inventory; section 8 gained a second table (Q0 a, the T01b freeze question, H-1 a, F-1 to F-10, mockup notes);
+  the wording-approval checklist gained two items (the reason rule; the deadline send of a signed revision and H-1 a).
+- Every place that needs the round-5 gate is marked "refreshed after the round-5 gate" (section 0 table note, section 5 intro, sections 6 and 7).
+
+### Checks
+- `parity.mjs` on the four pairs (docs/04, docs/12, docs/11, the packet): PARITY OK each (`07-parity.txt`; the only code spans missing in VI are translated placeholders).
+- `validate_package.py --preflight` (workflow Python): PASS, 122 translation pairs, 2353 local links (`08-preflight.txt`).
+- `node scripts/precommit-check.mjs --self-test`: exit 0, 12 rules (`09-precommit-selftest.txt`). Privacy scan of the evidence: only `example.invalid` and
+  `timesheet.invalid` (Message-IDs) addresses, no profile path, no real name or host.
+- `git diff --check`: exit 0 (twice).
+
+### Deviations and notes
+- Owner decision "Q2": I found no round-5 text labelled Q2 on the board. The two 2026-10-22 answers ("1 a, 2 a") are WP5-UX5-FREEZE-T01B-Q a and WP5-UX5-H-1 a; the packet lists both,
+  plus Q0 a and F-1 to F-10. If "Q2" meant something else, one row is missing.
+- Coverage limits stated in the docs: the samples have no holiday label and no leave day, so the partial-leave line and the label shrink rule are read from the code.
+- No runtime-rule slip: no heredoc, no stdin to an interpreter, no pipe into head or tail, no /dev path, no `rm -r` (one single-file `rm` of a scratch copy), no PID kill.
+- Nothing staged or committed. No background command is running; the only server (port 49800) was stopped through its own handle.
+
+Status: done
+
+### Addendum 1
+- Added rows Q1 (reference image, typography only, not stored) and Q2 (footer texts) to section 8 of the pilot packet, EN and VI (before the T01B-Q row; Q0 a kept).
+- Parity on the packet pair: PARITY OK (368/368 lines, table rows 153/153). `validate_package.py --preflight`: PASS (122 pairs, 2353 links). `git diff --check`: exit 0.
+- `npm run digest` (last): 318b3370450db99a96194249d4d9d7ae985a10a133f10994ba4acf219453635c (868 files), unchanged. Log: `12-addendum1.txt` (task folder). Nothing staged or committed.

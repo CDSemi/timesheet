@@ -1525,6 +1525,40 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Đang chạy: WP5-UX5-T05B-FREEZE (một committer mới, chạy một mình). Nó stage 12 đường dẫn
   ghi rõ tên cùng các hồ sơ trong handoff, kể cả bản nháp brief T06. Digest phải là
   a5dcb5a6, kiểm tra trên HEAD bằng `git ls-tree`.
+- WP5-UX5-T05B-FREEZE xong: 69d63400486a977f10e022deea85026c6751b687 trên main, đã push (26
+  đường dẫn: 12 ngoài `handoff/`, 14 trong handoff). Digest a5dcb5a6 (868 file) trước khi
+  stage và từ `git ls-tree` của HEAD; mọi kiểm tra exit 0. Cả năm slice mã nguồn của đợt 5
+  đều đã được freeze.
+- Đang chạy: WP5-UX5-T06, tài liệu và pilot packet (worker, sonnet; cỡ L, rủi ro M; nền
+  69d6340 / a5dcb5a6; cổng 49800-49819).
+  - Gồm docs/04 và docs/12 (EN/VI), pilot packet (EN/VI), và bộ mẫu tổng hợp mới tạo từ
+    bản export sạch của 69d6340, ở chế độ capture.
+  - Định danh bản phát hành và số liệu drill để lại cho ACCEPT-DOCS. Không đổi mã nguồn:
+    digest phải giữ nguyên a5dcb5a6.
+- Đính chính của điều phối viên trong lúc T06 chạy: digest có tính cả `docs/` (chỉ loại
+  `handoff/`), nên các thay đổi tài liệu của T06 sẽ làm digest đổi. Đã gửi bằng tin nhắn và
+  ghi lại thành Addendum 1.
+- T06 bàn giao lần đầu.
+  - Tài liệu đã cập nhật: docs/04, docs/12 và docs/11 (EN/VI; docs/07 không cần sửa), và
+    pilot packet (EN/VI).
+  - Bộ mẫu tạo từ bản export sạch của 69d6340: S1-S6 và N1-N5. Có sáu PDF một trang với
+    hash khớp, và kiểm tra ready cho thấy schema 15.
+  - parity x4, preflight và self-test của precommit đều đạt. Digest 318b3370 (868 file),
+    chỉ đổi do sáu file tài liệu.
+  - Thiếu sót: mục 8 của packet chưa có hai câu trả lời của chủ dự án trong đợt 5, Q1 (hình
+    tham chiếu) và Q2 (chữ ở chân trang).
+- Đang chạy: Addendum 1 của T06 (cùng worker) bổ sung hai dòng đó.
+- Đã soạn sẵn brief: WP5-UX5-GATE (gate của đợt 4 và đợt 5).
+- WP5-UX5-T06 xong sau Addendum 1: mục 8 của packet đã có hai dòng Q1 và Q2 (EN/VI).
+  Parity của packet OK, preflight PASS, `git diff --check` 0. Digest 318b3370 (868 file),
+  addendum không làm digest đổi.
+- Đang chạy: tra cứu WP5-UX5-T06-PATHS (light, haiku, chỉ đọc).
+- T06-PATHS xong. Ngoài `handoff/`: 6 file tài liệu, đều là file sửa. Không có gì được
+  stage, và không có file `zz-*`. Trong `handoff/`, file nhị phân duy nhất là sáu ảnh
+  `-synthetic.png`.
+- Đang chạy: WP5-UX5-T06-FREEZE (một committer mới, chạy một mình). Nó stage 6 đường dẫn
+  tài liệu cùng các hồ sơ trong handoff, gồm cặp pilot packet và bản nháp brief gate. Digest
+  phải là 318b3370, kiểm tra trên HEAD bằng `git ls-tree`.
 - Còn lại sau T06:
   - T06-FREEZE;
   - gate gói của đợt 5 (bao gồm cả đợt 4 và đợt 5);
