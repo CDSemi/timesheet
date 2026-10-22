@@ -1,0 +1,163 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { contrast, flattenedBackground, over, parseColour, textContrast, tokenColour } from './contrast.ts';
+import { expect, newPerson, SeedClient, test } from './fixtures.ts';
+import { applySituation, note, OUT, signInTo, SITUATIONS } from './zz-lib.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository): contrast of the new tokens in the four theme situations, the CSP headers,
+ * securitypolicyviolation, lazy chunks and the admin-request check. Notes go to GATE_OUT/tok.txt, headers-*.txt, chunks-*.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const r2 = (v: number) => Math.round(v * 100) / 100;
+const settle = (page: Page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(d, 250))))');
+
+test('contrast of the new tokens in light, dark and both manual overrides', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(300_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Token Person', signature: 'saved' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(free[0] ?? '');
+  await person.api.createSession(free[1] ?? '', '08:00', '12:00', null);
+  await signInTo(page, privateServer, person.account);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const lows: string[] = [];
+  for (const situation of SITUATIONS) {
+    await applySituation(page, situation);
+    await page.evaluate((stored) => { if (stored) localStorage.setItem('timesheet.theme', stored); else localStorage.removeItem('timesheet.theme'); }, situation.stored);
+    await page.goto(`${privateServer.origin}/#/timesheet`);
+    await page.reload();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole('switch', { name: 'Worked hours' }).check();
+    await settle(page);
+    const rows: string[] = [];
+    const add = (name: string, value: number, need: number) => {
+      rows.push(`${name} ${r2(value)}:1 (needs ${need})`);
+      if (value < need) lows.push(`${situation.slug}: ${name} ${r2(value)} < ${need}`);
+    };
+    const worked = await tokenColour(page, '--worked-line');
+    const card = await tokenColour(page, '--card');
+    const text = await tokenColour(page, '--text');
+    const muted = await tokenColour(page, '--muted');
+    add('--text on --worked-line', contrast(text, worked), 4.5);
+    add('--muted on --worked-line', contrast(muted, worked), 4.5);
+    const detail = page.locator('.d-detail').first();
+    add('rendered worked-line text on its tint', await textContrast(detail), 4.5);
+    add('--worked-line band against --card (non-text; informational)', contrast(worked, card), 1);
+    // chevron: --muted on --field-bg
+    add('select chevron (--muted on --field-bg)', contrast(muted, await tokenColour(page, '--field-bg')), 3);
+    // period-card divider: --line-soft against the card
+    const line = await tokenColour(page, '--line-soft');
+    add('period-card divider (--line-soft on --card; hairline, informational)', contrast(line, card), 1);
+    // danger sub-button: open the Day editor and read Delete on a session card
+    await namedDayButton(page, free[1] ?? '', 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    const del = editor.locator('button.delete-action').first();
+    await expect(del).toBeVisible();
+    add('Delete sub-button text (--error on its fill)', await textContrast(del), 4.5);
+    const delFill = await flattenedBackground(del);
+    const delBorder = parseColour(await del.evaluate((el) => getComputedStyle(el).borderTopColor));
+    add('Delete sub-button border against the drawer (non-text 3:1)', contrast(over(delBorder, delFill), await flattenedBackground(editor)), 3);
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    // Review: Preview header and chips
+    await page.goto(`${privateServer.origin}/#/review/${person.payrollDate}`);
+    await expect(page.locator('[data-paper="review"]')).toBeVisible();
+    await settle(page);
+    add('Preview header "Preview" text', await textContrast(page.locator('.preview-bar h2').first()), 4.5);
+    const chipTexts = await page.locator('.preview-chips .badge').evaluateAll((els) => els.length);
+    for (let i = 0; i < chipTexts; i += 1) add(`Preview chip ${i + 1} text`, await textContrast(page.locator('.preview-chips .badge').nth(i)), 4.5);
+    const barFill = await flattenedBackground(page.locator('.preview-bar').first());
+    add('Preview header bar against the preview card (informational)', contrast(barFill, await flattenedBackground(page.locator('[data-paper="review"]'))), 1);
+    note('tok.txt', `TOKENS ${situation.name}: ${rows.join('; ')}`);
+  }
+  note('tok.txt', `TOKEN failures: ${JSON.stringify(lows)}`);
+  expect(lows).toEqual([]);
+});
+
+const rec = (file: string, line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, file), `${line}\n`);
+};
+const LABEL = process.env.GATE_LABEL ?? 'target';
+
+test('CSP and every response header of the shell; no securitypolicyviolation on any screen; PDF Preview opens a new tab; an employee page makes no /api/admin/ request; lazy chunks load', async ({ page, privateServer, context }, testInfo) => {
+  const project = testInfo.project.name;
+  test.setTimeout(240_000);
+  for (const path of ['/', '/theme-init.js', '/cd-logo.svg']) {
+    const response = await page.request.get(`${privateServer.origin}${path}`);
+    const headers = Object.entries(response.headers())
+      .filter(([name]) => !['date', 'etag', 'last-modified', 'content-length', 'connection', 'keep-alive'].includes(name))
+      .sort(([a], [b]) => a.localeCompare(b));
+    for (const [name, value] of headers) rec(`headers-${LABEL}-${project}.txt`, `GET ${path} ${response.status()} ${name}: ${value}`);
+  }
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const me = await newPerson(admin, privateServer, { displayName: 'Synthetic Header Reader', signature: 'saved' });
+  const free = await me.api.displayedPeriodFreeWorkdays();
+  await me.api.seedCompleteDay(free[0] ?? '');
+  const seen: string[] = [];
+  const adminCalls: string[] = [];
+  page.on('response', (response) => {
+    const url = new URL(response.url());
+    if (url.pathname.startsWith('/assets/') && url.pathname.endsWith('.js')) seen.push(`${response.status()} ${url.pathname} ${response.headers()['content-length'] ?? '?'}`);
+  });
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/admin/')) adminCalls.push(`${request.method()} ${new URL(request.url()).pathname}`);
+  });
+  const consoleErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  await page.addInitScript({ content: `window.__csp = []; document.addEventListener('securitypolicyviolation', (event) => window.__csp.push(event.violatedDirective + ' ' + event.blockedURI));` });
+  await page.goto(`${privateServer.origin}/`);
+  await expect(page.getByLabel('Email')).toBeVisible();
+  rec(`violations-${LABEL}.txt`, `[${LABEL}/${project}] sign-in page: ${JSON.stringify(await page.evaluate('window.__csp'))}`);
+  await signInTo(page, privateServer, me.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  rec(`chunks-${LABEL}.txt`, `[${project}] after sign-in (employee): ${JSON.stringify(seen)}`);
+  for (const hash of ['#/settings', '#/settings/profile', '#/overtime', '#/history', '#/import', '#/settings/admin', '#/admin', `#/review/${me.payrollDate}`]) {
+    seen.length = 0;
+    await page.goto(`${privateServer.origin}/${hash}`);
+    await page.waitForTimeout(900);
+    rec(`violations-${LABEL}.txt`, `[${LABEL}/${project}] ${hash}: violations ${JSON.stringify(await page.evaluate('window.__csp'))}; lazy chunks ${JSON.stringify(seen)}`);
+  }
+  rec(`violations-${LABEL}.txt`, `[${LABEL}/${project}] employee /api/admin/ requests at #/settings/admin and #/admin and everywhere above: ${JSON.stringify(adminCalls)}; console errors ${JSON.stringify(consoleErrors)}`);
+  expect(adminCalls).toEqual([]);
+  expect(await page.evaluate('window.__csp')).toEqual([]);
+  if (project === 'desktop') {
+    // sign off, then PDF Preview opens in a new tab with no violation
+    await page.goto(`${privateServer.origin}/#/review/${me.payrollDate}`);
+    await page.locator('[data-sign-off]').click();
+    const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+    const ack = dialog.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+    if (await ack.count()) await ack.check();
+    await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+    await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
+    const [popup] = await Promise.all([context.waitForEvent('page'), page.locator('[data-pdf-preview]').click()]);
+    await popup.waitForLoadState('domcontentloaded').catch(() => undefined);
+    rec(`violations-${LABEL}.txt`, `[${LABEL}/${project}] PDF Preview opened a new tab: url path ${new URL(popup.url()).pathname}${new URL(popup.url()).search}; pages in the context ${context.pages().length}; original page violations ${JSON.stringify(await page.evaluate('window.__csp'))}`);
+    await popup.close();
+  }
+  // Admin: lazy Administration chunk
+  const adminCtx = await page.context().browser()!.newContext({ viewport: { width: 1280, height: 900 }, locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+  const ap = await adminCtx.newPage();
+  const aseen: string[] = [];
+  ap.on('response', (response) => {
+    const url = new URL(response.url());
+    if (url.pathname.startsWith('/assets/') && url.pathname.endsWith('.js')) aseen.push(`${response.status()} ${url.pathname} ${response.headers()['content-length'] ?? '?'}`);
+  });
+  await signInTo(ap, privateServer, privateServer.credentials.admin, '#/timesheet');
+  await ap.waitForTimeout(1200);
+  rec(`chunks-${LABEL}.txt`, `[${project}] admin after sign-in: ${JSON.stringify(aseen)}`);
+  aseen.length = 0;
+  await ap.goto(`${privateServer.origin}/#/settings/admin`);
+  await ap.waitForTimeout(1500);
+  rec(`chunks-${LABEL}.txt`, `[${project}] admin #/settings/admin: ${JSON.stringify(aseen)}`);
+  await adminCtx.close();
+});

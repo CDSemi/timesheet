@@ -1,0 +1,21 @@
+. <task>/env.sh
+cd $REPO
+O=$T/out/22-scope-check.txt
+: > $O
+# base owned-path regex per round-5 commit (original briefs); paths that do not match are listed as OUTSIDE-BASE for judgement against the addenda
+declare -A R
+R[c1b2cc4]='^(src/server/db/migrations/|src/server/db/migrations\.ts|src/server/services/finalization\.ts|src/server/http/schemas\.ts|src/server/jobs/pdfJob\.ts|src/server/pdf/timesheetPdf\.ts|src/server/routes/submission\.ts|src/domain/snapshot\.ts|src/client/components/ReviewSignoff\.tsx|src/client/components/reviewModel\.ts|src/client/api\.ts|src/client/styles\.css|tests/integration/|tests/client/|tests/e2e/review\.spec\.ts|tests/e2e/submission\.spec\.ts|docs/(03|04|05|06|07|10|11)_)'
+R[9917ae8]='^(src/server/db/migrations/|src/server/db/migrations\.ts|src/server/services/(finalization|deliveries|automation|notifications)\.ts|src/server/jobs/(sendJob|pdfJob)\.ts|src/server/mail/message\.ts|src/server/pdf/timesheetPdf\.ts|src/server/routes/(submission|shares|settings)|src/server/http/schemas\.ts|src/domain/(snapshot|reminders)\.ts|src/client/(api\.ts|ReviewScreen\.tsx|HistoryScreen\.tsx|components/(ReviewSignoff|reviewModel|History))|scripts/(smoke-built-server|container-drill)\.mjs|tests/integration/|tests/client/|tests/e2e/(review|submission|history-settings|automation|sharing)\.spec\.ts|docs/(01|03|05|06|10)_|DEVELOPMENT)'
+R[b4c5004]='^(src/server/pdf/|src/domain/|src/client/components/BrandWordmark\.tsx|assets/pdf-fonts/|Dockerfile|docs/adr/0001|docs/(03|07|11)_|scripts/(container-drill|smoke-built-server)\.mjs|tests/client/|tests/integration/|tests/e2e/pdf-visual\.spec\.ts)'
+R[65def2f]='^(src/client/|tests/client/|tests/e2e/|docs/04_)'
+R[060302b]='^(src/client/|tests/client/|tests/e2e/|docs/04_)'
+R[70f7800]='^(src/client/|src/domain/policy\.ts|src/server/pdf/timesheetPdf\.ts|tests/client/|tests/e2e/|tests/integration/|docs/04_)'
+R[69d6340]='^(src/client/|tests/client/|tests/e2e/|docs/04_)'
+R[e2bf1aa]='^(docs/(04|07|11|12)_)'
+for c in c1b2cc4 9917ae8 b4c5004 65def2f 060302b 70f7800 69d6340 e2bf1aa; do
+  echo "=== $c $(git log -1 --format=%s $c)" >> $O
+  git show --name-only --format= $c -- . ':!handoff' | while IFS= read -r p; do
+    if ! printf '%s\n' "$p" | grep -Eq "${R[$c]}"; then echo "OUTSIDE-BASE $p" >> $O; fi
+  done
+done
+cat $O

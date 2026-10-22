@@ -1,0 +1,215 @@
+import type { Locator, Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+import { note } from './zz-lib.ts';
+
+/*
+ * WP5-UX4-GATE task-local probe (never part of the repository): the session dialog and the Check out dialog on the built target.
+ * Notes go to GATE_OUT/session.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUTFILE = 'session.txt';
+const LA = 'America/Los_Angeles';
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 200))))');
+}
+
+const ROWS = String.raw`((dialog) => [...dialog.querySelectorAll('[data-break]')].map((row) => {
+  const part = (sel) => { const i = row.querySelector(sel); const b = i ? i.getBoundingClientRect() : null; return b ? { x: b.x, w: b.width } : { x: NaN, w: NaN }; };
+  return { origin: row.getAttribute('data-origin'), time: part('input[type="time"]'), minutes: part('input[type="number"]'), info: (row.querySelector('.break-info') || {}).textContent || '' };
+}))`;
+
+async function alertFacts(alert: Locator): Promise<string> {
+  return alert.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const w = document.documentElement.clientWidth; const h = document.documentElement.clientHeight;
+    const msgs = [...el.querySelectorAll('.confirm-message')].map((m) => { const b = m.getBoundingClientRect(); return b.top >= r.top && b.bottom <= r.bottom && b.left >= r.left && b.right <= r.right && b.top >= 0 && b.bottom <= h; });
+    return `alert box ${Math.round(r.left)},${Math.round(r.top)}..${Math.round(r.right)},${Math.round(r.bottom)} in window ${w}x${h}: inside ${r.top >= 0 && r.bottom <= h && r.left >= 0 && r.right <= w}; scrolls ${el.scrollHeight > el.clientHeight + 0.5}; messages inside the alert and the window ${msgs.every(Boolean)} (${msgs.length}); text "${(el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120)}"`;
+  });
+}
+
+for (const width of [1440, 768, 390]) {
+  test(`session dialog at ${width}: zone first, Today/Now right edges, aligned break rows, alert in view, no p.error`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+    test.setTimeout(180_000);
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Session Gate', signature: 'none' });
+    const [date = ''] = await person.api.displayedPeriodFreeWorkdays();
+    await page.setViewportSize({ width, height: width > 600 ? 1000 : 844 });
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await signInPageAs(person.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByLabel('Open a day').fill(date);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = page.getByRole('dialog', { name: 'New session', exact: true });
+    await expect(form).toBeVisible();
+    await form.getByLabel('Input zone').fill(LA);
+    // order
+    const order = await form.evaluate((d) => {
+      const section = d.querySelector('section[aria-labelledby$="-time"]');
+      return [...(section?.querySelectorAll('input') ?? [])].map((i) => { const b = i.getBoundingClientRect(); return { name: (i.closest('label')?.childNodes ? [...i.closest('label')!.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim() : ''), x: b.x, y: b.y }; });
+    });
+    note(OUTFILE, `ORDER ${width}: ${order.map((o) => `${o.name}@(${o.x.toFixed(0)},${o.y.toFixed(0)})`).join(' -> ')}`);
+    const pairs: Array<[string, string]> = [['Start date', 'Today, start date'], ['Start time', 'Now, start time'], ['End date', 'Today, end date'], ['End time', 'Now, end time']];
+    for (const [input, link] of pairs) {
+      const a = await form.getByLabel(input, { exact: true }).boundingBox();
+      const b = await form.getByRole('button', { name: link, exact: true }).boundingBox();
+      if (a && b) note(OUTFILE, `LINK ${width}: "${link}" right edge ${(b.x + b.width).toFixed(2)} vs input right edge ${(a.x + a.width).toFixed(2)}: delta ${Math.abs(b.x + b.width - (a.x + a.width)).toFixed(2)}px; link ${b.width.toFixed(1)}x${b.height.toFixed(1)}; below input ${(b.y - (a.y + a.height)).toFixed(1)}px`);
+    }
+    // aligned rows: add a break
+    await expect(form.locator('[data-break]')).toHaveCount(3);
+    await form.getByRole('button', { name: 'Add break' }).click();
+    await expect(form.locator('[data-break]')).toHaveCount(4);
+    const rows = await form.evaluate(new Function('d', `return (${ROWS})(d)`) as (d: Element) => unknown) as Array<{ origin: string; time: { x: number; w: number }; minutes: { x: number; w: number }; info: string }>;
+    const first = rows[0]!;
+    const maxDx = Math.max(...rows.map((r) => Math.abs(r.time.x - first.time.x)));
+    const maxDw = Math.max(...rows.map((r) => Math.abs(r.time.w - first.time.w)));
+    const maxMx = Math.max(...rows.map((r) => Math.abs(r.minutes.x - first.minutes.x)));
+    const maxMw = Math.max(...rows.map((r) => Math.abs(r.minutes.w - first.minutes.w)));
+    note(OUTFILE, `ROWS ${width} session: ${rows.length} rows (${rows.map((r) => r.origin).join(',')}); time x ${rows.map((r) => r.time.x.toFixed(1))} width ${rows.map((r) => r.time.w.toFixed(1))}; minutes x ${rows.map((r) => r.minutes.x.toFixed(1))} width ${rows.map((r) => r.minutes.w.toFixed(1))}; max deviation time x ${maxDx.toFixed(2)} w ${maxDw.toFixed(2)}, minutes x ${maxMx.toFixed(2)} w ${maxMw.toFixed(2)}`);
+    // alert: abort the save request, fill a valid session
+    await form.getByLabel('Start time', { exact: true }).fill('08:00');
+    await form.getByLabel('End date', { exact: true }).fill(date);
+    await form.getByLabel('End time', { exact: true }).fill('17:00');
+    await form.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check().catch(() => undefined);
+    // keep suggested breaks: remove all rows and confirm none, to keep the case simple
+    for (let n = await form.locator('[data-break]').count(); n > 0; n -= 1) await form.getByRole('button', { name: `Remove break ${n}`, exact: true }).click().catch(() => undefined);
+    await form.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+    await page.route('**/api/days/*/sessions', (route) => route.abort('failed'));
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    const confirm = page.getByRole('alertdialog', { name: 'Save this session?' });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole('button', { name: 'Save', exact: true }).click();
+    const alert = page.getByRole('alertdialog', { name: 'This session was not saved', exact: true });
+    await expect(alert).toBeVisible();
+    await settle(page);
+    note(OUTFILE, `ALERT ${width} session dialog: ${await alertFacts(alert)}`);
+    if (width === 1440 || width === 390) await page.screenshot({ path: screenshotPath(`ux5gate-sess-alert-session-${width}-synthetic.png`), animations: 'disabled' });
+    await alert.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(alert).toHaveCount(0);
+    note(OUTFILE, `PERROR ${width} session dialog: p.error elements left in the dialog after OK = ${await form.locator('p.error').count()}`);
+  });
+}
+
+for (const width of [1440, 768, 390]) {
+  test(`Check out dialog at ${width}: aligned break rows, alert in view, no p.error`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+    test.setTimeout(180_000);
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Checkout Gate', signature: 'none' });
+    await page.setViewportSize({ width, height: width > 600 ? 1000 : 844 });
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await signInPageAs(person.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByRole('button', { name: 'Check in' }).click();
+    await expect(page.getByRole('button', { name: 'Check out' })).toBeVisible();
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Check out', exact: true });
+    await expect(dialog).toBeVisible();
+    const add = dialog.getByRole('button', { name: 'Add break' });
+    for (let k = 0; k < 2; k += 1) {
+      await add.click();
+      const sub = page.locator('dialog.break-dialog[open]');
+      if (await sub.count()) await sub.getByRole('button', { name: 'Done', exact: true }).click();
+    }
+    note(OUTFILE, `LAYOUT ${width} checkout: break list data-layout = ${await dialog.getByRole('list', { name: 'Break list' }).getAttribute('data-layout')}`);
+    const rows = await dialog.evaluate(new Function('d', `return (${ROWS})(d)`) as (d: Element) => unknown) as Array<{ origin: string; time: { x: number; w: number }; minutes: { x: number; w: number }; info: string }>;
+    if (rows.length > 0) {
+      const first = rows[0]!;
+      note(OUTFILE, `ROWS ${width} checkout: ${rows.length} rows (${rows.map((r) => r.origin).join(',')}); time x ${rows.map((r) => r.time.x.toFixed(1))} width ${rows.map((r) => r.time.w.toFixed(1))}; minutes x ${rows.map((r) => r.minutes.x.toFixed(1))} width ${rows.map((r) => r.minutes.w.toFixed(1))}; max deviation time x ${Math.max(...rows.map((r) => Math.abs(r.time.x - first.time.x))).toFixed(2)} w ${Math.max(...rows.map((r) => Math.abs(r.time.w - first.time.w))).toFixed(2)}, minutes x ${Math.max(...rows.map((r) => Math.abs(r.minutes.x - first.minutes.x))).toFixed(2)} w ${Math.max(...rows.map((r) => Math.abs(r.minutes.w - first.minutes.w))).toFixed(2)}`);
+    } else note(OUTFILE, `ROWS ${width} checkout: no [data-break] rows found (chips layout?)`);
+    // remove added rows, then abort the request for the network-failure alert
+    const chips = (await dialog.getByRole('list', { name: 'Break list' }).getAttribute('data-layout')) === 'chips';
+    if (!chips) {
+      for (let n = await dialog.locator('[data-break]').count(); n > 0; n -= 1) await dialog.getByRole('button', { name: `Remove break ${n}`, exact: true }).click();
+      await page.route('**/api/clock/out', (route) => route.abort('failed'));
+    }
+    // With chips the two added, empty breaks cannot be saved: the row-error alert is the alert under test.
+    const submit = dialog.getByRole('button', { name: /^Check out/ }).last();
+    await submit.click();
+    const alert = page.getByRole('alertdialog', { name: 'This session was not saved', exact: true });
+    await expect(alert).toBeVisible();
+    await settle(page);
+    note(OUTFILE, `ALERT ${width} Check out dialog: ${await alertFacts(alert)}`);
+    if (width === 1440 || width === 390) await page.screenshot({ path: screenshotPath(`ux5gate-sess-alert-checkout-${width}-synthetic.png`), animations: 'disabled' });
+    await alert.getByRole('button', { name: 'OK', exact: true }).click();
+    note(OUTFILE, `PERROR ${width} Check out dialog: p.error elements left = ${await dialog.locator('p.error').count()}`);
+  });
+}
+
+test('running-session edit then Check out: worked minutes from the new start (one e2e pass of the oracle)', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(120_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Running Gate', signature: 'none' });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const { todayLocal } = await person.api.today();
+  await page.getByRole('button', { name: 'Check in' }).click();
+  await expect(page.getByRole('button', { name: 'Check out' })).toBeVisible();
+  await page.getByLabel('Open a day').fill(todayLocal);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  const day0 = await person.api.dayView(todayLocal);
+  const s0 = day0.sessions.find((s) => s.end_utc === null)!;
+  const card = editor.locator('.session-card[data-state="running"]');
+  await card.getByRole('button', { name: /^Edit session/ }).click();
+  const form = page.getByRole('dialog', { name: 'Edit session', exact: true });
+  await expect(form).toBeVisible();
+  const dateNow = await form.getByLabel('Start date', { exact: true }).inputValue();
+  const newStartMs = Date.parse(s0.start_utc) - 3 * 3_600_000;
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: LA, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(newStartMs));
+  const p = (t: string) => parts.find((x) => x.type === t)!.value;
+  await form.getByLabel('Start date', { exact: true }).fill(`${p('year')}-${p('month')}-${p('day')}`);
+  await form.getByLabel('Start time', { exact: true }).fill(`${p('hour')}:${p('minute')}`);
+  await page.screenshot({ path: screenshotPath("ux5gate-sess-running-edit-synthetic.png"), animations: 'disabled' });
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  const confirm = page.getByRole('alertdialog', { name: 'Save this session?' });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(editor.getByText('Session saved.')).toBeVisible();
+  const day1 = await person.api.dayView(todayLocal);
+  const s1 = day1.sessions.find((s) => s.id === s0.id)!;
+  await editor.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByRole('button', { name: 'Check out' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Check out', exact: true });
+  const withBreaks = dialog.getByRole('button', { name: 'Check out with these breaks' });
+  if (await withBreaks.count()) await withBreaks.click(); else { await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check(); await dialog.getByRole('button', { name: /^Check out/ }).last().click(); }
+  await expect(dialog).toHaveCount(0);
+  const day2 = await person.api.dayView(todayLocal);
+  const s2 = day2.sessions.find((s) => s.id === s0.id)!;
+  const gross = (Date.parse(s2.end_utc!) - Date.parse(s2.start_utc)) / 60_000;
+  note(OUTFILE, `RUNNING-EDIT: start moved from ${s0.start_utc} to ${s1.start_utc} (end ${s1.end_utc}, version ${s0.version} -> ${s1.version}); after Check out: gross ${gross.toFixed(1)} min, breaks ${s2.breaks.length} (${s2.breaks.reduce((m, b) => m + (Date.parse(b.end_utc) - Date.parse(b.start_utc)) / 60000, 0)} min), start-to-end minus breaks ${(gross - s2.breaks.reduce((m, b) => m + (Date.parse(b.end_utc) - Date.parse(b.start_utc)) / 60000, 0)).toFixed(1)}, regular_minutes ${day2.calculation?.regular_minutes}, credited ${day2.calculation?.credited_minutes}, status ${day2.calculation?.status}; start date field before edit ${dateNow}`);
+  expect(s1.end_utc, 'still running after the start edit').toBeNull();
+  expect(Date.parse(s1.start_utc)).toBe(Math.floor(newStartMs / 60_000) * 60_000);
+});
+
+test('Today and Now fill Asia/Tokyo values on a Los Angeles device with a frozen clock (links right-aligned)', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+  test.setTimeout(120_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Tokyo Gate', signature: 'none' });
+  const [date = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByLabel('Open a day').fill(date);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  const noon = new Date(`${date}T19:00:00Z`); // 12:00 Los Angeles (PDT) or 11:00 (PST); the Tokyo wall time is computed below
+  await page.clock.setFixedTime(noon);
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form = page.getByRole('dialog', { name: 'New session', exact: true });
+  await form.getByLabel('Input zone').fill('Asia/Tokyo');
+  await form.getByRole('button', { name: 'Today, start date', exact: true }).click();
+  await form.getByRole('button', { name: 'Now, start time', exact: true }).click();
+  const f = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(noon);
+  const g = (t: string) => f.find((x) => x.type === t)!.value;
+  const wantDate = `${g('year')}-${g('month')}-${g('day')}`; const wantTime = `${g('hour')}:${g('minute')}`;
+  const gotDate = await form.getByLabel('Start date', { exact: true }).inputValue();
+  const gotTime = await form.getByLabel('Start time', { exact: true }).inputValue();
+  note(OUTFILE, `TOKYO frozen clock ${noon.toISOString()} (device zone ${LA}): Today -> ${gotDate} (expected ${wantDate}), Now -> ${gotTime} (expected ${wantTime}); device-zone date would be ${date}`);
+  expect(gotDate).toBe(wantDate);
+  expect(gotTime).toBe(wantTime);
+});
+
+// keep the import used
+void namedDayButton;

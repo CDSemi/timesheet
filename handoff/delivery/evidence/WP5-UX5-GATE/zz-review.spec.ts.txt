@@ -1,0 +1,405 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { readPdf } from '../support/pdfText.ts';
+import { CAPTURE_SENDER, createAccountByAdminApi, drainJobsFrom, expect, newPerson, readCapture, SeedClient, starterPolicyBody, test } from './fixtures.ts';
+import { addDays } from '../../src/domain/dates.ts';
+import { note, OUT, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository): the Review page, the Sign off dialog and the Send card on the built target.
+ * Notes go to GATE_OUT/review.txt. Both projects where the test says so.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUTFILE = 'review.txt';
+const TO = 'payroll-gate@example.invalid';
+const CC = 'manager-gate@example.invalid';
+const TO_2 = 'second-gate@example.invalid';
+const CC_2 = 'copy-gate@example.invalid';
+const SUBJECT = 'Gate edited subject';
+const BODY = 'Gate edited message line.';
+
+async function seededReviewer(server: Parameters<typeof newPerson>[1], name: string, options: { signature?: 'saved' | 'none' } = {}) {
+  const admin = await new SeedClient(server.origin).signIn(server.credentials.admin.email, server.credentials.admin.password);
+  const person = await newPerson(admin, server, { displayName: name, to: [TO], cc: [CC], signature: options.signature ?? 'saved' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(free[0] ?? '');
+  await person.api.seedCompleteDay(free[1] ?? '');
+  return { admin, person };
+}
+
+const settle = (page: Page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(d, 200))))');
+
+async function openReview(page: Page, server: { origin: string }, account: { email: string; password: string }, payrollDate: string): Promise<void> {
+  await signInTo(page, server as never, account, `#/review/${payrollDate}`);
+  await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+  await expect(page.locator('[data-paper="review"]')).toBeVisible();
+}
+
+async function signOff(page: Page): Promise<void> {
+  await page.locator('[data-sign-off]').click();
+  const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+  await expect(dialog).toBeVisible();
+  const ack = dialog.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+  if (await ack.count()) await ack.check();
+  await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+  await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
+}
+
+test('Review layout facts before sign-off: title, Back label, company line, one column at 1440, signature geometry, Send disabled', async ({ page, privateServer }, testInfo) => {
+  test.setTimeout(240_000);
+  const project = testInfo.project.name;
+  const { person } = await seededReviewer(privateServer, 'Synthetic Review Gate');
+  if (project === 'desktop') await page.setViewportSize({ width: 1440, height: 900 });
+  await openReview(page, privateServer, person.account, person.payrollDate);
+  await settle(page);
+  const title = await page.getByRole('heading', { name: 'Review and sign off', level: 1 }).innerText();
+  const headText = (await page.locator('.review-head').innerText()).replace(/\s+/g, ' ');
+  const hasId = /[0-9a-f]{8}-[0-9a-f]{4}|submission id|sub[_-]?[0-9a-f]{6}/i.test(`${title} ${headText}`);
+  note(OUTFILE, `[${project}] TITLE h1 "${title}"; header text "${headText.slice(0, 140)}"; contains a submission id ${hasId}`);
+  expect(hasId).toBe(false);
+  // Send disabled before sign-off
+  const sendDisabled = await page.locator('[data-send]').isDisabled();
+  const chip = await page.locator('[data-send-card]').getByText('Sign off first').count();
+  note(OUTFILE, `[${project}] SEND card before sign-off: Send button disabled ${sendDisabled}, "Sign off first" chip count ${chip}`);
+  expect(sendDisabled).toBe(true);
+  if (project === 'desktop') {
+    // Back label below 480
+    for (const width of [320, 390, 479, 480, 481, 768]) {
+      await page.setViewportSize({ width, height: 900 });
+      await settle(page);
+      const back = await page.evaluate(() => {
+        const full = document.querySelector('.back-full') as HTMLElement;
+        const short = document.querySelector('.back-short') as HTMLElement;
+        const link = document.querySelector('.back-link') as HTMLElement;
+        const vis = (e: HTMLElement) => getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0;
+        return { full: vis(full), short: vis(short), name: link.getAttribute('aria-label'), text: link.innerText.trim() };
+      });
+      note(OUTFILE, `[desktop] BACK at ${width}px: visible text "${back.text}" (long ${back.full}, short ${back.short}), accessible name "${back.name}"`);
+      expect(back.short).toBe(width < 480);
+      expect(back.full).toBe(width >= 480);
+    }
+    // Company line hides rather than wraps
+    const problems: string[] = [];
+    const states = new Set<string>();
+    for (let width = 320; width <= 1440; width += 20) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForTimeout(80);
+      const c = await page.evaluate(() => {
+        const e = document.querySelector('.review-company') as HTMLElement | null;
+        if (e === null) return null;
+        const r = e.getBoundingClientRect();
+        const s = getComputedStyle(e);
+        return { fits: e.getAttribute('data-fits'), h: r.height, vis: s.visibility, lh: parseFloat(s.lineHeight) || parseFloat(s.fontSize) * 1.4, ws: s.whiteSpace, sw: e.scrollWidth, cw: e.clientWidth };
+      });
+      if (c === null) {
+        problems.push(`${width}: no company element`);
+        continue;
+      }
+      const shown = c.fits !== 'false';
+      states.add(shown ? 'shown' : 'hidden');
+      const oneLine = c.h <= c.lh * 1.3 + 1;
+      const ok = shown ? oneLine && c.sw <= c.cw + 1 : c.h <= 1 && c.vis === 'hidden';
+      if (!ok) problems.push(`${width}: fits=${c.fits} h=${c.h} vis=${c.vis} sw=${c.sw} cw=${c.cw}`);
+    }
+    note(OUTFILE, `[desktop] COMPANY line 320-1440 step 20: states seen ${[...states].join('/')}; shown = one line without clipping, hidden = zero height; problems ${JSON.stringify(problems)}`);
+    expect(problems).toEqual([]);
+    // One column at 1440
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await settle(page);
+    const col = await page.evaluate(() => {
+      const rect = (s: string) => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
+      return { check: rect('.check-card'), preview: rect('[data-paper="review"]'), send: rect('[data-send-card]'), scroll: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+    });
+    const parts = [col.check, col.preview, col.send];
+    const sameLeft = parts.every((p) => p !== null && Math.abs((p?.left ?? 0) - (parts[0]?.left ?? 0)) < 1);
+    const stacked = (col.check?.bottom ?? 0) <= (col.preview?.top ?? 0) + 1 && (col.preview?.bottom ?? 0) <= (col.send?.top ?? 0) + 1;
+    note(OUTFILE, `[desktop] ONE COLUMN at 1440: check card, preview and Send card share the left edge ${sameLeft} (lefts ${parts.map((p) => p?.left.toFixed(1)).join('/')}), stacked top to bottom ${stacked}, page scroll ${col.scroll}`);
+    expect(sameLeft && stacked).toBe(true);
+    // Signature geometry in the DOM (before sign-off): fractions of the container content width
+    const geo = await page.evaluate(() => {
+      const box = document.querySelector('.review-signatures') as HTMLElement;
+      const bs = getComputedStyle(box);
+      const x0 = box.getBoundingClientRect().left + parseFloat(bs.paddingLeft);
+      const w = box.clientWidth - parseFloat(bs.paddingLeft) - parseFloat(bs.paddingRight);
+      const lines = (name: string) => { const e = document.querySelector(`[data-sig-line="${name}"]`) as HTMLElement; const r = e.getBoundingClientRect(); return { left: (r.left - x0) / w, width: r.width / w, top: r.top }; };
+      const caps = [...document.querySelectorAll('.rsig-cap')].map((e) => { const r = e.getBoundingClientRect(); return { text: e.textContent, center: ((r.left + r.right) / 2 - x0) / w }; });
+      return { w, employee: lines('employee'), date: lines('employee-date'), manager: lines('manager'), mdate: lines('manager-date'), caps };
+    });
+    note(OUTFILE, `[desktop] SIG geometry (DOM, fractions of the content width ${geo.w.toFixed(1)}px): employee line left ${(geo.employee.left * 100).toFixed(3)}% width ${(geo.employee.width * 100).toFixed(3)}%; date line left ${(geo.date.left * 100).toFixed(3)}% width ${(geo.date.width * 100).toFixed(3)}%; manager line left ${(geo.manager.left * 100).toFixed(3)}% width ${(geo.manager.width * 100).toFixed(3)}%; manager date left ${(geo.mdate.left * 100).toFixed(3)}% width ${(geo.mdate.width * 100).toFixed(3)}%; caption centres ${geo.caps.map((c) => `${c.text}@${(c.center * 100).toFixed(3)}%`).join(', ')}; row tops employee ${geo.employee.top.toFixed(1)}/${geo.date.top.toFixed(1)}, manager ${geo.manager.top.toFixed(1)}/${geo.mdate.top.toFixed(1)}`);
+    if (OUT !== '') writeFileSync(join(OUT, 'sig-dom.txt'), JSON.stringify(geo) + '\n');
+  }
+});
+
+test('Sign off dialog with an image and without one; the signed footer; the PDF signature geometry; Not signed off alert; stale review', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(300_000);
+  const { person, admin } = await seededReviewer(privateServer, 'Synthetic Signer Gate');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openReview(page, privateServer, person.account, person.payrollDate);
+  // Not signed off alert (server refusal, mocked), then a stale review (day edited behind the page)
+  await page.route('**/api/timesheets/*/signoff', (route) =>
+    route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: { code: 'period_not_signable', message: 'This period cannot be signed right now' } }) }),
+  );
+  await page.locator('[data-sign-off]').click();
+  const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+  await expect(dialog).toBeVisible();
+  const dialogFacts = await dialog.evaluate((el) => ({ img: el.querySelectorAll('img').length, signer: (el.querySelector('[data-signer]') as HTMLElement | null)?.innerText ?? null, text: (el as HTMLElement).innerText.replace(/\s+/g, ' ').slice(0, 400), nameField: el.querySelectorAll('input[type="text"]').length }));
+  note(OUTFILE, `SIGNOFF dialog with a saved image: images ${dialogFacts.img}, signer shown "${dialogFacts.signer}", text input fields ${dialogFacts.nameField} (no name field expected 0); text "${dialogFacts.text}"`);
+  await page.screenshot({ path: join(OUT, 'raw-signoff-dialog-1440.png') });
+  const ack = dialog.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+  if (await ack.count()) await ack.check();
+  await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+  const alert = page.getByRole('alertdialog', { name: 'Not signed off' });
+  await expect(alert).toBeVisible();
+  const alertFacts = { text: (await alert.innerText()).replace(/\s+/g, ' '), okFocused: await alert.getByRole('button', { name: 'OK' }).evaluate((el) => el === document.activeElement), modal: await alert.evaluate((el) => el.matches(':modal')) };
+  note(OUTFILE, `NOT SIGNED OFF alert: "${alertFacts.text}", OK focused ${alertFacts.okFocused}, modal ${alertFacts.modal}`);
+  await alert.getByRole('button', { name: 'OK' }).click();
+  await expect(alert).toHaveCount(0);
+  expect(await person.api.call<{ finalized_revision_no: number | null }>('GET', `/api/timesheets/${person.payrollDate}/finalization`)).toMatchObject({ finalized_revision_no: null });
+  await page.unroute('**/api/timesheets/*/signoff');
+  // Stale review: change a day behind the page, then sign off
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  const dayView = await person.api.dayView(free[2] ?? '');
+  await person.api.putDay(free[2] ?? '', { notes: 'Changed after the review was opened' });
+  void dayView;
+  await page.locator('[data-sign-off]').click();
+  const d2 = page.getByRole('dialog', { name: 'Sign off confirmation' });
+  const ack2 = d2.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+  if (await ack2.count()) await ack2.check();
+  await d2.getByRole('button', { name: 'Sign off', exact: true }).click();
+  const stale = page.locator('[data-notice="stale"]');
+  await expect(stale).toBeVisible();
+  note(OUTFILE, `STALE review: notice "${(await stale.innerText()).replace(/\s+/g, ' ')}", focused ${await stale.evaluate((el) => el === document.activeElement)}, dialog closed ${(await d2.count()) === 0}, nothing signed ${(await person.api.call<{ finalized_revision_no: number | null }>('GET', `/api/timesheets/${person.payrollDate}/finalization`)).finalized_revision_no === null}`);
+  await page.screenshot({ path: join(OUT, 'raw-stale-1440.png') });
+  // Sign for real
+  await signOff(page);
+  const foot = await page.evaluate(() => {
+    const mark = document.querySelector('[data-signed-line]') as HTMLElement | null;
+    return mark ? { text: mark.innerText.replace(/\s+/g, ' '), img: mark.querySelectorAll('img').length } : null;
+  });
+  note(OUTFILE, `SIGNED footer: ${JSON.stringify(foot)}; employee date "${(await page.locator('[data-signature="employee-date"]').innerText()).trim()}"`);
+  await page.screenshot({ path: join(OUT, 'raw-signed-footer-1440.png') });
+  const revisions = await person.api.call<{ revision: { id: string } }>('GET', `/api/timesheets/${person.payrollDate}/finalization`);
+  const pdf = await person.api.download(`/api/revisions/${revisions.revision.id}/pdf`);
+  if (OUT !== '') writeFileSync(join(OUT, 'sample-signed-t1o1.pdf'), pdf.body);
+  const printed = await readPdf(new Uint8Array(pdf.body));
+  note(OUTFILE, `PDF signed default: pages ${printed.pages.length}, images ${printed.pages[0]?.images.length}, content-type ${pdf.headers.get('content-type')}, disposition ${pdf.headers.get('content-disposition')}`);
+  for (const variant of ['time=1&ot=0', 'time=0&ot=1', 'time=0&ot=0']) {
+    const v = await person.api.download(`/api/revisions/${revisions.revision.id}/pdf?${variant}`);
+    const p = await readPdf(new Uint8Array(v.body));
+    if (OUT !== '') writeFileSync(join(OUT, `sample-signed-${variant.replace(/[=&]/g, '')}.pdf`), v.body);
+    note(OUTFILE, `PDF variant ${variant}: status ${v.status}, pages ${p.pages.length}, bytes ${v.body.length}`);
+  }
+  void admin;
+});
+
+test('signing without a saved image goes by name alone; the dialog says where to add one', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(180_000);
+  const { person } = await seededReviewer(privateServer, 'Synthetic Nameonly Gate', { signature: 'none' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openReview(page, privateServer, person.account, person.payrollDate);
+  await page.locator('[data-sign-off]').click();
+  const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+  await expect(dialog).toBeVisible();
+  const f = await dialog.evaluate((el) => ({ img: el.querySelectorAll('img').length, text: (el as HTMLElement).innerText.replace(/\s+/g, ' ').slice(0, 420), link: [...el.querySelectorAll('a')].map((a) => (a as HTMLAnchorElement).getAttribute('href')) }));
+  note(OUTFILE, `SIGNOFF dialog without an image: images ${f.img}, links ${JSON.stringify(f.link)}, text "${f.text}"`);
+  await page.screenshot({ path: join(OUT, 'raw-signoff-noimage-1440.png') });
+  const ackBox = dialog.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+  if (await ackBox.count()) await ackBox.check();
+  await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+  await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
+  const foot = await page.evaluate(() => { const m = document.querySelector('[data-signed-line]') as HTMLElement; return { text: m.innerText.replace(/\s+/g, ' '), img: m.querySelectorAll('img').length }; });
+  note(OUTFILE, `SIGNED by name only: ${JSON.stringify(foot)}`);
+  expect(foot.img).toBe(0);
+  const finNo = await person.api.call<{ revision: { id: string } }>('GET', `/api/timesheets/${person.payrollDate}/finalization`);
+  const pdfNo = await person.api.download(`/api/revisions/${finNo.revision.id}/pdf`);
+  if (OUT !== '') writeFileSync(join(OUT, 'sample-nameonly-t1o1.pdf'), pdfNo.body);
+  const printedNo = await readPdf(new Uint8Array(pdfNo.body));
+  note(OUTFILE, `PDF name only: pages ${printedNo.pages.length}, images ${printedNo.pages[0]?.images.length} (0 expected), contains the signer name ${printedNo.text.includes('Synthetic Nameonly Gate')}`);
+});
+
+const header = (eml: string, name: string): string => {
+  const match = new RegExp(`^${name}: (.*(?:\\r?\\n[ \\t].*)*)`, 'im').exec(eml);
+  return (match?.[1] ?? '').replace(/\r?\n[ \t]+/g, ' ').trim();
+};
+
+test('Send card: edited To, Cc, Subject, body and switches reach the local capture exactly with the matching variant; the reason dialog after a copy counts; the 409 path; History reason and label; admin Not sent yet; Settings switch and the file key', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(420_000);
+  const server = privateServer;
+  const { person, admin } = await seededReviewer(server, 'Synthetic Send Gate');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openReview(page, server, person.account, person.payrollDate);
+  await signOff(page);
+  const fin = await person.api.call<{ revision: { id: string } }>('GET', `/api/timesheets/${person.payrollDate}/finalization`);
+  const revisionId = fin.revision.id;
+  drainJobsFrom(server, new Date());
+  const attempts0 = (await person.api.call<{ deliveries: Array<{ id: string; state: string }> }>('GET', `/api/deliveries?revision_id=${revisionId}`)).deliveries;
+  note(OUTFILE, `SEND after sign-off: delivery attempts ${attempts0.length} (sign-off enqueues no send); jobs run once`);
+  expect(attempts0).toHaveLength(0);
+  const send = page.locator('[data-send-card]');
+  const requests: Array<Record<string, unknown>> = [];
+  page.on('request', (r) => {
+    if (r.method() === 'POST' && r.url().endsWith('/send')) requests.push(r.postDataJSON() as Record<string, unknown>);
+  });
+  const enabled = !(await send.locator('[data-send]').isDisabled());
+  note(OUTFILE, `SEND card after sign-off: Send enabled ${enabled}; defaults To "${await send.locator('#send-field-to').inputValue()}", Cc "${await send.locator('#send-field-cc').inputValue()}"; switches time ${await send.getByRole('switch', { name: 'Time rows on the PDF' }).isChecked()} ot ${await send.getByRole('switch', { name: 'OT rows on the PDF' }).isChecked()}`);
+  await send.locator('#send-field-to').fill(`${TO}, ${TO_2}`);
+  await send.locator('#send-field-cc').fill(CC_2);
+  await send.locator('#send-field-subject').fill(SUBJECT);
+  await send.locator('#send-field-body').fill(BODY);
+  await send.getByRole('switch', { name: 'Time rows on the PDF' }).uncheck();
+  await send.getByRole('switch', { name: 'OT rows on the PDF' }).uncheck();
+  const href = await send.locator('[data-pdf-preview]').getAttribute('href');
+  const target = await send.locator('[data-pdf-preview]').getAttribute('target');
+  note(OUTFILE, `PDF Preview link: href ${href}, target ${target}`);
+  await page.screenshot({ path: join(OUT, 'raw-send-card-1440.png') });
+  await send.locator('[data-send]').click();
+  await expect(send.locator('[data-send-notice="ok"]')).toContainText('Send 1 is queued');
+  note(OUTFILE, `SEND request body keys ${JSON.stringify(Object.keys(requests[0] ?? {}))}: to ${JSON.stringify(requests[0]?.to)}, cc ${JSON.stringify(requests[0]?.cc)}, subject "${String(requests[0]?.subject)}", body "${String(requests[0]?.body_text)}", time_rows ${String(requests[0]?.time_rows)}, ot_rows ${String(requests[0]?.ot_rows)}, reason ${String(requests[0]?.reason)}`);
+  expect(requests[0]).toEqual({ request_key: expect.any(String), to: [TO, TO_2], cc: [CC_2], subject: SUBJECT, body_text: BODY, time_rows: false, ot_rows: false });
+  // replay and different body under the same key
+  const replay = await person.api.call<{ status: string }>('POST', `/api/revisions/${revisionId}/send`, requests[0], 200);
+  const conflictResponse = await fetch(`${server.origin}/api/revisions/${revisionId}/send`, { method: 'POST', headers: { 'content-type': 'application/json', origin: server.origin, cookie: (await cookieOf(person.api)) }, body: JSON.stringify({ ...requests[0], subject: 'Another subject under the same key' }) });
+  note(OUTFILE, `SEND replay with the same key: status "${replay.status}"; same key with another body: HTTP ${conflictResponse.status}`);
+  expect(replay.status).toBe('replayed');
+  expect(conflictResponse.status).toBe(409);
+  drainJobsFrom(server, new Date());
+  const first = (await person.api.call<{ deliveries: Array<{ id: string; state: string }> }>('GET', `/api/deliveries?revision_id=${revisionId}`)).deliveries;
+  expect(first.map((d) => d.state)).toEqual(['accepted']);
+  const cap = readCapture(server, first[0]?.id ?? '');
+  const variant = await person.api.download(`/api/revisions/${revisionId}/pdf?time=0&ot=0`);
+  const defaultPdf = await person.api.download(`/api/revisions/${revisionId}/pdf?time=1&ot=1`);
+  note(OUTFILE, `CAPTURE 1: files ${JSON.stringify(cap.files)}; From ${header(cap.eml, 'From')}; To "${header(cap.eml, 'To')}"; Cc "${header(cap.eml, 'Cc')}"; Subject "${header(cap.eml, 'Subject')}"; body contains edit ${cap.eml.includes(BODY)}; attachment equals the time=0&ot=0 variant ${cap.pdf?.equals(variant.body)}; equals the default variant ${cap.pdf?.equals(defaultPdf.body)}; sender is the synthetic capture sender ${header(cap.eml, 'From') === CAPTURE_SENDER}`);
+  expect(header(cap.eml, 'Subject')).toBe(SUBJECT);
+  expect(cap.eml).toContain(BODY);
+  expect(cap.pdf?.equals(variant.body)).toBe(true);
+  expect(cap.pdf?.equals(defaultPdf.body)).toBe(false);
+  // Another copy: reason dialog
+  await page.reload();
+  await expect(page.locator('[data-send-card]')).toBeVisible();
+  const again = page.locator('[data-send]');
+  const label = (await again.innerText()).trim();
+  requests.length = 0;
+  await again.click();
+  const confirm = page.getByRole('alertdialog', { name: 'Send another copy?' });
+  await expect(confirm).toBeVisible();
+  const confirmFacts = { modal: await confirm.evaluate((el) => el.matches(':modal')), text: (await confirm.innerText()).replace(/\s+/g, ' ').slice(0, 300) };
+  await confirm.getByRole('button', { name: 'Send another copy' }).click();
+  const empty = (await confirm.getByRole('alert').innerText()).trim();
+  const noPost = requests.length === 0;
+  note(OUTFILE, `REASON dialog after an accepted copy: button label "${label}", modal ${confirmFacts.modal}; empty reason message "${empty}", nothing posted ${noPost}; text "${confirmFacts.text}"`);
+  await page.screenshot({ path: join(OUT, 'raw-reason-dialog-1440.png') });
+  await confirm.getByLabel('Reason for sending another copy (required)').fill('Gate asked for a second copy');
+  await confirm.getByRole('button', { name: 'Send another copy' }).click();
+  await expect(page.locator('[data-send-notice="ok"]')).toContainText('Send 2 is queued');
+  note(OUTFILE, `REASON send: request ${JSON.stringify({ time_rows: requests[0]?.time_rows, ot_rows: requests[0]?.ot_rows, reason: requests[0]?.reason, to: requests[0]?.to })}`);
+  // 409 path: a third send while the second waits
+  requests.length = 0;
+  await page.locator('[data-send]').click();
+  const c3 = page.getByRole('alertdialog', { name: 'Send another copy?' });
+  await c3.getByLabel('Reason for sending another copy (required)').fill('Asked again too soon');
+  await c3.getByRole('button', { name: 'Send another copy' }).click();
+  const err = page.locator('[data-send-notice="error"]');
+  await expect(err).toBeVisible();
+  note(OUTFILE, `409 path: posted ${requests.length} time(s); notice "${(await err.innerText()).replace(/\s+/g, ' ')}"`);
+  drainJobsFrom(server, new Date(Date.now() + 5_000));
+  const both = (await person.api.call<{ deliveries: Array<{ id: string; state: string }> }>('GET', `/api/deliveries?revision_id=${revisionId}`)).deliveries;
+  const second = readCapture(server, both.find((d) => d.id !== first[0]?.id)?.id ?? '');
+  note(OUTFILE, `CAPTURE 2: attempts ${JSON.stringify(both.map((d) => d.state))}; attachment equals the default variant ${second.pdf?.equals(defaultPdf.body)}; reason in the email ${second.eml.includes('second copy')}; Message-ID differs ${header(second.eml, 'Message-ID') !== header(cap.eml, 'Message-ID')}`);
+  // History
+  await page.goto(`${server.origin}/#/history`);
+  const revision = page.locator(`[data-revision="${revisionId}"]`);
+  await expect(revision).toBeVisible();
+  const ops = page.locator('[data-operation="revision.send"]');
+  await expect(ops).toHaveCount(2);
+  const labels = await ops.allInnerTexts();
+  const reasons = await page.locator('[data-operation="revision.send"] [data-reason]').evaluateAll((els) => els.map((e) => e.getAttribute('data-reason')));
+  note(OUTFILE, `HISTORY: revision.send events ${labels.length}, first label "${labels[0]?.replace(/\s+/g, ' ').slice(0, 80)}", reasons ${JSON.stringify(reasons)}, attempts on the revision ${await revision.locator('[data-attempt]').count()}`);
+  await page.screenshot({ path: join(OUT, 'raw-history-send-1440.png'), fullPage: false });
+  // Settings: the switch and the file key
+  await page.goto(`${server.origin}/#/settings`);
+  const showTime = page.getByRole('checkbox', { name: 'Time rows on the PDF' });
+  await expect(showTime).toBeVisible();
+  await page.screenshot({ path: join(OUT, 'raw-settings-defaults-1440.png') });
+  const exportRegion = page.getByRole('region', { name: 'Export and import settings' });
+  const readKey = async (): Promise<boolean | undefined> => {
+    const [download] = await Promise.all([page.waitForEvent('download'), exportRegion.getByRole('button', { name: 'Export settings' }).click()]);
+    const parsed = JSON.parse(readFileSync(await download.path(), 'utf8')) as { data: { submission: Record<string, unknown> } };
+    return parsed.data.submission.show_time_on_pdf as boolean | undefined;
+  };
+  const checkedBefore = await showTime.isChecked();
+  const keyBefore = await readKey();
+  await showTime.uncheck();
+  await page.getByRole('button', { name: /^Save/ }).first().click().catch(() => undefined);
+  await page.waitForTimeout(800);
+  const keyAfter = await readKey();
+  const saved = await person.api.call<{ settings: { show_time_on_pdf?: boolean; showTimeOnPdf?: boolean } | null }>('GET', '/api/settings/submission').catch(() => null);
+  note(OUTFILE, `SETTINGS switch "Time rows on the PDF": checked before ${checkedBefore}; file key show_time_on_pdf before ${String(keyBefore)} -> after unchecking and saving ${String(keyAfter)}; server settings ${JSON.stringify(saved)}`);
+  // Import a file that sets it back to true
+  const [download] = await Promise.all([page.waitForEvent('download'), exportRegion.getByRole('button', { name: 'Export settings' }).click()]);
+  const parsed = JSON.parse(readFileSync(await download.path(), 'utf8')) as { data: { submission: Record<string, unknown> } };
+  parsed.data.submission.show_time_on_pdf = true;
+  await page.getByLabel('Import settings from a file (.json)').setInputFiles({ name: 'timesheet-settings-synthetic.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(parsed)) });
+  const importDialog = page.getByRole('dialog', { name: 'Import settings' });
+  await expect(importDialog).toBeVisible();
+  const previewText = (await importDialog.innerText()).replace(/\s+/g, ' ');
+  note(OUTFILE, `SETTINGS import preview mentions the time-rows setting ${/time rows/i.test(previewText)}: "${previewText.slice(0, 260)}"`);
+  await importDialog.getByRole('button', { name: 'Cancel' }).click();
+  void admin;
+});
+
+async function cookieOf(client: SeedClient): Promise<string> {
+  return (client as unknown as { cookie: string }).cookie;
+}
+
+test('administrator status says Not sent yet for a signed period, and a grantee sees no Sign off or Send', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(240_000);
+  const server = privateServer;
+  const { person, admin } = await seededReviewer(server, 'Synthetic Share Owner');
+  const grantee = await createAccountByAdminApi(admin, { displayName: 'Synthetic Grantee' });
+  const gClient = await new SeedClient(server.origin).signIn(grantee.email, grantee.password);
+  await gClient.call('POST', '/api/policies', starterPolicyBody(addDays(person.todayLocal, -400)), 201);
+  await person.api.call('POST', '/api/shares', { grantee_email: grantee.email, items: { timesheets: 'view', ot_read: false, pdf_download: true } }, 201);
+  // sign off through the API (the page flow is covered above)
+  const review = await person.api.call<{ expected_version: number; payload_hash: string; expectedVersion?: number }>('GET', `/api/timesheets/${person.payrollDate}/review`);
+  void review;
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openReview(page, server, person.account, person.payrollDate);
+  await signOff(page);
+  const fin = await person.api.call<{ revision: { id: string } }>('GET', `/api/timesheets/${person.payrollDate}/finalization`);
+  // admin status
+  const ctx = await page.context().browser()!.newContext({ viewport: { width: 1280, height: 900 }, locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+  const adminPage = await ctx.newPage();
+  await signInTo(adminPage, server, server.credentials.admin, '#/settings/admin');
+  await expect(adminPage.getByRole('heading', { level: 1 }).first()).toBeVisible();
+  await adminPage.waitForTimeout(1500);
+  const bodyText = (await adminPage.locator('main').innerText()).replace(/\s+/g, ' ');
+  note(OUTFILE, `ADMIN status page: contains "Not sent yet" ${bodyText.includes('Not sent yet')}; sample "${bodyText.slice(bodyText.indexOf('Not sent yet') - 80, bodyText.indexOf('Not sent yet') + 60)}"`);
+  await adminPage.screenshot({ path: join(OUT, 'raw-admin-status-1280.png') });
+  await ctx.close();
+  // grantee
+  const gctx = await page.context().browser()!.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+  const gp = await gctx.newPage();
+  await signInTo(gp, server, grantee, `#/shared/${person.account.id}/timesheet`);
+  await expect(gp.locator('.share-bar')).toBeVisible();
+  await gp.waitForTimeout(1000);
+  const counts = await gp.evaluate(() => ({ signOff: document.querySelectorAll('[data-sign-off]').length, send: document.querySelectorAll('[data-send], [data-send-card]').length, reviewLinks: document.querySelectorAll('[data-review-link]').length, text: /Sign off|Send another copy|Review & send/.test(document.body.innerText) }));
+  const post = await gp.evaluate(async (args) => {
+    const call = async (method: string, path: string, body?: unknown) => (await fetch(path, { method, credentials: 'same-origin', headers: { 'content-type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })).status;
+    return {
+      sharedSend: await call('POST', `/api/shared/${args.owner}/revisions/${args.rev}/send`, {}),
+      sharedDraft: await call('GET', `/api/shared/${args.owner}/revisions/${args.rev}/send-draft`),
+      sharedPreview: await call('GET', `/api/shared/${args.owner}/timesheets/${args.date}/pdf-preview`),
+      ownSend: await call('POST', `/api/revisions/${args.rev}/send`, { request_key: 'gate-grantee-key-0001', to: ['x-gate@example.invalid'], cc: [], subject: 'Gate', body_text: 'Gate', time_rows: true, ot_rows: true }),
+      ownSendEmptyBody: await call('POST', `/api/revisions/${args.rev}/send`, {}),
+      ownDraft: await call('GET', `/api/revisions/${args.rev}/send-draft`),
+      sharedPdfQuery: await call('GET', `/api/shared/${args.owner}/revisions/${args.rev}/pdf?time=0&ot=0`),
+    };
+  }, { owner: person.account.id, rev: fin.revision.id, date: person.payrollDate });
+  note(OUTFILE, `GRANTEE shared timesheet: [data-sign-off] ${counts.signOff}, send controls ${counts.send}, review links ${counts.reviewLinks}, words "Sign off/Send another copy/Review & send" present ${counts.text}; HTTP statuses ${JSON.stringify(post)}`);
+  await gctx.close();
+});

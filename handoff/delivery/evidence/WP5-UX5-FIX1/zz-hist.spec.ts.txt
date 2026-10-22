@@ -1,0 +1,39 @@
+import { expect, newPerson, SeedClient, test } from './fixtures.ts';
+import { applySituation, note, runAxe, SITUATIONS, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX5-FIX1 task-local probe (scratch copy only, never in the repository): axe (WCAG 2.2 AA tags) on History, light and dark, both
+ * viewports. Notes go to GATE_OUT/hist-<GATE_LABEL>.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const LABEL = process.env.GATE_LABEL ?? 'target';
+
+for (const situation of SITUATIONS.filter((s) => s.slug === 'light' || s.slug === 'dark')) {
+  test(`History axe scan (${situation.name})`, async ({ page, privateServer }, testInfo) => {
+    await applySituation(page, situation);
+    const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+    const person = await newPerson(admin, privateServer, { displayName: 'Synthetic History Axe', signature: 'none' });
+    const free = await person.api.displayedPeriodFreeWorkdays();
+    await person.api.seedCompleteDay(free[0] ?? '');
+    await person.api.seedCompleteDay(free[1] ?? '');
+    await signInTo(page, privateServer, person.account, '#/history');
+    await expect(page.locator('[data-operation]').first()).toBeVisible();
+    await page.waitForTimeout(600);
+    const axe = await runAxe(page);
+    const wraps = await page.evaluate(() =>
+      [...document.querySelectorAll('.table-wrap')].map((w) => ({
+        sw: (w as HTMLElement).scrollWidth,
+        cw: (w as HTMLElement).clientWidth,
+        tab: w.getAttribute('tabindex'),
+        role: w.getAttribute('role'),
+        label: w.getAttribute('aria-label'),
+      })),
+    );
+    const scrolling = wraps.filter((w) => w.sw > w.cw);
+    note(
+      `hist-${LABEL}.txt`,
+      `[${LABEL}] ${testInfo.project.name} ${situation.name}: axe ${axe.version} violations ${axe.violations.length} (${axe.violations.map((v) => `${v.id}x${v.nodes.length}`).join(', ') || 'none'}); incomplete [${axe.incomplete.map((i) => `${i.id}x${i.nodes}`).join(', ')}]; passes ${axe.passes}; .table-wrap ${wraps.length}, scrolling ${scrolling.length}, scrolling with tabindex=0 role=region ${scrolling.filter((w) => w.tab === '0' && w.role === 'region').length}`,
+    );
+    expect(axe.violations.length, 'axe violations').toBe(0);
+  });
+}

@@ -1,0 +1,145 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { drainJobsFrom, expect, newPerson, screenshotPath, SeedClient, test } from './fixtures.ts';
+import { signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository): the synthetic screenshots of the brief (15 files, all named
+ * ux5gate-*-synthetic.png). Synthetic data only. Desktop project.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
+const VIEW_ORIGIN = 'http://pdf-view.invalid';
+const shot = (name: string) => screenshotPath(`ux5gate-${name}-synthetic.png`);
+const settle = (page: Page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(d, 400))))');
+
+async function renderPdf(page: Page, bytes: Buffer, name: string): Promise<void> {
+  const pdfjs = resolve(REPO_ROOT, 'node_modules', 'pdfjs-dist', 'build');
+  const assets: Record<string, { body: Buffer; type: string }> = {
+    '/': { body: readFileSync(resolve(import.meta.dirname, 'assets', 'pdf-view.html')), type: 'text/html; charset=utf-8' },
+    '/pdf.mjs': { body: readFileSync(resolve(pdfjs, 'pdf.mjs')), type: 'text/javascript; charset=utf-8' },
+    '/pdf.worker.mjs': { body: readFileSync(resolve(pdfjs, 'pdf.worker.mjs')), type: 'text/javascript; charset=utf-8' },
+    '/doc.pdf': { body: bytes, type: 'application/pdf' },
+  };
+  await page.route(`${VIEW_ORIGIN}/**`, (route) => {
+    const asset = assets[new URL(route.request().url()).pathname];
+    if (asset === undefined) return route.fulfill({ status: 404, body: 'not found' });
+    return route.fulfill({ status: 200, contentType: asset.type, body: asset.body });
+  });
+  await page.setViewportSize({ width: 920, height: 1240 });
+  await page.goto(`${VIEW_ORIGIN}/?page=1&scale=1.5`);
+  await page.waitForFunction('window.__pdfRender !== undefined', undefined, { timeout: 30_000 });
+  const result = await page.evaluate<{ ok: boolean; pages?: number }>('window.__pdfRender');
+  expect(result).toMatchObject({ ok: true, pages: 1 });
+  await page.locator('#page').screenshot({ path: shot(name) });
+  await page.unroute(`${VIEW_ORIGIN}/**`);
+}
+
+test('the synthetic screenshots of the gate', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(420_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Shot Person', to: ['payroll-shot@example.invalid'], cc: ['manager-shot@example.invalid'], signature: 'saved' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(free[0] ?? '');
+  await person.api.createSession(free[1] ?? '', '08:00', '12:00', null);
+  await person.api.createSession(free[1] ?? '', '13:00', '17:30', null);
+  await person.api.createSession(free[2] ?? '', '07:30', '16:00', [['11:00', '11:30']]);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInTo(page, privateServer, person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByRole('switch', { name: 'Worked hours' }).check();
+  await settle(page);
+  await page.screenshot({ path: shot('timesheet-1440-light') });
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await settle(page);
+  await page.screenshot({ path: shot('timesheet-1440-dark') });
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 600, height: 900 });
+  await settle(page);
+  await page.screenshot({ path: shot('timesheet-600') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await settle(page);
+  await page.screenshot({ path: shot('timesheet-390') });
+  await page.locator('section.period-bar').screenshot({ path: shot('period-card-narrow-390') });
+  // phone sheet
+  await page.locator(`tr[data-day="${free[1] ?? ''}"] .sheet-day-button`).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await settle(page);
+  await page.screenshot({ path: shot('phone-sheet-390x844') });
+  await page.keyboard.press('Escape');
+  // day editor with the partial leave dialog
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await settle(page);
+  await namedDayButton(page, free[1] ?? '', 'Edit').click();
+  await expect(editor).toBeVisible();
+  await editor.locator('[data-leave-summary]').getByRole('button', { name: 'Add', exact: true }).click();
+  const leave = page.getByRole('dialog', { name: 'Partial leave', exact: true });
+  await leave.getByLabel('Leave hours').fill('2');
+  await leave.getByLabel('Leave kind').selectOption('vacation');
+  await settle(page);
+  await page.screenshot({ path: shot('day-editor-partial-leave-1440') });
+  await leave.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.keyboard.press('Escape');
+  // Review
+  await page.goto(`${privateServer.origin}/#/review/${person.payrollDate}`);
+  await expect(page.locator('[data-paper="review"]')).toBeVisible();
+  await settle(page);
+  await page.screenshot({ path: shot('review-1440'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await settle(page);
+  await page.screenshot({ path: shot('review-390'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await settle(page);
+  await page.locator('[data-sign-off]').click();
+  const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+  await expect(dialog).toBeVisible();
+  await settle(page);
+  await page.screenshot({ path: shot('signoff-dialog-1440') });
+  const ack = dialog.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+  if (await ack.count()) await ack.check();
+  await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+  await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
+  await settle(page);
+  await page.locator('.review-signatures').scrollIntoViewIfNeeded();
+  await page.locator('[data-paper="review"]').locator('.review-signatures').screenshot({ path: shot('signed-footer') });
+  // PDF variant with the time rows off
+  const fin = await person.api.call<{ revision: { id: string } }>('GET', `/api/timesheets/${person.payrollDate}/finalization`);
+  const variant = await person.api.download(`/api/revisions/${fin.revision.id}/pdf?time=0&ot=1`);
+  expect(variant.status).toBe(200);
+  // send once, then another copy with the reason dialog
+  const send = page.locator('[data-send-card]');
+  await send.locator('[data-send]').click();
+  await expect(send.locator('[data-send-notice="ok"]')).toContainText('Send 1 is queued');
+  drainJobsFrom(privateServer, new Date());
+  await page.reload();
+  await expect(page.locator('[data-send-card]')).toBeVisible();
+  await page.locator('[data-send]').click();
+  const confirm = page.getByRole('alertdialog', { name: 'Send another copy?' });
+  await expect(confirm).toBeVisible();
+  await confirm.getByLabel('Reason for sending another copy (required)').fill('Payroll asked for a second copy');
+  await settle(page);
+  await page.screenshot({ path: shot('send-card-reason-dialog-1440') });
+  await confirm.getByRole('button', { name: 'Send another copy' }).click();
+  await expect(page.locator('[data-send-notice="ok"]')).toContainText('Send 2 is queued');
+  drainJobsFrom(privateServer, new Date(Date.now() + 5_000));
+  // Settings defaults
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${privateServer.origin}/#/settings`);
+  await expect(page.getByRole('checkbox', { name: 'Time rows on the PDF' })).toBeVisible();
+  await page.getByRole('checkbox', { name: 'Time rows on the PDF' }).scrollIntoViewIfNeeded();
+  await settle(page);
+  await page.screenshot({ path: shot('settings-defaults-1280') });
+  // History with a send reason
+  await page.goto(`${privateServer.origin}/#/history`);
+  await expect(page.locator('[data-operation="revision.send"]').first()).toBeVisible();
+  await page.locator('[data-operation="revision.send"] [data-reason]').first().scrollIntoViewIfNeeded();
+  await settle(page);
+  await page.screenshot({ path: shot('history-send-reason-1280') });
+  // The PDF page (time rows off) last: it changes the page's route
+  await renderPdf(page, variant.body, 'pdf-time-rows-off');
+});

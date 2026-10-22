@@ -1,0 +1,48 @@
+/** A point inside `target`, as an offset from its top-left corner. */
+type PressPoint = { x: number; y: number };
+
+/**
+ * The first of `candidates` (offsets inside `target`) whose column of the window the open drawer does not cover, or undefined
+ * when the drawer covers the whole width of `target` (WP5-UX5-FIX1). The floating drawer is a fixed column flush with one
+ * window edge and docks on the side away from the edited column, so which page parts it covers depends on the day of the
+ * week of the newest free workday; a fixed point of the title or of the paper margin was under the drawer on some days. Only
+ * the horizontal range is compared, because the drawer spans the window's height and the page scrolls vertically.
+ */
+async function uncoveredPoint(editor: Locator, target: Locator, candidates: (box: { width: number; height: number }) => PressPoint[]): Promise<PressPoint | undefined> {
+  const box = await target.boundingBox();
+  const drawer = await editor.boundingBox();
+  expect(box, 'the target is on the page').not.toBeNull();
+  expect(drawer, 'the drawer is open').not.toBeNull();
+  if (box === null || drawer === null) return undefined;
+  const free = candidates(box).find((point) => box.x + point.x < drawer.x || box.x + point.x > drawer.x + drawer.width);
+  // The point pressed is outside the drawer: asserted before it is used.
+  if (free !== undefined) expect(box.x + free.x < drawer.x || box.x + free.x > drawer.x + drawer.width, 'the point pressed is outside the drawer').toBe(true);
+  return free;
+}
+
+/** Presses `target` where the drawer does not cover it; fails (with the boxes) when it covers all of it. */
+async function pressUncovered(editor: Locator, target: Locator, label: string, candidates: (box: { width: number; height: number }) => PressPoint[]): Promise<void> {
+  const free = await uncoveredPoint(editor, target, candidates);
+  expect(free, `${label}: a point that the drawer does not cover (drawer ${JSON.stringify(await editor.boundingBox())}, target ${JSON.stringify(await target.boundingBox())})`).toBeDefined();
+  if (free !== undefined) await target.click({ position: free });
+}
+
+/** The middle of a box, then points toward its right and left ends, then its quarter points. */
+const acrossMiddle = (box: { width: number; height: number }): PressPoint[] =>
+  [0.5, 0.9, 0.1, 0.75, 0.25].map((fraction) => ({ x: box.width * fraction, y: box.height / 2 }));
+
+/**
+ * A press on the title (the heading) where the drawer leaves it uncovered. The title is a short heading at the left of the
+ * page; when the drawer docks on the left it covers the whole heading, so the same press goes to the empty part of the title
+ * row (the header the heading stands in, between the heading and the clock), which is the title's own place on the page.
+ */
+async function pressTitle(page: Page, editor: Locator): Promise<void> {
+  const heading = page.getByRole('heading', { name: 'Timesheet', level: 1 });
+  const onHeading = await uncoveredPoint(editor, heading, acrossMiddle);
+  if (onHeading !== undefined) {
+    await heading.click({ position: onHeading });
+    return;
+  }
+  const row = page.locator('header.page-head');
+  await pressUncovered(editor, row, 'the title row', (box) => [0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65].map((fraction) => ({ x: box.width * fraction, y: box.height / 2 })));
+}

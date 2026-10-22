@@ -1,0 +1,161 @@
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { drainJobsFrom, expect, newPerson, SeedClient, test } from './fixtures.ts';
+import { applySituation, note, scanState, signInTo, SITUATIONS } from './zz-lib.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository): a real axe scan (WCAG 2.2 AA tags) plus the text-contrast sweep of every
+ * state the brief lists, in light and dark. Notes go to GATE_OUT/a11y-scan.txt. Desktop project.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const settle = (page: Page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(d, 300))))');
+
+for (const situation of SITUATIONS.filter((s) => s.slug === 'light' || s.slug === 'dark')) {
+  test(`employee states: axe + text (${situation.name})`, async ({ page, privateServer }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop');
+    test.setTimeout(600_000);
+    const tag = `employee/${situation.slug}`;
+    await applySituation(page, situation);
+    const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+    const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Axe Person', to: ['payroll-axe@example.invalid'], cc: ['manager-axe@example.invalid'], signature: 'saved' });
+    const free = await person.api.displayedPeriodFreeWorkdays();
+    await person.api.seedCompleteDay(free[0] ?? '');
+    await person.api.seedCompleteDay(free[1] ?? '');
+    await person.api.createSession(free[2] ?? '', '08:00', '12:00', null);
+    await person.api.createSession(free[2] ?? '', '13:00', '17:30', null);
+    const scan = async (label: string) => {
+      await settle(page);
+      await scanState(page, label, { tag });
+    };
+    // Timesheet
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInTo(page, privateServer, person.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByRole('switch', { name: 'Worked hours' }).check();
+    await scan('Timesheet paper, editor closed, worked hours on, 1440');
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await namedDayButton(page, free[2] ?? '', 'Edit').click();
+    await expect(editor).toBeVisible();
+    await expect(page.locator('.sheet-area')).toHaveAttribute('data-editor-layout', 'beside');
+    await scan('Timesheet with the drawer beside, 1440');
+    // Partial leave dialog over the editor
+    const leave = page.getByRole('dialog', { name: 'Partial leave', exact: true });
+    await editor.locator('[data-leave-summary]').getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(leave).toBeVisible();
+    await leave.getByLabel('Leave hours').fill('2');
+    await leave.getByLabel('Leave kind').selectOption('vacation');
+    await scan('Day editor with the Partial leave dialog, 1440');
+    await leave.getByRole('button', { name: 'Done', exact: true }).click();
+    // Discard prompt (an unsaved leave draft and note)
+    await editor.getByLabel('Notes').fill('Synthetic unsaved note');
+    await page.getByRole('heading', { name: 'Timesheet', level: 1 }).click();
+    const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    await expect(prompt).toBeVisible();
+    await scan('Discard prompt over the drawer, 1440');
+    await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    // Floating 1280
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await settle(page);
+    await namedDayButton(page, free[2] ?? '', 'Edit').click();
+    await expect(editor).toBeVisible();
+    await expect(page.locator('.sheet-area')).toHaveAttribute('data-editor-layout', 'floating');
+    await scan('Timesheet with the drawer floating, 1280');
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    // 600 (narrow period card, 7-column grid, tab bar)
+    await page.setViewportSize({ width: 600, height: 900 });
+    await scan('Timesheet at 600 (narrow period card, grid scrolling in its card)');
+    // 390: compact table, narrow card
+    await page.setViewportSize({ width: 390, height: 844 });
+    await scan('Timesheet at 390 (compact table, narrow period card)');
+    // Phone sheet
+    await page.locator(`tr[data-day="${free[2] ?? ''}"] .sheet-day-button`).click();
+    await expect(editor).toBeVisible();
+    await scan('Phone bottom sheet (Day editor), 390x844');
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    // Review
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${privateServer.origin}/#/review/${person.payrollDate}`);
+    await expect(page.locator('[data-paper="review"]')).toBeVisible();
+    await scan('Review, unsigned, 1440');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await scan('Review, unsigned, 390');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.locator('[data-sign-off]').click();
+    const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+    await expect(dialog).toBeVisible();
+    await scan('Sign off dialog with the saved image, 1440');
+    await page.route('**/api/timesheets/*/signoff', (route) =>
+      route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: { code: 'period_not_signable', message: 'This period cannot be signed right now' } }) }),
+    );
+    const ack = dialog.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+    if (await ack.count()) await ack.check();
+    await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+    const alert = page.getByRole('alertdialog', { name: 'Not signed off' });
+    await expect(alert).toBeVisible();
+    await scan('"Not signed off" alert, 1440');
+    await alert.getByRole('button', { name: 'OK' }).click();
+    await page.unroute('**/api/timesheets/*/signoff');
+    await page.locator('[data-sign-off]').click();
+    const d2 = page.getByRole('dialog', { name: 'Sign off confirmation' });
+    const a2 = d2.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+    if (await a2.count()) await a2.check();
+    await d2.getByRole('button', { name: 'Sign off', exact: true }).click();
+    await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
+    await scan('Review, signed, Send card enabled, 1440');
+    const send = page.locator('[data-send-card]');
+    await send.locator('[data-send]').click();
+    await expect(send.locator('[data-send-notice="ok"]')).toContainText('Send 1 is queued');
+    drainJobsFrom(privateServer, new Date());
+    await page.reload();
+    await expect(page.locator('[data-send-card]')).toBeVisible();
+    await page.locator('[data-send]').click();
+    const confirm = page.getByRole('alertdialog', { name: 'Send another copy?' });
+    await expect(confirm).toBeVisible();
+    await scan('Send card with the reason dialog, 1440');
+    await confirm.getByRole('button', { name: 'Send another copy' }).click();
+    await scan('Send card with the reason dialog and its empty-reason alert, 1440');
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await scan('Review, signed and sent, 390');
+    // Settings with the submission defaults
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`${privateServer.origin}/#/settings`);
+    await expect(page.getByRole('checkbox', { name: 'Time rows on the PDF' })).toBeVisible();
+    await scan('Settings with the submission defaults, 1280');
+    // History with a send
+    await page.goto(`${privateServer.origin}/#/history`);
+    await expect(page.locator('[data-revision]').first()).toBeVisible();
+    await scan('History with a send, 1280');
+    // Profile
+    await page.goto(`${privateServer.origin}/#/settings/profile`);
+    await expect(page.getByRole('region', { name: 'Change password' })).toBeVisible();
+    await scan('Profile with Change password, 1280');
+  });
+
+  test(`administrator states: axe + text (${situation.name})`, async ({ page, privateServer }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop');
+    test.setTimeout(180_000);
+    const tag = `admin/${situation.slug}`;
+    await applySituation(page, situation);
+    const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+    const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Status Person', signature: 'saved' });
+    const free = await person.api.displayedPeriodFreeWorkdays();
+    await person.api.seedCompleteDay(free[0] ?? '');
+    const review = await person.api.call<{ payload_hash: string; expected_version: number }>('GET', `/api/timesheets/${person.payrollDate}/review`).catch(() => null);
+    void review;
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await signInTo(page, privateServer, server(privateServer).credentials.admin, '#/settings/admin');
+    await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+    await page.waitForTimeout(1500);
+    await settle(page);
+    await scanState(page, 'Administration (status and users), 1280', { tag });
+  });
+}
+
+function server<T>(value: T): T {
+  return value;
+}

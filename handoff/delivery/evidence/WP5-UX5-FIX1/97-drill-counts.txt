@@ -1,0 +1,49 @@
+PASS lines 209 FAIL lines 0 dep=8
+INFO  image id sha256:5cfa9f9afdbb4e2d23a2b3b8f1795c84f801c301fcb6361ccb3e910d0d61dc33, linux/amd64, size 110154229 bytes (105.1 MiB)
+STAGE 1 (build, image, start, persistence): 33 PASS, 0 FAIL
+STAGE 2 (backup, import sources, prune dry run): 32 PASS, 0 FAIL
+INFO  restore summary: {"outcome":"restored","manifest":{"verified":true,"schema_version":15,"files":11,"signatures":8,"pdfs":1,"database_bytes":684032},"schema":{"backup":15,"restored":15,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":0,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":2,"revisions":1,"ledger_entries":0,"attachments":9}}
+INFO  restored counts (equal to the backup): {"users":2,"import_batches":2,"revisions":1,"ledger_entries":0,"ledger_minutes":0,"signoffs":1,"attachments":9,"work_sessions":29,"outbound_jobs":0,"delivery_attempts":0}
+PASS  outbound resume without --confirm only previews (exit 2) and shows the paused queue  {"outcome":"confirmation_required","paused":true,"reason":"restored","awaiting_decision":0,"queued_send_jobs":2,"held_send_jobs":0}
+PASS  /api/admin/operations reports outbound delivery paused with reason restored  {"paused":true,"reason":"restored","queued":2,"held":0}
+PASS  no job is leased and nothing more was accepted while paused  jobs {"queued":2,"leased":0,"succeeded":5,"intervention":0,"cancelled":0}
+PASS  paused run: the two new send jobs are queued with no attempt spent  2 new
+PASS  a backup of the paused restored instance (with its queued send job) exits 0
+PASS  the second restore exits 0 and holds the backed-up queued send job (queued 0)  {"attempts_marked_uncertain":0,"send_jobs_held":2,"queued_send_jobs":0,"awaiting_decision":0}
+INFO  second restore summary: {"outcome":"restored","manifest":{"verified":true,"schema_version":15,"files":13,"signatures":8,"pdfs":3,"database_bytes":729088},"schema":{"backup":15,"restored":15,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":2,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":2,"revisions":3,"ledger_entries":0,"attachments":11}}
+PASS  the second restore holds both queued send jobs of the paused instance  2 held send jobs
+PASS  cli.js outbound resume --confirm clears the pause (exit 0)  {"outcome":"resumed","awaiting_decision":0,"queued_send_jobs":1,"held_send_jobs":2}
+PASS  no outbound job is leased after the resume  jobs {"queued":0,"leased":0,"succeeded":7,"intervention":2,"cancelled":0}
+STAGE 3 (restore, pause, release): 57 PASS, 0 FAIL
+PASS  previous build: two synthetic periods signed off (revisions, OT ledger, queued PDF and send jobs)  status 201/201
+PASS  pre-upgrade API facts read (ledger and two revisions)  1 ledger entries, 2 revisions
+PASS  pre-upgrade state: schema of the previous build, queued send jobs, signatures, revisions and OT credits  schema 6, 2 queued send jobs, 2 files
+PASS  pre-upgrade database is consistent
+INFO  paired backup: schema 6, 2 files, database 532480 bytes; source: 2 outbound jobs (2 queued send_email), 2 revisions, 1 ledger entries
+PASS  OT balance, ledger entry count and revision identities through the API equal the pre-upgrade values  1 ledger entries, 2 revisions
+PASS  the upgraded runner renders both queued PDFs and captures both queued sends  0.0 s
+PASS  every pre-upgrade row of every table is unchanged (jobs, sessions and heartbeat aside; PDFs, attempts and audit rows may be appended)  26 tables compared
+PASS  representative balances (ledger entries and sums per user), revision counts, sign-offs and sessions equal the pre-upgrade values  1 ledger entries, 600 minutes
+PASS  the upgraded instance finished the queued send jobs (so the paired backup still holds mail that already went out)  succeeded,succeeded
+STAGE 4 (upgrade from the WP3 schema): 35 PASS, 0 FAIL
+INFO  refusal recorded: previous build cli.js migrate exit code 1, upgraded database at schema 15, previous build at schema 6
+PASS  the restore states that nothing could be paused, held every queued send job and left none queued  {"attempts_marked_uncertain":0,"send_jobs_held":2,"queued_send_jobs":0,"awaiting_decision":0}
+INFO  rollback restore summary: {"outcome":"restored","manifest":{"verified":true,"schema_version":6,"files":2,"signatures":2,"pdfs":0,"database_bytes":532480},"schema":{"backup":6,"restored":6,"applied":[]},"outbound":{"paused":false,"reason":null},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":2,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":3,"revisions":2,"ledger_entries":1,"attachments":2}}
+PASS  restored database: no outbound job is queued or leased; every backed-up send job is held; no attempt exists  2 outbound jobs held
+PASS  restored rows equal the pre-upgrade rows of every table (jobs, sessions and heartbeat aside)  26 tables compared
+PASS  restored balances (ledger entries and sums), revision counts, sign-offs, files and sessions equal the pre-upgrade values
+INFO  restored counts (equal to the pre-upgrade values): {"users":3,"revisions":2,"ledger_entries":1,"ledger_minutes":600,"signoffs":2,"attachments":2,"work_sessions":6}
+PASS  control: the previous build on a plain file copy of the backup (no hold) sends the queued mail by itself  2 delivery attempts after 0.0 s (capture mode)
+PASS  OT balance, ledger entry count and revision identities through the API equal the pre-upgrade values  1 ledger entries, 2 revisions
+PASS  the held send jobs are untouched (state, attempts), still not queued, no delivery attempt in the database
+STAGE 5 (rollback to the WP3 build): 27 PASS, 0 FAIL
+PASS  the stage 1 instance starts again for stage 6 (healthy)  5.2 s (running healthy)
+INFO  counts before the first import: timesheets 11, day_entries 93, work_sessions 83, ot_ledger 0, timesheet_revisions 1, signoffs 1, jobs 3, delivery_attempts 0, imports 2, opening_balance 0
+INFO  counts after the first commit: timesheets 13, day_entries 112, work_sessions 83, ot_ledger 0, timesheet_revisions 1, signoffs 1, jobs 3, delivery_attempts 0, imports 3, opening_balance 0
+INFO  counts after the second commit: timesheets 13, day_entries 112, work_sessions 83, ot_ledger 0, timesheet_revisions 1, signoffs 1, jobs 3, delivery_attempts 0, imports 3, opening_balance 0
+INFO  counts after the opening balance: timesheets 13, day_entries 112, work_sessions 83, ot_ledger 1, timesheet_revisions 1, signoffs 1, jobs 3, delivery_attempts 0, imports 3, opening_balance 1
+INFO  counts at the end of stage 6: timesheets 13, day_entries 112, work_sessions 83, ot_ledger 1, timesheet_revisions 1, signoffs 1, jobs 3, delivery_attempts 0, imports 3, opening_balance 1
+PASS  the stage 6 instance log has no deprecation warning and never contains a password
+STAGE 6 (import and opening balance): 23 PASS, 0 FAIL
+SUMMARY stage 1: 33 PASS; stage 2: 32 PASS; stage 3: 57 PASS; stage 4: 35 PASS; stage 5: 27 PASS; stage 6: 23 PASS; total 209 PASS, 0 FAIL
+DRILL STAGES 1-6 PASSED

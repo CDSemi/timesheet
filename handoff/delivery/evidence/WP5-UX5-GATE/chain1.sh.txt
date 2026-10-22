@@ -1,0 +1,13 @@
+. <task>/env.sh
+cd $T
+mkfifo $T/tmp/wait.fifo
+exec 3<> $T/tmp/wait.fifo
+until [ -f $T/out/main.done ]; do read -t 5 -u 3 _x || true; done
+echo "main done seen $(date -u +%H:%M:%SZ)" > logs/chain1.log
+bash run-rest.sh > logs/rest.log 2>&1
+echo "rest done $(date -u +%H:%M:%SZ)" >> logs/chain1.log
+bash run-integ.sh > logs/integ.log 2>&1
+echo "integ done $(date -u +%H:%M:%SZ)" >> logs/chain1.log
+bash run-drill.sh > logs/drill.log 2>&1
+echo "drill done $(date -u +%H:%M:%SZ)" >> logs/chain1.log
+echo chain1-done > out/chain1.done

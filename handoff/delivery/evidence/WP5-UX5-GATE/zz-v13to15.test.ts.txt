@@ -1,0 +1,209 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { appendFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { SessionUser } from '../../src/server/auth/sessions.ts';
+import { type Db, openDatabase } from '../../src/server/db/database.ts';
+import { MIGRATIONS, migrate } from '../../src/server/db/migrations.ts';
+import { FileStore } from '../../src/server/files/fileStore.ts';
+import { seedSynthetic } from '../../src/server/seed.ts';
+import { canonicalize } from '../../src/domain/canonical.ts';
+import { payPeriodForPayrollDate } from '../../src/domain/periods.ts';
+import { getCalendar, listPayrollExceptions } from '../../src/server/services/calendars.ts';
+import { reviseTimesheet, signOffTimesheet, creditSourceKey } from '../../src/server/services/finalization.ts';
+import { ensurePayPeriodRow } from '../../src/server/services/periods.ts';
+import { recordRevisionLine } from '../../src/server/services/revisionLedger.ts';
+import { postCredit } from '../../src/server/services/ledger.ts';
+import { buildReviewPayload } from '../../src/server/services/reviewPayload.ts';
+import { currentSignature, saveSignature } from '../../src/server/services/signatures.ts';
+import { makePng } from '../support/pdfText.ts';
+import { authorizeAutoImage, currentSubmissionSettings, saveSubmissionSettings } from '../../src/server/services/submissionSettings.ts';
+import { createSession } from '../../src/server/services/timesheetCommands.ts';
+import { LA, MutableClock } from '../support/testApp.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository): a populated schema-13 database (signed, automatic, corrected and sent
+ * revisions; PDF files of two variants) upgraded to schema 15 in ONE migrate() call (0014 and 0015 together). The existing tests step 13 -> 14
+ * and 14 -> 15 separately. Notes go to GATE_OUT/v13to15.txt (counts only).
+ */
+const OUT = process.env.GATE_OUT ?? '';
+const say = (line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'v13to15.txt'), `${line}\n`);
+};
+const AT = '2026-09-29T20:00:00Z';
+const UP_TO_13 = MIGRATIONS.filter((m) => m.version <= 13);
+let dir: string;
+let db: Db;
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'timesheet-gate13-'));
+  db = openDatabase(join(dir, 'v13.db'));
+});
+afterEach(() => {
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+const sessionUser = (email: string): SessionUser => {
+  const row = db.prepare('SELECT id, email, display_name, calendar_id FROM users WHERE email = ?').get(email) as { id: string; email: string; display_name: string; calendar_id: string };
+  return { id: row.id, email: row.email, displayName: row.display_name, role: 'employee', calendarId: row.calendar_id, sessionId: 'fixture' };
+};
+
+function legacyAutomaticRevision(clock: MutableClock, owner: SessionUser, payrollDate: string): string {
+  const review = buildReviewPayload(db, clock, owner, payrollDate, 'automatic');
+  const calendar = getCalendar(db, owner.calendarId);
+  const period = payPeriodForPayrollDate(calendar.schedule, payrollDate, listPayrollExceptions(db, owner.calendarId));
+  const payPeriodId = ensurePayPeriodRow(db, clock, owner.calendarId, period);
+  const now = clock.now().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  let timesheet = db.prepare('SELECT id, version FROM timesheets WHERE user_id = ? AND pay_period_id = ?').get(owner.id, payPeriodId) as { id: string; version: number } | undefined;
+  if (timesheet === undefined) {
+    timesheet = { id: randomUUID(), version: 1 };
+    db.prepare('INSERT INTO timesheets (id, user_id, pay_period_id, version, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)').run(timesheet.id, owner.id, payPeriodId, now, now);
+  }
+  const revisionId = randomUUID();
+  db.prepare(
+    `INSERT INTO timesheet_revisions (id, user_id, timesheet_id, revision_no, revision_kind, origin, review_state, supersedes_revision_id, correction_reason, timesheet_version, payload_json, payload_sha256, reviewed_sha256, send_requested, actor_user_id, created_at)
+     VALUES (?, ?, ?, 1, 'original', 'deadline', 'pending', NULL, NULL, ?, ?, ?, NULL, 1, NULL, ?)`,
+  ).run(revisionId, owner.id, timesheet.id, timesheet.version, canonicalize(review.payload), review.payloadHash, now);
+  for (const proposal of review.payload.ot_proposals) {
+    const posted = postCredit({ db, clock }, { userId: owner.id, sourceKey: creditSourceKey(proposal.work_date), sourceRef: revisionId, actorUserId: null, origin: 'automatic', workDate: proposal.work_date, minutes: proposal.credited_minutes });
+    recordRevisionLine(db, clock, { userId: owner.id, revisionId, workDate: proposal.work_date, lineKind: 'credit', proposedMinutes: proposal.credited_minutes, result: { outcome: 'posted', ledgerEntryId: posted.entry.id } });
+  }
+  db.prepare('UPDATE timesheets SET finalized_revision_no = 1, version = version + 1, updated_at = ? WHERE id = ?').run(now, timesheet.id);
+  const job = db.prepare(`INSERT INTO jobs (id, user_id, revision_id, kind, business_key, payload_json, state, attempts, next_run_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)`);
+  const payload = JSON.stringify({ revision_id: revisionId });
+  job.run(randomUUID(), owner.id, revisionId, 'render_pdf', `revision:${revisionId}:render_pdf`, payload, now, now, now);
+  job.run(randomUUID(), owner.id, revisionId, 'send_email', `revision:${revisionId}:send_email:initial`, payload, now, now, now);
+  return revisionId;
+}
+
+function legacySend(owner: SessionUser, revisionId: string, key: string, state: 'queued' | 'succeeded', attempt: 'accepted' | 'failed_permanent' | null, at: string): string {
+  const jobId = randomUUID();
+  db.prepare(
+    `INSERT INTO jobs (id, user_id, revision_id, kind, business_key, payload_json, state, attempts, next_run_at, created_at, updated_at) VALUES (?, ?, ?, 'send_email', ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(jobId, owner.id, revisionId, key, JSON.stringify({ revision_id: revisionId }), state, state === 'queued' ? 0 : 1, at, at, at);
+  if (attempt !== null) {
+    const payload = JSON.parse(db.prepare('SELECT payload_json FROM timesheet_revisions WHERE id = ?').pluck().get(revisionId) as string);
+    const envelope = {
+      revision_id: revisionId,
+      to: payload.recipients.to,
+      cc: payload.recipients.cc,
+      subject: payload.recipients.subject,
+      template_version: payload.recipients.template_version,
+      body_sha256: createHash('sha256').update(canonicalize({ body_text: payload.recipients.body_text, body_html: payload.recipients.body_html })).digest('hex'),
+      attachment_sha256: 'f'.repeat(64),
+    };
+    db.prepare(
+      `INSERT INTO delivery_attempts (id, job_id, user_id, revision_id, attempt_no, channel, envelope_json, attachment_id, message_id, state, accepted_at, started_at, updated_at) VALUES (?, ?, ?, ?, 1, 'email', ?, NULL, ?, ?, ?, ?, ?)`,
+    ).run(randomUUID(), jobId, owner.id, revisionId, canonicalize(envelope), `<${randomUUID()}@timesheet.invalid>`, attempt, attempt === 'accepted' ? at : null, at, at);
+  }
+  return jobId;
+}
+
+describe('schema 13 to 15 in one migrate() call', () => {
+  it('copies rows, derives variants, backfills one send per send job, keeps the nullable image path and the triggers, and passes the integrity checks', async () => {
+    expect(migrate(db, UP_TO_13)).toEqual({ applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], version: 13 });
+    const clock = new MutableClock(AT);
+    await seedSynthetic(db, clock, { files: new FileStore(join(dir, 'private-data')), passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass', employee2: 'synthetic-employee2-pass' }, sampleData: true });
+    const owner = sessionUser('employee2@example.invalid');
+    const other = sessionUser('employee@example.invalid');
+    const session = (date: string, reason: string) =>
+      createSession({ db, clock, user: owner }, date, { start: { local: `${date}T09:00`, zone: LA }, end: { local: `${date}T19:00`, zone: LA }, input_zone: LA, breaks_confirmed: true, breaks: [], reason });
+    session('2026-09-02', 'Synthetic late entry for the schema 13 fixture');
+    const first = buildReviewPayload(db, clock, owner, '2026-09-18');
+    const original = signOffTimesheet({ db, clock, user: owner }, '2026-09-18', { expectedVersion: first.expectedVersion, reviewedHash: first.payloadHash, deficitChoices: [], incompleteEvidenceAcknowledged: true }).revision.id;
+    session('2026-09-03', 'Synthetic second entry to correct');
+    const second = buildReviewPayload(db, clock, owner, '2026-09-18');
+    const correction = reviseTimesheet({ db, clock, user: owner }, '2026-09-18', { kind: 'correction', reason: 'Synthetic correction for the schema 13 fixture', sendEmail: false, expectedVersion: second.expectedVersion, reviewedHash: second.payloadHash, deficitChoices: [], incompleteEvidenceAcknowledged: true }).revision.id;
+    const image = currentSignature(db, owner.id);
+    const settings = currentSubmissionSettings(db, owner.id);
+    authorizeAutoImage(db, clock, owner.id, { expectedSeq: settings?.seq ?? 0, signatureAttachmentId: image?.id ?? '' });
+    const automatic = legacyAutomaticRevision(clock, owner, '2026-10-02');
+    // the other person: OT rows off in Settings, signed (a saved image: schema 13 refuses an imageless sign-off)
+    saveSignature(db, clock, new FileStore(join(dir, 'private-data')), other.id, makePng(40, 12), 'image/png');
+    saveSubmissionSettings(db, clock, other.id, { expectedSeq: 0, to: ['payroll-other@example.invalid'], autoSubmit: true, showOtOnPdf: false });
+    const review = buildReviewPayload(db, clock, other, '2026-10-02');
+    const otherSigned = signOffTimesheet({ db, clock, user: other }, '2026-10-02', { expectedVersion: review.expectedVersion, reviewedHash: review.payloadHash, deficitChoices: [], incompleteEvidenceAcknowledged: true }).revision.id;
+    // legacy sends: the build before 0015 enqueued a send job at sign-off; write them as it did
+    const sendOriginal = legacySend(owner, original, `revision:${original}:send_email:initial`, 'succeeded', 'accepted', '2026-09-29T20:01:00Z');
+    const resendOriginal = legacySend(owner, original, `revision:${original}:send_email:resend:2`, 'succeeded', 'failed_permanent', '2026-09-29T20:02:00Z');
+    const sendCorrection = legacySend(owner, correction, `revision:${correction}:send_email:initial`, 'queued', null, '2026-09-29T20:03:00Z');
+    const sendAutomatic = db.prepare("SELECT id FROM jobs WHERE revision_id = ? AND kind = 'send_email'").pluck().get(automatic) as string;
+    const sendOther = legacySend(other, otherSigned, `revision:${otherSigned}:send_email:initial`, 'succeeded', 'accepted', '2026-09-29T20:04:00Z');
+    // ready/pending PDF files as the old PDF job left them
+    db.prepare(`INSERT INTO attachments (id, user_id, kind, storage_key, sha256, mime_type, size_bytes, width_px, height_px, created_at) VALUES ('pdf-v13', ?, 'pdf', 'pdf-v13-storage-key-0123', ?, 'application/pdf', 100, NULL, NULL, ?)`).run(owner.id, 'b'.repeat(64), AT);
+    const file = db.prepare(`INSERT INTO revision_files (id, user_id, revision_id, kind, state, attachment_id, last_error, created_at, updated_at) VALUES (?, ?, ?, 'pdf', ?, ?, NULL, ?, ?)`);
+    file.run('rf-v13-original', owner.id, original, 'ready', 'pdf-v13', AT, AT);
+    file.run('rf-v13-other', other.id, otherSigned, 'pending', null, AT, AT);
+
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all() as string[];
+    const changed = ['revision_files', 'revision_sends', 'submission_settings', 'schema_migrations', 'signoffs'];
+    const rowsOf = (target: Db, names: string[]) => Object.fromEntries(names.map((n) => [n, target.prepare(`SELECT * FROM ${n} ORDER BY rowid`).all()]));
+    const others = tables.filter((n) => !changed.includes(n));
+    const beforeOthers = rowsOf(db, others);
+    const beforeSignoffs = db.prepare('SELECT rowid AS row_id, * FROM signoffs ORDER BY rowid').all();
+    const beforeFiles = db.prepare('SELECT rowid AS row_id, * FROM revision_files ORDER BY rowid').all() as Array<Record<string, unknown>>;
+    const beforeSettings = db.prepare('SELECT rowid AS row_id, * FROM submission_settings ORDER BY rowid').all() as Array<Record<string, unknown>>;
+    const counts = {
+      revisions: db.prepare('SELECT count(*) FROM timesheet_revisions').pluck().get(),
+      signoffs: beforeSignoffs.length,
+      automatic: db.prepare("SELECT count(*) FROM timesheet_revisions WHERE origin = 'deadline'").pluck().get(),
+      corrected: db.prepare("SELECT count(*) FROM timesheet_revisions WHERE revision_kind = 'correction'").pluck().get(),
+      sendJobs: db.prepare("SELECT count(*) FROM jobs WHERE kind = 'send_email'").pluck().get(),
+      attempts: db.prepare('SELECT count(*) FROM delivery_attempts').pluck().get(),
+      files: beforeFiles.length,
+    };
+    say(`v13 fixture: schema ${db.pragma('user_version', { simple: true })}, ${counts.revisions} revisions (${counts.corrected} correction, ${counts.automatic} automatic), ${counts.signoffs} sign-offs, ${counts.sendJobs} send jobs, ${counts.attempts} delivery attempts, ${counts.files} revision files, ${others.length} other tables copied for comparison`);
+
+    // ONE call: 0014 and 0015 together
+    const result = migrate(db, MIGRATIONS, new Date('2026-10-21T12:00:00Z'));
+    say(`migrate(): ${JSON.stringify(result)}`);
+    expect(result).toEqual({ applied: [14, 15], version: 15 });
+
+    const afterOthers = rowsOf(db, others);
+    expect(afterOthers).toEqual(beforeOthers);
+    say(`rows of the ${others.length} untouched tables are identical before and after (deep equality of every row in rowid order)`);
+    expect(db.prepare('SELECT rowid AS row_id, * FROM signoffs ORDER BY rowid').all()).toEqual(beforeSignoffs);
+    say(`signoffs: ${beforeSignoffs.length} rows identical (with rowids); signature_attachment_id notnull = ${(db.pragma('table_info(signoffs)') as Array<{ name: string; notnull: number }>).find((c) => c.name === 'signature_attachment_id')?.notnull} (0 = nullable)`);
+    const variantOf: Record<string, string> = { 'rf-v13-original': 't1o1', 'rf-v13-other': 't1o0' };
+    const afterFiles = db.prepare('SELECT rowid AS row_id, * FROM revision_files ORDER BY rowid').all();
+    expect(afterFiles).toEqual(beforeFiles.map((row) => ({ ...row, variant: variantOf[row.id as string] })));
+    say(`revision_files: ${afterFiles.length} rows kept with rowids; variants ${JSON.stringify(afterFiles.map((r) => `${(r as Record<string, unknown>).id}=${(r as Record<string, unknown>).variant}`))} (t1o1 default, t1o0 where the snapshot had OT rows off)`);
+    expect(db.prepare('SELECT rowid AS row_id, * FROM submission_settings ORDER BY rowid').all()).toEqual(beforeSettings.map((row) => ({ ...row, show_time_on_pdf: 1 })));
+    say(`submission_settings: ${beforeSettings.length} versions kept, new column show_time_on_pdf = 1 on all`);
+    const sends = db.prepare('SELECT * FROM revision_sends ORDER BY created_at, send_no').all() as Array<Record<string, unknown>>;
+    const jobIds = [sendOriginal, resendOriginal, sendCorrection, sendAutomatic, sendOther];
+    expect(sends).toHaveLength(5);
+    expect(new Set(sends.map((s) => s.job_id))).toEqual(new Set(jobIds));
+    say(`revision_sends: ${sends.length} backfilled rows for ${counts.sendJobs} send jobs (one each); send_no per revision ${JSON.stringify(sends.map((s) => `${String(s.revision_id).slice(0, 4)}#${s.send_no}`))}; origins ${JSON.stringify(sends.map((s) => s.origin))}; pdf_variant ${JSON.stringify(sends.map((s) => s.pdf_variant))}; request keys all "migrated:<job>" ${sends.every((s) => String(s.request_key).startsWith('migrated:'))}`);
+    expect(sends.find((s) => s.job_id === sendOther)?.pdf_variant).toBe('t1o0');
+    expect(sends.find((s) => s.job_id === sendOriginal)?.pdf_variant).toBe('t1o1');
+    // triggers
+    const trig = db.prepare("SELECT tbl_name, name FROM sqlite_master WHERE type = 'trigger' AND tbl_name IN ('signoffs', 'revision_sends', 'revision_files') ORDER BY tbl_name, name").all();
+    say(`triggers: ${JSON.stringify(trig.map((t) => (t as Record<string, string>).name))}`);
+    // a foreign (pdf) image is refused by the kind trigger
+    db.prepare(`INSERT INTO attachments (id, user_id, kind, storage_key, sha256, mime_type, size_bytes, width_px, height_px, created_at) VALUES ('pdf-probe', ?, 'pdf', 'pdf-probe-storage-key', ?, 'application/pdf', 100, NULL, NULL, ?)`).run(owner.id, 'a'.repeat(64), AT);
+    const signed = beforeSignoffs[0] as { revision_id: string; user_id: string; reviewed_sha256: string };
+    const insert = db.prepare(`INSERT INTO signoffs (id, user_id, revision_id, signer_name, signed_at, reviewed_sha256, signature_attachment_id) VALUES (?, ?, ?, 'Probe', ?, ?, ?)`);
+    const foreign = (() => { try { insert.run('probe-1', signed.user_id, signed.revision_id, AT, signed.reviewed_sha256, 'pdf-probe'); return 'ACCEPTED'; } catch (e) { return String((e as Error).message); } })();
+    say(`signoffs trigger: a non-image attachment as signature image -> ${foreign}`);
+    expect(foreign).toMatch(/attachment_kind_mismatch/);
+    const upd = (() => { try { db.prepare("UPDATE signoffs SET signer_name = 'x'").run(); return 'ACCEPTED'; } catch (e) { return String((e as Error).message); } })();
+    const del = (() => { try { db.prepare('DELETE FROM signoffs').run(); return 'ACCEPTED'; } catch (e) { return String((e as Error).message); } })();
+    const sendUpd = (() => { try { db.prepare("UPDATE revision_sends SET reason = 'x'").run(); return 'ACCEPTED'; } catch (e) { return String((e as Error).message); } })();
+    const fileUpd = (() => { try { db.prepare("UPDATE revision_files SET variant = 't0o0' WHERE id = 'rf-v13-other'").run(); return 'ACCEPTED'; } catch (e) { return String((e as Error).message); } })();
+    say(`immutability: UPDATE signoffs -> ${upd}; DELETE signoffs -> ${del}; UPDATE revision_sends -> ${sendUpd}; UPDATE revision_files.variant -> ${fileUpd}`);
+    expect(upd).toMatch(/immutable_signoff/);
+    expect(del).toMatch(/immutable_signoff/);
+    expect(sendUpd).toMatch(/immutable_revision_send/);
+    expect(fileUpd).toMatch(/immutable_revision_file/);
+    const integrity = db.pragma('integrity_check', { simple: true });
+    const fk = db.pragma('foreign_key_check') as unknown[];
+    say(`integrity_check ${integrity}; foreign_key_check ${fk.length} violations; foreign_keys pragma ${db.pragma('foreign_keys', { simple: true })}; user_version ${db.pragma('user_version', { simple: true })}`);
+    expect(integrity).toBe('ok');
+    expect(fk).toEqual([]);
+    expect(migrate(db)).toEqual({ applied: [], version: 15 });
+    say('a second migrate() applies nothing');
+  });
+});

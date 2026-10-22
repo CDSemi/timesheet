@@ -1,0 +1,72 @@
+. /d/.claude-tmp/timesheet/WP5-UX5-GATE/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+mkdir -p $T/wp3 $T/drill
+cd $REPO; git archive 49651c8 | tar -x -C $T/wp3
+cd $T/wp3
+npm ci > $T/out/wp3-ci.txt 2>&1; echo "wp3 ci exit $? dep=$(grep -ci deprecat $T/out/wp3-ci.txt)"
+npm run build:server > $T/out/wp3-build.txt 2>&1; echo "wp3 build exit $? dep=$(grep -ci deprecat $T/out/wp3-build.txt)"
+docker ps --all --filter name=ts-wp5-ux5gate > $T/out/15-docker-ps-before.txt 2>&1
+docker images > $T/out/15-docker-images-before.txt 2>&1
+cd $T/export
+npm run drill:container -- --work "$TW\\drill" --project ts-wp5-ux5gate --wp3 "$TW\\wp3" > $T/out/07-drill.txt 2>&1
+echo "drill exit $?" > $T/out/07-drill-exit.txt
+cat $T/out/07-drill-exit.txt
+grep -E "image id|FAIL|forbidden|DRILL STAGES" $T/out/07-drill.txt
+echo "PASS lines $(grep -c '^PASS' $T/out/07-drill.txt) FAIL lines $(grep -c '^FAIL' $T/out/07-drill.txt) dep=$(grep -ci deprecat $T/out/07-drill.txt)"
+echo drill-done > $T/out/drill.done
+T=/d/.claude-tmp/timesheet/WP5-UX5-GATE
+export T
+TW='D:\.claude-tmp\timesheet\WP5-UX5-GATE'
+export TW
+export TEMP="$TW\\tmp"
+export TMP="$TEMP"
+export TMPDIR="$T/tmp"
+export DATA_DIR="$TW\\data"
+export DATABASE_PATH="$TW\\data\\timesheet.db"
+export SMOKE_PORT=49821
+export npm_config_update_notifier=false
+export npm_config_fund=false
+N="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin"
+export PATH="$N:$(cygpath -u "$APPDATA")/npm:$PATH"
+export REPO=/d/Dropbox/Work.CDSemi/timesheet
+export PY="$(cygpath -u "$USERPROFILE")/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe"
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
+export E=$REPO/handoff/delivery/evidence/WP5-UX5-GATE
+export TARGET=e2bf1aab4ef65d496de6672c7986e27db04ddb39
+export BASE=8e557100d16b6b6eb86a48e00276835761aabfdf
+. /d/.claude-tmp/timesheet/WP5-UX5-GATE/env.sh
+cd $REPO
+git rev-parse HEAD > $T/out/00-head.txt
+git rev-parse origin/main >> $T/out/00-head.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-before.txt 2>&1
+for d in export export-old export-probe; do
+  mkdir -p $T/$d
+done
+git archive $TARGET | tar -x -C $T/export
+git archive $TARGET | tar -x -C $T/export-probe
+git archive $BASE | tar -x -C $T/export-old
+ls $T/export | wc -l
+cat $T/out/00-head.txt
+# Usage: bash run-shift.sh <label> <target instant, UTC ISO or "real"> [playwright args...]
+# One Playwright run in the clean export under a simulated wall clock (FIX10's shiftclock.mjs, unchanged), own output folder.
+. /d/.claude-tmp/timesheet/WP5-UX5-GATE/env.sh
+L=$1; TARGET=$2; shift 2
+mkdir -p $T/pw-$L $T/shots-$L
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+if [ "$TARGET" = "real" ]; then
+  export NODE_OPTIONS="--trace-deprecation"
+  export AB8_SHIFT_MS=0
+else
+  TARGET_MS=$(date -u -d "$TARGET" +%s%3N)
+  NOW_MS=$(date -u +%s%3N)
+  export AB8_SHIFT_MS=$((TARGET_MS - NOW_MS))
+  export NODE_OPTIONS="--trace-deprecation --import file:///$(cygpath -m $T)/shiftclock.mjs"
+fi
+echo "== $L: real start $(date -u +%Y-%m-%dT%H:%M:%SZ), simulated start $TARGET, AB8_SHIFT_MS=$AB8_SHIFT_MS"
+node.exe $T/probe-now.mjs
+cd "${SHIFT_EXPORT:-$T/export}" || exit 2
+echo "\$ node node_modules/@playwright/test/cli.js test $* --output=D:/.claude-tmp/timesheet/WP5-UX5-GATE/pw-$L"
+node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-$L"
+echo "exit=$?"
+node.exe $T/probe-now.mjs
+echo "== $L real end $(date -u +%Y-%m-%dT%H:%M:%SZ)"

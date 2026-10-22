@@ -1518,6 +1518,61 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - Running now: WP5-UX5-T06-FREEZE (a fresh committer, alone). It stages the 6 docs paths
   plus the handoff records, including the pilot packet pair and the draft gate brief. The
   digest must be 318b3370, checked on HEAD with `git ls-tree`.
+- WP5-UX5-T06-FREEZE done: e2bf1aab4ef65d496de6672c7986e27db04ddb39 on main, pushed (55
+  paths). Digest 318b3370 (868 files) before staging and from HEAD's `git ls-tree`; every
+  check exit 0. Every round-5 slice is frozen; e2bf1aa is the package-final snapshot.
+- Phase `ux5-gate`. Running now: WP5-UX5-GATE (verifier, sonnet; size L, risk H; target
+  e2bf1aa / 318b3370; base 8e55710 / 507de97c; ports 49820-49859; Compose project
+  `ts-wp5-ux5gate`).
+  - It covers rounds 4 and 5: the WP5 gate with the first round-5 drill, the boundary and
+    scope, the data / sends / PDF, the simulated clocks, the round-4 rechecks, the round-5
+    UI checks, axe, the CSP and screenshots.
+  - No writer runs while the gate runs.
+- Draft briefs ready for after a gate PASS: WP5-UX5-AUDIT-A (visual, shell, Timesheet,
+  Day editor, Review UI, accessibility, F-UX4A-1..4) and WP5-UX5-AUDIT-B (sign-off and
+  send, data, migrations, PDF, font, privacy, docs, F-UX4B-1). Both are fresh opus/xhigh
+  auditors on e2bf1aa / 318b3370, run in parallel; the integration audit follows.
+- WP5-UX5-GATE: **FAIL** (NAS NOT VERIFIED). The digest is 318b3370 in all three forms.
+  - **Drill `--wp3`:** 203 PASS / 6 FAIL. The drill's sign-off omits `signer_name`, which
+    the previous build requires, so the data-bearing upgrade was not exercised.
+  - **Simulated-clock sweep:** four date- or DST-dependent test defects:
+    - `day-editor.spec.ts:6357`;
+    - `today.spec.ts:990` and `:455`;
+    - `timesheet.spec.ts:2040`.
+  - **axe:** `scrollable-region-focusable` on History. It is pre-existing, the same on
+    BASE_SHA.
+  - **Passed:** everything else. That includes the real-clock FULL e2e (859/0), npm test
+    x3, the migration 13 to 15 with backfill, backup and restore, sends and reasons,
+    deadline and reminders, the four one-page PDF variants with Indie Flower, scope, the
+    route table, the CSP, the fractional widths (reached), the round-4 rechecks and 38/40
+    axe scans.
+- Phase `ux5-fix`. Running now: WP5-UX5-FIX1 (worker-high, sonnet; size M, risk M; base
+  e2bf1aa / 318b3370; ports 49920-49939; Compose project `ts-wp5-ux5fix1`).
+  - It fixes the drill's sign-off body for the previous build, the four tests, and makes
+    History's scroll regions focusable and named.
+  - Proof: the drill with 0 FAIL; the four tests with 0 failed at all six instants and on
+    the real clock; History axe 0; FULL e2e 0 failed.
+- WP5-UX5-FIX1 done (worker report; the regate is pending). Each finding was reproduced
+  first.
+  - **The drill:** `signer_name` is sent only to the previous build. 209 PASS / 0 FAIL, and
+    stage 4 now signs two periods before the upgrade.
+  - **The four tests:** they now follow the T04 rules from measurement, and use a session
+    that crosses midnight in both seasons. 0 failed at all six instants and on the real
+    clock, and the mutants of the old assertions fail.
+  - **History:** a new `TableWrap.tsx` replaces all seven `.table-wrap` uses. A table that
+    overflows becomes a named, focusable region. History axe 0, and a new
+    `history-a11y.spec.ts`.
+  - FULL e2e: desktop 458 and mobile 403 passed, 0 failed. Verify 0. Digest 70975091 (870
+    files).
+- Running now: the lookup WP5-UX5-FIX1-PATHS (light, haiku, read-only).
+- FIX1-PATHS done, but a permission check refused its write of the Results into its
+  brief. The full list is in its task folder, and the board holds the summary.
+  - Outside `handoff/`: 11 modified, 2 new, nothing staged, nothing under `src/server` or
+    `src/domain`.
+  - Under `handoff/`: 5 modified and 344 new, mostly the gate's and FIX1's evidence.
+- Running now: WP5-UX5-FIX1-FREEZE (a fresh committer, alone). It stages 13 explicit paths,
+  the handoff records, and three evidence folders as directories. The digest must be
+  70975091, checked on HEAD with `git ls-tree`.
 - Remaining after T06:
   - T06-FREEZE;
   - the round-5 package gate (it covers rounds 4 and 5);

@@ -1,0 +1,224 @@
+import type { Page } from '@playwright/test';
+import { decodePng, lum, pixel } from './zz-png.ts';
+import { expect, newPerson, SeedClient, test } from './fixtures.ts';
+import { note, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository): controls and sheets (T05A) on the built target.
+ * Notes go to GATE_OUT/ctl.txt. Desktop project only unless the test says otherwise.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUTFILE = 'ctl.txt';
+
+test('select chevron: one layer and no seam at device pixel ratios 1, 1.25, 1.5, 1.75 and 2 in both themes (own pixel method)', async ({ browser, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(240_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Seam Gate', signature: 'none' });
+  const bad: string[] = [];
+  for (const theme of ['light', 'dark'] as const) {
+    for (const dpr of [1, 1.25, 1.5, 1.75, 2]) {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: dpr, colorScheme: theme, reducedMotion: 'reduce', locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+      try {
+        const page = await context.newPage();
+        await signInTo(page, privateServer, person.account, '#/settings');
+        await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+        const select = page.locator('select').first();
+        await select.scrollIntoViewIfNeeded();
+        const layers = await select.evaluate((el) => getComputedStyle(el).backgroundImage);
+        let depth = 0;
+        let count = layers === 'none' ? 0 : 1;
+        for (const ch of layers) {
+          if (ch === '(') depth += 1;
+          else if (ch === ')') depth -= 1;
+          else if (ch === ',' && depth === 0) count += 1;
+        }
+        const box = (await select.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+        // Own method: screenshot of the select; rows 4..6 CSS px from the top inner edge, right 40 CSS px; those rows hold no glyph, so every pixel must equal the field colour.
+        const png = decodePng(await page.screenshot({ clip: { x: box.x, y: box.y, width: box.width, height: box.height }, animations: 'disabled', type: 'png' }));
+        const scale = png.width / box.width;
+        const fieldColour = pixel(png, Math.round(png.width / 2), Math.round(png.height / 2));
+        let maxDev = 0;
+        let glyphRows = 0;
+        for (let y = Math.round(5 * scale); y <= Math.round(6 * scale); y += 1) {
+          for (let x = png.width - Math.round(40 * scale); x < png.width - Math.round(3 * scale); x += 1) {
+            maxDev = Math.max(maxDev, Math.abs(lum(pixel(png, x, y)) - lum(fieldColour)));
+          }
+        }
+        // glyph present: some pixel in the middle band of the right 30px deviates by >= 24 levels
+        for (let y = Math.round(png.height * 0.3); y <= Math.round(png.height * 0.7); y += 1) {
+          for (let x = png.width - Math.round(30 * scale); x < png.width - Math.round(6 * scale); x += 1) {
+            if (Math.abs(lum(pixel(png, x, y)) - lum(fieldColour)) >= 24) glyphRows += 1;
+          }
+        }
+        // seam: along the vertical middle band across the chevron's columns, columns lighter than both neighbours (profile of a row through the glyph)
+        const midY = Math.round(png.height / 2);
+        let seam = 0;
+        const ink: number[] = [];
+        for (let x = png.width - Math.round(30 * scale); x < png.width - Math.round(6 * scale); x += 1) ink.push(Math.abs(lum(pixel(png, x, midY - 1)) - lum(fieldColour)));
+        const peak = Math.max(...ink);
+        const first = ink.findIndex((v) => v >= peak / 2);
+        const last = ink.length - 1 - [...ink].reverse().findIndex((v) => v >= peak / 2);
+        for (let x = first + 1; x < last; x += 1) seam = Math.max(seam, Math.min(ink[x - 1] ?? 0, ink[x + 1] ?? 0) - (ink[x] ?? 0));
+        const ok = count === 1 && layers.startsWith('conic-gradient(') && maxDev <= 3 && glyphRows > 0 && seam <= 8;
+        if (!ok) bad.push(`${theme}@${dpr}`);
+        note(OUTFILE, `SEAM ${ok ? 'ok ' : 'BAD'} ${theme} dpr ${dpr}: layers ${count} (${layers.slice(0, 16)}...), glyph-free rows max deviation ${maxDev.toFixed(1)} levels (<=3), glyph pixels ${glyphRows}, largest light dip across the glyph row ${seam.toFixed(1)} levels (<=8)`);
+      } finally {
+        await context.close();
+      }
+    }
+  }
+  expect(bad).toEqual([]);
+});
+
+const HEADER = String.raw`((root) => {
+  const head = document.querySelector(root);
+  if (head === null) return null;
+  const fields = head.querySelector('.form-fields');
+  const title = head.querySelector('.form-title, .review-title');
+  const groups = [...fields.children].map((g) => { const r = g.getBoundingClientRect(); return { name: g.firstElementChild.textContent, top: Math.round(r.top), left: r.left, right: r.right, clipped: [...g.children].some((c) => c.scrollWidth > c.clientWidth + 1) }; });
+  const hs = getComputedStyle(head); const fs = getComputedStyle(fields);
+  const tr = title && title.getBoundingClientRect().height > 2 ? title.getBoundingClientRect() : null;
+  return { headFlexWrap: hs.flexWrap, headDirection: hs.flexDirection, fieldsFlexWrap: fs.flexWrap, groups, rows: new Set(groups.map((g) => g.top)).size, fieldsRight: fields.getBoundingClientRect().right, headRight: head.getBoundingClientRect().right - parseFloat(hs.paddingRight), titleHeight: tr ? tr.height : null };
+})`;
+
+test('header wrap order on Timesheet and Review: groups wrap from the end (U5-16)', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(240_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Header Gate Person With A Fairly Long Display Name', signature: 'none' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInTo(page, privateServer, person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  type H = { headFlexWrap: string; headDirection: string; fieldsFlexWrap: string; groups: Array<{ name: string; top: number; left: number; right: number; clipped: boolean }>; rows: number; fieldsRight: number; headRight: number; titleHeight: number | null } | null;
+  for (const [label, selector, hash] of [['Timesheet', 'article[data-sheet] > header.form-head', '#/timesheet'], ['Review', 'article[data-sheet] > header.review-form-head', `#/review/${person.payrollDate}`]] as const) {
+    await page.goto(`${privateServer.origin}/${hash}`);
+    await expect(page.locator(selector)).toBeVisible();
+    let backwards = 0;
+    let clipped = 0;
+    let overflowing = 0;
+    const rowsSeen = new Set<number>();
+    const lines: string[] = [];
+    for (const width of [320, 360, 390, 479, 480, 520, 600, 700, 767, 768, 900, 1024, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForTimeout(150);
+      const h = await page.evaluate<H>(`${HEADER}(${JSON.stringify(selector)})`);
+      if (h === null) continue;
+      for (let i = 1; i < h.groups.length; i += 1) if ((h.groups[i]?.top ?? 0) < (h.groups[i - 1]?.top ?? 0) - 1) backwards += 1;
+      clipped += h.groups.filter((g) => g.clipped).length;
+      if (h.fieldsRight > h.headRight + 1) overflowing += 1;
+      rowsSeen.add(h.rows);
+      lines.push(`${width}px: group rows ${h.rows} [tops ${h.groups.map((g) => g.top).join(',')}], head flex-wrap ${h.headFlexWrap} (${h.headDirection}), fields flex-wrap ${h.fieldsFlexWrap}, clipped ${h.groups.filter((g) => g.clipped).length}, fields right ${h.fieldsRight.toFixed(1)} vs head ${h.headRight.toFixed(1)}`);
+    }
+    for (const l of lines) note(OUTFILE, `HEADER ${label} ${l}`);
+    note(OUTFILE, `HEADER ${label}: later group above an earlier one ${backwards} times, clipped words ${clipped}, widths where the fields leave the header ${overflowing}; group-row counts seen ${[...rowsSeen].sort().join(',')}`);
+    expect(backwards).toBe(0);
+    expect(clipped).toBe(0);
+    expect(overflowing).toBe(0);
+  }
+});
+
+test('theme segments 32px with a fine pointer from 768 and 44px below 768; WEEK bar fill 480-913; Today spacing; worked lines', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(240_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Sheet Gate', signature: 'none' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(free[0] ?? '');
+  await person.api.createSession(free[1] ?? '', '08:00', '12:00', null);
+  await person.api.createSession(free[1] ?? '', '13:00', '17:30', null);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInTo(page, privateServer, person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  // theme segments
+  for (const width of [1440, 768, 767, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+    const phone = await more.isVisible();
+    const opener = phone ? more : page.getByRole('banner').getByRole('button', { name: /, account menu$/ });
+    if ((await opener.getAttribute('aria-expanded')) !== 'true') await opener.click();
+    const panel = page.locator(phone ? '#more-panel' : '#account-menu');
+    await expect(panel).toBeVisible();
+    const segs = await panel.evaluate((el) => [...el.querySelectorAll('.theme-option')].filter((e) => e.getBoundingClientRect().height > 0).map((e) => Math.round(e.getBoundingClientRect().height * 10) / 10));
+    note(OUTFILE, `THEME segments at ${width}px (${phone ? 'More panel' : 'account menu'}): heights ${JSON.stringify(segs)}; pointer fine ${await page.evaluate("matchMedia('(pointer: fine)').matches")}`);
+    await opener.click();
+  }
+  // WEEK bar fill: week bar width equals its grid width from 480 to 913, before and after a sideways scroll
+  const weekProblems: string[] = [];
+  for (const width of [480, 520, 600, 700, 800, 900, 913, 914, 1000, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.waitForTimeout(120);
+    const w = await page.evaluate(() => {
+      const card = document.querySelector('.sheet-week') as HTMLElement;
+      const bar = card.querySelector('.week-bar') as HTMLElement;
+      const grid = card.querySelector('.week-grid') as HTMLElement;
+      const before = { bar: bar.getBoundingClientRect().width, grid: grid.getBoundingClientRect().width, cardW: card.clientWidth, scrollW: card.scrollWidth };
+      card.scrollLeft = card.scrollWidth;
+      const after = { barRight: bar.getBoundingClientRect().right, gridRight: grid.getBoundingClientRect().right, scrolled: card.scrollLeft };
+      card.scrollLeft = 0;
+      return { before, after };
+    });
+    const ok = Math.abs(w.before.bar - w.before.grid) <= 1 && Math.abs(w.after.barRight - w.after.gridRight) <= 1;
+    if (!ok) weekProblems.push(String(width));
+    note(OUTFILE, `WEEKBAR ${ok ? 'ok ' : 'BAD'} ${width}px: bar ${w.before.bar.toFixed(1)} vs grid ${w.before.grid.toFixed(1)} (card ${w.before.cardW}, scrollWidth ${w.before.scrollW}); after scrolling ${w.after.scrolled}px right edges bar ${w.after.barRight.toFixed(1)} vs grid ${w.after.gridRight.toFixed(1)}`);
+  }
+  expect(weekProblems).toEqual([]);
+  // Worked lines (U5-20) and ranges spaced/tight (U5-07)
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole('switch', { name: 'Worked hours' }).check();
+  await page.waitForTimeout(250);
+  const worked = await page.evaluate(() => {
+    const details = [...document.querySelectorAll('.d-detail')];
+    const column = document.querySelector('.week-grid .sheet-day') as HTMLElement;
+    const own = [...column.querySelectorAll('.d-detail')].map((e) => getComputedStyle(e));
+    return { details: details.length, token: getComputedStyle(document.documentElement).getPropertyValue('--worked-line').trim(), bg: own.map((s) => s.backgroundColor), topWidth: own.map((s) => s.borderTopWidth), topColor: own[0]?.borderTopColor ?? '', checkBottom: getComputedStyle(column.querySelector('.d-check') as Element).borderBottomWidth };
+  });
+  note(OUTFILE, `WORKED desktop 1440: .d-detail cells ${worked.details} (28 expected), --worked-line ${worked.token}, backgrounds ${JSON.stringify(worked.bg)}, border-top widths ${JSON.stringify(worked.topWidth)}, rule colour ${worked.topColor}, Status cell bottom border ${worked.checkBottom}`);
+  for (const width of [1440, 900, 600, 480]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.waitForTimeout(150);
+    const r = await page.evaluate(() => {
+      const sheet = document.querySelector('article[data-sheet]') as HTMLElement;
+      const cells = [...document.querySelectorAll('.week-grid .d-time')].map((e) => (e as HTMLElement).innerText.trim()).filter((t) => /\d:\d\d/.test(t) || /\d{2}:\d{2}/.test(t)).slice(0, 4);
+      return { ranges: sheet.getAttribute('data-ranges'), cells };
+    });
+    note(OUTFILE, `RANGES ${width}px: data-ranges=${r.ranges}; sample time cells ${JSON.stringify(r.cells)}`);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(150);
+  const phoneRanges = await page.evaluate(() => ({ ranges: (document.querySelector('article[data-sheet]') as HTMLElement).getAttribute('data-ranges'), cells: [...document.querySelectorAll('.sheet-table td')].map((e) => (e as HTMLElement).innerText.replace(/\s+/g, ' ').trim()).filter((t) => /\d{2}:\d{2}/.test(t)).slice(0, 4) }));
+  note(OUTFILE, `RANGES 390px: data-ranges=${phoneRanges.ranges}; sample cells ${JSON.stringify(phoneRanges.cells)}`);
+  await page.getByRole('switch', { name: 'Worked hours' }).check();
+  await page.waitForTimeout(250);
+  const phone = await page.evaluate(() => {
+    const groups = [...document.querySelectorAll('tbody.sheet-group')].map((g) => {
+      const day = g.querySelector('tr[data-day] td') as HTMLElement;
+      const line = g.querySelector('tr.sheet-detail-row td') as HTMLElement;
+      return { rows: g.children.length, dayBottom: getComputedStyle(day).borderBottomWidth, lineTop: getComputedStyle(line).borderTopWidth, lineBottom: getComputedStyle(line).borderBottomWidth, bg: getComputedStyle(line).backgroundColor };
+    });
+    return { token: getComputedStyle(document.documentElement).getPropertyValue('--worked-line').trim(), groups };
+  });
+  const okGroups = phone.groups.length === 14 && phone.groups.every((g) => g.rows === 2 && g.dayBottom === '0px' && g.lineTop === '0px' && parseFloat(g.lineBottom) >= 2);
+  note(OUTFILE, `WORKED phone 390: groups ${phone.groups.length}, every group is day + worked line ${phone.groups.every((g) => g.rows === 2)}, no border under the day row / over the line ${phone.groups.every((g) => g.dayBottom === '0px' && g.lineTop === '0px')}, closing rule ${[...new Set(phone.groups.map((g) => g.lineBottom))].join('/')}, line background ${[...new Set(phone.groups.map((g) => g.bg))].join('/')} (token ${phone.token}); ok ${okGroups}`);
+  expect(okGroups).toBe(true);
+  await page.getByRole('switch', { name: 'Worked hours' }).uncheck();
+  for (const width of [320, 390, 479]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.waitForTimeout(150);
+    const t = await page.evaluate(() => {
+      const rows = [...document.querySelectorAll('tr[data-day]')];
+      const lefts = rows.map((r) => (r.querySelector('.sheet-day-button') as HTMLElement).getBoundingClientRect().left - (r.querySelector('td.t-day') as HTMLElement).getBoundingClientRect().left);
+      const todayRow = rows.find((r) => /inset/.test(getComputedStyle(r.querySelector('td.t-day') as Element).boxShadow));
+      let gap: number | null = null;
+      let bar = 0;
+      if (todayRow) {
+        const cell = todayRow.querySelector('td.t-day') as HTMLElement;
+        const m = /(-?[0-9.]+)px (?:-?[0-9.]+)px (?:-?[0-9.]+)px (?:-?[0-9.]+)px inset|inset (-?[0-9.]+)px/.exec(getComputedStyle(cell).boxShadow);
+        bar = parseFloat(m ? (m[1] || m[2] || '0') : '0');
+        gap = (todayRow.querySelector('.sheet-day-button') as HTMLElement).getBoundingClientRect().left - (cell.getBoundingClientRect().left + bar);
+      }
+      return { gap, bar, aligned: new Set(lefts.map((v) => Math.round(v * 10))).size };
+    });
+    note(OUTFILE, `TODAY spacing ${width}px: Today bar ${t.bar}px, day button starts ${t.gap === null ? 'n/a (today is not in the displayed period)' : t.gap.toFixed(2) + 'px'} after it (8-10 expected), distinct button insets across rows ${t.aligned}`);
+  }
+});

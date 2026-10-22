@@ -1,0 +1,15 @@
+// Finding 1 reproduction: the previous build's (49651c8) signoffBody against the two bodies the drill can post.
+// Run as: node repro-signoff.mjs <previous build root> <current build root>
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+const hash = 'a'.repeat(64);
+const withoutName = { expected_version: 0, reviewed_hash: hash, incomplete_evidence_acknowledged: true };
+const withName = { ...withoutName, signer_name: 'Synthetic Employee Two' };
+for (const [label, root] of [['previous build', process.argv[2]], ['current build', process.argv[3]]]) {
+  const { signoffBody } = await import(pathToFileURL(join(root, 'dist', 'server', 'http', 'schemas.js')).href);
+  for (const [name, body] of [['without signer_name', withoutName], ['with signer_name', withName]]) {
+    const parsed = signoffBody.safeParse(body);
+    console.log(`${label} ${name}: success=${parsed.success}${parsed.success ? '' : ` issues=${JSON.stringify(parsed.error.issues.map((issue) => `${issue.path.join('.')}:${issue.code}`))}`}`);
+  }
+}

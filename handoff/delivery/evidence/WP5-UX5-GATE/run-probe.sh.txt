@@ -1,0 +1,16 @@
+# Usage: bash run-probe.sh <label> <spec file(s) without path> -- [playwright args]
+# Runs gate probe specs in the scratch copy export-probe (never in the gate export), one output folder per run.
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+L=$1; shift
+SPECS=""
+while [ "$1" != "--" ] && [ -n "$1" ]; do SPECS="$SPECS tests/e2e/$1"; shift; done
+[ "$1" = "--" ] && shift
+mkdir -p $T/pw-$L $T/shots-$L $T/obs
+export GATE_OUT="$TW\\obs"
+export AXE_PATH="$TW\\axe\\axe.min.js"
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+cd $T/export-probe
+echo "\$ playwright test $SPECS $* --output=<task>/pw-$L"
+node node_modules/@playwright/test/cli.js test $SPECS "$@" --output="$TW\\pw-$L"
+echo "exit=$?"

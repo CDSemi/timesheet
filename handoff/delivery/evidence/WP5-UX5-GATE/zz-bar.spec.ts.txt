@@ -1,0 +1,176 @@
+import type { Page } from '@playwright/test';
+import { cardParts, near, noSidewaysScroll, rangeState } from './periodCard.ts';
+import { expect, newPerson, SeedClient, test } from './fixtures.ts';
+import { note, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository): top bar, period card, compact edges, toolbar rows.
+ * Notes go to GATE_OUT/bar.txt. Desktop project only (widths are set by the test).
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUTFILE = 'bar.txt';
+const LONG_NAME = 'Synthetic Reader With An Exceptionally Long Display Name';
+
+const BAR_SCRIPT = String.raw`(() => {
+  const bar = document.querySelector('header.shell-bar');
+  const mark = bar.querySelector('svg.wordmark');
+  const nav = bar.querySelector('.shell-nav');
+  const rect = (e) => e.getBoundingClientRect();
+  const measure = (force) => {
+    const markWas = mark.style.cssText; const navWas = nav.style.cssText;
+    if (force !== null) {
+      mark.style.setProperty('display', force ? 'block' : 'none', 'important');
+      nav.style.setProperty('--shell-brand-gap', force ? '32px' : '24px');
+    }
+    const items = [...bar.querySelectorAll('.shell-brand, .bar-clock, .shell-switcher, .shell-user, .shell-nav a')].filter((e) => getComputedStyle(e).display !== 'none').map((e) => rect(e));
+    const tops = [...new Set(items.map((r) => Math.round(r.top)))].length;
+    const out = { shown: getComputedStyle(mark).display !== 'none', height: rect(bar).height, rows: tops, markRight: rect(mark).width === 0 ? 0 : rect(mark).right, barRight: rect(bar).right, overflow: document.documentElement.scrollWidth > window.innerWidth };
+    mark.style.cssText = markWas; nav.style.cssText = navWas;
+    return out;
+  };
+  return { actual: measure(null), forcedShown: measure(true), forcedHidden: measure(false) };
+})()`;
+
+interface BarRow {
+  actual: { shown: boolean; height: number; rows: number; markRight: number; barRight: number; overflow: boolean };
+  forcedShown: { height: number; rows: number; overflow: boolean };
+  forcedHidden: { height: number; rows: number; overflow: boolean };
+}
+
+async function sweepBar(page: Page, label: string): Promise<void> {
+  let wraps = 0;
+  let clipped = 0;
+  let shownCount = 0;
+  let overflow = 0;
+  const firstShown: number[] = [];
+  let prevShown: boolean | null = null;
+  for (let width = 320; width <= 1440; width += 1) {
+    await page.setViewportSize({ width, height: 800 });
+    const row = await page.evaluate<BarRow>(`(async () => { await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); return ${BAR_SCRIPT}; })()`);
+    // The wordmark never adds a bar row: the bar keeps its height whether the mark is shown or hidden, and an actually shown mark does not change it.
+    if (row.actual.shown && row.actual.height !== row.forcedHidden.height) wraps += 1;
+    if (row.actual.shown && row.actual.rows > row.forcedHidden.rows) wraps += 1;
+    if (row.actual.shown && row.actual.markRight > row.actual.barRight + 0.5) clipped += 1;
+    if (row.actual.overflow) overflow += 1;
+    if (row.actual.shown) shownCount += 1;
+    if (prevShown !== row.actual.shown) firstShown.push(width);
+    prevShown = row.actual.shown;
+  }
+  note(OUTFILE, `WORDMARK ${label}: 320-1440 in 1px steps (1121 widths): shown at ${shownCount}; changes of state at ${firstShown.join(', ')}; widths where a shown mark changes the bar height or adds a row ${wraps}; mark clipped by the bar ${clipped}; widths with sideways page scroll ${overflow}`);
+  expect(wraps, `${label}: the wordmark never wraps a bar row`).toBe(0);
+  expect(clipped).toBe(0);
+  expect(overflow).toBe(0);
+}
+
+test('wordmark sweep 320-1440: own view and shared view never wrap a bar row', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(600_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const me = await newPerson(admin, privateServer, { displayName: LONG_NAME, signature: 'none' });
+  const owner = await newPerson(admin, privateServer, { displayName: 'Synthetic Owner', signature: 'none' });
+  await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  await page.setViewportSize({ width: 600, height: 800 });
+  await signInTo(page, privateServer, me.account);
+  await expect(page.locator('.bar-clock')).toBeVisible();
+  await sweepBar(page, 'own view with the Shared with me switcher');
+  await page.goto(`${privateServer.origin}/#/shared/${owner.account.id}/timesheet`);
+  await expect(page.locator('.share-bar')).toBeVisible();
+  await sweepBar(page, 'shared view');
+});
+
+test('wordmark sweep 320-1440: own view without a share never wraps a bar row', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(400_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const alone = await newPerson(admin, privateServer, { displayName: LONG_NAME, signature: 'none' });
+  await page.setViewportSize({ width: 600, height: 800 });
+  await signInTo(page, privateServer, alone.account);
+  await expect(page.locator('.bar-clock')).toBeVisible();
+  await sweepBar(page, 'own view without a share');
+});
+
+test('period card in both arrangements at 1440, 900, 632, 631, 480, 390, 320; ladder; compact edges 8px at 320-479', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(240_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const me = await newPerson(admin, privateServer, { displayName: 'Synthetic Card Person', signature: 'none' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInTo(page, privateServer, me.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const problems: string[] = [];
+  for (const width of [1440, 900, 632, 631, 480, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const p = await cardParts(page);
+    const { card, prev, title, name, pills, lastPill, next, today, review, meta, cta } = p;
+    if (!(card && prev && title && name && pills && lastPill && next && today && review && meta && cta)) {
+      problems.push(`${width}: a part is missing`);
+      continue;
+    }
+    const narrow = cta.top > prev.bottom;
+    const expectedNarrow = width < 632;
+    const overlaps: string[] = [];
+    const named = [['prev', prev], ['title', title], ['next', next], ['today', today], ['review', review], ['meta', meta]] as const;
+    for (const [i, a] of named.entries()) for (const [bName, b] of named.slice(i + 1)) {
+      if (a[1].left < b.right - 1 && b.left < a[1].right - 1 && a[1].top < b.bottom - 1 && b.top < a[1].bottom - 1) overlaps.push(`${a[0]}/${bName}`);
+    }
+    const wideOk = narrow ? true : near(title.left - prev.right, 20, 1) && near(next.left - title.right, 20, 1) && near(today.left - next.right, 8, 1) && near(title.height, prev.height, 1) && near(name.top, prev.top, 1) && near(lastPill.bottom, prev.bottom, 1);
+    const narrowOk = !narrow ? true : near((title.left + title.right) / 2, (card.left + card.right) / 2, 1) && near(next.right, card.right - 12, 1) && near(prev.left, card.left + 12, 1) && near(today.top, review.top, 1) && cta.top >= meta.bottom - 0.5;
+    const scroll = await noSidewaysScroll(page);
+    const range = await rangeState(page);
+    const ok = narrow === expectedNarrow && wideOk && narrowOk && overlaps.length === 0 && scroll;
+    if (!ok) problems.push(`${width}`);
+    note(OUTFILE, `CARD ${ok ? 'ok ' : 'BAD'} ${width}px: ${narrow ? 'narrow' : 'wide'} (expected ${expectedNarrow ? 'narrow' : 'wide'}); card ${card.width.toFixed(1)}x${card.height.toFixed(1)}; gaps "<"->range ${(title.left - prev.right).toFixed(1)}, range->">" ${(next.left - title.right).toFixed(1)}, ">"->Today ${(today.left - next.right).toFixed(1)}; range block h ${title.height.toFixed(1)} vs button h ${prev.height.toFixed(1)}; overlaps [${overlaps.join(',')}]; page scroll-free ${scroll}; range kind ${range.kind} showing "${range.text}" (box ${range.box.toFixed(1)}, forms ${JSON.stringify(range.widths)})`);
+  }
+  expect(problems, 'period card problems').toEqual([]);
+  // Compact 8px edges 320-479
+  const edgeProblems: string[] = [];
+  for (const width of [320, 340, 360, 375, 390, 414, 430, 479]) {
+    await page.setViewportSize({ width, height: 900 });
+    const e = await page.evaluate<{ card: [number, number]; paper: [number, number]; radius: string; paperRadius: string; paperPad: string }>(`(() => {
+      const w = document.documentElement.clientWidth; const c = document.querySelector('section.period-bar').getBoundingClientRect(); const p = document.querySelector('[data-paper]').getBoundingClientRect();
+      return { card: [c.left, w - c.right], paper: [p.left, w - p.right], radius: getComputedStyle(document.querySelector('section.period-bar')).borderTopLeftRadius, paperRadius: getComputedStyle(document.querySelector('[data-paper]')).borderTopLeftRadius, paperPad: getComputedStyle(document.querySelector('[data-paper]')).paddingLeft };
+    })()`);
+    const ok = e.card.every((v) => Math.abs(v - 8) < 0.6) && e.paper.every((v) => Math.abs(v - 8) < 0.6);
+    if (!ok) edgeProblems.push(String(width));
+    note(OUTFILE, `EDGES ${ok ? 'ok ' : 'BAD'} ${width}px: period card left/right ${e.card.map((v) => v.toFixed(1)).join('/')}, paper left/right ${e.paper.map((v) => v.toFixed(1)).join('/')}, corners ${e.radius}/${e.paperRadius}, paper padding ${e.paperPad}`);
+  }
+  expect(edgeProblems).toEqual([]);
+});
+
+const TOOLS = String.raw`(() => {
+  const rect = (e) => (e ? e.getBoundingClientRect() : null);
+  const vis = (e) => e && getComputedStyle(e).display !== 'none' && getComputedStyle(e).position !== 'absolute' && e.getBoundingClientRect().width > 1;
+  const form = document.querySelector('.open-day');
+  const label = form.querySelector('label'); const text = form.querySelector('.open-day-text'); const input = form.querySelector('input'); const button = form.querySelector('button');
+  const long = form.querySelector('.open-day-long'); const short = form.querySelector('.open-day-short');
+  const tools = document.querySelector('.tools'); const left = tools.querySelector('.tools-left'); const right = tools.querySelector('.tools-right');
+  const change = right.querySelector('.change-days'); const cl = change.querySelector('.change-days-long'); const cs = change.querySelector('.change-days-short');
+  const sw = right.querySelector('.switch');
+  const shortText = (e) => (e ? getComputedStyle(e, '::before').content.replace(/"/g, '') + '|' + getComputedStyle(e, '::after').content.replace(/"/g, '') : '');
+  return {
+    row: rect(left), toolsRow: rect(tools), formRect: rect(form), input: rect(input), button: rect(button), label: rect(label),
+    textVisible: vis(text) && getComputedStyle(text).clipPath === 'none', longVisible: vis(long), shortVisible: vis(short), shortContent: shortText(short),
+    buttonText: button.innerText.trim(),
+    change: rect(change), changeLong: vis(cl), changeShort: vis(cs), changeShortContent: shortText(cs), changeTextVisible: change.innerText.trim(),
+    switchRect: rect(sw), rightRect: rect(right), changeH: change.getBoundingClientRect().height,
+    switchLines: sw ? Math.round(sw.getBoundingClientRect().height) : 0,
+  };
+})()`;
+
+test('toolbar rows: Open a day and Change several days forms by row width (U5-17, U5-17b)', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(180_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const me = await newPerson(admin, privateServer, { displayName: 'Synthetic Toolbar Person', signature: 'none' });
+  await page.setViewportSize({ width: 390, height: 900 });
+  await signInTo(page, privateServer, me.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  // The viewport widths that give toolbar rows of 358 (390), 288 (320), 250 (282), 300 (332) and 270 (302): the row is the viewport less 32.
+  for (const width of [390, 332, 320, 302, 282, 200]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.waitForTimeout(200);
+    const t = await page.evaluate<Record<string, unknown> & { row: { width: number; right: number; left: number }; input: { right: number }; button: { left: number; right: number; height: number }; change: { right: number; left: number; width: number; height: number }; rightRect: { right: number; width: number } }>(TOOLS);
+    const gap = (t.button.left as number) - (t.input.right as number);
+    note(OUTFILE, `TOOLBAR viewport ${width}px: open-day row ${(t.row.width as number).toFixed(1)}px: field right ${(t.input.right as number).toFixed(1)} -> button left ${(t.button.left as number).toFixed(1)} (gap ${gap.toFixed(1)}), button right ${(t.button.right as number).toFixed(1)} = row right ${(t.row.right as number).toFixed(1)}; button "${t.buttonText}" height ${(t.button.height as number).toFixed(1)}; words "Open a day" visible ${t.textVisible}; long label visible ${t.longVisible}, short "Open" visible ${t.shortVisible} (${t.shortContent}); Change several days: label "${t.changeTextVisible}", long ${t.changeLong}, short ${t.changeShort} (${t.changeShortContent}), box ${(t.change.width as number).toFixed(1)}x${(t.change.height as number).toFixed(1)}, right edge ${(t.change.right as number).toFixed(1)} vs group right ${(t.rightRect.right as number).toFixed(1)}; switch height ${t.switchLines}`);
+  }
+});

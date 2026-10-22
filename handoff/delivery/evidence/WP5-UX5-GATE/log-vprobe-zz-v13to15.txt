@@ -1,0 +1,24 @@
+
+ RUN  v5.0.2 <task>/export-probe
+
+stdout | tests/integration/zz-v13to15.test.ts > schema 13 to 15 in one migrate() call > copies rows, derives variants, backfills one send per send job, keeps the nullable image path and the triggers, and passes the integrity checks
+v13 fixture: schema 13, 4 revisions (1 correction, 1 automatic), 3 sign-offs, 5 send jobs, 3 delivery attempts, 2 revision files, 25 other tables copied for comparison
+migrate(): {"applied":[14,15],"version":15}
+rows of the 25 untouched tables are identical before and after (deep equality of every row in rowid order)
+signoffs: 3 rows identical (with rowids); signature_attachment_id notnull = 0 (0 = nullable)
+revision_files: 2 rows kept with rowids; variants ["rf-v13-original=t1o1","rf-v13-other=t1o0"] (t1o1 default, t1o0 where the snapshot had OT rows off)
+submission_settings: 3 versions kept, new column show_time_on_pdf = 1 on all
+revision_sends: 5 backfilled rows for 5 send jobs (one each); send_no per revision ["b8c5#1","7b45#1","7b45#2","0f70#1","49da#1"]; origins ["deadline","employee","employee","employee","employee"]; pdf_variant ["t1o1","t1o1","t1o1","t1o1","t1o0"]; request keys all "migrated:<job>" true
+triggers: ["revision_files_identity","revision_files_no_delete","revision_files_pdf_insert","revision_files_pdf_update","revision_sends_job","revision_sends_no_delete","revision_sends_no_update","signoffs_image_kind","signoffs_no_delete","signoffs_no_update","signoffs_revision_signed"]
+signoffs trigger: a non-image attachment as signature image -> attachment_kind_mismatch
+immutability: UPDATE signoffs -> immutable_signoff; DELETE signoffs -> immutable_signoff; UPDATE revision_sends -> immutable_revision_send; UPDATE revision_files.variant -> immutable_revision_file
+integrity_check ok; foreign_key_check 0 violations; foreign_keys pragma 1; user_version 15
+a second migrate() applies nothing
+
+ ✓ tests/integration/zz-v13to15.test.ts > schema 13 to 15 in one migrate() call > copies rows, derives variants, backfills one send per send job, keeps the nullable image path and the triggers, and passes the integrity checks 396ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  09:49:19
+   Duration  2.22s (import 54%, transform 27%, tests 19%)
+

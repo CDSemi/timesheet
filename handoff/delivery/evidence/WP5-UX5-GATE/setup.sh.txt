@@ -1,0 +1,13 @@
+. <task>/env.sh
+cd $REPO
+git rev-parse HEAD > $T/out/00-head.txt
+git rev-parse origin/main >> $T/out/00-head.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-before.txt 2>&1
+for d in export export-old export-probe; do
+  mkdir -p $T/$d
+done
+git archive $TARGET | tar -x -C $T/export
+git archive $TARGET | tar -x -C $T/export-probe
+git archive $BASE | tar -x -C $T/export-old
+ls $T/export | wc -l
+cat $T/out/00-head.txt

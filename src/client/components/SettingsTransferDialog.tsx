@@ -1,5 +1,6 @@
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef } from 'react';
 import type { ComparisonGroup } from './settingsFileModel.ts';
+import { TableWrap } from './TableWrap.tsx';
 
 /**
  * The preview of an imported settings file (WP5-UX4-T05): a modal dialog with the file's description, the content that
@@ -90,7 +91,7 @@ export function SettingsTransferDialog({
  */
 export function ComparisonTable({ groups, caption }: { groups: readonly ComparisonGroup[]; caption: string }) {
   return (
-    <div className="table-wrap">
+    <TableWrap label={caption}>
       <table className="transfer-table" data-comparison="true">
         <caption className="sr-only">{caption}</caption>
         <thead>
@@ -123,6 +124,6 @@ export function ComparisonTable({ groups, caption }: { groups: readonly Comparis
           </tbody>
         ))}
       </table>
-    </div>
+    </TableWrap>
   );
 }

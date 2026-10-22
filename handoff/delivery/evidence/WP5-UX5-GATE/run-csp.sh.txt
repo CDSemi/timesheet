@@ -1,0 +1,11 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+export GATE_OUT="$TW\obs"
+for pair in "base:export-old" "target:export-probe"; do
+  label=${pair%%:*}; dir=${pair##*:}
+  export GATE_LABEL=$label
+  mkdir -p $T/pw-csp-$label
+  cd $T/$dir
+  node node_modules/@playwright/test/cli.js test tests/e2e/zz-csp.spec.ts --output="$TW\pw-csp-$label"
+  echo "csp $label exit=$?"
+done

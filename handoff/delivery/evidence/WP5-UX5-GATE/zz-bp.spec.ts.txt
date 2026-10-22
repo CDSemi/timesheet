@@ -1,0 +1,142 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { chromium } from '@playwright/test';
+import { expect, newPerson, SeedClient, test } from './fixtures.ts';
+import { note, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository): the T04 breakpoints on the built target.
+ * Notes go to GATE_OUT/bp.txt. Desktop project only.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUTFILE = 'bp.txt';
+
+const FACTS = String.raw`(() => {
+  const display = (selector) => { const e = document.querySelector(selector); return e === null ? 'absent' : getComputedStyle(e).display; };
+  const week = document.querySelector('.sheet-week');
+  const paper = document.querySelector('[data-paper]');
+  return {
+    phone: document.querySelectorAll('[data-sheet="phone"]').length,
+    desktop: document.querySelectorAll('[data-sheet="desktop"]').length,
+    tableDisplay: display('.sheet-table'),
+    gridDisplay: display('.week-grid'),
+    tabs: display('.shell-tabs'),
+    nav: display('.shell-nav'),
+    scroll: document.documentElement.scrollWidth,
+    client: document.documentElement.clientWidth,
+    rectW: document.documentElement.getBoundingClientRect().width,
+    weekScrolls: week !== null && week.scrollWidth > week.clientWidth + 1,
+    mqSheet: matchMedia('(width >= 480px)').matches,
+    mqShell: matchMedia('(width >= 768px)').matches,
+    paperLeft: paper === null ? null : paper.getBoundingClientRect().left,
+  };
+})()`;
+
+interface Facts {
+  phone: number;
+  desktop: number;
+  tableDisplay: string;
+  gridDisplay: string;
+  tabs: string;
+  nav: string;
+  scroll: number;
+  client: number;
+  rectW: number;
+  weekScrolls: boolean;
+  mqSheet: boolean;
+  mqShell: boolean;
+  paperLeft: number | null;
+}
+
+test('real page: exactly one sheet layout in the DOM and its styles apply, 470-490 and 760-776 in 1px steps; 600px shows the tab bar and the grid; no page scroll', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(300_000);
+  const person = await newPerson(
+    await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password),
+    privateServer,
+    { displayName: 'Synthetic Breakpoint Person', signature: 'none' },
+  );
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await signInTo(page, privateServer, person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const widths: number[] = [];
+  for (const [from, to] of [[470, 490], [760, 776]] as const) for (let w = from; w <= to; w += 1) widths.push(w);
+  let bad = 0;
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    const compact = width < 480;
+    const phoneBar = width < 768;
+    await expect.poll(async () => (await page.evaluate<Facts>(FACTS)).phone, { timeout: 5000 }).toBe(compact ? 1 : 0);
+    const f = await page.evaluate<Facts>(FACTS);
+    const ok =
+      f.phone === (compact ? 1 : 0) &&
+      f.desktop === (compact ? 0 : 1) &&
+      (compact ? f.tableDisplay === 'table' && f.gridDisplay === 'absent' : f.gridDisplay === 'grid' && f.tableDisplay === 'absent') &&
+      f.tabs === (phoneBar ? 'grid' : 'none') &&
+      f.nav === (phoneBar ? 'none' : 'flex') &&
+      f.mqSheet === !compact &&
+      f.mqShell === !phoneBar &&
+      f.scroll <= f.client;
+    if (!ok) bad += 1;
+    note(OUTFILE, `${ok ? 'ok ' : 'BAD'} ${width}px: phone sheets ${f.phone}, 7-column sheets ${f.desktop}, table ${f.tableDisplay}, grid ${f.gridDisplay}, tab bar ${f.tabs}, nav ${f.nav}, matchMedia sheet ${f.mqSheet} shell ${f.mqShell}, page scroll ${f.scroll}/${f.client}, week card scrolls ${f.weekScrolls}`);
+  }
+  note(OUTFILE, `SWEEP real-page 470-490 + 760-776: ${widths.length} widths, ${bad} bad`);
+  expect(bad).toBe(0);
+  await page.setViewportSize({ width: 600, height: 900 });
+  const f600 = await page.evaluate<Facts>(FACTS);
+  const tabBox = await page.locator('.shell-tabs').boundingBox();
+  const gridBox = await page.locator('.week-grid').first().boundingBox();
+  note(OUTFILE, `600px: tab bar ${f600.tabs} (box ${tabBox ? `${tabBox.width}x${tabBox.height}` : 'none'}), grid ${f600.gridDisplay} (box ${gridBox ? `${Math.round(gridBox.width)}x${Math.round(gridBox.height)}` : 'none'}), page scroll ${f600.scroll}/${f600.client} (no page scroll: ${f600.scroll <= f600.client}), week card scrolls inside ${f600.weekScrolls}`);
+  expect(f600.tabs).toBe('grid');
+  expect(f600.gridDisplay).toBe('grid');
+  expect(f600.scroll).toBeLessThanOrEqual(f600.client);
+});
+
+test('fractional CSS widths by a real app-mode window at 125% and 150% display scaling (--force-device-scale-factor, --window-size, --app)', async ({ privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(600_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Fraction Person', signature: 'none' });
+  const rows: string[] = [];
+  let bad = 0;
+  let fractional = 0;
+  const seenWidths: number[] = [];
+  for (const dsf of [1.25, 1.5]) {
+    const sizes: number[] = [];
+    for (let s = 497; s <= 506; s += 1) sizes.push(s);
+    for (let s = 787; s <= 796; s += 1) sizes.push(s);
+    for (const size of sizes) {
+      const dir = mkdtempSync(join(tmpdir(), 'gate-frac-'));
+      const context = await chromium.launchPersistentContext(dir, { channel: 'msedge', headless: true, viewport: null, locale: 'en-US', timezoneId: 'America/Los_Angeles', args: [`--window-size=${size},900`, `--force-device-scale-factor=${dsf}`, `--app=${privateServer.origin}/`] });
+      try {
+        const page = context.pages()[0] ?? (await context.newPage());
+        await signInTo(page, privateServer, person.account);
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        const probe = async () => page.evaluate<Facts>(FACTS);
+        let f = await probe();
+        const compact = f.rectW < 480;
+        const phoneBar = f.rectW < 768;
+        await expect.poll(async () => (await probe()).phone, { timeout: 5000 }).toBe(compact ? 1 : 0);
+        f = await probe();
+        const ok =
+          f.phone === (compact ? 1 : 0) &&
+          f.desktop === (compact ? 0 : 1) &&
+          f.tabs === (phoneBar ? 'grid' : 'none') &&
+          f.nav === (phoneBar ? 'none' : 'flex') &&
+          f.mqSheet === !compact &&
+          f.mqShell === !phoneBar;
+        if (!ok) bad += 1;
+        if (!Number.isInteger(f.rectW)) fractional += 1;
+        seenWidths.push(Math.round(f.rectW * 1000) / 1000);
+        rows.push(`${ok ? 'ok ' : 'BAD'} dsf ${dsf} window ${size}: CSS width ${f.rectW.toFixed(3)} (clientWidth ${f.client}), phone sheets ${f.phone}, 7-col ${f.desktop}, tab bar ${f.tabs}, nav ${f.nav}, matchMedia sheet ${f.mqSheet} shell ${f.mqShell}, page scroll ${f.scroll}`);
+      } finally {
+        await context.close();
+      }
+    }
+  }
+  for (const r of rows) note(OUTFILE, r);
+  const near = (v: number, lo: number, hi: number) => seenWidths.filter((w) => w >= lo && w <= hi);
+  note(OUTFILE, `FRACTIONAL: ${rows.length} real app-mode windows (${fractional} with a non-integer CSS width), ${bad} bad; non-integer widths within 1px below the 480 boundary: ${JSON.stringify(near(0, 478.9, 479.99))}; below the 768 boundary: ${JSON.stringify(near(0, 766.9, 767.99))}`);
+  expect(bad).toBe(0);
+});

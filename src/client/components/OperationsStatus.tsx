@@ -10,6 +10,7 @@ import {
 import { backupSummary, diskSummary, outboundBanner } from './adminModel.ts';
 import { describeError } from './errors.ts';
 import { displayZone, instantText } from './format.ts';
+import { TableWrap } from './TableWrap.tsx';
 
 /*
  * Operations status for administrators (F-3, F-Q3 (b), WP3-T13D). It shows the state of the
@@ -328,7 +329,7 @@ export function OperationsStatus() {
             No period has been submitted yet. Submitted periods appear here with their delivery state.
           </p>
         ) : (
-          <div className="table-wrap">
+          <TableWrap label="Submission and delivery status per person and period">
             <table className="ops-table">
               <caption className="sr-only">Submission and delivery status per person and period</caption>
               <thead>
@@ -349,7 +350,7 @@ export function OperationsStatus() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
         )}
       </section>
     </>

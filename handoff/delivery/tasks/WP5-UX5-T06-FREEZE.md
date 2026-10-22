@@ -184,3 +184,14 @@ Append to this brief:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+- HEAD before: 69d63400486a977f10e022deea85026c6751b687; after:
+  e2bf1aab4ef65d496de6672c7986e27db04ddb39 (also origin/main; pushed; no tag).
+- Digest before add and from `git ls-tree` of HEAD:
+  318b3370450db99a96194249d4d9d7ae985a10a133f10994ba4acf219453635c (868 files).
+- Staged: 55 paths (6 docs modified; 7 handoff modified; 42 handoff new). No extra handoff paths.
+- Checks (all exit 0): node v24.21.0, precommit-check, diff --cached --check, JSON parse,
+  validate_orchestration.py, check_recovery.py, validate_package.py --preflight, fetch,
+  push dry-run, push.
+- Scans: zz-* none; BEGIN/PEM hits 0.
+- No fix, masking or stop. Details: evidence/WP5-UX5-T06-FREEZE/checks.txt.

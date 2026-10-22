@@ -1,0 +1,49 @@
+$ playwright test  tests/e2e/zz-review.spec.ts --project=desktop --output=<task>/pw-rev2
+
+Running 5 tests using 1 worker
+
+[desktop] TITLE h1 "Review and sign off"; header text "Review and sign off Pay period Mon 10/12/2026 -> to Sun 10/25/2026 · payroll date Fri 10/30/2026 · due Tue 10/27/2026, 17:00 (America/Los_An"; contains a submission id false
+[desktop] SEND card before sign-off: Send button disabled true, "Sign off first" chip count 2
+[desktop] BACK at 320px: visible text "Back" (long false, short true), accessible name "Back to the timesheet"
+[desktop] BACK at 390px: visible text "Back" (long false, short true), accessible name "Back to the timesheet"
+[desktop] BACK at 479px: visible text "Back" (long false, short true), accessible name "Back to the timesheet"
+[desktop] BACK at 480px: visible text "Back to the timesheet" (long true, short false), accessible name "Back to the timesheet"
+[desktop] BACK at 481px: visible text "Back to the timesheet" (long true, short false), accessible name "Back to the timesheet"
+[desktop] BACK at 768px: visible text "Back to the timesheet" (long true, short false), accessible name "Back to the timesheet"
+[desktop] COMPANY line 320-1440 step 20: states seen hidden/shown; shown = one line without clipping, hidden = zero height; problems []
+[desktop] ONE COLUMN at 1440: check card, preview and Send card share the left edge true (lefts 136.0/136.0/136.0), stacked top to bottom true, page scroll 0
+[desktop] SIG geometry (DOM, fractions of the content width 1104.0px): employee line left 3.518% width 27.406%; date line left 75.372% width 13.703%; manager line left 3.518% width 27.406%; manager date left 75.372% width 13.703%; caption centres Employee Signature@17.221%, Date@82.224%, Manager Signature@17.221%, Date@82.224%; row tops employee 1270.8/1270.8, manager 1368.2/1368.2
+  ok 1 [desktop] › tests\e2e\zz-review.spec.ts:49:1 › Review layout facts before sign-off: title, Back label, company line, one column at 1440, signature geometry, Send disabled (9.6s)
+SIGNOFF dialog with a saved image: images 1, signer shown "Synthetic Signer Gate (you)", text input fields 0 (no name field expected 0); text "Sign off confirmation Pay period Mon 10/12/2026 -> Sun 10/25/2026 · payroll date Fri 10/30/2026 Signer Synthetic Signer Gate (you) Date on the PDF Today, 10/22/2026 (America/Los_Angeles) Overtime total 0:00 h:mm credited when you sign off Signature your saved image and your name Synthetic Signer Gate Employee Signature 10/22/2026 Date Not used yet Manager Signature Date OT proposals No complete da"
+NOT SIGNED OFF alert: "Not signed off This period cannot be signed right now (period_not_signable) Nothing was signed. Your choices are kept: open Sign off to try again. OK", OK focused true, modal true
+STALE review: notice "The timesheet or the review changed after you opened it. Nothing was submitted. The review below is up to date: check it and sign off again.", focused true, dialog closed true, nothing signed true
+SIGNED footer: null; employee date "10/22/2026"
+PDF signed default: pages 1, images 1, content-type application/pdf, disposition attachment; filename="timesheet-2026-10-30-r1.pdf"
+PDF variant time=1&ot=0: status 200, pages 1, bytes 40205
+PDF variant time=0&ot=1: status 200, pages 1, bytes 41476
+PDF variant time=0&ot=0: status 200, pages 1, bytes 39680
+  ok 2 [desktop] › tests\e2e\zz-review.spec.ts:134:1 › Sign off dialog with an image and without one; the signed footer; the PDF signature geometry; Not signed off alert; stale review (2.2s)
+SIGNOFF dialog without an image: images 0, links ["#/settings"], text "Sign off confirmation Pay period Mon 10/12/2026 -> Sun 10/25/2026 · payroll date Fri 10/30/2026 Signer Synthetic Nameonly Gate (you) Date on the PDF Today, 10/22/2026 (America/Los_Angeles) Overtime total 0:00 h:mm credited when you sign off Signature your name only Add a signature image in Settings. Synthetic Nameonly Gate Employee Signature 10/22/2026 Date Not used yet Manager Signature Date OT proposals No complete"
+SIGNED by name only: {"text":"Synthetic Nameonly Gate Signed","img":0}
+PDF name only: pages 1, images 0 (0 expected), contains the signer name true
+  ok 3 [desktop] › tests\e2e\zz-review.spec.ts:197:1 › signing without a saved image goes by name alone; the dialog says where to add one (1.3s)
+SEND after sign-off: delivery attempts 0 (sign-off enqueues no send); jobs run once
+SEND card after sign-off: Send enabled true; defaults To "payroll-gate@example.invalid", Cc "manager-gate@example.invalid"; switches time true ot true
+PDF Preview link: href /api/revisions/87d9b3f8-2ae9-447c-8256-0a84257fff9b/pdf?time=0&ot=0&disposition=inline, target _blank
+SEND request body keys ["request_key","to","cc","subject","body_text","time_rows","ot_rows"]: to ["payroll-gate@example.invalid","second-gate@example.invalid"], cc ["copy-gate@example.invalid"], subject "Gate edited subject", body "Gate edited message line.", time_rows false, ot_rows false, reason undefined
+SEND replay with the same key: status "replayed"; same key with another body: HTTP 409
+CAPTURE 1: files ["attachment.pdf","message.eml","metadata.json"]; From timesheet-capture@example.invalid; To "payroll-gate@example.invalid, second-gate@example.invalid"; Cc "copy-gate@example.invalid"; Subject "Gate edited subject"; body contains edit true; attachment equals the time=0&ot=0 variant true; equals the default variant false; sender is the synthetic capture sender true
+REASON dialog after an accepted copy: button label "Send another copy...", modal true; empty reason message "Give the reason for sending another copy.", nothing posted true; text "Send another copy? An earlier copy went to payroll-gate@example.invalid, second-gate@example.invalid (copy: copy-gate@example.invalid) on 2026-10-22 09:42 and was accepted by the mail server. No revision, sign-off or OT balance changes. Reason for sending another copy (required) The reason is kept w"
+REASON send: request {"time_rows":true,"ot_rows":true,"reason":"Gate asked for a second copy","to":["payroll-gate@example.invalid"]}
+409 path: posted 1 time(s); notice "A delivery of this revision is already in progress or waiting. Nothing was sent again; follow it in History."
+CAPTURE 2: attempts ["accepted","accepted"]; attachment equals the default variant true; reason in the email false; Message-ID differs true
+HISTORY: revision.send events 2, first label "Revision sent 2026-10-22 09:42 Reason: Gate asked for a second copy Field Before", reasons ["Gate asked for a second copy",""], attempts on the revision 2
+SETTINGS switch "Time rows on the PDF": checked before true; file key show_time_on_pdf before true -> after unchecking and saving false; server settings {"settings":{"id":"90cb3f18-5aa6-479b-ac3f-6a4d6b898921","seq":2,"is_default":false,"recipients":{"to":["payroll-gate@example.invalid"],"cc":["manager-gate@example.invalid"]},"subject_template":"Timesheet {PeriodStart} to {PeriodEnd} - {EmployeeName} - {SignOffStatus}","body_template":"Hello,\n\nAttached is the timesheet of {EmployeeName} for {PeriodStart} to {PeriodEnd} (payroll date {PayrollDate}).\nStatus: {SignOffStatus}.\nSubmission {SubmissionId}, revision {Revision}.","template_version":1,"variables":["EmployeeName","PeriodStart","PeriodEnd","PayrollDate","SignOffStatus","SubmissionId","Revision"],"auto_submit":false,"auto_submit_effective_from":"2026-10-22T16:42:24Z","auto_image":{"authorized":false,"signature_attachment_id":null,"authorized_at":null},"auto_note":{"enabled":false,"text":"Automatic submission"},"show_ot_on_pdf":true,"show_time_on_pdf":false,"reminder_offsets_minutes":[1440,120],"created_at":"2026-10-22T16:42:33Z"}}
+SETTINGS import preview mentions the time-rows setting true: "Import settings timesheet-settings-synthetic.json · format 1 · exported 2026-10-22 16:42 UTC from 0.1.0 Your current settings and the settings in the file Setting Now In the file Work policy (a new version) Required time per day 480 min same Threshold (N) 30 m"
+  ok 4 [desktop] › tests\e2e\zz-review.spec.ts:228:1 › Send card: edited To, Cc, Subject, body and switches reach the local capture exactly with the matching variant; the reason dialog after a copy counts; the 409 path; History reason and label; admin Not sent yet; Settings switch and the file key (10.2s)
+ADMIN status page: contains "Not sent yet" true; sample "-12 to 2026-10-25 2026-10-27 17:00 Revision 1 By the employee Signed No PDF yet Not sent yet Settings To payroll-gate@example.invalid; Cc ma"
+GRANTEE shared timesheet: [data-sign-off] 0, send controls 0, review links 0, words "Sign off/Send another copy/Review & send" present false; HTTP statuses {"sharedSend":404,"sharedDraft":404,"sharedPreview":404,"ownSend":404,"ownSendEmptyBody":422,"ownDraft":404,"sharedPdfQuery":409}
+  ok 5 [desktop] › tests\e2e\zz-review.spec.ts:358:1 › administrator status says Not sent yet for a signed period, and a grantee sees no Sign off or Send (5.3s)
+
+  5 passed (38.0s)
+exit=0

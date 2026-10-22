@@ -452,7 +452,7 @@ test.describe('phone', () => {
     }
   });
 
-  test('away: the review link is never wrapped: the short form beside Today and Current period at 390, 375 and 360, "Current" and the short form beside Today at 320, the full label where it fits', async ({
+  test('away: the review link is never wrapped: the short form beside Today and Current period where the row is under 22.8rem (375 and 360), the full label at 390 and where it fits, "Current" and the short form beside Today at 300', async ({
     page,
     employeeSeed,
     signInThroughUi,
@@ -465,7 +465,14 @@ test.describe('phone', () => {
     // the row is narrower than 18.4rem, so Today, Current and the review link still share one 44px row (WP5-UX3-T04 replaces the former
     // 320px own-row expectation: stricter, one row fewer). WP5-UX5-T04 (U5-22): the card stands 8px from the window edges, so the row is 16px
     // wider than before (280px at 320, which still holds "Current period" in full) and "Current" starts below 316px; 300px is checked too.
-    for (const width of [600, 390, 375, 360, 320, 300]) {
+    // The label is chosen by the measured width of the button row (the `period-cta` container), not by the window: with Current period
+    // a long label ("Review & sign off", "Review or correct") is full from 22.8rem (342px of the 15px root) and short from 15.4rem
+    // up to it; "Review now" is full from 20.2rem and short from 15.1rem. The card stands 8px from each window edge and pads 12px, so
+    // the row is the window less 40px: 390px gives 350px (full), 375px gives 335px (short). 382 and 381 are the two sides of 342px.
+    const rootPx = Number(await page.evaluate<number>('parseFloat(getComputedStyle(document.documentElement).fontSize)'));
+    const shortWidths: number[] = [];
+    const fullWidths: number[] = [];
+    for (const width of [600, 390, 382, 381, 375, 360, 320, 300]) {
       await page.setViewportSize({ width, height: 844 });
       const [today, review] = [todayButton(page), reviewLink(page)];
       const controls = withCurrent ? [today, currentButton(page), review] : [today, review];
@@ -476,11 +483,14 @@ test.describe('phone', () => {
       const full = ((await review.textContent()) ?? '').trim();
       const sharesRow = spread <= ROW_TOLERANCE;
       const shown = await visibleLabel(review);
-      // Short only for a long label in the three-button row at 390, 375, 360 and 320 (a row of 350 to 280px), and for every label at 320 and 300
-      // (below 20.2rem); everywhere else the full label is shown.
-      const expectShort = withCurrent && (width <= 320 || (full.length > 12 && [390, 375, 360].includes(width)));
-      if (expectShort) expect(shown, `${width}px: the short form`).toBe(SHORT_FORM[full]);
-      else expect(shown, `${width}px: the full label`).toBe(full);
+      // Short only with Current period, and only where the measured row is under the label's full width and still holds the short form
+      // (a long label: 15.4rem to 22.8rem; "Review now": 15.1rem to 20.2rem; below that the review link takes a row of its own, in full).
+      const rowRem = ((await page.locator('.period-cta').boundingBox())?.width ?? 0) / rootPx;
+      const longLabel = full.length > 12;
+      const expectShort = withCurrent && (longLabel ? rowRem >= 15.4 && rowRem < 22.8 : rowRem >= 15.1 && rowRem < 20.2);
+      (expectShort ? shortWidths : fullWidths).push(width);
+      if (expectShort) expect(shown, `${width}px: the short form (the row is ${rowRem.toFixed(2)}rem)`).toBe(SHORT_FORM[full]);
+      else expect(shown, `${width}px: the full label (the row is ${rowRem.toFixed(2)}rem)`).toBe(full);
       if (withCurrent) {
         // "Current period" in full from 320 to 600; "Current" only at 300, where the container is 260px (below 18.1rem or 18.4rem). The name never changes (SC 2.5.3).
         const currentShown = await visibleJumpLabel(currentButton(page));
@@ -501,6 +511,12 @@ test.describe('phone', () => {
       if (width === 390 || width === 320) await bar(page).screenshot({ path: screenshotPath(`today-bar-phone-away-w${width}-synthetic.png`), animations: 'disabled' });
       const widths = (await Promise.all(controls.map((control) => control.boundingBox()))).map((box) => box?.width);
       console.log(`ROW away width=${width} tops=${rowTops.join('/')} spread=${spread} widths=${widths.join('/')} review.h=${reviewBox?.height} withCurrent=${withCurrent}`);
+    }
+    // Both sides are really tested: with Current period the short form must appear at some width (381 and narrower) and the full label at
+    // another (382 and wider). The label of this period is the long "Review & sign off" (a draft of a period that has not been signed).
+    if (withCurrent) {
+      expect(shortWidths, 'with Current period the short form is checked at some widths').toContain(381);
+      expect(fullWidths, 'and the full label at others').toContain(382);
     }
   });
 });
@@ -999,21 +1015,41 @@ test.describe('desktop widths', () => {
       expect((reviewBox?.x ?? 0) + (reviewBox?.width ?? 0), `landing ${width}px: Review ends inside the card`).toBeLessThanOrEqual((barBox?.x ?? 0) + (barBox?.width ?? 0) + 0.5);
     }
     await awayState(page, periods);
-    for (const width of [768, 900, 1024, 1280]) {
+    // WP5-UX5-T04 (U5-09): the card has a wide and a narrow arrangement, chosen by the width of the CARD (the window is 32px wider than
+    // the card). The wide row needs 40rem of 15px (600px); while "Current period" shows (the five days after a period ended, away from
+    // today) it needs 9.2rem (138px) more, 738px. 769 and 770 are the two sides of that threshold in the window; outside the window the
+    // threshold is 600px, below every width here, so the arrangement is wide. The expectation is computed from the measured card width.
+    const withCurrent = isWindow(periods);
+    const wideNeeds = withCurrent ? 738 : 600;
+    const seen = new Set<string>();
+    for (const width of [768, 769, 770, 900, 1024, 1280]) {
       await page.setViewportSize({ width, height: 800 });
       await expect(todayButton(page)).toBeVisible();
       await expectNoSidewaysScroll(page, `away ${width}px`);
-      const barBox = await bar(page).boundingBox();
-      const next = await nextButton(page).boundingBox();
-      const today = await todayButton(page).boundingBox();
-      const review = await reviewLink(page).boundingBox();
-      console.log(`WIDTH away width=${width} next.x=${next?.x} next.y=${next?.y} today.x=${today?.x} today.y=${today?.y} review.x=${review?.x} card.w=${barBox?.width} card.h=${barBox?.height}`);
+      const { card, prev, next, today, review, cta } = await cardParts(page);
+      expect(card && prev && next && today && review && cta, `away ${width}px: every part is on the card`).toBeTruthy();
+      if (!(card && prev && next && today && review && cta)) continue;
+      console.log(`WIDTH away width=${width} next.x=${next.left} next.y=${next.top} today.x=${today.left} today.y=${today.top} review.x=${review.left} card.w=${card.width} card.h=${card.height}`);
       if (width === 768 || width === 1280) await bar(page).screenshot({ path: screenshotPath(`today-bar-away-w${width}-synthetic.png`), animations: 'disabled' });
       for (const box of [next, today, review]) {
-        expect((box?.x ?? 0) + (box?.width ?? 0), `away ${width}px: inside the card`).toBeLessThanOrEqual((barBox?.x ?? 0) + (barBox?.width ?? 0) + 0.5);
+        expect(box.right, `away ${width}px: inside the card`).toBeLessThanOrEqual(card.right + 0.5);
       }
-      expect(next?.x ?? 0, `away ${width}px: Next stays left of Today`).toBeLessThan(today?.x ?? 0);
+      const narrow = card.width < wideNeeds;
+      seen.add(narrow ? 'narrow' : 'wide');
+      expect(cta.top > prev.bottom ? 'narrow' : 'wide', `away ${width}px: the card is ${card.width}px wide, so the ${narrow ? 'narrow' : 'wide'} arrangement (the wide row needs ${wideNeeds}px)`).toBe(narrow ? 'narrow' : 'wide');
+      if (narrow) {
+        // Narrow: row 1 is "<", the range, ">" with ">" on the right edge (as far from it as "<" is from the left one); Today starts the row below.
+        expect(near(next.top, prev.top, 1), `away ${width}px: narrow, Next is in the first row`).toBe(true);
+        expect(near(card.right - next.right, prev.left - card.left, 1), `away ${width}px: narrow, Next keeps the right edge`).toBe(true);
+        expect(today.top, `away ${width}px: narrow, Today is in the row below`).toBeGreaterThan(next.bottom);
+        expect(next.left, `away ${width}px: narrow, Next is right of Today`).toBeGreaterThan(today.left);
+      } else {
+        expect(next.left, `away ${width}px: wide, Next stays left of Today`).toBeLessThan(today.left);
+        expect(near(today.top, next.top, 1), `away ${width}px: wide, Today is in the first row`).toBe(true);
+      }
     }
+    // The window has both sides of the threshold in this list (768 narrow; 770 and wider wide); outside it every width is wide.
+    expect([...seen].sort().join(), withCurrent ? 'in the window both arrangements are checked' : 'outside the window the arrangement is wide').toBe(withCurrent ? 'narrow,wide' : 'wide');
   });
 });
 

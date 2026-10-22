@@ -3,6 +3,7 @@ import type { OtLedgerEntry, OtSummary, Requester } from '../api.ts';
 import { describeError } from './errors.ts';
 import { ledgerEntryLabel } from '../importModel.ts';
 import { displayZone, instantText, minutesText, periodRange } from './format.ts';
+import { TableWrap } from './TableWrap.tsx';
 
 /**
  * The owner's OT balance and ledger for a share with the OT item. Read-only by construction: it has
@@ -94,7 +95,7 @@ export function SharingOt({ request, ownerName }: { request: Requester; ownerNam
         {ledger.length === 0 ? (
           <p className="muted">The ledger has no entries yet. Credits are posted when a period is finalized.</p>
         ) : (
-          <div className="table-wrap">
+          <TableWrap label="OT ledger entries">
             <table aria-label="OT ledger entries">
               <thead>
                 <tr>
@@ -121,7 +122,7 @@ export function SharingOt({ request, ownerName }: { request: Requester; ownerNam
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
         )}
       </section>
     </div>

@@ -1,5 +1,6 @@
 import type { ImportBatch, ImportFinding, ImportPlan, ImportPlanDay, ImportReportDay } from '../api.ts';
 import { batchStateText, periodStateText, reasonText } from '../importModel.ts';
+import { TableWrap } from './TableWrap.tsx';
 
 const SEVERITY_CLASS: Record<ImportFinding['severity'], string> = { error: 'badge-error', warning: 'badge-warn', info: '' };
 const SEVERITY_TEXT: Record<ImportFinding['severity'], string> = { error: 'Error', warning: 'Warning', info: 'Note' };
@@ -72,7 +73,7 @@ function Periods({ plan }: { plan: ImportPlan }) {
   return (
     <section className="card stack" aria-label="Periods in the workbook">
       <h2>Periods ({plan.periods.length})</h2>
-      <div className="table-wrap">
+      <TableWrap label="Periods">
         <table className="import-table" aria-label="Periods">
           <thead>
             <tr>
@@ -99,7 +100,7 @@ function Periods({ plan }: { plan: ImportPlan }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
     </section>
   );
 }
@@ -155,7 +156,7 @@ function Days({ batch, plan }: { batch: ImportBatch; plan: ImportPlan }) {
         {plan.importable_days} ready to import, {plan.decisions_required.length} needing a decision, {blank} blank (never imported). Clock cells are
         kept in the private source and never imported.
       </p>
-      <div className="table-wrap">
+      <TableWrap label="Days">
         <table className="import-table" aria-label="Days">
           <thead>
             <tr>
@@ -172,7 +173,7 @@ function Days({ batch, plan }: { batch: ImportBatch; plan: ImportPlan }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
     </section>
   );
 }

@@ -2034,13 +2034,20 @@ test.describe('time ranges (U5-07)', () => {
 });
 
 test.describe('a late end in the narrowest phone cell', () => {
-  // Ho Chi Minh is UTC+7: the seeded 09:00-18:00 Los Angeles day reads 23:00 to 08:00 the next day, "+1", which even the tight form cannot hold in 72px.
+  // Ho Chi Minh is UTC+7 all year; Los Angeles is UTC-7 in summer time and UTC-8 in winter, so the gap is 14 h or 15 h. A 09:00-18:00
+  // Los Angeles day reads 23:00 to 08:00 the next day ("+1") only in summer time; in winter it reads 00:00-09:00 on one day. The day
+  // here is 08:30-17:30 Los Angeles time, which crosses the Ho Chi Minh midnight in BOTH seasons (22:30 to 07:30 or 23:30 to 08:30,
+  // "+1"), so the late-end form, which even the tight form cannot hold in 72px, is tested whatever the date of the run is.
   test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
 
   test('the tight text may wrap there but never runs over the next column', async ({ page, employeeSeed, signInThroughUi }) => {
     const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
     seededDays.push(date);
-    await employeeSeed.seedCompleteDay(date);
+    await employeeSeed.createSession(date, '08:30', '17:30', [
+      ['11:00', '11:15'],
+      ['13:00', '13:30'],
+      ['15:30', '15:45'],
+    ]);
     await signInThroughUi();
     await expect(page.locator('[data-day]')).toHaveCount(14);
     for (const width of [320, 390, 1280]) {
@@ -2053,7 +2060,7 @@ test.describe('a late end in the narrowest phone cell', () => {
       // The sheet measures its cells when the window is resized, so it may take a frame to settle on the new width.
       await expect.poll(async () => (await read()).overflow, { message: `${width}px: the late end settles inside its cell` }).toBeLessThanOrEqual(1);
       const facts = await read();
-      expect(facts.text, `${width}px: the late end keeps its +1`).toMatch(/\+1$/);
+      expect(facts.text, `${width}px: the late end keeps its +1 (22:30 or 23:30 to 07:30 or 08:30 the next day)`).toMatch(/^(22|23):30( - |-)(07|08):30\+1$/);
       expect(facts.overflow, `${width}px: "${facts.text}" (${facts.mode}) does not run over its cell`).toBeLessThanOrEqual(1);
     }
   });

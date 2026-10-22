@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "ux5-slices",
+  "phase": "ux5-fix",
   "coordinator_session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,8 +28,16 @@
   "current_source_digest": "507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX5-T06-FREEZE",
+  "next_task_id": "WP5-UX5-FIX1-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-22",
+      "observation": "Coordinator slip: WP5-UX5-FIX1 was registered with depends_on WP5-UX5-GATE (a FAIL gate), so validate_orchestration and check_recovery refused the board ('Dependency gate not PASS: WP5-UX5-FIX1') in WP5-UX5-FIX1-FREEZE attempt 2, after its precommit passed; nothing committed. Fixed as in round 4: a gate fix depends on the frozen snapshot it fixes (WP5-UX5-T06-FREEZE) and names the failed gate in addresses_gate. Rule kept: never make a task depend on a FAIL gate or a FIX REQUIRED audit; use addresses_gate / addresses_audit."
+    },
+    {
+      "date": "2026-10-22",
+      "observation": "WP5-UX5-FIX1-PATHS (light, haiku): a permission check refused the lookup's Edit of its own brief's Results (a 340-line path list); it stopped and reported, with the full result in its task folder. The coordinator records a summary and the task-folder pointer on the board and does not copy the refused text into the brief. Rule kept: path lookups write only a short Results (counts, outside-handoff paths, exceptions) into the brief; long per-file handoff lists stay in the task folder, and freeze briefs stage named evidence folders as directories."
+    },
     {
       "date": "2026-10-22",
       "observation": "WP5-UX5-T01B-FREEZE attempt 1: 'git add --pathspec-from-file=<list>' was denied as '[Credential Leakage]' (the staged paths are not visible to the permission check). Attempt 2 by a fresh committer staged the same 96 paths as explicit arguments in several plain git add calls and passed. Rule kept: freeze briefs never stage from a list file, xargs, glob or directory argument outside named evidence folders; they name paths explicitly in batches of about 20."
@@ -439,7 +447,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "69d63400486a977f10e022deea85026c6751b687",
+    "last_commit": "e2bf1aab4ef65d496de6672c7986e27db04ddb39",
     "unpushed": []
   },
   "owner_decisions": [
@@ -1117,6 +1125,28 @@
     }
   ],
   "auxiliary_lookups": [
+    {
+      "id": "WP5-UX5-FIX1-PATHS",
+      "agent_type": "timesheet-light",
+      "agent_id": "a7c9dc098ae906f84",
+      "status": "done",
+      "brief": "handoff/delivery/tasks/WP5-UX5-FIX1-PATHS.md",
+      "requested_model": "haiku",
+      "routing_note": "docs/08: haiku only for pure listing/probes; this is a read-only git status listing.",
+      "writes": [
+        "handoff/delivery/tasks/WP5-UX5-FIX1-PATHS.md (Results section only)",
+        "task folder D:\\.claude-tmp\\timesheet\\WP5-UX5-FIX1-PATHS"
+      ],
+      "purpose": "Exact path lists (modified, new, deleted; outside and under handoff/, every file named), the index state and binary / zz-* checks after WP5-UX5-FIX1, so the WP5-UX5-FIX1-FREEZE brief names every path explicitly.",
+      "result": {
+        "model": "claude-haiku-5-5 (self_reported)",
+        "record_note": "The lookup's Edit of its brief's Results was refused by a permission check; it stopped and reported. The brief in the repository therefore has no Results. The complete result is the task-folder file D:\\.claude-tmp\\timesheet\\WP5-UX5-FIX1-PATHS\\30-results.md (read by the coordinator). The coordinator does not copy it into the brief.",
+        "git": "HEAD = origin/main = e2bf1aab4ef65d496de6672c7986e27db04ddb39 (no fetch); nothing staged; nothing deleted.",
+        "outside_handoff": "11 modified (scripts/container-drill.mjs; src/client HistoryScreen.tsx, OtScreen.tsx, styles.css, components ImportPreview.tsx, OperationsStatus.tsx, SettingsTransferDialog.tsx, SharingOt.tsx; tests/e2e day-editor, timesheet, today), 2 new (src/client/components/TableWrap.tsx 1,451 bytes; tests/e2e/history-a11y.spec.ts 4,245 bytes); docs/04 not modified.",
+        "handoff": "5 modified (board, checkpoint pair, tasks/WP5-UX5-GATE.md, tasks/WP5-UX5-T06-FREEZE.md), 344 new (evidence/WP5-UX5-FIX1 86 files, evidence/WP5-UX5-GATE 251 files incl. 15 -synthetic.png and zz-*.txt probe copies, evidence/WP5-UX5-T06-FREEZE 2, tasks AUDIT-A, AUDIT-B, FIX1-PATHS, FIX1, REGATE).",
+        "checks": "No path outside the allowed set; nothing under src/server or src/domain; no binary outside handoff; under handoff every PNG ends -synthetic.png (the one other binary is the tracked WP1 jpg); no zz-* under src, tests, scripts or docs; zz-*.txt probe copies exist only as evidence text under handoff."
+      }
+    },
     {
       "id": "WP5-UX5-T06-PATHS",
       "agent_type": "timesheet-light",
@@ -26338,9 +26368,174 @@
       "id": "WP5-UX5-T06-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX5-T06"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ae88f3c4a37deb97f",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX5-T06-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX5-T06-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX5-T06-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-T06-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX5-T06-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-UX5-T06-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "69d63400486a977f10e022deea85026c6751b687",
+      "branch": "main",
+      "commit_sha": "e2bf1aab4ef65d496de6672c7986e27db04ddb39",
+      "pushed": true,
+      "source_digest": "318b3370450db99a96194249d4d9d7ae985a10a133f10994ba4acf219453635c",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed e2bf1aa on main (remote equal; no tag): 55 staged (6 docs outside handoff, 49 handoff); digest 318b3370 (868 files) before git add and from HEAD's git ls-tree; precommit, git diff --cached --check, JSON parse, validate_orchestration, check_recovery (106), preflight and push exit 0; scans 0 hits; no fix, masking or stop. Package-final snapshot of round 5.",
+      "next_action": "None; WP5-UX5-GATE (rounds 4 and 5) on e2bf1aa / 318b3370."
+    },
+    {
+      "id": "WP5-UX5-GATE",
+      "package": "WP5",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "e2bf1aab4ef65d496de6672c7986e27db04ddb39",
+      "depends_on": [
+        "WP5-UX5-T06-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "routing_note": "docs/08 row 'Gates, digests, evidence': verifier sonnet. Package-final snapshot of rounds 4 and 5 (two migrations, the sign-off/send split with the reason rule, the signed PDF with a font asset, round-4 auth and privacy changes, the breakpoint change).",
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aa0cae83ad35d02b6",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX5-GATE.md",
+        "handoff/delivery/evidence/WP5-UX5-GATE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX5-GATE.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-GATE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX5-GATE/01-digest-export-before.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/01-digest-export-after.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/01-digest-lstree-after.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/03-verify.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/04-e2e-project-counts.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/05-ac13-exits.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/07-drill.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/07-drill-cause.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/11-exits.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/12-npmtest-exits.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/13-integ-exits.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/15-docker-ps-final.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/17-sweep-counts.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/20-server-map.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/21-routes-diff.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/22-scope-by-commit.txt",
+        "handoff/delivery/evidence/WP5-UX5-GATE/23-fonts.txt"
+      ],
+      "evidence_note": "251 files in the folder, including obs-*.txt probes, logs and 15 ux5gate-*-synthetic.png screenshots.",
+      "baseline_commit": "8e557100d16b6b6eb86a48e00276835761aabfdf",
+      "source_digest": "318b3370450db99a96194249d4d9d7ae985a10a133f10994ba4acf219453635c",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "FAIL",
+      "gate_notes": "FAIL on e2bf1aa / 318b3370 (868 files; three digest forms equal before and after; NAS NOT VERIFIED). Finding 1: drill --wp3 exit 1, 203 PASS / 6 FAIL (stage 4: 4, stage 5: 2): scripts/container-drill.mjs signOffPeriod omits signer_name, which the previous WP3 build (49651c8) requires (422), so the pre-upgrade build signed nothing and the data-bearing upgrade was not exercised (T01A/T01B edited the drill and never ran it); stage 1 PDF with the Indie Flower subset passed. Finding 2: the simulated-clock sweep never ends with 0 failed: four date/DST-dependent test defects: (a) day-editor.spec.ts:6357 (T05B) presses the page title at 1280 while the floating drawer covers it when the newest free workday is a Thursday or Friday; (b) today.spec.ts:990 (round 4) stale against T04's 738px narrow threshold with Current period; (c) today.spec.ts:455 mobile window days expects the short 'Sign off' at 390 after T04 widened the card; (d) timesheet.spec.ts:2040 (T05A) expects '+1' for a 09:00-18:00 LA day read in Asia/Ho_Chi_Minh, true only in PDT; two ERR_NO_BUFFER_SPACE passed on rerun. Finding 3: axe scrollable-region-focusable (serious, SC 2.1.1) on History, 3 .table-wrap nodes, light and dark; identical on BASE_SHA, so pre-existing, not a round-5 regression; a real finding for the owner's AA bar. Passed: ci, lint, verify (100 files / 2345); real-clock FULL e2e 859/125/0 (desktop 457, mobile 402); AC-13 x3 + Tokyo + New York; npm test x3 2345, 0 worker crashes; audit 0; validators (check_recovery 106); 23 integration files; schema 13 to 15 in one migrate() with 5 backfilled sends; backup/restore with variants and sends; sends, reason counting, concurrency, deadline and reminders (H-1 a); four one-page PDF variants embedding IndieFlower with the DejaVu Serif Italic fallback; deterministic bytes; scope (no unmapped path; one font file with the README hash); route table (+ password, send-draft, send, pdf-preview; SHARED_ROUTES unchanged); CSP byte-identical; no admin requests; fractional 479.333 / 767.333 CSS px reached with app-mode windows (0 bad); round-4 rechecks (SC 2.4.11 walks 0 hidden, Escape, Current-period focus, classic scrollbar); U5-16 holds on Review; T05A's 44px hit layers verified; 38/40 axe scans clean; token contrast OK. Slips: about a dozen heredocs writing script files, one node -e 1, one 2>/dev/null, one | head.",
+      "next_action": "None; WP5-UX5-FIX1 (drill signer_name for the previous build, the four date/DST-dependent tests, the History scroll-region a11y), then its freeze and a regate."
+    },
+    {
+      "id": "WP5-UX5-FIX1",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "done",
+      "addresses_gate": "WP5-UX5-GATE",
+      "depends_on": [
+        "WP5-UX5-T06-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "routing_note": "docs/08 'Accepted finding naming file/fix/tests': no plan step, the worker reproduces first; worker-high because finding 1 is the upgrade/recovery drill against the previous build and finding 2 is date/DST arithmetic.",
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a2aa429e118795ccf",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "scripts/container-drill.mjs",
+        "tests/e2e/day-editor.spec.ts",
+        "tests/e2e/today.spec.ts",
+        "tests/e2e/timesheet.spec.ts",
+        "tests/e2e/history-a11y.spec.ts",
+        "src/client",
+        "docs/04_UX_AND_SETTINGS.md",
+        "docs/04_UX_AND_SETTINGS.vi.md",
+        "handoff/delivery/tasks/WP5-UX5-FIX1.md",
+        "handoff/delivery/evidence/WP5-UX5-FIX1"
+      ],
+      "owned_paths_note": "container-drill.mjs only for the sign-off body; src/client only for the components rendering .table-wrap and the region focus ring in styles.css; a History e2e spec may be an existing one instead of history-a11y.spec.ts; docs/04 only if a table/keyboard line becomes false; no src/server path.",
+      "prompt": "handoff/delivery/tasks/WP5-UX5-FIX1.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-FIX1.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX5-FIX1/10-repro-f1.txt",
+        "handoff/delivery/evidence/WP5-UX5-FIX1/70-sweep-summary.txt",
+        "handoff/delivery/evidence/WP5-UX5-FIX1/86-mutants-summary.txt",
+        "handoff/delivery/evidence/WP5-UX5-FIX1/53-axe-old.txt",
+        "handoff/delivery/evidence/WP5-UX5-FIX1/54-axe-new.txt",
+        "handoff/delivery/evidence/WP5-UX5-FIX1/90-full-desktop.txt",
+        "handoff/delivery/evidence/WP5-UX5-FIX1/90-full-mobile.txt",
+        "handoff/delivery/evidence/WP5-UX5-FIX1/96-drill.txt",
+        "handoff/delivery/evidence/WP5-UX5-FIX1/97-drill-counts.txt",
+        "handoff/delivery/evidence/WP5-UX5-FIX1/120-verify.txt",
+        "handoff/delivery/evidence/WP5-UX5-FIX1/130-digest-after-1.txt"
+      ],
+      "evidence_note": "Paths as named in the worker's Results; the folder holds copies of the task-folder outputs; the T06-PATHS-style lookup confirms the exact list before the freeze.",
+      "baseline_commit": "e2bf1aab4ef65d496de6672c7986e27db04ddb39",
+      "source_digest": "709750910cb88422b1de35c38c85eac15c3eca63ee75e1ff26e11b75d6475bbf",
+      "reviewed_digest": null,
+      "author_agent_ids": [
+        "a2aa429e118795ccf"
+      ],
+      "decision": "done (worker report; regate pending): all three findings reproduced first. (1) container-drill.mjs signOffPeriod adds signer_name only for the two stage-4 calls to the previous build (the current schema accepts and ignores the key; branching keeps the current-build body as the product posts it); full drill --wp3 209 PASS / 0 FAIL, stage 4 35/0 (previous build signed 201/201; pre-upgrade 2 revisions, 2 queued send jobs), stage 5 27/0; Docker cleaned. (2) day-editor.spec.ts:6353-6483 presses an uncovered point (title or card text where uncovered, else plain space of the title row or card); today.spec.ts:1006-1053 follows T04's 600/738px rule from the measured card; today.spec.ts:455-515 short label from the measured row incl. widths 381/382; timesheet.spec.ts:2036-2063 seeds 08:30-17:30 LA so the Ho Chi Minh range crosses midnight in both seasons, stricter regex; sweep at the six gate instants and the real clock 0 failed on both projects; mutants of the four old assertions fail at their instants. (3) new TableWrap.tsx replaces all seven .table-wrap uses (History, OT, shared OT, Import preview x2, Operations status, Settings transfer dialog): role=region, tabIndex=0 and aria-label only while it overflows; styles.css shared inset focus ring; new history-a11y.spec.ts; axe History 0 (light, dark, both projects; old build 3). Checks: typecheck, lint, npm test 2345, build (no advisory, no deprecation), FULL e2e real clock desktop 458/35/0 and mobile 403/90/0, preflight PASS, git diff --check 0, verify 0 (smoke 49921); digest 70975091 (870 files: + TableWrap.tsx, history-a11y.spec.ts). Slip: one ls | head -0.",
+      "next_action": "None; WP5-UX5-FIX1-FREEZE after a path-list lookup (WP5-UX5-FIX1-PATHS), then WP5-UX5-REGATE."
+    },
+    {
+      "id": "WP5-UX5-FIX1-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX5-FIX1"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -26358,21 +26553,23 @@
       "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP5-UX5-T06-FREEZE.md",
-        "handoff/delivery/evidence/WP5-UX5-T06-FREEZE"
+        "handoff/delivery/tasks/WP5-UX5-FIX1-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX5-FIX1-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP5-UX5-T06-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP5-UX5-T06-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP5-UX5-FIX1-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-FIX1-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "69d63400486a977f10e022deea85026c6751b687",
+      "baseline_commit": "e2bf1aab4ef65d496de6672c7986e27db04ddb39",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "318b3370450db99a96194249d4d9d7ae985a10a133f10994ba4acf219453635c",
+      "source_digest": "709750910cb88422b1de35c38c85eac15c3eca63ee75e1ff26e11b75d6475bbf",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Fresh committer: 6 explicit docs paths plus the listed handoff records (pilot packet pair, T06 evidence, draft gate brief); nothing staged at dispatch; digest 318b3370 before git add and on HEAD via git ls-tree."
+      "attempt_1": "Stopped before commit (agent a9700715c20754afc, self_reported claude-sonnet-5-5): HEAD = origin/main = e2bf1aa, digest 70975091 (870) matched, tree set matched, nothing staged at start, key scan 0 hits; 363 paths staged; precommit exit 1: BLOCK private-media handoff/delivery/evidence/WP5-UX5-GATE/13-integ-signatures.txt (a non-source basename containing 'signature' without 'synthetic'; it is the gate's text log of the signatures integration test on synthetic data); git diff --cached --check 0; later checks not run. Addendum 1: the same committer renames that evidence file with git mv to 13-integ-signatures-synthetic.txt (and any other such basename), reruns from check 7 and commits (attempt 2). A precommit block, not a permission denial, so resuming the same agent is allowed.",
+      "attempt_2": "Stopped before commit (same agent): the one blocked basename renamed with git mv to 13-integ-signatures-synthetic.txt (the only such file); precommit PASS (363 files), git diff --cached --check 0, JSON parse 0, validate_package --preflight 0; validate_orchestration and check_recovery exit 1 'Dependency gate not PASS: WP5-UX5-FIX1' (coordinator slip: FIX1 depended on the FAIL gate). Board fixed (FIX1 depends on WP5-UX5-T06-FREEZE, addresses_gate WP5-UX5-GATE). Addendum 2: re-stage only ORCHESTRATION.json and rerun from check 7 (attempt 3).",
+      "next_action": "Attempt 3 by the same committer after Addendum 2."
     },
     {
       "id": "WP5-UX5-PLAN",

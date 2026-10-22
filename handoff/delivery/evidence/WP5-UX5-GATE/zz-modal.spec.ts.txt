@@ -1,0 +1,33 @@
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, SeedClient, test } from './fixtures.ts';
+import { note, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository): the Day editor is non-modal from 768px and a modal bottom sheet below it.
+ * Notes go to GATE_OUT/modal.txt. Desktop project.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+test('non-modal from 768px, modal below', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Modal Gate', signature: 'none' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await signInTo(page, privateServer, person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  for (const width of [1920, 1440, 1330, 1280, 1024, 800, 769, 768, 767, 600, 390]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.waitForTimeout(250);
+    if ((await editor.count()) === 0) {
+      if (width >= 480) await namedDayButton(page, free[0] ?? '', 'Edit').click();
+      else await page.locator(`tr[data-day="${free[0] ?? ''}"] .sheet-day-button`).click();
+    }
+    await expect(editor).toBeVisible();
+    await page.waitForTimeout(250);
+    const f = await editor.evaluate((el) => ({ modal: el.matches(':modal'), ariaModal: el.getAttribute('aria-modal'), inert: document.querySelectorAll('[inert]').length, layout: document.querySelector('.sheet-area')?.getAttribute('data-editor-layout') ?? null, kind: getComputedStyle(el).position }));
+    note('modal.txt', `${width}px: editor :modal ${f.modal}, aria-modal ${f.ariaModal}, [inert] ${f.inert}, layout ${f.layout}, position ${f.kind} (expected non-modal from 768, modal sheet below)`);
+    expect(f.modal).toBe(width < 768);
+  }
+});

@@ -1,0 +1,8 @@
+# Full e2e on the real clock, one project at a time, alone. Usage: bash fullrun.sh <suffix>
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX1/env.sh
+S=$1
+for P in desktop mobile; do
+  bash $T/run-shift.sh full-$P$S real --project=$P > $T/out/90-full-$P$S.txt 2>&1
+  echo "$P: $(grep -E '^  [0-9]+ (passed|failed|skipped|flaky)|exit=' $T/out/90-full-$P$S.txt | tr '\n' ' ')" >> $T/out/90-full-summary$S.txt
+done
+echo done >> $T/out/90-full-summary$S.txt

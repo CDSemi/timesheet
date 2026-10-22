@@ -1,0 +1,109 @@
+import { createHash } from 'node:crypto';
+import { appendFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { openDatabase } from '../../src/server/db/database.ts';
+import { FileStore } from '../../src/server/files/fileStore.ts';
+import { createBackup } from '../../src/server/ops/backup.ts';
+import { MANIFEST_FILE_NAME } from '../../src/server/ops/manifest.ts';
+import { RESTORED_DATA_DIR, RESTORED_DATABASE_NAME, restoreBackup } from '../../src/server/ops/restore.ts';
+import { saveSignature } from '../../src/server/services/signatures.ts';
+import { makePng } from '../support/pdfText.ts';
+import { sendWithDefaults } from '../support/sends.ts';
+import { createTestContext, la, LA, MutableClock } from '../support/testApp.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository): a database holding PDF variants (all four) and send rows (a send with its
+ * own rows, another copy with a reason, a replay) is backed up and restored; every restored file equals its manifest hash, and the
+ * revision_files and revision_sends rows equal the source's. Notes go to GATE_OUT/backup-variants.txt.
+ */
+const OUT = process.env.GATE_OUT ?? '';
+const say = (line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'backup-variants.txt'), `${line}\n`);
+};
+const sha256 = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
+
+describe('backup and restore of a database with PDF variants and send rows', () => {
+  it('keeps the variant files, the send rows and the manifest hashes', async () => {
+    const t = await createTestContext('2026-09-29T20:00:00Z');
+    const dataDir = join(dirname(t.config.databasePath), 'private-data');
+    const employee = await t.login('employee');
+    const files = new FileStore(dataDir);
+    const settings = await t.request('POST', '/api/settings/submission', { cookie: employee, body: { expected_seq: 0, to: ['payroll@example.invalid'], cc: ['manager@example.invalid'], auto_submit: false } });
+    expect(settings.status).toBeLessThan(300);
+    saveSignature(t.db, t.clock, files, t.userIds.employee, makePng(40, 12), 'image/png');
+    const date = '2026-09-15';
+    const added = await t.request('POST', `/api/days/${date}/sessions`, { cookie: employee, body: { start: la(`${date}T09:00`), end: la(`${date}T18:30`), input_zone: LA, breaks: [], breaks_confirmed: true } });
+    expect(added.status).toBe(201);
+    const review = await t.request('GET', '/api/timesheets/2026-10-02/review', { cookie: employee });
+    const signed = await t.request('POST', '/api/timesheets/2026-10-02/signoff', { cookie: employee, body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true } });
+    expect(signed.status, JSON.stringify(signed.body)).toBe(201);
+    const revisionId = signed.body.revision.id as string;
+    say(`sign-off: status ${signed.status}; delivery jobs after sign-off ${t.db.prepare("SELECT count(*) FROM jobs WHERE kind = 'send_email'").pluck().get()} (sign-off enqueues no send)`);
+    // all four variants rendered on request
+    const variants = ['time=1&ot=1', 'time=1&ot=0', 'time=0&ot=1', 'time=0&ot=0'];
+    for (const v of variants) {
+      const r = await t.request('GET', `/api/revisions/${revisionId}/pdf?${v}`, { cookie: employee });
+      expect(r.status, v).toBe(200);
+    }
+    // sends: own rows, then another copy with a reason, then a replay of the first
+    const first = await sendWithDefaults(t, employee, revisionId, { time_rows: false, ot_rows: false, request_key: 'gate-key-one-0001' });
+    expect(first.status, JSON.stringify(first.body)).toBe(201);
+    const replay = await sendWithDefaults(t, employee, revisionId, { time_rows: false, ot_rows: false, request_key: 'gate-key-one-0001' });
+    say(`send 1: ${first.status}; replay with the same key and body: ${replay.status} status "${replay.body.status}"`);
+    // make the first send's job succeed with an accepted attempt so another copy counts: run the jobs with the capture runner
+    const { createJobHandlers, runJobsOnce } = await import('../../src/server/jobs/runner.ts');
+    const { loadDeliveryConfig } = await import('../../src/server/config.ts');
+    const delivery = loadDeliveryConfig({ MAIL_FROM: 'timesheet@example.invalid', DATA_DIR: dataDir }, { databasePath: join(dataDir, '..', 'unused.db'), port: 3000, production: false });
+    const run = () => runJobsOnce({ db: t.db, clock: t.clock, owner: 'runner-gate', leaseSeconds: 600, handlers: createJobHandlers({ db: t.db, clock: t.clock, files, delivery }) });
+    await run();
+    t.clock.set('2026-09-29T20:02:00Z');
+    await run();
+    const states = t.db.prepare('SELECT state FROM delivery_attempts ORDER BY started_at').pluck().all();
+    say(`delivery attempts after the runner: ${JSON.stringify(states)}`);
+    const noReason = await sendWithDefaults(t, employee, revisionId, { time_rows: true, ot_rows: true });
+    say(`another copy without a reason: ${noReason.status} ${JSON.stringify(noReason.body?.error?.code ?? noReason.body)}`);
+    const second = await sendWithDefaults(t, employee, revisionId, { time_rows: true, ot_rows: true, reason: 'Gate probe asked for another copy' });
+    say(`another copy with a reason: ${second.status}`);
+    expect(second.status, JSON.stringify(second.body)).toBe(201);
+    t.clock.set('2026-09-29T20:03:00Z');
+    await run();
+
+    const sourceFiles = t.db.prepare('SELECT * FROM revision_files ORDER BY rowid').all();
+    const sourceSends = t.db.prepare('SELECT * FROM revision_sends ORDER BY rowid').all();
+    say(`source: ${sourceFiles.length} revision_files (variants ${JSON.stringify(t.db.prepare('SELECT variant FROM revision_files ORDER BY variant').pluck().all())}), ${sourceSends.length} revision_sends (reasons ${JSON.stringify(t.db.prepare('SELECT reason FROM revision_sends ORDER BY send_no').pluck().all())}), ${t.db.prepare("SELECT count(*) FROM attachments WHERE kind = 'pdf'").pluck().get()} PDF attachments`);
+    expect(sourceFiles.length).toBe(4);
+    expect(sourceSends.length).toBe(2);
+
+    t.clock.set('2026-09-29T20:04:00Z');
+    const backupsRoot = mkdtempSync(join(tmpdir(), 'timesheet-gate-backups-'));
+    const backup = await createBackup({ databasePath: t.config.databasePath, dataDir, targetDir: backupsRoot, clock: t.clock });
+    const target = join(mkdtempSync(join(tmpdir(), 'timesheet-gate-restore-')), 'instance');
+    const result = await restoreBackup({ fromDir: backup.directory, toDir: target, liveDataDir: dataDir, liveDatabasePath: t.config.databasePath, clock: new MutableClock('2026-09-29T21:00:00Z') });
+    const manifest = JSON.parse(readFileSync(join(backup.directory, MANIFEST_FILE_NAME), 'utf8')) as { files: Array<{ storage_key: string; sha256: string }> };
+    const restoredFiles = readdirSync(join(target, RESTORED_DATA_DIR, 'files')).sort();
+    let equal = 0;
+    for (const file of manifest.files) if (sha256(readFileSync(join(target, RESTORED_DATA_DIR, 'files', file.storage_key))) === file.sha256) equal += 1;
+    say(`manifest: ${manifest.files.length} files; restored files ${restoredFiles.length}; each equals its manifest hash: ${equal}/${manifest.files.length}; file lists equal ${JSON.stringify(restoredFiles) === JSON.stringify(manifest.files.map((f) => f.storage_key).sort())}`);
+    expect(equal).toBe(manifest.files.length);
+    const restored = openDatabase(join(target, RESTORED_DATABASE_NAME));
+    try {
+      const rf = restored.prepare('SELECT * FROM revision_files ORDER BY rowid').all();
+      const rs = restored.prepare('SELECT * FROM revision_sends ORDER BY rowid').all();
+      say(`restored: revision_files rows equal the source ${JSON.stringify(rf) === JSON.stringify(sourceFiles)} (${rf.length}); revision_sends rows equal the source ${JSON.stringify(rs) === JSON.stringify(sourceSends)} (${rs.length}); integrity ${restored.pragma('integrity_check', { simple: true })}; foreign_key_check ${(restored.pragma('foreign_key_check') as unknown[]).length}; schema ${restored.prepare('SELECT max(version) FROM schema_migrations').pluck().get()}`);
+      expect(rf).toEqual(sourceFiles);
+      expect(rs).toEqual(sourceSends);
+      expect(restored.pragma('integrity_check', { simple: true })).toBe('ok');
+      expect(restored.pragma('foreign_key_check')).toEqual([]);
+      say(`restore summary kinds: pdfs ${result.manifest?.pdfs ?? 'n/a'}`);
+    } finally {
+      restored.close();
+    }
+    expect(existsSync(join(target, RESTORED_DATABASE_NAME))).toBe(true);
+    rmSync(dirname(target), { recursive: true, force: true });
+    rmSync(backupsRoot, { recursive: true, force: true });
+    t.close();
+  });
+});

@@ -1,0 +1,24 @@
+// Gate probe (scratch copy only): can a real window reach 479.33 CSS px? Windows below ~500px are refused by a normal browser window;
+// try an app-mode window (smaller minimum) at 125% and 150% scaling.
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { chromium } from '@playwright/test';
+
+const html = 'data:text/html,<!doctype html><title>x</title><body>x';
+for (const dsf of [1.25, 1.5]) {
+  for (const size of [480, 490, 500, 509, 510, 520]) {
+    const dir = mkdtempSync(join(tmpdir(), 'gate-frac-'));
+    let context;
+    try {
+      context = await chromium.launchPersistentContext(dir, { channel: 'msedge', headless: true, viewport: null, args: [`--window-size=${size},900`, `--force-device-scale-factor=${dsf}`, `--app=${html}`] });
+      const page = context.pages()[0] ?? (await context.newPage());
+      const r = await page.evaluate('({ rect: document.documentElement.getBoundingClientRect().width, inner: window.innerWidth, outer: window.outerWidth, dpr: window.devicePixelRatio, lt480: matchMedia("(width < 480px)").matches })');
+      console.log(`dsf ${dsf} window-size ${size} (app mode): ${JSON.stringify(r)}`);
+    } catch (error) {
+      console.log(`dsf ${dsf} window-size ${size}: REFUSED ${String(error.message).split('\n')[0]}`);
+    } finally {
+      if (context) await context.close();
+    }
+  }
+}

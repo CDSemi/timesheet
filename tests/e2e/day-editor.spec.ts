@@ -6350,6 +6350,74 @@ async function pageEdgeX(page: Page, editor: Locator): Promise<number> {
   return side === 'left' ? width - 4 : 4;
 }
 
+/** A point inside `target`, as an offset from its top-left corner. */
+type PressPoint = { x: number; y: number };
+
+/** One page part that a press outside can land on: the part, the offsets to try, and whether a point must be on plain page (no control). */
+type Surface = { target: Locator; candidates: (box: { width: number; height: number }) => PressPoint[]; plain?: boolean };
+
+/**
+ * Presses the first point of the first `surfaces` entry that the open drawer does not cover (WP5-UX5-FIX1). The floating
+ * drawer is a fixed column flush with one window edge and docks on the side away from the edited column, so which page parts
+ * it covers depends on the day of the week of the newest free workday; a fixed point of the title, of the period card text or
+ * of the paper margin was under the drawer on some days (the heading and the card text are short and sit at the left). Each
+ * surface is scrolled into view first; a point counts as uncovered when it lies outside the drawer's horizontal range (the
+ * drawer spans the window's height). A `plain` surface is a wider part of the page that holds controls, so a point on it must
+ * also be on no link, button or field. The point is asserted uncovered before it is pressed, and the test fails, with the
+ * boxes, when the drawer covers every surface.
+ */
+async function pressOutsideDrawer(editor: Locator, label: string, surfaces: Surface[]): Promise<void> {
+  for (const { target, candidates, plain = false } of surfaces) {
+    await target.scrollIntoViewIfNeeded();
+    const box = await target.boundingBox();
+    const drawer = await editor.boundingBox();
+    expect(box, `${label}: the part is on the page`).not.toBeNull();
+    expect(drawer, 'the drawer is open').not.toBeNull();
+    if (box === null || drawer === null) return;
+    const outside = (point: PressPoint): boolean => box.x + point.x < drawer.x || box.x + point.x > drawer.x + drawer.width;
+    for (const point of candidates(box)) {
+      if (!outside(point)) continue;
+      if (plain) {
+        const onControl = await target.evaluate((element, offset) => {
+          const rect = element.getBoundingClientRect();
+          const hit = element.ownerDocument.elementFromPoint(rect.left + offset.x, rect.top + offset.y);
+          return hit === null || !element.contains(hit) || hit.closest('a, button, input, select, textarea, label, [role="button"]') !== null;
+        }, point);
+        if (onControl) continue;
+      }
+      expect(outside(point), `${label}: the point pressed is outside the drawer`).toBe(true);
+      await target.click({ position: point });
+      return;
+    }
+  }
+  throw new Error(`${label}: every part tried is covered by the drawer ${JSON.stringify(await editor.boundingBox())}`);
+}
+
+/** The middle of a box, then points toward its right and left ends, then its quarter points. */
+const acrossMiddle = (box: { width: number; height: number }): PressPoint[] =>
+  [0.5, 0.9, 0.1, 0.75, 0.25].map((fraction) => ({ x: box.width * fraction, y: box.height / 2 }));
+
+/** The same row of points for a wide part that holds controls: from the middle outward. */
+const acrossPlain = (box: { width: number; height: number }): PressPoint[] =>
+  [0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7].map((fraction) => ({ x: box.width * fraction, y: box.height / 2 }));
+
+/** A press on the title: the heading where the drawer leaves it, else the empty part of the title row beside it. */
+async function pressTitle(page: Page, editor: Locator): Promise<void> {
+  await pressOutsideDrawer(editor, 'the title', [
+    { target: page.getByRole('heading', { name: 'Timesheet', level: 1 }), candidates: acrossMiddle },
+    { target: page.locator('header.page-head'), candidates: acrossPlain, plain: true },
+  ]);
+}
+
+/** A press on the period card text: the "Payroll date" line where the drawer leaves it, else plain space of the card. */
+async function pressPeriodCardText(page: Page, editor: Locator): Promise<void> {
+  const card = page.getByRole('region', { name: 'Pay period' });
+  await pressOutsideDrawer(editor, 'the period card text', [
+    { target: card.getByText(/^Payroll date/), candidates: acrossMiddle },
+    { target: card, candidates: acrossPlain, plain: true },
+  ]);
+}
+
 test.describe('WP5-UX5-T05B (U5-24, owner answer F-7 a): on a desktop a press outside a day column, the drawer, a dialog and a control closes the drawer', () => {
   test.skip(({ isMobile }) => isMobile, 'The phone handles a tap on the sheet backdrop (below)');
 
@@ -6367,10 +6435,11 @@ test.describe('WP5-UX5-T05B (U5-24, owner answer F-7 a): on a desktop a press ou
       const dayBtn = namedDayButton(page, date, 'Edit');
       const presses: Array<[string, () => Promise<void>]> = [
         ['the page background', async () => page.mouse.click(await pageEdgeX(page, editor), 300)],
-        ['the title', () => page.getByRole('heading', { name: 'Timesheet', level: 1 }).click()],
-        ['the period card text', () => page.getByRole('region', { name: 'Pay period' }).getByText(/^Payroll date/).click()],
-        ['the paper margin', () => page.locator('section.paper').click({ position: { x: 6, y: 40 } })],
-        ['the legend', () => page.getByRole('list', { name: 'Legend' }).click()],
+        // The drawer docks away from the edited column, so each target is pressed where the drawer does not cover it.
+        ['the title', () => pressTitle(page, editor)],
+        ['the period card text', () => pressPeriodCardText(page, editor)],
+        ['the paper margin', () => pressOutsideDrawer(editor, 'the paper margin', [{ target: page.locator('section.paper'), candidates: (box) => [{ x: 6, y: 40 }, { x: box.width - 6, y: 40 }] }])],
+        ['the legend', () => pressOutsideDrawer(editor, 'the legend', [{ target: page.getByRole('list', { name: 'Legend' }), candidates: acrossMiddle }])],
       ];
       for (const [name, press] of presses) {
         await dayBtn.click();
@@ -6411,7 +6480,7 @@ test.describe('WP5-UX5-T05B (U5-24, owner answer F-7 a): on a desktop a press ou
     await expect(notes).toHaveValue('Synthetic unsaved note');
     await expect(notes, 'Keep editing returns focus to the field that had it').toBeFocused();
 
-    await page.getByRole('heading', { name: 'Timesheet', level: 1 }).click();
+    await pressTitle(page, editor);
     await expect(prompt).toBeVisible();
     await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
     await expect(editor).toHaveCount(0);

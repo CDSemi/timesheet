@@ -606,13 +606,20 @@ function parseJson(text) {
  * Signs off one past synthetic period as the employee and sends it; returns the status and the new revision id. Since
  * WP5-UX5-T01b signing sends nothing, so the drill sends the revision itself (the send draft's defaults, after saving
  * synthetic example.invalid recipients once, because a send needs a recipient). A build before the split (stages 4 and
- * 5 run the previous build) already queued the send at sign-off, so nothing more is posted there.
+ * 5 run the previous build) already queued the send at sign-off, so nothing more is posted there. The previous build's
+ * schema still requires `signer_name` (the current server records the account's display name and ignores the key), so a
+ * call that targets the previous build passes `toPreviousBuild: true` and the body carries a synthetic signer name.
  */
-async function signOffPeriod(cookie, payrollDate) {
+async function signOffPeriod(cookie, payrollDate, { toPreviousBuild = false } = {}) {
   const review = await call('GET', `/api/timesheets/${payrollDate}/review`, { cookie });
   const signoff = await call('POST', `/api/timesheets/${payrollDate}/signoff`, {
     cookie,
-    body: { expected_version: review.json?.expected_version, reviewed_hash: review.json?.payload_hash, incomplete_evidence_acknowledged: true },
+    body: {
+      expected_version: review.json?.expected_version,
+      reviewed_hash: review.json?.payload_hash,
+      incomplete_evidence_acknowledged: true,
+      ...(toPreviousBuild ? { signer_name: 'Synthetic Employee Two' } : {}),
+    },
   });
   const revisionId = signoff.json?.revision?.id;
   if (signoff.status !== 201 || (signoff.json?.jobs ?? []).some((job) => job.kind === 'send_email')) return { status: signoff.status, revisionId };
@@ -1135,8 +1142,8 @@ async function stageFour() {
     }
     check('previous build: three synthetic work sessions recorded', sessionsOk);
     check('previous build: a second synthetic signature file is stored', (await uploadSignature(cookie, 90)) === 201);
-    const first = await signOffPeriod(cookie, '2026-03-20');
-    const second = await signOffPeriod(cookie, '2026-04-03');
+    const first = await signOffPeriod(cookie, '2026-03-20', { toPreviousBuild: true });
+    const second = await signOffPeriod(cookie, '2026-04-03', { toPreviousBuild: true });
     check('previous build: two synthetic periods signed off (revisions, OT ledger, queued PDF and send jobs)', first.status === 201 && second.status === 201, `status ${first.status}/${second.status}`);
     apiBefore = await apiFacts(cookie);
   } finally {

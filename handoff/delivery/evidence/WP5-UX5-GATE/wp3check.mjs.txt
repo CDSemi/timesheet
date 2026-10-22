@@ -1,0 +1,9 @@
+// Does the previous (WP3, 49651c8) build accept the drill's sign-off body (no signer_name)? Reads its own built schema, runs nothing else.
+import { pathToFileURL } from 'node:url';
+
+const schemas = await import(pathToFileURL('<task>/wp3/dist/server/http/schemas.js').href);
+const body = { expected_version: 0, reviewed_hash: 'a'.repeat(64), incomplete_evidence_acknowledged: true };
+const without = schemas.signoffBody.safeParse(body);
+const withName = schemas.signoffBody.safeParse({ ...body, signer_name: 'Synthetic Employee' });
+console.log(`previous build signoffBody without signer_name: success=${without.success}${without.success ? '' : ` issues=${JSON.stringify(without.error.issues.map((i) => `${i.path.join('.')}:${i.code}`))}`}`);
+console.log(`previous build signoffBody with signer_name: success=${withName.success}`);

@@ -1,0 +1,62 @@
+// Gate probe (scratch copy only): can any browser method give a fractional CSS viewport width (479.33, 767.33)?
+import { chromium } from '@playwright/test';
+
+const html = '<!doctype html><meta charset="utf-8"><body><div id="o"></div><script>' +
+  'function facts(){const r=[];for(const w of [479,479.2,479.33,479.67,480,767,767.2,767.33,767.67,768]){r.push(w+":"+matchMedia("(width < "+w+"px)").matches);}' +
+  'return {inner:window.innerWidth,client:document.documentElement.clientWidth,dpr:window.devicePixelRatio,rectW:document.documentElement.getBoundingClientRect().width,lt480:matchMedia("(width < 480px)").matches,ge480:matchMedia("(width >= 480px)").matches,lt768:matchMedia("(width < 768px)").matches,ge768:matchMedia("(width >= 768px)").matches,probes:r.join(" ")};}' +
+  '</script>';
+
+async function attempt(label, fn) {
+  try {
+    const out = await fn();
+    console.log(`${label}: ${JSON.stringify(out)}`);
+  } catch (error) {
+    console.log(`${label}: REFUSED ${String(error.message).split('\n')[0]}`);
+  }
+}
+
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+console.log(`browser ${browser.version()}`);
+const context = await browser.newContext({ viewport: { width: 600, height: 700 } });
+const page = await context.newPage();
+await page.setContent(html);
+await attempt('A setViewportSize 479.33', async () => {
+  await page.setViewportSize({ width: 479.33, height: 700 });
+  return page.evaluate('facts()');
+});
+await attempt('B CDP setDeviceMetricsOverride width 479.33', async () => {
+  const session = await context.newCDPSession(page);
+  await session.send('Emulation.setDeviceMetricsOverride', { width: 479.33, height: 700, deviceScaleFactor: 1.25, mobile: false });
+  return page.evaluate('facts()');
+});
+await attempt('C CDP setDeviceMetricsOverride width 599 dsf 1.25 (the physical window at 125%)', async () => {
+  const session = await context.newCDPSession(page);
+  await session.send('Emulation.setDeviceMetricsOverride', { width: 599, height: 700, deviceScaleFactor: 1.25, mobile: false });
+  return page.evaluate('facts()');
+});
+await attempt('D CDP setDeviceMetricsOverride width 480 scale 0.998 (page scale)', async () => {
+  const session = await context.newCDPSession(page);
+  await session.send('Emulation.setDeviceMetricsOverride', { width: 480, height: 700, deviceScaleFactor: 1, mobile: false, scale: 0.998 });
+  return page.evaluate('facts()');
+});
+await context.close();
+
+// E a real window sized in physical pixels at 125% display scaling
+for (const [label, args] of [
+  ['E msedge --window-size=599,700 --force-device-scale-factor=1.25', ['--window-size=599,700', '--force-device-scale-factor=1.25']],
+  ['F msedge --window-size=959,700 --force-device-scale-factor=1.25 (767.2)', ['--window-size=959,700', '--force-device-scale-factor=1.25']],
+  ['G msedge --window-size=719,700 --force-device-scale-factor=1.5 (479.33)', ['--window-size=719,700', '--force-device-scale-factor=1.5']],
+]) {
+  await attempt(label, async () => {
+    const b = await chromium.launch({ channel: 'msedge', headless: true, args });
+    try {
+      const c = await b.newContext({ viewport: null });
+      const p = await c.newPage();
+      await p.setContent(html);
+      return await p.evaluate('facts()');
+    } finally {
+      await b.close();
+    }
+  });
+}
+await browser.close();

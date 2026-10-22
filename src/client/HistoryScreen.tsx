@@ -5,6 +5,7 @@ import { describeError } from './components/errors.ts';
 import { displayZone, instantText } from './components/format.ts';
 import { changedFields, operationText } from './components/otModel.ts';
 import { historyActorBadge, shareOperationText } from './components/sharingModel.ts';
+import { TableWrap } from './components/TableWrap.tsx';
 
 const PAGE_SIZE = 25;
 
@@ -27,7 +28,7 @@ function EventItem({ event }: { event: HistoryEvent }) {
         Reason: {event.reason ?? 'none given'}
       </p>
       {changes.length > 0 && (
-        <div className="table-wrap">
+        <TableWrap label={`Changes for ${label}`}>
           <table aria-label={`Changes for ${label}`}>
             <thead>
               <tr>
@@ -50,7 +51,7 @@ function EventItem({ event }: { event: HistoryEvent }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       )}
     </li>
   );

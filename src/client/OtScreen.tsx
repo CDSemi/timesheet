@@ -17,6 +17,7 @@ import { ledgerEntryLabel } from './importModel.ts';
 import { LeaveRow, type LeaveActions } from './components/LeaveRow.tsx';
 import { mismatchDays, mismatchText } from './components/otModel.ts';
 import { ReserveForm } from './components/ReserveForm.tsx';
+import { TableWrap } from './components/TableWrap.tsx';
 
 /** The evidence route accepts at most this many days (400); the default window is far inside it. */
 const EVIDENCE_MAX_DAYS = 400;
@@ -108,7 +109,7 @@ function EvidencePanel({ data }: { data: OtData }) {
       {data.ledger.length === 0 ? (
         <p className="muted">The ledger has no entries yet. Credits are posted when a period is finalized.</p>
       ) : (
-        <div className="table-wrap">
+        <TableWrap label="OT ledger">
           <table aria-label="OT ledger">
             <thead>
               <tr>
@@ -135,7 +136,7 @@ function EvidencePanel({ data }: { data: OtData }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       )}
       <div className="ot-export" role="group" aria-label="Evidence export">
         <label>

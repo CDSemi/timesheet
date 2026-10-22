@@ -1,0 +1,8 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+export GATE_OUT="$TW\\obs"
+cd $T/export-probe
+for f in zz-v13to15 zz-backup-variants zz-deadline; do
+  node node_modules/vitest/vitest.mjs run tests/integration/$f.test.ts --reporter=verbose > $T/logs/vprobe-$f.txt 2>&1
+  echo "$f exit $?"
+done

@@ -1,0 +1,13 @@
+# Usage: bash run-scratch.sh <label> [playwright args...]  -- runs the scratch copy (probe specs allowed there), real clock, axe loaded from the task folder.
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX1/env.sh
+L=$1; shift
+mkdir -p $T/pw-$L $T/shots-$L
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+export GATE_OUT="$TW\\out"
+export GATE_LABEL=$L
+export AXE_PATH="$TW\\axe\\axe.min.js"
+export NODE_OPTIONS="--trace-deprecation"
+cd $T/scratch || exit 2
+echo "\$ node node_modules/@playwright/test/cli.js test $*"
+node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-$L"
+echo "exit=$?"

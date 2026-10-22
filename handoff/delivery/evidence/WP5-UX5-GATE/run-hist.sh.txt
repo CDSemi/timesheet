@@ -1,0 +1,14 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+export GATE_OUT="$TW\\obs"
+for pair in "base:export-old" "target:export-probe"; do
+  label=${pair%%:*}; dir=${pair##*:}
+  export GATE_LABEL=$label
+  export AXE_PATH="$TW\\axe\\axe.min.js"
+  mkdir -p $T/pw-hist-$label
+  cp $T/zz-lib.ts $T/zz-hist.spec.ts $T/export-old/tests/e2e/
+  cp $T/zz-lib.ts $T/zz-hist.spec.ts $T/export-probe/tests/e2e/
+  cd $T/$dir
+  node node_modules/@playwright/test/cli.js test tests/e2e/zz-hist.spec.ts --project=desktop --output="$TW\\pw-hist-$label"
+  echo "hist $label exit=$?"
+done

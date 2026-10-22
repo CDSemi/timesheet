@@ -1,0 +1,77 @@
+// Gate probe (scratch copy only): reads the sample PDFs a gate spec saved: pages, fonts (BaseFont), text lines, rule geometry.
+// Usage: node zz-pdfprobe.mjs <folder with sample-*.pdf>
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { PDFDict, PDFDocument, PDFName } from 'pdf-lib';
+import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
+
+const folder = process.argv[2];
+const files = readdirSync(folder).filter((f) => /^sample-.*\.pdf$/.test(f)).sort();
+const mul = (m, n) => [n[0] * m[0] + n[1] * m[2], n[0] * m[1] + n[1] * m[3], n[2] * m[0] + n[3] * m[2], n[2] * m[1] + n[3] * m[3], n[4] * m[0] + n[5] * m[2] + m[4], n[4] * m[1] + n[5] * m[3] + m[5]];
+const apply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+for (const file of files) {
+  const bytes = readFileSync(join(folder, file));
+  const doc = await PDFDocument.load(bytes);
+  const fonts = [];
+  for (const [, object] of doc.context.enumerateIndirectObjects()) {
+    if (object instanceof PDFDict && object.get(PDFName.of('Type')) === PDFName.of('Font') && object.get(PDFName.of('BaseFont'))) fonts.push(String(object.get(PDFName.of('BaseFont'))).replace(/^\//, ''));
+  }
+  const pdf = await getDocument({ data: new Uint8Array(bytes), useSystemFonts: false, verbosity: 0 }).promise;
+  const page = await pdf.getPage(1);
+  const text = await page.getTextContent();
+  const items = text.items.filter((i) => 'str' in i && i.str.trim() !== '').map((i) => ({ s: i.str, x: i.transform[4], y: i.transform[5], w: i.width }));
+  const rows = [];
+  for (const item of [...items].sort((a, b) => b.y - a.y || a.x - b.x)) {
+    const row = rows[rows.length - 1];
+    if (row && Math.abs(row[0].y - item.y) < 1.5) row.push(item);
+    else rows.push([item]);
+  }
+  const lines = rows.map((r) => r.sort((a, b) => a.x - b.x).map((i) => i.s).join(' '));
+  const ops = await page.getOperatorList();
+  const rules = [];
+  let images = 0;
+  let ctm = [1, 0, 0, 1, 0, 0];
+  const stack = [];
+  ops.fnArray.forEach((fn, index) => {
+    const args = ops.argsArray[index];
+    if (fn === OPS.save) stack.push(ctm);
+    else if (fn === OPS.restore) ctm = stack.pop() ?? [1, 0, 0, 1, 0, 0];
+    else if (fn === OPS.transform) ctm = mul(ctm, args);
+    else if (fn === OPS.paintImageXObject) images += 1;
+    else if (fn === OPS.constructPath && Array.isArray(args) && (args[0] === OPS.fill || args[0] === OPS.stroke)) {
+      const data = Array.from(args[1][0]);
+      let i = 0;
+      let pts = [];
+      const flush = () => {
+        if (pts.length >= 2) {
+          const xs = pts.map((p) => p[0]);
+          const ys = pts.map((p) => p[1]);
+          const w = Math.max(...xs) - Math.min(...xs);
+          const h = Math.max(...ys) - Math.min(...ys);
+          if (w > 30 && h < 1.6) rules.push([Math.min(...xs), Math.max(...xs), (Math.min(...ys) + Math.max(...ys)) / 2]);
+        }
+        pts = [];
+      };
+      while (i < data.length) {
+        const code = data[i];
+        i += 1;
+        if (code === 0) { flush(); pts.push(apply(ctm, data[i], data[i + 1])); i += 2; }
+        else if (code === 1) { pts.push(apply(ctm, data[i], data[i + 1])); i += 2; }
+        else if (code === 2) { pts.push(apply(ctm, data[i + 4], data[i + 5])); i += 6; }
+        else if (code === 3) { pts.push(apply(ctm, data[i + 2], data[i + 3])); i += 4; }
+        else if (code === 4) { /* close */ }
+        else break;
+      }
+      flush();
+    }
+  });
+  console.log(`== ${file}: ${bytes.length} bytes, sha256 ${createHash('sha256').update(bytes).digest('hex').slice(0, 16)}, pages ${pdf.numPages}, images ${images}`);
+  console.log(`   fonts: ${[...new Set(fonts)].join(', ')}`);
+  console.log(`   text lines (${lines.length}):`);
+  for (const l of lines) console.log(`     ${l}`);
+  const low = rules.filter((s) => s[2] < 330).sort((a, b) => b[2] - a[2] || a[0] - b[0]);
+  console.log(`   horizontal rules in the lower page (x0 x1 y): ${low.map((s) => s.map((v) => v.toFixed(1)).join(' ')).join(' | ')}`);
+  const caps = items.filter((i) => /Signature|^Date$/.test(i.s)).map((i) => `${i.s}@${(i.x + i.w / 2).toFixed(1)}y${i.y.toFixed(0)}`);
+  console.log(`   caption centres: ${caps.join(', ')}`);
+}

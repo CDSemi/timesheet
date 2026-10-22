@@ -1,0 +1,83 @@
+00-README.txt
+00-node-head.txt
+01-digest-before.txt
+90-digest-after.txt
+env.sh.txt
+fix-ab01.txt
+fix-ab01b.txt
+fix-ab02.txt
+fix-ab03.txt
+fix-ab04.txt
+git-diffstat.txt
+git-status-code.txt
+lint.txt
+preflight.txt
+probe-now.mjs.txt
+repro-ab01.txt
+repro-ab02.txt
+repro-ab03.txt
+repro-ab04.txt
+repro-rest.sh.txt
+run-shift.sh.txt
+shiftclock.mjs.txt
+sweep-d-1128-1000-w1.txt
+sweep-d-1128-1000.txt
+sweep-d-1226-1000.txt
+sweep-d-2027-0111-1000.txt
+sweep-d-2027-0119-1800-rerun.txt
+sweep-d-2027-0119-1800.txt
+sweep-extra.sh.txt
+sweep-p-1030-1000.txt
+sweep-p1-1031-1000.txt
+sweep-p3-1027-1300.txt
+sweep-p3-1027-1800.txt
+sweep-p4-1026-1000.txt
+sweep-real.txt
+sweep-table.txt
+sweep-x-1130-1000-w1.txt
+sweep-x-2027-0102-1000.txt
+sweep.sh.txt
+typecheck.txt
+unit-seed.txt
+unit.txt
+verify.txt
+# Usage: bash run-shift.sh <label> <target instant, UTC ISO or "real"> [playwright args...]
+# One Playwright run in the repository under a simulated wall clock (shiftclock.mjs), own output folder.
+# Based on the WP5-UX-AUDIT-AB8 wrapper; the step reporter is not used.
+source /d/.claude-tmp/timesheet/WP5-UX-FIX10/env.sh
+L=$1; TARGET=$2; shift 2
+mkdir -p $T/pw-$L $T/shots-$L
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+if [ "$TARGET" = "real" ]; then
+  export NODE_OPTIONS="--trace-deprecation"
+  export AB8_SHIFT_MS=0
+else
+  TARGET_MS=$(date -u -d "$TARGET" +%s%3N)
+  NOW_MS=$(date -u +%s%3N)
+  export AB8_SHIFT_MS=$((TARGET_MS - NOW_MS))
+  export NODE_OPTIONS="--trace-deprecation --import file:///$(cygpath -m $T)/shiftclock.mjs"
+fi
+echo "== $L: real start $(date -u +%Y-%m-%dT%H:%M:%SZ), simulated start $TARGET, AB8_SHIFT_MS=$AB8_SHIFT_MS"
+node.exe $T/probe-now.mjs
+cd "$REPO" || exit 2
+echo "\$ node node_modules/@playwright/test/cli.js test $* --output=<task>/pw-$L"
+node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-$L"
+echo "exit=$?"
+node.exe $T/probe-now.mjs
+echo "== $L real end $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# Sourced by every WP5-UX-FIX10 command (Git Bash). Task-local temp, cache, data; Node 24 first.
+T=/d/.claude-tmp/timesheet/WP5-UX-FIX10
+TW=$(cygpath -w "$T")
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$(cygpath -u "$APPDATA")/npm:$PATH"
+mkdir -p "$T/tmp" "$T/data"
+export TEMP="$TW\\tmp"
+export TMP="$TW\\tmp"
+export npm_config_update_notifier=false
+export npm_config_fund=false
+export DATA_DIR="$TW\\data"
+export DATABASE_PATH="$TW\\data\\timesheet.db"
+export NODE_OPTIONS="--trace-deprecation"
+NPM_CLI="$(cygpath -u "$APPDATA")/npm/node_modules/npm/bin/npm-cli.js"
+npmx() { node.exe "$NPM_CLI" "$@"; }
+REPO=/d/Dropbox/Work.CDSemi/timesheet
+E=$REPO/handoff/delivery/evidence/WP5-UX-FIX10

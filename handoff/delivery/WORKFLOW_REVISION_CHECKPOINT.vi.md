@@ -1559,6 +1559,61 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Đang chạy: WP5-UX5-T06-FREEZE (một committer mới, chạy một mình). Nó stage 6 đường dẫn
   tài liệu cùng các hồ sơ trong handoff, gồm cặp pilot packet và bản nháp brief gate. Digest
   phải là 318b3370, kiểm tra trên HEAD bằng `git ls-tree`.
+- WP5-UX5-T06-FREEZE xong: e2bf1aab4ef65d496de6672c7986e27db04ddb39 trên main, đã push (55
+  đường dẫn). Digest 318b3370 (868 file) trước khi stage và từ `git ls-tree` của HEAD; mọi
+  kiểm tra exit 0. Mọi slice của đợt 5 đã được freeze; e2bf1aa là bản chụp cuối của gói.
+- Giai đoạn `ux5-gate`. Đang chạy: WP5-UX5-GATE (verifier, sonnet; cỡ L, rủi ro H; đích
+  e2bf1aa / 318b3370; nền 8e55710 / 507de97c; cổng 49820-49859; Compose project
+  `ts-wp5-ux5gate`).
+  - Gate kiểm cả đợt 4 và đợt 5: gate WP5 với lần drill đầu tiên của đợt 5, ranh giới và
+    phạm vi, dữ liệu / gửi / PDF, đồng hồ giả lập, kiểm lại các điểm của đợt 4, kiểm giao
+    diện của đợt 5, axe, CSP và ảnh chụp màn hình.
+  - Không writer nào chạy trong lúc gate chạy.
+- Đã soạn sẵn brief cho sau khi gate PASS: WP5-UX5-AUDIT-A (giao diện, khung điều hướng,
+  Timesheet, Day editor, giao diện Review, khả năng tiếp cận, F-UX4A-1..4) và
+  WP5-UX5-AUDIT-B (sign off và gửi, dữ liệu, migration, PDF, font, quyền riêng tư, tài
+  liệu, F-UX4B-1). Cả hai do auditor opus/xhigh mới làm trên e2bf1aa / 318b3370, chạy song
+  song; audit tích hợp đi sau.
+- WP5-UX5-GATE: **FAIL** (NAS NOT VERIFIED). Digest 318b3370 khớp ở cả ba dạng.
+  - **Drill `--wp3`:** 203 PASS / 6 FAIL. Lệnh sign off của drill thiếu `signer_name`, mà
+    bản build trước bắt buộc phải có, nên bước nâng cấp có dữ liệu không được chạy thử.
+  - **Quét với đồng hồ giả lập:** bốn lỗi test phụ thuộc vào ngày hoặc giờ mùa hè (DST):
+    - `day-editor.spec.ts:6357`;
+    - `today.spec.ts:990` và `:455`;
+    - `timesheet.spec.ts:2040`.
+  - **axe:** `scrollable-region-focusable` trên trang History. Lỗi có từ trước, giống hệt
+    trên BASE_SHA.
+  - **Đạt:** mọi mục còn lại. Gồm FULL e2e trên đồng hồ thật (859/0), npm test x3,
+    migration 13 lên 15 kèm backfill, sao lưu và khôi phục, gửi và lý do, hạn chót và
+    nhắc nhở, bốn biến thể PDF một trang có Indie Flower, phạm vi, bảng route, CSP, các độ
+    rộng lẻ (đã đạt tới được), kiểm lại các điểm của đợt 4 và 38/40 lượt quét axe.
+- Giai đoạn `ux5-fix`. Đang chạy: WP5-UX5-FIX1 (worker-high, sonnet; cỡ M, rủi ro M; nền
+  e2bf1aa / 318b3370; cổng 49920-49939; Compose project `ts-wp5-ux5fix1`).
+  - Sửa nội dung lệnh sign off của drill cho bản build trước, sửa bốn test, và làm cho các
+    vùng cuộn của History nhận được focus và có tên.
+  - Bằng chứng cần có: drill 0 FAIL; bốn test 0 lỗi ở cả sáu thời điểm và trên đồng hồ
+    thật; axe trên History 0; FULL e2e 0 lỗi.
+- WP5-UX5-FIX1 xong (theo báo cáo của worker; regate còn chờ). Mỗi phát hiện đều được tái
+  hiện trước khi sửa.
+  - **Drill:** chỉ gửi `signer_name` cho bản build trước. 209 PASS / 0 FAIL, và giai đoạn 4
+    giờ sign off được hai kỳ trước khi nâng cấp.
+  - **Bốn test:** giờ làm theo quy tắc của T04 dựa trên số đo, và dùng một phiên làm việc
+    vắt qua nửa đêm ở cả giờ mùa hè lẫn mùa đông. 0 lỗi ở cả sáu thời điểm và trên đồng
+    hồ thật; các mutant của assertion cũ đều fail.
+  - **History:** thành phần mới `TableWrap.tsx` thay cho cả bảy chỗ dùng `.table-wrap`. Bảng
+    nào tràn ngang sẽ thành một vùng có tên và nhận được focus. Axe trên History 0, kèm
+    test mới `history-a11y.spec.ts`.
+  - FULL e2e: desktop 458 và mobile 403 đạt, 0 lỗi. Verify 0. Digest 70975091 (870 file).
+- Đang chạy: tra cứu WP5-UX5-FIX1-PATHS (light, haiku, chỉ đọc).
+- FIX1-PATHS xong, nhưng một lần kiểm tra quyền đã chặn việc ghi Results vào brief của nó.
+  Danh sách đầy đủ nằm trong thư mục tác vụ, còn board giữ bản tóm tắt.
+  - Ngoài `handoff/`: 11 file sửa, 2 file mới, không có gì được stage, không có gì trong
+    `src/server` hay `src/domain`.
+  - Trong `handoff/`: 5 file sửa và 344 file mới, phần lớn là bằng chứng của gate và
+    FIX1.
+- Đang chạy: WP5-UX5-FIX1-FREEZE (một committer mới, chạy một mình). Nó stage 13 đường dẫn
+  ghi rõ tên, các hồ sơ trong handoff, và ba thư mục bằng chứng dưới dạng thư mục. Digest
+  phải là 70975091, kiểm tra trên HEAD bằng `git ls-tree`.
 - Còn lại sau T06:
   - T06-FREEZE;
   - gate gói của đợt 5 (bao gồm cả đợt 4 và đợt 5);

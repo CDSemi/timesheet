@@ -1,0 +1,14 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+const T = '<task>';
+const log = readFileSync(`${T}/logs/cmp-dist.txt`, 'utf8').split('\n');
+const start = log.findIndex((l) => l.startsWith('== export-old'));
+const end = log.findIndex((l) => l.startsWith('all hash diff'));
+const dist = log.slice(start + 1, end).filter((l) => l.startsWith('dist/'));
+const src = readFileSync(`${T}/out/20-server-map.txt`, 'utf8').split('\n').filter(Boolean).map((l) => l.split(':')[0]);
+const expected = new Set(src.flatMap((p) => { const d = 'dist/' + p.replace(/^src\//, '').replace(/\.ts$/, ''); return [d + '.js', d + '.js.map']; }));
+const got = new Set(dist);
+const unmapped = [...got].filter((f) => !expected.has(f));
+const missing = [...expected].filter((f) => !got.has(f));
+const out = `dist differences ${got.size}; expected from the ${src.length} mapped sources ${expected.size}; dist files not explained by a mapped source: ${JSON.stringify(unmapped)}; mapped sources with no dist difference: ${JSON.stringify(missing)}\n`;
+writeFileSync(`${T}/out/51-dist-map.txt`, out);
+console.log(out);

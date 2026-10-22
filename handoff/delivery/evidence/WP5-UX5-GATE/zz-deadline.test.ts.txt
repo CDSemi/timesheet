@@ -1,0 +1,83 @@
+import { appendFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { FileStore } from '../../src/server/files/fileStore.ts';
+import { runDeadlineScan, setAutomationActivation } from '../../src/server/services/automation.ts';
+import { runReminderScan } from '../../src/server/services/notifications.ts';
+import { saveSignature } from '../../src/server/services/signatures.ts';
+import { makePng } from '../support/pdfText.ts';
+import { sendWithDefaults } from '../support/sends.ts';
+import { createTestContext, la, LA, type TestContext } from '../support/testApp.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository): a period with a send on any revision counts as submitted (H-1 a):
+ * the deadline scan sends nothing more and a LATER CORRECTION is never sent automatically, even with auto-submit on; reminders stop.
+ * Notes go to GATE_OUT/deadline.txt.
+ */
+const OUT = process.env.GATE_OUT ?? '';
+const say = (line: string) => {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, 'deadline.txt'), `${line}\n`);
+};
+const PAYROLL = '2026-10-02';
+let t: TestContext;
+let employee: string;
+beforeEach(async () => {
+  t = await createTestContext('2026-09-29T20:00:00Z');
+  employee = await t.login('employee');
+});
+afterEach(() => t.close());
+const count = (sql: string): number => Number(t.db.prepare(sql).pluck().get());
+
+describe('a send makes the period submitted', () => {
+  it('stops reminders, and a later correction is not sent automatically at the deadline', async () => {
+    const files = new FileStore(join(dirname(t.config.databasePath), 'private-data'));
+    const settings = await t.request('POST', '/api/settings/submission', { cookie: employee, body: { expected_seq: 0, to: ['payroll@example.invalid'], cc: [], auto_submit: true } });
+    expect(settings.status).toBeLessThan(300);
+    saveSignature(t.db, t.clock, files, t.userIds.employee, makePng(40, 12), 'image/png');
+    setAutomationActivation(t.db, t.clock, { actorUserId: t.userIds.admin, activeFrom: '2026-09-29T21:00:00Z', reason: 'Synthetic activation' });
+    const add = async (date: string, reason?: string) => {
+      const r = await t.request('POST', `/api/days/${date}/sessions`, { cookie: employee, body: { start: la(`${date}T09:00`), end: la(`${date}T18:00`), input_zone: LA, breaks: [], breaks_confirmed: true, ...(reason ? { reason } : {}) } });
+      expect(r.status, JSON.stringify(r.body)).toBe(201);
+    };
+    await add('2026-09-15');
+    const review = await t.request('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: employee });
+    const signed = await t.request('POST', `/api/timesheets/${PAYROLL}/signoff`, { cookie: employee, body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true } });
+    expect(signed.status).toBe(201);
+    const original = signed.body.revision.id as string;
+    // before the send: a reminder scan (24 h before the deadline) would remind; after the send nothing more
+    const sent = await sendWithDefaults(t, employee, original);
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+    say(`signed ${original.slice(0, 8)} and sent once: revision_sends ${count('SELECT count(*) FROM revision_sends')}`);
+    const dueA =t.db.prepare('SELECT due_at_utc FROM pay_periods WHERE payroll_date = ?').pluck().get(PAYROLL) as string;
+    t.clock.set(new Date(Date.parse(dueA) - 125 * 60_000).toISOString().replace('.000Z', 'Z'));
+    const scanA = runReminderScan(t.db, t.clock);
+    const occA = t.db.prepare('SELECT p.payroll_date AS payroll, o.kind, o.disposition, o.occurrence_key AS key FROM reminder_occurrences o JOIN pay_periods p ON p.id = o.pay_period_id WHERE o.user_id = ?').all(t.userIds.employee);
+    say(`A. after the send, before any correction: reminder scan at due - 125 min: ${JSON.stringify(scanA)}; occurrences ${JSON.stringify(occA)}`);
+    // a correction after the send (send_email false: the owner has not sent it)
+    await add('2026-09-16', 'Synthetic forgotten day');
+    const r2 = await t.request('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: employee });
+    const correction = await t.request('POST', `/api/timesheets/${PAYROLL}/revisions`, { cookie: employee, body: { expected_version: r2.body.expected_version, reviewed_hash: r2.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false } });
+    expect(correction.status, JSON.stringify(correction.body)).toBe(201);
+    const sendsBefore = count('SELECT count(*) FROM revision_sends');
+    const revisionsBefore = count('SELECT count(*) FROM timesheet_revisions');
+    // reminders: the period counts as submitted, so none is decided for PAYROLL; other periods may still be reminded
+    const due = t.db.prepare('SELECT due_at_utc FROM pay_periods WHERE payroll_date = ?').pluck().get(PAYROLL) as string;
+    t.clock.set(new Date(Date.parse(due) - 2 * 3600_000).toISOString().replace('.000Z', 'Z'));
+    const remindersBefore = runReminderScan(t.db, t.clock);
+    const perPeriod = t.db.prepare('SELECT p.payroll_date AS payroll, o.kind, o.disposition FROM reminder_occurrences o JOIN pay_periods p ON p.id = o.pay_period_id WHERE o.user_id = ? ORDER BY o.decided_at').all(t.userIds.employee);
+    say(`period ${PAYROLL} due ${due}; reminder scan at due - 2 h with a send on the period: ${JSON.stringify(remindersBefore)}; occurrences by period ${JSON.stringify(perPeriod)}`);
+    expect(perPeriod.filter((o) => (o as { payroll: string }).payroll === PAYROLL)).toEqual([]);
+    // the deadline passes: scans at and after it
+    const results: unknown[] = [];
+    for (const when of [new Date(Date.parse(due) + 3600_000).toISOString().replace('.000Z', 'Z'), new Date(Date.parse(due) + 7200_000).toISOString().replace('.000Z', 'Z'), new Date(Date.parse(due) + 86400_000).toISOString().replace('.000Z', 'Z')]) {
+      t.clock.set(when);
+      results.push(runDeadlineScan(t.db, t.clock));
+    }
+    say(`deadline scans after the correction: ${JSON.stringify(results)}`);
+    say(`revision_sends before ${sendsBefore}, after ${count('SELECT count(*) FROM revision_sends')}; revisions before ${revisionsBefore}, after ${count('SELECT count(*) FROM timesheet_revisions')}; overdue records ${count('SELECT count(*) FROM audit_events WHERE operation LIKE \'deadline.%\'')} deadline audit events`);
+    expect(count('SELECT count(*) FROM revision_sends')).toBe(sendsBefore);
+    expect(count('SELECT count(*) FROM timesheet_revisions')).toBe(revisionsBefore);
+    for (const r of results) expect(r).toMatchObject({ sentSigned: 0, finalized: 0, overdueRecorded: 0 });
+  });
+});

@@ -1,0 +1,130 @@
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, SeedClient, test } from './fixtures.ts';
+import { note, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository): the phone sheet (T05B) and the sub-buttons (T05A) on the built target.
+ * Notes go to GATE_OUT/phone.txt. Mobile project (390x844, touch) plus one coarse-pointer context on a wide window.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUTFILE = 'phone.txt';
+
+const SUBBUTTONS = String.raw`(() => {
+  const sel = '.session-card .button-row > button, .editor-section-head > button, .break-actions > button, .leave-summary > button, .editor-actions > button';
+  const buttons = [...document.querySelectorAll(sel)].filter((b) => b.getBoundingClientRect().height > 0);
+  const pre = buttons.map((b) => b.getBoundingClientRect());
+  const preGaps = [];
+  for (let i = 0; i < pre.length; i += 1) for (let j = i + 1; j < pre.length; j += 1) {
+    if (Math.abs(pre[i].top - pre[j].top) < 2 && pre[j].left > pre[i].right - 1) preGaps.push(Math.round((pre[j].left - pre[i].right) * 10) / 10);
+  }
+  const out = buttons.map((b) => {
+    b.scrollIntoView({ block: 'center', inline: 'nearest' });
+    const r = b.getBoundingClientRect();
+    const cx = Math.min(Math.max(r.left + r.width / 2, 1), window.innerWidth - 1);
+    const above = document.elementFromPoint(cx, r.top - 3);
+    const below = document.elementFromPoint(cx, r.bottom + 3);
+    const farAbove = document.elementFromPoint(cx, r.top - 8);
+    const hit = (e) => e !== null && (e === b || b.contains(e));
+    const before = getComputedStyle(b, '::before');
+    return { name: (b.getAttribute('aria-label') || b.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 28), h: Math.round(r.height * 100) / 100, top: r.top, bottom: r.bottom, left: r.left, right: r.right, hitAbove: hit(above), hitBelow: hit(below), farAboveHits: hit(farAbove), beforeH: before.content === 'none' ? 0 : parseFloat(before.height) };
+  });
+  // The gap between neighbouring sub-buttons in a row
+  const gaps = preGaps;
+  return { out, gaps, coarse: matchMedia('(pointer: coarse)').matches, fine: matchMedia('(pointer: fine)').matches, width: window.innerWidth };
+})()`;
+
+interface Sub {
+  name: string;
+  h: number;
+  hitAbove: boolean;
+  hitBelow: boolean;
+  farAboveHits: boolean;
+  beforeH: number;
+}
+
+async function subButtons(page: Page): Promise<{ out: Sub[]; gaps: number[]; coarse: boolean; fine: boolean; width: number }> {
+  return page.evaluate(SUBBUTTONS);
+}
+
+test('phone: sheet backdrop tap, Save in the foot, no Figures, sub-buttons 36px with a 44px hit area, focus returns', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'mobile');
+  test.setTimeout(240_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Phone Gate', signature: 'none' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  const date = free[0] ?? '';
+  await person.api.createSession(date, '06:00', '07:00', null);
+  await person.api.createSession(date, '07:30', '08:30', null);
+  await person.api.createSession(date, '09:00', '10:00', null);
+  await signInTo(page, privateServer, person.account);
+  await expect(page.locator('[data-sheet="phone"]')).toHaveCount(1);
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  const dayBtn = namedDayButton(page, date, 'Edit');
+  const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+  await dayBtn.click();
+  await expect(editor).toBeVisible();
+  const modal = await editor.evaluate((el) => el.matches(':modal'));
+  const box = (await editor.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+  note(OUTFILE, `PHONE sheet: modal ${modal}, sheet top ${box.y.toFixed(1)}px (backdrop above it), size ${box.width}x${box.height}`);
+  expect(modal).toBe(true);
+  // sub-buttons
+  const sb = await subButtons(page);
+  const bad = sb.out.filter((b) => Math.abs(b.h - 36) > 0.5 || !b.hitAbove || !b.hitBelow || b.farAboveHits);
+  note(OUTFILE, `SUBBUTTONS phone 390 (pointer coarse ${sb.coarse}): ${sb.out.length} sub-buttons; heights ${[...new Set(sb.out.map((b) => b.h))].join('/')}; hit area 3px above and below returns the button for ${sb.out.filter((b) => b.hitAbove && b.hitBelow).length}/${sb.out.length}; 8px above still hits the button for ${sb.out.filter((b) => b.farAboveHits).length} (0 expected); ::before heights ${[...new Set(sb.out.map((b) => b.beforeH))].join('/')}; gaps between neighbours ${JSON.stringify(sb.gaps)}; names ${sb.out.map((b) => b.name).join(' | ')}; exceptions ${JSON.stringify(bad.map((b) => b.name))}`);
+  // Save in the foot, no figures
+  const save = editor.getByRole('button', { name: 'Save day fields' });
+  const foot = editor.locator('[data-editor-foot]');
+  const body = editor.locator('.editor-body');
+  const figures = await editor.getByRole('heading', { name: 'Figures (computed by the server)' }).count();
+  const first = (await save.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+  const footBox = (await foot.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+  const room = await body.evaluate((el) => el.scrollHeight - el.clientHeight);
+  await body.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  const second = (await save.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+  note(OUTFILE, `PHONE foot: Figures headings ${figures}; Save box ${first.width}x${first.height} at y ${first.y}, foot bottom ${footBox.y + footBox.height} (viewport 844); body scroll room ${room}px; after scrolling the body Save y ${second.y} (unchanged ${Math.abs(second.y - first.y) < 0.6}); sheet itself scrolls ${await editor.evaluate((el) => el.scrollHeight - el.clientHeight)}`);
+  expect(figures).toBe(0);
+  expect(Math.abs(second.y - first.y)).toBeLessThan(1);
+  await page.screenshot({ path: `${process.env.GATE_OUT ?? '.'}/raw-phone-sheet-390.png` });
+  // Backdrop tap and focus return
+  await editor.getByRole('heading', { level: 2 }).tap();
+  await expect(editor).toBeVisible();
+  await page.touchscreen.tap(20, 20);
+  await expect(editor).toHaveCount(0);
+  const focusBack = await dayBtn.evaluate((el) => el === document.activeElement);
+  note(OUTFILE, `PHONE backdrop: a tap on the sheet heading kept it open; a tap on the backdrop closed it; focus back on the day button ${focusBack}`);
+  expect(focusBack).toBe(true);
+  await dayBtn.click();
+  await editor.getByLabel('Notes').fill('Synthetic unsaved note');
+  await page.touchscreen.tap(20, 20);
+  await expect(prompt).toBeVisible();
+  await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  const keptNote = await editor.getByLabel('Notes').inputValue();
+  await page.touchscreen.tap(20, 20);
+  await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  note(OUTFILE, `PHONE backdrop with an unsaved note: question shown, Keep editing kept the note "${keptNote}", Discard closed the sheet, focus on the day button ${await dayBtn.evaluate((el) => el === document.activeElement)}`);
+});
+
+test('coarse pointer on a wide window: the 36px sub-buttons keep a 44px hit area', async ({ browser, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(120_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Coarse Gate', signature: 'none' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.createSession(free[0] ?? '', '08:00', '12:00', null);
+  for (const [label, options] of [['fine pointer 1440', { viewport: { width: 1440, height: 900 }, hasTouch: false }], ['touch-emulated 1024', { viewport: { width: 1024, height: 900 }, hasTouch: true }]] as const) {
+    const context = await browser.newContext({ ...options, locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+    try {
+      const page = await context.newPage();
+      await signInTo(page, privateServer, person.account);
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await namedDayButton(page, free[0] ?? '', 'Edit').click();
+      await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+      const sb = await subButtons(page);
+      note(OUTFILE, `SUBBUTTONS ${label}: pointer coarse ${sb.coarse} fine ${sb.fine}; ${sb.out.length} sub-buttons, heights ${[...new Set(sb.out.map((b) => b.h))].join('/')}; hit area above/below for ${sb.out.filter((b) => b.hitAbove && b.hitBelow).length}/${sb.out.length}; ::before heights ${[...new Set(sb.out.map((b) => b.beforeH))].join('/')}; gaps ${JSON.stringify(sb.gaps)}`);
+    } finally {
+      await context.close();
+    }
+  }
+});

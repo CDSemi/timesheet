@@ -1,0 +1,10 @@
+# Usage: bash sweep.sh <out-prefix> -- runs the four fixed tests and the History test at the six gate instants and on the real clock, both projects.
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX1/env.sh
+P=$1
+G="WP5-UX5-T05B \(U5-24|the bar does not overflow in the landing and away states|away: the review link is never wrapped|the tight text may wrap there but never runs over|every overflowing table box"
+FILES="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/history-a11y.spec.ts"
+for I in 2026-10-26T16:00:00Z 2026-11-01T08:45:00Z 2027-03-14T10:30:00Z 2026-10-27T06:58:30Z 2026-12-31T23:30:00-08:00 2027-01-01T08:30:00Z real; do
+  N=$(echo "$I" | tr -d ':+' )
+  bash $T/run-shift.sh "$P-$N" "$I" $FILES -g "$G" > $T/out/$P-$N.txt 2>&1
+  echo "$I: $(grep -E '^  [0-9]+ (passed|failed|skipped)|exit=' $T/out/$P-$N.txt | tr '\n' ' ')"
+done

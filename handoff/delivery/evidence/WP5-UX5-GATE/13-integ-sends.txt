@@ -1,0 +1,28 @@
+
+ RUN  v5.0.2 <task>/export
+
+ ✓ tests/integration/sends.test.ts > sign-off and the send record > signs off without sending; the draft gives the Settings defaults; a send writes its record, its job and its audit only 265ms
+ ✓ tests/integration/sends.test.ts > sign-off and the send record > is idempotent by request key: the same body replays, another body under the key is 409, and nothing more is written 227ms
+ ✓ tests/integration/sends.test.ts > sign-off and the send record > validates the envelope, subject, body and reason of a send (422, nothing written) 247ms
+ ✓ tests/integration/sends.test.ts > sign-off and the send record > refuses another send while a send job waits, an attempt is open or uncertain without a decision, for a superseded revision and for another user 432ms
+ ✓ tests/integration/sends.test.ts > the owner's reason rule (B-A2) > an accepted copy counts: another send needs a reason, stored on the send and in the audit, never in the email 374ms
+ ✓ tests/integration/sends.test.ts > the owner's reason rule (B-A2) > an uncertain copy counts whatever was decided; a copy whose attempts all failed permanently does not 348ms
+ ✓ tests/integration/sends.test.ts > the owner's reason rule (B-A2) > the resend decision on an uncertain attempt needs the reason too 333ms
+ ✓ tests/integration/sends.test.ts > the owner's reason rule (B-A2) > counts a copy of the period across its revisions: a correction sent after an accepted copy needs a reason 346ms
+ ✓ tests/integration/sends.test.ts > the PDF variants (F-3 b) > renders each of the four variants on request, one page each, stores each once, and drops only the chosen rows 650ms
+ ✓ tests/integration/sends.test.ts > the PDF variants (F-3 b) > the unsigned preview renders the current review with the chosen rows and writes nothing 276ms
+ ✓ tests/integration/sends.test.ts > the PDF variants (F-3 b) > the shared PDF route ignores the variant query and never renders: the latest send's variant, else the sign-off variant 479ms
+ ✓ tests/integration/sends.test.ts > the send job builds the message from its own record > sends the envelope, subject, body and PDF variant of the send, not the snapshot or the current Settings 390ms
+ ✓ tests/integration/sends.test.ts > the deadline and automatic sends (F-2 a) > finalizes an eligible draft automatically and sends it through a send record with origin deadline 218ms
+ ✓ tests/integration/sends.test.ts > the deadline and automatic sends (F-2 a) > sends a signed revision that was never sent when auto-submit is on, once, with no new revision or ledger change 243ms
+ ✓ tests/integration/sends.test.ts > the deadline and automatic sends (F-2 a) > records a signed revision that was never sent as overdue when auto-submit is off, and sends nothing 222ms
+stdout | tests/integration/sends.test.ts > two concurrent sends (separate connections, released together) > lets exactly one of two sends through, and neither skips the reason rule once a copy counts
+[race] two sends: overlapping call windows 3/3
+
+ ✓ tests/integration/sends.test.ts > two concurrent sends (separate connections, released together) > lets exactly one of two sends through, and neither skips the reason rule once a copy counts 481ms
+
+ Test Files  1 passed (1)
+      Tests  16 passed (16)
+   Start at  08:53:39
+   Duration  7.40s (tests 76%, import 16%, transform 8%)
+

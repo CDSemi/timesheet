@@ -1,0 +1,45 @@
+
+ RUN  v5.0.2 <task>/export
+
+ ✓ tests/integration/reminders.test.ts > registration and activation (F-4) > registers the scan and send handlers and queues no scan while the activation instant is null 187ms
+ ✓ tests/integration/reminders.test.ts > registration and activation (F-4) > queues at most one scan job per five-minute bucket once activated 179ms
+ ✓ tests/integration/reminders.test.ts > registration and activation (F-4) > sends the reminder through the registered runner jobs end to end 202ms
+ ✓ tests/integration/reminders.test.ts > 24 h and 2 h reminders in a week with a DST change (production zone functions) > fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go back (autumn) 210ms
+ ✓ tests/integration/reminders.test.ts > 24 h and 2 h reminders in a week with a DST change (production zone functions) > fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go forward (spring) 192ms
+ ✓ tests/integration/reminders.test.ts > dedupe by user, period and occurrence > records one decision per occurrence and a rerun sends nothing new 206ms
+ ✓ tests/integration/reminders.test.ts > dedupe by user, period and occurrence > dedupes per user: two employees each get their own single reminder 205ms
+ ✓ tests/integration/reminders.test.ts > dedupe by user, period and occurrence > rolls back the job when the occurrence cannot be recorded, so nothing half-queued remains 168ms
+ ✓ tests/integration/reminders.test.ts > stop at the first send > keeps reminding a signed period that was not sent, worded "signed, not sent yet"; the first send stops the reminders 245ms
+ ✓ tests/integration/reminders.test.ts > stop at the first send > sends nothing for a reminder that was queued before the period was sent 216ms
+ ✓ tests/integration/reminders.test.ts > stop at the first send > keeps reminding an employee whose other period is not sent (per-period scope) 205ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > warns about an overdue period only when auto-submit is off, once, to the employee only 230ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > stops the overdue warning once the employee signs off and sends the overdue period 193ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > keeps the overdue warning of a signed period that was not sent, worded "signed, not sent yet" (F-2 a) 203ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > sends the outcome notice to the employee only: submitted automatically, review pending, login-required link 189ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > runs end to end in the production runner: the submission goes to payroll, the outcome notice only to the employee 419ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > sends the outcome notice once per automatic revision and none for a manual sign-off 221ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > sends no outcome notice once the employee already reviewed the automatic revision (late review) 188ms
+ ✓ tests/integration/reminders.test.ts > missed notices collapse into one current notice after downtime > sends only the 2 h notice and records the 24 h one as collapsed when the runner was down for both 190ms
+ ✓ tests/integration/reminders.test.ts > missed notices collapse into one current notice after downtime > sends the 24 h notice with the real time left when only that reminder was missed 198ms
+ ✓ tests/integration/reminders.test.ts > missed notices collapse into one current notice after downtime > sends no pre-deadline notice for a deadline that already passed during the downtime 170ms
+ ✓ tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends nothing while the clock is before the activation instant, then one current notice at it 193ms
+ ✓ tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends nothing for a period whose deadline is before the activation instant 160ms
+ ✓ tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends no reminder for an imported (unverified) period and no outcome notice 178ms
+ ✓ tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends nothing to a deactivated account 157ms
+ ✓ tests/integration/reminders.test.ts > per-user reminder offsets > uses the offsets saved in the submission settings 194ms
+ ✓ tests/integration/reminders.test.ts > per-user reminder offsets > sends no pre-deadline notice when the offsets list is empty 177ms
+ ✓ tests/integration/reminders.test.ts > links and recipients (AC-09) > uses login-required deep links with the payroll date only, never a token or personal data 241ms
+ ✓ tests/integration/reminders.test.ts > links and recipients (AC-09) > addresses every captured message to the employee’s own address only 249ms
+ ✓ tests/integration/reminders.test.ts > links and recipients (AC-09) > keeps the job payload to routing identifiers only 161ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > retries a temporary failure and does not send twice after acceptance 189ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > needs intervention for a permanent failure and never resends an uncertain outcome 198ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > blocks with a visible fault, never a send, when the sender is missing 174ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > treats an already captured message as sent when the same job runs again after a crash 182ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > refuses a job whose occurrence does not exist and sends nothing 228ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > refuses a job that borrows another employee’s decision (owner scoping) 241ms
+
+ Test Files  1 passed (1)
+      Tests  36 passed (36)
+   Start at  08:55:14
+   Duration  9.19s (tests 81%, import 13%, transform 7%)
+

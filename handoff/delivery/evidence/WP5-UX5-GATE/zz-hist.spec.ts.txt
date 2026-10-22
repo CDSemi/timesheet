@@ -1,0 +1,26 @@
+import { expect, newPerson, SeedClient, test } from './fixtures.ts';
+import { note, runAxe, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository), run against the BASE_SHA export and the target: is the History axe finding
+ * (scrollable-region-focusable on the audit tables) new in this round? Notes go to GATE_OUT/hist-<GATE_LABEL>.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const LABEL = process.env.GATE_LABEL ?? 'target';
+
+test('History axe scan on a plain account (policy and two sessions, no sign-off)', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const person = await newPerson(admin, privateServer, { displayName: 'Synthetic History Base', signature: 'none' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(free[0] ?? '');
+  await person.api.seedCompleteDay(free[1] ?? '');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await signInTo(page, privateServer, person.account, '#/history');
+  await expect(page.locator('[data-operation]').first()).toBeVisible();
+  await page.waitForTimeout(500);
+  const axe = await runAxe(page);
+  const wraps = await page.evaluate(() => [...document.querySelectorAll('.table-wrap')].map((w) => ({ sw: (w as HTMLElement).scrollWidth, cw: (w as HTMLElement).clientWidth, sh: (w as HTMLElement).scrollHeight, ch: (w as HTMLElement).clientHeight, tab: w.getAttribute('tabindex'), focusable: w.querySelectorAll('a[href],button,input,select,textarea,[tabindex]').length })));
+  const scrolling = wraps.filter((w) => w.sw > w.cw + 1 || w.sh > w.ch + 1);
+  note(`hist-${LABEL}.txt`, `[${LABEL}] History at 1280: axe ${axe.version} violations ${axe.violations.length} (${axe.violations.map((v) => `${v.id}x${v.nodes.length}`).join(', ') || 'none'}); .table-wrap regions ${wraps.length}, scrolling ${scrolling.length} ${JSON.stringify(scrolling.slice(0, 4))}`);
+});

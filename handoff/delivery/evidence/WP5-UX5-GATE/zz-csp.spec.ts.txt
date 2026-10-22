@@ -1,0 +1,25 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-GATE task-local probe (never part of the repository), run against the target export and against the BASE_SHA export:
+ * every response header of the app shell and its assets. The CSP must be identical.
+ */
+const OUT = process.env.GATE_OUT ?? '';
+const LABEL = process.env.GATE_LABEL ?? 'target';
+
+test('headers: every response header of the shell and its assets', async ({ page, builtServer }, testInfo) => {
+  const project = testInfo.project.name;
+  for (const path of ['/', '/theme-init.js', '/cd-logo.svg']) {
+    const response = await page.request.get(`${builtServer.origin}${path}`);
+    const headers = Object.entries(response.headers())
+      .filter(([name]) => !['date', 'etag', 'last-modified', 'content-length', 'connection', 'keep-alive'].includes(name))
+      .sort(([a], [b]) => a.localeCompare(b));
+    for (const [name, value] of headers) {
+      const line = `GET ${path} ${response.status()} ${name}: ${value}`;
+      console.log(line);
+      if (OUT !== '') appendFileSync(join(OUT, `headers2-${LABEL}-${project}.txt`), `${line}\n`);
+    }
+  }
+});
