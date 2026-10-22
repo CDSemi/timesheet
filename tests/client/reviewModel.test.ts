@@ -5,8 +5,10 @@ import {
   type FinalizationJob,
   type ReviewResponse,
   type RevisionSummary,
+  type SendDraft,
 } from '../../src/client/api.ts';
 import {
+  buildSendBody,
   buildSubmitBody,
   checklistSteps,
   classifySubmitError,
@@ -25,6 +27,8 @@ import {
   reviewSheetDay,
   reviewSheetWeeks,
   sessionLine,
+  sendAfterSignoff,
+  sendFailureText,
   submitBlockers,
   unresolvedText,
 } from '../../src/client/components/reviewModel.ts';
@@ -337,11 +341,15 @@ describe('period and delivery status from server fields', () => {
     expect(deliveryStatus(null, [], [])).toBeNull();
   });
 
-  it('reports email not requested, queued and needing attention from the send job', () => {
-    expect(deliveryStatus(revision({ send_requested: false }), [job('succeeded', 'render_pdf')], [])?.key).toBe('not_requested');
+  it('reports not sent yet, queued and needing attention from the send jobs (WP5-UX5-T01b: signing never sends)', () => {
+    // No send job: the revision is signed but not sent, whatever `send_requested` says.
+    expect(deliveryStatus(revision({ send_requested: false }), [job('succeeded', 'render_pdf')], [])).toMatchObject({ key: 'not_sent', text: 'Not sent yet', tone: 'neutral' });
+    expect(deliveryStatus(revision({ send_requested: true }), [job('succeeded', 'render_pdf')], [])?.key).toBe('not_sent');
     expect(deliveryStatus(revision(), [job('queued')], [])?.key).toBe('queued');
     expect(deliveryStatus(revision(), [job('leased')], [])?.key).toBe('queued');
     expect(deliveryStatus(revision(), [job('intervention')], [])?.key).toBe('attention');
+    // The newest send job decides: an earlier send that needed attention does not hide a new one that is queued.
+    expect(deliveryStatus(revision(), [job('intervention'), job('queued')], [])?.key).toBe('queued');
   });
 
   it('the newest attempt decides the delivery state', () => {
@@ -530,5 +538,59 @@ describe('the checklist beside the sheet', () => {
     expect(checklistSteps(payload({ signature: null }), form(), false)[1]?.state).toBe('Recipients ready, name-only signature');
     expect(checklistSteps(payload({ recipients: { ...payload().recipients, to: [] } }), form(), false)[1]?.state).toBe('No recipient set');
     expect(checklistSteps(payload(), form(), true)[2]?.state).toBe('Locked: imported history');
+  });
+});
+
+describe('sending after the sign-off (WP5-UX5-T01b, transitional until the Send card)', () => {
+  const draft: SendDraft = {
+    revision_id: 'rev-1',
+    revision_no: 1,
+    current: true,
+    sender: null,
+    to: ['payroll@example.invalid'],
+    cc: ['manager@example.invalid'],
+    subject: 'Synthetic subject',
+    body_text: 'Synthetic body',
+    time_rows: true,
+    ot_rows: false,
+    copy_sent_before: null,
+    reason_required: false,
+    previous_send: null,
+    correction_reason: null,
+  };
+
+  it('a first sign-off always sends; a revision sends only when the person chose to, with its reason', () => {
+    expect(sendAfterSignoff('signoff', form())).toEqual({ send: true, reason: null });
+    expect(sendAfterSignoff('correction', form({ sendEmail: false, reason: 'Fixed a day' }))).toEqual({ send: false, reason: 'Fixed a day' });
+    expect(sendAfterSignoff('correction', form({ sendEmail: true, reason: '  Fixed a day  ' }))).toEqual({ send: true, reason: 'Fixed a day' });
+    expect(sendAfterSignoff('late_review', form({ sendEmail: true, reason: '' }))).toEqual({ send: true, reason: null });
+  });
+
+  it('posts the draft defaults with the attempt key, and the reason only when there is one', () => {
+    expect(buildSendBody(draft, 'key-0001', null)).toEqual({
+      request_key: 'key-0001',
+      to: draft.to,
+      cc: draft.cc,
+      subject: draft.subject,
+      body_text: draft.body_text,
+      time_rows: true,
+      ot_rows: false,
+    });
+    expect(buildSendBody(draft, 'key-0002', 'Payroll asked again')).toMatchObject({ reason: 'Payroll asked again' });
+  });
+
+  it('asks a late review that sends for the reason of another copy, and keeps a correction reason within the send rule', () => {
+    expect(submitBlockers(payload(), 'late_review', form({ sendEmail: true, reason: '' })).map((item) => item.field)).toEqual(['reason']);
+    expect(submitBlockers(payload(), 'late_review', form({ sendEmail: true, reason: 'Resent after review' }))).toEqual([]);
+    expect(submitBlockers(payload(), 'late_review', form({ sendEmail: false, reason: '' }))).toEqual([]);
+    expect(submitBlockers(payload(), 'correction', form({ sendEmail: true, reason: 'x'.repeat(501) })).map((item) => item.field)).toEqual(['reason']);
+    expect(submitBlockers(payload(), 'correction', form({ sendEmail: false, reason: 'x'.repeat(501) }))).toEqual([]);
+  });
+
+  it('words a refused send after a successful sign-off: signed, the email only is missing', () => {
+    const refused = (status: number, code: string) => new ApiRequestError(status, code, 'synthetic');
+    expect(sendFailureText(refused(422, 'recipients_required'))).toBe('Signed. The email was not sent: no recipient is set. Add one in Settings, then send it from History.');
+    expect(sendFailureText(refused(422, 'reason_required'))).toContain('another one needs a reason');
+    expect(sendFailureText(refused(409, 'delivery_in_progress'))).toContain('still open');
   });
 });

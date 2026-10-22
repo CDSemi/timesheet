@@ -1281,6 +1281,54 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
     kept.
   - The same committer re-stages the board and the checkpoint and reruns every check
     (attempt 2).
+- WP5-UX5-T01A-FREEZE attempt 2 committed and pushed
+  c1b2cc4f31cc9a3957a04056a8dff413977b97b5. 60 paths; digest 783a63f8; every check 0.
+- Running now: WP5-UX5-T01B (worker-high, **opus**, override `size_risk`: an L/H/novel
+  outbox slice). It covers:
+  - sign-off without sending;
+  - `revision_sends` and the PDF variants (migration 0015);
+  - the send-draft, send and pdf routes;
+  - the reason rule;
+  - the deadline send and reminders;
+  - the transitional UI wiring;
+  - docs/01 FR-11.
+- T01B stopped on scope before any edit. Missing paths: the History resend components, the
+  admin operations status (one row per variant), `submissionSettings.ts`, and
+  `admin-status.spec.ts`.
+  - Design addition, approved: migration 0015 backfills a send record for every existing
+    send job, so a pre-upgrade send is never re-sent at the deadline.
+  - Addendum 1 adds the paths. The same worker resumes.
+  - Lesson: inventory the call sites of every changed contract before writing a slice's
+    owned paths.
+- T01B stopped a second time, again before any edit. `tests/support/schemaV6.ts` needs its
+  own v6 send jobs after the split.
+  - Addendum 2 adds `tests/support/` for fixture adaptations only.
+  - The worker now implements.
+- WP5-UX5-T01B done (opus).
+  - Sign-off no longer sends. Each send is a record; PDF variants; the reason rule.
+  - Migration 0015, with a backfill and an upgrade test.
+  - Deadline send and reminders per F-2 a; transitional UI.
+  - Results: vitest 2261; FULL e2e 779 passed, 0 failed; mutants 5/5; digest 089cf868
+    (854 files).
+  - The drill was edited but not run; it needs Docker and the gate covers it.
+  - Deviation, asked as owner question WP5-UX5-H-1: "submitted" means any revision of the
+    period has a send, so corrections are not auto-sent at the deadline.
+- Running now: WP5-UX5-T01B-FREEZE (a fresh committer), with a rule-based path set.
+  - Attempt 1: the classifier denied `git add --pathspec-from-file` with "[Credential
+    Leakage]". It was not retried and nothing was staged.
+  - The checks before it all passed: the digest, the 71 paths meet the rules, and the scans
+    found 0 hits.
+  - Likely cause: my brief's list-file staging hides the paths from the check; earlier
+    freezes staged explicit paths.
+  - Per the lesson, the same agent is not resumed.
+  - The owner is asked to choose (a) a fresh committer with explicit paths, or (b) a manual
+    commit. The mission is `blocked`.
+- Owner (2026-10-22, verbatim "1 a, 2 a"):
+  - a fresh committer with explicit paths, per brief Addendum 1. If it is denied again, it
+    stops and the owner commits manually;
+  - H-1 a: corrections after a sent copy are sent by the person, not at the deadline (as
+    built).
+  - The mission is `running`.
 - Remaining after T06:
   - T06-FREEZE;
   - the round-4 package gate;

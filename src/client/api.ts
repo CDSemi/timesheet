@@ -799,8 +799,54 @@ export interface DeliveryRecord extends DeliveryAttempt {
   updated_at: string;
 }
 
-/** POST /api/deliveries/:id/decision and POST /api/revisions/:id/resend: what the server answers. */
+/** POST /api/deliveries/:id/decision: the owner's decision on an uncertain attempt (a resend needs a reason). */
 export type DeliveryDecisionChoice = 'mark_delivered' | 'resend';
+
+/** One send of a revision (WP5-UX5-T01b): its own immutable record, owner-only. */
+export interface SendRecordJson {
+  id: string;
+  revision_id: string;
+  send_no: number;
+  origin: 'employee' | 'deadline';
+  to: string[];
+  cc: string[];
+  subject: string;
+  body_text: string;
+  time_rows: boolean;
+  ot_rows: boolean;
+  pdf_variant: 't1o1' | 't1o0' | 't0o1' | 't0o0';
+  reason: string | null;
+  job_id: string;
+  created_at: string;
+}
+
+/**
+ * GET /api/revisions/:id/send-draft: the Send card defaults (Settings envelope rendered for this revision and the two
+ * PDF switches), the sender, and whether a copy already counts as sent (then another send needs a reason).
+ */
+export interface SendDraft {
+  revision_id: string;
+  revision_no: number;
+  current: boolean;
+  sender: string | null;
+  to: string[];
+  cc: string[];
+  subject: string;
+  body_text: string;
+  time_rows: boolean;
+  ot_rows: boolean;
+  copy_sent_before: { sent_at: string; to: string[]; cc: string[]; state: 'accepted' | 'uncertain' } | null;
+  reason_required: boolean;
+  previous_send: SendRecordJson | null;
+  correction_reason: string | null;
+}
+
+/** POST /api/revisions/:id/send and /resend: the stored send (`replayed` for an identical retry). */
+export interface SendResponse {
+  status: 'created' | 'replayed';
+  send: SendRecordJson;
+  job: { id: string; kind: string };
+}
 
 /*
  * Submission settings and the signature image (WP3). The server owns every rule (recipient
@@ -823,6 +869,8 @@ export interface SubmissionSettings {
   auto_image: { authorized: boolean; signature_attachment_id: string | null; authorized_at: string | null };
   auto_note: { enabled: boolean; text: string };
   show_ot_on_pdf: boolean;
+  /** The Settings default of the per-send "Time rows on the PDF" switch (the Settings control arrives with WP5-UX5-T03). */
+  show_time_on_pdf?: boolean;
   reminder_offsets_minutes: number[];
   created_at: string | null;
 }

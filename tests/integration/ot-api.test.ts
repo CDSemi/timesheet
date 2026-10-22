@@ -539,6 +539,8 @@ describe('route inventory: no route posts a credit or debit', () => {
         'POST /api/timesheets/:payrollDate/signoff',
         // Correction revisions, late review and same-revision resend (WP3-T06): they post only differences or nothing, and only through the ledger service.
         'POST /api/revisions/:id/resend',
+        // One send of a revision (WP5-UX5-T01b): a send record and its jobs; never a ledger movement.
+        'POST /api/revisions/:id/send',
         'POST /api/timesheets/:payrollDate/late-review',
         'POST /api/timesheets/:payrollDate/revisions',
         // The owner's decision on an uncertain delivery attempt (WP3-T09): resends or closes it, posts nothing.

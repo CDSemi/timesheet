@@ -269,6 +269,34 @@ describe('timesheet PDF content', () => {
     expect(on.text).toContain('Overtime Total');
   });
 
+  // WP5-UX5-T01b (owner decision F-3 b): the time rows and the OT rows are chosen for each send. Every variant is one
+  // page of the same signed snapshot; only the chosen rows are left out, and the omitted switch keeps the old default.
+  it('prints or omits the time rows and the OT rows per variant, each on one page, from the same snapshot', async () => {
+    const snapshot = snapshotWith({ show_ot_on_pdf: true });
+    const byVariant = new Map<string, PdfContent>();
+    for (const time of [true, false]) {
+      for (const ot of [true, false]) {
+        const { content } = await render(manual({ snapshot, rows: { time, ot } }));
+        expect(content.pages, `time ${time} ot ${ot}`).toHaveLength(1);
+        expect(content.text.includes('Time'), `time ${time} ot ${ot}`).toBe(time);
+        expect(content.text.includes('OT (h:mm)'), `time ${time} ot ${ot}`).toBe(ot);
+        expect(content.text.includes('Overtime Total'), `time ${time} ot ${ot}`).toBe(ot);
+        // The signed facts stay on every variant: the name, the dates, the categories.
+        expect(content.text).toContain('Category');
+        expect(dateMatches(content).length).toBeGreaterThanOrEqual(14);
+        byVariant.set(`${time}:${ot}`, content);
+      }
+    }
+    // Without a choice the renderer prints the time rows and follows the snapshot's OT switch (the sign-off variant).
+    const plain = (await render(manual({ snapshot }))).content;
+    expect(plain.text).toBe(byVariant.get('true:true')?.text);
+    const offSnapshot = (await render(manual({ snapshot: snapshotWith({ show_ot_on_pdf: false }) }))).content;
+    expect(offSnapshot.text.includes('Overtime Total')).toBe(false);
+    // A send's choice wins over the snapshot's OT switch in both directions.
+    const forcedOn = (await render(manual({ snapshot: snapshotWith({ show_ot_on_pdf: false }), rows: { time: true, ot: true } }))).content;
+    expect(forcedOn.text).toContain('Overtime Total');
+  });
+
   it('marks days with incomplete OT as pending and says they are outside the total', async () => {
     const days = DATES.map((date) => (date === '2026-09-16' ? weekday(date, { completeness: 'incomplete', calculation: null }) : weekday(date)));
     const snapshot = snapshotWith({}, days);

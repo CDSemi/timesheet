@@ -13,6 +13,7 @@ import { ApiError } from '../../src/server/http/errors.ts';
 import type { SessionBody } from '../../src/server/http/schemas.ts';
 import { type SignOffInput, signOffTimesheet } from '../../src/server/services/finalization.ts';
 import { runDeadlineScan } from '../../src/server/services/automation.ts';
+import { type SendInput, sendRevision } from '../../src/server/services/deliveries.ts';
 import { getBalance, postCredit } from '../../src/server/services/ledger.ts';
 import { createPolicyVersion } from '../../src/server/services/policies.ts';
 import { buildReviewPayload } from '../../src/server/services/reviewPayload.ts';
@@ -77,6 +78,13 @@ export interface DeadlineRaceInput {
   batchSize?: number;
 }
 
+/** One send of a revision by its owner `userId` (WP5-UX5-T01b): the send record and its jobs in one transaction. */
+export interface SendRaceInput {
+  userId: string;
+  revisionId: string;
+  input: SendInput;
+}
+
 /** One racer's operation. `unsafeReserveControl` is the harness self-check, never production code. */
 export type RaceOp =
   | { kind: 'reserve'; input: ReserveOtLeaveInput }
@@ -86,6 +94,7 @@ export type RaceOp =
   | { kind: 'signOff'; input: SignOffRaceInput }
   | { kind: 'createSession'; input: CreateSessionRaceInput }
   | { kind: 'deadline'; input: DeadlineRaceInput }
+  | { kind: 'send'; input: SendRaceInput }
   | { kind: 'unsafeReserveControl'; input: UnsafeReserveControlInput };
 
 export type RaceOutcome = (
@@ -173,7 +182,7 @@ function runOp(message: RoundMessage, control: Int32Array): RaceOutcome {
   try {
     const ctx = { db, clock };
     const { op } = message;
-    const user = op.kind === 'signOff' || op.kind === 'createSession' ? sessionUserOf(db, op.input.userId) : null;
+    const user = op.kind === 'signOff' || op.kind === 'createSession' || op.kind === 'send' ? sessionUserOf(db, op.input.userId) : null;
     // Touch the file so the connection is fully open before the barrier releases.
     db.prepare('SELECT count(*) FROM ot_leave_requests').pluck().get();
     parentPort?.postMessage({ type: 'ready' } satisfies WorkerMessage);
@@ -207,6 +216,9 @@ function runOp(message: RoundMessage, control: Int32Array): RaceOutcome {
         status = `finalized:${summary.finalized}`;
         break;
       }
+      case 'send':
+        status = sendRevision({ db, clock, user: user as SessionUser }, op.input.revisionId, op.input.input).status;
+        break;
       case 'unsafeReserveControl':
         status = unsafeReserveControl(db, op.input, message.nowIso, control, message.racers);
         break;

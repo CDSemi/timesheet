@@ -62,6 +62,7 @@ export function settingsRoutes(deps: AppDeps) {
       autoNoteEnabled: body.auto_note_enabled,
       autoNoteText: body.auto_note_text,
       showOtOnPdf: body.show_ot_on_pdf,
+      showTimeOnPdf: body.show_time_on_pdf,
       reminderOffsetsMinutes: body.reminder_offsets_minutes,
     });
     return c.json({ settings: submissionSettingsJson(settings) }, 201);

@@ -1,31 +1,34 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { canonicalize, type CanonicalValue, sha256Hex } from '../../domain/canonical.ts';
-import type { ReviewSnapshot } from '../../domain/snapshot.ts';
+import { canonicalize, type CanonicalValue } from '../../domain/canonical.ts';
 import { type Clock, nowUtc } from '../clock.ts';
 import { type Db, writeTransaction } from '../db/database.ts';
 import type { FileStore } from '../files/fileStore.ts';
-import { buildMessage, frozenEnvelope, MessageError, newMessageId, type OutboundMessage } from '../mail/message.ts';
+import { buildMessage, frozenEnvelope, MessageError, newMessageId, type OutboundMessage, type SendContent } from '../mail/message.ts';
 import type { OutboundAdapter, SendOutcome } from '../mail/outbound.ts';
-import { recoverInterruptedSends, UNCERTAIN_LEASE_EXPIRED } from '../services/deliveries.ts';
+import { readyPdfOf, recoverInterruptedSends, type SendRecord, sendOfJob, UNCERTAIN_LEASE_EXPIRED } from '../services/deliveries.ts';
 import { JOB_SEND_EMAIL } from '../services/finalization.ts';
 import { type Job, JobError } from './jobStore.ts';
+import { loadSnapshot } from './pdfJob.ts';
 import type { JobHandler } from './runner.ts';
 
 /*
  * The send job (docs/05 "Durable delivery" and its failure table, AC-08, AC-14).
  *
- * One run of a `send_email` job:
+ * One `send_email` job is one send: its immutable `revision_sends` row (WP5-UX5-T01b) holds the
+ * envelope, subject, bodies and PDF variant chosen for that copy. One run of the job:
  * 1. Interrupted sends of any job (a `sending` attempt whose lease expired) become `uncertain`.
- * 2. The revision is loaded by job owner and id; its canonical payload hash is re-checked.
+ * 2. The send row of this job and its revision are loaded by job owner and ids; the revision's
+ *    canonical payload hash is re-checked.
  * 3. This job's latest attempt decides what may happen: `sending` means a previous runner died
  *    during the network call, so the attempt becomes `uncertain` and nothing is sent;
  *    `uncertain`, `failed_permanent` and `accepted` are final for the job (no automatic resend);
- *    `preparing` (from a T06 resend or a run that stopped before the network) is reused; none or
- *    `failed_temporary` creates the next attempt with a new stable Message-ID and the frozen
- *    envelope. The PDF must be `ready`; until then the job retries without creating an attempt.
+ *    `preparing` (a run that stopped before the network) is reused; none or `failed_temporary`
+ *    creates the next attempt with a new stable Message-ID and the envelope frozen from the send.
+ *    The send's PDF variant must be `ready`; until then the job retries without creating an attempt.
  * 4. The stored PDF bytes are read and their SHA-256 re-checked against the attachment row and
- *    the frozen envelope; the message is built from the snapshot only (message.ts). A missing
- *    sender or recipient or a hash mismatch fails the attempt permanently with a visible code.
+ *    the frozen envelope; the message is built from the send row only (message.ts), never from the
+ *    snapshot's envelope or the current settings. A missing sender or recipient or a hash mismatch
+ *    fails the attempt permanently with a visible code.
  * 5. `sending` is committed, then the adapter is called outside any transaction, then the
  *    classified outcome is recorded: accepted (provider id and time), failed_temporary (the job
  *    store retries after 1, 5, 15, 60 minutes), failed_permanent or uncertain (intervention; an
@@ -78,15 +81,6 @@ interface PdfRow {
 
 const sha256 = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 
-function loadSnapshot(revision: RevisionRow): ReviewSnapshot {
-  if (sha256Hex(revision.payload_json) !== revision.payload_sha256) throw new JobError('snapshot_hash_mismatch', { permanent: true });
-  try {
-    return JSON.parse(revision.payload_json) as ReviewSnapshot;
-  } catch (error) {
-    throw new JobError('snapshot_invalid', { permanent: true, cause: error });
-  }
-}
-
 function holdsLease(db: Db, job: Job): boolean {
   return (
     db
@@ -104,22 +98,15 @@ function latestAttempt(db: Db, job: Job, userId: string): AttemptRow | undefined
     .get(job.id, userId);
 }
 
-function readyPdf(db: Db, revision: RevisionRow): PdfRow | undefined {
-  return db
-    .prepare<[string, string], PdfRow>(
-      `SELECT f.attachment_id, a.storage_key, a.sha256
-         FROM revision_files f
-         JOIN attachments a ON a.id = f.attachment_id AND a.user_id = f.user_id
-        WHERE f.revision_id = ? AND f.user_id = ? AND f.kind = 'pdf' AND f.state = 'ready' AND a.kind = 'pdf'`,
-    )
-    .get(revision.id, revision.user_id);
-}
-
 const isUniqueViolation = (error: unknown): boolean =>
   error instanceof Error && 'code' in error && (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || error.code === 'SQLITE_CONSTRAINT_PRIMARYKEY');
 
-/** The next attempt of this job, `preparing`, with the frozen envelope and a new Message-ID. */
-function createAttempt(db: Db, clock: Clock, job: Job, revision: RevisionRow, snapshot: ReviewSnapshot, pdf: PdfRow, attemptNo: number): AttemptRow {
+function contentOf(send: SendRecord): SendContent {
+  return { sendId: send.id, to: send.to, cc: send.cc, subject: send.subject, bodyText: send.bodyText, bodyHtml: send.bodyHtml };
+}
+
+/** The next attempt of this job, `preparing`, with the envelope frozen from the send and a new Message-ID. */
+function createAttempt(db: Db, clock: Clock, job: Job, revision: RevisionRow, send: SendRecord, pdf: PdfRow, attemptNo: number): AttemptRow {
   try {
     return writeTransaction(db, (): AttemptRow => {
       if (!holdsLease(db, job)) throw new JobError('lease_lost');
@@ -128,7 +115,7 @@ function createAttempt(db: Db, clock: Clock, job: Job, revision: RevisionRow, sn
         id: randomUUID(),
         attempt_no: attemptNo,
         state: 'preparing',
-        envelope_json: canonicalize(frozenEnvelope(revision.id, snapshot, pdf.sha256) as unknown as CanonicalValue),
+        envelope_json: canonicalize(frozenEnvelope(revision.id, contentOf(send), pdf.sha256) as unknown as CanonicalValue),
         attachment_id: pdf.attachment_id,
         message_id: newMessageId(),
       };
@@ -199,9 +186,14 @@ function recordOutcome(db: Db, clock: Clock, attemptId: string, outcome: SendOut
   });
 }
 
+/** The fields of a frozen envelope that bind what is sent (an attempt made before the split has no `send_id`). */
+const BOUND_FIELDS = ['revision_id', 'to', 'cc', 'subject', 'body_sha256', 'attachment_sha256'] as const;
+
 function envelopeMatches(stored: string, expected: ReturnType<typeof frozenEnvelope>): boolean {
   try {
-    return canonicalize(JSON.parse(stored) as CanonicalValue) === canonicalize(expected as unknown as CanonicalValue);
+    const parsed = JSON.parse(stored) as Record<string, unknown>;
+    if (parsed.send_id !== undefined && parsed.send_id !== expected.send_id) return false;
+    return BOUND_FIELDS.every((field) => canonicalize((parsed[field] ?? null) as CanonicalValue) === canonicalize(expected[field] as CanonicalValue));
   } catch {
     return false;
   }
@@ -215,6 +207,10 @@ export function createSendJobHandler(deps: SendJobDeps): JobHandler {
     const { revisionId, userId } = job;
     if (revisionId === null || userId === null || job.payload.revision_id !== revisionId || job.leaseOwner === null) {
       throw new JobError('invalid_job_payload', { permanent: true });
+    }
+    const send = sendOfJob(db, userId, job.id);
+    if (send === null || send.revisionId !== revisionId || (job.payload.send_id !== undefined && job.payload.send_id !== send.id)) {
+      throw new JobError('send_record_missing', { permanent: true });
     }
     const revision = db
       .prepare<[string, string], RevisionRow>(
@@ -234,13 +230,13 @@ export function createSendJobHandler(deps: SendJobDeps): JobHandler {
     if (latest?.state === 'failed_permanent') throw new JobError('delivery_failed_permanent', { permanent: true });
     if (latest?.state === 'accepted') return;
 
-    const pdf = readyPdf(db, revision);
+    // The send waits for the PDF of its own variant (rendered by the PDF job its transaction enqueued).
+    const pdf = readyPdfOf(db, userId, revisionId, send.pdfVariant);
     if (pdf === undefined) throw new JobError('pdf_not_ready');
-    const attempt =
-      latest?.state === 'preparing' ? latest : createAttempt(db, clock, job, revision, snapshot, pdf, (latest?.attempt_no ?? 0) + 1);
+    const attempt = latest?.state === 'preparing' ? latest : createAttempt(db, clock, job, revision, send, pdf, (latest?.attempt_no ?? 0) + 1);
 
     if (attempt.attachment_id !== pdf.attachment_id) throw failBeforeSend(db, clock, attempt.id, 'attachment_mismatch', true);
-    if (!envelopeMatches(attempt.envelope_json, frozenEnvelope(revision.id, snapshot, pdf.sha256))) {
+    if (!envelopeMatches(attempt.envelope_json, frozenEnvelope(revision.id, contentOf(send), pdf.sha256))) {
       throw failBeforeSend(db, clock, attempt.id, 'envelope_mismatch', true);
     }
     let bytes: Buffer;
@@ -254,7 +250,8 @@ export function createSendJobHandler(deps: SendJobDeps): JobHandler {
     let message: OutboundMessage;
     try {
       message = await buildMessage({
-        snapshot,
+        send: contentOf(send),
+        payrollDate: snapshot.period.payroll_date,
         revisionNo: revision.revision_no,
         senderAddress: deps.senderAddress,
         messageId: attempt.message_id,

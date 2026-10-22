@@ -314,6 +314,8 @@ export const submissionSettingsBody = z.strictObject({
   auto_note_enabled: z.boolean().optional(),
   auto_note_text: z.string().max(400).optional(),
   show_ot_on_pdf: z.boolean().optional(),
+  /** The Settings default of the per-send "Time rows on the PDF" switch (owner decision F-3 b). */
+  show_time_on_pdf: z.boolean().optional(),
   reminder_offsets_minutes: z.array(z.number().int().min(1).max(20_160)).max(5).optional(),
 });
 export type SubmissionSettingsBody = z.infer<typeof submissionSettingsBody>;
@@ -374,13 +376,43 @@ export const lateReviewBody = z.strictObject({
 });
 export type LateReviewBody = z.infer<typeof lateReviewBody>;
 
-/** Optional echo of the envelope the caller expects; any difference needs a new revision (409). */
+/** A client idempotency key (useAttemptKey: a random UUID). */
+const requestKey = z.string().regex(/^[A-Za-z0-9-]{8,100}$/);
+/** The owner's reason for another copy; its exact rules (2-500 characters, no control characters) are the service's. */
+const sendReason = z.string().max(4000).nullable().optional();
+
+/*
+ * One send of a revision (WP5-UX5-T01b, owner decisions F-3 b and F-4): the envelope, subject, body and the two PDF
+ * row switches chosen for this copy, and the reason once a copy counts as sent. The address, subject, body and reason
+ * rules are the service's, for exact codes.
+ */
+export const sendBody = z.strictObject({
+  request_key: requestKey,
+  to: addressList,
+  cc: addressList,
+  subject: z.string().max(2000),
+  body_text: z.string().max(100_000),
+  time_rows: z.boolean(),
+  ot_rows: z.boolean(),
+  reason: sendReason,
+});
+export type SendBody = z.infer<typeof sendBody>;
+
+/**
+ * The same send again with the previous send's values. Optional echo of the recipients the caller expects (a
+ * difference is 409), the reason once a copy counts, and an optional idempotency key.
+ */
 export const resendBody = z.strictObject({
   to: addressList.optional(),
   cc: addressList.optional(),
   template_version: z.number().int().min(1).optional(),
+  reason: sendReason,
+  request_key: requestKey.optional(),
 });
 export type ResendBody = z.infer<typeof resendBody>;
+
+/** The owner's explicit decision on an uncertain delivery attempt (docs/05); a resend needs the reason (B-A2). */
+export const deliveryDecisionBody = z.strictObject({ decision: z.enum(['mark_delivered', 'resend']), reason: sendReason });
 
 /*
  * Workbook import commit (WP4-T09). The owner and the batch come from the session and the path; the body holds only

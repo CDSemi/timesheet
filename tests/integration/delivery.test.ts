@@ -13,9 +13,11 @@ import { captureFolder } from '../../src/server/mail/captureAdapter.ts';
 import { buildMessage, MessageError } from '../../src/server/mail/message.ts';
 import { createOutboundAdapter, type OutboundAdapter } from '../../src/server/mail/outbound.ts';
 import { classifySmtpFailure } from '../../src/server/mail/smtpAdapter.ts';
-import { recoverInterruptedSends } from '../../src/server/services/deliveries.ts';
+import { writeTransaction } from '../../src/server/db/database.ts';
+import { insertSend, recoverInterruptedSends } from '../../src/server/services/deliveries.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
 import { makePng } from '../support/pdfText.ts';
+import { sendWithDefaults } from '../support/sends.ts';
 import { type SinkBehaviour, type SmtpSink, startSmtpSink } from '../support/smtpSink.ts';
 import { createTestContext, la, LA, type TestContext } from '../support/testApp.ts';
 
@@ -132,12 +134,46 @@ async function finalized(options: { recipients?: boolean; pdf?: boolean } = {}) 
   });
   expect(response.status, JSON.stringify(response.body)).toBe(201);
   const revisionId = response.body.revision.id as string;
+  // WP5-UX5-T01b: signing sends nothing; the owner sends with the draft's defaults. A send without a recipient cannot
+  // come from the send route (422), only from an automatic path, so that case writes its send record directly.
+  if (options.recipients !== false) {
+    const sent = await sendWithDefaults(t, employee, revisionId);
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+  } else {
+    const snapshot = JSON.parse(t.db.prepare('SELECT payload_json FROM timesheet_revisions WHERE id = ?').pluck().get(revisionId) as string);
+    writeTransaction(t.db, () =>
+      insertSend(t.db, t.clock, {
+        userId: t.userIds.employee,
+        revisionId,
+        snapshot,
+        origin: 'deadline',
+        actorUserId: null,
+        requestKey: `deadline:${revisionId}`,
+        envelope: { to: [], cc: [], subject: snapshot.recipients.subject, bodyText: snapshot.recipients.body_text, bodyHtml: snapshot.recipients.body_html },
+        rows: { time: true, ot: true },
+        reason: null,
+      }),
+    );
+  }
   if (options.pdf !== false) {
     const summary = await runJobsOnce({ db: t.db, clock: t.clock, owner: 'runner-pdf', handlers: { render_pdf: createPdfJobHandler({ db: t.db, clock: t.clock, files }) } });
     expect(summary).toMatchObject({ claimed: 1, succeeded: 1 });
   }
   const sendJobId = t.db.prepare("SELECT id FROM jobs WHERE revision_id = ? AND kind = 'send_email'").pluck().get(revisionId) as string;
   return { revisionId, sendJobId };
+}
+
+/** The send record of a send job: what its message must contain. */
+function sendOf(jobId: string) {
+  const row = t.db.prepare('SELECT id, to_json, cc_json, subject, body_text, body_html FROM revision_sends WHERE job_id = ?').get(jobId) as {
+    id: string;
+    to_json: string;
+    cc_json: string;
+    subject: string;
+    body_text: string;
+    body_html: string;
+  };
+  return { sendId: row.id, to: JSON.parse(row.to_json) as string[], cc: JSON.parse(row.cc_json) as string[], subject: row.subject, bodyText: row.body_text, bodyHtml: row.body_html };
 }
 
 function runSend(outbound: OutboundAdapter, options: { sender?: string | null; hooks?: SendJobHooks; owner?: string } = {}) {
@@ -287,11 +323,13 @@ describe('capture (default outbound mode)', () => {
     expect(others).toHaveLength(0);
     if (attempt === undefined) throw new Error('no attempt');
     const pdf = storedPdf(revisionId);
-    const { snapshot, revisionNo } = snapshotOf(revisionId);
+    const { revisionNo } = snapshotOf(revisionId);
+    // WP5-UX5-T01b: the message comes from the send record (its own envelope, subject and bodies), not the snapshot.
+    const send = sendOf(sendJobId);
     expect(attempt).toMatchObject({ job_id: sendJobId, attempt_no: 1, state: 'accepted', accepted_at: '2026-09-29T20:10:00Z', provider_response: 'captured', attachment_id: pdf.id });
     expect(attempt.provider_message_id).toMatch(/^capture-[0-9a-f]{32}$/);
     expect(attempt.message_id).toMatch(/^<[0-9a-f-]{36}@timesheet\.invalid>$/);
-    expect(JSON.parse(attempt.envelope_json)).toMatchObject({ revision_id: revisionId, to: TO, cc: CC, subject: snapshot.recipients.subject, attachment_sha256: pdf.sha256 });
+    expect(JSON.parse(attempt.envelope_json)).toMatchObject({ revision_id: revisionId, send_id: send.sendId, to: TO, cc: CC, subject: send.subject, attachment_sha256: pdf.sha256 });
     expect(job(sendJobId)).toMatchObject({ state: 'succeeded', attempts: 1, last_error: null });
 
     const folder = captureFolder(dataDir, attempt.id);
@@ -306,11 +344,11 @@ describe('capture (default outbound mode)', () => {
     expect(message.headers.get('from')).toBe(SENDER);
     expect(message.headers.get('to')).toBe(TO.join(', '));
     expect(message.headers.get('cc')).toBe(CC.join(', '));
-    expect(message.headers.get('subject')).toBe(snapshot.recipients.subject);
+    expect(message.headers.get('subject')).toBe(send.subject);
     expect(message.headers.get('message-id')).toBe(attempt.message_id);
     expect(message.headers.has('x-mailer')).toBe(false);
-    sameText(message.text, snapshot.recipients.body_text);
-    sameText(message.html, snapshot.recipients.body_html);
+    sameText(message.text, send.bodyText);
+    sameText(message.html, send.bodyHtml);
     expect(message.pdf?.equals(stored)).toBe(true);
     expect(message.pdfName).toContain(`timesheet-${PAYROLL}-r${revisionNo}.pdf`);
     // The provider id is derived from the exact captured bytes.
@@ -326,8 +364,8 @@ describe('capture (default outbound mode)', () => {
       pdf_sha256: pdf.sha256,
       pdf_bytes: stored.length,
     });
-    // The bytes are exactly what the builder makes from the snapshot, the stored PDF, the attempt's Message-ID and send instant.
-    const rebuilt = await buildMessage({ snapshot, revisionNo, senderAddress: SENDER, messageId: attempt.message_id, date: new Date('2026-09-29T20:10:00Z'), pdf: stored });
+    // The bytes are exactly what the builder makes from the send record, the stored PDF, the attempt's Message-ID and send instant.
+    const rebuilt = await buildMessage({ send, payrollDate: PAYROLL, revisionNo, senderAddress: SENDER, messageId: attempt.message_id, date: new Date('2026-09-29T20:10:00Z'), pdf: stored });
     expect(rebuilt.raw.equals(eml)).toBe(true);
 
     // Nothing posted; a later pass sends nothing more.
@@ -372,12 +410,14 @@ describe('capture (default outbound mode)', () => {
 
   it('enqueues a duplicate send job once and sends once', async () => {
     const { revisionId, sendJobId } = await finalized();
+    // A send job's business key is its send record's (WP5-UX5-T01b): `send:<send id>`.
+    const send = sendOf(sendJobId);
     const duplicate = enqueueJob(t.db, t.clock, {
       kind: 'send_email',
-      businessKey: `revision:${revisionId}:send_email:initial`,
+      businessKey: `send:${send.sendId}`,
       userId: t.userIds.employee,
       revisionId,
-      payload: { revision_id: revisionId },
+      payload: { revision_id: revisionId, send_id: send.sendId },
     });
     expect(duplicate).toMatchObject({ created: false, job: { id: sendJobId } });
     expect(count("SELECT count(*) FROM jobs WHERE revision_id = ? AND kind = 'send_email'", revisionId)).toBe(1);
@@ -405,10 +445,10 @@ describe('SMTP adapter against the loopback sink (docs/05 failure table)', () =>
     expect(received?.from).toBe(SENDER);
     expect(received?.to).toEqual([...TO, ...CC]);
     const message = readMessage(received?.raw ?? Buffer.alloc(0));
-    const { snapshot } = snapshotOf(revisionId);
+    const send = sendOf(sendJobId);
     expect(message.headers.get('message-id')).toBe(attempt?.message_id);
-    expect(message.headers.get('subject')).toBe(snapshot.recipients.subject);
-    sameText(message.text, snapshot.recipients.body_text);
+    expect(message.headers.get('subject')).toBe(send.subject);
+    sameText(message.text, send.bodyText);
     expect(message.pdf?.equals(files.read(storedPdf(revisionId).storage_key))).toBe(true);
     expect(ledgerState()).toEqual(before);
     expect(existsSync(join(dataDir, 'mail-capture'))).toBe(false);
@@ -540,17 +580,26 @@ describe('SMTP adapter against the loopback sink (docs/05 failure table)', () =>
     expect(refused.status).toBe(409);
     expect(refused.body.error.code).toBe('delivery_uncertain');
 
-    const decided = await t.request('POST', `/api/deliveries/${uncertain?.id}/decision`, { cookie: employee, body: { decision: 'resend' } });
+    // B-A2: the uncertain copy may have arrived, so the resend decision needs the owner's reason; without one nothing is written.
+    const unreasoned = await t.request('POST', `/api/deliveries/${uncertain?.id}/decision`, { cookie: employee, body: { decision: 'resend' } });
+    expect(unreasoned.status).toBe(422);
+    expect(unreasoned.body.error.code).toBe('reason_required');
+    expect(t.db.prepare('SELECT decision FROM delivery_attempts WHERE id = ?').pluck().get(uncertain?.id)).toBeNull();
+    const decided = await t.request('POST', `/api/deliveries/${uncertain?.id}/decision`, {
+      cookie: employee,
+      body: { decision: 'resend', reason: 'The mail server dropped the connection' },
+    });
     expect(decided.status, JSON.stringify(decided.body)).toBe(201);
     expect(decided.body.attempt).toMatchObject({ id: uncertain?.id, state: 'uncertain', decision: 'resend', decision_required: false });
-    expect(decided.body.resend).toMatchObject({ revision_id: revisionId, job: { kind: 'send_email', state: 'queued' }, attempt: { attempt_no: 1, state: 'preparing' } });
-    const again = await t.request('POST', `/api/deliveries/${uncertain?.id}/decision`, { cookie: employee, body: { decision: 'resend' } });
+    expect(decided.body.resend).toMatchObject({ status: 'created', send: { revision_id: revisionId, send_no: 2, reason: 'The mail server dropped the connection' }, job: { kind: 'send_email' } });
+    const again = await t.request('POST', `/api/deliveries/${uncertain?.id}/decision`, { cookie: employee, body: { decision: 'resend', reason: 'Twice' } });
     expect(again.status).toBe(409);
     expect(again.body.error.code).toBe('delivery_decision_recorded');
     expect(count("SELECT count(*) FROM jobs WHERE revision_id = ? AND kind = 'send_email'", revisionId)).toBe(2);
-    const audit = t.db.prepare("SELECT actor_user_id, after_json FROM audit_events WHERE operation = 'delivery.decision'").all() as Array<{ actor_user_id: string; after_json: string }>;
+    const audit = t.db.prepare("SELECT actor_user_id, reason, after_json FROM audit_events WHERE operation = 'delivery.decision'").all() as Array<{ actor_user_id: string; reason: string; after_json: string }>;
     expect(audit).toHaveLength(1);
-    expect(JSON.parse(audit[0]?.after_json ?? '{}')).toMatchObject({ decision: 'resend', resend_attempt_id: decided.body.resend.attempt.id });
+    expect(audit[0]?.reason).toBe('The mail server dropped the connection');
+    expect(JSON.parse(audit[0]?.after_json ?? '{}')).toMatchObject({ decision: 'resend', resend_send_id: decided.body.resend.send.id, resend_job_id: decided.body.resend.job.id });
 
     expect(await runSend(smtpOutbound(target))).toMatchObject({ claimed: 1, succeeded: 1 });
     const rows = attempts(revisionId);
@@ -558,7 +607,9 @@ describe('SMTP adapter against the loopback sink (docs/05 failure table)', () =>
       ['uncertain', 'resend'],
       ['accepted', null],
     ]);
-    expect(rows[1]?.id).toBe(decided.body.resend.attempt.id);
+    expect(rows[1]?.job_id).toBe(decided.body.resend.job.id);
+    // The reason is the owner's record only: never in the message.
+    expect(target.messages[1]?.raw.toString('latin1')).not.toContain('dropped the connection');
     expect(rows[1]?.message_id).not.toBe(rows[0]?.message_id);
     expect(target.messages).toHaveLength(2);
     expect(ledgerState()).toEqual(before);
@@ -637,9 +688,11 @@ describe('integrity and visible faults', () => {
   });
 
   it('the builder refuses a missing or malformed sender and recipient', async () => {
-    const { revisionId } = await finalized();
-    const { snapshot, revisionNo } = snapshotOf(revisionId);
-    const source = { snapshot, revisionNo, senderAddress: SENDER, messageId: '<a@timesheet.invalid>', date: new Date(0), pdf: new Uint8Array([1]) };
+    const { revisionId, sendJobId } = await finalized();
+    const { revisionNo } = snapshotOf(revisionId);
+    // WP5-UX5-T01b: the message comes from the send record (its own envelope, subject and bodies), not the snapshot.
+    const send = sendOf(sendJobId);
+    const source = { send, payrollDate: PAYROLL, revisionNo, senderAddress: SENDER, messageId: '<a@timesheet.invalid>', date: new Date(0), pdf: new Uint8Array([1]) };
     const code = async (overrides: Record<string, unknown>) => {
       try {
         await buildMessage({ ...source, ...overrides });
@@ -651,8 +704,8 @@ describe('integrity and visible faults', () => {
     expect(await code({})).toBe('built');
     expect(await code({ senderAddress: null })).toBe('sender_missing');
     expect(await code({ senderAddress: 'a@b.invalid\r\nBcc: x@example.invalid' })).toBe('sender_invalid');
-    expect(await code({ snapshot: { ...snapshot, recipients: { ...snapshot.recipients, to: [] } } })).toBe('recipient_missing');
-    expect(await code({ snapshot: { ...snapshot, recipients: { ...snapshot.recipients, cc: ['x@example.invalid, y@example.invalid'] } } })).toBe('recipient_invalid');
+    expect(await code({ send: { ...send, to: [] } })).toBe('recipient_missing');
+    expect(await code({ send: { ...send, cc: ['x@example.invalid, y@example.invalid'] } })).toBe('recipient_invalid');
     expect(await code({ messageId: '<a@b>\r\nX: y' })).toBe('message_id_invalid');
   });
 
@@ -713,7 +766,7 @@ describe('integrity and visible faults', () => {
     expect(refused.body.error.code).toBe('delivery_uncertain');
 
     // One explicit decision resends exactly once.
-    const decided = await t.request('POST', `/api/deliveries/${last?.id}/decision`, { cookie: employee, body: { decision: 'resend' } });
+    const decided = await t.request('POST', `/api/deliveries/${last?.id}/decision`, { cookie: employee, body: { decision: 'resend', reason: 'The runner stopped while sending' } });
     expect(decided.status, JSON.stringify(decided.body)).toBe(201);
     expect(await runSend(captureOutbound())).toMatchObject({ claimed: 1, succeeded: 1 });
     expect(attempts(revisionId).map((row) => row.state).slice(-2)).toEqual(['uncertain', 'accepted']);
@@ -834,7 +887,8 @@ describe('secrets and the owner-only sending flag', () => {
 
     // Capture mode with SMTP credentials present in its environment object reads none of them.
     const capture = loadDeliveryConfig({ DATA_DIR: dataDir, MAIL_FROM: SENDER, SMTP_USER, SMTP_PASSWORD: SECRET }, base());
-    const again = await t.request('POST', `/api/revisions/${revisionId}/resend`, { cookie: employee, body: {} });
+    // The first copy was accepted, so another one needs the owner's reason (B-A2).
+    const again = await t.request('POST', `/api/revisions/${revisionId}/resend`, { cookie: employee, body: { reason: 'Synthetic second copy' } });
     expect(again.status).toBe(201);
     await runSend(createOutboundAdapter(capture.outbound, { dataDir }));
     const captured = attempts(revisionId).at(-1);

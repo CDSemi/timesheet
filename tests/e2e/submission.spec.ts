@@ -85,7 +85,9 @@ test('a manual sign-off is delivered into the capture folder with the signed PDF
   await expect(page.locator('[data-signer]')).toContainText(SIGNER);
   await page.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ }).check();
   await page.getByRole('button', { name: 'Sign off & Submit' }).click();
+  // WP5-UX5-T01b: the sign-off sends nothing by itself; the page then sends with the send-draft defaults.
   await expect(page.getByRole('heading', { name: 'Submitted' })).toBeVisible();
+  await expect(page.locator('[data-result="created"]')).toHaveAttribute('data-sent', 'true');
   const signedOn = new Date();
 
   // The PDF and the send run through the production CLI; the first attempt is accepted into the capture folder.
@@ -134,18 +136,34 @@ test('a manual sign-off is delivered into the capture folder with the signed PDF
   const download = await downloading;
   expect(readFileSync(await download.path()).equals(capture.pdf ?? Buffer.alloc(0)), 'the downloaded file is the captured PDF').toBe(true);
 
-  // An explicit resend (a confirmation first) makes one more attempt of the same revision and the same PDF.
+  // An explicit resend (a confirmation first) makes one more attempt of the same revision and the same PDF. A copy was
+  // already accepted, so the confirmation asks for a typed reason (owner decision F-4, WP5-UX5-T01b); the reason is kept
+  // with the send and never put in the email.
+  const sends: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST') sends.push(new URL(request.url()).pathname);
+  });
   await revision.getByRole('button', { name: /^Resend email/ }).click();
   const confirm = revision.locator('[data-confirm="resend"]');
   await expect(confirm).toContainText(TO);
-  await confirm.getByRole('button', { name: 'Send again' }).click();
+  await expect(confirm.getByRole('heading', { name: 'Send another copy?' })).toBeVisible();
+  const reason = confirm.getByLabel('Reason for sending another copy');
+  await expect(reason).toBeVisible();
+  await confirm.getByRole('button', { name: 'Send another copy' }).click();
+  await expect(confirm.getByRole('alert')).toHaveText('Give the reason for sending another copy.');
+  expect(sends, 'nothing is posted without the reason').toEqual([]);
+  await reason.fill('Payroll asked for a second copy');
+  await confirm.getByRole('button', { name: 'Send another copy' }).click();
   await expect(revision.locator('[data-revision-message="ok"]')).toContainText('A new delivery attempt was queued');
+  // History's resend is the send route (WP5-UX5-T01b).
+  expect(sends).toEqual([`/api/revisions/${revisionId}/send`]);
   drainJobsFrom(server, new Date(Date.now() + 5_000));
   const both = await attemptsOf(person, revisionId);
   expect(both.map((item) => item.state)).toEqual(['accepted', 'accepted']);
   const second = readCapture(server, both.find((item) => item.id !== first[0]?.id)?.id ?? '');
   expect(second.pdf?.equals(capture.pdf ?? Buffer.alloc(0)), 'the resend carries the same PDF').toBe(true);
   expect(header(second.eml, 'Message-ID'), 'a new attempt has its own Message-ID').not.toBe(header(capture.eml, 'Message-ID'));
+  expect(second.eml, 'the reason is not in the email').not.toContain('second copy');
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(revision.locator('[data-attempt]')).toHaveCount(2);
   await expect(revision.locator('[data-attempt-state="accepted"]')).toHaveCount(2);

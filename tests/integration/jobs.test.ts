@@ -282,7 +282,7 @@ describe('PDF job', () => {
     expect(jobRow(pdfJobId)).toMatchObject({ state: 'succeeded', attempts: 1, last_error: null });
 
     const file = t.db.prepare('SELECT * FROM revision_files WHERE revision_id = ?').get(revisionId) as any;
-    expect(file).toMatchObject({ user_id: t.userIds.employee, kind: 'pdf', state: 'ready', last_error: null });
+    expect(file).toMatchObject({ user_id: t.userIds.employee, kind: 'pdf', variant: 't1o1', state: 'ready', last_error: null });
     const attachment = t.db.prepare('SELECT * FROM attachments WHERE id = ?').get(file.attachment_id) as any;
     expect(attachment).toMatchObject({ user_id: t.userIds.employee, kind: 'pdf', mime_type: 'application/pdf', width_px: null, height_px: null });
     const bytes = readFileSync(files.pathOf(attachment.storage_key));
@@ -308,9 +308,10 @@ describe('PDF job', () => {
     });
     expect(sha(bytes)).toBe(sha(expected));
 
-    // Nothing posted, no delivery, the send job untouched.
+    // Nothing posted, no delivery.
     expect(untouchable()).toEqual(before);
-    expect(t.db.prepare("SELECT state, attempts FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(revisionId)).toEqual({ state: 'queued', attempts: 0 });
+    // Signing never sends (WP5-UX5-T01b): the revision has no send job at all.
+    expect(t.db.prepare("SELECT state, attempts FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(revisionId)).toBeUndefined();
 
     // A second pass finds nothing; a duplicate run of the handler writes nothing new.
     t.clock.advanceSeconds(3600);

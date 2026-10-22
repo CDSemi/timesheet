@@ -173,7 +173,7 @@ function expectSingleFinalization(owner: Owner, round: number): void {
     { work_date: '2026-09-15', line_kind: 'credit', proposed_minutes: 60, outcome: 'posted' },
     { work_date: '2026-09-16', line_kind: 'deficit_debit', proposed_minutes: -240, outcome: 'posted' },
   ]);
-  expect(t.db.prepare('SELECT kind FROM jobs WHERE user_id = ? ORDER BY kind').pluck().all(userId), label).toEqual(['render_pdf', 'send_email']);
+  expect(t.db.prepare('SELECT kind FROM jobs WHERE user_id = ? ORDER BY kind').pluck().all(userId), label).toEqual(['render_pdf']);
   expect(count('SELECT finalized_revision_no FROM timesheets WHERE user_id = ?', userId), label).toBe(1);
   expect(getBalance(t.db, userId).postedMinutes, label).toBe(300 - 240 + 60);
 }

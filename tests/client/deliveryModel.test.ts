@@ -12,6 +12,8 @@ import {
   attemptStateText,
   buildRevisionRows,
   confirmationFor,
+  copyCounts,
+  copyReasonProblem,
   correctionLinkLabel,
   decisionFailureText,
   decisionText,
@@ -330,6 +332,38 @@ describe('the uncertain delivery decision and its confirmation', () => {
     expect(resendFailureText(refused(409, 'pdf_not_ready'))).toContain('not ready');
     expect(resendFailureText(refused(409, 'revision_superseded'))).toContain('newer revision');
     expect(resendFailureText(refused(409, 'envelope_changed'))).toContain('recipients');
+    expect(resendFailureText(refused(422, 'reason_required'))).toContain('Give the reason');
+    expect(resendFailureText(refused(422, 'recipients_required'))).toContain('No recipient is set');
+    expect(decisionFailureText(refused(422, 'reason_required'))).toContain('Give the reason');
+    expect(decisionFailureText(refused(422, 'invalid_reason'))).toContain('2 to 500 characters');
+  });
+
+  // WP5-UX5-T01b, owner decision F-4 and its reason rule (B-A2).
+  it('asks for a typed reason once a copy of the period counts as sent, and for every resend of an uncertain copy', () => {
+    const recipients = { to: ['payroll@example.invalid'], cc: [] };
+    expect(confirmationFor('resend', recipients, false)).toMatchObject({ title: 'Send this revision again?', confirmLabel: 'Send again', reasonRequired: false });
+    const another = confirmationFor('resend', recipients, true);
+    expect(another).toMatchObject({ title: 'Send another copy?', confirmLabel: 'Send another copy', reasonRequired: true });
+    expect(another.message).toContain('not added to the email');
+    expect(confirmationFor('resend_uncertain', recipients).reasonRequired).toBe(true);
+    expect(confirmationFor('mark_delivered', recipients).reasonRequired).toBe(false);
+  });
+
+  it('counts a copy as sent from an accepted or uncertain attempt of any revision of the period, not from a failed one', () => {
+    const row = { payrollDate: '2026-10-02' };
+    expect(copyCounts(row, [])).toBe(false);
+    expect(copyCounts(row, [attempt({ payroll_date: '2026-10-02', state: 'failed_permanent' })])).toBe(false);
+    expect(copyCounts(row, [attempt({ payroll_date: '2026-10-02', state: 'accepted' })])).toBe(true);
+    expect(copyCounts(row, [attempt({ payroll_date: '2026-10-02', state: 'uncertain', decision: 'mark_delivered', decision_required: false })])).toBe(true);
+    expect(copyCounts(row, [attempt({ payroll_date: '2026-09-18', state: 'accepted' })])).toBe(false);
+  });
+
+  it('checks the reason like the server: 2 to 500 characters after trimming', () => {
+    expect(copyReasonProblem('   ')).toBe('Give the reason for sending another copy.');
+    expect(copyReasonProblem(' x ')).toContain('2 to 500');
+    expect(copyReasonProblem('ok')).toBeNull();
+    expect(copyReasonProblem('x'.repeat(500))).toBeNull();
+    expect(copyReasonProblem('x'.repeat(501))).toContain('2 to 500');
   });
 });
 

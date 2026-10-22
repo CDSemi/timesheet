@@ -1318,6 +1318,53 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
     sơ suất của coordinator.
   - Mã task trên board đã đổi thành WP5-UX5-T01A và WP5-UX5-T01A-FREEZE; tên file giữ nguyên.
   - Cùng committer đó stage lại board và checkpoint, rồi chạy lại mọi kiểm tra (lần 2).
+- WP5-UX5-T01A-FREEZE lần 2 đã commit và push c1b2cc4f31cc9a3957a04056a8dff413977b97b5. 60 đường
+  dẫn; digest 783a63f8; mọi kiểm tra trả về 0.
+- Đang chạy: WP5-UX5-T01B (worker-high, **opus**, override `size_risk`: slice outbox cỡ L, rủi ro H,
+  có phần mới). Phạm vi:
+  - ký mà không gửi;
+  - `revision_sends` và các biến thể PDF (migration 0015);
+  - các route send-draft, send và pdf;
+  - quy tắc lý do khi gửi lại;
+  - tự gửi đúng hạn và nhắc nhở;
+  - nối tạm giao diện để luồng hiện tại vẫn chạy;
+  - docs/01 FR-11.
+- T01B dừng vì thiếu phạm vi, trước khi sửa file nào. Các đường dẫn còn thiếu: các component gửi lại
+  ở History, trạng thái vận hành cho quản trị viên (để mỗi bản ghi chỉ ra một dòng dù có nhiều biến
+  thể PDF), `submissionSettings.ts`, và `admin-status.spec.ts`.
+  - Bổ sung thiết kế đã duyệt: migration 0015 tạo sẵn bản ghi gửi cho mọi job gửi đang có, để bản đã
+    gửi trước khi nâng cấp không bị tự gửi lại lúc đến hạn.
+  - Addendum 1 thêm các đường dẫn này. Cùng worker đó chạy tiếp.
+  - Bài học: trước khi viết danh sách đường dẫn cho một slice, phải liệt kê hết nơi gọi tới mọi hợp
+    đồng (API, hàm) bị thay đổi.
+- T01B dừng lần thứ hai, cũng trước khi sửa file nào. Sau khi tách Sign off và Send,
+  `tests/support/schemaV6.ts` phải tự tạo các job gửi của phiên bản 6.
+  - Addendum 2 thêm `tests/support/`, chỉ để chỉnh fixture.
+  - Worker giờ bắt đầu viết code.
+- WP5-UX5-T01B xong (opus).
+  - Ký không còn tự gửi. Mỗi lần gửi là một bản ghi riêng; có các biến thể PDF; có quy tắc lý do.
+  - Migration 0015, kèm phần tạo sẵn bản ghi gửi cũ và test nâng cấp.
+  - Tự gửi đúng hạn và nhắc nhở theo F-2 a; giao diện được nối tạm.
+  - Kết quả: vitest 2261; e2e đầy đủ 779 đạt, 0 lỗi; 5/5 đột biến bị bắt; digest 089cf868 (854 file).
+  - Script drill đã sửa nhưng chưa chạy vì cần Docker; gate sẽ chạy.
+  - Điểm lệch, đưa thành câu hỏi WP5-UX5-H-1 cho chủ dự án: "đã nộp" nghĩa là bất kỳ bản nào của kỳ
+    đã được gửi, nên bản sửa (correction) không tự gửi khi đến hạn.
+- Đang chạy: WP5-UX5-T01B-FREEZE (một committer mới), kiểm tập đường dẫn theo quy tắc.
+  - Lần 1: classifier chặn lệnh `git add --pathspec-from-file` với lý do "[Credential Leakage]".
+    Committer không thử lại và chưa stage gì.
+  - Các kiểm tra trước đó đều đạt: digest khớp, 71 đường dẫn đúng quy tắc, các lần quét không có kết
+    quả nào.
+  - Nguyên nhân có thể: brief của tôi bảo stage từ một file danh sách, nên bước kiểm tra quyền không
+    thấy được các đường dẫn; các lần freeze trước đều ghi đường dẫn trực tiếp trong lệnh.
+  - Theo bài học đã ghi, không cho cùng agent chạy lại.
+  - Hỏi chủ dự án chọn: (a) một committer mới, ghi đường dẫn trực tiếp; hoặc (b) chủ dự án tự commit.
+    Mission ở trạng thái `blocked`.
+- Chủ dự án trả lời (2026-10-22, nguyên văn "1 a, 2 a"):
+  - một committer mới ghi đường dẫn trực tiếp, theo Addendum 1 của brief. Nếu vẫn bị chặn thì dừng và
+    chủ dự án tự commit;
+  - H-1 a: bản sửa (correction) sau khi đã gửi một bản thì người dùng tự gửi, hệ thống không tự gửi
+    khi đến hạn (đúng như đã làm).
+  - Mission chuyển về `running`.
 - Còn lại sau T06:
   - T06-FREEZE;
   - gate cho cả đợt 4;

@@ -4,7 +4,7 @@
 // Usage: npm run build && node scripts/smoke-built-server.mjs
 // Port: SMOKE_PORT when set; otherwise a free loopback port chosen by the OS per run.
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -380,6 +380,31 @@ try {
   );
   const staleReview = await call('POST', `/api/timesheets/${payroll2}/signoff`, { cookie: cookie2, body: { ...signoffBody, reviewed_hash: '0'.repeat(64) } });
   check('a sign-off built from a stale review hash is also a 409', staleReview.status === 409, String(staleReview.status));
+
+  // WP5-UX5-T01b: signing sends nothing; the owner sends the signed revision with the send draft's defaults.
+  check(
+    'the sign-off enqueued the PDF only (no send job)',
+    Array.isArray(signoff.json?.jobs) && signoff.json.jobs.map((job) => job.kind).join(',') === 'render_pdf',
+    (signoff.json?.jobs ?? []).map((job) => job.kind).join(','),
+  );
+  const draft = await call('GET', `/api/revisions/${revisionId}/send-draft`, { cookie: cookie2 });
+  const sendBody = {
+    request_key: randomUUID(),
+    to: draft.json?.to,
+    cc: draft.json?.cc,
+    subject: draft.json?.subject,
+    body_text: draft.json?.body_text,
+    time_rows: draft.json?.time_rows,
+    ot_rows: draft.json?.ot_rows,
+  };
+  const sent = await call('POST', `/api/revisions/${revisionId}/send`, { cookie: cookie2, body: sendBody });
+  check(
+    'the owner sends the signed revision once with the send draft defaults (201, send 1)',
+    draft.status === 200 && draft.json?.reason_required === false && sent.status === 201 && sent.json?.send?.send_no === 1,
+    `${draft.status}/${sent.status}`,
+  );
+  const replayed = await call('POST', `/api/revisions/${revisionId}/send`, { cookie: cookie2, body: sendBody });
+  check('the same send request replays (200) with the same send', replayed.status === 200 && replayed.json?.status === 'replayed' && replayed.json?.send?.id === sent.json?.send?.id, String(replayed.status));
 
   // The runner is off in this smoke: run the due jobs through the CLI (PDF, then delivery in capture mode).
   const runAt = (offsetSeconds) =>

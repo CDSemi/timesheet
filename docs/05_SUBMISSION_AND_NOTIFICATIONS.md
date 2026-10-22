@@ -6,9 +6,9 @@ Track revision (draft/finalized), employee review (pending/signed), finalization
 
 ## Manual path
 
-Prepare an exact review payload: attendance, OT evidence/movements, unresolved inputs, deficit decisions, recipients, email and the signature image when one is saved. A preview is not a final submission PDF. Manual sign-off is the signed-in owner's act: it records the account's display name (no typed name) and, when one is saved, the signature image; without a saved image it carries the name alone (owner decision F-5 b, 2026-10-21). The reviewed payload binds the image state, so an image saved or replaced after the review makes the request a stale-review conflict. Explicit Sign off & Submit carries expected draft version and reviewed payload hash.
+Prepare an exact review payload: attendance, OT evidence/movements, unresolved inputs, deficit decisions, recipients, email and the signature image when one is saved. A preview is not a final submission PDF. Manual sign-off is the signed-in owner's act: it records the account's display name (no typed name) and, when one is saved, the signature image; without a saved image it carries the name alone (owner decision F-5 b, 2026-10-21). The reviewed payload binds the image state, so an image saved or replaced after the review makes the request a stale-review conflict. Explicit sign-off carries expected draft version and reviewed payload hash.
 
-Validate ownership/version, finalize snapshot, record real sign-off, post ledger events and enqueue work in one transaction. Stale content returns a conflict. Render the final private PDF from the snapshot, persist/hash it, then send that exact file and frozen email content. Delivery status remains independent of sign-off.
+Sign off and send are separate acts (owner decisions F-2 a, F-3 b and F-4, 2026-10-21; WP5-UX5-T01b). Sign-off validates ownership/version, finalizes the snapshot, records the real sign-off, posts ledger events and enqueues the PDF in one transaction; it sends nothing. Stale content returns a conflict. The owner then sends the signed revision: the To, Cc, subject and body and the two PDF row switches ("Time rows on the PDF", "OT rows on the PDF") are chosen for that send, with the current Settings as defaults. Each send is its own immutable record. Render each PDF variant once from the snapshot, persist/hash it, then send that exact file with the send's own email content. Delivery status remains independent of sign-off. Until the Send card (WP5-UX5-T03), the Review page sends right after a successful sign-off with the Settings defaults.
 
 Incomplete optional clock evidence may remain pending after explicit acknowledgement; never invent hours. Correct invalid data or exclude it with audit.
 
@@ -16,9 +16,12 @@ Incomplete optional clock evidence may remain pending after explicit acknowledge
 
 Persist due_at UTC from the reporting-zone due rule. The runner operates without a browser.
 
-- Unsigned draft + enabled switch: finalize valid saved attendance—or the default labels when the period has no saved entries—as **automatic** (the record keeps employee review pending); post only computable credits/authorized deficits (days without records post no OT and no deficit); enqueue PDF/email, presented as document 04 describes.
-- Switch off: keep draft, mark overdue and notify; no automatic export/send.
-- Already finalized: continue its existing job, never finalize/post again.
+A period counts as submitted once any of its revisions has a send (owner decision F-2 a). At the deadline the system submits what is not yet submitted:
+
+- Unsigned draft + enabled switch: finalize valid saved attendance—or the default labels when the period has no saved entries—as **automatic** (the record keeps employee review pending); post only computable credits/authorized deficits (days without records post no OT and no deficit); enqueue the PDF and send it through a send record with origin `deadline`, the Settings envelope and switches and no reason, presented as document 04 describes.
+- Signed revision never sent + enabled switch: send the signed revision as signed (a `deadline` send with the Settings envelope and switches, no reason; audit `deadline.send_signed`). No new revision and no ledger change.
+- Switch off (a draft, or a signed revision never sent): keep it, mark overdue and notify; no automatic export/send.
+- Already submitted (any revision has a send): continue its existing jobs, never finalize, post or send again. A later correction or late review is therefore never sent by the deadline scan; the owner sends it.
 - Manual/deadline race: one transaction wins; the other reloads. No duplicate revision, ledger posting or send.
 
 Automatic image inclusion is a separate explicit, audited authorization of one stored signature image, asked for at signature upload with the option pre-selected; a user who unticks it gets no image on automatic submissions until they authorize it later in Settings. Outgoing automatic PDF/email follow document 04 (no automatic indicator, optional note line). signed_at stays empty and no sign-off is recorded; the employee's own screens and the outcome notice always show that review is pending.
@@ -32,7 +35,7 @@ Account bounds on automatic submission (both only narrow what is submitted; neit
 
 ## Reminders and review links
 
-Default reminders: 24h and 2h before due, an overdue warning when auto-submit is off, and an outcome notice after automatic submission. Deduplicate by user/period/reminder occurrence; stop normal reminders after finalization. Collapse missed pre-deadline notices into one useful current notice.
+Default reminders: 24h and 2h before due, an overdue warning when auto-submit is off, and an outcome notice after automatic submission. Deduplicate by user/period/reminder occurrence; stop normal reminders once the period is submitted, at its first send (owner decision F-2 a): a signed period that was not sent keeps its reminders, worded "signed, not sent yet". Collapse missed pre-deadline notices into one useful current notice.
 
 Reminders are at-least-once (owner decision D-7 a, 2026-10-20). A reminder job that runs again after a crash finds its message already captured and counts as sent; on real SMTP no such record exists, so if the process stops after the mail server accepted the message and before the job is recorded as sent, the reminder may arrive twice. This is accepted: reminders are advisory, and a lost reminder could cause a missed deadline. Submission deliveries are not reminders and keep the uncertain-outcome rule of the delivery table below.
 
@@ -43,6 +46,8 @@ If implementing magic links: random short-lived action-scoped tokens stored hash
 ## Durable delivery
 
 Persist jobs, unique business keys, attempts, lease/renewal, retry times and redacted provider responses. Suggested delays: 1, 5, 15, 60 minutes, then visible intervention. Target discovery within one minute on a healthy host; do not promise exact wall-clock send time.
+
+Each send is an immutable record with exactly one send job (WP5-UX5-T01b). The send job builds the message from that record only (its envelope, subject, bodies and PDF variant), never from the snapshot's envelope or the current settings. It waits until the PDF of its variant is ready. Each attempt freezes the envelope, the body digest and the PDF hash. A send request carries the owner's idempotency key: the same request replays, and another body under the key is refused.
 
 | Failure point | Action |
 |---|---|
@@ -56,8 +61,15 @@ SMTP is not exactly-once delivery. Stable Message-ID helps correlation but canno
 
 ## Corrections and resends
 
-Old/finalized edits require a reason and correction draft, preserving original snapshots/PDF/sign-off/attempts. Finalize a new revision and post only ledger differences. Editing does not silently resend.
+Old/finalized edits require a reason and correction draft, preserving original snapshots/PDF/sign-off/attempts. Finalize a new revision and post only ledger differences. Editing does not silently resend: corrections and late reviews sign the same way as a sign-off and never send by themselves.
 
-Late review of an automatic revision creates a new genuinely signed revision; unchanged calculation posts zero delta. Let the employee explicitly choose whether to email that reviewed revision. Unchanged-PDF resend creates another attempt on the same revision and no ledger movement. Changed report content or recipient envelope needs a new immutable reviewed revision. After an automatic submission the employee may add records for days that credited no OT and finalize a reasoned correction; a day without an earlier credit posts a first credit, any other day only the difference.
+Late review of an automatic revision creates a new genuinely signed revision; unchanged calculation posts zero delta. The employee explicitly chooses whether to send that reviewed revision. A send of the same revision creates another send record and attempt and no ledger movement; `/resend` is that send with the previous send's values. Changed report content needs a new immutable reviewed revision; the envelope, subject, body and PDF row switches are chosen for each send (owner decision F-4). After an automatic submission the employee may add records for days that credited no OT and finalize a reasoned correction; a day without an earlier credit posts a first credit, any other day only the difference.
+
+Another copy needs a confirmation and a typed reason (owner decision F-4, 2026-10-21; plan B-A2):
+- A copy of the period counts as sent once any delivery attempt of any of its revisions was `accepted` or `uncertain`, whatever was decided later (the mail may have arrived). A send whose attempts all ended `failed_permanent` does not count, so retrying a failed first send needs no reason.
+- When a copy counts, a send needs a reason: 2-500 characters after trimming, NFC, no control characters except line feeds. Otherwise the send is refused (422 `reason_required`) and nothing is written. The explicit "resend" decision on an uncertain attempt needs the reason too.
+- The reason is stored on the send and in its audit event. It is never added to the email.
+- The check runs inside the send transaction, so two concurrent sends cannot both skip it. A send still in progress blocks another one (409).
+- The automatic paths never need a reason: they run only for a period that has no send.
 
 Archived downloads require ownership or a share whose PDF item is on (the PDF may contain the signature image); signature image files are never shared. Separate OT evidence export includes raw intervals, breaks, policies, daily eligible/credited amounts, adjustments and leave permission; it is not automatically attached to payroll email.

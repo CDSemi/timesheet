@@ -317,6 +317,37 @@ function wholeNumber(value: number, field: string): number {
   return value;
 }
 
+/* ---- PDF variants (owner decision F-3 b) ---------------------------------------------------- */
+
+/**
+ * Which rows a PDF of a signed revision prints: `t<time rows>o<OT rows>`. Every variant is a deterministic view of the
+ * same signed snapshot (same days, totals, signature and date); only the session time rows and the OT rows (with the
+ * OT total) are printed or left out. The snapshot itself never changes, so its hash binds every variant.
+ */
+export const PDF_VARIANTS = ['t1o1', 't1o0', 't0o1', 't0o0'] as const;
+export type PdfVariant = (typeof PDF_VARIANTS)[number];
+export type PdfRows = { time: boolean; ot: boolean };
+
+export function pdfVariant(rows: PdfRows): PdfVariant {
+  return `t${rows.time ? 1 : 0}o${rows.ot ? 1 : 0}` as PdfVariant;
+}
+
+export function pdfRowsOf(variant: PdfVariant): PdfRows {
+  return { time: variant.charAt(1) === '1', ot: variant.charAt(3) === '1' };
+}
+
+export function isPdfVariant(value: unknown): value is PdfVariant {
+  return typeof value === 'string' && (PDF_VARIANTS as readonly string[]).includes(value);
+}
+
+/**
+ * The sign-off default variant of a revision: the time rows on and the OT rows as the snapshot froze them. It is what
+ * the sign-off renders, what every PDF made before the split printed, and what a grantee gets before any send.
+ */
+export function defaultPdfVariant(snapshot: Pick<ReviewSnapshot, 'show_ot_on_pdf'>): PdfVariant {
+  return pdfVariant({ time: true, ot: snapshot.show_ot_on_pdf });
+}
+
 /** The payload as a canonical value (a type-level bridge for hashing and storage). */
 export function snapshotValue(snapshot: ReviewSnapshot): CanonicalValue {
   return snapshot;

@@ -199,3 +199,15 @@ FAILED: validate_orchestration.py and check_recovery.py exit 1, ValueError "Inva
 validator regex `[A-Z0-9-]+` rejects the lowercase `a` in the board task ID WP5-UX5-T01a. Needs a
 coordinator decision (rename the task ID or change the validator). Files remain staged. See
 evidence/WP5-UX5-T01a-FREEZE/checks.txt.
+
+### Attempt 2
+
+Attempt 1 stopped on the lowercase task ID; the coordinator renamed the board IDs and I re-staged
+ORCHESTRATION.json and the checkpoint pair. HEAD before = origin/main = 57c41e8; commit
+c1b2cc4f31cc9a3957a04056a8dff413977b97b5, pushed, remote SHA = same. Digest before add and after
+commit (clean tree) 783a63f8... (851 files). Staged: 60 files (39 outside handoff, 21 handoff);
+no extra handoff paths. Checks all exit 0: precommit (60 files, 0 findings), diff --cached --check,
+JSON parse (ORCHESTRATION, STATE), validate_orchestration, check_recovery, validate_package
+--preflight, fetch, push --dry-run, push. No masking. Slips: one stray `python -c "x"` with a
+/dev/null redirect (no effect), and the brief (with the attempt-1 note) was staged; this
+Attempt 2 text and checks.txt are unstaged.

@@ -8,10 +8,14 @@ import {
   type Period,
   requestFailure,
   type RevisionListItem,
+  type SendDraft,
+  type SendResponse,
 } from '../api.ts';
 import { DeliveryRevision, type PendingAction } from './DeliveryRevision.tsx';
 import {
   buildRevisionRows,
+  copyCounts,
+  copyReasonProblem,
   decisionFailureText,
   type DeliveryAction,
   filenameFromDisposition,
@@ -23,6 +27,7 @@ import {
 } from './deliveryModel.ts';
 import { describeError } from './errors.ts';
 import { displayZone } from './format.ts';
+import { useAttemptKey } from './useAttemptKey.ts';
 
 /*
  * The owner's submissions: every revision with its origin and review state, the PDF, the delivery
@@ -120,6 +125,8 @@ export function DeliveryHistory() {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingState | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const sendKey = useAttemptKey();
   const [messages, setMessages] = useState<Readonly<Record<string, RowMessage>>>({});
   const opener = useRef<HTMLElement | null>(null);
   const inFlight = useRef(false);
@@ -201,34 +208,74 @@ export function DeliveryHistory() {
     opener.current = trigger;
     say(row.key, null);
     setConfirmError(null);
+    setReason('');
     setPending({ revisionKey: row.key, payrollDate: row.payrollDate, action, attemptId });
   }
 
   function cancel() {
     setPending(null);
     setConfirmError(null);
+    setReason('');
     opener.current?.focus();
+  }
+
+  /**
+   * History's resend is the send route (WP5-UX5-T01b): the values of the revision's previous send (or the Settings
+   * defaults of a revision never sent) from the send draft, and the owner's reason once a copy counts as sent.
+   */
+  async function sendAgain(revisionId: string, typed: string | null): Promise<void> {
+    const draft = await api<SendDraft>('GET', `/api/revisions/${revisionId}/send-draft`);
+    const previous = draft.previous_send;
+    const body = {
+      request_key: sendKey.keyFor(`${revisionId}\n${typed ?? ''}`),
+      to: previous?.to ?? draft.to,
+      cc: previous?.cc ?? draft.cc,
+      subject: previous?.subject ?? draft.subject,
+      body_text: previous?.body_text ?? draft.body_text,
+      time_rows: previous?.time_rows ?? draft.time_rows,
+      ot_rows: previous?.ot_rows ?? draft.ot_rows,
+      ...(typed === null ? {} : { reason: typed }),
+    };
+    await api<SendResponse>('POST', `/api/revisions/${revisionId}/send`, body);
+    sendKey.settle();
   }
 
   async function confirm() {
     if (pending === null || inFlight.current) return;
+    const { revisionKey, payrollDate, action, attemptId } = pending;
+    // The reason rule (B-A2): an uncertain attempt always counts; a resend counts once a copy of the period was sent.
+    const needsReason = action === 'resend_uncertain' || (action === 'resend' && copyCounts({ payrollDate }, data?.deliveries ?? []));
+    const typed = reason.trim() === '' ? null : reason.trim();
+    if (needsReason) {
+      const problem = copyReasonProblem(reason);
+      if (problem !== null) {
+        setConfirmError(problem);
+        return;
+      }
+    }
     inFlight.current = true;
     setBusy(true);
     setConfirmError(null);
-    const { revisionKey, payrollDate, action, attemptId } = pending;
     try {
       if (action === 'resend') {
-        await api('POST', `/api/revisions/${revisionKey}/resend`, {});
+        await sendAgain(revisionKey, needsReason ? typed : null);
       } else {
-        await api('POST', `/api/deliveries/${attemptId ?? ''}/decision`, { decision: action === 'mark_delivered' ? 'mark_delivered' : 'resend' });
+        await api('POST', `/api/deliveries/${attemptId ?? ''}/decision`, {
+          decision: action === 'mark_delivered' ? 'mark_delivered' : 'resend',
+          ...(action === 'resend_uncertain' && typed !== null ? { reason: typed } : {}),
+        });
       }
       setPending(null);
+      setReason('');
       say(revisionKey, { tone: 'ok', text: RESULT_TEXT[action] });
       await refreshAround(payrollDate);
       document.querySelector<HTMLElement>(`[data-revision="${revisionKey}"] h3`)?.focus();
     } catch (caught) {
       const text = action === 'resend' ? resendFailureText(caught) : decisionFailureText(caught);
-      if (caught instanceof ApiRequestError && (caught.status === 404 || caught.status === 409)) {
+      if (caught instanceof ApiRequestError && caught.status === 422) {
+        // A reason or recipient problem: the confirmation stays open so the person can correct it.
+        setConfirmError(text);
+      } else if (caught instanceof ApiRequestError && (caught.status === 404 || caught.status === 409)) {
         // The situation changed (another window, a runner): show why, and read the state again.
         setPending(null);
         say(revisionKey, { tone: 'error', text });
@@ -282,6 +329,9 @@ export function DeliveryHistory() {
               pending={pending !== null && pending.revisionKey === row.key ? { action: pending.action, attemptId: pending.attemptId } : null}
               message={messages[row.key] ?? null}
               confirmError={pending !== null && pending.revisionKey === row.key ? confirmError : null}
+              copySent={copyCounts(row, data.deliveries)}
+              reason={reason}
+              onReasonChange={setReason}
               onDownload={(item) => void download(item)}
               onResend={(item, trigger) => ask(item, 'resend', null, trigger)}
               onDecide={(item, attempt, action, trigger) => ask(item, action, attempt.id, trigger)}

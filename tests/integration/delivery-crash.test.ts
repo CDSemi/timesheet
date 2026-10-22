@@ -12,6 +12,7 @@ import { captureFolder } from '../../src/server/mail/captureAdapter.ts';
 import { createOutboundAdapter } from '../../src/server/mail/outbound.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
 import { makePng } from '../support/pdfText.ts';
+import { sendWithDefaults } from '../support/sends.ts';
 import { type SmtpSink, startSmtpSink } from '../support/smtpSink.ts';
 import { createTestContext, la, LA, type TestContext } from '../support/testApp.ts';
 
@@ -146,6 +147,9 @@ async function finalized() {
   });
   expect(signoff.status, JSON.stringify(signoff.body)).toBe(201);
   const revisionId = signoff.body.revision.id as string;
+  // WP5-UX5-T01b: signing sends nothing; the owner sends with the draft's defaults.
+  const sent = await sendWithDefaults(t, employee, revisionId);
+  expect(sent.status, JSON.stringify(sent.body)).toBe(201);
   await runJobsOnce({ db: t.db, clock: t.clock, owner: 'runner-pdf', handlers: { render_pdf: createPdfJobHandler({ db: t.db, clock: t.clock, files }) } });
   const sendJobId = t.db.prepare("SELECT id FROM jobs WHERE revision_id = ? AND kind = 'send_email'").pluck().get(revisionId) as string;
   return { revisionId, sendJobId };
@@ -231,7 +235,7 @@ describe('a runner process killed during the send', () => {
 
     // One explicit decision resends once, as a new attempt on the same revision.
     const [uncertain] = attemptRows(revisionId);
-    const decided = await t.request('POST', `/api/deliveries/${uncertain?.id}/decision`, { cookie: employee, body: { decision: 'resend' } });
+    const decided = await t.request('POST', `/api/deliveries/${uncertain?.id}/decision`, { cookie: employee, body: { decision: 'resend', reason: 'The runner died after the transfer' } });
     expect(decided.status, JSON.stringify(decided.body)).toBe(201);
     expect(await run('runner-resend')).toMatchObject({ claimed: 1, succeeded: 1 });
     const rows = attemptRows(revisionId);

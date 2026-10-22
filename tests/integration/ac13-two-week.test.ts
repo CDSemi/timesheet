@@ -14,6 +14,7 @@ import { saveSignature } from '../../src/server/services/signatures.ts';
 import { createUser } from '../../src/server/services/users.ts';
 import { RacePool } from '../support/concurrency.ts';
 import { makePng, readPdf } from '../support/pdfText.ts';
+import { sendWithDefaults } from '../support/sends.ts';
 import { createTestContext, la, LA, type TestContext } from '../support/testApp.ts';
 import { capturedIds, CRASH_EXIT_CODE, hm, listCaptured, runCrashRunner, sha256Hex } from './ac13-support.ts';
 
@@ -244,6 +245,10 @@ describe('AC-13 integrated scenario', () => {
     const r1 = created.body.revision.id as string;
     expect(count('SELECT count(*) FROM timesheet_revisions WHERE user_id = ?', credentials.alice.id)).toBe(1);
     expect(count('SELECT count(*) FROM signoffs WHERE user_id = ?', credentials.alice.id)).toBe(1);
+    // WP5-UX5-T01b: signing sends nothing; Alice sends the signed revision with the draft's defaults.
+    expect(count("SELECT count(*) FROM jobs WHERE revision_id = ? AND kind = 'send_email'", r1)).toBe(0);
+    const sent = await sendWithDefaults(t, a, r1);
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
 
     // The ledger posts exactly once: opening 90, six credits, one deficit debit of 60.
     const ledger1 = (await call(a, 'GET', '/api/ot/ledger', undefined, 200)).body;
@@ -278,7 +283,7 @@ describe('AC-13 integrated scenario', () => {
     expect(attemptsOf(r1)).toHaveLength(1);
     // Only the owner's explicit decision resends, once, as a new attempt.
     const uncertainId = (attemptsOf(r1)[0] as { id: string }).id;
-    await call(a, 'POST', `/api/deliveries/${uncertainId}/decision`, { decision: 'resend' }, 201);
+    await call(a, 'POST', `/api/deliveries/${uncertainId}/decision`, { decision: 'resend', reason: 'The runner died while sending' }, 201);
     await runPasses(restartHandlers, 3);
     const attemptsR1 = attemptsOf(r1);
     expect(attemptsR1.map((attempt) => [attempt.state, attempt.decision])).toEqual([['uncertain', 'resend'], ['accepted', null]]);
@@ -375,7 +380,14 @@ describe('AC-13 integrated scenario', () => {
       ['DELETE', `/api/sessions/${aliceSession}`, { expected_version: 1, reason: 'swap attempt' }],
       ['GET', `/api/revisions/${r1}/pdf`],
       ['POST', `/api/revisions/${r2}/resend`, {}],
-      ['POST', `/api/deliveries/${aliceAttempt}/decision`, { decision: 'resend' }],
+      // WP5-UX5-T01b: the send draft and the send are owner-only too.
+      ['GET', `/api/revisions/${r2}/send-draft`],
+      [
+        'POST',
+        `/api/revisions/${r2}/send`,
+        { request_key: 'swap-attempt-0001', to: ['bob-swap@example.invalid'], cc: [], subject: 'Swap', body_text: 'Swap', time_rows: true, ot_rows: true, reason: 'Swap attempt' },
+      ],
+      ['POST', `/api/deliveries/${aliceAttempt}/decision`, { decision: 'resend', reason: 'Swap attempt' }],
       ['GET', `/api/signatures/${signature.id}`],
       ['POST', `/api/ot/leave/${leaveId}/cancel`, { expected_version: 1 }],
       ['POST', `/api/ot/leave/${secondId}/consume`, { use_key: 'swap', minutes: 1, expected_version: 1 }],

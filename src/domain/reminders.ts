@@ -144,6 +144,11 @@ export interface ReminderContent {
   nowUtc: EpochSeconds;
   /** The review deep link, built with `reviewLink`. */
   link: string;
+  /**
+   * The period is signed but no copy was sent yet (F-2 a): a before-due or overdue notice then asks the person to send
+   * it, not to sign it. Omitted means false.
+   */
+  signedNotSent?: boolean | undefined;
 }
 
 export interface RenderedReminder {
@@ -172,16 +177,17 @@ export function renderReminder(content: ReminderContent): RenderedReminder {
   const period = `${content.periodStart} to ${content.periodEnd} (payroll date ${content.payrollDate})`;
   const deadline = describeDeadline(content.zone, content.dueAtUtc);
   const open = ['Open the timesheet (you must sign in first):', content.link];
+  const signed = content.signedNotSent === true;
   if (content.kind === 'before_due') {
     const left = remainingText(content.dueAtUtc - content.nowUtc);
     return {
-      subject: `Timesheet due in ${left}: payroll ${content.payrollDate}`,
+      subject: signed ? `Timesheet signed, not sent yet: payroll ${content.payrollDate}` : `Timesheet due in ${left}: payroll ${content.payrollDate}`,
       text: lines([
         `Your timesheet for ${period}`,
-        `is due in ${left}.`,
+        signed ? `is signed, not sent yet. It is due in ${left}.` : `is due in ${left}.`,
         `Deadline: ${deadline}.`,
         '',
-        'Review it and sign off before the deadline.',
+        signed ? 'Send it to payroll before the deadline.' : 'Review it and sign off before the deadline.',
         ...open,
       ]),
     };
@@ -191,11 +197,11 @@ export function renderReminder(content: ReminderContent): RenderedReminder {
       subject: `Timesheet overdue: payroll ${content.payrollDate}`,
       text: lines([
         `Your timesheet for ${period}`,
-        `was due on ${deadline}.`,
+        signed ? `is signed, not sent yet. It was due on ${deadline}.` : `was due on ${deadline}.`,
         'It was not submitted automatically because automatic',
         'submission is switched off in your settings.',
         '',
-        'Review it and sign off to submit it.',
+        signed ? 'Send it to payroll to submit it.' : 'Review it and sign off to submit it.',
         ...open,
       ]),
     };

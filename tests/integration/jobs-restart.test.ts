@@ -12,6 +12,7 @@ import { FileStore } from '../../src/server/files/fileStore.ts';
 import { enqueueJob } from '../../src/server/jobs/jobStore.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
 import { makePng } from '../support/pdfText.ts';
+import { sendWithDefaults } from '../support/sends.ts';
 import { createTestContext, la, LA, type TestContext } from '../support/testApp.ts';
 
 /*
@@ -241,7 +242,8 @@ describe('a runner process killed during the PDF job', () => {
       expect(sha(readFileSync(join(filesDir, pdf?.storage_key ?? '')))).toBe(pdf?.sha256);
       // Nothing posted twice; nothing sent.
       expect(ledgerState()).toEqual(before);
-      expect(t.db.prepare("SELECT state, attempts FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(revisionId)).toEqual({ state: 'queued', attempts: 0 });
+      // Signing never sends (WP5-UX5-T01b): no send job exists at all.
+      expect(t.db.prepare("SELECT state, attempts FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(revisionId)).toBeUndefined();
       // A stale temporary file is left for the file store's orphan sweep, never renamed later.
       const swept = new FileStore(dataDir).sweep({ isReferenced: (key) => names.includes(key), minAgeMs: 0, now: new Date(Date.now() + 60_000) });
       expect(swept).toMatchObject({ removedUnreferenced: 0, keptReferenced: 2, removedTemporary: point === 'before-rename' ? 1 : 0 });
@@ -282,12 +284,11 @@ describe('run-jobs CLI', () => {
     const env = { NODE_ENV: undefined, DATABASE_PATH: t.config.databasePath, DATA_DIR: dataDir, OUTBOUND_MODE: undefined, MAIL_FROM: undefined };
     const result = await start([CLI, 'run-jobs', '--once', '--now', '2026-09-29T20:05:00Z'], env).done;
     expect(result.code, result.stderr).toBe(0);
-    // WP3-T09: the send job is registered too. Claimed before the PDF it waits (pdf_not_ready);
-    // claimed after it, the unset MAIL_FROM blocks it with the visible fault sender_missing.
+    // WP5-UX5-T01b: signing sends nothing, so only the PDF job is due (the send handler is registered but has no job).
     const summary = JSON.parse(result.stdout) as Record<string, number>;
-    // The PDF job, the send job, the day's orphan sweep (WP4-T07) and the day's job-row retention (WP4-T07B); the sweep and the retention succeed.
-    expect(summary).toMatchObject({ claimed: 4, succeeded: 3, lost: 0 });
-    expect((summary.retried ?? 0) + (summary.intervention ?? 0)).toBe(1);
+    // The PDF job, the day's orphan sweep (WP4-T07) and the day's job-row retention (WP4-T07B) all succeed.
+    expect(summary).toMatchObject({ claimed: 3, succeeded: 3, lost: 0 });
+    expect((summary.retried ?? 0) + (summary.intervention ?? 0)).toBe(0);
     expect(t.db.prepare('SELECT state, attempts, updated_at FROM jobs WHERE id = ?').get(pdfJobId)).toEqual({ state: 'succeeded', attempts: 1, updated_at: '2026-09-29T20:05:00Z' });
     const key = t.db
       .prepare("SELECT a.storage_key FROM revision_files f JOIN attachments a ON a.id = f.attachment_id WHERE f.revision_id = ? AND f.state = 'ready'")
@@ -297,7 +298,7 @@ describe('run-jobs CLI', () => {
     expect(existsSync(join(workDir(), 'private-data', 'files', key))).toBe(false);
     expect(ledgerState()).toMatchObject({ ledger: before.ledger, lines: before.lines, revisions: before.revisions });
     const send = t.db.prepare("SELECT state, last_error FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(revisionId);
-    expect([{ state: 'queued', last_error: 'pdf_not_ready' }, { state: 'intervention', last_error: 'sender_missing' }]).toContainEqual(send);
+    expect(send).toBeUndefined();
     expect(count("SELECT count(*) FROM delivery_attempts WHERE state = 'accepted'")).toBe(0);
     expect(existsSync(join(dataDir, 'mail-capture'))).toBe(false);
     expect(result.stdout + result.stderr).not.toMatch(/Example Employee|example\.invalid/);
@@ -355,6 +356,9 @@ describe('server entry', () => {
     });
     expect(settings.status, JSON.stringify(settings.body)).toBeLessThan(300);
     const { revisionId } = await signedRevision(dataDir);
+    // WP5-UX5-T01b: signing sends nothing; the owner's send queues the send job.
+    const sent = await sendWithDefaults(t, employee, revisionId);
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
     // A paused instance (as a restore leaves it); synthetic capture sender, so an unpaused runner would send at once.
     t.db.prepare("UPDATE operations_state SET outbound_paused_at = '2026-09-29T20:00:00Z', outbound_paused_reason = 'restored' WHERE id = 1").run();
     const server = await startServer({ DATA_DIR: dataDir, JOB_RUNNER: undefined, OUTBOUND_MODE: undefined, MAIL_FROM: 'timesheet@example.invalid' });

@@ -44,6 +44,7 @@ import { saveSignature } from '../../src/server/services/signatures.ts';
 import { commitImport, previewImport } from '../../src/server/services/workbookImport.ts';
 import { makePng } from '../support/pdfText.ts';
 import { buildSchemaV6, type SchemaV6Fixture, WP3_SCHEMA_VERSION } from '../support/schemaV6.ts';
+import { sendWithDefaults } from '../support/sends.ts';
 import { buildSyntheticWorkbook } from '../support/syntheticWorkbook.ts';
 import { createTestContext, la, LA, MutableClock, type TestContext } from '../support/testApp.ts';
 
@@ -144,7 +145,11 @@ async function signOff(t: TestContext, cookie: string, payrollDate: string): Pro
     body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, signer_name: 'Example Employee', incomplete_evidence_acknowledged: true },
   });
   expect(response.status, JSON.stringify(response.body)).toBe(201);
-  return response.body.revision.id as string;
+  const revisionId = response.body.revision.id as string;
+  // WP5-UX5-T01b: signing sends nothing; the source owner sends each revision, as a sign-off once did by itself.
+  const sent = await sendWithDefaults(t, cookie, revisionId);
+  expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+  return revisionId;
 }
 
 class SimulatedCrash extends Error {}
@@ -360,7 +365,8 @@ describe('isolated restore with outbound paused (AC-15, AC-11)', () => {
       const response = await app.request(`/api/deliveries/${attemptId}/decision`, {
         method: 'POST',
         headers: { origin: 'http://localhost:3000', cookie: `${SESSION_COOKIE}=${session.token}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ decision }),
+        // B-A2: a resend of an uncertain copy needs the owner's reason.
+        body: JSON.stringify(decision === 'resend' ? { decision, reason: 'The restored copy may not have arrived' } : { decision }),
       });
       return { status: response.status, body: (await response.json()) as Record<string, unknown> };
     };
@@ -372,7 +378,7 @@ describe('isolated restore with outbound paused (AC-15, AC-11)', () => {
     // Still paused: the new resend attempt waits, nothing is claimed.
     const runner = captureRunner(restored, clock, join(target, RESTORED_DATA_DIR));
     await runner('runner-before-resume');
-    expect(restored.prepare("SELECT state, attempts FROM jobs WHERE revision_id = ? AND business_key LIKE '%:resend:%'").get(source.revisions.preparing)).toEqual({ state: 'queued', attempts: 0 });
+    expect(restored.prepare("SELECT state, attempts FROM jobs WHERE revision_id = ? AND kind = 'send_email' ORDER BY created_at DESC, rowid DESC LIMIT 1").get(source.revisions.preparing)).toEqual({ state: 'queued', attempts: 0 });
     expect(existsSync(join(target, RESTORED_DATA_DIR, 'mail-capture'))).toBe(false);
 
     clock.set('2026-09-30T10:00:00Z');
@@ -472,7 +478,9 @@ describe('isolated restore with outbound paused (AC-15, AC-11)', () => {
     });
     expect(resend.status).toBe(201);
     const heldPdfPending = jobOf(source.revisions.pdfPending);
-    expect(releaseHeldJob(restored, clock, heldPdfPending)).toEqual({ outcome: 'refused', code: 'delivery_attempt_open' });
+    // WP5-UX5-T01b: the owner's send is its own record and queued job; its attempt starts when the job runs, so the held
+    // job is refused as superseded by that later send (before, the resend opened an attempt at once).
+    expect(releaseHeldJob(restored, clock, heldPdfPending)).toEqual({ outcome: 'refused', code: 'superseded_by_later_send' });
     await pass('runner-owner-resend');
     expect(states(source.revisions.pdfPending)).toEqual(['accepted']);
     expect(releaseHeldJob(restored, clock, heldPdfPending)).toEqual({ outcome: 'refused', code: 'superseded_by_later_send' });
@@ -1270,7 +1278,7 @@ describe('restore of the private workbook import sources (WP4-T09B, AC-11)', () 
     const backup = await createBackup({ databasePath, dataDir: join(dir, 'private-data'), targetDir: join(dir, 'backups'), clock: new MutableClock(NOW) });
     expect(backup.manifest.schema_version).toBe(11);
     const result = await restoreBackup({ fromDir: backup.directory, toDir: join(work, 'target-v11'), liveDataDir: join(dir, 'private-data'), liveDatabasePath: databasePath, clock: new MutableClock(LATER) });
-    expect(result.schema).toMatchObject({ backup: 11, restored: LATEST, applied: [12, 13, 14] });
+    expect(result.schema).toMatchObject({ backup: 11, restored: LATEST, applied: [12, 13, 14, 15] });
     const restored = openDatabase(result.databasePath);
     try {
       expect(count(restored, 'SELECT count(*) FROM imports')).toBe(0);

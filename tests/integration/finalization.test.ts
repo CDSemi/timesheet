@@ -195,7 +195,8 @@ describe('sign-off transaction', () => {
       payload_sha256: current.payload_hash,
       reviewed_sha256: current.payload_hash,
       timesheet_version: current.expected_version,
-      send_requested: true,
+      // WP5-UX5-T01b: signing never sends; `send_requested` means "requested at finalization".
+      send_requested: false,
     });
     expect(body.signoff).toEqual({
       signer_name: SIGNER,
@@ -232,18 +233,15 @@ describe('sign-off transaction', () => {
     const sheet = t.db.prepare('SELECT finalized_revision_no, version FROM timesheets WHERE user_id = ?').get(t.userIds.employee) as any;
     expect(sheet).toEqual({ finalized_revision_no: 1, version: current.expected_version + 1 });
 
-    // PDF and send work is enqueued (rows only; the runner is a later task).
+    // Only the PDF work is enqueued (the sign-off default variant); signing never sends (WP5-UX5-T01b).
     const jobs = t.db.prepare('SELECT * FROM jobs ORDER BY kind').all() as any[];
     expect(jobs.map((job) => [job.kind, job.state, job.attempts, job.business_key, job.revision_id, job.user_id, JSON.parse(job.payload_json)])).toEqual([
-      ['render_pdf', 'queued', 0, `revision:${revision.id}:render_pdf`, revision.id, t.userIds.employee, { revision_id: revision.id }],
-      ['send_email', 'queued', 0, `revision:${revision.id}:send_email:initial`, revision.id, t.userIds.employee, { revision_id: revision.id }],
+      ['render_pdf', 'queued', 0, `revision:${revision.id}:render_pdf`, revision.id, t.userIds.employee, { revision_id: revision.id, variant: 't1o1' }],
     ]);
     expect(jobs.every((job) => job.next_run_at === '2026-09-29T20:01:35Z')).toBe(true);
-    expect(body.jobs.map((job: any) => [job.kind, job.state])).toEqual([
-      ['render_pdf', 'queued'],
-      ['send_email', 'queued'],
-    ]);
+    expect(body.jobs.map((job: any) => [job.kind, job.state])).toEqual([['render_pdf', 'queued']]);
     expect(count('SELECT count(*) FROM delivery_attempts')).toBe(0);
+    expect(count('SELECT count(*) FROM revision_sends')).toBe(0);
 
     // The audit event names ids, hashes and counts, never the signer, recipients or content.
     const audit = t.db.prepare("SELECT * FROM audit_events WHERE operation = 'timesheet.signoff'").all() as any[];
@@ -269,7 +267,7 @@ describe('sign-off transaction', () => {
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     expect(response.body.ledger_lines).toEqual([]);
     const after = writeState();
-    expect(after).toMatchObject({ revisions: before.revisions + 1, timesheets: before.timesheets + 1, finalized: before.finalized + 1, jobs: before.jobs + 2, ledger: before.ledger });
+    expect(after).toMatchObject({ revisions: before.revisions + 1, timesheets: before.timesheets + 1, finalized: before.finalized + 1, jobs: before.jobs + 1, ledger: before.ledger });
     expect(response.body.revision.timesheet_version).toBe(1);
   });
 
@@ -330,12 +328,12 @@ describe('signer from the account, optional image and acknowledgement (AC-06, F-
     });
     const stored = t.db.prepare('SELECT signer_name, signature_attachment_id FROM signoffs').get();
     expect(stored).toEqual({ signer_name: SIGNER, signature_attachment_id: null });
-    expect(response.body.revision).toMatchObject({ revision_no: 1, revision_kind: 'original', origin: 'employee', review_state: 'signed', send_requested: true });
+    expect(response.body.revision).toMatchObject({ revision_no: 1, revision_kind: 'original', origin: 'employee', review_state: 'signed', send_requested: false });
     expect(linesOf(response.body)).toEqual([
       ['2026-09-15', 'credit', 60, 'posted'],
       ['2026-09-26', 'credit', 120, 'posted'],
     ]);
-    expect(response.body.jobs.map((job: any) => job.kind)).toEqual(['render_pdf', 'send_email']);
+    expect(response.body.jobs.map((job: any) => job.kind)).toEqual(['render_pdf']);
     expect(getBalance(t.db, t.userIds.employee).postedMinutes).toBe(180);
     const audit = JSON.parse((t.db.prepare("SELECT after_json FROM audit_events WHERE operation = 'timesheet.signoff'").get() as { after_json: string }).after_json);
     expect(audit).toMatchObject({ signature_attachment_id: null, signature_sha256: null });

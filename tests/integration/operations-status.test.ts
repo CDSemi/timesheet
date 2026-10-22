@@ -14,6 +14,7 @@ import { faultCode, HEARTBEAT_STALE_SECONDS } from '../../src/server/services/op
 import { saveSignature } from '../../src/server/services/signatures.ts';
 import type { DeliveryConfig } from '../../src/server/types.ts';
 import { makePng } from '../support/pdfText.ts';
+import { sendWithDefaults } from '../support/sends.ts';
 import { createTestContext, la, LA, ORIGIN, type TestContext } from '../support/testApp.ts';
 
 /*
@@ -97,6 +98,9 @@ async function finalizeFor(cookie: string, userId: string, to: string[], cc: str
   });
   expect(signed.status, JSON.stringify(signed.body)).toBe(201);
   const revisionId = signed.body.revision.id as string;
+  // WP5-UX5-T01b: signing sends nothing; the person sends with the draft's defaults.
+  const sent = await sendWithDefaults(t, cookie, revisionId);
+  expect(sent.status, JSON.stringify(sent.body)).toBe(201);
   const sendJobId = t.db.prepare("SELECT id FROM jobs WHERE revision_id = ? AND kind = 'send_email'").pluck().get(revisionId) as string;
   return { revisionId, sendJobId, sessionStartUtc };
 }
@@ -428,7 +432,7 @@ describe('submission and delivery status', () => {
     expect(employeeRow).toMatchObject({
       display_name: expect.any(String),
       period: { payroll_date: PAYROLL },
-      revision: { no: 1, origin: 'employee', review_state: 'signed', send_requested: true },
+      revision: { no: 1, origin: 'employee', review_state: 'signed', send_requested: false },
       pdf: { state: 'ready', fault_code: null },
       delivery: { state: 'failed_permanent', attempts: 1, accepted_at: null, fault_code: 'sender_missing', decision_required: false, job_state: 'intervention' },
     });
@@ -478,10 +482,23 @@ describe('submission and delivery status', () => {
   it('shows a failed PDF with its code', async () => {
     const { revisionId } = await finalizeFor(employee, t.userIds.employee, EMPLOYEE_TO, [], false);
     t.db
-      .prepare("INSERT INTO revision_files (id, user_id, revision_id, kind, state, attachment_id, last_error, created_at, updated_at) VALUES ('rf-synth-1', ?, ?, 'pdf', 'failed', NULL, ?, '2026-09-29T20:00:00Z', '2026-09-29T20:00:00Z')")
+      .prepare("INSERT INTO revision_files (id, user_id, revision_id, kind, variant, state, attachment_id, last_error, created_at, updated_at) VALUES ('rf-synth-1', ?, ?, 'pdf', 't1o1', 'failed', NULL, ?, '2026-09-29T20:00:00Z', '2026-09-29T20:00:00Z')")
       .run(t.userIds.employee, revisionId, 'render_failed at C:\\synthetic\\path.pdf');
     const row = (await statusOf('/api/admin/submissions', admin)).body.submissions[0];
     expect(row.pdf).toEqual({ state: 'failed', fault_code: 'render_failed' });
+  });
+
+  it('lists one row per revision however many PDF variants it stores (WP5-UX5-T01b)', async () => {
+    const { revisionId } = await finalizeFor(employee, t.userIds.employee, EMPLOYEE_TO, [], false);
+    const insert = t.db.prepare(
+      "INSERT INTO revision_files (id, user_id, revision_id, kind, variant, state, attachment_id, last_error, created_at, updated_at) VALUES (?, ?, ?, 'pdf', ?, 'pending', NULL, NULL, ?, ?)",
+    );
+    insert.run('rf-synth-a', t.userIds.employee, revisionId, 't1o1', '2026-09-29T20:00:00Z', '2026-09-29T20:00:00Z');
+    insert.run('rf-synth-b', t.userIds.employee, revisionId, 't0o0', '2026-09-29T20:00:05Z', '2026-09-29T20:00:05Z');
+    insert.run('rf-synth-c', t.userIds.employee, revisionId, 't1o0', '2026-09-29T20:00:09Z', '2026-09-29T20:00:09Z');
+    const rows = (await statusOf('/api/admin/submissions', admin)).body.submissions as Array<{ user_id: string; pdf: unknown }>;
+    expect(rows.filter((row) => row.user_id === t.userIds.employee)).toHaveLength(1);
+    expect(rows[0]?.pdf).toEqual({ state: 'pending', fault_code: null });
   });
 });
 

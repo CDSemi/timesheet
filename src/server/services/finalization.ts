@@ -1,16 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { canonicalize, sha256Hex } from '../../domain/canonical.ts';
+import { canonicalize } from '../../domain/canonical.ts';
 import { assertCivilDate, type CivilDate } from '../../domain/dates.ts';
 import { decideDeficit } from '../../domain/deficit.ts';
 import { isDomainError } from '../../domain/errors.ts';
 import { type PayPeriod, payPeriodForPayrollDate } from '../../domain/periods.ts';
-import type { ReviewSnapshot, SnapshotDeficitProposal } from '../../domain/snapshot.ts';
+import { defaultPdfVariant, type ReviewSnapshot, type SnapshotDeficitProposal } from '../../domain/snapshot.ts';
 import type { SessionUser } from '../auth/sessions.ts';
 import { type Clock, nowUtc } from '../clock.ts';
 import { type Db, writeTransaction } from '../db/database.ts';
 import { ApiError, notFound } from '../http/errors.ts';
 import { normalizeReason } from '../http/validation.ts';
 import { recordAudit } from './audit.ts';
+import { enqueuePdfJob, insertSend, JOB_RENDER_PDF, JOB_SEND_EMAIL, settingsDefaults } from './deliveries.ts';
 import {
   getBalance,
   type LedgerContext,
@@ -60,7 +61,7 @@ import { importedPeriodError, isImportedTimesheet } from './workbookImport.ts';
  *    revision-independent day keys, and record every proposal outcome (posted, pending for
  *    an insufficient balance, waived) in revision_ledger_lines;
  * 5. set timesheets.finalized_revision_no, which removes the period's provisional minutes;
- * 6. enqueue the PDF and send jobs (rows only; the runner is a later task);
+ * 6. enqueue the PDF job only: signing never sends (WP5-UX5-T01b; the owner sends separately, deliveries.ts);
  * 7. audit ids, hashes and counts, never the signer name, recipients or content.
  *
  * No network call or file write happens inside the transaction. An identical retry after
@@ -138,8 +139,7 @@ export interface SignOffResult extends FinalizationView {
   finalizedRevisionNo: number;
 }
 
-export const JOB_RENDER_PDF = 'render_pdf';
-export const JOB_SEND_EMAIL = 'send_email';
+export { JOB_RENDER_PDF, JOB_SEND_EMAIL };
 
 /** Original postings are keyed by work date only, so no later revision can post a day's original twice. */
 export const creditSourceKey = (workDate: CivilDate): string => `finalization:day:${workDate}:credit`;
@@ -258,7 +258,7 @@ function loadFinalization(db: Db, userId: string, timesheet: TimesheetRow): { vi
     .prepare('SELECT signer_name, signed_at, reviewed_sha256, signature_attachment_id FROM signoffs WHERE user_id = ? AND revision_id = ?')
     .get(userId, row.id) as SignoffRow | undefined;
   const jobs = db
-    .prepare('SELECT id, kind, state FROM jobs WHERE user_id = ? AND revision_id = ? ORDER BY kind, id')
+    .prepare('SELECT id, kind, state FROM jobs WHERE user_id = ? AND revision_id = ? ORDER BY kind, created_at, rowid')
     .all(userId, row.id) as JobRecord[];
   return {
     view: {
@@ -442,19 +442,11 @@ function postCredits(posting: PostingContext): RevisionLedgerLine[] {
 }
 
 /**
- * Outbox rows for the PDF and the initial send; unique business keys make them once-only.
- * A correction or late review sends only on the owner's explicit choice (`sendEmail`).
+ * The outbox row of the sign-off PDF: the default variant (time rows on, OT rows as the snapshot froze them), once
+ * only by its business key. Signing never sends (WP5-UX5-T01b): a send is its own act and record (deliveries.ts).
  */
-function enqueueJobs(db: Db, userId: string, revisionId: string, now: string, sendEmail = true): void {
-  const insert = db.prepare(
-    `INSERT INTO jobs (id, user_id, revision_id, kind, business_key, payload_json, state, attempts, next_run_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)`,
-  );
-  const payload = JSON.stringify({ revision_id: revisionId });
-  insert.run(randomUUID(), userId, revisionId, JOB_RENDER_PDF, `revision:${revisionId}:${JOB_RENDER_PDF}`, payload, now, now, now);
-  if (sendEmail) {
-    insert.run(randomUUID(), userId, revisionId, JOB_SEND_EMAIL, `revision:${revisionId}:${JOB_SEND_EMAIL}:initial`, payload, now, now, now);
-  }
+function enqueueSignedPdf(db: Db, clock: Clock, userId: string, revisionId: string, payload: ReviewSnapshot): void {
+  enqueuePdfJob(db, clock, userId, revisionId, payload, defaultPdfVariant(payload));
 }
 
 /**
@@ -506,7 +498,7 @@ export function signOffTimesheet(ctx: FinalizationContext, payrollDate: string, 
       `INSERT INTO timesheet_revisions (id, user_id, timesheet_id, revision_no, revision_kind, origin, review_state,
          supersedes_revision_id, correction_reason, timesheet_version, payload_json, payload_sha256, reviewed_sha256,
          send_requested, actor_user_id, created_at)
-       VALUES (?, ?, ?, ?, 'original', 'employee', 'signed', NULL, NULL, ?, ?, ?, ?, 1, ?, ?)`,
+       VALUES (?, ?, ?, ?, 'original', 'employee', 'signed', NULL, NULL, ?, ?, ?, ?, 0, ?, ?)`,
     ).run(revisionId, user.id, timesheet.id, revisionNo, timesheet.version, canonicalize(payload), review.payloadHash, review.payloadHash, user.id, now);
     db.prepare(
       `INSERT INTO signoffs (id, user_id, revision_id, signer_name, signed_at, reviewed_sha256, signature_attachment_id)
@@ -526,8 +518,8 @@ export function signOffTimesheet(ctx: FinalizationContext, payrollDate: string, 
       .run(revisionNo, now, timesheet.id, user.id, timesheet.version);
     if (finalized.changes !== 1) throw conflict('stale_version', 'The timesheet changed since it was reviewed; review it again');
 
-    // 6. PDF and send work for the runner.
-    enqueueJobs(db, user.id, revisionId, now);
+    // 6. The PDF for the runner; nothing is sent (the owner sends separately).
+    enqueueSignedPdf(db, clock, user.id, revisionId, payload);
 
     // 7. Audit without personal content.
     const loaded = loadFinalization(db, user.id, { ...timesheet, finalized_revision_no: revisionNo });
@@ -725,7 +717,26 @@ export function finalizeAutomatically(ctx: AutomaticFinalizationContext, input: 
       .run(revisionNo, now, timesheet.id, owner.id, timesheet.version);
     if (finalized.changes !== 1) throw conflict('stale_version', 'The timesheet changed during automatic finalization');
 
-    enqueueJobs(db, owner.id, revisionId, now);
+    // The PDF and the automatic send (F-2 a): a send record with origin `deadline`, the Settings envelope frozen in the
+    // snapshot and the Settings switches; no copy of an unfinalized period was ever sent, so it needs no reason.
+    enqueueSignedPdf(db, clock, owner.id, revisionId, payload);
+    const send = insertSend(db, clock, {
+      userId: owner.id,
+      revisionId,
+      snapshot: payload,
+      origin: 'deadline',
+      actorUserId: null,
+      requestKey: `deadline:${revisionId}`,
+      envelope: {
+        to: [...payload.recipients.to],
+        cc: [...payload.recipients.cc],
+        subject: payload.recipients.subject,
+        bodyText: payload.recipients.body_text,
+        bodyHtml: payload.recipients.body_html,
+      },
+      rows: settingsDefaults(db, owner.id, payload, revisionNo).rows,
+      reason: null,
+    });
 
     const loaded = loadFinalization(db, owner.id, { ...timesheet, finalized_revision_no: revisionNo });
     if (loaded === null) throw new Error('The new revision was not stored');
@@ -749,6 +760,8 @@ export function finalizeAutomatically(ctx: AutomaticFinalizationContext, input: 
         auto_image_authorized: payload.auto_image.authorized,
         ledger_lines: { ...outcomeCounts(lines), pending_choice: lines.filter((line) => line.outcome === 'pending_choice').length },
         job_ids: loaded.view.jobs.map((job) => job.id),
+        send_id: send.id,
+        pdf_variant: send.pdfVariant,
         finalized_revision_no: revisionNo,
         version: timesheet.version + 1,
       },
@@ -775,7 +788,8 @@ export function finalizeAutomatically(ctx: AutomaticFinalizationContext, input: 
  * - A late review (`late_review`) turns an automatic revision awaiting review into a genuinely
  *   signed revision. Its ledger-relevant content must be unchanged (otherwise it is a
  *   correction with a reason), so the difference is zero (LG-09).
- * - Both are explicit about e-mail: `sendEmail` false enqueues only the PDF job.
+ * - Neither sends by itself (WP5-UX5-T01b): both enqueue only the PDF job, and `sendEmail` is accepted and not
+ *   acted on (the owner sends the revision separately, deliveries.ts).
  * - Originals (revision rows, sign-offs, PDFs, lines, ledger entries) are never touched; the
  *   timesheet only points at the newest revision.
  *
@@ -789,7 +803,7 @@ export interface ReviseInput extends SignOffInput {
   kind: RevisionKind;
   /** Required (non-blank, at most 2000 characters) for a correction; ignored for a late review. */
   reason: string | null;
-  /** The explicit choice to e-mail this revision; false enqueues no send job. */
+  /** Accepted from older callers and not acted on: signing never sends (the owner sends separately). */
   sendEmail: boolean;
 }
 
@@ -825,7 +839,7 @@ function isRevisionReplay(
   if (view.signoff === null) return false;
   const revision = view.revision;
   if (revision.revisionKind !== input.kind || revision.reviewedSha256 !== input.reviewedHash) return false;
-  if (revision.correctionReason !== reason || revision.sendRequested !== input.sendEmail) return false;
+  if (revision.correctionReason !== reason) return false;
   if (payload.unresolved_inputs.length > 0 && !input.incompleteEvidenceAcknowledged) return false;
   // Choose-mode choices cannot be compared with what was recorded: such a retry is not a replay.
   return !payload.deficit_proposals.some((item) => item.mode === 'choose_at_signoff');
@@ -1028,7 +1042,7 @@ export function reviseTimesheet(ctx: FinalizationContext, payrollDate: string, i
       canonicalize(payload),
       review.payloadHash,
       review.payloadHash,
-      input.sendEmail ? 1 : 0,
+      0,
       user.id,
       now,
     );
@@ -1051,7 +1065,7 @@ export function reviseTimesheet(ctx: FinalizationContext, payrollDate: string, i
       .run(revisionNo, now, existing.id, user.id, previousNo, existing.version);
     if (finalized.changes !== 1) throw conflict('stale_version', 'The timesheet changed since it was reviewed; review it again');
 
-    enqueueJobs(db, user.id, revisionId, now, input.sendEmail);
+    enqueueSignedPdf(db, clock, user.id, revisionId, payload);
 
     const loaded = loadFinalization(db, user.id, { ...existing, finalized_revision_no: revisionNo });
     if (loaded === null) throw new Error('The new revision was not stored');
@@ -1073,7 +1087,7 @@ export function reviseTimesheet(ctx: FinalizationContext, payrollDate: string, i
         payload_sha256: review.payloadHash,
         signed_at: now,
         signature_attachment_id: signature?.id ?? null,
-        send_requested: input.sendEmail,
+        send_requested: false,
         ledger_lines: revisionOutcomeCounts(lines),
         job_ids: loaded.view.jobs.map((job) => job.id),
         finalized_revision_no: revisionNo,
@@ -1081,123 +1095,6 @@ export function reviseTimesheet(ctx: FinalizationContext, payrollDate: string, i
       },
     });
     return { status: 'created', finalizedRevisionNo: revisionNo, ...loaded.view };
-  });
-}
-
-/* ------------------------------------------------------------------ resend ---- */
-
-export interface ResendInput {
-  /** Optional echo of the envelope the caller expects; a difference needs a new revision instead. */
-  to?: readonly string[];
-  cc?: readonly string[];
-  templateVersion?: number;
-}
-
-export interface ResendResult {
-  revisionId: string;
-  job: JobRecord;
-  attempt: { id: string; attemptNo: number; state: string };
-}
-
-const addressKey = (list: readonly string[]): string => JSON.stringify(list.map((item) => item.trim().toLowerCase()).sort());
-
-/**
- * Same-revision resend (docs/05): a new delivery attempt and send job for the revision's frozen
- * PDF and frozen envelope. No revision, sign-off, line or ledger row is written or changed.
- * Refused while an attempt is preparing or sending, while one is uncertain without an
- * explicit decision, or while a send job of the revision is still waiting; a changed
- * envelope needs a new revision. The attempt starts `preparing`; the send job (a later task)
- * claims it and moves it on.
- */
-export function resendRevision(ctx: FinalizationContext, revisionId: string, input: ResendInput): ResendResult {
-  const { db, clock, user } = ctx;
-  return writeTransaction(db, (): ResendResult => {
-    const row = db
-      .prepare(
-        `SELECT r.id, r.revision_no, r.payload_json, t.finalized_revision_no
-           FROM timesheet_revisions r
-           JOIN timesheets t ON t.id = r.timesheet_id AND t.user_id = r.user_id
-          WHERE r.id = ? AND r.user_id = ?`,
-      )
-      .get(revisionId, user.id) as { id: string; revision_no: number; payload_json: string; finalized_revision_no: number | null } | undefined;
-    // Another user's revision is indistinguishable from a missing one.
-    if (row === undefined) throw notFound('Revision');
-    if (row.finalized_revision_no !== row.revision_no) {
-      throw new ApiError(409, 'revision_superseded', 'A newer revision exists; only the current revision can be resent');
-    }
-    const payload = JSON.parse(row.payload_json) as ReviewSnapshot;
-    const frozen = payload.recipients;
-    const changed = [
-      ...(input.to !== undefined && addressKey(input.to) !== addressKey(frozen.to) ? ['to'] : []),
-      ...(input.cc !== undefined && addressKey(input.cc) !== addressKey(frozen.cc) ? ['cc'] : []),
-      ...(input.templateVersion !== undefined && input.templateVersion !== frozen.template_version ? ['template_version'] : []),
-    ];
-    if (changed.length > 0) {
-      throw new ApiError(409, 'envelope_changed', 'The recipients or template differ from this revision; create a new revision instead', {
-        new_revision_required: true,
-        fields: changed,
-      });
-    }
-
-    const open = db
-      .prepare(
-        `SELECT state FROM delivery_attempts
-          WHERE user_id = ? AND revision_id = ? AND (state IN ('preparing', 'sending') OR (state = 'uncertain' AND decision IS NULL))
-          ORDER BY started_at`,
-      )
-      .all(user.id, revisionId) as Array<{ state: string }>;
-    if (open.some((attempt) => attempt.state === 'uncertain')) {
-      throw new ApiError(409, 'delivery_uncertain', 'A delivery attempt is uncertain; record a decision before resending');
-    }
-    const waiting = db
-      .prepare("SELECT 1 FROM jobs WHERE user_id = ? AND revision_id = ? AND kind = ? AND state IN ('queued', 'leased') LIMIT 1")
-      .get(user.id, revisionId, JOB_SEND_EMAIL);
-    if (open.length > 0 || waiting !== undefined) {
-      throw new ApiError(409, 'delivery_in_progress', 'A delivery of this revision is already in progress');
-    }
-    const pdf = db
-      .prepare(
-        `SELECT f.attachment_id, a.sha256
-           FROM revision_files f
-           JOIN attachments a ON a.id = f.attachment_id AND a.user_id = f.user_id
-          WHERE f.user_id = ? AND f.revision_id = ? AND f.kind = 'pdf' AND f.state = 'ready'`,
-      )
-      .get(user.id, revisionId) as { attachment_id: string; sha256: string } | undefined;
-    if (pdf === undefined) throw new ApiError(409, 'pdf_not_ready', 'The final PDF of this revision is not ready yet');
-
-    const now = nowUtc(clock);
-    const sends = Number(db.prepare('SELECT count(*) FROM jobs WHERE user_id = ? AND revision_id = ? AND kind = ?').pluck().get(user.id, revisionId, JOB_SEND_EMAIL));
-    const jobId = randomUUID();
-    const businessKey = `revision:${revisionId}:${JOB_SEND_EMAIL}:resend:${sends + 1}`;
-    db.prepare(
-      `INSERT INTO jobs (id, user_id, revision_id, kind, business_key, payload_json, state, attempts, next_run_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)`,
-    ).run(jobId, user.id, revisionId, JOB_SEND_EMAIL, businessKey, JSON.stringify({ revision_id: revisionId }), now, now, now);
-    // The envelope is frozen from the revision's own payload: recipients, subject, a digest of the body and the PDF hash.
-    const envelope = {
-      revision_id: revisionId,
-      to: frozen.to,
-      cc: frozen.cc,
-      subject: frozen.subject,
-      template_version: frozen.template_version,
-      body_sha256: sha256Hex(canonicalize({ body_text: frozen.body_text, body_html: frozen.body_html })),
-      attachment_sha256: pdf.sha256,
-    };
-    const attemptId = randomUUID();
-    db.prepare(
-      `INSERT INTO delivery_attempts (id, job_id, user_id, revision_id, attempt_no, channel, envelope_json, attachment_id,
-         message_id, state, started_at, updated_at)
-       VALUES (?, ?, ?, ?, 1, 'email', ?, ?, ?, 'preparing', ?, ?)`,
-    ).run(attemptId, jobId, user.id, revisionId, canonicalize(envelope), pdf.attachment_id, `<${randomUUID()}@timesheet.invalid>`, now, now);
-    recordAudit(db, clock, {
-      actorUserId: user.id,
-      ownerUserId: user.id,
-      operation: 'revision.resend',
-      entityType: 'timesheet_revision',
-      entityId: revisionId,
-      after: { revision_id: revisionId, job_id: jobId, business_key: businessKey, attempt_id: attemptId, attempt_no: 1, attachment_id: pdf.attachment_id },
-    });
-    return { revisionId, job: { id: jobId, kind: JOB_SEND_EMAIL, state: 'queued' }, attempt: { id: attemptId, attemptNo: 1, state: 'preparing' } };
   });
 }
 
@@ -1242,14 +1139,6 @@ function viewJson(view: FinalizationView | null) {
 
 export function signOffJson(result: SignOffResult) {
   return { status: result.status, finalized_revision_no: result.finalizedRevisionNo, ...viewJson(result) };
-}
-
-export function resendJson(result: ResendResult) {
-  return {
-    revision_id: result.revisionId,
-    job: { id: result.job.id, kind: result.job.kind, state: result.job.state },
-    attempt: { id: result.attempt.id, attempt_no: result.attempt.attemptNo, state: result.attempt.state },
-  };
 }
 
 export function finalizationStatusJson(status: FinalizationStatus) {

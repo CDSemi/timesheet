@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -138,6 +139,17 @@ async function signOffPeriod(person: Person): Promise<string> {
     'POST',
     `/api/timesheets/${person.payrollDate}/signoff`,
     { expected_version: review.expected_version, reviewed_hash: review.payload_hash, signer_name: 'Synthetic Person', incomplete_evidence_acknowledged: true },
+    201,
+  );
+  // WP5-UX5-T01b: signing sends nothing; the person sends the revision with the send draft's defaults.
+  const draft = await person.api.call<{ to: string[]; cc: string[]; subject: string; body_text: string; time_rows: boolean; ot_rows: boolean }>(
+    'GET',
+    `/api/revisions/${done.revision.id}/send-draft`,
+  );
+  await person.api.call(
+    'POST',
+    `/api/revisions/${done.revision.id}/send`,
+    { request_key: randomUUID(), to: draft.to, cc: draft.cc, subject: draft.subject, body_text: draft.body_text, time_rows: draft.time_rows, ot_rows: draft.ot_rows },
     201,
   );
   return done.revision.id;
@@ -319,8 +331,17 @@ test('history shows the signed revision with its PDF and delivery; download, exp
   await expect(resend).toBeFocused();
   expect((await attemptsOf(person, revisionId)).length, 'cancelling a resend sends nothing').toBe(1);
 
+  // The first copy was accepted, so another copy needs a confirmation and a typed reason (owner decision F-4, B-A2).
   await resend.click();
-  await confirm.getByRole('button', { name: 'Send again' }).click();
+  await expect(confirm.getByRole('heading', { name: 'Send another copy?' })).toBeVisible();
+  await confirm.getByRole('button', { name: 'Send another copy' }).click();
+  await expect(confirm.getByRole('alert')).toHaveText('Give the reason for sending another copy.');
+  await confirm.getByLabel('Reason for sending another copy').fill('x');
+  await confirm.getByRole('button', { name: 'Send another copy' }).click();
+  await expect(confirm.getByRole('alert')).toHaveText('The reason must have 2 to 500 characters.');
+  expect((await attemptsOf(person, revisionId)).length, 'a missing or short reason sends nothing').toBe(1);
+  await confirm.getByLabel('Reason for sending another copy').fill('Payroll asked for another copy');
+  await confirm.getByRole('button', { name: 'Send another copy' }).click();
   await expect(revision.locator('[data-revision-message="ok"]')).toContainText('A new delivery attempt was queued');
   await waitForFinal(person, revisionId, 2);
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
@@ -383,6 +404,10 @@ test('an uncertain delivery can be resolved by resending the same PDF, after a c
   const confirm = revision.locator('[data-confirm="resend_uncertain"]');
   await expect(confirm).toContainText(TO);
   await expect(confirm).toContainText('may receive it twice');
+  // The uncertain copy may have arrived, so the resend decision needs the owner's reason too (B-A2).
+  await confirm.getByRole('button', { name: 'Resend now' }).click();
+  await expect(confirm.getByRole('alert')).toHaveText('Give the reason for sending another copy.');
+  await confirm.getByLabel('Reason for sending another copy').fill('The mail server lost the connection');
   await confirm.getByRole('button', { name: 'Resend now' }).click();
   await expect(revision.locator('[data-revision-message="ok"]')).toContainText('queued for another delivery attempt');
 

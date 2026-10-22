@@ -16,7 +16,7 @@ A personal timesheet tool, ready for isolated coworker accounts later. Record at
 | FR-08 | Optional deficit deduction automatically or at sign-off; no absence-day debit | WP1/WP2 |
 | FR-09 | Traceable OT ledger, corrections, recorded manager permission and partial leave conversion | WP2 |
 | FR-10 | Explicit employee sign-off bound to immutable revision | WP3 |
-| FR-11 | Familiar PDF; manual sign-off requires name and signature image; automatic image configurable | WP3 |
+| FR-11 | Familiar PDF; manual sign-off is the signed-in owner's act and records the account name and, when one is saved, the signature image (F-5 b); the time rows and OT rows are chosen for each send, with Settings defaults (F-3 b); automatic image configurable | WP3, WP5 |
 | FR-12 | Recipient/templates, notifications, deadline switch and durable delivery | WP3 |
 | FR-13 | Annual company holiday calendar and effective policy versions | WP2 |
 | FR-14 | Audit actor/time/before-after; require reasons for old/finalized edits | WP1/WP2 |

@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { crc32, deflateSync } from 'node:zlib';
@@ -90,6 +91,20 @@ async function uploadSignature(server: BuiltServer, account: CreatedAccount): Pr
   expect(upload.status, 'signature upload').toBe(201);
 }
 
+/** WP5-UX5-T01b: signing sends nothing; the person sends the signed revision with the send draft's defaults. */
+async function sendSigned(api: SeedClient, revisionId: string): Promise<void> {
+  const draft = await api.call<{ to: string[]; cc: string[]; subject: string; body_text: string; time_rows: boolean; ot_rows: boolean }>(
+    'GET',
+    `/api/revisions/${revisionId}/send-draft`,
+  );
+  await api.call(
+    'POST',
+    `/api/revisions/${revisionId}/send`,
+    { request_key: randomUUID(), to: draft.to, cc: draft.cc, subject: draft.subject, body_text: draft.body_text, time_rows: draft.time_rows, ot_rows: draft.ot_rows },
+    201,
+  );
+}
+
 interface ApiSubmission {
   user_id: string;
   pdf: { state: string; fault_code: string | null };
@@ -118,12 +133,13 @@ test('the admin sees pipeline states, a fault code and recipients, and no timesh
   await api.putDay(noteDay, { notes: NOTE });
   await api.seedCompleteDay(workDay);
   const review = await api.call<{ expected_version: number; payload_hash: string }>('GET', `/api/timesheets/${currentPayrollDate}/review`);
-  await api.call(
+  const signedOff = await api.call<{ revision: { id: string } }>(
     'POST',
     `/api/timesheets/${currentPayrollDate}/signoff`,
     { expected_version: review.expected_version, reviewed_hash: review.payload_hash, signer_name: 'Synthetic Operator', incomplete_evidence_acknowledged: true },
     201,
   );
+  await sendSigned(api, signedOff.revision.id);
 
   // The runner renders the PDF and attempts the delivery; wait for a final delivery state.
   const mine = async () => {
@@ -264,6 +280,7 @@ test('phone Administration: a long delivery state and a long fault code stay ins
     { expected_version: review.expected_version, reviewed_hash: review.payload_hash, signer_name: 'Synthetic Operator', incomplete_evidence_acknowledged: true },
     201,
   );
+  await sendSigned(api, signed.revision.id);
   const mine = async () => (await adminSeed.call<{ submissions: ApiSubmission[] }>('GET', '/api/admin/submissions?limit=500')).submissions.find((row) => row.user_id === account.id);
   await expect
     .poll(async () => (await mine())?.delivery.state, { timeout: 150_000, intervals: [2_000], message: 'a final first delivery state' })

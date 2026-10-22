@@ -12,6 +12,7 @@ import { postCredit } from '../../src/server/services/ledger.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
 import { createUser } from '../../src/server/services/users.ts';
 import { makePng } from '../support/pdfText.ts';
+import { sendWithDefaults } from '../support/sends.ts';
 import { createTestContext, la, LA, ORIGIN, type TestContext } from '../support/testApp.ts';
 
 /*
@@ -821,6 +822,8 @@ describe('revision status list GET /api/revisions (owner-only, write-free)', () 
       },
     });
     expect(signed.status).toBe(201);
+    // WP5-UX5-T01b: signing sends nothing; the owner sends with the draft's defaults.
+    expect((await sendWithDefaults(t, owner, signed.body.revision.id)).status).toBe(201);
     const pending = await t.request('GET', '/api/revisions', { cookie: owner });
     expect(pending.body.revisions).toEqual([expect.objectContaining({ pdf_state: null, delivery_state: null })]);
     await runJobsOnce({ db: t.db, clock: t.clock, owner: 'runner-pdf', handlers: { render_pdf: createPdfJobHandler({ db: t.db, clock: t.clock, files }) } });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, ApiRequestError, type ReviewResponse, type SignOffResponse, type TimesheetView } from './api.ts';
+import { api, ApiRequestError, type ReviewResponse, type SendDraft, type SendResponse, type SignOffResponse, type TimesheetView } from './api.ts';
 import { describeError } from './components/errors.ts';
 import { instantText, periodRange } from './components/format.ts';
 import { granteeChangeText } from './components/granteeChangesModel.ts';
@@ -9,8 +9,10 @@ import { ReviewEnvelope } from './components/ReviewEnvelope.tsx';
 import { ReviewDeficits, ReviewEvidence, ReviewOtProposals, ReviewReservations } from './components/ReviewFindings.tsx';
 import { ReviewSignoff } from './components/ReviewSignoff.tsx';
 import { loadPeriodState, type PeriodState, ReviewBadges } from './components/ReviewStatus.tsx';
+import { useAttemptKey } from './components/useAttemptKey.ts';
 import {
   type Blocker,
+  buildSendBody,
   buildSubmitBody,
   checklistSteps,
   classifySubmitError,
@@ -20,6 +22,8 @@ import {
   resetAfterStale,
   reviewMode,
   type ReviewMode,
+  sendAfterSignoff,
+  sendFailureText,
   submitBlockers,
 } from './components/reviewModel.ts';
 
@@ -28,7 +32,8 @@ const EMPTY_FORM: FormState = { acknowledged: false, choices: {}, reason: '', se
 type Phase = { kind: 'loading' } | { kind: 'ready' } | { kind: 'missing' } | { kind: 'failed'; message: string };
 
 const MODE_INTRO: Record<ReviewMode, string> = {
-  signoff: 'Check every day, then sign off. Signing off posts your OT credits and sends the PDF to the recipients below.',
+  signoff:
+    'Check every day, then sign off. Signing off posts your OT credits; right after it, this page sends the PDF to the recipients below.',
   late_review:
     'This period was submitted automatically at the deadline and is waiting for your review. Signing records your review. It changes no OT balance.',
   correction:
@@ -51,7 +56,8 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
   const [shown, setShown] = useState<Blocker[]>([]);
   const [notice, setNotice] = useState<{ kind: 'stale' | 'error'; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<SignOffResponse | null>(null);
+  const [done, setDone] = useState<{ result: SignOffResponse; sent: boolean; sendError: string | null } | null>(null);
+  const sendKey = useAttemptKey();
   const submitting = useRef(false);
   const noticeRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -108,7 +114,23 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
     setShown([]);
     try {
       const result = await api<SignOffResponse>('POST', modeEndpoint(mode, payrollDate), buildSubmitBody(review, mode, form));
-      setDone(result);
+      // Signing never sends (WP5-UX5-T01b). Until the Send card (WP5-UX5-T03) the screen sends right away with the
+      // Settings defaults of the send draft; a refused send leaves the revision signed and says so.
+      const after = sendAfterSignoff(mode, form);
+      let sent = false;
+      let sendError: string | null = null;
+      if (after.send && result.status === 'created' && result.revision !== null) {
+        const revisionId = result.revision.id;
+        try {
+          const draft = await api<SendDraft>('GET', `/api/revisions/${revisionId}/send-draft`);
+          await api<SendResponse>('POST', `/api/revisions/${revisionId}/send`, buildSendBody(draft, sendKey.keyFor(revisionId), after.reason));
+          sendKey.settle();
+          sent = true;
+        } catch (caught) {
+          sendError = sendFailureText(caught);
+        }
+      }
+      setDone({ result, sent, sendError });
       setPeriod(await loadPeriodState(payrollDate).catch(() => period));
     } catch (caught) {
       const failure = classifySubmitError(caught);
@@ -183,16 +205,21 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
       )}
 
       {done !== null && (
-        <section className="card stack" aria-labelledby="review-done-title" data-result={done.status}>
-          <h2 id="review-done-title">{done.status === 'replayed' ? 'Already submitted' : 'Submitted'}</h2>
+        <section className="card stack" aria-labelledby="review-done-title" data-result={done.result.status} data-sent={done.sent ? 'true' : 'false'}>
+          <h2 id="review-done-title">{done.result.status === 'replayed' ? 'Already submitted' : done.sendError !== null ? 'Signed, not sent' : 'Submitted'}</h2>
           <p className="notice-ok" role="status">
-            {done.status === 'replayed'
+            {done.result.status === 'replayed'
               ? 'This sign-off was already recorded. Nothing new was created.'
-              : `Revision ${done.revision?.revision_no ?? ''} is signed and queued for the PDF${done.revision?.send_requested === true ? ' and the email' : ''}.`}
+              : `Revision ${done.result.revision?.revision_no ?? ''} is signed and queued for the PDF${done.sent ? ' and the email' : ''}.`}
           </p>
-          {done.signoff !== null && (
+          {done.sendError !== null && (
+            <p className="error" role="alert" data-send-error>
+              {done.sendError}
+            </p>
+          )}
+          {done.result.signoff !== null && (
             <p className="muted">
-              Signed by {done.signoff.signer_name} at <span className="mono">{instantText(done.signoff.signed_at, payload.reporting_zone)}</span> ({payload.reporting_zone}).
+              Signed by {done.result.signoff.signer_name} at <span className="mono">{instantText(done.result.signoff.signed_at, payload.reporting_zone)}</span> ({payload.reporting_zone}).
             </p>
           )}
           <div className="button-row">

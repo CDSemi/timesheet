@@ -5,7 +5,7 @@ import type { SessionUser } from '../../src/server/auth/sessions.ts';
 import { loadDeliveryConfig } from '../../src/server/config.ts';
 import { FileStore } from '../../src/server/files/fileStore.ts';
 import { createJobHandlers, runJobsOnce } from '../../src/server/jobs/runner.ts';
-import { setAutomationActivation } from '../../src/server/services/automation.ts';
+import { runDeadlineScan, setAutomationActivation } from '../../src/server/services/automation.ts';
 import type { SignOffInput } from '../../src/server/services/finalization.ts';
 import { getBalance, listLedgerEntries, postCredit } from '../../src/server/services/ledger.ts';
 import { createPolicyVersion } from '../../src/server/services/policies.ts';
@@ -171,7 +171,12 @@ async function expectSingleFinalization(owner: Owner, round: number, origin: 'em
     { work_date: '2026-09-15', line_kind: 'credit', proposed_minutes: 60, outcome: 'posted' },
     { work_date: '2026-09-16', line_kind: 'deficit_debit', proposed_minutes: -240, outcome: 'posted' },
   ]);
+  // WP5-UX5-T01b (F-2 a): a manual sign-off sends nothing. The next deadline tick sends a signed revision that was
+  // never sent (auto-submit is on here), and does nothing for a period the deadline job already sent.
+  runDeadlineScan(t.db, t.clock);
   expect(t.db.prepare("SELECT kind FROM jobs WHERE user_id = ? AND kind <> 'deadline_scan' ORDER BY kind").pluck().all(userId), tag).toEqual(['render_pdf', 'send_email']);
+  expect(t.db.prepare('SELECT origin, actor_user_id, reason FROM revision_sends WHERE user_id = ?').all(userId), tag).toEqual([{ origin: 'deadline', actor_user_id: null, reason: null }]);
+  expect(count("SELECT count(*) FROM audit_events WHERE owner_user_id = ? AND operation = 'deadline.send_signed'", userId), tag).toBe(origin === 'employee' ? 1 : 0);
   expect(count('SELECT finalized_revision_no FROM timesheets WHERE user_id = ?', userId), tag).toBe(1);
   expect(getBalance(t.db, userId).postedMinutes, tag).toBe(300 - 240 + 60);
   // One send: the runner renders the PDF and delivers the captured message exactly once, even when run twice.

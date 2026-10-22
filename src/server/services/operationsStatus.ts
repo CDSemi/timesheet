@@ -368,7 +368,9 @@ export interface SubmissionStatus {
 
 /**
  * The latest revision of every timesheet with its PDF and delivery state and recipient addresses,
- * most recent deadline first. Every join is on the (id, user_id) pair of the owner of the revision.
+ * most recent deadline first. Every join is on the (id, user_id) pair of the owner of the revision. One row per
+ * revision: the PDF state is that of the revision's first PDF (the sign-off's, normally), never one row per stored
+ * variant (WP5-UX5-T01b). No snapshot is read, so the service stays column-allowlisted.
  */
 export function listSubmissionStatus(db: Db, options: { limit?: number } = {}): SubmissionStatus[] {
   const limit = options.limit ?? DEFAULT_SUBMISSION_LIMIT;
@@ -382,7 +384,10 @@ export function listSubmissionStatus(db: Db, options: { limit?: number } = {}): 
          JOIN timesheets t ON t.id = r.timesheet_id AND t.user_id = r.user_id
          JOIN pay_periods p ON p.id = t.pay_period_id
          JOIN users u ON u.id = r.user_id
-         LEFT JOIN revision_files f ON f.revision_id = r.id AND f.user_id = r.user_id AND f.kind = 'pdf'
+         LEFT JOIN revision_files f ON f.rowid = (
+              SELECT x.rowid FROM revision_files x
+               WHERE x.revision_id = r.id AND x.user_id = r.user_id AND x.kind = 'pdf'
+               ORDER BY x.created_at, x.rowid LIMIT 1)
         WHERE r.revision_no = (SELECT max(x.revision_no) FROM timesheet_revisions x WHERE x.timesheet_id = r.timesheet_id AND x.user_id = r.user_id)
         ORDER BY p.due_at_utc DESC, u.display_name, r.id
         LIMIT ?`,

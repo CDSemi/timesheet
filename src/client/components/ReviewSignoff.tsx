@@ -1,4 +1,4 @@
-import type { FieldKey, FormState, ReviewMode } from './reviewModel.ts';
+import { type FieldKey, type FormState, MAX_SEND_REASON, type ReviewMode } from './reviewModel.ts';
 
 /**
  * The sign-off form: the account name that will be recorded and printed (not editable, owner decision
@@ -77,6 +77,32 @@ export function ReviewSignoff({
             </p>
           )}
         </fieldset>
+      )}
+
+      {mode === 'late_review' && form.sendEmail === true && (
+        <>
+          {/* The automatic copy was sent at the deadline, so another copy needs the owner's reason (B-A2). */}
+          <label>
+            Reason for sending another copy
+            <textarea
+              id="review-field-reason"
+              rows={2}
+              value={form.reason}
+              maxLength={MAX_SEND_REASON}
+              aria-invalid={errors.reason !== undefined}
+              aria-describedby={errors.reason === undefined ? 'review-hint-reason' : 'review-hint-reason review-error-reason'}
+              onChange={(event) => onChange({ ...form, reason: event.target.value })}
+            />
+          </label>
+          <p className="hint" id="review-hint-reason">
+            Stored with the send and in your history; it is not added to the email.
+          </p>
+          {errors.reason !== undefined && (
+            <p className="error" id="review-error-reason">
+              {errors.reason}
+            </p>
+          )}
+        </>
       )}
 
       <div className="button-row">

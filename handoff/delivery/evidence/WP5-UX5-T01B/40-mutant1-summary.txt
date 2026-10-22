@@ -1,0 +1,19 @@
+     × signs off without sending; the draft gives the Settings defaults; a send writes its record, its job and its audit only 318ms
+     × is idempotent by request key: the same body replays, another body under the key is 409, and nothing more is written 274ms
+     × validates the envelope, subject, body and reason of a send (422, nothing written) 277ms
+     × refuses another send while a send job waits, an attempt is open or uncertain without a decision, for a superseded revision and for another user 258ms
+     × an accepted copy counts: another send needs a reason, stored on the send and in the audit, never in the email 249ms
+     × an uncertain copy counts whatever was decided; a copy whose attempts all failed permanently does not 275ms
+     × the resend decision on an uncertain attempt needs the reason too 258ms
+     × counts a copy of the period across its revisions: a correction sent after an accepted copy needs a reason 293ms
+     × the shared PDF route ignores the variant query and never renders: the latest send's variant, else the sign-off variant 443ms
+     × sends the envelope, subject, body and PDF variant of the send, not the snapshot or the current Settings 262ms
+     × lets exactly one of two sends through, and neither skips the reason rule once a copy counts 361ms
+     × creates the signed revision, the real sign-off, the ledger postings, the lines and the jobs in one step 382ms
+     × finalizes a period with no saved entries, creating its timesheet row 308ms
+     × signs without a saved signature image: the account name and a null image, the revision, postings and jobs as before 347ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 14 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  2 failed (2)
+      Tests  14 failed | 25 passed (39)
+exit=1
+0

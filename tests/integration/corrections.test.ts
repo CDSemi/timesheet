@@ -8,6 +8,7 @@ import { creditSourceKey } from '../../src/server/services/finalization.ts';
 import { getBalance, listLedgerEntries, postCredit } from '../../src/server/services/ledger.ts';
 import { recordRevisionLine } from '../../src/server/services/revisionLedger.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
+import { sendWithDefaults } from '../support/sends.ts';
 import { createTestContext, la, LA, type TestContext } from '../support/testApp.ts';
 
 /*
@@ -281,7 +282,7 @@ describe('correction revision', () => {
     expect(`${audit.before_json}${audit.after_json}`).not.toContain(SIGNER);
   });
 
-  it('records the explicit send choice: true enqueues the PDF and the send, false only the PDF', async () => {
+  it('never sends by itself (WP5-UX5-T01b): with send_email true or false only the PDF is enqueued; the field is still required', async () => {
     await addSession('2026-09-15', '09:00', '18:00');
     uploadSignature(0x63);
     await finalizeOriginal();
@@ -294,11 +295,12 @@ describe('correction revision', () => {
     expect((await revise(withoutSend)).status).toBe(422);
     const send = await revise(await reviseBody({ send_email: true }));
     expect(send.status, JSON.stringify(send.body)).toBe(201);
-    expect(jobKinds(send.body)).toEqual(['render_pdf', 'send_email']);
-    expect(send.body.revision.send_requested).toBe(true);
+    expect(jobKinds(send.body)).toEqual(['render_pdf']);
+    expect(send.body.revision.send_requested).toBe(false);
     expect(send.body.finalized_revision_no).toBe(3);
     const keys = t.db.prepare("SELECT business_key FROM jobs WHERE revision_id = ? ORDER BY kind").pluck().all(send.body.revision.id);
-    expect(keys).toEqual([`revision:${send.body.revision.id}:render_pdf`, `revision:${send.body.revision.id}:send_email:initial`]);
+    expect(keys).toEqual([`revision:${send.body.revision.id}:render_pdf`]);
+    expect(count('SELECT count(*) FROM revision_sends')).toBe(0);
   });
 
   it('posts a first credit with the day original key for a day without a posted original (O7), not a correction', async () => {
@@ -680,7 +682,7 @@ describe('late review of an automatic revision', () => {
     expect(`${audit.before_json}${audit.after_json}`).not.toContain(SIGNER);
   });
 
-  it('enqueues the send only when send_email is true, and requires the choice', async () => {
+  it('never sends by itself even when send_email is true (WP5-UX5-T01b), and still requires the choice', async () => {
     await addSession('2026-09-15', '09:00', '18:00');
     uploadSignature(0x72);
     await makeAutomaticRevision();
@@ -689,8 +691,8 @@ describe('late review of an automatic revision', () => {
     expect((await lateReview(withoutSend)).status).toBe(422);
     const response = await lateReview(body);
     expect(response.status, JSON.stringify(response.body)).toBe(201);
-    expect(response.body.revision.send_requested).toBe(true);
-    expect(jobKinds(response.body)).toEqual(['render_pdf', 'send_email']);
+    expect(response.body.revision.send_requested).toBe(false);
+    expect(jobKinds(response.body)).toEqual(['render_pdf']);
     expect(count('SELECT count(*) FROM ot_ledger WHERE entry_type = ?', 'correction')).toBe(0);
   });
 
@@ -756,6 +758,9 @@ describe('same-revision resend', () => {
     uploadSignature(0x81);
     const original = await finalizeOriginal();
     const revisionId: string = original.revision.id;
+    // WP5-UX5-T01b: signing sends nothing; the first copy is the owner's own send.
+    const first = await sendWithDefaults(t, employee, revisionId);
+    expect(first.status, JSON.stringify(first.body)).toBe(201);
     const attachmentId = randomUUID();
     t.db
       .prepare(
@@ -765,8 +770,8 @@ describe('same-revision resend', () => {
       .run(attachmentId, t.userIds.employee, randomBytes(24).toString('base64url'), randomBytes(32).toString('hex'));
     t.db
       .prepare(
-        `INSERT INTO revision_files (id, user_id, revision_id, kind, state, attachment_id, last_error, created_at, updated_at)
-         VALUES (?, ?, ?, 'pdf', 'ready', ?, NULL, '2026-09-29T20:00:00Z', '2026-09-29T20:00:00Z')`,
+        `INSERT INTO revision_files (id, user_id, revision_id, kind, variant, state, attachment_id, last_error, created_at, updated_at)
+         VALUES (?, ?, ?, 'pdf', 't1o1', 'ready', ?, NULL, '2026-09-29T20:00:00Z', '2026-09-29T20:00:00Z')`,
       )
       .run(randomUUID(), t.userIds.employee, revisionId, attachmentId);
     const job = t.db.prepare("SELECT id FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(revisionId) as { id: string };
@@ -799,34 +804,37 @@ describe('same-revision resend', () => {
 
   const resend = (id: string, body: unknown = {}, who = employee) => t.request('POST', resendPath(id), { cookie: who, body });
 
-  it('creates a new delivery attempt and send job on the same revision with no ledger movement', async () => {
+  it('creates another send record and send job on the same revision with the previous values and no ledger movement', async () => {
     const { revisionId, attachmentId } = await finalizedWithPdf();
     const frozen = frozenState(revisionId, false);
     const before = writeState();
     const ledgerBefore = JSON.stringify(listLedgerEntries(t.db, t.userIds.employee));
-    const response = await resend(revisionId, { to: ['payroll@example.invalid'], cc: [] });
+    // The first copy was accepted, so another one needs the owner's reason (B-A2); without it nothing is written.
+    const unreasoned = await resend(revisionId, { to: ['payroll@example.invalid'], cc: [] });
+    expect(unreasoned.status).toBe(422);
+    expect(unreasoned.body.error.code).toBe('reason_required');
+    expect(writeState()).toEqual(before);
+    const response = await resend(revisionId, { to: ['payroll@example.invalid'], cc: [], reason: 'Payroll asked for another copy' });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     expect(response.body).toMatchObject({
-      revision_id: revisionId,
-      job: { kind: 'send_email', state: 'queued' },
-      attempt: { attempt_no: 1, state: 'preparing' },
+      status: 'created',
+      send: { revision_id: revisionId, send_no: 2, to: ['payroll@example.invalid'], cc: [], reason: 'Payroll asked for another copy', pdf_variant: 't1o1' },
+      job: { kind: 'send_email' },
     });
     const after = writeState();
-    expect(after).toEqual({ ...before, jobs: before.jobs + 1, attempts: before.attempts + 1, audit: before.audit + 1 });
+    // The job creates its attempt when it runs; the PDF of the variant is stored already, so no PDF job.
+    expect(after).toEqual({ ...before, jobs: before.jobs + 1, audit: before.audit + 1 });
     // No ledger movement, no new revision, no change of the timesheet or of the revision's stored facts.
     expect(JSON.stringify(listLedgerEntries(t.db, t.userIds.employee))).toBe(ledgerBefore);
     expect(frozenState(revisionId, false)).toBe(frozen);
     const jobs = t.db.prepare("SELECT business_key, kind FROM jobs WHERE revision_id = ? AND kind = 'send_email' ORDER BY created_at, business_key").all(revisionId) as any[];
     expect(jobs).toHaveLength(2);
-    expect(jobs.map((job) => job.business_key)).toContain(`revision:${revisionId}:send_email:resend:2`);
-    const attempt = t.db.prepare("SELECT * FROM delivery_attempts WHERE state = 'preparing'").get() as any;
-    expect(attempt).toMatchObject({ revision_id: revisionId, user_id: t.userIds.employee, attachment_id: attachmentId, channel: 'email' });
-    const envelope = JSON.parse(attempt.envelope_json);
-    expect(envelope).toMatchObject({ to: ['payroll@example.invalid'], cc: [], revision_id: revisionId });
-    expect(typeof envelope.subject).toBe('string');
-    expect(attempt.message_id).toMatch(/^<[^<>\s]+@[^<>\s]+>$/);
+    expect(jobs.map((job) => job.business_key)).toContain(`send:${response.body.send.id}`);
+    const previous = t.db.prepare('SELECT subject, body_text FROM revision_sends WHERE revision_id = ? AND send_no = 1').get(revisionId);
+    expect(t.db.prepare('SELECT subject, body_text FROM revision_sends WHERE id = ?').get(response.body.send.id)).toEqual(previous);
+    expect(attachmentId).toBeTruthy();
     const audit = t.db.prepare("SELECT * FROM audit_events WHERE operation = 'revision.resend'").get() as any;
-    expect(audit).toMatchObject({ entity_id: revisionId, actor_user_id: t.userIds.employee });
+    expect(audit).toMatchObject({ entity_id: revisionId, actor_user_id: t.userIds.employee, reason: 'Payroll asked for another copy' });
     expect(`${audit.before_json}${audit.after_json}`).not.toContain('payroll@example.invalid');
     expect(count('SELECT count(*) FROM timesheet_revisions')).toBe(1);
   });
@@ -852,7 +860,7 @@ describe('same-revision resend', () => {
     t.db
       .prepare("UPDATE delivery_attempts SET decision = 'resend', decision_actor_user_id = ?, decided_at = '2026-09-29T20:30:00Z' WHERE job_id = ? AND attempt_no = 2")
       .run(t.userIds.employee, jobId);
-    const allowed = await resend(revisionId);
+    const allowed = await resend(revisionId, { reason: 'The earlier copy may not have arrived' });
     expect(allowed.status, JSON.stringify(allowed.body)).toBe(201);
   });
 
@@ -871,13 +879,14 @@ describe('same-revision resend', () => {
     expect(writeState()).toEqual(before);
   });
 
-  it('a changed envelope (recipients or template) needs a new revision, not a resend', async () => {
+  it('a changed envelope (recipients or template) is refused by the resend, which repeats the previous send', async () => {
     const { revisionId } = await finalizedWithPdf();
     const before = writeState();
     const recipients = await resend(revisionId, { to: ['someone.else@example.invalid'] });
     expect(recipients.status).toBe(409);
     expect(recipients.body.error.code).toBe('envelope_changed');
-    expect(recipients.body.error.details).toMatchObject({ new_revision_required: true });
+    // WP5-UX5-T01b (F-4): other recipients take a new send with its own envelope, not a new revision.
+    expect(recipients.body.error.details).toMatchObject({ fields: ['to'] });
     const cc = await resend(revisionId, { cc: ['copy@example.invalid'] });
     expect(cc.status).toBe(409);
     expect(cc.body.error.code).toBe('envelope_changed');
@@ -887,20 +896,25 @@ describe('same-revision resend', () => {
     expect(writeState()).toEqual(before);
   });
 
-  it('needs a ready PDF and only the current revision of its timesheet', async () => {
+  it('sends only the current revision of its timesheet; a correction is sent by the owner with a reason once a copy counts', async () => {
     const { revisionId, attachmentId } = await finalizedWithPdf();
     const before = writeState();
     // A newer revision supersedes this one: resending the old revision is refused.
     await addSession('2026-09-16', '09:00', '18:00', { reason: REASON });
-    const newer = await revise(await reviseBody());
+    const newer = await revise(await reviseBody({ send_email: true }));
     expect(newer.status, JSON.stringify(newer.body)).toBe(201);
-    const superseded = await resend(revisionId);
+    const superseded = await resend(revisionId, { reason: 'An older copy' });
     expect(superseded.status).toBe(409);
     expect(superseded.body.error.code).toBe('revision_superseded');
-    // The newer revision has no ready PDF yet (the PDF job is a later task).
-    const noPdf = await resend(newer.body.revision.id);
-    expect(noPdf.status).toBe(409);
-    expect(noPdf.body.error.code).toBe('pdf_not_ready');
+    // The correction sent nothing by itself. Its PDF is not ready yet; the send does not wait for it (the job does),
+    // but the first copy of the period counts, so the owner's reason is required.
+    expect(count("SELECT count(*) FROM jobs WHERE kind = 'send_email' AND revision_id = ?", newer.body.revision.id)).toBe(0);
+    const noReason = await resend(newer.body.revision.id);
+    expect(noReason.status).toBe(422);
+    expect(noReason.body.error.code).toBe('reason_required');
+    const sent = await resend(newer.body.revision.id, { reason: REASON });
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+    expect(sent.body.send).toMatchObject({ revision_id: newer.body.revision.id, send_no: 1, reason: REASON });
     expect(attachmentId).toBeTruthy();
     expect(count('SELECT count(*) FROM delivery_attempts')).toBe(before.attempts);
   });

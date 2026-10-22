@@ -63,6 +63,10 @@ const NEVER: ReadonlyArray<readonly [method: string, path: string]> = [
   ['POST', '/timesheets/2026-10-02/late-review'],
   ['GET', '/timesheets/2026-10-02/finalization'],
   ['POST', '/revisions/:revision/resend'],
+  // The sign-off/send split (WP5-UX5-T01b): no grantee drafts, sends or previews.
+  ['GET', '/revisions/:revision/send-draft'],
+  ['POST', '/revisions/:revision/send'],
+  ['GET', '/timesheets/2026-10-02/pdf-preview'],
   ['GET', '/deliveries'],
   ['POST', '/deliveries/:revision/decision'],
   ['GET', '/settings/submission'],
@@ -187,6 +191,9 @@ const OPENING_BALANCE_ADDED = ['GET /api/ot/opening-balance 2', 'POST /api/ot/op
 
 /** The signed-in user's own password change (WP5-UX4-T04, D-9 b): self-only, never reachable under /api/shared. */
 const PASSWORD_ADDED = ['POST /api/auth/password 2'];
+
+/** The sign-off/send split (WP5-UX5-T01b): the send draft, the send and the unsigned preview are owner-only. */
+const SENDS_ADDED = ['GET /api/revisions/:id/send-draft 2', 'GET /api/timesheets/:payrollDate/pdf-preview 2', 'POST /api/revisions/:id/send 2'];
 
 const ITEM_SETS: ItemSet[] = (['none', 'view', 'edit'] as const).flatMap((timesheets) =>
   [false, true].flatMap((otRead) =>
@@ -317,7 +324,7 @@ describe('route inventory', () => {
 
   it('keeps every self-only /api route unchanged and adds only the reviewed sharing routes', () => {
     const outside = inventory().filter((route) => !route.includes(' /api/shared/'));
-    expect(outside).toEqual([...SELF_ONLY_BEFORE, ...SHARING_ADDED, ...IMPORTS_ADDED, ...OPENING_BALANCE_ADDED, ...PASSWORD_ADDED].sort());
+    expect(outside).toEqual([...SELF_ONLY_BEFORE, ...SHARING_ADDED, ...IMPORTS_ADDED, ...OPENING_BALANCE_ADDED, ...PASSWORD_ADDED, ...SENDS_ADDED].sort());
   });
 
   it('WP4-T02 drift guard: the shared write routes are exactly the five that record the audit marker', () => {

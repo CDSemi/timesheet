@@ -15,6 +15,7 @@ import type { OutboundAdapter, SendOutcome } from '../../src/server/mail/outboun
 import { runDeadlineScan, setAutomationActivation } from '../../src/server/services/automation.ts';
 import { createPayrollException, getCalendar, listPayrollExceptions } from '../../src/server/services/calendars.ts';
 import { reviseTimesheet, signOffTimesheet } from '../../src/server/services/finalization.ts';
+import { sendDraft, sendRevision } from '../../src/server/services/deliveries.ts';
 import { runReminderScan } from '../../src/server/services/notifications.ts';
 import { createPolicyVersion } from '../../src/server/services/policies.ts';
 import { buildReviewPayload } from '../../src/server/services/reviewPayload.ts';
@@ -355,7 +356,23 @@ describe('dedupe by user, period and occurrence', () => {
   });
 });
 
-describe('stop after finalization', () => {
+/** The owner's send of a signed revision with the send draft's defaults (WP5-UX5-T01b). */
+function sendAsOwner(user: SessionUser, revisionId: string) {
+  const draft = sendDraft(t.db, user, revisionId, null);
+  return sendRevision({ db: t.db, clock: t.clock, user }, revisionId, {
+    requestKey: randomUUID(),
+    to: draft.envelope.to,
+    cc: draft.envelope.cc,
+    subject: draft.envelope.subject,
+    bodyText: draft.envelope.bodyText,
+    timeRows: draft.rows.time,
+    otRows: draft.rows.ot,
+  });
+}
+
+// WP5-UX5-T01b (owner decision F-2 a): signing no longer submits. A period counts as submitted at its first send, so
+// reminders continue after a sign-off ("signed, not sent yet") and stop at the first send.
+describe('stop at the first send', () => {
   function finalizeManually(user: SessionUser, payroll: string) {
     saveSignature(t.db, t.clock, files, user.id, makePng(40, 12), 'image/png');
     const review = buildReviewPayload(t.db, t.clock, user, payroll);
@@ -368,7 +385,7 @@ describe('stop after finalization', () => {
     });
   }
 
-  it('sends no 2 h reminder to an employee who signed off after the 24 h reminder', async () => {
+  it('keeps reminding a signed period that was not sent, worded "signed, not sent yet"; the first send stops the reminders', async () => {
     const user = newUser();
     work(user, '2026-09-15', '09:00', '18:00');
     saveSettings(user);
@@ -378,15 +395,24 @@ describe('stop after finalization', () => {
     await pass();
     expect(captured(user)).toHaveLength(1);
     setClock(due - 3 * H);
-    expect(finalizeManually(user, P1).status).toBe('created');
+    const signed = finalizeManually(user, P1);
+    expect(signed.status).toBe('created');
     setClock(due - 2 * H);
-    expect(runReminderScan(t.db, t.clock)).toMatchObject({ enqueued: 0, collapsed: 0 });
+    expect(runReminderScan(t.db, t.clock)).toMatchObject({ enqueued: 1 });
     await pass();
-    expect(captured(user)).toHaveLength(1);
-    expect(occurrences(user)).toHaveLength(1);
+    const messages = captured(user);
+    expect(messages).toHaveLength(2);
+    expect(messages[1]?.subject).toBe(`Timesheet signed, not sent yet: payroll ${P1}`);
+    expect(messages[1]?.text).toContain('is signed, not sent yet.');
+    expect(messages[1]?.text).toContain('Send it to payroll before the deadline.');
+    // The first send submits the period: no reminder after it.
+    expect(sendAsOwner(user, signed.revision.id).status).toBe('created');
+    setClock(due - 1 * H);
+    expect(runReminderScan(t.db, t.clock)).toMatchObject({ enqueued: 0, collapsed: 0 });
+    expect(occurrences(user)).toHaveLength(2);
   });
 
-  it('sends nothing for a reminder that was queued before the period was finalized', async () => {
+  it('sends nothing for a reminder that was queued before the period was sent', async () => {
     const user = newUser();
     work(user, '2026-09-15', '09:00', '18:00');
     saveSettings(user);
@@ -394,22 +420,24 @@ describe('stop after finalization', () => {
     const due = dueOf(P1);
     setClock(due - 2 * H);
     expect(runReminderScan(t.db, t.clock)).toMatchObject({ enqueued: 1 });
-    finalizeManually(user, P1);
+    const signed = finalizeManually(user, P1);
+    sendAsOwner(user, signed.revision.id);
     await pass();
-    expect(captured(user)).toEqual([]);
+    expect(captured(user).filter((message) => message.envelopeTo.includes(user.email))).toEqual([]);
     expect(reminderJobs(user).map((job) => job.state)).toEqual(['succeeded']);
   });
 
-  it('keeps reminding an employee whose other period is unfinalized (per-period scope)', async () => {
+  it('keeps reminding an employee whose other period is not sent (per-period scope)', async () => {
     const user = newUser();
     work(user, '2026-09-15', '09:00', '18:00');
     saveSettings(user);
     activate('2026-09-21T00:00:00Z');
     setClock(dueOf(P1) - 3 * H);
-    finalizeManually(user, P1);
+    const signed = finalizeManually(user, P1);
+    sendAsOwner(user, signed.revision.id);
     setClock(dueOf(P2) - 24 * H);
     await pass();
-    const messages = captured(user);
+    const messages = captured(user).filter((message) => message.envelopeTo.includes(user.email));
     expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain(link(P2));
   });
@@ -444,7 +472,7 @@ describe('overdue warning (auto-submit off) and outcome notice (auto-submit on)'
     expect(captured(on)).toHaveLength(1);
   });
 
-  it('stops the overdue warning once the employee signs off the overdue period', async () => {
+  it('stops the overdue warning once the employee signs off and sends the overdue period', async () => {
     const user = newUser();
     work(user, '2026-09-15', '09:00', '18:00');
     activate('2026-09-21T00:00:00Z');
@@ -454,16 +482,44 @@ describe('overdue warning (auto-submit off) and outcome notice (auto-submit on)'
     expect(runDeadlineScan(t.db, t.clock).overdueRecorded).toBe(1);
     saveSignature(t.db, t.clock, files, user.id, makePng(40, 12), 'image/png');
     const review = buildReviewPayload(t.db, t.clock, user, P1);
-    signOffTimesheet({ db: t.db, clock: t.clock, user }, P1, {
+    const signed = signOffTimesheet({ db: t.db, clock: t.clock, user }, P1, {
       expectedVersion: review.expectedVersion,
       reviewedHash: review.payloadHash,
       signerName: 'Synthetic Employee',
       deficitChoices: [],
       incompleteEvidenceAcknowledged: true,
     });
+    // WP5-UX5-T01b: the sign-off alone does not submit; the first send does.
+    expect(sendAsOwner(user, signed.revision.id).status).toBe('created');
     await pass();
-    expect(captured(user)).toEqual([]);
+    expect(captured(user).filter((message) => message.envelopeTo.includes(user.email))).toEqual([]);
     expect(occurrences(user).map((row) => [row.kind, row.disposition])).toEqual([['overdue', 'suppressed']]);
+  });
+
+  it('keeps the overdue warning of a signed period that was not sent, worded "signed, not sent yet" (F-2 a)', async () => {
+    const user = newUser();
+    work(user, '2026-09-15', '09:00', '18:00');
+    activate('2026-09-21T00:00:00Z');
+    t.clock.set('2026-09-21T12:00:00Z');
+    saveSettings(user, { autoSubmit: false });
+    saveSignature(t.db, t.clock, files, user.id, makePng(40, 12), 'image/png');
+    setClock(dueOf(P1) - 60 * 60);
+    const review = buildReviewPayload(t.db, t.clock, user, P1);
+    signOffTimesheet({ db: t.db, clock: t.clock, user }, P1, {
+      expectedVersion: review.expectedVersion,
+      reviewedHash: review.payloadHash,
+      deficitChoices: [],
+      incompleteEvidenceAcknowledged: true,
+    });
+    setClock(dueOf(P1) + 5 * 60);
+    // The switch is off: the signed, unsent period gets the overdue record and warning, and is not sent by the scan.
+    expect(runDeadlineScan(t.db, t.clock)).toMatchObject({ finalized: 0, sentSigned: 0, overdueRecorded: 1 });
+    expect(count('SELECT count(*) FROM revision_sends WHERE user_id = ?', user.id)).toBe(0);
+    await pass();
+    const warning = captured(user).filter((message) => message.subject.startsWith('Timesheet overdue'));
+    expect(warning).toHaveLength(1);
+    expect(warning[0]?.text).toContain('is signed, not sent yet.');
+    expect(warning[0]?.text).toContain('Send it to payroll to submit it.');
   });
 
   it('sends the outcome notice to the employee only: submitted automatically, review pending, login-required link', async () => {

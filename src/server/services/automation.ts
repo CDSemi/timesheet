@@ -10,6 +10,7 @@ import { ApiError } from '../http/errors.ts';
 import { normalizeReason } from '../http/validation.ts';
 import { recordAudit } from './audit.ts';
 import { getCalendar, listPayrollExceptions } from './calendars.ts';
+import { periodHasSend, sendSignedAtDeadline } from './deliveries.ts';
 import { finalizeAutomatically } from './finalization.ts';
 import { ensurePayPeriodRow } from './periods.ts';
 
@@ -35,7 +36,8 @@ import { ensurePayPeriodRow } from './periods.ts';
  *   saved settings (even an explicit "apply to overdue drafts" never reaches back before the
  *   account). A period whose deadline is on or after the account's creation, including the
  *   one in which it was created, is automated at its deadline once the settings are saved (F-1);
- * - the timesheet (when one exists) is unfinalized and not `imported_unverified`;
+ * - the timesheet (when one exists) is unfinalized, or signed and never sent (see below), and not
+ *   `imported_unverified`;
  * - the auto-submit switch that governs the deadline is on. Each saved version of a user's
  *   settings applies to deadlines on or after its own effective instant, so the governing
  *   version is the newest one whose effective instant is not after the deadline; a deadline
@@ -45,6 +47,11 @@ import { ensurePayPeriodRow } from './periods.ts';
  *   settings with auto-submit on; periods due before that save are not submitted automatically
  *   unless the user explicitly applies the switch to overdue drafts when saving, which is still
  *   clamped by the account creation above).
+ * Signing and sending are separate acts (WP5-UX5-T01b, owner decision F-2 a): a period counts as submitted once any
+ * of its revisions has a send. A signed revision that was never sent is treated like a draft: with the switch on it is
+ * sent as signed (a `deadline` send with the Settings envelope and switches, audit `deadline.send_signed`; no new
+ * revision, no ledger change), with the switch off it gets the overdue record. A period with a send is skipped, so a
+ * later correction or late review is never sent by the scan.
  * A period governed by an off switch gets one overdue record (an audit event, no export, no
  * revision); the employee can still sign off manually. An eligible period with no saved entries
  * is still submitted with the default labels (F-1; the transaction creates the timesheet row).
@@ -137,9 +144,23 @@ export function activationJson(activation: AutomationActivation) {
 
 /* ----------------------------------------------------------- eligibility ---- */
 
-type SkipReason = 'not_active' | 'inactive_user' | 'before_activation' | 'before_account' | 'not_configured' | 'not_due' | 'finalized' | 'imported' | 'before_effective' | 'overdue_recorded';
+type SkipReason =
+  | 'not_active'
+  | 'inactive_user'
+  | 'before_activation'
+  | 'before_account'
+  | 'not_configured'
+  | 'not_due'
+  | 'finalized'
+  | 'imported'
+  | 'before_effective'
+  | 'overdue_recorded';
 
-type Verdict = { kind: 'finalize' } | { kind: 'overdue' } | { kind: 'skip'; reason: SkipReason };
+/**
+ * `finalize`: an unfinalized draft is finalized and sent automatically. `send_signed` (F-2 a): a signed revision that
+ * was never sent is sent as signed. `overdue`: the switch is off, so the period is recorded as overdue.
+ */
+type Verdict = { kind: 'finalize' } | { kind: 'send_signed'; timesheetId: string } | { kind: 'overdue' } | { kind: 'skip'; reason: SkipReason };
 
 interface Candidate {
   user: SessionUser;
@@ -147,6 +168,7 @@ interface Candidate {
 }
 
 interface TimesheetState {
+  id: string;
   finalized_revision_no: number | null;
   imported_unverified: number;
 }
@@ -200,16 +222,19 @@ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
   if (period.dueAtUtc > nowEpoch(clock)) return { kind: 'skip', reason: 'not_due' };
   const timesheet = db
     .prepare<[string, string, number], TimesheetState>(
-      `SELECT t.finalized_revision_no, t.imported_unverified
+      `SELECT t.id, t.finalized_revision_no, t.imported_unverified
          FROM timesheets t JOIN pay_periods p ON p.id = t.pay_period_id
         WHERE t.user_id = ? AND p.calendar_id = ? AND p.period_index = ?`,
     )
     .get(user.id, user.calendarId, period.index);
-  if (timesheet !== undefined && timesheet.finalized_revision_no !== null) return { kind: 'skip', reason: 'finalized' };
   if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+  // F-2 a: a period counts as submitted once it has a send. A finalized period with one needs nothing; a signed one
+  // without any send is "signed, not sent yet" and is treated like a draft below.
+  const signedNotSent = timesheet !== undefined && timesheet.finalized_revision_no !== null;
+  if (signedNotSent && periodHasSend(db, user.id, timesheet.id)) return { kind: 'skip', reason: 'finalized' };
   const governing = governingSwitch(db, user.id, formatUtcInstant(period.dueAtUtc));
   if (governing === null) return { kind: 'skip', reason: hasSavedSettings(db, user.id) ? 'before_effective' : 'not_configured' };
-  if (governing.autoSubmit) return { kind: 'finalize' };
+  if (governing.autoSubmit) return signedNotSent ? { kind: 'send_signed', timesheetId: timesheet.id } : { kind: 'finalize' };
   if (overdueRecorded(db, user.id, storedPeriodId(db, user.calendarId, period))) return { kind: 'skip', reason: 'overdue_recorded' };
   return { kind: 'overdue' };
 }
@@ -281,6 +306,8 @@ export interface ScanSummary {
   /** Periods whose deadline lies between the activation instant and now. */
   examined: number;
   finalized: number;
+  /** Signed revisions that were never sent and were sent at the deadline (F-2 a). */
+  sentSigned: number;
   overdueRecorded: number;
   /** Periods that needed nothing (finalized, imported, recorded before) or changed under the scan. */
   skipped: number;
@@ -336,15 +363,24 @@ function recordOverdue(db: Db, clock: Clock, candidate: Candidate): boolean {
   });
 }
 
+/** The deadline send of a signed revision never sent (F-2 a); false when the period changed meanwhile. */
+function sendSigned(db: Db, clock: Clock, candidate: Candidate): boolean {
+  return writeTransaction(db, (): boolean => {
+    const current = assessPeriod(db, clock, candidate);
+    if (current.kind !== 'send_signed') return false;
+    return sendSignedAtDeadline(db, clock, candidate.user.id, current.timesheetId) !== null;
+  });
+}
+
 /**
- * One scan: finalizes or records, oldest deadline first, at most `batchSize` periods. It writes
+ * One scan: finalizes, sends or records, oldest deadline first, at most `batchSize` periods. It writes
  * nothing while the activation instant is null. Safe to run at any time and from several runners
  * at once: every action re-checks eligibility inside its own transaction.
  */
 export function runDeadlineScan(db: Db, clock: Clock, options: ScanOptions = {}): ScanSummary {
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
   if (!Number.isSafeInteger(batchSize) || batchSize < 1) throw new Error('The batch size is a positive whole number');
-  const summary: ScanSummary = { activated: false, examined: 0, finalized: 0, overdueRecorded: 0, skipped: 0, failed: 0, remaining: false };
+  const summary: ScanSummary = { activated: false, examined: 0, finalized: 0, sentSigned: 0, overdueRecorded: 0, skipped: 0, failed: 0, remaining: false };
   const { activeFrom } = getAutomationActivation(db);
   if (activeFrom === null) return summary;
   summary.activated = true;
@@ -365,6 +401,11 @@ export function runDeadlineScan(db: Db, clock: Clock, options: ScanOptions = {})
     try {
       if (verdict.kind === 'overdue') {
         if (recordOverdue(db, clock, candidate)) summary.overdueRecorded += 1;
+        else summary.skipped += 1;
+        continue;
+      }
+      if (verdict.kind === 'send_signed') {
+        if (sendSigned(db, clock, candidate)) summary.sentSigned += 1;
         else summary.skipped += 1;
         continue;
       }

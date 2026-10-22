@@ -102,8 +102,8 @@ type SharedRouter = 'api' | 'ot' | 'submission';
  * The allowlist (WP3-REQ C as amended by WP3-REQ2 item 4): every route a share can ever reach, the
  * personal router it comes from and the share item it needs. Paths are relative to the router;
  * the OT router is mounted under /ot. Nothing else is mounted under /api/shared: Clock in/out,
- * policy changes, review, sign-off, corrections, late review, finalization detail, resend,
- * deliveries and their decisions, submission settings, auto-image, signatures, leave requests,
+ * policy changes, review, sign-off, corrections, late review, finalization detail, send drafts,
+ * sends, resend, the unsigned PDF preview, deliveries and their decisions, submission settings, auto-image, signatures, leave requests,
  * the evidence export, history and the shares API itself stay owner-only.
  */
 export const SHARED_ROUTES: ReadonlyArray<{ router: SharedRouter; method: string; path: string; access: ShareAccess }> = [
@@ -161,6 +161,9 @@ export function sharedRoutes(deps: AppDeps, files?: FileStore) {
       submissionRoutes(checked, {
         access: requireShare(deps, access),
         ...(files === undefined ? {} : { files }),
+        // WP5-UX5-T01b: the shared PDF route ignores the variant query and never renders (latest send's variant, else
+        // the sign-off variant). The allowlist below is unchanged; send, send-draft and pdf-preview are never shared.
+        sharedPdf: true,
         beforePdfSend: (c, revision) => {
           // Hono answers a HEAD through the GET handler and discards the body. A HEAD hands over no bytes, so it
           // is not a download and writes no audit event (WP4-T02, WP3_REVIEW_C R1). The guard has already checked

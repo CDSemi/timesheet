@@ -80,6 +80,8 @@ export interface SubmissionSettings {
   autoNoteEnabled: boolean;
   autoNoteText: string;
   showOtOnPdf: boolean;
+  /** The Settings default of the "Time rows on the PDF" switch of a send (owner decision F-3 b). */
+  showTimeOnPdf: boolean;
   reminderOffsetsMinutes: number[];
   createdAt: string | null;
 }
@@ -100,6 +102,7 @@ interface SettingsRow {
   auto_note_enabled: number;
   auto_note_text: string;
   show_ot_on_pdf: number;
+  show_time_on_pdf?: number;
   reminder_offsets_minutes: string;
   created_at: string;
 }
@@ -122,6 +125,8 @@ function fromRow(row: SettingsRow): SubmissionSettings {
     autoNoteEnabled: row.auto_note_enabled === 1,
     autoNoteText: row.auto_note_text,
     showOtOnPdf: row.show_ot_on_pdf === 1,
+    // A row read before migration 0015 has no such column: the switch is on, as the column default.
+    showTimeOnPdf: row.show_time_on_pdf !== 0,
     reminderOffsetsMinutes: JSON.parse(row.reminder_offsets_minutes) as number[],
     createdAt: row.created_at,
   };
@@ -146,6 +151,7 @@ function defaultSettings(): SubmissionSettings {
     autoNoteEnabled: false,
     autoNoteText: DEFAULT_AUTO_NOTE_TEXT,
     showOtOnPdf: true,
+    showTimeOnPdf: true,
     reminderOffsetsMinutes: [...DEFAULT_REMINDER_OFFSETS_MINUTES],
     createdAt: null,
   };
@@ -170,6 +176,7 @@ export function submissionSettingsJson(settings: SubmissionSettings) {
     },
     auto_note: { enabled: settings.autoNoteEnabled, text: settings.autoNoteText },
     show_ot_on_pdf: settings.showOtOnPdf,
+    show_time_on_pdf: settings.showTimeOnPdf,
     reminder_offsets_minutes: settings.reminderOffsetsMinutes,
     created_at: settings.createdAt,
   };
@@ -235,6 +242,7 @@ function auditSummary(settings: SubmissionSettings) {
     auto_note_enabled: settings.autoNoteEnabled,
     auto_note_text: settings.autoNoteText,
     show_ot_on_pdf: settings.showOtOnPdf,
+    show_time_on_pdf: settings.showTimeOnPdf,
     reminder_offsets_minutes: settings.reminderOffsetsMinutes,
   };
 }
@@ -252,6 +260,8 @@ interface NewVersion {
   autoNoteEnabled: boolean;
   autoNoteText: string;
   showOtOnPdf: boolean;
+  /** The Settings default of the "Time rows on the PDF" switch of a send (owner decision F-3 b). */
+  showTimeOnPdf: boolean;
   reminderOffsetsMinutes: number[];
 }
 
@@ -272,13 +282,19 @@ function appendVersion(
   const id = randomUUID();
   const seq = (previous?.seq ?? 0) + 1;
   const createdAt = nowUtc(clock);
+  // "Time rows on the PDF" (migration 0015, default 1) is written only when it is off: a version that keeps the default
+  // stores exactly the row the column default gives, and the same insert still works on a schema before 0015 (the
+  // synthetic seed and the upgrade fixtures build such databases).
+  const timeColumn = next.showTimeOnPdf
+    ? { name: '', placeholder: '', values: [] as number[] }
+    : { name: ', show_time_on_pdf', placeholder: ', ?', values: [0] };
   db.prepare(
     `INSERT INTO submission_settings
        (id, user_id, seq, recipients_to, recipients_cc, subject_template, body_template, template_version,
         auto_submit, auto_submit_effective_from, auto_image_authorized, auto_image_attachment_id,
         auto_image_authorized_at, auto_note_enabled, auto_note_text, show_ot_on_pdf, reminder_offsets_minutes,
-        created_by, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        created_by, created_at${timeColumn.name})
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${timeColumn.placeholder})`,
   ).run(
     id,
     userId,
@@ -299,6 +315,7 @@ function appendVersion(
     JSON.stringify(next.reminderOffsetsMinutes),
     userId,
     createdAt,
+    ...timeColumn.values,
   );
   const created: SubmissionSettings = {
     id,
@@ -317,6 +334,7 @@ function appendVersion(
     autoNoteEnabled: next.autoNoteEnabled,
     autoNoteText: next.autoNoteText,
     showOtOnPdf: next.showOtOnPdf,
+    showTimeOnPdf: next.showTimeOnPdf,
     reminderOffsetsMinutes: next.reminderOffsetsMinutes,
     createdAt,
   };
@@ -347,6 +365,7 @@ function carry(base: SubmissionSettings): NewVersion {
     autoNoteEnabled: base.autoNoteEnabled,
     autoNoteText: base.autoNoteText,
     showOtOnPdf: base.showOtOnPdf,
+    showTimeOnPdf: base.showTimeOnPdf,
     reminderOffsetsMinutes: base.reminderOffsetsMinutes,
   };
 }
@@ -363,6 +382,7 @@ export interface SaveSettingsInput {
   autoNoteEnabled?: boolean | undefined;
   autoNoteText?: string | undefined;
   showOtOnPdf?: boolean | undefined;
+  showTimeOnPdf?: boolean | undefined;
   reminderOffsetsMinutes?: number[] | undefined;
 }
 
@@ -418,6 +438,7 @@ export function saveSubmissionSettings(db: Db, clock: Clock, userId: string, inp
       autoNoteEnabled,
       autoNoteText: nextAutoNoteText,
       showOtOnPdf: input.showOtOnPdf ?? base.showOtOnPdf,
+      showTimeOnPdf: input.showTimeOnPdf ?? base.showTimeOnPdf,
       reminderOffsetsMinutes: normalizeOffsets(input.reminderOffsetsMinutes ?? base.reminderOffsetsMinutes),
     };
     return appendVersion(db, clock, userId, previous, next, 'submission_settings.update', {

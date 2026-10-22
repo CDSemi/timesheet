@@ -34,6 +34,9 @@ export function DeliveryRevision({
   pending,
   message,
   confirmError,
+  copySent,
+  reason,
+  onReasonChange,
   onDownload,
   onResend,
   onDecide,
@@ -46,6 +49,11 @@ export function DeliveryRevision({
   /** The outcome or the refusal of the last action on this revision. */
   message: { tone: 'ok' | 'error'; text: string } | null;
   confirmError: string | null;
+  /** A copy of this period already counts as sent (B-A2): another copy needs a typed reason. */
+  copySent: boolean;
+  /** The reason typed in the open confirmation. */
+  reason: string;
+  onReasonChange: (text: string) => void;
   onDownload: (row: RevisionRow) => void;
   onResend: (row: RevisionRow, trigger: HTMLElement) => void;
   onDecide: (row: RevisionRow, attempt: DeliveryRecord, action: 'mark_delivered' | 'resend_uncertain', trigger: HTMLElement) => void;
@@ -167,7 +175,9 @@ export function DeliveryRevision({
 
       {pending !== null && (
         <DeliveryConfirm
-          confirmation={confirmationFor(pending.action, row.recipients)}
+          confirmation={confirmationFor(pending.action, row.recipients, copySent)}
+          reason={reason}
+          onReasonChange={onReasonChange}
           busy={busy}
           error={confirmError}
           onConfirm={onConfirm}

@@ -51,7 +51,7 @@
 // Needs Docker and a free loopback port. Everything is synthetic (example.invalid, random per-run passwords); the
 // published port is loopback only; nothing is pushed to or pulled from any registry except the pinned base image.
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
@@ -597,14 +597,40 @@ function parseJson(text) {
   }
 }
 
-/** Signs off one past synthetic period as the employee; returns the status and the new revision id. */
+/**
+ * Signs off one past synthetic period as the employee and sends it; returns the status and the new revision id. Since
+ * WP5-UX5-T01b signing sends nothing, so the drill sends the revision itself (the send draft's defaults, after saving
+ * synthetic example.invalid recipients once, because a send needs a recipient). A build before the split (stages 4 and
+ * 5 run the previous build) already queued the send at sign-off, so nothing more is posted there.
+ */
 async function signOffPeriod(cookie, payrollDate) {
   const review = await call('GET', `/api/timesheets/${payrollDate}/review`, { cookie });
   const signoff = await call('POST', `/api/timesheets/${payrollDate}/signoff`, {
     cookie,
     body: { expected_version: review.json?.expected_version, reviewed_hash: review.json?.payload_hash, incomplete_evidence_acknowledged: true },
   });
-  return { status: signoff.status, revisionId: signoff.json?.revision?.id };
+  const revisionId = signoff.json?.revision?.id;
+  if (signoff.status !== 201 || (signoff.json?.jobs ?? []).some((job) => job.kind === 'send_email')) return { status: signoff.status, revisionId };
+  let draft = await call('GET', `/api/revisions/${revisionId}/send-draft`, { cookie });
+  if (draft.status === 200 && (draft.json?.to ?? []).length === 0) {
+    const current = await call('GET', '/api/settings/submission', { cookie });
+    await call('POST', '/api/settings/submission', { cookie, body: { expected_seq: current.json?.settings?.seq ?? 0, to: ['payroll-drill@example.invalid'], auto_submit: false } });
+    draft = await call('GET', `/api/revisions/${revisionId}/send-draft`, { cookie });
+  }
+  const sent = await call('POST', `/api/revisions/${revisionId}/send`, {
+    cookie,
+    body: {
+      request_key: randomUUID(),
+      to: draft.json?.to,
+      cc: draft.json?.cc,
+      subject: draft.json?.subject,
+      body_text: draft.json?.body_text,
+      time_rows: draft.json?.time_rows,
+      ot_rows: draft.json?.ot_rows,
+      ...(draft.json?.reason_required === true ? { reason: 'Synthetic drill copy' } : {}),
+    },
+  });
+  return { status: sent.status === 201 ? signoff.status : sent.status, revisionId };
 }
 
 /** Polls until `predicate` holds or the timeout passes. */
@@ -757,7 +783,7 @@ async function stageThree({ backupName, cookie, adminPassword, importSources }) 
 
   // While paused: a new sign-off (a send job created after the restore) waits; its PDF renders, its send is not claimed.
   const later = await signOffPeriod(cookie, '2026-04-17');
-  check('a sign-off on the paused restored instance creates a send job (not held: created after the restore)', later.status === 201, `status ${later.status}`);
+  check('a sign-off and its send on the paused restored instance create a send job (not held: created after the restore)', later.status === 201, `status ${later.status}`);
   check('its PDF renders while outbound delivery is paused', await waitPdfReady(cookie, later.revisionId));
   // A second send job, so the bulk release after the second restore has more than the one released by id (R-A5).
   const laterToo = await signOffPeriod(cookie, '2026-05-15');
@@ -870,7 +896,7 @@ async function stageThree({ backupName, cookie, adminPassword, importSources }) 
   const deliveries = await call('GET', '/api/deliveries', { cookie });
   const states = {};
   for (const item of deliveries.json?.deliveries ?? []) states[item.state] = (states[item.state] ?? 0) + 1;
-  console.log(`INFO  delivery attempt states at the end (capture mode, synthetic data without recipients): ${JSON.stringify(states)}`);
+  console.log(`INFO  delivery attempt states at the end (capture mode, synthetic example.invalid recipients): ${JSON.stringify(states)}`);
   const finalLog = compose(['logs', '--no-color', 'timesheet']).stdout;
   check('restored instance log has no deprecation warning', !/deprecat/i.test(finalLog));
   check('restored instance log never contains a password', !finalLog.includes(adminPassword));
@@ -1167,7 +1193,7 @@ async function stageFour() {
   check('upgraded database passes integrity_check and has no foreign key violation', afterUpgrade.integrity === 'ok' && afterUpgrade.foreignKeyViolations === 0);
   check('schema_migrations: contiguous 1..latest, and the old rows are unchanged', afterUpgrade.schema === target && afterUpgrade.migrations.map((row) => row.version).join() === Array.from({ length: target }, (_, index) => index + 1).join() && JSON.stringify(afterUpgrade.migrations.slice(0, oldVersion)) === JSON.stringify(preFacts.migrations));
   const appliedNow = afterUpgrade.migrations.slice(oldVersion);
-  check('migrations 0011 (job retention), 0012 (imports), 0013 (opening balance) and 0014 (optional sign-off image) are among the applied ones', [11, 12, 13, 14].every((version) => appliedNow.some((row) => row.version === version)), `versions ${appliedNow.map((row) => row.version).join(',')}`);
+  check('migrations 0011 (job retention), 0012 (imports), 0013 (opening balance), 0014 (optional sign-off image) and 0015 (sends) are among the applied ones', [11, 12, 13, 14, 15].every((version) => appliedNow.some((row) => row.version === version)), `versions ${appliedNow.map((row) => row.version).join(',')}`);
   const upgradedImports = new Database(databasePath, { readonly: true, fileMustExist: true });
   try {
     const tables = upgradedImports.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('imports', 'job_retention_window') ORDER BY name").pluck().all();

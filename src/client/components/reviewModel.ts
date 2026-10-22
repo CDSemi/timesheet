@@ -17,6 +17,7 @@ import {
   type FinalizationResponse,
   type ReviewResponse,
   type RevisionSummary,
+  type SendDraft,
 } from '../api.ts';
 import { describeError } from './errors.ts';
 import { WEEKDAYS } from './dayModel.ts';
@@ -114,7 +115,65 @@ export function submitBlockers(payload: ReviewSnapshot, mode: ReviewMode, form: 
   if (mode !== 'signoff' && form.sendEmail === null) {
     blockers.push({ field: 'send_email', message: 'Choose whether to email this revision to the recipients.' });
   }
+  if (mode !== 'signoff' && form.sendEmail === true) {
+    // A revision of a period whose copy was already sent needs a reason for another copy (B-A2): the correction
+    // reason, or the late review's own reason. It must fit the send rule of 2-500 characters.
+    const reason = form.reason.trim();
+    if (mode === 'late_review' && (reason.length < MIN_SEND_REASON || reason.length > MAX_SEND_REASON)) {
+      blockers.push({ field: 'reason', message: `Give the reason for sending another copy (${MIN_SEND_REASON} to ${MAX_SEND_REASON} characters).` });
+    } else if (mode === 'correction' && reason !== '' && (reason.length < MIN_SEND_REASON || reason.length > MAX_SEND_REASON)) {
+      blockers.push({ field: 'reason', message: `To email this correction, the reason must have ${MIN_SEND_REASON} to ${MAX_SEND_REASON} characters: it is also the reason for sending another copy.` });
+    }
+  }
   return blockers;
+}
+
+/* ---- Sending after the sign-off (transitional until the Send card, WP5-UX5-T03) ---------------- */
+
+export const MIN_SEND_REASON = 2;
+export const MAX_SEND_REASON = 500;
+
+/**
+ * Signing never sends (WP5-UX5-T01b). Until the Send card exists, the Review screen sends right after a
+ * successful sign-off with the Settings defaults of `GET /api/revisions/:id/send-draft`: always for a first
+ * sign-off, and for a correction or a late review when the person chose "Send the email". The reason for
+ * another copy is the correction reason or the late review's reason.
+ */
+export function sendAfterSignoff(mode: ReviewMode, form: FormState): { send: boolean; reason: string | null } {
+  if (mode === 'signoff') return { send: true, reason: null };
+  const reason = form.reason.trim();
+  return { send: form.sendEmail === true, reason: reason === '' ? null : reason };
+}
+
+/** The send request for the draft's defaults (envelope, subject, body and switches as the server proposed them). */
+export function buildSendBody(draft: SendDraft, requestKey: string, reason: string | null): Record<string, unknown> {
+  return {
+    request_key: requestKey,
+    to: draft.to,
+    cc: draft.cc,
+    subject: draft.subject,
+    body_text: draft.body_text,
+    time_rows: draft.time_rows,
+    ot_rows: draft.ot_rows,
+    ...(reason === null ? {} : { reason }),
+  };
+}
+
+/** A refused send after a successful sign-off, in words: the revision is signed, only the email is missing. */
+export function sendFailureText(caught: unknown): string {
+  const prefix = 'Signed. The email was not sent: ';
+  if (!(caught instanceof ApiRequestError)) return `${prefix}${describeError(caught)} Send it from History.`;
+  switch (caught.code) {
+    case 'recipients_required':
+      return `${prefix}no recipient is set. Add one in Settings, then send it from History.`;
+    case 'reason_required':
+      return `${prefix}a copy was already sent, so another one needs a reason. Send it from History with a reason.`;
+    case 'delivery_in_progress':
+    case 'delivery_uncertain':
+      return `${prefix}another delivery of this revision is still open. Follow it in History.`;
+    default:
+      return `${prefix}${describeError(caught)} Send it from History.`;
+  }
 }
 
 /**
@@ -228,7 +287,7 @@ export function reviewLinkLabel(status: PeriodStatus | null): string {
 }
 
 export type DeliveryKey =
-  | 'not_requested'
+  | 'not_sent'
   | 'queued'
   | 'attention'
   | 'sending'
@@ -246,10 +305,11 @@ export interface DeliveryStatus {
 
 /**
  * Delivery state of a revision's email. The newest attempt decides; before any attempt exists the
- * send job's state and the revision's own send choice do.
+ * send job's state does, and a revision without a send job is "Not sent yet" (signing never sends,
+ * WP5-UX5-T01b: the owner sends separately).
  */
 export function deliveryStatus(
-  revision: Pick<RevisionSummary, 'send_requested'> | null,
+  revision: Pick<RevisionSummary, 'id'> | null,
   jobs: readonly FinalizationJob[],
   attempts: readonly DeliveryAttempt[],
 ): DeliveryStatus | null {
@@ -272,9 +332,10 @@ export function deliveryStatus(
           : { key: 'marked_delivered', text: 'Delivery uncertain, decision recorded', tone: 'neutral' };
     }
   }
-  if (!revision.send_requested) return { key: 'not_requested', text: 'Email not requested', tone: 'neutral' };
-  const send = jobs.find((job) => job.kind === 'send_email');
-  if (send?.state === 'intervention') return { key: 'attention', text: 'Email needs attention', tone: 'error' };
+  const sends = jobs.filter((job) => job.kind === 'send_email');
+  if (sends.length === 0) return { key: 'not_sent', text: 'Not sent yet', tone: 'neutral' };
+  // The server lists a revision's jobs oldest first within a kind: the last send job is the newest send.
+  if (sends.at(-1)?.state === 'intervention') return { key: 'attention', text: 'Email needs attention', tone: 'error' };
   return { key: 'queued', text: 'Email queued', tone: 'neutral' };
 }
 

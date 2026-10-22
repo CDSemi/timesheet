@@ -1,0 +1,8 @@
+PASS  cli seed creates synthetic users without printing supplied passwords  Created synthetic seed data: |   admin    admin@example.invalid |   employee employee@example.invalid |   employee employee2@example.invalid |   sample data for employee2@example.invalid: 3 sessions, 1 leave request, setup credit 600 minutes |   submission settings (recipients on example.invalid, automatic submission off) and a generated synthetic signature saved for employee2@example.invalid |   capture sender: set MAIL_FROM to an example.invalid address (OUTBOUND_MODE stays capture) so first attempts are captured
+PASS  the sign-off enqueued the PDF only (no send job)  render_pdf
+PASS  the owner sends the signed revision once with the send draft defaults (201, send 1)  200/201
+PASS  the same send request replays (200) and writes nothing new  200
+PASS  cli run-jobs --once --now runs the PDF and send jobs  {"claimed":4,"succeeded":3,"retried":1,"intervention":0,"lost":0} {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0} {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+PASS  capture: one accepted attempt; message.eml, attachment.pdf and metadata.json exist; the PDF equals the download; sender and recipients are example.invalid  accepted attachment.pdf+message.eml+metadata.json
+SMOKE PASSED
+exit=0

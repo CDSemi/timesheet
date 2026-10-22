@@ -188,27 +188,37 @@ describe('ownership and authentication', () => {
 });
 
 describe('a PDF that is not ready', () => {
-  it('answers 409 pdf_not_ready while the PDF job has not run', async () => {
+  // WP5-UX5-T01b: the owner's route renders a variant that is not stored yet on request (the PDF job's path: no
+  // network, an atomic file write, one short transaction), so the owner is never told to wait. The variant is then
+  // stored once and the PDF job finds it ready.
+  it('renders the PDF on request while the PDF job has not run, stores it once, and the job then writes nothing', async () => {
     const revisionId = await finalized({ pdf: false });
     const response = await send(`/api/revisions/${revisionId}/pdf`, employee);
-    expect(response.status).toBe(409);
-    expect(response.json.error.code).toBe('pdf_not_ready');
+    expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(response.bytes.subarray(0, 5).toString('latin1')).not.toBe('%PDF-');
+    expect(response.bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    expect(t.db.prepare("SELECT variant, state FROM revision_files WHERE revision_id = ? AND kind = 'pdf'").all(revisionId)).toEqual([{ variant: 't1o1', state: 'ready' }]);
+    const again = await send(`/api/revisions/${revisionId}/pdf`, employee);
+    expect(again.bytes.equals(response.bytes)).toBe(true);
+    const handler = createPdfJobHandler({ db: t.db, clock: t.clock, files });
+    await runJobsOnce({ db: t.db, clock: t.clock, owner: 'runner-later', handlers: { render_pdf: handler } });
+    expect(t.db.prepare("SELECT count(*) FROM attachments WHERE kind = 'pdf'").pluck().get()).toBe(1);
   });
 
-  it('answers 409 pdf_not_ready after a failed render and 200 once a later run succeeds', async () => {
+  it('after a failed job render, the owner route renders on request; a later job run finds it ready', async () => {
     const revisionId = await finalized({
       render: () => Promise.reject(new Error('synthetic render fault')),
     });
     const state = t.db.prepare("SELECT state FROM revision_files WHERE revision_id = ? AND kind = 'pdf'").pluck().get(revisionId);
     expect(state).toBe('failed');
-    expect((await send(`/api/revisions/${revisionId}/pdf`, employee)).status).toBe(409);
+    expect((await send(`/api/revisions/${revisionId}/pdf`, employee)).status).toBe(200);
+    expect(t.db.prepare("SELECT state FROM revision_files WHERE revision_id = ? AND kind = 'pdf'").pluck().get(revisionId)).toBe('ready');
 
     t.clock.advanceSeconds(3600);
     const handler = createPdfJobHandler({ db: t.db, clock: t.clock, files });
     await runJobsOnce({ db: t.db, clock: t.clock, owner: 'runner-retry', handlers: { render_pdf: handler } });
     expect((await send(`/api/revisions/${revisionId}/pdf`, employee)).status).toBe(200);
+    expect(t.db.prepare("SELECT count(*) FROM attachments WHERE kind = 'pdf'").pluck().get()).toBe(1);
   });
 });
 

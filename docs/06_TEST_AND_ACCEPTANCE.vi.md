@@ -11,15 +11,15 @@ Gói này là đặc tả, chưa có app chạy. Kiểm tra gói không chứng 
 | AC-03 | Ghi/tiêu phép lặp và đồng thời không trùng sự kiện hay dùng trùng giữ chỗ | WP2/WP3 |
 | AC-04 | Nháp hiện tại không lý do; cũ/đã chốt cần; giữ audit/lịch sử/quy tắc/PDF gốc | WP2/WP3 |
 | AC-05 | Import lễ preview/kiểm ngày trùng/sai, giữ override và lịch sử đã chốt | WP2 |
-| AC-06 | Sign-off là hành động của chủ đang đăng nhập, ghi tên tài khoản và ảnh khi đã lưu, và gắn payload đã xem; tên gõ vào không đổi gì; ảnh được lưu hoặc thay sau lúc xem, hay sửa đồng thời, gây xung đột | WP3, WP5 |
-| AC-07 | Tự nộp bật/tắt, dòng ghi chú tự nộp (mặc định tắt, sửa được nội dung) và phép dùng ảnh hoạt động đúng; bản tự nộp gửi đi không có dấu hiệu tự động trong khi bản ghi giữ nguồn tự động, chờ xác nhận, signed_at trống và không sign-off; kỳ chưa lưu dữ liệu được nộp theo nhãn mặc định, không OT, không thiếu giờ | WP3 |
+| AC-06 | Sign-off là hành động của chủ đang đăng nhập, ghi tên tài khoản và ảnh khi đã lưu, và gắn payload đã xem; nó không gửi gì, và việc gửi là một hành động riêng của chủ (WP5-UX5-T01b); tên gõ vào không đổi gì; ảnh được lưu hoặc thay sau lúc xem, hay sửa đồng thời, gây xung đột | WP3, WP5 |
+| AC-07 | Tự nộp bật/tắt, dòng ghi chú tự nộp (mặc định tắt, sửa được nội dung) và phép dùng ảnh hoạt động đúng; bản tự nộp gửi đi không có dấu hiệu tự động trong khi bản ghi giữ nguồn tự động, chờ xác nhận, signed_at trống và không sign-off; kỳ chưa lưu dữ liệu được nộp theo nhãn mặc định, không OT, không thiếu giờ; đến hạn mà bật tự nộp thì revision đã ký nhưng chưa từng gửi được gửi đúng như đã ký (một lần gửi deadline, không revision mới, không đổi sổ), tắt thì nhận cảnh báo quá hạn, và kỳ đã có lần gửi thì không bao giờ được gửi lại (quyết định của chủ F-2 a) | WP3, WP5 |
 | AC-08 | Restart trước/sau PDF và quanh lúc gửi giữ job; chưa rõ chấp nhận không tự gửi lại mù | WP3 |
 | AC-09 | GET/scanner không ký; link auth và token nếu có từ chối cũ/lặp/sai chủ | WP3 |
-| AC-10 | PDF đủ 14 ngày, tổng OT được ghi (h:mm) gồm hai Chủ nhật, ngày ký thật (thủ công) hoặc ngày tự nộp (tự động), Unicode, nhãn dài, ảnh vừa và ID revision | WP3 |
+| AC-10 | PDF đủ 14 ngày, tổng OT được ghi (h:mm) gồm hai Chủ nhật, ngày ký thật (thủ công) hoặc ngày tự nộp (tự động), Unicode, nhãn dài, ảnh vừa khung khi có và ID revision; dòng giờ và dòng OT (kèm tổng) được in hoặc bỏ theo từng lần gửi, mỗi biến thể là một trang của cùng snapshot đã ký (quyết định của chủ F-3 b) | WP3, WP5 |
 | AC-11 | Docker cài mới/restart/nâng cấp; backup nhất quán lúc ghi khôi phục DB/file/hash trong dry-run riêng | WP4 |
 | AC-12 | Preview nhập workbook (mẫu trong repo điền sheet có ngày giả) báo lỗi nguồn; nhập lại giống hệt không thêm bản ghi/OT/sign-off/gửi | WP4 |
 | AC-13 | Quy trình hai tuần đầu-cuối, sửa lịch sử, dùng OT một phần đã duyệt và quá hạn | WP5 |
-| AC-14 | Lỗi sender/kênh hiện rõ, không lộ secret, capture đúng người nhận/nội dung/PDF | WP3/WP5 |
+| AC-14 | Lỗi sender/kênh hiện rõ, không lộ secret, capture đúng người nhận/nội dung/PDF của từng lần gửi (phong bì, tiêu đề, nội dung và biến thể PDF riêng của nó, quyết định của chủ F-4); gửi thêm bản sau khi đã có bản được tính cần lý do gõ tay và lý do không bao giờ vào email | WP3/WP5 |
 | AC-15 | Health/backup an toàn và rollback tương thích; bản restore tắt outbound | WP4/WP5 |
 | AC-16 | Quyền chia sẻ chỉ tới các mục đã bật (xem hoặc sửa timesheet, xem sổ và tổng OT chỉ đọc, tải PDF đã chốt), không bao giờ sign-off, file ảnh chữ ký, gửi, settings, thao tác nghỉ hay chia sẻ tiếp; thao tác sửa ghi tên người được chia sẻ; đổi, thu hồi hoặc vô hiệu hóa có hiệu lực ở request kế tiếp | WP3 |
 

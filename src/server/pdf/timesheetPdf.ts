@@ -56,6 +56,11 @@ export type TimesheetPdfInput = {
   signerName: string;
   /** The validated signature image (PNG or JPEG bytes): optional for a manual revision (null prints the name alone, F-5 b), allowed for an automatic one only when authorized. */
   signatureImage: Uint8Array | null;
+  /**
+   * Which rows the PDF prints (owner decision F-3 b, chosen for each send): the session time rows and the OT rows
+   * with the OT total. Omitted: the time rows and the snapshot's `show_ot_on_pdf` (the sign-off default variant).
+   */
+  rows?: { time: boolean; ot: boolean } | undefined;
 };
 
 const COMPANY = 'C&D Semiconductor Services, Inc.';
@@ -171,7 +176,7 @@ type Rows = { weekday: number; date: number; category: number; time: number; ot:
 const ROWS: Rows = { weekday: 14, date: 14, category: 36, time: 46, ot: 18 };
 const WEEK_HEADING = 16;
 
-function drawWeek(canvas: Canvas, snapshot: ReviewSnapshot, days: SnapshotDay[], weekNumber: number, topY: number, showOt: boolean): number {
+function drawWeek(canvas: Canvas, snapshot: ReviewSnapshot, days: SnapshotDay[], weekNumber: number, topY: number, showTime: boolean, showOt: boolean): number {
   const first = days[0];
   const last = days[days.length - 1];
   if (first === undefined || last === undefined) throw new PdfRenderError('A week needs seven days');
@@ -205,13 +210,15 @@ function drawWeek(canvas: Canvas, snapshot: ReviewSnapshot, days: SnapshotDay[],
   cells(ROWS.category, (day, x) => canvas.fitted(categoryCellText(day), inner(x, 3.5, 3), 8, 5.5, { align: 'center' }));
   y += ROWS.category;
 
-  labelRow('Time', ROWS.time);
-  cells(ROWS.time, (day, x) => {
-    const ranges = sessionRanges(day, snapshot.reporting_zone);
-    const shown = ranges.length > 4 ? [...ranges.slice(0, 3), `+${ranges.length - 3} more`] : ranges;
-    shown.forEach((range, index) => canvas.fitted(range, inner(x, 3.5 + index * 10.5, 1), 7.5, 5.5, { align: 'center' }));
-  });
-  y += ROWS.time;
+  if (showTime) {
+    labelRow('Time', ROWS.time);
+    cells(ROWS.time, (day, x) => {
+      const ranges = sessionRanges(day, snapshot.reporting_zone);
+      const shown = ranges.length > 4 ? [...ranges.slice(0, 3), `+${ranges.length - 3} more`] : ranges;
+      shown.forEach((range, index) => canvas.fitted(range, inner(x, 3.5 + index * 10.5, 1), 7.5, 5.5, { align: 'center' }));
+    });
+    y += ROWS.time;
+  }
 
   if (showOt) {
     labelRow('OT (h:mm)', ROWS.ot);
@@ -259,7 +266,8 @@ export async function renderTimesheetPdf(input: TimesheetPdfInput): Promise<Uint
   const zone = assertTimeZone(snapshot.reporting_zone, 'reporting_zone');
   const signDate = formatUsDate(localDateOf(zone, parseUtcInstant(printedInstant, 'signature date')));
   const autoNote = input.origin === 'automatic' ? autoNoteOf(snapshot) : null;
-  const showOt = snapshot.show_ot_on_pdf;
+  const showTime = input.rows?.time ?? true;
+  const showOt = input.rows?.ot ?? snapshot.show_ot_on_pdf;
 
   const doc = await PDFDocument.create({ updateMetadata: false });
   doc.registerFontkit(fontkit);
@@ -311,8 +319,8 @@ export async function renderTimesheetPdf(input: TimesheetPdfInput): Promise<Uint
   // Two Monday-Sunday blocks with the 14 dates.
   const weekOne = snapshot.days.slice(0, DAYS_PER_WEEK);
   const weekTwo = snapshot.days.slice(DAYS_PER_WEEK);
-  y = drawWeek(canvas, snapshot, weekOne, 1, y, showOt) + 10;
-  y = drawWeek(canvas, snapshot, weekTwo, 2, y, showOt) + 6;
+  y = drawWeek(canvas, snapshot, weekOne, 1, y, showTime, showOt) + 10;
+  y = drawWeek(canvas, snapshot, weekTwo, 2, y, showTime, showOt) + 6;
 
   if (showOt) {
     const total = formatHoursMinutes(snapshot.totals.credited_minutes);

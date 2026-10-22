@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { openDatabase } from '../../src/server/db/database.ts';
 import { MIGRATIONS, migrate } from '../../src/server/db/migrations.ts';
@@ -75,6 +75,13 @@ export async function buildSchemaV6(dir: string, nowIso: string = FIXTURE_NOW): 
         deficitChoices: [],
         incompleteEvidenceAcknowledged: true,
       });
+      // A version-6 sign-off also enqueued the initial send job in the same transaction. Since WP5-UX5-T01b signing
+      // no longer sends, so the fixture writes that job itself, with the business key and payload a WP3 build wrote.
+      const now = clock.now().toISOString().replace(/\.\d{3}Z$/, 'Z');
+      db.prepare(
+        `INSERT INTO jobs (id, user_id, revision_id, kind, business_key, payload_json, state, attempts, next_run_at, created_at, updated_at)
+         VALUES (?, ?, ?, 'send_email', ?, ?, 'queued', 0, ?, ?, ?)`,
+      ).run(randomUUID(), owner.id, result.revision.id, `revision:${result.revision.id}:send_email:initial`, JSON.stringify({ revision_id: result.revision.id }), now, now, now);
       return result.revision.id;
     };
     const sending = signOff('2026-09-02', '09:00', '19:00', '2026-09-18');

@@ -21,6 +21,7 @@ import { enqueueJob, type Job, JobError } from '../jobs/jobStore.ts';
 import { MESSAGE_ID_DOMAIN, type OutboundMessage } from '../mail/message.ts';
 import { getAutomationActivation, OVERDUE_AUDIT_OPERATION } from './automation.ts';
 import { getCalendar, listPayrollExceptions } from './calendars.ts';
+import { periodHasSend } from './deliveries.ts';
 import { ensurePayPeriodRow, findPayPeriodRow } from './periods.ts';
 import { submissionSettingsOrDefault } from './submissionSettings.ts';
 
@@ -29,9 +30,10 @@ import { submissionSettingsOrDefault } from './submissionSettings.ts';
  *
  * Three kinds of notice, all addressed to the employee's own account address and nobody else:
  * - before_due: 24 h and 2 h before the deadline by default (per-user offsets), until the period
- *   is finalized;
+ *   is submitted, that is until it has a send (F-2 a, WP5-UX5-T01b: signing alone does not stop
+ *   them; a signed period's notice says "signed, not sent yet");
  * - overdue: the deadline passed while auto-submit was off (the deadline scan's overdue record),
- *   until the period is finalized;
+ *   until the period is submitted;
  * - outcome_notice: after an automatic submission, saying that the period was submitted
  *   automatically and that review is pending (the owner's decision: the system tracks the
  *   automatic origin, and only outgoing payroll artefacts drop the indicator).
@@ -42,11 +44,11 @@ import { submissionSettingsOrDefault } from './submissionSettings.ts';
  * and a rerun can never queue a second notice. A notice missed during downtime is recorded as
  * `collapsed` into the one current notice. Nothing is decided while the system activation instant
  * is null or still in the future (F-4), for a deadline before it, for an imported period, for a
- * finalized period or for a deactivated account. Deadlines come from the production pay-period
+ * submitted period (one with a send) or for a deactivated account. Deadlines come from the production pay-period
  * functions in the saved reporting zone; offsets are elapsed time before them (R-07).
  *
  * The send job rebuilds the notice at send time from routing identifiers only (job payloads never
- * hold content) and re-checks that it is still relevant, so a period finalized between queueing and
+ * hold content) and re-checks that it is still relevant, so a period submitted between queueing and
  * sending sends nothing. Links are the login-required review deep link and nothing else.
  */
 
@@ -76,20 +78,26 @@ interface UserRow {
 }
 
 interface TimesheetState {
+  id: string;
   finalized_revision_no: number | null;
   imported_unverified: number;
 }
 
-/** What a period's timesheet allows: finalized and imported periods get no notices. */
-function timesheetState(db: Db, userId: string, calendarId: string, periodIndex: number): { finalized: boolean; imported: boolean } {
+/**
+ * What a period's timesheet allows (F-2 a): a submitted period (one with a send) and an imported one get no notices;
+ * a signed period that was never sent still does, worded "signed, not sent yet".
+ */
+function timesheetState(db: Db, userId: string, calendarId: string, periodIndex: number): { submitted: boolean; signed: boolean; imported: boolean } {
   const row = db
     .prepare<[string, string, number], TimesheetState>(
-      `SELECT t.finalized_revision_no, t.imported_unverified
+      `SELECT t.id, t.finalized_revision_no, t.imported_unverified
          FROM timesheets t JOIN pay_periods p ON p.id = t.pay_period_id
         WHERE t.user_id = ? AND p.calendar_id = ? AND p.period_index = ?`,
     )
     .get(userId, calendarId, periodIndex);
-  return { finalized: row !== undefined && row.finalized_revision_no !== null, imported: row !== undefined && row.imported_unverified === 1 };
+  if (row === undefined) return { submitted: false, signed: false, imported: false };
+  const signed = row.finalized_revision_no !== null;
+  return { submitted: signed && periodHasSend(db, userId, row.id), signed, imported: row.imported_unverified === 1 };
 }
 
 function insertOccurrence(
@@ -156,7 +164,7 @@ interface Acted {
 function decideBeforeDue(db: Db, clock: Clock, user: UserRow, period: PayPeriod, offsets: readonly number[], activeFrom: EpochSeconds): Acted | null {
   return writeTransaction(db, (): Acted | null => {
     const state = timesheetState(db, user.id, user.calendar_id, period.index);
-    if (state.finalized || state.imported) return null;
+    if (state.submitted || state.imported) return null;
     const stored = findPayPeriodRow(db, user.calendar_id, period.index);
     const decided = new Set<string>(
       stored === undefined
@@ -186,13 +194,13 @@ interface OverdueRow {
   period_index: number;
 }
 
-/** The overdue warning of one recorded period; a finalized or imported period is suppressed instead. */
+/** The overdue warning of one recorded period; a submitted or imported period is suppressed instead. */
 function decideOverdue(db: Db, clock: Clock, row: OverdueRow): Acted | null {
   return writeTransaction(db, (): Acted | null => {
     if (occurrenceExists(db, row.user_id, row.pay_period_id, 'overdue', OVERDUE_KEY)) return null;
     const state = timesheetState(db, row.user_id, row.calendar_id, row.period_index);
     const base = { userId: row.user_id, payPeriodId: row.pay_period_id, kind: 'overdue' as const, key: OVERDUE_KEY };
-    if (state.finalized || state.imported) {
+    if (state.submitted || state.imported) {
       insertOccurrence(db, clock, { ...base, disposition: 'suppressed', jobId: null });
       return { enqueued: 0, collapsed: 0, suppressed: 1 };
     }
@@ -387,7 +395,7 @@ export function prepareReminder(db: Db, clock: Clock, job: Job, publicBaseUrl: s
 
   if (user.status !== 'active' || getAutomationActivation(db).activeFrom === null) return null;
   const state = timesheetState(db, user.id, period.calendar_id, period.period_index);
-  if (state.finalized && kind !== 'outcome_notice') return null;
+  if (state.submitted && kind !== 'outcome_notice') return null;
   if (state.imported) return null;
   const now = nowEpoch(clock);
   const due = parseUtcInstant(period.due_at_utc);
@@ -403,6 +411,7 @@ export function prepareReminder(db: Db, clock: Clock, job: Job, publicBaseUrl: s
     zone: getCalendar(db, user.calendar_id).schedule.reportingZone,
     nowUtc: now,
     link: reviewLink(publicBaseUrl, period.payroll_date),
+    signedNotSent: state.signed && !state.submitted,
   });
   return { to: user.email, subject: rendered.subject, text: rendered.text };
 }

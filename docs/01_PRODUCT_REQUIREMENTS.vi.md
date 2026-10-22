@@ -16,7 +16,7 @@ Công cụ timesheet cá nhân, sẵn nền tảng tài khoản riêng cho đồ
 | FR-08 | Tùy chọn trừ giờ thiếu tự động hoặc khi sign-off; không trừ ngày nghỉ không làm | WP1/WP2 |
 | FR-09 | Sổ OT truy vết, sửa chênh lệch, ghi manager cho phép, đổi phép một phần | WP2 |
 | FR-10 | Sign-off rõ ràng gắn với revision bất biến | WP3 |
-| FR-11 | PDF quen thuộc; sign-off tay cần tên và ảnh ký; ảnh tự động cấu hình được | WP3 |
+| FR-11 | PDF quen thuộc; sign-off tay là hành động của chủ tài khoản đang đăng nhập, ghi tên tài khoản và ảnh ký nếu đã lưu (F-5 b); dòng giờ và dòng OT được chọn cho từng lần gửi, mặc định lấy từ Settings (F-3 b); ảnh tự động cấu hình được | WP3, WP5 |
 | FR-12 | Người nhận/template, thông báo, công tắc đến hạn, luồng gửi bền vững | WP3 |
 | FR-13 | Lịch lễ công ty hằng năm và phiên bản quy tắc theo hiệu lực | WP2 |
 | FR-14 | Audit ai/lúc nào/trước-sau; lý do sửa kỳ cũ/đã chốt | WP1/WP2 |

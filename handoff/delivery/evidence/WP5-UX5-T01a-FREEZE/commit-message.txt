@@ -1,0 +1,30 @@
+Freeze WP5-UX5-T01a: sign as the account holder, signature image optional
+
+- feat(signoff): the signer is the signed-in account holder.
+  - The typed name is gone. `signer_name` is still accepted in the request but ignored.
+  - The sign-off records the account's display name.
+- feat(signoff): the signature image is optional (owner decision F-5 b).
+  - With a saved image, the sign-off records the image and the name; without one, the name
+    only.
+  - A changed image after the review still gives 409.
+- feat(db): migration 0014 rebuilds `signoffs` with a nullable image column, keeping its
+  triggers and immutability.
+- feat(pdf): a sign-off without an image prints the name only.
+- feat(ui): the Review sign-off shows "You sign as <name>", and a Settings link when no
+  image is saved.
+- test: a v13-to-v14 migration test; name-only and with-image sign-off, PDF and job tests;
+  the e2e follows.
+- chore(scripts): the smoke and drill scripts no longer send a typed name.
+- docs: docs/03, 04, 05, 06 (AC-06), 10 and DEVELOPMENT (+ vi).
+- docs(handoff):
+  - the FIX3-FREEZE results;
+  - the round-5 plan Addenda 2, 3 and 3b with the re-rendered mockup;
+  - the T01a record;
+  - the board and the checkpoint (+ vi).
+
+Task: WP5-UX5-T01a (owner decision F-5 b; round-5 plan B-A3)
+Gate: pending (round-5 package gate covers rounds 4 and 5)
+Audit: pending (round-5 audits)
+Digest: 783a63f8 (was 7af8e935)
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

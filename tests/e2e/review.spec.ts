@@ -143,6 +143,7 @@ interface ApiFinalization {
   finalized_revision_no: number | null;
   revision: { revision_no: number; review_state: string; origin: string; send_requested: boolean } | null;
   signoff: { signer_name: string; signature_attachment_id: string | null } | null;
+  jobs: Array<{ kind: string; state: string }>;
 }
 
 const reviewPath = (payrollDate: string) => `/api/timesheets/${payrollDate}/review`;
@@ -265,12 +266,18 @@ test('the review shows the server content for all 14 days, then the sign-off sub
   await page.getByRole('button', { name: 'Sign off & Submit' }).click();
   await expect(page.getByRole('heading', { name: 'Submitted' })).toBeVisible();
   expect(posts.filter((url) => url.endsWith('/signoff')), 'one sign-off request').toHaveLength(1);
+  // WP5-UX5-T01b: signing never sends; until the Send card the page sends right after it with the send-draft defaults.
+  expect(posts.filter((url) => url.endsWith('/send')), 'one send request after the sign-off').toHaveLength(1);
+  await expect(page.locator('[data-result="created"]')).toHaveAttribute('data-sent', 'true');
+  await expect(page.locator('[data-result="created"]')).toContainText('queued for the PDF and the email');
   await expect(page.locator('[data-status="review"]')).toHaveText('Submitted manually');
   await expect(page.getByRole('button', { name: 'Sign off & Submit' })).toHaveCount(0);
 
   const finalized = await reviewer.api.call<ApiFinalization>('GET', finalizationPath(reviewer.payrollDate));
   expect(finalized.finalized_revision_no).toBe(1);
-  expect(finalized.revision).toMatchObject({ revision_no: 1, review_state: 'signed', origin: 'employee', send_requested: true });
+  // `send_requested` is "requested at finalization": a sign-off requests no send; the send is its own record and job.
+  expect(finalized.revision).toMatchObject({ revision_no: 1, review_state: 'signed', origin: 'employee', send_requested: false });
+  expect(finalized.jobs.map((job) => job.kind).sort()).toEqual(['render_pdf', 'send_email']);
   expect(finalized.signoff).toMatchObject({ signer_name: 'Synthetic Reviewer', signature_attachment_id: expect.any(String) });
   await page.screenshot({ path: screenshotPath(`review-signed-${project}-synthetic.png`), fullPage: true });
 
@@ -439,10 +446,14 @@ test('without a saved signature image the sign-off still goes, by name alone, an
   await expect(page.locator('[data-signer]')).toContainText('Synthetic Unsigned');
   await acknowledge(page);
   await page.getByRole('button', { name: 'Sign off & Submit' }).click();
-  await expect(page.getByRole('heading', { name: 'Submitted' })).toBeVisible();
+  // This account saved no recipients: the sign-off is recorded, and the send that follows is refused with the reason
+  // in words (WP5-UX5-T01b: signing and sending are separate acts).
+  await expect(page.getByRole('heading', { name: 'Signed, not sent' })).toBeVisible();
+  await expect(page.locator('[data-send-error]')).toHaveText('Signed. The email was not sent: no recipient is set. Add one in Settings, then send it from History.');
   const finalized = await api.call<ApiFinalization>('GET', finalizationPath(currentPayrollDate));
   expect(finalized.finalized_revision_no).toBe(1);
-  expect(finalized.revision).toMatchObject({ revision_no: 1, review_state: 'signed', origin: 'employee', send_requested: true });
+  expect(finalized.revision).toMatchObject({ revision_no: 1, review_state: 'signed', origin: 'employee', send_requested: false });
+  expect(finalized.jobs.map((job) => job.kind)).toEqual(['render_pdf']);
   expect(finalized.signoff).toEqual({ signer_name: 'Synthetic Unsigned', signature_attachment_id: null, signed_at: expect.any(String), reviewed_sha256: expect.any(String) });
 });
 

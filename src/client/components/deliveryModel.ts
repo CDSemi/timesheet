@@ -261,6 +261,28 @@ export interface Confirmation {
   message: string;
   confirmLabel: string;
   cancelLabel: string;
+  /** True when the server's reason rule applies (B-A2): a copy of the period already counts as sent. */
+  reasonRequired: boolean;
+}
+
+/** The owner's reason for another copy: 2-500 characters (the server checks the exact rule). */
+export const MIN_COPY_REASON = 2;
+export const MAX_COPY_REASON = 500;
+
+/**
+ * Whether a copy of the row's period already counts as sent (B-A2, mirrored from the server, which decides): an attempt
+ * of any revision of the same payroll date was accepted or is uncertain, whatever was decided later.
+ */
+export function copyCounts(row: Pick<RevisionRow, 'payrollDate'>, deliveries: readonly DeliveryRecord[]): boolean {
+  return deliveries.some((item) => item.payroll_date === row.payrollDate && (item.state === 'accepted' || item.state === 'uncertain'));
+}
+
+/** The reason field's problem in words, or null when the text can be sent. */
+export function copyReasonProblem(text: string): string | null {
+  const length = [...text.trim()].length;
+  if (length === 0) return 'Give the reason for sending another copy.';
+  if (length < MIN_COPY_REASON || length > MAX_COPY_REASON) return `The reason must have ${MIN_COPY_REASON} to ${MAX_COPY_REASON} characters.`;
+  return null;
 }
 
 function recipientsText(recipients: RecipientAddresses | null): string {
@@ -272,9 +294,12 @@ function recipientsText(recipients: RecipientAddresses | null): string {
 /**
  * What the owner is asked to confirm before a decision or a resend is sent. Marking as delivered
  * changes no mail; a resend names the recipients and the double-delivery risk of an uncertain attempt.
+ * Once a copy counts as sent (`copySent`), another copy needs a typed reason (owner decision F-4,
+ * B-A2); an uncertain attempt always counts, so its resend always asks for one.
  */
-export function confirmationFor(action: DeliveryAction, recipients: RecipientAddresses | null): Confirmation {
+export function confirmationFor(action: DeliveryAction, recipients: RecipientAddresses | null, copySent = false): Confirmation {
   const cancelLabel = 'Cancel';
+  const reasonNote = ' Give a reason: it is kept with the send and in your history, and it is not added to the email.';
   switch (action) {
     case 'mark_delivered':
       return {
@@ -284,23 +309,35 @@ export function confirmationFor(action: DeliveryAction, recipients: RecipientAdd
           'Choose this only if you know the recipients received the email. The attempt stays recorded as uncertain with your decision, and nothing is sent.',
         confirmLabel: 'Mark as delivered',
         cancelLabel,
+        reasonRequired: false,
       };
     case 'resend_uncertain':
       return {
         action,
         title: 'Resend the same PDF?',
-        message: `The same PDF and message go to ${recipientsText(recipients)}. If the first attempt did arrive, the recipients may receive it twice.`,
+        message: `The same PDF and message go to ${recipientsText(recipients)}. If the first attempt did arrive, the recipients may receive it twice.${reasonNote}`,
         confirmLabel: 'Resend now',
         cancelLabel,
+        reasonRequired: true,
       };
     default:
-      return {
-        action: 'resend',
-        title: 'Send this revision again?',
-        message: `A new delivery attempt sends the same PDF to ${recipientsText(recipients)}. No revision, sign-off or OT balance changes.`,
-        confirmLabel: 'Send again',
-        cancelLabel,
-      };
+      return copySent
+        ? {
+            action: 'resend',
+            title: 'Send another copy?',
+            message: `A copy of this period was already sent. Another copy sends the same PDF and message to ${recipientsText(recipients)}. No revision, sign-off or OT balance changes.${reasonNote}`,
+            confirmLabel: 'Send another copy',
+            cancelLabel,
+            reasonRequired: true,
+          }
+        : {
+            action: 'resend',
+            title: 'Send this revision again?',
+            message: `A new delivery attempt sends the same PDF to ${recipientsText(recipients)}. No revision, sign-off or OT balance changes.`,
+            confirmLabel: 'Send again',
+            cancelLabel,
+            reasonRequired: false,
+          };
   }
 }
 
@@ -315,6 +352,10 @@ export function decisionFailureText(caught: unknown): string {
       return 'This attempt is no longer uncertain, so it takes no decision. The list was refreshed.';
     case 'delivery_not_resendable':
       return 'This attempt has no revision to resend.';
+    case 'reason_required':
+      return 'This copy may have arrived. Give the reason for sending another one.';
+    case 'invalid_reason':
+      return `The reason must have ${MIN_COPY_REASON} to ${MAX_COPY_REASON} characters without control characters.`;
     case 'not_found':
       return 'That delivery attempt could not be found. The list was refreshed.';
     default:
@@ -335,6 +376,12 @@ export function resendFailureText(caught: unknown): string {
       return 'A newer revision exists, so only that one can be resent. The list was refreshed.';
     case 'envelope_changed':
       return 'The recipients or template differ from this revision. Record a correction instead.';
+    case 'reason_required':
+      return 'A copy of this period was already sent. Give the reason for sending another one.';
+    case 'invalid_reason':
+      return `The reason must have ${MIN_COPY_REASON} to ${MAX_COPY_REASON} characters without control characters.`;
+    case 'recipients_required':
+      return 'No recipient is set. Add one in Settings, then send again.';
     default:
       return describeError(caught);
   }
