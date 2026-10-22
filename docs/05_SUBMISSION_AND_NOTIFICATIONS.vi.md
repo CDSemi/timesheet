@@ -6,7 +6,7 @@ Theo dõi riêng revision (nháp/chốt), nhân viên xác nhận (chờ/đã k�
 
 ## Luồng thủ công
 
-Chuẩn bị payload review chính xác: loại ngày, bằng chứng/biến động OT, dữ liệu chưa đủ, quyết định thiếu, người nhận, email và ảnh chữ ký. Preview không phải PDF nộp chính thức. Sign-off thủ công cần tên nhân viên và ảnh chữ ký tải lên. Sign off & Submit rõ ràng gửi kèm phiên bản nháp kỳ vọng và hash đã xem.
+Chuẩn bị payload review chính xác: loại ngày, bằng chứng/biến động OT, dữ liệu chưa đủ, quyết định thiếu, người nhận, email và ảnh chữ ký khi đã lưu. Preview không phải PDF nộp chính thức. Sign-off thủ công là hành động của chủ đang đăng nhập: nó ghi tên hiển thị của tài khoản (không gõ tên) và, khi đã lưu, cả ảnh chữ ký; chưa lưu ảnh thì chỉ ký bằng tên (quyết định của chủ F-5 b, 2026-10-21). Payload đã xem ràng buộc trạng thái ảnh, nên ảnh được lưu hoặc thay sau lúc xem làm yêu cầu thành xung đột review cũ. Sign off & Submit rõ ràng gửi kèm phiên bản nháp kỳ vọng và hash đã xem.
 
 Kiểm chủ/phiên bản, chốt snapshot, ghi sign-off thật, sổ và job trong một transaction. Nội dung cũ trả xung đột. Tạo PDF riêng từ snapshot, lưu/hash, rồi gửi đúng file và email đã đóng băng. Trạng thái gửi độc lập sign-off.
 

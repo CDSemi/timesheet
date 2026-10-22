@@ -337,12 +337,15 @@ export const autoImageRevokeBody = z.strictObject({
 /*
  * Manual sign-off (WP3-T05). The owner is never a field: it comes from the session. The
  * reviewed hash and expected version bind the request to the review the employee saw.
+ * The signer is the signed-in person (WP5-UX5-T01a, owner decision F-5 b): the server records the account's
+ * display name, never a name from the request.
  */
 const signoffShape = {
   /** The timesheet version the review was read at (0 when the period had no saved row). */
   expected_version: z.number().int().min(0),
   reviewed_hash: z.string().regex(/^[0-9a-f]{64}$/),
-  signer_name: z.string().max(400),
+  /** Accepted and ignored: the key of an older caller. The server always records the account's display name. */
+  signer_name: z.unknown().optional(),
   /** One deduct/waive choice per choose-mode deficit day (a 14-day period has at most 14). */
   deficit_choices: z.array(z.strictObject({ work_date: z.string().max(10), choice: z.enum(['deduct', 'waive']) })).max(31).optional(),
   /** Required when the review lists unresolved inputs. */

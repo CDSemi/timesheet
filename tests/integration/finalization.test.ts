@@ -293,30 +293,61 @@ describe('sign-off transaction', () => {
   });
 });
 
-describe('required name, image and acknowledgement (AC-06)', () => {
-  it('refuses a blank or missing signer name with 422 and writes nothing', async () => {
+describe('signer from the account, optional image and acknowledgement (AC-06, F-5 b)', () => {
+  it('records the account display name whatever signer_name the request carries (accepted and ignored)', async () => {
     await addSession('2026-09-15', '09:00', '18:00');
     uploadSignature(0x43);
-    const before = writeState();
-    const blank = await signoff(await signoffBody({ signer_name: '   ' }));
-    expect(blank.status).toBe(422);
-    expect(blank.body.error.code).toBe('signer_name_required');
-    const control = await signoff(await signoffBody({ signer_name: 'Example\nEmployee' }));
-    expect(control.status).toBe(422);
-    expect(control.body.error.code).toBe('invalid_signer_name');
-    const { signer_name: _omitted, ...missing } = await signoffBody();
-    const absent = await signoff(missing);
-    expect(absent.status).toBe(422);
-    expect(writeState()).toEqual(before);
+    const body = await signoffBody({ signer_name: '   ' });
+    const response = await signoff(body);
+    expect(response.status, JSON.stringify(response.body)).toBe(201);
+    expect(response.body.signoff.signer_name).toBe(SIGNER);
+    expect(t.db.prepare('SELECT signer_name FROM signoffs').pluck().get()).toBe(SIGNER);
+    // The same request with another name, with a line break, or with no key at all is the same replay.
+    const afterFirst = writeState();
+    for (const signer_name of ['Someone Else', 'Example\nEmployee', undefined]) {
+      const { signer_name: _drop, ...rest } = body;
+      const retry = await signoff(signer_name === undefined ? rest : { ...rest, signer_name });
+      expect(retry.status, JSON.stringify(retry.body)).toBe(200);
+      expect(retry.body.status).toBe('replayed');
+      expect(retry.body.signoff.signer_name).toBe(SIGNER);
+    }
+    expect(writeState()).toEqual(afterFirst);
   });
 
-  it('refuses a sign-off without a signature image with 422 and writes nothing', async () => {
+  it('signs without a saved signature image: the account name and a null image, the revision, postings and jobs as before', async () => {
+    await addSession('2026-09-15', '09:00', '18:00'); // 60 credited
+    await addSession('2026-09-26', '10:00', '12:00'); // Saturday: 120 credited
+    const current = await review();
+    expect(current.payload.signature).toBeNull();
+    t.clock.advanceSeconds(95);
+    const response = await signoff({ expected_version: current.expected_version, reviewed_hash: current.payload_hash, incomplete_evidence_acknowledged: true });
+    expect(response.status, JSON.stringify(response.body)).toBe(201);
+    expect(response.body.signoff).toEqual({
+      signer_name: SIGNER,
+      signed_at: '2026-09-29T20:01:35Z',
+      reviewed_sha256: current.payload_hash,
+      signature_attachment_id: null,
+    });
+    const stored = t.db.prepare('SELECT signer_name, signature_attachment_id FROM signoffs').get();
+    expect(stored).toEqual({ signer_name: SIGNER, signature_attachment_id: null });
+    expect(response.body.revision).toMatchObject({ revision_no: 1, revision_kind: 'original', origin: 'employee', review_state: 'signed', send_requested: true });
+    expect(linesOf(response.body)).toEqual([
+      ['2026-09-15', 'credit', 60, 'posted'],
+      ['2026-09-26', 'credit', 120, 'posted'],
+    ]);
+    expect(response.body.jobs.map((job: any) => job.kind)).toEqual(['render_pdf', 'send_email']);
+    expect(getBalance(t.db, t.userIds.employee).postedMinutes).toBe(180);
+    const audit = JSON.parse((t.db.prepare("SELECT after_json FROM audit_events WHERE operation = 'timesheet.signoff'").get() as { after_json: string }).after_json);
+    expect(audit).toMatchObject({ signature_attachment_id: null, signature_sha256: null });
+  });
+
+  it('records the saved signature image together with the account name', async () => {
     await addSession('2026-09-15', '09:00', '18:00');
-    const before = writeState();
+    const signature = uploadSignature(0x50);
     const response = await signoff(await signoffBody());
-    expect(response.status, JSON.stringify(response.body)).toBe(422);
-    expect(response.body.error.code).toBe('signature_required');
-    expect(writeState()).toEqual(before);
+    expect(response.status, JSON.stringify(response.body)).toBe(201);
+    expect(response.body.signoff).toMatchObject({ signer_name: SIGNER, signature_attachment_id: signature.id });
+    expect(t.db.prepare('SELECT signature_attachment_id FROM signoffs').pluck().get()).toBe(signature.id);
   });
 
   it('requires the explicit acknowledgement when evidence is incomplete', async () => {
@@ -382,6 +413,22 @@ describe('stale review (AC-06: a concurrent edit causes a conflict)', () => {
     expect(response.status).toBe(409);
     expect(response.body.error.code).toBe('stale_review');
     expect(writeState()).toEqual(before);
+  });
+
+  it('answers 409 when an image was saved after a review that had none: a saved image is never left out (F-5 b)', async () => {
+    await addSession('2026-09-15', '09:00', '18:00');
+    const reviewed = await review();
+    expect(reviewed.payload.signature).toBeNull();
+    uploadSignature(0x49);
+    const before = writeState();
+    const response = await signoff({ expected_version: reviewed.expected_version, reviewed_hash: reviewed.payload_hash, incomplete_evidence_acknowledged: true });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('stale_review');
+    expect(writeState()).toEqual(before);
+    // A fresh review carries the image and signs with it.
+    const fresh = await signoff(await signoffBody());
+    expect(fresh.status, JSON.stringify(fresh.body)).toBe(201);
+    expect(fresh.body.signoff.signature_attachment_id).not.toBeNull();
   });
 });
 
@@ -548,7 +595,6 @@ describe('idempotency and provisional minutes', () => {
     expect(writeState()).toEqual(afterFirst);
 
     for (const changed of [
-      { ...body, signer_name: 'Example Employee Again' },
       { ...body, deficit_choices: [{ work_date: '2026-09-15', choice: 'waive' }] },
       { ...body, reviewed_hash: 'a'.repeat(64) },
     ]) {
@@ -557,6 +603,13 @@ describe('idempotency and provisional minutes', () => {
       expect(response.body.error.code).toBe('already_finalized');
       expect(response.body.error.details).toEqual({ fresh_review_required: true });
     }
+    expect(writeState()).toEqual(afterFirst);
+    // F-5 b: a different signer_name is not a different request. The key is accepted and ignored, so the retry is
+    // the same identical replay and the stored name stays the account's.
+    const renamed = await signoff({ ...body, signer_name: 'Example Employee Again' });
+    expect(renamed.status, JSON.stringify(renamed.body)).toBe(200);
+    expect(renamed.body.status).toBe('replayed');
+    expect(renamed.body.signoff).toEqual(first.body.signoff);
     expect(writeState()).toEqual(afterFirst);
   });
 

@@ -80,7 +80,9 @@ test('a manual sign-off is delivered into the capture folder with the signed PDF
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
   await expect(page.locator('[data-envelope="to"] dd')).toHaveText(TO);
-  await page.getByLabel('Your name').fill(SIGNER);
+  // F-5 b: the signer is the account; there is no name field and the sign-off shows the name it will record.
+  await expect(page.getByLabel('Your name')).toHaveCount(0);
+  await expect(page.locator('[data-signer]')).toContainText(SIGNER);
   await page.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ }).check();
   await page.getByRole('button', { name: 'Sign off & Submit' }).click();
   await expect(page.getByRole('heading', { name: 'Submitted' })).toBeVisible();

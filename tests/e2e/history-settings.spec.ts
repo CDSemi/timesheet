@@ -283,7 +283,8 @@ test('history shows the signed revision with its PDF and delivery; download, exp
   await expect(revision.locator('[data-revision-badge="pdf"]')).toHaveText('PDF ready');
   await expect(revision.locator('[data-revision-badge="delivery"]')).toHaveText(outcome.badge);
   await expect(revision.locator('[data-fact="origin"]')).toHaveText('Signed by you');
-  await expect(revision.locator('[data-fact="signed"]')).toContainText('Synthetic Person');
+  // F-5 b: the signer is the account, so the name printed is the account's display name (the request's signer_name is ignored).
+  await expect(revision.locator('[data-fact="signed"]')).toContainText('Synthetic History Person');
   await expect(revision.locator('[data-fact="recipients"]')).toHaveText(`${TO} (copy: ${CC})`);
   await expect(revision.locator('[data-attempt]')).toHaveCount(1);
   await expect(revision.locator(`[data-attempt-state="${firstState}"]`)).toContainText(outcome.attempt);

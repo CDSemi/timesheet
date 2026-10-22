@@ -1235,6 +1235,52 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - Results: FULL e2e 0 failed; mutants caught; digest 7af8e935.
 - Running now: WP5-UX4-FIX3-FREEZE (a fresh committer, alone). It is the last round-4
   commit.
+- WP5-UX4-FIX3-FREEZE committed and pushed 57c41e8e43fb6e10df654294361818e59bff86ca.
+  - 179 paths; digest 7af8e935 on HEAD; every check 0; scans clean.
+  - Round 4 is folded into round 5.
+- Owner, verbatim on the board: mockup notes 2 (B2, B7/B9, B11) and Indie Flower approved.
+  The owner asks that the reference image be given to the mockup agent. It is viewed from
+  the session temp folder only, never copied, with no real name or signature.
+- Running now, in parallel:
+  - WP5-UX5-T01a (worker-high, sonnet; source writer): signer from the account, optional
+    signature image with migration 0014. The sign-off/send split is left to T01b.
+  - WP5-UX5-PLAN Addendum 2 (planner, read-only): the mockup notes.
+- T01a stopped on scope before any edit. Compiling and verify need five more paths:
+  `ReviewScreen.tsx`, `ReviewEnvelope.tsx`, the smoke and drill scripts, and
+  `DEVELOPMENT.md` (+ vi).
+  - Addendum 1 adds them and makes `signer_name` accepted-and-ignored, so the 22 test files
+    stay valid.
+  - `scripts/precommit-check.mjs` stays out, because it is a GOV path; the other scripts
+    are not.
+  - The same worker resumes.
+- WP5-UX5-PLAN Addendum 2 done.
+  - B2 thresholds measured.
+  - B7/B9: aligned lines, 22rem and 11rem; Sign off inset 8px.
+  - B11: typography measured from the reference image without storing it. Serif
+    Condensed Bold 17/18pt titles, bold small-caps day names, Indie Flower 13pt, fields
+    54pt in, rows 34/69/16/17pt.
+  - Renders updated. No new question.
+- Owner adjustment 3 (verbatim on the board): on the Review page and in the Sign off dialog,
+  the signature rows and their dates are inset 1 tab from the left and 2 tabs from the right.
+  - Recorded as plan Addendum 3, with 1 tab = 0.5 in (48px / 36pt).
+  - It is applied in UX5-T03 without a re-render. The PDF is unchanged unless asked.
+- The owner corrected adjustment 3 (verbatim on the board): the signature rows on Review and
+  in the Sign off dialog take the same insets as the B11 PDF mockup.
+  - Plan Addendum 3b supersedes the 1-tab/2-tab rule.
+  - UX5-T03 measures the B11 proportions and applies them as tokens.
+- WP5-UX5-T01a done.
+  - The signer comes from the account; `signer_name` is ignored.
+  - The image is optional, through migration 0014 with an upgrade test from v13.
+  - Results: FULL e2e 779 passed, 0 failed; mutants 3/3; digest 783a63f8 (851 files).
+  - One assertion outside the owned paths was accepted (`history-settings.spec.ts:286`).
+  - docs/01 FR-11 goes to T01b.
+- Running now: WP5-UX5-T01a-FREEZE (a fresh committer, alone), with 39 paths.
+  - Attempt 1 stopped at the validators with "Invalid task ID". The IDs contained a
+    lowercase "a", a coordinator slip.
+  - The board IDs are renamed WP5-UX5-T01A and WP5-UX5-T01A-FREEZE; the file names are
+    kept.
+  - The same committer re-stages the board and the checkpoint and reruns every check
+    (attempt 2).
 - Remaining after T06:
   - T06-FREEZE;
   - the round-4 package gate;

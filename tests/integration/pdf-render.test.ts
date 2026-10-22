@@ -123,7 +123,7 @@ function snapshotWith(overrides: Partial<ReviewSnapshot> = {}, days?: SnapshotDa
 const SIGN_INSTANT = utc('2026-10-07', '22:30');
 const SIGN_DATE = '10/07/2026';
 
-/** A manual revision: the stored sign-off name and instant and the validated image (all required). */
+/** A manual revision: the stored sign-off name and instant (required) and the validated image (optional, F-5 b). */
 function manual(overrides: Partial<TimesheetPdfInput> = {}): TimesheetPdfInput {
   const snapshot = overrides.snapshot ?? snapshotWith();
   return {
@@ -327,12 +327,19 @@ describe('sign-off and review state', () => {
     expect(content.lines.filter((line) => line.includes('Dr. Sam Q. Signer'))).toHaveLength(1);
   });
 
-  it('refuses a manual revision without a sign-off instant, a name or an image, and one that carries an automatic instant', async () => {
+  it('refuses a manual revision without a sign-off instant or a name, and one that carries an automatic instant', async () => {
     await expect(renderTimesheetPdf(manual({ signedAt: null }))).rejects.toThrow(PdfRenderError);
-    await expect(renderTimesheetPdf(manual({ signatureImage: null }))).rejects.toThrow(PdfRenderError);
     await expect(renderTimesheetPdf(manual({ signerName: '   ' }))).rejects.toThrow(PdfRenderError);
     await expect(renderTimesheetPdf(manual({ automaticSubmittedAt: SIGN_INSTANT }))).rejects.toThrow(PdfRenderError);
     await expect(renderTimesheetPdf(manual({ signedAt: '2026-10-07 22:30' }))).rejects.toThrow();
+  });
+
+  it('prints a manual revision without a saved image with the name alone: no picture, the name and the real sign date (F-5 b)', async () => {
+    const { content } = await render(manual({ signatureImage: null }));
+    expect(content.pages[0]?.images).toHaveLength(0);
+    expect(content.lines.filter((line) => line === 'Alex Example')).toHaveLength(1);
+    expect(content.text).toContain('Employee Signature');
+    expect(content.text).toMatch(/\d{2}\/\d{2}\/\d{4}/);
   });
 
   it('refuses an automatic revision that has a sign-off instant or no submission instant', async () => {

@@ -297,6 +297,99 @@ Same runtime rules: NO HEREDOCS, NO STDIN TO NODE OR PYTHON, NO PIPES INTO `head
 NO NULL-DEVICE REDIRECTS, NO `rm -r`. Write only this brief and
 `handoff/delivery/design/WP5-UX5/`.
 
+## Addendum 2 (coordinator, owner's mockup notes of 2026-10-21)
+
+The owner's words are verbatim on the board (`owner_decisions` 2026-10-21, the entry that
+starts "- b2-topcard-narrow"). **Indie Flower is approved.** Update the mockup and the
+renders, and write the revision under "### Addendum 2" in Results. UX5-T01a runs at the same
+time as the only source writer; you stay read-only.
+
+1. **B2, "Change several days":**
+   - Once "Worked hours" and "Change several days" have wrapped, "Change several days" is
+     always right-aligned. It becomes "Change days" when there is no room.
+   - If it must wrap onto its own row, it fills the width, and still becomes "Change days"
+     when there is no room.
+   - Only narrower still does it break into two lines, "Change / days".
+   - Give the measured thresholds and the acceptance criteria, as you did for the
+     Open-a-day row.
+2. **B7 and B9, the signature lines:**
+   - The "Sign off" button is right-aligned to the end of its own signature line, inset a
+     little.
+   - The lines are shorter than now.
+   - All lines are aligned with each other: Employee Signature, Date, Manager Signature and
+     Date lines on the same baselines per row.
+   - Two rows stay.
+3. **B11, the PDF:**
+   - "Employee", "Payroll Date" and "Period" are indented by about 1.5 tabs (not 2) from the
+     left margin. "Payroll Date" is also inset from the right margin by the same amount.
+   - The vertical "WEEK" is centred in its cell.
+   - There is a little more space between the day-name line and the date line.
+   - The day names are bold.
+   - **Type faces and sizes as in the owner's reference image.** The owner asks that you
+     look at it. It is at
+     `D:\.claude-tmp\claude\D--Dropbox-Work-CDSemi-timesheet\b5de56d1-fb31-4dc5-b74f-70e9473e1a0a\images\2.webp`,
+     outside the repository.
+     - If the Read tool cannot open WebP, open it in a headless browser and screenshot it as
+       PNG into your task folder.
+     - **Privacy (AGENTS rule 4):** the image shows a real employee name, a handwritten
+       signature and a red redaction box. Never copy the image, or any crop of it, into the
+       repository or the design folder. Never write the real name. Never reproduce the
+       signature.
+     - Measure and record only typography and proportions:
+       - title sizes and weight;
+       - label sizes;
+       - day-name small caps and date sizes;
+       - category text size;
+       - row heights relative to the page;
+       - the header and total styles.
+     - Map them to the PDF pipeline's fonts: DejaVu Serif from the installed package, and
+       Indie Flower for categories as planned. Give the point sizes.
+     - Re-render B11 with synthetic data only.
+4. Re-render the affected renders: B2, B7, B9 and B11.
+
+Same runtime rules: NO HEREDOCS, NO STDIN TO NODE OR PYTHON, NO PIPES INTO `head` OR `tail`,
+NO NULL-DEVICE REDIRECTS, NO `rm -r`.
+
+## Addendum 3b (coordinator note: the owner's correction, superseding Addendum 3)
+
+- **The owner's correction**, verbatim on the board (`owner_decisions` 2026-10-21,
+  "correction of mockup adjustment 3"): "Tôi cần đính chính lại, tôi muốn hai hàng chữ ký
+  (Employee Signature + Date, Manager Signature + Date) thụt vào giống như bản vẽ b11-pdf".
+- **Rule.** On the Review sheet footer and in the Sign off dialog's signature preview, the two
+  signature rows and their Date lines take the same insets and proportions as the signature
+  block in the PDF mockup B11 (`design/WP5-UX5/mockup.html`, the PDF page, and
+  `mockup-r5-b11-pdf-synthetic.png`):
+  - the left inset of the signature lines;
+  - the line lengths relative to the content width;
+  - the gap to the Date line;
+  - the Date line's inset from the right.
+- **Measurement.** UX5-T03 measures them from the mockup's PDF page, as fractions of the
+  content width. It applies the same fractions on screen as tokens, and states its narrow-width
+  rule.
+- **Kept:** the Sign off button stays at the end of its signature line, inset 8px; the lines
+  stay aligned and in two rows.
+- **The 1-tab / 2-tab rule of Addendum 3 below is withdrawn.**
+
+## Addendum 3 (withdrawn by Addendum 3b; kept as history)
+
+- **The owner's words**, verbatim on the board (`owner_decisions` 2026-10-21, "mockup
+  adjustment 3"): "b7-review-1440 và b9-signoff-dialog: hai hàng chữ ký và dates tương ứng
+  cần thụt vào so với 2 bên lề trái phải với độ rộng lần lượt là 1 tab (so với lề trái) và
+  2 tabs (so với lề phải)".
+- **Rule for the Review sheet footer and the Sign off dialog's signature preview.** Both
+  signature rows (Employee Signature + Date, Manager Signature + Date) are inset:
+  - one tab from the left edge of the sheet's content box;
+  - two tabs from the right edge.
+- **Tab width.** One tab is the planner's 0.5 inch: 36pt in the PDF, 48px (3rem) on screen.
+  The left inset is therefore 3rem and the right inset 6rem, as tokens.
+- **Narrow widths.** On narrow widths, scale both insets down so that the signature lines
+  keep at least their minimum readable length. UX5-T03 states the exact rule and its
+  acceptance criteria.
+- **The PDF signature block** keeps the Addendum 2 layout unless the owner asks for the same
+  insets there.
+- **The Sign off button** stays at the end of its signature line, inset 8px. The lines stay
+  aligned and in two rows.
+
 ## Results
 
 Self-reported model: claude-opus-5-5. Status: done. Sections A-F below; mockup and 11 renders in
@@ -1102,3 +1195,85 @@ overflow, only `example.invalid` addresses. All 11 renders regenerated and viewe
 - New owner question: none. No answer contradicts another decision or AGENTS; the choices made here
   (reason not in the email, a failed first send needs no reason, the reason asked also for an
   uncertain-attempt resend, the font file committed as an asset) are reversible planner defaults.
+
+### Addendum 2
+
+Owner notes (board `owner_decisions` 2026-10-21, "- b2-topcard-narrow ..."): **Indie Flower is
+approved**, so the ADR outline of Addendum 1 C becomes the decision for T02. Still read-only (UX5-T01a
+is the source writer). Outputs in `D:\.claude-tmp\timesheet\WP5-UX5-PLAN\`: `run6\tools-390.json`
+(toolbar probe, port 49646, exit 0), `fonts\fit.txt`, `fonts\fit-cond.txt` (font sizing, exit 0),
+`build-add2e.txt`, `render10.json` (exit 0; 0 scripts, 0 external references, 0 blocked requests, 0
+console messages, no frame overflow, only `example.invalid` addresses). The measuring copy of the font
+was fetched again into the task folder and deleted (`rm` of one file).
+
+#### U5-17b "Change several days" (B2)
+
+Measured at 390 on the HEAD build: toolbar row 358px, gap 8px, "Change several days" 163.6px,
+"Change days" 112.3px, "Change" 77.2px (one line of "Change / days"); the switch with "Worked hours"
+about 145px (186.4px today with "Show worked hours", less the measured width of "Show "; re-measure in
+T05). Rules on the row that holds the switch and the button (below 480px, after the Open-a-day row):
+- row >= 316.6px (145 + 8 + 163.6): one row, the button right-aligned, full label (390 compact: 358px);
+- 265.3-316.6px: one row, right-aligned, "Change days" (320 compact: 288px);
+- below 265.3px: the button takes its own row and the full width; full label while the row is >= 163.6px,
+  "Change days" while >= 112.3px, and "Change / days" on two lines below that (no real phone reaches it).
+- The accessible name stays "Change several days" (it contains every visible form, SC 2.5.3); the
+  button stays 44px high, also on two lines.
+- AC: at row widths 358, 288, 250 and 110 the label is the full, short, full and two-line form; the
+  button's right edge equals the row's right edge on a shared row; on its own row its width equals the
+  row; the switch never wraps; the thresholds within 1px (a container query on the row, as Open a day).
+
+#### B7/B9 signature lines
+
+- Two rows, as now: Employee Signature + Date, then Manager Signature + Date.
+- Fixed line widths, shorter than the full column: the signature line 22rem (330px), the date line
+  11rem (165px); both rows use the same widths and x positions, so the four lines align by column.
+- Each line box has one minimum height (52px) with its content bottom-aligned, so the two lines of a row
+  share one baseline, also when a signature image is shown.
+- "Sign off" sits at the end of its signature line, right-aligned, inset 8px from the line's end, above
+  the rule. Captions are centred under their lines, as on the PDF.
+- AC: |row lines' y| equal within 1px per row; employee and manager lines have equal x and width, date
+  lines equal x and width; button.right = line.right - 8 ±1; two rows at every width from 480px.
+- Mockups B7, B8, B9 re-rendered.
+
+#### C, revised: type faces and sizes after the owner's reference page
+
+The reference page (outside the repository, viewed only; it holds personal data, which is not copied,
+cropped or written anywhere) was measured for typography and proportions only. Its page is US Letter
+at about 2.44 px per point; table edges at 36pt from the page edges, as the current PDF.
+
+| Element | Reference (measured) | PDF plan (pipeline fonts) |
+|---|---|---|
+| Header labels | small teal sans, cap height about 6.6pt, 30pt from the top | logo 32pt and wordmark box 17.6pt left; "Revision n" DejaVu Sans 9pt teal right, submission id 7.5pt grey |
+| Title 1 | bold serif (Times-like), cap height 12.3pt, 236pt wide | DejaVu Serif Condensed Bold 17pt (cap 11.5pt, 294pt wide), centred, baseline about 84pt |
+| Title 2 | bold serif capitals, cap height 13.1pt, 399pt wide, 29pt below title 1 | DejaVu Serif Condensed Bold 18pt (cap 12.2pt, 472pt wide), baseline 28pt below title 1 |
+| Field labels | bold serif, cap 7.4pt | DejaVu Serif Condensed Bold 10.5pt |
+| Field values | sans, about 11-12.5pt, underlined | DejaVu Sans 11pt, underlined |
+| Field indent | labels at 76pt from the table edge | 54pt (1.5 tabs, owner) from the left margin; "Payroll Date" ends 54pt from the right margin; Period under Employee |
+| Week table | 536pt wide, 136pt tall; left column 19pt; header row 34pt, category row 69pt, two 16pt rows | the same: 19pt column, rows 34/69/16/17pt (time cells and OT) |
+| Day names | small capitals, bold sans, first-letter cap 7.4pt | DejaVu Sans Bold 10pt, simulated small capitals (rest at 80%) |
+| Dates | sans, cap 8.2pt, baseline 20pt under the day name | DejaVu Sans 11pt, baseline 22pt under the day name (a little more than the reference, owner) |
+| Category | handwriting, cap about 9pt | Indie Flower 13pt (fallback DejaVu Serif Italic per cell) |
+| Vertical labels | week number in the header cell, "WEEK" in the category cell, "OT" across the two lower rows, serif | DejaVu Serif Condensed Bold 10.5pt, each centred in its cell both ways |
+| Weekend | header peach, body grey | the same (from the server calendar, holidays included) |
+| Overtime total | small capitals sans, regular, cap 7.4pt, 15pt under table 2, right part | DejaVu Sans 10.5pt simulated small capitals, right edge 35pt inside the table edge |
+| Signature block | image box 152x54pt above the line; employee line 148pt at x 55pt, date line 74pt at x 443pt; captions bold serif centred under the lines; manager row 81pt lower | the same geometry; captions DejaVu Serif Condensed Bold 10.5pt; date DejaVu Sans 11pt centred above its line; name DejaVu Sans 9.5pt beside the image (F-5 b) |
+
+- Fonts: DejaVu Serif Condensed Bold, DejaVu Sans, DejaVu Sans Bold and DejaVu Serif Italic all come from
+  the installed `dejavu-fonts-ttf` 2.37.3 package (verified file list), so only Indie Flower is new
+  (ADR 0001). Width-fitting the plain DejaVu Serif Bold to the reference widths would need 12-14pt titles
+  (`fonts\fit.txt`); the condensed cut keeps the reference's height and fits the line width.
+- Vertical budget (points from the top): header 29-61, titles to 112, fields 138 and 163, week 1
+  192-328, week 2 358-494, total 514, signature image 528-582, employee line 600, manager line 680,
+  footer 752; bottom margin 36pt.
+- AC (T02): the PDF is one page in all four row variants; text extraction finds the strings in those
+  fonts (`pdffonts`-style check of the embedded subset names); the week block heights equal the plan
+  within 1pt; the three fields' left edges at margin + 54pt and Payroll Date's right edge at page width
+  - margin - 54pt; WEEK, OT and the week number centred in their cells within 1pt; no text outside its
+  cell.
+- Mockup B11 re-rendered with these sizes at 1.25 px per point (system serif and handwriting faces
+  stand in for DejaVu Serif Condensed and Indie Flower; synthetic data and a synthetic signature only).
+
+#### E
+
+No change of slices, order or estimate. T05 gains U5-17b; T03 the signature-line geometry; T02 the
+reference sizes above and ADR 0001 as approved. No new owner question.

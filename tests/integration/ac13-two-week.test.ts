@@ -229,7 +229,7 @@ describe('AC-13 integrated scenario', () => {
     const beforeRefusals = tableCounts();
     expect((await call(a, 'POST', `/api/timesheets/${P1}/signoff`, { ...signBody, deficit_choices: [] })).status).toBe(422);
     expect((await call(a, 'POST', `/api/timesheets/${P1}/signoff`, { ...signBody, incomplete_evidence_acknowledged: false })).status).toBe(422);
-    expect((await call(a, 'POST', `/api/timesheets/${P1}/signoff`, { ...signBody, signer_name: '  ' })).status).toBe(422);
+    // F-5 b: the signer is the account; a typed name (even a blank one) is not a refusal reason any more.
     expect((await call(a, 'POST', `/api/timesheets/${P1}/signoff`, { ...signBody, reviewed_hash: '0'.repeat(64) })).status).toBe(409);
     expect(tableCounts()).toEqual(beforeRefusals);
     // Two identical sign-offs at once: one creates the revision, the other replays or conflicts; never two.

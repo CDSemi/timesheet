@@ -48,9 +48,12 @@ import { importedPeriodError, isImportedTimesheet } from './workbookImport.ts';
  * 1. recompute the review payload (the same engine-only builder the review GET uses) and
  *    compare the timesheet version and the payload hash with what the employee reviewed;
  *    a mismatch is 409 with a fresh-review hint and nothing is written;
- * 2. require the signer name and the owner's current signature image (422 otherwise), the
- *    explicit acknowledgement when evidence is incomplete, and a deduct/waive choice for
- *    every choose-mode deficit;
+ * 2. take the signer from the account (the reviewed payload's employee name, the session user's
+ *    display name; a name in the request is never read) and the owner's current signature image
+ *    when one is saved (a changed or newly saved image is 409; none saved is allowed and the
+ *    sign-off then carries the name only, owner decision F-5 b), require the explicit
+ *    acknowledgement when evidence is incomplete, and a deduct/waive choice for every
+ *    choose-mode deficit;
  * 3. create the immutable signed revision (origin employee) and the sign-off with the real
  *    `signed_at` from the injectable clock;
  * 4. post authorized debits, then computable credits, only through ledger.ts with
@@ -83,7 +86,11 @@ export interface SignOffInput {
   expectedVersion: number;
   /** The payload hash the employee reviewed. */
   reviewedHash: string;
-  signerName: string;
+  /**
+   * Accepted and never read (owner decision F-5 b): the signer is the account's display name. The key stays so older
+   * callers, like the request body's `signer_name`, remain valid.
+   */
+  signerName?: string;
   /** One choice per choose-mode deficit day; none for other modes. */
   deficitChoices: ReadonlyArray<{ workDate: string; choice: DeficitChoice }>;
   /** Required when the payload lists unresolved inputs; incomplete days stay pending. */
@@ -109,7 +116,8 @@ export interface SignoffRecord {
   signerName: string;
   signedAt: string;
   reviewedSha256: string;
-  signatureAttachmentId: string;
+  /** The saved signature image used, or null when the person had none (the name alone signs). */
+  signatureAttachmentId: string | null;
 }
 
 export interface JobRecord {
@@ -140,15 +148,16 @@ export const deficitDebitSourceKey = (workDate: CivilDate): string => `finalizat
 const MAX_SIGNER_NAME = 200;
 const NAME_CONTROL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
-type SignerName = { ok: true; name: string } | { ok: false; error: ApiError };
-
-function parseSignerName(raw: string): SignerName {
+/**
+ * The signer is the signed-in person: the account's display name as the reviewed payload holds it (F-5 b).
+ * A stored name that cannot be printed on one line is a data problem, refused before anything is written.
+ */
+function accountSignerName(raw: string): string {
   const name = raw.normalize('NFC').trim();
-  if (name === '') return { ok: false, error: new ApiError(422, 'signer_name_required', 'Sign-off requires the employee name') };
-  if (name.length > MAX_SIGNER_NAME || NAME_CONTROL.test(name)) {
-    return { ok: false, error: new ApiError(422, 'invalid_signer_name', `The name must be one line of at most ${MAX_SIGNER_NAME} characters`) };
+  if (name === '' || name.length > MAX_SIGNER_NAME || NAME_CONTROL.test(name)) {
+    throw new ApiError(422, 'invalid_account_name', `The account name must be one line of 1-${MAX_SIGNER_NAME} characters; ask an administrator to correct it`);
   }
-  return { ok: true, name };
+  return name;
 }
 
 function parseChoices(choices: SignOffInput['deficitChoices']): Map<CivilDate, DeficitChoice> {
@@ -165,6 +174,21 @@ function parseChoices(choices: SignOffInput['deficitChoices']): Map<CivilDate, D
 
 function conflict(code: string, message: string): ApiError {
   return new ApiError(409, code, message, { fresh_review_required: true });
+}
+
+/**
+ * F-5 b: the saved signature image is optional, but a saved image is never left out. The reviewed payload and the
+ * image saved now must agree (both none, or the same image): any difference means the person reviewed another state,
+ * so the answer is 409 `stale_review`. Returns the image to record, or null for a sign-off with the name alone.
+ */
+function signatureForSignoff(db: Db, userId: string, payload: ReviewSnapshot): ReturnType<typeof currentSignature> {
+  const signature = currentSignature(db, userId);
+  const reviewed = payload.signature;
+  if (signature === null && reviewed === null) return null;
+  if (signature === null || reviewed === null || signature.id !== reviewed.attachment_id || signature.sha256 !== reviewed.sha256) {
+    throw conflict('stale_review', 'The signature image changed; review it again');
+  }
+  return signature;
 }
 
 function resolvePeriod(scope: UserScope, payrollDateInput: string): PayPeriod {
@@ -199,7 +223,7 @@ interface SignoffRow {
   signer_name: string;
   signed_at: string;
   reviewed_sha256: string;
-  signature_attachment_id: string;
+  signature_attachment_id: string | null;
 }
 
 function toRevision(row: RevisionRow): RevisionRecord {
@@ -285,13 +309,13 @@ export function listCurrentPendingLines(db: Db, userId: string) {
 function isIdenticalRetry(
   loaded: { view: FinalizationView; payload: ReviewSnapshot },
   input: SignOffInput,
-  signer: SignerName,
   choices: Map<CivilDate, DeficitChoice>,
 ): boolean {
   const { view, payload } = loaded;
-  if (!signer.ok || view.signoff === null) return false;
+  if (view.signoff === null) return false;
   if (view.revision.revisionKind !== 'original' || view.revision.origin !== 'employee') return false;
-  if (view.revision.reviewedSha256 !== input.reviewedHash || view.signoff.signerName !== signer.name) return false;
+  // The reviewed hash binds the account name and the image the person signed with.
+  if (view.revision.reviewedSha256 !== input.reviewedHash) return false;
   if (payload.unresolved_inputs.length > 0 && !input.incompleteEvidenceAcknowledged) return false;
   const recorded = new Map<CivilDate, DeficitChoice>();
   for (const proposal of payload.deficit_proposals) {
@@ -439,7 +463,6 @@ function enqueueJobs(db: Db, userId: string, revisionId: string, now: string, se
  */
 export function signOffTimesheet(ctx: FinalizationContext, payrollDate: string, input: SignOffInput): SignOffResult {
   const { db, clock, user } = ctx;
-  const signer = parseSignerName(input.signerName);
   const choices = parseChoices(input.deficitChoices);
   return writeTransaction(db, (): SignOffResult => {
     // 1. Recompute the reviewed content from the engine and bind it to the review.
@@ -451,7 +474,7 @@ export function signOffTimesheet(ctx: FinalizationContext, payrollDate: string, 
     if (existing !== undefined && isImportedTimesheet(db, user.id, existing.id)) throw importedPeriodError();
     if (existing !== undefined && existing.finalized_revision_no !== null) {
       const loaded = loadFinalization(db, user.id, existing);
-      if (loaded !== null && isIdenticalRetry(loaded, input, signer, choices)) {
+      if (loaded !== null && isIdenticalRetry(loaded, input, choices)) {
         return { status: 'replayed', finalizedRevisionNo: existing.finalized_revision_no, ...loaded.view };
       }
       throw conflict('already_finalized', 'This period is already finalized; load it again to review its current state');
@@ -463,16 +486,10 @@ export function signOffTimesheet(ctx: FinalizationContext, payrollDate: string, 
       throw conflict('stale_review', 'The reviewed content changed; review it again');
     }
 
-    // 2. The owner's name and current signature image, the acknowledgement and the choices.
-    if (!signer.ok) throw signer.error;
+    // 2. The account name, the saved signature image when there is one, the acknowledgement and the choices.
     const payload = review.payload;
-    if (payload.signature === null) {
-      throw new ApiError(422, 'signature_required', 'Upload a signature image before signing off');
-    }
-    const signature = currentSignature(db, user.id);
-    if (signature?.id !== payload.signature.attachment_id || signature.sha256 !== payload.signature.sha256) {
-      throw conflict('stale_review', 'The signature image changed; review it again');
-    }
+    const signerName = accountSignerName(payload.employee.name);
+    const signature = signatureForSignoff(db, user.id, payload);
     if (payload.unresolved_inputs.length > 0 && !input.incompleteEvidenceAcknowledged) {
       throw new ApiError(422, 'acknowledgement_required', 'Acknowledge the incomplete evidence before signing off', {
         unresolved: payload.unresolved_inputs.length,
@@ -494,7 +511,7 @@ export function signOffTimesheet(ctx: FinalizationContext, payrollDate: string, 
     db.prepare(
       `INSERT INTO signoffs (id, user_id, revision_id, signer_name, signed_at, reviewed_sha256, signature_attachment_id)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(randomUUID(), user.id, revisionId, signer.name, now, review.payloadHash, signature.id);
+    ).run(randomUUID(), user.id, revisionId, signerName, now, review.payloadHash, signature?.id ?? null);
 
     // 4. Ledger postings through ledger.ts and every proposal outcome (R4, F-2).
     const posting: PostingContext = { ledger: { db, clock }, scope, user, revisionId, payload };
@@ -532,8 +549,8 @@ export function signOffTimesheet(ctx: FinalizationContext, payrollDate: string, 
         payroll_date: period.payrollDate,
         payload_sha256: review.payloadHash,
         signed_at: now,
-        signature_attachment_id: signature.id,
-        signature_sha256: signature.sha256,
+        signature_attachment_id: signature?.id ?? null,
+        signature_sha256: signature?.sha256 ?? null,
         ledger_lines: outcomeCounts(lines),
         job_ids: loaded.view.jobs.map((job) => job.id),
         finalized_revision_no: revisionNo,
@@ -802,14 +819,13 @@ function ledgerContent(payload: ReviewSnapshot): string {
 function isRevisionReplay(
   loaded: { view: FinalizationView; payload: ReviewSnapshot },
   input: ReviseInput,
-  signer: SignerName,
   reason: string | null,
 ): boolean {
   const { view, payload } = loaded;
-  if (!signer.ok || view.signoff === null) return false;
+  if (view.signoff === null) return false;
   const revision = view.revision;
   if (revision.revisionKind !== input.kind || revision.reviewedSha256 !== input.reviewedHash) return false;
-  if (view.signoff.signerName !== signer.name || revision.correctionReason !== reason || revision.sendRequested !== input.sendEmail) return false;
+  if (revision.correctionReason !== reason || revision.sendRequested !== input.sendEmail) return false;
   if (payload.unresolved_inputs.length > 0 && !input.incompleteEvidenceAcknowledged) return false;
   // Choose-mode choices cannot be compared with what was recorded: such a retry is not a replay.
   return !payload.deficit_proposals.some((item) => item.mode === 'choose_at_signoff');
@@ -949,7 +965,6 @@ function postDifferences(posting: RevisionPosting, choices: Map<CivilDate, Defic
 export function reviseTimesheet(ctx: FinalizationContext, payrollDate: string, input: ReviseInput): SignOffResult {
   const { db, clock, user } = ctx;
   const reason = parseReason(input.kind, input.reason);
-  const signer = parseSignerName(input.signerName);
   const choices = parseChoices(input.deficitChoices);
   return writeTransaction(db, (): SignOffResult => {
     const review = buildReviewPayload(db, clock, user, payrollDate);
@@ -963,7 +978,7 @@ export function reviseTimesheet(ctx: FinalizationContext, payrollDate: string, i
     }
     const previous = loadFinalization(db, user.id, existing);
     if (previous === null) throw new Error('The finalized revision was not found');
-    if (isRevisionReplay(previous, input, signer, reason)) {
+    if (isRevisionReplay(previous, input, reason)) {
       return { status: 'replayed', finalizedRevisionNo: existing.finalized_revision_no, ...previous.view };
     }
     if (input.kind === 'late_review' && !(previous.view.revision.origin === 'deadline' && previous.view.revision.reviewState === 'pending')) {
@@ -976,16 +991,10 @@ export function reviseTimesheet(ctx: FinalizationContext, payrollDate: string, i
       throw conflict('stale_review', 'The reviewed content changed; review it again');
     }
 
-    // The owner's name and current signature image, the acknowledgement and the choices, as at sign-off.
-    if (!signer.ok) throw signer.error;
+    // The account name, the saved signature image when there is one, the acknowledgement and the choices, as at sign-off.
     const payload = review.payload;
-    if (payload.signature === null) {
-      throw new ApiError(422, 'signature_required', 'Upload a signature image before signing off');
-    }
-    const signature = currentSignature(db, user.id);
-    if (signature?.id !== payload.signature.attachment_id || signature.sha256 !== payload.signature.sha256) {
-      throw conflict('stale_review', 'The signature image changed; review it again');
-    }
+    const signerName = accountSignerName(payload.employee.name);
+    const signature = signatureForSignoff(db, user.id, payload);
     if (payload.unresolved_inputs.length > 0 && !input.incompleteEvidenceAcknowledged) {
       throw new ApiError(422, 'acknowledgement_required', 'Acknowledge the incomplete evidence before signing off', {
         unresolved: payload.unresolved_inputs.length,
@@ -1026,7 +1035,7 @@ export function reviseTimesheet(ctx: FinalizationContext, payrollDate: string, i
     db.prepare(
       `INSERT INTO signoffs (id, user_id, revision_id, signer_name, signed_at, reviewed_sha256, signature_attachment_id)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(randomUUID(), user.id, revisionId, signer.name, now, review.payloadHash, signature.id);
+    ).run(randomUUID(), user.id, revisionId, signerName, now, review.payloadHash, signature?.id ?? null);
 
     // Only differences reach the ledger, through ledger.ts; every outcome is recorded.
     const lines = postDifferences(
@@ -1063,7 +1072,7 @@ export function reviseTimesheet(ctx: FinalizationContext, payrollDate: string, i
         payroll_date: period.payrollDate,
         payload_sha256: review.payloadHash,
         signed_at: now,
-        signature_attachment_id: signature.id,
+        signature_attachment_id: signature?.id ?? null,
         send_requested: input.sendEmail,
         ledger_lines: revisionOutcomeCounts(lines),
         job_ids: loaded.view.jobs.map((job) => job.id),

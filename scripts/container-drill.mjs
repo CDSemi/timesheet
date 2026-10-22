@@ -39,7 +39,7 @@
 // The earlier stages are extended for the features added since: the stage 2 backup holds the import sources (committed and
 // preview batches, hashes equal to the uploaded workbooks) and a `backup prune --dry-run` inside the container counts what
 // it would remove and removes nothing; the stage 3 restore holds every import source, and the outbound pause is read from
-// /api/admin/operations; stage 4 migrates from the WP3 schema to the image's latest schema (migrations 0011-0013 included).
+// /api/admin/operations; stage 4 migrates from the WP3 schema to the image's latest schema (migrations 0011-0014 included).
 //
 // Usage: npm run drill:container -- --work <empty host directory outside the repository> [--project <name>] [--wp3 <dir>] [--keep]
 //   --work     host directory for the drill data, the env file and the raw logs (created if missing; nothing in it is deleted)
@@ -367,7 +367,6 @@ async function stageTwo(cookie) {
     body: {
       expected_version: review.json?.expected_version,
       reviewed_hash: review.json?.payload_hash,
-      signer_name: 'Synthetic Employee',
       incomplete_evidence_acknowledged: true,
     },
   });
@@ -603,7 +602,7 @@ async function signOffPeriod(cookie, payrollDate) {
   const review = await call('GET', `/api/timesheets/${payrollDate}/review`, { cookie });
   const signoff = await call('POST', `/api/timesheets/${payrollDate}/signoff`, {
     cookie,
-    body: { expected_version: review.json?.expected_version, reviewed_hash: review.json?.payload_hash, signer_name: 'Synthetic Employee', incomplete_evidence_acknowledged: true },
+    body: { expected_version: review.json?.expected_version, reviewed_hash: review.json?.payload_hash, incomplete_evidence_acknowledged: true },
   });
   return { status: signoff.status, revisionId: signoff.json?.revision?.id };
 }
@@ -1168,7 +1167,7 @@ async function stageFour() {
   check('upgraded database passes integrity_check and has no foreign key violation', afterUpgrade.integrity === 'ok' && afterUpgrade.foreignKeyViolations === 0);
   check('schema_migrations: contiguous 1..latest, and the old rows are unchanged', afterUpgrade.schema === target && afterUpgrade.migrations.map((row) => row.version).join() === Array.from({ length: target }, (_, index) => index + 1).join() && JSON.stringify(afterUpgrade.migrations.slice(0, oldVersion)) === JSON.stringify(preFacts.migrations));
   const appliedNow = afterUpgrade.migrations.slice(oldVersion);
-  check('migrations 0011 (job retention), 0012 (imports) and 0013 (opening balance) are among the applied ones', [11, 12, 13].every((version) => appliedNow.some((row) => row.version === version)), `versions ${appliedNow.map((row) => row.version).join(',')}`);
+  check('migrations 0011 (job retention), 0012 (imports), 0013 (opening balance) and 0014 (optional sign-off image) are among the applied ones', [11, 12, 13, 14].every((version) => appliedNow.some((row) => row.version === version)), `versions ${appliedNow.map((row) => row.version).join(',')}`);
   const upgradedImports = new Database(databasePath, { readonly: true, fileMustExist: true });
   try {
     const tables = upgradedImports.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('imports', 'job_retention_window') ORDER BY name").pluck().all();
@@ -1408,7 +1407,7 @@ async function stageSix({ employeePassword, adminPassword }) {
   const review = await call('GET', '/api/timesheets/2026-03-06/review', { cookie: employee.cookie });
   const signoff = await call('POST', '/api/timesheets/2026-03-06/signoff', {
     cookie: employee.cookie,
-    body: { expected_version: review.json?.expected_version, reviewed_hash: review.json?.payload_hash, signer_name: 'Synthetic Employee', incomplete_evidence_acknowledged: true },
+    body: { expected_version: review.json?.expected_version, reviewed_hash: review.json?.payload_hash, incomplete_evidence_acknowledged: true },
   });
   check('a sign-off of an imported period answers 409 imported_period', review.status === 200 && signoff.status === 409 && signoff.json?.error?.code === 'imported_period', `status ${review.status}/${signoff.status} ${signoff.json?.error?.code}`);
   check('the refused sign-off wrote nothing', sameCounts(countsInContainer(), afterOpening));

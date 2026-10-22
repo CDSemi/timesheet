@@ -179,21 +179,26 @@ function expectSingleFinalization(owner: Owner, round: number): void {
 }
 
 describe('concurrent sign-offs (AC-03, WP3)', () => {
-  it(`two different sign-offs of the same period: one wins, the other gets 409 (${ROUNDS} rounds)`, async () => {
+  it(`two different sign-offs of the same period (another reviewed hash): one wins, the other gets 409 (${ROUNDS} rounds)`, async () => {
     const distribution = new Map<string, number>();
     let overlapping = 0;
     for (let round = 0; round < ROUNDS; round += 1) {
       const owner = newOwner(round);
-      const outcomes = await race([signOffOp(owner, 'Synthetic Racer'), signOffOp(owner, 'Synthetic Racer B')]);
+      // F-5 b: the signer is the account, so a name cannot make two requests different. The second racer asks for
+      // another reviewed hash: it is stale before the winner commits and already_finalized after.
+      const other = signOffOp(owner, 'Synthetic Racer B');
+      if (other.kind === 'signOff') other.input.input.reviewedHash = 'b'.repeat(64);
+      const outcomes = await race([signOffOp(owner, 'Synthetic Racer'), other]);
       tally(distribution, outcomes);
       if (callWindowsOverlap(outcomes)) overlapping += 1;
       expect(new Set(outcomes.map((outcome) => outcome.racer)).size).toBe(2);
-      expect(labels(outcomes), `round ${round}`).toEqual(['409 already_finalized', 'created']);
+      expect(outcomes.filter((outcome) => outcome.ok).map((outcome) => outcome.ok && outcome.status), `round ${round}`).toEqual(['created']);
+      expect(labels(outcomes).filter((label) => label !== 'created'), `round ${round}`).toHaveLength(1);
+      expect(labels(outcomes).find((label) => label !== 'created'), `round ${round}`).toMatch(/^409 (already_finalized|stale_review)$/);
       expectSingleFinalization(owner, round);
-      // The stored signer is the winner's.
-      const winner = outcomes.findIndex((outcome) => outcome.ok);
+      // The stored signer is the account's, whatever name the racers carried.
       const signer = t.db.prepare('SELECT signer_name FROM signoffs WHERE user_id = ?').pluck().get(owner.user.id);
-      expect(signer).toBe(winner === 0 ? 'Synthetic Racer' : 'Synthetic Racer B');
+      expect(signer).toBe('Synthetic Racer');
     }
     report('sign-off vs different sign-off', ROUNDS, overlapping, distribution);
     // The barrier releases both racers together, so their calls really overlap in most rounds.

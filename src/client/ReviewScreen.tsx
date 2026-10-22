@@ -23,7 +23,7 @@ import {
   submitBlockers,
 } from './components/reviewModel.ts';
 
-const EMPTY_FORM: FormState = { signerName: '', acknowledged: false, choices: {}, reason: '', sendEmail: null };
+const EMPTY_FORM: FormState = { acknowledged: false, choices: {}, reason: '', sendEmail: null };
 
 type Phase = { kind: 'loading' } | { kind: 'ready' } | { kind: 'missing' } | { kind: 'failed'; message: string };
 
@@ -257,7 +257,7 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
                     <ReviewReservations payload={payload} />
                   </>
                 )}
-                {step.key === 'email' && <ReviewEnvelope payload={payload} error={errors.signature ?? null} />}
+                {step.key === 'email' && <ReviewEnvelope payload={payload} />}
                 {step.key === 'sign' && done === null && imported && (
                   <section className="card stack" aria-labelledby="review-imported-title" data-imported-lock>
                     <h2 id="review-imported-title">Sign off</h2>

@@ -54,7 +54,7 @@ export type TimesheetPdfInput = {
   automaticSubmittedAt: string | null;
   /** The name printed under the signature line: the stored sign-off name (manual) or the employee name (automatic). */
   signerName: string;
-  /** The validated signature image (PNG or JPEG bytes): required for a manual revision, allowed for an automatic one only when authorized. */
+  /** The validated signature image (PNG or JPEG bytes): optional for a manual revision (null prints the name alone, F-5 b), allowed for an automatic one only when authorized. */
   signatureImage: Uint8Array | null;
 };
 
@@ -246,7 +246,7 @@ export async function renderTimesheetPdf(input: TimesheetPdfInput): Promise<Uint
   if (input.origin === 'manual') {
     if (input.signedAt === null) throw new PdfRenderError('A manual revision needs its real sign-off instant');
     if (input.automaticSubmittedAt !== null) throw new PdfRenderError('A manual revision has no automatic submission instant');
-    if (input.signatureImage === null) throw new PdfRenderError('A manual revision needs its signature image');
+    // F-5 b: a manual revision carries its saved signature image when one exists, else the printed name alone.
     printedInstant = input.signedAt;
   } else {
     if (input.signedAt !== null) throw new PdfRenderError('An automatic revision has no real sign-off instant');

@@ -510,19 +510,39 @@ describe('correction revision', () => {
     expect(writeState()).toEqual(afterEdit);
   });
 
-  it('requires the signer name, the signature image and the acknowledgement like a sign-off', async () => {
+  it('requires the acknowledgement like a sign-off, and signs as the account whatever signer_name says (F-5 b)', async () => {
     await addSession('2026-09-15', '09:00', '18:00');
     uploadSignature(0x68);
     await finalizeOriginal();
     const before = writeState();
-    const blank = await revise(await reviseBody({ signer_name: '  ' }));
-    expect(blank.status).toBe(422);
-    expect(blank.body.error.code).toBe('signer_name_required');
     // The day 2026-09-16 has no records, so the review lists unresolved inputs.
     const unacknowledged = await revise(await reviseBody({ incomplete_evidence_acknowledged: false }));
     expect(unacknowledged.status).toBe(422);
     expect(unacknowledged.body.error.code).toBe('acknowledgement_required');
     expect(writeState()).toEqual(before);
+    // A blank typed name no longer refuses anything: the key is accepted and ignored.
+    const ignored = await revise(await reviseBody({ signer_name: '  ' }));
+    expect(ignored.status, JSON.stringify(ignored.body)).toBe(201);
+    expect(ignored.body.signoff.signer_name).toBe(SIGNER);
+  });
+
+  it('corrects a period that was signed without an image: the correction signs by name alone, or with the image saved since', async () => {
+    await addSession('2026-09-15', '09:00', '18:00');
+    const original = await finalizeOriginal();
+    expect(original.signoff.signature_attachment_id).toBeNull();
+    await addSession('2026-09-17', '09:00', '18:00', { reason: REASON });
+    const byName = await revise(await reviseBody());
+    expect(byName.status, JSON.stringify(byName.body)).toBe(201);
+    expect(byName.body.signoff).toMatchObject({ signer_name: SIGNER, signature_attachment_id: null });
+    // An image saved after that review is never left out: the stale review is refused, a fresh one signs with it.
+    const stale = await reviseBody();
+    const signature = uploadSignature(0x6b);
+    await addSession('2026-09-18', '09:00', '18:00', { reason: REASON });
+    const refused = await revise({ ...stale });
+    expect(refused.status).toBe(409);
+    const withImage = await revise(await reviseBody());
+    expect(withImage.status, JSON.stringify(withImage.body)).toBe(201);
+    expect(withImage.body.signoff).toMatchObject({ signer_name: SIGNER, signature_attachment_id: signature.id });
   });
 
   it('an identical retry returns the same revision and writes nothing; another one is a conflict', async () => {

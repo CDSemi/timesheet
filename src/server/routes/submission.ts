@@ -151,7 +151,6 @@ export function submissionRoutes(deps: AppDeps, options: SubmissionRouterOptions
     const result = signOffTimesheet({ db: deps.db, clock: deps.clock, user: c.get('subject') }, c.req.param('payrollDate'), {
       expectedVersion: body.expected_version,
       reviewedHash: body.reviewed_hash,
-      signerName: body.signer_name,
       deficitChoices: (body.deficit_choices ?? []).map((item) => ({ workDate: item.work_date, choice: item.choice })),
       incompleteEvidenceAcknowledged: body.incomplete_evidence_acknowledged ?? false,
     });
@@ -167,7 +166,6 @@ export function submissionRoutes(deps: AppDeps, options: SubmissionRouterOptions
       sendEmail: body.send_email,
       expectedVersion: body.expected_version,
       reviewedHash: body.reviewed_hash,
-      signerName: body.signer_name,
       deficitChoices: (body.deficit_choices ?? []).map((item) => ({ workDate: item.work_date, choice: item.choice })),
       incompleteEvidenceAcknowledged: body.incomplete_evidence_acknowledged ?? false,
     });
@@ -183,7 +181,6 @@ export function submissionRoutes(deps: AppDeps, options: SubmissionRouterOptions
       sendEmail: body.send_email,
       expectedVersion: body.expected_version,
       reviewedHash: body.reviewed_hash,
-      signerName: body.signer_name,
       deficitChoices: (body.deficit_choices ?? []).map((item) => ({ workDate: item.work_date, choice: item.choice })),
       incompleteEvidenceAcknowledged: body.incomplete_evidence_acknowledged ?? false,
     });

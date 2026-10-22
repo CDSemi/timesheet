@@ -1,0 +1,30 @@
+WP5-UX5-T01a checks (Git Bash, Node 24.21.0 first on PATH, TEMP/TMP/DATA_DIR/DATABASE_PATH in the task folder
+D:\.claude-tmp\timesheet\WP5-UX5-T01a, SMOKE_PORT 49661). Raw outputs are in that folder. <user> = the Windows user name.
+
+Base: HEAD 57c41e8e43fb6e10df654294361818e59bff86ca; digest before 7af8e935f2c11f05b5c584a0a38da1170aa9826d752ee54434a4a8d2be434949 (850 files).
+
+1. npm run typecheck                        exit 0
+2. npm run lint                             exit 0
+3. npm test (vitest run)                    exit 0   Test Files 97 passed (97), Tests 2233 passed (2233)  (before: 2225)
+4. npm run build                            exit 0   no chunk advisory
+5. Integration files run alone (each once): finalization, jobs, pdf-render, migrations, plus the full npm test above: pass.
+6. Mutants (each reverted afterwards, source re-grepped clean):
+   - restore the image requirement (signatureForSignoff throws 422 signature_required when both are null):
+     4 failed (finalization name-only test, corrections name-only correction, jobs name-only PDF test, migrations 0014 test)
+   - take the signer name from the request again (service reads input.signerName, route passes it):
+     3 failed (finalization ignored-name test, jobs manual mapping, jobs name-only mapping)
+   - the migration keeps the column NOT NULL:
+     4 failed (finalization name-only, jobs name-only, migrations 0014 upgrade, migrations 0014 fresh)
+7. Full e2e, both projects, real clock, alone, after the last change (npx playwright test):
+   run 1 (before the history-settings assertion fix): 777 passed, 101 skipped, 2 failed
+     (history-settings.spec.ts:237 desktop and mobile: the old typed name 'Synthetic Person' expected under "signed")
+   run 2 (after the one-line fix, nothing else changed): exit 0, 779 passed, 101 skipped, 0 failed, 16.7m
+     desktop ok 407 skipped 33 failed 0; mobile ok 372 skipped 68 failed 0
+   No rerun was a network or buffer retry; run 1 failed on a real assertion and was fixed, not retried.
+8. EN/VI parity (workflow Python, -I, parity.py): headings, bullets and table rows equal for docs/03, 04, 05, 06, 10 and
+   DEVELOPMENT (EN = VI): 03: 6/5/21; 04: 10/47/26; 05: 7/6/7; 06: 4/0/18; 10: 32/119/31; DEVELOPMENT: 9/18/50.
+9. validate_package.py --preflight (workflow Python at <user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe):
+   exit 0, status PASS, translation_pairs 120, local_links 2337, scenario_total 91.
+10. git diff --check: exit 0. No signature image or real name in any changed file (synthetic fixtures only).
+11. npm run verify (SMOKE_PORT=49661): exit 0 (typecheck, lint, test, build, smoke: SMOKE PASSED, schema v14).
+12. npm run digest: see the last line of the brief's Results.

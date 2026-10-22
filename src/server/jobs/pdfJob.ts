@@ -60,7 +60,7 @@ interface RevisionRow {
 interface SignoffRow {
   signer_name: string;
   signed_at: string;
-  signature_attachment_id: string;
+  signature_attachment_id: string | null;
 }
 
 const sha256 = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
@@ -114,12 +114,14 @@ function signatureInput(db: Db, files: FileStore, revision: RevisionRow, snapsho
     )
     .get(revision.id, revision.user_id);
   if (signoff !== undefined) {
+    // F-5 b: the image is optional. The sign-off and the reviewed snapshot agree on it: both none (the name alone
+    // signs) or the same saved image, whose bytes are checked against the reviewed hash.
     const reviewed = snapshot.signature;
-    if (reviewed === null || reviewed.attachment_id !== signoff.signature_attachment_id) {
+    if ((reviewed?.attachment_id ?? null) !== signoff.signature_attachment_id) {
       throw new JobError('signature_reference_mismatch', { permanent: true });
     }
-    const image = readSignature(db, files, revision.user_id, reviewed.attachment_id, reviewed.sha256);
-    // The name the employee signed with (the stored sign-off), not necessarily the profile name.
+    const image = reviewed === null ? null : readSignature(db, files, revision.user_id, reviewed.attachment_id, reviewed.sha256);
+    // The name the person signed with (the stored sign-off: the account name at sign-off time).
     return { origin: 'manual', signedAt: signoff.signed_at, automaticSubmittedAt: null, signerName: signoff.signer_name, signatureImage: image };
   }
   // No sign-off row: an automatic revision. Its printed date is its own creation instant; signed_at stays empty.

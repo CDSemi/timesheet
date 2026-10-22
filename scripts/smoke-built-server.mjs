@@ -364,14 +364,15 @@ try {
   const signoffBody = {
     expected_version: review2.json?.expected_version,
     reviewed_hash: review2.json?.payload_hash,
-    signer_name: 'Example Employee Two',
     incomplete_evidence_acknowledged: true,
   };
   const signoff = await call('POST', `/api/timesheets/${payroll2}/signoff`, { cookie: cookie2, body: signoffBody });
   const revisionId = signoff.json?.revision?.id;
   check('sign-off of the reviewed period creates revision 1', signoff.status === 201 && signoff.json?.revision?.revision_no === 1 && typeof revisionId === 'string', String(signoff.status));
   const stateAfterSignoff = dbState();
-  const conflict = await call('POST', `/api/timesheets/${payroll2}/signoff`, { cookie: cookie2, body: { ...signoffBody, signer_name: 'Another Name' } });
+  // The signer is the account (the server ignores a name in the body), so the different request varies the choices.
+  const differentChoice = [{ work_date: review2.json?.payload?.days?.[0]?.work_date, choice: 'deduct' }];
+  const conflict = await call('POST', `/api/timesheets/${payroll2}/signoff`, { cookie: cookie2, body: { ...signoffBody, deficit_choices: differentChoice } });
   check(
     'a second, different sign-off of the same period is refused with 409 and writes nothing',
     conflict.status === 409 && conflict.json?.error?.code === 'already_finalized' && dbState() === stateAfterSignoff,

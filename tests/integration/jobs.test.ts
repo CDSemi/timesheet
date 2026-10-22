@@ -87,10 +87,21 @@ async function addSession(date: string, from: string, to: string, reason?: strin
 
 /** A signed original revision with OT on a weekday and on the second Sunday; its jobs are queued. */
 async function signedRevision(files = new FileStore(dataDir()), signerName = 'Example Employee') {
+  const signed = await signPeriod(files, signerName, true);
+  if (signed.signature === null) throw new Error('The fixture saved no signature image');
+  return { ...signed, signature: signed.signature };
+}
+
+/** The same signed revision with no saved signature image (F-5 b): the sign-off carries the name only. */
+async function signedRevisionWithoutImage(files = new FileStore(dataDir()), signerName = 'Example Employee') {
+  return signPeriod(files, signerName, false);
+}
+
+async function signPeriod(files: FileStore, signerName: string, withImage: boolean) {
   await addSession('2026-09-15', '09:00', '18:00');
   await addSession('2026-09-27', '10:00', '12:00');
   const png = makePng(40, 12);
-  const signature = saveSignature(t.db, t.clock, files, t.userIds.employee, png, 'image/png');
+  const signature = withImage ? saveSignature(t.db, t.clock, files, t.userIds.employee, png, 'image/png') : null;
   const review = await t.request('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: employee });
   expect(review.status, JSON.stringify(review.body)).toBe(200);
   t.clock.advanceSeconds(60);
@@ -436,15 +447,31 @@ describe('PDF job input mapping (WP3-T07B)', () => {
   }
 
   it('maps a manual revision to the stored sign-off name and instant, no automatic instant and the reviewed image', async () => {
+    // F-5 b: the signer is the account; a name passed by an older caller is ignored.
     const { revisionId, png, files } = await signedRevision(new FileStore(dataDir()), 'Quinn Q. Signer');
     const signoff = t.db.prepare('SELECT signer_name, signed_at FROM signoffs WHERE revision_id = ?').get(revisionId) as { signer_name: string; signed_at: string };
-    expect(signoff.signer_name).toBe('Quinn Q. Signer');
+    expect(signoff.signer_name).toBe('Example Employee');
     const { input, content } = await runPdfJob(files, revisionId);
-    expect(input).toMatchObject({ origin: 'manual', signedAt: signoff.signed_at, automaticSubmittedAt: null, signerName: 'Quinn Q. Signer' });
+    expect(input).toMatchObject({ origin: 'manual', signedAt: signoff.signed_at, automaticSubmittedAt: null, signerName: 'Example Employee' });
     expect(Buffer.from(input.signatureImage ?? []).equals(png)).toBe(true);
-    // The profile name stays in the header; the stored name is printed under the signature line.
+    // The account name is in the header and, on its own line, under the signature line.
     expect(content.text).toContain('Employee: Example Employee');
-    expect(content.lines.filter((line) => line.includes('Quinn Q. Signer'))).toHaveLength(1);
+    expect(content.lines.filter((line) => line === 'Example Employee')).toHaveLength(1);
+    expect(content.text).not.toContain('Quinn Q. Signer');
+  });
+
+  it('maps a manual revision without a saved image to the name alone: a null image and no picture on the page', async () => {
+    const files = new FileStore(dataDir());
+    const { revisionId } = await signedRevisionWithoutImage(files, 'Ignored Name');
+    const signoff = t.db.prepare('SELECT signer_name, signature_attachment_id FROM signoffs WHERE revision_id = ?').get(revisionId) as {
+      signer_name: string;
+      signature_attachment_id: string | null;
+    };
+    expect(signoff).toEqual({ signer_name: 'Example Employee', signature_attachment_id: null });
+    const { input, content } = await runPdfJob(files, revisionId);
+    expect(input).toMatchObject({ origin: 'manual', automaticSubmittedAt: null, signerName: 'Example Employee', signatureImage: null });
+    expect(content.pages[0]?.images).toHaveLength(0);
+    expect(content.lines.filter((line) => line === 'Example Employee')).toHaveLength(1);
   });
 
   it('maps an automatic revision to its creation instant, the employee name and no image unless authorized', async () => {

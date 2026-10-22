@@ -1275,6 +1275,49 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
     `contrast.ts` vẫn còn hàm chờ cũ; đợt 5 sẽ xử lý.
   - Kết quả: e2e đầy đủ 0 lỗi; các đột biến đều bị bắt; digest 7af8e935.
 - Đang chạy: WP5-UX4-FIX3-FREEZE (một committer mới, chạy một mình). Đây là commit cuối của đợt 4.
+- WP5-UX4-FIX3-FREEZE đã commit và push 57c41e8e43fb6e10df654294361818e59bff86ca.
+  - 179 đường dẫn; digest 7af8e935 trên HEAD; mọi kiểm tra trả về 0; các lần quét đều sạch.
+  - Đợt 4 được gộp vào đợt 5.
+- Chủ dự án (nguyên văn trên board): ghi chú mockup lần 2 (B2, B7/B9, B11) và duyệt font Indie
+  Flower. Chủ dự án muốn đưa ảnh mẫu cho agent vẽ mockup. Ảnh chỉ được xem từ thư mục tạm của phiên,
+  không sao chép, không ghi lại tên hay chữ ký thật.
+- Đang chạy song song:
+  - WP5-UX5-T01a (worker-high, sonnet; tác vụ sửa source): người ký lấy từ tài khoản, ảnh chữ ký
+    không bắt buộc, kèm migration 0014. Việc tách Sign off và Send để cho T01b.
+  - Addendum 2 của WP5-UX5-PLAN (planner, chỉ đọc): các ghi chú mockup.
+- T01a dừng vì thiếu phạm vi, trước khi sửa file nào. Để compile và chạy verify được, cần thêm năm
+  đường dẫn: `ReviewScreen.tsx`, `ReviewEnvelope.tsx`, hai script smoke và drill, và `DEVELOPMENT.md`
+  (+ vi).
+  - Addendum 1 bổ sung các đường dẫn này, và cho phép gửi `signer_name` nhưng bỏ qua giá trị, để 22
+    file test vẫn dùng được.
+  - `scripts/precommit-check.mjs` vẫn nằm ngoài phạm vi vì là file GOV; các script còn lại thì
+    không phải.
+  - Cùng worker đó chạy tiếp.
+- Addendum 2 của WP5-UX5-PLAN xong.
+  - Đã đo các ngưỡng của B2.
+  - B7/B9: đường kẻ thẳng hàng, dài 22rem và 11rem; nút Sign off thụt vào 8px.
+  - B11: kiểu chữ đo theo ảnh mẫu, không lưu ảnh. Tiêu đề Serif Condensed Bold 17/18pt, tên thứ
+    in đậm dạng small caps, Indie Flower 13pt, các trường thụt vào 54pt, các hàng cao 34/69/16/17pt.
+  - Đã vẽ lại ảnh render. Không có câu hỏi mới.
+- Điều chỉnh lần 3 của chủ dự án (nguyên văn trên board): trên trang Review và trong hộp thoại Sign
+  off, các hàng chữ ký và ngày tương ứng thụt vào 1 tab so với lề trái và 2 tab so với lề phải.
+  - Đã ghi thành Addendum 3 của kế hoạch, với 1 tab = 0,5 inch (48px / 36pt).
+  - Sẽ áp dụng trong UX5-T03, không vẽ lại mockup. PDF giữ nguyên trừ khi chủ dự án yêu cầu.
+- Chủ dự án đính chính điều chỉnh lần 3 (nguyên văn trên board): các hàng chữ ký trên trang Review và
+  trong hộp thoại Sign off thụt vào giống bản vẽ PDF B11.
+  - Addendum 3b của kế hoạch thay cho quy tắc 1 tab / 2 tab.
+  - UX5-T03 sẽ đo tỷ lệ từ bản vẽ B11 và áp dụng bằng token.
+- WP5-UX5-T01a xong.
+  - Người ký lấy theo tài khoản; `signer_name` bị bỏ qua.
+  - Ảnh chữ ký không bắt buộc, qua migration 0014, có test nâng cấp từ v13.
+  - Kết quả: e2e đầy đủ 779 đạt, 0 lỗi; 3/3 đột biến bị bắt; digest 783a63f8 (851 file).
+  - Chấp nhận một assertion nằm ngoài phạm vi được giao (`history-settings.spec.ts:286`).
+  - docs/01 FR-11 chuyển sang T01b.
+- Đang chạy: WP5-UX5-T01a-FREEZE (một committer mới, chạy một mình), với 39 đường dẫn.
+  - Lần 1 dừng ở bước validator với lỗi "Invalid task ID", vì mã task có chữ "a" viết thường. Đây là
+    sơ suất của coordinator.
+  - Mã task trên board đã đổi thành WP5-UX5-T01A và WP5-UX5-T01A-FREEZE; tên file giữ nguyên.
+  - Cùng committer đó stage lại board và checkpoint, rồi chạy lại mọi kiểm tra (lần 2).
 - Còn lại sau T06:
   - T06-FREEZE;
   - gate cho cả đợt 4;

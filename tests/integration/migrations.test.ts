@@ -8,11 +8,13 @@ import { type Db, openDatabase } from '../../src/server/db/database.ts';
 import { MIGRATIONS, migrate, MigrationError, migrationChecksum } from '../../src/server/db/migrations.ts';
 import { FileStore } from '../../src/server/files/fileStore.ts';
 import { seedSynthetic } from '../../src/server/seed.ts';
-import { signOffTimesheet } from '../../src/server/services/finalization.ts';
+import { finalizeAutomatically, reviseTimesheet, signOffTimesheet } from '../../src/server/services/finalization.ts';
 import { getHistory } from '../../src/server/services/history.ts';
 import { getBalance, postCorrection, postCredit, postDeficitDebit, postOpeningBalance } from '../../src/server/services/ledger.ts';
 import { recordOtLeaveUse, reserveOtLeave, reverseOtLeaveUse } from '../../src/server/services/otLeave.ts';
 import { buildReviewPayload } from '../../src/server/services/reviewPayload.ts';
+import { currentSignature } from '../../src/server/services/signatures.ts';
+import { authorizeAutoImage, currentSubmissionSettings } from '../../src/server/services/submissionSettings.ts';
 import { granteeChangesForReview } from '../../src/server/services/sharedActs.ts';
 import { createSession } from '../../src/server/services/timesheetCommands.ts';
 import { LA, MutableClock } from '../support/testApp.ts';
@@ -109,7 +111,7 @@ function expectSqliteError(action: () => unknown, pattern: RegExp): void {
 
 describe('fresh SQLite migrations', () => {
   it('applies every migration to an empty file database with the required pragmas', () => {
-    expect(LATEST).toBe(13);
+    expect(LATEST).toBe(14);
     expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: LATEST });
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
@@ -144,6 +146,7 @@ describe('fresh SQLite migrations', () => {
       'job_retention',
       'imports',
       'ot_opening_balance',
+      'signoff_optional_image',
     ]);
     const strictTables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%) STRICT' ORDER BY name")
@@ -266,7 +269,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       expect(before[name]?.length, name).toBeGreaterThan(0);
     }
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], version: 13 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], version: 14 });
 
     const after = snapshot(db);
     // schema_migrations gains exactly one row; WP1 rows (including migration 1's record) are unchanged.
@@ -284,13 +287,14 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       expect.objectContaining({ version: 11, name: 'job_retention', applied_at: '2026-10-02T18:00:00Z' }),
       expect.objectContaining({ version: 12, name: 'imports', applied_at: '2026-10-02T18:00:00Z' }),
       expect.objectContaining({ version: 13, name: 'ot_opening_balance', applied_at: '2026-10-02T18:00:00Z' }),
+      expect.objectContaining({ version: 14, name: 'signoff_optional_image', applied_at: '2026-10-02T18:00:00Z' }),
     ]);
     expect({ ...after, schema_migrations: [] }).toEqual({ ...before, schema_migrations: [] });
     // WP1 rows are conservatively explicit (an employee may have chosen the label) and carry no leave kind.
     expect(db.prepare('SELECT id, leave_minutes, category_source, leave_kind FROM day_entries').all()).toEqual([
       { id: 'd1', leave_minutes: 120, category_source: 'explicit', leave_kind: null },
     ]);
-    expect(db.pragma('user_version', { simple: true })).toBe(13);
+    expect(db.pragma('user_version', { simple: true })).toBe(14);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT count(*) FROM ot_ledger').pluck().get()).toBe(0);
@@ -302,7 +306,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       { userId: employee, sourceKey: 'upgrade-check', minutes: 30, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
     );
     expect(getBalance(db, employee).postedMinutes).toBe(30);
-    expect(migrate(db)).toEqual({ applied: [], version: 13 });
+    expect(migrate(db)).toEqual({ applied: [], version: 14 });
     // The upgraded row stays editable: leave minutes now need a kind, and the row stays usable by work sessions.
     db.prepare("UPDATE day_entries SET leave_kind = 'ot', version = version + 1 WHERE id = 'd1'").run();
     expect(db.prepare("SELECT s.id FROM work_sessions s JOIN day_entries d ON d.user_id = s.user_id AND d.work_date = s.work_date WHERE d.id = 'd1'").pluck().all()).toEqual(['s1']);
@@ -319,7 +323,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       { db, clock: new MutableClock(AT) },
       { userId: employee, sourceKey: 'before-upgrade', minutes: 45, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
     );
-    expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], version: 13 });
+    expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], version: 14 });
     expect(getBalance(db, employee).postedMinutes).toBe(45);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
   });
@@ -512,13 +516,13 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     }
     const balances = seed.users.map((user) => getBalance(db, user.id));
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).toEqual({ applied: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13], version: 13 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).toEqual({ applied: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], version: 14 });
 
     expect(snapshotV3(db)).toEqual(before);
     expect(seed.users.map((user) => getBalance(db, user.id))).toEqual(balances);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
-    expect(db.pragma('user_version', { simple: true })).toBe(13);
+    expect(db.pragma('user_version', { simple: true })).toBe(14);
     // Existing timesheets are not imported history; automation stays inactive until the owner records it.
     expect(db.prepare('SELECT DISTINCT imported_unverified FROM timesheets').pluck().all()).toEqual([0]);
     expect(db.prepare('SELECT * FROM operations_state').all()).toEqual([
@@ -544,7 +548,7 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     }
     // The retention window is the one seeded row, closed (migration 0011).
     expect(db.prepare('SELECT id, as_of FROM job_retention_window').all()).toEqual([{ id: 1, as_of: null }]);
-    expect(migrate(db)).toEqual({ applied: [], version: 13 });
+    expect(migrate(db)).toEqual({ applied: [], version: 14 });
   });
 });
 
@@ -1815,7 +1819,7 @@ describe('migration 0013 opening balance (ot_ledger rebuild, F-3)', () => {
     };
     expect(before.ledger.length).toBeGreaterThanOrEqual(6);
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-06T12:00:00Z'))).toEqual({ applied: [13], version: 13 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-06T12:00:00Z'))).toEqual({ applied: [13, 14], version: 14 });
 
     const ledgerAfter = db.prepare('SELECT rowid AS row_id, * FROM ot_ledger ORDER BY rowid').all() as Array<Record<string, unknown>>;
     expect(ledgerAfter.map(({ as_of_date: _asOf, evidence_ref: _evidence, ...rest }) => rest)).toEqual(before.ledger);
@@ -1847,7 +1851,7 @@ describe('migration 0013 opening balance (ot_ledger rebuild, F-3)', () => {
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
-    expect(db.pragma('user_version', { simple: true })).toBe(13);
+    expect(db.pragma('user_version', { simple: true })).toBe(14);
 
     // The rebuilt table is still append-only and its foreign keys are enforced.
     expectSqliteError(() => db.prepare('UPDATE ot_ledger SET delta_minutes = 1').run(), /immutable_ledger_entry/);
@@ -1873,7 +1877,7 @@ describe('migration 0013 opening balance (ot_ledger rebuild, F-3)', () => {
     );
     expect(opening.status).toBe('posted');
     expect(getBalance(db, owner.id).postedMinutes).toBe((before.balances[users.indexOf(owner.id)]?.postedMinutes ?? 0) + 90);
-    expect(migrate(db)).toEqual({ applied: [], version: 13 });
+    expect(migrate(db)).toEqual({ applied: [], version: 14 });
   });
 
   it('checks foreign keys before the commit: a violation rolls the whole rebuild back and restores the pragma', async () => {
@@ -1896,10 +1900,10 @@ describe('migration 0013 opening balance (ot_ledger rebuild, F-3)', () => {
     expect(db.inTransaction).toBe(false);
   });
 
-  it('builds the same table on a fresh 1 to 13 database', () => {
-    const fresh = openDatabase(join(dir, 'fresh-13.db'));
+  it('builds the same table on a fresh 1 to latest database', () => {
+    const fresh = openDatabase(join(dir, 'fresh-latest.db'));
     try {
-      expect(migrate(fresh)).toEqual({ applied: ALL_VERSIONS, version: 13 });
+      expect(migrate(fresh)).toEqual({ applied: ALL_VERSIONS, version: 14 });
       expect(fresh.prepare("SELECT name FROM pragma_table_info('ot_ledger') ORDER BY cid").pluck().all()).toEqual([
         'id',
         'user_id',
@@ -1925,9 +1929,216 @@ describe('migration 0013 opening balance (ot_ledger rebuild, F-3)', () => {
       ]);
       expect(fresh.pragma('integrity_check', { simple: true })).toBe('ok');
       expect(fresh.pragma('foreign_key_check')).toEqual([]);
-      expect(migrate(fresh)).toEqual({ applied: [], version: 13 });
+      expect(migrate(fresh)).toEqual({ applied: [], version: 14 });
     } finally {
       fresh.close();
     }
+  });
+});
+
+describe('migration 0014 optional sign-off image (signoffs rebuild, F-5 b)', () => {
+  const AT = '2026-09-29T20:00:00Z';
+  const UP_TO_13 = MIGRATIONS.filter((migration) => migration.version <= 13);
+
+  function schemaObjects(target: Db, table: string) {
+    return target
+      .prepare("SELECT type, name, sql FROM sqlite_master WHERE tbl_name = ? AND type IN ('index', 'trigger') ORDER BY type, name")
+      .all(table) as Array<{ type: string; name: string; sql: string | null }>;
+  }
+
+  /** Every row of every table except the rebuilt sign-offs and the migration record, in storage order. */
+  function otherRows(target: Db): Record<string, unknown[]> {
+    const tables = target
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('signoffs', 'schema_migrations') ORDER BY name")
+      .pluck()
+      .all() as string[];
+    return Object.fromEntries(tables.map((name) => [name, target.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all()]));
+  }
+
+  const sessionUser = (id: string): SessionUser => {
+    const row = db.prepare('SELECT id, email, display_name, calendar_id FROM users WHERE id = ?').get(id) as {
+      id: string;
+      email: string;
+      display_name: string;
+      calendar_id: string;
+    };
+    return { id: row.id, email: row.email, displayName: row.display_name, role: 'employee', calendarId: row.calendar_id, sessionId: 'fixture' };
+  };
+
+  /**
+   * A version 13 database with a signed original and a correction (both with the saved image) of one employee and an
+   * automatic revision (authorized image) of the same employee in another period, plus a second employee with no image.
+   */
+  async function populatedV13() {
+    expect(migrate(db, UP_TO_13)).toEqual({ applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], version: 13 });
+    const clock = new MutableClock(AT);
+    const seed = await seedSynthetic(db, clock, {
+      files: new FileStore(join(dir, 'private-data')),
+      passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass', employee2: 'synthetic-employee2-pass' },
+      sampleData: true,
+    });
+    const idOf = (email: string) => db.prepare('SELECT id FROM users WHERE email = ?').pluck().get(email) as string;
+    const owner = sessionUser(idOf('employee2@example.invalid'));
+    const imageless = sessionUser(idOf('employee@example.invalid'));
+    const session = (date: string, reason: string) =>
+      createSession({ db, clock, user: owner }, date, {
+        start: { local: `${date}T09:00`, zone: LA },
+        end: { local: `${date}T19:00`, zone: LA },
+        input_zone: LA,
+        breaks_confirmed: true,
+        breaks: [],
+        reason,
+      });
+    session('2026-09-02', 'Synthetic late entry for the schema 13 fixture');
+    const first = buildReviewPayload(db, clock, owner, '2026-09-18');
+    signOffTimesheet({ db, clock, user: owner }, '2026-09-18', {
+      expectedVersion: first.expectedVersion,
+      reviewedHash: first.payloadHash,
+      deficitChoices: [],
+      incompleteEvidenceAcknowledged: true,
+    });
+    session('2026-09-03', 'Synthetic second entry to correct');
+    const second = buildReviewPayload(db, clock, owner, '2026-09-18');
+    reviseTimesheet({ db, clock, user: owner }, '2026-09-18', {
+      kind: 'correction',
+      reason: 'Synthetic correction for the schema 13 fixture',
+      sendEmail: false,
+      expectedVersion: second.expectedVersion,
+      reviewedHash: second.payloadHash,
+      deficitChoices: [],
+      incompleteEvidenceAcknowledged: true,
+    });
+    const image = currentSignature(db, owner.id);
+    expect(image).not.toBeNull();
+    const settings = currentSubmissionSettings(db, owner.id);
+    authorizeAutoImage(db, clock, owner.id, { expectedSeq: settings?.seq ?? 0, signatureAttachmentId: image?.id ?? '' });
+    const automatic = finalizeAutomatically({ db, clock, owner }, { payrollDate: '2026-10-02', authorize: () => null });
+    expect(automatic.status).toBe('created');
+    expect(db.prepare('SELECT count(*) FROM signoffs WHERE signature_attachment_id IS NOT NULL').pluck().get()).toBe(2);
+    expect(db.prepare("SELECT revision_kind, origin FROM timesheet_revisions ORDER BY created_at, revision_no").all()).toEqual(
+      expect.arrayContaining([
+        { revision_kind: 'original', origin: 'employee' },
+        { revision_kind: 'correction', origin: 'employee' },
+        { revision_kind: 'original', origin: 'deadline' },
+      ]),
+    );
+    return { owner, imageless, users: seed.users.map((user) => user.id) };
+  }
+
+  it('upgrades a populated version 13 database: rows copied unchanged, the triggers still refuse update and delete, a null image only through the new path', async () => {
+    const { owner, imageless } = await populatedV13();
+    const before = {
+      signoffs: db.prepare('SELECT rowid AS row_id, * FROM signoffs ORDER BY rowid').all() as Array<Record<string, unknown>>,
+      others: otherRows(db),
+      objects: schemaObjects(db, 'signoffs'),
+      keys: db.pragma('foreign_key_list(signoffs)'),
+      imageColumn: (db.pragma('table_info(signoffs)') as Array<{ name: string; notnull: number }>).find((column) => column.name === 'signature_attachment_id'),
+    };
+    expect(before.signoffs).toHaveLength(2);
+    expect(before.imageColumn?.notnull).toBe(1);
+    expect(before.objects.map((item) => item.name)).toEqual(
+      expect.arrayContaining(['signoffs_image_kind', 'signoffs_no_delete', 'signoffs_no_update', 'signoffs_revision_signed']),
+    );
+    // Before the migration the schema cannot hold a sign-off without an image: the only way to a null is the new table.
+    expect(before.objects.find((item) => item.name === 'signoffs_image_kind')?.sql).not.toContain('IS NOT NULL');
+
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-21T12:00:00Z'))).toEqual({ applied: [14], version: 14 });
+
+    // Existing rows, with their rowids, and every other table are unchanged; the image column is now nullable.
+    expect(db.prepare('SELECT rowid AS row_id, * FROM signoffs ORDER BY rowid').all()).toEqual(before.signoffs);
+    expect(otherRows(db)).toEqual(before.others);
+    expect(db.pragma('foreign_key_list(signoffs)')).toEqual(before.keys);
+    expect((db.pragma('table_info(signoffs)') as Array<{ name: string; notnull: number }>).find((column) => column.name === 'signature_attachment_id')?.notnull).toBe(0);
+    expect(db.prepare("SELECT name FROM pragma_table_info('signoffs') ORDER BY cid").pluck().all()).toEqual([
+      'id',
+      'user_id',
+      'revision_id',
+      'signer_name',
+      'signed_at',
+      'reviewed_sha256',
+      'signature_attachment_id',
+    ]);
+    // Every trigger is back; the three that do not depend on the image are byte-identical, the kind trigger skips a null.
+    const after = schemaObjects(db, 'signoffs');
+    expect(after.map((item) => `${item.type} ${item.name}`)).toEqual(before.objects.map((item) => `${item.type} ${item.name}`));
+    for (const name of ['signoffs_revision_signed', 'signoffs_no_update', 'signoffs_no_delete']) {
+      expect(after.find((item) => item.name === name)?.sql, name).toBe(before.objects.find((item) => item.name === name)?.sql);
+    }
+    expect(after.find((item) => item.name === 'signoffs_image_kind')?.sql).toContain('NEW.signature_attachment_id IS NOT NULL');
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
+    expect(db.pragma('user_version', { simple: true })).toBe(14);
+
+    // The rebuilt table is still insert-only.
+    expectSqliteError(() => db.prepare("UPDATE signoffs SET signer_name = 'Someone Else'").run(), /immutable_signoff/);
+    expectSqliteError(() => db.prepare('UPDATE signoffs SET signature_attachment_id = NULL').run(), /immutable_signoff/);
+    expectSqliteError(() => db.prepare('DELETE FROM signoffs').run(), /immutable_signoff/);
+
+    // Its guards still hold. A pdf attachment is not a signature image; a null passes the kind guard and meets the
+    // next rule instead (one sign-off per revision); a sign-off of a revision that is not signed is refused.
+    const signed = before.signoffs[0] as { revision_id: string; user_id: string; reviewed_sha256: string };
+    db.prepare(
+      `INSERT INTO attachments (id, user_id, kind, storage_key, sha256, mime_type, size_bytes, width_px, height_px, created_at)
+       VALUES ('pdf-probe', ?, 'pdf', 'pdf-probe-storage-key', ?, 'application/pdf', 100, NULL, NULL, ?)`,
+    ).run(owner.id, 'a'.repeat(64), AT);
+    const insert = db.prepare(
+      `INSERT INTO signoffs (id, user_id, revision_id, signer_name, signed_at, reviewed_sha256, signature_attachment_id)
+       VALUES (?, ?, ?, 'Probe', ?, ?, ?)`,
+    );
+    expectSqliteError(() => insert.run('probe-1', signed.user_id, signed.revision_id, AT, signed.reviewed_sha256, 'pdf-probe'), /attachment_kind_mismatch/);
+    expectSqliteError(() => insert.run('probe-2', signed.user_id, signed.revision_id, AT, signed.reviewed_sha256, null), /UNIQUE constraint failed: signoffs.revision_id/);
+    expectSqliteError(() => insert.run('probe-3', signed.user_id, 'no-such-revision', AT, signed.reviewed_sha256, null), /signoff_revision_mismatch/);
+    expect(db.prepare('SELECT count(*) FROM signoffs').pluck().get()).toBe(before.signoffs.length);
+
+    // The new path: an account with no saved image signs by name alone; the row carries a null image and the account name.
+    const clock = new MutableClock('2026-10-21T12:00:00Z');
+    const review = buildReviewPayload(db, clock, imageless, '2026-10-02');
+    expect(review.payload.signature).toBeNull();
+    const result = signOffTimesheet({ db, clock, user: imageless }, '2026-10-02', {
+      expectedVersion: review.expectedVersion,
+      reviewedHash: review.payloadHash,
+      deficitChoices: [],
+      incompleteEvidenceAcknowledged: true,
+    });
+    expect(result.signoff).toMatchObject({ signerName: 'Example Employee', signatureAttachmentId: null });
+    expect(db.prepare('SELECT signer_name, signature_attachment_id FROM signoffs WHERE user_id = ?').all(imageless.id)).toEqual([
+      { signer_name: 'Example Employee', signature_attachment_id: null },
+    ]);
+    expect(db.prepare('SELECT count(*) FROM signoffs').pluck().get()).toBe(before.signoffs.length + 1);
+    // The new row is immutable too, and a second run changes nothing.
+    expectSqliteError(() => db.prepare('DELETE FROM signoffs WHERE signature_attachment_id IS NULL').run(), /immutable_signoff/);
+    expect(migrate(db)).toEqual({ applied: [], version: 14 });
+  });
+
+  it('checks foreign keys before the commit: a dangling sign-off image rolls the rebuild back and restores the pragma', async () => {
+    await populatedV13();
+    // A reference to a missing attachment written behind the application's back (foreign keys off) must not survive.
+    db.pragma('foreign_keys = OFF');
+    const tableSql = db.prepare("SELECT sql FROM sqlite_master WHERE name = 'signoffs'").pluck().get();
+    db.exec('DROP TRIGGER signoffs_no_update');
+    db.prepare("UPDATE signoffs SET signature_attachment_id = 'no-such-attachment' WHERE rowid = (SELECT min(rowid) FROM signoffs)").run();
+    db.exec(`CREATE TRIGGER signoffs_no_update BEFORE UPDATE ON signoffs
+BEGIN SELECT RAISE(ABORT, 'immutable_signoff'); END`);
+    db.pragma('foreign_keys = ON');
+    expect(() => migrate(db, MIGRATIONS, new Date('2026-10-21T12:00:00Z'))).toThrow(MigrationError);
+    expect(db.prepare('SELECT max(version) FROM schema_migrations').pluck().get()).toBe(13);
+    expect(db.pragma('user_version', { simple: true })).toBe(13);
+    expect(db.prepare("SELECT sql FROM sqlite_master WHERE name = 'signoffs'").pluck().get()).toBe(tableSql);
+    expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
+    expect(db.inTransaction).toBe(false);
+  });
+
+  it('builds the same table on a fresh 1 to 14 database', () => {
+    expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: 14 });
+    const column = (db.pragma('table_info(signoffs)') as Array<{ name: string; notnull: number }>).find((item) => item.name === 'signature_attachment_id');
+    expect(column?.notnull).toBe(0);
+    expect(schemaObjects(db, 'signoffs').filter((item) => item.type === 'trigger').map((item) => item.name)).toEqual([
+      'signoffs_image_kind',
+      'signoffs_no_delete',
+      'signoffs_no_update',
+      'signoffs_revision_signed',
+    ]);
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
   });
 });

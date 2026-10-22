@@ -142,7 +142,7 @@ interface ApiReview {
 interface ApiFinalization {
   finalized_revision_no: number | null;
   revision: { revision_no: number; review_state: string; origin: string; send_requested: boolean } | null;
-  signoff: { signer_name: string } | null;
+  signoff: { signer_name: string; signature_attachment_id: string | null } | null;
 }
 
 const reviewPath = (payrollDate: string) => `/api/timesheets/${payrollDate}/review`;
@@ -247,21 +247,19 @@ test('the review shows the server content for all 14 days, then the sign-off sub
   await page.screenshot({ path: screenshotPath(`review-top-${project}-synthetic.png`) });
   await page.getByRole('form', { name: 'Sign off' }).screenshot({ path: screenshotPath(`review-form-${project}-synthetic.png`) });
 
-  // Required name and acknowledgement are checked before anything is sent.
+  // F-5 b: the signer is the account. The typed-name field is gone; the sign-off shows the name it will record.
+  await expect(page.getByLabel('Your name')).toHaveCount(0);
+  await expect(page.locator('[data-signer]')).toContainText('Synthetic Reviewer');
+  // The acknowledgement is checked before anything is sent.
   const posts: string[] = [];
   page.on('request', (request) => {
     if (request.method() === 'POST') posts.push(request.url());
   });
   await page.getByRole('button', { name: 'Sign off & Submit' }).click();
-  await expect(page.getByText('Enter your name to sign off.')).toBeVisible();
-  await expect(page.getByLabel('Your name')).toBeFocused();
-  await expect(page.getByLabel('Your name')).toHaveAttribute('aria-invalid', 'true');
-  expect(posts, 'nothing is sent while the name is missing').toEqual([]);
-
-  await page.getByLabel('Your name').fill('Synthetic Reviewer');
-  await page.getByRole('button', { name: 'Sign off & Submit' }).click();
   await expect(page.getByText('Acknowledge the incomplete evidence to submit with it.')).toBeVisible();
   expect(posts, 'nothing is sent while the acknowledgement is missing').toEqual([]);
+  // A saved image is shown with no "name only" line.
+  await expect(page.locator('[data-signature="name-only"]')).toHaveCount(0);
 
   await acknowledge(page);
   await page.getByRole('button', { name: 'Sign off & Submit' }).click();
@@ -273,7 +271,7 @@ test('the review shows the server content for all 14 days, then the sign-off sub
   const finalized = await reviewer.api.call<ApiFinalization>('GET', finalizationPath(reviewer.payrollDate));
   expect(finalized.finalized_revision_no).toBe(1);
   expect(finalized.revision).toMatchObject({ revision_no: 1, review_state: 'signed', origin: 'employee', send_requested: true });
-  expect(finalized.signoff?.signer_name).toBe('Synthetic Reviewer');
+  expect(finalized.signoff).toMatchObject({ signer_name: 'Synthetic Reviewer', signature_attachment_id: expect.any(String) });
   await page.screenshot({ path: screenshotPath(`review-signed-${project}-synthetic.png`), fullPage: true });
 
   // Back on the timesheet the header carries the review and delivery status from the server.
@@ -303,7 +301,6 @@ test('a stale review leads to a fresh review and nothing is submitted twice', as
   await expect(deficitBox.getByRole('radio', { name: 'Deduct from my OT balance' })).not.toBeChecked();
 
   // The deficit choice is required before sign-off.
-  await page.getByLabel('Your name').fill('Synthetic Reviewer');
   await page.getByRole('button', { name: 'Sign off & Submit' }).click();
   await expect(page.getByText(`Choose deduct or waive for ${shortDay}.`)).toBeVisible();
   await deficitBox.getByRole('radio', { name: 'Deduct from my OT balance' }).check();
@@ -318,10 +315,9 @@ test('a stale review leads to a fresh review and nothing is submitted twice', as
   await expect(notice).toContainText('Nothing was submitted');
   await expect(notice).toBeFocused();
   await expect(page.locator(`[data-review-day="${fullDay}"]`)).toContainText('Changed after the review was opened');
-  // The old choice belonged to the old review; the typed name stays.
+  // The old choice belonged to the old review.
   await expect(deficitBox.getByRole('radio', { name: 'Deduct from my OT balance' })).not.toBeChecked();
   await expect(page.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ })).not.toBeChecked();
-  await expect(page.getByLabel('Your name')).toHaveValue('Synthetic Reviewer');
   const afterConflict = await reviewer.api.call<ApiFinalization>('GET', finalizationPath(reviewer.payrollDate));
   expect(afterConflict.finalized_revision_no, 'the stale sign-off submitted nothing').toBeNull();
   await page.screenshot({ path: screenshotPath(`review-stale-${project}-synthetic.png`), fullPage: true });
@@ -341,7 +337,6 @@ test('a stale review leads to a fresh review and nothing is submitted twice', as
     {
       expected_version: first.expected_version,
       reviewed_hash: first.payload_hash,
-      signer_name: 'Synthetic Reviewer',
       deficit_choices: [{ work_date: shortDay, choice: 'deduct' }],
       incomplete_evidence_acknowledged: true,
     },
@@ -358,7 +353,7 @@ async function signOffElsewhere(reviewer: Reviewer): Promise<void> {
   await reviewer.api.call(
     'POST',
     `/api/timesheets/${reviewer.payrollDate}/signoff`,
-    { expected_version: current.expected_version, reviewed_hash: current.payload_hash, signer_name: 'Synthetic Reviewer', incomplete_evidence_acknowledged: true },
+    { expected_version: current.expected_version, reviewed_hash: current.payload_hash, incomplete_evidence_acknowledged: true },
     201,
   );
 }
@@ -370,10 +365,10 @@ test('a period finalized in another window reloads with a clear message and no s
 
   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
   await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('Complete');
+  // A different request than the one already recorded (the content changed before the other window signed):
+  // refused, never a second revision. A typed name cannot make a request different any more (F-5 b).
+  await reviewer.api.putDay(day, { notes: 'Changed before the other window signed' });
   await signOffElsewhere(reviewer);
-
-  // A different request than the one already recorded (another name): refused, never a second revision.
-  await page.getByLabel('Your name').fill('Synthetic Reviewer Junior');
   await acknowledge(page);
   await page.getByRole('button', { name: 'Sign off & Submit' }).click();
   const notice = page.locator('[data-notice="stale"]');
@@ -397,7 +392,6 @@ test('an identical sign-off repeated from a second window is recognised and crea
   await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('Complete');
   await signOffElsewhere(reviewer);
 
-  await page.getByLabel('Your name').fill('Synthetic Reviewer');
   await acknowledge(page);
   await page.getByRole('button', { name: 'Sign off & Submit' }).click();
   await expect(page.locator('[data-result="replayed"]')).toContainText('Nothing new was created');
@@ -413,31 +407,43 @@ test('a refusal from the server names the missing field', async ({ page, adminSe
     route.fulfill({
       status: 422,
       contentType: 'application/json',
-      body: JSON.stringify({ error: { code: 'signer_name_required', message: 'Sign-off requires the employee name' } }),
+      body: JSON.stringify({ error: { code: 'acknowledgement_required', message: 'Acknowledge the incomplete evidence before signing off' } }),
     }),
   );
   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
-  await page.getByLabel('Your name').fill('Synthetic Reviewer');
   await acknowledge(page);
   await page.getByRole('button', { name: 'Sign off & Submit' }).click();
-  await expect(page.getByText('Enter your name to sign off.')).toBeVisible();
-  await expect(page.getByLabel('Your name')).toBeFocused();
+  await expect(page.locator('#review-error-acknowledgement')).toHaveText('Acknowledge the incomplete evidence to submit with it.');
+  await expect(page.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ })).toBeFocused();
   await expect(page.getByRole('heading', { name: 'Submitted' })).toHaveCount(0);
 });
 
-test('a missing signature image blocks the sign-off and says where to add it', async ({ page, adminSeed, builtServer }) => {
+test('without a saved signature image the sign-off still goes, by name alone, and the line says where to add one (F-5 b)', async ({ page, adminSeed, builtServer }, testInfo) => {
   // An account that never uploaded an image.
   const account = await createAccountByAdminApi(adminSeed, { displayName: 'Synthetic Unsigned' });
   const api = await new SeedClient(builtServer.origin).signIn(account.email, account.password);
   const { todayLocal, currentPayrollDate } = await api.today();
   await api.call('POST', '/api/policies', starterPolicyBody(addDays(todayLocal, -400)), 201);
   await signInAt(page, { account, api, payrollDate: currentPayrollDate, days: [] }, `#/review/${currentPayrollDate}`);
-  await expect(page.getByText('No signature image is saved. Upload one in Settings before you sign off.')).toBeVisible();
-  await page.getByLabel('Your name').fill('Synthetic Unsigned');
+  // No error and no image: a short line and a link to Settings; no typed-name field; the recorded name is shown.
+  const line = page.locator('[data-signature="name-only"]');
+  await expect(line).toHaveText('Signed with your name only.');
+  const link = page.locator('.review-signature').getByRole('link', { name: 'Add a signature image in Settings.' });
+  await expect(link).toHaveAttribute('href', '#/settings');
+  if (testInfo.project.name === 'mobile') {
+    expect((await link.boundingBox())?.height ?? 0, 'the Settings link is a 44px target').toBeGreaterThanOrEqual(44);
+    await expectNoSidewaysScroll(page);
+  }
+  await expect(page.getByRole('img', { name: 'Your saved signature image' })).toHaveCount(0);
+  await expect(page.getByLabel('Your name')).toHaveCount(0);
+  await expect(page.locator('[data-signer]')).toContainText('Synthetic Unsigned');
+  await acknowledge(page);
   await page.getByRole('button', { name: 'Sign off & Submit' }).click();
-  await expect(page.getByText('Upload a signature image in Settings before you sign off.').first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Submitted' })).toBeVisible();
   const finalized = await api.call<ApiFinalization>('GET', finalizationPath(currentPayrollDate));
-  expect(finalized.finalized_revision_no).toBeNull();
+  expect(finalized.finalized_revision_no).toBe(1);
+  expect(finalized.revision).toMatchObject({ revision_no: 1, review_state: 'signed', origin: 'employee', send_requested: true });
+  expect(finalized.signoff).toEqual({ signer_name: 'Synthetic Unsigned', signature_attachment_id: null, signed_at: expect.any(String), reviewed_sha256: expect.any(String) });
 });
 
 test('the deep link survives the sign-in form and carries no token', async ({ page, adminSeed, builtServer }) => {
@@ -484,7 +490,7 @@ test("the review shows the signed-in account's own data and an unknown image id 
   await signInAt(page, reviewer, `#/review/${other.currentPayrollDate}`);
   await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
   await expect(page.locator('[data-envelope="to"] dd')).toHaveText('payroll@example.invalid');
-  await expect(page.getByText('Name on file: Synthetic Reviewer.')).toBeVisible();
+  await expect(page.locator('[data-signer]')).toContainText('Synthetic Reviewer');
   const status = await page.evaluate<number>(
     "fetch('/api/signatures/00000000-0000-4000-8000-000000000000').then((response) => response.status)",
   );

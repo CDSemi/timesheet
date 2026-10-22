@@ -13,6 +13,7 @@ import { migration0010 } from './migrations/0010_outbound_pause.ts';
 import { migration0011 } from './migrations/0011_job_retention.ts';
 import { migration0012 } from './migrations/0012_imports.ts';
 import { migration0013 } from './migrations/0013_ot_opening_balance.ts';
+import { migration0014 } from './migrations/0014_signoff_optional_image.ts';
 
 export interface Migration {
   version: number;
@@ -35,6 +36,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration0011,
   migration0012,
   migration0013,
+  migration0014,
 ];
 
 export class MigrationError extends Error {

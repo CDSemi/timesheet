@@ -69,8 +69,11 @@ export function modeEndpoint(mode: ReviewMode, payrollDate: string): string {
 
 export type DeficitChoice = 'deduct' | 'waive';
 
+/*
+ * The signer is the signed-in person (owner decision F-5 b): the server records the account's display name, so the
+ * form has no name field, and the saved signature image is optional (its absence is a hint, not a blocker).
+ */
 export interface FormState {
-  signerName: string;
   acknowledged: boolean;
   /** One choice per choose-mode deficit day, keyed by work date. */
   choices: Readonly<Record<string, DeficitChoice>>;
@@ -79,15 +82,13 @@ export interface FormState {
   sendEmail: boolean | null;
 }
 
-export type FieldKey = 'signer_name' | 'signature' | 'acknowledgement' | 'deficit_choices' | 'reason' | 'send_email';
+export type FieldKey = 'acknowledgement' | 'deficit_choices' | 'reason' | 'send_email';
 
 export interface Blocker {
   field: FieldKey;
   message: string;
 }
 
-/** The name limits the server enforces (one line, at most 200 characters). */
-const MAX_NAME = 200;
 const MAX_REASON = 2000;
 
 /** Days with a deficit that the employee decides at sign-off. */
@@ -98,14 +99,6 @@ export function deficitChoiceDays(payload: ReviewSnapshot): SnapshotDeficitPropo
 /** What is still missing before the sign-off can be sent, in the order the form shows it. */
 export function submitBlockers(payload: ReviewSnapshot, mode: ReviewMode, form: FormState): Blocker[] {
   const blockers: Blocker[] = [];
-  const name = form.signerName.trim();
-  if (name === '') blockers.push({ field: 'signer_name', message: 'Enter your name to sign off.' });
-  else if (name.length > MAX_NAME || /[\r\n]/.test(name)) {
-    blockers.push({ field: 'signer_name', message: `The name must be one line of at most ${MAX_NAME} characters.` });
-  }
-  if (payload.signature === null) {
-    blockers.push({ field: 'signature', message: 'Upload a signature image in Settings before you sign off.' });
-  }
   if (payload.unresolved_inputs.length > 0 && !form.acknowledged) {
     blockers.push({ field: 'acknowledgement', message: 'Acknowledge the incomplete evidence to submit with it.' });
   }
@@ -135,7 +128,6 @@ export function buildSubmitBody(review: ReviewResponse, mode: ReviewMode, form: 
   const body: Record<string, unknown> = {
     expected_version: review.expected_version,
     reviewed_hash: review.payload_hash,
-    signer_name: form.signerName.trim(),
     deficit_choices: days.flatMap((workDate) => {
       const choice = form.choices[workDate];
       return choice === undefined ? [] : [{ work_date: workDate, choice }];
@@ -164,9 +156,6 @@ const STALE_MESSAGE =
   'The timesheet or the review changed after you opened it. Nothing was submitted. The review below is up to date: check it and sign off again.';
 
 const FIELD_FOR_CODE: Record<string, { field: FieldKey; message: string }> = {
-  signer_name_required: { field: 'signer_name', message: 'Enter your name to sign off.' },
-  invalid_signer_name: { field: 'signer_name', message: 'The name must be one line of at most 200 characters.' },
-  signature_required: { field: 'signature', message: 'Upload a signature image in Settings before you sign off.' },
   acknowledgement_required: { field: 'acknowledgement', message: 'Acknowledge the incomplete evidence to submit with it.' },
   deficit_choice_required: { field: 'deficit_choices', message: 'Choose deduct or waive for every deficit day.' },
   unexpected_deficit_choice: { field: 'deficit_choices', message: 'A deficit choice no longer applies. Review the choices again.' },
@@ -425,8 +414,13 @@ export function checklistSteps(payload: ReviewSnapshot, form: FormState, importe
   if (evidence > 0 && !form.acknowledged) attention = evidence === 1 ? '1 day needs your acknowledgement' : `${evidence} days need your acknowledgement`;
   else if (undecided > 0) attention = undecided === 1 ? '1 deficit day needs your choice' : `${undecided} deficit days need your choice`;
   else if (evidence > 0) attention = 'Acknowledged';
+  // F-5 b: no saved image is not a problem; the sign-off then carries the name only.
   const email =
-    payload.signature === null ? 'No signature image saved' : payload.recipients.to.length === 0 ? 'No recipient set' : 'Recipients and signature ready';
+    payload.recipients.to.length === 0
+      ? 'No recipient set'
+      : payload.signature === null
+        ? 'Recipients ready, name-only signature'
+        : 'Recipients and signature ready';
   return [
     { key: 'attention', title: 'Days that need attention', state: attention },
     { key: 'email', title: 'Email and PDF', state: email },

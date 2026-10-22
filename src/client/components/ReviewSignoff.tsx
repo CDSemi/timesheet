@@ -1,9 +1,10 @@
 import type { FieldKey, FormState, ReviewMode } from './reviewModel.ts';
 
 /**
- * The sign-off form: the name that goes on the PDF, the reason and the email choice a revision
- * needs, and the one submit button. Labels sit above their inputs and each error sits below its
- * field; the first missing field takes focus when a submit is refused.
+ * The sign-off form: the account name that will be recorded and printed (not editable, owner decision
+ * F-5 b), the reason and the email choice a revision needs, and the one submit button. Labels sit above
+ * their inputs and each error sits below its field; the first missing field takes focus when a submit
+ * is refused.
  */
 export function ReviewSignoff({
   mode,
@@ -33,27 +34,9 @@ export function ReviewSignoff({
       }}
     >
       <h2 id="review-signoff-title">Sign off</h2>
-      <label>
-        Your name
-        <input
-          id="review-field-signer_name"
-          type="text"
-          autoComplete="name"
-          value={form.signerName}
-          maxLength={400}
-          aria-invalid={errors.signer_name !== undefined}
-          aria-describedby={`review-hint-signer_name${errors.signer_name === undefined ? '' : ' review-error-signer_name'}`}
-          onChange={(event) => onChange({ ...form, signerName: event.target.value })}
-        />
-      </label>
-      <p className="muted hint" id="review-hint-signer_name">
-        Type your name as it should appear on the PDF. Name on file: {employeeName}.
+      <p id="review-signer" data-signer>
+        You sign as <strong>{employeeName}</strong>, the name of your account.
       </p>
-      {errors.signer_name !== undefined && (
-        <p className="error" id="review-error-signer_name">
-          {errors.signer_name}
-        </p>
-      )}
 
       {mode === 'correction' && (
         <>

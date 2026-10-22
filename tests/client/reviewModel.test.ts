@@ -109,7 +109,6 @@ const chooseDay = (workDate: string) => ({
 const unresolved = [{ work_date: '2026-09-29', reason: 'unconfirmed_breaks', detail: null }];
 
 const form = (overrides: Partial<FormState> = {}): FormState => ({
-  signerName: 'Synthetic Person',
   acknowledged: false,
   choices: {},
   reason: '',
@@ -183,20 +182,8 @@ describe('sign-off requirements', () => {
     expect(submitBlockers(review().payload, 'signoff', form())).toEqual([]);
   });
 
-  it('requires the signer name (blank and whitespace only)', () => {
-    for (const signerName of ['', '   ', '\t']) {
-      expect(submitBlockers(review().payload, 'signoff', form({ signerName })).map((b) => b.field)).toEqual(['signer_name']);
-    }
-  });
-
-  it('refuses a name with a line break or more than 200 characters', () => {
-    expect(submitBlockers(review().payload, 'signoff', form({ signerName: 'A\nB' })).map((b) => b.field)).toEqual(['signer_name']);
-    expect(submitBlockers(review().payload, 'signoff', form({ signerName: 'x'.repeat(201) })).map((b) => b.field)).toEqual(['signer_name']);
-    expect(submitBlockers(review().payload, 'signoff', form({ signerName: 'x'.repeat(200) }))).toEqual([]);
-  });
-
-  it('requires the saved signature image', () => {
-    expect(submitBlockers(review({ signature: null }).payload, 'signoff', form()).map((b) => b.field)).toEqual(['signature']);
+  it('does not require a typed name or a saved signature image (the account signs; the image is optional, F-5 b)', () => {
+    expect(submitBlockers(review({ signature: null }).payload, 'signoff', form())).toEqual([]);
   });
 
   it('requires the acknowledgement only while incomplete evidence is listed', () => {
@@ -225,18 +212,18 @@ describe('sign-off requirements', () => {
   });
 
   it('every blocker has words for the person to read', () => {
-    const blockers = submitBlockers(review({ signature: null, unresolved_inputs: unresolved, deficit_proposals: [chooseDay('2026-09-29')] }).payload, 'correction', form({ signerName: '' }));
-    expect(blockers.map((b) => b.field)).toEqual(['signer_name', 'signature', 'acknowledgement', 'deficit_choices', 'reason', 'send_email']);
+    const blockers = submitBlockers(review({ unresolved_inputs: unresolved, deficit_proposals: [chooseDay('2026-09-29')] }).payload, 'correction', form());
+    expect(blockers.map((b) => b.field)).toEqual(['acknowledgement', 'deficit_choices', 'reason', 'send_email']);
     for (const blocker of blockers) expect(blocker.message.length).toBeGreaterThan(10);
   });
 });
 
 describe('request body', () => {
   it('binds the reviewed hash and the version it was read at', () => {
-    expect(buildSubmitBody(review(), 'signoff', form({ signerName: '  Synthetic Person  ' }))).toEqual({
+    // F-5 b: the signer is the account, so the body carries no name.
+    expect(buildSubmitBody(review(), 'signoff', form())).toEqual({
       expected_version: 7,
       reviewed_hash: HASH,
-      signer_name: 'Synthetic Person',
       deficit_choices: [],
       incomplete_evidence_acknowledged: false,
     });
@@ -293,9 +280,6 @@ describe('conflict and field errors', () => {
 
   it('a 422 names the missing field', () => {
     const cases: Array<[string, string]> = [
-      ['signer_name_required', 'signer_name'],
-      ['invalid_signer_name', 'signer_name'],
-      ['signature_required', 'signature'],
       ['acknowledgement_required', 'acknowledgement'],
       ['deficit_choice_required', 'deficit_choices'],
       ['unexpected_deficit_choice', 'deficit_choices'],
@@ -317,8 +301,8 @@ describe('conflict and field errors', () => {
   });
 
   it('after a stale review the old acknowledgement and choices are cleared, the typed text is kept', () => {
-    const next = resetAfterStale(form({ acknowledged: true, choices: { '2026-09-29': 'deduct' }, reason: 'Because', sendEmail: false, signerName: 'Synthetic Person' }));
-    expect(next).toEqual(form({ acknowledged: false, choices: {}, reason: 'Because', sendEmail: false, signerName: 'Synthetic Person' }));
+    const next = resetAfterStale(form({ acknowledged: true, choices: { '2026-09-29': 'deduct' }, reason: 'Because', sendEmail: false }));
+    expect(next).toEqual(form({ acknowledged: false, choices: {}, reason: 'Because', sendEmail: false }));
   });
 });
 
@@ -541,8 +525,9 @@ describe('the checklist beside the sheet', () => {
     expect(checklistSteps(open, form({ acknowledged: true, choices: { '2026-09-30': 'waive' } }), false)[0]?.state).toBe('Acknowledged');
   });
 
-  it('names a missing signature or recipient and the imported lock', () => {
-    expect(checklistSteps(payload({ signature: null }), form(), false)[1]?.state).toBe('No signature image saved');
+  it('names a name-only signature, a missing recipient and the imported lock', () => {
+    // F-5 b: no saved image is not a problem, only a different signature.
+    expect(checklistSteps(payload({ signature: null }), form(), false)[1]?.state).toBe('Recipients ready, name-only signature');
     expect(checklistSteps(payload({ recipients: { ...payload().recipients, to: [] } }), form(), false)[1]?.state).toBe('No recipient set');
     expect(checklistSteps(payload(), form(), true)[2]?.state).toBe('Locked: imported history');
   });

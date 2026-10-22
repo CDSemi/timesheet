@@ -188,3 +188,17 @@ Append to this brief:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+Self-reported model: claude-sonnet-5-5.
+
+- HEAD before: 178f1cf8970086018e2e96e8340d911077a2d3ad (= origin/main).
+- HEAD after: 57c41e8e43fb6e10df654294361818e59bff86ca. Pushed: yes. Remote SHA: 57c41e8e43fb6e10df654294361818e59bff86ca.
+- Digest before add and after commit (git ls-tree): 7af8e935f2c11f05b5c584a0a38da1170aa9826d752ee54434a4a8d2be434949 (850 files).
+- Staged 179 files: docs 8; src and tests 10; handoff records 8; design WP5-UX5 13;
+  evidence FIX2-FREEZE 2, FIX3 37, REGATE2 101. Extra handoff paths: none.
+- Checks (Node v24.21.0): precommit 0, diff --cached --check 0, JSON parse 0,
+  validate_orchestration 0, check_recovery 0 (106 probes), validate_package --preflight 0,
+  push dry-run 0, push 0.
+- Scans: mockup.html has only @example.invalid addresses (and a CSS @container); BEGIN hits 0;
+  base64 runs >= 200 chars 0; no other emails in the staged diff.
+- Fixes, masking, stops: none. Details in evidence/WP5-UX4-FIX3-FREEZE/checks.txt.

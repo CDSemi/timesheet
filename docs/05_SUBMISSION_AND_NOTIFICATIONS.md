@@ -6,7 +6,7 @@ Track revision (draft/finalized), employee review (pending/signed), finalization
 
 ## Manual path
 
-Prepare an exact review payload: attendance, OT evidence/movements, unresolved inputs, deficit decisions, recipients, email and signature image. A preview is not a final submission PDF. Manual sign-off requires employee name and an uploaded signature image. Explicit Sign off & Submit carries expected draft version and reviewed payload hash.
+Prepare an exact review payload: attendance, OT evidence/movements, unresolved inputs, deficit decisions, recipients, email and the signature image when one is saved. A preview is not a final submission PDF. Manual sign-off is the signed-in owner's act: it records the account's display name (no typed name) and, when one is saved, the signature image; without a saved image it carries the name alone (owner decision F-5 b, 2026-10-21). The reviewed payload binds the image state, so an image saved or replaced after the review makes the request a stale-review conflict. Explicit Sign off & Submit carries expected draft version and reviewed payload hash.
 
 Validate ownership/version, finalize snapshot, record real sign-off, post ledger events and enqueue work in one transaction. Stale content returns a conflict. Render the final private PDF from the snapshot, persist/hash it, then send that exact file and frozen email content. Delivery status remains independent of sign-off.
 
