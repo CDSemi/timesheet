@@ -1,0 +1,13 @@
+. /d/.claude-tmp/timesheet/WP5-UX4-FIX3/env.sh
+# Usage: bash run-pw.sh <tag> <playwright args...>   (runs in the repo)
+TAG=$1
+shift
+mkdir -p $T/tmp-$TAG $T/data-$TAG
+export TEMP="$TW\\tmp-$TAG"
+export TMP="$TEMP"
+export TMPDIR="$T/tmp-$TAG"
+export DATA_DIR="$TW\\data-$TAG"
+export DATABASE_PATH="$TW\\data-$TAG\\timesheet.db"
+cd $REPO
+node node_modules/@playwright/test/cli.js test "$@" > $T/logs/pw-$TAG.txt 2>&1
+echo "exit $?" >> $T/logs/pw-$TAG.txt

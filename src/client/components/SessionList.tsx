@@ -50,6 +50,7 @@ export function SessionList({
   workDate,
   zone,
   readOnly,
+  shared = false,
   onEdit,
   onConfirmBreaks,
   onDelete,
@@ -59,6 +60,8 @@ export function SessionList({
   /** The display zone every time is shown in (R-07). */
   zone: string;
   readOnly: boolean;
+  /** A shared edit view: the owner's running session offers no Delete (the server answers 409 shared_clock_action, R2 a). */
+  shared?: boolean;
   onEdit: (session: Session, button: HTMLButtonElement) => void;
   onConfirmBreaks: (session: Session, button: HTMLButtonElement) => void;
   /** The button is passed on so focus can return to it when the confirmation is cancelled. */
@@ -105,14 +108,16 @@ export function SessionList({
                 >
                   Edit
                 </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={(event: MouseEvent<HTMLButtonElement>) => onDelete(session, event.currentTarget)}
-                  aria-label={`Delete session ${session.id}`}
-                >
-                  Delete
-                </button>
+                {!(shared && card.state === 'running') && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={(event: MouseEvent<HTMLButtonElement>) => onDelete(session, event.currentTarget)}
+                    aria-label={`Delete session ${session.id}`}
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             )}
           </li>

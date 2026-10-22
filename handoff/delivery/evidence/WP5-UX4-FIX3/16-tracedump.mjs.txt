@@ -1,0 +1,29 @@
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+
+const require = createRequire('D:/Dropbox/Work.CDSemi/timesheet/package.json');
+const { unzipSync, strFromU8 } = require('fflate');
+const [zipPath, outDir] = process.argv.slice(2);
+mkdirSync(outDir, { recursive: true });
+const files = unzipSync(new Uint8Array(readFileSync(zipPath)));
+const names = Object.keys(files);
+writeFileSync(join(outDir, 'names.txt'), names.join('\n'));
+for (const name of names) {
+  if (name.endsWith('.trace') || name.endsWith('.network')) writeFileSync(join(outDir, name), strFromU8(files[name]));
+}
+// Summarise the actions of the main trace.
+const lines = strFromU8(files[process.argv[4] ?? '0-trace.trace']).split('\n').filter(Boolean);
+const befores = new Map();
+const out = [];
+for (const line of lines) {
+  let event;
+  try { event = JSON.parse(line); } catch { continue; }
+  if (event.type === 'context-options') out.push(`context: ${JSON.stringify(event).slice(0, 600)}`);
+  if (event.type === 'before') befores.set(event.callId, event);
+  if (event.type === 'after') {
+    const b = befores.get(event.callId);
+    if (b) out.push(`${b.startTime.toFixed(0)} +${(event.endTime - b.startTime).toFixed(0)}ms ${b.class}.${b.method} ${b.apiName ?? ''} ${JSON.stringify(b.params).slice(0, 160)}`);
+  }
+}
+writeFileSync(join(outDir, 'actions.txt'), out.join('\n'));

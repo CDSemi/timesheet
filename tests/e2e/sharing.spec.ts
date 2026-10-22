@@ -429,6 +429,11 @@ test("a grantee with edit rights can correct the start of the owner's running se
     await expect(editor).toBeVisible();
     const card = editor.locator('.session-card[data-state="running"]');
     await expect(card.locator('.session-source')).toHaveText('Checked in');
+    // R2 a: the running card offers Edit but no Delete in a shared edit view, and the server refuses the delete (nothing is removed).
+    await expect(card.getByRole('button', { name: /^Edit session/ })).toHaveCount(1);
+    await expect(card.getByRole('button', { name: /^Delete session/ })).toHaveCount(0);
+    expect(await statusInPage(page, 'DELETE', `/api/shared/${owner.account.id}/sessions/${moved.session.id}`, { expected_version: moved.session.version })).toBe(409);
+    expect((await owner.api.dayView(todayLocal)).sessions.map((session) => session.id)).toContain(moved.session.id);
     await card.getByRole('button', { name: /^Edit session/ }).click();
     const form = page.getByRole('dialog', { name: 'Edit session', exact: true });
     await expect(form).toBeVisible();

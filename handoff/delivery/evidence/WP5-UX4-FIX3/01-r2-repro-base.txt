@@ -1,0 +1,35 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/integration/sharing.test.ts (31 tests | 1 failed | 30 skipped) 528ms
+   ❯ access through /api/shared (AC-16) (9)
+     × R2 a: an edit grantee cannot delete the owner's running session (409 shared_clock_action, nothing written); an ended session and the owner are unchanged 527ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/sharing.test.ts > access through /api/shared (AC-16) > R2 a: an edit grantee cannot delete the owner's running session (409 shared_clock_action, nothing written); an ended session and the owner are unchanged
+AssertionError: {"deleted":true,"day":{"work_date":"2026-09-29","classification":{"day_class":"normal","reason":"scheduled_weekday","name":null,"calendar_version_id":"168ae5b6-3dd2-4bc4-9143-9e8480f4fc12"},"default_category":"Worked","category":"Worked","category_source":"default","attendance_expected":true,"leave_minutes":0,"leave_kind":null,"wfh":false,"ot_leave":{"kind_minutes":0,"consumed_minutes":0,"reversed_minutes":0,"mismatch":false},"entry":{"id":"eac88429-122b-4812-abf7-5ff458580493","work_date":"2026-09-29","category":"Worked","category_source":"default","leave_minutes":0,"leave_kind":null,"wfh":false,"notes":"","version":1},"sessions":[],"calculation":{"status":"no_records","provisional":true,"policy_version_id":"be709b49-08ac-4dbb-ad68-a906abd55830","gross_seconds":null,"excluded_break_seconds":null,"regular_seconds":null,"nonworking_seconds":null,"regular_minutes":null,"nonworking_minutes":null,"normal_excess_minutes":null,"eligible_minutes":null,"credited_minutes":null,"segments":[]},"calculation_error":null,"deficit_minutes":null,"edit":{"period_relation":"future","reason_required":false}}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/sharing.test.ts:505:58
+    503|     const before = personalState();
+    504|     const refused = await t.request('DELETE', shared(`/sessions/${runn…
+    505|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+       |                                                          ^
+    506|     expect(refused.body.error.code).toBe('shared_clock_action');
+    507|     expect(personalState()).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 skipped (31)
+   Start at  18:24:34
+   Duration  3.57s (import 69%, transform 16%, tests 15%)
+
+exit 1

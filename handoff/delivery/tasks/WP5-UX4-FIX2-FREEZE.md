@@ -190,3 +190,8 @@ Append to this brief:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+- HEAD before 0ddfeada1b66c82b066b179e901184ca5d857793; after 178f1cf8970086018e2e96e8340d911077a2d3ad (commit SHA). Pushed: yes; remote SHA 178f1cf8970086018e2e96e8340d911077a2d3ad.
+- Digest before and after: 1c1c526f3c7748fb108c7f6a535568e510e1d84faf813ef80d49c499a56cdcd0 (850 files).
+- Staged 352: 18 outside handoff; evidence FIX1-FREEZE 2, REGATE 88, AUDIT-A 159, AUDIT-B 36, FIX2 36; the rest are handoff records. No extra handoff paths.
+- Checks: all exit 0 (precommit, diff --check, JSON parse, validate_orchestration, check_recovery 106, validate_package --preflight). Key/PEM scan: no hits. No fix, masking or stop. One stray null-device redirect in a no-op command.

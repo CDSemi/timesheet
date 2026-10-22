@@ -1,0 +1,21 @@
+. <task>/env.sh
+mkdir -p $E
+m() { node.exe "$TW\\mask.mjs" "$1" "$2" >> $T/tmp/mask-last.txt 2>&1; }
+cd $T/out
+for f in *.txt; do
+  case "$f" in 51-*-files.txt|51-*-hashes.txt|ex-*.txt|lstree-sorted.txt|25-diff-*.txt) continue;; esac
+  m "$T/out/$f" "$E/$f"
+done
+cp $T/out/51-export-prev-hashes.txt $T/tmp/h-prev.txt; cp $T/out/51-export-hashes.txt $T/tmp/h-target.txt
+m $T/tmp/h-prev.txt $E/51-dist-hashes-prev.txt
+m $T/tmp/h-target.txt $E/51-dist-hashes-target.txt
+cd $T/logs
+for f in *.txt; do m "$T/logs/$f" "$E/log-$f"; done
+cd $T/obs
+for f in *.txt; do m "$T/obs/$f" "$E/obs-$f"; done
+cd $T
+for s in env.sh digest.sh run-core.sh run-e2e.sh run-shift.sh run-probe.sh run-probes.sh rerun.sh sweep.sh cmp-dist.sh collect.sh; do m "$T/$s" "$E/$s.txt"; done
+for s in mask.mjs zone.mjs shiftclock.mjs probe-now.mjs zz-lib.ts zz-png.ts zz-control.spec.ts zz-regate-walk.spec.ts zz-regate-axe.spec.ts; do m "$T/$s" "$E/$s.txt"; done
+
+ls $E | wc -l
+ls $E/*.png | wc -l

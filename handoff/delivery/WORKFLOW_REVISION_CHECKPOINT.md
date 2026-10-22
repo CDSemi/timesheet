@@ -1139,6 +1139,102 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - The owner question WP5-UX4-R2-Q is still open. An answer (a) becomes a small FIX3.
 - Running now: WP5-UX4-FIX2-FREEZE (a fresh committer, alone), then REGATE2 and the
   rechecks A2 and B2.
+- WP5-UX4-FIX2-FREEZE committed and pushed 178f1cf8970086018e2e96e8340d911077a2d3ad.
+  - 352 paths; digest 1c1c526f on HEAD; every check 0; key and PEM scan clean.
+- Running now: WP5-UX4-REGATE2 (verifier, sonnet) on 178f1cf / 1c1c526f.
+  - `dist/server` may differ only in `auth.ts`.
+  - The drill and AC-13 in three zones are rerun.
+  - The real-clock FULL e2e and the simulated sweep.
+  - The findings rechecked, including the classic-scrollbar probes and the side effects of
+    the root `overflow-y: scroll`.
+- Owner answers (2026-10-21, verbatim on the board):
+  - R2 a: block an edit grantee from deleting the owner's running session.
+  - R3 b: Review shows two columns again from 1200px.
+  - R4 a: the footer is unchanged.
+  - R5: the owner asked for an explanation of the flap. The question stays open with
+    options (a) keep the always-visible track, or (b) decide on a width that always
+    subtracts the classic scrollbar, with no forced track.
+- REGATE2 is asked to stop early and clean up, because FIX3 (R2, R3 and R5 if b) changes
+  the source again and a later regate covers everything.
+- WP5-UX4-REGATE2: NOT VERIFIED, stopped early and cleaned up.
+  - Done: identity (only `auth.js` differs in `dist/server`), `npm test` x3 with 0 crashes,
+    the drill (208 PASS), AC-13 in three zones, integration, routes, audit.
+  - The real-clock FULL e2e failed one test: `hover.spec.ts:125` on mobile, a settle
+    timeout and not a network error. It goes into FIX3.
+- WP5-UX4-FIX3 brief written. FIX3 is `blocked` on the owner's R5 answer, and so is the
+  mission. It covers:
+  - R2 a: a server guard and the client hide;
+  - R3 b: Review two columns from 1200px without overflow;
+  - R5 per the answer;
+  - the `hover.spec.ts` timeout.
+
+## Update 2026-10-21: owner request round 5 (WP5-UX5)
+
+- The owner answered R5 b and sent a large round-5 request, verbatim on the board
+  (`owner_decisions` 2026-10-21). It covers:
+  - compact mode below 480px instead of 768px;
+  - top bar, chevron seam, icons, button heights, theme toggle, time-range spacing;
+  - Timesheet period card and week sheet details;
+  - Day editor: no corners, outside click, Partial leave sub-dialog, phone Save fixed;
+  - a Review and sign off redesign that splits Sign off and Send;
+  - a PDF redesign.
+- Coordinator decision:
+  - FIX3 runs now with R2 a, R5 b and the hover timeout. R3 b is dropped as superseded,
+    because the checklist moves into a sign-off dialog.
+  - WP5-UX5-PLAN (opus planner, read-only) runs in parallel.
+- Owner question WP5-UX5-Q0, with the missing PDF image and the licence text:
+  - (a, recommended) fold round 4 into round 5's gate and audits;
+  - (b) close round 4 first.
+- Running now: WP5-UX4-FIX3 (worker-high, sonnet) and WP5-UX5-PLAN (planner, opus).
+- Owner answers:
+  - **Q0 a:** round 4 is folded into round 5's gate and audits. No separate round-4
+    regate, recheck or integration after FIX3-FREEZE.
+  - **Q2:** footer "© 2026 C&D Semiconductor Services, Inc. All rights reserved." and
+    "Internal use by C&D only".
+  - **Q1:** a reference image of the PDF page. It holds a name and a signature, so it is
+    kept out of the repository (AGENTS rule 4). Its layout is described in text on the
+    board, and the planner has been told.
+- WP5-UX5-PLAN done.
+  - 34 items.
+  - Causes confirmed: the 767/768 desync at 150% scaling, the chevron seam from two
+    gradient tiles, the WEEK bar width, and the "68px" buttons (44px touch targets at
+    150%).
+  - Slices T01 (the sign-off/send split, risk H) to T06.
+  - No migration; no GOV path unless F-1 c or F-6 b.
+  - Mockup with 11 renders.
+  - Owner questions F-1..F-10 are open (`open_owner_question_ux5_f`).
+- WP5-UX4-FIX3 is still running.
+- Owner answers (verbatim on the board):
+  - F-1 a, F-2 a, F-6 a, F-7 a, F-8 a, F-10 a;
+  - F-3 b: per-send PDF switches, with Settings defaults;
+  - F-4: the envelope is editable per send; a further send needs a confirmation and a typed
+    reason;
+  - F-5 b: the signature image is optional;
+  - F-9 b: a licensed handwriting font if one is found, else a.
+  - Mockup adjustments: B1, B2, B5, B7/B9 (two signature rows; header fill kept), B11.
+- Running now: WP5-UX5-PLAN Addendum 1 (same planner, read-only): it revises B, C, the
+  mockup and E. FIX3 is still the source writer.
+- WP5-UX5-PLAN Addendum 1 done.
+  - Each send is a new record with its own envelope and switches. Up to four PDF variants
+    are stored.
+  - Reason rule: 2-500 characters, audited. A copy counts as sent once any attempt was
+    accepted or uncertain.
+  - The optional signature image needs migration 0014.
+  - Font: Indie Flower (SIL OFL 1.1), with ADR 0001.
+  - Mockup re-rendered, 12 renders.
+  - Slices: T01a sign-off, T01b sends, T02 PDF, T03 Review, T04 breakpoints, T05 sheet and
+    editor, T06 docs. Estimate 24-28 dispatches.
+- Owner question WP5-UX5-G-1 (mockup and font approval) blocks T02..T05. T01a starts after
+  FIX3-FREEZE.
+- WP5-UX4-FIX3 done.
+  - R2 a: deleting through a share answers 409 and the client hides Delete.
+  - R5 b: `innerWidth` minus a probe-measured scrollbar width; no forced track.
+  - Hover: the REGATE2 failure was a ~24 s host stall that ran out a 7 s poll. Fixed with
+    an event-based settle in `hover.spec.ts`; 1050/1050 on mobile. `contrast.ts` still has
+    the old helper; round 5 picks it up.
+  - Results: FULL e2e 0 failed; mutants caught; digest 7af8e935.
+- Running now: WP5-UX4-FIX3-FREEZE (a fresh committer, alone). It is the last round-4
+  commit.
 - Remaining after T06:
   - T06-FREEZE;
   - the round-4 package gate;

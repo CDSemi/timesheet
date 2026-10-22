@@ -444,8 +444,9 @@ export function upsertDayEntry(ctx: CommandContext, workDateInput: string, input
 /**
  * F-Q5: a grantee never checks in or out for the owner, by any route. Through a share, a session
  * edit may not start a running session (an open new one, or an ended one reopened) or end a
- * running one: 409 `shared_clock_action`. The owner's own edits are unchanged, and so are shared
- * edits that keep an ended session ended or a running session running.
+ * running one: 409 `shared_clock_action`. Deleting the running session ends it the same way
+ * (R2 a). The owner's own edits are unchanged, and so are shared edits that keep an ended
+ * session ended or a running session running, and a shared delete of an ended session.
  */
 function assertNoSharedClockAction(ctx: CommandContext, runningBefore: boolean, runningAfter: boolean): void {
   if (ctx.viaShareId === undefined || runningBefore === runningAfter) return;
@@ -535,6 +536,8 @@ export function updateSession(ctx: CommandContext, sessionId: string, input: Ses
 export function deleteSession(ctx: CommandContext, sessionId: string, input: DeleteBody) {
   const workDate = writeTransaction(ctx.db, () => {
     const before = requireSession(ctx, sessionId);
+    // R2 a: deleting the running session through a share removes the owner's clock by another route.
+    assertNoSharedClockAction(ctx, before.end_utc === null, false);
     if (before.version !== input.expected_version) throw staleVersion();
     const scope = loadScope(ctx.db, ctx.user);
     const edit = prepareEdit(ctx, scope, before.work_date, input.reason);

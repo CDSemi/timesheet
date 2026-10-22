@@ -9,6 +9,8 @@ import { expect, test } from './fixtures.ts';
  * page was taller than the window in one mode and shorter in the other (the scrollbar came and went with the mode).
  * Here the flag is dropped, so the scrollbar is drawn. The rule must depend on the window size alone: one layout per
  * size, one change per crossing of the switch, and the switch where the classic scrollbar puts it (token need + gutter).
+ * R5 b: the rule takes the window width less the classic scrollbar width (measured with an off-screen `overflow: scroll` box),
+ * so the root is not forced to scroll: a page shorter than the window draws no vertical track.
  */
 test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh', launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } });
 
@@ -80,11 +82,14 @@ test.describe('the Day editor layout with a classic scrollbar', () => {
       }
     }
     await expect(area(page)).toHaveAttribute('data-editor-layout', 'floating');
-    // The track does not depend on the page's height: a window taller than the page keeps the same width, hence the same layout.
+    // R5 b: the rule subtracts the classic scrollbar width whether or not the page draws a track. A window taller than the page draws
+    // no vertical track (the root is not forced to scroll), yet the layout is the one a track would give: floating, below 1345.
     await page.setViewportSize({ width: 1340, height: 3000 });
     await page.waitForTimeout(150);
-    expect(await scrollbarOf(page), 'the classic scrollbar track stays in a window taller than the page').toBeGreaterThan(0);
+    expect(await scrollbarOf(page), 'a short page draws no vertical track: clientWidth equals innerWidth').toBe(0);
     await expect(area(page)).toHaveAttribute('data-editor-layout', 'floating');
+    const watchedShort = await watchLayout(page, 1500);
+    expect(watchedShort, '1340x3000: the layout does not change').toEqual({ changes: 0, layouts: ['floating'] });
   });
 
   test('the switch point is the token need plus the scrollbar gutter, and a sweep across it changes the layout once per crossing', async ({

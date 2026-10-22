@@ -9,7 +9,7 @@ import {
   parseColour,
   parseLayers,
   type Rgba,
-  settledStyle,
+  type StyleProperty,
   textContrast,
 } from './contrast.ts';
 import { expect, openAccount, screenshotPath, test } from './fixtures.ts';
@@ -88,6 +88,38 @@ function expectColour(actual: Rgba, expected: Rgba, label: string): void {
 }
 
 const round = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * The computed value of one property once no transition or animation is running on the element (WP5-UX4-FIX3, item 4). The wait is
+ * the browser's own: `getAnimations()` flushes pending style changes, so a transition that a hover, a tap or a theme change has just
+ * started is seen, and the `finished` promises of the running ones are awaited; two animation frames then let the last style apply.
+ * No wall-clock timer or poll is involved. The helper of `contrast.ts` read twice 400 ms apart inside a 7 s poll, which cost about
+ * 0.4 s per call (a mobile test here calls it about 25 times) and ran out when the worker side stalled for 24 s in the full
+ * run of WP5-UX4-REGATE2 (the trace shows the browser's 400 ms timer done in 403 ms, and the next read reaching the browser 24 s later).
+ */
+async function settledStyle(locator: Locator, property: StyleProperty): Promise<string> {
+  return locator.evaluate(async (element, name) => {
+    // The test project has no DOM types: the few members used here are declared by shape.
+    interface Animated {
+      ownerDocument: {
+        defaultView: { requestAnimationFrame: (callback: () => void) => number; getComputedStyle: (target: unknown) => Record<string, string> } | null;
+      };
+      getAnimations: () => Array<{ playState: string; finished: Promise<unknown> }>;
+    }
+    const target = element as unknown as Animated;
+    const view = target.ownerDocument.defaultView;
+    if (view === null) return '';
+    const frame = () => new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()));
+    for (let round = 0; round < 20; round += 1) {
+      const running = target.getAnimations().filter((animation) => animation.playState !== 'finished');
+      if (running.length === 0) break;
+      await Promise.allSettled(running.map((animation) => animation.finished));
+    }
+    await frame();
+    await frame();
+    return view.getComputedStyle(target)[name] ?? '';
+  }, property);
+}
 
 async function canHover(page: Page): Promise<boolean> {
   return page.evaluate<boolean>("window.matchMedia('(hover: hover)').matches");

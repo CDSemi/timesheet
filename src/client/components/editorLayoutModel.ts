@@ -12,7 +12,7 @@ export type EditorLayout = 'bottom-sheet' | 'beside' | 'floating';
 
 /** Every length is in CSS px. */
 export interface EditorLayoutInput {
-  /** `document.documentElement.clientWidth`: the window width without a classic scrollbar. */
+  /** `window.innerWidth` less the width of a classic scrollbar (0 for overlay scrollbars), whether or not the page draws a track now. */
   viewportWidth: number;
   /** The page's side padding, both sides together (2 x --page-pad). */
   pagePadding: number;

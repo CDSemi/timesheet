@@ -1179,6 +1179,102 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Câu hỏi WP5-UX4-R2-Q cho chủ dự án vẫn chờ trả lời. Nếu trả lời (a) sẽ thành một FIX3 nhỏ.
 - Đang chạy: WP5-UX4-FIX2-FREEZE (một committer mới, chạy một mình), sau đó là REGATE2 và hai lần
   kiểm tra lại A2, B2.
+- WP5-UX4-FIX2-FREEZE đã commit và push 178f1cf8970086018e2e96e8340d911077a2d3ad.
+  - 352 đường dẫn; digest 1c1c526f trên HEAD; mọi kiểm tra trả về 0; quét khóa và PEM sạch.
+- Đang chạy: WP5-UX4-REGATE2 (verifier, sonnet) trên 178f1cf / 1c1c526f.
+  - `dist/server` chỉ được khác ở `auth.ts`.
+  - Chạy lại drill và AC-13 với ba time zone.
+  - E2e đầy đủ với đồng hồ thật và quét với đồng hồ giả lập.
+  - Kiểm tra lại các lỗi đã sửa, gồm cả probe với thanh cuộn thường và các tác dụng phụ của
+    `overflow-y: scroll` ở thẻ gốc.
+- Chủ dự án trả lời (2026-10-21, nguyên văn trên board):
+  - R2 a: chặn người được chia sẻ quyền sửa xóa phiên đang chạy của chủ.
+  - R3 b: trang Review chia hai cột trở lại từ 1200px.
+  - R4 a: footer giữ nguyên.
+  - R5: chủ dự án hỏi lại vì sao drawer nhảy. Câu hỏi vẫn mở với hai lựa chọn: (a) giữ rãnh thanh
+    cuộn luôn hiện; (b) tính độ rộng luôn trừ sẵn phần thanh cuộn thường, không ép hiện rãnh.
+- REGATE2 được yêu cầu dừng sớm và dọn dẹp, vì FIX3 (R2, R3, và R5 nếu chọn b) sẽ sửa source thêm,
+  và một lần regate sau sẽ kiểm tra lại toàn bộ.
+- WP5-UX4-REGATE2: NOT VERIFIED, đã dừng sớm và dọn dẹp xong.
+  - Đã làm: định danh (`dist/server` chỉ khác ở `auth.js`), `npm test` ba lần không crash, drill
+    (208 PASS), AC-13 với ba time zone, test tích hợp, bảng route, audit.
+  - E2e đầy đủ với đồng hồ thật lỗi một test: `hover.spec.ts:125` trên mobile, timeout lúc chờ
+    style ổn định, không phải lỗi mạng. Lỗi này đưa vào FIX3.
+- Đã viết brief WP5-UX4-FIX3. FIX3 đang ở trạng thái `blocked` chờ chủ dự án trả lời R5, mission
+  cũng vậy. Phạm vi:
+  - R2 a: thêm chặn ở server và ẩn nút ở client;
+  - R3 b: trang Review chia hai cột từ 1200px mà không tràn;
+  - R5 theo câu trả lời;
+  - lỗi timeout của `hover.spec.ts`.
+
+## Cập nhật 2026-10-21: yêu cầu đợt 5 của chủ dự án (WP5-UX5)
+
+- Chủ dự án trả lời R5 b và gửi một yêu cầu lớn cho đợt 5, nguyên văn trên board (`owner_decisions`
+  2026-10-21). Nội dung gồm:
+  - chế độ compact áp dụng dưới 480px thay vì 768px;
+  - thanh trên cùng, vết gạch ở mũi tên combobox, icon, chiều cao nút, nút chuyển theme, khoảng
+    trắng trong khoảng giờ;
+  - chi tiết thẻ kỳ lương và week sheet của trang Timesheet;
+  - Day editor: bỏ bo góc, bấm ra ngoài thì đóng, Partial leave thành hộp thoại con, nút Save cố
+    định trên điện thoại;
+  - thiết kế lại trang Review và sign off, tách Sign off và Send;
+  - thiết kế lại PDF.
+- Quyết định của coordinator:
+  - FIX3 chạy ngay với R2 a, R5 b và lỗi timeout hover. R3 b bỏ vì không còn cần, do checklist
+    chuyển vào hộp thoại sign off.
+  - WP5-UX5-PLAN (planner opus, chỉ đọc) chạy song song.
+- Câu hỏi WP5-UX5-Q0 cho chủ dự án, kèm hỏi hình mẫu PDF chưa gửi và nội dung giấy phép:
+  - (a, khuyến nghị) gộp đợt 4 vào gate và audit của đợt 5;
+  - (b) đóng đợt 4 trước.
+- Đang chạy: WP5-UX4-FIX3 (worker-high, sonnet) và WP5-UX5-PLAN (planner, opus).
+- Chủ dự án trả lời:
+  - **Q0 a:** gộp đợt 4 vào gate và audit của đợt 5. Sau FIX3-FREEZE không còn regate, kiểm tra
+    lại hay audit tích hợp riêng cho đợt 4.
+  - **Q2:** footer "© 2026 C&D Semiconductor Services, Inc. All rights reserved." và "Internal use
+    by C&D only".
+  - **Q1:** một ảnh mẫu trang PDF. Ảnh có tên và chữ ký thật nên không lưu vào repo (AGENTS
+    rule 4). Bố cục của ảnh được mô tả bằng chữ trên board, và đã báo cho planner.
+- WP5-UX5-PLAN xong.
+  - 34 mục.
+  - Đã xác nhận nguyên nhân: bố cục lệch nhau ở 767/768px khi màn hình phóng 150%; vết gạch ở mũi
+    tên do hai dải gradient ghép lại; thanh WEEK không đủ rộng; nút "68px" thực ra là vùng chạm 44px
+    nhân 150%.
+  - Các slice T01 (tách Sign off và Send, rủi ro H) đến T06.
+  - Không có migration; không đụng file GOV, trừ khi chủ dự án chọn F-1 c hoặc F-6 b.
+  - Mockup kèm 11 ảnh render.
+  - Câu hỏi F-1..F-10 cho chủ dự án đang chờ trả lời (`open_owner_question_ux5_f`).
+- WP5-UX4-FIX3 vẫn đang chạy.
+- Chủ dự án trả lời (nguyên văn trên board):
+  - F-1 a, F-2 a, F-6 a, F-7 a, F-8 a, F-10 a;
+  - F-3 b: hai công tắc PDF đổi được ở mỗi lần gửi, giá trị mặc định lấy từ Settings;
+  - F-4: thông tin gửi (To, Cc, Subject, nội dung) sửa được ở mỗi lần gửi; gửi thêm một bản nữa thì
+    phải xác nhận và gõ lý do;
+  - F-5 b: ảnh chữ ký không bắt buộc;
+  - F-9 b: dùng font viết tay nếu tìm được font có giấy phép phù hợp, nếu không thì theo a.
+  - Điều chỉnh mockup: B1, B2, B5, B7/B9 (hai hàng chữ ký; giữ màu nền hàng đầu và cột đầu), B11.
+- Đang chạy: Addendum 1 của WP5-UX5-PLAN (cùng planner, chỉ đọc), sửa lại phần B, C, mockup và E.
+  FIX3 vẫn là tác vụ duy nhất được sửa source.
+- Addendum 1 của WP5-UX5-PLAN xong.
+  - Mỗi lần gửi là một bản ghi mới, có thông tin gửi và hai công tắc riêng. Lưu tối đa bốn biến
+    thể PDF.
+  - Quy tắc lý do: 2-500 ký tự, có ghi audit. Một bản được tính là đã gửi khi có ít nhất một lần
+    gửi được chấp nhận hoặc chưa rõ kết quả.
+  - Ảnh chữ ký không bắt buộc nữa nên cần migration 0014.
+  - Font: Indie Flower (SIL OFL 1.1), kèm ADR 0001.
+  - Mockup vẽ lại, 12 ảnh render.
+  - Các slice: T01a sign off, T01b gửi, T02 PDF, T03 trang Review, T04 breakpoint, T05 bảng tuần và
+    panel ngày, T06 docs. Ước tính 24-28 lượt chạy.
+- Câu hỏi WP5-UX5-G-1 cho chủ dự án (duyệt mockup và font) chặn T02..T05. T01a bắt đầu sau
+  FIX3-FREEZE.
+- WP5-UX4-FIX3 xong.
+  - R2 a: xóa phiên qua chia sẻ trả về 409, và client ẩn nút Delete.
+  - R5 b: dùng `innerWidth` trừ độ rộng thanh cuộn đo bằng phần tử dò; không còn ép hiện rãnh thanh
+    cuộn.
+  - Hover: lỗi ở REGATE2 là do máy bị treo khoảng 24 giây, vượt mức chờ 7 giây của vòng thăm dò. Đã
+    sửa bằng cách chờ theo sự kiện trong `hover.spec.ts`; 1050/1050 lần đạt trên mobile.
+    `contrast.ts` vẫn còn hàm chờ cũ; đợt 5 sẽ xử lý.
+  - Kết quả: e2e đầy đủ 0 lỗi; các đột biến đều bị bắt; digest 7af8e935.
+- Đang chạy: WP5-UX4-FIX3-FREEZE (một committer mới, chạy một mình). Đây là commit cuối của đợt 4.
 - Còn lại sau T06:
   - T06-FREEZE;
   - gate cho cả đợt 4;

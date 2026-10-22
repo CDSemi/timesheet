@@ -1,0 +1,62 @@
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, screenshotPath, test } from './fixtures.ts';
+import { applySituation, scanState, seedLongContent, signInTo, SITUATIONS } from './zz-lib.ts';
+
+/*
+ * WP5-UX4-REGATE2 task-local probe (never part of the repository): a real axe scan (WCAG 2.2 AA tags) plus the text-contrast sweep of the
+ * Timesheet with the drawer beside (1440), floating at 1280 docked left and docked right, and the discard prompt; light and dark.
+ * Four screenshots (the drawer at 1280, docked left and right, light and dark).
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 250))))');
+}
+
+for (const situation of SITUATIONS.filter((s) => s.slug === 'light' || s.slug === 'dark')) {
+  test(`regate drawer states: axe, text (${situation.name})`, async ({ page, privateServer }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'desktop');
+    test.setTimeout(300_000);
+    const tag = `regate/${situation.slug}`;
+    await applySituation(page, situation);
+    const data = await seedLongContent(privateServer, 'Synthetic Regate Axe');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInTo(page, privateServer, data.person.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByRole('switch', { name: 'Show worked hours' }).check();
+    await settle(page);
+    await namedDayButton(page, data.twoSessions, 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await settle(page);
+    await expect(page.locator('.sheet-area')).toHaveAttribute('data-editor-layout', 'beside');
+    await scanState(page, 'Timesheet with the drawer beside the sheet, 1440', { tag });
+
+    await editor.getByLabel('Notes').fill('Synthetic unsaved note');
+    const other = data.dates.find((d) => d !== data.twoSessions && d !== data.holiday) ?? '';
+    await namedDayButton(page, other, 'Edit').click();
+    const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    await expect(prompt).toBeVisible();
+    await settle(page);
+    await scanState(page, 'Discard prompt over the drawer, 1440', { tag });
+    await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
+    await page.keyboard.press('Escape');
+    if (await prompt.isVisible().catch(() => false)) await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(editor).toHaveCount(0);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await settle(page);
+    for (const [label, index, side] of [['docked right (Monday column)', 0, 'right'], ['docked left (Saturday column)', 5, 'left']] as const) {
+      await namedDayButton(page, data.dates[index] ?? '', 'Edit').click();
+      await expect(editor).toBeVisible();
+      await settle(page);
+      await expect(page.locator('.sheet-area')).toHaveAttribute('data-editor-layout', 'floating');
+      await expect(editor).toHaveAttribute('data-side', side);
+      await scanState(page, `Timesheet with the drawer floating, 1280, ${label}`, { tag });
+      await page.screenshot({ path: screenshotPath(`regate-drawer-1280-${side}-${situation.slug}-synthetic.png`), animations: 'disabled' });
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+    }
+  });
+}

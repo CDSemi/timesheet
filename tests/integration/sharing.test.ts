@@ -489,6 +489,38 @@ describe('access through /api/shared (AC-16)', () => {
     expect(closed.status, JSON.stringify(closed.body)).toBe(201);
   });
 
+  it('R2 a: an edit grantee cannot delete the owner\'s running session (409 shared_clock_action, nothing written); an ended session and the owner are unchanged', async () => {
+    await granted(items('edit'));
+    const today = '2026-09-29';
+    const running = await t.request('POST', `/api/days/${today}/sessions`, {
+      cookie: owner,
+      body: { ...sessionBody(today, '08:00'), end: null, breaks_confirmed: false },
+    });
+    expect(running.status, JSON.stringify(running.body)).toBe(201);
+    const runningId = running.body.session.id as string;
+
+    // Deleting the running session through a share would end the owner's clock by another route: refused, nothing written.
+    const before = personalState();
+    const refused = await t.request('DELETE', shared(`/sessions/${runningId}`), { cookie: grantee.cookie, body: { expected_version: 1 } });
+    expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+    expect(refused.body.error.code).toBe('shared_clock_action');
+    expect(personalState()).toEqual(before);
+    expect(t.db.prepare('SELECT COUNT(*) FROM work_sessions WHERE id = ? AND end_utc IS NULL').pluck().get(runningId)).toBe(1);
+
+    // The owner deletes the running session by the owner's own route as before.
+    const ownDelete = await t.request('DELETE', `/api/sessions/${runningId}`, { cookie: owner, body: { expected_version: 1 } });
+    expect(ownDelete.status, JSON.stringify(ownDelete.body)).toBe(200);
+    expect(t.db.prepare('SELECT COUNT(*) FROM work_sessions WHERE id = ?').pluck().get(runningId)).toBe(0);
+
+    // A grantee may still delete an ended session.
+    const ended = await t.request('POST', shared('/days/2026-09-28/sessions'), { cookie: grantee.cookie, body: sessionBody('2026-09-28') });
+    expect(ended.status, JSON.stringify(ended.body)).toBe(201);
+    const endedId = ended.body.session.id as string;
+    const removed = await t.request('DELETE', shared(`/sessions/${endedId}`), { cookie: grantee.cookie, body: { expected_version: 1 } });
+    expect(removed.status, JSON.stringify(removed.body)).toBe(200);
+    expect(t.db.prepare('SELECT COUNT(*) FROM work_sessions WHERE id = ?').pluck().get(endedId)).toBe(0);
+  });
+
   it('never offers Clock in/out, sign-off, signatures, review, settings, leave, evidence, history or policies to a full grantee', async () => {
     postCredit(
       { db: t.db, clock: t.clock },

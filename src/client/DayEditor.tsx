@@ -414,6 +414,7 @@ export function DayEditor({
                 workDate={workDate}
                 zone={displayZone}
                 readOnly={readOnly}
+                shared={request !== ownRequest}
                 onEdit={(session, button) => startEditing({ kind: 'edit', sessionId: session.id, opener: button, confirm: false })}
                 onConfirmBreaks={(session, button) => startEditing({ kind: 'edit', sessionId: session.id, opener: button, confirm: true })}
                 onDelete={askDelete}

@@ -1,0 +1,47 @@
+"""EN/VI structure parity of the docs pairs touched by WP5-UX4-FIX3 (headings, bullets, numbered items, table rows, fences, code spans)."""
+import re
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+pairs = ["03_ARCHITECTURE_AND_DATA", "04_UX_AND_SETTINGS", "10_DECISIONS_AND_SOURCES", "12_RELEASE_NOTES"]
+
+
+def facts(text):
+    lines = text.splitlines()
+    return {
+        "headings": sum(1 for l in lines if re.match(r"#{1,6} ", l)),
+        "bullets": sum(1 for l in lines if re.match(r"\s*[-*] ", l)),
+        "numbered": sum(1 for l in lines if re.match(r"\s*\d+\. ", l)),
+        "table_rows": sum(1 for l in lines if l.lstrip().startswith("|")),
+        "fences": sum(1 for l in lines if l.lstrip().startswith("```")),
+    }
+
+
+ok = True
+for name in pairs:
+    en = (root / "docs" / f"{name}.md").read_text(encoding="utf-8")
+    vi = (root / "docs" / f"{name}.vi.md").read_text(encoding="utf-8")
+    a, b = facts(en), facts(vi)
+    same = a == b
+    ok = ok and same
+    print(name, "EQUAL" if same else "DIFFERENT", a, b)
+    for span in [
+        "shared_clock_action",
+        "overflow-y: scroll",
+        "html { overflow-y: scroll }",
+        "scrollbar-gutter: stable",
+        "window.innerWidth",
+        "overflow: scroll",
+        "F-UX4A-1",
+        "R2 a",
+        "R5 b",
+        "DELETE /api/shared/:ownerId/sessions/:id",
+        "createSession",
+        "updateSession",
+    ]:
+        ce, cv = en.count(span), vi.count(span)
+        if ce != cv:
+            ok = False
+            print("  span count differs:", span, ce, cv)
+print("PARITY", "PASS" if ok else "FAIL")

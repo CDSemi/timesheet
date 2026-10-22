@@ -1,0 +1,21 @@
+. /d/.claude-tmp/timesheet/WP5-UX4-FIX3/env.sh
+# Usage: bash run-hover.sh <dir under $T or "repo"> <tag> <repeat> [grep]
+D=$1
+TAG=$2
+REP=$3
+GREP=$4
+if [ "$D" = "repo" ]; then WD=$REPO; else WD=$T/$D; fi
+mkdir -p $T/tmp-$TAG
+export TEMP="$TW\\tmp-$TAG"
+export TMP="$TEMP"
+export TMPDIR="$T/tmp-$TAG"
+export DATA_DIR="$TW\\data-$TAG"
+export DATABASE_PATH="$TW\\data-$TAG\\timesheet.db"
+mkdir -p $T/data-$TAG
+cd $WD
+if [ -n "$GREP" ]; then
+  node node_modules/@playwright/test/cli.js test tests/e2e/hover.spec.ts --project=mobile --repeat-each=$REP --grep "$GREP" > $T/logs/hover-$TAG.txt 2>&1
+else
+  node node_modules/@playwright/test/cli.js test tests/e2e/hover.spec.ts --project=mobile --repeat-each=$REP > $T/logs/hover-$TAG.txt 2>&1
+fi
+echo "exit $?" >> $T/logs/hover-$TAG.txt
