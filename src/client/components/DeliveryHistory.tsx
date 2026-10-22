@@ -95,8 +95,10 @@ const RELEASE_DELAY_MS = 1000;
  * PDF item when `base` is its `/api/shared/:ownerId`) and hands it to the browser as a download. Nothing is cached or kept: the object URL is released right after the click. The
  * saved name comes from the response's Content-Disposition, reduced to a safe name.
  */
-export async function downloadRevisionPdf(revisionId: string, base = '/api'): Promise<string> {
-  const response = await fetch(`${base}/revisions/${revisionId}/pdf`, { credentials: 'same-origin' });
+export async function downloadRevisionPdf(revisionId: string, base = '/api', rows?: { time: boolean; ot: boolean }): Promise<string> {
+  // `rows` is the owner's own choice of the PDF variant (the Send card, WP5-UX5-T03); the shared route ignores the query.
+  const query = rows === undefined ? '' : `?time=${rows.time ? 1 : 0}&ot=${rows.ot ? 1 : 0}`;
+  const response = await fetch(`${base}/revisions/${revisionId}/pdf${query}`, { credentials: 'same-origin' });
   if (!response.ok) throw await requestFailure(response);
   const blob = await response.blob();
   const name = filenameFromDisposition(response.headers.get('content-disposition'));

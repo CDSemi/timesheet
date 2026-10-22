@@ -144,7 +144,7 @@
   --page-max: 1200px;
   /* The page's side padding (each side); the Day editor's layout rule reads it */
   --page-pad: var(--space-4);
-  /* The page width of the Review page beside its checklist; the Timesheet page reserves the Day editor's room instead (--editor-reserve) */
+  /* The page width of the Timesheet page while the Day editor is open (the Review page is one column at the normal width; --editor-reserve) */
   --page-max-editor: 1600px;
   /* The gap between the title row and the next block of Timesheet and of Review, from 768px (round 4, U4-02, owner answer F-5) */
   --page-head-gap: var(--space-6);
@@ -177,7 +177,11 @@
   --counter-min: 6rem;
   --action-min: 14rem;
   --signature-max-width: 16rem;
-  --checklist-width: 380px;
+  /* The Review page (WP5-UX5-T03): the Send card's side column (the two PDF switches) and its label column, the Sign off dialog and its label column */
+  --send-side-width: 17rem;
+  --send-label-width: 4.5rem;
+  --signoff-dialog-width: 40rem;
+  --signoff-label-width: 9rem;
   /* The row-header column of the settings file preview table (a share of the table, which uses a fixed layout) */
   --transfer-row-head-width: 30%;
   --signature-max-height: 6rem;
@@ -2278,11 +2282,6 @@ textarea {
 
   .review-screen > .review-head {
     margin-bottom: calc(var(--page-head-gap) - var(--space-3));
-  }
-
-  /* The mode introduction is a paragraph with a card surface: its browser top margin would add to the title gap. */
-  .review-screen > p.card {
-    margin-top: 0;
   }
 
   .period-bar {
@@ -4985,6 +4984,7 @@ textarea.mono {
   white-space: normal;
 }
 
+/* The rendered email of the Settings preview and the saved signature image of the upload card (shared pieces; the Review page no longer uses them). */
 .review-mail {
   display: flex;
   flex-direction: column;
@@ -5026,89 +5026,521 @@ textarea.mono {
 }
 
 /*
- * Review layout (WP5-UX-T05): "What you sign" is the read-only sheet, the checklist (three steps in
- * an ordered list) sits beside it from 1330px and follows it below. Inside a step the existing
- * review sections lose their own card surface; the step is the card. 1330px (a literal: a media query cannot read a custom
- * property) is the room the sheet needs beside the checklist: the label column and seven 108px columns (850px), the paper's
- * 32px of padding (round 4), the checklist (380px), the 16px gap and the 32px page padding are 1310px, and a classic scrollbar
- * takes 15px more. It was 1200px before the paper existed, on a page capped at 1200px, which left the sheet 772px beside the
- * checklist: the week grid (850px) already overflowed its card by 78px at 1440px (found by the round-4 containment test).
+ * The Review and sign off page (WP5-UX5-T03, mockups B7-B10): one column at every width (the checklist beside the paper and its 1330px
+ * switch are gone, round-4 R3 b is dropped). The title, a check card, the Preview card (a header bar, the sheet and the signature rows),
+ * the Send card and one muted note on the zone.
  */
-.review-layout {
-  display: grid;
-  grid-template-columns: minmax(0, var(--track));
-  gap: var(--space-4);
-  align-items: start;
+.review-head {
+  margin-bottom: var(--space-3);
 }
 
-@media (min-width: 1330px) {
-  /* The page cap (--page-max, 1200px) leaves the sheet 772px beside the checklist, less than its 850px: the page widens, as it does for the open Day editor. */
-  .page:has(.review-layout) {
-    max-width: var(--page-max-editor);
-  }
-
-  .review-layout {
-    grid-template-columns: minmax(0, var(--track)) var(--checklist-width);
-  }
-
-  /* The narrower sheet beside the checklist stacks its form header instead of squeezing the title. */
-  .review-layout .form-head {
-    grid-template-columns: var(--track);
-  }
+.review-head h1 {
+  margin: 0;
 }
 
-/* "What you sign" is a paper sheet (see `.paper`): the heading, the hint and the sheet stand on one surface. */
-.review-sheet-intro {
-  gap: var(--space-1);
+.review-desc {
+  margin: var(--space-1) 0 var(--space-2);
 }
 
-.review-checklist {
-  min-width: 0;
+.review-desc b {
+  color: var(--text);
+  font-weight: var(--font-weight-strong);
 }
 
-.review-steps {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.step-head {
+/* The chips under the title, left-aligned; the Preview and Send headers carry their own set on the right. */
+.review-chips,
+.preview-chips {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The pills of these chip rows are the period bar's pills (rounded, tinted, always with words). */
+:where(.review-chips, .preview-chips) .badge {
+  padding: var(--hairline) var(--space-2);
+  border-radius: var(--radius-pill);
+  border-color: var(--pill-neutral-line);
+  background: var(--pill-neutral-bg);
+  color: var(--pill-neutral-ink);
+  font-weight: var(--font-weight-strong);
+}
+
+/*
+ * The check card (U5-28): the period card's padding (16px; 12px in compact, below 768px), the text on the left and vertically centred,
+ * the way back on the right and vertically centred, at least 16px apart. Below 480px the way back says "Back"; its accessible name
+ * stays "Back to the timesheet".
+ */
+.check-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.check-card > p {
+  flex: 1 1 0;
+  min-width: 0;
   margin: 0;
-  padding-bottom: var(--space-2);
-  border-bottom: var(--hairline) solid var(--line-soft);
 }
 
-.step-title {
-  font-weight: var(--font-weight-heavy);
+.check-card > .back-link {
+  flex: none;
 }
 
-.step-state {
-  color: var(--muted);
-  font-size: var(--font-size-xs);
+.back-short {
+  display: none;
 }
 
-.review-step .card {
-  padding: 0;
-  background: transparent;
+@media (max-width: 767px) {
+  .check-card {
+    padding: var(--space-3);
+  }
+}
+
+@media (max-width: 479px) {
+  .back-full {
+    display: none;
+  }
+
+  .back-short {
+    display: inline;
+  }
+}
+
+/*
+ * The Preview card and the Send card (U5-29, U5-31): a card with a header bar (the title on the left, the chips on the right) and a
+ * padded body. The Preview is the paper: it carries the sheet, whose week bands and footer lose only their own outer shadow. On a
+ * phone it is full-bleed and square, like the paper of the Timesheet, so the four-column table keeps its width.
+ */
+.review-preview,
+.send-card {
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  background: var(--paper-surface);
+  box-shadow: var(--elev-paper);
+}
+
+.preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--hairline) solid var(--line);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--panel-head);
+}
+
+.preview-bar h2 {
+  margin: 0;
+  font-size: var(--font-size-md);
+}
+
+.preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--paper-gap);
+  min-width: 0;
+  padding: var(--paper-pad);
+}
+
+.review-preview .sheet-week,
+.review-preview .sheet-footer {
   box-shadow: none;
 }
 
-.review-step .card + .card {
+@media (max-width: 767px) {
+  .review-preview {
+    margin-inline: calc(-1 * var(--space-4));
+    border-radius: 0;
+  }
+
+  .review-preview .preview-bar {
+    border-radius: 0;
+  }
+
+  .preview-body {
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+  }
+}
+
+/*
+ * The header of the preview sheet (U5-29): line 1 the company name, large, centred, one line (hidden, never wrapped, when its
+ * max-content width does not fit: the component measures it); line 2 the title, large, centred, wrapping by word; line 3 the fields,
+ * 12px below, wrapping by group. The Timesheet page keeps its own small header.
+ */
+.review-form-head {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+.review-company {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-heavy);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.review-company[data-fits='false'] {
+  height: 0;
+  visibility: hidden;
+}
+
+.review-form-head .review-title {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--sheet-caps-spacing);
+  text-align: center;
+  text-transform: uppercase;
+  overflow-wrap: break-word;
+}
+
+.review-form-head .form-fields {
+  margin-top: var(--space-3);
+}
+
+/*
+ * The signature rows of the Preview and of the Sign off dialog's preview (owner correction of 2026-10-21: indent like the PDF block of
+ * B11). The fractions are the PDF's own, of its content width (540pt): the lines start 19pt in (3.519%), the signature line is 148pt
+ * (27.407%), the Date line 74pt (13.704%) and ends 59pt before the right edge (10.926%), which leaves the gap of 240pt (44.444%).
+ * Measured from the B11 mockup page (765px wide at 1.25px per point, content 675px): 23.75px, 185px, 92.5px, 73.75px, the same
+ * fractions; `src/server/pdf/layout.ts` gives 19, 148, 74 and 59pt, so the two agree (difference 0.000% of the content width).
+ * Narrow rule: the lines keep a minimum readable length and stay in two rows at every width; the gap between the two lines is the
+ * flexible track and the right inset the one that gives way first, so nothing wraps and nothing scrolls.
+ */
+.review-signatures {
+  --sig-inset: 3.519%;
+  --sig-line: 27.407%;
+  --sig-date: 13.704%;
+  --sig-right: 10.926%;
+  --sig-line-min: 9rem;
+  --sig-date-min: 5.5rem;
+  --sig-line-height: 52px;
+  --sig-button-inset: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.rsig-row {
+  display: grid;
+  grid-template-columns:
+    var(--sig-inset)
+    minmax(var(--sig-line-min), var(--sig-line))
+    minmax(var(--space-1), var(--track))
+    minmax(var(--sig-date-min), var(--sig-date))
+    minmax(0, var(--sig-right));
+  align-items: stretch;
+  min-width: 0;
+}
+
+.rsig {
+  display: grid;
+  grid-template-rows: var(--track) auto;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.rsig-sign {
+  grid-column: 2;
+}
+
+.rsig-date {
+  grid-column: 4;
+}
+
+.rsig-line {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--sig-line-height);
+  padding: 0 0 var(--space-1);
+  border-bottom: var(--hairline) solid var(--sheet-rule-strong);
+  font-size: var(--font-size-sm);
+}
+
+.rsig-content {
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+}
+
+.rsig-action {
+  flex: none;
+  padding-inline-end: var(--sig-button-inset);
+  margin-inline-start: auto;
+}
+
+.rsig-note {
+  font-size: var(--font-size-sm);
+}
+
+.rsig-cap {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+/* The signed content of the Employee Signature line: the saved image, the name, and "Signed" in words and a shape. */
+.signed-mark {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.signed-image {
+  max-width: 100%;
+  max-height: calc(var(--sig-line-height) - var(--space-1));
+  object-fit: contain;
+  background: var(--paper);
+  border-radius: var(--radius-sm);
+}
+
+.signed-name {
+  font-weight: var(--font-weight-heavy);
+  overflow-wrap: anywhere;
+}
+
+.signed-mark .status {
+  color: var(--ok);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-strong);
+}
+
+/*
+ * The Send card (U5-31): the envelope on the left (From, To, Cc, Subject and the message), the two PDF switches on the right, and the
+ * actions along the bottom (PDF Preview, Save PDF, Send). Below 768px it is one column.
+ */
+.send-body {
+  display: grid;
+  grid-template-columns: minmax(0, var(--track)) var(--send-side-width);
+  gap: var(--space-4) var(--space-5);
+  padding: var(--space-4);
+}
+
+.send-envelope {
+  min-width: 0;
+}
+
+.send-row {
+  display: grid;
+  grid-template-columns: var(--send-label-width) minmax(0, var(--track));
+  align-items: start;
+  gap: var(--space-1) var(--space-3);
+}
+
+.send-label {
+  padding-top: var(--space-2);
+  color: var(--muted);
+}
+
+.send-row[data-envelope='from'] .send-label,
+.send-from {
+  padding-top: 0;
+}
+
+.send-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.send-field input,
+.send-message {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.send-side {
+  align-content: start;
+}
+
+.send-side .hint {
+  margin: 0;
+}
+
+.send-reset {
+  align-self: flex-start;
+  min-height: var(--link-action-height);
+  padding-inline: 0;
+  text-decoration: underline;
+}
+
+.send-settings-link {
+  align-self: flex-start;
+}
+
+/* Touch devices and narrow screens: the quiet controls of the Send card are 44px targets too. */
+@media (max-width: 767px), (pointer: coarse) {
+  .send-reset {
+    min-height: var(--tap-min);
+  }
+
+  .send-settings-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap-min);
+  }
+}
+
+.send-actions {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
   padding-top: var(--space-3);
   border-top: var(--hairline) solid var(--line-soft);
 }
 
-.review-step .status {
+.send-notice,
+.send-hint {
+  flex: 1 1 100%;
+  margin: 0;
+  text-align: right;
+}
+
+@media (max-width: 767px) {
+  .send-card {
+    border-radius: var(--radius-lg);
+  }
+
+  .send-body {
+    grid-template-columns: minmax(0, var(--track));
+    padding: var(--space-3);
+  }
+
+  .send-row {
+    grid-template-columns: minmax(0, var(--track));
+  }
+
+  .send-label {
+    padding-top: 0;
+  }
+
+  .send-actions {
+    justify-content: flex-start;
+  }
+
+  .send-notice,
+  .send-hint {
+    text-align: left;
+  }
+
+  .send-reset {
+    min-height: var(--tap-min);
+  }
+}
+
+/* The sign-off dialog (U5-30): a head, a scrolling body of what the review found, and the foot with the two buttons. */
+.signoff-dialog {
+  width: min(var(--signoff-dialog-width), var(--dialog-fit));
+  padding: 0;
+  overflow: hidden;
+}
+
+.signoff-form {
+  display: flex;
+  flex-direction: column;
+  max-height: var(--dialog-max-height);
+}
+
+.signoff-head {
+  padding: var(--space-4);
+  border-bottom: var(--hairline) solid var(--line-soft);
+}
+
+.signoff-head h2 {
+  margin: 0;
+}
+
+.signoff-head p {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-sm);
+}
+
+.signoff-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--space-4);
+  overflow: auto;
+}
+
+.signoff-summary {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.signoff-summary > div {
+  display: grid;
+  grid-template-columns: var(--signoff-label-width) minmax(0, var(--track));
+  gap: var(--space-3);
+}
+
+.signoff-summary dt {
+  color: var(--muted);
+}
+
+.signoff-summary dd {
+  margin: 0;
+  font-weight: var(--font-weight-strong);
+  overflow-wrap: anywhere;
+}
+
+.signoff-preview {
+  padding: var(--space-3) 0;
+}
+
+.signoff-dialog .card {
+  padding: var(--space-3);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+
+.signoff-dialog .card h2 {
+  font-size: var(--font-size-base);
+}
+
+.signoff-dialog .status {
   white-space: normal;
 }
 
-.review-totals {
-  margin-top: var(--space-1);
+.signoff-dialog .confirm-foot {
+  flex: none;
+}
+
+@media (max-width: 767px) {
+  .signoff-summary > div {
+    grid-template-columns: minmax(0, var(--track));
+    gap: 0;
+  }
+
+  .signoff-body,
+  .signoff-head {
+    padding: var(--space-3);
+  }
+}
+
+/* The note at the end of the page (U5-32). */
+.review-zone-note {
+  margin: 0;
 }
 
 /* The read-only sheet: nothing opens, so nothing looks clickable. */

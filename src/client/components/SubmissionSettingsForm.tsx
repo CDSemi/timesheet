@@ -177,10 +177,17 @@ export function SubmissionSettingsForm({
         )}
       </fieldset>
 
-      <label className="inline">
-        <input type="checkbox" checked={draft.showOt} onChange={(event) => onChange({ ...draft, showOt: event.target.checked })} />
-        Show the OT rows on the PDF
-      </label>
+      <div className="stack" role="group" aria-label="PDF rows" data-setting="pdf-rows">
+        <label className="inline">
+          <input id="submission-field-show-time" type="checkbox" checked={draft.showTime} onChange={(event) => onChange({ ...draft, showTime: event.target.checked })} />
+          Time rows on the PDF
+        </label>
+        <label className="inline">
+          <input id="submission-field-show-ot" type="checkbox" checked={draft.showOt} onChange={(event) => onChange({ ...draft, showOt: event.target.checked })} />
+          OT rows on the PDF
+        </label>
+        <p className="muted hint">The defaults of the Send card: each send can change them. They do not change a signed timesheet.</p>
+      </div>
 
       <fieldset className="choice-set stack">
         <legend>Preview the email as</legend>

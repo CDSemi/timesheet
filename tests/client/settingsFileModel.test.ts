@@ -180,6 +180,7 @@ describe('what a personal export may hold', () => {
       'data.submission.subject_template',
       'data.submission.body_template',
       'data.submission.show_ot_on_pdf',
+      'data.submission.show_time_on_pdf',
       'data.submission.reminder_offsets_minutes',
       'data.submission.auto_note_enabled',
       'data.submission.auto_note_text',
@@ -444,11 +445,40 @@ describe('the personal import: comparison and requests', () => {
   it('keeps apply_to_overdue_drafts and the image authorization out of every request', () => {
     const request = buildSubmissionRequest(exportPersonal().data.submission!, settings(), true);
     expect(Object.keys(request).sort()).toEqual(
-      ['auto_note_enabled', 'auto_note_text', 'auto_submit', 'body_template', 'cc', 'expected_seq', 'reminder_offsets_minutes', 'show_ot_on_pdf', 'subject_template', 'to'].sort(),
+      ['auto_note_enabled', 'auto_note_text', 'auto_submit', 'body_template', 'cc', 'expected_seq', 'reminder_offsets_minutes', 'show_ot_on_pdf', 'show_time_on_pdf', 'subject_template', 'to'].sort(),
     );
     expect(Object.keys(buildPolicyRequest(exportPersonal().data.work_policy!, '2026-11-02', 'a.json')).sort()).toEqual(
       ['breaks', 'deficit_mode', 'effective_from', 'note', 'reference_end', 'reference_start', 'required_minutes', 'rounding_step_minutes', 'threshold_minutes'].sort(),
     );
+  });
+
+  it('the per-send time switch (WP5-UX5-T03): an export writes it, an older file without it still imports and changes nothing', () => {
+    expect(exportPersonal().data.submission?.show_time_on_pdf).toBe(true);
+    expect(exportPersonal({ submission: settings({ show_time_on_pdf: false }) }).data.submission?.show_time_on_pdf).toBe(false);
+    // The key is optional on reading: a file made before it existed is accepted.
+    const older = tampered((file) => {
+      delete data(file).submission?.show_time_on_pdf;
+    });
+    const parsed = parseSettingsFile(older, 'personal');
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.file.scope !== 'personal') throw new Error('expected a personal file');
+    expect(parsed.file.data.submission).not.toHaveProperty('show_time_on_pdf');
+    // ... and it leaves the saved value as it is: the comparison shows no difference and the request does not carry the key.
+    const savedOff = current({ submission: settings({ show_time_on_pdf: false }) });
+    const olderPlan = planPersonalImport({ ...parsed.file.data, theme: 'light' }, savedOff, options);
+    const olderRow = olderPlan.groups.find((group) => group.id === 'submission')?.rows.find((item) => item.key === 'show_time');
+    expect(olderRow).toMatchObject({ now: 'No', file: 'No', changed: false });
+    expect(buildSubmissionRequest(parsed.file.data.submission!, savedOff.submission, false)).not.toHaveProperty('show_time_on_pdf');
+    // A file that has it differs when the saved value differs, and carries it into the request.
+    const withKey = { ...exportPersonal().data, theme: 'light' as const };
+    const plan = planPersonalImport(withKey, savedOff, options);
+    expect(plan.groups.find((group) => group.id === 'submission')?.rows.find((item) => item.key === 'show_time')).toMatchObject({ now: 'No', file: 'Yes', changed: true });
+    expect(plan.submission).toMatchObject({ show_time_on_pdf: true });
+    // A value that is not a boolean is refused.
+    const wrong = tampered((file) => {
+      data(file).submission!.show_time_on_pdf = 'yes';
+    });
+    expect(problemsOf(wrong).join(' ')).toContain('show_time_on_pdf');
   });
 
   it('marks the effective date from the pay period that contains today', () => {

@@ -7,7 +7,6 @@ import { shareEndedMessage } from './components/sharingModel.ts';
 import { HistoryScreen } from './HistoryScreen.tsx';
 import { OtScreen } from './OtScreen.tsx';
 import { ProfileScreen } from './ProfileScreen.tsx';
-import { ReviewScreen } from './ReviewScreen.tsx';
 import { SettingsScreen } from './SettingsScreen.tsx';
 import { SetupScreen } from './SetupScreen.tsx';
 import { SharedTimesheetScreen } from './SharedTimesheetScreen.tsx';
@@ -90,6 +89,8 @@ function useReceivedShares() {
  */
 const AdminScreen = lazy(() => import('./AdminScreen.tsx').then((module) => ({ default: module.AdminScreen })));
 const ImportScreen = lazy(() => import('./ImportScreen.tsx').then((module) => ({ default: module.ImportScreen })));
+// The Review page (WP5-UX5-T03) grew a Sign off dialog and a Send card: it loads on demand so the main bundle stays under the advisory.
+const ReviewScreen = lazy(() => import('./ReviewScreen.tsx').then((module) => ({ default: module.ReviewScreen })));
 
 /**
  * Shows a readable message and a retry when a screen's chunk cannot be loaded (offline, a stale deployment), never a blank
@@ -169,7 +170,11 @@ function SignedIn({ user, onSignedOut }: { user: User; onSignedOut: () => void }
       onSignedOut={onSignedOut}
     >
       {route.id === 'timesheet' && <TimesheetScreen user={user} />}
-      {route.id === 'review' && <ReviewScreen key={route.payrollDate} payrollDate={route.payrollDate} />}
+      {route.id === 'review' && (
+        <Deferred label="Review">
+          <ReviewScreen key={route.payrollDate} payrollDate={route.payrollDate} />
+        </Deferred>
+      )}
       {route.id === 'ot' && <OtScreen />}
       {route.id === 'history' && <HistoryScreen />}
       {route.id === 'import' && (

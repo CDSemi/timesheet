@@ -1,23 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { ApiRequestError, type DeliveryAttempt, type FinalizationJob, type ReviewResponse, type RevisionSummary } from '../../src/client/api.ts';
 import {
-  ApiRequestError,
-  type DeliveryAttempt,
-  type FinalizationJob,
-  type ReviewResponse,
-  type RevisionSummary,
-  type SendDraft,
-} from '../../src/client/api.ts';
-import {
-  buildSendBody,
   buildSubmitBody,
-  checklistSteps,
   classifySubmitError,
   deficitChoiceDays,
   deliveryStatus,
   dueReservations,
   type FormState,
+  MODE_INTRO,
   modeEndpoint,
+  otTotalText,
   parseReviewHash,
+  periodDescription,
   periodStatus,
   reviewLinkLabel,
   resetAfterStale,
@@ -27,10 +21,15 @@ import {
   reviewSheetDay,
   reviewSheetWeeks,
   sessionLine,
-  sendAfterSignoff,
-  sendFailureText,
+  signatureSummary,
+  signedDate,
+  SIGNOFF_LABEL,
+  SIGNOFF_NOTE,
+  SIGNOFF_TITLE,
   submitBlockers,
   unresolvedText,
+  weekdayDate,
+  zoneNote,
 } from '../../src/client/components/reviewModel.ts';
 import { addDays } from '../../src/domain/dates.ts';
 import type { ReviewSnapshot, SnapshotDay } from '../../src/domain/snapshot.ts';
@@ -116,7 +115,6 @@ const form = (overrides: Partial<FormState> = {}): FormState => ({
   acknowledged: false,
   choices: {},
   reason: '',
-  sendEmail: null,
   ...overrides,
 });
 
@@ -207,17 +205,17 @@ describe('sign-off requirements', () => {
     expect(submitBlockers(deficits, 'signoff', form({ choices: { '2026-09-29': 'deduct', '2026-09-30': 'waive' } }))).toEqual([]);
   });
 
-  it('a correction needs a reason and an explicit email choice; a late review only the email choice', () => {
-    expect(submitBlockers(review().payload, 'correction', form()).map((b) => b.field)).toEqual(['reason', 'send_email']);
-    expect(submitBlockers(review().payload, 'correction', form({ reason: '   ', sendEmail: true })).map((b) => b.field)).toEqual(['reason']);
-    expect(submitBlockers(review().payload, 'correction', form({ reason: 'Fixed a break', sendEmail: false }))).toEqual([]);
-    expect(submitBlockers(review().payload, 'late_review', form()).map((b) => b.field)).toEqual(['send_email']);
-    expect(submitBlockers(review().payload, 'late_review', form({ sendEmail: false }))).toEqual([]);
+  it('a correction needs a reason (at most 2000 characters); a late review needs nothing more, and signing asks no email choice (T03: signing never sends)', () => {
+    expect(submitBlockers(review().payload, 'correction', form()).map((b) => b.field)).toEqual(['reason']);
+    expect(submitBlockers(review().payload, 'correction', form({ reason: '   ' })).map((b) => b.field)).toEqual(['reason']);
+    expect(submitBlockers(review().payload, 'correction', form({ reason: 'x'.repeat(2001) })).map((b) => b.field)).toEqual(['reason']);
+    expect(submitBlockers(review().payload, 'correction', form({ reason: 'Fixed a break' }))).toEqual([]);
+    expect(submitBlockers(review().payload, 'late_review', form())).toEqual([]);
   });
 
   it('every blocker has words for the person to read', () => {
     const blockers = submitBlockers(review({ unresolved_inputs: unresolved, deficit_proposals: [chooseDay('2026-09-29')] }).payload, 'correction', form());
-    expect(blockers.map((b) => b.field)).toEqual(['acknowledgement', 'deficit_choices', 'reason', 'send_email']);
+    expect(blockers.map((b) => b.field)).toEqual(['acknowledgement', 'deficit_choices', 'reason']);
     for (const blocker of blockers) expect(blocker.message.length).toBeGreaterThan(10);
   });
 });
@@ -249,11 +247,11 @@ describe('request body', () => {
     expect(body.deficit_choices).toEqual([{ work_date: '2026-09-29', choice: 'deduct' }]);
   });
 
-  it('adds the reason and the email choice for revisions only', () => {
-    const base = form({ reason: '  Fixed a break  ', sendEmail: true });
-    expect(buildSubmitBody(review(), 'correction', base)).toMatchObject({ reason: 'Fixed a break', send_email: true });
+  it('adds the reason for a correction and never asks for an email: a revision always says send_email false (the Send card sends)', () => {
+    const base = form({ reason: '  Fixed a break  ' });
+    expect(buildSubmitBody(review(), 'correction', base)).toMatchObject({ reason: 'Fixed a break', send_email: false });
     const late = buildSubmitBody(review(), 'late_review', base);
-    expect(late.send_email).toBe(true);
+    expect(late.send_email).toBe(false);
     expect(late).not.toHaveProperty('reason');
     const first = buildSubmitBody(review(), 'signoff', base);
     expect(first).not.toHaveProperty('reason');
@@ -305,8 +303,8 @@ describe('conflict and field errors', () => {
   });
 
   it('after a stale review the old acknowledgement and choices are cleared, the typed text is kept', () => {
-    const next = resetAfterStale(form({ acknowledged: true, choices: { '2026-09-29': 'deduct' }, reason: 'Because', sendEmail: false }));
-    expect(next).toEqual(form({ acknowledged: false, choices: {}, reason: 'Because', sendEmail: false }));
+    const next = resetAfterStale(form({ acknowledged: true, choices: { '2026-09-29': 'deduct' }, reason: 'Because' }));
+    expect(next).toEqual(form({ acknowledged: false, choices: {}, reason: 'Because' }));
   });
 });
 
@@ -318,6 +316,17 @@ describe('period and delivery status from server fields', () => {
 
   it('names a manual sign-off', () => {
     expect(periodStatus({ finalized_revision_no: 1, revision: revision() })).toMatchObject({ key: 'submitted_manual', text: 'Submitted manually' });
+  });
+
+  it('a signed period counts as submitted once it has a send (owner decision H-1 a): until then it is only "Signed"', () => {
+    const render = job('succeeded', 'render_pdf');
+    expect(periodStatus({ finalized_revision_no: 1, revision: revision(), jobs: [render] })).toMatchObject({ key: 'signed', text: 'Signed', tone: 'ok' });
+    expect(periodStatus({ finalized_revision_no: 1, revision: revision(), jobs: [render, job('queued')] })).toMatchObject({ key: 'submitted_manual', text: 'Submitted manually' });
+    // Whatever the send's own state is: a failed or waiting send job is still a send.
+    expect(periodStatus({ finalized_revision_no: 1, revision: revision(), jobs: [render, job('intervention')] }).key).toBe('submitted_manual');
+    // A correction or a late review keeps its own words; an automatic submission already has its deadline send.
+    expect(periodStatus({ finalized_revision_no: 2, revision: revision({ revision_no: 2, revision_kind: 'correction' }), jobs: [render] }).key).toBe('corrected');
+    expect(periodStatus({ finalized_revision_no: 1, revision: revision({ origin: 'deadline', review_state: 'pending' }), jobs: [render] }).key).toBe('submitted_auto_pending');
   });
 
   it('names an automatic submission with review pending', () => {
@@ -335,6 +344,7 @@ describe('period and delivery status from server fields', () => {
     expect(reviewLinkLabel(periodStatus({ finalized_revision_no: null, revision: null }))).toBe('Review & sign off');
     expect(reviewLinkLabel(periodStatus({ finalized_revision_no: 1, revision: revision({ origin: 'deadline', review_state: 'pending' }) }))).toBe('Review now');
     expect(reviewLinkLabel(periodStatus({ finalized_revision_no: 1, revision: revision() }))).toBe('Review or correct');
+    expect(reviewLinkLabel(periodStatus({ finalized_revision_no: 1, revision: revision(), jobs: [job('succeeded', 'render_pdf')] }))).toBe('Review or correct');
   });
 
   it('no delivery state before a revision', () => {
@@ -516,81 +526,60 @@ describe('the review payload on the sheet', () => {
   });
 });
 
-describe('the checklist beside the sheet', () => {
-  it('lists the three steps in order with their states in words', () => {
-    const ready = payload();
-    expect(checklistSteps(ready, form(), false)).toEqual([
-      { key: 'attention', title: 'Days that need attention', state: 'Nothing to resolve' },
-      { key: 'email', title: 'Email and PDF', state: 'Recipients and signature ready' },
-      { key: 'sign', title: 'Sign', state: 'Waiting for your signature' },
-    ]);
-  });
-
-  it('says what still needs the person: acknowledgement, then deficit choices', () => {
-    const open = payload({ unresolved_inputs: unresolved, deficit_proposals: [chooseDay('2026-09-30')] });
-    expect(checklistSteps(open, form(), false)[0]?.state).toBe('1 day needs your acknowledgement');
-    expect(checklistSteps(open, form({ acknowledged: true }), false)[0]?.state).toBe('1 deficit day needs your choice');
-    expect(checklistSteps(open, form({ acknowledged: true, choices: { '2026-09-30': 'waive' } }), false)[0]?.state).toBe('Acknowledged');
-  });
-
-  it('names a name-only signature, a missing recipient and the imported lock', () => {
-    // F-5 b: no saved image is not a problem, only a different signature.
-    expect(checklistSteps(payload({ signature: null }), form(), false)[1]?.state).toBe('Recipients ready, name-only signature');
-    expect(checklistSteps(payload({ recipients: { ...payload().recipients, to: [] } }), form(), false)[1]?.state).toBe('No recipient set');
-    expect(checklistSteps(payload(), form(), true)[2]?.state).toBe('Locked: imported history');
-  });
-});
-
-describe('sending after the sign-off (WP5-UX5-T01b, transitional until the Send card)', () => {
-  const draft: SendDraft = {
-    revision_id: 'rev-1',
-    revision_no: 1,
-    current: true,
-    sender: null,
-    to: ['payroll@example.invalid'],
-    cc: ['manager@example.invalid'],
-    subject: 'Synthetic subject',
-    body_text: 'Synthetic body',
-    time_rows: true,
-    ot_rows: false,
-    copy_sent_before: null,
-    reason_required: false,
-    previous_send: null,
-    correction_reason: null,
-  };
-
-  it('a first sign-off always sends; a revision sends only when the person chose to, with its reason', () => {
-    expect(sendAfterSignoff('signoff', form())).toEqual({ send: true, reason: null });
-    expect(sendAfterSignoff('correction', form({ sendEmail: false, reason: 'Fixed a day' }))).toEqual({ send: false, reason: 'Fixed a day' });
-    expect(sendAfterSignoff('correction', form({ sendEmail: true, reason: '  Fixed a day  ' }))).toEqual({ send: true, reason: 'Fixed a day' });
-    expect(sendAfterSignoff('late_review', form({ sendEmail: true, reason: '' }))).toEqual({ send: true, reason: null });
-  });
-
-  it('posts the draft defaults with the attempt key, and the reason only when there is one', () => {
-    expect(buildSendBody(draft, 'key-0001', null)).toEqual({
-      request_key: 'key-0001',
-      to: draft.to,
-      cc: draft.cc,
-      subject: draft.subject,
-      body_text: draft.body_text,
-      time_rows: true,
-      ot_rows: false,
+describe('the page header and the dialog (WP5-UX5-T03)', () => {
+  it('words the period in the reporting zone: weekdays, US dates, the due time and the zone (no submission id)', () => {
+    const description = periodDescription(payload().period, 'America/Los_Angeles');
+    expect(description).toEqual({
+      start: 'Mon 09/28/2026',
+      end: 'Sun 10/11/2026',
+      payroll: 'Fri 10/09/2026',
+      due: 'Mon 10/12/2026, 12:00',
+      zone: 'America/Los_Angeles',
     });
-    expect(buildSendBody(draft, 'key-0002', 'Payroll asked again')).toMatchObject({ reason: 'Payroll asked again' });
+    expect(weekdayDate('2026-10-30')).toBe('Fri 10/30/2026');
+    expect(JSON.stringify(description)).not.toContain('TS-');
   });
 
-  it('asks a late review that sends for the reason of another copy, and keeps a correction reason within the send rule', () => {
-    expect(submitBlockers(payload(), 'late_review', form({ sendEmail: true, reason: '' })).map((item) => item.field)).toEqual(['reason']);
-    expect(submitBlockers(payload(), 'late_review', form({ sendEmail: true, reason: 'Resent after review' }))).toEqual([]);
-    expect(submitBlockers(payload(), 'late_review', form({ sendEmail: false, reason: '' }))).toEqual([]);
-    expect(submitBlockers(payload(), 'correction', form({ sendEmail: true, reason: 'x'.repeat(501) })).map((item) => item.field)).toEqual(['reason']);
-    expect(submitBlockers(payload(), 'correction', form({ sendEmail: false, reason: 'x'.repeat(501) }))).toEqual([]);
+  it('ends the page with one note that names the saved zone, not a literal', () => {
+    expect(zoneNote('America/Los_Angeles')).toBe('Dates are accounting dates in America/Los_Angeles. Session times are shown in that zone, as on the PDF.');
+    expect(zoneNote('Asia/Ho_Chi_Minh')).toContain('Asia/Ho_Chi_Minh');
+    expect(zoneNote('Asia/Ho_Chi_Minh')).not.toContain('Los_Angeles');
   });
 
-  it('words a refused send after a successful sign-off: signed, the email only is missing', () => {
-    const refused = (status: number, code: string) => new ApiRequestError(status, code, 'synthetic');
-    expect(sendFailureText(refused(422, 'recipients_required'))).toBe('Signed. The email was not sent: no recipient is set. Add one in Settings, then send it from History.');
-    expect(sendFailureText(refused(422, 'reason_required'))).toContain('another one needs a reason');
-    expect(sendFailureText(refused(409, 'delivery_in_progress'))).toContain('still open');
+  it('words the check card for each of the three modes: signing locks and posts, sending is separate', () => {
+    expect(MODE_INTRO.signoff).toBe(
+      'Check every day, then sign off. Signing off locks this period and posts your OT credits; you send the PDF to payroll afterwards, below.',
+    );
+    expect(MODE_INTRO.late_review).toMatch(/waiting for your review/);
+    expect(MODE_INTRO.correction).toMatch(/correction revision with a reason/);
+    for (const mode of ['signoff', 'late_review', 'correction'] as const) {
+      expect(MODE_INTRO[mode], mode).toMatch(/sen(d|ding)/i);
+      expect(SIGNOFF_NOTE[mode], mode).toMatch(/sends nothing/);
+      expect(SIGNOFF_TITLE[mode].length, mode).toBeGreaterThan(5);
+      expect(SIGNOFF_LABEL[mode].length, mode).toBeGreaterThan(3);
+    }
+    expect(SIGNOFF_LABEL.signoff).toBe('Sign off');
+  });
+
+  it('shows the sign date in the reporting zone: an instant just after local midnight is still the local day (R-07)', () => {
+    // 2026-10-27 06:30Z is 2026-10-26 23:30 in America/Los_Angeles (PDT) and 2026-10-27 13:30 in Asia/Ho_Chi_Minh.
+    expect(signedDate('2026-10-27T06:30:00Z', 'America/Los_Angeles')).toBe('10/26/2026');
+    expect(signedDate('2026-10-27T06:30:00Z', 'Asia/Ho_Chi_Minh')).toBe('10/27/2026');
+  });
+
+  it('the signature summary is the saved image and the name, or the name only when none is saved (F-5 b)', () => {
+    expect(signatureSummary(payload())).toEqual({ image: '/api/signatures/sig-1', text: 'your saved image and your name' });
+    expect(signatureSummary(payload({ signature: null }))).toEqual({ image: null, text: 'your name only' });
+  });
+
+  it('the OT total is the payload number as h:mm', () => {
+    expect(otTotalText(300)).toBe('5:00');
+    expect(otTotalText(0)).toBe('0:00');
+    expect(otTotalText(95)).toBe('1:35');
+  });
+
+  it('signing a revision never asks for the reason of another copy: that is the Send card\'s rule', () => {
+    expect(submitBlockers(payload(), 'late_review', form())).toEqual([]);
+    expect(submitBlockers(payload(), 'correction', form({ reason: 'x'.repeat(501) }))).toEqual([]);
   });
 });

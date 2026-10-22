@@ -1363,9 +1363,37 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - `OFL.txt` was trimmed. The READMEs and ADR 0001 (EN/VI) say so.
   - Tests and preflight pass. New digest 1b413273.
   - T02-FREEZE attempt 2 runs: re-stage and rerun.
+- WP5-UX5-T02-FREEZE done: b4c500456a69158571799f8f0d90f035fd7a0fa5 on main, pushed (61
+  paths: 24 outside `handoff/`, 37 handoff). Digest 1b413273 (862 files) before staging and
+  on HEAD; every check exit 0.
+- Running now: WP5-UX5-T03, the Review and sign off page with the Send card
+  (worker-high, sonnet; size L, risk H; base b4c5004 / 1b413273; ports 49720-49739).
+  - The brief puts the owner's F-3 b, F-4 and F-5 b answers and Addendum 3b above plan B3.
+  - Also: the Settings switch "Time rows on the PDF", the settings-file key, and the
+    `revision.send` label and reason display in History.
+  - No `src/server` path is owned. The worker inventories first and stops if one is
+    needed.
+- WP5-UX5-T03 done (worker report; the gate and audits are pending). No inventory stop;
+  `src/server` untouched.
+  - npm test 2312; FULL e2e 795 passed, 0 failed, no rerun; mutants 5/5; verify 0; digest
+    d23e3617 (862 files).
+  - The signature fractions from the B11 mockup and from `layout.ts` agree exactly.
+  - Deviations:
+    - "From" shows a placeholder before a revision exists;
+    - "PDF Preview" opens in a new tab, because the CSP forbids framing;
+    - `App.tsx` lazy-loads Review, for the chunk limit;
+    - the worker staged the two deleted files with `git rm --cached` so the digest script
+      runs.
+  - Slips: one heredoc, one `/dev/null`.
+- Running now: the lookup WP5-UX5-T03-PATHS (light, haiku, read-only). It lists the exact
+  paths for the T03-FREEZE brief.
+- T03-PATHS done. Outside `handoff/`: 28 modified, 2 new, and 2 deletions, already staged.
+  Nothing else is staged. No path is outside the owned set, and there is no binary.
+- Running now: WP5-UX5-T03-FREEZE (a fresh committer, alone). It stages 32 explicit paths
+  plus the handoff records; the digest must be d23e3617.
 - Remaining after T06:
   - T06-FREEZE;
-  - the round-4 package gate;
+  - the round-5 package gate (it covers rounds 4 and 5);
   - area audits A and B, then the integration audit;
   - ACCEPT-DOCS and the WP5 re-accept.
 

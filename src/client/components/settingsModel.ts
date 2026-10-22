@@ -40,7 +40,10 @@ export interface SubmissionDraft {
   applyToOverdue: boolean;
   noteEnabled: boolean;
   noteText: string;
+  /** The per-send default of "OT rows on the PDF". */
   showOt: boolean;
+  /** The per-send default of "Time rows on the PDF" (WP5-UX5-T03); on until a person switches it off. */
+  showTime: boolean;
 }
 
 export function draftFromSettings(settings: SubmissionSettings): SubmissionDraft {
@@ -54,6 +57,7 @@ export function draftFromSettings(settings: SubmissionSettings): SubmissionDraft
     noteEnabled: settings.auto_note.enabled,
     noteText: settings.auto_note.text,
     showOt: settings.show_ot_on_pdf,
+    showTime: settings.show_time_on_pdf ?? true,
   };
 }
 
@@ -110,6 +114,7 @@ export function buildSettingsRequest(draft: SubmissionDraft, settings: Submissio
     auto_submit: draft.autoSubmit,
     auto_note_enabled: draft.noteEnabled,
     show_ot_on_pdf: draft.showOt,
+    show_time_on_pdf: draft.showTime,
     ...(autoSubmitChanged(draft, settings) && draft.applyToOverdue ? { apply_to_overdue_drafts: true } : {}),
     ...(note.ok ? { auto_note_text: note.text } : {}),
   };
@@ -131,7 +136,8 @@ export function isDraftChanged(draft: SubmissionDraft, settings: SubmissionSetti
     draft.autoSubmit !== saved.autoSubmit ||
     draft.noteEnabled !== saved.noteEnabled ||
     (note.ok ? note.text : draft.noteText) !== saved.noteText ||
-    draft.showOt !== saved.showOt
+    draft.showOt !== saved.showOt ||
+    draft.showTime !== saved.showTime
   );
 }
 

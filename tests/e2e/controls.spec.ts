@@ -184,7 +184,7 @@ test('Timesheet on a phone: the paper is full-bleed and square, the table keeps 
 });
 
 for (const theme of THEMES) {
-  test(`Review and sign off: the paper holds "What you sign" and the sheet, the checklist stays outside (${theme})`, async ({ page, signInThroughUi, employeeSeed }, testInfo) => {
+  test(`Review and sign off: the Preview card holds the sheet in one column at every width (${theme})`, async ({ page, signInThroughUi, employeeSeed }, testInfo) => {
     const { currentPayrollDate } = await employeeSeed.today();
     await openTimesheet(page, theme, signInThroughUi);
     await page.evaluate(`window.location.hash = '#/review/${currentPayrollDate}'`);
@@ -192,13 +192,15 @@ for (const theme of THEMES) {
     await expect(paper).toHaveCount(1);
     await expect(paper).toHaveAttribute('data-paper', 'review');
     const lines = [`# ${testInfo.project.name} / ${theme}: Review paper`];
-    await expect(paper.getByRole('heading', { name: 'What you sign', level: 2 })).toBeVisible();
+    // WP5-UX5-T03: "What you sign" and its hint are gone; the card has a header bar ("Preview") and the sheet, and the checklist is gone
+    // (it moved into the Sign off dialog), so there is one column at every width.
+    await expect(paper.getByRole('heading', { name: 'Preview', level: 2 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'What you sign' })).toHaveCount(0);
     await expect(paper.locator('article.sheet')).toHaveCount(1);
     await expect(paper.locator('section.sheet-week')).toHaveCount(2);
     await expect(paper.locator('.sheet-footer')).toHaveCount(1);
-    await expect(paper.locator('.review-checklist, [data-step]'), 'the checklist stays outside the paper').toHaveCount(0);
     await expect(paper.locator('h1')).toHaveCount(0);
-    await expect(page.locator('.review-checklist')).toHaveCount(1);
+    await expect(page.locator('.review-checklist, .review-layout, [data-step]'), 'no checklist and no second column').toHaveCount(0);
 
     const desktop = testInfo.project.name === 'desktop';
     for (const width of desktop ? [1440, 1330, 1280, 1024] : [390]) {
@@ -208,8 +210,10 @@ for (const theme of THEMES) {
       lines.push(`${width}px: paper on page ${round(step)}:1`);
       expect(step, `the review paper steps from the page at ${width}px`).toBeGreaterThanOrEqual(CARD_STEP);
       const style = await paper.evaluate((element) => {
-        const computed = element.ownerDocument.defaultView?.getComputedStyle(element);
-        return { shadow: computed?.boxShadow ?? '', radius: computed?.borderTopLeftRadius ?? '', pad: computed?.paddingLeft ?? '' };
+        const view = element.ownerDocument.defaultView;
+        const computed = view?.getComputedStyle(element);
+        const body = element.querySelector('.preview-body');
+        return { shadow: computed?.boxShadow ?? '', radius: computed?.borderTopLeftRadius ?? '', pad: body === null ? '' : (view?.getComputedStyle(body).paddingLeft ?? '') };
       });
       expect(parseLayers(style.shadow).length, `the review paper is raised (${style.shadow})`).toBeGreaterThanOrEqual(3);
       expect(style.radius).toBe(width >= 768 ? '12px' : '0px');
@@ -218,9 +222,8 @@ for (const theme of THEMES) {
         for (const element of await page.locator(inner).all()) expect(await computedStyle(element, 'boxShadow')).toBe('none');
       }
       const outer = await boxOf(paper);
-      const checklist = await boxOf(page.locator('.review-checklist'));
-      if (width >= 1330) expect(checklist.left, 'the checklist is beside the paper').toBeGreaterThanOrEqual(outer.right);
-      else if (width >= 768) expect(checklist.top, 'below 1330px the checklist follows the paper').toBeGreaterThanOrEqual(outer.bottom);
+      // One column: the Send card follows the Preview, whatever the width.
+      expect((await boxOf(page.locator('[data-send-card]'))).top, `the Send card follows the Preview at ${width}px`).toBeGreaterThanOrEqual(outer.bottom - 1);
       for (const inside of ['header.form-head', 'section.sheet-week', '.sheet-footer']) {
         for (const element of await paper.locator(inside).all()) {
           const box = await boxOf(element);
@@ -228,7 +231,7 @@ for (const theme of THEMES) {
           expect(box.right, `${inside} right`).toBeLessThanOrEqual(outer.right);
         }
       }
-      // The seven columns never spill out of their week card or under the checklist (the paper's padding moved the two-column switch to 1330px).
+      // The seven columns never spill out of their week card.
       if (width >= 930) {
         for (const card of await paper.locator('section.sheet-week').all()) {
           const room = await card.evaluate((element) => ({ scroll: element.scrollWidth, client: element.clientWidth }));
@@ -236,7 +239,6 @@ for (const theme of THEMES) {
           expect(room.scroll, `the week card needs no sideways scroll at ${width}px`).toBeLessThanOrEqual(room.client);
           expect((await boxOf(card.locator('.week-grid'))).right, `the week grid stays inside the paper at ${width}px`).toBeLessThanOrEqual(outer.right - 15.5);
         }
-        if (width >= 1330) expect((await boxOf(paper.locator('.week-grid').first())).right, `the week grid is clear of the checklist at ${width}px`).toBeLessThanOrEqual(checklist.left);
       }
       if (width === 390) {
         expect(outer.left, 'full-bleed on a phone').toBeCloseTo(0, 0);

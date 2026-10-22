@@ -368,6 +368,13 @@ test('the owner changes the share to edit; the grantee edits a day without Check
   // The review hint belongs to the owner: the shared view and the review route show and serve none (WP3-C-01).
   await expect(page.locator('[data-grantee-changes]')).toHaveCount(0);
   expect(await statusInPage(page, 'GET', `/api/shared/${owner.account.id}/timesheets/${owner.payrollDate}/review`)).toBe(404);
+  // F-Q5: a grantee never sees Sign off, Send, the send draft or a render control, in the page or on the shared mount (WP5-UX5-T03).
+  await expect(page.locator('[data-sign-off], [data-send-card], [data-send], [data-pdf-preview], [data-save-pdf]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^(Sign off|Send)/ })).toHaveCount(0);
+  const someRevision = '00000000-0000-4000-8000-000000000000';
+  expect(await statusInPage(page, 'POST', `/api/shared/${owner.account.id}/revisions/${someRevision}/send`, {})).toBe(404);
+  expect(await statusInPage(page, 'GET', `/api/shared/${owner.account.id}/revisions/${someRevision}/send-draft`)).toBe(404);
+  expect(await statusInPage(page, 'GET', `/api/shared/${owner.account.id}/timesheets/${owner.payrollDate}/pdf-preview?time=1&ot=1`)).toBe(404);
 
   // The owner's History names the grantee for that change.
   await switchUser(page, signInPageAs, owner.account, '#/history');

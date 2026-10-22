@@ -45,6 +45,7 @@ export const ALLOWED_KEYS = {
     'subject_template',
     'body_template',
     'show_ot_on_pdf',
+    'show_time_on_pdf',
     'reminder_offsets_minutes',
     'auto_note_enabled',
     'auto_note_text',
@@ -74,6 +75,11 @@ export interface SubmissionData {
   subject_template: string;
   body_template: string;
   show_ot_on_pdf: boolean;
+  /**
+   * The per-send default of "Time rows on the PDF". Written by every export; optional on reading, so a file made before it existed
+   * still imports (absent leaves the saved value as it is).
+   */
+  show_time_on_pdf?: boolean;
   reminder_offsets_minutes: number[];
   auto_note_enabled: boolean;
   auto_note_text: string;
@@ -170,6 +176,7 @@ function submissionData(settings: SubmissionSettings): SubmissionData {
     subject_template: settings.subject_template,
     body_template: settings.body_template,
     show_ot_on_pdf: settings.show_ot_on_pdf,
+    show_time_on_pdf: settings.show_time_on_pdf ?? true,
     reminder_offsets_minutes: [...settings.reminder_offsets_minutes],
     auto_note_enabled: settings.auto_note.enabled,
     auto_note_text: settings.auto_note.text,
@@ -383,6 +390,8 @@ function readSubmission(reader: Reader, value: unknown): SubmissionData | null {
   const subject = reader.string(record.subject_template, `${path}.subject_template`, 600);
   const body = reader.string(record.body_template, `${path}.body_template`, 12_000);
   const showOt = reader.boolean(record.show_ot_on_pdf, `${path}.show_ot_on_pdf`);
+  // Optional: a file made before the per-send time switch existed has no such key and still imports.
+  const showTime = record.show_time_on_pdf === undefined ? undefined : reader.boolean(record.show_time_on_pdf, `${path}.show_time_on_pdf`);
   const offsets: number[] = [];
   for (const [index, item] of (reader.array(record.reminder_offsets_minutes, `${path}.reminder_offsets_minutes`, 5) ?? []).entries()) {
     const minutes = reader.integer(item, `${path}.reminder_offsets_minutes[${index}]`, 1, 20_160);
@@ -409,6 +418,7 @@ function readSubmission(reader: Reader, value: unknown): SubmissionData | null {
         subject_template: subject,
         body_template: body,
         show_ot_on_pdf: showOt,
+        ...(showTime === undefined || showTime === null ? {} : { show_time_on_pdf: showTime }),
         reminder_offsets_minutes: offsets,
         auto_note_enabled: noteEnabled,
         auto_note_text: noteText,
@@ -607,6 +617,7 @@ export interface PersonalCurrent {
 }
 
 const minutes = (value: number): string => `${value} min`;
+const yesNo = (value: boolean | undefined): string => (value === false ? 'No' : 'Yes');
 
 function offsetText(value: number): string {
   return value % 60 === 0 ? `${value / 60} h` : `${value} min`;
@@ -652,12 +663,19 @@ export function resolveAutoSubmit(fileValue: boolean, currentValue: boolean, tic
   return fileValue ? tick || currentValue : false;
 }
 
+/** What the file would leave saved: a key the file lacks (an older file) keeps today's value. */
 function effectiveSubmission(file: SubmissionData, current: SubmissionSettings, tick: boolean): SubmissionData {
-  return { ...file, auto_submit: resolveAutoSubmit(file.auto_submit, current.auto_submit, tick) };
+  return {
+    ...file,
+    show_time_on_pdf: file.show_time_on_pdf ?? current.show_time_on_pdf ?? true,
+    auto_submit: resolveAutoSubmit(file.auto_submit, current.auto_submit, tick),
+  };
 }
 
+/** Compares the allowlisted keys in their fixed order, so the order a file happened to list them in never matters. */
 function sameSubmission(a: SubmissionData, b: SubmissionData): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+  const canonical = (data: SubmissionData) => JSON.stringify(ALLOWED_KEYS.submission.map((key) => data[key]));
+  return canonical(a) === canonical(b);
 }
 
 /** True when a tick is meaningful: the file asks for automatic submission and it is off now. */
@@ -697,6 +715,7 @@ export function personalComparison(data: PersonalData, current: PersonalCurrent,
       row('subject', 'Subject template', excerpt(now.subject_template), excerpt(submission.subject_template), now.subject_template !== submission.subject_template),
       row('body', 'Body template', excerpt(now.body_template), excerpt(submission.body_template), now.body_template !== submission.body_template),
       row('reminders', 'Reminders before the deadline', offsetsText(now.reminder_offsets_minutes), offsetsText(submission.reminder_offsets_minutes)),
+      row('show_time', 'Time rows on the PDF (default per send)', yesNo(now.show_time_on_pdf), yesNo(effective.show_time_on_pdf)),
       row('show_ot', 'Show OT on the PDF', now.show_ot_on_pdf ? 'Yes' : 'No', submission.show_ot_on_pdf ? 'Yes' : 'No'),
       row('note', 'Automatic note line', now.auto_note_enabled ? 'On' : 'Off', submission.auto_note_enabled ? 'On' : 'Off'),
       row('note_text', 'Automatic note text', excerpt(now.auto_note_text), excerpt(submission.auto_note_text), now.auto_note_text !== submission.auto_note_text),
@@ -753,6 +772,8 @@ export function buildSubmissionRequest(file: SubmissionData, current: Submission
     auto_note_enabled: file.auto_note_enabled,
     ...(note.ok ? { auto_note_text: note.text } : {}),
     show_ot_on_pdf: file.show_ot_on_pdf,
+    // An older file has no such key: leaving it out keeps the saved value (the server keeps an omitted field).
+    ...(file.show_time_on_pdf === undefined ? {} : { show_time_on_pdf: file.show_time_on_pdf }),
     reminder_offsets_minutes: file.reminder_offsets_minutes,
   };
 }

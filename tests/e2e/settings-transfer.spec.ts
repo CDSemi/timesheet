@@ -137,10 +137,10 @@ test('export: the file holds the allowlisted keys only, with no signature, autho
     ['breaks', 'deficit_mode', 'reference_end', 'reference_start', 'required_minutes', 'rounding_step_minutes', 'threshold_minutes'].sort(),
   );
   expect(Object.keys(file.data.submission ?? {}).sort()).toEqual(
-    ['auto_note_enabled', 'auto_note_text', 'auto_submit', 'body_template', 'cc', 'reminder_offsets_minutes', 'show_ot_on_pdf', 'subject_template', 'to'].sort(),
+    ['auto_note_enabled', 'auto_note_text', 'auto_submit', 'body_template', 'cc', 'reminder_offsets_minutes', 'show_ot_on_pdf', 'show_time_on_pdf', 'subject_template', 'to'].sort(),
   );
   expect(file.data.work_policy?.deficit_mode).toBe('choose_at_signoff');
-  expect(file.data.submission).toMatchObject({ to: ['payroll-synthetic@example.invalid'], reminder_offsets_minutes: [2880, 90], auto_submit: true, show_ot_on_pdf: true });
+  expect(file.data.submission).toMatchObject({ to: ['payroll-synthetic@example.invalid'], reminder_offsets_minutes: [2880, 90], auto_submit: true, show_ot_on_pdf: true, show_time_on_pdf: true });
   // Nothing of the account that is not a setting: the signature, its authorization, the person, the session, the balance, the share.
   for (const forbidden of [signatureId, 'auto_image', 'authorized', 'sha256', 'attachment', 'apply_to_overdue_drafts', person.account.email, person.account.id, 'Synthetic Source Person', 'Synthetic Reader', 'opening', 'ledger', 'session', 'grantee']) {
     expect(first.text, `the file must not contain "${forbidden}"`).not.toContain(forbidden);

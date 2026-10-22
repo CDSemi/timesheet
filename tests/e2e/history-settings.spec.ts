@@ -545,6 +545,43 @@ test('settings: recipients, the automatic note line with its limits, the preview
   }
 });
 
+test('settings: "Time rows on the PDF" sits next to "OT rows on the PDF", persists, and becomes the default of the Send card', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(120_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Rows Owner', settings: true });
+  await signInPageAs(person.account, '#/settings');
+  const form = page.getByRole('form', { name: 'Submission and email' });
+  await expect(form).toBeVisible();
+  const time = form.getByRole('checkbox', { name: 'Time rows on the PDF' });
+  const ot = form.getByRole('checkbox', { name: 'OT rows on the PDF' });
+  // Both defaults are on; the two switches are side by side in one group.
+  await expect(time).toBeChecked();
+  await expect(ot).toBeChecked();
+  await expect(form.locator('[data-setting="pdf-rows"]').getByRole('checkbox')).toHaveCount(2);
+  const [timeBox, otBox] = [await time.boundingBox(), await ot.boundingBox()];
+  expect(Math.abs((otBox?.y ?? 0) - (timeBox?.y ?? 0)), 'the two switches are neighbours').toBeLessThan(80);
+  // Switching the time rows off is a change to save; it persists on the server and on reload.
+  await time.uncheck();
+  await form.getByRole('button', { name: 'Save settings' }).click();
+  await expect(form.locator('[data-status-note="submission-saved"]')).toContainText('saved as version');
+  expect((await person.api.call<{ settings: { show_time_on_pdf: boolean; show_ot_on_pdf: boolean } }>('GET', '/api/settings/submission')).settings).toMatchObject({
+    show_time_on_pdf: false,
+    show_ot_on_pdf: true,
+  });
+  await page.reload();
+  await expect(page.getByRole('form', { name: 'Submission and email' }).getByRole('checkbox', { name: 'Time rows on the PDF' })).not.toBeChecked();
+  await expect(page.getByRole('form', { name: 'Submission and email' }).getByRole('checkbox', { name: 'OT rows on the PDF' })).toBeChecked();
+  if (testInfo.project.name === 'mobile') await expectNoSidewaysScroll(page);
+  // The Send card starts from it: Time rows off, OT rows on; a send may still change both.
+  await page.goto(`/#/review/${person.payrollDate}`);
+  const send = page.locator('[data-send-card]');
+  await expect(send).toBeVisible();
+  await expect(send.getByRole('switch', { name: 'Time rows on the PDF' })).not.toBeChecked();
+  await expect(send.getByRole('switch', { name: 'OT rows on the PDF' })).toBeChecked();
+  await expect(send.locator('[data-pdf-preview]')).toHaveAttribute('href', `/api/timesheets/${person.payrollDate}/pdf-preview?time=0&ot=1`);
+  await send.getByRole('switch', { name: 'Time rows on the PDF' }).check();
+  await expect(send.locator('[data-pdf-preview]')).toHaveAttribute('href', `/api/timesheets/${person.payrollDate}/pdf-preview?time=1&ot=1`);
+});
+
 /* ---- Signature upload and the automatic-image consent ---------------------------------------------------- */
 
 test('signature upload: the consent is pre-selected, never dropped, and each outcome says what was recorded', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {

@@ -1,7 +1,7 @@
-import type { FocusEvent } from 'react';
+import { type FocusEvent, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import type { FinalizationResponse, TimesheetView } from '../api.ts';
 import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.tsx';
-import { minutesText, usDate } from './format.ts';
+import { usDate } from './format.ts';
 import { periodStatus, reviewHash, reviewLinkLabel } from './reviewModel.ts';
 import {
   dayButtonName,
@@ -31,6 +31,9 @@ import {
   SelectBox,
   SheetWeekTable,
 } from './SheetWeekTable.tsx';
+
+/** The company's name as the PDF and the top bar print it. */
+const COMPANY_NAME = 'C&D Semiconductor Services, Inc.';
 
 /** A cell's row name for screen readers; the visual row-label column is hidden from them. */
 function RowName({ name }: { name: string }) {
@@ -338,10 +341,92 @@ export function TimesheetSheet({
 }
 
 /**
- * "What you sign": the same sheet in read-only mode, fed by the review payload (see
- * `reviewSheetWeeks`). Same form header, week bands, Overtime Total and legend as the Timesheet
- * page and the PDF; the detail rows are always on, no day opens, and there is no signature image
- * or review link here (the signing happens in the checklist beside it).
+ * The company line of the Preview (U5-29 line 1): large, centred and always one line. When its max-content width does not fit the
+ * room it has, the line is hidden and not wrapped (the page keeps the company name in the top bar); the measure is the text's own
+ * width, read again whenever the room changes.
+ */
+function CompanyLine() {
+  const box = useRef<HTMLParagraphElement>(null);
+  const text = useRef<HTMLSpanElement>(null);
+  const [fits, setFits] = useState(true);
+  useLayoutEffect(() => {
+    const outer = box.current;
+    const inner = text.current;
+    if (outer === null || inner === null) return;
+    const measure = () => setFits(inner.getBoundingClientRect().width <= outer.getBoundingClientRect().width + 0.5);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(outer);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <p ref={box} className="review-company" data-fits={fits ? 'true' : 'false'} aria-hidden={fits ? undefined : true}>
+      <span ref={text}>{COMPANY_NAME}</span>
+    </p>
+  );
+}
+
+/**
+ * The geometry of the two signature rows of the Review preview and of the Sign off dialog's preview (owner correction of
+ * 2026-10-21, "indent like B11"): the left inset of the lines, their lengths, the gap between them and the inset of the Date
+ * line from the right are the PDF's own fractions of the content width (`--sig-*` tokens, measured from the PDF page and checked
+ * against `src/server/pdf/layout.ts`). Employee Signature + Date make the first row and Manager Signature + Date the second; the
+ * four lines align by row and by column. `children` is the content at the end of the employee line (the Sign off button).
+ */
+export function SignatureRows({
+  employee,
+  employeeDate,
+  manager,
+  action,
+}: {
+  /** What stands on the employee line (the signed image, name and mark), or nothing before the sign-off. */
+  employee: ReactNode;
+  /** The date on the employee Date line. */
+  employeeDate: ReactNode;
+  /** The manager line's text ("Not used yet"). */
+  manager: ReactNode;
+  /** The control at the end of the employee line, 8px from its end (the Sign off button). */
+  action?: ReactNode;
+}) {
+  return (
+    <div className="review-signatures" role="group" aria-label="Signatures">
+      <div className="rsig-row" data-sig-row="employee">
+        <div className="rsig rsig-sign">
+          <div className="rsig-line" data-sig-line="employee">
+            <div className="rsig-content">{employee}</div>
+            {action !== undefined && <div className="rsig-action">{action}</div>}
+          </div>
+          <span className="rsig-cap">Employee Signature</span>
+        </div>
+        <div className="rsig rsig-date">
+          <div className="rsig-line" data-sig-line="employee-date">
+            <span className="mono" data-signature="employee-date">
+              {employeeDate}
+            </span>
+          </div>
+          <span className="rsig-cap">Date</span>
+        </div>
+      </div>
+      <div className="rsig-row" data-sig-row="manager">
+        <div className="rsig rsig-sign">
+          <div className="rsig-line" data-sig-line="manager">
+            <span className="muted rsig-note">{manager}</span>
+          </div>
+          <span className="rsig-cap">Manager Signature</span>
+        </div>
+        <div className="rsig rsig-date">
+          <div className="rsig-line" data-sig-line="manager-date" />
+          <span className="rsig-cap">Date</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The Preview of the Review page (U5-29): the same sheet in read-only mode, fed by the review payload (see `reviewSheetWeeks`). The
+ * header is the company line, the title and the fields; then the week bands (detail rows always on, no day opens), the legend, the
+ * pending note with Overtime Total and the two signature rows. The sign-off control sits in the Employee Signature line.
  */
 export function ReviewSheet({
   weeks,
@@ -350,6 +435,7 @@ export function ReviewSheet({
   desktop,
   totalCredited,
   pendingDays,
+  signature,
 }: {
   weeks: SheetWeek[];
   employeeName: string;
@@ -359,13 +445,16 @@ export function ReviewSheet({
   totalCredited: number;
   /** The payload's `totals.pending_days`. */
   pendingDays: number;
+  /** The signature rows (`SignatureRows`) with the owner's state in them. */
+  signature: ReactNode;
 }) {
   const total = overtimeTotal({ provisional_credited_minutes: totalCredited, pending_days: pendingDays });
   return (
-    <article className={`sheet sheet-review ${desktop ? 'sheet-desktop' : 'sheet-phone'}`} aria-label="What you sign" data-sheet={desktop ? 'desktop' : 'phone'}>
-      <header className="form-head">
-        <div className="form-brand">
-          <div className="form-title">{SHEET_TITLE}</div>
+    <article className={`sheet sheet-review ${desktop ? 'sheet-desktop' : 'sheet-phone'}`} aria-label="Timesheet preview" data-sheet={desktop ? 'desktop' : 'phone'}>
+      <header className="form-head review-form-head">
+        <CompanyLine />
+        <div className="review-title" data-review-title>
+          {SHEET_TITLE}
         </div>
         <dl className="form-fields">
           <div>
@@ -398,16 +487,6 @@ export function ReviewSheet({
           <div className="foot-notes">
             {total.pendingNote !== null && <p className="pending-note">{total.pendingNote}</p>}
             <Legend today={false} />
-            <dl className="facts review-totals" aria-label="Period totals from the server">
-              <div data-total="credited">
-                <dt>OT credit if signed now</dt>
-                <dd data-minutes={totalCredited}>{minutesText(totalCredited)}</dd>
-              </div>
-              <div data-total="pending">
-                <dt>Days pending OT evidence</dt>
-                <dd>{pendingDays}</dd>
-              </div>
-            </dl>
           </div>
           <div className="ot-total" role="group" aria-label="Overtime total">
             <span className="ot-total-label">Overtime Total :</span>
@@ -417,6 +496,7 @@ export function ReviewSheet({
             <span className="ot-total-unit">h:mm</span>
           </div>
         </div>
+        {signature}
       </div>
     </article>
   );

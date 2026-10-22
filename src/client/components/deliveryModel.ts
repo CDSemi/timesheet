@@ -1,4 +1,6 @@
 import { addDays } from '../../domain/dates.ts';
+import { isValidEmailAddress, normalizeRecipients } from '../../domain/emailTemplate.ts';
+import type { ReviewSnapshot } from '../../domain/snapshot.ts';
 import {
   ApiRequestError,
   type DeliveryAttempt,
@@ -10,8 +12,10 @@ import {
   type RecipientAddresses,
   type RevisionListItem,
   type RevisionSummary,
+  type SendDraft,
 } from '../api.ts';
 import { describeError } from './errors.ts';
+import { instantText } from './format.ts';
 import { type DeliveryStatus, deliveryStatus, periodStatus, type PeriodStatus, type Tone } from './reviewModel.ts';
 
 /*
@@ -427,6 +431,166 @@ const WINDOW_DAYS = 182;
 export function historyWindow(currentPeriodEnd: string, index: number): { from: string; to: string } {
   const to = addDays(currentPeriodEnd, -WINDOW_DAYS * index);
   return { from: addDays(to, -(WINDOW_DAYS - 1)), to };
+}
+
+/* ---- The Send card (WP5-UX5-T03) -------------------------------------------------------------------- */
+
+/**
+ * What the Send card holds for one send: the envelope as typed (addresses one per line, or separated by commas, semicolons or
+ * spaces), the subject, the message body and the two PDF row switches. The defaults come from Settings (the send draft); each send
+ * may change them, and the signed timesheet never changes (owner decisions F-3 b and F-4).
+ */
+export interface SendForm {
+  to: string;
+  cc: string;
+  subject: string;
+  body: string;
+  time: boolean;
+  ot: boolean;
+}
+
+export const MAX_SEND_SUBJECT = 300;
+export const MAX_SEND_BODY = 20_000;
+
+const addressesText = (list: readonly string[]): string => list.join(', ');
+
+/** The defaults of a revision's send: the envelope and both switches the server proposed (Settings). */
+export function sendFormFromDraft(draft: Pick<SendDraft, 'to' | 'cc' | 'subject' | 'body_text' | 'time_rows' | 'ot_rows'>): SendForm {
+  return { to: addressesText(draft.to), cc: addressesText(draft.cc), subject: draft.subject, body: draft.body_text, time: draft.time_rows, ot: draft.ot_rows };
+}
+
+/**
+ * The defaults before the sign-off, when no revision (and so no send draft) exists yet: the envelope the review payload renders
+ * from the same Settings templates, the OT switch of the payload and the Settings default of the time switch.
+ */
+export function sendFormFromReview(recipients: Pick<ReviewSnapshot['recipients'], 'to' | 'cc' | 'subject' | 'body_text'>, rows: { time: boolean; ot: boolean }): SendForm {
+  return { to: addressesText(recipients.to), cc: addressesText(recipients.cc), subject: recipients.subject, body: recipients.body_text, time: rows.time, ot: rows.ot };
+}
+
+export const sameSendForm = (a: SendForm, b: SendForm): boolean =>
+  a.to === b.to && a.cc === b.cc && a.subject === b.subject && a.body === b.body && a.time === b.time && a.ot === b.ot;
+
+export interface SendProblem {
+  field: 'to' | 'cc' | 'subject' | 'body';
+  message: string;
+}
+
+function addressesOf(text: string): string[] {
+  return text.split(/[\s,;]+/).filter((item) => item !== '');
+}
+
+/** The problems of the typed envelope in words, the same rules the server applies (it stays the authority). */
+export function sendProblems(form: SendForm): SendProblem[] {
+  const problems: SendProblem[] = [];
+  const to = addressesOf(form.to);
+  const cc = addressesOf(form.cc);
+  const badTo = to.find((item) => !isValidEmailAddress(item));
+  const badCc = cc.find((item) => !isValidEmailAddress(item));
+  if (to.length === 0) problems.push({ field: 'to', message: 'Enter at least one recipient address.' });
+  else if (badTo !== undefined) problems.push({ field: 'to', message: `The recipient address "${badTo}" is not a valid email address.` });
+  if (badCc !== undefined) problems.push({ field: 'cc', message: `The copy address "${badCc}" is not a valid email address.` });
+  if (to.length > 0 && badTo === undefined && badCc === undefined) {
+    try {
+      normalizeRecipients(to, cc);
+    } catch (caught) {
+      problems.push({ field: 'to', message: caught instanceof Error ? caught.message : 'The recipients cannot be used.' });
+    }
+  }
+  const subject = form.subject.normalize('NFC').trim();
+  if (subject === '') problems.push({ field: 'subject', message: 'Enter a subject.' });
+  else if ([...subject].length > MAX_SEND_SUBJECT || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(subject)) {
+    problems.push({ field: 'subject', message: `The subject must be one line of at most ${MAX_SEND_SUBJECT} characters.` });
+  }
+  if (form.body.trim() === '') problems.push({ field: 'body', message: 'Enter the message.' });
+  else if ([...form.body].length > MAX_SEND_BODY) problems.push({ field: 'body', message: `The message must have at most ${MAX_SEND_BODY} characters.` });
+  return problems;
+}
+
+/** The body of POST /api/revisions/:id/send for exactly what the card shows; `reason` only when the owner gave one. */
+export function buildSendRequest(form: SendForm, requestKey: string, reason: string | null): Record<string, unknown> {
+  return {
+    request_key: requestKey,
+    to: addressesOf(form.to),
+    cc: addressesOf(form.cc),
+    subject: form.subject.trim(),
+    body_text: form.body,
+    time_rows: form.time,
+    ot_rows: form.ot,
+    ...(reason === null ? {} : { reason }),
+  };
+}
+
+/**
+ * The attempt key of one send: the same while the same revision, envelope, switches and reason are retried (a lost response
+ * replays, it is never a second send), and a different one as soon as anything differs.
+ */
+export function sendAttemptSignature(revisionId: string, form: SendForm, reason: string | null): string {
+  return JSON.stringify([revisionId, form, reason]);
+}
+
+export type SendCardMode = 'sign_first' | 'send' | 'another_copy' | 'locked';
+
+export interface SendCardState {
+  mode: SendCardMode;
+  /** The Send button's words. */
+  label: string;
+  /** Why the button is disabled, in words; null when it is enabled. */
+  hint: string | null;
+}
+
+/**
+ * Which Send button the card shows. Before the sign-off it is disabled and says "Sign off first"; once a copy of the period counts
+ * as sent it reads "Send another copy..." and asks for the owner's reason first (B-A2). An imported period, a shared view and a
+ * superseded revision have none.
+ */
+export function sendCardState(input: { signed: boolean; imported: boolean; current: boolean; copySentBefore: boolean }): SendCardState {
+  if (input.imported) return { mode: 'locked', label: 'Send', hint: 'An imported period is history and cannot be sent.' };
+  if (!input.signed) return { mode: 'sign_first', label: 'Send', hint: 'Sign off first' };
+  if (!input.current) return { mode: 'locked', label: 'Send', hint: 'A newer revision exists; only the current revision can be sent.' };
+  return input.copySentBefore ? { mode: 'another_copy', label: 'Send another copy...', hint: null } : { mode: 'send', label: 'Send', hint: null };
+}
+
+/** The earlier copy the reason dialog names: when it went, to whom and how it ended. */
+export function earlierCopyText(copy: NonNullable<SendDraft['copy_sent_before']>, zone: string): string {
+  const to = copy.to.length === 0 ? 'no one' : copy.to.join(', ');
+  const state = copy.state === 'accepted' ? 'was accepted by the mail server' : 'may have arrived (the delivery is recorded as uncertain)';
+  return `An earlier copy went to ${to}${copy.cc.length === 0 ? '' : ` (copy: ${copy.cc.join(', ')})`} on ${instantText(copy.sent_at, zone)} and ${state}.`;
+}
+
+export type SendFailure =
+  | { kind: 'reason'; message: string }
+  | { kind: 'field'; field: SendProblem['field']; message: string }
+  | { kind: 'conflict'; message: string }
+  | { kind: 'other'; message: string };
+
+/**
+ * A refused send in words. A 422 `reason_required` opens the reason dialog; a field code marks its field; a 409 (an attempt is open or
+ * uncertain, a send job is waiting, the revision was superseded) says so and is never retried blindly.
+ */
+export function sendFailure(caught: unknown): SendFailure {
+  if (!(caught instanceof ApiRequestError)) return { kind: 'other', message: describeError(caught) };
+  switch (caught.code) {
+    case 'reason_required':
+      return { kind: 'reason', message: 'A copy of this period was already sent. Give the reason for sending another one.' };
+    case 'invalid_reason':
+      return { kind: 'reason', message: `The reason must have ${MIN_COPY_REASON} to ${MAX_COPY_REASON} characters without control characters.` };
+    case 'recipients_required':
+      return { kind: 'field', field: 'to', message: 'Enter at least one recipient address.' };
+    case 'invalid_subject':
+      return { kind: 'field', field: 'subject', message: `The subject must be one line of at most ${MAX_SEND_SUBJECT} characters.` };
+    case 'invalid_body':
+      return { kind: 'field', field: 'body', message: `The message must have 1 to ${MAX_SEND_BODY} characters without control characters.` };
+    case 'delivery_in_progress':
+      return { kind: 'conflict', message: 'A delivery of this revision is already in progress or waiting. Nothing was sent again; follow it in History.' };
+    case 'delivery_uncertain':
+      return { kind: 'conflict', message: 'A delivery attempt of this revision is uncertain. Record your decision on it in History before you send again.' };
+    case 'revision_superseded':
+      return { kind: 'conflict', message: 'A newer revision exists, so only that one can be sent. The page was refreshed.' };
+    case 'request_key_reused':
+      return { kind: 'conflict', message: 'This send was already recorded with different values. Nothing was sent again; check History.' };
+    default:
+      return caught.status === 409 ? { kind: 'conflict', message: describeError(caught) } : { kind: 'other', message: describeError(caught) };
+  }
 }
 
 const SAFE_PDF_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,100}\.pdf$/;

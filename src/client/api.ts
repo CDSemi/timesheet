@@ -760,7 +760,8 @@ export interface FinalizationResponse {
   payroll_date: string;
   finalized_revision_no: number | null;
   revision: RevisionSummary | null;
-  signoff: { signer_name: string; signed_at: string } | null;
+  /** The sign-off record: the account name, the real sign time and the image placed on the PDF (null: name only, F-5 b). */
+  signoff: { signer_name: string; signed_at: string; signature_attachment_id?: string | null } | null;
   ledger_lines: Array<{ work_date: string | null; line_kind: string; proposed_minutes: number; outcome: string }>;
   jobs: FinalizationJob[];
 }
@@ -869,7 +870,7 @@ export interface SubmissionSettings {
   auto_image: { authorized: boolean; signature_attachment_id: string | null; authorized_at: string | null };
   auto_note: { enabled: boolean; text: string };
   show_ot_on_pdf: boolean;
-  /** The Settings default of the per-send "Time rows on the PDF" switch (the Settings control arrives with WP5-UX5-T03). */
+  /** The Settings default of the per-send "Time rows on the PDF" switch (the server sends it; absent only in older fixtures). */
   show_time_on_pdf?: boolean;
   reminder_offsets_minutes: number[];
   created_at: string | null;
@@ -887,6 +888,8 @@ export interface SubmissionSettingsRequest {
   auto_note_enabled: boolean;
   auto_note_text?: string;
   show_ot_on_pdf: boolean;
+  /** The per-send default of "Time rows on the PDF"; omitted keeps the saved value. */
+  show_time_on_pdf?: boolean;
   /** Minutes before the deadline at which a reminder is sent (at most five); omitted keeps the saved value. */
   reminder_offsets_minutes?: number[];
 }

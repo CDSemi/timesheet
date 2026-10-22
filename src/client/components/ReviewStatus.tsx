@@ -46,25 +46,37 @@ export function usePeriodState(payrollDate: string, refreshKey: unknown, enabled
 
 const TONE_CLASS: Record<Tone, string> = { neutral: '', ok: 'badge-ok', warn: 'badge-warn', error: 'badge-error' };
 
-function StatusBadge({ status, name }: { status: PeriodStatus | DeliveryStatus; name: string }) {
+/**
+ * One status pill with its words. `attr` is the data attribute that names it: the page's own chips use `data-status`; a second copy of
+ * the same chips on one page (the Preview and Send card headers) uses another name, so each name still marks exactly one element.
+ */
+function StatusBadge({ status, name, attr }: { status: PeriodStatus | DeliveryStatus; name: string; attr: string }) {
+  const marks = { [attr]: name, 'data-status-key': status.key };
   return (
-    <span className={`badge ${TONE_CLASS[status.tone]}`} data-status={name} data-status-key={status.key}>
+    <span className={`badge ${TONE_CLASS[status.tone]}`} {...marks}>
       {status.text}
     </span>
   );
 }
 
 /** Review and delivery state of a period as two badges, from server fields only. */
-export function ReviewBadges({ state, fallback }: { state: PeriodState | null; fallback: string }) {
+export function ReviewBadges({ state, fallback, attr = 'data-status' }: { state: PeriodState | null; fallback: string; attr?: string }) {
   if (state === null) return <span className="badge">{fallback}</span>;
   const period = periodStatus(state.finalization);
   const delivery = deliveryStatus(state.finalization.revision, state.finalization.jobs, state.attempts);
   return (
     <>
-      <StatusBadge status={period} name="review" />
-      {delivery !== null && <StatusBadge status={delivery} name="delivery" />}
+      <StatusBadge status={period} name="review" attr={attr} />
+      {delivery !== null && <StatusBadge status={delivery} name="delivery" attr={attr} />}
     </>
   );
+}
+
+/** The delivery state of the current revision as one badge (the Send card), or nothing for a period that has no revision. */
+export function DeliveryBadge({ state, attr }: { state: PeriodState | null; attr: string }) {
+  if (state === null) return null;
+  const delivery = deliveryStatus(state.finalization.revision, state.finalization.jobs, state.attempts);
+  return delivery === null ? null : <StatusBadge status={delivery} name="delivery" attr={attr} />;
 }
 
 /** The link from the timesheet to the review of a period; the wording follows the period state. */

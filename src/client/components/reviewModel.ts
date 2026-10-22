@@ -17,11 +17,10 @@ import {
   type FinalizationResponse,
   type ReviewResponse,
   type RevisionSummary,
-  type SendDraft,
 } from '../api.ts';
 import { describeError } from './errors.ts';
 import { WEEKDAYS } from './dayModel.ts';
-import { minutesText, usShortDate } from './format.ts';
+import { minutesText, usDate, usShortDate } from './format.ts';
 import { breaksNote, hm, NO_TIMES_TEXT, type SheetCheck, type SheetDay, type SheetOt, type SheetWeek, sessionRange, sheetLabel, weeksOf } from './sheetModel.ts';
 
 /*
@@ -72,18 +71,18 @@ export type DeficitChoice = 'deduct' | 'waive';
 
 /*
  * The signer is the signed-in person (owner decision F-5 b): the server records the account's display name, so the
- * form has no name field, and the saved signature image is optional (its absence is a hint, not a blocker).
+ * form has no name field, and the saved signature image is optional (its absence is a hint, not a blocker). Signing never
+ * sends (WP5-UX5-T01b), so the form has no email choice either: the Send card sends, with its own reason rule (B-A2).
  */
 export interface FormState {
   acknowledged: boolean;
   /** One choice per choose-mode deficit day, keyed by work date. */
   choices: Readonly<Record<string, DeficitChoice>>;
+  /** The reason of a correction revision (correction mode only). */
   reason: string;
-  /** The explicit email choice of a revision; null until the person picks one. */
-  sendEmail: boolean | null;
 }
 
-export type FieldKey = 'acknowledgement' | 'deficit_choices' | 'reason' | 'send_email';
+export type FieldKey = 'acknowledgement' | 'deficit_choices' | 'reason';
 
 export interface Blocker {
   field: FieldKey;
@@ -112,73 +111,13 @@ export function submitBlockers(payload: ReviewSnapshot, mode: ReviewMode, form: 
     if (reason === '') blockers.push({ field: 'reason', message: 'Give the reason for this correction.' });
     else if (reason.length > MAX_REASON) blockers.push({ field: 'reason', message: `The reason must be at most ${MAX_REASON} characters.` });
   }
-  if (mode !== 'signoff' && form.sendEmail === null) {
-    blockers.push({ field: 'send_email', message: 'Choose whether to email this revision to the recipients.' });
-  }
-  if (mode !== 'signoff' && form.sendEmail === true) {
-    // A revision of a period whose copy was already sent needs a reason for another copy (B-A2): the correction
-    // reason, or the late review's own reason. It must fit the send rule of 2-500 characters.
-    const reason = form.reason.trim();
-    if (mode === 'late_review' && (reason.length < MIN_SEND_REASON || reason.length > MAX_SEND_REASON)) {
-      blockers.push({ field: 'reason', message: `Give the reason for sending another copy (${MIN_SEND_REASON} to ${MAX_SEND_REASON} characters).` });
-    } else if (mode === 'correction' && reason !== '' && (reason.length < MIN_SEND_REASON || reason.length > MAX_SEND_REASON)) {
-      blockers.push({ field: 'reason', message: `To email this correction, the reason must have ${MIN_SEND_REASON} to ${MAX_SEND_REASON} characters: it is also the reason for sending another copy.` });
-    }
-  }
   return blockers;
-}
-
-/* ---- Sending after the sign-off (transitional until the Send card, WP5-UX5-T03) ---------------- */
-
-export const MIN_SEND_REASON = 2;
-export const MAX_SEND_REASON = 500;
-
-/**
- * Signing never sends (WP5-UX5-T01b). Until the Send card exists, the Review screen sends right after a
- * successful sign-off with the Settings defaults of `GET /api/revisions/:id/send-draft`: always for a first
- * sign-off, and for a correction or a late review when the person chose "Send the email". The reason for
- * another copy is the correction reason or the late review's reason.
- */
-export function sendAfterSignoff(mode: ReviewMode, form: FormState): { send: boolean; reason: string | null } {
-  if (mode === 'signoff') return { send: true, reason: null };
-  const reason = form.reason.trim();
-  return { send: form.sendEmail === true, reason: reason === '' ? null : reason };
-}
-
-/** The send request for the draft's defaults (envelope, subject, body and switches as the server proposed them). */
-export function buildSendBody(draft: SendDraft, requestKey: string, reason: string | null): Record<string, unknown> {
-  return {
-    request_key: requestKey,
-    to: draft.to,
-    cc: draft.cc,
-    subject: draft.subject,
-    body_text: draft.body_text,
-    time_rows: draft.time_rows,
-    ot_rows: draft.ot_rows,
-    ...(reason === null ? {} : { reason }),
-  };
-}
-
-/** A refused send after a successful sign-off, in words: the revision is signed, only the email is missing. */
-export function sendFailureText(caught: unknown): string {
-  const prefix = 'Signed. The email was not sent: ';
-  if (!(caught instanceof ApiRequestError)) return `${prefix}${describeError(caught)} Send it from History.`;
-  switch (caught.code) {
-    case 'recipients_required':
-      return `${prefix}no recipient is set. Add one in Settings, then send it from History.`;
-    case 'reason_required':
-      return `${prefix}a copy was already sent, so another one needs a reason. Send it from History with a reason.`;
-    case 'delivery_in_progress':
-    case 'delivery_uncertain':
-      return `${prefix}another delivery of this revision is still open. Follow it in History.`;
-    default:
-      return `${prefix}${describeError(caught)} Send it from History.`;
-  }
 }
 
 /**
  * The request body: bound to the hash and the version of the review the person saw. Choices
- * are sent only for days that are choose-mode days in that review, in date order.
+ * are sent only for days that are choose-mode days in that review, in date order. Signing never sends
+ * (WP5-UX5-T01b), so a correction or a late review always says `send_email: false`; the Send card sends.
  */
 export function buildSubmitBody(review: ReviewResponse, mode: ReviewMode, form: FormState): Record<string, unknown> {
   const days = deficitChoiceDays(review.payload)
@@ -194,7 +133,7 @@ export function buildSubmitBody(review: ReviewResponse, mode: ReviewMode, form: 
     incomplete_evidence_acknowledged: review.payload.unresolved_inputs.length > 0 && form.acknowledged,
   };
   if (mode === 'correction') body.reason = form.reason.trim();
-  if (mode !== 'signoff') body.send_email = form.sendEmail === true;
+  if (mode !== 'signoff') body.send_email = false;
   return body;
 }
 
@@ -252,7 +191,7 @@ export function classifySubmitError(caught: unknown): SubmitFailure {
 
 export type Tone = 'neutral' | 'ok' | 'warn' | 'error';
 
-export type PeriodStatusKey = 'draft' | 'submitted_manual' | 'submitted_auto_pending' | 'reviewed_late' | 'corrected';
+export type PeriodStatusKey = 'draft' | 'signed' | 'submitted_manual' | 'submitted_auto_pending' | 'reviewed_late' | 'corrected';
 
 export interface PeriodStatus {
   key: PeriodStatusKey;
@@ -260,8 +199,12 @@ export interface PeriodStatus {
   tone: Tone;
 }
 
-/** Review status of a period, from the finalization fields the server returns. */
-export function periodStatus(finalization: Pick<FinalizationResponse, 'finalized_revision_no' | 'revision'>): PeriodStatus {
+/**
+ * Review status of a period, from the finalization fields the server returns. A period counts as submitted once a send exists
+ * (owner decision H-1 a): a manual revision whose send job is not there yet is only "Signed", and the delivery chip says "Not sent
+ * yet". Callers that pass no `jobs` (a status read that has no job list) get the submitted words, as before.
+ */
+export function periodStatus(finalization: Pick<FinalizationResponse, 'finalized_revision_no' | 'revision'> & { jobs?: readonly FinalizationJob[] }): PeriodStatus {
   const revision = finalization.revision;
   if (revision === null || finalization.finalized_revision_no === null) return { key: 'draft', text: 'Draft', tone: 'neutral' };
   if (revision.revision_kind === 'correction') return { key: 'corrected', text: `Corrected (revision ${revision.revision_no})`, tone: 'ok' };
@@ -269,6 +212,7 @@ export function periodStatus(finalization: Pick<FinalizationResponse, 'finalized
   if (revision.origin === 'deadline' && revision.review_state === 'pending') {
     return { key: 'submitted_auto_pending', text: 'Submitted automatically, review pending', tone: 'warn' };
   }
+  if (finalization.jobs !== undefined && !finalization.jobs.some((job) => job.kind === 'send_email')) return { key: 'signed', text: 'Signed', tone: 'ok' };
   return { key: 'submitted_manual', text: 'Submitted manually', tone: 'ok' };
 }
 
@@ -277,6 +221,7 @@ export function reviewLinkLabel(status: PeriodStatus | null): string {
   switch (status?.key) {
     case 'submitted_auto_pending':
       return 'Review now';
+    case 'signed':
     case 'submitted_manual':
     case 'reviewed_late':
     case 'corrected':
@@ -455,38 +400,79 @@ export function reviewDayRow(day: SnapshotDay, zone: string): ReviewDayRow {
   };
 }
 
-/* ---- The checklist beside the sheet ------------------------------------------------------ */
+/* ---- The page header and the Preview card ------------------------------------------------- */
 
-export interface ChecklistStep {
-  key: 'attention' | 'email' | 'sign';
-  title: string;
-  /** The state in words (never colour alone). */
-  state: string;
+/** The period of the page title in words, every part in the reporting zone that owns it (nothing is converted). */
+export interface PeriodDescription {
+  /** `Mon 10/12/2026 -> Sun 10/25/2026` (the arrow is the page's own; screen readers get " to " from the markup). */
+  start: string;
+  end: string;
+  payroll: string;
+  due: string;
+  zone: string;
 }
 
-/**
- * The three steps of the review in order, each with its state in words. Only counts and presence
- * checks of the payload and the form: the person's choices, no business figure.
- */
-export function checklistSteps(payload: ReviewSnapshot, form: FormState, imported: boolean): ChecklistStep[] {
-  const evidence = payload.unresolved_inputs.length;
-  const undecided = deficitChoiceDays(payload).filter((item) => form.choices[item.work_date] === undefined).length;
-  let attention = 'Nothing to resolve';
-  if (evidence > 0 && !form.acknowledged) attention = evidence === 1 ? '1 day needs your acknowledgement' : `${evidence} days need your acknowledgement`;
-  else if (undecided > 0) attention = undecided === 1 ? '1 deficit day needs your choice' : `${undecided} deficit days need your choice`;
-  else if (evidence > 0) attention = 'Acknowledged';
-  // F-5 b: no saved image is not a problem; the sign-off then carries the name only.
-  const email =
-    payload.recipients.to.length === 0
-      ? 'No recipient set'
-      : payload.signature === null
-        ? 'Recipients ready, name-only signature'
-        : 'Recipients and signature ready';
-  return [
-    { key: 'attention', title: 'Days that need attention', state: attention },
-    { key: 'email', title: 'Email and PDF', state: email },
-    { key: 'sign', title: 'Sign', state: imported ? 'Locked: imported history' : 'Waiting for your signature' },
-  ];
+/** `Mon 10/12/2026`, an accounting date with its weekday. */
+export function weekdayDate(date: string): string {
+  return `${WEEKDAYS[isoWeekday(date) - 1] ?? ''} ${usDate(date)}`;
+}
+
+export function periodDescription(period: Pick<ReviewSnapshot['period'], 'period_start' | 'period_end' | 'payroll_date' | 'due_local_date' | 'due_local_time'>, zone: string): PeriodDescription {
+  return {
+    start: weekdayDate(period.period_start),
+    end: weekdayDate(period.period_end),
+    payroll: weekdayDate(period.payroll_date),
+    due: `${weekdayDate(period.due_local_date)}, ${period.due_local_time}`,
+    zone,
+  };
+}
+
+/** The date a sign-off carries on the PDF: the real sign instant (UTC) as an accounting date in the saved reporting zone, `MM/DD/YYYY` (R-07). */
+export function signedDate(signedAt: string, zone: string): string {
+  return usDate(formatInZone(zone, parseUtcInstant(signedAt)).slice(0, 10));
+}
+
+/** The one muted line at the end of the page (U5-32); the saved reporting zone, never a literal. */
+export function zoneNote(zone: string): string {
+  return `Dates are accounting dates in ${zone}. Session times are shown in that zone, as on the PDF.`;
+}
+
+/** The text of the check card for each mode (U5-28). */
+export const MODE_INTRO: Record<ReviewMode, string> = {
+  signoff: 'Check every day, then sign off. Signing off locks this period and posts your OT credits; you send the PDF to payroll afterwards, below.',
+  late_review:
+    'This period was submitted automatically at the deadline and is waiting for your review. Signing records your review and changes no OT balance; sending is separate, below.',
+  correction:
+    'This period is already signed. A change is recorded as a correction revision with a reason, and only the differences post to the OT ledger; you send the corrected PDF afterwards, below.',
+};
+
+/** The words of the sign-off button for each mode. */
+export const SIGNOFF_LABEL: Record<ReviewMode, string> = { signoff: 'Sign off', late_review: 'Sign off review', correction: 'Sign correction' };
+
+/** The title of the sign-off dialog for each mode. */
+export const SIGNOFF_TITLE: Record<ReviewMode, string> = {
+  signoff: 'Sign off confirmation',
+  late_review: 'Sign off the review',
+  correction: 'Sign the correction',
+};
+
+/** What the dialog says the sign-off does and does not do, for each mode. */
+export const SIGNOFF_NOTE: Record<ReviewMode, string> = {
+  signoff: 'Signing off locks this period and posts the credits. It sends nothing: you send the PDF afterwards from "Send to payroll".',
+  late_review: 'Signing records your review of the automatic submission. It changes no OT balance and sends nothing.',
+  correction: 'Signing records a correction revision with your reason and posts only the differences. It sends nothing: you send the corrected PDF afterwards from "Send to payroll".',
+};
+
+/** The two pieces of the dialog's signature preview: the saved image (when there is one) and the name. */
+export function signatureSummary(payload: Pick<ReviewSnapshot, 'signature'>): { image: string | null; text: string } {
+  return payload.signature === null
+    ? { image: null, text: 'your name only' }
+    : { image: `/api/signatures/${payload.signature.attachment_id}`, text: 'your saved image and your name' };
+}
+
+/** The OT total of the dialog summary, as h:mm (the payload's own number). */
+export function otTotalText(creditedMinutes: number): string {
+  return formatHoursMinutes(creditedMinutes);
 }
 
 /* ---- The review payload on the sheet ------------------------------------------------------- */

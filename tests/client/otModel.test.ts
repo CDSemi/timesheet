@@ -84,6 +84,9 @@ describe('history display', () => {
     expect(operationText('timesheet.signoff')).toBe('Timesheet signed off');
     expect(operationText('timesheet.correction')).toBe('Correction signed');
     expect(operationText('timesheet.late_review')).toBe('Late review signed');
+    // WP5-UX5-T03: a send is its own audit event with its own label (the owner's reason shows on it in History).
+    expect(operationText('revision.send')).toBe('Revision sent');
+    expect(operationText('deadline.send_signed')).toBe('Signed revision sent at the deadline');
     expect(operationText('revision.resend')).toBe('Revision resent');
     expect(operationText('delivery.decision')).toBe('Delivery decision recorded');
     expect(operationText('deadline.overdue')).toBe('Deadline passed with automatic submission off');

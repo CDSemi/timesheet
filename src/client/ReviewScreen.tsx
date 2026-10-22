@@ -1,77 +1,109 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, ApiRequestError, type ReviewResponse, type SendDraft, type SendResponse, type SignOffResponse, type TimesheetView } from './api.ts';
+import {
+  api,
+  ApiRequestError,
+  type CurrentPeriods,
+  type ReviewResponse,
+  type SendDraft,
+  type SignOffResponse,
+  type SubmissionSettings,
+  type TimesheetView,
+} from './api.ts';
+import { AlertDialog } from './components/AlertDialog.tsx';
+import { sendCardState, sendFormFromDraft, sendFormFromReview } from './components/deliveryModel.ts';
 import { describeError } from './components/errors.ts';
-import { instantText, periodRange } from './components/format.ts';
 import { granteeChangeText } from './components/granteeChangesModel.ts';
-import { ImportedBadge, ImportedNote } from './components/ImportStatus.tsx';
-import { ReviewDays } from './components/ReviewDays.tsx';
-import { ReviewEnvelope } from './components/ReviewEnvelope.tsx';
-import { ReviewDeficits, ReviewEvidence, ReviewOtProposals, ReviewReservations } from './components/ReviewFindings.tsx';
-import { ReviewSignoff } from './components/ReviewSignoff.tsx';
-import { loadPeriodState, type PeriodState, ReviewBadges } from './components/ReviewStatus.tsx';
-import { useAttemptKey } from './components/useAttemptKey.ts';
+import { IMPORTED_STATUS_TEXT } from './importModel.ts';
+import { ImportedBadge } from './components/ImportStatus.tsx';
+import { PERIOD_PILL_WORDS, periodPillKind, type PeriodPillKind } from './components/periodBarModel.ts';
+import { ReviewDays, type SignedLine } from './components/ReviewDays.tsx';
+import { DeliveryBadge, loadPeriodState, type PeriodState, ReviewBadges } from './components/ReviewStatus.tsx';
 import {
   type Blocker,
-  buildSendBody,
   buildSubmitBody,
-  checklistSteps,
   classifySubmitError,
   type FieldKey,
   type FormState,
+  MODE_INTRO,
   modeEndpoint,
+  periodDescription,
   resetAfterStale,
   reviewMode,
-  type ReviewMode,
-  sendAfterSignoff,
-  sendFailureText,
+  signedDate,
+  SIGNOFF_LABEL,
   submitBlockers,
+  zoneNote,
 } from './components/reviewModel.ts';
+import { SendCard } from './components/SendCard.tsx';
+import { SignoffDialog } from './components/SignoffDialog.tsx';
 
-const EMPTY_FORM: FormState = { acknowledged: false, choices: {}, reason: '', sendEmail: null };
+const EMPTY_FORM: FormState = { acknowledged: false, choices: {}, reason: '' };
 
 type Phase = { kind: 'loading' } | { kind: 'ready' } | { kind: 'missing' } | { kind: 'failed'; message: string };
 
-const MODE_INTRO: Record<ReviewMode, string> = {
-  signoff:
-    'Check every day, then sign off. Signing off posts your OT credits; right after it, this page sends the PDF to the recipients below.',
-  late_review:
-    'This period was submitted automatically at the deadline and is waiting for your review. Signing records your review. It changes no OT balance.',
-  correction:
-    'This period is already submitted. A change is recorded as a correction revision with a reason, and only the differences post to the OT ledger.',
-};
+/** What the page holds beyond the review payload: the period's state, the clock of the reporting zone and the send defaults. */
+interface Around {
+  period: PeriodState;
+  draft: SendDraft | null;
+}
+
+/** The send draft of the current revision, or null when there is none to read (no revision yet, an imported period or a failed read). */
+async function readDraft(state: PeriodState, imported: boolean): Promise<SendDraft | null> {
+  const revision = state.finalization.revision;
+  if (revision === null || imported) return null;
+  return api<SendDraft>('GET', `/api/revisions/${revision.id}/send-draft`).catch(() => null);
+}
 
 /**
- * The owner's review and sign-off screen (`#/review/{payrollDate}`). The page shows the server's
- * review payload as it is and posts the hash and the version it displayed. If anything changed
- * since, the server refuses with a 409 and nothing is submitted: the screen then reloads a fresh
- * review and says so. A 422 names the missing field.
+ * The owner's "Review and sign off" page (`#/review/{payrollDate}`), one column at every width: the title with its chips, a check card,
+ * the Preview of exactly what the review payload holds (with the Sign off button in the Employee Signature line), the Send card, and
+ * one note on the zone. Signing off and sending are two acts (WP5-UX5-T01b): the Sign off dialog signs and sends nothing; the Send card
+ * sends the signed revision with its own envelope, PDF rows and, for another copy, the owner's reason. The page shows the server's review
+ * payload as it is and posts the hash and the version it displayed. If anything changed since, the server refuses with a 409 and nothing
+ * is signed: the page then reloads a fresh review and says so. A 422 names the missing field.
  */
 export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [review, setReview] = useState<ReviewResponse | null>(null);
-  const [period, setPeriod] = useState<PeriodState | null>(null);
+  const [around, setAround] = useState<Around | null>(null);
   // F-2: an imported period is read-only history; its sign-off is shown but disabled, with the reason.
   const [imported, setImported] = useState(false);
+  const [pill, setPill] = useState<PeriodPillKind>('neutral');
+  const [today, setToday] = useState<string | null>(null);
+  const [defaultTime, setDefaultTime] = useState(true);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [shown, setShown] = useState<Blocker[]>([]);
   const [notice, setNotice] = useState<{ kind: 'stale' | 'error'; message: string } | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ result: SignOffResponse; sent: boolean; sendError: string | null } | null>(null);
-  const sendKey = useAttemptKey();
+  // Set by a sign-off made in this window: the page then shows the signed footer and no second Sign off button.
+  const [justSigned, setJustSigned] = useState<{ status: SignOffResponse['status']; revisionNo: number | null } | null>(null);
   const submitting = useRef(false);
   const noticeRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const signButton = useRef<HTMLButtonElement>(null);
+  const sendHeading = useRef<HTMLHeadingElement>(null);
 
   const load = useCallback(async () => {
     try {
-      const [fresh, state, sheet] = await Promise.all([
+      const [fresh, state, sheet, current, saved] = await Promise.all([
         api<ReviewResponse>('GET', `/api/timesheets/${payrollDate}/review`),
         loadPeriodState(payrollDate),
         api<TimesheetView>('GET', `/api/timesheets/${payrollDate}`),
+        api<CurrentPeriods>('GET', '/api/periods/current').catch(() => null),
+        api<{ settings: SubmissionSettings }>('GET', '/api/settings/submission')
+          .then((answer) => answer.settings)
+          .catch(() => null),
       ]);
+      const isImported = sheet.timesheet.imported_unverified;
+      const draft = await readDraft(state, isImported);
       setReview(fresh);
-      setPeriod(state);
-      setImported(sheet.timesheet.imported_unverified);
+      setAround({ period: state, draft });
+      setImported(isImported);
+      setPill(periodPillKind(sheet.period, current));
+      setToday(current?.today_local ?? null);
+      setDefaultTime(saved?.show_time_on_pdf ?? true);
       setPhase({ kind: 'ready' });
     } catch (caught) {
       setPhase(caught instanceof ApiRequestError && caught.status === 404 ? { kind: 'missing' } : { kind: 'failed', message: describeError(caught) });
@@ -90,22 +122,53 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
     if (notice !== null) noticeRef.current?.focus();
   }, [notice]);
 
+  // The alert is modal (the page behind it is inert): once it is gone focus returns to the Sign off button that started the act.
+  const refused = refusal !== null;
+  const wasRefused = useRef(false);
+  useEffect(() => {
+    if (refused) {
+      wasRefused.current = true;
+    } else if (wasRefused.current) {
+      wasRefused.current = false;
+      signButton.current?.focus();
+    }
+  }, [refused]);
+
+  // After a sign-off the next act is sending: focus moves to the Send card once the dialog and the Sign off button are gone.
+  const signedRevision = justSigned?.revisionNo ?? null;
+  useEffect(() => {
+    if (justSigned !== null) sendHeading.current?.focus();
+  }, [justSigned, signedRevision]);
+
+  /** Reads the period state and the send draft again (after a send, or after a refusal that shows the page is stale). */
+  const refreshAround = useCallback(async () => {
+    const state = await loadPeriodState(payrollDate);
+    const draft = await readDraft(state, imported);
+    setAround({ period: state, draft });
+  }, [payrollDate, imported]);
+
   const errors: Partial<Record<FieldKey, string>> = {};
   for (const item of shown) errors[item.field] = item.message;
 
-  function focusField(field: FieldKey) {
-    document.getElementById(`review-field-${field}`)?.focus();
+  function openSignoff() {
+    setShown([]);
+    setNotice(null);
+    setDialogOpen(true);
+  }
+
+  function cancelSignoff() {
+    if (busy) return;
+    setDialogOpen(false);
+    setShown([]);
   }
 
   async function submit() {
-    if (review === null || submitting.current) return;
-    const mode = reviewMode(period?.finalization.revision ?? null);
+    if (review === null || around === null || submitting.current) return;
+    const mode = reviewMode(around.period.finalization.revision);
     const blockers = submitBlockers(review.payload, mode, form);
     setNotice(null);
     if (blockers.length > 0) {
       setShown(blockers);
-      const first = blockers[0];
-      if (first !== undefined) queueMicrotask(() => focusField(first.field));
       return;
     }
     // One request at a time: a second click or Enter while one is in flight is ignored.
@@ -114,35 +177,23 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
     setShown([]);
     try {
       const result = await api<SignOffResponse>('POST', modeEndpoint(mode, payrollDate), buildSubmitBody(review, mode, form));
-      // Signing never sends (WP5-UX5-T01b). Until the Send card (WP5-UX5-T03) the screen sends right away with the
-      // Settings defaults of the send draft; a refused send leaves the revision signed and says so.
-      const after = sendAfterSignoff(mode, form);
-      let sent = false;
-      let sendError: string | null = null;
-      if (after.send && result.status === 'created' && result.revision !== null) {
-        const revisionId = result.revision.id;
-        try {
-          const draft = await api<SendDraft>('GET', `/api/revisions/${revisionId}/send-draft`);
-          await api<SendResponse>('POST', `/api/revisions/${revisionId}/send`, buildSendBody(draft, sendKey.keyFor(revisionId), after.reason));
-          sendKey.settle();
-          sent = true;
-        } catch (caught) {
-          sendError = sendFailureText(caught);
-        }
-      }
-      setDone({ result, sent, sendError });
-      setPeriod(await loadPeriodState(payrollDate).catch(() => period));
+      setDialogOpen(false);
+      setJustSigned({ status: result.status, revisionNo: result.revision?.revision_no ?? null });
+      await refreshAround().catch(() => undefined);
     } catch (caught) {
       const failure = classifySubmitError(caught);
       if (failure.kind === 'stale') {
+        setDialogOpen(false);
         setForm((current) => resetAfterStale(current));
         setNotice({ kind: 'stale', message: failure.message });
         await load();
       } else if (failure.kind === 'field') {
+        // Stays in the dialog: the missing field is marked and takes focus.
         setShown([{ field: failure.field, message: failure.message }]);
-        queueMicrotask(() => focusField(failure.field));
       } else {
-        setNotice({ kind: 'error', message: failure.message });
+        // A refusal of the server: nothing was signed. The alert says so; the person's choices are kept.
+        setDialogOpen(false);
+        setRefusal(failure.message);
       }
     } finally {
       submitting.current = false;
@@ -164,7 +215,7 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
       </section>
     );
   }
-  if (phase.kind === 'failed' || review === null) {
+  if (phase.kind === 'failed' || review === null || around === null) {
     return (
       <section className="card stack" aria-labelledby="review-title">
         <h1 id="review-title">Review and sign off</h1>
@@ -179,22 +230,59 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
   }
 
   const { payload } = review;
-  const mode = reviewMode(period?.finalization.revision ?? null);
-  const steps = checklistSteps(payload, form, imported).filter((step) => step.key !== 'sign' || done === null);
+  const finalization = around.period.finalization;
+  const revision = finalization.revision;
+  const mode = reviewMode(revision);
+  const description = periodDescription(payload.period, payload.reporting_zone);
+  const signoff = finalization.signoff;
+  const signed: SignedLine | null =
+    revision !== null && signoff !== null
+      ? { name: signoff.signer_name, date: signedDate(signoff.signed_at, payload.reporting_zone), imageId: signoff.signature_attachment_id ?? null }
+      : null;
+  const canSign = !imported && justSigned === null;
+  const sendState = sendCardState({
+    signed: revision !== null,
+    imported,
+    current: around.draft?.current ?? true,
+    copySentBefore: around.draft?.copy_sent_before != null,
+  });
+  const baseline =
+    around.draft === null
+      ? sendFormFromReview(payload.recipients, { time: defaultTime, ot: payload.show_ot_on_pdf })
+      : sendFormFromDraft(around.draft);
+  // The same chips under the title and in the Preview header; each copy names its elements by its own data attribute.
+  const statusChips = (attr: string) =>
+    imported ? (
+      attr === 'data-status' ? (
+        <ImportedBadge />
+      ) : (
+        <span className="badge badge-warn" {...{ [attr]: 'imported' }}>
+          {IMPORTED_STATUS_TEXT}
+        </span>
+      )
+    ) : (
+      <ReviewBadges state={around.period} fallback="Draft" attr={attr} />
+    );
+  const pillWords = PERIOD_PILL_WORDS[pill];
+
   return (
     <div className="review-screen stack">
-      <header className="toolbar review-head">
-        <div>
-          <h1 id="review-title" tabIndex={-1} ref={headingRef}>
-            Review and sign off
-          </h1>
-          <p className="muted">
-            <span className="mono">{periodRange(payload.period)}</span>, payroll date <span className="mono">{payload.period.payroll_date}</span>, submission{' '}
-            <span className="mono">{payload.submission.id}</span>
-          </p>
-        </div>
-        <div className="period-title" aria-label="Status">
-          {imported ? <ImportedBadge /> : <ReviewBadges state={period} fallback="Draft" />}
+      <header className="review-head">
+        <h1 id="review-title" tabIndex={-1} ref={headingRef}>
+          Review and sign off
+        </h1>
+        <p className="muted review-desc" data-review-desc>
+          Pay period <b>{description.start}</b>
+          <span className="range-arrow" aria-hidden="true">
+            {' '}
+            {'->'}{' '}
+          </span>
+          <span className="sr-only"> to </span>
+          <b>{description.end}</b> · payroll date <b>{description.payroll}</b> · due <b>{description.due}</b> ({description.zone})
+        </p>
+        <div className="review-chips" role="group" aria-label="Status" data-review-chips>
+          {pill !== 'neutral' && <span className={`badge ${pill}`}>{pillWords}</span>}
+          {statusChips('data-status')}
         </div>
       </header>
 
@@ -204,42 +292,25 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
         </div>
       )}
 
-      {done !== null && (
-        <section className="card stack" aria-labelledby="review-done-title" data-result={done.result.status} data-sent={done.sent ? 'true' : 'false'}>
-          <h2 id="review-done-title">{done.result.status === 'replayed' ? 'Already submitted' : done.sendError !== null ? 'Signed, not sent' : 'Submitted'}</h2>
-          <p className="notice-ok" role="status">
-            {done.result.status === 'replayed'
-              ? 'This sign-off was already recorded. Nothing new was created.'
-              : `Revision ${done.result.revision?.revision_no ?? ''} is signed and queued for the PDF${done.sent ? ' and the email' : ''}.`}
+      <section className="card check-card" aria-label="Before you sign" data-mode={mode}>
+        {justSigned !== null ? (
+          <p className="notice-ok" role="status" data-result={justSigned.status}>
+            {justSigned.status === 'replayed'
+              ? 'This sign-off was already recorded. Nothing new was created. Send the PDF to payroll below.'
+              : `Signed. Revision ${justSigned.revisionNo ?? ''} is recorded and the OT credits are posted. Send the PDF to payroll below.`}
           </p>
-          {done.sendError !== null && (
-            <p className="error" role="alert" data-send-error>
-              {done.sendError}
-            </p>
-          )}
-          {done.result.signoff !== null && (
-            <p className="muted">
-              Signed by {done.result.signoff.signer_name} at <span className="mono">{instantText(done.result.signoff.signed_at, payload.reporting_zone)}</span> ({payload.reporting_zone}).
-            </p>
-          )}
-          <div className="button-row">
-            <a className="button-link" href="#/timesheet">
-              Back to the timesheet
-            </a>
-            <a className="button-link" href="#/history">
-              History
-            </a>
-          </div>
-        </section>
-      )}
+        ) : (
+          <p data-intro>{imported ? 'This period is imported history. Nothing here is signed or sent.' : MODE_INTRO[mode]}</p>
+        )}
+        <a className="button-link back-link" href="#/timesheet" aria-label="Back to the timesheet">
+          <span className="back-full">Back to the timesheet</span>
+          <span className="back-short" aria-hidden="true">
+            Back
+          </span>
+        </a>
+      </section>
 
-      {done === null && !imported && (
-        <p className="card muted" data-mode={mode}>
-          {MODE_INTRO[mode]}
-        </p>
-      )}
-
-      {done === null && review.grantee_changes.length > 0 && (
+      {justSigned === null && review.grantee_changes.length > 0 && (
         <section className="card stack review-grantee-changes" aria-labelledby="review-grantee-changes-title" data-grantee-changes>
           <h2 id="review-grantee-changes-title">Changed by someone you share with</h2>
           <ul className="plain">
@@ -253,68 +324,57 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
         </section>
       )}
 
-      <div className="review-layout">
-        <ReviewDays payload={payload} />
+      <ReviewDays
+        payload={payload}
+        chips={statusChips('data-preview-status')}
+        signed={signed}
+        signLabel={SIGNOFF_LABEL[mode]}
+        canSign={canSign}
+        imported={imported}
+        signButtonRef={signButton}
+        onSignOff={openSignoff}
+      />
 
-        <aside className="review-checklist" aria-label="Before you sign">
-          <ol className="review-steps plain">
-            {steps.map((step, index) => (
-              <li key={step.key} className="review-step card stack" data-step={step.key}>
-                <p className="step-head">
-                  <span className="step-title">
-                    Step {index + 1}: {step.title}
-                  </span>
-                  <span className="step-state">{step.state}</span>
-                </p>
-                {step.key === 'attention' && (
-                  <>
-                    <ReviewOtProposals payload={payload} />
-                    <ReviewDeficits
-                      proposals={payload.deficit_proposals}
-                      choices={form.choices}
-                      onChoose={(workDate, choice) => setForm({ ...form, choices: { ...form.choices, [workDate]: choice } })}
-                      error={errors.deficit_choices ?? null}
-                    />
-                    <ReviewEvidence
-                      payload={payload}
-                      acknowledged={form.acknowledged}
-                      onAcknowledge={(value) => setForm({ ...form, acknowledged: value })}
-                      error={errors.acknowledgement ?? null}
-                    />
-                    <ReviewReservations payload={payload} />
-                  </>
-                )}
-                {step.key === 'email' && <ReviewEnvelope payload={payload} />}
-                {step.key === 'sign' && done === null && imported && (
-                  <section className="card stack" aria-labelledby="review-imported-title" data-imported-lock>
-                    <h2 id="review-imported-title">Sign off</h2>
-                    <ImportedNote id="imported-reason" />
-                    <div className="button-row">
-                      <button type="button" disabled aria-describedby="imported-reason">
-                        Sign off &amp; Submit
-                      </button>
-                      <a className="button-link" href="#/timesheet">
-                        Back to the timesheet
-                      </a>
-                    </div>
-                  </section>
-                )}
-                {step.key === 'sign' && done === null && !imported && (
-                  <ReviewSignoff
-                    mode={mode}
-                    employeeName={payload.employee.name}
-                    form={form}
-                    errors={errors}
-                    busy={busy}
-                    onChange={setForm}
-                    onSubmit={() => void submit()}
-                  />
-                )}
-              </li>
-            ))}
-          </ol>
-        </aside>
-      </div>
+      {!imported && (
+        <SendCard
+          payrollDate={payrollDate}
+          revisionId={revision?.id ?? null}
+          state={sendState}
+          baseline={baseline}
+          draft={around.draft}
+          zone={payload.reporting_zone}
+          headingRef={sendHeading}
+          chips={revision === null ? <span className="badge">Sign off first</span> : <DeliveryBadge state={around.period} attr="data-send-chip" />}
+          onChanged={refreshAround}
+        />
+      )}
+
+      <p className="muted hint review-zone-note" data-zone-note>
+        {zoneNote(payload.reporting_zone)}
+      </p>
+
+      {dialogOpen && (
+        <SignoffDialog
+          mode={mode}
+          payload={payload}
+          today={today ?? payload.period.payroll_date}
+          form={form}
+          errors={errors}
+          busy={busy}
+          opener={signButton.current}
+          onChange={setForm}
+          onCancel={cancelSignoff}
+          onSubmit={() => void submit()}
+        />
+      )}
+      {refusal !== null && (
+        <AlertDialog
+          title="Not signed off"
+          messages={[refusal]}
+          hint="Nothing was signed. Your choices are kept: open Sign off to try again."
+          onClose={() => setRefusal(null)}
+        />
+      )}
     </div>
   );
 }

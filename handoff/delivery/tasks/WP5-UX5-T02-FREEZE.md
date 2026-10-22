@@ -137,6 +137,27 @@ Record each exit code in `handoff/delivery/evidence/WP5-UX5-T02-FREEZE/checks.tx
 `evidence/`. A whitespace finding in a source, test, script, asset text or docs file stops
 the commit; report it.
 
+## Addendum 1 (coordinator, for attempt 2 by the same committer)
+
+- **Attempt 1** stopped at `git diff --cached --check`, on trailing whitespace in
+  `assets/pdf-fonts/OFL.txt:21`. The 61 paths stay staged.
+- **The author fixed it** (WP5-UX5-T02 Addendum 3):
+  - `OFL.txt` has its trailing whitespace removed; the wording is unchanged;
+  - `assets/pdf-fonts/README.md` and `README.vi.md` note it;
+  - `docs/adr/0001-pdf-handwriting-font.md` and `.vi.md` say the same;
+  - the font file and its SHA-256 are unchanged.
+- **The new expected digest** is
+  1b4132739017e8f153cc32764b84a8a698b406e5ada027bb3d8d4f7ff701aca1 (862 files). It replaces
+  0f0467ab everywhere in this brief, including the commit message's "Digest:" line.
+- **The path set is unchanged** (24 outside handoff).
+- **Re-stage with explicit plain `git add`:**
+  - the five changed asset and ADR files;
+  - `handoff/delivery/tasks/WP5-UX5-T02.md`;
+  - `handoff/delivery/ORCHESTRATION.json`;
+  - the checkpoint pair.
+- **Then rerun every check** from step 3, including `git diff --cached --check`, the scans
+  and the validators. Commit and push. Write the results under "### Attempt 2".
+
 ## Commit message (refine with the commit-message skill; keep the facts)
 
 Subject: Freeze WP5-UX5-T02: redesigned one-page timesheet PDF with a handwriting font
@@ -187,3 +208,12 @@ Append to this brief:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+- STOPPED at check 7: `git diff --cached --check` exit 2, `assets/pdf-fonts/OFL.txt:21` trailing whitespace (asset text file, not an allowed fix). No commit, no push. HEAD = origin/main = 9917ae84. Digest 0f0467ab (862 files) matched. 61 paths staged (24 outside handoff, 37 handoff). Details: evidence/WP5-UX5-T02-FREEZE/checks.txt.
+
+### Attempt 2
+
+- HEAD before 9917ae84, after b4c500456a69158571799f8f0d90f035fd7a0fa5; pushed, origin/main = b4c50045.
+- Digest before add and post-commit ls-tree: 1b4132739017e8f153cc32764b84a8a698b406e5ada027bb3d8d4f7ff701aca1 (862 files).
+- Staged 61: 24 outside handoff, 37 handoff (no extra handoff paths beyond the listed set). The committed brief is the attempt-1 staged copy.
+- All checks exit 0 (cached --check, precommit, JSON, validate_orchestration, check_recovery 106, preflight). Scans: 0 hits. No masking, no fixes by committer.

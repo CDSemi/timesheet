@@ -81,9 +81,9 @@ function deliveryLabel(row: SubmissionStatus): Label {
     case 'sending':
       return { text: DELIVERY_LABELS[delivery.state], tone: 'warn' };
     default:
-      // Signing never sends (WP5-UX5-T01b): no send job yet means the person has not sent it.
+      // Signing never sends (WP5-UX5-T01b): no send job yet means the person has not sent it, whether the revision is signed or not.
       if (delivery.job_state !== 'none') return { text: 'Not started', tone: 'warn' };
-      return row.revision.review_state === 'signed' ? { text: 'Signed, not sent yet', tone: 'neutral' } : { text: 'Not sent yet', tone: 'neutral' };
+      return { text: 'Not sent yet', tone: 'neutral' };
   }
 }
 

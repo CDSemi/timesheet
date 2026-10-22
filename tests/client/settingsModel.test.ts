@@ -134,8 +134,20 @@ describe('the settings draft and its request', () => {
         auto_note_enabled: true,
         auto_note_text: 'Automatic submission',
         show_ot_on_pdf: true,
+        show_time_on_pdf: true,
       },
     });
+  });
+
+  it('keeps the per-send defaults of the two PDF rows (WP5-UX5-T03): time rows on until switched off, each its own value', () => {
+    expect(draftFromSettings(settings())).toMatchObject({ showOt: true, showTime: true });
+    const off = draftFromSettings(settings({ show_time_on_pdf: false, show_ot_on_pdf: false }));
+    expect(off).toMatchObject({ showOt: false, showTime: false });
+    const built = buildSettingsRequest({ ...off, to: 'one@example.invalid', showTime: true }, settings());
+    expect(built).toMatchObject({ ok: true, request: { show_ot_on_pdf: false, show_time_on_pdf: true } });
+    // Changing only the time switch is a change to save; changing nothing is not.
+    expect(isDraftChanged(draftFromSettings(settings()), settings())).toBe(false);
+    expect(isDraftChanged({ ...draftFromSettings(settings()), showTime: false }, settings())).toBe(true);
   });
 
   it('sends the version of the first save as 0 and does not send an unusable note text', () => {

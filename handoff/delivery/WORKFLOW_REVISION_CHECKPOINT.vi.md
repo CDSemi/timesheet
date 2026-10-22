@@ -1398,9 +1398,37 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - Đã xóa khoảng trắng thừa trong `OFL.txt`. README và ADR 0001 (EN/VI) đều ghi lại việc này.
   - Test và preflight đạt. Digest mới 1b413273.
   - T02-FREEZE chạy lần 2: stage lại và chạy lại các kiểm tra.
+- WP5-UX5-T02-FREEZE xong: b4c500456a69158571799f8f0d90f035fd7a0fa5 trên main, đã push (61
+  đường dẫn: 24 ngoài `handoff/`, 37 trong handoff). Digest 1b413273 (862 file) trước khi
+  stage và trên HEAD; mọi kiểm tra exit 0.
+- Đang chạy: WP5-UX5-T03, trang Review and sign off cùng thẻ Send (worker-high, sonnet;
+  cỡ L, rủi ro H; nền b4c5004 / 1b413273; cổng 49720-49739).
+  - Brief đặt các câu trả lời F-3 b, F-4, F-5 b của chủ dự án và Addendum 3b lên trên kế
+    hoạch B3.
+  - Kèm theo: công tắc Settings "Time rows on the PDF", khóa trong file settings, nhãn
+    `revision.send` và phần hiển thị lý do trong History.
+  - Không giao đường dẫn `src/server` nào. Worker kiểm kê trước và dừng nếu cần đến.
+- WP5-UX5-T03 xong (theo báo cáo của worker; gate và audit còn chờ). Không dừng ở bước kiểm kê;
+  không đụng tới `src/server`.
+  - npm test 2312; FULL e2e 795 đạt, 0 lỗi, không chạy lại; mutant 5/5; verify 0; digest
+    d23e3617 (862 file).
+  - Các tỉ lệ chữ ký đo từ mockup B11 và từ `layout.ts` khớp hoàn toàn.
+  - Điểm lệch:
+    - ô "From" hiện chữ giữ chỗ khi chưa có revision;
+    - "PDF Preview" mở ở tab mới, vì CSP cấm nhúng khung;
+    - `App.tsx` tải trễ trang Review, để giữ giới hạn kích thước chunk;
+    - worker đã stage hai file bị xóa bằng `git rm --cached` để script digest chạy được.
+  - Lỗi quy tắc: một heredoc, một `/dev/null`.
+- Đang chạy: tra cứu WP5-UX5-T03-PATHS (light, haiku, chỉ đọc). Nó liệt kê chính xác các
+  đường dẫn cho brief T03-FREEZE.
+- T03-PATHS xong. Ngoài `handoff/`: 28 file sửa, 2 file mới và 2 file xóa đã được stage
+  sẵn. Ngoài ra không có gì được stage. Không có đường dẫn nào nằm ngoài phạm vi được giao,
+  và không có file nhị phân.
+- Đang chạy: WP5-UX5-T03-FREEZE (một committer mới, chạy một mình). Nó stage 32 đường dẫn
+  ghi rõ tên cùng các hồ sơ trong handoff; digest phải là d23e3617.
 - Còn lại sau T06:
   - T06-FREEZE;
-  - gate cho cả đợt 4;
+  - gate gói của đợt 5 (bao gồm cả đợt 4 và đợt 5);
   - audit khu vực A và B, rồi audit tích hợp;
   - ACCEPT-DOCS và nghiệm thu lại WP5.
 

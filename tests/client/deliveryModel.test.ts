@@ -6,22 +6,27 @@ import {
   type FinalizationResponse,
   type RevisionListItem,
   type RevisionSummary,
+  type SendDraft,
 } from '../../src/client/api.ts';
 import {
   attemptFault,
   attemptStateText,
   buildRevisionRows,
+  buildSendRequest,
   confirmationFor,
   copyCounts,
   copyReasonProblem,
   correctionLinkLabel,
   decisionFailureText,
   decisionText,
+  earlierCopyText,
   faultCodeOf,
   filenameFromDisposition,
   gridStatus,
   type HistoryPeriod,
   historyWindow,
+  MAX_SEND_BODY,
+  MAX_SEND_SUBJECT,
   pdfStateOf,
   pdfStateText,
   pendingDecision,
@@ -33,6 +38,14 @@ import {
   revisionsSince,
   rowOrigin,
   rowReview,
+  sameSendForm,
+  sendAttemptSignature,
+  sendCardState,
+  sendFailure,
+  type SendForm,
+  sendFormFromDraft,
+  sendFormFromReview,
+  sendProblems,
 } from '../../src/client/components/deliveryModel.ts';
 
 /*
@@ -418,6 +431,124 @@ describe('history windows', () => {
     expect(first).toEqual({ from: '2026-04-13', to: '2026-10-11' });
     expect(second).toEqual({ from: '2025-10-13', to: '2026-04-12' });
     expect(historyWindow('2026-10-11', 2).to).toBe('2025-10-12');
+  });
+});
+
+describe('the Send card (WP5-UX5-T03)', () => {
+  const draft: SendDraft = {
+    revision_id: 'rev-1',
+    revision_no: 1,
+    current: true,
+    sender: 'timesheet@example.invalid',
+    to: ['payroll@example.invalid', 'second@example.invalid'],
+    cc: ['manager@example.invalid'],
+    subject: 'Synthetic subject',
+    body_text: 'Synthetic body\nsecond line',
+    time_rows: true,
+    ot_rows: false,
+    copy_sent_before: null,
+    reason_required: false,
+    previous_send: null,
+    correction_reason: null,
+  };
+  const form = (overrides: Partial<SendForm> = {}): SendForm => ({ ...sendFormFromDraft(draft), ...overrides });
+  const refused = (status: number, code: string) => new ApiRequestError(status, code, 'synthetic');
+
+  it('fills the form from the send draft (Settings defaults) and from the review before the sign-off', () => {
+    expect(sendFormFromDraft(draft)).toEqual({
+      to: 'payroll@example.invalid, second@example.invalid',
+      cc: 'manager@example.invalid',
+      subject: 'Synthetic subject',
+      body: 'Synthetic body\nsecond line',
+      time: true,
+      ot: false,
+    });
+    const recipients = { to: ['a@example.invalid'], cc: [], subject: 'S', body_text: 'B', body_html: 'B', template_version: 1 };
+    expect(sendFormFromReview(recipients, { time: false, ot: true })).toEqual({ to: 'a@example.invalid', cc: '', subject: 'S', body: 'B', time: false, ot: true });
+    expect(sameSendForm(form(), form())).toBe(true);
+    expect(sameSendForm(form(), form({ ot: true }))).toBe(false);
+  });
+
+  it('posts exactly what the card shows: edited envelope, both switches, the attempt key and the reason only when given', () => {
+    const edited = form({ to: ' one@example.invalid ; two@example.invalid ', cc: '', subject: '  New subject  ', body: 'Edited body', time: false, ot: true });
+    expect(buildSendRequest(edited, 'key-0001', null)).toEqual({
+      request_key: 'key-0001',
+      to: ['one@example.invalid', 'two@example.invalid'],
+      cc: [],
+      subject: 'New subject',
+      body_text: 'Edited body',
+      time_rows: false,
+      ot_rows: true,
+    });
+    expect(buildSendRequest(edited, 'key-0002', 'Payroll asked for another copy')).toMatchObject({ reason: 'Payroll asked for another copy' });
+    expect(buildSendRequest(form(), 'key-0003', null)).not.toHaveProperty('reason');
+  });
+
+  it('keeps one attempt key for the same send and changes it as soon as anything differs (a replay is never a second send)', () => {
+    const same = sendAttemptSignature('rev-1', form(), null);
+    expect(sendAttemptSignature('rev-1', form(), null)).toBe(same);
+    expect(sendAttemptSignature('rev-2', form(), null)).not.toBe(same);
+    expect(sendAttemptSignature('rev-1', form({ ot: true }), null)).not.toBe(same);
+    expect(sendAttemptSignature('rev-1', form({ subject: 'Other' }), null)).not.toBe(same);
+    expect(sendAttemptSignature('rev-1', form(), 'Because')).not.toBe(same);
+  });
+
+  it('shows the address, subject and message rules as field errors', () => {
+    expect(sendProblems(form())).toEqual([]);
+    expect(sendProblems(form({ to: '' })).map((item) => item.field)).toEqual(['to']);
+    expect(sendProblems(form({ to: 'not-an-address' }))[0]?.message).toContain('not-an-address');
+    expect(sendProblems(form({ cc: 'broken@' })).map((item) => item.field)).toEqual(['cc']);
+    expect(sendProblems(form({ subject: '   ' })).map((item) => item.field)).toEqual(['subject']);
+    expect(sendProblems(form({ subject: 'line one\nline two' })).map((item) => item.field)).toEqual(['subject']);
+    expect(sendProblems(form({ subject: 'x'.repeat(MAX_SEND_SUBJECT + 1) })).map((item) => item.field)).toEqual(['subject']);
+    expect(sendProblems(form({ body: '  ' })).map((item) => item.field)).toEqual(['body']);
+    expect(sendProblems(form({ body: 'x'.repeat(MAX_SEND_BODY + 1) })).map((item) => item.field)).toEqual(['body']);
+  });
+
+  it('the Send button: disabled with "Sign off first" before the sign-off, "Send another copy..." once a copy counts, none for an imported period', () => {
+    const base = { signed: true, imported: false, current: true, copySentBefore: false };
+    expect(sendCardState({ ...base, signed: false })).toEqual({ mode: 'sign_first', label: 'Send', hint: 'Sign off first' });
+    expect(sendCardState(base)).toEqual({ mode: 'send', label: 'Send', hint: null });
+    expect(sendCardState({ ...base, copySentBefore: true })).toEqual({ mode: 'another_copy', label: 'Send another copy...', hint: null });
+    expect(sendCardState({ ...base, imported: true }).mode).toBe('locked');
+    expect(sendCardState({ ...base, current: false })).toMatchObject({ mode: 'locked' });
+    // Before the sign-off an imported or unsigned period never reaches "Send another copy...", whatever the copy state says.
+    expect(sendCardState({ ...base, signed: false, copySentBefore: true }).mode).toBe('sign_first');
+  });
+
+  it('names the earlier copy: when, to whom and how it ended', () => {
+    const accepted = earlierCopyText({ sent_at: '2026-10-27T17:05:00Z', to: ['payroll@example.invalid'], cc: ['manager@example.invalid'], state: 'accepted' }, 'America/Los_Angeles');
+    expect(accepted).toBe('An earlier copy went to payroll@example.invalid (copy: manager@example.invalid) on 2026-10-27 10:05 and was accepted by the mail server.');
+    expect(earlierCopyText({ sent_at: '2026-10-27T17:05:00Z', to: ['payroll@example.invalid'], cc: [], state: 'uncertain' }, 'America/Los_Angeles')).toContain('uncertain');
+  });
+
+  it('requires the reason of another copy to be 2 to 500 characters after trimming', () => {
+    expect(copyReasonProblem('')).toBe('Give the reason for sending another copy.');
+    expect(copyReasonProblem('  x  ')).toContain('2 to 500');
+    expect(copyReasonProblem('ok')).toBeNull();
+    expect(copyReasonProblem('y'.repeat(500))).toBeNull();
+    expect(copyReasonProblem('y'.repeat(501))).toContain('2 to 500');
+  });
+
+  it('a 422 reason_required opens the reason dialog; a field code marks its field; a 409 is said in words and never retried', () => {
+    expect(sendFailure(refused(422, 'reason_required'))).toMatchObject({ kind: 'reason' });
+    expect(sendFailure(refused(422, 'invalid_reason'))).toMatchObject({ kind: 'reason' });
+    expect(sendFailure(refused(422, 'recipients_required'))).toMatchObject({ kind: 'field', field: 'to' });
+    expect(sendFailure(refused(422, 'invalid_subject'))).toMatchObject({ kind: 'field', field: 'subject' });
+    expect(sendFailure(refused(422, 'invalid_body'))).toMatchObject({ kind: 'field', field: 'body' });
+    for (const code of ['delivery_in_progress', 'delivery_uncertain', 'revision_superseded', 'request_key_reused', 'something_new']) {
+      expect(sendFailure(refused(409, code)).kind, code).toBe('conflict');
+    }
+    expect(sendFailure(refused(409, 'delivery_in_progress')).message).toContain('Nothing was sent again');
+    expect(sendFailure(refused(500, 'internal_error')).kind).toBe('other');
+    expect(sendFailure(new Error('boom')).kind).toBe('other');
+  });
+
+  it('the status of a signed period that has no send is "Signed" and "Not sent yet"; imported history has no send', () => {
+    const finalization = { finalized_revision_no: 1, revision: revision(), jobs: [job('succeeded', 'render_pdf')] };
+    const grid = gridStatus({ finalization: { payroll_date: '2026-10-16', signoff: null, ledger_lines: [], ...finalization }, attempts: [] });
+    expect(grid.review).toMatchObject({ key: 'signed', text: 'Signed' });
+    expect(grid.delivery).toMatchObject({ key: 'not_sent', text: 'Not sent yet' });
   });
 });
 
