@@ -53,6 +53,7 @@ import {
 } from './dayEditorModel.ts';
 import { isStaleVersion } from './errors.ts';
 import { usShortDate } from './format.ts';
+import { timeRange } from './sheetModel.ts';
 import { LocalTimeField } from './LocalTimeField.tsx';
 import {
   emptyField,
@@ -79,7 +80,7 @@ function holds(field: LocalField, problem: TimeProblem): boolean {
 }
 
 /**
- * The Time line of the Save confirmation: `08:00-17:00 (America/Los_Angeles)`, the start date when it is not the accounting date, `+1`
+ * The Time line of the Save confirmation: `08:00 - 17:00 (America/Los_Angeles)`, the start date when it is not the accounting date, `+1`
  * for a later end date; `07:45 - running (America/Los_Angeles)` for a session that has no end yet.
  */
 function timeFact(draft: SessionDialogDraft, workDate: string): string {
@@ -87,7 +88,7 @@ function timeFact(draft: SessionDialogDraft, workDate: string): string {
   const prefix = start.date === workDate || !isCivilDate(start.date) ? '' : `${usShortDate(start.date)} `;
   if (draft.running) return `${prefix}${start.time.slice(0, 5)} - running (${draft.zone.trim()})`;
   const later = isCivilDate(start.date) && isCivilDate(end.date) ? diffDays(end.date, start.date) : 0;
-  return `${prefix}${start.time.slice(0, 5)}-${end.time.slice(0, 5)}${later > 0 ? `+${later}` : ''} (${draft.zone.trim()})`;
+  return `${prefix}${timeRange(start.time.slice(0, 5), end.time.slice(0, 5), { later })} (${draft.zone.trim()})`;
 }
 
 type Prefill = 'hours' | 'hours-breaks' | null;
@@ -588,7 +589,7 @@ export function SessionDialog({
   }
 
   const chosenFold = problem === null ? null : holds(draft.start, problem) ? draft.start.fold : holds(draft.end, problem) ? draft.end.fold : null;
-  const prefillHours = policy === undefined ? '' : `${policy.reference_start}-${policy.reference_end}${zone === reportingZone ? '' : ` in ${reportingZone}`}`;
+  const prefillHours = policy === undefined ? '' : `${timeRange(policy.reference_start, policy.reference_end)}${zone === reportingZone ? '' : ` in ${reportingZone}`}`;
 
   return (
     <dialog

@@ -1423,6 +1423,39 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   No path is outside the owned set, there is no binary, and there is no `zz-*` file.
 - Running now: WP5-UX5-T04-FREEZE (a fresh committer, alone). It stages 25 explicit paths
   plus the handoff records; the digest must be 2ba69f62.
+- WP5-UX5-T04-FREEZE done: 060302bcb41050c116e2519602f303c3a11cb01d on main, pushed (58
+  paths: 25 outside `handoff/`, 33 handoff). Digest 2ba69f62 (867 files) before staging and
+  on HEAD; every check exit 0; no slip reported.
+- Coordinator decision: UX5-T05 is split.
+  - **T05A:** the week sheets, toolbar and controls, plus the T04 leftovers, the
+    `contrast.ts` settle helper and the `automation.spec.ts` PDF assertions.
+  - **T05B:** the Day editor (U5-23 to U5-26).
+- Running now: WP5-UX5-T05A (worker, sonnet; size L, risk M; base 060302b / 2ba69f62;
+  ports 49760-49779).
+  - Items: U5-03 to U5-07, U5-16 to U5-21 and U5-17b.
+  - F-1 a: 36px visible sub-buttons, with a 44px invisible hit area below 768px and with
+    a coarse pointer.
+  - Only the range text may change in `src/domain/policy.ts` and the PDF, if any.
+- WP5-UX5-T05A done (worker report; the gate and audits are pending). No inventory stop.
+  - npm test 2344; mutants 5/5; verify 0; digest 66574877 (867 files).
+  - FULL e2e run 2 after the last change: 845 passed and 1 failed, a mobile buffer error.
+    That one test was rerun alone and passed; the full suite was not rerun.
+  - The PDF prints no range, so `timesheetPdf.ts` is untouched.
+  - The thresholds were measured again. A wrap fallback was added for late "+1" ranges in
+    the narrowest phone cell.
+  - Many runtime slips. A hung `python -` was left in the background; the coordinator
+    stopped the finished worker agent to end it.
+  - Audit notes:
+    - the Review header does not wrap (`nowrap`), against U5-16;
+    - the changed 44x44 test;
+    - the partial rerun;
+    - the docs/04 parity wording.
+- Running now: the lookup WP5-UX5-T05A-PATHS (light, haiku, read-only).
+- T05A-PATHS done. Outside `handoff/`: 32 modified, none new or deleted. Nothing is
+  staged. Nothing is outside the allowed set or under `src/server`, and there is no `zz-*`
+  file.
+- Running now: WP5-UX5-T05A-FREEZE (a fresh committer, alone). It stages 32 explicit paths
+  plus the handoff records, including the draft T05B brief; the digest must be 66574877.
 - Remaining after T06:
   - T06-FREEZE;
   - the round-5 package gate (it covers rounds 4 and 5);

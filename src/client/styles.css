@@ -166,8 +166,9 @@
   --dialog-fit: 92vw;
   --dialog-fit-wide: 96vw;
   --select-min: 10rem;
-  /* Every select (round 4, U4-08): a chevron of two gradient layers, 12px from the edge, and the end padding that keeps text clear of it */
-  --select-arrow-size: 7px;
+  /* Every select (round 5, U5-03): a chevron of one conic-gradient layer (a 12 x 6px tile), 12px from the edge, and the end padding that keeps text clear of it */
+  --select-arrow-w: 12px;
+  --select-arrow-h: 6px;
   --select-arrow-inset: 12px;
   --select-pad-end: 34px;
   /* The room the Category select may shrink to before the WFH checkbox wraps below it (U-27) */
@@ -237,6 +238,8 @@
   /* The week header row and the first column (round 4, owner F-5): a step stronger than the date cells; --muted is 4.59:1 on it, 1.27:1 from the card */
   --sheet-head-strong: #dde5f0;
   --sheet-head-off: #e1e6ee;
+  /* The worked-hours line of a day (round 5, U5-20): a tint under the day; --muted is 5.4:1 and --text 13:1 on it in the light theme */
+  --worked-line: #e8eef7;
   --day-nonworking: #f0f2f5;
   --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(28 36 48 / 0.045) 7px 8px);
   --day-hover: rgb(31 95 191 / 0.04);
@@ -256,6 +259,12 @@
    */
   --hover-fill: rgb(31 95 191 / 0.14);
   --control-height: 36px;
+  /* The visible height of the sub-buttons (Edit, Delete, Add session, Suggest breaks, Add break, Save day fields; round 5, F-1 a, U5-05):
+     36px on every device. Where controls are 44px (below 768px, coarse pointer) a ::before extends the hit area 4px up and down. */
+  --subbtn-h: var(--control-height);
+  --subbtn-hit-extra: 4px;
+  /* The theme segments of the account menu with a fine pointer (round 5, U5-06); 44px stays below 768px and with a coarse pointer */
+  --theme-seg-h: 32px;
   /* Check in/out in the title row (U-07): a compact 38px button on a pointer device, 44px on touch (see .clock-group) */
   --clock-button-min: 9rem;
   --clock-button-height: 38px;
@@ -454,6 +463,7 @@
     --sheet-head: #222a35;
     --sheet-head-strong: #2c3746;
     --sheet-head-off: #283140;
+    --worked-line: #242d3a;
     --day-nonworking: #1e252f;
     --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(230 233 238 / 0.04) 7px 8px);
     --day-hover: rgb(110 168 255 / 0.06);
@@ -520,6 +530,7 @@
   --sheet-head: #222a35;
   --sheet-head-strong: #2c3746;
   --sheet-head-off: #283140;
+  --worked-line: #242d3a;
   --day-nonworking: #1e252f;
   --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(230 233 238 / 0.04) 7px 8px);
   --day-hover: rgb(110 168 255 / 0.06);
@@ -1113,9 +1124,18 @@ button.account-action {
   }
 }
 
-/* In the account panel each segment is a 44px target. */
+/*
+ * In the account panel each segment is --theme-seg-h (32px, round 5, U5-06) with a fine pointer, in a row with 4px of padding; it stays
+ * a 44px target below 768px (the phone's More panel) and with a coarse pointer (AGENTS rule 3).
+ */
 .account-panel .theme-option {
-  min-height: var(--tap-min);
+  min-height: var(--theme-seg-h);
+}
+
+@media (width < 768px), (pointer: coarse) {
+  .account-panel .theme-option {
+    min-height: var(--tap-min);
+  }
 }
 
 /*
@@ -2212,7 +2232,7 @@ tr.nonworking td {
 }
 
 /*
- * The right group (U-12): "Show worked hours" and "Change several days" are two groups, a --toolbar-group-gap apart with a 1px --line
+ * The right group (U-12): "Worked hours" and "Change several days" are two groups, a --toolbar-group-gap apart with a 1px --line
  * separator centred in that gap (a pseudo-element of the second one, so the gap itself equals the token). The phone keeps the tighter
  * gap and no separator, because the two often wrap there (see the phone rules).
  */
@@ -2235,7 +2255,7 @@ tr.nonworking td {
 }
 
 /*
- * Every role="switch" ("Show worked hours" and the two sharing switches) is a slide switch (WP5-UX2-T02, round in round 4, U4-04):
+ * Every role="switch" ("Worked hours" and the two sharing switches) is a slide switch (WP5-UX2-T02, round in round 4, U4-04):
  * a native checkbox with `appearance: none`. The track is 44x24 and round (--radius-pill); the thumb is an 18px round
  * one-colour radial-gradient layer placed with background-position (no pseudo-element), 3px from the track edge.
  * State is shown by the thumb position and the track fill, never by colour alone. Contrast of the track
@@ -2447,20 +2467,20 @@ select {
 }
 
 /*
- * Every select (round 4, U4-08): the native arrow sat about 4px from the border and could not be aligned with the other fields, so
- * the browser's arrow is dropped (`appearance: none`) and a chevron is drawn with two gradient layers (no url(), so the content
- * security policy and both themes need nothing else). The arrow ends --select-arrow-inset from the border box and --muted is at
- * least 3:1 on --field-bg in the light and both dark sets; the end padding keeps the text clear of it. Forced colours drop
- * background images, so the native arrow comes back there.
+ * Every select (round 4, U4-08; one layer since round 5, U5-03): the native arrow sat about 4px from the border and could not be
+ * aligned with the other fields, so the browser's arrow is dropped (`appearance: none`) and a chevron is drawn (no url(), so the
+ * content security policy and both themes need nothing else). The chevron is ONE conic-gradient wedge in a single 12 x 6px tile: two
+ * tiles side by side were rasterised separately at a fractional device-pixel edge (125% and 150% display scaling) and left a light
+ * column down the middle. The arrow ends --select-arrow-inset from the border box and --muted is at least 3:1 on --field-bg in the
+ * light and both dark sets; the end padding keeps the text clear of it. Forced colours drop background images, so the native arrow
+ * comes back there.
  */
 select {
   appearance: none;
   padding-inline-end: var(--select-pad-end);
-  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-  background-position:
-    calc(100% - var(--select-arrow-inset) + var(--hairline) - var(--select-arrow-size)) center,
-    calc(100% - var(--select-arrow-inset) + var(--hairline)) center;
-  background-size: var(--select-arrow-size) var(--select-arrow-size);
+  background-image: conic-gradient(from -45deg at 50% 100%, var(--muted) 90deg, transparent 0);
+  background-position: calc(100% - var(--select-arrow-inset) + var(--hairline)) center;
+  background-size: var(--select-arrow-w) var(--select-arrow-h);
   background-repeat: no-repeat;
 }
 
@@ -2674,6 +2694,15 @@ textarea {
   }
 }
 
+/* "Change several days" has a short visible form for the compact toolbar (U5-17b); its name never changes. */
+.change-days-short {
+  display: none;
+}
+
+.change-days-short::before {
+  content: attr(data-text);
+}
+
 /*
  * The sheet's compact form (below 480px, SHEET_QUERY; WP5-UX-B-01, mockup A2, U5-22): the period card, the paper and the compact tools,
  * with the first day row above the tab bar. The period card and the paper stand --compact-edge from each window edge; the tools are
@@ -2699,9 +2728,25 @@ textarea {
     width: 100%;
   }
 
-  /* One row where the switch and the button fit (390px and wider); narrower, the button wraps below instead of scrolling sideways. The two wrap
-     often here, so the compact form keeps the tight gap and has no separator (the groups of the toolbar are a --toolbar-group-gap apart from 480px). */
+  /* "Open a day" takes the full width of its row and its date field all the free space (round 5, U5-17, Addendum 1). */
+  .open-day {
+    max-width: none;
+  }
+
+  /*
+   * The row of the "Worked hours" switch and "Change several days" (round 5, U5-17b, Addendum 2) is a size container, and the button steps
+   * through its forms by the room the row has. Measured in WP5-UX5-T05A (Edge, 15px root): the switch with "Worked hours" 147.9px, the
+   * full button 156.0px, "Change days" 104.7px, an 8px gap (the plan had 145, 163.6 and 112.3 from an earlier measure):
+   *   row >= T1 = 311.97px (switch + gap + full button): one row, the button right-aligned, the full label;
+   *   T2 = 260.64px (switch + gap + short button) <= row < T1: one row, right-aligned, "Change days";
+   *   row < T2: the button takes its own row and the full width, with the full label while the row is 156.0px or wider, "Change days"
+   *   down to 104.7px, and "Change / days" on two lines below that. The button is 44px tall in every form.
+   * The two wrap often here, so the compact form keeps the tight gap and has no separator (the groups of the toolbar are a
+   * --toolbar-group-gap apart from 480px). The thresholds are literals in rem (the 15px root): 20.8rem = 312.0px, 17.38rem = 260.7px,
+   * 10.41rem = 156.2px and 6.99rem = 104.9px.
+   */
   .tools-right {
+    container: tools-row / inline-size;
     flex-wrap: wrap;
     align-items: stretch;
     gap: var(--space-2);
@@ -2711,10 +2756,60 @@ textarea {
     content: none;
   }
 
-  .tools-right button {
-    flex: auto;
+  /* The switch never wraps its words: where the row is narrower than the switch, the switch overflows instead (no real phone is that narrow). */
+  .tools-right > label.switch {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .tools-right > button {
+    flex: none;
+    margin-inline-start: auto;
     padding-inline: var(--space-2);
     white-space: nowrap;
+  }
+
+  @container tools-row (width < 20.8rem) {
+    .change-days-long {
+      display: none;
+    }
+
+    .change-days-short {
+      display: inline;
+    }
+  }
+
+  @container tools-row (width < 17.38rem) {
+    .tools-right > button {
+      flex: 1 1 100%;
+    }
+
+    .change-days-long {
+      display: inline;
+    }
+
+    .change-days-short {
+      display: none;
+    }
+  }
+
+  @container tools-row (width < 10.41rem) {
+    .change-days-long {
+      display: none;
+    }
+
+    .change-days-short {
+      display: inline;
+    }
+  }
+
+  @container tools-row (width < 6.99rem) {
+    .tools-right > button {
+      height: var(--tap-min);
+      padding-block: 0;
+      line-height: var(--line-height-tight);
+      white-space: normal;
+    }
   }
 }
 
@@ -2742,13 +2837,24 @@ textarea {
   white-space: normal;
 }
 
+/*
+ * The form header (round 5, U5-16): a wrapping flex row, not a two-column grid, so the title is never squeezed to a word a line while
+ * the fields stay on one row. The title (`.form-brand`, flex 1 1 auto) and the field block (flex 0 1 auto) share a row while both fit;
+ * when they do not, the whole field block moves under the title first, and then its groups wrap one at a time from the end (Period,
+ * then Payroll Date). The title and a value break by word only when they alone are wider than the row.
+ */
 .form-head {
-  display: grid;
-  grid-template-columns: var(--track) auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2) var(--space-5);
-  align-items: end;
+  align-items: flex-end;
   padding-bottom: var(--space-3);
   border-bottom: var(--rule) solid var(--sheet-rule-strong);
+}
+
+.form-brand {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .form-title {
@@ -2761,8 +2867,10 @@ textarea {
 
 .form-fields {
   display: flex;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-5);
+  min-width: 0;
   margin: 0;
   font-size: var(--font-size-sm);
 }
@@ -2848,7 +2956,9 @@ textarea {
     scroll-padding: var(--focus-clearance);
   }
 
-  .sheet-week .week-grid {
+  /* The WEEK bar is as wide as the grid under it, also after a sideways scroll (round 5, U5-21): without a minimum it ended where the card's window ended. */
+  .sheet-week .week-grid,
+  .sheet-week .week-bar {
     min-width: calc(var(--sheet-label-col) + var(--sheet-days) * var(--sheet-col-min) + 2 * var(--hairline));
   }
 
@@ -2989,6 +3099,17 @@ textarea {
   display: block;
 }
 
+/* A time range never wraps inside a cell (round 5, U5-07): the sheet picks the tight form when the spaced one would not fit. */
+.cell-range {
+  white-space: nowrap;
+}
+
+/* Where even the tight text is wider than the cell (a late end such as 22:00-06:00+1 in the narrowest phone cell) it may break, never run over the next column. */
+.sheet[data-ranges='wrap'] .cell-range {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .cell-sub {
   color: var(--muted);
   font-size: var(--font-size-2xs);
@@ -3032,6 +3153,27 @@ textarea {
   color: var(--muted);
   font-family: var(--font-mono), monospace;
   font-size: var(--font-size-xs);
+}
+
+/*
+ * "Worked hours" on the desktop sheet (round 5, U5-20): the rows "Worked, workday" and "Worked, day off" are a band tinted with
+ * --worked-line, set off from the day's own rows by a stronger rule above it (the Status cell above gives up its hairline).
+ */
+.week-grid.with-details .sheet-day > .d-detail {
+  background-color: var(--worked-line);
+}
+
+.week-grid.with-details .sheet-day > .d-check {
+  border-bottom: 0;
+}
+
+.week-grid.with-details .sheet-day > .d-detail:nth-last-child(2),
+.week-grid.with-details .row-labels > div:nth-last-child(2) {
+  border-top: var(--rule) solid var(--sheet-rule-strong);
+}
+
+.week-grid.with-details .row-labels > div:nth-last-child(3) {
+  border-bottom: 0;
 }
 
 .sheet .attention {
@@ -3273,6 +3415,24 @@ textarea {
   text-align: right;
 }
 
+/* Beside the Today marker the day button keeps 8px clear of the bar (round 5, U5-19): the marker is a --sheet-today-bar inset, so the cell pads the bar and then 8px. */
+.sheet-table td.t-day {
+  padding-inline-start: calc(var(--sheet-today-bar) + var(--space-2));
+}
+
+/*
+ * "Worked hours" on the compact sheet (round 5, U5-20): a day and its worked line are one group (one tbody). No rule between the day
+ * row and its line; the line is indented, tinted with --worked-line and carries the short labels; a 2px rule closes each group.
+ */
+.sheet-table tbody.with-worked > tr.sheet-row > td {
+  border-bottom: 0;
+}
+
+.sheet-table tbody.with-worked > tr.sheet-detail-row > td {
+  border-bottom: var(--rule) solid var(--sheet-rule-strong);
+  background-color: var(--worked-line);
+}
+
 .sheet-table tr.sheet-row {
   cursor: pointer;
 }
@@ -3285,7 +3445,7 @@ textarea {
  * The row of the day open in the Day editor (round 3, U-13): a 1px accent frame, inset shadows on top and bottom of
  * every cell, on the left edge of the first and the right edge of the last, and the Day cell filled with
  * --day-editing-head (the hatching of a non-working day stays on the cells; the Day cell keeps its image layer). With
- * "Show worked hours" the row opens its frame downwards and the detail row closes it (sides and bottom). A table row does
+ * "Worked hours" the row opens its frame downwards and the detail row closes it (sides and bottom). A table row does
  * not lift: a selected row is the tint and the checked box.
  */
 .sheet-table tr.editing td,
@@ -3391,7 +3551,7 @@ textarea {
 
 .sheet-table tr.sheet-detail-row td {
   height: auto;
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--sheet-today-bar) + var(--space-2) + var(--space-4));
   color: var(--muted);
   font-size: var(--font-size-xs);
 }
@@ -3524,7 +3684,6 @@ textarea {
 
 /* The sheet's compact form (SHEET_QUERY, below 480px): a one-column header and footer, a phone-sized signature block. */
 @media (width < 480px) {
-  .form-head,
   .sheet-foot,
   .signatures {
     grid-template-columns: var(--track);
@@ -3544,7 +3703,12 @@ textarea {
     padding-bottom: var(--space-2);
   }
 
-  /* The company name is in the top bar, not on the sheet (WP5-UX2-T06): the phone header shows the fields, and the form title stays for screen readers. */
+  /* The company name is in the top bar, not on the sheet (WP5-UX2-T06): the phone header shows the fields, and the form title stays for screen readers
+     (its block leaves the header's flex row, so the fields start at the left edge). */
+  .form-brand {
+    position: absolute;
+  }
+
   .form-title {
     position: absolute;
     width: var(--hairline);
@@ -3573,9 +3737,9 @@ textarea {
 /* ---- Day editor and Clock out dialog ----------------------------------------- */
 
 /*
- * "Open a day" (U-11, U-18): the words, the date field and the button are one row at every width. The row is a size container: where
- * it is narrower than 21rem (text 76 + 8 + date field 127.5 + 8 + button 95.7 = 315.2px; a phone of 360px or less) the words are hidden
- * visually, while the <label> still names the field "Open a day". The field keeps at least a full date (--date-field-min).
+ * "Open a day" (U-11, U-18, U5-17): the words, the date field and the button are one row at every width. The row is a size container: as
+ * it narrows the button reads "Open" and then the words are hidden visually (see the container queries below), while the <label> still
+ * names the field "Open a day". The field keeps at least a full date (--date-field-min) and takes all the free width of the row.
  */
 .open-day {
   container: open-day / inline-size;
@@ -3611,7 +3775,31 @@ textarea {
   white-space: nowrap;
 }
 
-@container open-day (width < 21rem) {
+.open-day-short {
+  display: none;
+}
+
+.open-day-short::before {
+  content: attr(data-text);
+}
+
+/*
+ * Two steps as the row narrows (round 5, U5-17, Addendum 1), measured again in WP5-UX5-T05A (Edge, 15px root): the parts are the
+ * words 77.7 + the field's least width 127.5 + "Open day" 95.7 + two 8px gaps = 316.9px, and with "Open" (67.1px) for "Open day" 288.3px
+ * (the plan had 315.2 and 279.5 from an earlier measure). First the button reads "Open", then the words are hidden. The thresholds
+ * are literals in rem: 21.13rem = 316.95px and 19.22rem = 288.3px. The button keeps its accessible name "Open day".
+ */
+@container open-day (width < 21.13rem) {
+  .open-day-long {
+    display: none;
+  }
+
+  .open-day-short {
+    display: inline;
+  }
+}
+
+@container open-day (width < 19.22rem) {
   .open-day-text {
     position: absolute;
     width: var(--hairline);
@@ -3651,6 +3839,51 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/*
+ * The sub-buttons of the Day editor (round 5, owner decision F-1 a, U5-05): Edit and Delete on a session card, Add session, Suggest
+ * breaks, Add break and Save day fields. The visible box is --subbtn-h (36px) on every device. Where controls are 44px (below 768px
+ * and with a coarse pointer) the 44px target stays as an invisible hit area: a ::before extends the button --subbtn-hit-extra above and
+ * below. Rows of sub-buttons keep the 8px gap (--space-2), so two hit areas touch at most and never overlap (WCAG 2.5.8 spacing).
+ */
+.session-card .button-row > button,
+.editor-section-head > button,
+.break-actions > button,
+.editor-actions > button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: var(--subbtn-h);
+  min-height: var(--subbtn-h);
+  padding-block: 0;
+}
+
+@media (width < 768px), (pointer: coarse) {
+  .session-card .button-row > button::before,
+  .editor-section-head > button::before,
+  .break-actions > button::before,
+  .editor-actions > button::before {
+    content: '';
+    position: absolute;
+    inset: calc(-1 * (var(--subbtn-hit-extra) + var(--hairline))) calc(-1 * var(--hairline));
+  }
+}
+
+/* Delete (a trash icon): the danger tone is the error colour on the secondary look; the hover keeps the error boundary. */
+button.secondary.delete-action {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+@media (hover: hover) {
+  button.secondary.delete-action:hover:not(:disabled):not([aria-pressed='true']) {
+    background: var(--off);
+    border-color: var(--error);
+    color: var(--error);
+  }
 }
 
 .block {
@@ -3923,9 +4156,9 @@ button.link-action {
   padding-inline-end: calc(var(--page-pad) + var(--editor-reserve));
 }
 
-/* The narrower sheet beside the drawer stacks its form header instead of squeezing the title. */
-.sheet-area.with-editor .form-head {
-  grid-template-columns: var(--track);
+/* The narrower sheet beside the drawer stacks its form header instead of squeezing the title: the title takes a row of its own. */
+.sheet-area.with-editor .form-brand {
+  flex-basis: 100%;
 }
 
 .day-panel-sheet {
@@ -5365,6 +5598,7 @@ textarea.mono {
 .review-form-head {
   display: flex;
   flex-direction: column;
+  flex-wrap: nowrap;
   align-items: stretch;
   gap: var(--space-1);
 }

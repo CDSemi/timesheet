@@ -1,5 +1,6 @@
+import { createContext, useContext } from 'react';
 import type { DayDisplay, StatusShape } from './dayModel.ts';
-import { checkShape, type SheetCheck, type SheetLabel, type SheetOt, type SheetTime } from './sheetModel.ts';
+import { checkShape, type RangeForm, type SheetCheck, type SheetLabel, type SheetOt, type SheetTime } from './sheetModel.ts';
 
 /*
  * The status badges and the cell contents of a day, shared by the desktop sheet and the phone
@@ -35,14 +36,22 @@ export function LabelContent({ label }: { label: SheetLabel }) {
   );
 }
 
+/**
+ * Which form of a time range the cells of one sheet show (round 5, U5-07): "spaced" is "10:30 - 18:30"; "tight" and "wrap" show
+ * "10:30-18:30" ("wrap" lets even that break where a cell cannot hold it). The sheet decides once for all its cells (`useRangeForm`),
+ * so one sheet never mixes the forms.
+ */
+export const RangeFormContext = createContext<RangeForm>('spaced');
+
 /** The time cell: one line per session in the display zone, the local start date when it differs, and a short note. */
 export function TimeContent({ time }: { time: SheetTime }) {
+  const tight = useContext(RangeFormContext) !== 'spaced';
   return (
     <>
       {time.ranges.map((range) => (
         <span key={range.key} className="cell-range" data-range={range.key}>
           {range.startDate !== null && <span className="cell-sub">{range.startDate}</span>}
-          {range.text}
+          {tight ? range.tightText : range.text}
         </span>
       ))}
       {time.note !== null && <span className="cell-sub">{time.note}</span>}

@@ -79,22 +79,36 @@ export async function backdropsAbove(locator: Locator): Promise<string[]> {
 /** The computed properties the probes read. */
 export type StyleProperty = 'boxShadow' | 'color' | 'backgroundColor' | 'borderTopColor' | 'backgroundImage';
 
-/** The computed value of one property of an element, once it has not changed over two reads 400 ms apart. */
+/**
+ * The computed value of one property once no transition or animation is running on the element (WP5-UX4-FIX3, item 4; moved here from
+ * `hover.spec.ts` in WP5-UX5-T05A so every spec shares it). The wait is the browser's own: `getAnimations()` flushes pending style
+ * changes, so a transition that a hover, a tap or a theme change has just started is seen, and the `finished` promises of the running
+ * ones are awaited; two animation frames then let the last style apply. No wall-clock timer or poll is involved. The earlier helper read
+ * twice 400 ms apart inside a 7 s poll, which cost about 0.4 s per call and ran out when the worker side stalled for 24 s in the full
+ * run of WP5-UX4-REGATE2 (the trace shows the browser's 400 ms timer done in 403 ms, and the next read reaching the browser 24 s later).
+ */
 export async function settledStyle(locator: Locator, property: StyleProperty): Promise<string> {
-  const read = async () => locator.evaluate((element, name) => element.ownerDocument.defaultView?.getComputedStyle(element)[name] ?? '', property);
-  let settled = await read();
-  await expect
-    .poll(
-      async () => {
-        const first = await read();
-        await locator.page().waitForTimeout(400);
-        settled = await read();
-        return first === settled;
-      },
-      { message: `the computed ${property} is settled` },
-    )
-    .toBe(true);
-  return settled;
+  return locator.evaluate(async (element, name) => {
+    // The test project has no DOM types: the few members used here are declared by shape.
+    interface Animated {
+      ownerDocument: {
+        defaultView: { requestAnimationFrame: (callback: () => void) => number; getComputedStyle: (target: unknown) => Record<string, string> } | null;
+      };
+      getAnimations: () => Array<{ playState: string; finished: Promise<unknown> }>;
+    }
+    const target = element as unknown as Animated;
+    const view = target.ownerDocument.defaultView;
+    if (view === null) return '';
+    const frame = () => new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()));
+    for (let round = 0; round < 20; round += 1) {
+      const running = target.getAnimations().filter((animation) => animation.playState !== 'finished');
+      if (running.length === 0) break;
+      await Promise.allSettled(running.map((animation) => animation.finished));
+    }
+    await frame();
+    await frame();
+    return view.getComputedStyle(target)[name] ?? '';
+  }, property);
 }
 
 /** One immediate read of a computed property, for callers that have already waited for the colour transitions (300 ms). */
@@ -203,21 +217,30 @@ export async function readPseudo(locator: Locator, pseudo: '::before' | '::after
   }, pseudo);
 }
 
-/** A pseudo-element's computed style once it has not changed over two reads 400 ms apart. */
+/**
+ * A pseudo-element's computed style once no transition or animation is running on the element or its pseudo-elements: the same
+ * event-based wait as `settledStyle` (the browser's own `getAnimations({ subtree: true })`, then two animation frames), not a poll.
+ */
 export async function settledPseudo(locator: Locator, pseudo: '::before' | '::after'): Promise<PseudoStyle> {
-  let settled = await readPseudo(locator, pseudo);
-  await expect
-    .poll(
-      async () => {
-        const first = await readPseudo(locator, pseudo);
-        await locator.page().waitForTimeout(400);
-        settled = await readPseudo(locator, pseudo);
-        return JSON.stringify(first) === JSON.stringify(settled);
-      },
-      { message: `the computed ${pseudo} style is settled` },
-    )
-    .toBe(true);
-  return settled;
+  await locator.evaluate(async (element) => {
+    // The test project has no DOM types: the few members used here are declared by shape.
+    interface Animated {
+      ownerDocument: { defaultView: { requestAnimationFrame: (callback: () => void) => number } | null };
+      getAnimations: (options: { subtree: boolean }) => Array<{ playState: string; finished: Promise<unknown> }>;
+    }
+    const target = element as unknown as Animated;
+    const view = target.ownerDocument.defaultView;
+    if (view === null) return;
+    const frame = () => new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()));
+    for (let round = 0; round < 20; round += 1) {
+      const running = target.getAnimations({ subtree: true }).filter((animation) => animation.playState !== 'finished');
+      if (running.length === 0) break;
+      await Promise.allSettled(running.map((animation) => animation.finished));
+    }
+    await frame();
+    await frame();
+  });
+  return readPseudo(locator, pseudo);
 }
 
 /** The colour a CSS custom property resolves to (probed on a detached-style element, read from its computed colour). */

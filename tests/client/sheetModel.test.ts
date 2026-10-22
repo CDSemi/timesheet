@@ -4,9 +4,13 @@ import {
   checkShape,
   dayButtonName,
   dayClass,
+  DETAIL_ROWS,
+  DETAIL_SHORT,
   liftRuns,
+  longestRangeText,
   NO_TIMES_TEXT,
   overtimeTotal,
+  rangeFormFor,
   revealDelta,
   SHEET_ROWS,
   sessionRange,
@@ -16,6 +20,7 @@ import {
   sheetOt,
   sheetWeeks,
   signatureLines,
+  timeRange,
 } from '../../src/client/components/sheetModel.ts';
 
 const LA = 'America/Los_Angeles';
@@ -281,20 +286,20 @@ describe('sessionRange and the time cell (R-07)', () => {
   const sample = session('s1', '2026-11-23', '2026-11-23T16:00:00Z', '2026-11-24T01:00:00Z');
 
   it('prints 24-hour times in the display zone, as on the PDF', () => {
-    expect(sessionRange(sample, '2026-11-23', LA)).toEqual({ key: 's1', text: '08:00-17:00', startDate: null });
+    expect(sessionRange(sample, '2026-11-23', LA)).toEqual({ key: 's1', text: '08:00 - 17:00', tightText: '08:00-17:00', startDate: null });
   });
 
   it('marks an end on a later local date and a start on another local date than the accounting date', () => {
-    expect(sessionRange(sample, '2026-11-23', 'Asia/Ho_Chi_Minh')).toEqual({ key: 's1', text: '23:00-08:00+1', startDate: null });
-    expect(sessionRange(sample, '2026-11-23', 'Asia/Tokyo')).toEqual({ key: 's1', text: '01:00-10:00', startDate: '11/24' });
+    expect(sessionRange(sample, '2026-11-23', 'Asia/Ho_Chi_Minh')).toEqual({ key: 's1', text: '23:00 - 08:00+1', tightText: '23:00-08:00+1', startDate: null });
+    expect(sessionRange(sample, '2026-11-23', 'Asia/Tokyo')).toEqual({ key: 's1', text: '01:00 - 10:00', tightText: '01:00-10:00', startDate: '11/24' });
   });
 
   it('shows a running session by its start only', () => {
-    expect(sessionRange(session('s2', '2026-12-03', '2026-12-03T16:12:00Z', null), '2026-12-03', LA)).toEqual({ key: 's2', text: '08:12', startDate: null });
+    expect(sessionRange(session('s2', '2026-12-03', '2026-12-03T16:12:00Z', null), '2026-12-03', LA)).toEqual({ key: 's2', text: '08:12', tightText: '08:12', startDate: null });
   });
 
   it('notes breaks, a running session, unconfirmed breaks and missing times; flags the cells that need input', () => {
-    expect(sheetDay(completeDay(), LA, null).time).toEqual({ ranges: [{ key: 's1', text: '08:00-17:00', startDate: null }], note: '3 breaks', attention: false });
+    expect(sheetDay(completeDay(), LA, null).time).toEqual({ ranges: [{ key: 's1', text: '08:00 - 17:00', tightText: '08:00-17:00', startDate: null }], note: '3 breaks', attention: false });
     const oneBreak = day('2026-11-23', {
       sessions: [session('s1', '2026-11-23', '2026-11-23T16:00:00Z', '2026-11-23T20:00:00Z', { breaks: [aBreak('b1')] })],
       calculation: calculation('complete', { regular_minutes: 225, credited_minutes: 0 }),
@@ -491,5 +496,69 @@ describe('signatureLines', () => {
   it('shows an automatic submission with its submission date, as the PDF prints it', () => {
     const automatic = finalization({ revision: { ...revision, origin: 'deadline', review_state: 'pending' } });
     expect(signatureLines(automatic, LA)).toEqual({ employee: 'Submitted automatically, review pending', date: '12/08/2026', signed: false });
+  });
+});
+
+/* ---- WP5-UX5-T05A (round 5, U5-07 and U5-20): one range formatter, the tight rule, the worked rows ---------------------------- */
+
+describe('timeRange (U5-07): one formatter for every range shown', () => {
+  it('spaces the dash by default: "10:30 - 18:30"', () => {
+    expect(timeRange('10:30', '18:30')).toBe('10:30 - 18:30');
+  });
+
+  it('closes the dash only in the tight form: "10:30-18:30"', () => {
+    expect(timeRange('10:30', '18:30', { tight: true })).toBe('10:30-18:30');
+    expect(timeRange('10:30', '18:30', { tight: false })).toBe('10:30 - 18:30');
+  });
+
+  it('puts +N after the end when it lies N days later, in both forms, and nothing for 0', () => {
+    expect(timeRange('22:00', '06:00', { later: 1 })).toBe('22:00 - 06:00+1');
+    expect(timeRange('22:00', '06:00', { later: 1, tight: true })).toBe('22:00-06:00+1');
+    expect(timeRange('09:00', '17:00', { later: 0 })).toBe('09:00 - 17:00');
+  });
+
+  it('is the text of a session cell: sessionRange gives the spaced text and the tight text of the same range', () => {
+    const night = sessionRange(session('n', '2026-11-23', '2026-11-24T06:00:00Z', '2026-11-24T14:00:00Z'), '2026-11-23', 'Asia/Ho_Chi_Minh');
+    expect(night.text).toBe('13:00 - 21:00');
+    expect(night.tightText).toBe('13:00-21:00');
+    expect(night.text.replace(/ /g, '')).toBe(night.tightText);
+  });
+});
+
+describe('the tight rule (U5-07): decided per sheet from the longest range and the cell box', () => {
+  const weeks = sheetWeeks(
+    [
+      completeDay('2026-11-23'),
+      day('2026-11-24', { sessions: [session('late', '2026-11-24', '2026-11-25T06:00:00Z', '2026-11-25T14:00:00Z')] }),
+    ],
+    'Asia/Ho_Chi_Minh',
+    null,
+  );
+
+  it('finds the longest spaced range of all weeks (an end on a later day is the longest)', () => {
+    expect(longestRangeText(weeks)).toBe('23:00 - 08:00+1');
+    expect(longestRangeText([])).toBe('');
+    expect(longestRangeText(sheetWeeks([day('2026-11-23')], LA, null))).toBe('');
+  });
+
+  it('uses the tight form only when the spaced text is wider than the cell box', () => {
+    // The plan's measures: "10:30 - 18:30" needs 91.4px and a week cell at the 108px minimum has 92px; "22:00 - 06:00+1" needs 105.5px.
+    expect(rangeFormFor(91.4, 80, 92)).toBe('spaced');
+    expect(rangeFormFor(105.5, 92, 92)).toBe('tight');
+    // The phone Time cell at 320px has 72px and needs 82.3px spaced against 69.6px tight.
+    expect(rangeFormFor(82.3, 69.6, 72)).toBe('tight');
+    expect(rangeFormFor(92, 80, 92)).toBe('spaced');
+  });
+
+  it('lets the tight text wrap only where even it is wider than the cell box', () => {
+    expect(rangeFormFor(105.5, 92.4, 72)).toBe('wrap');
+    expect(rangeFormFor(105.5, 72, 72)).toBe('tight');
+  });
+});
+
+describe('the worked rows (U5-20)', () => {
+  it('names the desktop rows "Worked, workday" and "Worked, day off" and the phone line "Workday" and "Day off"', () => {
+    expect(DETAIL_ROWS).toEqual({ regular: 'Worked, workday', offCalendar: 'Worked, day off' });
+    expect(DETAIL_SHORT).toEqual({ regular: 'Workday', offCalendar: 'Day off' });
   });
 });

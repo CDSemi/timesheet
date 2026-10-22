@@ -103,7 +103,7 @@ export interface SessionCard {
   id: string;
   state: SessionCardState;
   stateText: string;
-  /** `09:00-17:30`, `22:00-06:00+1`, or the start alone while the session runs, in the display zone. */
+  /** `09:00 - 17:30`, `22:00 - 06:00+1`, or the start alone while the session runs, in the display zone. */
   range: string;
   /** `MM/DD` when the session starts on another local date than its accounting date (another zone, or after midnight). */
   startDate: string | null;

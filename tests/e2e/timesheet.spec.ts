@@ -1,3 +1,5 @@
+import { appendFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { besideNeed } from '../../src/client/components/editorLayoutModel.ts';
 import { rangeKind, rangeLadder, rangeSpokenText, rangeText } from '../../src/client/components/periodBarModel.ts';
@@ -19,7 +21,7 @@ import {
   tokenColour,
 } from './contrast.ts';
 import { ANY_DAY_BUTTON_NAME, dayButtonName, namedDayButton } from './dayButton.ts';
-import { expect, screenshotPath, type SeedClient, test } from './fixtures.ts';
+import { expect, SCREENSHOT_DIR, screenshotPath, type SeedClient, test } from './fixtures.ts';
 import { cardParts, cardStyle, near, noSidewaysScroll, rangeState } from './periodCard.ts';
 
 /*
@@ -324,19 +326,21 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   await expect(namedDayButton(page, start, 'Edit')).toBeVisible();
   await expect(page.getByText('accounting dates', { exact: false }).first()).toBeVisible();
 
-  // Session times are in the display zone (Asia/Ho_Chi_Minh), not in the reporting zone of the seed (09:00-18:00 LA).
-  const range = `${clockText(completeSession?.start_utc ?? '', displayZone)}-${clockText(completeSession?.end_utc ?? '', displayZone)}`;
+  // Session times are in the display zone (Asia/Ho_Chi_Minh), not in the reporting zone of the seed (09:00 - 18:00 LA).
+  // The sheet shows "10:30 - 18:30" or, when its cells cannot hold that on one line, the tight "10:30-18:30" (U5-07); the other tests pin the rule.
+  const tightRanges = (await page.locator('[data-sheet]').getAttribute('data-ranges')) === 'tight';
+  const range = `${clockText(completeSession?.start_utc ?? '', displayZone)}${tightRanges ? '-' : ' - '}${clockText(completeSession?.end_utc ?? '', displayZone)}`;
   await expect(dayRow(page, completeDay)).toContainText(range);
-  await expect(dayRow(page, completeDay)).not.toContainText('09:00-18:00');
+  await expect(dayRow(page, completeDay)).not.toContainText(/09:00 ?- ?18:00/);
 
-  // A complete day shows Complete, its server OT as h:mm and, under Show worked hours, 8:00 worked on a workday;
+  // A complete day shows Complete, its server OT as h:mm and, under Worked hours, 8:00 worked on a workday;
   // unconfirmed breaks show Confirm breaks and pending OT.
   await expect(dayRow(page, completeDay)).toContainText('Complete');
   await expect(dayRow(page, completeDay).locator('[data-ot]')).toHaveText(formatHoursMinutes(complete.calculation?.credited_minutes ?? -1));
   await expect(dayRow(page, completeDay).locator('[data-cell="ot"]')).not.toContainText('pending');
   await expect(dayRow(page, pendingDay)).toContainText('Confirm breaks');
   await expect(dayRow(page, pendingDay).locator('[data-cell="ot"] [data-ot="pending"]')).toHaveText('pending');
-  const details = page.getByRole('switch', { name: 'Show worked hours' });
+  const details = page.getByRole('switch', { name: 'Worked hours' });
   await expect(details).not.toBeChecked();
   await expect(page.locator('[data-detail]')).toHaveCount(0);
   await details.click();
@@ -669,7 +673,7 @@ test('the day open in the Day editor is marked on that day only, moves with the 
   for (const button of await buttons.all()) await expect(button).toHaveAccessibleName(ANY_DAY_BUTTON_NAME);
 });
 
-test('the marker stays with the editor across Show worked hours and a period change, and is absent while its date is not on the sheet', async ({
+test('the marker stays with the editor across Worked hours and a period change, and is absent while its date is not on the sheet', async ({
   page,
   employeeSeed,
   signInThroughUi,
@@ -685,12 +689,12 @@ test('the marker stays with the editor across Show worked hours and a period cha
   await signInThroughUi();
   await expect(page.locator('[data-day]')).toHaveCount(14);
   // A phone's modal sheet makes the toolbar inert, so its switch is set first there; on a desktop the panel is beside the sheet.
-  if (!desktop) await page.getByRole('switch', { name: 'Show worked hours' }).check();
+  if (!desktop) await page.getByRole('switch', { name: 'Worked hours' }).check();
   await openDay(page, date);
   await expectMarkedOnly(page, date);
 
-  // Show worked hours re-renders the sheet; the marker is kept and the layer still covers the whole column.
-  if (desktop) await page.getByRole('switch', { name: 'Show worked hours' }).check();
+  // Worked hours re-renders the sheet; the marker is kept and the layer still covers the whole column.
+  if (desktop) await page.getByRole('switch', { name: 'Worked hours' }).check();
   await expect(page.locator('[data-detail]')).toHaveCount(28);
   await expectMarkedOnly(page, date);
 
@@ -908,7 +912,7 @@ test('the day open in the Day editor is a lifted column with an inset 1px accent
   if (desktop) {
     const column = page.locator(`[data-day="${first}"]`);
     for (const details of [false, true]) {
-      if (details) await page.getByRole('switch', { name: 'Show worked hours' }).check();
+      if (details) await page.getByRole('switch', { name: 'Worked hours' }).check();
       await expect(page.locator('[data-detail]')).toHaveCount(details ? 28 : 0);
       await page.mouse.move(0, 0);
       const look = await settledLook(column);
@@ -957,7 +961,7 @@ test('the day open in the Day editor is a lifted column with an inset 1px accent
     for (const details of [false, true]) {
       if (details) {
         await page.keyboard.press('Escape');
-        await page.getByRole('switch', { name: 'Show worked hours' }).check();
+        await page.getByRole('switch', { name: 'Worked hours' }).check();
         await openDay(page, first);
       }
       await expectMarkedOnly(page, first);
@@ -1036,7 +1040,7 @@ test('desktop: the inset frame and the Day-cell fill are painted over every cell
   await openDay(page, first);
   await expectMarkedOnly(page, first);
   for (const details of [false, true]) {
-    if (details) await page.getByRole('switch', { name: 'Show worked hours' }).check();
+    if (details) await page.getByRole('switch', { name: 'Worked hours' }).check();
     for (const appearance of APPEARANCES) {
       await applyAppearance(page, appearance);
       const accent = await tokenColour(page, '--accent');
@@ -1080,7 +1084,7 @@ test('desktop: the inset frame and the Day-cell fill are painted over every cell
   // The visual record: the column with and without the detail rows, light and dark.
   const column = page.locator(`[data-day="${first}"]`);
   for (const details of [false, true]) {
-    const toggle = page.getByRole('switch', { name: 'Show worked hours' });
+    const toggle = page.getByRole('switch', { name: 'Worked hours' });
     await (details ? toggle.check() : toggle.uncheck());
     for (const appearance of [APPEARANCES[0], APPEARANCES[1]] as Appearance[]) {
       await applyAppearance(page, appearance);
@@ -1104,7 +1108,7 @@ for (const width of [390, 375, 360, 320]) {
     await signInThroughUi();
     await expect(page.locator('[data-day]')).toHaveCount(14);
     await expect(page.locator('[data-sheet="phone"]')).toHaveCount(1);
-    await page.getByRole('switch', { name: 'Show worked hours' }).check();
+    await page.getByRole('switch', { name: 'Worked hours' }).check();
     await page.getByRole('button', { name: 'Change several days' }).click();
     await page.getByLabel(`Select ${first}`).check();
     await expectNoSidewaysScroll(page, `selected, details on, ${width}px`);
@@ -1863,7 +1867,7 @@ test('"Open a day": the words, the date field and the button share one row; the 
   }
 });
 
-test('desktop toolbar: the gap between "Show worked hours" and "Change several days" is the token with a 1px separator, and the button is outlined until pressed', async ({
+test('desktop toolbar: the gap between "Worked hours" and "Change several days" is the token with a 1px separator, and the button is outlined until pressed', async ({
   page,
   signInThroughUi,
 }, testInfo) => {
@@ -1911,6 +1915,553 @@ test('desktop toolbar: the gap between "Show worked hours" and "Change several d
   const accent = await tokenColour(page, '--accent');
   expect(sameColour(parseColour(await settledStyle(batch, 'backgroundColor')), accent, 3), 'pressed is the solid accent').toBe(true);
   await page.screenshot({ path: screenshotPath('toolbar-desktop-pressed-synthetic.png'), clip: { x: 0, y: 0, width: 1280, height: 520 }, animations: 'disabled' });
+});
+
+/* ---- WP5-UX5-T05A (round 5): time ranges, the compact toolbar rows, Today spacing, the worked lines and the WEEK bar ---------------- */
+
+const toolbarRound = (value: number) => Math.round(value * 100) / 100;
+
+/** Gives a toolbar row an exact width (the row, not the window, is what the container queries read). */
+async function setRowWidth(page: Page, selector: string, width: number): Promise<void> {
+  await page.evaluate(`(() => { const element = document.querySelector(${JSON.stringify(selector)}); if (element !== null) element.style.cssText = 'width:${width}px;flex:none;max-width:none'; })()`);
+}
+
+/** Appends measured lines to a masked evidence text file in the screenshot folder (layout numbers only, synthetic data). */
+function record(testInfo: { project: { name: string } }, name: string, lines: string[]): void {
+  mkdirSync(SCREENSHOT_DIR, { recursive: true });
+  appendFileSync(join(SCREENSHOT_DIR, `timesheet-t05a-${testInfo.project.name}-${name}.txt`), `${lines.join('\n')}\n`, 'utf8');
+}
+
+test.describe('time ranges (U5-07)', () => {
+  // The display zone is the reporting zone, so the seeded 09:00-18:00 day reads as typed and has no "+1".
+  test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+  const SCRIPT = String.raw`(() => {
+    const sheet = document.querySelector('article[data-sheet]');
+    const cells = [...sheet.querySelectorAll('[data-cell="time"], td.t-time')];
+    const cell = cells[0];
+    const style = getComputedStyle(cell);
+    const box = cell.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    const widthOf = (text) => {
+      const probe = document.createElement('span');
+      probe.textContent = text;
+      probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
+      cell.append(probe);
+      const width = probe.getBoundingClientRect().width;
+      probe.remove();
+      return width;
+    };
+    const ranges = [...sheet.querySelectorAll('.cell-range')].map((element) => {
+      const text = [...element.childNodes].filter((node) => node.nodeType === 3).map((node) => node.textContent).join('');
+      const node = [...element.childNodes].filter((child) => child.nodeType === 3).pop();
+      let lines = 1;
+      if (node !== undefined) {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        lines = range.getClientRects().length;
+      }
+      return { text, lines, overflow: element.scrollWidth - element.clientWidth };
+    });
+    const spaced = ranges.map((range) => range.text.replace('-', ' - ').replace(/ +- +/, ' - '));
+    const longest = spaced.reduce((best, text) => (text.length > best.length ? text : best), '');
+    return {
+      mode: sheet.getAttribute('data-ranges'),
+      box,
+      spacedWidth: longest === '' ? 0 : widthOf(longest),
+      tightWidth: longest === '' ? 0 : widthOf(longest.replace(' - ', '-')),
+      ranges,
+      cells: cells.length,
+    };
+  })()`;
+
+  interface RangeFacts {
+    mode: string;
+    box: number;
+    spacedWidth: number;
+    tightWidth: number;
+    ranges: Array<{ text: string; lines: number; overflow: number }>;
+    cells: number;
+  }
+
+  test('every range reads "09:00 - 18:00"; a sheet uses the tight "09:00-18:00" only where the spaced form would not fit its time cells, one form per sheet, and no range wraps', async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+    seededDays.push(date);
+    await employeeSeed.seedCompleteDay(date);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const forms = new Set<string>();
+    const lines = [`# ${testInfo.project.name}: ranges`];
+    for (const width of [320, 360, 390, 479, 480, 520, 600, 767, 768, 850, 929, 930, 1100, 1280, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      // The sheet measures its cells when the window is resized (a ResizeObserver), so the page may take a frame to settle on the new width.
+      const modeFor = (measured: RangeFacts) => (measured.spacedWidth <= measured.box + 0.01 ? 'spaced' : measured.tightWidth <= measured.box + 0.01 ? 'tight' : 'wrap');
+      await expect
+        .poll(async () => {
+          const measured = await page.evaluate<RangeFacts>(SCRIPT);
+          return measured.mode === modeFor(measured);
+        }, { message: `${width}px: the sheet settles on the form its cells need` })
+        .toBe(true);
+      const facts = await page.evaluate<RangeFacts>(SCRIPT);
+      expect(facts.ranges.length, `${width}px: the seeded session is on the sheet`).toBeGreaterThanOrEqual(1);
+      lines.push(`${width}px: mode ${facts.mode}, cell box ${toolbarRound(facts.box)}px, spaced ${toolbarRound(facts.spacedWidth)}px, tight ${toolbarRound(facts.tightWidth)}px, texts ${facts.ranges.map((range) => range.text).join('|')}`);
+      forms.add(`${facts.mode}`);
+      if (facts.spacedWidth <= facts.box + 0.01) {
+        expect(facts.mode, `${width}px: the spaced form fits (${facts.spacedWidth} of ${facts.box}), so it shows`).toBe('spaced');
+      } else {
+        expect(facts.mode, `${width}px: the spaced form would wrap (${facts.spacedWidth} of ${facts.box}), so the tight form shows`).toBe(facts.tightWidth <= facts.box + 0.01 ? 'tight' : 'wrap');
+      }
+      // One form per sheet: every range is spaced, or every range is tight.
+      const spaced = facts.ranges.filter((range) => / - /.test(range.text));
+      expect(spaced.length === 0 || spaced.length === facts.ranges.length, `${width}px: one sheet never mixes the two forms (${facts.ranges.map((range) => range.text).join('|')})`).toBe(true);
+      expect(spaced.length === facts.ranges.length, `${width}px: the text is spaced exactly when the mode is "spaced"`).toBe(facts.mode === 'spaced');
+      for (const range of facts.ranges) {
+        expect(range.text, `${width}px: a range is HH:MM-HH:MM in one of the two forms`).toMatch(/^\d{2}:\d{2}( - |-)\d{2}:\d{2}(\+\d)?$/);
+        if (facts.mode !== 'wrap') {
+          expect(range.lines, `${width}px: "${range.text}" does not wrap`).toBe(1);
+          expect(range.overflow, `${width}px: "${range.text}" stays inside its cell`).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+    expect([...forms].sort(), 'the sweep shows both forms').toEqual(['spaced', 'tight']);
+    record(testInfo, 'ranges', lines);
+  });
+});
+
+test.describe('a late end in the narrowest phone cell', () => {
+  // Ho Chi Minh is UTC+7: the seeded 09:00-18:00 Los Angeles day reads 23:00 to 08:00 the next day, "+1", which even the tight form cannot hold in 72px.
+  test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+  test('the tight text may wrap there but never runs over the next column', async ({ page, employeeSeed, signInThroughUi }) => {
+    const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+    seededDays.push(date);
+    await employeeSeed.seedCompleteDay(date);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const read = () =>
+        page.evaluate<{ mode: string; text: string; overflow: number }>(
+          `(() => { const sheet = document.querySelector('article[data-sheet]'); const element = sheet.querySelector('.cell-range'); return { mode: sheet.getAttribute('data-ranges'), text: element.textContent, overflow: element.scrollWidth - element.clientWidth }; })()`,
+        );
+      // The sheet measures its cells when the window is resized, so it may take a frame to settle on the new width.
+      await expect.poll(async () => (await read()).overflow, { message: `${width}px: the late end settles inside its cell` }).toBeLessThanOrEqual(1);
+      const facts = await read();
+      expect(facts.text, `${width}px: the late end keeps its +1`).toMatch(/\+1$/);
+      expect(facts.overflow, `${width}px: "${facts.text}" (${facts.mode}) does not run over its cell`).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+test.describe('the compact toolbar rows (U5-17, U5-17b)', () => {
+  const OPEN_DAY = String.raw`(() => {
+    const row = document.querySelector('.open-day');
+    const label = row.querySelector('.open-day-text').getBoundingClientRect();
+    const input = row.querySelector('input').getBoundingClientRect();
+    const button = row.querySelector('button').getBoundingClientRect();
+    const long = row.querySelector('.open-day-long');
+    const rowBox = row.getBoundingClientRect();
+    return {
+      row: rowBox.width,
+      rowRight: rowBox.right,
+      labelWidth: label.width,
+      labelShown: label.width > 2,
+      inputLeft: input.left,
+      inputRight: input.right,
+      inputWidth: input.width,
+      buttonLeft: button.left,
+      buttonRight: button.right,
+      buttonWidth: button.width,
+      longShown: getComputedStyle(long).display !== 'none',
+      fieldMin: parseFloat(getComputedStyle(row.querySelector('input')).minWidth),
+      overflow: row.scrollWidth - row.clientWidth,
+    };
+  })()`;
+
+  interface OpenDayFacts {
+    row: number;
+    rowRight: number;
+    labelWidth: number;
+    labelShown: boolean;
+    inputLeft: number;
+    inputRight: number;
+    inputWidth: number;
+    buttonLeft: number;
+    buttonRight: number;
+    buttonWidth: number;
+    longShown: boolean;
+    fieldMin: number;
+    overflow: number;
+  }
+
+  test('"Open a day" takes the full row and its date field the free width: label + field + "Open day", then label + field + "Open", then field + "Open" with the label hidden; the name stays', async ({
+    page,
+    signInThroughUi,
+  }) => {
+    test.setTimeout(120_000);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.setViewportSize({ width: 390, height: 900 });
+    const read = async (width: number) => {
+      await setRowWidth(page, '.tools-left', width);
+      return page.evaluate<OpenDayFacts>(OPEN_DAY);
+    };
+    // At 390px the row is 358px wide and shows the full form.
+    await page.evaluate("document.querySelector('.tools-left').style.cssText = ''");
+    const natural = await page.evaluate<OpenDayFacts>(OPEN_DAY);
+    expect(natural.row, 'the row of a 390px window').toBeCloseTo(358, 0);
+    expect(natural.labelShown && natural.longShown, 'the full form at 390px').toBe(true);
+    // The parts, measured: the label, the field's least width, the two button texts.
+    const full = await read(358);
+    const short = await read(300);
+    const longParts = full.labelWidth + 8 + full.fieldMin + 8 + full.buttonWidth;
+    const shortParts = full.labelWidth + 8 + short.fieldMin + 8 + short.buttonWidth;
+    console.log(`OPEN-DAY parts: label ${full.labelWidth}, field min ${full.fieldMin}, "Open day" ${full.buttonWidth}, "Open" ${short.buttonWidth}; long threshold ${longParts}, short threshold ${shortParts}`);
+    expect(full.buttonWidth, '"Open day" is wider than "Open"').toBeGreaterThan(short.buttonWidth);
+    for (const width of [358, 300, 260]) {
+      const facts = await read(width);
+      expect(Math.abs(facts.inputRight + 8 - facts.buttonLeft), `${width}px: the field's right edge + 8 is the button's left edge`).toBeLessThanOrEqual(0.6);
+      expect(Math.abs(facts.buttonRight - facts.rowRight), `${width}px: the button's right edge is the row's right edge`).toBeLessThanOrEqual(0.6);
+      expect(facts.overflow, `${width}px: the row does not overflow`).toBeLessThanOrEqual(0);
+    }
+    const wide = await read(358);
+    expect(wide.inputWidth, 'the field takes all the free width of the 358px row').toBeCloseTo(358 - wide.labelWidth - 8 - 8 - wide.buttonWidth - 8 + 8, 0);
+    expect([wide.labelShown, wide.longShown], '358px: label + field + "Open day"').toEqual([true, true]);
+    const middle = await read(300);
+    expect([middle.labelShown, middle.longShown], '300px: label + field + "Open"').toEqual([true, false]);
+    const narrow = await read(260);
+    expect([narrow.labelShown, narrow.longShown], '260px: field + "Open", the label hidden').toEqual([false, false]);
+    // The thresholds, within 1px of the parts' sum.
+    for (const [threshold, below, above] of [
+      [longParts, [true, false], [true, true]],
+      [shortParts, [false, false], [true, false]],
+    ] as const) {
+      const lowFacts = await read(threshold - 1);
+      expect([lowFacts.labelShown, lowFacts.longShown], `${toolbarRound(threshold - 1)}px is below the threshold ${toolbarRound(threshold)}px`).toEqual(below);
+      const highFacts = await read(threshold + 1);
+      expect([highFacts.labelShown, highFacts.longShown], `${toolbarRound(threshold + 1)}px is above the threshold ${toolbarRound(threshold)}px`).toEqual(above);
+      expect(lowFacts.overflow, `${toolbarRound(threshold - 1)}px: no overflow`).toBeLessThanOrEqual(0);
+    }
+    // The field keeps the name "Open a day" and the button "Open day", whatever the row shows.
+    await read(260);
+    await expect(page.getByLabel('Open a day')).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Open day', exact: true })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Open day', exact: true })).toHaveText('Open day');
+  });
+
+  const CHANGE_DAYS = String.raw`(() => {
+    const row = document.querySelector('.tools-right');
+    const rowBox = row.getBoundingClientRect();
+    const toggle = row.querySelector('label.switch').getBoundingClientRect();
+    const button = row.querySelector('button.change-days');
+    const box = button.getBoundingClientRect();
+    const long = button.querySelector('.change-days-long');
+    const short = button.querySelector('.change-days-short');
+    return {
+      row: rowBox.width,
+      rowRight: rowBox.right,
+      switchWidth: toggle.width,
+      switchHeight: toggle.height,
+      switchTop: toggle.top,
+      switchBottom: toggle.bottom,
+      top: box.top,
+      left: box.left,
+      right: box.right,
+      width: box.width,
+      height: box.height,
+      long: getComputedStyle(long).display !== 'none',
+      short: getComputedStyle(short).display !== 'none',
+      shortHeight: short.getBoundingClientRect().height,
+      lineHeight: parseFloat(getComputedStyle(button).lineHeight),
+      overflow: button.scrollHeight - button.clientHeight,
+    };
+  })()`;
+
+  interface ChangeDaysFacts {
+    row: number;
+    rowRight: number;
+    switchWidth: number;
+    switchHeight: number;
+    switchTop: number;
+    switchBottom: number;
+    top: number;
+    left: number;
+    right: number;
+    width: number;
+    height: number;
+    long: boolean;
+    short: boolean;
+    shortHeight: number;
+    lineHeight: number;
+    overflow: number;
+  }
+
+  test('"Change several days": right-aligned beside the switch, "Change days" when there is no room, its own full-width row below that, "Change / days" on two lines when narrower still (below 104.7px); 44px high and named "Change several days"', async ({
+    page,
+    signInThroughUi,
+  }) => {
+    test.setTimeout(120_000);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.setViewportSize({ width: 390, height: 900 });
+    const read = async (width: number) => {
+      await setRowWidth(page, '.tools-right', width);
+      return page.evaluate<ChangeDaysFacts>(CHANGE_DAYS);
+    };
+    const full = await read(358);
+    const short = await read(288);
+    const shortOwn = await read(130);
+    const switchWidth = full.switchWidth;
+    const fullWidth = full.width;
+    const shortWidth = short.width;
+    // Row widths 358, 288, 250 and 100: the full, short, full and two-line forms (130 is the short form on its own row). The plan measured 110px for the two-line step; "Change days" is 104.7px wide here, so it takes two lines below that.
+    expect([full.long, full.short], '358px: the full label').toEqual([true, false]);
+    expect(Math.abs(full.right - full.rowRight), '358px: right-aligned on the shared row').toBeLessThanOrEqual(0.6);
+    expect(Math.abs(full.top + full.height / 2 - (full.switchTop + full.switchHeight / 2)), '358px: one row with the switch').toBeLessThanOrEqual(1);
+    expect([short.long, short.short], '288px: "Change days"').toEqual([false, true]);
+    expect(Math.abs(short.right - short.rowRight), '288px: right-aligned on the shared row').toBeLessThanOrEqual(0.6);
+    expect(Math.abs(short.top + short.height / 2 - (short.switchTop + short.switchHeight / 2)), '288px: one row with the switch').toBeLessThanOrEqual(1);
+    const own = await read(250);
+    expect([own.long, own.short], '250px: its own row, the full label again').toEqual([true, false]);
+    expect(own.top, '250px: the button is under the switch').toBeGreaterThanOrEqual(own.switchBottom - 0.5);
+    expect(Math.abs(own.width - own.row), '250px: the button fills the row').toBeLessThanOrEqual(0.6);
+    expect([shortOwn.long, shortOwn.short], '130px: its own row, "Change days"').toEqual([false, true]);
+    expect(Math.abs(shortOwn.width - shortOwn.row), '130px: the button fills the row').toBeLessThanOrEqual(0.6);
+    const stacked = await read(100);
+    console.log(`CHANGE-DAYS parts: switch ${switchWidth}, full ${fullWidth}, short ${shortWidth}, own-row 100px ${JSON.stringify(stacked)}`);
+    expect([stacked.long, stacked.short], '100px: "Change days" on two lines').toEqual([false, true]);
+    expect(Math.abs(stacked.width - stacked.row), '100px: the button fills the row').toBeLessThanOrEqual(0.6);
+    expect(stacked.shortHeight, '100px: the words take two lines').toBeGreaterThan(stacked.lineHeight * 1.7);
+    for (const [width, facts] of [[358, full], [288, short], [250, own], [130, shortOwn], [100, stacked]] as const) {
+      expect(Math.abs(facts.height - 44), `${width}px: the button is 44px high`).toBeLessThanOrEqual(0.5);
+      expect(facts.overflow, `${width}px: the words stay inside the button`).toBeLessThanOrEqual(1);
+      expect(facts.switchHeight, `${width}px: the switch never wraps`).toBeLessThanOrEqual(46);
+    }
+    // The thresholds, within 1px of the parts' sums: switch + 8 + button.
+    const t1 = switchWidth + 8 + fullWidth;
+    const t2 = switchWidth + 8 + shortWidth;
+    const above1 = await read(t1 + 1);
+    const below1 = await read(t1 - 1);
+    expect([above1.long, Math.abs(above1.right - above1.rowRight) < 0.6], `${toolbarRound(t1 + 1)}px: the full label, right-aligned`).toEqual([true, true]);
+    expect([below1.long, below1.short], `${toolbarRound(t1 - 1)}px: "Change days"`).toEqual([false, true]);
+    expect(Math.abs(below1.top + below1.height / 2 - (below1.switchTop + below1.switchHeight / 2)), `${toolbarRound(t1 - 1)}px: still one row`).toBeLessThanOrEqual(1);
+    const above2 = await read(t2 + 1);
+    const below2 = await read(t2 - 1);
+    expect(Math.abs(above2.top + above2.height / 2 - (above2.switchTop + above2.switchHeight / 2)), `${toolbarRound(t2 + 1)}px: one row`).toBeLessThanOrEqual(1);
+    expect(below2.top, `${toolbarRound(t2 - 1)}px: its own row`).toBeGreaterThanOrEqual(below2.switchBottom - 0.5);
+    // On its own row the full label stays while the row holds it (the full button's width) and "Change days" goes to two lines below its own width.
+    const ownFull = await read(fullWidth + 1);
+    const ownShort = await read(fullWidth - 1);
+    expect([ownFull.long, ownFull.short], `${toolbarRound(fullWidth + 1)}px: the full label on its own row`).toEqual([true, false]);
+    expect([ownShort.long, ownShort.short], `${toolbarRound(fullWidth - 1)}px: "Change days" on its own row`).toEqual([false, true]);
+    const oneLine = await read(shortWidth + 1);
+    const twoLines = await read(shortWidth - 1);
+    expect(oneLine.shortHeight, `${toolbarRound(shortWidth + 1)}px: "Change days" on one line`).toBeLessThan(oneLine.lineHeight * 1.4);
+    expect(twoLines.shortHeight, `${toolbarRound(shortWidth - 1)}px: "Change / days" on two lines`).toBeGreaterThan(twoLines.lineHeight * 1.7);
+    expect(Math.abs(twoLines.height - 44), `${toolbarRound(shortWidth - 1)}px: still 44px high`).toBeLessThanOrEqual(0.5);
+    // The name never changes.
+    await read(250);
+    await expect(page.getByRole('button', { name: 'Change several days', exact: true })).toHaveCount(1);
+    await read(100);
+    await expect(page.getByRole('button', { name: 'Change several days', exact: true })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Change several days', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
+test('Today spacing (U5-19): the day button starts 8 to 10px after the Today bar, in every row of the compact table', async ({ page, employeeSeed, signInThroughUi }) => {
+  test.setTimeout(90_000);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const todayDate = await showToday(page, employeeSeed);
+  for (const width of [320, 390, 479]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.locator('[data-sheet="phone"]')).toHaveCount(1);
+    const facts = await page.evaluate<{ gap: number; lefts: number[]; barWidth: number }>(`(() => {
+      const row = document.querySelector('tr[data-day="${todayDate}"]');
+      const cell = row.querySelector('td.t-day');
+      const button = cell.querySelector('.sheet-day-button');
+      const shadow = getComputedStyle(cell).boxShadow;
+      // "rgb(r, g, b) 3px 0px 0px 0px inset": the bar is the first offset of the inset layer.
+      const match = /(-?[\\d.]+)px (?:-?[\\d.]+)px (?:-?[\\d.]+)px (?:-?[\\d.]+)px inset|inset (-?[\\d.]+)px/.exec(shadow);
+      const bar = parseFloat((match && (match[1] || match[2])) || '0');
+      const lefts = [...document.querySelectorAll('tr[data-day] .sheet-day-button')].map((element) => element.getBoundingClientRect().left - element.closest('td').getBoundingClientRect().left);
+      return { gap: button.getBoundingClientRect().left - (cell.getBoundingClientRect().left + bar), lefts, barWidth: bar };
+    })()`);
+    expect(facts.barWidth, `${width}px: the Today bar is 3px`).toBeCloseTo(3, 0);
+    expect(facts.gap, `${width}px: button.left - bar.right`).toBeGreaterThanOrEqual(8 - 0.01);
+    expect(facts.gap, `${width}px: button.left - bar.right`).toBeLessThanOrEqual(10);
+    // Every row has the same inset, so the column stays aligned.
+    expect(new Set(facts.lefts.map((left) => toolbarRound(left))).size, `${width}px: the day buttons of all rows are aligned`).toBe(1);
+  }
+});
+
+test.describe('"Worked hours" lines (U5-20)', () => {
+  for (const theme of ['light', 'dark'] as const) {
+    test(`phone: a day and its worked line are one group, no rule between them and a rule of 2px or more between groups, tinted with --worked-line and readable (${theme})`, async ({
+      page,
+      signInThroughUi,
+    }) => {
+      test.setTimeout(90_000);
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      await signInThroughUi();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await page.setViewportSize({ width: 390, height: 900 });
+      await expect(page.locator('[data-sheet="phone"]')).toHaveCount(1);
+      await page.getByRole('switch', { name: 'Worked hours' }).check();
+      await expect(page.locator('tr.sheet-detail-row')).toHaveCount(14);
+      const tint = await tokenColour(page, '--worked-line');
+      const facts = await page.evaluate<
+        Array<{ dayBottom: number; lineTop: number; lineBottom: number; background: string; color: string; valueColor: string; labels: string; spoken: string; group: boolean; indent: number; dayIndent: number }>
+      >(`[...document.querySelectorAll('tbody.sheet-group')].map((group) => {
+          const day = group.querySelector('tr[data-day] td');
+          const line = group.querySelector('tr.sheet-detail-row td');
+          const style = (element) => getComputedStyle(element);
+          return {
+            dayBottom: parseFloat(style(day).borderBottomWidth),
+            lineTop: parseFloat(style(line).borderTopWidth),
+            lineBottom: parseFloat(style(line).borderBottomWidth),
+            background: style(line).backgroundColor,
+            color: style(line).color,
+            valueColor: style(line.querySelector('.mono')).color,
+            labels: [...line.querySelectorAll('[aria-hidden="true"]')].map((element) => element.textContent).join('|'),
+            spoken: [...line.querySelectorAll('.sr-only')].map((element) => element.textContent).join('|'),
+            group: group.children.length === 2,
+            indent: line.querySelector('.detail-pair').getBoundingClientRect().left - line.getBoundingClientRect().left,
+            dayIndent: group.querySelector('.sheet-day-button').getBoundingClientRect().left - day.getBoundingClientRect().left,
+          };
+        })`);
+      expect(facts, 'one group per day').toHaveLength(14);
+      for (const [index, item] of facts.entries()) {
+        expect(item.group, `day ${index}: the group is the day row and its worked line`).toBe(true);
+        expect(item.dayBottom, `day ${index}: no border under the day row`).toBe(0);
+        expect(item.lineTop, `day ${index}: no border over the worked line`).toBe(0);
+        expect(item.lineBottom, `day ${index}: a rule of 2px or more closes the group`).toBeGreaterThanOrEqual(2);
+        expect(sameColour(parseColour(item.background), tint, 1), `day ${index}: the line is tinted with --worked-line`).toBe(true);
+        expect(contrast(parseColour(item.color), tint), `day ${index}: the labels on the tint`).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(parseColour(item.valueColor), tint), `day ${index}: the values on the tint`).toBeGreaterThanOrEqual(4.5);
+        expect(item.labels, `day ${index}: short labels`).toBe('Workday|Day off');
+        expect(item.spoken, `day ${index}: the full names stay for screen readers`).toBe('Worked, workday|Worked, day off');
+        expect(item.indent, `day ${index}: the line is indented past the day button`).toBeGreaterThan(item.dayIndent);
+      }
+    });
+
+    test(`desktop: the rows are "Worked, workday" and "Worked, day off", a band tinted with --worked-line under a stronger rule (${theme})`, async ({ page, signInThroughUi }) => {
+      test.setTimeout(90_000);
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      await signInThroughUi();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await expect(page.locator('[data-sheet="desktop"]')).toHaveCount(1);
+      await page.getByRole('switch', { name: 'Worked hours' }).check();
+      await expect(page.locator('.d-detail')).toHaveCount(28);
+      const tint = await tokenColour(page, '--worked-line');
+      const rule = await tokenColour(page, '--sheet-rule-strong');
+      const first = page.locator('.week-grid').first();
+      const labels = first.locator('.row-labels > div');
+      await expect(labels.nth(6)).toHaveText('Worked, workday');
+      await expect(labels.nth(7)).toHaveText('Worked, day off');
+      const facts = await page.evaluate<{ backgrounds: string[]; colors: string[]; top: number[]; topColor: string; checkBottom: number }>(`(() => {
+        const column = document.querySelector('.week-grid .sheet-day');
+        const details = [...column.querySelectorAll('.d-detail')];
+        return {
+          backgrounds: details.map((element) => getComputedStyle(element).backgroundColor),
+          colors: details.map((element) => getComputedStyle(element).color),
+          top: details.map((element) => parseFloat(getComputedStyle(element).borderTopWidth)),
+          topColor: getComputedStyle(details[0]).borderTopColor,
+          checkBottom: parseFloat(getComputedStyle(column.querySelector('.d-check')).borderBottomWidth),
+        };
+      })()`);
+      for (const [index, background] of facts.backgrounds.entries()) {
+        expect(sameColour(parseColour(background), tint, 1), `worked row ${index}: tinted with --worked-line`).toBe(true);
+        expect(contrast(parseColour(facts.colors[index] ?? ''), tint), `worked row ${index}: text on the tint`).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(facts.top[0], 'a stronger rule above the band').toBeGreaterThanOrEqual(2);
+      expect(sameColour(parseColour(facts.topColor), rule, 1), 'the rule is --sheet-rule-strong').toBe(true);
+      expect(facts.checkBottom, 'the Status cell above gives up its hairline').toBe(0);
+    });
+  }
+});
+
+/*
+ * The visual record of WP5-UX5-T05A (synthetic data only): the sheet header with the Worked hours rows at 1440 and 390px, the Day editor's
+ * controls at both widths, and the compact toolbar at rows of 358, 288 and 250px. Each file name carries the project, so the two projects
+ * do not overwrite each other. The measured numbers are asserted by the tests above; this test only saves the pictures.
+ */
+test('saves the synthetic renders of the sheet, the Day editor controls and the compact toolbar', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.setTimeout(120_000);
+  const project = testInfo.project.name;
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  seededDays.push(date);
+  await employeeSeed.seedCompleteDay(date);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const picture = (name: string) => screenshotPath(`t05a-${name}-${project}-synthetic.png`);
+  await page.getByRole('switch', { name: 'Worked hours' }).check();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const paper = page.locator('[data-paper="timesheet"]');
+    await paper.screenshot({ path: picture(`worked-${width}`), animations: 'disabled' });
+  }
+  await page.getByRole('switch', { name: 'Worked hours' }).uncheck();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.reload();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByLabel('Open a day').fill(date);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await expect(editor.locator('.session-card')).toHaveCount(1);
+    await editor.locator('.session-card').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: picture(`controls-${width}`), animations: 'disabled' });
+    await page.keyboard.press('Escape');
+  }
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.reload();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const row of [358, 288, 250]) {
+    await setRowWidth(page, '.tools-right', row);
+    await page.locator('.tools').screenshot({ path: picture(`toolbar-${row}`), animations: 'disabled' });
+  }
+});
+
+test('the WEEK bar is as wide as its grid from 480px, before and after a sideways scroll (U5-21)', async ({ page, signInThroughUi }) => {
+  test.setTimeout(120_000);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const width of [480, 600, 767, 768, 850, 913, 929, 930, 1100]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.locator('[data-sheet="desktop"]')).toHaveCount(1);
+    const measure = () =>
+      page.locator('section.sheet-week').first().evaluate((card) => {
+        const bar = card.querySelector('.week-bar')?.getBoundingClientRect();
+        const grid = card.querySelector('.week-grid')?.getBoundingClientRect();
+        return { bar: bar?.width ?? 0, grid: grid?.width ?? 0, scrolls: card.scrollWidth > card.clientWidth, max: card.scrollWidth - card.clientWidth };
+      });
+    const before = await measure();
+    expect(Math.abs(before.bar - before.grid), `${width}px before the scroll: the bar is ${before.bar}px, the grid ${before.grid}px`).toBeLessThanOrEqual(0.5);
+    if (width <= 913) expect(before.scrolls, `${width}px: the week card scrolls sideways`).toBe(true);
+    await page.locator('section.sheet-week').first().evaluate((card) => {
+      card.scrollLeft = card.scrollWidth;
+    });
+    const after = await measure();
+    expect(Math.abs(after.bar - after.grid), `${width}px after the scroll to its end: the bar is ${after.bar}px, the grid ${after.grid}px`).toBeLessThanOrEqual(0.5);
+    // The bar spans the whole scrolled width: it ends where the grid ends.
+    const ends = await page.locator('section.sheet-week').first().evaluate((card) => {
+      const bar = card.querySelector('.week-bar')?.getBoundingClientRect();
+      const grid = card.querySelector('.week-grid')?.getBoundingClientRect();
+      return { bar: bar?.right ?? 0, grid: grid?.right ?? 0 };
+    });
+    expect(Math.abs(ends.bar - ends.grid), `${width}px: the bar ends where the grid ends`).toBeLessThanOrEqual(0.5);
+  }
 });
 
 /* ---- WP5-UX5-T04 (U5-09 to U5-13): the period card, wide and narrow, and the range ladder ---------------------------------------- */

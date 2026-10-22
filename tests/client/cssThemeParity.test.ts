@@ -253,3 +253,43 @@ describe('src/client/styles.css round-3 token system', () => {
     expect(sets.mediaDark['--card']).toBe('#1a2029');
   });
 });
+
+/*
+ * WP5-UX5-T05A (round 5, U5-20): the worked-hours line of a day is tinted with --worked-line. It is a themed colour (a light value and the
+ * same dark value in both dark sets), and --muted and --text keep 4.5:1 on it in every theme (WCAG 2.2 SC 1.4.3).
+ */
+describe('src/client/styles.css --worked-line (U5-20)', () => {
+  const sets = themeSets(css);
+
+  const channel = (value: number) => {
+    const unit = value / 255;
+    return unit <= 0.03928 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (hex: string) => {
+    const [red = 0, green = 0, blue = 0] = [1, 3, 5].map((start) => channel(Number.parseInt(hex.slice(start, start + 2), 16)));
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+  };
+  const ratio = (left: string, right: string) => {
+    const [high, low] = [luminance(left), luminance(right)].sort((a, b) => b - a);
+    return ((high ?? 0) + 0.05) / ((low ?? 0) + 0.05);
+  };
+
+  it('has a light value and the same value in both dark sets', () => {
+    expect(sets.light['--worked-line']).toBeDefined();
+    expect(sets.mediaDark['--worked-line']).toBeDefined();
+    expect(sets.manualDark['--worked-line']).toBe(sets.mediaDark['--worked-line']);
+    expect(sets.light['--worked-line']).not.toBe(sets.mediaDark['--worked-line']);
+  });
+
+  it.each([
+    ['light', () => sets.light],
+    ['dark', () => sets.mediaDark],
+  ] as const)('keeps --muted and --text at 4.5:1 on the tint in the %s set, and the tint apart from the card', (_name, pick) => {
+    const set = { ...sets.light, ...pick() };
+    const tint = set['--worked-line'] ?? '';
+    expect(tint).toMatch(/^#[0-9a-f]{6}$/);
+    expect(ratio(set['--muted'] ?? '', tint)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(set['--text'] ?? '', tint)).toBeGreaterThanOrEqual(4.5);
+    expect(tint).not.toBe(set['--card']);
+  });
+});

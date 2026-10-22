@@ -274,6 +274,9 @@ export function BreakRows({
       )}
       <div className="button-row break-actions">
         <button type="button" className="secondary" onClick={onSuggest} disabled={noBreaks}>
+          <svg className="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path d="M8 1.8l1.5 4.7 4.7 1.5-4.7 1.5L8 14.2l-1.5-4.7L1.8 8l4.7-1.5z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+          </svg>
           Suggest breaks
         </button>
         <button

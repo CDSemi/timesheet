@@ -28,7 +28,7 @@ import { SHEET_QUERY, SHELL_QUERY } from './components/layoutQueries.ts';
 import { OpenDay } from './components/OpenDay.tsx';
 import { PeriodBar, type PeriodJumps } from './components/PeriodBar.tsx';
 import { currentPeriodJump, currentStatusText, todayJump, todayStatusText } from './components/periodJumpModel.ts';
-import { usePeriodState } from './components/ReviewStatus.tsx';
+import { reviewLinkOf, usePeriodState } from './components/ReviewStatus.tsx';
 import { ShowDetailsSwitch } from './components/ShowDetailsSwitch.tsx';
 import { TimesheetSheet } from './components/TimesheetSheet.tsx';
 import { useEditorLayout } from './components/useEditorLayout.ts';
@@ -130,7 +130,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const imported = view?.timesheet.imported_unverified === true;
   // The same finalization and delivery reads as before; the sheet also takes its signature lines from them.
   const periodState = usePeriodState(view?.period.payroll_date ?? '', view?.timesheet.version, own && !imported && view !== null);
-  /** "Show worked hours" of the toolbar: the worked-on-a-workday and worked-on-a-day-off rows of the sheet. */
+  /** "Worked hours" of the toolbar: the "Worked, workday" and "Worked, day off" rows of the sheet. */
   const [details, setDetails] = useState(false);
   /** Batch mode ("Change several days"): the selection boxes and the batch bar show only while it is on. */
   const [batchMode, setBatchMode] = useState(false);
@@ -640,7 +640,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
                 {canEdit && (
                   <button
                     type="button"
-                    className="secondary"
+                    className="secondary change-days"
+                    aria-label="Change several days"
                     aria-pressed={batchOn}
                     disabled={imported}
                     aria-describedby={imported ? 'imported-reason' : undefined}
@@ -649,7 +650,10 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
                       setSelected(new Set());
                     }}
                   >
-                    Change several days
+                    {/* U5-17b: where the compact toolbar row has no room the visible words step down to "Change days" (CSS, a container
+                        query); the name stays "Change several days", which contains every visible form (SC 2.5.3). */}
+                    <span className="change-days-long">Change several days</span>
+                    <span className="change-days-short" data-text="Change days" aria-hidden="true" />
                   </button>
                 )}
               </div>
@@ -716,6 +720,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
               }}
               details={details}
               finalization={periodState?.finalization ?? null}
+              reviewLinkLabel={reviewLinkOf(periodState, view.period.period_end, todayLocal).label}
               signatures={own && !imported}
             />
           </section>

@@ -188,7 +188,9 @@ test('the deadline submits automatically: note off/on, image off/on, an empty pe
     expect(pdf.pages, `${label}: pages`).toHaveLength(1);
     expect(pdf.text, `${label}: signer name`).toContain(person.account.displayName);
     expect(pdf.text, `${label}: the submission date, not a sign date`).toContain(printedDate);
-    expect(pdf.text, `${label}: the OT total line`).toContain('VERTIME'); // the OVERTIME TOTAL line is small capitals, drawn as runs ("O", "VERTIME", ...)
+    // The OVERTIME TOTAL line is small capitals, drawn as runs ("O", "VERTIME ", "T", "OTAL ", ":"): with the spaces dropped it reads
+    // OVERTIMETOTAL:, then the total as h:mm, then the unit H:MM.
+    expect(pdf.text.replace(/\s+/g, ''), `${label}: the OT total line, its h:mm total and its unit`).toMatch(/OVERTIMETOTAL:\d+:\d{2}H:MM/);
     if (expected.note === null) expect(pdf.text, `${label}: no automatic indicator`).not.toMatch(/automatic|pending review|review pending/i);
     else expect(pdf.text, `${label}: the note line`).toContain(expected.note);
     // The signature image is a bounded picture on the page only when authorized.
@@ -199,11 +201,20 @@ test('the deadline submits automatically: note off/on, image off/on, an empty pe
   // The empty period renders with the default labels and no sessions.
   const emptyPdf = await readPdf(new Uint8Array(outcomes.full.pdf));
   expect(emptyPdf.text).toContain('Worked');
-  expect(emptyPdf.text, 'an empty period shows no time range').not.toMatch(/\b\d{2}:\d{2}-\d{2}:\d{2}\b/);
-  // A session is printed as a start cell and an end cell now (not one "09:00-18:00" range).
+  // The redesigned PDF prints a session as a start cell and an end cell ("HH:MM" each), never as one range in either form
+  // ("09:00-18:00" or "09:00 - 18:00"), so an empty period has no time cell and no page has a range.
+  const timeCell = /^\d{2}:\d{2}$/;
+  const rangeForm = /\d{2}:\d{2}\s*[-–]\s*\d{2}:\d{2}/;
+  expect(
+    (emptyPdf.pages[0]?.items ?? []).filter((item) => timeCell.test(item.text)).map((item) => item.text),
+    'an empty period prints no time cell',
+  ).toEqual([]);
+  expect(emptyPdf.text, 'an empty period shows no time range').not.toMatch(rangeForm);
   if (days.plain !== null) {
-    const plainItems = (await readPdf(new Uint8Array(outcomes.plain.pdf))).pages[0]?.items ?? [];
-    for (const time of ['09:00', '18:00']) expect(plainItems.some((item) => item.text === time), `the seeded session is printed: ${time}`).toBe(true);
+    const plainPdf = await readPdf(new Uint8Array(outcomes.plain.pdf));
+    const plainItems = plainPdf.pages[0]?.items ?? [];
+    for (const time of ['09:00', '18:00']) expect(plainItems.some((item) => item.text === time), `the seeded session is printed as a time cell: ${time}`).toBe(true);
+    expect(plainPdf.text, 'a printed session is two time cells, not a range').not.toMatch(rangeForm);
   }
   for (const value of Object.values(days)) expect(value === null || /^\d{4}-\d{2}-\d{2}$/.test(value)).toBe(true);
 

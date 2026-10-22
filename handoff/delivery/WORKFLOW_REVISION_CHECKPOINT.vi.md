@@ -1459,6 +1459,41 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   file `zz-*`.
 - Đang chạy: WP5-UX5-T04-FREEZE (một committer mới, chạy một mình). Nó stage 25 đường dẫn
   ghi rõ tên cùng các hồ sơ trong handoff; digest phải là 2ba69f62.
+- WP5-UX5-T04-FREEZE xong: 060302bcb41050c116e2519602f303c3a11cb01d trên main, đã push (58
+  đường dẫn: 25 ngoài `handoff/`, 33 trong handoff). Digest 2ba69f62 (867 file) trước khi
+  stage và trên HEAD; mọi kiểm tra exit 0; không báo lỗi quy tắc nào.
+- Quyết định của điều phối viên: tách UX5-T05 làm hai.
+  - **T05A:** tờ timesheet, thanh công cụ và các control, kèm các việc T04 để lại, helper
+    chờ ổn định trong `contrast.ts` và các assertion PDF trong `automation.spec.ts`.
+  - **T05B:** Day editor (U5-23 đến U5-26).
+- Đang chạy: WP5-UX5-T05A (worker, sonnet; cỡ L, rủi ro M; nền 060302b / 2ba69f62; cổng
+  49760-49779).
+  - Các mục: U5-03 đến U5-07, U5-16 đến U5-21 và U5-17b.
+  - F-1 a: nút con cao 36px khi nhìn, kèm vùng chạm vô hình 44px dưới 768px và khi dùng
+    con trỏ thô (cảm ứng).
+  - Trong `src/domain/policy.ts` và PDF chỉ được đổi chữ hiển thị khoảng giờ, nếu có.
+- WP5-UX5-T05A xong (theo báo cáo của worker; gate và audit còn chờ). Không dừng ở bước kiểm
+  kê.
+  - npm test 2344; mutant 5/5; verify 0; digest 66574877 (867 file).
+  - FULL e2e lần 2, sau thay đổi cuối: 845 đạt và 1 lỗi bộ đệm trên mobile. Riêng test đó
+    được chạy lại một mình và đạt; không chạy lại toàn bộ.
+  - PDF không in khoảng giờ nào, nên `timesheetPdf.ts` không bị đụng tới.
+  - Các ngưỡng được đo lại. Có thêm cách cho xuống dòng với khoảng giờ kết thúc "+1" ở ô
+    hẹp nhất trên điện thoại.
+  - Nhiều lỗi quy tắc khi chạy lệnh. Một lệnh `python -` bị treo ở nền; điều phối viên đã
+    dừng agent worker (đã xong việc) để chấm dứt nó.
+  - Ghi chú cho audit:
+    - header của trang Review không xuống dòng (`nowrap`), trái với U5-16;
+    - test 44x44 đã bị sửa;
+    - chỉ chạy lại một phần;
+    - cách ghi kết quả đối chiếu song ngữ docs/04.
+- Đang chạy: tra cứu WP5-UX5-T05A-PATHS (light, haiku, chỉ đọc).
+- T05A-PATHS xong. Ngoài `handoff/`: 32 file sửa, không có file mới hay bị xóa. Không có gì
+  được stage. Không có gì nằm ngoài phạm vi cho phép hay trong `src/server`, và không có
+  file `zz-*`.
+- Đang chạy: WP5-UX5-T05A-FREEZE (một committer mới, chạy một mình). Nó stage 32 đường dẫn
+  ghi rõ tên cùng các hồ sơ trong handoff, kể cả bản nháp brief T05B; digest phải là
+  66574877.
 - Còn lại sau T06:
   - T06-FREEZE;
   - gate gói của đợt 5 (bao gồm cả đợt 4 và đợt 5);

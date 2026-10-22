@@ -158,8 +158,8 @@ describe('the session cards of the panel (U-21)', () => {
 
   it('a session with confirmed breaks is "Breaks confirmed" with its table in the display zone and the saved minutes', () => {
     const card = sessionCardOf(session({ breaks_confirmed: true, breaks: threeBreaks }), '2026-09-21', LA);
-    expect(card).toMatchObject({ state: 'confirmed', stateText: 'Breaks confirmed', range: '09:00-18:30', startDate: null, emptyText: null, attentionText: null, runningText: null });
-    expect(card.caption).toBe('Breaks of 09:00-18:30');
+    expect(card).toMatchObject({ state: 'confirmed', stateText: 'Breaks confirmed', range: '09:00 - 18:30', startDate: null, emptyText: null, attentionText: null, runningText: null });
+    expect(card.caption).toBe('Breaks of 09:00 - 18:30');
     expect(card.breaks.map((item) => [item.number, item.date, item.start, item.minutes])).toEqual([
       [1, '09/21', '11:00', 15],
       [2, '09/21', '13:00', 30],
@@ -171,7 +171,7 @@ describe('the session cards of the panel (U-21)', () => {
   it('shows the same breaks in another display zone, with their date there and the end on a later local day as +1', () => {
     // Ho Chi Minh is UTC+7: the session reads 23:00 to 08:30 the next day and the breaks start at 01:00, 03:00 and 05:30 on 09/22.
     const card = sessionCardOf(session({ breaks_confirmed: true, breaks: threeBreaks }), '2026-09-21', HCM);
-    expect(card.range).toBe('23:00-08:30+1');
+    expect(card.range).toBe('23:00 - 08:30+1');
     expect(card.breaks.map((item) => `${item.date} ${item.start}`)).toEqual(['09/22 01:00', '09/22 03:00', '09/22 05:30']);
     expect(card.breaks.map((item) => item.minutes)).toEqual([15, 30, 15]);
   });
@@ -224,7 +224,7 @@ describe('the session cards of the panel (U-21)', () => {
     const facts = deleteFacts(session({ breaks_confirmed: true, breaks: threeBreaks }), '2026-09-21', LA);
     expect(facts).toEqual([
       { label: 'Day', value: 'Mon 09/21/2026' },
-      { label: 'Time', value: `09:00-18:30 (${LA})` },
+      { label: 'Time', value: `09:00 - 18:30 (${LA})` },
       { label: 'Breaks', value: '3 breaks (15, 30, 15 min)' },
     ]);
   });

@@ -9,6 +9,7 @@ import {
   periodStatus,
   type PeriodStatus,
   reviewHash,
+  type ReviewLinkView,
   reviewLinkView,
   type Tone,
 } from './reviewModel.ts';
@@ -101,16 +102,21 @@ export function DeliveryBadge({ state, attr }: { state: PeriodState | null; attr
   return delivery === null ? null : <StatusBadge status={delivery} name="delivery" attr={attr} />;
 }
 
+/** The review link's words and weight for a period state: the one source of the period card's link and of the signature line's link. */
+export function reviewLinkOf(state: PeriodState | null, periodEnd: string, todayLocal: string | null): ReviewLinkView {
+  return reviewLinkView({
+    status: state === null ? null : periodStatus(state.finalization),
+    sendExists: state !== null && periodHasSend(state.finalization, state.attempts, state.earlierSend === true),
+    ended: periodEnded(periodEnd, todayLocal),
+  });
+}
+
 /**
  * The link from the timesheet to the review of a period; the wording and the style follow the period state (U5-14): the primary
  * button (`data-review-primary`) while the period is ended and still needs the person, else the quiet link.
  */
 export function ReviewLink({ payrollDate, periodEnd, todayLocal, state }: { payrollDate: string; periodEnd: string; todayLocal: string | null; state: PeriodState | null }) {
-  const { label, primary } = reviewLinkView({
-    status: state === null ? null : periodStatus(state.finalization),
-    sendExists: state !== null && periodHasSend(state.finalization, state.attempts, state.earlierSend === true),
-    ended: periodEnded(periodEnd, todayLocal),
-  });
+  const { label, primary } = reviewLinkOf(state, periodEnd, todayLocal);
   // The text content is the full label. On a phone the style sheet may show `data-short` instead (a pseudo-element) when the full label
   // does not fit on one line; `aria-label` keeps the accessible name the full label either way (it contains the short text, SC 2.5.3).
   return (

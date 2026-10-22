@@ -106,15 +106,21 @@ export function SessionList({
                   onClick={(event: MouseEvent<HTMLButtonElement>) => onEdit(session, event.currentTarget)}
                   aria-label={`Edit session ${session.id}`}
                 >
+                  <svg className="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M2.5 13.5l.8-3.4 7.6-7.6a1.5 1.5 0 012.1 2.1l-7.6 7.6-2.9.8z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                  </svg>
                   Edit
                 </button>
                 {!(shared && card.state === 'running') && (
                   <button
                     type="button"
-                    className="secondary"
+                    className="secondary delete-action"
                     onClick={(event: MouseEvent<HTMLButtonElement>) => onDelete(session, event.currentTarget)}
                     aria-label={`Delete session ${session.id}`}
                   >
+                    <svg className="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                      <path d="M2.5 4.5h11M6 4.5V2.8h4v1.7M4 4.5l.6 8.7h6.8l.6-8.7M6.8 7v4M9.2 7v4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                     Delete
                   </button>
                 )}

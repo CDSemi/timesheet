@@ -115,6 +115,36 @@ async function expectPainted(page: Page, theme: Theme, explicit: boolean): Promi
 
 /* ---- The control: group, names, icons ------------------------------------------------------------------ */
 
+/*
+ * WP5-UX5-T05A (round 5, U5-06): each segment of the account menu is 32px high with a fine pointer from 768px, in a row with 4px of
+ * padding and 16px icons; it stays a 44px target below 768px (the phone's More panel) and with a coarse pointer.
+ */
+test('the segments are 32px high with a fine pointer from 768px (row padding 4px, icons 16px) and 44px below 768px and with a coarse pointer', async ({ page, signInThroughUi }) => {
+  test.setTimeout(90_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signInThroughUi();
+  for (const width of [1440, 1024, 768, 767, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const control = await themeControl(page);
+    const coarse = await page.evaluate<boolean>("matchMedia('(pointer: coarse)').matches");
+    const expected = coarse || width < 768 ? 44 : 32;
+    const row = control.group.locator('xpath=..');
+    const facts = await row.evaluate((element) => {
+      const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+      const box = element.getBoundingClientRect();
+      return { top: Number.parseFloat((style?.paddingTop ?? '0')), bottom: Number.parseFloat((style?.paddingBottom ?? '0')), height: box.height };
+    });
+    for (const theme of THEMES) {
+      const segment = await control.segment[theme].boundingBox();
+      expect(Math.abs((segment?.height ?? 0) - expected), `${width}px (${coarse ? 'coarse' : 'fine'} pointer): the ${theme} segment is ${expected}px high, not ${segment?.height}`).toBeLessThanOrEqual(0.5);
+      const icon = await control.segment[theme].locator('svg').boundingBox();
+      expect(icon?.height ?? 0, `${width}px: the icon is 16px`).toBeCloseTo(16, 0);
+    }
+    expect([facts.top, facts.bottom], `${width}px: the row pads 4px`).toEqual([4, 4]);
+    expect(Math.abs(facts.height - (expected + 8)), `${width}px: the row is the segment plus its padding`).toBeLessThanOrEqual(0.5);
+  }
+});
+
 test('the theme control is a "Theme" radio group of two native radios, Light and Dark, with aria-hidden icons', async ({ page, signInThroughUi }) => {
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await signInThroughUi();

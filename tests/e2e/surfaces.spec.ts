@@ -55,6 +55,134 @@ async function prepare(page: Page, situation: Situation, signIn: () => Promise<v
 
 const round = (value: number) => Math.round(value * 100) / 100;
 
+/* ---- WP5-UX5-T05A (U5-16): the form header wraps whole blocks first, then groups from the end, then words ------------------------------- */
+
+interface HeaderFacts {
+  width: number;
+  title: { top: number; bottom: number; height: number; lineHeight: number; maxContent: number; visible: boolean } | null;
+  fields: { top: number; bottom: number; left: number; right: number; maxContent: number };
+  groups: Array<{ name: string; top: number; left: number; right: number; clipped: boolean }>;
+  gap: number;
+  /** The right edge of the header's content box. */
+  right: number;
+}
+
+/**
+ * Reads a form header: the title's and the field block's box, their max-content widths (measured by letting each take its natural width
+ * for a moment), the three groups' positions and whether any word is cut off. `title` is the element that holds the form title.
+ */
+const HEADER_SCRIPT = String.raw`((root) => {
+  const head = document.querySelector(root);
+  if (head === null) return null;
+  const titleElement = head.querySelector('.form-title, .review-title');
+  const fieldsElement = head.querySelector('.form-fields');
+  const natural = (element) => {
+    const saved = { width: element.style.width, flex: element.style.flex, maxWidth: element.style.maxWidth, position: element.style.position };
+    element.style.width = 'max-content';
+    element.style.flex = 'none';
+    element.style.maxWidth = 'none';
+    const value = element.getBoundingClientRect().width;
+    element.style.width = saved.width;
+    element.style.flex = saved.flex;
+    element.style.maxWidth = saved.maxWidth;
+    return value;
+  };
+  const box = (element) => element.getBoundingClientRect();
+  const visible = (element) => {
+    const rect = box(element);
+    return rect.width > 2 && rect.height > 2 && getComputedStyle(element).position !== 'absolute';
+  };
+  const groups = [...fieldsElement.children].map((group) => {
+    const rect = box(group);
+    const parts = [...group.children];
+    const clipped = parts.some((part) => part.scrollWidth > part.clientWidth + 1);
+    return { name: parts[0] ? parts[0].textContent : '', top: rect.top, left: rect.left, right: rect.right, clipped };
+  });
+  const title = titleElement !== null && visible(titleElement) ? (() => {
+    const rect = box(titleElement);
+    const style = getComputedStyle(titleElement);
+    const lineHeight = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.5;
+    return { top: rect.top, bottom: rect.bottom, height: rect.height, lineHeight, maxContent: natural(titleElement), visible: true };
+  })() : null;
+  const fieldsRect = box(fieldsElement);
+  return {
+    width: box(head).width - Number.parseFloat(getComputedStyle(head).paddingLeft) - Number.parseFloat(getComputedStyle(head).paddingRight),
+    title,
+    fields: { top: fieldsRect.top, bottom: fieldsRect.bottom, left: fieldsRect.left, right: fieldsRect.right, maxContent: natural(fieldsElement) },
+    groups,
+    gap: Number.parseFloat(getComputedStyle(head).columnGap) || 0,
+    right: box(head).right - Number.parseFloat(getComputedStyle(head).paddingRight),
+  };
+})`;
+
+async function expectHeaderOrder(page: Page, selector: string, label: string, widths: readonly number[], review: boolean): Promise<void> {
+  const seen = new Set<string>();
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    const facts = await page.evaluate<HeaderFacts | null>(`${HEADER_SCRIPT}(${JSON.stringify(selector)})`);
+    expect(facts, `${label} ${width}px: the header is on the page`).not.toBeNull();
+    if (facts === null) continue;
+    const where = `${label} ${width}px`;
+    expect(facts.groups.map((group) => group.name), `${where}: the three groups, in order`).toEqual(['Employee:', 'Payroll Date:', 'Period:']);
+    // Groups wrap from the end: a later group is never above an earlier one.
+    for (let index = 1; index < facts.groups.length; index += 1) {
+      const [before, after] = [facts.groups[index - 1], facts.groups[index]];
+      expect(after?.top ?? 0, `${where}: ${after?.name} is not above ${before?.name}`).toBeGreaterThanOrEqual((before?.top ?? 0) - 1);
+    }
+    // No word of a title or of a value is cut off.
+    expect(facts.groups.filter((group) => group.clipped).map((group) => group.name), `${where}: no clipped word`).toEqual([]);
+    // The fields never sit beside a title that is more than one line while they could all be under it: a title wraps by word only when it
+    // alone does not fit the row. When the title is shown, it is one line whenever its own natural width fits the row.
+    if (facts.title !== null) {
+      if (facts.title.maxContent <= facts.width + 0.5) {
+        expect(facts.title.height, `${where}: the title is one line while it fits alone (${facts.title.maxContent} of ${facts.width})`).toBeLessThanOrEqual(facts.title.lineHeight * 1.05);
+      }
+      if (!review) {
+        // Timesheet header: title and fields share a row only if both fit with the gap; otherwise the whole field block is under the title.
+        const together = facts.title.maxContent + facts.gap + facts.fields.maxContent <= facts.width + 0.5;
+        const under = facts.fields.top >= facts.title.bottom - 1;
+        expect(under, `${where}: the field block is ${together ? 'beside' : 'under'} the title (title ${round(facts.title.maxContent)}, fields ${round(facts.fields.maxContent)}, gap ${facts.gap}, row ${round(facts.width)})`).toBe(!together);
+        seen.add(together ? 'beside' : 'under');
+      }
+    }
+    // The fields fit their row (the groups wrap instead of overflowing).
+    expect(facts.fields.right, `${where}: the field block ends inside the header ${JSON.stringify({ fields: facts.fields, groups: facts.groups, right: facts.right, width: facts.width })}`).toBeLessThanOrEqual(facts.right + 1);
+    const wrapped = new Set(facts.groups.map((group) => Math.round(group.top)));
+    seen.add(`rows${wrapped.size}`);
+  }
+  // The sweep crosses the points where the layout changes (the Review header is one column and only its groups wrap).
+  if (!review) expect([...seen].filter((name) => name === 'beside' || name === 'under').sort(), `${label}: both arrangements were seen`).toEqual(['beside', 'under']);
+}
+
+test('the Timesheet form header keeps the title on one line while it fits: the field block goes under it first, then its groups wrap from the end; no word is cut (U5-16)', async ({
+  page,
+  signInThroughUi,
+}) => {
+  test.setTimeout(120_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  // 480 is the least width with the title shown; the sweep crosses the width where the fields leave the title's row.
+  await expectHeaderOrder(page, 'article[data-sheet] > header.form-head', 'Timesheet', [480, 520, 560, 600, 640, 700, 767, 768, 800, 850, 900, 960, 1024, 1100, 1280, 1440, 1920], false);
+  // Below 480px the title is for screen readers only and the fields alone stand in the header, left-aligned and wrapping from the end.
+  await expectHeaderOrder(page, 'article[data-sheet] > header.form-head', 'Timesheet (compact)', [320, 360, 390, 479], true);
+  const compact = await page.evaluate<{ left: number; headLeft: number }>(
+    `(() => { const head = document.querySelector('article[data-sheet] > header.form-head'); const fields = head.querySelector('.form-fields'); return { left: fields.getBoundingClientRect().left, headLeft: head.getBoundingClientRect().left }; })()`,
+  );
+  expect(Math.abs(compact.left - compact.headLeft), 'the compact fields start at the header edge').toBeLessThanOrEqual(1);
+});
+
+test('the Review header wraps the same way: the title is one line while it fits and the groups wrap from the end, at every width (U5-16)', async ({ page, employeeSeed, signInThroughUi }) => {
+  test.setTimeout(120_000);
+  const { currentPayrollDate } = await employeeSeed.today();
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.evaluate(`window.location.hash = '#/review/${currentPayrollDate}'`);
+  await expect(page.locator('article[data-sheet] > header.review-form-head')).toBeVisible();
+  await expectHeaderOrder(page, 'article[data-sheet] > header.review-form-head', 'Review', [320, 360, 390, 479, 480, 600, 767, 768, 1024, 1440], true);
+});
+
 /** Appends measured lines to a masked evidence text file in the screenshot folder (no personal data: tokens and ratios only). */
 function record(project: string, situation: Situation, lines: string[]): void {
   mkdirSync(SCREENSHOT_DIR, { recursive: true });
@@ -198,7 +326,7 @@ test('interactive transitions list the changing properties, are 180ms normally a
     { name: 'button (Next period)', locator: page.getByRole('button', { name: 'Next period', exact: true }) },
     { name: 'date field (Open a day)', locator: page.getByLabel('Open a day') },
     { name: 'sheet day', locator: page.locator('[data-day]').first() },
-    { name: 'switch (Show worked hours)', locator: page.getByRole('switch', { name: 'Show worked hours', exact: true }) },
+    { name: 'switch (Worked hours)', locator: page.getByRole('switch', { name: 'Worked hours', exact: true }) },
   ];
   const lines = [`# ${testInfo.project.name}: transitions`];
   for (const control of controls) {

@@ -408,7 +408,7 @@ describe('the personal import: comparison and requests', () => {
     const plan = planPersonalImport(other, current(), options);
     expect(plan.changeCount).toBe(3);
     const policyGroup = plan.groups.find((group) => group.id === 'work_policy')!;
-    expect(policyGroup.rows.find((item) => item.key === 'reference')).toMatchObject({ now: '08:00-17:00', file: '07:30-16:30', changed: true });
+    expect(policyGroup.rows.find((item) => item.key === 'reference')).toMatchObject({ now: '08:00 - 17:00', file: '07:30 - 16:30', changed: true });
     expect(policyGroup.rows.find((item) => item.key === 'breaks')?.changed).toBe(false);
     const submissionGroup = plan.groups.find((group) => group.id === 'submission')!;
     expect(submissionGroup.rows.find((item) => item.key === 'cc')).toMatchObject({ now: 'manager@example.invalid', file: 'none', changed: true });

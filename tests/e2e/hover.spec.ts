@@ -9,13 +9,13 @@ import {
   parseColour,
   parseLayers,
   type Rgba,
-  type StyleProperty,
+  settledStyle,
   textContrast,
 } from './contrast.ts';
 import { expect, openAccount, screenshotPath, test } from './fixtures.ts';
 
 /*
- * WP5-UX2-T02: a hover that can be seen, a pressed look that hover cannot erase, the "Show worked hours" slide
+ * WP5-UX2-T02: a hover that can be seen, a pressed look that hover cannot erase, the "Worked hours" slide
  * switch, and the lighter label-picker selection. Every number is read from the browser's computed style
  * (WCAG 2.x relative luminance); nothing is computed by the application. Hover rules exist only where the
  * device can hover, so the desktop project measures them and the mobile project proves a tap leaves none
@@ -89,38 +89,6 @@ function expectColour(actual: Rgba, expected: Rgba, label: string): void {
 
 const round = (value: number) => Math.round(value * 100) / 100;
 
-/**
- * The computed value of one property once no transition or animation is running on the element (WP5-UX4-FIX3, item 4). The wait is
- * the browser's own: `getAnimations()` flushes pending style changes, so a transition that a hover, a tap or a theme change has just
- * started is seen, and the `finished` promises of the running ones are awaited; two animation frames then let the last style apply.
- * No wall-clock timer or poll is involved. The helper of `contrast.ts` read twice 400 ms apart inside a 7 s poll, which cost about
- * 0.4 s per call (a mobile test here calls it about 25 times) and ran out when the worker side stalled for 24 s in the full
- * run of WP5-UX4-REGATE2 (the trace shows the browser's 400 ms timer done in 403 ms, and the next read reaching the browser 24 s later).
- */
-async function settledStyle(locator: Locator, property: StyleProperty): Promise<string> {
-  return locator.evaluate(async (element, name) => {
-    // The test project has no DOM types: the few members used here are declared by shape.
-    interface Animated {
-      ownerDocument: {
-        defaultView: { requestAnimationFrame: (callback: () => void) => number; getComputedStyle: (target: unknown) => Record<string, string> } | null;
-      };
-      getAnimations: () => Array<{ playState: string; finished: Promise<unknown> }>;
-    }
-    const target = element as unknown as Animated;
-    const view = target.ownerDocument.defaultView;
-    if (view === null) return '';
-    const frame = () => new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()));
-    for (let round = 0; round < 20; round += 1) {
-      const running = target.getAnimations().filter((animation) => animation.playState !== 'finished');
-      if (running.length === 0) break;
-      await Promise.allSettled(running.map((animation) => animation.finished));
-    }
-    await frame();
-    await frame();
-    return view.getComputedStyle(target)[name] ?? '';
-  }, property);
-}
-
 async function canHover(page: Page): Promise<boolean> {
   return page.evaluate<boolean>("window.matchMedia('(hover: hover)').matches");
 }
@@ -147,7 +115,7 @@ const CONTROLS: readonly Control[] = [
   { name: 'secondary button (Next period)', boundary: true, text: true, find: (page) => page.getByRole('button', { name: 'Next period', exact: true }) },
   { name: 'identity button (bar)', boundary: true, text: true, find: (page) => page.getByRole('banner').getByRole('button', { name: /, account menu$/ }) },
   { name: 'navigation link (Overtime)', boundary: false, text: true, find: (page) => page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Overtime', exact: true }) },
-  { name: 'switch track (Show worked hours)', boundary: true, text: false, find: (page) => page.getByRole('switch', { name: 'Show worked hours', exact: true }) },
+  { name: 'switch track (Worked hours)', boundary: true, text: false, find: (page) => page.getByRole('switch', { name: 'Worked hours', exact: true }) },
   { name: 'menu button (Sign out)', boundary: true, text: true, find: async (page) => (await openAccount(page)).getByRole('button', { name: 'Sign out', exact: true }) },
   { name: 'menu link (Settings)', boundary: false, text: true, find: async (page) => (await openAccount(page)).getByRole('link', { name: 'Settings', exact: true }) },
 ];
@@ -346,7 +314,7 @@ async function expectNoStickyHover(page: Page, situation: string): Promise<void>
     expect(await settledStyle(control, 'boxShadow'), `${name}: shadow after a tap equals rest`).toBe(restShadow);
   }
   // The switch keeps no hover track either.
-  const details = page.getByRole('switch', { name: 'Show worked hours', exact: true });
+  const details = page.getByRole('switch', { name: 'Worked hours', exact: true });
   const trackRest = await settledStyle(details, 'backgroundColor');
   const borderRest = await settledStyle(details, 'borderTopColor');
   await details.tap();
@@ -367,20 +335,20 @@ async function expectNoStickyHover(page: Page, situation: string): Promise<void>
   expect(await settledStyle(picker, 'boxShadow'), `Category picker: shadow after a tap equals rest (${situation})`).toBe(pickerRest.shadow);
 }
 
-/* ---- The "Show worked hours" slide switch ----------------------------------------------------------------------- */
+/* ---- The "Worked hours" slide switch ----------------------------------------------------------------------- */
 
-test('Show worked hours is a native switch: role, off at load, Space and click toggle it, 0 and 14 detail rows', async ({ page, signInThroughUi }) => {
+test('Worked hours is a native switch: role, off at load, Space and click toggle it, 0 and 14 detail rows', async ({ page, signInThroughUi }) => {
   await signInThroughUi();
   await expect(page.locator('[data-day]')).toHaveCount(14);
-  const details = page.getByRole('switch', { name: 'Show worked hours', exact: true });
+  const details = page.getByRole('switch', { name: 'Worked hours', exact: true });
   await expect(details).toBeVisible();
   expect(await details.evaluate((element) => [element.tagName, element.getAttribute('type'), element.getAttribute('role')])).toEqual(['INPUT', 'checkbox', 'switch']);
   // The visible text is the label of the switch, and it never changes with the state.
   const label = page.locator('label.inline.switch');
   await expect(label).toHaveCount(1);
-  await expect(label).toHaveText('Show worked hours');
-  await expect(page.getByText('Show worked hours', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Show worked hours' })).toHaveCount(0);
+  await expect(label).toHaveText('Worked hours');
+  await expect(page.getByText('Worked hours', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Worked hours' })).toHaveCount(0);
 
   await expect(details).not.toBeChecked();
   await expect(page.locator('[data-detail]')).toHaveCount(0);
@@ -390,7 +358,7 @@ test('Show worked hours is a native switch: role, off at load, Space and click t
   await page.keyboard.press('Space');
   await expect(details).toBeChecked();
   await expect(page.locator('[data-detail="regular"]')).toHaveCount(14);
-  await expect(label).toHaveText('Show worked hours');
+  await expect(label).toHaveText('Worked hours');
 
   await details.click();
   await expect(details).not.toBeChecked();
@@ -403,13 +371,13 @@ test('Show worked hours is a native switch: role, off at load, Space and click t
   // It is not persisted: a reload starts it off again, as before.
   await page.reload();
   await expect(page.locator('[data-day]')).toHaveCount(14);
-  await expect(page.getByRole('switch', { name: 'Show worked hours', exact: true })).not.toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Worked hours', exact: true })).not.toBeChecked();
 });
 
 for (const situation of SITUATIONS) {
-  test(`every state of the Show worked hours switch reaches 3:1 (${situation.name})`, async ({ page, signInThroughUi }) => {
+  test(`every state of the Worked hours switch reaches 3:1 (${situation.name})`, async ({ page, signInThroughUi }) => {
     await prepare(page, situation, signInThroughUi);
-    const details = page.getByRole('switch', { name: 'Show worked hours', exact: true });
+    const details = page.getByRole('switch', { name: 'Worked hours', exact: true });
     const hover = await canHover(page);
     const measured: string[] = [];
 
@@ -472,7 +440,7 @@ for (const width of [390, 375, 360, 320]) {
     const button = page.getByRole('button', { name: 'Change several days', exact: true });
     const labelBox = await label.boundingBox();
     const buttonBox = await button.boundingBox();
-    const inputBox = await page.getByRole('switch', { name: 'Show worked hours', exact: true }).boundingBox();
+    const inputBox = await page.getByRole('switch', { name: 'Worked hours', exact: true }).boundingBox();
     const viewport = await page.evaluate<{ client: number; scroll: number }>('({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth })');
     expect(labelBox?.height ?? 0, 'switch label height').toBeGreaterThanOrEqual(44);
     expect(labelBox?.width ?? 0, 'switch label width').toBeGreaterThanOrEqual(44);
@@ -803,7 +771,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.locator('[data-day]')).toHaveCount(14);
     const tools = page.locator('.tools');
     const toggle = page.getByRole('button', { name: 'Change several days', exact: true });
-    const details = page.getByRole('switch', { name: 'Show worked hours', exact: true });
+    const details = page.getByRole('switch', { name: 'Worked hours', exact: true });
 
     // Pressed with the pointer still on it where the device can hover (pressed and hovered); pressed alone on a touch device.
     await details.check();

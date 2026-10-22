@@ -1,15 +1,18 @@
-import { type FocusEvent, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import { type FocusEvent, type ReactNode, type RefObject, useLayoutEffect, useRef, useState } from 'react';
 import type { FinalizationResponse, TimesheetView } from '../api.ts';
-import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.tsx';
+import { CheckBadge, LabelContent, OtContent, RangeFormContext, TimeContent } from './DayStatus.tsx';
 import { usDate } from './format.ts';
-import { periodStatus, reviewHash, reviewLinkLabel } from './reviewModel.ts';
+import { reviewHash } from './reviewModel.ts';
 import {
   dayButtonName,
   dayClass,
   DETAIL_ROWS,
   liftRuns,
   type LiftRun,
+  longestRangeText,
   overtimeTotal,
+  type RangeForm,
+  rangeFormFor,
   revealDelta,
   SHEET_ROWS,
   SHEET_TITLE,
@@ -123,7 +126,7 @@ function SheetDayColumn({ day, details, actions, lift }: { day: SheetDay; detail
 }
 
 /**
- * From 768 to 899px the week card scrolls sideways inside itself (styles.css). The browser leaves a partly visible control
+ * From 480 to 929px the week card scrolls sideways inside itself (styles.css). The browser leaves a partly visible control
  * where it is when it takes focus, so the card is scrolled until the focused control lies inside its visible box less its
  * scroll padding (`--focus-clearance`, wider than the focus ring). A card that does not scroll is left alone.
  */
@@ -180,6 +183,46 @@ function SheetWeekGrid({ week, details, actions }: { week: SheetWeek; details: b
   );
 }
 
+/**
+ * Which form of the time ranges a sheet shows (round 5, U5-07), decided once per sheet so it never mixes the forms: the spaced
+ * "10:30 - 18:30" while the longest range of the sheet fits on one line in a time cell, else the tight "10:30-18:30" (`rangeFormFor`;
+ * the tight text may wrap only where even it does not fit). The text is measured with a temporary hidden copy inside a time cell (so it
+ * has the cell's own font) against the cell's content box, again whenever the sheet's width or its layout changes. A range in the
+ * spaced or tight form never wraps (`white-space: nowrap`).
+ */
+function useRangeForm(sheet: RefObject<HTMLElement | null>, longest: string, desktop: boolean): RangeForm {
+  const [form, setForm] = useState<RangeForm>('spaced');
+  useLayoutEffect(() => {
+    const root = sheet.current;
+    if (root === null || longest === '') {
+      setForm('spaced');
+      return;
+    }
+    const measure = () => {
+      const cell = root.querySelector<HTMLElement>('[data-cell="time"], td.t-time');
+      if (cell === null) return;
+      const style = getComputedStyle(cell);
+      const box = cell.clientWidth - (Number.parseFloat(style.paddingLeft) || 0) - (Number.parseFloat(style.paddingRight) || 0);
+      const widthOf = (text: string) => {
+        const probe = document.createElement('span');
+        probe.textContent = text;
+        probe.setAttribute('aria-hidden', 'true');
+        probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;pointer-events:none';
+        cell.append(probe);
+        const width = probe.getBoundingClientRect().width;
+        probe.remove();
+        return width;
+      };
+      setForm(rangeFormFor(widthOf(longest), widthOf(longest.replace(' - ', '-')), box));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [sheet, longest, desktop]);
+  return form;
+}
+
 /** The legend of the sheet's day states; every state also has words or a shape in the cells. */
 function Legend({ today }: { today: boolean }) {
   return (
@@ -215,9 +258,19 @@ function Legend({ today }: { today: boolean }) {
  * The employee and manager signature lines, from the finalization state. Labels, the signer's name
  * and dates only: the signature image stays on the review screen.
  */
-function SignatureStrip({ payrollDate, finalization, reportingZone }: { payrollDate: string; finalization: FinalizationResponse | null; reportingZone: string }) {
+function SignatureStrip({
+  payrollDate,
+  finalization,
+  reportingZone,
+  linkLabel,
+}: {
+  payrollDate: string;
+  finalization: FinalizationResponse | null;
+  reportingZone: string;
+  /** The words of the link to the Review, the same as the period card's (`reviewLinkOf`). */
+  linkLabel: string;
+}) {
   const lines = finalization === null ? null : signatureLines(finalization, reportingZone);
-  const linkLabel = reviewLinkLabel(finalization === null ? null : periodStatus(finalization));
   return (
     <section className="signatures" aria-label="Signatures">
       <div className="sig">
@@ -255,7 +308,7 @@ function SignatureStrip({ payrollDate, finalization, reportingZone }: { payrollD
 
 /**
  * The Timesheet page in the layout of the Excel form and the PDF: the form header, two Monday to
- * Sunday week bands (a 7-column sheet from 768px, a 4-column table per week below), the Overtime
+ * Sunday week bands (a 7-column sheet from 480px, a 4-column table per week below), the Overtime
  * Total, the legend and the signature lines. Every number is a server field shown as h:mm.
  */
 export function TimesheetSheet({
@@ -267,6 +320,7 @@ export function TimesheetSheet({
   actions,
   details,
   finalization,
+  reviewLinkLabel,
   signatures,
 }: {
   view: TimesheetView;
@@ -276,18 +330,22 @@ export function TimesheetSheet({
   todayLocal: string | null;
   desktop: boolean;
   actions: DayActions;
-  /** "Show worked hours" of the toolbar: the worked-on-a-workday and worked-on-a-day-off rows. */
+  /** "Worked hours" of the toolbar: the "Worked, workday" and "Worked, day off" rows. */
   details: boolean;
   /** The period's finalization state for the signature lines; null while loading. */
   finalization: FinalizationResponse | null;
+  /** The words of the signature line's link to the Review: the period card's own (`reviewLinkOf`), so the two always agree. */
+  reviewLinkLabel: string;
   /** False in a shared view and for an imported period: the signature lines and the review link are the owner's. */
   signatures: boolean;
 }) {
+  const sheet = useRef<HTMLElement>(null);
   const weeks = sheetWeeks(view.days, zone, todayLocal);
+  const rangeForm = useRangeForm(sheet, longestRangeText(weeks), desktop);
   const total = overtimeTotal(view.totals);
   const { period } = view;
   return (
-    <article className={`sheet ${desktop ? 'sheet-desktop' : 'sheet-phone'}`} aria-label="Timesheet form" data-sheet={desktop ? 'desktop' : 'phone'}>
+    <article ref={sheet} className={`sheet ${desktop ? 'sheet-desktop' : 'sheet-phone'}`} aria-label="Timesheet form" data-sheet={desktop ? 'desktop' : 'phone'} data-ranges={rangeForm}>
       <header className="form-head">
         <div className="form-brand">
           <div className="form-title">{SHEET_TITLE}</div>
@@ -310,13 +368,15 @@ export function TimesheetSheet({
         </dl>
       </header>
 
-      {weeks.map((week) =>
-        desktop ? (
-          <SheetWeekGrid key={week.index} week={week} details={details} actions={actions} />
-        ) : (
-          <SheetWeekTable key={week.index} week={week} details={details} actions={actions} />
-        ),
-      )}
+      <RangeFormContext value={rangeForm}>
+        {weeks.map((week) =>
+          desktop ? (
+            <SheetWeekGrid key={week.index} week={week} details={details} actions={actions} />
+          ) : (
+            <SheetWeekTable key={week.index} week={week} details={details} actions={actions} />
+          ),
+        )}
+      </RangeFormContext>
 
       <div className="sheet-footer">
         <div className="sheet-foot">
@@ -334,7 +394,7 @@ export function TimesheetSheet({
           </div>
         </div>
 
-        {signatures && <SignatureStrip payrollDate={period.payroll_date} finalization={finalization} reportingZone={view.reporting_zone} />}
+        {signatures && <SignatureStrip payrollDate={period.payroll_date} finalization={finalization} reportingZone={view.reporting_zone} linkLabel={reviewLinkLabel} />}
       </div>
     </article>
   );
@@ -448,9 +508,11 @@ export function ReviewSheet({
   /** The signature rows (`SignatureRows`) with the owner's state in them. */
   signature: ReactNode;
 }) {
+  const sheet = useRef<HTMLElement>(null);
+  const rangeForm = useRangeForm(sheet, longestRangeText(weeks), desktop);
   const total = overtimeTotal({ provisional_credited_minutes: totalCredited, pending_days: pendingDays });
   return (
-    <article className={`sheet sheet-review ${desktop ? 'sheet-desktop' : 'sheet-phone'}`} aria-label="Timesheet preview" data-sheet={desktop ? 'desktop' : 'phone'}>
+    <article ref={sheet} className={`sheet sheet-review ${desktop ? 'sheet-desktop' : 'sheet-phone'}`} aria-label="Timesheet preview" data-sheet={desktop ? 'desktop' : 'phone'} data-ranges={rangeForm}>
       <header className="form-head review-form-head">
         <CompanyLine />
         <div className="review-title" data-review-title>
@@ -474,13 +536,15 @@ export function ReviewSheet({
         </dl>
       </header>
 
-      {weeks.map((week) =>
-        desktop ? (
-          <SheetWeekGrid key={week.index} week={week} details actions={REVIEW_ACTIONS} />
-        ) : (
-          <SheetWeekTable key={week.index} week={week} details actions={REVIEW_ACTIONS} />
-        ),
-      )}
+      <RangeFormContext value={rangeForm}>
+        {weeks.map((week) =>
+          desktop ? (
+            <SheetWeekGrid key={week.index} week={week} details actions={REVIEW_ACTIONS} />
+          ) : (
+            <SheetWeekTable key={week.index} week={week} details actions={REVIEW_ACTIONS} />
+          ),
+        )}
+      </RangeFormContext>
 
       <div className="sheet-footer">
         <div className="sheet-foot">

@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Locator, Page } from '@playwright/test';
@@ -291,7 +292,7 @@ test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, conf
     const confirmed = saveConfirmation(page);
     await expect(noBreaksNotice(page)).toHaveCount(0);
     await expect(confirmed.locator('.confirm-facts')).toContainText('3 breaks (15, 30, 15 min)');
-    await expect(confirmed.locator('.confirm-facts')).toContainText(`09:00-18:00 (${LA})`);
+    await expect(confirmed.locator('.confirm-facts')).toContainText(`09:00 - 18:00 (${LA})`);
     await expect(confirmed).toHaveAccessibleDescription('Saving confirms these breaks as the breaks you took.');
     await confirmed.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(editor.getByText('Session saved.')).toBeVisible();
@@ -429,7 +430,7 @@ test('an overnight entry needs its explicit end date and is saved with it', asyn
     await snap(page, 'day-editor-overnight', project);
     await form.getByRole('button', { name: 'Save', exact: true }).click();
     // The confirmation shows the later end date as +1.
-    await expect(saveConfirmation(page).locator('.confirm-facts')).toContainText(`22:00-03:00+1 (${LA})`);
+    await expect(saveConfirmation(page).locator('.confirm-facts')).toContainText(`22:00 - 03:00+1 (${LA})`);
     await saveConfirmation(page).getByRole('button', { name: 'Save', exact: true }).click();
     await expect(editor.getByText('Session saved.')).toBeVisible();
 
@@ -674,7 +675,7 @@ test('a new session on a past day is pre-filled with the reference hours and the
   await add.click();
   const form = sessionDialog(page, 'New session');
   await expect(form).toHaveAccessibleDescription(`${editorTitleOf(past)} · accounting date in ${LA}`);
-  // The reference hours 08:00-17:00 are wall-clock times on the accounting date in Los Angeles, shown in the input zone (the display zone).
+  // The reference hours 08:00 - 17:00 are wall-clock times on the accounting date in Los Angeles, shown in the input zone (the display zone).
   const start = wallTimeIn(past, '08:00', LA, displayZone);
   const end = wallTimeIn(past, '17:00', LA, displayZone);
   await expect(form.getByLabel('Start date', { exact: true })).toHaveValue(start.slice(0, 10));
@@ -682,7 +683,7 @@ test('a new session on a past day is pre-filled with the reference hours and the
   await expect(form.getByLabel('End date', { exact: true })).toHaveValue(end.slice(0, 10));
   await expect(form.getByLabel('End time', { exact: true })).toHaveValue(end.slice(11));
   await expect(form.locator('[data-prefill]')).toHaveText(
-    `Pre-filled from your reference hours (08:00-17:00 in ${LA}) and suggested breaks. Change them to the times you worked.`,
+    `Pre-filled from your reference hours (08:00 - 17:00 in ${LA}) and suggested breaks. Change them to the times you worked.`,
   );
   // The three suggested breaks of an 08:00 arrival (10:00, 12:00 and 14:30 in Los Angeles), in the input zone, tagged. In the display
   // zone the reference hours cross local midnight, so each row has its own date (Q6 b); on a phone (390px) the list is chips (T08B).
@@ -710,7 +711,7 @@ test('a new session on a past day is pre-filled with the reference hours and the
   await typeInputZone(form, LA);
   await expect(form.getByLabel('Start time', { exact: true })).toHaveValue('08:00');
   await expect(form.getByLabel('End time', { exact: true })).toHaveValue('17:00');
-  await expect(form.locator('[data-prefill]')).toHaveText('Pre-filled from your reference hours (08:00-17:00) and suggested breaks. Change them to the times you worked.');
+  await expect(form.locator('[data-prefill]')).toHaveText('Pre-filled from your reference hours (08:00 - 17:00) and suggested breaks. Change them to the times you worked.');
   await expect(breakRow(form, 1).time).toHaveValue('10:00');
   await form.getByLabel('Start time', { exact: true }).fill('08:30');
   await expect(breakRow(form, 1).time).toHaveValue('10:30');
@@ -760,7 +761,7 @@ test('a new session on a past day is pre-filled with the reference hours and the
   const todayStart = wallTimeIn(today, '08:00', LA, displayZone);
   await expect(todayForm.getByLabel('Start date', { exact: true })).toHaveValue(todayStart.slice(0, 10));
   await expect(todayForm.getByLabel('Start time', { exact: true })).toHaveValue(todayStart.slice(11));
-  await expect(todayForm.locator('[data-prefill]')).toHaveText(`Pre-filled from your reference hours (08:00-17:00 in ${LA}). Change them to the times you worked.`);
+  await expect(todayForm.locator('[data-prefill]')).toHaveText(`Pre-filled from your reference hours (08:00 - 17:00 in ${LA}). Change them to the times you worked.`);
   await expect(todayForm.locator('[data-break]'), 'no break is suggested for today').toHaveCount(0);
   await expect(todayForm.getByText('No breaks listed.')).toBeVisible();
   // Nothing changed, so Cancel closes at once, without a question.
@@ -861,7 +862,7 @@ test('Save with no break listed and the box unticked opens "No breaks listed": E
     const confirm = saveConfirmation(page);
     await expect(confirm).toBeVisible();
     await expect(confirm.locator('.confirm-facts dt')).toHaveText(['Day', 'Time', 'Breaks']);
-    await expect(confirm.locator('.confirm-facts dd')).toHaveText([editorTitleOf(date), `08:00-17:00 (${LA})`, 'Breaks not confirmed: OT for this day stays pending']);
+    await expect(confirm.locator('.confirm-facts dd')).toHaveText([editorTitleOf(date), `08:00 - 17:00 (${LA})`, 'Breaks not confirmed: OT for this day stays pending']);
     await expect(confirm).toHaveAccessibleDescription('Unconfirmed breaks keep OT for this day pending until you confirm them.');
     await expect(confirm.getByRole('button')).toHaveText(['Back', 'Save']);
     await expect(confirm.getByRole('button', { name: 'Back' })).toBeFocused();
@@ -2660,12 +2661,12 @@ function recordSessionDeletes(page: Page): Array<{ path: string; body: Record<st
   return deletes;
 }
 
-/** The range a card shows for two instants in a zone, read with Intl (an oracle independent of the app): `09:00-17:30`, with `+1` when the end lies on a later local day. */
+/** The range a card shows for two instants in a zone, read with Intl (an oracle independent of the app): `09:00 - 17:30`, with `+1` when the end lies on a later local day. */
 function rangeIn(startUtc: string, endUtc: string, zone: string): string {
   const start = dateTimeIn(startUtc, zone);
   const end = dateTimeIn(endUtc, zone);
   const later = Math.round((Date.parse(`${end.slice(0, 10)}T00:00:00Z`) - Date.parse(`${start.slice(0, 10)}T00:00:00Z`)) / 86_400_000);
-  return `${start.slice(11)}-${end.slice(11)}${later > 0 ? `+${later}` : ''}`;
+  return `${start.slice(11)} - ${end.slice(11)}${later > 0 ? `+${later}` : ''}`;
 }
 
 // WP5-UX3-T07 (U-22): the "Delete" then "Confirm delete" button swap became a confirmation dialog that names what is deleted.
@@ -2920,7 +2921,21 @@ test('mobile: the editor fits the screen and every control is at least 44 by 44'
     if (!(await control.isVisible())) continue;
     const box = await control.boundingBox();
     const name = await control.evaluate((element) => `${element.tagName} ${element.getAttribute('aria-label') ?? element.textContent?.slice(0, 30) ?? ''}`);
-    expect(box?.height ?? 0, `height of ${name}`).toBeGreaterThanOrEqual(43.5);
+    // Owner decision F-1 a (round 5, U5-05): a sub-button has a 36px visible box and keeps the 44px target as a hit area (a pseudo-element 4px above
+    // and below); the controls spec checks that the points 3px outside the box still belong to it.
+    const hit = await control.evaluate((element) => {
+      if (!element.matches('.session-card .button-row > button, .editor-section-head > button, .break-actions > button, .editor-actions > button')) return null;
+      // The dialog on top covers the editor, so the hit area is read from its layer: an absolute pseudo-element as tall as the 44px target.
+      const layer = element.ownerDocument.defaultView?.getComputedStyle(element, '::before');
+      return { content: layer?.content ?? 'none', position: layer?.position ?? '', height: Number.parseFloat(layer?.height ?? '0') };
+    });
+    if (hit !== null) {
+      expect(Math.abs((box?.height ?? 0) - 36), `visible height of the sub-button ${name}`).toBeLessThanOrEqual(0.5);
+      expect([hit.content, hit.position], `the hit-area layer of the sub-button ${name}`).toEqual(['""', 'absolute']);
+      expect(hit.height, `the hit area of the sub-button ${name} is the 44px target`).toBeGreaterThanOrEqual(43.5);
+    } else {
+      expect(box?.height ?? 0, `height of ${name}`).toBeGreaterThanOrEqual(43.5);
+    }
     if ((await control.evaluate((element) => element.tagName)) === 'BUTTON') {
       expect(box?.width ?? 0, `width of ${name}`).toBeGreaterThanOrEqual(43.5);
     }
@@ -3003,6 +3018,82 @@ test('the panel head: named by the date, chips instead of the long note, a surfa
   });
   expect(clear, 'the focused Save button lies below the head').toBe(true);
   await snap(page, 'editor-head', project);
+});
+
+/*
+ * WP5-UX5-T05A (round 5, U5-04): Edit (a pencil), Delete (a trash can, in the danger tone), Suggest breaks (a sparkle) and Add break (a plus)
+ * carry one inline icon each, before the words: `svg.icon`, 16px, `currentColor`, `aria-hidden`, not focusable. Their names and words are
+ * unchanged and no icon library is installed.
+ */
+test('Edit, Delete, Suggest breaks and Add break each carry one 16px inline icon before their words, with the same names and no icon library (U5-04)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  test.setTimeout(90_000);
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  try {
+    await employeeSeed.seedCompleteDay(date);
+    await signInThroughUi();
+    const editor = await openEditor(page, date);
+    const card = editor.locator('.session-card');
+    await expect(card).toHaveCount(1);
+    const sessionId = (await employeeSeed.dayView(date)).sessions[0]?.id ?? '';
+    const expectIcon = async (button: Locator, label: string, words: string, name: string | RegExp) => {
+      await expect(button, `${label}: the button`).toHaveCount(1);
+      await expect(button, `${label}: the accessible name is unchanged`).toHaveAccessibleName(name);
+      await expect(button, `${label}: the words are unchanged`).toHaveText(words);
+      const icon = button.locator('svg.icon');
+      await expect(icon, `${label}: exactly one icon`).toHaveCount(1);
+      await expect(icon).toHaveAttribute('aria-hidden', 'true');
+      await expect(icon).toHaveAttribute('focusable', 'false');
+      const facts = await button.evaluate((element) => {
+        const svg = element.querySelector('svg.icon');
+        const box = svg?.getBoundingClientRect();
+        const text = element.getBoundingClientRect();
+        return {
+          before: element.firstElementChild === svg,
+          width: box?.width ?? 0,
+          height: box?.height ?? 0,
+          left: box?.left ?? 0,
+          right: box?.right ?? 0,
+          buttonLeft: text.left,
+          stroke: svg?.querySelector('path')?.getAttribute('stroke') ?? '',
+          iconColour: svg === null || svg === undefined ? '' : svg.ownerDocument.defaultView?.getComputedStyle(svg).color ?? '',
+          buttonColour: element.ownerDocument.defaultView?.getComputedStyle(element).color ?? '',
+        };
+      });
+      expect(facts.before, `${label}: the icon comes before the words`).toBe(true);
+      expect(facts.width, `${label}: 16px wide`).toBeCloseTo(16, 0);
+      expect(facts.height, `${label}: 16px high`).toBeCloseTo(16, 0);
+      expect(facts.stroke, `${label}: drawn in currentColor`).toBe('currentColor');
+      expect(facts.iconColour, `${label}: the icon has the text colour`).toBe(facts.buttonColour);
+      return facts;
+    };
+    const edit = await expectIcon(card.getByRole('button', { name: `Edit session ${sessionId}` }), 'Edit', 'Edit', `Edit session ${sessionId}`);
+    const trash = card.getByRole('button', { name: `Delete session ${sessionId}` });
+    const remove = await expectIcon(trash, 'Delete', 'Delete', `Delete session ${sessionId}`);
+    // The danger tone: the Delete button is drawn in the error colour, the Edit button in the accent.
+    const errorColour = await page.evaluate<string>("getComputedStyle(document.documentElement).getPropertyValue('--error').trim()");
+    expect(errorColour).not.toBe('');
+    expect(remove.buttonColour, 'Delete is not the Edit colour').not.toBe(edit.buttonColour);
+    // The session dialog's Suggest breaks and Add break.
+    await card.getByRole('button', { name: `Edit session ${sessionId}` }).click();
+    const dialog = page.getByRole('dialog').last();
+    await expect(dialog.getByRole('button', { name: 'Add break' })).toBeVisible();
+    await expectIcon(dialog.getByRole('button', { name: 'Suggest breaks', exact: true }), 'Suggest breaks', 'Suggest breaks', 'Suggest breaks');
+    await expectIcon(dialog.getByRole('button', { name: 'Add break', exact: true }), 'Add break', 'Add break', 'Add break');
+    // Every icon is its own drawing (a pencil, a trash can, a sparkle, a plus), and no icon library is a dependency.
+    const drawings = await page.evaluate<string[]>(
+      `[...document.querySelectorAll('.session-card .button-row svg.icon path, .break-actions svg.icon path')].map((path) => path.getAttribute('d') || '')`,
+    );
+    expect(new Set(drawings).size, 'the four icons are four different drawings').toBe(4);
+    const manifest = JSON.parse(readFileSync(join(resolve(import.meta.dirname, '..', '..'), 'package.json'), 'utf8')) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+    const names = Object.keys({ ...manifest.dependencies, ...manifest.devDependencies });
+    expect(names.filter((name) => /icon|lucide|heroicons|fontawesome|feather|tabler|phosphor|material-symbols|react-icons/i.test(name)), 'no icon library').toEqual([]);
+  } finally {
+    await employeeSeed.clearSessions(date);
+  }
 });
 
 test('each session is a card with its state, its source and a break table in the display zone; an unconfirmed session asks for its breaks (U-21)', async ({
@@ -3109,8 +3200,8 @@ test.describe('WP5-UX3-T07: cards read in the reporting zone', () => {
       // Both zones are the reporting zone: "Times in" stays, "Day in" is left out.
       await expect(editor.getByRole('list', { name: 'About this day' }).getByRole('listitem')).toHaveText([/ period$/, `Times in ${LA}`]);
       const card = editor.locator('.session-card');
-      await expect(card.locator('.session-range')).toHaveText('22:00-02:30+1');
-      await expect(card.getByRole('table', { name: 'Breaks of 22:00-02:30+1' }).getByRole('row').nth(1).getByRole('cell')).toHaveText([
+      await expect(card.locator('.session-range')).toHaveText('22:00 - 02:30+1');
+      await expect(card.getByRole('table', { name: 'Breaks of 22:00 - 02:30+1' }).getByRole('row').nth(1).getByRole('cell')).toHaveText([
         '1',
         `${workDate.slice(5, 7)}/${workDate.slice(8, 10)}`,
         '23:00',
@@ -3357,8 +3448,8 @@ test.describe('WP5-UX-B-02 (round 4, U4-05): while the drawer floats, no focused
       await expect(dayButton(date)).toBeFocused();
       await dayButton(date).click();
       await expect(editor).toBeVisible();
-      await page.getByRole('switch', { name: 'Show worked hours' }).focus();
-      await expect(page.getByRole('switch', { name: 'Show worked hours' })).toBeFocused();
+      await page.getByRole('switch', { name: 'Worked hours' }).focus();
+      await expect(page.getByRole('switch', { name: 'Worked hours' })).toBeFocused();
       await page.keyboard.press('Escape');
       await expect(editor).toHaveCount(0);
       await expect(dayButton(date)).toBeFocused();
@@ -3522,7 +3613,7 @@ test.describe('WP5-UX4-FIX1 (SC 2.4.11): at 1280x800 no focused sheet control st
       let stops = 0;
       let redocks = 0;
       for (const key of ['Tab', 'Shift+Tab']) {
-        if (key === 'Tab') await page.getByRole('switch', { name: 'Show worked hours' }).focus();
+        if (key === 'Tab') await page.getByRole('switch', { name: 'Worked hours' }).focus();
         else await page.locator('.sheet-main a.sig-link').focus();
         for (let step = 0; step < 160; step += 1) {
           const before = await editor.getAttribute('data-side');
@@ -3547,7 +3638,7 @@ test.describe('WP5-UX4-FIX1 (SC 2.4.11): at 1280x800 no focused sheet control st
 
 test.describe('WP5-UX3-T05B: the Day editor floats below the layout rule and stands beside readable columns from it', () => {
   test.skip(({ isMobile }) => isMobile, 'The floating side panel and the 7-column sheet are desktop-project layouts');
-  // The display zone is the reporting zone, so the seeded times read as typed ("22:00-02:30+1").
+  // The display zone is the reporting zone, so the seeded times read as typed ("22:00 - 02:30+1").
   test.use({ timezoneId: LA });
 
   test('at 1280 and the last floating width the editor is a non-modal drawer over a sheet that keeps its full width and every word fits its cell', async ({
@@ -3559,7 +3650,7 @@ test.describe('WP5-UX3-T05B: the Day editor floats below the layout rule and sta
     await page.setViewportSize({ width: 1280, height: 800 });
     await signInToPrivate(page, privateServer, data.person);
     await expect(page.locator('[data-day]')).toHaveCount(14);
-    await page.getByRole('switch', { name: 'Show worked hours' }).check();
+    await page.getByRole('switch', { name: 'Worked hours' }).check();
     await expect(page.locator(`[data-day="${data.overnight}"]`)).toContainText('22:00');
     await expect(page.locator('.sheet-main')).toContainText('Independence');
     const lines: string[] = [];
@@ -3649,7 +3740,7 @@ test.describe('WP5-UX3-T05B: the Day editor floats below the layout rule and sta
     await page.setViewportSize({ width: 1440, height: 800 });
     await signInToPrivate(page, privateServer, data.person);
     await expect(page.locator('[data-day]')).toHaveCount(14);
-    await page.getByRole('switch', { name: 'Show worked hours' }).check();
+    await page.getByRole('switch', { name: 'Worked hours' }).check();
     await expect(page.locator('.sheet-main')).toContainText('Independence');
     const lines: string[] = [];
     for (const width of [BESIDE_NEED, 1366, 1440, 1920]) {
@@ -3751,7 +3842,7 @@ test.describe('WP5-UX3-FIX1: from 768 to 929px every focused sheet control is fu
     await page.setViewportSize({ width: 768, height: 900 });
     await signInToPrivate(page, privateServer, data.person);
     await expect(page.locator('[data-day]')).toHaveCount(14);
-    await page.getByRole('switch', { name: 'Show worked hours' }).check();
+    await page.getByRole('switch', { name: 'Worked hours' }).check();
     await expect(page.locator('.sheet-main')).toContainText('Independence');
     const cards = page.locator('.sheet-week');
     const lines: string[] = [];
@@ -4712,7 +4803,7 @@ test.describe('WP5-UX4-T02 (U4-05): the drawer leaves the page usable; another d
     await expect(sunday).toBeFocused();
     expect(await hidden(), 'the focused Sunday button is no longer under the drawer').toBe(false);
     // A control that the drawer does not cover leaves it where it is: the toolbar's switch is clear of the left-docked drawer.
-    await page.getByRole('switch', { name: 'Show worked hours' }).focus();
+    await page.getByRole('switch', { name: 'Worked hours' }).focus();
     await settleFrames(page);
     await expect(editor).toHaveAttribute('data-side', 'left');
     // The Monday button now lies wholly under the left-docked drawer, so focusing it moves the drawer back.

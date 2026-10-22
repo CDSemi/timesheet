@@ -553,7 +553,7 @@ describe('the review payload on the sheet', () => {
   it('shows a complete day with its payload minutes as h:mm, times in the reporting zone, and no Check blank', () => {
     const row = reviewSheetDay(day('2026-09-28', { calculation: calc(90), sessions: [session('2026-09-28', '09:00', '17:30')] }), zone);
     expect(row).toMatchObject({ workDate: '2026-09-28', weekday: 'Mon', dateText: '09/28', name: 'Mon 2026-09-28', today: false, nonworking: false });
-    expect(row.time.ranges.map((range) => range.text)).toEqual(['09:00-17:30']);
+    expect(row.time.ranges.map((range) => range.text)).toEqual(['09:00 - 17:30']);
     expect(row.time).toMatchObject({ note: '1 break', attention: false });
     expect(row.ot).toEqual({ kind: 'minutes', text: '1:30' });
     expect(row.check).toEqual({ key: 'complete', text: 'Complete', shape: 'circle' });

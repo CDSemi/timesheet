@@ -27,7 +27,12 @@ export const SHEET_TITLE = 'Time sheet for salaried exempt employees';
  * "Status": it only displays the server's calculation status and toggles nothing).
  */
 export const SHEET_ROWS = { day: 'Day', date: 'Date', label: 'Category', time: 'Time', ot: 'OT (h:mm)', check: 'Status' } as const;
-export const DETAIL_ROWS = { regular: 'Worked on a workday', offCalendar: 'Worked on a day off' } as const;
+/**
+ * The two rows "Worked hours" adds (round 5, U5-20): "Worked, workday" and "Worked, day off" name the row on the desktop sheet, and
+ * the phone's worked line, which sits right under its day, says "Workday" and "Day off" (`DETAIL_SHORT`).
+ */
+export const DETAIL_ROWS = { regular: 'Worked, workday', offCalendar: 'Worked, day off' } as const;
+export const DETAIL_SHORT = { regular: 'Workday', offCalendar: 'Day off' } as const;
 
 export type CheckKey = 'complete' | 'running' | 'open_session' | 'confirm_breaks' | 'missing' | 'upcoming' | 'error';
 
@@ -81,7 +86,7 @@ export interface Span {
 
 /**
  * How far a scrolling week card must scroll on one axis so a focused control lies inside the card's visible span (WP5-UX3-FIX1;
- * the card scrolls sideways from 768 to 899px). `view` is the card's visible span less its scroll padding, which clears the
+ * the card scrolls sideways from 480 to 929px, where the 7-column sheet is narrower than its 850px). `view` is the card's visible span less its scroll padding, which clears the
  * focus ring; `target` is the control. Negative scrolls back, positive forward, 0 leaves the card where it is. A control larger
  * than the view keeps its start edge in view.
  */
@@ -102,8 +107,10 @@ export interface SheetLabel {
 
 export interface SheetRange {
   key: string;
-  /** `HH:MM-HH:MM` in the display zone, `+N` when the end is N local days later, or just `HH:MM` while running. */
+  /** `HH:MM - HH:MM` in the display zone, `+N` when the end is N local days later, or just `HH:MM` while running. */
   text: string;
+  /** The same range without the spaces around the dash (`HH:MM-HH:MM`), for a sheet whose cells cannot hold `text` on one line. */
+  tightText: string;
   /** The local start date `MM/DD` when it is not the accounting date (another zone, or after midnight). */
   startDate: string | null;
 }
@@ -138,7 +145,7 @@ export interface SheetDay {
   time: SheetTime;
   ot: SheetOt;
   check: SheetCheck | null;
-  /** The "Show worked hours" rows, h:mm of the server's minutes; blank when the server has no value. */
+  /** The "Worked hours" rows, h:mm of the server's minutes; blank when the server has no value. */
   details: { regular: string; offCalendar: string };
   /** The day's note in full. Only the read-only review sets it (the Timesheet page shows a "Note" marker). */
   noteText?: string;
@@ -222,14 +229,57 @@ function localParts(instant: string, zone: string): { date: string; time: string
   return { date: localDateOf(zone, seconds), time: formatInZone(zone, seconds).slice(11, 16) };
 }
 
-/** One session as the PDF prints it, but in the display zone: `08:00-17:00`, `22:00-06:00+1`, or `08:12` while running. */
+/**
+ * A time range in one form for every place that shows one (WP5-UX5-T05A, U5-07): `10:30 - 18:30`, with `+N` after the end when it is
+ * N local days later (`22:00 - 06:00+1`). Only a week-sheet cell that cannot hold the spaced text on one line uses the tight form
+ * `10:30-18:30` (see `rangeFormFor` and `useRangeForm`), decided once per sheet so one sheet never mixes the two. Prose ranges
+ * with "to" are not this formatter's business.
+ */
+export function timeRange(start: string, end: string, options: { tight?: boolean; later?: number } = {}): string {
+  const later = options.later !== undefined && options.later > 0 ? `+${options.later}` : '';
+  return `${start}${options.tight === true ? '-' : ' - '}${end}${later}`;
+}
+
+/** One session as the sheet shows it, but in the display zone: `08:00 - 17:00`, `22:00 - 06:00+1`, or `08:12` while running. */
 export function sessionRange(session: Pick<Session, 'id' | 'start_utc' | 'end_utc'>, workDate: string, zone: string): SheetRange {
   const start = localParts(session.start_utc, zone);
   const startDate = start.date === workDate ? null : usShortDate(start.date);
-  if (session.end_utc === null) return { key: session.id, text: start.time, startDate };
+  if (session.end_utc === null) return { key: session.id, text: start.time, tightText: start.time, startDate };
   const end = localParts(session.end_utc, zone);
   const later = diffDays(end.date, start.date);
-  return { key: session.id, text: `${start.time}-${end.time}${later > 0 ? `+${later}` : ''}`, startDate };
+  return {
+    key: session.id,
+    text: timeRange(start.time, end.time, { later }),
+    tightText: timeRange(start.time, end.time, { later, tight: true }),
+    startDate,
+  };
+}
+
+/**
+ * The widest spaced range text among the weeks (digits are tabular, so the longest string is the widest): the text a sheet measures
+ * against its time cells to decide between the spaced and the tight form. Empty when no day has a session.
+ */
+export function longestRangeText(weeks: readonly SheetWeek[]): string {
+  let longest = '';
+  for (const week of weeks) {
+    for (const day of week.days) {
+      for (const range of day.time.ranges) if (range.text.length > longest.length) longest = range.text;
+    }
+  }
+  return longest;
+}
+
+/** The form the ranges of one sheet take: the spaced text, the tight text (`10:30-18:30`), or the tight text allowed to wrap (see `rangeFormFor`). */
+export type RangeForm = 'spaced' | 'tight' | 'wrap';
+
+/**
+ * The form of a sheet's ranges from the measured widths (on one line) of the longest range, spaced and tight, and the content box of a
+ * time cell. The spaced form while it fits; the tight form when only that fits; and when even the tight text is wider than the box (a
+ * late end such as `22:00-06:00+1` in the narrowest phone cell) the tight text may wrap rather than run over the next column.
+ */
+export function rangeFormFor(spacedWidth: number, tightWidth: number, boxWidth: number): RangeForm {
+  if (spacedWidth <= boxWidth + 0.01) return 'spaced';
+  return tightWidth <= boxWidth + 0.01 ? 'tight' : 'wrap';
 }
 
 export function breaksNote(sessions: ReadonlyArray<Pick<Session, 'end_utc' | 'breaks_confirmed'> & { breaks: readonly unknown[] }>): string | null {

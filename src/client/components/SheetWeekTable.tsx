@@ -1,7 +1,7 @@
 import { Fragment, type KeyboardEvent, type MouseEvent, useId, useRef, useState } from 'react';
 import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.tsx';
 import { LABEL_CHOICES, type LabelChoice, labelPickerListName, labelPickerName } from './labelPickerModel.ts';
-import { dayButtonName, dayClass, DETAIL_ROWS, type SheetDay, type SheetWeek } from './sheetModel.ts';
+import { dayButtonName, dayClass, DETAIL_ROWS, DETAIL_SHORT, type SheetDay, type SheetWeek } from './sheetModel.ts';
 
 /** The in-cell label picker of the sheet (E-3 a): what each day's label is now, and what a pick does. */
 export interface LabelPickerActions {
@@ -226,18 +226,24 @@ export function SelectBox({ day, actions }: { day: SheetDay; actions: DayActions
   );
 }
 
+/**
+ * The worked line of a day (round 5, U5-20): it belongs to the day row above it (no rule between them; the style sheet draws the
+ * tint and the indent) and carries short labels, "Workday 8:00" and "Day off 0:00". The full names stay for screen readers.
+ */
 function DetailLine({ day, editing }: { day: SheetDay; editing: boolean }) {
   return (
     <tr className={`sheet-detail-row${editing ? ' editing-detail' : ''}`}>
       <td colSpan={4}>
         <span className="detail-pair">
-          {DETAIL_ROWS.regular}{' '}
+          <span aria-hidden="true">{DETAIL_SHORT.regular}</span>
+          <span className="sr-only">{DETAIL_ROWS.regular}</span>{' '}
           <span className="mono" data-detail="regular" data-detail-day={day.workDate}>
             {day.details.regular}
           </span>
         </span>
         <span className="detail-pair">
-          {DETAIL_ROWS.offCalendar}{' '}
+          <span aria-hidden="true">{DETAIL_SHORT.offCalendar}</span>
+          <span className="sr-only">{DETAIL_ROWS.offCalendar}</span>{' '}
           <span className="mono" data-detail="off-calendar" data-detail-day={day.workDate}>
             {day.details.offCalendar}
           </span>
@@ -248,7 +254,7 @@ function DetailLine({ day, editing }: { day: SheetDay; editing: boolean }) {
 }
 
 /**
- * One week of the sheet below 768px: a 4-column table (Day | Category | Time | OT), one row per day
+ * One week of the compact sheet (below 480px): a 4-column table (Day | Category | Time | OT), one row per day
  * (`[data-day]`), so a phone never scrolls sideways. The Status folds into the Day cell as
  * words plus a shape, and the Time cell carries the attention tint.
  */
@@ -275,11 +281,12 @@ export function SheetWeekTable({ week, details, actions }: { week: SheetWeek; de
             <th scope="col">OT</th>
           </tr>
         </thead>
-        <tbody>
-          {week.days.map((day) => (
-            <DayRows key={day.workDate} day={day} details={details} actions={actions} verb={verb} />
-          ))}
-        </tbody>
+        {/* One tbody per day (round 5, U5-20): with the worked line on, a day and its line are one group, ruled off from the next. */}
+        {week.days.map((day) => (
+          <tbody key={day.workDate} className={details ? 'sheet-group with-worked' : 'sheet-group'}>
+            <DayRows day={day} details={details} actions={actions} verb={verb} />
+          </tbody>
+        ))}
       </table>
     </section>
   );

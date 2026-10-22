@@ -105,7 +105,7 @@ export function validateWorkPolicyRules(policy: WorkPolicyRules): void {
   if (referenceMinutes !== policy.requiredMinutes + excluded) {
     throw new DomainError(
       'inconsistent_reference_schedule',
-      `Reference ${policy.referenceStart}–${policy.referenceEnd} (${referenceMinutes} min) must equal required ` +
+      `Reference ${policy.referenceStart} - ${policy.referenceEnd} (${referenceMinutes} min) must equal required ` +
         `${policy.requiredMinutes} min plus excluded breaks ${excluded} min`,
       { referenceMinutes, requiredMinutes: policy.requiredMinutes, excludedBreakMinutes: excluded },
     );

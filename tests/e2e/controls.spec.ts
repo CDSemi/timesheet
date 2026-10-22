@@ -294,8 +294,8 @@ for (const theme of THEMES) {
         expect(ratio, `${name} text contrast`).toBeGreaterThanOrEqual(TEXT);
       }
     }
-    // The worked rows (Show worked hours) belong to the first column too.
-    await page.getByRole('switch', { name: 'Show worked hours' }).check();
+    // The worked rows (Worked hours) belong to the first column too.
+    await page.getByRole('switch', { name: 'Worked hours' }).check();
     await expect(page.locator('.row-labels').first().locator('> div')).toHaveCount(8);
     const worked = page.locator('.row-labels').first().locator('> div').nth(7);
     const workedFill = await flattenedBackground(worked);
@@ -319,6 +319,8 @@ interface SelectFact {
   appearance: string;
   arrowRight: number;
   arrowLayers: number;
+  imageLayers: number;
+  conic: boolean;
   padEnd: number;
   noUrl: boolean;
 }
@@ -358,6 +360,8 @@ const SCAN_SCRIPT = String.raw`(() => {
       appearance: style.appearance,
       arrowRight: match === null ? Number.NaN : parseFloat(match[1]) + border,
       arrowLayers: positions.length,
+      imageLayers: (() => { let depth = 0; let count = 1; for (const char of style.backgroundImage) { if (char === "(") depth += 1; else if (char === ")") depth -= 1; else if (char === "," && depth === 0) count += 1; } return style.backgroundImage === "none" ? 0 : count; })(),
+      conic: style.backgroundImage.startsWith('conic-gradient('),
       padEnd: parseFloat(style.paddingRight),
       noUrl: !style.backgroundImage.includes('url('),
     };
@@ -423,7 +427,10 @@ async function expectControls(
     lines.push(`${where}: select "${item.name}" arrow ${round(item.arrowRight)}px from the edge, end padding ${item.padEnd}px, arrow contrast ${round(arrowContrast)}:1`);
     expect(item.appearance, `${where}: select "${item.name}" has no native arrow`).toBe('none');
     expect(item.noUrl, `${where}: select "${item.name}" draws the arrow without url()`).toBe(true);
-    expect(item.arrowLayers, `${where}: two gradient layers draw the chevron`).toBe(2);
+    // U5-03: one layer, so there is no interior tile edge for a fractional device-pixel ratio to rasterise as a light column.
+    expect(item.arrowLayers, `${where}: one position`).toBe(1);
+    expect(item.imageLayers, `${where}: background-image has exactly one layer`).toBe(1);
+    expect(item.conic, `${where}: the layer is the conic-gradient chevron`).toBe(true);
     expect(Math.abs(item.arrowRight - 12), `${where}: select "${item.name}" arrow edge distance ${item.arrowRight}`).toBeLessThanOrEqual(1);
     expect(item.padEnd, `${where}: text stays clear of the arrow`).toBeGreaterThanOrEqual(12 + 14 + 8);
   }
@@ -560,3 +567,213 @@ for (const situation of SITUATIONS) {
     record(testInfo, 'tokens', lines);
   });
 }
+
+/* ---- WP5-UX5-T05A (U5-03): the select chevron is one layer, so it has no light seam at a fractional device pixel ratio ---------- */
+
+/** The device pixel ratios of the owner's display scaling: 100%, 125%, 150%, 175% and 200%. */
+const DEVICE_PIXEL_RATIOS = [1, 1.25, 1.5, 1.75, 2] as const;
+/** The number of layers of a computed `background-image` (the commas outside any parentheses, plus one; `none` has none). */
+function topLevelLayers(value: string): number {
+  if (value === 'none') return 0;
+  let depth = 0;
+  let count = 1;
+  for (const char of value) {
+    if (char === '(') depth += 1;
+    else if (char === ')') depth -= 1;
+    else if (char === ',' && depth === 0) count += 1;
+  }
+  return count;
+}
+
+/** The most an interior column of the arrow's top row may be lighter (less inked) than both neighbours, in luminance levels. */
+const SEAM_LEVELS = 8;
+
+interface ArrowProfile {
+  found: boolean;
+  /** The first row that holds the arrow (an ink of at least 24 levels), in screenshot pixels. */
+  row: number;
+  /** The ink of each column of that row: its luminance distance from the field. */
+  ink: number[];
+  /** The largest amount by which an interior column has less ink than both of its neighbours. */
+  dip: number;
+  width: number;
+}
+
+/** Decodes a screenshot of the select's arrow in the page and reads the luminance profile across the arrow's top row. */
+const ARROW_SCRIPT = String.raw`(async (base64) => {
+  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  context.drawImage(bitmap, 0, 0);
+  const { data, width, height } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+  const luminance = (x, y) => {
+    const at = (y * width + x) * 4;
+    return 0.2126 * data[at] + 0.7152 * data[at + 1] + 0.0722 * data[at + 2];
+  };
+  const field = luminance(1, Math.floor(height / 2));
+  const ink = (x, y) => Math.abs(luminance(x, y) - field);
+  let row = -1;
+  for (let y = 0; y < height && row < 0; y += 1) {
+    for (let x = 0; x < width; x += 1) if (ink(x, y) >= 24) { row = y; break; }
+  }
+  if (row < 0) return { found: false, row, ink: [], dip: 0, width: 0 };
+  const line = Array.from({ length: width }, (_, x) => ink(x, row));
+  const peak = Math.max(...line);
+  const first = line.findIndex((value) => value >= peak / 2);
+  const last = line.length - 1 - [...line].reverse().findIndex((value) => value >= peak / 2);
+  let dip = 0;
+  for (let x = first + 1; x < last; x += 1) dip = Math.max(dip, Math.min(line[x - 1], line[x + 1]) - line[x]);
+  return { found: true, row, ink: line.slice(first, last + 1).map((value) => Math.round(value)), dip, width: last - first + 1 };
+})`;
+
+for (const theme of THEMES) {
+  test(`the select chevron is one layer with no light seam at device pixel ratios 1, 1.25, 1.5, 1.75 and 2 (${theme})`, async ({ page, browser, adminSeed, builtServer, signInPageAs }, testInfo) => {
+    test.setTimeout(120_000);
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Seam' });
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    await signInPageAs(person.account, '#/settings');
+    await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+    const select = page.locator('select').first();
+    await select.scrollIntoViewIfNeeded();
+    const layers = await select.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).backgroundImage ?? '');
+    expect(topLevelLayers(layers), 'background-image has exactly one layer').toBe(1);
+    expect(layers.startsWith('conic-gradient('), `the layer is the conic chevron: ${layers}`).toBe(true);
+    // Each ratio is its own browser context (the signed-in session carried over), so the page is rasterised at that device pixel ratio.
+    const origin = new URL(page.url()).origin;
+    const state = await page.context().storageState();
+    const lines = [`# ${testInfo.project.name} / ${theme}: the arrow's top row`];
+    for (const ratio of DEVICE_PIXEL_RATIOS) {
+      const context = await browser.newContext({
+        storageState: state,
+        viewport: { width: 1280, height: 800 },
+        deviceScaleFactor: ratio,
+        colorScheme: theme,
+        reducedMotion: 'reduce',
+        locale: 'en-US',
+        timezoneId: 'America/Los_Angeles',
+      });
+      try {
+        const scaled = await context.newPage();
+        await scaled.goto(`${origin}/#/settings`);
+        await expect(scaled.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+        expect(await scaled.evaluate<number>('window.devicePixelRatio'), `the page runs at ${ratio}`).toBe(ratio);
+        const field = scaled.locator('select').first();
+        await field.scrollIntoViewIfNeeded();
+        const box = await field.boundingBox();
+        expect(box, `the select is on the screen at ${ratio}`).not.toBeNull();
+        // 24px around the arrow (it ends 12px from the border and is 12px wide), clear of the top and bottom borders of the field.
+        const clip = { x: (box?.x ?? 0) + (box?.width ?? 0) - 30, y: (box?.y ?? 0) + 4, width: 24, height: (box?.height ?? 0) - 8 };
+        const png = await scaled.screenshot({ clip, animations: 'disabled', type: 'png', path: screenshotPath(`seam-${testInfo.project.name}-${theme}-dpr${ratio}-synthetic.png`) });
+        const profile = await scaled.evaluate<ArrowProfile>(`${ARROW_SCRIPT}(${JSON.stringify(png.toString('base64'))})`);
+        lines.push(`dpr ${ratio}: top row ${profile.row}, ${profile.width} columns, largest dip ${round(profile.dip)} levels, ink ${profile.ink.join(' ')}`);
+        expect(profile.found, `dpr ${ratio}: the arrow is on the screenshot`).toBe(true);
+        expect(profile.width, `dpr ${ratio}: the top row spans the arrow`).toBeGreaterThanOrEqual(Math.floor(8 * ratio));
+        expect(profile.dip, `dpr ${ratio}, ${theme}: no interior column is lighter than both neighbours by more than ${SEAM_LEVELS} levels (${profile.ink.join(' ')})`).toBeLessThanOrEqual(SEAM_LEVELS);
+      } finally {
+        await context.close();
+      }
+    }
+    record(testInfo, 'seam', lines);
+  });
+}
+
+/* ---- WP5-UX5-T05A (U5-05, owner decision F-1 a): the sub-buttons are 36px high; the 44px target stays as a hit area where controls are 44px ---- */
+
+interface SubButtonFacts {
+  name: string;
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  height: number;
+  /** The element under a point 3px above and 3px below the visible box, centred: is it the button (or inside it)? */
+  hitAbove: boolean;
+  hitBelow: boolean;
+}
+
+/** Reads one sub-button's visible box and whether the points just outside it still belong to it (its ::before hit area). */
+async function subButtonFacts(button: Locator, name: string): Promise<SubButtonFacts> {
+  await expect(button, `${name} is on the page`).toHaveCount(1);
+  await button.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+  return button.evaluate((element, label) => {
+    const box = element.getBoundingClientRect();
+    const at = (y: number) => {
+      const hit = element.ownerDocument.elementFromPoint(box.left + box.width / 2, y);
+      return hit !== null && (hit === element || element.contains(hit));
+    };
+    return { name: label, top: box.top, bottom: box.bottom, left: box.left, right: box.right, height: box.height, hitAbove: at(box.top - 3), hitBelow: at(box.bottom + 3) };
+  }, name);
+}
+
+test('Edit, Delete, Add session, Suggest breaks, Add break and Save day fields are 36px high everywhere; the 44px hit area stays below 768px and with a coarse pointer; rows keep 8px apart', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  test.setTimeout(180_000);
+  const lines = [`# ${testInfo.project.name}: sub-buttons`];
+  const days = (await employeeSeed.displayedPeriodFreeWorkdays()).slice(0, 1);
+  expect(days.length, 'a free past workday in the displayed period').toBe(1);
+  const [date = ''] = days;
+  try {
+    await employeeSeed.seedCompleteDay(date);
+    const sessionId = (await employeeSeed.dayView(date)).sessions[0]?.id ?? '';
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    for (const width of [1280, 1024, 768, 767, 700, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.reload();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const coarse = await page.evaluate<boolean>("matchMedia('(pointer: coarse)').matches");
+      const hitArea = coarse || width < 768;
+      await page.getByLabel('Open a day').fill(date);
+      await page.getByRole('button', { name: 'Open day', exact: true }).click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toBeVisible();
+      await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+      const where = `${width}px (${coarse ? 'coarse' : 'fine'} pointer, hit area ${hitArea ? 'expected' : 'not expected'})`;
+      const facts: SubButtonFacts[] = [];
+      facts.push(await subButtonFacts(editor.getByRole('button', { name: 'Add session', exact: true }), 'Add session'));
+      const edit = await subButtonFacts(editor.getByRole('button', { name: `Edit session ${sessionId}` }), 'Edit');
+      const remove = await subButtonFacts(editor.getByRole('button', { name: `Delete session ${sessionId}` }), 'Delete');
+      facts.push(edit, remove);
+      facts.push(await subButtonFacts(editor.getByRole('button', { name: 'Save day fields' }), 'Save day fields'));
+      // The two buttons of a row keep 8px apart (or sit in separate rows 8px apart), so their 44px hit areas never overlap.
+      const apart = (first: SubButtonFacts, second: SubButtonFacts) => {
+        const sideways = second.left - first.right;
+        const stacked = second.top - first.bottom;
+        return Math.max(sideways, stacked);
+      };
+      lines.push(`${where}: Edit to Delete ${round(apart(edit, remove))}px`);
+      expect(apart(edit, remove), `${where}: Edit and Delete keep 8px apart`).toBeGreaterThanOrEqual(8 - 0.5);
+      // The session dialog: Suggest breaks and Add break.
+      await editor.getByRole('button', { name: 'Add session', exact: true }).click();
+      const dialog = page.getByRole('dialog').last();
+      await expect(dialog.getByRole('button', { name: 'Add break', exact: true })).toBeVisible();
+      const suggest = await subButtonFacts(dialog.getByRole('button', { name: 'Suggest breaks', exact: true }), 'Suggest breaks');
+      const add = await subButtonFacts(dialog.getByRole('button', { name: 'Add break', exact: true }), 'Add break');
+      facts.push(suggest, add);
+      lines.push(`${where}: Suggest breaks to Add break ${round(apart(suggest, add))}px`);
+      expect(apart(suggest, add), `${where}: Suggest breaks and Add break keep 8px apart`).toBeGreaterThanOrEqual(8 - 0.5);
+      for (const item of facts) {
+        lines.push(`${where}: ${item.name} ${round(item.height)}px high, hit above ${item.hitAbove}, below ${item.hitBelow}`);
+        expect(Math.abs(item.height - 36), `${where}: ${item.name} is 36px high, not ${item.height}`).toBeLessThanOrEqual(0.5);
+        if (hitArea) {
+          expect(item.hitAbove, `${where}: ${item.name} keeps its hit area 3px above the box`).toBe(true);
+          expect(item.hitBelow, `${where}: ${item.name} keeps its hit area 3px below the box`).toBe(true);
+        } else {
+          expect(item.hitAbove, `${where}: ${item.name} has no hit area above its 36px box with a fine pointer`).toBe(false);
+        }
+      }
+      await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+      if (await discard.isVisible()) await discard.getByRole('button', { name: 'Discard' }).click();
+    }
+    record(testInfo, 'sub-buttons', lines);
+  } finally {
+    await employeeSeed.clearSessions(date);
+  }
+});

@@ -8,6 +8,7 @@ import { checkAutoNoteText } from '../../domain/snapshot.ts';
 import { isValidTimeZone } from '../../domain/zones.ts';
 import type { CalendarInfo, DeficitMode, PolicyBreak, PolicyRequest, PolicyVersion, SubmissionSettings, SubmissionSettingsRequest } from '../api.ts';
 import { DEFICIT_MODE_LABELS } from './policyModel.ts';
+import { timeRange } from './sheetModel.ts';
 import type { Theme } from './themeModel.ts';
 
 /*
@@ -696,8 +697,8 @@ export function personalComparison(data: PersonalData, current: PersonalCurrent,
       row(
         'reference',
         'Reference hours',
-        now === null ? 'no version yet' : `${now.reference_start}-${now.reference_end}`,
-        `${policy.reference_start}-${policy.reference_end}`,
+        now === null ? 'no version yet' : timeRange(now.reference_start, now.reference_end),
+        timeRange(policy.reference_start, policy.reference_end),
       ),
       row('breaks', 'Breaks', now === null ? 'no version yet' : breaksText(now.breaks), breaksText(policy.breaks)),
       row('deficit', 'When a day falls short', now === null ? 'no version yet' : DEFICIT_MODE_LABELS[now.deficit_mode], DEFICIT_MODE_LABELS[policy.deficit_mode]),

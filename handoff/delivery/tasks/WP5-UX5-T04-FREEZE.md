@@ -189,3 +189,12 @@ Append to this brief:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+- HEAD before: 65def2f61b6cb82e8c23cb01c15e787d2d0b1c14. HEAD after: 060302bcb41050c116e2519602f303c3a11cb01d.
+- Commit SHA 060302bcb41050c116e2519602f303c3a11cb01d on main; pushed; remote SHA 060302bcb41050c116e2519602f303c3a11cb01d. No tag.
+- Digest before add and ls-tree digest of new HEAD: both 2ba69f6271c13b8541177c940f21d02f8c51bc1e36c1a6b8bbb3c0eb9749c355 (867 files).
+- Staged: 58 paths; 25 outside handoff/ (5 new, 20 modified); 33 under handoff/ (5 modified, 28 new including the evidence folder).
+- Extra handoff paths staged: none.
+- Checks: node v24.21.0; precommit 0; diff --check 0; JSON parse 0; validate_orchestration 0; check_recovery 0 (106); validate_package --preflight 0; push dry-run 0; push 0.
+- Scan hits: key/PEM scan 0 hits; zz-* none.
+- Fixes, masking, stops: none. Unstaged afterwards: this Results, evidence/WP5-UX5-T04-FREEZE/checks.txt and commit-message.txt.
