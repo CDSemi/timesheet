@@ -1426,6 +1426,39 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   và không có file nhị phân.
 - Đang chạy: WP5-UX5-T03-FREEZE (một committer mới, chạy một mình). Nó stage 32 đường dẫn
   ghi rõ tên cùng các hồ sơ trong handoff; digest phải là d23e3617.
+- WP5-UX5-T03-FREEZE xong: 65def2f61b6cb82e8c23cb01c15e787d2d0b1c14 trên main, đã push (56
+  đường dẫn: 32 ngoài `handoff/`, 24 trong handoff). Digest d23e3617 (862 file) trước khi
+  stage và trên HEAD; mọi kiểm tra exit 0. Lỗi quy tắc: một `2>/dev/null` và một `| head`.
+- Đang chạy: WP5-UX5-T04, breakpoint, top bar và period card (worker-high, sonnet; cỡ L,
+  rủi ro H; nền 65def2f / d23e3617; cổng 49740-49759).
+  - Gồm U5-01, U5-02, U5-08 đến U5-15, U5-22 và khoảng cách B1.
+  - F-6 a: chỉ dạng compact của tờ timesheet chuyển xuống dưới 480px. Khung điều hướng,
+    Day editor, hộp thoại và quy tắc 44px vẫn ở 768px.
+  - U5-14 với H-1 a: nút Review là nút primary khi một kỳ đã kết thúc vẫn cần người dùng
+    xử lý, và trở lại secondary khi có bất kỳ revision nào của kỳ đó đã được gửi.
+  - Không giao đường dẫn `src/server` nào.
+- WP5-UX5-T04 xong (theo báo cáo của worker; gate và audit còn chờ). Không dừng ở bước kiểm
+  kê; không đụng tới `src/server`.
+  - npm test 2333; FULL e2e 809 đạt, 0 lỗi, không chạy lại; mutant 5/5; verify 0; digest
+    2ba69f62 (867 file).
+  - Mọi media query đều viết theo cú pháp khoảng; có một test vitest buộc điều đó.
+  - Các độ rộng lẻ (479.33, 767.33) chỉ được chứng minh trên nội dung stylesheet, vì trình
+    duyệt không đặt được viewport có độ rộng lẻ.
+  - Điểm lệch:
+    - ở chế độ xem được chia sẻ, tên công ty hiện từ 492px chứ không phải khoảng 250px,
+      để không bao giờ làm thanh trên cùng thêm một hàng;
+    - các ngưỡng của period card là số đo thật: 600px, cộng thêm 138px khi có Current
+      period.
+  - Lỗi quy tắc: ba heredoc rỗng, hai `/dev/null`, một `| head`, và các file thử tạm
+    `zz-*` trong `tests/e2e/`, đã gỡ trước các lần chạy đầy đủ.
+  - Để lại cho T05: U5-16, U5-21, nhãn liên kết ở dòng chữ ký trên Timesheet, và các chú
+    thích cũ ghi 768-899.
+- Đang chạy: tra cứu WP5-UX5-T04-PATHS (light, haiku, chỉ đọc), có kiểm tra file `zz-*`.
+- T04-PATHS xong. Ngoài `handoff/`: 20 file sửa, 5 file mới, 0 file xóa. Không có gì được
+  stage. Không có đường dẫn nào nằm ngoài phạm vi được giao, không có file nhị phân, không có
+  file `zz-*`.
+- Đang chạy: WP5-UX5-T04-FREEZE (một committer mới, chạy một mình). Nó stage 25 đường dẫn
+  ghi rõ tên cùng các hồ sơ trong handoff; digest phải là 2ba69f62.
 - Còn lại sau T06:
   - T06-FREEZE;
   - gate gói của đợt 5 (bao gồm cả đợt 4 và đợt 5);

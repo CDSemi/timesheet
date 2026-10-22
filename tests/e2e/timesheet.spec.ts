@@ -1,5 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { besideNeed } from '../../src/client/components/editorLayoutModel.ts';
+import { rangeKind, rangeLadder, rangeSpokenText, rangeText } from '../../src/client/components/periodBarModel.ts';
 import { formatHoursMinutes } from '../../src/domain/format.ts';
 import {
   backdropOf,
@@ -19,6 +20,7 @@ import {
 } from './contrast.ts';
 import { ANY_DAY_BUTTON_NAME, dayButtonName, namedDayButton } from './dayButton.ts';
 import { expect, screenshotPath, type SeedClient, test } from './fixtures.ts';
+import { cardParts, cardStyle, near, noSidewaysScroll, rangeState } from './periodCard.ts';
 
 /*
  * The Excel-style sheet (two week bands on desktop, a table per week on a phone) and batch
@@ -262,7 +264,7 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   await signInThroughUi();
   await expect(page.locator('[data-day]')).toHaveCount(14);
 
-  // Exactly one of the two sheet layouts renders, chosen by the 768px media query.
+  // Exactly one of the two sheet layouts renders, chosen by the 480px sheet query (SHEET_QUERY; the shell keeps 768px).
   const isDesktop = project === 'desktop';
   await expect(page.locator('[data-sheet="desktop"]')).toHaveCount(isDesktop ? 1 : 0);
   await expect(page.locator('[data-sheet="phone"]')).toHaveCount(isDesktop ? 0 : 1);
@@ -1909,4 +1911,178 @@ test('desktop toolbar: the gap between "Show worked hours" and "Change several d
   const accent = await tokenColour(page, '--accent');
   expect(sameColour(parseColour(await settledStyle(batch, 'backgroundColor')), accent, 3), 'pressed is the solid accent').toBe(true);
   await page.screenshot({ path: screenshotPath('toolbar-desktop-pressed-synthetic.png'), clip: { x: 0, y: 0, width: 1280, height: 520 }, animations: 'disabled' });
+});
+
+/* ---- WP5-UX5-T04 (U5-09 to U5-13): the period card, wide and narrow, and the range ladder ---------------------------------------- */
+
+test.describe('the period card (U5-09 to U5-13)', () => {
+  test.skip(({ isMobile }) => isMobile, 'The card is checked at the widths of the desktop project');
+
+  test('wide: the range block is as tall as the buttons, its top is the buttons\' top and its last pill ends on their bottom; "<" and ">" stand 20px from it; Today follows ">" by 8px; Review keeps the right edge', async ({
+    page,
+    signInThroughUi,
+  }) => {
+    test.setTimeout(90_000);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    expect(await cardStyle(page, ':root', ['--period-step-gap']), 'the gap token (B1)').toEqual({ '--period-step-gap': '20px' });
+    // 632px is the least window that keeps the wide row without Current period (a card of 600px, 40rem).
+    for (const width of [1440, 1100, 900, 700, 632]) {
+      await page.setViewportSize({ width, height: 900 });
+      const { card, prev, title, name, lastPill, next, today, review, meta } = await cardParts(page);
+      expect(card && prev && title && name && lastPill && next && today && review && meta, `${width}px: every part is on the card`).toBeTruthy();
+      if (!(card && prev && title && name && lastPill && next && today && review && meta)) continue;
+      expect(prev.top, `${width}px: the first row of the card`).toBeLessThan(meta.top);
+      expect(next.top, `${width}px: ">" is on the first row`).toBeCloseTo(prev.top, 0);
+      expect(today.top, `${width}px: Today is on the first row`).toBeCloseTo(prev.top, 0);
+      expect(near(name.top, prev.top, 1), `${width}px: the range line stands on the buttons' top edge (${name.top} / ${prev.top})`).toBe(true);
+      expect(near(lastPill.bottom, prev.bottom, 1), `${width}px: the last pill ends on the buttons' bottom edge (${lastPill.bottom} / ${prev.bottom})`).toBe(true);
+      expect(near(title.height, prev.height, 1), `${width}px: the range block is as tall as the buttons`).toBe(true);
+      expect(near(title.left - prev.right, 20, 1), `${width}px: "<" to the range block`).toBe(true);
+      expect(near(next.left - title.right, 20, 1), `${width}px: the range block to ">"`).toBe(true);
+      expect(near(today.left - next.right, 8, 1), `${width}px: ">" to Today`).toBe(true);
+      expect(near(card.right - 16 - review.right, 0, 1), `${width}px: the review link keeps the card's right edge`).toBe(true);
+      expect(review.left, `${width}px: Review is right of Today`).toBeGreaterThan(today.right);
+      // The hairline under the first row is kept: 10px above it, 8px below, 1px --line-soft.
+      const rule = await cardStyle(page, '.period-meta', ['border-top-width', 'border-top-style', 'border-top-color', 'margin-top', 'padding-top']);
+      expect(rule['border-top-width'], `${width}px: the hairline`).toBe('1px');
+      expect(rule['border-top-style']).toBe('solid');
+      expect(rule['margin-top'], `${width}px: 10px above the hairline`).toBe('10px');
+      expect(rule['padding-top'], `${width}px: 8px below it`).toBe('8px');
+      expect(parseColour(rule['border-top-color'] ?? ''), `${width}px: the hairline is --line-soft`).toEqual(await tokenColour(page, '--line-soft'));
+      expect(near(meta.top - prev.bottom, 10, 1.5), `${width}px: the meta line under the first row`).toBe(true);
+      expect(await noSidewaysScroll(page), `${width}px: no sideways scroll`).toBe(true);
+    }
+  });
+
+  test('narrow: "<", the centred range over the pills and ">" at the right edge, then the hairline and the meta line, then Today and Review in one row; 8px above and 6px below the hairline', async ({
+    page,
+    signInThroughUi,
+  }) => {
+    test.setTimeout(90_000);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    // 631px is the widest window with the narrow arrangement without Current period.
+    for (const width of [631, 600, 480, 430, 390, 360, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      const { card, prev, title, name, pills, next, cta, today, review, meta } = await cardParts(page);
+      expect(card && prev && title && name && pills && next && cta && today && review && meta, `${width}px: every part is on the card`).toBeTruthy();
+      if (!(card && prev && title && name && pills && next && cta && today && review && meta)) continue;
+      expect(near(next.right, card.right - 12, 1), `${width}px: ">" is at the card's right edge`).toBe(true);
+      expect(near(prev.left, card.left + 12, 1), `${width}px: "<" is at the card's left edge`).toBe(true);
+      const middle = (card.left + card.right) / 2;
+      expect(near((title.left + title.right) / 2, middle, 1), `${width}px: the range block is centred on the card`).toBe(true);
+      expect(near((name.left + name.right) / 2, middle, 1), `${width}px: the range is centred on the card`).toBe(true);
+      expect(near((pills.left + pills.right) / 2, middle, 1.5), `${width}px: the pills are centred under the range`).toBe(true);
+      expect(prev.top, `${width}px: "<" is on the first row`).toBeCloseTo(next.top, 0);
+      expect(near(title.height, prev.height, 4), `${width}px: the range block is about as tall as the buttons`).toBe(true);
+      // The meta line and its hairline come between the first row and the buttons.
+      expect(meta.top, `${width}px: the meta line is under the first row`).toBeGreaterThan(prev.bottom);
+      expect(cta.top, `${width}px: the buttons are under the meta line`).toBeGreaterThanOrEqual(meta.bottom - 0.5);
+      expect(near(today.top, review.top, 1), `${width}px: Today and Review share a row`).toBe(true);
+      expect(today.right, `${width}px: Today is left of Review`).toBeLessThanOrEqual(review.left + 0.5);
+      expect(near(review.right, card.right - 12, 1), `${width}px: Review ends at the card's right edge`).toBe(true);
+      const rule = await cardStyle(page, '.period-meta', ['border-top-width', 'border-top-style', 'border-top-color', 'margin-top', 'padding-top']);
+      expect(rule['border-top-width'], `${width}px: the hairline is kept`).toBe('1px');
+      expect(rule['margin-top'], `${width}px: 8px above the hairline`).toBe('8px');
+      expect(rule['padding-top'], `${width}px: 6px below it`).toBe('6px');
+      expect(parseColour(rule['border-top-color'] ?? ''), `${width}px: the hairline is --line-soft`).toEqual(await tokenColour(page, '--line-soft'));
+      expect(await noSidewaysScroll(page), `${width}px: no sideways scroll`).toBe(true);
+    }
+  });
+
+  test('the arrangement flips by the width of the card, not of the window: 600px (40rem) without Current period, so a window of 631px is narrow and 632px wide', async ({ page, signInThroughUi }) => {
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const arrangement = async (width: number) => {
+      await page.setViewportSize({ width, height: 900 });
+      const { prev, cta } = await cardParts(page);
+      return cta !== null && prev !== null && cta.top > prev.bottom ? 'narrow' : 'wide';
+    };
+    expect(await arrangement(631)).toBe('narrow');
+    expect(await arrangement(632)).toBe('wide');
+    expect(await arrangement(1000)).toBe('wide');
+    expect(await arrangement(500)).toBe('narrow');
+  });
+});
+
+test.describe('the range ladder (U5-13)', () => {
+  test.skip(({ isMobile }) => isMobile, 'The ladder is checked at the widths of the desktop project');
+
+  test('the longest form that fits its box shows, for a one-month, a two-month and a two-year range, at 320, 360, 390 and 430px; the accessible text is always the full dates with "to"', async ({
+    page,
+    signInThroughUi,
+  }) => {
+    test.setTimeout(180_000);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const seen = new Set<string>();
+    const check = async () => {
+      const kind = await page.locator('.period-name').getAttribute('data-range-kind');
+      if (kind === null || seen.has(kind)) return;
+      seen.add(kind);
+      for (const width of [320, 360, 390, 430]) {
+        await page.setViewportSize({ width, height: 900 });
+        const state = await rangeState(page);
+        const dates = /^(\d{2})\/(\d{2})\/(\d{4}) to (\d{2})\/(\d{2})\/(\d{4})$/.exec(state.spoken);
+        expect(dates, `${state.kind} at ${width}px: the accessible text is the full dates with "to" (${state.spoken})`).not.toBeNull();
+        const [, startMonth, startDay, startYear, endMonth, endDay, endYear] = dates ?? [];
+        const start = `${startYear}-${startMonth}-${startDay}`;
+        const end = `${endYear}-${endMonth}-${endDay}`;
+        expect(state.spoken).toBe(rangeSpokenText(start, end));
+        expect(state.kind).toBe(rangeKind(start, end));
+        // The longest form of the ladder whose measured width fits the box (the last form when none does); what shows is that form's text.
+        const ladder = rangeLadder(start, end);
+        const fitting = ladder.find((form) => (state.widths[form] ?? Number.POSITIVE_INFINITY) <= state.box + 0.5) ?? ladder[ladder.length - 1] ?? 'full';
+        expect(state.text, `${state.kind} at ${width}px: the form that shows (box ${state.box.toFixed(1)}px, forms ${JSON.stringify(state.widths)})`).toBe(rangeText(start, end, fitting));
+      }
+    };
+    // Forward through the periods until the three kinds have been seen; a year of 14-day periods holds both month kinds and one two-year range.
+    await check();
+    for (let step = 0; step < 14 && seen.size < 3; step += 1) {
+      await page.setViewportSize({ width: 390, height: 900 });
+      await page.getByRole('button', { name: 'Next period' }).click();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await check();
+    }
+    // The nearest two-year range can lie behind: go back past the start.
+    for (let step = 0; step < 28 && seen.size < 3; step += 1) {
+      await page.setViewportSize({ width: 390, height: 900 });
+      await page.getByRole('button', { name: 'Previous period' }).click();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await check();
+    }
+    expect([...seen].sort(), 'a one-month, a two-month and a two-year range were checked').toEqual(['cross-month', 'cross-year', 'same-month']);
+  });
+});
+
+test.describe('the period card never overlaps (U5-12)', () => {
+  test.skip(({ isMobile }) => isMobile, 'The card is checked at the widths of the desktop project');
+
+  test('from 320 to 1920px no part of the card overlaps another or leaves the card, and the page never scrolls sideways', async ({ page, signInThroughUi }) => {
+    test.setTimeout(120_000);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    for (const width of [320, 360, 390, 430, 480, 520, 560, 600, 631, 632, 700, 768, 900, 1100, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      const parts = await cardParts(page);
+      const { card } = parts;
+      expect(card, `${width}px: the card`).not.toBeNull();
+      if (card === null) continue;
+      const named = (['prev', 'title', 'next', 'today', 'current', 'review', 'meta'] as const).flatMap((name) => {
+        const box = parts[name];
+        return box === null ? [] : [{ name, box }];
+      });
+      for (const [index, first] of named.entries()) {
+        // Every part lies inside the card, and no two parts share more than a pixel of area.
+        expect(first.box.left, `${width}px: ${first.name} is inside the card (left)`).toBeGreaterThanOrEqual(card.left - 0.5);
+        expect(first.box.right, `${width}px: ${first.name} is inside the card (right)`).toBeLessThanOrEqual(card.right + 0.5);
+        for (const second of named.slice(index + 1)) {
+          const overlap = first.box.left < second.box.right - 1 && second.box.left < first.box.right - 1 && first.box.top < second.box.bottom - 1 && second.box.top < first.box.bottom - 1;
+          expect(overlap, `${width}px: ${first.name} and ${second.name} do not overlap`).toBe(false);
+        }
+      }
+      expect(await noSidewaysScroll(page), `${width}px: no sideways scroll`).toBe(true);
+    }
+  });
 });

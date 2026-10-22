@@ -203,3 +203,12 @@ Append to this brief:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+- HEAD before b4c500456a69158571799f8f0d90f035fd7a0fa5; after 65def2f61b6cb82e8c23cb01c15e787d2d0b1c14.
+- Pushed to main: yes; remote SHA 65def2f61b6cb82e8c23cb01c15e787d2d0b1c14. No tag.
+- Digest before add and after commit: d23e3617d58fe540b42b28e13c4f8c4674b4eae106bdaea0ccf6b4cc76b03440 (862 files).
+- Staged 56 paths: source/docs/tests 32 (28 M, 2 A, 2 D), handoff 24 (no extra handoff paths).
+- Checks: precommit 0, diff --check 0, JSON parse 0, validate_orchestration 0, check_recovery 0 (106), validate_package --preflight 0.
+- Scans: BEGIN 0 hits in new evidence and source; T02-FREEZE checks.txt 2 prose hits, benign.
+- No fix, masking or stop. Deviation: one stray `2>/dev/null` and one `| head` ran, harmless.
+- Details: handoff/delivery/evidence/WP5-UX5-T03-FREEZE/checks.txt (unstaged).

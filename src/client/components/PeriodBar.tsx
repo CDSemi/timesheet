@@ -4,7 +4,7 @@ import { reviewStatus } from './dayModel.ts';
 import { gridStatus } from './deliveryModel.ts';
 import { usDate } from './format.ts';
 import { ImportedBadge, ImportedNote } from './ImportStatus.tsx';
-import { PERIOD_PILL_WORDS, dueInZoneText, dueParts, periodPillKind, reviewShortLabel, viewingZoneText, weekdayName, zoneNoteVisible } from './periodBarModel.ts';
+import { PERIOD_PILL_WORDS, dueInZoneText, dueParts, periodPillKind, rangeKind, rangeParts, reviewShortLabel, viewingZoneText, weekdayName, zoneNoteVisible } from './periodBarModel.ts';
 import { CURRENT_PERIOD_DESCRIPTION, todayDescription } from './periodJumpModel.ts';
 import { type PeriodState, ReviewLink } from './ReviewStatus.tsx';
 import { SubmissionStatusLine } from './SubmissionStatus.tsx';
@@ -36,6 +36,7 @@ export function PeriodBar({
   state,
   jumps,
   periods = null,
+  todayLocal = null,
 }: {
   view: TimesheetView;
   zone: string;
@@ -48,6 +49,8 @@ export function PeriodBar({
   jumps?: PeriodJumps;
   /** The server's current and in-progress periods (the owner's, in a shared view): they decide the "in progress" pill. Null until known. */
   periods?: Pick<CurrentPeriods, 'current' | 'in_progress'> | null;
+  /** The server's `today_local` (the accounting date in the reporting zone): a period that ended before it can ask for a sign-off. Null until known. */
+  todayLocal?: string | null;
 }) {
   const todayButton = useRef<HTMLButtonElement>(null);
   const { period } = view;
@@ -56,6 +59,7 @@ export function PeriodBar({
   // F-2: an imported period is read-only history. It has no review or delivery state, and its sign and submit are off.
   const imported = view.timesheet.imported_unverified;
   const status = state === null ? null : gridStatus(state);
+  const parts = rangeParts(period.period_start, period.period_end);
   return (
     <section className="card period-bar" aria-label="Pay period">
       <button type="button" className="secondary period-step" onClick={() => onMove(-1)} aria-label="Previous period">
@@ -63,20 +67,28 @@ export function PeriodBar({
       </button>
       <div className="period-main">
         <div className="period-title">
-          <strong className="period-name">
-            {usDate(period.period_start)}
+          {/*
+            The range is one set of text parts (U5-13): the style sheet shows the longest form that fits (full, no start year, no years,
+            end day only, no spaces) by hiding parts visually, never by removing them, so the text stays "10/12/2026 to 10/25/2026" for
+            every reader. The kind of range says which forms exist (the end-day forms need one month, the no-start-year form one year).
+          */}
+          <strong className="period-name" data-range-kind={rangeKind(period.period_start, period.period_end)}>
+            <span className="rg-start">{parts.startMonthDay}</span>
+            <span className="rg-start-year">{parts.startYear}</span>
             {/* The arrow is decoration in the label colour; screen readers read the hidden " to " (the text stays "10/12/2026 to 10/25/2026"). */}
             <span className="range-arrow" aria-hidden="true">
               →
             </span>
-            {/* A break opportunity: on the narrowest phones the end date moves to a second line instead of running under the arrow button. */}
-            <wbr />
             <span className="sr-only"> to </span>
-            {usDate(period.period_end)}
+            <span className="rg-end-month">{parts.endMonth}</span>
+            <span className="rg-end-day">{parts.endDay}</span>
+            <span className="rg-end-year">{parts.endYear}</span>
           </strong>
-          {/* The pill carries its words (never colour alone): the server's relation, or "in progress" in the five window days. */}
-          {pill !== 'neutral' && <span className={`badge ${pill}`}>{PERIOD_PILL_WORDS[pill]}</span>}
-          {imported ? <ImportedBadge /> : status !== null ? <SubmissionStatusLine status={status} /> : <span className="badge">{reviewStatus(view.timesheet)}</span>}
+          <div className="period-pills">
+            {/* The pill carries its words (never colour alone): the server's relation, or "in progress" in the five window days. */}
+            {pill !== 'neutral' && <span className={`badge ${pill}`}>{PERIOD_PILL_WORDS[pill]}</span>}
+            {imported ? <ImportedBadge /> : status !== null ? <SubmissionStatusLine status={status} /> : <span className="badge">{reviewStatus(view.timesheet)}</span>}
+          </div>
         </div>
         <p className="period-meta">
           <span>
@@ -179,7 +191,7 @@ export function PeriodBar({
                 <span className="review-full">Review &amp; sign off</span>
               </button>
             ) : (
-              <ReviewLink payrollDate={period.payroll_date} state={state} />
+              <ReviewLink payrollDate={period.payroll_date} periodEnd={period.period_end} todayLocal={todayLocal} state={state} />
             ))}
         </div>
       </div>

@@ -1,25 +1,10 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type CurrentPeriods, type Session, type TimesheetView } from '../api.ts';
 import { ClockOutDialog } from './ClockOutDialog.tsx';
 import { describeError } from './errors.ts';
 import { displayZone } from './format.ts';
 import { runningSessionOf } from './periodBarModel.ts';
 import { parseSharedHash } from './sharingModel.ts';
-
-/** The documented layout breakpoint: the clock card sits in the Timesheet page from 768px, in the top bar below it. */
-export const DESKTOP_QUERY = '(min-width: 768px)';
-
-/** True while a media query matches; the layouts that depend on it are chosen with it, never both at once. */
-export function useMedia(query: string): boolean {
-  return useSyncExternalStore(
-    (notify) => {
-      const list = window.matchMedia(query);
-      list.addEventListener('change', notify);
-      return () => list.removeEventListener('change', notify);
-    },
-    () => window.matchMedia(query).matches,
-  );
-}
 
 /** Finds the running session in the shown period, else in the current and in-progress periods. */
 async function findRunningSession(shown: TimesheetView | null): Promise<Session | undefined> {

@@ -16,6 +16,71 @@ export function weekdayName(date: string): string {
   return WEEKDAYS[isoWeekday(date) - 1] ?? '';
 }
 
+/*
+ * The period range on the period card (U5-13). The card shows the longest form that fits its box, from the full
+ * "10/12/2026 → 10/25/2026" down to "10/12→25". The five forms are one set of text parts that the style sheet hides visually
+ * (never removes), so the accessible text is always the full "10/12/2026 to 10/25/2026"; this model says which forms exist for a
+ * range and what each shows. Display only: both dates are the server's accounting dates, nothing is converted.
+ */
+
+/** How the two ends of a range relate; it decides which forms of the ladder exist. */
+export type RangeKind = 'same-month' | 'cross-month' | 'cross-year';
+
+/** The five forms, longest first: full, no start year, no years, end day only, no spaces around the arrow. */
+export type RangeStep = 'full' | 'no-start-year' | 'no-years' | 'end-day' | 'tight';
+
+/** Whether the end is in the start's month, in another month of the same year, or in another year. */
+export function rangeKind(start: string, end: string): RangeKind {
+  if (start.slice(0, 4) !== end.slice(0, 4)) return 'cross-year';
+  return start.slice(5, 7) === end.slice(5, 7) ? 'same-month' : 'cross-month';
+}
+
+/**
+ * The forms that exist for a range. "No start year" is skipped across years (it would read as one year for both ends), and the two
+ * "end day only" forms across months (the end month is needed).
+ */
+export function rangeLadder(start: string, end: string): RangeStep[] {
+  const kind = rangeKind(start, end);
+  if (kind === 'cross-year') return ['full', 'no-years'];
+  if (kind === 'cross-month') return ['full', 'no-start-year', 'no-years'];
+  return ['full', 'no-start-year', 'no-years', 'end-day', 'tight'];
+}
+
+/** The text parts of a range, in reading order; the style sheet hides some of them in the shorter forms. */
+export interface RangeParts {
+  startMonthDay: string;
+  startYear: string;
+  endMonth: string;
+  endDay: string;
+  endYear: string;
+}
+
+/** The parts of a range: `10/12`, `/2026`, `10/`, `25`, `/2026`. Joined with the arrow they are the full form. */
+export function rangeParts(start: string, end: string): RangeParts {
+  return {
+    startMonthDay: usShortDate(start),
+    startYear: `/${start.slice(0, 4)}`,
+    endMonth: `${end.slice(5, 7)}/`,
+    endDay: end.slice(8, 10),
+    endYear: `/${end.slice(0, 4)}`,
+  };
+}
+
+/** What one form of the ladder shows: `10/12/2026 → 10/25/2026`, `10/12 → 10/25/2026`, `10/12 → 10/25`, `10/12 → 25`, `10/12→25`. */
+export function rangeText(start: string, end: string, step: RangeStep): string {
+  const parts = rangeParts(start, end);
+  const arrow = step === 'tight' ? '→' : ' → ';
+  const startText = step === 'full' ? `${parts.startMonthDay}${parts.startYear}` : parts.startMonthDay;
+  const endText =
+    step === 'end-day' || step === 'tight' ? parts.endDay : `${parts.endMonth}${parts.endDay}${step === 'full' || step === 'no-start-year' ? parts.endYear : ''}`;
+  return `${startText}${arrow}${endText}`;
+}
+
+/** The accessible text of the range, whatever form shows: `10/12/2026 to 10/25/2026`. */
+export function rangeSpokenText(start: string, end: string): string {
+  return `${usDate(start)} to ${usDate(end)}`;
+}
+
 /**
  * The due date in words, in the reporting zone that owns it: `Due Tue 12/08/2026, 17:00 (America/Los_Angeles)`.
  * The date and time are the server's `due_local_*` fields; nothing is converted here.
@@ -35,11 +100,13 @@ export function dueParts(period: Pick<Period, 'due_local_date' | 'due_local_time
 
 /**
  * The short form of the review link's label, shown on a phone only when the full label does not fit on one line beside the other buttons
- * (the accessible name stays the full label, which contains the short text). `Review & sign off` becomes `Sign off`; `Review now` and
- * `Review or correct` become `Review`, the one word that names the action of both (the review screen is where a correction is made).
+ * (the accessible name stays the full label, which contains the short text). `Review & sign off` becomes `Sign off`, `Review & send`
+ * becomes `Send`; `Review now` and `Review or correct` become `Review`, the one word that names the action of both (the review screen
+ * is where a correction is made).
  */
 export function reviewShortLabel(label: string): string {
   if (label === 'Review & sign off') return 'Sign off';
+  if (label === 'Review & send') return 'Send';
   if (label === 'Review now' || label === 'Review or correct') return 'Review';
   return label;
 }

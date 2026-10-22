@@ -11,6 +11,10 @@ import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
  * the brand and the menu (--shell-brand-gap). WP5-UX3-T02 (owner decision U-06) changes the rule: the wordmark shows
  * from 1024px and is hidden below 1280px while the "Shared with me" switcher is in the bar, because the navigation
  * has only three entries and the person sits in one identity button truncated at 14rem; the bar stays one row.
+ *
+ * WP5-UX5-T04 (U5-02) changes it again: the wordmark shows whenever it fits (bar container queries, documented literals in styles.css), on
+ * the phone bar too: from 414px with the check in/out group, from 852px on the desktop bar without a share, from 1280px with one. The
+ * sweeps at the end of this file check every width from 320 to 1440px in both themes.
  */
 test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
 
@@ -146,7 +150,8 @@ async function barFacts(page: Page): Promise<BarFacts> {
           const clipped = (selector) => { const element = control.querySelector(selector); return element.scrollWidth > element.clientWidth; };
           return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height, textWidth: text.width, nameClipped: clipped('.identity-name') };
         })(),
-        brandGap: parseFloat(getComputedStyle(bar).getPropertyValue('--shell-brand-gap')),
+        // WP5-UX5-T04: the wordmark rule sets the gap on the menu (the bar is the size container, so it cannot style itself).
+        brandGap: parseFloat(getComputedStyle(bar.querySelector('.shell-nav')).getPropertyValue('--shell-brand-gap')),
         parts: ['.shell-brand', '.shell-nav', '.shell-switcher', '.shell-user'].map((selector) => { const element = bar.querySelector(selector); return selector + ' ' + (element === null ? '-' : Math.round(rect(element).width)); }).join(', '),
       };
     })()`,
@@ -265,7 +270,7 @@ async function expectBar(page: Page, label: string, wordmark: boolean): Promise<
 /** A display name far longer than the identity button's 14rem: the name is cut by an ellipsis, never wrapped or overflowing. */
 const LONG_NAME = 'Synthetic Reader With An Exceptionally Long Display Name';
 
-test('the wordmark rule: from 1024px, hidden below 1280px while the Shared with me switcher is in the bar; one row, no overflow, a long name truncated', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+test('the wordmark rule: from 852px of bar without a share (U5-02), hidden below 1280px while the Shared with me switcher is in the bar; one row, no overflow, a long name truncated', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
   test.skip(isMobile, 'The wordmark is a desktop-width brand; the phone shows the logo only (next test)');
   test.setTimeout(120_000);
   const me = await newPerson(adminSeed, builtServer, { displayName: LONG_NAME, signature: 'none' });
@@ -278,8 +283,9 @@ test('the wordmark rule: from 1024px, hidden below 1280px while the Shared with 
   const identityMax = await tokenPx(page, '--identity-max');
   expect(identityMax, '--identity-max is 14rem of the 15px root').toBeCloseTo(210, 0);
 
-  // Without a share the wordmark shows from 1024px; below it (768, 1023) the logo only with the 24px gap.
-  for (const width of [768, 1023]) {
+  // Without a share the wordmark shows from 852px of bar (U5-02: it was 1024px; the bar needs 14rem of identity, the three links and the brand
+  // with the 32px gap); below it (768, 851) the logo only with the 24px gap. The sweep tests below check every width.
+  for (const width of [768, 851]) {
     await page.setViewportSize({ width, height: 800 });
     const facts = await barFacts(page);
     expect(facts.wordmark?.visible, `no wordmark at ${width}px`).toBe(false);
@@ -287,7 +293,7 @@ test('the wordmark rule: from 1024px, hidden below 1280px while the Shared with 
     expect(facts.brandGap, `the narrow-width gap at ${width}px`).toBe(24);
     expect(facts.navLeft - facts.brandRight, `brand to menu at ${width}px`).toBeCloseTo(24, 1);
   }
-  for (const width of [1024, 1280, 1440, 1920]) {
+  for (const width of [852, 1023, 1024, 1280, 1440, 1920]) {
     await page.setViewportSize({ width, height: 800 });
     const facts = await expectBar(page, `${width}px without a share`, true);
     // The long name and the long email are cut at --identity-max, never wider.
@@ -318,7 +324,7 @@ test('the wordmark rule: from 1024px, hidden below 1280px while the Shared with 
   expect(await violations(page), 'no Content-Security-Policy violation').toEqual([]);
 });
 
-test('on a phone only the logo shows in the bar: no wordmark and no identity button', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+test('at 390px the phone bar shows only the logo (the wordmark joins from 414px, see the sweeps) and no identity button', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', 'The phone bar only; the desktop rule is the test above');
   const me = await newPerson(adminSeed, builtServer, { displayName: READER_NAME, signature: 'none' });
   await signInPageAs(me.account);
@@ -333,3 +339,202 @@ test('on a phone only the logo shows in the bar: no wordmark and no identity but
   await expect(page.locator('header.shell-bar .avatar').filter({ visible: true })).toHaveCount(0);
   await expect(page.getByText(BRAND_NAME, { exact: true })).toHaveCount(1);
 });
+
+/* ---- WP5-UX5-T04 (U5-02): the wordmark shows whenever it fits ------------------------------------------------------------------ */
+
+/** The bar as the browser laid it out in one state: the wordmark as it is, forced shown or forced hidden (see `sweepRow`). */
+interface BarMeasure {
+  visible: boolean;
+  height: number;
+  overflow: boolean;
+  /** The right edge of the wordmark, or 0 when it is not displayed. */
+  markRight: number;
+  barRight: number;
+  clockWidth: number | null;
+  switcherWidth: number | null;
+  brandRight: number;
+  clockLeft: number | null;
+  /** The free room in the menu cell of the desktop bar (its right edge less the last link's), or null on the phone bar. */
+  navRoom: number | null;
+  /** Boxes of the items that share the bar's row, left to right, for the overlap check: [name, left, right, top, bottom]. */
+  items: Array<[string, number, number, number, number]>;
+}
+
+interface SweepRow {
+  width: number;
+  actual: BarMeasure;
+  shown: BarMeasure;
+  hidden: BarMeasure;
+}
+
+/**
+ * One width of the bar in three states. A state is forced through the element's own style (the CSSOM; a `<style>` element is blocked
+ * by the page's CSP): the wordmark `display: block` with the 32px brand gap that goes with it, or `display: none` with the 24px one.
+ */
+const SWEEP_ROW_SCRIPT = `(async () => {
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const bar = document.querySelector('header.shell-bar');
+  const mark = bar.querySelector('svg.wordmark');
+  const nav = bar.querySelector('.shell-nav');
+  const rect = (element) => element.getBoundingClientRect();
+  const measure = (force) => {
+    const markWas = mark.style.cssText;
+    const navWas = nav.style.cssText;
+    if (force !== null) {
+      mark.style.setProperty('display', force ? 'block' : 'none', 'important');
+      nav.style.setProperty('--shell-brand-gap', force ? '32px' : '24px');
+    }
+    const clock = bar.querySelector('.bar-clock');
+    const switcher = bar.querySelector('.shell-switcher');
+    const user = bar.querySelector('.shell-user');
+    const desktop = getComputedStyle(nav).display !== 'none';
+    const links = [...nav.querySelectorAll('a')];
+    const lastLink = links[links.length - 1];
+    const items = [];
+    const add = (name, element) => {
+      if (element === null || element === undefined || getComputedStyle(element).display === 'none') return;
+      const box = rect(element);
+      items.push([name, box.left, box.right, box.top, box.bottom]);
+    };
+    add('brand', bar.querySelector('.shell-brand'));
+    add('clock', clock);
+    if (desktop) add('menu', lastLink);
+    add('switcher', switcher);
+    add('user', user);
+    const markBox = rect(mark);
+    const result = {
+      visible: getComputedStyle(mark).display !== 'none',
+      height: rect(bar).height,
+      overflow: document.documentElement.scrollWidth > window.innerWidth,
+      markRight: markBox.width === 0 ? 0 : markBox.right,
+      barRight: rect(bar).right - Number.parseFloat(getComputedStyle(bar).paddingRight),
+      clockWidth: clock === null ? null : rect(clock).width,
+      switcherWidth: switcher === null ? null : rect(switcher).width,
+      brandRight: rect(bar.querySelector('.shell-brand')).right,
+      clockLeft: clock === null ? null : rect(clock).left,
+      navRoom: desktop && lastLink !== undefined ? rect(nav).right - rect(lastLink).right : null,
+      items,
+    };
+    mark.style.cssText = markWas;
+    nav.style.cssText = navWas;
+    return result;
+  };
+  return { actual: measure(null), shown: measure(true), hidden: measure(false) };
+})()`;
+
+async function sweepRow(page: Page): Promise<Omit<SweepRow, 'width'>> {
+  return page.evaluate<Omit<SweepRow, 'width'>>(SWEEP_ROW_SCRIPT);
+}
+
+/**
+ * Whether the wordmark would fit at this width, from the browser's own layout with it forced shown against forced hidden: the bar keeps
+ * its height (the wordmark adds no row), nothing overflows, the group beside it keeps the width it has without it, and 8px are left over
+ * (beside the logo on the phone bar, where the switcher takes what is free, the switcher keeps 8px more than its 16rem basis; in the
+ * menu cell of the desktop bar).
+ */
+function wordmarkFits(row: Omit<SweepRow, 'width'>, phone: boolean): boolean {
+  const { shown, hidden } = row;
+  if (shown.height !== hidden.height || shown.overflow) return false;
+  if (shown.clockWidth !== null && hidden.clockWidth !== null && shown.clockWidth < hidden.clockWidth - 0.5) return false;
+  let room: number;
+  if (!phone) room = shown.navRoom ?? 0;
+  else if (shown.switcherWidth !== null && hidden.height < 100) room = shown.switcherWidth - 240;
+  else room = shown.clockLeft === null ? 100 : shown.clockLeft - shown.brandRight - 12;
+  return room >= 8;
+}
+
+/** Items of one row of the bar must not overlap, and the wordmark must end inside the bar. */
+function expectNoOverlap(width: number, state: BarMeasure): void {
+  const items = [...state.items].sort((a, b) => a[1] - b[1]);
+  for (const [index, item] of items.entries()) {
+    const next = items[index + 1];
+    if (next === undefined) continue;
+    const sameRow = item[3] < next[4] - 1 && next[3] < item[4] - 1;
+    if (sameRow) expect(item[2], `${width}px: ${item[0]} ends before ${next[0]} starts`).toBeLessThanOrEqual(next[1] + 0.5);
+  }
+  if (state.visible) expect(state.markRight, `${width}px: the wordmark ends inside the bar`).toBeLessThanOrEqual(state.barRight + 0.5);
+  expect(state.overflow, `${width}px: nothing overflows the window`).toBe(false);
+}
+
+interface SweepOptions {
+  /** True for the "Shared with me" bar of a desktop width: the bound is the fixed 1280px, not the measured room (the switcher's width depends on the owners' names). */
+  fixedDesktopBound: boolean;
+}
+
+/**
+ * Sweeps the bar from 320 to 1440px in 1px steps and checks the rule of U5-02: the wordmark is displayed exactly when it fits with 8px
+ * of slack (to the pixel of the literal thresholds), never overlaps or clips, and never adds a row. Returns the widths where it shows.
+ */
+async function sweepWordmark(page: Page, options: SweepOptions): Promise<number[]> {
+  const rows: SweepRow[] = [];
+  for (let width = 320; width <= 1440; width += 1) {
+    await page.setViewportSize({ width, height: 800 });
+    rows.push({ width, ...(await sweepRow(page)) });
+  }
+  const shows = rows.map((row) => row.actual.visible);
+  const fits = rows.map((row) => (row.width >= 768 && options.fixedDesktopBound ? row.width >= 1280 : wordmarkFits(row, row.width < 768)));
+  for (const [index, row] of rows.entries()) {
+    expectNoOverlap(row.width, row.actual);
+    if (row.actual.visible) expect(row.actual.height, `${row.width}px: the wordmark adds no row`).toBe(row.hidden.height);
+    // The literal thresholds are accurate to a pixel: a mismatch is allowed only where the neighbouring width agrees.
+    if (shows[index] !== fits[index]) {
+      const neighbour = shows[index] === fits[index - 1] || shows[index] === fits[index + 1];
+      expect(neighbour, `${row.width}px: the wordmark is ${shows[index] ? 'shown' : 'hidden'} but ${fits[index] ? 'fits' : 'does not fit'}`).toBe(true);
+    }
+  }
+  return rows.filter((row) => row.actual.visible).map((row) => row.width);
+}
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`the wordmark shows whenever it fits, 320 to 1440px in 1px steps, on the person's own screens (${scheme})`, async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+    test.skip(isMobile, 'The sweep resizes the window of the desktop project');
+    test.setTimeout(240_000);
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const me = await newPerson(adminSeed, builtServer, { displayName: LONG_NAME, signature: 'none' });
+    await page.setViewportSize({ width: 600, height: 800 });
+    await signInPageAs(me.account);
+    await expect(page.locator('.bar-clock')).toBeVisible();
+    const shown = await sweepWordmark(page, { fixedDesktopBound: false });
+    // The documented literals: from 414px of bar with the check in/out group, from 852px without it on the desktop bar.
+    const phone = shown.filter((width) => width < 768);
+    const desktop = shown.filter((width) => width >= 768);
+    expect(Math.min(...phone), 'the phone bar shows it from 414px').toBe(414);
+    expect(Math.max(...phone), 'and up to 767px').toBe(767);
+    expect(Math.min(...desktop), 'the desktop bar shows it from 852px').toBe(852);
+    expect(Math.max(...desktop)).toBe(1440);
+    expect(shown.length).toBe(phone.length + desktop.length);
+  });
+
+  test(`with a "Shared with me" switcher the wordmark never adds a row: hidden where it would push the switcher down, shown from 1280px on the desktop bar (${scheme})`, async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'The sweep resizes the window of the desktop project');
+    test.setTimeout(240_000);
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const me = await newPerson(adminSeed, builtServer, { displayName: LONG_NAME, signature: 'none' });
+    const owner = await newPerson(adminSeed, builtServer, { displayName: OWNER_NAME, signature: 'none' });
+    await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
+    await page.setViewportSize({ width: 600, height: 800 });
+    await signInPageAs(me.account);
+    await expect(page.locator('.bar-clock')).toBeVisible();
+    await expect(page.locator('header.shell-bar .shell-switcher')).toBeVisible();
+    const shown = await sweepWordmark(page, { fixedDesktopBound: true });
+    // Own view with the switcher: shown from 414px up to 494px (the switcher is on its own row anyway), hidden from 495 to 665px (it would
+    // wrap the switcher), shown again from 666px; on the desktop bar from 1280px.
+    const phone = shown.filter((width) => width < 768);
+    expect(phone.filter((width) => width < 600).sort((a, b) => a - b), 'the narrow range of the phone bar').toEqual(Array.from({ length: 495 - 414 }, (_, index) => 414 + index));
+    expect(Math.min(...phone.filter((width) => width >= 600)), 'shown again from 666px').toBe(666);
+    expect(Math.min(...shown.filter((width) => width >= 768)), 'the desktop bar shows it from 1280px').toBe(1280);
+    // A shared view has no check in/out group: the brand and the switcher share the row, so the wordmark shows from 492px.
+    await page.goto(`/#/shared/${owner.account.id}/timesheet`);
+    await expect(page.locator('.share-bar')).toBeVisible();
+    await expect(page.locator('.bar-clock')).toHaveCount(0);
+    const sharedShown = await sweepWordmark(page, { fixedDesktopBound: true });
+    expect(Math.min(...sharedShown), 'a shared view shows the wordmark from 492px').toBe(492);
+    expect(Math.min(...sharedShown.filter((width) => width >= 768)), 'and on the desktop bar from 1280px').toBe(1280);
+  });
+}

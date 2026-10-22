@@ -12,8 +12,11 @@ import {
   otTotalText,
   parseReviewHash,
   periodDescription,
+  periodEnded,
+  periodHasSend,
   periodStatus,
   reviewLinkLabel,
+  reviewLinkView,
   resetAfterStale,
   reviewDayRow,
   reviewHash,
@@ -345,6 +348,86 @@ describe('period and delivery status from server fields', () => {
     expect(reviewLinkLabel(periodStatus({ finalized_revision_no: 1, revision: revision({ origin: 'deadline', review_state: 'pending' }) }))).toBe('Review now');
     expect(reviewLinkLabel(periodStatus({ finalized_revision_no: 1, revision: revision() }))).toBe('Review or correct');
     expect(reviewLinkLabel(periodStatus({ finalized_revision_no: 1, revision: revision(), jobs: [job('succeeded', 'render_pdf')] }))).toBe('Review or correct');
+  });
+
+  /*
+   * U5-14 (owner answers F-2 a and H-1 a): the review link of the period card is the primary button while the shown period is ended
+   * (`period_end < today_local`) and still needs the person; once any revision has a send it is the quiet link. Synthetic dates: the
+   * period 09/28 to 10/11; today 10/12 (ended) or 10/05 (in progress).
+   */
+  describe('the review link of the period card (U5-14)', () => {
+    const END = '2026-10-11';
+    const AFTER = '2026-10-12';
+    const DURING = '2026-10-05';
+    const render = job('succeeded', 'render_pdf');
+
+    /** The view of one state: the finalization fields, the attempts, an earlier send, and whether the period has ended. */
+    const view = (
+      finalization: Parameters<typeof periodStatus>[0] & { jobs: FinalizationJob[] },
+      options: { attempts?: DeliveryAttempt[]; earlierSend?: boolean; today?: string | null } = {},
+    ) =>
+      reviewLinkView({
+        status: periodStatus(finalization),
+        sendExists: periodHasSend(finalization, options.attempts ?? [], options.earlierSend ?? false),
+        ended: periodEnded(END, options.today === undefined ? AFTER : options.today),
+      });
+
+    it('knows when a period has ended from the server date alone', () => {
+      expect(periodEnded(END, AFTER)).toBe(true);
+      expect(periodEnded(END, END)).toBe(false);
+      expect(periodEnded(END, DURING)).toBe(false);
+      expect(periodEnded(END, null)).toBe(false);
+    });
+
+    it('a draft is primary once ended and quiet while the period is in progress, with the same words', () => {
+      expect(view({ finalized_revision_no: null, revision: null, jobs: [] })).toEqual({ label: 'Review & sign off', primary: true });
+      expect(view({ finalized_revision_no: null, revision: null, jobs: [] }, { today: DURING })).toEqual({ label: 'Review & sign off', primary: false });
+      expect(view({ finalized_revision_no: null, revision: null, jobs: [] }, { today: END })).toEqual({ label: 'Review & sign off', primary: false });
+    });
+
+    it('an automatic revision with the review pending is primary "Review now" once ended', () => {
+      const pending = { finalized_revision_no: 1, revision: revision({ origin: 'deadline', review_state: 'pending' }), jobs: [render, job('succeeded')] };
+      expect(view(pending)).toEqual({ label: 'Review now', primary: true });
+      expect(view(pending, { today: DURING })).toEqual({ label: 'Review now', primary: false });
+    });
+
+    it('signed and not sent yet is primary "Review & send" (F-2 a), quiet while the period is in progress', () => {
+      const signed = { finalized_revision_no: 1, revision: revision(), jobs: [render] };
+      expect(view(signed)).toEqual({ label: 'Review & send', primary: true });
+      expect(view(signed, { today: DURING })).toEqual({ label: 'Review & send', primary: false });
+    });
+
+    it('once any revision has a send it is the quiet "Review or correct" (H-1 a)', () => {
+      // The send job of this revision, in any state, is a send.
+      expect(view({ finalized_revision_no: 1, revision: revision(), jobs: [render, job('queued')] })).toEqual({ label: 'Review or correct', primary: false });
+      expect(view({ finalized_revision_no: 1, revision: revision(), jobs: [render, job('intervention')] })).toEqual({ label: 'Review or correct', primary: false });
+      // A delivery attempt of this revision is a send too.
+      expect(view({ finalized_revision_no: 1, revision: revision(), jobs: [render] }, { attempts: [attempt({ state: 'accepted' })] })).toEqual({
+        label: 'Review or correct',
+        primary: false,
+      });
+    });
+
+    it('a later signed correction that is not sent yet stays quiet when an earlier revision was sent, and presses for a send when none was', () => {
+      const correction = { finalized_revision_no: 2, revision: revision({ revision_no: 2, revision_kind: 'correction' }), jobs: [render] };
+      expect(view(correction, { earlierSend: true })).toEqual({ label: 'Review or correct', primary: false });
+      expect(view(correction, { earlierSend: false })).toEqual({ label: 'Review & send', primary: true });
+      // Its own send makes it quiet as well.
+      expect(view({ ...correction, jobs: [render, job('queued')] }, { earlierSend: false })).toEqual({ label: 'Review or correct', primary: false });
+    });
+
+    it('a late review follows the same rule, and a state that did not load is the quiet link', () => {
+      const late = { finalized_revision_no: 2, revision: revision({ revision_no: 2, revision_kind: 'late_review', origin: 'deadline' }), jobs: [render] };
+      expect(view(late, { earlierSend: true }).primary).toBe(false);
+      expect(reviewLinkView({ status: null, sendExists: false, ended: true })).toEqual({ label: 'Review & sign off', primary: false });
+    });
+
+    it('reads a send of an earlier revision, a send job and an attempt as a send, and nothing else', () => {
+      expect(periodHasSend({ jobs: [render] }, [], false)).toBe(false);
+      expect(periodHasSend({ jobs: [render] }, [], true)).toBe(true);
+      expect(periodHasSend({ jobs: [job('queued')] }, [], false)).toBe(true);
+      expect(periodHasSend({ jobs: [] }, [attempt()], false)).toBe(true);
+    });
   });
 
   it('no delivery state before a revision', () => {

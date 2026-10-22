@@ -156,21 +156,28 @@ for (const theme of THEMES) {
   });
 }
 
-test('Timesheet on a phone: the paper is full-bleed and square, the table keeps its width and nothing scrolls sideways', async ({ page, signInThroughUi }, testInfo) => {
-  test.skip(testInfo.project.name !== 'mobile', 'The phone paper is measured on the 390x844 phone');
+// WP5-UX5-T04 (U5-22): below 480px the period card and the paper stand 8px from each window edge (they were full-bleed below 768px), the
+// paper keeps the card corner and pads 8px, so the table keeps its width.
+test('Timesheet in the compact form: the period card and the paper stand 8px from the window edges with the card corner, the table keeps its width and nothing scrolls sideways', async ({ page, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'The compact form is measured on the 390x844 phone');
   await openTimesheet(page, 'light', signInThroughUi);
-  const lines = [`# ${testInfo.project.name}: phone paper`];
-  for (const width of [320, 390]) {
+  const lines = [`# ${testInfo.project.name}: compact paper`];
+  for (const width of [320, 360, 390, 479]) {
     await page.setViewportSize({ width, height: 844 });
     const paper = page.locator('[data-paper="timesheet"]');
     const box = await boxOf(paper);
-    expect(box.left, `the paper reaches the left edge at ${width}px`).toBeCloseTo(0, 0);
-    expect(box.right, `the paper reaches the right edge at ${width}px`).toBeCloseTo(width, 0);
-    expect(await paper.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).borderTopLeftRadius), 'the phone paper is square').toBe('0px');
+    const card = await boxOf(page.locator('section.period-bar'));
+    expect(card.left, `the period card is 8px from the left edge at ${width}px`).toBeCloseTo(8, 0);
+    expect(card.right, `the period card is 8px from the right edge at ${width}px`).toBeCloseTo(width - 8, 0);
+    expect(box.left, `the paper is 8px from the left edge at ${width}px`).toBeCloseTo(8, 0);
+    expect(box.right, `the paper is 8px from the right edge at ${width}px`).toBeCloseTo(width - 8, 0);
+    expect(await paper.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).borderTopLeftRadius), 'the compact paper has the card corner').toBe('12px');
+    expect(await paper.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).paddingLeft), 'and 8px of padding').toBe('8px');
     const table = await boxOf(page.locator('.sheet-table').first());
-    // The table keeps the width it had without the paper: the page padding (16px) on each side.
-    lines.push(`${width}px: paper ${round(box.width)}px, table ${round(table.width)}px`);
+    // The table keeps the width it had before: the 8px edge and the 8px padding on each side leave the window less 32px (358px at 390px).
+    lines.push(`${width}px: card ${round(card.width)}px, paper ${round(box.width)}px, table ${round(table.width)}px`);
     expect(table.width, `the table width at ${width}px`).toBeCloseTo(width - 32, 0);
+    if (width === 390) expect(Math.abs(table.width - 358), 'the table is 358px at 390px').toBeLessThanOrEqual(1);
     const widths = await page.evaluate<{ scroll: number; inner: number }>('({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth })');
     expect(widths.scroll, `no sideways scroll at ${width}px`).toBeLessThanOrEqual(widths.inner);
   }
@@ -216,8 +223,9 @@ for (const theme of THEMES) {
         return { shadow: computed?.boxShadow ?? '', radius: computed?.borderTopLeftRadius ?? '', pad: body === null ? '' : (view?.getComputedStyle(body).paddingLeft ?? '') };
       });
       expect(parseLayers(style.shadow).length, `the review paper is raised (${style.shadow})`).toBeGreaterThanOrEqual(3);
-      expect(style.radius).toBe(width >= 768 ? '12px' : '0px');
-      expect(style.pad).toBe('16px');
+      // WP5-UX5-T04 (U5-22): the card corner at every width; the body pads 16px, and 8px in the compact form (below 480px).
+      expect(style.radius).toBe('12px');
+      expect(style.pad).toBe(width < 480 ? '8px' : '16px');
       for (const inner of ['section.sheet-week', '.sheet-footer']) {
         for (const element of await page.locator(inner).all()) expect(await computedStyle(element, 'boxShadow')).toBe('none');
       }
@@ -241,8 +249,8 @@ for (const theme of THEMES) {
         }
       }
       if (width === 390) {
-        expect(outer.left, 'full-bleed on a phone').toBeCloseTo(0, 0);
-        expect(outer.right).toBeCloseTo(390, 0);
+        expect(outer.left, 'the compact Preview card is 8px from the left edge').toBeCloseTo(8, 0);
+        expect(outer.right, 'and 8px from the right edge').toBeCloseTo(382, 0);
         const widths = await page.evaluate<{ scroll: number; inner: number }>('({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth })');
         expect(widths.scroll, 'no sideways scroll').toBeLessThanOrEqual(widths.inner);
       }

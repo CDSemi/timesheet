@@ -1,20 +1,42 @@
 import { useEffect, useState } from 'react';
-import { api, type DeliveryAttempt, type FinalizationResponse } from '../api.ts';
+import { api, type DeliveryAttempt, type FinalizationResponse, type RevisionListItem } from '../api.ts';
 import { reviewShortLabel } from './periodBarModel.ts';
-import { deliveryStatus, type DeliveryStatus, periodStatus, type PeriodStatus, reviewHash, reviewLinkLabel, type Tone } from './reviewModel.ts';
+import {
+  deliveryStatus,
+  type DeliveryStatus,
+  periodEnded,
+  periodHasSend,
+  periodStatus,
+  type PeriodStatus,
+  reviewHash,
+  reviewLinkView,
+  type Tone,
+} from './reviewModel.ts';
 
 /** What the server says about the finalization and the email of one period. */
 export interface PeriodState {
   finalization: FinalizationResponse;
   attempts: DeliveryAttempt[];
+  /** True when an earlier revision of the period has a delivery attempt (owner decision H-1 a); read only for a corrected period. */
+  earlierSend?: boolean;
 }
 
-/** Loads the finalization state and, once a revision exists, its delivery attempts. Read-only. */
+/**
+ * Loads the finalization state and, once a revision exists, its delivery attempts; for a revision after the first also whether an
+ * earlier revision of the period was sent (the revision list's delivery state). Read-only. A revision list that cannot be read counts as
+ * "an earlier send exists", so the review link stays the quiet one rather than pressing for a send that may already have gone out.
+ */
 export async function loadPeriodState(payrollDate: string): Promise<PeriodState> {
   const finalization = await api<FinalizationResponse>('GET', `/api/timesheets/${payrollDate}/finalization`);
-  if (finalization.revision === null) return { finalization, attempts: [] };
-  const deliveries = await api<{ deliveries: DeliveryAttempt[] }>('GET', `/api/deliveries?revision_id=${finalization.revision.id}`);
-  return { finalization, attempts: deliveries.deliveries };
+  const revision = finalization.revision;
+  if (revision === null) return { finalization, attempts: [] };
+  const deliveries = await api<{ deliveries: DeliveryAttempt[] }>('GET', `/api/deliveries?revision_id=${revision.id}`);
+  if (revision.revision_no <= 1) return { finalization, attempts: deliveries.deliveries };
+  const earlierSend = await api<{ revisions: RevisionListItem[] }>('GET', '/api/revisions').then(
+    (list) => list.revisions.some((item) => item.payroll_date === payrollDate && item.revision_no < revision.revision_no && item.delivery_state !== null),
+    () => true,
+  );
+  return { finalization, attempts: deliveries.deliveries, earlierSend };
 }
 
 /**
@@ -79,13 +101,27 @@ export function DeliveryBadge({ state, attr }: { state: PeriodState | null; attr
   return delivery === null ? null : <StatusBadge status={delivery} name="delivery" attr={attr} />;
 }
 
-/** The link from the timesheet to the review of a period; the wording follows the period state. */
-export function ReviewLink({ payrollDate, state }: { payrollDate: string; state: PeriodState | null }) {
-  const label = reviewLinkLabel(state === null ? null : periodStatus(state.finalization));
+/**
+ * The link from the timesheet to the review of a period; the wording and the style follow the period state (U5-14): the primary
+ * button (`data-review-primary`) while the period is ended and still needs the person, else the quiet link.
+ */
+export function ReviewLink({ payrollDate, periodEnd, todayLocal, state }: { payrollDate: string; periodEnd: string; todayLocal: string | null; state: PeriodState | null }) {
+  const { label, primary } = reviewLinkView({
+    status: state === null ? null : periodStatus(state.finalization),
+    sendExists: state !== null && periodHasSend(state.finalization, state.attempts, state.earlierSend === true),
+    ended: periodEnded(periodEnd, todayLocal),
+  });
   // The text content is the full label. On a phone the style sheet may show `data-short` instead (a pseudo-element) when the full label
   // does not fit on one line; `aria-label` keeps the accessible name the full label either way (it contains the short text, SC 2.5.3).
   return (
-    <a className="button-link review-link" href={reviewHash(payrollDate)} data-review-link={payrollDate} aria-label={label} {...reviewLabelAttributes(label)}>
+    <a
+      className={`button-link review-link${primary ? ' primary' : ''}`}
+      href={reviewHash(payrollDate)}
+      data-review-link={payrollDate}
+      data-review-primary={primary ? 'true' : undefined}
+      aria-label={label}
+      {...reviewLabelAttributes(label)}
+    >
       <span className="review-full">{label}</span>
     </a>
   );

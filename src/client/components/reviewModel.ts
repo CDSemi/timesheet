@@ -231,6 +231,51 @@ export function reviewLinkLabel(status: PeriodStatus | null): string {
   }
 }
 
+/** True when a period's last day is before today's accounting date (both `YYYY-MM-DD`; `todayLocal` is the server's `today_local`, never the device clock). */
+export function periodEnded(periodEnd: string, todayLocal: string | null): boolean {
+  return todayLocal !== null && periodEnd < todayLocal;
+}
+
+/**
+ * True when any revision of the period has a send (owner decision H-1 a), from server fields only: a send job or a delivery attempt
+ * of the current revision, or a delivery attempt of an earlier revision (`earlierSend`, from the revision list). A send that is queued
+ * for an earlier revision and has no attempt yet is not visible to the client.
+ */
+export function periodHasSend(finalization: Pick<FinalizationResponse, 'jobs'>, attempts: readonly unknown[], earlierSend: boolean): boolean {
+  return earlierSend || attempts.length > 0 || finalization.jobs.some((job) => job.kind === 'send_email');
+}
+
+/** The review link of the period card: its words, and whether it is the primary button. */
+export interface ReviewLinkView {
+  label: string;
+  primary: boolean;
+}
+
+/**
+ * The review link of the period card (U5-14, owner answers F-2 a and H-1 a). It is the primary button while the shown period is the
+ * person's own, ended (`ended`: its last day is before today's accounting date), not imported, and still needs the person:
+ * - no revision yet (draft): "Review & sign off";
+ * - an automatic revision with the review pending: "Review now";
+ * - signed and no revision of the period has a send yet: "Review & send".
+ * Once any revision has a send (`sendExists`) it is the quiet link "Review or correct", also for a later signed correction that is not
+ * sent yet (the Review page's Send card still offers that send). A future or in-progress period, and a state that did not load, keep
+ * the quiet link. The caller handles a shared view (no link) and an imported period (a disabled link).
+ */
+export function reviewLinkView(input: { status: PeriodStatus | null; sendExists: boolean; ended: boolean }): ReviewLinkView {
+  const { status, sendExists, ended } = input;
+  if (status === null) return { label: 'Review & sign off', primary: false };
+  switch (status.key) {
+    case 'draft':
+      return { label: 'Review & sign off', primary: ended };
+    case 'submitted_auto_pending':
+      return { label: 'Review now', primary: ended };
+    case 'submitted_manual':
+      return { label: 'Review or correct', primary: false };
+    default:
+      return sendExists ? { label: 'Review or correct', primary: false } : { label: 'Review & send', primary: ended };
+  }
+}
+
 export type DeliveryKey =
   | 'not_sent'
   | 'queued'

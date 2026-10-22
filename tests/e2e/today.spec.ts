@@ -1,7 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import type { Locator, Page } from '@playwright/test';
-import { backdropOf, backdropsAbove, computedStyle, contrast, focusFromKeyboard, measureFocusRing, over, parseColour, settledStyle } from './contrast.ts';
+import { addDays } from '../../src/domain/dates.ts';
+import { backdropOf, backdropsAbove, computedStyle, contrast, focusFromKeyboard, measureFocusRing, over, parseColour, settledStyle, tokenColour } from './contrast.ts';
 import { dayButton } from './dayButton.ts';
 import { expect, newPerson, type PeriodFacts, type PeriodsCurrent, screenshotPath, test } from './fixtures.ts';
+import { cardParts, near } from './periodCard.ts';
+import { insideTheWindow, withToday } from './periodWindow.ts';
 
 /*
  * WP5-UX2-T04: the "Today" and "Current period" buttons of the period bar, on both projects.
@@ -457,9 +461,11 @@ test.describe('phone', () => {
     await landOn(page, signInThroughUi);
     await awayState(page, periods);
     const withCurrent = isWindow(periods);
-    // 600px is a wide phone (below the 768px layout): the full label fits beside both buttons. At 320 "Current period" shows as "Current" (U-17)
-    // so Today, Current and the review link still share one 44px row (WP5-UX3-T04 replaces the former 320px own-row expectation: stricter, one row fewer).
-    for (const width of [600, 390, 375, 360, 320]) {
+    // 600px is a wide phone (below the 768px layout): the full label fits beside both buttons. "Current period" shows as "Current" (U-17) where
+    // the row is narrower than 18.4rem, so Today, Current and the review link still share one 44px row (WP5-UX3-T04 replaces the former
+    // 320px own-row expectation: stricter, one row fewer). WP5-UX5-T04 (U5-22): the card stands 8px from the window edges, so the row is 16px
+    // wider than before (280px at 320, which still holds "Current period" in full) and "Current" starts below 316px; 300px is checked too.
+    for (const width of [600, 390, 375, 360, 320, 300]) {
       await page.setViewportSize({ width, height: 844 });
       const [today, review] = [todayButton(page), reviewLink(page)];
       const controls = withCurrent ? [today, currentButton(page), review] : [today, review];
@@ -470,14 +476,15 @@ test.describe('phone', () => {
       const full = ((await review.textContent()) ?? '').trim();
       const sharesRow = spread <= ROW_TOLERANCE;
       const shown = await visibleLabel(review);
-      // Short only for a long label in the three-button row at 390, 375, 360 and 320; everywhere else the full label is shown.
-      const expectShort = withCurrent && (width === 320 || (full.length > 12 && [390, 375, 360].includes(width)));
+      // Short only for a long label in the three-button row at 390, 375, 360 and 320 (a row of 350 to 280px), and for every label at 320 and 300
+      // (below 20.2rem); everywhere else the full label is shown.
+      const expectShort = withCurrent && (width <= 320 || (full.length > 12 && [390, 375, 360].includes(width)));
       if (expectShort) expect(shown, `${width}px: the short form`).toBe(SHORT_FORM[full]);
       else expect(shown, `${width}px: the full label`).toBe(full);
       if (withCurrent) {
-        // "Current period" in full from 360 to 600; "Current" only at 320, where the container is 264px (below 18.1rem). The name never changes (SC 2.5.3).
+        // "Current period" in full from 320 to 600; "Current" only at 300, where the container is 260px (below 18.1rem or 18.4rem). The name never changes (SC 2.5.3).
         const currentShown = await visibleJumpLabel(currentButton(page));
-        if (width === 320) expect(currentShown, '320px: the short form of Current period').toBe('Current');
+        if (width === 300) expect(currentShown, '300px: the short form of Current period').toBe('Current');
         else expect(currentShown, `${width}px: Current period in full`).toBe('Current period');
         await expect(currentButton(page)).toHaveAccessibleName('Current period');
         expect('current period', `${width}px: the name contains the visible text`).toContain(currentShown.toLowerCase());
@@ -746,7 +753,8 @@ test('the periods are re-read through the share when the window regains focus or
 /* ---- WP5-UX3-T04, G-5 (b): the "in progress" pill ----------------------------------------------------------------- */
 
 /** The period relation pill of the bar (the status badges that follow it are not part of the set). */
-const relationPill = (page: Page) => bar(page).locator('.period-title > .badge:is(.old, .current, .future, .in-progress)');
+// WP5-UX5-T04 (U5-10): the pills are in their own row under the range (`.period-pills`), the relation pill first and a direct child of it.
+const relationPill = (page: Page) => bar(page).locator('.period-pills > .badge:is(.old, .current, .future, .in-progress)');
 
 /** The ink of a pill against its fill, in a theme situation (the page is switched like the other specs do: media plus the manual attribute). */
 async function pillInkContrast(pill: Locator): Promise<number> {
@@ -1006,5 +1014,145 @@ test.describe('desktop widths', () => {
       }
       expect(next?.x ?? 0, `away ${width}px: Next stays left of Today`).toBeLessThan(today?.x ?? 0);
     }
+  });
+});
+
+/* ---- U5-08 and U5-14: Current period inside the window after a period ended, and the primary review link ----------------------- */
+
+test.describe('Current period and the review link on the card (U5-08, U5-14)', () => {
+  test.skip(({ isMobile }) => isMobile, 'The card is checked at the widths of the desktop project');
+
+  test('inside the window after a period ended, Current period follows Today, the wide row needs 738px of card with it and the narrow row keeps the buttons in one row; a press returns to the current period', async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }) => {
+    test.setTimeout(120_000);
+    const periods = await insideTheWindow(page, employeeSeed);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    // The page opens on the ended period, where Current period is not offered; the next period (in progress) offers it.
+    await expect(page.locator('.period-name')).toHaveText(rangeText(periods.current));
+    await expect(page.locator('[data-period-current]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Next period' }).click();
+    await expect(page.locator('.period-name')).toHaveText(rangeText(periods.in_progress));
+    await expect(page.locator('[data-period-current]')).toHaveCount(1);
+    await expect(page.locator('.period-title .badge.in-progress')).toHaveText('in progress');
+    // Wide with Current period: the buttons are Today, Current period, then Review at the right edge.
+    for (const width of [1440, 1100, 900, 770]) {
+      await page.setViewportSize({ width, height: 900 });
+      const { card, prev, title, name, lastPill, next, today, current, review } = await cardParts(page);
+      expect(card && prev && title && name && lastPill && next && today && current && review, `${width}px: every part is on the card`).toBeTruthy();
+      if (!(card && prev && title && name && lastPill && next && today && current && review)) continue;
+      expect(next.top, `${width}px: wide with Current period`).toBeCloseTo(prev.top, 0);
+      expect(near(current.left - today.right, 8, 1), `${width}px: Current period follows Today by 8px`).toBe(true);
+      expect(review.left, `${width}px: Review is right of Current period`).toBeGreaterThan(current.right);
+      expect(near(card.right - 16 - review.right, 0, 1), `${width}px: Review keeps the right edge`).toBe(true);
+      expect(near(name.top, prev.top, 1) && near(lastPill.bottom, prev.bottom, 1), `${width}px: the range block is as tall as the buttons`).toBe(true);
+    }
+    // Current period needs 9.2rem (138px) more: a card of 737px is narrow, one of 738px is wide (the window is 32px wider than the card).
+    const flips = async (width: number) => {
+      await page.setViewportSize({ width, height: 900 });
+      const { prev, cta } = await cardParts(page);
+      return cta !== null && prev !== null && cta.top > prev.bottom ? 'narrow' : 'wide';
+    };
+    expect(await flips(769)).toBe('narrow');
+    expect(await flips(770)).toBe('wide');
+    // Narrow with Current period: Today, Current and Review in one row, the short label "Current" only where the row is too narrow.
+    for (const width of [600, 390, 320, 300]) {
+      await page.setViewportSize({ width, height: 900 });
+      const { today, current, review, meta } = await cardParts(page);
+      expect(today && current && review && meta, `${width}px: the buttons`).toBeTruthy();
+      if (!(today && current && review && meta)) continue;
+      expect(near(today.top, current.top, 1) && near(current.top, review.top, 1), `${width}px: Today, Current and Review share a row`).toBe(true);
+      expect(today.top, `${width}px: under the meta line`).toBeGreaterThanOrEqual(meta.bottom - 0.5);
+      await expect(page.locator('[data-period-current]'), `${width}px: the name of the button never changes (SC 2.5.3)`).toHaveAccessibleName('Current period');
+      expect(await visibleJumpLabel(page.locator('[data-period-current]')), `${width}px: "Current" only where the row is narrower than 18.4rem`).toBe(width === 300 ? 'Current' : 'Current period');
+    }
+    // A press returns to the current period, which is the ended one; Current period is then not offered.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.locator('[data-period-current]').click();
+    await expect(page.locator('.period-name')).toHaveText(rangeText(periods.current));
+    await expect(page.locator('[data-period-current]')).toHaveCount(0);
+  });
+
+  test('the review link is the primary button when the shown period is ended and needs the person, and quiet otherwise (draft, signed not sent, sent)', async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+  }) => {
+    test.setTimeout(120_000);
+    const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Review Link', signature: 'saved' });
+    await signInPageAs(me.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const real = await me.api.periodsCurrent();
+    const link = page.locator('[data-review-link]');
+    const checkIn = page.locator('.clock-group .clock-button');
+    const accent = await tokenColour(page, '--accent');
+    const state = async () => ({
+      // The fill and the ink are read once the colour transition of the link has settled (the state arrives after the first paint).
+      background: await settledStyle(link, 'backgroundColor'),
+      colour: await settledStyle(link, 'color'),
+      primary: await link.evaluate((element) => element.classList.contains('primary')),
+      marked: await link.getAttribute('data-review-primary'),
+      text: (await link.innerText()).trim(),
+    });
+    const day = (offset: number) => addDays(real.current.period_end, offset);
+    // A draft: primary once the period has ended (the page is told it is the day after the end), quiet on its last day and before.
+    for (const [today, primary] of [
+      [day(1), true],
+      [day(0), false],
+      [day(-6), false],
+    ] as const) {
+      await withToday(page, me.api, today);
+      await page.reload();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const view = await state();
+      expect(view.text, `draft on ${today}`).toBe('Review & sign off');
+      expect(view.primary, `draft on ${today}: primary is ${primary}`).toBe(primary);
+      expect(view.marked).toBe(primary ? 'true' : null);
+      if (primary) {
+        // Like the Check in button: the accent fill with the on-accent text.
+        expect(parseColour(view.background), 'the primary link has the accent fill').toEqual(accent);
+        expect(parseColour(view.colour), 'and the on-accent text').toEqual(await tokenColour(page, '--on-accent'));
+        expect(parseColour(await computedStyle(checkIn, 'backgroundColor'))).toEqual(parseColour(view.background));
+      } else {
+        expect(parseColour(view.background)[3], 'the quiet link has no fill').toBe(0);
+      }
+    }
+    // Signed and not sent yet: "Review & send", primary once ended.
+    const [workDay = ''] = await me.api.displayedPeriodFreeWorkdays();
+    expect(workDay, 'a past free workday in the displayed period').not.toBe('');
+    await me.api.seedCompleteDay(workDay);
+    const review = await me.api.call<{ expected_version: number; payload_hash: string }>('GET', `/api/timesheets/${me.payrollDate}/review`);
+    const signed = await me.api.call<{ revision: { id: string } }>(
+      'POST',
+      `/api/timesheets/${me.payrollDate}/signoff`,
+      { expected_version: review.expected_version, reviewed_hash: review.payload_hash, signer_name: 'Synthetic Review Link', incomplete_evidence_acknowledged: true },
+      201,
+    );
+    await withToday(page, me.api, day(1));
+    await page.reload();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await expect(link).toHaveText('Review & send');
+    expect((await state()).primary, 'signed and not sent, ended: primary').toBe(true);
+    await withToday(page, me.api, day(0));
+    await page.reload();
+    await expect(link).toHaveText('Review & send');
+    expect((await state()).primary, 'signed and not sent, not ended: quiet').toBe(false);
+    // Once the revision has a send the link is the quiet "Review or correct", also on an ended period.
+    const draft = await me.api.call<{ to: string[]; cc: string[]; subject: string; body_text: string; time_rows: boolean; ot_rows: boolean }>('GET', `/api/revisions/${signed.revision.id}/send-draft`);
+    await me.api.call(
+      'POST',
+      `/api/revisions/${signed.revision.id}/send`,
+      { request_key: randomUUID(), to: draft.to, cc: draft.cc, subject: draft.subject, body_text: draft.body_text, time_rows: draft.time_rows, ot_rows: draft.ot_rows },
+      201,
+    );
+    await withToday(page, me.api, day(1));
+    await page.reload();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await expect(link).toHaveText('Review or correct');
+    expect((await state()).primary, 'sent: quiet, even when ended').toBe(false);
   });
 });

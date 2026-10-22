@@ -1391,6 +1391,38 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Nothing else is staged. No path is outside the owned set, and there is no binary.
 - Running now: WP5-UX5-T03-FREEZE (a fresh committer, alone). It stages 32 explicit paths
   plus the handoff records; the digest must be d23e3617.
+- WP5-UX5-T03-FREEZE done: 65def2f61b6cb82e8c23cb01c15e787d2d0b1c14 on main, pushed (56
+  paths: 32 outside `handoff/`, 24 handoff). Digest d23e3617 (862 files) before staging and
+  on HEAD; every check exit 0. Slips: one `2>/dev/null` and one `| head`.
+- Running now: WP5-UX5-T04, the breakpoints, top bar and period card (worker-high, sonnet;
+  size L, risk H; base 65def2f / d23e3617; ports 49740-49759).
+  - It covers U5-01, U5-02, U5-08 to U5-15, U5-22 and the B1 gap.
+  - F-6 a: only the sheet's compact form moves to below 480px. The shell, the Day editor,
+    dialogs and the 44px rule stay at 768px.
+  - U5-14 with H-1 a: the Review button is primary while an ended period still needs the
+    person, and secondary once any revision of the period has a send.
+  - No `src/server` path is owned.
+- WP5-UX5-T04 done (worker report; the gate and audits are pending). No inventory stop;
+  `src/server` untouched.
+  - npm test 2333; FULL e2e 809 passed, 0 failed, no rerun; mutants 5/5; verify 0; digest
+    2ba69f62 (867 files).
+  - Every media query is in range syntax; a vitest test enforces it.
+  - Fractional widths (479.33, 767.33) are proved on the style sheet's text only, because
+    a browser cannot set a fractional viewport.
+  - Deviations:
+    - the shared-view wordmark shows from 492px, not about 250px, so it never adds a bar
+      row;
+    - the period-card thresholds are measured: 600px, plus 138px with Current period.
+  - Slips: three empty heredocs, two `/dev/null`, one `| head`, and temporary `zz-*`
+    probes in `tests/e2e/`, removed before the full runs.
+  - Left for T05: U5-16, U5-21, the Timesheet signature link label, and old 768-899
+    comments.
+- Running now: the lookup WP5-UX5-T04-PATHS (light, haiku, read-only), including a `zz-*`
+  check.
+- T04-PATHS done. Outside `handoff/`: 20 modified, 5 new, 0 deleted. Nothing is staged.
+  No path is outside the owned set, there is no binary, and there is no `zz-*` file.
+- Running now: WP5-UX5-T04-FREEZE (a fresh committer, alone). It stages 25 explicit paths
+  plus the handoff records; the digest must be 2ba69f62.
 - Remaining after T06:
   - T06-FREEZE;
   - the round-5 package gate (it covers rounds 4 and 5);

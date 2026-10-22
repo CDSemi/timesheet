@@ -1,0 +1,229 @@
+mutant m2: /d/Dropbox/Work.CDSemi/timesheet/src/client/components/layoutQueries.ts : s/export const SHEET_QUERY = '(width >= 480px)';/export const SHEET_QUERY = '(width >= 768px)';/
+build exit 0
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/layoutQueries.test.ts (5 tests | 2 failed) 33ms
+   ❯ layout breakpoints (U5-01, U5-15) (5)
+     × names the two documented breakpoints in range syntax, one constant per query 4ms
+     × every width falls on exactly one side of each breakpoint, in the script and in the style sheet (150% scaling gives 479.33 and 767.33) 26ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/layoutQueries.test.ts > layout breakpoints (U5-01, U5-15) > names the two documented breakpoints in range syntax, one constant per query
+AssertionError: expected '(width >= 768px)' to be '(width >= 480px)' // Object.is equality
+
+Expected: "(width >= 480px)"
+Received: "(width >= 768px)"
+
+ ❯ tests/client/layoutQueries.test.ts:51:25
+     49|   it('names the two documented breakpoints in range syntax, one consta…
+     50|     expect(SHELL_QUERY).toBe('(width >= 768px)');
+     51|     expect(SHEET_QUERY).toBe('(width >= 480px)');
+       |                         ^
+     52|     expect(DRAWER_MIN_WIDTH, 'the Day editor drawer stands from the sa…
+     53|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/client/layoutQueries.test.ts > layout breakpoints (U5-01, U5-15) > every width falls on exactly one side of each breakpoint, in the script and in the style sheet (150% scaling gives 479.33 and 767.33)
+AssertionError: (width < 480px) at 480.3333333333322: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/client/layoutQueries.test.ts:82:103
+     80|       for (const width of widths) {
+     81|         const script = matchesQuery(query, width);
+     82|         for (const prelude of below) expect(matchesPrelude(prelude, wi…
+       |                                                                                                       ^
+     83|         for (const prelude of from) expect(matchesPrelude(prelude, wid…
+     84|       }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
+   Start at  05:03:08
+   Duration  206ms (import 37%, tests 34%, transform 25%, worker 3%)
+
+
+Running 3 tests using 1 worker
+
+[1/3] [desktop] › tests\e2e\surfaces.spec.ts:356:3 › layout breakpoints (U5-01, U5-15) › exactly one sheet layout stands at every width and its styles apply: the 4-column table below 480px, the 7-column grid from 480px; the tab bar below 768px, the navigation from 768px; the page never scrolls sideways
+  1) [desktop] › tests\e2e\surfaces.spec.ts:356:3 › layout breakpoints (U5-01, U5-15) › exactly one sheet layout stands at every width and its styles apply: the 4-column table below 480px, the 7-column grid from 480px; the tab bar below 768px, the navigation from 768px; the page never scrolls sideways 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-sheet="phone"]')
+    Expected: 0
+    Received: 1
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveCount" locator('[data-sheet="phone"]') with timeout 7000ms
+      - waiting for locator('[data-sheet="phone"]')
+        18 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      366 |       const phoneBar = width < 768;
+      367 |       // The script follows the media query with a re-render: wait for it, then read the page (the CSS answers at once).
+    > 368 |       await expect(page.locator('[data-sheet="phone"]')).toHaveCount(compact ? 1 : 0);
+          |                                                          ^
+      369 |       const facts = await layoutFacts(page);
+      370 |       expect(facts.phone, `${width}px: the phone sheet in the DOM`).toBe(compact ? 1 : 0);
+      371 |       expect(facts.desktop, `${width}px: the 7-column sheet in the DOM`).toBe(compact ? 0 : 1);
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\surfaces.spec.ts:368:58
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX5-T04\timesheet-e2e-output\surfaces-layout-breakpoint-78e1b-page-never-scrolls-sideways-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX5-T04\timesheet-e2e-output\surfaces-layout-breakpoint-78e1b-page-never-scrolls-sideways-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX5-T04\timesheet-e2e-output\surfaces-layout-breakpoint-78e1b-page-never-scrolls-sideways-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[2/3] [desktop] › tests\e2e\surfaces.spec.ts:385:3 › layout breakpoints (U5-01, U5-15) › at 600px the tab bar and the 7-column grid show together, and the first day row of a 390x844 phone is above the tab bar
+[3/3] [desktop] › tests\e2e\surfaces.spec.ts:398:3 › layout breakpoints (U5-01, U5-15) › matchMedia and the style sheet switch at the same width: sweeps 470 to 490 and 760 to 776 in 1px steps
+  2) [desktop] › tests\e2e\surfaces.spec.ts:398:3 › layout breakpoints (U5-01, U5-15) › matchMedia and the style sheet switch at the same width: sweeps 470 to 490 and 760 to 776 in 1px steps 
+
+    Error: no width where the script and the style sheet disagree
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 97
+
+    - Array []
+    + Array [
+    +   "480px: the form title is static while matchMedia(sheet) is false",
+    +   "480px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "480px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "480px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "480px: matchMedia(sheet) is false",
+    +   "481px: the form title is static while matchMedia(sheet) is false",
+    +   "481px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "481px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "481px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "481px: matchMedia(sheet) is false",
+    +   "482px: the form title is static while matchMedia(sheet) is false",
+    +   "482px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "482px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "482px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "482px: matchMedia(sheet) is false",
+    +   "483px: the form title is static while matchMedia(sheet) is false",
+    +   "483px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "483px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "483px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "483px: matchMedia(sheet) is false",
+    +   "484px: the form title is static while matchMedia(sheet) is false",
+    +   "484px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "484px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "484px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "484px: matchMedia(sheet) is false",
+    +   "485px: the form title is static while matchMedia(sheet) is false",
+    +   "485px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "485px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "485px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "485px: matchMedia(sheet) is false",
+    +   "486px: the form title is static while matchMedia(sheet) is false",
+    +   "486px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "486px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "486px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "486px: matchMedia(sheet) is false",
+    +   "487px: the form title is static while matchMedia(sheet) is false",
+    +   "487px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "487px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "487px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "487px: matchMedia(sheet) is false",
+    +   "488px: the form title is static while matchMedia(sheet) is false",
+    +   "488px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "488px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "488px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "488px: matchMedia(sheet) is false",
+    +   "489px: the form title is static while matchMedia(sheet) is false",
+    +   "489px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "489px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "489px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "489px: matchMedia(sheet) is false",
+    +   "490px: the form title is static while matchMedia(sheet) is false",
+    +   "490px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "490px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "490px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "490px: matchMedia(sheet) is false",
+    +   "760px: the form title is static while matchMedia(sheet) is false",
+    +   "760px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "760px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "760px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "760px: matchMedia(sheet) is false",
+    +   "761px: the form title is static while matchMedia(sheet) is false",
+    +   "761px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "761px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "761px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "761px: matchMedia(sheet) is false",
+    +   "762px: the form title is static while matchMedia(sheet) is false",
+    +   "762px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "762px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "762px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "762px: matchMedia(sheet) is false",
+    +   "763px: the form title is static while matchMedia(sheet) is false",
+    +   "763px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "763px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "763px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "763px: matchMedia(sheet) is false",
+    +   "764px: the form title is static while matchMedia(sheet) is false",
+    +   "764px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "764px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "764px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "764px: matchMedia(sheet) is false",
+    +   "765px: the form title is static while matchMedia(sheet) is false",
+    +   "765px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "765px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "765px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "765px: matchMedia(sheet) is false",
+    +   "766px: the form title is static while matchMedia(sheet) is false",
+    +   "766px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "766px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "766px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "766px: matchMedia(sheet) is false",
+    +   "767px: the form title is static while matchMedia(sheet) is false",
+    +   "767px: the paper margin is 0px while matchMedia(sheet) is false",
+    +   "767px: the check card padding is 16px while matchMedia(sheet) is false",
+    +   "767px: the week card overflow is auto while matchMedia(sheet) is false",
+    +   "767px: matchMedia(sheet) is false",
+    + ]
+
+      430 |       if (row.sheet !== row.width >= 480) say(`matchMedia(sheet) is ${row.sheet}`);
+      431 |     }
+    > 432 |     expect(mismatches, 'no width where the script and the style sheet disagree').toEqual([]);
+          |                                                                                  ^
+      433 |   });
+      434 | });
+      435 |
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\surfaces.spec.ts:432:82
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX5-T04\timesheet-e2e-output\surfaces-layout-breakpoint-65bdf-and-760-to-776-in-1px-steps-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX5-T04\timesheet-e2e-output\surfaces-layout-breakpoint-65bdf-and-760-to-776-in-1px-steps-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX5-T04\timesheet-e2e-output\surfaces-layout-breakpoint-65bdf-and-760-to-776-in-1px-steps-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  2 failed
+    [desktop] › tests\e2e\surfaces.spec.ts:356:3 › layout breakpoints (U5-01, U5-15) › exactly one sheet layout stands at every width and its styles apply: the 4-column table below 480px, the 7-column grid from 480px; the tab bar below 768px, the navigation from 768px; the page never scrolls sideways 
+    [desktop] › tests\e2e\surfaces.spec.ts:398:3 › layout breakpoints (U5-01, U5-15) › matchMedia and the style sheet switch at the same width: sweeps 470 to 490 and 760 to 776 in 1px steps 
+  1 passed (14.8s)
+test exit 1
+restored: identical to the saved copy

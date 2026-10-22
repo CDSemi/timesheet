@@ -1,23 +1,10 @@
-import { type ReactNode, type Ref, useSyncExternalStore } from 'react';
+import type { ReactNode, Ref } from 'react';
 import type { ReviewSnapshot } from '../../domain/snapshot.ts';
 import { ImportedNote } from './ImportStatus.tsx';
+import { SHEET_QUERY } from './layoutQueries.ts';
 import { reviewSheetWeeks } from './reviewModel.ts';
 import { ReviewSheet, SignatureRows } from './TimesheetSheet.tsx';
-
-/** The documented layout breakpoint of the sheet: seven columns from 768px, one table per week below it. */
-const DESKTOP_QUERY = '(min-width: 768px)';
-
-/** True when the desktop sheet should render. Exactly one of the two layouts is ever in the page. */
-function useDesktop(): boolean {
-  return useSyncExternalStore(
-    (notify) => {
-      const query = window.matchMedia(DESKTOP_QUERY);
-      query.addEventListener('change', notify);
-      return () => query.removeEventListener('change', notify);
-    },
-    () => window.matchMedia(DESKTOP_QUERY).matches,
-  );
-}
+import { useMedia } from './useMedia.ts';
 
 /** What the Employee Signature line shows once the period is signed: the saved image when there was one, the name, the date. */
 export interface SignedLine {
@@ -70,7 +57,8 @@ export function ReviewDays({
   signButtonRef: Ref<HTMLButtonElement>;
   onSignOff: () => void;
 }) {
-  const desktop = useDesktop();
+  // The 7-column sheet from 480px, the 4-column table per week below it (the same SHEET_QUERY as the Timesheet page).
+  const desktop = useMedia(SHEET_QUERY);
   const zone = payload.reporting_zone;
   const rows = (
     <SignatureRows

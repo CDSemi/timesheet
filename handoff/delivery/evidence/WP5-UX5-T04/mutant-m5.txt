@@ -1,0 +1,77 @@
+mutant m5: /d/Dropbox/Work.CDSemi/timesheet/src/client/components/reviewModel.ts : s/return { label: 'Review & sign off', primary: ended };/return { label: 'Review \& sign off', primary: true };/
+build exit 0
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/reviewModel.test.ts (60 tests | 1 failed) 24ms
+   ❯ period and delivery status from server fields (18)
+     ❯ the review link of the period card (U5-14) (8)
+       × a draft is primary once ended and quiet while the period is in progress, with the same words 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/reviewModel.test.ts > period and delivery status from server fields > the review link of the period card (U5-14) > a draft is primary once ended and quiet while the period is in progress, with the same words
+AssertionError: expected { label: 'Review & sign off', …(1) } to deeply equal { label: 'Review & sign off', …(1) }
+
+- Expected
++ Received
+
+  {
+    "label": "Review & sign off",
+-   "primary": false,
++   "primary": true,
+  }
+
+ ❯ tests/client/reviewModel.test.ts:384:98
+    382|     it('a draft is primary once ended and quiet while the period is in…
+    383|       expect(view({ finalized_revision_no: null, revision: null, jobs:…
+    384|       expect(view({ finalized_revision_no: null, revision: null, jobs:…
+       |                                                                                                  ^
+    385|       expect(view({ finalized_revision_no: null, revision: null, jobs:…
+    386|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 59 passed (60)
+   Start at  05:05:02
+   Duration  374ms (import 56%, transform 34%, tests 9%, worker 1%)
+
+
+Running 1 test using 1 worker
+
+[1/1] [desktop] › tests\e2e\today.spec.ts:1079:3 › Current period and the review link on the card (U5-08, U5-14) › the review link is the primary button when the shown period is ended and needs the person, and quiet otherwise (draft, signed not sent, sent)
+  1) [desktop] › tests\e2e\today.spec.ts:1079:3 › Current period and the review link on the card (U5-08, U5-14) › the review link is the primary button when the shown period is ended and needs the person, and quiet otherwise (draft, signed not sent, sent) 
+
+    Error: draft on 2026-10-25: primary is false
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      1111 |       const view = await state();
+      1112 |       expect(view.text, `draft on ${today}`).toBe('Review & sign off');
+    > 1113 |       expect(view.primary, `draft on ${today}: primary is ${primary}`).toBe(primary);
+           |                                                                        ^
+      1114 |       expect(view.marked).toBe(primary ? 'true' : null);
+      1115 |       if (primary) {
+      1116 |         // Like the Check in button: the accent fill with the on-accent text.
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\today.spec.ts:1113:72
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX5-T04\timesheet-e2e-output\today-Current-period-and-t-44005-draft-signed-not-sent-sent--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX5-T04\timesheet-e2e-output\today-Current-period-and-t-44005-draft-signed-not-sent-sent--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX5-T04\timesheet-e2e-output\today-Current-period-and-t-44005-draft-signed-not-sent-sent--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  1 failed
+    [desktop] › tests\e2e\today.spec.ts:1079:3 › Current period and the review link on the card (U5-08, U5-14) › the review link is the primary button when the shown period is ended and needs the person, and quiet otherwise (draft, signed not sent, sent) 
+test exit 1
+restored: identical to the saved copy

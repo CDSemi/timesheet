@@ -5,7 +5,7 @@
  * window width and the tokens of the style sheet, never of the mode the editor is in now, so it cannot flap.
  */
 
-/** The width from which the Day editor is a drawer; the same value as DESKTOP_QUERY (a media query cannot read a token). */
+/** The width from which the Day editor is a drawer; the same value as SHELL_QUERY (layoutQueries.ts; a media query cannot read a token). */
 export const DRAWER_MIN_WIDTH = 768;
 
 export type EditorLayout = 'bottom-sheet' | 'beside' | 'floating';

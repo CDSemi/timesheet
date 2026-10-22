@@ -7,6 +7,11 @@ import {
   dueParts,
   PERIOD_PILL_WORDS,
   periodPillKind,
+  rangeKind,
+  rangeLadder,
+  rangeParts,
+  rangeSpokenText,
+  rangeText,
   reviewShortLabel,
   runningSessionOf,
   viewingZoneText,
@@ -53,13 +58,72 @@ describe('reviewShortLabel', () => {
     expect(reviewShortLabel('Review & sign off')).toBe('Sign off');
     expect(reviewShortLabel('Review now')).toBe('Review');
     expect(reviewShortLabel('Review or correct')).toBe('Review');
+    expect(reviewShortLabel('Review & send')).toBe('Send');
     expect(reviewShortLabel('Something else')).toBe('Something else');
   });
 
   it('keeps every full label containing its short form (SC 2.5.3: the accessible name contains the visible text)', () => {
-    for (const label of ['Review & sign off', 'Review now', 'Review or correct']) {
+    for (const label of ['Review & sign off', 'Review & send', 'Review now', 'Review or correct']) {
       expect(label.toLowerCase()).toContain(reviewShortLabel(label).toLowerCase());
     }
+  });
+});
+
+/*
+ * The range ladder of the period card (U5-13). Synthetic periods: 10/12 to 10/25 (one month), 09/28 to 10/11 (two months of one year)
+ * and 12/21 to 01/03 (two years).
+ */
+describe('range ladder (U5-13)', () => {
+  const SAME_MONTH = ['2026-10-12', '2026-10-25'] as const;
+  const CROSS_MONTH = ['2026-09-28', '2026-10-11'] as const;
+  const CROSS_YEAR = ['2026-12-21', '2027-01-03'] as const;
+
+  it('tells how the two ends relate', () => {
+    expect(rangeKind(...SAME_MONTH)).toBe('same-month');
+    expect(rangeKind(...CROSS_MONTH)).toBe('cross-month');
+    expect(rangeKind(...CROSS_YEAR)).toBe('cross-year');
+  });
+
+  it('has five forms inside one month, longest first', () => {
+    expect(rangeLadder(...SAME_MONTH)).toEqual(['full', 'no-start-year', 'no-years', 'end-day', 'tight']);
+    expect(rangeLadder('2026-10-01', '2026-10-14')).toEqual(rangeLadder(...SAME_MONTH));
+  });
+
+  it('skips both "end day only" forms across months (the end month is needed)', () => {
+    expect(rangeLadder(...CROSS_MONTH)).toEqual(['full', 'no-start-year', 'no-years']);
+  });
+
+  it('skips "no start year" across years, and the end-day forms with it (the months differ too)', () => {
+    expect(rangeLadder(...CROSS_YEAR)).toEqual(['full', 'no-years']);
+  });
+
+  it('prints each form of a one-month range', () => {
+    expect(rangeText(...SAME_MONTH, 'full')).toBe('10/12/2026 → 10/25/2026');
+    expect(rangeText(...SAME_MONTH, 'no-start-year')).toBe('10/12 → 10/25/2026');
+    expect(rangeText(...SAME_MONTH, 'no-years')).toBe('10/12 → 10/25');
+    expect(rangeText(...SAME_MONTH, 'end-day')).toBe('10/12 → 25');
+    expect(rangeText(...SAME_MONTH, 'tight')).toBe('10/12→25');
+  });
+
+  it('keeps the end month across months and the end year across years', () => {
+    expect(rangeText(...CROSS_MONTH, 'no-start-year')).toBe('09/28 → 10/11/2026');
+    expect(rangeText(...CROSS_MONTH, 'no-years')).toBe('09/28 → 10/11');
+    expect(rangeText(...CROSS_YEAR, 'full')).toBe('12/21/2026 → 01/03/2027');
+    expect(rangeText(...CROSS_YEAR, 'no-years')).toBe('12/21 → 01/03');
+  });
+
+  it('is the full text in parts: joined, the parts are the full form, and the spoken text is always the full dates with "to"', () => {
+    const parts = rangeParts(...CROSS_YEAR);
+    expect(parts).toEqual({ startMonthDay: '12/21', startYear: '/2026', endMonth: '01/', endDay: '03', endYear: '/2027' });
+    expect(`${parts.startMonthDay}${parts.startYear} → ${parts.endMonth}${parts.endDay}${parts.endYear}`).toBe(rangeText(...CROSS_YEAR, 'full'));
+    expect(rangeSpokenText(...SAME_MONTH)).toBe('10/12/2026 to 10/25/2026');
+    expect(rangeSpokenText(...CROSS_YEAR)).toBe('12/21/2026 to 01/03/2027');
+  });
+
+  it('gets shorter with every step (the longest form that fits is shown first)', () => {
+    const lengths = rangeLadder(...SAME_MONTH).map((step) => rangeText(...SAME_MONTH, step).length);
+    expect(lengths).toEqual([...lengths].sort((a, b) => b - a));
+    expect(new Set(lengths).size).toBe(lengths.length);
   });
 });
 

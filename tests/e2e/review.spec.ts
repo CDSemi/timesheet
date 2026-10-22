@@ -396,10 +396,12 @@ test('the review shows the server content for all 14 days, then the sign-off sig
   await expect(page.getByRole('button', { name: 'Check in' })).toBeVisible();
   await expect(page.locator('[data-status="review"]')).toHaveText('Signed');
   await expect(page.locator('[data-status="delivery"]')).toHaveText('Not sent yet');
-  await expect(page.locator(`[data-review-link="${reviewer.payrollDate}"]`)).toHaveText('Review or correct');
+  // WP5-UX5-T04 (U5-14, owner answer F-2 a): signed and no revision of the period sent yet, the link asks for the send ("Review & send").
+  await expect(page.locator(`[data-review-link="${reviewer.payrollDate}"]`)).toHaveText('Review & send');
   await page.screenshot({ path: screenshotPath(`review-status-${project}-synthetic.png`) });
 });
 
+// WP5-UX5-T04 (F-6 a): the compact padding of the check card moves with the sheet query, from 768px to 480px (12px below 480px).
 test('the check card: the period card padding, "Back" below 480px with the full accessible name, text and button centred and 16px apart', async ({ page, adminSeed, builtServer }) => {
   const reviewer = await newReviewer(adminSeed, builtServer);
   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
@@ -411,8 +413,8 @@ test('the check card: the period card padding, "Back" below 480px with the full 
   for (const [width, padding, label] of [
     [1440, '16px', 'Back to the timesheet'],
     [768, '16px', 'Back to the timesheet'],
-    [767, '12px', 'Back to the timesheet'],
-    [480, '12px', 'Back to the timesheet'],
+    [767, '16px', 'Back to the timesheet'],
+    [480, '16px', 'Back to the timesheet'],
     [479, '12px', 'Back'],
     [390, '12px', 'Back'],
     [320, '12px', 'Back'],
@@ -430,6 +432,30 @@ test('the check card: the period card padding, "Back" below 480px with the full 
     expect(Math.abs(middle(backBox) - middle(cardBox)), `the button is vertically centred at ${width}px`).toBeLessThanOrEqual(1.5);
     expect(backBox.left - textBox.right, `the gap between the text and the button at ${width}px`).toBeGreaterThanOrEqual(15.5);
     if (width < 768) expect(backBox.height, `Back is a 44px target at ${width}px`).toBeGreaterThanOrEqual(44);
+    await expectNoSidewaysScroll(page);
+  }
+});
+
+// WP5-UX5-T04 (F-6 a): the Preview card's sheet follows the sheet breakpoint like the Timesheet page (one query, 480px), while the shell
+// (the tab bar, the dialogs, the 44px rule) keeps 768px.
+test('the Preview sheet follows the sheet breakpoint: the 4-column table below 480px, the 7-column grid from 480px, exactly one layout in the DOM, the tab bar below 768px, no page sideways scroll', async ({
+  page,
+  adminSeed,
+  builtServer,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'The widths are set by the test (desktop project)');
+  const reviewer = await newReviewer(adminSeed, builtServer);
+  await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+  const paper = page.locator('[data-paper="review"]');
+  await expect(paper).toBeVisible();
+  for (const width of [320, 390, 479, 480, 600, 767, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const compact = width < 480;
+    await expect(paper.locator('[data-sheet="phone"]'), `${width}px: the phone table in the Preview`).toHaveCount(compact ? 1 : 0);
+    await expect(paper.locator('[data-sheet="desktop"]'), `${width}px: the 7-column grid in the Preview`).toHaveCount(compact ? 0 : 1);
+    await expect(paper.locator(compact ? '.sheet-table' : '.week-grid').first(), `${width}px: the layout in the DOM is displayed`).toBeVisible();
+    await expect(page.locator('.shell-tabs'), `${width}px: the tab bar`).toBeVisible({ visible: width < 768 });
     await expectNoSidewaysScroll(page);
   }
 });

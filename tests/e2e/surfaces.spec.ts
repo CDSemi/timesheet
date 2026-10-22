@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { backdropOf, backdropsAbove, computedStyle, contrast, flattenedBackground, focusFromKeyboard, measureFocusRing, parseColour, parseLayers, tokenColour } from './contrast.ts';
+import { SHEET_QUERY, SHELL_QUERY } from '../../src/client/components/layoutQueries.ts';
 import { expect, SCREENSHOT_DIR, screenshotPath, test } from './fixtures.ts';
 
 /*
@@ -122,11 +123,11 @@ for (const situation of SITUATIONS) {
       const corners = await computed(surface.locator, CORNERS);
       for (const corner of CORNERS) expect(corners[corner], `${surface.name} ${corner}`).toBe('0px');
     }
-    // (The phone paper is full-bleed and square, so it takes no corner there.)
+    // WP5-UX5-T04 (U5-22): the compact paper (below 480px) stands 8px from the window edges and keeps the card corner, like the period bar
+    // (it was full-bleed and square below 768px).
     for (const surface of surfaces.filter((item) => item.raised)) {
       const corners = await computed(surface.locator, CORNERS);
-      const expected = surface.name === 'paper' && project === 'mobile' ? '0px' : '12px';
-      for (const corner of CORNERS) expect(corners[corner], `${surface.name} ${corner}`).toBe(expected);
+      for (const corner of CORNERS) expect(corners[corner], `${surface.name} ${corner}`).toBe('12px');
     }
 
     // The footer holds the legend and the Overtime Total (and the signature lines on the owner's own sheet); it sits in the sheet, inside the paper, and not in a week band.
@@ -252,3 +253,182 @@ for (const situation of SITUATIONS) {
     record(testInfo.project.name, situation, lines);
   });
 }
+
+/* ---- WP5-UX5-T04 (U5-01, U5-15, owner decision F-6 a): the two layout breakpoints, 768px (the shell) and 480px (the sheet) ---------- */
+
+/**
+ * What one layout looks like at one width of the real page: how many sheet layouts are in the DOM and which, what their styles say
+ * (a table that is displayed, a grid that is displayed), which bar the shell shows (the tab bar or the navigation), and whether the page
+ * or the week card scrolls sideways.
+ */
+interface LayoutFacts {
+  phone: number;
+  desktop: number;
+  tables: number;
+  grids: number;
+  tableDisplay: string;
+  gridDisplay: string;
+  tabs: string;
+  nav: string;
+  scroll: number;
+  inner: number;
+  weekScrolls: boolean;
+}
+
+const LAYOUT_FACTS_SCRIPT = `(() => {
+  const display = (selector) => {
+    const element = document.querySelector(selector);
+    return element === null ? 'absent' : getComputedStyle(element).display;
+  };
+  const week = document.querySelector('.sheet-week');
+  return {
+    phone: document.querySelectorAll('[data-sheet="phone"]').length,
+    desktop: document.querySelectorAll('[data-sheet="desktop"]').length,
+    tables: document.querySelectorAll('.sheet-table').length,
+    grids: document.querySelectorAll('.week-grid').length,
+    tableDisplay: display('.sheet-table'),
+    gridDisplay: display('.week-grid'),
+    tabs: display('.shell-tabs'),
+    nav: display('.shell-nav'),
+    scroll: document.documentElement.scrollWidth,
+    inner: window.innerWidth,
+    weekScrolls: week !== null && week.scrollWidth > week.clientWidth + 1,
+  };
+})()`;
+
+const layoutFacts = (page: Page) => page.evaluate<LayoutFacts>(LAYOUT_FACTS_SCRIPT);
+
+/** One frame of the sweep: the width asked for, the width the frame has, what `matchMedia` says there and what the style sheet's rules did. */
+interface FrameRow {
+  width: number;
+  inner: number;
+  shell: boolean;
+  sheet: boolean;
+  tabs: string;
+  head: string;
+  title: string;
+  paper: string;
+  overflow: string;
+  checkPadding: string;
+}
+
+/** The script that builds one iframe per width of `widths` with the built style sheet and reads the probes (see the test below). */
+function frameSweepScript(href: string, widths: number[]): string {
+  return `(async () => {
+    const out = [];
+    for (const width of ${JSON.stringify(widths)}) {
+      const frame = document.createElement('iframe');
+      frame.style.cssText = 'border:0;height:400px;width:' + width + 'px';
+      document.body.append(frame);
+      const doc = frame.contentDocument;
+      const win = frame.contentWindow;
+      doc.body.innerHTML = '<header class="page-head"></header><nav class="shell-tabs"></nav><h2 class="form-title"></h2><section class="paper"></section><section class="sheet-week"></section><div class="check-card"></div>';
+      await new Promise((resolve, reject) => {
+        const link = doc.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = ${JSON.stringify(href)};
+        link.onload = () => resolve(null);
+        link.onerror = () => reject(new Error('the style sheet did not load'));
+        doc.head.append(link);
+      });
+      const style = (selector, property) => win.getComputedStyle(doc.querySelector(selector)).getPropertyValue(property);
+      out.push({
+        width,
+        inner: win.innerWidth,
+        shell: win.matchMedia(${JSON.stringify(SHELL_QUERY)}).matches,
+        sheet: win.matchMedia(${JSON.stringify(SHEET_QUERY)}).matches,
+        tabs: style('.shell-tabs', 'display'),
+        head: style('.page-head', 'position'),
+        title: style('.form-title', 'position'),
+        paper: style('.paper', 'margin-inline-start'),
+        overflow: style('.sheet-week', 'overflow-x'),
+        checkPadding: style('.check-card', 'padding-top'),
+      });
+      frame.remove();
+    }
+    return out;
+  })()`;
+}
+
+test.describe('layout breakpoints (U5-01, U5-15)', () => {
+  test.skip(({ isMobile }) => isMobile, 'The width sweeps resize the window of the desktop project');
+
+  test('exactly one sheet layout stands at every width and its styles apply: the 4-column table below 480px, the 7-column grid from 480px; the tab bar below 768px, the navigation from 768px; the page never scrolls sideways', async ({
+    page,
+    signInThroughUi,
+  }) => {
+    test.setTimeout(90_000);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    for (const width of [320, 360, 390, 479, 480, 481, 600, 700, 767, 768, 769, 929, 930, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      const compact = width < 480;
+      const phoneBar = width < 768;
+      // The script follows the media query with a re-render: wait for it, then read the page (the CSS answers at once).
+      await expect(page.locator('[data-sheet="phone"]')).toHaveCount(compact ? 1 : 0);
+      const facts = await layoutFacts(page);
+      expect(facts.phone, `${width}px: the phone sheet in the DOM`).toBe(compact ? 1 : 0);
+      expect(facts.desktop, `${width}px: the 7-column sheet in the DOM`).toBe(compact ? 0 : 1);
+      expect(facts.tables, `${width}px: two week tables or none`).toBe(compact ? 2 : 0);
+      expect(facts.grids, `${width}px: two week grids or none`).toBe(compact ? 0 : 2);
+      // The styles of the layout in the DOM apply (a table that is not a table, or a grid that is not a grid, is the hole of U5-15).
+      expect(facts[compact ? 'tableDisplay' : 'gridDisplay'], `${width}px: the sheet in the DOM is displayed as its layout`).toBe(compact ? 'table' : 'grid');
+      expect(facts.tabs, `${width}px: the tab bar`).toBe(phoneBar ? 'grid' : 'none');
+      expect(facts.nav, `${width}px: the navigation of the top bar`).toBe(phoneBar ? 'none' : 'flex');
+      expect(facts.scroll, `${width}px: no sideways scroll of the page`).toBeLessThanOrEqual(facts.inner);
+      // From 480px the seven columns scroll inside the week card until the page is wide enough: the grid needs 850px (the label column, seven
+      // columns of 108px and the hairlines) plus the 32px page padding and the 32px paper padding, so 914px; below 480 the table fits.
+      expect(facts.weekScrolls, `${width}px: the week card scrolls sideways only where the seven columns do not fit`).toBe(width >= 480 && width < 914);
+    }
+  });
+
+  test('at 600px the tab bar and the 7-column grid show together, and the first day row of a 390x844 phone is above the tab bar', async ({ page, signInThroughUi }) => {
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.setViewportSize({ width: 600, height: 900 });
+    await expect(page.locator('.shell-tabs')).toBeVisible();
+    await expect(page.locator('.week-grid').first()).toBeVisible();
+    await expect(page.locator('.sheet-table')).toHaveCount(0);
+    expect((await layoutFacts(page)).scroll, 'no page sideways scroll at 600px').toBeLessThanOrEqual(600);
+    await page.setViewportSize({ width: 390, height: 844 });
+    const first = await page.locator('[data-day]').first().boundingBox();
+    const tabs = await page.locator('.shell-tabs').boundingBox();
+    expect((first?.y ?? 0) + (first?.height ?? 0), 'the first day row is above the tab bar at 390x844').toBeLessThanOrEqual(tabs?.y ?? 0);
+  });
+  test('matchMedia and the style sheet switch at the same width: sweeps 470 to 490 and 760 to 776 in 1px steps', async ({ page, builtServer }) => {
+    test.setTimeout(120_000);
+    // A same-origin page of the spec's own (no CSP): iframes of every width load the built style sheet, so the browser decides the media
+    // queries of the frame as it does for a window of that width. A Playwright viewport takes whole pixels and a frame snaps to them (probed
+    // in WP5-UX5-T04: a 479.33px frame reads 479, a 479.67px frame 480), so the 1/3px steps and the widths of 125% and 150% display scaling
+    // (479.2, 479.33, 767.2, 767.33) are checked on the style sheet's text in tests/client/layoutQueries.test.ts.
+    const html = await (await page.request.get('/')).text();
+    const href = /href="(\/assets\/[^"]+\.css)"/.exec(html)?.[1];
+    expect(href, 'the built style sheet is linked from the page').toBeDefined();
+    await page.route(`${builtServer.origin}/zz-breakpoints.html`, (route) => route.fulfill({ contentType: 'text/html', body: '<!doctype html><meta charset="utf-8"><body></body>' }));
+    await page.goto('/zz-breakpoints.html');
+    const widths: number[] = [];
+    for (const [from, to] of [
+      [470, 490],
+      [760, 776],
+    ] as const) for (let width = from; width <= to; width += 1) widths.push(width);
+    const rows = await page.evaluate<FrameRow[]>(frameSweepScript(href ?? '', widths));
+    expect(rows.length).toBe(widths.length);
+    const mismatches: string[] = [];
+    for (const row of rows) {
+      const say = (what: string) => mismatches.push(`${row.width}px: ${what}`);
+      if (row.inner !== row.width) say(`the frame is ${row.inner}px wide`);
+      // The script and the style sheet agree on every width: the shell rules (tab bar, hidden page heading) and the sheet rules (form title,
+      // paper margin, check card padding, sideways scroll) apply exactly where the matching query says they do.
+      if ((row.tabs === 'grid') !== !row.shell) say(`the tab bar is ${row.tabs} while matchMedia(shell) is ${row.shell}`);
+      if ((row.head === 'absolute') !== !row.shell) say(`the page heading is ${row.head} while matchMedia(shell) is ${row.shell}`);
+      if ((row.title === 'absolute') !== !row.sheet) say(`the form title is ${row.title} while matchMedia(sheet) is ${row.sheet}`);
+      if ((row.paper === '-8px') !== !row.sheet) say(`the paper margin is ${row.paper} while matchMedia(sheet) is ${row.sheet}`);
+      if ((row.checkPadding === '12px') !== !row.sheet) say(`the check card padding is ${row.checkPadding} while matchMedia(sheet) is ${row.sheet}`);
+      if ((row.overflow === 'auto') !== (row.sheet && row.width < 930)) say(`the week card overflow is ${row.overflow} while matchMedia(sheet) is ${row.sheet}`);
+      // Every width is on exactly one side of each breakpoint: the two queries are the two documented values.
+      if (row.shell !== row.width >= 768) say(`matchMedia(shell) is ${row.shell}`);
+      if (row.sheet !== row.width >= 480) say(`matchMedia(sheet) is ${row.sheet}`);
+    }
+    expect(mismatches, 'no width where the script and the style sheet disagree').toEqual([]);
+  });
+});

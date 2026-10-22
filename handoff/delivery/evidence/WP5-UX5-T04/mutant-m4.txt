@@ -1,0 +1,40 @@
+mutant m4: /d/Dropbox/Work.CDSemi/timesheet/src/client/styles.css : s/@container period-range (width < [0-9.]*em)/@container period-range (width < 0em)/
+build exit 0
+
+Running 1 test using 1 worker
+
+[1/1] [desktop] › tests\e2e\timesheet.spec.ts:2012:3 › the range ladder (U5-13) › the longest form that fits its box shows, for a one-month, a two-month and a two-year range, at 320, 360, 390 and 430px; the accessible text is always the full dates with "to"
+  1) [desktop] › tests\e2e\timesheet.spec.ts:2012:3 › the range ladder (U5-13) › the longest form that fits its box shows, for a one-month, a two-month and a two-year range, at 320, 360, 390 and 430px; the accessible text is always the full dates with "to" 
+
+    Error: same-month at 320px: the form that shows (box 176.0px, forms {"full":199.203125,"no-start-year":156.765625,"no-years":114.328125,"end-day":89.6875,"tight":73.6875})
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "10/12 → 10/25/2026"
+    Received: "10/12/2026 → 10/25/2026"
+
+      2035 |         const ladder = rangeLadder(start, end);
+      2036 |         const fitting = ladder.find((form) => (state.widths[form] ?? Number.POSITIVE_INFINITY) <= state.box + 0.5) ?? ladder[ladder.length - 1] ?? 'full';
+    > 2037 |         expect(state.text, `${state.kind} at ${width}px: the form that shows (box ${state.box.toFixed(1)}px, forms ${JSON.stringify(state.widths)})`).toBe(rangeText(start, end, fitting));
+           |                                                                                                                                                       ^
+      2038 |       }
+      2039 |     };
+      2040 |     // Forward through the periods until the three kinds have been seen; a year of 14-day periods holds both month kinds and one two-year range.
+        at check (D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\timesheet.spec.ts:2037:151)
+        at D:\Dropbox\Work.CDSemi\timesheet\tests\e2e\timesheet.spec.ts:2041:5
+
+    Error Context: ..\..\..\.claude-tmp\timesheet\WP5-UX5-T04\timesheet-e2e-output\timesheet-the-range-ladder-37f05-ays-the-full-dates-with-to--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\..\..\.claude-tmp\timesheet\WP5-UX5-T04\timesheet-e2e-output\timesheet-the-range-ladder-37f05-ays-the-full-dates-with-to--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\..\..\.claude-tmp\timesheet\WP5-UX5-T04\timesheet-e2e-output\timesheet-the-range-ladder-37f05-ays-the-full-dates-with-to--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  1 failed
+    [desktop] › tests\e2e\timesheet.spec.ts:2012:3 › the range ladder (U5-13) › the longest form that fits its box shows, for a one-month, a two-month and a two-year range, at 320, 360, 390 and 430px; the accessible text is always the full dates with "to" 
+test exit 1
+restored: identical to the saved copy

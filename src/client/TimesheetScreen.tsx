@@ -16,7 +16,7 @@ import {
 import { BatchBar } from './components/BatchBar.tsx';
 import { BatchDialog } from './components/BatchDialog.tsx';
 import { ClockPanel } from './components/ClockPanel.tsx';
-import { DESKTOP_QUERY, useClock, useMedia } from './components/ClockProvider.tsx';
+import { useClock } from './components/ClockProvider.tsx';
 import { ConfirmDialog } from './components/ConfirmDialog.tsx';
 import { dayPeriodPill } from './components/dayEditorModel.ts';
 import { batchEntries, staleDates, staleReloadMessage } from './components/dayModel.ts';
@@ -24,6 +24,7 @@ import { whollyCovered } from './components/editorLayoutModel.ts';
 import { describeError } from './components/errors.ts';
 import { displayZone } from './components/format.ts';
 import { currentLabelChoice, type LabelChoice, labelEntry, labelPreviewOutcome } from './components/labelPickerModel.ts';
+import { SHEET_QUERY, SHELL_QUERY } from './components/layoutQueries.ts';
 import { OpenDay } from './components/OpenDay.tsx';
 import { PeriodBar, type PeriodJumps } from './components/PeriodBar.tsx';
 import { currentPeriodJump, currentStatusText, todayJump, todayStatusText } from './components/periodJumpModel.ts';
@@ -31,12 +32,14 @@ import { usePeriodState } from './components/ReviewStatus.tsx';
 import { ShowDetailsSwitch } from './components/ShowDetailsSwitch.tsx';
 import { TimesheetSheet } from './components/TimesheetSheet.tsx';
 import { useEditorLayout } from './components/useEditorLayout.ts';
+import { useMedia } from './components/useMedia.ts';
 import { DayEditor } from './DayEditor.tsx';
 
 /*
- * The documented layout breakpoint (DESKTOP_QUERY, shared with the check in/out control): the 7-column sheet from
- * 768px up, one table per week below it. From 768px the Day editor is a non-modal drawer; whether it stands beside the
- * sheet (the page reserves its room) or floats over it is the rule of useEditorLayout, never a literal width.
+ * The two documented layout breakpoints (layoutQueries.ts, F-6 a): the 7-column sheet from 480px up (scrolling sideways inside the
+ * week card until the page is wide enough), one table per week below it (`SHEET_QUERY`); the clock in the title row and the Day
+ * editor from 768px (`SHELL_QUERY`), where the editor is a non-modal drawer; whether it stands beside the sheet (the page reserves
+ * its room) or floats over it is the rule of useEditorLayout, never a literal width.
  */
 
 /** Which window edge the drawer is flush with: always the right beside the sheet; floating, away from the edited column so the column stays visible. */
@@ -98,7 +101,10 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const own = shared === undefined;
   const request: Requester = shared?.request ?? ownRequest;
   const canEdit = shared === undefined || shared.canEdit;
-  const desktop = useMedia(DESKTOP_QUERY);
+  // Two queries (F-6 a): the navigation shell (the title-row clock, the Day editor) from 768px and the sheet's full form (7 columns,
+  // scrolling sideways inside the week card until the page is wide enough) from 480px.
+  const desktop = useMedia(SHELL_QUERY);
+  const wideSheet = useMedia(SHEET_QUERY);
   // The Day editor's layout (U4-07): beside the sheet when the window leaves the sheet its minimum width, else floating. The media query
   // decides the phone (a classic scrollbar makes the model's width up to 15px narrower than the query's), so a sliver reads as floating.
   const beside = useEditorLayout() === 'beside' && desktop;
@@ -116,7 +122,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editDate, setEditDate] = useState<string | null>(null);
-  // The one check in/out state (null in a shared view, which has none). The desktop title row shows it here; below 768px the top bar does.
+  // The one check in/out state (null in a shared view, which has none). The desktop title row shows it here from 768px; below it the top bar does.
   const clock = useClock();
   // Review and delivery status of the shown period, from the server's fields; re-read with every edit.
   // A shared view has no status line: the finalization and delivery routes are the owner's own.
@@ -613,7 +619,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
 
       {view !== null && (
         <div className="workbar">
-          <PeriodBar view={view} zone={displayZone} onMove={move} own={own} state={periodState} jumps={jumps} periods={periods} />
+          <PeriodBar view={view} zone={displayZone} onMove={move} own={own} state={periodState} jumps={jumps} periods={periods} todayLocal={todayLocal} />
         </div>
       )}
 
@@ -689,7 +695,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
               employeeName={shared === undefined ? user.display_name : shared.ownerName}
               zone={displayZone}
               todayLocal={todayLocal}
-              desktop={desktop}
+              desktop={wideSheet}
               actions={{
                 selected,
                 editing: editDate,

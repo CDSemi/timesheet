@@ -148,6 +148,8 @@
   --page-max-editor: 1600px;
   /* The gap between the title row and the next block of Timesheet and of Review, from 768px (round 4, U4-02, owner answer F-5) */
   --page-head-gap: var(--space-6);
+  /* The compact form (below 480px, U5-22): the period card and the paper stand this far from each window edge */
+  --compact-edge: var(--space-2);
   /*
    * The paper sheet (round 4, U4-03): the surface that holds the toolbar, the messages, the sheet and its footer. It is the card colour,
    * lifted by --elev-paper (the --elev-2 step), with the card corner (--radius-lg) from 768px and padded like the sheet blocks; on a
@@ -259,8 +261,18 @@
   --clock-button-height: 38px;
   /* The side padding of the three buttons in that row on a phone, so all three fit one row at 360px */
   --cta-pad-x: 10px;
-  /* The width the period title block keeps beside the buttons from 768px; below it the pills wrap under the dates */
-  --period-main-min: 10rem;
+  /*
+   * The period card (WP5-UX5-T04, U5-09 to U5-13): the height of its button row (the range block and its pills are exactly this tall; 44px
+   * where controls are 44px, see the media rule below), the pill height, the gap between "<" or ">" and the range block (B1: 20px, was
+   * 12px), the room Current period adds to the wide row (the button and its gap), and the space around the hairline under the range
+   * (10px above and 8px below in the wide arrangement; the narrow one takes 8px and 6px).
+   */
+  --period-row-h: 40px;
+  --period-pill-h: 20px;
+  --period-step-gap: 20px;
+  --period-current-room: 9.2rem;
+  --period-divider-above: 10px;
+  --period-divider-below: var(--space-2);
   /* The meta line of the period card (payroll date, due, "Times in"): row gap, then column gap (U-10) */
   --period-meta-gap: var(--space-1) calc(var(--space-5) + var(--space-1));
 
@@ -590,8 +602,8 @@ body {
 }
 
 /*
- * The brand is the traced C&D logo (WP5-UX2-T05, a fixed-colour mark) and, from 1024px, the two-line wordmark
- * (WP5-UX2-T06, U-06); its one name is the visually hidden text. Both graphics are decorative.
+ * The brand is the traced C&D logo (WP5-UX2-T05, a fixed-colour mark) and, whenever it fits, the two-line wordmark
+ * (WP5-UX2-T06, U-06, U5-02; the thresholds are below); its one name is the visually hidden text. Both graphics are decorative.
  */
 .shell-brand {
   display: inline-flex;
@@ -622,32 +634,80 @@ body {
 }
 
 /*
- * Custom properties cannot drive a media query: 1024px is the wordmark breakpoint (U-06). The navigation has only
- * Timesheet, Overtime and History and the person sits in one identity button truncated at --identity-max, so the
- * bar without a "Shared with me" switcher needs about 800px with the wordmark and stays one row from 1024px. With
- * the switcher it needs about 1250px, so the wordmark is hidden below 1280px while the switcher is in the bar (a bar
- * that is already tight keeps its single row) and shows at 1280px and wider. The gap from the brand to the menu is
- * one step wider wherever the wordmark shows.
+ * The wordmark shows whenever it fits (U5-02). The bar is a size container (`shell-bar`); the thresholds below are widths of its content
+ * box (the bar less its 16px side padding), and each is the brand with the wordmark, what shares its row and 8px of slack. The wordmark
+ * never overlaps or clips, and it never adds a row: where it would push the "Shared with me" switcher onto a second row of a bar that
+ * is one row without it, it stays hidden. Literals: px for the graphics (the logo 36, the 12px gap and the wordmark 151.4, which is
+ * --wordmark-size 21px x 7.21) and rem for text (the 15px root), so a larger root font keeps the room. Measured at 15px:
+ * - phone bar (below 768px) with the check in/out group (checked out: 162.4px, 10.8rem here), brand 199.4 + 12px gap + group + 8:
+ *   from 381.4px of content (about 414px of bar). With the switcher (flex basis 16rem) the bar is one row where 36 + 12 + group + 12 +
+ *   16rem fit (462.4px): the wordmark then needs 633.4px (about 666px of bar); in between it would wrap the switcher, so it is hidden there;
+ *   below 462.4px the switcher is on its own row anyway and the wordmark shows from 381.4px;
+ * - phone bar without the group (a shared view: brand and switcher): the switcher shares the row with the logo from 288px (36 + 12 +
+ *   16rem), so the wordmark shows below that (from 207.4px, no real phone) and again from 459.4px (about 492px of bar);
+ * - desktop bar without the switcher: logo, wordmark and the 32px brand gap, the three links at 16.8rem, the 24px bar gap and the identity
+ *   button at its widest (14rem of text, avatar, chevron and gaps 86px): from 819.4px of content (about 852px of bar);
+ * - desktop bar with the switcher: from 1248px of content (1280px of bar), as before: the switcher is as wide as its longest owner's
+ *   name, so the bound is a fixed conservative one (the bar needs about 1130px with a short name; a narrower bar keeps its single row
+ *   without the wordmark, with tighter gaps and links between 1024 and 1279px).
+ * The gap from the brand to the menu is one step wider (--space-6) wherever the wordmark shows.
  */
-@media (min-width: 1024px) {
-  .shell-bar {
-    --shell-brand-gap: var(--space-6);
+.shell-bar {
+  container: shell-bar / inline-size;
+}
+
+@media (width < 768px) {
+  @container shell-bar (width >= calc(219.4px + 10.8rem)) {
+    .shell-bar:has(> .bar-clock):not(:has(.shell-switcher)) .wordmark {
+      display: block;
+    }
   }
 
-  .wordmark {
-    display: block;
+  @container shell-bar ((width >= calc(219.4px + 10.8rem)) and (width < calc(60.4px + 26.8rem))) or (width >= calc(231.4px + 26.8rem)) {
+    .shell-bar:has(> .bar-clock):has(.shell-switcher) .wordmark {
+      display: block;
+    }
+  }
+
+  @container shell-bar ((width >= 207.4px) and (width < calc(48px + 16rem))) or (width >= calc(219.4px + 16rem)) {
+    .shell-bar:not(:has(> .bar-clock)):has(.shell-switcher) .wordmark {
+      display: block;
+    }
+  }
+
+  @container shell-bar (width >= 207.4px) {
+    .shell-bar:not(:has(> .bar-clock)):not(:has(.shell-switcher)) .wordmark {
+      display: block;
+    }
   }
 }
 
-@media (min-width: 1024px) and (max-width: 1279px) {
-  .shell-bar:has(.shell-switcher) {
-    --shell-brand-gap: var(--space-5);
-    /* Without the wordmark the bar with a switcher and a 14rem identity still needs about 1030px: tighter column gaps and menu links win the rest */
-    --shell-gap: var(--shell-gap-tight);
+@media (width >= 768px) {
+  @container shell-bar (width >= calc(357.4px + 30.8rem)) {
+    .shell-bar:not(:has(.shell-switcher)) .wordmark {
+      display: block;
+    }
+
+    .shell-bar:not(:has(.shell-switcher)) .shell-nav {
+      --shell-brand-gap: var(--space-6);
+    }
   }
 
-  .shell-bar:has(.shell-switcher) .wordmark {
-    display: none;
+  @container shell-bar (width >= 1248px) {
+    .shell-bar:has(.shell-switcher) .wordmark {
+      display: block;
+    }
+
+    .shell-bar:has(.shell-switcher) .shell-nav {
+      --shell-brand-gap: var(--space-6);
+    }
+  }
+}
+
+@media (1024px <= width < 1280px) {
+  .shell-bar:has(.shell-switcher) {
+    /* Without the wordmark the bar with a switcher and a 14rem identity still needs about 1030px: tighter column gaps and menu links win the rest */
+    --shell-gap: var(--shell-gap-tight);
   }
 
   .shell-bar:has(.shell-switcher) .shell-nav .nav-link {
@@ -716,7 +776,7 @@ button.identity {
 }
 
 /* More specific than the generic touch rule (`button`), so the identity button has its own: a touch screen of 768px or more shows this bar. */
-@media (max-width: 767px), (pointer: coarse) {
+@media (width < 768px), (pointer: coarse) {
   button.identity {
     min-height: var(--tap-min);
   }
@@ -1066,13 +1126,20 @@ html {
   scroll-padding-top: calc(var(--shell-bar-size) + var(--focus-clearance));
 }
 
-@media (max-width: 767px) {
+@media (width < 768px) {
   html {
     scroll-padding-bottom: calc(var(--tabbar-height) + var(--space-2));
   }
 }
 
-@media (min-width: 768px) {
+/* The period card's button row is a 44px target where every control is (below 768px and with a coarse pointer). */
+@media (width < 768px), (pointer: coarse) {
+  :root {
+    --period-row-h: var(--tap-min);
+  }
+}
+
+@media (width >= 768px) {
   :root {
     --shell-bar-size: var(--bar-height);
   }
@@ -1109,7 +1176,7 @@ html {
 }
 
 /* Room for the fixed tab bar below the last control of every screen. */
-@media (max-width: 767px) {
+@media (width < 768px) {
   .page {
     padding-bottom: calc(var(--tabbar-height) + var(--space-5) + env(safe-area-inset-bottom));
   }
@@ -1208,7 +1275,7 @@ h1 {
   max-width: var(--page-narrow);
 }
 
-@media (max-width: 479px) {
+@media (width < 480px) {
   .profile-facts > div {
     grid-template-columns: minmax(0, var(--track));
     gap: 0;
@@ -1413,7 +1480,7 @@ button[aria-disabled='true']:active {
 }
 
 /* Touch devices and narrow screens: every control is at least 44px in both directions. */
-@media (max-width: 767px), (pointer: coarse) {
+@media (width < 768px), (pointer: coarse) {
   button,
   .nav-link,
   input:not([type='checkbox']):not([type='radio']),
@@ -1569,6 +1636,9 @@ tr.nonworking td {
 
 /* The period bar (WP5-UX-T03): which period, its one status and the way to review it, then the tools. Check in/out is in the title row (U-07). */
 .workbar {
+  /* The size container of the period card's two arrangements (below). The card's width, not the window's, decides, so a Day editor
+     drawer beside the sheet or a narrower page changes the arrangement by itself. */
+  container: period-card / inline-size;
   display: grid;
   grid-template-columns: minmax(0, var(--track));
   gap: var(--space-3);
@@ -1576,35 +1646,82 @@ tr.nonworking td {
 }
 
 /*
- * The period card is full width (U-07). From 768px it is a two-row grid (see the 768px block): row 1 the previous button, the dates with
- * their pills, then Next, Today, Current period and the review link; row 2 the meta line. Below 768px the phone grid further down applies.
- * The title block keeps a readable minimum (`--period-main-min`) and its pills wrap under the dates instead of squeezing it (WP5-UX2-T04).
+ * The wide row with Current period needs --period-current-room more than the row without it. The container's content box is what a
+ * container query measures, so the room is taken from it as padding and given back to the card as a negative margin: the card keeps
+ * its width and every threshold below is that much higher while Current period shows (one rule set, two thresholds).
+ */
+.workbar:has([data-period-current]) {
+  padding-inline-end: var(--period-current-room);
+}
+
+.workbar:has([data-period-current]) > .period-bar {
+  margin-inline-end: calc(-1 * var(--period-current-room));
+}
+
+/*
+ * The period card (WP5-UX5-T04, U5-09 to U5-14) has two arrangements, chosen by the width of the card (`.workbar` is the container).
+ *
+ * Wide (the default): one row `[<] [range over pills] [>] [Today] [Current period] ... [Review]`, then the meta line under a hairline.
+ * The range block is exactly the height of the buttons beside it (`--period-row-h`): the range line stands on the top edge of the
+ * buttons and the pills end on their bottom edge. "<" and ">" stand `--period-step-gap` from the block, Today follows ">" by 8px and
+ * the review link keeps the right edge. The wrappers dissolve, so every part is one item of the card's grid: four columns (previous, the
+ * range block, next, the buttons) on row 1, then the meta line and the notes, each across the card. The range block's track runs from
+ * its least width (the range) to its content (the pills in one row): ">" follows the range, and long pills wrap inside the block
+ * before they push anything else.
+ *
+ * Narrow (the container queries further down, used only when the wide row does not fit): row 1 is `[<] [range over pills, centred] [>]`
+ * with ">" at the right edge, then the hairline and the meta line, then Today, Current and the review link in one row.
  */
 .period-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--space-3);
+  display: grid;
+  grid-template-columns: auto minmax(min-content, max-content) auto minmax(min-content, var(--track));
+  align-items: start;
+  padding: var(--space-4);
 }
 
-.period-main {
-  display: flex;
-  flex: 1 1 var(--period-main-min);
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
+.period-main,
+.period-actions {
+  display: contents;
 }
 
+/* "<" and ">": squares of the row height. */
+.period-bar .period-step {
+  grid-row: 1;
+  width: var(--period-row-h);
+  min-width: var(--period-row-h);
+  min-height: var(--period-row-h);
+  padding: 0;
+}
+
+.period-bar > .period-step {
+  grid-column: 1;
+  margin-inline-end: var(--period-step-gap);
+}
+
+.period-actions > .period-step {
+  grid-column: 3;
+  margin-inline-start: var(--period-step-gap);
+}
+
+/*
+ * The range block: the range line over the pills, as tall as the buttons beside it. The font size belongs to the block, so the
+ * container thresholds of the range (U5-13, below) read the same em as the text they measure.
+ */
 .period-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
+  display: grid;
+  grid-column: 2;
+  grid-row: 1;
+  align-content: space-between;
+  justify-items: start;
+  min-height: var(--period-row-h);
+  font-size: var(--font-size-lg);
+  letter-spacing: var(--letter-spacing-tight);
 }
 
 .period-name {
-  font-size: var(--font-size-lg);
-  letter-spacing: var(--letter-spacing-tight);
+  display: block;
+  line-height: var(--period-pill-h);
+  white-space: nowrap;
 }
 
 /* The arrow between the two dates of the period range: a label-coloured, regular-weight separator (screen readers read the hidden " to "). */
@@ -1614,11 +1731,43 @@ tr.nonworking td {
   font-weight: var(--font-weight-normal);
 }
 
-.period-meta {
+.period-pills {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+/* Pills of the card are one height (--period-pill-h) so the last pill ends on the bottom edge of the buttons. */
+.period-title .badge {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: var(--period-pill-h);
+  padding-block: 0;
+  line-height: 1;
+}
+
+/* The link into the history sits in the pill row: pill height with a pointer, the 44px target of every link on touch and on a narrow window. */
+@media (width >= 768px) and (pointer: fine) {
+  .period-title .grid-status .button-link {
+    min-height: var(--period-pill-h);
+    padding-block: 0;
+    font-size: var(--font-size-xs);
+  }
+}
+
+/* The hairline between the range and the meta line is kept in both arrangements: 10px above and 8px below in the wide one, 8px and 6px in the narrow one. */
+.period-meta {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  order: 2;
   gap: var(--period-meta-gap);
-  margin: 0;
+  margin: var(--period-divider-above) 0 0;
+  padding-top: var(--period-divider-below);
+  border-top: var(--hairline) solid var(--line-soft);
   color: var(--muted);
   font-size: var(--font-size-sm);
 }
@@ -1628,28 +1777,25 @@ tr.nonworking td {
   font-weight: var(--font-weight-strong);
 }
 
-.period-actions {
-  display: flex;
-  flex: 0 1 auto;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  margin-left: auto;
-  gap: var(--space-2);
+/* The notes under the meta line (the zone note, the imported note, the edit-reason notice) take a full row each. */
+.period-main > :not(.period-title, .period-meta) {
+  grid-column: 1 / -1;
+  order: 2;
+  margin-top: var(--space-2);
 }
 
 /*
  * The button row of the period bar (WP5-UX2-T04): Today, Current period (only while it applies) and the review link. Every label stays
- * on one line. On a phone the review link shows its full label when that fits beside the other buttons and a short form otherwise
- * (see the container query below the phone rules); the text content and the accessible name are always the full label.
+ * on one line. In the narrow arrangement the review link shows its full label when that fits beside the other buttons and a short form
+ * otherwise (see the container query below); the text content and the accessible name are always the full label.
  */
 .period-cta {
   display: flex;
-  flex: 1 1 0;
-  flex-wrap: wrap;
-  align-items: stretch;
+  grid-column: 4;
+  grid-row: 1;
+  align-items: flex-start;
   gap: var(--space-2);
-  min-width: min-content;
+  margin-inline-start: var(--space-2);
 }
 
 .period-cta > .period-jump {
@@ -1657,15 +1803,214 @@ tr.nonworking td {
   white-space: nowrap;
 }
 
+/* The wide row: the review link keeps the right edge of the card. */
 .period-cta > .review-link {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: none;
+  margin-inline-start: auto;
   white-space: nowrap;
   text-align: center;
 }
 
+.period-bar .period-jump,
+.period-bar .review-link {
+  min-height: var(--period-row-h);
+}
+
 .review-link::after {
   content: none;
+}
+
+/*
+ * The narrow arrangement. It is used only when the wide row does not fit: the threshold is the width the wide row needs, measured from
+ * its parts in rem of the 15px root (16px of card padding twice, "<" and ">" 40px each, the 20px steps and the full range 201px, Today,
+ * 8px gaps and the longest review label 146px with 16px of air before it: about 40rem without Current period; the room of Current
+ * period and its gap, --period-current-room, is added to the container's threshold while it shows). Row 1 is `[<] [range over pills,
+ * centred] [>]`; the hairline and the meta line follow, then Today, Current and the review link in one row.
+ */
+@container period-card (width < 40rem) {
+  .period-bar {
+    --period-divider-above: var(--space-2);
+    --period-divider-below: var(--space-row);
+    grid-template-columns: var(--period-row-h) minmax(0, var(--track)) var(--period-row-h);
+    padding: var(--space-3);
+  }
+
+  .period-bar > .period-step,
+  .period-actions > .period-step {
+    margin-inline: 0;
+  }
+
+  .period-title {
+    container: period-range / inline-size;
+    justify-items: center;
+    margin-inline: var(--space-2);
+    font-size: var(--font-size-md);
+    text-align: center;
+  }
+
+  .period-pills {
+    justify-content: center;
+  }
+
+  .period-meta {
+    gap: 0 var(--space-3);
+    font-size: var(--font-size-xs);
+  }
+
+  /* The buttons leave row 1 for a row of their own under the meta line and the notes (the auto-placed items follow their `order`). */
+  .period-cta {
+    container: period-cta / inline-size;
+    grid-column: 1 / -1;
+    grid-row: auto;
+    flex-wrap: wrap;
+    order: 3;
+    margin: var(--space-3) 0 0;
+  }
+
+  .period-cta > :is(.period-jump, .review-link) {
+    flex: 1 1 auto;
+    padding-inline: var(--cta-pad-x);
+  }
+
+  .period-cta > .review-link {
+    min-width: 0;
+    margin-inline-start: 0;
+  }
+}
+
+/*
+ * The range ladder (U5-13), narrow arrangement only (the range block is a size container there; in the wide one the full form always
+ * fits). The longest form that fits the block is shown: full, no start year, no years, end day only, no spaces. A part that a form
+ * drops is hidden visually and stays in the text, so the accessible text is always "MM/DD/YYYY to MM/DD/YYYY". The thresholds are the
+ * widths of the forms, measured in em of the block's own font size (tabular digits: the same for every date; with the 8px arrow margins
+ * at 15.75px and 16.5px): full 12.65em, no start year 9.95em, no years 7.26em, end day only 5.69em (no spaces 4.68em), each rounded
+ * up by 0.05em, so each rule below hides the part that the next form drops as soon as the block is narrower than the form it shows
+ * now: 12.7em, 10em, 7.3em and 5.75em. Across years the "no start year" step is skipped, across months both "end day only" forms.
+ */
+@container period-range (width < 12.7em) {
+  .period-name:not([data-range-kind='cross-year']) .rg-start-year,
+  .period-name[data-range-kind='cross-year'] :is(.rg-start-year, .rg-end-year) {
+    position: absolute;
+    width: var(--hairline);
+    height: var(--hairline);
+    overflow: hidden;
+    clip-path: var(--clip-hidden);
+    white-space: nowrap;
+  }
+}
+
+@container period-range (width < 10em) {
+  .period-name :is(.rg-start-year, .rg-end-year) {
+    position: absolute;
+    width: var(--hairline);
+    height: var(--hairline);
+    overflow: hidden;
+    clip-path: var(--clip-hidden);
+    white-space: nowrap;
+  }
+}
+
+@container period-range (width < 7.3em) {
+  .period-name[data-range-kind='same-month'] .rg-end-month {
+    position: absolute;
+    width: var(--hairline);
+    height: var(--hairline);
+    overflow: hidden;
+    clip-path: var(--clip-hidden);
+    white-space: nowrap;
+  }
+}
+
+@container period-range (width < 5.75em) {
+  .period-name[data-range-kind='same-month'] .range-arrow {
+    margin-inline: 0;
+  }
+}
+
+/*
+ * The review link never wraps in the narrow arrangement. It shows its full label when that fits on one line beside the other buttons and a
+ * short form (`data-short`: "Sign off", "Send", "Review") otherwise; the text content stays the full label and `aria-label` keeps the
+ * accessible name. The row is a size container, and the thresholds are its width, measured with 15px/600 labels and 10px side padding
+ * (one line, in rem of the 15px root; container conditions cannot read custom properties):
+ *   with Current period (Today 62.3 + Current period 121.8 + two 8px gaps = 200.1px before the review link):
+ *     "Review & sign off" / "Review or correct" 140.1px: full from 22.8rem (342px), "Sign off" / "Review" 75.1px / 69.8px from
+ *     18.4rem (276px); "Review now" 102.9px: full from 20.2rem (303px), "Review" from 18.1rem.
+ *   below those widths the Current period button shows "Current" (73.2px, U-17; its name stays "Current period", SC 2.5.3), so Today 62.3
+ *     + Current 73.2 + Sign off 75.1 + two 8px gaps = 226.6px stay on one row: down to 15.4rem (231px, 4px of room for the system font,
+ *     R-UX2A-3); "Review now" shortens to "Review" at the same widths, which needs 221.3px, so its row holds down to 15.1rem (227px).
+ *     Below those widths (no real phone; 320px gives a 264px container) the review link takes its own row with the full label.
+ *   without Current period (Today 62.3 + one 8px gap = 70.3px): the long labels fit in full from 14.1rem (211px), "Review now" from 11.6rem.
+ */
+@container period-cta (15.4rem <= width < 22.8rem) {
+  .period-cta[data-current] > .review-link[data-label-size='long'] > .review-full {
+    display: none;
+  }
+
+  .period-cta[data-current] > .review-link[data-label-size='long']::after {
+    content: attr(data-short);
+  }
+}
+
+@container period-cta (15.4rem <= width < 18.4rem) {
+  .period-cta[data-current]:has(> .review-link[data-label-size='long']) > [data-period-current] > .jump-full {
+    display: none;
+  }
+
+  .period-cta[data-current]:has(> .review-link[data-label-size='long']) > [data-period-current]::after {
+    content: attr(data-short);
+  }
+}
+
+@container period-cta (width < 15.4rem) {
+  .period-cta[data-current] > .review-link[data-label-size='long'] {
+    flex-basis: 100%;
+  }
+}
+
+@container period-cta (15.1rem <= width < 20.2rem) {
+  .period-cta[data-current] > .review-link[data-label-size='short'] > .review-full {
+    display: none;
+  }
+
+  .period-cta[data-current] > .review-link[data-label-size='short']::after {
+    content: attr(data-short);
+  }
+}
+
+@container period-cta (15.1rem <= width < 18.1rem) {
+  .period-cta[data-current]:has(> .review-link[data-label-size='short']) > [data-period-current] > .jump-full {
+    display: none;
+  }
+
+  .period-cta[data-current]:has(> .review-link[data-label-size='short']) > [data-period-current]::after {
+    content: attr(data-short);
+  }
+}
+
+@container period-cta (width < 15.1rem) {
+  .period-cta[data-current] > .review-link[data-label-size='short'] {
+    flex-basis: 100%;
+  }
+}
+
+@container period-cta (width < 14.1rem) {
+  .period-cta:not([data-current]) > .review-link[data-label-size='long'] > .review-full {
+    display: none;
+  }
+
+  .period-cta:not([data-current]) > .review-link[data-label-size='long']::after {
+    content: attr(data-short);
+  }
+}
+
+@container period-cta (width < 11.6rem) {
+  .period-cta:not([data-current]) > .review-link[data-label-size='short'] > .review-full {
+    display: none;
+  }
+
+  .period-cta:not([data-current]) > .review-link[data-label-size='short']::after {
+    content: attr(data-short);
+  }
 }
 
 .zone-note {
@@ -1737,6 +2082,23 @@ tr.nonworking td {
 
 .zone-note .facts dd {
   font-size: var(--font-size-xs);
+}
+
+/* The zone note in the narrow arrangement of the period card: tighter, the facts as label and value on one line. */
+@container period-card (width < 40rem) {
+  .zone-note {
+    gap: 0;
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .zone-note .facts {
+    gap: 0 var(--space-3);
+  }
+
+  .zone-note .facts > div {
+    display: flex;
+    gap: var(--space-2);
+  }
 }
 
 .clock-state .live-dot {
@@ -1812,7 +2174,7 @@ tr.nonworking td {
  * Below 360px the date line does not fit beside the button without growing the bar past one row of 44px targets, so it stays
  * for screen readers only (it is still the second line of the status; the visible words keep "Checked in since HH:MM").
  */
-@media (max-width: 359px) {
+@media (width < 360px) {
   .bar-clock .hint {
     position: absolute;
     width: var(--hairline);
@@ -1886,7 +2248,7 @@ label.inline.switch {
   cursor: pointer;
 }
 
-@media (max-width: 767px), (pointer: coarse) {
+@media (width < 768px), (pointer: coarse) {
   label.inline.switch {
     min-height: var(--tap-min);
   }
@@ -2264,12 +2626,10 @@ textarea {
 }
 
 /*
- * The title row and the two-row period card (768px and wider; U-07, U-10). The title row is a wrapping flex row: the title on the
- * left, the check in/out group on the right. The period card is a grid: row 1 holds the previous button, the dates with their pills,
- * and the button group (Next, Today, Current period, review); row 2 holds the meta line across the full width under a hairline. The
- * wrappers dissolve, so the dates, the pills and the meta line are placed on one grid; the notes of the card follow on their own rows.
+ * The title row (768px and wider, SHELL_QUERY; U-07): a wrapping flex row, the title on the left, the check in/out group on the right.
+ * The period card has its own arrangements (see the period card above).
  */
-@media (min-width: 768px) {
+@media (width >= 768px) {
   .page-head h1 {
     margin: 0;
   }
@@ -2283,60 +2643,13 @@ textarea {
   .review-screen > .review-head {
     margin-bottom: calc(var(--page-head-gap) - var(--space-3));
   }
-
-  .period-bar {
-    display: grid;
-    grid-template-columns: auto minmax(var(--period-main-min), var(--track)) auto;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
-  .period-main {
-    display: contents;
-  }
-
-  .period-bar > .period-step {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .period-title {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .period-actions {
-    grid-column: 3;
-    grid-row: 1;
-    flex-wrap: nowrap;
-    margin-left: 0;
-  }
-
-  .period-cta {
-    flex: none;
-    flex-wrap: nowrap;
-    min-width: 0;
-  }
-
-  .period-meta {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    padding-top: var(--space-3);
-    border-top: var(--hairline) solid var(--line);
-  }
-
-  .period-main > :not(.period-title, .period-meta) {
-    grid-column: 1 / -1;
-  }
 }
 
 /*
- * Phone first screen (WP5-UX-B-01, mockup A2): the period card, the clock card and the sheet, with
- * the first day row above the tab bar. The page heading stays for screen readers only (the period
- * card and the form header already name the person and the period); `<` and `>` flank the period
- * title; the clock is one row; the tools are two compact rows.
+ * The phone bar (below 768px, SHELL_QUERY): the page heading stays for screen readers only (the period card and the form header already
+ * name the person and the period), because the clock is in the top bar and the first day row stays above the tab bar.
  */
-@media (max-width: 767px) {
+@media (width < 768px) {
   .page-head {
     position: absolute;
     width: var(--hairline);
@@ -2347,160 +2660,30 @@ textarea {
     white-space: nowrap;
   }
 
+  .clock-button {
+    flex: none;
+  }
+
+  .batch-bar label,
+  select {
+    width: 100%;
+  }
+
+  .dialog-actions {
+    flex-direction: column-reverse;
+  }
+}
+
+/*
+ * The sheet's compact form (below 480px, SHEET_QUERY; WP5-UX-B-01, mockup A2, U5-22): the period card, the paper and the compact tools,
+ * with the first day row above the tab bar. The period card and the paper stand --compact-edge from each window edge; the tools are
+ * two compact rows.
+ */
+@media (width < 480px) {
   .workbar {
     gap: var(--space-2);
     margin-bottom: var(--space-2);
-  }
-
-  .period-bar {
-    display: grid;
-    grid-template-columns: var(--tap-min) minmax(0, var(--track)) var(--tap-min);
-    align-items: center;
-    gap: var(--space-1) var(--space-2);
-    padding: var(--space-3);
-  }
-
-  /* The wrappers dissolve so the buttons, the title and the notes are placed on one grid. */
-  .period-main,
-  .period-actions {
-    display: contents;
-  }
-
-  .period-bar > .period-step {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .period-actions > .period-step {
-    grid-column: 3;
-    grid-row: 1;
-  }
-
-  .period-title {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .period-meta,
-  .period-main > :not(.period-title, .period-meta),
-  .period-actions > :not(.period-step) {
-    grid-column: 1 / -1;
-  }
-
-  .period-cta > :is(.period-jump, .button-link, button) {
-    padding-inline: var(--cta-pad-x);
-  }
-
-  /*
-   * The review link never wraps. It shows its full label when that fits on one line beside the other buttons and a short form
-   * (`data-short`: "Sign off", "Review") otherwise; the text content stays the full label and `aria-label` keeps the accessible
-   * name. The row is a size container, and the thresholds are its width, measured with 15px/600 labels and 10px side padding
-   * (one line, in rem of the 15px root; container conditions cannot read custom properties):
-   *   with Current period (Today 62.3 + Current period 121.8 + two 8px gaps = 200.1px before the review link):
-   *     "Review & sign off" / "Review or correct" 140.1px: full from 22.8rem (342px), "Sign off" / "Review" 75.1px / 69.8px from
-   *     18.4rem (276px); "Review now" 102.9px: full from 20.2rem (303px), "Review" from 18.1rem.
-   *   below those widths the Current period button shows "Current" (73.2px, U-17; its name stays "Current period", SC 2.5.3), so Today 62.3
-   *     + Current 73.2 + Sign off 75.1 + two 8px gaps = 226.6px stay on one row: down to 15.4rem (231px, 4px of room for the system font,
-   *     R-UX2A-3); "Review now" shortens to "Review" at the same widths, which needs 221.3px, so its row holds down to 15.1rem (227px).
-   *     Below those widths (no real phone; 320px gives a 264px container) the review link takes its own row with the full label.
-   *   without Current period (Today 62.3 + one 8px gap = 70.3px): the long labels fit in full from 14.1rem (211px), "Review now" from 11.6rem.
-   */
-  .period-cta {
-    container: period-cta / inline-size;
-  }
-
-  @container period-cta (15.4rem <= width < 22.8rem) {
-    .period-cta[data-current] > .review-link[data-label-size='long'] > .review-full {
-      display: none;
-    }
-
-    .period-cta[data-current] > .review-link[data-label-size='long']::after {
-      content: attr(data-short);
-    }
-  }
-
-  @container period-cta (15.4rem <= width < 18.4rem) {
-    .period-cta[data-current]:has(> .review-link[data-label-size='long']) > [data-period-current] > .jump-full {
-      display: none;
-    }
-
-    .period-cta[data-current]:has(> .review-link[data-label-size='long']) > [data-period-current]::after {
-      content: attr(data-short);
-    }
-  }
-
-  @container period-cta (width < 15.4rem) {
-    .period-cta[data-current] > .review-link[data-label-size='long'] {
-      flex-basis: 100%;
-    }
-  }
-
-  @container period-cta (15.1rem <= width < 20.2rem) {
-    .period-cta[data-current] > .review-link[data-label-size='short'] > .review-full {
-      display: none;
-    }
-
-    .period-cta[data-current] > .review-link[data-label-size='short']::after {
-      content: attr(data-short);
-    }
-  }
-
-  @container period-cta (15.1rem <= width < 18.1rem) {
-    .period-cta[data-current]:has(> .review-link[data-label-size='short']) > [data-period-current] > .jump-full {
-      display: none;
-    }
-
-    .period-cta[data-current]:has(> .review-link[data-label-size='short']) > [data-period-current]::after {
-      content: attr(data-short);
-    }
-  }
-
-  @container period-cta (width < 15.1rem) {
-    .period-cta[data-current] > .review-link[data-label-size='short'] {
-      flex-basis: 100%;
-    }
-  }
-
-  @container period-cta (width < 14.1rem) {
-    .period-cta:not([data-current]) > .review-link[data-label-size='long'] > .review-full {
-      display: none;
-    }
-
-    .period-cta:not([data-current]) > .review-link[data-label-size='long']::after {
-      content: attr(data-short);
-    }
-  }
-
-  @container period-cta (width < 11.6rem) {
-    .period-cta:not([data-current]) > .review-link[data-label-size='short'] > .review-full {
-      display: none;
-    }
-
-    .period-cta:not([data-current]) > .review-link[data-label-size='short']::after {
-      content: attr(data-short);
-    }
-  }
-
-  .period-name {
-    font-size: var(--font-size-md);
-  }
-
-  .period-meta {
-    gap: 0 var(--space-3);
-    font-size: var(--font-size-xs);
-  }
-
-  .zone-note {
-    padding: var(--space-1) var(--space-2);
-    gap: 0;
-  }
-
-  .zone-note .facts {
-    gap: 0 var(--space-3);
-  }
-
-  .clock-button {
-    flex: none;
+    margin-inline: calc(var(--compact-edge) - var(--page-pad));
   }
 
   .sheet-area > .sheet-main {
@@ -2517,7 +2700,7 @@ textarea {
   }
 
   /* One row where the switch and the button fit (390px and wider); narrower, the button wraps below instead of scrolling sideways. The two wrap
-     often here, so the phone keeps the tight gap and has no separator (the groups of the toolbar are a --toolbar-group-gap apart from 768px). */
+     often here, so the compact form keeps the tight gap and has no separator (the groups of the toolbar are a --toolbar-group-gap apart from 480px). */
   .tools-right {
     flex-wrap: wrap;
     align-items: stretch;
@@ -2532,20 +2715,6 @@ textarea {
     flex: auto;
     padding-inline: var(--space-2);
     white-space: nowrap;
-  }
-
-  .zone-note .facts > div {
-    display: flex;
-    gap: var(--space-2);
-  }
-
-  .batch-bar label,
-  select {
-    width: 100%;
-  }
-
-  .dialog-actions {
-    flex-direction: column-reverse;
   }
 }
 
@@ -2665,14 +2834,15 @@ textarea {
 
 /*
  * Seven columns of at least --sheet-col-min and the label column need 850px, plus the 32px page padding, the 32px paper
- * padding (round 4) and a classic scrollbar: a narrower window (768 to 929px) scrolls the week card sideways instead of breaking words inside the
- * columns. (Literal width: a media query cannot read a custom property.) A focused control is scrolled fully into the
+ * padding (round 4) and a classic scrollbar: a narrower window (480 to 929px, from where SHEET_QUERY gives the 7-column sheet) scrolls the
+ * week card sideways instead of breaking words inside the columns; the page never scrolls sideways. (Literal width: a media query
+ * cannot read a custom property; 930 is 929 plus the range syntax's open end.) A focused control is scrolled fully into the
  * card with --focus-clearance around it (the card's scroll padding, read by the sheet's focus handler; WP5-UX3-FIX1), and
  * the grid's box spans all its columns, so its frame closes after the last one. The card also scrolls down while an open
  * category list reaches past its bottom; an empty layer --focus-clearance tall under the list gives the list's focus ring
  * room to come into view.
  */
-@media (min-width: 768px) and (max-width: 929px) {
+@media (480px <= width < 930px) {
   .sheet-week {
     overflow-x: auto;
     scroll-padding: var(--focus-clearance);
@@ -3352,7 +3522,8 @@ textarea {
   border-color: transparent;
 }
 
-@media (max-width: 767px) {
+/* The sheet's compact form (SHEET_QUERY, below 480px): a one-column header and footer, a phone-sized signature block. */
+@media (width < 480px) {
   .form-head,
   .sheet-foot,
   .signatures {
@@ -3545,7 +3716,7 @@ button.link-action {
   }
 }
 
-@media (max-width: 767px), (pointer: coarse) {
+@media (width < 768px), (pointer: coarse) {
   button.link-action {
     min-height: var(--tap-min);
   }
@@ -3635,7 +3806,7 @@ button.link-action {
   grid-template-columns: repeat(auto-fit, minmax(var(--figures-min), var(--track)));
 }
 
-@media (min-width: 768px) {
+@media (width >= 768px) {
   .time-pair {
     grid-template-columns: var(--track) var(--track);
   }
@@ -3675,8 +3846,8 @@ button.link-action {
  * off: `section.review-sheet-block`, "What you sign" and the sheet; the checklist stays beside it). The title row and the period
  * card stay outside. The toolbar, the week sheets and the footer keep their own style and layout; the week sheets and the footer
  * lose only their outer shadow, because the paper carries it. The paper clips nothing (overflow stays visible): a lifted column's
- * shadow, a label list and the editor column lift draw over it. On a phone the paper is full-bleed and square: it reaches the
- * window edges, and its side padding equals the page padding, so the four-column table keeps its width.
+ * shadow, a label list and the editor column lift draw over it. In the compact form (below 480px, U5-22) the paper stands
+ * --compact-edge (8px) from each window edge with the card corner, and its side padding is 8px, so the four-column table keeps its width.
  */
 .paper {
   display: flex;
@@ -3694,12 +3865,12 @@ button.link-action {
   box-shadow: none;
 }
 
-@media (max-width: 767px) {
+/* The compact form (SHEET_QUERY, below 480px; U5-22): the paper stands --compact-edge from each window edge, keeps the card corner and pads 8px inside. */
+@media (width < 480px) {
   .paper {
     gap: var(--space-2);
-    margin-inline: calc(-1 * var(--space-4));
-    padding: var(--space-3) var(--space-4);
-    border-radius: 0;
+    margin-inline: calc(var(--compact-edge) - var(--page-pad));
+    padding: var(--space-3) var(--space-2);
   }
 }
 
@@ -4423,14 +4594,14 @@ button.quiet-danger {
 }
 
 /* From 768px the start and the end sit side by side. */
-@media (min-width: 768px) {
+@media (width >= 768px) {
   .session-times {
     grid-template-columns: repeat(var(--cols-2), minmax(0, var(--track)));
   }
 }
 
 /* Below 768px the dialog is the whole screen, with the phone spacing (N-2) and two equal buttons in a foot that stays in view. */
-@media (max-width: 767px) {
+@media (width < 768px) {
   .session-dialog {
     width: 100%;
     max-width: 100%;
@@ -4497,7 +4668,7 @@ button.quiet-danger {
 }
 
 /* On a phone or a coarse pointer the select is 44px tall (the control rule), and so is the box line beside it. */
-@media (max-width: 767px), (pointer: coarse) {
+@media (width < 768px), (pointer: coarse) {
   .label-row .label-wfh {
     min-height: var(--tap-min);
   }
@@ -4535,7 +4706,7 @@ button.quiet-danger {
   justify-content: flex-end;
 }
 
-@media (max-width: 767px) {
+@media (width < 768px) {
   .leave-grid {
     grid-template-columns: repeat(var(--cols-2), minmax(0, var(--track)));
   }
@@ -4704,7 +4875,7 @@ button.quiet-danger {
   box-shadow: 0 calc(-1 * var(--hairline)) 0 var(--line-soft);
 }
 
-@media (max-width: 767px), (pointer: coarse) {
+@media (width < 768px), (pointer: coarse) {
   .label-option {
     min-height: var(--tap-min);
   }
@@ -4828,6 +4999,27 @@ button.quiet-danger {
   }
 }
 
+/*
+ * The primary link (U5-14: "Review & sign off" while the period needs the person): the accent fill with the on-accent text, like the
+ * primary button, and the stronger accent under the pointer. Its words say what it is; the fill is not the only cue.
+ */
+.button-link.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+@media (hover: hover) {
+  .button-link.primary:hover {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+  }
+
+  .button-link.primary:focus-visible:hover {
+    box-shadow: var(--focus-ring);
+  }
+}
+
 .history-list {
   display: flex;
   flex-direction: column;
@@ -4858,7 +5050,7 @@ button.quiet-danger {
   overflow-wrap: anywhere;
 }
 
-@media (min-width: 768px) {
+@media (width >= 768px) {
   .ot-balances {
     grid-template-columns: repeat(var(--cols-4), var(--track));
   }
@@ -5067,7 +5259,7 @@ textarea.mono {
 }
 
 /*
- * The check card (U5-28): the period card's padding (16px; 12px in compact, below 768px), the text on the left and vertically centred,
+ * The check card (U5-28): the period card's padding (16px; 12px in compact, below 480px), the text on the left and vertically centred,
  * the way back on the right and vertically centred, at least 16px apart. Below 480px the way back says "Back"; its accessible name
  * stays "Back to the timesheet".
  */
@@ -5092,13 +5284,11 @@ textarea.mono {
   display: none;
 }
 
-@media (max-width: 767px) {
+@media (width < 480px) {
   .check-card {
     padding: var(--space-3);
   }
-}
 
-@media (max-width: 479px) {
   .back-full {
     display: none;
   }
@@ -5110,8 +5300,8 @@ textarea.mono {
 
 /*
  * The Preview card and the Send card (U5-29, U5-31): a card with a header bar (the title on the left, the chips on the right) and a
- * padded body. The Preview is the paper: it carries the sheet, whose week bands and footer lose only their own outer shadow. On a
- * phone it is full-bleed and square, like the paper of the Timesheet, so the four-column table keeps its width.
+ * padded body. The Preview is the paper: it carries the sheet, whose week bands and footer lose only their own outer shadow. In the
+ * compact form (below 480px) it stands 8px from the window edges, like the paper of the Timesheet.
  */
 .review-preview,
 .send-card {
@@ -5151,19 +5341,19 @@ textarea.mono {
   box-shadow: none;
 }
 
-@media (max-width: 767px) {
-  .review-preview {
-    margin-inline: calc(-1 * var(--space-4));
-    border-radius: 0;
-  }
-
-  .review-preview .preview-bar {
-    border-radius: 0;
+/*
+ * The compact form (SHEET_QUERY, below 480px; U5-22): the cards of the page stand --compact-edge (8px) from each window edge, as the
+ * period card and the paper of the Timesheet do, and keep their corner; the preview's body pads 8px, so the four-column table keeps
+ * the 358px it has at 390px.
+ */
+@media (width < 480px) {
+  .review-screen > :is(.card, .review-preview, .send-card) {
+    margin-inline: calc(var(--compact-edge) - var(--page-pad));
   }
 
   .preview-body {
     gap: var(--space-2);
-    padding: var(--space-3) var(--space-4);
+    padding: var(--space-2);
   }
 }
 
@@ -5385,7 +5575,7 @@ textarea.mono {
 }
 
 /* Touch devices and narrow screens: the quiet controls of the Send card are 44px targets too. */
-@media (max-width: 767px), (pointer: coarse) {
+@media (width < 768px), (pointer: coarse) {
   .send-reset {
     min-height: var(--tap-min);
   }
@@ -5415,7 +5605,7 @@ textarea.mono {
   text-align: right;
 }
 
-@media (max-width: 767px) {
+@media (width < 768px) {
   .send-card {
     border-radius: var(--radius-lg);
   }
@@ -5526,7 +5716,7 @@ textarea.mono {
   flex: none;
 }
 
-@media (max-width: 767px) {
+@media (width < 768px) {
   .signoff-summary > div {
     grid-template-columns: minmax(0, var(--track));
     gap: 0;
@@ -5620,7 +5810,7 @@ textarea.mono {
 }
 
 /* Below 768px each person and period is a labelled block instead of a table row. */
-@media (max-width: 767px) {
+@media (width < 768px) {
   .ops-table,
   .ops-table tbody,
   .ops-table th,
@@ -5822,7 +6012,7 @@ code {
 }
 
 /* Sticky below the sticky shell bar, never under it (WP5-UX-AX-01, SC 2.4.11). */
-@media (min-width: 768px) {
+@media (width >= 768px) {
   .share-bar {
     position: sticky;
     top: var(--shell-bar-size);
@@ -5862,7 +6052,7 @@ code {
  * a smaller visible label, a tighter gap and no extra block padding on the label (the select and Open keep
  * their 44px targets), so a person with a received share keeps the first day row above the tab bar.
  */
-@media (max-width: 767px) {
+@media (width < 768px) {
   .shell-bar {
     column-gap: var(--space-3);
   }
@@ -5942,7 +6132,7 @@ code {
 }
 
 /* A phone shows each row as a small card, so no column needs a sideways scroll. */
-@media (max-width: 767px) {
+@media (width < 768px) {
   .import-table thead {
     position: absolute;
     width: var(--hairline);
