@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type DayView, ownRequest, type PolicyVersion, type Requester, type Session } from './api.ts';
 import { ConfirmDialog } from './components/ConfirmDialog.tsx';
 import { dayBanner, deleteFacts, editorChips, editorTitle } from './components/dayEditorModel.ts';
@@ -39,17 +39,22 @@ function otherModalOpen(editor: HTMLDialogElement): boolean {
  * and so does Close; the caller returns focus to the day's button. `onDirtyChange` reports whether the
  * day fields or the reason hold edits that are not saved, so the page can ask before it drops them.
  *
+ * A press outside closes it as Close does, with the same discard question (WP5-UX5-T05B, U5-24): on the phone the sheet handles a
+ * press on its own backdrop (`backdropPress`); on a desktop the page handles a press outside a day column, the drawer, a dialog and a
+ * control. The drawer has square corners (U5-23); the phone's sheet keeps its top corners.
+ *
  * Order inside: the head (the accounting date, then chips for the period and the zones), the banner
  * of what the day still needs, the times (a card per session with its break table; Add session, Edit
- * and "Confirm breaks" open the session dialog, Delete the delete confirmation), category and leave,
- * then the server's figures. Every write carries the version the editor loaded and, for an old or
+ * and "Confirm breaks" open the session dialog, Delete the delete confirmation), category and leave
+ * (the partial leave is a summary row that opens its own dialog), then the server's figures. The phone's sheet is a grid of head,
+ * body (scrolls) and foot: the foot holds "Save day fields" and the figures are not shown there (U5-26). Every write carries the version the editor loaded and, for an old or
  * finalized period, a reason (one reason state, shared by the panel, the session dialog and the
  * delete confirmation); a stale version reloads the day and says so. In a view-only shared view or an
  * imported period (`readOnly`) the editor only shows the day: the reason, the add, edit and delete
  * controls and the day fields form are absent, not disabled.
  *
- * Nested dialogs (WP5-UX-B3-01): the session dialog (with its notice and confirmations) and the delete
- * confirmation are modal dialogs inside this one, one on top at a time. Each owns Escape and focus
+ * Nested dialogs (WP5-UX-B3-01): the session dialog (with its notice and confirmations), the delete
+ * confirmation and the Partial leave dialog of the day fields form are modal dialogs inside this one, one on top at a time. Each owns Escape and focus
  * while it is open, this editor ignores an Escape whose target lies in another dialog, and its switch
  * between modal and non-modal on crossing 768px waits until no other modal dialog is open.
  */
@@ -118,6 +123,8 @@ export function DayEditor({
   /** Remounts the forms after a reload, so they start from the reloaded day. */
   const [generation, setGeneration] = useState(0);
   const firstRefresh = useRef(refresh);
+  /** The foot of the phone's bottom sheet, where the day fields form draws "Save day fields" (null until it is mounted, and off the phone). */
+  const [foot, setFoot] = useState<HTMLElement | null>(null);
 
   // Opens the drawer (non-modal) or the bottom sheet (modal) and moves focus to the heading. A switch
   // between the two while open (the window crossed 768px) re-opens the same element in the other mode.
@@ -293,6 +300,22 @@ export function DayEditor({
     onClose();
   }
 
+  /**
+   * U5-24: a press on the bottom sheet's backdrop closes the sheet (after the discard question when it holds unsaved edits). The
+   * backdrop belongs to the dialog element itself, so the target is the dialog and the point lies outside its box; a press that lands
+   * on the dialog's own box, or on a dialog nested in it, is not a backdrop press. A drawer has no backdrop (the page handles its own
+   * outside press).
+   */
+  function backdropPress(event: PointerEvent<HTMLDialogElement>) {
+    if (!modal || event.button !== 0 || event.target !== event.currentTarget) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    const inside = event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
+    if (inside) return;
+    // The press is used here: unprevented, the browser would move focus to the page after the sheet (or the question) took it.
+    event.preventDefault();
+    onClose();
+  }
+
   const editingSession =
     editing.kind === 'edit' ? day?.sessions.find((session) => session.id === editing.sessionId) : undefined;
   const deletingSession = deleting === null ? undefined : day?.sessions.find((session) => session.id === deleting);
@@ -316,6 +339,7 @@ export function DayEditor({
       data-day-editor={workDate}
       data-side={bottomSheet ? undefined : dockSide}
       onKeyDown={keyDown}
+      onPointerDown={backdropPress}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -456,14 +480,19 @@ export function DayEditor({
                 reasonRequired={reasonRequired}
                 onSaved={(next) => saved(next, 'Day fields saved.')}
                 onStale={stale}
+                footSlot={bottomSheet ? foot : undefined}
                 request={request}
               />
             )}
 
-            <DayFigures day={day} todayLocal={todayLocal} expectedFinish={expectedFinishText(day.sessions, policy, displayZone)} />
+            {/* U5-26: the phone's sheet has no figures section (the server's values stay in the desktop drawer). */}
+            {!bottomSheet && <DayFigures day={day} todayLocal={todayLocal} expectedFinish={expectedFinishText(day.sessions, policy, displayZone)} />}
           </>
         )}
       </div>
+
+      {/* U5-26: the foot of the bottom sheet holds "Save day fields" (drawn here by the day fields form), so it stays in view while the body scrolls. */}
+      {bottomSheet && !readOnly && day !== null && <footer ref={setFoot} className="editor-foot" data-editor-foot />}
 
       {!readOnly && day !== null && (editing.kind === 'new' || editingSession !== undefined) && (
         <SessionDialog

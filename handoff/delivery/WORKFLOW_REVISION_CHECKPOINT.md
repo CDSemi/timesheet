@@ -1456,6 +1456,35 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   file.
 - Running now: WP5-UX5-T05A-FREEZE (a fresh committer, alone). It stages 32 explicit paths
   plus the handoff records, including the draft T05B brief; the digest must be 66574877.
+- WP5-UX5-T05A-FREEZE done: 70f7800b9c1582cffee453ac0bc8c741418f6f99 on main, pushed (56
+  paths: 32 outside `handoff/`, 24 handoff). Digest 66574877 (867 files) before staging;
+  every check exit 0.
+  - Deviation: after the commit the committer re-ran the working-tree digest instead of
+    the `git ls-tree` digest of HEAD. The tree outside `handoff/` was clean; the gate
+    records HEAD identity.
+- Running now: WP5-UX5-T05B, the Day editor (worker-high, sonnet; size M, risk H; base
+  70f7800 / 66574877; ports 49780-49799).
+  - Items: U5-23 (no drawer corners), U5-24 with F-7 a (an outside press closes, with the
+    discard guard; controls keep their action), U5-25 (Partial leave sub-dialog; Notes
+    stay, B5) and U5-26 (phone: no Figures, a fixed Save).
+- WP5-UX5-T05B done (worker report; the gate and audits are pending). No inventory stop;
+  `src/server` untouched.
+  - npm test 2345; FULL e2e 859 passed, 0 failed, no rerun; mutants 5/5; verify 0; digest
+    a5dcb5a6 (868 files; new `LeaveDialog.tsx`).
+  - `LeaveRow.tsx` was not reused: it is the OT leave-request row.
+  - The outside-press handlers call `preventDefault`, so focus returns to the day button.
+  - No runtime slip reported.
+  - Audit notes:
+    - after a save from the phone foot with the body scrolled, the "saved" status is
+      announced but not in view;
+    - a press on a bare part of the top bar closes the drawer.
+- Draft brief ready: WP5-UX5-T06 (docs/04, docs/12, the pilot packet and new samples).
+- Running now: the lookup WP5-UX5-T05B-PATHS (light, haiku, read-only).
+- T05B-PATHS done. Outside `handoff/`: 11 modified, 1 new (`LeaveDialog.tsx`), 0 deleted.
+  Nothing is staged, and there is no disallowed path, binary or `zz-*` file.
+- Running now: WP5-UX5-T05B-FREEZE (a fresh committer, alone). It stages 12 explicit paths
+  plus the handoff records, including the draft T06 brief. The digest must be a5dcb5a6,
+  checked on HEAD with `git ls-tree`.
 - Remaining after T06:
   - T06-FREEZE;
   - the round-5 package gate (it covers rounds 4 and 5);

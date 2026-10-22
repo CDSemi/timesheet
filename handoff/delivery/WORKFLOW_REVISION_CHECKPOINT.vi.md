@@ -1494,6 +1494,37 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Đang chạy: WP5-UX5-T05A-FREEZE (một committer mới, chạy một mình). Nó stage 32 đường dẫn
   ghi rõ tên cùng các hồ sơ trong handoff, kể cả bản nháp brief T05B; digest phải là
   66574877.
+- WP5-UX5-T05A-FREEZE xong: 70f7800b9c1582cffee453ac0bc8c741418f6f99 trên main, đã push (56
+  đường dẫn: 32 ngoài `handoff/`, 24 trong handoff). Digest 66574877 (867 file) trước khi
+  stage; mọi kiểm tra exit 0.
+  - Điểm lệch: sau commit, committer tính lại digest của cây làm việc thay vì digest
+    `git ls-tree` của HEAD. Phần ngoài `handoff/` đã sạch; gate sẽ ghi lại định danh của
+    HEAD.
+- Đang chạy: WP5-UX5-T05B, Day editor (worker-high, sonnet; cỡ M, rủi ro H; nền 70f7800 /
+  66574877; cổng 49780-49799).
+  - Các mục: U5-23 (panel không bo góc), U5-24 với F-7 a (bấm ra ngoài thì đóng, có hỏi
+    trước khi bỏ thay đổi; các nút vẫn giữ hành động riêng), U5-25 (hộp thoại con
+    Partial leave; Notes vẫn ở lại, B5) và U5-26 (điện thoại: bỏ Figures, nút Save cố
+    định).
+- WP5-UX5-T05B xong (theo báo cáo của worker; gate và audit còn chờ). Không dừng ở bước kiểm
+  kê; không đụng tới `src/server`.
+  - npm test 2345; FULL e2e 859 đạt, 0 lỗi, không chạy lại; mutant 5/5; verify 0; digest
+    a5dcb5a6 (868 file; thêm file mới `LeaveDialog.tsx`).
+  - Không dùng lại `LeaveRow.tsx`, vì đó là dòng yêu cầu nghỉ bằng OT.
+  - Các handler bấm ra ngoài gọi `preventDefault`, để focus quay về nút của ngày.
+  - Không báo lỗi quy tắc nào.
+  - Ghi chú cho audit:
+    - sau khi lưu từ nút cố định ở chân sheet trên điện thoại mà phần thân đang cuộn xuống,
+      thông báo "đã lưu" được đọc lên nhưng không nằm trong tầm nhìn;
+    - bấm vào chỗ trống trên thanh trên cùng sẽ đóng panel.
+- Đã soạn sẵn brief: WP5-UX5-T06 (docs/04, docs/12, pilot packet và bộ mẫu mới).
+- Đang chạy: tra cứu WP5-UX5-T05B-PATHS (light, haiku, chỉ đọc).
+- T05B-PATHS xong. Ngoài `handoff/`: 11 file sửa, 1 file mới (`LeaveDialog.tsx`), 0 file
+  xóa. Không có gì được stage, và không có đường dẫn ngoài phạm vi cho phép, file nhị phân hay
+  file `zz-*` nào.
+- Đang chạy: WP5-UX5-T05B-FREEZE (một committer mới, chạy một mình). Nó stage 12 đường dẫn
+  ghi rõ tên cùng các hồ sơ trong handoff, kể cả bản nháp brief T06. Digest phải là
+  a5dcb5a6, kiểm tra trên HEAD bằng `git ls-tree`.
 - Còn lại sau T06:
   - T06-FREEZE;
   - gate gói của đợt 5 (bao gồm cả đợt 4 và đợt 5);

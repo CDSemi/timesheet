@@ -206,3 +206,12 @@ Append to this brief:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+- HEAD before: 060302bcb41050c116e2519602f303c3a11cb01d. HEAD after: 70f7800b9c1582cffee453ac0bc8c741418f6f99.
+- Commit SHA 70f7800b9c1582cffee453ac0bc8c741418f6f99 on main; pushed; remote SHA 70f7800b9c1582cffee453ac0bc8c741418f6f99. No tag.
+- Digest before add: 665748778f55cb2240f350097892e03cbed8931bd7f0f56f6b1ed3250a892c24 (867 files); after commit, source-digest.mjs on the clean tree gives the same value (git ls-tree form not run separately).
+- Staged: 56 paths; 32 outside handoff/ (modified); 24 under handoff/ (4 modified, 20 new: 14 evidence files incl. T04-FREEZE checks/commit-message, 4 task records plus this brief counted).
+- Extra handoff paths staged: none.
+- Checks: node v24.21.0; precommit 0; diff --cached --check 0; JSON parse 0; validate_orchestration 0; check_recovery 0; validate_package --preflight 0; fetch 0; push dry-run 0; push 0.
+- Scan hits: key/PEM 0; zz-* none; only non-example email is the noreply attribution line in the T04 commit-message evidence (accepted).
+- Fixes, masking, stops: none. Unstaged afterwards: this Results, evidence/WP5-UX5-T05A-FREEZE/checks.txt and commit-message.txt.

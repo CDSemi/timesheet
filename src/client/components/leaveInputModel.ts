@@ -55,6 +55,18 @@ export function parseLeaveInput(input: LeaveInput): LeaveParse {
   return { ok: true, minutes: (wholeNumber(input.hours) ?? 0) * MINUTES_PER_HOUR + (wholeNumber(input.minutes) ?? 0) };
 }
 
+/**
+ * The summary row of the Day editor (U5-25): "None" with no leave, otherwise the leave as `2:00` followed by its kind word
+ * (`vacation`, `sick`, `OT`), or "kind not set" while no kind is chosen. A field that cannot be read counts as no leave:
+ * the Partial leave dialog accepts only readable fields, so the draft never holds one.
+ */
+export function leaveSummary(input: LeaveInput, kindWord: string | null): string {
+  const parsed = parseLeaveInput(input);
+  if (!parsed.ok || parsed.minutes === 0) return 'None';
+  const clock = `${Math.floor(parsed.minutes / MINUTES_PER_HOUR)}:${String(parsed.minutes % MINUTES_PER_HOUR).padStart(2, '0')}`;
+  return `${clock} ${kindWord ?? 'kind not set'}`;
+}
+
 /** The parts of the input that make it invalid; both false when `parseLeaveInput` accepts it. */
 export function invalidLeaveParts(input: LeaveInput): LeaveParts {
   const hours = input.hoursBad === true ? null : wholeNumber(input.hours);

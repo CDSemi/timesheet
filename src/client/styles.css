@@ -3850,6 +3850,7 @@ textarea {
 .session-card .button-row > button,
 .editor-section-head > button,
 .break-actions > button,
+.leave-summary > button,
 .editor-actions > button {
   position: relative;
   display: inline-flex;
@@ -3865,6 +3866,7 @@ textarea {
   .session-card .button-row > button::before,
   .editor-section-head > button::before,
   .break-actions > button::before,
+  .leave-summary > button::before,
   .editor-actions > button::before {
     content: '';
     position: absolute;
@@ -4061,10 +4063,11 @@ button.link-action {
  * bar to the bottom of the window (round 4, U4-05 to U4-07): no backdrop, the page stays usable. When the window has room for
  * the sheet and the drawer (`useEditorLayout`, the rule in editorLayoutModel.ts) the page is pushed aside and reserves the
  * drawer's room (`.sheet-area.with-editor`, always on the right); otherwise the drawer floats over the sheet on the side away
- * from the edited column (`data-side`), and docks to the other side when a control behind it takes focus under it. The two
- * corners on the window edge are square and the two toward the sheet are rounded. Below 768px it is a modal bottom sheet of at
- * most 86% of the height. Inside: a sticky head, then the banner, the times, label and leave, and the figures, each section
- * separated by a soft rule.
+ * from the edited column (`data-side`), and docks to the other side when a control behind it takes focus under it. All four corners
+ * of the drawer are square (U5-23). Below 768px it is a modal bottom sheet of at most 86% of the height with its top corners rounded:
+ * a grid of the handle, the head, the body (the one part that scrolls) and a foot with "Save day fields" (U5-26). Inside the drawer:
+ * a sticky head, then the banner, the times, label and leave, and the figures, each section separated by a soft rule; the phone
+ * has no figures section.
  */
 .sheet-area {
   display: grid;
@@ -4127,9 +4130,10 @@ button.link-action {
 }
 
 /*
- * The drawer (round 4, U4-06): beside the sheet and floating share this one geometry, a fixed column flush with a window edge from
- * under the top bar (and the share bar) to the bottom of the window. Docked right its corners toward the sheet are rounded and the
- * two on the edge are square; docked left is the mirror. There is no backdrop: the page stays usable.
+ * The drawer (round 4, U4-06; its corners are square since round 5, U5-23, the owner's "detail panel without rounded corners"):
+ * beside the sheet and floating share this one geometry, a fixed column flush with a window edge from under the top bar (and the
+ * share bar) to the bottom of the window, with no radius on any corner, docked right or left. There is no backdrop: the page stays
+ * usable. The phone's bottom sheet keeps its top corners (below).
  */
 .day-panel-side {
   position: fixed;
@@ -4137,13 +4141,12 @@ button.link-action {
   z-index: var(--layer-panel);
   width: var(--editor-width);
   height: auto;
-  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  border-radius: 0;
 }
 
 /* Docked on the left when the edited column lies in the right half of the window (floating only), so the column stays visible. */
 .day-panel-side[data-side='left'] {
   inset: calc(var(--shell-bar-size) + var(--share-bar-size)) auto 0 0;
-  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
 }
 
 /*
@@ -4168,7 +4171,42 @@ button.link-action {
   max-width: 100%;
   max-height: var(--editor-sheet-max-height);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding-bottom: env(safe-area-inset-bottom);
+  /* The body is the one part that scrolls (U5-26), so the sheet itself clips instead; its corners clip the head. */
+  overflow: hidden;
+}
+
+/*
+ * The phone's sheet is a grid of the handle, the head, the body and the foot (U5-26, mockup B6): the body takes the room that is left
+ * and scrolls, the foot stays where it is, so "Save day fields" is always in view and never moves with the content. The sheet is as
+ * tall as its content up to --editor-sheet-max-height.
+ */
+.day-panel-sheet[open] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, var(--track)) auto;
+}
+
+.day-panel-sheet .editor-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The body is the sheet's scroller: where a browser makes a scroll container a keyboard stop, it shows the dialog's inset ring (WP5-UX-AX-03, SC 2.4.7). */
+.day-panel-sheet .editor-body:focus-visible {
+  box-shadow: var(--focus-ring-inset);
+}
+
+/* The foot of the sheet, as the session dialog's foot: the panel-head surface, a soft rule above and the full-width 44px button. */
+.editor-foot {
+  display: flex;
+  padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+  border-top: var(--hairline) solid var(--line-soft);
+  background: var(--panel-head);
+}
+
+.editor-foot > button {
+  flex: 1 1 auto;
+  min-height: var(--tap-min);
 }
 
 .day-panel-sheet::backdrop {
@@ -4907,25 +4945,51 @@ button.quiet-danger {
   }
 }
 
-.leave-fields {
-  display: grid;
-  gap: var(--space-2);
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
+/*
+ * The partial leave (U5-25, mockup B5): one inset summary row in the day fields, "Partial leave" and its value ("2:00 vacation" or
+ * "None") with the Change or Add button at the end. The row is a hairline-ringed inset panel on --off, like the session cards; the
+ * words are always there, so the state is never a colour alone. The hours, minutes and kind live in the Partial leave dialog.
+ */
+.leave-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--off);
+  box-shadow: var(--elev-1);
 }
 
-.leave-fields legend {
-  padding: 0;
-  margin-bottom: var(--space-2);
+.leave-summary-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+  margin: 0;
+}
+
+.leave-summary-value {
   font-weight: var(--font-weight-strong);
+  overflow-wrap: anywhere;
+}
+
+/* The Partial leave dialog: the break dialog's card with the hours, minutes and kind in two columns and the kind below them. */
+.leave-dialog-head > p {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-sm);
 }
 
 .leave-grid {
   display: grid;
-  grid-template-columns: repeat(var(--cols-3), minmax(0, var(--track)));
+  grid-template-columns: repeat(var(--cols-2), minmax(0, var(--track)));
   gap: var(--space-3);
+}
+
+.leave-grid label:last-child {
+  grid-column: 1 / -1;
 }
 
 .leave-grid input,
@@ -4937,20 +5001,6 @@ button.quiet-danger {
 
 .editor-actions {
   justify-content: flex-end;
-}
-
-@media (width < 768px) {
-  .leave-grid {
-    grid-template-columns: repeat(var(--cols-2), minmax(0, var(--track)));
-  }
-
-  .leave-grid label:last-child {
-    grid-column: 1 / -1;
-  }
-
-  .editor-actions button {
-    width: 100%;
-  }
 }
 
 /* In-cell label picker: the label cell is the dropdown, as in the Excel form. */

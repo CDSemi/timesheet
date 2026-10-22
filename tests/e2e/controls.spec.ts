@@ -463,7 +463,14 @@ for (const theme of THEMES) {
     await page.locator('[data-day-button]').first().click();
     const editor = page.getByRole('dialog').first();
     await expect(editor.getByRole('checkbox', { name: /Worked from home/ })).toBeVisible();
-    await expectControls(page, 'Day editor', await scan(page), lines, { selects: 2, checkboxes: 1 });
+    // WP5-UX5-T05B (U5-25): the leave kind select moved into the Partial leave dialog, so the editor itself holds the Category select
+    // (one); the dialog is scanned next, where the kind select is the second one on the page.
+    await expectControls(page, 'Day editor', await scan(page), lines, { selects: 1, checkboxes: 1 });
+    await editor.getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Partial leave', exact: true }).getByLabel('Leave kind')).toBeVisible();
+    await expectControls(page, 'Partial leave dialog', await scan(page), lines, { selects: 2 });
+    await page.getByRole('dialog', { name: 'Partial leave', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Partial leave', exact: true })).toHaveCount(0);
     // The WFH box against the Category select, measured directly as well (the promise of U4-09).
     const wfh = editor.getByRole('checkbox', { name: /Worked from home/ });
     const select = editor.locator('.label-select select');
@@ -708,7 +715,7 @@ async function subButtonFacts(button: Locator, name: string): Promise<SubButtonF
   }, name);
 }
 
-test('Edit, Delete, Add session, Suggest breaks, Add break and Save day fields are 36px high everywhere; the 44px hit area stays below 768px and with a coarse pointer; rows keep 8px apart', async ({
+test('Edit, Delete, Add session, Add (partial leave), Suggest breaks, Add break and Save day fields (from 768px; the sheet foot below it is 44px) are 36px high everywhere; the 44px hit area stays below 768px and with a coarse pointer; rows keep 8px apart', async ({
   page,
   employeeSeed,
   signInThroughUi,
@@ -733,14 +740,31 @@ test('Edit, Delete, Add session, Suggest breaks, Add break and Save day fields a
       await page.getByRole('button', { name: 'Open day', exact: true }).click();
       const editor = page.getByRole('dialog', { name: /Day editor/ });
       await expect(editor).toBeVisible();
-      await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+      // WP5-UX5-T05B (U5-26): the bottom sheet (below 768px) has no figures section; the drawer keeps it.
+      const figures = editor.getByRole('heading', { name: 'Figures (computed by the server)' });
+      if (width >= 768) await expect(figures).toBeVisible();
+      else {
+        await expect(editor.getByRole('heading', { name: 'Times' })).toBeVisible();
+        await expect(figures).toHaveCount(0);
+      }
       const where = `${width}px (${coarse ? 'coarse' : 'fine'} pointer, hit area ${hitArea ? 'expected' : 'not expected'})`;
       const facts: SubButtonFacts[] = [];
       facts.push(await subButtonFacts(editor.getByRole('button', { name: 'Add session', exact: true }), 'Add session'));
       const edit = await subButtonFacts(editor.getByRole('button', { name: `Edit session ${sessionId}` }), 'Edit');
       const remove = await subButtonFacts(editor.getByRole('button', { name: `Delete session ${sessionId}` }), 'Delete');
       facts.push(edit, remove);
-      facts.push(await subButtonFacts(editor.getByRole('button', { name: 'Save day fields' }), 'Save day fields'));
+      // WP5-UX5-T05B (U5-25): the partial leave's Add (or Change) button is a sub-button too.
+      facts.push(await subButtonFacts(editor.getByRole('button', { name: 'Add', exact: true }), 'Add partial leave'));
+      // Below 768px "Save day fields" is the foot of the bottom sheet (U5-26): the full-width 44px button of a dialog foot, checked apart.
+      const save = editor.getByRole('button', { name: 'Save day fields' });
+      if (width >= 768) facts.push(await subButtonFacts(save, 'Save day fields'));
+      else {
+        const foot = await subButtonFacts(save, 'Save day fields');
+        const footBox = await editor.locator('[data-editor-foot]').boundingBox();
+        lines.push(`${width}px: Save day fields in the foot ${round(foot.height)}px high, ${round(foot.right - foot.left)}px wide in a foot ${round(footBox?.width ?? 0)}px wide`);
+        expect(Math.abs(foot.height - 44), `${width}px: the foot's Save day fields is 44px high, not ${foot.height}`).toBeLessThanOrEqual(0.5);
+        expect(foot.right - foot.left, `${width}px: the foot's Save day fields is full width (the foot less its 16px sides)`).toBeGreaterThanOrEqual((footBox?.width ?? 0) - 32 - 1);
+      }
       // The two buttons of a row keep 8px apart (or sit in separate rows 8px apart), so their 44px hit areas never overlap.
       const apart = (first: SubButtonFacts, second: SubButtonFacts) => {
         const sideways = second.left - first.right;

@@ -4,6 +4,7 @@ import {
   LEAVE_INPUT_MESSAGE,
   LEAVE_MAX_MINUTES,
   leaveInputOf,
+  leaveSummary,
   parseLeaveInput,
 } from '../../src/client/components/leaveInputModel.ts';
 import { leaveHint } from '../../src/client/components/sessionModel.ts';
@@ -79,6 +80,23 @@ describe('leave typed as hours and minutes', () => {
     expect(invalidLeaveParts({ hours: '25', minutes: '60' })).toEqual({ hours: true, minutes: true });
     // Each part is fine alone but the sum passes 24h 00m: both are marked.
     expect(invalidLeaveParts({ hours: '24', minutes: '1' })).toEqual({ hours: true, minutes: true });
+  });
+
+  // U5-25: the summary row of the Day editor shows the draft, so a Done in the Partial leave dialog is visible before Save.
+  it('summarises the leave draft as a clock and its kind, or None', () => {
+    expect(leaveSummary({ hours: '2', minutes: '0' }, 'vacation')).toBe('2:00 vacation');
+    expect(leaveSummary({ hours: '0', minutes: '5' }, 'sick')).toBe('0:05 sick');
+    expect(leaveSummary({ hours: '1', minutes: '30' }, 'OT')).toBe('1:30 OT');
+    expect(leaveSummary({ hours: '24', minutes: '0' }, 'vacation')).toBe('24:00 vacation');
+    expect(leaveSummary({ hours: '4', minutes: '' }, null)).toBe('4:00 kind not set');
+    expect(leaveSummary({ hours: '0', minutes: '0' }, 'vacation')).toBe('None');
+    expect(leaveSummary({ hours: '', minutes: '' }, null)).toBe('None');
+    // Text that cannot be read is no leave (the dialog never lets it into the draft).
+    expect(leaveSummary({ hours: '2-', minutes: '0' }, 'vacation')).toBe('None');
+    expect(leaveSummary({ hours: '', minutes: '30', hoursBad: true }, 'vacation')).toBe('None');
+    for (let minutes = 1; minutes <= LEAVE_MAX_MINUTES; minutes += 1) {
+      expect(leaveSummary(leaveInputOf(minutes), 'sick'), `${minutes} minutes`).toMatch(/^\d{1,2}:\d{2} sick$/);
+    }
   });
 
   it('starts the fields from the stored leave minutes, and the round trip is exact', () => {

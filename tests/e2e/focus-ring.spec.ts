@@ -274,13 +274,15 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
   /*
    * WP5-UX-AX-03 (SC 2.4.7): a scrolling day editor is a keyboard stop of its own (the browser makes a
-   * scroll container focusable); reached with Shift+Tab from Close it shows an inset ring.
+   * scroll container focusable); reached with Shift+Tab from Close it shows an inset ring. On the phone the scroller is the body of
+   * the sheet (U5-26), which holds controls and so is no stop of its own; the first control after Close shows the shared ring.
    */
   test(`WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (${colorScheme})`, async ({
     page,
     adminSeed,
     builtServer,
     signInPageAs,
+    isMobile,
   }) => {
     const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Ring Person', signature: 'none' });
     const [day = ''] = await person.api.displayedPeriodFreeWorkdays();
@@ -292,13 +294,28 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await page.locator(`[data-day="${day}"] :is(.d-time, .t-time)`).click();
     const editor = page.locator(`dialog[data-day-editor="${day}"]`);
     await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
-    expect(await editor.evaluate((element) => element.scrollHeight > element.clientHeight), 'the editor scrolls').toBe(true);
+    // WP5-UX5-T05B (U5-26): on the phone the sheet is a grid and its body is the scroller (the dialog itself never scrolls); from 768px
+    // the drawer dialog scrolls. Whichever element scrolls, a keyboard stop on it shows the inset ring.
+    const scroller = isMobile ? editor.locator('.editor-body') : editor;
+    expect(await scroller.evaluate((element) => element.scrollHeight > element.clientHeight), 'the editor scrolls').toBe(true);
     await page.keyboard.press('Shift');
     await editor.getByRole('button', { name: 'Close', exact: true }).focus();
-    await page.keyboard.press('Shift+Tab');
-    expect(await editor.evaluate((element) => element === element.ownerDocument.activeElement && element.matches(':focus-visible')), 'the dialog is the keyboard stop').toBe(true);
-    const ratio = expectInsetRing('day editor dialog', await settledShadow(editor), [await backdropsOf(editor, true)]);
-    console.log(`day editor dialog ring ${colorScheme}: ${ratio.toFixed(2)}`);
+    // The drawer's dialog comes before its Close button in the sequence; the sheet's body comes after it.
+    await page.keyboard.press(isMobile ? 'Tab' : 'Shift+Tab');
+    const onScroller = await scroller.evaluate((element) => element === element.ownerDocument.activeElement && element.matches(':focus-visible'));
+    if (!isMobile) expect(onScroller, 'the dialog is the keyboard stop').toBe(true);
+    if (onScroller) {
+      const ratio = expectInsetRing('day editor scroller', await settledShadow(scroller), [await backdropsOf(scroller, true)]);
+      console.log(`day editor scroller ring ${colorScheme}: ${ratio.toFixed(2)}`);
+    } else {
+      // The body of the sheet holds focusable controls, so the browser does not make it a stop of its own: the next stop after Close
+      // is its first control (Add session), which shows the shared ring. No stop is left without a ring.
+      const control = editor.locator(':focus');
+      await expect(control).toHaveCount(1);
+      await expect(control).toHaveText('Add session');
+      const ratio = expectRing('first control of the sheet body', { boxShadow: await settledShadow(control), backdrops: await backdropsOf(control, false) });
+      console.log(`day editor sheet first control ring ${colorScheme}: ${ratio.toFixed(2)}`);
+    }
   });
 
   /*

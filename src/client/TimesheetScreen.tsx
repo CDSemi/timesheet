@@ -45,6 +45,27 @@ import { DayEditor } from './DayEditor.tsx';
 /** Which window edge the drawer is flush with: always the right beside the sheet; floating, away from the edited column so the column stays visible. */
 type DockSide = 'left' | 'right';
 
+/**
+ * What an outside press leaves alone while the drawer is open (F-7 a): a day column (a press switches the day or closes it through the
+ * day's own button), the drawer and every dialog, and an interactive control (it keeps its own action).
+ */
+const OUTSIDE_PRESS_KEEPS = [
+  '[data-day]',
+  'dialog',
+  'button',
+  'a',
+  'input',
+  'select',
+  'textarea',
+  'label',
+  'summary',
+  '[role="switch"]',
+  '[role="button"]',
+  '[role="option"]',
+  '[role="menuitem"]',
+  '[role="tab"]',
+].join(', ');
+
 /** The text of the polite status after the open day's button closed the Day editor. */
 const EDITOR_CLOSED_TEXT = 'Day editor closed';
 
@@ -561,6 +582,31 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   function requestClose() {
     askBeforeDropping(closeEditor);
   }
+
+  // The newest requestClose for the document listener below: it reads the open day and the unsaved-edit flag of this render.
+  const closeFromOutside = useRef<() => void>(requestClose);
+  useEffect(() => {
+    closeFromOutside.current = requestClose;
+  });
+
+  // U5-24, owner answer F-7 a: while the drawer is open, a press on the page outside a day column, the drawer, a dialog or a control
+  // closes it like Close, with the discard question when it holds unsaved edits (Keep editing changes nothing). A control keeps its
+  // own action, so Today still moves an open editor; another day column switches the day. The phone's bottom sheet handles a press
+  // on its own backdrop (DayEditor). A press that is not the primary button, or lands on the window's scrollbar, is not a press on the page.
+  useEffect(() => {
+    if (editDate === null || !desktop) return;
+    const onPress = (event: PointerEvent) => {
+      if (event.button !== 0 || !(event.target instanceof Element)) return;
+      const root = document.documentElement;
+      if (event.clientX >= root.clientWidth || event.clientY >= root.clientHeight) return;
+      if (event.target.closest(OUTSIDE_PRESS_KEEPS) !== null) return;
+      // The press is used here: unprevented, the browser would move focus to the page after the editor (or the question) took it.
+      event.preventDefault();
+      closeFromOutside.current();
+    };
+    document.addEventListener('pointerdown', onPress);
+    return () => document.removeEventListener('pointerdown', onPress);
+  }, [editDate, desktop]);
 
   /** A press on the open day's own button: closes the editor (after the discard question when it holds unsaved edits) and says so. */
   function unselectEditor() {

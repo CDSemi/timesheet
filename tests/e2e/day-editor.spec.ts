@@ -115,8 +115,14 @@ async function openEditor(page: Page, workDate: string): Promise<Locator> {
   await page.getByRole('button', { name: 'Open day', exact: true }).click();
   const editor = page.getByRole('dialog', { name: /Day editor/ });
   await expect(editor).toBeVisible();
-  await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+  // The day is loaded once its sections are drawn. WP5-UX5-T05B (U5-26): the figures section is the drawer's alone; the phone's sheet has none.
+  await expect(editor.getByRole('heading', { name: figuresShown(page) ? 'Figures (computed by the server)' : 'Times', exact: true })).toBeVisible();
   return editor;
+}
+
+/** True where the editor shows the server's figures: from 768px (the drawer); the bottom sheet below it has no figures section (U5-26). */
+function figuresShown(page: Page): boolean {
+  return (page.viewportSize()?.width ?? 0) >= 768;
 }
 
 const WEEKDAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -268,18 +274,26 @@ test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, conf
     await expect(editor.getByText('Session saved.')).toBeVisible();
     expect(posts).toHaveLength(1);
     expect(posts[0]).toMatchObject({ breaks: [], breaks_confirmed: false, input_zone: LA });
-    await expect(figure(editor, 'status')).toContainText('confirm breaks');
     await expect(editor.getByText('OT for this day stays pending')).toBeVisible();
-    await expect(figure(editor, 'credited')).toHaveText('none');
+    // U5-26: the figures are the drawer's; the phone's sheet shows none (the banner above carries the state there).
+    if (figuresShown(page)) {
+      await expect(figure(editor, 'status')).toContainText('confirm breaks');
+      await expect(figure(editor, 'credited')).toHaveText('none');
+    } else {
+      await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toHaveCount(0);
+      await expect(editor.locator('[data-figure]')).toHaveCount(0);
+    }
     // Expected finish = start + required work + excluded breaks: 09:00 Los Angeles gives 18:00 there.
     // It is derived (shared domain function), display only, and shown in the display zone (R-07).
     const displayZone = await browserZone(page);
     const startUtc = (await employeeSeed.dayView(date)).sessions[0]?.start_utc ?? '';
     const finishUtc = new Date(Date.parse(startUtc) + 9 * 3600 * 1000).toISOString();
-    await expect(figure(editor, 'expected-finish')).toHaveText(`${dateTimeIn(finishUtc, displayZone)} (${displayZone})`);
-    await expect(figure(editor, 'expected-finish')).not.toContainText(LA);
-    await expect(editor.locator('[data-figure-label="expected-finish"]')).toContainText('derived');
-    await expect(editor.locator('[data-figure-note="expected-finish"]')).toContainText('Display only');
+    if (figuresShown(page)) {
+      await expect(figure(editor, 'expected-finish')).toHaveText(`${dateTimeIn(finishUtc, displayZone)} (${displayZone})`);
+      await expect(figure(editor, 'expected-finish')).not.toContainText(LA);
+      await expect(editor.locator('[data-figure-label="expected-finish"]')).toContainText('derived');
+      await expect(editor.locator('[data-figure-note="expected-finish"]')).toContainText('Display only');
+    }
 
     // Confirm the suggested breaks of the saved session (edit with the version it loaded): with rows listed, Save goes straight to the final confirmation.
     await editor.getByRole('button', { name: /^Edit session/ }).click();
@@ -299,10 +313,13 @@ test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, conf
 
     // R 480 and credit 0, exactly as the server shows them; the card says the breaks are confirmed.
     await expect(editor.locator('.session-card [data-session-state]')).toHaveText('Breaks confirmed');
-    await expect(figure(editor, 'status')).toContainText('complete');
-    await expect(figure(editor, 'regular')).toHaveText('8h 00m');
-    await expect(figure(editor, 'eligible')).toHaveText('0m');
-    await expect(figure(editor, 'credited')).toHaveText('0m');
+    // U5-26: the figures are the drawer's; the stored day below is what proves the same numbers on the phone.
+    if (figuresShown(page)) {
+      await expect(figure(editor, 'status')).toContainText('complete');
+      await expect(figure(editor, 'regular')).toHaveText('8h 00m');
+      await expect(figure(editor, 'eligible')).toHaveText('0m');
+      await expect(figure(editor, 'credited')).toHaveText('0m');
+    }
     await editor.getByRole('heading', { name: /Day editor/ }).scrollIntoViewIfNeeded();
     await snap(page, 'day-editor-09-18-breaks', project);
 
@@ -905,7 +922,8 @@ test('Save with no break listed and the box unticked opens "No breaks listed": E
     expect(posts).toHaveLength(2);
     expect(posts[1]).toMatchObject({ breaks: [], breaks_confirmed: false, input_zone: LA });
     await expect(editor.locator('[data-banner="attention"]')).toContainText('Breaks are not confirmed yet.');
-    await expect(figure(editor, 'credited')).toHaveText('none');
+    // U5-26: the figures are the drawer's alone; the stored day below carries the same fact on the phone.
+    if (figuresShown(page)) await expect(figure(editor, 'credited')).toHaveText('none');
     const stored = await employeeSeed.dayView(date);
     expect(stored.sessions.map((session) => session.breaks_confirmed).sort()).toEqual([false, true]);
   } finally {
@@ -2416,6 +2434,16 @@ test('a stale session version at Check out says so, reloads and then checks out'
   expect(bodies[1]?.expected_version, 'the second request carries the reloaded version').toBe((running?.version ?? 0) + 1);
 });
 
+/** The Partial leave dialog of the Day editor (U5-25), a modal named by its heading. */
+function leaveDialogOf(page: Page): Locator {
+  return page.getByRole('dialog', { name: 'Partial leave', exact: true });
+}
+
+/** The summary row of the partial leave in the Day editor: "Partial leave", its value and Change or Add. */
+function leaveSummaryOf(editor: Locator): Locator {
+  return editor.locator('[data-leave-summary]');
+}
+
 test('partial leave 240 with kind vacation saves; the kind is required; WFH is saved', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
   const project = testInfo.project.name;
   const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
@@ -2432,28 +2460,47 @@ test('partial leave 240 with kind vacation saves; the kind is required; WFH is s
     // FIX2 item 13: the calendar-default hint is the select's description, not a loose paragraph.
     await expect(fields.getByRole('combobox', { name: /^Category/ })).toHaveAccessibleDescription('Calendar default. Saving records it as your choice.');
 
+    // WP5-UX5-T05B (U5-25): the partial leave is one summary row ("Partial leave None" with Add); its hours, minutes and kind are in
+    // the Partial leave dialog, so the day fields form holds no leave field.
+    const summary = leaveSummaryOf(editor);
+    await expect(summary).toContainText('Partial leave');
+    await expect(summary).toContainText('None');
+    await expect(fields.getByLabel('Leave hours')).toHaveCount(0);
+    await expect(leaveDialogOf(page)).toHaveCount(0);
     // Leave is typed as hours and minutes (docs/04); 4 h 0 m is sent as the same 240 leave minutes.
-    await expect(fields.getByLabel('Leave hours')).toHaveValue('0');
-    await expect(fields.getByLabel('Leave minutes')).toHaveValue('0');
-    // Out of range (more than 59 minutes) is refused in the page; nothing is saved.
+    await summary.getByRole('button', { name: 'Add', exact: true }).click();
+    const leave = leaveDialogOf(page);
+    await expect(leave).toBeVisible();
+    await expect(leave.getByLabel('Leave hours')).toHaveValue('0');
+    await expect(leave.getByLabel('Leave minutes')).toHaveValue('0');
+    // Out of range (more than 59 minutes) is refused in the dialog, which stays open; nothing is saved.
     const untouched = await employeeSeed.dayView(date);
-    await fields.getByLabel('Leave minutes').fill('60');
-    await fields.getByRole('button', { name: 'Save day fields' }).click();
-    await expect(fields.getByRole('alert')).toContainText('Enter leave as whole hours (0 to 24) and minutes (0 to 59)');
+    await leave.getByLabel('Leave minutes').fill('60');
+    await leave.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(leave.getByRole('alert')).toContainText('Enter leave as whole hours (0 to 24) and minutes (0 to 59)');
+    await expect(leave).toBeVisible();
     const refused = await employeeSeed.dayView(date);
     expect(refused.leave_minutes).toBe(0);
     expect(refused.entry?.version ?? null).toBe(untouched.entry?.version ?? null);
-    await fields.getByLabel('Leave hours').fill('4');
-    await fields.getByLabel('Leave minutes').fill('0');
-    await expect(fields.getByText('Leave 4h 00m.')).toBeVisible();
-    await fields.getByRole('button', { name: 'Save day fields' }).click();
+    await leave.getByLabel('Leave hours').fill('4');
+    await leave.getByLabel('Leave minutes').fill('0');
+    await expect(leave.getByText('Leave 4h 00m.')).toBeVisible();
+    await leave.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(leave).toHaveCount(0);
+    await expect(summary).toContainText('4:00 kind not set');
+    // Done wrote the draft only: nothing reached the server.
+    expect((await employeeSeed.dayView(date)).entry?.version ?? null).toBe(untouched.entry?.version ?? null);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
     // The server insists on a kind with leave minutes.
     await expect(fields.getByRole('alert')).toContainText('leave_kind_required');
     expect((await employeeSeed.dayView(date)).leave_minutes).toBe(0);
 
-    await fields.getByLabel('Leave kind').selectOption('vacation');
+    await summary.getByRole('button', { name: 'Change', exact: true }).click();
+    await leave.getByLabel('Leave kind').selectOption('vacation');
+    await leave.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(summary).toContainText('4:00 vacation');
     await fields.getByLabel('Worked from home (WFH)').check();
-    await fields.getByRole('button', { name: 'Save day fields' }).click();
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
     await expect(editor.getByText('Day fields saved.')).toBeVisible();
     await snap(page, 'day-editor-partial-leave', project);
 
@@ -2473,11 +2520,15 @@ test('malformed leave hours or minutes are never saved as another leave; empty f
   try {
     await signInThroughUi();
     const editor = await openEditor(page, date);
-    const fields = editor.getByRole('form', { name: 'Day fields' });
-    const hours = fields.getByLabel('Leave hours');
-    const minutes = fields.getByLabel('Leave minutes');
-    const save = fields.getByRole('button', { name: 'Save day fields' });
-    await fields.getByLabel('Leave kind').selectOption('vacation');
+    // WP5-UX5-T05B (U5-25): the fields are in the Partial leave dialog; Done refuses what cannot be read and writes the draft only.
+    const summary = leaveSummaryOf(editor);
+    const leave = leaveDialogOf(page);
+    const hours = leave.getByLabel('Leave hours');
+    const minutes = leave.getByLabel('Leave minutes');
+    const done = leave.getByRole('button', { name: 'Done', exact: true });
+    const save = editor.getByRole('button', { name: 'Save day fields' });
+    await summary.getByRole('button', { name: 'Add', exact: true }).click();
+    await leave.getByLabel('Leave kind').selectOption('vacation');
     const untouched = await employeeSeed.dayView(date);
 
     // The browser holds text such as "2-" or "e" in a number field as an empty value with a bad-input flag;
@@ -2489,8 +2540,9 @@ test('malformed leave hours or minutes are never saved as another leave; empty f
       else await hours.fill('2');
       if (minutesKeys !== null) await minutes.pressSequentially(minutesKeys);
       else await minutes.fill('30');
-      await save.click();
-      const alert = fields.getByRole('alert');
+      await done.click();
+      await expect(leave, 'the dialog stays open on a refusal').toBeVisible();
+      const alert = leave.getByRole('alert');
       await expect(alert).toHaveCount(1);
       await expect(alert).toContainText('Enter leave as whole hours (0 to 24) and minutes (0 to 59)');
       const alertId = await alert.getAttribute('id');
@@ -2516,17 +2568,24 @@ test('malformed leave hours or minutes are never saved as another leave; empty f
     await refuse('0', '60', { hours: false, minutes: true });
     await refuse('24', '1', { hours: true, minutes: true });
 
-    // Valid input is unchanged: 2 h 30 m is the same 150 leave minutes.
+    // Valid input is unchanged: 2 h 30 m is the same 150 leave minutes, sent by Save day fields and not by Done.
     await hours.fill('2');
     await minutes.fill('30');
+    await done.click();
+    await expect(leave).toHaveCount(0);
+    await expect(summary).toContainText('2:30 vacation');
+    expect(puts, 'Done sends nothing').toEqual([]);
     await save.click();
     await expect(editor.getByText('Day fields saved.')).toBeVisible();
     expect(puts.map((body) => JSON.parse(body) as { leave_minutes: number })).toMatchObject([{ leave_minutes: 150 }]);
     expect((await employeeSeed.dayView(date)).leave_minutes).toBe(150);
 
     // Empty fields still save 0.
+    await summary.getByRole('button', { name: 'Change', exact: true }).click();
     await hours.fill('');
     await minutes.fill('');
+    await done.click();
+    await expect(summary).toContainText('None');
     await save.click();
     await expect.poll(() => puts.length).toBe(2);
     expect(JSON.parse(puts[1] ?? '{}')).toMatchObject({ leave_minutes: 0 });
@@ -2558,7 +2617,8 @@ test('the OT leave mismatch warning informs without spending or reserving anythi
 
     // Saving other fields keeps the notice and still touches no OT endpoint.
     await editor.getByRole('form', { name: 'Day fields' }).getByLabel('Worked from home (WFH)').check();
-    await editor.getByRole('form', { name: 'Day fields' }).getByRole('button', { name: 'Save day fields' }).click();
+    // U5-26: on the phone the button is the sheet's foot, outside the form, so it is found in the editor.
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
     await expect(editor.getByText('Day fields saved.')).toBeVisible();
     await expect(warning).toBeVisible();
     expect(otRequests).toEqual([]);
@@ -2586,13 +2646,14 @@ test('an edit in an old period prompts for a reason and saves with it', async ({
     const fields = editor.getByRole('form', { name: 'Day fields' });
     await expect(editor.getByRole('list', { name: 'About this day' }).getByText('old period')).toBeVisible();
     await fields.getByLabel('Worked from home (WFH)').check();
-    await expect(fields.getByRole('button', { name: 'Save day fields' })).toBeDisabled();
+    // U5-26: on the phone the button is the sheet's foot, outside the form, so it is found in the editor.
+    await expect(editor.getByRole('button', { name: 'Save day fields' })).toBeDisabled();
     await expect(fields.getByText('Enter a reason for this old period above to save.')).toBeVisible();
     await snap(page, 'day-editor-reason-prompt', project);
 
     await editor.getByLabel('Reason for editing an old or finalized period').fill('Correcting a past work-from-home day');
-    await expect(fields.getByRole('button', { name: 'Save day fields' })).toBeEnabled();
-    await fields.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(editor.getByRole('button', { name: 'Save day fields' })).toBeEnabled();
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
     await expect(editor.getByText('Day fields saved.')).toBeVisible();
     expect((await employeeSeed.dayView(OLD_DAY)).wfh).toBe(true);
   } finally {
@@ -2609,7 +2670,7 @@ test('a day changed elsewhere reports a stale version and reloads', async ({ pag
     // Another device saves the day after the editor loaded it without an entry.
     await employeeSeed.putDay(date, { notes: 'changed on another device' });
     await fields.getByLabel('Worked from home (WFH)').check();
-    await fields.getByRole('button', { name: 'Save day fields' }).click();
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
 
     const stale = editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
     await expect(stale).toBeVisible();
@@ -2879,7 +2940,9 @@ test('future days show as upcoming from the server date, past days without a rec
   // The editor shows the same state for that day.
   await namedDayButton(page, futureDay, 'Edit').click();
   const editor = page.getByRole('dialog', { name: /Day editor/ });
-  await expect(figure(editor, 'status')).toContainText('upcoming');
+  // U5-26: the status figure is the drawer's; the phone's sheet has no figures section.
+  if (figuresShown(page)) await expect(figure(editor, 'status')).toContainText('upcoming');
+  else await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toHaveCount(0);
 });
 
 test('mobile: the editor fits the screen and every control is at least 44 by 44', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
@@ -2924,7 +2987,7 @@ test('mobile: the editor fits the screen and every control is at least 44 by 44'
     // Owner decision F-1 a (round 5, U5-05): a sub-button has a 36px visible box and keeps the 44px target as a hit area (a pseudo-element 4px above
     // and below); the controls spec checks that the points 3px outside the box still belong to it.
     const hit = await control.evaluate((element) => {
-      if (!element.matches('.session-card .button-row > button, .editor-section-head > button, .break-actions > button, .editor-actions > button')) return null;
+      if (!element.matches('.session-card .button-row > button, .editor-section-head > button, .break-actions > button, .leave-summary > button, .editor-actions > button')) return null;
       // The dialog on top covers the editor, so the hit area is read from its layer: an absolute pseudo-element as tall as the 44px target.
       const layer = element.ownerDocument.defaultView?.getComputedStyle(element, '::before');
       return { content: layer?.content ?? 'none', position: layer?.position ?? '', height: Number.parseFloat(layer?.height ?? '0') };
@@ -3966,7 +4029,9 @@ test('"Confirm breaks" opens the session dialog with the suggested breaks listed
     await confirm.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(editor.getByText('Session saved.')).toBeVisible();
     await expect(editor.locator('[data-banner]')).toHaveCount(0);
-    await expect(figure(editor, 'status')).toContainText('complete');
+    // U5-26: the status figure is the drawer's; the phone's sheet shows the card state and no banner instead.
+    if (figuresShown(page)) await expect(figure(editor, 'status')).toContainText('complete');
+    else await expect(card.locator('[data-session-state]')).toHaveText('Breaks confirmed');
     await expect(editor.getByRole('heading', { name: 'Times', exact: true })).toBeFocused();
 
     // One session update, to the same route with the version the editor loaded: start, end, zone and the three breaks as local times.
@@ -4966,7 +5031,8 @@ const DRAWER_GEOMETRY = `(() => {
   };
 })()`;
 
-test.describe('WP5-UX4-T02 (U4-06): the drawer is flush with one window edge; the corners toward the sheet are round, the two on the edge are square', () => {
+// WP5-UX5-T05B (U5-23, the owner's "detail panel without rounded corners") reverses the round-4 corners: all four are square now.
+test.describe('WP5-UX4-T02 (U4-06) and WP5-UX5-T05B (U5-23): the drawer is flush with one window edge and has no rounded corner in either theme', () => {
   test.skip(({ isMobile }) => isMobile, 'The drawer is a desktop-project layout (the phone bottom sheet is checked below)');
 
   for (const { name, width, column, side, layout } of [
@@ -4987,9 +5053,15 @@ test.describe('WP5-UX4-T02 (U4-06): the drawer is flush with one window edge; th
       await expect(editor).toHaveAttribute('data-side', side);
       await settleFrames(page);
       const geometry = await page.evaluate<DrawerGeometry>(DRAWER_GEOMETRY);
-      const edge = side === 'right' ? { toward: [geometry.topLeft, geometry.bottomLeft], onEdge: [geometry.topRight, geometry.bottomRight] } : { toward: [geometry.topRight, geometry.bottomRight], onEdge: [geometry.topLeft, geometry.bottomLeft] };
-      expect(edge.onEdge, `${name}: the two corners on the window edge are square`).toEqual(['0px', '0px']);
-      expect(edge.toward, `${name}: the two corners toward the sheet are 12px`).toEqual(['12px', '12px']);
+      // U5-23: no corner of the drawer is rounded, in the light theme, in the dark theme of the system setting and in the chosen dark theme.
+      const corners = (shape: DrawerGeometry) => [shape.topLeft, shape.topRight, shape.bottomRight, shape.bottomLeft];
+      expect(corners(geometry), `${name}: all four corners are square (light)`).toEqual(['0px', '0px', '0px', '0px']);
+      await page.emulateMedia({ colorScheme: 'dark' });
+      expect(corners(await page.evaluate<DrawerGeometry>(DRAWER_GEOMETRY)), `${name}: all four corners are square (dark, system setting)`).toEqual(['0px', '0px', '0px', '0px']);
+      await page.emulateMedia({ colorScheme: 'light' });
+      await page.evaluate("document.documentElement.setAttribute('data-theme', 'dark')");
+      expect(corners(await page.evaluate<DrawerGeometry>(DRAWER_GEOMETRY)), `${name}: all four corners are square (dark, chosen)`).toEqual(['0px', '0px', '0px', '0px']);
+      await page.evaluate("document.documentElement.removeAttribute('data-theme')");
       expect(side === 'right' ? geometry.right : geometry.left, `${name}: no gap to the window edge`).toBeCloseTo(0, 1);
       expect(geometry.bottom, `${name}: no gap to the bottom of the window`).toBeCloseTo(0, 1);
       expect(geometry.top, `${name}: the drawer starts under the top bar`).toBeCloseTo(geometry.barBottom, 0);
@@ -6268,3 +6340,392 @@ async function escapeAndExpectFocus(page: Page, alert: Locator, control: Locator
   await expect(alert).toHaveCount(0);
   await expect(control).toBeFocused();
 }
+
+/* ---- WP5-UX5-T05B (round 5, U5-23 to U5-26): a press outside, the Partial leave dialog and the phone's sheet ------------------ */
+
+/** The x of a point on the page's own background beside the drawer: the window edge on the side the drawer does not use. */
+async function pageEdgeX(page: Page, editor: Locator): Promise<number> {
+  const side = await editor.getAttribute('data-side');
+  const width = await page.evaluate<number>('document.documentElement.clientWidth');
+  return side === 'left' ? width - 4 : 4;
+}
+
+test.describe('WP5-UX5-T05B (U5-24, owner answer F-7 a): on a desktop a press outside a day column, the drawer, a dialog and a control closes the drawer', () => {
+  test.skip(({ isMobile }) => isMobile, 'The phone handles a tap on the sheet backdrop (below)');
+
+  for (const width of [1280, 1440]) {
+    test(`at ${width}px a press on the page background, the title, the period card text, the paper margin or the legend closes it and focus returns to the day button`, async ({
+      page,
+      employeeSeed,
+      signInThroughUi,
+    }) => {
+      const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+      await page.setViewportSize({ width, height: 800 });
+      await signInThroughUi();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      const dayBtn = namedDayButton(page, date, 'Edit');
+      const presses: Array<[string, () => Promise<void>]> = [
+        ['the page background', async () => page.mouse.click(await pageEdgeX(page, editor), 300)],
+        ['the title', () => page.getByRole('heading', { name: 'Timesheet', level: 1 }).click()],
+        ['the period card text', () => page.getByRole('region', { name: 'Pay period' }).getByText(/^Payroll date/).click()],
+        ['the paper margin', () => page.locator('section.paper').click({ position: { x: 6, y: 40 } })],
+        ['the legend', () => page.getByRole('list', { name: 'Legend' }).click()],
+      ];
+      for (const [name, press] of presses) {
+        await dayBtn.click();
+        await expect(editor).toBeVisible();
+        await press();
+        await expect(editor, `a press on ${name} closes the drawer`).toHaveCount(0);
+        await expect(page.getByRole('alertdialog'), `${name}: nothing was unsaved, so nothing asks`).toHaveCount(0);
+        await expect(dayBtn, `${name}: focus returns to the day button`).toBeFocused();
+      }
+    });
+  }
+
+  test('with unsaved edits a press outside asks "Discard your changes?" first; Keep editing leaves everything as it was, Discard closes the drawer without saving', async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }) => {
+    const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+    const before = await employeeSeed.dayView(date);
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    const dayBtn = namedDayButton(page, date, 'Edit');
+    const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    await dayBtn.click();
+    const notes = editor.getByLabel('Notes');
+    await notes.fill('Synthetic unsaved note');
+
+    await page.mouse.click(await pageEdgeX(page, editor), 300);
+    await expect(prompt).toBeVisible();
+    await expect(editor, 'the drawer stays under the question').toBeVisible();
+    await expect(prompt.getByRole('button', { name: 'Keep editing', exact: true }), 'the question has the focus, not the page').toBeFocused();
+    await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(prompt).toHaveCount(0);
+    await expect(editor).toBeVisible();
+    await expect(editor).toHaveAttribute('data-day-editor', date);
+    await expect(notes).toHaveValue('Synthetic unsaved note');
+    await expect(notes, 'Keep editing returns focus to the field that had it').toBeFocused();
+
+    await page.getByRole('heading', { name: 'Timesheet', level: 1 }).click();
+    await expect(prompt).toBeVisible();
+    await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    await expect(dayBtn).toBeFocused();
+    const after = await employeeSeed.dayView(date);
+    expect(after.entry?.version ?? null, 'nothing was saved by any of this').toBe(before.entry?.version ?? null);
+  });
+
+  test('a press on a control keeps its own action, on another day column switches the day, and on a dialog or the drawer itself does not close it', async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }) => {
+    const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await namedDayButton(page, date, 'Edit').click();
+    await expect(editor).toBeVisible();
+
+    // A button keeps its own action: "Change several days" switches batch mode on and the drawer stays open.
+    const change = page.getByRole('button', { name: 'Change several days' });
+    await change.click();
+    await expect(change).toHaveAttribute('aria-pressed', 'true');
+    await expect(editor).toBeVisible();
+    await change.click();
+    await expect(change).toHaveAttribute('aria-pressed', 'false');
+    // A switch and a field keep their action too.
+    await page.getByRole('switch', { name: 'Worked hours' }).click();
+    await expect(page.getByRole('switch', { name: 'Worked hours' })).toBeChecked();
+    await expect(editor).toBeVisible();
+    await page.getByRole('switch', { name: 'Worked hours' }).click();
+
+    // The drawer itself: a press on its heading or its body is not a press outside.
+    await editor.getByRole('heading', { level: 2 }).click();
+    await expect(editor).toBeVisible();
+    await editor.locator('.editor-body').click({ position: { x: 2, y: 2 } });
+    await expect(editor).toBeVisible();
+
+    // A dialog on top (the session dialog): a press on its backdrop is a press on the dialog, not on the page behind.
+    await editor.getByRole('button', { name: 'Add session', exact: true }).click();
+    const session = sessionDialog(page, 'New session');
+    await expect(session).toBeVisible();
+    await page.mouse.click(4, 4);
+    await expect(session).toBeVisible();
+    await expect(editor).toBeVisible();
+    await session.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(session).toHaveCount(0);
+
+    // Another day column switches the drawer to it; it does not close it.
+    const other = await firstReachableDay(page, [date]);
+    await page.locator(`[data-day="${other}"] .d-time`).click();
+    await expect(editor).toHaveAttribute('data-day-editor', other);
+    await expect(editor).toBeVisible();
+  });
+});
+
+test('WP5-UX5-T05B (U5-24): on a phone a tap on the bottom sheet backdrop closes it, with the discard question when edits are unsaved, and focus returns to the day button', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'The bottom sheet is the phone project');
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  await signInThroughUi();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  const dayBtn = namedDayButton(page, date, 'Edit');
+  const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+  await dayBtn.click();
+  await expect(editor).toBeVisible();
+  expect(await editor.evaluate((element) => element.matches(':modal')), 'the phone sheet is modal').toBe(true);
+  const box = (await editor.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+  expect(box.y, 'the sheet leaves a backdrop above it').toBeGreaterThan(40);
+
+  // A tap on the sheet itself is not a backdrop tap.
+  await editor.getByRole('heading', { level: 2 }).tap();
+  await expect(editor).toBeVisible();
+  await page.touchscreen.tap(20, 20);
+  await expect(editor).toHaveCount(0);
+  await expect(dayBtn).toBeFocused();
+
+  // With unsaved edits the tap asks first; Keep editing leaves the sheet and the text, Discard closes it.
+  await dayBtn.click();
+  await expect(editor).toBeVisible();
+  const notes = editor.getByLabel('Notes');
+  await notes.fill('Synthetic unsaved note');
+  await page.touchscreen.tap(20, 20);
+  await expect(prompt).toBeVisible();
+  await expect(editor).toBeVisible();
+  await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(prompt).toHaveCount(0);
+  await expect(editor).toBeVisible();
+  await expect(notes).toHaveValue('Synthetic unsaved note');
+  await page.touchscreen.tap(20, 20);
+  await expect(prompt).toBeVisible();
+  await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(dayBtn).toBeFocused();
+
+  // The session dialog on top of the sheet has its own backdrop: a tap there is not a tap on the sheet's.
+  await dayBtn.click();
+  await editor.getByRole('button', { name: 'Add session', exact: true }).click();
+  await expect(sessionDialog(page, 'New session')).toBeVisible();
+  await page.touchscreen.tap(2, 2);
+  await expect(editor).toBeVisible();
+});
+
+test('WP5-UX5-T05B (U5-25): Done writes the draft only, Cancel restores it, Escape closes only the dialog, focus returns to Change or Add, and the unsaved-edit guard sees the draft', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  const puts: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && new URL(request.url()).pathname === `/api/days/${date}`) puts.push(request.postData() ?? '');
+  });
+  const before = await employeeSeed.dayView(date);
+  await signInThroughUi();
+  const editor = await openEditor(page, date);
+  const summary = leaveSummaryOf(editor);
+  const leave = leaveDialogOf(page);
+  const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+  const add = summary.getByRole('button', { name: 'Add', exact: true });
+  const change = summary.getByRole('button', { name: 'Change', exact: true });
+  const done = leave.getByRole('button', { name: 'Done', exact: true });
+
+  // The dialog is modal, starts on the hours, and the day's notes are not part of it (owner answer B5: they stay in the Day editor).
+  await add.click();
+  await expect(leave).toBeVisible();
+  expect(await leave.evaluate((element) => element.matches(':modal'))).toBe(true);
+  await expect(leave.getByLabel('Leave hours')).toBeFocused();
+  await expect(leave.getByLabel('Notes')).toHaveCount(0);
+  await expect(editor.getByLabel('Notes')).toHaveCount(1);
+  await expect(leave.getByRole('button', { name: 'Remove leave', exact: true }), 'nothing to remove yet').toBeDisabled();
+
+  // Escape closes only the sub-dialog: the editor stays, and focus is back on Add.
+  await page.keyboard.press('Escape');
+  await expect(leave).toHaveCount(0);
+  await expect(editor).toBeVisible();
+  await expect(add).toBeFocused();
+  await expect(prompt, 'a closed dialog is no edit').toHaveCount(0);
+
+  // Done: the summary row shows the draft, the button reads Change and has the focus; nothing reached the server.
+  await add.click();
+  await leave.getByLabel('Leave hours').fill('2');
+  await leave.getByLabel('Leave minutes').fill('0');
+  await leave.getByLabel('Leave kind').selectOption('vacation');
+  await done.click();
+  await expect(leave).toHaveCount(0);
+  await expect(summary).toContainText('2:00 vacation');
+  await expect(change).toBeFocused();
+  expect(puts, 'Done sends nothing').toEqual([]);
+  const stored = await employeeSeed.dayView(date);
+  expect(stored.leave_minutes).toBe(before.leave_minutes);
+  expect(stored.entry?.version ?? null).toBe(before.entry?.version ?? null);
+
+  // The draft is an unsaved edit: Close asks, and Keep editing leaves the draft and the editor as they were.
+  await editor.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(prompt).toBeVisible();
+  await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(prompt).toHaveCount(0);
+  await expect(editor).toBeVisible();
+  await expect(summary).toContainText('2:00 vacation');
+
+  // Cancel restores the earlier draft and returns focus to Change; so does Escape.
+  await change.click();
+  await expect(leave.getByLabel('Leave hours')).toHaveValue('2');
+  await leave.getByLabel('Leave hours').fill('5');
+  await leave.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(leave).toHaveCount(0);
+  await expect(summary).toContainText('2:00 vacation');
+  await expect(change).toBeFocused();
+  await change.click();
+  await expect(leave.getByLabel('Leave hours')).toHaveValue('2');
+  await leave.getByLabel('Leave hours').fill('7');
+  await page.keyboard.press('Escape');
+  await expect(leave).toHaveCount(0);
+  await expect(summary).toContainText('2:00 vacation');
+  await expect(change).toBeFocused();
+
+  // Remove leave clears the draft and returns focus to Add; the draft is the saved day again, so Close asks nothing.
+  await change.click();
+  await leave.getByRole('button', { name: 'Remove leave', exact: true }).click();
+  await expect(leave).toHaveCount(0);
+  await expect(summary).toContainText('None');
+  await expect(add).toBeFocused();
+  await editor.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(prompt).toHaveCount(0);
+  expect(puts, 'nothing was sent at any point').toEqual([]);
+});
+
+test('WP5-UX5-T05B (U5-25): the leave of Done is stored by Save day fields with the reason an old period needs', async ({ page, employeeSeed, signInThroughUi }) => {
+  const puts: Array<Record<string, unknown>> = [];
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && new URL(request.url()).pathname === `/api/days/${OLD_DAY}`) puts.push(request.postDataJSON() as Record<string, unknown>);
+  });
+  try {
+    await signInThroughUi();
+    const editor = await openEditor(page, OLD_DAY);
+    const summary = leaveSummaryOf(editor);
+    const leave = leaveDialogOf(page);
+    await summary.getByRole('button', { name: 'Add', exact: true }).click();
+    await leave.getByLabel('Leave hours').fill('1');
+    await leave.getByLabel('Leave minutes').fill('30');
+    await leave.getByLabel('Leave kind').selectOption('sick');
+    await leave.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(summary).toContainText('1:30 sick');
+    expect(puts, 'Done sends nothing').toEqual([]);
+
+    // The reason field keeps working with the draft: the save waits for it.
+    const save = editor.getByRole('button', { name: 'Save day fields' });
+    await expect(save).toBeDisabled();
+    await expect(editor.getByText('Enter a reason for this old period above to save.')).toBeVisible();
+    await editor.getByLabel('Reason for editing an old or finalized period').fill('Synthetic correction of a leave');
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect(editor.getByText('Day fields saved.')).toBeVisible();
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ leave_minutes: 90, leave_kind: 'sick', reason: 'Synthetic correction of a leave' });
+    expect(await employeeSeed.dayView(OLD_DAY)).toMatchObject({ leave_minutes: 90, leave_kind: 'sick' });
+    await expect(summary).toContainText('1:30 sick');
+  } finally {
+    await employeeSeed.resetDay(OLD_DAY);
+  }
+});
+
+test.describe('WP5-UX5-T05B (U5-26): from 768px the drawer keeps its figures and Save day fields ends the form', () => {
+  test.skip(({ isMobile }) => isMobile, 'The phone has the sheet (next test)');
+
+  for (const width of [768, 1280]) {
+    test(`at ${width}px`, async ({ page, employeeSeed, signInThroughUi }) => {
+      const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+      await page.setViewportSize({ width, height: 800 });
+      await signInThroughUi();
+      const editor = await openEditor(page, date);
+      await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+      await expect(editor.locator('[data-editor-foot]')).toHaveCount(0);
+      await expect(editor.getByRole('form', { name: 'Day fields' }).getByRole('button', { name: 'Save day fields' })).toBeVisible();
+    });
+  }
+});
+
+test('WP5-UX5-T05B (U5-26): at 390x844 the sheet has no figures, Save day fields is the 44px full-width button of a foot that stays put while the body scrolls', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'The bottom sheet is the phone project');
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  try {
+    // Three short sessions make the Times section tall enough that the body has to scroll.
+    await employeeSeed.createSession(date, '06:00', '07:00', null);
+    await employeeSeed.createSession(date, '07:30', '08:30', null);
+    await employeeSeed.createSession(date, '09:00', '10:00', null);
+    await signInThroughUi();
+    const viewport = page.viewportSize() ?? { width: 0, height: 0 };
+    expect(viewport, 'the phone project is 390x844').toEqual({ width: 390, height: 844 });
+    const editor = await openEditor(page, date);
+    const save = editor.getByRole('button', { name: 'Save day fields' });
+    const foot = editor.locator('[data-editor-foot]');
+    const body = editor.locator('.editor-body');
+
+    await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toHaveCount(0);
+    await expect(editor.locator('[data-figure]')).toHaveCount(0);
+    await expect(foot).toHaveCount(1);
+    const first = (await save.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+    const footBox = (await foot.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+    expect(first.y, 'Save is fully visible without scrolling (top)').toBeGreaterThanOrEqual(0);
+    expect(first.y + first.height, 'Save is fully visible without scrolling (bottom)').toBeLessThanOrEqual(viewport.height);
+    expect(first.height, 'the foot button is 44px high').toBeCloseTo(44, 0);
+    expect(first.width, 'the foot button is full width (the foot less its 16px sides)').toBeGreaterThanOrEqual(footBox.width - 32 - 1);
+    expect(footBox.y + footBox.height, 'the foot is the bottom of the sheet').toBeCloseTo(viewport.height, 0);
+    await page.screenshot({ path: screenshotPath('u5-26-phone-sheet-390x844-synthetic.png'), animations: 'disabled' });
+
+    // The body scrolls; the foot, and Save in it, do not move. The sheet itself does not scroll.
+    const room = await body.evaluate((element) => element.scrollHeight - element.clientHeight);
+    expect(room, 'the body has content to scroll').toBeGreaterThan(40);
+    await body.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    expect(await body.evaluate((element) => element.scrollTop), 'the body scrolled').toBeGreaterThan(40);
+    const second = (await save.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+    expect(second.y, 'Save is at the same y after the body scrolled').toBeCloseTo(first.y, 0);
+    expect(await editor.evaluate((element) => element.scrollHeight - element.clientHeight), 'the sheet itself does not scroll').toBeLessThanOrEqual(1);
+    await page.screenshot({ path: screenshotPath('u5-26-phone-sheet-scrolled-390x844-synthetic.png'), animations: 'disabled' });
+
+    // The foot's button is the form's Save: it stores the day fields.
+    await editor.getByLabel('Notes').fill('Synthetic phone note');
+    await save.click();
+    await expect(editor.getByText('Day fields saved.')).toBeVisible();
+    expect((await employeeSeed.dayView(date)).entry?.notes).toBe('Synthetic phone note');
+  } finally {
+    await employeeSeed.clearSessions(date);
+    await employeeSeed.resetDay(date);
+  }
+});
+
+test('WP5-UX5-T05B evidence: the square-cornered drawer at 1440 and the Partial leave dialog', async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+  test.skip(isMobile, 'The drawer and the dialog are drawn on the desktop project');
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInThroughUi();
+  const editor = await openEditor(page, date);
+  const leave = leaveDialogOf(page);
+  await leaveSummaryOf(editor).getByRole('button', { name: 'Add', exact: true }).click();
+  await leave.getByLabel('Leave hours').fill('2');
+  await leave.getByLabel('Leave kind').selectOption('vacation');
+  await page.screenshot({ path: screenshotPath('u5-25-partial-leave-dialog-w1440-synthetic.png'), animations: 'disabled' });
+  await leave.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(leaveSummaryOf(editor)).toContainText('2:00 vacation');
+  await page.screenshot({ path: screenshotPath('u5-23-drawer-square-corners-w1440-synthetic.png'), animations: 'disabled' });
+});
