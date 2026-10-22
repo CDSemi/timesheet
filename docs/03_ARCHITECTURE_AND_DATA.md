@@ -11,7 +11,7 @@ One repository, one Node.js application, one local SQLite DB. Hono serves the AP
 | ASP.NET Core/C# | Also suitable for Docker and strong domain modeling; no business rule rules it out |
 | FastAPI/Python | Viable, but adds another language to a TypeScript UI |
 
-These are project-fit judgments, not a claim that C# or Next.js cannot be lightweight. Use TypeScript strict mode, schema validation, versioned migrations and a lockfile. Pin a supported Node LTS and maintained SQLite binding during WP1; Drizzle is optional. PDF baseline is pdf-lib with embedded Unicode fonts, avoiding a browser service for a fixed form.
+These are project-fit judgments, not a claim that C# or Next.js cannot be lightweight. Use TypeScript strict mode, schema validation, versioned migrations and a lockfile. Pin a supported Node LTS and maintained SQLite binding during WP1; Drizzle is optional. PDF baseline is pdf-lib with embedded Unicode fonts, avoiding a browser service for a fixed form. The embedded fonts are DejaVu Sans, Sans Bold, Serif Condensed Bold and Serif Italic from the installed `dejavu-fonts-ttf` package, and Indie Flower 2.000 (SIL OFL 1.1) for the category cells only: the one committed font file, `assets/pdf-fonts/IndieFlower-Regular.ttf`, pinned by SHA-256, copied into the image, never served over HTTP or used by the UI, with DejaVu Serif Italic as the per-cell fallback for a character it lacks (ADR 0001, `docs/adr/0001-pdf-handwriting-font.md`). The PDF is one US Letter page drawn from the pure `pdfLayout` geometry; the C&D logo and wordmark are vector outlines shared with the client (`src/domain/brand.ts`).
 
 ## Records
 

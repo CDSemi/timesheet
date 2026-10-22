@@ -11,7 +11,7 @@ Một repo, một ứng dụng Node.js, một DB SQLite cục bộ. Hono phục 
 | ASP.NET Core/C# | Cũng phù hợp Docker và mô hình nghiệp vụ chặt; không có quy tắc nào loại nó |
 | FastAPI/Python | Khả thi, nhưng thêm ngôn ngữ so với UI TypeScript |
 
-Đây là đánh giá độ phù hợp dự án, không khẳng định C# hay Next.js không thể nhẹ. Dùng TypeScript strict, kiểm schema, migration có phiên bản và lockfile. Ghim Node LTS được hỗ trợ và SQLite binding còn duy trì ở WP1; Drizzle tùy chọn. PDF dùng pdf-lib với font Unicode nhúng, tránh cần dịch vụ trình duyệt cho mẫu cố định.
+Đây là đánh giá độ phù hợp dự án, không khẳng định C# hay Next.js không thể nhẹ. Dùng TypeScript strict, kiểm schema, migration có phiên bản và lockfile. Ghim Node LTS được hỗ trợ và SQLite binding còn duy trì ở WP1; Drizzle tùy chọn. PDF dùng pdf-lib với font Unicode nhúng, tránh cần dịch vụ trình duyệt cho mẫu cố định. Font nhúng gồm DejaVu Sans, Sans Bold, Serif Condensed Bold và Serif Italic từ gói `dejavu-fonts-ttf` đã cài, và Indie Flower 2.000 (SIL OFL 1.1) chỉ cho ô loại ngày: đây là file font duy nhất được commit, `assets/pdf-fonts/IndieFlower-Regular.ttf`, ghim bằng SHA-256, được chép vào image, không phục vụ qua HTTP và không dùng trong giao diện, với DejaVu Serif Italic là phương án thay theo từng ô khi gặp ký tự nó không có (ADR 0001, `docs/adr/0001-pdf-handwriting-font.md`). PDF là một trang US Letter vẽ theo hình học thuần `pdfLayout`; logo và wordmark C&D là đường viền vector dùng chung với client (`src/domain/brand.ts`).
 
 ## Bản ghi
 

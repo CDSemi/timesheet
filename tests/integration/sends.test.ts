@@ -367,8 +367,8 @@ describe('the PDF variants (F-3 b)', () => {
       const bytes = await bytesOf(`/api/revisions/${revisionId}/pdf?time=${time}&ot=${ot}`);
       const printed = await readPdf(new Uint8Array(bytes));
       expect(printed.pages, `t${time}o${ot}`).toHaveLength(1);
-      expect(printed.text.includes('09:00-18:00'), `time rows t${time}o${ot}`).toBe(time === '1');
-      expect(printed.text.includes('Overtime Total'), `OT rows t${time}o${ot}`).toBe(ot === '1');
+      expect(['09:00', '18:00'].every((clock) => printed.pages[0]?.items.some((item) => item.text === clock)), `time rows t${time}o${ot}`).toBe(time === '1');
+      expect(printed.text.includes('VERTIME'), `OT rows t${time}o${ot}`).toBe(ot === '1'); // the small-capitals total line
       // Every variant carries the same signed facts.
       expect(printed.text).toContain('Example Employee');
       byVariant.set(`t${time}o${ot}`, bytes);
@@ -403,8 +403,8 @@ describe('the PDF variants (F-3 b)', () => {
     const printed = await readPdf(new Uint8Array(preview.bytes));
     expect(printed.pages).toHaveLength(1);
     expect(printed.text).toContain('Preview, not signed');
-    expect(printed.text).not.toContain('09:00-18:00');
-    expect(printed.text).toContain('Overtime Total');
+    expect(printed.pages[0]?.items.some((item) => item.text === '09:00')).toBe(false);
+    expect(printed.text).toContain('VERTIME'); // the OVERTIME TOTAL line in small capitals
     expect(printed.pages[0]?.images).toHaveLength(0);
     expect(writeState()).toEqual(before);
     expect(existsSync(dataDir) ? readdirSync(dataDir, { recursive: true }) : []).toEqual([]);
@@ -490,8 +490,8 @@ describe('the send job builds the message from its own record', () => {
     const attached = readFileSync(join(captureFolder(dataDir, attempt.id), 'attachment.pdf'));
     const printed = await readPdf(new Uint8Array(attached));
     expect(printed.pages).toHaveLength(1);
-    expect(printed.text).not.toContain('09:00-18:00');
-    expect(printed.text).not.toContain('Overtime Total');
+    expect(printed.pages[0]?.items.some((item) => item.text === '09:00')).toBe(false);
+    expect(printed.text).not.toContain('VERTIME');
   });
 });
 

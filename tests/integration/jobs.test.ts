@@ -455,9 +455,9 @@ describe('PDF job input mapping (WP3-T07B)', () => {
     const { input, content } = await runPdfJob(files, revisionId);
     expect(input).toMatchObject({ origin: 'manual', signedAt: signoff.signed_at, automaticSubmittedAt: null, signerName: 'Example Employee' });
     expect(Buffer.from(input.signatureImage ?? []).equals(png)).toBe(true);
-    // The account name is in the header and, on its own line, under the signature line.
+    // The account name is in the header and, above the signature line beside the date, as the printed signer name.
     expect(content.text).toContain('Employee: Example Employee');
-    expect(content.lines.filter((line) => line === 'Example Employee')).toHaveLength(1);
+    expect((content.pages[0]?.items ?? []).filter((item) => item.text === 'Example Employee' && item.y < 300)).toHaveLength(1);
     expect(content.text).not.toContain('Quinn Q. Signer');
   });
 
@@ -472,7 +472,7 @@ describe('PDF job input mapping (WP3-T07B)', () => {
     const { input, content } = await runPdfJob(files, revisionId);
     expect(input).toMatchObject({ origin: 'manual', automaticSubmittedAt: null, signerName: 'Example Employee', signatureImage: null });
     expect(content.pages[0]?.images).toHaveLength(0);
-    expect(content.lines.filter((line) => line === 'Example Employee')).toHaveLength(1);
+    expect((content.pages[0]?.items ?? []).filter((item) => item.text === 'Example Employee' && item.y < 300)).toHaveLength(1);
   });
 
   it('maps an automatic revision to its creation instant, the employee name and no image unless authorized', async () => {

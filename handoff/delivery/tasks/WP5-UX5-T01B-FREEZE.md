@@ -222,3 +222,14 @@ Append to this brief:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+### Attempt 2
+
+- Attempt 1 stopped: `git add --pathspec-from-file` was denied ("[Credential Leakage]"); nothing staged.
+- HEAD before c1b2cc4f31cc9a3957a04056a8dff413977b97b5; after and commit SHA
+  9917ae8443f46cc3fc2dce79214176ff04bc01ba; pushed yes; remote SHA the same; branch main.
+- Digest before add and after commit: 089cf86879b11cb8eedbb29aa5d8f0573815672ff691227fe3db73209c9811d1 (854 files).
+- Staged 96: 16 server, 2 domain, 11 client, 2 scripts, 12 docs, 36 tests (incl. 3 new files: 0015_sends.ts in server, sends.test.ts, support/sends.ts), 17 evidence T01B, 2 evidence T01a-FREEZE, handoff records 7 (incl. this brief). No extra handoff paths.
+- Checks (all exit 0): precommit, diff --cached --check, JSON parse, validate_orchestration, check_recovery (106), validate_package --preflight; details in evidence/WP5-UX5-T01B-FREEZE/checks.txt.
+- Scan: one BEGIN line (T01a-FREEZE/checks.txt:7, prose, benign); no base64 runs.
+- No masking, no fixes, no stops. One empty heredoc to a scratch file was run by mistake (file deleted).

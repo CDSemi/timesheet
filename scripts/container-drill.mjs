@@ -379,6 +379,11 @@ async function stageTwo(cookie) {
     if (!pdfReady) await sleep(1000);
   }
   check('the container job runner renders the PDF of the finalized period', pdfReady, `${((Date.now() - pdfWaitStart) / 1000).toFixed(1)} s`);
+  // WP5-UX5-T02: the image carries assets/pdf-fonts, so the rendered PDF embeds the Indie Flower subset (ADR 0001).
+  const readyRevision = ((await call('GET', '/api/revisions', { cookie })).json?.revisions ?? []).find((revision) => revision.pdf_state === 'ready');
+  const downloaded = readyRevision === undefined ? null : await fetch(`${base}/api/revisions/${readyRevision.id}/pdf`, { headers: { cookie, origin: publicOrigin }, signal: AbortSignal.timeout(15_000) });
+  const embedded = downloaded === null ? '' : Buffer.from(await downloaded.arrayBuffer()).toString('latin1');
+  check('the container PDF is one page and embeds the Indie Flower subset from the image', (embedded.match(/\/Type\s*\/Page\b/g) ?? []).length === 1 && embedded.includes('+IndieFlower'), `${embedded.length} bytes`);
 
   // Two import batches before the backup, so it holds import sources: one committed and one still a preview. The periods
   // (payroll 2026-02-20 and 2026-01-23) end long before the synthetic writer's first day, so nothing meets them later.

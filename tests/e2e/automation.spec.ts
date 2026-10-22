@@ -188,7 +188,7 @@ test('the deadline submits automatically: note off/on, image off/on, an empty pe
     expect(pdf.pages, `${label}: pages`).toHaveLength(1);
     expect(pdf.text, `${label}: signer name`).toContain(person.account.displayName);
     expect(pdf.text, `${label}: the submission date, not a sign date`).toContain(printedDate);
-    expect(pdf.text, `${label}: the OT total line`).toContain('Overtime Total');
+    expect(pdf.text, `${label}: the OT total line`).toContain('VERTIME'); // the OVERTIME TOTAL line is small capitals, drawn as runs ("O", "VERTIME", ...)
     if (expected.note === null) expect(pdf.text, `${label}: no automatic indicator`).not.toMatch(/automatic|pending review|review pending/i);
     else expect(pdf.text, `${label}: the note line`).toContain(expected.note);
     // The signature image is a bounded picture on the page only when authorized.
@@ -200,7 +200,11 @@ test('the deadline submits automatically: note off/on, image off/on, an empty pe
   const emptyPdf = await readPdf(new Uint8Array(outcomes.full.pdf));
   expect(emptyPdf.text).toContain('Worked');
   expect(emptyPdf.text, 'an empty period shows no time range').not.toMatch(/\b\d{2}:\d{2}-\d{2}:\d{2}\b/);
-  if (days.plain !== null) expect((await readPdf(new Uint8Array(outcomes.plain.pdf))).text, 'the seeded session is printed').toContain('09:00-18:00');
+  // A session is printed as a start cell and an end cell now (not one "09:00-18:00" range).
+  if (days.plain !== null) {
+    const plainItems = (await readPdf(new Uint8Array(outcomes.plain.pdf))).pages[0]?.items ?? [];
+    for (const time of ['09:00', '18:00']) expect(plainItems.some((item) => item.text === time), `the seeded session is printed: ${time}`).toBe(true);
+  }
   for (const value of Object.values(days)) expect(value === null || /^\d{4}-\d{2}-\d{2}$/.test(value)).toBe(true);
 
   // Switch off: no revision, no PDF, no delivery; the overdue record is a notice, not a submission.

@@ -1,0 +1,33 @@
+Freeze WP5-UX5-T01B: sign off and send are separate acts
+
+- feat(signoff): sign-off, corrections and late reviews create the signed
+  revision and its PDF only. Nothing is sent by signing.
+- feat(sends): each send is its own immutable record.
+  - It carries To, Cc, subject, body and the Time and OT row switches.
+  - It is idempotent by request key.
+  - The send job builds the email from that record.
+- feat(sends): once a copy of a period has been accepted or is uncertain,
+  another send needs a confirmation and a typed reason. The reason is
+  2-500 characters, audited and never put in the email. (Owner rule F-4.)
+- feat(pdf): up to four stored PDF variants per revision (Time and OT rows
+  on or off), with a "Time rows on the PDF" default in Settings.
+  (Owner decision F-3 b.)
+- feat(automation): at the deadline, with auto-submit on, a signed but
+  unsent period is sent; with auto-submit off, it is marked overdue.
+  Reminders stop at the first send. (Owner decision F-2 a.)
+- feat(db): migration 0015 adds the PDF variants, the send records with a
+  backfill for existing sends, and the new Settings column.
+- feat(ui): the Review page signs off, then sends with the defaults, until
+  the Send card arrives; History resends with a reason.
+- test: a new sends suite, a v14 upgrade test, and adapted integration,
+  fixture and e2e tests; five mutants caught.
+- docs: docs/01 (FR-11), 03, 05, 06, 10 and DEVELOPMENT (+ vi).
+- docs(handoff): the T01A-FREEZE results, the T01B record and evidence,
+  the board and the checkpoint (+ vi).
+
+Task: WP5-UX5-T01B (owner decisions F-2 a, F-3 b, F-4; round-5 plan B-A1, B-A2, B-A4)
+Gate: pending (round-5 package gate covers rounds 4 and 5)
+Audit: pending (round-5 audits)
+Digest: 089cf868 (was 783a63f8)
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

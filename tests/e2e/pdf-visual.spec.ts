@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type Page } from '@playwright/test';
+import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { addDays } from '../../src/domain/dates.ts';
-import { formatHoursMinutes } from '../../src/server/pdf/layout.ts';
-import { readPdf } from '../support/pdfText.ts';
+import { formatHoursMinutes, pdfLayout } from '../../src/server/pdf/layout.ts';
+import { readPdf, type PdfContent } from '../support/pdfText.ts';
 import {
   type BuiltServer,
   drainJobsFrom,
@@ -79,6 +80,36 @@ async function renderPdf(page: Page, bytes: Buffer, name: string): Promise<{ wid
   await page.locator('#page').screenshot({ path: screenshotPath(`pdf-${name}-synthetic.png`) });
   await page.unroute(`${VIEW_ORIGIN}/**`);
   return { width: result.width ?? 0, height: result.height ?? 0 };
+}
+
+/**
+ * WP5-UX5-T02: the facts of the one-page design that every PDF of the built server must show: one page, the header line
+ * ("Revision n" and the submission id, the logo drawn as vectors), the two titles, the footer texts with the payroll
+ * date's year, the week tables, and no instructions paragraph.
+ */
+async function expectDesignFacts(printed: PdfContent, bytes: Buffer, payrollDate: string, label: string): Promise<void> {
+  const items = printed.pages[0]?.items ?? [];
+  expect(printed.pages, `${label}: one page`).toHaveLength(1);
+  expect(items.some((item) => /^Revision \d+$/.test(item.text) && item.y > 792 - 60), `${label}: Revision n on the header line`).toBe(true);
+  expect(items.filter((item) => item.y > 792 - 60), `${label}: the header line holds the revision and the id under it`).toHaveLength(2);
+  expect(printed.text, `${label}: title`).toContain('C&D Semiconductor Services, Inc.');
+  expect(printed.text, `${label}: title`).toContain('TIME SHEET FOR SALARIED EXEMPT EMPLOYEES');
+  expect(printed.text, `${label}: footer, left, the year of the payroll date`).toContain(`© ${payrollDate.slice(0, 4)} C&D Semiconductor Services, Inc. All rights reserved.`);
+  expect(printed.text, `${label}: footer, right`).toContain('Internal use by C&D only');
+  expect(items.filter((item) => item.text === 'WEEK'), `${label}: two week tables`).toHaveLength(2);
+  expect(printed.text, `${label}: no instructions paragraph`).not.toMatch(/instruction/i);
+  const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: false, verbosity: 0 });
+  const doc = await task.promise;
+  try {
+    const page = await doc.getPage(1);
+    const operators = await page.getOperatorList();
+    const clips = operators.fnArray.filter((fn) => fn === OPS.clip).length;
+    const paths = operators.fnArray.filter((fn) => fn === OPS.constructPath).length;
+    expect(clips, `${label}: the logo's clip path is drawn`).toBeGreaterThanOrEqual(1);
+    expect(paths, `${label}: the logo, the wordmark and the tables are vector paths`).toBeGreaterThan(40);
+  } finally {
+    await task.destroy();
+  }
 }
 
 const usDate = (instant: Date): string => new Intl.DateTimeFormat('en-US', { timeZone: ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(instant);
@@ -177,11 +208,30 @@ test('a manual revision: name, real sign date, signature, OT on both Sundays in 
   expect(printed.pages[0]?.images.length, 'the signature image').toBe(1);
   for (const date of dates) expect(printed.text, `date ${date}`).toContain(`${date.slice(5, 7)}/${date.slice(8, 10)}/${date.slice(0, 4)}`);
   for (const sunday of sundays) expect(printed.text, `OT cell of ${sunday}`).toContain(formatHoursMinutes(ot(sunday)));
-  expect(printed.text, 'the total').toContain(`${formatHoursMinutes(review.payload.totals.credited_minutes)} h:mm`);
+  // "OVERTIME TOTAL : h:mm H:MM" in small capitals: the total is its own text item on the total line.
+  const totalLine = 792 - pdfLayout({ timeRows: true, otRows: true }).total.baseline;
+  expect(
+    printed.pages[0]?.items.some((item) => item.text === formatHoursMinutes(review.payload.totals.credited_minutes) && Math.abs(item.y - totalLine) < 1),
+    'the total',
+  ).toBe(true);
+  expect(printed.text).toContain('VERTIME');
   expect(printed.text).not.toMatch(/automatic/i);
+  await expectDesignFacts(printed, pdf, payrollDate, 'manual revision');
 
   const size = await renderPdf(page, pdf, 'manual-ot-sundays-vietnamese');
   expect(size.width).toBeGreaterThan(800);
+
+  // Both per-send switches off: the unsigned preview without the time rows and without the OT rows is still one page of the
+  // same design, with neither the OT label, the total nor any session time.
+  const previewDate = person.payrollDate;
+  const off = await person.api.download(`/api/timesheets/${previewDate}/pdf-preview?time=0&ot=0`);
+  expect(off.status, 'preview with both rows off').toBe(200);
+  const offPrinted = await readPdf(new Uint8Array(off.body));
+  await expectDesignFacts(offPrinted, off.body, previewDate, 'time and OT rows off');
+  expect(offPrinted.pages[0]?.items.filter((item) => item.text === 'OT'), 'no OT label').toHaveLength(0);
+  expect(offPrinted.text, 'no OT total').not.toContain('VERTIME');
+  expect(offPrinted.pages[0]?.items.filter((item) => /^\d{2}:\d{2}$/.test(item.text)), 'no session times').toHaveLength(0);
+  await renderPdf(page, off.body, 'toggles-off');
 });
 
 test('automatic revisions: the note off/on and the image off/on, long Vietnamese labels, an empty period', async ({ page, privateServer }) => {
@@ -236,8 +286,10 @@ test('automatic revisions: the note off/on and the image off/on, long Vietnamese
     const printed = await readPdf(new Uint8Array(pdf));
     expect(printed.text, `${name}: the employee name`).toContain(person.account.displayName);
     expect(printed.text, `${name}: the submission date`).toContain(submissionDate);
-    // A holiday label wraps inside its day column, so its first word and the long label's first words are checked.
-    expect(printed.text, `${name}: the holiday labels`).toContain('Holiday:');
+    await expectDesignFacts(printed, pdf, payrollDate, name);
+    // The category is drawn in the handwriting face and the holiday label wraps in small type under it inside its day column,
+    // so the category, the short label's first word and the long label's first words are checked.
+    expect(printed.text, `${name}: the holiday labels`).toContain('Holiday');
     expect(printed.text, `${name}: the short holiday label`).toContain(HOLIDAY_SHORT.split(' ')[0] ?? '');
     expect(printed.text, `${name}: the long holiday label`).toContain(HOLIDAY_LONG.split(' ').slice(0, 3).join(' '));
     if (expected.note === null) expect(printed.text, `${name}: no automatic indicator`).not.toMatch(/automatic|review pending|pending review/i);

@@ -1329,6 +1329,40 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - H-1 a: corrections after a sent copy are sent by the person, not at the deadline (as
     built).
   - The mission is `running`.
+- WP5-UX5-T01B-FREEZE attempt 2 (fresh committer) committed and pushed
+  9917ae8443f46cc3fc2dce79214176ff04bc01ba.
+  - 96 paths staged as explicit arguments, none denied. Digest 089cf868.
+  - Rule kept: never stage from a list file.
+- Running now: WP5-UX5-T02 (worker-high, sonnet): the PDF layout per Addendum 2, the Indie
+  Flower asset with ADR 0001, the font fallback, the Dockerfile, and the wordmark test
+  change.
+  - It inventories first and reads the precommit check.
+  - It stops if a governance change or a missing path is needed.
+- T02 stopped on its inventory before any edit. `.dockerignore` is an allow-list, so it
+  needs `!assets/pdf-fonts/`.
+  - The precommit check does not refuse `.ttf` or `OFL.txt`, so no GOV change is needed.
+  - Addendum 1 adds `.dockerignore` (one line). The same worker implements.
+- T02 implemented: one page in all four variants per Addendum 2; Indie Flower with its
+  SHA-256 and a fallback; ADR 0001; mutants 5/5; digest e9a8b42d.
+  - Two e2e failures (`automation.spec.ts:118`, desktop and mobile) read the old PDF text.
+  - Addendum 2 owns those two assertions and asks for a full e2e rerun.
+  - The coordinator stopped a leftover `python -` background task.
+- WP5-UX5-T02 done.
+  - FULL e2e 779 passed, 0 failed, after one allowed buffer rerun; npm test 2300; digest
+    0f0467ab (862 files).
+  - Audit note: `automation.spec.ts:191` now checks "VERTIME" and `:202` is vacuous. Test
+    strength to review.
+- Running now: WP5-UX5-T02-FREEZE (a fresh committer).
+  - 24 explicit paths, including the one font file, checked by size and hash.
+- T02-FREEZE attempt 1 stopped at `git diff --cached --check`. `OFL.txt:21` has trailing
+  whitespace from upstream. 61 paths remain staged.
+  - The T02 author trims it (Addendum 3, without touching the git index) and gives a new
+    digest.
+  - The same committer then re-stages and reruns (attempt 2).
+- T02 Addendum 3 done.
+  - `OFL.txt` was trimmed. The READMEs and ADR 0001 (EN/VI) say so.
+  - Tests and preflight pass. New digest 1b413273.
+  - T02-FREEZE attempt 2 runs: re-stage and rerun.
 - Remaining after T06:
   - T06-FREEZE;
   - the round-4 package gate;

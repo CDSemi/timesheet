@@ -28,8 +28,12 @@
   "current_source_digest": "507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX5-T01B-FREEZE",
+  "next_task_id": "WP5-UX5-T02-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-22",
+      "observation": "WP5-UX5-T01B-FREEZE attempt 1: 'git add --pathspec-from-file=<list>' was denied as '[Credential Leakage]' (the staged paths are not visible to the permission check). Attempt 2 by a fresh committer staged the same 96 paths as explicit arguments in several plain git add calls and passed. Rule kept: freeze briefs never stage from a list file, xargs, glob or directory argument outside named evidence folders; they name paths explicitly in batches of about 20."
+    },
     {
       "date": "2026-10-21",
       "observation": "Coordinator slip: task IDs WP5-UX5-T01a and WP5-UX5-T01a-FREEZE broke the validator rule [A-Z0-9-]+ (validate_orchestration.py:265), so WP5-UX5-T01a-FREEZE attempt 1 stopped at validate_orchestration and check_recovery. Rule kept: board task IDs are upper case (T01A, T01B); file names may stay as written."
@@ -435,7 +439,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "c1b2cc4f31cc9a3957a04056a8dff413977b97b5",
+    "last_commit": "9917ae8443f46cc3fc2dce79214176ff04bc01ba",
     "unpushed": []
   },
   "owner_decisions": [
@@ -25553,7 +25557,7 @@
       "id": "WP5-UX5-T01B-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX5-T01B"
       ],
@@ -25566,29 +25570,158 @@
         "risk": "L",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "ac158ca5f53a14358",
+      "previous_agent_ids": [
+        "a1945e9e4f12befd9"
+      ],
       "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
-      "attempt": 1,
+      "attempt": 2,
       "owned_paths": [
         "handoff/delivery/tasks/WP5-UX5-T01B-FREEZE.md",
         "handoff/delivery/evidence/WP5-UX5-T01B-FREEZE"
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX5-T01B-FREEZE.md",
       "report": "handoff/delivery/tasks/WP5-UX5-T01B-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX5-T01B-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-UX5-T01B-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "c1b2cc4f31cc9a3957a04056a8dff413977b97b5",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "9917ae8443f46cc3fc2dce79214176ff04bc01ba",
+      "pushed": true,
       "source_digest": "089cf86879b11cb8eedbb29aa5d8f0573815672ff691227fe3db73209c9811d1",
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
+      "decision": "attempt 2 (fresh committer) committed and pushed 9917ae8 on main (remote equal; no tag): 96 paths staged by explicit-argument git add calls, none denied; digest 089cf868 (854 files) before and after; every check exit 0 (precommit, diff --cached --check, JSON parse, validate_orchestration, check_recovery 106, preflight); no stops. Slip: one empty heredoc (file deleted).",
       "attempt_1": "Stopped before staging (agent a1945e9e4f12befd9, self_reported claude-sonnet-5-5): the auto-mode classifier denied 'git add --pathspec-from-file=<list>' (96 paths) with reason '[Credential Leakage]'; not retried. Checks before the denial: Node v24.21.0, HEAD = origin/main = c1b2cc4, digest 089cf868 (854) matched, the 71 paths outside handoff/ meet the rules, BEGIN / 200+ base64 / secret scans 0 hits. Nothing staged; checks.txt and commit-message.txt not written. Likely cause: the brief asked to stage from a list file, which hides the paths from the permission check; every earlier freeze staged explicit paths on the command line. Per the runtime lesson the same agent is not resumed; the owner chooses.",
-      "next_action": "Owner answered a (2026-10-22): a fresh committer, attempt 2, stages explicit paths in several plain git add calls (brief Addendum 1); if denied again, stop and the owner commits manually."
+      "next_action": "None; UX5-T02 (PDF and font) on 9917ae8 / 089cf868."
+    },
+    {
+      "id": "WP5-UX5-T02",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX5-T01B-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a2f8b73dbc5b375c5",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/pdf",
+        "src/domain",
+        "src/client/components/BrandWordmark.tsx",
+        "assets/pdf-fonts",
+        "Dockerfile",
+        ".dockerignore",
+        "docs/adr",
+        "docs/03_ARCHITECTURE_AND_DATA.md",
+        "docs/03_ARCHITECTURE_AND_DATA.vi.md",
+        "docs/07_DEPLOYMENT_AND_OPERATIONS.md",
+        "docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md",
+        "docs/11_OPERATIONS_RUNBOOK.md",
+        "docs/11_OPERATIONS_RUNBOOK.vi.md",
+        "scripts/container-drill.mjs",
+        "scripts/smoke-built-server.mjs",
+        "tests/client",
+        "tests/integration",
+        "tests/e2e/pdf-visual.spec.ts",
+        "tests/e2e/automation.spec.ts",
+        "handoff/delivery/tasks/WP5-UX5-T02.md",
+        "handoff/delivery/evidence/WP5-UX5-T02"
+      ],
+      "owned_paths_note": "src/domain only for one new shared brand-paths module; tests/integration only for the PDF files.",
+      "prompt": "handoff/delivery/tasks/WP5-UX5-T02.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-T02.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX5-T02/02-font-info.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/03-precommit-rule-scan.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/04-pdf-unit-integration-files.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/08-preflight.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/09-parity.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/11-docker-image-assets.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/12-mutant-m1-drop-footer.vitest.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/12-mutant-m2-instructions.vitest.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/12-mutant-m3-overflow.vitest.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/12-mutant-m4-no-fallback.vitest.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/12-mutant-m5-second-font.vitest.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/13-a2-e2e-run1-buffer-error.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/14-a2-e2e-run2.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/15-a2-e2e-counts-run2.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/16-a2-verify.txt",
+        "handoff/delivery/evidence/WP5-UX5-T02/pdf-time-on-ot-on-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX5-T02/pdf-time-on-ot-off-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX5-T02/pdf-time-off-ot-on-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX5-T02/pdf-time-off-ot-off-synthetic.png"
+      ],
+      "baseline_commit": "9917ae8443f46cc3fc2dce79214176ff04bc01ba",
+      "source_digest": "1b4132739017e8f153cc32764b84a8a698b406e5ada027bb3d8d4f7ff701aca1",
+      "addendum_3": "After the T02-FREEZE whitespace stop: OFL.txt line 21 trailing whitespace removed (licence wording verbatim; font file and hash unchanged); README EN/VI note it; ADR 0001 EN/VI says the font file is unchanged and OFL.txt is the upstream text with trailing whitespace removed; git diff --check exit 0; wordmark and PDF tests 5 files 125 passed; preflight PASS (122 pairs); index untouched; digest 1b413273 (862 files), replacing 0f0467ab.",
+      "reviewed_digest": null,
+      "author_agent_ids": [
+        "a2f8b73dbc5b375c5"
+      ],
+      "decision": "done after Addenda 1-2 (worker report; round-5 gate and audits pending): PDF layout per plan Addendum 2 (one page in all four variants, within 1pt; small deviations: signature image 2pt above the line, footer baseline 753, holiday name and 'Leave h:mm' under the category); Indie Flower 2.000 (108,196 bytes, SHA-256 ccc94b22...0a94) under assets/pdf-fonts with OFL.txt and README (EN/VI); fallback to DejaVu Serif Italic tested; shared src/domain/brand.ts used by BrandWordmark.tsx and the PDF; ADR 0001 EN/VI; docs/03 EN/VI; .dockerignore and Dockerfile copy the asset; smoke and drill render a PDF (drill not run, docker build and asset listing only); objectsPerTick Infinity in doc.save. Tests: new pdf-layout.test.ts; pdf-render, jobs, sends, wordmarkAsset, pdf-visual and automation (lines 191, 203) adapted with reasons. npm test 99 files 2300; FULL e2e run 1 778/101/1 (history-settings.spec.ts:249 mobile ERR_NO_BUFFER_SPACE), allowed rerun 779 passed / 101 skipped / 0 failed (desktop 407, mobile 372); mutants 5/5; parity OK; preflight PASS (122 pairs); verify 0; digest 0f0467ab (862 files). Audit notes: automation.spec.ts:191 now checks 'VERTIME' (small-caps runs) and :202 (no hh:mm-hh:mm range) is now vacuous: test strength to review. Slips in round 1: one python - stdin (task stopped by the coordinator), one heredoc, four /dev/null, one head and one tail pipe; none in Addendum 2.",
+      "first_stop": "Stopped on inventory before any edit (self_reported claude-sonnet-5-5): .dockerignore is an allow-list ('*' then !package.json, !package-lock.json, !.npmrc, !tsconfig*.json, !vite.config.ts, !src/), so COPY assets/pdf-fonts needs '!assets/pdf-fonts/'. Precommit reading: .ttf and OFL.txt are not refused (it blocks .env*, data/, databases, pdf/png/jpg without 'synthetic', keys, spreadsheets, files over 5 MiB; text lines still pass the email, profile-path and secret rules). Call sites of renderTimesheetPdf need no edit; pdf-render.test.ts has many layout-bound assertions; wordmarkAsset.test.ts reads the path strings from BrandWordmark.tsx; smoke and drill already render a PDF. Addendum 1 adds .dockerignore (one line).",
+      "first_hand_back": "Implemented (self_reported claude-sonnet-5-5): layout one page in all four variants, Addendum 2 within 1pt (small deviations: signature image 2pt above the line, footer baseline 753, holiday name and 'Leave h:mm' under the category); Indie Flower 2.000, 108,196 bytes, SHA-256 ccc94b22...0a94, OFL and README (with .vi.md) scanned 0 findings; fallback to DejaVu Serif Italic tested; new src/domain brand.ts, BrandWordmark.tsx, pdf fonts/layout/timesheetPdf, ADR 0001 EN+VI, docs/03 EN+VI, .dockerignore, Dockerfile, smoke, drill (not run, docker build and asset listing only), tests incl. jobs.test.ts and sends.test.ts; npm test 99 files 2300; e2e desktop 406/33/1, mobile 371/68/1: automation.spec.ts:118 reads old PDF text at lines 191 and 203 (file not owned); mutants 5/5; parity OK; preflight PASS (122 pairs); verify 0 (smoke 45 PASS); digest e9a8b42d (862 files). Deviations: objectsPerTick Infinity in doc.save. Slips: one python - stdin call (background task boj3huo01, stopped by the coordinator), one heredoc, four /dev/null redirects, one head and one tail pipe. Addendum 2: own automation.spec.ts lines 191/203, rerun full e2e.",
+      "next_action": "None; WP5-UX5-T02-FREEZE (fresh committer, explicit paths, one font file allowed)."
+    },
+    {
+      "id": "WP5-UX5-T02-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX5-T02"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": "a540967587b5d9deb",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 2,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX5-T02-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX5-T02-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX5-T02-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-T02-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "9917ae8443f46cc3fc2dce79214176ff04bc01ba",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "1b4132739017e8f153cc32764b84a8a698b406e5ada027bb3d8d4f7ff701aca1",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "attempt_1": "Stopped before commit (agent a540967587b5d9deb, self_reported claude-sonnet-5-5): HEAD = origin/main = 9917ae84; digest 0f0467ab (862) matched; the path set, font size and hash matched; precommit exit 0 with 61 staged; git diff --cached --check exit 2: assets/pdf-fonts/OFL.txt:21 trailing whitespace from the upstream file (an asset text file, not an allowed fix). 61 paths remain staged. Fix: WP5-UX5-T02 Addendum 3 (the author trims OFL.txt, notes it in the READMEs, new digest); then the same committer re-stages and reruns (attempt 2).",
+      "next_action": "Same committer, attempt 2: re-stage the changed files (OFL.txt, the READMEs, the ADR pair, the T02 record, board, checkpoint), rerun every check with digest 1b413273, commit and push."
     },
     {
       "id": "WP5-UX5-PLAN",

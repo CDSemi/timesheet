@@ -28,7 +28,7 @@ FROM base AS prod-deps
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci --omit=dev --ignore-scripts
 
-# Runtime stage: dist/, production node_modules and package.json ("type": "module") only. The context excludes
+# Runtime stage: dist/, production node_modules, assets/pdf-fonts and package.json ("type": "module") only. The context excludes
 # reference/inputs (the template workbook), handoff/, tests/, .claude/, .agents/, docs and every .env file.
 FROM base AS runtime
 ENV NODE_ENV=production \
@@ -43,6 +43,8 @@ RUN groupadd --gid 10001 timesheet \
     && install --directory --owner 10001 --group 10001 --mode 0700 /data
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+# The one committed font (Indie Flower, SIL OFL 1.1, ADR 0001): read by the PDF renderer from /app/assets/pdf-fonts.
+COPY assets/pdf-fonts ./assets/pdf-fonts
 COPY package.json ./
 USER 10001:10001
 # Database, private files (PDFs, signatures, evidence) and the outbound capture directory live here and nowhere else;

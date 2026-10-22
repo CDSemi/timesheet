@@ -1365,6 +1365,39 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - H-1 a: bản sửa (correction) sau khi đã gửi một bản thì người dùng tự gửi, hệ thống không tự gửi
     khi đến hạn (đúng như đã làm).
   - Mission chuyển về `running`.
+- WP5-UX5-T01B-FREEZE lần 2 (committer mới) đã commit và push
+  9917ae8443f46cc3fc2dce79214176ff04bc01ba.
+  - 96 đường dẫn được stage bằng tên file ghi trực tiếp trong lệnh, không bị chặn lần nào. Digest
+    089cf868.
+  - Quy tắc từ nay: không stage từ file danh sách.
+- Đang chạy: WP5-UX5-T02 (worker-high, sonnet): bố cục PDF theo Addendum 2, file font Indie Flower
+  kèm ADR 0001, font dự phòng khi thiếu ký tự, Dockerfile, và sửa test wordmark.
+  - Worker liệt kê trước mọi file liên quan và đọc quy tắc precommit.
+  - Worker sẽ dừng nếu cần sửa file governance hoặc thiếu đường dẫn.
+- T02 dừng ở bước liệt kê, trước khi sửa file nào. `.dockerignore` là danh sách cho phép, nên cần thêm
+  dòng `!assets/pdf-fonts/`.
+  - Quy tắc precommit không chặn `.ttf` hay `OFL.txt`, nên không phải sửa file governance.
+  - Addendum 1 thêm `.dockerignore` (một dòng). Cùng worker đó bắt đầu viết code.
+- T02 đã viết xong: cả bốn biến thể PDF đều vừa một trang theo Addendum 2; font Indie Flower có
+  SHA-256 và font dự phòng; ADR 0001; bắt được 5/5 đột biến; digest e9a8b42d.
+  - E2e có 2 lỗi (`automation.spec.ts:118`, trên desktop và mobile), do test còn đọc chữ của PDF cũ.
+  - Addendum 2 cho worker sửa hai assertion đó và chạy lại toàn bộ e2e.
+  - Coordinator đã dừng một tác vụ nền `python -` mà worker để sót.
+- WP5-UX5-T02 xong.
+  - E2e đầy đủ 779 đạt, 0 lỗi, sau một lần chạy lại được phép vì lỗi buffer; npm test 2300; digest
+    0f0467ab (862 file).
+  - Ghi chú cho audit: `automation.spec.ts:191` giờ chỉ kiểm "VERTIME", còn `:202` không còn kiểm được
+    gì. Độ chặt của test cần xem lại.
+- Đang chạy: WP5-UX5-T02-FREEZE (một committer mới).
+  - 24 đường dẫn ghi trực tiếp, trong đó có một file font, kiểm theo kích thước và mã băm.
+- T02-FREEZE lần 1 dừng ở bước `git diff --cached --check`. `OFL.txt:21` có khoảng trắng thừa cuối
+  dòng, lấy nguyên từ file gốc. 61 đường dẫn vẫn đang được stage.
+  - Tác giả T02 xóa khoảng trắng đó (Addendum 3, không đụng tới git index) và tính lại digest.
+  - Sau đó cùng committer đó stage lại và chạy lại các kiểm tra (lần 2).
+- Addendum 3 của T02 xong.
+  - Đã xóa khoảng trắng thừa trong `OFL.txt`. README và ADR 0001 (EN/VI) đều ghi lại việc này.
+  - Test và preflight đạt. Digest mới 1b413273.
+  - T02-FREEZE chạy lần 2: stage lại và chạy lại các kiểm tra.
 - Còn lại sau T06:
   - T06-FREEZE;
   - gate cho cả đợt 4;

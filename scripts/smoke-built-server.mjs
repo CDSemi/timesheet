@@ -422,6 +422,13 @@ try {
       pdfBytes.subarray(0, 5).toString('latin1') === '%PDF-',
     `${pdf2.status} ${pdfBytes.length} bytes`,
   );
+  // WP5-UX5-T02: the PDF embeds the committed Indie Flower subset (assets/pdf-fonts, ADR 0001) next to DejaVu, on one page.
+  const pdfLatin1 = pdfBytes.toString('latin1');
+  check(
+    'the revision PDF is one page and embeds the Indie Flower subset (read from assets/pdf-fonts)',
+    (pdfLatin1.match(/\/Type\s*\/Page\b/g) ?? []).length === 1 && pdfLatin1.includes('+IndieFlower') && pdfLatin1.includes('+DejaVuSans'),
+    `${(pdfLatin1.match(/\/Type\s*\/Page\b/g) ?? []).length} page(s)`,
+  );
   const foreignPdf = await call('GET', `/api/revisions/${revisionId}/pdf`, { cookie });
   const adminPdf = await call('GET', `/api/revisions/${revisionId}/pdf`, { cookie: adminCookie });
   const anonymousPdf = await call('GET', `/api/revisions/${revisionId}/pdf`);
