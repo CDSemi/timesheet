@@ -208,6 +208,26 @@ English is canonical; the Vietnamese translation is [INGAT_T0_T8_CHECKPOINT.vi.m
   kia hiện đang tạm dừng, ko chạy gì cả"). Step 1 INGAT-SYNC-RECORD (timesheet-committer,
   sonnet) commits these records as a fast-forward. Step 2 (a verifier gate on the merged
   tree) follows. Step 3, the merge commit, waits for the owner's explicit approval.
+- Step 1 done: INGAT-SYNC-RECORD committed `db8793967b6967fbe0f62c6e97d9039ffe4f39fe` (15
+  handoff paths) and pushed it as a fast-forward; `origin/main` = `db87939`. The committer
+  noted the OS account name in `evidence/INGAT-SYNC-RECON/recon2.txt` (also present in 14
+  earlier published files; the precommit passed): a privacy follow-up for the owner.
+- Owner approval of step 3 (2026-10-23, this session, verbatim): "nếu ko có gì xung đột
+  thì merge đi, nếu có xung đột thì bạn tự giải quyết nếu đc, nếu ko đc thì chỉ rõ để tôi
+  hiểu mà biết đường quyết định" (if nothing conflicts, merge; if something conflicts,
+  resolve it yourself if possible; if not, explain it clearly so I can decide).
+- Step 2 INGAT-SYNC-GATE done, PASS (attempt 1, timesheet-verifier, sonnet): merged tree
+  T = `5da1839bdbf9ca84cb004590ed69bc474e32f6f2`, no conflict; typecheck, lint, `npm test`
+  (2374/2374), `npm run verify`, pinned `ingat validate` and actionlint exit 0 on T.
+- Step 3 INGAT-SYNC-MERGE attempt 1 stopped: `git merge` wrote the merged files into the
+  working tree, then failed with "unable to write .git/worktrees/relaxed-lalande-8359f0/index"
+  (exit 128). No `MERGE_HEAD`, HEAD still `db87939`, nothing committed or pushed, nothing
+  cleaned or reset; the working tree holds the 7aafa21 files as unstaged changes.
+- Step 3 attempt 2 running (fresh timesheet-committer, sonnet; brief Addendum 1): the merge
+  commit M is built from the gated tree T with `git commit-tree` (parents `db87939`,
+  `7aafa21`), checked through a temporary index outside Dropbox, then a record commit R on
+  M, and R is pushed as a fast-forward. The worktree's own index and branch are left
+  untouched (stale locally; everything it holds will be on `origin`).
 - Owner steps for the cleanup: none needed to start (the schedule deletes from its first
   run, and nothing is older than 30 days before about 2026-11-21). If the first scheduled
   run fails with 403, check the package's "Manage Actions access" role for

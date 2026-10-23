@@ -207,6 +207,27 @@ Bản tiếng Anh là bản gốc: [INGAT_T0_T8_CHECKPOINT.md](INGAT_T0_T8_CHECK
   án, nguyên văn: "Bên kia hiện đang tạm dừng, ko chạy gì cả"). Bước 1 INGAT-SYNC-RECORD
   (timesheet-committer, sonnet) commit các hồ sơ này dạng fast-forward. Tiếp theo là bước 2
   (verifier kiểm cây sau khi gộp). Bước 3, merge commit, chờ chủ dự án duyệt rõ ràng.
+- Bước 1 xong: INGAT-SYNC-RECORD commit `db8793967b6967fbe0f62c6e97d9039ffe4f39fe` (15
+  đường dẫn handoff) và push dạng fast-forward; `origin/main` = `db87939`. Committer ghi
+  nhận tên tài khoản hệ điều hành trong `evidence/INGAT-SYNC-RECON/recon2.txt` (đã có sẵn
+  trong 14 tệp công khai trước đó; precommit vẫn đạt): một việc riêng tư cần chủ dự án
+  xem sau.
+- Chủ dự án duyệt bước 3 (2026-10-23, trong phiên này, nguyên văn): "nếu ko có gì xung
+  đột thì merge đi, nếu có xung đột thì bạn tự giải quyết nếu đc, nếu ko đc thì chỉ rõ để
+  tôi hiểu mà biết đường quyết định".
+- Bước 2 INGAT-SYNC-GATE xong, PASS (lần 1, timesheet-verifier, sonnet): cây sau khi gộp
+  T = `5da1839bdbf9ca84cb004590ed69bc474e32f6f2`, không xung đột; typecheck, lint,
+  `npm test` (2374/2374), `npm run verify`, `ingat validate` đã ghim và actionlint exit 0
+  trên T.
+- Bước 3 INGAT-SYNC-MERGE lần 1 dừng: `git merge` đã ghi các tệp gộp vào thư mục làm
+  việc, rồi lỗi "unable to write .git/worktrees/relaxed-lalande-8359f0/index" (exit 128).
+  Không có `MERGE_HEAD`, HEAD vẫn `db87939`, chưa commit hay push gì, không dọn hay reset
+  gì; thư mục làm việc đang chứa các tệp của 7aafa21 dưới dạng thay đổi chưa stage.
+- Bước 3 lần 2 đang chạy (timesheet-committer mới, sonnet; Addendum 1 của brief): dựng
+  merge commit M từ cây đã kiểm T bằng `git commit-tree` (cha `db87939`, `7aafa21`), kiểm
+  qua một index tạm nằm ngoài Dropbox, rồi dựng commit hồ sơ R trên M, và push R dạng
+  fast-forward. Index và nhánh của worktree giữ nguyên (cục bộ bị cũ; mọi thứ trong đó sẽ
+  có trên `origin`).
 - Việc của chủ dự án cho job dọn: không cần gì để bắt đầu (lịch chạy xoá thật ngay từ lần
   đầu, và trước khoảng 2026-11-21 không có bản nào cũ hơn 30 ngày). Nếu lần chạy lịch đầu
   tiên lỗi 403, kiểm vai trò "Manage Actions access" của `CDSemi/timesheet` trên package
