@@ -2,7 +2,8 @@
 
 - **Task.** Mission timesheet-software-readiness, task WP5-UX5-AUDIT-A, package WP5, kind
   audit, attempt 1.
-  - It depends on WP5-UX5-GATE (PASS required).
+  - It depends on WP5-UX5-REGATE (PASS required). WP5-UX5-GATE on e2bf1aa failed, and
+    WP5-UX5-FIX1 fixed it.
   - Run in a fresh context. It runs in parallel with WP5-UX5-AUDIT-B, which uses other
     ports and other folders.
 - **Profile and routing.** timesheet-auditor, requested opus/xhigh, no override. Routing:
@@ -13,10 +14,10 @@
 - **Author separation.** You wrote no WP5-UX4 or WP5-UX5 task; their agent IDs are on the
   board. Treat every planner, worker, committer and verifier report as a claim.
 - **Target.**
-  - `reviewed_commit` = TARGET_SHA = e2bf1aab4ef65d496de6672c7986e27db04ddb39 (the
-    WP5-UX5-T06-FREEZE commit, the package-final snapshot of rounds 4 and 5).
-  - TARGET_DIGEST = 318b3370450db99a96194249d4d9d7ae985a10a133f10994ba4acf219453635c
-    (868 files).
+  - `reviewed_commit` = TARGET_SHA = 2bce0ab5842b80c710f23496d5173c122319e5c7 (the
+    WP5-UX5-FIX1-FREEZE commit, the package-final snapshot of rounds 4 and 5).
+  - TARGET_DIGEST = 709750910cb88422b1de35c38c85eac15c3eca63ee75e1ff26e11b75d6475bbf
+    (870 files).
   - Record HEAD, the digest before and after (three forms, as the gate did) and
     `reviewed_commit`.
   - Any change outside `handoff/` invalidates the audit. Work on a clean export or a
@@ -35,7 +36,8 @@
 - The plan `handoff/delivery/tasks/WP5-UX5-PLAN.md` (sections A, B3, D, E and every
   addendum) and the mockup `handoff/delivery/design/WP5-UX5/mockup.html` with its renders.
 - The round-5 slice records `WP5-UX5-T03.md`, `T04.md`, `T05A.md`, `T05B.md` and
-  `T06.md`; the gate `WP5-UX5-GATE.md`; and their evidence.
+  `T06.md`; the gate `WP5-UX5-GATE.md`, `WP5-UX5-FIX1.md` (including `TableWrap.tsx`) and
+  `WP5-UX5-REGATE.md`; and their evidence.
 - **The round-4 findings** you recheck: `WP5-UX4-AUDIT-A.md` (F-UX4A-1..4),
   `WP5-UX4-FIX2.md` and `WP5-UX4-FIX3.md` (R5 b replaced FIX2's `html{overflow-y:scroll}`
   with a probe-measured scrollbar width).
@@ -65,6 +67,15 @@
      status out of view after a foot save; a bare top-bar press closing the drawer.
 
    Say for each whether it is acceptable or a defect.
+
+   Also judge one optional risk passed on by the coordinator (WP5-UX5-DIAG1):
+   - `useBlockSize.ts` observes the content box while it writes the border-box height, so
+     a padding- or border-only change of the shell bar would leave `--shell-bar-size`
+     stale;
+   - no current style does that;
+   - the proposed one-line hardening is `observer.observe(node, { box: 'border-box' })`.
+
+   Is it needed now, or is it a recorded risk?
 2. **The style system:**
    - new tokens (`--sig-*`, `--compact-edge`, `--period-step-gap`, `--subbtn-h`,
      `--theme-seg-h`, `--worked-line`, `--select-arrow-*`, the Send card and dialog widths)

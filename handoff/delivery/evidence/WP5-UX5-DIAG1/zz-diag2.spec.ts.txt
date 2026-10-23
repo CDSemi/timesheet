@@ -1,0 +1,58 @@
+import { expect, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-DIAG1 probe 2 (scratch export only). Shows by construction when the stored --shell-bar-size can differ from the
+ * rendered bar: the ResizeObserver callback runs in the rendering step of the next frame, not at layout.
+ */
+test('diag2: the stored value follows a bar size change one frame later; a frame-less page keeps it stale', async ({ page, signInPageAs, builtServer }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInPageAs(builtServer.credentials.employee, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const read = (): Promise<{ bar: number; stored: number; visibility: string }> =>
+    page.evaluate(() => ({
+      bar: (document.querySelector('.shell-bar') as HTMLElement).getBoundingClientRect().height,
+      stored: parseFloat(document.documentElement.style.getPropertyValue('--shell-bar-size')),
+      visibility: document.visibilityState,
+    }));
+  console.log(`DIAG2 start ${JSON.stringify(await read())}`);
+
+  // 1. Grow the bar and read in the same task (layout is forced by the measurement; no frame has run yet).
+  const sameTask = await page.evaluate(() => {
+    const bar = document.querySelector('.shell-bar') as HTMLElement;
+    bar.style.height = '92px';
+    const measured = bar.getBoundingClientRect().height;
+    return { bar: measured, stored: parseFloat(document.documentElement.style.getPropertyValue('--shell-bar-size')) };
+  });
+  console.log(`DIAG2 same task after growth ${JSON.stringify(sameTask)}`);
+  const afterFrame = await page.evaluate(
+    () =>
+      new Promise<{ bar: number; stored: number }>((resolve) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() =>
+            resolve({
+              bar: (document.querySelector('.shell-bar') as HTMLElement).getBoundingClientRect().height,
+              stored: parseFloat(document.documentElement.style.getPropertyValue('--shell-bar-size')),
+            }),
+          ),
+        ),
+      ),
+  );
+  console.log(`DIAG2 two frames later ${JSON.stringify(afterFrame)}`);
+
+  // 2. A second page brought to the front: does the first one stop rendering (hidden)?
+  const other = await page.context().newPage();
+  await other.goto('about:blank');
+  await other.bringToFront();
+  console.log(`DIAG2 first page visibility after the second page is in front: ${(await read()).visibility}`);
+  await page.evaluate(() => {
+    (document.querySelector('.shell-bar') as HTMLElement).style.height = '52px';
+  });
+  const bar = await page.evaluate(() => (document.querySelector('.shell-bar') as HTMLElement).getBoundingClientRect().height);
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  console.log(`DIAG2 background page, shrunk 1.5 s ago: bar ${bar} now ${JSON.stringify(await read())}`);
+  await other.close();
+  await page.bringToFront();
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  console.log(`DIAG2 back in front 0.5 s later ${JSON.stringify(await read())}`);
+});

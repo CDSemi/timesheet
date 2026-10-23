@@ -1,0 +1,67 @@
+import { expect, newPerson, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-DIAG1 probe 3 (scratch export only). Replays theme.spec.ts:605 with a real sign-in each time (the shell mounts in the
+ * same document, no reload), and records, from a MutationObserver injected before the page scripts, every moment the DOM changed:
+ * the rendered bar, the stored --shell-bar-size and the time, so a stored-vs-rendered gap and its length can be seen.
+ */
+const RATE = Number(process.env.DIAG_RATE ?? '1');
+const LOOPS = Number(process.env.DIAG_LOOPS ?? '30');
+
+interface Sample {
+  t: number;
+  bar: number;
+  stored: number;
+}
+
+test('diag3: sign in with a received share, read like the test, with a timeline of the bar', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+  test.setTimeout(240_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner', signature: 'none' });
+  await page.addInitScript(() => {
+    const w = window as unknown as { __samples: Array<{ t: number; bar: number; stored: number }> };
+    w.__samples = [];
+    const take = (): void => {
+      const node = document.querySelector('.shell-bar');
+      if (node === null) return;
+      const stored = parseFloat(document.documentElement.style.getPropertyValue('--shell-bar-size'));
+      const bar = node.getBoundingClientRect().height;
+      const last = w.__samples[w.__samples.length - 1];
+      if (last === undefined || last.bar !== bar || last.stored !== stored) w.__samples.push({ t: Math.round(performance.now() * 10) / 10, bar, stored });
+    };
+    new MutationObserver(take).observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+    const frame = (): void => {
+      take();
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: RATE });
+  let testStyleMismatch = 0;
+  let gapsSeen = 0;
+  const lines: string[] = [];
+  for (let i = 0; i < LOOPS; i += 1) {
+    await page.goto('about:blank');
+    await page.context().clearCookies();
+    const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee', signature: 'none' });
+    await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+    await signInPageAs(me.account, '#/timesheet');
+    await expect(page.getByRole('combobox', { name: 'Shared with me' })).toBeVisible();
+    // What the test does after this: [data-day] count, then the three boxes, then one evaluate.
+    if (process.env.DIAG_FAST !== '1') {
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await page.locator('.shell-tabs').boundingBox();
+    }
+    const bar = (await page.locator('.shell-bar').boundingBox())?.height ?? 0;
+    const stored = await page.evaluate<number>("parseFloat(document.documentElement.style.getPropertyValue('--shell-bar-size'))");
+    if (Math.abs(stored - bar) >= 0.05) testStyleMismatch += 1;
+    await page.waitForTimeout(300);
+    const samples = await page.evaluate<Sample[]>('window.__samples');
+    const gaps = samples.filter((s) => Math.abs(s.bar - s.stored) >= 0.05 || Number.isNaN(s.stored));
+    gapsSeen += gaps.length > 0 ? 1 : 0;
+    lines.push(`loop ${i}: test-style read bar=${bar} stored=${stored}; timeline ${samples.map((s) => `${s.t}:${s.bar}/${s.stored}`).join(' ')}`);
+  }
+  console.log(lines.join('\n'));
+  console.log(`DIAG3 rate=${RATE} loops=${LOOPS} test-style mismatches=${testStyleMismatch} loops with an observed gap=${gapsSeen}`);
+});

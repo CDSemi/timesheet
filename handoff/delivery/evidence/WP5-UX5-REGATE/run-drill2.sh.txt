@@ -1,0 +1,16 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+mkdir -p $T/wp3 $T/drill2
+cd $REPO; git archive 49651c8 | tar -x -C $T/wp3
+cd $T/wp3
+npm ci > $T/out/wp3-ci.txt 2>&1; echo "wp3 ci exit $? dep=$(grep -ci deprecat $T/out/wp3-ci.txt)"
+npm run build:server > $T/out/wp3-build.txt 2>&1; echo "wp3 build exit $? dep=$(grep -ci deprecat $T/out/wp3-build.txt)"
+docker ps --all --filter name=ts-wp5-ux5regate > $T/out/15-docker-ps-before2.txt 2>&1
+docker images > $T/out/15-docker-images-before2.txt 2>&1
+cd $T/export
+npm run drill:container -- --work "$TW\\drill2" --project ts-wp5-ux5regate --wp3 "$TW\\wp3" > $T/out/08-drill2.txt 2>&1
+echo "drill exit $?" > $T/out/08-drill2-exit.txt
+cat $T/out/08-drill2-exit.txt
+grep -E "image id|FAIL|forbidden|DRILL STAGES" $T/out/08-drill2.txt
+echo "PASS lines $(grep -c '^PASS' $T/out/08-drill2.txt) FAIL lines $(grep -c '^FAIL' $T/out/08-drill2.txt) dep=$(grep -ci deprecat $T/out/08-drill2.txt)"
+echo drill2.done > $T/out/drill.done

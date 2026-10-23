@@ -2,7 +2,8 @@
 
 - **Task.** Mission timesheet-software-readiness, task WP5-UX5-AUDIT-B, package WP5, kind
   audit, attempt 1.
-  - It depends on WP5-UX5-GATE (PASS required).
+  - It depends on WP5-UX5-REGATE (PASS required). WP5-UX5-GATE on e2bf1aa failed, and
+    WP5-UX5-FIX1 fixed it.
   - Run in a fresh context. It runs in parallel with WP5-UX5-AUDIT-A, which uses other
     ports and other folders.
 - **Profile and routing.** timesheet-auditor, requested opus/xhigh, no override.
@@ -19,9 +20,10 @@
 - **Author separation.** You wrote no WP5-UX4 or WP5-UX5 task; their agent IDs are on the
   board. Treat every planner, worker, committer and verifier report as a claim.
 - **Target.**
-  - `reviewed_commit` = TARGET_SHA = e2bf1aab4ef65d496de6672c7986e27db04ddb39.
-  - TARGET_DIGEST = 318b3370450db99a96194249d4d9d7ae985a10a133f10994ba4acf219453635c
-    (868 files).
+  - `reviewed_commit` = TARGET_SHA = 2bce0ab5842b80c710f23496d5173c122319e5c7 (the
+    WP5-UX5-FIX1-FREEZE commit).
+  - TARGET_DIGEST = 709750910cb88422b1de35c38c85eac15c3eca63ee75e1ff26e11b75d6475bbf
+    (870 files).
   - The base is the last accepted snapshot, 8e557100d16b6b6eb86a48e00276835761aabfdf.
   - Record HEAD, the digest before and after (three forms) and `reviewed_commit`.
   - Work on a clean export or a scratch clone at TARGET_SHA.
@@ -39,7 +41,8 @@
 - The plan `handoff/delivery/tasks/WP5-UX5-PLAN.md`: sections B and C, and Addendum 1
   (B-A1..B-A4, C revised), Addendum 2 (C revised).
 - The slice records `WP5-UX5-T01a.md`, `T01B.md`, `T02.md`, `T03.md` (the client side of
-  sends) and `T06.md`; the gate `WP5-UX5-GATE.md`; and their evidence.
+  sends) and `T06.md`; the gate `WP5-UX5-GATE.md`, `WP5-UX5-FIX1.md` (the drill's
+  sign-off body for the previous build) and `WP5-UX5-REGATE.md`; and their evidence.
 - **The round-4 finding** you recheck: `WP5-UX4-AUDIT-B.md` (F-UX4B-1) and its fix in
   `WP5-UX4-FIX2.md`.
 - docs/01, 02, 03, 05, 06, 07, 10, 11 and 12, EN and VI; `docs/adr/0001-*` EN and VI;

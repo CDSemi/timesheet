@@ -1,0 +1,182 @@
+diff --git a/tests/e2e/day-editor.spec.ts b/tests/e2e/day-editor.spec.ts
+index b50855e..6d4ef76 100644
+--- a/tests/e2e/day-editor.spec.ts
++++ b/tests/e2e/day-editor.spec.ts
+@@ -6350,6 +6350,74 @@ async function pageEdgeX(page: Page, editor: Locator): Promise<number> {
+   return side === 'left' ? width - 4 : 4;
+ }
+ 
++/** A point inside `target`, as an offset from its top-left corner. */
++type PressPoint = { x: number; y: number };
++
++/** One page part that a press outside can land on: the part, the offsets to try, and whether a point must be on plain page (no control). */
++type Surface = { target: Locator; candidates: (box: { width: number; height: number }) => PressPoint[]; plain?: boolean };
++
++/**
++ * Presses the first point of the first `surfaces` entry that the open drawer does not cover (WP5-UX5-FIX1). The floating
++ * drawer is a fixed column flush with one window edge and docks on the side away from the edited column, so which page parts
++ * it covers depends on the day of the week of the newest free workday; a fixed point of the title, of the period card text or
++ * of the paper margin was under the drawer on some days (the heading and the card text are short and sit at the left). Each
++ * surface is scrolled into view first; a point counts as uncovered when it lies outside the drawer's horizontal range (the
++ * drawer spans the window's height). A `plain` surface is a wider part of the page that holds controls, so a point on it must
++ * also be on no link, button or field. The point is asserted uncovered before it is pressed, and the test fails, with the
++ * boxes, when the drawer covers every surface.
++ */
++async function pressOutsideDrawer(editor: Locator, label: string, surfaces: Surface[]): Promise<void> {
++  for (const { target, candidates, plain = false } of surfaces) {
++    await target.scrollIntoViewIfNeeded();
++    const box = await target.boundingBox();
++    const drawer = await editor.boundingBox();
++    expect(box, `${label}: the part is on the page`).not.toBeNull();
++    expect(drawer, 'the drawer is open').not.toBeNull();
++    if (box === null || drawer === null) return;
++    const outside = (point: PressPoint): boolean => box.x + point.x < drawer.x || box.x + point.x > drawer.x + drawer.width;
++    for (const point of candidates(box)) {
++      if (!outside(point)) continue;
++      if (plain) {
++        const onControl = await target.evaluate((element, offset) => {
++          const rect = element.getBoundingClientRect();
++          const hit = element.ownerDocument.elementFromPoint(rect.left + offset.x, rect.top + offset.y);
++          return hit === null || !element.contains(hit) || hit.closest('a, button, input, select, textarea, label, [role="button"]') !== null;
++        }, point);
++        if (onControl) continue;
++      }
++      expect(outside(point), `${label}: the point pressed is outside the drawer`).toBe(true);
++      await target.click({ position: point });
++      return;
++    }
++  }
++  throw new Error(`${label}: every part tried is covered by the drawer ${JSON.stringify(await editor.boundingBox())}`);
++}
++
++/** The middle of a box, then points toward its right and left ends, then its quarter points. */
++const acrossMiddle = (box: { width: number; height: number }): PressPoint[] =>
++  [0.5, 0.9, 0.1, 0.75, 0.25].map((fraction) => ({ x: box.width * fraction, y: box.height / 2 }));
++
++/** The same row of points for a wide part that holds controls: from the middle outward. */
++const acrossPlain = (box: { width: number; height: number }): PressPoint[] =>
++  [0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7].map((fraction) => ({ x: box.width * fraction, y: box.height / 2 }));
++
++/** A press on the title: the heading where the drawer leaves it, else the empty part of the title row beside it. */
++async function pressTitle(page: Page, editor: Locator): Promise<void> {
++  await pressOutsideDrawer(editor, 'the title', [
++    { target: page.getByRole('heading', { name: 'Timesheet', level: 1 }), candidates: acrossMiddle },
++    { target: page.locator('header.page-head'), candidates: acrossPlain, plain: true },
++  ]);
++}
++
++/** A press on the period card text: the "Payroll date" line where the drawer leaves it, else plain space of the card. */
++async function pressPeriodCardText(page: Page, editor: Locator): Promise<void> {
++  const card = page.getByRole('region', { name: 'Pay period' });
++  await pressOutsideDrawer(editor, 'the period card text', [
++    { target: card.getByText(/^Payroll date/), candidates: acrossMiddle },
++    { target: card, candidates: acrossPlain, plain: true },
++  ]);
++}
++
+ test.describe('WP5-UX5-T05B (U5-24, owner answer F-7 a): on a desktop a press outside a day column, the drawer, a dialog and a control closes the drawer', () => {
+   test.skip(({ isMobile }) => isMobile, 'The phone handles a tap on the sheet backdrop (below)');
+ 
+@@ -6367,10 +6435,11 @@ test.describe('WP5-UX5-T05B (U5-24, owner answer F-7 a): on a desktop a press ou
+       const dayBtn = namedDayButton(page, date, 'Edit');
+       const presses: Array<[string, () => Promise<void>]> = [
+         ['the page background', async () => page.mouse.click(await pageEdgeX(page, editor), 300)],
+-        ['the title', () => page.getByRole('heading', { name: 'Timesheet', level: 1 }).click()],
+-        ['the period card text', () => page.getByRole('region', { name: 'Pay period' }).getByText(/^Payroll date/).click()],
+-        ['the paper margin', () => page.locator('section.paper').click({ position: { x: 6, y: 40 } })],
+-        ['the legend', () => page.getByRole('list', { name: 'Legend' }).click()],
++        // The drawer docks away from the edited column, so each target is pressed where the drawer does not cover it.
++        ['the title', () => pressTitle(page, editor)],
++        ['the period card text', () => pressPeriodCardText(page, editor)],
++        ['the paper margin', () => pressOutsideDrawer(editor, 'the paper margin', [{ target: page.locator('section.paper'), candidates: (box) => [{ x: 6, y: 40 }, { x: box.width - 6, y: 40 }] }])],
++        ['the legend', () => pressOutsideDrawer(editor, 'the legend', [{ target: page.getByRole('list', { name: 'Legend' }), candidates: acrossMiddle }])],
+       ];
+       for (const [name, press] of presses) {
+         await dayBtn.click();
+@@ -6411,7 +6480,7 @@ test.describe('WP5-UX5-T05B (U5-24, owner answer F-7 a): on a desktop a press ou
+     await expect(notes).toHaveValue('Synthetic unsaved note');
+     await expect(notes, 'Keep editing returns focus to the field that had it').toBeFocused();
+ 
+-    await page.getByRole('heading', { name: 'Timesheet', level: 1 }).click();
++    await pressTitle(page, editor);
+     await expect(prompt).toBeVisible();
+     await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
+     await expect(editor).toHaveCount(0);
+diff --git a/tests/e2e/history-a11y.spec.ts b/tests/e2e/history-a11y.spec.ts
+new file mode 100644
+index 0000000..0c476c1
+--- /dev/null
++++ b/tests/e2e/history-a11y.spec.ts
+@@ -0,0 +1,72 @@
++import { focusFromKeyboard, parseLayers, settledStyle, tokenColour } from './contrast.ts';
++import { expect, newPerson, test } from './fixtures.ts';
++
++/*
++ * WP5-UX5-FIX1 (round-5 gate, finding 3; WCAG 2.1.1 Keyboard, axe `scrollable-region-focusable`): the tables of the recorded
++ * changes on History are wider than their box (a created session lists its whole JSON), so the box scrolls sideways. A scrolling
++ * box with nothing focusable inside has no keyboard stop. While a `.table-wrap` overflows it is a named region with a tab stop
++ * (`TableWrap`); while it fits it is a plain box. Synthetic account and days, both projects (1280px and 390px windows).
++ */
++test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
++
++interface WrapFacts {
++  overflows: boolean;
++  role: string | null;
++  tabindex: string | null;
++  label: string | null;
++}
++
++test('every overflowing table box on History is a named region with a keyboard stop, and a box that fits is a plain box', async ({ page, adminSeed, builtServer, signInPageAs }) => {
++  test.setTimeout(120_000);
++  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Table Region', signature: 'none' });
++  const free = await person.api.displayedPeriodFreeWorkdays();
++  expect(free.length, 'two free workdays to record sessions on').toBeGreaterThanOrEqual(2);
++  for (const day of free.slice(0, 2)) await person.api.seedCompleteDay(day);
++  await signInPageAs(person.account, '#/history');
++  await expect(page.locator('[data-operation]').first()).toBeVisible();
++
++  const boxes = page.locator('.table-wrap');
++  await expect(boxes.first()).toBeVisible();
++  const facts = async (): Promise<WrapFacts[]> =>
++    boxes.evaluateAll((elements) =>
++      elements.map((element) => ({
++        overflows: element.scrollWidth > element.clientWidth,
++        role: element.getAttribute('role'),
++        tabindex: element.getAttribute('tabindex'),
++        label: element.getAttribute('aria-label'),
++      })),
++    );
++  // The boxes settle after the first paint (the overflow is measured when the page lays out): wait for the region count to match.
++  await expect
++    .poll(async () => {
++      const read = await facts();
++      return read.filter((box) => box.overflows).length > 0 && read.every((box) => (box.overflows ? box.role === 'region' : box.role === null));
++    }, { message: 'every overflowing box becomes a region' })
++    .toBe(true);
++
++  const read = await facts();
++  const overflowing = read.filter((box) => box.overflows);
++  expect(overflowing.length, 'the premise: a created session lists values wider than the box, so at least one box scrolls sideways').toBeGreaterThanOrEqual(1);
++  for (const box of overflowing) {
++    expect(box.role, 'an overflowing box is a region').toBe('region');
++    expect(box.tabindex, 'and has a keyboard stop').toBe('0');
++    expect(box.label, 'and is named for what it lists').toMatch(/^Changes for .+/);
++  }
++  for (const box of read.filter((candidate) => !candidate.overflows)) {
++    expect([box.role, box.tabindex, box.label], 'a box that fits is a plain box (no extra tab stop or landmark)').toEqual([null, null, null]);
++  }
++  await expect(page.getByRole('region', { name: /^Changes for / }), 'the regions are in the accessibility tree by name').toHaveCount(overflowing.length);
++
++  // Reachable and usable with the keyboard: it takes focus, the arrow keys scroll it, and the shared accent ring shows (light and dark).
++  const region = page.getByRole('region', { name: /^Changes for / }).first();
++  for (const scheme of ['light', 'dark'] as const) {
++    await page.emulateMedia({ colorScheme: scheme });
++    await focusFromKeyboard(region);
++    const layers = parseLayers(await settledStyle(region, 'boxShadow'));
++    const accent = await tokenColour(page, '--accent');
++    expect(layers.some((layer) => layer.inset && layer.colour.slice(0, 3).join() === accent.slice(0, 3).join()), `${scheme}: the focus ring is the shared inset accent ring`).toBe(true);
++  }
++  const before = await region.evaluate((element) => element.scrollLeft);
++  await page.keyboard.press('ArrowRight');
++  await expect.poll(() => region.evaluate((element) => element.scrollLeft), { message: 'ArrowRight scrolls the focused region sideways' }).toBeGreaterThan(before);
++});

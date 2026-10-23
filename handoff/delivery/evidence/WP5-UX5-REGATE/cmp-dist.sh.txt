@@ -1,0 +1,24 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+for d in export-old export-probe; do
+  cd $T/$d
+  if [ "$d" = "export-old" ]; then npm ci > $T/out/50-$d-ci.txt 2>&1; echo "$d ci exit $?"; fi
+  npm run build > $T/out/50-$d-build.txt 2>&1; echo "$d build exit $?"
+done
+for d in export-old export export-probe; do
+  cd $T/$d
+  find dist -type f | LC_ALL=C sort > $T/out/51-$d-files.txt
+  rm -f $T/out/51-$d-hashes.txt
+  while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)" >> $T/out/51-$d-hashes.txt; done < $T/out/51-$d-files.txt
+  echo "$d: $(wc -l < $T/out/51-$d-files.txt) files (server $(grep -c 'dist/server' $T/out/51-$d-hashes.txt), domain-dir $(grep -c 'dist/domain' $T/out/51-$d-hashes.txt), client $(grep -c 'dist/client' $T/out/51-$d-hashes.txt))"
+done
+cd $T
+for d in export-old export-probe; do
+  echo "== $d (left) against export = the target (right): dist/server + dist/domain files differing"
+  diff <(grep -E 'dist/(server|domain)' out/51-$d-hashes.txt) <(grep -E 'dist/(server|domain)' out/51-export-hashes.txt) | grep -E '^[<>]' | cut -d' ' -f2 | sort -u
+  diff out/51-$d-hashes.txt out/51-export-hashes.txt > out/51-hash-diff-$d.txt
+  echo "all hash diff lines: $(wc -l < out/51-hash-diff-$d.txt); client diff lines: $(grep -cE '^[<>] dist/client' out/51-hash-diff-$d.txt)"
+  echo "files only in one side:"
+  diff out/51-$d-files.txt out/51-export-files.txt
+done
+echo cmp-done > out/cmp.done

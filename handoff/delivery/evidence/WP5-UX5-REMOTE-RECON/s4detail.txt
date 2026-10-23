@@ -1,0 +1,58 @@
+diff --git a/docs/07_DEPLOYMENT_AND_OPERATIONS.md b/docs/07_DEPLOYMENT_AND_OPERATIONS.md
+index c45f29f..b5197de 100644
+--- a/docs/07_DEPLOYMENT_AND_OPERATIONS.md
++++ b/docs/07_DEPLOYMENT_AND_OPERATIONS.md
+@@ -6,6 +6,8 @@ Synology reverse proxy → one app container → host-local persistent /data. SM
+ 
+ Verify actual NAS CPU architecture and Docker/Container Manager support; do not assume every NAS supports containers. Test native SQLite dependency and fonts on the selected target. WP4 supplies a pinned multi-stage Dockerfile, Compose example, secret-free .env.example, migrations, expiring one-time admin bootstrap, synthetic seed, health, backup/restore scripts and bilingual runbook.
+ 
++Ingat, the owner's deployment tool, installs and updates the app from the `ingat.toml` at the repository root; `.github/workflows/ingat-validate.yml` checks it on every push to `main` and every pull request with a digest-pinned Ingat image. `.github/workflows/image.yml` builds the image for linux/amd64 for the tip commit of each push to `main` and publishes `ghcr.io/cdsemi/timesheet:<commit>` with the OCI version, revision and source labels; Ingat accepts the pulled image only when its revision label equals the commit. Nothing here has run on the NAS, and neither workflow has run on GitHub yet (ADR 0002). The Compose example and the build-from-export path stay valid.
++
+ Run non-root. Persist DB, PDFs, signatures and evidence privately. Keep the workbook, developer files and secrets out of the image. Configure public HTTPS URL, trusted proxy, data path, reporting zone, outbound mode and SMTP TLS/credentials. There is no application session secret; SMTP credentials only. Per-user recipients/templates belong in user settings, not one shared environment recipient.
+ 
+ Use protected host secret/env files; never put credentials in git, chat, screenshots or logs. Use HTTPS, secure cookies, restricted internal access and host time synchronization.
+diff --git a/docs/11_OPERATIONS_RUNBOOK.md b/docs/11_OPERATIONS_RUNBOOK.md
+index d695f0d..799154b 100644
+--- a/docs/11_OPERATIONS_RUNBOOK.md
++++ b/docs/11_OPERATIONS_RUNBOOK.md
+@@ -40,7 +40,7 @@ The drill is `npm run drill:container -- --work <empty folder> --project <name>
+ ## 1. Install on Synology Container Manager
+ 
+ 1. Check the NAS first **[owner NAS step, unverified]**: DSM with Container Manager installed, and the CPU architecture from `uname -m` (`x86_64` or `aarch64`). Not every NAS supports containers.
+-2. The image is pinned: the Dockerfile builds from `node:24.21.0-trixie-slim` by the digest of its multi-architecture index (`ARG NODE_IMAGE_DIGEST`), never `latest`. No registry is used: build the image from a clean export of the release commit placed in `<project-dir>`. The `.dockerignore` keeps the workbook, tests, handoff files and every `.env` file out of the image. The drill built the `linux/amd64` image; an `arm64` image was built only under emulation. **[Drill stage 1]** for the build on amd64; the build on the NAS itself **[owner NAS step, unverified]**.
++2. The image is pinned: the Dockerfile builds from `node:24.21.0-trixie-slim` by the digest of its multi-architecture index (`ARG NODE_IMAGE_DIGEST`), never `latest`. Without Ingat, build the image from a clean export of the release commit placed in `<project-dir>`; the CI-published tag `ghcr.io/cdsemi/timesheet:<release-commit>` (docs/07) is what Ingat pulls and is not exercised by the drill. The `.dockerignore` keeps the workbook, tests, handoff files and every `.env` file out of the image. The drill built the `linux/amd64` image; an `arm64` image was built only under emulation. **[Drill stage 1]** for the build on amd64; the build on the NAS itself **[owner NAS step, unverified]**.
+ 3. The container runs as a fixed non-root user, UID and GID `10001`. The host folder must belong to that user **[owner NAS step, unverified]**:
+ 
+    ~~~bash
+====
+---
+# ingat.toml - Timesheet app manifest (Ingat manifest schema 1). Ingat reads it from the exact commit it deploys.
+#
+# This is the form for Ingat 0.1.x (support milestone M1): one runtime Compose file, no subnet param, no log_snapshot and
+# no empty [deploy] check lists (0.1.x parses them but refuses to plan an app that uses log_snapshot or non-empty
+# prechecks, postchecks or baseline). The image is built and published by this repository's CI (see
+# .github/workflows/image.yml) and pulled by tag; the revision label binds the tag to the commit.
+# Host values (ports, URLs, addresses, paths, secrets) never appear here: they live in the host's instance.toml.
+manifest = 1
+app = "timesheet"
+requires_ingat = ">=0.1,<1"
+
+[source]
+kind = "git"
+release = "commit"                            # one image per commit; there is no release tag yet
+
+[compose]
+files = ["compose.example.yaml"]              # `build: .` in it is reset by Ingat's override; the image is pulled instead
+build_services = ["timesheet"]                # the image is produced by this repository's CI
+expect_labels = { "org.opencontainers.image.revision" = "{commit}" }
+
+[params]
+TIMESHEET_IMAGE    = { kind = "template", value = "ghcr.io/cdsemi/timesheet:{commit}" }
+TIMESHEET_ENV_FILE = { kind = "env_file" }
+TIMESHEET_DATA_DIR = { kind = "store", store = "data" }
+TIMESHEET_PORT     = { kind = "port" }
+
+[app_env]
+param = "TIMESHEET_ENV_FILE"
+# Fixed by the image (Dockerfile ENV block), the static-root override STATIC_DIR (read by the production server), or
+# development-only seed passwords that never run in production.

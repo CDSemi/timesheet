@@ -145,6 +145,40 @@ Record each exit code in `handoff/delivery/evidence/WP5-UX5-FIX1-FREEZE/checks.t
 `evidence/`. A whitespace finding in a source, test, script or evidence file stops the
 commit; report it.
 
+## Addendum 1 (coordinator, for attempt 2 by the same committer)
+
+- **Attempt 1** stopped at check 7. The precommit check blocked
+  `handoff/delivery/evidence/WP5-UX5-GATE/13-integ-signatures.txt` as `private-media`.
+  - Its rule (`scripts/precommit-check.mjs:60-62`) treats any non-source basename that
+    contains "signature" as a signature file, unless the basename also contains
+    "synthetic".
+  - The file is the gate's text log of the `signatures` integration test, run on synthetic
+    data. It holds no image.
+  - 363 paths are still staged.
+- **The allowed fix:** rename that one evidence file with
+  `git mv handoff/delivery/evidence/WP5-UX5-GATE/13-integ-signatures.txt
+  handoff/delivery/evidence/WP5-UX5-GATE/13-integ-signatures-synthetic.txt`. Change
+  nothing else in it or in the other files.
+- **Before renaming,** check that no other staged path has "signature" in its basename
+  without "synthetic". If another one does, rename it the same way and list it.
+- **Then rerun every check from check 7** (precommit, `git diff --cached --check`, JSON
+  parse, the three validators). Commit and push, and compute the `git ls-tree` digest of
+  HEAD. The digest does not change: `handoff/` is excluded.
+- Record each rename under "### Attempt 2" in Results, briefly.
+
+## Addendum 2 (coordinator, for attempt 3 by the same committer)
+
+- **Attempt 2** stopped at `validate_orchestration.py` and `check_recovery.py` with
+  "Dependency gate not PASS: WP5-UX5-FIX1". This was a coordinator slip on the board:
+  FIX1 depended on the failed gate.
+- **The board is fixed.** FIX1 now depends on WP5-UX5-T06-FREEZE and names the gate in
+  `addresses_gate`, as round 4 did.
+- **Re-stage only `handoff/delivery/ORCHESTRATION.json`** with a plain `git add`. Then
+  rerun every check from check 7: precommit, `git diff --cached --check`, the JSON parse
+  and the three validators. Commit and push, and compute the `git ls-tree` digest of HEAD
+  (expected 70975091).
+- Record the result briefly under "### Attempt 3" in Results.
+
 ## Commit message (refine with the commit-message skill; keep the facts)
 
 Subject: Fix WP5-UX5 gate findings: drill sign-off, date-proof tests, focusable tables
@@ -193,3 +227,27 @@ Append to this brief, briefly:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+- HEAD before: e2bf1aab4ef65d496de6672c7986e27db04ddb39 (= origin/main).
+  HEAD after: 2bce0ab5842b80c710f23496d5173c122319e5c7. Pushed: yes; remote SHA
+  2bce0ab5842b80c710f23496d5173c122319e5c7. No tag.
+- Digest before add and from `git ls-tree` of HEAD: both
+  709750910cb88422b1de35c38c85eac15c3eca63ee75e1ff26e11b75d6475bbf (870 files).
+- Staged: 363 = 13 source/test/script, 5 modified handoff, 6 new task records (incl. this
+  brief), 339 evidence (251 GATE, 86 FIX1, 2 T06-FREEZE). No extra handoff paths.
+- Key/PEM scan: 0 hits.
+- Slip: attempt 1 stopped at precommit (exit 1, private-media on
+  `13-integ-signatures.txt`). See checks.txt.
+
+### Attempt 2
+- Renamed `evidence/WP5-UX5-GATE/13-integ-signatures.txt` to
+  `13-integ-signatures-synthetic.txt` (the only such file). precommit 0, diff --check 0,
+  JSON parse 0, preflight 0; validate_orchestration 1 and check_recovery 1 (board:
+  "Dependency gate not PASS: WP5-UX5-FIX1"). No commit.
+
+### Attempt 3
+- ORCHESTRATION.json re-staged. precommit 0, diff --check 0, JSON parse 0,
+  validate_orchestration 0, check_recovery 0 (106 probes), preflight 0, commit 0,
+  fetch 0, push dry-run 0, push 0.
+- The staged copy of this brief predates these Results and the addenda; the committed
+  version lacks them.

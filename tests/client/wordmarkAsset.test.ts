@@ -131,7 +131,7 @@ describe('exactly one font file in the project: the PDF handwriting font (ADR 00
   });
 
   it('has no other font file in the working tree outside node_modules and the build output', () => {
-    const skip = new Set(['node_modules', 'dist', '.git', 'coverage']);
+    const skip = new Set(['node_modules', 'dist', '.git', 'coverage', '.claude']); // .claude holds tooling (local worktrees), never app assets
     const walk = (directory: string): string[] =>
       readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
         if (skip.has(entry.name)) return [];

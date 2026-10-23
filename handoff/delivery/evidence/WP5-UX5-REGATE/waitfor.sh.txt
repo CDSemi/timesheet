@@ -1,0 +1,9 @@
+# Usage: bash waitfor.sh <file> <max seconds>   (waits without sleep, using a fifo read timeout)
+F=$1
+MAX=${2:-540}
+FIFO=<task>/tmp/wf$$.fifo
+mkfifo $FIFO
+exec 4<> $FIFO
+waited=0
+until [ -f "$F" ] || [ $waited -ge $MAX ]; do read -t 10 -u 4 _x || true; waited=$((waited + 10)); done
+if [ -f "$F" ]; then echo "found $F after ${waited}s"; else echo "timeout after ${waited}s"; fi

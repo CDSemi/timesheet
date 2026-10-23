@@ -1,0 +1,44 @@
+
+ RUN  v5.0.2 <task>/export
+
+ ✓ tests/integration/signatures.test.ts > image check > accepts well-formed PNG and JPEG images and reports their pixel size 264ms
+ ✓ tests/integration/signatures.test.ts > image check > refuses a declared type that is not PNG or JPEG, and bytes of another type 221ms
+ ✓ tests/integration/signatures.test.ts > image check > requires the magic bytes and the declared type to agree 218ms
+ ✓ tests/integration/signatures.test.ts > image check > refuses truncated PNG and JPEG data 224ms
+ ✓ tests/integration/signatures.test.ts > image check > refuses polyglots: data appended after the image ends 220ms
+ ✓ tests/integration/signatures.test.ts > image check > refuses a corrupted PNG chunk and pixel data that disagrees with the header 226ms
+ ✓ tests/integration/signatures.test.ts > image check > bounds the pixel dimensions 235ms
+ ✓ tests/integration/signatures.test.ts > upload > stores a PNG and a JPEG for the signed-in owner and returns metadata only 240ms
+ ✓ tests/integration/signatures.test.ts > upload > answers 401 to anonymous callers before reading a body, and 403 to a foreign origin 235ms
+ ✓ tests/integration/signatures.test.ts > upload > answers 413 above the route limit and accepts a body just below it 232ms
+ ✓ tests/integration/signatures.test.ts > upload > answers 415 for a wrong content type and for bytes that contradict it 230ms
+ ✓ tests/integration/signatures.test.ts > upload > answers 422 for truncated, polyglot and oversized-pixel images and stores nothing 229ms
+ ✓ tests/integration/signatures.test.ts > upload > bounds the number of stored signatures per user 536ms
+ ✓ tests/integration/signatures.test.ts > upload > removes the stored file when the database write fails 235ms
+ ✓ tests/integration/signatures.test.ts > private download > returns the image to its owner as a no-store attachment 256ms
+ ✓ tests/integration/signatures.test.ts > private download > answers 404 to another user (also an administrator) and 401 to anonymous callers 260ms
+ ✓ tests/integration/signatures.test.ts > private download > treats malformed ids, a storage key and path-like ids as not found 237ms
+ ✓ tests/integration/signatures.test.ts > private download > never serves a file whose bytes no longer match the recorded hash 243ms
+ ✓ tests/integration/signatures.test.ts > private download > reports the caller’s current signature as metadata and a 200 with an empty value when there is none 239ms
+ ✓ tests/integration/signatures.test.ts > replacement > appends a new immutable attachment and leaves earlier bytes and hash unchanged 242ms
+ ✓ tests/integration/signatures.test.ts > replacement > keeps referenced signature files when the orphan sweep runs 238ms
+ ✓ tests/integration/signatures.test.ts > audit > records the upload with metadata only: no image bytes, key or personal data 240ms
+ ✓ tests/integration/signatures.test.ts > audit > writes no audit event for a refused upload 240ms
+ ✓ tests/integration/signatures.test.ts > private storage boundary > never places or serves a stored file under the static root 260ms
+ ✓ tests/integration/signatures.test.ts > private storage boundary > refuses to start with a private data directory inside the static root 236ms
+ ✓ tests/integration/signatures.test.ts > global JSON-only rule stays in force for every other route > keeps the 64 KiB limit on JSON routes while the upload route allows 256 KiB 230ms
+ ✓ tests/integration/signatures.test.ts > global JSON-only rule stays in force for every other route > refuses image content types on every other state-changing route 236ms
+ ✓ tests/integration/signatures.test.ts > global JSON-only rule stays in force for every other route > refuses JSON bodies on the upload route itself and keeps its exemption to POST 231ms
+ ✓ tests/integration/signatures.test.ts > upload-time automatic image authorization (owner decision G-Q1 b) > never authorizes without the explicit flag: the default is unchanged 246ms
+ ✓ tests/integration/signatures.test.ts > upload-time automatic image authorization (owner decision G-Q1 b) > with authorize_auto_image=true stores the image and records the audited authorization in one transaction 246ms
+ ✓ tests/integration/signatures.test.ts > upload-time automatic image authorization (owner decision G-Q1 b) > moves an earlier authorization to the new image when the user confirms again 246ms
+ ✓ tests/integration/signatures.test.ts > upload-time automatic image authorization (owner decision G-Q1 b) > rolls everything back, and discards the file, when there are no saved settings to authorize against 243ms
+ ✓ tests/integration/signatures.test.ts > upload-time automatic image authorization (owner decision G-Q1 b) > refuses any other flag value, a repeated flag and an unauthenticated flagged upload, storing nothing 234ms
+ ✓ tests/integration/signatures.test.ts > upload-time automatic image authorization (owner decision G-Q1 b) > applies only to the signed-in owner: another user keeps their own settings 235ms
+ ✓ tests/integration/signatures.test.ts > upload-time automatic image authorization (owner decision G-Q1 b) > leaves a refused image unauthorized and unstored 227ms
+
+ Test Files  1 passed (1)
+      Tests  35 passed (35)
+   Start at  12:47:00
+   Duration  10.04s (tests 87%, import 9%, transform 5%)
+

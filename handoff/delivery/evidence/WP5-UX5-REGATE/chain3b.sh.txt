@@ -1,0 +1,21 @@
+. <task>/env.sh
+cd $T
+echo "chain3b start $(date -u +%H:%M:%SZ)" > logs/chain3b.log
+# Item 7: the four fixed tests and the History test, once more on the real clock, both projects, in the gate export
+G="press on the page background, the title|the bar does not overflow in the landing and away states|the review link is never wrapped|the tight text may wrap there|every overflowing table box"
+for P in desktop mobile; do
+  bash run-shift.sh fixed-$P real tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/history-a11y.spec.ts --project=$P -g "$G" > out/31-fixed-$P.txt 2>&1
+  echo "$P: $(grep -E '^  [0-9]+ (passed|failed|skipped|flaky)|exit=' out/31-fixed-$P.txt | tr '\n' ' ')" >> out/31-fixed-counts.txt
+done
+echo "fixed done $(date -u +%H:%M:%SZ)" >> logs/chain3b.log
+# Item 6: axe + keyboard probes (scratch copy)
+export NODE_OPTIONS="--trace-deprecation"
+export GATE_OUT="$TW\\obs"
+export AXE_PATH="$TW\\axe\\axe.min.js"
+export E2E_SCREENSHOT_DIR="$TW\\shots-regate"
+mkdir -p $T/pw-regate $T/shots-regate $T/obs
+cd $T/export-probe
+node node_modules/@playwright/test/cli.js test tests/e2e/zz-regate.spec.ts --project=desktop --workers=1 --output="$TW\\pw-regate" > $T/out/40-axe-run.txt 2>&1
+echo "axe probe exit $?" >> $T/logs/chain3b.log
+echo "axe done $(date -u +%H:%M:%SZ)" >> $T/logs/chain3b.log
+echo chain3b.done > $T/out/chain3.done

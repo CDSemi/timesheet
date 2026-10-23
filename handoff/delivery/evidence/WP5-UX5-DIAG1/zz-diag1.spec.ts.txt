@@ -1,0 +1,63 @@
+import { expect, newPerson, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-DIAG1 probe (scratch export only). Replays the sequence of theme.spec.ts:605 many times in one page,
+ * under a CDP CPU throttle (DIAG_RATE, default 1), and records the stored --shell-bar-size against the rendered bar:
+ *   at: right after the combobox is visible (what the test does), and again after one and two animation frames, and after 1 s.
+ */
+const RATE = Number(process.env.DIAG_RATE ?? '1');
+const LOOPS = Number(process.env.DIAG_LOOPS ?? '30');
+
+test('diag: stored --shell-bar-size against the rendered bar after a load with a received share', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+  test.setTimeout(600_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee', signature: 'none' });
+  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner', signature: 'none' });
+  await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  await signInPageAs(me.account, '#/timesheet');
+  await expect(page.getByRole('combobox', { name: 'Shared with me' })).toBeVisible();
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: RATE });
+  const stored = (): Promise<number> => page.evaluate<number>("parseFloat(document.documentElement.style.getPropertyValue('--shell-bar-size'))");
+  const frames = (n: number): Promise<void> =>
+    page.evaluate<void, number>(
+      (count) =>
+        new Promise<void>((resolve) => {
+          let left = count;
+          const tick = (): void => {
+            left -= 1;
+            if (left <= 0) resolve();
+            else requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }),
+      n,
+    );
+  let mismatchAtVisible = 0;
+  let mismatchAfter1 = 0;
+  let mismatchAfter2 = 0;
+  let mismatchAfter1s = 0;
+  const lines: string[] = [];
+  for (let i = 0; i < LOOPS; i += 1) {
+    await page.reload();
+    await expect(page.getByRole('combobox', { name: 'Shared with me' })).toBeVisible();
+    const bar = (await page.locator('.shell-bar').boundingBox())?.height ?? 0;
+    const s0 = await stored();
+    const bar0 = bar;
+    await frames(1);
+    const s1 = await stored();
+    await frames(1);
+    const s2 = await stored();
+    await page.waitForTimeout(1000);
+    const barLate = (await page.locator('.shell-bar').boundingBox())?.height ?? 0;
+    const s3 = await stored();
+    const ok = (a: number, b: number): boolean => Math.abs(a - b) < 0.05;
+    if (!ok(s0, bar0)) mismatchAtVisible += 1;
+    if (!ok(s1, barLate)) mismatchAfter1 += 1;
+    if (!ok(s2, barLate)) mismatchAfter2 += 1;
+    if (!ok(s3, barLate)) mismatchAfter1s += 1;
+    lines.push(`loop ${i}: bar@visible=${bar0} stored@visible=${s0} stored+1frame=${s1} stored+2frames=${s2} barLate=${barLate} stored+1s=${s3}`);
+  }
+  console.log(lines.join('\n'));
+  console.log(`DIAG rate=${RATE} loops=${LOOPS} mismatch@visible=${mismatchAtVisible} mismatch+1frame=${mismatchAfter1} mismatch+2frames=${mismatchAfter2} mismatch+1s=${mismatchAfter1s}`);
+});
