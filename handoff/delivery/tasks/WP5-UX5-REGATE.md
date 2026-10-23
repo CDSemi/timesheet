@@ -134,6 +134,94 @@
 
 ## Target at dispatch
 
-(written by the coordinator before dispatch)
+- **`freeze_commit` = TARGET_SHA** = 2bce0ab5842b80c710f23496d5173c122319e5c7
+  (WP5-UX5-FIX1-FREEZE). HEAD must be origin/main, or a later commit that changes only
+  `handoff/`.
+- **TARGET_DIGEST** = 709750910cb88422b1de35c38c85eac15c3eca63ee75e1ff26e11b75d6475bbf
+  (870 files).
+- **The previous gate's target** is e2bf1aab4ef65d496de6672c7986e27db04ddb39 (318b3370, 868
+  files).
+- **FIX1's 13 paths outside `handoff/`:**
+  - `scripts/container-drill.mjs`;
+  - `src/client/HistoryScreen.tsx`, `src/client/OtScreen.tsx`, `src/client/styles.css`;
+  - `src/client/components/ImportPreview.tsx`, `src/client/components/OperationsStatus.tsx`,
+    `src/client/components/SettingsTransferDialog.tsx`,
+    `src/client/components/SharingOt.tsx`;
+  - `src/client/components/TableWrap.tsx` (new);
+  - `tests/e2e/day-editor.spec.ts`, `tests/e2e/timesheet.spec.ts`,
+    `tests/e2e/today.spec.ts`;
+  - `tests/e2e/history-a11y.spec.ts` (new).
+- **The gate's evidence file** `13-integ-signatures.txt` was renamed
+  `13-integ-signatures-synthetic.txt` in the FIX1 freeze, for the precommit rule. Its
+  content is unchanged.
 
 ## Results
+
+### Verifier result (attempt 1) - decision: FAIL (one non-network assertion failure in the simulated-clock sweep; NAS items NOT VERIFIED)
+
+Self-reported model: claude-sonnet-5-5 (timesheet-verifier). Target 2bce0ab5842b80c710f23496d5173c122319e5c7, HEAD = origin/main before and after; `git status`
+outside `handoff/` empty before and after. Node v24.21.0 portable (the first call printed v26.10.0 on the bare PATH; every npm/node run used the portable v24).
+Evidence: `handoff/delivery/evidence/WP5-UX5-REGATE/` (masked LF `.txt`, scripts as `.txt`, 4 `-synthetic.png`). **The run was interrupted once (an expired
+sign-in) and resumed.** After the resume I found: the first drill had failed at its end (exit 1, 119 PASS / 3 FAIL, a `docker compose` process-start error
+3221225794 right after the stage-3 "release again" step) and left the Compose project up; the first sweep run (`sweep.sh`, started before the interruption) was
+wedged on its first test (no log change for 48 min). I removed the leftover project by name (`docker compose -p ts-wp5-ux5regate down -v`, exit 0,
+`15-docker-down-leftover.txt`), reran the drill in a fresh work folder, and ran the sweep again from its own script with new labels (`r2*`). The failed drill
+(`07-drill.txt`) and the wedged first sweep log are kept as evidence. **Leftover I cannot stop by the allowed means:** the wedged first-sweep Playwright/Node tree
+and two idle waiting shells (`chain2.sh`, `chain3.sh`) of mine are probably still alive (idle, 0 CPU); the rules forbid PID kills, and they have no handle. Docker: nothing left.
+
+**Digest** `709750910cb88422b1de35c38c85eac15c3eca63ee75e1ff26e11b75d6475bbf`, 870 files: clean `git archive` export hashed with `git hash-object --no-filters`, the
+`git ls-tree` form (sorted lists byte-identical) and `npm run digest` equal, before and after (`01-digest-*`). Probes ran in `export-probe`, never in the gate export.
+
+**Item 1, identity and scope.** `git diff --stat e2bf1aa..2bce0ab` outside `handoff/`: 13 files, 274 insertions, 42 deletions (`20-diffstat-nonhandoff.txt`), exactly FIX1's 13 paths; no
+other path. Clean builds of e2bf1aa and the target: `dist/server` (184 files) and `dist/domain` (48 files) **byte-identical** (`logs/cmp-dist.txt`: no differing file); the 13
+`dist/client` files that differ are `index` (JS and CSS), `AdminScreen` (OperationsStatus), `ImportScreen` (ImportPreview), `SettingsTransfer` and `SettingsTransferFile` (the dialog), and
+`ReviewScreen`, which changed only by minifier renames of imported identifiers (`52-review-chunk-diff.txt`: no source line differs in meaning). Because server and domain are byte-identical, the previous gate's
+item 2 (boundary and route table), item 4 (data, sends, PDF) and the integration files carry forward; I still ran the integration files below. The renamed `13-integ-signatures-synthetic.txt` is content-unchanged per its record (not re-diffed).
+
+**Item 2, core.** `npm ci` exit 0; `npm run lint` exit 0; `npm run verify` exit 0 (100 files / 2345 tests, build, `SMOKE PASSED`); 0 deprecation lines in ci, lint, verify, the three tests,
+the integration runs and the drill. `npm test` x3: exit 0 each, 100 files / 2345 tests each, 0 worker crashes (`12-npmtest-exits.txt`). Build: no chunk advisory; main chunk `index-BeK5KvKY.js`
+490.79 kB (gzip 143.99; the gate's 490.38), CSS 95.58 kB. Validators exit 0: `validate_package --preflight`, `validate_orchestration`, `check_recovery` (count 106), precommit self-test (35 path, 74 line samples, 12 rules).
+`npm audit --omit=dev` exit 0, 0 vulnerabilities. AC-13 once: exit 0. Integration files, one run each, all exit 0 (`13-integ-exits.txt`): sends 16, migrations 53, upgrade 13, restore 32, backup 12, pdf-render 57, pdf-layout 23,
+pdf-download 13, finalization 23, finalization-concurrency 3, deadline 44, deadline-race 2, reminders 36, delivery 27, signatures 35, sharing 31, sharing-matrix 26, submission-settings 71, review-payload 27, operations-status 23,
+password-change 7, client wordmark/layout/theme 97.
+
+**Item 3, drill `--wp3`** (`08-drill2.txt`, exit 0): stage 1 33/0, 2 32/0, 3 57/0, **4 35/0**, **5 27/0**, 6 23/0, total **209 PASS, 0 FAIL**, `DRILL STAGES 1-6 PASSED`. Stage 4: the previous build (49651c8, schema 6) signed two periods
+(status 201/201, not 422); pre-upgrade facts: 1 ledger entry, 2 revisions, 2 queued send jobs, 2 files; the upgrade 6 to 15 then ran on that data (26 tables unchanged, 600 ledger minutes equal, schema_migrations contiguous). Stage 1: the container
+PDF is one page and embeds the Indie Flower subset (41,571 bytes). Image `sha256:0c1ec071...783ed`, linux/amd64, 105.1 MiB. Cleanup: `docker compose -p ts-wp5-ux5regate down -v` exit 0, `docker rmi ts-wp5-ux5regate-timesheet:drill` exit 0,
+`docker ps --all --filter name=ts-wp5-ux5regate` empty, no image, volume or network (`15-docker-ps-final.txt`). The first drill attempt (`07-drill.txt`) stopped on the compose process error noted above (3 FAIL lines: "releasing it again is refused", the stop, the cleanup); the same step passed in the rerun.
+
+**Item 4, real-clock FULL e2e**, alone, in the gate export: Los Angeles Thu 2026-10-22 12:48:56 to 13:05:19 (`03-window.txt`); displayed period 2026-10-12..2026-10-25, outside the window (`control-real`). Desktop **458 passed, 35 skipped, 0 failed**
+(10.7 min, exit 0); mobile **403 passed, 90 skipped, 0 failed** (5.7 min, exit 0) (`04-e2e-project-counts.txt`).
+
+**Item 5, simulated-clock sweep** (FIX10 preload and wrapper unchanged; controls at every instant reported the simulated `today_local`, `16-controls.txt`; America/Los_Angeles; totals are both projects):
+
+| Instant (UTC) | Window | Scope | passed / skipped / failed | Exit | Note |
+|---|---|---|---|---|---|
+| 2026-10-26T16:00:00Z | inside | FULL | 861 / 125 / 0 | 0 | |
+| 2026-11-01T08:45:00Z | outside | FULL | 860 / 125 / **1** | 1 | `theme.spec.ts:605` mobile "received share, without the zone note": `--shell-bar-size` 112 against a rendered bar of 60 (an assertion, not a network error) |
+| 2026-11-01T08:45:00Z | outside | FULL rerun (informational) | 861 / 125 / 0 | 0 | the same run again |
+| 2027-03-14T10:30:00Z | outside | FULL | 861 / 125 / 0 | 0 | |
+| 2026-10-27T06:58:30Z | inside | 7 specs | 376 / 80 / 0 | 0 | |
+| 2027-01-01T07:30:00Z (2026-12-31 23:30 PST) | outside | 7 specs | 376 / 80 / 0 | 0 | |
+| 2027-01-01T08:30:00Z | outside | 7 specs | 376 / 80 / 0 | 0 | |
+
+The four gate failures are gone at every instant (the previous gate had failures at all six). The one failure is in a test FIX1 did not touch (`theme.spec.ts`), is not a network error, and the brief's rule is that such a failure is reported as is. It did not reproduce:
+3 isolated runs of `theme.spec.ts` on the mobile project at the same instant passed (39 each, `log-diag-theme*.txt`), and the full run repeated at that instant passed. It looks like a load-dependent race (the bar height was read while the shell bar was one size and the stored property another), not a date effect; I did not investigate the cause.
+Counts and logs: `17-sweep-counts.txt`, `log-sweep-r2*.txt`, `log-sweep-r3full-1101.txt`. The first (pre-interruption) sweep run wedged and produced no result (`log-sweep-full-1026.txt`).
+
+**Item 6, accessibility** (axe-core 4.14.0 loaded from a task-local file, WCAG 2.0/2.1/2.2 A and AA tags; light and dark; `obs-regate-a11y.txt`; probe `zz-regate.spec.ts.txt`): **0 violations in every scan** (Timesheet 1440 and 390; Review unsigned and signed-and-sent at 1440;
+History with a send at 1280 and 390, the previous gate's finding; Overtime ledger 1280 and 390; Administration status 1280 and 390; Import preview 1280 and 390; the Settings transfer dialog 1280 and 390; the shared OT ledger 1280 and 390; 4 tests passed). `incomplete` items are colour-contrast on layered fills as in earlier gates.
+Keyboard: History at 1280 has 3 overflowing boxes (3474, 3474 and 2018px in 1144px) and at 390 all 14; the Overtime ledger and the shared ledger overflow at 390; every one is `role=region`, `tabindex=0`, named ("Changes for ...", "OT ledger", "OT ledger entries"), Tab from the previous stop lands on it, `:focus-visible` matches,
+ArrowRight scrolls it, and the next Tab lands on the element after it (order stays DOM order; the last History box is followed by the page's next link). Boxes that fit have no role or tabindex (0 stray in every scan). **Not exercised: no Administration, Import (also at 320) or Settings-transfer table overflowed in my synthetic data**, so those three were checked for axe and for the "fits means plain" rule only; their markup is the same `TableWrap` component.
+Ring contrast: the inset accent ring is 6.09:1 (light, rgb(31,95,191) on white) and 6.79:1 (dark, rgb(110,168,255) on rgb(26,32,41)) against the outside backdrop and the inner gap, above the 3:1 needed.
+
+**Item 7, the four fixed tests.** I read the diff against the gate's diagnosis (`21-diff-a.txt`, `21-diff-b.txt`): (a) day-editor: the press target is chosen where the drawer does not cover, asserted before the press, with a plain-space fallback, and the title is still pressed where uncovered; the closing and focus-return assertions are unchanged;
+(b) today:1006: the expected arrangement is computed from the measured card width (738px with Current period, 600px without), narrow and wide both asserted at 768, 769, 770 and wider, both sides required in the window; (c) today:455: the label is expected from the measured row in rem (T04 rule), 382 and 381 added, both a short and a full width required, accessible-name assertions unchanged; this is
+a rule re-derived from the product's own measurement (partly circular) but pinned by the two required widths; (d) timesheet:2040: an 08:30-17:30 day that crosses the Ho Chi Minh midnight in both PDT and PST, and a stricter `^(22|23):30( - |-)(07|08):30\+1$` than the old `\+1$`. No assertion is weaker. Real-clock run of the four tests plus the History test: desktop 5 passed / 1 skipped, mobile 3 passed / 3 skipped (project-only tests), 0 failed (`31-fixed-counts.txt`).
+
+**Item 8, screenshots** (4, synthetic): `regate-history-focus-light`, `regate-history-focus-dark` (a focused History region), `regate-ot-ledger-focus-390-light` (a focused table region on a table screen; Administration and Import did not overflow, so this substitutes), `regate-timesheet-1440-dark`.
+
+**Slips.** I broke the tool rules several times with no effect on any product file or evidence: a few `/dev/null` redirects or `cat > /dev/null <<<` no-ops, three `| head -0` / `| tail -0` pipes, one one-line `cp ... /dev/null`. No stdin to node or python, no PID kill, no recursive delete.
+The probes live only in the task folder `D:\.claude-tmp\timesheet\WP5-UX5-REGATE` and its scratch copy; no source, doc, test, board or STATE was edited.
+
+Status: done (decision FAIL under the brief's rule; the single failure did not reproduce)

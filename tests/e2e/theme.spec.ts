@@ -568,6 +568,19 @@ test('screenshots: the theme control in the bar or the More panel, light and dar
 
 test.describe('phone: first screen budget and the More panel with the theme control', () => {
   // Both projects run these at the phone's size (the layout follows the width), so none is skipped.
+  /** Retries one-round-trip reads of |--shell-bar-size - rendered .shell-bar height| until under 0.05px (toBeCloseTo digits 1); NaN never passes. */
+  async function expectBarSizeFollowsBar(page: Page, label: string): Promise<void> {
+    await expect
+      .poll(
+        () =>
+          page.evaluate<number>(
+            "Math.abs(parseFloat(document.documentElement.style.getPropertyValue('--shell-bar-size')) - document.querySelector('.shell-bar').getBoundingClientRect().height)",
+          ),
+        { message: `${label}: --shell-bar-size equals the rendered bar` },
+      )
+      .toBeLessThan(0.05);
+  }
+
   /** The first day row against the tab bar, and the compact bar, measured; the theme control is not on the first screen. */
   async function expectBudget(page: Page, label: string, share: boolean): Promise<void> {
     await expect(page.locator('[data-day]')).toHaveCount(14);
@@ -581,8 +594,9 @@ test.describe('phone: first screen budget and the More panel with the theme cont
     expect(shellBar?.height ?? 0, share ? `${label}: the clock row plus the switcher row` : `${label}: the compact shell bar is one row`).toBeLessThanOrEqual(
       share ? 112.5 : 60,
     );
-    const measured = await page.evaluate<number>("parseFloat(document.documentElement.style.getPropertyValue('--shell-bar-size'))");
-    expect(measured, `${label}: --shell-bar-size equals the rendered bar`).toBeCloseTo(shellBar?.height ?? 0, 1);
+    // The ResizeObserver stores the property one to a few frames after the bar changes size (WP5-UX5-DIAG1), so the difference
+    // is read in ONE round trip and retried until it is within the unchanged 0.05px tolerance.
+    await expectBarSizeFollowsBar(page, label);
     expect(await page.evaluate('window.scrollY')).toBe(0);
     await expect(page.locator('.shell-bar .theme-switch').filter({ visible: true })).toHaveCount(0);
     console.log(`first screen 390x844 ${label}: first day row bottom ${rowBottom} of tab bar top ${tabs?.y}, shell bar ${shellBar?.height}px`);
@@ -615,6 +629,27 @@ test.describe('phone: first screen budget and the More panel with the theme cont
       });
     });
   }
+
+  test('--shell-bar-size follows a bar size change set through CSSOM, one to a few frames later (WP5-UX5-DIAG1)', async ({ page, signInPageAs, builtServer }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signInPageAs(builtServer.credentials.employee, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await expectBarSizeFollowsBar(page, 'before the change');
+    for (const height of [92, 52]) {
+      // One evaluate sets the height; the stored property is allowed to lag the rendered bar here, so only the poll asserts equality.
+      const sameTask = await page.evaluate<{ bar: number; stored: number }>(`(() => {
+        const bar = document.querySelector('.shell-bar');
+        bar.style.height = '${height}px';
+        return {
+          bar: bar.getBoundingClientRect().height,
+          stored: parseFloat(document.documentElement.style.getPropertyValue('--shell-bar-size')),
+        };
+      })()`);
+      expect(sameTask.bar, `the bar is ${height}px after the CSSOM change`).toBeCloseTo(height, 1);
+      await expectBarSizeFollowsBar(page, `after the bar became ${height}px`);
+    }
+  });
 
   for (const width of [390, 375, 360, 320]) {
     for (const role of ['employee', 'admin'] as const) {

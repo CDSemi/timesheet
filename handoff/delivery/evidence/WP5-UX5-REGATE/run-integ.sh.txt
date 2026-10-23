@@ -1,0 +1,12 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+cd $T/export
+O=$T/out
+for f in sends migrations upgrade restore backup pdf-render pdf-layout pdf-download finalization finalization-concurrency deadline deadline-race reminders delivery signatures sharing sharing-matrix submission-settings review-payload operations-status password-change; do
+  node node_modules/vitest/vitest.mjs run tests/integration/$f.test.ts --reporter=verbose > $O/13-integ-$f.txt 2>&1
+  echo "$f exit $? : $(grep -E '^\s+Tests ' $O/13-integ-$f.txt | cut -c1-80) dep=$(grep -ci deprecat $O/13-integ-$f.txt)" >> $O/13-integ-exits.txt
+done
+node node_modules/vitest/vitest.mjs run tests/client/wordmarkAsset.test.ts tests/client/layoutQueries.test.ts tests/client/cssThemeParity.test.ts --reporter=verbose > $O/13-client-asset.txt 2>&1
+echo "client asset+layout+theme exit $? : $(grep -E '^\s+Tests ' $O/13-client-asset.txt | cut -c1-80)" >> $O/13-integ-exits.txt
+cat $O/13-integ-exits.txt
+echo integ-done > $O/integ.done

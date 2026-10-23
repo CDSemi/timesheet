@@ -1,0 +1,80 @@
+
+ RUN  v5.0.2 <task>/export
+
+ ✓ tests/integration/submission-settings.test.ts > defaults before the first save > shows the defaults (seq 0) and stores nothing 244ms
+ ✓ tests/integration/submission-settings.test.ts > saving settings > appends version 1 with normalized recipients, defaults and an effective instant of now 222ms
+ ✓ tests/integration/submission-settings.test.ts > saving settings > audits the change with flags and counts only: no address and no template text 225ms
+ ✓ tests/integration/submission-settings.test.ts > saving settings > keeps unspecified optional fields and does not change the authorization on a plain save 222ms
+ ✓ tests/integration/submission-settings.test.ts > saving settings > refuses a stale expected_seq with 409 and writes nothing 226ms
+ ✓ tests/integration/submission-settings.test.ts > saving settings > rejects unknown fields (the owner is never a field) 217ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > missing to gives 422 { to: undefined } 216ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > empty to gives 422 { to: [] } 226ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > header injection in to gives 422 { to: [Array] } 229ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > header injection in cc gives 422 { cc: [Array] } 234ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > comma list in one entry gives 422 { to: [Array] } 227ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > display name form gives 422 { to: [ 'Name <a@example.invalid>' ] } 226ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > malformed address gives 422 { to: [ 'not-an-address' ] } 273ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > too many to gives 422 { to: [Array] } 247ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > unknown variable in the subject gives 422 { subject_template: 'Hello {Nope}' } 228ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > unknown variable in the body gives 422 { …(1) } 225ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > line break in the subject gives 422 { …(1) } 231ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > unmatched brace gives 422 { body_template: 'Hello {EmployeeName' } 225ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > empty subject gives 422 { subject_template: '   ' } 227ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > bad reminder offset gives 422 { reminder_offsets_minutes: [ 0 ] } 249ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > does not echo the rejected address in the error body 228ms
+ ✓ tests/integration/submission-settings.test.ts > append-only versions > keeps every earlier version byte-for-byte and lists them newest first 238ms
+ ✓ tests/integration/submission-settings.test.ts > append-only versions > refuses UPDATE and DELETE of a stored version at the schema level 229ms
+ ✓ tests/integration/submission-settings.test.ts > append-only versions > increments the template version only when subject or body text changes 236ms
+ ✓ tests/integration/submission-settings.test.ts > auto-submit effective instant (docs/05: changes default to future periods) > records now when the switch changes and carries it while the switch stays the same 386ms
+ ✓ tests/integration/submission-settings.test.ts > auto-submit effective instant (docs/05: changes default to future periods) > never reaches back to already-overdue drafts unless that is chosen explicitly 322ms
+ ✓ tests/integration/submission-settings.test.ts > auto-submit effective instant (docs/05: changes default to future periods) > refuses applying to overdue drafts when the switch does not change 231ms
+ ✓ tests/integration/submission-settings.test.ts > auto-submit effective instant (docs/05: changes default to future periods) > stores only the per-user instant and implements no system activation 230ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > is off with the text "Automatic submission" until the user turns it on 230ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > saves a custom Vietnamese text and the switch as one version; omitted fields keep the current values 234ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > normalizes the text to NFC and trims it 240ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > accepts exactly 120 characters, counting characters and not bytes 237ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses 121 characters with 422 invalid_auto_note and writes nothing 242ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses an empty text with 422 invalid_auto_note and writes nothing 251ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses a blank text with 422 invalid_auto_note and writes nothing 237ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses a line break with 422 invalid_auto_note and writes nothing 228ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses a carriage return with 422 invalid_auto_note and writes nothing 235ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses a tab with 422 invalid_auto_note and writes nothing 226ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses a control character with 422 invalid_auto_note and writes nothing 237ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses a NUL character with 422 invalid_auto_note and writes nothing 227ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses a line separator with 422 invalid_auto_note and writes nothing 230ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses a bidirectional control with 422 invalid_auto_note and writes nothing 226ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses an opening brace with 422 invalid_auto_note and writes nothing 231ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses a template variable with 422 invalid_auto_note and writes nothing 231ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses a closing brace with 422 invalid_auto_note and writes nothing 225ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > refuses a wrong type with a validation error and writes nothing 241ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > audits a note change with the before and after of the two fields only 250ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > is not a template change and does not move the auto-submit instant 239ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > survives the image authorization and revocation, and a stale save is refused 242ms
+ ✓ tests/integration/submission-settings.test.ts > automatic note line > never reads or changes another user's note 233ms
+ ✓ tests/integration/submission-settings.test.ts > automatic signature image authorization > is off by default 236ms
+ ✓ tests/integration/submission-settings.test.ts > automatic signature image authorization > is an explicit audited act that references one own signature and survives plain saves 243ms
+ ✓ tests/integration/submission-settings.test.ts > automatic signature image authorization > refuses another user's signature, a missing id, a non-signature attachment and a bad id (404) without writing 238ms
+ ✓ tests/integration/submission-settings.test.ts > automatic signature image authorization > needs saved settings first, a fresh expected_seq, and refuses the same image twice 250ms
+ ✓ tests/integration/submission-settings.test.ts > automatic signature image authorization > can switch to a newer signature; the earlier image stays referenced by the older version 255ms
+ ✓ tests/integration/submission-settings.test.ts > automatic signature image authorization > revoking is audited, appends a version and refuses a no-op revocation 243ms
+ ✓ tests/integration/submission-settings.test.ts > preview > renders the stored templates with sample values and writes nothing 249ms
+ ✓ tests/integration/submission-settings.test.ts > preview > previews an unsaved draft with the SignOffStatus of a manual submission, "Submitted", without storing it 238ms
+ ✓ tests/integration/submission-settings.test.ts > preview > previews an automatic submission: "Submitted" with the note off, the note text with the note on 238ms
+ ✓ tests/integration/submission-settings.test.ts > preview > refuses the retired sign_off values 231ms
+ ✓ tests/integration/submission-settings.test.ts > preview > escapes hostile values in the HTML body and keeps the subject on one line 247ms
+ ✓ tests/integration/submission-settings.test.ts > preview > unknown variable in the draft subject gives 422 and writes nothing 250ms
+ ✓ tests/integration/submission-settings.test.ts > preview > unknown variable in the draft body gives 422 and writes nothing 232ms
+ ✓ tests/integration/submission-settings.test.ts > preview > line break in the draft subject gives 422 and writes nothing 235ms
+ ✓ tests/integration/submission-settings.test.ts > preview > unknown field gives 422 and writes nothing 235ms
+ ✓ tests/integration/submission-settings.test.ts > preview > shows only the caller's own recipients 234ms
+ ✓ tests/integration/submission-settings.test.ts > owner scoping (ID swap) and access control > gives another user their own defaults and 404 for the first user's version ids 237ms
+ ✓ tests/integration/submission-settings.test.ts > owner scoping (ID swap) and access control > keeps each user's versions and sequence independent 239ms
+ ✓ tests/integration/submission-settings.test.ts > owner scoping (ID swap) and access control > requires a session on every route 258ms
+ ✓ tests/integration/submission-settings.test.ts > owner scoping (ID swap) and access control > rejects a missing, foreign or cross-site origin and non-JSON bodies on every POST 241ms
+ ✓ tests/integration/submission-settings.test.ts > owner scoping (ID swap) and access control > stores nothing but the version rows and audit events (no job, mail or file side effect) 239ms
+
+ Test Files  1 passed (1)
+      Tests  71 passed (71)
+   Start at  12:47:28
+   Duration  18.38s (tests 93%, import 5%, transform 3%)
+

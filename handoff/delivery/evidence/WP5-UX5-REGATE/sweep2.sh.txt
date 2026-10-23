@@ -1,0 +1,24 @@
+# Usage: bash sweep.sh   (after the real-clock main run, rest, drill and probes; sequential, each run with its own output folder)
+# America/Los_Angeles instants converted to UTC (PDT -7 until 2026-11-01 02:00, PST -8 after; 2027-03-14 02:00 PST->PDT).
+cd <task>
+PROBE=<task>/export-probe
+run() {
+  label=$1; instant=$2; shift 2
+  bash run-shift.sh "$label" "$instant" "$@" > "logs/sweep-$label.txt" 2>&1
+  echo "$label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/sweep2-progress.txt
+}
+control() {
+  label=$1; instant=$2; today=$3
+  CONTROL_TODAY=$today SHIFT_EXPORT=$PROBE bash run-shift.sh "ctl-$label" "$instant" tests/e2e/zz-control.spec.ts > "logs/control-$label.txt" 2>&1
+  echo "control $label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/sweep2-progress.txt
+}
+SEVEN="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts"
+# FULL suite, both projects
+run r2full-1026 2026-10-26T16:00:00Z
+run r2full-1101 2026-11-01T08:45:00Z
+run r2full-0314 2027-03-14T10:30:00Z
+# Seven specs, both projects
+run r2seven-1026b 2026-10-27T06:58:30Z $SEVEN
+run r2seven-1231 2027-01-01T07:30:00Z $SEVEN
+run r2seven-0101 2027-01-01T08:30:00Z $SEVEN
+echo done > logs/sweep2.done

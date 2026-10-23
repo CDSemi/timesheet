@@ -1614,6 +1614,215 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Đang chạy: WP5-UX5-FIX1-FREEZE (một committer mới, chạy một mình). Nó stage 13 đường dẫn
   ghi rõ tên, các hồ sơ trong handoff, và ba thư mục bằng chứng dưới dạng thư mục. Digest
   phải là 70975091, kiểm tra trên HEAD bằng `git ls-tree`.
+- WP5-UX5-FIX1-FREEZE xong ở lần 3: 2bce0ab5842b80c710f23496d5173c122319e5c7 trên main, đã
+  push (363 đường dẫn). Digest `git ls-tree` của HEAD là 70975091 (870 file); mọi kiểm tra
+  exit 0.
+  - Lần 1: quy tắc `private-media` của precommit chặn file log của gate
+    `13-integ-signatures.txt`. File đã được đổi tên thành `-synthetic.txt`.
+  - Lần 2: các validator từ chối board. Lỗi của điều phối viên: FIX1 phụ thuộc vào gate
+    FAIL. Giờ FIX1 phụ thuộc vào T06-FREEZE và ghi tên gate trong `addresses_gate`.
+- Giai đoạn `ux5-regate`. Đang chạy: WP5-UX5-REGATE (verifier, sonnet; cỡ M, rủi ro H; đích
+  2bce0ab / 70975091; cổng 49940-49979; Compose project `ts-wp5-ux5regate`).
+  - Nội dung kiểm tra: định danh và phạm vi so với e2bf1aa; `dist/server` và `dist/domain`
+    giống hệt từng byte, nên các mục kiểm tra phía server được giữ lại từ gate trước;
+    phần lõi; drill; e2e trên đồng hồ thật và đồng hồ giả lập; axe trên mọi màn hình có
+    `.table-wrap`; và bốn test đã sửa.
+- Regate bị gián đoạn sớm vì phiên đăng nhập hết hạn (API 401), khi verifier mới đang đọc
+  script. Chủ dự án đã đăng nhập lại. Cùng agent đó được cho chạy tiếp: nó kiểm tra phần còn
+  sót lại trước, rồi làm tiếp.
+- WP5-UX5-REGATE: **FAIL** trên 2bce0ab / 70975091, theo quy tắc lỗi không phải lỗi mạng thì
+  ghi nhận nguyên trạng.
+  - **Đạt:**
+    - định danh: chỉ có 13 đường dẫn của FIX1, `dist/server` và `dist/domain` giống hệt
+      từng byte;
+    - phần lõi, npm test x3, các validator và các file integration;
+    - drill 209/0 ở lần chạy lại, giai đoạn 4 sign off được hai kỳ;
+    - FULL e2e trên đồng hồ thật, 458 + 403 đạt, 0 lỗi;
+    - axe 0 ở mọi chỗ;
+    - bốn test đã sửa không bị làm yếu đi.
+  - **Quét với đồng hồ giả lập:** sáu trên bảy lượt chạy 0 lỗi. Có một lỗi:
+    - `theme.spec.ts:605` trên mobile, lượt FULL lúc 2026-11-01T08:45Z: `--shell-bar-size`
+      là 112 trong khi thanh trên cùng vẽ ra cao 60;
+    - không tái hiện được trong 3 lần chạy riêng lẻ và một lần chạy lại toàn bộ.
+  - **Còn sót lại:** cây tiến trình Node/Playwright bị treo của lượt quét đầu và hai shell
+    đang chờ, có từ trước lúc gián đoạn, có thể vẫn còn chạy; chưa dừng chúng (không được
+    kill theo PID).
+- Lỗi của điều phối viên, đã sửa: một lần sửa REGATE làm tác vụ tạm tách ra thành một object
+  giữ chỗ thừa; đã gộp lại trước khi giao việc tiếp.
+- Đang chạy: WP5-UX5-DIAG1 (planner, sonnet; chỉ đọc; cổng 49980-49999).
+  - Tìm chỗ ghi và chỗ đọc `--shell-bar-size`, tái hiện giá trị cũ khi máy chịu tải ở thời
+    điểm đó, và phân loại là lỗi test hay lỗi sản phẩm, kèm cách sửa nhỏ nhất.
+  - Đồng thời liệt kê các tiến trình còn sót của regate, nhưng không dừng chúng.
+- Lần freeze tới phải đổi tên `13-integ-signatures.txt` của regate (theo quy tắc
+  precommit).
+- WP5-UX5-DIAG1 xong: đây là **lỗi của test**.
+  - ResizeObserver ghi `--shell-bar-size` chậm một đến vài khung hình sau khi thanh đổi kích
+    thước (1-35 ms, 67 ms khi giảm tốc CPU 10 lần). Chỗ đọc giá trị này chỉ là CSS, người
+    dùng không thấy lỗi gì.
+  - `expectBudget` đọc thanh và thuộc tính trong hai lượt gọi riêng.
+  - Không tái hiện được qua khoảng 560 lần chạy. Không còn tiến trình nào của regate đang
+    chạy.
+  - Phần gia cố tùy chọn (theo dõi border box): chưa làm lúc này (quyết định của điều phối
+    viên); chuyển cho Audit A như một rủi ro tùy chọn.
+- Đang chạy: WP5-UX5-FIX2 (worker, sonnet; chỉ sửa test; cổng 50000-50019).
+  - Dùng `expect.poll` trên một lượt gọi trong `theme.spec.ts` và `shell.spec.ts`, và thêm
+    một test tất định.
+  - Bằng chứng cần có: repeat-each=40 ở 2026-11-01T08:45Z, một mutant, và FULL e2e.
+
+### Tạm dừng để khởi động lại máy (2026-10-22)
+
+- **Việc tạm dừng.** Chủ dự án yêu cầu tạm dừng và lưu mọi thứ để khởi động lại máy. Điều
+  phối viên đã dừng worker WP5-UX5-FIX2 (agent ac23550fd8a51aab2) bằng TaskStop khi nó đang
+  sửa code. Nó chưa ghi Results.
+- **Trạng thái board:**
+  - trạng thái nhiệm vụ `paused_usage`, kèm `pause_note` ghi rõ đây là khởi động lại máy,
+    không phải hết hạn mức sử dụng; đó là trạng thái tạm dừng duy nhất board có;
+  - giai đoạn `ux5-fix2`;
+  - WP5-UX5-FIX2 ở trạng thái `interrupted`, kèm ghi chú gián đoạn;
+  - next_task_id là WP5-UX5-FIX2;
+  - `current_source_digest` vẫn là 507de97c (bản đã nghiệm thu gần nhất, 8e55710).
+- **Git.** Commit đã push gần nhất là 2bce0ab5842b80c710f23496d5173c122319e5c7
+  (WP5-UX5-FIX1-FREEZE; digest 70975091, 870 file). Không có commit nào ở máy mà chưa push.
+- **Phần chưa commit kể từ 2bce0ab:**
+  - có thể có thay đổi dở dang của FIX2 trong `tests/e2e/theme.spec.ts`, `shell.spec.ts`
+    và `day-editor.spec.ts` (chỉ trong các đường dẫn được giao cho FIX2);
+  - hồ sơ của điều phối viên trong `handoff/`: board, STATE.json, NEXT_ACTION (+ vi), cặp
+    checkpoint này, `tasks/WP5-UX5-FIX1-FREEZE.md` (Results và các addendum);
+  - `tasks/WP5-UX5-REGATE.md` (Results), `tasks/WP5-UX5-DIAG1.md`, `tasks/WP5-UX5-FIX2.md`;
+  - bản nháp `tasks/WP5-UX5-REGATE2.md`, và các bản nháp AUDIT-A, AUDIT-B (đã trỏ đích sang
+    2bce0ab);
+  - các thư mục bằng chứng `WP5-UX5-FIX1-FREEZE`, `WP5-UX5-REGATE` (file
+    `13-integ-signatures.txt` trong đó phải đổi tên thành `-synthetic` ở lần freeze tới) và
+    `WP5-UX5-DIAG1`.
+- **Phần còn sót.** Không còn tiến trình nào của regate đang chạy (DIAG1 đã kiểm tra), và
+  không có cổng nào trong dải của tác vụ bị giữ. Server và trình duyệt riêng của worker
+  FIX2 sẽ tắt theo khi khởi động lại máy.
+- **Các bước để tiếp tục:**
+  1. Mở phiên làm việc (`claude --resume b5de56d1-fb31-4dc5-b74f-70e9473e1a0a`, hoặc một
+     phiên mới với prompt khởi động trong NEXT_ACTION). Đặt lại trạng thái nhiệm vụ thành
+     `running`.
+  2. Giao WP5-UX5-FIX2 lần 2 cho một worker mới, dùng cùng brief. Worker ghi lại HEAD,
+     `git status` và diff của các file test được giao trước tiên. Chỉ giữ thay đổi dở dang
+     nếu nó khớp với brief; nếu không thì khôi phục các file đó về HEAD (chỉ trong các
+     đường dẫn được giao). Sau đó làm cho xong brief.
+  3. Tiếp theo: tra cứu danh sách đường dẫn và WP5-UX5-FIX2-FREEZE, kèm đổi tên
+     `13-integ-signatures.txt` của regate. Rồi WP5-UX5-REGATE2 (điền phần Target).
+  4. Sau đó: AUDIT-A và AUDIT-B chạy song song, đích là bản freeze của FIX2. Rồi audit tích
+     hợp, ACCEPT-DOCS (định danh của pilot packet, WP5 handoff) và nghiệm thu lại WP5.
+- **Việc của chủ dự án còn mở:** không có việc nào chặn tiến độ. D-1..D-15 của pilot packet
+  để lại cho giai đoạn pilot.
+
+### Đã tiếp tục (2026-10-22, sau khi khởi động lại máy)
+
+- Chủ dự án nói "tiếp tục" trong cùng phiên điều phối. Trạng thái nhiệm vụ trở lại
+  `running`.
+- Đang chạy: WP5-UX5-FIX2 lần 2 (một worker mới, sonnet; Addendum 1 của brief).
+  - Trước tiên nó ghi lại HEAD, `git status` và diff của các file test được giao.
+  - Nó chỉ giữ thay đổi dở dang của lần 1 nếu khớp với brief; nếu không thì khôi phục ba
+    file đó về HEAD.
+  - Sau đó nó làm cho xong brief, trong thư mục tác vụ `WP5-UX5-FIX2-a2`.
+
+### Tạm dừng lần nữa để khởi động lại máy (2026-10-22, lần thứ hai)
+
+- **Việc tạm dừng.** Chủ dự án lại yêu cầu tạm dừng và lưu mọi thứ để khởi động lại máy.
+  Điều phối viên đã dừng FIX2 lần 2 (agent a0c1d387b29545038) bằng TaskStop khi nó đang
+  chạy test. Nó chưa ghi Results.
+- **Board:**
+  - trạng thái nhiệm vụ `paused_usage`, ghi chú tạm dừng đã được cập nhật;
+  - WP5-UX5-FIX2 ở trạng thái `interrupted`, kèm ghi chú `interruption_2`;
+  - next_task_id là WP5-UX5-FIX2.
+- **Git:** không đổi so với lần tạm dừng đầu. Commit đã push gần nhất là 2bce0ab (digest
+  70975091), và không có commit nào ở máy mà chưa push.
+- **Phần chưa commit:**
+  - giống danh sách trong mục "Tạm dừng để khởi động lại máy (2026-10-22)" ở trên;
+  - có thể có thay đổi dở dang của FIX2 trong ba file test được giao;
+  - Addendum 1 của brief, nay áp dụng cả cho lần 3.
+- **Các bước để tiếp tục:**
+  1. Mở lại phiên và đặt trạng thái nhiệm vụ thành `running`.
+  2. Giao FIX2 lần 3 cho một worker mới, dùng cùng brief (Addendum 1; thư mục tác vụ
+     `WP5-UX5-FIX2-a3`).
+  3. Tiếp tục lộ trình: tra cứu đường dẫn và FIX2-FREEZE (kèm đổi tên
+     `13-integ-signatures.txt` của regate), REGATE2, audit A và B, audit tích hợp,
+     ACCEPT-DOCS và nghiệm thu lại WP5.
+
+### Đã tiếp tục lần nữa (2026-10-22, sau lần khởi động lại thứ hai)
+
+- Chủ dự án nói "tiếp tục". Trạng thái nhiệm vụ trở lại `running`.
+- Đang chạy: WP5-UX5-FIX2 lần 3 (một worker mới, sonnet; Addendum 1 của brief; thư mục tác
+  vụ `WP5-UX5-FIX2-a3`).
+- WP5-UX5-FIX2 xong ở lần 3 (theo báo cáo của worker; regate còn chờ).
+  - Chỉ sửa test: lệnh poll trong `theme.spec.ts` và `shell.spec.ts`, cùng một test tất
+    định. Phần sửa dở của lần 1 và lần 2 khớp với brief nên được giữ lại.
+  - FULL e2e 863 đạt, 0 lỗi. Mutant làm 7 test fail.
+  - Lần chạy lặp cả hai spec (repeat-each=40, 14 worker) không đạt 0 lỗi (19, rồi 8, trên
+    6272): đều là timeout và lỗi bộ đệm ở các test không liên quan, do máy quá tải. Lần
+    chạy lặp nhắm riêng các test về chiều cao thanh đạt 1360/0.
+  - Digest 3ca01b9c (870 file).
+- **Thông tin mới từ worker FIX2:**
+  - `origin/main` đang ở 70dce2a, đi trước HEAD 2bce0ab. Các commit mới đến từ bên ngoài
+    nhiệm vụ và chạm vào `.github`, docs, `ingat.toml` và `handoff`.
+  - Một bản checkout chưa được git theo dõi, `.claude/worktrees/relaxed-lalande-8359f0/`,
+    chứa một file font làm `wordmarkAsset.test.ts` fail khi chạy `npm run verify` ngay
+    trong repo; chạy trong bản export sạch thì đạt.
+- Đang chạy: tra cứu chỉ đọc WP5-UX5-REMOTE-RECON (verifier, sonnet). Nó ghi lại các commit,
+  phần trùng với công việc chưa commit của nhiệm vụ, trạng thái và việc sử dụng của
+  worktree, cùng các phương án. Không freeze tiếp cho đến khi chủ dự án quyết định cách
+  gộp chúng.
+- WP5-UX5-REMOTE-RECON xong.
+  - **Hai commit tạo bên ngoài nhiệm vụ, cùng danh tính tác giả với 2bce0ab:**
+    - 6173f07, "ci(deploy): add the Ingat manifest and the GHCR image workflow": 203 file
+      (`ingat.toml`, hai file trong `.github/workflows`, docs 07 và 11 (+vi), ADR 0002
+      (+vi), hồ sơ INGAT);
+    - 70dce2a: chỉ có handoff.
+  - Không đụng đường dẫn quản trị nào, và không trùng với phần chưa commit của nhiệm vụ:
+    fast-forward sẽ không gây xung đột.
+  - **Worktree** `.claude/worktrees/relaxed-lalande-8359f0`:
+    - nhánh `claude/relaxed-lalande-8359f0`, chỉ có ở máy, đang ở 70dce2a;
+    - có thay đổi chưa commit (một hồ sơ INGAT-T0T8), được bỏ qua qua `.git/info/exclude`;
+    - không có gì đang dùng nó.
+  - Digest không bị ảnh hưởng. `wordmarkAsset.test.ts:135-140` duyệt cả thư mục này nên
+    thấy file font trong đó.
+- **Đang chờ chủ dự án:** câu hỏi WP5-UX5-REMOTE-Q.
+  - A: gộp các commit bằng fast-forward trước khi freeze FIX2 (khuyến nghị), hoặc audit cả
+    chúng, hoặc chờ.
+  - B: test quét font bỏ qua `.claude/` (khuyến nghị), hoặc chủ dự án gỡ worktree.
+  - C: việc push lên main có được phép khởi chạy workflow GHCR mới hay không.
+- **Câu trả lời của chủ dự án (nguyên văn): "A.a, B.A, C.b".**
+  - **A a:** lần freeze FIX2 trước hết đưa main ở máy tiến lên origin/main 70dce2a
+    (fast-forward), rồi mới commit. Các file Ingat được coi là việc của chủ dự án, nằm ngoài
+    đợt 4 và 5, chỉ kiểm tra là chúng không gây ảnh hưởng.
+  - **B a:** test quét font bỏ qua `.claude/`.
+  - **C b:** không push cho đến khi chủ dự án cho phép. Các commit nằm lại ở máy
+    (`push_hold` trên board).
+- Đang chạy: Addendum 2 của FIX2 (cùng worker). Nó cho phần duyệt font trong
+  `wordmarkAsset.test.ts` bỏ qua `.claude/`, rồi chứng minh:
+  - `npm run verify` đạt ngay trong repo khi worktree vẫn còn đó;
+  - một mutant có font lạ vẫn làm test fail.
+- Các bước tiếp theo:
+  1. một lần tra cứu đường dẫn ngắn;
+  2. FIX2-FREEZE: fast-forward, commit, đổi tên file log chữ ký của regate, **không
+     push**;
+  3. REGATE2 trên commit ở máy;
+  4. audit A và B.
+- Addendum 2 của FIX2 xong.
+  - `wordmarkAsset.test.ts:134` bỏ qua `.claude`.
+  - `npm run verify` đạt ngay trong repo khi worktree vẫn còn đó.
+  - Mutant có font lạ vẫn làm test fail.
+  - Digest 7ad771b5 (870 file, trên nền 2bce0ab cộng các thay đổi test của FIX2).
+- Đang chạy: tra cứu WP5-UX5-FIX2-PATHS (light, haiku, phần Results ngắn).
+- FIX2-PATHS xong. Danh sách nằm trong thư mục tác vụ; agent không ghi Results vào brief.
+  - Ngoài `handoff/`: 3 file test.
+  - Trong `handoff/`: 10 file sửa và 199 file mới, nằm trong 4 thư mục bằng chứng và 5 hồ
+    sơ tác vụ.
+  - Không trùng với HEAD..origin/main. Có một file log có chữ "signature" trong tên cần
+    đổi tên.
+- Đang chạy: WP5-UX5-FIX2-FREEZE (một committer mới, chạy một mình). Các bước:
+  1. fetch và kiểm tra trùng lặp;
+  2. `git merge --ff-only origin/main` (A a);
+  3. stage, đổi tên, kiểm tra precommit và chạy các validator;
+  4. **commit ở máy, không push** (C b).
+
+  Digest `ls-tree` của HEAD phải bằng digest tính ngay sau fast-forward.
 - Còn lại sau T06:
   - T06-FREEZE;
   - gate gói của đợt 5 (bao gồm cả đợt 4 và đợt 5);

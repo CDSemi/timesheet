@@ -1,0 +1,18 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+cd $T/export
+npm ci > $T/out/02-ci.txt 2>&1; echo "ci exit $?" > $T/out/02-ci-exit.txt
+npm run lint > $T/out/02-lint.txt 2>&1; echo "lint exit $?" > $T/out/02-lint-exit.txt
+npm run verify > $T/out/03-verify.txt 2>&1; echo "verify exit $?" > $T/out/03-verify-exit.txt
+echo "verify done $(date -u +%H:%M:%SZ)" > $T/logs/chain1.log
+cd $T
+bash run-rest2.sh > logs/rest.log 2>&1
+echo "rest done $(date -u +%H:%M:%SZ)" >> logs/chain1.log
+bash run-integ.sh > logs/integ.log 2>&1
+echo "integ done $(date -u +%H:%M:%SZ)" >> logs/chain1.log
+cd $T/export-probe
+npm ci > $T/out/50-probe-ci.txt 2>&1; echo "probe ci exit $?" >> $T/logs/chain1.log
+cd $T
+bash cmp-dist.sh > logs/cmp-dist.txt 2>&1
+echo "cmp-dist done $(date -u +%H:%M:%SZ)" >> logs/chain1.log
+echo chain1-done > out/chain1.done

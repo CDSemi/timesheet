@@ -1573,6 +1573,207 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - Running now: WP5-UX5-FIX1-FREEZE (a fresh committer, alone). It stages 13 explicit paths,
   the handoff records, and three evidence folders as directories. The digest must be
   70975091, checked on HEAD with `git ls-tree`.
+- WP5-UX5-FIX1-FREEZE done at attempt 3: 2bce0ab5842b80c710f23496d5173c122319e5c7 on main,
+  pushed (363 paths). HEAD `git ls-tree` digest 70975091 (870 files); every check exit 0.
+  - Attempt 1: the precommit `private-media` rule blocked the gate log
+    `13-integ-signatures.txt`. It was renamed `-synthetic.txt`.
+  - Attempt 2: the validators refused the board. Coordinator slip: FIX1 depended on the
+    FAIL gate. Now FIX1 depends on T06-FREEZE and names the gate in `addresses_gate`.
+- Phase `ux5-regate`. Running now: WP5-UX5-REGATE (verifier, sonnet; size M, risk H;
+  target 2bce0ab / 70975091; ports 49940-49979; Compose project `ts-wp5-ux5regate`).
+  - It checks: identity and scope against e2bf1aa; byte-identical `dist/server` and
+    `dist/domain`, which carry the server items forward; core; the drill; real-clock and
+    simulated-clock e2e; axe on every `.table-wrap` screen; and the four tests.
+- The regate was interrupted early by an expired sign-in (API 401) while the verifier was
+  still reading scripts. The owner signed in again. The same agent is resumed: it checks
+  for leftovers first, then continues.
+- WP5-UX5-REGATE: **FAIL** on 2bce0ab / 70975091, under the rule that a non-network
+  failure is reported as is.
+  - **Passed:**
+    - identity: only FIX1's 13 paths, with `dist/server` and `dist/domain` byte-identical;
+    - core, npm test x3, the validators and the integration files;
+    - the drill 209/0 on the rerun, with stage 4 signing two periods;
+    - the real-clock FULL e2e, 458 + 403 passed, 0 failed;
+    - axe 0 everywhere;
+    - the four fixed tests are not weaker.
+  - **Sweep:** six of seven runs had 0 failed. One failure:
+    - `theme.spec.ts:605` mobile, FULL at 2026-11-01T08:45Z: `--shell-bar-size` 112
+      against a rendered bar of 60;
+    - it did not reproduce in 3 isolated runs or in a full rerun.
+  - **Leftover:** the wedged first-sweep Node/Playwright tree and two idle shells from
+    before the interruption may still be alive; they were not stopped (no PID kills).
+- Coordinator slip, fixed: a REGATE edit briefly split the task into a stray placeholder
+  object; it was merged back before any dispatch.
+- Running now: WP5-UX5-DIAG1 (planner, sonnet; read-only; ports 49980-49999).
+  - It finds what sets and reads `--shell-bar-size`, reproduces the stale value under load
+    at that instant, and classifies it as a test or a product defect, with the minimal
+    fix.
+  - It also lists, without stopping them, the leftover regate processes.
+- The next freeze must rename the regate's `13-integ-signatures.txt` (the precommit rule).
+- WP5-UX5-DIAG1 done: a **test defect**.
+  - The ResizeObserver writes `--shell-bar-size` one to a few frames after the bar changes
+    size (1-35 ms, 67 ms at 10x throttle). Its readers are CSS only, and there is no
+    user-visible fault.
+  - `expectBudget` reads the bar and the property in two round trips.
+  - It did not reproduce in about 560 runs. No leftover regate process is alive.
+  - Optional hardening (observe the border box): not done now (coordinator decision);
+    passed to Audit A as an optional risk.
+- Running now: WP5-UX5-FIX2 (worker, sonnet; tests only; ports 50000-50019).
+  - It uses `expect.poll` on one round trip in `theme.spec.ts` and `shell.spec.ts`, and
+    adds a deterministic test.
+  - Proof: repeat-each=40 at 2026-11-01T08:45Z, a mutant, and the FULL e2e.
+
+### Paused for restart (2026-10-22)
+
+- **The pause.** The owner asked to pause and save everything to restart the machine. The
+  coordinator stopped the WP5-UX5-FIX2 worker (agent ac23550fd8a51aab2) with TaskStop
+  while it was implementing. It had written no Results.
+- **Board state:**
+  - mission status `paused_usage`, with a `pause_note` that says this is a restart, not a
+    usage limit; it is the board's only pause status;
+  - phase `ux5-fix2`;
+  - WP5-UX5-FIX2 `interrupted`, with an interruption note;
+  - next_task_id WP5-UX5-FIX2;
+  - `current_source_digest` still 507de97c (the last accepted snapshot, 8e55710).
+- **Git.** The last pushed commit is 2bce0ab5842b80c710f23496d5173c122319e5c7
+  (WP5-UX5-FIX1-FREEZE; digest 70975091, 870 files). Nothing is committed locally and left
+  unpushed.
+- **Uncommitted work since 2bce0ab:**
+  - possibly partial FIX2 edits in `tests/e2e/theme.spec.ts`, `shell.spec.ts` and
+    `day-editor.spec.ts` (FIX2's owned paths only);
+  - coordinator records under `handoff/`: the board, STATE.json, NEXT_ACTION (+ vi), this
+    checkpoint pair, `tasks/WP5-UX5-FIX1-FREEZE.md` (Results and addenda);
+  - `tasks/WP5-UX5-REGATE.md` (Results), `tasks/WP5-UX5-DIAG1.md`, `tasks/WP5-UX5-FIX2.md`;
+  - the draft `tasks/WP5-UX5-REGATE2.md`, and the drafts AUDIT-A and AUDIT-B (retargeted
+    to 2bce0ab);
+  - the evidence folders `WP5-UX5-FIX1-FREEZE`, `WP5-UX5-REGATE` (its
+    `13-integ-signatures.txt` must be renamed `-synthetic` at the next freeze) and
+    `WP5-UX5-DIAG1`.
+- **Leftovers.** No regate process is alive (DIAG1 checked), and no task-range port is
+  held. The FIX2 worker's own servers and browsers end with the restart.
+- **Resume steps:**
+  1. Open the session (`claude --resume b5de56d1-fb31-4dc5-b74f-70e9473e1a0a`, or a new
+     session with the entry prompt in NEXT_ACTION). Set the mission status back to
+     `running`.
+  2. Dispatch WP5-UX5-FIX2 attempt 2 to a fresh worker on the same brief. It first records
+     HEAD, `git status` and the diff of its owned test files. It keeps a partial change
+     only if it matches the brief; otherwise it restores those files from HEAD (owned paths
+     only). Then it completes the brief.
+  3. Then: a path lookup and WP5-UX5-FIX2-FREEZE, which also renames the regate's
+     `13-integ-signatures.txt`. Then WP5-UX5-REGATE2 (fill its Target).
+  4. Then AUDIT-A and AUDIT-B in parallel, retargeted to the FIX2 freeze. Then the
+     integration audit, ACCEPT-DOCS (pilot packet identity, WP5 handoff) and the WP5
+     re-accept.
+- **Open owner items:** none blocking. D-1..D-15 of the pilot packet stay for the pilot.
+
+### Resumed (2026-10-22, after the restart)
+
+- The owner said "tiếp tục" in the same coordinator session. The mission status is back to
+  `running`.
+- Running now: WP5-UX5-FIX2 attempt 2 (a fresh worker, sonnet; brief Addendum 1).
+  - It first records HEAD, `git status` and the diff of its owned test files.
+  - It keeps a partial attempt-1 change only if that matches the brief; otherwise it
+    restores those three files from HEAD.
+  - Then it completes the brief, in the task folder `WP5-UX5-FIX2-a2`.
+
+### Paused for restart again (2026-10-22, second time)
+
+- **The pause.** The owner asked again to pause and save everything to restart the machine.
+  The coordinator stopped FIX2 attempt 2 (agent a0c1d387b29545038) with TaskStop while it
+  was running tests. It wrote no Results.
+- **Board:**
+  - mission status `paused_usage`, with the pause note updated;
+  - WP5-UX5-FIX2 `interrupted`, with an `interruption_2` note;
+  - next_task_id WP5-UX5-FIX2.
+- **Git:** unchanged since the first pause. The last pushed commit is 2bce0ab (digest
+  70975091), and nothing is committed and left unpushed.
+- **Uncommitted:**
+  - the same list as in "Paused for restart (2026-10-22)" above;
+  - possibly partial FIX2 edits in the three owned test files;
+  - the brief's Addendum 1, which now also covers attempt 3.
+- **Resume steps:**
+  1. Resume the session and set the mission status to `running`.
+  2. Dispatch FIX2 attempt 3 to a fresh worker on the same brief (Addendum 1; task folder
+     `WP5-UX5-FIX2-a3`).
+  3. Continue the route: the path lookup and FIX2-FREEZE (renaming the regate's
+     `13-integ-signatures.txt`), REGATE2, audits A and B, the integration audit,
+     ACCEPT-DOCS and the WP5 re-accept.
+
+### Resumed again (2026-10-22, after the second restart)
+
+- The owner said "tiếp tục". The mission status is back to `running`.
+- Running now: WP5-UX5-FIX2 attempt 3 (a fresh worker, sonnet; brief Addendum 1; task
+  folder `WP5-UX5-FIX2-a3`).
+- WP5-UX5-FIX2 done at attempt 3 (worker report; the regate is pending).
+  - Tests only: the poll in `theme.spec.ts` and `shell.spec.ts`, plus a deterministic test.
+    The partial edits of attempts 1 and 2 matched the brief and were kept.
+  - FULL e2e 863 passed, 0 failed. The mutant fails 7 tests.
+  - The whole-spec repeat-each=40 with 14 workers did not reach 0 failed (19, then 8, out
+    of 6272): timeouts and buffer errors in unrelated tests, from host overload. The
+    targeted repeat of the bar-size tests passed 1360/0.
+  - Digest 3ca01b9c (870 files).
+- **New facts from the FIX2 worker:**
+  - `origin/main` is at 70dce2a, ahead of HEAD 2bce0ab. The new commits came from outside
+    the mission and touch `.github`, docs, `ingat.toml` and `handoff`.
+  - An untracked checkout `.claude/worktrees/relaxed-lalande-8359f0/` holds a font that
+    makes `wordmarkAsset.test.ts` fail when `npm run verify` runs in the repository; it
+    passes in a clean export.
+- Running now: the read-only lookup WP5-UX5-REMOTE-RECON (verifier, sonnet). It records
+  the commits, their overlap with the mission's uncommitted work, the worktree's state and
+  use, and the options. No freeze runs until the owner decides how to integrate them.
+- WP5-UX5-REMOTE-RECON done.
+  - **Two commits made outside the mission, by the same author identity as 2bce0ab:**
+    - 6173f07, "ci(deploy): add the Ingat manifest and the GHCR image workflow": 203
+      files (`ingat.toml`, two `.github/workflows`, docs 07 and 11 (+vi), ADR 0002 (+vi),
+      INGAT records);
+    - 70dce2a: handoff only.
+  - No governance path, and no overlap with the mission's uncommitted work: a
+    fast-forward is conflict-free.
+  - **The worktree** `.claude/worktrees/relaxed-lalande-8359f0`:
+    - branch `claude/relaxed-lalande-8359f0`, local only, at 70dce2a;
+    - dirty with an INGAT-T0T8 record, ignored through `.git/info/exclude`;
+    - not in use.
+  - The digest is not affected. `wordmarkAsset.test.ts:135-140` walks the folder and finds
+    its font.
+- **Waiting on the owner:** question WP5-UX5-REMOTE-Q.
+  - A: integrate the commits by a fast-forward before the FIX2 freeze (recommended), or
+    audit them too, or wait.
+  - B: the font-scan test skips `.claude/` (recommended), or the owner removes the
+    worktree.
+  - C: whether pushes to main may start the new GHCR workflow.
+- **Owner answer (verbatim): "A.a, B.A, C.b".**
+  - **A a:** the FIX2 freeze first fast-forwards local main to origin/main 70dce2a, then
+    commits. The Ingat files count as owner work outside rounds 4 and 5, checked only for
+    non-interference.
+  - **B a:** the font-scan test skips `.claude/`.
+  - **C b:** no push until the owner says. Commits stay local (`push_hold` on the board).
+- Running now: FIX2 Addendum 2 (the same worker). It makes the font walk in
+  `wordmarkAsset.test.ts` skip `.claude/`, then proves:
+  - `npm run verify` passes in the repository with the worktree present;
+  - a stray-font mutant still fails.
+- Next steps:
+  1. a short path lookup;
+  2. FIX2-FREEZE: fast-forward, commit, rename the regate's signature log, **no push**;
+  3. REGATE2 on the local commit;
+  4. audits A and B.
+- FIX2 Addendum 2 done.
+  - `wordmarkAsset.test.ts:134` skips `.claude`.
+  - `npm run verify` passes in the repository with the worktree present.
+  - The stray-font mutant still fails.
+  - Digest 7ad771b5 (870 files, on 2bce0ab plus the FIX2 test edits).
+- Running now: the lookup WP5-UX5-FIX2-PATHS (light, haiku, short Results).
+- FIX2-PATHS done. Its list is in the task folder; the agent wrote no Results into its
+  brief.
+  - Outside `handoff/`: the 3 test files.
+  - Under `handoff/`: 10 modified and 199 new, in 4 evidence folders and 5 task records.
+  - No overlap with HEAD..origin/main. One signature-basename log needs the rename.
+- Running now: WP5-UX5-FIX2-FREEZE (a fresh committer, alone). It runs:
+  1. a fetch and the overlap check;
+  2. `git merge --ff-only origin/main` (A a);
+  3. staging, the rename, the precommit check and the validators;
+  4. a **local commit with no push** (C b).
+
+  The HEAD `ls-tree` digest must equal the digest computed after the fast-forward.
 - Remaining after T06:
   - T06-FREEZE;
   - the round-5 package gate (it covers rounds 4 and 5);

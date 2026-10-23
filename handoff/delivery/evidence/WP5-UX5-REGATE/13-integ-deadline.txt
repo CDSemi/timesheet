@@ -1,0 +1,53 @@
+
+ RUN  v5.0.2 <task>/export
+
+ ✓ tests/integration/deadline.test.ts > deadlines are computed with the production zone functions (season independent) > matches the expected UTC instants on both sides of the autumn change 172ms
+ ✓ tests/integration/deadline.test.ts > deadlines are computed with the production zone functions (season independent) > finalizes exactly at the deadline instant in daylight time and in standard time 158ms
+ ✓ tests/integration/deadline.test.ts > a payroll exception that moves the deadline > uses the exception deadline, computed in the reporting zone, and the moved payroll date 146ms
+ ✓ tests/integration/deadline.test.ts > activation boundary (F-4) > finalizes nothing while the activation instant is null, even for an account whose auto-submit is on 144ms
+ ✓ tests/integration/deadline.test.ts > activation boundary (F-4) > does not touch a period due before the activation instant and finalizes the next one 151ms
+ ✓ tests/integration/deadline.test.ts > activation boundary (F-4) > treats a period due exactly at the activation instant as eligible 142ms
+ ✓ tests/integration/deadline.test.ts > activation boundary (F-4) > respects the user’s own effective instant: a period due before it is not auto-submitted 149ms
+ ✓ tests/integration/deadline.test.ts > activation boundary (F-4) > applies the switch that governed each period when the switch changed in between 144ms
+ ✓ tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > never submits a period whose deadline passed before the account existed, even with the explicit overdue choice 135ms
+ ✓ tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > still automates the first deadline after the account was created, with the default labels (F-1) 141ms
+ ✓ tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > automates the period in which the account was created when its deadline is still ahead 150ms
+ ✓ tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > never puts the auto-submit effective instant of saved settings before the account existed 156ms
+ ✓ tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > never automates an account that never saved its submission settings, at and after every deadline 194ms
+ ✓ tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > automates only the deadlines after the settings were saved with auto-submit on, when the account saves them mid-period 156ms
+ ✓ tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > keeps the explicit apply-to-overdue choice: it submits the overdue periods, still clamped by the account creation 170ms
+ ✓ tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > without the overdue choice a first save never reaches periods that fell due before it 151ms
+ ✓ tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > still records the overdue period for an account that saved auto-submit off, and nothing for one that never saved 154ms
+ ✓ tests/integration/deadline.test.ts > switch on: automatic finalization (R-05, R-06, F-1) > creates an automatic, pending, unsigned revision with credits, jobs and an audit event 164ms
+ ✓ tests/integration/deadline.test.ts > switch on: automatic finalization (R-05, R-06, F-1) > records a choose-mode deficit as pending_choice and posts no debit 151ms
+ ✓ tests/integration/deadline.test.ts > switch on: automatic finalization (R-05, R-06, F-1) > posts an auto-deduct debit through the ledger with the automatic origin 160ms
+ ✓ tests/integration/deadline.test.ts > switch on: automatic finalization (R-05, R-06, F-1) > keeps an auto-deduct debit pending when the balance cannot cover it 156ms
+ ✓ tests/integration/deadline.test.ts > switch on: automatic finalization (R-05, R-06, F-1) > posts nothing for an incomplete day and still submits the period 150ms
+ ✓ tests/integration/deadline.test.ts > switch on: automatic finalization (R-05, R-06, F-1) > carries the signature image only when the user authorized it, and never writes a sign-off 598ms
+ ✓ tests/integration/deadline.test.ts > the automatic entry point (finalizeAutomatically) > honors the in-transaction authorization: a refusal writes nothing, and a second call after success is skipped 158ms
+ ✓ tests/integration/deadline.test.ts > the automatic entry point (finalizeAutomatically) > refuses a payroll date that is not one of the owner’s own and creates nothing 155ms
+ ✓ tests/integration/deadline.test.ts > an eligible period with no saved entries is still submitted (F-1) > creates the timesheet with the default labels, zero OT, no deficit and one revision 306ms
+ ✓ tests/integration/deadline.test.ts > switch off: overdue state and notice record, nothing finalized > records the overdue period once and exports nothing 150ms
+ ✓ tests/integration/deadline.test.ts > switch off: overdue state and notice record, nothing finalized > submits the overdue period after the user explicitly applies the switch to overdue drafts 159ms
+ ✓ tests/integration/deadline.test.ts > switch off: overdue state and notice record, nothing finalized > never records or finalizes a deactivated user 157ms
+ ✓ tests/integration/deadline.test.ts > imported and already finalized periods > never auto-submits an imported_unverified timesheet of an account whose auto-submit is on, and records no overdue state 161ms
+ ✓ tests/integration/deadline.test.ts > imported and already finalized periods > does not mark an imported_unverified timesheet overdue when auto-submit was saved off before the deadline 150ms
+ ✓ tests/integration/deadline.test.ts > imported and already finalized periods > leaves a manually signed period alone: one revision, one ledger set and the existing jobs continue 332ms
+ ✓ tests/integration/deadline.test.ts > the scan re-assesses every period just before acting (guard sweep, WP3-FIX3) > skips the later periods of an account deactivated while the scan runs (inactive_user) 152ms
+ ✓ tests/integration/deadline.test.ts > the scan re-assesses every period just before acting (guard sweep, WP3-FIX3) > skips a period that falls before an activation instant moved forward while the scan runs (before_activation) 156ms
+ ✓ tests/integration/deadline.test.ts > the scan re-assesses every period just before acting (guard sweep, WP3-FIX3) > skips a period whose deadline is still ahead of the clock when it is acted on (not_due) 164ms
+ ✓ tests/integration/deadline.test.ts > a manual sign-off after the automatic submission > is refused as already finalized and changes nothing (the late review is a separate flow) 164ms
+ ✓ tests/integration/deadline.test.ts > recovery after downtime > processes missed deadlines chronologically in bounded batches 169ms
+ ✓ tests/integration/deadline.test.ts > recovery after downtime > orders several owners by deadline first and never starves an older period behind a newer one 169ms
+ ✓ tests/integration/deadline.test.ts > the runner registration > queues no scan job while the activation instant is null, and one per minute afterwards 171ms
+ ✓ tests/integration/deadline.test.ts > the runner registration > runs the scan, the PDF job and the send job through the runner and sends once 286ms
+ ✓ tests/integration/deadline.test.ts > a failure rolls the automatic finalization back (transaction rollback) > leaves no row behind, records the failure once and finalizes after the cause is gone 172ms
+ ✓ tests/integration/deadline.test.ts > activation instant service > records, replays and clears the instant with an audit event that carries no timesheet detail 144ms
+ ✓ tests/integration/deadline.test.ts > activation instant service > refuses an instant in the past, a malformed instant and a blank reason 138ms
+ ✓ tests/integration/deadline.test.ts > admin activation route > is admin only, strict, audited and returns no timesheet detail 265ms
+
+ Test Files  1 passed (1)
+      Tests  44 passed (44)
+   Start at  12:46:23
+   Duration  9.41s (tests 84%, import 10%, transform 5%)
+

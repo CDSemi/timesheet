@@ -1,0 +1,13 @@
+source /d/.claude-tmp/timesheet/WP5-UX5-DIAG1/env.sh
+node.exe --version
+mkdir -p "$X"
+cd "$REPO" || exit 2
+git archive 2bce0ab5842b80c710f23496d5173c122319e5c7 --format=tar --output="$T/export.tar"
+echo "archive exit=$?"
+cd "$X" || exit 2
+tar -xf "$T/export.tar"
+echo "tar exit=$?"
+npmx ci
+echo "ci exit=$?"
+npmx run build
+echo "build exit=$?"

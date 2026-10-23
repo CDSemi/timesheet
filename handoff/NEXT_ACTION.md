@@ -78,6 +78,18 @@ Do not change billing or permission settings.
 ~~~
 
 Current route:
+0. **In progress (paused twice on 2026-10-22 for machine restarts, now running FIX2
+   attempt 3): UI change rounds 4 and 5.**
+   - Every slice of both rounds is frozen. The last commit is 2bce0ab (digest 70975091).
+   - The round-5 gate failed and FIX1 fixed it. The regate then failed on one test race;
+     WP5-UX5-DIAG1 classified it as a test defect.
+   - WP5-UX5-FIX2 (tests only) was interrupted.
+   - Resume with the entry prompt below. The coordinator continues at the board's
+     `next_task_id` (WP5-UX5-FIX2, attempt 2). Then come its freeze, WP5-UX5-REGATE2,
+     audits A and B, the integration audit, ACCEPT-DOCS and the WP5 re-accept.
+   - Details: the [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), section
+     "Paused for restart (2026-10-22)".
+   - Until the re-accept, the last accepted snapshot stays 8e55710 / 507de97c.
 1. **Done: WP5 accepted, then re-accepted after each UI change round.** The first
    acceptance record was committed at dd0c7d1. The re-acceptances are in the
    [WP5 handoff](delivery/WP5_HANDOFF.md):

@@ -1,0 +1,10 @@
+. <task>/env.sh
+cd $T
+bash run-shift.sh r3full-1101 2026-11-01T08:45:00Z > logs/sweep-r3full-1101.txt 2>&1
+cp zz-shots2.spec.ts export-probe/tests/e2e/
+export NODE_OPTIONS="--trace-deprecation"
+export GATE_OUT="$TW\obs" AXE_PATH="$TW\axe\axe.min.js" E2E_SCREENSHOT_DIR="$TW\shots-regate2"
+mkdir -p $T/shots-regate2 $T/pw-regate2
+cd $T/export-probe
+node node_modules/@playwright/test/cli.js test tests/e2e/zz-shots2.spec.ts --project=desktop --output="$TW\pw-regate2" > $T/out/42-shots2.txt 2>&1
+echo done > $T/out/chain5.done

@@ -1,0 +1,434 @@
+diff --git a/scripts/container-drill.mjs b/scripts/container-drill.mjs
+index 071b7c3..27ade7a 100644
+--- a/scripts/container-drill.mjs
++++ b/scripts/container-drill.mjs
+@@ -606,13 +606,20 @@ function parseJson(text) {
+  * Signs off one past synthetic period as the employee and sends it; returns the status and the new revision id. Since
+  * WP5-UX5-T01b signing sends nothing, so the drill sends the revision itself (the send draft's defaults, after saving
+  * synthetic example.invalid recipients once, because a send needs a recipient). A build before the split (stages 4 and
+- * 5 run the previous build) already queued the send at sign-off, so nothing more is posted there.
++ * 5 run the previous build) already queued the send at sign-off, so nothing more is posted there. The previous build's
++ * schema still requires `signer_name` (the current server records the account's display name and ignores the key), so a
++ * call that targets the previous build passes `toPreviousBuild: true` and the body carries a synthetic signer name.
+  */
+-async function signOffPeriod(cookie, payrollDate) {
++async function signOffPeriod(cookie, payrollDate, { toPreviousBuild = false } = {}) {
+   const review = await call('GET', `/api/timesheets/${payrollDate}/review`, { cookie });
+   const signoff = await call('POST', `/api/timesheets/${payrollDate}/signoff`, {
+     cookie,
+-    body: { expected_version: review.json?.expected_version, reviewed_hash: review.json?.payload_hash, incomplete_evidence_acknowledged: true },
++    body: {
++      expected_version: review.json?.expected_version,
++      reviewed_hash: review.json?.payload_hash,
++      incomplete_evidence_acknowledged: true,
++      ...(toPreviousBuild ? { signer_name: 'Synthetic Employee Two' } : {}),
++    },
+   });
+   const revisionId = signoff.json?.revision?.id;
+   if (signoff.status !== 201 || (signoff.json?.jobs ?? []).some((job) => job.kind === 'send_email')) return { status: signoff.status, revisionId };
+@@ -1135,8 +1142,8 @@ async function stageFour() {
+     }
+     check('previous build: three synthetic work sessions recorded', sessionsOk);
+     check('previous build: a second synthetic signature file is stored', (await uploadSignature(cookie, 90)) === 201);
+-    const first = await signOffPeriod(cookie, '2026-03-20');
+-    const second = await signOffPeriod(cookie, '2026-04-03');
++    const first = await signOffPeriod(cookie, '2026-03-20', { toPreviousBuild: true });
++    const second = await signOffPeriod(cookie, '2026-04-03', { toPreviousBuild: true });
+     check('previous build: two synthetic periods signed off (revisions, OT ledger, queued PDF and send jobs)', first.status === 201 && second.status === 201, `status ${first.status}/${second.status}`);
+     apiBefore = await apiFacts(cookie);
+   } finally {
+diff --git a/src/client/HistoryScreen.tsx b/src/client/HistoryScreen.tsx
+index 423c20c..45512cd 100644
+--- a/src/client/HistoryScreen.tsx
++++ b/src/client/HistoryScreen.tsx
+@@ -5,6 +5,7 @@ import { describeError } from './components/errors.ts';
+ import { displayZone, instantText } from './components/format.ts';
+ import { changedFields, operationText } from './components/otModel.ts';
+ import { historyActorBadge, shareOperationText } from './components/sharingModel.ts';
++import { TableWrap } from './components/TableWrap.tsx';
+ 
+ const PAGE_SIZE = 25;
+ 
+@@ -27,7 +28,7 @@ function EventItem({ event }: { event: HistoryEvent }) {
+         Reason: {event.reason ?? 'none given'}
+       </p>
+       {changes.length > 0 && (
+-        <div className="table-wrap">
++        <TableWrap label={`Changes for ${label}`}>
+           <table aria-label={`Changes for ${label}`}>
+             <thead>
+               <tr>
+@@ -50,7 +51,7 @@ function EventItem({ event }: { event: HistoryEvent }) {
+               ))}
+             </tbody>
+           </table>
+-        </div>
++        </TableWrap>
+       )}
+     </li>
+   );
+diff --git a/src/client/OtScreen.tsx b/src/client/OtScreen.tsx
+index 6c22217..9d16776 100644
+--- a/src/client/OtScreen.tsx
++++ b/src/client/OtScreen.tsx
+@@ -17,6 +17,7 @@ import { ledgerEntryLabel } from './importModel.ts';
+ import { LeaveRow, type LeaveActions } from './components/LeaveRow.tsx';
+ import { mismatchDays, mismatchText } from './components/otModel.ts';
+ import { ReserveForm } from './components/ReserveForm.tsx';
++import { TableWrap } from './components/TableWrap.tsx';
+ 
+ /** The evidence route accepts at most this many days (400); the default window is far inside it. */
+ const EVIDENCE_MAX_DAYS = 400;
+@@ -108,7 +109,7 @@ function EvidencePanel({ data }: { data: OtData }) {
+       {data.ledger.length === 0 ? (
+         <p className="muted">The ledger has no entries yet. Credits are posted when a period is finalized.</p>
+       ) : (
+-        <div className="table-wrap">
++        <TableWrap label="OT ledger">
+           <table aria-label="OT ledger">
+             <thead>
+               <tr>
+@@ -135,7 +136,7 @@ function EvidencePanel({ data }: { data: OtData }) {
+               ))}
+             </tbody>
+           </table>
+-        </div>
++        </TableWrap>
+       )}
+       <div className="ot-export" role="group" aria-label="Evidence export">
+         <label>
+diff --git a/src/client/components/ImportPreview.tsx b/src/client/components/ImportPreview.tsx
+index 37839be..355f7b7 100644
+--- a/src/client/components/ImportPreview.tsx
++++ b/src/client/components/ImportPreview.tsx
+@@ -1,5 +1,6 @@
+ import type { ImportBatch, ImportFinding, ImportPlan, ImportPlanDay, ImportReportDay } from '../api.ts';
+ import { batchStateText, periodStateText, reasonText } from '../importModel.ts';
++import { TableWrap } from './TableWrap.tsx';
+ 
+ const SEVERITY_CLASS: Record<ImportFinding['severity'], string> = { error: 'badge-error', warning: 'badge-warn', info: '' };
+ const SEVERITY_TEXT: Record<ImportFinding['severity'], string> = { error: 'Error', warning: 'Warning', info: 'Note' };
+@@ -72,7 +73,7 @@ function Periods({ plan }: { plan: ImportPlan }) {
+   return (
+     <section className="card stack" aria-label="Periods in the workbook">
+       <h2>Periods ({plan.periods.length})</h2>
+-      <div className="table-wrap">
++      <TableWrap label="Periods">
+         <table className="import-table" aria-label="Periods">
+           <thead>
+             <tr>
+@@ -99,7 +100,7 @@ function Periods({ plan }: { plan: ImportPlan }) {
+             ))}
+           </tbody>
+         </table>
+-      </div>
++      </TableWrap>
+     </section>
+   );
+ }
+@@ -155,7 +156,7 @@ function Days({ batch, plan }: { batch: ImportBatch; plan: ImportPlan }) {
+         {plan.importable_days} ready to import, {plan.decisions_required.length} needing a decision, {blank} blank (never imported). Clock cells are
+         kept in the private source and never imported.
+       </p>
+-      <div className="table-wrap">
++      <TableWrap label="Days">
+         <table className="import-table" aria-label="Days">
+           <thead>
+             <tr>
+@@ -172,7 +173,7 @@ function Days({ batch, plan }: { batch: ImportBatch; plan: ImportPlan }) {
+             ))}
+           </tbody>
+         </table>
+-      </div>
++      </TableWrap>
+     </section>
+   );
+ }
+diff --git a/src/client/components/OperationsStatus.tsx b/src/client/components/OperationsStatus.tsx
+index d837d3e..d070f2e 100644
+--- a/src/client/components/OperationsStatus.tsx
++++ b/src/client/components/OperationsStatus.tsx
+@@ -10,6 +10,7 @@ import {
+ import { backupSummary, diskSummary, outboundBanner } from './adminModel.ts';
+ import { describeError } from './errors.ts';
+ import { displayZone, instantText } from './format.ts';
++import { TableWrap } from './TableWrap.tsx';
+ 
+ /*
+  * Operations status for administrators (F-3, F-Q3 (b), WP3-T13D). It shows the state of the
+@@ -328,7 +329,7 @@ export function OperationsStatus() {
+             No period has been submitted yet. Submitted periods appear here with their delivery state.
+           </p>
+         ) : (
+-          <div className="table-wrap">
++          <TableWrap label="Submission and delivery status per person and period">
+             <table className="ops-table">
+               <caption className="sr-only">Submission and delivery status per person and period</caption>
+               <thead>
+@@ -349,7 +350,7 @@ export function OperationsStatus() {
+                 ))}
+               </tbody>
+             </table>
+-          </div>
++          </TableWrap>
+         )}
+       </section>
+     </>
+diff --git a/src/client/components/SettingsTransferDialog.tsx b/src/client/components/SettingsTransferDialog.tsx
+index 87bb28e..c2bab20 100644
+--- a/src/client/components/SettingsTransferDialog.tsx
++++ b/src/client/components/SettingsTransferDialog.tsx
+@@ -1,5 +1,6 @@
+ import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef } from 'react';
+ import type { ComparisonGroup } from './settingsFileModel.ts';
++import { TableWrap } from './TableWrap.tsx';
+ 
+ /**
+  * The preview of an imported settings file (WP5-UX4-T05): a modal dialog with the file's description, the content that
+@@ -90,7 +91,7 @@ export function SettingsTransferDialog({
+  */
+ export function ComparisonTable({ groups, caption }: { groups: readonly ComparisonGroup[]; caption: string }) {
+   return (
+-    <div className="table-wrap">
++    <TableWrap label={caption}>
+       <table className="transfer-table" data-comparison="true">
+         <caption className="sr-only">{caption}</caption>
+         <thead>
+@@ -123,6 +124,6 @@ export function ComparisonTable({ groups, caption }: { groups: readonly Comparis
+           </tbody>
+         ))}
+       </table>
+-    </div>
++    </TableWrap>
+   );
+ }
+diff --git a/src/client/components/SharingOt.tsx b/src/client/components/SharingOt.tsx
+index e81a203..a6bb619 100644
+--- a/src/client/components/SharingOt.tsx
++++ b/src/client/components/SharingOt.tsx
+@@ -3,6 +3,7 @@ import type { OtLedgerEntry, OtSummary, Requester } from '../api.ts';
+ import { describeError } from './errors.ts';
+ import { ledgerEntryLabel } from '../importModel.ts';
+ import { displayZone, instantText, minutesText, periodRange } from './format.ts';
++import { TableWrap } from './TableWrap.tsx';
+ 
+ /**
+  * The owner's OT balance and ledger for a share with the OT item. Read-only by construction: it has
+@@ -94,7 +95,7 @@ export function SharingOt({ request, ownerName }: { request: Requester; ownerNam
+         {ledger.length === 0 ? (
+           <p className="muted">The ledger has no entries yet. Credits are posted when a period is finalized.</p>
+         ) : (
+-          <div className="table-wrap">
++          <TableWrap label="OT ledger entries">
+             <table aria-label="OT ledger entries">
+               <thead>
+                 <tr>
+@@ -121,7 +122,7 @@ export function SharingOt({ request, ownerName }: { request: Requester; ownerNam
+                 ))}
+               </tbody>
+             </table>
+-          </div>
++          </TableWrap>
+         )}
+       </section>
+     </div>
+diff --git a/src/client/components/TableWrap.tsx b/src/client/components/TableWrap.tsx
+new file mode 100644
+index 0000000..35221a2
+--- /dev/null
++++ b/src/client/components/TableWrap.tsx
+@@ -0,0 +1,30 @@
++import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
++
++/**
++ * The scrolling box of a table (WP5-UX5-FIX1, WCAG 2.1.1 and 4.1.2). A table that is wider than its box scrolls sideways, and a
++ * scrolling box that nothing inside can focus has no keyboard stop, so a keyboard user could not reach the cut-off columns. While the
++ * content overflows, the box is a named, focusable region (`tabindex="0"`, `role="region"`, `aria-label` = what the table lists)
++ * and takes the shared focus ring; while it fits, it is a plain box, so a short table adds no tab stop and no landmark. The
++ * overflow is measured before the first paint and again whenever the box or the table changes size.
++ */
++export function TableWrap({ label, children }: { label: string; children: ReactNode }) {
++  const box = useRef<HTMLDivElement>(null);
++  const [scrolls, setScrolls] = useState(false);
++
++  useLayoutEffect(() => {
++    const element = box.current;
++    if (element === null) return;
++    const measure = () => setScrolls(element.scrollWidth > element.clientWidth);
++    measure();
++    const observer = new ResizeObserver(measure);
++    observer.observe(element);
++    for (const child of Array.from(element.children)) observer.observe(child);
++    return () => observer.disconnect();
++  }, []);
++
++  return (
++    <div ref={box} className="table-wrap" {...(scrolls ? { role: 'region', 'aria-label': label, tabIndex: 0 } : {})}>
++      {children}
++    </div>
++  );
++}
+diff --git a/src/client/styles.css b/src/client/styles.css
+index 47c6a4c..27e3775 100644
+--- a/src/client/styles.css
++++ b/src/client/styles.css
+@@ -1608,6 +1608,11 @@ button[aria-disabled='true']:active {
+   overflow-x: auto;
+ }
+ 
++/* A table box that scrolls sideways is a keyboard stop of its own (TableWrap, WCAG 2.1.1): an inset ring the overflow cannot clip. */
++.table-wrap:focus-visible {
++  box-shadow: var(--focus-ring-inset);
++}
++
+ table {
+   width: 100%;
+   border-collapse: collapse;
+diff --git a/tests/e2e/timesheet.spec.ts b/tests/e2e/timesheet.spec.ts
+index 0707404..7f1c08d 100644
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -2034,13 +2034,20 @@ test.describe('time ranges (U5-07)', () => {
+ });
+ 
+ test.describe('a late end in the narrowest phone cell', () => {
+-  // Ho Chi Minh is UTC+7: the seeded 09:00-18:00 Los Angeles day reads 23:00 to 08:00 the next day, "+1", which even the tight form cannot hold in 72px.
++  // Ho Chi Minh is UTC+7 all year; Los Angeles is UTC-7 in summer time and UTC-8 in winter, so the gap is 14 h or 15 h. A 09:00-18:00
++  // Los Angeles day reads 23:00 to 08:00 the next day ("+1") only in summer time; in winter it reads 00:00-09:00 on one day. The day
++  // here is 08:30-17:30 Los Angeles time, which crosses the Ho Chi Minh midnight in BOTH seasons (22:30 to 07:30 or 23:30 to 08:30,
++  // "+1"), so the late-end form, which even the tight form cannot hold in 72px, is tested whatever the date of the run is.
+   test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+ 
+   test('the tight text may wrap there but never runs over the next column', async ({ page, employeeSeed, signInThroughUi }) => {
+     const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+     seededDays.push(date);
+-    await employeeSeed.seedCompleteDay(date);
++    await employeeSeed.createSession(date, '08:30', '17:30', [
++      ['11:00', '11:15'],
++      ['13:00', '13:30'],
++      ['15:30', '15:45'],
++    ]);
+     await signInThroughUi();
+     await expect(page.locator('[data-day]')).toHaveCount(14);
+     for (const width of [320, 390, 1280]) {
+@@ -2053,7 +2060,7 @@ test.describe('a late end in the narrowest phone cell', () => {
+       // The sheet measures its cells when the window is resized, so it may take a frame to settle on the new width.
+       await expect.poll(async () => (await read()).overflow, { message: `${width}px: the late end settles inside its cell` }).toBeLessThanOrEqual(1);
+       const facts = await read();
+-      expect(facts.text, `${width}px: the late end keeps its +1`).toMatch(/\+1$/);
++      expect(facts.text, `${width}px: the late end keeps its +1 (22:30 or 23:30 to 07:30 or 08:30 the next day)`).toMatch(/^(22|23):30( - |-)(07|08):30\+1$/);
+       expect(facts.overflow, `${width}px: "${facts.text}" (${facts.mode}) does not run over its cell`).toBeLessThanOrEqual(1);
+     }
+   });
+diff --git a/tests/e2e/today.spec.ts b/tests/e2e/today.spec.ts
+index e5c4c64..61f4c07 100644
+--- a/tests/e2e/today.spec.ts
++++ b/tests/e2e/today.spec.ts
+@@ -452,7 +452,7 @@ test.describe('phone', () => {
+     }
+   });
+ 
+-  test('away: the review link is never wrapped: the short form beside Today and Current period at 390, 375 and 360, "Current" and the short form beside Today at 320, the full label where it fits', async ({
++  test('away: the review link is never wrapped: the short form beside Today and Current period where the row is under 22.8rem (375 and 360), the full label at 390 and where it fits, "Current" and the short form beside Today at 300', async ({
+     page,
+     employeeSeed,
+     signInThroughUi,
+@@ -465,7 +465,14 @@ test.describe('phone', () => {
+     // the row is narrower than 18.4rem, so Today, Current and the review link still share one 44px row (WP5-UX3-T04 replaces the former
+     // 320px own-row expectation: stricter, one row fewer). WP5-UX5-T04 (U5-22): the card stands 8px from the window edges, so the row is 16px
+     // wider than before (280px at 320, which still holds "Current period" in full) and "Current" starts below 316px; 300px is checked too.
+-    for (const width of [600, 390, 375, 360, 320, 300]) {
++    // The label is chosen by the measured width of the button row (the `period-cta` container), not by the window: with Current period
++    // a long label ("Review & sign off", "Review or correct") is full from 22.8rem (342px of the 15px root) and short from 15.4rem
++    // up to it; "Review now" is full from 20.2rem and short from 15.1rem. The card stands 8px from each window edge and pads 12px, so
++    // the row is the window less 40px: 390px gives 350px (full), 375px gives 335px (short). 382 and 381 are the two sides of 342px.
++    const rootPx = Number(await page.evaluate<number>('parseFloat(getComputedStyle(document.documentElement).fontSize)'));
++    const shortWidths: number[] = [];
++    const fullWidths: number[] = [];
++    for (const width of [600, 390, 382, 381, 375, 360, 320, 300]) {
+       await page.setViewportSize({ width, height: 844 });
+       const [today, review] = [todayButton(page), reviewLink(page)];
+       const controls = withCurrent ? [today, currentButton(page), review] : [today, review];
+@@ -476,11 +483,14 @@ test.describe('phone', () => {
+       const full = ((await review.textContent()) ?? '').trim();
+       const sharesRow = spread <= ROW_TOLERANCE;
+       const shown = await visibleLabel(review);
+-      // Short only for a long label in the three-button row at 390, 375, 360 and 320 (a row of 350 to 280px), and for every label at 320 and 300
+-      // (below 20.2rem); everywhere else the full label is shown.
+-      const expectShort = withCurrent && (width <= 320 || (full.length > 12 && [390, 375, 360].includes(width)));
+-      if (expectShort) expect(shown, `${width}px: the short form`).toBe(SHORT_FORM[full]);
+-      else expect(shown, `${width}px: the full label`).toBe(full);
++      // Short only with Current period, and only where the measured row is under the label's full width and still holds the short form
++      // (a long label: 15.4rem to 22.8rem; "Review now": 15.1rem to 20.2rem; below that the review link takes a row of its own, in full).
++      const rowRem = ((await page.locator('.period-cta').boundingBox())?.width ?? 0) / rootPx;
++      const longLabel = full.length > 12;
++      const expectShort = withCurrent && (longLabel ? rowRem >= 15.4 && rowRem < 22.8 : rowRem >= 15.1 && rowRem < 20.2);
++      (expectShort ? shortWidths : fullWidths).push(width);
++      if (expectShort) expect(shown, `${width}px: the short form (the row is ${rowRem.toFixed(2)}rem)`).toBe(SHORT_FORM[full]);
++      else expect(shown, `${width}px: the full label (the row is ${rowRem.toFixed(2)}rem)`).toBe(full);
+       if (withCurrent) {
+         // "Current period" in full from 320 to 600; "Current" only at 300, where the container is 260px (below 18.1rem or 18.4rem). The name never changes (SC 2.5.3).
+         const currentShown = await visibleJumpLabel(currentButton(page));
+@@ -502,6 +512,12 @@ test.describe('phone', () => {
+       const widths = (await Promise.all(controls.map((control) => control.boundingBox()))).map((box) => box?.width);
+       console.log(`ROW away width=${width} tops=${rowTops.join('/')} spread=${spread} widths=${widths.join('/')} review.h=${reviewBox?.height} withCurrent=${withCurrent}`);
+     }
++    // Both sides are really tested: with Current period the short form must appear at some width (381 and narrower) and the full label at
++    // another (382 and wider). The label of this period is the long "Review & sign off" (a draft of a period that has not been signed).
++    if (withCurrent) {
++      expect(shortWidths, 'with Current period the short form is checked at some widths').toContain(381);
++      expect(fullWidths, 'and the full label at others').toContain(382);
++    }
+   });
+ });
+ 
+@@ -999,21 +1015,41 @@ test.describe('desktop widths', () => {
+       expect((reviewBox?.x ?? 0) + (reviewBox?.width ?? 0), `landing ${width}px: Review ends inside the card`).toBeLessThanOrEqual((barBox?.x ?? 0) + (barBox?.width ?? 0) + 0.5);
+     }
+     await awayState(page, periods);
+-    for (const width of [768, 900, 1024, 1280]) {
++    // WP5-UX5-T04 (U5-09): the card has a wide and a narrow arrangement, chosen by the width of the CARD (the window is 32px wider than
++    // the card). The wide row needs 40rem of 15px (600px); while "Current period" shows (the five days after a period ended, away from
++    // today) it needs 9.2rem (138px) more, 738px. 769 and 770 are the two sides of that threshold in the window; outside the window the
++    // threshold is 600px, below every width here, so the arrangement is wide. The expectation is computed from the measured card width.
++    const withCurrent = isWindow(periods);
++    const wideNeeds = withCurrent ? 738 : 600;
++    const seen = new Set<string>();
++    for (const width of [768, 769, 770, 900, 1024, 1280]) {
+       await page.setViewportSize({ width, height: 800 });
+       await expect(todayButton(page)).toBeVisible();
+       await expectNoSidewaysScroll(page, `away ${width}px`);
+-      const barBox = await bar(page).boundingBox();
+-      const next = await nextButton(page).boundingBox();
+-      const today = await todayButton(page).boundingBox();
+-      const review = await reviewLink(page).boundingBox();
+-      console.log(`WIDTH away width=${width} next.x=${next?.x} next.y=${next?.y} today.x=${today?.x} today.y=${today?.y} review.x=${review?.x} card.w=${barBox?.width} card.h=${barBox?.height}`);
++      const { card, prev, next, today, review, cta } = await cardParts(page);
++      expect(card && prev && next && today && review && cta, `away ${width}px: every part is on the card`).toBeTruthy();
++      if (!(card && prev && next && today && review && cta)) continue;
++      console.log(`WIDTH away width=${width} next.x=${next.left} next.y=${next.top} today.x=${today.left} today.y=${today.top} review.x=${review.left} card.w=${card.width} card.h=${card.height}`);
+       if (width === 768 || width === 1280) await bar(page).screenshot({ path: screenshotPath(`today-bar-away-w${width}-synthetic.png`), animations: 'disabled' });
+       for (const box of [next, today, review]) {
+-        expect((box?.x ?? 0) + (box?.width ?? 0), `away ${width}px: inside the card`).toBeLessThanOrEqual((barBox?.x ?? 0) + (barBox?.width ?? 0) + 0.5);
++        expect(box.right, `away ${width}px: inside the card`).toBeLessThanOrEqual(card.right + 0.5);
++      }
++      const narrow = card.width < wideNeeds;
++      seen.add(narrow ? 'narrow' : 'wide');
++      expect(cta.top > prev.bottom ? 'narrow' : 'wide', `away ${width}px: the card is ${card.width}px wide, so the ${narrow ? 'narrow' : 'wide'} arrangement (the wide row needs ${wideNeeds}px)`).toBe(narrow ? 'narrow' : 'wide');
++      if (narrow) {
++        // Narrow: row 1 is "<", the range, ">" with ">" on the right edge (as far from it as "<" is from the left one); Today starts the row below.
++        expect(near(next.top, prev.top, 1), `away ${width}px: narrow, Next is in the first row`).toBe(true);
++        expect(near(card.right - next.right, prev.left - card.left, 1), `away ${width}px: narrow, Next keeps the right edge`).toBe(true);
++        expect(today.top, `away ${width}px: narrow, Today is in the row below`).toBeGreaterThan(next.bottom);
++        expect(next.left, `away ${width}px: narrow, Next is right of Today`).toBeGreaterThan(today.left);
++      } else {
++        expect(next.left, `away ${width}px: wide, Next stays left of Today`).toBeLessThan(today.left);
++        expect(near(today.top, next.top, 1), `away ${width}px: wide, Today is in the first row`).toBe(true);
+       }
+-      expect(next?.x ?? 0, `away ${width}px: Next stays left of Today`).toBeLessThan(today?.x ?? 0);
+     }
++    // The window has both sides of the threshold in this list (768 narrow; 770 and wider wide); outside it every width is wide.
++    expect([...seen].sort().join(), withCurrent ? 'in the window both arrangements are checked' : 'outside the window the arrangement is wide').toBe(withCurrent ? 'narrow,wide' : 'wide');
+   });
+ });
+ 

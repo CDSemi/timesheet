@@ -1,0 +1,255 @@
+import { readFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { buildSyntheticWorkbook } from '../support/syntheticWorkbook.ts';
+import { backdropOf, backdropsAbove, contrast, over, parseColour, parseLayers } from './contrast.ts';
+import { createAccountByAdminApi, drainJobsFrom, expect, newPerson, screenshotPath, SeedClient, test } from './fixtures.ts';
+import { note, runAxe, signInTo } from './zz-lib.ts';
+
+/*
+ * WP5-UX5-REGATE task-local probe (never part of the repository): a real axe scan (WCAG 2.2 AA tags) of every screen with a `.table-wrap`
+ * plus Timesheet and Review, in light and dark, and the keyboard check of each overflowing `.table-wrap` (focus by Tab from the
+ * previous stop, name, shared ring and its contrast, ArrowRight scroll, the next Tab stop). Notes go to GATE_OUT/regate-a11y.txt.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const FILE = 'regate-a11y.txt';
+const THEMES = ['light', 'dark'] as const;
+const settle = (page: Page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(d, 400))))');
+
+interface WrapRow {
+  index: number;
+  overflows: boolean;
+  visible: boolean;
+  role: string | null;
+  tabindex: string | null;
+  label: string | null;
+  sw: number;
+  cw: number;
+}
+
+async function checkWraps(page: Page, label: string, theme: string, shot: string | null): Promise<void> {
+  const rows = await page.evaluate<WrapRow[]>(
+    `[...document.querySelectorAll('.table-wrap')].map((el, index) => ({ index, overflows: el.scrollWidth > el.clientWidth, visible: el.getClientRects().length > 0, role: el.getAttribute('role'), tabindex: el.getAttribute('tabindex'), label: el.getAttribute('aria-label'), sw: el.scrollWidth, cw: el.clientWidth }))`,
+  );
+  const shown = rows.filter((row) => row.visible);
+  const over1 = shown.filter((row) => row.overflows);
+  const plainBad = shown.filter((row) => !row.overflows && (row.role !== null || row.tabindex !== null));
+  note(FILE, `[${theme}] ${label}: .table-wrap visible ${shown.length}, overflowing ${over1.length}, fitting boxes with a stray role/tabindex ${plainBad.length}`);
+  let shotDone = false;
+  for (const row of over1) {
+    const wrap = page.locator('.table-wrap').nth(row.index);
+    await wrap.scrollIntoViewIfNeeded();
+    const order = await page.evaluate<{ k: number; prev: string | null; next: string | null; count: number }, number>((index) => {
+      const sel = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+      const wrapEl = document.querySelectorAll('.table-wrap')[index] as HTMLElement;
+      const scope: ParentNode = wrapEl.closest('[role="dialog"], [role="alertdialog"]') ?? document;
+      const all = ([...scope.querySelectorAll(sel)] as HTMLElement[]).filter((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden');
+      for (const e of document.querySelectorAll('[data-probe]')) e.removeAttribute('data-probe');
+      const k = all.indexOf(wrapEl);
+      const describe = (e: HTMLElement | undefined): string | null =>
+        e === undefined ? null : `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''} "${(e.getAttribute('aria-label') ?? e.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 30)}"`;
+      all[k - 1]?.setAttribute('data-probe', 'prev');
+      all[k + 1]?.setAttribute('data-probe', 'next');
+      wrapEl.setAttribute('data-probe', 'wrap');
+      return { k, prev: describe(all[k - 1]), next: describe(all[k + 1]), count: all.length };
+    }, row.index);
+    let reachedFromPrev: string | null = 'no prev';
+    let nextOk: string | null = 'no next';
+    await page.keyboard.press('Shift');
+    if (order.prev !== null) {
+      await page.evaluate(`document.querySelector('[data-probe="prev"]').focus()`);
+      await page.keyboard.press('Tab');
+      reachedFromPrev = await page.evaluate(`document.activeElement ? (document.activeElement.getAttribute('data-probe') ?? 'other:' + document.activeElement.tagName) : 'none'`);
+    } else {
+      await page.evaluate(`document.querySelector('[data-probe="wrap"]').focus()`);
+    }
+    const focusState = await page.evaluate<{ isWrap: boolean; fv: boolean; shadow: string; bg: string }>(
+      `(() => { const a = document.activeElement; const s = a ? getComputedStyle(a) : null; return { isWrap: a ? a.getAttribute('data-probe') === 'wrap' : false, fv: a ? a.matches(':focus-visible') : false, shadow: s ? s.boxShadow : '', bg: s ? s.backgroundColor : '' }; })()`,
+    );
+    await expect.poll(async () => parseLayers(await wrap.evaluate((e) => getComputedStyle(e).boxShadow)).length, { timeout: 5000 }).toBeGreaterThan(0).catch(() => undefined);
+    const shadow = await wrap.evaluate((e) => getComputedStyle(e).boxShadow);
+    const layers = parseLayers(shadow).filter((l) => l.inset && l.spread > 0);
+    const backdrop = backdropOf(await backdropsAbove(wrap));
+    let ringOutside = 'n/a';
+    let ringGap = 'n/a';
+    if (layers.length > 0) {
+      const ring = layers.reduce((a, b) => (b.spread < a.spread ? b : a));
+      const gap = layers.length > 1 ? layers.reduce((a, b) => (b.spread > a.spread ? b : a)) : null;
+      const ringColour = over(ring.colour, backdrop);
+      ringOutside = contrast(ringColour, backdrop).toFixed(2);
+      if (gap !== null) ringGap = contrast(ringColour, over(gap.colour, backdrop)).toFixed(2);
+    }
+    const before = await wrap.evaluate((e) => e.scrollLeft);
+    if (shot !== null && !shotDone) {
+      shotDone = true;
+      const box = await wrap.boundingBox();
+      await page.screenshot({ path: screenshotPath(`${shot}-${theme}-synthetic.png`), animations: 'disabled' });
+      note(FILE, `    screenshot ${shot}-${theme} (wrap at ${JSON.stringify(box)})`);
+    }
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(150);
+    const afterArrow = await wrap.evaluate((e) => e.scrollLeft);
+    if (order.next !== null) {
+      await page.keyboard.press('Tab');
+      nextOk = await page.evaluate(`document.activeElement ? (document.activeElement.getAttribute('data-probe') ?? 'other:' + document.activeElement.tagName) : 'none'`);
+    }
+    note(
+      FILE,
+      `    wrap#${row.index} name="${row.label}" role=${row.role} tabindex=${row.tabindex} (content ${row.sw}px in ${row.cw}px) tab-order: prev ${order.prev} -> Tab lands on "${reachedFromPrev}", is-wrap=${focusState.isWrap}, focus-visible=${focusState.fv}, next ${order.next} -> Tab lands on "${nextOk}"; ring: ${shadow}; ring vs outside ${ringOutside}:1, ring vs inner gap ${ringGap}:1; ArrowRight scrollLeft ${before} -> ${afterArrow}`,
+    );
+    expect.soft(row.role, `${label}: ${theme}: the overflowing box is a region`).toBe('region');
+    expect.soft(row.tabindex, `${label}: ${theme}: it has a tab stop`).toBe('0');
+    expect.soft((row.label ?? '').length, `${label}: ${theme}: it has a name`).toBeGreaterThan(3);
+    expect.soft(focusState.isWrap, `${label}: ${theme}: Tab from the previous stop reaches it`).toBe(true);
+    expect.soft(afterArrow, `${label}: ${theme}: ArrowRight scrolls it`).toBeGreaterThan(before);
+    if (order.next !== null) expect.soft(nextOk, `${label}: ${theme}: the next Tab stop is the element after it`).toBe('next');
+  }
+}
+
+async function scanBoth(page: Page, label: string, shot: string | null = null): Promise<void> {
+  for (const theme of THEMES) {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    await settle(page);
+    const axe = await runAxe(page);
+    note(FILE, `[${theme}] ${label}: axe ${axe.version} violations=${axe.violations.length} (${axe.violations.map((v) => `${v.id}x${v.nodes.length}`).join(', ') || 'none'}) incomplete=[${axe.incomplete.map((i) => `${i.id}x${i.nodes}`).join(', ')}]`);
+    for (const violation of axe.violations) {
+      for (const node of violation.nodes.slice(0, 6)) note(FILE, `    VIOLATION ${violation.id} (${violation.impact}) ${JSON.stringify(node.target)} ${node.html} :: ${node.summary}`);
+    }
+    expect.soft(axe.violations.length, `${label}: ${theme}: axe violations`).toBe(0);
+    await checkWraps(page, label, theme, shot);
+  }
+}
+
+async function resize(page: Page, width: number, height: number): Promise<void> {
+  await page.setViewportSize({ width, height });
+  await settle(page);
+}
+
+test('employee screens: Timesheet, Review, History with a send, Overtime; then Administration', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(900_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Regate Person', to: ['payroll-regate@example.invalid'], cc: ['manager-regate@example.invalid'], signature: 'saved' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(free[0] ?? '');
+  await person.api.seedCompleteDay(free[1] ?? '');
+  await person.api.createSession(free[2] ?? '', '08:00', '12:00', null);
+  await person.api.createSession(free[2] ?? '', '13:00', '17:30', null);
+  const periods = await person.api.periodsCurrent();
+  await person.api.call('POST', '/api/ot/opening-balance', { minutes: 90, as_of_date: addDays(periods.today_local, -30), reason: 'Synthetic opening balance', expected_version: 0 }, 201);
+
+  await resize(page, 1440, 900);
+  await signInTo(page, privateServer, person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await scanBoth(page, 'Timesheet 1440');
+  await resize(page, 390, 844);
+  await scanBoth(page, 'Timesheet 390');
+
+  await resize(page, 1440, 900);
+  await page.goto(`${privateServer.origin}/#/review/${person.payrollDate}`);
+  await expect(page.locator('[data-paper="review"]')).toBeVisible();
+  await scanBoth(page, 'Review unsigned 1440');
+  await page.locator('[data-sign-off]').click();
+  const d2 = page.getByRole('dialog', { name: 'Sign off confirmation' });
+  await expect(d2).toBeVisible();
+  const a2 = d2.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+  if (await a2.count()) await a2.check();
+  await d2.getByRole('button', { name: 'Sign off', exact: true }).click();
+  await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
+  const send = page.locator('[data-send-card]');
+  await send.locator('[data-send]').click();
+  await expect(send.locator('[data-send-notice="ok"]')).toContainText('Send 1 is queued');
+  drainJobsFrom(privateServer, new Date());
+  await page.reload();
+  await expect(page.locator('[data-send-card]')).toBeVisible();
+  await scanBoth(page, 'Review signed and sent 1440');
+
+  await resize(page, 1280, 900);
+  await page.goto(`${privateServer.origin}/#/history`);
+  await expect(page.locator('[data-revision]').first()).toBeVisible();
+  await expect(page.locator('[data-operation]').first()).toBeVisible();
+  await scanBoth(page, 'History with a send 1280', 'regate-history-focus');
+  await resize(page, 390, 844);
+  await scanBoth(page, 'History with a send 390');
+
+  await resize(page, 1280, 900);
+  await page.goto(`${privateServer.origin}/#/ot`);
+  await expect(page.getByRole('table', { name: 'OT ledger' })).toBeVisible();
+  await scanBoth(page, 'Overtime ledger 1280');
+  await resize(page, 390, 844);
+  await scanBoth(page, 'Overtime ledger 390');
+
+  // Administration: a fresh page load as the administrator (the sign-in form only shows after a full load).
+  await page.goto('about:blank');
+  await page.context().clearCookies();
+  await resize(page, 1280, 900);
+  await signInTo(page, privateServer, privateServer.credentials.admin, '#/settings/admin');
+  await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+  await expect(page.locator('table.ops-table').first()).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(1500);
+  await scanBoth(page, 'Administration status 1280');
+  await resize(page, 390, 844);
+  await scanBoth(page, 'Administration status 390', 'regate-admin-focus');
+});
+
+test('Import preview', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(300_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Import Person', signature: 'none' });
+  const payrollDate = addDays(person.payrollDate, -14);
+  const bytes = buildSyntheticWorkbook({ periods: [{ payrollDate, days: { 1: { label: 'Mystery label' }, 2: { labelFormulaCache: 'Holiday' }, 3: { label: 'Off day (overtime used)' } } }] });
+  await resize(page, 1280, 900);
+  await signInTo(page, privateServer, person.account, '#/import');
+  await expect(page.getByRole('heading', { name: 'Import and opening balance' })).toBeVisible();
+  await page.locator('[data-import-file]').setInputFiles({ name: 'synthetic-hours.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from(bytes) });
+  await page.getByRole('button', { name: 'Upload and preview' }).click();
+  await expect(page.locator('[data-import-notice="created"]')).toBeVisible();
+  await expect(page.locator('[data-import-preview]')).toBeVisible();
+  await scanBoth(page, 'Import preview 1280');
+  await resize(page, 390, 844);
+  await scanBoth(page, 'Import preview 390', 'regate-import-focus');
+});
+
+test('Settings transfer dialog (ComparisonTable)', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(300_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const source = await newPerson(admin, privateServer, { displayName: 'Synthetic Source Person', to: ['payroll-synthetic@example.invalid'], cc: ['manager-synthetic@example.invalid'], autoSubmit: true, signature: 'none' });
+  await resize(page, 1280, 900);
+  await signInTo(page, privateServer, source.account, '#/settings');
+  const card = page.getByRole('region', { name: 'Export and import settings' });
+  await expect(card).toBeVisible();
+  const [download] = await Promise.all([page.waitForEvent('download'), card.getByRole('button', { name: 'Export settings' }).click()]);
+  const exported = { name: download.suggestedFilename(), text: readFileSync(await download.path(), 'utf8') };
+  await page.goto('about:blank');
+  await page.context().clearCookies();
+  const target = await newPerson(admin, privateServer, { displayName: 'Synthetic Target Person', to: ['other-synthetic@example.invalid'], signature: 'none' });
+  await signInTo(page, privateServer, target.account, '#/settings');
+  await expect(card).toBeVisible();
+  await page.getByLabel('Import settings from a file (.json)').setInputFiles({ name: exported.name, mimeType: 'application/json', buffer: Buffer.from(exported.text) });
+  const dialog = page.getByRole('dialog', { name: 'Import settings' });
+  await expect(dialog).toBeVisible();
+  await scanBoth(page, 'Settings transfer dialog 1280');
+  await resize(page, 390, 844);
+  await expect(dialog).toBeVisible();
+  await scanBoth(page, 'Settings transfer dialog 390');
+});
+
+test('Shared OT ledger (grantee)', async ({ page, privateServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop');
+  test.setTimeout(300_000);
+  const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+  const owner = await newPerson(admin, privateServer, { displayName: 'Synthetic Owner', signature: 'none' });
+  const periods = await owner.api.periodsCurrent();
+  await owner.api.call('POST', '/api/ot/opening-balance', { minutes: 90, as_of_date: addDays(periods.today_local, -30), reason: 'Synthetic opening balance', expected_version: 0 }, 201);
+  const grantee = await createAccountByAdminApi(admin, { displayName: 'Synthetic Grantee' });
+  await owner.api.call('POST', '/api/shares', { grantee_email: grantee.email, items: { timesheets: 'view', ot_read: true, pdf_download: false } }, 201);
+  await resize(page, 1280, 900);
+  await signInTo(page, privateServer, grantee, `#/shared/${owner.account.id}/ot`);
+  await expect(page.getByRole('table', { name: 'OT ledger entries' })).toBeVisible();
+  await scanBoth(page, 'Shared OT ledger 1280');
+  await resize(page, 390, 844);
+  await scanBoth(page, 'Shared OT ledger 390');
+});

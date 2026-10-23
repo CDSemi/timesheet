@@ -494,13 +494,22 @@ for (const width of [390, 375, 360, 320]) {
       const group = page.getByRole('banner').getByRole('region', { name: 'Check in and out' });
       await expect(group).toContainText('Checked in since');
       if (withShare) await expect(page.getByRole('combobox', { name: 'Shared with me' })).toBeVisible();
+      // AX-01: the scroll padding follows the measured height of the taller bar. The ResizeObserver stores the property one to a few
+      // frames after the bar changes size (WP5-UX5-DIAG1), so the difference is read in ONE round trip and retried (same 0.05px tolerance).
+      await expect
+        .poll(
+          () =>
+            page.evaluate<number>(
+              "Math.abs(parseFloat(document.documentElement.style.getPropertyValue('--shell-bar-size')) - document.querySelector('.shell-bar').getBoundingClientRect().height)",
+            ),
+          { message: '--shell-bar-size equals the rendered bar' },
+        )
+        .toBeLessThan(0.05);
       const measured = await page.evaluate<{ bar: number; property: number; scroll: number; client: number }>(`(() => {
         const bar = document.querySelector('.shell-bar').getBoundingClientRect().height;
         const property = parseFloat(document.documentElement.style.getPropertyValue('--shell-bar-size'));
         return { bar, property, scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth };
       })()`);
-      // AX-01: the scroll padding follows the measured height of the taller bar.
-      expect(measured.property, '--shell-bar-size equals the rendered bar').toBeCloseTo(measured.bar, 1);
       expect(measured.scroll, 'no horizontal scroll').toBeLessThanOrEqual(measured.client);
       const button = await group.getByRole('button', { name: 'Check out', exact: true }).boundingBox();
       const bar = await page.locator('.shell-bar').boundingBox();

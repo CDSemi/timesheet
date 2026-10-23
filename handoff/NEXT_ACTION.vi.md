@@ -78,6 +78,18 @@ Không đổi billing hay cài đặt quyền.
 ~~~
 
 Luồng hiện tại:
+0. **Đang làm (đã tạm dừng hai lần ngày 2026-10-22 để khởi động lại máy, nay đang chạy FIX2
+   lần 3): vòng thay đổi UI lần 4 và 5.**
+   - Mọi slice của hai vòng đã được freeze. Commit gần nhất là 2bce0ab (digest 70975091).
+   - Gate của đợt 5 FAIL và FIX1 đã sửa. Lần regate sau đó FAIL vì một lỗi tranh chấp
+     thời điểm trong test; WP5-UX5-DIAG1 xác định đó là lỗi của test.
+   - WP5-UX5-FIX2 (chỉ sửa test) bị gián đoạn.
+   - Tiếp tục bằng prompt khởi động bên dưới. Điều phối viên làm tiếp ở `next_task_id` của
+     board (WP5-UX5-FIX2, lần 2). Sau đó là freeze của nó, WP5-UX5-REGATE2, audit A và B,
+     audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
+   - Chi tiết: [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), mục "Tạm dừng
+     để khởi động lại máy (2026-10-22)".
+   - Cho đến khi nghiệm thu lại, bản đã nghiệm thu gần nhất vẫn là 8e55710 / 507de97c.
 1. **Đã xong: WP5 đã nghiệm thu, rồi nghiệm thu lại sau mỗi vòng thay đổi UI.** Biên bản
    nghiệm thu đầu đã commit ở dd0c7d1. Các biên bản nghiệm thu lại nằm trong
    [WP5 handoff](delivery/WP5_HANDOFF.vi.md):

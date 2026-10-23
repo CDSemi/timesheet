@@ -2,6 +2,7 @@
   "schema_version": 1,
   "mission_id": "timesheet-software-readiness",
   "status": "running",
+  "pause_note": "Resumed after the second restart at the owner's 'tiếp tục' (same coordinator session): WP5-UX5-FIX2 attempt 3. Earlier note, 2026-10-22, second pause: paused again at the owner's request to restart the machine (not a usage limit; paused_usage is the board's only pause status). Resume at next_task_id WP5-UX5-FIX2 (interrupted twice; attempt 3 with a fresh worker, brief Addendum 1, task folder WP5-UX5-FIX2-a3). The regate and audit briefs WP5-UX5-REGATE2, AUDIT-A and AUDIT-B are drafts on disk, not on the board yet. First pause the same day: after DIAG1, resumed at the owner's 'tiếp tục'.",
   "authorized_scope": [
     "WP1",
     "WP2",
@@ -14,7 +15,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "ux5-fix",
+  "phase": "ux5-fix2",
   "coordinator_session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +29,8 @@
   "current_source_digest": "507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX5-FIX1-FREEZE",
+  "next_task_id": "WP5-UX5-FIX2-FREEZE",
+  "push_hold": "Owner decision C b (2026-10-22): no push to origin until the owner says; commits stay local and are listed in git.unpushed.",
   "runtime_observations": [
     {
       "date": "2026-10-22",
@@ -320,6 +322,14 @@
     "question": "F-1 (= WP5-OWN-Q1, sharpened): opening OT balance: (i, recommended) starts at 0 with no entry; only the owner of the timesheet sets or changes it any time (administrators never see a personal balance); each change is a ledger entry with a short reason; evidence optional; a correction back to 0 allowed (D-5 a); (ii) no reason either (needs a ledger migration or a dummy reason); (iii) one value overwritten in place (new storage model, history lost). Also confirm no historical import for the pilot. F-2 (D-15 b contradiction): per-date counts in the administrator's holiday preview reveal a named colleague's recorded days in a small team, against docs/03 ('administrators see no timesheet details') and the WP2-A-01 audit fix: (a, recommended) keep removed; (b) restore exact counts with a written exception and an audit event; (c) counts only when 3 or more, else 'fewer than 3'. F-3 (export/import scope): (a, recommended) personal settings file plus an administrators' company-calendar file; (b) personal only; (c) everything including accounts. F-4 (import behaviour): (a, recommended) preview with a Now/In-the-file comparison, new versions, policy from a chosen date, auto-submit only with a separate tick; (b) apply at once; (c) merge field by field. F-5: approve the mockup (a) as drawn or (b) with named changes.",
     "blocking": "F-5 blocks UX4-T01..T03; F-1 and F-2 block UX4-T04; F-3 and F-4 block UX4-T05."
   },
+  "answered_owner_question_ux5_remote": {
+    "answered": "2026-10-22, owner chat (verbatim): 'A.a, B.A, C.b'. A a: the next freeze first fast-forwards local main to origin/main 70dce2a (no conflict), then commits FIX2 on top; REGATE2 and the audits treat the Ingat files (6173f07, 70dce2a) as owner work outside rounds 4-5, checked only for not breaking the build, tests and docs pairs. B a: keep the worktree; the font-scan test skips the .claude/ folder, a one-line test change folded into FIX2 before its freeze. C b: hold pushes to main until the owner says; the mission's commits stay local (git.unpushed) and gates and audits run on the local commits.",
+    "id": "WP5-UX5-REMOTE-Q (A, B, C)",
+    "asked": "2026-10-22",
+    "source": "WP5-UX5-REMOTE-RECON (handoff/delivery/tasks/WP5-UX5-REMOTE-RECON.md): origin/main 70dce2a is 2 commits ahead of HEAD 2bce0ab (6173f07 'ci(deploy): add the Ingat manifest and the GHCR image workflow', 203 files: ingat.toml, .github/workflows/image.yml and ingat-validate.yml, docs 07 and 11 (+vi), ADR 0002 (+vi), INGAT handoff records; 70dce2a handoff only), same author identity as 2bce0ab, no governance path, no overlap with the mission's uncommitted work; an ignored local worktree .claude/worktrees/relaxed-lalande-8359f0 (branch claude/relaxed-lalande-8359f0, local only, HEAD 70dce2a, dirty with an INGAT-T0T8 record, no process using it) whose font copy makes wordmarkAsset.test.ts:135-140 fail in repository runs of npm run verify.",
+    "question": "A (integrating the two outside commits): (a, recommended) the next freeze first fast-forwards local main to origin/main (no conflict), then commits FIX2 on top; REGATE2 and the audits run on that tip and treat the Ingat files as owner work outside rounds 4-5, checked only for not breaking the build, tests and docs pairs; (b) the same, but the round-5 audits also review the Ingat work as part of the WP5 re-accept; (c) hold the mission until the Ingat session is finished, then integrate. B (the extra worktree): (a, recommended) keep it; the font-scan test skips the .claude/ folder (tooling, never app assets), folded into the FIX2 freeze as a one-line test change; (b) the owner closes that session and removes the worktree, no code change (repository-level verify fails until then). C (pushes to main): the new GHCR image workflow may run on pushes to main, so the mission's next freeze pushes may start it: (a) fine, continue pushing to main; (b) hold pushes until the owner says.",
+    "blocking": "WP5-UX5-FIX2-FREEZE and everything after it."
+  },
   "answered_owner_question_ux4_r3_r4": {
     "answered": "2026-10-21, owner chat (verbatim): '* UX4-R3.b' and '* UX4-R4.a'.",
     "id": "WP5-UX4-R3-Q, WP5-UX4-R4-Q",
@@ -447,10 +457,15 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "e2bf1aab4ef65d496de6672c7986e27db04ddb39",
+    "last_commit": "2bce0ab5842b80c710f23496d5173c122319e5c7",
     "unpushed": []
   },
   "owner_decisions": [
+    {
+      "date": "2026-10-22",
+      "source": "owner chat (verbatim)",
+      "decision": "'A.a, B.A, C.b' (WP5-UX5-REMOTE-Q): A a fast-forward local main to origin/main 70dce2a before the FIX2 freeze, Ingat files treated as owner work outside rounds 4-5 and checked only for non-interference; B a the font-scan test skips .claude/ (one-line test change in FIX2); C b hold pushes to main until the owner says (commits stay local)."
+    },
     {
       "date": "2026-10-22",
       "source": "owner chat (verbatim)",
@@ -700,6 +715,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-22",
+      "basis": "WP5-UX5-DIAG1 classified the regate failure theme.spec.ts:605 as a test defect (the ResizeObserver-written --shell-bar-size lags the bar by one to a few frames; readers are CSS only; no user-visible fault) and offered an optional one-line product hardening (observe the border box) for a latent gap that no current style triggers.",
+      "decision": "WP5-UX5-FIX2 is tests-only (expect.poll on one round trip, a deterministic test, repeat-each proof); the border-box hardening is not done now (smallest complete change; it would turn a tests-only regate into a client regate) and is passed to WP5-UX5-AUDIT-A as an optional risk to judge."
+    },
     {
       "date": "2026-10-22",
       "basis": "Plan slice UX5-T05 holds sixteen items (U5-03..07, U5-16..21 with the U5-17 revisions and U5-17b, U5-23..26) plus the T04 follow-ups; T03 and T04 each used a worker for 70-95 minutes and 660-880k tokens with fewer items. The Day editor items change data-entry behaviour (discard guard, partial-leave draft, fixed Save) while the others are measured layout and text contracts.",
@@ -1125,6 +1145,54 @@
     }
   ],
   "auxiliary_lookups": [
+    {
+      "id": "WP5-UX5-FIX2-PATHS",
+      "agent_type": "timesheet-light",
+      "agent_id": "a362f16d047198cfa",
+      "status": "done",
+      "brief": "handoff/delivery/tasks/WP5-UX5-FIX2-PATHS.md",
+      "requested_model": "haiku",
+      "routing_note": "docs/08: haiku only for pure listing/probes; a read-only git status listing with a short Results (lesson of FIX1-PATHS).",
+      "writes": [
+        "handoff/delivery/tasks/WP5-UX5-FIX2-PATHS.md (short Results only)",
+        "task folder D:\\.claude-tmp\\timesheet\\WP5-UX5-FIX2-PATHS (full handoff list)"
+      ],
+      "purpose": "Exact paths outside handoff/, handoff counts and folders, index state, overlap with HEAD..origin/main, signature-basename and zz-* checks after WP5-UX5-FIX2 Addendum 2, for the WP5-UX5-FIX2-FREEZE brief.",
+      "result": {
+        "model": "claude-haiku-5-5 (self_reported)",
+        "record_note": "The lookup did not write its brief's Results (it read the brief's 'change nothing' as covering its own Results); its full list is the task-folder file D:\\.claude-tmp\\timesheet\\WP5-UX5-FIX2-PATHS\\handoff-list.txt, read by the coordinator.",
+        "git": "HEAD 2bce0ab, origin/main 70dce2a (no fetch); nothing staged.",
+        "outside_handoff": "3 modified: tests/client/wordmarkAsset.test.ts, tests/e2e/shell.spec.ts, tests/e2e/theme.spec.ts; none new or deleted.",
+        "handoff": "10 modified (NEXT_ACTION pair, board, STATE, checkpoint pair, tasks AUDIT-A, AUDIT-B, FIX1-FREEZE, REGATE); 199 new (evidence WP5-UX5-DIAG1 28, FIX1-FREEZE 2, REGATE 148, REMOTE-RECON 16; tasks DIAG1, FIX2-PATHS, FIX2, REGATE2, REMOTE-RECON).",
+        "checks": "No overlap with HEAD..origin/main; 4 PNGs, all -synthetic; no zz-* under tests, src, scripts or docs (7 zz-*.txt probe copies under evidence); evidence/WP5-UX5-REGATE/13-integ-signatures.txt needs the -synthetic rename."
+      }
+    },
+    {
+      "id": "WP5-UX5-REMOTE-RECON",
+      "agent_type": "timesheet-verifier",
+      "agent_id": "a7cd1fbae22b4cf81",
+      "status": "done",
+      "brief": "handoff/delivery/tasks/WP5-UX5-REMOTE-RECON.md",
+      "requested_model": "sonnet",
+      "routing_note": "docs/08 'reconcile an interruption': verifier, read-only (git fetch allowed).",
+      "writes": [
+        "handoff/delivery/tasks/WP5-UX5-REMOTE-RECON.md (Results section only)",
+        "handoff/delivery/evidence/WP5-UX5-REMOTE-RECON/ (.txt only)",
+        "task folder D:\\.claude-tmp\\timesheet\\WP5-UX5-REMOTE-RECON"
+      ],
+      "purpose": "The FIX2 worker found origin/main at 70dce2a ahead of HEAD 2bce0ab (commits outside the mission touching .github, docs, ingat.toml, handoff) and an untracked checkout .claude/worktrees/relaxed-lalande-8359f0 whose font breaks wordmarkAsset.test.ts in repository runs of npm run verify. Record the commits, their overlap with the mission's uncommitted work, the worktree's state and use, the digest, and the options, before any freeze.",
+      "result": {
+        "model": "claude-sonnet-5-5 (self_reported)",
+        "git": "fetch changed nothing; origin/main 70dce2a, main behind by 2, none ahead.",
+        "commits": "6173f07 (2026-10-22) ci(deploy): add the Ingat manifest and the GHCR image workflow: 203 files (ingat.toml, .github/workflows/image.yml and ingat-validate.yml, docs 07 and 11 with .vi, ADR 0002 with .vi, INGAT handoff tasks and evidence); 70dce2a (2026-10-22) docs(handoff): record the INGAT-T0T8 commit and CI runs, handoff only. Author identity equal to 2bce0ab for both. No governance path. ingat.toml is the Ingat deploy manifest, no secret in its first 30 lines.",
+        "overlap": "No shared path with the mission's uncommitted work; a fast-forward is conflict-free.",
+        "worktree": ".claude/worktrees/relaxed-lalande-8359f0: branch claude/relaxed-lalande-8359f0 (local only), HEAD 70dce2a, dirty (1 modified, 1 untracked handoff path, INGAT-T0T8 record), ignored through .git/info/exclude, not in git status, no process using it; a full repository copy including font files.",
+        "digest": "3ca01b9ce42da2ce48c6b6f53664b30ce7e8b9391130b57125a4787cf2d19f84 (870 files); the script uses git ls-files with exclude-standard, so the worktree does not affect it.",
+        "tests": "tests/client/wordmarkAsset.test.ts:135-140 walks ROOT for fonts and sees the worktree; userWording.test.ts:46 and wordmarkAsset.test.ts:30 use readdirSync.",
+        "options": "fast-forward before the freeze; commit first then merge; make the walking test skip .claude/worktrees; owner removes the worktree.",
+        "record": "handoff/delivery/tasks/WP5-UX5-REMOTE-RECON.md; evidence handoff/delivery/evidence/WP5-UX5-REMOTE-RECON/"
+      }
+    },
     {
       "id": "WP5-UX5-FIX1-PATHS",
       "agent_type": "timesheet-light",
@@ -26533,7 +26601,7 @@
       "id": "WP5-UX5-FIX1-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX5-FIX1"
       ],
@@ -26546,6 +26614,205 @@
         "risk": "L",
         "novelty": false
       },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a9700715c20754afc",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 3,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX5-FIX1-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX5-FIX1-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX5-FIX1-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-FIX1-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX5-FIX1-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-UX5-FIX1-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "e2bf1aab4ef65d496de6672c7986e27db04ddb39",
+      "branch": "main",
+      "commit_sha": "2bce0ab5842b80c710f23496d5173c122319e5c7",
+      "pushed": true,
+      "source_digest": "709750910cb88422b1de35c38c85eac15c3eca63ee75e1ff26e11b75d6475bbf",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed 2bce0ab on main at attempt 3 (remote equal; no tag): 363 staged (13 outside handoff; the rest handoff, incl. the gate, FIX1 and T06-FREEZE evidence folders as directories); the gate evidence 13-integ-signatures.txt renamed 13-integ-signatures-synthetic.txt for the precommit private-media rule; precommit, git diff --cached --check, JSON parse, validate_orchestration, check_recovery (106) and preflight exit 0; HEAD git ls-tree digest 70975091 (870 files). The committed FIX1-FREEZE brief is the attempt-1 staged copy without the addenda; checks.txt, commit-message.txt and Results were written after the commit on request and stay unstaged.",
+      "attempt_1": "Stopped before commit (agent a9700715c20754afc, self_reported claude-sonnet-5-5): HEAD = origin/main = e2bf1aa, digest 70975091 (870) matched, tree set matched, nothing staged at start, key scan 0 hits; 363 paths staged; precommit exit 1: BLOCK private-media handoff/delivery/evidence/WP5-UX5-GATE/13-integ-signatures.txt (a non-source basename containing 'signature' without 'synthetic'; it is the gate's text log of the signatures integration test on synthetic data); git diff --cached --check 0; later checks not run. Addendum 1: the same committer renames that evidence file with git mv to 13-integ-signatures-synthetic.txt (and any other such basename), reruns from check 7 and commits (attempt 2). A precommit block, not a permission denial, so resuming the same agent is allowed.",
+      "attempt_2": "Stopped before commit (same agent): the one blocked basename renamed with git mv to 13-integ-signatures-synthetic.txt (the only such file); precommit PASS (363 files), git diff --cached --check 0, JSON parse 0, validate_package --preflight 0; validate_orchestration and check_recovery exit 1 'Dependency gate not PASS: WP5-UX5-FIX1' (coordinator slip: FIX1 depended on the FAIL gate). Board fixed (FIX1 depends on WP5-UX5-T06-FREEZE, addresses_gate WP5-UX5-GATE). Addendum 2: re-stage only ORCHESTRATION.json and rerun from check 7 (attempt 3).",
+      "next_action": "None; WP5-UX5-REGATE on 2bce0ab / 70975091."
+    },
+    {
+      "id": "WP5-UX5-REGATE",
+      "package": "WP5",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "2bce0ab5842b80c710f23496d5173c122319e5c7",
+      "depends_on": [
+        "WP5-UX5-FIX1-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aa7b9233afe01f0fd",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX5-REGATE.md",
+        "handoff/delivery/evidence/WP5-UX5-REGATE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX5-REGATE.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-REGATE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX5-REGATE/01-digest-export-before.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/01-digest-export-after.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/01-digest-lstree-after.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/03-verify.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/04-e2e-project-counts.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/07-drill.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/08-drill2.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/11-exits.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/12-npmtest-exits.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/13-integ-exits.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/15-docker-ps-final.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/17-sweep-counts.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/20-diffstat-nonhandoff.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/log-sweep-r2full-1101.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/log-sweep-r3full-1101.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE/log-diag-theme1.txt"
+      ],
+      "baseline_commit": "e2bf1aab4ef65d496de6672c7986e27db04ddb39",
+      "source_digest": "709750910cb88422b1de35c38c85eac15c3eca63ee75e1ff26e11b75d6475bbf",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "FAIL",
+      "gate_notes": "FAIL on 2bce0ab / 70975091 (870 files; three digest forms equal before and after; NAS NOT VERIFIED) under the rule that a non-network failure in the sweep is reported as is. Interrupted once (expired sign-in) and resumed; the first drill then failed at its end with a docker compose process-start error (119/3, kept as 07-drill.txt) and left the project up (removed by name); the rerun drill --wp3 passed 209/0 with stage 4 signing two periods (201/201; 2 revisions and 2 queued sends before the upgrade). Identity: only FIX1's 13 paths; dist/server and dist/domain byte-identical to e2bf1aa, so the gate's boundary, data/sends/PDF and integration items carry forward (integration files rerun anyway, all exit 0). Core: ci, lint, verify (2345), npm test x3 0 crashes, audit 0, validators (check_recovery 106), AC-13. Real-clock FULL e2e desktop 458 / mobile 403 passed, 0 failed. Sweep: six of seven runs 0 failed; FULL at 2026-11-01T08:45Z had 1 failure, theme.spec.ts:605 mobile 'received share, without the zone note' (--shell-bar-size 112 against a rendered bar of 60; an assertion, not a network error), not reproduced in 3 isolated runs or a full rerun at that instant; the four gate failures are gone at every instant. Axe 0 in every light/dark scan; overflowing .table-wrap regions focusable, named, ArrowRight scrolls; ring 6.09 / 6.79:1 (no Administration, Import or transfer table overflowed in the verifier's data). The four fixed tests: none weakened. Leftover: the wedged first-sweep Playwright/Node tree and two idle shells (chain2.sh, chain3.sh) from before the interruption may still be alive; not stopped (no PID kills). Note for the next freeze: the evidence file 13-integ-signatures.txt again trips the precommit private-media rule and must be renamed -synthetic.",
+      "interruption_1": "2026-10-22: the verifier stopped early with an API authentication error (401, OAuth access token expired) while it was still reading the gate's scripts; no result written. The owner signed in again and asked to continue. The same agent was resumed with its context: it checked for leftovers it had started, removed the Compose project by name, and continued the brief.",
+      "next_action": "None; WP5-UX5-DIAG1 (planner) diagnoses theme.spec.ts:605 (--shell-bar-size against the rendered bar under load); then a fix if needed, its freeze, and a regate."
+    },
+    {
+      "id": "WP5-UX5-DIAG1",
+      "package": "WP5",
+      "kind": "diagnose",
+      "status": "done",
+      "addresses_gate": "WP5-UX5-REGATE",
+      "depends_on": [
+        "WP5-UX5-FIX1-FREEZE"
+      ],
+      "profile": "timesheet-planner",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "routing_note": "docs/08 row 'Plan/diagnose a bounded issue': one non-reproduced assertion failure; read-only, probes in a scratch export.",
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a0208756e7a0124fd",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX5-DIAG1.md",
+        "handoff/delivery/evidence/WP5-UX5-DIAG1"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX5-DIAG1.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-DIAG1.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX5-DIAG1/zz-diag2.spec.ts.txt"
+      ],
+      "evidence_note": "Further logs (log-diag2-height.txt, log-diag2-padding-only.txt, log-diag3c-*, log-diag3d-*, trace-fields.txt, procs-raw.txt, ports-raw.txt, procs-final.txt) as named in the Results.",
+      "baseline_commit": "2bce0ab5842b80c710f23496d5173c122319e5c7",
+      "source_digest": "709750910cb88422b1de35c38c85eac15c3eca63ee75e1ff26e11b75d6475bbf",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "test defect (product lag by design, not a stuck value): the single writer useBlockSizeProperty (AppShell.tsx:131, useBlockSize.ts:10-24) sets --shell-bar-size at mount and then from a ResizeObserver, which runs in the next frame's rendering step; after a sign-in with a received share the bar goes 60 to 112 about 8 ms after mount and the property follows 1-35 ms later (up to 67 ms at 10x CPU throttle), 132 of 132 sign-ins; readers are CSS only (account panel max-height, html scroll-padding-top, side panel tops, a sticky top), one frame stale, no user-visible fault. expectBudget (theme.spec.ts:584-585) reads the bar (forced layout) and the property in two round trips and can land in that window under a loaded run; not reproduced in about 560 runs and probes. Latent product gap (hardening only): the observer watches the content box while the value is the border box, so a padding- or border-only change would not be reported; no such change exists in the stylesheet. Fix: tests only, expect.poll on one evaluate returning |property - bar| < 0.05 in theme.spec.ts:584-585 and shell.spec.ts:497-503 (day-editor.spec.ts:3065-3070 if the same pattern), a deterministic CSSOM test, repeat-each=40 at 2026-11-01T08:45Z. Leftover regate processes: none alive, no port held, nothing stopped. Slips: two ls | head, one /dev/null and /dev/stdout redirect in a copy command.",
+      "next_action": "None; WP5-UX5-FIX2 (tests only), its freeze, then WP5-UX5-REGATE2."
+    },
+    {
+      "id": "WP5-UX5-FIX2",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "done",
+      "addresses_gate": "WP5-UX5-REGATE",
+      "depends_on": [
+        "WP5-UX5-DIAG1"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "routing_note": "docs/08 'Accepted finding naming file/fix/tests' (DIAG1 Q5): tests only.",
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": "a80dc8984ee70cbc9",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 3,
+      "owned_paths": [
+        "tests/e2e/theme.spec.ts",
+        "tests/e2e/shell.spec.ts",
+        "tests/e2e/day-editor.spec.ts",
+        "tests/client/wordmarkAsset.test.ts",
+        "tests/client/userWording.test.ts",
+        "handoff/delivery/tasks/WP5-UX5-FIX2.md",
+        "handoff/delivery/evidence/WP5-UX5-FIX2"
+      ],
+      "owned_paths_note": "day-editor.spec.ts only for the --editor-head-size read at 3065-3070 if it has the same pattern; no src/ change.",
+      "prompt": "handoff/delivery/tasks/WP5-UX5-FIX2.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-FIX2.md",
+      "evidence": [],
+      "baseline_commit": "2bce0ab5842b80c710f23496d5173c122319e5c7",
+      "source_digest": "7ad771b5d991367e0f9f7a0800d3cf5abf46169667b233c7234791d81fdb81c0",
+      "reviewed_digest": null,
+      "author_agent_ids": [
+        "ac23550fd8a51aab2",
+        "a0c1d387b29545038",
+        "a80dc8984ee70cbc9"
+      ],
+      "interruption": "2026-10-22: the owner asked to pause and save everything for a machine restart. The coordinator stopped the worker (agent ac23550fd8a51aab2) with TaskStop mid-implementation (its last message: 'Tests have no DOM lib; use a string expression.'). No Results were written. Uncommitted partial edits may exist in the owned test files (tests/e2e/theme.spec.ts, shell.spec.ts, day-editor.spec.ts) and its task folder D:\\.claude-tmp\\timesheet\\WP5-UX5-FIX2. On resume: a fresh worker (attempt 2) on the same brief first records HEAD, git status and git diff of the owned files, keeps a partial change only if it matches the brief, otherwise restores those files from HEAD with git restore (owned paths only), then completes the brief.",
+      "attempt_1_agent_id": "ac23550fd8a51aab2",
+      "interruption_2": "2026-10-22: the owner asked again to pause and save everything for a machine restart. The coordinator stopped attempt 2 (agent a0c1d387b29545038) with TaskStop while it was running tests (its last note: 'Line reporter hides errors; find the Error text.'). No Results were written. Partial edits may exist in the owned test files and in the task folders D:\\.claude-tmp\\timesheet\\WP5-UX5-FIX2 and WP5-UX5-FIX2-a2. On resume: attempt 3 by a fresh worker on the same brief with Addendum 1 (record HEAD, git status and the diff of the owned test files; keep a matching partial change or restore those files from HEAD), using a new task folder WP5-UX5-FIX2-a3.",
+      "attempt_2_agent_id": "a0c1d387b29545038",
+      "decision": "done at attempt 3 with one unmet proof line (worker report; regate pending): the partial edits of attempts 1/2 matched the brief and were kept. theme.spec.ts:572-582 new helper expectBarSizeFollowsBar (expect.poll on one evaluate, < 0.05) used in expectBudget at :599; shell.spec.ts:497-507 the same poll; day-editor.spec.ts:3059-3070 already one evaluate, unchanged; deterministic test theme.spec.ts:633 (phone, CSSOM 92 then 52px). Real clock theme+shell both projects 157 passed / 15 skipped / 0 failed; FULL e2e both projects 863 passed / 125 skipped / 0 failed. Repeat-each=40 workers=14 at 2026-11-01T08:45Z of the two whole specs did NOT reach 0 failed (run 1: 19, run 2: 8 of 6272; all 30 s timeouts, 'session closed' or ERR_NO_BUFFER_SPACE in unrelated tests, a different set each run: host overload), while the targeted repeat of the bar-size and first-screen tests passed 1360/0. Mutant (ResizeObserver callback no-op in a scratch export) failed 7 tests; restored. typecheck, lint, preflight, git diff --check 0. npm run verify fails in the repository only because wordmarkAsset.test.ts finds a font in the untracked .claude/worktrees/relaxed-lalande-8359f0/ (not the mission's), and passes in a clean export (2345 tests). Digest 3ca01b9c...d19f84 (870 files). New fact for the coordinator: the local origin/main ref is 70dce2a, ahead of HEAD 2bce0ab, with commits touching .github, docs, ingat.toml and handoff (not src/tests), made outside the mission.",
+      "addendum_2": "Owner decision B a: the same worker (a80dc8984ee70cbc9) makes the font walk in tests/client/wordmarkAsset.test.ts:135-140 skip .claude/ (owned path added), proves npm run verify passes in the repository with the worktree present, a stray-font mutant in a scratch export, npm test, lint, digest LAST.",
+      "addendum_2_result": "done: tests/client/wordmarkAsset.test.ts:134 adds .claude to the walk's skip set (userWording.test.ts:46 walks only src/client and filesUnder only src/, unchanged); npm run verify in the repository with the worktree present exit 0 (100 files, 2345 tests); npm test 0, lint 0; scratch mutant: strayfolder/stray.ttf fails the test, .claude/worktrees/x/stray.ttf alone passes; dummies deleted file by file; digest 7ad771b5 (870 files; on the 2bce0ab base plus the FIX2 test edits).",
+      "next_action": "None; WP5-UX5-FIX2-FREEZE (fast-forward to origin/main 70dce2a, commit, no push)."
+    },
+    {
+      "id": "WP5-UX5-FIX2-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX5-FIX2"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
       "actual_model": null,
       "actual_source": null,
       "actual_effort": null,
@@ -26553,23 +26820,21 @@
       "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP5-UX5-FIX1-FREEZE.md",
-        "handoff/delivery/evidence/WP5-UX5-FIX1-FREEZE"
+        "handoff/delivery/tasks/WP5-UX5-FIX2-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX5-FIX2-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP5-UX5-FIX1-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP5-UX5-FIX1-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP5-UX5-FIX2-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-FIX2-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "e2bf1aab4ef65d496de6672c7986e27db04ddb39",
+      "baseline_commit": "2bce0ab5842b80c710f23496d5173c122319e5c7",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "709750910cb88422b1de35c38c85eac15c3eca63ee75e1ff26e11b75d6475bbf",
+      "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "attempt_1": "Stopped before commit (agent a9700715c20754afc, self_reported claude-sonnet-5-5): HEAD = origin/main = e2bf1aa, digest 70975091 (870) matched, tree set matched, nothing staged at start, key scan 0 hits; 363 paths staged; precommit exit 1: BLOCK private-media handoff/delivery/evidence/WP5-UX5-GATE/13-integ-signatures.txt (a non-source basename containing 'signature' without 'synthetic'; it is the gate's text log of the signatures integration test on synthetic data); git diff --cached --check 0; later checks not run. Addendum 1: the same committer renames that evidence file with git mv to 13-integ-signatures-synthetic.txt (and any other such basename), reruns from check 7 and commits (attempt 2). A precommit block, not a permission denial, so resuming the same agent is allowed.",
-      "attempt_2": "Stopped before commit (same agent): the one blocked basename renamed with git mv to 13-integ-signatures-synthetic.txt (the only such file); precommit PASS (363 files), git diff --cached --check 0, JSON parse 0, validate_package --preflight 0; validate_orchestration and check_recovery exit 1 'Dependency gate not PASS: WP5-UX5-FIX1' (coordinator slip: FIX1 depended on the FAIL gate). Board fixed (FIX1 depends on WP5-UX5-T06-FREEZE, addresses_gate WP5-UX5-GATE). Addendum 2: re-stage only ORCHESTRATION.json and rerun from check 7 (attempt 3).",
-      "next_action": "Attempt 3 by the same committer after Addendum 2."
+      "next_action": "Fresh committer: fetch, overlap check, git merge --ff-only origin/main (owner A a), stage the 3 test files, 10 modified handoff files, 4 evidence folders and the new task records, rename the signature-basename log, precommit and validators, commit locally, no push (owner C b); HEAD ls-tree digest equals the post-fast-forward digest D_PRE."
     },
     {
       "id": "WP5-UX5-PLAN",
