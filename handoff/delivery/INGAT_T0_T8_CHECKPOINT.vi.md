@@ -160,5 +160,21 @@ Bản tiếng Anh là bản gốc: [INGAT_T0_T8_CHECKPOINT.md](INGAT_T0_T8_CHECK
   trên GitHub; ghi rõ hơn nghĩa vụ gắn tag và dẫn Ingat; dùng phiên bản API mới hơn; hai
   lỗ hổng test; `assertSafe` không kiểm lại quy tắc tuổi). Lần chạy thật đầu tiên chưa
   diễn ra, theo thiết kế.
-- INGAT-GC-COMMIT đang chạy (lần 1, timesheet-committer, sonnet; chủ dự án "yes, lên
-  main"): commit trên nhánh worktree, push `HEAD:refs/heads/main` dạng fast-forward.
+- INGAT-GC-COMMIT xong (lần 1, timesheet-committer, tự báo claude-sonnet-5-5; chủ dự án
+  "yes, lên main"): commit `782cddabae6260a87c600936daf0408eebb17f56` (286 tệp: 15 tệp
+  nguồn, 12 tệp handoff, 7 thư mục bằng chứng), push dạng fast-forward lên `main`;
+  `origin/main` = `782cdda`; 15 hash khớp HEAD; digest không đổi `e47e6344…ee56`; mọi bước
+  kiểm exit 0. Kết quả kiểm nằm trong `evidence/INGAT-GC-COMMIT/checks.txt` (chưa theo
+  dõi).
+- INGAT-GC-CI xong, PASS (lần 1, timesheet-light, tự báo claude-haiku-5-5; 7 request API
+  công khai): `782cdda` ingat-validate run 39909592535 success, image run 39909592540
+  success; `70dce2a` ingat-validate run 39885375736 success, image run 39885375744
+  success; workflow `image-cleanup` (id 393702719) đã đăng ký, trạng thái active. Nó chưa
+  chạy lần nào (chỉ chạy theo lịch hoặc khi bấm tay).
+- INGAT-GC-RECORD (timesheet-committer, sonnet) commit các hồ sơ còn lại (chỉ `handoff/`)
+  và push lên `main`; kết quả của chính nó nằm trong brief của nó.
+- Việc của chủ dự án cho job dọn: không cần gì để bắt đầu (lịch chạy xoá thật ngay từ lần
+  đầu, và trước khoảng 2026-11-21 không có bản nào cũ hơn 30 ngày). Nếu lần chạy lịch đầu
+  tiên lỗi 403, kiểm vai trò "Manage Actions access" của `CDSemi/timesheet` trên package
+  (D4 vẫn để ngỏ). `main` cục bộ ở checkout chính giờ chậm hơn `origin/main` ba commit
+  (chạy `git merge --ff-only origin/main` ở đó).

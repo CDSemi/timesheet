@@ -1,0 +1,19 @@
+feat(ci): add a scheduled GHCR cleanup that keeps release images
+
+Add .github/workflows/image-cleanup.yml and scripts/ghcr-cleanup.ts. A
+daily job deletes a ghcr.io/cdsemi/timesheet version only when every tag
+is a commit SHA, none of them is a commit with a git tag (a release), and
+the version is outside the newest 20 and older than 30 days. Untagged
+and non-SHA-tagged versions are never deleted; the floors are 10
+versions and 7 days; a manual run is a dry run by default. Release
+versions are deleted only by hand. Record the decision in ADR 0003,
+point ADR 0002 to it, update docs/07 and docs/11 with their
+translations, add the tests, fixtures and tsconfig includes, and the
+track's records.
+
+Task: INGAT-GC-IMPL, INGAT-GC-FIX1
+Gate: INGAT-GC-GATE FAIL, INGAT-GC-REGATE1 PASS
+Audit: INGAT-GC-AUDIT PASS
+Digest: e47e634433fd2613985d976f2fd1bccd240b617eb4a96e1ee097912da184ee56
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

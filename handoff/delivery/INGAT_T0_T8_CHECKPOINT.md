@@ -160,5 +160,21 @@ English is canonical; the Vietnamese translation is [INGAT_T0_T8_CHECKPOINT.vi.m
   protected version. Optional O1-O9 (for example ADR 0002 still says nothing has run on
   GitHub; a plainer tag duty citing Ingat; a newer API version; two test gaps;
   `assertSafe` does not re-check the age rule). The first live run is unrun by design.
-- INGAT-GC-COMMIT running (attempt 1, timesheet-committer, sonnet; the owner's "yes, lên
-  main"): commit on the worktree branch, push `HEAD:refs/heads/main` as a fast-forward.
+- INGAT-GC-COMMIT done (attempt 1, timesheet-committer, self-reported claude-sonnet-5-5;
+  the owner's "yes, lên main"): commit `782cddabae6260a87c600936daf0408eebb17f56` (286
+  files: 15 source, 12 handoff files, 7 evidence folders), pushed to `main` as a
+  fast-forward; `origin/main` = `782cdda`; the 15 hashes equal HEAD; digest unchanged
+  `e47e6344…ee56`; every check exit 0. Its checks are in the untracked
+  `evidence/INGAT-GC-COMMIT/checks.txt`.
+- INGAT-GC-CI done, PASS (attempt 1, timesheet-light, self-reported claude-haiku-5-5; 7
+  public API requests): `782cdda` ingat-validate run 39909592535 success, image run
+  39909592540 success; `70dce2a` ingat-validate run 39885375736 success, image run
+  39885375744 success; workflow `image-cleanup` (id 393702719) registered, state active.
+  It has not run yet (schedule or manual dispatch only).
+- INGAT-GC-RECORD (timesheet-committer, sonnet) commits the remaining records (handoff
+  only) and pushes them to `main`; its own result stays in its brief.
+- Owner steps for the cleanup: none needed to start (the schedule deletes from its first
+  run, and nothing is older than 30 days before about 2026-11-21). If the first scheduled
+  run fails with 403, check the package's "Manage Actions access" role for
+  `CDSemi/timesheet` (D4 stays open). The local `main` of the main checkout is now three
+  commits behind `origin/main` (`git merge --ff-only origin/main` there).
