@@ -58,7 +58,7 @@ Status: proposed (side track "Ingat deployability", items T0 and T8; nothing has
 
 ## Consequences
 
-- The tip commit of each push to `main` adds a GHCR package version; a retention job is a later decision. A commit pushed
+- The tip commit of each push to `main` adds a GHCR package version; retention is decided in [ADR 0003](0003-ghcr-image-cleanup.md). A commit pushed
   together with later commits gets no image, so Ingat can deploy only a commit that was the tip of a push; before the
   first release this repository pushes after every commit (docs/08).
 - The first push creates a private package; making it public, which the target host needs to pull anonymously, cannot be

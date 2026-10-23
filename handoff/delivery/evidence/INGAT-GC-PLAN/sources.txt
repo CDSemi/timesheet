@@ -1,0 +1,25 @@
+INGAT-GC-PLAN sources. Public, unauthenticated reads only; no GitHub or GHCR write; nothing run against the NAS.
+Fetched copies are large HTML/YAML pages kept in the task folder D:\.claude-tmp\timesheet\INGAT-GC-PLAN\docs (not committed).
+
+Unauthenticated HTTP requests (16 of the allowed 30), all answered 200:
+ 1. https://docs.github.com/en/rest/packages/packages
+ 2. https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages
+ 3. https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry
+ 4. https://docs.github.com/en/packages/learn-github-packages/deleting-and-restoring-a-package
+ 5. https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+ 6. https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.yaml
+    (OpenAPI: lines 32036-32191 list/get/delete/restore org package versions; line 107506 package-version schema)
+ 7. https://raw.githubusercontent.com/actions/delete-package-versions/main/README.md
+ 8. https://api.github.com/repos/CDSemi/timesheet/git/matching-refs/tags   -> [] (no tag exists)
+ 9. https://api.github.com/repos/CDSemi/timesheet                          -> public repository
+10. git ls-remote --tags https://github.com/CDSemi/timesheet               -> empty output, exit 0 (anonymous read works)
+11. https://api.github.com/repos/actions/setup-node/releases/latest        -> v7.1.0
+12. https://api.github.com/repos/actions/setup-node/git/ref/tags/v7.1.0    -> commit 949feb2413d6458794dcd2491c4babbbce0c15c1
+13. https://api.github.com/repos/actions/checkout/git/ref/tags/v7.0.1      -> 3d3c42e5aac5ba805825da76410c181273ba90b1 (equals the pin in image.yml, so the method is sound)
+14. https://docs.github.com/en/actions/using-jobs/using-concurrency
+15. https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows
+16. git fetch origin (local git, no API)
+
+Ingat documents read (read-only): docs/design/adr/0026, adr/0007, LIFECYCLE.md sections 4.2, 4.4, 4.6, 4.9, 4.10, 4.13, 5.6, ARCHITECTURE.md (image sections), app-developers/MANIFEST_SPEC.md (retention examples).
+
+Commit rate (git rev-list on origin/main): 182 commits since 2026-09-30, 35 since 2026-10-15, so about 5 to 8 commits per day; a push can carry several commits, so versions per day are at most that.

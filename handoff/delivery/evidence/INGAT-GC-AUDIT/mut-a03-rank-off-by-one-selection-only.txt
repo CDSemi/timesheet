@@ -1,0 +1,245 @@
+- if (rank < options.keepNewest) return keep(
++ if (rank < options.keepNewest - 1) return keep(
+---
+
+ RUN  v5.0.2 D:/.claude-tmp/timesheet/INGAT-GC-AUDIT/export
+
+ ❯ tests/integration/ghcr-cleanup.test.ts (29 tests | 13 failed) 56ms
+   ❯ selectVersions (14)
+     × deletes only old versions: not among the newest and older than the age limit 5ms
+     × keeps a version whose commit has a git tag, even when it is old and was published before the tag existed 1ms
+     × keeps a version with a tag that is not a lowercase commit SHA, also when a commit tag is present too 0ms
+     × keeps an untagged version 0ms
+     × never deletes the newest versions and never deletes everything 0ms
+     × has no per-run cap: every eligible version is planned, the oldest last in the plan 1ms
+     × never deletes a protected version over many generated histories 5ms
+   ❯ run (7)
+     × a dry run lists across pages and writes nothing 22ms
+     × --apply deletes exactly the planned versions through the org endpoint, oldest first 2ms
+     × keeps a version whose tags changed after the listing 1ms
+     × stops at the first refused delete 4ms
+     × plans offline from saved files with a fixed clock 1ms
+   ❯ saved fixtures (3)
+     × with the floor options keeps 15 and plans 25 1ms
+
+ Test Files  1 failed (1)
+      Tests  13 failed | 16 passed (29)
+   Start at  22:49:26
+   Duration  251ms (tests 46%, transform 38%, import 14%, worker 2%)
+
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > deletes only old versions: not among the newest and older than the age limit
+Error: internal error: version 31 must not be deleted
+ ❯ scripts/ghcr-cleanup.ts:136:13
+    134|     const { tags } = decision.version;
+    135|     if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag)…
+    136|       throw new Error(`internal error: version ${decision.version.id} …
+       |             ^
+    137|     }
+    138|   });
+ ❯ assertSafe scripts/ghcr-cleanup.ts:131:13
+ ❯ selectVersions scripts/ghcr-cleanup.ts:124:3
+ ❯ deletedIds tests/integration/ghcr-cleanup.test.ts:31:3
+ ❯ tests/integration/ghcr-cleanup.test.ts:38:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > keeps a version whose commit has a git tag, even when it is old and was published before the tag existed
+Error: internal error: version 31 must not be deleted
+ ❯ scripts/ghcr-cleanup.ts:136:13
+    134|     const { tags } = decision.version;
+    135|     if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag)…
+    136|       throw new Error(`internal error: version ${decision.version.id} …
+       |             ^
+    137|     }
+    138|   });
+ ❯ assertSafe scripts/ghcr-cleanup.ts:131:13
+ ❯ selectVersions scripts/ghcr-cleanup.ts:124:3
+ ❯ deletedIds tests/integration/ghcr-cleanup.test.ts:31:3
+ ❯ tests/integration/ghcr-cleanup.test.ts:50:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > keeps a version with a tag that is not a lowercase commit SHA, also when a commit tag is present too
+Error: internal error: version 31 must not be deleted
+ ❯ scripts/ghcr-cleanup.ts:136:13
+    134|     const { tags } = decision.version;
+    135|     if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag)…
+    136|       throw new Error(`internal error: version ${decision.version.id} …
+       |             ^
+    137|     }
+    138|   });
+ ❯ assertSafe scripts/ghcr-cleanup.ts:131:13
+ ❯ selectVersions scripts/ghcr-cleanup.ts:124:3
+ ❯ deletedIds tests/integration/ghcr-cleanup.test.ts:31:3
+ ❯ tests/integration/ghcr-cleanup.test.ts:56:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > keeps an untagged version
+Error: internal error: version 31 must not be deleted
+ ❯ scripts/ghcr-cleanup.ts:136:13
+    134|     const { tags } = decision.version;
+    135|     if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag)…
+    136|       throw new Error(`internal error: version ${decision.version.id} …
+       |             ^
+    137|     }
+    138|   });
+ ❯ assertSafe scripts/ghcr-cleanup.ts:131:13
+ ❯ selectVersions scripts/ghcr-cleanup.ts:124:3
+ ❯ deletedIds tests/integration/ghcr-cleanup.test.ts:31:3
+ ❯ tests/integration/ghcr-cleanup.test.ts:61:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > never deletes the newest versions and never deletes everything
+Error: internal error: version 31 must not be deleted
+ ❯ scripts/ghcr-cleanup.ts:136:13
+    134|     const { tags } = decision.version;
+    135|     if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag)…
+    136|       throw new Error(`internal error: version ${decision.version.id} …
+       |             ^
+    137|     }
+    138|   });
+ ❯ assertSafe scripts/ghcr-cleanup.ts:131:13
+ ❯ selectVersions scripts/ghcr-cleanup.ts:124:3
+ ❯ deletedIds tests/integration/ghcr-cleanup.test.ts:31:3
+ ❯ tests/integration/ghcr-cleanup.test.ts:87:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > has no per-run cap: every eligible version is planned, the oldest last in the plan
+Error: internal error: version 191 must not be deleted
+ ❯ scripts/ghcr-cleanup.ts:136:13
+    134|     const { tags } = decision.version;
+    135|     if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag)…
+    136|       throw new Error(`internal error: version ${decision.version.id} …
+       |             ^
+    137|     }
+    138|   });
+ ❯ assertSafe scripts/ghcr-cleanup.ts:131:13
+ ❯ selectVersions scripts/ghcr-cleanup.ts:124:3
+ ❯ deletedIds tests/integration/ghcr-cleanup.test.ts:31:3
+ ❯ tests/integration/ghcr-cleanup.test.ts:96:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > never deletes a protected version over many generated histories
+Error: internal error: version 21 must not be deleted
+ ❯ scripts/ghcr-cleanup.ts:136:13
+    134|     const { tags } = decision.version;
+    135|     if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag)…
+    136|       throw new Error(`internal error: version ${decision.version.id} …
+       |             ^
+    137|     }
+    138|   });
+ ❯ assertSafe scripts/ghcr-cleanup.ts:131:13
+ ❯ selectVersions scripts/ghcr-cleanup.ts:124:3
+ ❯ tests/integration/ghcr-cleanup.test.ts:163:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > a dry run lists across pages and writes nothing
+Error: internal error: version 121 must not be deleted
+ ❯ scripts/ghcr-cleanup.ts:136:13
+    134|     const { tags } = decision.version;
+    135|     if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag)…
+    136|       throw new Error(`internal error: version ${decision.version.id} …
+       |             ^
+    137|     }
+    138|   });
+ ❯ assertSafe scripts/ghcr-cleanup.ts:131:13
+ ❯ selectVersions scripts/ghcr-cleanup.ts:124:3
+ ❯ run scripts/ghcr-cleanup.ts:263:21
+ ❯ tests/integration/ghcr-cleanup.test.ts:272:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > --apply deletes exactly the planned versions through the org endpoint, oldest first
+Error: internal error: version 21 must not be deleted
+ ❯ scripts/ghcr-cleanup.ts:136:13
+    134|     const { tags } = decision.version;
+    135|     if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag)…
+    136|       throw new Error(`internal error: version ${decision.version.id} …
+       |             ^
+    137|     }
+    138|   });
+ ❯ assertSafe scripts/ghcr-cleanup.ts:131:13
+ ❯ selectVersions scripts/ghcr-cleanup.ts:124:3
+ ❯ run scripts/ghcr-cleanup.ts:263:21
+ ❯ tests/integration/ghcr-cleanup.test.ts:282:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > keeps a version whose tags changed after the listing
+Error: internal error: version 21 must not be deleted
+ ❯ scripts/ghcr-cleanup.ts:136:13
+    134|     const { tags } = decision.version;
+    135|     if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag)…
+    136|       throw new Error(`internal error: version ${decision.version.id} …
+       |             ^
+    137|     }
+    138|   });
+ ❯ assertSafe scripts/ghcr-cleanup.ts:131:13
+ ❯ selectVersions scripts/ghcr-cleanup.ts:124:3
+ ❯ run scripts/ghcr-cleanup.ts:263:21
+ ❯ tests/integration/ghcr-cleanup.test.ts:294:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > stops at the first refused delete
+AssertionError: expected [] to have a length of 12 but got +0
+
+- Expected
++ Received
+
+- 12
++ 0
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:304:27
+    302|     await expect(run([...ARGS, '--apply'], ENV, deps)).rejects.toThrow…
+    303|     // Oldest first: versions 1 to 12 were attempted, 13 and later nev…
+    304|     expect(writes(calls)).toHaveLength(12);
+       |                           ^
+    305|   });
+    306|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > plans offline from saved files with a fixed clock
+Error: internal error: version 21 must not be deleted
+ ❯ scripts/ghcr-cleanup.ts:136:13
+    134|     const { tags } = decision.version;
+    135|     if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag)…
+    136|       throw new Error(`internal error: version ${decision.version.id} …
+       |             ^
+    137|     }
+    138|   });
+ ❯ assertSafe scripts/ghcr-cleanup.ts:131:13
+ ❯ selectVersions scripts/ghcr-cleanup.ts:124:3
+ ❯ run scripts/ghcr-cleanup.ts:263:21
+ ❯ tests/integration/ghcr-cleanup.test.ts:332:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the floor options keeps 15 and plans 25
+Error: internal error: version 1031 must not be deleted
+ ❯ scripts/ghcr-cleanup.ts:136:13
+    134|     const { tags } = decision.version;
+    135|     if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag)…
+    136|       throw new Error(`internal error: version ${decision.version.id} …
+       |             ^
+    137|     }
+    138|   });
+ ❯ assertSafe scripts/ghcr-cleanup.ts:131:13
+ ❯ selectVersions scripts/ghcr-cleanup.ts:124:3
+ ❯ run scripts/ghcr-cleanup.ts:263:21
+ ❯ plan tests/integration/ghcr-cleanup.test.ts:354:24
+ ❯ tests/integration/ghcr-cleanup.test.ts:376:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/13]⎯
+
+
+exit 1

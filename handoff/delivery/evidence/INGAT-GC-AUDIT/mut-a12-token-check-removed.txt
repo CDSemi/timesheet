@@ -1,0 +1,41 @@
+- if (!offline && (env['GITHUB_TOKEN'] ?? '') === '') throw new Error('GITHUB_TOKEN is not set');
++ 
+---
+
+ RUN  v5.0.2 D:/.claude-tmp/timesheet/INGAT-GC-AUDIT/export
+
+ ❯ tests/integration/ghcr-cleanup.test.ts (29 tests | 1 failed) 121ms
+   ❯ run (7)
+     × fails closed on missing token, missing tags file, a combined offline apply and an empty package 4ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 28 passed (29)
+   Start at  22:49:32
+   Duration  313ms (tests 66%, transform 23%, import 9%, worker 2%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > fails closed on missing token, missing tags file, a combined offline apply and an empty package
+AssertionError: promise resolved "+0" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+0
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:309:38
+    307|   it('fails closed on missing token, missing tags file, a combined off…
+    308|     const { deps } = fake([version(1, 1)]);
+    309|     await expect(run(ARGS, {}, deps)).rejects.toThrow();
+       |                                      ^
+    310|     await expect(run(['--owner', 'CDSemi'], ENV, deps)).rejects.toThro…
+    311|     await expect(run([...ARGS, '--apply', '--versions-file', 'v'], ENV…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit 1

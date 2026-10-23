@@ -111,3 +111,54 @@ Bản tiếng Anh là bản gốc: [INGAT_T0_T8_CHECKPOINT.md](INGAT_T0_T8_CHECK
 - Tiếp tục agent cùng phiên hoặc đầu vào cho task thay thế: không cần.
 - Hạn mức/thời điểm reset: không quan sát được.
 - Một việc tiếp theo: chủ dự án chuyển package GHCR sang Public.
+
+## Việc tiếp theo: dọn GHCR (GC)
+
+- Yêu cầu của chủ dự án (2026-10-22, trong phiên này, nguyên văn): "Thêm 1 job dọn định kỳ
+  xóa các phiên bản cũ, nhưng chỉ xóa các bản ko phải bản release. các bản release nếu
+  muốn xóa thì cần phải xóa bằng tay".
+- Chưa commit lúc bắt đầu: phần Results của `tasks/INGAT-T0T8-RECORD.md` và
+  `evidence/INGAT-T0T8-RECORD/` (ghi sau commit hồ sơ `70dce2a`).
+- INGAT-GC-PLAN xong (lần 1, timesheet-planner, tự báo claude-sonnet-5-5;
+  `tasks/INGAT-GC-PLAN.md`, `evidence/INGAT-GC-PLAN/`): bản release = commit có git tag;
+  một phiên bản chỉ bị xoá khi mọi tag của nó là SHA commit, không tag nào là commit có
+  git tag, nằm ngoài 20 bản mới nhất và cũ hơn 30 ngày; mức sàn 10 / 7 ngày, tối đa 50 bản
+  mỗi lần chạy, xoá bản cũ nhất trước; mặc định chạy thử; nhóm concurrency riêng; script
+  `scripts/ghcr-cleanup.ts` có test offline; ADR 0003 mới. Chưa chạy: tsc, eslint, vitest
+  thật, mọi lệnh gọi GitHub. Rủi ro còn lại: một commit không có tag, cũ hơn 30 ngày, mà
+  Ingat vẫn cần để restore bản sao lưu, sẽ mất image trên registry.
+- Quyết định của chủ dự án (2026-10-22, trong phiên này, nguyên văn): "D1. theo đề xuất /
+  D2. Giữ 20 bản mới nhất và mọi bản dưới 30 ngày, không giới hạn số lượng mỗi lần xoá /
+  D3. Xóa thật luôn (nhưng theo quy tắc D2 thì làm gì có bản nào hơn 30 ngày để mà xóa) /
+  yes, lên main". Nghĩa là: D1 tag git nào cũng đánh dấu bản release; D2 giữ 20 bản mới
+  nhất và mọi bản dưới 30 ngày, không giới hạn số bản xoá mỗi lần; D3 lịch chạy xoá thật
+  ngay từ lần đầu (không có cổng `GHCR_CLEANUP_APPLY`); sau khi audit PASS thì commit và
+  push lên `main`. D4 vẫn để ngỏ (chỉ khi lần xoá thật đầu tiên trả 403; trong lúc chờ
+  không dùng token cá nhân).
+- INGAT-GC-IMPL xong (lần 1, timesheet-worker-high, tự báo claude-sonnet-5-5): 15 tệp
+  (`evidence/INGAT-GC-IMPL/snapshot-sha256.txt`), digest `1d004a9a…dfa0` (882 tệp); worker
+  báo 26 test của job dọn, typecheck, lint, `npm test`, `npm run verify` exit 0 trong bản
+  export sạch, bắt được năm đột biến, actionlint sạch. Lỡ quy tắc chạy: hai lần pipe `ls`
+  vào `head` (chỉ để liệt kê).
+- INGAT-GC-GATE lần 1 xong, FAIL (tự báo claude-sonnet-5-5): mọi mục đạt trên danh tính
+  không đổi, trừ mục 6: bỏ dòng chặn "không bao giờ xoá hết mọi bản"
+  (`scripts/ghcr-cleanup.ts:139`, lớp phòng thủ thêm mà mức sàn khiến luồng thường không
+  chạm tới) thì cả 26 test vẫn đạt.
+- INGAT-GC-FIX1 đang chạy (lần 1, timesheet-worker, model yêu cầu sonnet, không ghi đè;
+  routing S/M/no; addresses_gate INGAT-GC-GATE): thêm test gọi thẳng vào dòng chặn đó (và
+  vào bước kiểm ở dòng 136 nếu chưa có test). Xong (tự báo claude-sonnet-5-5): export
+  `assertSafe`, thêm ba test, cả bảy đột biến giờ đều bị bắt (theo báo cáo worker); digest
+  `e47e6344…ee56`, danh sách `evidence/INGAT-GC-FIX1/snapshot-sha256.txt`.
+- INGAT-GC-REGATE1 xong, PASS (lần 1, timesheet-verifier, sonnet, cổng kiểm đầy đủ) trên
+  digest `e47e6344…ee56`: script chỉ khác ở `export`; test job dọn 29, `npm test` 2374,
+  smoke của verify đạt; cả bảy đột biến bị bắt; actionlint, ghim SHA, parity, preflight,
+  riêng tư.
+- INGAT-GC-AUDIT xong, PASS (lần 1, timesheet-auditor, tự báo claude-opus-5-5, ngữ cảnh
+  mới; `INGAT_GC_REVIEW.vi.md`): danh tính khớp đầu và cuối; chạy lại mọi bước kiểm; 17
+  phép thử đột biến riêng (13 bị bắt, 2 lỗ hổng test, 2 tương đương); không có đường nào
+  xoá một bản được bảo vệ. Gợi ý tùy chọn O1-O9 (ví dụ ADR 0002 vẫn nói chưa có gì chạy
+  trên GitHub; ghi rõ hơn nghĩa vụ gắn tag và dẫn Ingat; dùng phiên bản API mới hơn; hai
+  lỗ hổng test; `assertSafe` không kiểm lại quy tắc tuổi). Lần chạy thật đầu tiên chưa
+  diễn ra, theo thiết kế.
+- INGAT-GC-COMMIT đang chạy (lần 1, timesheet-committer, sonnet; chủ dự án "yes, lên
+  main"): commit trên nhánh worktree, push `HEAD:refs/heads/main` dạng fast-forward.

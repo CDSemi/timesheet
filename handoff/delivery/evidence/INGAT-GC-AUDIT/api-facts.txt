@@ -1,0 +1,45 @@
+INGAT-GC-AUDIT: GitHub facts the cleanup relies on, checked by the auditor against GitHub's public documentation.
+Fetched 2026-10-22 (local) with unauthenticated curl into D:\.claude-tmp\timesheet\INGAT-GC-AUDIT\docs (fetch-docs.log,
+fetch-docs2.log: every page HTTP 200 except one unused how-to path, 404). docs.github.com pages through
+/api/article/body?pathname=...; OpenAPI from github/rest-api-description main. V = verified, NV = not verifiable without a
+live authenticated run (left for the first run).
+
+1. V  List: GET /orgs/{org}/packages/{package_type}/{package_name}/versions; page (default 1), per_page (max 100,
+      default 30), state (active|deleted, default active); 200/401/403/404 (rest-packages.md 619-668; openapi 32036-32086).
+      Script: /orgs/<owner>/packages/container/<name>/versions?state=active&per_page=100&page=N; stops on a short page,
+      refuses above 30 pages. No total count is returned, so paging to a short page is the documented way.
+2. V  Get one: GET .../versions/{package_version_id} -> 200 (rest-packages.md 703-767). Script re-reads each id first.
+3. V  Delete: DELETE .../versions/{package_version_id} -> 204; 401/403/404 otherwise (rest-packages.md 769-823). A public
+      package version with more than 5,000 downloads cannot be deleted (rest-packages.md 775; deleting-restoring.md 14).
+4. V  Restore: POST .../versions/{id}/restore -> 204, within 30 days of the deletion and while the namespace and version
+      are not reused (openapi 32154-32162; deleting-restoring.md 223-226).
+5. V  Version shape: id integer, name string, created_at date-time (required), metadata.package_type enum incl.
+      container, metadata.container.tags array of strings (required inside container) (openapi 107506-107582;
+      rest-packages.md 684-701). NV: that `name` is the manifest digest for a container version (the schema example is
+      "latest"); the script uses `name` only for logging and the re-read equality, not for selection.
+6. V  GITHUB_TOKEN may delete or restore package versions through the REST API when it has admin permission to the
+      package; a repository whose workflow publishes the package gets the admin role by default; marked "currently in
+      public preview and subject to change" (deleting-restoring.md 34-36; publishing-actions.md 20-22). A package linked
+      before publication (org.opencontainers.image.source label, which image.yml sets) inherits the repository's access
+      (package-access.md 15). NV: whether the live token is accepted for list and delete; the OpenAPI entries carry
+      x-github enabledForGitHubApps: false (openapi 32085, 32118, 32151, 32189), and the REST overview says package
+      endpoints need a classic personal access token (rest-packages.md 11). Fails closed either way (non-200 / non-204).
+7. V  Rate limits: GITHUB_TOKEN 1,000 requests per hour per repository (rate-limits.md 58); secondary limits: 100
+      concurrent, 900 points per minute per endpoint, about 80 content-generating requests per minute and 500 per hour,
+      403 or 429 when exceeded (rate-limits.md 64-70, 113). The script is sequential; any 403/429 stops the run.
+8. V  Concurrency: one running and, by default, one pending run per group; a newer pending run cancels the older pending
+      one; `queue: max` allows up to 100 pending (concurrency.md 11-18). Supports not sharing a group with image.yml.
+9. V  Schedule: runs on the latest commit of the default branch only; public repositories disable scheduled workflows
+      after 60 days without repository activity (events.md 1002-1003, 1015). workflow_dispatch can be run against any
+      branch or tag once the workflow has run (events.md 1169).
+10. V Default shell for an unnamed `run` on Linux is `bash -e {0}` (workflow-syntax 898), so a failed `git ls-remote`
+      ends the step before the script runs.
+11. V Package visibility: once public, a package cannot be made private again (package-access.md 237, 261).
+12. V REST API versions: 2026-03-10 and 2022-11-28 are both supported; 2022-11-28 has an end-of-support date of
+      2028-03-10, after which a request naming it gets 410 Gone (api-versions.md 40-42, 86-89; GET /versions answered
+      ["2026-03-10","2022-11-28"]). An unauthenticated 2022-11-28 request carried no Deprecation or Sunset header
+      (public-repo.txt). The 2026-03-10 breaking changes list no package-version endpoint (breaking-changes.md 44-680).
+13. V Organization: CDSemi is an Organization and CDSemi/timesheet is public, default branch main (public-repo.txt), so
+      the /orgs/ endpoints are the right family.
+14. V Action pins: actions/setup-node v7.1.0 = 949feb2413d6458794dcd2491c4babbbce0c15c1 and actions/checkout v7.0.1 =
+      3d3c42e5aac5ba805825da76410c181273ba90b1 (anonymous git ls-remote, public-repo.txt); CDSemi/timesheet has no git tag.

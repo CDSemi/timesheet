@@ -114,3 +114,51 @@ English is canonical; the Vietnamese translation is [INGAT_T0_T8_CHECKPOINT.vi.m
 - Same-session agent continuation or replacement-task inputs: not needed.
 - Usage/reset observed timestamp/timezone: not observable.
 - One next task/action: the owner sets the GHCR package to Public.
+
+## Follow-up: GHCR cleanup (GC)
+
+- Owner request (2026-10-22, this session, verbatim): "Thêm 1 job dọn định kỳ xóa các phiên
+  bản cũ, nhưng chỉ xóa các bản ko phải bản release. các bản release nếu muốn xóa thì cần
+  phải xóa bằng tay".
+- Uncommitted at the start: the Results of `tasks/INGAT-T0T8-RECORD.md` and
+  `evidence/INGAT-T0T8-RECORD/` (written after the record commit `70dce2a`).
+- INGAT-GC-PLAN done (attempt 1, timesheet-planner, self-reported claude-sonnet-5-5;
+  `tasks/INGAT-GC-PLAN.md`, `evidence/INGAT-GC-PLAN/`): a release = a commit with a git
+  tag; a version is deleted only if all its tags are commit SHAs, none is a tagged commit,
+  it is outside the newest 20 and older than 30 days; floors 10 / 7 days, at most 50
+  deletions per run, oldest first; dry run by default; own concurrency group; script
+  `scripts/ghcr-cleanup.ts` with offline tests; new ADR 0003. Not run: tsc, eslint, real
+  vitest, any GitHub call. Residual risk: an untagged commit older than 30 days whose
+  backups Ingat must still restore loses its registry image.
+- Owner decisions (2026-10-22, this session, verbatim): "D1. theo đề xuất / D2. Giữ 20 bản
+  mới nhất và mọi bản dưới 30 ngày, không giới hạn số lượng mỗi lần xoá / D3. Xóa thật
+  luôn (nhưng theo quy tắc D2 thì làm gì có bản nào hơn 30 ngày để mà xóa) / yes, lên
+  main". Meaning: D1 any git tag marks a release; D2 keep the newest 20 and everything
+  younger than 30 days, no per-run deletion cap; D3 the schedule deletes from its first
+  run (no `GHCR_CLEANUP_APPLY` gate); after an audit PASS, commit and push to `main`. D4
+  stays open (only if the first live delete answers 403; no personal token meanwhile).
+- INGAT-GC-IMPL done (attempt 1, timesheet-worker-high, self-reported claude-sonnet-5-5):
+  15 files (`evidence/INGAT-GC-IMPL/snapshot-sha256.txt`), digest `1d004a9a…dfa0` (882
+  files); worker reports 26 cleanup tests, typecheck, lint, `npm test`, `npm run verify`
+  exit 0 in a clean export, five mutations caught, actionlint clean. Runtime slip: `ls`
+  piped into `head` twice (listing only).
+- INGAT-GC-GATE attempt 1 done, FAIL (self-reported claude-sonnet-5-5): every item passed
+  on the unchanged identity except item 6: removing the "never delete every version"
+  abort (`scripts/ghcr-cleanup.ts:139`, defence in depth unreachable through the floor)
+  leaves all 26 tests passing.
+- INGAT-GC-FIX1 running (attempt 1, timesheet-worker, requested model sonnet, no override;
+  routing S/M/no; addresses_gate INGAT-GC-GATE): a direct test of that abort (and of the
+  line-136 check if untested). Done (self-reported claude-sonnet-5-5): `assertSafe`
+  exported, three tests added, all seven mutations now caught (worker report); digest
+  `e47e6344…ee56`, list `evidence/INGAT-GC-FIX1/snapshot-sha256.txt`.
+- INGAT-GC-REGATE1 done, PASS (attempt 1, timesheet-verifier, sonnet, full gate) on digest
+  `e47e6344…ee56`: script delta only `export`; cleanup test 29, `npm test` 2374, verify
+  smoke passed; all seven mutations caught; actionlint, pins, parity, preflight, privacy.
+- INGAT-GC-AUDIT done, PASS (attempt 1, timesheet-auditor, self-reported claude-opus-5-5,
+  fresh context; `INGAT_GC_REVIEW.md`): identity equal first and last; all checks rerun;
+  17 own mutation probes (13 killed, 2 test gaps, 2 equivalent); no path deletes a
+  protected version. Optional O1-O9 (for example ADR 0002 still says nothing has run on
+  GitHub; a plainer tag duty citing Ingat; a newer API version; two test gaps;
+  `assertSafe` does not re-check the age rule). The first live run is unrun by design.
+- INGAT-GC-COMMIT running (attempt 1, timesheet-committer, sonnet; the owner's "yes, lên
+  main"): commit on the worktree branch, push `HEAD:refs/heads/main` as a fast-forward.

@@ -1,0 +1,97 @@
+== mutation-1-release.txt
+     × keeps a version whose commit has a git tag, even when it is old and was published before the tag existed 11ms
+     × never deletes a protected version over many generated histories 1ms
+     × plans offline from saved files with a fixed clock 1ms
+     × with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag 1ms
+     × with the floor options keeps 15 and plans 25 1ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > keeps a version whose commit has a git tag, even when it is old and was published before the tag existed
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > never deletes a protected version over many generated histories
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > plans offline from saved files with a fixed clock
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the floor options keeps 15 and plans 25
+      Tests  5 failed | 24 passed (29)
+exit 1
+== mutation-2-untagged.txt
+     × keeps an untagged version 4ms
+     × never deletes a protected version over many generated histories 1ms
+     × with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag 1ms
+     × with the floor options keeps 15 and plans 25 1ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > keeps an untagged version
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > never deletes a protected version over many generated histories
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the floor options keeps 15 and plans 25
+      Tests  4 failed | 25 passed (29)
+exit 1
+== mutation-3-nonsha.txt
+     × keeps a version with a tag that is not a lowercase commit SHA, also when a commit tag is present too 5ms
+     × never deletes a protected version over many generated histories 0ms
+     × with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag 1ms
+     × with the floor options keeps 15 and plans 25 0ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > keeps a version with a tag that is not a lowercase commit SHA, also when a commit tag is present too
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > never deletes a protected version over many generated histories
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the floor options keeps 15 and plans 25
+      Tests  4 failed | 25 passed (29)
+exit 1
+== mutation-4-future.txt
+     × refuses a version dated in the future 4ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > refuses a version dated in the future
+      Tests  1 failed | 28 passed (29)
+exit 1
+== mutation-5-floor.txt
+     × refuses options below the floor 3ms
+     × fails closed on missing token, missing tags file, a combined offline apply and an empty package 2ms
+     × refuses an option below the floor 3ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > refuses options below the floor
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > fails closed on missing token, missing tags file, a combined offline apply and an empty package
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > refuses an option below the floor
+      Tests  3 failed | 26 passed (29)
+exit 1
+== mutation-6-abort139.txt
+     × assertSafe refuses a list in which every version is marked for deletion 3ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > assertSafe refuses a list in which every version is marked for deletion
+      Tests  1 failed | 28 passed (29)
+exit 1
+== mutation-7-check136.txt
+     × assertSafe refuses a deletion that breaks a protection rule, each rule on its own 4ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > assertSafe refuses a deletion that breaks a protection rule, each rule on its own
+      Tests  1 failed | 28 passed (29)
+exit 1
+== mutation-8-control-noop.txt
+     × deletes only old versions: not among the newest and older than the age limit 10ms
+     × the shipped defaults are 20 versions and 30 days, and satisfy the floors 3ms
+     × keeps a version whose commit has a git tag, even when it is old and was published before the tag existed 3ms
+     × applies the age and the rank limits together, boundaries included 1ms
+     × never deletes the newest versions and never deletes everything 1ms
+     × has no per-run cap: every eligible version is planned, the oldest last in the plan 1ms
+     × a dry run lists across pages and writes nothing 24ms
+     × --apply deletes exactly the planned versions through the org endpoint, oldest first 1ms
+     × keeps a version whose tags changed after the listing 1ms
+     × stops at the first refused delete 1ms
+     × plans offline from saved files with a fixed clock 1ms
+     × with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag 1ms
+     × with the floor options keeps 15 and plans 25 1ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > deletes only old versions: not among the newest and older than the age limit
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > the shipped defaults are 20 versions and 30 days, and satisfy the floors
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > keeps a version whose commit has a git tag, even when it is old and was published before the tag existed
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > applies the age and the rank limits together, boundaries included
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > never deletes the newest versions and never deletes everything
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > has no per-run cap: every eligible version is planned, the oldest last in the plan
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > a dry run lists across pages and writes nothing
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > --apply deletes exactly the planned versions through the org endpoint, oldest first
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > keeps a version whose tags changed after the listing
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > stops at the first refused delete
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > plans offline from saved files with a fixed clock
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the floor options keeps 15 and plans 25
+      Tests  13 failed | 16 passed (29)
+exit 1
+== mutation-restored.txt

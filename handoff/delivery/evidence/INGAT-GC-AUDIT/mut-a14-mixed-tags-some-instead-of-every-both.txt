@@ -1,0 +1,95 @@
+- if (!version.tags.every((tag) => COMMIT_TAG.test(tag))) return keep(
++ if (!version.tags.some((tag) => COMMIT_TAG.test(tag))) return keep(
+- if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag))
++ if (tags.length === 0 || !tags.some((tag) => COMMIT_TAG.test(tag))
+---
+
+ RUN  v5.0.2 D:/.claude-tmp/timesheet/INGAT-GC-AUDIT/export
+
+ ❯ tests/integration/ghcr-cleanup.test.ts (29 tests | 4 failed) 46ms
+   ❯ selectVersions (14)
+     × keeps a version with a tag that is not a lowercase commit SHA, also when a commit tag is present too 4ms
+     × never deletes a protected version over many generated histories 2ms
+   ❯ saved fixtures (3)
+     × with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag 1ms
+     × with the floor options keeps 15 and plans 25 1ms
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 25 passed (29)
+   Start at  22:49:33
+   Duration  243ms (tests 42%, transform 41%, import 14%, worker 3%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > keeps a version with a tag that is not a lowercase commit SHA, also when a commit tag is present too
+AssertionError: expected [ 30, 29, 28, 27, 26, 25, 24, …(23) ] to not include 1
+ ❯ tests/integration/ghcr-cleanup.test.ts:56:88
+     54|   it('keeps a version with a tag that is not a lowercase commit SHA, a…
+     55|     for (const extra of ['v1.0.0', 'latest', 'keep-nas', 'A'.repeat(40…
+     56|       expect(deletedIds([...history().slice(1), version(1, 40, [sha(1)…
+       |                                                                                        ^
+     57|     }
+     58|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > never deletes a protected version over many generated histories
+AssertionError: expected [ …(2) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:166:24
+    164|       expect(deleted.length).toBeLessThan(versions.length);
+    165|       for (const { version: v } of deleted) {
+    166|         expect(v.tags).toHaveLength(1);
+       |                        ^
+    167|         expect(tagged).not.toContain(v.tags[0]);
+    168|         expect(v.tags[0]).toBe(sha(v.id));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag
+AssertionError: expected [ …(34) ] to have a length of 35 but got 34
+
+- Expected
++ Received
+
+- 35
++ 34
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:366:25
+    364|     const result = await plan([]);
+    365|     expect(result.code).toBe(0);
+    366|     expect(result.keep).toHaveLength(35);
+       |                         ^
+    367|     expect(result.remove.map((line) => /id=(\d+)/.exec(line)?.[1])).to…
+    368|     // 1002 and 1003 are tagged commits (lightweight and annotated), 1…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the floor options keeps 15 and plans 25
+AssertionError: expected [ …(14) ] to have a length of 15 but got 14
+
+- Expected
++ Received
+
+- 15
++ 14
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:377:25
+    375|   it('with the floor options keeps 15 and plans 25', async () => {
+    376|     const result = await plan(['--keep-newest', '10', '--keep-days', '…
+    377|     expect(result.keep).toHaveLength(15);
+       |                         ^
+    378|     expect(result.remove).toHaveLength(25);
+    379|     expect(result.line).toBe('plan: keep 15, delete 25 (dry run: nothi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+exit 1

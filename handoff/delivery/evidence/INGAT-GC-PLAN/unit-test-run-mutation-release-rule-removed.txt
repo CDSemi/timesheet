@@ -1,0 +1,84 @@
+▶ selectVersions
+  ✔ deletes only old versions: not among the newest and older than the age limit (2.0017ms)
+  ✔ the shipped defaults satisfy the floors (0.1762ms)
+  ✖ keeps a version whose commit has a git tag, even when it is old and was published before the tag existed (0.2319ms)
+  ✔ keeps a version with a tag that is not a lowercase commit SHA, also when a commit tag is present too (0.4084ms)
+  ✔ keeps an untagged version (0.1271ms)
+  ✔ applies the age and the rank limits together, boundaries included (0.1767ms)
+  ✔ refuses options below the floor or above the ceiling (0.4677ms)
+  ✔ never deletes the newest versions and never deletes everything (0.2709ms)
+  ✔ deletes at most maxDelete versions, the oldest first (0.4685ms)
+  ✔ refuses a version dated in the future (0.7554ms)
+  ✖ never deletes a protected version over many generated histories (0.4411ms)
+✖ selectVersions (6.3863ms)
+▶ taggedCommits
+  ✔ reads lightweight and annotated tags and returns the commit, not the tag object (0.3212ms)
+  ✔ accepts an empty list and Windows line ends (0.092ms)
+  ✔ fails closed on a line it does not understand (0.1195ms)
+✔ taggedCommits (0.6418ms)
+▶ parseVersions
+  ✔ reads the documented shape and ignores a repeated id (0.1913ms)
+  ✔ fails closed on anything else (0.1549ms)
+✔ parseVersions (0.4319ms)
+▶ run
+  ✔ a dry run lists across pages and writes nothing (16.7181ms)
+  ✔ --apply deletes exactly the planned versions through the org endpoint (2.5879ms)
+  ✔ keeps a version whose tags changed after the listing (1.6079ms)
+  ✔ stops at the first refused delete (1.4571ms)
+  ✔ fails closed on missing token, missing tags file, a combined offline apply and an empty package (0.3518ms)
+  ✖ plans offline from saved files with a fixed clock (0.347ms)
+✖ run (23.2943ms)
+ℹ tests 22
+ℹ suites 4
+ℹ pass 19
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 145.1461
+
+✖ failing tests:
+
+test at tests\integration\ghcr-cleanup.test.ts:41:3
+✖ keeps a version whose commit has a git tag, even when it is old and was published before the tag existed (0.2319ms)
+  Error: internal error: version 1 must not be deleted
+      at file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/scripts/ghcr-cleanup.ts:144:13
+      at Array.forEach (<anonymous>)
+      at assertSafe (file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/scripts/ghcr-cleanup.ts:139:13)
+      at selectVersions (file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/scripts/ghcr-cleanup.ts:132:3)
+      at deletedIds (file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/tests/integration/ghcr-cleanup.test.ts:27:3)
+      at TestContext.<anonymous> (file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/tests/integration/ghcr-cleanup.test.ts:43:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+
+test at tests\integration\ghcr-cleanup.test.ts:96:3
+✖ never deletes a protected version over many generated histories (0.4411ms)
+  Error: internal error: version 6 must not be deleted
+      at file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/scripts/ghcr-cleanup.ts:144:13
+      at Array.forEach (<anonymous>)
+      at assertSafe (file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/scripts/ghcr-cleanup.ts:139:13)
+      at selectVersions (file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/scripts/ghcr-cleanup.ts:132:3)
+      at TestContext.<anonymous> (file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/tests/integration/ghcr-cleanup.test.ts:114:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+
+test at tests\integration\ghcr-cleanup.test.ts:266:3
+✖ plans offline from saved files with a fixed clock (0.347ms)
+  Error: internal error: version 1 must not be deleted
+      at file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/scripts/ghcr-cleanup.ts:144:13
+      at Array.forEach (<anonymous>)
+      at assertSafe (file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/scripts/ghcr-cleanup.ts:139:13)
+      at selectVersions (file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/scripts/ghcr-cleanup.ts:132:3)
+      at run (file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/scripts/ghcr-cleanup.ts:273:21)
+      at TestContext.<anonymous> (file:///D:/.claude-tmp/timesheet/INGAT-GC-PLAN/mut/tests/integration/ghcr-cleanup.test.ts:277:18)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+exit 1
+9

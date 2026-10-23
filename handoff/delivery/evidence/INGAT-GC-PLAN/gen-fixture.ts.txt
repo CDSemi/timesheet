@@ -1,0 +1,18 @@
+// Writes the synthetic dry-run fixture: a saved version listing and a saved `git ls-remote --tags` output.
+import { writeFileSync } from 'node:fs';
+
+const now = Date.parse('2026-11-01T00:00:00Z');
+const sha = (n: number): string => n.toString(16).padStart(40, '0');
+const versions = Array.from({ length: 40 }, (_unused, i) => {
+  const id = i + 1;
+  const tags = id === 5 ? [sha(id), 'keep-nas'] : id === 6 ? [] : id === 7 ? ['v1.0.0'] : [sha(id)];
+  return {
+    id: 1000 + id,
+    name: `sha256:${(id + 5000).toString(16).padStart(64, '0')}`,
+    created_at: new Date(now - (41 - id) * 86_400_000).toISOString(),
+    metadata: { package_type: 'container', container: { tags } },
+  };
+});
+writeFileSync('versions.fixture.json', `${JSON.stringify(versions, null, 2)}\n`);
+// Version 2 is a lightweight-tagged commit; version 3 is an annotated tag (tag object sha(900), commit sha(3)).
+writeFileSync('tags.fixture.txt', `${sha(2)}\trefs/tags/v0.9.0\n${sha(900)}\trefs/tags/v0.9.1\n${sha(3)}\trefs/tags/v0.9.1^{}\n`);

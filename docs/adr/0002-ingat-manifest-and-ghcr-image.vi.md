@@ -56,7 +56,7 @@ Bản tiếng Anh là bản chuẩn. Trạng thái: đề xuất (nhánh phụ "
 
 ## Hệ quả
 
-- Commit đầu mút của mỗi lần push lên `main` thêm một phiên bản package GHCR; job dọn dẹp là quyết định về sau. Commit được
+- Commit đầu mút của mỗi lần push lên `main` thêm một phiên bản package GHCR; việc lưu giữ được quyết định ở [ADR 0003](0003-ghcr-image-cleanup.vi.md). Commit được
   push cùng các commit sau nó không có image, nên Ingat chỉ triển khai được commit từng là đầu mút của một lần push; trước
   bản phát hành đầu tiên, kho này push sau mỗi commit (docs/08).
 - Lần push đầu tạo package ở chế độ riêng tư; công khai package, điều máy đích cần để kéo ẩn danh, không thể hoàn tác. Chủ dự án

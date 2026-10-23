@@ -1,0 +1,39 @@
+- if (chunk.length < PAGE_SIZE) {
++ if (chunk.length <= PAGE_SIZE) {
+---
+
+ RUN  v5.0.2 D:/.claude-tmp/timesheet/INGAT-GC-AUDIT/export
+
+ ❯ tests/integration/ghcr-cleanup.test.ts (29 tests | 1 failed) 112ms
+   ❯ run (7)
+     × a dry run lists across pages and writes nothing 28ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 28 passed (29)
+   Start at  22:49:32
+   Duration  295ms (tests 64%, transform 26%, import 7%, worker 2%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > a dry run lists across pages and writes nothing
+AssertionError: expected [ { method: 'GET', …(1) } ] to have a length of 2 but got 1
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:273:59
+    271|     const { calls, out, deps } = fake(versions);
+    272|     expect(await run(ARGS, ENV, deps)).toBe(0);
+    273|     expect(calls.filter((call) => call.method === 'GET')).toHaveLength…
+       |                                                           ^
+    274|     expect(writes(calls)).toHaveLength(0);
+    275|     expect(out.some((line) => line.startsWith('DELETE '))).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit 1

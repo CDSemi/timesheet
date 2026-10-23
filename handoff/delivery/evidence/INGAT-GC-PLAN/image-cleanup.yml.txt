@@ -1,0 +1,94 @@
+# Daily cleanup of old versions of ghcr.io/cdsemi/timesheet (docs/adr/0003). It deletes only versions whose every tag is a
+# full commit SHA, whose commit has no git tag, that are not among the newest 20 and are older than 30 days; at most 50
+# per run, oldest first. A version with any other tag, an untagged version and every tagged commit are always kept.
+# The plan job only reads (packages: read) and always runs; the apply job (packages: write) runs after it, for a manual
+# run with apply = true, or for the schedule once the repository variable GHCR_CLEANUP_APPLY is "true".
+name: image-cleanup
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Delete the versions the plan lists (false = dry run)'
+        type: boolean
+        default: false
+      keep_newest:
+        description: 'Newest versions always kept (floor 10)'
+        type: string
+        default: '20'
+      keep_days:
+        description: 'Versions younger than this many days are always kept (floor 7)'
+        type: string
+        default: '30'
+      max_delete:
+        description: 'Most versions deleted in one run (1 to 100)'
+        type: string
+        default: '50'
+
+permissions:
+  contents: read
+
+# One cleanup at a time. It shares no group with the image workflow on purpose: a group keeps one pending run and cancels
+# the older pending one, which would drop the image of an intermediate push. A publish and a cleanup cannot conflict: a
+# new version is among the newest ones, and the cleanup deletes only ids it listed before.
+concurrency:
+  group: image-cleanup
+  cancel-in-progress: false
+
+env:
+  KEEP_NEWEST: ${{ inputs.keep_newest || '20' }}
+  KEEP_DAYS: ${{ inputs.keep_days || '30' }}
+  MAX_DELETE: ${{ inputs.max_delete || '50' }}
+
+jobs:
+  plan:
+    if: github.repository == 'CDSemi/timesheet'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read # list the versions; nothing is written
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.21.0
+      - name: list the git tags (a tagged commit is a release)
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+        run: git ls-remote --tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" > "$RUNNER_TEMP/tags.txt"
+      - name: plan (dry run)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ghcr-cleanup.ts --tags-file "$RUNNER_TEMP/tags.txt" --keep-newest "$KEEP_NEWEST" --keep-days "$KEEP_DAYS" --max-delete "$MAX_DELETE"
+
+  apply:
+    needs: plan
+    if: >-
+      github.repository == 'CDSemi/timesheet' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.apply) ||
+       (github.event_name == 'schedule' && vars.GHCR_CLEANUP_APPLY == 'true'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write # delete versions
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.21.0
+      - name: list the git tags (a tagged commit is a release)
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+        run: git ls-remote --tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" > "$RUNNER_TEMP/tags.txt"
+      - name: delete the old versions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ghcr-cleanup.ts --apply --tags-file "$RUNNER_TEMP/tags.txt" --keep-newest "$KEEP_NEWEST" --keep-days "$KEEP_DAYS" --max-delete "$MAX_DELETE"

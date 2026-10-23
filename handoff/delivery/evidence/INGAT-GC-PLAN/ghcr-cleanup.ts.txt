@@ -1,0 +1,317 @@
+// Chooses and, when asked, deletes old versions of the GHCR package ghcr.io/<owner>/timesheet (docs/adr/0003).
+// A version is deleted only when every rule below allows it; everything else is kept, with the reason in the log.
+//   - a version with no tag is kept (it may be a child manifest of a tagged image);
+//   - a version with any tag that is not a full lowercase commit SHA is kept (a release or a manual keep tag);
+//   - a version whose commit has a git tag (any name) is kept: a release is a tagged commit, and the tag list is read
+//     when the job runs, so a tag created after the image was published still protects it;
+//   - the newest keepNewest versions are kept, and so is every version created within the last keepDays days;
+//   - at most maxDelete versions go per run, oldest first.
+// Any unexpected answer (a malformed list, a failed call, a tag list that cannot be read) stops the run with exit 1
+// before anything else is deleted. Without --apply nothing is written to GitHub.
+import { appendFileSync, readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import { parseArgs } from 'node:util';
+
+export const DAY_MS = 86_400_000;
+export const COMMIT_TAG = /^[0-9a-f]{40}$/;
+export const DEFAULTS = { keepNewest: 20, keepDays: 30, maxDelete: 50 } as const;
+// Hard limits: no option, input or environment value can go below the floors or above the ceiling.
+export const LIMITS = { minKeepNewest: 10, minKeepDays: 7, maxDeleteCeiling: 100 } as const;
+const PAGE_SIZE = 100;
+const MAX_PAGES = 30;
+
+export interface Options {
+  keepNewest: number;
+  keepDays: number;
+  maxDelete: number;
+}
+
+export interface Version {
+  id: number;
+  digest: string;
+  created: string;
+  createdAt: number;
+  tags: string[];
+}
+
+export interface Decision {
+  version: Version;
+  action: 'keep' | 'delete';
+  reason: string;
+}
+
+export function assertOptions(options: Options): void {
+  if (!Number.isInteger(options.keepNewest) || options.keepNewest < LIMITS.minKeepNewest) {
+    throw new Error(`keep-newest must be an integer >= ${LIMITS.minKeepNewest}`);
+  }
+  if (!Number.isInteger(options.keepDays) || options.keepDays < LIMITS.minKeepDays) {
+    throw new Error(`keep-days must be an integer >= ${LIMITS.minKeepDays}`);
+  }
+  if (!Number.isInteger(options.maxDelete) || options.maxDelete < 1 || options.maxDelete > LIMITS.maxDeleteCeiling) {
+    throw new Error(`max-delete must be an integer from 1 to ${LIMITS.maxDeleteCeiling}`);
+  }
+}
+
+function toVersion(item: unknown): Version {
+  if (typeof item !== 'object' || item === null) throw new Error('a version entry is not an object');
+  const entry = item as Record<string, unknown>;
+  const { id, name, created_at: created, metadata } = entry;
+  if (typeof id !== 'number' || !Number.isSafeInteger(id) || typeof name !== 'string' || typeof created !== 'string') {
+    throw new Error('a version entry lacks a numeric id, a name or a created_at');
+  }
+  const createdAt = Date.parse(created);
+  if (Number.isNaN(createdAt)) throw new Error(`version ${id}: created_at is not a date`);
+  if (typeof metadata !== 'object' || metadata === null) throw new Error(`version ${id}: no metadata`);
+  const meta = metadata as Record<string, unknown>;
+  if (meta['package_type'] !== 'container') throw new Error(`version ${id}: not a container version`);
+  const container = meta['container'];
+  const tags = typeof container === 'object' && container !== null ? (container as Record<string, unknown>)['tags'] : undefined;
+  if (!Array.isArray(tags) || !tags.every((tag): tag is string => typeof tag === 'string')) {
+    throw new Error(`version ${id}: metadata.container.tags is not a list of strings`);
+  }
+  return { id, digest: name, created, createdAt, tags: [...tags] };
+}
+
+// Validates the API answer; a version seen on two pages (a publish shifted the pages) is kept once.
+export function parseVersions(raw: unknown): Version[] {
+  if (!Array.isArray(raw)) throw new Error('the version list is not an array');
+  const byId = new Map<number, Version>();
+  for (const item of raw as unknown[]) {
+    const version = toVersion(item);
+    if (!byId.has(version.id)) byId.set(version.id, version);
+  }
+  return [...byId.values()];
+}
+
+// `git ls-remote --tags` output -> the set of commits that carry a git tag. An annotated tag lists the tag object and
+// then `<tag>^{}` with the commit; a lightweight tag lists the commit itself.
+export function taggedCommits(lsRemote: string): Set<string> {
+  const direct = new Map<string, string>();
+  const peeled = new Map<string, string>();
+  for (const line of lsRemote.split(/\r?\n/)) {
+    if (line === '') continue;
+    const match = /^([0-9a-f]{40})\trefs\/tags\/(.+?)(\^\{\})?$/.exec(line);
+    if (match === null) throw new Error(`unexpected tag list line: ${line.slice(0, 120)}`);
+    const sha = match[1] ?? '';
+    const name = match[2] ?? '';
+    (match[3] === undefined ? direct : peeled).set(name, sha);
+  }
+  for (const name of peeled.keys()) {
+    if (!direct.has(name)) throw new Error(`tag list: ${name} has a peeled entry and no tag entry`);
+  }
+  const commits = new Set<string>();
+  for (const [name, sha] of direct) commits.add(peeled.get(name) ?? sha);
+  return commits;
+}
+
+export function selectVersions(
+  versions: readonly Version[],
+  taggedShas: ReadonlySet<string>,
+  options: Options,
+  nowMs: number,
+): Decision[] {
+  assertOptions(options);
+  const ordered = [...versions].sort((a, b) => b.createdAt - a.createdAt || b.id - a.id);
+  for (const version of ordered) {
+    if (version.createdAt > nowMs + DAY_MS) throw new Error(`version ${version.id} is dated more than a day in the future`);
+  }
+  const decisions: Decision[] = ordered.map((version, rank) => {
+    const keep = (reason: string): Decision => ({ version, action: 'keep', reason });
+    if (version.tags.length === 0) return keep('untagged');
+    if (!version.tags.every((tag) => COMMIT_TAG.test(tag))) return keep('a tag that is not a commit SHA (a release or a manual keep)');
+    if (version.tags.some((tag) => taggedShas.has(tag))) return keep('release: the commit has a git tag');
+    if (rank < options.keepNewest) return keep(`newest: rank ${rank + 1} of ${ordered.length}`);
+    if (nowMs - version.createdAt <= options.keepDays * DAY_MS) return keep(`recent: within ${options.keepDays} days`);
+    return { version, action: 'delete', reason: 'old: not tagged, not recent, not among the newest' };
+  });
+  // The cap: the oldest versions go first, the rest wait for the next run.
+  const doomed = decisions.filter((decision) => decision.action === 'delete');
+  for (const decision of doomed.slice(0, Math.max(0, doomed.length - options.maxDelete))) {
+    decision.action = 'keep';
+    decision.reason = `deferred: more than ${options.maxDelete} deletions in one run`;
+  }
+  assertSafe(decisions, taggedShas, options);
+  return decisions;
+}
+
+// A second, independent check of the invariants; selectVersions throws if its own result breaks one.
+function assertSafe(decisions: readonly Decision[], taggedShas: ReadonlySet<string>, options: Options): void {
+  let deleted = 0;
+  decisions.forEach((decision, rank) => {
+    if (decision.action !== 'delete') return;
+    deleted += 1;
+    const { tags } = decision.version;
+    if (tags.length === 0 || !tags.every((tag) => COMMIT_TAG.test(tag)) || tags.some((tag) => taggedShas.has(tag)) || rank < options.keepNewest) {
+      throw new Error(`internal error: version ${decision.version.id} must not be deleted`);
+    }
+  });
+  if (deleted > options.maxDelete || deleted >= decisions.length) throw new Error('internal error: too many deletions');
+}
+
+// ---------------------------------------------------------------- GitHub REST (the only network code)
+
+export interface Api {
+  get(path: string): Promise<unknown>;
+  remove(path: string): Promise<void>;
+}
+
+export function githubApi(token: string, fetchImpl: typeof fetch): Api {
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    Authorization: `Bearer ${token}`,
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'timesheet-image-cleanup',
+  };
+  const call = (method: string, path: string): Promise<Response> =>
+    fetchImpl(`https://api.github.com${path}`, { method, headers, redirect: 'error', signal: AbortSignal.timeout(30_000) });
+  return {
+    async get(path) {
+      const response = await call('GET', path);
+      if (response.status !== 200) throw new Error(`GET ${path} answered HTTP ${response.status}`);
+      return (await response.json()) as unknown;
+    },
+    async remove(path) {
+      const response = await call('DELETE', path);
+      if (response.status !== 204) throw new Error(`DELETE ${path} answered HTTP ${response.status}`);
+    },
+  };
+}
+
+export async function listVersions(api: Api, base: string): Promise<Version[]> {
+  const all: unknown[] = [];
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const chunk = await api.get(`${base}/versions?state=active&per_page=${PAGE_SIZE}&page=${page}`);
+    if (!Array.isArray(chunk)) throw new Error('a version page is not an array');
+    all.push(...(chunk as unknown[]));
+    if (chunk.length < PAGE_SIZE) {
+      const versions = parseVersions(all);
+      if (versions.length === 0) throw new Error('the package has no version: refusing to continue');
+      return versions;
+    }
+  }
+  throw new Error(`more than ${MAX_PAGES * PAGE_SIZE} versions: refusing to continue`);
+}
+
+const sameTags = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((tag) => b.includes(tag));
+
+// Deletes the planned versions one by one, oldest first. Each is read again first; one whose tags changed since the
+// listing is kept.
+export async function deleteVersions(api: Api, base: string, decisions: readonly Decision[], log: (line: string) => void): Promise<number> {
+  let deleted = 0;
+  for (const decision of [...decisions].reverse()) {
+    if (decision.action !== 'delete') continue;
+    const { id, digest, tags } = decision.version;
+    const [current] = parseVersions([await api.get(`${base}/versions/${id}`)]);
+    if (current === undefined || current.id !== id || current.digest !== digest || !sameTags(current.tags, tags)) {
+      log(`SKIPPED id=${id}: it changed since the listing, so it is kept`);
+      continue;
+    }
+    await api.remove(`${base}/versions/${id}`);
+    deleted += 1;
+    log(`DELETED id=${id} ${digest} tags=${tags.join(',')} created=${decision.version.created}`);
+  }
+  return deleted;
+}
+
+// ---------------------------------------------------------------- command line
+
+export interface Deps {
+  fetch: typeof fetch;
+  readText(path: string): string;
+  out(line: string): void;
+  appendSummary(text: string): void;
+  nowMs(): number;
+}
+
+function intOption(value: string | undefined, fallback: number, name: string): number {
+  if (value === undefined || value === '') return fallback;
+  if (!/^[0-9]{1,6}$/.test(value)) throw new Error(`${name} is not a number: ${value.slice(0, 40)}`);
+  return Number(value);
+}
+
+export async function run(argv: readonly string[], env: Readonly<Record<string, string | undefined>>, deps: Deps): Promise<number> {
+  const { values } = parseArgs({
+    args: [...argv],
+    options: {
+      owner: { type: 'string' },
+      package: { type: 'string' },
+      'keep-newest': { type: 'string' },
+      'keep-days': { type: 'string' },
+      'max-delete': { type: 'string' },
+      apply: { type: 'boolean', default: false },
+      'tags-file': { type: 'string' },
+      'versions-file': { type: 'string' },
+      now: { type: 'string' },
+    },
+    strict: true,
+    allowPositionals: false,
+  });
+  const options: Options = {
+    keepNewest: intOption(values['keep-newest'], DEFAULTS.keepNewest, 'keep-newest'),
+    keepDays: intOption(values['keep-days'], DEFAULTS.keepDays, 'keep-days'),
+    maxDelete: intOption(values['max-delete'], DEFAULTS.maxDelete, 'max-delete'),
+  };
+  assertOptions(options);
+  const owner = values.owner ?? env['GITHUB_REPOSITORY_OWNER'] ?? '';
+  const name = values.package ?? 'timesheet';
+  if (!/^[A-Za-z0-9-]{1,39}$/.test(owner) || !/^[a-z0-9._-]{1,100}$/.test(name)) throw new Error('owner or package name is not valid');
+  const tagsFile = values['tags-file'];
+  if (tagsFile === undefined) throw new Error('--tags-file is required: the list of git tags decides which versions are releases');
+  const offline = values['versions-file'] !== undefined;
+  if (offline && values.apply) throw new Error('--apply cannot be combined with --versions-file');
+  if (values.now !== undefined && !offline) throw new Error('--now is only allowed with --versions-file');
+  const nowMs = values.now === undefined ? deps.nowMs() : Date.parse(values.now);
+  if (Number.isNaN(nowMs)) throw new Error('--now is not a date');
+
+  const base = `/orgs/${encodeURIComponent(owner)}/packages/container/${encodeURIComponent(name)}`;
+  const api = offline ? undefined : githubApi(env['GITHUB_TOKEN'] ?? '', deps.fetch);
+  if (!offline && (env['GITHUB_TOKEN'] ?? '') === '') throw new Error('GITHUB_TOKEN is not set');
+  const versions =
+    api === undefined
+      ? parseVersions(JSON.parse(deps.readText(values['versions-file'] ?? '')) as unknown)
+      : await listVersions(api, base);
+  const taggedShas = taggedCommits(deps.readText(tagsFile));
+  const decisions = selectVersions(versions, taggedShas, options, nowMs);
+
+  deps.out(`package ${owner}/${name}: ${versions.length} versions, ${taggedShas.size} tagged commits, keep-newest=${options.keepNewest} keep-days=${options.keepDays} max-delete=${options.maxDelete}`);
+  for (const { version, action, reason } of decisions) {
+    deps.out(`${action === 'keep' ? 'KEEP  ' : 'DELETE'} id=${version.id} created=${version.created} tags=${version.tags.join(',') || '(none)'} reason=${reason}`);
+  }
+  const planned = decisions.filter((decision) => decision.action === 'delete');
+  deps.out(`plan: keep ${decisions.length - planned.length}, delete ${planned.length}${values.apply ? '' : ' (dry run: nothing is deleted)'}`);
+
+  let deleted = 0;
+  if (values.apply && api !== undefined) deleted = await deleteVersions(api, base, decisions, deps.out);
+  deps.appendSummary(
+    [
+      `### Image cleanup (${values.apply ? 'apply' : 'dry run'})`,
+      '',
+      `- Versions: ${versions.length}; kept ${decisions.length - planned.length}; planned for deletion ${planned.length}; deleted ${deleted}`,
+      `- Rules: newest ${options.keepNewest}, ${options.keepDays} days, at most ${options.maxDelete} deletions, tagged commits and non-commit tags always kept`,
+      ...(deleted > 0 ? ['- A deleted version can be restored for 30 days: `POST /orgs/<owner>/packages/container/<package>/versions/<id>/restore`'] : []),
+      '',
+    ].join('\n'),
+  );
+  return 0;
+}
+
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const summaryPath = process.env['GITHUB_STEP_SUMMARY'];
+  run(process.argv.slice(2), process.env, {
+    fetch,
+    readText: (path) => readFileSync(path, 'utf8'),
+    out: (line) => console.log(line),
+    appendSummary: (text) => {
+      if (summaryPath !== undefined && summaryPath !== '') appendFileSync(summaryPath, text);
+    },
+    nowMs: () => Date.now(),
+  }).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (error: unknown) => {
+      console.error(`::error::${error instanceof Error ? error.message : String(error)}`);
+      process.exitCode = 1;
+    },
+  );
+}

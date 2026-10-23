@@ -1,0 +1,310 @@
+
+ RUN  v5.0.2 D:/.claude-tmp/timesheet/INGAT-GC-GATE/export
+
+ ❯ tests/integration/ghcr-cleanup.test.ts (26 tests | 13 failed) 56ms
+   ❯ selectVersions (11)
+     × deletes only old versions: not among the newest and older than the age limit 9ms
+     × the shipped defaults are 20 versions and 30 days, and satisfy the floors 2ms
+     × keeps a version whose commit has a git tag, even when it is old and was published before the tag existed 2ms
+     × applies the age and the rank limits together, boundaries included 0ms
+     × never deletes the newest versions and never deletes everything 1ms
+     × has no per-run cap: every eligible version is planned, the oldest last in the plan 1ms
+   ❯ run (7)
+     × a dry run lists across pages and writes nothing 17ms
+     × --apply deletes exactly the planned versions through the org endpoint, oldest first 2ms
+     × keeps a version whose tags changed after the listing 1ms
+     × stops at the first refused delete 1ms
+     × plans offline from saved files with a fixed clock 1ms
+   ❯ saved fixtures (3)
+     × with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag 1ms
+     × with the floor options keeps 15 and plans 25 1ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > deletes only old versions: not among the newest and older than the age limit
+AssertionError: expected [] to deeply equal [ 30, 29, 28, 27, 26, 25, 24, …(23) ]
+
+- Expected
++ Received
+
+- [
+-   30,
+-   29,
+-   28,
+-   27,
+-   26,
+-   25,
+-   24,
+-   23,
+-   22,
+-   21,
+-   20,
+-   19,
+-   18,
+-   17,
+-   16,
+-   15,
+-   14,
+-   13,
+-   12,
+-   11,
+-   10,
+-   9,
+-   8,
+-   7,
+-   6,
+-   5,
+-   4,
+-   3,
+-   2,
+-   1,
+- ]
++ []
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:36:35
+     34|   it('deletes only old versions: not among the newest and older than t…
+     35|     // Version n is 41 - n days old; ranks 1-10 are versions 31-40 and…
+     36|     expect(deletedIds(history())).toEqual(Array.from({ length: 30 }, (…
+       |                                   ^
+     37|   });
+     38|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > the shipped defaults are 20 versions and 30 days, and satisfy the floors
+AssertionError: expected [] to deeply equal [ 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 ]
+
+- Expected
++ Received
+
+- [
+-   10,
+-   9,
+-   8,
+-   7,
+-   6,
+-   5,
+-   4,
+-   3,
+-   2,
+-   1,
+- ]
++ []
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:43:49
+     41|     expect(() => selectVersions(history(), new Set(), DEFAULTS, NOW)).…
+     42|     // Version n is 41 - n days old: older than 30 days is n <= 10, an…
+     43|     expect(deletedIds(history(), [], DEFAULTS)).toEqual([10, 9, 8, 7, …
+       |                                                 ^
+     44|   });
+     45|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > keeps a version whose commit has a git tag, even when it is old and was published before the tag existed
+AssertionError: expected [] to include 1
+ ❯ tests/integration/ghcr-cleanup.test.ts:49:34
+     47|     const versions = history();
+     48|     expect(deletedIds(versions, [sha(1)])).not.toContain(1);
+     49|     expect(deletedIds(versions)).toContain(1);
+       |                                  ^
+     50|   });
+     51|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > applies the age and the rank limits together, boundaries included
+AssertionError: expected [] to include 29
+ ❯ tests/integration/ghcr-cleanup.test.ts:65:72
+     63|     const versions = [...history()];
+     64|     // version 31 is rank 10 (kept, newest); version 30 is rank 11 and…
+     65|     expect(deletedIds(versions, [], { keepNewest: 10, keepDays: 11 }))…
+       |                                                                        ^
+     66|     expect(deletedIds(versions, [], { keepNewest: 10, keepDays: 11 }))…
+     67|     expect(deletedIds(versions, [], { keepNewest: 10, keepDays: 11 }))…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > never deletes the newest versions and never deletes everything
+AssertionError: expected [] to deeply equal [ 2, 1 ]
+
+- Expected
++ Received
+
+- [
+-   2,
+-   1,
+- ]
++ []
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:88:33
+     86|     expect(deletedIds([version(1, 900)])).toEqual([]);
+     87|     const manyOld = Array.from({ length: 12 }, (_unused, i) => version…
+     88|     expect(deletedIds(manyOld)).toEqual([2, 1]);
+       |                                 ^
+     89|   });
+     90|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > has no per-run cap: every eligible version is planned, the oldest last in the plan
+AssertionError: expected [] to have a length of 190 but got +0
+
+- Expected
++ Received
+
+- 190
++ 0
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:95:17
+     93|     // Version n is 201 - n days old; ranks 1-10 are versions 191-200 …
+     94|     const ids = deletedIds(versions);
+     95|     expect(ids).toHaveLength(190);
+       |                 ^
+     96|     expect(ids[0]).toBe(190);
+     97|     expect(ids.at(-1)).toBe(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > a dry run lists across pages and writes nothing
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:234:60
+    232|     expect(calls.filter((call) => call.method === 'GET')).toHaveLength…
+    233|     expect(writes(calls)).toHaveLength(0);
+    234|     expect(out.some((line) => line.startsWith('DELETE '))).toBe(true);
+       |                                                            ^
+    235|     expect(out.some((line) => line.startsWith('DELETED'))).toBe(false);
+    236|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > --apply deletes exactly the planned versions through the org endpoint, oldest first
+AssertionError: expected [] to have a length of 20 but got +0
+
+- Expected
++ Received
+
+- 20
++ 0
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:244:21
+    242|     // Version n is 31 - n days old: versions 1-20 are outside the new…
+    243|     const removed = writes(calls).map((call) => call.url);
+    244|     expect(removed).toHaveLength(20);
+       |                     ^
+    245|     expect(removed[0]).toBe('https://api.github.com/orgs/CDSemi/packag…
+    246|     expect(removed.at(-1)).toBe('https://api.github.com/orgs/CDSemi/pa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > keeps a version whose tags changed after the listing
+AssertionError: expected [] to have a length of 19 but got +0
+
+- Expected
++ Received
+
+- 19
++ 0
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:255:27
+    253|     await run([...ARGS, '--apply'], ENV, deps);
+    254|     expect(writes(calls).map((call) => call.url)).not.toContain('https…
+    255|     expect(writes(calls)).toHaveLength(19);
+       |                           ^
+    256|   });
+    257|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > stops at the first refused delete
+AssertionError: promise resolved "+0" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+0
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:261:55
+    259|     const versions = Array.from({ length: 30 }, (_unused, i) => versio…
+    260|     const { calls, deps } = fake(versions, { failDeleteOf: 12 });
+    261|     await expect(run([...ARGS, '--apply'], ENV, deps)).rejects.toThrow…
+       |                                                       ^
+    262|     // Oldest first: versions 1 to 12 were attempted, 13 and later nev…
+    263|     expect(writes(calls)).toHaveLength(12);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > plans offline from saved files with a fixed clock
+AssertionError: expected [] to have a length of 19 but got +0
+
+- Expected
++ Received
+
+- 19
++ 0
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:294:62
+    292|     expect(calls).toHaveLength(0);
+    293|     // Versions 1-20 are old; version 1 is kept because its commit has…
+    294|     expect(out.filter((line) => line.startsWith('DELETE '))).toHaveLen…
+       |                                                              ^
+    295|     expect(out.some((line) => line.startsWith('KEEP') && line.includes…
+    296|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag
+AssertionError: expected [ …(40) ] to have a length of 35 but got 40
+
+- Expected
++ Received
+
+- 35
++ 40
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:325:25
+    323|     const result = await plan([]);
+    324|     expect(result.code).toBe(0);
+    325|     expect(result.keep).toHaveLength(35);
+       |                         ^
+    326|     expect(result.remove.map((line) => /id=(\d+)/.exec(line)?.[1])).to…
+    327|     // 1002 and 1003 are tagged commits (lightweight and annotated), 1…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/13]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the floor options keeps 15 and plans 25
+AssertionError: expected [ …(40) ] to have a length of 15 but got 40
+
+- Expected
++ Received
+
+- 15
++ 40
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:336:25
+    334|   it('with the floor options keeps 15 and plans 25', async () => {
+    335|     const result = await plan(['--keep-newest', '10', '--keep-days', '…
+    336|     expect(result.keep).toHaveLength(15);
+       |                         ^
+    337|     expect(result.remove).toHaveLength(25);
+    338|     expect(result.line).toBe('plan: keep 15, delete 25 (dry run: nothi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/13]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  13 failed | 13 passed (26)
+   Start at  22:18:34
+   Duration  265ms (tests 49%, transform 37%, import 11%, worker 3%)
+
+exit 1

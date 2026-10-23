@@ -1,0 +1,101 @@
+- if (nowMs - version.createdAt <= options.keepDays * DAY_MS) return keep(
++ if (false) return keep(
+---
+
+ RUN  v5.0.2 D:/.claude-tmp/timesheet/INGAT-GC-AUDIT/export
+
+ ❯ tests/integration/ghcr-cleanup.test.ts (29 tests | 4 failed) 45ms
+   ❯ selectVersions (14)
+     × the shipped defaults are 20 versions and 30 days, and satisfy the floors 5ms
+     × applies the age and the rank limits together, boundaries included 1ms
+     × never deletes a protected version over many generated histories 9ms
+   ❯ saved fixtures (3)
+     × with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag 1ms
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 25 passed (29)
+   Start at  22:49:25
+   Duration  201ms (tests 49%, transform 36%, import 12%, worker 3%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > the shipped defaults are 20 versions and 30 days, and satisfy the floors
+AssertionError: expected [ 20, 19, 18, 17, 16, 15, 14, …(13) ] to deeply equal [ 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 ]
+
+- Expected
++ Received
+
+@@ -1,6 +1,16 @@
+  [
++   20,
++   19,
++   18,
++   17,
++   16,
++   15,
++   14,
++   13,
++   12,
++   11,
+    10,
+    9,
+    8,
+    7,
+    6,
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:45:49
+     43|     expect(() => selectVersions(history(), new Set(), DEFAULTS, NOW)).…
+     44|     // Version n is 41 - n days old: older than 30 days is n <= 10, an…
+     45|     expect(deletedIds(history(), [], DEFAULTS)).toEqual([10, 9, 8, 7, …
+       |                                                 ^
+     46|   });
+     47|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > applies the age and the rank limits together, boundaries included
+AssertionError: expected [ 30, 29, 28, 27, 26, 25, 24, …(23) ] to not include 30
+ ❯ tests/integration/ghcr-cleanup.test.ts:68:76
+     66|     // version 31 is rank 10 (kept, newest); version 30 is rank 11 and…
+     67|     expect(deletedIds(versions, [], { keepNewest: 10, keepDays: 11 }))…
+     68|     expect(deletedIds(versions, [], { keepNewest: 10, keepDays: 11 }))…
+       |                                                                            ^
+     69|     expect(deletedIds(versions, [], { keepNewest: 10, keepDays: 11 }))…
+     70|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > selectVersions > never deletes a protected version over many generated histories
+AssertionError: expected 1468800000 to be greater than 1900800000
+ ❯ tests/integration/ghcr-cleanup.test.ts:170:35
+    168|         expect(v.tags[0]).toBe(sha(v.id));
+    169|         expect(ordered.indexOf(v)).toBeGreaterThanOrEqual(options.keep…
+    170|         expect(NOW - v.createdAt).toBeGreaterThan(options.keepDays * D…
+       |                                   ^
+    171|       }
+    172|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > saved fixtures > with the defaults keeps 35 and plans 5: only old versions with a lone commit tag and no git tag
+AssertionError: expected [ …(25) ] to have a length of 35 but got 25
+
+- Expected
++ Received
+
+- 35
++ 25
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:366:25
+    364|     const result = await plan([]);
+    365|     expect(result.code).toBe(0);
+    366|     expect(result.keep).toHaveLength(35);
+       |                         ^
+    367|     expect(result.remove.map((line) => /id=(\d+)/.exec(line)?.[1])).to…
+    368|     // 1002 and 1003 are tagged commits (lightweight and annotated), 1…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+exit 1

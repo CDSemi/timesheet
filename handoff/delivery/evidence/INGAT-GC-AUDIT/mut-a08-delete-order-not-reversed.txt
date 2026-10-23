@@ -1,0 +1,56 @@
+- for (const decision of [...decisions].reverse()) {
++ for (const decision of [...decisions]) {
+---
+
+ RUN  v5.0.2 D:/.claude-tmp/timesheet/INGAT-GC-AUDIT/export
+
+ ❯ tests/integration/ghcr-cleanup.test.ts (29 tests | 2 failed) 128ms
+   ❯ run (7)
+     × --apply deletes exactly the planned versions through the org endpoint, oldest first 17ms
+     × stops at the first refused delete 5ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 27 passed (29)
+   Start at  22:49:29
+   Duration  297ms (tests 69%, transform 20%, import 9%, worker 2%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > --apply deletes exactly the planned versions through the org endpoint, oldest first
+AssertionError: expected 'https://api.github.com/orgs/CDSemi/pa…' to be 'https://api.github.com/orgs/CDSemi/pa…' // Object.is equality
+
+Expected: "https://api.github.com/orgs/CDSemi/packages/container/timesheet/versions/1"
+Received: "https://api.github.com/orgs/CDSemi/packages/container/timesheet/versions/20"
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:286:24
+    284|     const removed = writes(calls).map((call) => call.url);
+    285|     expect(removed).toHaveLength(20);
+    286|     expect(removed[0]).toBe('https://api.github.com/orgs/CDSemi/packag…
+       |                        ^
+    287|     expect(removed.at(-1)).toBe('https://api.github.com/orgs/CDSemi/pa…
+    288|     expect(writes(calls).every((call) => call.method === 'DELETE')).to…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/ghcr-cleanup.test.ts > run > stops at the first refused delete
+AssertionError: expected [ { method: 'DELETE', …(1) }, …(8) ] to have a length of 12 but got 9
+
+- Expected
++ Received
+
+- 12
++ 9
+
+ ❯ tests/integration/ghcr-cleanup.test.ts:304:27
+    302|     await expect(run([...ARGS, '--apply'], ENV, deps)).rejects.toThrow…
+    303|     // Oldest first: versions 1 to 12 were attempted, 13 and later nev…
+    304|     expect(writes(calls)).toHaveLength(12);
+       |                           ^
+    305|   });
+    306|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+exit 1
