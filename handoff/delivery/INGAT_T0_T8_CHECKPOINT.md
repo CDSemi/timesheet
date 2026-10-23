@@ -171,8 +171,43 @@ English is canonical; the Vietnamese translation is [INGAT_T0_T8_CHECKPOINT.vi.m
   39909592540 success; `70dce2a` ingat-validate run 39885375736 success, image run
   39885375744 success; workflow `image-cleanup` (id 393702719) registered, state active.
   It has not run yet (schedule or manual dispatch only).
-- INGAT-GC-RECORD (timesheet-committer, sonnet) commits the remaining records (handoff
-  only) and pushes them to `main`; its own result stays in its brief.
+- INGAT-GC-RECORD done (timesheet-committer, sonnet): commit
+  `01c4cdcb5abefad41ec9f8431752eab76f4d2c4a` (9 handoff paths), pushed to `main` as a
+  fast-forward. Uncommitted: `evidence/INGAT-GC-RECORD/`.
+
+## Synchronization with the main checkout (2026-10-23)
+
+- Owner (this session): the timesheet project's agent reports commits out of step; the
+  owner wants everything synchronized and pushed before either side continues, with the
+  two agents coordinating.
+- This side pushes nothing more until the procedure is agreed (`origin/main` stays at
+  `01c4cdc` from this side).
+- INGAT-SYNC-RECON done (attempt 1, timesheet-planner, self-reported claude-sonnet-5-5,
+  read-only; `tasks/INGAT-SYNC-RECON.md`): local `main` `7aafa21` (WP5-UX5-FIX2, unpushed)
+  is 1 ahead and 2 behind `origin/main` `01c4cdc`, diverged from `70dce2a`; no shared
+  path; `git merge-tree` clean; no merge or rebase in progress. The main checkout's
+  coordinator (session `95755b87…`) added two uncommitted sections to this checkpoint pair
+  in the main checkout ("Structural audit of `ingat.toml`" and "Design review of the
+  manifest format") at the same place where `782cdda`/`01c4cdc` added theirs, so its
+  `git merge --ff-only origin/main` (its owner decision of 2026-10-23) cannot run.
+- Proposed procedure (needs the owner's approval of one merge commit, which replaces the
+  board's "ff-only, no merge commit" decision for this one synchronization):
+  0. the other coordinator holds every git write and every edit of this pair in the main
+     checkout until step 4;
+  1. this side commits and pushes its remaining records (fast-forward);
+  2. a verifier gates the exact merged tree (`git merge-tree` of the new `origin/main` and
+     `7aafa21`, archived and run with `npm ci` and `npm run verify`);
+  3. this side's committer makes the merge commit in the worktree (`git merge --no-ff
+     refs/heads/main`), checks its tree equals the gated tree, and pushes it as a
+     fast-forward of `origin/main`;
+  4. the other coordinator saves its two sections, restores the pair, runs
+     `git merge --ff-only origin/main`, re-adds its sections after this side's, commits
+     its untracked INGAT review files and its board update (registering the INGAT tasks),
+     and pushes.
+- 2026-10-23: the owner relayed the hold; the other side is paused (owner, verbatim: "Bên
+  kia hiện đang tạm dừng, ko chạy gì cả"). Step 1 INGAT-SYNC-RECORD (timesheet-committer,
+  sonnet) commits these records as a fast-forward. Step 2 (a verifier gate on the merged
+  tree) follows. Step 3, the merge commit, waits for the owner's explicit approval.
 - Owner steps for the cleanup: none needed to start (the schedule deletes from its first
   run, and nothing is older than 30 days before about 2026-11-21). If the first scheduled
   run fails with 403, check the package's "Manage Actions access" role for

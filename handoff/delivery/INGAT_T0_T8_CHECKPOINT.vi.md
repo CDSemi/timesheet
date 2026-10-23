@@ -171,8 +171,42 @@ Bản tiếng Anh là bản gốc: [INGAT_T0_T8_CHECKPOINT.md](INGAT_T0_T8_CHECK
   success; `70dce2a` ingat-validate run 39885375736 success, image run 39885375744
   success; workflow `image-cleanup` (id 393702719) đã đăng ký, trạng thái active. Nó chưa
   chạy lần nào (chỉ chạy theo lịch hoặc khi bấm tay).
-- INGAT-GC-RECORD (timesheet-committer, sonnet) commit các hồ sơ còn lại (chỉ `handoff/`)
-  và push lên `main`; kết quả của chính nó nằm trong brief của nó.
+- INGAT-GC-RECORD xong (timesheet-committer, sonnet): commit
+  `01c4cdcb5abefad41ec9f8431752eab76f4d2c4a` (9 đường dẫn handoff), push dạng fast-forward
+  lên `main`. Chưa commit: `evidence/INGAT-GC-RECORD/`.
+
+## Đồng bộ với checkout chính (2026-10-23)
+
+- Chủ dự án (trong phiên này): agent của dự án timesheet báo lệch commit; chủ dự án muốn
+  mọi thứ được đồng bộ và push trước khi bên nào làm tiếp, và hai agent phối hợp với nhau.
+- Bên này không push thêm cho tới khi thống nhất cách làm (`origin/main` đứng ở `01c4cdc`
+  về phía bên này).
+- INGAT-SYNC-RECON xong (lần 1, timesheet-planner, tự báo claude-sonnet-5-5, chỉ đọc;
+  `tasks/INGAT-SYNC-RECON.md`): `main` cục bộ `7aafa21` (WP5-UX5-FIX2, chưa push) đi trước
+  1 và chậm 2 commit so với `origin/main` `01c4cdc`, rẽ nhánh từ `70dce2a`; không có tệp
+  chung; `git merge-tree` sạch; không có merge hay rebase dở. Coordinator của checkout
+  chính (phiên `95755b87…`) đã thêm hai mục chưa commit vào cặp checkpoint này trong
+  checkout chính ("Structural audit of `ingat.toml`" và "Design review of the manifest
+  format") đúng chỗ `782cdda`/`01c4cdc` thêm mục của mình, nên lệnh
+  `git merge --ff-only origin/main` của nó (quyết định ngày 2026-10-23 của chủ dự án)
+  không chạy được.
+- Cách làm đề xuất (cần chủ dự án duyệt một merge commit, thay quyết định "chỉ
+  fast-forward, không merge commit" trên bảng cho riêng lần đồng bộ này):
+  0. coordinator bên kia ngừng mọi lệnh git ghi và mọi chỉnh sửa cặp tệp này trong
+     checkout chính cho tới bước 4;
+  1. bên này commit và push các hồ sơ còn lại (fast-forward);
+  2. một verifier kiểm đúng cây sau khi gộp (`git merge-tree` của `origin/main` mới và
+     `7aafa21`, archive ra rồi chạy `npm ci` và `npm run verify`);
+  3. committer bên này tạo merge commit trong worktree (`git merge --no-ff
+     refs/heads/main`), kiểm cây của nó trùng cây đã kiểm, rồi push dạng fast-forward lên
+     `origin/main`;
+  4. coordinator bên kia lưu hai mục của nó, khôi phục cặp tệp, chạy
+     `git merge --ff-only origin/main`, thêm lại hai mục sau các mục của bên này, commit
+     các tệp review INGAT chưa theo dõi và bản cập nhật bảng (ghi các task INGAT), rồi push.
+- 2026-10-23: chủ dự án đã chuyển lời yêu cầu tạm dừng; bên kia đang tạm dừng (chủ dự
+  án, nguyên văn: "Bên kia hiện đang tạm dừng, ko chạy gì cả"). Bước 1 INGAT-SYNC-RECORD
+  (timesheet-committer, sonnet) commit các hồ sơ này dạng fast-forward. Tiếp theo là bước 2
+  (verifier kiểm cây sau khi gộp). Bước 3, merge commit, chờ chủ dự án duyệt rõ ràng.
 - Việc của chủ dự án cho job dọn: không cần gì để bắt đầu (lịch chạy xoá thật ngay từ lần
   đầu, và trước khoảng 2026-11-21 không có bản nào cũ hơn 30 ngày). Nếu lần chạy lịch đầu
   tiên lỗi 403, kiểm vai trò "Manage Actions access" của `CDSemi/timesheet` trên package
