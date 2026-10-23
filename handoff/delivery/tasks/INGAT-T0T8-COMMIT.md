@@ -182,4 +182,10 @@ blockers. Return at most 120 words, beginning 'Self-reported model: ...'.
 
 ## Results
 
-(committer appends here)
+Attempt 2: pre-HEAD 2bce0ab, commit 6173f07777d3a972db77208390df86a5f7de1a11, pushed to main
+as a fast-forward (dry-run first), origin/main = 6173f07 after fetch; local refs/heads/main
+stays 2bce0ab. 198 paths staged. Checks: precommit 0, diff --check 0, preflight 0, no JSON,
+nine hashes OK before and after, digest 47e8036b... (875 files) unchanged, secret scan: only
+redacted setup tokens, no masking needed. Blockers: none.
+
+Status: done
