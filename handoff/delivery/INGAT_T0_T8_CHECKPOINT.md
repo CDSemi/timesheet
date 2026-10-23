@@ -228,6 +228,34 @@ English is canonical; the Vietnamese translation is [INGAT_T0_T8_CHECKPOINT.vi.m
   `7aafa21`), checked through a temporary index outside Dropbox, then a record commit R on
   M, and R is pushed as a fast-forward. The worktree's own index and branch are left
   untouched (stale locally; everything it holds will be on `origin`).
+- Attempt 2 done (self-reported claude-sonnet-5-5): M =
+  `b8bae505cdd546b29c48389219dd263fd670662b` (tree T, parents `db87939`, `7aafa21`); R =
+  `377554e024db1669e47fd19eeadaf9dccc672b3e` (records on M); first push HTTP 408, retry a
+  fast-forward, exit 0; `origin/main` = R; `7aafa21` is an ancestor of R. Worktree left
+  as it was (HEAD `db87939`, the failed merge's files unstaged).
+- INGAT-SYNC-CHECK done, PASS (timesheet-light, self-reported claude-haiku-5-5; read-only):
+  `origin/main` = ls-remote = R `377554e`; M tree T, parents `db87939`, `7aafa21`; R's only
+  parent M; M..R = 24 paths, all under `handoff/delivery/`; `7aafa21` and `db87939` are
+  ancestors of `origin/main`; the main checkout HEAD is still `7aafa21`.
+- INGAT-SYNC-RECORD2 (timesheet-committer, sonnet) commits these last records on R with a
+  temporary index and pushes them as a fast-forward. After it, this side pushes nothing
+  more; its worktree is stale (HEAD `db87939`, the failed merge's files unstaged) and holds
+  nothing that is not on `origin`, so the owner may remove it.
+- Step 4, the other coordinator (relayed by the owner): save its two sections of this
+  pair, restore the pair, `git fetch`, `git merge --ff-only origin/main`, re-add its
+  sections, commit its untracked INGAT review files and its board update (register the
+  INGAT tasks), push.
+- INGAT-SYNC-RECORD2: attempt 1 stopped at the precommit check (the commit identity
+  e-mail in `evidence/INGAT-SYNC-CHECK/02-M.txt` and `03-R.txt`); INGAT-SYNC-MASK replaced
+  those lines. Attempt 2 (same agent) passed every check (19 paths, precommit PASS, tree
+  `6ac74e7c…`) but the client's permission check denied the `commit-tree` and push call,
+  reason "[PII Data Handling]". Nothing created or pushed. Not routed around; the agent is
+  not resumed for the same action. `origin/main` stays `377554e`, which already holds the
+  merge; only these last records are not on GitHub.
+- Owner (2026-10-23, verbatim): "Tôi xác nhận cho commit và push các tệp hồ sơ
+  handoff/delivery/**/INGAT-SYNC* và cặp INGAT_T0_T8_CHECKPOINT lên main; các dòng email đã
+  được che." INGAT-SYNC-RECORD2 attempt 3 runs with a fresh committer (brief Addendum 2),
+  while the other coordinator stays paused.
 - Owner steps for the cleanup: none needed to start (the schedule deletes from its first
   run, and nothing is older than 30 days before about 2026-11-21). If the first scheduled
   run fails with 403, check the package's "Manage Actions access" role for

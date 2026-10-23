@@ -228,6 +228,34 @@ Bản tiếng Anh là bản gốc: [INGAT_T0_T8_CHECKPOINT.md](INGAT_T0_T8_CHECK
   qua một index tạm nằm ngoài Dropbox, rồi dựng commit hồ sơ R trên M, và push R dạng
   fast-forward. Index và nhánh của worktree giữ nguyên (cục bộ bị cũ; mọi thứ trong đó sẽ
   có trên `origin`).
+- Lần 2 xong (tự báo claude-sonnet-5-5): M = `b8bae505cdd546b29c48389219dd263fd670662b`
+  (cây T, cha `db87939`, `7aafa21`); R = `377554e024db1669e47fd19eeadaf9dccc672b3e` (hồ sơ
+  trên M); lần push đầu lỗi HTTP 408, lần thử lại là fast-forward, exit 0; `origin/main` =
+  R; `7aafa21` là tổ tiên của R. Worktree giữ nguyên (HEAD `db87939`, các tệp của lần
+  merge lỗi vẫn chưa stage).
+- INGAT-SYNC-CHECK xong, PASS (timesheet-light, tự báo claude-haiku-5-5; chỉ đọc):
+  `origin/main` = ls-remote = R `377554e`; M có cây T, cha `db87939`, `7aafa21`; R chỉ có
+  một cha là M; M..R = 24 đường dẫn, đều trong `handoff/delivery/`; `7aafa21` và `db87939`
+  là tổ tiên của `origin/main`; HEAD của checkout chính vẫn là `7aafa21`.
+- INGAT-SYNC-RECORD2 (timesheet-committer, sonnet) commit các hồ sơ cuối này trên R bằng
+  index tạm và push dạng fast-forward. Sau đó bên này không push gì thêm; worktree của bên
+  này đã cũ (HEAD `db87939`, các tệp của lần merge lỗi chưa stage) và không chứa gì mà
+  `origin` chưa có, nên chủ dự án có thể xoá nó.
+- Bước 4, coordinator bên kia (chủ dự án chuyển lời): lưu hai mục của nó trong cặp tệp
+  này, khôi phục cặp tệp, `git fetch`, `git merge --ff-only origin/main`, thêm lại hai mục,
+  commit các tệp review INGAT chưa theo dõi và bản cập nhật bảng (ghi các task INGAT),
+  rồi push.
+- INGAT-SYNC-RECORD2: lần 1 dừng ở precommit (email danh tính commit trong
+  `evidence/INGAT-SYNC-CHECK/02-M.txt` và `03-R.txt`); INGAT-SYNC-MASK đã thay các dòng đó.
+  Lần 2 (cùng agent) qua mọi bước kiểm (19 đường dẫn, precommit PASS, cây `6ac74e7c…`)
+  nhưng bộ kiểm quyền của client từ chối lệnh `commit-tree` và push, lý do "[PII Data
+  Handling]". Không tạo hay push gì. Không lách; không giao lại cho agent đó cùng hành
+  động. `origin/main` vẫn là `377554e`, đã chứa merge; chỉ các hồ sơ cuối này chưa lên
+  GitHub.
+- Chủ dự án (2026-10-23, nguyên văn): "Tôi xác nhận cho commit và push các tệp hồ sơ
+  handoff/delivery/**/INGAT-SYNC* và cặp INGAT_T0_T8_CHECKPOINT lên main; các dòng email đã
+  được che." INGAT-SYNC-RECORD2 lần 3 chạy với một committer mới (Addendum 2 của brief),
+  trong lúc coordinator bên kia vẫn tạm dừng.
 - Việc của chủ dự án cho job dọn: không cần gì để bắt đầu (lịch chạy xoá thật ngay từ lần
   đầu, và trước khoảng 2026-11-21 không có bản nào cũ hơn 30 ngày). Nếu lần chạy lịch đầu
   tiên lỗi 403, kiểm vai trò "Manage Actions access" của `CDSemi/timesheet` trên package
