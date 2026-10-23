@@ -1,0 +1,101 @@
+INGAT-TOML-AUDIT key-by-key table for ingat.toml (blob 7bf274a8c8da29c75c806e46bfa62489b4821d59fee08a5d81c70cced74a1104,
+the content of 6173f07 and of HEAD 7aafa21). Line numbers are those of that file.
+
+Authority: Ingat 0.1.0. The cited Python files of the local Ingat checkout (v0.1.0-16-g35be585) have the same SHA-256 as
+the files inside the pinned image ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb
+(ingat-source-identity.txt). "m.py" = src/ingat/model/manifest.py. Parser rule: a bool field defaults to false, a list to
+(), a table to {}, a str to None unless the field spec names a default (m.py:74-305, toml_read.py:121-130).
+
+Class: REQ = the parser refuses the file without it; OPT-D = optional with a parser default; OPT = optional, no default.
+"Default?" = does the written value equal the parser default (then the resolved model is the same without it).
+"0.1.0 reads" = the run-time code that consults the parsed value (not only the parser/validator).
+
+line    | key                                   | class | default? | 0.1.0 reads (file:line)                                      | verdict | risk of dropping
+--------+---------------------------------------+-------+----------+--------------------------------------------------------------+---------+------------------------------------------------
+8       | manifest = 1                          | REQ   | n/a      | m.py:274, 352                                                | keep    | parse error
+9       | app                                   | REQ   | n/a      | instance.py:195 (instance must name it)                      | keep    | parse error
+10      | requires_ingat                        | REQ   | n/a      | m.py:350-351 (version range)                                 | keep    | parse error
+13      | [source] kind = "git"                 | REQ   | n/a      | m.py:278; ops/context.py source                              | keep    | parse error
+14      | [source] release = "commit"           | REQ*  | n/a      | m.py:279 (*required for git)                                 | keep    | parse error (wording: known O1)
+17      | [compose] files                       | REQ*  | n/a      | m.py:354 (*must be non-empty); deploy.py:63, validate.py:33  | keep    | parse error
+18      | [compose] build_services              | OPT-D | no       | deploy.py:67-68, 181-182 (label check only for these)        | keep    | the revision-label provenance check stops
+19      | [compose] expect_labels               | OPT-D | no       | deploy.py:177; m.py:356-357 (required with build_services)   | keep    | parse error while build_services is set
+22-25   | [params] 4 params                     | OPT   | no       | validate.py:53-55 (every param must be a Compose variable);  | keep    | Compose defaults (non-empty) would apply:
+        |                                       |       |          | Compose ${VAR:-x} defaults mean only declared params are set  |         | local image tag, ./data, port 3000
+28      | [app_env] param                       | REQ   | n/a      | m.py:101, 358; context.py app_env                            | keep    | parse error
+31-32   | [app_env] forbidden                   | OPT-D | no       | instance.py:215-219 (message "forbidden by the manifest"     | keep    | wording only: an undeclared key is refused
+        |                                       |       |          | instead of "not declared"); m.py:381 (cannot be declared)    |         | anyway; loses the clearer message and guard
+35-48   | [app_env.keys] 14 keys                | OPT   | no       | instance.py:216-236; context.py:330-339; deploy.py:471-480    | keep    | values unchecked or wrongly rendered.
+        |                                       |       |          | (owner-gated refusal); every attribute is non-default        |         | Notes: OUTBOUND_MODE default "capture" equals
+        |                                       |       |          |                                                              |         | the image ENV (Dockerfile:35), kept on purpose;
+        |                                       |       |          |                                                              |         | ^...$ anchors are redundant under fullmatch
+        |                                       |       |          |                                                              |         | (instance.py:231), spec idiom, harmless
+51      | [stores.data] kind = "bind"           | REQ   | n/a      | m.py:116                                                     | keep    | parse error
+52      | [stores.data] param                   | REQ*  | n/a      | m.py:118 (*bind)                                             | keep    | parse error
+53      | [stores.data] owner = "10001:10001"   | OPT   | no       | deploy.py:272, backup.py:170 (owner of new generations)      | keep    | g1 not owned by the image user: app cannot write
+54      | [stores.data] mode = "0700"           | OPT   | no (None)| deploy.py:270, backup.py:171 use 0o700 when None             | keep    | behaviour the same in 0.1.0, but the 0700
+        |                                       |       |          |                                                              |         | fallback is not in MANIFEST_SPEC §2.4
+55      | [stores.data] local_only = true       | OPT-D | no       | none (grep of src/: only m.py:123); not marked Planned       | keep    | none in 0.1.0; a true fact a later Ingat
+        |                                       |       |          |                                                              |         | enforces (0.1.0 does not check the filesystem)
+56      | [stores.data] online_backup = true    | OPT-D | no       | backup.py:44, 97; status.py:500                              | keep    | backups would stop the app; gate tier 2
+59      | [services] writers                    | REQ*  | n/a      | m.py:359 (*stores exist); deploy.py:126, 306-308             | keep    | parse error
+62-64   | [schema] probe/expected/actual        | REQ*  | n/a      | m.py:139-140, 362; deploy.py:39-42; probes.py:118-122         | keep    | no schema record, no rollback gate
+65      | [schema] migrates_on_start = true     | OPT-D | no       | deploy.py:125 (every image change is data-changing)          | keep    | an update would skip the pre-change backup
+68-69   | [probes.ready] exec, argv             | REQ*  | n/a      | m.py:170; probes.py:62-69                                    | keep    | parse error
+70      | [probes.ready] expect.json            | OPT   | no       | probes.py:70-76: JSON is parsed only when expect.json is set; | keep    | [schema] could not read schema.expected/actual
+        |                                       |       |          | probes.py:118-122 reads the schema from that parse           |         | (data_dir_writable=true is implied by
+        |                                       |       |          |                                                              |         | status=ready, app.ts:124; belt and braces)
+71      | [probes.ready] stable = "5s"          | OPT-D | no (0)   | probes.py:87                                                 | keep    | a single passing answer would count
+72      | [probes.ready] timeout = "120s"       | OPT-D | no (60)  | probes.py:81                                                 | keep    | a slow first migration could time out
+74-77   | [probes.edge-live] http/expect/30s    | OPT   | no       | activation and install waits (deploy.py:51, 294)             | keep    | no retried check of the published port
+80-82   | [[activate]]                          | REQ*  | n/a      | m.py:360 (one reopens_writes group); deploy.py:46-51         | keep    | parse error
+84-87   | [[smoke]] live                        | OPT   | no       | probes.py:136-143: one attempt after the waits, in a plan    | optional| none in 0.1.0: edge-live just passed on the
+        |                                       |       |          | that has just waited for edge-live (deploy.py:432-437,       | drop    | same port, and smoke "ready" proves more
+        |                                       |       |          | lifecycle.py:130-138)                                        |         | (/api/ready reads the DB: app.ts:57-64);
+        |                                       |       |          |                                                              |         | loses the live-vs-ready diagnostic, §11 parity
+88-91   | [[smoke]] ready                       | OPT   | no       | probes.py:136-143                                            | keep    | no readiness check through the published port
+93-100  | [[install]] migrate, start, pause     | OPT   | no       | deploy.py:264-298 (replaces the activation groups at install)| keep    | install would start without the one-off migrate
+        |   allow_tasks                         |       |          | opening.py:73, lifecycle.py:49-54; render.py:29 (plan shows) | keep    | bootstrap tasks could not join the pause
+103     | [deploy] migrate                      | OPT   | no       | deploy.py:319-329, 346                                       | keep    | migration moves into the first start
+106     | [backup] strategy = "tasks"           | OPT-D | no (none)| deploy.py:232-236; backup.py:195                             | keep    | no backups
+107     | [backup] steps                        | REQ*  | n/a      | m.py:364; steps_build.py:59                                  | keep    | parse error
+108     | [backup] verify = []                  | OPT-D | YES      | steps_build.py:83 (iterates an empty tuple either way)       | DROP    | none (model identical); move the TODO comment
+111     | [restore] start = []                  | OPT-D | YES      | backup.py:173 (empty either way)                             | DROP    | none (model identical)
+112     | [restore] steps                       | REQ*  | n/a      | m.py:366 (outbound needs a restore task); backup.py:160      | keep    | parse error
+113     | [restore] post = []                   | OPT-D | YES      | backup.py:160 (empty either way)                             | DROP    | none (model identical)
+114     | [restore] checks = []                 | OPT-D | YES      | backup.py:160 (empty either way)                             | DROP    | none (model identical)
+115     | [restore] activate = true             | OPT-D | no       | none in 0.1.0 (no live restore; drill uses [drill] activate) | keep    | the M2 restore would not start the app
+118     | [rollback] env                        | OPT-D | no       | only the reference check m.py:393                            | keep    | later restore-based rollback loses JOB_RUNNER=off
+121     | [drill] checks = []                   | OPT-D | YES      | backup.py:161 (empty either way)                             | DROP    | none (model identical)
+122     | [drill] record = []                   | OPT-D | YES      | backup.py:162 (empty either way)                             | DROP    | none (model identical)
+123     | [drill] activate = true               | OPT-D | no       | backup.py:177                                                | keep    | a drill would not start the restored app
+124     | [drill] min_free_memory = "512m"      | OPT-D | no (0)   | backup.py:138-140                                            | keep    | drill runs on any free memory (known R8)
+127-128 | [holds.timesheet]                     | REQ*  | n/a      | m.py:366 (outbound); context.py:468; validate.py:63          | keep    | parse error; a drill would run the job runner
+131     | [side_effects] kind = "outbound"      | OPT-D | no (none)| m.py:366                                                     | keep    | the outbound safety rules stop applying
+132     | [side_effects] restore_via_app        | REQ*  | n/a      | m.py:366                                                     | keep    | parse error
+133     | [side_effects] after_restore = "held" | OPT   | no       | none in 0.1.0 (no live restore)                              | keep    | M2 restore loses the declared hold
+134     | [side_effects] clear_hold             | OPT   | no       | status.py:330; m.py:451                                      | keep    | status cannot name the clearing task
+135     | [side_effects] single_active = true   | OPT-D | no       | none (Planned M4)                                            | keep    | none in 0.1.0; must be re-added for M4
+136     | [side_effects] restore_notice         | OPT   | no       | template check m.py:433 only (no live restore in 0.1.0)      | keep    | M2 restore shows no guidance
+tasks   | service, mode, effect, timeout (x11)  | REQ   | n/a      | m.py:250-251, 260, 269; probe-required run: "is required"    | keep    | parse error; schema 1 has no task defaults
+        |                                       |       |          | x4 and "task_defaults: unknown key"                          |         | or inheritance (unknown keys are refused)
+tasks   | argv prefix node dist/server/cli.js   | -     | -        | no argv variable exists except params, and every param must  | keep    | unavoidable repetition in schema 1
+        |   (x11)                               |       |          | be used by Compose (validate.py:55)                          |         |
+145,168 | image = "candidate" / "bundle"        | OPT-D | no       | lifecycle.py:191 only (`ingat task` refusal); the planners    | keep    | none in 0.1.0; spec §4 semantics (which image
+        |                                       |       |          | pick candidate/bundle themselves (deploy.py:284, 323)        |         | set the task pins), documents intent
+149,162,| operator = false (migrate, backup,    | OPT-D | no       | lifecycle.py:191: already refused for image != current or a  | keep    | none in 0.1.0; MANIFEST_SPEC §4 `operator`
+172     |   restore)                            |       |          | stage/bundle/generation mount                                |         | row says such tasks declare it
+147,158,| idempotent = true                     | OPT-D | no       | m.py:449-450 (required for migrate and backup); executor.py: | keep    | parse error (migrate, backup); previews could
+203,214 |                                       |       |          | 427 and steps_build.py:35 (resume may repeat)                |         | not be repeated after an unknown outcome
+tasks   | exit maps                             | OPT   | no       | core/tasks.py:32-36: an undeclared 0 is already "ok"; an     | keep    | `0 = "ok"` (10 tasks) is behaviour-neutral;
+        |                                       |       |          | undeclared non-zero is "unknown" for write tasks             |         | explicit contract and spec idiom; optional
+tasks   | stdout json/record/terminal           | OPT   | no       | core/tasks.py:183-188 (artifact, 0600 report); m.py:451,459; | keep    | output lost, or expect refused, or the token
+        |                                       |       |          | lifecycle.py:250 (terminal runs in the foreground)           |         | captured
+205,216 | expect (previews)                     | OPT   | no       | core/tasks.py:180-181                                        | keep    | a usage error (exit 2) would count as ok
+224,244 | args job                              | OPT   | no       | lifecycle.py:198-206; m.py:477                               | keep    | {arg.job} invalid
+253     | clears_hold = true                    | OPT-D | no       | lifecycle.py:265                                             | keep    | held_since never clears
+180     | max_input_bytes                       | OPT   | no       | lifecycle.py:221; core/tasks.py:110                          | keep    | no size limit on the inbox file
+
+Totals: 6 written values equal the parser default (lines 108, 111, 113, 114, 121, 122); dropping them leaves the
+resolved model identical (dump body SHA-256 e831cb73... for orig, lean and lean-wrapped; diff exit 0). Every other key
+is required, non-default and read by 0.1.0, or a non-default declaration that a later milestone reads.

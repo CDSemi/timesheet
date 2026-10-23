@@ -15,7 +15,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "ux5-fix2",
+  "phase": "ux5-regate2",
   "coordinator_session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -29,8 +29,8 @@
   "current_source_digest": "507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX5-FIX2-FREEZE",
-  "push_hold": "Owner decision C b (2026-10-22): no push to origin until the owner says; commits stay local and are listed in git.unpushed.",
+  "next_task_id": "WP5-UX5-FIX3-FREEZE",
+  "push_hold": "Lifted 2026-10-22 by the owner ('Từ giờ bạn cứ push lên main thoải mái nhé'); it was owner decision C b. Pending push: 7aafa21 (git.unpushed), pushed by a committer as soon as no gate or audit is running (commit tasks run alone).",
   "runtime_observations": [
     {
       "date": "2026-10-22",
@@ -322,6 +322,58 @@
     "question": "F-1 (= WP5-OWN-Q1, sharpened): opening OT balance: (i, recommended) starts at 0 with no entry; only the owner of the timesheet sets or changes it any time (administrators never see a personal balance); each change is a ledger entry with a short reason; evidence optional; a correction back to 0 allowed (D-5 a); (ii) no reason either (needs a ledger migration or a dummy reason); (iii) one value overwritten in place (new storage model, history lost). Also confirm no historical import for the pilot. F-2 (D-15 b contradiction): per-date counts in the administrator's holiday preview reveal a named colleague's recorded days in a small team, against docs/03 ('administrators see no timesheet details') and the WP2-A-01 audit fix: (a, recommended) keep removed; (b) restore exact counts with a written exception and an audit event; (c) counts only when 3 or more, else 'fewer than 3'. F-3 (export/import scope): (a, recommended) personal settings file plus an administrators' company-calendar file; (b) personal only; (c) everything including accounts. F-4 (import behaviour): (a, recommended) preview with a Now/In-the-file comparison, new versions, policy from a chosen date, auto-submit only with a separate tick; (b) apply at once; (c) merge field by field. F-5: approve the mockup (a) as drawn or (b) with named changes.",
     "blocking": "F-5 blocks UX4-T01..T03; F-1 and F-2 block UX4-T04; F-3 and F-4 block UX4-T05."
   },
+  "external_tracks": {
+    "INGAT": {
+      "registered": "2026-10-23, at the request of the Ingat-track coordinator relayed by the owner.",
+      "note": "The Ingat track (deploy manifest, GHCR image and cleanup workflows) is the owner's separate track, run by another coordinator in the worktree .claude/worktrees/relaxed-lalande-8359f0. Its tasks are recorded here as reported done by that coordinator; this mission did not run or verify them, and they are not part of the WP1-WP5 task graph (the validator admits only WP1-WP5 and GOV packages in tasks). Records: handoff/delivery/INGAT_T0_T8_CHECKPOINT.md (+vi), the INGAT task and evidence files in handoff/delivery/tasks and handoff/delivery/evidence.",
+      "status_as_reported": "done",
+      "tasks": [
+        "INGAT-T0T8-PLAN",
+        "INGAT-T0T8-IMPL",
+        "INGAT-T0T8-GATE",
+        "INGAT-T0T8-AUDIT",
+        "INGAT-T0T8-FIX1",
+        "INGAT-T0T8-REGATE1",
+        "INGAT-T0T8-RECHECK1",
+        "INGAT-T0T8-COMMIT",
+        "INGAT-T0T8-CI",
+        "INGAT-T0T8-RECORD",
+        "INGAT-GC-PLAN",
+        "INGAT-GC-IMPL",
+        "INGAT-GC-GATE",
+        "INGAT-GC-FIX1",
+        "INGAT-GC-REGATE1",
+        "INGAT-GC-AUDIT",
+        "INGAT-GC-COMMIT",
+        "INGAT-GC-CI",
+        "INGAT-GC-RECORD",
+        "INGAT-SYNC-RECON",
+        "INGAT-SYNC-RECORD",
+        "INGAT-SYNC-GATE",
+        "INGAT-SYNC-MERGE",
+        "INGAT-SYNC-CHECK",
+        "INGAT-SYNC-MASK",
+        "INGAT-SYNC-RECORD2"
+      ],
+      "sync": "origin/main 9f186b264f8d9fac671e58ab63de54fa38f75977 contains the merge b8bae50 (parents db87939 and the mission's 7aafa21; tree 5da1839, gated by the Ingat side with npm ci + npm run verify, 2374/2374 tests); 7aafa21 kept as is. The Ingat side pushes nothing more."
+    }
+  },
+  "answered_owner_question_ux5_ff": {
+    "answered": "2026-10-23, owner relayed the Ingat-track coordinator's message (pasted verbatim in chat): synchronization done; origin/main 9f186b2 contains the merge b8bae50 with the mission's 7aafa21 as a parent; in the main checkout: (1) save the two uncommitted sections of the INGAT_T0_T8_CHECKPOINT pair ('Structural audit of ingat.toml', 'Design review of the manifest format') to a scratch file and git restore the pair; (2) git fetch origin; git merge --ff-only origin/main (must fast-forward from 7aafa21); (3) re-add the two sections at the end of the pair; (4) commit the untracked INGAT_TOML_REVIEW*, INGAT_MANIFEST_DESIGN_REVIEW*, their tasks and evidence, the board and WP5 files, register the listed INGAT tasks as done on the board, then push; the Ingat side pushes nothing more. This resolves F as option b (the Ingat side integrated 7aafa21) and G (the remaining Ingat files are committed by the mission's committer).",
+    "id": "WP5-UX5-FF-Q (F, G)",
+    "asked": "2026-10-23",
+    "source": "WP5-UX5-FIX3-PATHS: the Ingat side asks for 'git merge --ff-only origin/main' at the next mission commit, but local main 7aafa21 (the mission's FIX2 freeze, held unpushed under the earlier push hold) is not in origin/main 01c4cdc: 1 ahead, 2 behind, so a fast-forward is impossible as things stand. The Ingat files in this main checkout (the modified INGAT_T0_T8_CHECKPOINT pair, which origin also changed, and untracked INGAT reviews, tasks and evidence) block any fast-forward or merge and make validate_package --preflight fail in the repository.",
+    "question": "F (how to reach a state where 'git merge --ff-only origin/main' works): (a, recommended) once G is done, the mission rebases its own unpushed 7aafa21 onto origin/main (a local-only rewrite of a commit never pushed; needs the owner's explicit OK because AGENTS forbids history rewrites), commits FIX3 and the records on top and pushes; origin then contains both, and every later side, Ingat included, fast-forwards; REGATE3 runs on the new SHA (REGATE2 failed anyway, so nothing accepted is lost); (b) the Ingat session merges local main (7aafa21) into its branch and pushes it to origin, after which the mission runs exactly 'git merge --ff-only origin/main' as asked; (c) the mission makes one merge commit as in D a, pushes, and the Ingat side fast-forwards from origin afterwards. G (prerequisite for every option): the Ingat session commits or moves out of this main checkout its INGAT_T0_T8_CHECKPOINT pair and the untracked INGAT reviews, tasks and evidence folders, and then works only in its worktree while rounds 4-5 finish.",
+    "blocking": "WP5-UX5-FIX3-FREEZE and everything after it."
+  },
+  "answered_owner_question_ux5_remote2": {
+    "answered": "2026-10-23, owner chat (verbatim): 'D.a, E.a'. D a: before each mission commit the committer merges origin/main into local main with a merge commit when the merge is clean and touches no mission path, then commits and pushes; no rewrite; Ingat changes stay owner work, checked only for non-interference. E a: the owner's Ingat session commits or settles the uncommitted INGAT_T0_T8_CHECKPOINT pair itself; the mission never stages, restores or stashes it; the merge waits until that file is clean. The side question (Ingat session keeping to its worktree) was not answered.",
+    "id": "WP5-UX5-REMOTE2-Q (D, E)",
+    "asked": "2026-10-23",
+    "source": "WP5-UX5-REMOTE-RECON2: origin/main 01c4cdc diverged from the local, unpushed mission commit 7aafa21 (base 70dce2a); two owner commits (782cddab GHCR cleanup with scripts/ghcr-cleanup.ts, tests/integration/ghcr-cleanup*, tsconfig changes, docs 07/11, ADRs; 01c4cdcb records); clean merge-tree; an uncommitted edit of handoff/delivery/INGAT_T0_T8_CHECKPOINT.md and .vi.md in this main checkout, not made by the mission, conflicting with the remote version at line 116.",
+    "question": "D (integrating origin/main now and at later mission commits): (a, recommended) the committer merges origin/main into local main with a merge commit when the merge is clean and touches no mission path, then commits and pushes; no history is rewritten; Ingat changes stay owner work, checked only for non-interference (the gate runs npm test with the new ghcr-cleanup tests and the tsconfig changes); (b) rebase the unpushed 7aafa21 onto origin/main (linear history, but the gated SHA changes and the regate identity must be redone); (c) the owner pauses Ingat pushes until WP5 is re-accepted. E (the uncommitted INGAT_T0_T8_CHECKPOINT pair in this checkout): (a, recommended) the owner's Ingat session commits or settles it itself; the mission never stages, restores or stashes it, and its merge waits until the file is clean; (b) the mission saves a copy in its task folder, restores the file to HEAD, merges, then writes the saved edit back for the owner to resolve. Also: the Ingat session seems to write into this main checkout besides its worktree; may it keep to its worktree while rounds 4-5 finish?",
+    "blocking": "WP5-UX5-RECORDS1 (push of 7aafa21) and every later commit."
+  },
   "answered_owner_question_ux5_remote": {
     "answered": "2026-10-22, owner chat (verbatim): 'A.a, B.A, C.b'. A a: the next freeze first fast-forwards local main to origin/main 70dce2a (no conflict), then commits FIX2 on top; REGATE2 and the audits treat the Ingat files (6173f07, 70dce2a) as owner work outside rounds 4-5, checked only for not breaking the build, tests and docs pairs. B a: keep the worktree; the font-scan test skips the .claude/ folder, a one-line test change folded into FIX2 before its freeze. C b: hold pushes to main until the owner says; the mission's commits stay local (git.unpushed) and gates and audits run on the local commits.",
     "id": "WP5-UX5-REMOTE-Q (A, B, C)",
@@ -457,10 +509,32 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "2bce0ab5842b80c710f23496d5173c122319e5c7",
-    "unpushed": []
+    "last_commit": "7aafa21bc1c6efc70c0fa8691c3a1165841aeb45",
+    "unpushed": [
+      "7aafa21bc1c6efc70c0fa8691c3a1165841aeb45"
+    ]
   },
   "owner_decisions": [
+    {
+      "date": "2026-10-23",
+      "source": "owner chat: message of the Ingat-track coordinator relayed by the owner (pasted verbatim)",
+      "decision": "Synchronization done: origin/main = 9f186b264f8d9fac671e58ab63de54fa38f75977 with the merge b8bae50 (parents db87939 and the mission's 7aafa21). In the main checkout: save the two uncommitted sections of handoff/delivery/INGAT_T0_T8_CHECKPOINT.md and .vi.md ('Structural audit of ingat.toml', 'Design review of the manifest format') to a scratch file, git restore the pair; git fetch origin; git merge --ff-only origin/main; re-add the two sections at the end of the pair; commit the untracked INGAT_TOML_REVIEW*, INGAT_MANIFEST_DESIGN_REVIEW*, their tasks and evidence, the board and WP5 files; register INGAT-T0T8-*, INGAT-GC-* and INGAT-SYNC-* tasks as done on the board; push. The Ingat side pushes nothing more."
+    },
+    {
+      "date": "2026-10-23",
+      "source": "owner chat (verbatim)",
+      "decision": "'Bên ingat yêu cầu bạn chạy \"git merge --ff-only origin/main\" cho lần commit kế tiếp' (the Ingat side asks the mission to run 'git merge --ff-only origin/main' for the next commit). Replaces D a's merge commit for the next commit: the committer fast-forwards only; if a fast-forward is not possible it stops and reports, with no fallback to a merge commit or rebase."
+    },
+    {
+      "date": "2026-10-23",
+      "source": "owner chat (verbatim)",
+      "decision": "'D.a, E.a' (WP5-UX5-REMOTE2-Q): D a merge origin/main into local main with a merge commit before each mission commit (clean merge, no mission path touched), then commit and push, no history rewrite; E a the owner's Ingat session settles the uncommitted INGAT_T0_T8_CHECKPOINT pair; the mission never touches it and merges only once it is clean."
+    },
+    {
+      "date": "2026-10-22",
+      "source": "owner chat (verbatim)",
+      "decision": "'Từ giờ bạn cứ push lên main thoải mái nhé' (from now on, push to main freely). Revokes C b of WP5-UX5-REMOTE-Q: the committer pushes main again at freeze points, including the unpushed 7aafa21; pushes may start the owner's GHCR workflow, which the owner accepts."
+    },
     {
       "date": "2026-10-22",
       "source": "owner chat (verbatim)",
@@ -1145,6 +1219,55 @@
     }
   ],
   "auxiliary_lookups": [
+    {
+      "id": "WP5-UX5-FIX3-PATHS",
+      "agent_type": "timesheet-light",
+      "agent_id": "a7b3637698e8ac287",
+      "status": "done",
+      "brief": "handoff/delivery/tasks/WP5-UX5-FIX3-PATHS.md",
+      "requested_model": "haiku",
+      "routing_note": "docs/08: haiku for a listing; read-only git ancestry and status checks (fetch allowed).",
+      "writes": [
+        "handoff/delivery/tasks/WP5-UX5-FIX3-PATHS.md (short Results only)",
+        "task folder D:\\.claude-tmp\\timesheet\\WP5-UX5-FIX3-PATHS"
+      ],
+      "purpose": "Before the FIX3 freeze under the owner's new instruction 'git merge --ff-only origin/main': can HEAD 7aafa21 fast-forward to origin/main (is 7aafa21 already in it), do the new remote commits touch mission paths, which paths are dirty outside handoff, which non-mission handoff files (INGAT) are still dirty or untracked, and any overlap blocking the fast-forward.",
+      "result": {
+        "model": "claude-haiku-5-5 (self_reported)",
+        "git": "HEAD 7aafa21; origin/main 01c4cdcb; merge-base --is-ancestor HEAD origin/main exit 1: a fast-forward is NOT possible; 1 ahead, 2 behind (diverged; origin does not contain the mission's unpushed 7aafa21).",
+        "remote_commits": "782cdda (GHCR cleanup) and 01c4cdc (records): tests/integration/ghcr-cleanup.test.ts, scripts/ghcr-cleanup.ts, tsconfig.json, tsconfig.test.json, docs/07, docs/11, docs/adr, INGAT-GC tasks and evidence, the INGAT_T0_T8 checkpoint pair; no WP5 path, board or NEXT_ACTION.",
+        "outside_handoff": "tests/e2e/controls.spec.ts and tests/e2e/fixtures.ts (FIX3) only.",
+        "non_mission_handoff": "INGAT_T0_T8_CHECKPOINT.md and .vi.md modified; untracked INGAT_MANIFEST_DESIGN_REVIEW.md/.vi.md, INGAT_TOML_REVIEW.md/.vi.md, tasks/INGAT-MANIFEST-DESIGN.md, tasks/INGAT-TOML-AUDIT.md, evidence/INGAT-MANIFEST-DESIGN/, evidence/INGAT-TOML-AUDIT/.",
+        "blocking": "The dirty INGAT_T0_T8_CHECKPOINT pair is also changed in HEAD..origin/main, so a fast-forward or merge would refuse; index empty.",
+        "record": "handoff/delivery/tasks/WP5-UX5-FIX3-PATHS.md; task folder D:\\.claude-tmp\\timesheet\\WP5-UX5-FIX3-PATHS"
+      }
+    },
+    {
+      "id": "WP5-UX5-REMOTE-RECON2",
+      "agent_type": "timesheet-verifier",
+      "agent_id": "ab18bb6602cb5be24",
+      "status": "done",
+      "brief": "handoff/delivery/tasks/WP5-UX5-REMOTE-RECON2.md",
+      "requested_model": "sonnet",
+      "routing_note": "docs/08 'reconcile an interruption': verifier, read-only (git fetch allowed).",
+      "writes": [
+        "handoff/delivery/tasks/WP5-UX5-REMOTE-RECON2.md (Results section only)",
+        "handoff/delivery/evidence/WP5-UX5-REMOTE-RECON2/ (.txt only)",
+        "task folder D:\\.claude-tmp\\timesheet\\WP5-UX5-REMOTE-RECON2"
+      ],
+      "purpose": "origin/main moved from 70dce2a to 01c4cdc while the mission's FIX2 freeze 7aafa21 is local and unpushed: record the new commits, their overlap with 7aafa21 and the uncommitted records, governance and source paths, a no-write merge check, and the options.",
+      "result": {
+        "model": "claude-sonnet-5-5 (self_reported)",
+        "git": "HEAD 7aafa21, origin/main 01c4cdc, merge-base 70dce2a; diverged 1 / 2.",
+        "commits": "782cddab (2026-10-22) GHCR cleanup: 270 files, mostly INGAT evidence and tasks, plus .github/workflows/image-cleanup.yml, scripts/ghcr-cleanup.ts, tests/integration/ghcr-cleanup*, tsconfig.json, tsconfig.test.json, docs 07 and 11, ADR 0002 and 0003, INGAT_T0_T8_CHECKPOINT; 01c4cdcb (2026-10-22) records: the INGAT checkpoint pair, INGAT-GC evidence and tasks. Both same author identity as 2bce0ab.",
+        "paths": "No governance path. Source paths only scripts/, tests/ and the two tsconfig files; no src/, assets/, Dockerfile or package files.",
+        "overlap": "None with 7aafa21 (213 paths). With the 22 uncommitted paths: handoff/delivery/INGAT_T0_T8_CHECKPOINT.md and .vi.md are modified, uncommitted, in this main checkout (not by the mission) and edited on both sides at line 116 (remote +64 lines, local +92), so a merge or checkout over them would conflict or refuse.",
+        "merge_check": "git merge-tree --write-tree HEAD origin/main exit 0, clean (tree 313b911d) for the committed sides.",
+        "owner_worktree": "branch claude/relaxed-lalande-8359f0 = 01c4cdc; 1 dirty entry.",
+        "options": "merge origin/main into main, then push (the checkpoint pair committed or saved first); rebase 7aafa21 onto origin/main (local-only, SHA changes; same precondition); the owner pauses Ingat pushes until WP5 is re-accepted; set the uncommitted checkpoint edit aside and re-apply it after integration.",
+        "record": "handoff/delivery/tasks/WP5-UX5-REMOTE-RECON2.md; evidence handoff/delivery/evidence/WP5-UX5-REMOTE-RECON2/"
+      }
+    },
     {
       "id": "WP5-UX5-FIX2-PATHS",
       "agent_type": "timesheet-light",
@@ -26800,9 +26923,191 @@
       "id": "WP5-UX5-FIX2-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX5-FIX2"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a7486aa2d7cf90397",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX5-FIX2-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX5-FIX2-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX5-FIX2-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-FIX2-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX5-FIX2-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-UX5-FIX2-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "2bce0ab5842b80c710f23496d5173c122319e5c7",
+      "branch": "main",
+      "commit_sha": "7aafa21bc1c6efc70c0fa8691c3a1165841aeb45",
+      "pushed": false,
+      "source_digest": "59516a2d0abe1294aa3aebbbc88dd2327dc2980dd139d6f3591054b95c25f0ad",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed 7aafa21 on main, NOT pushed (owner decision C b): git fetch confirmed origin/main 70dce2a; git merge --ff-only origin/main moved HEAD 2bce0ab -> 70dce2a (owner decision A a; the owner's 6173f07 and 70dce2a taken as they are); 213 files staged (3 test files, 10 modified handoff records, 4 evidence folders, new task records); one rename evidence/WP5-UX5-REGATE/13-integ-signatures.txt -> 13-integ-signatures-synthetic.txt; no masking or unstaging; precommit, git diff --cached --check, JSON parse, validate_orchestration, check_recovery (106) and preflight exit 0; D_PRE after the fast-forward = HEAD git ls-tree digest = 59516a2d. Five .log files of the REGATE evidence folder went in with the directory. Slips: one empty heredoc, one '| head -0' with a null redirect (no effect).",
+      "next_action": "None; WP5-UX5-REGATE2 on the local commit 7aafa21 / 59516a2d."
+    },
+    {
+      "id": "WP5-UX5-REGATE2",
+      "package": "WP5",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "7aafa21bc1c6efc70c0fa8691c3a1165841aeb45",
+      "depends_on": [
+        "WP5-UX5-FIX2-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aa7bcfbf66e8f7e6f",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX5-REGATE2.md",
+        "handoff/delivery/evidence/WP5-UX5-REGATE2"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX5-REGATE2.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-REGATE2.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX5-REGATE2/01-digest-export-before.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE2/01-digest-export-after.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE2/01-digest-lstree-after.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE2/03-verify.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE2/04-e2e-project-counts.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE2/06-det-counts.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE2/11-exits.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE2/12-npmtest-exits.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE2/17-sweep-counts.txt",
+        "handoff/delivery/evidence/WP5-UX5-REGATE2/31-stress-counts.txt"
+      ],
+      "baseline_commit": "2bce0ab5842b80c710f23496d5173c122319e5c7",
+      "source_digest": "59516a2d0abe1294aa3aebbbc88dd2327dc2980dd139d6f3591054b95c25f0ad",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "FAIL",
+      "gate_notes": "FAIL on the local commit 7aafa21 / 59516a2d (875 files; equal before and after; NAS NOT VERIFIED) under the rule that a non-network failure is reported as is. Identity: 12 changed paths outside handoff/ against 2bce0ab, each mapped to FIX2 (3 test files) or the owner's Ingat commit 6173f07; all 250 dist/ files byte-identical to 2bce0ab, so drill, axe, CSP, integration and build sizes carry forward. Core: npm ci, lint, npm test, validators (check_recovery 106) exit 0; npm run verify exit 0 in the export and in the repository with the owner's worktree present (B a). Real-clock FULL e2e desktop 459 / mobile 404 passed, 0 failed. Stress at 2026-11-01T08:45Z: targeted repeat 1360 passed / 0 failed; whole theme+shell specs repeat-each=20 workers=4 3140 passed / 0 failed; the deterministic test passed on both projects; the theme.spec bar-size failure did not occur in any run. Sweep: FULL 2026-10-26T16:00Z run 1 failed on network errors only; its full rerun failed mobile settings-routes.spec.ts:16 ('Administration' heading not visible in 7 s; not a network error); FULL 2026-11-01T08:45Z failed mobile controls.spec.ts:640 ('dpr 1.5: the arrow is on the screenshot'; not a network error) plus one desktop ECONNRESET; its informational rerun 863/0; the other four runs 0 failed; the chevron test alone at that instant passed 3 of 3 on both projects. The verifier judges both as host-load flakes in screenshot and 7 s-locator tests that FIX2 did not touch.",
+      "next_action": "Push 7aafa21 with the REGATE2 records (WP5-UX5-RECORDS1, committer alone); then WP5-UX5-FIX3 (worker-high): reproduce the two load flakes under load, make them robust with event-based waits (no looser assertions), prove with load runs; its freeze; REGATE3 (sweep-focused)."
+    },
+    {
+      "id": "WP5-UX5-RECORDS1",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "cancelled",
+      "depends_on": [
+        "WP5-UX5-FIX2-FREEZE"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX5-RECORDS1.md",
+        "handoff/delivery/evidence/WP5-UX5-RECORDS1"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX5-RECORDS1.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-RECORDS1.md",
+      "evidence": [],
+      "baseline_commit": "7aafa21bc1c6efc70c0fa8691c3a1165841aeb45",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "59516a2d0abe1294aa3aebbbc88dd2327dc2980dd139d6f3591054b95c25f0ad",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "attempt_1": "Stopped at step 2 (agent ac734a83683a6711e, self_reported claude-sonnet-5-5): after git fetch origin/main is 01c4cdcb5abefad41ec9f8431752eab76f4d2c4a, not 70dce2a; HEAD 7aafa21; nothing staged or changed; no commit, no push. Origin moved again (most likely the owner's Ingat session). Blocked until WP5-UX5-REMOTE-RECON2 and the owner's choice of integration.",
+      "cancel_reason": "Superseded after the owner's 'D.a, E.a' (2026-10-23): its records and the push of 7aafa21 move into WP5-UX5-FIX3-FREEZE, which merges origin/main (once the owner's INGAT checkpoint pair is clean), commits FIX3 with the REGATE2 records, and pushes.",
+      "next_action": "None (cancelled)."
+    },
+    {
+      "id": "WP5-UX5-FIX3",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "done",
+      "addresses_gate": "WP5-UX5-REGATE2",
+      "depends_on": [
+        "WP5-UX5-FIX2-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "routing_note": "Two load-dependent e2e flakes without a named fix: the worker reproduces under load first and fixes tests with event-based waits; worker-high because the cause is timing under load (docs/08 escalation applies if the root cause is still unclear after one evidence-backed attempt). Diagnosis and fix combined to save a dispatch; a product cause is a stop.",
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": "a8ebb803c27cf0da5",
+      "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
+      "attempt": 1,
+      "owned_paths": [
+        "tests/e2e/settings-routes.spec.ts",
+        "tests/e2e/controls.spec.ts",
+        "tests/e2e/fixtures.ts",
+        "tests/e2e/contrast.ts",
+        "handoff/delivery/tasks/WP5-UX5-FIX3.md",
+        "handoff/delivery/evidence/WP5-UX5-FIX3"
+      ],
+      "owned_paths_note": "fixtures.ts and contrast.ts only if a shared wait helper belongs there; no src/ change (a product cause is a stop).",
+      "prompt": "handoff/delivery/tasks/WP5-UX5-FIX3.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-FIX3.md",
+      "evidence": [],
+      "baseline_commit": "7aafa21bc1c6efc70c0fa8691c3a1165841aeb45",
+      "source_digest": null,
+      "source_digest_note": "The worker reported df4d0b21...a589 (truncated); the freeze records the full digest after its merge.",
+      "reviewed_digest": null,
+      "author_agent_ids": [
+        "a8ebb803c27cf0da5"
+      ],
+      "decision": "done (worker report; regate pending): both flakes were test races, not product defects. (1) settings-routes.spec.ts:16: after the Sign out click the Administration screen stays until the sign-out answer arrives, and its own Email field (AdminUsers.tsx:82) took the fill; the login form then mounted empty and no login request was sent; fix: tests/e2e/fixtures.ts signInPageAs waits for the 'Sign in' button before filling (3 lines); under load (mobile, 2026-10-26T16:00Z, 14 workers) 2 of 40 failed before, 80 of 80 passed after. (2) controls.spec.ts:640: 'Loading...' placeholders above the first select resolve while the test measures and screenshots, moving the select by 0.53px; fix: settledSelect waits for no placeholder and 6 still animation frames (no sleep, no looser assertion); probe 10 of 200 samples moved before, 0 of 300 after; 80 of 80 under a 32-thread CPU burner. Mutants (invisible arrow, a second gradient layer, the Administration h1 replaced by a div) fail the fixed tests; scratch restored. Real clock both tests 3/3 per project; FULL e2e desktop 459 / mobile 404 passed, 0 failed; typecheck, lint, git diff --check, npm run verify (smoke 50061) exit 0. validate_package --preflight fails in the repository only on an untracked file of the owner's other session (INGAT_MANIFEST_DESIGN_REVIEW.md: a directory link to evidence/INGAT-MANIFEST-DESIGN/ fails the is_file() check) and passes on HEAD plus the FIX3 files in a scratch export. Files: tests/e2e/controls.spec.ts, tests/e2e/fixtures.ts.",
+      "next_action": "None; WP5-UX5-FIX3-FREEZE once the owner's Ingat files in this checkout are settled (the INGAT_T0_T8_CHECKPOINT pair, INGAT_MANIFEST_DESIGN_REVIEW.md and its evidence), then a path lookup, the merge of origin/main, commit and push."
+    },
+    {
+      "id": "WP5-UX5-FIX3-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX5-FIX3"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -26820,13 +27125,13 @@
       "session_id": "b5de56d1-fb31-4dc5-b74f-70e9473e1a0a",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP5-UX5-FIX2-FREEZE.md",
-        "handoff/delivery/evidence/WP5-UX5-FIX2-FREEZE"
+        "handoff/delivery/tasks/WP5-UX5-FIX3-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX5-FIX3-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP5-UX5-FIX2-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP5-UX5-FIX2-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP5-UX5-FIX3-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX5-FIX3-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "2bce0ab5842b80c710f23496d5173c122319e5c7",
+      "baseline_commit": "7aafa21bc1c6efc70c0fa8691c3a1165841aeb45",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
@@ -26834,7 +27139,9 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Fresh committer: fetch, overlap check, git merge --ff-only origin/main (owner A a), stage the 3 test files, 10 modified handoff files, 4 evidence folders and the new task records, rename the signature-basename log, precommit and validators, commit locally, no push (owner C b); HEAD ls-tree digest equals the post-fast-forward digest D_PRE."
+      "blocked_reason": "Owner decision E a: the merge of origin/main waits until the owner's Ingat session has settled its files in this main checkout (uncommitted INGAT_T0_T8_CHECKPOINT pair; untracked INGAT_MANIFEST_DESIGN_REVIEW.md, whose directory link also fails validate_package --preflight in the repository). The coordinator asked the owner on 2026-10-23 to say when they are settled.",
+      "unblocked": "2026-10-23: the owner relayed the Ingat-track coordinator's synchronization (origin/main 9f186b2 holds the merge b8bae50 with 7aafa21 as a parent) and its steps; the final brief follows them: save the two sections of the INGAT checkpoint pair, git restore the pair, git merge --ff-only origin/main, re-add the sections, stage FIX3, the listed INGAT files and the mission records, one allowed preflight link fix in an INGAT review, commit, push.",
+      "next_action": "Fresh committer on the final brief."
     },
     {
       "id": "WP5-UX5-PLAN",

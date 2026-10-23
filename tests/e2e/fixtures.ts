@@ -787,6 +787,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     await use(async ({ email, password }, startHash = '') => {
       // The hash survives the sign-in, so a screen can be the first one the app renders.
       await page.goto(`/${startHash}`);
+      // WP5-UX5-FIX3: after a Sign out click the signed-in screen is still shown until the sign-out answer arrives, and the
+      // Administration screen has an Email field of its own. Fill the form only once the sign-in form itself is on the page.
+      await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
       await page.getByLabel('Email').fill(email);
       await page.getByLabel('Password').fill(password);
       await page.getByRole('button', { name: 'Sign in' }).click();

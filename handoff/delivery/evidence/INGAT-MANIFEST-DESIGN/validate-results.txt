@@ -1,0 +1,103 @@
+INGAT-MANIFEST-DESIGN: pinned `ingat validate` results (verbatim output of results/validate-<variant>.txt in the task
+folder). Image ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb (local
+image ID equal to that digest: image-inspect in commands.txt). Command, as in .github/workflows/ingat-validate.yml:
+docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user <uid:gid>
+  --volume <task>/<variant>:/app:ro <INGAT_IMAGE> validate /app
+Each variant folder holds `ingat.toml` and a byte-identical copy of the repository's compose.example.yaml (cmp exit 0
+for all ten folders).
+
+---------------------------------------------------------------- A. minimal forms
+min1 (first attempt: store param only, no env_file and port params)
+ingat: the app does not validate:
+sample: services.timesheet.env_file[0]: /app/timesheet.env is outside the instance's store generations, task dirs, placeholder, secrets and rendered env file
+sample: services.timesheet.ports[0]: 127.0.0.1:3000 refused: only 127.0.0.1 and a port param value
+sample--t1: services.timesheet.env_file[0]: /app/timesheet.env is outside the instance's store generations, task dirs, placeholder, secrets and rendered env file
+exit=1
+
+min2 = minimal-validate-ingat.toml.txt (26 lines)
+/app: the app's settings file (ingat.toml) is valid
+exit=0
+
+min3 = minimal-ingat.toml.txt (30 lines: min2 plus the readiness probe and the activation wait)
+/app: the app's settings file (ingat.toml) is valid
+exit=0
+
+operable = operable-ingat.toml.txt (72 lines: image param, app env with two required keys, store owner, backup,
+restore, one operator task)
+/app: the app's settings file (ingat.toml) is valid
+exit=0
+
+---------------------------------------------------------------- E. error probes (each = operable plus the change shown)
+err-missing: line 53 `effect = "app-write"` deleted from [tasks.backup]
+ingat: invalid app manifest:
+tasks.backup.effect: is required
+exit=1
+
+err-typo: `idempotent = true` -> `idempotant = true` in [tasks.backup]
+ingat: invalid app manifest:
+tasks.backup.idempotant: unknown key
+backup.steps: task 'backup' must be idempotent (scratch)
+exit=1
+
+err-enum: `effect = "app-write"` -> `effect = "write"`, `timeout = "60m"` -> `timeout = "60 min"` in [tasks.backup]
+ingat: invalid app manifest:
+tasks.backup.effect: must be one of: read, app-write, data
+tasks.backup.timeout: '60 min' is not a duration such as 15s, 2m or 1h
+exit=1
+
+err-taskref: `wait = ["redy"]`, `steps = ["bakup"]`, and `"{arg.user}"` appended to the bootstrap-new-token argv
+ingat: invalid app manifest:
+activate[0].wait: names an unknown probe 'redy'
+backup.steps: names an unknown task 'bakup'
+tasks.bootstrap-new-token: template variable {arg.user} names an undeclared arg
+exit=1
+
+err-syntax: the [probes.ready] inline table split over two lines (valid TOML 1.1, invalid TOML 1.0)
+ingat: invalid app manifest: Invalid initial character for a key part (at line 34, column 40)
+exit=1
+
+---------------------------------------------------------------- G. the proposed sketch (expected to fail on 0.1.0)
+rewrite = proposed-ingat.toml.txt
+ingat: invalid app manifest:
+app_env.param: is required
+stores.data.param: is required
+smoke[0].name: is required
+smoke[0].http.port_param: is required
+smoke[0].http.path: is required
+install[1]: needs exactly one of start, task, pause
+tasks.migrate.service: is required
+tasks.migrate.mode: is required
+tasks.backup.service: is required
+tasks.backup.mode: is required
+tasks.restore.service: is required
+tasks.restore.mode: is required
+tasks.bootstrap-config.service: is required
+tasks.bootstrap-config.mode: is required
+tasks.bootstrap-new-token.service: is required
+tasks.bootstrap-new-token.mode: is required
+tasks.bootstrap-new-token.timeout: is required
+tasks.outbound-held.service: is required
+tasks.outbound-held.mode: is required
+tasks.outbound-held.timeout: is required
+tasks.outbound-status.service: is required
+tasks.outbound-status.mode: is required
+tasks.outbound-status.timeout: is required
+tasks.outbound-release-job.service: is required
+tasks.outbound-release-job.mode: is required
+tasks.outbound-release-job.timeout: is required
+tasks.outbound-release-all.service: is required
+tasks.outbound-release-all.mode: is required
+tasks.outbound-release-all.timeout: is required
+tasks.outbound-drop-job.service: is required
+tasks.outbound-drop-job.mode: is required
+tasks.outbound-drop-job.timeout: is required
+tasks.outbound-resume.service: is required
+tasks.outbound-resume.mode: is required
+tasks.outbound-resume.timeout: is required
+task_defaults: unknown key
+smoke[0].probe: unknown key
+install[1].activate: unknown key
+requires_ingat: '>=0.2,<1' excludes version 0.1.0
+app_env.param: must name an env_file param
+smoke[0].http.port_param: is not a port param
+exit=1

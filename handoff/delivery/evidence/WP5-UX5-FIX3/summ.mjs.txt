@@ -1,0 +1,30 @@
+import { readFileSync } from 'node:fs';
+const dir = process.argv[2];
+const rd = (f) => readFileSync(`${dir}/${f}`, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+const out = [];
+let t0 = null;
+const before = new Map();
+for (const f of ['1-trace.trace', 'test.trace']) {
+  let ev;
+  try { ev = rd(f); } catch { continue; }
+  for (const e of ev) {
+    if (e.type === 'before') { before.set(e.callId, e); }
+    if (e.type === 'after') {
+      const b = before.get(e.callId);
+      if (b) out.push({ s: b.startTime, e: e.endTime, text: `${b.class}.${b.method} ${JSON.stringify(b.params).slice(0, 140)} ${e.error ? 'ERR' : ''}` });
+    }
+    if (e.type === 'console') out.push({ s: e.time, e: e.time, text: `console.${e.messageType} ${e.text}`.slice(0, 200) });
+    if (e.type === 'event' && /(pageerror|dialog)/i.test(e.method)) out.push({ s: e.time, e: e.time, text: `event ${e.method}` });
+  }
+}
+const net = rd('1-trace.network');
+for (const n of net) {
+  const sn = n.snapshot;
+  out.push({ s: sn._monotonicTime ?? 0, e: 0, text: `NET ${sn.request.method} ${sn.request.url.slice(0, 110)} -> ${sn.response.status} (${Math.round(sn.time)}ms)`, net: true });
+}
+const acts = out.filter((o) => !o.net).sort((a, b) => a.s - b.s);
+t0 = acts[0].s;
+for (const a of acts) console.log(`${(a.s - t0).toFixed(0).padStart(7)} +${(a.e - a.s).toFixed(0).padStart(6)} ${a.text}`);
+console.log('--- network');
+const nets = out.filter((o) => o.net).sort((a, b) => a.s - b.s);
+for (const a of nets) console.log(`${(a.s - t0).toFixed(0).padStart(7)} ${a.text}`);

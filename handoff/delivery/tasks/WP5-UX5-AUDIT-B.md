@@ -2,8 +2,16 @@
 
 - **Task.** Mission timesheet-software-readiness, task WP5-UX5-AUDIT-B, package WP5, kind
   audit, attempt 1.
-  - It depends on WP5-UX5-REGATE (PASS required). WP5-UX5-GATE on e2bf1aa failed, and
-    WP5-UX5-FIX1 fixed it.
+  - It depends on WP5-UX5-REGATE2 (PASS required).
+    - WP5-UX5-GATE on e2bf1aa failed, and FIX1 fixed it.
+    - WP5-UX5-REGATE on 2bce0ab failed on one test race; FIX2 fixed it.
+  - **Owner decisions of 2026-10-22** ("A.a, B.A, C.b"):
+    - the target is a local commit, not pushed;
+    - it includes the owner's Ingat commits 6173f07 and 70dce2a (`ingat.toml`, the GHCR
+      workflows, docs 07 and 11, ADR 0002). Check them only for non-interference with
+      rounds 4 and 5: no conflicting statement in docs 07 or 11 about sign-off, sending or
+      the PDF. Do not review their deployment content;
+    - never touch `.claude/worktrees/`.
   - Run in a fresh context. It runs in parallel with WP5-UX5-AUDIT-A, which uses other
     ports and other folders.
 - **Profile and routing.** timesheet-auditor, requested opus/xhigh, no override.
@@ -20,10 +28,9 @@
 - **Author separation.** You wrote no WP5-UX4 or WP5-UX5 task; their agent IDs are on the
   board. Treat every planner, worker, committer and verifier report as a claim.
 - **Target.**
-  - `reviewed_commit` = TARGET_SHA = 2bce0ab5842b80c710f23496d5173c122319e5c7 (the
-    WP5-UX5-FIX1-FREEZE commit).
-  - TARGET_DIGEST = 709750910cb88422b1de35c38c85eac15c3eca63ee75e1ff26e11b75d6475bbf
-    (870 files).
+  - `reviewed_commit` = TARGET_SHA = 7aafa21bc1c6efc70c0fa8691c3a1165841aeb45 (the
+    WP5-UX5-FIX2-FREEZE commit, local and not pushed).
+  - TARGET_DIGEST = 59516a2d0abe1294aa3aebbbc88dd2327dc2980dd139d6f3591054b95c25f0ad.
   - The base is the last accepted snapshot, 8e557100d16b6b6eb86a48e00276835761aabfdf.
   - Record HEAD, the digest before and after (three forms) and `reviewed_commit`.
   - Work on a clean export or a scratch clone at TARGET_SHA.

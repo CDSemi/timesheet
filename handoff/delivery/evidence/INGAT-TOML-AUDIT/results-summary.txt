@@ -1,0 +1,72 @@
+===== validate-lean-wrapped.txt
+cmd: docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user 197609:197609 --volume <task>/lean-wrapped:/app:ro <INGAT_IMAGE> validate /app
+/app: the app's settings file (ingat.toml) is valid
+exit=0
+===== validate-lean.txt
+cmd: docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user 197609:197609 --volume <task>/lean:/app:ro <INGAT_IMAGE> validate /app
+/app: the app's settings file (ingat.toml) is valid
+exit=0
+===== validate-optional.txt
+cmd: docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user 197609:197609 --volume <task>/optional:/app:ro <INGAT_IMAGE> validate /app
+/app: the app's settings file (ingat.toml) is valid
+exit=0
+===== validate-orig-instance-bad.txt
+cmd: (as above) --volume <task>/instance:/inst:ro ... validate /app --instance /inst/instance-bad.toml
+ingat: the app does not validate:
+app_env.APP_ORIGINS: does not match the manifest's pattern
+app_env.COOKIE_SECURE: must be one of true, false
+app_env.DEBUG: not declared by the manifest
+app_env.JOB_RUNNER: tool-managed; only holds and [rollback] env set it
+app_env.NODE_ENV: forbidden by the manifest
+app_env.PUBLIC_BASE_URL: does not match the manifest's pattern
+app_env.SESSION_TTL_HOURS: does not match the manifest's pattern
+app_env.SMTP_PASSWORD: a secret key, so its value must never be written in instance.toml; remove it here and store it with `ingat secret set` instead
+app_env.MAIL_FROM: required
+exit=1
+===== validate-orig-instance-good.txt
+cmd: (as above) --volume <task>/instance:/inst:ro ... validate /app --instance /inst/instance-good.toml
+/app: the app's settings file (ingat.toml) is valid, and the instance file /inst/instance-good.toml fits it
+exit=0
+===== validate-orig.txt
+cmd: docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user 197609:197609 --volume <task>/orig:/app:ro <INGAT_IMAGE> validate /app
+/app: the app's settings file (ingat.toml) is valid
+exit=0
+===== validate-probe-required.txt
+cmd: docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user 197609:197609 --volume <task>/probe-required:/app:ro <INGAT_IMAGE> validate /app
+ingat: invalid app manifest:
+tasks.outbound-status.service: is required
+tasks.outbound-status.mode: is required
+tasks.outbound-status.effect: is required
+tasks.outbound-status.timeout: is required
+task_defaults: unknown key
+exit=1
+===== model-diff-lean.txt
+diff exit=0
+===== model-diff-lean-wrapped.txt
+diff exit=0
+===== sizes.txt
+orig lines=257 bytes=11261 max_line=319 lines_over_120=14 sha256=7bf274a8c8da29c75c806e46bfa62489b4821d59fee08a5d81c70cced74a1104
+lean lines=249 bytes=10938 max_line=319 lines_over_120=3 sha256=400adb129feb25b1f034243a0352fec9b7980d9a2f53642192cbaf68e08d42e5
+lean-wrapped lines=258 bytes=10986 max_line=119 lines_over_120=0 sha256=d497f1898a007b82ddf621add08820669ee2b1a283b88ceb105efff9dab1bf3a
+optional lines=258 bytes=11285 max_line=119 lines_over_120=0 sha256=0199f958f9fbb2a72f68f866470091701875787d8f2de31aa23cc0102c354ab9
+===== dump-lean-wrapped.err
+exit=0
+===== dump-lean.err
+exit=0
+===== dump-optional.err
+exit=0
+===== dump-orig.err
+exit=0
+===== model-diff-optional (line count)
+47
+orig file_sha256=5ad76a22a6ff70f9fbabb0ea11ee5a8d43487c2477c4752e556d0d5d8a14685f body_sha256=e831cb73169f2c09fefbb2f7e02470ea5fd2c997cd62ab3034eb344a37776356 lines=558
+# file /app/ingat.toml; raw_sha256 7bf274a8c8da29c75c806e46bfa62489b4821d59fee08a5d81c70cced74a1104; resolved fields 556
+lean file_sha256=9948f635fc21d517ac5ee0f09f352c87ac8eaceb15bac69b11b5a66f48c92f94 body_sha256=e831cb73169f2c09fefbb2f7e02470ea5fd2c997cd62ab3034eb344a37776356 lines=558
+# file /app/ingat.toml; raw_sha256 400adb129feb25b1f034243a0352fec9b7980d9a2f53642192cbaf68e08d42e5; resolved fields 556
+lean-wrapped file_sha256=e7cfb53f443c96bb06dad90d92ee3013bfcce49f33bf505e76546b07625247a7 body_sha256=e831cb73169f2c09fefbb2f7e02470ea5fd2c997cd62ab3034eb344a37776356 lines=558
+# file /app/ingat.toml; raw_sha256 d497f1898a007b82ddf621add08820669ee2b1a283b88ceb105efff9dab1bf3a; resolved fields 556
+optional file_sha256=bb5b04792884b934bde47567bccc24729a72ca24a2335f813d2797adf90ffe8a body_sha256=df8b55573de85e430dd666cf67d91e868cf68e28549846348fc8319cec3f9ba3 lines=539
+# file /app/ingat.toml; raw_sha256 0199f958f9fbb2a72f68f866470091701875787d8f2de31aa23cc0102c354ab9; resolved fields 537
+===== run-all-2.log
+run-all done
+exit=0

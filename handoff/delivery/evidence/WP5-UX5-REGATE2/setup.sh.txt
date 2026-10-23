@@ -1,0 +1,15 @@
+. <task>/env.sh
+cd $REPO
+git rev-parse HEAD > $T/out/00-head.txt
+git rev-parse origin/main >> $T/out/00-head.txt 2>&1
+git branch --show-current >> $T/out/00-head.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-before.txt 2>&1
+git diff --stat $PREV..$TARGET -- . ':!handoff' > $T/out/20-diffstat-nonhandoff.txt 2>&1
+git diff --name-status $PREV..$TARGET -- . ':!handoff' > $T/out/20-namestatus.txt 2>&1
+git diff --name-status $PREV..$TARGET -- src scripts assets tests package.json package-lock.json tsconfig.base.json tsconfig.client.json tsconfig.json tsconfig.server.json tsconfig.test.json vite.config.ts vitest.config.ts playwright.config.ts eslint.config.js Dockerfile compose.example.yaml > $T/out/20-namestatus-code.txt 2>&1
+git archive $TARGET | tar -x -C $T/export
+git archive $TARGET | tar -x -C $T/export-probe
+git archive $PREV | tar -x -C $T/export-old
+ls $T/export | wc -l
+cat $T/out/00-head.txt
+cat $T/out/20-namestatus.txt

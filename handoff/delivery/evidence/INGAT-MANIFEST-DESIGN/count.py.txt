@@ -1,0 +1,61 @@
+"""INGAT-MANIFEST-DESIGN: size and concept counts of TOML manifests (read-only).
+
+Usage: python -I count.py <label>=<path> ...
+Per file: physical lines, blank lines, comment-only lines, content lines, table headers ([x] and [[x]] lines),
+leaf keys written (a value that is not a table; an inline table's members count one by one; a list counts once),
+and distinct schema key paths ("concepts"): user-chosen names in map positions are replaced by "*".
+"""
+
+import sys
+import tomllib
+
+# Positions whose children are user-chosen names, not schema keys.
+MAPS = {
+    "params", "app_env.keys", "stores", "secrets", "probes", "tasks", "holds",
+    "tasks.*.mounts", "tasks.*.exit", "tasks.*.args", "tasks.*.env", "tasks.*.expect.json",
+    "probes.*.expect.json", "smoke[].expect.json", "probes.*.http.headers", "smoke[].http.headers",
+    "probes.*.expect.header_equals", "probes.*.expect.header_contains",
+    "smoke[].expect.header_equals", "smoke[].expect.header_contains",
+    "compose.expect_labels", "compose.build_env", "rollback.env", "install[].params",
+    "backup.naming", "source.images", "services", "holds.*",
+}
+
+
+def walk(node, path, leaves, concepts):
+    if isinstance(node, dict):
+        for k, v in node.items():
+            child = f"{path}.{k}" if path else k
+            norm_parent = path
+            if norm_parent in MAPS and norm_parent != "services":
+                child = f"{path}.*"
+            walk(v, child, leaves, concepts)
+    elif isinstance(node, list) and node and all(isinstance(x, dict) for x in node):
+        for item in node:
+            walk(item, f"{path}[]", leaves, concepts)
+    else:
+        leaves.append(path)
+        concepts.add(path)
+
+
+def main(args):
+    for arg in args:
+        label, _, path = arg.partition("=")
+        with open(path, "rb") as f:
+            raw = f.read()
+        text = raw.decode("utf-8")
+        lines = text.splitlines()
+        blank = sum(1 for x in lines if not x.strip())
+        comment = sum(1 for x in lines if x.strip().startswith("#"))
+        headers = sum(1 for x in lines if x.lstrip().startswith("["))
+        doc = tomllib.loads(text)
+        leaves, concepts = [], set()
+        walk(doc, "", leaves, concepts)
+        tops = sorted({c.split(".")[0].split("[")[0] for c in concepts})
+        print(f"{label}: lines={len(lines)} blank={blank} comment_only={comment} content={len(lines) - blank - comment} "
+              f"headers={headers} leaf_keys={len(leaves)} distinct_key_paths={len(concepts)} top_level={len(tops)}")
+        print(f"  top-level names: {', '.join(tops)}")
+        print(f"  key paths: {', '.join(sorted(concepts))}")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

@@ -1,0 +1,62 @@
+INGAT-MANIFEST-DESIGN: the same app (one container, one data volume, one readiness route, one migration) in the
+minimal form of two comparable tools. SKETCHES written from the cited documentation; neither was run (no flyctl, no
+kamal in this task). Host values are placeholders (192.0.2.10 is a documentation address, RFC 5737).
+
+---------------------------------------------------------------- fly.toml (Fly.io), 15 lines, 4 tables, 7 keys
+app = "timesheet"
+primary_region = "ams"
+
+[http_service]
+internal_port = 3000
+
+[[http_service.checks]]
+path = "/api/ready"
+
+[mounts]
+source = "data"
+destination = "/data"
+
+[deploy]
+release_command = "node dist/server/cli.js migrate"
+
+Sources: https://fly.io/docs/reference/configuration/ (served as docs.fly.io/reference/configuration): "The first
+key/value in any fly.toml file is the application name"; [http_service] internal_port (default 8080);
+[[http_service.checks]] "expect a successful HTTP status in response (i.e, 2xx)"; [mounts] "two required entries:
+source and destination"; scheduled_snapshots "The default is true (enabled) when unset", snapshot_retention "default is
+5 days"; [deploy] release_command "runs in a temporary Machine ... no volumes". `fly launch` generates fly.toml
+(https://fly.io/docs/launch/create/). Not expressed in fly.toml: backup/restore commands (the platform snapshots the
+volume), restore drills, side-effect holds, task exit contracts.
+
+---------------------------------------------------------------- config/deploy.yml (Kamal 2.12), 20 lines, 11 leaf keys
+service: timesheet
+image: cdsemi/timesheet
+servers:
+  - 192.0.2.10
+proxy:
+  app_port: 3000
+  healthcheck:
+    path: /api/ready
+volumes:
+  - /srv/timesheet/data:/data
+registry:
+  server: ghcr.io
+  username: cdsemi
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+env:
+  secret:
+    - SMTP_PASSWORD
+aliases:
+  migrate: app exec "node dist/server/cli.js migrate"
+
+Sources: https://kamal-deploy.org/docs/installation/ ("run kamal init. Now edit the new file config/deploy.yml. It
+could look as simple as this:" followed by a 14-line example with servers, registry, builder and env);
+https://kamal-deploy.org/docs/configuration/overview/ ("Kamal will not accept unrecognized keys"; `x-` extensions and
+YAML anchors "to avoid repetition"); https://kamal-deploy.org/docs/configuration/proxy/ (app_port; healthcheck path,
+default "/up"); https://kamal-deploy.org/docs/configuration/aliases/ (named command shortcuts). Kamal keeps host
+values (server addresses) in the repository file; it has no backup, restore, drill or hold concept.
+
+---------------------------------------------------------------- Ingat, the same scope (task folder `min3`, validated)
+26 lines without the readiness probe (min-validate), 30 lines with it (min-ready): 7 table headers, 18 leaf keys. The
+migration step the sketches above include costs Ingat about 8 more lines ([deploy] migrate plus a [tasks.migrate]
+table with its four required keys). See minimal-ingat.toml.txt and counts.txt.

@@ -1,0 +1,66 @@
+INGAT-MANIFEST-DESIGN commands (Git Bash; task folder <task> = D:\.claude-tmp\timesheet\INGAT-MANIFEST-DESIGN;
+profile paths masked as <user>). No npm, no build, no test, no network port, no write in the Ingat repository.
+Repository state at start: HEAD 7aafa21bc1c6efc70c0fa8691c3a1165841aeb45; the working tree differed from HEAD only
+under handoff/ (git status --short).
+
+0. Identity (read-only):
+   sha256sum ingat.toml -> 7bf274a8c8da29c75c806e46bfa62489b4821d59fee08a5d81c70cced74a1104 (as INGAT-TOML-AUDIT)
+   git rev-parse HEAD -> 7aafa21bc1c6efc70c0fa8691c3a1165841aeb45; git diff --quiet HEAD -- ingat.toml compose.example.yaml -> 0
+   git -C <Ingat> describe --tags --always -> v0.1.0-16-g35be585; git -C <Ingat> status --short -> empty, exit 0
+
+1. Image presence (read-only):
+   docker image inspect --format '{{.Id}} {{json .RepoDigests}}' ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb
+   -> sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb, exit 0
+
+2. Validate (<task>/validate.sh, one run per variant; the CI job's exact flags):
+   export MSYS_NO_PATHCONV=1; TEMP/TMP=<task>/tmp
+   docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges \
+     --user "$(id -u):$(id -g)" --volume "$(cygpath -m <task>/<variant>):/app:ro" "$INGAT_IMAGE" validate /app
+   variants and exits: min1 1, min2 0, min3 0, operable 0 (also 0 again after adding the image param), err-missing 1,
+   err-typo 1, err-enum 1, err-taskref 1, err-syntax 1, rewrite 1. Output: validate-results.txt.
+
+3. Copies checked:
+   cmp <repo>/compose.example.yaml <task>/<variant>/compose.example.yaml   -> exit 0 for all ten variants
+   cmp <task>/min2/ingat.toml minimal-validate-ingat.toml.txt              -> exit 0
+   cmp <task>/min3/ingat.toml minimal-ingat.toml.txt                       -> exit 0
+   cmp <task>/operable/ingat.toml operable-ingat.toml.txt                  -> exit 0
+   cmp <task>/rewrite/ingat.toml proposed-ingat.toml.txt                   -> exit 0
+   cmp <task>/scripts/count.py count.py.txt; cmp <task>/scripts/convert.py convert.py.txt -> exit 0, 0
+   diff <task>/operable/ingat.toml <task>/err-*/ingat.toml               -> the changes listed in validate-results.txt
+
+4. Counts and conversions (workflow Python, C:/Users/<user>/.cache/codex-runtimes/codex-primary-runtime/dependencies/
+   python/python.exe, Python 3.12.14):
+   python -I scripts/count.py min-validate=min2/ingat.toml min-ready=min3/ingat.toml operable=operable/ingat.toml \
+     app=<repo>/ingat.toml lean=<repo>/handoff/delivery/evidence/INGAT-TOML-AUDIT/lean-ingat.toml.txt \
+     rewrite=rewrite/ingat.toml fx-lite=<Ingat>/fixtures/fx-lite/ingat.toml fx-web=<Ingat>/fixtures/fx-web/ingat.toml
+     -> exit 0; counts.txt
+   python -I scripts/convert.py json <repo>/ingat.toml > results/app-as.json   -> exit 0, 509 lines
+   python -I scripts/convert.py yaml <repo>/ingat.toml > results/app-as.yaml   -> exit 0, 280 lines
+
+5. Public documentation (read-only GETs, <task>/fetch.sh, each page in its own folder <task>/downloads/<name>/; then
+   python -I scripts/html2text.py into <task>/text/<name>.txt). All 32 responses HTTP 200:
+   https://toml.io/en/ ; https://toml.io/en/v1.0.0 ; https://toml.io/en/v1.1.0 ; https://github.com/toml-lang/toml/releases ;
+   https://peps.python.org/pep-0518/ ; https://peps.python.org/pep-0621/ ; https://peps.python.org/pep-0680/ ;
+   https://docs.python.org/3/library/tomllib.html ; https://doc.rust-lang.org/cargo/reference/manifest.html ;
+   https://doc.rust-lang.org/cargo/reference/workspaces.html ; https://gohugo.io/configuration/introduction/ ;
+   https://docs.netlify.com/build/configure-builds/file-based-configuration/ ;
+   https://buildpacks.io/docs/reference/config/project-descriptor/ ; https://fly.io/docs/reference/configuration/ ;
+   https://fly.io/docs/launch/create/ ; https://kamal-deploy.org/docs/installation/ ;
+   https://kamal-deploy.org/docs/configuration/overview/ ; https://kamal-deploy.org/docs/configuration/proxy/ ;
+   https://kamal-deploy.org/docs/configuration/accessories/ ; https://kamal-deploy.org/docs/configuration/aliases/ ;
+   https://kamal-deploy.org/docs/configuration/anchors/ ; https://docs.docker.com/reference/compose-file/services/ ;
+   https://docs.docker.com/reference/compose-file/fragments/ ; https://docs.docker.com/reference/compose-file/extension/ ;
+   https://developer.hashicorp.com/nomad/docs/job-specification/task ;
+   https://developer.hashicorp.com/nomad/docs/job-specification/check ;
+   https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html ;
+   https://devcenter.heroku.com/articles/release-phase ; https://render.com/docs/blueprint-spec ;
+   https://taplo.tamasfe.dev/configuration/developing-schemas.html ; https://www.schemastore.org/api/json/catalog.json ;
+   https://yaml.org/spec/1.2.2/
+   One release date read from the HTML attribute: grep 'datetime=' downloads/toml-releases/page.html
+   -> 2025-12-24T17:30:07Z (1.1.0), 2021-01-12T09:14:27Z (1.0.0).
+
+6. Ingat reads (read-only Read/Grep): docs/app-developers/MANIFEST_SPEC.md; docs/design/ARCHITECTURE.md §11.3;
+   docs/design/ROADMAP.md; docs/design/adr/README.md, 0009, 0015, 0018, 0031; docs/guide/*.md and README.md (Grep);
+   src/ingat/model/manifest.py, model/toml_read.py, cli/commands.py:400-519, ops/deploy.py:220-239, Grep of
+   "strategy" over src/ingat; fixtures/fx-lite/ingat.toml, fixtures/fx-lite/compose.yaml, fixtures/fx-web/ingat.toml.
+   The owner's private draft was not opened.

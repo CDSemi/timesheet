@@ -1,0 +1,17 @@
+. <task>/env.sh
+for d in export-old export export-probe; do
+  cd $T/$d
+  find dist -type f | LC_ALL=C sort > $T/out/51-$d-files.txt
+  rm -f $T/out/51-$d-hashes.txt
+  while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)" >> $T/out/51-$d-hashes.txt; done < $T/out/51-$d-files.txt
+  echo "$d: $(wc -l < $T/out/51-$d-files.txt) files (server $(grep -c 'dist/server' $T/out/51-$d-hashes.txt), domain-dir $(grep -c 'dist/domain' $T/out/51-$d-hashes.txt), client $(grep -c 'dist/client' $T/out/51-$d-hashes.txt))"
+done
+cd $T
+for d in export-old export-probe; do
+  echo "== $d (left) against export = the target (right)"
+  diff out/51-$d-hashes.txt out/51-export-hashes.txt > out/51-hash-diff-$d.txt
+  echo "diff exit $? ; all differing lines: $(grep -cE '^[<>]' out/51-hash-diff-$d.txt)"
+  echo "files only in one side:"
+  diff out/51-$d-files.txt out/51-export-files.txt
+done
+echo cmp-done > out/cmp.done

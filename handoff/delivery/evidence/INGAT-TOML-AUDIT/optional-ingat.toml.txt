@@ -1,0 +1,258 @@
+# ingat.toml - Timesheet app manifest (Ingat manifest schema 1). Ingat reads it from the exact commit it deploys.
+# The Ingat 0.1.x (M1) form of the SQLite pattern of MANIFEST_SPEC §11; what 0.1.x cannot run is left out (ADR 0002).
+# Keys at their Ingat default are omitted. Host values (ports, URLs, addresses, paths, secrets) live only in the
+# host's instance.toml.
+manifest = 1
+app = "timesheet"
+requires_ingat = ">=0.1,<1"
+
+[source]
+kind = "git"
+release = "commit"                            # one image per commit; there is no release tag yet
+
+[compose]
+files = ["compose.example.yaml"]              # Ingat's override resets its `build: .`; the image is pulled by tag
+build_services = ["timesheet"]                # built and published by .github/workflows/image.yml
+expect_labels = { "org.opencontainers.image.revision" = "{commit}" }   # binds the pulled tag to the commit
+
+[params]
+TIMESHEET_IMAGE    = { kind = "template", value = "ghcr.io/cdsemi/timesheet:{commit}" }
+TIMESHEET_ENV_FILE = { kind = "env_file" }
+TIMESHEET_DATA_DIR = { kind = "store", store = "data" }
+TIMESHEET_PORT     = { kind = "port" }
+
+[app_env]
+param = "TIMESHEET_ENV_FILE"
+# Fixed by the image (Dockerfile ENV block), the static-root override STATIC_DIR (read by the production server), or
+# development-only seed passwords that never run in production.
+forbidden = ["NODE_ENV", "HOST", "PORT", "DATABASE_PATH", "DATA_DIR", "STATIC_DIR",
+             "SEED_ADMIN_PASSWORD", "SEED_EMPLOYEE_PASSWORD", "SEED_EMPLOYEE2_PASSWORD"]
+
+[app_env.keys]
+# APP_ORIGINS: comma-separated origins without a path; PUBLIC_BASE_URL: an https URL without a query or fragment.
+APP_ORIGINS                = { required = true, pattern = '^https?://[^\s,/?#]+(,https?://[^\s,/?#]+)*$' }
+PUBLIC_BASE_URL            = { required = true, pattern = '^https://[^\s?#]+$' }
+MAIL_FROM                  = { required = true }   # the app starts without it, but sends and captures need it
+TRUSTED_PROXY_ADDRESSES    = { pattern = '^[0-9A-Fa-f:.]+(,[0-9A-Fa-f:.]+)*$' }  # exact IPs; unset trusts no proxy
+COOKIE_SECURE              = { allowed = ["true", "false"] }
+SESSION_TTL_HOURS          = { pattern = '^[1-9][0-9]{0,3}$' }
+OUTBOUND_MODE              = { default = "capture", allowed = ["capture", "smtp"], owner_gated = true }
+PRODUCTION_SENDING_ENABLED = { allowed = ["true"], owner_gated = true }   # real sending needs both owner-gated keys
+SMTP_HOST                  = { pattern = '^[A-Za-z0-9.-]{1,253}$' }
+SMTP_PORT                  = { pattern = '^[0-9]{1,5}$' }
+SMTP_SECURITY              = { allowed = ["starttls", "tls"] }
+SMTP_USER                  = { secret = true }
+SMTP_PASSWORD              = { secret = true }
+JOB_RUNNER                 = { allowed = ["off"], tool_managed = true }
+
+[stores.data]
+kind = "bind"
+param = "TIMESHEET_DATA_DIR"
+owner = "10001:10001"                         # the image user
+mode = "0700"
+local_only = true                             # SQLite WAL: never a remote share or a synchronized folder
+online_backup = true                          # the backup command uses SQLite's online backup
+
+[services]
+writers = ["timesheet"]                       # web app, in-process job runner and the SQLite store in one container
+
+[schema]
+probe = "ready"
+expected = "schema.expected"
+actual = "schema.actual"
+migrates_on_start = true                      # the server applies pending migrations at start
+
+[probes.ready]                                # readiness: schema current and the data directory writable
+exec = "timesheet"
+argv = ["node", "-e", """\
+  fetch('http://127.0.0.1:3000/api/ready',{signal:AbortSignal.timeout(4000)})\
+  .then(async r=>{process.stdout.write(await r.text());process.exit(r.ok?0:1)},()=>process.exit(1))"""]
+expect = { json = { status = "ready", data_dir_writable = true } }
+stable = "5s"
+timeout = "120s"
+
+[probes.edge-live]
+http = { port_param = "TIMESHEET_PORT", path = "/api/health" }
+expect = { status = 200, json = { status = "ok" } }
+timeout = "30s"
+
+[[activate]]
+services = ["timesheet"]
+wait = ["ready", "edge-live"]
+reopens_writes = true
+
+[[smoke]]                                     # `edge-live` already proves /api/health through the same port
+name = "ready"
+http = { port_param = "TIMESHEET_PORT", path = "/api/ready" }
+expect = { status = 200, json = { status = "ready", data_dir_writable = true } }
+
+[[install]]
+task = "migrate"                              # once and alone: concurrent first opens can fail with SQLITE_BUSY
+[[install]]
+start = ["timesheet"]
+wait = ["ready", "edge-live"]
+[[install]]
+pause = """\
+  Copy the owner's bootstrap file into the Ingat inbox (INGAT_ROOT/inbox/), run \
+  `ingat task {instance} bootstrap-config --input config=<file>` (it prints a single-use setup token, valid for \
+  60 minutes, to the terminal that runs it and never records it), create the administrator in the browser, then \
+  run `ingat resume {instance}`. If the token expires first, `ingat task {instance} bootstrap-new-token` prints a \
+  new one."""
+allow_tasks = ["bootstrap-config", "bootstrap-new-token"]
+
+[deploy]
+migrate = "migrate"                           # explicit one-off before the start, so the start applies nothing
+
+[backup]                                      # no verify task: hash-only until the app has a read-only verify command
+strategy = "tasks"
+steps = ["backup"]
+
+[restore]                                     # the restore command checks hashes, integrity and schema itself
+steps = ["restore"]
+activate = true                               # start the app on the new generation in isolation and wait for `ready`
+
+[rollback]
+env = { JOB_RUNNER = "off" }                  # a schema older than the outbound pause cannot hold jobs
+
+[drill]                                       # throwaway secrets; SMTP credentials and owner-gated keys are dropped
+activate = true
+min_free_memory = "512m"                      # not measured yet
+
+[holds.timesheet]
+OUTBOUND_MODE = "capture"
+JOB_RUNNER = "off"
+
+[side_effects]
+kind = "outbound"
+restore_via_app = true
+after_restore = "held"
+clear_hold = "outbound-resume"
+single_active = true                          # Planned M4: never two queues on one data lineage
+restore_notice = """\
+  Outbound delivery is paused (reason: restored) and queued sends are held. List them with \
+  `ingat task {instance} outbound-held`, check the mailbox, then release or drop them with \
+  `ingat task {instance} outbound-release-job --arg job=<id>`, outbound-release-all or \
+  `outbound-drop-job --arg job=<id>`, check `ingat task {instance} outbound-status`, and finally run \
+  `ingat task {instance} outbound-resume`."""
+
+# ------------------------------------------------- tasks (all `run`: a second SQLite process is safe under WAL)
+# The image keeps the Node base image's docker-entrypoint.sh, which runs an argv that starts with a program unchanged.
+# Each exit map follows its command in src/server/cli.ts (its header describes every command; docs/11 documents the
+# backup, restore and outbound exits).
+[tasks.migrate]
+service = "timesheet"
+mode = "run"
+image = "candidate"
+argv = ["node", "dist/server/cli.js", "migrate"]
+effect = "data"
+idempotent = true                             # exclusive lock, one transaction; a re-run applies nothing
+exit = { 0 = "ok" }                           # any other exit is unknown (data effect)
+operator = false
+timeout = "15m"
+
+[tasks.backup]
+service = "timesheet"
+mode = "run"
+argv = ["node", "dist/server/cli.js", "backup", "--to", "/out"]
+mounts = { "/out" = "stage" }                 # outside the data directory, as the command requires
+effect = "app-write"                          # records its outcome in operations_state; scratch as a backup step
+idempotent = true                             # required for a non-read backup task; a redo writes into a fresh stage
+stdout = "json"
+exit = { 0 = "ok", 1 = "failed", 2 = "refused" }
+operator = false                              # it mounts the stage, which exists only inside a backup
+timeout = "60m"
+
+[tasks.restore]                               # runs only in the isolated project: internal network, read-only root
+service = "timesheet"
+mode = "run"
+image = "bundle"
+argv = ["node", "dist/server/cli.js", "restore", "--from", "/in/{bundle.payload}", "--to", "/restore"]
+mounts = { "/in" = "bundle", "/restore" = "generation:data" }
+effect = "data"
+exit = { 0 = "ok", 1 = "failed", 2 = "refused" }
+operator = false
+timeout = "60m"
+
+[tasks.bootstrap-config]
+service = "timesheet"
+mode = "run"
+argv = ["node", "dist/server/cli.js", "bootstrap", "--config", "/in/{input.config}"]
+mounts = { "/in" = "input:config" }
+max_input_bytes = 262144                      # the command's own 256 KiB limit
+stdout = "terminal"                           # prints the single-use setup token; never recorded
+effect = "app-write"
+exit = { 0 = "ok", 1 = "refused", 2 = "refused" }
+timeout = "5m"
+
+[tasks.bootstrap-new-token]
+service = "timesheet"
+mode = "run"
+argv = ["node", "dist/server/cli.js", "bootstrap", "--new-token"]
+stdout = "terminal"
+effect = "app-write"
+exit = { 0 = "ok", 1 = "refused", 2 = "refused" }
+timeout = "2m"
+
+# Outbound reconciliation after a restore. The preview (no --confirm) prints JSON with outcome "confirmation_required"
+# and exits 2; it also runs the app's migration first and exits 2 for a usage error, so the preview tasks are app-write
+# and idempotent, and `expect` tells a preview from a usage error. Each confirm (--confirm last) is its own task.
+[tasks.outbound-held]                         # lists held jobs: ids, kinds, attempts, blockers; no person
+service = "timesheet"
+mode = "run"
+argv = ["node", "dist/server/cli.js", "outbound", "release"]
+effect = "app-write"
+idempotent = true
+stdout = "record"
+expect = { json = { outcome = "confirmation_required" } }
+exit = { 2 = "ok" }
+timeout = "2m"
+
+[tasks.outbound-status]                       # the pause and the counts `outbound-resume` would release
+service = "timesheet"
+mode = "run"
+argv = ["node", "dist/server/cli.js", "outbound", "resume"]
+effect = "app-write"
+idempotent = true
+stdout = "record"
+expect = { json = { outcome = "confirmation_required" } }
+exit = { 2 = "ok" }
+timeout = "2m"
+
+[tasks.outbound-release-job]
+service = "timesheet"
+mode = "run"
+argv = ["node", "dist/server/cli.js", "outbound", "release", "--job", "{arg.job}", "--confirm"]
+args = { job = '^[A-Za-z0-9-]{1,64}$' }
+effect = "app-write"
+stdout = "record"
+exit = { 0 = "ok", 1 = "refused" }
+timeout = "2m"
+
+[tasks.outbound-release-all]
+service = "timesheet"
+mode = "run"
+argv = ["node", "dist/server/cli.js", "outbound", "release", "--all", "--confirm"]
+effect = "app-write"
+stdout = "record"
+exit = { 0 = "ok", 1 = "refused" }
+timeout = "2m"
+
+[tasks.outbound-drop-job]
+service = "timesheet"
+mode = "run"
+argv = ["node", "dist/server/cli.js", "outbound", "drop", "--job", "{arg.job}", "--confirm"]
+args = { job = '^[A-Za-z0-9-]{1,64}$' }
+effect = "app-write"
+stdout = "record"
+exit = { 0 = "ok", 1 = "refused" }
+timeout = "2m"
+
+[tasks.outbound-resume]
+service = "timesheet"
+mode = "run"
+argv = ["node", "dist/server/cli.js", "outbound", "resume", "--confirm"]
+clears_hold = true
+effect = "app-write"
+stdout = "record"
+exit = { 0 = "ok", 1 = "refused" }            # 1: a delivery attempt still awaits its decision
+timeout = "2m"

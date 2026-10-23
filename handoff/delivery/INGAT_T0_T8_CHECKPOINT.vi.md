@@ -261,3 +261,94 @@ Bản tiếng Anh là bản gốc: [INGAT_T0_T8_CHECKPOINT.md](INGAT_T0_T8_CHECK
   tiên lỗi 403, kiểm vai trò "Manage Actions access" của `CDSemi/timesheet` trên package
   (D4 vẫn để ngỏ). `main` cục bộ ở checkout chính giờ chậm hơn `origin/main` ba commit
   (chạy `git merge --ff-only origin/main` ở đó).
+
+## Audit cấu trúc `ingat.toml` (2026-10-22, theo yêu cầu chủ dự án)
+
+- Yêu cầu: chủ dự án hỏi `ingat.toml` có cồng kềnh hay dư thừa không, có tinh gọn và dễ
+  dùng không. Đây là audit mới về cấu trúc/tính dễ dùng của tệp đã được chấp nhận, không
+  lặp lại các audit về tính đúng.
+- Điều phối: phiên mới ở checkout chính (`95755b87-cb43-4c64-80f8-8fddd1e9114b`), vai
+  timesheet-coordinator. Bảng đang chạy vẫn ghi WP5-UX5-REGATE2 ở trạng thái running từ
+  phiên trước `b5de56d1…`; audit này chỉ đọc nguồn và không khởi động writer nào.
+- Task INGAT-TOML-AUDIT: loại audit, lần 1, **đang chạy** (đã giao; agent
+  `ad411eefc3b66eb73`, phiên coordinator nêu trên); timesheet-auditor (xhigh), yêu cầu
+  opus, không override; định tuyến cỡ M, rủi ro H, không
+  mới; tách tác giả: các tác giả của tệp (PLAN, IMPL, FIX1) đều là sonnet; ngữ cảnh mới.
+  Brief: `handoff/delivery/tasks/INGAT-TOML-AUDIT.md`. Đầu ra: `INGAT_TOML_REVIEW.md`
+  (+ `.vi.md`), `evidence/INGAT-TOML-AUDIT/`, thư mục task
+  `D:\.claude-tmp\timesheet\INGAT-TOML-AUDIT`.
+- Danh tính được audit: `ingat.toml` ở HEAD của checkout chính (HEAD cục bộ dự kiến
+  `7aafa21bc1c6efc70c0fa8691c3a1165841aeb45`, chưa push theo lệnh giữ push của chủ dự án;
+  tệp bằng blob `6173f07`). Auditor ghi danh tính đầu và cuối.
+- Không ghi lên bảng (theo lệ của nhánh phụ). Các task INGAT-T0T8 vẫn chưa được ghi lên
+  bảng (bước 4 của chủ dự án ở trên còn mở).
+- **Kết quả (2026-10-23): INGAT-TOML-AUDIT xong, lần 1, tự báo claude-opus-5-5, kết luận
+  FIX REQUIRED (hai phát hiện mức thấp, đều không đổi hành vi; chủ dự án có thể nhận hoặc
+  từ chối).** Danh tính đầu và cuối: HEAD `7aafa21…`, `ingat.toml` SHA-256
+  `7bf274a8c8da29c75c806e46bfa62489b4821d59fee08a5d81c70cced74a1104` (= blob HEAD = blob
+  `6173f07`), digest nguồn `59516a2d…` (875 tệp). Review: `INGAT_TOML_REVIEW.md`
+  (+ `.vi.md`); bằng chứng `evidence/INGAT-TOML-AUDIT/` (13 tệp, mỗi tệp `cmp` khớp bản
+  gốc trong thư mục task); cổng riêng tư trên repo nháp chứa cả 16 tệp đã ghi: PASS.
+  - Kết luận chính: không cồng kềnh; là dạng M1 của MANIFEST_SPEC §11, cùng thứ tự mục,
+    257 dòng so với fixture fx-lite của chính Ingat 255 dòng; schema 1 không có mặc định
+    cho task (bảng `[task_defaults]` bị từ chối), nên phần lặp trong từng task không rút
+    gọn được.
+  - F1 thấp: sáu danh sách rỗng trùng mặc định của parser (`[backup] verify`, `[restore]
+    start/post/checks`, `[drill] checks/record`). F2 thấp: phần đầu lặp lại ADR 0002 và
+    sự kiện image do CI dựng được nêu ba lần. Bản gọn (`lean-ingat.toml.txt`): 249 dòng /
+    10.938 byte, `ingat validate` ghim digest exit 0, mô hình phân tích giống hệt (556
+    trường, SHA-256 thân `e831cb73…`).
+  - Tùy chọn O-A..O-J (ngắt dòng ba chuỗi dài, gợi ý cho người vận hành trong `pause` và
+    `restore_notice`, chú thích định dạng, bỏ `[[smoke]] live`, lỗ hổng phía Ingat:
+    `local_only` chưa được 0.1.0 thực thi, chưa có test ràng argv của task với `cli.ts`);
+    các mục đã biết O1, O3, O4, R8 giữ nguyên.
+- Kiểm tra của coordinator: đã đối chiếu review, phần Results của brief và danh sách bằng
+  chứng; không có gì ngoài đường dẫn được giao của auditor bị đổi; không stage, commit hay
+  push. Hồ sơ chưa commit (lệnh giữ push vẫn còn).
+- Việc tiếp theo: chủ dự án quyết định về F1/F2 (và mục tùy chọn nào nếu muốn). Nếu nhận:
+  một task worker sửa có giới hạn chỉ trên `ingat.toml`, commit freeze, gate (validate ghim
+  digest cộng dump mô hình; hash thân không đổi trừ khi chọn O-B..O-E) và kiểm lại mới.
+  Nếu từ chối: ghi quyết định vào đây và đóng audit, không đổi nguồn. Chủ dự án chưa trả
+  lời (2026-10-23); quyết định còn mở.
+
+## Review thiết kế định dạng manifest (2026-10-23, chủ dự án làm rõ)
+
+- Chủ dự án làm rõ: câu hỏi là về thiết kế của chính định dạng manifest (MANIFEST_SPEC của
+  Ingat: bảng, khóa, cách diễn đạt task, probe, param), không phải tệp này so với codebase
+  — thiết kế đã tối ưu và dễ dùng nhất chưa, hay có thể thiết kế tốt hơn? Kèm: TOML là
+  chuẩn gì, dễ học không, phổ biến không.
+- Task INGAT-MANIFEST-DESIGN: loại plan (review thiết kế, không đổi nguồn), lần 1, **đang
+  chạy** (đã giao; agent `ada2d126be04ca8e9`); timesheet-planner (high), yêu cầu opus, lý do override
+  `novelty` (review thiết kế định dạng đầu tiên; cần phán đoán so sánh nhiều công cụ); định
+  tuyến cỡ M, rủi ro M, mới. Brief: `handoff/delivery/tasks/INGAT-MANIFEST-DESIGN.md`. Đầu
+  ra: `INGAT_MANIFEST_DESIGN_REVIEW.md` (+ `.vi.md`), `evidence/INGAT-MANIFEST-DESIGN/`,
+  thư mục task `D:\.claude-tmp\timesheet\INGAT-MANIFEST-DESIGN`. Không ghi gì vào
+  repository Ingat và không đổi manifest nào.
+- **Kết quả (2026-10-23): INGAT-MANIFEST-DESIGN xong, lần 1, tự báo claude-opus-5-5.**
+  Review: `INGAT_MANIFEST_DESIGN_REVIEW.md` (+ `.vi.md`); bằng chứng
+  `evidence/INGAT-MANIFEST-DESIGN/` (10 tệp: các manifest tối thiểu, có readiness và vận
+  hành được đã đo, bản phác thảo viết lại, kết quả validate, số đếm, so sánh, hai script,
+  `commands.txt`). Không stage hay commit; không đụng tệp nào của Ingat.
+  - Kết luận: định dạng gần tối ưu cho việc của nó (sao lưu, khôi phục, rollback, diễn
+    tập an toàn cho app Compose) nhưng chưa phải dễ dùng nhất. Đo bằng validate ghim
+    digest: manifest hợp lệ tối thiểu 26 dòng (30 nếu có readiness), dạng vận hành được
+    72, app này 257 (11 lệnh với hợp đồng khác nhau, 14 khóa env, một pause outbound);
+    cùng dữ liệu là 211 dòng nội dung TOML, 280 YAML, 509 JSON, nên TOML không phải
+    nguyên nhân.
+  - Lỗ hổng thật (phía Ingat): một cái bẫy (`[backup] strategy` mặc định `"none"`, nên
+    app có dữ liệu mà thiếu `[backup]` vẫn validate xanh rồi bị từ chối ở lần cập nhật
+    đổi dữ liệu đầu tiên); không có mẫu khởi đầu, `init`, JSON Schema hay gợi ý
+    "did you mean"; khóa kỹ thuật (`service`, `mode`, `timeout`) lặp ở mỗi task; tên va
+    nhau (`clear_hold`/`clears_hold`, `record`, `activate`, `expect`/`expected`).
+  - Đề xuất: P1-1..P1-4 (quy tắc validate, thông báo lỗi, JSON Schema, tài liệu; không
+    đổi schema), P1-a làm được ngay (= bản gọn của INGAT-TOML-AUDIT, -8 dòng),
+    P2-a..P2-h (mặc định task chỉ cho khóa vận chuyển, suy ra liên kết, smoke tham chiếu
+    probe, bước install activate, suy ra `operator`, đổi tên, `validate --explain`; cộng
+    thêm được nếu quyết trước khi đóng băng schema M2), P3 là sở thích hoặc không khuyến
+    nghị (kế thừa, đổi định dạng, một bảng lifecycle). Bản phác thảo với P1-a +
+    P2-a..f: 218 dòng (-15%), 0.1.0 từ chối như dự kiến.
+- Kiểm tra của coordinator: đã đối chiếu review, phần Results của brief (Status: done) và
+  danh sách bằng chứng. Mọi đề xuất trừ P1-a là quyết định phía Ingat của chủ dự án;
+  repository này không đổi gì cho tới khi một bản phát hành Ingat mang nó.
+- Việc tiếp theo: chủ dự án đọc review; quyết P1-a ở đây (cùng quyết định với F1/F2 ở
+  trên) và các mục phía Ingat ở dự án Ingat.

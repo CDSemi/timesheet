@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Audit INGAT-TOML-AUDIT: pinned `ingat validate` (the CI job's exact flags) and the model dump for every variant,
+# then text and model diffs against the original. Every container runs with --rm and exits by itself.
+set -u
+export MSYS_NO_PATHCONV=1
+T=/d/.claude-tmp/timesheet/INGAT-TOML-AUDIT
+export TEMP=$T/tmp TMP=$T/tmp
+INGAT_IMAGE=ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb
+S=$(cygpath -m "$T/scripts")
+U="$(id -u):$(id -g)"
+OUT=$T/results
+mkdir -p "$OUT"
+
+validate() {  # $1 variant folder name: the CI job's exact command on that copy
+  local v=$1
+  local W; W=$(cygpath -m "$T/$v")
+  echo "cmd: docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user $U --volume <task>/$v:/app:ro <INGAT_IMAGE> validate /app"
+  docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges \
+    --user "$U" --volume "$W:/app:ro" \
+    "$INGAT_IMAGE" validate /app
+  echo "exit=$?"
+}
+
+validate_inst() {  # $1 variant folder name, $2 synthetic instance file: the same plus a read-only instance mount
+  local v=$1 i=$2
+  local W; W=$(cygpath -m "$T/$v")
+  echo "cmd: (as above) --volume <task>/instance:/inst:ro ... validate /app --instance /inst/$i"
+  docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges \
+    --user "$U" --volume "$W:/app:ro" --volume "$(cygpath -m "$T/instance"):/inst:ro" \
+    "$INGAT_IMAGE" validate /app --instance "/inst/$i"
+  echo "exit=$?"
+}
+
+dump() {  # $1 variant folder name
+  local v=$1
+  local W; W=$(cygpath -m "$T/$v")
+  docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges \
+    --user "$U" --volume "$S:/scripts:ro" --volume "$W:/app:ro" \
+    --entrypoint python3 "$INGAT_IMAGE" -I /scripts/dump_model.py /app/ingat.toml
+  echo "exit=$?" >&2
+}
+
+for v in orig lean lean-wrapped optional probe-required; do
+  validate "$v" > "$OUT/validate-$v.txt" 2>&1
+done
+validate_inst orig instance-good.toml > "$OUT/validate-orig-instance-good.txt" 2>&1
+validate_inst orig instance-bad.toml > "$OUT/validate-orig-instance-bad.txt" 2>&1
+
+for v in orig lean lean-wrapped optional; do
+  dump "$v" > "$OUT/dump-$v.txt" 2> "$OUT/dump-$v.err"
+done
+
+for v in lean lean-wrapped optional; do
+  # the model body without the two header lines (the header names the file and its raw hash)
+  diff <(tail -n +3 "$OUT/dump-orig.txt") <(tail -n +3 "$OUT/dump-$v.txt") > "$OUT/model-diff-$v.txt" 2>&1
+  echo "diff exit=$?" >> "$OUT/model-diff-$v.txt"
+  diff -u "$T/orig/ingat.toml" "$T/$v/ingat.toml" > "$OUT/text-diff-$v.txt" 2>&1
+  echo "diff exit=$?" >> "$OUT/text-diff-$v.txt"
+done
+
+{
+  for v in orig lean lean-wrapped optional; do
+    f="$T/$v/ingat.toml"
+    printf '%s lines=%s bytes=%s max_line=%s lines_over_120=%s sha256=%s\n' "$v" \
+      "$(wc -l < "$f" | tr -d ' ')" "$(wc -c < "$f" | tr -d ' ')" \
+      "$(awk '{ if (length($0) > m) m = length($0) } END { print m }' "$f")" \
+      "$(awk 'length($0) > 120 { n++ } END { print n + 0 }' "$f")" \
+      "$(sha256sum "$f" | cut -d' ' -f1)"
+  done
+} > "$OUT/sizes.txt" 2>&1
+echo "run-all done"

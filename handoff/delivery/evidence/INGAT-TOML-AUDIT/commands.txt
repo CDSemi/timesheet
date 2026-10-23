@@ -1,0 +1,56 @@
+INGAT-TOML-AUDIT attempt 1: commands actually run, in order, with their exits (Git Bash; <task> = the task folder
+D:\.claude-tmp\timesheet\INGAT-TOML-AUDIT; IMAGE = ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb).
+No npm, build, test, network port, push, stage or commit. Every container: --rm, exits by itself.
+
+ 1. git rev-parse HEAD; git status --short; sha256sum ingat.toml; git show HEAD:ingat.toml > <task>/head-ingat.toml;
+    git show 6173f07:ingat.toml > <task>/6173f07-ingat.toml; sha256sum of both and of the old worktree copy;
+    git log --oneline -- ingat.toml                                           -> exit 0 (identity.txt)
+ 2. (Ingat checkout) git rev-parse v0.1.0^{commit}; git log/diff --stat v0.1.0..HEAD -- src/ docs/app-developers/;
+    git status --short                                                       -> exit 0 (identity.txt)
+ 3. docker version; docker image inspect IMAGE                               -> exit 0 (identity.txt)
+ 4. (Ingat checkout) wc -l of model/ and ops/ files; grep -rl '^manifest = 1' docs tests fixtures examples | xargs wc
+                                                                             -> exit 123 (examples/ does not exist;
+                                                                                the 9 manifests are listed: fx-lite
+                                                                                fixture 255 lines, unit fx-lite 254)
+ 5. awk/grep statistics of ingat.toml (lines, bytes, lines over 120, comments, tables, cli.js count) -> exit 0:
+    257 lines, 11,261 bytes, 14 lines over 120 (max 319 at line 136), 15 comment-only lines, 32 lines with an inline
+    comment, 31 blank, 34 table headers, `dist/server/cli.js` 11 times
+ 6. git show HEAD:ingat.toml / HEAD:compose.example.yaml > <task>/{orig,lean,optional,probe-required}/... ; sha256sum
+                                                                             -> exit 0 (copies equal HEAD blobs)
+ 7. docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user "$(id -u):$(id -g)"
+    --volume <task>/orig:/app:ro IMAGE validate /app                         -> exit 0 "is valid"
+ 8. docker run (same flags) --volume <task>/scripts:/scripts:ro --volume <task>/orig:/app:ro --entrypoint python3 IMAGE
+    -I /scripts/dump_model.py /app/ingat.toml                                -> exit 0 (556 resolved fields)
+ 9. Variants edited with the Edit tool only (lean, lean-wrapped seeded by `cat lean > lean-wrapped`, optional seeded
+    from lean-wrapped, probe-required from the HEAD blob). The probe-required edit replaced [tasks.outbound-status] by:
+      [task_defaults]
+      service = "timesheet"
+      mode = "run"
+
+      [tasks.outbound-status]
+      argv = ["node", "dist/server/cli.js", "outbound", "resume"]
+      idempotent = true
+      stdout = "record"
+      expect = { json = { outcome = "confirmation_required" } }
+      exit = { 2 = "ok" }
+10. bash <task>/scripts/run-all.sh (run-all.sh.txt)                          -> exit 0, run twice (the second run after a
+    two-space alignment fix in the optional variant's comments; all results below are from the second run)
+      validate orig / lean / lean-wrapped / optional                         -> exit 0 each
+      validate probe-required                                                -> exit 1 (four "is required", one
+                                                                                "task_defaults: unknown key")
+      validate orig --instance instance-good.toml                           -> exit 0
+      validate orig --instance instance-bad.toml                            -> exit 1 (nine key messages)
+      dump orig / lean / lean-wrapped / optional                            -> exit 0 each
+      model diff lean, lean-wrapped                                         -> diff exit 0 (identical)
+      model diff optional                                                   -> diff exit 1 (intended: pause text,
+                                                                                restore_notice, smoke "live" removed)
+    (results-summary.txt, model-diff-optional.txt, model-dump-orig.txt)
+11. sha256 of each dump and of its body (tail -n +3 <file> > <body>)        -> orig, lean, lean-wrapped body
+                                                                                e831cb73...; optional df8b5557...
+12. docker run --rm ... --entrypoint sha256sum IMAGE <13 Ingat files>; sha256sum of the same local files -> exit 0, all
+    equal (identity.txt)
+13. node scripts/source-digest.mjs (Node v24.21.0)                          -> exit 0 (first: 59516a2d..., 875 files)
+14. cmp of every evidence copy written with the Write tool against its task-folder original -> exit 0 for
+    lean-ingat.toml.txt, lean-wrapped-ingat.toml.txt, optional-ingat.toml.txt, model-dump-orig.txt,
+    model-diff-optional.txt, results-summary.txt, run-all.sh.txt, dump_model.py.txt, instance-good.toml.txt,
+    instance-bad.toml.txt

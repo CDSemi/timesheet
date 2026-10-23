@@ -1,0 +1,10 @@
+cd <task>
+. ./env.sh
+# Stress at 2026-11-01T08:45:00Z with the FIX10 wrapper
+bash run-shift.sh stress-target 2026-11-01T08:45:00Z tests/e2e/theme.spec.ts tests/e2e/shell.spec.ts --repeat-each=40 --workers=14 --grep "phone bar at|first screen|shell-bar-size follows" > logs/stress-target.txt 2>&1
+node counts.mjs logs/stress-target.txt > out/31-stress-counts.txt 2>&1
+echo "target finished $(date -u +%H:%M:%SZ)" > logs/chain4.log
+bash run-shift.sh stress-whole 2026-11-01T08:45:00Z tests/e2e/theme.spec.ts tests/e2e/shell.spec.ts --repeat-each=20 --workers=4 > logs/stress-whole.txt 2>&1
+node counts.mjs logs/stress-whole.txt >> out/31-stress-counts.txt 2>&1
+echo "whole finished $(date -u +%H:%M:%SZ)" >> logs/chain4.log
+echo stress-done > out/chain4.done

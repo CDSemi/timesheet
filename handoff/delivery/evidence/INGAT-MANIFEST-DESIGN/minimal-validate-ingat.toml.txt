@@ -1,0 +1,26 @@
+manifest = 1
+app = "timesheet"
+requires_ingat = ">=0.1,<1"
+
+[source]
+kind = "git"
+release = "commit"
+
+[compose]
+files = ["compose.example.yaml"]
+
+[params]
+TIMESHEET_ENV_FILE = { kind = "env_file" }
+TIMESHEET_DATA_DIR = { kind = "store", store = "data" }
+TIMESHEET_PORT     = { kind = "port" }
+
+[stores.data]
+kind = "bind"
+param = "TIMESHEET_DATA_DIR"
+
+[services]
+writers = ["timesheet"]
+
+[[activate]]
+services = ["timesheet"]
+reopens_writes = true

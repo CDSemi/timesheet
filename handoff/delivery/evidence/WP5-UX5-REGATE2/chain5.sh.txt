@@ -1,0 +1,15 @@
+cd <task>
+. ./env.sh
+run() {
+  label=$1; instant=$2; shift 2
+  bash run-shift.sh "$label" "$instant" "$@" > "logs/sweep-$label.txt" 2>&1
+  echo "$label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/sweep-progress.txt
+  node counts.mjs "logs/sweep-$label.txt" >> out/17-sweep-counts.txt 2>&1
+}
+run full-1026-rerun 2026-10-26T16:00:00Z
+run full-1101-rerun 2026-11-01T08:45:00Z
+# informational: the chevron test alone at the failing instant, 3 sequential runs
+for i in 1 2 3; do
+  run chev-1101-$i 2026-11-01T08:45:00Z tests/e2e/controls.spec.ts --grep "select chevron is one layer"
+done
+echo rerun-done > out/chain5.done

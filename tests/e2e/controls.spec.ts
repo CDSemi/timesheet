@@ -636,6 +636,36 @@ const ARROW_SCRIPT = String.raw`(async (base64) => {
   return { found: true, row, ink: line.slice(first, last + 1).map((value) => Math.round(value)), dip, width: last - first + 1 };
 })`;
 
+/** The animation frames in a row for which the select must keep its place in the document before it is measured. */
+const SETTLED_FRAMES = 6;
+/** Resolves true once the element's box in the document is unchanged for SETTLED_FRAMES frames in a row; false after 600 frames (about 10 s). */
+const SETTLED_SCRIPT = String.raw`(async (element) => {
+  const place = () => {
+    const box = element.getBoundingClientRect();
+    return [box.left + window.scrollX, box.top + window.scrollY, box.width, box.height].join(' ');
+  };
+  const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  let last = place();
+  let still = 0;
+  for (let count = 0; count < 600 && still < ${SETTLED_FRAMES}; count += 1) {
+    await frame();
+    const now = place();
+    still = now === last ? still + 1 : 0;
+    last = now;
+  }
+  return still >= ${SETTLED_FRAMES};
+})`;
+
+/**
+ * WP5-UX5-FIX3: the Settings sections above the first select each show a "Loading…" placeholder until their own request has
+ * answered, and the swap moves the select (by half a pixel at the measured widths). A screenshot taken in that window can miss
+ * the arrow. So the clip is only measured once no placeholder is left and the select has kept its place for several frames.
+ */
+async function settledSelect(page: Page): Promise<void> {
+  await expect(page.getByText(/^Loading/), 'the Settings sections have finished loading').toHaveCount(0);
+  await expect.poll(() => page.evaluate<boolean>(`${SETTLED_SCRIPT}(document.querySelector('select'))`), { message: 'the first select keeps its place for six frames' }).toBe(true);
+}
+
 for (const theme of THEMES) {
   test(`the select chevron is one layer with no light seam at device pixel ratios 1, 1.25, 1.5, 1.75 and 2 (${theme})`, async ({ page, browser, adminSeed, builtServer, signInPageAs }, testInfo) => {
     test.setTimeout(120_000);
@@ -668,6 +698,7 @@ for (const theme of THEMES) {
         await expect(scaled.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
         expect(await scaled.evaluate<number>('window.devicePixelRatio'), `the page runs at ${ratio}`).toBe(ratio);
         const field = scaled.locator('select').first();
+        await settledSelect(scaled);
         await field.scrollIntoViewIfNeeded();
         const box = await field.boundingBox();
         expect(box, `the select is on the screen at ${ratio}`).not.toBeNull();

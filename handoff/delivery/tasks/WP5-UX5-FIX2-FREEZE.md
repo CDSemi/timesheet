@@ -157,3 +157,8 @@ Append to this brief, briefly:
 Return at most 80 words, beginning 'Self-reported model: ...'.
 
 ## Results
+
+- HEAD: 2bce0ab (before), 70dce2a (after fast-forward), 7aafa21bc1c6efc70c0fa8691c3a1165841aeb45 (after commit); pushed: no.
+- D_PRE = HEAD digest = 59516a2d0abe1294aa3aebbbc88dd2327dc2980dd139d6f3591054b95c25f0ad.
+- Staged 213 files; one rename (13-integ-signatures.txt to 13-integ-signatures-synthetic.txt); no masking or unstaging.
+- All checks exit 0. Details in evidence/WP5-UX5-FIX2-FREEZE/checks.txt.

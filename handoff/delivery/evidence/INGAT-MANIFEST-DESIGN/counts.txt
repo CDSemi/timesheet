@@ -1,0 +1,40 @@
+INGAT-MANIFEST-DESIGN: size and concept counts (scripts/count.py, see count.py.txt; Python 3.12.14 tomllib, run with
+-I on the files named). Definitions: lines = physical lines; content = lines that are neither blank nor comment-only;
+headers = [table] and [[array]] header lines; leaf_keys = written values that are not tables (an inline table's
+members counted one by one, a list counted once); distinct_key_paths = schema key paths with user-chosen names
+replaced by "*" (the "concepts" a reader meets); top_level = distinct top-level keys and tables.
+
+file (source)                                   lines blank comment content headers leaf_keys key_paths top_level
+min-validate (minimal-validate-ingat.toml.txt)     26     6       0      20       6        15        13         9
+min-ready    (minimal-ingat.toml.txt)              30     7       0      23       7        18        16        10
+operable     (operable-ingat.toml.txt)             72    14       0      58      14        48        32        14
+app          (ingat.toml at HEAD 7aafa21)         257    31      15     211      34       205        88        22
+lean         (INGAT-TOML-AUDIT lean variant)      249    31      13     205      34       199        82        22
+rewrite      (proposed-ingat.toml.txt, sketch)    218    32      14     172      35       163        80        23
+fx-lite      (Ingat fixtures/fx-lite/ingat.toml)  255    31      12     212      34       205        88        22
+fx-web       (Ingat fixtures/fx-web/ingat.toml)    39     9       1      29       9        25        24        12
+
+Differences: rewrite vs app = -39 lines (-15%), -39 content lines, -42 leaf keys (-20%); rewrite vs lean = -31 lines.
+
+Distinct key paths of the app manifest (88):
+activate[].reopens_writes, activate[].services, activate[].wait, app, app_env.forbidden, app_env.keys.*.allowed,
+app_env.keys.*.default, app_env.keys.*.owner_gated, app_env.keys.*.pattern, app_env.keys.*.required,
+app_env.keys.*.secret, app_env.keys.*.tool_managed, app_env.param, backup.steps, backup.strategy, backup.verify,
+compose.build_services, compose.expect_labels.*, compose.files, deploy.migrate, drill.activate, drill.checks,
+drill.min_free_memory, drill.record, holds.*.*, install[].allow_tasks, install[].pause, install[].start,
+install[].task, install[].wait, manifest, params.*.kind, params.*.store, params.*.value, probes.*.argv, probes.*.exec,
+probes.*.expect.json.*, probes.*.expect.status, probes.*.http.path, probes.*.http.port_param, probes.*.stable,
+probes.*.timeout, requires_ingat, restore.activate, restore.checks, restore.post, restore.start, restore.steps,
+rollback.env.*, schema.actual, schema.expected, schema.migrates_on_start, schema.probe, services.writers,
+side_effects.after_restore, side_effects.clear_hold, side_effects.kind, side_effects.restore_notice,
+side_effects.restore_via_app, side_effects.single_active, smoke[].expect.json.*, smoke[].expect.status,
+smoke[].http.path, smoke[].http.port_param, smoke[].name, source.kind, source.release, stores.*.kind,
+stores.*.local_only, stores.*.mode, stores.*.online_backup, stores.*.owner, stores.*.param, tasks.*.args.*,
+tasks.*.argv, tasks.*.clears_hold, tasks.*.effect, tasks.*.exit.*, tasks.*.expect.json.*, tasks.*.idempotent,
+tasks.*.image, tasks.*.max_input_bytes, tasks.*.mode, tasks.*.mounts.*, tasks.*.operator, tasks.*.service,
+tasks.*.stdout, tasks.*.timeout
+
+Format conversion of the app manifest (scripts/convert.py, see convert.py.txt; comments are lost in both):
+  JSON, indented 2:                      509 lines   (TOML: 211 content lines, 257 with comments and blanks)
+  YAML, block style, minimal emitter:    280 lines   (an upper bound: a YAML author may use flow maps like TOML's
+                                                      inline tables; the emitter JSON-quotes strings that need it)

@@ -127,6 +127,62 @@
 
 ## Target at dispatch
 
-(written by the coordinator before dispatch)
+- **`freeze_commit` = TARGET_SHA** = 7aafa21bc1c6efc70c0fa8691c3a1165841aeb45, a **local
+  commit, not pushed** (owner decision C b). HEAD must equal it, or be a later local commit
+  that changes only `handoff/`. origin/main stays at 70dce2a, one behind; that is
+  expected. Do not push and do not fetch-merge.
+- **TARGET_DIGEST** = 59516a2d0abe1294aa3aebbbc88dd2327dc2980dd139d6f3591054b95c25f0ad. The
+  freeze committer computed it right after the fast-forward, and it equals HEAD's
+  `ls-tree` digest. Record the file count yourself.
+- **The previous regate's target** is 2bce0ab5842b80c710f23496d5173c122319e5c7 (70975091,
+  870 files).
+- **Between them:**
+  - the owner's 6173f07 and 70dce2a (Ingat; fast-forward, owner decision A a);
+  - FIX2's three test files: `tests/e2e/theme.spec.ts`, `tests/e2e/shell.spec.ts` and
+    `tests/client/wordmarkAsset.test.ts`.
+- **Wherever this brief says "FIX2's test paths only" for `2bce0ab..TARGET`,** read: those
+  three files plus the Ingat paths of 6173f07 outside `handoff/`. Map each path.
 
 ## Results
+
+### Verifier result (attempt 1) - decision: FAIL (two non-network e2e failures in the simulated-clock sweep; NAS items NOT VERIFIED)
+
+Self-reported model: claude-sonnet-5-5 (timesheet-verifier). Target 7aafa21bc1c6efc70c0fa8691c3a1165841aeb45; HEAD = target before and after, branch main, origin/main 70dce2a
+(not touched); `git status` outside `handoff/` empty before and after. Node v24.21.0 portable for every run. Evidence: `handoff/delivery/evidence/WP5-UX5-REGATE2/`.
+Task folder `D:\.claude-tmp\timesheet\WP5-UX5-REGATE2`; nothing left running.
+
+1. **Identity and scope.** Digest 59516a2d0abe1294aa3aebbbc88dd2327dc2980dd139d6f3591054b95c25f0ad, 875 files, equal in the export form, the ls-tree form and `npm run digest`, before and after
+   (`01-digest-*`). `git diff --name-status 2bce0ab..TARGET` outside `handoff/` lists 12 paths, all mapped: FIX2 = `tests/e2e/theme.spec.ts`, `tests/e2e/shell.spec.ts`,
+   `tests/client/wordmarkAsset.test.ts`; Ingat 6173f07 = `.github/workflows/image.yml`, `.github/workflows/ingat-validate.yml`, `ingat.toml`, docs 07 and 11 (+vi), ADR 0002 (+vi). No other path;
+   nothing under `src/`, `scripts/`, `assets/` or the package files (`20-namestatus*.txt`). Clean builds of 2bce0ab and the target: **all 250 `dist/` files byte-identical**
+   (server 184, domain 48, client 18; `log-cmp-dist.txt`, diff exit 0, 0 differing lines; the scratch probe copy equals too). So the REGATE items for identity against e2bf1aa, the drill (209/0),
+   the integration files, axe, the CSP and the build sizes **carry forward** (not rerun; no drill, so no Docker use).
+2. **Core.** `npm ci` 0; `npm run lint` 0; `npm run verify` in the export 0 (100 files / 2345 tests, `SMOKE PASSED`); `npm run verify` in the repository, with `.claude/worktrees/relaxed-lalande-8359f0` present
+   and untouched: exit 0, 100 files / 2345 tests, SMOKE PASSED (owner decision B a holds). `npm test` once: exit 0, 100/2345, 0 crashes. 0 deprecation lines in ci, lint, both verifies, npm test.
+   Validators exit 0: `validate_package --preflight`, `validate_orchestration`, `check_recovery` (count 106), precommit self-test. `npm audit --omit=dev` 0 vulnerabilities.
+3. **Real-clock FULL e2e**, alone (LA Thu 2026-10-22 21:39-21:57, displayed period 2026-10-12..10-25, outside the window): desktop **459 passed, 35 skipped, 0 failed**; mobile **404 passed, 90 skipped, 0 failed**; both exit 0 (`04-e2e-project-counts.txt`).
+4. **Simulated-clock sweep** (preload validated by controls at the real clock and at 2026-11-01T08:45Z: `today_local` 2026-10-22 and 2026-11-01; totals are both projects):
+
+| Run | passed / skipped / failed | Exit | Failure |
+|---|---|---|---|
+| FULL 2026-10-26T16:00Z | 861 / 125 / 2 | 1 | mobile `automation.spec.ts:118` and `:283`: `fetch failed` ECONNRESET (network) |
+| FULL 2026-10-26T16:00Z rerun | 862 / 125 / **1** | 1 | mobile `settings-routes.spec.ts:16` "Administration" heading not visible in 7 s (**not a network error**) |
+| FULL 2026-11-01T08:45Z | 861 / 125 / **2** | 1 | desktop `automation.spec.ts:118` ECONNRESET (network); mobile `controls.spec.ts:640` "dpr 1.5: the arrow is on the screenshot" (**not a network error**) |
+| FULL 2026-11-01T08:45Z rerun (informational) | 863 / 125 / 0 | 0 | |
+| FULL 2027-03-14T10:30Z | 863 / 125 / 0 | 0 | |
+| 7 specs 2026-10-27T06:58:30Z | 376 / 80 / 0 | 0 | |
+| 7 specs 2027-01-01T07:30Z (2026-12-31 23:30 PST) | 376 / 80 / 0 | 0 | |
+| 7 specs 2027-01-01T08:30Z | 376 / 80 / 0 | 0 | |
+
+   The failure FIX2 targeted (`theme.spec.ts` bar size) did not occur in any run. The two non-network failures are in tests FIX2 did not touch, are not reproducible (the chevron test alone at 2026-11-01T08:45Z passed 3 of 3 times on both projects; `log-sweep-chev-1101-*.txt`;
+   the 1026 and 1101 full reruns passed their tests), and `dist/` is byte-identical to the accepted build, so they look like host-load flakes in screenshot and 7 s-locator tests. Under the brief's rule ("any other failure is reported as is") this is a FAIL.
+   Counts: `17-sweep-counts.txt`.
+5. **Stress at 2026-11-01T08:45Z** (FIX10 wrapper): targeted repeat (`--grep "phone bar at|first screen|shell-bar-size follows" --repeat-each=40 --workers=14`): **1360 passed, 0 failed** (desktop 520, mobile 840; exit 0, 6.7 min).
+   Whole specs (`theme.spec.ts`, `shell.spec.ts`, `--repeat-each=20 --workers=4`): **3140 passed, 300 skipped, 0 failed** (exit 0, 17.1 min), no host-overload errors (`31-stress-counts.txt`).
+6. **Test strength.** FIX2's diff (read against DIAG1): `--shell-bar-size` is now polled with one `page.evaluate` that returns `|property - bar height|`, `expect.poll(...).toBeLessThan(0.05)` (the same 0.05 as `toBeCloseTo(.,1)`); NaN never passes
+   so a missing or never-matching property fails when the poll times out; no sleep or fixed wait. The deterministic test (CSSOM height 92 then 52, same-task read allowed to lag, equality only through the poll) passed once per project (desktop 1, mobile 1, `06-det-counts.txt`).
+   `wordmarkAsset.test.ts` adds `.claude` to the skip set only; a font elsewhere still fails (per FIX2's mutant; not re-run here). Nothing is weaker.
+
+NAS items: NOT VERIFIED (not exercised). Slips: I piped a few outputs into `head`/`tail` and wrote this Results block with a shell heredoc; no stdin to node or python, no PID kill, no recursive delete, no `/dev/null`. Scripts and logs are in the evidence folder as `.txt`.
+
+Status: done (decision FAIL under the brief's rule; the two non-network failures are not reproducible)

@@ -1,0 +1,47 @@
+165c165
+< install[2].text = "Copy the owner's bootstrap file into the Ingat inbox (INGAT_ROOT/inbox/), run `ingat task {instance} bootstrap-config --input config=<file>` (it prints the single-use setup token to the terminal that runs it and never records it), create the administrator in the browser, then run `ingat resume {instance}`."
+---
+> install[2].text = "Copy the owner's bootstrap file into the Ingat inbox (INGAT_ROOT/inbox/), run `ingat task {instance} bootstrap-config --input config=<file>` (it prints a single-use setup token, valid for 60 minutes, to the terminal that runs it and never records it), create the administrator in the browser, then run `ingat resume {instance}`. If the token expires first, `ingat task {instance} bootstrap-new-token` prints a new one."
+258c258
+< side_effects.restore_notice = "Outbound delivery is paused (reason: restored) and queued sends are held. List them with `ingat task {instance} outbound-held`, check the mailbox, then use outbound-release-job / outbound-release-all / outbound-drop-job, check `ingat task {instance} outbound-status`, and finally run outbound-resume."
+---
+> side_effects.restore_notice = "Outbound delivery is paused (reason: restored) and queued sends are held. List them with `ingat task {instance} outbound-held`, check the mailbox, then release or drop them with `ingat task {instance} outbound-release-job --arg job=<id>`, outbound-release-all or `outbound-drop-job --arg job=<id>`, check `ingat task {instance} outbound-status`, and finally run `ingat task {instance} outbound-resume`."
+261c261
+< smoke[0].name = "live"
+---
+> smoke[0].name = "ready"
+267c267,268
+< smoke[0].probe.expect.json['status'] = ["ok"]
+---
+> smoke[0].probe.expect.json['data_dir_writable'] = [true]
+> smoke[0].probe.expect.json['status'] = ["ready"]
+272c273
+< smoke[0].probe.http.path = "/api/health"
+---
+> smoke[0].probe.http.path = "/api/ready"
+276c277
+< smoke[0].probe.name = "live"
+---
+> smoke[0].probe.name = "ready"
+280,299d280
+< smoke[1].name = "ready"
+< smoke[1].probe.argv = []
+< smoke[1].probe.expect.body_contains = null
+< smoke[1].probe.expect.exit = null
+< smoke[1].probe.expect.header_contains = {}
+< smoke[1].probe.expect.header_equals = {}
+< smoke[1].probe.expect.json['data_dir_writable'] = [true]
+< smoke[1].probe.expect.json['status'] = ["ready"]
+< smoke[1].probe.expect.status = 200
+< smoke[1].probe.http.body = null
+< smoke[1].probe.http.headers = {}
+< smoke[1].probe.http.method = "GET"
+< smoke[1].probe.http.path = "/api/ready"
+< smoke[1].probe.http.port_param = "TIMESHEET_PORT"
+< smoke[1].probe.interval = 2
+< smoke[1].probe.kind = "http"
+< smoke[1].probe.name = "ready"
+< smoke[1].probe.service = null
+< smoke[1].probe.stable = 0
+< smoke[1].probe.timeout = 60
+diff exit=1

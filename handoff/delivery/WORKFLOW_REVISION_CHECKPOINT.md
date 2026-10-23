@@ -1774,6 +1774,139 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   4. a **local commit with no push** (C b).
 
   The HEAD `ls-tree` digest must equal the digest computed after the fast-forward.
+- WP5-UX5-FIX2-FREEZE done: **7aafa21bc1c6efc70c0fa8691c3a1165841aeb45 on main, NOT
+  pushed** (C b).
+  - The fast-forward 2bce0ab -> 70dce2a succeeded (A a). 213 files were staged.
+  - `13-integ-signatures.txt` was renamed `-synthetic`.
+  - Every check exits 0. D_PRE = the HEAD `ls-tree` digest = 59516a2d.
+  - `git.unpushed` = [7aafa21].
+- Phase `ux5-regate2`. Running now: WP5-UX5-REGATE2 (verifier, sonnet) on the local commit
+  7aafa21 / 59516a2d, against 2bce0ab.
+- **Owner (verbatim): "Từ giờ bạn cứ push lên main thoải mái nhé".**
+  - The push hold (C b) is lifted.
+  - 7aafa21 is pushed by a committer as soon as REGATE2 ends; commit tasks run alone.
+  - Later freezes push as before.
+- WP5-UX5-REGATE2: **FAIL** on 7aafa21 / 59516a2d (875 files), under the "report as is"
+  rule.
+  - **Passed:**
+    - identity: 12 paths, each from FIX2 or Ingat; all of `dist/` byte-identical;
+    - core, with verify also run in the repository;
+    - the real-clock FULL e2e, 459 + 404 passed, 0 failed;
+    - both stress runs, 1360 and 3140 passed, 0 failed;
+    - the deterministic test.
+  - **Two non-network failures in the sweep,** not reproducible:
+    - mobile `settings-routes.spec.ts:16` ("Administration" heading not visible in 7 s),
+      on the 10-26 full rerun;
+    - mobile `controls.spec.ts:640` (the chevron screenshot at DPR 1.5), on the 11-01 full
+      run.
+
+    The 11-01 rerun had 0 failed, and the chevron test alone passed 3 of 3. The verifier
+    judges both as host-load flakes.
+- Running now: WP5-UX5-RECORDS1 (a committer, alone). It commits the REGATE2 records
+  (handoff only) and **pushes main**, including 7aafa21.
+- RECORDS1 stopped at its fetch step. origin/main is now 01c4cdc, not 70dce2a: the owner's
+  Ingat session has pushed again. Nothing was staged, committed or pushed. RECORDS1 is
+  `blocked`.
+- Running now: the read-only lookup WP5-UX5-REMOTE-RECON2. It records the new commits,
+  their overlap with 7aafa21 and the uncommitted records, a no-write merge check, and the
+  options. Then the owner chooses how to integrate.
+- REMOTE-RECON2 done. Local 7aafa21 and origin/main 01c4cdc have diverged (1 / 2, base
+  70dce2a).
+  - **Two owner commits:**
+    - 782cddab, the GHCR cleanup: a workflow, `scripts/ghcr-cleanup.ts`,
+      `tests/integration/ghcr-cleanup*`, the tsconfig files, docs 07 and 11, ADRs 0002 and
+      0003, and records;
+    - 01c4cdcb, records.
+  - No governance path, and no overlap with 7aafa21. The `merge-tree` check is clean.
+  - **An uncommitted edit of `handoff/delivery/INGAT_T0_T8_CHECKPOINT.md` (+ vi) sits in
+    this main checkout.** The mission did not make it, and it conflicts with the remote
+    version at line 116.
+- **Waiting on the owner:** WP5-UX5-REMOTE2-Q.
+  - D: how to integrate — merge (recommended), rebase, or pause the Ingat pushes.
+  - E: who settles the uncommitted INGAT checkpoint edit.
+  - Also: whether the Ingat session can keep to its worktree.
+- **Owner answer (verbatim): "D.a, E.a".**
+  - **D a:** before each mission commit, merge origin/main with a merge commit (clean, no
+    mission path touched), then commit and push.
+  - **E a:** the owner's Ingat session settles the INGAT checkpoint pair. The mission never
+    touches it, and merges only once it is clean.
+- RECORDS1 is `cancelled`. Its records and the push of 7aafa21 move into the FIX3 freeze.
+- Running now: WP5-UX5-FIX3 (worker-high, sonnet; base 7aafa21; ports 50060-50079).
+  - It reproduces and fixes the two load flakes, `settings-routes.spec.ts:16` and
+    `controls.spec.ts:640`, with event-based waits. It is tests only, and a product cause
+    is a stop.
+- Then the FIX3 freeze:
+  1. check that the owner's INGAT pair is clean; stop if not;
+  2. `git merge origin/main` (a merge commit);
+  3. commit FIX3 with the REGATE2 records;
+  4. push.
+
+  Then REGATE3 on the merged tip, including the owner's new ghcr-cleanup tests and the
+  tsconfig changes, checked for non-interference.
+- WP5-UX5-FIX3 done (worker report). **Both flakes were test races, not product defects.**
+  - **The heading:** after Sign out, the Administration screen stays until the answer
+    arrives, and its own Email field took the fill. The fix in `fixtures.ts`:
+    `signInPageAs` waits for "Sign in". Under load it went from 2 of 40 failing to 80/80
+    passing.
+  - **The chevron:** "Loading..." placeholders above the select move it by 0.53px. The fix
+    in `controls.spec.ts`: `settledSelect` waits for no placeholder and 6 still frames.
+    Under load: 80/80.
+  - Mutants fail. FULL e2e 863 passed, 0 failed. Verify 0.
+  - `--preflight` fails in the repository only on the owner's untracked
+    `INGAT_MANIFEST_DESIGN_REVIEW.md`; it passes on an export.
+- **WP5-UX5-FIX3-FREEZE is `blocked`** (E a). It waits until the owner's Ingat session has
+  settled its files in this checkout:
+  - the INGAT_T0_T8_CHECKPOINT pair;
+  - `INGAT_MANIFEST_DESIGN_REVIEW.md` and its evidence folder.
+
+  The owner was asked to say when.
+- **Owner (verbatim): "Bên ingat yêu cầu bạn chạy "git merge --ff-only origin/main" cho lần
+  commit kế tiếp".**
+  - The next commit fast-forwards only, with no merge commit and no rebase. If a
+    fast-forward is not possible, the committer stops.
+- Running now: the read-only lookup WP5-UX5-FIX3-PATHS. It checks:
+  - whether 7aafa21 is already in origin/main, so that a fast-forward is possible;
+  - what the new remote commits touch;
+  - the dirty paths;
+  - whether the Ingat files are settled.
+- FIX3-PATHS done: **a fast-forward is not possible.** The unpushed 7aafa21 is not in
+  origin/main 01c4cdc (1 ahead, 2 behind).
+  - The remote commits touch no mission path.
+  - Outside `handoff/`: only the two FIX3 files.
+  - **Still in this checkout from the Ingat session:**
+    - the modified INGAT_T0_T8_CHECKPOINT pair, which origin also changed, so it blocks
+      any fast-forward or merge;
+    - the untracked INGAT reviews, tasks and evidence folders, which break `--preflight`.
+- **Waiting on the owner:** WP5-UX5-FF-Q.
+  - F: how to get there — rebase the unpushed 7aafa21 onto origin/main (recommended,
+    needs an explicit OK); or the Ingat session pushes 7aafa21 into origin first; or one
+    merge commit.
+  - G: the Ingat session settles or moves its files out of this checkout first.
+- **The owner relayed the Ingat-track coordinator (2026-10-23):** the synchronization is
+  done.
+  - origin/main 9f186b2 holds the merge b8bae50, with parents db87939 and the mission's
+    7aafa21. Its tree was gated by the Ingat side (2374/2374 tests).
+  - The steps asked of this checkout:
+    1. save the two sections of the INGAT checkpoint pair, and restore the pair;
+    2. `git merge --ff-only origin/main`;
+    3. re-add the sections;
+    4. commit the INGAT reviews, tasks and evidence with the mission's files, register the
+       INGAT tasks as done, and push.
+  - The Ingat side pushes nothing more.
+- Coordinator handling:
+  - The INGAT tasks are registered under the board's new `external_tracks.INGAT`. The
+    validator admits only WP1-WP5 and GOV packages in `tasks`, and this mission did not
+    run them.
+  - The FIX3 freeze brief now follows the steps. It allows one fix: a directory link in an
+    INGAT review that fails `--preflight` may point to a file instead.
+- Running now: WP5-UX5-FIX3-FREEZE (a fresh committer, alone): save, restore,
+  fast-forward, re-add, stage, check, commit, push.
+- Next: WP5-UX5-FIX3 (worker-high). It reproduces the two flakes under load and makes the
+  tests robust with event-based waits, with no looser assertions. Then its freeze and
+  REGATE3.
+  - The Ingat paths count as owner work, checked only for non-interference.
+  - Verify runs in the repository too.
+  - The sweep has seven runs, and the stress run has two parts.
 - Remaining after T06:
   - T06-FREEZE;
   - the round-5 package gate (it covers rounds 4 and 5);

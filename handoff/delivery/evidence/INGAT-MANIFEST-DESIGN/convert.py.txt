@@ -1,0 +1,68 @@
+"""INGAT-MANIFEST-DESIGN: print one TOML file as indented JSON or as block-style YAML (read-only, for line counts).
+
+Usage: python -I convert.py json|yaml <file.toml>
+The YAML emitter is minimal (block mappings and sequences, scalars JSON-quoted when needed); comments are lost in both.
+"""
+
+import json
+import re
+import sys
+import tomllib
+
+_PLAIN = re.compile(r"[A-Za-z_][A-Za-z0-9_./-]*")
+
+
+def scalar(v):
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, int | float):
+        return str(v)
+    s = str(v)
+    return s if _PLAIN.fullmatch(s) and s not in ("true", "false", "null", "yes", "no", "on", "off") else json.dumps(s)
+
+
+def key(k):
+    return k if _PLAIN.fullmatch(k) else json.dumps(k)
+
+
+def emit(node, indent, out):
+    pad = "  " * indent
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if isinstance(v, dict) and v:
+                out.append(f"{pad}{key(k)}:")
+                emit(v, indent + 1, out)
+            elif isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
+                out.append(f"{pad}{key(k)}:")
+                for item in v:
+                    first = True
+                    for ik, iv in item.items():
+                        lead = "- " if first else "  "
+                        first = False
+                        if isinstance(iv, dict | list) and iv:
+                            out.append(f"{pad}  {lead}{key(ik)}: {json.dumps(iv)}")
+                        else:
+                            out.append(f"{pad}  {lead}{key(ik)}: {scalar(iv) if not isinstance(iv, list) else '[]'}")
+            elif isinstance(v, list):
+                flow = "[" + ", ".join(scalar(x) for x in v) + "]"
+                out.append(f"{pad}{key(k)}: {flow}")
+            elif isinstance(v, dict):
+                out.append(f"{pad}{key(k)}: {{}}")
+            else:
+                out.append(f"{pad}{key(k)}: {scalar(v)}")
+
+
+def main(fmt, path):
+    sys.stdout.reconfigure(encoding="utf-8")
+    with open(path, "rb") as f:
+        doc = tomllib.load(f)
+    if fmt == "json":
+        sys.stdout.write(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+    else:
+        out = []
+        emit(doc, 0, out)
+        sys.stdout.write("\n".join(out) + "\n")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1], sys.argv[2])

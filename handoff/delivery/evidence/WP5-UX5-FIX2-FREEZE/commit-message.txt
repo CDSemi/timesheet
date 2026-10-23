@@ -1,0 +1,28 @@
+Fix the shell-bar test race and skip .claude/ in the font scan (WP5-UX5-FIX2)
+
+- test(e2e): `theme.spec.ts` and `shell.spec.ts` read `--shell-bar-size` and the rendered
+  bar in one round trip and poll until they match.
+  - Background: a ResizeObserver writes the property one to a few frames after the bar
+    resizes.
+  - A deterministic test resizes the bar through CSSOM and waits for the property.
+- test(client): the font walk in `wordmarkAsset.test.ts` skips `.claude/`, which holds
+  tooling and local worktrees and never app assets. A stray font anywhere else still
+  fails.
+- docs(handoff):
+  - the FIX1-FREEZE results;
+  - the REGATE record (FAIL on one test race) and evidence;
+  - the DIAG1 diagnosis;
+  - the REMOTE-RECON lookup (two owner commits outside the mission, and a local
+    worktree);
+  - the FIX2 record and path lookup;
+  - the REGATE2 and audit drafts;
+  - NEXT_ACTION, STATE, the board and the checkpoint (+ vi).
+- On top of the owner's 6173f07 and 70dce2a (fast-forward, owner decision A a). Not pushed
+  (owner decision C b).
+
+Task: WP5-UX5-FIX2 (WP5-UX5-REGATE finding; owner decisions A a, B a, C b)
+Gate: WP5-UX5-REGATE FAIL on 2bce0ab; REGATE2 pending
+Audit: pending (round-5 audits)
+Digest: 59516a2d (was 70975091 at 2bce0ab)
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

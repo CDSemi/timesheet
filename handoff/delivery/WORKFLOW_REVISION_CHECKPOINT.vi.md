@@ -1823,6 +1823,144 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   4. **commit ở máy, không push** (C b).
 
   Digest `ls-tree` của HEAD phải bằng digest tính ngay sau fast-forward.
+- WP5-UX5-FIX2-FREEZE xong: **7aafa21bc1c6efc70c0fa8691c3a1165841aeb45 trên main, CHƯA
+  push** (C b).
+  - Fast-forward 2bce0ab -> 70dce2a thành công (A a). Đã stage 213 file.
+  - `13-integ-signatures.txt` đã được đổi tên thành `-synthetic`.
+  - Mọi kiểm tra exit 0. D_PRE = digest `ls-tree` của HEAD = 59516a2d.
+  - `git.unpushed` = [7aafa21].
+- Giai đoạn `ux5-regate2`. Đang chạy: WP5-UX5-REGATE2 (verifier, sonnet) trên commit ở máy
+  7aafa21 / 59516a2d, so với 2bce0ab.
+- **Chủ dự án (nguyên văn): "Từ giờ bạn cứ push lên main thoải mái nhé".**
+  - Lệnh tạm hoãn push (C b) đã được gỡ.
+  - Committer sẽ push 7aafa21 ngay khi REGATE2 xong; tác vụ commit phải chạy một mình.
+  - Các lần freeze sau push như trước.
+- WP5-UX5-REGATE2: **FAIL** trên 7aafa21 / 59516a2d (875 file), theo quy tắc "ghi nhận
+  nguyên trạng".
+  - **Đạt:**
+    - định danh: 12 đường dẫn, mỗi đường dẫn thuộc FIX2 hoặc Ingat; toàn bộ `dist/` giống
+      hệt từng byte;
+    - phần lõi, có chạy verify cả ngay trong repo;
+    - FULL e2e trên đồng hồ thật, 459 + 404 đạt, 0 lỗi;
+    - cả hai phép thử chịu tải, 1360 và 3140 đạt, 0 lỗi;
+    - test tất định.
+  - **Hai lỗi không phải lỗi mạng trong lượt quét,** không tái hiện được:
+    - mobile `settings-routes.spec.ts:16` (tiêu đề "Administration" không hiện trong
+      7 giây), ở lần chạy lại toàn bộ của ngày 10-26;
+    - mobile `controls.spec.ts:640` (ảnh chụp mũi tên chevron ở DPR 1.5), ở lần chạy toàn
+      bộ của ngày 11-01.
+
+    Lần chạy lại của 11-01 có 0 lỗi, và test chevron chạy riêng đạt 3/3. Verifier đánh
+    giá cả hai là lỗi chập chờn do máy quá tải.
+- Đang chạy: WP5-UX5-RECORDS1 (committer, chạy một mình). Nó commit hồ sơ REGATE2 (chỉ
+  trong handoff) và **push main**, kể cả 7aafa21.
+- RECORDS1 dừng ở bước fetch. origin/main giờ là 01c4cdc, không còn là 70dce2a: phiên Ingat
+  của chủ dự án đã push thêm. Chưa stage, commit hay push gì. RECORDS1 ở trạng thái
+  `blocked`.
+- Đang chạy: tra cứu chỉ đọc WP5-UX5-REMOTE-RECON2. Nó ghi lại các commit mới, phần trùng
+  với 7aafa21 và với các hồ sơ chưa commit, một lần kiểm tra merge không ghi gì, và các
+  phương án. Sau đó chủ dự án chọn cách gộp.
+- REMOTE-RECON2 xong. 7aafa21 ở máy và origin/main 01c4cdc đã rẽ nhánh (1 / 2, gốc chung
+  70dce2a).
+  - **Hai commit của chủ dự án:**
+    - 782cddab, dọn dẹp GHCR: một workflow, `scripts/ghcr-cleanup.ts`,
+      `tests/integration/ghcr-cleanup*`, các file tsconfig, docs 07 và 11, ADR 0002 và
+      0003, cùng các hồ sơ;
+    - 01c4cdcb, các hồ sơ.
+  - Không đụng đường dẫn quản trị, và không trùng với 7aafa21. Kiểm tra bằng `merge-tree`
+    cho kết quả gộp sạch.
+  - **Có một thay đổi chưa commit ở `handoff/delivery/INGAT_T0_T8_CHECKPOINT.md` (+ vi)
+    ngay trong bản checkout chính này.** Nhiệm vụ không tạo ra nó, và nó xung đột với bản
+    trên remote ở dòng 116.
+- **Đang chờ chủ dự án:** câu hỏi WP5-UX5-REMOTE2-Q.
+  - D: cách gộp — merge (khuyến nghị), rebase, hay tạm dừng các lần push của Ingat.
+  - E: ai xử lý thay đổi chưa commit trong checkpoint INGAT.
+  - Ngoài ra: phiên Ingat có thể chỉ làm việc trong worktree của nó hay không.
+- **Câu trả lời của chủ dự án (nguyên văn): "D.a, E.a".**
+  - **D a:** trước mỗi lần commit của nhiệm vụ, merge origin/main bằng một commit gộp (gộp
+    sạch, không đụng đường dẫn nào của nhiệm vụ), rồi commit và push.
+  - **E a:** phiên Ingat của chủ dự án tự xử lý cặp checkpoint INGAT. Nhiệm vụ không bao
+    giờ đụng vào nó, và chỉ merge khi nó đã sạch.
+- RECORDS1 chuyển sang `cancelled`. Phần hồ sơ và việc push 7aafa21 được dồn vào lần freeze
+  của FIX3.
+- Đang chạy: WP5-UX5-FIX3 (worker-high, sonnet; nền 7aafa21; cổng 50060-50079).
+  - Nó tái hiện và sửa hai lỗi chập chờn do tải, `settings-routes.spec.ts:16` và
+    `controls.spec.ts:640`, bằng cách chờ theo sự kiện. Chỉ sửa test; nếu nguyên nhân nằm
+    ở sản phẩm thì dừng lại.
+- Sau đó là freeze của FIX3:
+  1. kiểm tra cặp checkpoint INGAT của chủ dự án đã sạch; nếu chưa thì dừng;
+  2. `git merge origin/main` (một commit gộp);
+  3. commit FIX3 cùng các hồ sơ của REGATE2;
+  4. push.
+
+  Rồi REGATE3 trên đầu nhánh đã gộp, gồm cả các test ghcr-cleanup mới của chủ dự án và các
+  thay đổi tsconfig, kiểm tra là chúng không gây ảnh hưởng.
+- WP5-UX5-FIX3 xong (theo báo cáo của worker). **Cả hai lỗi chập chờn đều do test tranh chấp
+  thời điểm, không phải lỗi sản phẩm.**
+  - **Tiêu đề:** sau khi bấm Sign out, màn hình Administration vẫn còn cho tới khi có phản
+    hồi, và ô Email của chính màn hình đó nhận nhầm phần nhập. Sửa trong `fixtures.ts`:
+    `signInPageAs` chờ nút "Sign in". Khi máy chịu tải: từ 2 lỗi trên 40 lần xuống 80/80
+    đạt.
+  - **Mũi tên chevron:** các ô giữ chỗ "Loading..." phía trên làm ô chọn xê dịch 0,53px.
+    Sửa trong `controls.spec.ts`: `settledSelect` chờ hết ô giữ chỗ và 6 khung hình đứng
+    yên. Khi máy chịu tải: 80/80.
+  - Các mutant đều fail. FULL e2e 863 đạt, 0 lỗi. Verify 0.
+  - `--preflight` chỉ fail trong repo vì file chưa được git theo dõi
+    `INGAT_MANIFEST_DESIGN_REVIEW.md` của chủ dự án; chạy trên bản export thì đạt.
+- **WP5-UX5-FIX3-FREEZE đang `blocked`** (E a). Nó chờ phiên Ingat của chủ dự án xử lý xong
+  các file của phiên đó trong bản checkout này:
+  - cặp INGAT_T0_T8_CHECKPOINT;
+  - `INGAT_MANIFEST_DESIGN_REVIEW.md` và thư mục bằng chứng của nó.
+
+  Đã nhờ chủ dự án báo khi nào xong.
+- **Chủ dự án (nguyên văn): "Bên ingat yêu cầu bạn chạy "git merge --ff-only origin/main"
+  cho lần commit kế tiếp".**
+  - Lần commit tới chỉ fast-forward, không tạo commit gộp và không rebase. Nếu không
+    fast-forward được thì committer dừng lại.
+- Đang chạy: tra cứu chỉ đọc WP5-UX5-FIX3-PATHS. Nó kiểm tra:
+  - 7aafa21 đã nằm trong origin/main chưa, tức là có fast-forward được không;
+  - các commit mới trên remote chạm vào những gì;
+  - các đường dẫn đang có thay đổi;
+  - các file Ingat đã được xử lý xong chưa.
+- FIX3-PATHS xong: **không fast-forward được.** Commit 7aafa21 chưa push nên không nằm trong
+  origin/main 01c4cdc (đi trước 1, đi sau 2).
+  - Các commit trên remote không đụng đường dẫn nào của nhiệm vụ.
+  - Ngoài `handoff/`: chỉ có hai file của FIX3.
+  - **Trong bản checkout này vẫn còn file của phiên Ingat:**
+    - cặp INGAT_T0_T8_CHECKPOINT đang có thay đổi, mà origin cũng đã sửa, nên chặn mọi
+      lần fast-forward hay merge;
+    - các review, task và thư mục bằng chứng INGAT chưa được git theo dõi, làm
+      `--preflight` fail.
+- **Đang chờ chủ dự án:** câu hỏi WP5-UX5-FF-Q.
+  - F: cách đạt được — rebase 7aafa21 (chưa push) lên origin/main (khuyến nghị, cần chủ
+    dự án đồng ý rõ ràng); hoặc phiên Ingat push 7aafa21 lên origin trước; hoặc một commit
+    gộp.
+  - G: phiên Ingat xử lý xong hoặc chuyển các file của nó ra khỏi bản checkout này trước.
+- **Chủ dự án chuyển lời điều phối viên của nhánh Ingat (2026-10-23):** việc đồng bộ đã xong.
+  - origin/main 9f186b2 chứa commit gộp b8bae50, với hai cha là db87939 và 7aafa21 của
+    nhiệm vụ. Cây mã nguồn của nó đã được phía Ingat kiểm tra (2374/2374 test).
+  - Các bước đề nghị bản checkout này làm:
+    1. lưu hai mục trong cặp checkpoint INGAT, rồi khôi phục cặp file đó;
+    2. `git merge --ff-only origin/main`;
+    3. thêm lại hai mục;
+    4. commit các review, task và bằng chứng INGAT cùng với các file của nhiệm vụ, ghi
+       nhận các task INGAT là đã xong, rồi push.
+  - Phía Ingat không push thêm gì nữa.
+- Cách điều phối viên xử lý:
+  - Các task INGAT được ghi vào mục mới `external_tracks.INGAT` trên board. Validator chỉ
+    chấp nhận gói WP1-WP5 và GOV trong `tasks`, và nhiệm vụ này không chạy các task đó.
+  - Brief freeze của FIX3 giờ làm theo các bước trên. Nó cho phép một chỗ sửa: liên kết
+    trỏ tới thư mục trong một review INGAT làm `--preflight` fail thì được đổi sang trỏ
+    tới một file.
+- Đang chạy: WP5-UX5-FIX3-FREEZE (một committer mới, chạy một mình): lưu, khôi phục,
+  fast-forward, thêm lại, stage, kiểm tra, commit, push.
+- Tiếp theo: WP5-UX5-FIX3 (worker-high). Nó tái hiện hai lỗi chập chờn khi máy chịu tải và
+  làm test ổn định bằng cách chờ theo sự kiện, không nới lỏng assertion. Sau đó là freeze
+  của nó và REGATE3.
+  - Các đường dẫn Ingat được coi là việc của chủ dự án, chỉ kiểm tra là không gây ảnh
+    hưởng.
+  - Verify chạy cả ngay trong repo.
+  - Lượt quét gồm bảy lần chạy, phép thử chịu tải chia làm hai phần.
 - Còn lại sau T06:
   - T06-FREEZE;
   - gate gói của đợt 5 (bao gồm cả đợt 4 và đợt 5);

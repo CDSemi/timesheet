@@ -1,0 +1,72 @@
+manifest = 1
+app = "timesheet"
+requires_ingat = ">=0.1,<1"
+
+[source]
+kind = "git"
+release = "commit"
+
+[compose]
+files = ["compose.example.yaml"]
+
+[params]
+TIMESHEET_IMAGE    = { kind = "template", value = "ghcr.io/cdsemi/timesheet:{commit}" }
+TIMESHEET_ENV_FILE = { kind = "env_file" }
+TIMESHEET_DATA_DIR = { kind = "store", store = "data" }
+TIMESHEET_PORT     = { kind = "port" }
+
+[app_env]
+param = "TIMESHEET_ENV_FILE"
+
+[app_env.keys]
+APP_ORIGINS     = { required = true }
+PUBLIC_BASE_URL = { required = true }
+
+[stores.data]
+kind = "bind"
+param = "TIMESHEET_DATA_DIR"
+owner = "10001:10001"
+
+[services]
+writers = ["timesheet"]
+
+[probes.ready]
+http = { port_param = "TIMESHEET_PORT", path = "/api/ready" }
+
+[[activate]]
+services = ["timesheet"]
+wait = ["ready"]
+reopens_writes = true
+
+[backup]
+strategy = "tasks"
+steps = ["backup"]
+
+[restore]
+steps = ["restore"]
+
+[tasks.backup]
+service = "timesheet"
+mode = "run"
+argv = ["node", "dist/server/cli.js", "backup", "--to", "/out"]
+mounts = { "/out" = "stage" }
+effect = "app-write"
+idempotent = true
+timeout = "60m"
+
+[tasks.restore]
+service = "timesheet"
+mode = "run"
+image = "bundle"
+argv = ["node", "dist/server/cli.js", "restore", "--from", "/in/{bundle.payload}", "--to", "/restore"]
+mounts = { "/in" = "bundle", "/restore" = "generation:data" }
+effect = "data"
+timeout = "60m"
+
+[tasks.bootstrap-new-token]
+service = "timesheet"
+mode = "run"
+argv = ["node", "dist/server/cli.js", "bootstrap", "--new-token"]
+stdout = "terminal"
+effect = "app-write"
+timeout = "2m"

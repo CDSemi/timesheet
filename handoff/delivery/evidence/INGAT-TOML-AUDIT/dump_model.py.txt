@@ -1,0 +1,54 @@
+"""Audit INGAT-TOML-AUDIT: load an app manifest through Ingat's own parser and print every resolved field.
+
+Usage (inside the pinned Ingat image): python3 -I dump_model.py <manifest file>
+Prints a header (tool version, parser module, raw SHA-256), then one sorted `path = JSON value` line per resolved
+leaf field of the parsed `Manifest`, with `raw_sha256` left out of the sorted body so two files can be diffed.
+"""
+
+import dataclasses
+import json
+import sys
+
+import ingat
+from ingat.model import manifest as manifest_module
+from ingat.model.manifest import parse_manifest
+
+
+def _leaf(value: object) -> str:
+    if isinstance(value, tuple):
+        value = [list(x) if isinstance(x, tuple) else x for x in value]
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def _flat(prefix: str, value: object, out: list[str]) -> None:
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        for f in dataclasses.fields(value):
+            _flat(f"{prefix}.{f.name}" if prefix else f.name, getattr(value, f.name), out)
+    elif isinstance(value, dict):
+        if not value:
+            out.append(f"{prefix} = {{}}")
+        for k in sorted(value, key=str):
+            _flat(f"{prefix}[{k!r}]", value[k], out)
+    elif isinstance(value, tuple) and value and all(dataclasses.is_dataclass(x) for x in value):
+        for n, x in enumerate(value):
+            _flat(f"{prefix}[{n}]", x, out)
+    else:
+        out.append(f"{prefix} = {_leaf(value)}")
+
+
+def main() -> int:
+    path = sys.argv[1]
+    with open(path, "rb") as fh:
+        data = fh.read()
+    m = parse_manifest(data, tool_version=ingat.__version__)
+    lines: list[str] = []
+    _flat("", m, lines)
+    body = sorted(x for x in lines if not x.startswith("raw_sha256 = "))
+    print(f"# ingat {ingat.__version__}; parser {manifest_module.__file__}")
+    print(f"# file {path}; raw_sha256 {m.raw_sha256}; resolved fields {len(body)}")
+    print("\n".join(body))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
