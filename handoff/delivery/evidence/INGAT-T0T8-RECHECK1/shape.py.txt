@@ -1,0 +1,13 @@
+"""Print the shape of each line of a file without its content: letters -> a, digits -> 9, tabs -> <TAB>.
+
+Usage: python -I shape.py <file>
+"""
+import re
+import sys
+from pathlib import Path
+
+for n, line in enumerate(Path(sys.argv[1]).read_text(encoding="utf-8").splitlines(), 1):
+    s = re.sub(r"[A-Za-z]", "a", line)
+    s = re.sub(r"[0-9]", "9", s)
+    s = s.replace("\t", "<TAB>")
+    print(f"{n}: len={len(line)} fields(ws)={len(line.split())} shape={s}")

@@ -1,0 +1,15 @@
+"""Normalize CRLF to LF in the given files (Python on Windows wrote some outputs with CRLF). Content is otherwise
+unchanged; prints the number of CRLF pairs replaced per file.
+
+Usage: python -I lf.py <file>...
+"""
+import sys
+from pathlib import Path
+
+for name in sys.argv[1:]:
+    p = Path(name)
+    data = p.read_bytes()
+    n = data.count(b"\r\n")
+    if n:
+        p.write_bytes(data.replace(b"\r\n", b"\n"))
+    print(f"{name}: {n} CRLF replaced")

@@ -1,0 +1,24 @@
+#!/bin/bash
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-GATE"
+R="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+S="$T/scratch"
+FILES=".github/workflows/image.yml .github/workflows/ingat-validate.yml docs/07_DEPLOYMENT_AND_OPERATIONS.md docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md docs/11_OPERATIONS_RUNBOOK.md docs/11_OPERATIONS_RUNBOOK.vi.md docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md ingat.toml"
+mkdir -p "$S"
+cd "$S" || exit 3
+{
+git init -q . ; echo "git init exit $?"
+for f in $FILES; do
+  mkdir -p "$(dirname "$f")"
+  cp "$R/$f" "$S/$f"
+  git add "$f"
+done
+git status --short
+echo "== precommit-check"
+node "$R/scripts/precommit-check.mjs"
+echo "precommit-check exit $?"
+echo "== marker grep (changed files in worktree)"
+cd "$R"
+grep -nE '(^|[^0-9])(10|192\.168|172\.(1[6-9]|2[0-9]|3[01]))\.[0-9]+\.[0-9]+|/volume[0-9]|\.local\b|\.lan\b|@[a-z0-9-]+\.[a-z]' $FILES
+echo "marker grep exit $? (0 = hits, 1 = none)"
+} > "$T/g6.txt" 2>&1

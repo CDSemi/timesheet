@@ -1,0 +1,91 @@
+"""Privacy scan of the track's files (recheck item 5). Never writes a matched value into the summary.
+
+REDACTED COPY for the evidence folder: the run used the same file with two patterns filled in. The host/draft marker
+pattern is withheld (it is the first audit's list of host and draft-only values, so publishing it would publish the
+values it looks for), and the account segment of the profile pattern is replaced by <account>. Nothing else differs.
+
+Usage: python -I privacy.py <repo> <old_f3_dir> <file_list> <summary_out> <detail_out>
+
+- known names: the NAMES (and image) tokens of the docker ps rows FIX1 removed (taken from the audited originals in the
+  task folder), searched as fixed strings in every listed file;
+- docker ps row shapes: lines shaped like a `docker ps` table row (12-hex id first), classified as a track container
+  (name starts with ingat-/t0t8) or not;
+- markers: private IPv4, host/draft markers, profile paths, e-mail addresses, LAN DNS names, secret-like assignments.
+The summary holds counts and file:line only; the detail file (task folder only) holds the matched lines to read.
+"""
+import difflib
+import re
+import sys
+from pathlib import Path
+
+repo, old_f3, file_list, summary_out, detail_out = (Path(a) for a in sys.argv[1:6])
+files = [x for x in file_list.read_text(encoding="utf-8").splitlines() if x.strip()]
+
+pairs = {
+    "handoff_delivery_evidence_INGAT-T0T8-GATE_cleanup.txt": "handoff/delivery/evidence/INGAT-T0T8-GATE/cleanup.txt",
+    "handoff_delivery_evidence_INGAT-T0T8-GATE_g5.txt.txt": "handoff/delivery/evidence/INGAT-T0T8-GATE/g5.txt.txt",
+    "handoff_delivery_evidence_INGAT-T0T8-IMPL_g5.txt": "handoff/delivery/evidence/INGAT-T0T8-IMPL/g5.txt",
+    "handoff_delivery_evidence_INGAT-T0T8-IMPL_ps.txt": "handoff/delivery/evidence/INGAT-T0T8-IMPL/ps.txt",
+}
+names: set[str] = set()
+for old_name, rel in pairs.items():
+    a = (old_f3 / old_name).read_text(encoding="utf-8").splitlines()
+    b = (repo / rel).read_text(encoding="utf-8").splitlines()
+    for tag, i1, i2, _j1, _j2 in difflib.SequenceMatcher(a=a, b=b, autojunk=False).get_opcodes():
+        if tag == "equal":
+            continue
+        for row in a[i1:i2]:
+            tok = row.split()
+            if re.match(r"^[0-9a-f]{12}$", tok[0]):
+                names.add(tok[-1])  # NAMES column
+                names.add(tok[1].split(":")[0])  # IMAGE without tag
+            else:
+                names.update(t.split(":")[0] for t in tok)  # `--format` row: name, image
+generic = {"postgres", "redis", "nginx", "node", "registry", "moby/buildkit", "alpine", "busybox", "ubuntu", "debian"}
+names = {n for n in names if len(n) >= 4 and n.lower() not in generic}
+
+row = re.compile(r"^[0-9a-f]{12}\s{2,}")
+markers = {
+    "private-ipv4": re.compile(r"(^|[^0-9.])(10|192\.168|172\.(1[6-9]|2[0-9]|3[01]))\.[0-9]{1,3}\.[0-9]{1,3}"),
+    "host-draft": re.compile(r"<withheld: the first audit's host/draft marker pattern>", re.I),
+    "profile": re.compile(r"users[\\/]+<account>|<account>|/home/[a-z]|C:[\\/]+Users", re.I),
+    "address": re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
+    "lan-dns": re.compile(r"\.local\b|\.lan\b|\.home\.arpa|\.synology|quickconnect", re.I),
+    "secret-like": re.compile(r"(password|passwd|secret|token|api[_-]?key)\s*[=:]\s*['\"]?[A-Za-z0-9/+_-]{12,}", re.I),
+}
+allowed_address = re.compile(r"@(example\.invalid|example\.com|anthropic\.com)$|\.invalid$|^git@github\.com|^noreply@", re.I)
+
+summary: list[str] = [f"files scanned: {len(files)}; known unrelated container/image names to look for: {len(names)}"]
+detail: list[str] = []
+counts = {k: 0 for k in ["known-name", "ps-row-other", "ps-row-track", *markers]}
+for rel in files:
+    p = repo / rel
+    try:
+        text = p.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        text = p.read_text(encoding="latin-1")
+    for n, line in enumerate(text.splitlines(), 1):
+        if any(x in line for x in names):
+            counts["known-name"] += 1
+            summary.append(f"known-name {rel}:{n}")
+            detail.append(f"known-name {rel}:{n}: {line}")
+        if row.match(line):
+            nm = line.split()[-1]
+            kind = "ps-row-track" if re.match(r"^(ingat|t0t8)", nm, re.I) else "ps-row-other"
+            counts[kind] += 1
+            summary.append(f"{kind} {rel}:{n}" + (f" name {nm}" if kind == "ps-row-track" else ""))
+            detail.append(f"{kind} {rel}:{n}: {line}")
+        for key, rx in markers.items():
+            for m in rx.finditer(line):
+                hit = m.group(0).strip()
+                if key == "address" and allowed_address.search(hit):
+                    continue
+                counts[key] += 1
+                summary.append(f"{key} {rel}:{n}")
+                detail.append(f"{key} {rel}:{n}: {line[:300]}")
+                break
+summary.insert(1, "counts: " + ", ".join(f"{k} {v}" for k, v in counts.items()))
+summary_out.write_text("\n".join(summary) + "\n", encoding="utf-8")
+detail_out.write_text("\n".join(detail) + "\n", encoding="utf-8")
+print(summary[0])
+print(summary[1])

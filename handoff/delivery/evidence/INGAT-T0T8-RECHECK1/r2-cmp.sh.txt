@@ -1,0 +1,14 @@
+#!/bin/bash
+# Recheck item 2: comment-only proof, F3 masking proof (removed rows never printed).
+export TEMP="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/tmp"
+export TMP="$TEMP"
+PY="$(cygpath -u "$USERPROFILE")/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe"
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+{
+  echo "\$ python -I cmp.py <task>/old <worktree>"
+  "$PY" --version
+  "$PY" -I "$T/cmp.py" "$T/old" "$REPO"
+  echo "exit $?"
+} > "$T/r2-cmp.txt" 2>&1
+echo done

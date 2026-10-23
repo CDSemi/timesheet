@@ -1,0 +1,41 @@
+#!/bin/bash
+# F1 reproduction: build the snapshot locally (default builder, workflow flags), inspect Entrypoint/Cmd/User/Env, read
+# the inherited entrypoint script, and show that a task argv starting with a program runs unchanged.
+export MSYS_NO_PATHCONV=1
+export TEMP="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/tmp"
+export TMP="$TEMP"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1"
+IMG="ingat-t0t8-recheck1:local"
+cd "$REPO" || exit 3
+SHA="$(git rev-parse HEAD)"
+{
+  echo "date $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "\$ docker build --platform linux/amd64 --provenance=false --sbom=false --label org.opencontainers.image.version=0.1.0 --label org.opencontainers.image.revision=$SHA --tag $IMG ."
+  docker build --platform linux/amd64 --provenance=false --sbom=false --progress plain \
+    --label "org.opencontainers.image.version=0.1.0" --label "org.opencontainers.image.revision=$SHA" \
+    --tag "$IMG" . > "$T/tmp/build-log.txt" 2>&1
+  echo "build exit $? (full log in the task folder: tmp/build-log.txt)"
+  echo "\$ docker image inspect --format '{{json .Config.Entrypoint}} {{json .Config.Cmd}} {{.Config.User}} {{.Os}}/{{.Architecture}}' $IMG"
+  docker image inspect --format '{{json .Config.Entrypoint}} {{json .Config.Cmd}} {{.Config.User}} {{.Os}}/{{.Architecture}}' "$IMG"
+  echo "inspect exit $?"
+  echo "\$ docker image inspect --format '{{json .Config.Env}}' $IMG"
+  docker image inspect --format '{{json .Config.Env}}' "$IMG"
+  echo "inspect exit $?"
+  echo "\$ docker image inspect --format '{{json .Config.Entrypoint}}' node@sha256:8ec5d755... (the pinned base)"
+  docker image inspect --format '{{json .Config.Entrypoint}} {{json .Config.Cmd}}' "node@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe"
+  echo "inspect exit $?"
+  echo "\$ docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint cat $IMG /usr/local/bin/docker-entrypoint.sh"
+  docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint cat "$IMG" /usr/local/bin/docker-entrypoint.sh
+  echo "run exit $?"
+  echo "\$ docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges $IMG node -e 'console.log(JSON.stringify(process.argv.slice(1)))' a b"
+  docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges "$IMG" node -e 'console.log(JSON.stringify(process.argv.slice(1)))' a b
+  echo "run exit $?"
+  echo "\$ docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges $IMG -e 'console.log(\"node was prepended\")'  (contrast: a first argument that is not a program)"
+  docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges "$IMG" -e 'console.log("node was prepended")'
+  echo "run exit $?"
+  echo "\$ docker ps -a --filter ancestor=$IMG --format '{{.Names}}'  (own containers left: none expected)"
+  docker ps -a --filter "ancestor=$IMG" --format '{{.Names}}'
+  echo "ps exit $?"
+} > "$T/r3-build.txt" 2>&1
+echo done

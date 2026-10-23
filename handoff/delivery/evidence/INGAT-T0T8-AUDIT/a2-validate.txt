@@ -1,0 +1,71 @@
+A2 ingat validate (the CI job's docker run; uid:gid 1001:118 stands for the GitHub runner) and the auditor's probes.
+Script: <task>/a2-validate.sh (copy: a2-validate.sh.txt). Probe folders hold `cp` copies of ingat.toml and
+compose.example.yaml from the worktree, each changed with the Edit tool as named. <task> = the audit task folder.
+Exit of the script: 0. Output (verbatim, Windows mount paths shortened to <worktree> and <task>):
+
+--- docker version
+28.5.1 linux/amd64
+--- pinned image
+ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb
+pull exit 0
+0.1.0 9e531a015d3e25ae9230e3add5de7ee13a5ba609 ["python3","-I","-m","ingat"]
+=== P0 snapshot worktree (expect 0)
++ docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user 1001:118 --volume <worktree>:/app:ro ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb validate /app
+/app: the app's settings file (ingat.toml) is valid
+exit 0
+=== N1 forbidden key declared in app_env.keys (expect 1)   [copy: DATA_DIR added to [app_env.keys]]
++ docker run ... --volume <task>\neg-forbidden:/app:ro ... validate /app
+ingat: invalid app manifest:
+app_env.keys.DATA_DIR: is a forbidden key
+exit 1
+=== N2 port published on 0.0.0.0 (expect 1)   [copy: compose port "0.0.0.0:${TIMESHEET_PORT:-3000}:3000"]
++ docker run ... --volume <task>\neg-port:/app:ro ... validate /app
+ingat: the app does not validate:
+sample: services.timesheet.ports[0]: 0.0.0.0:20003 refused: only 127.0.0.1 and a port param value
+exit 1
+=== N3 readiness probe reads an undeclared param template (expect 1)   [copy: edge-live path "/api/health/{param.TIMESHEET_NOPE}"]
++ docker run ... --volume <task>\neg-template:/app:ro ... validate /app
+ingat: invalid app manifest:
+probes.edge-live: template variable {param.TIMESHEET_NOPE} names an undeclared param
+exit 1
+=== L1 compose sets cpus 0.5 (validate assumes CFS: shows what CI cannot catch)   [copy: `cpus: "0.5"` on the service]
++ docker run ... --volume <task>\lim-cpus:/app:ro ... validate /app
+/app: the app's settings file (ingat.toml) is valid
+exit 0
+=== L2 log_snapshot added (0.1.0 refuses it at init/deploy; shows what CI cannot catch)   [copy: services.log_snapshot]
++ docker run ... --volume <task>\lim-logsnap:/app:ro ... validate /app
+/app: the app's settings file (ingat.toml) is valid
+exit 0
+=== I1 synthetic good instance on an unmodified copy (expect 0)
++ docker run ... --volume <task>\inst:/app:ro ... validate /app --instance /app/good.toml
+/app: the app's settings file (ingat.toml) is valid, and the instance file /app/good.toml fits it
+exit 0
+=== I2 synthetic bad instance on an unmodified copy (expect 1, one line per error)
++ docker run ... --volume <task>\inst:/app:ro ... validate /app --instance /app/bad.toml
+ingat: the app does not validate:
+params.TIMESHEET_DATA_DIR: the tool sets store params, not the instance
+app_env.APP_ORIGINS: does not match the manifest's pattern
+app_env.JOB_RUNNER: tool-managed; only holds and [rollback] env set it
+app_env.OUTBOUND_MODE: must be one of capture, smtp
+app_env.PUBLIC_BASE_URL: does not match the manifest's pattern
+app_env.SESSION_TTL_HOURS: does not match the manifest's pattern
+app_env.SMTP_PASSWORD: a secret key, so its value must never be written in instance.toml; remove it here and store it with `ingat secret set` instead
+app_env.STATIC_DIR: forbidden by the manifest
+app_env.TRUSTED_PROXY_ADDRESSES: does not match the manifest's pattern
+app_env.MAIL_FROM: required
+exit 1
+=== cmp of the unmodified copy against the snapshot
+cmp ingat.toml exit 0
+cmp compose exit 0
+
+Run twice with identical results; the second run (kept) after renaming the synthetic instance to ts-audit.
+Instance files (synthetic, task folder only): good.toml sets name ts-audit, app timesheet, environment test,
+repo https://github.com/CDSemi/timesheet.git, TIMESHEET_PORT 20111, APP_ORIGINS/PUBLIC_BASE_URL https://timesheet.example.invalid,
+MAIL_FROM timesheet@example.invalid, OUTBOUND_MODE capture. bad.toml sets a store param, an origin with a path, an http
+base URL, STATIC_DIR, SMTP_PASSWORD (a synthetic placeholder), JOB_RUNNER, a CIDR proxy list (192.0.2.0/24, TEST-NET-1),
+SESSION_TTL_HOURS 0 and OUTBOUND_MODE smtp-x, and omits MAIL_FROM.
+
+Reading: the manifest validates; every refusal probe is refused with the expected key path. L1 and L2 pass `validate`
+although Ingat 0.1.0 would refuse them on the target host (`cpus`: ops/validate.py:66 passes cpu_cfs=True to the policy,
+while deploy uses the host's CpuCfsQuota, ops/context.py:471; log_snapshot: ops/context.py:197-207 `supported()` runs
+only in init/prepare/deploy). The snapshot has neither; see the review (risk R1).

@@ -1,0 +1,16 @@
+#!/bin/bash
+# usage: identity.sh <label>
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+OUT="D:/.claude-tmp/timesheet/INGAT-T0T8-GATE/identity-$1.txt"
+cd "$REPO" || exit 3
+{
+  echo "HEAD $(git rev-parse HEAD)"
+  git status --short
+  echo "--- sha256sum -c"
+  sha256sum -c handoff/delivery/evidence/INGAT-T0T8-IMPL/snapshot-sha256.txt
+  echo "sha256sum -c exit $?"
+  echo "--- digest"
+  node scripts/source-digest.mjs
+  echo "digest exit $?"
+} > "$OUT" 2>&1

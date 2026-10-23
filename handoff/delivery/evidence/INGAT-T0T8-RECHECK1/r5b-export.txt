@@ -1,0 +1,25 @@
+date 2026-10-22T23:24:23Z
+--- 3. clean export: git archive HEAD, then the nine snapshot files copied in
+git archive exit 0
+tar exit 0
+files in the export: 12145; HEAD tree files: 12145
+.github/workflows/image.yml: OK
+.github/workflows/ingat-validate.yml: OK
+docs/07_DEPLOYMENT_AND_OPERATIONS.md: OK
+docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md: OK
+docs/11_OPERATIONS_RUNBOOK.md: OK
+docs/11_OPERATIONS_RUNBOOK.vi.md: OK
+docs/adr/0002-ingat-manifest-and-ghcr-image.md: OK
+docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md: OK
+ingat.toml: OK
+export sha256sum -c exit 0
+compose.example.yaml equal to the worktree: cmp exit 0
+/app: the app's settings file (ingat.toml) is valid
+validate exit 0
+--- 4. negative control: the export's ingat.toml with a Compose file that uses one undeclared variable
+15:    image: ${TIMESHEET_IMAGE:-timesheet:local}${RECHECK1_UNDECLARED}
+ingat: the app does not validate:
+compose: variable RECHECK1_UNDECLARED has no default and is not a declared param
+validate exit 1 (non-zero expected)
+--- own containers left: none expected
+ps exit 0

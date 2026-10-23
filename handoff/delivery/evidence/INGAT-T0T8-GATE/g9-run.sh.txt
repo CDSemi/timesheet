@@ -1,0 +1,20 @@
+#!/bin/bash
+# usage: g9-run.sh <run-label>. Runs g9-step.sh (the workflow run: lines) with bash -e from the worktree.
+export MSYS_NO_PATHCONV=1
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-GATE"
+R="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+export BUILDX_BUILDER=ingat-gate-builder
+export IMAGE=localhost:49820/timesheet
+export GITHUB_SHA=2bce0ab5842b80c710f23496d5173c122319e5c7
+export GITHUB_SERVER_URL=https://github.com
+export GITHUB_REPOSITORY=CDSemi/timesheet
+export RUNNER_TEMP="$T/g9-runner-temp-$1"
+export GITHUB_STEP_SUMMARY="$T/g9-summary-$1.md"
+mkdir -p "$RUNNER_TEMP"
+: > "$GITHUB_STEP_SUMMARY"
+cd "$R" || exit 3
+{
+echo "run $1: BUILDX_BUILDER=$BUILDX_BUILDER IMAGE=$IMAGE GITHUB_SHA=$GITHUB_SHA RUNNER_TEMP=$RUNNER_TEMP"
+bash -e "$T/g9-step.sh"
+echo "run $1 exit $?"
+} > "$T/g9-run-$1.txt" 2>&1

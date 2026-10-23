@@ -1,0 +1,28 @@
+version=$(sed -n 's/^  "version": "\([0-9][0-9.]*\)",$/\1/p' package.json)
+test -n "$version"
+if docker buildx imagetools inspect --raw "$IMAGE:$GITHUB_SHA" > "$RUNNER_TEMP/manifest.json" 2> "$RUNNER_TEMP/inspect.err"; then
+  echo "$IMAGE:$GITHUB_SHA is already published: it is not rebuilt or moved"
+elif grep -q 'not found' "$RUNNER_TEMP/inspect.err"; then
+  docker buildx build --platform linux/amd64 --provenance=false --sbom=false \
+    --label "org.opencontainers.image.version=$version" \
+    --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+    --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+    --tag "$IMAGE:$GITHUB_SHA" --push .
+  docker buildx imagetools inspect --raw "$IMAGE:$GITHUB_SHA" > "$RUNNER_TEMP/manifest.json"
+else
+  cat "$RUNNER_TEMP/inspect.err" >&2
+  exit 1
+fi
+digest="sha256:$(sha256sum "$RUNNER_TEMP/manifest.json" | cut -d' ' -f1)"
+docker pull --quiet "$IMAGE@$digest"
+got=$(docker image inspect --format '{{.Os}}/{{.Architecture}} {{.Config.User}} {{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "org.opencontainers.image.version"}}' "$IMAGE@$digest")
+want="linux/amd64 10001:10001 $GITHUB_SHA $version"
+[ "$got" = "$want" ] || { echo "the published image does not match: got [$got], want [$want]" >&2; exit 1; }
+{
+  echo "### Application image"
+  echo
+  echo "- Tag: \`$IMAGE:$GITHUB_SHA\`"
+  echo "- Digest: \`$IMAGE@$digest\`"
+  echo "- Version label: \`$version\`"
+} >> "$GITHUB_STEP_SUMMARY"
+echo "$IMAGE@$digest"

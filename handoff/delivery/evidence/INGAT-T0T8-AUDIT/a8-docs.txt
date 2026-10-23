@@ -1,0 +1,27 @@
+A8 docs. Script: a8-docs.sh.txt (exit 0); parity script: parity.mjs.txt (the WP5-UX5-T06 logic, unchanged).
+--- node v24.21.0
+docs/adr/0002 pair: h2 5/5, bullets 24/24, code spans 45/45 (one EN span with a translated placeholder: `ghcr.io/cdsemi/timesheet:<full commit SHA>`), links 0/0, PARITY OK, exit 0
+docs/07 pair: h2 5/5, numbered 6/6, code spans 13/13, links EN 0 VI 1 (same at HEAD: baseline run below), PARITY OK, exit 0
+docs/11 pair: h2 19/19, h3 2/2, table rows 33/33, checkboxes 13/13, bullets 23/23, nested 27/27, numbered 76/76, code spans 317/317 (one translated placeholder span, at HEAD already), links 14/14, PARITY OK, exit 0
+docs/07 pair at HEAD (git show into the task folder): links EN 0 VI 1, PARITY OK, exit 0
+--- validate_package.py --preflight (workflow Python, -I)
+{"status": "PASS", "mode": "preflight", "translation_pairs": 124, "local_links": 2355, "scenario_total": 91, "application_tests_executed": false}
+preflight exit 0
+--- precommit-check --self-test
+PASS self-test: 35 path and 74 line samples, 12 rules (exit 0)
+--- git diff --check HEAD: exit 0; trailing spaces in the five new files: none; CR bytes: 0 in each
+--- claims scan (grep for succeeded|passed|published|pushed|ran on|has run|kernel 4.4|NAS ... in the nine files): every
+hit read. The only success-like words are the workflow's own messages and negative statements ("nothing has run on
+GitHub or on the target host", "no workflow run, no image pushed, no package created or made public, no NAS run and no
+S15 result", "Nothing was run on a 4.4 kernel", docs/07 "Nothing here has run on the NAS, and neither workflow has run
+on GitHub yet"). No claim of an unrun GitHub run, push, visibility change or NAS/S15 result.
+--- behaviour versus wording (read by the auditor, see the review):
+docs/07 EN/VI: "checks it on every push" (the trigger is push to main and pull_request) and "builds the image ... on every
+commit to `main`"; image.yml:1 "on every commit to main"; ADR 0002 Consequences "Every `main` commit adds a GHCR package
+version" while its Decision says "on every push to `main`". GitHub: GITHUB_SHA of a push run is the "Tip commit pushed to
+the ref" (docs.github.com, read 2026-10-22). Finding F2.
+docs/11 EN/VI step 2: accurate (the build-from-export path stays; the CI tag is what Ingat pulls; the drill does not use it).
+ADR 0002 EN/VI: same facts in both; the VI adds "Bản tiếng Anh là bản chuẩn" as ADR 0001's pair does.
+--- GitHub package docs (docs.github.com, configuring a package's access control and visibility, read 2026-10-22):
+"When you first publish a package, the default visibility is private and only you can see the package";
+"Once you make a package public, you cannot make it private again". ADR 0002 Consequences match.

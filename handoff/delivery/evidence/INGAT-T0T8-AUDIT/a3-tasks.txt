@@ -1,0 +1,120 @@
+A3b task contract: every manifest task argv, the readiness probe argv and the live/ready routes against the locally built
+image (ingat-t0t8-audit:local, built by a5-build.sh from the snapshot) with the Compose hardening of compose.example.yaml.
+Script: a3-tasks.sh.txt. Exit of the script: 0. Synthetic data in throw-away named volumes (removed at the end); the
+synthetic bootstrap file has one synthetic holiday. Long tokens (setup tokens and, as a side effect, the backup folder
+name and one JSON key) are shown as <redacted-token>. $ENVS = APP_ORIGINS/PUBLIC_BASE_URL https://timesheet.example.invalid,
+MAIL_FROM timesheet@example.invalid, OUTBOUND_MODE capture. <task> = the audit task folder.
+
+--- the probe argv used here equals the manifest's argv[2] (grep -F -c, expect 1)
+1
+--- stage and generation owned by the task user 10001:10001 (Ingat creates them so; root helper simulates it)
+drwxr-xr-x 2 10001 10001 4096 Oct 22 22:50 /out
+drwx------ 2 10001 10001 4096 Oct 22 22:50 /restore
+helper exit 0
+=== tasks.migrate (expect 0)
++ docker run --rm --init --read-only --tmpfs /tmp:size=64m,mode=1777 --cap-drop ALL --security-opt no-new-privileges $ENVS -v ingat-audit-data:/data ingat-t0t8-audit:local node dist/server/cli.js migrate
+stdout: {"database":"/data/timesheet.db","applied":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],"version":15}
+exit 0
+=== tasks.migrate again: idempotent (expect 0, applied [])
+stdout: {"database":"/data/timesheet.db","applied":[],"version":15}
+exit 0
+=== tasks.bootstrap-new-token before any config (expect 1 = refused)
+stderr: This database is not bootstrapped; run bootstrap --config first
+exit 1
+=== tasks.bootstrap-config (expect 0; token redacted)
++ docker run ... -v ingat-audit-data:/data -v <task>\input:/in:ro ingat-t0t8-audit:local node dist/server/cli.js bootstrap --config /in/bootstrap.json
+stdout:
+Company calendar and default policy created (1 holiday dates).
+Setup token (shown once, valid until 2026-10-22T23:50:28Z; only its hash is stored):
+  <redacted-token>
+Open the application and enter it on the Setup screen to create the first administrator.
+Do not paste it into a chat, ticket or log. If it expires unused: cli.js bootstrap --new-token
+exit 0
+=== tasks.bootstrap-config again (expect 1 = refused)
+stderr: This database is already bootstrapped; the company calendar is created only once
+exit 1
+=== tasks.bootstrap-new-token (expect 0; token redacted)
+stdout: Setup token (shown once, valid until 2026-10-22T23:50:30Z; only its hash is stored): <redacted-token> ...
+exit 0
+=== start the service as Compose would (detached, loopback port 127.0.0.1:49831 -> 3000)
+run -d exit 0
+=== live data: probes.ready argv via docker exec (retry until exit 0, at most 40 tries)
+tries 1
+stdout: {"status":"ready","schema":{"expected":15,"actual":15},"data_dir_writable":true}
+exit 0
+=== probes.edge-live and smoke over the published loopback port
+health http 200
+{"status":"ok"}
+ready http 200
+{"status":"ready","schema":{"expected":15,"actual":15},"data_dir_writable":true}
+=== tasks.backup while the server runs (expect 0, one JSON line)
++ docker run ... -v ingat-audit-data:/data -v ingat-audit-stage:/out ingat-t0t8-audit:local node dist/server/cli.js backup --to /out
+stdout: {"outcome":"succeeded","backup":"<redacted-token>","schema_version":15,"files":0,"signatures":0,"pdfs":0,"database_bytes":573440,"duration_ms":54,"status_recorded":true}
+exit 0
+--- stage entries (Ingat needs exactly one)
+drwxr-xr-x 3 timesheet timesheet 4096 Oct 22 22:50 .
+drwx------ 3 timesheet timesheet 4096 Oct 22 22:50 timesheet-backup-20261022T225033Z-35d8af19
+=== backup refused: target inside DATA_DIR (expect 2 = refused)
+stderr: Backup refused (target_inside_data_dir): The backup target must be outside the private data directory (DATA_DIR)
+exit 2
+=== tasks.outbound-held preview (expect 2, outcome confirmation_required)
+stdout: {"outcome":"confirmation_required","held":0,"releasable":0,"blocked":{},"jobs":[]}
+exit 2
+=== tasks.outbound-status preview (expect 2, outcome confirmation_required)
+stdout: {"outcome":"confirmation_required","paused":false,"reason":null,"awaiting_decision":0,"queued_send_jobs":0,"held_send_jobs":0}
+exit 2
+=== preview usage error (expect 2, no JSON on stdout: why the manifest needs expect)
+stdout: (empty)
+stderr: Usage: cli.js outbound resume [--confirm] | outbound release [--all | --job <id>] [--confirm] | outbound drop --job <id> [--confirm]
+exit 2
+=== tasks.outbound-release-job unknown id (expect 1 = refused)
+stdout: {"outcome":"refused","code":"not_held"}
+exit 1
+=== tasks.outbound-release-all (expect 0)
+stdout: {"outcome":"released","released":0,"refused":{}}
+exit 0
+=== tasks.outbound-drop-job unknown id (expect 1 = refused)
+stdout: {"outcome":"refused","code":"not_held"}
+exit 1
+=== tasks.outbound-resume, not paused (expect 0)
+stdout: {"outcome":"not_paused","awaiting_decision":0,"queued_send_jobs":0,"held_send_jobs":0}
+exit 0
+=== stop the service (SIGTERM; it must exit by itself)
+stop exit 0
+payload entry: timesheet-backup-20261022T225033Z-35d8af19
+=== tasks.restore into the empty generation, /data = empty placeholder (expect 0)
++ docker run ... -v ingat-audit-placeholder:/data:ro -v ingat-audit-stage:/in:ro -v ingat-audit-gen:/restore ingat-t0t8-audit:local node dist/server/cli.js restore --from /in/timesheet-backup-20261022T225033Z-35d8af19 --to /restore
+stdout: {"outcome":"restored","manifest":{"verified":true,"schema_version":15,"files":0,"signatures":0,"pdfs":0,"database_bytes":573440},"schema":{"backup":15,"restored":15,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"<redacted-token>":0,"send_jobs_held":0,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":0,"revisions":0,"ledger_entries":0,"attachments":0}}
+exit 0
+=== tasks.restore again into the now non-empty target (expect 2 = refused)
+stderr: Restore refused (target_not_empty): The restore target must be an empty or new directory
+exit 2
+--- restored generation layout
+drwx------ 3 timesheet timesheet   4096 Oct 22 22:50 .
+drwx------ 3 timesheet timesheet   4096 Oct 22 22:50 private-data
+-rw-r--r-- 1 timesheet timesheet 573440 Oct 22 22:50 timesheet.db
+=== start the service on the restored generation with the holds (JOB_RUNNER=off, OUTBOUND_MODE=capture)
+run -d exit 0
+=== restored generation: probes.ready argv via docker exec
+tries 1
+stdout: {"status":"ready","schema":{"expected":15,"actual":15},"data_dir_writable":true}
+exit 0
+--- server log
+Timesheet listening on http://0.0.0.0:3000 (schema v15)
+Outbound delivery PAUSED since 2026-10-22T22:50:45Z (reason: restored); 0 delivery attempt(s) await a decision, 0 send job(s) wait, 0 held for reconciliation (cli.js outbound release). Nothing is sent until: node dist/server/cli.js outbound resume --confirm
+=== tasks.outbound-held preview on the restored copy (expect 2)
+stdout: {"outcome":"confirmation_required","held":0,"releasable":0,"blocked":{},"jobs":[]}
+exit 2
+=== tasks.outbound-status preview on the restored copy (expect 2, paused true reason restored)
+stdout: {"outcome":"confirmation_required","paused":true,"reason":"restored","awaiting_decision":0,"queued_send_jobs":0,"held_send_jobs":0}
+exit 2
+=== tasks.outbound-resume on the restored copy (expect 0)
+stdout: {"outcome":"resumed","awaiting_decision":0,"queued_send_jobs":0,"held_send_jobs":0}
+exit 0
+stop exit 0
+--- cleanup
+volume rm exit 0 (ingat-audit-data, ingat-audit-stage, ingat-audit-gen, ingat-audit-placeholder)
+ps (name=ingat-audit-app): no container
+
+Lines shortened: "..." stands for the unchanged hardening flags and $ENVS of the first command line; empty stderr and
+stdout sections are omitted. The raw log is <task>/a3-tasks.txt.

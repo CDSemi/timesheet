@@ -1,0 +1,46 @@
+date 2026-10-22T23:23:54Z
+--- INGAT_IMAGE in the workflow
+20:      INGAT_IMAGE: ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb
+--- local image of the pinned digest
+["ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb"] linux/amd64 0.1.0
+inspect exit 0
+--- 1. worktree, --user "$(id -u):$(id -g)" exactly as the job text (197609:197609 here)
+$ docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user "$(id -u):$(id -g)" --volume "<worktree>:/app:ro" "ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb" validate /app
+/app: the app's settings file (ingat.toml) is valid
+validate exit 0
+--- 2. worktree, --user 1001:118 (the ubuntu-24.04 runner user)
+/app: the app's settings file (ingat.toml) is valid
+validate exit 0
+--- 3. clean export: git archive HEAD, then the nine snapshot files copied in
+git archive exit 0
+tar: Cannot connect to D: resolve failed
+tar exit 128
+.github/workflows/image.yml: OK
+.github/workflows/ingat-validate.yml: OK
+docs/07_DEPLOYMENT_AND_OPERATIONS.md: OK
+docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md: OK
+docs/11_OPERATIONS_RUNBOOK.md: OK
+docs/11_OPERATIONS_RUNBOOK.vi.md: OK
+docs/adr/0002-ingat-manifest-and-ghcr-image.md: OK
+docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md: OK
+ingat.toml: OK
+export sha256sum -c exit 0
+ingat: the app does not validate:
+compose.files: compose.example.yaml does not exist
+validate exit 1
+--- 4. negative control: a copy of the export's ingat.toml and Compose file with one undeclared Compose variable
+cp: cannot stat 'D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/export/compose.example.yaml': No such file or directory
+sed: can't read D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/neg/compose.example.yaml: No such file or directory
+grep: D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/neg/compose.example.yaml: No such file or directory
+ingat: the app does not validate:
+compose.files: compose.example.yaml does not exist
+validate exit 1 (non-zero expected)
+--- 5. actionlint pinned by digest (as INGAT-T0T8-GATE g3)
+$ docker run --rm --read-only --network none -v <worktree>:/repo:ro -w /repo rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 .github/workflows/image.yml .github/workflows/ingat-validate.yml
+actionlint exit 0
+1.7.12
+installed by building from source
+built with go1.26.1 compiler for linux/amd64
+version exit 0
+--- own containers left (filter by ancestor): none expected
+ps exit 0

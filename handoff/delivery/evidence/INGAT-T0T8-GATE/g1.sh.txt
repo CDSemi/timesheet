@@ -1,0 +1,14 @@
+#!/bin/bash
+export MSYS_NO_PATHCONV=1
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-GATE"
+R="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+INGAT=ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb
+CMD1='docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user 1001:1001 --volume REPO:/app:ro INGAT validate /app'
+{
+echo "G1 command: $CMD1  (REPO=$R)"
+docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user 1001:1001 --volume "$R:/app:ro" "$INGAT" validate /app
+echo "G1 exit $?"
+echo "G1n command: same with REPO=$T/neg"
+docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user 1001:1001 --volume "$T/neg:/app:ro" "$INGAT" validate /app
+echo "G1n exit $?"
+} > "$T/g1.txt" 2>&1

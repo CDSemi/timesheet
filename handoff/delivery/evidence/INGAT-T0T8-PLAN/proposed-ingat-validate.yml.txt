@@ -1,0 +1,29 @@
+# Validates ingat.toml with the public Ingat tool image, pinned by digest. The check is offline and read-only: it never
+# touches a Docker daemon of the runner beyond starting this one container, and it changes nothing.
+name: ingat-validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # ghcr.io/lisahq/ingat:0.1.0 pinned by digest. Bump the digest and this comment together, after reading the
+      # Ingat release notes (manifest keys can change before schema 1 is frozen).
+      INGAT_IMAGE: ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: ingat validate
+        run: |
+          docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges \
+            --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/app:ro" \
+            "$INGAT_IMAGE" validate /app

@@ -1,0 +1,31 @@
+"""For each removed docker ps row in the F3 originals, report only whether it could be a container of the
+track's own tasks (name or image mentions ingat, t0t8, timesheet, gate, impl, or the registry:3 image).
+Names and ports are never printed.
+
+Usage: python -I f3own.py <old_f3_dir> <repo_dir>
+"""
+import difflib
+import re
+import sys
+from pathlib import Path
+
+old_dir, repo = Path(sys.argv[1]), Path(sys.argv[2])
+pairs = {
+    "handoff_delivery_evidence_INGAT-T0T8-GATE_cleanup.txt": "handoff/delivery/evidence/INGAT-T0T8-GATE/cleanup.txt",
+    "handoff_delivery_evidence_INGAT-T0T8-GATE_g5.txt.txt": "handoff/delivery/evidence/INGAT-T0T8-GATE/g5.txt.txt",
+    "handoff_delivery_evidence_INGAT-T0T8-IMPL_g5.txt": "handoff/delivery/evidence/INGAT-T0T8-IMPL/g5.txt",
+    "handoff_delivery_evidence_INGAT-T0T8-IMPL_ps.txt": "handoff/delivery/evidence/INGAT-T0T8-IMPL/ps.txt",
+}
+own = re.compile(r"ingat|t0t8|timesheet|gate|impl|registry:3", re.I)
+any_own = False
+for old_name, rel in pairs.items():
+    a = (old_dir / old_name).read_text(encoding="utf-8").splitlines()
+    b = (repo / rel).read_text(encoding="utf-8").splitlines()
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(a=a, b=b, autojunk=False).get_opcodes():
+        if tag == "equal":
+            continue
+        flags = [bool(own.search(x)) for x in a[i1:i2]]
+        any_own = any_own or any(flags)
+        print(f"{rel}: removed rows {i1 + 1}-{i2}: could be the track's own: {flags}")
+print("any removed row of the track's own:", any_own)
+sys.exit(1 if any_own else 0)

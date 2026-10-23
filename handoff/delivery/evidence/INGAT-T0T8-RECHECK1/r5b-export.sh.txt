@@ -1,0 +1,46 @@
+#!/bin/bash
+# Rerun of r5 steps 3-4: the first attempt's tar read "D:/..." as a remote host (exit 128), so the export held only the
+# nine copied files. This run uses --force-local and a fresh export directory.
+export MSYS_NO_PATHCONV=1
+export TEMP="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/tmp"
+export TMP="$TEMP"
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+INGAT_IMAGE=ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb
+E="$T/export2"
+N="$T/neg2"
+cd "$REPO" || exit 3
+mkdir -p "$E" "$N"
+{
+  echo "date $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "--- 3. clean export: git archive HEAD, then the nine snapshot files copied in"
+  git archive --format=tar -o "$T/tmp/head.tar" HEAD
+  echo "git archive exit $?"
+  tar --force-local -xf "$T/tmp/head.tar" -C "$E"
+  echo "tar exit $?"
+  echo "files in the export: $(find "$E" -type f | wc -l); HEAD tree files: $(git ls-tree -r --name-only HEAD | wc -l)"
+  for f in .github/workflows/image.yml .github/workflows/ingat-validate.yml docs/07_DEPLOYMENT_AND_OPERATIONS.md docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md docs/11_OPERATIONS_RUNBOOK.md docs/11_OPERATIONS_RUNBOOK.vi.md docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md ingat.toml; do
+    mkdir -p "$E/$(dirname "$f")"
+    cp "$f" "$E/$f"
+  done
+  (cd "$E" && sha256sum -c "$REPO/handoff/delivery/evidence/INGAT-T0T8-FIX1/snapshot-sha256.txt")
+  echo "export sha256sum -c exit $?"
+  cmp "$E/compose.example.yaml" compose.example.yaml; echo "compose.example.yaml equal to the worktree: cmp exit $?"
+  docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges \
+    --user "1001:118" --volume "$E:/app:ro" \
+    "$INGAT_IMAGE" validate /app
+  echo "validate exit $?"
+  echo "--- 4. negative control: the export's ingat.toml with a Compose file that uses one undeclared variable"
+  cp "$E/ingat.toml" "$N/ingat.toml"
+  cp "$E/compose.example.yaml" "$N/compose.example.yaml"
+  sed -i 's|image: ${TIMESHEET_IMAGE:-timesheet:local}|image: ${TIMESHEET_IMAGE:-timesheet:local}${RECHECK1_UNDECLARED}|' "$N/compose.example.yaml"
+  grep -n 'RECHECK1_UNDECLARED' "$N/compose.example.yaml"
+  docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges \
+    --user "1001:118" --volume "$N:/app:ro" \
+    "$INGAT_IMAGE" validate /app
+  echo "validate exit $? (non-zero expected)"
+  echo "--- own containers left: none expected"
+  docker ps -a --filter "ancestor=$INGAT_IMAGE" --format '{{.Names}}'
+  echo "ps exit $?"
+} > "$T/r5b-export.txt" 2>&1
+echo done

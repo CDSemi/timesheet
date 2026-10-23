@@ -6,6 +6,8 @@ Reverse proxy Synology → một container app → /data bền vững cục bộ
 
 Kiểm CPU NAS thật và khả năng Docker/Container Manager; không giả định mọi NAS đều hỗ trợ. Test SQLite native và font trên đích đã chọn. WP4 giao Dockerfile nhiều stage có ghim phiên bản, ví dụ Compose, .env.example không secret, migration, bootstrap admin một lần có hạn, seed giả, health, script backup/restore và runbook song ngữ.
 
+Ingat, công cụ triển khai của chủ dự án, cài và cập nhật app từ `ingat.toml` ở thư mục gốc kho; `.github/workflows/ingat-validate.yml` kiểm file này ở mỗi lần push lên `main` và mỗi pull request bằng image Ingat được ghim theo digest. `.github/workflows/image.yml` build image cho linux/amd64 cho commit đầu mút của mỗi lần push lên `main` và đăng `ghcr.io/cdsemi/timesheet:<commit>` kèm nhãn OCI version, revision và source; Ingat chỉ nhận image đã kéo về khi nhãn revision bằng commit. Chưa có gì ở đây chạy trên NAS, và cả hai workflow chưa chạy trên GitHub (ADR 0002). Ví dụ Compose và đường build từ bản export vẫn dùng được.
+
 Chạy non-root. Lưu DB, PDF, chữ ký, bằng chứng riêng tư. Không đưa workbook, file dev hay secret vào image. Cấu hình HTTPS URL, proxy tin cậy, data path, múi giờ báo cáo, outbound và SMTP TLS/credential. Không có bí mật session của ứng dụng; chỉ có credential SMTP. Người nhận/template từng user ở settings, không dùng một recipient chung trong env.
 
 Dùng file secret/env được bảo vệ trên host; không đưa credential vào git, chat, ảnh hay log. Có HTTPS, cookie an toàn, hạn chế truy cập nội bộ và đồng bộ giờ host.

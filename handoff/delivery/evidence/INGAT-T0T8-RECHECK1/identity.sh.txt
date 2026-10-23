@@ -1,0 +1,32 @@
+#!/bin/bash
+# usage: identity.sh <label>   (first | last)
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+export TEMP="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/tmp"
+export TMP="$TEMP"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+OUT="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/identity-$1.txt"
+cd "$REPO" || exit 3
+{
+  echo "date $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "node $(node --version)"
+  echo "HEAD $(git rev-parse HEAD)"
+  echo "branch $(git rev-parse --abbrev-ref HEAD)"
+  echo "--- git status --short"
+  git status --short
+  echo "--- git status --short --untracked-files=all (outside handoff/)"
+  git status --short --untracked-files=all -- . ':(exclude)handoff'
+  echo "--- sha256sum -c FIX1 list (new snapshot)"
+  sha256sum -c handoff/delivery/evidence/INGAT-T0T8-FIX1/snapshot-sha256.txt
+  echo "sha256sum -c exit $?"
+  echo "--- sha256 of the FIX1 list itself"
+  sha256sum handoff/delivery/evidence/INGAT-T0T8-FIX1/snapshot-sha256.txt handoff/delivery/evidence/INGAT-T0T8-IMPL/snapshot-sha256.txt
+  echo "--- PLAN byte copies of the audited ingat.toml and image.yml"
+  sha256sum handoff/delivery/evidence/INGAT-T0T8-PLAN/proposed-ingat.toml.txt handoff/delivery/evidence/INGAT-T0T8-PLAN/proposed-image.yml.txt
+  echo "--- digest"
+  node scripts/source-digest.mjs
+  echo "digest exit $?"
+  echo "--- Dockerfile/compose/.dockerignore/package.json/src diff vs HEAD"
+  git diff --stat HEAD -- Dockerfile compose.example.yaml .dockerignore package.json package-lock.json src
+  echo "diff exit $?"
+} > "$OUT" 2>&1
+echo "identity $1 done"

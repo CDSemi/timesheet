@@ -1,0 +1,22 @@
+#!/bin/bash
+export MSYS_NO_PATHCONV=1
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-GATE"
+R="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+PY="$(cygpath -u "$USERPROFILE")/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe"
+{
+echo "G2 command: python -I check-workflows.py <workflows dir>"
+"$PY" -I "$T/check-workflows.py" "$R/.github/workflows"
+echo "G2 exit $?"
+echo "--- uses lines"
+grep -rn 'uses:' "$R/.github/workflows"
+echo "--- ls-remote"
+git ls-remote https://github.com/actions/checkout.git refs/tags/v7.0.1 'refs/tags/v7.0.1^{}'
+echo "exit $?"
+git ls-remote https://github.com/docker/setup-buildx-action.git refs/tags/v4.4.1 'refs/tags/v4.4.1^{}'
+echo "exit $?"
+git ls-remote https://github.com/docker/login-action.git refs/tags/v4.6.0 'refs/tags/v4.6.0^{}'
+echo "exit $?"
+echo "--- yaml parse (PyYAML, workflow python -I)"
+"$PY" -I "$T/yamlparse.py" "$R/.github/workflows/image.yml" "$R/.github/workflows/ingat-validate.yml"
+echo "yaml exit $?"
+} > "$T/g2.txt" 2>&1

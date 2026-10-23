@@ -40,7 +40,7 @@ The drill is `npm run drill:container -- --work <empty folder> --project <name> 
 ## 1. Install on Synology Container Manager
 
 1. Check the NAS first **[owner NAS step, unverified]**: DSM with Container Manager installed, and the CPU architecture from `uname -m` (`x86_64` or `aarch64`). Not every NAS supports containers.
-2. The image is pinned: the Dockerfile builds from `node:24.21.0-trixie-slim` by the digest of its multi-architecture index (`ARG NODE_IMAGE_DIGEST`), never `latest`. No registry is used: build the image from a clean export of the release commit placed in `<project-dir>`. The `.dockerignore` keeps the workbook, tests, handoff files and every `.env` file out of the image. The drill built the `linux/amd64` image; an `arm64` image was built only under emulation. **[Drill stage 1]** for the build on amd64; the build on the NAS itself **[owner NAS step, unverified]**.
+2. The image is pinned: the Dockerfile builds from `node:24.21.0-trixie-slim` by the digest of its multi-architecture index (`ARG NODE_IMAGE_DIGEST`), never `latest`. Without Ingat, build the image from a clean export of the release commit placed in `<project-dir>`; the CI-published tag `ghcr.io/cdsemi/timesheet:<release-commit>` (docs/07) is what Ingat pulls and is not exercised by the drill. The `.dockerignore` keeps the workbook, tests, handoff files and every `.env` file out of the image. The drill built the `linux/amd64` image; an `arm64` image was built only under emulation. **[Drill stage 1]** for the build on amd64; the build on the NAS itself **[owner NAS step, unverified]**.
 3. The container runs as a fixed non-root user, UID and GID `10001`. The host folder must belong to that user **[owner NAS step, unverified]**:
 
    ~~~bash

@@ -1,0 +1,64 @@
+#!/bin/bash
+# Trace of every new or changed sentence to the code, spec and docs lines it states (grep -n / sed -n, read-only).
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+ING="D:/Dropbox/Work.LISA/LisaHQ/Ingat"
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1"
+cd "$REPO" || exit 3
+{
+  echo "date $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "Ingat checkout: $(git -C "$ING" describe --tags --always --dirty 2>&1) ($(git -C "$ING" rev-parse HEAD 2>&1))"
+  echo
+  echo "=== F1 ingat.toml:139 (entrypoint)"
+  sed -n '139p' ingat.toml
+  echo "--- Dockerfile: no ENTRYPOINT line; CMD"
+  grep -n -E '^(ENTRYPOINT|CMD)' Dockerfile
+  echo "--- MANIFEST_SPEC run mode"
+  grep -n 'the entrypoint stays' "$ING/docs/app-developers/MANIFEST_SPEC.md" | cut -c1-260
+  echo "--- adapters/compose.py run argv placement"
+  sed -n '125,127p' "$ING/src/ingat/adapters/compose.py"
+  echo "--- no entrypoint override in compose.example.yaml or Ingat src: grep -c"
+  echo "compose.example.yaml: $(grep -c -i entrypoint compose.example.yaml)"
+  echo "Ingat src/: $(grep -r -i -l entrypoint "$ING/src" | wc -l) files"
+  echo
+  echo "=== F1 ingat.toml:29-32 (forbidden keys)"
+  sed -n '29,32p' ingat.toml
+  echo "--- Dockerfile ENV block"
+  sed -n '34,39p' Dockerfile
+  echo "--- STATIC_DIR reader (production server)"
+  grep -n 'STATIC_DIR' src/server/index.ts
+  echo "--- SEED_* readers in src/ and the production refusal"
+  grep -rn -E 'SEED_(ADMIN|EMPLOYEE|EMPLOYEE2)_PASSWORD' src
+  grep -n "Refusing to seed" src/server/cli.ts
+  echo
+  echo "=== R7 ingat.toml:140 (exit maps)"
+  sed -n '140p' ingat.toml
+  echo "--- cli.ts header: command lines (28-61)"
+  sed -n '28,61p' src/server/cli.ts | grep -n -E '^ \*   [a-z]'
+  echo "--- cli.ts header lines that state an exit code"
+  sed -n '28,61p' src/server/cli.ts | grep -n -i 'exit'
+  echo "--- docs/11 exit statements"
+  grep -n -i -E 'exits? [0-9]|\(exit [0-9]' docs/11_OPERATIONS_RUNBOOK.md | cut -c1-160
+  echo
+  echo "=== F2 / ADR Consequences sentence"
+  sed -n '61,63p' docs/adr/0002-ingat-manifest-and-ghcr-image.md
+  grep -n 'push after every commit' docs/08_AI_WORKFLOW_AND_BUDGET.md | cut -c1-120
+  echo
+  echo "=== R1 ADR facts"
+  sed -n '46,48p' docs/adr/0002-ingat-manifest-and-ghcr-image.md
+  echo "--- ops/validate.py:66 (cpu_cfs argument = True)"
+  sed -n '66p' "$ING/src/ingat/ops/validate.py"
+  grep -n 'def policy_errors' -A 3 "$ING/src/ingat/ops/context.py"
+  echo "--- policy/compose_policy.py:130-135"
+  sed -n '130,135p' "$ING/src/ingat/policy/compose_policy.py"
+  echo "--- the target host: ADR context and Ingat's host file"
+  sed -n '12,13p' docs/adr/0002-ingat-manifest-and-ghcr-image.md
+  grep -n -E '"cpu_cfs_(quota|period)"' "$ING/src/ingat/support/hosts/"*.json
+  echo "--- ARCHITECTURE.md: cpus only as params that default to no limit"
+  grep -n -o '`cpus` limits only as params that default to no limit[^;]*' "$ING/docs/design/ARCHITECTURE.md"
+  echo
+  echo "=== R6 ADR facts"
+  sed -n '44,45p' docs/adr/0002-ingat-manifest-and-ghcr-image.md
+  sed -n '131,133p' "$ING/src/ingat/ops/instance.py"
+  sed -n '274,275p' "$ING/src/ingat/ops/context.py"
+} > "$T/r3-trace.txt" 2>&1
+echo done

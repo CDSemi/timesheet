@@ -1,0 +1,25 @@
+#!/bin/bash
+# What changed under the track's handoff/ files since the first audit's final privacy pass (its scratch repository
+# scratch-pass3 holds a byte copy of every track file at 16:06 local time): changed, removed and new paths.
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1"
+P3="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT/scratch-pass3"
+R="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+cd "$P3" || exit 3
+git ls-files > "$T/tmp/p3-files.txt"
+cd "$R" || exit 3
+{
+  echo "date $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "files in the first audit's final scratch copy: $(grep -c '' "$T/tmp/p3-files.txt")"
+  echo "--- changed (cmp differs) or removed since then"
+  while IFS= read -r f; do
+    if [ ! -f "$R/$f" ]; then echo "REMOVED $f"; elif ! cmp -s "$P3/$f" "$R/$f"; then echo "CHANGED $f"; fi
+  done < "$T/tmp/p3-files.txt"
+  echo "--- new track paths since then"
+  { for f in .github/workflows/image.yml .github/workflows/ingat-validate.yml docs/07_DEPLOYMENT_AND_OPERATIONS.md docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md docs/11_OPERATIONS_RUNBOOK.md docs/11_OPERATIONS_RUNBOOK.vi.md docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md ingat.toml; do echo "$f"; done
+    git ls-files --others --exclude-standard -- handoff | grep -E '^handoff/delivery/(INGAT_T0_T8_|tasks/INGAT-T0T8-|evidence/INGAT-T0T8-)'; } > "$T/tmp/now-files.txt"
+  grep -v -x -F -f "$T/tmp/p3-files.txt" "$T/tmp/now-files.txt"
+  echo "--- shared state files: git status of the board, STATE and NEXT_ACTION"
+  git status --short -- handoff/delivery/ORCHESTRATION.json handoff/delivery/STATE.json handoff/NEXT_ACTION.md handoff/NEXT_ACTION.vi.md
+  echo "status exit $? (no lines = unchanged)"
+} > "$T/r2-handoff-delta.txt" 2>&1
+echo done

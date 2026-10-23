@@ -1,0 +1,33 @@
+#!/bin/bash
+# G5: S15 command list steps 1-3 and 5-7 against ingat-t0t8-gate:local; synthetic data; every container --rm.
+export MSYS_NO_PATHCONV=1
+TASK=D:/.claude-tmp/timesheet/INGAT-T0T8-GATE
+W="$TASK/g5"
+IMG=ingat-t0t8-gate:local
+RUN="docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp:size=64m,mode=1777"
+ENVS="-e NODE_ENV=production -e APP_ORIGINS=https://app.example.invalid -e PUBLIC_BASE_URL=https://app.example.invalid -e MAIL_FROM=app@example.invalid"
+mkdir -p "$W/data" "$W/out" "$W/restore"
+{
+echo "RUN=$RUN"
+echo "ENVS=$ENVS"
+echo "== step 1: node --version"
+$RUN $IMG node --version; echo "exit $?"
+echo "== step 2: better-sqlite3 loads"
+$RUN $IMG node --input-type=module -e "const { default: D } = await import('better-sqlite3'); const d = new D(':memory:'); console.log(d.prepare('select sqlite_version() as v').get())"; echo "exit $?"
+echo "== step 3: migrate"
+$RUN $ENVS -v "$W/data:/data" $IMG node dist/server/cli.js migrate; echo "exit $?"
+echo "== step 5: bootstrap (token output redacted)"
+$RUN $ENVS -v "$W/data:/data" -v "$W/bootstrap:/in:ro" $IMG node dist/server/cli.js bootstrap --config /in/bootstrap.json > "$W/bootstrap-out.raw" 2>&1
+echo "exit $?"
+sed 's/[A-Za-z0-9_-]\{24,\}/<redacted-token>/g' "$W/bootstrap-out.raw"
+echo "== step 6: backup"
+$RUN $ENVS -v "$W/data:/data" -v "$W/out:/out" $IMG node dist/server/cli.js backup --to /out; echo "exit $?"
+B=$(ls "$W/out")
+echo "backup folder: $B"
+echo "== step 7: restore"
+$RUN $ENVS -v "$W/out:/in:ro" -v "$W/restore:/restore" $IMG node dist/server/cli.js restore --from "/in/$B" --to /restore; echo "exit $?"
+echo "== restored directory"
+ls "$W/restore"
+echo "== docker ps"
+docker ps
+} > "$TASK/g5.txt" 2>&1

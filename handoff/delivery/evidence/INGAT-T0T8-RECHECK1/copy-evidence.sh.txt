@@ -1,0 +1,18 @@
+#!/bin/bash
+# Copy this recheck's outputs and scripts into the evidence folder (scripts get a .txt suffix). privacy.py is NOT copied:
+# a redacted copy is written separately with the Write tool, because its host/draft marker pattern would publish the
+# values it looks for. Detail files with matched lines stay in the task folder.
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1"
+E="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0/handoff/delivery/evidence/INGAT-T0T8-RECHECK1"
+for f in identity-first.txt copy-old.txt r2-cmp.txt r2-f3own.txt r2-handoff-delta.txt r3-build.txt r3-trace.txt \
+         r3-ingat-version.txt r4-f2.txt r5-validate.txt r5b-export.txt r6-privacy-pass1.txt r6-scan-pass1.txt \
+         r6-draftscan-pass1.txt r7-docs-pass1.txt r7-eol.txt "$@"; do
+  [ -f "$T/$f" ] && cp "$T/$f" "$E/$f" || echo "MISSING $f"
+done
+cp "$T/delta-lines.txt" "$E/r2-delta.txt"
+for s in identity.sh find-old.sh copy-old.sh delta.sh cmp.py shape.py f3own.py r2-cmp.sh r2-handoff-delta.sh r3-build.sh \
+         r3-trace.sh r4-f2.sh r5-validate.sh r5b-export.sh r6-privacy.sh draftscan.py r7-docs.sh eol.py copy-evidence.sh; do
+  cp "$T/$s" "$E/$s.txt" || echo "MISSING $s"
+done
+ls -la "$E" > "$T/tmp/evidence-ls.txt"
+echo done

@@ -1,0 +1,21 @@
+#!/bin/bash
+# Full textual delta of the nine snapshot files: audited byte copies (old/) against the current worktree files.
+OLD="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+OUT="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/delta.txt"
+cd "$REPO" || exit 3
+{
+  for f in .github/workflows/image.yml .github/workflows/ingat-validate.yml docs/07_DEPLOYMENT_AND_OPERATIONS.md docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md docs/11_OPERATIONS_RUNBOOK.md docs/11_OPERATIONS_RUNBOOK.vi.md docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md ingat.toml; do
+    echo "=================== $f"
+    git diff --no-index --no-color --unified=0 --word-diff=plain -- "$OLD/$f" "$f"
+    echo "diff exit $? (0 = identical, 1 = differs)"
+  done
+} > "$OUT" 2>&1
+{
+  for f in .github/workflows/image.yml docs/07_DEPLOYMENT_AND_OPERATIONS.md docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md ingat.toml; do
+    echo "=================== $f"
+    git diff --no-index --no-color --unified=0 -- "$OLD/$f" "$f"
+    echo "diff exit $?"
+  done
+} > "D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/delta-lines.txt" 2>&1
+echo done

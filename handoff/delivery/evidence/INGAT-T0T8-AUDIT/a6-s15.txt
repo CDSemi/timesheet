@@ -1,0 +1,18 @@
+A6 S15 statement.
+Commands:
+  curl -sS -o <task>/BUILDING-v24.21.0.md https://raw.githubusercontent.com/nodejs/node/v24.21.0/BUILDING.md   -> http 200
+  curl -sS -o <task>/BUILDING-v24.x.md    https://raw.githubusercontent.com/nodejs/node/v24.x/BUILDING.md      -> http 200
+  grep -n -i -E 'kernel|GNU/Linux|musl|RHEL 8|Older kernel' on both files (identical rows in both)
+sha256: v24.21.0 6e001f1f6e092f65042850844b5f68c0b1004c5d4269ae9fb35087bc6203e0e9, v24.x 01647fa20b9ddab794898f5e49c76d332fe5e7ea1c9765c526bc162685119096
+Rows (verbatim, both files):
+108:| GNU/Linux        | x64              | kernel >= 4.18[^1], glibc >= 2.28 | Tier 1       | e.g. Ubuntu 20.04, Debian 10, RHEL 8 |
+109:| GNU/Linux        | x64              | kernel >= 3.10, musl >= 1.1.19    | Experimental | e.g. Alpine 3.8                      |
+129:[^1]: Older kernel versions may work. However, official Node.js release
+130:    binaries are [built on RHEL 8 systems](#official-binary-platforms-and-toolchains)
+131:    with kernel 4.18.
+Image (a5-build.txt): node v24.21.0 x64, glibc runtime 2.41, Debian GNU/Linux 13.7 (trixie).
+
+Reading: the image is the glibc x64 row, Tier 1 from kernel 4.18; a 4.4 kernel is below it and only "may work".
+ADR 0002 (EN and VI) says: Node.js v24.21.0 on glibc (Debian 13); Tier 1 from kernel 4.18 (BUILDING.md, v24.x);
+"Official support for a 4.4 kernel: no. Practical risk: unverified. Nothing was run on a 4.4 kernel." The runtime is
+unchanged (Dockerfile byte-identical to HEAD). No file of the snapshot or of this track claims a result on kernel 4.4.

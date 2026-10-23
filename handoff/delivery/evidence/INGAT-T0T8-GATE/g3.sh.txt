@@ -1,0 +1,13 @@
+#!/bin/bash
+export MSYS_NO_PATHCONV=1
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-GATE"
+R="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+AL=rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+{
+echo "G3 command: docker run --rm --read-only --network none -v REPO:/repo:ro -w /repo $AL .github/workflows/image.yml .github/workflows/ingat-validate.yml"
+docker run --rm --read-only --network none -v "$R:/repo:ro" -w /repo "$AL" .github/workflows/image.yml .github/workflows/ingat-validate.yml
+echo "G3 exit $?"
+echo "--- version"
+docker run --rm --read-only --network none "$AL" -version
+echo "version exit $?"
+} > "$T/g3.txt" 2>&1

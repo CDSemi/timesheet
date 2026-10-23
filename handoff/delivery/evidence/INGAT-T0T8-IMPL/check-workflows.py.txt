@@ -1,0 +1,48 @@
+"""Check that every `uses:` line of each workflow is pinned by a full 40-hex commit SHA followed by a version comment.
+
+Standard library only (the workflow Python has no YAML module); YAML syntax and the workflow schema are checked by
+actionlint in a separate gate step.
+
+Usage: python -I check-workflows.py <workflows-dir>
+Exit 0 when every `uses:` is pinned; 1 otherwise (also when no workflow file exists).
+"""
+
+import re
+import sys
+from pathlib import Path
+
+USES = re.compile(r"^\s*(?:-\s+)?uses:\s*(?P<ref>\S+)(?P<rest>.*)$")
+PINNED = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}$")
+VERSION_COMMENT = re.compile(r"^\s+#\s*v\d+(\.\d+)*\s*$")
+
+
+def main() -> int:
+    directory = Path(sys.argv[1])
+    files = sorted([*directory.glob("*.yml"), *directory.glob("*.yaml")])
+    if not files:
+        print(f"no workflow files in {directory}")
+        return 1
+    failures = 0
+    for path in files:
+        total = 0
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            match = USES.match(line)
+            if match is None:
+                continue
+            total += 1
+            ref, rest = match.group("ref"), match.group("rest")
+            if ref.startswith("./"):
+                print(f"FAIL {path.name}:{number}: local action {ref} is not allowed here")
+                failures += 1
+            elif not PINNED.match(ref):
+                print(f"FAIL {path.name}:{number}: not pinned by a 40-hex SHA: {ref}")
+                failures += 1
+            elif not VERSION_COMMENT.match(rest):
+                print(f"FAIL {path.name}:{number}: pinned action {ref} has no '# vX.Y.Z' version comment")
+                failures += 1
+        print(f"checked {path.name}: {total} uses line(s)")
+    print("PASS" if failures == 0 else f"FAIL: {failures} problem(s)")
+    return 0 if failures == 0 else 1
+
+
+sys.exit(main())

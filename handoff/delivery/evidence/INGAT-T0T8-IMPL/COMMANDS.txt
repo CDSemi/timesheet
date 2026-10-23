@@ -1,0 +1,27 @@
+INGAT-T0T8-IMPL commands and exits (Git Bash, Node 24.21.0; MSYS_NO_PATHCONV=1 for Docker mounts; <user> masks the account segment)
+Raw logs: D:\.claude-tmp\timesheet\INGAT-T0T8-IMPL. Masked copies: this folder.
+
+1  HEAD / status / main / ls-remote / node scripts/source-digest.mjs      exit 0   check1.txt
+   HEAD = main = remote main = 2bce0ab5842b80c710f23496d5173c122319e5c7; digest 709750910cb8... (870 files, handoff/ excluded)
+2  files written with the Write/Edit tools; cmp of the three plan texts       exit 0 x3  cmp.txt (byte-identical, no CR)
+G1 docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user 1001:1001
+   -v <repo>:/app:ro ghcr.io/lisahq/ingat@sha256:b5db73bef81f... validate /app      exit 0   g1.txt
+G1n same on a copy without expect_labels                                           exit 1   g1n.txt ("compose.expect_labels: must bind {commit}")
+G2 python -I check-workflows.py <repo>/.github/workflows                           exit 0   g2.txt (PASS, 3 + 1 uses lines)
+   (first attempt failed with exit 2 on a path-translation error of the Windows Python; rerun with cygpath -w)
+G3 docker run --rm --read-only --network none actionlint@sha256:b1934ee5f1c5... both workflows   exit 0   g3.txt (no findings)
+G4 docker buildx build --platform linux/amd64 --provenance=false --sbom=false --label version/revision/source --load   exit 0   g4-build.txt
+   docker image inspect -> "linux/amd64 10001:10001 2bce0ab5842b80c710f23496d5173c122319e5c7 0.1.0 https://github.com/CDSemi/timesheet"   g4-inspect.txt
+G5 g5.sh: plan G steps 1, 2, 3, 5, 6, 7 against ingat-t0t8-gate:local (synthetic data, --rm each)   exit 0 each   g5.txt
+   (step 4, the detached server, not run; the setup token in the log is redacted)
+G6 scratch repository in the task folder, explicit git add per file, scripts/precommit-check.mjs
+   first attempt: exit 1 (path-translation error, node could not find the script)    g6a.txt
+   rerun: PASS: 9 staged file(s), 0 blocking finding(s), 0 warning(s)                exit 0   g6a2.txt
+   marker grep (private ranges, volume paths, .local/.lan, e-mail shapes) on the 9 files: no match (grep exit 1)   g6b.txt
+G7 node scripts/precommit-check.mjs --self-test                                    exit 0   g7g8.txt
+G8 git status --short; git diff --stat; git diff --check                           exit 0   g7g8.txt
+T  parity (WP5-UX5-T06 script) on the three pairs touched                           exit 0 x3  parity-out.txt
+   validate_package.py --preflight (workflow Python)                                exit 0   vp.txt (PASS)
+   docker ps after the work: only an unrelated container that was running before    ps.txt
+Last: node scripts/source-digest.mjs and snapshot-sha256.txt (final-digest.txt, snapshot-sha256.txt)
+Not run: G9 (the verifier runs it); any GitHub run; any GHCR push; anything against the NAS; S15 step 4.

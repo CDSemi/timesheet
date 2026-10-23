@@ -1,0 +1,36 @@
+A5 local linux/amd64 build with the image workflow's flags (--load instead of --push) on a docker-container builder with
+the workflow's pinned BuildKit. Script: a5-build.sh.txt. Exit of the script: 0. BuildKit progress lines omitted.
+
+--- buildx version
+github.com/docker/buildx v0.29.1-desktop.1 28f6246ff24e2c05095e8741e48c48dcb2d3b4bc
+version=[0.1.0] GITHUB_SHA=2bce0ab5842b80c710f23496d5173c122319e5c7     (the workflow's sed on package.json)
+test -n exit 0
+--- create builder (docker-container, moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea)
+create exit 0
+--- docker buildx build --builder ingat-audit-builder --platform linux/amd64 --provenance=false --sbom=false
+      --label org.opencontainers.image.version=0.1.0 --label org.opencontainers.image.revision=<HEAD>
+      --label org.opencontainers.image.source=https://github.com/CDSemi/timesheet --tag ingat-t0t8-audit:local --load .
+build exit 0
+--- inspect (the workflow's format)
+got  [linux/amd64 10001:10001 2bce0ab5842b80c710f23496d5173c122319e5c7 0.1.0]
+want [linux/amd64 10001:10001 2bce0ab5842b80c710f23496d5173c122319e5c7 0.1.0]
+compare exit 0
+source=https://github.com/CDSemi/timesheet
+--- entrypoint, cmd, workdir, env, labels, healthcheck
+Entrypoint=["docker-entrypoint.sh"] Cmd=["node","dist/server/index.js"] WorkingDir=/app
+["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","NODE_VERSION=24.21.0","YARN_VERSION=1.22.22","NPM_CONFIG_UPDATE_NOTIFIER=false","NODE_ENV=production","OUTBOUND_MODE=capture","HOST=0.0.0.0","PORT=3000","DATABASE_PATH=/data/timesheet.db","DATA_DIR=/data/private-data"]
+{"org.opencontainers.image.revision":"2bce0ab5842b80c710f23496d5173c122319e5c7","org.opencontainers.image.source":"https://github.com/CDSemi/timesheet","org.opencontainers.image.version":"0.1.0"}
+{"Test":["CMD","node","-e","fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/ready', { signal: AbortSignal.timeout(4000) }).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"],"Interval":15000000000,"Timeout":5000000000,"StartPeriod":20000000000,"Retries":3}
+--- node version and libc in the image (docker run --rm --read-only --network none --cap-drop ALL ... node -e ...)
+v24.21.0 x64 "2.41"
+node exit 0
+--- /etc/os-release
+PRETTY_NAME="Debian GNU/Linux 13 (trixie)", VERSION_ID="13", DEBIAN_VERSION_FULL=13.7
+os-release exit 0
+--- remove builder
+ingat-audit-builder removed (exit 0); docker buildx ls afterwards lists only the default and desktop-linux builders
+
+Reading: platform, user and both bound labels match what image.yml checks. The Entrypoint is the Node base image's
+docker-entrypoint.sh (the Dockerfile sets none, so the runtime stage inherits it): the manifest comment "The image has
+no ENTRYPOINT" is wrong (finding F1). Tasks still work: the script execs a first argument that is a command (`node`)
+unchanged, as a3-tasks.txt shows; probes use docker exec, which skips the entrypoint.

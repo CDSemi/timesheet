@@ -1,0 +1,27 @@
+#!/bin/bash
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-GATE"
+R="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+PY="$(cygpath -u "$USERPROFILE")/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe"
+export TEMP="$T/tmp" TMP="$T/tmp"
+cd "$R" || exit 3
+{
+echo "== G7 node scripts/precommit-check.mjs --self-test"
+node scripts/precommit-check.mjs --self-test; echo "exit $?"
+echo "== G7 node scripts/source-digest.mjs"
+node scripts/source-digest.mjs; echo "exit $?"
+echo "== parity (WP5-UX5-T06 script)"
+for b in docs/07_DEPLOYMENT_AND_OPERATIONS docs/11_OPERATIONS_RUNBOOK docs/adr/0002-ingat-manifest-and-ghcr-image; do
+  echo "-- $b"
+  node "$T/parity.mjs" "$R/$b.md" "$R/$b.vi.md"; echo "exit $?"
+done
+echo "== validate_package.py --preflight"
+"$PY" -I handoff/delivery/validate_package.py --preflight; echo "exit $?"
+echo "== git diff --check"
+git diff --check; echo "exit $?"
+echo "== git diff --check on untracked new files (no-index vs empty)"
+for f in ingat.toml .github/workflows/image.yml .github/workflows/ingat-validate.yml docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md; do
+  grep -nE '[[:space:]]+$' "$f" > "$T/ws.tmp"; echo "$f trailing-ws grep exit $? (1 = none)"
+  grep -c $'\r' "$f"
+done
+} > "$T/g7-12.txt" 2>&1

@@ -1,0 +1,67 @@
+#!/bin/bash
+# Recheck item 4: `ingat validate` exactly as .github/workflows/ingat-validate.yml runs it (pinned digest, read-only,
+# --network none, cap-drop ALL, no-new-privileges, read-only workspace mount), on the worktree and on a clean export
+# (HEAD tree plus the nine snapshot files = the tree a CI checkout of the would-be commit holds); one negative control;
+# then actionlint pinned by digest on both workflows.
+export MSYS_NO_PATHCONV=1
+export TEMP="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/tmp"
+export TMP="$TEMP"
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+INGAT_IMAGE=ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb
+AL=rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+cd "$REPO" || exit 3
+mkdir -p "$T/export" "$T/neg"
+{
+  echo "date $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "--- INGAT_IMAGE in the workflow"
+  grep -n 'INGAT_IMAGE:' .github/workflows/ingat-validate.yml
+  echo "--- local image of the pinned digest"
+  docker image inspect --format '{{json .RepoDigests}} {{.Os}}/{{.Architecture}} {{index .Config.Labels "org.opencontainers.image.version"}}' "$INGAT_IMAGE"
+  echo "inspect exit $?"
+  echo "--- 1. worktree, --user \"\$(id -u):\$(id -g)\" exactly as the job text ($(id -u):$(id -g) here)"
+  echo "\$ docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user \"\$(id -u):\$(id -g)\" --volume \"<worktree>:/app:ro\" \"$INGAT_IMAGE\" validate /app"
+  docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges \
+    --user "$(id -u):$(id -g)" --volume "$REPO:/app:ro" \
+    "$INGAT_IMAGE" validate /app
+  echo "validate exit $?"
+  echo "--- 2. worktree, --user 1001:118 (the ubuntu-24.04 runner user)"
+  docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges \
+    --user "1001:118" --volume "$REPO:/app:ro" \
+    "$INGAT_IMAGE" validate /app
+  echo "validate exit $?"
+  echo "--- 3. clean export: git archive HEAD, then the nine snapshot files copied in"
+  git archive --format=tar -o "$T/tmp/head.tar" HEAD
+  echo "git archive exit $?"
+  tar -xf "$T/tmp/head.tar" -C "$T/export"
+  echo "tar exit $?"
+  for f in .github/workflows/image.yml .github/workflows/ingat-validate.yml docs/07_DEPLOYMENT_AND_OPERATIONS.md docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md docs/11_OPERATIONS_RUNBOOK.md docs/11_OPERATIONS_RUNBOOK.vi.md docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md ingat.toml; do
+    mkdir -p "$T/export/$(dirname "$f")"
+    cp "$f" "$T/export/$f"
+  done
+  (cd "$T/export" && sha256sum -c "$REPO/handoff/delivery/evidence/INGAT-T0T8-FIX1/snapshot-sha256.txt")
+  echo "export sha256sum -c exit $?"
+  docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges \
+    --user "1001:118" --volume "$T/export:/app:ro" \
+    "$INGAT_IMAGE" validate /app
+  echo "validate exit $?"
+  echo "--- 4. negative control: a copy of the export's ingat.toml and Compose file with one undeclared Compose variable"
+  cp "$T/export/ingat.toml" "$T/neg/ingat.toml"
+  cp "$T/export/compose.example.yaml" "$T/neg/compose.example.yaml"
+  sed -i 's|image: ${TIMESHEET_IMAGE:-timesheet:local}|image: ${TIMESHEET_IMAGE:-timesheet:local}${RECHECK1_UNDECLARED}|' "$T/neg/compose.example.yaml"
+  grep -n 'RECHECK1_UNDECLARED' "$T/neg/compose.example.yaml"
+  docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges \
+    --user "1001:118" --volume "$T/neg:/app:ro" \
+    "$INGAT_IMAGE" validate /app
+  echo "validate exit $? (non-zero expected)"
+  echo "--- 5. actionlint pinned by digest (as INGAT-T0T8-GATE g3)"
+  echo "\$ docker run --rm --read-only --network none -v <worktree>:/repo:ro -w /repo $AL .github/workflows/image.yml .github/workflows/ingat-validate.yml"
+  docker run --rm --read-only --network none -v "$REPO:/repo:ro" -w /repo "$AL" .github/workflows/image.yml .github/workflows/ingat-validate.yml
+  echo "actionlint exit $?"
+  docker run --rm --read-only --network none "$AL" -version
+  echo "version exit $?"
+  echo "--- own containers left (filter by ancestor): none expected"
+  docker ps -a --filter "ancestor=$INGAT_IMAGE" --filter "ancestor=$AL" --format '{{.Names}}'
+  echo "ps exit $?"
+} > "$T/r5-validate.txt" 2>&1
+echo done

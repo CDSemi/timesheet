@@ -1,0 +1,29 @@
+--- every commit / every push in the nine files
+docs/07_DEPLOYMENT_AND_OPERATIONS.md:9:Ingat, the owner's deployment tool, installs and updates the app from the `ingat.toml` at the repository root; `.github/workflows/ingat-validate.yml` checks it on every push to `main` and every pull request with a digest-pinned Ingat image. `.github/workflows/image.yml` builds the image for linux/amd64 for the tip commit of each push to `main` and publishes `ghcr.io/cdsemi/timesheet:<commit>` with the OCI version, revision and source labels; Ingat accepts the pulled image only when its revision label equals the commit. Nothing here has run on the NAS, and neither workflow has run on GitHub yet (ADR 0002). The Compose example and the build-from-export path stay valid.
+docs/adr/0002-ingat-manifest-and-ghcr-image.md:24:- Add `.github/workflows/ingat-validate.yml`: on every push to `main` and every pull request, run `ingat validate` with
+docs/adr/0002-ingat-manifest-and-ghcr-image.md:28:- Add `.github/workflows/image.yml`: on every push to `main`, build the image for `linux/amd64` and publish
+docs/adr/0002-ingat-manifest-and-ghcr-image.md:63:  first release this repository pushes after every commit (docs/08).
+grep exit 0
+--- vi: moi commit / moi lan push
+docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md:9:Ingat, công cụ triển khai của chủ dự án, cài và cập nhật app từ `ingat.toml` ở thư mục gốc kho; `.github/workflows/ingat-validate.yml` kiểm file này ở mỗi lần push lên `main` và mỗi pull request bằng image Ingat được ghim theo digest. `.github/workflows/image.yml` build image cho linux/amd64 cho commit đầu mút của mỗi lần push lên `main` và đăng `ghcr.io/cdsemi/timesheet:<commit>` kèm nhãn OCI version, revision và source; Ingat chỉ nhận image đã kéo về khi nhãn revision bằng commit. Chưa có gì ở đây chạy trên NAS, và cả hai workflow chưa chạy trên GitHub (ADR 0002). Ví dụ Compose và đường build từ bản export vẫn dùng được.
+docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md:23:- Thêm `.github/workflows/ingat-validate.yml`: ở mỗi lần push lên `main` và mỗi pull request, chạy `ingat validate` bằng image
+docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md:27:- Thêm `.github/workflows/image.yml`: ở mỗi lần push lên `main`, build image cho `linux/amd64` và đăng
+docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md:59:- Commit đầu mút của mỗi lần push lên `main` thêm một phiên bản package GHCR; job dọn dẹp là quyết định về sau. Commit được
+docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md:61:  bản phát hành đầu tiên, kho này push sau mỗi commit (docs/08).
+grep exit 0
+--- ENTRYPOINT / STATIC_DIR lines in ingat.toml
+29:# Fixed by the image (Dockerfile ENV block), the static-root override STATIC_DIR (read by the production server), or
+31:forbidden = ["NODE_ENV", "HOST", "PORT", "DATABASE_PATH", "DATA_DIR", "STATIC_DIR",
+139:# The image keeps the Node base image's docker-entrypoint.sh, which runs a task argv that starts with a program unchanged.
+--- Dockerfile / index.ts
+56:    CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/ready', { signal: AbortSignal.timeout(4000) }).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+58:CMD ["node", "dist/server/index.js"]
+17:  if (process.env.STATIC_DIR !== undefined) return process.env.STATIC_DIR;
+--- docker ps header lines under INGAT-T0T8-* evidence, tasks and reports
+evidence/INGAT-T0T8-IMPL/g5.txt:30:CONTAINER ID   IMAGE               COMMAND                  CREATED       STATUS      PORTS                                                                                      NAMES
+evidence/INGAT-T0T8-GATE/cleanup.txt:6:CONTAINER ID   IMAGE                                     COMMAND                  CREATED         STATUS                     PORTS                                                                                      NAMES
+evidence/INGAT-T0T8-GATE/g5.txt.txt:32:CONTAINER ID   IMAGE               COMMAND                  CREATED       STATUS      PORTS                                                                                      NAMES
+evidence/INGAT-T0T8-FIX1/c7-privacy.txt:20:evidence/INGAT-T0T8-IMPL/g5.txt:30:CONTAINER ID   IMAGE               COMMAND                  CREATED       STATUS      PORTS                                                                                      NAMES
+evidence/INGAT-T0T8-FIX1/c7-privacy.txt:21:evidence/INGAT-T0T8-GATE/cleanup.txt:6:CONTAINER ID   IMAGE                                     COMMAND                  CREATED         STATUS                     PORTS                                                                                      NAMES
+evidence/INGAT-T0T8-FIX1/c7-privacy.txt:22:evidence/INGAT-T0T8-GATE/g5.txt.txt:32:CONTAINER ID   IMAGE               COMMAND                  CREATED       STATUS      PORTS                                                                                      NAMES
+grep exit 0

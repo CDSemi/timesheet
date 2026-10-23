@@ -1,0 +1,37 @@
+A7 privacy. Script: a7-privacy.sh (scripts.txt; its host/draft marker pattern is withheld there because it would
+publish the values it looks for). Each pass builds a scratch git repository in the task folder from `git status
+--short --untracked-files=all` filtered to the nine snapshot files and every file of this track under handoff/
+(INGAT_T0_T8_*, tasks/INGAT-T0T8-*, evidence/INGAT-T0T8-*), copies each file with `cp` and stages it with its own
+`git add -- <path>`, then runs the repository's own gate `node <worktree>/scripts/precommit-check.mjs` on the staged set,
+then five marker greps whose every hit the auditor read. (The CRLF warnings git prints in the scratch repository are
+omitted: the scratch repository has no .gitattributes; the worktree files are LF.)
+
+pass1 (before the review pair existed): 117 files staged
+PASS: 117 staged file(s), 0 blocking finding(s), 0 warning(s)          precommit exit 0
+private IPv4 hits 0 | host/draft marker hits 6 | profile hits 0 | address hits 0 | lan dns hits 4
+
+pass2 (with the review pair, the brief's Results and this folder's other files): 126 files staged
+PASS: 126 staged file(s), 0 blocking finding(s), 0 warning(s)          precommit exit 0
+private IPv4 hits 0 | host/draft marker hits 6 | profile hits 0 | address hits 0 | lan dns hits 5
+
+pass3 (final, after identity-last and every output of the audit; 12 files of this folder included): 128 files staged
+PASS: 128 staged file(s), 0 blocking finding(s), 0 warning(s)          precommit exit 0
+private IPv4 hits 0 | host/draft marker hits 6 (the same six) | profile hits 0 | address hits 0 | lan dns hits 6 (the new
+one is the word `source.local` quoted in this file)
+
+Hits, as read (no hit is in one of the nine snapshot files):
+- evidence/INGAT-T0T8-GATE/cleanup.txt:7, :8, :11 (and, found by a follow-up grep for docker ps output, :6-12 in total,
+  evidence/INGAT-T0T8-GATE/g5.txt.txt:32-33, evidence/INGAT-T0T8-IMPL/g5.txt:30-31, evidence/INGAT-T0T8-IMPL/ps.txt:1):
+  `docker ps` rows of the development machine's unrelated containers: names of the owner's other projects, their
+  published ports and a masked account fragment. Finding F3 (Low). Not a secret, not the target host; 31 committed
+  evidence files of earlier packages list such names too (`git grep -l` over HEAD).
+- tasks/INGAT-T0T8-AUDIT.md:72, tasks/INGAT-T0T8-PLAN.md:65, tasks/INGAT-T0T8-IMPL.md:32: the coordinator's briefs name
+  the folder of the owner's private draft (a path in the Ingat checkout), not its content. Accepted.
+- The remaining hits are search patterns inside scripts and command logs (GATE g6.sh.txt:22, PLAN.md:940, IMPL
+  COMMANDS.txt:20, this folder's scripts.txt) and the BuildKit word `source.local` (GATE g9-setup.txt.txt:55). Accepted.
+
+Reading of the nine snapshot files themselves: no real port, subnet, host name, host path, user name, e-mail address or
+secret; the only URLs are github.com/CDSemi/timesheet (through GITHUB_SERVER_URL/GITHUB_REPOSITORY), ghcr.io/cdsemi/timesheet,
+ghcr.io/lisahq/ingat, moby/buildkit and the loopback 127.0.0.1:3000 inside the container. The manifest's structure
+follows the public MANIFEST_SPEC §11 example; it carries none of the draft's host-specific values (the draft's
+instance-level values were checked by the auditor and appear in no file of this track).

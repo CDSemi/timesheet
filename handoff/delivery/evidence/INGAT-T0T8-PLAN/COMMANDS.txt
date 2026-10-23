@@ -1,0 +1,51 @@
+INGAT-T0T8-PLAN: commands that were run (Git Bash on Windows, Docker 28.5.1, Node 24.21.0 where Node was used).
+Raw outputs are the sibling files of this folder; "<user>" would replace any profile path (none occurs in these files).
+Nothing was run against any remote host other than public GitHub, GHCR, Docker Hub and nodejs.org reads. Nothing was
+staged, committed or pushed. No image of this application was built or pushed.
+
+Base record
+  git rev-parse HEAD; git status --short; git log -1 --format=%H main      -> base-drift.txt (HEAD == main == 2bce0ab5842b80c710f23496d5173c122319e5c7)
+  git ls-remote https://github.com/CDSemi/timesheet.git refs/heads/main   -> lsremote-main.txt (same SHA)
+  git log --oneline HEAD..main (empty); git diff --stat HEAD main (empty)    -> base-drift.txt, base-drift-origin.txt
+
+Pinned Ingat image (ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb)
+  docker pull <digest ref>                                  exit 0 (anonymous pull works)
+  docker image inspect (entrypoint, labels)                 -> ingat-inspect.txt   (revision 9e531a01..., version 0.1.0)
+  docker run --rm <ref> validate --help | version           exit 0 -> validate-help.txt, version.txt
+
+ingat validate runs (all: --rm, --network none; the locked-down form adds --read-only --cap-drop ALL
+--security-opt no-new-privileges --user 1001:1001 and a read-only bind mount)
+  owner draft, pre-fixed-subnet form, as written          exit 1  compose.expect_labels: must bind {commit}  -> validate-draft-pre-t1.txt
+  same, plus expect_labels only                           exit 0  valid (log_snapshot and empty [deploy] lists still pass validate)  -> validate-draft-pre-t1-b.txt
+  proposed ingat.toml + compose.example.yaml, locked down  exit 0  -> validate-proposed-final.txt, validate-locked-down.txt
+  proposed + a good instance file (--instance)             exit 0  -> validate-instance-ok-final.txt
+  proposed + a bad instance file                           exit 1  7 messages (patterns, forbidden keys, missing MAIL_FROM) -> validate-instance-bad.txt
+  nonexistent directory                                    exit 2  -> validate-nodir.txt
+  --json form                                              exit 0  -> validate-json.txt
+
+Node.js runtime of the image (docker run --rm --read-only --network none, node:24.21.0-trixie-slim@sha256:8ec5d755...)
+  node probe.mjs (probe.mjs.txt)                           exit 0  -> probe-node-image.txt
+  curl of nodejs/node BUILDING.md (v24.x and v24.21.0)     exit 0  -> node-v24.*-BUILDING-excerpt.txt (full files kept in the task folder)
+
+Workflow checks
+  git ls-remote of actions/checkout v7.0.1, docker/setup-buildx-action v4.4.1, docker/login-action v4.6.0   -> lsremote-actions.txt
+  docker buildx imagetools inspect rhysd/actionlint:1.7.12 (index digest sha256:b1934ee5...)                  -> actionlint-inspect.txt
+  docker run --rm --read-only --network none -v <proposed>:/repo:ro -w /repo rhysd/actionlint@sha256:b1934ee5... <two workflow files>
+                                                           exit 0  -> actionlint.txt
+  same on a deliberately broken workflow                   exit 1  -> actionlint-negative.txt
+  python -I check-workflows.py (every uses: is a 40-hex SHA + version comment)  exit 0 -> check-workflows.txt; broken sample exit 1 -> check-workflows-negative.txt
+  buildx facts: `--format '{{.Manifest.Digest}}'` is NOT a working template (it prints the default text); the digest of a tag is
+  sha256 of `imagetools inspect --raw` (checked on the Ingat image: equals the index digest; a missing tag exits 1 with "not found")
+                                                                                -> raw-test.txt, snippets-test.txt
+  scripts/precommit-check.mjs on a scratch repository holding only the proposed files   exit 0 PASS -> precommit-check-proposed.txt
+
+Public GitHub reads
+  GET api.github.com/repos/CDSemi/timesheet                -> repo-api-summary.txt (public, owned by an organization, default branch main)
+  anonymous token + tags/list for ghcr.io/cdsemi/timesheet -> ghcr-anonymous-token-*.txt (access denied: absent or private)
+  GitHub docs on packages (raw markdown excerpts)          -> ghcr-working-excerpt.txt, pkg-access-*.txt
+
+Deviations from the brief's Runtime rules (all harmless to the result, listed for honesty)
+  - Several one-off listing commands piped into head (ls and git ls-files listings early in the task).
+  - A few redirects to /dev/null and one `rm -f /dev/null 2>/dev/null` (a mistake; /dev/null still exists afterwards:
+    `test -e /dev/null` exit 0). No other file was removed except my own evidence copy imagetools-format-test2.txt.
+  - No heredoc, no stdin to node or python, no interactive container, no PID kill. Every container ran with --rm and exited.

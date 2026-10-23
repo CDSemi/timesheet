@@ -1,0 +1,27 @@
+audited copy proposed-ingat.toml.txt sha256 ed051d661c9a4ded983aa01b0f1879b53204364c717f8dc153845a78f659b549 equals audited snapshot hash: True
+ingat.toml non-comment content equal: True
+ingat.toml tomllib data equal: True
+--- textual diff of ingat.toml (all changed lines must be comments)
+--- old
++++ new
+@@ -29 +29,2 @@
+-# Fixed by the image (Dockerfile ENV block), or read only by development commands that never run in production.
++# Fixed by the image (Dockerfile ENV block), the static-root override STATIC_DIR (read by the production server), or
++# development-only seed passwords that never run in production.
+@@ -138,2 +139,2 @@
+-# The image has no ENTRYPOINT, so a task argv replaces the service command and starts with the program.
+-# The exit map of each task follows its command in src/server/cli.ts (documented in docs/11_OPERATIONS_RUNBOOK.md).
++# The image keeps the Node base image's docker-entrypoint.sh, which runs a task argv that starts with a program unchanged.
++# The exit map of each task follows its command in src/server/cli.ts (the header documents all commands; docs/11_OPERATIONS_RUNBOOK.md documents backup, restore and outbound).
+changed non-whole-line-comment lines: 0
+audited copy proposed-image.yml.txt sha256 1b09a01e97befe9703d5acf1a15aaacd72a5a5d3c07fe2ef3ab66285536c154d equals audited snapshot hash: True
+image.yml non-comment content equal: True
+--- textual diff of image.yml (all changed lines must be comments)
+--- old
++++ new
+@@ -1 +1 @@
+-# Builds the application image for linux/amd64 on every commit to main and publishes it to GHCR, tagged by the full
++# Builds the application image for linux/amd64 for the tip commit of each push to main and publishes it to GHCR, tagged by the full
+changed non-whole-line-comment lines: 0
+RESULT OK
+cmp exit 0

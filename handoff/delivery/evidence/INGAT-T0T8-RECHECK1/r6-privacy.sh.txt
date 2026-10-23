@@ -1,0 +1,36 @@
+#!/bin/bash
+# Recheck item 5: privacy over the nine snapshot files and every track file under handoff/ (INGAT_T0_T8_*,
+# tasks/INGAT-T0T8-*, evidence/INGAT-T0T8-*), including the gates' and the first audit's evidence and this recheck's own
+# outputs. A scratch repository per pass (per-file cp, per-file git add) runs the repository's precommit gate; then
+# privacy.py scans for the removed container names, docker ps rows and markers (summary: counts and file:line only).
+# usage: r6-privacy.sh <label>
+export MSYS_NO_PATHCONV=1
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1"
+export TEMP="$T/tmp" TMP="$T/tmp"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+PY="$(cygpath -u "$USERPROFILE")/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe"
+R="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+S="$T/scratch-$1"
+L="$T/files-$1.txt"
+OUT="$T/r6-privacy-$1.txt"
+cd "$R" || exit 3
+{
+  echo "date $(date -u +%Y-%m-%dT%H:%M:%SZ) node $(node --version)"
+  for f in .github/workflows/image.yml .github/workflows/ingat-validate.yml docs/07_DEPLOYMENT_AND_OPERATIONS.md docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md docs/11_OPERATIONS_RUNBOOK.md docs/11_OPERATIONS_RUNBOOK.vi.md docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md ingat.toml; do echo "$f"; done > "$L"
+  git ls-files --others --exclude-standard -- handoff | grep -E '^handoff/delivery/(INGAT_T0_T8_|tasks/INGAT-T0T8-|evidence/INGAT-T0T8-)' >> "$L"
+  echo "files: $(grep -c '' "$L") (nine snapshot files + track files under handoff/)"
+  echo "per folder:"; sed -n '10,$p' "$L" | sed -E 's|^(handoff/delivery/evidence/[^/]+)/.*|\1/|; s|^(handoff/delivery/tasks)/.*|\1/|' | sort | uniq -c
+  mkdir -p "$S" && cd "$S" && git init -q . && echo "scratch init exit $?"
+  while IFS= read -r f; do
+    mkdir -p "$S/$(dirname "$f")" && cp "$R/$f" "$S/$f" && git add -- "$f" 2> "$T/tmp/add-warn.txt" || echo "COPY/ADD FAILED $f"
+  done < "$L"
+  echo "staged $(git diff --cached --name-only | grep -c '')"
+  echo "--- node <worktree>/scripts/precommit-check.mjs (staged set of the scratch repository)"
+  node "$R/scripts/precommit-check.mjs"
+  echo "precommit exit $?"
+  cd "$R" || exit 3
+  echo "--- privacy.py scan (summary written to r6-scan-$1.txt)"
+  "$PY" -I "$T/privacy.py" "$R" "$T/old/f3" "$L" "$T/r6-scan-$1.txt" "$T/tmp/r6-detail-$1.txt"
+  echo "scan exit $?"
+} > "$OUT" 2>&1
+echo done

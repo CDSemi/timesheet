@@ -1,0 +1,30 @@
+// Read-only probe of the Node.js runtime image: versions, libc, and the minimum kernel each ELF file declares in its
+// GNU ABI-tag note (4 x uint32: OS 0 = Linux, major, minor, patch). Prints nothing that identifies a host.
+import { readFileSync, readdirSync } from 'node:fs';
+
+function abiTag(path) {
+  const buf = readFileSync(path);
+  // note header: namesz=4, descsz=16, type=1 (NT_GNU_ABI_TAG), then "GNU\0", then the descriptor.
+  const needle = Buffer.from([4, 0, 0, 0, 16, 0, 0, 0, 1, 0, 0, 0, 0x47, 0x4e, 0x55, 0x00]);
+  const at = buf.indexOf(needle);
+  if (at < 0) return 'no ABI-tag note';
+  const os = buf.readUInt32LE(at + 16);
+  return `os=${os} kernel>=${buf.readUInt32LE(at + 20)}.${buf.readUInt32LE(at + 24)}.${buf.readUInt32LE(at + 28)}`;
+}
+
+const header = process.report.getReport().header;
+console.log(JSON.stringify({
+  node: process.version,
+  arch: process.arch,
+  platform: process.platform,
+  glibcRuntime: header.glibcVersionRuntime,
+  glibcCompiler: header.glibcVersionCompiler,
+  v8: process.versions.v8,
+  napi: process.versions.napi,
+  execPath: process.execPath,
+}));
+console.log('node binary ABI tag:', abiTag(process.execPath));
+const libDir = '/lib/x86_64-linux-gnu';
+const libc = readdirSync(libDir).filter((name) => /^libc\.so\.6$/.test(name));
+for (const name of libc) console.log(`${libDir}/${name} ABI tag:`, abiTag(`${libDir}/${name}`));
+console.log('os-release:', readFileSync('/etc/os-release', 'utf8').split('\n').filter((l) => /^(PRETTY_NAME|VERSION_ID)=/.test(l)).join('; '));

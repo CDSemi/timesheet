@@ -1,0 +1,46 @@
+date 2026-10-22T23:22:53Z
+--- triggers (grep -n of on:/push:/branches:/pull_request: in both workflows)
+.github/workflows/image.yml:7:on:
+.github/workflows/image.yml:8:  push:
+.github/workflows/image.yml:9:    branches: [main]
+.github/workflows/ingat-validate.yml:5:on:
+.github/workflows/ingat-validate.yml:6:  push:
+.github/workflows/ingat-validate.yml:7:    branches: [main]
+.github/workflows/ingat-validate.yml:8:  pull_request:
+--- every GITHUB_SHA use in image.yml
+40:          if docker buildx imagetools inspect --raw "$IMAGE:$GITHUB_SHA" > "$RUNNER_TEMP/manifest.json" 2> "$RUNNER_TEMP/inspect.err"; then
+41:            echo "$IMAGE:$GITHUB_SHA is already published: it is not rebuilt or moved"
+45:              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+47:              --tag "$IMAGE:$GITHUB_SHA" --push .
+48:            docker buildx imagetools inspect --raw "$IMAGE:$GITHUB_SHA" > "$RUNNER_TEMP/manifest.json"
+56:          want="linux/amd64 10001:10001 $GITHUB_SHA $version"
+61:            echo "- Tag: \`$IMAGE:$GITHUB_SHA\`"
+--- every 'every commit' / 'every push' / 'each push' / 'tip commit' phrase in the nine files (case-insensitive)
+.github/workflows/image.yml:1:# Builds the application image for linux/amd64 for the tip commit of each push to main and publishes it to GHCR, tagged by the full
+docs/07_DEPLOYMENT_AND_OPERATIONS.md:9:Ingat, the owner's deployment tool, installs and updates the app from the `ingat.toml` at the repository root; `.github/workflows/ingat-validate.yml` checks it on every push to `main` and every pull request with a digest-pinned Ingat image. `.github/workflows/image.yml` builds the image for linux/amd64 for the tip commit of each push to `main` and publishes `ghcr.io/cdsemi/timesheet:<commit>` with the OCI version, revision and source labels; Ingat accepts the pulled image only when its revision label equals the commit. Nothing here has run on the NAS, and neither workflow has run on GitHub yet (ADR 0002). The Compose example and the build-from-export path stay valid.
+docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md:9:Ingat, công cụ triển khai của chủ dự án, cài và cập nhật app từ `ingat.toml` ở thư mục gốc kho; `.github/workflows/ingat-validate.yml` kiểm file này ở mỗi lần push lên `main` và mỗi pull request bằng image Ingat được ghim theo digest. `.github/workflows/image.yml` build image cho linux/amd64 cho commit đầu mút của mỗi lần push lên `main` và đăng `ghcr.io/cdsemi/timesheet:<commit>` kèm nhãn OCI version, revision và source; Ingat chỉ nhận image đã kéo về khi nhãn revision bằng commit. Chưa có gì ở đây chạy trên NAS, và cả hai workflow chưa chạy trên GitHub (ADR 0002). Ví dụ Compose và đường build từ bản export vẫn dùng được.
+docs/adr/0002-ingat-manifest-and-ghcr-image.md:24:- Add `.github/workflows/ingat-validate.yml`: on every push to `main` and every pull request, run `ingat validate` with
+docs/adr/0002-ingat-manifest-and-ghcr-image.md:28:- Add `.github/workflows/image.yml`: on every push to `main`, build the image for `linux/amd64` and publish
+docs/adr/0002-ingat-manifest-and-ghcr-image.md:61:- The tip commit of each push to `main` adds a GHCR package version; a retention job is a later decision. A commit pushed
+docs/adr/0002-ingat-manifest-and-ghcr-image.md:63:  first release this repository pushes after every commit (docs/08).
+docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md:23:- Thêm `.github/workflows/ingat-validate.yml`: ở mỗi lần push lên `main` và mỗi pull request, chạy `ingat validate` bằng image
+docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md:27:- Thêm `.github/workflows/image.yml`: ở mỗi lần push lên `main`, build image cho `linux/amd64` và đăng
+docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md:59:- Commit đầu mút của mỗi lần push lên `main` thêm một phiên bản package GHCR; job dọn dẹp là quyết định về sau. Commit được
+docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md:61:  bản phát hành đầu tiên, kho này push sau mỗi commit (docs/08).
+--- docs/08 push rule
+docs/08_AI_WORKFLOW_AND_BUDGET.md:72:- Before the first release, commit directly to `main` and push after every commit. After the owner records the first release (board `git.release_declared` true), work on `fix/<task>-<slug>` or `feat/<task>-<slug>` branches with pull requests; the owner merges unless delegated. Agents create no tags or releases.
+--- curl GitHub docs: events that trigger workflows
+http 200
+curl exit 0
+--- the push event's GITHUB_SHA cell (grep -o)
+dy> push Not applicable Tip commit pushed to the ref. When you delete a branch, the SHA in t
+03ccode\u003epush\u003c/code\u003e\u003c/a\u003e\u003c/td\u003e\u003ctd\u003eNot applicable\u003c/td\u003e\u003ctd\u003eTip commit pushed to the ref. When you delete a branch, the SHA in t
+"text","value":"Not applicable"}]},{"type":"element","tagName":"td","properties":{},"children":[{"type":"text","value":"Tip commit pushed to the ref. When you delete a branch, the SHA in t
+--- curl GitHub docs: skipping workflow runs
+http 200
+curl exit 0
+skip-instruction hits: 6 (first one, tags stripped):
+ [skip ci] 
+--- commits in this repository whose message carries a skip instruction (git log --all -i --grep)
+git log exit 0; matching commits: 0
+--- commits on HEAD's history: 180

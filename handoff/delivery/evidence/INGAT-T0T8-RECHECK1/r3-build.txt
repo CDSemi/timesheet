@@ -1,0 +1,33 @@
+date 2026-10-22T23:21:23Z
+$ docker build --platform linux/amd64 --provenance=false --sbom=false --label org.opencontainers.image.version=0.1.0 --label org.opencontainers.image.revision=2bce0ab5842b80c710f23496d5173c122319e5c7 --tag ingat-t0t8-recheck1:local .
+build exit 0 (full log in the task folder: tmp/build-log.txt)
+$ docker image inspect --format '{{json .Config.Entrypoint}} {{json .Config.Cmd}} {{.Config.User}} {{.Os}}/{{.Architecture}}' ingat-t0t8-recheck1:local
+["docker-entrypoint.sh"] ["node","dist/server/index.js"] 10001:10001 linux/amd64
+inspect exit 0
+$ docker image inspect --format '{{json .Config.Env}}' ingat-t0t8-recheck1:local
+["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","NODE_VERSION=24.21.0","YARN_VERSION=1.22.22","NPM_CONFIG_UPDATE_NOTIFIER=false","NODE_ENV=production","OUTBOUND_MODE=capture","HOST=0.0.0.0","PORT=3000","DATABASE_PATH=/data/timesheet.db","DATA_DIR=/data/private-data"]
+inspect exit 0
+$ docker image inspect --format '{{json .Config.Entrypoint}}' node@sha256:8ec5d755... (the pinned base)
+["docker-entrypoint.sh"] ["node"]
+inspect exit 0
+$ docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint cat ingat-t0t8-recheck1:local /usr/local/bin/docker-entrypoint.sh
+#!/bin/sh
+set -e
+
+# Run command with node if the first argument contains a "-" or is not a system command. The last
+# part inside the "{}" is a workaround for the following bug in ash/dash:
+# https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=874264
+if [ "${1#-}" != "${1}" ] || [ -z "$(command -v "${1}")" ] || { [ -f "${1}" ] && ! [ -x "${1}" ]; }; then
+  set -- node "$@"
+fi
+
+exec "$@"
+run exit 0
+$ docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges ingat-t0t8-recheck1:local node -e 'console.log(JSON.stringify(process.argv.slice(1)))' a b
+["a","b"]
+run exit 0
+$ docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges ingat-t0t8-recheck1:local -e 'console.log("node was prepended")'  (contrast: a first argument that is not a program)
+node was prepended
+run exit 0
+$ docker ps -a --filter ancestor=ingat-t0t8-recheck1:local --format '{{.Names}}'  (own containers left: none expected)
+ps exit 0

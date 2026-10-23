@@ -1,0 +1,27 @@
+#!/bin/bash
+# Copy byte copies of the audited snapshot files (AUDIT scratch-pass1 = the first auditor's privacy scratch
+# repository of the audited snapshot) into old/, then verify them against the IMPL list.
+SRC="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT/scratch-pass1"
+DST="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old"
+OUT="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/copy-old.txt"
+LIST="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0/handoff/delivery/evidence/INGAT-T0T8-IMPL/snapshot-sha256.txt"
+mkdir -p "$DST/.github/workflows" "$DST/docs/adr" "$DST/f3"
+{
+  for f in .github/workflows/image.yml .github/workflows/ingat-validate.yml docs/07_DEPLOYMENT_AND_OPERATIONS.md docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md docs/11_OPERATIONS_RUNBOOK.md docs/11_OPERATIONS_RUNBOOK.vi.md docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md ingat.toml; do
+    cp "$SRC/$f" "$DST/$f"
+  done
+  cd "$DST" || exit 3
+  echo "--- sha256sum -c IMPL list against old/ copies"
+  sha256sum -c "$LIST"
+  echo "sha256sum -c exit $?"
+  echo "--- PLAN spares equal to the old copies"
+  cmp "$DST/ingat.toml" "D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0/handoff/delivery/evidence/INGAT-T0T8-PLAN/proposed-ingat.toml.txt"; echo "cmp toml exit $?"
+  cmp "$DST/.github/workflows/image.yml" "D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0/handoff/delivery/evidence/INGAT-T0T8-PLAN/proposed-image.yml.txt"; echo "cmp image exit $?"
+  echo "--- F3 originals as the first audit saw them (pass1 scratch), hashes only"
+  for f in handoff/delivery/evidence/INGAT-T0T8-GATE/cleanup.txt handoff/delivery/evidence/INGAT-T0T8-GATE/g5.txt.txt handoff/delivery/evidence/INGAT-T0T8-IMPL/g5.txt handoff/delivery/evidence/INGAT-T0T8-IMPL/ps.txt; do
+    b="$(echo "$f" | tr '/' '_')"
+    cp "$SRC/$f" "$DST/f3/$b"
+    sha256sum "$DST/f3/$b"
+  done
+} > "$OUT" 2>&1
+echo done

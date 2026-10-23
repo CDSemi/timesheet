@@ -1,0 +1,80 @@
+=================== .github/workflows/image.yml
+diff --git a/D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old/.github/workflows/image.yml b/.github/workflows/image.yml
+index 9695442..21569f8 100644
+--- a/D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old/.github/workflows/image.yml
++++ b/.github/workflows/image.yml
+@@ -1 +1 @@
+-# Builds the application image for linux/amd64 on every commit to main and publishes it to GHCR, tagged by the full
++# Builds the application image for linux/amd64 for the tip commit of each push to main and publishes it to GHCR, tagged by the full
+diff exit 1
+=================== docs/07_DEPLOYMENT_AND_OPERATIONS.md
+diff --git a/D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old/docs/07_DEPLOYMENT_AND_OPERATIONS.md b/docs/07_DEPLOYMENT_AND_OPERATIONS.md
+index fd1b9cd..b5197de 100644
+--- a/D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old/docs/07_DEPLOYMENT_AND_OPERATIONS.md
++++ b/docs/07_DEPLOYMENT_AND_OPERATIONS.md
+@@ -9 +9 @@ Verify actual NAS CPU architecture and Docker/Container Manager support; do not
+-Ingat, the owner's deployment tool, installs and updates the app from the `ingat.toml` at the repository root; `.github/workflows/ingat-validate.yml` checks it on every push with a digest-pinned Ingat image. `.github/workflows/image.yml` builds the image for linux/amd64 on every commit to `main` and publishes `ghcr.io/cdsemi/timesheet:<commit>` with the OCI version, revision and source labels; Ingat accepts the pulled image only when its revision label equals the commit. Nothing here has run on the NAS, and neither workflow has run on GitHub yet (ADR 0002). The Compose example and the build-from-export path stay valid.
++Ingat, the owner's deployment tool, installs and updates the app from the `ingat.toml` at the repository root; `.github/workflows/ingat-validate.yml` checks it on every push to `main` and every pull request with a digest-pinned Ingat image. `.github/workflows/image.yml` builds the image for linux/amd64 for the tip commit of each push to `main` and publishes `ghcr.io/cdsemi/timesheet:<commit>` with the OCI version, revision and source labels; Ingat accepts the pulled image only when its revision label equals the commit. Nothing here has run on the NAS, and neither workflow has run on GitHub yet (ADR 0002). The Compose example and the build-from-export path stay valid.
+diff exit 1
+=================== docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md
+diff --git a/D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old/docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md b/docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md
+index fb9c892..02b585b 100644
+--- a/D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old/docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md
++++ b/docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md
+@@ -9 +9 @@ Kiểm CPU NAS thật và khả năng Docker/Container Manager; không giả đ
+-Ingat, công cụ triển khai của chủ dự án, cài và cập nhật app từ `ingat.toml` ở thư mục gốc kho; `.github/workflows/ingat-validate.yml` kiểm file này ở mỗi lần push bằng image Ingat được ghim theo digest. `.github/workflows/image.yml` build image cho linux/amd64 ở mỗi commit lên `main` và đăng `ghcr.io/cdsemi/timesheet:<commit>` kèm nhãn OCI version, revision và source; Ingat chỉ nhận image đã kéo về khi nhãn revision bằng commit. Chưa có gì ở đây chạy trên NAS, và cả hai workflow chưa chạy trên GitHub (ADR 0002). Ví dụ Compose và đường build từ bản export vẫn dùng được.
++Ingat, công cụ triển khai của chủ dự án, cài và cập nhật app từ `ingat.toml` ở thư mục gốc kho; `.github/workflows/ingat-validate.yml` kiểm file này ở mỗi lần push lên `main` và mỗi pull request bằng image Ingat được ghim theo digest. `.github/workflows/image.yml` build image cho linux/amd64 cho commit đầu mút của mỗi lần push lên `main` và đăng `ghcr.io/cdsemi/timesheet:<commit>` kèm nhãn OCI version, revision và source; Ingat chỉ nhận image đã kéo về khi nhãn revision bằng commit. Chưa có gì ở đây chạy trên NAS, và cả hai workflow chưa chạy trên GitHub (ADR 0002). Ví dụ Compose và đường build từ bản export vẫn dùng được.
+diff exit 1
+=================== docs/adr/0002-ingat-manifest-and-ghcr-image.md
+diff --git a/D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old/docs/adr/0002-ingat-manifest-and-ghcr-image.md b/docs/adr/0002-ingat-manifest-and-ghcr-image.md
+index c5d3260..074b3e6 100644
+--- a/D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old/docs/adr/0002-ingat-manifest-and-ghcr-image.md
++++ b/docs/adr/0002-ingat-manifest-and-ghcr-image.md
+@@ -44,3 +44,5 @@ Status: proposed (side track "Ingat deployability", items T0 and T8; nothing has
+-- Ingat 0.1.x cannot run `log_snapshot`, non-empty deploy prechecks, postchecks or baseline, or a subnet param. The
+-  manifest omits them. `ingat validate` does not detect them, so CI cannot protect against that class of error; revisit when the
+-  pinned Ingat image changes. A fixed-subnet Compose file is a later Ingat item, and
++- Ingat 0.1.x cannot run `log_snapshot`, non-empty deploy prechecks, postchecks or baseline, or a subnet param left to
++  allocation. The manifest omits them. `ingat validate` does not detect them, so CI cannot protect against that class of
++  error; revisit when the pinned Ingat image changes. `ingat validate` also checks the Compose policy with CPU CFS assumed
++  present, so a later non-zero `cpus` would pass CI although the target host refuses it; any CPU limit must stay an
++  optional param that sends nothing when unset. A fixed-subnet Compose file is a later Ingat item, and
+@@ -59 +61,3 @@ Status: proposed (side track "Ingat deployability", items T0 and T8; nothing has
+-- Every `main` commit adds a GHCR package version; a retention job is a later decision.
++- The tip commit of each push to `main` adds a GHCR package version; a retention job is a later decision. A commit pushed
++  together with later commits gets no image, so Ingat can deploy only a commit that was the tip of a push; before the
++  first release this repository pushes after every commit (docs/08).
+diff exit 1
+=================== docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md
+diff --git a/D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old/docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md b/docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md
+index b69cdb3..15c8df4 100644
+--- a/D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old/docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md
++++ b/docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md
+@@ -43,2 +43,4 @@ Bản tiếng Anh là bản chuẩn. Trạng thái: đề xuất (nhánh phụ "
+-  subnet. Manifest bỏ các mục đó. `ingat validate` không phát hiện chúng, nên CI không bảo vệ được loại lỗi này; xem lại khi
+-  image Ingat được ghim đổi. File Compose có subnet cố định là một mục Ingat về sau, và đến lúc đó
++  subnet để mặc cho cấp phát. Manifest bỏ các mục đó. `ingat validate` không phát hiện chúng, nên CI không bảo vệ được loại
++  lỗi này; xem lại khi image Ingat được ghim đổi. `ingat validate` cũng kiểm chính sách Compose với giả định CPU CFS có sẵn,
++  nên một `cpus` khác 0 thêm về sau vẫn qua CI dù máy đích từ chối nó; mọi giới hạn CPU phải giữ là tham số tùy chọn không
++  gửi gì khi chưa đặt. File Compose có subnet cố định là một mục Ingat về sau, và đến lúc đó
+@@ -57 +59,3 @@ Bản tiếng Anh là bản chuẩn. Trạng thái: đề xuất (nhánh phụ "
+-- Mỗi commit `main` thêm một phiên bản package GHCR; job dọn dẹp là quyết định về sau.
++- Commit đầu mút của mỗi lần push lên `main` thêm một phiên bản package GHCR; job dọn dẹp là quyết định về sau. Commit được
++  push cùng các commit sau nó không có image, nên Ingat chỉ triển khai được commit từng là đầu mút của một lần push; trước
++  bản phát hành đầu tiên, kho này push sau mỗi commit (docs/08).
+diff exit 1
+=================== ingat.toml
+diff --git a/D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old/ingat.toml b/ingat.toml
+index 9fcfb56..6f997ec 100644
+--- a/D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/old/ingat.toml
++++ b/ingat.toml
+@@ -29 +29,2 @@ param = "TIMESHEET_ENV_FILE"
+-# Fixed by the image (Dockerfile ENV block), or read only by development commands that never run in production.
++# Fixed by the image (Dockerfile ENV block), the static-root override STATIC_DIR (read by the production server), or
++# development-only seed passwords that never run in production.
+@@ -138,2 +139,2 @@ restore_notice = "Outbound delivery is paused (reason: restored) and queued send
+-# The image has no ENTRYPOINT, so a task argv replaces the service command and starts with the program.
+-# The exit map of each task follows its command in src/server/cli.ts (documented in docs/11_OPERATIONS_RUNBOOK.md).
++# The image keeps the Node base image's docker-entrypoint.sh, which runs a task argv that starts with a program unchanged.
++# The exit map of each task follows its command in src/server/cli.ts (the header documents all commands; docs/11_OPERATIONS_RUNBOOK.md documents backup, restore and outbound).
+diff exit 1

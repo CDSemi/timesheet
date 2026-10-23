@@ -1,0 +1,15 @@
+#!/bin/bash
+# Find byte copies of the audited (IMPL-list) files in earlier task folders, by SHA-256.
+OUT="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/find-old.txt"
+LIST="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0/handoff/delivery/evidence/INGAT-T0T8-IMPL/snapshot-sha256.txt"
+{
+  for d in "D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT" "D:/.claude-tmp/timesheet/INGAT-T0T8-GATE" "D:/.claude-tmp/timesheet/INGAT-T0T8-IMPL" "D:/.claude-tmp/timesheet/INGAT-T0T8-FIX1" "D:/.claude-tmp/timesheet/INGAT-T0T8-REGATE1"; do
+    find "$d" -type f \( -name '*.md' -o -name '*.yml' -o -name '*.toml' -o -name '*.orig' -o -name '*.txt' \) -not -path '*/.git/*' -print0 | xargs -0 sha256sum
+  done > "D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/tmp/all-hashes.txt"
+  while read -r h p; do
+    p="${p#\*}"
+    echo "== $p ($h)"
+    grep "^$h " "D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1/tmp/all-hashes.txt"
+  done < "$LIST"
+} > "$OUT" 2>&1
+echo done

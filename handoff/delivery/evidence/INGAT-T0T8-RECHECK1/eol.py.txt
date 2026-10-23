@@ -1,0 +1,11 @@
+"""Count CR bytes, LF bytes and the final byte of each file given (binary read).
+
+Usage: python -I eol.py <file>...
+"""
+import sys
+from pathlib import Path
+
+for name in sys.argv[1:]:
+    data = Path(name).read_bytes()
+    print(f"{name}: bytes {len(data)}, CR {data.count(b'\r')}, LF {data.count(b'\n')}, CRLF {data.count(b'\r\n')}, "
+          f"final {data[-1:].hex()}, BOM {data.startswith(b'\xef\xbb\xbf')}")

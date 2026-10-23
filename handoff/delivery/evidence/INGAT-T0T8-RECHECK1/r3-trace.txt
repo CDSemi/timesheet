@@ -1,0 +1,104 @@
+date 2026-10-22T23:25:37Z
+Ingat checkout: v0.1.0-16-g35be585 (35be58551345310a6bbeb516545faf8bcd3e553e)
+
+=== F1 ingat.toml:139 (entrypoint)
+# The image keeps the Node base image's docker-entrypoint.sh, which runs a task argv that starts with a program unchanged.
+--- Dockerfile: no ENTRYPOINT line; CMD
+58:CMD ["node", "dist/server/index.js"]
+--- MANIFEST_SPEC run mode
+152:| `mode` | `"run"` \| `"exec"` | `run`: `compose run --rm --no-deps -T --name <instance>-x<seq>-<step>-a<attempt>` with op labels (no `-T` for `stdin = "terminal"`); `argv` replaces the service command (the entrypoint stays). `exec`: inside the running ser
+--- adapters/compose.py run argv placement
+        opts = ["--rm", "--no-deps", *([] if tty else ["-T"]), "--name", name, *pairs("--label", labels)]
+        opts += [*(x for v in volumes for x in ("-v", v)), *(["-u", user] if user else []), *pairs("-e", env or {})]
+        return self._run(p, "run", *opts, service, *argv, timeout=timeout, stdin=stdin, stdout=stdout, tick=tick)
+--- no entrypoint override in compose.example.yaml or Ingat src: grep -c
+compose.example.yaml: 0
+Ingat src/: 0 files
+
+=== F1 ingat.toml:29-32 (forbidden keys)
+# Fixed by the image (Dockerfile ENV block), the static-root override STATIC_DIR (read by the production server), or
+# development-only seed passwords that never run in production.
+forbidden = ["NODE_ENV", "HOST", "PORT", "DATABASE_PATH", "DATA_DIR", "STATIC_DIR",
+             "SEED_ADMIN_PASSWORD", "SEED_EMPLOYEE_PASSWORD", "SEED_EMPLOYEE2_PASSWORD"]
+--- Dockerfile ENV block
+ENV NODE_ENV=production \
+    OUTBOUND_MODE=capture \
+    HOST=0.0.0.0 \
+    PORT=3000 \
+    DATABASE_PATH=/data/timesheet.db \
+    DATA_DIR=/data/private-data
+--- STATIC_DIR reader (production server)
+17:  if (process.env.STATIC_DIR !== undefined) return process.env.STATIC_DIR;
+--- SEED_* readers in src/ and the production refusal
+src/server/cli.ts:449:            admin: process.env.SEED_ADMIN_PASSWORD,
+src/server/cli.ts:450:            employee: process.env.SEED_EMPLOYEE_PASSWORD,
+src/server/cli.ts:451:            employee2: process.env.SEED_EMPLOYEE2_PASSWORD,
+443:        if (config.production) throw new Error('Refusing to seed synthetic data when NODE_ENV=production');
+
+=== R7 ingat.toml:140 (exit maps)
+# The exit map of each task follows its command in src/server/cli.ts (the header documents all commands; docs/11_OPERATIONS_RUNBOOK.md documents backup, restore and outbound).
+--- cli.ts header: command lines (28-61)
+3: *   migrate  apply pending versioned migrations to DATABASE_PATH
+4: *   seed     migrate, then create synthetic example.invalid data (never in production)
+5: *   run-jobs --once --now <UTC instant>
+8: *   bootstrap --config <file>
+11: *   bootstrap --new-token
+13: *   backup --to <dir> [--prune]
+18: *   backup prune --in <dir> --dry-run
+20: *   restore --from <backup folder> --to <empty directory>
+24: *   restore --from <backup folder> --to <empty directory> --keep-schema [--confirm]
+28: *   outbound resume [--confirm]
+31: *   outbound release [--all | --job <id>] [--confirm]   /   outbound drop --job <id> [--confirm]
+--- cli.ts header lines that state an exit code
+27: *            (exit 2) without --confirm, and with it the backed-up send jobs are held and a warning is printed
+29: *            without --confirm: print what a resume would release and exit 2; with --confirm: clear the outbound pause
+30: *            of DATABASE_PATH when no delivery attempt awaits its decision (audited system event), otherwise exit 1
+32: *            the send jobs a restore holds: without --confirm list them with counts (exit 2); with --confirm release
+33: *            one or every releasable job back to the queue, or drop one held reminder (audited; refused: exit 1)
+--- docs/11 exit statements
+109:1. A backup is consistent while the server keeps writing: it uses SQLite's online backup, copies the private files the copy refers to, checks each hash, and
+126:- **Backups (F-5).** `--prune` keeps the newest backup of each of the last 7 UTC days, of the last 4 ISO weeks and of the last 6 UTC months, and always the 
+138:Restore into a new empty folder, never over the live data. The tool refuses a target inside the live `DATA_DIR` or one that holds the live database. It veri
+164:1. List what is held. Without `--confirm` the command only prints job ids, kinds, attempts and blockers, and exits 2. **[Drill stage 3]**
+171:3. Preview the resume, then clear the pause. With `--confirm` it succeeds only when no attempt awaits a decision (exit 1 otherwise). **[Drill stage 3]**
+211:2. Restore the paired pre-upgrade backup with the new build's tool and `--keep-schema`, which does not migrate. A backup whose schema predates the outbound 
+
+=== F2 / ADR Consequences sentence
+- The tip commit of each push to `main` adds a GHCR package version; a retention job is a later decision. A commit pushed
+  together with later commits gets no image, so Ingat can deploy only a commit that was the tip of a push; before the
+  first release this repository pushes after every commit (docs/08).
+72:- Before the first release, commit directly to `main` and push after every commit. After the owner records the first 
+
+=== R1 ADR facts
+  error; revisit when the pinned Ingat image changes. `ingat validate` also checks the Compose policy with CPU CFS assumed
+  present, so a later non-zero `cpus` would pass CI although the target host refuses it; any CPU limit must stay an
+  optional param that sends nothing when unset. A fixed-subnet Compose file is a later Ingat item, and
+--- ops/validate.py:66 (cpu_cfs argument = True)
+        errs += [f"{project}: {e}" for e in cx.policy_errors(m, model, spec, env, repo, True, isolated)]
+409:def policy_errors(
+410-    m: Manifest, model: Any, spec: Any, env: Mapping[str, str], export: str, cpu_cfs: bool, isolated: bool = False
+411-) -> list[str]:
+412-    """The Compose policy (ARCHITECTURE §9.5) over a model rendered with the override `spec`; `isolated` for the
+--- policy/compose_policy.py:130-135
+    if not ctx.cpu_cfs:  # Compose drops a zero `cpus` from the model, so any value here is a real limit
+        for key in CPU_KEYS:
+            if (value := _dig(svc, key)) and float(value) != 0:
+                param = ctx.cpus_params.get(f"{name}/{key}")
+                hint = f"; set param {param} to 0" if param else ""
+                out.append(f"{at}.{key}: CPU limit {value} needs CPU CFS quota support, which this host lacks{hint}")
+--- the target host: ADR context and Ingat's host file
+- The target host (the NAS) runs a Linux 4.4 kernel with no CPU CFS quota. `compose.example.yaml` sets no `cpus` or memory
+  limit, so nothing in the manifest sends a non-zero `cpus` there.
+116:      "cpu_cfs_quota": false,
+117:      "cpu_cfs_period": false,
+--- ARCHITECTURE.md: cpus only as params that default to no limit
+599:`cpus` limits only as params that default to no limit (hosts without CPU CFS refuse a non-zero one)
+
+=== R6 ADR facts
+- Ingat 0.1.x cannot run `log_snapshot`, non-empty deploy prechecks, postchecks or baseline, or a subnet param left to
+  allocation. The manifest omits them. `ingat validate` does not detect them, so CI cannot protect against that class of
+    out = {k: inst.params.get(k, "") for k, p in m.params.items() if p.kind == "subnet"}
+    if unset := [k for k, v in out.items() if not v]:
+        raise Refused(f"params.{unset[0]}: set the live subnet in instance.toml", code="not-in-this-release")
+        if p.kind == "subnet" and k not in given:
+            raise Refused(f"params.{k}: set the live subnet in instance.toml", code="not-in-this-release")

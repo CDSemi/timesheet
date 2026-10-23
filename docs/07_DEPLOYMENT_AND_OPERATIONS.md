@@ -6,6 +6,8 @@ Synology reverse proxy → one app container → host-local persistent /data. SM
 
 Verify actual NAS CPU architecture and Docker/Container Manager support; do not assume every NAS supports containers. Test native SQLite dependency and fonts on the selected target. WP4 supplies a pinned multi-stage Dockerfile, Compose example, secret-free .env.example, migrations, expiring one-time admin bootstrap, synthetic seed, health, backup/restore scripts and bilingual runbook.
 
+Ingat, the owner's deployment tool, installs and updates the app from the `ingat.toml` at the repository root; `.github/workflows/ingat-validate.yml` checks it on every push to `main` and every pull request with a digest-pinned Ingat image. `.github/workflows/image.yml` builds the image for linux/amd64 for the tip commit of each push to `main` and publishes `ghcr.io/cdsemi/timesheet:<commit>` with the OCI version, revision and source labels; Ingat accepts the pulled image only when its revision label equals the commit. Nothing here has run on the NAS, and neither workflow has run on GitHub yet (ADR 0002). The Compose example and the build-from-export path stay valid.
+
 Run non-root. Persist DB, PDFs, signatures and evidence privately. Keep the workbook, developer files and secrets out of the image. Configure public HTTPS URL, trusted proxy, data path, reporting zone, outbound mode and SMTP TLS/credentials. There is no application session secret; SMTP credentials only. Per-user recipients/templates belong in user settings, not one shared environment recipient.
 
 Use protected host secret/env files; never put credentials in git, chat, screenshots or logs. Use HTTPS, secure cookies, restricted internal access and host time synchronization.

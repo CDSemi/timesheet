@@ -1,0 +1,35 @@
+#!/bin/bash
+# Finish: copy the pass-2 outputs, clean up this task's image and its private intermediate files, normalize the
+# evidence to LF, and list what of this task is left in Docker (nothing expected).
+export MSYS_NO_PATHCONV=1
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1"
+export TEMP="$T/tmp" TMP="$T/tmp"
+PY="$(cygpath -u "$USERPROFILE")/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe"
+E="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0/handoff/delivery/evidence/INGAT-T0T8-RECHECK1"
+{
+  echo "date $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  for f in r6-privacy-pass2.txt r6-scan-pass2.txt r6-draftscan-pass2.txt r7-docs-pass2.txt r7-own-files.txt; do
+    cp "$T/$f" "$E/$f" && echo "copied $f"
+  done
+  cp "$T/finish.sh" "$E/finish.sh.txt"; cp "$T/lf.py" "$E/lf.py.txt"
+  echo "--- this task's image and containers"
+  docker ps -a --filter "ancestor=ingat-t0t8-recheck1:local" --format '{{.Names}}'
+  echo "ps exit $?"
+  docker image rm ingat-t0t8-recheck1:local
+  echo "image rm exit $?"
+  docker image ls --filter "reference=ingat-t0t8-recheck1*" --format '{{.Repository}}:{{.Tag}}'
+  echo "image ls exit $? (no lines = removed)"
+  echo "--- buildx builders of this task: none created (default builder only)"
+  echo "--- private intermediate files removed from the task folder (per file)"
+  for f in "$T/old/f3/handoff_delivery_evidence_INGAT-T0T8-GATE_cleanup.txt" "$T/old/f3/handoff_delivery_evidence_INGAT-T0T8-GATE_g5.txt.txt" \
+           "$T/old/f3/handoff_delivery_evidence_INGAT-T0T8-IMPL_g5.txt" "$T/old/f3/handoff_delivery_evidence_INGAT-T0T8-IMPL_ps.txt" \
+           "$T/tmp/r6-detail-pass1.txt" "$T/tmp/r6-detail-pass2.txt" "$T/tmp/r6-draftscan-detail-pass1.txt" "$T/tmp/r6-draftscan-detail-pass2.txt" \
+           "$T/tmp/ps-shape.txt"; do
+    rm -f "$f" && echo "removed $(basename "$f")"
+  done
+  echo "--- LF normalization of the evidence folder"
+  "$PY" -I "$T/lf.py" "$E"/*.txt
+  echo "lf exit $?"
+} > "$T/finish.txt" 2>&1
+cp "$T/finish.txt" "$E/finish.txt"
+echo done

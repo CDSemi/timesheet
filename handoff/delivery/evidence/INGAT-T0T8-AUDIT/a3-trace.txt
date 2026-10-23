@@ -1,0 +1,63 @@
+A3 trace of every ingat.toml element to this repository's code (HEAD 2bce0ab) and to Ingat 0.1.0 (source read at the
+Ingat checkout HEAD 35be585; `git diff --stat v0.1.0 HEAD -- src/` changes only a docstring in model/words.py, so the
+source equals the pinned image's). OK = matches; NOTE = matches, with a remark; F = finding (see the review).
+
+Manifest element | This repository | Ingat 0.1.0 | Verdict
+manifest/app/requires_ingat | - | model/manifest.py:315-319, 350-352; validate exit 0 | OK
+[source] git, release=commit | no tag (docs/10 D-14: release_declared false) | ops/context.py:154-158 ({release}={commit}) | OK
+[compose] files = compose.example.yaml | compose.example.yaml:13-38, build: . at :14 | adapters/override.py:73-74 resets build; :70 pull_policy never | OK
+build_services, expect_labels revision={commit} | image.yml:45 sets the label to GITHUB_SHA | model/manifest.py:356-357; core/steps.py:295-302 | OK (a5, a4-g9)
+TIMESHEET_IMAGE template ghcr.io/cdsemi/timesheet:{commit} | compose :15 ${TIMESHEET_IMAGE:-timesheet:local}; image.yml:22,47 | ops/deploy.py:61-69 (pull by the rendered reference) | OK
+TIMESHEET_ENV_FILE env_file | compose :19-20 | ops/context.py:243, 322-352 | OK
+TIMESHEET_DATA_DIR store data | compose :23 bind to /data | ops/context.py:248-249; model_errors :399-401 | OK
+TIMESHEET_PORT port | compose :27 127.0.0.1:${TIMESHEET_PORT:-3000}:3000 | policy/compose_policy.py:122-125 | OK (a2 N2 refusal)
+no cpus / memory key | compose has none | compose_policy.py:130-135 (target host: cpu_cfs false) | OK; CI blind spot R1
+[app_env] forbidden | Dockerfile:34-39 (NODE_ENV HOST PORT DATABASE_PATH DATA_DIR); index.ts:17 STATIC_DIR; cli.ts:449-451 SEED_* | instance.py:216-219 | OK; comment for STATIC_DIR inexact (F1)
+APP_ORIGINS required + pattern | config.ts:39-48, 53-58 | instance.py:229-237 | OK (stricter: no spaces after commas)
+PUBLIC_BASE_URL required + https pattern | config.ts:123-141 (https in production) | | OK
+MAIL_FROM required | config.ts:146-152 (optional to start); mail/message.ts:104, services/notifications.ts:431 (sender_missing) | | NOTE: deliberate, documented
+TRUSTED_PROXY_ADDRESSES optional, IP-list pattern | config.ts:72; http/clientAddress.ts:46-56 | | OK (M1: set after the first install)
+COOKIE_SECURE true/false | config.ts:69 | | OK
+SESSION_TTL_HOURS ^[1-9][0-9]{0,3}$ | config.ts:62-63 (positive) | | OK (stricter)
+OUTBOUND_MODE default capture, capture|smtp, owner_gated | config.ts:180-183; Dockerfile:35 | ops/deploy.py:471-480 (a change is class D, refused in 0.1.x) | OK
+PRODUCTION_SENDING_ENABLED true, owner_gated | config.ts:184-186 | | OK
+SMTP_HOST/PORT/SECURITY | config.ts:154-166 (same regexes and values) | | OK
+SMTP_USER/SMTP_PASSWORD secret | config.ts:167-171 (env only, no *_FILE) | ops/context.py:330-349 (secrets/env/<KEY>, dropped in isolation) | NOTE: env-file secret, ADR states the *_FILE gap
+JOB_RUNNER off, tool_managed | index.ts:44-47 (only "off" disables) | instance.py:227-228 | OK
+[stores.data] bind, 10001:10001, 0700, local_only, online_backup | Dockerfile:41-43, 49; ops/backup.ts:229-235 (better-sqlite3 online backup) | ops/deploy.py:268-273 CreateGeneration owner/mode | OK
+[services] writers = timesheet | index.ts:29-47 (server, runner, SQLite in one process) | ops/context.py:390-397 | OK
+[schema] probe ready, schema.expected/actual, migrates_on_start | app.ts:120-129 (JSON paths); index.ts:30 (migrate at start) | ops/deploy.py:35-43, 121-126 | OK (a3: {"schema":{"expected":15,"actual":15}})
+[probes.ready] exec node -e fetch /api/ready, expect status ready + data_dir_writable | app.ts:121-129; Dockerfile:37 PORT fixed; image has node, no wget | model/templates.py:8 (the JS braces match no template variable) | OK (a3: exit 0, JSON)
+[probes.edge-live], [[smoke]] live/ready | app.ts:115-118, 121-129; http/security.ts:5, 12-20 (GET needs no Origin) | spec §5 (http over host loopback) | OK (a3: 200)
+[[activate]] one group, reopens_writes | single service | model/manifest.py:360 | OK
+[[install]] migrate, start+wait, pause + allow_tasks | docs/11 §16.1 item 1 (migrate alone first); cli.ts:110-163 | ops/deploy.py:264-298; core/executor.py:123 (Pause supported) | OK
+pause / restore_notice text | INGAT_ROOT/inbox/, {instance} only | model/templates.py:25 (text context) | OK (generic)
+[deploy] migrate = migrate (no check lists) | cli.ts:437-441 | ops/context.py:203 | OK
+[backup] tasks, steps backup, verify [] | no read-only verify command exists | core/tasks.py:275-285 (exactly one stage entry) | OK (a3: one entry)
+[restore] steps restore, activate, checks [] | ops/restore.ts:239-262, 722-817 (own hash/integrity/schema checks) | ops/backup.py:131-189 (drill = verify --restore-test) | OK (a3)
+[rollback] env JOB_RUNNER=off | cli.ts:321-327 (pre-pause schema warning) | model/manifest.py:393 | OK
+[drill] min_free_memory 512m | unmeasured | ops/backup.py:138-140 | NOTE: guess, documented
+[holds.timesheet] OUTBOUND_MODE capture, JOB_RUNNER off | config.ts:181-182; index.ts:44-47 | adapters/override.py:108 (holds as service env in isolation) | OK (a3: restored copy starts with them)
+[side_effects] outbound, held, clear_hold outbound-resume | ops/restore.ts (pause reason restored) | model/manifest.py:366-367 | OK
+tasks.migrate argv/exit/candidate/operator=false/idempotent | cli.ts:437-441; any throw exits 1 = unknown | model/manifest.py:308-312, 446-449 | OK (a3: 0, re-run 0 applied [])
+tasks.backup argv/mount stage/exit 0,1,2/json/idempotent/operator=false | cli.ts:223-268 (0 ok, 1 failed, 2 refused or usage) | steps_build.py:20-26 (stage owner = image user 10001:10001) | OK (a3: 0, refused 2)
+tasks.restore argv/bundle+generation mounts/exit 0,1,2/image bundle | cli.ts:302-336; restore.ts:742-743 (<to>/timesheet.db, <to>/private-data = /data layout) | core/tasks.py:354-361 (read-only copy 0550/0440) | OK (a3: 0, non-empty 2)
+tasks.bootstrap-config argv/input mount/256 KiB/terminal/exit 0,1,2 | cli.ts:110-118, 165-179 (MAX_CONFIG_BYTES 262144), 134-163 | model/manifest.py:451-452 (terminal only in allow_tasks) | OK (a3: 0, again 1); exit-1 ambiguity R2
+tasks.bootstrap-new-token | cli.ts:116, 151; services/bootstrap.ts:281-282 | | OK (a3: 1 before config, 0 after)
+tasks.outbound-held / -status (preview: exit 2 + expect outcome) | cli.ts:379-396 (preview 2), 371-374 (usage 2, no JSON) | model/manifest.py:459 (expect needs json/record) | OK (a3)
+tasks.outbound-release-job / -release-all / -drop-job / -resume | cli.ts:347-360, 397-421; job ids are UUIDs (jobs/jobStore.ts:175) matching ^[A-Za-z0-9-]{1,64}$ | | OK (a3: 1 unknown id, 0, 1, 0)
+comment "The image has no ENTRYPOINT" (ingat.toml:138) | Dockerfile sets none; the runtime stage inherits node's ["docker-entrypoint.sh"] (a5-build.txt) | spec §4: run keeps the entrypoint | F1
+comment "follows ... cli.ts (documented in docs/11)" (ingat.toml:139) | docs/11 documents backup, restore and outbound exits (:109, :138, :164-171), not migrate or bootstrap | | R7 (partial)
+
+Anything 0.1.0 refuses at init/deploy that validate accepts, checked against this manifest:
+- ops/context.py:197-207 supported(): no image source, data service, log_snapshot, volume store, deploy check list, exec
+  task or file/bundle stream: none used.
+- ops/instance.py:127-133 and ops/context.py:274-275: no subnet param.
+- policy/compose_policy.py:130-135 with the host's CpuCfsQuota false: no cpus key.
+- ops/deploy.py:471-480: owner-gated keys keep their defaults on the first install; a later change to smtp is refused
+  (class D) in 0.1.x, as ADR 0002 and the plan state.
+- ops/steps_build.py:23-25: the image user is numeric (10001:10001).
+- core/executor.py:123: every planned step type (Obtain, CreateGeneration, Up, RunTask, CaptureBundle, VerifyBundle,
+  Record, Pause, Teardown) is runnable.
+- ops/backup.py:138-140: a drill refuses when MemAvailable < 512 MiB (unmeasured guess).
+Nothing else found.

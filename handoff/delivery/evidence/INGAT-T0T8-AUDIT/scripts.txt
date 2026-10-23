@@ -1,0 +1,345 @@
+Scripts the auditor wrote with the Write tool into the task folder and ran with `bash <script>` from Git Bash (each
+redirects its own output to a file in the task folder). identity.sh is in identity.sh.txt. parity.mjs is the logic of
+handoff/delivery/evidence/INGAT-T0T8-IMPL/parity.mjs.txt unchanged (only its header comment differs).
+Probe folders (neg-*, lim-*, inst) hold `cp` copies of ingat.toml and compose.example.yaml, changed with the Edit tool.
+
+==================================================================== a2-validate.sh
+#!/bin/bash
+# A2: ingat validate exactly as .github/workflows/ingat-validate.yml runs it (uid:gid of a GitHub runner), plus probes.
+export MSYS_NO_PATHCONV=1
+export TEMP="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT/tmp"
+export TMP="$TEMP"
+TASK="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+INGAT_IMAGE=ghcr.io/lisahq/ingat@sha256:b5db73bef81f8da0d8efd7e38baa522b38b9b0fcc0a89b0df934b06d3c54badb
+OUT="$TASK/a2-validate.txt"
+run() {  # run <label> <host dir> [extra args...]
+  label=$1; dir=$2; shift 2
+  echo "=== $label"
+  echo "+ docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --user 1001:118 --volume $(cygpath -w "$dir"):/app:ro $INGAT_IMAGE validate /app $*"
+  docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges \
+    --user 1001:118 --volume "$(cygpath -w "$dir"):/app:ro" \
+    "$INGAT_IMAGE" validate /app "$@"
+  echo "exit $?"
+}
+{
+  echo "--- docker version"
+  docker version --format '{{.Server.Version}} {{.Server.Os}}/{{.Server.Arch}}'
+  echo "--- pinned image"
+  docker pull --quiet "$INGAT_IMAGE"
+  echo "pull exit $?"
+  docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}} {{index .Config.Labels "org.opencontainers.image.revision"}} {{json .Config.Entrypoint}}' "$INGAT_IMAGE"
+  run "P0 snapshot worktree (expect 0)" "$REPO"
+  run "N1 forbidden key declared in app_env.keys (expect 1)" "$TASK/neg-forbidden"
+  run "N2 port published on 0.0.0.0 (expect 1)" "$TASK/neg-port"
+  run "N3 readiness probe reads an undeclared param template (expect 1)" "$TASK/neg-template"
+  run "L1 compose sets cpus 0.5 (validate assumes CFS: shows what CI cannot catch)" "$TASK/lim-cpus"
+  run "L2 log_snapshot added (0.1.0 refuses it at init/deploy; shows what CI cannot catch)" "$TASK/lim-logsnap"
+  run "I1 synthetic good instance on an unmodified copy (expect 0)" "$TASK/inst" --instance /app/good.toml
+  run "I2 synthetic bad instance on an unmodified copy (expect 1, one line per error)" "$TASK/inst" --instance /app/bad.toml
+  echo "=== cmp of the unmodified copy against the snapshot"
+  cmp "$TASK/inst/ingat.toml" "$REPO/ingat.toml"; echo "cmp ingat.toml exit $?"
+  cmp "$TASK/inst/compose.example.yaml" "$REPO/compose.example.yaml"; echo "cmp compose exit $?"
+} > "$OUT" 2>&1
+
+==================================================================== a3-tasks.sh
+#!/bin/bash
+# A3b: run every manifest task argv, the readiness probe argv and the live/ready routes against the locally built image
+# (ingat-t0t8-audit:local from a5-build.sh) with the Compose hardening (read-only root, /tmp tmpfs, init, cap_drop ALL,
+# no-new-privileges). Synthetic data in throw-away named volumes; every container --rm; volumes removed at the end.
+export MSYS_NO_PATHCONV=1
+export TEMP="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT/tmp"
+export TMP="$TEMP"
+TASK="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+IMG=ingat-t0t8-audit:local
+OUT="$TASK/a3-tasks.txt"
+APP=ingat-audit-app
+PORT=49831
+HARD="--rm --init --read-only --tmpfs /tmp:size=64m,mode=1777 --cap-drop ALL --security-opt no-new-privileges"
+ENVS="-e APP_ORIGINS=https://timesheet.example.invalid -e PUBLIC_BASE_URL=https://timesheet.example.invalid -e MAIL_FROM=timesheet@example.invalid -e OUTBOUND_MODE=capture"
+CLI="node dist/server/cli.js"
+PROBE="fetch('http://127.0.0.1:3000/api/ready',{signal:AbortSignal.timeout(4000)}).then(async r=>{process.stdout.write(await r.text());process.exit(r.ok?0:1)},()=>process.exit(1))"
+redact() { sed 's/[A-Za-z0-9_-]\{24,\}/<redacted-token>/g'; }
+task() {  # task <label> <volume args> -- <cli args...>
+  label=$1; vols=$2; shift 2
+  echo "=== $label"
+  echo "+ docker run $HARD \$ENVS $vols $IMG $CLI $*"
+  docker run $HARD $ENVS $vols $IMG $CLI "$@" > "$TASK/t.out" 2> "$TASK/t.err"
+  rc=$?
+  echo "stdout:"; redact < "$TASK/t.out"
+  echo "stderr:"; redact < "$TASK/t.err"
+  echo "exit $rc"
+}
+wait_ready() {  # wait_ready <label>
+  echo "=== $1: probes.ready argv via docker exec (retry until exit 0, at most 40 tries)"
+  for i in $(seq 1 40); do
+    docker exec "$APP" node -e "$PROBE" > "$TASK/p.out" 2> "$TASK/p.err"; rc=$?
+    [ "$rc" = 0 ] && break
+    sleep 1
+  done
+  echo "tries $i"; echo "stdout:"; cat "$TASK/p.out"; echo; echo "stderr:"; cat "$TASK/p.err"; echo "exit $rc"
+}
+{
+  echo "--- the probe argv used here equals the manifest's argv[2] (grep -F -c, expect 1)"
+  grep -F -c "$PROBE" "$REPO/ingat.toml"
+  docker volume create ingat-audit-data; docker volume create ingat-audit-stage; docker volume create ingat-audit-gen
+  docker volume create ingat-audit-placeholder
+  echo "--- stage and generation owned by the task user 10001:10001 (Ingat creates them so; root helper simulates it)"
+  docker run --rm --user 0:0 --entrypoint sh -v ingat-audit-stage:/out -v ingat-audit-gen:/restore "$IMG" \
+    -c "chown 10001:10001 /out /restore && chmod 0700 /restore && ls -ldn /out /restore"
+  echo "helper exit $?"
+  task "tasks.migrate (expect 0)" "-v ingat-audit-data:/data" migrate
+  task "tasks.migrate again: idempotent (expect 0, applied [])" "-v ingat-audit-data:/data" migrate
+  task "tasks.bootstrap-new-token before any config (expect 1 = refused)" "-v ingat-audit-data:/data" bootstrap --new-token
+  task "tasks.bootstrap-config (expect 0; token redacted)" "-v ingat-audit-data:/data -v $(cygpath -w "$TASK/input"):/in:ro" bootstrap --config /in/bootstrap.json
+  task "tasks.bootstrap-config again (expect 1 = refused)" "-v ingat-audit-data:/data -v $(cygpath -w "$TASK/input"):/in:ro" bootstrap --config /in/bootstrap.json
+  task "tasks.bootstrap-new-token (expect 0; token redacted)" "-v ingat-audit-data:/data" bootstrap --new-token
+  echo "=== start the service as Compose would (detached, loopback port)"
+  docker run -d --name "$APP" $HARD $ENVS -p "127.0.0.1:$PORT:3000" -v ingat-audit-data:/data "$IMG"
+  echo "run -d exit $?"
+  wait_ready "live data"
+  echo "=== probes.edge-live and smoke over the published loopback port"
+  curl -sS -o "$TASK/h.out" -w "health http %{http_code}\n" "http://127.0.0.1:$PORT/api/health"; cat "$TASK/h.out"; echo
+  curl -sS -o "$TASK/r.out" -w "ready http %{http_code}\n" "http://127.0.0.1:$PORT/api/ready"; cat "$TASK/r.out"; echo
+  task "tasks.backup while the server runs (expect 0, one JSON line)" "-v ingat-audit-data:/data -v ingat-audit-stage:/out" backup --to /out
+  echo "--- stage entries (Ingat needs exactly one)"
+  docker run --rm --entrypoint ls -v ingat-audit-stage:/out "$IMG" -la /out
+  task "backup refused: target inside DATA_DIR (expect 2 = refused)" "-v ingat-audit-data:/data" backup --to /data/private-data/x
+  task "tasks.outbound-held preview (expect 2, outcome confirmation_required)" "-v ingat-audit-data:/data" outbound release
+  task "tasks.outbound-status preview (expect 2, outcome confirmation_required)" "-v ingat-audit-data:/data" outbound resume
+  task "preview usage error (expect 2, no JSON on stdout: why the manifest needs expect)" "-v ingat-audit-data:/data" outbound release --bogus
+  task "tasks.outbound-release-job unknown id (expect 1 = refused)" "-v ingat-audit-data:/data" outbound release --job 00000000-0000-4000-8000-000000000000 --confirm
+  task "tasks.outbound-release-all (expect 0)" "-v ingat-audit-data:/data" outbound release --all --confirm
+  task "tasks.outbound-drop-job unknown id (expect 1 = refused)" "-v ingat-audit-data:/data" outbound drop --job 00000000-0000-4000-8000-000000000000 --confirm
+  task "tasks.outbound-resume, not paused (expect 0)" "-v ingat-audit-data:/data" outbound resume --confirm
+  echo "=== stop the service (SIGTERM; it must exit by itself)"
+  docker stop "$APP"; echo "stop exit $?"
+  ENTRY=$(docker run --rm --entrypoint ls -v ingat-audit-stage:/out "$IMG" /out)
+  echo "payload entry: $ENTRY"
+  task "tasks.restore into the empty generation, /data = empty placeholder (expect 0)" "-v ingat-audit-placeholder:/data:ro -v ingat-audit-stage:/in:ro -v ingat-audit-gen:/restore" restore --from "/in/$ENTRY" --to /restore
+  task "tasks.restore again into the now non-empty target (expect 2 = refused)" "-v ingat-audit-placeholder:/data:ro -v ingat-audit-stage:/in:ro -v ingat-audit-gen:/restore" restore --from "/in/$ENTRY" --to /restore
+  echo "--- restored generation layout"
+  docker run --rm --entrypoint ls -v ingat-audit-gen:/g "$IMG" -la /g
+  echo "=== start the service on the restored generation with the holds (JOB_RUNNER=off, OUTBOUND_MODE=capture)"
+  docker run -d --name "$APP" $HARD $ENVS -e JOB_RUNNER=off -v ingat-audit-gen:/data "$IMG"
+  echo "run -d exit $?"
+  wait_ready "restored generation"
+  docker logs "$APP" > "$TASK/l.out" 2>&1; echo "--- server log"; cat "$TASK/l.out"
+  task "tasks.outbound-held preview on the restored copy (expect 2)" "-v ingat-audit-gen:/data" outbound release
+  task "tasks.outbound-status preview on the restored copy (expect 2, paused true reason restored)" "-v ingat-audit-gen:/data" outbound resume
+  task "tasks.outbound-resume on the restored copy (expect 0)" "-v ingat-audit-gen:/data" outbound resume --confirm
+  docker stop "$APP"; echo "stop exit $?"
+  echo "--- cleanup"
+  docker volume rm ingat-audit-data ingat-audit-stage ingat-audit-gen ingat-audit-placeholder
+  echo "volume rm exit $?"
+  docker ps -a --filter "name=$APP" --format '{{.Names}} {{.Status}}'
+  echo "ps exit $?"
+} > "$OUT" 2>&1
+
+==================================================================== a4-workflows.sh
+#!/bin/bash
+# A4: action pins against the public repositories, the action runtimes at the pinned SHAs, actionlint pinned by digest.
+export MSYS_NO_PATHCONV=1
+export TEMP="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT/tmp"
+export TMP="$TEMP"
+TASK="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+AL=rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+OUT="$TASK/a4-workflows.txt"
+{
+  echo "--- every uses: line"
+  grep -n 'uses:' "$REPO/.github/workflows/image.yml" "$REPO/.github/workflows/ingat-validate.yml"
+  echo "--- git ls-remote of each tag named in the comments (tag ref and peeled ref)"
+  for pair in "actions/checkout v7.0.1" "docker/setup-buildx-action v4.4.1" "docker/login-action v4.6.0"; do
+    set -- $pair
+    echo "## $1 $2"
+    git ls-remote "https://github.com/$1.git" "refs/tags/$2" "refs/tags/$2^{}"
+    echo "ls-remote exit $?"
+  done
+  echo "--- latest tags of each action (is the pin the newest release of its major?)"
+  for a in actions/checkout docker/setup-buildx-action docker/login-action; do
+    echo "## $a"
+    git ls-remote --tags --sort=-v:refname "https://github.com/$a.git" 'v[0-9]*.[0-9]*.[0-9]*' > "$TASK/tags-$(echo "$a" | tr '/' '_').txt"
+    echo "ls-remote exit $?"
+  done
+  echo "--- action.yml runs.using at the pinned commits"
+  for pair in "actions/checkout 3d3c42e5aac5ba805825da76410c181273ba90b1" "docker/setup-buildx-action f87e5991a6d7451dcb8d9637bfbc97413f497069" "docker/login-action dbcb813823bdd20940b903addbd779551569679f"; do
+    set -- $pair
+    f="$TASK/action-$(echo "$1" | tr '/' '_').yml"
+    curl -sS -o "$f" -w "## $1@$2 http %{http_code}\n" "https://raw.githubusercontent.com/$1/$2/action.yml"
+    grep -n -E "using:|main:|post:|deprecationMessage" "$f"
+  done
+  echo "--- actionlint image: digest of tag 1.7.12 on Docker Hub"
+  docker buildx imagetools inspect rhysd/actionlint:1.7.12 --format '{{json .Manifest.Digest}}'
+  docker buildx imagetools inspect --raw rhysd/actionlint:1.7.12 > "$TASK/actionlint-index.json"
+  echo "raw exit $?"; sha256sum "$TASK/actionlint-index.json"
+  echo "--- actionlint -version"
+  docker run --rm --read-only --network none "$AL" -version
+  echo "exit $?"
+  echo "--- actionlint on both workflows (read-only, no network)"
+  docker run --rm --read-only --network none -v "$(cygpath -w "$REPO"):/repo:ro" -w /repo "$AL" -color=false -verbose \
+    .github/workflows/image.yml .github/workflows/ingat-validate.yml
+  echo "actionlint exit $?"
+} > "$OUT" 2>&1
+(then: grep -v '\^{}' over the tags files, and `docker run --rm --read-only --network none --entrypoint shellcheck "$AL" --version`)
+
+==================================================================== a4-g9.sh
+#!/bin/bash
+# A4b: the image workflow's own `run:` block (extracted byte-for-byte from .github/workflows/image.yml, indentation
+# removed) against a throw-away local registry, twice: first the "not found" branch (build, push, digest, label check),
+# then the "already published" branch. Only the variables GitHub would set are set here; setup-buildx is replaced by a
+# docker-container builder with the same pinned BuildKit plus network=host (to reach the loopback registry).
+export MSYS_NO_PATHCONV=1
+export TEMP="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT/tmp"
+export TMP="$TEMP"
+TASK="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+OUT="$TASK/a4-g9.txt"
+REG=ingat-audit-registry
+B=ingat-audit-builder2
+P=49825
+{
+  echo "--- extract the run: block"
+  sed -n '/^        run: |$/,$p' "$REPO/.github/workflows/image.yml" | sed '1d; s/^          //' > "$TASK/wf-run.sh"
+  echo "extract exit $?"; cat "$TASK/wf-run.sh"; echo "--- end of extracted block"
+  echo "--- registry:3 pinned by digest on 127.0.0.1:$P"
+  docker run -d --rm --name "$REG" -p "127.0.0.1:$P:5000" registry:3@sha256:01cd312e67026f06f5d89c3e133a4a9adc7cb9eeb9b1194e0b2954dfd770efd2
+  echo "registry exit $?"
+  docker buildx create --name "$B" --driver docker-container --driver-opt network=host \
+    --driver-opt image=moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea
+  echo "builder exit $?"
+  mkdir -p "$TASK/runner1" "$TASK/runner2"
+  for n in 1 2; do
+    echo "=== workflow script run $n"
+    ( cd "$REPO" && env IMAGE="localhost:$P/timesheet" GITHUB_SHA="$(git rev-parse HEAD)" GITHUB_SERVER_URL=https://github.com \
+        GITHUB_REPOSITORY=CDSemi/timesheet RUNNER_TEMP="$TASK/runner$n" GITHUB_STEP_SUMMARY="$TASK/runner$n/summary.md" \
+        BUILDX_BUILDER="$B" bash -e "$TASK/wf-run.sh" > "$TASK/runner$n/stdout.txt" 2> "$TASK/runner$n/stderr.txt" )
+    echo "run $n exit $?"
+    echo "stdout:"; cat "$TASK/runner$n/stdout.txt"
+    echo "stderr (progress lines dropped):"; grep -v -E '^#[0-9]+ ' "$TASK/runner$n/stderr.txt"
+    echo "inspect.err:"; cat "$TASK/runner$n/inspect.err"
+    echo "summary:"; cat "$TASK/runner$n/summary.md"
+    echo "manifest sha256 and media type:"; sha256sum "$TASK/runner$n/manifest.json"; grep -o '"mediaType":"[^"]*"' "$TASK/runner$n/manifest.json"
+  done
+  echo "--- the tag's manifest is one image manifest, not an index"
+  docker buildx imagetools inspect "localhost:$P/timesheet:$(cd "$REPO" && git rev-parse HEAD)"
+  echo "--- cleanup"
+  docker stop "$REG"; echo "registry stop exit $?"
+  docker buildx rm "$B"; echo "builder rm exit $?"
+  docker image ls --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep -E '^localhost:'"$P"'/' || echo "no localhost:$P images left by name"
+} > "$OUT" 2>&1
+
+==================================================================== a5-build.sh
+#!/bin/bash
+# A5: local linux/amd64 build with the workflow's flags (BuildKit pinned as in image.yml; --load instead of --push).
+export MSYS_NO_PATHCONV=1
+export TEMP="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT/tmp"
+export TMP="$TEMP"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+OUT="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT/a5-build.txt"
+B=ingat-audit-builder
+TAG=ingat-t0t8-audit:local
+cd "$REPO" || exit 3
+{
+  echo "--- buildx version"; docker buildx version
+  GITHUB_SHA=$(git rev-parse HEAD)
+  GITHUB_SERVER_URL=https://github.com
+  GITHUB_REPOSITORY=CDSemi/timesheet
+  version=$(sed -n 's/^  "version": "\([0-9][0-9.]*\)",$/\1/p' package.json)
+  echo "version=[$version] GITHUB_SHA=$GITHUB_SHA"
+  test -n "$version"; echo "test -n exit $?"
+  echo "--- create builder (docker-container, BuildKit v0.33.1 pinned by digest, as setup-buildx driver-opts)"
+  docker buildx create --name "$B" --driver docker-container \
+    --driver-opt image=moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea
+  echo "create exit $?"
+  echo "--- build"
+  docker buildx build --builder "$B" --platform linux/amd64 --provenance=false --sbom=false \
+    --label "org.opencontainers.image.version=$version" \
+    --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+    --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+    --tag "$TAG" --load --progress plain .
+  echo "build exit $?"
+  echo "--- inspect (the workflow's format plus source)"
+  got=$(docker image inspect --format '{{.Os}}/{{.Architecture}} {{.Config.User}} {{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "org.opencontainers.image.version"}}' "$TAG")
+  want="linux/amd64 10001:10001 $GITHUB_SHA $version"
+  echo "got  [$got]"; echo "want [$want]"
+  [ "$got" = "$want" ]; echo "compare exit $?"
+  docker image inspect --format 'source={{index .Config.Labels "org.opencontainers.image.source"}}' "$TAG"
+  echo "--- entrypoint, cmd, workdir, env, all labels, healthcheck"
+  docker image inspect --format 'Entrypoint={{json .Config.Entrypoint}} Cmd={{json .Config.Cmd}} WorkingDir={{.Config.WorkingDir}}' "$TAG"
+  docker image inspect --format '{{json .Config.Env}}' "$TAG"
+  docker image inspect --format '{{json .Config.Labels}}' "$TAG"
+  docker image inspect --format '{{json .Config.Healthcheck}}' "$TAG"
+  echo "--- node version and libc in the image (node -e runs inside the app container)"
+  docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges "$TAG" node -e "console.log(process.version, process.arch, JSON.stringify(process.report.getReport().header.glibcVersionRuntime))"
+  echo "node exit $?"
+  docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges --entrypoint cat "$TAG" /etc/os-release
+  echo "os-release exit $?"
+  echo "--- remove builder"
+  docker buildx rm "$B"
+  echo "rm exit $?"
+  docker buildx ls
+} > "$OUT" 2>&1
+
+==================================================================== a7-privacy.sh  (usage: a7-privacy.sh <label>)
+#!/bin/bash
+export MSYS_NO_PATHCONV=1
+export TEMP="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT/tmp"
+export TMP="$TEMP"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+TASK="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+S="$TASK/scratch-$1"
+OUT="$TASK/a7-privacy-$1.txt"
+cd "$REPO" || exit 3
+{
+  echo "--- file list (snapshot files, then the track's files under handoff/)"
+  git status --short --untracked-files=all | sed 's/^...//' | grep -E '^(ingat\.toml|\.github/|docs/|handoff/delivery/(INGAT_T0_T8_|tasks/INGAT-T0T8-|evidence/INGAT-T0T8-))' > "$TASK/files-$1.txt"
+  cat "$TASK/files-$1.txt"; echo "count $(grep -c '' "$TASK/files-$1.txt")"
+  mkdir -p "$S" && cd "$S" && git init -q . && echo "init exit $?"
+  while IFS= read -r f; do
+    mkdir -p "$S/$(dirname "$f")" && cp "$REPO/$f" "$S/$f" && git add -- "$f" || echo "COPY/ADD FAILED $f"
+  done < "$TASK/files-$1.txt"
+  echo "staged $(git diff --cached --name-only | grep -c '')"
+  echo "--- precommit-check (staged set)"
+  node "$REPO/scripts/precommit-check.mjs"
+  echo "precommit exit $?"
+  echo "--- marker grep (each hit is read by the auditor)"
+  grep -rnE '(^|[^0-9.])(10|192\.168|172\.(1[6-9]|2[0-9]|3[01]))\.[0-9]{1,3}\.[0-9]{1,3}' --include='*' . | grep -v '^./.git/' > "$TASK/m-ip-$1.txt"; echo "private IPv4 hits $(grep -c '' "$TASK/m-ip-$1.txt")"
+  grep -rniE '<host and draft markers: withheld here, they would publish the values they look for>' . | grep -v '^./.git/' > "$TASK/m-host-$1.txt"; echo "host/draft marker hits $(grep -c '' "$TASK/m-host-$1.txt")"
+  grep -rniE '<the local account name, withheld>|/home/[a-z]|C:[\\/]+Users' .| grep -v '^./.git/' > "$TASK/m-profile-$1.txt"; echo "profile hits $(grep -c '' "$TASK/m-profile-$1.txt")"
+  grep -rnoiE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' . | grep -v '^./.git/' | grep -viE '@(example\.invalid|example\.com|anthropic\.com)|\.invalid$|git@github\.com' > "$TASK/m-mail-$1.txt"; echo "address hits $(grep -c '' "$TASK/m-mail-$1.txt")"
+  grep -rniE '\.local\b|\.lan\b|\.home\.arpa|\.synology|quickconnect' . | grep -v '^./.git/' > "$TASK/m-dns-$1.txt"; echo "lan dns hits $(grep -c '' "$TASK/m-dns-$1.txt")"
+} > "$OUT" 2>&1
+(Note: the host/draft marker pattern of the task-folder script lists the target host's volume and tool roots, the
+draft's placeholder domain, port and subnet, and the names of the owner's other projects; it stays in the task folder.)
+
+==================================================================== a8-docs.sh
+#!/bin/bash
+export TEMP="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT/tmp"
+export TMP="$TEMP"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+PY="$(cygpath -u "$USERPROFILE")/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe"
+TASK="D:/.claude-tmp/timesheet/INGAT-T0T8-AUDIT"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+OUT="$TASK/a8-docs.txt"
+cd "$REPO" || exit 3
+{
+  echo "--- node $(node --version)"
+  for p in docs/adr/0002-ingat-manifest-and-ghcr-image docs/07_DEPLOYMENT_AND_OPERATIONS docs/11_OPERATIONS_RUNBOOK; do
+    node "$TASK/parity.mjs" "$p.md" "$p.vi.md"; echo "parity exit $?"
+  done
+  git show HEAD:docs/07_DEPLOYMENT_AND_OPERATIONS.md > "$TASK/h07.md"; git show HEAD:docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md > "$TASK/h07.vi.md"
+  node "$TASK/parity.mjs" "$TASK/h07.md" "$TASK/h07.vi.md"; echo "parity exit $?"
+  "$PY" -I handoff/delivery/validate_package.py --preflight; echo "preflight exit $?"
+  node scripts/precommit-check.mjs --self-test; echo "self-test exit $?"
+  git diff --check HEAD; echo "diff --check exit $?"
+  grep -n -E ' +$' ingat.toml .github/workflows/image.yml .github/workflows/ingat-validate.yml docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md; echo "trailing-space grep exit $? (1 = none)"
+  grep -c $'\r' ingat.toml .github/workflows/image.yml .github/workflows/ingat-validate.yml docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md
+  grep -n -i -E 'succeeded|passed|published|is public|made public|pushed|ran on|has run|verified on|works on|kernel 4\.4|4\.4 kernel|NAS' ingat.toml .github/workflows/*.yml docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md
+  git diff HEAD -- docs/07_DEPLOYMENT_AND_OPERATIONS.md docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md docs/11_OPERATIONS_RUNBOOK.md docs/11_OPERATIONS_RUNBOOK.vi.md | grep -n '^[+-][^+-]'
+  grep -o -E '\]\([^)]+\)' docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md; echo "links grep exit $? (1 = none)"
+  ls docs/adr
+} > "$OUT" 2>&1
+(also: curl of the two GitHub docs pages named in a8-docs.txt into the task folder, then grep -o of the quoted sentences)

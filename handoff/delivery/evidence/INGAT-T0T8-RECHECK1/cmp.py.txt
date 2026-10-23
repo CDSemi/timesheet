@@ -1,0 +1,101 @@
+"""Recheck comparison of the audited snapshot (old/) and the FIX1 snapshot (worktree).
+
+Usage: python -I cmp.py <old_dir> <repo_dir>
+
+1. ingat.toml: tomllib data of old and new are equal.
+2. ingat.toml and image.yml: every changed line (difflib) is a comment-only line; the files are equal once
+   comment-only lines are removed; the image.yml YAML block-scalar positions of changed lines are reported.
+3. The four F3 evidence files: every removed line is a `docker ps` row (12-hex container id first), the
+   replacement is exactly one mask line per block with N equal to the removed rows, and nothing else changed.
+   Removed rows are never printed; only their count and shape test.
+Exit 0 when every check holds, 1 otherwise.
+"""
+import difflib
+import re
+import sys
+import tomllib
+from pathlib import Path
+
+old_dir = Path(sys.argv[1])
+repo = Path(sys.argv[2])
+ok = True
+
+
+def lines(p: Path) -> list[str]:
+    return p.read_text(encoding="utf-8").splitlines()
+
+
+def is_comment(line: str) -> bool:
+    return line.strip().startswith("#")
+
+
+def report(name: str, cond: bool, detail: str = "") -> None:
+    global ok
+    ok = ok and cond
+    print(f"{'PASS' if cond else 'FAIL'} {name}{(': ' + detail) if detail else ''}")
+
+
+# 1. tomllib data equality
+old_t = tomllib.loads((old_dir / "ingat.toml").read_text(encoding="utf-8"))
+new_t = tomllib.loads((repo / "ingat.toml").read_text(encoding="utf-8"))
+report("ingat.toml tomllib data equal", old_t == new_t, f"{len(old_t)} top-level keys")
+
+# 2. comment-only changes
+for rel in ["ingat.toml", ".github/workflows/image.yml"]:
+    a, b = lines(old_dir / rel), lines(repo / rel)
+    sm = difflib.SequenceMatcher(a=a, b=b, autojunk=False)
+    changed_old, changed_new = [], []
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            continue
+        changed_old += list(range(i1, i2))
+        changed_new += list(range(j1, j2))
+    all_comment = all(is_comment(a[i]) for i in changed_old) and all(is_comment(b[j]) for j in changed_new)
+    report(f"{rel} every changed line is a comment-only line", all_comment,
+           f"old lines {[i + 1 for i in changed_old]} -> new lines {[j + 1 for j in changed_new]}")
+    sa = [x for x in a if not is_comment(x)]
+    sb = [x for x in b if not is_comment(x)]
+    report(f"{rel} equal once comment-only lines are removed", sa == sb, f"{len(sa)} non-comment lines")
+    if rel.endswith(".yml"):
+        # A '#' line inside a YAML block scalar would be content, not a comment: report the indentation context.
+        for j in changed_new:
+            prev = next((b[k] for k in range(j - 1, -1, -1) if b[k].strip() and not is_comment(b[k])), "<start of file>")
+            report(f"{rel} changed line {j + 1} is outside a block scalar",
+                   prev == "<start of file>" or not prev.rstrip().endswith("|"), f"indent {len(b[j]) - len(b[j].lstrip())}, previous non-comment line: {prev[:40]!r}")
+
+# 3. F3 evidence masking
+# A default `docker ps` table row starts with a 12-hex container id. IMPL/ps.txt was written with a
+# `--format` of name and image (IMPL COMMANDS.txt line 25), so a two-field "name image[:tag]" row also counts.
+row = re.compile(r"^(?:[0-9a-f]{12}\s|[A-Za-z0-9][A-Za-z0-9_.-]* [A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*:[A-Za-z0-9._-]+$)")
+mask = re.compile(r"^\[(\d+) containers that are not this task's; names and ports omitted\]$")
+f3 = {
+    "handoff_delivery_evidence_INGAT-T0T8-GATE_cleanup.txt": "handoff/delivery/evidence/INGAT-T0T8-GATE/cleanup.txt",
+    "handoff_delivery_evidence_INGAT-T0T8-GATE_g5.txt.txt": "handoff/delivery/evidence/INGAT-T0T8-GATE/g5.txt.txt",
+    "handoff_delivery_evidence_INGAT-T0T8-IMPL_g5.txt": "handoff/delivery/evidence/INGAT-T0T8-IMPL/g5.txt",
+    "handoff_delivery_evidence_INGAT-T0T8-IMPL_ps.txt": "handoff/delivery/evidence/INGAT-T0T8-IMPL/ps.txt",
+}
+for old_name, rel in f3.items():
+    a, b = lines(old_dir / "f3" / old_name), lines(repo / rel)
+    sm = difflib.SequenceMatcher(a=a, b=b, autojunk=False)
+    blocks = 0
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            continue
+        blocks += 1
+        removed = a[i1:i2]
+        added = b[j1:j2]
+        rows_ok = all(row.match(x) for x in removed)
+        m = mask.match(added[0]) if len(added) == 1 else None
+        n_ok = bool(m) and int(m.group(1)) == len(removed)
+        report(f"{rel} block {blocks} (old lines {i1 + 1}-{i2}, new line(s) {j1 + 1}-{j2})",
+               tag == "replace" and rows_ok and n_ok,
+               f"removed {len(removed)} line(s), all docker ps rows: {rows_ok}; replacement {added!r}; N matches: {n_ok}")
+    kept_rows = [x for x in b if row.match(x)]
+    names = [x.split()[-1] for x in kept_rows]
+    task_like = [n if re.match(r"^(ingat|t0t8|gate|impl)[-_]", n, re.I) else "<other: not printed>" for n in names]
+    report(f"{rel} rows left in the file are the task's own", all(not n.startswith("<other") for n in task_like),
+           f"{len(kept_rows)} docker ps row(s) kept: {task_like}")
+    report(f"{rel} has exactly one masked block", blocks == 1, f"{blocks} changed block(s)")
+
+print("overall", "PASS" if ok else "FAIL")
+sys.exit(0 if ok else 1)

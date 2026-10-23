@@ -1,0 +1,63 @@
+"""Search the track's files for host-specific tokens of the owner's private draft (recheck item 5).
+
+Usage: python -I draftscan.py <draft.md> <repo> <file_list> <summary_out> <detail_out>
+
+Token classes taken from the draft: IPv4 addresses and CIDRs (not loopback/any), absolute host paths (not the
+container paths the manifest uses), domain names (not public service hosts), e-mail addresses, and 4-5 digit numbers on
+lines that mention a port. The summary holds counts and file:line only; tokens appear only in the detail file, which
+stays in the task folder.
+"""
+import re
+import sys
+from pathlib import Path
+
+draft, repo, file_list, summary_out, detail_out = (Path(a) for a in sys.argv[1:6])
+text = draft.read_text(encoding="utf-8")
+classes: dict[str, set[str]] = {"ipv4": set(), "path": set(), "domain": set(), "address": set(), "port": set()}
+for m in re.finditer(r"\b\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?\b", text):
+    if not m.group(0).startswith(("127.", "0.0.0.0")):
+        classes["ipv4"].add(m.group(0))
+container_paths = ("/app", "/data", "/in", "/out", "/restore", "/tmp", "/dev", "/proc", "/sys", "/usr", "/bin", "/etc")
+for m in re.finditer(r"(?<![\w.:])/(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+", text):
+    p = m.group(0)
+    if len(p) > 4 and not p.startswith(container_paths) and p.count("/") >= 2:
+        classes["path"].add(p)
+public = re.compile(r"(github\.com|githubusercontent\.com|ghcr\.io|docker\.io|docker\.com|example\.(invalid|com|org)|"
+                    r"opencontainers|nodejs\.org|npmjs|python\.org|ubuntu\.com|debian\.org|anthropic\.com|"
+                    r"\.(md|toml|yaml|yml|json|py|ts|js|mjs|txt|env|sh|db|sql|html|lock)$)", re.I)
+for m in re.finditer(r"\b[a-z0-9-]+(?:\.[a-z0-9-]+)+\.[a-z]{2,}\b", text, re.I):
+    d = m.group(0)
+    if not public.search(d) and not re.match(r"^\d", d):
+        classes["domain"].add(d)
+for m in re.finditer(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text):
+    if not re.search(r"example\.(invalid|com)|\.invalid$", m.group(0)):
+        classes["address"].add(m.group(0))
+for line in text.splitlines():
+    if re.search(r"port", line, re.I):
+        for m in re.finditer(r"(?<![\d.])\d{4,5}(?![\d.])", line):
+            if m.group(0) not in ("3000", "2026", "2025"):
+                classes["port"].add(m.group(0))
+
+files = [x for x in file_list.read_text(encoding="utf-8").splitlines() if x.strip()]
+summary = [f"draft tokens: " + ", ".join(f"{k} {len(v)}" for k, v in classes.items()) + f"; files scanned: {len(files)}"]
+detail: list[str] = []
+hits = {k: 0 for k in classes}
+for rel in files:
+    p = repo / rel
+    try:
+        body = p.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        body = p.read_text(encoding="latin-1")
+    for n, line in enumerate(body.splitlines(), 1):
+        for k, toks in classes.items():
+            found = [t for t in toks if (re.search(r"(?<![\d.])" + re.escape(t) + r"(?![\d])", line) if k in ("port", "ipv4") else t in line)]
+            if found:
+                hits[k] += 1
+                summary.append(f"{k} {rel}:{n}")
+                detail.append(f"{k} {rel}:{n}: tokens {found}: {line[:300]}")
+summary.insert(1, "hits: " + ", ".join(f"{k} {v}" for k, v in hits.items()))
+summary_out.write_text("\n".join(summary) + "\n", encoding="utf-8")
+detail_out.write_text("\n".join(detail) + "\n" + "\n".join(f"TOKENS {k}: {sorted(v)}" for k, v in classes.items()) + "\n",
+                      encoding="utf-8")
+print(summary[0])
+print(summary[1])

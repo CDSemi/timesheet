@@ -1,0 +1,34 @@
+#!/bin/bash
+# Recheck item 6: EN/VI parity (the WP5-UX5-T06 script, copied byte for byte), the package preflight, git diff --check,
+# and line-ending / final-newline checks of the nine files.
+# usage: r7-docs.sh <label> [extra pair stems...]
+export MSYS_NO_PATHCONV=1
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1"
+export TEMP="$T/tmp" TMP="$T/tmp"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+PY="$(cygpath -u "$USERPROFILE")/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe"
+R="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+label="$1"; shift
+cd "$R" || exit 3
+cp handoff/delivery/evidence/WP5-UX5-T06/parity.mjs.txt "$T/parity.mjs"
+{
+  echo "date $(date -u +%Y-%m-%dT%H:%M:%SZ) node $(node --version)"
+  echo "parity script: $(sha256sum handoff/delivery/evidence/WP5-UX5-T06/parity.mjs.txt | cut -c1-64) (WP5-UX5-T06 copy)"
+  for p in docs/07_DEPLOYMENT_AND_OPERATIONS docs/adr/0002-ingat-manifest-and-ghcr-image docs/11_OPERATIONS_RUNBOOK "$@"; do
+    node "$T/parity.mjs" "$p.md" "$p.vi.md"; echo "parity exit $?"
+  done
+  echo "--- validate_package.py --preflight (workflow Python, from the worktree root)"
+  "$PY" -I handoff/delivery/validate_package.py --preflight; echo "preflight exit $?"
+  echo "--- git diff --check"
+  git diff --check; echo "diff --check exit $?"
+  echo "--- untracked snapshot files: trailing whitespace (git diff --no-index --check against an empty file)"
+  for f in .github/workflows/image.yml .github/workflows/ingat-validate.yml docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md ingat.toml; do
+    git diff --no-index --check "$T/tmp/empty" "$f" > "$T/tmp/ws.txt" 2>&1; rc=$?
+    echo "$f: $(grep -c '' "$T/tmp/ws.txt") whitespace report line(s) (diff exit $rc: 1 = differs only)"
+  done
+  echo "--- CR bytes and final newline of the nine files"
+  for f in .github/workflows/image.yml .github/workflows/ingat-validate.yml docs/07_DEPLOYMENT_AND_OPERATIONS.md docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md docs/11_OPERATIONS_RUNBOOK.md docs/11_OPERATIONS_RUNBOOK.vi.md docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md ingat.toml; do
+    echo "$f: CR lines $(grep -c $'\r' "$f"); last byte $(tail -c 1 "$f" | od -An -tx1 | tr -d ' ')"
+  done
+} > "$T/r7-docs-$label.txt" 2>&1
+echo done

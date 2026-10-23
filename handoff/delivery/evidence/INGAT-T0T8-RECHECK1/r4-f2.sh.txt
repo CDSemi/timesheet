@@ -1,0 +1,36 @@
+#!/bin/bash
+# F2 reproduction: the workflow triggers and $GITHUB_SHA use, GitHub's documented GITHUB_SHA of a push run, the
+# skip-instruction caveat, and the repository's own commit messages (no skip instruction used).
+T="D:/.claude-tmp/timesheet/INGAT-T0T8-RECHECK1"
+REPO="D:/Dropbox/Work.CDSemi/timesheet/.claude/worktrees/relaxed-lalande-8359f0"
+cd "$REPO" || exit 3
+{
+  echo "date $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "--- triggers (grep -n of on:/push:/branches:/pull_request: in both workflows)"
+  grep -n -E '^on:|^  push:|^    branches:|^  pull_request:' .github/workflows/image.yml .github/workflows/ingat-validate.yml
+  echo "--- every GITHUB_SHA use in image.yml"
+  grep -n 'GITHUB_SHA' .github/workflows/image.yml
+  echo "--- every 'every commit' / 'every push' / 'each push' / 'tip commit' phrase in the nine files (case-insensitive)"
+  grep -n -i -E 'every commit|every push|each push|tip commit|commit đầu mút|mỗi commit|mỗi lần push|sau mỗi commit' \
+    .github/workflows/image.yml .github/workflows/ingat-validate.yml docs/07_DEPLOYMENT_AND_OPERATIONS.md \
+    docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md docs/11_OPERATIONS_RUNBOOK.md docs/11_OPERATIONS_RUNBOOK.vi.md \
+    docs/adr/0002-ingat-manifest-and-ghcr-image.md docs/adr/0002-ingat-manifest-and-ghcr-image.vi.md ingat.toml
+  echo "--- docs/08 push rule"
+  grep -n 'push after every commit' docs/08_AI_WORKFLOW_AND_BUDGET.md docs/08_AI_WORKFLOW_AND_BUDGET.vi.md
+  echo "--- curl GitHub docs: events that trigger workflows"
+  curl -sSL -o "$T/tmp/gh-events.html" -w 'http %{http_code}\n' "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows"
+  echo "curl exit $?"
+  echo "--- the push event's GITHUB_SHA cell (grep -o)"
+  grep -o -E '.{0,120}Tip commit pushed to the ref.{0,40}' "$T/tmp/gh-events.html" | sed -e 's/<[^>]*>/ /g' -e 's/  */ /g'
+  echo "--- curl GitHub docs: skipping workflow runs"
+  curl -sSL -o "$T/tmp/gh-skip.html" -w 'http %{http_code}\n' "https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs"
+  echo "curl exit $?"
+  grep -o -E '.{0,200}\[skip ci\].{0,200}' "$T/tmp/gh-skip.html" | sed -e 's/<[^>]*>/ /g' -e 's/  */ /g' > "$T/tmp/gh-skip-hits.txt"
+  echo "skip-instruction hits: $(wc -l < "$T/tmp/gh-skip-hits.txt") (first one, tags stripped):"
+  sed -n '1p' "$T/tmp/gh-skip-hits.txt"
+  echo "--- commits in this repository whose message carries a skip instruction (git log --all -i --grep)"
+  git log --all --oneline -i -E --grep '\[(skip ci|ci skip|no ci|skip actions|actions skip)\]|skip-checks' > "$T/tmp/skip-commits.txt"
+  echo "git log exit $?; matching commits: $(wc -l < "$T/tmp/skip-commits.txt")"
+  echo "--- commits on HEAD's history: $(git rev-list --count HEAD)"
+} > "$T/r4-f2.txt" 2>&1
+echo done
