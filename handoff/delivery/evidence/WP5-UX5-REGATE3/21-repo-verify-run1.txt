@@ -1,0 +1,60 @@
+
+> timesheet@0.1.0 verify
+> npm run typecheck && npm run lint && npm test && npm run build && npm run smoke
+
+
+> timesheet@0.1.0 typecheck
+> tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json && tsc -p tsconfig.test.json
+
+
+> timesheet@0.1.0 lint
+> eslint .
+
+
+> timesheet@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.2 <repo>
+
+ ❯ tests/integration/backup.test.ts (12 tests | 1 failed) 44471ms
+   ❯ cli.js backup (1)
+     × runs in production, prints counts only and refuses a target inside DATA_DIR 30212ms
+ ❯ tests/integration/jobs-restart.test.ts (10 tests | 1 failed) 93587ms
+   ❯ a runner process killed during the PDF job (3)
+     × resumes after a kill before write without duplicate files or ledger rows 21628ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/backup.test.ts > cli.js backup > runs in production, prints counts only and refuses a target inside DATA_DIR
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/integration/backup.test.ts:493:3
+    491|   }
+    492|
+    493|   it('runs in production, prints counts only and refuses a target insi…
+       |   ^
+    494|     const ok = cli(['--to', target]);
+    495|     expect(ok.stderr).toBe('');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/jobs-restart.test.ts > a runner process killed during the PDF job > resumes after a kill before write without duplicate files or ledger rows
+Error: Timed out waiting for the before-write pause
+ ❯ waitFor tests/integration/jobs-restart.test.ts:134:38
+    132|   const deadline = Date.now() + timeoutMs;
+    133|   while (!predicate()) {
+    134|     if (Date.now() > deadline) throw new Error(`Timed out waiting for …
+       |                                      ^
+    135|     await new Promise((resolve) => setTimeout(resolve, 25));
+    136|   }
+ ❯ tests/integration/jobs-restart.test.ts:213:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 99 passed (101)
+      Tests  2 failed | 2372 passed (2374)
+   Start at  13:53:39
+   Duration  110.66s (tests 76%, transform 13%, import 11%)
+

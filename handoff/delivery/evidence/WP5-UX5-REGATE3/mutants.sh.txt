@@ -1,0 +1,36 @@
+cd <task>
+. ./env.sh
+A=export-probe/dist/client/assets
+CSS=$(ls $A/index-*.css)
+ADM=$(ls $A/AdminScreen-*.js)
+mkdir -p tmp/orig
+cp "$CSS" tmp/orig/index.css
+cp "$ADM" tmp/orig/admin.js
+sha256sum "$CSS" "$ADM" > out/41-mutant-sha-before.txt
+chev() { bash run-shift.sh "$1" real tests/e2e/controls.spec.ts --grep "select chevron is one layer" > "logs/$1.txt" 2>&1; node counts.mjs "logs/$1.txt" >> out/42-mutant-counts.txt 2>&1; }
+adm() { bash run-shift.sh "$1" real tests/e2e/settings-routes.spec.ts > "logs/$1.txt" 2>&1; node counts.mjs "logs/$1.txt" >> out/42-mutant-counts.txt 2>&1; }
+
+# mutant A: the arrow is invisible (one layer, transparent)
+sed -i 's/var(--muted) 90deg, transparent 0/transparent 90deg, transparent 0/' "$CSS"
+cmp -s "$CSS" tmp/orig/index.css && echo "MUTANT A DID NOT CHANGE THE FILE" >> out/42-mutant-counts.txt
+SHIFT_EXPORT=$T/export-probe chev mutA
+cp tmp/orig/index.css "$CSS"
+
+# mutant B: a second gradient layer
+sed -i 's/background-image:conic-gradient(from -45deg at 50% 100%, var(--muted) 90deg, transparent 0);/background-image:conic-gradient(from -45deg at 50% 100%, var(--muted) 90deg, transparent 0),conic-gradient(from -45deg at 50% 100%, var(--muted) 90deg, transparent 0);/' "$CSS"
+cmp -s "$CSS" tmp/orig/index.css && echo "MUTANT B DID NOT CHANGE THE FILE" >> out/42-mutant-counts.txt
+SHIFT_EXPORT=$T/export-probe chev mutB
+cp tmp/orig/index.css "$CSS"
+
+# mutant H: the Administration h1 becomes a div
+sed -i 's/jsx)(`h1`,{tabIndex:-1,children:`Administration`}/jsx)(`div`,{tabIndex:-1,children:`Administration`}/' "$ADM"
+cmp -s "$ADM" tmp/orig/admin.js && echo "MUTANT H DID NOT CHANGE THE FILE" >> out/42-mutant-counts.txt
+SHIFT_EXPORT=$T/export-probe adm mutH
+cp tmp/orig/admin.js "$ADM"
+
+sha256sum "$CSS" "$ADM" > out/41-mutant-sha-after.txt
+cmp out/41-mutant-sha-before.txt out/41-mutant-sha-after.txt && echo "restored: sha-256 equal" >> out/42-mutant-counts.txt
+# the restored build passes the same tests (control)
+SHIFT_EXPORT=$T/export-probe chev restoredA
+SHIFT_EXPORT=$T/export-probe adm restoredH
+echo mutants-done > out/mutants.done

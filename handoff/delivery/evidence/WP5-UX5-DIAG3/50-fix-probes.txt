@@ -1,0 +1,32 @@
+WP5-UX5-DIAG3 Q4: the probed changes (scratch export only; nothing was changed in the repository)
+
+A. vitest.config.ts (after line 8 `pool: 'forks',`)
+   8a9
+   >     maxWorkers: '50%',
+   Documented form: vitest 5.0.2 types "Maximum number or percentage of workers" (maxWorkers?: number | string). 50% of the 32 logical cores = 16 forks on this host; on a 4-core CI host it is 2, so it never oversubscribes a small machine. Measured: 30-timeouts.txt observations 4 and 5 (4 logical CPUs: 6 failures at 31 workers, 0 at 16 or 8; idle 53 s at 16 workers, 43 s together with B).
+
+B. src/server/jobs/pdfJob.ts (lazy PDF library; behaviour unchanged, the first render in a process loads it)
+   9c9
+   < import { type PdfOrigin, renderTimesheetPdf, type TimesheetPdfInput } from '../pdf/timesheetPdf.ts';
+   ---
+   > import type { PdfOrigin, TimesheetPdfInput } from '../pdf/timesheetPdf.ts';
+   244c244
+   <   const render = deps.render ?? renderTimesheetPdf;
+   ---
+   >   const render = deps.render ?? (await import('../pdf/timesheetPdf.ts')).renderTimesheetPdf;
+   Checks run in the scratch export: tsc -p tsconfig.server.json --noEmit exit 0; tsc emit exit 0 (import rewritten to ../pdf/timesheetPdf.js); CLI graph 373 -> 176 ms, CLI 388 -> 245 ms; full vitest suites AF4LAZYW16, AF4LAZYW31 and IDLELAZY50 ran all 2374 tests (PDF tests included) with only load-related failures at 31 workers. NOT run: npm run lint (the eslint step), the e2e suite, the built server's first PDF route (only the emit was checked). The submission route still imports renderTimesheetPdf statically (src/server/routes/submission.ts:13), so the server process behaves as before.
+   Consideration: touches src/ (product code) only for start-up cost; skip it if the coordinator wants tests-and-config only. Without B the config change A alone gives 0 failures at 4 logical CPUs (AF4W16) but a 2x margin on deadline-race (15.6 s of 30 s); with B 10.6 s.
+
+C. scripts/smoke-built-server.mjs
+   :76   const headers = {};                       ->  const headers = { connection: 'close' };
+   :415  { headers: { cookie: cookie2 } }          ->  { headers: { cookie: cookie2, connection: 'close' } }
+   plus the cleanup defect: declare `let monitor;` next to `let server;` (:114), assign at :316, and in the finally block (:493-497) call `monitor?.close();` before rmSync (the success-path `monitor.close()` at :484 may stay or go).
+   Proof: 40-smoke.txt probes 4 (fails, idle, 9.2 s block) and 5 (passes, 9.3 s and 73 s blocks).
+
+D. optional hardening (not reproduced): tests/e2e/fixtures.ts:69 waitUntilHealthy and tests/e2e/setup.spec.ts:98 health polls; scripts/container-drill.mjs:174 call(): add the same `connection: 'close'` header.
+
+Owned paths per worker task:
+   FIX6a (S, risk low): vitest.config.ts; scripts/smoke-built-server.mjs.
+   FIX6b (S, risk low, optional): src/server/jobs/pdfJob.ts (and tests only if a test imports renderTimesheetPdf from it; none does).
+   FIX6c (XS, optional): tests/e2e/fixtures.ts, tests/e2e/setup.spec.ts, scripts/container-drill.mjs.
+   Assertions are not touched.

@@ -168,7 +168,8 @@ function freeLoopbackPort() {
 
 let base = '';
 async function call(method, path, { cookie, body } = {}) {
-  const headers = { origin: publicOrigin };
+  // Close each connection: blocking docker/compose runs between calls outlast the server's 5 s keep-alive.
+  const headers = { origin: publicOrigin, connection: 'close' };
   if (cookie) headers.cookie = cookie;
   if (body !== undefined) headers['content-type'] = 'application/json';
   const response = await fetch(`${base}${path}`, {

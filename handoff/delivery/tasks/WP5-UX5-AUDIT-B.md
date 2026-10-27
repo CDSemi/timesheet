@@ -28,9 +28,12 @@
 - **Author separation.** You wrote no WP5-UX4 or WP5-UX5 task; their agent IDs are on the
   board. Treat every planner, worker, committer and verifier report as a claim.
 - **Target.**
-  - `reviewed_commit` = TARGET_SHA = 7aafa21bc1c6efc70c0fa8691c3a1165841aeb45 (the
-    WP5-UX5-FIX2-FREEZE commit, local and not pushed).
-  - TARGET_DIGEST = 59516a2d0abe1294aa3aebbbc88dd2327dc2980dd139d6f3591054b95c25f0ad.
+  - `reviewed_commit` = TARGET_SHA = 5b8b7184692fff683c4083c9fc5610acd47bece1 (the
+    WP5-UX5-FIX3-FREEZE commit, pushed, on top of the owner's Ingat merge b8bae50).
+  - TARGET_DIGEST = edcca1949c429251b1476c3e32e1485507ef488264429c6afe318a7fccc041ce.
+  - The dependency is WP5-UX5-REGATE3 (PASS required). The Ingat changes since 70dce2a
+    (782cdda GHCR cleanup with `scripts/ghcr-cleanup.ts`, its tests and the tsconfig
+    files; the records) are owner work: check them only for non-interference.
   - The base is the last accepted snapshot, 8e557100d16b6b6eb86a48e00276835761aabfdf.
   - Record HEAD, the digest before and after (three forms) and `reviewed_commit`.
   - Work on a clean export or a scratch clone at TARGET_SHA.

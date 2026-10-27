@@ -1,0 +1,13 @@
+cd <task>
+. ./env.sh
+# Stress of the three fixed tests at their failing instants with the FIX10 wrapper
+bash run-shift.sh stress-settings 2026-10-26T16:00:00Z tests/e2e/settings-routes.spec.ts --repeat-each=40 --workers=14 > logs/stress-settings.txt 2>&1
+node counts.mjs logs/stress-settings.txt > out/31-stress-counts.txt 2>&1
+echo "settings finished $(date -u +%H:%M:%SZ)" > logs/stress.log
+bash run-shift.sh stress-chev 2026-11-01T08:45:00Z tests/e2e/controls.spec.ts --grep "select chevron is one layer" --repeat-each=40 --workers=14 > logs/stress-chev.txt 2>&1
+node counts.mjs logs/stress-chev.txt >> out/31-stress-counts.txt 2>&1
+echo "chev finished $(date -u +%H:%M:%SZ)" >> logs/stress.log
+bash run-shift.sh stress-bar 2026-11-01T08:45:00Z tests/e2e/theme.spec.ts tests/e2e/shell.spec.ts --repeat-each=40 --workers=14 --grep "phone bar at|first screen|shell-bar-size follows" > logs/stress-bar.txt 2>&1
+node counts.mjs logs/stress-bar.txt >> out/31-stress-counts.txt 2>&1
+echo "bar finished $(date -u +%H:%M:%SZ)" >> logs/stress.log
+echo stress-done > out/stress.done

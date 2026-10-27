@@ -78,8 +78,31 @@ Không đổi billing hay cài đặt quyền.
 ~~~
 
 Luồng hiện tại:
-0. **Đang làm (đã tạm dừng hai lần ngày 2026-10-22 để khởi động lại máy, nay đang chạy FIX2
-   lần 3): vòng thay đổi UI lần 4 và 5.**
+0. **Đang làm (đã tiếp tục ngày 2026-10-26 sau lần tạm dừng vì hạn mức ngày 2026-10-23):
+   vòng thay đổi UI lần 4 và 5.**
+   - Commit đã push gần nhất là 5b8b718 (digest edcca194). FIX1, FIX2 và FIX3 đã được freeze,
+     và nhánh Ingat của chủ dự án đã được gộp vào (b8bae50).
+   - WP5-UX5-REGATE3 (lần 2) không đạt:
+     - hai lỗi assertion trong lượt quét: Today khi qua nửa đêm giờ LA, và một dòng trên
+       trang review không thẳng hàng;
+     - ECONNRESET lặp lại;
+     - hai cảnh báo bảo mật mới từ npm audit (nodemailer, zod).
+   - Hai việc chẩn đoán đã xong:
+     - hai lỗi trong lượt quét là lỗi của test;
+     - lỗi reset kết nối là lỗi của bộ chạy test;
+     - không có lỗi nào của sản phẩm.
+   - WP5-UX5-FIX4 đã ghim nodemailer 10.1.4 và zod 4.6.6, chưa commit.
+   - WP5-UX5-FIX5 (chỉ sửa test và bộ chạy test) đã xong, chưa commit.
+   - WP5-UX5-DIAG3 đã xong. Khi máy bận, quá nhiều worker test chạy song song gây ra lỗi
+     quá thời gian; lỗi reset ở bước smoke cũng là lỗi keep-alive như trước. Không có lỗi
+     sản phẩm.
+   - WP5-UX5-FIX6 (chỉ sửa bộ chạy test và cấu hình test) đã xong, chưa commit.
+   - Đang chạy: WP5-UX5-FIX6-FREEZE, một commit cho FIX4 tới FIX6 và các bản ghi, rồi
+     push.
+   - Sau đó là REGATE4, audit A và B, audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
+   - Chi tiết: checkpoint, mục "REGATE3 không đạt; hai việc chẩn đoán đang chạy
+     (2026-10-26)".
+   - Trước đó trong ngày đã tạm dừng hai lần để khởi động lại máy.
    - Mọi slice của hai vòng đã được freeze. Commit gần nhất là 2bce0ab (digest 70975091).
    - Gate của đợt 5 FAIL và FIX1 đã sửa. Lần regate sau đó FAIL vì một lỗi tranh chấp
      thời điểm trong test; WP5-UX5-DIAG1 xác định đó là lỗi của test.

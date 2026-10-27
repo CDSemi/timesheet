@@ -1,0 +1,36 @@
+C. "TypeError: fetch failed [cause]: Error: read ECONNRESET"
+
+Which request, which side: a Node fetch (undici) issued by the TEST RUNNER process (SeedClient.raw, tests/e2e/fixtures.ts:371-376) to the built server on
+127.0.0.1; the server side closed the connection (reset on a reused socket). Not a page navigation, not an in-page fetch.
+Where: submission.spec.ts:67 (REGATE3 full-0314 trace: last good API call at 6.78 s, then 8.6 s with no trace step, then the failure at 15.4 s) and automation.spec.ts:118,
+:283. All three call drainJobsFrom(server, ...) (fixtures.ts:166-168: six sequential spawnSync of "dist/server/cli.js run-jobs --once", fixtures.ts:150-158;
+callers submission.spec.ts:102, automation.spec.ts:158, :165, :290) and fetch again in the same tick.
+
+Mechanism: spawnSync blocks the runner's event loop. The server (@hono/node-server serve() at src/server/index.ts:59, default Node http keepAliveTimeout 5 s, no
+other timeout set in src/) closes the idle keep-alive socket after 5 s. The blocked runner cannot read the close, and the next fetch reuses the dead pooled socket.
+Timers involved are libuv timers (monotonic), not Date: the shifted wall clock plays no part. The preload only slows each spawned CLI (it loads shiftclock.mjs).
+
+Probe (scratch zz-c.spec.ts, privateServer, fetch, Atomics.wait for N ms, fetch again in the same tick):
+  real clock      : 1000, 3000, 4500, 5500 ms ok; 7000 ms FAILED fetch failed / read ECONNRESET; 9000 ms FAILED fetch failed / read ECONNRESET
+  2027-03-14T10:30Z: 1000, 3000, 4500, 5500 ms ok; 7000 ms FAILED read ECONNRESET; 9000 ms ok (the race is not certain once the socket is already dead)
+  with header "connection: close" on the first request: 7000 ms ok, 9000 ms ok
+  drainJobsFrom blocked the runner: 3594 ms (real clock, 1 worker, idle host) and 4916 ms (2027-03-14T10:30Z, 1 worker): next fetch ok; under 6+ workers the
+  six CLI runs pass the 5 s line.
+
+Why more resets in REGATE3 than REGATE2: REGATE2's sweep ran with no --workers (playwright.config.ts: workers 2), REGATE3 with --workers=6. More concurrent
+browsers and CLIs make each spawnSync slower. REGATE2 had 3 resets in 2 of 8 runs (automation:118, :283 in FULL 1026 and 1101); REGATE3 had resets in 5 of 9 runs.
+The real-clock FULL e2e (2 workers, idle host) is fast enough and had 0 failed.
+
+Before the change (scratch export, 2027-03-14T10:30:00Z, submission.spec.ts:67 only, both projects):
+  --repeat-each=6  --workers=6 : 12 failed (12 x ECONNRESET), exit 1
+  --repeat-each=10 --workers=10: 20 failed (20 x ECONNRESET), exit 1
+After the change (fixtures.ts SeedClient.raw and uploadSignature send "connection: close"):
+  --repeat-each=6  --workers=6 : 12 passed, 0 ECONNRESET
+  --repeat-each=10 --workers=10: 20 passed, 0 ECONNRESET
+  automation.spec.ts + submission.spec.ts, --repeat-each=2 --workers=8: 12 passed, 0 ECONNRESET
+
+Other observation (not proven, no fix proposed): fixtures.ts:88 freePort() probes a port and closes it, and the server starts seconds later (after two spawnSync CLI runs),
+so two workers may pick the same port; waitUntilHealthy (fixtures.ts:65-76) accepts the other worker's server. The one 401 on the admin seed sign-in at 14 workers
+(log b2) is consistent with this, but it was not reproduced.
+Product note: Node's default 5 s keepAliveTimeout also applies in production; a reverse proxy that keeps upstream connections longer would meet the same race
+(browsers retry a reused-socket reset). Out of scope here; no change proposed.

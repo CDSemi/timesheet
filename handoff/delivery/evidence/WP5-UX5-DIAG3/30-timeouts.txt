@@ -1,0 +1,48 @@
+WP5-UX5-DIAG3 Q2b: the 30 s integration-test timeouts (vitest.config.ts: pool forks, testTimeout 30000, no maxWorkers)
+
+Method. Scratch export of HEAD 5b8b718 plus the five uncommitted files (package.json, package-lock.json, tests/e2e/fixtures.ts, review.spec.ts, timesheet.spec.ts), node_modules copied from the repository (no install); Node 24.21.0; TEMP/TMP/DATA_DIR/DATABASE_PATH inside the task folder. One heavy command at a time. Every run: node node_modules/vitest/vitest.mjs run [args] --reporter=json --outputFile=<task>\logs\<label>.json; per-test durations read from the JSON (summarize.mjs, table.mjs). "Smaller host" = the vitest process started through powershell Start-Process and given a ProcessorAffinity mask, so it and every child it spawns share those logical CPUs while vitest still sees 32 cores (default maxWorkers 31 forks). CPU burner = burner.mjs, N worker threads, ends by itself after a fixed time. File churn = fsburner.mjs. Totals are the whole suite (101 files, 2374 tests).
+
+Runs (label: condition -> wall, failed):
+  full-idle1   idle host, export                          48 s, 0   (the seven named files alone in one run: 17 s, 98 tests, 0 failed)
+  L16          + burner 16 threads (half the cores)       49 s, 0
+  L32          + burner 32 threads (all logical cores)    55 s, 0
+  FS16         + 16 file-churn threads (1.0 M files)      62 s, 0
+  repo-full1   Dropbox repository, idle                   53 s, 0
+  W16 / W8     --maxWorkers=16 / 8, idle                  53 s / 81 s, 0
+  AF8W31       8 logical CPUs, 31 workers                 78 s, 3 failed (pdf-render timeout, deadline-race timeout + a cascade assertion)
+  AF8W16       8 logical CPUs, 16 workers                 68 s, 0
+  AF4W31       4 logical CPUs, 31 workers (default)       139 s, 6 failed (pdf-render x2 timeout, workbook-reader x2 time-bound assertions, deadline-race timeout + cascade)
+  AF4W16       4 logical CPUs, 16 workers                 130 s, 0
+  AF4W8        4 logical CPUs, 8 workers                  126 s, 0
+  AF4LAZYW31   4 CPUs, 31 workers, lazy pdf import        124 s, 2 failed (pdf-render timeout, workbook-reader bound)
+  AF4LAZYW16   4 CPUs, 16 workers, lazy pdf import        122 s, 0
+  AF2LAZYW16   2 CPUs, 16 workers, lazy pdf import        258 s, 11 failed (backup, backup-prune, restore x2, jobs-restart x3, deadline-race x2, pdf-render, workbook-reader)
+  IDLELAZY50   idle, maxWorkers '50%' in config, lazy pdf 43 s, 0
+All runs exit 0 except the ones with failures (exit 1).
+
+Per-file table: slowest test in ms (sum of the file's tests in ms); T = a test of the file failed. The limit is 30000 per test.
+  condition                          | backup | backup-prune | bootstrap | restore | deadline-race | delivery-crash | jobs-restart
+  ISO (file alone, idle)             | 2430 (4309) | 3551 (5358) | 1600 (6906) | 3305 (11244) | 4123 (5799) | 1073 (3109) | 2225 (13363)
+  FULL idle                          | 4590 (12087) | 6182 (13312) | 2974 (17997) | 5549 (23285) | 12597 (16011) | 3199 (7600) | 6199 (27028)
+  FULL repo (Dropbox), idle          | 7492 (15939) | 10993 (17330) | 5292 (22998) | 11530 (34912) | 15246 (21874) | 4990 (11600) | 5325 (38178)
+  FULL + 32 CPU threads              | 7403 (15370) | 10735 (16129) | 5145 (23821) | 10393 (34798) | 15627 (22331) | 3425 (9851) | 5850 (37834)
+  FULL + file churn                  | 7467 (18339) | 12354 (19427) | 5412 (26485) | 11615 (39272) | 15792 (22886) | 3951 (11157) | 5379 (39739)
+  FULL 8 CPUs, 31 workers            | 14099 (20284) | 22259 (32972) | 8063 (35802) | 22112 (56227) | 30555 (35151) T | 10299 (20760) | 8626 (63504)
+  FULL 4 CPUs, 31 workers (default)  | 11168 (27402) | 17524 (25136) | 8910 (43011) | 14455 (59897) | 30681 (31303) T | 8400 (21706) | 9748 (70595)
+  FULL 4 CPUs, 16 workers            | 9078 (17821) | 14917 (19860) | 5926 (23281) | 8110 (29916) | 15612 (20751) | 6542 (14903) | 5296 (38516)
+  FULL 4 CPUs, 8 workers             | 6267 (11179) | 9357 (12840) | 4283 (14580) | 5829 (20796) | 12556 (17808) | 3001 (8465) | 3363 (23831)
+  FULL 4 CPUs, 31 workers, lazy pdf  | 9344 (22498) | 9203 (13917) | 5360 (30491) | 9144 (42972) | 27320 (39568) | 8282 (17366) | 7142 (55338)
+  FULL 4 CPUs, 16 workers, lazy pdf  | 8342 (15353) | 8781 (17016) | 2444 (11791) | 5336 (23662) | 10624 (16528) | 4253 (12494) | 4056 (30924)
+  FULL 2 CPUs, 16 workers, lazy pdf  | 36911 (52302) T | 34387 (70449) T | 12434 (36061) | 39847 (128366) T | 30236 (41763) T | 11064 (28935) | 32718 (151856) T
+  FULL idle, 50% workers, lazy pdf   | 2557 (7166) | 2786 (4796) | 1806 (9827) | 3332 (14632) | 7159 (11332) | 1616 (4382) | 2847 (16827)
+Slowest tests at idle (full run): backup "runs in production, prints counts only..." 4.6 s; backup-prune "dry run prints the counts..." 6.2 s; bootstrap "rejects a bad file..." 3.0 s; restore "restores in production..." 5.5 s; deadline-race "exactly one revision... (20 rounds)" 12.6 s; delivery-crash 3.2 s; jobs-restart "resumes after a kill before rename..." 6.2 s.
+
+Observations.
+  1. Idle, every test is far below 30 s, but in the full parallel run the suite slows itself: deadline-race 4.1 s alone -> 12.6-15.8 s in the full run (3-4x), backup-prune 3.6 -> 6.2-12.4 s, restore 3.3 -> 5.5-11.6 s. The run-to-run spread at idle is already 2x (12.6 vs 15.2 s). The margin to 30 s is 2x for deadline-race.
+  2. Neither CPU load alone (burner on all 32 logical cores) nor file churn reproduced a failure (55 s, 62 s). The Windows scheduler gives the short test processes a fair share.
+  3. Giving the suite fewer logical CPUs while vitest still runs its default 31 forks does reproduce the FIX5 failures: 8 CPUs -> 3 failures, 4 CPUs -> 6, 2 CPUs -> the same set FIX5 saw (backup, backup-prune, jobs-restart, restore, deadline-race; FIX5 npm test run 1 took 272 s and run 2 115 s against 48 s idle). So FIX5's host offered the suite roughly 2-4 CPUs' worth of capacity for a few minutes. What took the capacity was not running at either census (about 1.5 to 4 cores busy; 10-census.txt) and is not identified. The 45 msedge processes FIX5 saw are the owner's Edge (one parent, started days ago); they used 0.07 core at the first census and 2 cores at the second, so they can add a little load but not 28 cores' worth.
+  4. Self-contention is the lever that is ours: with the same 4 logical CPUs, 16 workers (not 31) took 130 s instead of 139 s, with 0 failures instead of 6, and cut the slowest test of the sensitive files by 25-45% (deadline-race 30.7 -> 15.6 s, restore 14.5 -> 8.1 s). 8 workers: 126 s, slowest 12.6 s. On the idle host 16 workers cost nothing (53 s against 48-53 s) and 8 workers cost +60% (81 s). 31 forks, each also spawning CLI children, oversubscribe the 16 physical cores / 32 SMT threads.
+  5. Cheaper spawns (lazy PDF library, 20-cli-cost.txt) take 37% off each CLI: 4 CPUs/16 workers backup-prune 14.9 -> 8.8 s, bootstrap 5.9 -> 2.4 s, restore 8.1 -> 5.3 s, deadline-race 15.6 -> 10.6 s; idle full run 43 s with the config change and the lazy import together. The remaining load-sensitive tests that no spawn cost explains are in-process CPU work: deadline-race (worker threads), pdf-render (30 s), workbook-reader (time-bound assertions 5000 / 2000 ms inside the test, tests/integration/workbook-reader.test.ts; they fail at 4 CPUs with 31 workers and pass with 16; do not loosen them).
+  6. Limit of the fix: at 2 logical CPUs (16x fewer than the 32 vitest sees) even 16 workers and lazy import fail (slowest 39.8 s). Between 4 and 2 CPUs the margin is exhausted; no setting can make a host that gives away 94% of its CPU to something else pass a 30 s limit. That regime must be avoided at the gate (run only when the census shows a quiet host) and the failing run repeated once.
+  7. Dropbox path versus export: single CLI +25 to +45% (20-cli-cost.txt); full suite 53 s (repo) against 48-49 s (export), about +10%, inside the run-to-run spread. The repository path is not the cause of the timeouts.
+  8. Not shown to matter: database and file I/O (a spawned command's database work is tens of ms; 1.0 M small files of churn changed nothing).

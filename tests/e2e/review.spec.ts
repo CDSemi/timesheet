@@ -567,6 +567,15 @@ test('the mockup and the PDF geometry agree within 1% of the content width (the 
 /** Measures the two signature rows inside `scope` and checks the owner's rules; returns the measured fractions. */
 async function expectSignatureGeometry(scope: Locator, width: number, options: { button: Locator | null; exactFractions: boolean }) {
   const group = scope.locator('.review-signatures');
+  // The saved signature image of the Sign off dialog's preview grows the employee line when it arrives (the name wraps under it by
+  // 23.25px): wait until every image in the rows has loaded, so the four lines are read from one settled layout.
+  for (const image of await group.locator('img').all()) {
+    await expect
+      .poll(() => image.evaluate((element) => (element as unknown as { complete: boolean; naturalWidth: number }).complete && (element as unknown as { naturalWidth: number }).naturalWidth > 0), {
+        message: 'the signature image has loaded',
+      })
+      .toBe(true);
+  }
   const content = await rect(group);
   const line = async (name: string) => rect(group.locator(`[data-sig-line="${name}"]`));
   const employee = await line('employee');

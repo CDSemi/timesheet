@@ -78,8 +78,30 @@ Do not change billing or permission settings.
 ~~~
 
 Current route:
-0. **In progress (paused twice on 2026-10-22 for machine restarts, now running FIX2
-   attempt 3): UI change rounds 4 and 5.**
+0. **In progress (resumed 2026-10-26 after the 2026-10-23 usage pause): UI change rounds 4
+   and 5.**
+   - The last pushed commit is 5b8b718 (digest edcca194). FIX1, FIX2 and FIX3 are frozen,
+     and the owner's Ingat track was merged in (b8bae50).
+   - WP5-UX5-REGATE3 (attempt 2) failed:
+     - two sweep assertion failures: Today at the LA midnight crossing, and a review row
+       alignment;
+     - recurring ECONNRESET;
+     - two new npm audit advisories (nodemailer, zod).
+   - The diagnoses are done:
+     - the two sweep failures are test defects;
+     - the resets are a harness defect;
+     - no product fault was found.
+   - WP5-UX5-FIX4 pinned nodemailer 10.1.4 and zod 4.6.6. It is not committed yet.
+   - WP5-UX5-FIX5 (tests and harness only) is done and not committed yet.
+   - WP5-UX5-DIAG3 is done. Under host load, too many parallel test workers cause the
+     timeouts; the smoke reset is the same keep-alive defect. No product fault.
+   - WP5-UX5-FIX6 (harness and test configuration only) is done and not committed yet.
+   - Running now: WP5-UX5-FIX6-FREEZE, one commit of FIX4 to FIX6 and the records, then a
+     push.
+   - Then REGATE4, audits A and B, the integration audit, ACCEPT-DOCS and the WP5
+     re-accept.
+   - Details: the checkpoint, section "REGATE3 failed; two diagnoses run (2026-10-26)".
+   - Earlier the same day it was paused twice for machine restarts.
    - Every slice of both rounds is frozen. The last commit is 2bce0ab (digest 70975091).
    - The round-5 gate failed and FIX1 fixed it. The regate then failed on one test race;
      WP5-UX5-DIAG1 classified it as a test defect.

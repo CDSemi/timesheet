@@ -530,9 +530,22 @@ async function showToday(page: Page, employeeSeed: SeedClient): Promise<string> 
   await expect(page.locator(`[data-day="${todayLocal}"]`)).toHaveCount(todayShown ? 1 : 0);
   await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(todayShown ? 1 : 0);
   if (!todayShown) await page.getByRole('button', { name: 'Next period' }).click();
-  await expect(page.locator(`[data-day="${todayLocal}"].today`)).toHaveCount(1);
   await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(1);
-  return todayLocal;
+  // The date comes from the app once the app and the server agree on it. A page that stayed open across the reporting-zone midnight
+  // shows the earlier date until it re-reads the periods (document 04: on load, on a press of Today and on focus), so the poll sends
+  // the focus event and compares the Today tag with a fresh server read instead of with the date read before the midnight.
+  const tagged = page.locator('[data-sheet] [data-day].today');
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate("window.dispatchEvent(new Event('focus'))");
+        const server = (await employeeSeed.today()).todayLocal;
+        return (await tagged.count()) === 1 && (await tagged.getAttribute('data-day')) === server ? server : null;
+      },
+      { message: 'the Today tag and the server date agree' },
+    )
+    .not.toBeNull();
+  return (await tagged.getAttribute('data-day')) ?? todayLocal;
 }
 
 const dayButtonOf = (page: Page, workDate: string) => namedDayButton(page, workDate, 'Edit');

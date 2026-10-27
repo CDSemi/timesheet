@@ -157,3 +157,8 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+
+- Done. HEAD 7aafa21 -> ff 9f186b2 -> commit 5b8b7184692fff683c4083c9fc5610acd47bece1; pushed;
+  remote SHA = HEAD. D_PRE = HEAD digest = edcca194...041ce.
+- 177 files staged; sections re-added (+92/+91 lines); one link fix (MANIFEST_DESIGN review, EN+VI);
+  no rename or masking. All checks exit 0 (preflight 0 after the fix). Details: evidence/WP5-UX5-FIX3-FREEZE/checks.txt.

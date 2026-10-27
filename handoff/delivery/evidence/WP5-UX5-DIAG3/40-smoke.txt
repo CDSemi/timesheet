@@ -1,0 +1,34 @@
+WP5-UX5-DIAG3 Q3: the smoke "fetch failed" after run-jobs (scripts/smoke-built-server.mjs)
+
+Verdict: CONFIRMED. A pooled keep-alive socket goes stale while the smoke process is blocked in spawnSync; the next fetch writes to it and gets ECONNRESET.
+
+Code path (scratch export of the repository file; line numbers are those of scripts/smoke-built-server.mjs at HEAD):
+  :70-73   run(args) = spawnSync(process.execPath, args, ...)  blocks the smoke process's event loop for the whole CLI run
+  :79-82   call() = fetch without a connection header (undici keep-alive pool, reuses the socket)
+  :406-407 the last call() before the block (replayed send) leaves a pooled idle socket to the server
+  :410-413 runAt() x3 = three blocking CLI runs: 3 x (0.37 s idle ... 13 s loaded)
+  :415     const pdf2 = await fetch(`${base}/api/revisions/${revisionId}/pdf`, ...)  first fetch after the block; also without a connection header
+  server   @hono/node-server serve() at src/server/index.ts:59, Node http default keepAliveTimeout 5 s: it closes the idle socket 5 s after the last response. The blocked client cannot read the FIN, and the next request on the dead socket is reset.
+Only this block can strand a socket in the smoke: the other spawnSync calls (:117, :119, :121) run before the server starts and before any connection exists.
+
+Probes (task folder scripts smokerun.sh, smoke-timed.mjs, smoke-block8.mjs, smoke-close.mjs, smoke-block8-close.mjs in the scratch export; the files are copies with only the lines named below changed; built dist of the export; ports 50221-50228):
+  1. smoke-timed.mjs = the smoke with a BLOCKED_MS print around :412. Idle host: BLOCKED_MS 1106 -> SMOKE PASSED (rc 0).
+  2. Pinned to 2 logical CPUs with 8 burner threads on the same CPUs: BLOCKED_MS 2805 -> SMOKE PASSED.
+  3. Pinned to 1 logical CPU with 16 burner threads (burner ends itself after 120 s): BLOCKED_MS 39110 -> "FAIL  unexpected error: fetch failed" (the wrapper's exit code is not the smoke's; the smoke then crashes in its cleanup, see "Second defect" below).
+  4. smoke-block8.mjs = probe 1 plus Atomics.wait(8000) after the three CLI runs, IDLE host, error cause printed: BLOCKED_MS 9162 -> "FAIL  unexpected error: fetch failed CAUSE ECONNRESET read ECONNRESET", rc 1. Deterministic.
+  5. Fix probe: the same two copies with the header { connection: 'close' } in call() (:76 headers) and in the raw fetch at :415:
+       smoke-block8-close.mjs, idle, BLOCKED_MS 9260 -> SMOKE PASSED, rc 0.
+       smoke-close.mjs under the load of probe 3 (BLOCKED_MS 73059, nearly twice the failing block) -> SMOKE PASSED, rc 0.
+  A stand-alone mini probe (scripts/probe-keepalive.mjs: fetch /api/health, Atomics.wait N ms, fetch again; N = 1, 3, 4.5, 5.5, 7, 12 s) did NOT reproduce the reset for keep-alive or close (all ok 200). The reason is not established (a GET /api/health may be retried by undici on a stale socket, while the smoke's :415 request carries a cookie and failed); the smoke itself with the same total block does reproduce it, so the mechanism is proven on the real script, not on the mini probe. DIAG2's e2e probe (30-C-econnreset.txt) reproduced it at 7 s and 9 s with the same server.
+  Why it failed only in FIX5's first verify run and not in the smoke runs alone: the three CLI runs take about 1.1 s idle and must exceed 5 s in total (more than 1.7 s per CLI, 4.5x slower than idle), the same overload as the test timeouts.
+
+Second defect, seen in probes 3 and 4 and in FIX5's verify1.txt (a FAIL line and no "SMOKE FAILED" line): on any failure the cleanup crashes. scripts/smoke-built-server.mjs:316 opens `monitor` (a readonly better-sqlite3 handle on the smoke database) inside the try block and closes it only at :484, on the success path. After an exception the handle is still open, so `rmSync(work, ...)` at :496 fails with EPERM on Windows (the log: "Error: EPERM, Permission denied ... timesheet-smoke-..."), the uncaught exception ends the process with exit 1 before :499 prints "SMOKE FAILED (n)", and the temp folder timesheet-smoke-* stays behind. Exit code 1 still fails the gate, but the summary line is lost and a folder is left in the temp directory. Fix: close `monitor` in the finally block before rmSync (declare it next to `let server;`).
+
+Other places that fetch after a blocking spawnSync/execSync on a reused connection (scripts/ and tests/):
+  scripts/smoke-built-server.mjs:415 (above) - the only occurrence that fails today.
+  tests/e2e/fixtures.ts SeedClient.raw :376 and uploadSignature :387 after drainJobsFrom (:150-168) - fixed by FIX5 (header connection: close on the request before the block). Remaining weak point (not reproduced, 0 resets in FIX5's 52 runs): waitUntilHealthy fetch at tests/e2e/fixtures.ts:69 and tests/e2e/setup.spec.ts:98 send no close header, leave one pooled socket, and the first SeedClient request can ride on it; harmless unless a block reaches the server's 5 s before that first request.
+  scripts/container-drill.mjs:174 call() (fetch, no close) interleaved with compose()/docker() spawnSync of docker exec / compose commands (:132, :152, :674 cliIn, :1562): same pattern against the container's server, seconds per docker exec; not run here (needs Docker and the build; same server code, same 5 s). Same one-line fix: headers.connection = 'close'.
+  tests/e2e/admin-status.spec.ts:242,367, day-editor.spec.ts:4240, history-settings.spec.ts:220: spawnSync of a seed script, but every Node-side HTTP call before and after goes through SeedClient (close) and the rest is the browser, which is not blocked. No hazard.
+  tests/e2e/setup.spec.ts:78 cli() spawnSync runs before the server exists. No hazard.
+  tests/e2e review/admin-status/history-settings/sharing/import specs: plain fetch() login+upload pairs run back to back and none of these specs calls drainJobsFrom or runJobsAt (only automation, pdf-visual and submission specs do, all through SeedClient). No hazard.
+  tests/integration jobs-restart.test.ts:334,391 fetch a spawned (asynchronous) server: the test process is not blocked. All other integration tests call the Hono app in process (no socket). tests/client: none. scripts/precommit-check.mjs and scripts/source-digest.mjs: execFileSync of git only, no fetch.

@@ -1,0 +1,40 @@
+WP5-UX5-FIX5 evidence (synthetic data, capture mode). Task folder D:\.claude-tmp\timesheet\WP5-UX5-FIX5 (logs\ holds every raw log). Node v24.21.0.
+Wrapper: FIX10 run-shift.sh + shiftclock.mjs (copied from the DIAG2 folder, unchanged; run-shift.sh takes SHIFT_EXPORT, default the repository).
+Start state: HEAD 5b8b7184692fff683c4083c9fc5610acd47bece1; outside handoff/ only package.json and package-lock.json modified (FIX4).
+Setup: npm ci in the repository exit 0 (first try, no EBUSY); npm run build exit 0. Scratch export "ex" = git archive HEAD + FIX4 package files + DIAG2 probes zz-*.spec.ts, npm ci and build exit 0.
+
+REPRODUCTION (unfixed tests, scratch export ex; before any change)
+  A  PROBE_MODE=old zz-a.spec.ts, mobile, start 2026-10-27T06:59:35Z: 1 failed (Today tag moved, line 533 message), deterministic.
+  B  zz-review-c (unmodified test + image route delay), desktop, 2027-01-01T07:30:00Z, repeat 6 x 3 workers: delay 50 ms 3 failed / 3 passed; 100 ms 6 passed; 200 ms 6 passed (a race: fails some runs only).
+  C  submission.spec.ts:67 at 2027-03-14T10:30:00Z: w6 repeat6 (12 runs) 12 passed this time (load dependent); w10 repeat10 (20 runs) 2 failed (ECONNRESET); w14 repeat10 (20 runs) 20 failed (ECONNRESET).
+     zz-c probe, real clock: SeedClient fetch after a 7000 ms blocked event loop: FAILED fetch failed / read ECONNRESET; with connection: close: ok.
+
+FIXES (tests and harness only; no src/ change)
+  tests/e2e/timesheet.spec.ts showToday: the line-533 date assertion moved into an expect.poll (focus event + fresh server read vs the Today tag's data-day); returns the app's date.
+  tests/e2e/review.spec.ts expectSignatureGeometry: expect.poll until every img in the rows is complete with naturalWidth > 0, then the unchanged geometry checks.
+  tests/e2e/fixtures.ts SeedClient.raw and uploadSignature: connection: close.
+
+AFTER
+  A  probe fixed, 06:59:35Z mobile: 1 passed.
+     real tests (-g "Today bar is painted over|Today spacing", both projects): 06:59:35Z repeat-each=20 workers=4: 80 passed; real clock repeat-each=20 workers=4: 80 passed.
+  B  zz-review-d (fixed wait + same delay route; equals the real review.spec wait), desktop, repeat 10 each: delays 50, 75, 100, 150, 200 ms: 50 of 50 passed.
+     review.spec.ts, real clock, both projects, 4 workers: 34 passed.
+  C  submission.spec.ts:67 at 2027-03-14T10:30:00Z: w6 repeat6 12 passed; w10 repeat10 20 passed; w14 repeat10 20 passed (before: 20 failed).
+     automation.spec.ts + submission.spec.ts, repeat-each=2, 8 workers: 12 passed.
+  FULL e2e, real clock, default 2 workers, both projects, one run: 863 passed, 125 skipped, 0 failed (18.6 min).
+     desktop: 459 passed, 35 skipped, 0 failed. mobile: 404 passed, 90 skipped, 0 failed.
+
+MUTANTS (scratch export only; src restored afterwards: diff -r repository/src vs export/src empty)
+  M1 sheetModel.ts: the Today mark on the previous day (addDays(todayLocal, -1)); timesheet.spec.ts -g "Today bar|Today spacing": 4 failed (the existing pre-click check '[data-sheet] .today-tag' Expected 0 Received 1 fires first; the poll's own date compare is covered by the DIAG2 old/fixed probe).
+  M2 TimesheetSheet.tsx: employee-date line shifted 4 px (position relative top 4); review.spec.ts -g "signature rows" desktop: 1 failed, "row 1 lines align at 1440px", Expected <= 1, Received 4.
+
+CHECKS in the repository
+  npm run lint exit 0; npm run typecheck exit 0; git diff --check exit 0.
+  npm test, first two runs: exit 1 with 5 files failing (backup, backup-prune, deadline-race, delivery-crash, jobs-restart, bootstrap, restore: 30 s timeouts, different tests each run; the host was busy, 46 msedge processes not started by this task).
+  npm run verify run 1: typecheck, lint, test (101 files, 2374 tests passed), build ok, smoke FAILED late ("fetch failed" after run-jobs --once in scripts/smoke-built-server.mjs; same blocked-event-loop mechanism as C, outside the owned paths) exit 1.
+  npm run smoke alone twice: exit 0, 46 PASS each. npm run verify run 2: exit 0 (101 files, 2374 tests passed, smoke 46 PASS).
+
+DIGEST (clean export: git archive HEAD + package.json, package-lock.json, fixtures.ts, review.spec.ts, timesheet.spec.ts; git init; node scripts/source-digest.mjs; computed last)
+  4e93f7663fdea86d5c80cf6ff086786aeb7414449872248238586bb35aef4519  (882 files, handoff/ excluded)
+
+Slips: one sed -i on my own repro.sh in the task folder (not a repository file); no forbidden shell form otherwise. Nothing left running.

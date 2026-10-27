@@ -1,0 +1,13 @@
+cd <task>
+. ./env.sh
+SEVEN="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts"
+run() {
+  label=$1; instant=$2; shift 2
+  bash run-shift.sh "$label" "$instant" "$@" --workers=6 > "logs/sweep-$label.txt" 2>&1
+  echo "$label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/sweep-progress.txt
+  node counts.mjs "logs/sweep-$label.txt" >> out/17-sweep-counts.txt 2>&1
+}
+run full-0314-rerun 2027-03-14T10:30:00Z
+run seven-1231-rerun 2027-01-01T07:30:00Z $SEVEN
+run seven-1026-rerun 2026-10-27T06:58:30Z $SEVEN
+echo rerun-done > out/rerun.done

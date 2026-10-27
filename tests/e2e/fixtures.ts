@@ -66,7 +66,8 @@ async function waitUntilHealthy(origin: string, child: ChildProcess): Promise<vo
   for (let attempt = 0; attempt < READY_ATTEMPTS; attempt += 1) {
     if (child.exitCode !== null) throw new Error(`Built server exited early with ${child.exitCode}`);
     try {
-      if ((await fetch(`${origin}/api/health`)).ok) return;
+      // Close the connection: a blocking CLI run (runJobsAt) can precede the first request and would strand a pooled socket.
+      if ((await fetch(`${origin}/api/health`, { headers: { connection: 'close' } })).ok) return;
     } catch {
       // Not listening yet.
     }
@@ -369,7 +370,8 @@ export class SeedClient {
   }
 
   private raw(method: string, path: string, body?: unknown): Promise<Response> {
-    const headers: Record<string, string> = { origin: this.origin };
+    // One connection per request: a spec blocks this process for seconds (spawnSync of the run-jobs CLI) and the server closes an idle keep-alive connection after 5 s, which a pooled socket would still look alive on.
+    const headers: Record<string, string> = { origin: this.origin, connection: 'close' };
     if (this.cookie !== '') headers.cookie = this.cookie;
     if (body !== undefined) headers['content-type'] = 'application/json';
     return fetch(`${this.origin}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -380,7 +382,7 @@ export class SeedClient {
    * `authorizeAutoImage` the upload also records the explicit automatic-image consent (settings must exist).
    */
   async uploadSignature(png: Buffer, authorizeAutoImage = false): Promise<string> {
-    const headers: Record<string, string> = { origin: this.origin, 'content-type': 'image/png' };
+    const headers: Record<string, string> = { origin: this.origin, 'content-type': 'image/png', connection: 'close' };
     if (this.cookie !== '') headers.cookie = this.cookie;
     const query = authorizeAutoImage ? '?authorize_auto_image=true' : '';
     const response = await fetch(`${this.origin}/api/signatures${query}`, { method: 'POST', headers, body: new Uint8Array(png) });

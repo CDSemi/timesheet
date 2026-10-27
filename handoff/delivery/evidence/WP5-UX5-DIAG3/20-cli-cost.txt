@@ -1,0 +1,38 @@
+WP5-UX5-DIAG3 Q2a: what one spawned CLI costs (idle host, Node 24.21.0, scratch export of 5b8b718 plus the five uncommitted files; the Dropbox repository for the "repo" rows)
+
+The "about 3.6 s per CLI" figure is a misreading of DIAG2: 30-C-econnreset.txt says drainJobsFrom (SIX sequential spawnSync of run-jobs) blocked the runner for 3594 ms on an idle host, i.e. 0.6 s per CLI. One CLI is 0.25-0.7 s idle (rows below). It reaches 3 s and more only when the host is loaded (smoke run under load: 3 CLIs blocked 39 s, see 40-smoke.txt).
+
+Commands (task folder scripts: time-cli.sh, cli-matrix.sh, import-timing.mjs); wall ms per spawn, one run each unless noted; all exit 0 (usage exits 2 by design):
+  node --version (baseline)                         46 ms (3 runs 46-47)
+  export  src/server/cli.ts   usage (module graph only)  388 ms   (5 runs 396-433)
+  export  src/server/cli.ts   migrate fresh / noop        418 / 388
+  export  src/server/cli.ts   seed                        630
+  export  src/server/cli.ts   run-jobs --once --now       515, 458
+  export  src/server/cli.ts   backup --to                 550
+  repo    src/server/cli.ts   usage 573, migrate 730 / 513, seed 696, run-jobs 547 / 486, backup 698   (Dropbox path: +25 to +45%)
+  repo    dist/server/cli.js  usage 371, migrate 371 / 372, seed 360, run-jobs 395 / 365, backup 438      (compiled JS: 0.36-0.44 s)
+No first-run penalty (antivirus scan of a new file) showed in repeated runs; Defender real-time protection is on and its exclusions need administrator rights to read, so antivirus cost is not isolated.
+
+Where the time goes (import-timing.mjs, ms per module, cumulative load of the CLI graph):
+  dist (repo)   better-sqlite3 6, db 4+10, config 4, fileStore 1, mail/outbound 39, jobs/pdfJob 180, runner 14, backup/restore/seed 9, services/bootstrap 44   total 310 ms
+  src (export)  same modules, total 373 ms: Node 24 type stripping adds about 60 ms
+  pdfJob 180-192 ms = 55-60% of the module-graph cost. It is the only user of src/server/pdf/timesheetPdf.ts (pdf-lib + @pdf-lib/fontkit) in the CLI graph (src/server/jobs/pdfJob.ts:9 static import; used at :244 and :253 only when a PDF is rendered). Every CLI command (migrate, seed, backup, restore, bootstrap, outbound, run-jobs) pays it, although only run-jobs may render.
+  node start-up 46 ms; SQLite open and migration check about 20-30 ms; the command itself 0-300 ms.
+
+Probe of the cheaper spawn (scratch export only, never in the repository):
+  src/server/jobs/pdfJob.ts:9   -> import type { PdfOrigin, TimesheetPdfInput } from '../pdf/timesheetPdf.ts';
+  src/server/jobs/pdfJob.ts:244 -> const render = deps.render ?? (await import('../pdf/timesheetPdf.ts')).renderTimesheetPdf;
+  tsc -p tsconfig.server.json --noEmit: exit 0.  tsc emit: the dynamic import is rewritten to "../pdf/timesheetPdf.js" (dist js line 181).
+  graph load 373 -> 176 ms; CLI usage 388 -> 245 ms (5 runs 244-247), i.e. -37%. The PDF library then loads on the first render in the same process.
+  The diff is in 50-fix-probes.txt.
+
+Spawn counts and time per file (iso.sh: each file alone on the idle host, spawnlog.mjs preload wrapping child_process; spawn = sync CLI run or async child lifetime):
+  file             wall ms   spawns (mean)         spawn time   share of the tests' time
+  backup            7017      6 sync (404 ms)       2.4 s        about 55% (tests sum 4.3 s)
+  backup-prune      6894     13 sync (408 ms)       5.3 s        about 100% (tests sum 5.4 s)
+  bootstrap         8138     12 sync (404 ms)       4.9 s        about 70% (tests sum 6.9 s)
+  restore          14631     21 sync (400 ms)       8.4 s        about 75% (tests sum 11.2 s)
+  delivery-crash    4563      5 async runner children (mean lifetime 374 ms)   (kill/restart steps wait for marks)
+  jobs-restart     14700     21 async lifetimes (mean 533 ms, max 1938 ms) 11.2 s; kill/restart steps poll marks with waitFor limit 20 s (tests/integration/jobs-restart.test.ts:131, delivery-crash.test.ts:119)
+  deadline-race     7349      0 spawns: 20 + 10 rounds of two worker threads (tests/support/concurrency.ts) racing on one SQLite file; CPU and scheduler bound
+So the CLI-spawning files are dominated by the spawns (CPU: module load and TypeScript stripping), not by the database or file I/O: sync spawns are 55-100% of their test time, and the database work of each command is tens of ms.

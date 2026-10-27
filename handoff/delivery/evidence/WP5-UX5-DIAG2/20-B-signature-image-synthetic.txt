@@ -1,0 +1,23 @@
+B. review.spec.ts:616 "row 1 lines align at 1440px", received 23.25
+
+Where it fails: in the SECOND half of the test, the Sign off dialog's signature preview (review.spec.ts:641-645), not the page footer.
+Evidence: REGATE3-a2 pw-seven-1231-rerun trace of the failure lists all four page widths (1440, 768, 390, 320) done, then the click on [data-sign-off] and the
+dialog reads (3190-3231 ms); error-context.md shows the dialog with img "Your saved signature image". The failing run started 2027-01-01T07:30:00Z
+(23:36 PST): the instant plays no part (test #52, early in the run, 6 workers starting).
+
+Mechanism: src/client/components/SignoffDialog.tsx:168 renders <img class="signed-image" src="/api/signatures/<id>"> in the Employee Signature line.
+Before the image arrives the line is 52 px (the minimum, src/client/styles.css:5746); after it arrives the name wraps under the image and the line is
+75.25 px: +23.25 px = one text line (15 px x 1.55). expectSignatureGeometry (review.spec.ts:568-614) reads the four lines one boundingBox() at a time;
+when the image lands between two reads the bottoms differ by 23.25.
+Probe (scratch zz-review-b.spec.ts, image route delayed 800 ms):
+  PROBE-B loadedAtOpen=false employeeLine bottom 316.484375 -> 339.734375, height 52 -> 75.25; dialog top 45 -> 45, height 810 -> 810  (twice)
+
+Before the change (zz-review-c.spec.ts = the unmodified test plus only a delay of GET /api/signatures/*; desktop, 2027-01-01T07:30:00Z, 6 runs each, 3 workers):
+  delay   0 ms: 6 passed        delay  25 ms: 6 passed
+  delay  50 ms: 2 failed, 4 passed   delay  75 ms: 1 failed, 5 passed
+  delay 100 ms: 2 failed, 4 passed   delay 150 ms: 6 passed
+  delay 200 ms: 3 failed, 3 passed (message "row 2 lines align at 1440px", Received 23.25)   delay 300 ms: 6 passed
+After the change (zz-review-d.spec.ts = the same plus the wait; 10 runs each): delays 0, 50, 100, 200, 400 ms: 50 passed, 0 failed.
+Unmodified test, no delay: 20 of 20 passed (desktop, --repeat-each=20 --workers=6) and 117 of 120 passed at --repeat-each=60 --workers=14 (both projects; the 3
+failures there were page.goto ERR_ABORTED x2 at the 30 s timeout and one 401 on the admin seed sign-in: load faults, not B). Natural rate in REGATE3: 1 failure in about 10 desktop executions of the test.
+Actual patched review.spec.ts, 2027-01-01T07:30:00Z, -g "signature rows" --repeat-each=10 --workers=6: 20 passed.

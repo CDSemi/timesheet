@@ -1,0 +1,39 @@
+WP5-UX5-FIX6 evidence (synthetic data, capture mode, scratch exports under D:\.claude-tmp\timesheet\WP5-UX5-FIX6; raw logs there in logs\)
+
+Base: HEAD 5b8b7184692fff683c4083c9fc5610acd47bece1 + the five FIX4/FIX5 files (package.json, package-lock.json, tests/e2e/fixtures.ts, review.spec.ts, timesheet.spec.ts). No npm ci/install. Node 24.21.0. Ports 50241-50246 (smoke), e2e/drill use OS-chosen loopback ports.
+Start state (17:17): git status outside handoff/ = exactly the five files. Census (30 s): about 3.3 busy cores of 32 (msedge 0.73, bash 1.0, dwm 0.45, claude 0.21 ...). The mission leftover "bash.exe waitfor.sh out/sweep.done 590" is STILL PRESENT (30.1 s CPU in 30 s = one core). Not stopped.
+
+Changes (working tree):
+  vitest.config.ts              maxWorkers: '50%' (type number | string in vitest 5 plugin.d.ts "Maximum number or percentage of workers"; not deprecated). Yields 16 forks on this 32-logical-CPU host (was 31).
+  scripts/smoke-built-server.mjs  call() sends connection: close; the raw PDF fetch sends connection: close; `let monitor;` next to `let server;`, assigned at the old const site, `monitor?.close()` first in the finally before rmSync.
+  scripts/container-drill.mjs     call() headers get connection: close.
+  tests/e2e/fixtures.ts           waitUntilHealthy fetch gets { headers: { connection: 'close' } } (FIX5's change kept).
+  tests/e2e/setup.spec.ts         UNCHANGED.
+No src/ change, no timeout raised, no assertion changed.
+
+Item 4 verdicts:
+  container-drill.mjs:174 call()  CHANGED. It is a Node fetch that follows blocking spawnSync docker/compose runs (docker exec cliIn at about :674-677, :803-806, :1562-1567; compose stop/up) against the container's server with the same 5 s keep-alive. Same pattern as the smoke.
+  tests/e2e/fixtures.ts:69 health poll  CHANGED (hardening, not reproduced). The poll leaves a pooled socket; a blocking runJobsAt/drainJobsFrom (spawnSync) can run before the first SeedClient request, which could then ride the dead socket. One header, no behaviour change.
+  tests/e2e/setup.spec.ts:98  NOT CHANGED. All its spawnSync calls (migrate, bootstrap) run before the server exists; after the health poll the only requests are the browser's (page.goto, page.evaluate fetch), so the Node process is never blocked while a pooled socket is open.
+
+BEFORE (scratch export exp0 = base, unfixed):
+  Smoke blocked probe (copy with Atomics.wait 8000 after the three run-jobs spawns, scratch only, port 50241): BLOCKED_MS 9154 -> "FAIL unexpected error: fetch failed"; then "Error: EPERM, Permission denied ... timesheet-smoke-aYnvAx"; NO "SMOKE FAILED" line; rc 1; folder timesheet-smoke-aYnvAx remained in the task TEMP.
+  Suite at 4 logical CPUs (affinity mask 0xF, default worker count = 31 forks), 2 runs: 183 s, 0 failed (2374 tests; slowest file test 5.5 s) and 310 s, 0 failed (slowest 9.3 s). The DIAG3 failures (6 failed at 139 s) did NOT reproduce here; both runs passed with the old config. Honest note: the timeout regime is intermittent on this host; the config change cannot be shown to fix a failure that did not recur.
+
+AFTER (scratch export exp1 = new working tree, built with npm run build, rc 0):
+  Smoke blocked probe 8 s: BLOCKED_MS 10190 -> SMOKE PASSED rc 0 (port 50242).
+  Smoke blocked probe 40 s: BLOCKED_MS 43111 -> SMOKE PASSED rc 0 (port 50243).
+  Smoke plain: SMOKE PASSED rc 0 (7 s).
+  Induced failure (scratch copy: a deliberately wrong check plus a thrown error after the monitor opened): lines "FAIL induced wrong expectation", "FAIL unexpected error: induced failure after the monitor opened", "SMOKE FAILED (2)", rc 1, no new timesheet-smoke-* folder (only the pre-fix leftover aYnvAx from BEFORE is in the folder).
+  Suite at 4 logical CPUs with maxWorkers '50%' (16 forks), three runs: 321 s, 266 s, 334 s; every run 101 files, 2374 tests passed, 0 failed; slowest single test 4.8 s, 4.6 s and 7.0 s (limit 30 s). (Wall times are longer than DIAG3's 130 s because the host was busier: the leftover core plus the owner's apps.)
+  Suite on the unrestricted host: 65 s, 101 files, 2374 passed, 0 failed (DIAG3: 48-53 s; the leftover core and owner load were present; slowest test 12.6 s backup-prune).
+  Full e2e, real clock, both projects, 2 workers, in exp1: 988 tests, 863 passed, 125 skipped, 0 failed, 0 flaky, 25.1 m. desktop: 459 passed, 35 skipped. mobile: 404 passed, 90 skipped.
+  Container drill (Docker 28.5.1 available), run once from exp1 with --work in the task folder and project fix6-drill, no --wp3: rc 0, 296 s; STAGE 1 33 PASS 0 FAIL, STAGE 2 32 PASS 0 FAIL, STAGE 3 57 PASS 0 FAIL, STAGE 6 23 PASS 0 FAIL; "DRILL STAGES 1-3 and 6 PASSED". Stages 4 and 5 not run (they need --wp3).
+  Repository checks, one after another: npm run lint rc 0 (28 s); npm run typecheck rc 0 (13 s); npm test rc 0 (50 s, 101 files, 2374 tests passed); npm run verify rc 0 (84 s, SMOKE_PORT 50246, 101 files / 2374 tests passed, SMOKE PASSED); git diff --check rc 0.
+  Final git status outside handoff/: the same five files + vitest.config.ts, scripts/smoke-built-server.mjs, scripts/container-drill.mjs.
+
+Digest (clean export exp2 = git archive HEAD + the five earlier files + vitest.config.ts + the two scripts; scratch git init so the repository's script can list files; node scripts/source-digest.mjs):
+  26b163a62b7d85dbf6b6146c73f98593ad6bcae7eeb8fb1dc7fd9d4dc8305336  (882 files, handoff/ excluded)
+
+Slips: one global git setting was added: `git config --global --add safe.directory <exp2 path>` (scratch export only); the owner may remove that entry. Several polling waits used `until ... sleep` loops in the foreground. No heredoc, no stdin to node/python, no pipe into head/tail/cat, no PID kill, no rm -r, no sed -i, no /dev/null.
+Left behind in the task folder: timesheet-smoke-aYnvAx (from the BEFORE probe, by design); the drill's default end step is `compose down -v` for project fix6-drill (not separately checked).

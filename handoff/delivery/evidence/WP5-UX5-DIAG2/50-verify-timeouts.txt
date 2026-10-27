@@ -1,0 +1,11 @@
+Q6: REGATE3 repository "npm run verify" run 1 (backup.test.ts and jobs-restart.test.ts timeouts), from the logs only
+
+Run 1: Start 13:53:39 PDT, Duration 110.66 s (tests 76%, transform 13%, import 11%); backup.test.ts "runs in production, prints counts only and refuses a target inside
+DATA_DIR" timed out at 30000 ms (file took 44.5 s); jobs-restart.test.ts "resumes after a kill before write" failed in waitFor (file took 93.6 s). Exit 1.
+Run 2 (about 2 min later, same tree): Duration 60.90 s, exit 0, 101 files / 2374 tests. The export verify (03-verify) took 51.86 s, three npm test runs 48-50 s.
+So run 1 was about twice as slow as every other run of the same tests, in tests that spawn node child processes (the backup CLI; killed runner processes).
+Overlap: in REGATE3-a2's own folder the previous heavy command (mutant runs, mutants.done) ended 13:51:46 and the stress run 13:48:06; run 1 ran 13:53:39-13:55:31
+alone in that task. The logs show no other heavy command of the same task in that window; they do not show other agents' work or Dropbox/antivirus scanning,
+so an outside load is likely but not provable.
+Fix: none needed. The tests passed on rerun; the 30 s limits and the child-process spawns were fine at normal speed. Rule: run "npm run verify" alone on an idle host
+and rerun once on a timeout, recording both (as REGATE3 did).

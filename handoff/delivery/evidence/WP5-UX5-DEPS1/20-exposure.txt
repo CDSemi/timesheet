@@ -1,0 +1,40 @@
+WP5-UX5-DEPS1 evidence 20: how the app uses the two packages and whether the advisories are reachable
+(read from the repository at 5b8b718; line numbers refer to that tree)
+
+zod (imports: src/server/http/schemas.ts:1, http/validation.ts:2 (type only), services/bootstrap.ts:2,
+routes/admin.ts:2, routes/shares.ts:2)
+  - The only parse call on request input is http/validation.ts:13 `schema.safeParse(body)` after
+    `c.req.json()` (readJson); other safeParse: services/bootstrap.ts:127 (operator configuration, not network input).
+  - Every request goes through app.ts:97-112: a 64 KiB JSON body limit (app.ts:38 GLOBAL_JSON_LIMIT_BYTES, bodyLimit at
+    app.ts:103-109 with 413) before the route runs, for authenticated and anonymous routes alike (the two raw uploads
+    use their own limits: signatures 256 KiB, workbook 2 MiB, and are not parsed by zod).
+  - Array schemas exist (examples): schemas.ts:58, 68, 120 (entries .max(62)), 140, 157-164, 273 (.max(500)),
+    301 addressList .max(40), 319, 352, 423-424 (.max(1000)); bootstrap.ts:58-74; admin.ts, shares.ts item lists.
+    Each has a .max(), but zod runs a length check after the elements are parsed, so a max does not stop the per-element
+    issue accumulation the advisory describes.
+  - Exposure statement: reachable in principle (JSON arrays reach zod array schemas, including on authenticated routes),
+    but bounded. A 64 KiB body holds at most about 32,000 minimal array elements, so the per-element issue objects stay in
+    the megabytes, far below an out-of-memory condition; the unbounded body the advisory needs is refused first with 413.
+    Risk: low. No unauthenticated route has an array field (login/bootstrap bodies are flat objects). This is an
+    assessment from the code, not a reproduced exploit; no memory test was run.
+
+nodemailer (imports: src/server/mail/message.ts:2 `nodemailer/lib/mail-composer`, services/notifications.ts:2 same,
+mail/smtpAdapter.ts:2 `nodemailer/lib/smtp-connection`)
+  - MailComposer: message.ts:114 (submission e-mail), notifications.ts:435 (reminder). Only MailComposer reaches
+    addressparser, through dist/esm/mime-node/index.js:1068 `addressparser(address)` (the only users of addressparser
+    in the package are mime-node and the addressparser module itself; grep of dist/esm, installed 10.0.14).
+  - SMTPConnection: smtpAdapter.ts:79 (connect/login/send of a prebuilt envelope {from, to[]}); it does not call
+    addressparser.
+  - Every address given to MailComposer is first checked against SINGLE_ADDRESS
+    `/^[^\s@<>(),;:"\\]+@[^\s@<>(),;:"\\]+\.[^\s@<>(),;:"\\]+$/`:
+    message.ts:20 and :105 (sender), :109 (every To and Cc); notifications.ts:420 and :432-433 (sender and recipient).
+    config.ts:144/150 applies the same expression to MAIL_FROM. The expression rejects whitespace, "<", ">", "(", ")",
+    ",", ";", ":", a double quote and a backslash, which are exactly the characters every payload in the three
+    advisories needs (nested "(", ";" inside a group/comment, ">" and "\"" in a quoted local part).
+  - Exposure statement: not reachable with the inputs the app passes. User-influenced addresses (submission settings
+    recipients, per-send To/Cc) cannot contain the trigger characters when they reach MailComposer; an invalid address
+    makes buildMessage throw MessageError (message.ts:109) and the reminder job fail permanently. Risk: negligible, but
+    the upgrade is still the right fix because the regex is the only defence and the advisory is on a direct
+    production dependency.
+  - Secondary check, by probe: the same fixed message built with the base dist and with the upgraded dist gives
+    identical bytes (see 30-probe.txt), so the upgrade does not change what is sent or captured.

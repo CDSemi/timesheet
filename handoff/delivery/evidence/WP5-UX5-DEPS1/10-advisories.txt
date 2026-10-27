@@ -1,0 +1,50 @@
+WP5-UX5-DEPS1 evidence 10: advisories (read from the scratch export of 5b8b7184692fff683c4083c9fc5610acd47bece1)
+
+Source of metadata: `npm audit --omit=dev --json` in the base export (exit 1), and the GitHub advisory
+REST API (https://api.github.com/advisories/<GHSA>, read-only GET) for the published dates.
+<export> = D:\.claude-tmp\timesheet\WP5-UX5-DEPS1\base
+
+Base export: git archive of HEAD, `npm ci` exit 0 (Node v24.21.0, npm 11.18.0, portable Node 24 first on PATH).
+Note: with the Program Files npm shim, npm ran on Node 26.10.0 and `npm ci` stopped with EBADENGINE (exit 1);
+the working invocation is `node.exe <APPDATA>/npm/node_modules/npm/bin/npm-cli.js ...` with the portable
+Node bin first on PATH (as recorded in the dev-environment notes).
+
+Installed: nodemailer 10.0.14 (exact pin in package.json), zod 4.6.5 (exact pin).
+`npm ls zod nodemailer --all` (base export):
+  timesheet@0.1.0
+  +-- nodemailer@10.0.14                (direct, production dependency)
+  +-- smtp-server@3.19.17               (dev dependency; exact pin nodemailer 10.0.14)
+  |   `-- nodemailer@10.0.14 deduped
+  `-- zod@4.6.5                         (direct, production dependency)
+Both packages are DIRECT dependencies; there is no transitive production path.
+
+Advisory 1: zod
+  GHSA-mrhx-c7xc-m3w5 (CVE-2023-54404), severity high, CVSS 3.1 7.5 (AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H), CWE-770
+  Title: Zod can exhaust memory while validating oversized constrained collections
+  Published 2026-10-01T18:32:46Z (GitHub-reviewed 2026-10-23T18:26:50Z, so npm audit shows it from 2026-10-23).
+  Vulnerable range: < 4.6.6. First patched: 4.6.6. Installed 4.6.5. Latest 4.6.7 (2026-10-12).
+  Mechanism (advisory text): $ZodArray handleArrayResult accumulates every validation issue for each failing element
+  with no cap or early termination; a very large array makes the process allocate excessive issue objects.
+
+Advisories 2-4: nodemailer (all moderate, CVSS 3.1 6.5, AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:L/A:N, CWE-20 and CWE-436)
+  All three: vulnerable range >= 3.0.0, < 10.1.4. First patched 10.1.4 (2026-10-18). Installed 10.0.14.
+  All three published 2026-10-23 (21:51-21:53Z); npm audit range string "3.0.0 - 10.1.3".
+  - GHSA-8c8m-p3m8-cjg8: a nested comment ends early in addressparser (published 2026-10-23T21:53:04Z).
+  - GHSA-m943-m63m-w62w: a ";" inside a quoted string or comment ends an address group early (2026-10-23T21:51:52Z).
+  - GHSA-85x2-q946-cp5h: a ">" inside a quoted local part ends an angle-addr early (2026-10-23T21:51:18Z).
+  Mechanism: lib/addressparser misreads a syntactically valid RFC 5322 address so the envelope recipient becomes a
+  different address than a conformant validator sees. The attacker must control the text of an address that the
+  application passes to Nodemailer as a STRING (the parse happens in MimeNode._convertAddresses).
+
+Why the advisories are new: package.json and package-lock.json are unchanged since 7aafa21; the advisories were
+published/reviewed on 2026-10-23, after REGATE2's clean audit.
+
+`npm audit fix` (no --force) does NOT reach the fix: both packages are exact pins in package.json; npm reports
+"fix available via `npm audit fix --force`" (nodemailer 10.2.1, zod 4.6.7, isSemVerMajor false). A dry run of
+`npm audit fix --dry-run --omit=dev` in the scratch export exits 1 and still lists both advisories.
+
+Full audit (`npm audit`, dev included), for context: base 7 findings (4 moderate, 3 high), fix export 6 findings
+(4 moderate, 2 high). The remaining ones are all dev-only and already present before this change: vite, vitest,
+@vitest/mocker, source-map-js, smtp-server, plus a nested dev copy nodemailer 10.0.14 under
+node_modules/smtp-server/node_modules/nodemailer (smtp-server pins nodemailer 10.0.14 exactly, so npm nests it once
+the root moves to 10.1.4). The gate is `npm audit --omit=dev`, which does not see them.

@@ -1954,18 +1954,240 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
     tới một file.
 - Đang chạy: WP5-UX5-FIX3-FREEZE (một committer mới, chạy một mình): lưu, khôi phục,
   fast-forward, thêm lại, stage, kiểm tra, commit, push.
-- Tiếp theo: WP5-UX5-FIX3 (worker-high). Nó tái hiện hai lỗi chập chờn khi máy chịu tải và
-  làm test ổn định bằng cách chờ theo sự kiện, không nới lỏng assertion. Sau đó là freeze
-  của nó và REGATE3.
-  - Các đường dẫn Ingat được coi là việc của chủ dự án, chỉ kiểm tra là không gây ảnh
-    hưởng.
-  - Verify chạy cả ngay trong repo.
-  - Lượt quét gồm bảy lần chạy, phép thử chịu tải chia làm hai phần.
-- Còn lại sau T06:
-  - T06-FREEZE;
-  - gate gói của đợt 5 (bao gồm cả đợt 4 và đợt 5);
-  - audit khu vực A và B, rồi audit tích hợp;
-  - ACCEPT-DOCS và nghiệm thu lại WP5.
+- WP5-UX5-FIX3-FREEZE xong: **đã push 5b8b7184692fff683c4083c9fc5610acd47bece1**, một
+  fast-forward từ 9f186b2.
+  - Hai mục đã được thêm lại (+92 / +91 dòng). Đã stage 177 file.
+  - Một chỗ sửa liên kết, trong bản review thiết kế manifest INGAT (EN/VI).
+  - Mọi kiểm tra exit 0. D_PRE = digest của HEAD = edcca194. Không còn commit nào chưa
+    push.
+  - Điểm lệch: phần nối thêm được làm bằng shell; một `/dev/null`; một địa chỉ no-reply
+    công khai trong dòng Co-Authored-By của các hồ sơ đã stage (không phải dữ liệu cá
+    nhân).
+- Giai đoạn `ux5-regate3`. Đang chạy: WP5-UX5-REGATE3 (verifier, sonnet) trên 5b8b718 /
+  edcca194, so với 7aafa21. Nội dung:
+  - định danh, với mọi đường dẫn của FIX3 và Ingat được gán nguồn;
+  - so sánh toàn bộ `dist/`: nếu giống hệt thì giữ lại kết quả cũ, nếu khác thì chạy lại
+    các mục bị ảnh hưởng;
+  - phần lõi, kèm các test và tsconfig của Ingat;
+  - FULL e2e trên đồng hồ thật;
+  - lượt quét bảy lần chạy với `--workers=6`;
+  - phép thử chịu tải cho ba test đã sửa;
+  - các mutant của FIX3.
+
+### Tạm dừng vì hạn mức sử dụng (2026-10-23)
+
+- **Việc tạm dừng.** Chủ dự án yêu cầu tạm dừng vì sắp hết hạn mức sử dụng. Điều phối viên
+  đã dừng WP5-UX5-REGATE3 (agent a5a471b592740f995) bằng TaskStop khi nó đang chạy. Ghi
+  chú cuối của nó là "Both clean. Continue waiting."; chưa ghi Results.
+- **Board:**
+  - trạng thái nhiệm vụ `paused_usage`, kèm ghi chú tạm dừng;
+  - giai đoạn `ux5-regate3`;
+  - WP5-UX5-REGATE3 ở trạng thái `interrupted`, kèm ghi chú gián đoạn;
+  - next_task_id là WP5-UX5-REGATE3;
+  - `current_source_digest` vẫn là 507de97c (bản đã nghiệm thu gần nhất, 8e55710).
+- **Git.** Commit đã push gần nhất là 5b8b7184692fff683c4083c9fc5610acd47bece1 (digest
+  edcca194). `git.unpushed` trống. origin/main còn chứa commit gộp Ingat b8bae50 của chủ dự
+  án.
+- **Phần chưa commit kể từ 5b8b718:**
+  - board, STATE, NEXT_ACTION (+ vi) và cặp checkpoint này;
+  - `tasks/WP5-UX5-FIX3-FREEZE.md` (Results), `tasks/WP5-UX5-REGATE3.md`, và các bản nháp
+    audit A, B (đã trỏ sang đích mới);
+  - `evidence/WP5-UX5-FIX3-FREEZE/`;
+  - có thể có một phần `evidence/WP5-UX5-REGATE3/` làm dở.
+- **Phần REGATE3 có thể để sót lại:** server và trình duyệt của nó, cùng Compose project
+  `ts-wp5-ux5regate3` nếu nó đã bắt đầu chạy drill. Lần 2 sẽ kiểm tra và chỉ gỡ theo tên
+  project, không bao giờ theo PID.
+- **Các bước để tiếp tục:**
+  1. Mở lại phiên (`claude --resume b5de56d1-fb31-4dc5-b74f-70e9473e1a0a`, hoặc một phiên
+     mới với prompt khởi động), rồi đặt trạng thái nhiệm vụ thành `running`.
+  2. Giao WP5-UX5-REGATE3 lần 2: một verifier mới, cùng brief, thư mục tác vụ
+     `WP5-UX5-REGATE3-a2`, kiểm tra phần còn sót trước.
+  3. Nếu PASS: audit A và B chạy song song (opus/xhigh mới, brief đã có sẵn, đích là
+     5b8b718 / edcca194), rồi audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5. Nếu
+     FAIL: chẩn đoán và sửa như các lần trước.
+- **Các thỏa thuận với chủ dự án đang có hiệu lực:**
+  - D a cho việc merge, trừ khi chủ dự án lại yêu cầu `--ff-only`;
+  - được phép push lên main;
+  - nhánh Ingat không push gì thêm;
+  - worktree `.claude/worktrees/relaxed-lalande-8359f0` của chủ dự án được để nguyên.
+
+### Đã tiếp tục (2026-10-26)
+
+- Chủ dự án nói "tiếp tục". Trạng thái nhiệm vụ trở lại `running`.
+- Đang chạy: WP5-UX5-REGATE3 lần 2 (một verifier mới, sonnet; Addendum 1 của brief).
+  - Trước tiên nó fetch và kiểm tra định danh; nếu origin đã đi trước HEAD thì dừng.
+  - Nó kiểm tra phần lần 1 còn sót (Compose project `ts-wp5-ux5regate3` theo tên; các
+    tiến trình chỉ liệt kê, không bao giờ dừng theo PID).
+  - Nó dùng thư mục tác vụ mới `WP5-UX5-REGATE3-a2`.
+
+### REGATE3 không đạt; hai việc chẩn đoán đang chạy (2026-10-26)
+
+- **WP5-UX5-REGATE3 lần 2: FAIL** trên bản đã push 5b8b718 / edcca194. Các mục NAS vẫn
+  NOT VERIFIED.
+  - **Đạt:**
+    - định danh (chỉ có đường dẫn của FIX3 và Ingat; không có gì trong `src/`, `assets/`
+      hay các file package);
+    - cả 250 file trong `dist/` giống từng byte với 7aafa21, nên kết quả drill, axe, CSP
+      và tích hợp của REGATE2 được giữ;
+    - phần lõi: npm ci, lint, typecheck, verify trong bản export, npm test 3 lần (2374
+      test), các validator;
+    - e2e FULL theo giờ thật: desktop 459, mobile 404, 0 lỗi;
+    - chạy tải nặng các test đã sửa: 0 lỗi;
+    - các mutant của FIX3 đều làm test đã sửa báo lỗi.
+  - **Không đạt:**
+    - `npm audit --omit=dev`: nodemailer (mức trung bình) và zod (mức cao). Đây là các cảnh
+      báo mới, trong khi các file package không đổi.
+    - Lượt quét với `--workers=6`:
+      - `timesheet.spec.ts:1216`: lần chạy đi qua nửa đêm giờ LA mà Today vẫn ở ngày cũ;
+      - `review.spec.ts:616`: dòng không thẳng hàng, lệch 23.25;
+      - ECONNRESET lặp lại (`submission.spec.ts:67` và các spec automation), chạy lại vẫn
+        còn.
+  - Lần verify đầu trong repo có hai unit test bị quá thời gian khi máy chịu tải; lần chạy
+    lại đạt.
+  - Sau khi verifier trả kết quả, harness vẫn còn một tác vụ nền của nó. Điều phối viên đã
+    dừng agent đó bằng TaskStop, không dừng tiến trình nào theo PID.
+- **Đang chạy song song, cả hai chỉ đọc:**
+  - WP5-UX5-DIAG2 (planner, sonnet): phân loại và tái hiện A (nửa đêm), B (thẳng hàng) và
+    C (ECONNRESET), rồi đề xuất cách sửa tối thiểu;
+  - WP5-UX5-DEPS1 (planner, sonnet): hai cảnh báo bảo mật, mức ảnh hưởng tới app, bản
+    nâng cấp nhỏ nhất, và chạy thử trong một bản export tạm.
+- **Tiếp theo:** một vòng sửa (mỗi lúc chỉ một người sửa mã nguồn), freeze, rồi REGATE4.
+  Sau đó là audit A và B, audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
+- **Nếu bị gián đoạn:** chạy lại cả hai việc chẩn đoán từ brief bằng planner mới, trong
+  thư mục tác vụ mới.
+- **WP5-UX5-DEPS1: xong.** Cả hai đều là thư viện production dùng trực tiếp, ghim phiên
+  bản chính xác. Bốn cảnh báo được công bố hoặc xác nhận ngày 2026-10-23.
+  - **zod 4.6.5** (mức cao; dùng nhiều bộ nhớ khi kiểm tra mảng lớn): đã sửa ở 4.6.6. Về
+    lý thuyết có thể chạm tới qua bước kiểm tra JSON, nhưng bị giới hạn bởi kích thước
+    body 64 KiB.
+  - **nodemailer 10.0.14** (ba cảnh báo mức trung bình, đều trong bộ phân tích địa chỉ):
+    đã sửa ở 10.1.4. Không chạm tới được: mọi địa chỉ đều qua một bước kiểm tra địa chỉ
+    đơn rất chặt trước.
+  - **Chạy thử** trong một bản export tạm: mọi kiểm tra đều exit 0, `dist/` không đổi,
+    không có cảnh báo deprecated nào.
+  - **Lựa chọn của điều phối viên:** cặp phiên bản nhỏ nhất đủ để hết cảnh báo, 10.1.4 và
+    4.6.6. Vì thư viện lúc chạy thay đổi, REGATE4 sẽ chạy lại drill container dù `dist/`
+    giống từng byte.
+- **Đang chạy:**
+  - WP5-UX5-FIX4 (worker, sonnet), người duy nhất sửa mã nguồn. Nó sửa `package.json` và
+    `package-lock.json`, chứng minh trong bản export tạm, và không động tới `node_modules`
+    của repo.
+  - WP5-UX5-DIAG2 (chỉ đọc) vẫn chạy tiếp.
+- **WP5-UX5-FIX4: xong** (theo báo cáo của worker; còn chờ regate).
+  - Lỗi audit được tái hiện trước.
+  - Đã ghim nodemailer 10.1.4 và zod 4.6.6. Phần thay đổi lockfile chỉ chạm các mục đó và
+    một mục lồng bên trong chỉ dùng cho dev.
+  - Trong bản export tạm, lint, typecheck, npm test (2374), verify và
+    `npm audit --omit=dev` đều exit 0. `dist/` giống từng byte.
+  - Hai file package đã đổi trong working tree, chưa commit. `node_modules` trong repo vẫn
+    là bản cũ.
+  - Digest là c431c508 (882 file).
+- **Tiếp theo:**
+  - Freeze phải chờ DIAG2 xong: task commit phải chạy một mình.
+  - Sau DIAG2: bản sửa của nó (người duy nhất sửa mã nguồn), rồi một lần freeze cho cả
+    FIX4 và bản sửa đó, rồi REGATE4. REGATE4 chạy npm ci trong repo trước khi chạy verify
+    trong repo, và chạy lại drill.
+- **WP5-UX5-DIAG2: xong.** Cả ba lỗi đều được tái hiện. Không lỗi nào là lỗi của sản phẩm
+  so với tài liệu.
+  - **A, Today lúc nửa đêm:** lỗi của test.
+    - Test đọc ngày từ server một lần. Một cú click ngay sau nửa đêm giờ LA khiến trang
+      đọc lại, và Today chuyển sang ngày mới.
+    - Sản phẩm đọc lại khi tải trang, khi focus, khi trang hiện ra và khi bấm Today, không
+      dùng bộ hẹn giờ, đúng như tài liệu 04 dòng 58 yêu cầu.
+    - Cách sửa: test chờ cho tới khi Today khớp với một lần đọc mới từ server, kèm sự kiện
+      focus.
+  - **B, thẳng hàng:** lỗi của test.
+    - Trong phần xem trước của hộp thoại Sign off, ảnh chữ ký đã lưu tải về muộn, làm dòng
+      của nhân viên cao thêm một dòng chữ (23.25 px) giữa hai lần đo.
+    - Cách sửa: chờ ảnh tải xong rồi mới đo.
+    - Bản thân việc nhảy 23 px được đưa vào backlog không bắt buộc của WP5; vòng này không
+      sửa `src/`.
+  - **C, ECONNRESET:** lỗi của bộ chạy test.
+    - Client seed của test dùng lại một socket keep-alive sau một lần xử lý job bị chặn
+      lâu hơn thời gian keep-alive 5 giây của server.
+    - Cách sửa: gửi `connection: close` từ client seed.
+    - Đồng hồ giả lập không liên quan.
+  - **Cách chạy gate:** giữ nguyên (`--workers=6`, quy tắc chạy lại).
+  - **Lần verify trong repo bị quá thời gian:** không cần sửa; chạy riêng và chạy lại một
+    lần.
+- **Đang chạy:** WP5-UX5-FIX5 (worker, sonnet), chạy một mình; chỉ sửa test và bộ chạy
+  test.
+  - Trước tiên nó chạy npm ci trong repo để khớp với lockfile của FIX4.
+  - Nó tái hiện từng lỗi, áp dụng ba cách sửa, rồi chứng minh bằng các probe, chạy lặp ở
+    đúng các thời điểm lỗi, e2e FULL theo giờ thật, hai mutant và các kiểm tra lõi.
+    Digest tính sau cùng.
+- **Tiếp theo:** một lần freeze cho FIX4 và FIX5 (tra đường dẫn, rồi committer), rồi
+  REGATE4.
+- **WP5-UX5-FIX5: xong** (theo báo cáo của worker; còn chờ regate). Chỉ sửa test và bộ
+  chạy test; chưa commit; digest 4e93f766.
+  - **Trước khi sửa:** A lỗi chắc chắn trong probe. B lỗi 3/6 lần khi ảnh trễ 50 ms. C lỗi
+    20/20 lần ở 14 luồng.
+  - **Sau khi sửa:** A đạt 80/80 lúc 06:59:35Z và 80/80 theo giờ thật. B đạt 50/50 với độ
+    trễ 50-200 ms. C đạt 20/20 ở cả 10 và 14 luồng.
+  - **E2e FULL theo giờ thật:** desktop 459 và mobile 404 test đạt, 0 lỗi.
+  - **Mutant:** cả hai đều làm test báo lỗi.
+  - **Còn hai hiện tượng**, nằm ngoài phạm vi file của FIX5, sẽ làm gate sau thất bại:
+    - `npm test` lỗi hai lần vì quá thời gian 30 giây ở các integration test gọi nhiều
+      tiến trình con, mỗi lần một nhóm test khác nhau;
+    - `npm run verify` lỗi một lần ở bước smoke với "fetch failed" sau `run-jobs`, nhiều
+      khả năng cùng cơ chế keep-alive như C.
+
+    Các lần chạy sau đều đạt. FIX5 thấy 46 tiến trình `msedge` không phải do nó mở.
+- **Quyết định của điều phối viên:** chẩn đoán trước khi freeze, thay vì đánh cược vào
+  regate. REGATE3 mất khoảng 2,5 giờ.
+- **WP5-UX5-DIAG3 xong** (planner, sonnet, chỉ đọc). Không có lỗi sản phẩm.
+  - **Kiểm kê tiến trình.** 45 tiến trình `msedge` là trình duyệt Edge của chủ dự án.
+    Mission không để sót trình duyệt, Playwright, vitest hay Docker nào. Có một tiến trình
+    sót lại của mission: `bash.exe waitfor.sh out/sweep.done 590` từ lần chạy thứ hai của
+    REGATE3, chiếm trọn một nhân CPU. Chủ dự án được nhờ tự đóng nó; task của mission
+    không bao giờ dừng tiến trình theo PID. Tải thấy được là 1,5-4 trên 32 nhân.
+  - **Quá thời gian.** Bộ test chạy 31 fork của vitest, mỗi fork lại gọi tiến trình CLI
+    con. Đốt CPU trên cả 32 nhân không gây lỗi. Chỉ cho bộ test 2-8 CPU logic thì có lỗi,
+    và ở 2 CPU thì lặp lại đúng nhóm test đã lỗi ở FIX5. Ở 4 CPU, chạy với 16 hoặc 8 worker
+    thì không có lỗi nào. Mỗi lần gọi CLI mất 0,25-0,7 giây khi máy rảnh; con số "3,6 giây"
+    thật ra là tổng của sáu lần chạy.
+  - **Smoke.** Đã xác nhận cơ chế keep-alive: ba lần chạy CLI bằng `spawnSync` chặn luồng,
+    rồi fetch trên một socket mà server đã đóng. Lỗi thứ hai: sau khi lỗi, `monitor` vẫn mở
+    nên bước dọn dẹp thất bại và dòng "SMOKE FAILED" bị mất.
+  - **Quyết định của điều phối viên:** FIX6 chỉ sửa phần chạy test và cấu hình test:
+    - giới hạn số worker của vitest;
+    - smoke gửi `connection: close` và đóng `monitor` trước khi dọn dẹp;
+    - cùng header đó ở `container-drill.mjs`, `fixtures.ts:69` và `setup.spec.ts:98`, chỉ
+      ở chỗ đúng là có mẫu lỗi này.
+
+    Đề xuất tùy chọn nạp thư viện PDF khi cần (lazy import) của DIAG3 được đưa vào danh
+    sách việc tùy chọn của WP5 (vòng này không sửa `src/`). Không nâng giới hạn thời gian
+    nào, không đổi assertion nào.
+  - **Cho REGATE4:** kiểm kê tiến trình trước khi chạy gate, và chạy `npm test` với
+    `npm run verify` lần lượt, không bao giờ chạy cùng lúc.
+- **WP5-UX5-FIX6 xong** (worker, sonnet; chưa commit; digest 26b163a6).
+  - Đã sửa: `vitest.config.ts` (`maxWorkers: '50%'`, 16 fork thay vì 31),
+    `scripts/smoke-built-server.mjs`, `scripts/container-drill.mjs` và phần kiểm tra health
+    trong `tests/e2e/fixtures.ts`. `setup.spec.ts` giữ nguyên, vì các tiến trình con của nó
+    chạy trước khi server khởi động.
+  - **Smoke:** trước khi sửa, probe bị chặn thì lỗi và mất dòng báo lỗi. Sau khi sửa, chặn
+    8 giây và 40 giây đều qua; một lỗi cố ý gây ra thì in "SMOKE FAILED (2)" và không để
+    lại thư mục tạm.
+  - **Giới hạn worker:** các lần chạy 4 CPU của chính FIX6 đều qua cả trước lẫn sau khi
+    sửa, nên căn cứ cho giới hạn này là các lần chạy có kiểm soát của DIAG3. Đây là ghi chú
+    cho REGATE4 và các auditor.
+  - **Kết quả:** e2e FULL theo giờ thật 863 qua, 0 lỗi. Container drill qua (các bước 1,
+    2, 3, 6). Lint, typecheck, `npm test` và `npm run verify` đều trả về 0.
+  - **Sơ suất:** worker đã thêm một mục `safe.directory` vào cấu hình git toàn cục cho một
+    bản xuất tạm. Chủ dự án đã được báo và có thể xóa nó.
+- **Bước tra cứu WP5-UX5-FIX6-PATHS đã xong.**
+  - HEAD = origin/main = 5b8b718, nên không cần merge.
+  - Các file mã nguồn chưa commit đúng là tám file như dự kiến.
+  - Một file evidence, `20-B-signature-image.txt` trong evidence của DIAG2, sẽ được đổi tên
+    thêm `-synthetic` khi freeze. Board đã ghi sẵn tên mới.
+  - Không còn container nào của drill. Mục `safe.directory` toàn cục là
+    `D:/.claude-tmp/timesheet/WP5-UX5-FIX6/exp2`.
+  - `waitfor.sh` khớp với PID 22240, tức tiến trình sót lại từ REGATE3, và ba tiến trình
+    bash được tạo ngay lúc tra cứu. Ba tiến trình này được cho là shell của chính bước tra
+    cứu; lần kiểm kê của REGATE4 sẽ xác nhận.
+- **Đang chạy:** WP5-UX5-FIX6-FREEZE (committer, sonnet), một mình: một commit cho FIX4
+  tới FIX6 và các bản ghi, rồi push.
+- **Tiếp theo:** REGATE4.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

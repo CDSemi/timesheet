@@ -1901,17 +1901,229 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
     INGAT review that fails `--preflight` may point to a file instead.
 - Running now: WP5-UX5-FIX3-FREEZE (a fresh committer, alone): save, restore,
   fast-forward, re-add, stage, check, commit, push.
-- Next: WP5-UX5-FIX3 (worker-high). It reproduces the two flakes under load and makes the
-  tests robust with event-based waits, with no looser assertions. Then its freeze and
-  REGATE3.
-  - The Ingat paths count as owner work, checked only for non-interference.
-  - Verify runs in the repository too.
-  - The sweep has seven runs, and the stress run has two parts.
-- Remaining after T06:
-  - T06-FREEZE;
-  - the round-5 package gate (it covers rounds 4 and 5);
-  - area audits A and B, then the integration audit;
-  - ACCEPT-DOCS and the WP5 re-accept.
+- WP5-UX5-FIX3-FREEZE done: **5b8b7184692fff683c4083c9fc5610acd47bece1 pushed**, a
+  fast-forward from 9f186b2.
+  - The sections were re-added (+92 / +91 lines). 177 files were staged.
+  - One link fix, in the INGAT manifest design review (EN/VI).
+  - Every check exits 0. D_PRE = the HEAD digest = edcca194. Nothing is unpushed.
+  - Deviations: the append was done by shell; one `/dev/null`; a public no-reply address
+    from a Co-Authored-By line in the staged records (not personal data).
+- Phase `ux5-regate3`. Running now: WP5-UX5-REGATE3 (verifier, sonnet) on 5b8b718 /
+  edcca194, against 7aafa21. It covers:
+  - identity, with every FIX3 and Ingat path mapped;
+  - all of `dist/` compared: if identical the earlier results carry forward, otherwise the
+    affected items rerun;
+  - core, with the Ingat tests and tsconfig;
+  - the real-clock FULL e2e;
+  - the seven-run sweep with `--workers=6`;
+  - stress of the three fixed tests;
+  - FIX3's mutants.
+
+### Paused for usage (2026-10-23)
+
+- **The pause.** The owner asked to pause because the usage limit is near. The
+  coordinator stopped WP5-UX5-REGATE3 (agent a5a471b592740f995) with TaskStop mid-run. Its
+  last note was "Both clean. Continue waiting."; no Results were written.
+- **Board:**
+  - mission status `paused_usage`, with the pause note;
+  - phase `ux5-regate3`;
+  - WP5-UX5-REGATE3 `interrupted`, with an interruption note;
+  - next_task_id WP5-UX5-REGATE3;
+  - `current_source_digest` still 507de97c (the last accepted snapshot, 8e55710).
+- **Git.** The last pushed commit is 5b8b7184692fff683c4083c9fc5610acd47bece1 (digest
+  edcca194). `git.unpushed` is empty. origin/main also holds the owner's Ingat merge
+  b8bae50.
+- **Uncommitted since 5b8b718:**
+  - the board, STATE, NEXT_ACTION (+ vi) and this checkpoint pair;
+  - `tasks/WP5-UX5-FIX3-FREEZE.md` (Results), `tasks/WP5-UX5-REGATE3.md`, and the audit
+    A and B drafts (retargeted);
+  - `evidence/WP5-UX5-FIX3-FREEZE/`;
+  - possibly partial `evidence/WP5-UX5-REGATE3/`.
+- **Possible leftovers of REGATE3:** its servers and browsers, and Compose project
+  `ts-wp5-ux5regate3` if it had started a drill. Attempt 2 checks for them and removes
+  only by project name, never by PID.
+- **Resume steps:**
+  1. Resume the session (`claude --resume b5de56d1-fb31-4dc5-b74f-70e9473e1a0a`, or a new
+     session with the entry prompt), and set the mission status to `running`.
+  2. Dispatch WP5-UX5-REGATE3 attempt 2: a fresh verifier on the same brief, task folder
+     `WP5-UX5-REGATE3-a2`, leftover check first.
+  3. On a PASS: audits A and B in parallel (fresh opus/xhigh, briefs on disk, retargeted to
+     5b8b718 / edcca194), then the integration audit, ACCEPT-DOCS and the WP5 re-accept.
+     On a FAIL: diagnose and fix as before.
+- **Owner coordination in force:**
+  - D a for merges, unless the owner asks for `--ff-only` again;
+  - pushes to main are allowed;
+  - the Ingat track pushes nothing more;
+  - the owner's worktree `.claude/worktrees/relaxed-lalande-8359f0` stays untouched.
+
+### Resumed (2026-10-26)
+
+- The owner said "tiếp tục". The mission status is back to `running`.
+- Running now: WP5-UX5-REGATE3 attempt 2 (a fresh verifier, sonnet; brief Addendum 1).
+  - It runs a fetch and the identity check first; if origin has moved past HEAD, it
+    stops.
+  - It checks for attempt-1 leftovers (Compose project `ts-wp5-ux5regate3` by name,
+    processes listed but never stopped by PID).
+  - It uses a new task folder `WP5-UX5-REGATE3-a2`.
+
+### REGATE3 failed; two diagnoses run (2026-10-26)
+
+- **WP5-UX5-REGATE3 attempt 2: FAIL** on the pushed 5b8b718 / edcca194. NAS items stay
+  NOT VERIFIED.
+  - **Passed:**
+    - identity (FIX3 and Ingat paths only; nothing under `src/`, `assets/` or the package
+      files);
+    - all 250 `dist/` files byte-identical to 7aafa21, so REGATE2's drill, axe, CSP and
+      integration results carry forward;
+    - core: npm ci, lint, typecheck, export verify, npm test x3 (2374 tests), validators;
+    - real-clock FULL e2e: desktop 459, mobile 404, 0 failed;
+    - stress of the fixed tests: 0 failed;
+    - FIX3's mutants fail the fixed tests.
+  - **Failed:**
+    - `npm audit --omit=dev`: nodemailer (moderate) and zod (high). These are new
+      advisories on unchanged package files.
+    - The sweep with `--workers=6`:
+      - `timesheet.spec.ts:1216`: the run crossed LA midnight, and Today stayed on the old
+        day;
+      - `review.spec.ts:616`: row alignment off by 23.25;
+      - repeated ECONNRESET (`submission.spec.ts:67` and automation specs), not cleared by
+        the reruns.
+  - The first repository verify had two unit-test timeouts under load; its rerun passed.
+  - After the verifier returned, the harness still showed one of its background handles.
+    The coordinator stopped the finished agent with TaskStop. No PID kills.
+- **Running now, in parallel, both read-only:**
+  - WP5-UX5-DIAG2 (planner, sonnet): classify and reproduce A (midnight), B (row
+    alignment) and C (ECONNRESET), and propose minimal fixes;
+  - WP5-UX5-DEPS1 (planner, sonnet): the two advisories, the app's exposure, the
+    smallest upgrade, and a probe in a scratch export.
+- **Next:** one fix round (one source writer at a time), its freeze, then REGATE4. Then
+  audits A and B, the integration audit, ACCEPT-DOCS and the WP5 re-accept.
+- **On interruption:** resume both diagnoses from their briefs with fresh planners, in new
+  task folders.
+- **WP5-UX5-DEPS1: done.** Both packages are direct production dependencies with exact
+  pins. All four advisories were published or reviewed on 2026-10-23.
+  - **zod 4.6.5** (high; memory use grows with large arrays): fixed in 4.6.6. Reachable in
+    principle through JSON validation, but limited by the 64 KiB body limit.
+  - **nodemailer 10.0.14** (three moderate advisories, all in the address parser): fixed
+    in 10.1.4. Not reachable: every address passes a strict single-address check first.
+  - **Probe** in a scratch export: every check exits 0, `dist/` is unchanged, and no
+    deprecation appears.
+  - **Coordinator choice:** the smallest clearing pair, 10.1.4 and 4.6.6. The runtime
+    dependencies change, so REGATE4 reruns the container drill even though `dist/` is
+    byte-identical.
+- **Running now:**
+  - WP5-UX5-FIX4 (worker, sonnet), the only source writer. It changes `package.json` and
+    `package-lock.json`, with proof in a scratch export, and does not touch the
+    repository's `node_modules`.
+  - WP5-UX5-DIAG2 (read-only) continues.
+- **WP5-UX5-FIX4: done** (worker report; the regate is pending).
+  - The audit failure was reproduced first.
+  - Pinned nodemailer 10.1.4 and zod 4.6.6. The lockfile diff touches only those entries
+    and one dev-only nested entry.
+  - In the scratch export, lint, typecheck, npm test (2374), verify and
+    `npm audit --omit=dev` all exit 0. `dist/` is byte-identical.
+  - The two package files are changed in the working tree and not committed. The
+    repository's `node_modules` still has the old versions.
+  - The digest is c431c508 (882 files).
+- **Next:**
+  - The freeze waits for DIAG2: a commit task must run alone.
+  - After DIAG2: its fix (the only source writer), then one freeze of FIX4 and that fix,
+    then REGATE4. REGATE4 runs npm ci in the repository before the repository verify, and
+    reruns the drill.
+- **WP5-UX5-DIAG2: done.** All three failures were reproduced. None is a product fault
+  against the docs.
+  - **A, Today at midnight:** a test defect.
+    - The test reads the server date once. A click just after LA midnight makes the page
+      re-read, and Today moves to the new day.
+    - The product re-reads on load, focus, visibility and the Today press, with no timer,
+      as document 04 line 58 requires.
+    - Fix: the test polls against a fresh server read, with the focus refresh.
+  - **B, row alignment:** a test defect.
+    - In the Sign off dialog preview, the saved signature image arrives late and the
+      employee line grows by one text line (23.25 px) between two reads.
+    - Fix: wait for the image to load before the geometry checks.
+    - The 23 px shift itself goes to the WP5 optional backlog; no `src/` change in this
+      round.
+  - **C, ECONNRESET:** a harness defect.
+    - The test runner's seed client reuses a keep-alive socket after a blocking job drain
+      that lasts longer than the server's 5 s keep-alive.
+    - Fix: `connection: close` in the seed client.
+    - The simulated clock plays no part.
+  - **Gate method:** unchanged (`--workers=6`, the rerun rule).
+  - **The repository verify timeout:** no fix; run it alone and rerun once.
+- **Running now:** WP5-UX5-FIX5 (worker, sonnet), alone; tests and harness only.
+  - It first runs npm ci in the repository to sync FIX4's lockfile.
+  - It reproduces each failure, applies the three fixes, and proves them with probes,
+    repeated runs at the failing instants, the real-clock FULL e2e, two mutants and the
+    core checks. The digest comes last.
+- **Next:** one freeze of FIX4 and FIX5 (a path lookup, then the committer), then REGATE4.
+- **WP5-UX5-FIX5: done** (worker report; the regate is pending). Tests and harness only;
+  not committed; the digest is 4e93f766.
+  - **Before the fixes:** A failed deterministically in the probe. B failed 3 of 6 at a
+    50 ms image delay. C failed 20 of 20 at 14 workers.
+  - **After the fixes:** A passed 80/80 at 06:59:35Z and 80/80 on the real clock. B passed
+    50/50 at delays of 50-200 ms. C passed 20/20 at 10 and at 14 workers.
+  - **Real-clock FULL e2e:** desktop 459 and mobile 404 passed, 0 failed.
+  - **Mutants:** both fail the tests.
+  - **Two open symptoms**, outside its owned paths, would fail the next gate:
+    - `npm test` failed twice on 30 s timeouts in spawn-heavy integration tests, with a
+      different set of tests each run;
+    - `npm run verify` failed once in smoke with "fetch failed" after `run-jobs`, likely
+      the same keep-alive mechanism as C.
+
+    Later runs passed. FIX5 saw 46 `msedge` processes it had not started.
+- **Coordinator decision:** diagnose before the freeze rather than gamble the regate.
+  REGATE3 took about 2.5 hours.
+- **WP5-UX5-DIAG3 done** (planner, sonnet, read-only). No product fault.
+  - **Host census.** The 45 `msedge` processes are the owner's Edge. There was no
+    leftover browser, Playwright, vitest or Docker process from the mission. One mission
+    leftover: `bash.exe waitfor.sh out/sweep.done 590` from REGATE3 attempt 2, spinning
+    one core. The owner is asked to close it; mission tasks never kill by PID. Visible load
+    was 1.5-4 of 32 cores.
+  - **Timeouts.** The suite runs 31 vitest forks that spawn CLI children. CPU burners on
+    all 32 cores did not cause a failure. Giving the suite only 2-8 logical CPUs did, and
+    at 2 CPUs it reproduced FIX5's exact set. At 4 CPUs, 16 or 8 workers gave 0 failures.
+    One CLI takes 0.25-0.7 s idle; the "3.6 s" was six runs.
+  - **Smoke.** Keep-alive confirmed: three blocking `spawnSync` CLIs, then a fetch on a
+    socket the server already closed. Second defect: after a failure the open `monitor`
+    blocks the cleanup, so the "SMOKE FAILED" line is lost.
+  - **Coordinator decision:** FIX6 covers harness and test configuration only:
+    - a vitest worker cap;
+    - smoke `connection: close` and closing `monitor` before cleanup;
+    - the same header at `container-drill.mjs`, `fixtures.ts:69` and `setup.spec.ts:98`,
+      only where the pattern holds.
+
+    DIAG3's optional lazy PDF import goes to the WP5 optional backlog (no `src/` change in
+    this round). No timeout is raised and no assertion changes.
+  - **For REGATE4:** take a census before the gate, and run `npm test` and `npm run verify`
+    one after another, never together.
+- **WP5-UX5-FIX6 done** (worker, sonnet; uncommitted; digest 26b163a6).
+  - Changed: `vitest.config.ts` (`maxWorkers: '50%'`, 16 forks instead of 31),
+    `scripts/smoke-built-server.mjs`, `scripts/container-drill.mjs` and the
+    `tests/e2e/fixtures.ts` health poll. `setup.spec.ts` is unchanged, because its spawns
+    run before the server starts.
+  - **Smoke:** before the fix, the blocked probe failed and its failure line was lost.
+    After it, 8 s and 40 s blocks pass, and an induced failure prints "SMOKE FAILED (2)"
+    and leaves no folder.
+  - **Worker cap:** FIX6's own 4-CPU runs passed both before and after the change, so the
+    cap rests on DIAG3's controlled runs. This is a note for REGATE4 and the auditors.
+  - **Results:** real-clock FULL e2e 863 passed, 0 failed. The container drill passed
+    (stages 1, 2, 3, 6). Lint, typecheck, `npm test` and `npm run verify` all exit 0.
+  - **Slip:** one global `git config safe.directory` entry was added for a scratch export.
+    The owner is told and may remove it.
+- **The lookup WP5-UX5-FIX6-PATHS is done.**
+  - HEAD = origin/main = 5b8b718, so no merge is needed.
+  - The dirty source paths are exactly the eight expected.
+  - One evidence basename, `20-B-signature-image.txt` in DIAG2's evidence, is renamed with
+    `-synthetic` in the freeze. The board already lists the new name.
+  - No drill containers are left. The global `safe.directory` entry is
+    `D:/.claude-tmp/timesheet/WP5-UX5-FIX6/exp2`.
+  - `waitfor.sh` matched PID 22240, the REGATE3 leftover, and three bash processes created
+    during the lookup itself. Those three are assumed to be its own shells; the REGATE4
+    census confirms.
+- **Running now:** WP5-UX5-FIX6-FREEZE (committer, sonnet), alone: one commit of FIX4 to
+  FIX6 and the records, then a push.
+- **Next:** REGATE4.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

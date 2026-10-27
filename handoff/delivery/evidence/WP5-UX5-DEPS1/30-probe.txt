@@ -1,0 +1,61 @@
+WP5-UX5-DEPS1 evidence 30: probe of the upgrade in scratch exports (never in the repository)
+Task folder <task> = D:\.claude-tmp\timesheet\WP5-UX5-DEPS1; every export is `git archive 5b8b7184692fff683c4083c9fc5610acd47bece1`.
+Environment: Node v24.21.0 (portable) first on PATH, npm 11.18.0 run as `node.exe <APPDATA>/npm/node_modules/npm/bin/npm-cli.js`,
+TEMP/TMP/DATA_DIR/DATABASE_PATH inside <task>, SMOKE_PORT 50142 (minimal) and 50143 (alternative).
+
+A. Minimal clearing upgrade (export fix2): nodemailer 10.0.14 -> 10.1.4, zod 4.6.5 -> 4.6.6
+  Created with: npm install --save-exact nodemailer@10.1.4 zod@4.6.6   (in a throwaway export; exit 0)
+  package.json diff (only these two lines):
+    -    "nodemailer": "10.0.14",        +    "nodemailer": "10.1.4",
+    -    "zod": "4.6.5"                  +    "zod": "4.6.6"
+  package-lock.json diff (35 diff lines):
+    packages[""].dependencies: nodemailer 10.1.4, zod 4.6.6
+    node_modules/nodemailer: 10.1.4, resolved https://registry.npmjs.org/nodemailer/-/nodemailer-10.1.4.tgz,
+      integrity sha512-EsMnOR2oRv4LGnWvHgcVYkkQ4O2j8KO4WTw6l+PHR4sOXo8SAgIraxtEnGDmotjbhv0hDsu3IuDIFZm8iXwO4A==
+    node_modules/zod: 4.6.6, resolved https://registry.npmjs.org/zod/-/zod-4.6.6.tgz,
+      integrity sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==
+    NEW node_modules/smtp-server/node_modules/nodemailer: 10.0.14 (dev: true), because smtp-server (dev) pins nodemailer
+      10.0.14 exactly and can no longer share the root copy.
+  Then a fresh export with only those two files copied in:
+    npm ci                         exit 0
+    npm run lint                   exit 0 (no warnings; typescript-eslint no-deprecated active)
+    npm run typecheck              exit 0
+    npm test                       exit 0   Test Files 101 passed (101), Tests 2374 passed (2374)
+    npm run verify                 exit 0   typecheck, lint, test (101 files / 2374 tests), build, smoke:
+                                            "SMOKE PASSED" (cli migrate, seed, login, sign-off, PDF job, send job with capture,
+                                            message.eml + attachment.pdf + metadata.json)
+    npm audit --omit=dev           exit 0   "found 0 vulnerabilities"
+  Deprecation warnings from the toolchain or runtime: none. The only npm warning is the existing
+  "npm warn allow-scripts .npmrc allow-scripts setting is being ignored because package.json declares its own allowScripts
+  field" (also present in REGATE3's audit log; not caused by this change).
+  Full `npm audit` (dev included) after the change: exit 1, 6 findings (4 moderate, 2 high): vite, vitest, @vitest/mocker,
+  source-map-js, smtp-server and the nested dev nodemailer 10.0.14; all dev-only and, except for the nested copy, present
+  before the change (base 7 findings).
+
+B. The versions `npm audit` itself proposes (export alt): nodemailer 10.2.1, zod 4.6.7
+  npm install --save-exact nodemailer@10.2.1 zod@4.6.7 (exit 0), npm ci exit 0, npm run verify exit 0 (101 files /
+  2374 tests, SMOKE PASSED), npm audit --omit=dev exit 0 (0 vulnerabilities). Same dist result as A.
+
+C. dist comparison (npm run build in the base export, exit 0, versus the build in A and B)
+  `diff -rq base/dist fix2/dist` and `diff -rq base/dist alt/dist`: no difference (exit 0, empty output) in
+  dist/server, dist/domain and dist/client, including the client asset hashes. The compiled server imports
+  `zod` and `nodemailer/lib/*` as external packages and the client does not bundle either, so only node_modules changes.
+
+D. Message bytes (probe script <task>/probe-message.mjs: buildMessage from each export's dist with a fixed synthetic
+   message: two To, one Cc on example.invalid, UTF-8 subject, text + HTML bodies, a 3,000-byte attachment, fixed Message-ID and date)
+  base (nodemailer 10.0.14):  sha256 fd69c0e24e8dbbbca8af37a1efbfaca6f67f393d6c73d40b4682eeb0e2eaf43d, 5293 bytes
+  A    (nodemailer 10.1.4):   sha256 fd69c0e24e8dbbbca8af37a1efbfaca6f67f393d6c73d40b4682eeb0e2eaf43d, 5293 bytes
+  B    (nodemailer 10.2.1):   sha256 fd69c0e24e8dbbbca8af37a1efbfaca6f67f393d6c73d40b4682eeb0e2eaf43d, 5293 bytes
+  Envelope identical in all three. This is one representative message, not a proof for every input.
+
+E. Breaking changes (nodemailer CHANGELOG.md of 10.2.1, entries 10.0.15 .. 10.2.1; zod: patch releases 4.6.6 and 4.6.7 of 4.6.5)
+  All are minor or patch releases of the 10.x line; there is no major bump. Entries that touch what the app uses:
+  - 10.1.0 "harden message streams, SMTP connections and the connection pool" plus SMTP fixes: end the session on any 421,
+    refuse a second connect() call, drop the connection when DATA follows a refused sender, count the greeting wait against
+    connectionTimeout. The app opens one SMTPConnection per message and calls connect() once (smtpAdapter.ts:79, :132), and
+    the SMTP adapter tests and the smoke against the in-repo smtp-server sink pass, so no adjustment is needed.
+  - 10.1.4 addressparser corrections (the three advisories plus group-nesting bound and others): parser only, unreachable.
+  - 10.1.2 "bound the work a message can make the mailer do": not triggered by the app's messages (the probe is byte-identical).
+  - 10.2.0 adds optional features (info.serverMessageId, err.permanent, pendingCount); the app ignores them.
+  No deprecation notice for the APIs the app uses (MailComposer, SMTPConnection). zod: no changelog entry was read for 4.6.6
+  and 4.6.7 beyond the advisory (GHSA-mrhx-c7xc-m3w5 first patched 4.6.6); the verified behaviour is the test result above.

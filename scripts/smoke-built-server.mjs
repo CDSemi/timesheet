@@ -73,7 +73,8 @@ function run(args) {
 }
 
 async function call(method, path, { cookie, body, withOrigin = true } = {}) {
-  const headers = {};
+  // Close each connection: spawnSync below blocks this process for longer than the server's 5 s keep-alive.
+  const headers = { connection: 'close' };
   if (withOrigin) headers.origin = origin;
   if (cookie) headers.cookie = cookie;
   if (body !== undefined) headers['content-type'] = 'application/json';
@@ -112,6 +113,7 @@ function recentMonday() {
 const local = (date, time) => ({ local: `${date}T${time}`, zone: 'America/Los_Angeles' });
 
 let server;
+let monitor;
 try {
   console.log(`node ${process.version}`);
   const migrated = run(['dist/server/cli.js', 'migrate']);
@@ -313,7 +315,7 @@ try {
   check('state change without Origin is rejected (403)', noOrigin.status === 403, String(noOrigin.status));
 
 // ---- WP3: review safety, sign-off conflict, private PDF, capture, shared route (WP3-T14) ----
-  const monitor = new Database(join(work, 'timesheet.db'), { readonly: true });
+  monitor = new Database(join(work, 'timesheet.db'), { readonly: true });
   const tableNames = monitor.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
   /** Row counts of every table plus the commit counter: any write by another connection changes it. */
   const dbState = () =>
@@ -412,7 +414,7 @@ try {
   const passes = [runAt(1), runAt(150), runAt(300)];
   check('cli run-jobs --once --now runs the PDF and send jobs', passes.every((pass) => pass.status === 0), passes.map((pass) => pass.output).join(' '));
 
-  const pdf2 = await fetch(`${base}/api/revisions/${revisionId}/pdf`, { headers: { cookie: cookie2 } });
+  const pdf2 = await fetch(`${base}/api/revisions/${revisionId}/pdf`, { headers: { cookie: cookie2, connection: 'close' } });
   const pdfBytes = Buffer.from(await pdf2.arrayBuffer());
   check(
     'the owner downloads the revision PDF (application/pdf, no-store, attachment)',
@@ -491,6 +493,8 @@ try {
   failures += 1;
   console.log(`FAIL  unexpected error: ${error instanceof Error ? error.message : String(error)}`);
 } finally {
+  // An open database handle makes rmSync fail on Windows and would hide the SMOKE FAILED line.
+  monitor?.close();
   server?.kill();
   await new Promise((resolve) => setTimeout(resolve, 300));
   rmSync(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
