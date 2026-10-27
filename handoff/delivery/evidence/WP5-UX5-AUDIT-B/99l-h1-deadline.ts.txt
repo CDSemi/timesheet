@@ -1,0 +1,108 @@
+/*
+ * WP5-UX5-AUDIT-B probe: owner decision H-1 a. Revision 1 is sent and accepted; a correction (revision 2) is signed and
+ * not sent. With auto-submit on and the deadline passed, the scan must not send revision 2, and the reminder scans must
+ * decide nothing for that period. A control period that is signed and never sent IS sent at the deadline.
+ * Target code in process, synthetic seed, capture adapter. Usage: node h1-deadline.ts <workDir> <out.txt>
+ */
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { openDatabase } from '../export/src/server/db/database.ts';
+import { migrate } from '../export/src/server/db/migrations.ts';
+import { FileStore } from '../export/src/server/files/fileStore.ts';
+import { seedSynthetic } from '../export/src/server/seed.ts';
+import { createSession } from '../export/src/server/services/timesheetCommands.ts';
+import { buildReviewPayload } from '../export/src/server/services/reviewPayload.ts';
+import { reviseTimesheet, signOffTimesheet } from '../export/src/server/services/finalization.ts';
+import { sendDraft, sendRevision } from '../export/src/server/services/deliveries.ts';
+import { runDeadlineScan } from '../export/src/server/services/automation.ts';
+import { runReminderScan } from '../export/src/server/services/notifications.ts';
+import { currentSubmissionSettings, saveSubmissionSettings } from '../export/src/server/services/submissionSettings.ts';
+import { createPdfJobHandler } from '../export/src/server/jobs/pdfJob.ts';
+import { createSendJobHandler } from '../export/src/server/jobs/sendJob.ts';
+import { runJobsOnce } from '../export/src/server/jobs/runner.ts';
+import { createCaptureAdapter } from '../export/src/server/mail/captureAdapter.ts';
+
+const [work, outPath] = process.argv.slice(2);
+if (work === undefined || outPath === undefined) throw new Error('usage');
+mkdirSync(work, { recursive: true });
+const lines: string[] = [];
+let failures = 0;
+const check = (name: string, ok: boolean, detail = '') => {
+  if (!ok) failures += 1;
+  lines.push(`${ok ? 'PASS' : 'FAIL'} ${name}${detail === '' ? '' : ` | ${detail}`}`);
+};
+class MutableClock {
+  current: Date;
+  constructor(iso: string) {
+    this.current = new Date(iso);
+  }
+  now(): Date {
+    return new Date(this.current.getTime());
+  }
+  set(iso: string): void {
+    this.current = new Date(iso);
+  }
+}
+const LA = 'America/Los_Angeles';
+const db = openDatabase(join(work, 'probe.db'));
+migrate(db);
+const clock = new MutableClock('2026-08-30T20:00:00Z');
+const files = new FileStore(join(work, 'private-data'));
+await seedSynthetic(db, clock, { files, passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass', employee2: 'synthetic-employee2-pass' }, sampleData: true });
+const adminId = db.prepare("SELECT id FROM users WHERE role = 'admin'").pluck().get() as string;
+// Activation before both deadlines, recorded as the service would (the probe's clock is earlier than the deadlines).
+db.prepare("UPDATE operations_state SET automation_active_from = '2026-08-31T00:00:00Z', automation_recorded_at = '2026-08-30T20:00:00Z', automation_recorded_by = ? WHERE id = 1").run(adminId);
+const row = db.prepare("SELECT id, email, display_name, calendar_id FROM users WHERE email = 'employee2@example.invalid'").get() as Record<string, string>;
+const user = { id: row.id, email: row.email, displayName: row.display_name, role: 'employee' as const, calendarId: row.calendar_id, sessionId: 'probe' };
+clock.set('2026-10-12T20:00:00Z');
+saveSubmissionSettings(db, clock, user.id, { expectedSeq: currentSubmissionSettings(db, user.id)?.seq ?? 0, to: ['payroll@example.invalid'], autoSubmit: true, applyToOverdueDrafts: true });
+const session = (date: string, reason: string) =>
+  createSession({ db, clock, user } as never, date, { start: { local: `${date}T09:00`, zone: LA }, end: { local: `${date}T19:00`, zone: LA }, input_zone: LA, breaks_confirmed: true, breaks: [], reason } as never);
+const sign = (payrollDate: string) => {
+  const review = buildReviewPayload(db, clock, user, payrollDate);
+  return signOffTimesheet({ db, clock, user }, payrollDate, { expectedVersion: review.expectedVersion, reviewedHash: review.payloadHash, deficitChoices: [], incompleteEvidenceAcknowledged: true });
+};
+const handlers = {
+  render_pdf: createPdfJobHandler({ db, clock, files }),
+  send_email: createSendJobHandler({ db, clock, files, outbound: createCaptureAdapter(join(work, 'private-data')), senderAddress: 'timesheet@example.invalid' }),
+};
+const drain = async () => {
+  for (let pass = 0; pass < 3; pass += 1) {
+    await runJobsOnce({ db, clock, handlers });
+    clock.set(new Date(clock.now().getTime() + 120_000).toISOString());
+  }
+};
+// Period A (payroll 2026-10-16, due 2026-10-13 17:00 LA): signed, sent and accepted, then a correction signed and NOT sent.
+session('2026-09-29', 'Synthetic entry for period A');
+const a1 = sign('2026-10-16');
+const draft = sendDraft(db, user, a1.revision.id, null);
+sendRevision({ db, clock, user }, a1.revision.id, { requestKey: 'probe-h1-0001', to: draft.envelope.to, cc: draft.envelope.cc, subject: draft.envelope.subject, bodyText: draft.envelope.bodyText, timeRows: draft.rows.time, otRows: draft.rows.ot });
+await drain();
+session('2026-10-01', 'Synthetic second entry to correct');
+const r2 = buildReviewPayload(db, clock, user, '2026-10-16');
+const a2 = reviseTimesheet({ db, clock, user }, '2026-10-16', { kind: 'correction', reason: 'Synthetic correction', sendEmail: false, expectedVersion: r2.expectedVersion, reviewedHash: r2.payloadHash, deficitChoices: [], incompleteEvidenceAcknowledged: true });
+// Reminder scans for A happen below; period B is created later in time.
+const timesheetOf = (revisionId: string) => db.prepare('SELECT timesheet_id FROM timesheet_revisions WHERE id = ?').pluck().get(revisionId) as string;
+const sendsOf = (revisionId: string) => db.prepare('SELECT count(*) FROM revision_sends WHERE revision_id = ?').pluck().get(revisionId) as number;
+const periodOf = (payrollDate: string) => db.prepare('SELECT id FROM pay_periods WHERE payroll_date = ?').pluck().get(payrollDate) as string | undefined;
+const occurrences = (payrollDate: string) => db.prepare('SELECT count(*) FROM reminder_occurrences WHERE user_id = ? AND pay_period_id = ?').pluck().get(user.id, periodOf(payrollDate) ?? '') as number;
+// Reminder scans before the A deadline (due 2026-10-13T17:00 LA = 2026-10-14T00:00Z): 24 h and 2 h before.
+clock.set('2026-10-13T00:30:00Z');
+runReminderScan(db, clock);
+clock.set('2026-10-13T22:30:00Z');
+runReminderScan(db, clock);
+check('H-1 a: no reminder decided for period A after its first send (revision 2 not sent)', occurrences('2026-10-16') === 0, `${occurrences('2026-10-16')}`);
+// Period B (payroll 2026-10-30, due 2026-10-27 17:00 LA): signed after its period ended and never sent (control).
+clock.set('2026-10-26T20:00:00Z');
+session('2026-10-13', 'Synthetic entry for period B');
+const b1 = sign('2026-10-30');
+// The deadline scan after both deadlines.
+clock.set('2026-11-05T18:00:00Z');
+const scan = runDeadlineScan(db, clock, { batchSize: 200 });
+lines.push(`deadline scan: ${JSON.stringify(scan)}`);
+check('H-1 a: revision 2 (a correction after a sent copy) is not sent at the deadline', sendsOf(a2.revision.id) === 0 && sendsOf(a1.revision.id) === 1);
+check('control: period B, signed and never sent, is sent at the deadline (origin deadline)', sendsOf(b1.revision.id) === 1 && db.prepare('SELECT origin FROM revision_sends WHERE revision_id = ?').pluck().get(b1.revision.id) === 'deadline');
+check('no new revision for period A', (db.prepare('SELECT count(*) FROM timesheet_revisions WHERE timesheet_id = ?').pluck().get(timesheetOf(a2.revision.id)) as number) === 2);
+lines.push(`failures: ${failures}`);
+writeFileSync(outPath, `${lines.join('\n')}\n`);
+process.exitCode = failures === 0 ? 0 : 1;

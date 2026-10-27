@@ -1,0 +1,12 @@
+# Usage: bash run-spec.sh <label> <spec path under the export> [playwright args...]
+# One Playwright run of an existing repository spec inside the scratch export (never the repository), ports 50340-50359 (patched fixtures).
+. <task>/env.sh
+L=$1; SPEC=$2; shift 2
+mkdir -p $T/pw-$L $T/shots $T/obs
+export E2E_SCREENSHOT_DIR="$TW\\shots"
+export NODE_OPTIONS="--trace-deprecation"
+cd $X || exit 2
+echo "\$ node node_modules/@playwright/test/cli.js test $SPEC $* --output=$TW\\pw-$L" > $T/out/log-$L.txt
+node.exe node_modules/@playwright/test/cli.js test $SPEC --reporter=line --workers=1 "$@" --output="$TW\\pw-$L" >> $T/out/log-$L.txt 2>&1
+echo "exit=$?" >> $T/out/log-$L.txt
+echo "done $L: $(grep -o 'exit=[0-9]*' $T/out/log-$L.txt)"

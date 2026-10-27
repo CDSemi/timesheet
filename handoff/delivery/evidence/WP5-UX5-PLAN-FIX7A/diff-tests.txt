@@ -1,0 +1,284 @@
+diff --git a/<repo>/tests/e2e/review.spec.ts b/<task>/export/tests/e2e/review.spec.ts
+index 38b5f0a..8bc77aa 100644
+--- a/<repo>/tests/e2e/review.spec.ts
++++ b/<task>/export/tests/e2e/review.spec.ts
+@@ -655,6 +655,47 @@ test('signature rows: the PDF block insets and proportions, lines aligned by row
+   testInfo.annotations.push({ type: 'signature-geometry', description: lines.join('\n') });
+ });
+ 
++test('a signed period opened again (reloaded): the signed image, name and mark stay readable and uncovered beside Sign correction, and the four lines stay aligned', async ({
++  page,
++  adminSeed,
++  builtServer,
++}) => {
++  const reviewer = await newReviewer(adminSeed, builtServer);
++  await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
++  await expect(page.locator('[data-review-day]')).toHaveCount(14);
++  const signing = await openSignoff(page);
++  await acknowledge(signing);
++  await confirmSignoff(signing).click();
++  await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
++  // A later visit (to send the PDF, say): the page loads already signed, so the Employee Signature line holds the signed mark and the
++  // correction button together. The sign-off of this window left no second button; a reload does.
++  await page.reload();
++  await expect(page.locator('[data-review-day]')).toHaveCount(14);
++  const button = page.locator('[data-sign-off]');
++  await expect(button).toHaveText('Sign correction');
++  const signed = page.locator('[data-signed-line]');
++  await expect(signed).toContainText('Synthetic Reviewer');
++  for (const width of [1440, 768, 600, 390, 320]) {
++    await page.setViewportSize({ width, height: 900 });
++    const footer = page.locator('.review-preview .sheet-footer');
++    await footer.scrollIntoViewIfNeeded();
++    // The four lines align by row and by column, the insets are the PDF's at 768px and wider, and the button stands 8px inside its line.
++    await expectSignatureGeometry(footer, width, { button, exactFractions: width >= 768 });
++    await expectNoSidewaysScroll(page);
++    // The button covers neither the image, nor the name, nor the "Signed" mark.
++    const pressed = await rect(button);
++    const parts = { image: signed.locator('img.signed-image'), name: signed.locator('[data-signer-name]'), seal: signed.locator('[data-signed-seal]') };
++    for (const [part, locator] of Object.entries(parts)) {
++      const box = await rect(locator);
++      const overlaps = box.left < pressed.right - 0.5 && pressed.left < box.right - 0.5 && box.top < pressed.bottom - 0.5 && pressed.top < box.bottom - 0.5;
++      expect(overlaps, `the ${part} is not covered by Sign correction at ${width}px`).toBe(false);
++    }
++    // Readable: the image keeps at least 100px, and the name wraps by words into at most three lines instead of letters (21px wide, ten lines).
++    expect((await rect(parts.image)).width, `the saved image keeps its width at ${width}px`).toBeGreaterThanOrEqual(100);
++    expect((await rect(parts.name)).height, `the name takes at most three lines at ${width}px`).toBeLessThanOrEqual(3 * 20);
++  }
++});
++
+ test('a stale review leads to a fresh review and nothing is submitted twice', async ({ page, adminSeed, builtServer }, testInfo) => {
+   const project = testInfo.project.name;
+   const reviewer = await newReviewer(adminSeed, builtServer, { deficitMode: 'choose_at_signoff' });
+diff --git a/<repo>/tests/e2e/day-editor.spec.ts b/<task>/export/tests/e2e/day-editor.spec.ts
+index 6d4ef76..1e0f10d 100644
+--- a/<repo>/tests/e2e/day-editor.spec.ts
++++ b/<task>/export/tests/e2e/day-editor.spec.ts
+@@ -6537,6 +6537,64 @@ test.describe('WP5-UX5-T05B (U5-24, owner answer F-7 a): on a desktop a press ou
+     await expect(editor).toHaveAttribute('data-day-editor', other);
+     await expect(editor).toBeVisible();
+   });
++
++  // F-UX5A-3: on a touch screen the press acts on its pointer-up. A swipe that starts outside a day column scrolls the page; the browser
++  // cancels that pointer and nothing was pressed.
++  test.describe('on a touch screen, 1024px wide', () => {
++    test.use({ hasTouch: true, viewport: { width: 1024, height: 768 } });
++
++    test('a swipe that starts outside a day column scrolls the page and leaves the drawer (and its edits) alone; a tap there closes it like a press, with the question when edits are unsaved', async ({
++      page,
++      employeeSeed,
++      signInThroughUi,
++    }) => {
++      const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
++      await signInThroughUi();
++      await expect(page.locator('[data-day]')).toHaveCount(14);
++      const editor = page.getByRole('dialog', { name: /Day editor/ });
++      const dayBtn = namedDayButton(page, date, 'Edit');
++      const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
++      expect(await page.evaluate<boolean>('matchMedia("(pointer: coarse)").matches'), 'a touch screen').toBe(true);
++      await dayBtn.click();
++      await expect(editor).toBeVisible();
++      await expect(page.locator('[data-editor-layout]')).toHaveAttribute('data-editor-layout', 'floating');
++      const notes = editor.getByLabel('Notes');
++      await notes.fill('Synthetic unsaved note');
++      const x = await pageEdgeX(page, editor);
++
++      // A swipe up from plain page (a touch sequence through the browser, which is what a finger sends): the page scrolls, nothing closes
++      // and nothing asks.
++      await page.evaluate('window.scrollTo(0, 0)');
++      const cdp = await page.context().newCDPSession(page);
++      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: 300 }] });
++      for (let step = 1; step <= 6; step += 1) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: 300 - step * 30 }] });
++      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
++      await expect.poll(() => page.evaluate<number>('window.scrollY'), { message: 'the swipe scrolled the page' }).toBeGreaterThan(0);
++      await expect(editor, 'a scroll is not a press').toBeVisible();
++      await expect(prompt).toHaveCount(0);
++      await expect(notes).toHaveValue('Synthetic unsaved note');
++
++      // A tap with unsaved edits asks; Keep editing leaves the text and gives the focus back to the field.
++      await page.touchscreen.tap(x, 300);
++      await expect(prompt).toBeVisible();
++      await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
++      await expect(prompt).toHaveCount(0);
++      await expect(notes).toHaveValue('Synthetic unsaved note');
++      await expect(notes, 'Keep editing returns focus to the field that had it').toBeFocused();
++
++      // Discard closes it and focus returns to the day button; a tap with nothing unsaved closes at once, and the focus is still the day's.
++      await page.touchscreen.tap(x, 300);
++      await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
++      await expect(editor).toHaveCount(0);
++      await expect(dayBtn).toBeFocused();
++      await dayBtn.click();
++      await expect(editor).toBeVisible();
++      await page.touchscreen.tap(x, 300);
++      await expect(editor).toHaveCount(0);
++      await expect(prompt).toHaveCount(0);
++      await expect(dayBtn, 'the mouse events after the tap do not move the focus').toBeFocused();
++    });
++  });
+ });
+ 
+ test('WP5-UX5-T05B (U5-24): on a phone a tap on the bottom sheet backdrop closes it, with the discard question when edits are unsaved, and focus returns to the day button', async ({
+diff --git a/<repo>/tests/e2e/classic-scrollbar.spec.ts b/<task>/export/tests/e2e/classic-scrollbar.spec.ts
+index acda994..ff1f7aa 100644
+--- a/<repo>/tests/e2e/classic-scrollbar.spec.ts
++++ b/<task>/export/tests/e2e/classic-scrollbar.spec.ts
+@@ -134,3 +134,48 @@ test.describe('the Day editor layout with a classic scrollbar', () => {
+     }
+   });
+ });
++
++/*
++ * WP5-UX5 F-UX5A-3 (owner answer F-7 a): a press outside closes the drawer, but a press on an element's own scrollbar scrolls that
++ * element; it is not a press on the page. Between 480 and 929px a week card scrolls sideways and draws a classic scrollbar under it.
++ */
++test.describe('a press on a scrollbar with the Day editor open', () => {
++  test('a press-drag on a week card\'s own scrollbar scrolls the card and leaves the drawer open; a press on plain page still closes it', async ({
++    page,
++    employeeSeed,
++    signInThroughUi,
++  }) => {
++    test.setTimeout(120_000);
++    const days = await employeeSeed.displayedPeriodFreeWorkdays();
++    expect(days.length, 'past free workdays in the displayed period').toBeGreaterThanOrEqual(1);
++    await page.setViewportSize({ width: 900, height: 900 });
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    await openDay(page, days[0] ?? '');
++    const editor = page.getByRole('dialog', { name: /Day editor/ });
++    // The scrollbar of the first week card that scrolls sideways and has its track in view.
++    const bar = await page.evaluate<{ x: number; y: number } | null>(`(() => {
++      for (const week of document.querySelectorAll('.sheet-week')) {
++        const box = week.getBoundingClientRect();
++        const track = week.offsetHeight - week.clientHeight;
++        const y = box.top + week.clientTop + week.clientHeight + Math.max(1, track / 2);
++        if (week.scrollWidth > week.clientWidth && track > 0 && box.top > 0 && y < window.innerHeight) return { x: box.right - 60, y };
++      }
++      return null;
++    })()`);
++    expect(bar, 'a week card with a sideways scrollbar in view').not.toBeNull();
++    const at = bar ?? { x: 0, y: 0 };
++    const scrolled = () => page.evaluate<number>(`[...document.querySelectorAll('.sheet-week')].reduce((sum, week) => sum + week.scrollLeft, 0)`);
++    expect(await scrolled()).toBe(0);
++    await page.mouse.move(at.x, at.y);
++    await page.mouse.down();
++    await page.mouse.move(at.x + 120, at.y, { steps: 5 });
++    await page.mouse.up();
++    expect(await scrolled(), 'the press-drag moved the scrollbar thumb').toBeGreaterThan(0);
++    await expect(editor, 'a scrollbar press is not a press on the page').toBeVisible();
++    // Plain page, away from the drawer, still closes it.
++    const width = await page.evaluate<number>('document.documentElement.clientWidth');
++    await page.mouse.click((await editor.getAttribute('data-side')) === 'left' ? width - 4 : 4, 300);
++    await expect(editor).toHaveCount(0);
++  });
++});
+diff --git a/<repo>/tests/e2e/timesheet.spec.ts b/<task>/export/tests/e2e/timesheet.spec.ts
+index af63ff3..c123bf0 100644
+--- a/<repo>/tests/e2e/timesheet.spec.ts
++++ b/<task>/export/tests/e2e/timesheet.spec.ts
+@@ -1122,10 +1122,12 @@ for (const width of [390, 375, 360, 320]) {
+     await expect(page.locator('[data-day]')).toHaveCount(14);
+     await expect(page.locator('[data-sheet="phone"]')).toHaveCount(1);
+     await page.getByRole('switch', { name: 'Worked hours' }).check();
+-    await page.getByRole('button', { name: 'Change several days' }).click();
++    // Named by the words it shows: "Change days" at 320px, "Change several days" where the toolbar row holds it.
++    const changeDays = page.getByRole('button', { name: /^Change (several )?days$/ });
++    await changeDays.click();
+     await page.getByLabel(`Select ${first}`).check();
+     await expectNoSidewaysScroll(page, `selected, details on, ${width}px`);
+-    await page.getByRole('button', { name: 'Change several days' }).click();
++    await changeDays.click();
+     await openDay(page, first);
+     await expectMarkedOnly(page, first);
+     await expectNoSidewaysScroll(page, `editing frame with the details row, ${width}px`);
+@@ -2222,7 +2224,7 @@ test.describe('the compact toolbar rows (U5-17, U5-17b)', () => {
+     overflow: number;
+   }
+ 
+-  test('"Change several days": right-aligned beside the switch, "Change days" when there is no room, its own full-width row below that, "Change / days" on two lines when narrower still (below 104.7px); 44px high and named "Change several days"', async ({
++  test('"Change several days": right-aligned beside the switch, "Change days" when there is no room, its own full-width row below that, "Change / days" on two lines when narrower still (below 104.7px); 44px high and named by the words it shows', async ({
+     page,
+     signInThroughUi,
+   }) => {
+@@ -2285,12 +2287,15 @@ test.describe('the compact toolbar rows (U5-17, U5-17b)', () => {
+     expect(oneLine.shortHeight, `${toolbarRound(shortWidth + 1)}px: "Change days" on one line`).toBeLessThan(oneLine.lineHeight * 1.4);
+     expect(twoLines.shortHeight, `${toolbarRound(shortWidth - 1)}px: "Change / days" on two lines`).toBeGreaterThan(twoLines.lineHeight * 1.7);
+     expect(Math.abs(twoLines.height - 44), `${toolbarRound(shortWidth - 1)}px: still 44px high`).toBeLessThanOrEqual(0.5);
+-    // The name never changes.
+-    await read(250);
+-    await expect(page.getByRole('button', { name: 'Change several days', exact: true })).toHaveCount(1);
+-    await read(100);
+-    await expect(page.getByRole('button', { name: 'Change several days', exact: true })).toHaveCount(1);
+-    await expect(page.getByRole('button', { name: 'Change several days', exact: true })).toHaveAttribute('aria-pressed', 'false');
++    // The name is the visible words (WCAG 2.2 SC 2.5.3 Label in Name): the full form names it "Change several days" and the short form
++    // "Change days"; a name that is not the visible text (an aria-label of the long form on the short one) would fail it.
++    const named = (name: 'Change several days' | 'Change days') => page.getByRole('button', { name, exact: true });
++    for (const [width, long] of [[358, true], [288, false], [250, true], [130, false], [100, false]] as const) {
++      await read(width);
++      await expect(named(long ? 'Change several days' : 'Change days'), `${width}px: the name is the visible words`).toHaveCount(1);
++      await expect(named(long ? 'Change days' : 'Change several days'), `${width}px: the other form is not the name`).toHaveCount(0);
++    }
++    await expect(named('Change days')).toHaveAttribute('aria-pressed', 'false');
+   });
+ });
+ 
+@@ -2625,6 +2630,31 @@ test.describe('the range ladder (U5-13)', () => {
+     }
+     expect([...seen].sort(), 'a one-month, a two-month and a two-year range were checked').toEqual(['cross-month', 'cross-year', 'same-month']);
+   });
++
++  // The two last forms ("10/12 → 25" and "10/12→25") need a range box under 7.3em and 5.75em (about 115px and 91px), which no phone gives
++  // (the narrowest box is about 258px at 320px). A forced width stands in for the screen, as the toolbar tests force their row.
++  test('the last two forms of a same-month range show in a box far narrower than any phone', async ({ page, signInThroughUi }) => {
++    test.setTimeout(120_000);
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    await page.setViewportSize({ width: 390, height: 900 });
++    for (let step = 0; step < 14 && (await page.locator('.period-name').getAttribute('data-range-kind')) !== 'same-month'; step += 1) {
++      await page.getByRole('button', { name: 'Next period' }).click();
++      await expect(page.locator('[data-day]')).toHaveCount(14);
++    }
++    await expect(page.locator('.period-name')).toHaveAttribute('data-range-kind', 'same-month');
++    for (const [width, form] of [[130, 'no-years'], [105, 'end-day'], [80, 'tight']] as const) {
++      await setRowWidth(page, '.period-title', width);
++      const state = await rangeState(page);
++      const dates = /^(\d{2})\/(\d{2})\/(\d{4}) to (\d{2})\/(\d{2})\/(\d{4})$/.exec(state.spoken);
++      expect(dates, `${width}px: the accessible text is the full dates with "to" (${state.spoken})`).not.toBeNull();
++      const [, startMonth, startDay, startYear, endMonth, endDay, endYear] = dates ?? [];
++      const start = `${startYear}-${startMonth}-${startDay}`;
++      const end = `${endYear}-${endMonth}-${endDay}`;
++      expect(state.box, `${width}px: the range box has the forced width`).toBeCloseTo(width, 0);
++      expect(state.text, `${width}px: the ${form} form shows`).toBe(rangeText(start, end, form));
++    }
++  });
+ });
+ 
+ test.describe('the period card never overlaps (U5-12)', () => {
+diff --git a/<repo>/tests/e2e/keyboard-access.spec.ts b/<task>/export/tests/e2e/keyboard-access.spec.ts
+index b4679c6..bb94a8d 100644
+--- a/<repo>/tests/e2e/keyboard-access.spec.ts
++++ b/<task>/export/tests/e2e/keyboard-access.spec.ts
+@@ -549,7 +549,8 @@ test.describe('WP5-UX-AX-10 on the mobile project', () => {
+       await page.setViewportSize(size);
+       await signInPageAs(world.me.account, '#/timesheet');
+       await expect(page.locator('[data-day]')).toHaveCount(14);
+-      await page.getByRole('button', { name: 'Change several days' }).click();
++      // The button is named by the words it shows: "Change days" on the 320px toolbar row, "Change several days" where the row holds it.
++      await page.getByRole('button', { name: /^Change (several )?days$/ }).click();
+       await expect(page.getByRole('group', { name: 'Batch category edit' })).toBeVisible();
+       const rows = await page.locator('tr.sheet-row[data-day]').evaluateAll((elements) =>
+         elements.map((row) => {
+diff --git a/<repo>/tests/e2e/hover.spec.ts b/<task>/export/tests/e2e/hover.spec.ts
+index 1f3e9de..9cb51ab 100644
+--- a/<repo>/tests/e2e/hover.spec.ts
++++ b/<task>/export/tests/e2e/hover.spec.ts
+@@ -437,7 +437,8 @@ for (const width of [390, 375, 360, 320]) {
+     await signInThroughUi();
+     await expect(page.locator('[data-day]')).toHaveCount(14);
+     const label = page.locator('label.inline.switch');
+-    const button = page.getByRole('button', { name: 'Change several days', exact: true });
++    // Named by the words it shows: "Change days" at 320px, "Change several days" where the toolbar row holds it.
++    const button = page.getByRole('button', { name: /^Change (several )?days$/ });
+     const labelBox = await label.boundingBox();
+     const buttonBox = await button.boundingBox();
+     const inputBox = await page.getByRole('switch', { name: 'Worked hours', exact: true }).boundingBox();

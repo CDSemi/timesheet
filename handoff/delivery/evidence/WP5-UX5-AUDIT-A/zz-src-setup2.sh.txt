@@ -1,0 +1,11 @@
+. <task>/env.sh
+for d in export-probe export-mut; do
+  mkdir -p $T/$d
+  cd $REPO
+  git archive $TARGET | tar -x -C $T/$d
+  cd $T/$d
+  npm ci > $T/out/02-ci-$d.txt 2>&1
+  echo "ci $d rc=$?" >> $T/out/02-ci-extra.txt
+  npm run build > $T/out/04-build-$d.txt 2>&1
+  echo "build $d rc=$?" >> $T/out/02-ci-extra.txt
+done

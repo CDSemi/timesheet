@@ -96,10 +96,24 @@ Luồng hiện tại:
    - WP5-UX5-DIAG3 đã xong. Khi máy bận, quá nhiều worker test chạy song song gây ra lỗi
      quá thời gian; lỗi reset ở bước smoke cũng là lỗi keep-alive như trước. Không có lỗi
      sản phẩm.
-   - WP5-UX5-FIX6 (chỉ sửa bộ chạy test và cấu hình test) đã xong, chưa commit.
-   - Đang chạy: WP5-UX5-FIX6-FREEZE, một commit cho FIX4 tới FIX6 và các bản ghi, rồi
+   - WP5-UX5-FIX6 (chỉ sửa bộ chạy test và cấu hình test) đã xong.
+   - FIX4 tới FIX6 đã được freeze trong f4049aa (digest 26b163a6) và đã push.
+   - WP5-UX5-REGATE4 đã đạt trên f4049aa.
+   - WP5-UX5-AUDIT-B tìm ra năm lỗi mức Low (FIX REQUIRED): tài liệu cũ chưa cập nhật, một
+     trường hợp hiếm trong PDF khiến giờ nghỉ phép bị cắt mất khi tên ngày lễ dài, và hai
+     test chưa đủ chặt.
+   - WP5-UX5-AUDIT-A tìm ra một lỗi Medium và ba lỗi Low (FIX REQUIRED). Lỗi Medium: trên
+     trang Review hẹp, nút "Sign correction" của một kỳ đã ký che mất dòng chữ ký.
+   - Cả hai bản kế hoạch sửa đã xong. WP5-UX5-FIX7 (sửa các lỗi vùng B) đã xong, chưa
+     commit.
+   - WP5-UX5-FIX8 (sửa các lỗi vùng A) đã xong, chưa commit. Lượt quét axe của nó phát hiện
+     một lỗ hổng truy cập bằng bàn phím có từ trước: các thẻ tuần chỉ đọc cuộn ngang không
+     thể dùng bàn phím để tới được.
+   - WP5-UX5-FIX9 đã sửa lỗ hổng đó, chưa commit.
+   - Đang chạy: WP5-UX5-FIX9-FREEZE, một commit cho FIX7 tới FIX9 và các bản ghi, rồi
      push.
-   - Sau đó là REGATE4, audit A và B, audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
+   - Sau đó là một lần freeze, gate lại, kiểm tra lại độc lập, audit tích hợp, ACCEPT-DOCS
+     và nghiệm thu lại WP5.
    - Chi tiết: checkpoint, mục "REGATE3 không đạt; hai việc chẩn đoán đang chạy
      (2026-10-26)".
    - Trước đó trong ngày đã tạm dừng hai lần để khởi động lại máy.

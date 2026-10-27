@@ -133,7 +133,8 @@ function SheetDayColumn({ day, details, actions, lift }: { day: SheetDay; detail
 function revealFocused(event: FocusEvent<HTMLElement>) {
   const card = event.currentTarget;
   const style = getComputedStyle(card);
-  if (style.overflowX === 'visible' || !(event.target instanceof Element)) return;
+  // The card itself (focusable in the read-only review while it scrolls) is not a control to reveal.
+  if (style.overflowX === 'visible' || !(event.target instanceof Element) || event.target === card) return;
   const padding = (value: string) => Number.parseFloat(value) || 0;
   const box = card.getBoundingClientRect();
   const left = box.left + card.clientLeft;
@@ -150,12 +151,37 @@ function revealFocused(event: FocusEvent<HTMLElement>) {
   if (dx !== 0 || dy !== 0) card.scrollBy({ left: dx, top: dy, behavior: 'instant' });
 }
 
+/**
+ * True while the element scrolls sideways (WP5-UX5-FIX9, WCAG 2.1.1). The read-only review week card holds nothing to focus, so
+ * while it overflows it is a focusable named region (arrow keys scroll it) and takes the shared focus ring; while it fits it adds
+ * no tab stop. Measured before the first paint and again whenever the card or its content changes size (as `TableWrap` does).
+ */
+function useScrollsSideways(box: RefObject<HTMLElement | null>, enabled: boolean): boolean {
+  const [scrolls, setScrolls] = useState(false);
+  useLayoutEffect(() => {
+    const element = box.current;
+    if (!enabled || element === null) {
+      setScrolls(false);
+      return;
+    }
+    const measure = () => setScrolls(element.scrollWidth > element.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    for (const child of Array.from(element.children)) observer.observe(child);
+    return () => observer.disconnect();
+  }, [box, enabled]);
+  return scrolls;
+}
+
 /** One Monday to Sunday band of the desktop sheet, with the Excel rows Day, Date, Category, Time, OT and Status. */
 function SheetWeekGrid({ week, details, actions }: { week: SheetWeek; details: boolean; actions: DayActions }) {
   // A day is lifted while it is selected for a batch change or open in the Day editor; runs never cross a band.
   const runs = liftRuns(week.days.map((day) => actions.selected.has(day.workDate) || isEditingDay(day, actions)));
+  const card = useRef<HTMLElement>(null);
+  const scrolls = useScrollsSideways(card, actions.review === true);
   return (
-    <section className="sheet-week" aria-label={`Week ${week.index}, ${week.rangeName}`} onFocus={revealFocused}>
+    <section ref={card} className="sheet-week" aria-label={`Week ${week.index}, ${week.rangeName}`} onFocus={revealFocused} {...(scrolls ? { tabIndex: 0 } : {})}>
       <div className="week-bar">
         <strong>WEEK {week.index}</strong>
         <span className="mono muted">{week.rangeText}</span>

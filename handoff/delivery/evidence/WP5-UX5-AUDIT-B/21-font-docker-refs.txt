@@ -1,0 +1,134 @@
+=== Dockerfile
+     1	# Timesheet application image (WP4-T04): one pinned Node base, three build stages, a small non-root runtime.
+     2	#
+     3	# Base image: node:24.21.0-trixie-slim (Debian 13, matches .nvmrc 24.21.0), pinned by the digest of its multi-arch
+     4	# image INDEX (linux/amd64 and linux/arm64 resolve from it). Recorded 2026-10-05 with:
+     5	#   docker buildx imagetools inspect node:24.21.0-trixie-slim
+     6	# Never use a moving tag such as `latest`. Bump the tag and the digest together, and rebuild.
+     7	# better-sqlite3 13.0.3 ships N-API prebuilds for linux glibc, so no compiler is installed (see O13 in WP4-PLAN);
+     8	# fall back to bookworm-slim only if that prebuilt binding ever fails to load.
+     9	ARG NODE_IMAGE_DIGEST=sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
+    10
+    11	FROM node:24.21.0-trixie-slim@${NODE_IMAGE_DIGEST} AS base
+    12	WORKDIR /app
+    13	ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+    14
+    15	# Build stage: development dependencies, then the server (tsc) and the client (Vite) into dist/. The image ships no source
+    16	# maps and no sourceMappingURL comments (WP4-A-01): tsc gets --sourceMap false, and vite.config.ts turns build.sourcemap
+    17	# off when BUILD_SOURCEMAPS=off. Local development keeps its maps.
+    18	FROM base AS build
+    19	COPY package.json package-lock.json .npmrc ./
+    20	RUN npm ci
+    21	COPY tsconfig*.json vite.config.ts ./
+    22	COPY src ./src
+    23	RUN npm run build:server -- --sourceMap false \
+    24	    && BUILD_SOURCEMAPS=off npm run build:client
+    25
+    26	# Production dependencies only. Install scripts stay off: better-sqlite3 needs none (prebuilds ship in the package).
+    27	FROM base AS prod-deps
+    28	COPY package.json package-lock.json .npmrc ./
+    29	RUN npm ci --omit=dev --ignore-scripts
+    30
+    31	# Runtime stage: dist/, production node_modules, assets/pdf-fonts and package.json ("type": "module") only. The context excludes
+    32	# reference/inputs (the template workbook), handoff/, tests/, .claude/, .agents/, docs and every .env file.
+    33	FROM base AS runtime
+    34	ENV NODE_ENV=production \
+    35	    OUTBOUND_MODE=capture \
+    36	    HOST=0.0.0.0 \
+    37	    PORT=3000 \
+    38	    DATABASE_PATH=/data/timesheet.db \
+    39	    DATA_DIR=/data/private-data
+    40	# Fixed non-root identity. A bind-mounted /data must be owned by UID/GID 10001 on the host.
+    41	RUN groupadd --gid 10001 timesheet \
+    42	    && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin timesheet \
+    43	    && install --directory --owner 10001 --group 10001 --mode 0700 /data
+    44	COPY --from=prod-deps /app/node_modules ./node_modules
+    45	COPY --from=build /app/dist ./dist
+    46	# The one committed font (Indie Flower, SIL OFL 1.1, ADR 0001): read by the PDF renderer from /app/assets/pdf-fonts.
+    47	COPY assets/pdf-fonts ./assets/pdf-fonts
+    48	COPY package.json ./
+    49	USER 10001:10001
+    50	# Database, private files (PDFs, signatures, evidence) and the outbound capture directory live here and nowhere else;
+    51	# the root filesystem can run read-only with a /tmp tmpfs.
+    52	VOLUME ["/data"]
+    53	EXPOSE 3000
+    54	# Slim images have no curl: a Node one-liner asks /api/ready (schema applied and /data writable; no personal data).
+    55	HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
+    56	    CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/ready', { signal: AbortSignal.timeout(4000) }).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+    57	STOPSIGNAL SIGTERM
+    58	CMD ["node", "dist/server/index.js"]
+=== .dockerignore
+     1	# Allow-list: nothing enters the build context unless it is named below. This keeps the template workbook,
+     2	# handoff/, tests/, .claude/, .agents/, docs, env files and local databases out of every image layer.
+     3	*
+     4	!package.json
+     5	!package-lock.json
+     6	!.npmrc
+     7	!tsconfig*.json
+     8	!vite.config.ts
+     9	!src/
+    10	!assets/pdf-fonts/
+    11
+    12	# Explicit denials, as a second line of defence if the allow-list is ever widened.
+    13	**/.env
+    14	**/.env.*
+    15	**/*.xlsx
+    16	**/*.db
+    17	**/*.db-wal
+    18	**/*.db-shm
+    19	**/*.sqlite*
+    20	**/node_modules
+    21	**/dist
+    22	reference
+    23	handoff
+    24	tests
+    25	docs
+    26	.claude
+    27	.agents
+    28	.git
+=== grep pdf-fonts / IndieFlower outside handoff
+src/server/pdf/fonts.ts:13: * - Indie Flower 2.000 (SIL Open Font License 1.1) for the category cell only (ADR 0001). The one committed font file is
+src/server/pdf/fonts.ts:14: *   assets/pdf-fonts/IndieFlower-Regular.ttf, pinned by its SHA-256 below. It is read by this renderer only: never served
+src/server/pdf/fonts.ts:28:/** The pinned Indie Flower file: 108,196 bytes, version 2.000 (assets/pdf-fonts/README.md). */
+src/server/pdf/fonts.ts:29:export const INDIE_FLOWER_FILE = 'IndieFlower-Regular.ttf';
+src/server/pdf/fonts.ts:40:export function pdfFontAssetDirectory(): string {
+src/server/pdf/fonts.ts:41:  return fileURLToPath(new URL('../../../assets/pdf-fonts/', import.meta.url));
+src/server/pdf/fonts.ts:45:  const bytes = await readFile(path.join(pdfFontAssetDirectory(), INDIE_FLOWER_FILE));
+src/server/pdf/fonts.ts:47:    throw new Error('assets/pdf-fonts/IndieFlower-Regular.ttf does not match its pinned SHA-256 (ADR 0001)');
+src/server/pdf/timesheetPdf.ts:63: * Bold, Serif Condensed Bold and Serif Italic from the installed package, and the committed Indie Flower file for the
+src/server/pdf/timesheetPdf.ts:64: * category cells only (ADR 0001); a category with a character Indie Flower lacks is drawn in DejaVu Serif Italic.
+src/server/pdf/timesheetPdf.ts:442:    hand: await embed(bytes.hand, 'EAAAAA+IndieFlower'),
+scripts/container-drill.mjs:383:  // WP5-UX5-T02: the image carries assets/pdf-fonts, so the rendered PDF embeds the Indie Flower subset (ADR 0001).
+scripts/container-drill.mjs:387:  check('the container PDF is one page and embeds the Indie Flower subset from the image', (embedded.match(/\/Type\s*\/Page\b/g) ?? []).length === 1 && embedded.includes('+IndieFlower'), `${embedded.length} bytes`);
+scripts/smoke-built-server.mjs:427:  // WP5-UX5-T02: the PDF embeds the committed Indie Flower subset (assets/pdf-fonts, ADR 0001) next to DejaVu, on one page.
+scripts/smoke-built-server.mjs:430:    'the revision PDF is one page and embeds the Indie Flower subset (read from assets/pdf-fonts)',
+scripts/smoke-built-server.mjs:431:    (pdfLatin1.match(/\/Type\s*\/Page\b/g) ?? []).length === 1 && pdfLatin1.includes('+IndieFlower') && pdfLatin1.includes('+DejaVuSans'),
+tests/client/wordmarkAsset.test.ts:14: * ADR 0001 (WP5-UX5-T02) adds exactly one font file to the repository: the PDF renderer's Indie Flower
+tests/client/wordmarkAsset.test.ts:15: * (assets/pdf-fonts, SIL OFL 1.1), pinned by its SHA-256. It is never under src/, never served and never used by the UI.
+tests/client/wordmarkAsset.test.ts:25:const ALLOWED_FONT = 'assets/pdf-fonts/IndieFlower-Regular.ttf';
+tests/client/wordmarkAsset.test.ts:111:    const offenders = filesUnder(join(SRC, 'client')).filter((file) => /IndieFlower|Indie Flower|pdf-fonts/i.test(readFileSync(file, 'utf8')));
+tests/client/wordmarkAsset.test.ts:119:  it('is assets/pdf-fonts/IndieFlower-Regular.ttf: 108,196 bytes with the pinned SHA-256, the same one the renderer checks', () => {
+tests/client/wordmarkAsset.test.ts:124:    expect(INDIE_FLOWER_FILE).toBe('IndieFlower-Regular.ttf');
+tests/client/wordmarkAsset.test.ts:128:    const readme = readFileSync(join(ROOT, 'assets', 'pdf-fonts', 'README.md'), 'utf8');
+tests/client/wordmarkAsset.test.ts:130:    expect(readFileSync(join(ROOT, 'assets', 'pdf-fonts', 'OFL.txt'), 'utf8')).toContain('SIL OPEN FONT LICENSE Version 1.1');
+tests/client/wordmarkAsset.test.ts:157:    expect(listed).toContain('assets/pdf-fonts/OFL.txt');
+tests/client/wordmarkAsset.test.ts:158:    expect(listed).toContain('assets/pdf-fonts/README.md');
+tests/integration/pdf-render.test.ts:22: * Indie Flower category cells with their DejaVu Serif Italic fallback. Geometry comes from the pure `pdfLayout` and is
+tests/integration/pdf-render.test.ts:827:describe('fonts: Indie Flower for the category cells, DejaVu Serif Italic as the per-cell fallback (ADR 0001)', () => {
+tests/integration/pdf-render.test.ts:830:  // Greek and Cyrillic: DejaVu has them, Indie Flower 2.000 does not ("Vacation" in Russian, "Alpha" in Greek).
+tests/integration/pdf-render.test.ts:835:  it('embeds Indie Flower, and only a subset of it, next to the four DejaVu faces', async () => {
+tests/integration/pdf-render.test.ts:838:    for (const name of ['DejaVuSans', 'DejaVuSans-Bold', 'DejaVuSerifCondensed-Bold', 'DejaVuSerif-Italic', 'IndieFlower']) {
+tests/integration/pdf-render.test.ts:842:    expect(glyphs(fonts, 'IndieFlower')).toBeGreaterThan(5);
+tests/integration/pdf-render.test.ts:843:    expect(glyphs(fonts, 'IndieFlower')).toBeLessThan(30);
+tests/integration/pdf-render.test.ts:847:  it('draws a category that Indie Flower lacks a character of in DejaVu Serif Italic for that cell, never as "?"', async () => {
+tests/integration/pdf-render.test.ts:856:      // The italic face drew it: its subset grew by one glyph per distinct character; Indie Flower's did not grow for it.
+tests/integration/pdf-render.test.ts:858:      expect(glyphs(fonts, 'IndieFlower'), category).toBeLessThanOrEqual(glyphs(baseline, 'IndieFlower'));
+tests/integration/pdf-render.test.ts:862:  it('keeps a Vietnamese category in Indie Flower: the handwriting subset grows and the italic fallback does not', async () => {
+tests/integration/pdf-render.test.ts:866:    expect(glyphs(fonts, 'IndieFlower')).toBeGreaterThan(glyphs(baseline, 'IndieFlower'));
+Dockerfile:31:# Runtime stage: dist/, production node_modules, assets/pdf-fonts and package.json ("type": "module") only. The context excludes
+Dockerfile:46:# The one committed font (Indie Flower, SIL OFL 1.1, ADR 0001): read by the PDF renderer from /app/assets/pdf-fonts.
+Dockerfile:47:COPY assets/pdf-fonts ./assets/pdf-fonts
+=== static serving
+src/server/app.ts:3:import { serveStatic } from '@hono/node-server/serve-static';
+src/server/app.ts:150:    app.use('*', serveStatic({ root }));
+src/server/app.ts:155:    app.get('*', serveStatic({ path: join(root, 'index.html') }));

@@ -63,9 +63,9 @@ async function addSession(date: string, from: string, to: string, reason?: strin
   expect(response.status, JSON.stringify(response.body)).toBe(201);
 }
 
-/** The employee's signed revision of PAYROLL (settings, one session, a saved image). */
-async function signed(): Promise<string> {
-  await saveSettings();
+/** The employee's signed revision of PAYROLL (settings with optional overrides, one session, a saved image). */
+async function signed(settings: Record<string, unknown> = {}): Promise<string> {
+  await saveSettings(settings);
   await addSession('2026-09-15', '09:00', '18:00');
   saveSignature(t.db, t.clock, files, t.userIds.employee, makePng(40, 12), 'image/png');
   const review = await t.request('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: employee });
@@ -176,6 +176,23 @@ describe('sign-off and the send record', () => {
     expect(() => t.db.prepare("UPDATE revision_sends SET subject = 'Changed'").run()).toThrow(/immutable_revision_send/);
   });
 
+  // F-UX5B-5 (plan B-A1): the Settings time switch is the default of the send draft and of the deadline sends, never of the
+  // sign-off's own PDF, which stays the sign-off default (time rows on, OT rows as the snapshot froze them).
+  it('the Settings time switch reaches the send draft, not the PDF job and file of the sign-off', async () => {
+    const revisionId = await signed({ show_time_on_pdf: false });
+    expect((await draftOf(revisionId)).time_rows).toBe(false);
+    expect(t.db.prepare("SELECT business_key, payload_json FROM jobs WHERE revision_id = ? AND kind = 'render_pdf'").all(revisionId)).toEqual([
+      { business_key: `revision:${revisionId}:render_pdf`, payload_json: JSON.stringify({ revision_id: revisionId, variant: 't1o1' }) },
+    ]);
+    await runPdf();
+    expect(t.db.prepare("SELECT variant, state FROM revision_files WHERE revision_id = ? AND kind = 'pdf'").all(revisionId)).toEqual([{ variant: 't1o1', state: 'ready' }]);
+    // Sending with the draft's default renders the other variant next to it; the sign-off file is untouched.
+    const sent = await postSend(revisionId, await sendBody(revisionId));
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+    expect(sent.body.send).toMatchObject({ time_rows: false, ot_rows: true, pdf_variant: 't0o1' });
+    expect(t.db.prepare("SELECT variant FROM revision_files WHERE revision_id = ? AND kind = 'pdf' AND state = 'ready'").pluck().all(revisionId)).toEqual(['t1o1']);
+  });
+
   it('is idempotent by request key: the same body replays, another body under the key is 409, and nothing more is written', async () => {
     const revisionId = await signed();
     const body = await sendBody(revisionId);
@@ -269,6 +286,35 @@ describe('sign-off and the send record', () => {
   });
 });
 
+describe('a send that still waits for an older revision (R-UX5B-1)', () => {
+  it("blocks the correction's send until the older revision's job has run, and then the reason rule applies", async () => {
+    const first = await signed();
+    expect((await postSend(first, await sendBody(first))).status).toBe(201); // revision 1's send job waits
+    await addSession('2026-09-16', '09:00', '18:00', 'Synthetic forgotten day');
+    const review = await t.request('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: employee });
+    const correction = await t.request('POST', `/api/timesheets/${PAYROLL}/revisions`, {
+      cookie: employee,
+      body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false },
+    });
+    expect(correction.status, JSON.stringify(correction.body)).toBe(201);
+    const second = correction.body.revision.id as string;
+    const before = writeState();
+    const blocked = await postSend(second, await sendBody(second));
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error.code).toBe('delivery_in_progress');
+    expect(writeState()).toEqual(before);
+    // The older send is delivered first; only then can the correction be sent, and that copy needs a reason.
+    await runPdf();
+    await runSend();
+    expect(t.db.prepare("SELECT state FROM delivery_attempts WHERE revision_id = ?").pluck().all(first)).toEqual(['accepted']);
+    const noReason = await postSend(second, await sendBody(second));
+    expect(noReason.status).toBe(422);
+    expect(noReason.body.error.code).toBe('reason_required');
+    const sent = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+  });
+});
+
 describe("the owner's reason rule (B-A2)", () => {
   /** Sends the revision once with the draft defaults and runs its job against `outbound`. */
   async function sendOnce(revisionId: string, outbound: OutboundAdapter, extra: Record<string, unknown> = {}) {
@@ -297,7 +343,15 @@ describe("the owner's reason rule (B-A2)", () => {
     expect(t.db.prepare("SELECT reason FROM audit_events WHERE operation = 'revision.send' ORDER BY rowid DESC LIMIT 1").pluck().get()).toBe(reason);
     const attempts = t.db.prepare("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'accepted' ORDER BY started_at").pluck().all(revisionId) as string[];
     expect(attempts).toHaveLength(2);
-    for (const attempt of attempts) expect(readFileSync(join(captureFolder(dataDir, attempt), 'message.eml'), 'utf8')).not.toContain('asked for the copy again');
+    // Quoted-printable breaks a long line ("Reason: Payroll asked for =" / "the copy again"), so join the soft breaks before
+    // looking for the reason; a positive control proves the joined text is the message body (F-UX5B-5, mutant M11).
+    const body = String(t.db.prepare('SELECT body_text FROM revision_sends WHERE id = ?').pluck().get(second));
+    for (const attempt of attempts) {
+      const message = readFileSync(join(captureFolder(dataDir, attempt), 'message.eml'), 'utf8').replace(/=\r?\n/g, '');
+      expect(message).toContain(body.split('\n')[0] ?? '?');
+      expect(message).not.toContain('asked for the copy again');
+      expect(message).not.toMatch(/Reason:/i);
+    }
   });
 
   it('an uncertain copy counts whatever was decided; a copy whose attempts all failed permanently does not', async () => {

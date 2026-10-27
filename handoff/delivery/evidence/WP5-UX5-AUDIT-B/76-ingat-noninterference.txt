@@ -1,0 +1,29 @@
+37:MAIL_FROM                  = { required = true }   # the app starts without it, but no send or capture works without a sender
+41:OUTBOUND_MODE              = { default = "capture", allowed = ["capture", "smtp"], owner_gated = true }
+42:PRODUCTION_SENDING_ENABLED = { allowed = ["true"], owner_gated = true }   # real sending needs both owner-gated keys
+43:SMTP_HOST                  = { pattern = '^[A-Za-z0-9.-]{1,253}$' }
+44:SMTP_PORT                  = { pattern = '^[0-9]{1,5}$' }
+45:SMTP_SECURITY              = { allowed = ["starttls", "tls"] }
+46:SMTP_USER                  = { secret = true }
+47:SMTP_PASSWORD              = { secret = true }
+69:argv = ["node", "-e", "fetch('http://127.0.0.1:3000/api/ready',{signal:AbortSignal.timeout(4000)}).then(async r=>{process.stdout.write(await r.text());process.exit(r.ok?0:1)},()=>process.exit(1))"]
+118:env = { JOB_RUNNER = "off" }                  # a schema older than the outbound pause cannot hold jobs
+120:[drill]                                       # throwaway secrets; SMTP credentials and owner-gated keys are dropped in isolation
+127:OUTBOUND_MODE = "capture"
+131:kind = "outbound"
+134:clear_hold = "outbound-resume"
+136:restore_notice = "Outbound delivery is paused (reason: restored) and queued sends are held. List them with `ingat task {instance} outbound-held`, check the mailbox, then use outbound-release-job / outbound-release-all / outbound-drop-job, check `ingat task {instance} outbound-status`, and finally run outbound-resume."
+140:# The exit map of each task follows its command in src/server/cli.ts (the header documents all commands; docs/11_OPERATIONS_RUNBOOK.md documents backup, restore and outbound).
+195:# Outbound reconciliation after a restore. The preview (no --confirm) prints JSON with outcome "confirmation_required"
+198:[tasks.outbound-held]                         # lists held jobs: ids, kinds, attempts, blockers; no person
+201:argv = ["node", "dist/server/cli.js", "outbound", "release"]
+209:[tasks.outbound-status]                       # the pause and the counts `outbound-resume` would release
+212:argv = ["node", "dist/server/cli.js", "outbound", "resume"]
+220:[tasks.outbound-release-job]
+223:argv = ["node", "dist/server/cli.js", "outbound", "release", "--job", "{arg.job}", "--confirm"]
+230:[tasks.outbound-release-all]
+233:argv = ["node", "dist/server/cli.js", "outbound", "release", "--all", "--confirm"]
+239:[tasks.outbound-drop-job]
+242:argv = ["node", "dist/server/cli.js", "outbound", "drop", "--job", "{arg.job}", "--confirm"]
+249:[tasks.outbound-resume]
+252:argv = ["node", "dist/server/cli.js", "outbound", "resume", "--confirm"]

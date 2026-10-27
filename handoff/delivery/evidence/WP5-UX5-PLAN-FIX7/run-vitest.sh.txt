@@ -1,0 +1,12 @@
+#!/bin/bash
+# usage: run-vitest.sh <out-name> <vitest args...>   (runs inside the scratch export)
+set -u
+T="<task>"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$(cygpath -u "$APPDATA")/npm:$PATH"
+export TEMP="$(cygpath -w "$T/tmp")" TMP="$(cygpath -w "$T/tmp")"
+export DATA_DIR="$T/data" DATABASE_PATH="$T/data/probe.db"
+mkdir -p "$T/data" "$T/out"
+OUT="$1"; shift
+cd "$T/export" || exit 1
+node.exe node_modules/vitest/vitest.mjs run "$@" > "$T/out/$OUT" 2>&1
+echo "exit $?" >> "$T/out/$OUT"

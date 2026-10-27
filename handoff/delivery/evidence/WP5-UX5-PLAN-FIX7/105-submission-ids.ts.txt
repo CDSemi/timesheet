@@ -1,0 +1,17 @@
+/* Prints the submission ids of two sample databases, to see whether two generator runs share them (they print on the PDF). */
+import { writeFileSync } from 'node:fs';
+import { openDatabase } from '../export/src/server/db/database.ts';
+
+const [outPath, ...paths] = process.argv.slice(2);
+if (outPath === undefined || paths.length === 0) throw new Error('usage');
+const lines: string[] = [];
+for (const path of paths) {
+  const db = openDatabase(path);
+  const rows = db
+    .prepare("SELECT u.display_name AS name, r.revision_no AS no, json_extract(r.payload_json, '$.submission.id') AS sid FROM timesheet_revisions r JOIN users u ON u.id = r.user_id ORDER BY u.display_name, r.revision_no")
+    .all() as Array<{ name: string; no: number; sid: string }>;
+  db.close();
+  lines.push(`# ${path.replace(/\\/g, '/').split('/').slice(-2).join('/')}`);
+  for (const row of rows) lines.push(`${row.name} r${row.no} ${row.sid}`);
+}
+writeFileSync(outPath, `${lines.join('\n')}\n`);

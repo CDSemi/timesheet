@@ -1,0 +1,114 @@
+== M12 start 03:59:45Z
+M12 applied to src/client/components/SendCard.tsx: the reason dialog is skipped for another copy (the server's 422 still opens it)
+  build:client exit=0
+
+Running 2 tests using 2 workers
+
+[1/2] [mobile] › tests\e2e\submission.spec.ts:67:1 › a manual sign-off sends nothing; the Send card then sends the edited envelope, both switches and the matching PDF into the capture folder, and another copy needs the owner's reason
+[2/2] [desktop] › tests\e2e\submission.spec.ts:67:1 › a manual sign-off sends nothing; the Send card then sends the edited envelope, both switches and the matching PDF into the capture folder, and another copy needs the owner's reason
+  1) [desktop] › tests\e2e\submission.spec.ts:67:1 › a manual sign-off sends nothing; the Send card then sends the edited envelope, both switches and the matching PDF into the capture folder, and another copy needs the owner's reason 
+
+    Error: nothing is posted without a valid reason
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "body_text": "Hello,
+    +
+    + Attached is the timesheet of Synthetic Signer for 2026-10-12 to 2026-10-25 (payroll date 2026-10-30).
+    + Status: Submitted.
+    + Submission TS-20261030-6f380a8268, revision 1.",
+    +     "cc": Array [
+    +       "manager-capture@example.invalid",
+    +     ],
+    +     "ot_rows": true,
+    +     "request_key": "8ec537af-433d-4b50-82ca-73b261a2df81",
+    +     "subject": "Timesheet 2026-10-12 to 2026-10-25 - Synthetic Signer - Submitted",
+    +     "time_rows": true,
+    +     "to": Array [
+    +       "payroll-capture@example.invalid",
+    +     ],
+    +   },
+    + ]
+
+      192 |   await confirm.getByRole('button', { name: 'Send another copy' }).click();
+      193 |   await expect(confirm.getByRole('alert')).toContainText('2 to 500 characters');
+    > 194 |   expect(requests, 'nothing is posted without a valid reason').toEqual([]);
+          |                                                                ^
+      195 |   await page.screenshot({ path: screenshotPath(`submission-reason-${project}-synthetic.png`) });
+      196 |   await reason.fill('Payroll asked for a second copy');
+      197 |   await confirm.getByRole('button', { name: 'Send another copy' }).click();
+        at <task>\export-mut\tests\e2e\submission.spec.ts:194:64
+
+    Error Context: ..\pw-mut-a\submission-a-manual-sign-o-4e9d1-py-needs-the-owner-s-reason-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-a\submission-a-manual-sign-o-4e9d1-py-needs-the-owner-s-reason-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-a\submission-a-manual-sign-o-4e9d1-py-needs-the-owner-s-reason-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  2) [mobile] › tests\e2e\submission.spec.ts:67:1 › a manual sign-off sends nothing; the Send card then sends the edited envelope, both switches and the matching PDF into the capture folder, and another copy needs the owner's reason 
+
+    Error: nothing is posted without a valid reason
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "body_text": "Hello,
+    +
+    + Attached is the timesheet of Synthetic Signer for 2026-10-12 to 2026-10-25 (payroll date 2026-10-30).
+    + Status: Submitted.
+    + Submission TS-20261030-0203231862, revision 1.",
+    +     "cc": Array [
+    +       "manager-capture@example.invalid",
+    +     ],
+    +     "ot_rows": true,
+    +     "request_key": "bc32a0b2-b2a9-4d84-b923-da9e6fdbc6ac",
+    +     "subject": "Timesheet 2026-10-12 to 2026-10-25 - Synthetic Signer - Submitted",
+    +     "time_rows": true,
+    +     "to": Array [
+    +       "payroll-capture@example.invalid",
+    +     ],
+    +   },
+    + ]
+
+      192 |   await confirm.getByRole('button', { name: 'Send another copy' }).click();
+      193 |   await expect(confirm.getByRole('alert')).toContainText('2 to 500 characters');
+    > 194 |   expect(requests, 'nothing is posted without a valid reason').toEqual([]);
+          |                                                                ^
+      195 |   await page.screenshot({ path: screenshotPath(`submission-reason-${project}-synthetic.png`) });
+      196 |   await reason.fill('Payroll asked for a second copy');
+      197 |   await confirm.getByRole('button', { name: 'Send another copy' }).click();
+        at <task>\export-mut\tests\e2e\submission.spec.ts:194:64
+
+    Error Context: ..\pw-mut-a\submission-a-manual-sign-o-4e9d1-py-needs-the-owner-s-reason-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-a\submission-a-manual-sign-o-4e9d1-py-needs-the-owner-s-reason-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-a\submission-a-manual-sign-o-4e9d1-py-needs-the-owner-s-reason-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  2 failed
+    [desktop] › tests\e2e\submission.spec.ts:67:1 › a manual sign-off sends nothing; the Send card then sends the edited envelope, both switches and the matching PDF into the capture folder, and another copy needs the owner's reason 
+    [mobile] › tests\e2e\submission.spec.ts:67:1 › a manual sign-off sends nothing; the Send card then sends the edited envelope, both switches and the matching PDF into the capture folder, and another copy needs the owner's reason 
+  playwright a exit=1
+M12 restored src/client/components/SendCard.tsx: byte-equal true
+== M12 end 03:59:58Z

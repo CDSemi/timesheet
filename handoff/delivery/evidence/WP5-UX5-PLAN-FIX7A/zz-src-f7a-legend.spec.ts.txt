@@ -1,0 +1,43 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, test } from './fixtures.ts';
+import { namedDayButton } from './dayButton.ts';
+
+/* WP5-UX5-PLAN-FIX7A debug probe: what the legend press hits and what the client-box rule says. Task-local. */
+const OUT = process.env.AUDIT_OUT ?? '';
+const LABEL = process.env.PROBE_LABEL ?? 'legend';
+function note(line: string): void {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, `obs-${LABEL}.txt`), `${line}\n`);
+}
+
+test('legend press target', async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+  test.skip(isMobile, 'desktop');
+  const free = await employeeSeed.displayedPeriodFreeWorkdays();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await namedDayButton(page, free[0] ?? '', 'Edit').click();
+  await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+  const legend = page.getByRole('list', { name: 'Legend' });
+  await legend.scrollIntoViewIfNeeded();
+  const facts = await legend.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const out: string[] = [];
+    for (const f of [0.5, 0.9, 0.1, 0.75, 0.25]) {
+      const x = rect.left + rect.width * f;
+      const y = rect.top + rect.height / 2;
+      const hit = element.ownerDocument.elementFromPoint(x, y);
+      if (hit === null) {
+        out.push(`${f}: null`);
+        continue;
+      }
+      const b = hit.getBoundingClientRect();
+      out.push(
+        `${f}: ${hit.tagName.toLowerCase()}.${hit.className} client ${hit.clientWidth}x${hit.clientHeight} cl ${hit.clientLeft} ct ${hit.clientTop} box ${b.left.toFixed(2)},${b.top.toFixed(2)} ${b.width.toFixed(2)}x${b.height.toFixed(2)} point ${x.toFixed(2)},${y.toFixed(2)}`,
+      );
+    }
+    return out;
+  });
+  for (const line of facts) note(line);
+});

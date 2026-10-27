@@ -1,0 +1,15 @@
+# Usage: bash run-probe.sh <label> <spec file in $T> [playwright args...]
+# One Playwright run of a task-local probe in the scratch export (never the repository), real clock, ports 50340-50359 (patched fixtures).
+. <task>/env.sh
+L=$1; SPEC=$2; shift 2
+mkdir -p $T/pw-$L $T/shots $T/obs
+cp $T/$SPEC $X/tests/e2e/$SPEC
+export E2E_SCREENSHOT_DIR="$TW\\shots"
+export AUDIT_OUT="$TW\\obs"
+export PROBE_LABEL=$L
+export NODE_OPTIONS="--trace-deprecation"
+cd $X || exit 2
+echo "\$ node node_modules/@playwright/test/cli.js test tests/e2e/$SPEC $* --output=$TW\\pw-$L"
+node.exe node_modules/@playwright/test/cli.js test tests/e2e/$SPEC --reporter=line --workers=1 "$@" --output="$TW\\pw-$L" > $T/out/log-$L.txt 2>&1
+echo "exit=$?" >> $T/out/log-$L.txt
+echo "done $L: $(grep -o 'exit=[0-9]*' $T/out/log-$L.txt)"

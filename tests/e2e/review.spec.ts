@@ -460,6 +460,42 @@ test('the Preview sheet follows the sheet breakpoint: the 4-column table below 4
   }
 });
 
+// WP5-UX5-FIX9 (WCAG 2.1.1, axe scrollable-region-focusable): a read-only week card that scrolls sideways (480 to 929px) is a keyboard stop.
+test('the Preview week cards that scroll sideways are named keyboard stops that ArrowRight scrolls; a window wide enough adds no stop', async ({
+  page,
+  adminSeed,
+  builtServer,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'The widths are set by the test (desktop project)');
+  const reviewer = await newReviewer(adminSeed, builtServer);
+  await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+  const paper = page.locator('[data-paper="review"]');
+  await expect(paper).toBeVisible();
+  const cards = paper.locator('.sheet-week');
+  for (const width of [480, 600, 768, 900]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(cards, `${width}px: two week cards`).toHaveCount(2);
+    for (const index of [0, 1]) {
+      const card = cards.nth(index);
+      await expect(card, `${width}px: week ${index + 1} scrolls sideways`).toHaveAttribute('tabindex', '0');
+      await card.focus();
+      await expect(card, `${width}px: week ${index + 1} is reached by keyboard focus`).toBeFocused();
+      await expect(card, `${width}px: week ${index + 1} has its name`).toHaveAccessibleName(new RegExp(`^Week ${index + 1}, `));
+      await card.evaluate((element) => {
+        element.scrollLeft = 0;
+      });
+      await page.keyboard.press('ArrowRight');
+      await expect.poll(() => card.evaluate((element) => element.scrollLeft), `${width}px: ArrowRight scrolls week ${index + 1}`).toBeGreaterThan(0);
+    }
+  }
+  for (const width of [1100, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(cards, `${width}px: two week cards`).toHaveCount(2);
+    for (const index of [0, 1]) await expect(cards.nth(index), `${width}px: week ${index + 1} fits, so it takes no tab stop`).not.toHaveAttribute('tabindex', /.*/);
+  }
+});
+
 test('the Preview header: line 1 is hidden, never wrapped, when it does not fit; line 2 wraps by word; the fields sit 12px below', async ({ page, adminSeed, builtServer }) => {
   const reviewer = await newReviewer(adminSeed, builtServer);
   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
@@ -653,6 +689,47 @@ test('signature rows: the PDF block insets and proportions, lines aligned by row
     await expectSignatureGeometry(dialog.locator('[data-signature-preview]'), 1440, { button: null, exactFractions: true });
   }
   testInfo.annotations.push({ type: 'signature-geometry', description: lines.join('\n') });
+});
+
+test('a signed period opened again (reloaded): the signed image, name and mark stay readable and uncovered beside Sign correction, and the four lines stay aligned', async ({
+  page,
+  adminSeed,
+  builtServer,
+}) => {
+  const reviewer = await newReviewer(adminSeed, builtServer);
+  await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  const signing = await openSignoff(page);
+  await acknowledge(signing);
+  await confirmSignoff(signing).click();
+  await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
+  // A later visit (to send the PDF, say): the page loads already signed, so the Employee Signature line holds the signed mark and the
+  // correction button together. The sign-off of this window left no second button; a reload does.
+  await page.reload();
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  const button = page.locator('[data-sign-off]');
+  await expect(button).toHaveText('Sign correction');
+  const signed = page.locator('[data-signed-line]');
+  await expect(signed).toContainText('Synthetic Reviewer');
+  for (const width of [1440, 768, 600, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const footer = page.locator('.review-preview .sheet-footer');
+    await footer.scrollIntoViewIfNeeded();
+    // The four lines align by row and by column, the insets are the PDF's at 768px and wider, and the button stands 8px inside its line.
+    await expectSignatureGeometry(footer, width, { button, exactFractions: width >= 768 });
+    await expectNoSidewaysScroll(page);
+    // The button covers neither the image, nor the name, nor the "Signed" mark.
+    const pressed = await rect(button);
+    const parts = { image: signed.locator('img.signed-image'), name: signed.locator('[data-signer-name]'), seal: signed.locator('[data-signed-seal]') };
+    for (const [part, locator] of Object.entries(parts)) {
+      const box = await rect(locator);
+      const overlaps = box.left < pressed.right - 0.5 && pressed.left < box.right - 0.5 && box.top < pressed.bottom - 0.5 && pressed.top < box.bottom - 0.5;
+      expect(overlaps, `the ${part} is not covered by Sign correction at ${width}px`).toBe(false);
+    }
+    // Readable: the image keeps at least 100px, and the name wraps by words into at most three lines instead of letters (21px wide, ten lines).
+    expect((await rect(parts.image)).width, `the saved image keeps its width at ${width}px`).toBeGreaterThanOrEqual(100);
+    expect((await rect(parts.name)).height, `the name takes at most three lines at ${width}px`).toBeLessThanOrEqual(3 * 20);
+  }
 });
 
 test('a stale review leads to a fresh review and nothing is submitted twice', async ({ page, adminSeed, builtServer }, testInfo) => {

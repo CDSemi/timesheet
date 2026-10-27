@@ -1,0 +1,100 @@
+import { expect, test } from './fixtures.ts';
+import { dayBtn, drawer, note, seedA5, settle, signInTo } from './zz-a5lib.ts';
+
+/*
+ * WP5-UX5-AUDIT-A probe C: classic scrollbars (Playwright's headless default `--hide-scrollbars` dropped). F-UX4A-1 recheck: count the
+ * Day editor's layout changes at the round-4 reproduction sizes; and a press on a week card's own horizontal scrollbar while the drawer
+ * is open (768-929px, where the week card scrolls sideways). Task-local; never part of the repository.
+ */
+const F = 'classic.txt';
+test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] }, locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+async function countChanges(page: import('@playwright/test').Page, ms: number) {
+  return page.evaluate(
+    (wait) =>
+      new Promise<{ flips: number; layouts: string[] }>((resolve) => {
+        const area = document.querySelector('[data-editor-layout]');
+        let flips = 0;
+        const seen = new Set<string>([area?.getAttribute('data-editor-layout') ?? '']);
+        const mo = new MutationObserver(() => {
+          flips += 1;
+          seen.add(area?.getAttribute('data-editor-layout') ?? '');
+        });
+        if (area !== null) mo.observe(area, { attributes: true, attributeFilter: ['data-editor-layout', 'class'] });
+        setTimeout(() => {
+          mo.disconnect();
+          resolve({ flips, layouts: [...seen] });
+        }, wait);
+      }),
+    ms,
+  );
+}
+
+test('classic scrollbar: no layout flap; a press on a week card scrollbar', async ({ page, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop');
+  test.setTimeout(300_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const seed = await seedA5(builtServer, 'Synthetic Classic Person');
+  await page.setViewportSize({ width: 1340, height: 900 });
+  await signInTo(page, builtServer, seed.person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await dayBtn(page, seed.complete).click();
+  await expect(drawer(page)).toBeVisible();
+  note(F, `classic scrollbar width ${await page.evaluate('window.innerWidth - document.documentElement.clientWidth')}px at 1340x900`);
+  for (const [w, h] of [
+    [1335, 1430],
+    [1340, 1400],
+    [1344, 1370],
+    [1330, 1450],
+    [1345, 1400],
+    [1350, 1380],
+    [1346, 1300],
+  ] as const) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.waitForTimeout(300);
+    const r = await countChanges(page, 3000);
+    const now = await page.evaluate(() => ({
+      layout: document.querySelector('[data-editor-layout]')?.getAttribute('data-editor-layout'),
+      track: window.innerWidth - document.documentElement.clientWidth,
+      scrollH: document.documentElement.scrollHeight,
+      innerH: window.innerHeight,
+    }));
+    note(F, `F-UX4A-1 ${w}x${h}: layout changes in 3 s = ${r.flips}; seen ${JSON.stringify(r.layouts)}; now ${JSON.stringify(now)}`);
+  }
+  // Week card scrollbar press at 900px (the week card scrolls sideways between 480 and 929px).
+  await page.setViewportSize({ width: 900, height: 900 });
+  await settle(page);
+  if (!(await drawer(page).isVisible())) await dayBtn(page, seed.complete).click();
+  await expect(drawer(page)).toBeVisible();
+  const bar = await page.evaluate(() => {
+    for (const week of document.querySelectorAll<HTMLElement>('.sheet-week')) {
+      const r = week.getBoundingClientRect();
+      const trackH = week.offsetHeight - week.clientHeight;
+      const y = r.top + week.clientTop + week.clientHeight + Math.max(1, trackH / 2);
+      if (week.scrollWidth > week.clientWidth && y < window.innerHeight && r.top > 0) return { x: r.right - 60, y, trackH, scrollW: week.scrollWidth, clientW: week.clientWidth };
+    }
+    return null;
+  });
+  note(F, `week card scrollbar at 900: ${JSON.stringify(bar)}`);
+  if (bar !== null && bar.trackH > 0) {
+    const hit = await page.evaluate(([x, y]) => {
+      const e = document.elementFromPoint(x, y);
+      return e === null ? 'null' : `${e.tagName.toLowerCase()}.${e.className}`;
+    }, [bar.x, bar.y] as const);
+    await page.mouse.move(bar.x, bar.y);
+    await page.mouse.down();
+    await page.mouse.move(bar.x + 120, bar.y, { steps: 5 });
+    await page.mouse.up();
+    await settle(page);
+    const scrolled = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.sheet-week')].map((w) => w.scrollLeft).join(','));
+    note(F, `press-drag on the week card scrollbar (${hit}) -> drawer ${(await drawer(page).count()) > 0 && (await drawer(page).isVisible()) ? 'OPEN' : 'closed'}; week scrollLeft ${scrolled}`);
+  }
+  // The window scrollbar.
+  if (!(await drawer(page).isVisible())) await dayBtn(page, seed.complete).click();
+  const track = await page.evaluate<number>('window.innerWidth - document.documentElement.clientWidth');
+  if (track > 0) {
+    await page.mouse.click(899 - Math.floor(track / 2), 450);
+    await settle(page);
+    note(F, `press on the window scrollbar -> drawer ${(await drawer(page).count()) > 0 && (await drawer(page).isVisible()) ? 'OPEN' : 'closed'}`);
+  }
+});

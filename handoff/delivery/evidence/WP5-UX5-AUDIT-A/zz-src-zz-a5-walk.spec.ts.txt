@@ -1,0 +1,75 @@
+import { expect, test } from './fixtures.ts';
+import { dayBtn, drawer, note, seedA5, signInTo } from './zz-a5lib.ts';
+
+/*
+ * WP5-UX5-AUDIT-A probe K: keyboard walks (SC 2.4.7 / 2.4.11) on the Timesheet with the Day editor open, desktop (floating 1280x800 and
+ * 900x800, beside 1440x900) and phone (bottom sheet 390x844), light and dark. After every key press the probe waits two animation
+ * frames (the drawer re-docks in a focusin handler), then hit-tests a 5x5 grid of points of the focused control's visible part:
+ * the control is "wholly hidden" when no point hits the control itself (so the paint order, the top layer and sticky bars count as
+ * they are drawn). It also checks that a focus indicator is drawn. Task-local.
+ */
+const F = 'walk.txt';
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const STOP = `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
+  const a = document.activeElement;
+  if (!a || a === document.body) { resolve({ name: 'body', hidden: false, ring: true, where: '' }); return; }
+  const r = a.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+  const L = Math.max(r.left, 0), T = Math.max(r.top, 0), R = Math.min(r.right, vw), B = Math.min(r.bottom, vh);
+  let hidden = false, where = '';
+  if (r.width === 0 || r.height === 0) { hidden = false; where = 'no box'; }
+  else if (R <= L || B <= T) { hidden = true; where = 'outside window'; }
+  else {
+    let visible = 0;
+    for (let i = 0; i < 5; i += 1) for (let j = 0; j < 5; j += 1) {
+      const x = L + (R - L) * (i + 0.5) / 5, y = T + (B - T) * (j + 0.5) / 5;
+      const hit = document.elementFromPoint(x, y);
+      const lbl = a.closest('label');
+      if (hit && (hit === a || a.contains(hit) || (lbl && lbl.contains(hit)))) visible += 1;
+      else if (hit) where = (hit.closest('dialog') ? 'dialog ' : '') + hit.tagName.toLowerCase() + '.' + (typeof hit.className === 'string' ? hit.className.split(' ')[0] : '');
+    }
+    hidden = visible === 0;
+  }
+  const s = getComputedStyle(a);
+  const ring = (s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) > 0) || (s.boxShadow !== 'none' && s.boxShadow !== '');
+  const name = (a.getAttribute('aria-label') ?? a.textContent ?? '').replace(/\\s+/g, ' ').trim().slice(0, 30);
+  resolve({ name: a.tagName.toLowerCase() + '[' + name + ']', hidden, ring, where });
+})))`;
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`keyboard walk with the Day editor open (${scheme})`, async ({ page, builtServer, isMobile }) => {
+    test.setTimeout(400_000);
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const seed = await seedA5(builtServer, `Synthetic Walk ${scheme}`);
+    const sizes = isMobile ? [[390, 844]] : [[1280, 800], [1440, 900], [900, 800]];
+    await signInTo(page, builtServer, seed.person.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    for (const [w, h] of sizes) {
+      await page.setViewportSize({ width: w ?? 0, height: h ?? 0 });
+      const opener = isMobile ? page.locator(`tr[data-day="${seed.leave}"] [data-day-button]`) : dayBtn(page, seed.leave);
+      if (!(await drawer(page).isVisible().catch(() => false))) await opener.click();
+      await expect(drawer(page)).toBeVisible();
+      let stops = 0;
+      let hiddenStops = 0;
+      let noRing = 0;
+      const samples: string[] = [];
+      for (const key of ['Tab', 'Shift+Tab']) {
+        for (let i = 0; i < 90; i += 1) {
+          await page.keyboard.press(key);
+          const s = (await page.evaluate(STOP)) as { name: string; hidden: boolean; ring: boolean; where: string };
+          stops += 1;
+          if (s.hidden) {
+            hiddenStops += 1;
+            if (samples.length < 6) samples.push(`HIDDEN ${s.name} (${s.where})`);
+          }
+          if (!s.ring && s.name !== 'body') {
+            noRing += 1;
+            if (samples.length < 12) samples.push(`NO-RING ${s.name}`);
+          }
+        }
+      }
+      note(F, `[${isMobile ? 'phone' : 'desk'} ${scheme} ${w}x${h}] layout ${await page.locator('[data-editor-layout]').getAttribute('data-editor-layout')} stops ${stops}, wholly hidden ${hiddenStops}, without a ring ${noRing} ${samples.join(' ; ')}`);
+    }
+  });
+}

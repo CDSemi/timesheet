@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Core checks, one after another, in the clean export. Each step logs to its own file and its exit code.
+source <task>/env.sh
+mkdir -p "$T/tmp" "$T/logs"
+export TEMP="$(cygpath -w "$T/tmp")" TMP="$(cygpath -w "$T/tmp")" TMPDIR="$T/tmp"
+export SMOKE_PORT=49891
+cd "$X" || exit 9
+run() {
+  local name="$1"; shift
+  local start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  "$@" > "$T/logs/$name.log" 2>&1
+  local code=$?
+  echo "$name exit=$code start=$start end=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/logs/exits.txt"
+}
+echo "node $(node --version) npm $(npm --version)" >> "$T/logs/exits.txt"
+run typecheck npm run typecheck
+run lint npm run lint
+run build npm run build
+run test1 npm test
+run test2 npm test
+run integ npx vitest run tests/integration/finalization.test.ts tests/integration/finalization-concurrency.test.ts tests/integration/corrections.test.ts tests/integration/sends.test.ts tests/integration/delivery.test.ts tests/integration/delivery-crash.test.ts tests/integration/jobs.test.ts tests/integration/jobs-restart.test.ts tests/integration/jobs-sweep.test.ts tests/integration/job-retention.test.ts tests/integration/migrations.test.ts tests/integration/upgrade.test.ts tests/integration/pdf-render.test.ts tests/integration/pdf-layout.test.ts tests/integration/pdf-download.test.ts tests/integration/deadline.test.ts tests/integration/deadline-race.test.ts tests/integration/reminders.test.ts tests/integration/signatures.test.ts tests/integration/submission-settings.test.ts tests/integration/restore.test.ts tests/integration/backup.test.ts tests/integration/review-payload.test.ts tests/integration/operations-status.test.ts tests/integration/auth.test.ts tests/integration/password-change.test.ts tests/integration/sharing.test.ts tests/integration/opening-balance.test.ts tests/integration/holiday-import.test.ts tests/integration/workbook-import.test.ts --maxWorkers=1
+echo "chain1 done" >> "$T/logs/exits.txt"

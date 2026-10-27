@@ -2,16 +2,28 @@
 
 - **Task.** Mission timesheet-software-readiness, task WP5-UX5-AUDIT-B, package WP5, kind
   audit, attempt 1.
-  - It depends on WP5-UX5-REGATE2 (PASS required).
-    - WP5-UX5-GATE on e2bf1aa failed, and FIX1 fixed it.
+  - It depends on WP5-UX5-REGATE4 (PASS on f4049aa / 26b163a6). The gate history:
+    - WP5-UX5-GATE on e2bf1aa failed; FIX1 fixed it.
     - WP5-UX5-REGATE on 2bce0ab failed on one test race; FIX2 fixed it.
+    - WP5-UX5-REGATE2 on 7aafa21 failed on two load flakes; FIX3 fixed them in tests.
+    - WP5-UX5-REGATE3 on 5b8b718 failed on:
+      - two sweep test defects;
+      - a keep-alive harness defect;
+      - two new `npm audit` advisories.
+
+      DIAG2, DEPS1 and DIAG3 diagnosed them. FIX4 pinned nodemailer 10.1.4 and zod 4.6.6,
+      FIX5 fixed the tests, and FIX6 fixed the harness and the vitest worker cap.
+    - WP5-UX5-REGATE4 passed.
   - **Owner decisions of 2026-10-22** ("A.a, B.A, C.b"):
-    - the target is a local commit, not pushed;
-    - it includes the owner's Ingat commits 6173f07 and 70dce2a (`ingat.toml`, the GHCR
-      workflows, docs 07 and 11, ADR 0002). Check them only for non-interference with
-      rounds 4 and 5: no conflicting statement in docs 07 or 11 about sign-off, sending or
-      the PDF. Do not review their deployment content;
+    - the target includes the owner's Ingat commits:
+      - 6173f07 and 70dce2a (`ingat.toml`, the GHCR workflows, docs 07 and 11, ADR 0002);
+      - 782cdda, through the owner's merge b8bae50 (GHCR cleanup: `scripts/ghcr-cleanup.ts`,
+        its tests, the tsconfig files, docs 07 and 11, ADR 0002 and 0003).
+    - Check them only for non-interference with rounds 4 and 5: no conflicting statement in
+      docs 07 or 11 about sign-off, sending or the PDF. Do not review their deployment
+      content;
     - never touch `.claude/worktrees/`.
+  - The owner allows pushes to main; the target is pushed.
   - Run in a fresh context. It runs in parallel with WP5-UX5-AUDIT-A, which uses other
     ports and other folders.
 - **Profile and routing.** timesheet-auditor, requested opus/xhigh, no override.
@@ -28,12 +40,11 @@
 - **Author separation.** You wrote no WP5-UX4 or WP5-UX5 task; their agent IDs are on the
   board. Treat every planner, worker, committer and verifier report as a claim.
 - **Target.**
-  - `reviewed_commit` = TARGET_SHA = 5b8b7184692fff683c4083c9fc5610acd47bece1 (the
-    WP5-UX5-FIX3-FREEZE commit, pushed, on top of the owner's Ingat merge b8bae50).
-  - TARGET_DIGEST = edcca1949c429251b1476c3e32e1485507ef488264429c6afe318a7fccc041ce.
-  - The dependency is WP5-UX5-REGATE3 (PASS required). The Ingat changes since 70dce2a
-    (782cdda GHCR cleanup with `scripts/ghcr-cleanup.ts`, its tests and the tsconfig
-    files; the records) are owner work: check them only for non-interference.
+  - `reviewed_commit` = TARGET_SHA = f4049aa7905e22f1467dfcae4208675cb2fc8e80 (the
+    WP5-UX5-FIX6-FREEZE commit, pushed, on top of the owner's Ingat merge b8bae50).
+  - TARGET_DIGEST = 26b163a62b7d85dbf6b6146c73f98593ad6bcae7eeb8fb1dc7fd9d4dc8305336
+    (882 files).
+  - HEAD may be a later commit that changes only `handoff/`.
   - The base is the last accepted snapshot, 8e557100d16b6b6eb86a48e00276835761aabfdf.
   - Record HEAD, the digest before and after (three forms) and `reviewed_commit`.
   - Work on a clean export or a scratch clone at TARGET_SHA.
@@ -53,6 +64,9 @@
 - The slice records `WP5-UX5-T01a.md`, `T01B.md`, `T02.md`, `T03.md` (the client side of
   sends) and `T06.md`; the gate `WP5-UX5-GATE.md`, `WP5-UX5-FIX1.md` (the drill's
   sign-off body for the previous build) and `WP5-UX5-REGATE.md`; and their evidence.
+- **The fix rounds after REGATE:** `WP5-UX5-REGATE3.md`, `WP5-UX5-DEPS1.md`,
+  `WP5-UX5-FIX4.md`, `WP5-UX5-DIAG3.md`, `WP5-UX5-FIX6.md` and `WP5-UX5-REGATE4.md`, with
+  their evidence.
 - **The round-4 finding** you recheck: `WP5-UX4-AUDIT-B.md` (F-UX4B-1) and its fix in
   `WP5-UX4-FIX2.md`.
 - docs/01, 02, 03, 05, 06, 07, 10, 11 and 12, EN and VI; `docs/adr/0001-*` EN and VI;
@@ -154,7 +168,30 @@
 
     **The pilot packet:** do section 2, the samples S1-S6 and N1-N5 with their hashes, and
     section 8 tell the truth? Check that the release identity is marked for refresh.
-11. **Test strength.** Write at least ten mutants of your own on area-B behaviour, for
+11. **Dependencies and harness (FIX4, FIX6).**
+    - **The pins.**
+      - nodemailer 10.1.4 and zod 4.6.6 are exact, and the advisories are resolved:
+        `npm audit --omit=dev` exits 0.
+      - REGATE4 flagged a new nested, dev-only `smtp-server/node_modules/nodemailer`
+        10.0.14. Run the full `npm audit` and judge whether that copy is an acceptable
+        dev-only risk.
+    - **Behaviour unchanged.** In capture mode, check against docs/05 and the tests:
+      - the mail the app builds: envelope, headers, Message-ID `@timesheet.invalid`, body;
+      - the zod 400 answers and messages.
+
+      No deprecated nodemailer or zod API is used.
+    - **The harness.** Review:
+      - `scripts/smoke-built-server.mjs`: `connection: close`, and the monitor closed in the
+        `finally` so the failure line is kept;
+      - `scripts/container-drill.mjs`;
+      - `vitest.config.ts` (`maxWorkers: '50%'`).
+
+      The worker cap rests on DIAG3's controlled runs. FIX6's own before and after runs did
+      not discriminate, and REGATE4's run at 4 logical CPUs passed. Judge whether the
+      evidence is adequate.
+    - **The deferred lazy PDF import.** DIAG3's FIX6b, `src/server/jobs/pdfJob.ts`, was
+      deferred to the optional backlog. Say whether it should stay optional.
+12. **Test strength.** Write at least ten mutants of your own on area-B behaviour, for
     example:
     - sign-off enqueues a send;
     - `failed_permanent` counts;
@@ -168,7 +205,7 @@
     - the image is required again.
 
     Say whether the suite catches each.
-12. **Mandatory checks yourself:**
+13. **Mandatory checks yourself:**
     - typecheck, lint, `npm test` twice, build;
     - the integration files for submission, sends, jobs, the migrations and the PDF, each
       once;
@@ -176,7 +213,7 @@
     - AC-13 once.
 
     Another auditor runs at the same time. A failure whose trace shows a network or buffer
-    error may be rerun once; record both runs.
+    error, or a test timeout, may be rerun once; record both runs.
 
 ## Runtime
 
@@ -190,8 +227,13 @@
   ALSO NOT IN `2>`. NEVER `rm -r`.**
   - Write probes as files in the task folder and run them.
   - Read outputs with the Read tool.
-- Never kill processes by PID, and leave nothing running. Before returning, make sure none
-  of your background commands is still running.
+- Never kill processes by PID, and never use `Stop-Process`. Leave nothing running. Before
+  returning, make sure none of your background commands is still running.
+- No FIFO waiter scripts such as `waitfor.sh`. To wait for a long command, use the Bash
+  tool's own background run and its exit notice.
+- **Never change any git configuration,** including `safe.directory`. For a scratch clone,
+  use a per-process override:
+  `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0=<path>`.
 - Put Node 24 first on PATH for every node or npm call.
 - Run the digest before any long probe.
 - Create files only in the task folder, the evidence folder and the review pair.
@@ -215,3 +257,45 @@
 - Return at most 250 words, beginning with your self-reported model.
 
 ## Results
+
+Self-reported model: claude-opus-5-5 (equal to the strongest author model of the snapshot: UX4-PLAN, UX4-T04, UX5-PLAN,
+UX5-T01B). Fresh context; I authored no WP5-UX4 or WP5-UX5 task. 2026-10-27, 03:25Z to about 04:25Z. Review pair:
+`handoff/delivery/WP5_UX5_REVIEW_B.md` and `.vi.md`; evidence: `handoff/delivery/evidence/WP5-UX5-AUDIT-B/` (76 masked LF
+`.txt`, no PNG); raw logs in `D:\.claude-tmp\timesheet\WP5-UX5-AUDIT-B`.
+
+- **Target.** `reviewed_commit` f4049aa7905e22f1467dfcae4208675cb2fc8e80 = HEAD = origin/main before and after; working tree
+  clean outside `handoff/` before and after. Digest 26b163a62b7d85dbf6b6146c73f98593ad6bcae7eeb8fb1dc7fd9d4dc8305336 (882
+  files) before and after in three equal forms (`npm run digest`, `git ls-tree`, clean `git archive` export hashed as raw
+  blobs). Work in a clean export; base 8e55710 exported beside it.
+- **Decision: FIX REQUIRED.** Five Low findings, no product defect:
+  - F-UX5B-1: `docs/05_SUBMISSION_AND_NOTIFICATIONS.md:11` (+ `.vi.md:11`) still says the Review page sends right after
+    sign-off "until the Send card (WP5-UX5-T03)"; the release never sends at sign-off.
+  - F-UX5B-2: `docs/12_RELEASE_NOTES.md:54` (+ VI) and `docs/04_UX_AND_SETTINGS.md:124` (+ VI :125) quote "Signed with your
+    name only." / "You sign as", which the UI no longer shows.
+  - F-UX5B-3: `src/server/pdf/timesheetPdf.ts:336-342`: a day with leave and a holiday label of about 35 characters or more
+    loses "Leave h:mm" to the ellipsis ("(company closure) Leave…"); `docs/12_RELEASE_NOTES.md:86` (+ VI) says leave is
+    always printed.
+  - F-UX5B-4: `docs/10_DECISIONS_AND_SOURCES.md` (+ VI) has no record of the owner's H-1 a (2026-10-22); the any-revision
+    rule is attributed to F-2 a only (also `docs/05:19`).
+  - F-UX5B-5 (tests): mutant M12b (the sign-off's own PDF follows `show_time_on_pdf`) passes all 2,374 tests;
+    `sends.test.ts:300` ("reason never in the email") cannot fail because quoted-printable breaks the searched phrase.
+- **Risks** R-UX5B-1..7 in the review: cross-revision in-flight sends (pre-existing; a superseded copy can arrive after the
+  correction); 6 dev-only `npm audit` advisories (acceptable; `--omit=dev` exit 0); drill fetch sites without
+  `connection: close`; the worker cap (adequate) and the lazy PDF import (stay optional); M3 not observable; format
+  characters in reason/body; a GET that renders.
+- **Checks run.** typecheck 0, lint 0, build 0; `npm test` x2: 101 files / 2,374 each; 30 area-B integration files: 725
+  passed; full e2e both projects real clock: 863 passed / 125 skipped / 0 failed (desktop 459/35, mobile 404/90), no rerun;
+  AC-13 under Asia/Tokyo (TZPROBE -540) 1/1; `npm audit --omit=dev` 0. Probes: real schema-13 DB built by the base and
+  upgraded by the target CLI (91 PASS), old build refuses schema 15, backup/restore with variants and sends (10 PASS), HTTP
+  area B with two server processes (89 PASS), PDF content (193 PASS, 8 FAIL = F-UX5B-3), H-1 a (4 PASS; fails under M6),
+  font identical to upstream, nodemailer/zod pins byte-identical behaviour, F-UX4B-1 fixed. Own mutants: 14 of 17 killed
+  (M3 near-equivalent, M16 equivalent, M12 real gap); all restored, work tree equal to the target list.
+- **Slips.** One status listing first written to the shared parent folder (moved into my task folder), and my mutant
+  runner's first version used `shell: true` (a DEP0190 warning from my script, not the product; replaced). No heredoc,
+  no stdin to node or python, no pipe into head/tail/cat, no null-device redirect, no `rm -r`, no PID kill, no git
+  configuration change. Nothing of mine is left running (no listener in 49890-49919; all background runs ended).
+- **Next action.** One bounded fix task (`addresses_audit` WP5-UX5-AUDIT-B): docs EN/VI for F-UX5B-1..4 (owner picks code or
+  doc for F-UX5B-3) and the two tests of F-UX5B-5; its freeze, a regate of the changed tests plus the docs delta, and a fresh
+  area-B recheck.
+
+Status: done (decision FIX REQUIRED)

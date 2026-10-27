@@ -1,0 +1,13 @@
+#!/bin/bash
+# Export HEAD into the scratch folder and install dependencies there.
+set -u
+T="<task>"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$(cygpath -u "$APPDATA")/npm:$PATH"
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
+cd "<repo>" || exit 1
+git archive f4049aa7905e22f1467dfcae4208675cb2fc8e80 | tar -x -C "$T/export"
+echo "archive exit $?"
+cd "$T/export" || exit 1
+node.exe --version
+node.exe "$(cygpath -u "$APPDATA")/npm/node_modules/npm/bin/npm-cli.js" ci > "$T/out/npm-ci.txt" 2>&1
+echo "npm ci exit $?"

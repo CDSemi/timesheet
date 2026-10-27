@@ -1,0 +1,8 @@
+cd <task>
+. ./env.sh
+cd $T/export-probe
+npm run build:client > $T/out/80-m1-build.txt 2>&1; echo "m1 build exit $?" > $T/out/80-mut-exits.txt
+cd $T
+SHIFT_EXPORT=$T/export-probe bash run-shift.sh mut-m1 real tests/e2e/timesheet.spec.ts --grep "Today bar is painted over|Today spacing" --workers=4 > logs/mut-m1.txt 2>&1
+node counts.mjs logs/mut-m1.txt > out/81-mut-counts.txt 2>&1
+echo mut1-done > out/mut1.done

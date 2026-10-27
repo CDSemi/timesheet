@@ -1,0 +1,20 @@
+cd <task>
+. ./env.sh
+O=$T/out
+# 1. DIAG2 deterministic Today probe, mobile, simulated start 2026-10-27T06:59:35Z
+for M in old fixed; do
+  PROBE_MODE=$M SHIFT_EXPORT=$T/export-probe bash run-shift.sh probe-a-$M 2026-10-27T06:59:35Z tests/e2e/zz-a.spec.ts --project=mobile --workers=1 > logs/probe-a-$M.txt 2>&1
+  echo "probe-a $M done $(date -u +%H:%M:%SZ)" >> logs/probes.log
+done
+# 2. smoke blocked probes (copies of the target smoke in the scratch export; ports in range)
+cd $T/export-probe
+export SMOKE_PORT=50285
+node scripts/smoke-block8.mjs > $O/70-smoke-block8-close.txt 2>&1; echo "smoke-block8 (target headers) exit $?" >> $O/70-smoke-exits.txt
+export SMOKE_PORT=50286
+node scripts/smoke-block8-noclose.mjs > $O/70-smoke-block8-noclose.txt 2>&1; echo "smoke-block8-noclose (headers removed) exit $?" >> $O/70-smoke-exits.txt
+export SMOKE_PORT=50287
+ls $TMPDIR > $O/70-tmp-before-fail.txt 2>&1
+node scripts/smoke-fail.mjs > $O/71-smoke-induced-fail.txt 2>&1; echo "smoke-fail (induced) exit $?" >> $O/70-smoke-exits.txt
+ls $TMPDIR > $O/71-tmp-after-fail.txt 2>&1
+echo "smoke probes done $(date -u +%H:%M:%SZ)" >> $T/logs/probes.log
+echo probes-done > $O/probes.done

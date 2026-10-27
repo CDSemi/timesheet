@@ -1,0 +1,135 @@
+
+ RUN  v5.0.2 <task>/export
+
+ ❯ tests/integration/sends.test.ts (18 tests | 1 failed) 7251ms
+   ❯ a send that still waits for an older revision (R-UX5B-1) (1)
+     × blocks the correction's send until the older revision's job has run, and then the reason rule applies 272ms
+ ❯ tests/integration/pdf-render.test.ts (65 tests | 6 failed) 12017ms
+   ❯ bounds of long labels (10)
+     × keeps "Leave 1:30" whole on its own line under the holiday label Labor Day, in all four variants 81ms
+     × keeps "Leave 1:30" whole on its own line under the holiday label Day after Thanksgiving, in all four variants 91ms
+     × keeps "Leave 1:30" whole on its own line under the holiday label Martin Luther King Jr. Day, in all four variants 76ms
+     × keeps "Leave 1:30" whole on its own line under the holiday label Christmas Eve (company closure), in all four variants 78ms
+     × keeps "Leave 1:30" whole on its own line under the holiday label Lunar New Year's Eve (company closure), in all four variants 99ms
+     × keeps "Leave 1:30" whole on its own line under the holiday label Year-end shutdown: plant maintenance week, in all four variants 81ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/pdf-render.test.ts > bounds of long labels > keeps "Leave 1:30" whole on its own line under the holiday label Labor Day, in all four variants
+AssertionError: Labor Day time true ot true: ["Labor Day Leave","1:30"]: expected '1:30' to be 'Leave 1:30' // Object.is equality
+
+Expected: "Leave 1:30"
+Received: "1:30"
+
+ ❯ tests/integration/pdf-render.test.ts:842:38
+    840|         expect(small, context).toHaveLength(2); // the holiday label o…
+    841|         const [label, leave] = small;
+    842|         expect(leave?.text, context).toBe('Leave 1:30');
+       |                                      ^
+    843|         expect(leave?.height ?? 0, context).toBeCloseTo(7, 0);
+    844|         expect(label?.y ?? 0, context).toBeGreaterThan(leave?.y ?? Inf…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  tests/integration/pdf-render.test.ts > bounds of long labels > keeps "Leave 1:30" whole on its own line under the holiday label Day after Thanksgiving, in all four variants
+AssertionError: Day after Thanksgiving time true ot true: ["Day after Thanksgiving","Leave 1:30"]: expected 5.5 to be close to 7, received difference is 1.5, but expected 0.5
+ ❯ tests/integration/pdf-render.test.ts:843:45
+    841|         const [label, leave] = small;
+    842|         expect(leave?.text, context).toBe('Leave 1:30');
+    843|         expect(leave?.height ?? 0, context).toBeCloseTo(7, 0);
+       |                                             ^
+    844|         expect(label?.y ?? 0, context).toBeGreaterThan(leave?.y ?? Inf…
+    845|         expect(name.startsWith(label?.text.replace(String.fromCodePoin…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  tests/integration/pdf-render.test.ts > bounds of long labels > keeps "Leave 1:30" whole on its own line under the holiday label Martin Luther King Jr. Day, in all four variants
+AssertionError: Martin Luther King Jr. Day time true ot true: ["Martin Luther King","Jr. Day Leave 1:30"]: expected 'Jr. Day Leave 1:30' to be 'Leave 1:30' // Object.is equality
+
+Expected: "Leave 1:30"
+Received: "Jr. Day Leave 1:30"
+
+ ❯ tests/integration/pdf-render.test.ts:842:38
+    840|         expect(small, context).toHaveLength(2); // the holiday label o…
+    841|         const [label, leave] = small;
+    842|         expect(leave?.text, context).toBe('Leave 1:30');
+       |                                      ^
+    843|         expect(leave?.height ?? 0, context).toBeCloseTo(7, 0);
+    844|         expect(label?.y ?? 0, context).toBeGreaterThan(leave?.y ?? Inf…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  tests/integration/pdf-render.test.ts > bounds of long labels > keeps "Leave 1:30" whole on its own line under the holiday label Christmas Eve (company closure), in all four variants
+AssertionError: Christmas Eve (company closure) time true ot true: ["Christmas Eve (company","closure) Leave 1:30"]: expected 'closure) Leave 1:30' to be 'Leave 1:30' // Object.is equality
+
+Expected: "Leave 1:30"
+Received: "closure) Leave 1:30"
+
+ ❯ tests/integration/pdf-render.test.ts:842:38
+    840|         expect(small, context).toHaveLength(2); // the holiday label o…
+    841|         const [label, leave] = small;
+    842|         expect(leave?.text, context).toBe('Leave 1:30');
+       |                                      ^
+    843|         expect(leave?.height ?? 0, context).toBeCloseTo(7, 0);
+    844|         expect(label?.y ?? 0, context).toBeGreaterThan(leave?.y ?? Inf…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  tests/integration/pdf-render.test.ts > bounds of long labels > keeps "Leave 1:30" whole on its own line under the holiday label Lunar New Year's Eve (company closure), in all four variants
+AssertionError: Lunar New Year's Eve (company closure) time true ot true: ["Lunar New Year's Eve","(company closure) Leave…"]: expected '(company closure) Leave…' to be 'Leave 1:30' // Object.is equality
+
+Expected: "Leave 1:30"
+Received: "(company closure) Leave…"
+
+ ❯ tests/integration/pdf-render.test.ts:842:38
+    840|         expect(small, context).toHaveLength(2); // the holiday label o…
+    841|         const [label, leave] = small;
+    842|         expect(leave?.text, context).toBe('Leave 1:30');
+       |                                      ^
+    843|         expect(leave?.height ?? 0, context).toBeCloseTo(7, 0);
+    844|         expect(label?.y ?? 0, context).toBeGreaterThan(leave?.y ?? Inf…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  tests/integration/pdf-render.test.ts > bounds of long labels > keeps "Leave 1:30" whole on its own line under the holiday label Year-end shutdown: plant maintenance week, in all four variants
+AssertionError: Year-end shutdown: plant maintenance week time true ot true: ["Year-end shutdown: plant","maintenance week Leav…"]: expected 'maintenance week Leav…' to be 'Leave 1:30' // Object.is equality
+
+Expected: "Leave 1:30"
+Received: "maintenance week Leav…"
+
+ ❯ tests/integration/pdf-render.test.ts:842:38
+    840|         expect(small, context).toHaveLength(2); // the holiday label o…
+    841|         const [label, leave] = small;
+    842|         expect(leave?.text, context).toBe('Leave 1:30');
+       |                                      ^
+    843|         expect(leave?.height ?? 0, context).toBeCloseTo(7, 0);
+    844|         expect(label?.y ?? 0, context).toBeGreaterThan(leave?.y ?? Inf…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  tests/integration/sends.test.ts > a send that still waits for an older revision (R-UX5B-1) > blocks the correction's send until the older revision's job has run, and then the reason rule applies
+AssertionError: expected 201 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 201
+
+ ❯ tests/integration/sends.test.ts:303:28
+    301|     const before = writeState();
+    302|     const blocked = await postSend(second, await sendBody(second));
+    303|     expect(blocked.status).toBe(409);
+       |                            ^
+    304|     expect(blocked.body.error.code).toBe('delivery_in_progress');
+    305|     expect(writeState()).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  2 failed | 1 passed (3)
+      Tests  7 failed | 99 passed (106)
+   Start at  21:50:49
+   Duration  12.50s (tests 93%, transform 4%, import 3%)
+
+exit 1

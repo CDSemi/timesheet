@@ -152,8 +152,9 @@
   --compact-edge: var(--space-2);
   /*
    * The paper sheet (round 4, U4-03): the surface that holds the toolbar, the messages, the sheet and its footer. It is the card colour,
-   * lifted by --elev-paper (the --elev-2 step), with the card corner (--radius-lg) from 768px and padded like the sheet blocks; on a
-   * phone it is full-bleed and square (see the phone rule), so the sheet keeps its width. The week sheets inside lose only their own shadow.
+   * lifted by --elev-paper (the --elev-2 step), with the card corner (--radius-lg) at every width and padded like the sheet blocks; in the
+   * compact form (below 480px, U5-22) it stands --compact-edge from each window edge (see the compact rule), so the sheet keeps its width.
+   * The week sheets inside lose only their own shadow.
    */
   --paper-surface: var(--card);
   --elev-paper: var(--elev-2);
@@ -341,7 +342,8 @@
   --shell-brand-inner-gap: var(--space-3);
   /*
    * The bar's column gap, and the total gap between the brand and the navigation (owner: "a little further
-   * from the text and logo, so it is balanced"). The wordmark shows from 1024px (U-06), where the gap grows one step.
+   * from the text and logo, so it is balanced"). The wordmark shows whenever it fits (U5-02; the widths are with the .wordmark rules
+   * below), and the gap grows one step wherever it shows.
    */
   --shell-gap: var(--space-5);
   --shell-gap-tight: var(--space-4);
@@ -2699,13 +2701,9 @@ textarea {
   }
 }
 
-/* "Change several days" has a short visible form for the compact toolbar (U5-17b); its name never changes. */
+/* "Change several days" has a short visible form, "Change days", for the compact toolbar (U5-17b); the button is named by the form it shows (SC 2.5.3). */
 .change-days-short {
   display: none;
-}
-
-.change-days-short::before {
-  content: attr(data-text);
 }
 
 /*
@@ -2823,8 +2821,8 @@ textarea {
 /*
  * The form people know from the Excel template and the PDF: header block, two Monday to Sunday
  * week bands with the rows Day, Date, Category, Time, OT (and Status), Overtime Total bottom right and
- * the signature lines. From 768px each band is a CSS grid whose day columns share the band's rows
- * (subgrid); below it each band is a 4-column table. Non-working days of the server calendar are
+ * the signature lines. From 480px each band is a CSS grid whose day columns share the band's rows
+ * (subgrid; it scrolls sideways inside its card from 480 to 929px); below 480px each band is a 4-column table. Non-working days of the server calendar are
  * tinted and hatched (a non-colour cue); every status keeps its words and shape.
  */
 .sheet {
@@ -2959,6 +2957,13 @@ textarea {
   .sheet-week {
     overflow-x: auto;
     scroll-padding: var(--focus-clearance);
+  }
+
+  /* A read-only review card that scrolls is a keyboard stop (WP5-UX5-FIX9): an inset outline the WEEK bar and cells cannot cover. */
+  .sheet-week:focus-visible {
+    outline: var(--rule) solid var(--accent);
+    outline-offset: calc(-1 * var(--rule));
+    box-shadow: var(--elev-2);
   }
 
   /* The WEEK bar is as wide as the grid under it, also after a sideways scroll (round 5, U5-21): without a minimum it ended where the card's window ended. */
@@ -3848,7 +3853,8 @@ textarea {
 
 /*
  * The sub-buttons of the Day editor (round 5, owner decision F-1 a, U5-05): Edit and Delete on a session card, Add session, Suggest
- * breaks, Add break and Save day fields. The visible box is --subbtn-h (36px) on every device. Where controls are 44px (below 768px
+ * breaks, Add break and Save day fields in the drawer's form (the phone sheet's fixed foot has its own full-width 44px button, `.editor-foot`).
+ * The visible box is --subbtn-h (36px) on every device. Where controls are 44px (below 768px
  * and with a coarse pointer) the 44px target stays as an invisible hit area: a ::before extends the button --subbtn-hit-extra above and
  * below. Rows of sub-buttons keep the 8px gap (--space-2), so two hit areas touch at most and never overlap (WCAG 2.5.8 spacing).
  */
@@ -4084,7 +4090,7 @@ button.link-action {
 /*
  * The paper sheet (round 4, U4-03, owner answer F-5). One surface holds the toolbar, the page messages, the batch bar, the form
  * header, both week sheets, the legend, Overtime Total and the signature lines (Timesheet: `section.sheet-main`; Review and sign
- * off: `section.review-sheet-block`, "What you sign" and the sheet; the checklist stays beside it). The title row and the period
+ * off: `section.review-preview`, the Preview card with its header bar). The title row and the period
  * card stay outside. The toolbar, the week sheets and the footer keep their own style and layout; the week sheets and the footer
  * lose only their outer shadow, because the paper carries it. The paper clips nothing (overflow stays visible): a lifted column's
  * shadow, a label list and the editor column lift draw over it. In the compact form (below 480px, U5-22) the paper stands
@@ -5705,6 +5711,7 @@ textarea.mono {
   --sig-date-min: 5.5rem;
   --sig-line-height: 52px;
   --sig-button-inset: var(--space-2);
+  --sig-content-min: 10rem;
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
@@ -5740,6 +5747,7 @@ textarea.mono {
 
 .rsig-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-2);
@@ -5751,8 +5759,13 @@ textarea.mono {
 
 .rsig-content {
   display: flex;
+  flex: 1 1 var(--sig-content-min);
   align-items: flex-end;
   min-width: 0;
+}
+
+.rsig-content:empty {
+  display: none;
 }
 
 .rsig-action {

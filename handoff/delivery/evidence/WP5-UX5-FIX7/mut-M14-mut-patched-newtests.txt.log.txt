@@ -1,0 +1,79 @@
+
+ RUN  v5.0.2 <task>/export
+
+ ❯ tests/integration/sends.test.ts (18 tests | 3 failed) 6962ms
+   ❯ sign-off and the send record (5)
+     × refuses another send while a send job waits, an attempt is open or uncertain without a decision, for a superseded revision and for another user 243ms
+   ❯ a send that still waits for an older revision (R-UX5B-1) (1)
+     × blocks the correction's send until the older revision's job has run, and then the reason rule applies 260ms
+   ❯ two concurrent sends (separate connections, released together) (1)
+     × lets exactly one of two sends through, and neither skips the reason rule once a copy counts 371ms
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 15 passed (18)
+   Start at  21:58:01
+   Duration  8.02s (tests 88%, transform 7%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/sends.test.ts > sign-off and the send record > refuses another send while a send job waits, an attempt is open or uncertain without a decision, for a superseded revision and for another user
+AssertionError: expected 201 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 201
+
+ ❯ tests/integration/sends.test.ts:246:28
+    244|     expect((await postSend(revisionId, await sendBody(revisionId))).st…
+    245|     const waiting = await postSend(revisionId, await sendBody(revision…
+    246|     expect(waiting.status).toBe(409);
+       |                            ^
+    247|     expect(waiting.body.error.code).toBe('delivery_in_progress');
+    248|     // An attempt left `preparing` by a runner that stopped before the…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/integration/sends.test.ts > a send that still waits for an older revision (R-UX5B-1) > blocks the correction's send until the older revision's job has run, and then the reason rule applies
+AssertionError: expected 201 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 201
+
+ ❯ tests/integration/sends.test.ts:303:28
+    301|     const before = writeState();
+    302|     const blocked = await postSend(second, await sendBody(second));
+    303|     expect(blocked.status).toBe(409);
+       |                            ^
+    304|     expect(blocked.body.error.code).toBe('delivery_in_progress');
+    305|     expect(writeState()).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/integration/sends.test.ts > two concurrent sends (separate connections, released together) > lets exactly one of two sends through, and neither skips the reason rule once a copy counts
+AssertionError: expected [ 'created', 'created' ] to deeply equal [ 'created', 'delivery_in_progress' ]
+
+- Expected
++ Received
+
+  [
+    "created",
+-   "delivery_in_progress",
++   "created",
+  ]
+
+ ❯ tests/integration/sends.test.ts:657:37
+    655|     // No copy yet: one send is created, the other finds its job waiti…
+    656|     const first = await race([undefined, undefined]);
+    657|     expect(first.map(label).sort()).toEqual(['created', 'delivery_in_p…
+       |                                     ^
+    658|     expect(count('SELECT count(*) FROM revision_sends')).toBe(1);
+    659|     await runPdf();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+

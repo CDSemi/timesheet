@@ -1,0 +1,406 @@
+// WP5-UX5-AUDIT-B probe: area-B behaviour of the BUILT target server over real HTTP, capture mode, synthetic
+// example.invalid accounts, random per-run passwords, two server processes on one database for a real race.
+// Usage: node http-areab.mjs <exportDir> <workDir> <portA> <portB> <out.txt>
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [exportDir, work, portA, portB, outPath] = process.argv.slice(2);
+const require = createRequire(join(exportDir, 'package.json'));
+const Database = require('better-sqlite3');
+const { readPdf } = await import(pathToFileURL(join(exportDir, 'tests', 'support', 'pdfText.ts')).href);
+
+mkdirSync(work, { recursive: true });
+const lines = [];
+let failures = 0;
+const log = (line) => lines.push(line);
+const check = (name, ok, detail = '') => {
+  if (!ok) failures += 1;
+  log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail === '' ? '' : ` | ${detail}`}`);
+};
+const SENDER = 'audit-b-sender@example.invalid';
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+const databasePath = join(work, 'timesheet.db');
+const dataDir = join(work, 'private-data');
+const envFor = (port) => ({
+  ...process.env,
+  NODE_ENV: 'development',
+  PORT: String(port),
+  HOST: '127.0.0.1',
+  DATABASE_PATH: databasePath,
+  DATA_DIR: dataDir,
+  APP_ORIGINS: `http://localhost:${portA},http://localhost:${portB}`,
+  MAIL_FROM: SENDER,
+  OUTBOUND_MODE: 'capture',
+  JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: passwords.admin,
+  SEED_EMPLOYEE_PASSWORD: passwords.employee,
+  SEED_EMPLOYEE2_PASSWORD: passwords.employee2,
+});
+delete process.env.PRODUCTION_SENDING_ENABLED;
+const cli = (args, port = portA) => {
+  const result = spawnSync(process.execPath, [join(exportDir, 'dist', 'server', 'cli.js'), ...args], { env: envFor(port), encoding: 'utf8', cwd: exportDir });
+  return { status: result.status, output: `${result.stdout}${result.stderr}`.replaceAll(work, '<work>').trim() };
+};
+const servers = [];
+function startServer(port) {
+  const child = spawn(process.execPath, [join(exportDir, 'dist', 'server', 'index.js')], { env: envFor(port), cwd: exportDir, stdio: ['ignore', 'pipe', 'pipe'] });
+  let output = '';
+  child.stdout.on('data', (chunk) => (output += String(chunk)));
+  child.stderr.on('data', (chunk) => (output += String(chunk)));
+  servers.push({ child, output: () => output });
+  return child;
+}
+async function waitHealthy(port) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/api/health`, { headers: { connection: 'close' }, signal: AbortSignal.timeout(2000) });
+      if (response.ok) return true;
+    } catch {
+      // not listening yet
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return false;
+}
+async function call(method, path, { cookie, body, port = portA, origin = true } = {}) {
+  const headers = { connection: 'close' };
+  if (origin) headers.origin = `http://localhost:${port}`;
+  if (cookie) headers.cookie = cookie;
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  const response = await fetch(`http://127.0.0.1:${port}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const buffer = Buffer.from(await response.arrayBuffer());
+  let json = null;
+  try {
+    json = JSON.parse(buffer.toString('utf8'));
+  } catch {
+    json = null;
+  }
+  return { status: response.status, headers: response.headers, json, buffer, text: buffer.toString('utf8') };
+}
+const code = (res) => `${res.status}:${res.json?.error?.code ?? ''}`;
+const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+async function login(email, password) {
+  const res = await call('POST', '/api/auth/login', { body: { email, password } });
+  return { status: res.status, cookie: (res.headers.get('set-cookie') ?? '').split(';')[0] };
+}
+
+let monitor;
+try {
+  log(`node ${process.version}`);
+  check('cli migrate', cli(['migrate']).status === 0);
+  const seeded = cli(['seed']);
+  check('cli seed', seeded.status === 0, seeded.output.split('\n')[0]);
+  startServer(portA);
+  startServer(portB);
+  check('server A healthy', await waitHealthy(portA));
+  check('server B healthy (same database)', await waitHealthy(portB));
+  monitor = new Database(databasePath, { readonly: true });
+  const tableNames = monitor.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+  const dbState = () => JSON.stringify({ v: monitor.pragma('data_version', { simple: true }), rows: tableNames.map((name) => [name, monitor.prepare(`SELECT count(*) FROM "${name}"`).pluck().get()]) });
+  const filesState = () => {
+    const list = [];
+    const walk = (dir) => {
+      if (!existsSync(dir)) return;
+      for (const entry of readdirSync(dir, { withFileTypes: true })) entry.isDirectory() ? walk(join(dir, entry.name)) : list.push(join(dir, entry.name));
+    };
+    walk(dataDir);
+    return list.sort().join('\n');
+  };
+  const count = (sql, ...params) => monitor.prepare(sql).pluck().get(...params);
+
+  const owner = await login('employee2@example.invalid', passwords.employee2);
+  const other = await login('employee@example.invalid', passwords.employee);
+  const admin = await login('admin@example.invalid', passwords.admin);
+  check('three logins', owner.status === 200 && other.status === 200 && admin.status === 200);
+  const me = (await call('GET', '/api/auth/me', { cookie: owner.cookie })).json.user;
+  const meOther = (await call('GET', '/api/auth/me', { cookie: other.cookie })).json.user;
+  const periods = (await call('GET', '/api/periods/current', { cookie: owner.cookie })).json;
+  const payroll = periods.current.payroll_date;
+  log(`today ${periods.today_local}, current payroll ${payroll}`);
+
+  // ---- 1. sign-off without sending
+  const review = (await call('GET', `/api/timesheets/${payroll}/review`, { cookie: owner.cookie })).json;
+  const ledgerBefore = count('SELECT count(*) FROM ot_ledger WHERE user_id = ?', me.id);
+  const signBody = { expected_version: review.expected_version, reviewed_hash: review.payload_hash, incomplete_evidence_acknowledged: true, signer_name: 'Someone Else Entirely' };
+  const signed = await call('POST', `/api/timesheets/${payroll}/signoff`, { cookie: owner.cookie, body: signBody });
+  const revisionId = signed.json?.revision?.id;
+  check('sign-off 201', signed.status === 201, code(signed));
+  check('sign-off enqueues the PDF job only (no send job)', JSON.stringify((signed.json?.jobs ?? []).map((job) => job.kind)) === '["render_pdf"]', JSON.stringify(signed.json?.jobs));
+  check('send_requested false on the new revision', signed.json?.revision?.send_requested === false);
+  const signoffRow = monitor.prepare('SELECT signer_name, signature_attachment_id FROM signoffs WHERE revision_id = ?').get(revisionId);
+  const currentSig = (await call('GET', '/api/signatures/current', { cookie: owner.cookie })).json?.signature;
+  check('signer is the account display name; a body signer_name is ignored', signoffRow?.signer_name === me.display_name, signoffRow?.signer_name);
+  check('the saved image is recorded on the sign-off', signoffRow?.signature_attachment_id === currentSig?.id && typeof currentSig?.id === 'string');
+  check('no send record after the sign-off', count('SELECT count(*) FROM revision_sends WHERE revision_id = ?', revisionId) === 0);
+  const ledgerAfter = count('SELECT count(*) FROM ot_ledger WHERE user_id = ?', me.id);
+  const stateAfterSign = dbState();
+  const replay = await call('POST', `/api/timesheets/${payroll}/signoff`, { cookie: owner.cookie, body: signBody });
+  check('identical sign-off replays (200) and posts nothing more', replay.status === 200 && dbState() === stateAfterSign, `${code(replay)}; ledger ${ledgerBefore}->${ledgerAfter}`);
+  const stale = await call('POST', `/api/timesheets/${payroll}/signoff`, { cookie: owner.cookie, body: { ...signBody, reviewed_hash: '0'.repeat(64) } });
+  check('stale review hash 409, nothing written', stale.status === 409 && dbState() === stateAfterSign, code(stale));
+
+  // name-only sign-off of the other employee (no saved image)
+  const sigOther = (await call('GET', '/api/signatures/current', { cookie: other.cookie })).json;
+  const reviewOther = (await call('GET', `/api/timesheets/${payroll}/review`, { cookie: other.cookie })).json;
+  const signedOther = await call('POST', `/api/timesheets/${payroll}/signoff`, { cookie: other.cookie, body: { expected_version: reviewOther.expected_version, reviewed_hash: reviewOther.payload_hash, incomplete_evidence_acknowledged: true } });
+  const otherRevision = signedOther.json?.revision?.id;
+  const otherSignoff = monitor.prepare('SELECT signer_name, signature_attachment_id FROM signoffs WHERE revision_id = ?').get(otherRevision);
+  check('name-only sign-off without a saved image (null image, account name)', sigOther?.signature === null && signedOther.status === 201 && otherSignoff?.signature_attachment_id === null && otherSignoff?.signer_name === meOther.display_name, JSON.stringify(otherSignoff));
+
+  // ---- 2. send draft ownership and the shared allowlist
+  const draft = await call('GET', `/api/revisions/${revisionId}/send-draft`, { cookie: owner.cookie });
+  check('send-draft owner 200, reason not required yet', draft.status === 200 && draft.json?.reason_required === false && draft.json?.sender === SENDER, code(draft));
+  const draftOther = await call('GET', `/api/revisions/${revisionId}/send-draft`, { cookie: other.cookie });
+  const draftAdmin = await call('GET', `/api/revisions/${revisionId}/send-draft`, { cookie: admin.cookie });
+  const draftAnon = await call('GET', `/api/revisions/${revisionId}/send-draft`);
+  check('send-draft: another employee 404, admin 404, anonymous 401', `${draftOther.status}/${draftAdmin.status}/${draftAnon.status}` === '404/404/401', `${draftOther.status}/${draftAdmin.status}/${draftAnon.status}`);
+  const base = (key, extra = {}) => ({ request_key: key, to: draft.json.to, cc: draft.json.cc, subject: draft.json.subject, body_text: draft.json.body_text, time_rows: false, ot_rows: false, ...extra });
+
+  // ---- 3. validation (422 / 400, nothing written)
+  const before = dbState();
+  const invalid = [
+    ['to not an address', base(randomUUID(), { to: ['not-an-address'] }), '422'],
+    ['to empty', base(randomUUID(), { to: [] }), '422'],
+    ['subject with a line break', base(randomUUID(), { subject: 'Line one\nLine two' }), '422:invalid_subject'],
+    ['subject 301 characters', base(randomUUID(), { subject: 'a'.repeat(301) }), '422:invalid_subject'],
+    ['subject blank', base(randomUUID(), { subject: '   ' }), '422:invalid_subject'],
+    ['subject with a bidi override (Cf)', base(randomUUID(), { subject: 'Timesheet ‮ reversed' }), '422:invalid_subject'],
+    ['body blank', base(randomUUID(), { body_text: '  \n ' }), '422:invalid_body'],
+    ['body 20001 characters', base(randomUUID(), { body_text: 'b'.repeat(20_001) }), '422:invalid_body'],
+    ['body with a control character', base(randomUUID(), { body_text: 'Hello\u0007there' }), '422:invalid_body'],
+    ['reason 1 character', base(randomUUID(), { reason: 'x' }), '422:invalid_reason'],
+    ['reason 501 characters', base(randomUUID(), { reason: 'r'.repeat(501) }), '422:invalid_reason'],
+    ['reason with a tab', base(randomUUID(), { reason: 'needs\tanother' }), '422:invalid_reason'],
+    ['reason with a control character', base(randomUUID(), { reason: 'needs\u0001another' }), '422:invalid_reason'],
+    ['time_rows not a boolean', base(randomUUID(), { time_rows: 'yes' }), '422:validation_error'],
+    ['unknown key', base(randomUUID(), { bcc: ['x@example.invalid'] }), '422:validation_error'],
+    ['request key too short', base('short'), '422:validation_error'],
+    ['request key with a colon (server key space)', base('deadline:abcdefgh'), '422:validation_error'],
+  ];
+  for (const [name, body, want] of invalid) {
+    const res = await call('POST', `/api/revisions/${revisionId}/send`, { cookie: owner.cookie, body });
+    check(`send refused: ${name} -> ${want}`, code(res).startsWith(want), `${code(res)} ${res.json?.error?.message ?? ''}`);
+  }
+  check('no validation refusal wrote anything', dbState() === before);
+  // 500 code points of a multi-unit character pass the length rule (code points, NFC)
+  const nfc = await call('POST', `/api/revisions/${otherRevision}/send`, { cookie: other.cookie, body: { request_key: randomUUID(), to: ['payroll@example.invalid'], cc: [], subject: 'Probe', body_text: 'Probe', time_rows: true, ot_rows: true, reason: '\u{1F600}'.repeat(500) } });
+  check('reason of 500 astral code points accepted (counted as code points)', nfc.status === 201, code(nfc));
+
+  // ---- 4. idempotency and the in-flight refusal
+  const K1 = randomUUID();
+  const s1 = await call('POST', `/api/revisions/${revisionId}/send`, { cookie: owner.cookie, body: base(K1) });
+  check('first send 201, send 1, variant t0o0, no reason', s1.status === 201 && s1.json?.send?.send_no === 1 && s1.json?.send?.pdf_variant === 't0o0' && s1.json?.send?.reason === null, code(s1));
+  const afterS1 = dbState();
+  const s1again = await call('POST', `/api/revisions/${revisionId}/send`, { cookie: owner.cookie, body: base(K1) });
+  check('same key, same body: 200 replayed, same send, nothing written', s1again.status === 200 && s1again.json?.status === 'replayed' && s1again.json?.send?.id === s1.json?.send?.id && dbState() === afterS1, code(s1again));
+  const s1other = await call('POST', `/api/revisions/${revisionId}/send`, { cookie: owner.cookie, body: base(K1, { subject: 'Another subject' }) });
+  check('same key, another body: 409 request_key_reused, nothing written', code(s1other) === '409:request_key_reused' && dbState() === afterS1, code(s1other));
+  const s1otherUser = await call('POST', `/api/revisions/${revisionId}/send`, { cookie: other.cookie, body: base(K1) });
+  check("another user's send of the owner's revision: 404", s1otherUser.status === 404, code(s1otherUser));
+  const s2early = await call('POST', `/api/revisions/${revisionId}/send`, { cookie: owner.cookie, body: base(randomUUID()) });
+  check('another send while the first waits: 409 delivery_in_progress', code(s2early) === '409:delivery_in_progress', code(s2early));
+
+  // ---- 5. run the jobs (CLI, capture) and read the captured message
+  const runAt = (offsetSeconds) => cli(['run-jobs', '--once', '--now', new Date(Date.now() + offsetSeconds * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')]);
+  let clockOffset = 0;
+  const runJobs = () => {
+    const out = [];
+    for (let pass = 0; pass < 3; pass += 1) {
+      clockOffset += 150;
+      out.push(runAt(clockOffset));
+    }
+    return out.every((pass) => pass.status === 0);
+  };
+  check('run-jobs passes exit 0', runJobs());
+  const attemptOf = (jobId) => monitor.prepare('SELECT id, state, envelope_json, message_id FROM delivery_attempts WHERE job_id = ? ORDER BY attempt_no DESC LIMIT 1').get(jobId);
+  const a1 = attemptOf(s1.json.send.job_id);
+  check('first send accepted', a1?.state === 'accepted', a1?.state);
+  const capDir = (attemptId) => join(dataDir, 'mail-capture', attemptId);
+  const eml1 = readFileSync(join(capDir(a1.id), 'message.eml'), 'latin1');
+  const meta1 = JSON.parse(readFileSync(join(capDir(a1.id), 'metadata.json'), 'utf8'));
+  const unfolded = eml1.replace(/\r\n[ \t]+/g, ' ');
+  check('captured envelope: from the sender, to + cc of the send', meta1.envelope.from === SENDER && JSON.stringify(meta1.envelope.to) === JSON.stringify([...draft.json.to, ...draft.json.cc]), JSON.stringify(meta1.envelope));
+  check('captured headers: From, To, Subject of the send, Message-ID @timesheet.invalid, no X-Mailer', unfolded.includes(`From: ${SENDER}`) && unfolded.includes(`Subject: ${draft.json.subject}`) && /\r\nMessage-ID: <[0-9a-f-]{36}@timesheet\.invalid>\r\n/i.test(eml1) && !/X-Mailer/i.test(eml1), '');
+  check('captured Message-ID equals the attempt row', unfolded.includes(`Message-ID: ${a1.message_id}`));
+  const frozen1 = JSON.parse(a1.envelope_json);
+  check('attempt froze the envelope, send id and body hash', frozen1.send_id === s1.json.send.id && typeof frozen1.body_sha256 === 'string' && frozen1.body_sha256.length === 64 && frozen1.attachment_sha256 === meta1.pdf_sha256);
+  const variantBytes = await call('GET', `/api/revisions/${revisionId}/pdf?time=0&ot=0`, { cookie: owner.cookie });
+  check('the captured attachment is the t0o0 variant of the send', sha(variantBytes.buffer) === meta1.pdf_sha256);
+
+  // ---- 6. the reason rule, its storage, audit, history, and not in the email
+  const draft2 = (await call('GET', `/api/revisions/${revisionId}/send-draft`, { cookie: owner.cookie })).json;
+  check('send-draft now requires a reason and names the earlier copy', draft2.reason_required === true && draft2.copy_sent_before?.state === 'accepted');
+  const noReason = await call('POST', `/api/revisions/${revisionId}/send`, { cookie: owner.cookie, body: base(randomUUID(), { time_rows: false, ot_rows: true }) });
+  check('another copy without a reason: 422 reason_required with copy_sent_before', code(noReason) === '422:reason_required' && noReason.json?.error?.details?.copy_sent_before?.state === 'accepted', JSON.stringify(noReason.json?.error));
+  const REASON = 'Payroll asked for the copy again (synthetic probe reason)';
+  const s2 = await call('POST', `/api/revisions/${revisionId}/send`, { cookie: owner.cookie, body: base(randomUUID(), { time_rows: false, ot_rows: true, reason: `  ${REASON}\r\n ` }) });
+  check('another copy with a reason: 201, reason stored trimmed with CRLF->LF', s2.status === 201 && s2.json?.send?.reason === REASON && s2.json?.send?.send_no === 2, code(s2));
+  check('runner for the second copy', runJobs());
+  const a2 = attemptOf(s2.json.send.job_id);
+  const eml2 = readFileSync(join(capDir(a2.id), 'message.eml'), 'latin1');
+  check('second copy accepted; the reason is not in the email', a2.state === 'accepted' && !eml2.includes('synthetic probe reason') && !eml2.includes('Payroll asked'));
+  const history = await call('GET', '/api/history', { cookie: owner.cookie });
+  const sendEvents = (history.json?.audit_events ?? []).filter((event) => event.operation === 'revision.send');
+  check("the owner's History holds both sends and the second one's reason", sendEvents.length === 2 && sendEvents.some((event) => event.reason === REASON), JSON.stringify(sendEvents.map((event) => event.reason)));
+  const auditRow = monitor.prepare("SELECT reason, after_json FROM audit_events WHERE operation = 'revision.send' AND reason IS NOT NULL AND entity_id = ?").get(revisionId);
+  check('the revision.send audit row carries the reason and counts, no body', auditRow?.reason === REASON && !auditRow.after_json.includes(draft.json.body_text.slice(0, 20)), auditRow?.after_json);
+
+  // ---- 7. two concurrent sends on two server processes (one database)
+  const race = async (withReason) => {
+    const one = call('POST', `/api/revisions/${revisionId}/send`, { cookie: owner.cookie, port: portA, body: base(randomUUID(), withReason ? { reason: 'Race probe reason A' } : {}) });
+    const two = call('POST', `/api/revisions/${revisionId}/send`, { cookie: owner.cookie, port: portB, body: base(randomUUID(), withReason ? { reason: 'Race probe reason B' } : {}) });
+    return (await Promise.all([one, two])).map(code).sort();
+  };
+  const raceResults = [];
+  for (let round = 0; round < 6; round += 1) {
+    const sendsBefore = count('SELECT count(*) FROM revision_sends WHERE revision_id = ?', revisionId);
+    const result = await race(true);
+    const sendsAfter = count('SELECT count(*) FROM revision_sends WHERE revision_id = ?', revisionId);
+    raceResults.push(`${result.join('+')} (+${sendsAfter - sendsBefore})`);
+    runJobs();
+  }
+  check('two concurrent reasoned sends on two processes: exactly one 201 each round', raceResults.every((result) => result.startsWith('201:+409:delivery_in_progress (+1)')), raceResults.join(' | '));
+  const noReasonRace = await race(false);
+  check('two concurrent sends without a reason once a copy counts: both 422 reason_required', noReasonRace.join('+') === '422:reason_required+422:reason_required', noReasonRace.join('+'));
+
+  // ---- 8. PDF variants and routes
+  const filesOf = (id) => monitor.prepare('SELECT variant, state FROM revision_files WHERE revision_id = ? ORDER BY variant').all(id);
+  const defaultPdf = await call('GET', `/api/revisions/${revisionId}/pdf`, { cookie: owner.cookie });
+  const storedDefault = monitor.prepare("SELECT a.sha256 FROM revision_files f JOIN attachments a ON a.id = f.attachment_id WHERE f.revision_id = ? AND f.variant = 't1o1'").pluck().get(revisionId);
+  check('Save PDF (no query) serves the stored sign-off variant t1o1 (hash equal), attachment, no-store', defaultPdf.status === 200 && sha(defaultPdf.buffer) === storedDefault && /^attachment; filename="timesheet-\d{4}-\d{2}-\d{2}-r1\.pdf"$/.test(defaultPdf.headers.get('content-disposition') ?? '') && (defaultPdf.headers.get('cache-control') ?? '').includes('no-store'));
+  const before4 = filesOf(revisionId).length;
+  const v10 = await call('GET', `/api/revisions/${revisionId}/pdf?time=1&ot=0&disposition=inline`, { cookie: owner.cookie });
+  check('a variant not stored is rendered on request (inline)', v10.status === 200 && (v10.headers.get('content-disposition') ?? '').startsWith('inline;'));
+  const v10again = await call('GET', `/api/revisions/${revisionId}/pdf?time=1&ot=0`, { cookie: owner.cookie });
+  check('the same variant again: identical bytes, rendered once', sha(v10.buffer) === sha(v10again.buffer));
+  const filesNow = filesOf(revisionId);
+  check('at most four PDFs per revision, all ready', filesNow.length === 4 && filesNow.every((file) => file.state === 'ready'), `${before4} -> ${JSON.stringify(filesNow)}`);
+  const badQuery = await call('GET', `/api/revisions/${revisionId}/pdf?time=2`, { cookie: owner.cookie });
+  check('a bad variant query is 422', badQuery.status === 422, code(badQuery));
+  for (const [variant, query] of [['t1o1', 'time=1&ot=1'], ['t1o0', 'time=1&ot=0'], ['t0o1', 'time=0&ot=1'], ['t0o0', 'time=0&ot=0']]) {
+    const res = await call('GET', `/api/revisions/${revisionId}/pdf?${query}`, { cookie: owner.cookie });
+    const pdf = await readPdf(new Uint8Array(res.buffer));
+    const text = pdf.text;
+    const timeShown = /\b\d{2}:\d{2}\b/.test(pdf.pages[0].items.filter((item) => item.text.length === 5).map((item) => item.text).join(' '));
+    check(`variant ${variant}: one page; OT ${variant[3] === '1' ? 'shown' : 'hidden'}; one image (saved signature)`, pdf.pages.length === 1 && text.includes('VERTIME') === (variant[3] === '1') && pdf.pages[0].images.length === 1, `pages ${pdf.pages.length}, VERTIME ${text.includes('VERTIME')}, images ${pdf.pages[0].images.length}, times ${timeShown}`);
+  }
+  const otherPdf = await call('GET', `/api/revisions/${otherRevision}/pdf`, { cookie: other.cookie });
+  const otherPdfText = await readPdf(new Uint8Array(otherPdf.buffer));
+  check('name-only revision PDF: no image, the account name printed', otherPdf.status === 200 && otherPdfText.pages[0].images.length === 0 && otherPdfText.text.includes(meOther.display_name));
+  const pdfOther = await call('GET', `/api/revisions/${revisionId}/pdf?time=0&ot=0`, { cookie: other.cookie });
+  const pdfAdmin = await call('GET', `/api/revisions/${revisionId}/pdf`, { cookie: admin.cookie });
+  const pdfAnon = await call('GET', `/api/revisions/${revisionId}/pdf`);
+  check('revision PDF: another employee 404, admin 404, anonymous 401 (no render for them)', `${pdfOther.status}/${pdfAdmin.status}/${pdfAnon.status}` === '404/404/401');
+  const stateBeforePreview = dbState();
+  const filesBeforePreview = filesState();
+  const preview = await call('GET', `/api/timesheets/${periods.in_progress.payroll_date}/pdf-preview?time=0&ot=1`, { cookie: owner.cookie });
+  const previewPdf = await readPdf(new Uint8Array(preview.buffer));
+  check('unsigned preview: 200 PDF inline no-store, "Preview, not signed", no image, one page', preview.status === 200 && (preview.headers.get('content-disposition') ?? '').startsWith('inline;') && previewPdf.text.includes('Preview, not signed') && previewPdf.pages[0].images.length === 0 && previewPdf.pages.length === 1, code(preview));
+  check('unsigned preview writes nothing (database and private files unchanged)', dbState() === stateBeforePreview && filesState() === filesBeforePreview);
+  const previewOther = await call('GET', `/api/timesheets/${payroll}/pdf-preview`, { cookie: admin.cookie });
+  check("the admin's preview is of the admin's own timesheet only (no user id in the route)", previewOther.status === 200 || previewOther.status === 404, code(previewOther));
+
+  // ---- 9. the shared mount (grantee with every item)
+  const grant = await call('POST', '/api/shares', { cookie: owner.cookie, body: { grantee_email: 'employee@example.invalid', items: { timesheets: 'edit', ot_read: true, pdf_download: true } } });
+  check('owner grants a share with every item', grant.status === 201, code(grant));
+  const shared = (path) => `/api/shared/${me.id}${path}`;
+  const sharedPdf = await call('GET', shared(`/revisions/${revisionId}/pdf?time=1&ot=1`), { cookie: other.cookie });
+  const latestSend = monitor.prepare('SELECT pdf_variant FROM revision_sends WHERE revision_id = ? ORDER BY send_no DESC LIMIT 1').pluck().get(revisionId);
+  const ownerOfLatest = await call('GET', `/api/revisions/${revisionId}/pdf?time=${latestSend[1]}&ot=${latestSend[3]}`, { cookie: owner.cookie });
+  check(`shared PDF ignores the query and serves the latest send's variant (${latestSend})`, sharedPdf.status === 200 && sha(sharedPdf.buffer) === sha(ownerOfLatest.buffer), code(sharedPdf));
+  const sharedRefused = [];
+  for (const [method, path, body] of [
+    ['GET', `/revisions/${revisionId}/send-draft`],
+    ['POST', `/revisions/${revisionId}/send`, base(randomUUID(), { reason: 'Shared probe' })],
+    ['POST', `/revisions/${revisionId}/resend`, { reason: 'Shared probe' }],
+    ['GET', `/timesheets/${payroll}/pdf-preview`],
+    ['GET', '/deliveries'],
+    ['GET', `/timesheets/${payroll}/review`],
+    ['POST', `/timesheets/${payroll}/signoff`, signBody],
+    ['GET', `/signatures/${currentSig.id}`],
+    ['GET', '/settings/submission'],
+  ]) {
+    const res = await call(method, shared(path), { cookie: other.cookie, body });
+    sharedRefused.push(`${method} ${path.replace(revisionId, '<rev>').replace(currentSig.id, '<sig>')} ${res.status}`);
+  }
+  check('send-draft, send, resend, pdf-preview, deliveries, review, sign-off, signature and settings are not shared (404)', sharedRefused.every((line) => line.endsWith(' 404')), sharedRefused.join('; '));
+  // a correction revision with no PDF yet: the shared route never renders it
+  const review2 = (await call('GET', `/api/timesheets/${payroll}/review`, { cookie: owner.cookie })).json;
+  const dayEntry = await call('PUT', `/api/days/${review2.payload.days[2].work_date}`, { cookie: owner.cookie, body: { category: 'Sick', leave_minutes: 0, wfh: false, notes: '', reason: 'Synthetic correction probe' } });
+  const review3 = (await call('GET', `/api/timesheets/${payroll}/review`, { cookie: owner.cookie })).json;
+  const corr = await call('POST', `/api/timesheets/${payroll}/revisions`, { cookie: owner.cookie, body: { expected_version: review3.expected_version, reviewed_hash: review3.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic correction for the audit probe', send_email: true } });
+  const corrId = corr.json?.revision?.id;
+  check('a correction (send_email: true) creates revision 2 and enqueues the PDF only', corr.status === 201 && JSON.stringify((corr.json?.jobs ?? []).map((job) => job.kind)) === '["render_pdf"]' && count('SELECT count(*) FROM revision_sends WHERE revision_id = ?', corrId) === 0, `${code(dayEntry)} ${code(corr)} ${JSON.stringify(corr.json?.jobs)}`);
+  const filesBeforeShared = filesOf(corrId).length;
+  const sharedCorr = await call('GET', shared(`/revisions/${corrId}/pdf?time=0&ot=0`), { cookie: other.cookie });
+  check('shared PDF of a revision whose PDF is not stored: 409, no render, no file row', code(sharedCorr) === '409:pdf_not_ready' && filesOf(corrId).length === filesBeforeShared, `${code(sharedCorr)} files ${filesBeforeShared}->${filesOf(corrId).length}`);
+  const supersededSend = await call('POST', `/api/revisions/${revisionId}/send`, { cookie: owner.cookie, body: base(randomUUID(), { reason: 'Old revision probe' }) });
+  check('sending the superseded revision: 409 revision_superseded', code(supersededSend) === '409:revision_superseded', code(supersededSend));
+  const corrDraft = (await call('GET', `/api/revisions/${corrId}/send-draft`, { cookie: owner.cookie })).json;
+  check("the correction's draft requires a reason (a copy of revision 1 counts) and offers the correction reason", corrDraft.reason_required === true && corrDraft.correction_reason === 'Synthetic correction for the audit probe');
+
+  // ---- 10. signature image privacy and the static root
+  const sigOwner = await call('GET', `/api/signatures/${currentSig.id}`, { cookie: owner.cookie });
+  const sigOtherUser = await call('GET', `/api/signatures/${currentSig.id}`, { cookie: other.cookie });
+  const sigAdmin = await call('GET', `/api/signatures/${currentSig.id}`, { cookie: admin.cookie });
+  const sigAnon = await call('GET', `/api/signatures/${currentSig.id}`);
+  check('signature image: owner 200 private no-store; other 404, admin 404, anonymous 401', sigOwner.status === 200 && (sigOwner.headers.get('cache-control') ?? '').includes('no-store') && `${sigOtherUser.status}/${sigAdmin.status}/${sigAnon.status}` === '404/404/401', `${sigOwner.status} ${sigOwner.headers.get('cache-control')} ${sigOtherUser.status}/${sigAdmin.status}/${sigAnon.status}`);
+  const font = await call('GET', '/assets/pdf-fonts/IndieFlower-Regular.ttf', { origin: false });
+  const fontBytes = readFileSync(join(exportDir, 'assets', 'pdf-fonts', 'IndieFlower-Regular.ttf'));
+  check('the PDF font is not served over HTTP (the static path gives the app shell, not the font)', sha(font.buffer) !== sha(fontBytes) && !font.buffer.subarray(0, 4).equals(Buffer.from([0, 1, 0, 0])), `${font.status} ${font.headers.get('content-type')} ${font.buffer.length} bytes`);
+
+  // ---- 11. per-send privacy for administrators
+  const subs = await call('GET', '/api/admin/submissions', { cookie: admin.cookie });
+  const subsText = subs.text;
+  check('admin status: recipient addresses only, no subject, body, reason or variant', subs.status === 200 && subsText.includes('payroll@example.invalid') && !subsText.includes(draft.json.subject) && !subsText.includes('synthetic probe reason') && !subsText.includes('Race probe') && !subsText.includes(draft.json.body_text.slice(0, 15)), `${subs.status} ${subsText.length} bytes`);
+  const adminDeliveries = await call('GET', `/api/deliveries?revision_id=${revisionId}`, { cookie: admin.cookie });
+  check("admin's own deliveries list does not show the owner's attempts", adminDeliveries.status === 200 && (adminDeliveries.json?.deliveries ?? []).length === 0, code(adminDeliveries));
+
+  // ---- 12. Settings show_time_on_pdf
+  const settingsNow = (await call('GET', '/api/settings/submission', { cookie: owner.cookie })).json.settings;
+  const versionsBefore = (await call('GET', '/api/settings/submission/versions', { cookie: owner.cookie })).json.versions;
+  const badSettings = await call('POST', '/api/settings/submission', { cookie: owner.cookie, body: { expected_seq: settingsNow.seq, to: settingsNow.recipients.to, auto_submit: settingsNow.auto_submit, show_time_on_pdf: 'no' } });
+  check('settings: show_time_on_pdf not a boolean is 422 validation_error', code(badSettings) === '422:validation_error', code(badSettings));
+  const saved = await call('POST', '/api/settings/submission', { cookie: owner.cookie, body: { expected_seq: settingsNow.seq, to: settingsNow.recipients.to, cc: settingsNow.recipients.cc, auto_submit: settingsNow.auto_submit, show_time_on_pdf: false } });
+  const versionsAfter = (await call('GET', '/api/settings/submission/versions', { cookie: owner.cookie })).json.versions;
+  const oldVersion = (await call('GET', `/api/settings/submission/versions/${settingsNow.id}`, { cookie: owner.cookie })).json?.settings;
+  check('settings: a new version with show_time_on_pdf false; the earlier version is unchanged', saved.status === 201 && saved.json.settings.show_time_on_pdf === false && versionsAfter.length === versionsBefore.length + 1 && oldVersion?.show_time_on_pdf === settingsNow.show_time_on_pdf, `${code(saved)} ${versionsBefore.length}->${versionsAfter.length}`);
+  const corrDraft2 = (await call('GET', `/api/revisions/${corrId}/send-draft`, { cookie: owner.cookie })).json;
+  check('the Settings default reaches the send draft (time_rows false)', corrDraft2.time_rows === false);
+  const corrJobs = monitor.prepare("SELECT payload_json FROM jobs WHERE revision_id = ? AND kind = 'render_pdf'").pluck().all(corrId);
+  check("the correction's own sign-off PDF job is the sign-off default (time rows on), not the Settings value", corrJobs.length === 1 && JSON.parse(corrJobs[0]).variant?.startsWith('t1'), JSON.stringify(corrJobs));
+
+  // ---- 13. round-4 recheck F-UX4B-1 and the password route
+  const victim = meOther.id;
+  const attackerTries = [];
+  for (let attempt = 0; attempt < 6; attempt += 1) attackerTries.push((await call('POST', '/api/auth/login', { body: { email: `password:${victim}`, password: '<synthetic-password>' } })).status);
+  const wrongCurrent = await call('POST', '/api/auth/password', { cookie: other.cookie, body: { current_password: '<synthetic-password>', new_password: '<synthetic-password>' } });
+  const change = await call('POST', '/api/auth/password', { cookie: other.cookie, body: { current_password: passwords.employee, new_password: `Synthetic-${randomBytes(9).toString('base64url')}` } });
+  check('F-UX4B-1: six failed sign-ins typed as password:<victim id> do not lock the victim out of the password change', change.status === 200 && wrongCurrent.status === 403 && wrongCurrent.json?.error?.code === 'current_password_incorrect', `sign-ins ${attackerTries.join(',')}; wrong current ${code(wrongCurrent)}; change ${code(change)}`);
+  check('the sign-in limiter itself still answers 429 after five failures on one account', attackerTries.slice(5).every((status) => status === 429) && attackerTries.slice(0, 5).every((status) => status === 401), attackerTries.join(','));
+  const sharedPassword = await call('POST', shared('/auth/password'), { cookie: owner.cookie, body: { current_password: 'x', new_password: 'y' } });
+  check('the password route is not on the shared mount', sharedPassword.status === 404, code(sharedPassword));
+
+  // ---- 14. round-4 shared clock guard still intact
+  const clockIn = await call('POST', '/api/clock/in', { cookie: owner.cookie, body: { input_zone: 'America/Los_Angeles' } });
+  const running = clockIn.json?.session;
+  const sharedClockIn = await call('POST', shared('/clock/in'), { cookie: other.cookie, body: { input_zone: 'America/Los_Angeles' } });
+  const runningId = running?.id;
+  const sharedDelete = await call('DELETE', shared(`/sessions/${runningId}`), { cookie: other.cookie, body: { expected_version: running?.version ?? 1, reason: 'Synthetic probe' } });
+  check('round 4: a grantee cannot clock in (404) or delete the running session (409 shared_clock_action)', sharedClockIn.status === 404 && code(sharedDelete) === '409:shared_clock_action', `${code(clockIn)} ${sharedClockIn.status} ${code(sharedDelete)}`);
+} catch (error) {
+  failures += 1;
+  log(`FAIL unexpected error: ${error instanceof Error ? `${error.message}\n${error.stack}` : String(error)}`);
+} finally {
+  monitor?.close();
+  for (const server of servers) server.child.kill();
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  for (const [index, server] of servers.entries()) log(`server ${index} output (first 300 chars): ${server.output().replaceAll(work, '<work>').slice(0, 300).replaceAll('\n', ' | ')}`);
+}
+log(`failures: ${failures}`);
+writeFileSync(outPath, `${lines.join('\n')}\n`);
+process.exitCode = failures === 0 ? 0 : 1;

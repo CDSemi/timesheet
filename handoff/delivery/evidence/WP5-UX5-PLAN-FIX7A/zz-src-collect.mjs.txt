@@ -1,0 +1,55 @@
+import { copyFileSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+// Usage: node collect.mjs <task folder> <evidence folder>. Copies the evidence files with masked paths, LF line ends and no ANSI codes.
+const [, , task, evidence] = process.argv;
+const mask = (text) =>
+  text
+    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
+    .replace(/\r\n/g, '\n')
+    .replaceAll('D:\\.claude-tmp\\timesheet\\WP5-UX5-PLAN-FIX7A', '<task>')
+    .replaceAll('<task>', '<task>')
+    .replaceAll('<task>', '<task>')
+    .replaceAll('D:\\Dropbox\\Work.CDSemi\\timesheet', '<repo>')
+    .replaceAll('<repo>', '<repo>')
+    .replaceAll('<repo>', '<repo>')
+    .replace(/C:\\Users\\[^\\]+/g, 'C:\\Users\\<user>')
+    .replace(/<user>/g, '<user>');
+const put = (from, to) => {
+  if (!existsSync(from)) return;
+  writeFileSync(join(evidence, to), mask(readFileSync(from, 'utf8')));
+};
+const out = join(task, 'out');
+const obs = join(task, 'obs');
+for (const name of readdirSync(obs)) put(join(obs, name), name);
+for (const name of ['sum-sigbase.txt', 'sum-sigfix2.txt', 'diff-src.txt', 'diff-tests.txt', '02-ci-rc.txt', '02-typecheck-final.txt', '02-lint-final.txt', '03-npmtest-final.txt', '04-build-final2.txt']) put(join(out, name), name);
+// One line per Playwright run: the command, the result counts and the exit code.
+const lines = [];
+for (const name of readdirSync(out).filter((n) => n.startsWith('log-')).sort()) {
+  const text = mask(readFileSync(join(out, name), 'utf8'));
+  const all = text.split('\n');
+  const command = all.find((l) => l.startsWith('$ ')) ?? '';
+  const counts = all.filter((l) => /^\s+\d+ (passed|failed|skipped|flaky)/.test(l)).map((l) => l.trim()).join(', ');
+  const exit = all.find((l) => /^exit=/.test(l)) ?? '';
+  lines.push(`${name}: ${exit} ${counts}\n    ${command}`);
+}
+writeFileSync(join(evidence, '20-runs.txt'), `${lines.join('\n')}\n`);
+// Probe and script sources.
+const sources = [
+  ['zz-f7a-sig.spec.ts', 'zz-src-f7a-sig.spec.ts.txt'],
+  ['zz-f7a-name.spec.ts', 'zz-src-f7a-name.spec.ts.txt'],
+  ['zz-f7a-touch.spec.ts', 'zz-src-f7a-touch.spec.ts.txt'],
+  ['zz-f7a-legend.spec.ts', 'zz-src-f7a-legend.spec.ts.txt'],
+  ['summarize-sig.mjs', 'zz-src-summarize-sig.mjs.txt'],
+  ['collect.mjs', 'zz-src-collect.mjs.txt'],
+  ['env.sh', 'zz-src-env.sh.txt'],
+  ['setup.sh', 'zz-src-setup.sh.txt'],
+  ['run-probe.sh', 'zz-src-run-probe.sh.txt'],
+  ['run-spec.sh', 'zz-src-run-spec.sh.txt'],
+];
+for (const [from, to] of sources) put(join(task, from), to);
+for (const png of ['f7a-sigbase-sig-390-light-synthetic.png', 'f7a-sigfix2-sig-390-light-synthetic.png', 'f7a-sigbase-sig-768-light-synthetic.png', 'f7a-sigfix2-sig-768-light-synthetic.png', 'f7a-sigbase-sig-320-dark-synthetic.png', 'f7a-sigfix2-sig-320-dark-synthetic.png']) {
+  const from = join(task, 'shots', png);
+  if (existsSync(from)) copyFileSync(from, join(evidence, png));
+}
+console.log('collected');

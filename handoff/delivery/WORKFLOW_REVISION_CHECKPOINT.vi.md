@@ -2185,9 +2185,158 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - `waitfor.sh` khớp với PID 22240, tức tiến trình sót lại từ REGATE3, và ba tiến trình
     bash được tạo ngay lúc tra cứu. Ba tiến trình này được cho là shell của chính bước tra
     cứu; lần kiểm kê của REGATE4 sẽ xác nhận.
-- **Đang chạy:** WP5-UX5-FIX6-FREEZE (committer, sonnet), một mình: một commit cho FIX4
-  tới FIX6 và các bản ghi, rồi push.
-- **Tiếp theo:** REGATE4.
+- **WP5-UX5-FIX6-FREEZE xong.**
+  - Commit f4049aa7905e22f1467dfcae4208675cb2fc8e80 đã lên main và đã push, fast-forward từ
+    5b8b718.
+  - D_PRE bằng digest của HEAD, 26b163a6.
+  - 164 đường dẫn: 8 file mã nguồn, 6 bản ghi, 12 task và 138 file evidence. Một file được
+    đổi tên thêm `-synthetic`. Mọi kiểm tra đều trả về 0.
+  - Bước quét email chỉ khớp với địa chỉ no-reply công khai trong một dòng Co-Authored-By,
+    được trích lại trong bản ghi FIX3-FREEZE. Địa chỉ này đã công khai từ 5b8b718 và được
+    chấp nhận như đã ghi. Các brief freeze sau sẽ ghi rõ địa chỉ này được phép.
+- **WP5-UX5-REGATE4: PASS** trên f4049aa / 26b163a6 (verifier, sonnet). NAS vẫn NOT
+  VERIFIED.
+  - Kiểm kê: khoảng 1,4 trên 32 nhân đang bận. Tiến trình sót lại từ REGATE3 vẫn chiếm một
+    nhân.
+  - Đúng tám file mã nguồn. Cả 250 file trong `dist/` giống hệt từng byte với 5b8b718.
+  - Drill `--wp3`: các bước 1-6 có 209 PASS và 0 FAIL. `npm audit --omit=dev` không thấy lỗ
+    hổng nào.
+  - `npm test` ×3 và `verify` (trong bản xuất và trong repo) đều trả về 0, không có lần nào
+    quá thời gian. Bộ test chạy với 4 CPU logic cũng qua.
+  - e2e FULL theo giờ thật: 459 và 404 qua, 0 lỗi. Sáu lượt quét và ba lượt chạy dồn đều 0
+    lỗi, không có ECONNRESET.
+  - Probe ngày Today của DIAG2, hai mutant M1 và M2, và các probe smoke của FIX6 (có và
+    không có header, cùng lỗi cố ý gây ra) đều cho kết quả như yêu cầu.
+  - Lưu ý: lockfile có thêm một bản nodemailer 10.0.14 lồng trong `smtp-server`, chỉ dùng
+    khi phát triển và không có trong image.
+- **Đang chạy:** WP5-UX5-AUDIT-A và WP5-UX5-AUDIT-B (auditor mới, opus), song song, trên
+  f4049aa / 26b163a6. Brief của chúng đã được đổi mục tiêu và bổ sung:
+  - A: các thay đổi e2e của những vòng sửa, một mutant mà chỉ bước so ngày trong poll Today
+    mới bắt được, và đánh giá việc hoãn sửa lỗi lệch 23 px khi ảnh chữ ký tải chậm;
+  - B: các phiên bản thư viện đã ghim (kể cả bản lồng chỉ dùng khi phát triển), bộ chạy
+    test, căn cứ cho giới hạn worker, và việc hoãn lazy import thư viện PDF.
+- **WP5-UX5-AUDIT-B: FIX REQUIRED** (opus). Năm lỗi mức Low, không có lỗi sản phẩm nào ở
+  vùng B:
+  - F-UX5B-1: docs/05:11 vẫn mô tả việc gửi ngay khi ký duyệt.
+  - F-UX5B-2: docs/12:54 và docs/04:124 trích những chuỗi giao diện đã bị bỏ.
+  - F-UX5B-3: trong PDF, một ngày vừa có nghỉ phép vừa có tên ngày lễ dài khoảng 35 ký tự
+    trở lên thì mất chữ "Leave h:mm" vì bị cắt bằng dấu ba chấm, trái với docs/12:86.
+  - F-UX5B-4: docs/10 không ghi quyết định H-1 a.
+  - F-UX5B-5: bộ test không bắt được mutant M12b, và `sends.test.ts:300` không thể lỗi
+    được vì mã hóa quoted-printable.
+
+  Rủi ro:
+  - R-UX5B-1 (có từ trước): một lần gửi đang chờ của bản sửa cũ có thể đến sau bản đính
+    chính.
+  - Các cảnh báo chỉ ở thư viện dùng khi phát triển, các chỗ gọi fetch trong drill, và giới
+    hạn worker được đánh giá là chấp nhận được.
+
+  Mọi kiểm tra đều qua, kể cả e2e, migration, sao lưu và khôi phục, và các probe HTTP.
+  F-UX4B-1 đã được sửa.
+- **WP5-UX5-AUDIT-A: FIX REQUIRED** (opus). Các phát hiện:
+  - **F-UX5A-1, Medium.** Trên trang Review của một kỳ đã ký, nút "Sign correction" nằm
+    trong dòng chữ ký của nhân viên. Ở 480, 390 và 320 px, tên bị ngắt từng chữ cái, nút che
+    chữ "Signed", và các dòng không còn thẳng hàng.
+  - F-UX5A-2: SC 2.5.3. Nút hiển thị "Change days" nhưng tên truy cập là "Change several
+    days".
+  - F-UX5A-3: vuốt chạm, hoặc nhấn vào thanh cuộn của thẻ tuần, làm đóng Day editor.
+  - F-UX5A-4: các dòng cũ chưa cập nhật trong docs/04 và docs/12, cùng ba chú thích CSS.
+
+  Mọi thứ khác đều qua:
+  - các mục U5 còn lại, hai bề rộng lẻ 479,33 và 767,33 (mỗi bề rộng chỉ một bố cục), và
+    F-UX4A-1..4, đã được sửa;
+  - axe: 108 lượt quét, 0 vi phạm;
+  - e2e đầy đủ: 863 qua, 0 lỗi.
+
+  Mutant: 15 trên 17 bị bắt.
+  - M2, bước ngày cuối của bậc thang khoảng ngày, không bị bắt.
+  - M13 chỉ bị `today.spec.ts:626` bắt ở thời điểm qua nửa đêm, không phải bởi bước chờ
+    `showToday`.
+- **WP5-UX5-PLAN-FIX7 xong** (planner, sonnet). Nó đưa ra một bản diff đã được chứng
+  minh và đặc tả chính xác.
+  - **F-UX5B-3.** Một ngày lễ hoặc ngày công ty nghỉ vẫn có thể có nghỉ phép một phần;
+    không có gì ngăn điều đó. Sửa mã sẽ khôi phục đúng docs/04:122, AC-10 và docs/12:86.
+    Trong bản sửa, tên ngày lễ chiếm một dòng và "Leave h:mm" có dòng riêng. Các PDF không
+    có cả hai nhãn vẫn giống hệt từng byte (624 trên 1.920 cặp), và các PDF mẫu của pilot
+    không có nhãn nào trong hai nhãn này.
+  - **R-UX5B-1.** Đã tái hiện được, và lỗi này có từ trước. Planner khuyến nghị phương án
+    A: khi một lần gửi của bất kỳ bản sửa nào trong kỳ còn đang chờ, lần gửi mới bị chặn
+    (409). Như vậy mã làm đúng câu docs/05:72 đã viết, và docs/03:60 được chỉnh cho khớp.
+  - **Quyết định của điều phối viên:**
+    - F-UX5B-3: sửa mã;
+    - R-UX5B-1: làm phương án A ngay trong vòng này;
+    - gộp luôn bốn chỗ thêm `connection: close` trong drill.
+
+    Không cần chủ dự án quyết định, vì không có quy tắc nào chủ dự án đặt ra bị thay đổi.
+    Chủ dự án được thông báo.
+- **WP5-UX5-PLAN-FIX7A xong** (planner, sonnet). Đã chứng minh trong một bản xuất tạm.
+  - **F-UX5A-1:** chỉ sửa CSS cho dòng tự xuống hàng. Ở 1440 và 1200 px không có gì thay
+    đổi. Dưới khoảng 1150 px, "Sign correction" tụt xuống dưới nội dung đã ký và vẫn cách
+    cuối dòng 8 px. Không còn chồng lấn, các dòng vẫn thẳng hàng, và PDF không bị đụng tới.
+    Theo lời chủ dự án, nút nằm ở cuối dòng, và mockup chưa từng thể hiện trạng thái này,
+    nên không cần chủ dự án quyết định. Chủ dự án được thông báo.
+  - **F-UX5A-2:** tên truy cập đi theo dạng chữ đang hiện. Bốn assertion e2e được sửa.
+  - **F-UX5A-3:** cảm ứng chỉ có tác dụng khi nhấc ngón tay (`pointerup`), nhấn vào thanh
+    cuộn riêng của một phần tử thì bỏ qua, còn chuột và bút giữ nguyên cách xử lý cũ.
+  - **F-UX5A-4:** có sẵn văn bản EN và VI chính xác. Hai dòng dùng chung docs/04:124 và
+    docs/12:54 giữ nguyên văn bản của FIX7.
+  - **Gộp thêm:** R3 (test bậc thang khoảng ngày bắt được M2), R4 và mũi tên của R5.
+- **WP5-UX5-FIX7 xong** (worker-high, sonnet; chưa commit; digest bca04c4f).
+  - **Trước khi sửa:** các probe PDF lỗi 13 kiểm tra, 7 test mới lỗi, và hai mutant M11, M12b
+    không bị bắt.
+  - **Sau khi sửa:** các probe PDF không còn kiểm tra nào lỗi, 106 test mới qua. Trong 1.920
+    cặp PDF, 624 cặp không có đủ cả hai nhãn vẫn giống hệt từng byte. M11, M12b và M14 đều
+    bị bắt.
+  - e2e có chọn lọc: 38 qua, 0 lỗi. `npm test` chạy 2.384 test, `verify` trả về 0. Drill
+    `--wp3`: 209 PASS, 0 FAIL. Tài liệu EN và VI khớp cấu trúc.
+  - Ghi chú cho lần kiểm tra lại: lý do của nút Resend "A delivery of this revision is in
+    progress." (`deliveryModel.ts:251`) vẫn tính theo từng bản.
+- **WP5-UX5-FIX8 xong** (worker, sonnet; chưa commit; digest 61d19bf1).
+  - Trước khi sửa, bốn test mới đều lỗi. Sau khi sửa, cả bốn qua. Mutant M2 giờ làm test
+    bậc thang mới bị lỗi.
+  - Điểm lệch kế hoạch: axe báo `button-name` ở 320 px, nên dạng ngắn "Change days" giờ là
+    chữ thật thay vì nội dung `::before`.
+  - axe: 40 lượt quét, 0 vi phạm. e2e FULL: 868 qua, 0 lỗi (desktop 463, mobile 405).
+    `npm test` chạy 2.384 test, `verify` và build đều trả về 0.
+  - Một lệnh `git apply -p2` với đường dẫn đã che lúc đầu ghi mười file vào một thư mục
+    `export/` lạc chỗ. Worker đã sửa lại.
+  - **Mới, có từ trước:** axe báo `scrollable-region-focusable` (serious) trên các thẻ tuần
+    chỉ đọc của trang Review ở 768 px. Các thẻ này cuộn ngang từ 480 tới 929 px mà không
+    chứa phần tử nào nhận được focus. HEAD cũng bị.
+- **Quyết định của điều phối viên:** sửa ngay, trước khi freeze, vì chuẩn UI trong AGENTS
+  yêu cầu WCAG 2.2 AA (SC 2.1.1) và lần kiểm tra lại sẽ trượt vì lỗi này.
+- **WP5-UX5-FIX9 xong** (worker, sonnet; chưa commit; digest 462a1cd7; 27 file thay đổi
+  ngoài `handoff/`).
+  - Trước khi sửa: axe tìm thấy 24 lỗi `scrollable-region-focusable`, tất cả ở thẻ tuần
+    chỉ đọc số 2 và 3 của trang Review, từ 480 tới 900 px. Không có lỗi nào khác ở bất kỳ
+    màn hình nào.
+  - Cách sửa: hook `useScrollsSideways` cho thẻ `tabIndex=0` chỉ khi thẻ bị tràn. Thẻ vốn đã
+    có tên "Week n", phím mũi tên cuộn được, và có viền focus lõm vào trong. Các thẻ chỉnh
+    sửa được không bị đụng tới.
+  - Sau khi sửa: axe quét 56 lượt, 0 vi phạm. Test mới lỗi khi chưa sửa, và mutant cũng làm
+    nó lỗi.
+  - e2e FULL: 869 qua, 0 lỗi. `npm test` chạy 2.384 test; `verify` và build trả về 0.
+  - Sơ suất: spec probe axe bị xóa nên không có trong evidence, và một lệnh `rm -rf` bị
+    chặn.
+- **Bước tra cứu WP5-UX5-FIX9-PATHS đã xong.**
+  - HEAD = origin/main = f4049aa.
+  - Ngoài `handoff/`: đúng 27 file của FIX9, tất cả xuống dòng kiểu LF. Không còn thư mục
+    `export/`, file chưa theo dõi hay file `.tmp` nào.
+  - `handoff/`: 9 file sửa và 566 file chưa theo dõi, tất cả là bản ghi của mission.
+  - Không có gì chặn commit, không có container Docker nào sót lại.
+- **Đang chạy:** WP5-UX5-FIX9-FREEZE (committer, sonnet), một mình: một commit cho FIX7
+  tới FIX9 và các bản ghi, rồi push.
+  - **Lần dừng đầu tiên:** committer dừng đúng quy trình, trước khi commit. Bước kiểm tra
+    trước commit chặn hai mật khẩu giả lập viết thẳng trong một script probe của AUDIT-B,
+    được lưu làm evidence (`94-http-areab.mjs.txt:380-381`). 603 đường dẫn đã được stage,
+    và HEAD vẫn là f4049aa.
+  - **Quyết định của điều phối viên (Addendum 1 của brief):** che hai giá trị đó thành
+    `'<synthetic-password>'`, stage lại file đó và các bản ghi đã cập nhật, chạy lại các
+    bước quét và kiểm tra trước commit, rồi commit và push. Committer cũ làm tiếp.
+- **Tiếp theo:**
+  1. Gate lại bằng WP5-UX5-REGATE5.
+  2. Kiểm tra lại độc lập vùng A và B.
+  3. Audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

@@ -1,0 +1,63 @@
+import { expect, test } from './fixtures.ts';
+import { note, seedA5, signInTo } from './zz-a5lib.ts';
+
+/*
+ * WP5-UX5-AUDIT-A probe B (U5-01, U5-15): fractional CSS widths, reached the way Windows display scaling reaches them. The browser runs
+ * with a forced device scale factor of 1.5 (or 1.25) and no viewport emulation; the window is resized through CDP, so the layout
+ * viewport is (window px / scale) CSS px, for example 719 / 1.5 = 479.33. Task-local; never part of the repository.
+ */
+const F = 'frac.txt';
+const SCALE = Number(process.env.A5_SCALE ?? '1.5');
+test.use({ viewport: null, launchOptions: { args: [`--force-device-scale-factor=${SCALE}`, '--window-size=1200,900'] } });
+
+const STATE = `(() => {
+  const q = (m) => window.matchMedia(m).matches;
+  const st = (s, p) => { const e = document.querySelector(s); return e ? getComputedStyle(e).getPropertyValue(p) : 'none-el'; };
+  const vis = (s) => { const e = document.querySelector(s); if (!e) return 'absent'; const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); return cs.display === 'none' ? 'display-none' : (cs.position === 'absolute' && r.width <= 1.01) || cs.clip !== 'auto' && cs.clip !== '' ? 'sr-only' : r.width > 1 ? 'shown' : 'zero'; };
+  const card = document.querySelector('.period-bar');
+  const prev = document.querySelector('.period-bar > .period-step')?.getBoundingClientRect();
+  const today = document.querySelector('[data-period-today]')?.getBoundingClientRect();
+  return {
+    vvw: window.visualViewport ? window.visualViewport.width : -1, innerWidth: window.innerWidth, dpr: window.devicePixelRatio,
+    exact: q('(width > ' + (window.visualViewport.width - 0.01) + 'px) and (width < ' + (window.visualViewport.width + 0.01) + 'px)'),
+    sheetQ: q('(width >= 480px)'), shellQ: q('(width >= 768px)'), oldMax479: q('(max-width: 479px)'), oldMin480: q('(min-width: 480px)'), oldMax767: q('(max-width: 767px)'), oldMin768: q('(min-width: 768px)'),
+    dataSheet: document.querySelector('[data-sheet]')?.getAttribute('data-sheet') ?? 'none',
+    formTitle: vis('.form-head .form-title'), pageH1: vis('.page-head h1'), tabs: st('.shell-tabs', 'display'), nav: st('.shell-nav', 'display'),
+    workbarMargin: st('.workbar', 'margin-left'), paperRadius: st('[data-paper="timesheet"]', 'border-top-left-radius'), paperMargin: st('[data-paper="timesheet"]', 'margin-left'),
+    weekOverflow: st('.sheet-week', 'overflow-x'), barClock: vis('.bar-clock'), titleClock: vis('.page-head .clock-group'),
+    cardArrangement: prev && today ? (Math.abs(prev.top - today.top) < 2 ? 'wide' : 'narrow') : 'unknown', cardWidth: card ? card.getBoundingClientRect().width : -1,
+    scroll: document.documentElement.scrollWidth + '/' + document.documentElement.clientWidth,
+  };
+})()`;
+
+test('fractional widths at a forced device scale factor', async ({ page, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop browser only');
+  test.setTimeout(240_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const seed = await seedA5(builtServer, 'Synthetic Frac Person');
+  await signInTo(page, builtServer, seed.person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const cdp = await page.context().newCDPSession(page);
+  const { windowId } = (await cdp.send('Browser.getWindowForTarget')) as { windowId: number };
+  const measureAt = async (width: number) => {
+    await cdp.send('Browser.setWindowBounds', { windowId, bounds: { width, height: 900, windowState: 'normal' } });
+    await page.waitForFunction(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))));
+    return page.evaluate<Record<string, unknown>>(STATE);
+  };
+  // The window bounds are not in CSS px; find the window width for each target by a secant search, then a short linear scan.
+  const s1 = await measureAt(1000);
+  const s2 = await measureAt(1400);
+  const slope = ((s2.vvw as number) - (s1.vvw as number)) / 400;
+  note(F, `scale ${SCALE}: window 1000 -> ${s1.vvw}, 1400 -> ${s2.vvw}, slope ${slope.toFixed(4)} CSS px per window unit`);
+  for (const css of [478.67, 479.33, 479.6, 480, 480.67, 767.2, 767.33, 767.6, 768, 768.67, 929.33, 930]) {
+    let width = Math.round(1000 + (css - (s1.vvw as number)) / slope);
+    let state: Record<string, unknown> = await measureAt(width);
+    for (let i = 0; i < 8 && Math.abs((state.vvw as number) - css) >= 0.1; i += 1) {
+      const step = Math.round((css - (state.vvw as number)) / slope);
+      width += step === 0 ? (css > (state.vvw as number) ? 1 : -1) : step;
+      state = await measureAt(width);
+    }
+    const sheetSide = (state.dataSheet === 'desktop') === (state.sheetQ as boolean);
+    note(F, `scale ${SCALE} target ${css} window ${width}px -> ${JSON.stringify(state)} | data-sheet follows SHEET_QUERY: ${sheetSide}`);
+  }
+});

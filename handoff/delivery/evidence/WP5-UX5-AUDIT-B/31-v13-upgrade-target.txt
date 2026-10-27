@@ -1,0 +1,100 @@
+PASS database starts at schema 13
+PASS no revision_sends table before
+cli migrate exit 0 stdout {"database":"<task>","applied":[14,15],"version":15} stderr
+PASS cli migrate applies 14 and 15 in one call
+PASS table attachments unchanged (7 rows)
+PASS table audit_events unchanged (44 rows)
+PASS table auth_sessions unchanged (0 rows)
+PASS table bootstrap_state unchanged (0 rows)
+PASS table calendar_versions unchanged (1 rows)
+PASS table calendars unchanged (1 rows)
+PASS table day_entries unchanged (8 rows)
+PASS table delivery_attempts unchanged (6 rows)
+PASS table imports unchanged (0 rows)
+PASS table job_retention_window unchanged (1 rows)
+PASS table jobs unchanged (13 rows)
+PASS table operations_state unchanged (1 rows)
+PASS table ot_leave_requests unchanged (1 rows)
+PASS table ot_ledger unchanged (7 rows)
+PASS table pay_periods unchanged (3 rows)
+PASS table payroll_exceptions unchanged (0 rows)
+PASS table reminder_occurrences unchanged (0 rows)
+PASS table revision_ledger_lines unchanged (7 rows)
+PASS table session_breaks unchanged (3 rows)
+PASS table timesheet_revisions unchanged (6 rows)
+PASS table timesheet_shares unchanged (0 rows)
+PASS table timesheets unchanged (5 rows)
+PASS table users unchanged (3 rows)
+PASS table work_policies unchanged (3 rows)
+PASS table work_sessions unchanged (8 rows)
+PASS signoffs rows copied with rowids, unchanged | 5 rows
+PASS submission_settings versions kept, show_time_on_pdf = 1 | 3 rows
+PASS revision_files: same rows and rowids
+PASS revision_files 28bc1345 variant t1o1 (snapshot show_ot_on_pdf true)
+PASS revision_files 5ee00b9a variant t1o1 (snapshot show_ot_on_pdf true)
+PASS revision_files b242edd9 variant t1o1 (snapshot show_ot_on_pdf true)
+PASS revision_files 8eb75dbc variant t1o0 (snapshot show_ot_on_pdf false)
+PASS revision_files 280ff0bb variant t1o0 (snapshot show_ot_on_pdf false)
+PASS both derived variants present (t1o1 and t1o0) | t1o1,t1o0
+PASS one revision_sends row per existing send job | 7 sends / 7 jobs
+PASS send of job revision:<rev>:send_email:initial (succeeded) | send_no 1 origin employee variant t1o1
+PASS send of job revision:<rev>:send_email:initial (intervention) | send_no 1 origin employee variant t1o1
+PASS send of job revision:<rev>:send_email:initial (intervention) | send_no 1 origin deadline variant t1o1
+PASS send of job revision:<rev>:send_email:initial (succeeded) | send_no 1 origin employee variant t1o0
+PASS send of job revision:<rev>:send_email:resend:2 (queued) | send_no 2 origin employee variant t1o0
+PASS send of job revision:<rev>:send_email:initial (intervention) | send_no 1 origin employee variant t1o0
+PASS send of job revision:<rev>:send_email:initial (queued) | send_no 1 origin employee variant t1o1
+PASS every trigger of schema 13 still exists | missing ; before 66, after 69
+PASS only the image-kind and revision-file identity triggers changed text | revision_files_identity,signoffs_image_kind
+PASS new trigger revision_sends_job
+PASS new trigger revision_sends_no_update
+PASS new trigger revision_sends_no_delete
+PASS identity trigger freezes the variant
+PASS image-kind trigger skips a null image
+PASS integrity_check ok
+PASS foreign_key_check empty
+PASS foreign_keys on
+PASS user_version 15
+PASS revision_sends update refused
+PASS revision_sends delete refused
+PASS signoffs update refused
+PASS image-kind trigger refuses a pdf attachment as the signature image
+PASS reason rule counts the accepted pre-upgrade copy (A)
+PASS reason rule counts the uncertain pre-upgrade copy (B, automatic)
+PASS reason rule ignores a failed-only period (D)
+PASS queued pre-upgrade send does not count yet (E)
+deadline scan: {"activated":true,"examined":9,"finalized":3,"sentSigned":0,"overdueRecorded":0,"skipped":6,"failed":0,"remaining":false}
+PASS deadline scan sends nothing for the periods sent (or queued, or failed) before the upgrade | 7 -> 7
+PASS deadline scan adds no revision to those periods | 6
+all sends 7 -> 10, revisions 6 -> 9 (other periods auto-finalized)
+PASS send-draft of the failed-only period needs no reason
+PASS send-draft of A rev2 needs a reason (accepted copy of rev1)
+PASS A rev2 without a reason: 422 reason_required | 422:reason_required
+PASS A rev2 with a reason: created | ok:created
+PASS A rev1 (superseded): 409 revision_superseded | 409:revision_superseded
+PASS B (uncertain, undecided): 409 delivery_uncertain | 409:delivery_uncertain
+PASS C (pre-split resend still preparing): 409 delivery_in_progress | 409:delivery_in_progress
+PASS E (backfilled send queued): 409 delivery_in_progress | 409:delivery_in_progress
+PASS D (failed-only) without a reason: created | ok:created
+PASS B resend decision without a reason: 422 reason_required | 422:reason_required
+PASS B resend decision with a reason: done | ok:done
+runner pass 0: {"claimed":12,"succeeded":8,"retried":4,"intervention":0,"lost":0}
+runner pass 1: {"claimed":4,"succeeded":4,"retried":0,"intervention":0,"lost":0}
+runner pass 2: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+runner pass 3: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+PASS C pre-split resend (preparing attempt reused) sent after the upgrade: accepted | accepted
+PASS E queued pre-upgrade send: accepted | accepted
+PASS E message envelope = the snapshot recipients (backfilled row) | {"from":"timesheet@example.invalid","to":["payroll@example.invalid","manager@example.invalid"]}
+PASS E message subject = snapshot subject | Timesheet 2026-09-28 to 2026-10-11 - Example Employee Two - Submitted
+PASS E Message-ID @timesheet.invalid
+PASS E pre-split PDF job (no variant) rendered the sign-off default t1o1 | [{"variant":"t1o1","state":"ready"}]
+PASS A rev2 reasoned send: accepted | accepted
+PASS the reason is stored on the send
+PASS the reason is not in the email
+PASS the reason is in the revision.send audit event | ["Probe reason: payroll asked for another copy"]
+PASS D send accepted
+PASS B resend decision created send 2 with the reason, sent
+PASS integrity_check ok at the end
+PASS foreign_key_check empty at the end
+failures: 0
+exit=0

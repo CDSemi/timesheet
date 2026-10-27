@@ -1,0 +1,73 @@
+/*
+ * WP5-UX5-AUDIT-B probe for mutant M11 (reason appended to the stored body text): does the reason reach the captured
+ * message, and how is it encoded? Run only while M11 is applied (m11-wrapper.mjs). Usage: node m11-eml.ts <workDir> <out.txt>
+ */
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { openDatabase } from '../export/src/server/db/database.ts';
+import { migrate } from '../export/src/server/db/migrations.ts';
+import { FileStore } from '../export/src/server/files/fileStore.ts';
+import { seedSynthetic } from '../export/src/server/seed.ts';
+import { createSession } from '../export/src/server/services/timesheetCommands.ts';
+import { buildReviewPayload } from '../export/src/server/services/reviewPayload.ts';
+import { signOffTimesheet } from '../export/src/server/services/finalization.ts';
+import { sendDraft, sendRevision } from '../export/src/server/services/deliveries.ts';
+import { createPdfJobHandler } from '../export/src/server/jobs/pdfJob.ts';
+import { createSendJobHandler } from '../export/src/server/jobs/sendJob.ts';
+import { runJobsOnce } from '../export/src/server/jobs/runner.ts';
+import { captureFolder, createCaptureAdapter } from '../export/src/server/mail/captureAdapter.ts';
+
+const [work, outPath] = process.argv.slice(2);
+if (work === undefined || outPath === undefined) throw new Error('usage');
+mkdirSync(work, { recursive: true });
+class MutableClock {
+  current: Date;
+  constructor(iso: string) {
+    this.current = new Date(iso);
+  }
+  now(): Date {
+    return new Date(this.current.getTime());
+  }
+  set(iso: string): void {
+    this.current = new Date(iso);
+  }
+}
+const LA = 'America/Los_Angeles';
+const db = openDatabase(join(work, 'probe.db'));
+migrate(db);
+const clock = new MutableClock('2026-09-29T20:00:00Z');
+const dataDir = join(work, 'private-data');
+const files = new FileStore(dataDir);
+await seedSynthetic(db, clock, { files, passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass', employee2: 'synthetic-employee2-pass' }, sampleData: true });
+const row = db.prepare("SELECT id, email, display_name, calendar_id FROM users WHERE email = 'employee2@example.invalid'").get() as Record<string, string>;
+const user = { id: row.id, email: row.email, displayName: row.display_name, role: 'employee' as const, calendarId: row.calendar_id, sessionId: 'probe' };
+createSession({ db, clock, user } as never, '2026-09-02', { start: { local: '2026-09-02T09:00', zone: LA }, end: { local: '2026-09-02T19:00', zone: LA }, input_zone: LA, breaks_confirmed: true, breaks: [], reason: 'Synthetic entry' } as never);
+const review = buildReviewPayload(db, clock, user, '2026-09-18');
+const signed = signOffTimesheet({ db, clock, user }, '2026-09-18', { expectedVersion: review.expectedVersion, reviewedHash: review.payloadHash, deficitChoices: [], incompleteEvidenceAcknowledged: true });
+const handlers = {
+  render_pdf: createPdfJobHandler({ db, clock, files }),
+  send_email: createSendJobHandler({ db, clock, files, outbound: createCaptureAdapter(dataDir), senderAddress: 'timesheet@example.invalid' }),
+};
+const drain = async () => {
+  for (let pass = 0; pass < 3; pass += 1) {
+    await runJobsOnce({ db, clock, handlers });
+    clock.set(new Date(clock.now().getTime() + 120_000).toISOString());
+  }
+};
+const send = (key: string, reason?: string) => {
+  const draft = sendDraft(db, user, signed.revision.id, null);
+  return sendRevision({ db, clock, user }, signed.revision.id, { requestKey: key, to: draft.envelope.to, cc: draft.envelope.cc, subject: draft.envelope.subject, bodyText: draft.envelope.bodyText, timeRows: draft.rows.time, otRows: draft.rows.ot, reason });
+};
+send('probe-m11-0001');
+await drain();
+send('probe-m11-0002', 'Payroll asked for the copy again');
+await drain();
+const attempts = db.prepare("SELECT id FROM delivery_attempts WHERE state = 'accepted' ORDER BY started_at").pluck().all() as string[];
+const out: string[] = [`attempts ${attempts.length}`];
+for (const attempt of attempts) {
+  const eml = readFileSync(join(captureFolder(dataDir, attempt), 'message.eml'), 'utf8');
+  const stored = db.prepare('SELECT s.body_text FROM revision_sends s JOIN delivery_attempts a ON a.job_id = s.job_id WHERE a.id = ?').pluck().get(attempt) as string;
+  out.push(`attempt: stored body has the reason=${stored.includes('asked for the copy again')}; eml contains the literal phrase=${eml.includes('asked for the copy again')}; eml contains "Reason"=${eml.includes('Reason')}`);
+  out.push(`  eml lines with Reason/copy: ${JSON.stringify(eml.split('\r\n').filter((line) => /Reason|copy/.test(line)))}`);
+}
+writeFileSync(outPath, `${out.join('\n')}\n`);

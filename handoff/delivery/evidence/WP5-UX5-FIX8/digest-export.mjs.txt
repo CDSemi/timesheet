@@ -1,0 +1,23 @@
+// Usage: node digest-export.mjs <exportDir> <fileListFile>
+// The digest of scripts/source-digest.mjs for a clean export that has no .git: the same sorted "<path> <blob>\n" lines and SHA-256, with the
+// (core.autocrlf=input stands in for the repository's .gitattributes eol=lf normalization, which a folder without .git does not read)
+// file list given (tracked + untracked non-ignored files outside handoff/ of the repository) and the blob IDs from git hash-object.
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+
+const [dir, listFile] = process.argv.slice(2);
+const files = [...new Set(readFileSync(listFile, 'utf8').split('\n'))]
+  .filter((path) => path !== '' && !path.startsWith('handoff/'))
+  .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+const blobs = execFileSync('git', ['-c', 'core.autocrlf=input', 'hash-object', '--stdin-paths'], {
+  cwd: dir,
+  input: `${files.join('\n')}\n`,
+  encoding: 'utf8',
+  maxBuffer: 64 * 1024 * 1024,
+})
+  .trim()
+  .split('\n');
+if (blobs.length !== files.length) throw new Error('unexpected blob count');
+const lines = files.map((path, index) => `${path} ${blobs[index]}\n`).join('');
+console.log(`${createHash('sha256').update(lines).digest('hex')}  (${files.length} files, handoff/ excluded)`);

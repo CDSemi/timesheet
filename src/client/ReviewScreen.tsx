@@ -275,7 +275,7 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
           Pay period <b>{description.start}</b>
           <span className="range-arrow" aria-hidden="true">
             {' '}
-            {'->'}{' '}
+            {'→'}{' '}
           </span>
           <span className="sr-only"> to </span>
           <b>{description.end}</b> · payroll date <b>{description.payroll}</b> · due <b>{description.due}</b> ({description.zone})

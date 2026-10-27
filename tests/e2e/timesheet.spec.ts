@@ -1122,10 +1122,12 @@ for (const width of [390, 375, 360, 320]) {
     await expect(page.locator('[data-day]')).toHaveCount(14);
     await expect(page.locator('[data-sheet="phone"]')).toHaveCount(1);
     await page.getByRole('switch', { name: 'Worked hours' }).check();
-    await page.getByRole('button', { name: 'Change several days' }).click();
+    // Named by the words it shows: "Change days" at 320px, "Change several days" where the toolbar row holds it.
+    const changeDays = page.getByRole('button', { name: /^Change (several )?days$/ });
+    await changeDays.click();
     await page.getByLabel(`Select ${first}`).check();
     await expectNoSidewaysScroll(page, `selected, details on, ${width}px`);
-    await page.getByRole('button', { name: 'Change several days' }).click();
+    await changeDays.click();
     await openDay(page, first);
     await expectMarkedOnly(page, first);
     await expectNoSidewaysScroll(page, `editing frame with the details row, ${width}px`);
@@ -2222,7 +2224,7 @@ test.describe('the compact toolbar rows (U5-17, U5-17b)', () => {
     overflow: number;
   }
 
-  test('"Change several days": right-aligned beside the switch, "Change days" when there is no room, its own full-width row below that, "Change / days" on two lines when narrower still (below 104.7px); 44px high and named "Change several days"', async ({
+  test('"Change several days": right-aligned beside the switch, "Change days" when there is no room, its own full-width row below that, "Change / days" on two lines when narrower still (below 104.7px); 44px high and named by the words it shows', async ({
     page,
     signInThroughUi,
   }) => {
@@ -2285,12 +2287,15 @@ test.describe('the compact toolbar rows (U5-17, U5-17b)', () => {
     expect(oneLine.shortHeight, `${toolbarRound(shortWidth + 1)}px: "Change days" on one line`).toBeLessThan(oneLine.lineHeight * 1.4);
     expect(twoLines.shortHeight, `${toolbarRound(shortWidth - 1)}px: "Change / days" on two lines`).toBeGreaterThan(twoLines.lineHeight * 1.7);
     expect(Math.abs(twoLines.height - 44), `${toolbarRound(shortWidth - 1)}px: still 44px high`).toBeLessThanOrEqual(0.5);
-    // The name never changes.
-    await read(250);
-    await expect(page.getByRole('button', { name: 'Change several days', exact: true })).toHaveCount(1);
-    await read(100);
-    await expect(page.getByRole('button', { name: 'Change several days', exact: true })).toHaveCount(1);
-    await expect(page.getByRole('button', { name: 'Change several days', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    // The name is the visible words (WCAG 2.2 SC 2.5.3 Label in Name): the full form names it "Change several days" and the short form
+    // "Change days"; a name that is not the visible text (an aria-label of the long form on the short one) would fail it.
+    const named = (name: 'Change several days' | 'Change days') => page.getByRole('button', { name, exact: true });
+    for (const [width, long] of [[358, true], [288, false], [250, true], [130, false], [100, false]] as const) {
+      await read(width);
+      await expect(named(long ? 'Change several days' : 'Change days'), `${width}px: the name is the visible words`).toHaveCount(1);
+      await expect(named(long ? 'Change days' : 'Change several days'), `${width}px: the other form is not the name`).toHaveCount(0);
+    }
+    await expect(named('Change days')).toHaveAttribute('aria-pressed', 'false');
   });
 });
 
@@ -2624,6 +2629,31 @@ test.describe('the range ladder (U5-13)', () => {
       await check();
     }
     expect([...seen].sort(), 'a one-month, a two-month and a two-year range were checked').toEqual(['cross-month', 'cross-year', 'same-month']);
+  });
+
+  // The two last forms ("10/12 → 25" and "10/12→25") need a range box under 7.3em and 5.75em (about 115px and 91px), which no phone gives
+  // (the narrowest box is about 258px at 320px). A forced width stands in for the screen, as the toolbar tests force their row.
+  test('the last two forms of a same-month range show in a box far narrower than any phone', async ({ page, signInThroughUi }) => {
+    test.setTimeout(120_000);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.setViewportSize({ width: 390, height: 900 });
+    for (let step = 0; step < 14 && (await page.locator('.period-name').getAttribute('data-range-kind')) !== 'same-month'; step += 1) {
+      await page.getByRole('button', { name: 'Next period' }).click();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+    }
+    await expect(page.locator('.period-name')).toHaveAttribute('data-range-kind', 'same-month');
+    for (const [width, form] of [[130, 'no-years'], [105, 'end-day'], [80, 'tight']] as const) {
+      await setRowWidth(page, '.period-title', width);
+      const state = await rangeState(page);
+      const dates = /^(\d{2})\/(\d{2})\/(\d{4}) to (\d{2})\/(\d{2})\/(\d{4})$/.exec(state.spoken);
+      expect(dates, `${width}px: the accessible text is the full dates with "to" (${state.spoken})`).not.toBeNull();
+      const [, startMonth, startDay, startYear, endMonth, endDay, endYear] = dates ?? [];
+      const start = `${startYear}-${startMonth}-${startDay}`;
+      const end = `${endYear}-${endMonth}-${endDay}`;
+      expect(state.box, `${width}px: the range box has the forced width`).toBeCloseTo(width, 0);
+      expect(state.text, `${width}px: the ${form} form shows`).toBe(rangeText(start, end, form));
+    }
   });
 });
 

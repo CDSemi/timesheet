@@ -335,23 +335,27 @@ function drawCategory(canvas: Canvas, day: SnapshotDay, x: number, layout: WeekL
   const category = cleanText(day.category ?? '');
   const holiday = day.holiday_name !== null ? cleanText(day.holiday_name) : '';
   const leave = day.leave_minutes > 0 ? `Leave ${formatHoursMinutes(day.leave_minutes)}` : '';
-  const subText = [holiday, leave].filter((part) => part !== '').join(' ');
+  // Leave is payroll data and keeps its own whole line; a holiday name only repeats the calendar, so on a day with both it is
+  // shrunk to one line and cut first (F-UX5B-3). A day with only one of them is laid out exactly as before.
+  const both = holiday !== '' && leave !== '';
+  const subText = both ? holiday : [holiday, leave].filter((part) => part !== '').join(' ');
   const face = canDraw(fonts.hand, category) ? fonts.hand : fonts.italic;
   const measureFace = (target: Face) => (text: string, size: number) => target.font.widthOfTextAtSize(text, size);
   const primary = category === '' ? { lines: [] as string[], size: 13 } : fitText(printable(face, category), face === fonts.hand ? 13 : 12, 8, width, subText === '' ? 2 : 1, measureFace(face));
-  const sub = subText === '' ? { lines: [] as string[], size: 7 } : fitText(printable(fonts.sans, subText), 7, 5, width, 2, measureFace(fonts.sans));
+  const fitted = subText === '' ? { lines: [] as string[], size: 7 } : fitText(printable(fonts.sans, subText), 7, 5, width, both ? 1 : 2, measureFace(fonts.sans));
+  const sub = fitted.lines.map((line) => ({ text: line, size: fitted.size }));
+  if (both) sub.push({ text: leave, size: 7 });
   const primaryLine = 15;
-  const subLine = sub.size * 1.2;
-  const block = primary.lines.length * primaryLine + sub.lines.length * subLine + (primary.lines.length > 0 && sub.lines.length > 0 ? 2 : 0);
+  const block = primary.lines.length * primaryLine + sub.reduce((sum, line) => sum + line.size * 1.2, 0) + (primary.lines.length > 0 && sub.length > 0 ? 2 : 0);
   let cursor = layout.category.top + (layout.category.height - block) / 2;
   for (const line of primary.lines) {
     canvas.centered(face, line, centerX, cursor + primaryLine * 0.8, primary.size);
     cursor += primaryLine;
   }
-  if (primary.lines.length > 0 && sub.lines.length > 0) cursor += 2;
-  for (const line of sub.lines) {
-    canvas.centered(fonts.sans, line, centerX, cursor + sub.size * 0.9, sub.size, MUTED);
-    cursor += subLine;
+  if (primary.lines.length > 0 && sub.length > 0) cursor += 2;
+  for (const line of sub) {
+    canvas.centered(fonts.sans, line.text, centerX, cursor + line.size * 0.9, line.size, MUTED);
+    cursor += line.size * 1.2;
   }
 }
 

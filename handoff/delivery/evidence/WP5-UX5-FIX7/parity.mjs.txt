@@ -1,0 +1,34 @@
+// EN/VI structure parity of the changed document pairs: the same heading sequence (levels) and the same list structure per line.
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [repo, outPath] = process.argv.slice(2);
+const pairs = ['03_ARCHITECTURE_AND_DATA', '04_UX_AND_SETTINGS', '05_SUBMISSION_AND_NOTIFICATIONS', '10_DECISIONS_AND_SOURCES', '12_RELEASE_NOTES'];
+const shape = (text) =>
+  text.split('\n').map((line) => {
+    const heading = /^(#{1,6})\s/.exec(line);
+    if (heading) return `H${heading[1].length}`;
+    const item = /^(\s*)([-*]|\d+\.)\s/.exec(line);
+    if (item) return `L${item[1].length}${/\d/.test(item[2]) ? 'n' : 'b'}`;
+    if (line.trim() === '') return '_';
+    if (line.startsWith('|')) return 'T';
+    return 'P';
+  });
+const lines = [];
+let bad = 0;
+for (const name of pairs) {
+  const en = shape(readFileSync(join(repo, 'docs', `${name}.md`), 'utf8'));
+  const vi = shape(readFileSync(join(repo, 'docs', `${name}.vi.md`), 'utf8'));
+  const headings = (s) => s.filter((x) => x.startsWith('H')).join(',');
+  const same = en.length === vi.length && en.every((x, i) => x === vi[i]);
+  const sameHeadings = headings(en) === headings(vi);
+  const lists = (s) => s.filter((x) => x.startsWith('L')).length;
+  lines.push(`${name}: lines EN ${en.length} VI ${vi.length}; headings ${en.filter((x) => x.startsWith('H')).length}/${vi.filter((x) => x.startsWith('H')).length} same sequence ${sameHeadings}; list items ${lists(en)}/${lists(vi)}; line-by-line shape identical ${same}`);
+  if (!same) {
+    bad += 1;
+    const at = en.findIndex((x, i) => x !== vi[i]);
+    lines.push(`  first difference at line ${at + 1}: EN ${en[at]} VI ${vi[at]}`);
+  }
+}
+lines.push(`pairs with a structural difference: ${bad}`);
+writeFileSync(outPath, `${lines.join('\n')}\n`);

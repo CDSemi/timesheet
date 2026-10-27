@@ -1,0 +1,59 @@
+M3 the reason rule is checked outside the send transaction (POST /send path only): exit 0, 2374 passed (2374), 48 s; SURVIVED; restored byte-identical
+M6 only the CURRENT revision having a send counts as submitted (a correction after a sent copy is sent at the deadline, reminders resume): exit 1, 1 failed | 2373 passed (2374), 49 s; KILLED | e.g. tests/integration/ac13-two-week.test.ts > AC-13 integrated scenario > runs two weeks of entries, sign-off, send, restart, correction, partial OT use, is; restored byte-identical
+M12 the sign-off's own PDF follows the Settings time switch (t0 when off) instead of the sign-off default: exit 1, 6 failed | 2350 passed | 18 skipped (2374), 50 s; KILLED | e.g. tests/integration/restore.test.ts > restore of a pre-pause backup without upgrading it (rollback) || tests/integration/restore.test.ts > restore of a pre-pause backup without upgrading it (rollback) || tests/integration/upgrade.test.ts > upgrade of a populated schema 6 database to the latest schema (AC-11) || tests/integration/upgrade.test.ts > upgrade of a populated schema 6 database to the latest schema (AC-11); restored byte-identical
+M16 the resend decision on an uncertain attempt no longer needs a reason (its own check removed): exit 0, 2374 passed (2374), 53 s; SURVIVED; restored byte-identical
+M12b the sign-off's own PDF follows the Settings time switch (t0 when off), schema-safe (no column on old schemas = default): exit 0, 2374 passed (2374), 57 s; SURVIVED; restored byte-identical
+=== M6 full
+     × runs two weeks of entries, sign-off, send, restart, correction, partial OT use, isolation and an overdue deadline 3295ms
+ FAIL  tests/integration/ac13-two-week.test.ts > AC-13 integrated scenario > runs two weeks of entries, sign-off, send, restart, correction, partial OT use, isolation and an overdue deadline
+AssertionError: expected [ { payrollDate: '2026-10-09', …(3) } ] to deeply equal []
+- Expected
++ Received
+=== M12 full
+     × red-first: upgrades a fully populated version 12 database keeping every row, rowid, foreign key, index and trigger 713ms
+     × checks foreign keys before the commit: a violation rolls the whole rebuild back and restores the pragma 726ms
+     × upgrades a populated version 13 database: rows copied unchanged, the triggers still refuse update and delete, a null image only through the new path 626ms
+     × checks foreign keys before the commit: a dangling sign-off image rolls the rebuild back and restores the pragma 640ms
+     × upgrades a populated version 14 database: rows kept, variants derived, one send record per send job, triggers intact 741ms
+     × a revision sent before the upgrade counts as sent: the deadline scan skips it and the reason rule counts it 764ms
+ FAIL  tests/integration/restore.test.ts > restore of a pre-pause backup without upgrading it (rollback)
+SqliteError: no such column: show_time_on_pdf
+ FAIL  tests/integration/restore.test.ts > restore of a pre-pause backup without upgrading it (rollback)
+TypeError: Cannot read properties of undefined (reading 'close')
+ FAIL  tests/integration/upgrade.test.ts > upgrade of a populated schema 6 database to the latest schema (AC-11)
+SqliteError: no such column: show_time_on_pdf
+ FAIL  tests/integration/upgrade.test.ts > upgrade of a populated schema 6 database to the latest schema (AC-11)
+TypeError: Cannot read properties of undefined (reading 'close')
+ FAIL  tests/integration/upgrade.test.ts > migrations 0011 to 0013 on a populated schema 6 database (job retention, imports, opening balance)
+SqliteError: no such column: show_time_on_pdf
+ FAIL  tests/integration/upgrade.test.ts > migrations 0011 to 0013 on a populated schema 6 database (job retention, imports, opening balance)
+TypeError: Cannot read properties of undefined (reading 'close')
+ FAIL  tests/integration/upgrade.test.ts > a failed upgrade of a populated schema 6 database
+SqliteError: no such column: show_time_on_pdf
+ FAIL  tests/integration/migrations.test.ts > migration 0013 opening balance (ot_ledger rebuild, F-3) > red-first: upgrades a fully populated version 12 database keeping every row, rowid, foreign key, index and trigger
+SqliteError: no such column: show_time_on_pdf
+ FAIL  tests/integration/migrations.test.ts > migration 0013 opening balance (ot_ledger rebuild, F-3) > checks foreign keys before the commit: a violation rolls the whole rebuild back and restores the pragma
+SqliteError: no such column: show_time_on_pdf
+ FAIL  tests/integration/migrations.test.ts > migration 0014 optional sign-off image (signoffs rebuild, F-5 b) > upgrades a populated version 13 database: rows copied unchanged, the triggers still refuse update and delete, a null image only through the new path
+SqliteError: no such column: show_time_on_pdf
+ FAIL  tests/integration/migrations.test.ts > migration 0014 optional sign-off image (signoffs rebuild, F-5 b) > checks foreign keys before the commit: a dangling sign-off image rolls the rebuild back and restores the pragma
+SqliteError: no such column: show_time_on_pdf
+ FAIL  tests/integration/migrations.test.ts > migration 0015 sends and PDF variants (WP5-UX5-T01b) > upgrades a populated version 14 database: rows kept, variants derived, one send record per send job, triggers intact
+SqliteError: no such column: show_time_on_pdf
+15-
+16- FAIL  tests/integration/ac13-two-week.test.ts > AC-13 integrated scenario > runs two weeks of entries, sign-off, send, restart, correction, partial OT use, isolation and an overdue deadline
+17:AssertionError: expected [ { payrollDate: '2026-10-09', …(3) } ] to deeply equal []
+18-
+19-- Expected
+20-+ Received
+21-
+22-- []
+23-+ [
+24-+   {
+25-+     "dueAt": "2026-10-09T00:00:00Z",
+26-+     "payrollDate": "2026-10-09",
+27-+     "reason": "auto_submit_off",
+28-+     "recordedAt": "2026-10-09T00:05:00Z",
+29-+   },
+30-+ ]
+31-

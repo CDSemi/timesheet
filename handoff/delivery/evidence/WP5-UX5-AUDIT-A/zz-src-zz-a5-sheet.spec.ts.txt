@@ -1,0 +1,216 @@
+import type { Page } from '@playwright/test';
+import { expect, screenshotPath, test } from './fixtures.ts';
+import { box, css, note, pageScroll, seedA5, setWidth, settle, signInTo } from './zz-a5lib.ts';
+
+/*
+ * WP5-UX5-AUDIT-A probe S: the Timesheet page geometry (period card, range ladder, header wrap, toolbar, week bar, compact edges,
+ * Today spacing, worked lines, ranges) measured from the browser's layout. Task-local; never part of the repository.
+ */
+const F = 'sheet.txt';
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const CARD = `(() => {
+  const b = (s) => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height }; };
+  const pills = [...document.querySelectorAll('.period-pills .badge')].map((e) => e.getBoundingClientRect());
+  const last = pills[pills.length - 1];
+  const card = document.querySelector('.period-bar');
+  const cs = card ? getComputedStyle(card) : null;
+  const parts = [...document.querySelectorAll('.period-name > span')].map((e) => {
+    const r = e.getBoundingClientRect(); const s = getComputedStyle(e);
+    const hidden = e.classList.contains('sr-only') || s.display === 'none' || r.width <= 1.01 || (s.clipPath && s.clipPath !== 'none') || s.position === 'absolute';
+    return hidden ? '' : e.textContent;
+  }).join('');
+  const meta = document.querySelector('.period-meta');
+  const ms = meta ? getComputedStyle(meta) : null;
+  return { card: b('.period-bar'), padL: cs ? parseFloat(cs.paddingLeft) : 0, padR: cs ? parseFloat(cs.paddingRight) : 0, prev: b('.period-bar > .period-step'), name: b('.period-name'),
+    lastPill: last ? { t: last.top, b: last.bottom } : null, next: b('.period-actions > .period-step'), today: b('[data-period-today]'), current: b('[data-period-current]'),
+    review: b('[data-review-link]'), meta: b('.period-meta'), metaBorder: ms ? ms.borderTopWidth + ' ' + ms.borderTopStyle + ' pt=' + ms.paddingTop + ' mt=' + ms.marginTop : '',
+    visible: parts, text: document.querySelector('.period-name')?.textContent ?? '', reviewText: (document.querySelector('[data-review-link]')?.textContent ?? '').trim(),
+    reviewPrimary: document.querySelector('[data-review-link]')?.getAttribute('data-review-primary') ?? 'no' };
+})()`;
+
+const HEAD = `(() => {
+  const b = (e) => { const r = e.getBoundingClientRect(); return { t: Math.round(r.top), b: Math.round(r.bottom), l: Math.round(r.left), w: Math.round(r.width), h: Math.round(r.height) }; };
+  const title = document.querySelector('.form-head .form-title');
+  const fields = document.querySelector('.form-head .form-fields');
+  const groups = [...document.querySelectorAll('.form-head .form-fields > div')].map((g) => b(g));
+  const lh = title ? parseFloat(getComputedStyle(title).lineHeight) || 18 : 18;
+  return { title: title ? b(title) : null, titleLines: title ? Math.round(title.getBoundingClientRect().height / lh) : 0, titleVisible: title ? title.checkVisibility() : false, fields: fields ? b(fields) : null, groups };
+})()`;
+
+const TOOLS = `(() => {
+  const b = (s) => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { l: Math.round(r.left * 10) / 10, r: Math.round(r.right * 10) / 10, t: Math.round(r.top), b: Math.round(r.bottom), w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 }; };
+  const shown = (s) => { const e = document.querySelector(s); return e ? getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0 : false; };
+  return { row: b('.tools-right'), sw: b('.tools-right > label.switch'), btn: b('.change-days'), longShown: shown('.change-days-long'), shortShown: shown('.change-days-short'),
+    open: b('.open-day'), field: b('.open-day input'), obtn: b('.open-day button'), openLong: shown('.open-day-long'), openShort: shown('.open-day-short'), openText: shown('.open-day-text') };
+})()`;
+
+async function weekBars(page: Page) {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    for (const week of document.querySelectorAll<HTMLElement>('.sheet-week')) {
+      const bar = week.querySelector('.week-bar');
+      const grid = week.querySelector('.week-grid');
+      if (bar === null || grid === null) continue;
+      const before = `${bar.getBoundingClientRect().width.toFixed(1)}/${grid.getBoundingClientRect().width.toFixed(1)}`;
+      week.scrollLeft = week.scrollWidth;
+      const br = bar.getBoundingClientRect();
+      const gr = grid.getBoundingClientRect();
+      out.push(`scrollable=${week.scrollWidth > week.clientWidth} bar/grid before ${before} after scroll ${br.width.toFixed(1)}/${gr.width.toFixed(1)} right ${br.right.toFixed(1)}/${gr.right.toFixed(1)}`);
+      week.scrollLeft = 0;
+    }
+    return out.join(' | ');
+  });
+}
+
+test('timesheet geometry, desktop widths', async ({ page, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop sweep');
+  test.setTimeout(300_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const seed = await seedA5(builtServer, 'Synthetic Sheet Desk');
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await signInTo(page, builtServer, seed.person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  note(F, `seed displayed period ${seed.dates[0]}..${seed.dates[13]}, today ${seed.person.todayLocal}`);
+  for (const width of [1440, 1280, 1100, 900, 770, 768, 767, 700, 632, 631, 600, 520, 480]) {
+    await setWidth(page, width, 1000);
+    const c = await page.evaluate<Record<string, unknown>>(CARD);
+    const card = c.card as { l: number; r: number; t: number } | null;
+    const prev = c.prev as { l: number; r: number; t: number; b: number } | null;
+    const next = c.next as { l: number; r: number; t: number; b: number } | null;
+    const name = c.name as { l: number; r: number; t: number } | null;
+    const today = c.today as { l: number; t: number } | null;
+    const review = c.review as { r: number; t: number } | null;
+    const lastPill = c.lastPill as { t: number; b: number } | null;
+    const wide = prev !== null && next !== null && today !== null && Math.abs(today.t - prev.t) < 2;
+    const contentR = (card?.r ?? 0) - (c.padR as number);
+    const parts = [
+      `w=${width}`,
+      wide ? 'WIDE' : 'NARROW',
+      `range "${c.visible as string}"`,
+      `name.t-prev.t=${((name?.t ?? 0) - (prev?.t ?? 0)).toFixed(2)}`,
+      `pill.b-prev.b=${((lastPill?.b ?? 0) - (prev?.b ?? 0)).toFixed(2)}`,
+      `gap prev->name=${((name?.l ?? 0) - (prev?.r ?? 0)).toFixed(1)}`,
+      `gap name->next=${((next?.l ?? 0) - (name?.r ?? 0)).toFixed(1)}`,
+      `today-next=${((today?.l ?? 0) - (next?.r ?? 0)).toFixed(1)}`,
+      `review.r-contentR=${((review?.r ?? 0) - contentR).toFixed(1)}`,
+      `next.r-contentR=${((next?.r ?? 0) - contentR).toFixed(1)}`,
+      `nameCentre-cardCentre=${(((name?.l ?? 0) + (name?.r ?? 0)) / 2 - ((card?.l ?? 0) + (card?.r ?? 0)) / 2).toFixed(1)}`,
+      `review "${c.reviewText as string}" primary=${c.reviewPrimary as string}`,
+      `meta ${c.metaBorder as string}`,
+    ];
+    note(F, `[desk card] ${parts.join(' ')}`);
+    const h = await page.evaluate<Record<string, unknown>>(HEAD);
+    note(F, `[desk head] w=${width} ${JSON.stringify(h)}`);
+    const t = await page.evaluate<Record<string, unknown>>(TOOLS);
+    note(F, `[desk tools] w=${width} ${JSON.stringify(t)}`);
+    note(F, `[desk week] w=${width} ${await weekBars(page)}`);
+    const s = await pageScroll(page);
+    note(F, `[desk scroll] w=${width} page scrollWidth=${s.scrollWidth} clientWidth=${s.clientWidth} ${s.scrollWidth > s.clientWidth ? 'SIDEWAYS' : 'ok'}`);
+    if (width === 1440) {
+      await page.getByRole('switch', { name: 'Worked hours' }).click();
+      await settle(page);
+      await page.screenshot({ path: screenshotPath('a5-timesheet-1440-light-synthetic.png'), fullPage: true });
+      await page.getByRole('switch', { name: 'Worked hours' }).click();
+    }
+    if (width === 600) await page.screenshot({ path: screenshotPath('a5-timesheet-600-light-synthetic.png'), fullPage: true });
+  }
+  // Ranges: the overnight day's cell and the two-session day at 1440 and 480.
+  for (const width of [1440, 900, 480]) {
+    await setWidth(page, width, 1000);
+    const ranges = await page.evaluate(([a, b]) => {
+      const read = (d: string) => [...document.querySelectorAll(`[data-day="${d}"] .cell-range`)].map((e) => `${e.textContent}|lines=${Math.round(e.getBoundingClientRect().height / (parseFloat(getComputedStyle(e).lineHeight) || 16))}`).join(' ; ');
+      return `data-ranges=${document.querySelector('[data-sheet]')?.getAttribute('data-ranges')} overnight=[${read(a)}] two=[${read(b)}]`;
+    }, [seed.overnight, seed.two]);
+    note(F, `[desk ranges] w=${width} ${ranges}`);
+  }
+});
+
+test('timesheet geometry, compact widths', async ({ page, builtServer, isMobile }) => {
+  test.skip(!isMobile, 'phone sweep');
+  test.setTimeout(300_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const seed = await seedA5(builtServer, 'Synthetic Sheet Phone');
+  await signInTo(page, builtServer, seed.person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const width of [479, 430, 390, 375, 360, 340, 320]) {
+    await setWidth(page, width, 844);
+    const edges = await page.evaluate(() => {
+      const r = (s: string) => document.querySelector(s)?.getBoundingClientRect() ?? null;
+      const card = r('.period-bar');
+      const paper = r('[data-paper="timesheet"]');
+      const table = r('.sheet-table');
+      const pc = document.querySelector('[data-paper="timesheet"]');
+      const rad = pc ? getComputedStyle(pc).borderTopLeftRadius : '';
+      return `card ${card?.left.toFixed(1)}..${(window.innerWidth - (card?.right ?? 0)).toFixed(1)} paper ${paper?.left.toFixed(1)}..${(window.innerWidth - (paper?.right ?? 0)).toFixed(1)} radius ${rad} table w ${table?.width.toFixed(1)}`;
+    });
+    note(F, `[phone edges] w=${width} ${edges}`);
+    const c = await page.evaluate<Record<string, unknown>>(CARD);
+    const prev = c.prev as { t: number } | null;
+    const today = c.today as { t: number } | null;
+    note(F, `[phone card] w=${width} range "${c.visible as string}" text "${(c.text as string).replace(/\s+/g, ' ')}" today-below-prev=${((today?.t ?? 0) - (prev?.t ?? 0)).toFixed(1)} review "${c.reviewText as string}"`);
+    const t = await page.evaluate<Record<string, unknown>>(TOOLS);
+    note(F, `[phone tools] w=${width} ${JSON.stringify(t)}`);
+    const s = await pageScroll(page);
+    note(F, `[phone scroll] w=${width} ${s.scrollWidth}/${s.clientWidth} ${s.scrollWidth > s.clientWidth ? 'SIDEWAYS' : 'ok'}`);
+    const names = await page.evaluate(() => {
+      const b = document.querySelector('.change-days');
+      const o = document.querySelector('.open-day button');
+      return `change-days aria-label="${b?.getAttribute('aria-label')}" visible="${[...(b?.querySelectorAll('span') ?? [])].filter((e) => getComputedStyle(e).display !== 'none').map((e) => e.textContent || getComputedStyle(e, '::before').content).join('')}" open aria-label="${o?.getAttribute('aria-label')}"`;
+    });
+    note(F, `[phone names] w=${width} ${names}`);
+  }
+  await setWidth(page, 390, 844);
+  // Ranges on the compact table.
+  const ranges = await page.evaluate(([a, b]) => {
+    const read = (d: string) => [...document.querySelectorAll(`[data-day="${d}"] .cell-range`)].map((e) => `${e.textContent}|h=${e.getBoundingClientRect().height.toFixed(1)}`).join(' ; ');
+    return `data-ranges=${document.querySelector('[data-sheet]')?.getAttribute('data-ranges')} overnight=[${read(a)}] two=[${read(b)}]`;
+  }, [seed.overnight, seed.two]);
+  note(F, `[phone ranges] w=390 ${ranges}`);
+  await setWidth(page, 320, 844);
+  const ranges320 = await page.evaluate(([a, b]) => {
+    const read = (d: string) => [...document.querySelectorAll(`[data-day="${d}"] .cell-range`)].map((e) => `${e.textContent}|h=${e.getBoundingClientRect().height.toFixed(1)}`).join(' ; ');
+    return `data-ranges=${document.querySelector('[data-sheet]')?.getAttribute('data-ranges')} overnight=[${read(a)}] two=[${read(b)}]`;
+  }, [seed.overnight, seed.two]);
+  note(F, `[phone ranges] w=320 ${ranges320}`);
+  // Worked lines on the compact table.
+  await setWidth(page, 390, 844);
+  await page.getByRole('switch', { name: 'Worked hours' }).click();
+  await settle(page);
+  const worked = await page.evaluate((d) => {
+    const row = document.querySelector(`tr[data-day="${d}"]`) ?? document.querySelector(`[data-day="${d}"]`)?.closest('tr');
+    const group = row?.closest('tbody');
+    const detail = group?.querySelector('tr.sheet-detail-row');
+    const td = row?.querySelector('td');
+    const dtd = detail?.querySelector('td');
+    const next = group?.nextElementSibling;
+    return `tbody per day=${document.querySelectorAll('.sheet-table tbody.with-worked').length} rowBottom=${td ? getComputedStyle(td).borderBottomWidth : '?'} detailBottom=${dtd ? getComputedStyle(dtd).borderBottomWidth + ' ' + getComputedStyle(dtd).borderBottomColor : '?'} detailBg=${dtd ? getComputedStyle(dtd).backgroundColor : '?'} detailText="${(detail?.textContent ?? '').replace(/\s+/g, ' ')}" detailIndent=${dtd ? getComputedStyle(dtd).paddingLeft : '?'} nextIsTbody=${next?.tagName}`;
+  }, seed.complete);
+  note(F, `[phone worked] ${worked}`);
+  await page.screenshot({ path: screenshotPath('a5-timesheet-390-worked-light-synthetic.png'), fullPage: true });
+  await page.getByRole('switch', { name: 'Worked hours' }).click();
+  // Today spacing: the period with today.
+  await page.getByRole('button', { name: 'Today' }).click();
+  await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(1);
+  for (const width of [390, 320]) {
+    await setWidth(page, width, 844);
+    const gap = await page.evaluate(() => {
+      const row = document.querySelector('.sheet-table tr.today');
+      const td = row?.querySelector('td');
+      const btn = td?.querySelector('button');
+      const tag = document.querySelector('.today-tag');
+      if (!td || !btn) return 'no today row';
+      const shadow = getComputedStyle(td).boxShadow;
+      const bar = parseFloat(getComputedStyle(td).getPropertyValue('--sheet-today-bar')) || 3;
+      const tr = td.getBoundingClientRect();
+      const br = btn.getBoundingClientRect();
+      const tg = tag?.getBoundingClientRect();
+      return `td.left ${tr.left.toFixed(1)} bar ${bar} button.left ${br.left.toFixed(1)} -> gap after bar ${(br.left - tr.left - bar).toFixed(1)}px; tag.left ${tg?.left.toFixed(1)}; shadow ${shadow}`;
+    });
+    note(F, `[phone today] w=${width} ${gap}`);
+  }
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await setWidth(page, 320, 844);
+  await settle(page);
+  await page.screenshot({ path: screenshotPath('a5-timesheet-320-dark-synthetic.png'), fullPage: false });
+});

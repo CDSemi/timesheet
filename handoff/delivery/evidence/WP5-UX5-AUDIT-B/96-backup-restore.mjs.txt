@@ -1,0 +1,75 @@
+// WP5-UX5-AUDIT-B probe: backup and isolated restore of a database holding PDF variants and send records (target CLI).
+// Usage: node backup-restore.mjs <exportDir> <workDir (http2)> <backupsDir> <restoreDir> <out.txt>
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
+
+const [exportDir, work, backups, restoreDir, outPath] = process.argv.slice(2);
+const require = createRequire(join(exportDir, 'package.json'));
+const Database = require('better-sqlite3');
+const lines = [];
+let failures = 0;
+const check = (name, ok, detail = '') => {
+  if (!ok) failures += 1;
+  lines.push(`${ok ? 'PASS' : 'FAIL'} ${name}${detail === '' ? '' : ` | ${detail}`}`);
+};
+const env = { ...process.env, NODE_ENV: 'development', DATABASE_PATH: join(work, 'timesheet.db'), DATA_DIR: join(work, 'private-data'), OUTBOUND_MODE: 'capture', MAIL_FROM: 'audit-b-sender@example.invalid' };
+delete env.PRODUCTION_SENDING_ENABLED;
+const cli = (args) => {
+  const result = spawnSync(process.execPath, [join(exportDir, 'dist', 'server', 'cli.js'), ...args], { env, encoding: 'utf8', cwd: exportDir });
+  return { status: result.status, output: `${result.stdout}${result.stderr}`.replaceAll(work, '<work>').replaceAll(backups, '<backups>').replaceAll(restoreDir, '<restore>').trim() };
+};
+mkdirSync(backups, { recursive: true });
+const backup = cli(['backup', '--to', backups]);
+check('backup exit 0', backup.status === 0, backup.output.slice(0, 300));
+const name = readdirSync(backups).sort().at(-1);
+mkdirSync(restoreDir, { recursive: true });
+const restore = cli(['restore', '--from', join(backups, name), '--to', restoreDir]);
+check('isolated restore exit 0', restore.status === 0, restore.output.slice(0, 400));
+const rows = (path, sql) => {
+  const db = new Database(path, { readonly: true });
+  try {
+    return db.prepare(sql).all();
+  } finally {
+    db.close();
+  }
+};
+const restoredDbName = readdirSync(restoreDir).find((file) => /\.(db|sqlite)$/.test(file));
+const restoredDb = join(restoreDir, restoredDbName ?? 'missing.db');
+const source = join(work, 'timesheet.db');
+for (const [table, sql] of [
+  ['revision_files', 'SELECT * FROM revision_files ORDER BY rowid'],
+  ['revision_sends', 'SELECT * FROM revision_sends ORDER BY rowid'],
+  ['attachments', "SELECT * FROM attachments WHERE kind = 'pdf' ORDER BY rowid"],
+  ['delivery_attempts', 'SELECT id, job_id, state, envelope_json FROM delivery_attempts ORDER BY rowid'],
+]) {
+  const a = rows(source, sql);
+  const b = rows(restoredDb, sql);
+  check(`restored ${table} rows equal the source (${a.length})`, a.length > 0 && isDeepStrictEqual(a, b));
+}
+const variants = rows(restoredDb, 'SELECT revision_id, group_concat(variant) AS variants FROM (SELECT revision_id, variant FROM revision_files ORDER BY variant) GROUP BY revision_id');
+check('a revision with all four variants is restored', variants.some((row) => row.variants === 't0o0,t0o1,t1o0,t1o1'), JSON.stringify(variants));
+const pdfs = rows(restoredDb, "SELECT a.storage_key, a.sha256 FROM revision_files f JOIN attachments a ON a.id = f.attachment_id WHERE f.state = 'ready'");
+const restoredFiles = [];
+const walk = (dir) => {
+  if (!existsSync(dir)) return;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) entry.isDirectory() ? walk(join(dir, entry.name)) : restoredFiles.push(join(dir, entry.name));
+};
+walk(restoreDir);
+const byKey = new Map(restoredFiles.map((file) => [file.split(/[\\/]/).at(-1), file]));
+const matching = pdfs.filter((pdf) => {
+  const file = byKey.get(pdf.storage_key);
+  return file !== undefined && createHash('sha256').update(readFileSync(file)).digest('hex') === pdf.sha256;
+});
+check('every restored PDF variant file is present with its recorded hash', matching.length === pdfs.length && pdfs.length >= 4, `${matching.length}/${pdfs.length}`);
+const db = new Database(restoredDb, { readonly: true });
+check('restored integrity ok, no foreign key violation, schema 15', db.pragma('integrity_check', { simple: true }) === 'ok' && db.pragma('foreign_key_check').length === 0 && db.pragma('user_version', { simple: true }) === 15);
+const pause = db.prepare("SELECT outbound_paused_reason FROM operations_state WHERE id = 1").pluck().get();
+check('the restored copy has outbound paused (reason restored)', pause === 'restored', String(pause));
+db.close();
+lines.push(`failures: ${failures}`);
+writeFileSync(outPath, `${lines.join('\n')}\n`);
+process.exitCode = failures === 0 ? 0 : 1;

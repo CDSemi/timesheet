@@ -1,0 +1,73 @@
+import { expect, test } from './fixtures.ts';
+import { note, seedA5, signInTo } from './zz-a5lib.ts';
+
+/*
+ * WP5-UX5-AUDIT-A probe B2: fractional widths below the window minimum. The app sends frame-ancestors 'none', so it cannot run in a frame;
+ * instead, at a forced device scale factor of 1.5, an about:blank frame (same origin, the page's CSP) of 479.333px CSS (719 device px)
+ * links the app's built style sheet and holds bare copies of the elements whose rules switch at 480 and 768px. Task-local.
+ */
+const F = 'frac2.txt';
+test.use({ viewport: null, launchOptions: { args: ['--force-device-scale-factor=1.5', '--window-size=1400,1000'] } });
+
+test('fractional widths in a same-origin frame at 150% scaling', async ({ page, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop browser only');
+  test.setTimeout(240_000);
+  const seed = await seedA5(builtServer, 'Synthetic Frac Frame');
+  await signInTo(page, builtServer, seed.person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const sheetHref = await page.evaluate(() => (document.querySelector('link[rel="stylesheet"]') as HTMLLinkElement | null)?.href ?? '');
+  note(F, `style sheet ${sheetHref.replace(/^https?:\/\/[^/]+/, '')}; top window dpr ${await page.evaluate('devicePixelRatio')}`);
+  for (const css of ['479px', '479.333px', '479.667px', '480px', '767px', '767.333px', '767.667px', '768px']) {
+    const state = await page.evaluate(
+      async ([w, href]) => {
+        document.querySelector('#a5-frame')?.remove();
+        const f = document.createElement('iframe');
+        f.id = 'a5-frame';
+        f.style.width = w;
+        f.style.height = '600px';
+        f.style.border = '0';
+        document.body.append(f);
+        const d = f.contentDocument as Document;
+        const link = d.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        const loaded = new Promise((r) => {
+          link.onload = () => r(true);
+          link.onerror = () => r(false);
+        });
+        d.head.append(link);
+        const ok = await loaded;
+        d.body.innerHTML =
+          '<header class="toolbar page-head"><h1>T</h1></header><div class="workbar"><section class="card period-bar"></section></div><div class="sheet-area"><section class="card paper" data-paper="timesheet"><article class="sheet"><header class="form-head"><div class="form-brand"><div class="form-title">TITLE</div></div></header><section class="sheet-week"></section></article></section></div><nav class="shell-tabs"></nav>';
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))));
+        const win = f.contentWindow as Window & typeof globalThis;
+        const q = (m: string) => win.matchMedia(m).matches;
+        const cs = (s: string, p: string) => {
+          const e = d.querySelector(s);
+          return e ? win.getComputedStyle(e).getPropertyValue(p) : 'none-el';
+        };
+        return {
+          sheetLoaded: ok,
+          vvw: win.visualViewport?.width,
+          innerWidth: win.innerWidth,
+          rootClient: d.documentElement.getBoundingClientRect().width,
+          dpr: win.devicePixelRatio,
+          sheetQ: q('(width >= 480px)'),
+          shellQ: q('(width >= 768px)'),
+          rangeBelow480: q('(width < 480px)'),
+          rangeBelow768: q('(width < 768px)'),
+          oldMax479: q('(max-width: 479px)'),
+          oldMin480: q('(min-width: 480px)'),
+          oldMax767: q('(max-width: 767px)'),
+          oldMin768: q('(min-width: 768px)'),
+          pageHeadPosition: cs('.page-head', 'position'),
+          workbarMarginLeft: cs('.workbar', 'margin-left'),
+          weekOverflowX: cs('.sheet-week', 'overflow-x'),
+          tabsDisplay: cs('.shell-tabs', 'display'),
+        };
+      },
+      [css, sheetHref] as const,
+    );
+    note(F, `frame ${css} -> ${JSON.stringify(state)}`);
+  }
+});

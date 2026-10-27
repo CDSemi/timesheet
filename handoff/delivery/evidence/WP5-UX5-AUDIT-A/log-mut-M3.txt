@@ -1,0 +1,82 @@
+== M3 start 03:57:40Z
+M3 applied to src/client/components/reviewModel.ts: U5-14: Review & sign off is primary for an in-progress draft
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/client/reviewModel.test.ts (60 tests | 1 failed) 25ms
+   ❯ period and delivery status from server fields (18)
+     ❯ the review link of the period card (U5-14) (8)
+       × a draft is primary once ended and quiet while the period is in progress, with the same words 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/reviewModel.test.ts > period and delivery status from server fields > the review link of the period card (U5-14) > a draft is primary once ended and quiet while the period is in progress, with the same words
+AssertionError: expected { label: 'Review & sign off', …(1) } to deeply equal { label: 'Review & sign off', …(1) }
+
+- Expected
++ Received
+
+  {
+    "label": "Review & sign off",
+-   "primary": false,
++   "primary": true,
+  }
+
+ ❯ tests/client/reviewModel.test.ts:384:98
+    382|     it('a draft is primary once ended and quiet while the period is in…
+    383|       expect(view({ finalized_revision_no: null, revision: null, jobs:…
+    384|       expect(view({ finalized_revision_no: null, revision: null, jobs:…
+       |                                                                                                  ^
+    385|       expect(view({ finalized_revision_no: null, revision: null, jobs:…
+    386|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 59 passed (60)
+   Start at  20:57:40
+   Duration  257ms (transform 60%, import 20%, tests 17%, worker 2%)
+
+  vitest exit=1
+  build:client exit=0
+
+Running 2 tests using 2 workers
+
+[1/2] [mobile] › tests\e2e\today.spec.ts:1115:3 › Current period and the review link on the card (U5-08, U5-14) › the review link is the primary button when the shown period is ended and needs the person, and quiet otherwise (draft, signed not sent, sent)
+[2/2] [desktop] › tests\e2e\today.spec.ts:1115:3 › Current period and the review link on the card (U5-08, U5-14) › the review link is the primary button when the shown period is ended and needs the person, and quiet otherwise (draft, signed not sent, sent)
+  1) [desktop] › tests\e2e\today.spec.ts:1115:3 › Current period and the review link on the card (U5-08, U5-14) › the review link is the primary button when the shown period is ended and needs the person, and quiet otherwise (draft, signed not sent, sent) 
+
+    Error: draft on 2026-10-25: primary is false
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      1147 |       const view = await state();
+      1148 |       expect(view.text, `draft on ${today}`).toBe('Review & sign off');
+    > 1149 |       expect(view.primary, `draft on ${today}: primary is ${primary}`).toBe(primary);
+           |                                                                        ^
+      1150 |       expect(view.marked).toBe(primary ? 'true' : null);
+      1151 |       if (primary) {
+      1152 |         // Like the Check in button: the accent fill with the on-accent text.
+        at <task>\export-mut\tests\e2e\today.spec.ts:1149:72
+
+    Error Context: ..\pw-mut-a\today-Current-period-and-t-44005-draft-signed-not-sent-sent--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-a\today-Current-period-and-t-44005-draft-signed-not-sent-sent--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-a\today-Current-period-and-t-44005-draft-signed-not-sent-sent--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  1 failed
+    [desktop] › tests\e2e\today.spec.ts:1115:3 › Current period and the review link on the card (U5-08, U5-14) › the review link is the primary button when the shown period is ended and needs the person, and quiet otherwise (draft, signed not sent, sent) 
+  1 skipped
+  playwright a exit=1
+M3 restored src/client/components/reviewModel.ts: byte-equal true
+== M3 end 03:57:48Z

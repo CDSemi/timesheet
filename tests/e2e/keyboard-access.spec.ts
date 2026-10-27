@@ -549,7 +549,8 @@ test.describe('WP5-UX-AX-10 on the mobile project', () => {
       await page.setViewportSize(size);
       await signInPageAs(world.me.account, '#/timesheet');
       await expect(page.locator('[data-day]')).toHaveCount(14);
-      await page.getByRole('button', { name: 'Change several days' }).click();
+      // The button is named by the words it shows: "Change days" on the 320px toolbar row, "Change several days" where the row holds it.
+      await page.getByRole('button', { name: /^Change (several )?days$/ }).click();
       await expect(page.getByRole('group', { name: 'Batch category edit' })).toBeVisible();
       const rows = await page.locator('tr.sheet-row[data-day]').evaluateAll((elements) =>
         elements.map((row) => {

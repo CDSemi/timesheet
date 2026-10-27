@@ -2121,9 +2121,154 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - `waitfor.sh` matched PID 22240, the REGATE3 leftover, and three bash processes created
     during the lookup itself. Those three are assumed to be its own shells; the REGATE4
     census confirms.
-- **Running now:** WP5-UX5-FIX6-FREEZE (committer, sonnet), alone: one commit of FIX4 to
-  FIX6 and the records, then a push.
-- **Next:** REGATE4.
+- **WP5-UX5-FIX6-FREEZE done.**
+  - Commit f4049aa7905e22f1467dfcae4208675cb2fc8e80 is on main and pushed, a fast-forward
+    from 5b8b718.
+  - D_PRE equals the HEAD digest, 26b163a6.
+  - 164 paths: 8 source files, 6 records, 12 tasks and 138 evidence files. One rename added
+    `-synthetic`. Every check exits 0.
+  - The email scan matched only the public no-reply address of a Co-Authored-By trailer,
+    quoted in the FIX3-FREEZE records. That address has been public since 5b8b718 and is
+    accepted as recorded. Later freeze briefs name it as allowed.
+- **WP5-UX5-REGATE4: PASS** on f4049aa / 26b163a6 (verifier, sonnet). NAS stays NOT
+  VERIFIED.
+  - Census: about 1.4 of 32 cores busy. The REGATE3 leftover still uses one core.
+  - Exactly the eight source paths. All 250 `dist/` files are byte-identical to 5b8b718.
+  - Drill `--wp3`: stages 1-6 had 209 PASS and 0 FAIL. `npm audit --omit=dev` found 0
+    vulnerabilities.
+  - `npm test` ×3 and `verify` (export and repository) exit 0, with no timeout. The suite
+    at 4 logical CPUs passed.
+  - Real-clock FULL e2e: 459 and 404 passed, 0 failed. The six sweep runs and the three
+    stress runs had 0 failed, with no ECONNRESET.
+  - The DIAG2 Today probe, the mutants M1 and M2, and the FIX6 smoke probes (with and
+    without the header, and the induced failure) behaved as required.
+  - Flagged: a new nested dev-only `smtp-server` copy of nodemailer 10.0.14, which is not
+    in the image.
+- **Running now:** WP5-UX5-AUDIT-A and WP5-UX5-AUDIT-B (fresh auditors, opus), in parallel,
+  on f4049aa / 26b163a6. Their briefs are retargeted and add:
+  - A: the fix-round e2e changes, a mutant that only the Today poll's date compare can
+    catch, and a judgment on the deferred 23 px signature-image shift;
+  - B: the dependency pins (including the nested dev-only copy), the harness, the
+    evidence for the worker cap, and the deferred lazy PDF import.
+- **WP5-UX5-AUDIT-B: FIX REQUIRED** (opus). Five Low findings, and no product defect in
+  area B:
+  - F-UX5B-1: docs/05:11 still describes sending at sign-off.
+  - F-UX5B-2: docs/12:54 and docs/04:124 quote UI strings that were removed.
+  - F-UX5B-3: in the PDF, a day with leave and a holiday label of about 35 characters or
+    more loses "Leave h:mm" to the ellipsis, which contradicts docs/12:86.
+  - F-UX5B-4: docs/10 has no record of H-1 a.
+  - F-UX5B-5: the tests miss mutant M12b, and `sends.test.ts:300` cannot fail because of
+    quoted-printable encoding.
+
+  Risks:
+  - R-UX5B-1 (pre-existing): a superseded revision's queued send can arrive after the
+    correction.
+  - The dev-only advisories, the drill fetch sites and the worker cap are judged
+    acceptable.
+
+  All checks passed, including the e2e, the migrations, backup and restore, and the HTTP
+  probes. F-UX4B-1 is fixed.
+- **WP5-UX5-AUDIT-A: FIX REQUIRED** (opus). Findings:
+  - **F-UX5A-1, Medium.** On a signed period's Review page, "Sign correction" sits in the
+    employee signature line. At 480, 390 and 320 px the name breaks letter by letter, the
+    button covers "Signed", and the lines lose alignment.
+  - F-UX5A-2: SC 2.5.3. The button shows "Change days", but its name is "Change several
+    days".
+  - F-UX5A-3: a touch swipe, or a press on a week card's scrollbar, closes the Day editor.
+  - F-UX5A-4: stale lines in docs/04 and docs/12, and three CSS comments.
+
+  Everything else passed:
+  - the other U5 items, the fractional widths 479.33 and 767.33 (one layout each), and
+    F-UX4A-1..4, which are fixed;
+  - axe: 108 scans, 0 violations;
+  - the full e2e: 863 passed, 0 failed.
+
+  Mutants: 15 of 17 were caught.
+  - M2, the ladder's end-day step, was not caught.
+  - M13 was caught only by `today.spec.ts:626` at the crossing, not by the `showToday`
+    poll.
+- **WP5-UX5-PLAN-FIX7 done** (planner, sonnet). It produced a proven diff and an exact
+  specification.
+  - **F-UX5B-3.** A holiday or closure day can carry partial leave; nothing forbids it.
+    The code route restores docs/04:122, AC-10 and docs/12:86. In the fix, the holiday
+    label gets one line and "Leave h:mm" its own line. PDFs without both labels stay
+    byte-identical (624 of 1,920 pairs), and the pilot samples carry neither label.
+  - **R-UX5B-1.** Reproduced and pre-existing. The planner recommends option A: a waiting
+    send of any revision of the period blocks a new send (409). This enforces docs/05:72
+    as written and aligns docs/03:60.
+  - **Coordinator decisions:**
+    - F-UX5B-3: the code route;
+    - R-UX5B-1: option A in this round;
+    - the four drill `connection: close` edits are folded in.
+
+    No owner decision is needed, because no rule the owner set changes. The owner is
+    informed.
+- **WP5-UX5-PLAN-FIX7A done** (planner, sonnet). It is proven in a scratch export.
+  - **F-UX5A-1:** a pure-CSS wrap. At 1440 and 1200 px nothing changes. Below about
+    1150 px, "Sign correction" drops under the signed content and stays 8 px inside the line
+    end. There is no overlap, the lines stay aligned, and the PDF is untouched. The owner's
+    words place the action at the line end, and the mockup never showed this state, so no
+    owner decision is needed. The owner is informed.
+  - **F-UX5A-2:** the name follows the shown form. Four e2e assertions change.
+  - **F-UX5A-3:** touch acts on `pointerup`, a press on an element's own scrollbar is
+    ignored, and the mouse and pen paths are unchanged.
+  - **F-UX5A-4:** exact EN and VI text. The shared lines docs/04:124 and docs/12:54 keep
+    FIX7's text.
+  - **Folded in:** R3 (the ladder test that catches M2), R4 and the R5 arrow.
+- **WP5-UX5-FIX7 done** (worker-high, sonnet; uncommitted; digest bca04c4f).
+  - **Before:** the PDF probes failed 13 checks, 7 of the new tests failed, and M11 and
+    M12b survived.
+  - **After:** the PDF probes fail 0 checks and 106 new tests pass. Of the 1,920 PDF pairs,
+    the 624 without both labels are byte-identical. M11, M12b and M14 are killed.
+  - The targeted e2e had 38 passed and 0 failed. `npm test` ran 2,384 tests, and `verify`
+    exits 0. The drill `--wp3` had 209 PASS and 0 FAIL. The documents have EN/VI parity.
+  - Note for the rechecks: the Resend reason "A delivery of this revision is in progress."
+    (`deliveryModel.ts:251`) is still per revision.
+- **WP5-UX5-FIX8 done** (worker, sonnet; uncommitted; digest 61d19bf1).
+  - Before the fix, the four new tests failed. After it, they pass. Mutant M2 now fails the
+    new ladder test.
+  - Deviation: axe flagged `button-name` at 320 px, so the short form "Change days" is now
+    real text instead of `::before` content.
+  - axe: 40 scans, 0 violations. FULL e2e: 868 passed and 0 failed (desktop 463, mobile
+    405). `npm test` ran 2,384 tests, and `verify` and build exit 0.
+  - A `git apply -p2` with the masked path first wrote ten files into a stray `export/`
+    folder. The worker repaired that.
+  - **New, pre-existing:** axe `scrollable-region-focusable` (serious) on the read-only
+    Review week cards at 768 px. They scroll sideways from 480 to 929 px and hold no
+    focusable content. HEAD has it too.
+- **Coordinator decision:** fix it now, before the freeze, because the AGENTS UI standards
+  require WCAG 2.2 AA (SC 2.1.1) and a recheck would fail on it.
+- **WP5-UX5-FIX9 done** (worker, sonnet; uncommitted; digest 462a1cd7; 27 changed files
+  outside `handoff/`).
+  - Before: axe found 24 `scrollable-region-focusable` hits, all on the Review's read-only
+    week cards 2 and 3, at 480 to 900 px. Nothing else was found on any screen.
+  - The fix: a `useScrollsSideways` hook gives the card `tabIndex=0` only while it
+    overflows. The card is already named "Week n", the arrow keys scroll it, and an inset
+    focus ring shows. Editable cards are untouched.
+  - After: axe ran 56 scans with 0 violations. The new test fails without the fix, and so
+    does the mutant.
+  - FULL e2e: 869 passed and 0 failed. `npm test` ran 2,384 tests; `verify` and build
+    exit 0.
+  - Slips: the axe probe spec was deleted, so it is not in the evidence, and one `rm -rf`
+    was denied.
+- **The lookup WP5-UX5-FIX9-PATHS is done.**
+  - HEAD = origin/main = f4049aa.
+  - Outside `handoff/`: exactly FIX9's 27 paths, all LF. No `export/`, untracked or
+    `.tmp` file remains.
+  - `handoff/`: 9 modified and 566 untracked, all mission records.
+  - No blocker and no Docker leftover.
+- **Running now:** WP5-UX5-FIX9-FREEZE (committer, sonnet), alone: one commit of FIX7 to
+  FIX9 and the records, then a push.
+  - **First stop:** the committer stopped correctly before committing. The precommit check
+    blocked two synthetic password literals in an AUDIT-B probe script stored as evidence
+    (`94-http-areab.mjs.txt:380-381`). 603 paths were staged, and HEAD is still f4049aa.
+  - **Coordinator decision (brief Addendum 1):** mask those two literals as
+    `'<synthetic-password>'`, re-stage that file and the updated records, rerun the scans
+    and the precommit check, then commit and push. The same committer continues.
+- **Next:**
+  1. The regate WP5-UX5-REGATE5.
+  2. Fresh rechecks of areas A and B.
+  3. The integration audit, ACCEPT-DOCS and the WP5 re-accept.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

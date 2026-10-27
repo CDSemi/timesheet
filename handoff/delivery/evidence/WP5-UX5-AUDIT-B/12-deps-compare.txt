@@ -1,0 +1,17 @@
+base nodemailer 10.0.14 zod 4.6.5; target nodemailer 10.1.4 zod 4.6.6
+PASS nodemailer message 1: identical bytes from 10.0.14 and 10.1.4 | 7109 bytes
+PASS message 1: no X-Mailer, Message-ID @timesheet.invalid, MIME-Version
+PASS nodemailer message 2: identical bytes from 10.0.14 and 10.1.4 | 7045 bytes
+PASS message 2: no X-Mailer, Message-ID @timesheet.invalid, MIME-Version
+PASS nodemailer message 3: identical bytes from 10.0.14 and 10.1.4 | 9455 bytes
+PASS message 3: no X-Mailer, Message-ID @timesheet.invalid, MIME-Version
+addressparser "\"a;b\"@example.invalid": 10.0.14 [{"address":"\"a;b\"@example.invalid","name":""}] | 10.1.4 [{"address":"\"a;b\"@example.invalid","name":""}]
+addressparser "user@example.invalid (a (b) c) evil@example.invalid": 10.0.14 [{"address":"user@example.invalid","name":"c) evil@example.invalid"}] | 10.1.4 [{"address":"user@example.invalid","name":"evil@example.invalid"}]
+addressparser "\"x>y\"@example.invalid": 10.0.14 [{"address":"\"x>y\"@example.invalid","name":""}] | 10.1.4 [{"address":"\"x>y\"@example.invalid","name":""}]
+PASS zod input 1: identical result and issue messages in 4.6.5 and 4.6.6 | {"ok":{"request_key":"abcdefgh-1","to":["a@example.invalid"],"cc":[],"subject":"s","body_text":"b","time_rows":true,"ot_rows":false}}
+PASS zod input 2: identical result and issue messages in 4.6.5 and 4.6.6 | {"issues":[{"path":"request_key","code":"invalid_format","message":"Invalid string: must match pattern /^[A-Za-z0-9-]{8,100}$/"},{"path":"to","code":"invalid_type","message":"Invalid input: expected array, received string"},{"path":"subject","code":"invalid_type","message":"Invalid input: expected s
+PASS zod input 3: identical result and issue messages in 4.6.5 and 4.6.6 | {"issues":[{"path":"to","code":"too_big","message":"Too big: expected array to have <=40 items"},{"path":"subject","code":"too_big","message":"Too big: expected string to have <=2000 characters"},{"path":"decision","code":"invalid_value","message":"Invalid option: expected one of \"mark_delivered\"|
+PASS zod input 4: identical result and issue messages in 4.6.5 and 4.6.6 | {"issues":[{"path":"","code":"unrecognized_keys","message":"Unrecognized key: \"polluted\""}]}
+PASS zod input 5: identical result and issue messages in 4.6.5 and 4.6.6 | {"issues":[{"path":"","code":"invalid_type","message":"Invalid input: expected object, received null"}]}
+PASS zod input 6: identical result and issue messages in 4.6.5 and 4.6.6 | {"issues":[{"path":"","code":"invalid_type","message":"Invalid input: expected object, received array"}]}
+failures: 0

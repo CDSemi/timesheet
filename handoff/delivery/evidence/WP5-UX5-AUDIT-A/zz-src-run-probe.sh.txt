@@ -1,0 +1,10 @@
+# Usage: bash run-probe.sh <label> <spec> [playwright args...]
+# One Playwright run of task-local probes in export-probe (never the repository), real clock, own output folder.
+. <task>/env.sh
+L=$1; SPEC=$2; shift 2
+for f in zz-a5lib.ts zz-a5-sheet.spec.ts zz-a5-frac.spec.ts zz-a5-editor.spec.ts zz-a5-review.spec.ts zz-a5-axe.spec.ts zz-a5-classic.spec.ts zz-a5-walk.spec.ts zz-a5-targets.spec.ts zz-a5-frac2.spec.ts; do
+  [ -f $T/$f ] && cp $T/$f $T/export-probe/tests/e2e/$f
+done
+export SHIFT_EXPORT=$T/export-probe
+bash $T/run-shift.sh $L real tests/e2e/$SPEC --reporter=line "$@" > $T/out/log-probe-$L.txt 2>&1
+echo "probe $L exit: $(grep -o 'exit=[0-9]*' $T/out/log-probe-$L.txt)"

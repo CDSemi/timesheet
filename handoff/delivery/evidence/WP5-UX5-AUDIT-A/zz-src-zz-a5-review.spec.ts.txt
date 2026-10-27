@@ -1,0 +1,172 @@
+import type { Page } from '@playwright/test';
+import { drainJobsFrom, expect, newPerson, screenshotPath, SeedClient, test } from './fixtures.ts';
+import { activeDesc, note, setWidth, settle, signInTo } from './zz-a5lib.ts';
+
+/*
+ * WP5-UX5-AUDIT-A probe R: the Review page (U5-27..U5-32): title and chips, check card, Preview card, signature geometry against the
+ * PDF fractions, the Sign off dialog, the signed footer, the Send card and the reason dialog. Task-local; never part of the repository.
+ */
+const F = 'review.txt';
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const GEOM = `(() => {
+  const g = document.querySelector('.review-signatures');
+  if (!g) return 'no signatures';
+  const gr = g.getBoundingClientRect();
+  const cs = getComputedStyle(g);
+  const left = gr.left + parseFloat(cs.paddingLeft); const width = gr.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const line = (n) => { const e = g.querySelector('[data-sig-line="' + n + '"]'); if (!e) return null; const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, b: r.bottom, w: r.width }; };
+  const e = line('employee'), ed = line('employee-date'), m = line('manager'), md = line('manager-date');
+  const pct = (v) => (100 * v / width).toFixed(3) + '%';
+  const btn = g.querySelector('.rsig-action button')?.getBoundingClientRect();
+  return 'content ' + width.toFixed(1) + ' | inset ' + pct(e.l - left) + ' line ' + pct(e.w) + ' date ' + pct(ed.w) + ' right ' + pct(left + width - ed.r) +
+    ' | row1 bottoms ' + e.b.toFixed(2) + '/' + ed.b.toFixed(2) + ' row2 ' + m.b.toFixed(2) + '/' + md.b.toFixed(2) + ' | cols x ' + (e.l - m.l).toFixed(2) + '/' + (ed.l - md.l).toFixed(2) + ' widths ' + (e.w - m.w).toFixed(2) + '/' + (ed.w - md.w).toFixed(2) +
+    (btn ? ' | button.right-line.right ' + (btn.right - e.r).toFixed(2) + ' button h ' + btn.height.toFixed(1) : ' | no button');
+})()`;
+
+const HEADER = `(() => {
+  const b = (s) => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { l: +r.left.toFixed(1), r: +r.right.toFixed(1), t: +r.top.toFixed(1), b: +r.bottom.toFixed(1), h: +r.height.toFixed(1) }; };
+  const card = document.querySelector('.check-card');
+  const ccs = card ? getComputedStyle(card) : null;
+  const intro = b('.check-card > p'); const back = b('.check-card .back-link');
+  const company = document.querySelector('.review-company');
+  const cspan = company?.querySelector('span');
+  const title = document.querySelector('.preview-body .form-title, .preview-body .review-title, .preview-body h3');
+  const lh = (e) => e ? parseFloat(getComputedStyle(e).lineHeight) || 1 : 1;
+  return { h1: document.querySelector('h1')?.textContent, desc: (document.querySelector('[data-review-desc]')?.textContent ?? '').replace(/\\s+/g, ' '), descBox: b('[data-review-desc]'), chips: b('[data-review-chips]'),
+    chipTexts: [...document.querySelectorAll('[data-review-chips] .badge')].map((e) => e.textContent),
+    card: card ? { pad: ccs.paddingLeft + ' ' + ccs.paddingTop, box: b('.check-card') } : null, intro, back, backText: [...document.querySelectorAll('.check-card .back-link span')].filter((e) => getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0).map((e) => e.textContent).join('|'),
+    introMid: intro && back ? +((intro.t + intro.b) / 2 - (back.t + back.b) / 2).toFixed(1) : null, gap: intro && back ? +(back.l - intro.r).toFixed(1) : null,
+    previewBar: b('.preview-bar'), previewChips: [...document.querySelectorAll('.preview-bar .badge')].map((e) => e.textContent),
+    company: company ? { fits: company.getAttribute('data-fits'), visible: company.checkVisibility({ visibilityProperty: true }), h: +company.getBoundingClientRect().height.toFixed(1), lines: Math.round(company.getBoundingClientRect().height / lh(company)), spanW: cspan ? +cspan.getBoundingClientRect().width.toFixed(1) : 0, boxW: +company.getBoundingClientRect().width.toFixed(1) } : 'none',
+    title: title ? { text: title.textContent, lines: Math.round(title.getBoundingClientRect().height / lh(title)), w: title.getBoundingClientRect().width, scrollW: title.scrollWidth } : 'none',
+    scroll: document.documentElement.scrollWidth + '/' + document.documentElement.clientWidth };
+})()`;
+
+async function header(page: Page, label: string) {
+  note(F, `[${label}] ${JSON.stringify(await page.evaluate(HEADER))}`);
+}
+
+test('review page, sign off dialog, signed footer, send card and reason dialog', async ({ page, privateServer, isMobile }) => {
+  test.skip(isMobile, 'desktop flow; phone widths are set on the desktop browser');
+  test.setTimeout(400_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const server = privateServer;
+  const adm = await new SeedClient(server.origin).signIn(server.credentials.admin.email, server.credentials.admin.password);
+  const person = await newPerson(adm, server, { displayName: 'Synthetic Review Person', to: ['payroll-synthetic@example.invalid'], cc: ['manager-synthetic@example.invalid'], signature: 'saved' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(free[0] ?? '');
+  await person.api.seedUnconfirmedBreaksDay(free[1] ?? '');
+  const posts: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && /\/(signoff|send)$/.test(request.url())) posts.push(`${new URL(request.url()).pathname} ${request.postData() ?? ''}`.slice(0, 400));
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await signInTo(page, server, person.account, `#/review/${person.payrollDate}`);
+  await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+  await settle(page);
+  note(F, `[focus on load] ${await activeDesc(page)}`);
+  for (const width of [1440, 1100, 768, 767, 600, 480, 479, 390, 340, 320]) {
+    await setWidth(page, width, 1000);
+    await header(page, `head ${width}`);
+    note(F, `[geom ${width}] ${await page.evaluate(GEOM)}`);
+  }
+  await setWidth(page, 1440, 1000);
+  await page.screenshot({ path: screenshotPath('a5-review-1440-unsigned-light-synthetic.png'), fullPage: true });
+  // Send card before the sign-off.
+  const send = page.locator('[data-send-card]');
+  note(F, `[send before] mode ${await send.getAttribute('data-send-mode')} send "${await send.locator('[data-send]').textContent()}" disabled=${await send.locator('[data-send]').isDisabled()} describedby="${await send.locator('[data-send]').getAttribute('aria-describedby')}" hint "${await send.locator('.send-hint').textContent().catch(() => '')}" save disabled=${await send.locator('[data-save-pdf]').isDisabled()} preview href ${await send.locator('[data-pdf-preview]').getAttribute('href')} target ${await send.locator('[data-pdf-preview]').getAttribute('target')} from "${await send.locator('[data-envelope-from]').textContent()}" chips "${await send.locator('[data-send-status]').textContent()}"`);
+  // The Sign off dialog: open, refuse without the acknowledgement, Escape, then sign.
+  await page.locator('[data-sign-off]').click();
+  const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+  await expect(dialog).toBeVisible();
+  await settle(page);
+  note(F, `[dialog] focus ${await activeDesc(page)}; summary ${(await dialog.locator('.signoff-summary').innerText()).replace(/\s+/g, ' ')}; image ${await dialog.locator('img.signed-image').count()}; close button ${await dialog.getByRole('button', { name: /close/i }).count()}`);
+  note(F, `[dialog geom] ${await page.evaluate(GEOM.replace("document.querySelector('.review-signatures')", "document.querySelector('dialog[open] .review-signatures')"))}`);
+  await page.screenshot({ path: screenshotPath('a5-signoff-dialog-1440-light-synthetic.png') });
+  await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+  await settle(page);
+  note(F, `[dialog refuse] posts ${posts.length}; errors ${(await dialog.locator('.error').allTextContents()).join(' | ')}; focus ${await activeDesc(page)}`);
+  await page.keyboard.press('Escape');
+  await settle(page);
+  note(F, `[dialog escape] open=${await dialog.count()} focus ${await activeDesc(page)}`);
+  await page.locator('[data-sign-off]').click();
+  await dialog.getByRole('checkbox', { name: /I acknowledge/ }).check();
+  await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+  await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
+  await settle(page);
+  note(F, `[signed] focus ${await activeDesc(page)}; footer "${(await page.locator('[data-sig-row="employee"]').innerText()).replace(/\s+/g, ' ')}" image ${await page.locator('[data-sig-row="employee"] img').count()} sign-off buttons ${await page.locator('[data-sign-off]').count()}; posts ${posts.join(' || ')}`);
+  note(F, `[signed geom 1440] ${await page.evaluate(GEOM)}`);
+  note(F, `[send after] mode ${await send.getAttribute('data-send-mode')} send "${await send.locator('[data-send]').textContent()}" disabled=${await send.locator('[data-send]').isDisabled()} save disabled=${await send.locator('[data-save-pdf]').isDisabled()} preview href ${await send.locator('[data-pdf-preview]').getAttribute('href')} from "${await send.locator('[data-envelope-from]').textContent()}" chips "${await send.locator('[data-send-status]').textContent()}"`);
+  await page.screenshot({ path: screenshotPath('a5-review-1440-signed-light-synthetic.png'), fullPage: true });
+  // Field errors: an empty To.
+  const to = send.locator('#send-field-to');
+  const before = posts.length;
+  await to.fill('');
+  await send.locator('[data-send]').click();
+  await settle(page);
+  note(F, `[send empty to] posts +${posts.length - before}; error "${await send.locator('#send-error-to').textContent().catch(() => 'none')}" aria-invalid=${await to.getAttribute('aria-invalid')} focus ${await activeDesc(page)}`);
+  await to.fill('not an address');
+  await send.locator('[data-send]').click();
+  await settle(page);
+  note(F, `[send bad to] posts +${posts.length - before}; error "${await send.locator('#send-error-to').textContent().catch(() => 'none')}"`);
+  await to.fill('payroll-synthetic@example.invalid');
+  // Switch the time rows off for this send, then Send.
+  await send.getByRole('switch', { name: 'Time rows on the PDF' }).click();
+  note(F, `[send switch] preview href now ${await send.locator('[data-pdf-preview]').getAttribute('href')}`);
+  await send.locator('[data-send]').click();
+  await expect.poll(() => posts.length).toBeGreaterThan(before);
+  await settle(page);
+  note(F, `[send 1] post ${posts.at(-1)}; chips "${await send.locator('[data-send-status]').textContent()}"; notice "${await send.locator('[data-send-notice]').textContent().catch(() => '')}"`);
+  drainJobsFrom(server, new Date());
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+  await expect(send.locator('[data-send]')).toBeVisible();
+  await settle(page);
+  note(F, `[after jobs] mode ${await send.getAttribute('data-send-mode')} send "${await send.locator('[data-send]').textContent()}" chips "${await send.locator('[data-send-status]').textContent()}" title chips "${await page.locator('[data-review-chips]').textContent()}"`);
+  // Another copy: the reason dialog.
+  const before2 = posts.length;
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await send.locator('[data-send]').click();
+  const ask = page.getByRole('alertdialog', { name: 'Send another copy?' }).or(page.getByRole('dialog', { name: 'Send another copy?' }));
+  await expect(ask).toBeVisible();
+  await settle(page);
+  note(F, `[reason] dialog text "${(await ask.innerText()).replace(/\s+/g, ' ').slice(0, 300)}" focus ${await activeDesc(page)}`);
+  await page.screenshot({ path: screenshotPath('a5-send-reason-dialog-dark-synthetic.png') });
+  await ask.getByRole('button', { name: 'Send another copy' }).click();
+  await settle(page);
+  note(F, `[reason empty] posts +${posts.length - before2}; error "${await page.locator('#send-error-reason').textContent().catch(() => 'none')}" aria-invalid=${await page.locator('#send-field-reason').getAttribute('aria-invalid')}`);
+  await page.locator('#send-field-reason').fill('x');
+  await ask.getByRole('button', { name: 'Send another copy' }).click();
+  await settle(page);
+  note(F, `[reason 1 char] posts +${posts.length - before2}; error "${await page.locator('#send-error-reason').textContent().catch(() => 'none')}"`);
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await settle(page);
+  note(F, `[reason cancel] posts +${posts.length - before2}; focus ${await activeDesc(page)}`);
+  await send.locator('[data-send]').click();
+  await page.locator('#send-field-reason').fill('Synthetic audit: payroll asked again');
+  await ask.getByRole('button', { name: 'Send another copy' }).click();
+  await expect.poll(() => posts.length).toBeGreaterThan(before2);
+  note(F, `[reason send] post ${posts.at(-1)}`);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  // Narrow: the signed footer and the send card at 390 and 320 on the desktop browser.
+  for (const width of [1440, 768, 480, 390, 320]) {
+    await setWidth(page, width, 900);
+    note(F, `[signed geom ${width}] ${await page.evaluate(GEOM)}`);
+    const overlap = await page.evaluate(() => {
+      const row = document.querySelector('[data-sig-row="employee"]');
+      const c = row?.querySelector('.rsig-content')?.getBoundingClientRect();
+      const kids = [...(row?.querySelectorAll('.rsig-content img, .rsig-content .signed-name, .rsig-content [data-signed-seal]') ?? [])].map((e) => e.getBoundingClientRect());
+      const a = row?.querySelector('.rsig-action button')?.getBoundingClientRect();
+      const right = Math.max(...kids.map((k) => k.right));
+      const line = row?.querySelector('[data-sig-line="employee"]')?.getBoundingClientRect();
+      const date = row?.querySelector('[data-sig-line="employee-date"]')?.getBoundingClientRect();
+      return `button "${(row?.querySelector('.rsig-action button')?.textContent ?? 'none').trim()}" content right ${right.toFixed(1)} button ${a ? a.left.toFixed(1) + '..' + a.right.toFixed(1) : '-'} overlap ${a ? (right > a.left + 0.5 ? 'YES' : 'no') : '-'} line ${line?.left.toFixed(1)}..${line?.right.toFixed(1)} h ${line?.height.toFixed(1)} date ${date?.left.toFixed(1)}..${date?.right.toFixed(1)} content box ${c?.width.toFixed(1)}`;
+    });
+    note(F, `[signed row ${width}] ${overlap}`);
+    await header(page, `signed head ${width}`);
+  }
+  await setWidth(page, 390, 900);
+  await page.locator('[data-sig-row="employee"]').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: screenshotPath('a5-review-390-signed-reloaded-light-synthetic.png') });
+});

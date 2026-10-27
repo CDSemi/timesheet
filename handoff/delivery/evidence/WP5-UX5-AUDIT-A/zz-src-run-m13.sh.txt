@@ -1,0 +1,16 @@
+# M13 at the America/Los_Angeles midnight crossing (FIX10 simulated clock), then the same run on the unmutated build as a control.
+. <task>/env.sh
+O=$T/out
+INSTANT=${1:-2026-11-04T07:59:20Z}
+TESTS='a page left open across|Today bar is painted over|Today spacing'
+ID=M13
+: > $O/log-mut-M13.txt
+node.exe $T/mut.mjs apply M13 >> $O/log-mut-M13.txt 2>&1
+(cd $T/export-mut && npm run build:client) > $O/log-mut-M13-build.txt 2>&1
+echo "build exit=$?" >> $O/log-mut-M13.txt
+SHIFT_EXPORT=$T/export-mut bash $T/run-shift.sh m13-cross $INSTANT tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts -g "$TESTS" --workers=6 --repeat-each=3 --reporter=line >> $O/log-mut-M13.txt 2>&1
+node.exe $T/mut.mjs restore M13 >> $O/log-mut-M13.txt 2>&1
+(cd $T/export-mut && npm run build:client) > $O/log-mut-M13-rebuild.txt 2>&1
+echo "rebuild exit=$?" >> $O/log-mut-M13.txt
+: > $O/log-m13-control.txt
+SHIFT_EXPORT=$T/export bash $T/run-shift.sh m13-control $INSTANT tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts -g "$TESTS" --workers=6 --repeat-each=3 --reporter=line >> $O/log-m13-control.txt 2>&1

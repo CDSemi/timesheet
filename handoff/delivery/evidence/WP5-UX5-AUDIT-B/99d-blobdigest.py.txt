@@ -1,0 +1,22 @@
+"""Digest form 3: walk an exported tree, hash each file as a raw git blob (equivalent to
+git hash-object --no-filters), skip handoff/, sort by path bytes, SHA-256 of '<path> <blob>\n'."""
+import hashlib, os, sys
+
+root = sys.argv[1]
+entries = []
+for dirpath, dirnames, filenames in os.walk(root):
+    for name in filenames:
+        full = os.path.join(dirpath, name)
+        rel = os.path.relpath(full, root).replace(os.sep, "/")
+        if rel.startswith("handoff/"):
+            continue
+        if os.path.islink(full):
+            data = os.readlink(full).encode("utf-8")
+        else:
+            with open(full, "rb") as fh:
+                data = fh.read()
+        blob = hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+        entries.append((rel.encode("utf-8"), blob))
+entries.sort(key=lambda e: e[0])
+text = b"".join(p + b" " + b.encode() + b"\n" for p, b in entries)
+print("%s  (%d files, handoff/ excluded)" % (hashlib.sha256(text).hexdigest(), len(entries)))

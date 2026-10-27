@@ -1,0 +1,276 @@
+import { appendFileSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { expect, newPerson, type BuiltServer, type Person, SeedClient } from './fixtures.ts';
+
+/*
+ * WP5-UX5-AUDIT-A task-local probe library. It lives only in the auditor's scratch export (never in the repository).
+ * Every number is read from the browser (computed style, boxes); nothing is computed by the application under audit.
+ */
+export const LA = 'America/Los_Angeles';
+export const OUT = process.env.AUDIT_OUT ?? '';
+export const STORAGE_KEY = 'timesheet.theme';
+export type Theme = 'light' | 'dark';
+
+export function note(file: string, line: string): void {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, file), `${line}\n`);
+}
+
+export interface Situation {
+  slug: string;
+  media: Theme;
+  stored: Theme | null;
+}
+export const SITUATIONS: readonly Situation[] = [
+  { slug: 'light', media: 'light', stored: null },
+  { slug: 'dark', media: 'dark', stored: null },
+  { slug: 'manual-dark', media: 'light', stored: 'dark' },
+  { slug: 'manual-light', media: 'dark', stored: 'light' },
+];
+
+export async function applySituation(page: Page, situation: Situation): Promise<void> {
+  await page.emulateMedia({ colorScheme: situation.media, reducedMotion: 'reduce' });
+  if (situation.stored !== null) {
+    await page.addInitScript({
+      content: `try { localStorage.setItem(${JSON.stringify(STORAGE_KEY)}, ${JSON.stringify(situation.stored)}); } catch (error) {}`,
+    });
+  }
+}
+
+/** Waits two frames and every running animation, so a computed value is the settled one. */
+export async function settle(page: Page): Promise<void> {
+  await page.evaluate(
+    `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))).then(resolve))))`,
+  );
+}
+
+export async function signInTo(page: Page, server: BuiltServer, account: { email: string; password: string }, hash = '#/timesheet'): Promise<void> {
+  await page.goto(`${server.origin}/${hash}`);
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  await page.getByLabel('Email').fill(account.email);
+  await page.getByLabel('Password').fill(account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+}
+
+export async function admin(server: BuiltServer): Promise<SeedClient> {
+  return new SeedClient(server.origin).signIn(server.credentials.admin.email, server.credentials.admin.password);
+}
+
+export interface A5Seed {
+  person: Person;
+  dates: string[];
+  complete: string;
+  overnight: string;
+  two: string;
+  leave: string;
+  unconfirmed: string;
+  free: string[];
+}
+
+/**
+ * The auditor's own seed: a complete day, an overnight session (+1 end), two sessions on one day, a day with 2h vacation leave and a
+ * note, an unconfirmed-breaks day, all in the displayed period (the period the page opens on).
+ */
+export async function seedA5(server: BuiltServer, name: string, signature: 'saved' | 'none' = 'none'): Promise<A5Seed> {
+  const adm = await admin(server);
+  const person = await newPerson(adm, server, { displayName: name, signature });
+  const sheet = await person.api.call<{ days: Array<{ work_date: string }> }>('GET', `/api/timesheets/${person.payrollDate}`);
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  expect(free.length, 'free past workdays').toBeGreaterThanOrEqual(6);
+  // The overnight day needs a next day that is in the past and gets no other session: take the first free day whose next day is not free
+  // (a weekend day) or is the last free day left unused below.
+  const overnight = free.find((d) => !free.includes(addDays(d, 1)) && addDays(d, 1) < person.todayLocal) ?? free[0] ?? '';
+  const rest = free.filter((d) => d !== overnight && d !== addDays(overnight, 1));
+  const [complete = '', two = '', leave = '', unconfirmed = ''] = rest;
+  await person.api.seedCompleteDay(complete);
+  const at = (date: string, time: string) => ({ local: `${date}T${time}`, zone: LA });
+  const add = (start: { local: string; zone: string }, end: { local: string; zone: string }) =>
+    person.api.call('POST', `/api/days/${start.local.slice(0, 10)}/sessions`, { start, end, input_zone: LA, breaks_confirmed: true, breaks: [] }, 201);
+  await add(at(overnight, '22:00'), at(addDays(overnight, 1), '06:00'));
+  await add(at(two, '07:30'), at(two, '11:45'));
+  await add(at(two, '12:30'), at(two, '19:10'));
+  await person.api.putDay(leave, { category: 'Worked', leave_minutes: 120, leave_kind: 'vacation', notes: 'Synthetic audit note' });
+  await person.api.seedUnconfirmedBreaksDay(unconfirmed);
+  return { person, dates: sheet.days.map((d) => d.work_date), complete, overnight, two, leave, unconfirmed, free };
+}
+
+/* ---- axe ------------------------------------------------------------------------------------------------------------ */
+const AXE_PATH = process.env.AXE_PATH ?? '';
+let axeSource = '';
+export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+
+export interface AxeSummary {
+  version: string;
+  violations: Array<{ id: string; impact: string | null; nodes: Array<{ target: string; html: string; summary: string }> }>;
+  incomplete: Array<{ id: string; nodes: number }>;
+  passes: number;
+}
+
+export async function runAxe(page: Page): Promise<AxeSummary> {
+  if (axeSource === '') axeSource = readFileSync(AXE_PATH, 'utf8');
+  if (!(await page.evaluate<boolean>(`typeof window.axe !== 'undefined'`))) await page.evaluate(axeSource);
+  return page.evaluate<AxeSummary, string[]>(async (tags) => {
+    const axe = (window as unknown as { axe: { run: (c: Document, o: unknown) => Promise<Record<string, unknown>>; version: string } }).axe;
+    const r = (await axe.run(document, { runOnly: { type: 'tag', values: tags }, resultTypes: ['violations', 'incomplete'] })) as {
+      violations: Array<{ id: string; impact: string | null; nodes: Array<{ target: unknown; html: string; failureSummary?: string }> }>;
+      incomplete: Array<{ id: string; nodes: unknown[] }>;
+      passes: unknown[];
+    };
+    return {
+      version: axe.version,
+      violations: r.violations.map((v) => ({
+        id: v.id,
+        impact: v.impact,
+        nodes: v.nodes.map((n) => ({ target: JSON.stringify(n.target), html: n.html.slice(0, 160), summary: (n.failureSummary ?? '').replace(/\s+/g, ' ').slice(0, 240) })),
+      })),
+      incomplete: r.incomplete.map((i) => ({ id: i.id, nodes: i.nodes.length })),
+      passes: r.passes.length,
+    };
+  }, AXE_TAGS);
+}
+
+/* ---- text contrast of every visible text element against its composited backdrop ---------------------------------- */
+const TEXT_SWEEP = `(() => {
+  const parse = (css) => {
+    let m = css.match(/^rgba?\\(([^)]+)\\)$/);
+    if (m) { const p = m[1].split(/[,\\s/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; }
+    m = css.match(/^color\\(srgb ([^)]+)\\)$/);
+    if (m) { const p = m[1].split(/[\\s/]+/).filter(Boolean).map(Number); return [p[0] * 255, p[1] * 255, p[2] * 255, p.length > 3 ? p[3] : 1]; }
+    return [0, 0, 0, 0];
+  };
+  const overC = (t, b) => { const a = t[3] + b[3] * (1 - t[3]); if (a === 0) return [0, 0, 0, 0]; const mix = (i) => (t[i] * t[3] + b[i] * b[3] * (1 - t[3])) / a; return [mix(0), mix(1), mix(2), a]; };
+  const lum = (c) => { const ch = (v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; }; return 0.2126 * ch(c[0]) + 0.7152 * ch(c[1]) + 0.0722 * ch(c[2]); };
+  const out = [];
+  for (const el of document.querySelectorAll('body *')) {
+    if (['SCRIPT', 'STYLE', 'svg', 'path', 'OPTION'].includes(el.tagName)) continue;
+    let own = '';
+    for (const n of el.childNodes) if (n.nodeType === 3) own += n.textContent;
+    own = own.replace(/\\s+/g, ' ').trim();
+    if (el.tagName === 'INPUT' && !['checkbox', 'radio', 'hidden', 'file', 'button', 'submit'].includes(el.type)) own = (el.value || '').trim();
+    if (el.tagName === 'SELECT') own = (el.selectedOptions[0]?.textContent ?? '').trim();
+    if (own === '') continue;
+    const r = el.getBoundingClientRect();
+    const s = getComputedStyle(el);
+    if (r.width <= 1 || r.height <= 1) continue;
+    if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
+    if (s.clipPath && s.clipPath !== 'none') continue;
+    if (el.closest('[inert]')) continue;
+    let opacity = 1; let image = false; const stack = [];
+    for (let n = el; n; n = n.parentElement) { const st = getComputedStyle(n); opacity *= parseFloat(st.opacity); stack.push(parse(st.backgroundColor)); if (st.backgroundImage !== 'none') image = true; }
+    let bg = [255, 255, 255, 1];
+    for (let i = stack.length - 1; i >= 0; i -= 1) bg = overC(stack[i], bg);
+    const f = parse(s.color);
+    const fg = overC([f[0], f[1], f[2], f[3] * opacity], bg);
+    const [hi, lo] = [lum(fg), lum(bg)].sort((a, b) => b - a);
+    const size = parseFloat(s.fontSize); const weight = parseInt(s.fontWeight, 10) || 400;
+    const large = size >= 24 || (size >= 18.66 && weight >= 700);
+    const disabled = Boolean(el.closest(':disabled, [aria-disabled="true"]'));
+    out.push({ tag: el.tagName.toLowerCase(), cls: typeof el.className === 'string' ? el.className.slice(0, 40) : '', text: own.slice(0, 36), ratio: (hi + 0.05) / (lo + 0.05), need: large ? 3 : 4.5, disabled, image });
+  }
+  return out;
+})()`;
+
+export interface TextRecord {
+  tag: string;
+  cls: string;
+  text: string;
+  ratio: number;
+  need: number;
+  disabled: boolean;
+  image: boolean;
+}
+
+export async function textSweep(page: Page): Promise<{ count: number; min: number; minWhere: string; below: TextRecord[] }> {
+  const all = await page.evaluate<TextRecord[]>(TEXT_SWEEP);
+  const live = all.filter((r) => !r.disabled);
+  const min = live.reduce<TextRecord | null>((m, r) => (m === null || r.ratio < m.ratio ? r : m), null);
+  return {
+    count: all.length,
+    min: min?.ratio ?? 0,
+    minWhere: min === null ? '' : `${min.tag}.${min.cls} "${min.text}"`,
+    below: live.filter((r) => r.ratio < r.need - 0.005),
+  };
+}
+
+export async function scan(page: Page, file: string, label: string): Promise<{ violations: number; below: number }> {
+  await settle(page);
+  const axe = await runAxe(page);
+  const text = await textSweep(page);
+  note(
+    file,
+    `${label}: axe ${axe.version} violations=${axe.violations.length} [${axe.violations.map((v) => `${v.id}(${v.impact})x${v.nodes.length}`).join(', ')}] incomplete=[${axe.incomplete.map((i) => `${i.id}x${i.nodes}`).join(', ')}] passes=${axe.passes}; text n=${text.count} min=${text.min.toFixed(2)} (${text.minWhere}) below=${text.below.length}`,
+  );
+  for (const v of axe.violations) for (const n of v.nodes.slice(0, 5)) note(file, `    VIOLATION ${v.id} ${n.target} ${n.html} :: ${n.summary}`);
+  for (const r of text.below.slice(0, 8)) note(file, `    TEXT-BELOW ${r.tag}.${r.cls} "${r.text}" ${r.ratio.toFixed(2)} needs ${r.need} image=${r.image}`);
+  return { violations: axe.violations.length, below: text.below.length };
+}
+
+/* ---- geometry ------------------------------------------------------------------------------------------------------- */
+export interface BoxN {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
+export async function box(locator: Locator): Promise<BoxN> {
+  return locator.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+  });
+}
+
+export async function css(locator: Locator, props: string[]): Promise<Record<string, string>> {
+  return locator.evaluate((el, names) => {
+    const s = getComputedStyle(el);
+    const out: Record<string, string> = {};
+    for (const n of names) out[n] = s.getPropertyValue(n);
+    return out;
+  }, props);
+}
+
+/** Sets the viewport so that `document.documentElement.clientWidth` is exactly `width` (overlay scrollbars: equal). */
+export async function setWidth(page: Page, width: number, height = 800): Promise<void> {
+  await page.setViewportSize({ width, height });
+  for (let i = 0; i < 3; i += 1) {
+    const cw = await page.evaluate<number>('document.documentElement.clientWidth');
+    if (cw === width) break;
+    await page.setViewportSize({ width: width + (width - cw), height });
+  }
+  await settle(page);
+}
+
+export async function pageScroll(page: Page): Promise<{ scrollWidth: number; clientWidth: number }> {
+  return page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
+}
+
+export function drawer(page: Page): Locator {
+  return page.locator('dialog[data-day-editor]');
+}
+
+export function dayBtn(page: Page, date: string): Locator {
+  return page.locator(`[data-day="${date}"] [data-day-button]`).first();
+}
+
+export async function activeDesc(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const a = document.activeElement;
+    if (a === null) return 'null';
+    const name = a.getAttribute('aria-label') ?? (a.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    return `${a.tagName.toLowerCase()}${a.id ? `#${a.id}` : ''}[${name}]${a.closest('[data-day]') ? ` in-day=${a.closest('[data-day]')?.getAttribute('data-day')}` : ''}`;
+  });
+}
+
+/** A press at a viewport point through real mouse events (pointerdown, mousedown, focus moves, click). */
+export async function pressAt(page: Page, x: number, y: number): Promise<string> {
+  const target = await page.evaluate(([px, py]) => {
+    const el = document.elementFromPoint(px, py);
+    return el === null ? 'null' : `${el.tagName.toLowerCase()}.${typeof el.className === 'string' ? el.className.split(' ').slice(0, 2).join('.') : ''}`;
+  }, [x, y]);
+  await page.mouse.click(x, y);
+  return target;
+}

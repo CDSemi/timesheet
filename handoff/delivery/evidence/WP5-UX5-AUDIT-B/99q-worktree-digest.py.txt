@@ -1,0 +1,17 @@
+"""Digest of the work export restricted to the target's own file list (lstree-sorted.txt): proves every tracked file of
+the work tree is byte-identical to the target after the mutants and probes. Also lists extra files outside the build
+outputs. Usage: python -I worktree-digest.py <exportDir> <lstree-sorted.txt>"""
+import hashlib, os, sys
+
+root, listing = sys.argv[1], sys.argv[2]
+entries, changed = [], []
+for line in open(listing, encoding="utf-8"):
+    path, blob = line.rstrip("\n").rsplit(" ", 1)
+    full = os.path.join(root, path)
+    data = open(full, "rb").read() if os.path.exists(full) else b""
+    actual = hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+    if actual != blob:
+        changed.append(path)
+    entries.append((path.encode("utf-8"), actual))
+text = b"".join(p + b" " + b.encode() + b"\n" for p, b in sorted(entries))
+print("%s  (%d files from the target list); changed: %s" % (hashlib.sha256(text).hexdigest(), len(entries), changed or "none"))

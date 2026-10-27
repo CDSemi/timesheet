@@ -1,0 +1,35 @@
+#!/bin/bash
+# Clean export of the repository working tree (tracked + untracked non-ignored files, handoff/ excluded) and its digest forms.
+# usage: wt-export.sh <tag> [export-dir-name]
+set -u
+T="<task>"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$(cygpath -u "$APPDATA")/npm:$PATH"
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
+TAG="$1"
+EXP="$T/${2:-wt-export2}"
+mkdir -p "$EXP" "$T/out"
+cd "<repo>" || exit 1
+git ls-files --cached --others --exclude-standard -z > "$T/out/wt-list-$TAG.bin"
+if [ ! -f "$EXP/package.json" ]; then
+  tar --null --anchored --exclude=handoff -c -f - -T "$T/out/wt-list-$TAG.bin" | tar -x -C "$EXP"
+  echo "export exit $?"
+fi
+git ls-files --eol --cached --others --exclude-standard > "$T/out/wt-eol-$TAG.txt"
+# export form: git blob id of every file of the export (CRLF working-tree text files normalized to LF as .gitattributes eol=lf does),
+# sorted, excluding installed/built folders and handoff/
+cd "$EXP" || exit 1
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' -not -path './.git/*' | sed 's|^\./||' | LC_ALL=C sort > "$T/out/wt-files-$TAG.txt"
+: > "$T/out/wt-hashes-$TAG.txt"
+while IFS= read -r f; do
+  if grep -F -q -- "w/crlf" <(grep -F -- "	$f" "$T/out/wt-eol-$TAG.txt"); then
+    h=$(sed 's/\r$//' -- "$f" | git hash-object --stdin)
+  else
+    h=$(git hash-object --no-filters -- "$f")
+  fi
+  printf '%s %s\n' "$f" "$h" >> "$T/out/wt-hashes-$TAG.txt"
+done < "$T/out/wt-files-$TAG.txt"
+LC_ALL=C sort "$T/out/wt-hashes-$TAG.txt" > "$T/out/wt-sorted-$TAG.txt"
+echo "export form: $(sha256sum "$T/out/wt-sorted-$TAG.txt" | cut -d' ' -f1) lines $(wc -l < "$T/out/wt-sorted-$TAG.txt")" > "$T/out/digest-export-$TAG.txt"
+cd "<repo>" || exit 1
+node.exe scripts/source-digest.mjs > "$T/out/digest-repo-$TAG.txt" 2>&1
+cat "$T/out/digest-export-$TAG.txt" "$T/out/digest-repo-$TAG.txt"

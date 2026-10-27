@@ -1,0 +1,46 @@
+$ node node_modules/@playwright/test/cli.js test tests/e2e/review.spec.ts -g week cards that scroll sideways --project=desktop --output=<task>\pw-rep-review
+
+Running 1 test using 1 worker
+
+[1/1] [desktop] › tests\e2e\review.spec.ts:464:1 › the Preview week cards that scroll sideways are named keyboard stops that ArrowRight scrolls; a window wide enough adds no stop
+  1) [desktop] › tests\e2e\review.spec.ts:464:1 › the Preview week cards that scroll sideways are named keyboard stops that ArrowRight scrolls; a window wide enough adds no stop 
+
+    Error: 480px: week 1 scrolls sideways
+
+    expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('[data-paper="review"]').locator('.sheet-week').first()
+    Expected: "0"
+    Received: ""
+    Timeout:  7000ms
+
+    Call log:
+      - 480px: week 1 scrolls sideways locator('[data-paper="review"]').locator('.sheet-week').first() with timeout 7000ms
+      - waiting for locator('[data-paper="review"]').locator('.sheet-week').first()
+        18 × locator resolved to <section class="sheet-week" aria-label="Week 1, 10/12/2026 to 10/18/2026">…</section>
+           - unexpected value "null"
+
+
+      479 |     for (const index of [0, 1]) {
+      480 |       const card = cards.nth(index);
+    > 481 |       await expect(card, `${width}px: week ${index + 1} scrolls sideways`).toHaveAttribute('tabindex', '0');
+          |                                                                            ^
+      482 |       await card.focus();
+      483 |       await expect(card, `${width}px: week ${index + 1} is reached by keyboard focus`).toBeFocused();
+      484 |       await expect(card, `${width}px: week ${index + 1} has its name`).toHaveAccessibleName(new RegExp(`^Week ${index + 1}, `));
+        at <task>\export\tests\e2e\review.spec.ts:481:76
+
+    Error Context: ..\pw-rep-review\review-the-Preview-week-ca-e3999-ow-wide-enough-adds-no-stop-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-rep-review\review-the-Preview-week-ca-e3999-ow-wide-enough-adds-no-stop-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-rep-review\review-the-Preview-week-ca-e3999-ow-wide-enough-adds-no-stop-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  1 failed
+    [desktop] › tests\e2e\review.spec.ts:464:1 › the Preview week cards that scroll sideways are named keyboard stops that ArrowRight scrolls; a window wide enough adds no stop 
+exit=1

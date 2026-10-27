@@ -1,0 +1,25 @@
+. <task>/env.sh
+mkdir -p $E
+rm -f $T/tmp/mask-last.txt
+m() { node "$TW\\mask.mjs" "$1" "$2" >> $T/tmp/mask-last.txt 2>&1; }
+cd $T/out
+for f in *.txt; do
+  case "$f" in ex-files.txt|ex-hashes.txt|ex-sorted.txt|lstree-sorted.txt|51-*-files.txt|51-*-hashes.txt|82-r1-*.txt) continue;; esac
+  m "$T/out/$f" "$E/$f"
+done
+cd $T/logs
+for f in control-*.txt sweep-*.txt stress-*.txt probe-a-*.txt mut-*.txt probes.log stress.log chain1.log chain2.log drill.log cmp-dist.txt census.log digest-*.txt setup.txt; do
+  [ -f "$f" ] && m "$T/logs/$f" "$E/log-$f"
+done
+cd $T
+for s in env.sh setup.sh digest.sh run-shift.sh chain1.sh chain2.sh sweep.sh stress.sh cmp-dist.sh repo-verify.sh drill.sh probes.sh mut1.sh mut2.sh af4.sh collect.sh wait.sh; do [ -f "$s" ] && m "$T/$s" "$E/$s.txt"; done
+for s in mask.mjs shiftclock.mjs probe-now.mjs zone.mjs counts.mjs zz-control.spec.ts affinity-run.ps1; do [ -f "$s" ] && m "$T/$s" "$E/$s.txt"; done
+m $T/export-probe/tests/e2e/zz-a.spec.ts $E/zz-a-diag2-probe.spec.ts.txt
+m $T/export-probe/scripts/smoke-block8.mjs $E/smoke-block8-target-copy.mjs.txt
+m $T/export-probe/scripts/smoke-block8-noclose.mjs $E/smoke-block8-noclose-copy.mjs.txt
+m $T/export-probe/scripts/smoke-fail.mjs $E/smoke-induced-fail-copy.mjs.txt
+ls $E | wc -l
+grep -rhoE "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+" $E --include=*.txt > $T/tmp/emails-found.txt
+grep -rlE "<user>|signature" $E > $T/tmp/flag-files.txt
+ls $E | grep -i signature > $T/tmp/signature-names.txt
+echo collect-done > $T/out/collect.done

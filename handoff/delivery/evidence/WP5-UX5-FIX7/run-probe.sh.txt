@@ -1,0 +1,11 @@
+#!/bin/bash
+# usage: run-probe.sh <probe-file-name-in-probes> <out-name>
+set -u
+T="<task>"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$(cygpath -u "$APPDATA")/npm:$PATH"
+export TEMP="$(cygpath -w "$T/tmp")" TMP="$(cygpath -w "$T/tmp")"
+export DATA_DIR="$T/data" DATABASE_PATH="$T/data/probe.db"
+mkdir -p "$T/data" "$T/out"
+cd "$T/probes" || exit 1
+node.exe "$1" "$T/out/$2" > "$T/out/$2.log" 2>&1
+echo "exit $?" >> "$T/out/$2.log"

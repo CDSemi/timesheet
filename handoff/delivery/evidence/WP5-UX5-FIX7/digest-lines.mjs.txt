@@ -1,0 +1,8 @@
+// Prints the "<path> <blob>" lines that scripts/source-digest.mjs hashes (same logic), to the file given as argv[2].
+import { execFileSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+
+const listing = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { encoding: 'utf8' });
+const files = [...new Set(listing.split('\0'))].filter((path) => path !== '' && !path.startsWith('handoff/')).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+const blobs = execFileSync('git', ['hash-object', '--stdin-paths'], { input: `${files.join('\n')}\n`, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).trim().split('\n');
+writeFileSync(process.argv[2], files.map((path, index) => `${path} ${blobs[index]}\n`).join(''));

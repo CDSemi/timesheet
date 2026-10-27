@@ -1,0 +1,18 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+const b = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const out = [];
+for (const t of b.tasks) {
+  if (!/^WP5-UX[45]/.test(t.id)) continue;
+  out.push([t.id, t.kind, t.profile, t.status, t.actual_model, t.requested_model, t.agent_id, t.decision].join(' | '));
+}
+out.push('---- owner_decisions (2026-10-20..22)');
+for (const d of b.owner_decisions) {
+  const s = JSON.stringify(d);
+  if (/2026-10-2[0-2]/.test(s)) out.push(s);
+}
+out.push('---- coordinator_decisions (2026-10-20..22)');
+for (const d of b.coordinator_decisions) {
+  const s = JSON.stringify(d);
+  if (/2026-10-2[0-2]/.test(s)) out.push(s);
+}
+writeFileSync(process.argv[3], out.join('\n'));

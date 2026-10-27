@@ -154,3 +154,10 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+
+- HEAD 5b8b718 -> f4049aa7905e22f1467dfcae4208675cb2fc8e80; pushed (fast-forward), remote SHA = HEAD.
+- D_PRE = HEAD digest = 26b163a62b7d85dbf6b6146c73f98593ad6bcae7eeb8fb1dc7fd9d4dc8305336.
+- Staged 164 (8 source, 6 records, 12 tasks, 138 evidence). One rename (-synthetic), no masking, nothing unstaged.
+- All checks exit 0 (precommit, diff --check, JSON, validate_orchestration, check_recovery 106, preflight).
+- Note: the email/Message-ID scan matched only the attribution trailer address in FIX3-FREEZE records.
+- Details: handoff/delivery/evidence/WP5-UX5-FIX6-FREEZE/checks.txt.

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Usage: digest.sh <label>   (writes digest-<label>.txt in the task folder)
+set -u
+T=<task>
+R=/d/Dropbox/Work.CDSemi/timesheet
+SHA=f4049aa7905e22f1467dfcae4208675cb2fc8e80
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+OUT="$T/digest-$1.txt"
+{
+  echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "node: $(node --version)"
+  echo "HEAD: $(git -C "$R" rev-parse HEAD)"
+  echo "origin/main: $(git -C "$R" rev-parse origin/main)"
+  echo "status outside handoff (empty = clean):"
+  git -C "$R" status --short -- . ':(exclude)handoff' 2>&1
+  echo "--- form 1: npm run digest in the repository working tree"
+  (cd "$R" && node scripts/source-digest.mjs) 2>&1
+  echo "--- form 2: git ls-tree of $SHA"
+  git -C "$R" ls-tree -r --format='%(path) %(objectname)' "$SHA" > "$T/lstree.txt"
+  grep -v '^handoff/' "$T/lstree.txt" > "$T/lstree-nohandoff.txt"
+  LC_ALL=C sort "$T/lstree-nohandoff.txt" > "$T/lstree-sorted.txt"
+  echo "$(sha256sum < "$T/lstree-sorted.txt" | cut -d' ' -f1)  ($(wc -l < "$T/lstree-sorted.txt") files)"
+  echo "--- form 3: clean git archive export of $SHA, raw blob hashes"
+  rm -f "$T/export-after.tar"; if false; then :; else
+    mkdir -p "$T/export-after"
+    git -C "$R" archive --format=tar "$SHA" > "$T/export-after.tar"
+    tar -x -C "$T/export-after" -f "$T/export-after.tar"
+  fi
+  python -I "$T/blobdigest.py" "$T/export-after"
+} > "$OUT" 2>&1
+echo "exit=$?" >> "$OUT"

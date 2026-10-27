@@ -1,0 +1,155 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+import { namedDayButton } from './dayButton.ts';
+
+/*
+ * WP5-UX5-PLAN-FIX7A probe T (F-UX5A-3): a touch swipe, a touch tap and a press on a week card's own scrollbar while the Day editor
+ * is open (floating drawer, a desktop-width window). Task-local; never part of the repository.
+ */
+const OUT = process.env.AUDIT_OUT ?? '';
+const LABEL = process.env.PROBE_LABEL ?? 'touch';
+function note(line: string): void {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, `obs-${LABEL}.txt`), `${line}\n`);
+}
+
+// Classic scrollbars for the whole file (Playwright's headless default hides them).
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles', launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } });
+
+async function activeDesc(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const e = document.activeElement;
+    if (e === null) return 'null';
+    return `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}[${(e.getAttribute('aria-label') ?? e.textContent ?? '').trim().slice(0, 30)}]`;
+  });
+}
+
+/** A point of plain page at the window edge away from the docked drawer (as the repository's own outside-press tests). */
+async function edgePoint(page: Page, editor: Locator): Promise<{ x: number; y: number; hit: string }> {
+  const side = await editor.getAttribute('data-side');
+  const width = await page.evaluate<number>('document.documentElement.clientWidth');
+  const x = side === 'left' ? width - 4 : 4;
+  const hit = await page.evaluate(([px, py]) => {
+    const e = document.elementFromPoint(px as number, py as number);
+    return e === null ? 'null' : `${e.tagName.toLowerCase()}.${e.className}`;
+  }, [x, 300] as const);
+  return { x, y: 300, hit };
+}
+
+test.describe('touch context', () => {
+  test.use({ hasTouch: true, viewport: { width: 1024, height: 768 } });
+
+  test('swipe, tap and keep editing', async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+    test.skip(isMobile, 'a desktop browser with a touch screen');
+    test.setTimeout(120_000);
+    const free = await employeeSeed.displayedPeriodFreeWorkdays();
+    const date = free[0] ?? '';
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    const dayBtn = namedDayButton(page, date, 'Edit');
+    const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    const isOpen = async () => (await editor.count()) > 0;
+    note(`coarse ${await page.evaluate('matchMedia("(pointer: coarse)").matches')} layout ${await page.locator('[data-editor-layout]').getAttribute('data-editor-layout')}`);
+    const swipe = async (x: number, y: number) => {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+      for (let i = 1; i <= 6; i += 1) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - i * 30 }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await page.waitForTimeout(400);
+    };
+    await dayBtn.click();
+    await expect(editor).toBeVisible();
+    const p = await edgePoint(page, editor);
+    note(`drawer side ${await editor.getAttribute('data-side')}; press point ${JSON.stringify(p)}`);
+    // T1: a swipe up that starts on plain page.
+    const y0 = await page.evaluate<number>('window.scrollY');
+    await swipe(p.x, p.y);
+    note(`T1 swipe: page scrolled ${y0} -> ${await page.evaluate<number>('window.scrollY')}; drawer ${(await isOpen()) ? 'OPEN' : 'closed'}`);
+    // T2: a tap on plain page closes it; focus returns to the day button.
+    if (!(await isOpen())) await dayBtn.click();
+    await expect(editor).toBeVisible();
+    await page.touchscreen.tap(p.x, p.y);
+    await page.waitForTimeout(300);
+    note(`T2 tap (no edits): drawer ${(await isOpen()) ? 'OPEN' : 'closed'}; asks ${await prompt.count()}; focus ${await activeDesc(page)}; dayBtnFocused ${await dayBtn.evaluate((e) => e === document.activeElement)}`);
+    // T3: a tap with unsaved edits asks; Keep editing returns focus to the field.
+    if (!(await isOpen())) await dayBtn.click();
+    await expect(editor).toBeVisible();
+    const notes = editor.getByLabel('Notes');
+    await notes.fill('Synthetic unsaved note');
+    const p2 = await edgePoint(page, editor);
+    await page.touchscreen.tap(p2.x, p2.y);
+    await page.waitForTimeout(300);
+    note(`T3 tap with edits: asks ${await prompt.count()}; editor ${(await isOpen()) ? 'open' : 'closed'}; focus ${await activeDesc(page)}`);
+    if ((await prompt.count()) > 0) {
+      await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+      await page.waitForTimeout(200);
+      note(`T3 after Keep editing: focus ${await activeDesc(page)}; notesFocused ${await notes.evaluate((e) => e === document.activeElement)}`);
+      // T3b: a swipe with edits does not ask.
+      const p3 = await edgePoint(page, editor);
+      await swipe(p3.x, p3.y);
+      note(`T3b swipe with edits: asks ${await prompt.count()}; editor ${(await isOpen()) ? 'open' : 'closed'}; focus ${await activeDesc(page)}`);
+      // T3c: Discard goes ahead.
+      await page.touchscreen.tap(p3.x, p3.y);
+      await page.waitForTimeout(300);
+      if ((await prompt.count()) > 0) await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
+      await page.waitForTimeout(200);
+      note(`T3c tap then Discard: editor ${(await isOpen()) ? 'open' : 'closed'}; dayBtnFocused ${await dayBtn.evaluate((e) => e === document.activeElement)}`);
+    }
+  });
+});
+
+test.describe('classic scrollbar, mouse', () => {
+  test.use({ viewport: { width: 900, height: 900 } });
+
+  test('a press on a week card scrollbar', async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+    test.skip(isMobile, 'desktop');
+    test.setTimeout(120_000);
+    const free = await employeeSeed.displayedPeriodFreeWorkdays();
+    const date = free[0] ?? '';
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    const dayBtn = namedDayButton(page, date, 'Edit');
+    const isOpen = async () => (await editor.count()) > 0;
+    await dayBtn.click();
+    await expect(editor).toBeVisible();
+    const bar = await page.evaluate(() => {
+      for (const week of document.querySelectorAll<HTMLElement>('.sheet-week')) {
+        const r = week.getBoundingClientRect();
+        const trackH = week.offsetHeight - week.clientHeight;
+        const y = r.top + week.clientTop + week.clientHeight + Math.max(1, trackH / 2);
+        if (week.scrollWidth > week.clientWidth && y < window.innerHeight && r.top > 0) return { x: r.right - 60, y, trackH };
+      }
+      return null;
+    });
+    note(`week card scrollbar: ${JSON.stringify(bar)}`);
+    if (bar !== null && bar.trackH > 0) {
+      await page.mouse.move(bar.x, bar.y);
+      await page.mouse.down();
+      await page.mouse.move(bar.x + 120, bar.y, { steps: 5 });
+      await page.mouse.up();
+      await page.waitForTimeout(300);
+      const scrolled = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.sheet-week')].map((w) => w.scrollLeft).join(','));
+      note(`S1 press-drag on the week card scrollbar: drawer ${(await isOpen()) ? 'OPEN' : 'closed'}; week scrollLeft ${scrolled}`);
+    }
+    if (!(await isOpen())) await dayBtn.click();
+    await expect(editor).toBeVisible();
+    // S2: a press on plain page still closes it.
+    const p = await edgePoint(page, editor);
+    await page.mouse.click(p.x, p.y);
+    await page.waitForTimeout(300);
+    note(`S2 mouse press on plain page ${p.hit}: drawer ${(await isOpen()) ? 'OPEN' : 'closed'}; dayBtnFocused ${await dayBtn.evaluate((e) => e === document.activeElement)}`);
+    // S3: a press on the window scrollbar (unchanged rule).
+    await dayBtn.click();
+    await expect(editor).toBeVisible();
+    const track = await page.evaluate<number>('window.innerWidth - document.documentElement.clientWidth');
+    if (track > 0) {
+      await page.mouse.click(899 - Math.floor(track / 2), 450);
+      await page.waitForTimeout(300);
+      note(`S3 press on the window scrollbar (${track}px): drawer ${(await isOpen()) ? 'OPEN' : 'closed'}`);
+    }
+  });
+});

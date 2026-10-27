@@ -428,11 +428,18 @@ function assertNothingInFlight(db: Db, userId: string, revisionId: string): void
   if (open.some((attempt) => attempt.state === 'uncertain')) {
     throw new ApiError(409, 'delivery_uncertain', 'A delivery attempt is uncertain; record a decision before sending again');
   }
+  // A send job of ANY revision of the period that still waits blocks another send, so a superseded revision's copy cannot
+  // arrive after the correction's (R-UX5B-1).
   const waiting = db
-    .prepare<[string, string, string], { one: number }>("SELECT 1 AS one FROM jobs WHERE user_id = ? AND revision_id = ? AND kind = ? AND state IN ('queued', 'leased') LIMIT 1")
-    .get(userId, revisionId, JOB_SEND_EMAIL);
+    .prepare<[string, string, string], { one: number }>(
+      `SELECT 1 AS one FROM jobs j
+         JOIN timesheet_revisions r ON r.id = j.revision_id AND r.user_id = j.user_id
+         JOIN timesheet_revisions target ON target.timesheet_id = r.timesheet_id AND target.user_id = r.user_id
+        WHERE j.user_id = ? AND j.kind = ? AND j.state IN ('queued', 'leased') AND target.id = ? LIMIT 1`,
+    )
+    .get(userId, JOB_SEND_EMAIL, revisionId);
   if (open.length > 0 || waiting !== undefined) {
-    throw new ApiError(409, 'delivery_in_progress', 'A delivery of this revision is already in progress');
+    throw new ApiError(409, 'delivery_in_progress', 'A delivery of this period is already in progress');
   }
 }
 

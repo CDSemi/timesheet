@@ -1,0 +1,6 @@
+import { readFileSync } from 'node:fs';
+const text = readFileSync(process.argv[2], 'utf8');
+const find = '    input.envelope.bodyText,\n    input.envelope.bodyHtml,';
+console.log('crlf lines', (text.match(/\r\n/g) ?? []).length, 'anchor count', text.split(find).length - 1);
+const i = text.indexOf('input.envelope.bodyText,');
+console.log(JSON.stringify(text.slice(i - 10, i + 70)));

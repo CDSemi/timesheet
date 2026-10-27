@@ -1,0 +1,80 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-PLAN-FIX7A probe S (F-UX5A-1): the Review page of an already signed period (signed, reloaded) at several widths.
+ * Task-local; never part of the repository. Output: OUT_DIR/<label>.txt (label from PROBE_LABEL).
+ */
+const OUT = process.env.AUDIT_OUT ?? '';
+const LABEL = process.env.PROBE_LABEL ?? 'sig';
+function note(line: string): void {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, `obs-${LABEL}.txt`), `${line}\n`);
+}
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const GEOM = `(() => {
+  const g = document.querySelector('.review-signatures');
+  const r = (e) => { if (!e) return null; const b = e.getBoundingClientRect(); return { l: +b.left.toFixed(1), r: +b.right.toFixed(1), t: +b.top.toFixed(1), b: +b.bottom.toFixed(1), w: +b.width.toFixed(1), h: +b.height.toFixed(1) }; };
+  const line = (n) => r(g.querySelector('[data-sig-line="' + n + '"]'));
+  const e = line('employee'), ed = line('employee-date'), m = line('manager'), md = line('manager-date');
+  const btn = r(g.querySelector('.rsig-action button'));
+  const content = r(g.querySelector('.rsig-content'));
+  const parts = ['.signed-image', '.signed-name', '[data-signed-seal]'].map((s) => ({ s, box: r(g.querySelector(s)) }));
+  const overlap = (a, b) => a && b && a.l < b.r - 0.5 && b.l < a.r - 0.5 && a.t < b.b - 0.5 && b.t < a.b - 0.5;
+  const overlaps = btn ? parts.filter((p) => overlap(btn, p.box)).map((p) => p.s) : [];
+  const nameEl = g.querySelector('.signed-name');
+  const lh = nameEl ? parseFloat(getComputedStyle(nameEl).lineHeight) || 18 : 18;
+  const nameLines = nameEl ? Math.round(nameEl.getBoundingClientRect().height / lh) : 0;
+  const nameFits = nameEl ? nameEl.scrollWidth <= nameEl.clientWidth + 1 : null;
+  return { line: e, date: ed, mgr: m, mgrDate: md, content, btn, parts, overlaps, nameLines, nameFits,
+    rowAlign1: e && ed ? +(e.b - ed.b).toFixed(2) : null, rowAlign2: m && md ? +(m.b - md.b).toFixed(2) : null,
+    colX: e && m ? +(e.l - m.l).toFixed(2) : null, colW: e && m ? +(e.w - m.w).toFixed(2) : null, dateX: ed && md ? +(ed.l - md.l).toFixed(2) : null, dateW: ed && md ? +(ed.w - md.w).toFixed(2) : null,
+    btnRightInset: btn && e ? +(e.r - btn.r).toFixed(2) : null, btnBottomOnLine: btn && e ? +(btn.b - e.b).toFixed(2) : null,
+    scroll: document.documentElement.scrollWidth + '/' + document.documentElement.clientWidth };
+})()`;
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))).then(resolve))))`);
+}
+
+test('signed and reloaded Review: the employee line at many widths', async ({ page, adminSeed, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop browser; widths are set by resize');
+  test.setTimeout(300_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Review Person', to: ['payroll-synthetic@example.invalid'], signature: 'saved' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(free[0] ?? '');
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/#/review/${person.payrollDate}`);
+  await page.getByLabel('Email').fill(person.account.email);
+  await page.getByLabel('Password').fill(person.account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+  await page.locator('[data-sign-off]').click();
+  const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('checkbox', { name: /I acknowledge/ }).check();
+  await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+  await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+  await expect(page.locator('[data-signed-line]')).toBeVisible();
+  const imgs = page.locator('[data-signed-line] img');
+  for (const img of await imgs.all()) await expect.poll(() => img.evaluate((e) => (e as unknown as { complete: boolean; naturalWidth: number }).complete && (e as unknown as { naturalWidth: number }).naturalWidth > 0)).toBe(true);
+  note(`button text "${await page.locator('[data-sign-off]').textContent()}"`);
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    for (const width of [1440, 1200, 1100, 1000, 900, 768, 600, 480, 390, 340, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await settle(page);
+      await page.locator('.review-preview .sheet-footer').scrollIntoViewIfNeeded();
+      note(`[${scheme} ${width}] ${JSON.stringify(await page.evaluate(GEOM))}`);
+      if ([768, 390, 320].includes(width)) {
+        await page.locator('.review-signatures').screenshot({ path: screenshotPath(`f7a-${LABEL}-sig-${width}-${scheme}-synthetic.png`) });
+      }
+    }
+  }
+});

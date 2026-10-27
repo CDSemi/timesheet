@@ -1,0 +1,21 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+
+// Usage: node summarize-sig.mjs <obs-file> <out-file>: one compact line per probe row.
+const [, , input, output] = process.argv;
+const out = [];
+for (const raw of readFileSync(input, 'utf8').split('\n')) {
+  const match = /^\[(\w+) (\d+)\] (.*)$/.exec(raw);
+  if (match === null) {
+    if (raw !== '') out.push(raw);
+    continue;
+  }
+  const [, scheme, width, json] = match;
+  const g = JSON.parse(json);
+  const image = g.parts.find((p) => p.s === '.signed-image')?.box;
+  out.push(
+    `${scheme} ${width}: line ${g.line.w}x${g.line.h} mgr ${g.mgr.w} content ${g.content.w} image ${image?.w}x${image?.h} nameLines ${g.nameLines} ` +
+      `btn below content ${g.btn.t >= g.content.b - 0.5} overlaps ${JSON.stringify(g.overlaps)} rowAlign ${g.rowAlign1}/${g.rowAlign2} col x ${g.colX} w ${g.colW} date x ${g.dateX} w ${g.dateW} ` +
+      `btnInset ${g.btnRightInset} btnBottom ${g.btnBottomOnLine} scroll ${g.scroll}`,
+  );
+}
+writeFileSync(output, `${out.join('\n')}\n`);

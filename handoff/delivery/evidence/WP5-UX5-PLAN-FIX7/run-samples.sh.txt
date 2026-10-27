@@ -1,0 +1,10 @@
+#!/bin/bash
+set -u
+T="<task>"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$(cygpath -u "$APPDATA")/npm:$PATH"
+export TEMP="$(cygpath -w "$T/tmp")" TMP="$(cygpath -w "$T/tmp")"
+cd "$T/export" || exit 1
+node.exe node_modules/typescript/lib/tsc.js -p tsconfig.server.json > "$T/out/130-build-server.txt" 2>&1; echo "build exit $?" >> "$T/out/130-build-server.txt"
+export PILOT_REPO="$(cygpath -w "$T/export")" RUN_DIR="$(cygpath -w "$T/samples-run")"
+mkdir -p "$T/samples-run"
+node.exe "$T/probes/104-make-samples.mjs" > "$T/out/131-samples.txt" 2>&1; echo "exit $?" >> "$T/out/131-samples.txt"

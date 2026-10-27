@@ -1,0 +1,12 @@
+// Runs a command with a given TZ in the child environment (Git Bash does not pass TZ to native programs).
+// Usage: node run-tz.mjs <zone> <cwd> <command> [args...]
+import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+
+const [zone, cwd, command, ...args] = process.argv.slice(2);
+const env = { ...process.env, TZ: zone };
+const probe = spawnSync(process.execPath, [join(import.meta.dirname, 'tzprobe.mjs')], { env, encoding: 'utf8' });
+process.stdout.write(probe.stdout);
+const run = spawnSync(command, args, { cwd, env, stdio: 'inherit', shell: true });
+console.log(`exit=${run.status}`);
+process.exitCode = run.status ?? 1;

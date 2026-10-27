@@ -1,0 +1,20 @@
+// Applies mutant M6 (only the current revision's send counts) and runs the H-1 a probe, to show the probe discriminates.
+// Usage: node h1-under-m6.mjs <exportDir> <workDir> <out.txt>
+import { spawnSync } from 'node:child_process';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [exportDir, work, outPath] = process.argv.slice(2);
+const file = join(exportDir, 'src', 'server', 'services', 'deliveries.ts');
+const original = readFileSync(file, 'utf8');
+const find = '          WHERE r.timesheet_id = ? AND s.user_id = ? LIMIT 1`,';
+const replace = '          WHERE r.timesheet_id = ? AND s.user_id = ? AND r.revision_no = (SELECT t.finalized_revision_no FROM timesheets t WHERE t.id = r.timesheet_id) LIMIT 1`,';
+if (original.split(find).length !== 2) throw new Error('anchor');
+writeFileSync(file, original.replace(find, () => replace));
+try {
+  const run = spawnSync(process.execPath, [join(import.meta.dirname, 'h1-deadline2.ts'), work, outPath], { encoding: 'utf8' });
+  appendFileSync(outPath, `probe exit ${run.status} (non-zero expected under the mutant) ${run.stderr.slice(0, 300)}\n`);
+} finally {
+  writeFileSync(file, original);
+}
+appendFileSync(outPath, `restored identical: ${readFileSync(file, 'utf8') === original}\n`);

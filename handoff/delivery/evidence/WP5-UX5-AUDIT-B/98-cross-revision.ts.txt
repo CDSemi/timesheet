@@ -1,0 +1,81 @@
+/*
+ * WP5-UX5-AUDIT-B probe: is the "send in progress blocks another send" rule revision-scoped or period-scoped? Revision 1
+ * is sent (its job still waiting), then a correction (revision 2) is signed and sent while revision 1's send waits.
+ * Target code in process, synthetic seed, capture adapter. Usage: node cross-revision.ts <workDir> <out.txt>
+ */
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { openDatabase } from '../export/src/server/db/database.ts';
+import { migrate } from '../export/src/server/db/migrations.ts';
+import { FileStore } from '../export/src/server/files/fileStore.ts';
+import { seedSynthetic } from '../export/src/server/seed.ts';
+import { createSession } from '../export/src/server/services/timesheetCommands.ts';
+import { buildReviewPayload } from '../export/src/server/services/reviewPayload.ts';
+import { reviseTimesheet, signOffTimesheet } from '../export/src/server/services/finalization.ts';
+import { sendDraft, sendRevision } from '../export/src/server/services/deliveries.ts';
+import { createPdfJobHandler } from '../export/src/server/jobs/pdfJob.ts';
+import { createSendJobHandler } from '../export/src/server/jobs/sendJob.ts';
+import { runJobsOnce } from '../export/src/server/jobs/runner.ts';
+import { createCaptureAdapter } from '../export/src/server/mail/captureAdapter.ts';
+
+const [work, outPath] = process.argv.slice(2);
+if (work === undefined || outPath === undefined) throw new Error('usage');
+mkdirSync(work, { recursive: true });
+const lines: string[] = [];
+const log = (line: string) => lines.push(line);
+class MutableClock {
+  current: Date;
+  constructor(iso: string) {
+    this.current = new Date(iso);
+  }
+  now(): Date {
+    return new Date(this.current.getTime());
+  }
+  set(iso: string): void {
+    this.current = new Date(iso);
+  }
+}
+const LA = 'America/Los_Angeles';
+const db = openDatabase(join(work, 'probe.db'));
+migrate(db);
+const clock = new MutableClock('2026-09-29T20:00:00Z');
+const files = new FileStore(join(work, 'private-data'));
+await seedSynthetic(db, clock, { files, passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass', employee2: 'synthetic-employee2-pass' }, sampleData: true });
+const row = db.prepare("SELECT id, email, display_name, calendar_id FROM users WHERE email = 'employee2@example.invalid'").get() as Record<string, string>;
+const user = { id: row.id, email: row.email, displayName: row.display_name, role: 'employee' as const, calendarId: row.calendar_id, sessionId: 'probe' };
+const session = (date: string, reason: string, end = '19:00') =>
+  createSession({ db, clock, user } as never, date, { start: { local: `${date}T09:00`, zone: LA }, end: { local: `${date}T${end}`, zone: LA }, input_zone: LA, breaks_confirmed: true, breaks: [], reason } as never);
+session('2026-09-02', 'Synthetic entry for the cross-revision probe');
+const r1 = buildReviewPayload(db, clock, user, '2026-09-18');
+const s1 = signOffTimesheet({ db, clock, user }, '2026-09-18', { expectedVersion: r1.expectedVersion, reviewedHash: r1.payloadHash, deficitChoices: [], incompleteEvidenceAcknowledged: true });
+const send = (revisionId: string, key: string, reason?: string) => {
+  const draft = sendDraft(db, user, revisionId, 'timesheet@example.invalid');
+  try {
+    const result = sendRevision({ db, clock, user }, revisionId, { requestKey: key, to: draft.envelope.to, cc: draft.envelope.cc, subject: draft.envelope.subject, bodyText: draft.envelope.bodyText, timeRows: draft.rows.time, otRows: draft.rows.ot, reason });
+    return `${result.status} send ${result.send.sendNo}`;
+  } catch (error) {
+    const e = error as { status?: number; code?: string };
+    return `${e.status}:${e.code}`;
+  }
+};
+log(`revision 1 send: ${send(s1.revision.id, 'probe-cross-0001')}`);
+// The correction, while revision 1's send job still waits (no job has run).
+session('2026-09-03', 'Synthetic second entry to correct');
+const r2 = buildReviewPayload(db, clock, user, '2026-09-18');
+const s2 = reviseTimesheet({ db, clock, user }, '2026-09-18', { kind: 'correction', reason: 'Synthetic correction', sendEmail: false, expectedVersion: r2.expectedVersion, reviewedHash: r2.payloadHash, deficitChoices: [], incompleteEvidenceAcknowledged: true });
+log(`correction (revision 2) created: ${s2.status}`);
+log(`revision 2 draft: reason_required=${sendDraft(db, user, s2.revision.id, null).copySentBefore !== null}`);
+log(`revision 2 send while revision 1's send waits, no reason: ${send(s2.revision.id, 'probe-cross-0002')}`);
+const handlers = {
+  render_pdf: createPdfJobHandler({ db, clock, files }),
+  send_email: createSendJobHandler({ db, clock, files, outbound: createCaptureAdapter(join(work, 'private-data')), senderAddress: 'timesheet@example.invalid' }),
+};
+for (let pass = 0; pass < 4; pass += 1) {
+  await runJobsOnce({ db, clock, handlers });
+  clock.set(new Date(clock.now().getTime() + 120_000).toISOString());
+}
+const attempts = db
+  .prepare('SELECT r.revision_no, a.state, a.started_at FROM delivery_attempts a JOIN timesheet_revisions r ON r.id = a.revision_id ORDER BY a.rowid')
+  .all();
+log(`attempts after the runner (in order): ${JSON.stringify(attempts)}`);
+writeFileSync(outPath, `${lines.join('\n')}\n`);

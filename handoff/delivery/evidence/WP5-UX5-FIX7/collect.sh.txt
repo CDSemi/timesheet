@@ -1,0 +1,29 @@
+#!/bin/bash
+# Copies the masked outputs, scripts and probes of this task into the evidence folder (masked LF .txt).
+set -u
+T="<task>"
+REPO="<repo>"
+E="$REPO/handoff/delivery/evidence/WP5-UX5-FIX7"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$PATH"
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
+mkdir -p "$E"
+MASK="$(cygpath -w "$T/scripts/mask.mjs")"
+m() { node.exe "$MASK" "$(cygpath -w "$1")" "$(cygpath -w "$2")"; }
+cd "$T/out" || exit 1
+for f in *.txt *.log; do
+  [ -f "$f" ] || continue
+  case "$f" in wt-list-*|wt-files-*|wt-hashes-*|wt-sorted-*|wt-eol-*|repo-lines*|*.bin) continue;; esac
+  case "$f" in *.log) m "$T/out/$f" "$E/$f.txt";; *) m "$T/out/$f" "$E/$f";; esac
+done
+for f in mut/*.log; do [ -f "$f" ] && m "$T/out/$f" "$E/$(basename "$f").txt"; done
+for s in setup.sh run-vitest.sh run-probe.sh run-mutants.sh run-repo.sh run-e2e.sh reapply.sh wt-export.sh drill.sh collect.sh; do m "$T/scripts/$s" "$E/$s.txt"; done
+m "$T/scripts/change.diff" "$E/change-applied.diff.txt"
+m "$T/scripts/mask.mjs" "$E/mask.mjs.txt"
+for p in mutants.mjs anchor.mjs digest-lines.mjs parity.mjs; do m "$T/probes/$p" "$E/$p.txt"; done
+cd "$REPO" || exit 1
+git status --short -- . ':!handoff' > "$T/out/end-status.txt" 2>&1
+git diff --stat -- . ':!handoff' > "$T/out/end-diffstat.txt" 2>&1
+git diff -- . ':!handoff' > "$T/out/end-diff.txt" 2>&1
+git diff --check > "$T/out/end-diffcheck.txt" 2>&1; echo "exit $?" >> "$T/out/end-diffcheck.txt"
+for f in end-status end-diffstat end-diff end-diffcheck; do m "$T/out/$f.txt" "$E/$f.txt"; done
+ls "$E" | wc -l

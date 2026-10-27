@@ -1,0 +1,17 @@
+#!/bin/bash
+# Full typecheck (server, client, test), node --check of the drill, and eslint of every changed file. usage: run-checks2.sh <out-name>
+set -u
+T="<task>"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$(cygpath -u "$APPDATA")/npm:$PATH"
+export TEMP="$(cygpath -w "$T/tmp")" TMP="$(cygpath -w "$T/tmp")"
+OUT="$T/out/$1"
+cd "$T/export" || exit 1
+: > "$OUT"
+for project in tsconfig.server.json tsconfig.client.json tsconfig.test.json; do
+  echo "== tsc -p $project" >> "$OUT"
+  node.exe node_modules/typescript/lib/tsc.js -p "$project" --noEmit >> "$OUT" 2>&1; echo "exit $?" >> "$OUT"
+done
+echo "== node --check scripts/container-drill.mjs" >> "$OUT"
+node.exe --check scripts/container-drill.mjs >> "$OUT" 2>&1; echo "exit $?" >> "$OUT"
+echo "== eslint changed files" >> "$OUT"
+node.exe node_modules/eslint/bin/eslint.js src/server/pdf/timesheetPdf.ts src/server/services/deliveries.ts src/client/components/deliveryModel.ts scripts/container-drill.mjs tests/integration/pdf-render.test.ts tests/integration/sends.test.ts >> "$OUT" 2>&1; echo "exit $?" >> "$OUT"

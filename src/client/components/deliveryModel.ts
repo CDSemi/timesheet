@@ -373,7 +373,7 @@ export function resendFailureText(caught: unknown): string {
     case 'delivery_uncertain':
       return 'A delivery attempt is uncertain. Record your decision on it before you resend.';
     case 'delivery_in_progress':
-      return 'A delivery of this revision is already in progress.';
+      return 'A delivery of this period is already in progress.';
     case 'pdf_not_ready':
       return 'The PDF of this revision is not ready yet.';
     case 'revision_superseded':
@@ -581,7 +581,7 @@ export function sendFailure(caught: unknown): SendFailure {
     case 'invalid_body':
       return { kind: 'field', field: 'body', message: `The message must have 1 to ${MAX_SEND_BODY} characters without control characters.` };
     case 'delivery_in_progress':
-      return { kind: 'conflict', message: 'A delivery of this revision is already in progress or waiting. Nothing was sent again; follow it in History.' };
+      return { kind: 'conflict', message: 'A delivery of this period is already in progress or waiting. Nothing was sent again; follow it in History.' };
     case 'delivery_uncertain':
       return { kind: 'conflict', message: 'A delivery attempt of this revision is uncertain. Record your decision on it in History before you send again.' };
     case 'revision_superseded':

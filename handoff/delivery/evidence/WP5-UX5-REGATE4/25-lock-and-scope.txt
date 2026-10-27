@@ -1,0 +1,19 @@
+WP5-UX5-REGATE4 item 1: scope of 5b8b718..f4049aa outside handoff/ (one commit: f4049aa7 "Pin patched dependencies and harden tests against host load"), exactly eight paths:
+  package.json                    FIX4  nodemailer 10.0.14 -> 10.1.4, zod 4.6.5 -> 4.6.6 (exact pins)
+  package-lock.json               FIX4  see below
+  tests/e2e/timesheet.spec.ts     FIX5  showToday: date compare moved into an expect.poll (focus event + fresh server read)
+  tests/e2e/review.spec.ts        FIX5  expectSignatureGeometry: poll until every img in the rows is complete with naturalWidth > 0
+  tests/e2e/fixtures.ts           FIX5  SeedClient.raw and uploadSignature: connection: close;  FIX6  waitUntilHealthy health poll: connection: close
+  vitest.config.ts                FIX6  maxWorkers: '50%'
+  scripts/smoke-built-server.mjs  FIX6  connection: close in call() and the PDF fetch; monitor declared outside try and closed in finally
+  scripts/container-drill.mjs     FIX6  connection: close in call()
+
+package-lock.json: every package whose version changed (from the diff, out/20-diff-full.txt):
+  node_modules/nodemailer   10.0.14 -> 10.1.4   (root dependency, FIX4)
+  node_modules/zod          4.6.5   -> 4.6.6    (root dependency, FIX4)
+  New entry node_modules/smtp-server/node_modules/nodemailer 10.0.14 (dev: true, MIT-0): the dev-only smtp-server (test mail sink) keeps its own nested nodemailer 10.0.14
+  because the root copy moved to 10.1.4. It is a dev dependency, not in the production image (npm audit --omit=dev and the image scan: production dependencies only).
+  No other version changed. Beyond nodemailer, zod and what they require: only that nested dev copy (flagged, not blocking).
+
+Nothing under src/, assets/, Dockerfile or compose files changed. Clean builds: 5b8b718 and f4049aa each after its own npm ci: 250 dist files each, all hashes equal (diff exit 0, 0 differing lines),
+so the shipped server and client bundles are byte-identical to the previous snapshot; the nodemailer and zod bump is therefore visible only in node_modules (the container image installs from the new lockfile).

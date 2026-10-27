@@ -1,0 +1,17 @@
+#!/bin/bash
+# usage: run-repo.sh <out-name> <npm run args...>   (runs inside the repository, Node 24, task-folder TEMP and data)
+set -u
+T="<task>"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$(cygpath -u "$APPDATA")/npm:$PATH"
+export TEMP="$(cygpath -w "$T/tmp")" TMP="$(cygpath -w "$T/tmp")" TMPDIR="$T/tmp"
+export DATA_DIR="$T/data" DATABASE_PATH="$T/data/repo.db"
+export SMOKE_PORT=50370
+export NO_COLOR=1 FORCE_COLOR=0
+unset PRODUCTION_SENDING_ENABLED
+mkdir -p "$T/data" "$T/out"
+OUT="$1"; shift
+cd "<repo>" || exit 1
+echo "start $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$T/out/$OUT"
+node.exe "$(cygpath -u "$APPDATA")/npm/node_modules/npm/bin/npm-cli.js" "$@" >> "$T/out/$OUT" 2>&1
+echo "exit $?" >> "$T/out/$OUT"
+echo "end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/out/$OUT"

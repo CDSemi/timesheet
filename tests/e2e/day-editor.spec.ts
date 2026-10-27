@@ -6537,6 +6537,64 @@ test.describe('WP5-UX5-T05B (U5-24, owner answer F-7 a): on a desktop a press ou
     await expect(editor).toHaveAttribute('data-day-editor', other);
     await expect(editor).toBeVisible();
   });
+
+  // F-UX5A-3: on a touch screen the press acts on its pointer-up. A swipe that starts outside a day column scrolls the page; the browser
+  // cancels that pointer and nothing was pressed.
+  test.describe('on a touch screen, 1024px wide', () => {
+    test.use({ hasTouch: true, viewport: { width: 1024, height: 768 } });
+
+    test('a swipe that starts outside a day column scrolls the page and leaves the drawer (and its edits) alone; a tap there closes it like a press, with the question when edits are unsaved', async ({
+      page,
+      employeeSeed,
+      signInThroughUi,
+    }) => {
+      const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+      await signInThroughUi();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      const dayBtn = namedDayButton(page, date, 'Edit');
+      const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+      expect(await page.evaluate<boolean>('matchMedia("(pointer: coarse)").matches'), 'a touch screen').toBe(true);
+      await dayBtn.click();
+      await expect(editor).toBeVisible();
+      await expect(page.locator('[data-editor-layout]')).toHaveAttribute('data-editor-layout', 'floating');
+      const notes = editor.getByLabel('Notes');
+      await notes.fill('Synthetic unsaved note');
+      const x = await pageEdgeX(page, editor);
+
+      // A swipe up from plain page (a touch sequence through the browser, which is what a finger sends): the page scrolls, nothing closes
+      // and nothing asks.
+      await page.evaluate('window.scrollTo(0, 0)');
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: 300 }] });
+      for (let step = 1; step <= 6; step += 1) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: 300 - step * 30 }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await expect.poll(() => page.evaluate<number>('window.scrollY'), { message: 'the swipe scrolled the page' }).toBeGreaterThan(0);
+      await expect(editor, 'a scroll is not a press').toBeVisible();
+      await expect(prompt).toHaveCount(0);
+      await expect(notes).toHaveValue('Synthetic unsaved note');
+
+      // A tap with unsaved edits asks; Keep editing leaves the text and gives the focus back to the field.
+      await page.touchscreen.tap(x, 300);
+      await expect(prompt).toBeVisible();
+      await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+      await expect(prompt).toHaveCount(0);
+      await expect(notes).toHaveValue('Synthetic unsaved note');
+      await expect(notes, 'Keep editing returns focus to the field that had it').toBeFocused();
+
+      // Discard closes it and focus returns to the day button; a tap with nothing unsaved closes at once, and the focus is still the day's.
+      await page.touchscreen.tap(x, 300);
+      await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
+      await expect(editor).toHaveCount(0);
+      await expect(dayBtn).toBeFocused();
+      await dayBtn.click();
+      await expect(editor).toBeVisible();
+      await page.touchscreen.tap(x, 300);
+      await expect(editor).toHaveCount(0);
+      await expect(prompt).toHaveCount(0);
+      await expect(dayBtn, 'the mouse events after the tap do not move the focus').toBeFocused();
+    });
+  });
 });
 
 test('WP5-UX5-T05B (U5-24): on a phone a tap on the bottom sheet backdrop closes it, with the discard question when edits are unsaved, and focus returns to the day button', async ({

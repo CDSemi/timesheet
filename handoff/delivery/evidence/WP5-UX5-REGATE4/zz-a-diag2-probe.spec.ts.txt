@@ -1,0 +1,71 @@
+import type { Page } from '@playwright/test';
+import { expect, type SeedClient, test } from './fixtures.ts';
+
+/*
+ * DIAG2 probe for A (scratch copy only). It copies `shownPeriod` and `showToday` of timesheet.spec.ts (lines 518-536) and, between the
+ * server read and the click on "Next period", waits until the server's date passes the reporting-zone midnight: the same ordering as
+ * the REGATE3 failure trace (server read 06:59:59.97Z, click 07:00:00.17Z), made deterministic.
+ * PROBE_MODE=old runs the original helper; PROBE_MODE=fixed runs the proposed one.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+interface ShownSheet {
+  days: Array<{ work_date: string; classification: { day_class: 'normal' | 'nonworking' } | null }>;
+}
+
+async function shownPeriod(employeeSeed: SeedClient) {
+  const { todayLocal, currentPayrollDate } = await employeeSeed.today();
+  const sheet = await employeeSeed.call<ShownSheet>('GET', `/api/timesheets/${currentPayrollDate}`);
+  const dates = sheet.days.map((day) => day.work_date);
+  return { todayLocal, dates, todayShown: dates.includes(todayLocal) };
+}
+
+async function waitForRollover(employeeSeed: SeedClient, from: string) {
+  await expect
+    .poll(async () => (await employeeSeed.today()).todayLocal, { message: 'the server date passes midnight', timeout: 120_000, intervals: [50] })
+    .not.toBe(from);
+}
+
+async function showTodayOld(page: Page, employeeSeed: SeedClient): Promise<string> {
+  const { todayLocal, todayShown } = await shownPeriod(employeeSeed);
+  await waitForRollover(employeeSeed, todayLocal); // probe only: the crossing lands here
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await expect(page.locator(`[data-day="${todayLocal}"]`)).toHaveCount(todayShown ? 1 : 0);
+  await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(todayShown ? 1 : 0);
+  if (!todayShown) await page.getByRole('button', { name: 'Next period' }).click();
+  await expect(page.locator(`[data-day="${todayLocal}"].today`)).toHaveCount(1);
+  await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(1);
+  return todayLocal;
+}
+
+/** Proposed: the date comes from the app (the Today tag) once the app and the server agree on it; a focus event is the app's own refresh. */
+async function showTodayFixed(page: Page, employeeSeed: SeedClient): Promise<string> {
+  const { todayLocal, todayShown } = await shownPeriod(employeeSeed);
+  await waitForRollover(employeeSeed, todayLocal); // probe only: the crossing lands here
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await expect(page.locator(`[data-day="${todayLocal}"]`)).toHaveCount(todayShown ? 1 : 0);
+  await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(todayShown ? 1 : 0);
+  if (!todayShown) await page.getByRole('button', { name: 'Next period' }).click();
+  await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(1);
+  const tag = page.locator('[data-sheet] [data-day].today');
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate("window.dispatchEvent(new Event('focus'))");
+        const server = (await employeeSeed.today()).todayLocal;
+        return (await tag.count()) === 1 && (await tag.getAttribute('data-day')) === server ? server : null;
+      },
+      { message: 'the Today tag and the server date agree' },
+    )
+    .not.toBeNull();
+  return (await tag.getAttribute('data-day')) ?? '';
+}
+
+test('probe A: the date read before midnight, the page read after', async ({ page, employeeSeed, signInThroughUi }) => {
+  test.setTimeout(150_000);
+  await signInThroughUi();
+  const mode = process.env.PROBE_MODE ?? 'old';
+  const today = mode === 'fixed' ? await showTodayFixed(page, employeeSeed) : await showTodayOld(page, employeeSeed);
+  console.log(`PROBE-A mode=${mode} today=${today}`);
+  await expect(page.locator(`[data-day="${today}"]`)).toHaveClass(/\btoday\b/);
+});

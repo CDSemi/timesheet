@@ -1,0 +1,238 @@
+diff --git a/package-lock.json b/package-lock.json
+index d20167dc..1e0a957c 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -13,11 +13,11 @@
+         "better-sqlite3": "13.0.3",
+         "dejavu-fonts-ttf": "2.37.3",
+         "hono": "4.13.11",
+-        "nodemailer": "10.0.14",
++        "nodemailer": "10.1.4",
+         "pdf-lib": "1.17.1",
+         "react": "19.3.0",
+         "react-dom": "19.3.0",
+-        "zod": "4.6.5"
++        "zod": "4.6.6"
+       },
+       "devDependencies": {
+         "@playwright/test": "1.63.0",
+@@ -2279,9 +2279,9 @@
+       }
+     },
+     "node_modules/nodemailer": {
+-      "version": "10.0.14",
+-      "resolved": "https://registry.npmjs.org/nodemailer/-/nodemailer-10.0.14.tgz",
+-      "integrity": "sha512-eJoLFKg55fesSlzUekmfOv/SBXh4KUYT8oiQc2RLP0tfG0rbNMJBK7wgHJwXTJwqyKlSJMz9UzDZ4v+aHEvo8g==",
++      "version": "10.1.4",
++      "resolved": "https://registry.npmjs.org/nodemailer/-/nodemailer-10.1.4.tgz",
++      "integrity": "sha512-EsMnOR2oRv4LGnWvHgcVYkkQ4O2j8KO4WTw6l+PHR4sOXo8SAgIraxtEnGDmotjbhv0hDsu3IuDIFZm8iXwO4A==",
+       "license": "MIT-0",
+       "engines": {
+         "node": ">=20.0.0"
+@@ -2642,6 +2642,16 @@
+         "node": ">=20.0.0"
+       }
+     },
++    "node_modules/smtp-server/node_modules/nodemailer": {
++      "version": "10.0.14",
++      "resolved": "https://registry.npmjs.org/nodemailer/-/nodemailer-10.0.14.tgz",
++      "integrity": "sha512-eJoLFKg55fesSlzUekmfOv/SBXh4KUYT8oiQc2RLP0tfG0rbNMJBK7wgHJwXTJwqyKlSJMz9UzDZ4v+aHEvo8g==",
++      "dev": true,
++      "license": "MIT-0",
++      "engines": {
++        "node": ">=20.0.0"
++      }
++    },
+     "node_modules/source-map-js": {
+       "version": "1.2.1",
+       "resolved": "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.1.tgz",
+@@ -2997,9 +3007,9 @@
+       }
+     },
+     "node_modules/zod": {
+-      "version": "4.6.5",
+-      "resolved": "https://registry.npmjs.org/zod/-/zod-4.6.5.tgz",
+-      "integrity": "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==",
++      "version": "4.6.6",
++      "resolved": "https://registry.npmjs.org/zod/-/zod-4.6.6.tgz",
++      "integrity": "sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==",
+       "license": "MIT",
+       "funding": {
+         "url": "https://github.com/sponsors/colinhacks"
+diff --git a/package.json b/package.json
+index d950fb24..84f5397a 100644
+--- a/package.json
++++ b/package.json
+@@ -33,11 +33,11 @@
+     "better-sqlite3": "13.0.3",
+     "dejavu-fonts-ttf": "2.37.3",
+     "hono": "4.13.11",
+-    "nodemailer": "10.0.14",
++    "nodemailer": "10.1.4",
+     "pdf-lib": "1.17.1",
+     "react": "19.3.0",
+     "react-dom": "19.3.0",
+-    "zod": "4.6.5"
++    "zod": "4.6.6"
+   },
+   "devDependencies": {
+     "@playwright/test": "1.63.0",
+diff --git a/scripts/container-drill.mjs b/scripts/container-drill.mjs
+index 27ade7a7..9a238125 100644
+--- a/scripts/container-drill.mjs
++++ b/scripts/container-drill.mjs
+@@ -168,7 +168,8 @@ function freeLoopbackPort() {
+ 
+ let base = '';
+ async function call(method, path, { cookie, body } = {}) {
+-  const headers = { origin: publicOrigin };
++  // Close each connection: blocking docker/compose runs between calls outlast the server's 5 s keep-alive.
++  const headers = { origin: publicOrigin, connection: 'close' };
+   if (cookie) headers.cookie = cookie;
+   if (body !== undefined) headers['content-type'] = 'application/json';
+   const response = await fetch(`${base}${path}`, {
+diff --git a/scripts/smoke-built-server.mjs b/scripts/smoke-built-server.mjs
+index 7a5279c8..8b211968 100644
+--- a/scripts/smoke-built-server.mjs
++++ b/scripts/smoke-built-server.mjs
+@@ -73,7 +73,8 @@ function run(args) {
+ }
+ 
+ async function call(method, path, { cookie, body, withOrigin = true } = {}) {
+-  const headers = {};
++  // Close each connection: spawnSync below blocks this process for longer than the server's 5 s keep-alive.
++  const headers = { connection: 'close' };
+   if (withOrigin) headers.origin = origin;
+   if (cookie) headers.cookie = cookie;
+   if (body !== undefined) headers['content-type'] = 'application/json';
+@@ -112,6 +113,7 @@ function recentMonday() {
+ const local = (date, time) => ({ local: `${date}T${time}`, zone: 'America/Los_Angeles' });
+ 
+ let server;
++let monitor;
+ try {
+   console.log(`node ${process.version}`);
+   const migrated = run(['dist/server/cli.js', 'migrate']);
+@@ -313,7 +315,7 @@ try {
+   check('state change without Origin is rejected (403)', noOrigin.status === 403, String(noOrigin.status));
+ 
+ // ---- WP3: review safety, sign-off conflict, private PDF, capture, shared route (WP3-T14) ----
+-  const monitor = new Database(join(work, 'timesheet.db'), { readonly: true });
++  monitor = new Database(join(work, 'timesheet.db'), { readonly: true });
+   const tableNames = monitor.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+   /** Row counts of every table plus the commit counter: any write by another connection changes it. */
+   const dbState = () =>
+@@ -412,7 +414,7 @@ try {
+   const passes = [runAt(1), runAt(150), runAt(300)];
+   check('cli run-jobs --once --now runs the PDF and send jobs', passes.every((pass) => pass.status === 0), passes.map((pass) => pass.output).join(' '));
+ 
+-  const pdf2 = await fetch(`${base}/api/revisions/${revisionId}/pdf`, { headers: { cookie: cookie2 } });
++  const pdf2 = await fetch(`${base}/api/revisions/${revisionId}/pdf`, { headers: { cookie: cookie2, connection: 'close' } });
+   const pdfBytes = Buffer.from(await pdf2.arrayBuffer());
+   check(
+     'the owner downloads the revision PDF (application/pdf, no-store, attachment)',
+@@ -491,6 +493,8 @@ try {
+   failures += 1;
+   console.log(`FAIL  unexpected error: ${error instanceof Error ? error.message : String(error)}`);
+ } finally {
++  // An open database handle makes rmSync fail on Windows and would hide the SMOKE FAILED line.
++  monitor?.close();
+   server?.kill();
+   await new Promise((resolve) => setTimeout(resolve, 300));
+   rmSync(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+diff --git a/tests/e2e/fixtures.ts b/tests/e2e/fixtures.ts
+index de11fd7c..438de786 100644
+--- a/tests/e2e/fixtures.ts
++++ b/tests/e2e/fixtures.ts
+@@ -66,7 +66,8 @@ async function waitUntilHealthy(origin: string, child: ChildProcess): Promise<vo
+   for (let attempt = 0; attempt < READY_ATTEMPTS; attempt += 1) {
+     if (child.exitCode !== null) throw new Error(`Built server exited early with ${child.exitCode}`);
+     try {
+-      if ((await fetch(`${origin}/api/health`)).ok) return;
++      // Close the connection: a blocking CLI run (runJobsAt) can precede the first request and would strand a pooled socket.
++      if ((await fetch(`${origin}/api/health`, { headers: { connection: 'close' } })).ok) return;
+     } catch {
+       // Not listening yet.
+     }
+@@ -369,7 +370,8 @@ export class SeedClient {
+   }
+ 
+   private raw(method: string, path: string, body?: unknown): Promise<Response> {
+-    const headers: Record<string, string> = { origin: this.origin };
++    // One connection per request: a spec blocks this process for seconds (spawnSync of the run-jobs CLI) and the server closes an idle keep-alive connection after 5 s, which a pooled socket would still look alive on.
++    const headers: Record<string, string> = { origin: this.origin, connection: 'close' };
+     if (this.cookie !== '') headers.cookie = this.cookie;
+     if (body !== undefined) headers['content-type'] = 'application/json';
+     return fetch(`${this.origin}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+@@ -380,7 +382,7 @@ export class SeedClient {
+    * `authorizeAutoImage` the upload also records the explicit automatic-image consent (settings must exist).
+    */
+   async uploadSignature(png: Buffer, authorizeAutoImage = false): Promise<string> {
+-    const headers: Record<string, string> = { origin: this.origin, 'content-type': 'image/png' };
++    const headers: Record<string, string> = { origin: this.origin, 'content-type': 'image/png', connection: 'close' };
+     if (this.cookie !== '') headers.cookie = this.cookie;
+     const query = authorizeAutoImage ? '?authorize_auto_image=true' : '';
+     const response = await fetch(`${this.origin}/api/signatures${query}`, { method: 'POST', headers, body: new Uint8Array(png) });
+diff --git a/tests/e2e/review.spec.ts b/tests/e2e/review.spec.ts
+index f85fa2b3..38b5f0a8 100644
+--- a/tests/e2e/review.spec.ts
++++ b/tests/e2e/review.spec.ts
+@@ -567,6 +567,15 @@ test('the mockup and the PDF geometry agree within 1% of the content width (the
+ /** Measures the two signature rows inside `scope` and checks the owner's rules; returns the measured fractions. */
+ async function expectSignatureGeometry(scope: Locator, width: number, options: { button: Locator | null; exactFractions: boolean }) {
+   const group = scope.locator('.review-signatures');
++  // The saved signature image of the Sign off dialog's preview grows the employee line when it arrives (the name wraps under it by
++  // 23.25px): wait until every image in the rows has loaded, so the four lines are read from one settled layout.
++  for (const image of await group.locator('img').all()) {
++    await expect
++      .poll(() => image.evaluate((element) => (element as unknown as { complete: boolean; naturalWidth: number }).complete && (element as unknown as { naturalWidth: number }).naturalWidth > 0), {
++        message: 'the signature image has loaded',
++      })
++      .toBe(true);
++  }
+   const content = await rect(group);
+   const line = async (name: string) => rect(group.locator(`[data-sig-line="${name}"]`));
+   const employee = await line('employee');
+diff --git a/tests/e2e/timesheet.spec.ts b/tests/e2e/timesheet.spec.ts
+index 7f1c08d1..af63ff30 100644
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -530,9 +530,22 @@ async function showToday(page: Page, employeeSeed: SeedClient): Promise<string>
+   await expect(page.locator(`[data-day="${todayLocal}"]`)).toHaveCount(todayShown ? 1 : 0);
+   await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(todayShown ? 1 : 0);
+   if (!todayShown) await page.getByRole('button', { name: 'Next period' }).click();
+-  await expect(page.locator(`[data-day="${todayLocal}"].today`)).toHaveCount(1);
+   await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(1);
+-  return todayLocal;
++  // The date comes from the app once the app and the server agree on it. A page that stayed open across the reporting-zone midnight
++  // shows the earlier date until it re-reads the periods (document 04: on load, on a press of Today and on focus), so the poll sends
++  // the focus event and compares the Today tag with a fresh server read instead of with the date read before the midnight.
++  const tagged = page.locator('[data-sheet] [data-day].today');
++  await expect
++    .poll(
++      async () => {
++        await page.evaluate("window.dispatchEvent(new Event('focus'))");
++        const server = (await employeeSeed.today()).todayLocal;
++        return (await tagged.count()) === 1 && (await tagged.getAttribute('data-day')) === server ? server : null;
++      },
++      { message: 'the Today tag and the server date agree' },
++    )
++    .not.toBeNull();
++  return (await tagged.getAttribute('data-day')) ?? todayLocal;
+ }
+ 
+ const dayButtonOf = (page: Page, workDate: string) => namedDayButton(page, workDate, 'Edit');
+diff --git a/vitest.config.ts b/vitest.config.ts
+index d65ab18e..a16a9d6c 100644
+--- a/vitest.config.ts
++++ b/vitest.config.ts
+@@ -6,6 +6,9 @@ export default defineConfig({
+     environment: 'node',
+     // better-sqlite3 is a native addon; separate processes keep each test file isolated.
+     pool: 'forks',
++    // Many integration files spawn CLI children; one fork per logical CPU oversubscribes a loaded or small host
++    // and pushes spawn-heavy tests past the timeout. Half the logical CPUs keeps the same coverage.
++    maxWorkers: '50%',
+     testTimeout: 30_000,
+   },
+ });

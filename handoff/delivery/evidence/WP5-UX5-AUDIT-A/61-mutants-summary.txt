@@ -1,0 +1,32 @@
+WP5-UX5-AUDIT-A mutants (export-mut; each applied alone by mut.mjs from mutants.json, client rebuilt with npm run build:client where the
+target is client code, the named tests run on both projects unless a test is project-scoped, the file restored and compared byte for byte;
+after all runs `diff -r export/src export-mut/src` and `diff -r export/tests export-mut/tests` exit 0: 60-mutants-srcdiff.txt).
+Raw logs: log-mut-<id>.txt.
+
+id   mutation                                                              tests run                                         result
+M1   compact sheet rule `@media (width < 480px)` -> `(max-width: 479px)`   vitest layoutQueries.test.ts;                     CAUGHT by vitest (1 failed: "leaves no min-width / max-width media query");
+                                                                           surfaces.spec "layout breakpoints"                e2e 3 passed (whole-pixel browser sweep cannot see it)
+M2   range ladder: `@container period-range (width < 7.3em)` -> 0.1em    timesheet.spec "range ladder"                     NOT CAUGHT (1 passed): no tested width reaches a box under 7.3em
+M3   U5-14: draft "Review & sign off" primary even when not ended        vitest reviewModel.test.ts; today.spec "primary"   CAUGHT (vitest 1 failed; e2e 1 failed)
+M4   compact "Change several days" not right-aligned                     timesheet.spec "compact toolbar rows"              CAUGHT (2 failed: "358px: right-aligned on the shared row", 46.03 > 0.6)
+M5   sub-button hit area extra 4px -> 0px                                 controls.spec "36px high everywhere"               CAUGHT (2 failed: "Add session keeps its hit area 3px above the box")
+M6   an outside press on Today closes the editor first                   today.spec "Today moves an open Day editor";       CAUGHT by today.spec (desktop 1 failed); day-editor.spec U5-24 5 passed
+                                                                           day-editor.spec "U5-24"
+M7   the dirty guard ignores the partial-leave draft                      day-editor.spec "U5-25"                            CAUGHT (2 failed: discard question not visible)
+M8   the phone bottom sheet renders the Figures                           day-editor.spec "U5-26"                            CAUGHT (1 failed)
+M9   the Preview company line never hides (clipped instead)               review.spec "Preview header"                       CAUGHT (2 failed: toBeHidden)
+M10  Sign off inset 8px -> 12px                                           review.spec "signature rows"                       CAUGHT (2 failed: "Sign off sits 8px inside the end of its line", 4 > 1)
+M11  Send enabled before the sign-off                                     vitest deliveryModel.test.ts; review.spec           CAUGHT (vitest 1 failed; e2e 2 failed: toBeDisabled)
+                                                                           "Send stays disabled"
+M12  the reason dialog is skipped for another copy                        submission.spec                                    CAUGHT (2 failed: "nothing is posted without a valid reason")
+M13  the window-focus refresh keeps the old periods once the date moved   today.spec:626 + timesheet.spec showToday users     at the America/Los_Angeles midnight crossing (FIX10 wrapper, start 2026-11-04T07:59:20Z,
+                                                                           (Today bar, Today spacing), --repeat-each=3,       --workers=6): 4 failed, 14 passed. CAUGHT by today.spec:626 "the refreshed tab tags the
+                                                                           --workers=6                                        new date" (3 desktop, 1 mobile; Expected 2026-11-04, Received 2026-11-03); all 12
+                                                                                                                              showToday instances PASSED (the poll's date compare did not catch it). Control (unmutated
+                                                                                                                              export, same instant and tests): 18 passed (log-m13-control.txt).
+M14  Today spacing: day button 4px after the bar                          timesheet.spec "Today spacing"                     CAUGHT (2 failed: 4.5 < 7.99)
+M15  the WEEK bar loses its grid-wide minimum                             timesheet.spec "WEEK bar"                          CAUGHT (2 failed: bar 416px, grid 850px)
+M16  U5-16: the title shrinks before the field block moves under it     surfaces.spec "U5-16"                              CAUGHT (2 failed: "the title is one line while it fits alone")
+M17  drawer corners rounded again (U5-23)                                 day-editor.spec "U5-23"                            CAUGHT (3 failed: "all four corners are square")
+
+Totals: 17 mutants; 15 caught by the suite (M1 only by the vitest text test), M2 not caught, M13 caught only by today.spec:626 at the crossing.

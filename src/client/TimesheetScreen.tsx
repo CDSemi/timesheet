@@ -66,6 +66,24 @@ const OUTSIDE_PRESS_KEEPS = [
   '[role="tab"]',
 ].join(', ');
 
+/**
+ * Whether a press at (x, y) on `element` landed on the element's own scrollbar: the element scrolls (overflow auto or scroll) and the
+ * point is outside its client box, which excludes the scrollbars. A scrollbar press scrolls; it is not a press on the page (F-UX5A-3).
+ */
+function onOwnScrollbar(element: Element, x: number, y: number): boolean {
+  const style = getComputedStyle(element);
+  if (!/auto|scroll/.test(`${style.overflowX} ${style.overflowY}`)) return false;
+  const box = element.getBoundingClientRect();
+  const left = box.left + element.clientLeft;
+  const top = box.top + element.clientTop;
+  return x < left || x >= left + element.clientWidth || y < top || y >= top + element.clientHeight;
+}
+
+/** The touch-end listener of a tap that was used: cancelling it stops the mouse events (and the focus move they bring) after the tap. */
+function cancelMouseEvents(event: TouchEvent): void {
+  if (event.cancelable) event.preventDefault();
+}
+
 /** The text of the polite status after the open day's button closed the Day editor. */
 const EDITOR_CLOSED_TEXT = 'Day editor closed';
 
@@ -592,20 +610,46 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   // U5-24, owner answer F-7 a: while the drawer is open, a press on the page outside a day column, the drawer, a dialog or a control
   // closes it like Close, with the discard question when it holds unsaved edits (Keep editing changes nothing). A control keeps its
   // own action, so Today still moves an open editor; another day column switches the day. The phone's bottom sheet handles a press
-  // on its own backdrop (DayEditor). A press that is not the primary button, or lands on the window's scrollbar, is not a press on the page.
+  // on its own backdrop (DayEditor). A press that is not the primary button, or lands on a scrollbar (the window's or an element's own),
+  // is not a press on the page. A touch press waits for its pointer-up: a swipe that starts outside a day column scrolls the page, the
+  // browser cancels that pointer (no pointer-up), and it must not close the drawer. The touch-end that follows a tap that closed it is
+  // prevented, so the browser's mouse events (which would move focus off the day button) do not follow.
   useEffect(() => {
     if (editDate === null || !desktop) return;
+    let touch: number | null = null;
     const onPress = (event: PointerEvent) => {
+      touch = null;
       if (event.button !== 0 || !(event.target instanceof Element)) return;
       const root = document.documentElement;
       if (event.clientX >= root.clientWidth || event.clientY >= root.clientHeight) return;
       if (event.target.closest(OUTSIDE_PRESS_KEEPS) !== null) return;
+      if (onOwnScrollbar(event.target, event.clientX, event.clientY)) return;
+      if (event.pointerType === 'touch') {
+        touch = event.pointerId;
+        return;
+      }
       // The press is used here: unprevented, the browser would move focus to the page after the editor (or the question) took it.
       event.preventDefault();
       closeFromOutside.current();
     };
+    const onRelease = (event: PointerEvent) => {
+      if (touch !== event.pointerId) return;
+      touch = null;
+      // The touch-end of this tap comes next (browsers with touch events): preventing it cancels the mouse events that would follow.
+      if ('ontouchend' in document) document.addEventListener('touchend', cancelMouseEvents, { once: true, passive: false });
+      closeFromOutside.current();
+    };
+    const onCancel = () => {
+      touch = null;
+    };
     document.addEventListener('pointerdown', onPress);
-    return () => document.removeEventListener('pointerdown', onPress);
+    document.addEventListener('pointerup', onRelease);
+    document.addEventListener('pointercancel', onCancel);
+    return () => {
+      document.removeEventListener('pointerdown', onPress);
+      document.removeEventListener('pointerup', onRelease);
+      document.removeEventListener('pointercancel', onCancel);
+    };
   }, [editDate, desktop]);
 
   /** A press on the open day's own button: closes the editor (after the discard question when it holds unsaved edits) and says so. */
@@ -687,7 +731,6 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
                   <button
                     type="button"
                     className="secondary change-days"
-                    aria-label="Change several days"
                     aria-pressed={batchOn}
                     disabled={imported}
                     aria-describedby={imported ? 'imported-reason' : undefined}
@@ -697,9 +740,11 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
                     }}
                   >
                     {/* U5-17b: where the compact toolbar row has no room the visible words step down to "Change days" (CSS, a container
-                        query); the name stays "Change several days", which contains every visible form (SC 2.5.3). */}
+                        query). The name is the visible words (no aria-label): the form that is shown is the name (SC 2.5.3), and
+                        the form that is not shown is display: none, so it is not read. Both forms are real text, because a
+                        generated ::before text is not part of the name for every tool (axe: button-name). */}
                     <span className="change-days-long">Change several days</span>
-                    <span className="change-days-short" data-text="Change days" aria-hidden="true" />
+                    <span className="change-days-short">Change days</span>
                   </button>
                 )}
               </div>

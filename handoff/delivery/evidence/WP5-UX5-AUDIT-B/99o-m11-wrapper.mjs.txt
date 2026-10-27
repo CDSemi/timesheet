@@ -1,0 +1,20 @@
+// Applies mutant M11 to the export, runs m11-eml.ts in a fresh process, restores the file and checks it is identical.
+// Usage: node m11-wrapper.mjs <exportDir> <workDir> <out.txt>
+import { spawnSync } from 'node:child_process';
+import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [exportDir, work, outPath] = process.argv.slice(2);
+const file = join(exportDir, 'src', 'server', 'services', 'deliveries.ts');
+const original = readFileSync(file, 'utf8');
+const find = '    input.envelope.bodyText,\n    input.envelope.bodyHtml,';
+const replace = "    input.reason === null ? input.envelope.bodyText : `${input.envelope.bodyText}\\nReason: ${input.reason}`,\n    input.envelope.bodyHtml,";
+if (original.split(find).length !== 2) throw new Error('anchor');
+writeFileSync(file, original.replace(find, () => replace));
+try {
+  const run = spawnSync(process.execPath, [join(import.meta.dirname, 'm11-eml.ts'), work, outPath], { encoding: 'utf8' });
+  appendFileSync(outPath, `probe exit ${run.status} ${run.stderr.slice(0, 500)}\n`);
+} finally {
+  writeFileSync(file, original);
+}
+appendFileSync(outPath, `restored identical: ${readFileSync(file, 'utf8') === original}\n`);

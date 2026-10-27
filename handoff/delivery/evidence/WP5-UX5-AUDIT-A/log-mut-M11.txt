@@ -1,0 +1,125 @@
+== M11 start 03:59:32Z
+M11 applied to src/client/components/deliveryModel.ts: Send enabled before the sign-off
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/client/deliveryModel.test.ts (40 tests | 1 failed) 19ms
+   ❯ the Send card (WP5-UX5-T03) (9)
+     × the Send button: disabled with "Sign off first" before the sign-off, "Send another copy..." once a copy counts, none for an imported period 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/deliveryModel.test.ts > the Send card (WP5-UX5-T03) > the Send button: disabled with "Sign off first" before the sign-off, "Send another copy..." once a copy counts, none for an imported period
+AssertionError: expected { mode: 'send', label: 'Send', …(1) } to deeply equal { mode: 'sign_first', …(2) }
+
+- Expected
++ Received
+
+  {
+    "hint": "Sign off first",
+    "label": "Send",
+-   "mode": "sign_first",
++   "mode": "send",
+  }
+
+ ❯ tests/client/deliveryModel.test.ts:510:55
+    508|   it('the Send button: disabled with "Sign off first" before the sign-…
+    509|     const base = { signed: true, imported: false, current: true, copyS…
+    510|     expect(sendCardState({ ...base, signed: false })).toEqual({ mode: …
+       |                                                       ^
+    511|     expect(sendCardState(base)).toEqual({ mode: 'send', label: 'Send',…
+    512|     expect(sendCardState({ ...base, copySentBefore: true })).toEqual({…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 39 passed (40)
+   Start at  20:59:32
+   Duration  253ms (transform 64%, import 22%, tests 12%, worker 2%)
+
+  vitest exit=1
+  build:client exit=0
+
+Running 2 tests using 2 workers
+
+[1/2] [desktop] › tests\e2e\review.spec.ts:884:1 › Send stays disabled before the sign-off whatever is typed, and a send with an invalid address makes no request
+[2/2] [mobile] › tests\e2e\review.spec.ts:884:1 › Send stays disabled before the sign-off whatever is typed, and a send with an invalid address makes no request
+  1) [mobile] › tests\e2e\review.spec.ts:884:1 › Send stays disabled before the sign-off whatever is typed, and a send with an invalid address makes no request 
+
+    Error: expect(locator).toBeDisabled() failed
+
+    Locator:  locator('[data-send-card]').locator('[data-send]')
+    Expected: disabled
+    Received: enabled
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toBeDisabled" locator('[data-send-card]').locator('[data-send]') with timeout 7000ms
+      - waiting for locator('[data-send-card]').locator('[data-send]')
+        16 × locator resolved to <button type="button" data-send="true" aria-describedby="send-hint">Send</button>
+           - unexpected value "enabled"
+
+
+      886 |   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+      887 |   const send = page.locator('[data-send-card]');
+    > 888 |   await expect(send.locator('[data-send]')).toBeDisabled();
+          |                                             ^
+      889 |   await send.locator('#send-field-to').fill('typed@example.invalid');
+      890 |   await send.locator('#send-field-subject').fill('Typed subject');
+      891 |   await expect(send.locator('[data-send]')).toBeDisabled();
+        at <task>\export-mut\tests\e2e\review.spec.ts:888:45
+
+    Error Context: ..\pw-mut-a\review-Send-stays-disabled-7573d-id-address-makes-no-request-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-a\review-Send-stays-disabled-7573d-id-address-makes-no-request-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-a\review-Send-stays-disabled-7573d-id-address-makes-no-request-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  2) [desktop] › tests\e2e\review.spec.ts:884:1 › Send stays disabled before the sign-off whatever is typed, and a send with an invalid address makes no request 
+
+    Error: expect(locator).toBeDisabled() failed
+
+    Locator:  locator('[data-send-card]').locator('[data-send]')
+    Expected: disabled
+    Received: enabled
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toBeDisabled" locator('[data-send-card]').locator('[data-send]') with timeout 7000ms
+      - waiting for locator('[data-send-card]').locator('[data-send]')
+        16 × locator resolved to <button type="button" data-send="true" aria-describedby="send-hint">Send</button>
+           - unexpected value "enabled"
+
+
+      886 |   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+      887 |   const send = page.locator('[data-send-card]');
+    > 888 |   await expect(send.locator('[data-send]')).toBeDisabled();
+          |                                             ^
+      889 |   await send.locator('#send-field-to').fill('typed@example.invalid');
+      890 |   await send.locator('#send-field-subject').fill('Typed subject');
+      891 |   await expect(send.locator('[data-send]')).toBeDisabled();
+        at <task>\export-mut\tests\e2e\review.spec.ts:888:45
+
+    Error Context: ..\pw-mut-a\review-Send-stays-disabled-7573d-id-address-makes-no-request-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-a\review-Send-stays-disabled-7573d-id-address-makes-no-request-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-a\review-Send-stays-disabled-7573d-id-address-makes-no-request-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  2 failed
+    [desktop] › tests\e2e\review.spec.ts:884:1 › Send stays disabled before the sign-off whatever is typed, and a send with an invalid address makes no request 
+    [mobile] › tests\e2e\review.spec.ts:884:1 › Send stays disabled before the sign-off whatever is typed, and a send with an invalid address makes no request 
+  playwright a exit=1
+M11 restored src/client/components/deliveryModel.ts: byte-equal true
+== M11 end 03:59:45Z

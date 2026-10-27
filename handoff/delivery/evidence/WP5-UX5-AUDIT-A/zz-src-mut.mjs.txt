@@ -1,0 +1,30 @@
+// Usage: node mut.mjs apply|restore <id>   (task-local mutant tool; it edits only the scratch export export-mut)
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
+const T = '<task>';
+const ROOT = join(T, 'export-mut');
+const [action, id] = process.argv.slice(2);
+const mutants = JSON.parse(readFileSync(join(T, 'mutants.json'), 'utf8'));
+const m = mutants.find((x) => x.id === id);
+if (!m) throw new Error(`no mutant ${id}`);
+const file = join(ROOT, m.file);
+const pristine = join(T, 'pristine', m.file);
+if (action === 'apply') {
+  if (!existsSync(pristine)) {
+    mkdirSync(dirname(pristine), { recursive: true });
+    copyFileSync(file, pristine);
+  }
+  const text = readFileSync(pristine, 'utf8');
+  const count = text.split(m.find).length - 1;
+  if (count !== 1) throw new Error(`${id}: anchor found ${count} times in ${m.file}`);
+  writeFileSync(file, text.replace(m.find, m.replace));
+  console.log(`${id} applied to ${m.file}: ${m.what}`);
+} else if (action === 'restore') {
+  copyFileSync(pristine, file);
+  const same = readFileSync(pristine).equals(readFileSync(file));
+  console.log(`${id} restored ${m.file}: byte-equal ${same}`);
+  if (!same) process.exit(3);
+} else {
+  throw new Error('apply or restore');
+}

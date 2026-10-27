@@ -1,0 +1,7 @@
+param([string]$Node, [string]$Cwd, [string]$Mask, [string]$OutFile, [string]$NodeArgs)
+# Runs node with the given argument string restricted to the CPU affinity mask (hex), simulating a host with fewer cores.
+# Child processes inherit the affinity. Waits for the run to end by itself.
+$p = Start-Process -FilePath $Node -ArgumentList $NodeArgs -WorkingDirectory $Cwd -RedirectStandardOutput $OutFile -RedirectStandardError "$OutFile.err" -PassThru -NoNewWindow
+try { $p.ProcessorAffinity = [IntPtr]([Convert]::ToInt64($Mask, 16)) } catch { Write-Output "affinity failed: $($_.Exception.Message)" }
+$p.WaitForExit()
+Write-Output "exit $($p.ExitCode) mask $Mask"

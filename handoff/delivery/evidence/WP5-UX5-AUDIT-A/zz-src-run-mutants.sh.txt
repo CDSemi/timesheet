@@ -1,0 +1,46 @@
+# Usage: bash run-mutants.sh M1 M2 ...   Each mutant: apply in export-mut, build the client when needed, run its targeted tests, restore.
+. <task>/env.sh
+M=$T/export-mut
+O=$T/out
+export NODE_OPTIONS="--trace-deprecation"
+export E2E_SCREENSHOT_DIR="$TW\\shots-mut"
+pw() { # label, args...
+  local l=$1; shift
+  (cd $M && node.exe node_modules/@playwright/test/cli.js test "$@" --reporter=line --output="$TW\\pw-mut-$l") >> $O/log-mut-$ID.txt 2>&1
+  echo "  playwright $l exit=$?" >> $O/log-mut-$ID.txt
+}
+vt() { # files...
+  (cd $M && node.exe node_modules/vitest/vitest.mjs run "$@") >> $O/log-mut-$ID.txt 2>&1
+  echo "  vitest exit=$?" >> $O/log-mut-$ID.txt
+}
+bc() {
+  (cd $M && npm run build:client) > $O/log-mut-$ID-build.txt 2>&1
+  echo "  build:client exit=$?" >> $O/log-mut-$ID.txt
+}
+for ID in "$@"; do
+  : > $O/log-mut-$ID.txt
+  echo "== $ID start $(date -u +%H:%M:%SZ)" >> $O/log-mut-$ID.txt
+  node.exe $T/mut.mjs apply $ID >> $O/log-mut-$ID.txt 2>&1 || { echo "APPLY FAILED" >> $O/log-mut-$ID.txt; continue; }
+  case $ID in
+    M1) vt tests/client/layoutQueries.test.ts; bc; pw a tests/e2e/surfaces.spec.ts -g "layout breakpoints" ;;
+    M2) bc; pw a tests/e2e/timesheet.spec.ts -g "range ladder" ;;
+    M3) vt tests/client/reviewModel.test.ts; bc; pw a tests/e2e/today.spec.ts -g "primary button" ;;
+    M4) bc; pw a tests/e2e/timesheet.spec.ts -g "compact toolbar rows" ;;
+    M5) bc; pw a tests/e2e/controls.spec.ts -g "36px high everywhere" ;;
+    M6) bc; pw a tests/e2e/today.spec.ts -g "Today moves an open Day editor"; pw b tests/e2e/day-editor.spec.ts -g "U5-24" ;;
+    M7) bc; pw a tests/e2e/day-editor.spec.ts -g "U5-25" ;;
+    M8) bc; pw a tests/e2e/day-editor.spec.ts -g "U5-26" ;;
+    M9) bc; pw a tests/e2e/review.spec.ts -g "Preview header" ;;
+    M10) bc; pw a tests/e2e/review.spec.ts -g "signature rows" ;;
+    M11) vt tests/client/deliveryModel.test.ts; bc; pw a tests/e2e/review.spec.ts -g "Send stays disabled" ;;
+    M12) bc; pw a tests/e2e/submission.spec.ts ;;
+    M14) bc; pw a tests/e2e/timesheet.spec.ts -g "Today spacing" ;;
+    M15) bc; pw a tests/e2e/timesheet.spec.ts -g "WEEK bar" ;;
+    M16) bc; pw a tests/e2e/surfaces.spec.ts -g "U5-16" ;;
+    M17) bc; pw a tests/e2e/day-editor.spec.ts -g "U5-23" ;;
+  esac
+  node.exe $T/mut.mjs restore $ID >> $O/log-mut-$ID.txt 2>&1
+  echo "== $ID end $(date -u +%H:%M:%SZ)" >> $O/log-mut-$ID.txt
+done
+(cd $M && npm run build:client) > $O/log-mut-final-build.txt 2>&1
+echo "final build exit=$?" >> $O/log-mut-final-build.txt

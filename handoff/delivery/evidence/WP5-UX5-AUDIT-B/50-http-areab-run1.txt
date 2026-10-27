@@ -1,0 +1,94 @@
+node v24.21.0
+PASS cli migrate
+PASS cli seed | Created synthetic seed data:
+PASS server A healthy
+PASS server B healthy (same database)
+PASS three logins
+today 2026-10-26, current payroll 2026-10-30
+PASS sign-off 201 | 201:
+PASS sign-off enqueues the PDF job only (no send job) | [{"id":"8bba5f01-7f58-4f9f-ae89-e5e0ac783cb0","kind":"render_pdf","state":"queued"}]
+PASS send_requested false on the new revision
+PASS signer is the account display name; a body signer_name is ignored | Example Employee Two
+PASS the saved image is recorded on the sign-off
+PASS no send record after the sign-off
+PASS identical sign-off replays (200) and posts nothing more | 200:; ledger 1->2
+PASS stale review hash 409, nothing written | 409:already_finalized
+PASS name-only sign-off without a saved image (null image, account name) | {"signer_name":"Example Employee","signature_attachment_id":null}
+PASS send-draft owner 200, reason not required yet | 200:
+PASS send-draft: another employee 404, admin 404, anonymous 401 | 404/404/401
+PASS send refused: to not an address -> 422 | 422:invalid_recipient The to address at position 1 is not valid
+PASS send refused: to empty -> 422 | 422:recipients_required At least one to address is required
+PASS send refused: subject with a line break -> 422:invalid_subject | 422:invalid_subject The subject must be one line of 1-300 characters
+PASS send refused: subject 301 characters -> 422:invalid_subject | 422:invalid_subject The subject must be one line of 1-300 characters
+PASS send refused: subject blank -> 422:invalid_subject | 422:invalid_subject The subject must be one line of 1-300 characters
+PASS send refused: subject with a bidi override (Cf) -> 422:invalid_subject | 422:invalid_subject The subject must be one line of 1-300 characters
+PASS send refused: body blank -> 422:invalid_body | 422:invalid_body The message must have 1-20000 characters without control characters
+PASS send refused: body 20001 characters -> 422:invalid_body | 422:invalid_body The message must have 1-20000 characters without control characters
+PASS send refused: body with a control character -> 422:invalid_body | 422:invalid_body The message must have 1-20000 characters without control characters
+PASS send refused: reason 1 character -> 422:invalid_reason | 422:invalid_reason The reason must be 2-500 characters without control characters
+PASS send refused: reason 501 characters -> 422:invalid_reason | 422:invalid_reason The reason must be 2-500 characters without control characters
+PASS send refused: reason with a tab -> 422:invalid_reason | 422:invalid_reason The reason must be 2-500 characters without control characters
+PASS send refused: reason with a control character -> 422:invalid_reason | 422:invalid_reason The reason must be 2-500 characters without control characters
+FAIL send refused: time_rows not a boolean -> 400 | 422:validation_error The request body is invalid
+FAIL send refused: unknown key -> 400 | 422:validation_error The request body is invalid
+FAIL send refused: request key too short -> 400 | 422:validation_error The request body is invalid
+FAIL send refused: request key with a colon (server key space) -> 400 | 422:validation_error The request body is invalid
+PASS no validation refusal wrote anything
+PASS reason of 500 astral code points accepted (counted as code points) | 201:
+PASS first send 201, send 1, variant t0o0, no reason | 201:
+PASS same key, same body: 200 replayed, same send, nothing written | 200:
+PASS same key, another body: 409 request_key_reused, nothing written | 409:request_key_reused
+PASS another user's send of the owner's revision: 404 | 404:not_found
+PASS another send while the first waits: 409 delivery_in_progress | 409:delivery_in_progress
+PASS run-jobs passes exit 0
+PASS first send accepted | accepted
+PASS captured envelope: from the sender, to + cc of the send | {"from":"audit-b-sender@example.invalid","to":["payroll@example.invalid","manager@example.invalid"]}
+PASS captured headers: From, To, Subject of the send, Message-ID @timesheet.invalid, no X-Mailer
+PASS captured Message-ID equals the attempt row
+PASS attempt froze the envelope, send id and body hash
+PASS the captured attachment is the t0o0 variant of the send
+PASS send-draft now requires a reason and names the earlier copy
+PASS another copy without a reason: 422 reason_required with copy_sent_before | {"code":"reason_required","message":"A copy was already sent; give a reason for sending another one","details":{"copy_sent_before":{"sent_at":"2026-10-27T03:48:22Z","state":"accepted"}}}
+PASS another copy with a reason: 201, reason stored trimmed with CRLF->LF | 201:
+PASS runner for the second copy
+PASS second copy accepted; the reason is not in the email
+PASS the owner's History holds both sends and the second one's reason | ["Payroll asked for the copy again (synthetic probe reason)",null]
+FAIL the revision.send audit row carries the reason and counts, no body | {"revision_id":"168958c4-354a-4959-b177-8b89fbaa78e9","send_id":"9db5e291-c8a8-4298-8b9c-a87052edb109","send_no":1,"job_id":"fff30338-c8a6-4202-aec0-f6a5409ecde5","pdf_variant":"t1o1","time_rows":true,"ot_rows":true,"to_count":1,"cc_count":0,"copy_counted_before":false}
+PASS two concurrent reasoned sends on two processes: exactly one 201 each round | 201:+409:delivery_in_progress (+1) | 201:+409:delivery_in_progress (+1) | 201:+409:delivery_in_progress (+1) | 201:+409:delivery_in_progress (+1) | 201:+409:delivery_in_progress (+1) | 201:+409:delivery_in_progress (+1)
+PASS two concurrent sends without a reason once a copy counts: both 422 reason_required | 422:reason_required+422:reason_required
+PASS Save PDF (no query) serves the stored sign-off variant t1o1 (hash equal), attachment, no-store
+PASS a variant not stored is rendered on request (inline)
+PASS the same variant again: identical bytes, rendered once
+PASS at most four PDFs per revision, all ready | 3 -> [{"variant":"t0o0","state":"ready"},{"variant":"t0o1","state":"ready"},{"variant":"t1o0","state":"ready"},{"variant":"t1o1","state":"ready"}]
+PASS a bad variant query is 422 | 422:validation_error
+PASS variant t1o1: one page; OT shown; one image (saved signature) | pages 1, VERTIME true, images 1, times true
+PASS variant t1o0: one page; OT hidden; one image (saved signature) | pages 1, VERTIME false, images 1, times true
+PASS variant t0o1: one page; OT shown; one image (saved signature) | pages 1, VERTIME true, images 1, times false
+PASS variant t0o0: one page; OT hidden; one image (saved signature) | pages 1, VERTIME false, images 1, times false
+PASS name-only revision PDF: no image, the account name printed
+PASS revision PDF: another employee 404, admin 404, anonymous 401 (no render for them)
+PASS unsigned preview: 200 PDF inline no-store, "Preview, not signed", no image, one page | 200:
+PASS unsigned preview writes nothing (database and private files unchanged)
+PASS the admin's preview is of the admin's own timesheet only (no user id in the route) | 200:
+PASS owner grants a share with every item | 201:
+PASS shared PDF ignores the query and serves the latest send's variant (t0o0) | 200:
+PASS send-draft, send, resend, pdf-preview, deliveries, review, sign-off, signature and settings are not shared (404) | GET /revisions/<rev>/send-draft 404; POST /revisions/<rev>/send 404; POST /revisions/<rev>/resend 404; GET /timesheets/2026-10-30/pdf-preview 404; GET /deliveries 404; GET /timesheets/2026-10-30/review 404; POST /timesheets/2026-10-30/signoff 404; GET /signatures/<sig> 404; GET /settings/submission 404
+PASS a correction (send_email: true) creates revision 2 and enqueues the PDF only | 200: 201: [{"id":"477669bf-c405-4b18-bac1-45296dd089f1","kind":"render_pdf","state":"queued"}]
+PASS shared PDF of a revision whose PDF is not stored: 409, no render, no file row | 409:pdf_not_ready files 0->0
+PASS sending the superseded revision: 409 revision_superseded | 409:revision_superseded
+PASS the correction's draft requires a reason (a copy of revision 1 counts) and offers the correction reason
+PASS signature image: owner 200 private no-store; other 404, admin 404, anonymous 401 | 200 no-store 404/404/401
+PASS the PDF font is not served over HTTP (the static path gives the app shell, not the font) | 404 application/json 58 bytes
+PASS admin status: recipient addresses only, no subject, body, reason or variant | 200 1297 bytes
+PASS admin's own deliveries list does not show the owner's attempts | 200:
+FAIL settings: show_time_on_pdf not a boolean is 400 | 422:validation_error
+FAIL settings: a new version with show_time_on_pdf false; the earlier version is unchanged | 422:validation_error 1->1
+FAIL the Settings default reaches the send draft (time_rows false)
+PASS the correction's own sign-off PDF job is the sign-off default (time rows on), not the Settings value | ["{\"revision_id\":\"a3f51d02-ddfe-4217-8ea3-8cb4f0d186cc\",\"variant\":\"t1o1\"}"]
+PASS F-UX4B-1: six failed sign-ins typed as password:<victim id> do not lock the victim out of the password change | sign-ins 401,401,401,401,401,429; wrong current 403:current_password_incorrect; change 200:
+PASS the sign-in limiter itself still answers 429 after five failures on one account | 401,401,401,401,401,429
+PASS the password route is not on the shared mount | 404:not_found
+PASS round 4: a grantee cannot clock in (404) or delete the running session (409 shared_clock_action) | 201: 404 409:shared_clock_action
+server 0 output (first 300 chars): Timesheet listening on http://127.0.0.1:49895 (schema v15) | Outbound delivery active |
+server 1 output (first 300 chars): Timesheet listening on http://127.0.0.1:49896 (schema v15) | Outbound delivery active |
+failures: 8

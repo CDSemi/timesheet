@@ -1,0 +1,22 @@
+Item 2: where the code uses nodemailer and zod (grep of src/ and tests/), and the tests that ran in item 3 (npm test x3 and verify x2, 101 files / 2374 tests each, all passed)
+
+nodemailer (src/server/mail/smtpAdapter.ts, src/server/mail/message.ts, src/server/services/notifications.ts); dev test sink smtp-server in tests/support/smtpSink.ts.
+  Mail transport in capture or dry-run mode, integration tests: tests/integration/delivery.test.ts (smtpSink, mail message, notifications), delivery-crash.test.ts,
+  reminders.test.ts, workbook-import.test.ts (notification path); the smoke (verify) runs run-jobs in capture mode and the drill stage 3 captured sends (delivery attempt states at the end: accepted 3).
+  (Files found by grep for smtpSink|smtpAdapter|mail/message|notifications; I did not read each test to confirm the assertions.)
+zod (src/server/http/schemas.ts, src/server/http/validation.ts, src/server/routes/admin.ts, src/server/routes/shares.ts, src/server/services/bootstrap.ts): server only.
+  src/client has no zod import (grep: 0), so there is no client-side zod validation to test; the client only sees the server's validation answers.
+  Integration tests that import the schemas: tests/integration/isolation.test.ts, actor-subject.test.ts (tests/support/concurrency.ts too); tests that expect 400 answers (grep for
+  400, not read in detail): user-admin.test.ts, sharing.test.ts, ot-api.test.ts, static-and-limits.test.ts; bootstrap in the drill stage 1 (token, first administrator) and the smoke.
+These files were part of the 101 files passed in 03-verify, 12-npmtest-1..3, 21-repo-verify and 90-suite-4cpu.
+
+Item 7 diff reading (out/20-diff-full.txt):
+  FIX5 timesheet.spec.ts showToday: the old line `expect([data-day=todayLocal].today).toHaveCount(1)` (a date check against a value read before a possible midnight) is replaced by
+    expect.poll(...) which sends a focus event, reads the server date again and accepts only when exactly one `[data-sheet] [data-day].today` exists and its data-day equals the server date;
+    the pre-click count checks, the `.today-tag` count 1 and the return value (the app's date) are kept. State-based, no sleep, default expect timeout (no timeout raised); the date check moved into the poll.
+    It compares with a fresh server read instead of the earlier read, which is the point of the fix; it is not looser: it still requires exactly one Today tag and the server's date.
+  FIX5 review.spec.ts: for each img in the signature rows, expect.poll until complete && naturalWidth > 0, then the unchanged geometry checks. State-based, no sleep, no timeout raised, no assertion changed.
+  FIX5 fixtures.ts and FIX6 fixtures.ts, container-drill.mjs, smoke-built-server.mjs: only `connection: 'close'` headers (and the smoke monitor closed in finally). No assertion touched.
+  FIX6 vitest.config.ts: maxWorkers '50%' (config only; same files and tests, testTimeout still 30_000, not raised).
+  No fixed sleep, no raised timeout, no removed or loosened check in the eight paths.
+Worker count: vitest does not print it. Computed from the config: 50% of 32 logical CPUs = 16 forks on this host (DIAG3 10-census.txt and 50-fix-probes.txt say the same); not observed directly.

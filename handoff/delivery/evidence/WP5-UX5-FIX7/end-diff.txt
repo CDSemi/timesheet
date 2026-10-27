@@ -1,0 +1,488 @@
+diff --git a/docs/03_ARCHITECTURE_AND_DATA.md b/docs/03_ARCHITECTURE_AND_DATA.md
+index 735a9ca8..3412ea24 100644
+--- a/docs/03_ARCHITECTURE_AND_DATA.md
++++ b/docs/03_ARCHITECTURE_AND_DATA.md
+@@ -57,7 +57,7 @@ Group routes under /api for auth, personal settings, calendars, periods/day edit
+ 
+ Sends (WP5-UX5-T01b; owner decisions F-2 a, F-3 b and F-4, 2026-10-21). All are owner only; none is on the shared allowlist.
+ - `GET /api/revisions/:id/send-draft` writes nothing. It returns the Send card defaults: To and Cc from the current Settings, the subject and body rendered from the current Settings templates for this revision, the two PDF row switches from Settings ("Time rows on the PDF" `show_time_on_pdf`, "OT rows on the PDF" `show_ot_on_pdf`), the configured sender, `copy_sent_before` (the latest counted copy: date, recipients, state), `reason_required` and the previous send.
+-- `POST /api/revisions/:id/send` takes `{ request_key, to, cc, subject, body_text, time_rows, ot_rows, reason? }`. The same request key with the same body replays (200); with another body it is 409 `request_key_reused`. Only the period's current revision can be sent (409 `revision_superseded`), never an imported one. A send is refused while an attempt of the revision is open (409 `delivery_in_progress`), uncertain without a decision (409 `delivery_uncertain`), or while one of its send jobs waits (409 `delivery_in_progress`). Then the reason rule runs inside the same transaction (document 05). One transaction writes the send record, its send job (business key `send:<send id>`, routing ids only), the PDF job of its variant when that file is not stored yet, and the audit event `revision.send` (ids, number, switches, recipient counts, and the reason in the event's reason field; no address or content).
++- `POST /api/revisions/:id/send` takes `{ request_key, to, cc, subject, body_text, time_rows, ot_rows, reason? }`. The same request key with the same body replays (200); with another body it is 409 `request_key_reused`. Only the period's current revision can be sent (409 `revision_superseded`), never an imported one. A send is refused while an attempt of the revision is open (409 `delivery_in_progress`), uncertain without a decision (409 `delivery_uncertain`), or while a send job of any revision of the period waits (409 `delivery_in_progress`). Then the reason rule runs inside the same transaction (document 05). One transaction writes the send record, its send job (business key `send:<send id>`, routing ids only), the PDF job of its variant when that file is not stored yet, and the audit event `revision.send` (ids, number, switches, recipient counts, and the reason in the event's reason field; no address or content).
+ - `POST /api/revisions/:id/resend` is the same send with the previous send's values. The uncertain-attempt decision "resend" is the same too, and it needs a reason.
+ - `GET /api/revisions/:id/pdf?time=0|1&ot=0|1[&disposition=inline]` returns the stored variant (default: the sign-off variant, time rows on and OT rows as the snapshot froze them). It renders a variant not stored yet on request, through the PDF job's path (no network, an atomic file write, then a short transaction). On the shared mount the query is ignored and nothing is rendered: the grantee gets the variant of the latest send, or the sign-off variant, once it is stored (else 409 `pdf_not_ready`).
+ - `GET /api/timesheets/:payrollDate/pdf-preview?time&ot` renders an unsigned preview of the current review. It writes nothing, is `no-store` and inline, and prints "Preview, not signed" without an image.
+diff --git a/docs/03_ARCHITECTURE_AND_DATA.vi.md b/docs/03_ARCHITECTURE_AND_DATA.vi.md
+index cbe7299a..84309c58 100644
+--- a/docs/03_ARCHITECTURE_AND_DATA.vi.md
++++ b/docs/03_ARCHITECTURE_AND_DATA.vi.md
+@@ -57,7 +57,7 @@ Nhóm route dưới /api cho auth, settings cá nhân, lịch, kỳ/sửa ngày,
+ 
+ Gửi (WP5-UX5-T01b; quyết định của chủ F-2 a, F-3 b và F-4, 2026-10-21). Tất cả chỉ dành cho chủ sở hữu; không route nào thuộc allowlist chia sẻ.
+ - `GET /api/revisions/:id/send-draft` không ghi gì. Nó trả về các giá trị mặc định của thẻ Gửi: To và Cc từ Settings hiện tại, tiêu đề và nội dung render từ mẫu Settings hiện tại cho revision này, hai công tắc dòng PDF từ Settings ("Dòng giờ trên PDF" `show_time_on_pdf`, "Dòng OT trên PDF" `show_ot_on_pdf`), người gửi đã cấu hình, `copy_sent_before` (bản gần nhất được tính: ngày, người nhận, trạng thái), `reason_required` và lần gửi trước.
+-- `POST /api/revisions/:id/send` nhận `{ request_key, to, cc, subject, body_text, time_rows, ot_rows, reason? }`. Cùng khóa request với cùng nội dung thì replay (200); với nội dung khác là 409 `request_key_reused`. Chỉ revision hiện tại của kỳ được gửi (409 `revision_superseded`), không bao giờ là kỳ nhập. Lần gửi bị từ chối khi một attempt của revision đang mở (409 `delivery_in_progress`), không chắc chắn mà chưa có quyết định (409 `delivery_uncertain`), hoặc khi một send job của nó đang chờ (409 `delivery_in_progress`). Sau đó quy tắc lý do chạy trong cùng transaction (tài liệu 05). Một transaction ghi bản ghi gửi, send job của nó (business key `send:<send id>`, chỉ ID định tuyến), job PDF của biến thể khi file đó chưa được lưu, và sự kiện audit `revision.send` (ID, số thứ tự, công tắc, số người nhận, và lý do trong trường lý do của sự kiện; không địa chỉ, không nội dung).
++- `POST /api/revisions/:id/send` nhận `{ request_key, to, cc, subject, body_text, time_rows, ot_rows, reason? }`. Cùng khóa request với cùng nội dung thì replay (200); với nội dung khác là 409 `request_key_reused`. Chỉ revision hiện tại của kỳ được gửi (409 `revision_superseded`), không bao giờ là kỳ nhập. Lần gửi bị từ chối khi một attempt của revision đang mở (409 `delivery_in_progress`), không chắc chắn mà chưa có quyết định (409 `delivery_uncertain`), hoặc khi một send job của bất kỳ revision nào của kỳ đang chờ (409 `delivery_in_progress`). Sau đó quy tắc lý do chạy trong cùng transaction (tài liệu 05). Một transaction ghi bản ghi gửi, send job của nó (business key `send:<send id>`, chỉ ID định tuyến), job PDF của biến thể khi file đó chưa được lưu, và sự kiện audit `revision.send` (ID, số thứ tự, công tắc, số người nhận, và lý do trong trường lý do của sự kiện; không địa chỉ, không nội dung).
+ - `POST /api/revisions/:id/resend` là cùng lần gửi đó với giá trị của lần gửi trước. Quyết định "gửi lại" cho một attempt không chắc chắn cũng vậy, và nó cần lý do.
+ - `GET /api/revisions/:id/pdf?time=0|1&ot=0|1[&disposition=inline]` trả về biến thể đã lưu (mặc định: biến thể lúc sign-off, có dòng giờ và dòng OT theo snapshot). Nó render theo yêu cầu một biến thể chưa lưu, qua đường của job PDF (không gọi mạng, ghi file nguyên tử, rồi một transaction ngắn). Trên mount chia sẻ, query bị bỏ qua và không render gì: người được chia sẻ nhận biến thể của lần gửi gần nhất, hoặc biến thể lúc sign-off, khi nó đã được lưu (nếu chưa thì 409 `pdf_not_ready`).
+ - `GET /api/timesheets/:payrollDate/pdf-preview?time&ot` render một bản xem trước chưa ký của review hiện tại. Nó không ghi gì, `no-store`, hiển thị inline, và in "Preview, not signed" không kèm ảnh.
+diff --git a/docs/04_UX_AND_SETTINGS.md b/docs/04_UX_AND_SETTINGS.md
+index c95f5680..4ba430ea 100644
+--- a/docs/04_UX_AND_SETTINGS.md
++++ b/docs/04_UX_AND_SETTINGS.md
+@@ -121,6 +121,6 @@ Signing off and sending are separate acts (round 5, owner decisions F-2 a, F-3 b
+ 
+ PDF (round 5, one page): a header with the C&D logo and the two-line wordmark at the left (vector, as in the top bar) and "Revision n" with the small submission id under it at the right; the company name and the title "TIME SHEET FOR SALARIED EXEMPT EMPLOYEES" centred; the fields Employee, Payroll Date and Period; two Monday–Sunday week tables (day name in small capitals, date, category in the Indie Flower handwriting face, start and end time cells and the OT row); the credited OT total in h:mm over all 14 days, including both Sundays; the signature rows with the employee name, the saved signature image when there is one, and the date, and a blank manager signature and date unless a real future approval exists; and a footer with the copyright at the left and "Internal use by C&D only" at the right. It has no instructions paragraph (owner decision F-8 a). The time rows and the OT rows (with the OT total) are printed or left out as the owner chooses for each send, with the Settings defaults "Time rows on the PDF" and "OT rows on the PDF"; the four variants carry the same days, totals, signature and date. Use US Letter portrait, embedded Unicode fonts (a category that Indie Flower cannot draw falls back to DejaVu Serif Italic), readable long labels and a bounded signature image. Remove stale year headers. Add submission/revision identifiers and sanitized filenames.
+ 
+-Manual sign-off is the signed-in owner's act; it records the account's display name and, when one is saved, the signature image (owner decision F-5 b, 2026-10-21). There is no typed name: the Review sign-off shows "You sign as" with the account name. With a saved image the PDF and the Review show the image and the name; without one they show the name alone, and the Review shows "Signed with your name only." with a link "Add a signature image in Settings." A saved image cannot be left out. The unsigned automatic-image setting is separate.
++Manual sign-off is the signed-in owner's act; it records the account's display name and, when one is saved, the signature image (owner decision F-5 b, 2026-10-21). There is no typed name: the Sign off dialog shows the account name under "Signer", followed by "(you)". With a saved image the PDF and the Review show the image and the name; without one they show the name alone, and the Sign off dialog's "Signature" line reads "your name only" with a link "Add a signature image in Settings." (with a saved image it reads "your saved image and your name"). A saved image cannot be left out. The unsigned automatic-image setting is separate.
+ 
+ The outgoing PDF and email of an automatic submission show no automatic indicator: the signature block prints the employee name and the date of the automatic submission in the saved reporting zone; the signature image appears only when the user has authorized automatic image use; a note line appears only when the user turns it on (default off; the user edits its text, default "Automatic submission"). The system still records the revision as automatic with employee review pending, empty signed_at and no sign-off, and the employee's own screens show that. Even a preauthorized signature image creates no signed_at or real sign-off. A separate OT evidence report can be exported when the user chooses.
+diff --git a/docs/04_UX_AND_SETTINGS.vi.md b/docs/04_UX_AND_SETTINGS.vi.md
+index 253b7052..19c0c295 100644
+--- a/docs/04_UX_AND_SETTINGS.vi.md
++++ b/docs/04_UX_AND_SETTINGS.vi.md
+@@ -122,7 +122,7 @@ Ký xác nhận và gửi là hai hành động riêng (vòng 5, quyết định
+ 
+ PDF (vòng 5, một trang): header có logo C&D và wordmark hai dòng ở bên trái (vector, như thanh trên) và "Revision n" cùng mã nộp nhỏ bên dưới ở bên phải; tên công ty và tiêu đề "TIME SHEET FOR SALARIED EXEMPT EMPLOYEES" canh giữa; các trường Employee, Payroll Date và Period; hai bảng tuần thứ Hai–Chủ nhật (tên thứ bằng chữ hoa nhỏ, ngày, loại bằng kiểu chữ viết tay Indie Flower, ô giờ bắt đầu và kết thúc, và dòng OT); tổng OT được ghi dạng h:mm của cả 14 ngày, gồm hai Chủ nhật; các dòng chữ ký có tên nhân viên, ảnh chữ ký đã lưu nếu có, và ngày, cùng chữ ký/ngày manager trống nếu chưa có duyệt thật tương lai; và chân trang có bản quyền bên trái và "Internal use by C&D only" bên phải. Không có đoạn hướng dẫn (quyết định của chủ F-8 a). Dòng giờ và dòng OT (cùng tổng OT) được in hoặc bỏ theo lựa chọn của chủ cho từng lần gửi, với mặc định "Time rows on the PDF" và "OT rows on the PDF" ở Settings; bốn biến thể mang cùng ngày, tổng, chữ ký và ngày. Dùng Letter dọc, font Unicode nhúng (loại mà Indie Flower không vẽ được chuyển sang DejaVu Serif Italic), nhãn dài đọc được, ảnh ký có giới hạn. Bỏ header năm cũ. Có mã nộp/revision và tên file an toàn.
+ 
+-Sign-off thủ công là hành động của chủ đang đăng nhập; nó ghi tên hiển thị của tài khoản và, khi đã lưu, cả ảnh chữ ký (quyết định của chủ F-5 b, 2026-10-21). Không có ô gõ tên: phần sign-off của Review hiện "You sign as" cùng tên tài khoản. Có ảnh đã lưu thì PDF và Review hiện ảnh và tên; không có thì chỉ hiện tên, và Review hiện "Signed with your name only." cùng liên kết "Add a signature image in Settings." Ảnh đã lưu không thể bỏ ra. Thiết lập ảnh khi tự nộp chưa ký là riêng.
++Sign-off thủ công là hành động của chủ đang đăng nhập; nó ghi tên hiển thị của tài khoản và, khi đã lưu, cả ảnh chữ ký (quyết định của chủ F-5 b, 2026-10-21). Không có ô gõ tên: hộp thoại Sign off hiện tên tài khoản dưới "Signer", kèm "(you)". Có ảnh đã lưu thì PDF và Review hiện ảnh và tên; không có thì chỉ hiện tên, và dòng "Signature" của hộp thoại Sign off ghi "your name only" cùng liên kết "Add a signature image in Settings." (có ảnh đã lưu thì dòng ghi "your saved image and your name"). Ảnh đã lưu không thể bỏ ra. Thiết lập ảnh khi tự nộp chưa ký là riêng.
+ 
+ PDF và email gửi đi của bản tự nộp không có dấu hiệu tự động: khối chữ ký in tên nhân viên và ngày tự nộp theo múi giờ báo cáo đã lưu; ảnh chữ ký chỉ xuất hiện khi user đã cho phép dùng ảnh tự động; dòng ghi chú chỉ xuất hiện khi user bật (mặc định tắt; user sửa nội dung, mặc định "Automatic submission"). Hệ thống vẫn ghi revision là tự động, chờ nhân viên xác nhận, signed_at trống và không có sign-off, và màn hình của chính nhân viên hiện điều đó. Ảnh ký được cho phép trước vẫn không tạo signed_at hay sign-off thật. Có thể xuất báo cáo bằng chứng OT riêng khi user chọn.
+ 
+diff --git a/docs/05_SUBMISSION_AND_NOTIFICATIONS.md b/docs/05_SUBMISSION_AND_NOTIFICATIONS.md
+index 94195139..69ee6512 100644
+--- a/docs/05_SUBMISSION_AND_NOTIFICATIONS.md
++++ b/docs/05_SUBMISSION_AND_NOTIFICATIONS.md
+@@ -8,7 +8,7 @@ Track revision (draft/finalized), employee review (pending/signed), finalization
+ 
+ Prepare an exact review payload: attendance, OT evidence/movements, unresolved inputs, deficit decisions, recipients, email and the signature image when one is saved. A preview is not a final submission PDF. Manual sign-off is the signed-in owner's act: it records the account's display name (no typed name) and, when one is saved, the signature image; without a saved image it carries the name alone (owner decision F-5 b, 2026-10-21). The reviewed payload binds the image state, so an image saved or replaced after the review makes the request a stale-review conflict. Explicit sign-off carries expected draft version and reviewed payload hash.
+ 
+-Sign off and send are separate acts (owner decisions F-2 a, F-3 b and F-4, 2026-10-21; WP5-UX5-T01b). Sign-off validates ownership/version, finalizes the snapshot, records the real sign-off, posts ledger events and enqueues the PDF in one transaction; it sends nothing. Stale content returns a conflict. The owner then sends the signed revision: the To, Cc, subject and body and the two PDF row switches ("Time rows on the PDF", "OT rows on the PDF") are chosen for that send, with the current Settings as defaults. Each send is its own immutable record. Render each PDF variant once from the snapshot, persist/hash it, then send that exact file with the send's own email content. Delivery status remains independent of sign-off. Until the Send card (WP5-UX5-T03), the Review page sends right after a successful sign-off with the Settings defaults.
++Sign off and send are separate acts (owner decisions F-2 a, F-3 b and F-4, 2026-10-21; WP5-UX5-T01b). Sign-off validates ownership/version, finalizes the snapshot, records the real sign-off, posts ledger events and enqueues the PDF in one transaction; it sends nothing. Stale content returns a conflict. The owner then sends the signed revision: the To, Cc, subject and body and the two PDF row switches ("Time rows on the PDF", "OT rows on the PDF") are chosen for that send, with the current Settings as defaults. Each send is its own immutable record. Render each PDF variant once from the snapshot, persist/hash it, then send that exact file with the send's own email content. Delivery status remains independent of sign-off.
+ 
+ Incomplete optional clock evidence may remain pending after explicit acknowledgement; never invent hours. Correct invalid data or exclude it with audit.
+ 
+@@ -16,7 +16,7 @@ Incomplete optional clock evidence may remain pending after explicit acknowledge
+ 
+ Persist due_at UTC from the reporting-zone due rule. The runner operates without a browser.
+ 
+-A period counts as submitted once any of its revisions has a send (owner decision F-2 a). At the deadline the system submits what is not yet submitted:
++A period counts as submitted once any of its revisions has a send (owner decisions F-2 a of 2026-10-21 and H-1 a of 2026-10-22). At the deadline the system submits what is not yet submitted:
+ 
+ - Unsigned draft + enabled switch: finalize valid saved attendance—or the default labels when the period has no saved entries—as **automatic** (the record keeps employee review pending); post only computable credits/authorized deficits (days without records post no OT and no deficit); enqueue the PDF and send it through a send record with origin `deadline`, the Settings envelope and switches and no reason, presented as document 04 describes.
+ - Signed revision never sent + enabled switch: send the signed revision as signed (a `deadline` send with the Settings envelope and switches, no reason; audit `deadline.send_signed`). No new revision and no ledger change.
+@@ -35,7 +35,7 @@ Account bounds on automatic submission (both only narrow what is submitted; neit
+ 
+ ## Reminders and review links
+ 
+-Default reminders: 24h and 2h before due, an overdue warning when auto-submit is off, and an outcome notice after automatic submission. Deduplicate by user/period/reminder occurrence; stop normal reminders once the period is submitted, at its first send (owner decision F-2 a): a signed period that was not sent keeps its reminders, worded "signed, not sent yet". Collapse missed pre-deadline notices into one useful current notice.
++Default reminders: 24h and 2h before due, an overdue warning when auto-submit is off, and an outcome notice after automatic submission. Deduplicate by user/period/reminder occurrence; stop normal reminders once the period is submitted, at its first send (owner decisions F-2 a of 2026-10-21 and H-1 a of 2026-10-22): a signed period that was not sent keeps its reminders, worded "signed, not sent yet". Collapse missed pre-deadline notices into one useful current notice.
+ 
+ Reminders are at-least-once (owner decision D-7 a, 2026-10-20). A reminder job that runs again after a crash finds its message already captured and counts as sent; on real SMTP no such record exists, so if the process stops after the mail server accepted the message and before the job is recorded as sent, the reminder may arrive twice. This is accepted: reminders are advisory, and a lost reminder could cause a missed deadline. Submission deliveries are not reminders and keep the uncertain-outcome rule of the delivery table below.
+ 
+@@ -69,7 +69,7 @@ Another copy needs a confirmation and a typed reason (owner decision F-4, 2026-1
+ - A copy of the period counts as sent once any delivery attempt of any of its revisions was `accepted` or `uncertain`, whatever was decided later (the mail may have arrived). A send whose attempts all ended `failed_permanent` does not count, so retrying a failed first send needs no reason.
+ - When a copy counts, a send needs a reason: 2-500 characters after trimming, NFC, no control characters except line feeds. Otherwise the send is refused (422 `reason_required`) and nothing is written. The explicit "resend" decision on an uncertain attempt needs the reason too.
+ - The reason is stored on the send and in its audit event. It is never added to the email.
+-- The check runs inside the send transaction, so two concurrent sends cannot both skip it. A send still in progress blocks another one (409).
++- The check runs inside the send transaction, so two concurrent sends cannot both skip it. A send still in progress, or a send job of any revision of the period that still waits, blocks another one (409), so an older revision's copy cannot arrive after the correction's.
+ - The automatic paths never need a reason: they run only for a period that has no send.
+ 
+ Archived downloads require ownership or a share whose PDF item is on (the PDF may contain the signature image); signature image files are never shared. Separate OT evidence export includes raw intervals, breaks, policies, daily eligible/credited amounts, adjustments and leave permission; it is not automatically attached to payroll email.
+diff --git a/docs/05_SUBMISSION_AND_NOTIFICATIONS.vi.md b/docs/05_SUBMISSION_AND_NOTIFICATIONS.vi.md
+index cacd7a5e..355e2b67 100644
+--- a/docs/05_SUBMISSION_AND_NOTIFICATIONS.vi.md
++++ b/docs/05_SUBMISSION_AND_NOTIFICATIONS.vi.md
+@@ -8,7 +8,7 @@ Theo dõi riêng revision (nháp/chốt), nhân viên xác nhận (chờ/đã k
+ 
+ Chuẩn bị payload review chính xác: loại ngày, bằng chứng/biến động OT, dữ liệu chưa đủ, quyết định thiếu, người nhận, email và ảnh chữ ký khi đã lưu. Preview không phải PDF nộp chính thức. Sign-off thủ công là hành động của chủ đang đăng nhập: nó ghi tên hiển thị của tài khoản (không gõ tên) và, khi đã lưu, cả ảnh chữ ký; chưa lưu ảnh thì chỉ ký bằng tên (quyết định của chủ F-5 b, 2026-10-21). Payload đã xem ràng buộc trạng thái ảnh, nên ảnh được lưu hoặc thay sau lúc xem làm yêu cầu thành xung đột review cũ. Sign-off rõ ràng gửi kèm phiên bản nháp kỳ vọng và hash đã xem.
+ 
+-Ký và gửi là hai hành động riêng (quyết định của chủ F-2 a, F-3 b và F-4, 2026-10-21; WP5-UX5-T01b). Sign-off kiểm chủ/phiên bản, chốt snapshot, ghi sign-off thật, ghi sổ và xếp job PDF trong một transaction; nó không gửi gì. Nội dung cũ trả xung đột. Sau đó chủ gửi revision đã ký: To, Cc, tiêu đề, nội dung và hai công tắc dòng PDF ("Dòng giờ trên PDF", "Dòng OT trên PDF") được chọn cho lần gửi đó, mặc định lấy từ Settings hiện tại. Mỗi lần gửi là một bản ghi bất biến riêng. Tạo mỗi biến thể PDF một lần từ snapshot, lưu/hash, rồi gửi đúng file đó với nội dung email riêng của lần gửi. Trạng thái gửi độc lập sign-off. Cho tới khi có thẻ Gửi (WP5-UX5-T03), trang Review gửi ngay sau khi sign-off thành công với giá trị mặc định của Settings.
++Ký và gửi là hai hành động riêng (quyết định của chủ F-2 a, F-3 b và F-4, 2026-10-21; WP5-UX5-T01b). Sign-off kiểm chủ/phiên bản, chốt snapshot, ghi sign-off thật, ghi sổ và xếp job PDF trong một transaction; nó không gửi gì. Nội dung cũ trả xung đột. Sau đó chủ gửi revision đã ký: To, Cc, tiêu đề, nội dung và hai công tắc dòng PDF ("Dòng giờ trên PDF", "Dòng OT trên PDF") được chọn cho lần gửi đó, mặc định lấy từ Settings hiện tại. Mỗi lần gửi là một bản ghi bất biến riêng. Tạo mỗi biến thể PDF một lần từ snapshot, lưu/hash, rồi gửi đúng file đó với nội dung email riêng của lần gửi. Trạng thái gửi độc lập sign-off.
+ 
+ Giờ tùy chọn thiếu có thể để chờ sau xác nhận rõ; không bịa giờ. Sửa dữ liệu sai hoặc loại có audit.
+ 
+@@ -16,7 +16,7 @@ Giờ tùy chọn thiếu có thể để chờ sau xác nhận rõ; không bị
+ 
+ Lưu due_at UTC từ quy tắc hạn theo múi giờ báo cáo. Runner không cần trình duyệt.
+ 
+-Một kỳ được tính là đã nộp khi bất kỳ revision nào của nó đã có một lần gửi (quyết định của chủ F-2 a). Đến hạn, hệ thống nộp những gì chưa được nộp:
++Một kỳ được tính là đã nộp khi bất kỳ revision nào của nó đã có một lần gửi (quyết định của chủ F-2 a ngày 2026-10-21 và H-1 a ngày 2026-10-22). Đến hạn, hệ thống nộp những gì chưa được nộp:
+ 
+ - Nháp chưa ký + bật: chốt loại ngày hợp lệ đã lưu—hoặc nhãn mặc định khi kỳ chưa lưu dữ liệu nào—là **tự động** (bản ghi giữ trạng thái chờ nhân viên xác nhận); chỉ ghi OT tính được/khoản trừ đã cho phép (ngày không có bản ghi không ghi OT và không tính thiếu); xếp PDF và gửi qua một bản ghi gửi có nguồn `deadline`, với phong bì và công tắc của Settings và không có lý do, trình bày như tài liệu 04.
+ - Revision đã ký nhưng chưa từng gửi + bật: gửi revision đã ký đúng như đã ký (một lần gửi `deadline` với phong bì và công tắc của Settings, không có lý do; audit `deadline.send_signed`). Không tạo revision mới và không đổi sổ.
+@@ -35,7 +35,7 @@ Giới hạn theo tài khoản đối với tự nộp (cả hai chỉ thu hẹp
+ 
+ ## Nhắc và link review
+ 
+-Mặc định: trước hạn 24h, 2h; báo quá hạn nếu tắt tự nộp; báo kết quả sau tự nộp. Chống trùng theo user/kỳ/lần nhắc; ngừng nhắc thường khi kỳ đã nộp, tức là ở lần gửi đầu tiên (quyết định của chủ F-2 a): một kỳ đã ký mà chưa gửi vẫn được nhắc, với lời "đã ký, chưa gửi". Gộp các nhắc trước hạn bị lỡ thành một thông báo hiện tại hữu ích.
++Mặc định: trước hạn 24h, 2h; báo quá hạn nếu tắt tự nộp; báo kết quả sau tự nộp. Chống trùng theo user/kỳ/lần nhắc; ngừng nhắc thường khi kỳ đã nộp, tức là ở lần gửi đầu tiên (quyết định của chủ F-2 a ngày 2026-10-21 và H-1 a ngày 2026-10-22): một kỳ đã ký mà chưa gửi vẫn được nhắc, với lời "đã ký, chưa gửi". Gộp các nhắc trước hạn bị lỡ thành một thông báo hiện tại hữu ích.
+ 
+ Lời nhắc là ít nhất một lần (quyết định của chủ D-7 a, 2026-10-20). Job nhắc chạy lại sau sự cố thấy thư đã được ghi vào thư mục capture và coi như đã gửi; trên SMTP thật không có bản ghi như vậy, nên nếu tiến trình dừng sau khi máy chủ thư đã nhận thư và trước khi job được ghi là đã gửi thì lời nhắc có thể đến hai lần. Điều này được chấp nhận: lời nhắc chỉ mang tính tư vấn, và mất một lời nhắc có thể gây lỡ hạn. Lần gửi bài nộp không phải lời nhắc và giữ quy tắc kết quả không chắc chắn ở bảng gửi bên dưới.
+ 
+@@ -69,7 +69,7 @@ Gửi thêm một bản cần xác nhận và lý do gõ tay (quyết định c
+ - Một bản của kỳ được tính là đã gửi khi bất kỳ lượt gửi nào của bất kỳ revision nào của kỳ đã `accepted` hoặc `uncertain`, bất kể quyết định sau đó (thư có thể đã tới). Một lần gửi mà mọi lượt đều kết thúc `failed_permanent` thì không được tính, nên thử lại một lần gửi đầu thất bại không cần lý do.
+ - Khi đã có bản được tính, lần gửi cần lý do: 2-500 ký tự sau khi cắt khoảng trắng, NFC, không ký tự điều khiển trừ xuống dòng. Nếu không, lần gửi bị từ chối (422 `reason_required`) và không ghi gì. Quyết định "gửi lại" rõ ràng cho một lượt không chắc chắn cũng cần lý do.
+ - Lý do được lưu trên lần gửi và trong sự kiện audit của nó. Nó không bao giờ được thêm vào email.
+-- Việc kiểm tra chạy trong transaction gửi, nên hai lần gửi đồng thời không thể cùng bỏ qua nó. Một lần gửi đang chạy chặn lần gửi khác (409).
++- Việc kiểm tra chạy trong transaction gửi, nên hai lần gửi đồng thời không thể cùng bỏ qua nó. Một lần gửi đang chạy, hoặc một send job của bất kỳ revision nào của kỳ còn đang chờ, chặn lần gửi khác (409), nên bản gửi của revision cũ không thể đến sau bản của lần sửa.
+ - Các đường tự động không bao giờ cần lý do: chúng chỉ chạy cho kỳ chưa có lần gửi nào.
+ 
+ Tải lưu trữ cần quyền chủ hoặc quyền chia sẻ bật mục PDF (PDF có thể chứa ảnh chữ ký); file ảnh chữ ký không bao giờ được chia sẻ. Báo cáo OT riêng có ca gốc, nghỉ, quy tắc, số đủ điều kiện/ghi mỗi ngày, điều chỉnh và quyền dùng phép; không tự kèm email payroll.
+diff --git a/docs/10_DECISIONS_AND_SOURCES.md b/docs/10_DECISIONS_AND_SOURCES.md
+index 3fd86eea..fc2fc1f4 100644
+--- a/docs/10_DECISIONS_AND_SOURCES.md
++++ b/docs/10_DECISIONS_AND_SOURCES.md
+@@ -315,3 +315,11 @@ Source: the owner's answers of 2026-10-21 to WP5-UX5-PLAN, recorded verbatim (in
+ - The owner's reason rule (F-4, plan B-A2). A copy counts as sent once any attempt of any revision of the period was `accepted` or `uncertain`; a send whose attempts all failed permanently does not count. When a copy counts, another send, and the "resend" decision on an uncertain attempt, need a reason of 2-500 characters (trimmed, NFC, no control characters except line feeds), else 422 `reason_required`. The reason is stored on the send and in its audit event and is never added to the email. The check runs inside the send transaction. The reason not being in the email, a failed first send needing no reason, and the uncertain resend needing one are the planner's reversible defaults (plan Addendum 1, E revised).
+ - Data: migration 0015 rebuilds `revision_files` with a `variant` (existing rows `t1o1`, or `t1o0` when the snapshot hid the OT rows), adds `revision_sends` with a backfilled record for every existing send job (so a revision sent before the upgrade counts as sent), and adds `submission_settings.show_time_on_pdf`.
+ - Rules rewritten under AGENTS rule 8, with their translations: FR-11 in document 01 (manual sign-off no longer requires the image, F-5 b, left over from WP5-UX5-T01a; the rows chosen per send), document 03 (records, atomicity and the API boundary), document 05 ("Manual path", "Deadline and recovery", "Reminders and review links", "Durable delivery", "Corrections and resends"), and AC-06, AC-07, AC-10 and AC-14 in document 06. Document 04 and the pilot packet follow in WP5-UX5-T06.
++
++## Owner decisions — 2026-10-22 (WP5-UX5, what "submitted" means after a correction, H-1 a)
++
++Source: the owner's chat answer of 2026-10-22, "1 a, 2 a", recorded verbatim in the task board (`ORCHESTRATION.json`, id `answered_owner_question_ux5_h1`). Question 2 is WP5-UX5-H-1, answer a. The board records the answer as: "a period stays submitted once any revision has a send; a later correction or late review is not auto-sent at the deadline and reminders do not restart; the person sends it from the Send card (as built in WP5-UX5-T01B)." The question, as the board records it: "When a correction or a late review is signed after a copy of the period was already sent: (a, built, recommended) the period stays 'submitted': no automatic send of the new revision at the deadline and no new reminders; the person sends the correction from the Send card when they choose (consistent with 'corrections never send by themselves'); (b) the period becomes 'not submitted' again until the new revision is sent: reminders restart and, with auto-submit on, the deadline scan sends the new revision automatically."
++
++- H-1 a is the rule "a period counts as submitted once any of its revisions has a send" (`periodHasSend`, `deliveries.ts:226`). The plan's B-A1 had said "its current revision has a send"; WP5-UX5-T01B built "any revision" and flagged the deviation, and the owner confirmed what was built. Reversible only by a new owner decision.
++- Effects: a correction or late review made after a send gets no deadline send and no new reminders; the owner sends it from the Send card. The F-2 a rules for a period that was never sent are unchanged.
++- Rules already written under it: document 05 "Deadline and recovery" and "Reminders and review links" (cited there with F-2 a), and AC-07 in document 06.
+diff --git a/docs/10_DECISIONS_AND_SOURCES.vi.md b/docs/10_DECISIONS_AND_SOURCES.vi.md
+index 1f7f3cae..b5f6d860 100644
+--- a/docs/10_DECISIONS_AND_SOURCES.vi.md
++++ b/docs/10_DECISIONS_AND_SOURCES.vi.md
+@@ -316,3 +316,11 @@ Nguồn: các câu trả lời của chủ sở hữu ngày 2026-10-21 cho WP5-U
+ - Quy tắc lý do của chủ (F-4, kế hoạch B-A2). Một bản được tính là đã gửi khi bất kỳ lượt nào của bất kỳ revision nào của kỳ đã `accepted` hoặc `uncertain`; một lần gửi mà mọi lượt đều thất bại vĩnh viễn thì không được tính. Khi đã có bản được tính, lần gửi khác, và quyết định "gửi lại" cho một lượt không chắc chắn, cần lý do 2-500 ký tự (đã cắt khoảng trắng, NFC, không ký tự điều khiển trừ xuống dòng), nếu không là 422 `reason_required`. Lý do được lưu trên lần gửi và trong sự kiện audit của nó và không bao giờ được thêm vào email. Việc kiểm tra chạy trong transaction gửi. Việc lý do không vào email, lần gửi đầu thất bại không cần lý do, và gửi lại lượt không chắc chắn cần lý do là các mặc định có thể đảo ngược của người lập kế hoạch (kế hoạch Addendum 1, E sửa đổi).
+ - Dữ liệu: migration 0015 dựng lại `revision_files` với `variant` (dòng có sẵn là `t1o1`, hoặc `t1o0` khi snapshot ẩn dòng OT), thêm `revision_sends` với bản ghi backfill cho mọi send job đã có (để revision đã gửi trước khi nâng cấp được tính là đã gửi), và thêm `submission_settings.show_time_on_pdf`.
+ - Quy tắc được viết lại theo quy tắc AGENTS 8, kèm bản dịch: FR-11 trong tài liệu 01 (sign-off tay không còn cần ảnh, F-5 b, phần còn lại từ WP5-UX5-T01a; các dòng được chọn theo lần gửi), tài liệu 03 (bản ghi, tính nguyên tử và ranh giới API), tài liệu 05 ("Luồng thủ công", "Đến hạn và phục hồi", "Nhắc và link review", "Gửi bền vững", "Sửa và gửi lại"), và AC-06, AC-07, AC-10 và AC-14 trong tài liệu 06. Tài liệu 04 và gói pilot theo sau trong WP5-UX5-T06.
++
++## Quyết định của chủ sở hữu — 2026-10-22 (WP5-UX5, "đã nộp" nghĩa là gì sau một bản sửa, H-1 a)
++
++Nguồn: câu trả lời trong chat của chủ sở hữu ngày 2026-10-22, "1 a, 2 a", ghi nguyên văn trong bảng nhiệm vụ (`ORCHESTRATION.json`, id `answered_owner_question_ux5_h1`). Câu hỏi 2 là WP5-UX5-H-1, trả lời a. Bảng ghi câu trả lời như sau: "a period stays submitted once any revision has a send; a later correction or late review is not auto-sent at the deadline and reminders do not restart; the person sends it from the Send card (as built in WP5-UX5-T01B)." Câu hỏi, như bảng ghi: "When a correction or a late review is signed after a copy of the period was already sent: (a, built, recommended) the period stays 'submitted': no automatic send of the new revision at the deadline and no new reminders; the person sends the correction from the Send card when they choose (consistent with 'corrections never send by themselves'); (b) the period becomes 'not submitted' again until the new revision is sent: reminders restart and, with auto-submit on, the deadline scan sends the new revision automatically."
++
++- H-1 a là quy tắc "một kỳ được tính là đã nộp khi bất kỳ revision nào của nó có một lần gửi" (`periodHasSend`, `deliveries.ts:226`). B-A1 của kế hoạch đã nói "revision hiện tại của nó có một lần gửi"; WP5-UX5-T01B xây "bất kỳ revision nào" và nêu rõ chỗ lệch này, và chủ sở hữu xác nhận điều đã xây. Chỉ đảo ngược bằng một quyết định mới của chủ.
++- Hệ quả: bản sửa hay review muộn làm sau một lần gửi không có lần gửi lúc hạn và không có lời nhắc mới; chủ gửi nó từ thẻ Gửi. Các quy tắc F-2 a cho kỳ chưa từng gửi không đổi.
++- Các quy tắc đã viết theo nó: tài liệu 05 "Đến hạn và phục hồi" và "Nhắc và link review" (trích dẫn ở đó cùng F-2 a), và AC-07 trong tài liệu 06.
+diff --git a/docs/12_RELEASE_NOTES.md b/docs/12_RELEASE_NOTES.md
+index b2a528f4..94fd8776 100644
+--- a/docs/12_RELEASE_NOTES.md
++++ b/docs/12_RELEASE_NOTES.md
+@@ -51,7 +51,7 @@ These notes identify the release candidate of the Timesheet application, state w
+   - **Another copy needs a confirmation and a reason (F-4).** Once a copy counts as sent (an attempt of any revision of the period was accepted, or uncertain), the button reads "Send another copy..." and asks for a reason of 2 to 500 characters. The reason is stored with the send and in the audit log and is never put in the email. A first send that failed permanently needs no reason; the "resend" decision on an uncertain attempt does.
+   - **Deadline and reminders (F-2 a, H-1 a).** A period counts as submitted once any of its revisions has a send. With auto-submit on, a draft is finalized and sent at the deadline, and a signed revision that was never sent is sent as signed; with it off, the overdue warning applies. Reminders continue until a send and then stop; a signed period that is not sent says "signed, not sent yet". A correction or late review made after a send is sent by the person only, never at the deadline. The Timesheet button reads "Review & send" for a signed, unsent period.
+   - **Review page.** Title "Review and sign off" with the period, payroll date and due time in words (no submission id), status chips, a check card, a "Preview" card holding the sheet people sign (the signature rows carry the Sign off button) and the Send card. Sign off opens a confirmation dialog with the checks that were the checklist. The signer is the signed-in account.
+-  - **Signature image is optional (F-5 b).** With a saved image the PDF and the Review show the image and the account name; without one they show the name alone ("Signed with your name only.", with a link to Settings). There is no typed name.
++  - **Signature image is optional (F-5 b).** With a saved image the PDF and the Review show the image and the account name; without one they show the name alone (the Sign off dialog's "Signature" line reads "your name only", with a link "Add a signature image in Settings."). There is no typed name.
+   - **One-page PDF (F-8 a, F-9 b, F-10 a).** The PDF is redesigned as one US Letter page after the workbook: the C&D logo and wordmark, "Revision n" with the submission id small under it, the title and fields, two week tables with the category in the Indie Flower handwriting face, start and end time cells, the OT total, the signature rows and a footer. There is no instructions paragraph. Indie Flower 2.000 (SIL Open Font License 1.1, 108 KB) is the first committed font file ([ADR 0001](adr/0001-pdf-handwriting-font.md)); a category it cannot draw falls back to DejaVu Serif Italic. The PDF bytes changed, so the pilot samples were regenerated.
+   - **480 / 768px layout (F-6 a).** The sheet's compact four-column form now starts below 480px (it was below 768px); from 480 to 929px the seven-column week card scrolls sideways inside itself. The navigation shell (phone bar, tab bar, bottom-sheet editor, full-screen dialogs, the 44px rule) stays at 768px. The paper and the period card stand 8px from the window edges in the compact form.
+   - **Top bar and period card.** The wordmark shows beside the logo whenever it fits and never adds a row. The period card has a wide and a narrow arrangement chosen by its own width, a range that shortens step by step, and a primary "Review & sign off" button when the shown period needs the person.
+@@ -83,7 +83,7 @@ Each line gives the limit and where the rule or step is. None is a known defect
+ - **Sign-off before the period end is allowed (WP3 R5).** An accepted interpretation of [05 Submission](05_SUBMISSION_AND_NOTIFICATIONS.md).
+ - **Seed events show as automatic (WP3 R9).** Only synthetic seed data; the seed is refused in production.
+ - **A very long holiday label can still be cut with an ellipsis in the PDF (WP3 R1, R-WA6).** Since the round-5 PDF the category cell shrinks the label to 5 pt and wraps it on up to two lines first, and cuts it only when it still does not fit (`drawCategory`, `fitText`). The pilot samples have no holiday label; the owner judges it on a real one.
+-- **Partial leave is printed on the PDF since round 5 (R-WA2 no longer holds).** A day with leave prints "Leave h:mm" in small type under its category (read from the frozen code, `drawCategory`; the pilot samples have no leave day). A day with 4 h work and 4 h leave still prints as worked time with its OT. The owner judges whether payroll needs more.
++- **Partial leave is printed on the PDF since round 5 (R-WA2 no longer holds).** A day with leave prints "Leave h:mm" in small type under its category (read from the frozen code, `drawCategory`; the pilot samples have no leave day). On a day that also has a holiday label, the label is shrunk to one line and cut first; the leave figure keeps its own line. A day with 4 h work and 4 h leave still prints as worked time with its OT. The owner judges whether payroll needs more.
+ - **Days without records read "Worked" on an automatic PDF (R-WA8).** This is the owner's decision F-1 and F-Q1 (no automatic indicator, default labels), see [10 Decisions](10_DECISIONS_AND_SOURCES.md); the pilot sample shows it.
+ - **The outcome notice after downtime recovery is inexact (R-WA1).** It says the period was submitted "at the deadline" although a recovered submission is produced later; the PDF date is correct.
+ - **Unconfirmed breaks.** Check out is refused with 422 when a saved break ends after the Check out time (`saved_break_after_clock_out`), and a break in the future, one that ends more than five minutes from now, is refused when it is listed (`future_break`); an unconfirmed break that lies inside the session does not stop Check out, it only keeps OT pending. A refused Check out is resolved in the Check out dialog itself: list the breaks taken in its break rows, or tick "Confirm no breaks taken"; removing every saved row with the box unticked deletes them and keeps the breaks unconfirmed. "Confirm breaks" on a session card applies to ended sessions: it opens the session dialog, where Save confirms the listed breaks or "Confirm no breaks taken" ([02 Time and OT](02_TIME_AND_OT_RULES.md)).
+diff --git a/docs/12_RELEASE_NOTES.vi.md b/docs/12_RELEASE_NOTES.vi.md
+index 7a32cd85..ad911964 100644
+--- a/docs/12_RELEASE_NOTES.vi.md
++++ b/docs/12_RELEASE_NOTES.vi.md
+@@ -51,7 +51,7 @@ Các ghi chú này xác định bản ứng viên phát hành của ứng dụng
+   - **Bản gửi thêm cần xác nhận và một lý do (F-4).** Khi đã có một bản được tính là đã gửi (một lượt gửi của revision bất kỳ trong kỳ đã được chấp nhận hoặc không chắc chắn), nút ghi "Send another copy..." và hỏi lý do 2 đến 500 ký tự. Lý do được lưu cùng lần gửi và trong nhật ký audit và không bao giờ đưa vào email. Lần gửi đầu bị lỗi vĩnh viễn không cần lý do; quyết định "resend" trên một lượt gửi không chắc chắn thì cần.
+   - **Hạn nộp và nhắc (F-2 a, H-1 a).** Một kỳ được tính là đã nộp khi revision nào của nó có một lần gửi. Khi tự nộp bật, bản nháp được chốt và gửi lúc đến hạn, và một revision đã ký nhưng chưa từng gửi được gửi như đã ký; khi tắt thì áp dụng cảnh báo quá hạn. Nhắc tiếp tục cho đến khi có lần gửi rồi dừng; kỳ đã ký mà chưa gửi ghi "signed, not sent yet". Bản sửa hoặc xem lại muộn làm sau một lần gửi chỉ do người đó gửi, không bao giờ gửi lúc đến hạn. Nút trên Timesheet ghi "Review & send" cho kỳ đã ký chưa gửi.
+   - **Trang Review.** Tiêu đề "Review and sign off" với kỳ, ngày payroll và hạn nộp bằng lời (không có mã nộp), các chip trạng thái, thẻ kiểm tra, thẻ "Preview" chứa bảng người ta ký (các dòng chữ ký có nút Sign off) và thẻ Send. Sign off mở hộp thoại xác nhận với các mục kiểm trước đây là checklist. Người ký là tài khoản đang đăng nhập.
+-  - **Ảnh chữ ký là tùy chọn (F-5 b).** Có ảnh đã lưu thì PDF và Review hiện ảnh và tên tài khoản; không có thì chỉ hiện tên ("Signed with your name only.", kèm liên kết tới Settings). Không có ô gõ tên.
++  - **Ảnh chữ ký là tùy chọn (F-5 b).** Có ảnh đã lưu thì PDF và Review hiện ảnh và tên tài khoản; không có thì chỉ hiện tên (dòng "Signature" của hộp thoại Sign off ghi "your name only", kèm liên kết "Add a signature image in Settings."). Không có ô gõ tên.
+   - **PDF một trang (F-8 a, F-9 b, F-10 a).** PDF được thiết kế lại thành một trang US Letter theo workbook: logo và wordmark C&D, "Revision n" với mã nộp nhỏ bên dưới, tiêu đề và các trường, hai bảng tuần với loại bằng kiểu chữ viết tay Indie Flower, ô giờ bắt đầu và kết thúc, tổng OT, các dòng chữ ký và chân trang. Không có đoạn hướng dẫn. Indie Flower 2.000 (SIL Open Font License 1.1, 108 KB) là file font đầu tiên được commit ([ADR 0001](adr/0001-pdf-handwriting-font.vi.md)); loại mà nó không vẽ được chuyển sang DejaVu Serif Italic. Byte của PDF đã đổi, nên các mẫu pilot được tạo lại.
+   - **Bố cục 480 / 768px (F-6 a).** Dạng gọn bốn cột của bảng nay bắt đầu dưới 480px (trước là dưới 768px); từ 480 đến 929px thẻ tuần bảy cột cuộn ngang trong chính nó. Vỏ điều hướng (thanh điện thoại, thanh tab, editor dạng bottom sheet, hộp thoại toàn màn hình, quy tắc 44px) vẫn ở 768px. Tờ giấy và thẻ kỳ cách mép cửa sổ 8px ở dạng gọn.
+   - **Thanh trên và thẻ kỳ.** Wordmark hiện cạnh logo khi vừa chỗ và không bao giờ thêm một hàng. Thẻ kỳ có kiểu rộng và kiểu hẹp theo chiều rộng của chính nó, khoảng ngày rút gọn dần, và nút "Review & sign off" dạng chính khi kỳ đang xem cần người đó.
+@@ -83,7 +83,7 @@ Mỗi dòng nêu giới hạn và nơi có quy tắc hoặc bước. Không dòn
+ - **Cho phép ký xác nhận trước khi hết kỳ (WP3 R5).** Một cách hiểu đã được chấp nhận của [05 Nộp](05_SUBMISSION_AND_NOTIFICATIONS.vi.md).
+ - **Sự kiện seed hiện là tự động (WP3 R9).** Chỉ với dữ liệu seed tổng hợp; seed bị từ chối ở production.
+ - **Nhãn ngày lễ rất dài vẫn có thể bị cắt bằng dấu ba chấm trong PDF (WP3 R1, R-WA6).** Từ PDF vòng 5, ô loại thu nhỏ nhãn xuống 5 pt và xuống tối đa hai dòng trước, chỉ cắt khi vẫn không vừa (`drawCategory`, `fitText`). Các mẫu pilot không có nhãn ngày lễ; chủ sở hữu đánh giá trên một nhãn thật.
+-- **Nghỉ một phần được in trên PDF từ vòng 5 (R-WA2 không còn đúng).** Một ngày có nghỉ in "Leave h:mm" bằng chữ nhỏ dưới loại của nó (đọc từ mã đã đóng băng, `drawCategory`; các mẫu pilot không có ngày nghỉ). Một ngày làm 4 giờ và nghỉ 4 giờ vẫn in như giờ làm kèm OT của nó. Chủ sở hữu quyết định bộ phận lương có cần thêm không.
++- **Nghỉ một phần được in trên PDF từ vòng 5 (R-WA2 không còn đúng).** Một ngày có nghỉ in "Leave h:mm" bằng chữ nhỏ dưới loại của nó (đọc từ mã đã đóng băng, `drawCategory`; các mẫu pilot không có ngày nghỉ). Trên ngày có cả nhãn ngày lễ, nhãn được thu về một dòng và bị cắt trước; số giờ nghỉ giữ một dòng riêng. Một ngày làm 4 giờ và nghỉ 4 giờ vẫn in như giờ làm kèm OT của nó. Chủ sở hữu quyết định bộ phận lương có cần thêm không.
+ - **Ngày không có bản ghi hiện "Worked" trên PDF tự động (R-WA8).** Đây là quyết định F-1 và F-Q1 của chủ sở hữu (không có dấu hiệu tự động, nhãn mặc định), xem [10 Quyết định](10_DECISIONS_AND_SOURCES.vi.md); mẫu pilot sẽ hiển thị điều này.
+ - **Thông báo kết quả sau khi phục hồi do ngừng chạy chưa chính xác (R-WA1).** Thông báo nói kỳ được nộp "tại hạn" dù bản nộp được phục hồi tạo ra muộn hơn; ngày trên PDF là đúng.
+ - **Giờ nghỉ chưa xác nhận.** Check out bị từ chối với 422 khi một giờ nghỉ đã lưu kết thúc sau giờ Check out (`saved_break_after_clock_out`), và giờ nghỉ nằm trong tương lai, tức kết thúc muộn hơn năm phút kể từ bây giờ, bị từ chối khi được liệt kê (`future_break`); một giờ nghỉ chưa xác nhận nằm trong ca không chặn Check out, nó chỉ giữ OT ở trạng thái chờ. Check out bị từ chối được giải quyết ngay trong hộp thoại Check out: liệt kê các giờ nghỉ đã nghỉ trong các dòng giờ nghỉ của nó, hoặc chọn "Confirm no breaks taken"; xóa hết các dòng đã lưu khi ô chưa chọn sẽ xóa chúng và giữ giờ nghỉ ở trạng thái chưa xác nhận. "Confirm breaks" trên thẻ ca áp dụng cho các ca đã kết thúc: nó mở hộp thoại ca, nơi Save xác nhận các giờ nghỉ đã liệt kê hoặc "Confirm no breaks taken" ([02 Thời gian và OT](02_TIME_AND_OT_RULES.vi.md)).
+diff --git a/scripts/container-drill.mjs b/scripts/container-drill.mjs
+index 9a238125..bda316cb 100644
+--- a/scripts/container-drill.mjs
++++ b/scripts/container-drill.mjs
+@@ -275,7 +275,7 @@ function syntheticPng(fill) {
+ async function uploadSignature(cookie, fill) {
+   const response = await fetch(`${base}/api/signatures`, {
+     method: 'POST',
+-    headers: { origin: publicOrigin, cookie, 'content-type': 'image/png' },
++    headers: { origin: publicOrigin, cookie, 'content-type': 'image/png', connection: 'close' },
+     body: syntheticPng(fill),
+     signal: AbortSignal.timeout(15_000),
+   });
+@@ -302,7 +302,7 @@ function syntheticWorkbook(periods) {
+ async function uploadWorkbook(cookie, bytes) {
+   const response = await fetch(`${base}/api/imports`, {
+     method: 'POST',
+-    headers: { origin: publicOrigin, cookie, 'content-type': XLSX_MEDIA_TYPE },
++    headers: { origin: publicOrigin, cookie, 'content-type': XLSX_MEDIA_TYPE, connection: 'close' },
+     body: bytes,
+     signal: AbortSignal.timeout(30_000),
+   });
+@@ -382,7 +382,7 @@ async function stageTwo(cookie) {
+   check('the container job runner renders the PDF of the finalized period', pdfReady, `${((Date.now() - pdfWaitStart) / 1000).toFixed(1)} s`);
+   // WP5-UX5-T02: the image carries assets/pdf-fonts, so the rendered PDF embeds the Indie Flower subset (ADR 0001).
+   const readyRevision = ((await call('GET', '/api/revisions', { cookie })).json?.revisions ?? []).find((revision) => revision.pdf_state === 'ready');
+-  const downloaded = readyRevision === undefined ? null : await fetch(`${base}/api/revisions/${readyRevision.id}/pdf`, { headers: { cookie, origin: publicOrigin }, signal: AbortSignal.timeout(15_000) });
++  const downloaded = readyRevision === undefined ? null : await fetch(`${base}/api/revisions/${readyRevision.id}/pdf`, { headers: { cookie, origin: publicOrigin, connection: 'close' }, signal: AbortSignal.timeout(15_000) });
+   const embedded = downloaded === null ? '' : Buffer.from(await downloaded.arrayBuffer()).toString('latin1');
+   check('the container PDF is one page and embeds the Indie Flower subset from the image', (embedded.match(/\/Type\s*\/Page\b/g) ?? []).length === 1 && embedded.includes('+IndieFlower'), `${embedded.length} bytes`);
+ 
+@@ -984,7 +984,7 @@ async function startPreviousServer(name, databasePath, privateDir, { runnerOff =
+   const started = Date.now();
+   for (;;) {
+     try {
+-      const health = await fetch(`${server.base}/api/health`, { signal: AbortSignal.timeout(2000) });
++      const health = await fetch(`${server.base}/api/health`, { headers: { connection: 'close' }, signal: AbortSignal.timeout(2000) });
+       if (health.ok) return server;
+     } catch {
+       // not listening yet
+diff --git a/src/client/components/deliveryModel.ts b/src/client/components/deliveryModel.ts
+index 05816c86..23bcb038 100644
+--- a/src/client/components/deliveryModel.ts
++++ b/src/client/components/deliveryModel.ts
+@@ -373,7 +373,7 @@ export function resendFailureText(caught: unknown): string {
+     case 'delivery_uncertain':
+       return 'A delivery attempt is uncertain. Record your decision on it before you resend.';
+     case 'delivery_in_progress':
+-      return 'A delivery of this revision is already in progress.';
++      return 'A delivery of this period is already in progress.';
+     case 'pdf_not_ready':
+       return 'The PDF of this revision is not ready yet.';
+     case 'revision_superseded':
+@@ -581,7 +581,7 @@ export function sendFailure(caught: unknown): SendFailure {
+     case 'invalid_body':
+       return { kind: 'field', field: 'body', message: `The message must have 1 to ${MAX_SEND_BODY} characters without control characters.` };
+     case 'delivery_in_progress':
+-      return { kind: 'conflict', message: 'A delivery of this revision is already in progress or waiting. Nothing was sent again; follow it in History.' };
++      return { kind: 'conflict', message: 'A delivery of this period is already in progress or waiting. Nothing was sent again; follow it in History.' };
+     case 'delivery_uncertain':
+       return { kind: 'conflict', message: 'A delivery attempt of this revision is uncertain. Record your decision on it in History before you send again.' };
+     case 'revision_superseded':
+diff --git a/src/server/pdf/timesheetPdf.ts b/src/server/pdf/timesheetPdf.ts
+index a4686bdd..c4b9bebf 100644
+--- a/src/server/pdf/timesheetPdf.ts
++++ b/src/server/pdf/timesheetPdf.ts
+@@ -335,23 +335,27 @@ function drawCategory(canvas: Canvas, day: SnapshotDay, x: number, layout: WeekL
+   const category = cleanText(day.category ?? '');
+   const holiday = day.holiday_name !== null ? cleanText(day.holiday_name) : '';
+   const leave = day.leave_minutes > 0 ? `Leave ${formatHoursMinutes(day.leave_minutes)}` : '';
+-  const subText = [holiday, leave].filter((part) => part !== '').join(' ');
++  // Leave is payroll data and keeps its own whole line; a holiday name only repeats the calendar, so on a day with both it is
++  // shrunk to one line and cut first (F-UX5B-3). A day with only one of them is laid out exactly as before.
++  const both = holiday !== '' && leave !== '';
++  const subText = both ? holiday : [holiday, leave].filter((part) => part !== '').join(' ');
+   const face = canDraw(fonts.hand, category) ? fonts.hand : fonts.italic;
+   const measureFace = (target: Face) => (text: string, size: number) => target.font.widthOfTextAtSize(text, size);
+   const primary = category === '' ? { lines: [] as string[], size: 13 } : fitText(printable(face, category), face === fonts.hand ? 13 : 12, 8, width, subText === '' ? 2 : 1, measureFace(face));
+-  const sub = subText === '' ? { lines: [] as string[], size: 7 } : fitText(printable(fonts.sans, subText), 7, 5, width, 2, measureFace(fonts.sans));
++  const fitted = subText === '' ? { lines: [] as string[], size: 7 } : fitText(printable(fonts.sans, subText), 7, 5, width, both ? 1 : 2, measureFace(fonts.sans));
++  const sub = fitted.lines.map((line) => ({ text: line, size: fitted.size }));
++  if (both) sub.push({ text: leave, size: 7 });
+   const primaryLine = 15;
+-  const subLine = sub.size * 1.2;
+-  const block = primary.lines.length * primaryLine + sub.lines.length * subLine + (primary.lines.length > 0 && sub.lines.length > 0 ? 2 : 0);
++  const block = primary.lines.length * primaryLine + sub.reduce((sum, line) => sum + line.size * 1.2, 0) + (primary.lines.length > 0 && sub.length > 0 ? 2 : 0);
+   let cursor = layout.category.top + (layout.category.height - block) / 2;
+   for (const line of primary.lines) {
+     canvas.centered(face, line, centerX, cursor + primaryLine * 0.8, primary.size);
+     cursor += primaryLine;
+   }
+-  if (primary.lines.length > 0 && sub.lines.length > 0) cursor += 2;
+-  for (const line of sub.lines) {
+-    canvas.centered(fonts.sans, line, centerX, cursor + sub.size * 0.9, sub.size, MUTED);
+-    cursor += subLine;
++  if (primary.lines.length > 0 && sub.length > 0) cursor += 2;
++  for (const line of sub) {
++    canvas.centered(fonts.sans, line.text, centerX, cursor + line.size * 0.9, line.size, MUTED);
++    cursor += line.size * 1.2;
+   }
+ }
+ 
+diff --git a/src/server/services/deliveries.ts b/src/server/services/deliveries.ts
+index bd795ddd..88acddf3 100644
+--- a/src/server/services/deliveries.ts
++++ b/src/server/services/deliveries.ts
+@@ -428,11 +428,18 @@ function assertNothingInFlight(db: Db, userId: string, revisionId: string): void
+   if (open.some((attempt) => attempt.state === 'uncertain')) {
+     throw new ApiError(409, 'delivery_uncertain', 'A delivery attempt is uncertain; record a decision before sending again');
+   }
++  // A send job of ANY revision of the period that still waits blocks another send, so a superseded revision's copy cannot
++  // arrive after the correction's (R-UX5B-1).
+   const waiting = db
+-    .prepare<[string, string, string], { one: number }>("SELECT 1 AS one FROM jobs WHERE user_id = ? AND revision_id = ? AND kind = ? AND state IN ('queued', 'leased') LIMIT 1")
+-    .get(userId, revisionId, JOB_SEND_EMAIL);
++    .prepare<[string, string, string], { one: number }>(
++      `SELECT 1 AS one FROM jobs j
++         JOIN timesheet_revisions r ON r.id = j.revision_id AND r.user_id = j.user_id
++         JOIN timesheet_revisions target ON target.timesheet_id = r.timesheet_id AND target.user_id = r.user_id
++        WHERE j.user_id = ? AND j.kind = ? AND j.state IN ('queued', 'leased') AND target.id = ? LIMIT 1`,
++    )
++    .get(userId, JOB_SEND_EMAIL, revisionId);
+   if (open.length > 0 || waiting !== undefined) {
+-    throw new ApiError(409, 'delivery_in_progress', 'A delivery of this revision is already in progress');
++    throw new ApiError(409, 'delivery_in_progress', 'A delivery of this period is already in progress');
+   }
+ }
+ 
+diff --git a/tests/integration/pdf-render.test.ts b/tests/integration/pdf-render.test.ts
+index d8e90822..ed7cdca4 100644
+--- a/tests/integration/pdf-render.test.ts
++++ b/tests/integration/pdf-render.test.ts
+@@ -807,6 +807,54 @@ describe('bounds of long labels', () => {
+     }
+   });
+ 
++  // WP5-UX5-FIX7 (F-UX5B-3, docs/12 "Partial leave is printed on the PDF"): the leave figure is payroll data and keeps its
++  // own whole line under the category; on a day that also has a holiday label the label is shrunk to one line and cut first.
++  const leaveCell = async (day: SnapshotDay, rows: { time: boolean; ot: boolean }): Promise<PdfTextItem[]> => {
++    const days = DATES.map((date) => (date === day.work_date ? day : weekday(date)));
++    const { content } = await render(manual({ snapshot: snapshotWith({}, days), rows }));
++    expect(content.pages, JSON.stringify(rows)).toHaveLength(1);
++    // The Wednesday of week 1 is column 2; the category cell holds the category (13 pt) and the small lines (5 to 7 pt).
++    return bandItems(textItems(content), pdfLayout({ timeRows: rows.time, otRows: rows.ot }), 0, 'category', 2).filter((item) => item.height < 8);
++  };
++
++  it('prints "Leave h:mm" whole on a working day without a holiday label', async () => {
++    for (const rows of [{ time: true, ot: true }, { time: false, ot: false }]) {
++      const small = await leaveCell(weekday('2026-09-16', { leave_minutes: 150, leave_kind: 'vacation' }), rows);
++      expect(small.map((item) => item.text), JSON.stringify(rows)).toEqual(['Leave 2:30']);
++    }
++  });
++
++  it.each([
++    'Labor Day',
++    'Day after Thanksgiving',
++    'Martin Luther King Jr. Day',
++    'Christmas Eve (company closure)',
++    "Lunar New Year's Eve (company closure)",
++    'Year-end shutdown: plant maintenance week',
++  ])('keeps "Leave 1:30" whole on its own line under the holiday label %s, in all four variants', async (name) => {
++    for (const time of [true, false]) {
++      for (const ot of [true, false]) {
++        const day = weekday('2026-09-16', { category: 'Holiday', holiday_name: name, day_class: 'nonworking', leave_minutes: 90, leave_kind: 'sick', sessions: [] });
++        const small = await leaveCell(day, { time, ot });
++        const context = `${name} time ${time} ot ${ot}: ${JSON.stringify(small.map((item) => item.text))}`;
++        expect(small, context).toHaveLength(2); // the holiday label on one line, then the leave line
++        const [label, leave] = small;
++        expect(leave?.text, context).toBe('Leave 1:30');
++        expect(leave?.height ?? 0, context).toBeCloseTo(7, 0);
++        expect(label?.y ?? 0, context).toBeGreaterThan(leave?.y ?? Infinity); // above it
++        expect(name.startsWith(label?.text.replace(String.fromCodePoint(0x2026), '') ?? '?'), context).toBe(true); // the label, whole or cut
++      }
++    }
++  });
++
++  it('still wraps a long holiday label on up to two lines when the day has no leave', async () => {
++    const day = weekday('2026-09-16', { category: 'Holiday', holiday_name: 'Founders Remembrance and Community Service Observance Day', day_class: 'nonworking' });
++    const small = await leaveCell(day, { time: true, ot: true });
++    expect(small).toHaveLength(2);
++    expect(small.map((item) => item.text).join(' ')).toContain('Founders Remembrance');
++    expect(small.every((item) => item.height < 6)).toBe(true);
++  });
++
+   it('shows overnight sessions with +1 and open sessions with an open end', async () => {
+     const days = DATES.map((date) =>
+       date === '2026-09-16'
+diff --git a/tests/integration/sends.test.ts b/tests/integration/sends.test.ts
+index 30ae9f3f..f5125774 100644
+--- a/tests/integration/sends.test.ts
++++ b/tests/integration/sends.test.ts
+@@ -63,9 +63,9 @@ async function addSession(date: string, from: string, to: string, reason?: strin
+   expect(response.status, JSON.stringify(response.body)).toBe(201);
+ }
+ 
+-/** The employee's signed revision of PAYROLL (settings, one session, a saved image). */
+-async function signed(): Promise<string> {
+-  await saveSettings();
++/** The employee's signed revision of PAYROLL (settings with optional overrides, one session, a saved image). */
++async function signed(settings: Record<string, unknown> = {}): Promise<string> {
++  await saveSettings(settings);
+   await addSession('2026-09-15', '09:00', '18:00');
+   saveSignature(t.db, t.clock, files, t.userIds.employee, makePng(40, 12), 'image/png');
+   const review = await t.request('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: employee });
+@@ -176,6 +176,23 @@ describe('sign-off and the send record', () => {
+     expect(() => t.db.prepare("UPDATE revision_sends SET subject = 'Changed'").run()).toThrow(/immutable_revision_send/);
+   });
+ 
++  // F-UX5B-5 (plan B-A1): the Settings time switch is the default of the send draft and of the deadline sends, never of the
++  // sign-off's own PDF, which stays the sign-off default (time rows on, OT rows as the snapshot froze them).
++  it('the Settings time switch reaches the send draft, not the PDF job and file of the sign-off', async () => {
++    const revisionId = await signed({ show_time_on_pdf: false });
++    expect((await draftOf(revisionId)).time_rows).toBe(false);
++    expect(t.db.prepare("SELECT business_key, payload_json FROM jobs WHERE revision_id = ? AND kind = 'render_pdf'").all(revisionId)).toEqual([
++      { business_key: `revision:${revisionId}:render_pdf`, payload_json: JSON.stringify({ revision_id: revisionId, variant: 't1o1' }) },
++    ]);
++    await runPdf();
++    expect(t.db.prepare("SELECT variant, state FROM revision_files WHERE revision_id = ? AND kind = 'pdf'").all(revisionId)).toEqual([{ variant: 't1o1', state: 'ready' }]);
++    // Sending with the draft's default renders the other variant next to it; the sign-off file is untouched.
++    const sent = await postSend(revisionId, await sendBody(revisionId));
++    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
++    expect(sent.body.send).toMatchObject({ time_rows: false, ot_rows: true, pdf_variant: 't0o1' });
++    expect(t.db.prepare("SELECT variant FROM revision_files WHERE revision_id = ? AND kind = 'pdf' AND state = 'ready'").pluck().all(revisionId)).toEqual(['t1o1']);
++  });
++
+   it('is idempotent by request key: the same body replays, another body under the key is 409, and nothing more is written', async () => {
+     const revisionId = await signed();
+     const body = await sendBody(revisionId);
+@@ -269,6 +286,35 @@ describe('sign-off and the send record', () => {
+   });
+ });
+ 
++describe('a send that still waits for an older revision (R-UX5B-1)', () => {
++  it("blocks the correction's send until the older revision's job has run, and then the reason rule applies", async () => {
++    const first = await signed();
++    expect((await postSend(first, await sendBody(first))).status).toBe(201); // revision 1's send job waits
++    await addSession('2026-09-16', '09:00', '18:00', 'Synthetic forgotten day');
++    const review = await t.request('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: employee });
++    const correction = await t.request('POST', `/api/timesheets/${PAYROLL}/revisions`, {
++      cookie: employee,
++      body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false },
++    });
++    expect(correction.status, JSON.stringify(correction.body)).toBe(201);
++    const second = correction.body.revision.id as string;
++    const before = writeState();
++    const blocked = await postSend(second, await sendBody(second));
++    expect(blocked.status).toBe(409);
++    expect(blocked.body.error.code).toBe('delivery_in_progress');
++    expect(writeState()).toEqual(before);
++    // The older send is delivered first; only then can the correction be sent, and that copy needs a reason.
++    await runPdf();
++    await runSend();
++    expect(t.db.prepare("SELECT state FROM delivery_attempts WHERE revision_id = ?").pluck().all(first)).toEqual(['accepted']);
++    const noReason = await postSend(second, await sendBody(second));
++    expect(noReason.status).toBe(422);
++    expect(noReason.body.error.code).toBe('reason_required');
++    const sent = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
++    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
++  });
++});
++
+ describe("the owner's reason rule (B-A2)", () => {
+   /** Sends the revision once with the draft defaults and runs its job against `outbound`. */
+   async function sendOnce(revisionId: string, outbound: OutboundAdapter, extra: Record<string, unknown> = {}) {
+@@ -297,7 +343,15 @@ describe("the owner's reason rule (B-A2)", () => {
+     expect(t.db.prepare("SELECT reason FROM audit_events WHERE operation = 'revision.send' ORDER BY rowid DESC LIMIT 1").pluck().get()).toBe(reason);
+     const attempts = t.db.prepare("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'accepted' ORDER BY started_at").pluck().all(revisionId) as string[];
+     expect(attempts).toHaveLength(2);
+-    for (const attempt of attempts) expect(readFileSync(join(captureFolder(dataDir, attempt), 'message.eml'), 'utf8')).not.toContain('asked for the copy again');
++    // Quoted-printable breaks a long line ("Reason: Payroll asked for =" / "the copy again"), so join the soft breaks before
++    // looking for the reason; a positive control proves the joined text is the message body (F-UX5B-5, mutant M11).
++    const body = String(t.db.prepare('SELECT body_text FROM revision_sends WHERE id = ?').pluck().get(second));
++    for (const attempt of attempts) {
++      const message = readFileSync(join(captureFolder(dataDir, attempt), 'message.eml'), 'utf8').replace(/=\r?\n/g, '');
++      expect(message).toContain(body.split('\n')[0] ?? '?');
++      expect(message).not.toContain('asked for the copy again');
++      expect(message).not.toMatch(/Reason:/i);
++    }
+   });
+ 
+   it('an uncertain copy counts whatever was decided; a copy whose attempts all failed permanently does not', async () => {

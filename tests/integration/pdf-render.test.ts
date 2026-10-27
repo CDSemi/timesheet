@@ -807,6 +807,54 @@ describe('bounds of long labels', () => {
     }
   });
 
+  // WP5-UX5-FIX7 (F-UX5B-3, docs/12 "Partial leave is printed on the PDF"): the leave figure is payroll data and keeps its
+  // own whole line under the category; on a day that also has a holiday label the label is shrunk to one line and cut first.
+  const leaveCell = async (day: SnapshotDay, rows: { time: boolean; ot: boolean }): Promise<PdfTextItem[]> => {
+    const days = DATES.map((date) => (date === day.work_date ? day : weekday(date)));
+    const { content } = await render(manual({ snapshot: snapshotWith({}, days), rows }));
+    expect(content.pages, JSON.stringify(rows)).toHaveLength(1);
+    // The Wednesday of week 1 is column 2; the category cell holds the category (13 pt) and the small lines (5 to 7 pt).
+    return bandItems(textItems(content), pdfLayout({ timeRows: rows.time, otRows: rows.ot }), 0, 'category', 2).filter((item) => item.height < 8);
+  };
+
+  it('prints "Leave h:mm" whole on a working day without a holiday label', async () => {
+    for (const rows of [{ time: true, ot: true }, { time: false, ot: false }]) {
+      const small = await leaveCell(weekday('2026-09-16', { leave_minutes: 150, leave_kind: 'vacation' }), rows);
+      expect(small.map((item) => item.text), JSON.stringify(rows)).toEqual(['Leave 2:30']);
+    }
+  });
+
+  it.each([
+    'Labor Day',
+    'Day after Thanksgiving',
+    'Martin Luther King Jr. Day',
+    'Christmas Eve (company closure)',
+    "Lunar New Year's Eve (company closure)",
+    'Year-end shutdown: plant maintenance week',
+  ])('keeps "Leave 1:30" whole on its own line under the holiday label %s, in all four variants', async (name) => {
+    for (const time of [true, false]) {
+      for (const ot of [true, false]) {
+        const day = weekday('2026-09-16', { category: 'Holiday', holiday_name: name, day_class: 'nonworking', leave_minutes: 90, leave_kind: 'sick', sessions: [] });
+        const small = await leaveCell(day, { time, ot });
+        const context = `${name} time ${time} ot ${ot}: ${JSON.stringify(small.map((item) => item.text))}`;
+        expect(small, context).toHaveLength(2); // the holiday label on one line, then the leave line
+        const [label, leave] = small;
+        expect(leave?.text, context).toBe('Leave 1:30');
+        expect(leave?.height ?? 0, context).toBeCloseTo(7, 0);
+        expect(label?.y ?? 0, context).toBeGreaterThan(leave?.y ?? Infinity); // above it
+        expect(name.startsWith(label?.text.replace(String.fromCodePoint(0x2026), '') ?? '?'), context).toBe(true); // the label, whole or cut
+      }
+    }
+  });
+
+  it('still wraps a long holiday label on up to two lines when the day has no leave', async () => {
+    const day = weekday('2026-09-16', { category: 'Holiday', holiday_name: 'Founders Remembrance and Community Service Observance Day', day_class: 'nonworking' });
+    const small = await leaveCell(day, { time: true, ot: true });
+    expect(small).toHaveLength(2);
+    expect(small.map((item) => item.text).join(' ')).toContain('Founders Remembrance');
+    expect(small.every((item) => item.height < 6)).toBe(true);
+  });
+
   it('shows overnight sessions with +1 and open sessions with an open end', async () => {
     const days = DATES.map((date) =>
       date === '2026-09-16'

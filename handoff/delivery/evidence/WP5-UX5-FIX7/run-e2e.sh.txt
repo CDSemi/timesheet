@@ -1,0 +1,16 @@
+#!/bin/bash
+# usage: run-e2e.sh <out-name> <spec files...>   (built server in dist/, both projects, real clock)
+set -u
+T="<task>"
+export PATH="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin:$(cygpath -u "$APPDATA")/npm:$PATH"
+mkdir -p "$T/tmp-e2e" "$T/out"
+export TEMP="$(cygpath -w "$T/tmp-e2e")" TMP="$(cygpath -w "$T/tmp-e2e")" TMPDIR="$T/tmp-e2e"
+export DATA_DIR="$T/data" DATABASE_PATH="$T/data/e2e.db"
+export NO_COLOR=1 FORCE_COLOR=0
+unset PRODUCTION_SENDING_ENABLED
+OUT="$1"; shift
+cd "<repo>" || exit 1
+echo "start $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$T/out/$OUT"
+node.exe node_modules/@playwright/test/cli.js test "$@" >> "$T/out/$OUT" 2>&1
+echo "exit $?" >> "$T/out/$OUT"
+echo "end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/out/$OUT"

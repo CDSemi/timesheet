@@ -1,0 +1,93 @@
+/*
+ * WP5-UX5-PLAN-FIX7 probe: a port of the AUDIT-B probes 92-pdf-content.ts (the leave and holiday parts) and
+ * 93-pdf-leave-threshold.ts to a synthetic snapshot (the auditor's probes read a private scratch database that is not part of
+ * the repository). Same day edits, same seven holiday names, same assertions. Usage: node 103-auditor-probes-port.ts <out.txt>
+ */
+import { writeFileSync } from 'node:fs';
+import { datesBetween } from '../export/src/domain/dates.ts';
+import type { ReviewSnapshot, SnapshotDay } from '../export/src/domain/snapshot.ts';
+import { renderTimesheetPdf } from '../export/src/server/pdf/timesheetPdf.ts';
+import { instantOfWallTime } from '../export/tests/client/zoneOracle.ts';
+import { makePng, readPdf } from '../export/tests/support/pdfText.ts';
+
+const [outPath] = process.argv.slice(2);
+if (outPath === undefined) throw new Error('usage');
+const ZONE = 'America/Los_Angeles';
+const START = '2026-10-05';
+const DATES = datesBetween(START, '2026-10-18');
+const utc = (date: string, time: string): string => instantOfWallTime(date, time, ZONE).replace('.000Z', 'Z');
+const day = (date: string, overrides: Partial<SnapshotDay> = {}): SnapshotDay => ({
+  work_date: date, day_class: 'normal', day_class_reason: null, holiday_name: null, calendar_version_id: 'cv-1', category: 'Worked', category_source: 'default',
+  attendance_expected: true, wfh: false, notes: '', leave_minutes: 0, leave_kind: null,
+  ot_leave: { kind_minutes: 0, consumed_minutes: 0, reversed_minutes: 0, mismatch: false },
+  sessions: [{ id: `s-${date}`, start_utc: utc(date, '08:00'), end_utc: utc(date, '17:00'), source: 'manual', breaks_confirmed: true, breaks: [] }],
+  completeness: 'complete', policy_version_id: 'pv-1',
+  calculation: { regular_minutes: 480, nonworking_minutes: 0, normal_excess_minutes: 0, eligible_minutes: 0, credited_minutes: 0 }, calculation_error: null,
+  ...overrides,
+});
+const snapshotOf = (days: SnapshotDay[]): ReviewSnapshot =>
+  ({
+    schema: 'timesheet-review', schema_version: 2, employee: { name: 'Example Employee Two' },
+    period: { payroll_date: '2026-10-16', nominal_payroll_date: '2026-10-16', period_start: START, period_end: '2026-10-18', due_local_date: '2026-10-14', due_local_time: '17:00', due_at_utc: utc('2026-10-14', '17:00'), is_exception: false },
+    reporting_zone: ZONE, submission: { id: 'TS-2026-10-16-0123456789', revision_no: 1, sign_off_status: 'Submitted' }, timesheet: { finalized_revision_no: null },
+    calendar: { id: 'cal-1', version_ids: ['cv-1'] }, policy: { version_ids: ['pv-1'] }, days, totals: { credited_minutes: 0, pending_days: 0 },
+    ot_proposals: [], deficit_proposals: [], unresolved_inputs: [], ot_leave_reservations: [],
+    recipients: { to: ['payroll@example.invalid'], cc: [], subject: 's', body_text: 'b', body_html: '<p>b</p>', template_version: 1 },
+    signature: null, auto_image: { authorized: false, attachment_id: null }, auto_note: { enabled: false, text: 'Automatic submission' }, show_ot_on_pdf: true,
+  }) as ReviewSnapshot;
+
+const lines: string[] = [];
+let failures = 0;
+const check = (name: string, ok: boolean, detail = '') => {
+  if (!ok) failures += 1;
+  lines.push(`${ok ? 'PASS' : 'FAIL'} ${name}${detail === '' ? '' : ` | ${detail}`}`);
+};
+
+// Part 1: the threshold probe (93): seven holiday names, 90 minutes of leave, sessions removed.
+const NAMES = [
+  'Labor Day', 'Independence Day', 'Day after Thanksgiving', 'Martin Luther King Jr. Day', 'Christmas Eve (company closure)',
+  "Lunar New Year's Eve (company closure)", 'Year-end shutdown: plant maintenance week',
+];
+for (const name of NAMES) {
+  const days = DATES.map((date, index) => (index === 2 ? day(date, { category: 'Holiday', holiday_name: name, day_class: 'holiday', leave_minutes: 90, leave_kind: 'sick', sessions: [] }) : day(date)));
+  const bytes = await renderTimesheetPdf({ snapshot: snapshotOf(days), submissionId: 'TS-2026-10-16-0123456789', revisionNo: 1, origin: 'manual', signedAt: '2026-10-14T20:00:00Z', automaticSubmittedAt: null, signerName: 'Example Employee Two', signatureImage: null });
+  const pdf = await readPdf(bytes);
+  const small = (pdf.pages[0]?.items ?? []).filter((item) => item.height < 7.5 && item.x > 150 && item.x < 300 && item.y > 400 && item.y < 600).map((item) => `${item.text} (${item.height.toFixed(1)}pt)`);
+  const joined = small.join(' | ');
+  check(`93 threshold, ${name.length} chars ${JSON.stringify(name)}: "Leave 1:30" printed whole`, small.some((text) => text.startsWith('Leave 1:30 (')), joined);
+}
+
+// Part 2: the content probe (92), leave and holiday parts, four variants, with and without an image.
+const LONG_HOLIDAY = 'Founders Remembrance and Community Service Observance Day (synthetic)';
+const LONG_HOLIDAY_2 = 'Extended Plant Shutdown for the Annual Safety Inspection';
+const days = DATES.map((date) => day(date));
+days[2] = { ...days[2]!, category: 'Holiday', holiday_name: LONG_HOLIDAY, day_class: 'holiday', sessions: [] };
+days[3] = { ...days[3]!, category: 'Worked', leave_minutes: 150, leave_kind: 'vacation' };
+days[9] = { ...days[9]!, category: 'Shutdown', holiday_name: LONG_HOLIDAY_2, day_class: 'holiday', leave_minutes: 90, leave_kind: 'sick', sessions: [] };
+const snapshot = snapshotOf(days);
+const image = makePng(320, 96);
+for (const withImage of [true, false]) {
+  for (const rows of [{ time: true, ot: true }, { time: true, ot: false }, { time: false, ot: true }, { time: false, ot: false }]) {
+    const label = `t${rows.time ? 1 : 0}o${rows.ot ? 1 : 0} ${withImage ? 'image+name' : 'name only'}`;
+    const bytes = await renderTimesheetPdf({ snapshot, submissionId: snapshot.submission.id, revisionNo: 3, origin: 'manual', signedAt: '2026-10-14T20:00:00Z', automaticSubmittedAt: null, signerName: 'Example Employee Two', signatureImage: withImage ? image : null, rows });
+    const again = await renderTimesheetPdf({ snapshot, submissionId: snapshot.submission.id, revisionNo: 3, origin: 'manual', signedAt: '2026-10-14T20:00:00Z', automaticSubmittedAt: null, signerName: 'Example Employee Two', signatureImage: withImage ? image : null, rows });
+    check(`92 ${label}: deterministic bytes`, Buffer.compare(Buffer.from(bytes), Buffer.from(again)) === 0);
+    const pdf = await readPdf(bytes);
+    const page = pdf.pages[0];
+    check(`92 ${label}: one page`, pdf.pages.length === 1);
+    if (page === undefined) continue;
+    const all = page.items.map((item) => item.text).join(' ');
+    const outside = page.items.filter((item) => item.x < 35.5 || item.x + item.width > 577 || item.y < 36 || item.y > 772);
+    check(`92 ${label}: every text item inside the margins`, outside.length === 0, outside.map((item) => item.text).join('; '));
+    check(`92 ${label}: partial leave printed on a working day ("Leave 2:30")`, all.includes('Leave 2:30'));
+    check(`92 ${label}: partial leave printed on a day that also has a long holiday name ("Leave 1:30")`, all.includes('Leave 1:30'));
+    const holidayItems = page.items.filter((item) => /Founders|Remembrance|Observance|Community|synthetic/.test(item.text) && item.height < 6);
+    const column = page.items.find((item) => item.text === 'Holiday');
+    check(`92 ${label}: long holiday label (no leave) shrunk and wrapped inside its column`, holidayItems.length >= 2 && holidayItems.every((item) => column === undefined || Math.abs(item.x + item.width / 2 - (column.x + column.width / 2)) < 2), holidayItems.map((i) => i.text).join(' / '));
+    const shutdown = page.items.filter((item) => /Extended|Plant|Shutdown|Safety|Inspection|Annual/.test(item.text) && item.height < 7.5).map((item) => `${item.text} (${item.height.toFixed(1)}pt)`);
+    if (label === 't1o1 image+name') lines.push(`  info: shutdown-day small items ${JSON.stringify(shutdown)}`);
+  }
+}
+lines.push(`failures: ${failures}`);
+writeFileSync(outPath, `${lines.join('\n')}\n`);
+process.exitCode = failures === 0 ? 0 : 1;

@@ -1,0 +1,43 @@
+// WP5-UX5-AUDIT-B probe: after migration 0014, a sign-off row cannot reference another user's signature image or a
+// non-signature attachment, and a null image is accepted only through a signed revision. Works on a COPY of the upgraded
+// synthetic database. Usage: node signoff-foreign.mjs <exportDir> <databaseCopy> <out.txt>
+import { writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+
+const [exportDir, dbPath, outPath] = process.argv.slice(2);
+const Database = createRequire(join(exportDir, 'package.json'))('better-sqlite3');
+const db = new Database(dbPath);
+db.pragma('foreign_keys = ON');
+const lines = [];
+const attempt = (name, fn) => {
+  try {
+    fn();
+    lines.push(`${name}: ACCEPTED`);
+  } catch (error) {
+    lines.push(`${name}: refused (${error.code ?? ''} ${error.message})`);
+  }
+};
+const users = db.prepare("SELECT id, email FROM users WHERE role = 'employee' ORDER BY email").all();
+const [one, two] = users;
+const sigOfTwo = db.prepare("SELECT id FROM attachments WHERE user_id = ? AND kind = 'signature' LIMIT 1").pluck().get(two.id);
+const pdfOfOne = db.prepare("SELECT id FROM attachments WHERE user_id = ? AND kind = 'pdf' LIMIT 1").pluck().get(one.id);
+// A signed revision of user one with its reviewed hash, to satisfy the revision-signed trigger.
+const revision = db.prepare("SELECT r.id, r.reviewed_sha256 FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id WHERE r.user_id = ? AND r.review_state = 'signed' AND r.revision_no = t.finalized_revision_no LIMIT 1").get(one.id);
+db.exec('BEGIN');
+// Make room: the probe inserts a NEW sign-off for a revision that has none, so add a synthetic signed revision copy first.
+const base = db.prepare('SELECT * FROM timesheet_revisions WHERE id = ?').get(revision.id);
+const newRevision = '00000000-0000-4000-8000-00000000abcd';
+db.prepare(
+  `INSERT INTO timesheet_revisions (id, user_id, timesheet_id, revision_no, revision_kind, origin, review_state, supersedes_revision_id,
+     correction_reason, timesheet_version, payload_json, payload_sha256, reviewed_sha256, send_requested, actor_user_id, created_at)
+   VALUES (?, ?, ?, ?, 'correction', 'employee', 'signed', ?, 'probe', ?, ?, ?, ?, 0, ?, ?)`,
+).run(newRevision, base.user_id, base.timesheet_id, base.revision_no + 1, base.id, base.timesheet_version, base.payload_json, base.payload_sha256, base.reviewed_sha256, base.user_id, base.created_at);
+const insert = db.prepare('INSERT INTO signoffs (id, user_id, revision_id, signer_name, signed_at, reviewed_sha256, signature_attachment_id) VALUES (?, ?, ?, ?, ?, ?, ?)');
+attempt("another user's signature image", () => insert.run('probe-foreign', one.id, newRevision, 'Probe', '2026-10-21T00:00:00Z', base.reviewed_sha256, sigOfTwo));
+attempt('a pdf attachment as the image', () => insert.run('probe-kind', one.id, newRevision, 'Probe', '2026-10-21T00:00:00Z', base.reviewed_sha256, pdfOfOne));
+attempt('a missing attachment id', () => insert.run('probe-missing', one.id, newRevision, 'Probe', '2026-10-21T00:00:00Z', base.reviewed_sha256, 'no-such-attachment'));
+attempt('a null image on a signed revision', () => insert.run('probe-null', one.id, newRevision, 'Probe', '2026-10-21T00:00:00Z', base.reviewed_sha256, null));
+db.exec('ROLLBACK');
+db.close();
+writeFileSync(outPath, `${lines.join('\n')}\n`);

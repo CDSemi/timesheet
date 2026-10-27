@@ -1,0 +1,234 @@
+diff --git a/<repo>/src/client/styles.css b/<task>/export/src/client/styles.css
+index 27e3775..3954105 100644
+--- a/<repo>/src/client/styles.css
++++ b/<task>/export/src/client/styles.css
+@@ -152,8 +152,9 @@
+   --compact-edge: var(--space-2);
+   /*
+    * The paper sheet (round 4, U4-03): the surface that holds the toolbar, the messages, the sheet and its footer. It is the card colour,
+-   * lifted by --elev-paper (the --elev-2 step), with the card corner (--radius-lg) from 768px and padded like the sheet blocks; on a
+-   * phone it is full-bleed and square (see the phone rule), so the sheet keeps its width. The week sheets inside lose only their own shadow.
++   * lifted by --elev-paper (the --elev-2 step), with the card corner (--radius-lg) at every width and padded like the sheet blocks; in the
++   * compact form (below 480px, U5-22) it stands --compact-edge from each window edge (see the compact rule), so the sheet keeps its width.
++   * The week sheets inside lose only their own shadow.
+    */
+   --paper-surface: var(--card);
+   --elev-paper: var(--elev-2);
+@@ -341,7 +342,8 @@
+   --shell-brand-inner-gap: var(--space-3);
+   /*
+    * The bar's column gap, and the total gap between the brand and the navigation (owner: "a little further
+-   * from the text and logo, so it is balanced"). The wordmark shows from 1024px (U-06), where the gap grows one step.
++   * from the text and logo, so it is balanced"). The wordmark shows whenever it fits (U5-02; the widths are with the .wordmark rules
++   * below), and the gap grows one step wherever it shows.
+    */
+   --shell-gap: var(--space-5);
+   --shell-gap-tight: var(--space-4);
+@@ -2699,7 +2701,7 @@ textarea {
+   }
+ }
+ 
+-/* "Change several days" has a short visible form for the compact toolbar (U5-17b); its name never changes. */
++/* "Change several days" has a short visible form, "Change days", for the compact toolbar (U5-17b); the button is named by the form it shows (SC 2.5.3). */
+ .change-days-short {
+   display: none;
+ }
+@@ -2823,8 +2825,8 @@ textarea {
+ /*
+  * The form people know from the Excel template and the PDF: header block, two Monday to Sunday
+  * week bands with the rows Day, Date, Category, Time, OT (and Status), Overtime Total bottom right and
+- * the signature lines. From 768px each band is a CSS grid whose day columns share the band's rows
+- * (subgrid); below it each band is a 4-column table. Non-working days of the server calendar are
++ * the signature lines. From 480px each band is a CSS grid whose day columns share the band's rows
++ * (subgrid; it scrolls sideways inside its card from 480 to 929px); below 480px each band is a 4-column table. Non-working days of the server calendar are
+  * tinted and hatched (a non-colour cue); every status keeps its words and shape.
+  */
+ .sheet {
+@@ -3848,7 +3850,8 @@ textarea {
+ 
+ /*
+  * The sub-buttons of the Day editor (round 5, owner decision F-1 a, U5-05): Edit and Delete on a session card, Add session, Suggest
+- * breaks, Add break and Save day fields. The visible box is --subbtn-h (36px) on every device. Where controls are 44px (below 768px
++ * breaks, Add break and Save day fields in the drawer's form (the phone sheet's fixed foot has its own full-width 44px button, `.editor-foot`).
++ * The visible box is --subbtn-h (36px) on every device. Where controls are 44px (below 768px
+  * and with a coarse pointer) the 44px target stays as an invisible hit area: a ::before extends the button --subbtn-hit-extra above and
+  * below. Rows of sub-buttons keep the 8px gap (--space-2), so two hit areas touch at most and never overlap (WCAG 2.5.8 spacing).
+  */
+@@ -4084,7 +4087,7 @@ button.link-action {
+ /*
+  * The paper sheet (round 4, U4-03, owner answer F-5). One surface holds the toolbar, the page messages, the batch bar, the form
+  * header, both week sheets, the legend, Overtime Total and the signature lines (Timesheet: `section.sheet-main`; Review and sign
+- * off: `section.review-sheet-block`, "What you sign" and the sheet; the checklist stays beside it). The title row and the period
++ * off: `section.review-preview`, the Preview card with its header bar). The title row and the period
+  * card stay outside. The toolbar, the week sheets and the footer keep their own style and layout; the week sheets and the footer
+  * lose only their outer shadow, because the paper carries it. The paper clips nothing (overflow stays visible): a lifted column's
+  * shadow, a label list and the editor column lift draw over it. In the compact form (below 480px, U5-22) the paper stands
+@@ -5705,6 +5708,7 @@ textarea.mono {
+   --sig-date-min: 5.5rem;
+   --sig-line-height: 52px;
+   --sig-button-inset: var(--space-2);
++  --sig-content-min: 10rem;
+   display: flex;
+   flex-direction: column;
+   gap: var(--space-5);
+@@ -5740,6 +5744,7 @@ textarea.mono {
+ 
+ .rsig-line {
+   display: flex;
++  flex-wrap: wrap;
+   align-items: flex-end;
+   justify-content: space-between;
+   gap: var(--space-2);
+@@ -5751,10 +5756,15 @@ textarea.mono {
+ 
+ .rsig-content {
+   display: flex;
++  flex: 1 1 var(--sig-content-min);
+   align-items: flex-end;
+   min-width: 0;
+ }
+ 
++.rsig-content:empty {
++  display: none;
++}
++
+ .rsig-action {
+   flex: none;
+   padding-inline-end: var(--sig-button-inset);
+diff --git a/<repo>/src/client/TimesheetScreen.tsx b/<task>/export/src/client/TimesheetScreen.tsx
+index 613f41c..d412696 100644
+--- a/<repo>/src/client/TimesheetScreen.tsx
++++ b/<task>/export/src/client/TimesheetScreen.tsx
+@@ -66,6 +66,24 @@ const OUTSIDE_PRESS_KEEPS = [
+   '[role="tab"]',
+ ].join(', ');
+ 
++/**
++ * Whether a press at (x, y) on `element` landed on the element's own scrollbar: the element scrolls (overflow auto or scroll) and the
++ * point is outside its client box, which excludes the scrollbars. A scrollbar press scrolls; it is not a press on the page (F-UX5A-3).
++ */
++function onOwnScrollbar(element: Element, x: number, y: number): boolean {
++  const style = getComputedStyle(element);
++  if (!/auto|scroll/.test(`${style.overflowX} ${style.overflowY}`)) return false;
++  const box = element.getBoundingClientRect();
++  const left = box.left + element.clientLeft;
++  const top = box.top + element.clientTop;
++  return x < left || x >= left + element.clientWidth || y < top || y >= top + element.clientHeight;
++}
++
++/** The touch-end listener of a tap that was used: cancelling it stops the mouse events (and the focus move they bring) after the tap. */
++function cancelMouseEvents(event: TouchEvent): void {
++  if (event.cancelable) event.preventDefault();
++}
++
+ /** The text of the polite status after the open day's button closed the Day editor. */
+ const EDITOR_CLOSED_TEXT = 'Day editor closed';
+ 
+@@ -592,20 +610,46 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+   // U5-24, owner answer F-7 a: while the drawer is open, a press on the page outside a day column, the drawer, a dialog or a control
+   // closes it like Close, with the discard question when it holds unsaved edits (Keep editing changes nothing). A control keeps its
+   // own action, so Today still moves an open editor; another day column switches the day. The phone's bottom sheet handles a press
+-  // on its own backdrop (DayEditor). A press that is not the primary button, or lands on the window's scrollbar, is not a press on the page.
++  // on its own backdrop (DayEditor). A press that is not the primary button, or lands on a scrollbar (the window's or an element's own),
++  // is not a press on the page. A touch press waits for its pointer-up: a swipe that starts outside a day column scrolls the page, the
++  // browser cancels that pointer (no pointer-up), and it must not close the drawer. The touch-end that follows a tap that closed it is
++  // prevented, so the browser's mouse events (which would move focus off the day button) do not follow.
+   useEffect(() => {
+     if (editDate === null || !desktop) return;
++    let touch: number | null = null;
+     const onPress = (event: PointerEvent) => {
++      touch = null;
+       if (event.button !== 0 || !(event.target instanceof Element)) return;
+       const root = document.documentElement;
+       if (event.clientX >= root.clientWidth || event.clientY >= root.clientHeight) return;
+       if (event.target.closest(OUTSIDE_PRESS_KEEPS) !== null) return;
++      if (onOwnScrollbar(event.target, event.clientX, event.clientY)) return;
++      if (event.pointerType === 'touch') {
++        touch = event.pointerId;
++        return;
++      }
+       // The press is used here: unprevented, the browser would move focus to the page after the editor (or the question) took it.
+       event.preventDefault();
+       closeFromOutside.current();
+     };
++    const onRelease = (event: PointerEvent) => {
++      if (touch !== event.pointerId) return;
++      touch = null;
++      // The touch-end of this tap comes next (browsers with touch events): preventing it cancels the mouse events that would follow.
++      if ('ontouchend' in document) document.addEventListener('touchend', cancelMouseEvents, { once: true, passive: false });
++      closeFromOutside.current();
++    };
++    const onCancel = () => {
++      touch = null;
++    };
+     document.addEventListener('pointerdown', onPress);
+-    return () => document.removeEventListener('pointerdown', onPress);
++    document.addEventListener('pointerup', onRelease);
++    document.addEventListener('pointercancel', onCancel);
++    return () => {
++      document.removeEventListener('pointerdown', onPress);
++      document.removeEventListener('pointerup', onRelease);
++      document.removeEventListener('pointercancel', onCancel);
++    };
+   }, [editDate, desktop]);
+ 
+   /** A press on the open day's own button: closes the editor (after the discard question when it holds unsaved edits) and says so. */
+@@ -687,7 +731,6 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+                   <button
+                     type="button"
+                     className="secondary change-days"
+-                    aria-label="Change several days"
+                     aria-pressed={batchOn}
+                     disabled={imported}
+                     aria-describedby={imported ? 'imported-reason' : undefined}
+@@ -697,9 +740,10 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+                     }}
+                   >
+                     {/* U5-17b: where the compact toolbar row has no room the visible words step down to "Change days" (CSS, a container
+-                        query); the name stays "Change several days", which contains every visible form (SC 2.5.3). */}
++                        query). The name is the visible words (no aria-label): the form that is shown is the name (SC 2.5.3), and
++                        the form that is not shown is display: none, so it is not read. */}
+                     <span className="change-days-long">Change several days</span>
+-                    <span className="change-days-short" data-text="Change days" aria-hidden="true" />
++                    <span className="change-days-short" data-text="Change days" />
+                   </button>
+                 )}
+               </div>
+diff --git a/<repo>/src/client/ReviewScreen.tsx b/<task>/export/src/client/ReviewScreen.tsx
+index 3576977..7e56e8b 100644
+--- a/<repo>/src/client/ReviewScreen.tsx
++++ b/<task>/export/src/client/ReviewScreen.tsx
+@@ -275,7 +275,7 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
+           Pay period <b>{description.start}</b>
+           <span className="range-arrow" aria-hidden="true">
+             {' '}
+-            {'->'}{' '}
++            {'→'}{' '}
+           </span>
+           <span className="sr-only"> to </span>
+           <b>{description.end}</b> · payroll date <b>{description.payroll}</b> · due <b>{description.due}</b> ({description.zone})
+diff --git a/<repo>/src/client/components/SignoffDialog.tsx b/<task>/export/src/client/components/SignoffDialog.tsx
+index a5b32ab..79e6330 100644
+--- a/<repo>/src/client/components/SignoffDialog.tsx
++++ b/<task>/export/src/client/components/SignoffDialog.tsx
+@@ -123,7 +123,10 @@ export function SignoffDialog({
+             {SIGNOFF_TITLE[mode]}
+           </h2>
+           <p className="muted">
+-            Pay period {weekdayDate(payload.period.period_start)} {'->'} {weekdayDate(payload.period.period_end)} · payroll date {description.payroll}
++            Pay period {weekdayDate(payload.period.period_start)}
++            <span aria-hidden="true"> → </span>
++            <span className="sr-only"> to </span>
++            {weekdayDate(payload.period.period_end)} · payroll date {description.payroll}
+           </p>
+         </div>
+ 
+@@ -161,7 +164,7 @@ export function SignoffDialog({
+             </div>
+           </dl>
+ 
+-          <div className="signoff-preview" aria-label="Signature preview" data-signature-preview>
++          <div className="signoff-preview" data-signature-preview>
+             <SignatureRows
+               employee={
+                 <span className="signed-mark">

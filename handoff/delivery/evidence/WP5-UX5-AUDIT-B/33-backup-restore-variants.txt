@@ -1,0 +1,11 @@
+PASS backup exit 0 | {"outcome":"succeeded","backup":"timesheet-backup-20261027T035141Z-fdd59d3a","schema_version":15,"files":6,"signatures":1,"pdfs":5,"database_bytes":671744,"duration_ms":67,"status_recorded":true}
+PASS isolated restore exit 0 | {"outcome":"restored","manifest":{"verified":true,"schema_version":15,"files":6,"signatures":1,"pdfs":5,"database_bytes":671744},"schema":{"backup":15,"restored":15,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":0,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":3,"revisions":3,"ledger_entries":2,"attachmen
+PASS restored revision_files rows equal the source (5)
+PASS restored revision_sends rows equal the source (9)
+PASS restored attachments rows equal the source (5)
+PASS restored delivery_attempts rows equal the source (9)
+PASS a revision with all four variants is restored | [{"revision_id":"9e9628f1-c5b9-4519-b10a-efc15dbf6b75","variants":"t1o1"},{"revision_id":"d5d2beb2-260d-4d3e-9730-d1e14f8282b3","variants":"t0o0,t0o1,t1o0,t1o1"}]
+PASS every restored PDF variant file is present with its recorded hash | 5/5
+PASS restored integrity ok, no foreign key violation, schema 15
+PASS the restored copy has outbound paused (reason restored) | restored
+failures: 0

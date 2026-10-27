@@ -1,0 +1,38 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-PLAN-FIX7A probe N (F-UX5A-2): the accessible name of the "Change several days" button at several widths, read two ways:
+ * Playwright's own role-name computation and Chrome's accessibility tree through CDP. Task-local; never part of the repository.
+ */
+const OUT = process.env.AUDIT_OUT ?? '';
+const LABEL = process.env.PROBE_LABEL ?? 'name';
+function note(line: string): void {
+  console.log(line);
+  if (OUT !== '') appendFileSync(join(OUT, `obs-${LABEL}.txt`), `${line}\n`);
+}
+
+test('the name of the Change days button follows the visible form', async ({ page, signInThroughUi, isMobile }) => {
+  test.skip(isMobile, 'desktop browser; widths are set by resize');
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Accessibility.enable');
+  for (const width of [1280, 600, 390, 360, 340, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.waitForTimeout(250);
+    const visible = await page.evaluate(() => {
+      const long = document.querySelector('.change-days-long');
+      const short = document.querySelector('.change-days-short');
+      const shown = (e: Element | null) => (e === null ? false : getComputedStyle(e).display !== 'none');
+      return { long: shown(long), short: shown(short), pseudo: short === null ? '' : getComputedStyle(short, '::before').content };
+    });
+    const tree = (await cdp.send('Accessibility.getFullAXTree')) as { nodes: Array<{ role?: { value: string }; name?: { value: string }; properties?: Array<{ name: string; value: { value: unknown } }> }> };
+    const names = tree.nodes.filter((n) => n.role?.value === 'button' && /Change/.test(n.name?.value ?? '')).map((n) => n.name?.value);
+    const pw = await page.getByRole('button', { name: /^Change (several )?days$/ }).count();
+    const pwLong = await page.getByRole('button', { name: 'Change several days', exact: true }).count();
+    const pwShort = await page.getByRole('button', { name: 'Change days', exact: true }).count();
+    note(`[${width}] visible ${JSON.stringify(visible)} chromeNames ${JSON.stringify(names)} pw(regex) ${pw} pw("Change several days") ${pwLong} pw("Change days") ${pwShort}`);
+  }
+});

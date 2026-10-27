@@ -1,0 +1,302 @@
+/*
+ * WP5-UX5-AUDIT-B probe: upgrade the REAL schema-13 database (built by the base build, build-v13.ts) with the TARGET
+ * build's CLI (`node dist/server/cli.js migrate`), then check rows, variants, the backfilled sends, triggers, integrity
+ * and the behaviour of the target code on the upgraded data. Synthetic data, capture adapter only.
+ * Usage: node upgrade-v13.ts <exportDir> <databasePath> <dataDir> <out.txt>
+ */
+import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
+import { openDatabase } from '../export/src/server/db/database.ts';
+import { FileStore } from '../export/src/server/files/fileStore.ts';
+import { countedCopy, decideDelivery, sendDraft, sendRevision } from '../export/src/server/services/deliveries.ts';
+import { runDeadlineScan, setAutomationActivation } from '../export/src/server/services/automation.ts';
+import { currentSubmissionSettings, saveSubmissionSettings } from '../export/src/server/services/submissionSettings.ts';
+import { createPdfJobHandler } from '../export/src/server/jobs/pdfJob.ts';
+import { createSendJobHandler } from '../export/src/server/jobs/sendJob.ts';
+import { runJobsOnce } from '../export/src/server/jobs/runner.ts';
+import { createCaptureAdapter, captureFolder } from '../export/src/server/mail/captureAdapter.ts';
+
+const [exportDir, databasePath, dataDir, outPath] = process.argv.slice(2);
+if (exportDir === undefined || databasePath === undefined || dataDir === undefined || outPath === undefined) throw new Error('usage');
+const lines: string[] = [];
+let failures = 0;
+const log = (line: string) => lines.push(line);
+const check = (name: string, ok: boolean, detail = '') => {
+  if (!ok) failures += 1;
+  log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail === '' ? '' : ` | ${detail}`}`);
+};
+
+class MutableClock {
+  current: Date;
+  constructor(iso: string) {
+    this.current = new Date(iso);
+  }
+  now(): Date {
+    return new Date(this.current.getTime());
+  }
+  set(iso: string): void {
+    this.current = new Date(iso);
+  }
+}
+
+type Row = Record<string, unknown>;
+const CHANGED = new Set(['signoffs', 'revision_files', 'revision_sends', 'submission_settings', 'schema_migrations']);
+
+// ---- before
+let db = openDatabase(databasePath);
+const tableNames = (target: typeof db) =>
+  target.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all() as string[];
+const rowsOf = (target: typeof db, table: string) => target.prepare(`SELECT rowid AS _rowid, * FROM ${table} ORDER BY rowid`).all() as Row[];
+const triggersOf = (target: typeof db) => target.prepare("SELECT name, tbl_name, sql FROM sqlite_master WHERE type = 'trigger' ORDER BY name").all() as Row[];
+const beforeTables = tableNames(db);
+const before: Record<string, Row[]> = Object.fromEntries(beforeTables.map((name) => [name, rowsOf(db, name)]));
+const beforeTriggers = triggersOf(db);
+check('database starts at schema 13', db.pragma('user_version', { simple: true }) === 13);
+check('no revision_sends table before', !beforeTables.includes('revision_sends'));
+db.close();
+
+// ---- the target CLI migrate (the production path)
+const cli = spawnSync(process.execPath, [join(exportDir, 'dist', 'server', 'cli.js'), 'migrate'], {
+  env: { ...process.env, DATABASE_PATH: databasePath, DATA_DIR: dataDir },
+  encoding: 'utf8',
+});
+log(`cli migrate exit ${cli.status} stdout ${cli.stdout.trim().replace(/"database":"[^"]*"/, '"database":"<task>"')} stderr ${cli.stderr.trim()}`);
+check('cli migrate applies 14 and 15 in one call', cli.status === 0 && cli.stdout.includes('"applied":[14,15]') && cli.stdout.includes('"version":15'));
+
+// ---- after
+db = openDatabase(databasePath);
+const after: Record<string, Row[]> = Object.fromEntries(tableNames(db).map((name) => [name, rowsOf(db, name)]));
+for (const table of beforeTables) {
+  if (CHANGED.has(table)) continue;
+  check(`table ${table} unchanged (${before[table]?.length} rows)`, isDeepStrictEqual(before[table], after[table]));
+}
+check('signoffs rows copied with rowids, unchanged', isDeepStrictEqual(before.signoffs, after.signoffs), `${after.signoffs?.length} rows`);
+const settingsOk = isDeepStrictEqual(
+  (before.submission_settings ?? []).map((row) => ({ ...row, show_time_on_pdf: 1 })),
+  after.submission_settings,
+);
+check('submission_settings versions kept, show_time_on_pdf = 1', settingsOk, `${after.submission_settings?.length} rows`);
+
+const snapshotOf = (revisionId: string) => JSON.parse(db.prepare('SELECT payload_json FROM timesheet_revisions WHERE id = ?').pluck().get(revisionId) as string);
+const filesAfter = after.revision_files ?? [];
+check('revision_files: same rows and rowids', (before.revision_files ?? []).length === filesAfter.length);
+for (const [index, row] of (before.revision_files ?? []).entries()) {
+  const now = filesAfter[index] as Row;
+  const snap = snapshotOf(row.revision_id as string);
+  const expected = snap.show_ot_on_pdf === false ? 't1o0' : 't1o1';
+  const { variant, ...rest } = now;
+  check(`revision_files ${String(row.revision_id).slice(0, 8)} variant ${variant} (snapshot show_ot_on_pdf ${snap.show_ot_on_pdf})`, isDeepStrictEqual(rest, row) && variant === expected);
+}
+const variants = new Set(filesAfter.map((row) => row.variant));
+check('both derived variants present (t1o1 and t1o0)', variants.has('t1o1') && variants.has('t1o0'), [...variants].join(','));
+
+// one backfilled send per send job
+const sendJobs = db.prepare("SELECT rowid AS _rowid, * FROM jobs WHERE kind = 'send_email' ORDER BY created_at, rowid").all() as Row[];
+const sends = db.prepare('SELECT * FROM revision_sends').all() as Row[];
+check('one revision_sends row per existing send job', sends.length === sendJobs.length && sendJobs.length === 7, `${sends.length} sends / ${sendJobs.length} jobs`);
+const perRevision = new Map<string, number>();
+for (const job of sendJobs) {
+  const send = sends.find((row) => row.job_id === job.id);
+  const revisionId = job.revision_id as string;
+  perRevision.set(revisionId, (perRevision.get(revisionId) ?? 0) + 1);
+  const snap = snapshotOf(revisionId);
+  const origin = db.prepare('SELECT origin FROM timesheet_revisions WHERE id = ?').pluck().get(revisionId) as string;
+  const deadline = origin === 'deadline' && job.business_key === `revision:${revisionId}:send_email:initial`;
+  const ot = snap.show_ot_on_pdf === false ? 0 : 1;
+  const expected = {
+    user_id: job.user_id,
+    revision_id: revisionId,
+    send_no: perRevision.get(revisionId),
+    request_key: `migrated:${job.id}`,
+    origin: deadline ? 'deadline' : 'employee',
+    actor_user_id: deadline ? null : job.user_id,
+    to_json: JSON.stringify(snap.recipients.to),
+    cc_json: JSON.stringify(snap.recipients.cc),
+    subject: snap.recipients.subject,
+    body_text: snap.recipients.body_text,
+    body_html: snap.recipients.body_html,
+    time_rows: 1,
+    ot_rows: ot,
+    pdf_variant: ot === 1 ? 't1o1' : 't1o0',
+    reason: null,
+    job_id: job.id,
+    created_at: job.created_at,
+  };
+  const got = send === undefined ? null : Object.fromEntries(Object.keys(expected).map((key) => [key, send[key]]));
+  check(`send of job ${String(job.business_key).replace(/[0-9a-f-]{36}/, '<rev>')} (${String(job.state)})`, isDeepStrictEqual(got, expected), got === null ? 'missing' : `send_no ${got.send_no} origin ${got.origin} variant ${got.pdf_variant}`);
+}
+
+// triggers
+const afterTriggers = triggersOf(db);
+const afterNames = new Set(afterTriggers.map((row) => row.name));
+const missing = beforeTriggers.filter((row) => !afterNames.has(row.name)).map((row) => row.name);
+check('every trigger of schema 13 still exists', missing.length === 0, `missing ${missing.join(',')}; before ${beforeTriggers.length}, after ${afterTriggers.length}`);
+const changedTriggers = beforeTriggers.filter((row) => afterTriggers.find((item) => item.name === row.name)?.sql !== row.sql).map((row) => row.name);
+check('only the image-kind and revision-file identity triggers changed text', isDeepStrictEqual(changedTriggers.sort(), ['revision_files_identity', 'signoffs_image_kind']), changedTriggers.join(','));
+for (const name of ['revision_sends_job', 'revision_sends_no_update', 'revision_sends_no_delete']) check(`new trigger ${name}`, afterNames.has(name));
+check('identity trigger freezes the variant', String(afterTriggers.find((row) => row.name === 'revision_files_identity')?.sql).includes('NEW.variant IS NOT OLD.variant'));
+check('image-kind trigger skips a null image', String(afterTriggers.find((row) => row.name === 'signoffs_image_kind')?.sql).includes('NEW.signature_attachment_id IS NOT NULL'));
+check('integrity_check ok', db.pragma('integrity_check', { simple: true }) === 'ok');
+check('foreign_key_check empty', (db.pragma('foreign_key_check') as unknown[]).length === 0);
+check('foreign_keys on', db.pragma('foreign_keys', { simple: true }) === 1);
+check('user_version 15', db.pragma('user_version', { simple: true }) === 15);
+const tryRun = (sql: string, ...params: unknown[]): string => {
+  try {
+    db.prepare(sql).run(...params);
+    return 'ran';
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+};
+check('revision_sends update refused', tryRun("UPDATE revision_sends SET reason = 'later'").includes('immutable_revision_send'));
+check('revision_sends delete refused', tryRun('DELETE FROM revision_sends').includes('immutable_revision_send'));
+check('signoffs update refused', tryRun("UPDATE signoffs SET signer_name = 'x'").includes('immutable_signoff'));
+const pdfAttachment = db.prepare("SELECT id, user_id FROM attachments WHERE kind = 'pdf' LIMIT 1").get() as { id: string; user_id: string };
+const signedRow = db.prepare('SELECT revision_id, user_id, reviewed_sha256 FROM signoffs LIMIT 1').get() as Row;
+check(
+  'image-kind trigger refuses a pdf attachment as the signature image',
+  tryRun(
+    "INSERT INTO signoffs (id, user_id, revision_id, signer_name, signed_at, reviewed_sha256, signature_attachment_id) VALUES ('probe-x', ?, ?, 'Probe', '2026-10-01T00:00:00Z', ?, ?)",
+    signedRow.user_id,
+    signedRow.revision_id,
+    signedRow.reviewed_sha256,
+    pdfAttachment.id,
+  ).includes('attachment_kind_mismatch'),
+);
+
+// ---- behaviour of the target code on the upgraded data
+const clock = new MutableClock('2026-11-05T18:00:00Z');
+const userOf = (email: string) => {
+  const row = db.prepare('SELECT id, email, display_name, calendar_id, role FROM users WHERE email = ?').get(email) as Row;
+  return { id: row.id as string, email: row.email as string, displayName: row.display_name as string, role: 'employee' as const, calendarId: row.calendar_id as string, sessionId: 'probe' };
+};
+const two = userOf('employee2@example.invalid');
+const one = userOf('employee@example.invalid');
+const revisionsOf = (user: { id: string }) =>
+  db
+    .prepare(
+      `SELECT r.id, r.revision_no, r.origin, r.timesheet_id, p.payroll_date FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id
+        JOIN pay_periods p ON p.id = t.pay_period_id WHERE r.user_id = ? ORDER BY r.created_at`,
+    )
+    .all(user.id) as Array<{ id: string; revision_no: number; origin: string; timesheet_id: string; payroll_date: string }>;
+const [aRev1, aRev2, bAuto, eRev] = revisionsOf(two);
+const [cRev, dRev] = revisionsOf(one);
+if (aRev1 === undefined || aRev2 === undefined || bAuto === undefined || eRev === undefined || cRev === undefined || dRev === undefined) throw new Error('fixture');
+
+const counted = (user: { id: string }, timesheetId: string) => countedCopy(db, user.id, timesheetId)?.state ?? null;
+check('reason rule counts the accepted pre-upgrade copy (A)', counted(two, aRev1.timesheet_id) === 'accepted');
+check('reason rule counts the uncertain pre-upgrade copy (B, automatic)', counted(two, bAuto.timesheet_id) === 'uncertain');
+check('reason rule ignores a failed-only period (D)', counted(one, dRev.timesheet_id) === null);
+check('queued pre-upgrade send does not count yet (E)', counted(two, eRev.timesheet_id) === null);
+
+// Deadline scan right after the upgrade, auto-submit on for both, activation before the old deadlines.
+const sendsBefore = db.prepare('SELECT count(*) FROM revision_sends').pluck().get() as number;
+const revisionsBefore = db.prepare('SELECT count(*) FROM timesheet_revisions').pluck().get() as number;
+db.prepare("UPDATE operations_state SET automation_active_from = '2026-09-01T00:00:00Z', automation_recorded_at = '2026-09-01T00:00:00Z', automation_recorded_by = ? WHERE id = 1").run(
+  (db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").pluck().get() as string),
+);
+for (const user of [two, one]) {
+  saveSubmissionSettings(db, clock, user.id, { expectedSeq: currentSubmissionSettings(db, user.id)?.seq ?? 0, to: ['payroll@example.invalid'], autoSubmit: true, applyToOverdueDrafts: true });
+}
+const oldTimesheets = [aRev1, bAuto, eRev, cRev, dRev].map((rev) => rev.timesheet_id);
+const sendsOfOld = () =>
+  db.prepare(`SELECT count(*) FROM revision_sends s JOIN timesheet_revisions r ON r.id = s.revision_id WHERE r.timesheet_id IN (${oldTimesheets.map(() => '?').join(',')})`).pluck().get(...oldTimesheets) as number;
+const oldSendsBefore = sendsOfOld();
+const scan = runDeadlineScan(db, clock, { batchSize: 200 });
+log(`deadline scan: ${JSON.stringify(scan)}`);
+check('deadline scan sends nothing for the periods sent (or queued, or failed) before the upgrade', sendsOfOld() === oldSendsBefore, `${oldSendsBefore} -> ${sendsOfOld()}`);
+const newRevs = db.prepare(`SELECT count(*) FROM timesheet_revisions WHERE timesheet_id IN (${oldTimesheets.map(() => '?').join(',')})`).pluck().get(...oldTimesheets) as number;
+check('deadline scan adds no revision to those periods', newRevs === 6, `${newRevs}`);
+log(`all sends ${sendsBefore} -> ${db.prepare('SELECT count(*) FROM revision_sends').pluck().get()}, revisions ${revisionsBefore} -> ${db.prepare('SELECT count(*) FROM timesheet_revisions').pluck().get()} (other periods auto-finalized)`);
+
+const files = new FileStore(dataDir);
+const tryApi = (fn: () => unknown): string => {
+  try {
+    const result = fn() as { status?: string };
+    return `ok:${result.status ?? 'done'}`;
+  } catch (error) {
+    const e = error as { status?: number; code?: string; message?: string };
+    return `${e.status ?? 'error'}:${e.code ?? e.message}`;
+  }
+};
+const ctxTwo = { db, clock, user: two };
+const ctxOne = { db, clock, user: one };
+const draftOf = (user: typeof two, revisionId: string) => sendDraft(db, user, revisionId, 'timesheet@example.invalid');
+const bodyOf = (user: typeof two, revisionId: string, key: string, reason?: string) => {
+  const draft = draftOf(user, revisionId);
+  return { requestKey: key, to: draft.envelope.to, cc: draft.envelope.cc, subject: draft.envelope.subject, bodyText: draft.envelope.bodyText, timeRows: draft.rows.time, otRows: draft.rows.ot, reason };
+};
+check('send-draft of the failed-only period needs no reason', draftOf(one, dRev.id).copySentBefore === null);
+check('send-draft of A rev2 needs a reason (accepted copy of rev1)', draftOf(two, aRev2.id).copySentBefore?.state === 'accepted');
+const REASON = 'Probe reason: payroll asked for another copy';
+const r1 = tryApi(() => sendRevision(ctxTwo, aRev2.id, bodyOf(two, aRev2.id, 'probe-key-a2-0001')));
+check('A rev2 without a reason: 422 reason_required', r1 === '422:reason_required', r1);
+const r2 = tryApi(() => sendRevision(ctxTwo, aRev2.id, bodyOf(two, aRev2.id, 'probe-key-a2-0002', REASON)));
+check('A rev2 with a reason: created', r2 === 'ok:created', r2);
+const r3 = tryApi(() => sendRevision(ctxTwo, aRev1.id, bodyOf(two, aRev1.id, 'probe-key-a1-0001', REASON)));
+check('A rev1 (superseded): 409 revision_superseded', r3 === '409:revision_superseded', r3);
+const r4 = tryApi(() => sendRevision(ctxTwo, bAuto.id, bodyOf(two, bAuto.id, 'probe-key-b-00001', REASON)));
+check('B (uncertain, undecided): 409 delivery_uncertain', r4 === '409:delivery_uncertain', r4);
+const r5 = tryApi(() => sendRevision(ctxOne, cRev.id, bodyOf(one, cRev.id, 'probe-key-c-00001', REASON)));
+check('C (pre-split resend still preparing): 409 delivery_in_progress', r5 === '409:delivery_in_progress', r5);
+const r6 = tryApi(() => sendRevision(ctxTwo, eRev.id, bodyOf(two, eRev.id, 'probe-key-e-00001')));
+check('E (backfilled send queued): 409 delivery_in_progress', r6 === '409:delivery_in_progress', r6);
+const r7 = tryApi(() => sendRevision(ctxOne, dRev.id, bodyOf(one, dRev.id, 'probe-key-d-00001')));
+check('D (failed-only) without a reason: created', r7 === 'ok:created', r7);
+const bAttempt = db.prepare("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'uncertain'").pluck().get(bAuto.id) as string;
+const r8 = tryApi(() => decideDelivery(ctxTwo, bAttempt, 'resend', null));
+check('B resend decision without a reason: 422 reason_required', r8 === '422:reason_required', r8);
+const r9 = tryApi(() => decideDelivery(ctxTwo, bAttempt, 'resend', REASON));
+check('B resend decision with a reason: done', r9 === 'ok:done', r9);
+
+// ---- the target runner sends the queued and the new sends from their records
+const handlers = {
+  render_pdf: createPdfJobHandler({ db, clock, files }),
+  send_email: createSendJobHandler({ db, clock, files, outbound: createCaptureAdapter(dataDir), senderAddress: 'timesheet@example.invalid' }),
+};
+for (let pass = 0; pass < 4; pass += 1) {
+  const summary = await runJobsOnce({ db, clock, handlers });
+  log(`runner pass ${pass}: ${JSON.stringify(summary)}`);
+  clock.set(new Date(clock.now().getTime() + 120_000).toISOString());
+}
+const attemptOf = (jobId: string) => db.prepare('SELECT id, state, envelope_json FROM delivery_attempts WHERE job_id = ? ORDER BY attempt_no DESC LIMIT 1').get(jobId) as Row | undefined;
+const sendRowOf = (key: string) => db.prepare('SELECT * FROM revision_sends WHERE request_key = ?').get(key) as Row;
+const captured = (attemptId: string) => {
+  const folder = captureFolder(dataDir, attemptId);
+  // Unfold RFC 5322 header continuation lines (a long Subject is folded at about 78 characters).
+  return existsSync(join(folder, 'message.eml')) ? readFileSync(join(folder, 'message.eml'), 'latin1').replace(/\r\n[ \t]+/g, ' ') : '';
+};
+const cResendJob = sendJobs.find((job) => String(job.business_key).endsWith(':send_email:resend:2')) as Row;
+const cAttempt = attemptOf(cResendJob.id as string);
+check('C pre-split resend (preparing attempt reused) sent after the upgrade: accepted', cAttempt?.state === 'accepted', String(cAttempt?.state));
+const eJob = sendJobs.find((job) => job.revision_id === eRev.id) as Row;
+const eAttempt = attemptOf(eJob.id as string);
+const eSnap = snapshotOf(eRev.id);
+const eEml = eAttempt === undefined ? '' : captured(eAttempt.id as string);
+check('E queued pre-upgrade send: accepted', eAttempt?.state === 'accepted', String(eAttempt?.state));
+const eMeta = eAttempt === undefined ? null : JSON.parse(readFileSync(join(captureFolder(dataDir, eAttempt.id as string), 'metadata.json'), 'utf8'));
+check('E message envelope = the snapshot recipients (backfilled row)', isDeepStrictEqual(eMeta?.envelope?.to, [...eSnap.recipients.to, ...eSnap.recipients.cc]), JSON.stringify(eMeta?.envelope));
+check('E message subject = snapshot subject', eEml.includes(`Subject: ${eSnap.recipients.subject}`), eSnap.recipients.subject);
+check('E Message-ID @timesheet.invalid', /Message-ID: <[0-9a-f-]{36}@timesheet\.invalid>/i.test(eEml));
+const eVariant = db.prepare("SELECT variant, state FROM revision_files WHERE revision_id = ?").all(eRev.id);
+check('E pre-split PDF job (no variant) rendered the sign-off default t1o1', isDeepStrictEqual(eVariant, [{ variant: 't1o1', state: 'ready' }]), JSON.stringify(eVariant));
+const a2Send = sendRowOf('probe-key-a2-0002');
+const a2Attempt = attemptOf(a2Send.job_id as string);
+const a2Eml = a2Attempt === undefined ? '' : captured(a2Attempt.id as string);
+check('A rev2 reasoned send: accepted', a2Attempt?.state === 'accepted', String(a2Attempt?.state));
+check('the reason is stored on the send', a2Send.reason === REASON);
+check('the reason is not in the email', a2Eml !== '' && !a2Eml.includes('Probe reason'));
+const audit = db.prepare("SELECT reason FROM audit_events WHERE operation = 'revision.send' AND entity_id = ?").pluck().all(aRev2.id);
+check('the reason is in the revision.send audit event', isDeepStrictEqual(audit, [REASON]), JSON.stringify(audit));
+const dSend = sendRowOf('probe-key-d-00001');
+check('D send accepted', attemptOf(dSend.job_id as string)?.state === 'accepted');
+const bResend = db.prepare("SELECT * FROM revision_sends WHERE revision_id = ? AND send_no = 2").get(bAuto.id) as Row | undefined;
+check('B resend decision created send 2 with the reason, sent', bResend?.reason === REASON && attemptOf(bResend?.job_id as string)?.state === 'accepted');
+check('integrity_check ok at the end', db.pragma('integrity_check', { simple: true }) === 'ok');
+check('foreign_key_check empty at the end', (db.pragma('foreign_key_check') as unknown[]).length === 0);
+db.close();
+log(`failures: ${failures}`);
+writeFileSync(outPath, `${lines.join('\n')}\n`);
+process.exitCode = failures === 0 ? 0 : 1;

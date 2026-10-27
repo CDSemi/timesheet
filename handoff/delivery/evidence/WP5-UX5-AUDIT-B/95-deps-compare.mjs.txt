@@ -1,0 +1,108 @@
+// WP5-UX5-AUDIT-B probe: do the FIX4 pins change behaviour? The same inputs through the base's nodemailer 10.0.14 /
+// zod 4.6.5 and the target's nodemailer 10.1.4 / zod 4.6.6. Usage: node deps-compare.mjs <baseDir> <exportDir> <out.txt>
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+
+const [baseDir, exportDir, outPath] = process.argv.slice(2);
+const lines = [];
+let failures = 0;
+const check = (name, ok, detail = '') => {
+  if (!ok) failures += 1;
+  lines.push(`${ok ? 'PASS' : 'FAIL'} ${name}${detail === '' ? '' : ` | ${detail}`}`);
+};
+const load = (dir) => {
+  const require = createRequire(join(dir, 'package.json'));
+  return {
+    version: { nodemailer: require('nodemailer/package.json').version, zod: require('zod/package.json').version },
+    MailComposer: require('nodemailer/lib/mail-composer'),
+    z: require('zod').z,
+    addressparser: require('nodemailer/lib/addressparser'),
+  };
+};
+const before = load(baseDir);
+const after = load(exportDir);
+lines.push(`base nodemailer ${before.version.nodemailer} zod ${before.version.zod}; target nodemailer ${after.version.nodemailer} zod ${after.version.zod}`);
+
+// ---- nodemailer: the exact message bytes the app builds (message.ts options), several inputs
+const pdf = readFileSync(join(exportDir, 'assets', 'pdf-fonts', 'OFL.txt')); // any fixed bytes stand in for the PDF
+const messages = [
+  { to: ['payroll@example.invalid'], cc: [], subject: 'Timesheet 2026-10-12 to 2026-10-25 - Example Employee - Submitted', text: 'Hello,\nplease find the timesheet attached.\n', html: 'Hello,<br>\nplease find the timesheet attached.<br>\n' },
+  { to: ['a@example.invalid', 'b@example.invalid'], cc: ['c@example.invalid'], subject: 'Bảng chấm công — Nguyễn Văn A — kỳ 10/2026 (đã ký) with a long tail to force header folding beyond seventy-eight', text: 'Xin chào,\nđính kèm bảng chấm công.\nTab\there.\n', html: '' },
+  { to: ['x@example.invalid'], cc: [], subject: '=?utf-8?B?not-really?= "quoted" <angle> ; semicolon', text: 'Line\n'.repeat(400), html: '<b>escaped?</b>' },
+];
+for (const [index, input] of messages.entries()) {
+  const build = async (lib) => {
+    const messageId = `<0000000${index}-aaaa-4bbb-8ccc-dddddddddddd@timesheet.invalid>`;
+    const composer = new lib.MailComposer({
+      from: 'timesheet-sender@example.invalid',
+      to: input.to,
+      ...(input.cc.length === 0 ? {} : { cc: input.cc }),
+      subject: input.subject,
+      messageId,
+      date: new Date('2026-10-27T03:00:00Z'),
+      text: input.text,
+      ...(input.html === '' ? {} : { html: input.html }),
+      attachments: [{ filename: 'timesheet-2026-10-30-r1.pdf', content: pdf, contentType: 'application/pdf' }],
+      baseBoundary: createHash('sha256').update(messageId).digest('hex').slice(0, 24),
+      xMailer: false,
+      disableFileAccess: true,
+      disableUrlAccess: true,
+      newline: '\r\n',
+    });
+    return composer.compile().build();
+  };
+  const a = await build(before);
+  const b = await build(after);
+  const same = Buffer.compare(a, b) === 0;
+  check(`nodemailer message ${index + 1}: identical bytes from 10.0.14 and 10.1.4`, same, same ? `${b.length} bytes` : `${a.length} vs ${b.length}; first diff at ${[...a].findIndex((byte, i) => byte !== b[i])}`);
+  const headers = b.toString('latin1').split('\r\n\r\n')[0];
+  check(`message ${index + 1}: no X-Mailer, Message-ID @timesheet.invalid, MIME-Version`, !/X-Mailer/i.test(headers) && /Message-ID: <[^>]+@timesheet\.invalid>/i.test(headers) && /MIME-Version: 1\.0/.test(headers));
+}
+// The advisories are in addressparser: the app never hands it a display name, quote, comment, ';' or '>' (the
+// app's SINGLE_ADDRESS rule and normalizeRecipients refuse them). Show what the two versions do with the advisory shapes.
+for (const shape of ['"a;b"@example.invalid', 'user@example.invalid (a (b) c) evil@example.invalid', '"x>y"@example.invalid']) {
+  const a = JSON.stringify(before.addressparser(shape));
+  const b = JSON.stringify(after.addressparser(shape));
+  lines.push(`addressparser ${JSON.stringify(shape)}: 10.0.14 ${a} | 10.1.4 ${b}`);
+}
+
+// ---- zod: the app's schema shapes, the same issues before and after
+const schemaOf = (z) => {
+  const requestKey = z.string().regex(/^[A-Za-z0-9-]{8,100}$/);
+  const addressList = z.array(z.string().max(320)).max(40);
+  return z.strictObject({
+    request_key: requestKey,
+    to: addressList,
+    cc: addressList,
+    subject: z.string().max(2000),
+    body_text: z.string().max(100_000),
+    time_rows: z.boolean(),
+    ot_rows: z.boolean(),
+    reason: z.string().max(4000).nullable().optional(),
+    decision: z.enum(['mark_delivered', 'resend']).optional(),
+    expected_version: z.number().int().min(0).optional(),
+    signer_name: z.unknown().optional(),
+  });
+};
+const inputs = [
+  { request_key: 'abcdefgh-1', to: ['a@example.invalid'], cc: [], subject: 's', body_text: 'b', time_rows: true, ot_rows: false },
+  { request_key: 'short', to: 'not-a-list', cc: [], subject: 5, body_text: 'b', time_rows: 'yes', ot_rows: false, extra: 1 },
+  { request_key: 'abcdefgh-1', to: Array(41).fill('a@example.invalid'), cc: [], subject: 'x'.repeat(2001), body_text: 'b', time_rows: true, ot_rows: true, reason: null, decision: 'maybe', expected_version: -1.5 },
+  { __proto__: { polluted: true }, request_key: 'abcdefgh-1', to: [], cc: [], subject: '', body_text: '', time_rows: false, ot_rows: false, signer_name: { any: 'thing' } },
+  null,
+  [],
+];
+for (const [index, input] of inputs.entries()) {
+  const run = (z) => {
+    const parsed = schemaOf(z).safeParse(input);
+    return JSON.stringify(parsed.success ? { ok: parsed.data } : { issues: parsed.error.issues.map((issue) => ({ path: issue.path.join('.'), code: issue.code, message: issue.message })) });
+  };
+  const a = run(before.z);
+  const b = run(after.z);
+  check(`zod input ${index + 1}: identical result and issue messages in 4.6.5 and 4.6.6`, a === b, b.slice(0, 300));
+}
+lines.push(`failures: ${failures}`);
+writeFileSync(outPath, `${lines.join('\n')}\n`);
+process.exitCode = failures === 0 ? 0 : 1;

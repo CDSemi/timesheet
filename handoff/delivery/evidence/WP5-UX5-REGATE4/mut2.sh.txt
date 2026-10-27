@@ -1,0 +1,27 @@
+cd <task>
+. ./env.sh
+cd $T/export-probe
+# restore after M1: src equals the target again, rebuild the client, compare all of dist with the clean build
+cmp src/client/components/sheetModel.ts $T/export/src/client/components/sheetModel.ts && echo "sheetModel.ts restored (cmp equal)" >> $T/out/80-mut-exits.txt
+npm run build:client > $T/out/82-restore1-build.txt 2>&1; echo "restore1 build exit $?" >> $T/out/80-mut-exits.txt
+find dist -type f | LC_ALL=C sort > $T/out/82-r1-files.txt
+rm -f $T/out/82-r1-hashes.txt
+while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)" >> $T/out/82-r1-hashes.txt; done < $T/out/82-r1-files.txt
+cmp $T/out/82-r1-hashes.txt $T/out/51-export-hashes.txt && echo "dist after restore1: all hashes equal the clean build" >> $T/out/80-mut-exits.txt
+# M2: shift one signature row (employee line) by 4px through an appended CSS rule in the built stylesheet
+CSS=$(ls dist/client/assets/index-*.css)
+cp "$CSS" $T/tmp/orig-index.css
+printf '\n.rsig-line[data-sig-line="employee"]{position:relative;top:4px}\n' >> "$CSS"
+cmp -s "$CSS" $T/tmp/orig-index.css && echo "M2 DID NOT CHANGE THE FILE" >> $T/out/80-mut-exits.txt
+cd $T
+SHIFT_EXPORT=$T/export-probe bash run-shift.sh mut-m2 real tests/e2e/review.spec.ts --grep "signature rows: the PDF block insets" --workers=4 > logs/mut-m2.txt 2>&1
+node counts.mjs logs/mut-m2.txt >> out/81-mut-counts.txt 2>&1
+cp tmp/orig-index.css "export-probe/$CSS"
+cd $T/export-probe
+sha256sum "$CSS" > $T/out/82-m2-css-after.txt
+grep "$CSS" $T/out/51-export-hashes.txt >> $T/out/82-m2-css-after.txt
+# control: the restored build passes the same test
+cd $T
+SHIFT_EXPORT=$T/export-probe bash run-shift.sh mut-restored real tests/e2e/review.spec.ts --grep "signature rows: the PDF block insets" --workers=4 > logs/mut-restored.txt 2>&1
+node counts.mjs logs/mut-restored.txt >> out/81-mut-counts.txt 2>&1
+echo mut2-done > out/mut2.done

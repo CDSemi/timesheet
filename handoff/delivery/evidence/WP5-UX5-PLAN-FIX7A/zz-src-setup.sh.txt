@@ -1,0 +1,9 @@
+. <task>/env.sh
+mkdir -p $T/out $T/tmp $T/data $X $E
+cd $REPO
+git archive $TARGET | tar -x -C $X
+cd $X
+npm ci > $T/out/02-ci.txt 2>&1
+echo "ci rc=$?" > $T/out/02-ci-rc.txt
+npm run build > $T/out/04-build.txt 2>&1
+echo "build rc=$?" >> $T/out/02-ci-rc.txt

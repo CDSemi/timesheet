@@ -1,0 +1,154 @@
+diff --git a/docs/01_PRODUCT_REQUIREMENTS.md b/docs/01_PRODUCT_REQUIREMENTS.md
+index c1f773d7..4a36ff86 100644
+--- a/docs/01_PRODUCT_REQUIREMENTS.md
++++ b/docs/01_PRODUCT_REQUIREMENTS.md
+@@ -16,7 +16,7 @@ A personal timesheet tool, ready for isolated coworker accounts later. Record at
+ | FR-08 | Optional deficit deduction automatically or at sign-off; no absence-day debit | WP1/WP2 |
+ | FR-09 | Traceable OT ledger, corrections, recorded manager permission and partial leave conversion | WP2 |
+ | FR-10 | Explicit employee sign-off bound to immutable revision | WP3 |
+-| FR-11 | Familiar PDF; manual sign-off requires name and signature image; automatic image configurable | WP3 |
++| FR-11 | Familiar PDF; manual sign-off is the signed-in owner's act and records the account name and, when one is saved, the signature image (F-5 b); the time rows and OT rows are chosen for each send, with Settings defaults (F-3 b); automatic image configurable | WP3, WP5 |
+ | FR-12 | Recipient/templates, notifications, deadline switch and durable delivery | WP3 |
+ | FR-13 | Annual company holiday calendar and effective policy versions | WP2 |
+ | FR-14 | Audit actor/time/before-after; require reasons for old/finalized edits | WP1/WP2 |
+diff --git a/docs/03_ARCHITECTURE_AND_DATA.md b/docs/03_ARCHITECTURE_AND_DATA.md
+index 6d4e6f51..735a9ca8 100644
+--- a/docs/03_ARCHITECTURE_AND_DATA.md
++++ b/docs/03_ARCHITECTURE_AND_DATA.md
+@@ -11,7 +11,7 @@ One repository, one Node.js application, one local SQLite DB. Hono serves the AP
+ | ASP.NET Core/C# | Also suitable for Docker and strong domain modeling; no business rule rules it out |
+ | FastAPI/Python | Viable, but adds another language to a TypeScript UI |
+
+-These are project-fit judgments, not a claim that C# or Next.js cannot be lightweight. Use TypeScript strict mode, schema validation, versioned migrations and a lockfile. Pin a supported Node LTS and maintained SQLite binding during WP1; Drizzle is optional. PDF baseline is pdf-lib with embedded Unicode fonts, avoiding a browser service for a fixed form.
++These are project-fit judgments, not a claim that C# or Next.js cannot be lightweight. Use TypeScript strict mode, schema validation, versioned migrations and a lockfile. Pin a supported Node LTS and maintained SQLite binding during WP1; Drizzle is optional. PDF baseline is pdf-lib with embedded Unicode fonts, avoiding a browser service for a fixed form. The embedded fonts are DejaVu Sans, Sans Bold, Serif Condensed Bold and Serif Italic from the installed `dejavu-fonts-ttf` package, and Indie Flower 2.000 (SIL OFL 1.1) for the category cells only: the one committed font file, `assets/pdf-fonts/IndieFlower-Regular.ttf`, pinned by SHA-256, copied into the image, never served over HTTP or used by the UI, with DejaVu Serif Italic as the per-cell fallback for a character it lacks (ADR 0001, `docs/adr/0001-pdf-handwriting-font.md`). The PDF is one US Letter page drawn from the pure `pdfLayout` geometry; the C&D logo and wordmark are vector outlines shared with the client (`src/domain/brand.ts`).
+
+ ## Records
+
+@@ -23,7 +23,9 @@ These are project-fit judgments, not a claim that C# or Next.js cannot be lightw
+ | pay_periods | Calendar, start/end, payroll date, due rule and resolved UTC; unique calendar/payroll |
+ | timesheets/day_entries | User+period and user+work_date uniqueness; attendance/leave minutes with `leave_kind` (vacation, sick or ot; no OT-leave day category), notes, confirmation, optimistic version |
+ | work_sessions/breaks | Ownership, UTC start/end, originating zone, source, confirmed breaks; no overlapping user intervals |
+-| timesheet_revisions/signoffs | Immutable canonical payload/hash; real actor/time/hash-bound sign-off, absent on unsigned automation |
++| timesheet_revisions/signoffs | Immutable canonical payload/hash; real actor/time/hash-bound sign-off, absent on unsigned automation. A sign-off records the account's display name and, when one was saved, the signature image; the image reference is nullable (owner decision F-5 b, 2026-10-21; migration 0014) |
++| revision_files | One PDF per revision and variant (`t<time rows>o<OT rows>`: `t1o1`, `t1o0`, `t0o1`, `t0o0`); each variant is a deterministic view of the same signed snapshot, rendered once, hashed and never deleted; at most four per revision (owner decision F-3 b, 2026-10-21; migration 0015) |
++| revision_sends | One immutable record per send of a revision: number, owner's request key, origin (employee or deadline), actor, To/Cc, subject, text and HTML bodies, the two PDF row switches and their variant, the owner's reason for another copy (2-500 characters, or none), the send job; owner-only like other rendered email content. Every send job made before the split has a backfilled record (owner decisions F-2 a, F-4, 2026-10-21; migration 0015) |
+ | ot_ledger | Integer signed delta, type, source event, revision/correction links, actor/reason; unique event key |
+ | ot_leave_requests | Requested/approved/reserved/consumed minutes, date, evidence, approval origin, reversals; consumption only through an explicit idempotent record-use action on or after the leave date (partial allowed); no WP2 job runner consumes or expires reservations |
+ | jobs/delivery_attempts | Owner/revision/channel, due/retry time, state, attempts, lease, correlation/provider identifiers |
+@@ -37,7 +39,7 @@ Shared pay periods do not contain a single user's signed/sent flag. Names/emails
+
+ Enable foreign keys, WAL, busy timeout and short transactions. Validate ownership or an active grant of sufficient scope, and the version, on each action; the session user is the actor and the timesheet owner is the subject. Reserve/consume balances atomically. Claim jobs with an atomic update and renewable lease. No network call inside a DB write transaction.
+
+-Finalization atomically creates the immutable revision, real sign-off if any, ledger events and outbox job. PDF/network work follows. Use temporary files plus atomic rename, recorded hashes and recovery of orphan files; never remove referenced archived files.
++Finalization atomically creates the immutable revision, real sign-off if any, ledger events and outbox job. PDF/network work follows. Signing and sending are separate acts (WP5-UX5-T01b): a sign-off, a correction and a late review enqueue only the PDF job; a send atomically creates its own immutable record, its send job and, when that variant is not stored yet, its PDF job. The automatic paths (an automatic finalization, and the deadline send of a signed revision never sent) create a send record with origin `deadline` in the same way. Use temporary files plus atomic rename, recorded hashes and recovery of orphan files; never remove referenced archived files.
+
+ Canonical serialization uses stable object keys/array order, integer minutes, ISO dates and UTC strings. Snapshot calculations, policy/calendar IDs, employee/report data, recipients, subject/body, signature authorization and template version. Referenced signature/file content must be immutable; later profile edits cannot alter archived reports. Do not snapshot credentials.
+
+@@ -51,7 +53,14 @@ Canonical serialization uses stable object keys/array order, integer minutes, IS
+
+ ## API and hosting boundary
+
+-Group routes under /api for auth, personal settings, calendars, periods/day edits, OT/leave, review/finalize/status, correction/resend, private files, sharing (grants and delegated access under an explicit owner path), users (administration), the owner's own workbook import and health. Distinguish validation, auth, ownership, stale version and delivery errors. Review/finalize requires expected_version and reviewed hash; conflicts require fresh review. The workbook import routes are `/api/imports` and the explicit opening balance is `/api/ot/opening-balance`; both are owner only and are not part of any share.
++Group routes under /api for auth, personal settings, calendars, periods/day edits, OT/leave, review/finalize/status, correction/resend, private files, sharing (grants and delegated access under an explicit owner path), users (administration), the owner's own workbook import and health. Distinguish validation, auth, ownership, stale version and delivery errors. Review/finalize requires expected_version and reviewed hash; conflicts require fresh review. The signer of a sign-off, a correction and a late review is the signed-in person (owner decision F-5 b, 2026-10-21): the server records the session user's display name and never a name from the request. The `signer_name` key that older callers still send is accepted and ignored (it changes neither the stored name nor whether a retry is an identical replay). The saved signature image is optional: with one, the sign-off records it and a review payload whose `signature` differs from the image saved now is a 409 `stale_review`; without one, the sign-off records no image and the PDF prints the name alone. The workbook import routes are `/api/imports` and the explicit opening balance is `/api/ot/opening-balance`; both are owner only and are not part of any share.
++
++Sends (WP5-UX5-T01b; owner decisions F-2 a, F-3 b and F-4, 2026-10-21). All are owner only; none is on the shared allowlist.
++- `GET /api/revisions/:id/send-draft` writes nothing. It returns the Send card defaults: To and Cc from the current Settings, the subject and body rendered from the current Settings templates for this revision, the two PDF row switches from Settings ("Time rows on the PDF" `show_time_on_pdf`, "OT rows on the PDF" `show_ot_on_pdf`), the configured sender, `copy_sent_before` (the latest counted copy: date, recipients, state), `reason_required` and the previous send.
++- `POST /api/revisions/:id/send` takes `{ request_key, to, cc, subject, body_text, time_rows, ot_rows, reason? }`. The same request key with the same body replays (200); with another body it is 409 `request_key_reused`. Only the period's current revision can be sent (409 `revision_superseded`), never an imported one. A send is refused while an attempt of the revision is open (409 `delivery_in_progress`), uncertain without a decision (409 `delivery_uncertain`), or while one of its send jobs waits (409 `delivery_in_progress`). Then the reason rule runs inside the same transaction (document 05). One transaction writes the send record, its send job (business key `send:<send id>`, routing ids only), the PDF job of its variant when that file is not stored yet, and the audit event `revision.send` (ids, number, switches, recipient counts, and the reason in the event's reason field; no address or content).
++- `POST /api/revisions/:id/resend` is the same send with the previous send's values. The uncertain-attempt decision "resend" is the same too, and it needs a reason.
++- `GET /api/revisions/:id/pdf?time=0|1&ot=0|1[&disposition=inline]` returns the stored variant (default: the sign-off variant, time rows on and OT rows as the snapshot froze them). It renders a variant not stored yet on request, through the PDF job's path (no network, an atomic file write, then a short transaction). On the shared mount the query is ignored and nothing is rendered: the grantee gets the variant of the latest send, or the sign-off variant, once it is stored (else 409 `pdf_not_ready`).
++- `GET /api/timesheets/:payrollDate/pdf-preview?time&ot` renders an unsigned preview of the current review. It writes nothing, is `no-store` and inline, and prints "Preview, not signed" without an image.
+
+ The signed-in user changes their own password with `POST /api/auth/password` (owner decision D-9 b, 2026-10-20). It is for the session user only and is not a shared route. The body carries the current and the new password; a wrong current password is 403 `current_password_incorrect` (the session stays valid) and counts per user and client address against the sign-in limiter under its own key `password:<user id>` (5 wrong current passwords in 15 minutes, then 429 with `Retry-After`). Sign-in keys carry a `login:` prefix, so no sign-in input can address that bucket and lock the user out of the change (F-UX4B-1); the per-client-address bucket (30 failures in 15 minutes) is still shared with sign-in. A new password outside 12–256 characters is 422 `weak_password`, and one equal to the current password is 422 `password_unchanged`. In one transaction the hash is replaced, every other session of the user is revoked (this one stays signed in) and one `auth.password_change` audit event is written without any password or hash. The administrator's temporary password for another account is a separate path and is unchanged.
+
+diff --git a/docs/05_SUBMISSION_AND_NOTIFICATIONS.md b/docs/05_SUBMISSION_AND_NOTIFICATIONS.md
+index cfcc8aa2..94195139 100644
+--- a/docs/05_SUBMISSION_AND_NOTIFICATIONS.md
++++ b/docs/05_SUBMISSION_AND_NOTIFICATIONS.md
+@@ -6,9 +6,9 @@ Track revision (draft/finalized), employee review (pending/signed), finalization
+
+ ## Manual path
+
+-Prepare an exact review payload: attendance, OT evidence/movements, unresolved inputs, deficit decisions, recipients, email and signature image. A preview is not a final submission PDF. Manual sign-off requires employee name and an uploaded signature image. Explicit Sign off & Submit carries expected draft version and reviewed payload hash.
++Prepare an exact review payload: attendance, OT evidence/movements, unresolved inputs, deficit decisions, recipients, email and the signature image when one is saved. A preview is not a final submission PDF. Manual sign-off is the signed-in owner's act: it records the account's display name (no typed name) and, when one is saved, the signature image; without a saved image it carries the name alone (owner decision F-5 b, 2026-10-21). The reviewed payload binds the image state, so an image saved or replaced after the review makes the request a stale-review conflict. Explicit sign-off carries expected draft version and reviewed payload hash.
+
+-Validate ownership/version, finalize snapshot, record real sign-off, post ledger events and enqueue work in one transaction. Stale content returns a conflict. Render the final private PDF from the snapshot, persist/hash it, then send that exact file and frozen email content. Delivery status remains independent of sign-off.
++Sign off and send are separate acts (owner decisions F-2 a, F-3 b and F-4, 2026-10-21; WP5-UX5-T01b). Sign-off validates ownership/version, finalizes the snapshot, records the real sign-off, posts ledger events and enqueues the PDF in one transaction; it sends nothing. Stale content returns a conflict. The owner then sends the signed revision: the To, Cc, subject and body and the two PDF row switches ("Time rows on the PDF", "OT rows on the PDF") are chosen for that send, with the current Settings as defaults. Each send is its own immutable record. Render each PDF variant once from the snapshot, persist/hash it, then send that exact file with the send's own email content. Delivery status remains independent of sign-off. Until the Send card (WP5-UX5-T03), the Review page sends right after a successful sign-off with the Settings defaults.
+
+ Incomplete optional clock evidence may remain pending after explicit acknowledgement; never invent hours. Correct invalid data or exclude it with audit.
+
+@@ -16,9 +16,12 @@ Incomplete optional clock evidence may remain pending after explicit acknowledge
+
+ Persist due_at UTC from the reporting-zone due rule. The runner operates without a browser.
+
+-- Unsigned draft + enabled switch: finalize valid saved attendance—or the default labels when the period has no saved entries—as **automatic** (the record keeps employee review pending); post only computable credits/authorized deficits (days without records post no OT and no deficit); enqueue PDF/email, presented as document 04 describes.
+-- Switch off: keep draft, mark overdue and notify; no automatic export/send.
+-- Already finalized: continue its existing job, never finalize/post again.
++A period counts as submitted once any of its revisions has a send (owner decision F-2 a). At the deadline the system submits what is not yet submitted:
++
++- Unsigned draft + enabled switch: finalize valid saved attendance—or the default labels when the period has no saved entries—as **automatic** (the record keeps employee review pending); post only computable credits/authorized deficits (days without records post no OT and no deficit); enqueue the PDF and send it through a send record with origin `deadline`, the Settings envelope and switches and no reason, presented as document 04 describes.
++- Signed revision never sent + enabled switch: send the signed revision as signed (a `deadline` send with the Settings envelope and switches, no reason; audit `deadline.send_signed`). No new revision and no ledger change.
++- Switch off (a draft, or a signed revision never sent): keep it, mark overdue and notify; no automatic export/send.
++- Already submitted (any revision has a send): continue its existing jobs, never finalize, post or send again. A later correction or late review is therefore never sent by the deadline scan; the owner sends it.
+ - Manual/deadline race: one transaction wins; the other reloads. No duplicate revision, ledger posting or send.
+
+ Automatic image inclusion is a separate explicit, audited authorization of one stored signature image, asked for at signature upload with the option pre-selected; a user who unticks it gets no image on automatic submissions until they authorize it later in Settings. Outgoing automatic PDF/email follow document 04 (no automatic indicator, optional note line). signed_at stays empty and no sign-off is recorded; the employee's own screens and the outcome notice always show that review is pending.
+@@ -32,7 +35,7 @@ Account bounds on automatic submission (both only narrow what is submitted; neit
+
+ ## Reminders and review links
+
+-Default reminders: 24h and 2h before due, an overdue warning when auto-submit is off, and an outcome notice after automatic submission. Deduplicate by user/period/reminder occurrence; stop normal reminders after finalization. Collapse missed pre-deadline notices into one useful current notice.
++Default reminders: 24h and 2h before due, an overdue warning when auto-submit is off, and an outcome notice after automatic submission. Deduplicate by user/period/reminder occurrence; stop normal reminders once the period is submitted, at its first send (owner decision F-2 a): a signed period that was not sent keeps its reminders, worded "signed, not sent yet". Collapse missed pre-deadline notices into one useful current notice.
+
+ Reminders are at-least-once (owner decision D-7 a, 2026-10-20). A reminder job that runs again after a crash finds its message already captured and counts as sent; on real SMTP no such record exists, so if the process stops after the mail server accepted the message and before the job is recorded as sent, the reminder may arrive twice. This is accepted: reminders are advisory, and a lost reminder could cause a missed deadline. Submission deliveries are not reminders and keep the uncertain-outcome rule of the delivery table below.
+
+@@ -44,6 +47,8 @@ If implementing magic links: random short-lived action-scoped tokens stored hash
+
+ Persist jobs, unique business keys, attempts, lease/renewal, retry times and redacted provider responses. Suggested delays: 1, 5, 15, 60 minutes, then visible intervention. Target discovery within one minute on a healthy host; do not promise exact wall-clock send time.
+
++Each send is an immutable record with exactly one send job (WP5-UX5-T01b). The send job builds the message from that record only (its envelope, subject, bodies and PDF variant), never from the snapshot's envelope or the current settings. It waits until the PDF of its variant is ready. Each attempt freezes the envelope, the body digest and the PDF hash. A send request carries the owner's idempotency key: the same request replays, and another body under the key is refused.
++
+ | Failure point | Action |
+ |---|---|
+ | PDF before send | Retry same snapshot, no ledger posting |
+@@ -56,8 +61,15 @@ SMTP is not exactly-once delivery. Stable Message-ID helps correlation but canno
+
+ ## Corrections and resends
+
+-Old/finalized edits require a reason and correction draft, preserving original snapshots/PDF/sign-off/attempts. Finalize a new revision and post only ledger differences. Editing does not silently resend.
++Old/finalized edits require a reason and correction draft, preserving original snapshots/PDF/sign-off/attempts. Finalize a new revision and post only ledger differences. Editing does not silently resend: corrections and late reviews sign the same way as a sign-off and never send by themselves.
++
++Late review of an automatic revision creates a new genuinely signed revision; unchanged calculation posts zero delta. The employee explicitly chooses whether to send that reviewed revision. A send of the same revision creates another send record and attempt and no ledger movement; `/resend` is that send with the previous send's values. Changed report content needs a new immutable reviewed revision; the envelope, subject, body and PDF row switches are chosen for each send (owner decision F-4). After an automatic submission the employee may add records for days that credited no OT and finalize a reasoned correction; a day without an earlier credit posts a first credit, any other day only the difference.
+
+-Late review of an automatic revision creates a new genuinely signed revision; unchanged calculation posts zero delta. Let the employee explicitly choose whether to email that reviewed revision. Unchanged-PDF resend creates another attempt on the same revision and no ledger movement. Changed report content or recipient envelope needs a new immutable reviewed revision. After an automatic submission the employee may add records for days that credited no OT and finalize a reasoned correction; a day without an earlier credit posts a first credit, any other day only the difference.
++Another copy needs a confirmation and a typed reason (owner decision F-4, 2026-10-21; plan B-A2):
++- A copy of the period counts as sent once any delivery attempt of any of its revisions was `accepted` or `uncertain`, whatever was decided later (the mail may have arrived). A send whose attempts all ended `failed_permanent` does not count, so retrying a failed first send needs no reason.
++- When a copy counts, a send needs a reason: 2-500 characters after trimming, NFC, no control characters except line feeds. Otherwise the send is refused (422 `reason_required`) and nothing is written. The explicit "resend" decision on an uncertain attempt needs the reason too.
++- The reason is stored on the send and in its audit event. It is never added to the email.
++- The check runs inside the send transaction, so two concurrent sends cannot both skip it. A send still in progress blocks another one (409).
++- The automatic paths never need a reason: they run only for a period that has no send.
+
+ Archived downloads require ownership or a share whose PDF item is on (the PDF may contain the signature image); signature image files are never shared. Separate OT evidence export includes raw intervals, breaks, policies, daily eligible/credited amounts, adjustments and leave permission; it is not automatically attached to payroll email.
+diff --git a/docs/06_TEST_AND_ACCEPTANCE.md b/docs/06_TEST_AND_ACCEPTANCE.md
+index 342ac171..2bd69868 100644
+--- a/docs/06_TEST_AND_ACCEPTANCE.md
++++ b/docs/06_TEST_AND_ACCEPTANCE.md
+@@ -11,15 +11,15 @@ This package contains specifications, not a running app. Package checks do not c
+ | AC-03 | Repeated/concurrent posting and leave consumption cannot duplicate events or double-spend reservations | WP2/WP3 |
+ | AC-04 | Current draft no reason; old/finalized reason required; audit/history/policies and original PDF retained | WP2/WP3 |
+ | AC-05 | Holiday import previews/validates duplicates/dates, preserves overrides and finalized history | WP2 |
+-| AC-06 | Sign-off requires name/image and binds reviewed payload; concurrent edit causes conflict | WP3 |
+-| AC-07 | Auto-submit on/off, the automatic note line (default off, editable text) and image authorization behave correctly; outgoing automatic submissions show no automatic indicator while the record keeps origin automatic, review pending, empty signed_at and no sign-off; a period without saved entries is submitted with default labels, no OT and no deficit | WP3 |
++| AC-06 | Sign-off is the signed-in owner's act, records the account name and the image when saved, and binds the reviewed payload; it sends nothing, and sending is a separate act of the owner (WP5-UX5-T01b); a typed name changes nothing; an image saved or replaced after the review, or a concurrent edit, causes conflict | WP3, WP5 |
++| AC-07 | Auto-submit on/off, the automatic note line (default off, editable text) and image authorization behave correctly; outgoing automatic submissions show no automatic indicator while the record keeps origin automatic, review pending, empty signed_at and no sign-off; a period without saved entries is submitted with default labels, no OT and no deficit; at the deadline with auto-submit on a signed revision that was never sent is sent as signed (a deadline send, no new revision, no ledger change), with it off it gets the overdue warning, and a period that has a send is never sent again (owner decision F-2 a) | WP3, WP5 |
+ | AC-08 | Restart before/after PDF and around sending preserves jobs; uncertain acceptance is not blindly retried | WP3 |
+ | AC-09 | GET/scanners never sign; auth links and any implemented tokens reject stale/replayed/wrong-user access | WP3 |
+-| AC-10 | PDF has 14 dates, the credited OT total (h:mm) includes both Sundays, the real sign date (manual) or the automatic submission date (automatic), Unicode, long labels, bounded image and revision IDs | WP3 |
++| AC-10 | PDF has 14 dates, the credited OT total (h:mm) includes both Sundays, the real sign date (manual) or the automatic submission date (automatic), Unicode, long labels, a bounded image when present and revision IDs; the time rows and the OT rows (with the total) are printed or omitted per send, each variant one page of the same signed snapshot (owner decision F-3 b) | WP3, WP5 |
+ | AC-11 | Clean Docker install/restart/upgrade; consistent backup under writes restores DB/files/hashes in isolated dry-run | WP4 |
+ | AC-12 | Workbook import preview (the tracked template with synthetic dated sheets) flags defects; repeated identical import adds no records, OT, sign-offs or sends | WP4 |
+ | AC-13 | End-to-end two-week scenario, historical correction, approved partial OT leave and overdue case | WP5 |
+-| AC-14 | Sender/channel faults visible, no leaked secrets, exact local-captured recipients/body/PDF | WP3/WP5 |
++| AC-14 | Sender/channel faults visible, no leaked secrets, exact local-captured recipients/body/PDF of each send (its own envelope, subject, body and PDF variant, owner decision F-4); another copy after a counted copy needs a typed reason that never reaches the email | WP3/WP5 |
+ | AC-15 | Safe health/backup status and compatible rollback; restored instance has outbound paused | WP4/WP5 |
+ | AC-16 | A share reaches only its enabled items (timesheet view or edit, read-only OT summary and ledger, final PDF download), never sign-off, signature image files, sending, settings, leave actions or re-sharing; edits are attributed to the grantee; a change, revocation or deactivation applies on the next request | WP3 |
+

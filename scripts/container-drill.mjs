@@ -275,7 +275,7 @@ function syntheticPng(fill) {
 async function uploadSignature(cookie, fill) {
   const response = await fetch(`${base}/api/signatures`, {
     method: 'POST',
-    headers: { origin: publicOrigin, cookie, 'content-type': 'image/png' },
+    headers: { origin: publicOrigin, cookie, 'content-type': 'image/png', connection: 'close' },
     body: syntheticPng(fill),
     signal: AbortSignal.timeout(15_000),
   });
@@ -302,7 +302,7 @@ function syntheticWorkbook(periods) {
 async function uploadWorkbook(cookie, bytes) {
   const response = await fetch(`${base}/api/imports`, {
     method: 'POST',
-    headers: { origin: publicOrigin, cookie, 'content-type': XLSX_MEDIA_TYPE },
+    headers: { origin: publicOrigin, cookie, 'content-type': XLSX_MEDIA_TYPE, connection: 'close' },
     body: bytes,
     signal: AbortSignal.timeout(30_000),
   });
@@ -382,7 +382,7 @@ async function stageTwo(cookie) {
   check('the container job runner renders the PDF of the finalized period', pdfReady, `${((Date.now() - pdfWaitStart) / 1000).toFixed(1)} s`);
   // WP5-UX5-T02: the image carries assets/pdf-fonts, so the rendered PDF embeds the Indie Flower subset (ADR 0001).
   const readyRevision = ((await call('GET', '/api/revisions', { cookie })).json?.revisions ?? []).find((revision) => revision.pdf_state === 'ready');
-  const downloaded = readyRevision === undefined ? null : await fetch(`${base}/api/revisions/${readyRevision.id}/pdf`, { headers: { cookie, origin: publicOrigin }, signal: AbortSignal.timeout(15_000) });
+  const downloaded = readyRevision === undefined ? null : await fetch(`${base}/api/revisions/${readyRevision.id}/pdf`, { headers: { cookie, origin: publicOrigin, connection: 'close' }, signal: AbortSignal.timeout(15_000) });
   const embedded = downloaded === null ? '' : Buffer.from(await downloaded.arrayBuffer()).toString('latin1');
   check('the container PDF is one page and embeds the Indie Flower subset from the image', (embedded.match(/\/Type\s*\/Page\b/g) ?? []).length === 1 && embedded.includes('+IndieFlower'), `${embedded.length} bytes`);
 
@@ -984,7 +984,7 @@ async function startPreviousServer(name, databasePath, privateDir, { runnerOff =
   const started = Date.now();
   for (;;) {
     try {
-      const health = await fetch(`${server.base}/api/health`, { signal: AbortSignal.timeout(2000) });
+      const health = await fetch(`${server.base}/api/health`, { headers: { connection: 'close' }, signal: AbortSignal.timeout(2000) });
       if (health.ok) return server;
     } catch {
       // not listening yet

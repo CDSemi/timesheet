@@ -8,7 +8,7 @@ Theo dõi riêng revision (nháp/chốt), nhân viên xác nhận (chờ/đã k�
 
 Chuẩn bị payload review chính xác: loại ngày, bằng chứng/biến động OT, dữ liệu chưa đủ, quyết định thiếu, người nhận, email và ảnh chữ ký khi đã lưu. Preview không phải PDF nộp chính thức. Sign-off thủ công là hành động của chủ đang đăng nhập: nó ghi tên hiển thị của tài khoản (không gõ tên) và, khi đã lưu, cả ảnh chữ ký; chưa lưu ảnh thì chỉ ký bằng tên (quyết định của chủ F-5 b, 2026-10-21). Payload đã xem ràng buộc trạng thái ảnh, nên ảnh được lưu hoặc thay sau lúc xem làm yêu cầu thành xung đột review cũ. Sign-off rõ ràng gửi kèm phiên bản nháp kỳ vọng và hash đã xem.
 
-Ký và gửi là hai hành động riêng (quyết định của chủ F-2 a, F-3 b và F-4, 2026-10-21; WP5-UX5-T01b). Sign-off kiểm chủ/phiên bản, chốt snapshot, ghi sign-off thật, ghi sổ và xếp job PDF trong một transaction; nó không gửi gì. Nội dung cũ trả xung đột. Sau đó chủ gửi revision đã ký: To, Cc, tiêu đề, nội dung và hai công tắc dòng PDF ("Dòng giờ trên PDF", "Dòng OT trên PDF") được chọn cho lần gửi đó, mặc định lấy từ Settings hiện tại. Mỗi lần gửi là một bản ghi bất biến riêng. Tạo mỗi biến thể PDF một lần từ snapshot, lưu/hash, rồi gửi đúng file đó với nội dung email riêng của lần gửi. Trạng thái gửi độc lập sign-off. Cho tới khi có thẻ Gửi (WP5-UX5-T03), trang Review gửi ngay sau khi sign-off thành công với giá trị mặc định của Settings.
+Ký và gửi là hai hành động riêng (quyết định của chủ F-2 a, F-3 b và F-4, 2026-10-21; WP5-UX5-T01b). Sign-off kiểm chủ/phiên bản, chốt snapshot, ghi sign-off thật, ghi sổ và xếp job PDF trong một transaction; nó không gửi gì. Nội dung cũ trả xung đột. Sau đó chủ gửi revision đã ký: To, Cc, tiêu đề, nội dung và hai công tắc dòng PDF ("Dòng giờ trên PDF", "Dòng OT trên PDF") được chọn cho lần gửi đó, mặc định lấy từ Settings hiện tại. Mỗi lần gửi là một bản ghi bất biến riêng. Tạo mỗi biến thể PDF một lần từ snapshot, lưu/hash, rồi gửi đúng file đó với nội dung email riêng của lần gửi. Trạng thái gửi độc lập sign-off.
 
 Giờ tùy chọn thiếu có thể để chờ sau xác nhận rõ; không bịa giờ. Sửa dữ liệu sai hoặc loại có audit.
 
@@ -16,7 +16,7 @@ Giờ tùy chọn thiếu có thể để chờ sau xác nhận rõ; không bị
 
 Lưu due_at UTC từ quy tắc hạn theo múi giờ báo cáo. Runner không cần trình duyệt.
 
-Một kỳ được tính là đã nộp khi bất kỳ revision nào của nó đã có một lần gửi (quyết định của chủ F-2 a). Đến hạn, hệ thống nộp những gì chưa được nộp:
+Một kỳ được tính là đã nộp khi bất kỳ revision nào của nó đã có một lần gửi (quyết định của chủ F-2 a ngày 2026-10-21 và H-1 a ngày 2026-10-22). Đến hạn, hệ thống nộp những gì chưa được nộp:
 
 - Nháp chưa ký + bật: chốt loại ngày hợp lệ đã lưu—hoặc nhãn mặc định khi kỳ chưa lưu dữ liệu nào—là **tự động** (bản ghi giữ trạng thái chờ nhân viên xác nhận); chỉ ghi OT tính được/khoản trừ đã cho phép (ngày không có bản ghi không ghi OT và không tính thiếu); xếp PDF và gửi qua một bản ghi gửi có nguồn `deadline`, với phong bì và công tắc của Settings và không có lý do, trình bày như tài liệu 04.
 - Revision đã ký nhưng chưa từng gửi + bật: gửi revision đã ký đúng như đã ký (một lần gửi `deadline` với phong bì và công tắc của Settings, không có lý do; audit `deadline.send_signed`). Không tạo revision mới và không đổi sổ.
@@ -35,7 +35,7 @@ Giới hạn theo tài khoản đối với tự nộp (cả hai chỉ thu hẹp
 
 ## Nhắc và link review
 
-Mặc định: trước hạn 24h, 2h; báo quá hạn nếu tắt tự nộp; báo kết quả sau tự nộp. Chống trùng theo user/kỳ/lần nhắc; ngừng nhắc thường khi kỳ đã nộp, tức là ở lần gửi đầu tiên (quyết định của chủ F-2 a): một kỳ đã ký mà chưa gửi vẫn được nhắc, với lời "đã ký, chưa gửi". Gộp các nhắc trước hạn bị lỡ thành một thông báo hiện tại hữu ích.
+Mặc định: trước hạn 24h, 2h; báo quá hạn nếu tắt tự nộp; báo kết quả sau tự nộp. Chống trùng theo user/kỳ/lần nhắc; ngừng nhắc thường khi kỳ đã nộp, tức là ở lần gửi đầu tiên (quyết định của chủ F-2 a ngày 2026-10-21 và H-1 a ngày 2026-10-22): một kỳ đã ký mà chưa gửi vẫn được nhắc, với lời "đã ký, chưa gửi". Gộp các nhắc trước hạn bị lỡ thành một thông báo hiện tại hữu ích.
 
 Lời nhắc là ít nhất một lần (quyết định của chủ D-7 a, 2026-10-20). Job nhắc chạy lại sau sự cố thấy thư đã được ghi vào thư mục capture và coi như đã gửi; trên SMTP thật không có bản ghi như vậy, nên nếu tiến trình dừng sau khi máy chủ thư đã nhận thư và trước khi job được ghi là đã gửi thì lời nhắc có thể đến hai lần. Điều này được chấp nhận: lời nhắc chỉ mang tính tư vấn, và mất một lời nhắc có thể gây lỡ hạn. Lần gửi bài nộp không phải lời nhắc và giữ quy tắc kết quả không chắc chắn ở bảng gửi bên dưới.
 
@@ -69,7 +69,7 @@ Gửi thêm một bản cần xác nhận và lý do gõ tay (quyết định c�
 - Một bản của kỳ được tính là đã gửi khi bất kỳ lượt gửi nào của bất kỳ revision nào của kỳ đã `accepted` hoặc `uncertain`, bất kể quyết định sau đó (thư có thể đã tới). Một lần gửi mà mọi lượt đều kết thúc `failed_permanent` thì không được tính, nên thử lại một lần gửi đầu thất bại không cần lý do.
 - Khi đã có bản được tính, lần gửi cần lý do: 2-500 ký tự sau khi cắt khoảng trắng, NFC, không ký tự điều khiển trừ xuống dòng. Nếu không, lần gửi bị từ chối (422 `reason_required`) và không ghi gì. Quyết định "gửi lại" rõ ràng cho một lượt không chắc chắn cũng cần lý do.
 - Lý do được lưu trên lần gửi và trong sự kiện audit của nó. Nó không bao giờ được thêm vào email.
-- Việc kiểm tra chạy trong transaction gửi, nên hai lần gửi đồng thời không thể cùng bỏ qua nó. Một lần gửi đang chạy chặn lần gửi khác (409).
+- Việc kiểm tra chạy trong transaction gửi, nên hai lần gửi đồng thời không thể cùng bỏ qua nó. Một lần gửi đang chạy, hoặc một send job của bất kỳ revision nào của kỳ còn đang chờ, chặn lần gửi khác (409), nên bản gửi của revision cũ không thể đến sau bản của lần sửa.
 - Các đường tự động không bao giờ cần lý do: chúng chỉ chạy cho kỳ chưa có lần gửi nào.
 
 Tải lưu trữ cần quyền chủ hoặc quyền chia sẻ bật mục PDF (PDF có thể chứa ảnh chữ ký); file ảnh chữ ký không bao giờ được chia sẻ. Báo cáo OT riêng có ca gốc, nghỉ, quy tắc, số đủ điều kiện/ghi mỗi ngày, điều chỉnh và quyền dùng phép; không tự kèm email payroll.

@@ -1,0 +1,166 @@
+/*
+ * WP5-UX5-AUDIT-B probe: build a REAL schema-13 database with the accepted base build's own code (8e55710):
+ * signed, corrected, automatic, sent (accepted), uncertain, failed and still-queued revisions, a pre-split resend left
+ * preparing, a person with the OT rows off. Synthetic seed data only; capture or in-process fake adapters only.
+ * Usage: node build-v13.ts <databasePath> <dataDir> <out.txt>
+ */
+import { writeFileSync } from 'node:fs';
+import { openDatabase } from '../base/src/server/db/database.ts';
+import { migrate } from '../base/src/server/db/migrations.ts';
+import { FileStore } from '../base/src/server/files/fileStore.ts';
+import { seedSynthetic, syntheticSignaturePng } from '../base/src/server/seed.ts';
+import { createSession } from '../base/src/server/services/timesheetCommands.ts';
+import { buildReviewPayload } from '../base/src/server/services/reviewPayload.ts';
+import { finalizeAutomatically, resendRevision, reviseTimesheet, signOffTimesheet } from '../base/src/server/services/finalization.ts';
+import { saveSubmissionSettings, currentSubmissionSettings } from '../base/src/server/services/submissionSettings.ts';
+import { saveSignature } from '../base/src/server/services/signatures.ts';
+import { createPdfJobHandler } from '../base/src/server/jobs/pdfJob.ts';
+import { createSendJobHandler } from '../base/src/server/jobs/sendJob.ts';
+import { runJobsOnce } from '../base/src/server/jobs/runner.ts';
+import { createCaptureAdapter } from '../base/src/server/mail/captureAdapter.ts';
+
+const [databasePath, dataDir, outPath] = process.argv.slice(2);
+if (databasePath === undefined || dataDir === undefined || outPath === undefined) throw new Error('usage');
+const lines: string[] = [];
+const log = (line: string) => lines.push(line);
+
+class MutableClock {
+  current: Date;
+  constructor(iso: string) {
+    this.current = new Date(iso);
+  }
+  now(): Date {
+    return new Date(this.current.getTime());
+  }
+  set(iso: string): void {
+    this.current = new Date(iso);
+  }
+}
+
+const LA = 'America/Los_Angeles';
+const SENDER = 'timesheet@example.invalid';
+const db = openDatabase(databasePath);
+log(`migrate: ${JSON.stringify(migrate(db))}`);
+const clock = new MutableClock('2026-09-29T20:00:00Z');
+const files = new FileStore(dataDir);
+await seedSynthetic(db, clock, { files, passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass', employee2: 'synthetic-employee2-pass' }, sampleData: true });
+
+const userOf = (email: string) => {
+  const row = db.prepare('SELECT id, email, display_name, calendar_id FROM users WHERE email = ?').get(email) as { id: string; email: string; display_name: string; calendar_id: string };
+  return { id: row.id, email: row.email, displayName: row.display_name, role: 'employee' as const, calendarId: row.calendar_id, sessionId: 'probe' };
+};
+const two = userOf('employee2@example.invalid');
+const one = userOf('employee@example.invalid');
+
+const session = (user: typeof two, date: string, reason: string) =>
+  createSession({ db, clock, user } as never, date, {
+    start: { local: `${date}T09:00`, zone: LA },
+    end: { local: `${date}T19:00`, zone: LA },
+    input_zone: LA,
+    breaks_confirmed: true,
+    breaks: [],
+    reason,
+  } as never);
+const sign = (user: typeof two, payrollDate: string) => {
+  const review = buildReviewPayload(db, clock, user, payrollDate);
+  return signOffTimesheet({ db, clock, user }, payrollDate, {
+    expectedVersion: review.expectedVersion,
+    reviewedHash: review.payloadHash,
+    signerName: user.displayName,
+    deficitChoices: [],
+    incompleteEvidenceAcknowledged: true,
+  });
+};
+
+type Outcome = 'accepted' | 'failed_permanent' | 'uncertain';
+function adapter(outcome: Outcome) {
+  if (outcome === 'accepted') return createCaptureAdapter(dataDir);
+  return {
+    mode: 'capture' as const,
+    async send() {
+      return outcome === 'failed_permanent'
+        ? { kind: 'failed_permanent' as const, code: 'smtp_rejected', providerResponse: '550 5.1.1' }
+        : { kind: 'uncertain' as const, code: 'connection_lost_after_data', providerResponse: null };
+    },
+  };
+}
+async function runJobs(outcome: Outcome, label: string) {
+  const handlers = {
+    render_pdf: createPdfJobHandler({ db, clock, files }),
+    send_email: createSendJobHandler({ db, clock, files, outbound: adapter(outcome) as never, senderAddress: SENDER }),
+  };
+  // The send job waits for the PDF (pdf_not_ready retries after one minute): run, then move the clock on, a few times.
+  for (let pass = 0; pass < 4; pass += 1) {
+    const summary = await runJobsOnce({ db, clock, handlers });
+    log(`run ${label} (${outcome}) pass ${pass} at ${clock.now().toISOString()}: ${JSON.stringify(summary)}`);
+    clock.set(new Date(clock.now().getTime() + 120_000).toISOString());
+  }
+}
+
+// Settings for both people (employee: OT rows off).
+saveSubmissionSettings(db, clock, two.id, { expectedSeq: currentSubmissionSettings(db, two.id)?.seq ?? 0, to: ['payroll@example.invalid'], cc: ['manager@example.invalid'], autoSubmit: false });
+saveSubmissionSettings(db, clock, one.id, { expectedSeq: currentSubmissionSettings(db, one.id)?.seq ?? 0, to: ['payroll@example.invalid'], autoSubmit: false, showOtOnPdf: false });
+saveSignature(db, clock, files, one.id, syntheticSignaturePng(3), 'image/png');
+
+// A. employee2, period 2026-09-18: signed original, sent and accepted.
+session(two, '2026-09-02', 'Synthetic late entry for the v13 probe');
+const a1 = sign(two, '2026-09-18');
+log(`A rev1 ${a1.revision.id} jobs ${a1.jobs.map((job) => job.kind).join(',')}`);
+await runJobs('accepted', 'A rev1');
+// A. correction with send, which fails permanently.
+session(two, '2026-09-03', 'Synthetic second entry to correct');
+const r2 = buildReviewPayload(db, clock, two, '2026-09-18');
+const a2 = reviseTimesheet({ db, clock, user: two }, '2026-09-18', {
+  kind: 'correction',
+  reason: 'Synthetic correction for the v13 probe',
+  sendEmail: true,
+  signerName: two.displayName,
+  expectedVersion: r2.expectedVersion,
+  reviewedHash: r2.payloadHash,
+  deficitChoices: [],
+  incompleteEvidenceAcknowledged: true,
+});
+log(`A rev2 ${a2.revision.id} jobs ${a2.jobs.map((job) => job.kind).join(',')}`);
+await runJobs('failed_permanent', 'A rev2');
+
+// B. employee2, period 2026-10-02: automatic revision, its send uncertain (no decision).
+const b1 = finalizeAutomatically({ db, clock, owner: two }, { payrollDate: '2026-10-02', authorize: () => null });
+log(`B auto ${JSON.stringify(b1.status === 'created' ? { id: b1.revision.id, origin: b1.revision.origin } : b1)}`);
+await runJobs('uncertain', 'B auto');
+
+// C. employee (OT rows off), period 2026-09-18: signed and accepted, then a pre-split resend left preparing (not run).
+session(one, '2026-09-08', 'Synthetic entry for the second person');
+const c1 = sign(one, '2026-09-18');
+log(`C rev1 ${c1.revision.id} jobs ${c1.jobs.map((job) => job.kind).join(',')}`);
+await runJobs('accepted', 'C rev1');
+clock.set('2026-09-29T21:00:00Z');
+const c2 = resendRevision({ db, clock, user: one }, c1.revision.id, {});
+log(`C resend job ${c2.job.id} attempt ${c2.attempt.state} (left queued)`);
+
+// D. employee, period 2026-10-02: signed, its only send failed permanently.
+session(one, '2026-09-22', 'Synthetic entry for a failed-only period');
+const d1 = sign(one, '2026-10-02');
+log(`D rev1 ${d1.revision.id}`);
+// Run only D's jobs: the C resend job must stay queued, so hold it by running with a limit that claims D first is not
+// possible; instead C's resend job is created after D runs.
+log('note: C resend created before D; both are run below with the failing adapter only for D by pausing C');
+// Pause C's resend job by moving its next_run_at to the far future while D runs.
+db.prepare("UPDATE jobs SET next_run_at = '2099-01-01T00:00:00Z' WHERE id = ?").run(c2.job.id);
+await runJobs('failed_permanent', 'D rev1');
+db.prepare("UPDATE jobs SET next_run_at = ? WHERE id = ?").run('2026-09-29T21:00:00Z', c2.job.id);
+
+// E. employee2, period 2026-10-16: signed, PDF and send jobs left queued (never run before the upgrade).
+clock.set('2026-10-14T20:00:00Z');
+session(two, '2026-10-06', 'Synthetic entry for a queued period');
+const e1 = sign(two, '2026-10-16');
+log(`E rev1 ${e1.revision.id} jobs ${e1.jobs.map((job) => `${job.kind}:${job.state}`).join(',')} (left queued)`);
+
+const q = (sql: string) => db.prepare(sql).all();
+log(`revisions: ${JSON.stringify(q('SELECT r.id, r.revision_no, r.revision_kind, r.origin, r.review_state, r.send_requested, p.payroll_date, u.email FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id JOIN users u ON u.id = r.user_id ORDER BY r.created_at'))}`);
+log(`send jobs: ${JSON.stringify(q("SELECT id, revision_id, business_key, state FROM jobs WHERE kind = 'send_email' ORDER BY created_at"))}`);
+log(`attempts: ${JSON.stringify(q('SELECT job_id, revision_id, attempt_no, state, decision FROM delivery_attempts ORDER BY started_at'))}`);
+log(`files: ${JSON.stringify(q('SELECT revision_id, state FROM revision_files ORDER BY created_at'))}`);
+log(`signoffs: ${JSON.stringify(q('SELECT revision_id, signer_name, signature_attachment_id IS NOT NULL AS has_image FROM signoffs'))}`);
+log(`user_version: ${db.pragma('user_version', { simple: true })}`);
+db.close();
+writeFileSync(outPath, `${lines.join('\n')}\n`);

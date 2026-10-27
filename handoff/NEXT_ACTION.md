@@ -95,11 +95,23 @@ Current route:
    - WP5-UX5-FIX5 (tests and harness only) is done and not committed yet.
    - WP5-UX5-DIAG3 is done. Under host load, too many parallel test workers cause the
      timeouts; the smoke reset is the same keep-alive defect. No product fault.
-   - WP5-UX5-FIX6 (harness and test configuration only) is done and not committed yet.
-   - Running now: WP5-UX5-FIX6-FREEZE, one commit of FIX4 to FIX6 and the records, then a
+   - WP5-UX5-FIX6 (harness and test configuration only) is done.
+   - FIX4 to FIX6 are frozen in f4049aa (digest 26b163a6) and pushed.
+   - WP5-UX5-REGATE4 passed on f4049aa.
+   - WP5-UX5-AUDIT-B found five Low findings (FIX REQUIRED): stale docs, a PDF edge case
+     where leave on a long holiday label is cut off, and two weak tests.
+   - WP5-UX5-AUDIT-A found one Medium and three Low findings (FIX REQUIRED). The Medium
+     one: on a narrow Review page, a signed period's "Sign correction" button covers the
+     signature line.
+   - Both fix plans are done. WP5-UX5-FIX7 (area B fixes) is done and not committed yet.
+   - WP5-UX5-FIX8 (area A fixes) is done and not committed yet. Its axe sweep found an
+     older keyboard-access gap: read-only week cards that scroll sideways cannot be reached
+     with the keyboard.
+   - WP5-UX5-FIX9 fixed that gap; it is not committed yet.
+   - Running now: WP5-UX5-FIX9-FREEZE, one commit of FIX7 to FIX9 and the records, then a
      push.
-   - Then REGATE4, audits A and B, the integration audit, ACCEPT-DOCS and the WP5
-     re-accept.
+   - Then one freeze, a regate, fresh rechecks, the integration audit, ACCEPT-DOCS and the
+     WP5 re-accept.
    - Details: the checkpoint, section "REGATE3 failed; two diagnoses run (2026-10-26)".
    - Earlier the same day it was paused twice for machine restarts.
    - Every slice of both rounds is frozen. The last commit is 2bce0ab (digest 70975091).

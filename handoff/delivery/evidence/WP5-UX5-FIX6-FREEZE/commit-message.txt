@@ -1,0 +1,26 @@
+Pin patched dependencies and harden tests against host load
+
+- fix(deps): pin nodemailer 10.1.4 (moderate advisory) and zod 4.6.6 (high
+  advisory); npm audit --omit=dev is clean again.
+- test(e2e):
+  - Today waits for the page's date to match a fresh server read across
+    midnight;
+  - the review alignment check waits for the saved signature images to load;
+  - the seed client and the health poll close each connection, so a pooled
+    socket that the server dropped during a blocking job run is not reused.
+- test: vitest runs at most half the logical CPUs as workers, so its
+  spawn-heavy integration files do not time out when the host is busy.
+- chore(scripts): the smoke check and the container drill close each
+  connection. The smoke check now closes its monitor before cleanup, so a
+  failure keeps its "SMOKE FAILED" line and leaves no temporary folder.
+- docs(handoff): records of the REGATE3 failure, the DIAG2, DEPS1 and DIAG3
+  diagnoses, FIX4 to FIX6, the path lookup and the board; the checkpoint
+  (+ vi), STATE and NEXT_ACTION (+ vi). One evidence file is renamed with
+  -synthetic.
+
+Task: WP5-UX5-FIX4, WP5-UX5-FIX5, WP5-UX5-FIX6 (WP5-UX5-REGATE3 findings)
+Gate: WP5-UX5-REGATE3 FAIL on 5b8b718; REGATE4 pending
+Audit: pending
+Digest: 26b163a62b7d85dbf6b6146c73f98593ad6bcae7eeb8fb1dc7fd9d4dc8305336
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

@@ -1,0 +1,38 @@
+"""Structural EN/VI parity of the round-5 document pairs: headings, bullets, numbered items, table rows, fences,
+inline code spans and AC/FR/F-/D-/H- identifiers."""
+import os, re, sys
+
+root = sys.argv[1]
+out = open(sys.argv[2], "w", encoding="utf-8", newline="\n")
+pairs = [
+    "docs/01_PRODUCT_REQUIREMENTS", "docs/03_ARCHITECTURE_AND_DATA", "docs/05_SUBMISSION_AND_NOTIFICATIONS",
+    "docs/06_TEST_AND_ACCEPTANCE", "docs/07_DEPLOYMENT_AND_OPERATIONS", "docs/10_DECISIONS_AND_SOURCES",
+    "docs/11_OPERATIONS_RUNBOOK", "docs/12_RELEASE_NOTES", "docs/adr/0001-pdf-handwriting-font",
+    "assets/pdf-fonts/README", "handoff/delivery/WP5_PILOT_PACKET", "DEVELOPMENT",
+]
+ident = re.compile(r"\b(?:AC-\d+|FR-\d+|F-\d+|D-\d+|H-\d+|Q\d|R-[A-Z0-9-]+|U5-\d+)\b")
+def shape(path):
+    text = open(path, encoding="utf-8").read()
+    lines = text.split("\n")
+    return {
+        "headings": sum(1 for l in lines if l.startswith("#")),
+        "bullets": sum(1 for l in lines if re.match(r"\s*- ", l)),
+        "numbered": sum(1 for l in lines if re.match(r"\s*\d+\. ", l)),
+        "table_rows": sum(1 for l in lines if l.lstrip().startswith("|")),
+        "fences": sum(1 for l in lines if l.strip().startswith("~~~") or l.strip().startswith("```")),
+        "code_spans": len(re.findall(r"`[^`]+`", text)),
+        "ids": sorted(set(ident.findall(text))),
+        "lines": len(lines),
+    }
+bad = 0
+for base in pairs:
+    en, vi = os.path.join(root, base + ".md"), os.path.join(root, base + ".vi.md")
+    if not (os.path.exists(en) and os.path.exists(vi)):
+        out.write("%s: missing pair\n" % base); bad += 1; continue
+    a, b = shape(en), shape(vi)
+    diffs = [k for k in ("headings", "bullets", "numbered", "table_rows", "fences") if a[k] != b[k]]
+    idiff = sorted(set(a["ids"]) ^ set(b["ids"]))
+    status = "OK" if not diffs and not idiff else "DIFF"
+    if status != "OK": bad += 1
+    out.write("%s: %s | %s | code spans EN %d VI %d | ids only on one side: %s\n" % (base, status, ", ".join("%s %d/%d" % (k, a[k], b[k]) for k in ("headings", "bullets", "numbered", "table_rows", "fences")), a["code_spans"], b["code_spans"], idiff))
+out.write("pairs with a structural difference: %d\n" % bad)

@@ -1,0 +1,88 @@
+import { drainJobsFrom, expect, newPerson, SeedClient, test } from './fixtures.ts';
+import { applySituation, dayBtn, drawer, note, scan, setWidth, settle, signInTo, SITUATIONS } from './zz-a5lib.ts';
+
+/*
+ * WP5-UX5-AUDIT-A probe X: a real axe scan (WCAG 2.0/2.1/2.2 A and AA tags, axe-core loaded from the task folder) plus a text-contrast
+ * sweep of the round-5 screens in the four theme situations, desktop and phone. Task-local; never part of the repository.
+ */
+const F = 'axe.txt';
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+for (const situation of SITUATIONS) {
+  test(`axe round-5 screens - ${situation.slug}`, async ({ page, privateServer, isMobile }) => {
+    test.setTimeout(420_000);
+    const tag = `${isMobile ? 'phone' : 'desk'} ${situation.slug}`;
+    await applySituation(page, situation);
+    const server = privateServer;
+    const adm = await new SeedClient(server.origin).signIn(server.credentials.admin.email, server.credentials.admin.password);
+    const person = await newPerson(adm, server, { displayName: `Synthetic Axe ${situation.slug}`, signature: 'saved' });
+    const free = await person.api.displayedPeriodFreeWorkdays();
+    await person.api.seedCompleteDay(free[0] ?? '');
+    await person.api.seedUnconfirmedBreaksDay(free[1] ?? '');
+    await person.api.putDay(free[2] ?? '', { category: 'Worked', leave_minutes: 90, leave_kind: 'sick', notes: 'Synthetic axe note' });
+    if (!isMobile) await page.setViewportSize({ width: 1440, height: 900 });
+    await signInTo(page, server, person.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    let total = 0;
+    const add = (r: { violations: number; below: number }) => (total += r.violations + r.below);
+    await page.getByRole('switch', { name: 'Worked hours' }).click();
+    add(await scan(page, F, `[${tag}] Timesheet, worked hours on`));
+    if (!isMobile) {
+      await setWidth(page, 600, 900);
+      add(await scan(page, F, `[${tag}] Timesheet 600 (narrow card, 7-column scroll)`));
+      await setWidth(page, 1440, 900);
+    }
+    await page.getByRole('switch', { name: 'Worked hours' }).click();
+    const row = isMobile ? page.locator(`tr[data-day="${free[2]}"] [data-day-button]`) : dayBtn(page, free[2] ?? '');
+    await row.click();
+    await expect(drawer(page)).toBeVisible();
+    add(await scan(page, F, `[${tag}] Day editor ${isMobile ? 'bottom sheet with foot' : 'drawer'}`));
+    await drawer(page).locator('[data-leave-summary] button').click();
+    await expect(page.locator('dialog[data-leave-dialog]')).toBeVisible();
+    add(await scan(page, F, `[${tag}] Partial leave dialog`));
+    await page.locator('dialog[data-leave-dialog]').getByLabel('Leave hours').fill('30');
+    await page.locator('dialog[data-leave-dialog]').getByRole('button', { name: 'Done' }).click();
+    add(await scan(page, F, `[${tag}] Partial leave dialog with a refusal`));
+    await page.locator('dialog[data-leave-dialog]').getByRole('button', { name: 'Cancel' }).click();
+    await drawer(page).getByLabel('Notes').fill('axe dirty');
+    await drawer(page).getByRole('button', { name: 'Close' }).click();
+    await expect(page.getByRole('alertdialog', { name: 'Discard your changes?' })).toBeVisible();
+    add(await scan(page, F, `[${tag}] discard question`));
+    await page.getByRole('button', { name: 'Discard' }).click();
+    // Review.
+    await page.goto(`${server.origin}/#/review/${person.payrollDate}`);
+    await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+    add(await scan(page, F, `[${tag}] Review unsigned`));
+    await page.locator('[data-sign-off]').click();
+    const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+    await expect(dialog).toBeVisible();
+    add(await scan(page, F, `[${tag}] Sign off dialog`));
+    await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+    add(await scan(page, F, `[${tag}] Sign off dialog with the acknowledgement error`));
+    await dialog.getByRole('checkbox', { name: /I acknowledge/ }).check();
+    await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+    await expect(page.locator('[data-result="created"]')).toBeVisible();
+    add(await scan(page, F, `[${tag}] Review signed`));
+    const send = page.locator('[data-send-card]');
+    await send.locator('#send-field-to').fill('');
+    await send.locator('[data-send]').click();
+    add(await scan(page, F, `[${tag}] Send card with a field error`));
+    await send.locator('#send-field-to').fill('payroll-synthetic@example.invalid');
+    await send.locator('[data-send]').click();
+    await expect(send.locator('[data-send-notice]')).toBeVisible();
+    drainJobsFrom(server, new Date());
+    await page.reload();
+    await expect(send.locator('[data-send]')).toBeVisible();
+    await settle(page);
+    add(await scan(page, F, `[${tag}] Review sent`));
+    await send.locator('[data-send]').click();
+    await expect(page.locator('#send-field-reason')).toBeVisible();
+    await page.getByRole('button', { name: 'Send another copy', exact: true }).click();
+    add(await scan(page, F, `[${tag}] reason dialog with its error`));
+    await page.keyboard.press('Escape');
+    await page.goto(`${server.origin}/#/settings`);
+    await expect(page.getByRole('checkbox', { name: 'Time rows on the PDF' })).toBeVisible({ timeout: 15_000 });
+    add(await scan(page, F, `[${tag}] Settings personal`));
+    note(F, `[${tag}] TOTAL problems ${total}`);
+  });
+}

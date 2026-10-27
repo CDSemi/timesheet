@@ -1,0 +1,19 @@
+. <task>/env.sh
+cd $X
+O=$T/out
+: > $O/12-core-exits.txt
+run() {
+  name=$1; shift
+  start=$(date -u +%H:%M:%S)
+  "$@" > $O/$name.txt 2>&1
+  rc=$?
+  echo "$name rc=$rc start=$start end=$(date -u +%H:%M:%S)" >> $O/12-core-exits.txt
+}
+run 02-ci npm ci
+run 02-typecheck npm run typecheck
+run 02-lint npm run lint
+run 03-npmtest-1 npm test
+run 03-npmtest-2 npm test
+run 04-build npm run build
+run 05-ac13 npx vitest run tests/integration/ac13-two-week.test.ts
+echo done >> $O/12-core-exits.txt

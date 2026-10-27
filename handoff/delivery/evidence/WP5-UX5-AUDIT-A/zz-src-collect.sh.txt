@@ -1,0 +1,14 @@
+# Copies masked LF text and the chosen screenshots into the evidence folder (repository), nothing else.
+. <task>/env.sh
+mkdir -p $E
+for f in $T/out/*.txt; do
+  b=$(basename $f)
+  case $b in ex-*|lstree-sorted.txt|fx-seed.txt|models.txt|models-sum.txt|m2.txt|board-keys.txt) continue ;; esac
+  node.exe $T/mask.mjs $f $E/$b
+done
+for f in $T/obs/*.txt; do node.exe $T/mask.mjs $f $E/obs-$(basename $f); done
+for f in zz-a5lib.ts zz-a5-sheet.spec.ts zz-a5-frac.spec.ts zz-a5-frac2.spec.ts zz-a5-editor.spec.ts zz-a5-review.spec.ts zz-a5-axe.spec.ts zz-a5-classic.spec.ts zz-a5-walk.spec.ts mut.mjs mask.mjs env.sh digest.sh chain1.sh run-shift.sh run-probe.sh run-mutants.sh run-m13.sh collect.sh mutants.json board.mjs setup.sh setup2.sh; do
+  [ -f $T/$f ] && node.exe $T/mask.mjs $T/$f $E/zz-src-$f.txt
+done
+for f in $T/shots-*/a5-*-synthetic.png; do [ -f "$f" ] && cp "$f" $E/; done
+ls $E | wc -l

@@ -1,0 +1,400 @@
+import type { Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { expect, screenshotPath, test } from './fixtures.ts';
+import { activeDesc, css, dayBtn, drawer, note, seedA5, setWidth, settle, signInTo } from './zz-a5lib.ts';
+
+/*
+ * WP5-UX5-AUDIT-A probe E: the Day editor (U5-23..U5-26): the outside-press matrix, every discard-guard route, focus return, the phone
+ * backdrop, the Partial leave dialog, the phone foot and the square drawer. Task-local; never part of the repository.
+ */
+const F = 'editor.txt';
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const question = (page: Page) => page.getByRole('alertdialog', { name: 'Discard your changes?' });
+
+async function isOpen(page: Page): Promise<boolean> {
+  return (await drawer(page).count()) > 0 && (await drawer(page).evaluate((d) => (d as HTMLDialogElement).open));
+}
+
+async function pointOf(page: Page, selector: string, where: 'centre' | 'left-pad' | 'top-pad' = 'centre'): Promise<{ x: number; y: number } | null> {
+  return page.evaluate(
+    ([sel, w]) => {
+      const e = document.querySelector(sel);
+      if (e === null) return null;
+      const r = e.getBoundingClientRect();
+      if (w === 'left-pad') return { x: r.left + 5, y: r.top + r.height / 2 };
+      if (w === 'top-pad') return { x: r.left + r.width / 2, y: r.top + 4 };
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    },
+    [selector, where] as const,
+  );
+}
+
+async function openOn(page: Page, date: string) {
+  if (!(await isOpen(page))) {
+    await dayBtn(page, date).click();
+    await expect(drawer(page)).toBeVisible();
+  }
+}
+
+test('desktop: outside presses, controls and the guard routes', async ({ page, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop');
+  test.setTimeout(400_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const seed = await seedA5(builtServer, 'Synthetic Editor Desk');
+  const left = seed.dates[0] ?? '';
+  for (const width of [1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    if (width === 1280) await signInTo(page, builtServer, seed.person.account);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const targets: Array<[string, string, 'centre' | 'left-pad' | 'top-pad']> = [
+      ['page background (left of the page)', 'body', 'left-pad'],
+      ['title', '.page-head h1', 'centre'],
+      ['period card meta text', '.period-meta', 'centre'],
+      ['paper margin', '[data-paper="timesheet"]', 'top-pad'],
+      ['legend', '.legend', 'centre'],
+      ['form header title', '.form-head .form-title', 'centre'],
+      ['week bar strip', '.week-bar', 'centre'],
+      ['row labels column', '.row-labels', 'centre'],
+      ['top bar bare area', '.shell-bar', 'centre'],
+    ];
+    for (const [label, selector, where] of targets) {
+      for (let i = 0; i < 3 && (await page.locator('dialog:modal').count()) > 0; i += 1) await page.keyboard.press('Escape');
+      await openOn(page, left);
+      await settle(page);
+      const p = await pointOf(page, selector, where);
+      if (p === null) {
+        note(F, `[desk ${width}] ${label}: selector missing`);
+        continue;
+      }
+      // Use a point of the target that the drawer does not cover (the drawer docks left for a column in the right half).
+      const free = await page.evaluate(
+        ([sel, x0, y0]) => {
+          const target = document.querySelector(sel);
+          const ok = (x: number, y: number) => {
+            const e = document.elementFromPoint(x, y);
+            return e !== null && target !== null && (target === e || target.contains(e) || sel === 'body') && e.closest('dialog') === null && e.closest('button,a,input,select,label,[data-day]') === null;
+          };
+          if (ok(x0, y0)) return { x: x0, y: y0 };
+          const r = (target ?? document.body).getBoundingClientRect();
+          for (let i = 1; i < 40; i += 1) {
+            for (const [x, y] of [
+              [r.left + (r.width * i) / 40, y0],
+              [r.right - (r.width * i) / 40, y0],
+              [r.left + 3 + i, r.top + 3],
+              [r.right - 3 - i, r.top + 3],
+            ]) if (y > 0 && y < window.innerHeight && ok(x, y)) return { x, y };
+          }
+          return null;
+        },
+        [selector, p.x, p.y] as const,
+      );
+      if (free === null) {
+        note(F, `[desk ${width}] ${label}: no uncovered point`);
+        continue;
+      }
+      const hit = await page.evaluate(([x, y]) => {
+        const e = document.elementFromPoint(x, y);
+        return e === null ? 'null' : `${e.tagName.toLowerCase()}${e.closest('[data-day]') ? '[in-day]' : ''}${e.closest('dialog') ? '[in-dialog]' : ''}${e.closest('button,a,input,select,label') ? '[control]' : ''}`;
+      }, [free.x, free.y] as const);
+      await page.mouse.click(free.x, free.y);
+      await settle(page);
+      note(F, `[desk ${width}] press on ${label} (${hit}) -> drawer ${(await isOpen(page)) ? 'OPEN' : 'closed'}, focus ${await activeDesc(page)}`);
+    }
+    // Controls keep their action (at 1440, where the drawer stands beside the sheet; at 1280 it floats over the switch).
+    if (width === 1440) {
+    await openOn(page, left);
+    await page.getByRole('switch', { name: 'Worked hours' }).click();
+    note(F, `[desk ${width}] press on Worked hours switch -> drawer ${(await isOpen(page)) ? 'OPEN' : 'closed'}, switch ${await page.getByRole('switch', { name: 'Worked hours' }).getAttribute('aria-checked')}`);
+    await page.getByRole('switch', { name: 'Worked hours' }).click();
+    await dayBtn(page, seed.two).click();
+    await settle(page);
+    note(F, `[desk ${width}] press on another day -> drawer ${(await isOpen(page)) ? 'OPEN' : 'closed'} on ${await drawer(page).getAttribute('data-day-editor')}`);
+    await page.getByRole('button', { name: 'Today' }).click();
+    await settle(page);
+    note(F, `[desk ${width}] press on Today -> drawer ${(await isOpen(page)) ? 'OPEN' : 'closed'} on ${(await isOpen(page)) ? await drawer(page).getAttribute('data-day-editor') : '-'} (today ${seed.person.todayLocal})`);
+    await page.getByRole('button', { name: 'Previous period' }).click();
+    await settle(page);
+    if (await isOpen(page)) {
+      await drawer(page).getByRole('button', { name: 'Close' }).click();
+      await settle(page);
+    }
+    note(F, `[desk ${width}] back on the displayed period: ${await page.locator('.period-name').textContent()}`);
+    }
+    // The guard routes with unsaved edits.
+    const routes: Array<[string, () => Promise<void>]> = [
+      ['switch (another day)', async () => dayBtn(page, seed.two).click()],
+      ['unselect (open day button)', async () => dayBtn(page, left).click()],
+      ['Open a day', async () => {
+        await page.locator('.open-day input').fill(seed.leave);
+        await page.getByRole('button', { name: 'Open day' }).click();
+      }],
+      ['Today', async () => page.getByRole('button', { name: 'Today' }).click()],
+      ['Previous period', async () => page.getByRole('button', { name: 'Previous period' }).click()],
+      ['Next period', async () => page.getByRole('button', { name: 'Next period' }).click()],
+      ['Close', async () => drawer(page).getByRole('button', { name: 'Close' }).click()],
+      ['Escape in the drawer', async () => {
+        await drawer(page).getByLabel('Notes').focus();
+        await page.keyboard.press('Escape');
+      }],
+      ['Escape on a sheet control', async () => {
+        await page.getByRole('switch', { name: 'Worked hours' }).focus();
+        await page.keyboard.press('Escape');
+      }],
+      ['outside press (page background)', async () => {
+        const p = await pointOf(page, 'body', 'left-pad');
+        if (p !== null) await page.mouse.click(p.x, p.y);
+      }],
+    ];
+    for (const [label, act] of routes) {
+      await openOn(page, left);
+      await drawer(page).getByLabel('Notes').fill(`audit dirty ${label.length}`);
+      const shownBefore = await page.locator('.period-name').textContent();
+      await act();
+      await settle(page);
+      const asked = (await question(page).count()) > 0 && (await question(page).isVisible());
+      let after = '';
+      if (asked) {
+        await question(page).getByRole('button', { name: 'Keep editing' }).click();
+        await settle(page);
+        const kept = await drawer(page).getByLabel('Notes').inputValue();
+        after = `Keep editing -> drawer ${(await isOpen(page)) ? 'OPEN' : 'closed'} on ${await drawer(page).getAttribute('data-day-editor')}, notes kept ${kept === `audit dirty ${label.length}`}, period same ${(await page.locator('.period-name').textContent()) === shownBefore}, focus ${await activeDesc(page)}`;
+        // Discard for the outside press and Close: focus back on the day button.
+        if (label === 'outside press (page background)' || label === 'Close') {
+          await act();
+          await question(page).getByRole('button', { name: 'Discard' }).click();
+          await settle(page);
+          after += ` | Discard -> drawer ${(await isOpen(page)) ? 'OPEN' : 'closed'}, focus ${await activeDesc(page)}`;
+        } else {
+          await drawer(page).getByLabel('Notes').fill('');
+        }
+      } else {
+        after = `NO QUESTION; drawer ${(await isOpen(page)) ? 'OPEN' : 'closed'}`;
+      }
+      note(F, `[desk ${width}] dirty + ${label}: asked=${asked}; ${after}`);
+      if (await isOpen(page)) {
+        await drawer(page).getByLabel('Notes').fill('');
+        await drawer(page).getByRole('button', { name: 'Close' }).click();
+        if ((await question(page).count()) > 0) await question(page).getByRole('button', { name: 'Discard' }).click();
+      }
+      // Back to the displayed period if a route moved it.
+      await page.goto(`${builtServer.origin}/#/timesheet`);
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+    }
+    // Square drawer in light and dark.
+    await openOn(page, left);
+    const radii: string[] = [];
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+      await settle(page);
+      const r = await css(drawer(page), ['border-top-left-radius', 'border-top-right-radius', 'border-bottom-left-radius', 'border-bottom-right-radius']);
+      radii.push(`${scheme}: ${Object.values(r).join(' ')}`);
+    }
+    note(F, `[desk ${width}] drawer side ${await drawer(page).getAttribute('data-side')} radii ${radii.join(' | ')}`);
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    if (width === 1440) await page.screenshot({ path: screenshotPath('a5-drawer-1440-light-synthetic.png') });
+    await drawer(page).getByRole('button', { name: 'Close' }).click();
+  }
+});
+
+test('F-UX4A-3 recheck: Current period, then Keep editing', async ({ page, builtServer, isMobile }) => {
+  test.setTimeout(180_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const seed = await seedA5(builtServer, 'Synthetic Editor Current');
+  if (!isMobile) await page.setViewportSize({ width: 1440, height: 900 });
+  await signInTo(page, builtServer, seed.person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByRole('button', { name: 'Next period' }).click();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const current = page.locator('[data-period-current]');
+  const shown = await current.count();
+  note(F, `[current ${isMobile ? 'phone' : 'desk'}] Current period shown after Next: ${shown} (today ${seed.person.todayLocal})`);
+  if (shown === 0) return;
+  const first = await page.locator('[data-day]').first().getAttribute('data-day');
+  const button = isMobile ? page.locator(`tr[data-day="${first}"] [data-day-button]`) : dayBtn(page, first ?? '');
+  await button.click();
+  await expect(drawer(page)).toBeVisible();
+  await drawer(page).getByLabel('Notes').fill('current dirty');
+  if (isMobile) {
+    // The bottom sheet is modal on a phone: the period card is behind it, so the route does not exist there.
+    note(F, '[current phone] the period card is inert behind the modal sheet; route not reachable');
+    return;
+  }
+  await current.click();
+  await expect(question(page)).toBeVisible();
+  await question(page).getByRole('button', { name: 'Keep editing' }).click();
+  await settle(page);
+  note(F, `[current desk] Keep editing -> focus ${await activeDesc(page)}; drawer ${(await isOpen(page)) ? 'OPEN' : 'closed'}; period ${(await page.locator('.period-name').textContent())?.replace(/\s+/g, ' ')}`);
+  await current.click();
+  await question(page).getByRole('button', { name: 'Discard' }).click();
+  await settle(page);
+  note(F, `[current desk] Discard -> focus ${await activeDesc(page)}; drawer ${(await isOpen(page)) ? 'OPEN' : 'closed'}; period ${(await page.locator('.period-name').textContent())?.replace(/\s+/g, ' ')}`);
+});
+
+test('desktop touch 1024: a touch scroll that starts outside a day column', async ({ browser, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop browser with a touch context');
+  test.setTimeout(180_000);
+  const seed = await seedA5(builtServer, 'Synthetic Editor Touch');
+  const context = await browser.newContext({ viewport: { width: 1024, height: 768 }, hasTouch: true, locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+  const page = await context.newPage();
+  await signInTo(page, builtServer, seed.person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await dayBtn(page, seed.complete).tap();
+  await expect(drawer(page)).toBeVisible();
+  note(F, `[touch 1024] coarse=${await page.evaluate('matchMedia("(pointer: coarse)").matches')} layout ${await page.locator('[data-editor-layout]').getAttribute('data-editor-layout')}`);
+  const cdp = await context.newCDPSession(page);
+  for (const [label, selector] of [
+    ['legend', '.legend'],
+    ['row labels column', '.row-labels'],
+    ['form header title', '.form-head .form-title'],
+  ] as const) {
+    if (!(await isOpen(page))) await dayBtn(page, seed.complete).tap();
+    await expect(drawer(page)).toBeVisible();
+    await page.locator(selector).first().scrollIntoViewIfNeeded();
+    const p = await pointOf(page, selector);
+    if (p === null) continue;
+    const y0 = await page.evaluate<number>('window.scrollY');
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p.x, y: p.y }] });
+    for (let i = 1; i <= 6; i += 1) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: p.x, y: p.y - i * 30 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await settle(page);
+    note(F, `[touch 1024] swipe up from ${label}: page scrolled ${y0} -> ${await page.evaluate<number>('window.scrollY')}, drawer ${(await isOpen(page)) ? 'OPEN' : 'closed'}`);
+  }
+  await context.close();
+});
+
+test('phone: backdrop, foot, Partial leave dialog and the guard', async ({ page, builtServer, isMobile }) => {
+  test.skip(!isMobile, 'phone');
+  test.setTimeout(300_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const seed = await seedA5(builtServer, 'Synthetic Editor Phone');
+  const puts: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && request.url().includes('/api/days/')) puts.push(request.postData() ?? '');
+  });
+  await signInTo(page, builtServer, seed.person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const row = (d: string) => page.locator(`tr[data-day="${d}"] [data-day-button]`);
+  await row(seed.complete).click();
+  await expect(drawer(page)).toBeVisible();
+  const sheet = await page.evaluate(() => {
+    const d = document.querySelector('dialog[data-day-editor]') as HTMLDialogElement;
+    const foot = d.querySelector('[data-editor-foot]');
+    const save = foot?.querySelector('button');
+    const fr = foot?.getBoundingClientRect();
+    const sr = save?.getBoundingClientRect();
+    const r = d.getBoundingClientRect();
+    const cs = getComputedStyle(d);
+    return `modal=${d.matches(':modal')} figures=${d.querySelectorAll('[data-figure]').length + [...d.querySelectorAll('h3')].filter((h) => /Figures/.test(h.textContent ?? '')).length} sheet ${r.top.toFixed(0)}..${r.bottom.toFixed(0)} of ${window.innerHeight} radii ${cs.borderTopLeftRadius}/${cs.borderTopRightRadius}/${cs.borderBottomLeftRadius}/${cs.borderBottomRightRadius} foot ${fr?.top.toFixed(1)}..${fr?.bottom.toFixed(1)} save "${save?.textContent}" ${sr?.width.toFixed(1)}x${sr?.height.toFixed(1)} at ${sr?.left.toFixed(1)}..${sr?.right.toFixed(1)}, in form=${save?.closest('form') !== null} formAttr=${save?.getAttribute('form') !== null}`;
+  });
+  note(F, `[phone] open sheet: ${sheet}`);
+  const saveY = async () => (await drawer(page).getByRole('button', { name: 'Save day fields' }).boundingBox())?.y ?? -1;
+  const y1 = await saveY();
+  await page.evaluate(() => {
+    const body = document.querySelector('dialog[data-day-editor] .editor-body') ?? document.querySelector('dialog[data-day-editor]');
+    if (body) body.scrollTop = body.scrollHeight;
+  });
+  await settle(page);
+  note(F, `[phone] Save y before scroll ${y1.toFixed(1)} after ${(await saveY()).toFixed(1)}`);
+  // Backdrop tap (top of the screen, above the sheet), clean.
+  await page.mouse.click(195, 30);
+  await settle(page);
+  note(F, `[phone] backdrop tap clean -> drawer ${(await isOpen(page)) ? 'OPEN' : 'closed'}, focus ${await activeDesc(page)}`);
+  // Dirty, backdrop: asks; Keep editing; Discard.
+  await row(seed.complete).click();
+  await expect(drawer(page)).toBeVisible();
+  await drawer(page).getByLabel('Notes').fill('phone dirty');
+  await page.mouse.click(195, 30);
+  await settle(page);
+  const asked = (await question(page).count()) > 0;
+  note(F, `[phone] dirty backdrop -> asked=${asked}`);
+  if (asked) {
+    await question(page).getByRole('button', { name: 'Keep editing' }).click();
+    await settle(page);
+    note(F, `[phone] Keep editing -> drawer ${(await isOpen(page)) ? 'OPEN' : 'closed'}, notes "${await drawer(page).getByLabel('Notes').inputValue()}", focus ${await activeDesc(page)}`);
+    await page.mouse.click(195, 30);
+    await question(page).getByRole('button', { name: 'Discard' }).click();
+    await settle(page);
+    note(F, `[phone] Discard -> drawer ${(await isOpen(page)) ? 'OPEN' : 'closed'}, focus ${await activeDesc(page)}`);
+  }
+  // Partial leave dialog.
+  await row(seed.complete).click();
+  await expect(drawer(page)).toBeVisible();
+  const summary = () => drawer(page).locator('[data-leave-summary] .leave-summary-value').textContent();
+  const leaveBtn = drawer(page).locator('[data-leave-summary] button');
+  note(F, `[phone leave] summary "${await summary()}", button "${(await leaveBtn.textContent())?.trim()}", box ${JSON.stringify(await leaveBtn.boundingBox())}`);
+  await leaveBtn.click();
+  const dlg = page.locator('dialog[data-leave-dialog]');
+  await expect(dlg).toBeVisible();
+  note(F, `[phone leave] dialog open, focus ${await activeDesc(page)}, notes in dialog=${await dlg.getByLabel('Notes').count()}`);
+  await dlg.getByLabel('Leave hours').fill('2');
+  await dlg.getByLabel('Leave kind').selectOption('vacation');
+  await dlg.getByRole('button', { name: 'Done' }).click();
+  await settle(page);
+  note(F, `[phone leave] Done -> dialog ${(await dlg.count()) > 0 ? 'open' : 'closed'}, summary "${await summary()}", PUTs ${puts.length}, focus ${await activeDesc(page)}`);
+  // The guard sees the draft: Close asks.
+  await drawer(page).getByRole('button', { name: 'Close' }).click();
+  await settle(page);
+  const guard = (await question(page).count()) > 0;
+  note(F, `[phone leave] Close after Done -> asked=${guard}`);
+  if (guard) await question(page).getByRole('button', { name: 'Keep editing' }).click();
+  // Cancel restores.
+  await leaveBtn.click();
+  await dlg.getByLabel('Leave minutes').fill('30');
+  await dlg.getByRole('button', { name: 'Cancel' }).click();
+  await settle(page);
+  note(F, `[phone leave] Cancel -> summary "${await summary()}", focus ${await activeDesc(page)}`);
+  // Escape closes only the dialog.
+  await leaveBtn.click();
+  await dlg.getByLabel('Leave minutes').fill('45');
+  await page.keyboard.press('Escape');
+  await settle(page);
+  note(F, `[phone leave] Escape -> leave dialog ${(await dlg.count()) > 0 ? 'open' : 'closed'}, editor ${(await isOpen(page)) ? 'OPEN' : 'closed'}, summary "${await summary()}", focus ${await activeDesc(page)}`);
+  // Invalid value.
+  await leaveBtn.click();
+  await dlg.getByLabel('Leave hours').fill('25');
+  await dlg.getByRole('button', { name: 'Done' }).click();
+  await settle(page);
+  const alert = dlg.getByRole('alert');
+  note(F, `[phone leave] 25h Done -> dialog ${(await dlg.count()) > 0 ? 'open' : 'closed'}, alert "${(await alert.count()) > 0 ? await alert.textContent() : ''}", hours aria-invalid=${await dlg.getByLabel('Leave hours').getAttribute('aria-invalid')}`);
+  await dlg.getByRole('button', { name: 'Cancel' }).click();
+  // Remove leave.
+  await leaveBtn.click();
+  await dlg.getByRole('button', { name: 'Remove leave' }).click();
+  await settle(page);
+  note(F, `[phone leave] Remove -> summary "${await summary()}", button "${(await leaveBtn.textContent())?.trim()}", focus ${await activeDesc(page)}`);
+  // Add 1h sick again and save from the foot.
+  await leaveBtn.click();
+  await dlg.getByLabel('Leave hours').fill('1');
+  await dlg.getByLabel('Leave kind').selectOption('sick');
+  await dlg.getByRole('button', { name: 'Done' }).click();
+  await drawer(page).getByRole('button', { name: 'Save day fields' }).click();
+  await expect.poll(() => puts.length).toBeGreaterThan(0);
+  note(F, `[phone leave] foot Save -> PUT ${puts.at(-1)}`);
+  const status = await page.evaluate(() => {
+    const s = [...document.querySelectorAll('dialog[data-day-editor] [role="status"]')].map((e) => {
+      const r = e.getBoundingClientRect();
+      return `"${(e.textContent ?? '').trim()}" ${r.top.toFixed(0)}..${r.bottom.toFixed(0)}`;
+    });
+    return s.join(' ; ');
+  });
+  note(F, `[phone leave] status after save: ${status}`);
+  if (await isOpen(page)) await drawer(page).getByRole('button', { name: 'Close' }).click();
+  // An old period: the reason field and Done then Save.
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const old = await seed.person.api.call<{ days: Array<{ work_date: string; classification: { day_class: string } | null }> }>('GET', `/api/timesheets/${addDays(seed.person.payrollDate, -14)}`);
+  const oldDay = old.days.find((d) => d.classification?.day_class === 'normal')?.work_date ?? '';
+  await row(oldDay).click();
+  await expect(drawer(page)).toBeVisible();
+  await leaveBtn.click();
+  await dlg.getByLabel('Leave hours').fill('3');
+  await dlg.getByLabel('Leave kind').selectOption('vacation');
+  await dlg.getByRole('button', { name: 'Done' }).click();
+  const saveBtn = drawer(page).getByRole('button', { name: 'Save day fields' });
+  note(F, `[phone old] Done -> Save disabled=${await saveBtn.isDisabled()} reason field=${await drawer(page).getByLabel(/reason/i).count()}`);
+  await drawer(page).getByLabel(/reason/i).first().fill('Synthetic audit correction');
+  await saveBtn.click();
+  await expect.poll(() => puts.length).toBeGreaterThan(1);
+  note(F, `[phone old] Save -> PUT ${puts.at(-1)}`);
+});

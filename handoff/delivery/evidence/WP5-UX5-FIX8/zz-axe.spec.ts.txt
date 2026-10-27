@@ -1,0 +1,83 @@
+import { appendFileSync, readFileSync } from 'node:fs';
+import { newPerson, SeedClient, test, expect } from './fixtures.ts';
+
+/*
+ * WP5-UX5-FIX8 probe: axe-core 4.14 (loaded from the task folder, no dependency) on the Review page (unsigned, sign-off dialog, signed and
+ * reloaded) and on the Timesheet page at 320px and 1280px. Wide tags WCAG 2.0 to 2.2 A and AA. Synthetic data only.
+ */
+const AXE_PATH = process.env.AXE_PATH ?? '';
+const OUT = process.env.AXE_OUT ?? '';
+const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+let axeSource = '';
+const lines: string[] = [];
+function note(line: string): void {
+  console.log(line);
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+  lines.push(line);
+}
+
+interface Result {
+  version: string;
+  violations: Array<{ id: string; impact: string | null; nodes: string[] }>;
+  incomplete: number;
+}
+
+async function scan(page: import('@playwright/test').Page, label: string): Promise<number> {
+  if (axeSource === '') axeSource = readFileSync(AXE_PATH, 'utf8');
+  if (!(await page.evaluate<boolean>(`typeof window.axe !== 'undefined'`))) await page.evaluate(axeSource);
+  const result = await page.evaluate<Result, string[]>(async (tags) => {
+    const axe = (window as unknown as { axe: { run: (c: Document, o: unknown) => Promise<Record<string, unknown>>; version: string } }).axe;
+    const r = (await axe.run(document, { runOnly: { type: 'tag', values: tags }, resultTypes: ['violations', 'incomplete'] })) as {
+      violations: Array<{ id: string; impact: string | null; nodes: Array<{ target: unknown }> }>;
+      incomplete: unknown[];
+    };
+    return { version: axe.version, violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => JSON.stringify(n.target)) })), incomplete: r.incomplete.length };
+  }, TAGS);
+  note(`${label}: axe ${result.version} violations=${result.violations.length} [${result.violations.map((v) => `${v.id}(${v.impact}) ${v.nodes.join(' ')}`).join('; ')}] incomplete=${result.incomplete}`);
+  return result.violations.length;
+}
+
+for (const mode of ['light', 'dark'] as const) {
+  test(`axe Review signed and reloaded, Timesheet 320 and 1280 - ${mode}`, async ({ page, privateServer, isMobile }) => {
+    test.setTimeout(240_000);
+    const tag = `${isMobile ? 'mobile' : 'desktop'} ${mode}`;
+    await page.emulateMedia({ colorScheme: mode, reducedMotion: 'reduce' });
+    const server = privateServer;
+    const adm = await new SeedClient(server.origin).signIn(server.credentials.admin.email, server.credentials.admin.password);
+    const person = await newPerson(adm, server, { displayName: `Synthetic Axe ${mode}`, signature: 'saved' });
+    const free = await person.api.displayedPeriodFreeWorkdays();
+    await person.api.seedCompleteDay(free[0] ?? '');
+    let total = 0;
+    await page.goto(`${server.origin}/#/timesheet`);
+    await page.getByLabel('Email').fill(person.account.email);
+    await page.getByLabel('Password').fill(person.account.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    for (const width of [1280, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      total += await scan(page, `[${tag}] Timesheet ${width}px`);
+      await page.getByRole('switch', { name: 'Worked hours' }).click();
+      total += await scan(page, `[${tag}] Timesheet ${width}px worked hours on`);
+      await page.getByRole('switch', { name: 'Worked hours' }).click();
+    }
+    await page.goto(`${server.origin}/#/review/${person.payrollDate}`);
+    await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+    total += await scan(page, `[${tag}] Review unsigned`);
+    await page.locator('[data-sign-off]').click();
+    const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+    await expect(dialog).toBeVisible();
+    total += await scan(page, `[${tag}] Sign off dialog`);
+    await dialog.getByRole('checkbox', { name: /I acknowledge/ }).check();
+    await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+    await expect(page.locator('[data-result="created"]')).toBeVisible();
+    total += await scan(page, `[${tag}] Review signed`);
+    await page.reload();
+    await expect(page.locator('[data-sign-off]')).toHaveText('Sign correction');
+    for (const width of [1280, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      total += await scan(page, `[${tag}] Review signed and reloaded ${width}px`);
+    }
+    note(`[${tag}] TOTAL violations ${total}`);
+    expect(total).toBe(0);
+  });
+}

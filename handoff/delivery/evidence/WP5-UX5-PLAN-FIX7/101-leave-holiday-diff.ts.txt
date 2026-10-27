@@ -1,0 +1,151 @@
+/*
+ * WP5-UX5-PLAN-FIX7 probe: differential render of the original drawCategory (timesheetPdf.orig.ts) against the patched one.
+ * Synthetic snapshots only. For every combination of holiday name, leave minutes, category, session count and row variant:
+ *  - the bytes must be equal unless the day has BOTH a holiday label and leave (the only case the patch changes);
+ *  - on a day with both, "Leave h:mm" must be printed whole on one text item, and the page must stay one page.
+ * Usage: node 101-leave-holiday-diff.ts <out.txt>
+ */
+import { writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { datesBetween } from '../export/src/domain/dates.ts';
+import type { ReviewSnapshot, SnapshotDay } from '../export/src/domain/snapshot.ts';
+import { renderTimesheetPdf as renderNew } from '../export/src/server/pdf/timesheetPdf.ts';
+import { renderTimesheetPdf as renderOld } from '../export/src/server/pdf/timesheetPdf.orig.ts';
+import { instantOfWallTime } from '../export/tests/client/zoneOracle.ts';
+import { readPdf } from '../export/tests/support/pdfText.ts';
+
+const [outPath] = process.argv.slice(2);
+if (outPath === undefined) throw new Error('usage');
+const ZONE = 'America/Los_Angeles';
+const START = '2026-09-14';
+const DATES = datesBetween(START, '2026-09-27');
+const utc = (date: string, time: string): string => instantOfWallTime(date, time, ZONE).replace('.000Z', 'Z');
+
+function day(date: string, overrides: Partial<SnapshotDay> = {}, sessionCount = 1): SnapshotDay {
+  const sessions = Array.from({ length: sessionCount }, (_, index) => ({
+    id: `s${index}-${date}`,
+    start_utc: utc(date, `${String(6 + index * 2).padStart(2, '0')}:00`),
+    end_utc: utc(date, `${String(6 + index * 2).padStart(2, '0')}:45`),
+    source: 'manual' as const,
+    breaks_confirmed: true,
+    breaks: [],
+  }));
+  return {
+    work_date: date,
+    day_class: 'normal',
+    day_class_reason: null,
+    holiday_name: null,
+    calendar_version_id: 'cv-1',
+    category: 'Worked',
+    category_source: 'default',
+    attendance_expected: true,
+    wfh: false,
+    notes: '',
+    leave_minutes: 0,
+    leave_kind: null,
+    ot_leave: { kind_minutes: 0, consumed_minutes: 0, reversed_minutes: 0, mismatch: false },
+    sessions,
+    completeness: sessionCount === 0 ? 'no_records' : 'complete',
+    policy_version_id: 'pv-1',
+    calculation: sessionCount === 0 ? null : { regular_minutes: 480, nonworking_minutes: 0, normal_excess_minutes: 0, eligible_minutes: 0, credited_minutes: 0 },
+    calculation_error: null,
+    ...overrides,
+  };
+}
+
+function snapshotOf(days: SnapshotDay[]): ReviewSnapshot {
+  return {
+    schema: 'timesheet-review',
+    schema_version: 2,
+    employee: { name: 'Alex Example' },
+    period: {
+      payroll_date: '2026-10-02', nominal_payroll_date: '2026-10-02', period_start: START, period_end: '2026-09-27',
+      due_local_date: '2026-09-29', due_local_time: '17:00', due_at_utc: utc('2026-09-29', '17:00'), is_exception: false,
+    },
+    reporting_zone: ZONE,
+    submission: { id: 'TS-2026-10-02-0123456789', revision_no: 1, sign_off_status: 'Submitted' },
+    timesheet: { finalized_revision_no: null },
+    calendar: { id: 'cal-1', version_ids: ['cv-1'] },
+    policy: { version_ids: ['pv-1'] },
+    days,
+    totals: { credited_minutes: 0, pending_days: 0 },
+    ot_proposals: [], deficit_proposals: [], unresolved_inputs: [], ot_leave_reservations: [],
+    recipients: { to: ['payroll@example.invalid'], cc: [], subject: 's', body_text: 'b', body_html: '<p>b</p>', template_version: 1 },
+    signature: null,
+    auto_image: { authorized: false, attachment_id: null },
+    auto_note: { enabled: false, text: 'Automatic submission' },
+    show_ot_on_pdf: true,
+  } as ReviewSnapshot;
+}
+
+const HOLIDAYS = [
+  null,
+  'Labor Day',
+  'Independence Day',
+  'Day after Thanksgiving',
+  'Martin Luther King Jr. Day',
+  'Christmas Eve (company closure)',
+  "Lunar New Year's Eve (company closure)",
+  'Year-end shutdown: plant maintenance week',
+  'Founders Remembrance and Community Service Observance Day (synthetic)',
+  `Qu${String.fromCodePoint(0x1ed1)}c kh${String.fromCodePoint(0xe1)}nh ${String.fromCodePoint(0x111)}${String.fromCodePoint(0x1ea1)}i l${String.fromCodePoint(0x1ec5)} and a long extra tail of words`,
+];
+const LEAVES = [0, 5, 90, 600];
+const CATEGORIES = ['Worked', 'Holiday', 'A very long handwritten category label that needs two lines', 'Работа'];
+const SESSION_COUNTS = [0, 4, 5];
+const VARIANTS = [{ time: true, ot: true }, { time: true, ot: false }, { time: false, ot: true }, { time: false, ot: false }];
+
+const lines: string[] = [];
+let failures = 0;
+const check = (name: string, ok: boolean, detail = '') => {
+  if (!ok) failures += 1;
+  if (!ok || lines.length < 400) lines.push(`${ok ? 'PASS' : 'FAIL'} ${name}${detail === '' ? '' : ` | ${detail}`}`);
+};
+const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+const h = (minutes: number) => `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+
+let renders = 0;
+let equalCount = 0;
+let changedCount = 0;
+for (const holiday of HOLIDAYS) {
+  for (const leave of LEAVES) {
+    for (const category of CATEGORIES) {
+      for (const sessionCount of SESSION_COUNTS) {
+        // The same day shape appears in both weeks (the Wednesdays), so both week layouts are exercised.
+        const days = DATES.map((date) =>
+          date === '2026-09-16' || date === '2026-09-23'
+            ? day(date, { category, holiday_name: holiday, day_class: holiday === null ? 'normal' : 'nonworking', leave_minutes: leave, leave_kind: leave > 0 ? 'sick' : null }, sessionCount)
+            : day(date),
+        );
+        const snapshot = snapshotOf(days);
+        for (const rows of VARIANTS) {
+          const input = { snapshot, submissionId: 'TS-2026-10-02-0123456789', revisionNo: 1, origin: 'manual' as const, signedAt: utc('2026-10-07', '22:30'), automaticSubmittedAt: null, signerName: 'Alex Example', signatureImage: null, rows };
+          const before = await renderOld(input);
+          const after = await renderNew(input);
+          renders += 1;
+          const both = holiday !== null && leave > 0;
+          const label = `holiday=${JSON.stringify(holiday)} leave=${leave} category=${JSON.stringify(category.slice(0, 12))} sessions=${sessionCount} t${rows.time ? 1 : 0}o${rows.ot ? 1 : 0}`;
+          const same = sha(before) === sha(after);
+          if (!both) {
+            equalCount += 1;
+            check(`bytes unchanged: ${label}`, same);
+            continue;
+          }
+          changedCount += 1;
+          const pdf = await readPdf(after);
+          const text = pdf.pages[0]?.items.map((item) => item.text) ?? [];
+          check(`one page: ${label}`, pdf.pages.length === 1);
+          const leaveItems = (pdf.pages[0]?.items ?? []).filter((item) => item.text === `Leave ${h(leave)}`);
+          check(`"Leave ${h(leave)}" printed whole as one item, twice (both columns): ${label}`, leaveItems.length === 2, `${leaveItems.length} item(s); text sample ${JSON.stringify(text.filter((t) => /Leave/.test(t)))}`);
+          check(`leave item is 7pt and inside the 36pt margins: ${label}`, leaveItems.every((item) => Math.abs(item.height - 7) < 0.6 && item.x >= 36 && item.x + item.width <= 576), leaveItems.map((i) => `${i.height.toFixed(1)}pt@${i.x.toFixed(1)}`).join(','));
+          const lowest = Math.min(...(pdf.pages[0]?.items ?? []).map((item) => item.y));
+          check(`lowest text above the 36pt bottom margin: ${label}`, lowest >= 36 - 0.5, `${lowest.toFixed(1)}`);
+        }
+      }
+    }
+  }
+}
+lines.push(`renders (old+new pair each): ${renders}; unchanged-expected pairs: ${equalCount}; changed-expected (holiday AND leave) pairs: ${changedCount}`);
+lines.push(`failures: ${failures}`);
+writeFileSync(outPath, `${lines.join('\n')}\n`);
+process.exitCode = failures === 0 ? 0 : 1;

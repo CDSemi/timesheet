@@ -134,3 +134,48 @@ test.describe('the Day editor layout with a classic scrollbar', () => {
     }
   });
 });
+
+/*
+ * WP5-UX5 F-UX5A-3 (owner answer F-7 a): a press outside closes the drawer, but a press on an element's own scrollbar scrolls that
+ * element; it is not a press on the page. Between 480 and 929px a week card scrolls sideways and draws a classic scrollbar under it.
+ */
+test.describe('a press on a scrollbar with the Day editor open', () => {
+  test('a press-drag on a week card\'s own scrollbar scrolls the card and leaves the drawer open; a press on plain page still closes it', async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }) => {
+    test.setTimeout(120_000);
+    const days = await employeeSeed.displayedPeriodFreeWorkdays();
+    expect(days.length, 'past free workdays in the displayed period').toBeGreaterThanOrEqual(1);
+    await page.setViewportSize({ width: 900, height: 900 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await openDay(page, days[0] ?? '');
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    // The scrollbar of the first week card that scrolls sideways and has its track in view.
+    const bar = await page.evaluate<{ x: number; y: number } | null>(`(() => {
+      for (const week of document.querySelectorAll('.sheet-week')) {
+        const box = week.getBoundingClientRect();
+        const track = week.offsetHeight - week.clientHeight;
+        const y = box.top + week.clientTop + week.clientHeight + Math.max(1, track / 2);
+        if (week.scrollWidth > week.clientWidth && track > 0 && box.top > 0 && y < window.innerHeight) return { x: box.right - 60, y };
+      }
+      return null;
+    })()`);
+    expect(bar, 'a week card with a sideways scrollbar in view').not.toBeNull();
+    const at = bar ?? { x: 0, y: 0 };
+    const scrolled = () => page.evaluate<number>(`[...document.querySelectorAll('.sheet-week')].reduce((sum, week) => sum + week.scrollLeft, 0)`);
+    expect(await scrolled()).toBe(0);
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await page.mouse.move(at.x + 120, at.y, { steps: 5 });
+    await page.mouse.up();
+    expect(await scrolled(), 'the press-drag moved the scrollbar thumb').toBeGreaterThan(0);
+    await expect(editor, 'a scrollbar press is not a press on the page').toBeVisible();
+    // Plain page, away from the drawer, still closes it.
+    const width = await page.evaluate<number>('document.documentElement.clientWidth');
+    await page.mouse.click((await editor.getAttribute('data-side')) === 'left' ? width - 4 : 4, 300);
+    await expect(editor).toHaveCount(0);
+  });
+});

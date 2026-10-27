@@ -1,0 +1,15 @@
+import json, sys
+board = json.load(open(sys.argv[1], encoding="utf-8"))
+out = open(sys.argv[2], "w", encoding="utf-8", newline="\n")
+for t in board.get("tasks", []):
+    tid = t.get("id", "")
+    if not (tid.startswith("WP5-UX4") or tid.startswith("WP5-UX5")):
+        continue
+    out.write("%s | %s | %s | req=%s/%s | actual=%s | note=%s | agents=%s | rc=%s | fc=%s | commit=%s\n" % (
+        tid, t.get("kind"), t.get("status"), t.get("requested_model"), t.get("requested_effort"),
+        t.get("actual_model"), t.get("actual_model_note"), t.get("author_agent_ids") or t.get("agent_id"),
+        t.get("reviewed_commit"), t.get("freeze_commit"), t.get("commit_sha")))
+for k in ("owner_decisions", "coordinator_decisions"):
+    v = board.get(k)
+    out.write("== %s type=%s len=%s\n" % (k, type(v).__name__, len(v) if v else 0))
+out.write("current_source_digest: %s\n" % board.get("current_source_digest"))

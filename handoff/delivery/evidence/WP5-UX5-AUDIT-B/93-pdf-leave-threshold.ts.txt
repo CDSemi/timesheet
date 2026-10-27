@@ -1,0 +1,34 @@
+/* WP5-UX5-AUDIT-B probe: from which holiday-name length does a day's "Leave h:mm" disappear from its PDF cell? */
+import { writeFileSync } from 'node:fs';
+import { openDatabase } from '../export/src/server/db/database.ts';
+import { renderTimesheetPdf } from '../export/src/server/pdf/timesheetPdf.ts';
+import { readPdf } from '../export/tests/support/pdfText.ts';
+
+const [databasePath, outPath] = process.argv.slice(2);
+if (databasePath === undefined || outPath === undefined) throw new Error('usage');
+const db = openDatabase(databasePath);
+const base = JSON.parse(
+  (db.prepare("SELECT r.payload_json FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id WHERE p.payroll_date = '2026-10-16' AND r.origin = 'employee' LIMIT 1").get() as { payload_json: string }).payload_json,
+);
+db.close();
+const names = [
+  'Labor Day',
+  'Independence Day',
+  'Day after Thanksgiving',
+  'Martin Luther King Jr. Day',
+  'Christmas Eve (company closure)',
+  "Lunar New Year's Eve (company closure)",
+  'Year-end shutdown: plant maintenance week',
+];
+const out: string[] = [];
+for (const name of names) {
+  const snapshot = structuredClone(base);
+  snapshot.days[2] = { ...snapshot.days[2], category: 'Holiday', holiday_name: name, day_class: 'holiday', leave_minutes: 90, leave_kind: 'sick', sessions: [] };
+  const bytes = await renderTimesheetPdf({ snapshot, submissionId: snapshot.submission.id, revisionNo: 1, origin: 'manual', signedAt: '2026-10-14T20:00:00Z', automaticSubmittedAt: null, signerName: 'Example Employee Two', signatureImage: null });
+  const pdf = await readPdf(bytes);
+  const page = pdf.pages[0];
+  const small = (page?.items ?? []).filter((item) => item.height < 7.5 && item.x > 150 && item.x < 300 && item.y > 400 && item.y < 600).map((item) => `${item.text} (${item.height.toFixed(1)}pt)`);
+  const joined = small.map((text) => text.replace(/ \(\d+\.\dpt\)$/, '')).join(' ');
+  out.push(`${String(name.length).padStart(2)} chars ${JSON.stringify(name)}: "1:30" printed=${joined.includes('1:30')} lines ${JSON.stringify(small)}`);
+}
+writeFileSync(outPath, `${out.join('\n')}\n`);

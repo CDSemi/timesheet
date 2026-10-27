@@ -1,0 +1,28 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+O=$T/out
+cd $T/export
+npm ci > $O/02-ci.txt 2>&1; echo "ci exit $?" > $O/02-ci-exit.txt
+npm run lint > $O/02-lint.txt 2>&1; echo "lint exit $?" > $O/02-lint-exit.txt
+npm run typecheck > $O/02-typecheck.txt 2>&1; echo "typecheck exit $?" > $O/02-typecheck-exit.txt
+npm run verify > $O/03-verify.txt 2>&1; echo "verify exit $?" > $O/03-verify-exit.txt
+echo "verify done $(date -u +%H:%M:%SZ)" > $T/logs/chain1.log
+for i in 1 2 3; do
+  npm test > $O/12-npmtest-$i.txt 2>&1; echo "npm test run $i exit $? dep=$(grep -ci deprecat $O/12-npmtest-$i.txt) crash=$(grep -ciE 'worker|crash|0xC0000005|exited' $O/12-npmtest-$i.txt)" >> $O/12-npmtest-exits.txt
+  echo "npmtest $i done $(date -u +%H:%M:%SZ)" >> $T/logs/chain1.log
+done
+npm audit --omit=dev > $O/10-audit.txt 2>&1; echo "audit exit $?" >> $O/10-audit.txt
+$PY handoff/delivery/validate_package.py --preflight > $O/11-validate_package.txt 2>&1; echo "validate_package exit $?" >> $O/11-exits.txt
+$PY handoff/delivery/validate_orchestration.py > $O/11-validate_orchestration.txt 2>&1; echo "validate_orchestration exit $?" >> $O/11-exits.txt
+$PY handoff/delivery/check_recovery.py > $O/11-check_recovery.txt 2>&1; echo "check_recovery exit $?" >> $O/11-exits.txt
+node scripts/precommit-check.mjs --self-test > $O/11-precommit-selftest.txt 2>&1; echo "precommit self-test exit $?" >> $O/11-exits.txt
+echo "rest done $(date -u +%H:%M:%SZ)" >> $T/logs/chain1.log
+for d in export-old export-probe; do
+  cd $T/$d
+  npm ci > $O/50-$d-ci.txt 2>&1; echo "$d ci exit $?" >> $T/logs/chain1.log
+  npm run build > $O/50-$d-build.txt 2>&1; echo "$d build exit $?" >> $T/logs/chain1.log
+done
+cd $T
+bash cmp-dist.sh > logs/cmp-dist.txt 2>&1
+echo "cmp-dist done $(date -u +%H:%M:%SZ)" >> $T/logs/chain1.log
+echo chain1-done > out/chain1.done

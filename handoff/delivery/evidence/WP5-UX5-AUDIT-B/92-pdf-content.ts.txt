@@ -1,0 +1,127 @@
+/*
+ * WP5-UX5-AUDIT-B probe: the PDF content of the TARGET renderer on a real snapshot (taken from the upgraded synthetic
+ * database), stretched to the hard cases: four and five sessions a day, long holiday labels, partial leave, a category
+ * Indie Flower cannot draw; all four row variants, with and without a signature image; the footer year from the payroll
+ * date; deterministic bytes. Writes one synthetic PNG-free text report. Usage: node pdf-content.ts <databasePath> <out.txt>
+ */
+import { writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { openDatabase } from '../export/src/server/db/database.ts';
+import { renderTimesheetPdf } from '../export/src/server/pdf/timesheetPdf.ts';
+import { makePng, readPdf } from '../export/tests/support/pdfText.ts';
+
+const [databasePath, outPath] = process.argv.slice(2);
+if (databasePath === undefined || outPath === undefined) throw new Error('usage');
+const lines: string[] = [];
+let failures = 0;
+const log = (line: string) => lines.push(line);
+const check = (name: string, ok: boolean, detail = '') => {
+  if (!ok) failures += 1;
+  log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail === '' ? '' : ` | ${detail}`}`);
+};
+
+const db = openDatabase(databasePath);
+const row = db
+  .prepare(
+    `SELECT r.payload_json FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id
+      WHERE p.payroll_date = '2026-10-16' AND r.origin = 'employee' LIMIT 1`,
+  )
+  .get() as { payload_json: string };
+db.close();
+const base = JSON.parse(row.payload_json);
+const start = base.period.period_start as string;
+log(`snapshot period ${start}..${base.period.period_end}, payroll ${base.period.payroll_date}, zone ${base.reporting_zone}, days ${base.days.length}`);
+
+// Los Angeles is UTC-7 in late September and early October 2026.
+const utc = (date: string, hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number) as [number, number];
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCHours(h + 7, m, 0, 0);
+  return d.toISOString().replace('.000Z', 'Z');
+};
+const session = (date: string, from: string, to: string, n: number) => ({
+  id: `00000000-0000-4000-8000-0000000000${String(n).padStart(2, '0')}`,
+  start_utc: utc(date, from),
+  end_utc: utc(date, to),
+  source: 'manual',
+  breaks_confirmed: true,
+  breaks: [],
+});
+const LONG_HOLIDAY = 'Founders Remembrance and Community Service Observance Day (synthetic)';
+const LONG_HOLIDAY_2 = 'Extended Plant Shutdown for the Annual Safety Inspection';
+const snapshot = structuredClone(base);
+const days = snapshot.days as Array<Record<string, unknown>>;
+const d0 = days[0] as { work_date: string };
+days[0] = { ...days[0], category: 'Worked', sessions: [session(d0.work_date, '08:00', '10:00', 1), session(d0.work_date, '10:30', '12:00', 2), session(d0.work_date, '13:00', '15:00', 3), session(d0.work_date, '15:30', '17:45', 4)] };
+const d1 = days[1] as { work_date: string };
+days[1] = { ...days[1], category: 'Worked', sessions: [1, 2, 3, 4, 5].map((n) => session(d1.work_date, `0${n + 3}:00`.slice(-5), `0${n + 3}:40`.slice(-5), 10 + n)) };
+days[2] = { ...days[2], category: 'Holiday', holiday_name: LONG_HOLIDAY, day_class: 'holiday', sessions: [] };
+days[3] = { ...days[3], category: 'Worked', leave_minutes: 150, leave_kind: 'vacation' };
+days[4] = { ...days[4], category: 'Работа' };
+days[9] = { ...days[9], category: 'Shutdown', holiday_name: LONG_HOLIDAY_2, day_class: 'holiday', leave_minutes: 90, leave_kind: 'sick', sessions: [] };
+
+const image = makePng(320, 96);
+const variants = [
+  { time: true, ot: true },
+  { time: true, ot: false },
+  { time: false, ot: true },
+  { time: false, ot: false },
+];
+const TIMES = ['08:00', '10:00', '10:30', '12:00', '13:00', '15:00', '15:30', '17:45'];
+for (const withImage of [true, false]) {
+  for (const rows of variants) {
+    const label = `t${rows.time ? 1 : 0}o${rows.ot ? 1 : 0} ${withImage ? 'image+name' : 'name only'}`;
+    const input = {
+      snapshot,
+      submissionId: snapshot.submission.id,
+      revisionNo: 3,
+      origin: 'manual' as const,
+      signedAt: '2026-10-14T20:00:00Z',
+      automaticSubmittedAt: null,
+      signerName: 'Example Employee Two',
+      signatureImage: withImage ? image : null,
+      rows,
+    };
+    const bytes = await renderTimesheetPdf(input);
+    const again = await renderTimesheetPdf(input);
+    const sha = createHash('sha256').update(bytes).digest('hex');
+    check(`${label}: deterministic bytes`, sha === createHash('sha256').update(again).digest('hex'), `${bytes.length} bytes ${sha.slice(0, 12)}`);
+    const pdf = await readPdf(bytes);
+    const page = pdf.pages[0];
+    check(`${label}: one page`, pdf.pages.length === 1);
+    if (page === undefined) continue;
+    const texts = page.items.map((item) => item.text);
+    const all = texts.join(' ');
+    const outside = page.items.filter((item) => item.x < 35.5 || item.x + item.width > 576.5 + 0.5 || item.y < 36 || item.y > 792 - 20);
+    check(`${label}: every text item inside the margins (36pt)`, outside.length === 0, outside.map((item) => `${item.text}@${item.x.toFixed(1)},${item.y.toFixed(1)}`).join('; '));
+    for (const want of ['Revision 3', snapshot.submission.id, 'Employee:', 'Payroll Date:', 'Period:', '10/16/2026', 'C&D Semiconductor Services, Inc.', 'TIME SHEET FOR SALARIED EXEMPT EMPLOYEES', 'Internal use by C&D only', 'Employee Signature', 'Manager Signature', 'Example Employee Two', '10/14/2026']) {
+      check(`${label}: prints "${want}"`, all.includes(want));
+    }
+    check(`${label}: footer year from the payroll date`, all.includes('© 2026 C&D Semiconductor Services, Inc. All rights reserved.'));
+    check(`${label}: no instructions paragraph`, !/instruction|turn in|fill each day/i.test(all));
+    const timesShown = TIMES.filter((time) => texts.includes(time));
+    check(`${label}: time rows ${rows.time ? 'printed (4 sessions + "+n more")' : 'absent'}`, rows.time ? timesShown.length === TIMES.length && /\+\d more/.test(all) : timesShown.length === 0 && !all.includes('more'), `${timesShown.length}/8 times; more=${all.includes('more')}`);
+    const otShown = texts.includes('OT') && all.includes('VERTIME');
+    check(`${label}: OT rows and total ${rows.ot ? 'printed' : 'absent'}`, rows.ot ? otShown : !texts.includes('OT') && !all.includes('VERTIME'), `OT=${texts.includes('OT')} VERTIME=${all.includes('VERTIME')}`);
+    log(`  ${label}: leave items ${JSON.stringify(page.items.filter((item) => /Leave|2:30|1:30|Shutdown|Plant|Inspection/.test(item.text)).map((item) => `${item.text} (${item.height.toFixed(1)}pt @${item.x.toFixed(0)})`))}`);
+    check(`${label}: partial leave printed on a working day ("Leave 2:30")`, all.includes('Leave 2:30'));
+    check(`${label}: partial leave printed on a day that also has a long holiday name ("Leave 1:30")`, all.includes('Leave 1:30'));
+    const holidayItems = page.items.filter((item) => /Founders|Remembrance|Observance|Community|synthetic/.test(item.text) && item.height < 6);
+    const holidayText = holidayItems.map((item) => item.text).join(' ');
+    log(`  ${label}: long holiday label printed as ${JSON.stringify(holidayItems.map((item) => `${item.text} (${item.height.toFixed(1)}pt)`))}`);
+    const column = page.items.find((item) => item.text === 'Holiday');
+    check(`${label}: long holiday label shrunk and wrapped inside its column`, holidayItems.length >= 2 && holidayItems.every((item) => column === undefined || Math.abs(item.x + item.width / 2 - (column.x + column.width / 2)) < 2), holidayText);
+    const ru = page.items.find((item) => item.text.includes('Работа'));
+    check(`${label}: a category Indie Flower lacks is drawn (fallback, no "?")`, ru !== undefined && !all.includes('??????'));
+    check(`${label}: signature image ${withImage ? 'placed once' : 'absent (name only)'}`, page.images.length === (withImage ? 1 : 0), `${page.images.length} image(s)`);
+  }
+}
+// The footer year follows the payroll date, not the clock: a January 2027 payroll date in a 2026 period.
+const nextYear = structuredClone(snapshot);
+nextYear.period.payroll_date = '2027-01-08';
+const bytes2027 = await renderTimesheetPdf({ snapshot: nextYear, submissionId: snapshot.submission.id, revisionNo: 1, origin: 'manual', signedAt: '2026-12-30T20:00:00Z', automaticSubmittedAt: null, signerName: 'Example Employee Two', signatureImage: null });
+const pdf2027 = await readPdf(bytes2027);
+check('footer year 2027 for payroll date 2027-01-08', pdf2027.text.includes('© 2027 C&D'));
+log(`failures: ${failures}`);
+writeFileSync(outPath, `${lines.join('\n')}\n`);
+process.exitCode = failures === 0 ? 0 : 1;

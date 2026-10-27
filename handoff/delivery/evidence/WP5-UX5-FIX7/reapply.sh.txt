@@ -1,0 +1,12 @@
+#!/bin/bash
+# Restore the files the change touches from HEAD and re-apply the change with LF line endings (per-process env, no config change).
+set -u
+T="<task>"
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*' GIT_CONFIG_KEY_1=core.autocrlf GIT_CONFIG_VALUE_1=false
+cd "<repo>" || exit 1
+git archive f4049aa7905e22f1467dfcae4208675cb2fc8e80 src/server/pdf/timesheetPdf.ts src/server/services/deliveries.ts src/client/components/deliveryModel.ts scripts/container-drill.mjs tests/integration/pdf-render.test.ts tests/integration/sends.test.ts | tar -x -C "$T/export"
+echo "restore exit $?"
+cd "$T/export" || exit 1
+git apply "$T/scripts/change.diff"
+echo "apply exit $?"
+cp "$T/probes/timesheetPdf.orig.ts" src/server/pdf/timesheetPdf.orig.ts

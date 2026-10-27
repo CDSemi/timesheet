@@ -123,7 +123,10 @@ export function SignoffDialog({
             {SIGNOFF_TITLE[mode]}
           </h2>
           <p className="muted">
-            Pay period {weekdayDate(payload.period.period_start)} {'->'} {weekdayDate(payload.period.period_end)} · payroll date {description.payroll}
+            Pay period {weekdayDate(payload.period.period_start)}
+            <span aria-hidden="true"> → </span>
+            <span className="sr-only"> to </span>
+            {weekdayDate(payload.period.period_end)} · payroll date {description.payroll}
           </p>
         </div>
 
@@ -161,7 +164,7 @@ export function SignoffDialog({
             </div>
           </dl>
 
-          <div className="signoff-preview" aria-label="Signature preview" data-signature-preview>
+          <div className="signoff-preview" data-signature-preview>
             <SignatureRows
               employee={
                 <span className="signed-mark">

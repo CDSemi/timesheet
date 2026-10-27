@@ -1,0 +1,33 @@
+"""Copy task-folder outputs into the evidence folder as masked LF .txt: ANSI codes stripped, CRLF -> LF, profile paths ->
+<user>, task paths -> <task>, export path -> <export>. Reports any email address that is not @example.invalid.
+Usage: python -I mask.py <taskDir> <evidenceDir> <src>=<dest> ..."""
+import os, re, sys
+
+task, evidence = sys.argv[1], sys.argv[2]
+os.makedirs(evidence, exist_ok=True)
+ansi = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+email = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+rules = [
+    (re.compile(r"[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s\"']+", re.I), "<user>"),
+    (re.compile(r"/[a-z]/Users/[^/\s\"']+", re.I), "<user>"),
+    (re.compile(r"[Dd]:[\\/]+\.claude-tmp[\\/]+timesheet[\\/]+WP5-UX5-AUDIT-B[\\/]+export"), "<export>"),
+    (re.compile(r"/d/\.claude-tmp/timesheet/WP5-UX5-AUDIT-B/export"), "<export>"),
+    (re.compile(r"[Dd]:[\\/]+\.claude-tmp[\\/]+timesheet[\\/]+WP5-UX5-AUDIT-B"), "<task>"),
+    (re.compile(r"/d/\.claude-tmp/timesheet/WP5-UX5-AUDIT-B"), "<task>"),
+    (re.compile(r"file:///[Dd]:/\.claude-tmp/timesheet/WP5-UX5-AUDIT-B"), "<task>"),
+    (re.compile(r"[Dd]:[\\/]+\.claude-tmp[\\/]+claude[\\/]+[^\s\"']+"), "<claude-tmp>"),
+]
+report = []
+for pair in sys.argv[3:]:
+    src, dest = pair.split("=", 1)
+    data = open(os.path.join(task, src), "rb").read().decode("utf-8", errors="replace")
+    data = ansi.sub("", data).replace("\r\n", "\n").replace("\r", "\n")
+    for pattern, repl in rules:
+        data = pattern.sub(repl, data)
+    bad = sorted({m for m in email.findall(data) if not m.lower().endswith("@example.invalid") and not m.lower().endswith("@timesheet.invalid")})
+    if bad:
+        report.append("%s: non-synthetic address-like strings %s" % (dest, bad))
+    with open(os.path.join(evidence, dest), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(data)
+    report.append("%s <- %s (%d bytes)" % (dest, src, len(data.encode("utf-8"))))
+print("\n".join(report))

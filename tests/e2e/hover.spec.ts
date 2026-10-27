@@ -437,7 +437,8 @@ for (const width of [390, 375, 360, 320]) {
     await signInThroughUi();
     await expect(page.locator('[data-day]')).toHaveCount(14);
     const label = page.locator('label.inline.switch');
-    const button = page.getByRole('button', { name: 'Change several days', exact: true });
+    // Named by the words it shows: "Change days" at 320px, "Change several days" where the toolbar row holds it.
+    const button = page.getByRole('button', { name: /^Change (several )?days$/ });
     const labelBox = await label.boundingBox();
     const buttonBox = await button.boundingBox();
     const inputBox = await page.getByRole('switch', { name: 'Worked hours', exact: true }).boundingBox();

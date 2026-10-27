@@ -1,0 +1,41 @@
+"""Compare the committed font asset with the upstream copy and the README facts."""
+import hashlib, os, re, sys
+
+repo = sys.argv[1]
+up = sys.argv[2]
+out = open(sys.argv[3], "w", encoding="utf-8", newline="\n")
+
+def sha(path):
+    with open(path, "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+asset = os.path.join(repo, "assets", "pdf-fonts")
+for name in sorted(os.listdir(asset)):
+    p = os.path.join(asset, name)
+    out.write("asset %s %d bytes sha256 %s\n" % (name, os.path.getsize(p), sha(p)))
+for name in sorted(os.listdir(up)):
+    p = os.path.join(up, name)
+    out.write("upstream %s %d bytes sha256 %s\n" % (name, os.path.getsize(p), sha(p)))
+out.write("font equal to upstream: %s\n" % (sha(os.path.join(asset, "IndieFlower-Regular.ttf")) == sha(os.path.join(up, "IndieFlower-Regular.ttf"))))
+
+a = open(os.path.join(asset, "OFL.txt"), "rb").read()
+u = open(os.path.join(up, "OFL.txt"), "rb").read()
+out.write("asset OFL CR count %d, upstream CR count %d\n" % (a.count(b"\r"), u.count(b"\r")))
+al = a.split(b"\n")
+ul = u.split(b"\n")
+out.write("lines asset %d upstream %d\n" % (len(al), len(ul)))
+diffs = 0
+for i, (x, y) in enumerate(zip(al, ul), 1):
+    if x != y:
+        diffs += 1
+        out.write("line %d differs: asset=%r upstream=%r\n" % (i, x, y))
+        out.write("  equal after rstrip of upstream: %s\n" % (x == y.rstrip()))
+out.write("differing lines: %d\n" % diffs)
+stripped = b"\n".join(line.rstrip() for line in ul)
+out.write("asset == upstream with trailing whitespace stripped per line: %s\n" % (a == stripped))
+
+for readme in ("README.md", "README.vi.md"):
+    text = open(os.path.join(asset, readme), encoding="utf-8").read()
+    out.write("--- %s facts\n" % readme)
+    for fact in ("108,196", "ccc94b22b156e9c5dfe50fd051f01b097600b252c24473e624bb43a143140a94", "Version 2.000", "SIL Open Font License 1.1", "github.com/google/fonts", "OFL.txt"):
+        out.write("  %s: %s\n" % (fact, fact in text))
