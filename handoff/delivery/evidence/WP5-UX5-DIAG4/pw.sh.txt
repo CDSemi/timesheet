@@ -1,0 +1,11 @@
+# Usage: bash pw.sh <label> [playwright args...]   (real clock, in the export, own output folder)
+. /d/.claude-tmp/timesheet/WP5-UX5-DIAG4/env.sh
+L=$1; shift
+mkdir -p $T/pw-$L $T/shots-$L
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+cd "${PW_EXPORT:-$T/export}" || exit 2
+echo "== $L start $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "\$ playwright test $*"
+node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-$L"
+echo "exit=$?"
+echo "== $L end $(date -u +%Y-%m-%dT%H:%M:%SZ)"

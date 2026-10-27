@@ -1,0 +1,7 @@
+# usage: bash wait.sh <file> <max seconds>   (low-CPU pause using the Windows ping timer)
+f=$1; max=$2; n=0
+while [ ! -f "$f" ] && [ $n -lt $max ]; do
+  ping -n 16 127.0.0.1 > <task>/tmp/ping.txt 2>&1
+  n=$((n + 15))
+done
+[ -f "$f" ] && echo "found $f after ~${n}s" || echo "not yet after ${n}s"

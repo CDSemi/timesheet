@@ -1,0 +1,12 @@
+. /d/.claude-tmp/timesheet/WP5-UX5-DIAG4/env.sh
+mkdir -p $T/tmp $T/data $T/export $T/logs $T/out
+cd $REPO
+git rev-parse HEAD > $T/out/head.txt 2>&1
+git status --short -- . ':!handoff' >> $T/out/head.txt 2>&1
+git archive $TARGET | tar -x -C $T/export
+cd $T/export
+npm ci > $T/logs/ci.txt 2>&1
+echo "ci exit=$?" >> $T/logs/ci.txt
+npm run build > $T/logs/build.txt 2>&1
+echo "build exit=$?" >> $T/logs/build.txt
+ls dist | wc -l >> $T/logs/build.txt

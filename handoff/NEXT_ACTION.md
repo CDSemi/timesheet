@@ -80,39 +80,27 @@ Do not change billing or permission settings.
 Current route:
 0. **In progress (resumed 2026-10-26 after the 2026-10-23 usage pause): UI change rounds 4
    and 5.**
-   - The last pushed commit is 5b8b718 (digest edcca194). FIX1, FIX2 and FIX3 are frozen,
-     and the owner's Ingat track was merged in (b8bae50).
-   - WP5-UX5-REGATE3 (attempt 2) failed:
-     - two sweep assertion failures: Today at the LA midnight crossing, and a review row
-       alignment;
-     - recurring ECONNRESET;
-     - two new npm audit advisories (nodemailer, zod).
-   - The diagnoses are done:
-     - the two sweep failures are test defects;
-     - the resets are a harness defect;
-     - no product fault was found.
-   - WP5-UX5-FIX4 pinned nodemailer 10.1.4 and zod 4.6.6. It is not committed yet.
-   - WP5-UX5-FIX5 (tests and harness only) is done and not committed yet.
-   - WP5-UX5-DIAG3 is done. Under host load, too many parallel test workers cause the
-     timeouts; the smoke reset is the same keep-alive defect. No product fault.
-   - WP5-UX5-FIX6 (harness and test configuration only) is done.
-   - FIX4 to FIX6 are frozen in f4049aa (digest 26b163a6) and pushed.
-   - WP5-UX5-REGATE4 passed on f4049aa.
-   - WP5-UX5-AUDIT-B found five Low findings (FIX REQUIRED): stale docs, a PDF edge case
-     where leave on a long holiday label is cut off, and two weak tests.
-   - WP5-UX5-AUDIT-A found one Medium and three Low findings (FIX REQUIRED). The Medium
-     one: on a narrow Review page, a signed period's "Sign correction" button covers the
-     signature line.
-   - Both fix plans are done. WP5-UX5-FIX7 (area B fixes) is done and not committed yet.
-   - WP5-UX5-FIX8 (area A fixes) is done and not committed yet. Its axe sweep found an
-     older keyboard-access gap: read-only week cards that scroll sideways cannot be reached
-     with the keyboard.
-   - WP5-UX5-FIX9 fixed that gap; it is not committed yet.
-   - Running now: WP5-UX5-FIX9-FREEZE, one commit of FIX7 to FIX9 and the records, then a
-     push.
-   - Then one freeze, a regate, fresh rechecks, the integration audit, ACCEPT-DOCS and the
-     WP5 re-accept.
-   - Details: the checkpoint, section "REGATE3 failed; two diagnoses run (2026-10-26)".
+   - The last pushed commit is 94accda (digest 462a1cd7).
+   - What happened since 5b8b718:
+     - WP5-UX5-REGATE3 failed on test and harness defects and two npm audit advisories.
+     - FIX4 to FIX6 fixed them (dependency pins, tests, harness); they are frozen in
+       f4049aa.
+     - WP5-UX5-REGATE4 passed on f4049aa.
+     - The independent audits A and B returned FIX REQUIRED:
+       - one Medium: the signed footer on a narrow Review page;
+       - Low findings: docs, a PDF leave line, accessibility, Day editor touch, and weak
+         tests.
+     - FIX7 to FIX9 fixed them, and a pre-existing keyboard gap on read-only week cards;
+       they are frozen in 94accda.
+   - WP5-UX5-REGATE5 failed on one criterion only: under host load, an unchanged and slow
+     logo test hit its 4-minute limit in one sweep run. Everything else passed.
+   - WP5-UX5-DIAG4 found why four e2e tests are slow, and proved a tests-only patch.
+   - WP5-UX5-FIX10 applied that patch; the logo test now takes about 31 s instead of 2 min.
+   - Running now: WP5-UX5-FIX10-FREEZE, one commit of FIX10 and the records, then a push.
+   - Then a scoped regate, fresh rechecks of areas A and B, the integration
+     audit, ACCEPT-DOCS and the WP5 re-accept.
+   - Details: the checkpoint, section "REGATE3 failed; two diagnoses run (2026-10-26)" and
+     the sections after it.
    - Earlier the same day it was paused twice for machine restarts.
    - Every slice of both rounds is frozen. The last commit is 2bce0ab (digest 70975091).
    - The round-5 gate failed and FIX1 fixed it. The regate then failed on one test race;

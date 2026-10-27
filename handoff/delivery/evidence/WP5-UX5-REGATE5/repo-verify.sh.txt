@@ -1,0 +1,12 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+export SMOKE_PORT=50483
+cd $REPO
+ls .claude/worktrees > $T/out/21-worktree-present.txt 2>&1
+npm ci > $T/out/21-repo-ci.txt 2>&1; rc=$?
+if [ $rc -ne 0 ]; then echo "repo ci first exit $rc, rerun once" > $T/out/21-repo-ci-exit.txt; npm ci > $T/out/21-repo-ci-rerun.txt 2>&1; rc=$?; fi
+echo "repo ci exit $rc" >> $T/out/21-repo-ci-exit.txt
+npm run verify > $T/out/21-repo-verify.txt 2>&1; echo "repo verify exit $?" > $T/out/21-repo-verify-exit.txt
+grep -E "Test Files|Tests  |SMOKE|Duration" $T/out/21-repo-verify.txt >> $T/out/21-repo-verify-exit.txt
+echo "deprecat lines: $(grep -ci deprecat $T/out/21-repo-verify.txt)" >> $T/out/21-repo-verify-exit.txt
+echo done > $T/out/repo-verify.done

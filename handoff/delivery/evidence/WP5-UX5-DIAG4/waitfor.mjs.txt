@@ -1,0 +1,14 @@
+// Usage: node waitfor.mjs <file> <text> <max seconds>   Waits (polling every 5 s) until the file contains the text, or the time is up.
+import { existsSync, readFileSync } from 'node:fs';
+
+const [file, text, maxSeconds] = process.argv.slice(2);
+const end = Date.now() + Number(maxSeconds) * 1000;
+while (Date.now() < end) {
+  if (existsSync(file) && readFileSync(file, 'utf8').includes(text)) {
+    console.log(`found "${text}" in ${file}`);
+    process.exit(0);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+}
+console.log(`gave up waiting for "${text}" in ${file}`);
+process.exit(1);

@@ -283,6 +283,66 @@ export async function paintedPixel(page: Page, x: number, y: number): Promise<Rg
   return [raw.readUInt8(1), raw.readUInt8(2), raw.readUInt8(3), colourType === 6 ? raw.readUInt8(4) / 255 : 1];
 }
 
+/** A screenshot of the viewport, decoded once: the painted colour of any CSS pixel of it. */
+export interface PaintedSurface {
+  /** The colour painted at one CSS pixel of the viewport when the screenshot was taken. */
+  at(x: number, y: number): Rgba;
+}
+
+/**
+ * One screenshot of the viewport for many pixel reads. `paintedPixel` takes a screenshot per pixel (about 60 ms each, and the probe of a
+ * frame over every cell of a column reads several hundred); a surface answers the same question for every pixel of one screenshot. Take a
+ * new surface after anything scrolls, resizes, changes theme or repaints. The pointer is moved off the page first, as `paintedPixel` does.
+ */
+export async function paintedSurface(page: Page): Promise<PaintedSurface> {
+  await page.mouse.move(0, 0);
+  const png = await page.screenshot({ scale: 'css', animations: 'disabled', caret: 'hide' });
+  const data: Buffer[] = [];
+  let [width, height, colourType] = [0, 0, 0];
+  for (let offset = 8; offset < png.length; ) {
+    const length = png.readUInt32BE(offset);
+    const type = png.toString('latin1', offset + 4, offset + 8);
+    const body = png.subarray(offset + 8, offset + 8 + length);
+    if (type === 'IHDR') {
+      expect(body.readUInt8(8), 'PNG bit depth').toBe(8);
+      expect(body.readUInt8(12), 'PNG is not interlaced').toBe(0);
+      [width, height, colourType] = [body.readUInt32BE(0), body.readUInt32BE(4), body.readUInt8(9)];
+    }
+    if (type === 'IDAT') data.push(body);
+    offset += 12 + length;
+  }
+  expect([2, 6], `PNG colour type ${colourType}`).toContain(colourType);
+  const raw = inflateSync(Buffer.concat(data));
+  const bytes = colourType === 6 ? 4 : 3;
+  const stride = width * bytes;
+  const pixels = Buffer.alloc(stride * height);
+  for (let row = 0; row < height; row += 1) {
+    const filter = raw.readUInt8(row * (stride + 1));
+    for (let index = 0; index < stride; index += 1) {
+      const left = index >= bytes ? pixels.readUInt8(row * stride + index - bytes) : 0;
+      const up = row > 0 ? pixels.readUInt8((row - 1) * stride + index) : 0;
+      const upLeft = row > 0 && index >= bytes ? pixels.readUInt8((row - 1) * stride + index - bytes) : 0;
+      let predictor = 0;
+      if (filter === 1) predictor = left;
+      else if (filter === 2) predictor = up;
+      else if (filter === 3) predictor = (left + up) >> 1;
+      else if (filter === 4) {
+        const estimate = left + up - upLeft;
+        const [fromLeft, fromUp, fromUpLeft] = [Math.abs(estimate - left), Math.abs(estimate - up), Math.abs(estimate - upLeft)];
+        predictor = fromLeft <= fromUp && fromLeft <= fromUpLeft ? left : fromUp <= fromUpLeft ? up : upLeft;
+      }
+      pixels.writeUInt8((raw.readUInt8(row * (stride + 1) + 1 + index) + predictor) & 255, row * stride + index);
+    }
+  }
+  return {
+    at(x: number, y: number): Rgba {
+      expect(Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < width && y < height, `pixel ${x},${y} is a whole pixel inside the ${width}x${height} viewport`).toBe(true);
+      const start = y * stride + x * bytes;
+      return [pixels.readUInt8(start), pixels.readUInt8(start + 1), pixels.readUInt8(start + 2), colourType === 6 ? pixels.readUInt8(start + 3) / 255 : 1];
+    },
+  };
+}
+
 /** True when two opaque colours differ by at most `tolerance` on every channel. */
 export function sameColour(a: Rgba, b: Rgba, tolerance = 3): boolean {
   return [0, 1, 2].every((index) => Math.abs((a[index] ?? 0) - (b[index] ?? 0)) <= tolerance);

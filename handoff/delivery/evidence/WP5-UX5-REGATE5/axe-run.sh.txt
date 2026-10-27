@@ -1,0 +1,11 @@
+cd <task>
+. ./env.sh
+cp zz-axe.spec.ts export-probe/tests/e2e/zz-axe.spec.ts
+rm -f out/90-axe-lines.txt
+export AXE_PATH="$TW\\axe\\axe.min.js"
+export AXE_OUT="$TW\\out\\90-axe-lines.txt"
+SHIFT_EXPORT=$T/export-probe bash run-shift.sh axe real tests/e2e/zz-axe.spec.ts --workers=2 > logs/axe-run.txt 2>&1
+echo "axe run done $(date -u +%H:%M:%SZ)" > logs/axe.log
+echo "scans: $(grep -c 'axe 4.14.0' out/90-axe-lines.txt); with violations>0: $(grep 'axe 4.14.0' out/90-axe-lines.txt | grep -vc 'violations=0 ')" > out/90-axe-summary.txt
+grep TOTAL out/90-axe-lines.txt >> out/90-axe-summary.txt
+echo axe-done > out/axe.done

@@ -1,0 +1,44 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+O=$T/out
+hashdist() {
+  d=$1; tag=$2
+  cd $T/$d
+  find dist -type f | LC_ALL=C sort > $O/51-$tag-files.txt
+  rm -f $O/51-$tag-hashes.txt
+  while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)" >> $O/51-$tag-hashes.txt; done < $O/51-$tag-files.txt
+  echo "$tag: $(wc -l < $O/51-$tag-files.txt) files" >> $O/51-dist-counts.txt
+}
+cd $T/export
+npm ci > $O/02-ci.txt 2>&1; echo "ci exit $?" > $O/02-ci-exit.txt
+npm run lint > $O/02-lint.txt 2>&1; echo "lint exit $?" > $O/02-lint-exit.txt
+npm run typecheck > $O/02-typecheck.txt 2>&1; echo "typecheck exit $?" > $O/02-typecheck-exit.txt
+npm run build > $O/02-build.txt 2>&1; echo "build exit $? advisory=$(grep -ciE 'chunks are larger|chunk size|advisory' $O/02-build.txt)" > $O/02-build-exit.txt
+hashdist export target
+echo "build done $(date -u +%H:%M:%SZ)" > $T/logs/chain1.log
+cd $T/export
+npm run verify > $O/03-verify.txt 2>&1; echo "verify exit $?" > $O/03-verify-exit.txt
+echo "verify done $(date -u +%H:%M:%SZ)" >> $T/logs/chain1.log
+hashdist export target-after-verify
+cd $T/export
+for i in 1 2 3; do
+  npm test > $O/12-npmtest-$i.txt 2>&1; echo "npm test run $i exit $? dep=$(grep -ci deprecat $O/12-npmtest-$i.txt) crash=$(grep -ciE 'worker|crash|0xC0000005|exited' $O/12-npmtest-$i.txt) $(grep -E 'Test Files|Tests  ' $O/12-npmtest-$i.txt | tr '\n' ' ')" >> $O/12-npmtest-exits.txt
+  echo "npmtest $i done $(date -u +%H:%M:%SZ)" >> $T/logs/chain1.log
+done
+cd $T/export
+npm audit --omit=dev > $O/10-audit.txt 2>&1; echo "audit exit $?" >> $O/10-audit.txt
+$PY handoff/delivery/validate_package.py --preflight > $O/11-validate_package.txt 2>&1; echo "validate_package exit $?" >> $O/11-exits.txt
+$PY handoff/delivery/validate_orchestration.py > $O/11-validate_orchestration.txt 2>&1; echo "validate_orchestration exit $?" >> $O/11-exits.txt
+$PY handoff/delivery/check_recovery.py > $O/11-check_recovery.txt 2>&1; echo "check_recovery exit $?" >> $O/11-exits.txt
+node scripts/precommit-check.mjs --self-test > $O/11-precommit-selftest.txt 2>&1; echo "precommit self-test exit $?" >> $O/11-exits.txt
+echo "rest done $(date -u +%H:%M:%SZ)" >> $T/logs/chain1.log
+cd $T/export-old
+npm ci > $O/50-old-ci.txt 2>&1; echo "old ci exit $?" >> $T/logs/chain1.log
+npm run build > $O/50-old-build.txt 2>&1; echo "old build exit $? advisory=$(grep -ciE 'chunks are larger|chunk size|advisory' $O/50-old-build.txt)" >> $T/logs/chain1.log
+hashdist export-old old
+cd $T
+diff out/51-old-hashes.txt out/51-target-hashes.txt > out/51-hash-diff-old-vs-target.txt; echo "diff exit $? differing lines $(grep -cE '^[<>]' out/51-hash-diff-old-vs-target.txt)" >> logs/chain1.log
+diff out/51-old-files.txt out/51-target-files.txt > out/51-files-diff.txt; echo "files-diff exit $?" >> logs/chain1.log
+diff out/51-target-hashes.txt out/51-target-after-verify-hashes.txt > out/51-target-vs-after-verify.txt; echo "target vs after-verify diff exit $?" >> logs/chain1.log
+echo "chain1 done $(date -u +%H:%M:%SZ)" >> logs/chain1.log
+echo chain1-done > out/chain1.done

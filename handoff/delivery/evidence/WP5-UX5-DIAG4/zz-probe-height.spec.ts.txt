@@ -1,0 +1,27 @@
+import { expect, newPerson, test } from './fixtures.ts';
+
+/* DIAG4 probe: does the window height change the cost of a sweep step? Not part of the suite. */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const RAF2 = `(async () => { await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))); return 1; })()`;
+
+test('probe: step cost by window height', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'desktop only');
+  test.setTimeout(400_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Reader With An Exceptionally Long Display Name', signature: 'none' });
+  await page.setViewportSize({ width: 600, height: 800 });
+  await signInPageAs(me.account);
+  await expect(page.locator('.bar-clock')).toBeVisible();
+  const N = 150;
+  for (const round of [1, 2]) {
+    for (const height of [800, 120, 800, 120]) {
+      const t0 = performance.now();
+      for (let i = 0; i < N; i += 1) {
+        await page.setViewportSize({ width: 320 + i * 3 + round, height });
+        await page.evaluate(RAF2);
+      }
+      console.log(`PROBE height ${height}: ${(((performance.now() - t0) / N)).toFixed(1)} ms/step at ${new Date().toISOString()}`);
+    }
+  }
+});

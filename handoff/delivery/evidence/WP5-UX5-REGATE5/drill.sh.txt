@@ -1,0 +1,16 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+mkdir -p $T/wp3 $T/drillwork
+cd $REPO && git archive 49651c8bb91d56bf6c6966405257537ec7ca474b | tar -x -C $T/wp3
+cd $T/wp3
+npm ci > $T/out/30-wp3-ci.txt 2>&1; echo "wp3 ci exit $?" > $T/out/30-wp3-exits.txt
+npm run build:server > $T/out/30-wp3-build.txt 2>&1; echo "wp3 build:server exit $?" >> $T/out/30-wp3-exits.txt
+echo "wp3 prepared $(date -u +%H:%M:%SZ)" > $T/logs/drill.log
+cd $T/export
+node scripts/container-drill.mjs --work "$TW\\drillwork" --project ts-wp5-ux5regate5 --wp3 "$TW\\wp3" > $T/out/30-drill.txt 2>&1
+echo "drill exit $?" >> $T/out/30-wp3-exits.txt
+echo "drill done $(date -u +%H:%M:%SZ)" >> $T/logs/drill.log
+docker compose -p ts-wp5-ux5regate5 down -v > $T/out/30-compose-down.txt 2>&1; echo "compose down exit $?" >> $T/out/30-wp3-exits.txt
+docker ps --all --filter name=ts-wp5-ux5regate5 > $T/out/30-docker-after.txt 2>&1
+grep -E "^STAGE|^SUMMARY" $T/out/30-drill.txt > $T/out/30-drill-stages.txt
+echo drill-done > $T/out/drill.done

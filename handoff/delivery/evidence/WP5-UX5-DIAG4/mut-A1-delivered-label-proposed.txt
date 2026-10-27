@@ -1,0 +1,47 @@
+== mut-A1-delivered-label-proposed start 2026-10-27T12:01:32Z
+$ playwright test tests/e2e/admin-status.spec.ts -g pipeline states --project=desktop --workers=1 --reporter=list
+
+Running 1 test using 1 worker
+
+  x  1 [desktop] › tests\e2e\admin-status.spec.ts:139:1 › the admin sees pipeline states, a fault code and recipients, and no timesheet detail (38.4s)
+
+
+  1) [desktop] › tests\e2e\admin-status.spec.ts:139:1 › the admin sees pipeline states, a fault code and recipients, and no timesheet detail 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: 'Submissions and delivery' }).locator('[data-submission-user="cf0dc725-fb5c-4544-9c66-3a34dbdcc7a1"]').locator('[data-status="delivery"]')
+    Expected: "Delivered"
+    Received: "Sent"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: 'Submissions and delivery' }).locator('[data-submission-user="cf0dc725-fb5c-4544-9c66-3a34dbdcc7a1"]').locator('[data-status="delivery"]') with timeout 7000ms
+      - waiting for getByRole('region', { name: 'Submissions and delivery' }).locator('[data-submission-user="cf0dc725-fb5c-4544-9c66-3a34dbdcc7a1"]').locator('[data-status="delivery"]')
+        18 × locator resolved to <span class="badge badge-ok" data-status="delivery">Sent</span>
+           - unexpected value "Sent"
+
+
+      196 |   await expect(personRow.locator('[data-status="pdf"]')).toHaveText('PDF ready');
+      197 |   if (row.delivery.state === 'accepted') {
+    > 198 |     await expect(personRow.locator('[data-status="delivery"]')).toHaveText('Delivered');
+          |                                                                 ^
+      199 |   } else {
+      200 |     await expect(personRow.locator('[data-status="delivery"]')).toHaveText('Failed');
+      201 |     await expect(personRow).toContainText(row.delivery.fault_code ?? 'unclassified');
+        at D:\.claude-tmp\timesheet\WP5-UX5-DIAG4\export\tests\e2e\admin-status.spec.ts:198:65
+
+    Error Context: ..\pw-mut-A1-delivered-label-proposed\admin-status-the-admin-see-bee93-nts-and-no-timesheet-detail-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-A1-delivered-label-proposed\admin-status-the-admin-see-bee93-nts-and-no-timesheet-detail-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-A1-delivered-label-proposed\admin-status-the-admin-see-bee93-nts-and-no-timesheet-detail-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\admin-status.spec.ts:139:1 › the admin sees pipeline states, a fault code and recipients, and no timesheet detail 
+exit=1
+== mut-A1-delivered-label-proposed end 2026-10-27T12:02:13Z

@@ -80,42 +80,29 @@ Không đổi billing hay cài đặt quyền.
 Luồng hiện tại:
 0. **Đang làm (đã tiếp tục ngày 2026-10-26 sau lần tạm dừng vì hạn mức ngày 2026-10-23):
    vòng thay đổi UI lần 4 và 5.**
-   - Commit đã push gần nhất là 5b8b718 (digest edcca194). FIX1, FIX2 và FIX3 đã được freeze,
-     và nhánh Ingat của chủ dự án đã được gộp vào (b8bae50).
-   - WP5-UX5-REGATE3 (lần 2) không đạt:
-     - hai lỗi assertion trong lượt quét: Today khi qua nửa đêm giờ LA, và một dòng trên
-       trang review không thẳng hàng;
-     - ECONNRESET lặp lại;
-     - hai cảnh báo bảo mật mới từ npm audit (nodemailer, zod).
-   - Hai việc chẩn đoán đã xong:
-     - hai lỗi trong lượt quét là lỗi của test;
-     - lỗi reset kết nối là lỗi của bộ chạy test;
-     - không có lỗi nào của sản phẩm.
-   - WP5-UX5-FIX4 đã ghim nodemailer 10.1.4 và zod 4.6.6, chưa commit.
-   - WP5-UX5-FIX5 (chỉ sửa test và bộ chạy test) đã xong, chưa commit.
-   - WP5-UX5-DIAG3 đã xong. Khi máy bận, quá nhiều worker test chạy song song gây ra lỗi
-     quá thời gian; lỗi reset ở bước smoke cũng là lỗi keep-alive như trước. Không có lỗi
-     sản phẩm.
-   - WP5-UX5-FIX6 (chỉ sửa bộ chạy test và cấu hình test) đã xong.
-   - FIX4 tới FIX6 đã được freeze trong f4049aa (digest 26b163a6) và đã push.
-   - WP5-UX5-REGATE4 đã đạt trên f4049aa.
-   - WP5-UX5-AUDIT-B tìm ra năm lỗi mức Low (FIX REQUIRED): tài liệu cũ chưa cập nhật, một
-     trường hợp hiếm trong PDF khiến giờ nghỉ phép bị cắt mất khi tên ngày lễ dài, và hai
-     test chưa đủ chặt.
-   - WP5-UX5-AUDIT-A tìm ra một lỗi Medium và ba lỗi Low (FIX REQUIRED). Lỗi Medium: trên
-     trang Review hẹp, nút "Sign correction" của một kỳ đã ký che mất dòng chữ ký.
-   - Cả hai bản kế hoạch sửa đã xong. WP5-UX5-FIX7 (sửa các lỗi vùng B) đã xong, chưa
-     commit.
-   - WP5-UX5-FIX8 (sửa các lỗi vùng A) đã xong, chưa commit. Lượt quét axe của nó phát hiện
-     một lỗ hổng truy cập bằng bàn phím có từ trước: các thẻ tuần chỉ đọc cuộn ngang không
-     thể dùng bàn phím để tới được.
-   - WP5-UX5-FIX9 đã sửa lỗ hổng đó, chưa commit.
-   - Đang chạy: WP5-UX5-FIX9-FREEZE, một commit cho FIX7 tới FIX9 và các bản ghi, rồi
-     push.
-   - Sau đó là một lần freeze, gate lại, kiểm tra lại độc lập, audit tích hợp, ACCEPT-DOCS
-     và nghiệm thu lại WP5.
+   - Commit đã push gần nhất là 94accda (digest 462a1cd7).
+   - Những gì đã xảy ra từ 5b8b718:
+     - WP5-UX5-REGATE3 không đạt vì lỗi của test và bộ chạy test, cùng hai cảnh báo của npm
+       audit.
+     - FIX4 tới FIX6 đã sửa các lỗi đó (ghim phiên bản thư viện, test, bộ chạy test), được
+       freeze trong f4049aa.
+     - WP5-UX5-REGATE4 đạt trên f4049aa.
+     - Hai audit độc lập A và B trả về FIX REQUIRED:
+       - một lỗi Medium: phần chân chữ ký đã ký trên trang Review hẹp;
+       - các lỗi Low: tài liệu, dòng nghỉ phép trong PDF, khả năng truy cập, thao tác cảm
+         ứng trong Day editor, và các test chưa đủ chặt.
+     - FIX7 tới FIX9 đã sửa các lỗi đó, cùng một lỗ hổng bàn phím có từ trước ở các thẻ tuần
+       chỉ đọc; được freeze trong 94accda.
+   - WP5-UX5-REGATE5 trượt ở đúng một tiêu chí: khi máy bận, một test logo không đổi và vốn
+     chạy chậm vượt giới hạn 4 phút trong một lượt quét. Mọi thứ khác đều qua.
+   - WP5-UX5-DIAG4 đã tìm ra vì sao bốn test e2e chạy chậm, và chứng minh một bản vá chỉ
+     sửa test.
+   - WP5-UX5-FIX10 đã áp dụng bản vá đó; test logo giờ mất khoảng 31 giây thay vì 2 phút.
+   - Đang chạy: WP5-UX5-FIX10-FREEZE, một commit cho FIX10 và các bản ghi, rồi push.
+   - Sau đó là gate lại có giới hạn phạm vi, kiểm tra lại độc lập vùng A và B,
+     audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
    - Chi tiết: checkpoint, mục "REGATE3 không đạt; hai việc chẩn đoán đang chạy
-     (2026-10-26)".
+     (2026-10-26)" và các mục sau đó.
    - Trước đó trong ngày đã tạm dừng hai lần để khởi động lại máy.
    - Mọi slice của hai vòng đã được freeze. Commit gần nhất là 2bce0ab (digest 70975091).
    - Gate của đợt 5 FAIL và FIX1 đã sửa. Lần regate sau đó FAIL vì một lỗi tranh chấp

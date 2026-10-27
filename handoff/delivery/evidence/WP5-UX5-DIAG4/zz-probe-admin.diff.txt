@@ -1,0 +1,13 @@
+--- orig-admin-status.spec.ts
++++ probe-admin
+@@ -146,8 +146,9 @@
+     const response = await adminSeed.call<{ submissions: ApiSubmission[] }>('GET', '/api/admin/submissions?limit=500');
+     return response.submissions.find((row) => row.user_id === account.id);
+   };
++  const tStart = Date.now();
+   await expect
+-    .poll(async () => (await mine())?.delivery.state, { timeout: 150_000, intervals: [2_000], message: 'a final delivery state' })
++    .poll(async () => { const r = await mine(); console.log(`PROBE ${((Date.now() - tStart) / 1000).toFixed(1)}s pdf=${r?.pdf.state}/${r?.pdf.fault_code} delivery=${r?.delivery.state}/${r?.delivery.fault_code}/${r?.delivery.job_fault_code}`); return r?.delivery.state; }, { timeout: 150_000, intervals: [2_000], message: 'a final delivery state' })
+     .toMatch(/^(accepted|failed_permanent)$/);
+   const row = await mine();
+   if (row === undefined) throw new Error('the submission row is missing');

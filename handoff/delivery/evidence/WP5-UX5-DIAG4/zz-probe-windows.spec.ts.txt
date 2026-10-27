@@ -1,0 +1,43 @@
+import type { Page } from '@playwright/test';
+import { expect, newPerson, test } from './fixtures.ts';
+
+/* DIAG4 probe: throughput of a viewport sweep spread over K windows of one browser context. Not part of the suite. */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const RAF = `(async () => { await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))); return 1; })()`;
+
+test('probe: sweep throughput by number of windows', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'desktop only');
+  test.setTimeout(400_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Reader With An Exceptionally Long Display Name', signature: 'none' });
+  await page.setViewportSize({ width: 600, height: 800 });
+  await signInPageAs(me.account);
+  await expect(page.locator('.bar-clock')).toBeVisible();
+  const TOTAL = 480;
+  for (const windows of [1, 2, 4, 6, 8, 12]) {
+    const views: Page[] = [page];
+    const t0 = performance.now();
+    for (let i = 1; i < windows; i += 1) {
+      const view = await page.context().newPage();
+      await view.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+      await view.setViewportSize({ width: 600, height: 800 });
+      await view.goto(page.url());
+      await expect(view.locator('.bar-clock')).toBeVisible();
+      views.push(view);
+    }
+    const t1 = performance.now();
+    const share = TOTAL / windows;
+    await Promise.all(
+      views.map(async (view, index) => {
+        for (let step = 0; step < share; step += 1) {
+          await view.setViewportSize({ width: 320 + index * 5 + step * 2, height: 800 });
+          await view.evaluate(RAF);
+        }
+      }),
+    );
+    const t2 = performance.now();
+    console.log(`PROBE windows=${windows}: open ${(t1 - t0).toFixed(0)}ms, ${TOTAL} steps in ${(t2 - t1).toFixed(0)}ms = ${((t2 - t1) / TOTAL).toFixed(1)}ms/step`);
+    for (const view of views.slice(1)) await view.close();
+  }
+});

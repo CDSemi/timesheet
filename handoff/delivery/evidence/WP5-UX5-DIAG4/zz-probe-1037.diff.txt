@@ -1,0 +1,30 @@
+--- orig-timesheet.spec.ts
++++ probe-1037
+@@ -10,7 +10,7 @@
+   computedStyle,
+   contrast,
+   over,
+-  paintedPixel,
++  paintedPixel as realPaintedPixel,
+   parseColour,
+   parseLayers,
+   readPseudo,
+@@ -24,6 +24,18 @@
+ import { expect, SCREENSHOT_DIR, screenshotPath, type SeedClient, test } from './fixtures.ts';
+ import { cardParts, cardStyle, near, noSidewaysScroll, rangeState } from './periodCard.ts';
+ 
++const PROBE = { pixelCalls: 0, pixelMs: 0 };
++async function paintedPixel(page: Page, x: number, y: number): Promise<Rgba> {
++  const t0 = performance.now();
++  const result = await realPaintedPixel(page, x, y);
++  PROBE.pixelCalls += 1;
++  PROBE.pixelMs += performance.now() - t0;
++  return result;
++}
++test.afterEach(() => {
++  console.log(`PROBE paintedPixel: ${PROBE.pixelCalls} calls, ${PROBE.pixelMs.toFixed(0)} ms in total, ${(PROBE.pixelMs / Math.max(1, PROBE.pixelCalls)).toFixed(1)} ms each`);
++});
++
+ /*
+  * The Excel-style sheet (two week bands on desktop, a table per week on a phone) and batch
+  * category edit, on both projects.

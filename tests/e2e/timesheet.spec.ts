@@ -10,7 +10,9 @@ import {
   computedStyle,
   contrast,
   over,
+  type PaintedSurface,
   paintedPixel,
+  paintedSurface,
   parseColour,
   parseLayers,
   readPseudo,
@@ -865,11 +867,14 @@ async function expectLifted(page: Page, look: LiftLook, run: keyof typeof RUN_LO
 
 /**
  * True when a pixel of the area (x0..x1, y0..y1, rounded outwards) has the colour: a 1px edge lands on either side of a
- * fractional box edge, so a single pixel is not a reliable probe of it.
+ * fractional box edge, so a single pixel is not a reliable probe of it. The pixels come from a screenshot per pixel of the page, or from
+ * one screenshot of the viewport (`paintedSurface`) when the caller reads many pixels of an unchanged page.
  */
-async function paintedWithin(page: Page, [x0, x1]: [number, number], [y0, y1]: [number, number], colour: Rgba): Promise<boolean> {
+async function paintedWithin(source: Page | PaintedSurface, [x0, x1]: [number, number], [y0, y1]: [number, number], colour: Rgba): Promise<boolean> {
   for (let y = Math.floor(y0); y <= Math.ceil(y1); y += 1) {
-    for (let x = Math.floor(x0); x <= Math.ceil(x1); x += 1) if (sameRgb(await paintedPixel(page, x, y), colour, 3)) return true;
+    for (let x = Math.floor(x0); x <= Math.ceil(x1); x += 1) {
+      if (sameRgb('at' in source ? source.at(x, y) : await paintedPixel(source, x, y), colour, 3)) return true;
+    }
   }
   return false;
 }
@@ -1063,31 +1068,33 @@ test('desktop: the inset frame and the Day-cell fill are painted over every cell
       await bringIntoView(page, column);
       await settledLook(column);
       const boxes = await columnBoxes(column);
+      // One screenshot of the viewport answers every pixel read of the open column (a screenshot per pixel was 360 screenshots in all).
+      const columnSurface = await paintedSurface(page);
       // The attention cell (a past workday without a session) is among the cells, and so is the head.
       expect(boxes.cells.some((cell) => cell.className.includes('attention')), 'an attention cell in the column').toBe(true);
       for (const cell of boxes.cells) {
         const y = Math.floor(cell.box.top + cell.box.height / 2);
-        expect(await paintedWithin(page, [boxes.host.left, boxes.host.left + 1], [y, y], accent), `${appearance.name}: left frame over "${cell.className}" (details ${details})`).toBe(true);
-        expect(await paintedWithin(page, [boxes.host.right - 3, boxes.host.right - 1], [y, y], accent), `${appearance.name}: right frame over "${cell.className}" (details ${details})`).toBe(true);
+        expect(await paintedWithin(columnSurface, [boxes.host.left, boxes.host.left + 1], [y, y], accent), `${appearance.name}: left frame over "${cell.className}" (details ${details})`).toBe(true);
+        expect(await paintedWithin(columnSurface, [boxes.host.right - 3, boxes.host.right - 1], [y, y], accent), `${appearance.name}: right frame over "${cell.className}" (details ${details})`).toBe(true);
         // No 2px rail: the pixels three and four columns in are the cell's own colour, not accent.
-        expect(await paintedWithin(page, [boxes.host.left + 3, boxes.host.left + 4], [y, y], accent), `${appearance.name}: no rail beside the frame over "${cell.className}"`).toBe(false);
+        expect(await paintedWithin(columnSurface, [boxes.host.left + 3, boxes.host.left + 4], [y, y], accent), `${appearance.name}: no rail beside the frame over "${cell.className}"`).toBe(false);
       }
       const head = boxes.cells[0]?.box;
       const headMiddle = Math.floor((head?.top ?? 0) + (head?.height ?? 0) / 2);
       const middle = Math.floor((head?.left ?? 0) + (head?.width ?? 0) / 2);
       // The top and bottom edges of the frame are painted too (the layer is inset in the column's box, never clipped).
-      expect(await paintedWithin(page, [middle, middle], [boxes.host.top, boxes.host.top + 1], accent), `${appearance.name}: top frame over the head`).toBe(true);
+      expect(await paintedWithin(columnSurface, [middle, middle], [boxes.host.top, boxes.host.top + 1], accent), `${appearance.name}: top frame over the head`).toBe(true);
       const last = boxes.cells.at(-1)?.box;
-      expect(await paintedWithin(page, [middle, middle], [(last?.bottom ?? 0) - 2, (last?.bottom ?? 0) - 1], accent), `${appearance.name}: bottom frame`).toBe(true);
+      expect(await paintedWithin(columnSurface, [middle, middle], [(last?.bottom ?? 0) - 2, (last?.bottom ?? 0) - 1], accent), `${appearance.name}: bottom frame`).toBe(true);
       // The Day cell is filled (a corner of the head, where no text is) and has no underline.
-      expect(sameRgb(await paintedPixel(page, Math.ceil(boxes.host.left) + 4, headMiddle), headFill, 3), `${appearance.name}: the Day cell is filled`).toBe(true);
-      expect(sameRgb(await paintedPixel(page, middle, Math.floor((head?.top ?? 0) + (head?.height ?? 0) - 2)), accent), `${appearance.name}: no underline under the Day cell`).toBe(false);
+      expect(sameRgb(columnSurface.at(Math.ceil(boxes.host.left) + 4, headMiddle), headFill, 3), `${appearance.name}: the Day cell is filled`).toBe(true);
+      expect(sameRgb(columnSurface.at(middle, Math.floor((head?.top ?? 0) + (head?.height ?? 0) - 2)), accent), `${appearance.name}: no underline under the Day cell`).toBe(false);
       // The frame is a layer over the column, not a property of the cells: the same pixels of the neighbouring day are not accent.
       await bringIntoView(page, neighbour);
       const other = await columnBoxes(neighbour);
       const otherHead = other.cells[0]?.box;
       const otherY = Math.floor((otherHead?.top ?? 0) + (otherHead?.height ?? 0) / 2);
-      expect(sameRgb(await paintedPixel(page, Math.ceil(other.host.left), otherY), accent), `${appearance.name}: neighbour head edge`).toBe(false);
+      expect(sameRgb((await paintedSurface(page)).at(Math.ceil(other.host.left), otherY), accent), `${appearance.name}: neighbour head edge`).toBe(false);
       // Nothing fills the column body: its OT corner is the neighbour's, the card colour.
       const bare = await otCorner(page, neighbour);
       const filled = await otCorner(page, column);

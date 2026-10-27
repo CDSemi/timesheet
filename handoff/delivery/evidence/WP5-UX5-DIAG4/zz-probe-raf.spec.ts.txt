@@ -1,0 +1,38 @@
+import { chromium } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+
+/* DIAG4 probe: how long do two animation frames take in a browser launched with and without frame-pacing flags? Not part of the suite. */
+const RAF2 = `(async () => { await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))); return 1; })()`;
+
+for (const [label, args] of [
+  ['default', []],
+  ['no-frame-rate-limit', ['--disable-frame-rate-limit']],
+  ['no-vsync', ['--disable-gpu-vsync', '--disable-frame-rate-limit']],
+  ['no-vsync-nogpu', ['--disable-gpu-vsync', '--disable-frame-rate-limit', '--disable-gpu']],
+] as const) {
+  test(`probe: frames in a browser launched with ${label}`, async ({ builtServer }) => {
+    test.skip(test.info().project.name !== 'desktop', 'desktop only');
+    test.setTimeout(120_000);
+    const browser = await chromium.launch({ channel: 'msedge', headless: true, args: [...args] });
+    try {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+      const page = await context.newPage();
+      await page.goto(builtServer.origin);
+      const times: number[] = [];
+      const resizes: number[] = [];
+      for (let index = 0; index < 100; index += 1) {
+        const t0 = performance.now();
+        await page.setViewportSize({ width: 600 + index, height: 800 });
+        const t1 = performance.now();
+        await page.evaluate(RAF2);
+        times.push(performance.now() - t1);
+        resizes.push(t1 - t0);
+      }
+      const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length;
+      console.log(`PROBE ${label}: setViewportSize ${mean(resizes).toFixed(1)} ms, two rAF ${mean(times).toFixed(1)} ms per step`);
+      expect(times.length).toBe(100);
+    } finally {
+      await browser.close();
+    }
+  });
+}

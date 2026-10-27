@@ -1,0 +1,25 @@
+. <task>/env.sh
+mkdir -p $E
+rm -f $T/tmp/mask-last.txt
+m() { node "$TW\\mask.mjs" "$1" "$2" >> $T/tmp/mask-last.txt 2>&1; }
+cd $T/out
+for f in *.txt; do
+  case "$f" in ex-files.txt|ex-hashes.txt|ex-sorted.txt|lstree-sorted.txt|51-*-files.txt|83-probe-dist-files.txt) continue;; esac
+  m "$T/out/$f" "$E/$f"
+done
+for f in mut/*.log; do [ -f "$f" ] && m "$T/out/$f" "$E/mut-unit-$(basename $f).txt"; done
+cd $T/logs
+for f in control-*.txt sweep-*.txt stress-*.txt mut-*.txt diag-*.txt axe-run.txt chain1.log chain2.log stress.log sweep-progress.txt drill.log digest-*.txt setup.txt axe.log; do
+  [ -f "$f" ] && m "$T/logs/$f" "$E/log-$f"
+done
+cd $T
+for s in env.sh setup.sh digest.sh run-shift.sh chain1.sh chain2.sh sweep.sh stress.sh drill.sh repo-verify.sh repo-verify2.sh mut-e2e.sh mut-unit.sh axe-run.sh collect.sh wait.sh; do [ -f "$s" ] && m "$T/$s" "$E/$s.txt"; done
+for s in mask.mjs shiftclock.mjs probe-now.mjs zone.mjs counts.mjs zz-control.spec.ts zz-axe.spec.ts census.ps1; do [ -f "$s" ] && m "$T/$s" "$E/$s.txt"; done
+m $T/probes/mutants.mjs $E/mutants.mjs.txt
+m $T/probes/apply.mjs $E/apply-e2e-mutants.mjs.txt
+m $REPO/handoff/delivery/tasks/WP5-UX5-REGATE5.md $T/tmp/brief-copy.txt
+ls $E | wc -l
+grep -rhoE "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+" $E --include=*.txt > $T/tmp/emails-found.txt
+grep -rlE "<user>" $E > $T/tmp/flag-files.txt
+ls $E | grep -i signature > $T/tmp/signature-names.txt
+echo collect-done > $T/out/collect.done

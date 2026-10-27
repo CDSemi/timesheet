@@ -1,0 +1,13 @@
+# Usage: bash swap.sh orig|proposed   Copies the five test files of the scratch export between the HEAD originals and the proposed versions.
+. /d/.claude-tmp/timesheet/WP5-UX5-DIAG4/env.sh
+mode=$1
+mkdir -p $T/orig
+if [ ! -f $T/orig/logo.spec.ts ]; then
+  for f in logo.spec.ts admin-status.spec.ts timesheet.spec.ts contrast.ts day-editor.spec.ts; do
+    git -C $REPO show $TARGET:tests/e2e/$f > $T/orig/$f
+  done
+fi
+for f in logo.spec.ts admin-status.spec.ts timesheet.spec.ts contrast.ts day-editor.spec.ts; do
+  cp $T/$mode/$f $T/export/tests/e2e/$f
+done
+echo "swapped to $mode"

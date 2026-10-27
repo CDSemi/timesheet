@@ -112,6 +112,23 @@ interface ApiSubmission {
   recipients: { effective: { to: string[]; cc: string[] }; frozen: { to: string[]; cc: string[] } | null };
 }
 
+/**
+ * Waits until the runner has rendered the PDF of the person's signed period, before the send is requested. A send job made in the same
+ * second as the PDF job (the job queue orders by whole seconds, then by a random id) can be claimed first, find no PDF, and wait one
+ * minute for its retry: 78 s of the test instead of 17 s, on about every second run.
+ */
+async function waitForPdf(adminSeed: SeedClient, userId: string): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const response = await adminSeed.call<{ submissions: ApiSubmission[] }>('GET', '/api/admin/submissions?limit=500');
+        return response.submissions.find((row) => row.user_id === userId)?.pdf.state;
+      },
+      { timeout: 60_000, intervals: [1_000], message: 'the PDF of the signed period is rendered before the send' },
+    )
+    .toBe('ready');
+}
+
 async function expectNoSidewaysScroll(page: Page) {
   const widths = await page.evaluate<{ scroll: number; inner: number }>(
     '({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth })',
@@ -139,6 +156,7 @@ test('the admin sees pipeline states, a fault code and recipients, and no timesh
     { expected_version: review.expected_version, reviewed_hash: review.payload_hash, signer_name: 'Synthetic Operator', incomplete_evidence_acknowledged: true },
     201,
   );
+  await waitForPdf(adminSeed, account.id);
   await sendSigned(api, signedOff.revision.id);
 
   // The runner renders the PDF and attempts the delivery; wait for a final delivery state.
@@ -280,6 +298,7 @@ test('phone Administration: a long delivery state and a long fault code stay ins
     { expected_version: review.expected_version, reviewed_hash: review.payload_hash, signer_name: 'Synthetic Operator', incomplete_evidence_acknowledged: true },
     201,
   );
+  await waitForPdf(adminSeed, account.id);
   await sendSigned(api, signed.revision.id);
   const mine = async () => (await adminSeed.call<{ submissions: ApiSubmission[] }>('GET', '/api/admin/submissions?limit=500')).submissions.find((row) => row.user_id === account.id);
   await expect

@@ -1,0 +1,40 @@
+
+ RUN  v5.0.2 <task>/export-probe
+
+ ❯ tests/integration/sends.test.ts (18 tests | 1 failed) 7174ms
+   ❯ sign-off and the send record (5)
+     × the Settings time switch reaches the send draft, not the PDF job and file of the sign-off 322ms
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 127 passed (128)
+   Start at  01:56:27
+   Duration  23.84s (tests 95%, import 3%, transform 2%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/sends.test.ts > sign-off and the send record > the Settings time switch reaches the send draft, not the PDF job and file of the sign-off
+AssertionError: expected [ { …(2) } ] to deeply equal [ { …(2) } ]
+
+- Expected
++ Received
+
+  [
+    {
+-     "business_key": "revision:7d19552d-d9fd-4f0d-a80d-6bc867a66bee:render_pdf",
+-     "payload_json": "{\"revision_id\":\"7d19552d-d9fd-4f0d-a80d-6bc867a66bee\",\"variant\":\"t1o1\"}",
++     "business_key": "revision:7d19552d-d9fd-4f0d-a80d-6bc867a66bee:render_pdf:t0o1",
++     "payload_json": "{\"revision_id\":\"7d19552d-d9fd-4f0d-a80d-6bc867a66bee\",\"variant\":\"t0o1\"}",
+    },
+  ]
+
+ ❯ tests/integration/sends.test.ts:184:135
+    182|     const revisionId = await signed({ show_time_on_pdf: false });
+    183|     expect((await draftOf(revisionId)).time_rows).toBe(false);
+    184|     expect(t.db.prepare("SELECT business_key, payload_json FROM jobs W…
+       |                                                                                                                                       ^
+    185|       { business_key: `revision:${revisionId}:render_pdf`, payload_jso…
+    186|     ]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

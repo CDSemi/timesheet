@@ -1,0 +1,5 @@
+# Usage: bash kstress.sh <windows> <burner threads>   Four sweeps at once (own screens, light) under a burner, with K windows each.
+. /d/.claude-tmp/timesheet/WP5-UX5-DIAG4/env.sh
+export DIAG_WINDOWS=$1
+bash $T/loadone.sh kstress-$1-$2 $2 300 tests/e2e/logo.spec.ts -g "wordmark shows whenever it fits.*\(light\)" --project=desktop --workers=4 --repeat-each=4 --reporter=list
+grep -E "ok |passed|failed|x " $T/logs/kstress-$1-$2.txt | cut -c1-60,190-260

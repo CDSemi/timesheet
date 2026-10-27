@@ -1,0 +1,42 @@
+param([int]$Gap = 60, [string]$Out = '')
+# Read-only census: two samples $Gap seconds apart, busy cores by group.
+$names = @{}
+function Sample {
+  $h = @{}
+  Get-CimInstance Win32_Process | ForEach-Object { $p = $_; $h[[int]$p.ProcessId] = $p }
+  $cpu = @{}
+  Get-Process | ForEach-Object { try { $cpu[[int]$_.Id] = $_.TotalProcessorTime.TotalSeconds } catch {} }
+  return @{ proc = $h; cpu = $cpu }
+}
+$s1 = Sample
+Start-Sleep -Seconds $Gap
+$s2 = Sample
+$lines = @()
+$lines += "census at $((Get-Date).ToString('s')) gap ${Gap}s logical cores $([Environment]::ProcessorCount)"
+$groups = @{}
+foreach ($id in $s2.cpu.Keys) {
+  if (-not $s1.cpu.ContainsKey($id)) { continue }
+  $delta = $s2.cpu[$id] - $s1.cpu[$id]
+  $p = $s2.proc[$id]
+  if ($null -eq $p) { continue }
+  $cmd = [string]$p.CommandLine
+  $cls = 'other'
+  if ($p.Name -match 'msedge|chrome') { $cls = 'owner-browser' }
+  elseif ($p.Name -match 'claude') { $cls = 'owner-app(claude)' }
+  elseif ($p.Name -match 'Docker|docker|vmmem|wsl|MsMpEng|Dropbox') { $cls = 'owner-app/system' }
+  elseif ($cmd -match 'WP5-UX5-REGATE5') { $cls = 'mission' }
+  $key = "$($p.Name), $cls"
+  if (-not $groups.ContainsKey($key)) { $groups[$key] = @(0, 0.0) }
+  $groups[$key][0] += 1
+  $groups[$key][1] += $delta
+  if ($delta -gt 1.0) { $lines += ("{0}`t{1}`tdelta {2:N2}s`tcls {3}" -f $p.Name, $id, $delta, $cls) }
+}
+$lines += 'summary by name and class: count, cpu delta sum (s over gap), busy cores = delta/gap'
+foreach ($k in ($groups.Keys | Sort-Object)) { $lines += ("{0}`tcount={1}`tdelta={2:N2}`tbusy={3:N2}" -f $k, $groups[$k][0], $groups[$k][1], ($groups[$k][1] / $Gap)) }
+$total = 0.0; foreach ($k in $groups.Keys) { $total += $groups[$k][1] }
+$lines += ("TOTAL busy cores {0:N2}" -f ($total / $Gap))
+$waitfor = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'bash.exe' -and [string]$_.CommandLine -match 'waitfor' })
+$lines += "bash.exe running waitfor.sh: $($waitfor.Count)"
+$os = Get-CimInstance Win32_OperatingSystem
+$lines += ("free physical MB {0} of {1}" -f [int]($os.FreePhysicalMemory / 1024), [int]($os.TotalVisibleMemorySize / 1024))
+if ($Out -ne '') { $lines | Set-Content -Path $Out -Encoding UTF8 } else { $lines }

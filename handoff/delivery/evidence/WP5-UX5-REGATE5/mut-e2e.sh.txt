@@ -1,0 +1,24 @@
+cd <task>
+. ./env.sh
+P=$T/export-probe
+M() {
+  id=$1; spec=$2; pat=$3
+  node.exe $TW\\probes\\apply.mjs "$TW\\export-probe" $id apply >> out/81-mut-e2e-apply.txt 2>&1 || { echo "$id apply FAILED" >> out/81-mut-e2e-counts.txt; return; }
+  ( cd $P && node.exe node_modules/vite/bin/vite.js build > $T/out/80-$id-build.txt 2>&1; echo "$id mutated client build exit $?" >> $T/out/80-mut-exits.txt )
+  SHIFT_EXPORT=$P bash run-shift.sh mut-$id real $spec --grep "$pat" --workers=4 > logs/mut-$id.txt 2>&1
+  node counts.mjs logs/mut-$id.txt | sed "s/^/$id: /" >> out/81-mut-e2e-counts.txt 2>&1
+  node.exe $TW\\probes\\apply.mjs "$TW\\export-probe" $id restore >> out/81-mut-e2e-apply.txt 2>&1
+  ( cd $P && node.exe node_modules/vite/bin/vite.js build > $T/out/82-$id-restore-build.txt 2>&1; echo "$id restore client build exit $?" >> $T/out/80-mut-exits.txt )
+}
+M RSIG_WRAP tests/e2e/review.spec.ts "a signed period opened again"
+M TOUCH tests/e2e/day-editor.spec.ts "a swipe that starts outside a day column"
+M OWN_SCROLLBAR tests/e2e/classic-scrollbar.spec.ts "a press-drag on a week card"
+M ARIA_LABEL tests/e2e/timesheet.spec.ts "named by the words it shows"
+M M2_LADDER tests/e2e/timesheet.spec.ts "the last two forms of a same-month range"
+M TABINDEX tests/e2e/review.spec.ts "week cards that scroll sideways are named keyboard stops"
+cd $P
+find dist -type f | LC_ALL=C sort > $T/out/83-probe-dist-files.txt
+rm -f $T/out/83-probe-dist-hashes.txt
+while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)" >> $T/out/83-probe-dist-hashes.txt; done < $T/out/83-probe-dist-files.txt
+diff $T/out/83-probe-dist-hashes.txt $T/out/51-target-hashes.txt > $T/out/83-probe-dist-vs-target.txt; echo "probe dist after restore vs target dist: diff exit $?" >> $T/out/81-mut-e2e-counts.txt
+echo mut-e2e-done > $T/out/mut-e2e.done

@@ -2333,10 +2333,77 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - **Quyết định của điều phối viên (Addendum 1 của brief):** che hai giá trị đó thành
     `'<synthetic-password>'`, stage lại file đó và các bản ghi đã cập nhật, chạy lại các
     bước quét và kiểm tra trước commit, rồi commit và push. Committer cũ làm tiếp.
+- **WP5-UX5-FIX9-FREEZE xong.**
+  - Commit 94accda904240fda1cf500063d8b30d3a3603fd2 đã lên main và đã push, fast-forward từ
+    f4049aa.
+  - D_PRE bằng digest của HEAD, 462a1cd7.
+  - 603 đường dẫn, hai giá trị mật khẩu giả lập đã được che. Mọi kiểm tra đều trả về 0.
+- **WP5-UX5-REGATE5: FAIL** trên 94accda / 462a1cd7, chỉ vì một tiêu chí.
+  - Trong lượt quét full-1101, test `logo.spec.ts:508` (không đổi, vốn chạy chậm) vượt giới
+    hạn 240 giây khi máy đang bận (kiểm kê ngay sau đó thấy 5,5 nhân bận). Test này mất 2,5
+    tới 3,8 phút ở mọi lần chạy. Chạy riêng thì qua, và chạy lại cả lượt quét cũng qua.
+  - **Mọi thứ khác đều qua:**
+    - đúng 27 file;
+    - các thay đổi trong `dist/` khớp với FIX7 tới FIX9;
+    - drill `--wp3`: 209 PASS, 0 FAIL;
+    - `npm audit`: 0;
+    - `npm test` ×3: 2.384 test;
+    - e2e FULL theo giờ thật: 464 và 405 qua, 0 lỗi;
+    - năm lượt quét còn lại và mọi lượt chạy dồn: 0 lỗi;
+    - cả mười mutant đều bị bắt;
+    - axe: 80 lượt quét, 0 vi phạm.
+  - `npm ci` trong repo gặp lỗi EBUSY của Dropbox, và verifier khôi phục bằng
+    `npm install`.
+- **Quyết định của điều phối viên:** không bỏ qua lỗi quá thời gian. Một test chạy sát giới
+  hạn như vậy là lỗi của test, nên ta bỏ bớt chi phí của nó chứ không nâng giới hạn.
+- **WP5-UX5-DIAG4 xong** (planner, sonnet). Không có lỗi sản phẩm.
+  - **Nguyên nhân:** `logo.spec.ts:508` đổi cỡ cửa sổ 2.242 bước, mỗi bước mất khoảng hai
+    khung hình của trình duyệt. Khi máy bận, khung hình kéo dài ra, và khi chạy kèm một
+    tiến trình đốt CPU thì test lỗi cả 4/4 lần.
+  - **Các test khác chạy sát giới hạn:**
+    - logo `:489`;
+    - `admin-status` `:122` và `:259`: lệnh gửi chạy trước khi PDF xong thì phải chờ một
+      phút để thử lại;
+    - `timesheet.spec.ts:1037`: 360 ảnh chụp một pixel;
+    - `day-editor.spec.ts:5560`: năm lượt gọi qua lại trình duyệt cho mỗi phần tử.
+
+    Hai test mới có giới hạn 120 giây chỉ mất tối đa 7 giây.
+  - **Bản vá** (chỉ sửa test, năm file; giữ nguyên assertion, trường hợp kiểm tra và giới
+    hạn thời gian):
+    - các lượt quét logo chạy trong bốn browser context, và lượt quét chế độ chia sẻ tách
+      thành test riêng; các dòng kết quả giống hệt;
+    - admin-status chờ PDF xong rồi mới gửi;
+    - một ảnh chụp đã giải mã thay cho 360 ảnh;
+    - một lần evaluate thay cho các lượt gọi theo từng phần tử, cho ra cùng tỷ lệ tương
+      phản.
+  - **Chứng minh:** test 508 giảm từ 2,0 phút xuống khoảng 33 giây mỗi test, và từ 192 xuống
+    72 giây ở thời điểm của lượt quét. Mười mutant đều bị bắt. Bộ test chạy ở thời điểm của
+    lượt quét: 871 test, 0 lỗi; `dist/` không đổi.
+  - **Phạm vi gate lại:** `dist/`, drill, `npm audit`, `npm test`, axe và các mutant cấp
+    unit được giữ kết quả từ REGATE5. Phần chạy lại gồm xác nhận danh tính, lint,
+    typecheck, build và `verify`, e2e FULL, sáu lượt quét, chạy dồn các file đã đổi, và các
+    mutant.
+- **Quyết định của điều phối viên:**
+  - áp dụng bản vá trong FIX10 (worker);
+  - chấp nhận lần gate lại có giới hạn phạm vi;
+  - thêm một ghi chú sản phẩm vào danh sách việc tùy chọn của WP5: một lần gửi được yêu cầu
+    ngay sau khi ký có thể phải chờ một phút thử lại, vì lệnh tạo PDF và lệnh gửi được tạo
+    trong cùng một giây và được xếp thứ tự theo id ngẫu nhiên.
+- **WP5-UX5-FIX10 xong** (worker, sonnet; chưa commit; digest 41477510). Chỉ năm file test
+  thuộc phạm vi của nó bị đổi.
+  - Test logo 508 giờ mất khoảng 31 giây mỗi test sau khi tách, giảm từ 1,9 phút. Khi chạy
+    kèm tiến trình đốt CPU, nó qua 12/12 lần, trong khi test cũ quá thời gian 4/4 lần.
+  - admin-status mất 31-33 giây, thay vì 17 hoặc 78 giây. Test khung viền mất 15 giây, thay
+    vì 34 giây.
+  - Kết quả đo không đổi, và cả mười mutant đều bị bắt.
+  - e2e FULL theo giờ thật: 871 qua, 0 lỗi. Lượt FULL ở thời điểm 2026-11-01T08:45Z với 6
+    worker: 871 qua, 0 lỗi, các test logo mất 1,1 tới 1,3 phút.
+  - Tên các file build không đổi.
+- **Đang chạy:** WP5-UX5-FIX10-FREEZE (committer, sonnet), một mình.
 - **Tiếp theo:**
-  1. Gate lại bằng WP5-UX5-REGATE5.
+  1. Gate lại có giới hạn phạm vi bằng WP5-UX5-REGATE6.
   2. Kiểm tra lại độc lập vùng A và B.
-  3. Audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
+  2. Audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

@@ -1,0 +1,40 @@
+== mut-T2-day-cell-unfilled-proposed start 2026-10-27T12:03:51Z
+$ playwright test tests/e2e/timesheet.spec.ts -g inset frame and the Day-cell fill are painted over every cell --project=desktop --workers=1 --reporter=list
+
+Running 1 test using 1 worker
+
+  x  1 [desktop] › tests\e2e\timesheet.spec.ts:1042:1 › desktop: the inset frame and the Day-cell fill are painted over every cell, there is no underline, rail or column fill, and a neighbouring day is left alone, in both themes (2.2s)
+
+
+  1) [desktop] › tests\e2e\timesheet.spec.ts:1042:1 › desktop: the inset frame and the Day-cell fill are painted over every cell, there is no underline, rail or column fill, and a neighbouring day is left alone, in both themes 
+
+    Error: light: the Day cell is filled
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      1088 |       expect(await paintedWithin(columnSurface, [middle, middle], [(last?.bottom ?? 0) - 2, (last?.bottom ?? 0) - 1], accent), `${appearance.name}: bottom frame`).toBe(true);
+      1089 |       // The Day cell is filled (a corner of the head, where no text is) and has no underline.
+    > 1090 |       expect(sameRgb(columnSurface.at(Math.ceil(boxes.host.left) + 4, headMiddle), headFill, 3), `${appearance.name}: the Day cell is filled`).toBe(true);
+           |                                                                                                                                                ^
+      1091 |       expect(sameRgb(columnSurface.at(middle, Math.floor((head?.top ?? 0) + (head?.height ?? 0) - 2)), accent), `${appearance.name}: no underline under the Day cell`).toBe(false);
+      1092 |       // The frame is a layer over the column, not a property of the cells: the same pixels of the neighbouring day are not accent.
+      1093 |       await bringIntoView(page, neighbour);
+        at D:\.claude-tmp\timesheet\WP5-UX5-DIAG4\export\tests\e2e\timesheet.spec.ts:1090:144
+
+    Error Context: ..\pw-mut-T2-day-cell-unfilled-proposed\timesheet-desktop-the-inse-2ca24-s-left-alone-in-both-themes-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-T2-day-cell-unfilled-proposed\timesheet-desktop-the-inse-2ca24-s-left-alone-in-both-themes-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-T2-day-cell-unfilled-proposed\timesheet-desktop-the-inse-2ca24-s-left-alone-in-both-themes-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\timesheet.spec.ts:1042:1 › desktop: the inset frame and the Day-cell fill are painted over every cell, there is no underline, rail or column fill, and a neighbouring day is left alone, in both themes 
+exit=1
+== mut-T2-day-cell-unfilled-proposed end 2026-10-27T12:03:56Z

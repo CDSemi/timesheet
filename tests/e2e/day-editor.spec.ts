@@ -5543,15 +5543,32 @@ async function textContrast(locator: Locator): Promise<number> {
   return contrast(over(text, behind), behind);
 }
 
-/** The text of the dialog's own words against what is behind them: at least 4.5:1 for every leaf element with text. */
+/**
+ * The text of the dialog's own words against what is behind them: at least 4.5:1 for every leaf element with text. One read of the
+ * dialog gives, for each visible leaf with text, its own text and fill colour and the fill of every ancestor (the same computed values
+ * `textContrast` reads, five round trips to the browser per leaf before); the colour maths are the same and stay here.
+ */
 async function textContrastProblems(dialog: Locator): Promise<string[]> {
-  const leaves = await dialog.locator('h2, h3, p, li, label, button, dt, dd, .hint, .muted, legend').all();
+  const leaves = await dialog.evaluate((element) => {
+    const view = element.ownerDocument.defaultView;
+    const found: Array<{ label: string; colour: string; fill: string; backdrops: string[] }> = [];
+    for (const leaf of element.querySelectorAll('h2, h3, p, li, label, button, dt, dd, .hint, .muted, legend')) {
+      const style = view?.getComputedStyle(leaf);
+      const box = leaf.getBoundingClientRect();
+      if (style === undefined || style.visibility !== 'visible' || box.width <= 0 || box.height <= 0) continue;
+      // The test project has no DOM types: `innerText` (what the page renders, as Locator.isVisible and innerText() see it) is declared by shape.
+      if ((leaf as unknown as { innerText: string }).innerText.trim() === '') continue;
+      const backdrops: string[] = [];
+      for (let node = leaf.parentElement; node; node = node.parentElement) backdrops.push(view?.getComputedStyle(node).backgroundColor ?? '');
+      found.push({ label: `${leaf.tagName}.${leaf.getAttribute('class') ?? ''}`, colour: style.color, fill: style.backgroundColor, backdrops });
+    }
+    return found;
+  });
   const problems: string[] = [];
   for (const leaf of leaves) {
-    if (!(await leaf.isVisible())) continue;
-    if ((await leaf.innerText()).trim() === '') continue;
-    const ratio = await textContrast(leaf);
-    if (ratio < 4.5) problems.push(`${await leaf.evaluate((element) => `${element.tagName}.${element.getAttribute('class') ?? ''}`)} ${ratio.toFixed(2)}:1`);
+    const behind = over(parseColour(leaf.fill), backdropOf(leaf.backdrops));
+    const ratio = contrast(over(parseColour(leaf.colour), behind), behind);
+    if (ratio < 4.5) problems.push(`${leaf.label} ${ratio.toFixed(2)}:1`);
   }
   return problems;
 }

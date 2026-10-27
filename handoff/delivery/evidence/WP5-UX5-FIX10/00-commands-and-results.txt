@@ -1,0 +1,62 @@
+WP5-UX5-FIX10 commands and results (worker: Claude Sonnet 5.5). Host date 2026-10-27. Task folder D:\.claude-tmp\timesheet\WP5-UX5-FIX10.
+Full logs stay in <task folder>\logs\ (not copied); this file quotes the lines that carry the evidence.
+
+== 1. Start state
+HEAD 94accda904240fda1cf500063d8b30d3a3603fd2; `git status --short -- . ':!handoff'` and `git diff --stat -- . ':!handoff'`: empty.
+
+== 2. Scratch exports (git archive, then npm ci and npm run build, exit 0 each)
+- export       = HEAD (baseline). Assets: index-BNsJjgBK.js, index-CGoignED.css, AdminScreen-C5fbI6Cd.js, ...
+- export-after = HEAD + the five owned test files copied from the repository working tree (cmp: byte-equal). Assets: identical names.
+
+== 3. Before (HEAD, scratch export, env: node 24, own output folder per run)
+- logo.spec.ts:508 alone (--project=desktop --workers=2): ok light 1.9m, ok dark 1.9m (2 passed, 3.9m).
+- same under the self-stopping burner (burner.mjs 64 threads, 600 s, ended by itself), 4 runs of 508 light at once (--workers=4 --repeat-each=4):
+  x x x x, 4.3m 4.4m 4.4m 4.9m, "Test timeout of 240000ms exceeded" in sweepRow (4 of 4 timed out).
+- admin-status.spec.ts:122 --repeat-each=4 (--project=desktop --workers=1): 17.7s, 17.8s, 1.3m, 17.8s (bimodal).
+- timesheet.spec.ts:1037 desktop: 33.9s.
+- day-editor.spec.ts:5560 (both projects): desktop 5.0s (1440), 4.5s (390); mobile 4.1s, 3.0s.
+
+== 4. Patch
+`git apply --check --include='tests/e2e/*' handoff/delivery/evidence/WP5-UX5-DIAG4/proposed-tests.patch.txt` -> clean; applied with the same command (git wrote nothing outside tests/e2e/; the headers carry the plain a/ b/ prefix).
+`git status --short -- . ':!handoff'` after: M tests/e2e/{admin-status.spec.ts, contrast.ts, day-editor.spec.ts, logo.spec.ts, timesheet.spec.ts}; no untracked file.
+`git diff --stat`: 5 files changed, 221 insertions(+), 31 deletions(-).
+
+== 5. After (export-after; the test lines moved: logo 547/569/599, admin 139/277, timesheet 1042, day-editor 5577)
+- logo (-g "(Shared with me|in a shared view)", desktop, workers=1): own-view-with-switcher light 31.7s, shared-view light 30.7s, dark 31.6s and 31.1s (5 passed incl. the 2.2s rule test).
+- same family under the burner (burner.mjs 64 threads, 720 s, self-stopping), -g "(wordmark shows whenever it fits|Shared with me|in a shared view).*\(light\)"
+  --workers=4 --repeat-each=4, 12 tests: 12 passed (6.8m). 547: 1.7m 2.0m 2.4m 2.5m; 569: 1.8m 1.2m 1.6m 1.6m; 599: 1.6m 1.7m 1.6m 1.5m (max 2.5m = 150 s of 240 s; before: 4 of 4 timed out).
+- admin-status:139 --repeat-each=4: 32.9s, 31.7s, 32.9s, 30.9s (4 passed).
+- timesheet:1042: 15.1s. day-editor:5577: desktop 3.1s (1440), 2.7s (390); mobile 2.2s, 1.8s.
+
+== 6. Equivalence (instrumented copies in export-after only, restored byte-equal afterwards, cmp with the repository files)
+- Logo: DIAG4's compare (DIAG_COMPARE=1 block inserted after the sweep: the same widths re-measured serially on the test page, rows compared by JSON):
+  7 passed (9.1m). Six sweeps (own view light and dark, switcher light and dark, shared light and dark): "DIAG compare: 1121 parallel rows against 1121 serial rows, differing widths: none" x6 (1,121 of 1,121 identical each).
+- textContrastProblems: DIAG_EQUAL=1 probe (old per-leaf locator reads against the new single evaluate, ratio to 4 decimals, labels and order compared):
+  8 cases (2 widths x 2 themes x 2 projects): "PROBE old 34 leaves, new 34 leaves, identical=true" (1440, 4x) and "old 28 leaves, new 28 leaves, identical=true" (390, 4x); first leaf H2. 14.2939 (light) and 11.7205 (dark) in both.
+
+== 7. Mutants (mut.sh.txt, mutants-all.sh.txt; scratch export-after only; each file restored and cmp-checked, client rebuilt after the restore, exit 0)
+See 10-mutants.txt. All ten are killed by the named test.
+
+== 8. Repository checks (in D:\Dropbox\Work.CDSemi\timesheet, Node 24, one after another)
+- npm run lint: exit 0. npm run typecheck: exit 0. npm run build: exit 0.
+- dist/client/assets listing before and after the build: byte-equal (15 entries; index-BNsJjgBK.js, index-CGoignED.css, ...), and equal to the HEAD scratch export's listing (dist/ is git-ignored).
+- npm run verify (SMOKE_PORT=50541): "SMOKE PASSED", exit 0.
+- git diff --check: exit 0, no output.
+
+== 9. FULL e2e, export-after (the working tree's test files; src and dist as HEAD)
+- Real clock, --workers=2, both projects (13:24:19Z to 13:43:05Z): 871 passed, 131 skipped, 0 failed (18.8m).
+  desktop 466 ok, 35 skipped, 0 failed; mobile 405 ok, 96 skipped, 0 failed. Durations: logo 547/569/599 37.5s to 42.5s (6 tests); admin-status 139 and 277: 31.2s to 32.5s (desktop and mobile).
+- 2026-11-01T08:45:00Z (run-shift.sh, shiftclock.mjs unchanged from WP5-UX-FIX10, process clock 2026-11-01T08:45:00.085Z, America/Los_Angeles Sun 01:45), --workers=6 (13:43:25Z to 13:54:42Z real): 871 passed, 131 skipped, 0 failed (11.3m).
+  desktop 466 ok, 35 skipped, 0 failed; mobile 405 ok, 96 skipped, 0 failed.
+  Durations: logo 547 light 1.2m, dark 1.2m; 569 light 1.3m, dark 1.1m; 599 light 1.1m, dark 1.2m (all under 1.3m = 78 s of 240 s); admin-status 139: 32.2s desktop, 33.6s mobile; 277: 31.3s desktop, 29.7s mobile.
+  (Before, REGATE5 sweep run full-1101: 508 took 192 s median, 246 s once = timeout.)
+
+== 10. Digest (last step, after every command above)
+`node scripts/source-digest.mjs` in the working tree: 4147751090b5511ea56225bb7bf9a33225602cc705eb906a13477cec9101869f  (882 files, handoff/ excluded).
+git status outside handoff/: only the five test files (modified), no untracked file.
+
+== Notes
+- Nothing was staged, committed or pushed; no git configuration changed (per-process safe.directory override only); no npm ci/install in the repository.
+- Burners ended by themselves (64 threads for 600 s and 720 s). Two background waiter loops (until-loops with a sleep) ended by themselves as well. Nothing is running.
+- The mutants' old/new texts are reconstructed from DIAG4's Results (the exact texts were not recorded there); see mutants-all.sh.txt.
+- The digest was taken in the working tree (git ls-files + hash-object), not in a git-less export, because the script needs git.

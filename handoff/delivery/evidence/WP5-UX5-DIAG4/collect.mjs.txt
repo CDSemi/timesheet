@@ -1,0 +1,19 @@
+// Usage: node collect.mjs <outdir> <file...>
+// Copies task-local logs, diffs and probe scripts into the evidence folder as masked LF text: CRLF to LF, ANSI colour codes removed,
+// every email address other than @example.invalid replaced, the task folder path kept (it is not personal).
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+
+const [outdir, ...files] = process.argv.slice(2);
+mkdirSync(outdir, { recursive: true });
+for (const file of files) {
+  let text = readFileSync(file, 'utf8');
+  text = text.replace(/\r\n/g, '\n').replace(/\u001b\[[0-9;]*m/g, '');
+  text = text.replace(/[A-Za-z0-9._%+-]+@(?!example\.invalid)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '<email-masked>');
+  let name = basename(file);
+  if (/\.(ts|mjs|sh|py)$/.test(name)) name += '.txt';
+  else if (!name.endsWith('.txt')) name += '.txt';
+  if (/signature/i.test(name) && !/synthetic/i.test(name)) name = name.replace(/signature/gi, 'sig');
+  writeFileSync(join(outdir, name), text.endsWith('\n') ? text : `${text}\n`);
+  console.log(`wrote ${join(outdir, name)} (${text.length} chars)`);
+}

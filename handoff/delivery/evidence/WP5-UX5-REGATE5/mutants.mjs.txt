@@ -1,0 +1,158 @@
+// WP5-UX5-AUDIT-B: own mutants on area-B behaviour. Each mutant edits one or more exact strings in the clean export,
+// runs the named vitest files, records the counts, restores the files and checks they are byte-identical again.
+// Usage: node mutants.mjs <exportDir> <logDir> <out.txt> [mutantId ...] [--full]
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const args = process.argv.slice(2);
+const [exportDir, logDir, outPath] = args;
+const full = args.includes('--full');
+const only = args.slice(3).filter((arg) => !arg.startsWith('--'));
+const sha = (text) => createHash('sha256').update(text).digest('hex');
+
+const D = 'src/server/services/deliveries.ts';
+const F = 'src/server/services/finalization.ts';
+const P = 'src/server/pdf/timesheetPdf.ts';
+const S = 'tests/integration/sends.test.ts';
+const MUTANTS = [
+  {
+    id: 'M1', what: 'sign-off enqueues a send job again',
+    edits: [[F, '  enqueuePdfJob(db, clock, userId, revisionId, payload, defaultPdfVariant(payload));\n}', "  enqueuePdfJob(db, clock, userId, revisionId, payload, defaultPdfVariant(payload));\n  db.prepare(\"INSERT INTO jobs (id, user_id, revision_id, kind, business_key, payload_json, state, attempts, next_run_at, created_at, updated_at) VALUES (?, ?, ?, 'send_email', ?, ?, 'queued', 0, ?, ?, ?)\").run(randomUUID(), userId, revisionId, `revision:${revisionId}:send_email:initial`, JSON.stringify({ revision_id: revisionId }), nowUtc(clock), nowUtc(clock), nowUtc(clock));\n}"]],
+    tests: [S, 'tests/integration/finalization.test.ts', 'tests/integration/corrections.test.ts'],
+  },
+  {
+    id: 'M2', what: 'a failed_permanent attempt counts as a sent copy',
+    edits: [[D, "WHERE a.user_id = ? AND r.timesheet_id = ? AND a.state IN ('accepted', 'uncertain')", "WHERE a.user_id = ? AND r.timesheet_id = ? AND a.state IN ('accepted', 'uncertain', 'failed_permanent')"]],
+    tests: [S, 'tests/integration/delivery.test.ts'],
+  },
+  {
+    id: 'M3', what: 'the reason rule is checked outside the send transaction (POST /send path only)',
+    edits: [
+      [D, '  const counted = countedCopy(db, user.id, revision.timesheet_id);\n  if (counted !== null && input.reason === null) {', '  const counted = input.precounted !== undefined ? input.precounted : countedCopy(db, user.id, revision.timesheet_id);\n  if (counted !== null && input.reason === null) {'],
+      [D, 'interface CheckedSend {\n  revisionId: string;', 'interface CheckedSend {\n  precounted?: CountedCopy | null;\n  revisionId: string;'],
+      [D, "  return writeTransaction(ctx.db, () =>\n    sendWithin(ctx, { revisionId, requestKey: input.requestKey, envelope, rows: { time: input.timeRows, ot: input.otRows }, reason }, 'revision.send'),\n  );", "  const owned = ctx.db.prepare('SELECT timesheet_id FROM timesheet_revisions WHERE id = ? AND user_id = ?').get(revisionId, ctx.user.id) as { timesheet_id: string } | undefined;\n  const precounted = owned === undefined ? null : countedCopy(ctx.db, ctx.user.id, owned.timesheet_id);\n  return writeTransaction(ctx.db, () =>\n    sendWithin(ctx, { precounted, revisionId, requestKey: input.requestKey, envelope, rows: { time: input.timeRows, ot: input.otRows }, reason }, 'revision.send'),\n  );"],
+    ],
+    tests: [S, 'tests/integration/delivery.test.ts', 'tests/integration/corrections.test.ts'],
+  },
+  {
+    id: 'M4', what: 'the same request key with another body is replayed (accepted)',
+    edits: [[D, "    if (sameSend(stored, input.revisionId, input.envelope, input.rows, input.reason)) return { status: 'replayed', send: stored };", "    return { status: 'replayed', send: stored };"]],
+    tests: [S],
+  },
+  {
+    id: 'M5', what: 'the shared PDF route honours the query and renders',
+    edits: [['src/server/routes/submission.ts', '      if (options.sharedPdf === true) {', '      if (options.sharedPdf === "never") {']],
+    tests: [S, 'tests/integration/sharing.test.ts', 'tests/integration/pdf-download.test.ts'],
+  },
+  {
+    id: 'M6', what: 'only the CURRENT revision having a send counts as submitted (a correction after a sent copy is sent at the deadline, reminders resume)',
+    edits: [[D, '          WHERE r.timesheet_id = ? AND s.user_id = ? LIMIT 1`,', '          WHERE r.timesheet_id = ? AND s.user_id = ? AND r.revision_no = (SELECT t.finalized_revision_no FROM timesheets t WHERE t.id = r.timesheet_id) LIMIT 1`,']],
+    tests: [S, 'tests/integration/reminders.test.ts', 'tests/integration/deadline.test.ts', 'tests/integration/deadline-race.test.ts', 'tests/integration/corrections.test.ts'],
+  },
+  {
+    id: 'M7', what: 'migration 0015 derives t1o1 for a snapshot with the OT rows off',
+    edits: [['src/server/db/migrations/0015_sends.ts', "COALESCE((SELECT CASE WHEN json_extract(r.payload_json, '$.show_ot_on_pdf') = 0 THEN 't1o0' ELSE 't1o1' END", "COALESCE((SELECT CASE WHEN json_extract(r.payload_json, '$.show_ot_on_pdf') = 0 THEN 't1o1' ELSE 't1o1' END"]],
+    tests: ['tests/integration/migrations.test.ts', 'tests/integration/upgrade.test.ts', 'tests/integration/restore.test.ts'],
+  },
+  {
+    id: 'M8', what: 'the per-cell DejaVu Serif Italic fallback is removed',
+    edits: [[P, '  const face = canDraw(fonts.hand, category) ? fonts.hand : fonts.italic;', '  const face = fonts.hand;']],
+    tests: ['tests/integration/pdf-render.test.ts', 'tests/integration/pdf-layout.test.ts'],
+  },
+  {
+    id: 'M9', what: 'the time rows are always printed',
+    edits: [[P, '  const showTime = input.rows?.time ?? true;', '  const showTime = true;']],
+    tests: ['tests/integration/pdf-render.test.ts', 'tests/integration/pdf-layout.test.ts', S],
+  },
+  {
+    id: 'M10', what: 'the signature image is required again',
+    edits: [[F, '  if (signature === null && reviewed === null) return null;', "  if (signature === null && reviewed === null) throw new ApiError(422, 'signature_required', 'A signature image is required');"]],
+    tests: ['tests/integration/finalization.test.ts', 'tests/integration/signatures.test.ts', S],
+  },
+  {
+    id: 'M11', what: 'the reason is added to the email body',
+    edits: [[D, '    input.envelope.bodyText,\n    input.envelope.bodyHtml,', "    input.reason === null ? input.envelope.bodyText : `${input.envelope.bodyText}\\nReason: ${input.reason}`,\n    input.envelope.bodyHtml,"]],
+    tests: [S, 'tests/integration/delivery.test.ts'],
+  },
+  {
+    id: 'M12', what: "the sign-off's own PDF follows the Settings time switch (t0 when off) instead of the sign-off default",
+    edits: [[F, '  enqueuePdfJob(db, clock, userId, revisionId, payload, defaultPdfVariant(payload));\n}', "  enqueuePdfJob(db, clock, userId, revisionId, payload, (db.prepare('SELECT show_time_on_pdf FROM submission_settings WHERE user_id = ? ORDER BY seq DESC LIMIT 1').pluck().get(userId) === 0 ? (payload.show_ot_on_pdf ? 't0o1' : 't0o0') : defaultPdfVariant(payload)) as never);\n}"]],
+    tests: [S, 'tests/integration/finalization.test.ts', 'tests/integration/jobs.test.ts', 'tests/integration/submission-settings.test.ts'],
+  },
+  {
+    id: 'M12b', what: "the sign-off's own PDF follows the Settings time switch (t0 when off), schema-safe (no column on old schemas = default)",
+    edits: [[F, '  enqueuePdfJob(db, clock, userId, revisionId, payload, defaultPdfVariant(payload));\n}', "  const timeOff = (() => { try { return db.prepare('SELECT show_time_on_pdf FROM submission_settings WHERE user_id = ? ORDER BY seq DESC LIMIT 1').pluck().get(userId) === 0; } catch { return false; } })();\n  enqueuePdfJob(db, clock, userId, revisionId, payload, (timeOff ? (payload.show_ot_on_pdf ? 't0o1' : 't0o0') : defaultPdfVariant(payload)) as never);\n}"]],
+    tests: [S, 'tests/integration/finalization.test.ts', 'tests/integration/jobs.test.ts', 'tests/integration/submission-settings.test.ts'],
+  },
+  {
+    id: 'M13', what: 'a settings file without show_time_on_pdf is refused (the key made required)',
+    edits: [['src/client/components/settingsFileModel.ts', '  const showTime = record.show_time_on_pdf === undefined ? undefined : reader.boolean(record.show_time_on_pdf, `${path}.show_time_on_pdf`);', '  const showTime = reader.boolean(record.show_time_on_pdf, `${path}.show_time_on_pdf`);']],
+    tests: ['tests/client/settingsFileModel.test.ts'],
+  },
+  {
+    id: 'M14', what: 'a waiting send job no longer blocks another send',
+    edits: [[D, '  if (open.length > 0 || waiting !== undefined) {', '  if (open.length > 0) {']],
+    tests: [S, 'tests/integration/delivery.test.ts', 'tests/integration/corrections.test.ts'],
+  },
+  {
+    id: 'M15', what: 'a subject with a control or format character is accepted',
+    edits: [[D, 'const SUBJECT_UNSAFE = /[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]/u;', 'const SUBJECT_UNSAFE = /[\\p{Zl}\\p{Zp}]/u;']],
+    tests: [S],
+  },
+  {
+    id: 'M16', what: 'the resend decision on an uncertain attempt no longer needs a reason (its own check removed)',
+    edits: [[D, "    if (decision === 'resend' && reason === null) {\n      throw new ApiError(422, 'reason_required', 'This copy may have arrived; give a reason for sending another one');\n    }", '']],
+    tests: [S, 'tests/integration/delivery.test.ts'],
+  },
+  {
+    id: 'M17', what: 'migration 0015 backfills no send record for an existing send job',
+    edits: [['src/server/db/migrations/0015_sends.ts', "WHERE j.kind = 'send_email'\nORDER BY j.created_at, j.rowid;", "WHERE j.kind = 'send_email' AND 0\nORDER BY j.created_at, j.rowid;"]],
+    tests: ['tests/integration/migrations.test.ts', 'tests/integration/upgrade.test.ts', 'tests/integration/restore.test.ts'],
+  },
+  {
+    id: 'PDFLEAVE', what: 'the PDF leave line reverted to the shared sub-line (holiday and leave in one wrapped text)',
+    edits: [[P, "  const both = holiday !== '' && leave !== '';", '  const both = false;']],
+    tests: ['tests/integration/pdf-render.test.ts'],
+  },
+];
+
+const lines = [];
+const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+for (const mutant of MUTANTS) {
+  if (only.length > 0 && !only.includes(mutant.id)) continue;
+  const originals = new Map();
+  let applied = true;
+  for (const [file, find, replace] of mutant.edits) {
+    const path = join(exportDir, file);
+    const text = originals.get(path) ?? readFileSync(path, 'utf8');
+    if (!originals.has(path)) originals.set(path, text);
+    const current = readFileSync(path, 'utf8');
+    const count = current.split(find).length - 1;
+    if (count !== 1) {
+      applied = false;
+      lines.push(`${mutant.id} NOT APPLIED: anchor found ${count} times in ${file}`);
+      break;
+    }
+    writeFileSync(path, current.replace(find, () => replace));
+  }
+  let summary = 'not run';
+  if (applied) {
+    const override = args.find((arg) => arg.startsWith('--tests='));
+    const testList = override === undefined ? mutant.tests : override.slice('--tests='.length).split(',');
+    const testArgs = full ? ['vitest', 'run'] : ['vitest', 'run', ...testList, '--maxWorkers=2'];
+    const started = Date.now();
+    const run = spawnSync(process.execPath, [join(exportDir, 'node_modules', 'vitest', 'vitest.mjs'), ...testArgs.slice(1)], { cwd: exportDir, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }, maxBuffer: 256 * 1024 * 1024 });
+    const output = `${run.stdout}${run.stderr}`;
+    writeFileSync(join(logDir, `mut-${mutant.id}${full ? '-full' : ''}-${outPath.split(/[\\/]/).pop()}.log`), output);
+    const tests = /Tests\s+([^\n]+)/.exec(output)?.[1]?.trim() ?? '?';
+    const failedNames = [...output.matchAll(/(?:FAIL|×)\s+(tests\/[^\s>]+)[^\n]*?>\s*([^\n]+)/g)].slice(0, 4).map((match) => `${match[1]} > ${match[2].trim().slice(0, 110)}`);
+    summary = `exit ${run.status}, ${tests}, ${((Date.now() - started) / 1000).toFixed(0)} s; ${run.status === 0 ? 'SURVIVED' : 'KILLED'}${failedNames.length > 0 ? ` | e.g. ${failedNames.join(' || ')}` : ''}`;
+  }
+  for (const [path, text] of originals) writeFileSync(path, text);
+  const restored = [...originals].every(([path, text]) => sha(readFileSync(path, 'utf8')) === sha(text));
+  lines.push(`${mutant.id} ${mutant.what}: ${summary}; restored ${restored ? 'byte-identical' : 'MISMATCH'}`);
+  writeFileSync(outPath, `${lines.join('\n')}\n`);
+}
+writeFileSync(outPath, `${lines.join('\n')}\n`);

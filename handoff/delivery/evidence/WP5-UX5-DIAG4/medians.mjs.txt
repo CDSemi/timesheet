@@ -1,0 +1,26 @@
+// Usage: node medians.mjs <out.txt> <log...>   Median duration per (project, file:line, title prefix) over the given Playwright list logs.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [out, ...logs] = process.argv.slice(2);
+const rows = new Map();
+for (const log of logs) {
+  for (const line of readFileSync(log, 'utf8').split(/\r?\n/)) {
+    const match = /^\s+(ok|x)\s+\d+ \[(\w+)\] › (tests\\e2e\\[\w.-]+):(\d+):\d+ › (.*) \(([\d.]+)(ms|s|m)\)\s*$/.exec(line);
+    if (match === null) continue;
+    const [, status, project, file, row, title, amount, unit] = match;
+    const seconds = Number(amount) * (unit === 'm' ? 60 : unit === 'ms' ? 0.001 : 1);
+    const key = `${project} ${file.replace('tests\\e2e\\', '')}:${row} ${title.slice(0, 90)}`;
+    const entry = rows.get(key) ?? { seconds: [], failed: 0 };
+    entry.seconds.push(seconds);
+    if (status === 'x') entry.failed += 1;
+    rows.set(key, entry);
+  }
+}
+const lines = [];
+for (const [key, entry] of rows) {
+  const sorted = [...entry.seconds].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+  lines.push({ key, median, max: sorted.at(-1) ?? 0, n: sorted.length, failed: entry.failed });
+}
+lines.sort((a, b) => b.median - a.median);
+writeFileSync(out, lines.slice(0, 60).map((l) => `${l.median.toFixed(1)}s median, ${l.max.toFixed(1)}s max, n=${l.n}, failed=${l.failed}  ${l.key}`).join('\n') + '\n');

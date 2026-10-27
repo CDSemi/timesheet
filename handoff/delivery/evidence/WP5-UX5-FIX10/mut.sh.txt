@@ -1,0 +1,15 @@
+# Usage: bash mut.sh <name> <file relative to export-after> <old> <new> <rebuild: client|none> <playwright args...>
+# Applies one mutant in the scratch export (export-after), rebuilds the client when asked, runs the named tests, restores the file byte for byte.
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX10/env.sh
+export PW_EXPORT=$T/export-after
+name=$1; file=$2; old=$3; new=$4; rebuild=$5; shift 5
+cd $PW_EXPORT
+cp "$file" "$T/mut-backup.tmp"
+node $T/mutate.mjs "$file" "$old" "$new" > $T/logs/mut-$name-apply.txt 2>&1 || { cat $T/logs/mut-$name-apply.txt; cp "$T/mut-backup.tmp" "$file"; exit 2; }
+cat $T/logs/mut-$name-apply.txt
+if [ "$rebuild" = "client" ]; then npm run build:client > $T/logs/mut-$name-build.txt 2>&1; echo "build exit=$?" >> $T/logs/mut-$name-build.txt; fi
+bash $T/pw.sh mut-$name "$@" > $T/logs/mut-$name.txt 2>&1
+echo "mut $name playwright rc=$?"
+cp "$T/mut-backup.tmp" "$file"
+cmp "$T/mut-backup.tmp" "$file" && echo "restored $file"
+if [ "$rebuild" = "client" ]; then npm run build:client > $T/logs/mut-$name-restore-build.txt 2>&1; echo "restore build exit=$?" >> $T/logs/mut-$name-restore-build.txt; fi

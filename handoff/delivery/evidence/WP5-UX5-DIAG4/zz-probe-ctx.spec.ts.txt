@@ -1,0 +1,40 @@
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+
+/* DIAG4 probe: sweep throughput of K pages in K separate contexts of one browser. Not part of the suite. */
+const RAF2 = `(async () => { await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))); return 1; })()`;
+
+test('probe: contexts', async ({ page, builtServer, browser }) => {
+  test.skip(test.info().project.name !== 'desktop', 'desktop only');
+  test.setTimeout(500_000);
+  await page.goto(builtServer.origin);
+  const TOTAL = 240;
+  const run = async (label: string, pages: Page[]) => {
+    const t0 = performance.now();
+    await Promise.all(
+      pages.map(async (view, index) => {
+        for (let step = 0; step < TOTAL / pages.length; step += 1) {
+          await view.setViewportSize({ width: 320 + index * 5 + step * 2, height: 800 });
+          await view.evaluate(RAF2);
+        }
+      }),
+    );
+    console.log(`PROBE ${label}: ${TOTAL} steps in ${(performance.now() - t0).toFixed(0)} ms (${((performance.now() - t0) / TOTAL).toFixed(1)} ms/step) at ${new Date().toISOString()}`);
+  };
+  for (const round of [1, 2, 3]) {
+    for (const count of [1, 2, 3, 4, 6]) {
+      const contexts = [];
+      const views: Page[] = [page];
+      for (let i = 1; i < count; i += 1) {
+        const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+        contexts.push(context);
+        const view = await context.newPage();
+        await view.goto(builtServer.origin);
+        views.push(view);
+      }
+      await run(`round ${round}: ${count} pages in ${count} contexts`, views);
+      for (const context of contexts) await context.close();
+    }
+  }
+  expect(true).toBe(true);
+});

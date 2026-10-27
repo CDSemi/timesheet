@@ -1,0 +1,24 @@
+WP5-UX5-FIX10 mutants (scratch export-after, DIAG4 definitions reconstructed in mutants-all.sh.txt). Every mutant: named test failed (exit=1), file restored byte-equal, client rebuilt, restore build exit 0.
+
+L1 styles.css `@container shell-bar (width >= 1248px)` -> `1000px` (logo shown below 1280px with the switcher)
+   -g "(Shared with me|in a shared view).*\(light\)": FAILED 2 of 2: logo.spec.ts:569 (switcher, 31.9s) and :599 (shared view, 31.8s), both "Error: 1032px: the wordmark adds no row".
+L2 styles.css phone rule `calc(219.4px + 10.8rem)` -> `calc(150px + 10.8rem)`
+   -g "wordmark shows whenever it fits.*\(light\)": FAILED logo.spec.ts:547 (32.3s), "Error: 344px: the wordmark adds no row".
+H1 logo.spec.ts sweepRange: only the window starting at 320 resizes (the other windows skip the resize)
+   FAILED logo.spec.ts:547 (18.2s), "Error: 769px: the wordmark is shown but does not fit".
+H2 logo.spec.ts openSweepWindow: storageState empty (other windows not signed in)
+   FAILED logo.spec.ts:547 (8.3s), "expect(locator).toBeVisible() failed ... element(s) not found" (.bar-clock).
+A1 OperationsStatus.tsx `accepted: 'Delivered'` -> `'Sent'`
+   -g "pipeline states" (admin-status.spec.ts:139 desktop): FAILED (39.4s), "expect(locator).toHaveText(expected) failed".
+A2 admin-status.spec.ts waitForPdf `.toBe('ready')` -> `.toBe('failed')`
+   FAILED admin-status.spec.ts:139 (60.0s), "Error: the PDF of the signed period is rendered before the send", Expected: "failed".
+T1 styles.css `.sheet-day.editing::after` box-shadow without var(--marker-frame)
+   -g "inset frame and the Day-cell fill" (timesheet.spec.ts:1042 desktop): FAILED (2.2s), "light: left frame over "d-day" (details false)".
+T2 styles.css `.sheet-day.editing > .d-day` background transparent
+   FAILED timesheet.spec.ts:1042 (2.3s), "light: the Day cell is filled".
+T3 styles.css `--marker-frame` 5px
+   FAILED timesheet.spec.ts:1042 (2.1s), "light: no rail beside the frame over "d-day"".
+D1 styles.css `.muted` colour #d2d6dc
+   -g "U4-12, U4-13 at 1440" (day-editor.spec.ts:5577 desktop): FAILED (1.5s), "text contrast of the session dialog (light)".
+
+After the series: the five test files of export-after are byte-equal to the repository's (cmp), styles.css and OperationsStatus.tsx equal to the HEAD export's, and dist/client/assets lists the same names as the HEAD export.

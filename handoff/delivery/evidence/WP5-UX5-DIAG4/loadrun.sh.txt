@@ -1,0 +1,14 @@
+# Usage: bash loadrun.sh <orig|proposed> <burner threads, 0 = none> <label>
+# Runs the six candidate tests together (one per worker, as in a sweep) on the desktop project, with a self-stopping CPU burner beside them.
+. /d/.claude-tmp/timesheet/WP5-UX5-DIAG4/env.sh
+mode=$1; threads=$2; label=$3
+bash $T/swap.sh $mode
+if [ "$threads" != "0" ]; then
+  node $T/burner.mjs $threads 420 > $T/logs/burner-$label.txt 2>&1 &
+  sleep 3
+fi
+bash $T/pw.sh $label tests/e2e/logo.spec.ts tests/e2e/admin-status.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/day-editor.spec.ts \
+  -g "wordmark shows whenever it fits.*\(light\)|Shared with me.*\(light\)|pipeline states|inset frame and the Day-cell fill are painted over every cell|U4-12, U4-13 at" \
+  --project=desktop --workers=6 --reporter=list > $T/logs/$label.txt 2>&1
+echo "$label rc=$?"
+wait

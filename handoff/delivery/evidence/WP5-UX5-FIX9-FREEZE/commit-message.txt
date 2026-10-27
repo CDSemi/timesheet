@@ -1,0 +1,34 @@
+Fix round-5 audit findings: signed footer, keyboard and touch access, PDF leave line, in-flight sends
+
+- fix(review): on a signed period opened again, "Sign correction" drops under the signed
+  content on narrower windows. The name, image and "Signed" stay readable, and the four
+  signature lines stay aligned.
+- fix(a11y):
+  - the "Change days" button is named by the words it shows (SC 2.5.3);
+  - read-only week cards that scroll sideways take keyboard focus while they overflow
+    (SC 2.1.1);
+  - an `aria-label` on a generic element was removed.
+- fix(day-editor): a touch swipe or a press on a week card's scrollbar no longer closes
+  the Day editor. Mouse and pen behaviour is unchanged.
+- fix(pdf): on a day with both a holiday label and leave, "Leave h:mm" keeps its own line,
+  and the holiday label is cut first.
+- fix(sends): a send job still waiting for any revision of the period blocks a new send
+  (409), so an older copy cannot arrive after the correction.
+- test:
+  - the sign-off PDF ignores the Settings time switch;
+  - the reason never appears in the email, now checked on the decoded body;
+  - new e2e tests for the signed footer, touch, scrollbars, names, the ladder forms and the
+    week cards.
+- chore(scripts): the container drill closes each connection.
+- docs: documents 03, 04, 05, 10 and 12, EN and VI, match the build. docs/10 records the
+  owner decision H-1 a.
+- docs(handoff): REGATE4 PASS, the area A and B audits (FIX REQUIRED) with their review
+  pairs, the fix plans, FIX7 to FIX9, the lookup, the board, the checkpoint (+ vi), STATE
+  and NEXT_ACTION (+ vi).
+
+Task: WP5-UX5-FIX7 (AUDIT-B findings), WP5-UX5-FIX8 (AUDIT-A findings), WP5-UX5-FIX9 (axe)
+Gate: WP5-UX5-REGATE4 PASS on f4049aa; REGATE5 pending
+Audit: WP5-UX5-AUDIT-A and WP5-UX5-AUDIT-B FIX REQUIRED on f4049aa; rechecks pending
+Digest: 462a1cd70e533a95354097b928c0479c4db77b00f7215c5ae074453d7807e0a0
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

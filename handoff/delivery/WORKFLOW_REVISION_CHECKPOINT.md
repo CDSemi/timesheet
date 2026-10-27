@@ -2265,10 +2265,75 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - **Coordinator decision (brief Addendum 1):** mask those two literals as
     `'<synthetic-password>'`, re-stage that file and the updated records, rerun the scans
     and the precommit check, then commit and push. The same committer continues.
+- **WP5-UX5-FIX9-FREEZE done.**
+  - Commit 94accda904240fda1cf500063d8b30d3a3603fd2 is on main and pushed, a fast-forward
+    from f4049aa.
+  - D_PRE equals the HEAD digest, 462a1cd7.
+  - 603 paths, with the two literals masked. Every check exits 0.
+- **WP5-UX5-REGATE5: FAIL** on 94accda / 462a1cd7, on one criterion only.
+  - In sweep run full-1101, the unchanged and slow `logo.spec.ts:508` hit its 240 s
+    timeout under host load (a census right after showed 5.5 busy cores). The test takes
+    2.5 to 3.8 min on every run. It passed alone, and the rerun of the whole run passed.
+  - **Everything else passed:**
+    - the 27 paths;
+    - the `dist/` changes, mapped to FIX7 to FIX9;
+    - the drill `--wp3`: 209 PASS, 0 FAIL;
+    - `npm audit`: 0;
+    - `npm test` ×3: 2,384 tests;
+    - the real-clock FULL e2e: 464 and 405 passed, 0 failed;
+    - the other five sweep runs and all the stress runs: 0 failed;
+    - all ten mutants killed;
+    - axe: 80 scans, 0 violations.
+  - The repository's `npm ci` hit Dropbox EBUSY, and the verifier recovered with
+    `npm install`.
+- **Coordinator decision:** a timeout is not waived. A test that runs this close to its
+  limit is a test defect, so we remove its cost and do not raise the limit.
+- **WP5-UX5-DIAG4 done** (planner, sonnet). No product fault.
+  - **The cause:** `logo.spec.ts:508` makes 2,242 resize steps, each about two browser
+    frames. Under load the frames stretch, and under a burner it failed 4 of 4 runs.
+  - **Other tests near their limit:**
+    - logo `:489`;
+    - `admin-status` `:122` and `:259`: a send job that runs before its PDF waits a
+      one-minute retry;
+    - `timesheet.spec.ts:1037`: 360 one-pixel screenshots;
+    - `day-editor.spec.ts:5560`: five browser round trips per leaf.
+
+    The two new 120 s tests take at most 7 s.
+  - **The patch** (tests only, five files; assertions, cases and timeouts unchanged):
+    - logo sweeps run in four browser contexts, and the shared-view sweep becomes its own
+      test; the rows are identical;
+    - admin-status waits for the PDF before it sends;
+    - one decoded screenshot replaces the 360;
+    - one evaluate replaces the per-leaf round trips, with the same ratios.
+  - **Proof:** 508 went from 2.0 min to about 33 s per test, and from 192 to 72 s at the
+    sweep instant. Ten mutants were killed. The sweep-instant suite ran 871 tests with 0
+    failed, and `dist/` is unchanged.
+  - **Regate scope:** `dist/`, the drill, `npm audit`, `npm test`, axe and the unit
+    mutants carry forward from REGATE5. The rerun covers identity, lint, typecheck, build
+    and `verify`, the FULL e2e, the six sweeps, stress of the changed files, and the
+    mutants.
+- **Coordinator decisions:**
+  - apply the patch in FIX10 (worker);
+  - accept the scoped regate;
+  - add a product note to the WP5 optional backlog: a send requested right after sign-off
+    can wait one retry minute, because the PDF and send jobs share a second and are
+    ordered by random id.
+- **WP5-UX5-FIX10 done** (worker, sonnet; uncommitted; digest 41477510). Only the five
+  owned test files changed.
+  - logo 508 now takes about 31 s per split test, down from 1.9 min. Under the burner it
+    passed 12 of 12, where the old test timed out 4 of 4.
+  - admin-status takes 31-33 s, down from 17 or 78 s. The frame test takes 15 s, down from
+    34 s.
+  - Equivalence holds, and all ten mutants are killed.
+  - The real-clock FULL e2e had 871 passed and 0 failed. The FULL run at
+    2026-11-01T08:45Z, workers=6, had 871 passed and 0 failed, with the logo tests at 1.1
+    to 1.3 min.
+  - The build asset names are unchanged.
+- **Running now:** WP5-UX5-FIX10-FREEZE (committer, sonnet), alone.
 - **Next:**
-  1. The regate WP5-UX5-REGATE5.
+  1. The scoped regate WP5-UX5-REGATE6.
   2. Fresh rechecks of areas A and B.
-  3. The integration audit, ACCEPT-DOCS and the WP5 re-accept.
+  2. The integration audit, ACCEPT-DOCS and the WP5 re-accept.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

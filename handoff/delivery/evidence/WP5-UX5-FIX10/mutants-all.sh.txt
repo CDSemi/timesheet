@@ -1,0 +1,21 @@
+# Runs the ten FIX10 mutants one after another in export-after (definitions of DIAG4, reconstructed from its Results).
+# mut.sh <name> <file> <old> <new> <client|none> <playwright args...>: applies exactly one occurrence (mutate.mjs), rebuilds the client when asked,
+# runs the named tests in its own output folder, restores the file with cp and checks it with cmp, rebuilds the client again.
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX10/env.sh
+M="bash $T/mut.sh"
+CSS=src/client/styles.css
+LOGO=tests/e2e/logo.spec.ts
+SHARED='(Shared with me|in a shared view).*\(light\)'
+OWN='wordmark shows whenever it fits.*\(light\)'
+TS="tests/e2e/timesheet.spec.ts"
+
+$M L1 $CSS '@container shell-bar (width >= 1248px) {' '@container shell-bar (width >= 1000px) {' client -g "$SHARED" tests/e2e/logo.spec.ts --project=desktop --workers=2 --reporter=list
+$M L2 $CSS '@container shell-bar (width >= calc(219.4px + 10.8rem)) {' '@container shell-bar (width >= calc(150px + 10.8rem)) {' client -g "$OWN" tests/e2e/logo.spec.ts --project=desktop --workers=1 --reporter=list
+$M H1 $LOGO $'    await page.setViewportSize({ width, height: 800 });\n    rows.push' $'    if (from === 320) await page.setViewportSize({ width, height: 800 });\n    rows.push' none -g "$OWN" tests/e2e/logo.spec.ts --project=desktop --workers=1 --reporter=list
+$M H2 $LOGO 'storageState: await page.context().storageState(),' 'storageState: { cookies: [], origins: [] },' none -g "$OWN" tests/e2e/logo.spec.ts --project=desktop --workers=1 --reporter=list
+$M A1 src/client/components/OperationsStatus.tsx "accepted: 'Delivered'," "accepted: 'Sent'," client -g "pipeline states" tests/e2e/admin-status.spec.ts --project=desktop --workers=1 --reporter=list
+$M A2 tests/e2e/admin-status.spec.ts $'    )\n    .toBe(\'ready\');' $'    )\n    .toBe(\'failed\');' none -g "pipeline states" tests/e2e/admin-status.spec.ts --project=desktop --workers=1 --reporter=list
+$M T1 $CSS 'box-shadow: var(--marker-bar), var(--marker-frame);' 'box-shadow: var(--marker-bar);' client -g "inset frame and the Day-cell fill" $TS --project=desktop --workers=1 --reporter=list
+$M T2 $CSS $'.sheet-day.editing > .d-day {\n  background: var(--day-editing-head);' $'.sheet-day.editing > .d-day {\n  background: transparent;' client -g "inset frame and the Day-cell fill" $TS --project=desktop --workers=1 --reporter=list
+$M T3 $CSS '--marker-frame: inset 0 0 0 var(--hairline) var(--accent);' '--marker-frame: inset 0 0 0 5px var(--accent);' client -g "inset frame and the Day-cell fill" $TS --project=desktop --workers=1 --reporter=list
+$M D1 $CSS $'.muted {\n  color: var(--muted);' $'.muted {\n  color: #d2d6dc;' client -g "U4-12, U4-13 at 1440" tests/e2e/day-editor.spec.ts --project=desktop --workers=1 --reporter=list

@@ -1,0 +1,10 @@
+# Usage: bash loadone.sh <label> <burner threads> <burner seconds> <playwright args...>   (export as it is now, real clock, desktop)
+. /d/.claude-tmp/timesheet/WP5-UX5-DIAG4/env.sh
+label=$1; threads=$2; seconds=$3; shift 3
+if [ "$threads" != "0" ]; then
+  node $T/burner.mjs $threads $seconds > $T/logs/burner-$label.txt 2>&1 &
+  sleep 3
+fi
+bash $T/pw.sh $label "$@" > $T/logs/$label.txt 2>&1
+echo "$label rc=$?"
+wait

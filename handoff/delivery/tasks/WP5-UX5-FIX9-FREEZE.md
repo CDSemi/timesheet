@@ -185,7 +185,7 @@ Return at most 80 words, beginning 'Self-reported model: ...', with the full com
 
 ## Results
 
-STOPPED before commit. Staged 603 paths; precommit-check exit 1 with 2 BLOCK
-secret-assignment findings in evidence/WP5-UX5-AUDIT-B/94-http-areab.mjs.txt lines 380-381
-(synthetic password literals). Not an allowed edit. HEAD unchanged f4049aa; nothing pushed.
-See evidence/WP5-UX5-FIX9-FREEZE/checks.txt.
+Committed 94accda904240fda1cf500063d8b30d3a3603fd2 on main (603 paths) and pushed
+(f4049aa..94accda); remote = HEAD. Masked at freeze: synthetic password literals, lines
+380-381 of evidence/WP5-UX5-AUDIT-B/94-http-areab.mjs.txt. HEAD digest = D_PRE. All checks
+exit 0. See evidence/WP5-UX5-FIX9-FREEZE/checks.txt.

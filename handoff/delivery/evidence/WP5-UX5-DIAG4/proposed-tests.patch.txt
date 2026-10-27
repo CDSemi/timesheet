@@ -1,0 +1,389 @@
+--- a/tests/e2e/logo.spec.ts
++++ b/tests/e2e/logo.spec.ts
+@@ -1,4 +1,4 @@
+-import type { Page } from '@playwright/test';
++import type { BrowserContext, Page } from '@playwright/test';
+ import { contrast, flattenedBackground, parseColour, type Rgba } from './contrast.ts';
+ import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+ 
+@@ -16,7 +16,8 @@
+  * the phone bar too: from 414px with the check in/out group, from 852px on the desktop bar without a share, from 1280px with one. The
+  * sweeps at the end of this file check every width from 320 to 1440px in both themes.
+  */
+-test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
++const DEVICE = { locale: 'en-US', timezoneId: 'America/Los_Angeles' } as const;
++test.use(DEVICE);
+ 
+ const BRAND_NAME = 'C&D Semiconductor Services, Inc.';
+ const STORAGE_KEY = 'timesheet.theme';
+@@ -459,18 +460,75 @@
+ interface SweepOptions {
+   /** True for the "Shared with me" bar of a desktop width: the bound is the fixed 1280px, not the measured room (the switcher's width depends on the owners' names). */
+   fixedDesktopBound: boolean;
++  /** The colour scheme of the person's screens: every extra window of the sweep emulates it with reduced motion. */
++  scheme: 'light' | 'dark';
++  /** Waits until the screen under test is ready in a window: the conditions the test awaited on its own page before the sweep. */
++  ready: (view: Page) => Promise<void>;
+ }
+ 
+ /**
+- * Sweeps the bar from 320 to 1440px in 1px steps and checks the rule of U5-02: the wordmark is displayed exactly when it fits with 8px
+- * of slack (to the pixel of the literal thresholds), never overlaps or clips, and never adds a row. Returns the widths where it shows.
++ * The windows that measure the sweep side by side: the test's own page and three more, each in a browser context of its own, each one a
++ * quarter of the widths. Never as tabs of one context: with the host busy a second tab of a context gets a frame only now and then (the
++ * rAF of every step then takes a second and more), where a context of its own keeps its frames.
+  */
+-async function sweepWordmark(page: Page, options: SweepOptions): Promise<number[]> {
++const SWEEP_WINDOWS = 4;
++const SWEEP_FIRST = 320;
++const SWEEP_LAST = 1440;
++
++/** Another window for the sweep: a context of the test's browser, signed in as the test's page is, on the same screen, device and colour scheme. */
++async function openSweepWindow(page: Page, options: SweepOptions): Promise<{ context: BrowserContext; view: Page }> {
++  const browser = page.context().browser();
++  if (browser === null) throw new Error('The sweep needs the browser of the test to open its other windows');
++  const context = await browser.newContext({
++    ...DEVICE,
++    storageState: await page.context().storageState(),
++    viewport: { width: 600, height: 800 },
++    colorScheme: options.scheme,
++    reducedMotion: 'reduce',
++  });
++  const view = await context.newPage();
++  view.on('pageerror', (error) => {
++    throw error;
++  });
++  await view.goto(page.url());
++  await options.ready(view);
++  return { context, view };
++}
++
++/** One window's share of the sweep: every width from `from` to `to`, in 1px steps. */
++async function sweepRange(page: Page, from: number, to: number): Promise<SweepRow[]> {
+   const rows: SweepRow[] = [];
+-  for (let width = 320; width <= 1440; width += 1) {
++  for (let width = from; width <= to; width += 1) {
+     await page.setViewportSize({ width, height: 800 });
+     rows.push({ width, ...(await sweepRow(page)) });
+   }
++  return rows;
++}
++
++/**
++ * Sweeps the bar from 320 to 1440px in 1px steps and checks the rule of U5-02: the wordmark is displayed exactly when it fits with 8px
++ * of slack (to the pixel of the literal thresholds), never overlaps or clips, and never adds a row. Returns the widths where it shows.
++ * The 1,121 widths are split into SWEEP_WINDOWS runs of consecutive widths, measured at the same time in as many windows; every width is
++ * measured by the same script in the same way, and the rows are put back in width order before any check.
++ */
++async function sweepWordmark(page: Page, options: SweepOptions): Promise<number[]> {
++  const others: Array<{ context: BrowserContext; view: Page }> = [];
++  let rows: SweepRow[];
++  try {
++    for (let index = 1; index < SWEEP_WINDOWS; index += 1) others.push(await openSweepWindow(page, options));
++    const views = [page, ...others.map((other) => other.view)];
++    const share = Math.ceil((SWEEP_LAST - SWEEP_FIRST + 1) / SWEEP_WINDOWS);
++    const parts = await Promise.all(
++      views.map((view, index) => sweepRange(view, SWEEP_FIRST + index * share, Math.min(SWEEP_LAST, SWEEP_FIRST + (index + 1) * share - 1))),
++    );
++    rows = parts.flat();
++  } finally {
++    for (const other of others) await other.context.close();
++  }
++  expect(
++    rows.map((row) => row.width),
++    'every width from 320 to 1440px was measured once, in order',
++  ).toEqual(Array.from({ length: SWEEP_LAST - SWEEP_FIRST + 1 }, (_, index) => SWEEP_FIRST + index));
+   const shows = rows.map((row) => row.actual.visible);
+   const fits = rows.map((row) => (row.width >= 768 && options.fixedDesktopBound ? row.width >= 1280 : wordmarkFits(row, row.width < 768)));
+   for (const [index, row] of rows.entries()) {
+@@ -493,8 +551,11 @@
+     const me = await newPerson(adminSeed, builtServer, { displayName: LONG_NAME, signature: 'none' });
+     await page.setViewportSize({ width: 600, height: 800 });
+     await signInPageAs(me.account);
+-    await expect(page.locator('.bar-clock')).toBeVisible();
+-    const shown = await sweepWordmark(page, { fixedDesktopBound: false });
++    const ready = async (view: Page) => {
++      await expect(view.locator('.bar-clock')).toBeVisible();
++    };
++    await ready(page);
++    const shown = await sweepWordmark(page, { fixedDesktopBound: false, scheme, ready });
+     // The documented literals: from 414px of bar with the check in/out group, from 852px without it on the desktop bar.
+     const phone = shown.filter((width) => width < 768);
+     const desktop = shown.filter((width) => width >= 768);
+@@ -520,20 +581,46 @@
+     await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
+     await page.setViewportSize({ width: 600, height: 800 });
+     await signInPageAs(me.account);
+-    await expect(page.locator('.bar-clock')).toBeVisible();
+-    await expect(page.locator('header.shell-bar .shell-switcher')).toBeVisible();
+-    const shown = await sweepWordmark(page, { fixedDesktopBound: true });
++    const ready = async (view: Page) => {
++      await expect(view.locator('.bar-clock')).toBeVisible();
++      await expect(view.locator('header.shell-bar .shell-switcher')).toBeVisible();
++    };
++    await ready(page);
++    const shown = await sweepWordmark(page, { fixedDesktopBound: true, scheme, ready });
+     // Own view with the switcher: shown from 414px up to 494px (the switcher is on its own row anyway), hidden from 495 to 665px (it would
+     // wrap the switcher), shown again from 666px; on the desktop bar from 1280px.
+     const phone = shown.filter((width) => width < 768);
+     expect(phone.filter((width) => width < 600).sort((a, b) => a - b), 'the narrow range of the phone bar').toEqual(Array.from({ length: 495 - 414 }, (_, index) => 414 + index));
+     expect(Math.min(...phone.filter((width) => width >= 600)), 'shown again from 666px').toBe(666);
+     expect(Math.min(...shown.filter((width) => width >= 768)), 'the desktop bar shows it from 1280px').toBe(1280);
++  });
++
++  // The shared view is a test of its own (it was the second sweep of the test above): each sweep has the whole timeout to itself.
++  test(`in a shared view the wordmark never adds a row: shown from 492px, and from 1280px on the desktop bar (${scheme})`, async ({
++    page,
++    adminSeed,
++    builtServer,
++    signInPageAs,
++    isMobile,
++  }) => {
++    test.skip(isMobile, 'The sweep resizes the window of the desktop project');
++    test.setTimeout(240_000);
++    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
++    const me = await newPerson(adminSeed, builtServer, { displayName: LONG_NAME, signature: 'none' });
++    const owner = await newPerson(adminSeed, builtServer, { displayName: OWNER_NAME, signature: 'none' });
++    await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
++    await page.setViewportSize({ width: 600, height: 800 });
++    await signInPageAs(me.account);
++    await expect(page.locator('.bar-clock')).toBeVisible();
++    await expect(page.locator('header.shell-bar .shell-switcher')).toBeVisible();
+     // A shared view has no check in/out group: the brand and the switcher share the row, so the wordmark shows from 492px.
+     await page.goto(`/#/shared/${owner.account.id}/timesheet`);
+-    await expect(page.locator('.share-bar')).toBeVisible();
+-    await expect(page.locator('.bar-clock')).toHaveCount(0);
+-    const sharedShown = await sweepWordmark(page, { fixedDesktopBound: true });
++    const sharedReady = async (view: Page) => {
++      await expect(view.locator('.share-bar')).toBeVisible();
++      await expect(view.locator('.bar-clock')).toHaveCount(0);
++    };
++    await sharedReady(page);
++    const sharedShown = await sweepWordmark(page, { fixedDesktopBound: true, scheme, ready: sharedReady });
+     expect(Math.min(...sharedShown), 'a shared view shows the wordmark from 492px').toBe(492);
+     expect(Math.min(...sharedShown.filter((width) => width >= 768)), 'and on the desktop bar from 1280px').toBe(1280);
+   });
+--- a/tests/e2e/admin-status.spec.ts
++++ b/tests/e2e/admin-status.spec.ts
+@@ -112,6 +112,23 @@
+   recipients: { effective: { to: string[]; cc: string[] }; frozen: { to: string[]; cc: string[] } | null };
+ }
+ 
++/**
++ * Waits until the runner has rendered the PDF of the person's signed period, before the send is requested. A send job made in the same
++ * second as the PDF job (the job queue orders by whole seconds, then by a random id) can be claimed first, find no PDF, and wait one
++ * minute for its retry: 78 s of the test instead of 17 s, on about every second run.
++ */
++async function waitForPdf(adminSeed: SeedClient, userId: string): Promise<void> {
++  await expect
++    .poll(
++      async () => {
++        const response = await adminSeed.call<{ submissions: ApiSubmission[] }>('GET', '/api/admin/submissions?limit=500');
++        return response.submissions.find((row) => row.user_id === userId)?.pdf.state;
++      },
++      { timeout: 60_000, intervals: [1_000], message: 'the PDF of the signed period is rendered before the send' },
++    )
++    .toBe('ready');
++}
++
+ async function expectNoSidewaysScroll(page: Page) {
+   const widths = await page.evaluate<{ scroll: number; inner: number }>(
+     '({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth })',
+@@ -139,6 +156,7 @@
+     { expected_version: review.expected_version, reviewed_hash: review.payload_hash, signer_name: 'Synthetic Operator', incomplete_evidence_acknowledged: true },
+     201,
+   );
++  await waitForPdf(adminSeed, account.id);
+   await sendSigned(api, signedOff.revision.id);
+ 
+   // The runner renders the PDF and attempts the delivery; wait for a final delivery state.
+@@ -280,6 +298,7 @@
+     { expected_version: review.expected_version, reviewed_hash: review.payload_hash, signer_name: 'Synthetic Operator', incomplete_evidence_acknowledged: true },
+     201,
+   );
++  await waitForPdf(adminSeed, account.id);
+   await sendSigned(api, signed.revision.id);
+   const mine = async () => (await adminSeed.call<{ submissions: ApiSubmission[] }>('GET', '/api/admin/submissions?limit=500')).submissions.find((row) => row.user_id === account.id);
+   await expect
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -10,7 +10,9 @@
+   computedStyle,
+   contrast,
+   over,
++  type PaintedSurface,
+   paintedPixel,
++  paintedSurface,
+   parseColour,
+   parseLayers,
+   readPseudo,
+@@ -865,11 +867,14 @@
+ 
+ /**
+  * True when a pixel of the area (x0..x1, y0..y1, rounded outwards) has the colour: a 1px edge lands on either side of a
+- * fractional box edge, so a single pixel is not a reliable probe of it.
++ * fractional box edge, so a single pixel is not a reliable probe of it. The pixels come from a screenshot per pixel of the page, or from
++ * one screenshot of the viewport (`paintedSurface`) when the caller reads many pixels of an unchanged page.
+  */
+-async function paintedWithin(page: Page, [x0, x1]: [number, number], [y0, y1]: [number, number], colour: Rgba): Promise<boolean> {
++async function paintedWithin(source: Page | PaintedSurface, [x0, x1]: [number, number], [y0, y1]: [number, number], colour: Rgba): Promise<boolean> {
+   for (let y = Math.floor(y0); y <= Math.ceil(y1); y += 1) {
+-    for (let x = Math.floor(x0); x <= Math.ceil(x1); x += 1) if (sameRgb(await paintedPixel(page, x, y), colour, 3)) return true;
++    for (let x = Math.floor(x0); x <= Math.ceil(x1); x += 1) {
++      if (sameRgb('at' in source ? source.at(x, y) : await paintedPixel(source, x, y), colour, 3)) return true;
++    }
+   }
+   return false;
+ }
+@@ -1063,31 +1068,33 @@
+       await bringIntoView(page, column);
+       await settledLook(column);
+       const boxes = await columnBoxes(column);
++      // One screenshot of the viewport answers every pixel read of the open column (a screenshot per pixel was 360 screenshots in all).
++      const columnSurface = await paintedSurface(page);
+       // The attention cell (a past workday without a session) is among the cells, and so is the head.
+       expect(boxes.cells.some((cell) => cell.className.includes('attention')), 'an attention cell in the column').toBe(true);
+       for (const cell of boxes.cells) {
+         const y = Math.floor(cell.box.top + cell.box.height / 2);
+-        expect(await paintedWithin(page, [boxes.host.left, boxes.host.left + 1], [y, y], accent), `${appearance.name}: left frame over "${cell.className}" (details ${details})`).toBe(true);
+-        expect(await paintedWithin(page, [boxes.host.right - 3, boxes.host.right - 1], [y, y], accent), `${appearance.name}: right frame over "${cell.className}" (details ${details})`).toBe(true);
++        expect(await paintedWithin(columnSurface, [boxes.host.left, boxes.host.left + 1], [y, y], accent), `${appearance.name}: left frame over "${cell.className}" (details ${details})`).toBe(true);
++        expect(await paintedWithin(columnSurface, [boxes.host.right - 3, boxes.host.right - 1], [y, y], accent), `${appearance.name}: right frame over "${cell.className}" (details ${details})`).toBe(true);
+         // No 2px rail: the pixels three and four columns in are the cell's own colour, not accent.
+-        expect(await paintedWithin(page, [boxes.host.left + 3, boxes.host.left + 4], [y, y], accent), `${appearance.name}: no rail beside the frame over "${cell.className}"`).toBe(false);
++        expect(await paintedWithin(columnSurface, [boxes.host.left + 3, boxes.host.left + 4], [y, y], accent), `${appearance.name}: no rail beside the frame over "${cell.className}"`).toBe(false);
+       }
+       const head = boxes.cells[0]?.box;
+       const headMiddle = Math.floor((head?.top ?? 0) + (head?.height ?? 0) / 2);
+       const middle = Math.floor((head?.left ?? 0) + (head?.width ?? 0) / 2);
+       // The top and bottom edges of the frame are painted too (the layer is inset in the column's box, never clipped).
+-      expect(await paintedWithin(page, [middle, middle], [boxes.host.top, boxes.host.top + 1], accent), `${appearance.name}: top frame over the head`).toBe(true);
++      expect(await paintedWithin(columnSurface, [middle, middle], [boxes.host.top, boxes.host.top + 1], accent), `${appearance.name}: top frame over the head`).toBe(true);
+       const last = boxes.cells.at(-1)?.box;
+-      expect(await paintedWithin(page, [middle, middle], [(last?.bottom ?? 0) - 2, (last?.bottom ?? 0) - 1], accent), `${appearance.name}: bottom frame`).toBe(true);
++      expect(await paintedWithin(columnSurface, [middle, middle], [(last?.bottom ?? 0) - 2, (last?.bottom ?? 0) - 1], accent), `${appearance.name}: bottom frame`).toBe(true);
+       // The Day cell is filled (a corner of the head, where no text is) and has no underline.
+-      expect(sameRgb(await paintedPixel(page, Math.ceil(boxes.host.left) + 4, headMiddle), headFill, 3), `${appearance.name}: the Day cell is filled`).toBe(true);
+-      expect(sameRgb(await paintedPixel(page, middle, Math.floor((head?.top ?? 0) + (head?.height ?? 0) - 2)), accent), `${appearance.name}: no underline under the Day cell`).toBe(false);
++      expect(sameRgb(columnSurface.at(Math.ceil(boxes.host.left) + 4, headMiddle), headFill, 3), `${appearance.name}: the Day cell is filled`).toBe(true);
++      expect(sameRgb(columnSurface.at(middle, Math.floor((head?.top ?? 0) + (head?.height ?? 0) - 2)), accent), `${appearance.name}: no underline under the Day cell`).toBe(false);
+       // The frame is a layer over the column, not a property of the cells: the same pixels of the neighbouring day are not accent.
+       await bringIntoView(page, neighbour);
+       const other = await columnBoxes(neighbour);
+       const otherHead = other.cells[0]?.box;
+       const otherY = Math.floor((otherHead?.top ?? 0) + (otherHead?.height ?? 0) / 2);
+-      expect(sameRgb(await paintedPixel(page, Math.ceil(other.host.left), otherY), accent), `${appearance.name}: neighbour head edge`).toBe(false);
++      expect(sameRgb((await paintedSurface(page)).at(Math.ceil(other.host.left), otherY), accent), `${appearance.name}: neighbour head edge`).toBe(false);
+       // Nothing fills the column body: its OT corner is the neighbour's, the card colour.
+       const bare = await otCorner(page, neighbour);
+       const filled = await otCorner(page, column);
+--- a/tests/e2e/contrast.ts
++++ b/tests/e2e/contrast.ts
+@@ -283,6 +283,66 @@
+   return [raw.readUInt8(1), raw.readUInt8(2), raw.readUInt8(3), colourType === 6 ? raw.readUInt8(4) / 255 : 1];
+ }
+ 
++/** A screenshot of the viewport, decoded once: the painted colour of any CSS pixel of it. */
++export interface PaintedSurface {
++  /** The colour painted at one CSS pixel of the viewport when the screenshot was taken. */
++  at(x: number, y: number): Rgba;
++}
++
++/**
++ * One screenshot of the viewport for many pixel reads. `paintedPixel` takes a screenshot per pixel (about 60 ms each, and the probe of a
++ * frame over every cell of a column reads several hundred); a surface answers the same question for every pixel of one screenshot. Take a
++ * new surface after anything scrolls, resizes, changes theme or repaints. The pointer is moved off the page first, as `paintedPixel` does.
++ */
++export async function paintedSurface(page: Page): Promise<PaintedSurface> {
++  await page.mouse.move(0, 0);
++  const png = await page.screenshot({ scale: 'css', animations: 'disabled', caret: 'hide' });
++  const data: Buffer[] = [];
++  let [width, height, colourType] = [0, 0, 0];
++  for (let offset = 8; offset < png.length; ) {
++    const length = png.readUInt32BE(offset);
++    const type = png.toString('latin1', offset + 4, offset + 8);
++    const body = png.subarray(offset + 8, offset + 8 + length);
++    if (type === 'IHDR') {
++      expect(body.readUInt8(8), 'PNG bit depth').toBe(8);
++      expect(body.readUInt8(12), 'PNG is not interlaced').toBe(0);
++      [width, height, colourType] = [body.readUInt32BE(0), body.readUInt32BE(4), body.readUInt8(9)];
++    }
++    if (type === 'IDAT') data.push(body);
++    offset += 12 + length;
++  }
++  expect([2, 6], `PNG colour type ${colourType}`).toContain(colourType);
++  const raw = inflateSync(Buffer.concat(data));
++  const bytes = colourType === 6 ? 4 : 3;
++  const stride = width * bytes;
++  const pixels = Buffer.alloc(stride * height);
++  for (let row = 0; row < height; row += 1) {
++    const filter = raw.readUInt8(row * (stride + 1));
++    for (let index = 0; index < stride; index += 1) {
++      const left = index >= bytes ? pixels.readUInt8(row * stride + index - bytes) : 0;
++      const up = row > 0 ? pixels.readUInt8((row - 1) * stride + index) : 0;
++      const upLeft = row > 0 && index >= bytes ? pixels.readUInt8((row - 1) * stride + index - bytes) : 0;
++      let predictor = 0;
++      if (filter === 1) predictor = left;
++      else if (filter === 2) predictor = up;
++      else if (filter === 3) predictor = (left + up) >> 1;
++      else if (filter === 4) {
++        const estimate = left + up - upLeft;
++        const [fromLeft, fromUp, fromUpLeft] = [Math.abs(estimate - left), Math.abs(estimate - up), Math.abs(estimate - upLeft)];
++        predictor = fromLeft <= fromUp && fromLeft <= fromUpLeft ? left : fromUp <= fromUpLeft ? up : upLeft;
++      }
++      pixels.writeUInt8((raw.readUInt8(row * (stride + 1) + 1 + index) + predictor) & 255, row * stride + index);
++    }
++  }
++  return {
++    at(x: number, y: number): Rgba {
++      expect(Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < width && y < height, `pixel ${x},${y} is a whole pixel inside the ${width}x${height} viewport`).toBe(true);
++      const start = y * stride + x * bytes;
++      return [pixels.readUInt8(start), pixels.readUInt8(start + 1), pixels.readUInt8(start + 2), colourType === 6 ? pixels.readUInt8(start + 3) / 255 : 1];
++    },
++  };
++}
++
+ /** True when two opaque colours differ by at most `tolerance` on every channel. */
+ export function sameColour(a: Rgba, b: Rgba, tolerance = 3): boolean {
+   return [0, 1, 2].every((index) => Math.abs((a[index] ?? 0) - (b[index] ?? 0)) <= tolerance);
+--- a/tests/e2e/day-editor.spec.ts
++++ b/tests/e2e/day-editor.spec.ts
+@@ -5543,15 +5543,32 @@
+   return contrast(over(text, behind), behind);
+ }
+ 
+-/** The text of the dialog's own words against what is behind them: at least 4.5:1 for every leaf element with text. */
++/**
++ * The text of the dialog's own words against what is behind them: at least 4.5:1 for every leaf element with text. One read of the
++ * dialog gives, for each visible leaf with text, its own text and fill colour and the fill of every ancestor (the same computed values
++ * `textContrast` reads, five round trips to the browser per leaf before); the colour maths are the same and stay here.
++ */
+ async function textContrastProblems(dialog: Locator): Promise<string[]> {
+-  const leaves = await dialog.locator('h2, h3, p, li, label, button, dt, dd, .hint, .muted, legend').all();
++  const leaves = await dialog.evaluate((element) => {
++    const view = element.ownerDocument.defaultView;
++    const found: Array<{ label: string; colour: string; fill: string; backdrops: string[] }> = [];
++    for (const leaf of element.querySelectorAll('h2, h3, p, li, label, button, dt, dd, .hint, .muted, legend')) {
++      const style = view?.getComputedStyle(leaf);
++      const box = leaf.getBoundingClientRect();
++      if (style === undefined || style.visibility !== 'visible' || box.width <= 0 || box.height <= 0) continue;
++      // The test project has no DOM types: `innerText` (what the page renders, as Locator.isVisible and innerText() see it) is declared by shape.
++      if ((leaf as unknown as { innerText: string }).innerText.trim() === '') continue;
++      const backdrops: string[] = [];
++      for (let node = leaf.parentElement; node; node = node.parentElement) backdrops.push(view?.getComputedStyle(node).backgroundColor ?? '');
++      found.push({ label: `${leaf.tagName}.${leaf.getAttribute('class') ?? ''}`, colour: style.color, fill: style.backgroundColor, backdrops });
++    }
++    return found;
++  });
+   const problems: string[] = [];
+   for (const leaf of leaves) {
+-    if (!(await leaf.isVisible())) continue;
+-    if ((await leaf.innerText()).trim() === '') continue;
+-    const ratio = await textContrast(leaf);
+-    if (ratio < 4.5) problems.push(`${await leaf.evaluate((element) => `${element.tagName}.${element.getAttribute('class') ?? ''}`)} ${ratio.toFixed(2)}:1`);
++    const behind = over(parseColour(leaf.fill), backdropOf(leaf.backdrops));
++    const ratio = contrast(over(parseColour(leaf.colour), behind), behind);
++    if (ratio < 4.5) problems.push(`${leaf.label} ${ratio.toFixed(2)}:1`);
+   }
+   return problems;
+ }

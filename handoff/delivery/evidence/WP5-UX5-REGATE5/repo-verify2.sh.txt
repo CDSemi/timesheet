@@ -1,0 +1,8 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+export SMOKE_PORT=50483
+cd $REPO
+npm run verify > $T/out/22-repo-verify.txt 2>&1; echo "repo verify (after npm install fallback) exit $?" > $T/out/22-repo-verify-exit.txt
+grep -E "Test Files|Tests  |SMOKE|Duration" $T/out/22-repo-verify.txt >> $T/out/22-repo-verify-exit.txt
+echo "deprecat lines: $(grep -ci deprecat $T/out/22-repo-verify.txt)" >> $T/out/22-repo-verify-exit.txt
+echo done > $T/out/repo-verify2.done

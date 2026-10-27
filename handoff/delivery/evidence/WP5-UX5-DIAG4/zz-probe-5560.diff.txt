@@ -1,0 +1,36 @@
+--- orig-day-editor.spec.ts
++++ probe-5560
+@@ -5563,6 +5563,7 @@
+     signInThroughUi,
+     isMobile,
+   }, testInfo) => {
++    const T0 = performance.now();
+     const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+     await page.setViewportSize({ width, height: width > 600 ? 1000 : 844 });
+     try {
+@@ -5571,6 +5572,7 @@
+       await editor.getByRole('button', { name: 'Add session' }).click();
+       const form = sessionDialog(page, 'New session');
+       await expect(form).toBeVisible();
++      console.log(`PROBE ${width}: form visible at ${(performance.now() - T0).toFixed(0)} ms`);
+       const expected = ['Input zone', 'Start date', 'Start time', 'End date', 'End time'];
+ 
+       // DOM order and screen order of the five inputs of the Time section.
+@@ -5623,13 +5625,17 @@
+           }
+           expect(await textContrast(link), `${linkName} text contrast (${theme})`).toBeGreaterThanOrEqual(4.5);
+         }
++        console.log(`PROBE ${width} ${theme}: pairs done at ${(performance.now() - T0).toFixed(0)} ms`);
+         expect(await namesContainVisibleText(form), `names of the session dialog (${theme})`).toEqual([]);
++        console.log(`PROBE ${width} ${theme}: names done at ${(performance.now() - T0).toFixed(0)} ms`);
+         expect(await textContrastProblems(form), `text contrast of the session dialog (${theme})`).toEqual([]);
++        console.log(`PROBE ${width} ${theme}: textContrastProblems done at ${(performance.now() - T0).toFixed(0)} ms`);
+ 
+         // The shared focus ring on a link (3:1, SC 1.4.11) and, where the device can hover, a hover that keeps the text readable.
+         const today = form.getByRole('button', { name: 'Today, start date', exact: true });
+         await focusFromKeyboard(today);
+         const ring = await measureFocusRing(today);
++        console.log(`PROBE ${width} ${theme}: ring done at ${(performance.now() - T0).toFixed(0)} ms`);
+         expect(ring.ringAgainstBackdrop, `focus ring of "Today" (${theme})`).toBeGreaterThanOrEqual(3);
+         expect(ring.ringAgainstGap, `focus ring against its gap (${theme})`).toBeGreaterThanOrEqual(3);
+         if (!isMobile) {

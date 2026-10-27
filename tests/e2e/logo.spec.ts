@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { BrowserContext, Page } from '@playwright/test';
 import { contrast, flattenedBackground, parseColour, type Rgba } from './contrast.ts';
 import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
 
@@ -16,7 +16,8 @@ import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
  * the phone bar too: from 414px with the check in/out group, from 852px on the desktop bar without a share, from 1280px with one. The
  * sweeps at the end of this file check every width from 320 to 1440px in both themes.
  */
-test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const DEVICE = { locale: 'en-US', timezoneId: 'America/Los_Angeles' } as const;
+test.use(DEVICE);
 
 const BRAND_NAME = 'C&D Semiconductor Services, Inc.';
 const STORAGE_KEY = 'timesheet.theme';
@@ -459,18 +460,75 @@ function expectNoOverlap(width: number, state: BarMeasure): void {
 interface SweepOptions {
   /** True for the "Shared with me" bar of a desktop width: the bound is the fixed 1280px, not the measured room (the switcher's width depends on the owners' names). */
   fixedDesktopBound: boolean;
+  /** The colour scheme of the person's screens: every extra window of the sweep emulates it with reduced motion. */
+  scheme: 'light' | 'dark';
+  /** Waits until the screen under test is ready in a window: the conditions the test awaited on its own page before the sweep. */
+  ready: (view: Page) => Promise<void>;
+}
+
+/**
+ * The windows that measure the sweep side by side: the test's own page and three more, each in a browser context of its own, each one a
+ * quarter of the widths. Never as tabs of one context: with the host busy a second tab of a context gets a frame only now and then (the
+ * rAF of every step then takes a second and more), where a context of its own keeps its frames.
+ */
+const SWEEP_WINDOWS = 4;
+const SWEEP_FIRST = 320;
+const SWEEP_LAST = 1440;
+
+/** Another window for the sweep: a context of the test's browser, signed in as the test's page is, on the same screen, device and colour scheme. */
+async function openSweepWindow(page: Page, options: SweepOptions): Promise<{ context: BrowserContext; view: Page }> {
+  const browser = page.context().browser();
+  if (browser === null) throw new Error('The sweep needs the browser of the test to open its other windows');
+  const context = await browser.newContext({
+    ...DEVICE,
+    storageState: await page.context().storageState(),
+    viewport: { width: 600, height: 800 },
+    colorScheme: options.scheme,
+    reducedMotion: 'reduce',
+  });
+  const view = await context.newPage();
+  view.on('pageerror', (error) => {
+    throw error;
+  });
+  await view.goto(page.url());
+  await options.ready(view);
+  return { context, view };
+}
+
+/** One window's share of the sweep: every width from `from` to `to`, in 1px steps. */
+async function sweepRange(page: Page, from: number, to: number): Promise<SweepRow[]> {
+  const rows: SweepRow[] = [];
+  for (let width = from; width <= to; width += 1) {
+    await page.setViewportSize({ width, height: 800 });
+    rows.push({ width, ...(await sweepRow(page)) });
+  }
+  return rows;
 }
 
 /**
  * Sweeps the bar from 320 to 1440px in 1px steps and checks the rule of U5-02: the wordmark is displayed exactly when it fits with 8px
  * of slack (to the pixel of the literal thresholds), never overlaps or clips, and never adds a row. Returns the widths where it shows.
+ * The 1,121 widths are split into SWEEP_WINDOWS runs of consecutive widths, measured at the same time in as many windows; every width is
+ * measured by the same script in the same way, and the rows are put back in width order before any check.
  */
 async function sweepWordmark(page: Page, options: SweepOptions): Promise<number[]> {
-  const rows: SweepRow[] = [];
-  for (let width = 320; width <= 1440; width += 1) {
-    await page.setViewportSize({ width, height: 800 });
-    rows.push({ width, ...(await sweepRow(page)) });
+  const others: Array<{ context: BrowserContext; view: Page }> = [];
+  let rows: SweepRow[];
+  try {
+    for (let index = 1; index < SWEEP_WINDOWS; index += 1) others.push(await openSweepWindow(page, options));
+    const views = [page, ...others.map((other) => other.view)];
+    const share = Math.ceil((SWEEP_LAST - SWEEP_FIRST + 1) / SWEEP_WINDOWS);
+    const parts = await Promise.all(
+      views.map((view, index) => sweepRange(view, SWEEP_FIRST + index * share, Math.min(SWEEP_LAST, SWEEP_FIRST + (index + 1) * share - 1))),
+    );
+    rows = parts.flat();
+  } finally {
+    for (const other of others) await other.context.close();
   }
+  expect(
+    rows.map((row) => row.width),
+    'every width from 320 to 1440px was measured once, in order',
+  ).toEqual(Array.from({ length: SWEEP_LAST - SWEEP_FIRST + 1 }, (_, index) => SWEEP_FIRST + index));
   const shows = rows.map((row) => row.actual.visible);
   const fits = rows.map((row) => (row.width >= 768 && options.fixedDesktopBound ? row.width >= 1280 : wordmarkFits(row, row.width < 768)));
   for (const [index, row] of rows.entries()) {
@@ -493,8 +551,11 @@ for (const scheme of ['light', 'dark'] as const) {
     const me = await newPerson(adminSeed, builtServer, { displayName: LONG_NAME, signature: 'none' });
     await page.setViewportSize({ width: 600, height: 800 });
     await signInPageAs(me.account);
-    await expect(page.locator('.bar-clock')).toBeVisible();
-    const shown = await sweepWordmark(page, { fixedDesktopBound: false });
+    const ready = async (view: Page) => {
+      await expect(view.locator('.bar-clock')).toBeVisible();
+    };
+    await ready(page);
+    const shown = await sweepWordmark(page, { fixedDesktopBound: false, scheme, ready });
     // The documented literals: from 414px of bar with the check in/out group, from 852px without it on the desktop bar.
     const phone = shown.filter((width) => width < 768);
     const desktop = shown.filter((width) => width >= 768);
@@ -520,20 +581,46 @@ for (const scheme of ['light', 'dark'] as const) {
     await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
     await page.setViewportSize({ width: 600, height: 800 });
     await signInPageAs(me.account);
-    await expect(page.locator('.bar-clock')).toBeVisible();
-    await expect(page.locator('header.shell-bar .shell-switcher')).toBeVisible();
-    const shown = await sweepWordmark(page, { fixedDesktopBound: true });
+    const ready = async (view: Page) => {
+      await expect(view.locator('.bar-clock')).toBeVisible();
+      await expect(view.locator('header.shell-bar .shell-switcher')).toBeVisible();
+    };
+    await ready(page);
+    const shown = await sweepWordmark(page, { fixedDesktopBound: true, scheme, ready });
     // Own view with the switcher: shown from 414px up to 494px (the switcher is on its own row anyway), hidden from 495 to 665px (it would
     // wrap the switcher), shown again from 666px; on the desktop bar from 1280px.
     const phone = shown.filter((width) => width < 768);
     expect(phone.filter((width) => width < 600).sort((a, b) => a - b), 'the narrow range of the phone bar').toEqual(Array.from({ length: 495 - 414 }, (_, index) => 414 + index));
     expect(Math.min(...phone.filter((width) => width >= 600)), 'shown again from 666px').toBe(666);
     expect(Math.min(...shown.filter((width) => width >= 768)), 'the desktop bar shows it from 1280px').toBe(1280);
+  });
+
+  // The shared view is a test of its own (it was the second sweep of the test above): each sweep has the whole timeout to itself.
+  test(`in a shared view the wordmark never adds a row: shown from 492px, and from 1280px on the desktop bar (${scheme})`, async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'The sweep resizes the window of the desktop project');
+    test.setTimeout(240_000);
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const me = await newPerson(adminSeed, builtServer, { displayName: LONG_NAME, signature: 'none' });
+    const owner = await newPerson(adminSeed, builtServer, { displayName: OWNER_NAME, signature: 'none' });
+    await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: SHARE_ITEMS }, 201);
+    await page.setViewportSize({ width: 600, height: 800 });
+    await signInPageAs(me.account);
+    await expect(page.locator('.bar-clock')).toBeVisible();
+    await expect(page.locator('header.shell-bar .shell-switcher')).toBeVisible();
     // A shared view has no check in/out group: the brand and the switcher share the row, so the wordmark shows from 492px.
     await page.goto(`/#/shared/${owner.account.id}/timesheet`);
-    await expect(page.locator('.share-bar')).toBeVisible();
-    await expect(page.locator('.bar-clock')).toHaveCount(0);
-    const sharedShown = await sweepWordmark(page, { fixedDesktopBound: true });
+    const sharedReady = async (view: Page) => {
+      await expect(view.locator('.share-bar')).toBeVisible();
+      await expect(view.locator('.bar-clock')).toHaveCount(0);
+    };
+    await sharedReady(page);
+    const sharedShown = await sweepWordmark(page, { fixedDesktopBound: true, scheme, ready: sharedReady });
     expect(Math.min(...sharedShown), 'a shared view shows the wordmark from 492px').toBe(492);
     expect(Math.min(...sharedShown.filter((width) => width >= 768)), 'and on the desktop bar from 1280px').toBe(1280);
   });

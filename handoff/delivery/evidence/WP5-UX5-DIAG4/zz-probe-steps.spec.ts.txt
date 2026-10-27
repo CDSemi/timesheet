@@ -1,0 +1,55 @@
+import { expect, newPerson, test } from './fixtures.ts';
+
+/* DIAG4 probe: where does one sweep step of logo.spec.ts go? Not part of the suite. */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const RAF = `(async () => { await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))); return 1; })()`;
+const BARE = `(() => { const bar = document.querySelector('header.shell-bar'); return bar.getBoundingClientRect().height; })()`;
+
+test('probe: per-step cost of a viewport sweep', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'desktop only');
+  test.setTimeout(240_000);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Reader With An Exceptionally Long Display Name', signature: 'none' });
+  await page.setViewportSize({ width: 600, height: 800 });
+  await signInPageAs(me.account);
+  await expect(page.locator('.bar-clock')).toBeVisible();
+  const N = 200;
+  const stat = (label: string, values: number[]) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    const sum = values.reduce((a, b) => a + b, 0);
+    console.log(`PROBE ${label}: n=${values.length} total=${sum.toFixed(0)}ms mean=${(sum / values.length).toFixed(1)}ms median=${sorted[Math.floor(values.length / 2)]?.toFixed(1)}ms max=${sorted[sorted.length - 1]?.toFixed(1)}ms`);
+  };
+  for (const [label, script] of [['resize+raf-evaluate', RAF], ['resize+bare-evaluate', BARE]] as const) {
+    const resize: number[] = [];
+    const evaluate: number[] = [];
+    for (let i = 0; i < N; i += 1) {
+      const width = 320 + i * 3 + (label === 'resize+raf-evaluate' ? 0 : 1);
+      const t0 = performance.now();
+      await page.setViewportSize({ width, height: 800 });
+      const t1 = performance.now();
+      await page.evaluate(script);
+      const t2 = performance.now();
+      resize.push(t1 - t0);
+      evaluate.push(t2 - t1);
+    }
+    stat(`${label} setViewportSize`, resize);
+    stat(`${label} evaluate`, evaluate);
+  }
+  // resize without any evaluate
+  const bareResize: number[] = [];
+  for (let i = 0; i < N; i += 1) {
+    const t0 = performance.now();
+    await page.setViewportSize({ width: 320 + i * 3 + 2, height: 800 });
+    bareResize.push(performance.now() - t0);
+  }
+  stat('resize only', bareResize);
+  // a single evaluate that does two rAF in a row (no resize)
+  const rafOnly: number[] = [];
+  for (let i = 0; i < 50; i += 1) {
+    const t0 = performance.now();
+    await page.evaluate(RAF);
+    rafOnly.push(performance.now() - t0);
+  }
+  stat('raf-evaluate without resize', rafOnly);
+});

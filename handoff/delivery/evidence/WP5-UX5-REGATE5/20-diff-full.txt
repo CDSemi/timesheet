@@ -1,0 +1,1253 @@
+diff --git a/docs/03_ARCHITECTURE_AND_DATA.md b/docs/03_ARCHITECTURE_AND_DATA.md
+index 735a9ca8..3412ea24 100644
+--- a/docs/03_ARCHITECTURE_AND_DATA.md
++++ b/docs/03_ARCHITECTURE_AND_DATA.md
+@@ -57,7 +57,7 @@ Group routes under /api for auth, personal settings, calendars, periods/day edit
+ 
+ Sends (WP5-UX5-T01b; owner decisions F-2 a, F-3 b and F-4, 2026-10-21). All are owner only; none is on the shared allowlist.
+ - `GET /api/revisions/:id/send-draft` writes nothing. It returns the Send card defaults: To and Cc from the current Settings, the subject and body rendered from the current Settings templates for this revision, the two PDF row switches from Settings ("Time rows on the PDF" `show_time_on_pdf`, "OT rows on the PDF" `show_ot_on_pdf`), the configured sender, `copy_sent_before` (the latest counted copy: date, recipients, state), `reason_required` and the previous send.
+-- `POST /api/revisions/:id/send` takes `{ request_key, to, cc, subject, body_text, time_rows, ot_rows, reason? }`. The same request key with the same body replays (200); with another body it is 409 `request_key_reused`. Only the period's current revision can be sent (409 `revision_superseded`), never an imported one. A send is refused while an attempt of the revision is open (409 `delivery_in_progress`), uncertain without a decision (409 `delivery_uncertain`), or while one of its send jobs waits (409 `delivery_in_progress`). Then the reason rule runs inside the same transaction (document 05). One transaction writes the send record, its send job (business key `send:<send id>`, routing ids only), the PDF job of its variant when that file is not stored yet, and the audit event `revision.send` (ids, number, switches, recipient counts, and the reason in the event's reason field; no address or content).
++- `POST /api/revisions/:id/send` takes `{ request_key, to, cc, subject, body_text, time_rows, ot_rows, reason? }`. The same request key with the same body replays (200); with another body it is 409 `request_key_reused`. Only the period's current revision can be sent (409 `revision_superseded`), never an imported one. A send is refused while an attempt of the revision is open (409 `delivery_in_progress`), uncertain without a decision (409 `delivery_uncertain`), or while a send job of any revision of the period waits (409 `delivery_in_progress`). Then the reason rule runs inside the same transaction (document 05). One transaction writes the send record, its send job (business key `send:<send id>`, routing ids only), the PDF job of its variant when that file is not stored yet, and the audit event `revision.send` (ids, number, switches, recipient counts, and the reason in the event's reason field; no address or content).
+ - `POST /api/revisions/:id/resend` is the same send with the previous send's values. The uncertain-attempt decision "resend" is the same too, and it needs a reason.
+ - `GET /api/revisions/:id/pdf?time=0|1&ot=0|1[&disposition=inline]` returns the stored variant (default: the sign-off variant, time rows on and OT rows as the snapshot froze them). It renders a variant not stored yet on request, through the PDF job's path (no network, an atomic file write, then a short transaction). On the shared mount the query is ignored and nothing is rendered: the grantee gets the variant of the latest send, or the sign-off variant, once it is stored (else 409 `pdf_not_ready`).
+ - `GET /api/timesheets/:payrollDate/pdf-preview?time&ot` renders an unsigned preview of the current review. It writes nothing, is `no-store` and inline, and prints "Preview, not signed" without an image.
+diff --git a/docs/03_ARCHITECTURE_AND_DATA.vi.md b/docs/03_ARCHITECTURE_AND_DATA.vi.md
+index cbe7299a..84309c58 100644
+--- a/docs/03_ARCHITECTURE_AND_DATA.vi.md
++++ b/docs/03_ARCHITECTURE_AND_DATA.vi.md
+@@ -57,7 +57,7 @@ Nhóm route dưới /api cho auth, settings cá nhân, lịch, kỳ/sửa ngày,
+ 
+ Gửi (WP5-UX5-T01b; quyết định của chủ F-2 a, F-3 b và F-4, 2026-10-21). Tất cả chỉ dành cho chủ sở hữu; không route nào thuộc allowlist chia sẻ.
+ - `GET /api/revisions/:id/send-draft` không ghi gì. Nó trả về các giá trị mặc định của thẻ Gửi: To và Cc từ Settings hiện tại, tiêu đề và nội dung render từ mẫu Settings hiện tại cho revision này, hai công tắc dòng PDF từ Settings ("Dòng giờ trên PDF" `show_time_on_pdf`, "Dòng OT trên PDF" `show_ot_on_pdf`), người gửi đã cấu hình, `copy_sent_before` (bản gần nhất được tính: ngày, người nhận, trạng thái), `reason_required` và lần gửi trước.
+-- `POST /api/revisions/:id/send` nhận `{ request_key, to, cc, subject, body_text, time_rows, ot_rows, reason? }`. Cùng khóa request với cùng nội dung thì replay (200); với nội dung khác là 409 `request_key_reused`. Chỉ revision hiện tại của kỳ được gửi (409 `revision_superseded`), không bao giờ là kỳ nhập. Lần gửi bị từ chối khi một attempt của revision đang mở (409 `delivery_in_progress`), không chắc chắn mà chưa có quyết định (409 `delivery_uncertain`), hoặc khi một send job của nó đang chờ (409 `delivery_in_progress`). Sau đó quy tắc lý do chạy trong cùng transaction (tài liệu 05). Một transaction ghi bản ghi gửi, send job của nó (business key `send:<send id>`, chỉ ID định tuyến), job PDF của biến thể khi file đó chưa được lưu, và sự kiện audit `revision.send` (ID, số thứ tự, công tắc, số người nhận, và lý do trong trường lý do của sự kiện; không địa chỉ, không nội dung).
++- `POST /api/revisions/:id/send` nhận `{ request_key, to, cc, subject, body_text, time_rows, ot_rows, reason? }`. Cùng khóa request với cùng nội dung thì replay (200); với nội dung khác là 409 `request_key_reused`. Chỉ revision hiện tại của kỳ được gửi (409 `revision_superseded`), không bao giờ là kỳ nhập. Lần gửi bị từ chối khi một attempt của revision đang mở (409 `delivery_in_progress`), không chắc chắn mà chưa có quyết định (409 `delivery_uncertain`), hoặc khi một send job của bất kỳ revision nào của kỳ đang chờ (409 `delivery_in_progress`). Sau đó quy tắc lý do chạy trong cùng transaction (tài liệu 05). Một transaction ghi bản ghi gửi, send job của nó (business key `send:<send id>`, chỉ ID định tuyến), job PDF của biến thể khi file đó chưa được lưu, và sự kiện audit `revision.send` (ID, số thứ tự, công tắc, số người nhận, và lý do trong trường lý do của sự kiện; không địa chỉ, không nội dung).
+ - `POST /api/revisions/:id/resend` là cùng lần gửi đó với giá trị của lần gửi trước. Quyết định "gửi lại" cho một attempt không chắc chắn cũng vậy, và nó cần lý do.
+ - `GET /api/revisions/:id/pdf?time=0|1&ot=0|1[&disposition=inline]` trả về biến thể đã lưu (mặc định: biến thể lúc sign-off, có dòng giờ và dòng OT theo snapshot). Nó render theo yêu cầu một biến thể chưa lưu, qua đường của job PDF (không gọi mạng, ghi file nguyên tử, rồi một transaction ngắn). Trên mount chia sẻ, query bị bỏ qua và không render gì: người được chia sẻ nhận biến thể của lần gửi gần nhất, hoặc biến thể lúc sign-off, khi nó đã được lưu (nếu chưa thì 409 `pdf_not_ready`).
+ - `GET /api/timesheets/:payrollDate/pdf-preview?time&ot` render một bản xem trước chưa ký của review hiện tại. Nó không ghi gì, `no-store`, hiển thị inline, và in "Preview, not signed" không kèm ảnh.
+diff --git a/docs/04_UX_AND_SETTINGS.md b/docs/04_UX_AND_SETTINGS.md
+index c95f5680..fd0e12e5 100644
+--- a/docs/04_UX_AND_SETTINGS.md
++++ b/docs/04_UX_AND_SETTINGS.md
+@@ -7,7 +7,7 @@
+ | App shell | Desktop top bar: the C&D logo, with the two-line wordmark ("SEMICONDUCTOR" over "SERVICES, INC.") beside it whenever it fits (round 5, U5-02; the bar is a size container and the thresholds are documented literals in the style sheet): from 852px of bar width without the "Shared with me" switcher and from 1280px with it (the switcher is as wide as its longest owner's name, so that bound is a fixed, conservative one; the bar keeps its single row with tighter gaps between 1024 and 1279px); the wordmark never overlaps or clips and never adds a row, so where it would push the switcher onto a second row it stays hidden; then Timesheet, Overtime and History, and at the right end the identity block: the display name in bold over the email in smaller muted text (both right-aligned and cut with an ellipsis at 14rem), an initials avatar and a chevron. The identity block always shows the signed-in person, also in a shared view, and opens the account menu, a disclosure panel (not an ARIA menu, so its links, Theme choice and button keep their own semantics): a header with the avatar, the full name, the email and, for administrators, "Administrator"; Profile, Settings, Administration (administrators only), the Light/Dark "Theme" control and Sign out. Opened by keyboard it focuses the first entry; Escape closes it and returns focus to the identity button; a press outside, a page change or Tab past Sign out also closes it. After an entry is chosen, focus moves to the new page's main heading, or back to the identity button (on phones, More) when the page does not change; the heading shows the focus ring only to keyboard users. The brand is not a link; its text name "C&D Semiconductor Services, Inc." is hidden text read once by screen readers. The space from the brand to the menu is 24px, and 32px wherever the wordmark shows. Phone bar (below 768px, the navigation shell; round 5 keeps 768px for the shell and moves only the sheet's compact form to 480px): compact top bar with the logo and, on the person's own screens, the check in/out controls (see "Period bar, check in/out and batch mode"), no avatar, with the wordmark beside the logo where it fits (from 414px of bar width with the check in/out group; with the "Shared with me" switcher in the bar it shows from 414 to 494px, where the switcher is on its own row anyway, is hidden from 495 to 665px, where it would push the switcher down, and shows again from 666px; in a shared view, where the switcher and the brand share one row, from 492px), and a bottom tab bar with Timesheet, Overtime, History and More; More holds the same account content (header, Profile, Settings, Import, Administration for administrators only, the "Theme" control and Sign out). Import (the person's own workbook and opening balance) is reached from a link in Settings on the desktop and from More on a phone; its address keeps working. The Review belongs under Timesheet and has no entry of its own |
+ | Timesheet | The form people know from the Excel workbook and the PDF (see "Timesheet sheet"): a title row (the heading and, on a desktop, the check in/out group at its right; no name line under the title), the period card (with Today and, in the days after a period ends, Current period; on a phone the check in/out controls are in the top bar), then one paper sheet (see "Paper sheet") that holds the toolbar (Open a day, a Worked hours switch, Change several days), the page messages and the batch bar, the form header, both week sheets, the legend, Overtime Total and the signature lines |
+ | Day editor | A non-modal drawer flush with a window edge from 768px, beside the sheet (the page is pushed aside) when the window leaves the sheet its minimum width (1330px with the documented tokens) and floating over it below that, and a modal bottom sheet on phones; another day's button switches it, the open day's button closes it, and unsaved edits are asked about first: the times as session cards with break tables (Add session, Edit and Confirm breaks open a session dialog, Delete a confirmation), category, leave in hours and minutes with `leave_kind` (vacation, sick, ot), WFH, notes, raw/eligible/credited figures computed by the server (see "Day editor"); while it is open, the sheet marks the day being edited |
+-| Review | "Review and sign off", one column at every width: the title with the period, payroll date and due time in the reporting zone and its status chips (no submission id), a check card with "Back to the timesheet" ("Back" below 480px), the Preview card (the same sheet in read-only mode with the detail rows on, under a header bar with the chips; the signature rows carry the primary Sign off button, or after the sign-off the saved image when there is one, the account name, the date and "Signed"), and the Send card. Sign off opens a confirmation dialog (signer = the account, the date on the PDF, the OT total, the signature preview, OT proposals, deficit choices, missing evidence with acknowledgement, reserved OT leave, the correction reason); signing sends nothing. The Send card holds From, To, Cc, Subject, the message and the two switches "Time rows on the PDF" and "OT rows on the PDF" for each send (defaults from Settings), "PDF Preview", "Save PDF" and Send ("Send another copy..." with a required reason once a copy counts as sent). Exact content from the server's review |
++| Review | "Review and sign off", one column at every width: the title with the period, payroll date and due time in the reporting zone and its status chips (no submission id), a check card with "Back to the timesheet" ("Back" below 480px), the Preview card (the same sheet in read-only mode with the detail rows on, under a header bar with the chips; the signature rows carry the primary Sign off button, or after the sign-off the saved image when there is one, the account name, the date and "Signed"; opened again after the sign-off, the same line holds the signed content and "Sign correction", which stays 8px inside the end of the line and drops under the signed content, still 8px inside, where the line is narrower than about 290px (a window under about 1150px), so the four signature lines keep their rows and columns), and the Send card. Sign off opens a confirmation dialog (signer = the account, the date on the PDF, the OT total, the signature preview, OT proposals, deficit choices, missing evidence with acknowledgement, reserved OT leave, the correction reason); signing sends nothing. The Send card holds From, To, Cc, Subject, the message and the two switches "Time rows on the PDF" and "OT rows on the PDF" for each send (defaults from Settings), "PDF Preview", "Save PDF" and Send ("Send another copy..." with a required reason once a copy counts as sent). Exact content from the server's review |
+ | Overtime (ledger/leave) | Posted/provisional/reserved/available balance, daily evidence, adjustments; record permission, reserve, "record use" (explicit, idempotent, on or after the leave date, partial allowed), cancel/reverse |
+ | History | Immutable revisions/PDFs, manual/auto origin, the sends of each revision (To, Cc, the two PDF row choices and, for another copy, the reason) with their delivery attempts, reasoned correction, and "Send another copy..." (a confirmation and a required reason once a copy counts as sent) |
+ | Settings/admin | Three sub-pages, linked by a "Settings sections" navigation and the account menu: Personal (`#/settings`: policy/templates and sharing, grant, change or revoke per item, the "Export and import settings" card (see "Settings export and import") and the link to Import); Profile (`#/settings/profile`: display name, email, role and reporting zone are read only, with the note that an administrator changes display names, and below them a "Change password" card with the current password, the new password and its confirmation, checked in the browser for 12 to 256 characters; on success the person stays signed in and the other sign-ins are signed out); Administration (`#/settings/admin`, administrators only: users, annual holidays, the "Company calendar file" card, sender, sharing grants and per-person submission/delivery status with recipients, without timesheet details). The old `#/admin` address moves an administrator to `#/settings/admin` and sends an employee to the Timesheet; an employee at either address sees no Administration page and makes no administration request, and the server still refuses every administration call from a non-administrator. The Administration and Import screens load on demand |
+@@ -46,8 +46,8 @@ The Timesheet page shows the form of the Excel workbook and the PDF. The header
+ 
+ - Category cell: the app category (Worked, Off, Vacation, Sick, Holiday, Shutdown), the holiday name for a Holiday, a second line for work from home or for OT-funded leave minutes, and a note marker. Excel's "Sick Day" and "Off Day (Overtime Used)" are not reintroduced: OT leave stays leave minutes with `leave_kind` ot (document 10, 2026-10-03 E-2). A day with no record shows no placeholder text; empty cells are blank.
+ - Every number is a server field shown as h:mm. The client computes no business minutes. The OT cell follows the PDF rule: the credited minutes of a complete day, "pending" while the day is incomplete or its breaks are unconfirmed, blank for a day without a record. "Overtime Total :" is the server's provisional credited total over all 14 days, including both Sundays, with a note when days are still pending; it equals the PDF total. The Excel formulas that conflict with the canonical rules are not reproduced (document 10, 2026-10-08).
+-- Formats are those of the PDF: US dates (MM/DD in the cells, MM/DD/YYYY in the header and period bar), durations as h:mm, times as 24-hour ranges such as 08:00 - 17:00 in the display zone (round 5, U5-07: one formatter, a spaced dash everywhere a range is shown, `+1` after an end on a later day; the PDF prints a start cell and an end cell, no range), with several sessions listed and a running session marked. A week-sheet cell shows the tight form "08:00-17:00" only when the spaced form would not fit on one line in its time cells, decided once per sheet so a sheet never mixes the two forms; a range never wraps, except a late end such as "22:00-06:00+1" that even the tight form cannot hold in the narrowest phone cell, which may break rather than run over the next column. Prose ranges with "to" are unchanged. The accounting date stays the saved reporting-zone date.
+-- Non-working days (weekends, holidays and closures from the server calendar, never inferred from the weekday) carry one light tint with fine diagonal hatching. Today carries an accent top bar and a "Today" tag. A cell that needs input has an amber tint plus the Status text and shape. Columns chosen in batch mode and the column open in the Day editor are lifted: raised by a few pixels over a soft shadow with a 4px corner, never boxed in a heavy ring. A batch-selected column also has a light tint and its checked selection box; consecutive lifted days of a week form one group with one shadow around the group and none cast on a neighbour. The day open in the Day editor is marked as a whole by the same lift plus a 1px accent frame inside the column and a filled Day cell (a 1px frame on the row and a filled Day cell on a phone, where selection is a tint and the checked box without lift), and its day button carries `aria-current`. The marker combines with the Today bar and the batch selection on the same column, goes when the editor closes or when the day is not on the displayed sheet, keeps at least 3:1 contrast for the frame (measured 4.82:1 or more on every column surface beside the sheet; the drawer has no backdrop in either layout, so nothing dims the frame and the 3:1 figure no longer depends on the layout) and 4.5:1 for text, and never covers the open category picker. Under reduced motion the lift is static. Every day column is at least 108px wide (`--sheet-col-min`) so no word is cut inside the cell; from 480 to 929px (round 5: it was 768 to 929px), where seven columns do not fit the page and the paper's padding, the week card scrolls sideways inside itself and the page never does (it was 899px before the paper added 32px); the 4-column table is only for windows narrower than 480px.
++- Formats are those of the PDF: US dates (MM/DD in the cells, MM/DD/YYYY in the header and period bar), durations as h:mm, times as 24-hour ranges such as 08:00 - 17:00 in the display zone (round 5, U5-07: one formatter, a spaced dash everywhere a range is shown, `+1` after an end on a later day; the PDF prints a start cell and an end cell, no range), with several sessions listed and a running session marked. A week-sheet cell shows the tight form "08:00-17:00" only when the spaced form would not fit on one line in its time cells, decided once per sheet so a sheet never mixes the two forms; a range never wraps, except a late end such as "22:00-06:00+1" that even the tight form cannot hold in a day cell at its least width (the 108px columns of the seven-column sheet, measured at 480 and 900px, and the narrowest phone cell), which breaks onto two lines rather than run over the next column. Prose ranges with "to" are unchanged. The accounting date stays the saved reporting-zone date.
++- Non-working days (weekends, holidays and closures from the server calendar, never inferred from the weekday) carry one light tint with fine diagonal hatching. Today carries an accent top bar and a "Today" tag. A cell that needs input has an amber tint plus the Status text and shape. Columns chosen in batch mode and the column open in the Day editor are lifted: raised by a few pixels over a soft shadow with a 4px corner, never boxed in a heavy ring. A batch-selected column also has a light tint and its checked selection box; consecutive lifted days of a week form one group with one shadow around the group and none cast on a neighbour. The day open in the Day editor is marked as a whole by the same lift plus a 1px accent frame inside the column and a filled Day cell (a 1px frame on the row and a filled Day cell on a phone, where selection is a tint and the checked box without lift), and its day button carries `aria-current`. The marker combines with the Today bar and the batch selection on the same column, goes when the editor closes or when the day is not on the displayed sheet, keeps at least 3:1 contrast for the frame (measured 4.82:1 or more on every column surface beside the sheet; the drawer has no backdrop in either layout, so nothing dims the frame and the 3:1 figure no longer depends on the layout) and 4.5:1 for text, and never covers the open category picker. Under reduced motion the lift is static. Every day column is at least 108px wide (`--sheet-col-min`) so no word is cut inside the cell; from 480 to 929px (round 5: it was 768 to 929px), where seven columns do not fit the page and the paper's padding, the week card scrolls sideways inside itself and the page never does (it was 899px before the paper added 32px); the 4-column table is only for windows narrower than 480px. In the read-only Review, which has nothing inside the week cards to focus, a card that scrolls sideways is a named region (`Week 1, ...`) that takes focus (`tabindex="0"`) only while it overflows, shows the shared focus ring and scrolls with the arrow keys (WCAG 2.1.1); a card that fits adds no tab stop.
+ - Signature lines: "Employee Signature" shows the signer's name when signed, or the pending-review state, with the date in the saved reporting zone and a link to the Review (its words are those of the period card's link, round 5: "Review & sign off", "Review now", "Review & send" or "Review or correct"). "Manager Signature" shows "Not used yet" with an empty date. The signature image never appears on the Timesheet page. The lines and the link are absent in a shared view and for an imported period.
+ - Compact form (below 480px, round 5, owner decision F-6 a; it was below 768px): each week is a four-column table Day | Category | Time | OT, one row per day at least 54px tall, with no sideways scroll; the Status folds into the Day cell and the Time cell tint. A whole row opens the day editor, and the row of the day open in it is framed. The first screen shows the period card (the narrow arrangement: "<" and ">" beside the centred range, then "Today" and the Review link together in one row) and the compact tools, so the first day row is fully visible above the tab bar at 390x844 (measured in round 5, with the card and the paper 8px from the window edges and the paper's 12px of top padding: its bottom is at 582px, or 685px with the zone note, against the tab bar at 788px; 634px and 737px with a received share, whose switcher takes a second bar row; it was 571px, 670px, 623px and 722px in round 4), also in the five days when "Current period" joins that row (down to the narrowest phones, "Current" and "Sign off" keep the one row; see "Narrow arrangement buttons"). The page heading stays for screen readers only below 768px (the check in/out controls are in the top bar there, not on the page) and the form title below 480px. From 480 to 767px the shell is still the phone bar with the tab bar and the Day editor a bottom sheet, but the sheet is the seven-column grid scrolling sideways inside each week card (see above), so a wide phone or a small tablet keeps the full form (the WEEK bar is as wide as the grid under it, also after a sideways scroll, round 5, U5-21). Beside the Today marker the day button starts 8px after the bar, in every row (round 5, U5-19). Both layouts expose exactly one element per day, named by weekday and date, with one day button whose accessible name holds its visible text and keeps the accounting date (WCAG 2.2 SC 2.5.3): "Edit {MM/DD} ({date})" on the sheet, for example "Edit 09/28 (2026-09-28)", and "Edit {weekday} {MM/DD} ({date})" on a phone, for example "Edit Mon 09/28 (2026-09-28)"; "View" replaces "Edit" when read-only.
+ - The Review uses the same sheet. In a shared view, the share bar stays above the period bar and controls outside the share are absent.
+@@ -60,13 +60,13 @@ The Timesheet page shows the form of the Excel workbook and the PDF. The header
+ - Review link style (round 5, U5-14, owner answers F-2 a and H-1 a): "Review & sign off" is a primary button (the accent fill with the on-accent text, like "Check in"; hover steps to the stronger accent) when the shown period is the person's own, not imported, ended (`period_end` before the server's `today_local`) and still needs the person: no revision yet ("Review & sign off"), an automatic revision with its review pending ("Review now"), or signed with no send of any revision yet ("Review & send"). Once any revision of the period has a send (a send job or a delivery attempt of the current revision, or a delivery attempt of an earlier one) it is the quiet link "Review or correct", also for a later signed correction that is not sent yet (the Review page's Send card still offers that send). A future or in-progress period, a state that did not load and an imported period keep the quiet (or disabled) link; a shared view has no link.
+ - Narrow arrangement buttons: Previous and Next stay beside the range; Today, Current period (when shown) and the Review link share one row at every width down to 320px. Each button is 44px high on one line (the row is the button row) and shows its full label when that fits and a short form otherwise: "Sign off" for "Review & sign off", "Send" for "Review & send" (and "Review" for "Review now" and "Review or correct") below about 22.8rem of row width, then "Current" for "Current period" below about 18.4rem; only below about 15.4rem (no real phone) does the Review link take its own row with its full label. The accessible names are always the full labels ("Current period", "Review & sign off"). The wide arrangement shows the full labels.
+ - Check in/out: one state-aware button. Checked out shows "Checked out" and "Check in"; checked in shows "Checked in since HH:MM" with a static ringed dot and "Check out", which opens the break confirmation. On a desktop it is a group at the right end of the Timesheet page's title row (the state words right-aligned over the date line, no card). On a phone the same state and button are a group in the top bar on every screen of the person's own context (the bar is 60px high, or 112px when the "Shared with me" switcher takes a second row), so the group is not on the page; the break confirmation is the same dialog and focus returns to the button that opened it. It is absent in every shared view, on any width (the owner's check in/out stays the owner's).
+-- Toolbar: "Open a day" (its words, the date field and the "Open day" button on one row at every width; below 480px the row takes the full width and the date field all the free space; as the row narrows the button reads "Open" below 21.13rem, 316.9px, and the words are hidden below 19.22rem, 288.3px, measured in round 5 from the parts, with the field keeping its accessible name "Open a day" and the button its name "Open day"; any date, also outside the displayed period; Today brings the sheet back), the "Worked hours" switch and "Change several days" (an outlined button until pressed, set apart from the switch by a 24px gap and a hairline separator from 480px; the compact form below 480px keeps the tight gap and no separator, and the button is right-aligned beside the switch from a row of 20.8rem, 312.0px, reads "Change days" down to 17.38rem, 260.7px, and below that takes its own full-width row with the full words while the row is 10.41rem, 156.2px, or wider, "Change days" down to 6.99rem, 104.9px, and "Change / days" on two lines below that; it is 44px high in every form and its name stays "Change several days"). Batch mode is off by default: the selection boxes, "Select all", "Clear", the category choice ("Category for selected days") and "Preview changes" appear only after "Change several days" and leave with "Done". Batch category changes still preview conflicts with recorded work before saving. Without edit rights (view-only share) and for an imported period these controls are absent or disabled with their reason.
++- Toolbar: "Open a day" (its words, the date field and the "Open day" button on one row at every width; below 480px the row takes the full width and the date field all the free space; as the row narrows the button reads "Open" below 21.13rem, 316.9px, and the words are hidden below 19.22rem, 288.3px, measured in round 5 from the parts, with the field keeping its accessible name "Open a day" and the button its name "Open day"; any date, also outside the displayed period; Today brings the sheet back), the "Worked hours" switch and "Change several days" (an outlined button until pressed, set apart from the switch by a 24px gap and a hairline separator from 480px; the compact form below 480px keeps the tight gap and no separator, and the button is right-aligned beside the switch from a row of 20.8rem, 312.0px, reads "Change days" down to 17.38rem, 260.7px, and below that takes its own full-width row with the full words while the row is 10.41rem, 156.2px, or wider, "Change days" down to 6.99rem, 104.9px, and "Change / days" on two lines below that; it is 44px high in every form and is named by the words it shows, "Change several days" or "Change days" (SC 2.5.3)). Batch mode is off by default: the selection boxes, "Select all", "Clear", the category choice ("Category for selected days") and "Preview changes" appear only after "Change several days" and leave with "Done". Batch category changes still preview conflicts with recorded work before saving. Without edit rights (view-only share) and for an imported period these controls are absent or disabled with their reason.
+ 
+ ## Day editor
+ 
+ - Drawer (round 4, owner request of 2026-10-20, U4-05 to U4-07): from 768px the editor is a non-modal drawer (no backdrop, nothing inert, no `aria-modal`; the page stays usable), flush with one window edge from under the top bar to the bottom of the window. The drawer has no rounded corner (`border-radius: 0` on all four, docked right or left, in the light and both dark sets; round 5, U5-23: the owner's words "detail panel without rounded corners" reverse the round-4 corners). Phones (below 768px): a modal bottom sheet of at most 86% of the screen height with its top corners rounded (`--radius-lg`) and its bottom corners square; it is a grid of the handle, the head, the body (the only part that scrolls) and a foot (see "Order").
+ - Beside or floating: the Day editor floats only when the sheet and the drawer would not fit side by side, a rule of the window width alone (never of the mode the editor is in, so it cannot flap). `editorLayout` (`editorLayoutModel.ts`) returns `bottom-sheet` below 768px, `beside` when `viewportWidth - pagePadding - editorWidth - gap >= sheetMinWidth`, otherwise `floating`. `viewportWidth` is `window.innerWidth` less the width of a classic scrollbar (R5 b), measured once per device pixel ratio with an off-screen box that has `overflow: scroll` and 0 for overlay or hidden scrollbars; so the width never depends on whether the page draws a track at this moment (a track that came and went with the page height let the layout change the page height and so the width again), and the root is not forced to scroll: a page shorter than the window draws no vertical track; every other input is read in px from a token: `--page-pad` (16px each side), `--editor-width` (400px), `--editor-gap` (16px) and `--sheet-min-width` (the 92px label column, 7 x `--sheet-col-min` 108px, the 2px of hairlines and 2 x `--paper-pad` 16px: 882px). With the documented tokens the switch is at 1330px with overlay scrollbars (measured by the sweep test) and 1345px of window width with a classic 15px scrollbar; it replaces the fixed 1360px of round 3, which was 30 to 47px too early. Beside: the drawer is fixed on the right and the page reserves `--editor-width + --editor-gap` on that side, so the sheet is never under the drawer (16px or more clear) and every day column is at least 108px wide. Floating: the drawer lies over the sheet's edge, docked at the left edge instead of the right when the edited column lies in the right half of the screen, with the edited column scrolled into view. The page is not inert, so a control behind the drawer can take focus: when its box lies wholly under the drawer, the drawer docks to the other edge (WCAG 2.2 SC 2.4.11), so a focused control is never entirely hidden.
+-- Switching and unselecting: a press on another column's day button, or anywhere on that column, switches the drawer to that day without closing it first; a press (or Enter) on the open day's own button closes it, focus stays on that button and a polite status says "Day editor closed". When the Day fields form or the reason holds edits that are not saved, every action that would change the open day, close the drawer or move the sheet to another period first asks "Discard your changes?" (Keep editing and Discard) through the confirmation dialog: a switch, an unselect, "Open a day", "Today", "Previous period", "Next period", "Current period", the Close button and Escape (a nested dialog keeps Escape first). Keep editing leaves the drawer, its edits and the period shown exactly as they were; Discard goes ahead (a period step leaves the drawer open and starts it again from the saved day). With nothing unsaved, nothing asks. A press outside closes the editor the same way (round 5, U5-24, owner answer F-7 a): on a desktop (768px and wider) a `pointerdown` on the page closes the drawer through Close's path, with the same question, unless it lands inside a day column (`[data-day]`), the drawer, any dialog or an interactive control (button, link, input, select, textarea, label, switch, option), so a control keeps its own action ("Today" still moves the open editor, another day column switches the day); a press that is not the primary button or lands on the window's scrollbar is not a press on the page. On a phone a tap on the bottom sheet's backdrop (the dialog element itself, outside its box) closes it. The press is consumed, so focus is not moved to the page afterwards: Keep editing returns focus to the field that had it and a close returns it to the day's button. Two routes do not ask, by design: a link that leaves the page (the app has no navigation guard on any screen), and the reload after a label or batch commit that changed the open day (the person changed that day on purpose, so the form follows its new saved version and the fields typed for that day are dropped). Saved fields and a reason already used by a save are not unsaved edits. The session dialog is modal, so no switch can happen while it is open. Focus moves to the drawer heading on open; the drawer follows the sheet in the DOM (Tab from the sheet reaches it, Shift+Tab leaves it); Escape closes the drawer wherever focus is (a nested dialog takes Escape first), as does Close, and focus returns to the day's date button. While the drawer is open, the day it edits is marked on the sheet (see "Timesheet sheet").
++- Switching and unselecting: a press on another column's day button, or anywhere on that column, switches the drawer to that day without closing it first; a press (or Enter) on the open day's own button closes it, focus stays on that button and a polite status says "Day editor closed". When the Day fields form or the reason holds edits that are not saved, every action that would change the open day, close the drawer or move the sheet to another period first asks "Discard your changes?" (Keep editing and Discard) through the confirmation dialog: a switch, an unselect, "Open a day", "Today", "Previous period", "Next period", "Current period", the Close button and Escape (a nested dialog keeps Escape first). Keep editing leaves the drawer, its edits and the period shown exactly as they were; Discard goes ahead (a period step leaves the drawer open and starts it again from the saved day). With nothing unsaved, nothing asks. A press outside closes the editor the same way (round 5, U5-24, owner answer F-7 a): on a desktop (768px and wider) a `pointerdown` on the page closes the drawer through Close's path, with the same question, unless it lands inside a day column (`[data-day]`), the drawer, any dialog or an interactive control (button, link, input, select, textarea, label, switch, option), so a control keeps its own action ("Today" still moves the open editor, another day column switches the day); a press that is not the primary button, or lands on a scrollbar (the window's, or the sideways scrollbar of a week card), is not a press on the page. A touch press acts when the finger lifts: a swipe that starts outside a day column scrolls the page, the browser cancels that touch, and nothing closes. On a phone a tap on the bottom sheet's backdrop (the dialog element itself, outside its box) closes it. The press is consumed, so focus is not moved to the page afterwards: Keep editing returns focus to the field that had it and a close returns it to the day's button. Two routes do not ask, by design: a link that leaves the page (the app has no navigation guard on any screen), and the reload after a label or batch commit that changed the open day (the person changed that day on purpose, so the form follows its new saved version and the fields typed for that day are dropped). Saved fields and a reason already used by a save are not unsaved edits. The session dialog is modal, so no switch can happen while it is open. Focus moves to the drawer heading on open; the drawer follows the sheet in the DOM (Tab from the sheet reaches it, Shift+Tab leaves it); Escape closes the drawer wherever focus is (a nested dialog takes Escape first), as does Close, and focus returns to the day's date button. While the drawer is open, the day it edits is marked on the sheet (see "Timesheet sheet").
+ - Header: on its own surface, with the title "Mon 10/12/2026" (the dialog name keeps the ISO accounting date), a Close icon button and chips: the period (current, old, future or in progress), "Times in {display zone}", "Day in {reporting zone}" only when the display zone differs from the reporting zone, and "View only" for a read-only share. There is no long note about zones; the explanation of the input zone sits beside the "Input zone" field of the session dialog.
+ - Order: the header, a status banner, the stale/notice/error messages and the reason field (old or finalized periods), "Times" (one card per session with its range, a state pill, its source line and a break table, plus Add session), "Category and leave" and "Figures (computed by the server)". The panel only shows the chosen times and breaks; the explicit end date and the visible "Input zone" are in the session dialog, and the day fields keep their own button ("Save day fields"). Round 5, U5-26: below 768px the sheet has no "Figures" section (the server's values stay in the desktop drawer) and "Save day fields" is the 44px full-width button of a foot (the panel-head surface, a soft rule above it, like the session dialog's foot) that stays in view while the body scrolls; from 768px the button ends the form as before.
+ - Session cards: the range in the display zone (`+1` when the end is on a later local day), a pill ("Breaks confirmed" or "No breaks taken" green, "Breaks not confirmed" amber, "Running" with a static dot), a source line ("Entered by hand in {zone}", "Checked in" while the session runs, or "Checked in and out") and the break table (Break, Date, Start, Minutes, in the display zone). A session with unconfirmed breaks shows "OT stays pending until breaks are confirmed." and a "Confirm breaks" button that opens the session dialog with its saved rows or, when it has none, the suggested breaks that lie inside the session; if none fits, Save asks through the notice below. The old one-tap buttons no longer exist. Edit and Delete are absent in a read-only share or an imported period. In a shared edit view the owner's running session card offers Edit but no Delete, because deleting it would end the owner's clock by another route; the server refuses it with 409 `shared_clock_action` and writes nothing (owner decision R2 a, 2026-10-21). An ended session keeps its Delete in a shared edit view, and the owner's own view is unchanged.
+@@ -100,15 +100,15 @@ Leave: the Day editor shows a non-blocking warning when the day's `ot`-kind leav
+ Plain CSS custom properties in `src/client/styles.css`; system font stack only (the content security policy allows no web fonts), with numbers, times and OT in the monospace stack. New values are added as custom properties, never as ad hoc values.
+ 
+ - Style (round 3, owner decision of 2026-10-15; it replaces the industrial direction, the 4px radius and the 300 ms transition of E-8): a modern, friendly business style. Surfaces step from the page (`--bg`) to cards (`--card`), then sheets, panels and menus. Every colour has a light value in `:root` and the same dark value in both dark sets; a card differs from the page by at least 1.12:1 in both themes. One brand accent (`--accent`); status colours and the period pills (`--pill-*`: old amber, current green, future pink, in progress blue, neutral grey) always carry words or a shape.
+-- Shape (radius scale): inputs and chips `--radius-sm` 6px; buttons and inset panels `--radius` 8px; cards, the period bar, dialogs, the phone's bottom sheet (its top corners) and menus `--radius-lg` 12px; the editor drawer has no rounded corner (U5-23); pills and the avatar `--radius-pill`. The paper sheet takes the card corner (`--radius-lg`) from 768px and is square on a phone, where it is full-bleed. Exception: the week sheets and the sheet footer are square (`--radius-sheet`, 0), because the sheet keeps the Excel form; a lifted (selected or open) sheet column has a 4px corner (`--radius-lift`). Switches are round: the track takes `--radius-pill` and the thumb is a circle.
++- Shape (radius scale): inputs and chips `--radius-sm` 6px; buttons and inset panels `--radius` 8px; cards, the period bar, dialogs, the phone's bottom sheet (its top corners) and menus `--radius-lg` 12px; the editor drawer has no rounded corner (U5-23); pills and the avatar `--radius-pill`. The paper sheet takes the card corner (`--radius-lg`) at every width; in the compact form (below 480px) it stands `--compact-edge` (8px) from each window edge. Exception: the week sheets and the sheet footer are square (`--radius-sheet`, 0), because the sheet keeps the Excel form; a lifted (selected or open) sheet column has a 4px corner (`--radius-lift`). Switches are round: the track takes `--radius-pill` and the thumb is a circle.
+ - Elevation: a hairline ring plus soft layered shadows, never a hard border. `--elev-bar` the top bar, `--elev-1` cards and the period bar, `--elev-2` the paper sheet (`--elev-paper`; the week sheets and the footer card on it cast no shadow of their own), `--elev-3` menus, dialogs and the editor drawer (beside the sheet or floating), `--elev-lift` a lifted sheet column. The dark levels carry a light ring because a shadow alone is invisible on a dark page. The Timesheet and Review pages stand the toolbar, the form header, each week sheet (with its header strip of week number and range) and the footer on one paper sheet, so the sheet stands out from the page.
+-- Round 4 tokens (owner answer F-5 and the round-4 controls): `--page-head-gap` 32px (the title gap from 768px); `--paper-surface`, `--elev-paper`, `--paper-pad` 16px and `--paper-gap` 16px (the paper sheet); `--sheet-head-strong` (the week header and first-column fill, in the light set and both dark sets); `--select-arrow-size` 7px, `--select-arrow-inset` 12px and `--select-pad-end` 34px (every select); the switch tokens `--switch-width` 44px, `--switch-height` 24px, `--switch-thumb` 18px and `--switch-inset` 3px with the round track and thumb.
++- Round 4 tokens (owner answer F-5 and the round-4 controls): `--page-head-gap` 32px (the title gap from 768px); `--paper-surface`, `--elev-paper`, `--paper-pad` 16px and `--paper-gap` 16px (the paper sheet); `--sheet-head-strong` (the week header and first-column fill, in the light set and both dark sets); `--select-arrow-w` 12px and `--select-arrow-h` 6px (the chevron's tile; round 5, U5-03 replaced the 7px `--select-arrow-size`), `--select-arrow-inset` 12px and `--select-pad-end` 34px (every select); the switch tokens `--switch-width` 44px, `--switch-height` 24px, `--switch-thumb` 18px and `--switch-inset` 3px with the round track and thumb.
+ - Select (round 4; one layer since round 5, U5-03): every select has no native arrow (`appearance: none`) and draws a chevron with one conic-gradient layer in a single 12 x 6px tile (no `url()`; two tiles side by side left a light seam at 125% and 150% display scaling), its right edge 12px from the border box, in `--muted` (5.83:1 on `--field-bg` in the light theme, 7.07:1 in both dark sets, against the 3:1 needed), with 34px of end padding so the text stays clear of it; in forced colours the native arrow returns.
+ - Checkbox (round 4): a checkbox is centred on the first line of its text (within 1px); on a phone or with a coarse pointer its label stays 44px tall with one line centred in it.
+ - Motion: one shared transition token (`--transition`) that lists only the properties that change (colour, background, border colour, box shadow, transform) and never `all`; `--duration` 180 ms (`--duration-fast` 120 ms, `--duration-slow` 260 ms) with `--ease-standard`. A control that needs another duration sets `--transition-duration` on itself. A pressed button moves by a small token offset. No entrance, scroll or looping animation; under reduced motion the durations are 0.01 ms, and the running-session dot is static.
+ - Buttons: primary (accent fill), secondary (card with accent border) and quiet (accent text), each with a visible focus ring (one shared token: a solid accent ring with a card-coloured gap, at least 3:1 against every surface in both themes).
+ - Hover and pressed: secondary and quiet buttons, navigation links, tabs, the More entries, switches (every `role="switch"`: "Worked hours" and the two sharing switches, round track and round thumb, 44x24px, the thumb position and the track fill showing the state) and picker options share one hover tint (`--hover-fill`) with an accent boundary. The one exception is the quiet link buttons "Today", "Now" and "Set an end instead" (the quiet look with an underline and no padding, so a fill would hug the words): their hover is transparent, with no tint and no boundary; the text turns to the stronger accent and the underline thickens. A pressed (toggled-on) button is a solid accent fill with its on-accent text, and under the pointer it turns to the stronger accent, so hover never hides the pressed state. Hover looks apply only on devices that can hover (`@media (hover: hover)`), so a tap leaves none. Measurable criterion, in both themes: the hover fill differs from the resting surface by at least 1.20:1, the accent boundary reaches 3:1 against the surface, text on the fill keeps 4.5:1, and the pressed fill differs from the unpressed hover fill by at least 3:1.
+-- Touch: controls are at least 44px (`--tap-min`) below 768px and with a coarse pointer. Two exceptions (round 5, owner decision F-1 a): the sub-buttons of the Day editor (Edit and Delete on a session card, Add session, Suggest breaks, Add break and Save day fields) have a 36px visible box on every device (`--subbtn-h`) and keep the 44px target below 768px and with a coarse pointer as an invisible hit area (a pseudo-element 4px above and below), rows of them staying 8px apart so hit areas never overlap; and the Light and Dark segments of the account menu are 32px high with a fine pointer from 768px (`--theme-seg-h`, 16px icons, 4px of row padding) and stay 44px below 768px, in the phone More panel, and with a coarse pointer.
++- Touch: controls are at least 44px (`--tap-min`) below 768px and with a coarse pointer. Two exceptions (round 5, owner decision F-1 a): the sub-buttons of the Day editor (Edit and Delete on a session card, Add session, Suggest breaks, Add break and Save day fields in the drawer's form, the phone sheet's foot having its own full-width 44px button, see "Order") have a 36px visible box on every device (`--subbtn-h`) and keep the 44px target below 768px and with a coarse pointer as an invisible hit area (a pseudo-element 4px above and below), rows of them staying 8px apart so hit areas never overlap; and the Light and Dark segments of the account menu are 32px high with a fine pointer from 768px (`--theme-seg-h`, 16px icons, 4px of row padding) and stay 44px below 768px, in the phone More panel, and with a coarse pointer.
+ - Day-state colour roles (sheet rules and heads, non-working tint with hatching, today, needs input, selected, editing, running) have light and dark values. State is never colour alone: every state also has words or a shape.
+ - Brand: the logo and the wordmark are brand artwork in fixed colours, not restyled with the interface colours. The logo is a vector file; the wordmark is vector outlines drawn in the page, and no font file is shipped. In the dark theme the wordmark uses documented lighter tints of the brand blue and grey so it stays readable; the light theme keeps the brand colours.
+ - Mobile-first layout with readable density for a small-team timesheet app (clear hierarchy and comfortable spacing; the sheet keeps its Excel form). Light and dark themes follow the device until the person chooses one with the "Theme" control (Light or Dark, each with a sun or moon icon, in the desktop account menu and in the phone More panel); the choice is stored on that device only, with no server setting, and is applied before the page is drawn.
+@@ -121,6 +121,6 @@ Signing off and sending are separate acts (round 5, owner decisions F-2 a, F-3 b
+ 
+ PDF (round 5, one page): a header with the C&D logo and the two-line wordmark at the left (vector, as in the top bar) and "Revision n" with the small submission id under it at the right; the company name and the title "TIME SHEET FOR SALARIED EXEMPT EMPLOYEES" centred; the fields Employee, Payroll Date and Period; two Monday–Sunday week tables (day name in small capitals, date, category in the Indie Flower handwriting face, start and end time cells and the OT row); the credited OT total in h:mm over all 14 days, including both Sundays; the signature rows with the employee name, the saved signature image when there is one, and the date, and a blank manager signature and date unless a real future approval exists; and a footer with the copyright at the left and "Internal use by C&D only" at the right. It has no instructions paragraph (owner decision F-8 a). The time rows and the OT rows (with the OT total) are printed or left out as the owner chooses for each send, with the Settings defaults "Time rows on the PDF" and "OT rows on the PDF"; the four variants carry the same days, totals, signature and date. Use US Letter portrait, embedded Unicode fonts (a category that Indie Flower cannot draw falls back to DejaVu Serif Italic), readable long labels and a bounded signature image. Remove stale year headers. Add submission/revision identifiers and sanitized filenames.
+ 
+-Manual sign-off is the signed-in owner's act; it records the account's display name and, when one is saved, the signature image (owner decision F-5 b, 2026-10-21). There is no typed name: the Review sign-off shows "You sign as" with the account name. With a saved image the PDF and the Review show the image and the name; without one they show the name alone, and the Review shows "Signed with your name only." with a link "Add a signature image in Settings." A saved image cannot be left out. The unsigned automatic-image setting is separate.
++Manual sign-off is the signed-in owner's act; it records the account's display name and, when one is saved, the signature image (owner decision F-5 b, 2026-10-21). There is no typed name: the Sign off dialog shows the account name under "Signer", followed by "(you)". With a saved image the PDF and the Review show the image and the name; without one they show the name alone, and the Sign off dialog's "Signature" line reads "your name only" with a link "Add a signature image in Settings." (with a saved image it reads "your saved image and your name"). A saved image cannot be left out. The unsigned automatic-image setting is separate.
+ 
+ The outgoing PDF and email of an automatic submission show no automatic indicator: the signature block prints the employee name and the date of the automatic submission in the saved reporting zone; the signature image appears only when the user has authorized automatic image use; a note line appears only when the user turns it on (default off; the user edits its text, default "Automatic submission"). The system still records the revision as automatic with employee review pending, empty signed_at and no sign-off, and the employee's own screens show that. Even a preauthorized signature image creates no signed_at or real sign-off. A separate OT evidence report can be exported when the user chooses.
+diff --git a/docs/04_UX_AND_SETTINGS.vi.md b/docs/04_UX_AND_SETTINGS.vi.md
+index 253b7052..b945fe02 100644
+--- a/docs/04_UX_AND_SETTINGS.vi.md
++++ b/docs/04_UX_AND_SETTINGS.vi.md
+@@ -7,7 +7,7 @@
+ | Khung ứng dụng | Desktop: thanh trên cùng có logo C&D, với chữ thương hiệu hai dòng ("SEMICONDUCTOR" trên "SERVICES, INC.") bên cạnh mỗi khi đủ chỗ (vòng 5, U5-02; thanh là một size container và các ngưỡng là hằng số ghi trong style sheet): từ bề rộng thanh 852px khi không có bộ chuyển "Shared with me" và từ 1280px khi có (bộ chuyển rộng bằng tên chủ sở hữu dài nhất của nó, nên ngưỡng đó cố định và thận trọng; thanh vẫn giữ một hàng với khoảng cách chặt hơn trong khoảng 1024 đến 1279px); chữ thương hiệu không bao giờ đè hoặc bị cắt và không bao giờ thêm một hàng, nên khi nó đẩy bộ chuyển xuống hàng thứ hai thì nó bị ẩn; rồi Timesheet, Overtime và History, và ở đầu bên phải là khối danh tính: tên hiển thị in đậm trên dòng email chữ nhỏ màu mờ (cả hai canh phải và cắt bằng dấu chấm lửng ở 14rem), avatar chữ cái đầu và một mũi tên nhỏ. Khối danh tính luôn hiện người đang đăng nhập, kể cả trong chế độ xem chia sẻ, và mở ra menu tài khoản, một bảng dạng disclosure (không phải ARIA menu, nên các liên kết, lựa chọn Theme và nút giữ ngữ nghĩa riêng): phần đầu có avatar, tên đầy đủ, email và, với admin, "Administrator"; Profile, Settings, Administration (chỉ admin), điều khiển "Theme" Light/Dark và Sign out. Khi mở bằng bàn phím, tiêu điểm vào mục đầu; Escape đóng menu và trả tiêu điểm về nút danh tính; bấm ra ngoài, đổi trang hoặc Tab qua Sign out cũng đóng menu. Sau khi chọn một mục, tiêu điểm chuyển đến tiêu đề chính của trang mới, hoặc quay về nút danh tính (trên điện thoại là More) khi trang không đổi; tiêu đề chỉ hiện vòng tiêu điểm với người dùng bàn phím. Thương hiệu không phải liên kết; tên chữ "C&D Semiconductor Services, Inc." là chữ ẩn, trình đọc màn hình đọc đúng một lần. Khoảng cách từ thương hiệu đến menu là 24px, và 32px ở mọi nơi chữ thương hiệu hiện. Thanh điện thoại (dưới 768px, phần khung điều hướng; vòng 5 giữ 768px cho khung và chỉ chuyển dạng gọn của bảng sang 480px): thanh trên gọn có logo và, trên các màn hình của chính người dùng, điều khiển check in/out (xem "Thanh kỳ, check in/out và chế độ nhiều ngày"), không có avatar, kèm chữ thương hiệu bên cạnh logo khi đủ chỗ (từ bề rộng thanh 414px khi có nhóm check in/out; khi bộ chuyển "Shared with me" có trên thanh thì chữ hiện từ 414 đến 494px, nơi bộ chuyển vốn đã nằm ở hàng riêng, bị ẩn từ 495 đến 665px, nơi nó sẽ đẩy bộ chuyển xuống, và hiện lại từ 666px; trong chế độ xem chia sẻ, nơi bộ chuyển và thương hiệu chung một hàng, từ 492px), cùng thanh tab dưới gồm Timesheet, Overtime, History và More; More chứa cùng nội dung tài khoản (phần đầu, Profile, Settings, Import, Administration chỉ cho admin, điều khiển "Theme" và Sign out). Import (workbook và số dư đầu của chính người dùng) mở từ một liên kết trong Settings trên desktop và từ More trên điện thoại; địa chỉ cũ vẫn dùng được. Review thuộc mục Timesheet và không có mục riêng |
+ | Timesheet | Biểu mẫu quen thuộc từ workbook Excel và PDF (xem "Bảng Timesheet"): hàng tiêu đề (tiêu đề trang và, trên desktop, nhóm check in/out ở bên phải; không có dòng tên dưới tiêu đề), thẻ kỳ (có Today và, trong những ngày sau khi một kỳ kết thúc, Current period; trên điện thoại điều khiển check in/out nằm ở thanh trên cùng), rồi một tờ giấy (xem "Tờ giấy") chứa thanh công cụ (Open a day, công tắc Worked hours, Change several days), các thông báo của trang và thanh nhiều ngày, đầu biểu mẫu, cả hai bảng tuần, chú giải, Overtime Total và các dòng chữ ký |
+ | Sửa ngày | Ngăn kéo không modal sát một mép cửa sổ từ 768px, nằm cạnh bảng timesheet (trang được đẩy sang bên) khi cửa sổ còn đủ chỗ tối thiểu cho bảng (1330px với các token đã ghi) và nổi đè lên bảng khi hẹp hơn, còn trên điện thoại là bottom sheet modal; nút ngày của cột khác chuyển ngăn kéo sang ngày đó, nút của chính ngày đang mở thì đóng nó, và chỉnh sửa chưa lưu được hỏi trước: các ca giờ dưới dạng thẻ ca kèm bảng giờ nghỉ (Add session, Edit và Confirm breaks mở hộp thoại ca, Delete mở hộp xác nhận), loại ngày, phút nghỉ nhập theo giờ và phút kèm `leave_kind` (vacation, sick, ot), WFH, ghi chú, các số gốc/đủ điều kiện/ghi do server tính (xem "Sửa ngày (Day editor)"); khi bảng đang mở, bảng timesheet đánh dấu ngày đang sửa |
+-| Review | "Review and sign off", một cột ở mọi bề rộng: tiêu đề kèm kỳ lương, ngày trả lương và hạn nộp theo múi giờ báo cáo cùng các chip trạng thái (không có mã submission), thẻ kiểm tra với "Back to the timesheet" ("Back" dưới 480px), thẻ Preview (cùng bảng timesheet ở chế độ chỉ đọc với các dòng chi tiết luôn bật, dưới thanh tiêu đề có các chip; dòng chữ ký có nút Sign off chính, hoặc sau khi ký là ảnh đã lưu nếu có, tên tài khoản, ngày và "Signed") và thẻ Send. Sign off mở hộp thoại xác nhận (người ký = tài khoản, ngày trên PDF, tổng OT, preview chữ ký, OT dự kiến, lựa chọn trừ, bằng chứng thiếu kèm xác nhận, OT leave đã giữ chỗ, lý do chỉnh sửa); ký không gửi gì. Thẻ Send gồm From, To, Cc, Subject, nội dung và hai công tắc "Time rows on the PDF" và "OT rows on the PDF" cho từng lần gửi (mặc định từ Settings), "PDF Preview", "Save PDF" và Send ("Send another copy..." kèm lý do bắt buộc khi đã có một bản được tính là đã gửi). Nội dung chính xác theo review của máy chủ |
++| Review | "Review and sign off", một cột ở mọi bề rộng: tiêu đề kèm kỳ lương, ngày trả lương và hạn nộp theo múi giờ báo cáo cùng các chip trạng thái (không có mã submission), thẻ kiểm tra với "Back to the timesheet" ("Back" dưới 480px), thẻ Preview (cùng bảng timesheet ở chế độ chỉ đọc với các dòng chi tiết luôn bật, dưới thanh tiêu đề có các chip; dòng chữ ký có nút Sign off chính, hoặc sau khi ký là ảnh đã lưu nếu có, tên tài khoản, ngày và "Signed"; mở lại sau khi ký, cùng dòng đó chứa nội dung đã ký và "Sign correction", nút vẫn cách cuối dòng 8px và tụt xuống dưới nội dung đã ký (vẫn cách cuối dòng 8px) khi dòng hẹp hơn khoảng 290px (cửa sổ dưới khoảng 1150px), nên bốn dòng chữ ký giữ nguyên hàng và cột) và thẻ Send. Sign off mở hộp thoại xác nhận (người ký = tài khoản, ngày trên PDF, tổng OT, preview chữ ký, OT dự kiến, lựa chọn trừ, bằng chứng thiếu kèm xác nhận, OT leave đã giữ chỗ, lý do chỉnh sửa); ký không gửi gì. Thẻ Send gồm From, To, Cc, Subject, nội dung và hai công tắc "Time rows on the PDF" và "OT rows on the PDF" cho từng lần gửi (mặc định từ Settings), "PDF Preview", "Save PDF" và Send ("Send another copy..." kèm lý do bắt buộc khi đã có một bản được tính là đã gửi). Nội dung chính xác theo review của máy chủ |
+ | Sổ OT/phép (Overtime) | Số dư đã ghi/tạm/giữ/khả dụng, bằng chứng ngày, điều chỉnh; ghi cho phép, giữ chỗ, "ghi đã dùng" (record use: rõ ràng, idempotent, vào hoặc sau ngày nghỉ, cho phép một phần), hủy/đảo |
+ | Lịch sử | Revision/PDF bất biến, nguồn tay/tự động, các lần gửi của mỗi revision (To, Cc, hai lựa chọn dòng PDF và, với bản gửi thêm, lý do) cùng các lượt gửi, sửa có lý do, và "Send another copy..." (một xác nhận và một lý do bắt buộc khi đã có một bản được tính là đã gửi) |
+ | Settings/admin | Ba trang con, nối bằng thanh điều hướng "Settings sections" và menu tài khoản: Personal (`#/settings`: quy tắc/template riêng và chia sẻ, cấp, đổi hoặc thu hồi theo từng mục, thẻ "Export and import settings" (xem "Xuất và nhập cài đặt") và liên kết tới Import); Profile (`#/settings/profile`: tên hiển thị, email, vai trò và múi giờ báo cáo chỉ đọc, kèm ghi chú rằng admin là người đổi tên hiển thị, và bên dưới là thẻ "Change password" với mật khẩu hiện tại, mật khẩu mới và ô xác nhận, được trình duyệt kiểm tra 12 đến 256 ký tự; khi thành công người dùng vẫn đăng nhập và các phiên đăng nhập khác bị đăng xuất); Administration (`#/settings/admin`, chỉ admin: user, lễ năm, thẻ "Company calendar file", sender, quyền chia sẻ và trạng thái nộp/gửi từng người kèm người nhận, không có chi tiết timesheet). Địa chỉ cũ `#/admin` chuyển admin sang `#/settings/admin` và đưa nhân viên về Timesheet; nhân viên ở một trong hai địa chỉ không thấy trang Administration và không gửi yêu cầu quản trị nào, còn server vẫn từ chối mọi lệnh quản trị từ người không phải admin. Màn Administration và Import chỉ tải khi cần |
+@@ -47,8 +47,8 @@ Trang Timesheet hiện biểu mẫu của workbook Excel và PDF. Khối đầu
+ 
+ - Ô Category: loại ngày của app (Worked, Off, Vacation, Sick, Holiday, Shutdown), tên ngày lễ cho Holiday, một dòng thứ hai cho làm việc tại nhà hoặc số phút nghỉ bằng OT, và dấu ghi chú. "Sick Day" và "Off Day (Overtime Used)" của Excel không được đưa lại: nghỉ bằng OT vẫn là phút nghỉ với `leave_kind` ot (tài liệu 10, E-2 ngày 2026-10-03). Ngày không có bản ghi không hiện chữ giữ chỗ; ô trống để trống.
+ - Mọi con số là trường do server trả về, hiển thị dạng h:mm. Client không tính phút nghiệp vụ. Ô OT theo quy tắc của PDF: phút được ghi của ngày đầy đủ, "pending" khi ngày chưa đủ hoặc nghỉ chưa xác nhận, để trống khi ngày không có bản ghi. "Overtime Total :" là tổng OT được ghi tạm tính của server cho cả 14 ngày, gồm hai Chủ nhật, kèm ghi chú khi còn ngày đang chờ; con số này bằng tổng trên PDF. Các công thức Excel mâu thuẫn với quy tắc chuẩn không được tái tạo (tài liệu 10, 2026-10-08).
+-- Định dạng giống PDF: ngày kiểu Mỹ (MM/DD trong ô, MM/DD/YYYY ở phần đầu và thanh kỳ), thời lượng dạng h:mm, giờ dạng khoảng 24 giờ như 08:00 - 17:00 theo múi giờ hiển thị (vòng 5, U5-07: một bộ định dạng, dấu gạch có khoảng trắng ở mọi nơi hiện một khoảng, `+1` sau giờ kết thúc rơi vào ngày sau; PDF in một ô bắt đầu và một ô kết thúc, không in khoảng), liệt kê nhiều ca và đánh dấu ca đang chạy. Ô của bảng tuần chỉ dùng dạng sát "08:00-17:00" khi dạng có khoảng trắng không vừa một dòng trong các ô Time của nó, quyết định một lần cho cả bảng để một bảng không bao giờ trộn hai dạng; một khoảng giờ không bao giờ xuống dòng, trừ giờ kết thúc muộn như "22:00-06:00+1" mà ngay cả dạng sát cũng không chứa nổi trong ô điện thoại hẹp nhất, có thể ngắt thay vì tràn sang cột bên cạnh. Khoảng viết bằng chữ với "to" không đổi. Ngày ghi sổ vẫn là ngày theo múi giờ báo cáo đã lưu.
+-- Ngày không làm việc (cuối tuần, ngày lễ và ngày đóng cửa từ lịch của server, không suy ra từ thứ trong tuần) có một nền nhạt kèm sọc chéo mảnh. Hôm nay có thanh nhấn phía trên và nhãn "Today". Ô cần nhập có nền hổ phách cùng chữ và hình trong dòng Status. Các cột được chọn ở chế độ nhiều ngày và cột đang mở trong trình sửa ngày được nâng lên: nhô cao vài pixel trên một bóng đổ mềm với góc bo 4px, không bao giờ bị đóng khung nặng. Cột được chọn nhiều ngày còn có nền nhạt và ô chọn đã tick; các ngày được nâng liên tiếp trong một tuần tạo thành một nhóm với một bóng đổ quanh nhóm và không đổ bóng lên cột bên cạnh. Ngày đang mở trong trình sửa ngày được đánh dấu cả cột bằng cùng hiệu ứng nâng, thêm một khung nhấn 1px bên trong cột và ô Day được tô nền (trên điện thoại là khung 1px quanh hàng và ô Day được tô nền, còn việc chọn chỉ là nền nhạt cùng ô tick, không nâng), và nút ngày của nó mang `aria-current`. Dấu này kết hợp được với thanh Today và việc chọn nhiều ngày trên cùng một cột, mất khi trình sửa đóng hoặc khi ngày đó không nằm trên bảng đang hiển thị, giữ độ tương phản ít nhất 3:1 cho khung (đo được 4.82:1 trở lên trên mọi bề mặt cột khi nằm cạnh bảng; ngăn kéo không có lớp nền ở cả hai cách bố trí, nên không gì làm mờ khung và mức 3:1 không còn phụ thuộc vào cách bố trí) và 4.5:1 cho chữ, và không bao giờ che bộ chọn loại ngày đang mở. Khi giảm chuyển động thì hiệu ứng nâng là tĩnh. Mỗi cột ngày rộng ít nhất 108px (`--sheet-col-min`) nên không chữ nào bị cắt giữa ô; từ 480 đến 929px (vòng 5: trước đây là 768 đến 929px), khi bảy cột không vừa trang cộng lề trong của tờ giấy, card tuần tự cuộn ngang bên trong nó còn trang thì không bao giờ cuộn ngang (trước đây là 899px, trước khi tờ giấy thêm 32px); bảng bốn cột chỉ dành cho cửa sổ hẹp hơn 480px.
++- Định dạng giống PDF: ngày kiểu Mỹ (MM/DD trong ô, MM/DD/YYYY ở phần đầu và thanh kỳ), thời lượng dạng h:mm, giờ dạng khoảng 24 giờ như 08:00 - 17:00 theo múi giờ hiển thị (vòng 5, U5-07: một bộ định dạng, dấu gạch có khoảng trắng ở mọi nơi hiện một khoảng, `+1` sau giờ kết thúc rơi vào ngày sau; PDF in một ô bắt đầu và một ô kết thúc, không in khoảng), liệt kê nhiều ca và đánh dấu ca đang chạy. Ô của bảng tuần chỉ dùng dạng sát "08:00-17:00" khi dạng có khoảng trắng không vừa một dòng trong các ô Time của nó, quyết định một lần cho cả bảng để một bảng không bao giờ trộn hai dạng; một khoảng giờ không bao giờ xuống dòng, trừ giờ kết thúc muộn như "22:00-06:00+1" mà ngay cả dạng sát cũng không chứa nổi trong một ô ngày ở bề rộng tối thiểu (cột 108px của bảng bảy cột, đo ở 480px và 900px, và ô điện thoại hẹp nhất), nên bị ngắt thành hai dòng thay vì tràn sang cột bên cạnh. Khoảng viết bằng chữ với "to" không đổi. Ngày ghi sổ vẫn là ngày theo múi giờ báo cáo đã lưu.
++- Ngày không làm việc (cuối tuần, ngày lễ và ngày đóng cửa từ lịch của server, không suy ra từ thứ trong tuần) có một nền nhạt kèm sọc chéo mảnh. Hôm nay có thanh nhấn phía trên và nhãn "Today". Ô cần nhập có nền hổ phách cùng chữ và hình trong dòng Status. Các cột được chọn ở chế độ nhiều ngày và cột đang mở trong trình sửa ngày được nâng lên: nhô cao vài pixel trên một bóng đổ mềm với góc bo 4px, không bao giờ bị đóng khung nặng. Cột được chọn nhiều ngày còn có nền nhạt và ô chọn đã tick; các ngày được nâng liên tiếp trong một tuần tạo thành một nhóm với một bóng đổ quanh nhóm và không đổ bóng lên cột bên cạnh. Ngày đang mở trong trình sửa ngày được đánh dấu cả cột bằng cùng hiệu ứng nâng, thêm một khung nhấn 1px bên trong cột và ô Day được tô nền (trên điện thoại là khung 1px quanh hàng và ô Day được tô nền, còn việc chọn chỉ là nền nhạt cùng ô tick, không nâng), và nút ngày của nó mang `aria-current`. Dấu này kết hợp được với thanh Today và việc chọn nhiều ngày trên cùng một cột, mất khi trình sửa đóng hoặc khi ngày đó không nằm trên bảng đang hiển thị, giữ độ tương phản ít nhất 3:1 cho khung (đo được 4.82:1 trở lên trên mọi bề mặt cột khi nằm cạnh bảng; ngăn kéo không có lớp nền ở cả hai cách bố trí, nên không gì làm mờ khung và mức 3:1 không còn phụ thuộc vào cách bố trí) và 4.5:1 cho chữ, và không bao giờ che bộ chọn loại ngày đang mở. Khi giảm chuyển động thì hiệu ứng nâng là tĩnh. Mỗi cột ngày rộng ít nhất 108px (`--sheet-col-min`) nên không chữ nào bị cắt giữa ô; từ 480 đến 929px (vòng 5: trước đây là 768 đến 929px), khi bảy cột không vừa trang cộng lề trong của tờ giấy, card tuần tự cuộn ngang bên trong nó còn trang thì không bao giờ cuộn ngang (trước đây là 899px, trước khi tờ giấy thêm 32px); bảng bốn cột chỉ dành cho cửa sổ hẹp hơn 480px. Trong Review chỉ đọc, nơi card tuần không có gì để focus bên trong, card cuộn ngang là một vùng có tên (`Week 1, ...`) chỉ nhận focus (`tabindex="0"`) khi nó tràn, hiện vòng focus dùng chung và cuộn bằng phím mũi tên (WCAG 2.1.1); card vừa khung thì không thêm điểm dừng Tab.
+ - Dòng chữ ký: "Employee Signature" hiện tên người ký khi đã ký, hoặc trạng thái chờ xác nhận, kèm ngày theo múi giờ báo cáo đã lưu và liên kết tới Review (chữ của nó là chữ của liên kết trên thẻ kỳ, vòng 5: "Review & sign off", "Review now", "Review & send" hoặc "Review or correct"). "Manager Signature" hiện "Not used yet" với ô ngày trống. Ảnh chữ ký không bao giờ xuất hiện trên trang Timesheet. Các dòng này và liên kết không có trong chế độ xem chia sẻ và với kỳ đã nhập.
+ - Dạng gọn (dưới 480px, vòng 5, quyết định F-6 a của chủ sở hữu; trước đây là dưới 768px): mỗi tuần là một bảng bốn cột Day | Category | Time | OT, mỗi ngày một hàng cao ít nhất 54px, không cuộn ngang; trạng thái Status gộp vào ô Day và màu ô Time. Chạm cả hàng sẽ mở trình sửa ngày, và hàng của ngày đang mở trong đó được khung lại. Màn hình đầu hiện thẻ kỳ (bố cục hẹp: "<" và ">" cạnh khoảng ngày canh giữa, rồi "Today" cùng liên kết Review trong một hàng) và các công cụ gọn, nên hàng ngày đầu tiên hiện đầy đủ phía trên thanh tab ở 390x844 (đo được ở vòng 5, với thẻ và tờ giấy cách mép cửa sổ 8px và 12px lề trên của tờ giấy: đáy hàng ở 582px, hoặc 685px khi có ghi chú múi giờ, so với thanh tab ở 788px; 634px và 737px khi có chia sẻ nhận được, vì bộ chuyển của nó chiếm hàng thứ hai của thanh; ở vòng 4 là 571px, 670px, 623px và 722px), kể cả trong năm ngày khi "Current period" vào cùng hàng đó (xuống tới điện thoại hẹp nhất, "Current" và "Sign off" vẫn giữ một hàng; xem "Các nút của bố cục hẹp"). Tiêu đề trang chỉ dành cho trình đọc màn hình dưới 768px (ở đó điều khiển check in/out nằm ở thanh trên cùng, không nằm trên trang) và tiêu đề biểu mẫu dưới 480px. Từ 480 đến 767px khung vẫn là thanh điện thoại kèm thanh tab và trình sửa ngày vẫn là bottom sheet, nhưng bảng là lưới bảy cột cuộn ngang bên trong từng card tuần (xem ở trên), nên điện thoại rộng hoặc máy tính bảng nhỏ vẫn giữ biểu mẫu đầy đủ (thanh WEEK rộng bằng lưới bên dưới, kể cả sau khi cuộn ngang, vòng 5, U5-21). Cạnh vạch Today, nút ngày bắt đầu cách vạch 8px ở mọi hàng (vòng 5, U5-19). Cả hai bố cục chỉ có đúng một phần tử cho mỗi ngày, đặt tên theo thứ và ngày, kèm một nút ngày có tên truy cập chứa đúng chữ hiển thị và giữ ngày kế toán (WCAG 2.2 SC 2.5.3): "Edit {MM/DD} ({date})" trên bảng timesheet, ví dụ "Edit 09/28 (2026-09-28)", và "Edit {weekday} {MM/DD} ({date})" trên điện thoại, ví dụ "Edit Mon 09/28 (2026-09-28)"; khi chỉ đọc thì "View" thay cho "Edit".
+ - Review dùng cùng bảng này. Trong chế độ xem chia sẻ, thanh chia sẻ vẫn nằm trên thanh kỳ và các điều khiển ngoài quyền chia sẻ bị ẩn.
+@@ -61,13 +61,13 @@ Trang Timesheet hiện biểu mẫu của workbook Excel và PDF. Khối đầu
+ - Kiểu liên kết Review (vòng 5, U5-14, câu trả lời F-2 a và H-1 a của chủ sở hữu): "Review & sign off" là nút chính (nền màu nhấn với chữ on-accent, như "Check in"; khi rê chuột chuyển sang màu nhấn đậm hơn) khi kỳ đang xem là của chính người dùng, không phải kỳ đã nhập, đã kết thúc (`period_end` trước `today_local` của server) và vẫn cần người dùng: chưa có revision ("Review & sign off"), có revision tự động chờ duyệt ("Review now"), hoặc đã ký mà chưa revision nào của kỳ được gửi ("Review & send"). Khi bất kỳ revision nào của kỳ đã có một lần gửi (job gửi hoặc lần thử gửi của revision hiện tại, hoặc lần thử gửi của một revision trước) thì nó là liên kết thường "Review or correct", kể cả với bản hiệu chỉnh đã ký sau đó chưa gửi (thẻ Send của trang Review vẫn đề nghị lần gửi đó). Kỳ tương lai hoặc đang diễn ra, trạng thái chưa tải được và kỳ đã nhập giữ liên kết thường (hoặc bị khóa); chế độ xem chia sẻ không có liên kết.
+ - Các nút của bố cục hẹp: Previous và Next vẫn cạnh khoảng ngày; Today, Current period (khi hiện) và liên kết Review chung một hàng ở mọi độ rộng xuống tới 320px. Mỗi nút cao 44px trên một dòng (hàng đó là hàng nút), hiện nhãn đầy đủ khi vừa chỗ và dạng rút gọn khi không: "Sign off" cho "Review & sign off", "Send" cho "Review & send" (và "Review" cho "Review now" và "Review or correct") khi hàng rộng dưới khoảng 22.8rem, rồi "Current" cho "Current period" dưới khoảng 18.4rem; chỉ dưới khoảng 15.4rem (không có điện thoại thật nào như vậy) liên kết Review mới có hàng riêng với nhãn đầy đủ. Tên truy cập luôn là nhãn đầy đủ ("Current period", "Review & sign off"). Bố cục rộng luôn hiện nhãn đầy đủ.
+ - Check in/out: một nút theo trạng thái. Khi chưa vào ca hiện "Checked out" và "Check in"; khi đang vào ca hiện "Checked in since HH:MM" với chấm vòng tĩnh và "Check out", nút mở bước xác nhận giờ nghỉ. Trên desktop đây là một nhóm ở đầu bên phải của hàng tiêu đề trang Timesheet (chữ trạng thái canh phải trên dòng ngày, không có thẻ). Trên điện thoại cùng trạng thái và nút đó là một nhóm ở thanh trên cùng trên mọi màn hình thuộc ngữ cảnh của chính người dùng (thanh cao 60px, hoặc 112px khi bộ chuyển "Shared with me" chiếm hàng thứ hai), nên nhóm không nằm trên trang; bước xác nhận giờ nghỉ là cùng một hộp thoại và tiêu điểm trở về nút đã mở nó. Nút không có trong mọi chế độ xem chia sẻ, ở mọi độ rộng (check in/out của chủ vẫn là của chủ).
+-- Thanh công cụ: "Open a day" (chữ, ô ngày và nút "Open day" trên một hàng ở mọi độ rộng; dưới 480px hàng chiếm toàn chiều rộng và ô ngày lấy toàn bộ chỗ trống; khi hàng hẹp dần, nút đọc là "Open" dưới 21.13rem, 316.9px, và chữ bị ẩn dưới 19.22rem, 288.3px, đo lại ở vòng 5 từ các thành phần, ô ngày vẫn giữ tên truy cập "Open a day" và nút giữ tên "Open day"; mọi ngày, kể cả ngoài kỳ đang hiển thị; Today đưa bảng quay lại), công tắc "Worked hours" và "Change several days" (nút có viền cho đến khi được nhấn, tách khỏi công tắc bằng khoảng 24px và một đường kẻ mảnh từ 480px; dạng gọn dưới 480px giữ khoảng cách chặt và không có đường kẻ, và nút căn phải cạnh công tắc từ hàng 20.8rem, 312.0px, đọc là "Change days" xuống tới 17.38rem, 260.7px, rồi dưới mức đó chiếm một hàng riêng toàn chiều rộng với đủ chữ khi hàng còn từ 10.41rem, 156.2px, "Change days" xuống tới 6.99rem, 104.9px, và "Change / days" trên hai dòng khi hẹp hơn; nút cao 44px ở mọi dạng và tên vẫn là "Change several days"). Chế độ nhiều ngày mặc định tắt: ô chọn, "Select all", "Clear", ô chọn loại ngày ("Category for selected days") và "Preview changes" chỉ hiện sau "Change several days" và mất khi bấm "Done". Đổi loại nhiều ngày vẫn xem trước xung đột với giờ đã ghi trước khi lưu. Khi không có quyền sửa (chia sẻ chỉ xem) và với kỳ đã nhập, các điều khiển này bị ẩn hoặc khóa kèm lý do.
++- Thanh công cụ: "Open a day" (chữ, ô ngày và nút "Open day" trên một hàng ở mọi độ rộng; dưới 480px hàng chiếm toàn chiều rộng và ô ngày lấy toàn bộ chỗ trống; khi hàng hẹp dần, nút đọc là "Open" dưới 21.13rem, 316.9px, và chữ bị ẩn dưới 19.22rem, 288.3px, đo lại ở vòng 5 từ các thành phần, ô ngày vẫn giữ tên truy cập "Open a day" và nút giữ tên "Open day"; mọi ngày, kể cả ngoài kỳ đang hiển thị; Today đưa bảng quay lại), công tắc "Worked hours" và "Change several days" (nút có viền cho đến khi được nhấn, tách khỏi công tắc bằng khoảng 24px và một đường kẻ mảnh từ 480px; dạng gọn dưới 480px giữ khoảng cách chặt và không có đường kẻ, và nút căn phải cạnh công tắc từ hàng 20.8rem, 312.0px, đọc là "Change days" xuống tới 17.38rem, 260.7px, rồi dưới mức đó chiếm một hàng riêng toàn chiều rộng với đủ chữ khi hàng còn từ 10.41rem, 156.2px, "Change days" xuống tới 6.99rem, 104.9px, và "Change / days" trên hai dòng khi hẹp hơn; nút cao 44px ở mọi dạng và được đặt tên theo chữ nó đang hiện, "Change several days" hoặc "Change days" (SC 2.5.3)). Chế độ nhiều ngày mặc định tắt: ô chọn, "Select all", "Clear", ô chọn loại ngày ("Category for selected days") và "Preview changes" chỉ hiện sau "Change several days" và mất khi bấm "Done". Đổi loại nhiều ngày vẫn xem trước xung đột với giờ đã ghi trước khi lưu. Khi không có quyền sửa (chia sẻ chỉ xem) và với kỳ đã nhập, các điều khiển này bị ẩn hoặc khóa kèm lý do.
+ 
+ ## Sửa ngày (Day editor)
+ 
+ - Ngăn kéo (vòng 4, yêu cầu của chủ sở hữu 2026-10-20, U4-05 đến U4-07): từ 768px trình sửa ngày là một ngăn kéo không modal (không lớp nền, không có gì bị vô hiệu, không có `aria-modal`; trang vẫn dùng được), sát một mép cửa sổ, từ dưới thanh trên cùng tới đáy cửa sổ. Ngăn kéo không có góc bo nào (`border-radius: 0` cho cả bốn góc, đặt bên phải hay bên trái, ở giao diện sáng và cả hai bộ tối; vòng 5, U5-23: lời của chủ sở hữu "detail panel không bo góc" đảo ngược các góc bo của vòng 4). Điện thoại (dưới 768px): bottom sheet dạng modal cao tối đa 86% màn hình, hai góc trên bo (`--radius-lg`) và hai góc dưới vuông; nó là một lưới gồm thanh kéo, phần đầu, phần thân (phần duy nhất cuộn) và một chân (xem "Thứ tự").
+ - Cạnh bảng hay nổi: trình sửa ngày chỉ nổi khi bảng timesheet và ngăn kéo không vừa cạnh nhau, một quy tắc chỉ theo chiều rộng cửa sổ (không bao giờ theo chế độ hiện tại của trình sửa, nên không thể nhấp nháy qua lại). `editorLayout` (`editorLayoutModel.ts`) trả về `bottom-sheet` dưới 768px, `beside` khi `viewportWidth - pagePadding - editorWidth - gap >= sheetMinWidth`, còn lại là `floating`. `viewportWidth` là `window.innerWidth` trừ đi chiều rộng thanh cuộn chiếm chỗ (R5 b), đo một lần cho mỗi tỉ lệ điểm ảnh thiết bị bằng một hộp ngoài màn hình có `overflow: scroll` và bằng 0 với thanh cuộn dạng phủ hoặc bị ẩn; nên chiều rộng không bao giờ phụ thuộc việc trang có đang vẽ rãnh cuộn hay không (rãnh lúc có lúc không theo chiều cao trang từng khiến bố cục làm đổi chiều cao trang và do đó đổi lại chiều rộng), và phần tử gốc không bị ép cuộn: trang thấp hơn cửa sổ không vẽ rãnh cuộn dọc; mọi đầu vào khác được đọc theo px từ token: `--page-pad` (16px mỗi bên), `--editor-width` (400px), `--editor-gap` (16px) và `--sheet-min-width` (cột nhãn 92px, 7 x `--sheet-col-min` 108px, 2px đường viền mảnh và 2 x `--paper-pad` 16px: 882px). Với các token đã ghi, điểm chuyển là 1330px khi thanh cuộn dạng phủ (do test quét đo được) và 1345px chiều rộng cửa sổ khi có thanh cuộn chiếm chỗ 15px; nó thay cho con số cố định 1360px của vòng 3, vốn sớm hơn cần thiết 30 đến 47px. Cạnh bảng: ngăn kéo cố định ở bên phải và trang chừa `--editor-width + --editor-gap` ở phía đó, nên bảng timesheet không bao giờ nằm dưới ngăn kéo (cách ít nhất 16px) và mỗi cột ngày rộng ít nhất 108px. Nổi: ngăn kéo đè lên mép bảng timesheet, đặt ở mép trái thay vì mép phải khi cột đang sửa nằm ở nửa phải màn hình, và cột đang sửa được cuộn vào tầm nhìn. Trang không bị vô hiệu, nên một điều khiển phía sau ngăn kéo có thể nhận tiêu điểm: khi hộp của nó nằm hoàn toàn dưới ngăn kéo, ngăn kéo chuyển sang mép bên kia (WCAG 2.2 SC 2.4.11), nên điều khiển đang có tiêu điểm không bao giờ bị che hẳn.
+-- Chuyển ngày và bỏ chọn: bấm nút ngày của một cột khác, hoặc bấm bất kỳ chỗ nào trên cột đó, chuyển ngăn kéo sang ngày ấy mà không cần đóng trước; bấm (hoặc Enter) trên nút của chính ngày đang mở thì đóng ngăn kéo, tiêu điểm ở lại nút đó và một trạng thái lịch sự đọc "Day editor closed". Khi biểu mẫu các trường của ngày hoặc ô lý do có chỉnh sửa chưa lưu, việc mọi thao tác làm đổi ngày đang mở, đóng ngăn kéo hoặc chuyển bảng timesheet sang kỳ khác đều trước hết hỏi "Discard your changes?" (Keep editing và Discard) qua hộp thoại xác nhận: chuyển ngày, bỏ chọn, "Open a day", "Today", "Previous period", "Next period", "Current period", nút Close và Escape (hộp thoại lồng bên trong vẫn nhận Escape trước). Keep editing giữ nguyên ngăn kéo, các chỉnh sửa và kỳ đang hiển thị đúng như cũ; Discard thì tiếp tục (bước sang kỳ khác để ngăn kéo mở nguyên và bắt đầu lại từ ngày đã lưu). Khi không có gì chưa lưu thì không hỏi gì. Bấm ra ngoài cũng đóng trình sửa theo cách đó (vòng 5, U5-24, câu trả lời F-7 a của chủ sở hữu): trên máy tính (từ 768px) một `pointerdown` trên trang đóng ngăn kéo qua đường của nút Close, với cùng câu hỏi, trừ khi nó rơi vào trong một cột ngày (`[data-day]`), ngăn kéo, bất kỳ hộp thoại nào hoặc một điều khiển tương tác (nút, liên kết, input, select, textarea, label, switch, option), nên điều khiển giữ hành động riêng ("Today" vẫn chuyển trình sửa đang mở, cột ngày khác chuyển ngày); một lần bấm không phải nút chính hoặc rơi vào thanh cuộn của cửa sổ không phải bấm lên trang. Trên điện thoại, chạm vào lớp nền của bottom sheet (chính phần tử dialog, ngoài hộp của nó) đóng sheet. Lần bấm được dùng hết, nên sau đó tiêu điểm không bị chuyển sang trang: Keep editing trả tiêu điểm về trường đang có nó và việc đóng trả tiêu điểm về nút ngày. Có hai đường không hỏi, theo thiết kế: một liên kết rời khỏi trang (ứng dụng không có chốt chặn điều hướng ở màn hình nào), và việc tải lại sau khi một thay đổi nhãn hoặc theo lô đã đổi ngày đang mở (người dùng chủ động đổi ngày đó, nên biểu mẫu theo phiên bản đã lưu mới và các trường đã gõ cho ngày đó bị bỏ). Các trường đã lưu và lý do đã được một lần lưu dùng không phải là chỉnh sửa chưa lưu. Hộp thoại ca là modal, nên không thể chuyển ngày khi nó đang mở. Tiêu điểm chuyển tới tiêu đề của ngăn kéo khi mở; ngăn kéo nằm sau bảng timesheet trong DOM (Tab từ bảng tới được nó, Shift+Tab rời khỏi nó); Escape đóng ngăn kéo dù tiêu điểm đang ở đâu (hộp thoại lồng bên trong nhận Escape trước), Close cũng vậy, và tiêu điểm trở về nút ngày của ngày đó. Khi ngăn kéo đang mở, ngày nó đang sửa được đánh dấu trên bảng timesheet (xem "Bảng Timesheet").
++- Chuyển ngày và bỏ chọn: bấm nút ngày của một cột khác, hoặc bấm bất kỳ chỗ nào trên cột đó, chuyển ngăn kéo sang ngày ấy mà không cần đóng trước; bấm (hoặc Enter) trên nút của chính ngày đang mở thì đóng ngăn kéo, tiêu điểm ở lại nút đó và một trạng thái lịch sự đọc "Day editor closed". Khi biểu mẫu các trường của ngày hoặc ô lý do có chỉnh sửa chưa lưu, việc mọi thao tác làm đổi ngày đang mở, đóng ngăn kéo hoặc chuyển bảng timesheet sang kỳ khác đều trước hết hỏi "Discard your changes?" (Keep editing và Discard) qua hộp thoại xác nhận: chuyển ngày, bỏ chọn, "Open a day", "Today", "Previous period", "Next period", "Current period", nút Close và Escape (hộp thoại lồng bên trong vẫn nhận Escape trước). Keep editing giữ nguyên ngăn kéo, các chỉnh sửa và kỳ đang hiển thị đúng như cũ; Discard thì tiếp tục (bước sang kỳ khác để ngăn kéo mở nguyên và bắt đầu lại từ ngày đã lưu). Khi không có gì chưa lưu thì không hỏi gì. Bấm ra ngoài cũng đóng trình sửa theo cách đó (vòng 5, U5-24, câu trả lời F-7 a của chủ sở hữu): trên máy tính (từ 768px) một `pointerdown` trên trang đóng ngăn kéo qua đường của nút Close, với cùng câu hỏi, trừ khi nó rơi vào trong một cột ngày (`[data-day]`), ngăn kéo, bất kỳ hộp thoại nào hoặc một điều khiển tương tác (nút, liên kết, input, select, textarea, label, switch, option), nên điều khiển giữ hành động riêng ("Today" vẫn chuyển trình sửa đang mở, cột ngày khác chuyển ngày); một lần bấm không phải nút chính, hoặc rơi vào một thanh cuộn (của cửa sổ, hoặc thanh cuộn ngang của một thẻ tuần), không phải bấm lên trang. Một lần chạm có tác dụng khi ngón tay nhấc lên: vuốt bắt đầu ngoài cột ngày làm trang cuộn, trình duyệt hủy lần chạm đó và không có gì đóng. Trên điện thoại, chạm vào lớp nền của bottom sheet (chính phần tử dialog, ngoài hộp của nó) đóng sheet. Lần bấm được dùng hết, nên sau đó tiêu điểm không bị chuyển sang trang: Keep editing trả tiêu điểm về trường đang có nó và việc đóng trả tiêu điểm về nút ngày. Có hai đường không hỏi, theo thiết kế: một liên kết rời khỏi trang (ứng dụng không có chốt chặn điều hướng ở màn hình nào), và việc tải lại sau khi một thay đổi nhãn hoặc theo lô đã đổi ngày đang mở (người dùng chủ động đổi ngày đó, nên biểu mẫu theo phiên bản đã lưu mới và các trường đã gõ cho ngày đó bị bỏ). Các trường đã lưu và lý do đã được một lần lưu dùng không phải là chỉnh sửa chưa lưu. Hộp thoại ca là modal, nên không thể chuyển ngày khi nó đang mở. Tiêu điểm chuyển tới tiêu đề của ngăn kéo khi mở; ngăn kéo nằm sau bảng timesheet trong DOM (Tab từ bảng tới được nó, Shift+Tab rời khỏi nó); Escape đóng ngăn kéo dù tiêu điểm đang ở đâu (hộp thoại lồng bên trong nhận Escape trước), Close cũng vậy, và tiêu điểm trở về nút ngày của ngày đó. Khi ngăn kéo đang mở, ngày nó đang sửa được đánh dấu trên bảng timesheet (xem "Bảng Timesheet").
+ - Phần đầu: nằm trên bề mặt riêng, với tiêu đề "Mon 10/12/2026" (tên hộp thoại vẫn giữ ngày ghi sổ dạng ISO), nút biểu tượng Close và các chip: kỳ (current, old, future hoặc in progress), "Times in {múi giờ hiển thị}", "Day in {múi giờ báo cáo}" chỉ khi múi giờ hiển thị khác múi giờ báo cáo, và "View only" cho chia sẻ chỉ đọc. Không còn ghi chú dài về múi giờ; lời giải thích về múi giờ nhập nằm cạnh trường "Input zone" của hộp thoại ca.
+ - Thứ tự: phần đầu, dòng trạng thái, các thông báo cũ/thông tin/lỗi và ô lý do (kỳ cũ hoặc đã chốt), "Times" (mỗi ca một thẻ với khoảng giờ, nhãn trạng thái, dòng nguồn và bảng giờ nghỉ, cùng Add session), "Category and leave" và "Figures (computed by the server)". Bảng chỉ hiện giờ và giờ nghỉ đã chọn; ngày kết thúc rõ ràng và trường "Input zone" nhìn thấy được nằm trong hộp thoại ca, còn các trường của ngày giữ nút lưu riêng ("Save day fields"). Vòng 5, U5-26: dưới 768px bottom sheet không có phần "Figures" (các giá trị của máy chủ vẫn nằm ở ngăn kéo trên máy tính) và "Save day fields" là nút 44px rộng hết chiều ngang nằm ở chân sheet (bề mặt panel-head, một đường kẻ mảnh phía trên, như chân hộp thoại ca), luôn ở trong tầm nhìn khi phần thân cuộn; từ 768px nút vẫn kết thúc biểu mẫu như trước.
+ - Thẻ ca: khoảng giờ theo múi giờ hiển thị (`+1` khi giờ kết thúc ở ngày địa phương sau), một nhãn ("Breaks confirmed" hoặc "No breaks taken" màu xanh lá, "Breaks not confirmed" màu hổ phách, "Running" kèm chấm tĩnh), dòng nguồn ("Entered by hand in {zone}", "Checked in" khi ca đang chạy, hoặc "Checked in and out") và bảng giờ nghỉ (Break, Date, Start, Minutes, theo múi giờ hiển thị). Ca có giờ nghỉ chưa xác nhận hiện "OT stays pending until breaks are confirmed." và nút "Confirm breaks" mở hộp thoại ca với các dòng đã lưu hoặc, khi chưa có, các giờ nghỉ gợi ý nằm trong ca; nếu không có gợi ý nào vừa, Save hỏi qua thông báo bên dưới. Các nút một chạm cũ không còn. Edit và Delete không có trong chia sẻ chỉ đọc hay kỳ đã nhập. Trong khung nhìn chia sẻ có quyền sửa, thẻ ca đang chạy của chủ sở hữu có Edit nhưng không có Delete, vì xóa nó sẽ kết thúc đồng hồ của chủ sở hữu bằng một đường khác; máy chủ từ chối bằng 409 `shared_clock_action` và không ghi gì (quyết định R2 a của chủ sở hữu, 2026-10-21). Ca đã kết thúc vẫn có Delete trong khung nhìn chia sẻ có quyền sửa, và khung nhìn của chính chủ sở hữu không đổi.
+@@ -101,15 +101,15 @@ Nghỉ: màn Sửa ngày hiện cảnh báo không chặn khi số phút nghỉ
+ CSS custom properties thuần trong `src/client/styles.css`; chỉ dùng bộ font hệ thống (chính sách bảo mật nội dung không cho web font), số, giờ và OT dùng bộ font monospace. Giá trị mới được thêm dưới dạng custom property, không dùng giá trị tùy tiện.
+ 
+ - Phong cách (vòng 3, quyết định của chủ sở hữu ngày 2026-10-15; thay thế hướng công nghiệp, bo góc 4px và transition 300 ms của E-8): phong cách doanh nghiệp hiện đại, thân thiện. Các bề mặt đi từ trang (`--bg`) đến card (`--card`), rồi bảng tuần, panel và menu. Mọi màu đều có giá trị sáng trong `:root` và cùng giá trị tối trong cả hai bộ tối; card khác nền trang ít nhất 1.12:1 ở cả hai giao diện. Một màu nhấn thương hiệu (`--accent`); màu trạng thái và các nhãn kỳ (`--pill-*`: cũ màu hổ phách, hiện tại màu xanh lá, tương lai màu hồng, đang diễn ra màu xanh dương, trung tính màu xám) luôn đi kèm chữ hoặc hình.
+-- Hình dạng (thang bo góc): ô nhập và chip `--radius-sm` 6px; nút và panel lõm `--radius` 8px; card, thanh kỳ, hộp thoại, bottom sheet trên điện thoại (hai góc trên) và menu `--radius-lg` 12px; ngăn kéo sửa ngày không có góc bo nào (U5-23); nhãn kỳ và avatar `--radius-pill`. Tờ giấy lấy góc card (`--radius-lg`) từ 768px và vuông góc trên điện thoại, nơi nó tràn mép. Ngoại lệ: bảng tuần và chân bảng là góc vuông (`--radius-sheet`, 0) vì bảng giữ dạng Excel; cột bảng được nâng (đang chọn hoặc đang mở) bo góc 4px (`--radius-lift`). Công tắc tròn: rãnh dùng `--radius-pill` và núm là hình tròn.
++- Hình dạng (thang bo góc): ô nhập và chip `--radius-sm` 6px; nút và panel lõm `--radius` 8px; card, thanh kỳ, hộp thoại, bottom sheet trên điện thoại (hai góc trên) và menu `--radius-lg` 12px; ngăn kéo sửa ngày không có góc bo nào (U5-23); nhãn kỳ và avatar `--radius-pill`. Tờ giấy lấy góc card (`--radius-lg`) ở mọi bề rộng; ở dạng gọn (dưới 480px) nó cách mỗi mép cửa sổ `--compact-edge` (8px). Ngoại lệ: bảng tuần và chân bảng là góc vuông (`--radius-sheet`, 0) vì bảng giữ dạng Excel; cột bảng được nâng (đang chọn hoặc đang mở) bo góc 4px (`--radius-lift`). Công tắc tròn: rãnh dùng `--radius-pill` và núm là hình tròn.
+ - Độ cao: một vòng viền mảnh cộng bóng mềm nhiều lớp, không bao giờ là viền cứng. `--elev-bar` thanh trên cùng, `--elev-1` card và thanh kỳ, `--elev-2` tờ giấy (`--elev-paper`; bảng tuần và card chân bảng trên đó không tự đổ bóng), `--elev-3` menu, hộp thoại và ngăn kéo sửa ngày (cạnh bảng hoặc nổi), `--elev-lift` cột bảng được nâng. Các mức tối có vòng sáng vì chỉ bóng đổ thì không thấy được trên nền tối. Các trang Timesheet và Review đặt thanh công cụ, đầu biểu mẫu, từng bảng tuần (có dải tiêu đề số tuần và khoảng ngày) và chân bảng trên một tờ giấy, nên bảng nổi bật khỏi nền trang.
+-- Token vòng 4 (câu trả lời F-5 của chủ sở hữu và các điều khiển vòng 4): `--page-head-gap` 32px (khoảng cách tiêu đề từ 768px); `--paper-surface`, `--elev-paper`, `--paper-pad` 16px và `--paper-gap` 16px (tờ giấy); `--sheet-head-strong` (nền dải tiêu đề tuần và cột đầu, ở bộ sáng và cả hai bộ tối); `--select-arrow-size` 7px, `--select-arrow-inset` 12px và `--select-pad-end` 34px (mọi ô chọn); các token công tắc `--switch-width` 44px, `--switch-height` 24px, `--switch-thumb` 18px và `--switch-inset` 3px với rãnh và núm tròn.
++- Token vòng 4 (câu trả lời F-5 của chủ sở hữu và các điều khiển vòng 4): `--page-head-gap` 32px (khoảng cách tiêu đề từ 768px); `--paper-surface`, `--elev-paper`, `--paper-pad` 16px và `--paper-gap` 16px (tờ giấy); `--sheet-head-strong` (nền dải tiêu đề tuần và cột đầu, ở bộ sáng và cả hai bộ tối); `--select-arrow-w` 12px và `--select-arrow-h` 6px (ô vuông vẽ mũi tên; vòng 5, U5-03 thay `--select-arrow-size` 7px), `--select-arrow-inset` 12px và `--select-pad-end` 34px (mọi ô chọn); các token công tắc `--switch-width` 44px, `--switch-height` 24px, `--switch-thumb` 18px và `--switch-inset` 3px với rãnh và núm tròn.
+ - Ô chọn (vòng 4; một lớp từ vòng 5, U5-03): mọi ô chọn không còn mũi tên gốc (`appearance: none`) và vẽ một dấu chevron bằng một lớp conic-gradient trong một ô 12 x 6px duy nhất (không dùng `url()`; hai ô đặt cạnh nhau để lại một vệt sáng ở mức hiển thị 125% và 150%), mép phải cách khung 12px, màu `--muted` (5.83:1 trên `--field-bg` ở giao diện sáng, 7.07:1 ở cả hai bộ tối, so với mức 3:1 cần có), lề phải trong 34px để chữ không chạm mũi tên; ở chế độ màu cưỡng bức mũi tên gốc quay lại.
+ - Ô tick (vòng 4): ô tick được căn giữa theo dòng chữ đầu tiên của nó (lệch tối đa 1px); trên điện thoại hoặc con trỏ thô nhãn của nó vẫn cao 44px với một dòng được căn giữa.
+ - Chuyển động: một token transition dùng chung (`--transition`) chỉ liệt kê các thuộc tính thực sự đổi (màu chữ, màu nền, màu viền, bóng, transform), không bao giờ dùng `all`; `--duration` 180 ms (`--duration-fast` 120 ms, `--duration-slow` 260 ms) với `--ease-standard`. Điều khiển cần thời lượng khác thì đặt `--transition-duration` trên chính nó. Nút đang nhấn dịch một khoảng nhỏ theo token. Không có animation khi vào, cuộn hay lặp; khi giảm chuyển động thì thời lượng là 0.01 ms, và chấm ca đang chạy là tĩnh.
+ - Nút: primary (nền màu nhấn), secondary (card viền màu nhấn) và quiet (chữ màu nhấn), mỗi loại có vòng focus nhìn thấy được (một token dùng chung: vòng màu nhấn đặc với khe màu card, độ tương phản tối thiểu 3:1 trên mọi bề mặt ở cả hai giao diện).
+ - Hover và nhấn: nút secondary và quiet, liên kết điều hướng, tab, mục trong More, công tắc (mọi `role="switch"`: "Worked hours" và hai công tắc chia sẻ, rãnh và núm tròn, 44x24px, vị trí núm và màu rãnh thể hiện trạng thái) và lựa chọn trong bộ chọn dùng chung một màu nền hover (`--hover-fill`) kèm viền nhấn. Ngoại lệ duy nhất là các nút liên kết quiet "Today", "Now" và "Set an end instead" (dáng quiet có gạch chân và không có padding, nên nền tô sẽ ôm sát chữ): hover của chúng trong suốt, không có màu nền và không có viền; chữ chuyển sang màu nhấn đậm hơn và nét gạch chân dày lên. Nút đang nhấn (bật) là nền màu nhấn đặc với chữ on-accent, và khi con trỏ ở trên thì chuyển sang màu nhấn đậm hơn, nên hover không bao giờ che trạng thái đang nhấn. Hiệu ứng hover chỉ áp dụng trên thiết bị có hover (`@media (hover: hover)`), nên chạm không để lại hover. Tiêu chí đo được, ở cả hai giao diện: nền hover khác bề mặt lúc nghỉ ít nhất 1.20:1, viền nhấn đạt 3:1 so với bề mặt, chữ trên nền đó giữ 4.5:1, và nền đang nhấn khác nền hover chưa nhấn ít nhất 3:1.
+-- Chạm: điều khiển cao ít nhất 44px (`--tap-min`) dưới 768px và với con trỏ thô. Hai ngoại lệ (vòng 5, quyết định F-1 a của chủ sở hữu): các nút phụ của Day editor (Edit và Delete trên thẻ ca, Add session, Suggest breaks, Add break và Save day fields) có khung nhìn thấy cao 36px ở mọi thiết bị (`--subbtn-h`) và giữ mục tiêu 44px dưới 768px và với con trỏ thô dưới dạng vùng chạm vô hình (một phần tử giả cao thêm 4px ở trên và dưới), các hàng nút phụ cách nhau 8px nên các vùng chạm không bao giờ chồng lên nhau; và các đoạn Light và Dark của menu tài khoản cao 32px với con trỏ tinh từ 768px (`--theme-seg-h`, biểu tượng 16px, đệm hàng 4px) và vẫn cao 44px dưới 768px, trong bảng More của điện thoại, và với con trỏ thô.
++- Chạm: điều khiển cao ít nhất 44px (`--tap-min`) dưới 768px và với con trỏ thô. Hai ngoại lệ (vòng 5, quyết định F-1 a của chủ sở hữu): các nút phụ của Day editor (Edit và Delete trên thẻ ca, Add session, Suggest breaks, Add break và Save day fields trong biểu mẫu của ngăn kéo, chân của sheet trên điện thoại có nút 44px toàn chiều rộng riêng, xem "Thứ tự") có khung nhìn thấy cao 36px ở mọi thiết bị (`--subbtn-h`) và giữ mục tiêu 44px dưới 768px và với con trỏ thô dưới dạng vùng chạm vô hình (một phần tử giả cao thêm 4px ở trên và dưới), các hàng nút phụ cách nhau 8px nên các vùng chạm không bao giờ chồng lên nhau; và các đoạn Light và Dark của menu tài khoản cao 32px với con trỏ tinh từ 768px (`--theme-seg-h`, biểu tượng 16px, đệm hàng 4px) và vẫn cao 44px dưới 768px, trong bảng More của điện thoại, và với con trỏ thô.
+ - Các vai trò màu theo trạng thái ngày (đường kẻ và đầu bảng, nền ngày không làm việc kèm sọc, hôm nay, cần nhập, đang chọn, đang sửa, đang chạy) có giá trị sáng và tối. Trạng thái không bao giờ chỉ bằng màu: luôn có chữ hoặc hình.
+ - Thương hiệu: logo và chữ thương hiệu là hình thương hiệu có màu cố định, không đổi theo màu giao diện. Logo là file vector; chữ thương hiệu là các đường viền vector vẽ ngay trong trang, và không có file font nào được phát hành. Ở giao diện tối, chữ thương hiệu dùng các sắc nhạt hơn đã ghi rõ của xanh và xám thương hiệu để vẫn đọc được; giao diện sáng giữ màu thương hiệu.
+ - Bố cục ưu tiên mobile với mật độ dễ đọc cho ứng dụng chấm công của nhóm nhỏ (thứ bậc rõ, khoảng cách thoải mái; bảng giữ dạng Excel). Giao diện sáng và tối theo thiết bị cho đến khi người dùng chọn một giao diện bằng điều khiển "Theme" (Light hoặc Dark, mỗi lựa chọn có biểu tượng mặt trời hoặc mặt trăng, trong menu tài khoản trên desktop và trong bảng More trên điện thoại); lựa chọn chỉ lưu trên thiết bị đó, không có thiết lập trên server, và được áp dụng trước khi trang được vẽ.
+@@ -122,7 +122,7 @@ Ký xác nhận và gửi là hai hành động riêng (vòng 5, quyết định
+ 
+ PDF (vòng 5, một trang): header có logo C&D và wordmark hai dòng ở bên trái (vector, như thanh trên) và "Revision n" cùng mã nộp nhỏ bên dưới ở bên phải; tên công ty và tiêu đề "TIME SHEET FOR SALARIED EXEMPT EMPLOYEES" canh giữa; các trường Employee, Payroll Date và Period; hai bảng tuần thứ Hai–Chủ nhật (tên thứ bằng chữ hoa nhỏ, ngày, loại bằng kiểu chữ viết tay Indie Flower, ô giờ bắt đầu và kết thúc, và dòng OT); tổng OT được ghi dạng h:mm của cả 14 ngày, gồm hai Chủ nhật; các dòng chữ ký có tên nhân viên, ảnh chữ ký đã lưu nếu có, và ngày, cùng chữ ký/ngày manager trống nếu chưa có duyệt thật tương lai; và chân trang có bản quyền bên trái và "Internal use by C&D only" bên phải. Không có đoạn hướng dẫn (quyết định của chủ F-8 a). Dòng giờ và dòng OT (cùng tổng OT) được in hoặc bỏ theo lựa chọn của chủ cho từng lần gửi, với mặc định "Time rows on the PDF" và "OT rows on the PDF" ở Settings; bốn biến thể mang cùng ngày, tổng, chữ ký và ngày. Dùng Letter dọc, font Unicode nhúng (loại mà Indie Flower không vẽ được chuyển sang DejaVu Serif Italic), nhãn dài đọc được, ảnh ký có giới hạn. Bỏ header năm cũ. Có mã nộp/revision và tên file an toàn.
+ 
+-Sign-off thủ công là hành động của chủ đang đăng nhập; nó ghi tên hiển thị của tài khoản và, khi đã lưu, cả ảnh chữ ký (quyết định của chủ F-5 b, 2026-10-21). Không có ô gõ tên: phần sign-off của Review hiện "You sign as" cùng tên tài khoản. Có ảnh đã lưu thì PDF và Review hiện ảnh và tên; không có thì chỉ hiện tên, và Review hiện "Signed with your name only." cùng liên kết "Add a signature image in Settings." Ảnh đã lưu không thể bỏ ra. Thiết lập ảnh khi tự nộp chưa ký là riêng.
++Sign-off thủ công là hành động của chủ đang đăng nhập; nó ghi tên hiển thị của tài khoản và, khi đã lưu, cả ảnh chữ ký (quyết định của chủ F-5 b, 2026-10-21). Không có ô gõ tên: hộp thoại Sign off hiện tên tài khoản dưới "Signer", kèm "(you)". Có ảnh đã lưu thì PDF và Review hiện ảnh và tên; không có thì chỉ hiện tên, và dòng "Signature" của hộp thoại Sign off ghi "your name only" cùng liên kết "Add a signature image in Settings." (có ảnh đã lưu thì dòng ghi "your saved image and your name"). Ảnh đã lưu không thể bỏ ra. Thiết lập ảnh khi tự nộp chưa ký là riêng.
+ 
+ PDF và email gửi đi của bản tự nộp không có dấu hiệu tự động: khối chữ ký in tên nhân viên và ngày tự nộp theo múi giờ báo cáo đã lưu; ảnh chữ ký chỉ xuất hiện khi user đã cho phép dùng ảnh tự động; dòng ghi chú chỉ xuất hiện khi user bật (mặc định tắt; user sửa nội dung, mặc định "Automatic submission"). Hệ thống vẫn ghi revision là tự động, chờ nhân viên xác nhận, signed_at trống và không có sign-off, và màn hình của chính nhân viên hiện điều đó. Ảnh ký được cho phép trước vẫn không tạo signed_at hay sign-off thật. Có thể xuất báo cáo bằng chứng OT riêng khi user chọn.
+ 
+diff --git a/docs/05_SUBMISSION_AND_NOTIFICATIONS.md b/docs/05_SUBMISSION_AND_NOTIFICATIONS.md
+index 94195139..69ee6512 100644
+--- a/docs/05_SUBMISSION_AND_NOTIFICATIONS.md
++++ b/docs/05_SUBMISSION_AND_NOTIFICATIONS.md
+@@ -8,7 +8,7 @@ Track revision (draft/finalized), employee review (pending/signed), finalization
+ 
+ Prepare an exact review payload: attendance, OT evidence/movements, unresolved inputs, deficit decisions, recipients, email and the signature image when one is saved. A preview is not a final submission PDF. Manual sign-off is the signed-in owner's act: it records the account's display name (no typed name) and, when one is saved, the signature image; without a saved image it carries the name alone (owner decision F-5 b, 2026-10-21). The reviewed payload binds the image state, so an image saved or replaced after the review makes the request a stale-review conflict. Explicit sign-off carries expected draft version and reviewed payload hash.
+ 
+-Sign off and send are separate acts (owner decisions F-2 a, F-3 b and F-4, 2026-10-21; WP5-UX5-T01b). Sign-off validates ownership/version, finalizes the snapshot, records the real sign-off, posts ledger events and enqueues the PDF in one transaction; it sends nothing. Stale content returns a conflict. The owner then sends the signed revision: the To, Cc, subject and body and the two PDF row switches ("Time rows on the PDF", "OT rows on the PDF") are chosen for that send, with the current Settings as defaults. Each send is its own immutable record. Render each PDF variant once from the snapshot, persist/hash it, then send that exact file with the send's own email content. Delivery status remains independent of sign-off. Until the Send card (WP5-UX5-T03), the Review page sends right after a successful sign-off with the Settings defaults.
++Sign off and send are separate acts (owner decisions F-2 a, F-3 b and F-4, 2026-10-21; WP5-UX5-T01b). Sign-off validates ownership/version, finalizes the snapshot, records the real sign-off, posts ledger events and enqueues the PDF in one transaction; it sends nothing. Stale content returns a conflict. The owner then sends the signed revision: the To, Cc, subject and body and the two PDF row switches ("Time rows on the PDF", "OT rows on the PDF") are chosen for that send, with the current Settings as defaults. Each send is its own immutable record. Render each PDF variant once from the snapshot, persist/hash it, then send that exact file with the send's own email content. Delivery status remains independent of sign-off.
+ 
+ Incomplete optional clock evidence may remain pending after explicit acknowledgement; never invent hours. Correct invalid data or exclude it with audit.
+ 
+@@ -16,7 +16,7 @@ Incomplete optional clock evidence may remain pending after explicit acknowledge
+ 
+ Persist due_at UTC from the reporting-zone due rule. The runner operates without a browser.
+ 
+-A period counts as submitted once any of its revisions has a send (owner decision F-2 a). At the deadline the system submits what is not yet submitted:
++A period counts as submitted once any of its revisions has a send (owner decisions F-2 a of 2026-10-21 and H-1 a of 2026-10-22). At the deadline the system submits what is not yet submitted:
+ 
+ - Unsigned draft + enabled switch: finalize valid saved attendance—or the default labels when the period has no saved entries—as **automatic** (the record keeps employee review pending); post only computable credits/authorized deficits (days without records post no OT and no deficit); enqueue the PDF and send it through a send record with origin `deadline`, the Settings envelope and switches and no reason, presented as document 04 describes.
+ - Signed revision never sent + enabled switch: send the signed revision as signed (a `deadline` send with the Settings envelope and switches, no reason; audit `deadline.send_signed`). No new revision and no ledger change.
+@@ -35,7 +35,7 @@ Account bounds on automatic submission (both only narrow what is submitted; neit
+ 
+ ## Reminders and review links
+ 
+-Default reminders: 24h and 2h before due, an overdue warning when auto-submit is off, and an outcome notice after automatic submission. Deduplicate by user/period/reminder occurrence; stop normal reminders once the period is submitted, at its first send (owner decision F-2 a): a signed period that was not sent keeps its reminders, worded "signed, not sent yet". Collapse missed pre-deadline notices into one useful current notice.
++Default reminders: 24h and 2h before due, an overdue warning when auto-submit is off, and an outcome notice after automatic submission. Deduplicate by user/period/reminder occurrence; stop normal reminders once the period is submitted, at its first send (owner decisions F-2 a of 2026-10-21 and H-1 a of 2026-10-22): a signed period that was not sent keeps its reminders, worded "signed, not sent yet". Collapse missed pre-deadline notices into one useful current notice.
+ 
+ Reminders are at-least-once (owner decision D-7 a, 2026-10-20). A reminder job that runs again after a crash finds its message already captured and counts as sent; on real SMTP no such record exists, so if the process stops after the mail server accepted the message and before the job is recorded as sent, the reminder may arrive twice. This is accepted: reminders are advisory, and a lost reminder could cause a missed deadline. Submission deliveries are not reminders and keep the uncertain-outcome rule of the delivery table below.
+ 
+@@ -69,7 +69,7 @@ Another copy needs a confirmation and a typed reason (owner decision F-4, 2026-1
+ - A copy of the period counts as sent once any delivery attempt of any of its revisions was `accepted` or `uncertain`, whatever was decided later (the mail may have arrived). A send whose attempts all ended `failed_permanent` does not count, so retrying a failed first send needs no reason.
+ - When a copy counts, a send needs a reason: 2-500 characters after trimming, NFC, no control characters except line feeds. Otherwise the send is refused (422 `reason_required`) and nothing is written. The explicit "resend" decision on an uncertain attempt needs the reason too.
+ - The reason is stored on the send and in its audit event. It is never added to the email.
+-- The check runs inside the send transaction, so two concurrent sends cannot both skip it. A send still in progress blocks another one (409).
++- The check runs inside the send transaction, so two concurrent sends cannot both skip it. A send still in progress, or a send job of any revision of the period that still waits, blocks another one (409), so an older revision's copy cannot arrive after the correction's.
+ - The automatic paths never need a reason: they run only for a period that has no send.
+ 
+ Archived downloads require ownership or a share whose PDF item is on (the PDF may contain the signature image); signature image files are never shared. Separate OT evidence export includes raw intervals, breaks, policies, daily eligible/credited amounts, adjustments and leave permission; it is not automatically attached to payroll email.
+diff --git a/docs/05_SUBMISSION_AND_NOTIFICATIONS.vi.md b/docs/05_SUBMISSION_AND_NOTIFICATIONS.vi.md
+index cacd7a5e..355e2b67 100644
+--- a/docs/05_SUBMISSION_AND_NOTIFICATIONS.vi.md
++++ b/docs/05_SUBMISSION_AND_NOTIFICATIONS.vi.md
+@@ -8,7 +8,7 @@ Theo dõi riêng revision (nháp/chốt), nhân viên xác nhận (chờ/đã k
+ 
+ Chuẩn bị payload review chính xác: loại ngày, bằng chứng/biến động OT, dữ liệu chưa đủ, quyết định thiếu, người nhận, email và ảnh chữ ký khi đã lưu. Preview không phải PDF nộp chính thức. Sign-off thủ công là hành động của chủ đang đăng nhập: nó ghi tên hiển thị của tài khoản (không gõ tên) và, khi đã lưu, cả ảnh chữ ký; chưa lưu ảnh thì chỉ ký bằng tên (quyết định của chủ F-5 b, 2026-10-21). Payload đã xem ràng buộc trạng thái ảnh, nên ảnh được lưu hoặc thay sau lúc xem làm yêu cầu thành xung đột review cũ. Sign-off rõ ràng gửi kèm phiên bản nháp kỳ vọng và hash đã xem.
+ 
+-Ký và gửi là hai hành động riêng (quyết định của chủ F-2 a, F-3 b và F-4, 2026-10-21; WP5-UX5-T01b). Sign-off kiểm chủ/phiên bản, chốt snapshot, ghi sign-off thật, ghi sổ và xếp job PDF trong một transaction; nó không gửi gì. Nội dung cũ trả xung đột. Sau đó chủ gửi revision đã ký: To, Cc, tiêu đề, nội dung và hai công tắc dòng PDF ("Dòng giờ trên PDF", "Dòng OT trên PDF") được chọn cho lần gửi đó, mặc định lấy từ Settings hiện tại. Mỗi lần gửi là một bản ghi bất biến riêng. Tạo mỗi biến thể PDF một lần từ snapshot, lưu/hash, rồi gửi đúng file đó với nội dung email riêng của lần gửi. Trạng thái gửi độc lập sign-off. Cho tới khi có thẻ Gửi (WP5-UX5-T03), trang Review gửi ngay sau khi sign-off thành công với giá trị mặc định của Settings.
++Ký và gửi là hai hành động riêng (quyết định của chủ F-2 a, F-3 b và F-4, 2026-10-21; WP5-UX5-T01b). Sign-off kiểm chủ/phiên bản, chốt snapshot, ghi sign-off thật, ghi sổ và xếp job PDF trong một transaction; nó không gửi gì. Nội dung cũ trả xung đột. Sau đó chủ gửi revision đã ký: To, Cc, tiêu đề, nội dung và hai công tắc dòng PDF ("Dòng giờ trên PDF", "Dòng OT trên PDF") được chọn cho lần gửi đó, mặc định lấy từ Settings hiện tại. Mỗi lần gửi là một bản ghi bất biến riêng. Tạo mỗi biến thể PDF một lần từ snapshot, lưu/hash, rồi gửi đúng file đó với nội dung email riêng của lần gửi. Trạng thái gửi độc lập sign-off.
+ 
+ Giờ tùy chọn thiếu có thể để chờ sau xác nhận rõ; không bịa giờ. Sửa dữ liệu sai hoặc loại có audit.
+ 
+@@ -16,7 +16,7 @@ Giờ tùy chọn thiếu có thể để chờ sau xác nhận rõ; không bị
+ 
+ Lưu due_at UTC từ quy tắc hạn theo múi giờ báo cáo. Runner không cần trình duyệt.
+ 
+-Một kỳ được tính là đã nộp khi bất kỳ revision nào của nó đã có một lần gửi (quyết định của chủ F-2 a). Đến hạn, hệ thống nộp những gì chưa được nộp:
++Một kỳ được tính là đã nộp khi bất kỳ revision nào của nó đã có một lần gửi (quyết định của chủ F-2 a ngày 2026-10-21 và H-1 a ngày 2026-10-22). Đến hạn, hệ thống nộp những gì chưa được nộp:
+ 
+ - Nháp chưa ký + bật: chốt loại ngày hợp lệ đã lưu—hoặc nhãn mặc định khi kỳ chưa lưu dữ liệu nào—là **tự động** (bản ghi giữ trạng thái chờ nhân viên xác nhận); chỉ ghi OT tính được/khoản trừ đã cho phép (ngày không có bản ghi không ghi OT và không tính thiếu); xếp PDF và gửi qua một bản ghi gửi có nguồn `deadline`, với phong bì và công tắc của Settings và không có lý do, trình bày như tài liệu 04.
+ - Revision đã ký nhưng chưa từng gửi + bật: gửi revision đã ký đúng như đã ký (một lần gửi `deadline` với phong bì và công tắc của Settings, không có lý do; audit `deadline.send_signed`). Không tạo revision mới và không đổi sổ.
+@@ -35,7 +35,7 @@ Giới hạn theo tài khoản đối với tự nộp (cả hai chỉ thu hẹp
+ 
+ ## Nhắc và link review
+ 
+-Mặc định: trước hạn 24h, 2h; báo quá hạn nếu tắt tự nộp; báo kết quả sau tự nộp. Chống trùng theo user/kỳ/lần nhắc; ngừng nhắc thường khi kỳ đã nộp, tức là ở lần gửi đầu tiên (quyết định của chủ F-2 a): một kỳ đã ký mà chưa gửi vẫn được nhắc, với lời "đã ký, chưa gửi". Gộp các nhắc trước hạn bị lỡ thành một thông báo hiện tại hữu ích.
++Mặc định: trước hạn 24h, 2h; báo quá hạn nếu tắt tự nộp; báo kết quả sau tự nộp. Chống trùng theo user/kỳ/lần nhắc; ngừng nhắc thường khi kỳ đã nộp, tức là ở lần gửi đầu tiên (quyết định của chủ F-2 a ngày 2026-10-21 và H-1 a ngày 2026-10-22): một kỳ đã ký mà chưa gửi vẫn được nhắc, với lời "đã ký, chưa gửi". Gộp các nhắc trước hạn bị lỡ thành một thông báo hiện tại hữu ích.
+ 
+ Lời nhắc là ít nhất một lần (quyết định của chủ D-7 a, 2026-10-20). Job nhắc chạy lại sau sự cố thấy thư đã được ghi vào thư mục capture và coi như đã gửi; trên SMTP thật không có bản ghi như vậy, nên nếu tiến trình dừng sau khi máy chủ thư đã nhận thư và trước khi job được ghi là đã gửi thì lời nhắc có thể đến hai lần. Điều này được chấp nhận: lời nhắc chỉ mang tính tư vấn, và mất một lời nhắc có thể gây lỡ hạn. Lần gửi bài nộp không phải lời nhắc và giữ quy tắc kết quả không chắc chắn ở bảng gửi bên dưới.
+ 
+@@ -69,7 +69,7 @@ Gửi thêm một bản cần xác nhận và lý do gõ tay (quyết định c
+ - Một bản của kỳ được tính là đã gửi khi bất kỳ lượt gửi nào của bất kỳ revision nào của kỳ đã `accepted` hoặc `uncertain`, bất kể quyết định sau đó (thư có thể đã tới). Một lần gửi mà mọi lượt đều kết thúc `failed_permanent` thì không được tính, nên thử lại một lần gửi đầu thất bại không cần lý do.
+ - Khi đã có bản được tính, lần gửi cần lý do: 2-500 ký tự sau khi cắt khoảng trắng, NFC, không ký tự điều khiển trừ xuống dòng. Nếu không, lần gửi bị từ chối (422 `reason_required`) và không ghi gì. Quyết định "gửi lại" rõ ràng cho một lượt không chắc chắn cũng cần lý do.
+ - Lý do được lưu trên lần gửi và trong sự kiện audit của nó. Nó không bao giờ được thêm vào email.
+-- Việc kiểm tra chạy trong transaction gửi, nên hai lần gửi đồng thời không thể cùng bỏ qua nó. Một lần gửi đang chạy chặn lần gửi khác (409).
++- Việc kiểm tra chạy trong transaction gửi, nên hai lần gửi đồng thời không thể cùng bỏ qua nó. Một lần gửi đang chạy, hoặc một send job của bất kỳ revision nào của kỳ còn đang chờ, chặn lần gửi khác (409), nên bản gửi của revision cũ không thể đến sau bản của lần sửa.
+ - Các đường tự động không bao giờ cần lý do: chúng chỉ chạy cho kỳ chưa có lần gửi nào.
+ 
+ Tải lưu trữ cần quyền chủ hoặc quyền chia sẻ bật mục PDF (PDF có thể chứa ảnh chữ ký); file ảnh chữ ký không bao giờ được chia sẻ. Báo cáo OT riêng có ca gốc, nghỉ, quy tắc, số đủ điều kiện/ghi mỗi ngày, điều chỉnh và quyền dùng phép; không tự kèm email payroll.
+diff --git a/docs/10_DECISIONS_AND_SOURCES.md b/docs/10_DECISIONS_AND_SOURCES.md
+index 3fd86eea..fc2fc1f4 100644
+--- a/docs/10_DECISIONS_AND_SOURCES.md
++++ b/docs/10_DECISIONS_AND_SOURCES.md
+@@ -315,3 +315,11 @@ Source: the owner's answers of 2026-10-21 to WP5-UX5-PLAN, recorded verbatim (in
+ - The owner's reason rule (F-4, plan B-A2). A copy counts as sent once any attempt of any revision of the period was `accepted` or `uncertain`; a send whose attempts all failed permanently does not count. When a copy counts, another send, and the "resend" decision on an uncertain attempt, need a reason of 2-500 characters (trimmed, NFC, no control characters except line feeds), else 422 `reason_required`. The reason is stored on the send and in its audit event and is never added to the email. The check runs inside the send transaction. The reason not being in the email, a failed first send needing no reason, and the uncertain resend needing one are the planner's reversible defaults (plan Addendum 1, E revised).
+ - Data: migration 0015 rebuilds `revision_files` with a `variant` (existing rows `t1o1`, or `t1o0` when the snapshot hid the OT rows), adds `revision_sends` with a backfilled record for every existing send job (so a revision sent before the upgrade counts as sent), and adds `submission_settings.show_time_on_pdf`.
+ - Rules rewritten under AGENTS rule 8, with their translations: FR-11 in document 01 (manual sign-off no longer requires the image, F-5 b, left over from WP5-UX5-T01a; the rows chosen per send), document 03 (records, atomicity and the API boundary), document 05 ("Manual path", "Deadline and recovery", "Reminders and review links", "Durable delivery", "Corrections and resends"), and AC-06, AC-07, AC-10 and AC-14 in document 06. Document 04 and the pilot packet follow in WP5-UX5-T06.
++
++## Owner decisions — 2026-10-22 (WP5-UX5, what "submitted" means after a correction, H-1 a)
++
++Source: the owner's chat answer of 2026-10-22, "1 a, 2 a", recorded verbatim in the task board (`ORCHESTRATION.json`, id `answered_owner_question_ux5_h1`). Question 2 is WP5-UX5-H-1, answer a. The board records the answer as: "a period stays submitted once any revision has a send; a later correction or late review is not auto-sent at the deadline and reminders do not restart; the person sends it from the Send card (as built in WP5-UX5-T01B)." The question, as the board records it: "When a correction or a late review is signed after a copy of the period was already sent: (a, built, recommended) the period stays 'submitted': no automatic send of the new revision at the deadline and no new reminders; the person sends the correction from the Send card when they choose (consistent with 'corrections never send by themselves'); (b) the period becomes 'not submitted' again until the new revision is sent: reminders restart and, with auto-submit on, the deadline scan sends the new revision automatically."
++
++- H-1 a is the rule "a period counts as submitted once any of its revisions has a send" (`periodHasSend`, `deliveries.ts:226`). The plan's B-A1 had said "its current revision has a send"; WP5-UX5-T01B built "any revision" and flagged the deviation, and the owner confirmed what was built. Reversible only by a new owner decision.
++- Effects: a correction or late review made after a send gets no deadline send and no new reminders; the owner sends it from the Send card. The F-2 a rules for a period that was never sent are unchanged.
++- Rules already written under it: document 05 "Deadline and recovery" and "Reminders and review links" (cited there with F-2 a), and AC-07 in document 06.
+diff --git a/docs/10_DECISIONS_AND_SOURCES.vi.md b/docs/10_DECISIONS_AND_SOURCES.vi.md
+index 1f7f3cae..b5f6d860 100644
+--- a/docs/10_DECISIONS_AND_SOURCES.vi.md
++++ b/docs/10_DECISIONS_AND_SOURCES.vi.md
+@@ -316,3 +316,11 @@ Nguồn: các câu trả lời của chủ sở hữu ngày 2026-10-21 cho WP5-U
+ - Quy tắc lý do của chủ (F-4, kế hoạch B-A2). Một bản được tính là đã gửi khi bất kỳ lượt nào của bất kỳ revision nào của kỳ đã `accepted` hoặc `uncertain`; một lần gửi mà mọi lượt đều thất bại vĩnh viễn thì không được tính. Khi đã có bản được tính, lần gửi khác, và quyết định "gửi lại" cho một lượt không chắc chắn, cần lý do 2-500 ký tự (đã cắt khoảng trắng, NFC, không ký tự điều khiển trừ xuống dòng), nếu không là 422 `reason_required`. Lý do được lưu trên lần gửi và trong sự kiện audit của nó và không bao giờ được thêm vào email. Việc kiểm tra chạy trong transaction gửi. Việc lý do không vào email, lần gửi đầu thất bại không cần lý do, và gửi lại lượt không chắc chắn cần lý do là các mặc định có thể đảo ngược của người lập kế hoạch (kế hoạch Addendum 1, E sửa đổi).
+ - Dữ liệu: migration 0015 dựng lại `revision_files` với `variant` (dòng có sẵn là `t1o1`, hoặc `t1o0` khi snapshot ẩn dòng OT), thêm `revision_sends` với bản ghi backfill cho mọi send job đã có (để revision đã gửi trước khi nâng cấp được tính là đã gửi), và thêm `submission_settings.show_time_on_pdf`.
+ - Quy tắc được viết lại theo quy tắc AGENTS 8, kèm bản dịch: FR-11 trong tài liệu 01 (sign-off tay không còn cần ảnh, F-5 b, phần còn lại từ WP5-UX5-T01a; các dòng được chọn theo lần gửi), tài liệu 03 (bản ghi, tính nguyên tử và ranh giới API), tài liệu 05 ("Luồng thủ công", "Đến hạn và phục hồi", "Nhắc và link review", "Gửi bền vững", "Sửa và gửi lại"), và AC-06, AC-07, AC-10 và AC-14 trong tài liệu 06. Tài liệu 04 và gói pilot theo sau trong WP5-UX5-T06.
++
++## Quyết định của chủ sở hữu — 2026-10-22 (WP5-UX5, "đã nộp" nghĩa là gì sau một bản sửa, H-1 a)
++
++Nguồn: câu trả lời trong chat của chủ sở hữu ngày 2026-10-22, "1 a, 2 a", ghi nguyên văn trong bảng nhiệm vụ (`ORCHESTRATION.json`, id `answered_owner_question_ux5_h1`). Câu hỏi 2 là WP5-UX5-H-1, trả lời a. Bảng ghi câu trả lời như sau: "a period stays submitted once any revision has a send; a later correction or late review is not auto-sent at the deadline and reminders do not restart; the person sends it from the Send card (as built in WP5-UX5-T01B)." Câu hỏi, như bảng ghi: "When a correction or a late review is signed after a copy of the period was already sent: (a, built, recommended) the period stays 'submitted': no automatic send of the new revision at the deadline and no new reminders; the person sends the correction from the Send card when they choose (consistent with 'corrections never send by themselves'); (b) the period becomes 'not submitted' again until the new revision is sent: reminders restart and, with auto-submit on, the deadline scan sends the new revision automatically."
++
++- H-1 a là quy tắc "một kỳ được tính là đã nộp khi bất kỳ revision nào của nó có một lần gửi" (`periodHasSend`, `deliveries.ts:226`). B-A1 của kế hoạch đã nói "revision hiện tại của nó có một lần gửi"; WP5-UX5-T01B xây "bất kỳ revision nào" và nêu rõ chỗ lệch này, và chủ sở hữu xác nhận điều đã xây. Chỉ đảo ngược bằng một quyết định mới của chủ.
++- Hệ quả: bản sửa hay review muộn làm sau một lần gửi không có lần gửi lúc hạn và không có lời nhắc mới; chủ gửi nó từ thẻ Gửi. Các quy tắc F-2 a cho kỳ chưa từng gửi không đổi.
++- Các quy tắc đã viết theo nó: tài liệu 05 "Đến hạn và phục hồi" và "Nhắc và link review" (trích dẫn ở đó cùng F-2 a), và AC-07 trong tài liệu 06.
+diff --git a/docs/12_RELEASE_NOTES.md b/docs/12_RELEASE_NOTES.md
+index b2a528f4..a04ea570 100644
+--- a/docs/12_RELEASE_NOTES.md
++++ b/docs/12_RELEASE_NOTES.md
+@@ -51,7 +51,7 @@ These notes identify the release candidate of the Timesheet application, state w
+   - **Another copy needs a confirmation and a reason (F-4).** Once a copy counts as sent (an attempt of any revision of the period was accepted, or uncertain), the button reads "Send another copy..." and asks for a reason of 2 to 500 characters. The reason is stored with the send and in the audit log and is never put in the email. A first send that failed permanently needs no reason; the "resend" decision on an uncertain attempt does.
+   - **Deadline and reminders (F-2 a, H-1 a).** A period counts as submitted once any of its revisions has a send. With auto-submit on, a draft is finalized and sent at the deadline, and a signed revision that was never sent is sent as signed; with it off, the overdue warning applies. Reminders continue until a send and then stop; a signed period that is not sent says "signed, not sent yet". A correction or late review made after a send is sent by the person only, never at the deadline. The Timesheet button reads "Review & send" for a signed, unsent period.
+   - **Review page.** Title "Review and sign off" with the period, payroll date and due time in words (no submission id), status chips, a check card, a "Preview" card holding the sheet people sign (the signature rows carry the Sign off button) and the Send card. Sign off opens a confirmation dialog with the checks that were the checklist. The signer is the signed-in account.
+-  - **Signature image is optional (F-5 b).** With a saved image the PDF and the Review show the image and the account name; without one they show the name alone ("Signed with your name only.", with a link to Settings). There is no typed name.
++  - **Signature image is optional (F-5 b).** With a saved image the PDF and the Review show the image and the account name; without one they show the name alone (the Sign off dialog's "Signature" line reads "your name only", with a link "Add a signature image in Settings."). There is no typed name.
+   - **One-page PDF (F-8 a, F-9 b, F-10 a).** The PDF is redesigned as one US Letter page after the workbook: the C&D logo and wordmark, "Revision n" with the submission id small under it, the title and fields, two week tables with the category in the Indie Flower handwriting face, start and end time cells, the OT total, the signature rows and a footer. There is no instructions paragraph. Indie Flower 2.000 (SIL Open Font License 1.1, 108 KB) is the first committed font file ([ADR 0001](adr/0001-pdf-handwriting-font.md)); a category it cannot draw falls back to DejaVu Serif Italic. The PDF bytes changed, so the pilot samples were regenerated.
+   - **480 / 768px layout (F-6 a).** The sheet's compact four-column form now starts below 480px (it was below 768px); from 480 to 929px the seven-column week card scrolls sideways inside itself. The navigation shell (phone bar, tab bar, bottom-sheet editor, full-screen dialogs, the 44px rule) stays at 768px. The paper and the period card stand 8px from the window edges in the compact form.
+   - **Top bar and period card.** The wordmark shows beside the logo whenever it fits and never adds a row. The period card has a wide and a narrow arrangement chosen by its own width, a range that shortens step by step, and a primary "Review & sign off" button when the shown period needs the person.
+@@ -83,7 +83,7 @@ Each line gives the limit and where the rule or step is. None is a known defect
+ - **Sign-off before the period end is allowed (WP3 R5).** An accepted interpretation of [05 Submission](05_SUBMISSION_AND_NOTIFICATIONS.md).
+ - **Seed events show as automatic (WP3 R9).** Only synthetic seed data; the seed is refused in production.
+ - **A very long holiday label can still be cut with an ellipsis in the PDF (WP3 R1, R-WA6).** Since the round-5 PDF the category cell shrinks the label to 5 pt and wraps it on up to two lines first, and cuts it only when it still does not fit (`drawCategory`, `fitText`). The pilot samples have no holiday label; the owner judges it on a real one.
+-- **Partial leave is printed on the PDF since round 5 (R-WA2 no longer holds).** A day with leave prints "Leave h:mm" in small type under its category (read from the frozen code, `drawCategory`; the pilot samples have no leave day). A day with 4 h work and 4 h leave still prints as worked time with its OT. The owner judges whether payroll needs more.
++- **Partial leave is printed on the PDF since round 5 (R-WA2 no longer holds).** A day with leave prints "Leave h:mm" in small type under its category (read from the frozen code, `drawCategory`; the pilot samples have no leave day). On a day that also has a holiday label, the label is shrunk to one line and cut first; the leave figure keeps its own line. A day with 4 h work and 4 h leave still prints as worked time with its OT. The owner judges whether payroll needs more.
+ - **Days without records read "Worked" on an automatic PDF (R-WA8).** This is the owner's decision F-1 and F-Q1 (no automatic indicator, default labels), see [10 Decisions](10_DECISIONS_AND_SOURCES.md); the pilot sample shows it.
+ - **The outcome notice after downtime recovery is inexact (R-WA1).** It says the period was submitted "at the deadline" although a recovered submission is produced later; the PDF date is correct.
+ - **Unconfirmed breaks.** Check out is refused with 422 when a saved break ends after the Check out time (`saved_break_after_clock_out`), and a break in the future, one that ends more than five minutes from now, is refused when it is listed (`future_break`); an unconfirmed break that lies inside the session does not stop Check out, it only keeps OT pending. A refused Check out is resolved in the Check out dialog itself: list the breaks taken in its break rows, or tick "Confirm no breaks taken"; removing every saved row with the box unticked deletes them and keeps the breaks unconfirmed. "Confirm breaks" on a session card applies to ended sessions: it opens the session dialog, where Save confirms the listed breaks or "Confirm no breaks taken" ([02 Time and OT](02_TIME_AND_OT_RULES.md)).
+@@ -113,7 +113,7 @@ Each line gives the limit and where the rule or step is. None is a known defect
+ - **A queued send is not visible to the Timesheet button.** The button reads the revision list and counts an earlier revision as sent only from its delivery state; a send queued for an earlier revision that has no attempt yet is not seen, and an unreadable list counts as "an earlier send exists" (the quiet link).
+ - **Several stored PDFs per revision.** Each distinct choice of the time and OT rows is rendered once and kept (up to four variants per revision, never deleted); the administrator status shows one row per revision (the first stored file).
+ - **"PDF Preview" opens in a new tab.** The server's content security policy (`frame-ancestors 'none'`, `object-src 'none'`) forbids an inline viewer. The Review response has no sender address, so "From" says "the sender set on this server" until a revision exists, then shows the address of the send draft.
+-- **Fractional widths are proved on the style sheet, not in a browser.** A browser run cannot set a viewport of 479.33px or 767.33px (125 % and 150 % scaling); those cases are proved on the style sheet's text and the TypeScript queries, and the browser sweep runs at whole pixels. The wordmark bound with the "Shared with me" switcher is a fixed 1280px, because the switcher's width depends on the owners' names.
++- **Fractional widths are proved on the style sheet in the suite.** Playwright's viewport cannot be set to 479.33px or 767.33px (125 % and 150 % scaling), so the suite proves those cases on the style sheet's text and the TypeScript queries and runs its browser sweep at whole pixels. An audit probe did reach them in a real browser (Edge at `--force-device-scale-factor=1.5`: a window resized through the DevTools protocol, or an about:blank frame of that width at that scale) and found each range rule on one side of the line; a browser regression test of those widths stays a recorded risk. The wordmark bound with the "Shared with me" switcher is a fixed 1280px, because the switcher's width depends on the owners' names.
+ - **Phone Day editor.** After "Save day fields" from the fixed foot with the body scrolled down, the notice "Day fields saved." is announced but is at the top of the body, not in view. A press on a bare part of the top bar closes the desktop drawer.
+ - **The container drill was not run for round 5 by its slices.** The slices ran typecheck, lint, unit, integration, the full e2e and the built-server smoke; the drill, the clean-export verification and the independent audits belong to the package-final gate.
+ - **Samples.** The pilot samples were regenerated from the round-5 freeze commit; see the [pilot packet](../handoff/delivery/WP5_PILOT_PACKET.md) section 3.
+diff --git a/docs/12_RELEASE_NOTES.vi.md b/docs/12_RELEASE_NOTES.vi.md
+index 7a32cd85..dc5cb597 100644
+--- a/docs/12_RELEASE_NOTES.vi.md
++++ b/docs/12_RELEASE_NOTES.vi.md
+@@ -51,7 +51,7 @@ Các ghi chú này xác định bản ứng viên phát hành của ứng dụng
+   - **Bản gửi thêm cần xác nhận và một lý do (F-4).** Khi đã có một bản được tính là đã gửi (một lượt gửi của revision bất kỳ trong kỳ đã được chấp nhận hoặc không chắc chắn), nút ghi "Send another copy..." và hỏi lý do 2 đến 500 ký tự. Lý do được lưu cùng lần gửi và trong nhật ký audit và không bao giờ đưa vào email. Lần gửi đầu bị lỗi vĩnh viễn không cần lý do; quyết định "resend" trên một lượt gửi không chắc chắn thì cần.
+   - **Hạn nộp và nhắc (F-2 a, H-1 a).** Một kỳ được tính là đã nộp khi revision nào của nó có một lần gửi. Khi tự nộp bật, bản nháp được chốt và gửi lúc đến hạn, và một revision đã ký nhưng chưa từng gửi được gửi như đã ký; khi tắt thì áp dụng cảnh báo quá hạn. Nhắc tiếp tục cho đến khi có lần gửi rồi dừng; kỳ đã ký mà chưa gửi ghi "signed, not sent yet". Bản sửa hoặc xem lại muộn làm sau một lần gửi chỉ do người đó gửi, không bao giờ gửi lúc đến hạn. Nút trên Timesheet ghi "Review & send" cho kỳ đã ký chưa gửi.
+   - **Trang Review.** Tiêu đề "Review and sign off" với kỳ, ngày payroll và hạn nộp bằng lời (không có mã nộp), các chip trạng thái, thẻ kiểm tra, thẻ "Preview" chứa bảng người ta ký (các dòng chữ ký có nút Sign off) và thẻ Send. Sign off mở hộp thoại xác nhận với các mục kiểm trước đây là checklist. Người ký là tài khoản đang đăng nhập.
+-  - **Ảnh chữ ký là tùy chọn (F-5 b).** Có ảnh đã lưu thì PDF và Review hiện ảnh và tên tài khoản; không có thì chỉ hiện tên ("Signed with your name only.", kèm liên kết tới Settings). Không có ô gõ tên.
++  - **Ảnh chữ ký là tùy chọn (F-5 b).** Có ảnh đã lưu thì PDF và Review hiện ảnh và tên tài khoản; không có thì chỉ hiện tên (dòng "Signature" của hộp thoại Sign off ghi "your name only", kèm liên kết "Add a signature image in Settings."). Không có ô gõ tên.
+   - **PDF một trang (F-8 a, F-9 b, F-10 a).** PDF được thiết kế lại thành một trang US Letter theo workbook: logo và wordmark C&D, "Revision n" với mã nộp nhỏ bên dưới, tiêu đề và các trường, hai bảng tuần với loại bằng kiểu chữ viết tay Indie Flower, ô giờ bắt đầu và kết thúc, tổng OT, các dòng chữ ký và chân trang. Không có đoạn hướng dẫn. Indie Flower 2.000 (SIL Open Font License 1.1, 108 KB) là file font đầu tiên được commit ([ADR 0001](adr/0001-pdf-handwriting-font.vi.md)); loại mà nó không vẽ được chuyển sang DejaVu Serif Italic. Byte của PDF đã đổi, nên các mẫu pilot được tạo lại.
+   - **Bố cục 480 / 768px (F-6 a).** Dạng gọn bốn cột của bảng nay bắt đầu dưới 480px (trước là dưới 768px); từ 480 đến 929px thẻ tuần bảy cột cuộn ngang trong chính nó. Vỏ điều hướng (thanh điện thoại, thanh tab, editor dạng bottom sheet, hộp thoại toàn màn hình, quy tắc 44px) vẫn ở 768px. Tờ giấy và thẻ kỳ cách mép cửa sổ 8px ở dạng gọn.
+   - **Thanh trên và thẻ kỳ.** Wordmark hiện cạnh logo khi vừa chỗ và không bao giờ thêm một hàng. Thẻ kỳ có kiểu rộng và kiểu hẹp theo chiều rộng của chính nó, khoảng ngày rút gọn dần, và nút "Review & sign off" dạng chính khi kỳ đang xem cần người đó.
+@@ -83,7 +83,7 @@ Mỗi dòng nêu giới hạn và nơi có quy tắc hoặc bước. Không dòn
+ - **Cho phép ký xác nhận trước khi hết kỳ (WP3 R5).** Một cách hiểu đã được chấp nhận của [05 Nộp](05_SUBMISSION_AND_NOTIFICATIONS.vi.md).
+ - **Sự kiện seed hiện là tự động (WP3 R9).** Chỉ với dữ liệu seed tổng hợp; seed bị từ chối ở production.
+ - **Nhãn ngày lễ rất dài vẫn có thể bị cắt bằng dấu ba chấm trong PDF (WP3 R1, R-WA6).** Từ PDF vòng 5, ô loại thu nhỏ nhãn xuống 5 pt và xuống tối đa hai dòng trước, chỉ cắt khi vẫn không vừa (`drawCategory`, `fitText`). Các mẫu pilot không có nhãn ngày lễ; chủ sở hữu đánh giá trên một nhãn thật.
+-- **Nghỉ một phần được in trên PDF từ vòng 5 (R-WA2 không còn đúng).** Một ngày có nghỉ in "Leave h:mm" bằng chữ nhỏ dưới loại của nó (đọc từ mã đã đóng băng, `drawCategory`; các mẫu pilot không có ngày nghỉ). Một ngày làm 4 giờ và nghỉ 4 giờ vẫn in như giờ làm kèm OT của nó. Chủ sở hữu quyết định bộ phận lương có cần thêm không.
++- **Nghỉ một phần được in trên PDF từ vòng 5 (R-WA2 không còn đúng).** Một ngày có nghỉ in "Leave h:mm" bằng chữ nhỏ dưới loại của nó (đọc từ mã đã đóng băng, `drawCategory`; các mẫu pilot không có ngày nghỉ). Trên ngày có cả nhãn ngày lễ, nhãn được thu về một dòng và bị cắt trước; số giờ nghỉ giữ một dòng riêng. Một ngày làm 4 giờ và nghỉ 4 giờ vẫn in như giờ làm kèm OT của nó. Chủ sở hữu quyết định bộ phận lương có cần thêm không.
+ - **Ngày không có bản ghi hiện "Worked" trên PDF tự động (R-WA8).** Đây là quyết định F-1 và F-Q1 của chủ sở hữu (không có dấu hiệu tự động, nhãn mặc định), xem [10 Quyết định](10_DECISIONS_AND_SOURCES.vi.md); mẫu pilot sẽ hiển thị điều này.
+ - **Thông báo kết quả sau khi phục hồi do ngừng chạy chưa chính xác (R-WA1).** Thông báo nói kỳ được nộp "tại hạn" dù bản nộp được phục hồi tạo ra muộn hơn; ngày trên PDF là đúng.
+ - **Giờ nghỉ chưa xác nhận.** Check out bị từ chối với 422 khi một giờ nghỉ đã lưu kết thúc sau giờ Check out (`saved_break_after_clock_out`), và giờ nghỉ nằm trong tương lai, tức kết thúc muộn hơn năm phút kể từ bây giờ, bị từ chối khi được liệt kê (`future_break`); một giờ nghỉ chưa xác nhận nằm trong ca không chặn Check out, nó chỉ giữ OT ở trạng thái chờ. Check out bị từ chối được giải quyết ngay trong hộp thoại Check out: liệt kê các giờ nghỉ đã nghỉ trong các dòng giờ nghỉ của nó, hoặc chọn "Confirm no breaks taken"; xóa hết các dòng đã lưu khi ô chưa chọn sẽ xóa chúng và giữ giờ nghỉ ở trạng thái chưa xác nhận. "Confirm breaks" trên thẻ ca áp dụng cho các ca đã kết thúc: nó mở hộp thoại ca, nơi Save xác nhận các giờ nghỉ đã liệt kê hoặc "Confirm no breaks taken" ([02 Thời gian và OT](02_TIME_AND_OT_RULES.vi.md)).
+@@ -113,7 +113,7 @@ Mỗi dòng nêu giới hạn và nơi có quy tắc hoặc bước. Không dòn
+ - **Nút trên Timesheet không thấy một lần gửi đang xếp hàng.** Nút đọc danh sách revision và chỉ tính revision trước là đã gửi theo trạng thái gửi của nó; một lần gửi xếp hàng cho revision trước mà chưa có lượt nào thì không thấy, và danh sách không đọc được thì tính như "đã có lần gửi trước" (liên kết kiểu nhẹ).
+ - **Nhiều PDF được lưu cho mỗi revision.** Mỗi lựa chọn dòng giờ và dòng OT khác nhau được dựng một lần và giữ lại (tối đa bốn biến thể cho mỗi revision, không bao giờ xóa); trạng thái admin hiện một dòng cho mỗi revision (file được lưu đầu tiên).
+ - **"PDF Preview" mở trong tab mới.** Chính sách bảo mật nội dung của server (`frame-ancestors 'none'`, `object-src 'none'`) cấm trình xem nhúng. Phản hồi của Review không có địa chỉ người gửi, nên "From" ghi "the sender set on this server" cho đến khi có revision, rồi hiện địa chỉ của bản nháp gửi.
+-- **Chiều rộng lẻ được chứng minh trên style sheet, không phải trong trình duyệt.** Một lần chạy trình duyệt không đặt được viewport 479,33px hay 767,33px (co giãn 125 % và 150 %); các trường hợp đó được chứng minh trên văn bản style sheet và các truy vấn TypeScript, còn lượt quét trình duyệt chạy ở số pixel nguyên. Ngưỡng của wordmark khi có bộ chuyển "Shared with me" là 1280px cố định, vì chiều rộng bộ chuyển phụ thuộc tên các chủ sở hữu.
++- **Chiều rộng lẻ được chứng minh trên style sheet trong bộ kiểm thử.** Viewport của Playwright không đặt được 479,33px hay 767,33px (co giãn 125 % và 150 %), nên bộ kiểm thử chứng minh các trường hợp đó trên văn bản style sheet và các truy vấn TypeScript, còn lượt quét trình duyệt chạy ở số pixel nguyên. Một probe của kiểm toán đã chạm tới chúng trong trình duyệt thật (Edge với `--force-device-scale-factor=1.5`: cửa sổ đổi cỡ qua giao thức DevTools, hoặc khung about:blank rộng bằng đó ở tỷ lệ đó) và thấy mỗi quy tắc khoảng chỉ rơi về một phía; một bài kiểm thử hồi quy trên trình duyệt cho các độ rộng đó vẫn là rủi ro đã ghi. Ngưỡng của wordmark khi có bộ chuyển "Shared with me" là 1280px cố định, vì chiều rộng bộ chuyển phụ thuộc tên các chủ sở hữu.
+ - **Day editor trên điện thoại.** Sau "Save day fields" từ chân cố định khi phần thân đã cuộn xuống, thông báo "Day fields saved." được đọc ra nhưng nằm ở đầu phần thân, không trong tầm nhìn. Bấm vào một phần trống của thanh trên đóng ngăn kéo trên máy tính.
+ - **Các slice không chạy container drill cho vòng 5.** Các slice đã chạy typecheck, lint, unit, integration, full e2e và smoke của server đã build; drill, kiểm tra trên bản xuất sạch và các audit độc lập thuộc cổng kiểm cuối gói.
+ - **Mẫu.** Các mẫu pilot được tạo lại từ commit đóng băng của vòng 5; xem [gói pilot](../handoff/delivery/WP5_PILOT_PACKET.vi.md) mục 3.
+diff --git a/scripts/container-drill.mjs b/scripts/container-drill.mjs
+index 9a238125..bda316cb 100644
+--- a/scripts/container-drill.mjs
++++ b/scripts/container-drill.mjs
+@@ -275,7 +275,7 @@ function syntheticPng(fill) {
+ async function uploadSignature(cookie, fill) {
+   const response = await fetch(`${base}/api/signatures`, {
+     method: 'POST',
+-    headers: { origin: publicOrigin, cookie, 'content-type': 'image/png' },
++    headers: { origin: publicOrigin, cookie, 'content-type': 'image/png', connection: 'close' },
+     body: syntheticPng(fill),
+     signal: AbortSignal.timeout(15_000),
+   });
+@@ -302,7 +302,7 @@ function syntheticWorkbook(periods) {
+ async function uploadWorkbook(cookie, bytes) {
+   const response = await fetch(`${base}/api/imports`, {
+     method: 'POST',
+-    headers: { origin: publicOrigin, cookie, 'content-type': XLSX_MEDIA_TYPE },
++    headers: { origin: publicOrigin, cookie, 'content-type': XLSX_MEDIA_TYPE, connection: 'close' },
+     body: bytes,
+     signal: AbortSignal.timeout(30_000),
+   });
+@@ -382,7 +382,7 @@ async function stageTwo(cookie) {
+   check('the container job runner renders the PDF of the finalized period', pdfReady, `${((Date.now() - pdfWaitStart) / 1000).toFixed(1)} s`);
+   // WP5-UX5-T02: the image carries assets/pdf-fonts, so the rendered PDF embeds the Indie Flower subset (ADR 0001).
+   const readyRevision = ((await call('GET', '/api/revisions', { cookie })).json?.revisions ?? []).find((revision) => revision.pdf_state === 'ready');
+-  const downloaded = readyRevision === undefined ? null : await fetch(`${base}/api/revisions/${readyRevision.id}/pdf`, { headers: { cookie, origin: publicOrigin }, signal: AbortSignal.timeout(15_000) });
++  const downloaded = readyRevision === undefined ? null : await fetch(`${base}/api/revisions/${readyRevision.id}/pdf`, { headers: { cookie, origin: publicOrigin, connection: 'close' }, signal: AbortSignal.timeout(15_000) });
+   const embedded = downloaded === null ? '' : Buffer.from(await downloaded.arrayBuffer()).toString('latin1');
+   check('the container PDF is one page and embeds the Indie Flower subset from the image', (embedded.match(/\/Type\s*\/Page\b/g) ?? []).length === 1 && embedded.includes('+IndieFlower'), `${embedded.length} bytes`);
+ 
+@@ -984,7 +984,7 @@ async function startPreviousServer(name, databasePath, privateDir, { runnerOff =
+   const started = Date.now();
+   for (;;) {
+     try {
+-      const health = await fetch(`${server.base}/api/health`, { signal: AbortSignal.timeout(2000) });
++      const health = await fetch(`${server.base}/api/health`, { headers: { connection: 'close' }, signal: AbortSignal.timeout(2000) });
+       if (health.ok) return server;
+     } catch {
+       // not listening yet
+diff --git a/src/client/ReviewScreen.tsx b/src/client/ReviewScreen.tsx
+index 35769773..7e56e8b5 100644
+--- a/src/client/ReviewScreen.tsx
++++ b/src/client/ReviewScreen.tsx
+@@ -275,7 +275,7 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
+           Pay period <b>{description.start}</b>
+           <span className="range-arrow" aria-hidden="true">
+             {' '}
+-            {'->'}{' '}
++            {'→'}{' '}
+           </span>
+           <span className="sr-only"> to </span>
+           <b>{description.end}</b> · payroll date <b>{description.payroll}</b> · due <b>{description.due}</b> ({description.zone})
+diff --git a/src/client/TimesheetScreen.tsx b/src/client/TimesheetScreen.tsx
+index 613f41ca..4b6491ab 100644
+--- a/src/client/TimesheetScreen.tsx
++++ b/src/client/TimesheetScreen.tsx
+@@ -66,6 +66,24 @@ const OUTSIDE_PRESS_KEEPS = [
+   '[role="tab"]',
+ ].join(', ');
+ 
++/**
++ * Whether a press at (x, y) on `element` landed on the element's own scrollbar: the element scrolls (overflow auto or scroll) and the
++ * point is outside its client box, which excludes the scrollbars. A scrollbar press scrolls; it is not a press on the page (F-UX5A-3).
++ */
++function onOwnScrollbar(element: Element, x: number, y: number): boolean {
++  const style = getComputedStyle(element);
++  if (!/auto|scroll/.test(`${style.overflowX} ${style.overflowY}`)) return false;
++  const box = element.getBoundingClientRect();
++  const left = box.left + element.clientLeft;
++  const top = box.top + element.clientTop;
++  return x < left || x >= left + element.clientWidth || y < top || y >= top + element.clientHeight;
++}
++
++/** The touch-end listener of a tap that was used: cancelling it stops the mouse events (and the focus move they bring) after the tap. */
++function cancelMouseEvents(event: TouchEvent): void {
++  if (event.cancelable) event.preventDefault();
++}
++
+ /** The text of the polite status after the open day's button closed the Day editor. */
+ const EDITOR_CLOSED_TEXT = 'Day editor closed';
+ 
+@@ -592,20 +610,46 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+   // U5-24, owner answer F-7 a: while the drawer is open, a press on the page outside a day column, the drawer, a dialog or a control
+   // closes it like Close, with the discard question when it holds unsaved edits (Keep editing changes nothing). A control keeps its
+   // own action, so Today still moves an open editor; another day column switches the day. The phone's bottom sheet handles a press
+-  // on its own backdrop (DayEditor). A press that is not the primary button, or lands on the window's scrollbar, is not a press on the page.
++  // on its own backdrop (DayEditor). A press that is not the primary button, or lands on a scrollbar (the window's or an element's own),
++  // is not a press on the page. A touch press waits for its pointer-up: a swipe that starts outside a day column scrolls the page, the
++  // browser cancels that pointer (no pointer-up), and it must not close the drawer. The touch-end that follows a tap that closed it is
++  // prevented, so the browser's mouse events (which would move focus off the day button) do not follow.
+   useEffect(() => {
+     if (editDate === null || !desktop) return;
++    let touch: number | null = null;
+     const onPress = (event: PointerEvent) => {
++      touch = null;
+       if (event.button !== 0 || !(event.target instanceof Element)) return;
+       const root = document.documentElement;
+       if (event.clientX >= root.clientWidth || event.clientY >= root.clientHeight) return;
+       if (event.target.closest(OUTSIDE_PRESS_KEEPS) !== null) return;
++      if (onOwnScrollbar(event.target, event.clientX, event.clientY)) return;
++      if (event.pointerType === 'touch') {
++        touch = event.pointerId;
++        return;
++      }
+       // The press is used here: unprevented, the browser would move focus to the page after the editor (or the question) took it.
+       event.preventDefault();
+       closeFromOutside.current();
+     };
++    const onRelease = (event: PointerEvent) => {
++      if (touch !== event.pointerId) return;
++      touch = null;
++      // The touch-end of this tap comes next (browsers with touch events): preventing it cancels the mouse events that would follow.
++      if ('ontouchend' in document) document.addEventListener('touchend', cancelMouseEvents, { once: true, passive: false });
++      closeFromOutside.current();
++    };
++    const onCancel = () => {
++      touch = null;
++    };
+     document.addEventListener('pointerdown', onPress);
+-    return () => document.removeEventListener('pointerdown', onPress);
++    document.addEventListener('pointerup', onRelease);
++    document.addEventListener('pointercancel', onCancel);
++    return () => {
++      document.removeEventListener('pointerdown', onPress);
++      document.removeEventListener('pointerup', onRelease);
++      document.removeEventListener('pointercancel', onCancel);
++    };
+   }, [editDate, desktop]);
+ 
+   /** A press on the open day's own button: closes the editor (after the discard question when it holds unsaved edits) and says so. */
+@@ -687,7 +731,6 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+                   <button
+                     type="button"
+                     className="secondary change-days"
+-                    aria-label="Change several days"
+                     aria-pressed={batchOn}
+                     disabled={imported}
+                     aria-describedby={imported ? 'imported-reason' : undefined}
+@@ -697,9 +740,11 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+                     }}
+                   >
+                     {/* U5-17b: where the compact toolbar row has no room the visible words step down to "Change days" (CSS, a container
+-                        query); the name stays "Change several days", which contains every visible form (SC 2.5.3). */}
++                        query). The name is the visible words (no aria-label): the form that is shown is the name (SC 2.5.3), and
++                        the form that is not shown is display: none, so it is not read. Both forms are real text, because a
++                        generated ::before text is not part of the name for every tool (axe: button-name). */}
+                     <span className="change-days-long">Change several days</span>
+-                    <span className="change-days-short" data-text="Change days" aria-hidden="true" />
++                    <span className="change-days-short">Change days</span>
+                   </button>
+                 )}
+               </div>
+diff --git a/src/client/components/SignoffDialog.tsx b/src/client/components/SignoffDialog.tsx
+index a5b32ab1..79e63304 100644
+--- a/src/client/components/SignoffDialog.tsx
++++ b/src/client/components/SignoffDialog.tsx
+@@ -123,7 +123,10 @@ export function SignoffDialog({
+             {SIGNOFF_TITLE[mode]}
+           </h2>
+           <p className="muted">
+-            Pay period {weekdayDate(payload.period.period_start)} {'->'} {weekdayDate(payload.period.period_end)} · payroll date {description.payroll}
++            Pay period {weekdayDate(payload.period.period_start)}
++            <span aria-hidden="true"> → </span>
++            <span className="sr-only"> to </span>
++            {weekdayDate(payload.period.period_end)} · payroll date {description.payroll}
+           </p>
+         </div>
+ 
+@@ -161,7 +164,7 @@ export function SignoffDialog({
+             </div>
+           </dl>
+ 
+-          <div className="signoff-preview" aria-label="Signature preview" data-signature-preview>
++          <div className="signoff-preview" data-signature-preview>
+             <SignatureRows
+               employee={
+                 <span className="signed-mark">
+diff --git a/src/client/components/TimesheetSheet.tsx b/src/client/components/TimesheetSheet.tsx
+index 6af4537b..65ef9929 100644
+--- a/src/client/components/TimesheetSheet.tsx
++++ b/src/client/components/TimesheetSheet.tsx
+@@ -133,7 +133,8 @@ function SheetDayColumn({ day, details, actions, lift }: { day: SheetDay; detail
+ function revealFocused(event: FocusEvent<HTMLElement>) {
+   const card = event.currentTarget;
+   const style = getComputedStyle(card);
+-  if (style.overflowX === 'visible' || !(event.target instanceof Element)) return;
++  // The card itself (focusable in the read-only review while it scrolls) is not a control to reveal.
++  if (style.overflowX === 'visible' || !(event.target instanceof Element) || event.target === card) return;
+   const padding = (value: string) => Number.parseFloat(value) || 0;
+   const box = card.getBoundingClientRect();
+   const left = box.left + card.clientLeft;
+@@ -150,12 +151,37 @@ function revealFocused(event: FocusEvent<HTMLElement>) {
+   if (dx !== 0 || dy !== 0) card.scrollBy({ left: dx, top: dy, behavior: 'instant' });
+ }
+ 
++/**
++ * True while the element scrolls sideways (WP5-UX5-FIX9, WCAG 2.1.1). The read-only review week card holds nothing to focus, so
++ * while it overflows it is a focusable named region (arrow keys scroll it) and takes the shared focus ring; while it fits it adds
++ * no tab stop. Measured before the first paint and again whenever the card or its content changes size (as `TableWrap` does).
++ */
++function useScrollsSideways(box: RefObject<HTMLElement | null>, enabled: boolean): boolean {
++  const [scrolls, setScrolls] = useState(false);
++  useLayoutEffect(() => {
++    const element = box.current;
++    if (!enabled || element === null) {
++      setScrolls(false);
++      return;
++    }
++    const measure = () => setScrolls(element.scrollWidth > element.clientWidth);
++    measure();
++    const observer = new ResizeObserver(measure);
++    observer.observe(element);
++    for (const child of Array.from(element.children)) observer.observe(child);
++    return () => observer.disconnect();
++  }, [box, enabled]);
++  return scrolls;
++}
++
+ /** One Monday to Sunday band of the desktop sheet, with the Excel rows Day, Date, Category, Time, OT and Status. */
+ function SheetWeekGrid({ week, details, actions }: { week: SheetWeek; details: boolean; actions: DayActions }) {
+   // A day is lifted while it is selected for a batch change or open in the Day editor; runs never cross a band.
+   const runs = liftRuns(week.days.map((day) => actions.selected.has(day.workDate) || isEditingDay(day, actions)));
++  const card = useRef<HTMLElement>(null);
++  const scrolls = useScrollsSideways(card, actions.review === true);
+   return (
+-    <section className="sheet-week" aria-label={`Week ${week.index}, ${week.rangeName}`} onFocus={revealFocused}>
++    <section ref={card} className="sheet-week" aria-label={`Week ${week.index}, ${week.rangeName}`} onFocus={revealFocused} {...(scrolls ? { tabIndex: 0 } : {})}>
+       <div className="week-bar">
+         <strong>WEEK {week.index}</strong>
+         <span className="mono muted">{week.rangeText}</span>
+diff --git a/src/client/components/deliveryModel.ts b/src/client/components/deliveryModel.ts
+index 05816c86..23bcb038 100644
+--- a/src/client/components/deliveryModel.ts
++++ b/src/client/components/deliveryModel.ts
+@@ -373,7 +373,7 @@ export function resendFailureText(caught: unknown): string {
+     case 'delivery_uncertain':
+       return 'A delivery attempt is uncertain. Record your decision on it before you resend.';
+     case 'delivery_in_progress':
+-      return 'A delivery of this revision is already in progress.';
++      return 'A delivery of this period is already in progress.';
+     case 'pdf_not_ready':
+       return 'The PDF of this revision is not ready yet.';
+     case 'revision_superseded':
+@@ -581,7 +581,7 @@ export function sendFailure(caught: unknown): SendFailure {
+     case 'invalid_body':
+       return { kind: 'field', field: 'body', message: `The message must have 1 to ${MAX_SEND_BODY} characters without control characters.` };
+     case 'delivery_in_progress':
+-      return { kind: 'conflict', message: 'A delivery of this revision is already in progress or waiting. Nothing was sent again; follow it in History.' };
++      return { kind: 'conflict', message: 'A delivery of this period is already in progress or waiting. Nothing was sent again; follow it in History.' };
+     case 'delivery_uncertain':
+       return { kind: 'conflict', message: 'A delivery attempt of this revision is uncertain. Record your decision on it in History before you send again.' };
+     case 'revision_superseded':
+diff --git a/src/client/styles.css b/src/client/styles.css
+index 27e37751..6123cf30 100644
+--- a/src/client/styles.css
++++ b/src/client/styles.css
+@@ -152,8 +152,9 @@
+   --compact-edge: var(--space-2);
+   /*
+    * The paper sheet (round 4, U4-03): the surface that holds the toolbar, the messages, the sheet and its footer. It is the card colour,
+-   * lifted by --elev-paper (the --elev-2 step), with the card corner (--radius-lg) from 768px and padded like the sheet blocks; on a
+-   * phone it is full-bleed and square (see the phone rule), so the sheet keeps its width. The week sheets inside lose only their own shadow.
++   * lifted by --elev-paper (the --elev-2 step), with the card corner (--radius-lg) at every width and padded like the sheet blocks; in the
++   * compact form (below 480px, U5-22) it stands --compact-edge from each window edge (see the compact rule), so the sheet keeps its width.
++   * The week sheets inside lose only their own shadow.
+    */
+   --paper-surface: var(--card);
+   --elev-paper: var(--elev-2);
+@@ -341,7 +342,8 @@
+   --shell-brand-inner-gap: var(--space-3);
+   /*
+    * The bar's column gap, and the total gap between the brand and the navigation (owner: "a little further
+-   * from the text and logo, so it is balanced"). The wordmark shows from 1024px (U-06), where the gap grows one step.
++   * from the text and logo, so it is balanced"). The wordmark shows whenever it fits (U5-02; the widths are with the .wordmark rules
++   * below), and the gap grows one step wherever it shows.
+    */
+   --shell-gap: var(--space-5);
+   --shell-gap-tight: var(--space-4);
+@@ -2699,15 +2701,11 @@ textarea {
+   }
+ }
+ 
+-/* "Change several days" has a short visible form for the compact toolbar (U5-17b); its name never changes. */
++/* "Change several days" has a short visible form, "Change days", for the compact toolbar (U5-17b); the button is named by the form it shows (SC 2.5.3). */
+ .change-days-short {
+   display: none;
+ }
+ 
+-.change-days-short::before {
+-  content: attr(data-text);
+-}
+-
+ /*
+  * The sheet's compact form (below 480px, SHEET_QUERY; WP5-UX-B-01, mockup A2, U5-22): the period card, the paper and the compact tools,
+  * with the first day row above the tab bar. The period card and the paper stand --compact-edge from each window edge; the tools are
+@@ -2823,8 +2821,8 @@ textarea {
+ /*
+  * The form people know from the Excel template and the PDF: header block, two Monday to Sunday
+  * week bands with the rows Day, Date, Category, Time, OT (and Status), Overtime Total bottom right and
+- * the signature lines. From 768px each band is a CSS grid whose day columns share the band's rows
+- * (subgrid); below it each band is a 4-column table. Non-working days of the server calendar are
++ * the signature lines. From 480px each band is a CSS grid whose day columns share the band's rows
++ * (subgrid; it scrolls sideways inside its card from 480 to 929px); below 480px each band is a 4-column table. Non-working days of the server calendar are
+  * tinted and hatched (a non-colour cue); every status keeps its words and shape.
+  */
+ .sheet {
+@@ -2961,6 +2959,13 @@ textarea {
+     scroll-padding: var(--focus-clearance);
+   }
+ 
++  /* A read-only review card that scrolls is a keyboard stop (WP5-UX5-FIX9): an inset outline the WEEK bar and cells cannot cover. */
++  .sheet-week:focus-visible {
++    outline: var(--rule) solid var(--accent);
++    outline-offset: calc(-1 * var(--rule));
++    box-shadow: var(--elev-2);
++  }
++
+   /* The WEEK bar is as wide as the grid under it, also after a sideways scroll (round 5, U5-21): without a minimum it ended where the card's window ended. */
+   .sheet-week .week-grid,
+   .sheet-week .week-bar {
+@@ -3848,7 +3853,8 @@ textarea {
+ 
+ /*
+  * The sub-buttons of the Day editor (round 5, owner decision F-1 a, U5-05): Edit and Delete on a session card, Add session, Suggest
+- * breaks, Add break and Save day fields. The visible box is --subbtn-h (36px) on every device. Where controls are 44px (below 768px
++ * breaks, Add break and Save day fields in the drawer's form (the phone sheet's fixed foot has its own full-width 44px button, `.editor-foot`).
++ * The visible box is --subbtn-h (36px) on every device. Where controls are 44px (below 768px
+  * and with a coarse pointer) the 44px target stays as an invisible hit area: a ::before extends the button --subbtn-hit-extra above and
+  * below. Rows of sub-buttons keep the 8px gap (--space-2), so two hit areas touch at most and never overlap (WCAG 2.5.8 spacing).
+  */
+@@ -4084,7 +4090,7 @@ button.link-action {
+ /*
+  * The paper sheet (round 4, U4-03, owner answer F-5). One surface holds the toolbar, the page messages, the batch bar, the form
+  * header, both week sheets, the legend, Overtime Total and the signature lines (Timesheet: `section.sheet-main`; Review and sign
+- * off: `section.review-sheet-block`, "What you sign" and the sheet; the checklist stays beside it). The title row and the period
++ * off: `section.review-preview`, the Preview card with its header bar). The title row and the period
+  * card stay outside. The toolbar, the week sheets and the footer keep their own style and layout; the week sheets and the footer
+  * lose only their outer shadow, because the paper carries it. The paper clips nothing (overflow stays visible): a lifted column's
+  * shadow, a label list and the editor column lift draw over it. In the compact form (below 480px, U5-22) the paper stands
+@@ -5705,6 +5711,7 @@ textarea.mono {
+   --sig-date-min: 5.5rem;
+   --sig-line-height: 52px;
+   --sig-button-inset: var(--space-2);
++  --sig-content-min: 10rem;
+   display: flex;
+   flex-direction: column;
+   gap: var(--space-5);
+@@ -5740,6 +5747,7 @@ textarea.mono {
+ 
+ .rsig-line {
+   display: flex;
++  flex-wrap: wrap;
+   align-items: flex-end;
+   justify-content: space-between;
+   gap: var(--space-2);
+@@ -5751,10 +5759,15 @@ textarea.mono {
+ 
+ .rsig-content {
+   display: flex;
++  flex: 1 1 var(--sig-content-min);
+   align-items: flex-end;
+   min-width: 0;
+ }
+ 
++.rsig-content:empty {
++  display: none;
++}
++
+ .rsig-action {
+   flex: none;
+   padding-inline-end: var(--sig-button-inset);
+diff --git a/src/server/pdf/timesheetPdf.ts b/src/server/pdf/timesheetPdf.ts
+index a4686bdd..c4b9bebf 100644
+--- a/src/server/pdf/timesheetPdf.ts
++++ b/src/server/pdf/timesheetPdf.ts
+@@ -335,23 +335,27 @@ function drawCategory(canvas: Canvas, day: SnapshotDay, x: number, layout: WeekL
+   const category = cleanText(day.category ?? '');
+   const holiday = day.holiday_name !== null ? cleanText(day.holiday_name) : '';
+   const leave = day.leave_minutes > 0 ? `Leave ${formatHoursMinutes(day.leave_minutes)}` : '';
+-  const subText = [holiday, leave].filter((part) => part !== '').join(' ');
++  // Leave is payroll data and keeps its own whole line; a holiday name only repeats the calendar, so on a day with both it is
++  // shrunk to one line and cut first (F-UX5B-3). A day with only one of them is laid out exactly as before.
++  const both = holiday !== '' && leave !== '';
++  const subText = both ? holiday : [holiday, leave].filter((part) => part !== '').join(' ');
+   const face = canDraw(fonts.hand, category) ? fonts.hand : fonts.italic;
+   const measureFace = (target: Face) => (text: string, size: number) => target.font.widthOfTextAtSize(text, size);
+   const primary = category === '' ? { lines: [] as string[], size: 13 } : fitText(printable(face, category), face === fonts.hand ? 13 : 12, 8, width, subText === '' ? 2 : 1, measureFace(face));
+-  const sub = subText === '' ? { lines: [] as string[], size: 7 } : fitText(printable(fonts.sans, subText), 7, 5, width, 2, measureFace(fonts.sans));
++  const fitted = subText === '' ? { lines: [] as string[], size: 7 } : fitText(printable(fonts.sans, subText), 7, 5, width, both ? 1 : 2, measureFace(fonts.sans));
++  const sub = fitted.lines.map((line) => ({ text: line, size: fitted.size }));
++  if (both) sub.push({ text: leave, size: 7 });
+   const primaryLine = 15;
+-  const subLine = sub.size * 1.2;
+-  const block = primary.lines.length * primaryLine + sub.lines.length * subLine + (primary.lines.length > 0 && sub.lines.length > 0 ? 2 : 0);
++  const block = primary.lines.length * primaryLine + sub.reduce((sum, line) => sum + line.size * 1.2, 0) + (primary.lines.length > 0 && sub.length > 0 ? 2 : 0);
+   let cursor = layout.category.top + (layout.category.height - block) / 2;
+   for (const line of primary.lines) {
+     canvas.centered(face, line, centerX, cursor + primaryLine * 0.8, primary.size);
+     cursor += primaryLine;
+   }
+-  if (primary.lines.length > 0 && sub.lines.length > 0) cursor += 2;
+-  for (const line of sub.lines) {
+-    canvas.centered(fonts.sans, line, centerX, cursor + sub.size * 0.9, sub.size, MUTED);
+-    cursor += subLine;
++  if (primary.lines.length > 0 && sub.length > 0) cursor += 2;
++  for (const line of sub) {
++    canvas.centered(fonts.sans, line.text, centerX, cursor + line.size * 0.9, line.size, MUTED);
++    cursor += line.size * 1.2;
+   }
+ }
+ 
+diff --git a/src/server/services/deliveries.ts b/src/server/services/deliveries.ts
+index bd795ddd..88acddf3 100644
+--- a/src/server/services/deliveries.ts
++++ b/src/server/services/deliveries.ts
+@@ -428,11 +428,18 @@ function assertNothingInFlight(db: Db, userId: string, revisionId: string): void
+   if (open.some((attempt) => attempt.state === 'uncertain')) {
+     throw new ApiError(409, 'delivery_uncertain', 'A delivery attempt is uncertain; record a decision before sending again');
+   }
++  // A send job of ANY revision of the period that still waits blocks another send, so a superseded revision's copy cannot
++  // arrive after the correction's (R-UX5B-1).
+   const waiting = db
+-    .prepare<[string, string, string], { one: number }>("SELECT 1 AS one FROM jobs WHERE user_id = ? AND revision_id = ? AND kind = ? AND state IN ('queued', 'leased') LIMIT 1")
+-    .get(userId, revisionId, JOB_SEND_EMAIL);
++    .prepare<[string, string, string], { one: number }>(
++      `SELECT 1 AS one FROM jobs j
++         JOIN timesheet_revisions r ON r.id = j.revision_id AND r.user_id = j.user_id
++         JOIN timesheet_revisions target ON target.timesheet_id = r.timesheet_id AND target.user_id = r.user_id
++        WHERE j.user_id = ? AND j.kind = ? AND j.state IN ('queued', 'leased') AND target.id = ? LIMIT 1`,
++    )
++    .get(userId, JOB_SEND_EMAIL, revisionId);
+   if (open.length > 0 || waiting !== undefined) {
+-    throw new ApiError(409, 'delivery_in_progress', 'A delivery of this revision is already in progress');
++    throw new ApiError(409, 'delivery_in_progress', 'A delivery of this period is already in progress');
+   }
+ }
+ 
+diff --git a/tests/e2e/classic-scrollbar.spec.ts b/tests/e2e/classic-scrollbar.spec.ts
+index acda9942..ff1f7aa1 100644
+--- a/tests/e2e/classic-scrollbar.spec.ts
++++ b/tests/e2e/classic-scrollbar.spec.ts
+@@ -134,3 +134,48 @@ test.describe('the Day editor layout with a classic scrollbar', () => {
+     }
+   });
+ });
++
++/*
++ * WP5-UX5 F-UX5A-3 (owner answer F-7 a): a press outside closes the drawer, but a press on an element's own scrollbar scrolls that
++ * element; it is not a press on the page. Between 480 and 929px a week card scrolls sideways and draws a classic scrollbar under it.
++ */
++test.describe('a press on a scrollbar with the Day editor open', () => {
++  test('a press-drag on a week card\'s own scrollbar scrolls the card and leaves the drawer open; a press on plain page still closes it', async ({
++    page,
++    employeeSeed,
++    signInThroughUi,
++  }) => {
++    test.setTimeout(120_000);
++    const days = await employeeSeed.displayedPeriodFreeWorkdays();
++    expect(days.length, 'past free workdays in the displayed period').toBeGreaterThanOrEqual(1);
++    await page.setViewportSize({ width: 900, height: 900 });
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    await openDay(page, days[0] ?? '');
++    const editor = page.getByRole('dialog', { name: /Day editor/ });
++    // The scrollbar of the first week card that scrolls sideways and has its track in view.
++    const bar = await page.evaluate<{ x: number; y: number } | null>(`(() => {
++      for (const week of document.querySelectorAll('.sheet-week')) {
++        const box = week.getBoundingClientRect();
++        const track = week.offsetHeight - week.clientHeight;
++        const y = box.top + week.clientTop + week.clientHeight + Math.max(1, track / 2);
++        if (week.scrollWidth > week.clientWidth && track > 0 && box.top > 0 && y < window.innerHeight) return { x: box.right - 60, y };
++      }
++      return null;
++    })()`);
++    expect(bar, 'a week card with a sideways scrollbar in view').not.toBeNull();
++    const at = bar ?? { x: 0, y: 0 };
++    const scrolled = () => page.evaluate<number>(`[...document.querySelectorAll('.sheet-week')].reduce((sum, week) => sum + week.scrollLeft, 0)`);
++    expect(await scrolled()).toBe(0);
++    await page.mouse.move(at.x, at.y);
++    await page.mouse.down();
++    await page.mouse.move(at.x + 120, at.y, { steps: 5 });
++    await page.mouse.up();
++    expect(await scrolled(), 'the press-drag moved the scrollbar thumb').toBeGreaterThan(0);
++    await expect(editor, 'a scrollbar press is not a press on the page').toBeVisible();
++    // Plain page, away from the drawer, still closes it.
++    const width = await page.evaluate<number>('document.documentElement.clientWidth');
++    await page.mouse.click((await editor.getAttribute('data-side')) === 'left' ? width - 4 : 4, 300);
++    await expect(editor).toHaveCount(0);
++  });
++});
+diff --git a/tests/e2e/day-editor.spec.ts b/tests/e2e/day-editor.spec.ts
+index 6d4ef760..1e0f10d0 100644
+--- a/tests/e2e/day-editor.spec.ts
++++ b/tests/e2e/day-editor.spec.ts
+@@ -6537,6 +6537,64 @@ test.describe('WP5-UX5-T05B (U5-24, owner answer F-7 a): on a desktop a press ou
+     await expect(editor).toHaveAttribute('data-day-editor', other);
+     await expect(editor).toBeVisible();
+   });
++
++  // F-UX5A-3: on a touch screen the press acts on its pointer-up. A swipe that starts outside a day column scrolls the page; the browser
++  // cancels that pointer and nothing was pressed.
++  test.describe('on a touch screen, 1024px wide', () => {
++    test.use({ hasTouch: true, viewport: { width: 1024, height: 768 } });
++
++    test('a swipe that starts outside a day column scrolls the page and leaves the drawer (and its edits) alone; a tap there closes it like a press, with the question when edits are unsaved', async ({
++      page,
++      employeeSeed,
++      signInThroughUi,
++    }) => {
++      const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
++      await signInThroughUi();
++      await expect(page.locator('[data-day]')).toHaveCount(14);
++      const editor = page.getByRole('dialog', { name: /Day editor/ });
++      const dayBtn = namedDayButton(page, date, 'Edit');
++      const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
++      expect(await page.evaluate<boolean>('matchMedia("(pointer: coarse)").matches'), 'a touch screen').toBe(true);
++      await dayBtn.click();
++      await expect(editor).toBeVisible();
++      await expect(page.locator('[data-editor-layout]')).toHaveAttribute('data-editor-layout', 'floating');
++      const notes = editor.getByLabel('Notes');
++      await notes.fill('Synthetic unsaved note');
++      const x = await pageEdgeX(page, editor);
++
++      // A swipe up from plain page (a touch sequence through the browser, which is what a finger sends): the page scrolls, nothing closes
++      // and nothing asks.
++      await page.evaluate('window.scrollTo(0, 0)');
++      const cdp = await page.context().newCDPSession(page);
++      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: 300 }] });
++      for (let step = 1; step <= 6; step += 1) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: 300 - step * 30 }] });
++      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
++      await expect.poll(() => page.evaluate<number>('window.scrollY'), { message: 'the swipe scrolled the page' }).toBeGreaterThan(0);
++      await expect(editor, 'a scroll is not a press').toBeVisible();
++      await expect(prompt).toHaveCount(0);
++      await expect(notes).toHaveValue('Synthetic unsaved note');
++
++      // A tap with unsaved edits asks; Keep editing leaves the text and gives the focus back to the field.
++      await page.touchscreen.tap(x, 300);
++      await expect(prompt).toBeVisible();
++      await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
++      await expect(prompt).toHaveCount(0);
++      await expect(notes).toHaveValue('Synthetic unsaved note');
++      await expect(notes, 'Keep editing returns focus to the field that had it').toBeFocused();
++
++      // Discard closes it and focus returns to the day button; a tap with nothing unsaved closes at once, and the focus is still the day's.
++      await page.touchscreen.tap(x, 300);
++      await prompt.getByRole('button', { name: 'Discard', exact: true }).click();
++      await expect(editor).toHaveCount(0);
++      await expect(dayBtn).toBeFocused();
++      await dayBtn.click();
++      await expect(editor).toBeVisible();
++      await page.touchscreen.tap(x, 300);
++      await expect(editor).toHaveCount(0);
++      await expect(prompt).toHaveCount(0);
++      await expect(dayBtn, 'the mouse events after the tap do not move the focus').toBeFocused();
++    });
++  });
+ });
+ 
+ test('WP5-UX5-T05B (U5-24): on a phone a tap on the bottom sheet backdrop closes it, with the discard question when edits are unsaved, and focus returns to the day button', async ({
+diff --git a/tests/e2e/hover.spec.ts b/tests/e2e/hover.spec.ts
+index 1f3e9de6..9cb51ab4 100644
+--- a/tests/e2e/hover.spec.ts
++++ b/tests/e2e/hover.spec.ts
+@@ -437,7 +437,8 @@ for (const width of [390, 375, 360, 320]) {
+     await signInThroughUi();
+     await expect(page.locator('[data-day]')).toHaveCount(14);
+     const label = page.locator('label.inline.switch');
+-    const button = page.getByRole('button', { name: 'Change several days', exact: true });
++    // Named by the words it shows: "Change days" at 320px, "Change several days" where the toolbar row holds it.
++    const button = page.getByRole('button', { name: /^Change (several )?days$/ });
+     const labelBox = await label.boundingBox();
+     const buttonBox = await button.boundingBox();
+     const inputBox = await page.getByRole('switch', { name: 'Worked hours', exact: true }).boundingBox();
+diff --git a/tests/e2e/keyboard-access.spec.ts b/tests/e2e/keyboard-access.spec.ts
+index b4679c6b..bb94a8d1 100644
+--- a/tests/e2e/keyboard-access.spec.ts
++++ b/tests/e2e/keyboard-access.spec.ts
+@@ -549,7 +549,8 @@ test.describe('WP5-UX-AX-10 on the mobile project', () => {
+       await page.setViewportSize(size);
+       await signInPageAs(world.me.account, '#/timesheet');
+       await expect(page.locator('[data-day]')).toHaveCount(14);
+-      await page.getByRole('button', { name: 'Change several days' }).click();
++      // The button is named by the words it shows: "Change days" on the 320px toolbar row, "Change several days" where the row holds it.
++      await page.getByRole('button', { name: /^Change (several )?days$/ }).click();
+       await expect(page.getByRole('group', { name: 'Batch category edit' })).toBeVisible();
+       const rows = await page.locator('tr.sheet-row[data-day]').evaluateAll((elements) =>
+         elements.map((row) => {
+diff --git a/tests/e2e/review.spec.ts b/tests/e2e/review.spec.ts
+index 38b5f0a8..8d6235ea 100644
+--- a/tests/e2e/review.spec.ts
++++ b/tests/e2e/review.spec.ts
+@@ -460,6 +460,42 @@ test('the Preview sheet follows the sheet breakpoint: the 4-column table below 4
+   }
+ });
+ 
++// WP5-UX5-FIX9 (WCAG 2.1.1, axe scrollable-region-focusable): a read-only week card that scrolls sideways (480 to 929px) is a keyboard stop.
++test('the Preview week cards that scroll sideways are named keyboard stops that ArrowRight scrolls; a window wide enough adds no stop', async ({
++  page,
++  adminSeed,
++  builtServer,
++  isMobile,
++}) => {
++  test.skip(isMobile, 'The widths are set by the test (desktop project)');
++  const reviewer = await newReviewer(adminSeed, builtServer);
++  await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
++  const paper = page.locator('[data-paper="review"]');
++  await expect(paper).toBeVisible();
++  const cards = paper.locator('.sheet-week');
++  for (const width of [480, 600, 768, 900]) {
++    await page.setViewportSize({ width, height: 900 });
++    await expect(cards, `${width}px: two week cards`).toHaveCount(2);
++    for (const index of [0, 1]) {
++      const card = cards.nth(index);
++      await expect(card, `${width}px: week ${index + 1} scrolls sideways`).toHaveAttribute('tabindex', '0');
++      await card.focus();
++      await expect(card, `${width}px: week ${index + 1} is reached by keyboard focus`).toBeFocused();
++      await expect(card, `${width}px: week ${index + 1} has its name`).toHaveAccessibleName(new RegExp(`^Week ${index + 1}, `));
++      await card.evaluate((element) => {
++        element.scrollLeft = 0;
++      });
++      await page.keyboard.press('ArrowRight');
++      await expect.poll(() => card.evaluate((element) => element.scrollLeft), `${width}px: ArrowRight scrolls week ${index + 1}`).toBeGreaterThan(0);
++    }
++  }
++  for (const width of [1100, 1280]) {
++    await page.setViewportSize({ width, height: 900 });
++    await expect(cards, `${width}px: two week cards`).toHaveCount(2);
++    for (const index of [0, 1]) await expect(cards.nth(index), `${width}px: week ${index + 1} fits, so it takes no tab stop`).not.toHaveAttribute('tabindex', /.*/);
++  }
++});
++
+ test('the Preview header: line 1 is hidden, never wrapped, when it does not fit; line 2 wraps by word; the fields sit 12px below', async ({ page, adminSeed, builtServer }) => {
+   const reviewer = await newReviewer(adminSeed, builtServer);
+   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+@@ -655,6 +691,47 @@ test('signature rows: the PDF block insets and proportions, lines aligned by row
+   testInfo.annotations.push({ type: 'signature-geometry', description: lines.join('\n') });
+ });
+ 
++test('a signed period opened again (reloaded): the signed image, name and mark stay readable and uncovered beside Sign correction, and the four lines stay aligned', async ({
++  page,
++  adminSeed,
++  builtServer,
++}) => {
++  const reviewer = await newReviewer(adminSeed, builtServer);
++  await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
++  await expect(page.locator('[data-review-day]')).toHaveCount(14);
++  const signing = await openSignoff(page);
++  await acknowledge(signing);
++  await confirmSignoff(signing).click();
++  await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
++  // A later visit (to send the PDF, say): the page loads already signed, so the Employee Signature line holds the signed mark and the
++  // correction button together. The sign-off of this window left no second button; a reload does.
++  await page.reload();
++  await expect(page.locator('[data-review-day]')).toHaveCount(14);
++  const button = page.locator('[data-sign-off]');
++  await expect(button).toHaveText('Sign correction');
++  const signed = page.locator('[data-signed-line]');
++  await expect(signed).toContainText('Synthetic Reviewer');
++  for (const width of [1440, 768, 600, 390, 320]) {
++    await page.setViewportSize({ width, height: 900 });
++    const footer = page.locator('.review-preview .sheet-footer');
++    await footer.scrollIntoViewIfNeeded();
++    // The four lines align by row and by column, the insets are the PDF's at 768px and wider, and the button stands 8px inside its line.
++    await expectSignatureGeometry(footer, width, { button, exactFractions: width >= 768 });
++    await expectNoSidewaysScroll(page);
++    // The button covers neither the image, nor the name, nor the "Signed" mark.
++    const pressed = await rect(button);
++    const parts = { image: signed.locator('img.signed-image'), name: signed.locator('[data-signer-name]'), seal: signed.locator('[data-signed-seal]') };
++    for (const [part, locator] of Object.entries(parts)) {
++      const box = await rect(locator);
++      const overlaps = box.left < pressed.right - 0.5 && pressed.left < box.right - 0.5 && box.top < pressed.bottom - 0.5 && pressed.top < box.bottom - 0.5;
++      expect(overlaps, `the ${part} is not covered by Sign correction at ${width}px`).toBe(false);
++    }
++    // Readable: the image keeps at least 100px, and the name wraps by words into at most three lines instead of letters (21px wide, ten lines).
++    expect((await rect(parts.image)).width, `the saved image keeps its width at ${width}px`).toBeGreaterThanOrEqual(100);
++    expect((await rect(parts.name)).height, `the name takes at most three lines at ${width}px`).toBeLessThanOrEqual(3 * 20);
++  }
++});
++
+ test('a stale review leads to a fresh review and nothing is submitted twice', async ({ page, adminSeed, builtServer }, testInfo) => {
+   const project = testInfo.project.name;
+   const reviewer = await newReviewer(adminSeed, builtServer, { deficitMode: 'choose_at_signoff' });
+diff --git a/tests/e2e/timesheet.spec.ts b/tests/e2e/timesheet.spec.ts
+index af63ff30..c123bf06 100644
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -1122,10 +1122,12 @@ for (const width of [390, 375, 360, 320]) {
+     await expect(page.locator('[data-day]')).toHaveCount(14);
+     await expect(page.locator('[data-sheet="phone"]')).toHaveCount(1);
+     await page.getByRole('switch', { name: 'Worked hours' }).check();
+-    await page.getByRole('button', { name: 'Change several days' }).click();
++    // Named by the words it shows: "Change days" at 320px, "Change several days" where the toolbar row holds it.
++    const changeDays = page.getByRole('button', { name: /^Change (several )?days$/ });
++    await changeDays.click();
+     await page.getByLabel(`Select ${first}`).check();
+     await expectNoSidewaysScroll(page, `selected, details on, ${width}px`);
+-    await page.getByRole('button', { name: 'Change several days' }).click();
++    await changeDays.click();
+     await openDay(page, first);
+     await expectMarkedOnly(page, first);
+     await expectNoSidewaysScroll(page, `editing frame with the details row, ${width}px`);
+@@ -2222,7 +2224,7 @@ test.describe('the compact toolbar rows (U5-17, U5-17b)', () => {
+     overflow: number;
+   }
+ 
+-  test('"Change several days": right-aligned beside the switch, "Change days" when there is no room, its own full-width row below that, "Change / days" on two lines when narrower still (below 104.7px); 44px high and named "Change several days"', async ({
++  test('"Change several days": right-aligned beside the switch, "Change days" when there is no room, its own full-width row below that, "Change / days" on two lines when narrower still (below 104.7px); 44px high and named by the words it shows', async ({
+     page,
+     signInThroughUi,
+   }) => {
+@@ -2285,12 +2287,15 @@ test.describe('the compact toolbar rows (U5-17, U5-17b)', () => {
+     expect(oneLine.shortHeight, `${toolbarRound(shortWidth + 1)}px: "Change days" on one line`).toBeLessThan(oneLine.lineHeight * 1.4);
+     expect(twoLines.shortHeight, `${toolbarRound(shortWidth - 1)}px: "Change / days" on two lines`).toBeGreaterThan(twoLines.lineHeight * 1.7);
+     expect(Math.abs(twoLines.height - 44), `${toolbarRound(shortWidth - 1)}px: still 44px high`).toBeLessThanOrEqual(0.5);
+-    // The name never changes.
+-    await read(250);
+-    await expect(page.getByRole('button', { name: 'Change several days', exact: true })).toHaveCount(1);
+-    await read(100);
+-    await expect(page.getByRole('button', { name: 'Change several days', exact: true })).toHaveCount(1);
+-    await expect(page.getByRole('button', { name: 'Change several days', exact: true })).toHaveAttribute('aria-pressed', 'false');
++    // The name is the visible words (WCAG 2.2 SC 2.5.3 Label in Name): the full form names it "Change several days" and the short form
++    // "Change days"; a name that is not the visible text (an aria-label of the long form on the short one) would fail it.
++    const named = (name: 'Change several days' | 'Change days') => page.getByRole('button', { name, exact: true });
++    for (const [width, long] of [[358, true], [288, false], [250, true], [130, false], [100, false]] as const) {
++      await read(width);
++      await expect(named(long ? 'Change several days' : 'Change days'), `${width}px: the name is the visible words`).toHaveCount(1);
++      await expect(named(long ? 'Change days' : 'Change several days'), `${width}px: the other form is not the name`).toHaveCount(0);
++    }
++    await expect(named('Change days')).toHaveAttribute('aria-pressed', 'false');
+   });
+ });
+ 
+@@ -2625,6 +2630,31 @@ test.describe('the range ladder (U5-13)', () => {
+     }
+     expect([...seen].sort(), 'a one-month, a two-month and a two-year range were checked').toEqual(['cross-month', 'cross-year', 'same-month']);
+   });
++
++  // The two last forms ("10/12 → 25" and "10/12→25") need a range box under 7.3em and 5.75em (about 115px and 91px), which no phone gives
++  // (the narrowest box is about 258px at 320px). A forced width stands in for the screen, as the toolbar tests force their row.
++  test('the last two forms of a same-month range show in a box far narrower than any phone', async ({ page, signInThroughUi }) => {
++    test.setTimeout(120_000);
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    await page.setViewportSize({ width: 390, height: 900 });
++    for (let step = 0; step < 14 && (await page.locator('.period-name').getAttribute('data-range-kind')) !== 'same-month'; step += 1) {
++      await page.getByRole('button', { name: 'Next period' }).click();
++      await expect(page.locator('[data-day]')).toHaveCount(14);
++    }
++    await expect(page.locator('.period-name')).toHaveAttribute('data-range-kind', 'same-month');
++    for (const [width, form] of [[130, 'no-years'], [105, 'end-day'], [80, 'tight']] as const) {
++      await setRowWidth(page, '.period-title', width);
++      const state = await rangeState(page);
++      const dates = /^(\d{2})\/(\d{2})\/(\d{4}) to (\d{2})\/(\d{2})\/(\d{4})$/.exec(state.spoken);
++      expect(dates, `${width}px: the accessible text is the full dates with "to" (${state.spoken})`).not.toBeNull();
++      const [, startMonth, startDay, startYear, endMonth, endDay, endYear] = dates ?? [];
++      const start = `${startYear}-${startMonth}-${startDay}`;
++      const end = `${endYear}-${endMonth}-${endDay}`;
++      expect(state.box, `${width}px: the range box has the forced width`).toBeCloseTo(width, 0);
++      expect(state.text, `${width}px: the ${form} form shows`).toBe(rangeText(start, end, form));
++    }
++  });
+ });
+ 
+ test.describe('the period card never overlaps (U5-12)', () => {
+diff --git a/tests/integration/pdf-render.test.ts b/tests/integration/pdf-render.test.ts
+index d8e90822..ed7cdca4 100644
+--- a/tests/integration/pdf-render.test.ts
++++ b/tests/integration/pdf-render.test.ts
+@@ -807,6 +807,54 @@ describe('bounds of long labels', () => {
+     }
+   });
+ 
++  // WP5-UX5-FIX7 (F-UX5B-3, docs/12 "Partial leave is printed on the PDF"): the leave figure is payroll data and keeps its
++  // own whole line under the category; on a day that also has a holiday label the label is shrunk to one line and cut first.
++  const leaveCell = async (day: SnapshotDay, rows: { time: boolean; ot: boolean }): Promise<PdfTextItem[]> => {
++    const days = DATES.map((date) => (date === day.work_date ? day : weekday(date)));
++    const { content } = await render(manual({ snapshot: snapshotWith({}, days), rows }));
++    expect(content.pages, JSON.stringify(rows)).toHaveLength(1);
++    // The Wednesday of week 1 is column 2; the category cell holds the category (13 pt) and the small lines (5 to 7 pt).
++    return bandItems(textItems(content), pdfLayout({ timeRows: rows.time, otRows: rows.ot }), 0, 'category', 2).filter((item) => item.height < 8);
++  };
++
++  it('prints "Leave h:mm" whole on a working day without a holiday label', async () => {
++    for (const rows of [{ time: true, ot: true }, { time: false, ot: false }]) {
++      const small = await leaveCell(weekday('2026-09-16', { leave_minutes: 150, leave_kind: 'vacation' }), rows);
++      expect(small.map((item) => item.text), JSON.stringify(rows)).toEqual(['Leave 2:30']);
++    }
++  });
++
++  it.each([
++    'Labor Day',
++    'Day after Thanksgiving',
++    'Martin Luther King Jr. Day',
++    'Christmas Eve (company closure)',
++    "Lunar New Year's Eve (company closure)",
++    'Year-end shutdown: plant maintenance week',
++  ])('keeps "Leave 1:30" whole on its own line under the holiday label %s, in all four variants', async (name) => {
++    for (const time of [true, false]) {
++      for (const ot of [true, false]) {
++        const day = weekday('2026-09-16', { category: 'Holiday', holiday_name: name, day_class: 'nonworking', leave_minutes: 90, leave_kind: 'sick', sessions: [] });
++        const small = await leaveCell(day, { time, ot });
++        const context = `${name} time ${time} ot ${ot}: ${JSON.stringify(small.map((item) => item.text))}`;
++        expect(small, context).toHaveLength(2); // the holiday label on one line, then the leave line
++        const [label, leave] = small;
++        expect(leave?.text, context).toBe('Leave 1:30');
++        expect(leave?.height ?? 0, context).toBeCloseTo(7, 0);
++        expect(label?.y ?? 0, context).toBeGreaterThan(leave?.y ?? Infinity); // above it
++        expect(name.startsWith(label?.text.replace(String.fromCodePoint(0x2026), '') ?? '?'), context).toBe(true); // the label, whole or cut
++      }
++    }
++  });
++
++  it('still wraps a long holiday label on up to two lines when the day has no leave', async () => {
++    const day = weekday('2026-09-16', { category: 'Holiday', holiday_name: 'Founders Remembrance and Community Service Observance Day', day_class: 'nonworking' });
++    const small = await leaveCell(day, { time: true, ot: true });
++    expect(small).toHaveLength(2);
++    expect(small.map((item) => item.text).join(' ')).toContain('Founders Remembrance');
++    expect(small.every((item) => item.height < 6)).toBe(true);
++  });
++
+   it('shows overnight sessions with +1 and open sessions with an open end', async () => {
+     const days = DATES.map((date) =>
+       date === '2026-09-16'
+diff --git a/tests/integration/sends.test.ts b/tests/integration/sends.test.ts
+index 30ae9f3f..f5125774 100644
+--- a/tests/integration/sends.test.ts
++++ b/tests/integration/sends.test.ts
+@@ -63,9 +63,9 @@ async function addSession(date: string, from: string, to: string, reason?: strin
+   expect(response.status, JSON.stringify(response.body)).toBe(201);
+ }
+ 
+-/** The employee's signed revision of PAYROLL (settings, one session, a saved image). */
+-async function signed(): Promise<string> {
+-  await saveSettings();
++/** The employee's signed revision of PAYROLL (settings with optional overrides, one session, a saved image). */
++async function signed(settings: Record<string, unknown> = {}): Promise<string> {
++  await saveSettings(settings);
+   await addSession('2026-09-15', '09:00', '18:00');
+   saveSignature(t.db, t.clock, files, t.userIds.employee, makePng(40, 12), 'image/png');
+   const review = await t.request('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: employee });
+@@ -176,6 +176,23 @@ describe('sign-off and the send record', () => {
+     expect(() => t.db.prepare("UPDATE revision_sends SET subject = 'Changed'").run()).toThrow(/immutable_revision_send/);
+   });
+ 
++  // F-UX5B-5 (plan B-A1): the Settings time switch is the default of the send draft and of the deadline sends, never of the
++  // sign-off's own PDF, which stays the sign-off default (time rows on, OT rows as the snapshot froze them).
++  it('the Settings time switch reaches the send draft, not the PDF job and file of the sign-off', async () => {
++    const revisionId = await signed({ show_time_on_pdf: false });
++    expect((await draftOf(revisionId)).time_rows).toBe(false);
++    expect(t.db.prepare("SELECT business_key, payload_json FROM jobs WHERE revision_id = ? AND kind = 'render_pdf'").all(revisionId)).toEqual([
++      { business_key: `revision:${revisionId}:render_pdf`, payload_json: JSON.stringify({ revision_id: revisionId, variant: 't1o1' }) },
++    ]);
++    await runPdf();
++    expect(t.db.prepare("SELECT variant, state FROM revision_files WHERE revision_id = ? AND kind = 'pdf'").all(revisionId)).toEqual([{ variant: 't1o1', state: 'ready' }]);
++    // Sending with the draft's default renders the other variant next to it; the sign-off file is untouched.
++    const sent = await postSend(revisionId, await sendBody(revisionId));
++    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
++    expect(sent.body.send).toMatchObject({ time_rows: false, ot_rows: true, pdf_variant: 't0o1' });
++    expect(t.db.prepare("SELECT variant FROM revision_files WHERE revision_id = ? AND kind = 'pdf' AND state = 'ready'").pluck().all(revisionId)).toEqual(['t1o1']);
++  });
++
+   it('is idempotent by request key: the same body replays, another body under the key is 409, and nothing more is written', async () => {
+     const revisionId = await signed();
+     const body = await sendBody(revisionId);
+@@ -269,6 +286,35 @@ describe('sign-off and the send record', () => {
+   });
+ });
+ 
++describe('a send that still waits for an older revision (R-UX5B-1)', () => {
++  it("blocks the correction's send until the older revision's job has run, and then the reason rule applies", async () => {
++    const first = await signed();
++    expect((await postSend(first, await sendBody(first))).status).toBe(201); // revision 1's send job waits
++    await addSession('2026-09-16', '09:00', '18:00', 'Synthetic forgotten day');
++    const review = await t.request('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: employee });
++    const correction = await t.request('POST', `/api/timesheets/${PAYROLL}/revisions`, {
++      cookie: employee,
++      body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false },
++    });
++    expect(correction.status, JSON.stringify(correction.body)).toBe(201);
++    const second = correction.body.revision.id as string;
++    const before = writeState();
++    const blocked = await postSend(second, await sendBody(second));
++    expect(blocked.status).toBe(409);
++    expect(blocked.body.error.code).toBe('delivery_in_progress');
++    expect(writeState()).toEqual(before);
++    // The older send is delivered first; only then can the correction be sent, and that copy needs a reason.
++    await runPdf();
++    await runSend();
++    expect(t.db.prepare("SELECT state FROM delivery_attempts WHERE revision_id = ?").pluck().all(first)).toEqual(['accepted']);
++    const noReason = await postSend(second, await sendBody(second));
++    expect(noReason.status).toBe(422);
++    expect(noReason.body.error.code).toBe('reason_required');
++    const sent = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
++    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
++  });
++});
++
+ describe("the owner's reason rule (B-A2)", () => {
+   /** Sends the revision once with the draft defaults and runs its job against `outbound`. */
+   async function sendOnce(revisionId: string, outbound: OutboundAdapter, extra: Record<string, unknown> = {}) {
+@@ -297,7 +343,15 @@ describe("the owner's reason rule (B-A2)", () => {
+     expect(t.db.prepare("SELECT reason FROM audit_events WHERE operation = 'revision.send' ORDER BY rowid DESC LIMIT 1").pluck().get()).toBe(reason);
+     const attempts = t.db.prepare("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'accepted' ORDER BY started_at").pluck().all(revisionId) as string[];
+     expect(attempts).toHaveLength(2);
+-    for (const attempt of attempts) expect(readFileSync(join(captureFolder(dataDir, attempt), 'message.eml'), 'utf8')).not.toContain('asked for the copy again');
++    // Quoted-printable breaks a long line ("Reason: Payroll asked for =" / "the copy again"), so join the soft breaks before
++    // looking for the reason; a positive control proves the joined text is the message body (F-UX5B-5, mutant M11).
++    const body = String(t.db.prepare('SELECT body_text FROM revision_sends WHERE id = ?').pluck().get(second));
++    for (const attempt of attempts) {
++      const message = readFileSync(join(captureFolder(dataDir, attempt), 'message.eml'), 'utf8').replace(/=\r?\n/g, '');
++      expect(message).toContain(body.split('\n')[0] ?? '?');
++      expect(message).not.toContain('asked for the copy again');
++      expect(message).not.toMatch(/Reason:/i);
++    }
+   });
+ 
+   it('an uncertain copy counts whatever was decided; a copy whose attempts all failed permanently does not', async () => {

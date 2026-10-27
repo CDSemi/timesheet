@@ -1,0 +1,15 @@
+cd <task>
+. ./env.sh
+S() {
+  label=$1; shift
+  bash run-shift.sh "stress-$label" real "$@" --repeat-each=20 --workers=10 > "logs/stress-$label.txt" 2>&1
+  node counts.mjs "logs/stress-$label.txt" >> out/31-stress-counts.txt 2>&1
+  echo "$label finished $(date -u +%H:%M:%SZ)" >> logs/stress.log
+}
+S review-signed tests/e2e/review.spec.ts --grep "a signed period opened again"
+S review-keyboard tests/e2e/review.spec.ts --grep "week cards that scroll sideways are named keyboard stops"
+S touch tests/e2e/day-editor.spec.ts --grep "a swipe that starts outside a day column"
+S scrollbar tests/e2e/classic-scrollbar.spec.ts --grep "a press-drag on a week card"
+S named tests/e2e/timesheet.spec.ts --grep "named by the words it shows"
+S ladder tests/e2e/timesheet.spec.ts --grep "the last two forms of a same-month range"
+echo stress-done > out/stress.done

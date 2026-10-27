@@ -1,0 +1,18 @@
+. <task>/env.sh
+cd $REPO
+git rev-parse HEAD > $T/out/00-head.txt
+git rev-parse origin/main >> $T/out/00-head.txt 2>&1
+git branch --show-current >> $T/out/00-head.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-before.txt 2>&1
+git diff --stat $PREV..$TARGET -- . ':!handoff' > $T/out/20-diffstat-nonhandoff.txt 2>&1
+git diff --name-status $PREV..$TARGET -- . ':!handoff' > $T/out/20-namestatus.txt 2>&1
+git diff $PREV..$TARGET -- . ':!handoff' > $T/out/20-diff-full.txt 2>&1
+git log --format='%h %s' $PREV..$TARGET -- . ':!handoff' > $T/out/20-path-commits.txt 2>&1
+git diff --stat $PREV..$TARGET -- package.json package-lock.json > $T/out/25-lock-and-scope.txt 2>&1
+echo "lock/package diff lines: $(wc -l < $T/out/25-lock-and-scope.txt)" >> $T/out/25-lock-and-scope.txt
+git archive $TARGET | tar -x -C $T/export
+git archive $PREV | tar -x -C $T/export-old
+ls $T/export | wc -l
+cat $T/out/00-head.txt
+cat $T/out/20-namestatus.txt
+cat $T/out/20-path-commits.txt
