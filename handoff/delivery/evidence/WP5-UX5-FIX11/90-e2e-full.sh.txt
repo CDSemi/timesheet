@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Full e2e, both projects, real clock, 2 workers (the config's), in the clean export of the working tree. Usage: e2e-full.sh <label>
+source <task>/env.sh
+label="$1"
+mkdir -p "$T/pw-$label" "$T/tmp-e2e-$label" "$T/shots-$label"
+export TEMP="$(cygpath -w "$T/tmp-e2e-$label")" TMP="$(cygpath -w "$T/tmp-e2e-$label")" TMPDIR="$T/tmp-e2e-$label"
+export E2E_SCREENSHOT_DIR="$(cygpath -w "$T/shots-$label")"
+cd "$W" || exit 9
+start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+echo "e2e-$label start=$start local-LA=$(TZ=America/Los_Angeles date '+%a %Y-%m-%d %H:%M:%S %Z')" >> "$T/logs/e2e-exits.txt"
+npm run build > "$T/logs/e2e-$label-build.txt" 2>&1
+echo "e2e-$label build exit=$?" >> "$T/logs/e2e-exits.txt"
+npx playwright test --output "$(cygpath -w "$T/pw-$label")" > "$T/logs/e2e-$label.log" 2>&1
+code=$?
+echo "e2e-$label exit=$code start=$start end=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/logs/e2e-exits.txt"

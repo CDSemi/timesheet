@@ -175,7 +175,7 @@ Restore giữ lại mọi job `send_email` và `send_reminder` đang xếp hàng
    <compose> exec -T timesheet <cli> outbound resume --confirm
    ~~~
 
-4. Giải phóng một lần gửi bị giữ, hoặc tất cả sau khi xem số lượng đã in. Việc giải phóng bị từ chối với `attempt_uncertain`, `delivery_attempt_open` hoặc `superseded_by_later_send` khi lần gửi có thể trùng lặp; job được giải phóng sau đó theo quy tắc gửi bình thường và được gửi đúng một lần. **[Drill stage 3]**
+4. Giải phóng một lần gửi bị giữ, hoặc tất cả sau khi xem số lượng đã in. Việc giải phóng bị từ chối với `attempt_uncertain`, `delivery_attempt_open` hoặc `superseded_by_later_send` khi lần gửi có thể trùng lặp, hoặc khi nó sẽ gửi bản của revision cũ hơn sau một lần gửi muộn hơn của cùng kỳ (của bất kỳ revision nào của kỳ: chủ tài khoản có thể đã gửi bản sửa); job được giải phóng sau đó theo quy tắc gửi bình thường và được gửi đúng một lần. **[Drill stage 3]**
 
    ~~~bash
    <compose> exec -T timesheet <cli> outbound release --job <job-id> --confirm

@@ -2399,11 +2399,95 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - e2e FULL theo giờ thật: 871 qua, 0 lỗi. Lượt FULL ở thời điểm 2026-11-01T08:45Z với 6
     worker: 871 qua, 0 lỗi, các test logo mất 1,1 tới 1,3 phút.
   - Tên các file build không đổi.
-- **Đang chạy:** WP5-UX5-FIX10-FREEZE (committer, sonnet), một mình.
-- **Tiếp theo:**
-  1. Gate lại có giới hạn phạm vi bằng WP5-UX5-REGATE6.
-  2. Kiểm tra lại độc lập vùng A và B.
-  2. Audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
+- **WP5-UX5-FIX10-FREEZE xong.**
+  - Commit a5533b57daa81a340c0ad9dfe5f5feac4e6ce1f5 đã lên main và đã push, fast-forward từ
+    94accda.
+  - D_PRE bằng digest của HEAD, 41477510.
+  - 307 đường dẫn. Ba dòng có đường dẫn hồ sơ người dùng trong một log kiểm kê của DIAG4
+    được che thành `<user>`. Mọi kiểm tra đều trả về 0.
+- **WP5-UX5-REGATE6** (verifier, sonnet), lần gate lại có giới hạn phạm vi, đã chạy một
+  mình trên a5533b5.
+  - **Giữ kết quả từ REGATE5,** sau khi xác nhận đúng năm file đã đổi và mã băm `dist/`
+    không đổi: cặp build, drill, `npm audit`, `npm test` ×3, các mutant cấp unit, axe, và
+    lượt chạy dồn của các file không bị đụng tới.
+  - **Chạy lại:** lint, typecheck, `verify`, các validator, e2e FULL, sáu lượt quét giờ mô
+    phỏng (lần nào quá thời gian cũng tính là trượt), chạy dồn các test đã đổi, các mutant,
+    và đọc lại diff.
+  - **Lần dừng đầu tiên:** verifier gọi PowerShell với `-ExecutionPolicy Bypass -File`, một
+    cách gọi mà brief chưa bao giờ cho phép. Bước kiểm tra quyền chặn lệnh đó, và verifier
+    dừng đúng quy trình. Chưa mục gate nào được chạy.
+  - **Quyết định của điều phối viên (Addendum 1):** không bao giờ thử lại cách gọi đó. Bước
+    kiểm kê chỉ dùng các truy vấn `-Command` chỉ đọc viết trực tiếp. Nếu cả cách này cũng bị
+    chặn thì bỏ qua bước kiểm kê và ghi lại; đây là biện pháp phòng ngừa, không phải tiêu chí
+    của gate. Verifier cũ làm tiếp.
+- **WP5-UX5-REGATE6: PASS** (có giới hạn phạm vi) trên a5533b5 / 41477510.
+  - Kiểm kê được thực hiện bằng lệnh viết trực tiếp: 2,57 nhân đang bận.
+  - **Tiền đề đúng:** chỉ đúng năm đường dẫn trong `tests/e2e` bị đổi, và 250 mã băm của
+    `dist/` giống hệt REGATE5. Vì vậy kết quả drill, `npm audit`, `npm test` ×3, các mutant
+    cấp unit và axe được giữ nguyên.
+  - lint, typecheck, `verify` và các validator đều trả về 0.
+  - e2e FULL: 466 và 405 qua, 0 lỗi.
+  - Sáu lượt quét: 0 lỗi, không lần nào quá thời gian; các test logo mất 1,1 tới 1,4 phút.
+  - Các lượt chạy dồn: 0 lỗi. Test logo lâu nhất mất 204 trên 240 giây khi chạy với 10
+    worker.
+  - Cả 12 mutant đều làm test của chúng lỗi.
+- **WP5-UX5-RECHECK-B: FIX REQUIRED** (opus), với một lỗi mới mức Low.
+  - **F-UX5B2-1:** sau khi khôi phục từ bản sao lưu, lệnh `outbound release` chỉ kiểm tra
+    các lần gửi muộn hơn trong cùng một bản (`restore.ts:535-555`). Một lần gửi đang bị giữ
+    của bản cũ có thể được thả ra và đến tay người nhận sau bản đính chính.
+  - **Cách sửa:** kiểm tra các lần gửi muộn hơn theo kỳ (`timesheet_id`) và thêm một trường
+    hợp vào `restore.test.ts`.
+  - **Năm lỗi cũ F-UX5B-1..5 đã được sửa.** Probe PDF riêng của auditor tạo 2.304 PDF, và
+    768 PDF không có đủ cả hai nhãn giống hệt từng byte. Mã băm các PDF mẫu của pilot không
+    bị ảnh hưởng. Phương án A đã được kiểm chứng, kể cả khi hai tiến trình server chạy đua
+    nhau.
+  - **Rủi ro:**
+    - phải chờ một phút để thử lại khi PDF của một lần gửi chưa được lưu, chấp nhận được cho
+      pilot;
+    - lần gửi bản đính chính có thể bị chặn tới khoảng 81 phút khi máy chủ email đang lỗi;
+    - hai lỗ hổng test (G2, P4) mà probe của auditor bắt được nhưng bộ test thì không.
+- **Quyết định của điều phối viên:** một lần sửa sau khi RECHECK-A trả kết quả, không bao giờ
+  chạy song song với một audit đang chạy. Lần sửa gồm:
+  - sửa F-UX5B2-1 trong mã, nhất quán với phương án A;
+  - thêm test cho hai lỗ hổng G2 và P4;
+  - một câu nêu giới hạn đã biết trong docs/12 (EN và VI) về thời gian phương án A có thể
+    chặn.
+- **WP5-UX5-RECHECK-A: FIX REQUIRED** (opus), với một lỗi mới mức Low.
+  - **F-UX5A-1..4 đã được sửa.** Đo ở chín bề rộng, cả hai giao diện: không còn chồng lấn,
+    nút cách cuối dòng 8 px, các dòng thẳng hàng. Tên của "Change days" khớp với chữ đang
+    hiện. Phần sửa cảm ứng được chứng minh trong giả lập Chromium. Tài liệu đã được sửa.
+  - **Mới, F-UX5A2-1:** viền focus của thẻ tuần chỉ đọc chỉ được vẽ ở cạnh trên và cạnh
+    trái, vì các cột ngày che phần còn lại. Tài liệu lại nói đó là viền focus chung. WCAG
+    2.2 AA vẫn đạt (SC 2.4.7); lỗi là so với chuẩn UI trong AGENTS và so với tài liệu.
+  - axe: 104 lượt quét, 0 vi phạm. e2e FULL: 871 qua, 0 lỗi.
+  - **Rủi ro:** cảm ứng trên thiết bị iOS và Android thật, thanh cuộn kiểu overlay, các lỗ
+    hổng test MA1, MA5, MA8 và MA9, và các lượt quét logo nhạy với tải máy.
+  - Lượt chạy probe của auditor vẫn đang chạy lúc bàn giao. Điều phối viên đã dừng nó bằng
+    TaskStop; không dừng theo PID.
+- **Quyết định của điều phối viên:** một lần sửa, WP5-UX5-FIX11 (worker-high). Gồm:
+  - F-UX5B2-1 và F-UX5A2-1;
+  - test cho các lỗ hổng G2, P4, MA1, MA8 và MA9;
+  - một câu nêu giới hạn đã biết trong docs/12 về thời gian phương án A có thể chặn.
+
+  R-A2-1 (thiết bị thật), R-A2-2 và MA5 vẫn được ghi lại. Pilot packet sẽ liệt kê bước
+  kiểm tra trên iPad và máy tính bảng Android thật.
+- **WP5-UX5-FIX11 xong** (worker-high, sonnet; chưa commit; digest 20709d60; 15 file thay
+  đổi). Cả hai lỗi đều được tái hiện trước khi sửa.
+  - **F-UX5B2-1:** `blockerOf` giờ kiểm tra theo kỳ. Lần gửi bị giữ của bản cũ vẫn bị giữ
+    (`superseded_by_later_send`). docs/11:178 đã được sửa và docs/05:72 được bổ sung.
+  - **F-UX5A2-1:** một lớp viền riêng vẽ đủ bốn cạnh, ở cả giao diện sáng và tối, kể cả khi
+    thẻ đã cuộn. Các chú thích và docs/04 đã được sửa.
+  - **Test lấp lỗ hổng:** G2, P4, MA1, MA8 và MA9 giờ đều làm test lỗi khi có mutant.
+  - docs/12 đã có câu nêu giới hạn đã biết.
+  - axe: 46 lượt quét, 0 vi phạm. `npm test` chạy 2.388 test. e2e FULL: 872 qua, 0 lỗi.
+    Drill: 209 PASS, 0 FAIL.
+  - **Tiến trình sót lại:** lượt chạy probe của RECHECK-A để lại các tiến trình Playwright
+    mồ côi và một server đã build (PID 63092, 37448, 90528, 101148) sau khi tác vụ bash của
+    nó bị dừng. Chủ dự án được nhờ tự đóng chúng; task của mission không bao giờ dừng tiến
+    trình theo PID.
+- **Đang chạy:** WP5-UX5-FIX11-FREEZE (committer), một mình.
+- **Tiếp theo:** WP5-UX5-REGATE7, kiểm tra lại độc lập hai lỗi đã sửa, audit tích hợp,
+  ACCEPT-DOCS và nghiệm thu lại WP5.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

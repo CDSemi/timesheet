@@ -1,0 +1,22 @@
+. <task>/env.sh
+mkdir -p $E
+rm -f $T/tmp/mask-last.txt
+m() { node "$TW\\mask.mjs" "$1" "$2" >> $T/tmp/mask-last.txt 2>&1; }
+cd $T/out
+for f in *.txt; do
+  case "$f" in ex-files.txt|ex-hashes.txt|ex-sorted.txt|lstree-sorted.txt|51-*-files.txt|10-census-sample*.txt) continue;; esac
+  m "$T/out/$f" "$E/$f"
+done
+cd $T/logs
+for f in control-*.txt sweep-*.txt stress-*.txt mut-*.txt chain1.log chain2.log stress.log digest-*.txt setup.txt; do
+  [ -f "$f" ] && m "$T/logs/$f" "$E/log-$f"
+done
+cd $T
+for s in env.sh setup.sh digest.sh run-shift.sh chain1.sh chain2.sh sweep.sh stress.sh mut6.sh mutants-run.sh collect.sh wait.sh; do [ -f "$s" ] && m "$T/$s" "$E/$s.txt"; done
+for s in mask.mjs shiftclock.mjs probe-now.mjs zone.mjs counts.mjs mutate.mjs durations.mjs census.mjs zz-control.spec.ts; do [ -f "$s" ] && m "$T/$s" "$E/$s.txt"; done
+m $T/probes/apply.mjs $E/apply-fix8-mutants.mjs.txt
+ls $E | wc -l
+grep -rhoE "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+" $E --include=*.txt > $T/tmp/emails-found.txt
+grep -rlE "<user>" $E > $T/tmp/flag-files.txt
+ls $E | grep -i signature > $T/tmp/signature-names.txt
+echo collect-done > $T/out/collect.done

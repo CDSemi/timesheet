@@ -1,0 +1,19 @@
+// Summarises each mutant log: mutate/test exits, restore check, failing test titles and first error line.
+import { existsSync, readFileSync } from 'node:fs';
+
+const names = process.argv.slice(2);
+for (const name of names) {
+  const file = new URL(`./out/mut-${name}.txt`, import.meta.url);
+  if (!existsSync(file)) {
+    console.log(`${name}: no log`);
+    continue;
+  }
+  const text = readFileSync(file, 'utf8').replace(/\u001b\[[0-9;]*[A-Za-z]/g, '');
+  const pick = (re) => (re.exec(text) ?? [])[1] ?? '?';
+  const failed = [...text.matchAll(/^\s+(?:x|✘)\s+\d+ \[\w+\] › (.*?)(?: \(\d.*\))?$/gm)].map((m) => m[1].slice(0, 150));
+  const errors = [...text.matchAll(/^\s+Error: (.*)$/gm)].map((m) => m[1].slice(0, 160));
+  const summary = [...text.matchAll(/^\s+(\d+ (?:passed|failed|skipped|flaky)).*$/gm)].map((m) => m[1]);
+  console.log(`${name}: mutate=${pick(/mutate exit (\d+)/)} build=${pick(/^build exit (\d+)/m)} tests=${pick(/tests exit (\d+)/)} restored=${text.includes('restored byte-identical') ? 'yes' : 'NO'} restoreBuild=${pick(/restore build exit (\d+)/)} summary=[${summary.join(', ')}]`);
+  for (const f of [...new Set(failed)]) console.log(`   failed: ${f}`);
+  for (const e of [...new Set(errors)].slice(0, 3)) console.log(`   error: ${e}`);
+}

@@ -98,8 +98,16 @@ Luồng hiện tại:
    - WP5-UX5-DIAG4 đã tìm ra vì sao bốn test e2e chạy chậm, và chứng minh một bản vá chỉ
      sửa test.
    - WP5-UX5-FIX10 đã áp dụng bản vá đó; test logo giờ mất khoảng 31 giây thay vì 2 phút.
-   - Đang chạy: WP5-UX5-FIX10-FREEZE, một commit cho FIX10 và các bản ghi, rồi push.
-   - Sau đó là gate lại có giới hạn phạm vi, kiểm tra lại độc lập vùng A và B,
+   - FIX10 đã được freeze trong a5533b5 (digest 41477510) và đã push.
+   - Lần gate lại có giới hạn phạm vi WP5-UX5-REGATE6 đã đạt trên a5533b5.
+   - Lần kiểm tra lại vùng B tìm ra một lỗ hổng mức Low: sau khi khôi phục từ bản sao lưu,
+     việc thả một lần gửi đang bị giữ vẫn có thể gửi bản cũ tới sau bản đính chính. Các lỗi
+     cũ của vùng B đã được sửa.
+   - Lần kiểm tra lại vùng A tìm ra một lỗ hổng mức Low: viền focus của thẻ tuần chỉ đọc bị
+     che mất một phần. Các lỗi cũ của vùng A đã được sửa.
+   - WP5-UX5-FIX11 đã sửa cả hai lỗ hổng và thêm các test còn thiếu, chưa commit.
+   - Đang chạy: WP5-UX5-FIX11-FREEZE, một commit cho FIX11 và các bản ghi, rồi push.
+   - Sau đó là gate lại, freeze, gate lại có giới hạn phạm vi, kiểm tra lại độc lập,
      audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
    - Chi tiết: checkpoint, mục "REGATE3 không đạt; hai việc chẩn đoán đang chạy
      (2026-10-26)" và các mục sau đó.

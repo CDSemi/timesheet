@@ -1,0 +1,123 @@
+import { appendFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-RECHECK-A probe with CLASSIC scrollbars (the --hide-scrollbars flag dropped, as classic-scrollbar.spec.ts does): the FIX9 stop
+ * rule around the 930px media boundary, the signed footer threshold, page sideways scroll on the Review, and presses on scrollbars with
+ * the Day editor open. Synthetic data only; observations go to $RA_OUT.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles', launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } });
+test.skip(({ isMobile }) => isMobile, 'desktop project only');
+
+const OUT = process.env.RA_OUT ?? '';
+function note(kind: string, data: unknown): void {
+  const line = JSON.stringify({ kind, ...(data as object) });
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+
+test('classic: Review week-card stops 470-1110, the signed footer threshold, and no sideways page scroll 320-1440', async ({ page, adminSeed, builtServer }) => {
+  test.setTimeout(240_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Reviewer', signature: 'saved' });
+  await page.goto(`/#/review/${person.payrollDate}`);
+  await page.getByLabel('Email').fill(person.account.email);
+  await page.getByLabel('Password').fill(person.account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  const scrollbar = await page.evaluate<number>('window.innerWidth - document.documentElement.clientWidth');
+  const bad: unknown[] = [];
+  const seen: Record<string, number[]> = {};
+  for (let width = 470; width <= 1110; width += 1) {
+    await page.setViewportSize({ width, height: 900 });
+    await frames(page);
+    const cards = await page.evaluate<Array<{ tab: string | null; ox: string; sw: number; cw: number }>>(
+      `[...document.querySelectorAll('.review-preview .sheet-week')].map((c) => ({ tab: c.getAttribute('tabindex'), ox: getComputedStyle(c).overflowX, sw: c.scrollWidth, cw: c.clientWidth }))`,
+    );
+    for (const [index, card] of cards.entries()) {
+      const overflows = card.sw > card.cw;
+      const key = `${index}:${card.tab ?? '-'}:${card.ox}:${overflows}`;
+      (seen[key] ??= []).push(width);
+      if ((card.tab === '0') !== overflows || (card.tab === '0' && card.ox !== 'auto')) bad.push({ width, index, ...card });
+    }
+  }
+  note('classic-fix9-sweep', { scrollbar, badCount: bad.length, bad: bad.slice(0, 20), ranges: Object.fromEntries(Object.entries(seen).map(([k, v]) => [k, `${Math.min(...v)}-${Math.max(...v)} (${v.length})`])) });
+  // Sign off and reload, then the threshold and the sideways sweep.
+  await page.locator('[data-sign-off]').click();
+  const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+  await dialog.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ }).check();
+  await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+  await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
+  await page.reload();
+  await expect(page.locator('[data-sign-off]')).toHaveText('Sign correction');
+  let lastWrapped = 0;
+  for (let width = 1100; width <= 1260; width += 1) {
+    await page.setViewportSize({ width, height: 900 });
+    await frames(page);
+    const wrapped = await page.evaluate<boolean>(
+      `(() => { const b = document.querySelector('[data-sign-off]').getBoundingClientRect(); const c = document.querySelector('[data-sig-line="employee"] .rsig-content').getBoundingClientRect(); return b.top >= c.bottom - 0.5; })()`,
+    );
+    if (wrapped) lastWrapped = width;
+  }
+  const sideways: number[] = [];
+  for (let width = 320; width <= 1440; width += 1) {
+    await page.setViewportSize({ width, height: 900 });
+    const w = await page.evaluate<{ s: number; c: number }>('({ s: document.documentElement.scrollWidth, c: document.documentElement.clientWidth })');
+    if (w.s > w.c) sideways.push(width);
+  }
+  note('classic-review', { scrollbar, lastWrapped, sidewaysWidths: sideways });
+});
+
+test('classic: presses on the week card scrollbar (thumb, track, arrow) and on the window scrollbar leave the drawer open; plain page closes it', async ({ page, employeeSeed, signInThroughUi }) => {
+  test.setTimeout(180_000);
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  const results: Record<string, unknown> = {};
+  for (const width of [900, 800]) {
+    await page.setViewportSize({ width, height: 900 });
+    if (width === 900) await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    const dayBtn = namedDayButton(page, date, 'Edit');
+    const bar = await page.evaluate<{ left: number; right: number; y: number; track: number } | null>(`(() => {
+      for (const week of document.querySelectorAll('.sheet-week')) {
+        const box = week.getBoundingClientRect();
+        const track = week.offsetHeight - week.clientHeight;
+        const y = box.top + week.clientTop + week.clientHeight + Math.max(1, track / 2);
+        if (week.scrollWidth > week.clientWidth && track > 0 && box.top > 0 && y < window.innerHeight) return { left: box.left, right: box.right, y, track };
+      }
+      return null;
+    })()`);
+    if (bar === null) {
+      results[`w${width}`] = 'no week card scrollbar in view';
+      continue;
+    }
+    const presses: Array<[string, number]> = [
+      ['arrow-left-end', bar.left + 5],
+      ['track-right', bar.right - 60],
+      ['arrow-right-end', bar.right - 5],
+    ];
+    const out: Record<string, unknown> = { track: bar.track };
+    for (const [name, x] of presses) {
+      if ((await editor.count()) === 0) await dayBtn.click();
+      await expect(editor).toBeVisible();
+      const before = await page.evaluate<number>(`[...document.querySelectorAll('.sheet-week')].reduce((s, w) => s + w.scrollLeft, 0)`);
+      await page.mouse.click(x, bar.y);
+      await frames(page);
+      out[name] = { stillOpen: (await editor.count()) === 1, scrolled: (await page.evaluate<number>(`[...document.querySelectorAll('.sheet-week')].reduce((s, w) => s + w.scrollLeft, 0)`)) !== before };
+    }
+    // The window's vertical scrollbar.
+    if ((await editor.count()) === 0) await dayBtn.click();
+    const client = await page.evaluate<number>('document.documentElement.clientWidth');
+    await page.mouse.click(client + 5, 400);
+    await frames(page);
+    out['window-scrollbar'] = { stillOpen: (await editor.count()) === 1 };
+    // Plain page closes.
+    const side = await editor.getAttribute('data-side');
+    await page.mouse.click(side === 'left' ? client - 4 : 4, 300);
+    await frames(page);
+    out['plain-page'] = { closed: (await editor.count()) === 0, focusedDay: await dayBtn.evaluate((el) => el === document.activeElement) };
+    results[`w${width}`] = out;
+  }
+  note('classic-presses', results);
+});

@@ -1,0 +1,99 @@
+import { appendFileSync } from 'node:fs';
+import type { CDPSession, Locator, Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-RECHECK-A probe: does a control still act on the first tap after a tap outside closed the Day editor (1024px touch screen)?
+ * Records the document's touchend listeners (DevTools protocol) and whether each touchend was cancelled. Synthetic data only.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles', hasTouch: true, viewport: { width: 1024, height: 768 } });
+const OUT = process.env.RA_OUT ?? '';
+function note(kind: string, data: unknown): void {
+  const line = JSON.stringify({ kind, ...(data as object) });
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+
+async function touchendListeners(cdp: CDPSession): Promise<string[]> {
+  const doc = (await cdp.send('Runtime.evaluate', { expression: 'document' })) as { result: { objectId: string } };
+  const listeners = (await cdp.send('DOMDebugger.getEventListeners', { objectId: doc.result.objectId })) as { listeners: Array<{ type: string; once: boolean; passive: boolean; lineNumber: number; handler?: { description?: string } }> };
+  return listeners.listeners.filter((l) => l.type === 'touchend').map((l) => `${(l.handler?.description ?? '').slice(0, 40)} once=${l.once} passive=${l.passive}`);
+}
+
+async function tapCentre(page: Page, locator: Locator) {
+  await locator.scrollIntoViewIfNeeded();
+  await frames(page);
+  const box = await locator.boundingBox();
+  await page.touchscreen.tap((box?.x ?? 0) + (box?.width ?? 0) / 2, (box?.y ?? 0) + (box?.height ?? 0) / 2);
+  await frames(page);
+}
+
+test('the first tap on a control after an outside tap closed the drawer', async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+  test.setTimeout(120_000);
+  test.skip(isMobile, 'desktop project with touch');
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  const dayBtn = namedDayButton(page, date, 'Edit');
+  const sw = page.getByRole('switch', { name: 'Worked hours' });
+  const cdp = await page.context().newCDPSession(page);
+  const events: string[] = [];
+  await page.exposeFunction('raLog', (text: string) => events.push(text));
+  await page.evaluate(`
+    for (const t of ['pointerup', 'touchend', 'click']) window.addEventListener(t, (e) => window.raLog(t + ':' + (e.target && e.target.tagName) + ':' + (e.defaultPrevented ? 'prevented' : 'not-prevented')), false);
+  `);
+  const result: Record<string, unknown> = {};
+  result.listenersAtStart = await touchendListeners(cdp);
+  // Control: a tap on the switch with no drawer involved.
+  events.length = 0;
+  let before = await sw.isChecked();
+  await tapCentre(page, sw);
+  result.controlTap = { toggled: (await sw.isChecked()) !== before, events: [...events] };
+  if ((await sw.isChecked()) !== before) await tapCentre(page, sw);
+  // Open the drawer, close it with a tap outside.
+  await dayBtn.click();
+  await expect(editor).toBeVisible();
+  const side = await editor.getAttribute('data-side');
+  const x = side === 'left' ? (await page.evaluate<number>('document.documentElement.clientWidth')) - 4 : 4;
+  events.length = 0;
+  await page.touchscreen.tap(x, 360);
+  await frames(page);
+  await expect(editor).toHaveCount(0);
+  result.closingTap = { events: [...events], listenersAfter: await touchendListeners(cdp) };
+  // The first tap on the switch after that.
+  events.length = 0;
+  before = await sw.isChecked();
+  await tapCentre(page, sw);
+  result.firstTapAfterClose = { toggled: (await sw.isChecked()) !== before, events: [...events], listenersAfter: await touchendListeners(cdp) };
+  // The second tap.
+  events.length = 0;
+  before = await sw.isChecked();
+  await tapCentre(page, sw);
+  result.secondTapAfterClose = { toggled: (await sw.isChecked()) !== before, events: [...events], listenersAfter: await touchendListeners(cdp) };
+  // The same with the Close button (a mouse click) closing the drawer: no outside tap involved.
+  if (await sw.isChecked()) await sw.click();
+  await dayBtn.click();
+  await expect(editor).toBeVisible();
+  await editor.getByRole('button', { name: /^Close/ }).first().click();
+  await expect(editor).toHaveCount(0);
+  events.length = 0;
+  before = await sw.isChecked();
+  await tapCentre(page, sw);
+  result.tapAfterCloseButton = { toggled: (await sw.isChecked()) !== before, events: [...events] };
+  // An outside tap, a pause of 1.5 s, then a tap on the "Next period" button.
+  if (await sw.isChecked()) await sw.click();
+  await dayBtn.click();
+  await expect(editor).toBeVisible();
+  await page.touchscreen.tap(x, 360);
+  await expect(editor).toHaveCount(0);
+  await page.waitForTimeout(1500);
+  const range = await page.locator('.period-name').first().textContent();
+  events.length = 0;
+  await tapCentre(page, page.getByRole('button', { name: 'Next period' }));
+  await page.waitForTimeout(500);
+  result.nextPeriodAfterPause = { moved: (await page.locator('.period-name').first().textContent()) !== range, events: [...events], listeners: await touchendListeners(cdp) };
+  await cdp.detach();
+  note('tap-after-close', result);
+});

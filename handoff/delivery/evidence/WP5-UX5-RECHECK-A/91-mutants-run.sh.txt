@@ -1,0 +1,25 @@
+# Runs the auditor's own mutants one after another in export-mut (definitions in mkmutants.mjs).
+M="bash <task>/mut.sh"
+CSS=src/client/styles.css
+TS=src/client/TimesheetScreen.tsx
+SHEET=src/client/components/TimesheetSheet.tsx
+R=tests/e2e/review.spec.ts
+D="--project=desktop --workers=2 --reporter=list"
+$M MA1 $CSS client $R -g "signature rows|opened again|Sign off dialog|refusal from the server|without a saved signature" $D
+$M MA2 $CSS client $R -g "opened again" $D
+$M MA3 $CSS client $R -g "signature rows|opened again" $D
+$M MA4 $TS client tests/e2e/day-editor.spec.ts tests/e2e/classic-scrollbar.spec.ts -g "U5-24|press on a scrollbar" $D
+$M MA5 $TS client tests/e2e/day-editor.spec.ts -g "U5-23|U5-24|U5-25|U5-26|touch screen" $D
+$M MA6 $TS client tests/e2e/day-editor.spec.ts -g "touch screen" $D
+$M MA7 $SHEET client $R -g "keyboard stops" $D
+$M MA8 $CSS client $R tests/e2e/focus-ring.spec.ts tests/e2e/keyboard-access.spec.ts --project=desktop --workers=2 --reporter=list
+$M MA9 $SHEET client $R -g "keyboard stops|Preview sheet follows" $D
+$M MA10 $TS client tests/e2e/timesheet.spec.ts tests/e2e/hover.spec.ts tests/e2e/keyboard-access.spec.ts -g "compact toolbar rows|no sideways scroll at 320|320|AX-10" --workers=2 --reporter=list
+$M MF1 $CSS client tests/e2e/logo.spec.ts -g "in a shared view.*\(light\)" $D
+$M MF1b tests/e2e/logo.spec.ts none tests/e2e/logo.spec.ts -g "wordmark shows whenever it fits.*\(light\)" $D
+$M MF2 src/client/components/OperationsStatus.tsx client tests/e2e/admin-status.spec.ts -g "pipeline states" $D
+$M MF3 tests/e2e/contrast.ts none tests/e2e/timesheet.spec.ts -g "inset frame and the Day-cell fill" $D
+$M MF3b tests/e2e/contrast.ts none tests/e2e/timesheet.spec.ts -g "inset frame and the Day-cell fill" $D
+$M MF4 $CSS client tests/e2e/timesheet.spec.ts -g "inset frame and the Day-cell fill" $D
+$M MF5 $CSS client tests/e2e/day-editor.spec.ts -g "U4-12, U4-13 at 1440" $D
+echo all-mutants-done >> <task>/out/mut-exits.txt

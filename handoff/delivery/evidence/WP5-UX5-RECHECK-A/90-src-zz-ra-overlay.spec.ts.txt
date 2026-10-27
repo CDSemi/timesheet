@@ -1,0 +1,66 @@
+import { appendFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-RECHECK-A risk probe: OVERLAY scrollbars (Chromium's overlay scrollbar feature, as macOS and some touch laptops draw them). An
+ * overlay scrollbar lies over the element's client box, so the client-box test of onOwnScrollbar cannot tell it apart. Does a press-drag
+ * on a week card's overlay scrollbar close the Day editor? Synthetic data only.
+ */
+test.use({
+  locale: 'en-US',
+  timezoneId: 'America/Los_Angeles',
+  launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'], args: ['--enable-features=OverlayScrollbar,OverlayScrollbarFlashAfterAnyScrollUpdate,OverlayScrollbarFlashWhenMouseEnter'] },
+});
+test.skip(({ isMobile }) => isMobile, 'desktop project only');
+
+const OUT = process.env.RA_OUT ?? '';
+function note(kind: string, data: unknown): void {
+  const line = JSON.stringify({ kind, ...(data as object) });
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+
+test('overlay: a press-drag on the week card scrollbar with the Day editor open', async ({ page, employeeSeed, signInThroughUi }) => {
+  test.setTimeout(120_000);
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  await page.setViewportSize({ width: 768, height: 900 });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await namedDayButton(page, date, 'Edit').click();
+  await expect(editor).toBeVisible();
+  const geo = await page.evaluate<{ track: number; windowTrack: number; box: { left: number; right: number; bottom: number; top: number }; clientH: number; offsetH: number } | null>(`(() => {
+    for (const week of document.querySelectorAll('.sheet-week')) {
+      const b = week.getBoundingClientRect();
+      if (week.scrollWidth > week.clientWidth && b.top > 0 && b.bottom < window.innerHeight) return { track: week.offsetHeight - week.clientHeight, windowTrack: window.innerWidth - document.documentElement.clientWidth, box: { left: b.left, right: b.right, bottom: b.bottom, top: b.top }, clientH: week.clientHeight, offsetH: week.offsetHeight };
+    }
+    return null;
+  })()`);
+  const events: string[] = [];
+  await page.exposeFunction('raLog', (text: string) => events.push(text));
+  await page.evaluate(`document.addEventListener('pointerdown', (e) => window.raLog('pointerdown:' + e.target.className + ':' + e.clientX + ',' + e.clientY), true)`);
+  const result: Record<string, unknown> = { geo };
+  if (geo !== null) {
+    const sum = () => page.evaluate<number>(`[...document.querySelectorAll('.sheet-week')].reduce((s, w) => s + w.scrollLeft, 0)`);
+    for (const inset of [2, 4, 6]) {
+      if ((await editor.count()) === 0) await namedDayButton(page, date, 'Edit').click();
+      await expect(editor).toBeVisible();
+      const y = geo.box.bottom - inset;
+      const x = geo.box.left + 100;
+      await page.mouse.move(x, y - 30);
+      await page.mouse.move(x, y, { steps: 4 });
+      await page.waitForTimeout(400);
+      events.length = 0;
+      const before = await sum();
+      await page.mouse.down();
+      await page.mouse.move(x + 80, y, { steps: 6 });
+      await page.mouse.up();
+      await frames(page);
+      result[`press-bottom-${inset}`] = { scrolled: (await sum()) !== before, stillOpen: (await editor.count()) === 1, events: [...events] };
+      await page.evaluate(`document.querySelectorAll('.sheet-week').forEach((w) => { w.scrollLeft = 0; })`);
+    }
+  }
+  note('overlay-press', result);
+});

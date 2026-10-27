@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# axe 4.14.0 probe on the fixed build in the scratch export. Output folder of its own.
+source <task>/env.sh
+mkdir -p "$T/pw-axe" "$T/tmp-axe" "$T/shots-axe"
+export TEMP="$(cygpath -w "$T/tmp-axe")" TMP="$(cygpath -w "$T/tmp-axe")" TMPDIR="$T/tmp-axe"
+export E2E_SCREENSHOT_DIR="$(cygpath -w "$T/shots-axe")"
+export AXE_PATH="$(cygpath -w "$T/axe/axe.min.js")"
+export AXE_OUT="$(cygpath -w "$T/logs/axe-lines.txt")"
+rm -f "$T/logs/axe-lines.txt"
+cd "$H" || exit 9
+cp "$T/zz-fix11-axe.spec.ts" tests/e2e/zz-fix11-axe.spec.ts
+npm run build > "$T/logs/axe-build.txt" 2>&1
+echo "build exit=$?" >> "$T/logs/axe-build.txt"
+npx playwright test tests/e2e/zz-fix11-axe.spec.ts --output "$(cygpath -w "$T/pw-axe")" --workers=2 > "$T/logs/axe-run.txt" 2>&1
+echo "exit=$?" >> "$T/logs/axe-run.txt"

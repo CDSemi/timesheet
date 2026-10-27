@@ -1,0 +1,284 @@
+import { randomUUID } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { FileStore } from '../../src/server/files/fileStore.ts';
+import { claimNextJob, failJob, JobError } from '../../src/server/jobs/jobStore.ts';
+import { createPdfJobHandler } from '../../src/server/jobs/pdfJob.ts';
+import { runJobsOnce } from '../../src/server/jobs/runner.ts';
+import { createSendJobHandler } from '../../src/server/jobs/sendJob.ts';
+import { createOutboundAdapter, type OutboundAdapter, type SendOutcome } from '../../src/server/mail/outbound.ts';
+import { runDeadlineScan, setAutomationActivation } from '../../src/server/services/automation.ts';
+import { saveSignature } from '../../src/server/services/signatures.ts';
+import { makePng } from '../support/pdfText.ts';
+import { createTestContext, la, LA, type TestContext } from '../support/testApp.ts';
+
+/*
+ * WP5-UX5-RECHECK-B probe (auditor's own, synthetic, capture only): the period-wide in-flight guard of FIX7 (option A,
+ * deliveries.ts assertNothingInFlight) through the real routes and job handlers: the job states that block and the ones
+ * that do not, the uncertain-attempt path, the deadline paths, and how often a send claimed in the same second as its
+ * PDF job waits the one-minute retry (DIAG4's product note). Results go to RECHECK_SENDS_OUT as lines.
+ */
+
+const PAYROLL = '2026-10-02';
+const PREVIOUS = '2026-09-18';
+const SENDER = 'timesheet@example.invalid';
+const TO = ['payroll@example.invalid'];
+const CC = ['manager@example.invalid'];
+
+let t: TestContext;
+let employee: string;
+let dataDir: string;
+let files: FileStore;
+const lines: string[] = [];
+const note = (line: string) => lines.push(line);
+
+async function fresh() {
+  t = await createTestContext('2026-09-29T20:00:00Z');
+  employee = await t.login('employee');
+  dataDir = join(dirname(t.config.databasePath), 'private-data');
+  files = new FileStore(dataDir);
+}
+
+beforeEach(fresh);
+afterEach(() => t.close());
+
+const count = (sql: string, ...params: string[]): number => Number(t.db.prepare(sql).pluck().get(...params));
+
+async function saveSettings(overrides: Record<string, unknown> = {}) {
+  const response = await t.request('POST', '/api/settings/submission', { cookie: employee, body: { expected_seq: 0, to: TO, cc: CC, auto_submit: false, ...overrides } });
+  expect(response.status, JSON.stringify(response.body)).toBe(201);
+}
+
+async function addSession(date: string, from: string, to: string, reason?: string) {
+  const response = await t.request('POST', `/api/days/${date}/sessions`, {
+    cookie: employee,
+    body: { start: la(`${date}T${from}`), end: la(`${date}T${to}`), input_zone: LA, breaks: [], breaks_confirmed: true, ...(reason === undefined ? {} : { reason }) },
+  });
+  expect(response.status, JSON.stringify(response.body)).toBe(201);
+}
+
+async function signOff(payroll: string): Promise<string> {
+  const review = await t.request('GET', `/api/timesheets/${payroll}/review`, { cookie: employee });
+  expect(review.status, JSON.stringify(review.body)).toBe(200);
+  const response = await t.request('POST', `/api/timesheets/${payroll}/signoff`, {
+    cookie: employee,
+    body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true },
+  });
+  expect(response.status, JSON.stringify(response.body)).toBe(201);
+  return response.body.revision.id as string;
+}
+
+async function signed(settings: Record<string, unknown> = {}): Promise<string> {
+  await saveSettings(settings);
+  await addSession('2026-09-15', '09:00', '18:00');
+  saveSignature(t.db, t.clock, files, t.userIds.employee, makePng(40, 12), 'image/png');
+  return signOff(PAYROLL);
+}
+
+async function correction(payroll = PAYROLL, day = '2026-09-16'): Promise<string> {
+  await addSession(day, '09:00', '18:00', 'Synthetic forgotten day');
+  const review = await t.request('GET', `/api/timesheets/${payroll}/review`, { cookie: employee });
+  const response = await t.request('POST', `/api/timesheets/${payroll}/revisions`, {
+    cookie: employee,
+    body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false },
+  });
+  expect(response.status, JSON.stringify(response.body)).toBe(201);
+  return response.body.revision.id as string;
+}
+
+async function sendBody(revisionId: string, overrides: Record<string, unknown> = {}) {
+  const draft = (await t.request('GET', `/api/revisions/${revisionId}/send-draft`, { cookie: employee })).body;
+  return { request_key: randomUUID(), to: draft.to, cc: draft.cc, subject: draft.subject, body_text: draft.body_text, time_rows: draft.time_rows, ot_rows: draft.ot_rows, ...overrides };
+}
+
+const postSend = (revisionId: string, body: unknown) => t.request('POST', `/api/revisions/${revisionId}/send`, { cookie: employee, body });
+const code = (response: { status: number; body: { error?: { code?: string } } | null }) => `${response.status}${response.body?.error?.code === undefined ? '' : `:${response.body.error.code}`}`;
+const pdfHandler = () => createPdfJobHandler({ db: t.db, clock: t.clock, files });
+const sendHandler = (outbound: OutboundAdapter) => createSendJobHandler({ db: t.db, clock: t.clock, files, outbound, senderAddress: SENDER });
+const capture = () => createOutboundAdapter({ mode: 'capture' }, { dataDir });
+const runPdf = () => runJobsOnce({ db: t.db, clock: t.clock, owner: 'runner-pdf', handlers: { render_pdf: pdfHandler() } });
+const runSend = (outbound: OutboundAdapter = capture()) => runJobsOnce({ db: t.db, clock: t.clock, owner: 'runner-send', handlers: { send_email: sendHandler(outbound) } });
+const runBoth = () => runJobsOnce({ db: t.db, clock: t.clock, owner: 'runner-both', handlers: { render_pdf: pdfHandler(), send_email: sendHandler(capture()) } });
+const fixed = (outcome: SendOutcome): OutboundAdapter => ({ mode: 'capture', send: () => Promise.resolve(outcome) });
+const writes = () => JSON.stringify(['revision_sends', 'jobs', 'delivery_attempts', 'audit_events'].map((table) => count(`SELECT count(*) FROM ${table}`)));
+const sendJobState = (revisionId: string) => t.db.prepare("SELECT state, attempts, last_error, next_run_at FROM jobs WHERE revision_id = ? AND kind = 'send_email' ORDER BY rowid DESC LIMIT 1").get(revisionId);
+
+describe('RECHECK-B option A probe', () => {
+  it('J: which states of an older revision send job block the correction send', async () => {
+    const first = await signed();
+    expect((await postSend(first, await sendBody(first))).status).toBe(201);
+    // queued, never claimed
+    const second = await correction();
+    let before = writes();
+    let response = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
+    note(`J1 queued (never claimed): ${code(response)}; nothing written ${writes() === before}; message ${JSON.stringify(response.body?.error?.message)}`);
+    expect(code(response)).toBe('409:delivery_in_progress');
+    // claimed before its PDF: queued again with a retry in one minute (pdf_not_ready)
+    await runSend();
+    note(`J2 job after a claim before its PDF: ${JSON.stringify(sendJobState(first))}`);
+    before = writes();
+    response = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
+    note(`J2 queued for the retry: ${code(response)}; nothing written ${writes() === before}`);
+    expect(code(response)).toBe('409:delivery_in_progress');
+    // leased by a runner
+    await runPdf();
+    t.clock.advanceSeconds(120);
+    const leased = claimNextJob(t.db, t.clock, { owner: 'runner-probe', kinds: ['send_email'] });
+    note(`J3 claimed job is the older revision's: ${leased?.revisionId === first}`);
+    response = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
+    note(`J3 leased: ${code(response)}`);
+    expect(code(response)).toBe('409:delivery_in_progress');
+    if (leased !== null) failJob(t.db, t.clock, leased.id, 'runner-probe', new JobError('probe_release'));
+    // intervention after a permanent failure: the copy does not count, nothing waits
+    note(`J3 job after the probe released its lease: ${JSON.stringify(sendJobState(first))}`);
+    t.clock.advanceSeconds(600);
+    await runSend(fixed({ kind: 'failed_permanent', code: 'smtp_envelope_rejected_permanent', providerResponse: '550' }));
+    note(`J4 job after a permanent failure: ${JSON.stringify(sendJobState(first))}`);
+    response = await postSend(second, await sendBody(second));
+    note(`J4 intervention (failed permanently), no reason: ${code(response)}`);
+    expect(code(response)).toBe('201');
+  });
+
+  it('S: a succeeded older send no longer blocks; the reason rule then applies; the superseded send is delivered first', async () => {
+    const first = await signed();
+    expect((await postSend(first, await sendBody(first))).status).toBe(201);
+    const second = await correction();
+    await runPdf();
+    await runSend();
+    note(`S1 older send after the runner: ${JSON.stringify(sendJobState(first))}; attempt ${t.db.prepare('SELECT state FROM delivery_attempts WHERE revision_id = ?').pluck().get(first)}`);
+    const noReason = await postSend(second, await sendBody(second));
+    note(`S1 correction without a reason: ${code(noReason)} copy_sent_before ${JSON.stringify(noReason.body?.error?.details?.copy_sent_before)}`);
+    expect(code(noReason)).toBe('422:reason_required');
+    const withReason = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
+    note(`S1 correction with a reason: ${code(withReason)}`);
+    expect(code(withReason)).toBe('201');
+  });
+
+  it('U: the uncertain-attempt path of an older revision', async () => {
+    const first = await signed();
+    expect((await postSend(first, await sendBody(first))).status).toBe(201);
+    await runPdf();
+    await runSend(fixed({ kind: 'uncertain', code: 'smtp_connection_lost_after_data', providerResponse: null }));
+    const uncertain = t.db.prepare("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'uncertain'").pluck().get(first) as string;
+    note(`U1 older job after an uncertain outcome: ${JSON.stringify(sendJobState(first))}`);
+    const sameRevision = await postSend(first, await sendBody(first, { reason: 'Synthetic copy again' }));
+    note(`U1 the same (current) revision while undecided: ${code(sameRevision)}`);
+    expect(code(sameRevision)).toBe('409:delivery_uncertain');
+    const second = await correction();
+    const noReason = await postSend(second, await sendBody(second));
+    note(`U2 correction without a reason while the older attempt is uncertain and undecided: ${code(noReason)}`);
+    expect(code(noReason)).toBe('422:reason_required');
+    const withReason = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
+    note(`U2 correction with a reason: ${code(withReason)}`);
+    expect(code(withReason)).toBe('201');
+    const before = writes();
+    const resendOld = await t.request('POST', `/api/deliveries/${uncertain}/decision`, { cookie: employee, body: { decision: 'resend', reason: 'Synthetic resend of the old copy' } });
+    note(`U3 resend decision on the superseded revision's uncertain attempt: ${code(resendOld)}; nothing written ${writes() === before}; decision ${JSON.stringify(t.db.prepare('SELECT decision FROM delivery_attempts WHERE id = ?').pluck().get(uncertain))}`);
+    expect(code(resendOld)).toBe('409:revision_superseded');
+    const mark = await t.request('POST', `/api/deliveries/${uncertain}/decision`, { cookie: employee, body: { decision: 'mark_delivered' } });
+    note(`U3 mark delivered: ${code(mark)}`);
+    expect(mark.status).toBe(200);
+  });
+
+  it('D: the deadline paths', async () => {
+    await saveSettings({ auto_submit: true });
+    setAutomationActivation(t.db, t.clock, { actorUserId: t.userIds.admin, activeFrom: '2026-09-29T21:00:00Z', reason: 'Synthetic activation' });
+    saveSignature(t.db, t.clock, files, t.userIds.employee, makePng(40, 12), 'image/png');
+    // D1: the previous period is signed and its send waits; this period is signed and never sent.
+    await addSession('2026-09-08', '09:00', '18:00', 'Synthetic previous-period day');
+    const previous = await signOff(PREVIOUS);
+    const previousSend = await postSend(previous, await sendBody(previous));
+    note(`D1 previous period send: ${code(previousSend)}`);
+    await addSession('2026-09-15', '09:00', '18:00');
+    const first = await signOff(PAYROLL);
+    t.clock.set('2026-09-30T06:00:00Z');
+    const scan = runDeadlineScan(t.db, t.clock);
+    note(`D1 deadline scan with another period's send waiting: ${JSON.stringify(scan)}; sends of this period ${count('SELECT count(*) FROM revision_sends WHERE revision_id = ?', first)} origin ${JSON.stringify(t.db.prepare('SELECT origin FROM revision_sends WHERE revision_id = ?').pluck().get(first))}`);
+    expect(scan).toMatchObject({ sentSigned: 1 });
+    // D2: the deadline send of revision 1 waits; a correction's send is refused until it is delivered.
+    const second = await correction(PAYROLL, '2026-09-17');
+    const blocked = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
+    note(`D2 correction send while the deadline send waits: ${code(blocked)}`);
+    expect(code(blocked)).toBe('409:delivery_in_progress');
+    await runPdf();
+    await runSend();
+    const noReason = await postSend(second, await sendBody(second));
+    note(`D2 after the deadline copy was accepted, no reason: ${code(noReason)}`);
+    expect(code(noReason)).toBe('422:reason_required');
+    // D3: the next scan sends nothing more (the period has a send) and records nothing for it.
+    t.clock.advanceSeconds(3600);
+    const again = runDeadlineScan(t.db, t.clock);
+    note(`D3 later scan: ${JSON.stringify(again)}; sends of the period ${count('SELECT count(*) FROM revision_sends s JOIN timesheet_revisions r ON r.id = s.revision_id WHERE r.timesheet_id = (SELECT timesheet_id FROM timesheet_revisions WHERE id = ?)', first)}`);
+    expect(again).toMatchObject({ sentSigned: 0, finalized: 0 });
+  });
+
+  it('D4: an automatic send that waits blocks the late review send until delivered', async () => {
+    await saveSettings({ auto_submit: true });
+    setAutomationActivation(t.db, t.clock, { actorUserId: t.userIds.admin, activeFrom: '2026-09-29T21:00:00Z', reason: 'Synthetic activation' });
+    await addSession('2026-09-15', '09:00', '18:00');
+    t.clock.set('2026-09-30T06:00:00Z');
+    note(`D4 scan: ${JSON.stringify(runDeadlineScan(t.db, t.clock))}`);
+    saveSignature(t.db, t.clock, files, t.userIds.employee, makePng(40, 12), 'image/png');
+    const review = await t.request('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: employee });
+    const late = await t.request('POST', `/api/timesheets/${PAYROLL}/late-review`, {
+      cookie: employee,
+      body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, send_email: false },
+    });
+    note(`D4 late review sign-off: ${code(late)} revision_no ${late.body?.revision?.revision_no}`);
+    if (late.status !== 201) return;
+    const lateId = late.body.revision.id as string;
+    const blocked = await postSend(lateId, await sendBody(lateId, { reason: 'Synthetic reviewed copy' }));
+    note(`D4 late review send while the automatic send waits: ${code(blocked)}`);
+    expect(code(blocked)).toBe('409:delivery_in_progress');
+    await runPdf();
+    await runSend();
+    const after = await postSend(lateId, await sendBody(lateId, { reason: 'Synthetic reviewed copy' }));
+    note(`D4 after delivery, with a reason: ${code(after)}`);
+    expect(code(after)).toBe('201');
+  });
+
+  it('R: how often a send claimed in the same second as its PDF job waits the one-minute retry', async () => {
+    const outcome = async (prepare: () => Promise<string>): Promise<string> => {
+      await fresh();
+      try {
+        const revisionId = await prepare();
+        await runBoth();
+        const job = sendJobState(revisionId) as { state: string; last_error: string | null };
+        return job.state === 'succeeded' ? 'delivered' : `${job.state}:${job.last_error}`;
+      } finally {
+        t.close();
+      }
+    };
+    t.close();
+    const tally = (results: string[]) => JSON.stringify(results.reduce<Record<string, number>>((acc, item) => ({ ...acc, [item]: (acc[item] ?? 0) + 1 }), {}));
+    const rightAfter: string[] = [];
+    const newVariant: string[] = [];
+    for (let round = 0; round < 30; round += 1) {
+      rightAfter.push(
+        await outcome(async () => {
+          const revisionId = await signed();
+          expect((await postSend(revisionId, await sendBody(revisionId))).status).toBe(201);
+          return revisionId;
+        }),
+      );
+      newVariant.push(
+        await outcome(async () => {
+          const revisionId = await signed();
+          await runPdf();
+          t.clock.advanceSeconds(120);
+          expect((await postSend(revisionId, await sendBody(revisionId, { time_rows: false }))).status).toBe(201);
+          return revisionId;
+        }),
+      );
+    }
+    note(`R1 send in the sign-off second, default variant (30 runs): ${tally(rightAfter)}`);
+    note(`R2 send of a variant not stored yet, later (30 runs): ${tally(newVariant)}`);
+    await fresh();
+  }, 600_000);
+});
+
+afterEach(() => {
+  const out = process.env.RECHECK_SENDS_OUT;
+  if (out !== undefined) writeFileSync(out, `${lines.join('\n')}\n`);
+});

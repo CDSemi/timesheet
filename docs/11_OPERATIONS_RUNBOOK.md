@@ -175,7 +175,7 @@ A restore holds every queued or leased `send_email` and `send_reminder` job of t
    <compose> exec -T timesheet <cli> outbound resume --confirm
    ~~~
 
-4. Release one held send, or all of them after the printed count. A release is refused with `attempt_uncertain`, `delivery_attempt_open` or `superseded_by_later_send` when the send could be a duplicate; a released job then follows the normal send rules and goes out exactly once. **[Drill stage 3]**
+4. Release one held send, or all of them after the printed count. A release is refused with `attempt_uncertain`, `delivery_attempt_open` or `superseded_by_later_send` when the send could be a duplicate, or when it would deliver an older revision's copy after a later send of the same period (any of its revisions: the owner may already have sent a correction); a released job then follows the normal send rules and goes out exactly once. **[Drill stage 3]**
 
    ~~~bash
    <compose> exec -T timesheet <cli> outbound release --job <job-id> --confirm

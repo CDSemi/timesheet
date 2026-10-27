@@ -1,0 +1,13 @@
+cd <task>
+. ./env.sh
+S() {
+  label=$1; shift
+  bash run-shift.sh "stress-$label" real "$@" --repeat-each=20 --workers=10 > "logs/stress-$label.txt" 2>&1
+  node counts.mjs "logs/stress-$label.txt" >> out/31-stress-counts.txt 2>&1
+  echo "$label finished $(date -u +%H:%M:%SZ)" >> logs/stress.log
+}
+S logo tests/e2e/logo.spec.ts --project=desktop --grep "the wordmark shows whenever it fits|switcher the wordmark never adds a row|in a shared view the wordmark never"
+S admin tests/e2e/admin-status.spec.ts --project=desktop
+S frame tests/e2e/timesheet.spec.ts --project=desktop --grep "inset frame and the Day-cell fill"
+S contrast tests/e2e/day-editor.spec.ts --project=desktop --grep "U4-12, U4-13 at|U4-15 at [0-9]+: an overlap|U4-15: the Check out dialog opens|U4-11: Edit on the running session"
+echo stress-done > out/stress.done

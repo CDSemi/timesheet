@@ -1,0 +1,52 @@
+// Writes the mutant definitions (exact old and new texts) to mutants/<name>.old and .new.
+import { mkdirSync, writeFileSync } from 'node:fs';
+
+const dir = new URL('./mutants/', import.meta.url);
+mkdirSync(dir, { recursive: true });
+const defs = {
+  // FIX8 T1: the unsigned line keeps no empty content box.
+  MA1: ['.rsig-content:empty {\n  display: none;\n}', '.rsig-content:empty {\n  display: flex;\n}'],
+  // FIX8 T1: the readable minimum of the signed content.
+  MA2: ['  --sig-content-min: 10rem;', '  --sig-content-min: 3rem;'],
+  // The wrapped button keeps to the end of the line.
+  MA3: ['  padding-inline-end: var(--sig-button-inset);\n  margin-inline-start: auto;', '  padding-inline-end: var(--sig-button-inset);'],
+  // FIX8 T3: onOwnScrollbar without the "the target scrolls" condition.
+  MA4: ['  if (!/auto|scroll/.test(`${style.overflowX} ${style.overflowY}`)) return false;\n', '  void style;\n'],
+  // FIX8 T3: the touch-end cancel listener is never removed.
+  MA5: ["document.addEventListener('touchend', cancelMouseEvents, { once: true, passive: false });", "document.addEventListener('touchend', cancelMouseEvents, { passive: false });"],
+  // FIX8 T3: the touch-end of a used tap is not cancelled (the mouse events follow).
+  MA6: ['  if (event.cancelable) event.preventDefault();', '  if (event.cancelable) void event;'],
+  // FIX9: a card that exactly fits also becomes a stop.
+  MA7: ['const measure = () => setScrolls(element.scrollWidth > element.clientWidth);', 'const measure = () => setScrolls(element.scrollWidth >= element.clientWidth);'],
+  // FIX9: the card's focus indicator is not painted.
+  MA8: ['  .sheet-week:focus-visible {\n    outline: var(--rule) solid var(--accent);', '  .sheet-week:focus-visible {\n    outline: var(--rule) solid transparent;'],
+  // FIX9: revealFocused also acts on the card itself.
+  MA9: ["|| !(event.target instanceof Element) || event.target === card) return;", '|| !(event.target instanceof Element)) return;'],
+  // FIX8 T2: the short form is hidden from the accessibility tree again.
+  MA10: ['<span className="change-days-short">Change days</span>', '<span className="change-days-short" aria-hidden="true">Change days</span>'],
+  // FIX10 logo.spec.ts (product): the shared-view wordmark from about 512px instead of 492px.
+  MF1: ['or (width >= calc(219.4px + 16rem)) {', 'or (width >= calc(239.4px + 16rem)) {'],
+  // FIX10 logo.spec.ts (the sweep itself): each window skips its last width.
+  MF1b: ['  for (let width = from; width <= to; width += 1) {', '  for (let width = from; width < to; width += 1) {'],
+  // FIX10 admin-status.spec.ts (product): the PDF state label.
+  MF2: ["return { text: 'PDF ready', tone: 'ok' };", "return { text: 'PDF stored', tone: 'ok' };"],
+  // FIX10 contrast.ts (the decoder): the Paeth predictor prefers "up" on ties (a wrong decoder).
+  MF3: [
+    'predictor = fromLeft <= fromUp && fromLeft <= fromUpLeft ? left : fromUp <= fromUpLeft ? up : upLeft;',
+    'predictor = fromUp <= fromLeft && fromUp <= fromUpLeft ? up : fromLeft <= fromUpLeft ? left : upLeft;',
+  ],
+  // FIX10 contrast.ts (the decoder): the Average filter rounds up (a wrong decoder).
+  MF3b: ['else if (filter === 3) predictor = (left + up) >> 1;', 'else if (filter === 3) predictor = (left + up + 1) >> 1;'],
+  // FIX10 timesheet.spec.ts (product): the editing frame only on the left edge.
+  MF4: ['--marker-frame: inset 0 0 0 var(--hairline) var(--accent);', '--marker-frame: inset var(--hairline) 0 0 0 var(--accent);'],
+  // FIX10 day-editor.spec.ts (product): a mid-grey fill on the session dialog head (an ancestor of the title text).
+  MF5: [
+    '  border-bottom: var(--hairline) solid var(--line);\n  background: var(--panel-head);\n}\n\n.session-dialog-title {',
+    '  border-bottom: var(--hairline) solid var(--line);\n  background: #5f6b7a;\n}\n\n.session-dialog-title {',
+  ],
+};
+for (const [name, [from, to]] of Object.entries(defs)) {
+  writeFileSync(new URL(`${name}.old`, dir), from);
+  writeFileSync(new URL(`${name}.new`, dir), to);
+}
+console.log(Object.keys(defs).join(' '));

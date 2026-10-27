@@ -1,0 +1,16 @@
+# Usage: bash mut6.sh <name> <file relative to export-probe> <old> <new> <rebuild: client|none> <playwright args...>
+# Applies one mutant in the scratch copy (export-probe), rebuilds the client when asked, runs the named tests (real clock), restores the file byte for byte.
+. <task>/env.sh
+P=$T/export-probe
+name=$1; file=$2; old=$3; new=$4; rebuild=$5; shift 5
+cd $P
+cp "$file" "$T/tmp/mut-backup.tmp"
+node $T/mutate.mjs "$file" "$old" "$new" > $T/logs/mut-$name-apply.txt 2>&1 || { cat $T/logs/mut-$name-apply.txt; cp "$T/tmp/mut-backup.tmp" "$file"; exit 2; }
+cat $T/logs/mut-$name-apply.txt
+if [ "$rebuild" = "client" ]; then npm run build:client > $T/logs/mut-$name-build.txt 2>&1; echo "build exit=$?" >> $T/logs/mut-$name-build.txt; fi
+SHIFT_EXPORT=$P bash $T/run-shift.sh mut-$name real "$@" > $T/logs/mut-$name.txt 2>&1
+echo "mut $name playwright done"
+node $T/counts.mjs $T/logs/mut-$name.txt | sed "s/^/$name: /" >> $T/out/81-mut-counts.txt 2>&1
+cp "$T/tmp/mut-backup.tmp" "$file"
+cmp "$T/tmp/mut-backup.tmp" "$file" && echo "restored $file" && echo "$name restored $file byte-equal" >> $T/out/81-mut-counts.txt
+if [ "$rebuild" = "client" ]; then npm run build:client > $T/logs/mut-$name-restore-build.txt 2>&1; echo "restore build exit=$?" >> $T/logs/mut-$name-restore-build.txt; fi

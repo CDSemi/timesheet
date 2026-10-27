@@ -1,0 +1,75 @@
+
+Running 2 tests using 1 worker
+
+(node:52400) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  1 [desktop] › tests\e2e\review.spec.ts:529:1 › the Preview week card that scrolls sideways shows the shared focus ring on all four edges at 768px, in both themes and also scrolled, and focusing it does not scroll it (6.8s)
+(node:66428) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 2 [desktop] › tests\e2e\review.spec.ts:734:1 › signature rows: the PDF block insets and proportions, lines aligned by row and column, Sign off 8px inside its line, two rows at every width (2.5s)
+
+
+  1) [desktop] › tests\e2e\review.spec.ts:529:1 › the Preview week card that scrolls sideways shows the shared focus ring on all four edges at 768px, in both themes and also scrolled, and focusing it does not scroll it 
+
+    Error: light, scrolled 0px: the ring is painted on every edge
+
+    light, scrolled 0px: the ring is painted on every edge
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 25
+
+    - Array []
+    + Array [
+    +   "right at 735,153",
+    +   "bottom at 145,452",
+    +   "right at 735,177",
+    +   "bottom at 198,452",
+    +   "right at 735,201",
+    +   "bottom at 251,452",
+    +   "right at 735,226",
+    +   "bottom at 304,452",
+    +   "right at 735,250",
+    +   "bottom at 357,452",
+    +   "right at 735,274",
+    +   "bottom at 410,452",
+    +   "right at 735,299",
+    +   "bottom at 463,452",
+    +   "right at 735,323",
+    +   "bottom at 516,452",
+    +   "right at 735,347",
+    +   "bottom at 569,452",
+    +   "right at 735,372",
+    +   "bottom at 622,452",
+    +   "right at 735,396",
+    +   "bottom at 675,452",
+    +   "right at 735,420",
+    + ]
+
+    Call Log:
+    - Timeout 5000ms exceeded while waiting on the predicate
+
+      564 |       expect(await card.evaluate((element) => [element.scrollLeft, element.scrollTop]), `${where}: taking focus does not move the card`).toEqual([before, 0]);
+      565 |       await card.evaluate((element) => element.ownerDocument.defaultView?.scrollBy(0, element.getBoundingClientRect().top - 120));
+    > 566 |       await expect.poll(() => missingRingPixels(page, card, accent), { message: `${where}: the ring is painted on every edge`, timeout: 5000 }).toEqual([]);
+          |                                                                                                                                                 ^
+      567 |     }
+      568 |     await card.evaluate((element) => element.blur());
+      569 |   }
+        at <task>\head-export\tests\e2e\review.spec.ts:566:145
+
+    Error Context: <task>\pw-head\review-the-Preview-week-ca-53c0d-using-it-does-not-scroll-it-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    <task>\pw-head\review-the-Preview-week-ca-53c0d-using-it-does-not-scroll-it-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace <task>\pw-head\review-the-Preview-week-ca-53c0d-using-it-does-not-scroll-it-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\review.spec.ts:529:1 › the Preview week card that scrolls sideways shows the shared focus ring on all four edges at 768px, in both themes and also scrolled, and focusing it does not scroll it 
+  1 passed (14.9s)
+exit=1

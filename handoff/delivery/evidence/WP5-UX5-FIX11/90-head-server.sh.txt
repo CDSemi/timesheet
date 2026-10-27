@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Puts the HEAD version of restore.ts into the scratch export H and rebuilds the server (the finding's reproduction over HTTP),
+# or restores the fix from the repository. Usage: head-server.sh head|fix
+source <task>/env.sh
+cd "$H" || exit 9
+if [ "$1" = "head" ]; then
+  tar -xf "$T/target.tar" -C "$H" src/server/ops/restore.ts
+else
+  cp "$REPO/src/server/ops/restore.ts" "$H/src/server/ops/restore.ts"
+fi
+npm run build:server > "$T/logs/head-server-$1-build.txt" 2>&1
+echo "build:server exit=$?" >> "$T/logs/head-server-$1-build.txt"
+if cmp -s "$REPO/src/server/ops/restore.ts" "$H/src/server/ops/restore.ts"; then echo "restore.ts is the fixed one" >> "$T/logs/head-server-$1-build.txt"; else echo "restore.ts differs from the working tree (HEAD version)" >> "$T/logs/head-server-$1-build.txt"; fi

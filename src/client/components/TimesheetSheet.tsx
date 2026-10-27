@@ -153,8 +153,9 @@ function revealFocused(event: FocusEvent<HTMLElement>) {
 
 /**
  * True while the element scrolls sideways (WP5-UX5-FIX9, WCAG 2.1.1). The read-only review week card holds nothing to focus, so
- * while it overflows it is a focusable named region (arrow keys scroll it) and takes the shared focus ring; while it fits it adds
- * no tab stop. Measured before the first paint and again whenever the card or its content changes size (as `TableWrap` does).
+ * while it overflows it is a focusable named region (arrow keys scroll it) and takes the shared inset focus ring, drawn on all four
+ * edges by its non-scrolling wrapper (`.sheet-week-ring`, WP5-UX5-FIX11); while it fits it adds no tab stop. Measured before the
+ * first paint and again whenever the card or its content changes size (as `TableWrap` does).
  */
 function useScrollsSideways(box: RefObject<HTMLElement | null>, enabled: boolean): boolean {
   const [scrolls, setScrolls] = useState(false);
@@ -179,8 +180,9 @@ function SheetWeekGrid({ week, details, actions }: { week: SheetWeek; details: b
   // A day is lifted while it is selected for a batch change or open in the Day editor; runs never cross a band.
   const runs = liftRuns(week.days.map((day) => actions.selected.has(day.workDate) || isEditingDay(day, actions)));
   const card = useRef<HTMLElement>(null);
-  const scrolls = useScrollsSideways(card, actions.review === true);
-  return (
+  const review = actions.review === true;
+  const scrolls = useScrollsSideways(card, review);
+  const sheetWeek = (
     <section ref={card} className="sheet-week" aria-label={`Week ${week.index}, ${week.rangeName}`} onFocus={revealFocused} {...(scrolls ? { tabIndex: 0 } : {})}>
       <div className="week-bar">
         <strong>WEEK {week.index}</strong>
@@ -207,6 +209,8 @@ function SheetWeekGrid({ week, details, actions }: { week: SheetWeek; details: b
       </div>
     </section>
   );
+  // The read-only review card may take keyboard focus while it scrolls; its ring is a layer of this wrapper (styles.css, `.sheet-week-ring`).
+  return review ? <div className="sheet-week-ring">{sheetWeek}</div> : sheetWeek;
 }
 
 /**

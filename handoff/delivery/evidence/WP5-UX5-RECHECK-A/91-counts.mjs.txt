@@ -1,0 +1,14 @@
+// Usage: node counts.mjs <playwright list-reporter log>  Per-project counts of ok, skipped, failed and flaky lines, plus the summary.
+import { readFileSync } from 'node:fs';
+
+const text = readFileSync(process.argv[2], 'utf8').replace(/\u001b\[[0-9;]*[A-Za-z]/g, '');
+const counts = {};
+for (const line of text.split(/\r?\n/)) {
+  const m = /^\s+(ok|-|x|✘|✓|°)\s+\d+\s+\[(\w+)\]/.exec(line);
+  if (m === null) continue;
+  const status = { ok: 'ok', '✓': 'ok', '-': 'skipped', x: 'failed', '✘': 'failed', '°': 'skipped' }[m[1]];
+  counts[m[2]] ??= { ok: 0, skipped: 0, failed: 0 };
+  counts[m[2]][status] += 1;
+}
+const summary = text.split(/\r?\n/).filter((line) => /^\s+\d+ (passed|failed|skipped|flaky|did not run|interrupted)/.test(line)).map((line) => line.trim());
+console.log(JSON.stringify({ counts, summary }, null, 1));

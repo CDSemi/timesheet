@@ -1,0 +1,28 @@
+J1 queued (never claimed): 409:delivery_in_progress; nothing written true; message "A delivery of this period is already in progress"
+J2 job after a claim before its PDF: {"state":"queued","attempts":1,"last_error":"pdf_not_ready","next_run_at":"2026-09-29T20:01:00Z"}
+J2 queued for the retry: 409:delivery_in_progress; nothing written true
+J3 claimed job is the older revision's: true
+J3 leased: 409:delivery_in_progress
+J3 job after the probe released its lease: {"state":"queued","attempts":2,"last_error":"probe_release","next_run_at":"2026-09-29T20:07:00Z"}
+J4 job after a permanent failure: {"state":"intervention","attempts":3,"last_error":"smtp_envelope_rejected_permanent","next_run_at":"2026-09-29T20:07:00Z"}
+J4 intervention (failed permanently), no reason: 201
+S1 older send after the runner: {"state":"succeeded","attempts":1,"last_error":null,"next_run_at":"2026-09-29T20:00:00Z"}; attempt accepted
+S1 correction without a reason: 422:reason_required copy_sent_before {"sent_at":"2026-09-29T20:00:00Z","state":"accepted"}
+S1 correction with a reason: 201
+U1 older job after an uncertain outcome: {"state":"intervention","attempts":1,"last_error":"delivery_uncertain","next_run_at":"2026-09-29T20:00:00Z"}
+U1 the same (current) revision while undecided: 409:delivery_uncertain
+U2 correction without a reason while the older attempt is uncertain and undecided: 422:reason_required
+U2 correction with a reason: 201
+U3 resend decision on the superseded revision's uncertain attempt: 409:revision_superseded; nothing written true; decision null
+U3 mark delivered: 200
+D1 previous period send: 201
+D1 deadline scan with another period's send waiting: {"activated":true,"examined":2,"finalized":0,"sentSigned":1,"overdueRecorded":0,"skipped":1,"failed":0,"remaining":false}; sends of this period 1 origin "deadline"
+D2 correction send while the deadline send waits: 409:delivery_in_progress
+D2 after the deadline copy was accepted, no reason: 422:reason_required
+D3 later scan: {"activated":true,"examined":2,"finalized":0,"sentSigned":0,"overdueRecorded":0,"skipped":2,"failed":0,"remaining":false}; sends of the period 1
+D4 scan: {"activated":true,"examined":2,"finalized":1,"sentSigned":0,"overdueRecorded":0,"skipped":1,"failed":0,"remaining":false}
+D4 late review sign-off: 201 revision_no 2
+D4 late review send while the automatic send waits: 409:delivery_in_progress
+D4 after delivery, with a reason: 201
+R1 send in the sign-off second, default variant (30 runs): {"queued:pdf_not_ready":13,"delivered":17}
+R2 send of a variant not stored yet, later (30 runs): {"delivered":21,"queued:pdf_not_ready":9}

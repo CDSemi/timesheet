@@ -1,0 +1,23 @@
+# Usage: bash mut.sh <name> <file> <client|none> <playwright args...>
+# The old and new texts are in mutants/<name>.old and mutants/<name>.new (exact bytes). Runs in export-mut: backup, mutate, rebuild the
+# client when asked, run the named tests, restore from the backup, compare byte for byte, rebuild again.
+. <task>/env.sh
+NAME=$1; FILE=$2; BUILD=$3; shift 3
+cd $T/export-mut
+LOG=$T/out/mut-$NAME.txt
+mkdir -p $T/mutbak $T/tmp/pw-mut-$NAME
+cp "$FILE" "$T/mutbak/$NAME.orig"
+echo "mutant $NAME file $FILE build $BUILD args $*" > $LOG
+node $T/mutate.mjs "$FILE" "$T/mutants/$NAME.old" "$T/mutants/$NAME.new" >> $LOG 2>&1
+mrc=$?
+echo "mutate exit $mrc" >> $LOG
+if [ $mrc -eq 0 ]; then
+  if [ "$BUILD" = "client" ]; then npm run build:client > $T/out/mut-$NAME-build.txt 2>&1; echo "build exit $?" >> $LOG; fi
+  export E2E_SCREENSHOT_DIR="$TW\\tmp\\mutshots"
+  npx playwright test --output=$T/tmp/pw-mut-$NAME "$@" >> $LOG 2>&1
+  echo "tests exit $?" >> $LOG
+fi
+cp "$T/mutbak/$NAME.orig" "$FILE"
+cmp "$FILE" "$T/export/$FILE" && echo "restored byte-identical to the clean export" >> $LOG
+if [ "$BUILD" = "client" ]; then npm run build:client > $T/out/mut-$NAME-restore-build.txt 2>&1; echo "restore build exit $?" >> $LOG; fi
+echo "mutant $NAME done" >> $T/out/mut-exits.txt

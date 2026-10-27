@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Rebuilds the client of the scratch export and runs the named review.spec.ts tests on the desktop project. Usage: mut-e2e.sh <label> <grep>
+source <task>/env.sh
+label="$1"
+pattern="$2"
+mkdir -p "$T/pw-$label" "$T/tmp-$label"
+export TEMP="$(cygpath -w "$T/tmp-$label")" TMP="$(cygpath -w "$T/tmp-$label")" TMPDIR="$T/tmp-$label"
+cd "$H" || exit 9
+npm run build > "$T/logs/mut-$label-build.txt" 2>&1
+echo "build exit=$?" >> "$T/logs/mut-$label-build.txt"
+npx playwright test tests/e2e/review.spec.ts --project=desktop --output "$(cygpath -w "$T/pw-$label")" -g "$pattern" > "$T/logs/mut-$label.txt" 2>&1
+echo "exit=$?" >> "$T/logs/mut-$label.txt"

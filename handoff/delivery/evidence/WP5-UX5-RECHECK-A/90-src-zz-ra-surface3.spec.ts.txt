@@ -1,0 +1,79 @@
+import { appendFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { paintedSurface } from './contrast.ts';
+import { namedDayButton } from './dayButton.ts';
+import { expect, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-RECHECK-A probe (lighter form of zz-ra-surface2, whose every-pixel loop made a million expect steps): the FIX10 PNG decoder
+ * (`paintedSurface`) against the browser's own decoder of the same PNG bytes, on 10 whole rows and 20,000 seeded random pixels of the
+ * 1280x800 viewport, light and dark. Synthetic data only.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUT = process.env.RA_OUT ?? '';
+function note(kind: string, data: unknown): void {
+  const line = JSON.stringify({ kind, ...(data as object) });
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`paintedSurface decodes what the browser decodes (sampled) - ${scheme}`, async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+    test.setTimeout(240_000);
+    test.skip(isMobile, 'desktop');
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await namedDayButton(page, date, 'Edit').click();
+    await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+    const original = page.screenshot.bind(page);
+    let captured: Buffer | null = null;
+    (page as unknown as { screenshot: Page['screenshot'] }).screenshot = async (options) => {
+      captured = await original(options);
+      return captured;
+    };
+    const surface = await paintedSurface(page);
+    (page as unknown as { screenshot: Page['screenshot'] }).screenshot = original;
+    const base64 = (captured as unknown as Buffer).toString('base64');
+    const other = await page.context().newPage();
+    await other.goto('about:blank');
+    const decodedBase64 = await other.evaluate<string, string>(async (data) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext('2d', { colorSpace: 'srgb' });
+      if (context === null) return '';
+      context.drawImage(image, 0, 0);
+      const bytes = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let text = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      return btoa(text);
+    }, base64);
+    await other.close();
+    const decoded = Buffer.from(decodedBase64, 'base64');
+    const points: Array<[number, number]> = [];
+    for (let row = 0; row < 10; row += 1) for (let x = 0; x < 1280; x += 1) points.push([x, row * 79 + 3]);
+    let seed = 12345;
+    const next = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed;
+    };
+    for (let i = 0; i < 20000; i += 1) points.push([next() % 1280, next() % 800]);
+    let differ = 0;
+    const examples: unknown[] = [];
+    for (const [x, y] of points) {
+      const a = surface.at(x, y);
+      const i = (y * 1280 + x) * 4;
+      if (a[0] !== decoded[i] || a[1] !== decoded[i + 1] || a[2] !== decoded[i + 2]) {
+        differ += 1;
+        if (examples.length < 5) examples.push({ x, y, a, b: [decoded[i], decoded[i + 1], decoded[i + 2]] });
+      }
+    }
+    note('surface-vs-browser-decoder', { scheme, compared: points.length, differ, examples, decodedBytes: decoded.length });
+    expect(differ).toBe(0);
+  });
+}

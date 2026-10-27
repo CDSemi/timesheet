@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# RECHECK-B's two-process HTTP probe (option A, restore and release) against a built export. Usage: run-http.sh <export-dir> <label>
+source <task>/env.sh
+dir="$1"
+label="$2"
+mkdir -p "$T/http-work-$label" "$T/tmp-http-$label"
+export TEMP="$(cygpath -w "$T/tmp-http-$label")" TMP="$(cygpath -w "$T/tmp-http-$label")" TMPDIR="$T/tmp-http-$label"
+cd "$dir" || exit 9
+node "$T/http-optionA.mjs" "$(cygpath -w "$dir")" "$(cygpath -w "$T/http-work-$label")" 50621 50622 50623 50624 "$(cygpath -w "$T/logs/http-$label.txt")" > "$T/logs/http-$label-run.txt" 2>&1
+echo "exit=$?" >> "$T/logs/http-$label-run.txt"

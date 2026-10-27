@@ -46,7 +46,7 @@ import { makePng } from '../support/pdfText.ts';
 import { buildSchemaV6, type SchemaV6Fixture, WP3_SCHEMA_VERSION } from '../support/schemaV6.ts';
 import { sendWithDefaults } from '../support/sends.ts';
 import { buildSyntheticWorkbook } from '../support/syntheticWorkbook.ts';
-import { createTestContext, la, LA, MutableClock, type TestContext } from '../support/testApp.ts';
+import { createTestContext, la, LA, MutableClock, ORIGIN, type TestContext } from '../support/testApp.ts';
 
 /*
  * WP4-T06: outbound pause, isolated restore and reconciliation (AC-15, AC-11, AC-08; docs/07 "Backup, restore and
@@ -523,6 +523,110 @@ describe('isolated restore with outbound paused (AC-15, AC-11)', () => {
     expect(captured.filter((name) => attemptsOf(restored).some((attempt) => attempt.id === name)).sort()).toEqual(accepted.map((attempt) => attempt.id).sort());
     for (const attempt of accepted) expect(existsSync(captureFolder(join(target, RESTORED_DATA_DIR), attempt.id))).toBe(true);
     expect(listHeldJobs(restored).map((job) => job.blocker).sort()).toEqual(['attempt_uncertain', 'attempt_uncertain', 'superseded_by_later_send']);
+  });
+});
+
+/*
+ * WP5-UX5-FIX11 (F-UX5B2-1, R-UX5B-1): the send guard is period-wide (a waiting send of any revision of the period blocks another),
+ * and so is the release of a held job. A restore holds revision 1's waiting send; the owner then corrects the period (revision 2) and
+ * sends it, which a held job does not block and no counted copy makes a reason necessary. Releasing the held job afterwards would
+ * deliver the superseded copy after the correction's, so it is refused (`superseded_by_later_send`) for as long as the later send
+ * exists, whether it still waits or has succeeded. The release was refused only for a later send of the SAME revision before.
+ */
+describe('a held send of a superseded revision (F-UX5B2-1)', () => {
+  const PAYROLL = '2026-10-02';
+  let t: TestContext | undefined;
+  let restored: Db | undefined;
+  let backupsRoot = '';
+  let restoreRoot = '';
+
+  afterAll(() => {
+    restored?.close();
+    t?.close();
+    if (backupsRoot !== '') rmSync(backupsRoot, { recursive: true, force: true });
+    if (restoreRoot !== '') rmSync(restoreRoot, { recursive: true, force: true });
+  });
+
+  it('is not released once the owner has sent a correction of the period, while it waits or after it succeeded, and the old copy never follows the new', async () => {
+    const source = await createTestContext(NOW);
+    t = source;
+    const employee = await source.login('employee');
+    const files = new FileStore(dataDirOf(source));
+    const settings = await source.request('POST', '/api/settings/submission', {
+      cookie: employee,
+      body: { expected_seq: 0, to: ['payroll@example.invalid'], cc: [], auto_submit: false },
+    });
+    expect(settings.status, JSON.stringify(settings.body)).toBeLessThan(300);
+    saveSignature(source.db, source.clock, files, source.userIds.employee, makePng(40, 12), 'image/png');
+    await addSession(source, employee, '2026-09-15', '09:00', '18:00');
+    const first = await signOff(source, employee, PAYROLL); // revision 1 is signed and sent; its send job waits (no runner)
+    source.clock.set('2026-09-29T20:04:00Z');
+    backupsRoot = scratch('timesheet-f11-backups-');
+    const backup = await createBackup({ databasePath: source.config.databasePath, dataDir: dataDirOf(source), targetDir: backupsRoot, clock: source.clock });
+
+    restoreRoot = scratch('timesheet-f11-restore-');
+    const target = join(restoreRoot, 'instance');
+    const clock = new MutableClock(LATER);
+    await restoreBackup({ fromDir: backup.directory, toDir: target, liveDataDir: dataDirOf(source), liveDatabasePath: source.config.databasePath, clock });
+    const db = openDatabase(join(target, RESTORED_DATABASE_NAME));
+    restored = db;
+    const heldJobId = db.prepare<[string], { id: string }>("SELECT id FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(first)?.id ?? '';
+    expect(db.prepare('SELECT state, last_error FROM jobs WHERE id = ?').get(heldJobId)).toEqual({ state: 'intervention', last_error: RECONCILE_AFTER_RESTORE });
+    // Nothing is uncertain, so the operator can resume; the held job alone is still not sent, and it is releasable on its own.
+    expect(resumeOutbound(db, clock)).toMatchObject({ outcome: 'resumed' });
+    const heldSends = () => listHeldJobs(db).filter((job) => job.kind === JOB_SEND_EMAIL);
+    expect(heldSends().map((job) => [job.id, job.blocker])).toEqual([[heldJobId, null]]);
+
+    // On the restored instance the owner corrects the period (revision 2) and sends it: not blocked by the held job, and no reason is asked.
+    const app = createApp({ db, clock, config: source.config, loginLimiter: new LoginRateLimiter(), staticDir: null });
+    const cookie = `${SESSION_COOKIE}=${createAuthSession(db, clock, source.userIds.employee, 3600).token}`;
+    const request: TestContext['request'] = async (method, path, options = {}) => {
+      const headers: Record<string, string> = { origin: ORIGIN, cookie: options.cookie ?? cookie };
+      const init: RequestInit = { method, headers };
+      if (options.body !== undefined) {
+        headers['content-type'] = 'application/json';
+        init.body = JSON.stringify(options.body);
+      }
+      const response = await app.request(path, init);
+      const text = await response.text();
+      const body: unknown = text === '' ? null : JSON.parse(text);
+      return { status: response.status, body, headers: response.headers };
+    };
+    const edit = await request('POST', '/api/days/2026-09-16/sessions', {
+      body: { start: la('2026-09-16T09:00'), end: la('2026-09-16T18:00'), input_zone: LA, breaks: [], breaks_confirmed: true, reason: 'Synthetic forgotten day' },
+    });
+    expect(edit.status, JSON.stringify(edit.body)).toBe(201);
+    const review = await request('GET', `/api/timesheets/${PAYROLL}/review`);
+    const correction = await request('POST', `/api/timesheets/${PAYROLL}/revisions`, {
+      body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false },
+    });
+    expect(correction.status, JSON.stringify(correction.body)).toBe(201);
+    const second = correction.body.revision.id as string;
+    const sent = await sendWithDefaults({ request }, cookie, second);
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+
+    // The correction's send waits, so the held job of the superseded revision is refused (one by id, in the list and in bulk), writing nothing.
+    const auditBefore = count(db, "SELECT count(*) FROM audit_events WHERE operation LIKE 'operations.held_job_%'");
+    const refusal = { outcome: 'refused', code: 'superseded_by_later_send' };
+    expect(heldSends().map((job) => [job.id, job.blocker])).toEqual([[heldJobId, 'superseded_by_later_send']]);
+    expect(releaseHeldJob(db, clock, heldJobId)).toEqual(refusal);
+    expect(releaseAllHeldJobs(db, clock)).toEqual({ released: 0, refused: { superseded_by_later_send: 1 } });
+
+    // The correction goes out; the later send has succeeded, and the old job is still refused.
+    clock.set('2026-09-30T11:00:00Z');
+    const dataDir = join(target, RESTORED_DATA_DIR);
+    await runJobsOnce({ db, clock, owner: 'runner-f11-pdf', handlers: { render_pdf: createPdfJobHandler({ db, clock, files: new FileStore(dataDir) }) } });
+    const delivery = loadDeliveryConfig({ MAIL_FROM: SENDER, DATA_DIR: dataDir }, { databasePath: join(target, 'unused.db'), port: 3000, production: false });
+    await runJobsOnce({ db, clock, owner: 'runner-f11-send', leaseSeconds: 600, handlers: createJobHandlers({ db, clock, files: new FileStore(dataDir), delivery }) });
+    const states = (revisionId: string) => attemptsOf(db).filter((attempt) => attempt.revision_id === revisionId).map((attempt) => attempt.state);
+    expect(states(second)).toEqual(['accepted']);
+    expect(db.prepare<[string], { state: string }>("SELECT state FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(second)?.state).toBe('succeeded');
+    expect(releaseHeldJob(db, clock, heldJobId)).toEqual(refusal);
+    expect(releaseAllHeldJobs(db, clock)).toEqual({ released: 0, refused: { superseded_by_later_send: 1 } });
+    // The superseded revision was never sent, the job is still held, and the refusals left no audit event.
+    expect(states(first)).toEqual([]);
+    expect(db.prepare('SELECT state, last_error FROM jobs WHERE id = ?').get(heldJobId)).toEqual({ state: 'intervention', last_error: RECONCILE_AFTER_RESTORE });
+    expect(count(db, "SELECT count(*) FROM audit_events WHERE operation LIKE 'operations.held_job_%'")).toBe(auditBefore);
   });
 });
 

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Clean export of the repository working tree (every tracked or untracked non-ignored file outside handoff/), byte-checked against
+# the working tree, then npm ci and a build in the export. The export is outside Dropbox and is not a git repository.
+source <task>/env.sh
+cd "$REPO" || exit 9
+rm -f "$T/logs/work-files.txt"
+GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$REPO" git ls-files --cached --others --exclude-standard -z > "$T/logs/work-files.z"
+mkdir -p "$W"
+# tar copies exactly the listed files; handoff/ is left out
+tar --null -T "$T/logs/work-files.z" --exclude='handoff' -cf "$T/work.tar"
+echo "tar exit=$?" >> "$T/logs/setup-work.txt"
+tar -xf "$T/work.tar" -C "$W"
+echo "untar exit=$?" >> "$T/logs/setup-work.txt"
+# byte check, file by file
+diffs=0
+count=0
+while IFS= read -r -d '' f; do
+  case "$f" in handoff/*) continue ;; esac
+  count=$((count + 1))
+  if ! cmp -s "$REPO/$f" "$W/$f"; then diffs=$((diffs + 1)); echo "DIFF $f" >> "$T/logs/setup-work.txt"; fi
+done < "$T/logs/work-files.z"
+echo "files compared=$count differences=$diffs" >> "$T/logs/setup-work.txt"
+cd "$W" && npm ci > "$T/logs/npm-ci-work.txt" 2>&1
+echo "npm ci work-export exit=$?" >> "$T/logs/setup-work.txt"
+cd "$W" && npm run build > "$T/logs/build-work-export.txt" 2>&1
+echo "build work-export exit=$?" >> "$T/logs/setup-work.txt"

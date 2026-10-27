@@ -1,0 +1,50 @@
+mutant MF2 file src/client/components/OperationsStatus.tsx build client args tests/e2e/admin-status.spec.ts -g pipeline states --project=desktop --workers=2 --reporter=list
+mutated src/client/components/OperationsStatus.tsx
+mutate exit 0
+build exit 0
+
+Running 1 test using 1 worker
+
+  x  1 [desktop] › tests\e2e\admin-status.spec.ts:139:1 › the admin sees pipeline states, a fault code and recipients, and no timesheet detail (38.5s)
+
+
+  1) [desktop] › tests\e2e\admin-status.spec.ts:139:1 › the admin sees pipeline states, a fault code and recipients, and no timesheet detail 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: 'Submissions and delivery' }).locator('[data-submission-user="161cf181-9f17-42d6-bbe6-b87e56f6a245"]').locator('[data-status="pdf"]')
+    Expected: "PDF ready"
+    Received: "PDF stored"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: 'Submissions and delivery' }).locator('[data-submission-user="161cf181-9f17-42d6-bbe6-b87e56f6a245"]').locator('[data-status="pdf"]') with timeout 7000ms
+      - waiting for getByRole('region', { name: 'Submissions and delivery' }).locator('[data-submission-user="161cf181-9f17-42d6-bbe6-b87e56f6a245"]').locator('[data-status="pdf"]')
+        18 × locator resolved to <span data-status="pdf" class="badge badge-ok">PDF stored</span>
+           - unexpected value "PDF stored"
+
+
+      194 |   await expect(personRow).toContainText(currentPayrollDate);
+      195 |   await expect(personRow.locator('[data-status="review"]')).toHaveText('Signed');
+    > 196 |   await expect(personRow.locator('[data-status="pdf"]')).toHaveText('PDF ready');
+          |                                                          ^
+      197 |   if (row.delivery.state === 'accepted') {
+      198 |     await expect(personRow.locator('[data-status="delivery"]')).toHaveText('Delivered');
+      199 |   } else {
+        at <task>\export-mut\tests\e2e\admin-status.spec.ts:196:58
+
+    Error Context: ..\tmp\pw-mut-MF2\admin-status-the-admin-see-bee93-nts-and-no-timesheet-detail-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\pw-mut-MF2\admin-status-the-admin-see-bee93-nts-and-no-timesheet-detail-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\pw-mut-MF2\admin-status-the-admin-see-bee93-nts-and-no-timesheet-detail-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\admin-status.spec.ts:139:1 › the admin sees pipeline states, a fault code and recipients, and no timesheet detail 
+tests exit 1
+restored byte-identical to the clean export
+restore build exit 0

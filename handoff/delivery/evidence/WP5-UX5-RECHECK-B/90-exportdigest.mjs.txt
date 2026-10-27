@@ -1,0 +1,34 @@
+// Digest of a clean export: for every path of the target tree outside handoff/, the git blob id of the exported raw bytes;
+// SHA-256 of the sorted "<path> <blob>\n" lines (the source-digest.mjs form). Also lists export files outside handoff/ that
+// the tree does not hold (node_modules, dist and the task's own files excluded). Usage: node exportdigest.mjs <export> <lstree.txt>
+import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [root, listing] = process.argv.slice(2);
+const expected = readFileSync(listing, 'utf8').split('\n').filter((line) => line !== '');
+const paths = expected.map((line) => line.slice(0, line.lastIndexOf(' ')));
+const lines = [];
+let crlf = 0;
+for (const path of [...paths].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
+  const bytes = readFileSync(join(root, path));
+  if (bytes.includes(Buffer.from('\r\n'))) crlf += 1;
+  const blob = createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${bytes.length}\0`), bytes])).digest('hex');
+  lines.push(`${path} ${blob}\n`);
+}
+const digest = createHash('sha256').update(lines.join('')).digest('hex');
+const mismatches = lines.filter((line, index) => line.trimEnd() !== [...expected].sort()[index]).length;
+const seen = new Set(paths);
+const extra = [];
+const walk = (dir, rel) => {
+  for (const name of readdirSync(dir)) {
+    const relPath = rel === '' ? name : `${rel}/${name}`;
+    if (['node_modules', 'dist', 'handoff'].includes(relPath)) continue;
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) walk(full, relPath);
+    else if (!seen.has(relPath)) extra.push(relPath);
+  }
+};
+walk(root, '');
+console.log(`${digest}  (${lines.length} files, handoff/ excluded; raw export blobs)`);
+console.log(`lines differing from ls-tree: ${mismatches}; files with CRLF: ${crlf}; extra files: ${extra.length}${extra.length > 0 ? ` ${extra.slice(0, 20).join(', ')}` : ''}`);

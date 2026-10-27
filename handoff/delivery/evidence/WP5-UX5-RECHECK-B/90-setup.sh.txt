@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Two clean exports of the target (export = pristine checks; probe = probes and mutants), npm ci in each.
+source <task>/env.sh
+mkdir -p "$T/tmp" "$T/data" "$T/logs" "$X" "$P"
+cd "$REPO" || exit 9
+git archive --format=tar "$TARGET" > "$T/target.tar"
+echo "archive exit=$?" >> "$T/logs/setup.txt"
+tar -xf "$T/target.tar" -C "$X"
+echo "untar export exit=$?" >> "$T/logs/setup.txt"
+tar -xf "$T/target.tar" -C "$P"
+echo "untar probe exit=$?" >> "$T/logs/setup.txt"
+echo "node $(node --version) npm $(npm --version)" >> "$T/logs/setup.txt"
+cd "$X" && npm ci > "$T/logs/npm-ci-export.txt" 2>&1
+echo "npm ci export exit=$?" >> "$T/logs/setup.txt"
+cd "$P" && npm ci > "$T/logs/npm-ci-probe.txt" 2>&1
+echo "npm ci probe exit=$?" >> "$T/logs/setup.txt"
+echo "setup done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/logs/setup.txt"

@@ -1,0 +1,38 @@
+// Copies task files into the evidence folder as masked LF .txt: ANSI codes stripped, CRLF to LF, task and profile paths
+// masked, and a refusal when an e-mail address outside example.invalid remains. Usage: node mask.mjs <destDir> <src>=<name> ...
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dest, ...pairs] = process.argv.slice(2);
+const replacements = [
+  [/D:\\\\\.claude-tmp\\\\timesheet\\\\WP5-UX5-RECHECK-B/gi, '<task>'],
+  [/D:\\\.claude-tmp\\timesheet\\WP5-UX5-RECHECK-B/gi, '<task>'],
+  [/D:\/\.claude-tmp\/timesheet\/WP5-UX5-RECHECK-B/gi, '<task>'],
+  [/\/d\/\.claude-tmp\/timesheet\/WP5-UX5-RECHECK-B/gi, '<task>'],
+  [/D:\\\\\.claude-tmp\\\\claude\\\\[^\s"']*/gi, '<claude-tmp>'],
+  [/D:\\\.claude-tmp\\claude\\[^\s"']*/gi, '<claude-tmp>'],
+  [/D:\\\\Dropbox\\\\Work\.CDSemi\\\\timesheet/gi, '<repo>'],
+  [/D:\\Dropbox\\Work\.CDSemi\\timesheet/gi, '<repo>'],
+  [/\/d\/Dropbox\/Work\.CDSemi\/timesheet/gi, '<repo>'],
+  [/C:\\\\Users\\\\[^\\\s"']+/gi, '<user>'],
+  [/<user>\\\s"']+/gi, '<user>'],
+  [/\/c\/Users\/[^/\s"']+/gi, '<user>'],
+  [/C:\/Users\/[^/\s"']+/gi, '<user>'],
+];
+let refused = 0;
+for (const pair of pairs) {
+  const index = pair.lastIndexOf('=');
+  const src = pair.slice(0, index);
+  const name = pair.slice(index + 1);
+  let text = readFileSync(src, 'utf8').replace(/\u001b\[[0-9;]*[A-Za-z]/g, '').replace(/\r\n?/g, '\n');
+  for (const [pattern, value] of replacements) text = text.replace(pattern, value);
+  const foreign = (text.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) ?? []).filter((address) => !address.toLowerCase().endsWith('@example.invalid') && !address.toLowerCase().endsWith('.example.invalid') && !/@timesheet\.invalid$/i.test(address));
+  if (foreign.length > 0) {
+    refused += 1;
+    console.log(`REFUSED ${name}: addresses outside example.invalid: ${[...new Set(foreign)].slice(0, 5).join(', ')}`);
+    continue;
+  }
+  writeFileSync(join(dest, name), text.endsWith('\n') ? text : `${text}\n`);
+  console.log(`wrote ${name} (${text.length} chars)`);
+}
+process.exitCode = refused === 0 ? 0 : 1;

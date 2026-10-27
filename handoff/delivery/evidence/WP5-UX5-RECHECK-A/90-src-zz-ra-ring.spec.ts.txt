@@ -1,0 +1,71 @@
+import { appendFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { paintedSurface, sameColour, parseColour } from './contrast.ts';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-RECHECK-A probe: where the FIX9 focus outline of a read-only Review week card is actually painted. For each of the four edges,
+ * the fraction of edge pixels (2px band, every pixel along the edge) painted in the accent colour, at scroll positions start, middle and
+ * end, at 900 and 768px, light and dark; and the computed position of the children that touch the edges. Synthetic data only.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUT = process.env.RA_OUT ?? '';
+function note(kind: string, data: unknown): void {
+  const line = JSON.stringify({ kind, ...(data as object) });
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`FIX9 ring coverage by edge - ${scheme}`, async ({ page, adminSeed, builtServer, isMobile }) => {
+    test.setTimeout(180_000);
+    test.skip(isMobile, 'desktop project sets the widths');
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Ring', signature: 'none' });
+    await page.goto(`/#/review/${person.payrollDate}`);
+    await page.getByLabel('Email').fill(person.account.email);
+    await page.getByLabel('Password').fill(person.account.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.locator('[data-review-day]')).toHaveCount(14);
+    const card = page.locator('.review-preview .sheet-week').first();
+    for (const width of [900, 768]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await frames(page);
+      await page.locator('.review-preview .preview-bar h2').click();
+      for (let i = 0; i < 40 && !(await card.evaluate((el) => el === document.activeElement)); i += 1) await page.keyboard.press('Tab');
+      await expect(card).toBeFocused();
+      await card.scrollIntoViewIfNeeded();
+      const accent = parseColour(await card.evaluate((el) => getComputedStyle(el).outlineColor));
+      const max = await card.evaluate((el) => el.scrollWidth - el.clientWidth);
+      for (const [label, left] of [['start', 0], ['middle', Math.round(max / 2)], ['end', max]] as const) {
+        await card.evaluate((el, x) => { el.scrollLeft = x; }, left);
+        await frames(page);
+        const box = await card.evaluate((el) => { const b = el.getBoundingClientRect(); return { l: Math.ceil(b.left), t: Math.ceil(b.top), r: Math.floor(b.right) - 1, b: Math.floor(b.bottom) - 1 }; });
+        const surface = await paintedSurface(page);
+        const edge = (points: Array<[number, number]>) => {
+          const hits = points.filter(([x, y]) => sameColour(surface.at(x, y), accent, 3)).length;
+          return Number((hits / points.length).toFixed(3));
+        };
+        const xs = Array.from({ length: box.r - box.l - 3 }, (_, i) => box.l + 2 + i);
+        const ys = Array.from({ length: box.b - box.t - 3 }, (_, i) => box.t + 2 + i);
+        const coverage = {
+          top: edge(xs.map((x) => [x, box.t])),
+          bottom: edge(xs.map((x) => [x, box.b])),
+          left: edge(ys.map((y) => [box.l, y])),
+          right: edge(ys.map((y) => [box.r, y])),
+        };
+        note('ring-coverage', { scheme, width, scroll: label, scrollLeft: left, coverage });
+        if (scheme === 'light' && width === 768 && label === 'middle') await card.screenshot({ path: screenshotPath('ra-fix9-ring-768-middle-light-synthetic.png') });
+      }
+      const positions = await card.evaluate((el) => {
+        const kinds: Record<string, number> = {};
+        for (const child of el.querySelectorAll('.week-bar, .week-grid, .row-labels, .week-grid > *')) {
+          const key = `${child.className.toString().split(' ')[0]}:${getComputedStyle(child).position}`;
+          kinds[key] = (kinds[key] ?? 0) + 1;
+        }
+        return kinds;
+      });
+      note('ring-children', { scheme, width, positions });
+    }
+  });
+}

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Restores files of the scratch export $1 from the repository working tree and proves they are byte-identical. Usage: restore-file.sh <export> <relpath>...
+source <task>/env.sh
+dest="$1"
+shift
+for f in "$@"; do
+  cp "$REPO/$f" "$dest/$f"
+  if cmp -s "$REPO/$f" "$dest/$f"; then echo "restored byte-identical: $f"; else echo "DIFFERENT: $f"; fi
+done

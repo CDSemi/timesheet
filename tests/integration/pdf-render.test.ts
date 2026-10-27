@@ -847,6 +847,45 @@ describe('bounds of long labels', () => {
     }
   });
 
+  // WP5-UX5-FIX11 (mutant P4 of RECHECK-B): the tightest category band is 37 pt (four sessions, time and OT rows on); the block of the
+  // holiday label and the separate leave line must be sized together, or the leave line falls out of the band into the time row.
+  it.each(['Labor Day', "Lunar New Year's Eve (company closure)"])('keeps "Leave 1:30" whole inside the 37 pt band of four sessions with both row sets, under the holiday label %s', async (name) => {
+    const sessionsOf = (date: string) =>
+      [['06:00', '08:00'], ['09:00', '11:00'], ['12:00', '14:00'], ['15:00', '17:45']].map(([from = '', to = ''], index) => ({
+        id: `s-${date}-${index}`,
+        start_utc: utc(date, from),
+        end_utc: utc(date, to),
+        source: 'manual' as const,
+        breaks_confirmed: true,
+        breaks: [],
+      }));
+    const days = DATES.map((date) =>
+      date === '2026-09-16'
+        ? weekday(date, { category: 'Holiday', holiday_name: name, day_class: 'nonworking', leave_minutes: 90, leave_kind: 'sick', sessions: sessionsOf(date) })
+        : weekday(date, { sessions: sessionsOf(date) }),
+    );
+    const layout = pdfLayout({ timeRows: true, otRows: true, sessionLines: 4 });
+    const week = layout.weeks[0];
+    expect(week.category.height, 'four sessions with both row sets give the 37 pt band').toBe(37);
+    const { content } = await render(manual({ snapshot: snapshotWith({}, days) }));
+    expect(content.pages).toHaveLength(1);
+    // The Wednesday of week 1 is column 2. Look for the leave line anywhere in the column, not only inside the band, so a line that
+    // fell out of the band is found (and fails the bounds) instead of being missed.
+    const xLow = week.daysLeft + 2 * week.dayWidth;
+    const yLow = PAGE_HEIGHT - (week.category.top + week.category.height);
+    const yHigh = PAGE_HEIGHT - week.category.top;
+    const leave = textItems(content).filter((item) => item.text === 'Leave 1:30' && item.x >= xLow - 0.5 && item.x < xLow + week.dayWidth);
+    expect(leave, JSON.stringify(leave)).toHaveLength(1);
+    const line = leave[0];
+    // The glyph box of the 7 pt line (descent 0.24, ascent 0.76 of the size) lies inside the band.
+    expect(line?.y ?? 0, `baseline ${line?.y ?? '?'} in the band ${yLow}-${yHigh}`).toBeGreaterThan(yLow + 0.24 * 7 - 0.5);
+    expect((line?.y ?? 0) + 0.76 * 7, `top of the leave line in the band ${yLow}-${yHigh}`).toBeLessThan(yHigh + 0.5);
+    // The holiday label stays above it, inside the band too.
+    const label = textItems(content).filter((item) => item.text !== 'Leave 1:30' && item.height < 8 && item.x >= xLow - 0.5 && item.x < xLow + week.dayWidth && item.y > yLow - 1 && item.y < yHigh);
+    expect(label.length, 'the holiday label is drawn in the band').toBeGreaterThan(0);
+    for (const item of label) expect(item.y, `${item.text} above the leave line`).toBeGreaterThan(line?.y ?? Infinity);
+  });
+
   it('still wraps a long holiday label on up to two lines when the day has no leave', async () => {
     const day = weekday('2026-09-16', { category: 'Holiday', holiday_name: 'Founders Remembrance and Community Service Observance Day', day_class: 'nonworking' });
     const small = await leaveCell(day, { time: true, ot: true });

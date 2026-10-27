@@ -1,0 +1,47 @@
+// WP5-UX5-REGATE5 probe: applies or restores one named e2e mutant in the scratch copy.
+// Usage: node apply.mjs <probeDir> <id> apply|restore
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
+const [probeDir, id, action] = process.argv.slice(2);
+const CSS = 'src/client/styles.css';
+const TS = 'src/client/TimesheetScreen.tsx';
+const SHEET = 'src/client/components/TimesheetSheet.tsx';
+const MUTANTS = {
+  RSIG_WRAP: { what: 'the .rsig-line wrap removed', edits: [[CSS, '.rsig-line {\n  display: flex;\n  flex-wrap: wrap;\n', '.rsig-line {\n  display: flex;\n']] },
+  TOUCH: { what: 'the touch branch removed (a touch pointerdown closes at once)', edits: [[TS, "if (event.pointerType === 'touch') {", "if (event.pointerType === 'touch' && false) {"]] },
+  OWN_SCROLLBAR: { what: 'the own-scrollbar check removed', edits: [[TS, '      if (onOwnScrollbar(event.target, event.clientX, event.clientY)) return;\n', '']] },
+  ARIA_LABEL: { what: 'the aria-label "Change several days" restored', edits: [[TS, 'className="secondary change-days"\n', 'className="secondary change-days"\n                    aria-label="Change several days"\n']] },
+  M2_LADDER: { what: 'mutant M2: the 7.3em container step made unreachable (0.1em)', edits: [[CSS, '@container period-range (width < 7.3em) {', '@container period-range (width < 0.1em) {']] },
+  TABINDEX: { what: 'FIX9: the tabIndex never set', edits: [[SHEET, '{...(scrolls ? { tabIndex: 0 } : {})}', '']] },
+};
+const sha = (text) => createHash('sha256').update(text).digest('hex');
+const mutant = MUTANTS[id];
+if (!mutant) throw new Error(`unknown mutant ${id}`);
+const here = dirname(new URL(import.meta.url).pathname.replace(/^\//, ''));
+const orig = join(here, 'orig', id);
+mkdirSync(orig, { recursive: true });
+if (action === 'apply') {
+  for (const [file, find, replace] of mutant.edits) {
+    const path = join(probeDir, file);
+    const backup = join(orig, file.replaceAll('/', '__'));
+    const text = readFileSync(path, 'utf8');
+    if (!existsSync(backup)) writeFileSync(backup, text);
+    const count = text.split(find).length - 1;
+    if (count !== 1) throw new Error(`${id}: anchor found ${count} times in ${file}`);
+    writeFileSync(path, text.replace(find, () => replace));
+    console.log(`${id} applied (${mutant.what}) in ${file}`);
+  }
+} else if (action === 'restore') {
+  let ok = true;
+  for (const [file] of mutant.edits) {
+    const path = join(probeDir, file);
+    const backup = join(orig, file.replaceAll('/', '__'));
+    writeFileSync(path, readFileSync(backup, 'utf8'));
+    const same = sha(readFileSync(path, 'utf8')) === sha(readFileSync(backup, 'utf8'));
+    ok &&= same;
+    console.log(`${id} restored ${file}: ${same ? 'byte-identical to the saved original' : 'MISMATCH'} sha256 ${sha(readFileSync(path, 'utf8'))}`);
+  }
+  if (!ok) process.exit(1);
+} else throw new Error('action must be apply or restore');

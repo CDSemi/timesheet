@@ -1,0 +1,18 @@
+import json, sys
+p = sys.argv[1]
+out = sys.argv[2]
+d = json.load(open(p, encoding='utf-8'))
+tasks = d.get('tasks') or []
+lines = []
+lines.append('top keys: ' + ','.join(d.keys()))
+for t in tasks:
+    tid = t.get('id', '')
+    if tid.startswith('WP5-UX5') or tid.startswith('WP5-UX4'):
+        lines.append('%s | %s | %s | req=%s | act=%s | dec=%s | rc=%s | dig=%s | agent=%s' % (
+            tid, t.get('kind'), t.get('status'), t.get('requested_model'), t.get('actual_model'),
+            t.get('decision'), (t.get('reviewed_commit') or t.get('freeze_commit') or t.get('commit_sha') or '')[:10],
+            str(t.get('reviewed_source_digest') or t.get('source_digest') or '')[:12], t.get('agent_id')))
+od = d.get('owner_decisions')
+if od is not None:
+    lines.append('owner_decisions type: %s len %d' % (type(od).__name__, len(od)))
+open(out, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines) + '\n')

@@ -1,0 +1,20 @@
+// Summarises the axe and walk observations of a probe run: scans per label prefix, violations, incomplete rule ids, walks.
+import { readFileSync } from 'node:fs';
+
+const lines = readFileSync(process.argv[2], 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l));
+const axe = lines.filter((l) => l.kind === 'axe');
+const violations = axe.filter((l) => l.violations.length > 0);
+const incomplete = {};
+for (const l of axe) for (const id of l.incomplete) incomplete[id] = (incomplete[id] ?? 0) + 1;
+const groups = {};
+for (const l of axe) {
+  const key = l.label.replace(/ \d+( .*)?$/, '').replace(/^\[(\w+) (\w+)\] /, '$1 $2: ');
+  groups[key] = (groups[key] ?? 0) + 1;
+}
+console.log(`axe scans: ${axe.length}, versions: ${[...new Set(axe.map((l) => l.version))].join(',')}, scans with violations: ${violations.length}`);
+for (const v of violations) console.log(`VIOLATION ${v.label}: ${JSON.stringify(v.violations)}`);
+console.log(`incomplete rule ids (scans): ${JSON.stringify(incomplete)}`);
+console.log(`scans per group: ${JSON.stringify(groups, null, 1)}`);
+console.log(`labels: ${axe.map((l) => l.label).join(' | ')}`);
+for (const l of lines.filter((x) => x.kind === 'walk')) console.log(`WALK ${l.label}: stops ${l.stops}, hidden ${l.hidden}, noRing ${l.noRing}, problems ${JSON.stringify(l.problems)}`);
+for (const l of lines.filter((x) => x.kind === 'sideways-review-signed-reloaded' || x.kind === 'axe-total')) console.log(JSON.stringify(l));

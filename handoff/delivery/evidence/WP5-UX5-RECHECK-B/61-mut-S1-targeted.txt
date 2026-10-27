@@ -1,0 +1,64 @@
+
+ RUN  v5.0.2 <task>/mut
+
+ ❯ tests/integration/sends.test.ts (18 tests | 1 failed) 11292ms
+   ❯ the send job builds the message from its own record (1)
+     × sends the envelope, subject, body and PDF variant of the send, not the snapshot or the current Settings 426ms
+ ❯ tests/integration/delivery.test.ts (27 tests | 1 failed) 18565ms
+   ❯ capture (default outbound mode) (4)
+     × waits for the PDF without creating an attempt 422ms
+
+ Test Files  2 failed | 2 passed (4)
+      Tests  2 failed | 62 passed (64)
+   Start at  09:54:20
+   Duration  19.61s (tests 92%, import 4%, transform 4%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/delivery.test.ts > capture (default outbound mode) > waits for the PDF without creating an attempt
+AssertionError: expected { claimed: 1, succeeded: +0, …(3) } to match object { claimed: 1, retried: 1 }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "claimed": 1,
+-   "retried": 1,
++   "retried": 0,
+  }
+
+ ❯ tests/integration/delivery.test.ts:381:21
+    379|     const { revisionId, sendJobId } = await finalized({ pdf: false });
+    380|     const summary = await runSend(captureOutbound());
+    381|     expect(summary).toMatchObject({ claimed: 1, retried: 1 });
+       |                     ^
+    382|     expect(attempts(revisionId)).toHaveLength(0);
+    383|     expect(job(sendJobId)).toMatchObject({ state: 'queued', attempts: …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/sends.test.ts > the send job builds the message from its own record > sends the envelope, subject, body and PDF variant of the send, not the snapshot or the current Settings
+AssertionError: expected { claimed: 1, succeeded: +0, …(3) } to match object { claimed: 1, retried: 1 }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "claimed": 1,
+-   "retried": 1,
++   "retried": 0,
+  }
+
+ ❯ tests/integration/sends.test.ts:526:29
+    524|     expect(response.status).toBe(201);
+    525|     // The send waits for its own variant: claimed before the PDF it r…
+    526|     expect(await runSend()).toMatchObject({ claimed: 1, retried: 1 });
+       |                             ^
+    527|     expect(count('SELECT count(*) FROM delivery_attempts')).toBe(0);
+    528|     await runPdf();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+

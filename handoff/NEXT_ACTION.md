@@ -96,8 +96,15 @@ Current route:
      logo test hit its 4-minute limit in one sweep run. Everything else passed.
    - WP5-UX5-DIAG4 found why four e2e tests are slow, and proved a tests-only patch.
    - WP5-UX5-FIX10 applied that patch; the logo test now takes about 31 s instead of 2 min.
-   - Running now: WP5-UX5-FIX10-FREEZE, one commit of FIX10 and the records, then a push.
-   - Then a scoped regate, fresh rechecks of areas A and B, the integration
+   - FIX10 is frozen in a5533b5 (digest 41477510) and pushed.
+   - The scoped regate WP5-UX5-REGATE6 passed on a5533b5.
+   - The area B recheck found one Low gap: after a restore, releasing a held send can still
+     deliver an older copy after the correction. The old area B findings are fixed.
+   - The area A recheck found one Low gap: the focus ring of a read-only week card is
+     partly hidden. The old area A findings are fixed.
+   - WP5-UX5-FIX11 fixed both gaps and added the missing tests; it is not committed yet.
+   - Running now: WP5-UX5-FIX11-FREEZE, one commit of FIX11 and the records, then a push.
+   - Then a regate, its freeze, a scoped regate, fresh rechecks, the integration
      audit, ACCEPT-DOCS and the WP5 re-accept.
    - Details: the checkpoint, section "REGATE3 failed; two diagnoses run (2026-10-26)" and
      the sections after it.

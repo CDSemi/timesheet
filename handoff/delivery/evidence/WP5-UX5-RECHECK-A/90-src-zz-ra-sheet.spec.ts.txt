@@ -1,0 +1,270 @@
+import { appendFileSync } from 'node:fs';
+import type { Locator, Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { addDays } from '../../src/domain/dates.ts';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-RECHECK-A probe (auditor, not part of the suite): the "Change days" name (F-UX5A-2, SC 2.5.3), the touch and pen behaviour of
+ * the outside press (F-UX5A-3) and a sideways-scroll sweep of the Timesheet. Synthetic data only; observations go to $RA_OUT.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const OUT = process.env.RA_OUT ?? '';
+function note(kind: string, data: unknown): void {
+  const line = JSON.stringify({ kind, ...(data as object) });
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+
+async function axName(page: Page, selector: string): Promise<{ role?: string; name?: string; ignored?: boolean }> {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    const { root } = (await cdp.send('DOM.getDocument', { depth: 0 })) as { root: { nodeId: number } };
+    const { nodeId } = (await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector })) as { nodeId: number };
+    if (nodeId === 0) return {};
+    const ax = (await cdp.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false })) as { nodes: Array<{ role?: { value: string }; name?: { value: string }; ignored?: boolean }> };
+    const node = ax.nodes[0];
+    return { role: node?.role?.value, name: node?.name?.value, ignored: node?.ignored };
+  } finally {
+    await cdp.detach();
+  }
+}
+
+test('F-UX5A-2: the name of "Change several days" follows the shown words at every window width 320-479 and at wider ones', async ({ page, signInThroughUi, isMobile }) => {
+  test.setTimeout(240_000);
+  test.skip(isMobile, 'desktop project sets the widths');
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const results: Record<string, number[]> = {};
+  const bad: unknown[] = [];
+  for (const width of [...Array.from({ length: 160 }, (_, i) => 320 + i), 480, 600, 768, 900, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await frames(page);
+    const shown = (await page.locator('button.change-days').innerText()).replace(/\s+/g, ' ').trim();
+    const ax = await axName(page, 'button.change-days');
+    const byRole = await page.getByRole('button', { name: shown, exact: true }).count();
+    const key = `shown="${shown}" name="${ax.name}" role=${ax.role}`;
+    (results[key] ??= []).push(width);
+    if (ax.name !== shown || byRole !== 1 || ax.role !== 'button') bad.push({ width, shown, ax, byRole });
+    if (width === 320) await page.locator('.tools').screenshot({ path: screenshotPath('ra-change-days-320-light-synthetic.png') });
+  }
+  // Pressed (batch mode on) at 320: the name is still the shown words and the state is aria-pressed.
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.locator('button.change-days').click();
+  await frames(page);
+  const pressed = { shown: (await page.locator('button.change-days').innerText()).trim(), ax: await axName(page, 'button.change-days'), pressed: await page.locator('button.change-days').getAttribute('aria-pressed') };
+  await page.locator('button.change-days').click();
+  note('name-sweep', { ranges: Object.fromEntries(Object.entries(results).map(([k, v]) => [k, `${Math.min(...v)}-${Math.max(...v)} (${v.length})`])), bad, pressed });
+  expect(bad).toEqual([]);
+});
+
+test('Timesheet: no page scrolls sideways at any width 320-1440 (worked hours off and on)', async ({ page, signInThroughUi, isMobile }) => {
+  test.setTimeout(240_000);
+  test.skip(isMobile, 'desktop project sets the widths');
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const details of [false, true]) {
+    if (details) await page.getByRole('switch', { name: 'Worked hours' }).check();
+    const bad: number[] = [];
+    for (let width = 320; width <= 1440; width += 1) {
+      await page.setViewportSize({ width, height: 800 });
+      const w = await page.evaluate<{ s: number; c: number }>('({ s: document.documentElement.scrollWidth, c: document.documentElement.clientWidth })');
+      if (w.s > w.c) bad.push(width);
+    }
+    note('sideways-timesheet', { details, bad });
+  }
+});
+
+test('docs/04:49: a late end "22:00-06:00+1" breaks onto two lines in a day cell at its least width, one line where the cell is wider', async ({ page, adminSeed, builtServer, isMobile }) => {
+  test.setTimeout(180_000);
+  test.skip(isMobile, 'desktop project sets the widths');
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Night', signature: 'none' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  const day = free.find((d) => addDays(d, 1) < person.todayLocal) ?? '';
+  expect(day).not.toBe('');
+  const at = (date: string, time: string) => ({ local: `${date}T${time}`, zone: 'America/Los_Angeles' });
+  await person.api.call('POST', `/api/days/${day}/sessions`, { start: at(day, '22:00'), end: at(addDays(day, 1), '06:00'), input_zone: 'America/Los_Angeles', breaks_confirmed: true, breaks: [] }, 201);
+  await page.goto('/#/timesheet');
+  await page.getByLabel('Email').fill(person.account.email);
+  await page.getByLabel('Password').fill(person.account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const rows: unknown[] = [];
+  for (const width of [1440, 1280, 1100, 930, 900, 768, 600, 480, 479, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await frames(page);
+    rows.push(
+      await page.evaluate(`(() => {
+        const host = [...document.querySelectorAll('[data-day="${day}"]')].find((e) => e.getClientRects().length > 0);
+        const range = host && host.querySelector('.cell-range');
+        if (!range) return { width: ${width}, missing: true };
+        const r = document.createRange();
+        r.selectNodeContents(range);
+        const tops = new Set([...r.getClientRects()].filter((q) => q.width > 0).map((q) => Math.round(q.top)));
+        const cell = range.closest('[data-cell="time"], td');
+        return { width: ${width}, text: range.textContent, lines: tops.size, cellW: Math.round(cell.getBoundingClientRect().width), form: host.closest('[data-ranges]') ? host.closest('[data-ranges]').getAttribute('data-ranges') : null };
+      })()`),
+    );
+  }
+  note('overnight-range', { day, rows });
+});
+
+test('docs/04:103 and :111: the paper corner and edges, and Save day fields (36px in the drawer form, 44px full width in the phone foot)', async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+  test.skip(isMobile, 'desktop project sets the widths');
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const out: unknown[] = [];
+  for (const width of [1440, 768, 600, 479, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await frames(page);
+    out.push(
+      await page.evaluate(`(() => { const p = document.querySelector('section.paper'); const b = p.getBoundingClientRect(); const s = getComputedStyle(p);
+        return { width: ${width}, radius: s.borderTopLeftRadius, left: Math.round(b.left * 10) / 10, right: Math.round((document.documentElement.clientWidth - b.right) * 10) / 10 }; })()`),
+    );
+  }
+  const save: unknown[] = [];
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await namedDayButton(page, date, 'Edit').click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    const button = editor.getByRole('button', { name: 'Save day fields' });
+    const box = await button.boundingBox();
+    const sheet = await editor.boundingBox();
+    save.push({ width, h: box?.height, w: box?.width, editorW: sheet?.width, inFoot: await button.evaluate((el) => el.closest('.editor-foot') !== null) });
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+  }
+  note('paper-and-save', { paper: out, save });
+});
+
+async function pageEdgeX(page: Page, editor: Locator): Promise<number> {
+  const side = await editor.getAttribute('data-side');
+  const width = await page.evaluate<number>('document.documentElement.clientWidth');
+  return side === 'left' ? width - 4 : 4;
+}
+
+test.describe('F-UX5A-3 on a 1024px touch screen', () => {
+  test.use({ hasTouch: true, viewport: { width: 1024, height: 768 } });
+
+  test('swipes in each direction, a long press, taps, and a control tapped right after a closing tap', async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+    test.setTimeout(180_000);
+    test.skip(isMobile, 'desktop project with touch');
+    const days = await employeeSeed.displayedPeriodFreeWorkdays();
+    const date = days[0] ?? '';
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    const dayBtn = namedDayButton(page, date, 'Edit');
+    const cdp = await page.context().newCDPSession(page);
+    const swipe = async (x: number, y: number, dx: number, dy: number, steps = 6) => {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+      for (let step = 1; step <= steps; step += 1) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + (dx * step) / steps, y: y + (dy * step) / steps }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
+    const events: string[] = [];
+    await page.exposeFunction('raLog', (text: string) => events.push(text));
+    await page.evaluate(`for (const t of ['pointerdown','pointerup','pointercancel','touchend','click']) document.addEventListener(t, (e) => window.raLog(t + ':' + (e.pointerType || '') + ':' + (e.defaultPrevented ? 'prevented' : '')), true)`);
+    const open = async () => {
+      if ((await editor.count()) === 0) await dayBtn.click();
+      await expect(editor).toBeVisible();
+      await expect(page.locator('[data-editor-layout]')).toHaveAttribute('data-editor-layout', 'floating');
+    };
+    const results: Record<string, unknown> = {};
+    await open();
+    const x = await pageEdgeX(page, editor);
+    const inward = (await editor.getAttribute('data-side')) === 'left' ? -1 : 1;
+    for (const [name, dx, dy] of [['up', 0, -180], ['down', 0, 180], ['sideways-inward', 200 * inward, 0], ['diagonal', 120 * inward, -120]] as const) {
+      await page.evaluate('window.scrollTo(0, 200)');
+      events.length = 0;
+      await swipe(x, 360, dx, dy);
+      await frames(page);
+      await page.waitForTimeout(300);
+      results[`swipe-${name}`] = { open: (await editor.count()) === 1, asked: (await prompt.count()) === 1, scrollY: await page.evaluate<number>('window.scrollY'), events: [...events] };
+      if ((await prompt.count()) === 1) await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+      await open();
+    }
+    // A long press without movement.
+    events.length = 0;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: 360 }] });
+    await page.waitForTimeout(900);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await frames(page);
+    results['long-press'] = { open: (await editor.count()) === 1, focusedDay: await dayBtn.evaluate((el) => el === document.activeElement), events: [...events] };
+    await open();
+    // A tap closes; then a tap on a control (the Worked hours switch) must still act (no left-over touch-end cancel).
+    events.length = 0;
+    await page.touchscreen.tap(x, 360);
+    await expect(editor).toHaveCount(0);
+    results['tap-close'] = { focusedDay: await dayBtn.evaluate((el) => el === document.activeElement), events: [...events] };
+    const sw = page.getByRole('switch', { name: 'Worked hours' });
+    const before = await sw.isChecked();
+    const swBox = await sw.boundingBox();
+    events.length = 0;
+    await page.touchscreen.tap((swBox?.x ?? 0) + (swBox?.width ?? 0) / 2, (swBox?.y ?? 0) + (swBox?.height ?? 0) / 2);
+    await frames(page);
+    results['control-after-close'] = { switchedOn: (await sw.isChecked()) !== before, events: [...events] };
+    if ((await sw.isChecked()) !== before) await sw.click();
+    // A swipe (cancelled pointer), then a tap: the tap still closes, and the focus is the day button.
+    await open();
+    await swipe(x, 360, 0, -150);
+    await frames(page);
+    events.length = 0;
+    await page.touchscreen.tap(x, 360);
+    await expect(editor).toHaveCount(0);
+    results['tap-after-swipe'] = { focusedDay: await dayBtn.evaluate((el) => el === document.activeElement), events: [...events] };
+    // With an edit: a tap asks, Keep editing returns focus to the field; a tap then Discard closes with focus on the day button.
+    await open();
+    await editor.getByLabel('Notes').fill('Synthetic unsaved note');
+    await page.touchscreen.tap(x, 360);
+    await expect(prompt).toBeVisible();
+    await prompt.getByRole('button', { name: 'Keep editing', exact: true }).tap();
+    await expect(prompt).toHaveCount(0);
+    results['keep-editing-tap'] = { notesFocused: await editor.getByLabel('Notes').evaluate((el) => el === document.activeElement), value: await editor.getByLabel('Notes').inputValue() };
+    await page.touchscreen.tap(x, 360);
+    await prompt.getByRole('button', { name: 'Discard', exact: true }).tap();
+    await expect(editor).toHaveCount(0);
+    results['discard-tap'] = { focusedDay: await dayBtn.evaluate((el) => el === document.activeElement) };
+    // A tap inside another day column switches the day (kept as a press on a day column).
+    await open();
+    const other = days[1] ?? '';
+    if (other !== '') {
+      const col = page.locator(`[data-day="${other}"]`).first();
+      const cb = await col.boundingBox();
+      await page.touchscreen.tap((cb?.x ?? 0) + (cb?.width ?? 0) / 2, (cb?.y ?? 0) + 8);
+      await frames(page);
+      results['tap-other-column'] = { open: (await editor.count()) === 1, day: await editor.getAttribute('data-day-editor'), other };
+    }
+    await cdp.detach();
+    note('touch-1024', results);
+  });
+});
+
+test('F-UX5A-3 pen and mouse at 1280: a pen press outside closes like a mouse press, with focus on the day button', async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+  test.skip(isMobile, 'desktop project');
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  const dayBtn = namedDayButton(page, date, 'Edit');
+  const cdp = await page.context().newCDPSession(page);
+  const results: Record<string, unknown> = {};
+  for (const pointerType of ['pen', 'mouse'] as const) {
+    await dayBtn.click();
+    await expect(editor).toBeVisible();
+    const x = await pageEdgeX(page, editor);
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y: 300, pointerType });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y: 300, button: 'left', buttons: 1, clickCount: 1, pointerType });
+    await frames(page);
+    const closedOnDown = (await editor.count()) === 0;
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y: 300, button: 'left', buttons: 0, clickCount: 1, pointerType });
+    await frames(page);
+    results[pointerType] = { closedOnDown, closed: (await editor.count()) === 0, focusedDay: await dayBtn.evaluate((el) => el === document.activeElement) };
+  }
+  await cdp.detach();
+  note('pen-mouse-1280', results);
+});

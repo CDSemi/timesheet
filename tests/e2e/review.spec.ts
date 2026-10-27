@@ -2,6 +2,7 @@ import { crc32, deflateSync } from 'node:zlib';
 import { type Locator, type Page } from '@playwright/test';
 import { addDays } from '../../src/domain/dates.ts';
 import { formatDuration, formatHoursMinutes } from '../../src/domain/format.ts';
+import { paintedSurface, type Rgba, sameColour, tokenColour } from './contrast.ts';
 import {
   type BuiltServer,
   type CreatedAccount,
@@ -496,6 +497,78 @@ test('the Preview week cards that scroll sideways are named keyboard stops that 
   }
 });
 
+/**
+ * The CSS pixels of the shared focus ring that are not painted, read from a screenshot (so a layer the day columns cover, or a ring
+ * that is invisible, is seen; computed styles cannot show that). The ring is 2px of `--accent` at the outer edge of the card's visible
+ * box: for each of the four edges, twelve points along it, on the first pixel row or column inside the box. Empty means all four edges
+ * are painted.
+ */
+async function missingRingPixels(page: Page, card: Locator, accent: Rgba): Promise<string[]> {
+  const box = await card.boundingBox();
+  if (box === null) return ['the card has no box'];
+  const [left, top, right, bottom] = [Math.ceil(box.x), Math.ceil(box.y), Math.floor(box.x + box.width), Math.floor(box.y + box.height)];
+  const viewport = page.viewportSize();
+  if (top < 0 || bottom > (viewport?.height ?? 0)) return [`the card (${top}-${bottom}) is not wholly in the viewport`];
+  const surface = await paintedSurface(page);
+  const missing: string[] = [];
+  for (let step = 1; step <= 12; step += 1) {
+    const along = (from: number, to: number) => Math.floor(from + 8 + ((to - from - 16) * step) / 13);
+    const points: Array<[string, number, number]> = [
+      ['top', along(left, right), top],
+      ['bottom', along(left, right), bottom - 1],
+      ['left', left, along(top, bottom)],
+      ['right', right - 1, along(top, bottom)],
+    ];
+    for (const [edge, x, y] of points) if (!sameColour(surface.at(x, y), accent, 3)) missing.push(`${edge} at ${x},${y}`);
+  }
+  return missing;
+}
+
+// WP5-UX5-FIX11 (F-UX5A2-1, mutant MA8; mutant MA9): the ring is painted on all four edges, in both themes, whatever the card's scroll
+// position, and taking focus does not move the card (the focus handler leaves the card itself alone).
+test('the Preview week card that scrolls sideways shows the shared focus ring on all four edges at 768px, in both themes and also scrolled, and focusing it does not scroll it', async ({
+  page,
+  adminSeed,
+  builtServer,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'The widths are set by the test (desktop project)');
+  test.setTimeout(90_000);
+  const reviewer = await newReviewer(adminSeed, builtServer);
+  await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  await page.setViewportSize({ width: 768, height: 1000 });
+  const card = page.locator('[data-paper="review"] .sheet-week').first();
+  await expect(card).toHaveAttribute('tabindex', '0');
+  const range = await card.evaluate((element) => element.scrollWidth - element.clientWidth);
+  expect(range, 'the card scrolls sideways at 768px').toBeGreaterThan(80);
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const accent = await tokenColour(page, '--accent');
+    for (const scrollLeft of [0, 60, range]) {
+      await card.evaluate((element, value) => {
+        element.blur();
+        element.scrollLeft = value;
+      }, scrollLeft);
+      // Put the whole card in view, below the sticky shell, then take focus the way the keyboard does.
+      await card.evaluate((element) => element.ownerDocument.defaultView?.scrollBy(0, element.getBoundingClientRect().top - 120));
+      const where = `${scheme}, scrolled ${scrollLeft}px`;
+      await expect.poll(() => card.evaluate((element) => element.scrollLeft), `${where}: the scroll position is set`).toBeCloseTo(scrollLeft, 0);
+      const before = await card.evaluate((element) => element.scrollLeft);
+      // Not focused: no ring on the top edge (the same pixels are accent only while the card has focus).
+      await expect.poll(async () => (await missingRingPixels(page, card, accent)).length, { message: `${where}: no ring while the card has no focus`, timeout: 5000 }).toBeGreaterThan(40);
+      await page.keyboard.press('Shift');
+      await card.focus();
+      await expect(card, `${where}: the card has focus`).toBeFocused();
+      await expect.poll(() => card.evaluate((element) => element.matches(':focus-visible')), `${where}: the focus is a keyboard focus`).toBe(true);
+      expect(await card.evaluate((element) => [element.scrollLeft, element.scrollTop]), `${where}: taking focus does not move the card`).toEqual([before, 0]);
+      await card.evaluate((element) => element.ownerDocument.defaultView?.scrollBy(0, element.getBoundingClientRect().top - 120));
+      await expect.poll(() => missingRingPixels(page, card, accent), { message: `${where}: the ring is painted on every edge`, timeout: 5000 }).toEqual([]);
+    }
+    await card.evaluate((element) => element.blur());
+  }
+});
+
 test('the Preview header: line 1 is hidden, never wrapped, when it does not fit; line 2 wraps by word; the fields sit 12px below', async ({ page, adminSeed, builtServer }) => {
   const reviewer = await newReviewer(adminSeed, builtServer);
   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
@@ -667,11 +740,19 @@ test('signature rows: the PDF block insets and proportions, lines aligned by row
   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
   await expect(page.locator('[data-review-day]')).toHaveCount(14);
   const lines: string[] = [`# ${testInfo.project.name}: signature rows`];
-  for (const width of [1440, 768, 390, 320]) {
+  let unsignedHeight: number | null = null;
+  for (const width of [1440, 768, 600, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     const footer = page.locator('.review-preview .sheet-footer');
     await footer.scrollIntoViewIfNeeded();
     const measured = await expectSignatureGeometry(footer, width, { button: page.locator('[data-sign-off]'), exactFractions: width >= 768 });
+    // WP5-UX5-FIX11 (mutant MA1): the unsigned lines are as high at every width. The empty content block of the Employee line takes no
+    // room (`.rsig-content:empty`); as a flex item with a gap it made both lines 5px higher below 768px (52 to 57px).
+    for (const name of ['employee', 'employee-date']) {
+      const height = (await rect(footer.locator(`[data-sig-line="${name}"]`))).height;
+      unsignedHeight ??= height;
+      expect(Math.abs(height - unsignedHeight), `the unsigned ${name} line is ${unsignedHeight}px high at ${width}px (measured ${height})`).toBeLessThanOrEqual(0.5);
+    }
     lines.push(`${width}px: ${JSON.stringify(Object.fromEntries(Object.entries(measured).map(([key, value]) => [key, Number(value.toFixed(4))])))}`);
     await expectNoSidewaysScroll(page);
     if (width < 768) expect((await rect(page.locator('[data-sign-off]'))).height, `Sign off is a 44px target at ${width}px`).toBeGreaterThanOrEqual(44);

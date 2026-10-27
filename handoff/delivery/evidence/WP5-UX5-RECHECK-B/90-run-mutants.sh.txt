@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Runs the mutants in the third clean export (<task>/mut), which holds no probe file, and checks it equals the target after.
+# Usage: run-mutants.sh <mutant ids...>
+source <task>/env.sh
+M=$T/mut
+start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+node "$T/mutants.mjs" "$(cygpath -w "$M")" "$(cygpath -w "$T/logs")" "$@" >> "$T/logs/mutants-stdout.txt" 2>&1
+echo "mutants $* exit=$? start=$start end=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/logs/probe-exits.txt"
+node "$T/exportdigest.mjs" "$M" "$T/lstree-target.txt" >> "$T/logs/digest-mut-after.txt" 2>&1

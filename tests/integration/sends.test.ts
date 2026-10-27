@@ -5,9 +5,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { createApp } from '../../src/server/app.ts';
 import { LoginRateLimiter } from '../../src/server/auth/rateLimit.ts';
 import { FileStore } from '../../src/server/files/fileStore.ts';
+import { claimNextJob } from '../../src/server/jobs/jobStore.ts';
 import { createPdfJobHandler } from '../../src/server/jobs/pdfJob.ts';
 import { runJobsOnce } from '../../src/server/jobs/runner.ts';
-import { createSendJobHandler } from '../../src/server/jobs/sendJob.ts';
+import { createSendJobHandler, JOB_SEND_EMAIL } from '../../src/server/jobs/sendJob.ts';
 import { captureFolder } from '../../src/server/mail/captureAdapter.ts';
 import { createOutboundAdapter, type OutboundAdapter, type SendOutcome } from '../../src/server/mail/outbound.ts';
 import { listOverdueRecords, runDeadlineScan, setAutomationActivation } from '../../src/server/services/automation.ts';
@@ -310,6 +311,36 @@ describe('a send that still waits for an older revision (R-UX5B-1)', () => {
     const noReason = await postSend(second, await sendBody(second));
     expect(noReason.status).toBe(422);
     expect(noReason.body.error.code).toBe('reason_required');
+    const sent = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+  });
+
+  // WP5-UX5-FIX11 (mutant G2 of RECHECK-B): a send job that a runner holds (leased, inside its PDF check or the network call) still waits.
+  it("blocks the correction's send while the older revision's job is leased by a runner, writing nothing, and lets it through once that job has run", async () => {
+    const first = await signed();
+    expect((await postSend(first, await sendBody(first))).status).toBe(201);
+    await addSession('2026-09-16', '09:00', '18:00', 'Synthetic forgotten day');
+    const review = await t.request('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: employee });
+    const correction = await t.request('POST', `/api/timesheets/${PAYROLL}/revisions`, {
+      cookie: employee,
+      body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false },
+    });
+    expect(correction.status, JSON.stringify(correction.body)).toBe(201);
+    const second = correction.body.revision.id as string;
+    // A runner claims revision 1's send job and has not finished it.
+    const claimed = claimNextJob(t.db, t.clock, { owner: 'runner-leased', kinds: [JOB_SEND_EMAIL], leaseSeconds: 600 });
+    expect(claimed?.revisionId).toBe(first);
+    expect(t.db.prepare('SELECT state FROM jobs WHERE id = ?').pluck().get(claimed?.id)).toBe('leased');
+    const before = writeState();
+    const blocked = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error.code).toBe('delivery_in_progress');
+    expect(writeState()).toEqual(before);
+    // The runner lets the lease run out and the job runs again: delivered, then the correction can be sent.
+    t.clock.advanceSeconds(601);
+    await runPdf();
+    await runSend();
+    expect(t.db.prepare('SELECT state FROM delivery_attempts WHERE revision_id = ?').pluck().all(first)).toEqual(['accepted']);
     const sent = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
     expect(sent.status, JSON.stringify(sent.body)).toBe(201);
   });

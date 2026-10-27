@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Scratch export of HEAD (target a5533b5) for the reproductions and mutants; npm ci in the scratch export only.
+source <task>/env.sh
+cd "$REPO" || exit 9
+GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$REPO" git archive --format=tar "$TARGET" > "$T/target.tar"
+echo "archive exit=$?" >> "$T/logs/setup.txt"
+mkdir -p "$H"
+tar -xf "$T/target.tar" -C "$H"
+echo "untar head-export exit=$?" >> "$T/logs/setup.txt"
+echo "node $(node --version) npm $(npm --version)" >> "$T/logs/setup.txt"
+cd "$H" && npm ci > "$T/logs/npm-ci-head.txt" 2>&1
+echo "npm ci head-export exit=$?" >> "$T/logs/setup.txt"
+cd "$H" && npm run build > "$T/logs/build-head.txt" 2>&1
+echo "build head-export exit=$?" >> "$T/logs/setup.txt"

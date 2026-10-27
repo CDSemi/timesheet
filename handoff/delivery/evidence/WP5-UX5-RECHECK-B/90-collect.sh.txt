@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Copies masked LF evidence into the repository's evidence folder for this task (and nothing else).
+source <task>/env.sh
+E="$REPO/handoff/delivery/evidence/WP5-UX5-RECHECK-B"
+mkdir -p "$E"
+L=$T/logs
+cat "$T/digest-before.txt" "$L/digest-export-before.txt" > "$L/00-digest-before.txt"
+w() { cygpath -w "$1"; }
+node "$T/mask.mjs" "$(w "$E")" \
+  "$(w "$T/evidence-readme.txt")=00-README.txt" \
+  "$(w "$L/00-digest-before.txt")=00-digest-before.txt" \
+  "$(w "$L/00-digest-after.txt")=00-digest-after.txt" \
+  "$(w "$L/board-authors.txt")=01-author-models.txt" \
+  "$(w "$L/change-scope.txt")=02-change-scope.txt" \
+  "$(w "$L/setup.txt")=10-setup.txt" \
+  "$(w "$L/chain1-exits.txt")=10-chain1-exits.txt" \
+  "$(w "$L/summary-c1.txt")=10-chain1-summary.txt" \
+  "$(w "$L/c1-integ.log")=10-chain1-integration.txt" \
+  "$(w "$L/c1-ac13.log")=10-chain1-ac13-tokyo.txt" \
+  "$(w "$L/e2e-exits.txt")=11-e2e-exits.txt" \
+  "$(w "$L/e2e-summary.txt")=11-e2e-summary.txt" \
+  "$(w "$L/e2e-run1.log")=11-e2e-run1.txt" \
+  "$(w "$L/docs-and-code-diff.txt")=20-docs-and-code-diff.txt" \
+  "$(w "$L/docs04-124.txt")=20-docs-04-124.txt" \
+  "$(w "$L/docs-greps.txt")=20-docs-greps.txt" \
+  "$(w "$L/ui-strings.txt")=20-docs-ui-strings.txt" \
+  "$(w "$L/board-h1-record.txt")=20-docs-board-h1.txt" \
+  "$(w "$L/parity.txt")=20-docs-parity.txt" \
+  "$(w "$L/pdf-probe-run1-result.txt")=30-pdf-probe-run1-result.txt" \
+  "$(w "$L/pdf-probe-run2-result.txt")=30-pdf-probe-run2-result.txt" \
+  "$(w "$L/pdf-probe-run3-result.txt")=30-pdf-probe-run3-result.txt" \
+  "$(w "$L/pdf-probe-run3.log")=30-pdf-probe-run3-vitest.txt" \
+  "$(w "$T/probe-files/zz-recheck-pdf.test.ts")=30-pdf-probe.ts.txt" \
+  "$(w "$L/sends-probe-run2-result.txt")=40-sends-probe-result.txt" \
+  "$(w "$L/sends-probe-run2.log")=40-sends-probe-vitest.txt" \
+  "$(w "$T/probe-files/zz-recheck-sends.test.ts")=40-sends-probe.ts.txt" \
+  "$(w "$L/http-target2.txt")=50-http-target.txt" \
+  "$(w "$L/http-target.txt")=50-http-target-run1-probe-defect.txt" \
+  "$(w "$L/http-G1.txt")=50-http-G1.txt" \
+  "$(w "$T/http-optionA.mjs")=50-http-optionA.mjs.txt" \
+  "$(w "$L/mutants-summary.txt")=60-mutants-summary.txt" \
+  "$(w "$T/mutants.mjs")=60-mutants.mjs.txt" \
+  "$(w "$L/mut-M11-targeted.log")=61-mut-M11-targeted.txt" \
+  "$(w "$L/mut-M11b-targeted.log")=61-mut-M11b-targeted.txt" \
+  "$(w "$L/mut-M12b-targeted.log")=61-mut-M12b-targeted.txt" \
+  "$(w "$L/mut-G1-targeted.log")=61-mut-G1-targeted.txt" \
+  "$(w "$L/mut-G3-targeted.log")=61-mut-G3-targeted.txt" \
+  "$(w "$L/mut-P4x-targeted.log")=61-mut-P4x-targeted.txt" \
+  "$(w "$L/mini-control.log")=61-mut-P4x-mini-probe-control-on-target.txt" \
+  "$(w "$T/probe-files/zz-recheck-pdf-mini.test.ts")=61-mut-P4x-mini-probe.ts.txt" \
+  "$(w "$L/mut-S1-targeted.log")=61-mut-S1-targeted.txt" \
+  "$(w "$L/mut-S1-e2e.log")=61-mut-S1-admin-status-e2e.txt" \
+  "$(w "$L/mut-A1-e2e.log")=61-mut-A1-admin-status-e2e.txt" \
+  "$(w "$L/mut-A2-e2e.log")=61-mut-A2-admin-status-e2e.txt" \
+  "$(w "$L/mut-G2-full.log")=61-mut-G2-full-suite.txt" \
+  "$(w "$L/mut-P4-full.log")=61-mut-P4-full-suite.txt" \
+  "$(w "$L/mut-G6-full.log")=61-mut-G6-full-suite.txt" \
+  "$(w "$L/digest-mut-before.txt")=62-mutant-export-digest-before.txt" \
+  "$(w "$L/digest-probe-after.txt")=62-probe-export-digest-after.txt" \
+  "$(w "$L/digest-export-after.txt")=62-check-export-digest-after.txt" \
+  "$(w "$L/digest-mut-after.txt")=62-mutant-export-digest-after.txt" \
+  "$(w "$L/drill-fetch-sites.txt")=70-drill-fetch-sites.txt" \
+  "$(w "$L/client-resend-jobs.txt")=80-client-resend-jobs.txt" \
+  "$(w "$L/send-before-pdf-coverage.txt")=81-send-before-pdf-coverage.txt" \
+  "$(w "$T/env.sh")=90-env.sh.txt" \
+  "$(w "$T/setup.sh")=90-setup.sh.txt" \
+  "$(w "$T/chain1.sh")=90-chain1.sh.txt" \
+  "$(w "$T/e2e.sh")=90-e2e.sh.txt" \
+  "$(w "$T/run-pdfprobe.sh")=90-run-pdfprobe.sh.txt" \
+  "$(w "$T/run-sendsprobe.sh")=90-run-sendsprobe.sh.txt" \
+  "$(w "$T/run-http.sh")=90-run-http.sh.txt" \
+  "$(w "$T/run-mutants.sh")=90-run-mutants.sh.txt" \
+  "$(w "$T/exportdigest.mjs")=90-exportdigest.mjs.txt" \
+  "$(w "$T/mask.mjs")=90-mask.mjs.txt" \
+  "$(w "$T/parity.mjs")=90-parity.mjs.txt" \
+  "$(w "$T/board-authors.mjs")=90-board-authors.mjs.txt" \
+  "$(w "$T/run-tz.mjs")=90-run-tz.mjs.txt" \
+  "$(w "$T/tzprobe.mjs")=90-tzprobe.mjs.txt" \
+  "$(w "$T/collect.sh")=90-collect.sh.txt" \
+  > "$L/collect.txt" 2>&1
+echo "collect exit=$?" >> "$L/collect.txt"

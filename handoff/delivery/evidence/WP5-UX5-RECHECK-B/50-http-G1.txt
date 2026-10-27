@@ -1,0 +1,49 @@
+node v24.21.0
+PASS 1 cli migrate
+PASS 1 cli seed
+PASS 1 servers A and B healthy on one database
+PASS 1 logins
+1 recipients of the other employee: 201; owner: kept
+today 2026-10-27, current payroll 2026-10-30, previous payroll 2026-10-16
+PASS 1 owner signs revision 1 | 201
+PASS 1 send of revision 1: 201 (its job waits, runner off) | 201
+PASS 1 correction revision 2 (send_email false) | 200 201
+FAIL 1 two processes, four rounds: every send or resend of revision 2 is 409 delivery_in_progress while revision 1 waits; nothing written | 201+409:delivery_in_progress unchanged false | 409:delivery_in_progress+409:delivery_in_progress unchanged true | 409:delivery_in_progress+409:delivery_in_progress unchanged true | 409:delivery_in_progress+409:delivery_in_progress unchanged true
+1 refusal message: "A delivery of this period is already in progress"
+PASS 1 another owner's send of the same payroll date is not blocked | 201 201
+PASS 1 the owner's send of another period is not blocked | 201 201
+1 run-jobs: 0:{"claimed":10,"succeeded":8,"retried":2,"intervention":0,"lost":0} ; 0:{"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0} ; 0:{"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+PASS 1 revision 1 delivered by the runner | accepted
+PASS 1 the blocked request retried with the same key after delivery: 201 (the refusal stored nothing) | 201
+PASS 1 then another copy without a reason: 409 (the new send waits) or 422 reason_required, never 201 | 409:delivery_in_progress
+1 run-jobs: 0:{"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0} ; 0:{"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0} ; 0:{"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+2 run-jobs before round 1: 0:{"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0} ; 0:{"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+2 run-jobs before round 2: 0:{"claimed":3,"succeeded":2,"retried":1,"intervention":0,"lost":0} ; 0:{"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+2 run-jobs before round 3: 0:{"claimed":3,"succeeded":2,"retried":1,"intervention":0,"lost":0} ; 0:{"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+2 run-jobs before round 4: 0:{"claimed":3,"succeeded":2,"retried":1,"intervention":0,"lost":0} ; 0:{"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+2 run-jobs before round 5: 0:{"claimed":3,"succeeded":3,"retried":0,"intervention":0,"lost":0} ; 0:{"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+2 run-jobs before round 6: 0:{"claimed":3,"succeeded":3,"retried":0,"intervention":0,"lost":0} ; 0:{"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+FAIL 2 six rounds on two processes: exactly one send is created each round (never the old and the new copy together) | r1: waiting-before 0; old 201; correction 201; new 201; sends +2 | r2: waiting-before 0; old 201; correction 201; new 201; sends +2 | r3: waiting-before 0; old 201; correction 201; new 201; sends +2 | r4: waiting-before 0; old 201; correction 201; new 201; sends +2 | r5: waiting-before 0; old 201; correction 201; new 201; sends +2 | r6: waiting-before 0; old 201; correction 201; new 201; sends +2
+PASS 3 cli migrate
+PASS 3 cli seed
+PASS 3 source server healthy
+3 recipients of the other employee: 201; owner: kept
+PASS 3 two owners sign and send revision 1 on the source; both jobs wait (runner off) | 201 201
+PASS 3 cli backup while the sends wait | {"outcome":"succeeded","backup":"timesheet-backup-20261027T164559Z-d04e6d2f","schema_version":15,"files":1,"signatures":1,"pdfs":0,"database_bytes":610304,"duration_ms":46,"status_recorded":true}
+PASS 3 cli restore into an isolated folder | {"outcome":"restored","manifest":{"verified":true,"schema_version":15,"files":1,"signatures":1,"pdfs":0,"database_bytes":610304},"schema":{"backup":15,"restored":15,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":2,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":3,"revisions":2,"ledger_entries":2,"attachments":1}}
+PASS 3 the restored copy holds both send jobs (intervention, reconcile_after_restore) | ["intervention/reconcile_after_restore","intervention/reconcile_after_restore"]
+PASS 3 outbound resume --confirm | {"outcome":"resumed","awaiting_decision":0,"queued_send_jobs":0,"held_send_jobs":2}
+PASS 3 restored server healthy
+FAIL 3a released before the correction: the correction send is 409 delivery_in_progress | release 0; 201; 201
+3b correction 201; its send while revision 1 is held: 201 reason null
+3b run-jobs: 0:{"claimed":9,"succeeded":8,"retried":1,"intervention":0,"lost":0} ; 0:{"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0} ; 0:{"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+3b outbound release preview: exit 2 {"outcome":"confirmation_required","held":1,"releasable":1,"blocked":{},"jobs":[{"id":"<id>","kind":"send_email","attempts":0,"created_at":"2026-10-27T16:45:59Z","blocker":null}]}
+3b release of the superseded revision 1's held job: exit 0 {"outcome":"released"}
+3b run-jobs: 0:{"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0} ; 0:{"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0} ; 0:{"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+3b the owner's delivery attempts in order: [{"revision_no":2,"state":"accepted","accepted_at":"2026-10-27T17:33:31Z","seq":2},{"revision_no":1,"state":"accepted","accepted_at":"2026-10-27T17:41:04Z","seq":4}]; current revision 2
+FAIL 3b (docs/05:72 "an older revision's copy cannot arrive after the correction's"): the superseded revision 1 is NOT delivered after the correction | revision 2 was accepted first, then the released revision 1 copy
+server 0 (port 49894) exited true; output head: Timesheet listening on http://127.0.0.1:49894 (schema v15) | Outbound delivery active | 
+server 1 (port 49895) exited true; output head: Timesheet listening on http://127.0.0.1:49895 (schema v15) | Outbound delivery active | 
+server 2 (port 49896) exited true; output head: Timesheet listening on http://127.0.0.1:49896 (schema v15) | Outbound delivery active | 
+server 3 (port 49897) exited true; output head: Timesheet listening on http://127.0.0.1:49897 (schema v15) | Outbound delivery active | 
+failures: 4

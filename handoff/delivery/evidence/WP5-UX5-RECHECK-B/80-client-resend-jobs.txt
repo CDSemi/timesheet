@@ -1,0 +1,42 @@
+11:import { JobError } from '../jobs/jobStore.ts';
+12:import { loadRevisionRow, renderRevisionPdf } from '../jobs/pdfJob.ts';
+223:  // The finalized revision of a period with its sign-off, ledger lines (pending ones included, F-2) and jobs.
+134:  jobs: JobRecord[];
+1136:    jobs: view === null ? [] : view.jobs.map((job) => ({ id: job.id, kind: job.kind, state: job.state })),
+247:function loadFinalization(db: Db, userId: string, timesheet: TimesheetRow): { view: FinalizationView; payload: ReviewSnapshot } | null {
+248-  if (timesheet.finalized_revision_no === null) return null;
+249-  const row = db
+250-    .prepare(
+251-      `SELECT id, revision_no, revision_kind, origin, review_state, supersedes_revision_id, correction_reason,
+252-              payload_json, payload_sha256, reviewed_sha256, timesheet_version, send_requested, created_at
+253-         FROM timesheet_revisions WHERE user_id = ? AND timesheet_id = ? AND revision_no = ?`,
+254-    )
+255-    .get(userId, timesheet.id, timesheet.finalized_revision_no) as RevisionRow | undefined;
+256-  if (row === undefined) return null;
+257-  const signoff = db
+258-    .prepare('SELECT signer_name, signed_at, reviewed_sha256, signature_attachment_id FROM signoffs WHERE user_id = ? AND revision_id = ?')
+259-    .get(userId, row.id) as SignoffRow | undefined;
+260-  const jobs = db
+261-    .prepare('SELECT id, kind, state FROM jobs WHERE user_id = ? AND revision_id = ? ORDER BY kind, created_at, rowid')
+262-    .all(userId, row.id) as JobRecord[];
+263-  return {
+264-    view: {
+265-      revision: toRevision(row),
+266-      signoff:
+267-        signoff === undefined
+268-          ? null
+269-          : {
+270-              signerName: signoff.signer_name,
+271-              signedAt: signoff.signed_at,
+272-              reviewedSha256: signoff.reviewed_sha256,
+273-              signatureAttachmentId: signoff.signature_attachment_id,
+274-            },
+275-      lines: listRevisionLines(db, userId, row.id),
+276-      jobs,
+277-    },
+src/client/components/deliveryModel.ts:199:      pdf: pdfStateOf(finalization.jobs),
+src/client/components/deliveryModel.ts:200:      jobs: finalization.jobs,
+src/client/components/deliveryModel.ts:418:    delivery: deliveryStatus(revision, finalization.jobs, attempts),
+src/client/components/deliveryModel.ts:419:    pdf: submitted ? pdfStateOf(finalization.jobs) : null,
+src/client/components/reviewModel.ts:215:  if (finalization.jobs !== undefined && !finalization.jobs.some((job) => job.kind === 'send_email')) return { key: 'signed', text: 'Signed', tone: 'ok' };
+src/client/components/reviewModel.ts:245:  return earlierSend || attempts.length > 0 || finalization.jobs.some((job) => job.kind === 'send_email');

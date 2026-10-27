@@ -1,0 +1,23 @@
+// Durations of the logo.spec.ts sweep tests and the admin-status.spec.ts tests per Playwright list log. Usage: node durations.mjs <log> ...
+import { readFileSync } from 'node:fs';
+
+const toSeconds = (text) => {
+  const m = /^([\d.]+)(ms|s|m)$/.exec(text);
+  if (!m) return NaN;
+  return m[2] === 'ms' ? Number(m[1]) / 1000 : m[2] === 'm' ? Number(m[1]) * 60 : Number(m[1]);
+};
+for (const file of process.argv.slice(2)) {
+  console.log(`== ${file.split('/').pop()}`);
+  let longest = 0;
+  for (const line of readFileSync(file, 'utf8').replace(/\r/g, '').split('\n')) {
+    const m = /^\s+(ok|x|-)\s+\d+ \[(desktop|mobile)\] › tests.e2e.(logo|admin-status)\.spec\.ts:(\d+):\d+ › (.*) \(([\d.]+(?:ms|s|m))\)\s*$/.exec(line);
+    if (!m) continue;
+    const seconds = toSeconds(m[6]);
+    const sweep = m[3] === 'logo' && /wordmark (shows|never)|shared view|switcher/.test(m[5]);
+    if (m[3] === 'admin-status' || sweep) {
+      console.log(`${m[1]} ${m[2]} ${m[3]}:${m[4]} ${m[6]}  ${m[5].slice(0, 70)}`);
+      if (m[3] === 'logo' && sweep) longest = Math.max(longest, seconds);
+    }
+  }
+  console.log(`longest logo sweep test ${longest}s${longest > 120 ? '  FLAG over 120 s' : ''}`);
+}

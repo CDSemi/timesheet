@@ -1,0 +1,46 @@
+
+ RUN  v5.0.2 <task>/mut
+
+ ❯ tests/integration/restore.test.ts (32 tests | 7 skipped) 19243ms
+
+ Test Files  1 failed | 5 passed (6)
+      Tests  158 passed | 7 skipped (165)
+   Start at  09:47:29
+   Duration  20.60s (tests 94%, import 3%, transform 3%)
+
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11)
+AssertionError: {"error":{"code":"delivery_in_progress","message":"A delivery of this period is already in progress"}}: expected 409 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 409
+
+ ❯ signOff tests/integration/restore.test.ts:151:50
+    149|   // WP5-UX5-T01b: signing sends nothing; the source owner sends each …
+    150|   const sent = await sendWithDefaults(t, cookie, revisionId);
+    151|   expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+       |                                                  ^
+    152|   return revisionId;
+    153| }
+ ❯ buildSource tests/integration/restore.test.ts:190:21
+ ❯ tests/integration/restore.test.ts:243:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11)
+TypeError: Cannot read properties of undefined (reading 'close')
+ ❯ tests/integration/restore.test.ts:252:14
+    250|
+    251|   afterAll(() => {
+    252|     restored.close();
+       |              ^
+    253|     source.t.close();
+    254|     rmSync(dirname(target), { recursive: true, force: true });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+

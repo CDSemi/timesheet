@@ -1,0 +1,35 @@
+
+ RUN  v5.0.2 <task>/head-export
+
+ ❯ tests/integration/sends.test.ts (19 tests | 1 failed) 6863ms
+   ❯ a send that still waits for an older revision (R-UX5B-1) (2)
+     × blocks the correction's send while the older revision's job is leased by a runner, writing nothing, and lets it through once that job has run 231ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/sends.test.ts > a send that still waits for an older revision (R-UX5B-1) > blocks the correction's send while the older revision's job is leased by a runner, writing nothing, and lets it through once that job has run
+AssertionError: expected 201 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 201
+
+ ❯ tests/integration/sends.test.ts:336:28
+    334|     const before = writeState();
+    335|     const blocked = await postSend(second, await sendBody(second, { re…
+    336|     expect(blocked.status).toBe(409);
+       |                            ^
+    337|     expect(blocked.body.error.code).toBe('delivery_in_progress');
+    338|     expect(writeState()).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 18 passed (19)
+   Start at  10:44:19
+   Duration  7.85s (tests 88%, transform 7%, import 5%)
+
+exit=1

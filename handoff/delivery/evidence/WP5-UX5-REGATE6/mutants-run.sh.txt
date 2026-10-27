@@ -1,0 +1,34 @@
+# Runs the ten DIAG4 mutants (FIX10 definitions) and two FIX8 mutants one after another in export-probe.
+. <task>/env.sh
+M="bash $T/mut6.sh"
+CSS=src/client/styles.css
+LOGO=tests/e2e/logo.spec.ts
+SHARED='(Shared with me|in a shared view).*\(light\)'
+OWN='wordmark shows whenever it fits.*\(light\)'
+TS="tests/e2e/timesheet.spec.ts"
+
+$M L1 $CSS '@container shell-bar (width >= 1248px) {' '@container shell-bar (width >= 1000px) {' client -g "$SHARED" tests/e2e/logo.spec.ts --project=desktop --workers=2 --reporter=list
+$M L2 $CSS '@container shell-bar (width >= calc(219.4px + 10.8rem)) {' '@container shell-bar (width >= calc(150px + 10.8rem)) {' client -g "$OWN" tests/e2e/logo.spec.ts --project=desktop --workers=1 --reporter=list
+$M H1 $LOGO $'    await page.setViewportSize({ width, height: 800 });\n    rows.push' $'    if (from === 320) await page.setViewportSize({ width, height: 800 });\n    rows.push' none -g "$OWN" tests/e2e/logo.spec.ts --project=desktop --workers=1 --reporter=list
+$M H2 $LOGO 'storageState: await page.context().storageState(),' 'storageState: { cookies: [], origins: [] },' none -g "$OWN" tests/e2e/logo.spec.ts --project=desktop --workers=1 --reporter=list
+$M A1 src/client/components/OperationsStatus.tsx "accepted: 'Delivered'," "accepted: 'Sent'," client -g "pipeline states" tests/e2e/admin-status.spec.ts --project=desktop --workers=1 --reporter=list
+$M A2 tests/e2e/admin-status.spec.ts $'    )\n    .toBe(\'ready\');' $'    )\n    .toBe(\'failed\');' none -g "pipeline states" tests/e2e/admin-status.spec.ts --project=desktop --workers=1 --reporter=list
+$M T1 $CSS 'box-shadow: var(--marker-bar), var(--marker-frame);' 'box-shadow: var(--marker-bar);' client -g "inset frame and the Day-cell fill" $TS --project=desktop --workers=1 --reporter=list
+$M T2 $CSS $'.sheet-day.editing > .d-day {\n  background: var(--day-editing-head);' $'.sheet-day.editing > .d-day {\n  background: transparent;' client -g "inset frame and the Day-cell fill" $TS --project=desktop --workers=1 --reporter=list
+$M T3 $CSS '--marker-frame: inset 0 0 0 var(--hairline) var(--accent);' '--marker-frame: inset 0 0 0 5px var(--accent);' client -g "inset frame and the Day-cell fill" $TS --project=desktop --workers=1 --reporter=list
+$M D1 $CSS $'.muted {\n  color: var(--muted);' $'.muted {\n  color: #d2d6dc;' client -g "U4-12, U4-13 at 1440" tests/e2e/day-editor.spec.ts --project=desktop --workers=1 --reporter=list
+
+# FIX8 mutants that live in the changed specs (REGATE5 apply.mjs definitions)
+P=$T/export-probe
+F8() {
+  id=$1; spec=$2; pat=$3
+  node.exe $TW\\probes\\apply.mjs "$TW\\export-probe" $id apply >> $T/out/81-fix8-apply.txt 2>&1 || { echo "$id apply FAILED" >> $T/out/81-mut-counts.txt; return; }
+  ( cd $P && npm run build:client > $T/out/80-$id-build.txt 2>&1; echo "$id mutated client build exit $?" >> $T/out/80-mut-exits.txt )
+  SHIFT_EXPORT=$P bash $T/run-shift.sh mut-$id real $spec --grep "$pat" --project=desktop --workers=2 --reporter=list > $T/logs/mut-$id.txt 2>&1
+  node $T/counts.mjs $T/logs/mut-$id.txt | sed "s/^/$id: /" >> $T/out/81-mut-counts.txt 2>&1
+  node.exe $TW\\probes\\apply.mjs "$TW\\export-probe" $id restore >> $T/out/81-fix8-apply.txt 2>&1
+  ( cd $P && npm run build:client > $T/out/82-$id-restore-build.txt 2>&1; echo "$id restore client build exit $?" >> $T/out/80-mut-exits.txt )
+}
+F8 TOUCH tests/e2e/day-editor.spec.ts "a swipe that starts outside a day column"
+F8 M2_LADDER tests/e2e/timesheet.spec.ts "the last two forms of a same-month range"
+echo mutants-done > $T/out/mutants.done

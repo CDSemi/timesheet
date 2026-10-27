@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Runs the named integration test files in the scratch export. Usage: mut-int.sh <label> <file>...
+source <task>/env.sh
+label="$1"
+shift
+mkdir -p "$T/tmp-$label"
+export TEMP="$(cygpath -w "$T/tmp-$label")" TMP="$(cygpath -w "$T/tmp-$label")" TMPDIR="$T/tmp-$label"
+cd "$H" || exit 9
+npx vitest run "$@" > "$T/logs/mut-$label.txt" 2>&1
+echo "exit=$?" >> "$T/logs/mut-$label.txt"

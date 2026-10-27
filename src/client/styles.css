@@ -2906,6 +2906,26 @@ textarea {
   box-shadow: var(--elev-2);
 }
 
+/*
+ * The read-only Review wraps each week card (WP5-UX5-FIX11). The wrapper does not scroll; its layer is the card's focus ring (see the
+ * scrolling-card rules below), painted above the positioned day columns and empty (no shadow, no outline) until the card has
+ * keyboard focus. It takes no pointer event.
+ */
+.sheet-week-ring {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+}
+
+.sheet-week-ring::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--radius-sheet);
+  pointer-events: none;
+}
+
 .sheet-footer {
   display: flex;
   flex-direction: column;
@@ -2959,11 +2979,21 @@ textarea {
     scroll-padding: var(--focus-clearance);
   }
 
-  /* A read-only review card that scrolls is a keyboard stop (WP5-UX5-FIX9): an inset outline the WEEK bar and cells cannot cover. */
-  .sheet-week:focus-visible {
-    outline: var(--rule) solid var(--accent);
+  /*
+   * A read-only review card that scrolls is a keyboard stop (WP5-UX5-FIX9). Its ring is the shared inset focus ring on all four
+   * edges of its visible box (WP5-UX5-FIX11), drawn by the non-scrolling wrapper's layer (`.sheet-week-ring::after`) above the
+   * positioned day columns, which would cover an outline or shadow of the card itself, and it does not move when the card scrolls.
+   * The transparent outline keeps the ring visible in forced-colours mode. The card draws nothing of its own.
+   */
+  .sheet-week-ring > .sheet-week:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
+  .sheet-week-ring:has(> .sheet-week:focus-visible)::after {
+    box-shadow: var(--focus-ring-inset);
+    outline: var(--rule) solid transparent;
     outline-offset: calc(-1 * var(--rule));
-    box-shadow: var(--elev-2);
   }
 
   /* The WEEK bar is as wide as the grid under it, also after a sideways scroll (round 5, U5-21): without a minimum it ended where the card's window ended. */

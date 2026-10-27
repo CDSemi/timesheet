@@ -1,0 +1,19 @@
+. <task>/env.sh
+mkdir -p $T/out $T/tmp $T/data $T/export
+cd $REPO
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$REPO"
+date -u +%Y-%m-%dT%H:%M:%SZ > $T/out/00-start-time.txt
+git rev-parse HEAD > $T/out/00-head.txt
+git rev-parse origin/main >> $T/out/00-head.txt 2>&1
+git branch --show-current >> $T/out/00-head.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-before.txt 2>&1
+echo "nonhandoff status lines: $(wc -l < $T/out/00-nonhandoff-status-before.txt)" >> $T/out/00-head.txt
+git diff --stat $BASE..$TARGET -- . ':!handoff' > $T/out/20-diffstat-base-target.txt 2>&1
+git diff --name-status $BASE..$TARGET -- . ':!handoff' > $T/out/20-namestatus-base-target.txt 2>&1
+git diff $BASE..$TARGET -- . ':!handoff' > $T/out/20-diff-base-target.txt 2>&1
+git diff $PREV..$TARGET -- . ':!handoff' > $T/out/20-diff-fix10.txt 2>&1
+git diff $BASE..$PREV -- . ':!handoff' > $T/out/20-diff-fix7-9.txt 2>&1
+git log --format='%H %s' $BASE..$TARGET > $T/out/20-log.txt 2>&1
+git archive $TARGET | tar -x -C $T/export
+ls $T/export > $T/out/00-export-ls.txt
+echo setup-done

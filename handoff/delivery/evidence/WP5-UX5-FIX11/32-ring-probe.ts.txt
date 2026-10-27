@@ -1,0 +1,72 @@
+import { appendFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { paintedSurface, sameColour, tokenColour } from './contrast.ts';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-FIX11 probe (the worker's own): where the focus ring of a read-only Review week card is painted, edge by edge, every pixel of
+ * each edge's 2px band, at 900 and 768px, light and dark, scrolled to the start, the middle and the end; reached with the real Tab key.
+ * Synthetic data only.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUT = process.env.FIX11_OUT ?? '';
+function note(kind: string, data: unknown): void {
+  const line = JSON.stringify({ kind, ...(data as object) });
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`FIX11 ring coverage by edge - ${scheme}`, async ({ page, adminSeed, builtServer, isMobile }) => {
+    test.setTimeout(180_000);
+    test.skip(isMobile, 'desktop project sets the widths');
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Ring', signature: 'none' });
+    await page.goto(`/#/review/${person.payrollDate}`);
+    await page.getByLabel('Email').fill(person.account.email);
+    await page.getByLabel('Password').fill(person.account.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.locator('[data-review-day]')).toHaveCount(14);
+    const card = page.locator('.review-preview .sheet-week').first();
+    for (const width of [900, 768]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await frames(page);
+      await page.locator('.review-preview .preview-bar h2').click();
+      for (let i = 0; i < 40 && !(await card.evaluate((el) => el === document.activeElement)); i += 1) await page.keyboard.press('Tab');
+      await expect(card).toBeFocused();
+      await card.scrollIntoViewIfNeeded();
+      const accent = await tokenColour(page, '--accent');
+      const max = await card.evaluate((el) => el.scrollWidth - el.clientWidth);
+      for (const [label, left] of [['start', 0], ['middle', Math.round(max / 2)], ['end', max]] as const) {
+        await card.evaluate((el, x) => { el.scrollLeft = x; }, left);
+        await frames(page);
+        const box = await card.evaluate((el) => { const b = el.getBoundingClientRect(); return { l: Math.ceil(b.left), t: Math.ceil(b.top), r: Math.floor(b.right) - 1, b: Math.floor(b.bottom) - 1 }; });
+        const surface = await paintedSurface(page);
+        const edge = (points: Array<[number, number]>) => {
+          const hits = points.filter(([x, y]) => sameColour(surface.at(x, y), accent, 3)).length;
+          return Number((hits / points.length).toFixed(3));
+        };
+        const xs = Array.from({ length: box.r - box.l - 3 }, (_, i) => box.l + 2 + i);
+        const ys = Array.from({ length: box.b - box.t - 3 }, (_, i) => box.t + 2 + i);
+        const coverage = {
+          top: edge(xs.map((x) => [x, box.t])),
+          bottom: edge(xs.map((x) => [x, box.b])),
+          left: edge(ys.map((y) => [box.l, y])),
+          right: edge(ys.map((y) => [box.r, y])),
+          // The second row of the 2px band, inside the first.
+          top2: edge(xs.map((x) => [x, box.t + 1])),
+          bottom2: edge(xs.map((x) => [x, box.b - 1])),
+          left2: edge(ys.map((y) => [box.l + 1, y])),
+          right2: edge(ys.map((y) => [box.r - 1, y])),
+        };
+        note('ring-coverage', { scheme, width, scroll: label, scrollLeft: left, coverage });
+        if (width === 768 && label === 'middle') await page.screenshot({ path: screenshotPath(`fix11-ring-768-${scheme}-synthetic.png`), clip: { x: 0, y: Math.max(0, box.t - 12), width, height: Math.min(1000 - Math.max(0, box.t - 12), box.b - box.t + 24) } });
+      }
+      // Tab away: the ring goes with the focus.
+      await page.keyboard.press('Tab');
+      await frames(page);
+      const box = await card.evaluate((el) => { const b = el.getBoundingClientRect(); return { l: Math.ceil(b.left), t: Math.ceil(b.top) }; });
+      note('ring-after-blur', { scheme, width, focused: await card.evaluate((el) => el === document.activeElement), topMiddleIsAccent: sameColour((await paintedSurface(page)).at(box.l + 200, box.t), accent, 3) });
+    }
+  });
+}

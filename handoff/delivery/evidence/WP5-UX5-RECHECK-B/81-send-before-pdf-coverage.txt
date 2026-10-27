@@ -1,0 +1,45 @@
+tests/integration/ac13-two-week.test.ts:125:/** One production runner pass per step; each step moves the injected clock on, so a retried job is due again. */
+tests/integration/deadline-race.test.ts:183:  // Jobs enqueued in the same second tie-break by id, so a send claimed before its PDF is retried one minute
+tests/integration/deadline.test.ts:201: * so a send claimed before its PDF is retried one minute later: each pass therefore advances the clock.
+tests/integration/deadline.test.ts:987:    // second tie-break by id, so a send claimed before its PDF is retried by the store one minute later).
+tests/integration/delivery-crash.test.ts:228:    expect(await run('runner-restart')).toEqual({ claimed: 0, succeeded: 0, retried: 0, intervention: 0, lost: 0 });
+tests/integration/delivery-crash.test.ts:265:    expect(JSON.parse(restarted.stdout)).toEqual({ claimed: 1, succeeded: 1, retried: 0, intervention: 0, lost: 0 });
+tests/integration/delivery.test.ts:381:    expect(summary).toMatchObject({ claimed: 1, retried: 1 });
+tests/integration/delivery.test.ts:462:    expect(await runSend(createOutboundAdapter(config.outbound, { dataDir }))).toMatchObject({ claimed: 1, retried: 1 });
+tests/integration/delivery.test.ts:471:  // (`smtp_unavailable`, retried, five attempts in all), never the permanent `smtp_tls_failed`, and no transaction starts.
+tests/integration/delivery.test.ts:477:      expect(await runSend(createOutboundAdapter(config.outbound, { dataDir }))).toMatchObject({ claimed: 1, retried: 1 });
+tests/integration/delivery.test.ts:489:  it('pre-transfer failure (connection lost before DATA, or refused): temporary, retried, then accepted with a new attempt', async () => {
+tests/integration/delivery.test.ts:492:    expect(await runSend(smtpOutbound(target))).toMatchObject({ claimed: 1, retried: 1 });
+tests/integration/delivery.test.ts:503:    expect(await runSend(outbound)).toMatchObject({ claimed: 1, retried: 1 });
+tests/integration/delivery.test.ts:525:    it(`explicit temporary rejection (${behaviour}): failed_temporary and retried through the job store`, async () => {
+tests/integration/delivery.test.ts:528:      expect(await runSend(smtpOutbound(target))).toMatchObject({ claimed: 1, retried: 1 });
+tests/integration/delivery.test.ts:542:    it(`explicit permanent rejection (${behaviour}): failed_permanent, intervention, never retried`, async () => {
+tests/integration/delivery.test.ts:556:  it('uncertain (connection lost after DATA): never retried; one explicit resend creates one new attempt', async () => {
+tests/integration/delivery.test.ts:720:    expect(await runSend(smtpOutbound(target), { hooks: crash })).toMatchObject({ claimed: 1, retried: 1 });
+tests/integration/delivery.test.ts:733:      expect(await runSend(flaky)).toMatchObject({ claimed: 1, retried: 1 });
+tests/integration/delivery.test.ts:787:    expect(await runSend(captureOutbound(), { hooks: crash, owner: 'runner-dead' })).toMatchObject({ claimed: 1, retried: 1 });
+tests/integration/job-retention.test.ts:174:    expect(summary).toMatchObject({ succeeded: 1, intervention: 0, retried: 0 });
+tests/integration/jobs-restart.test.ts:232:      expect(JSON.parse(resumed.stdout)).toEqual({ claimed: 1, succeeded: 1, retried: 0, intervention: 0, lost: 0 });
+tests/integration/jobs-restart.test.ts:291:    expect((summary.retried ?? 0) + (summary.intervention ?? 0)).toBe(0);
+tests/integration/jobs-sweep.test.ts:89:    expect(summary).toMatchObject({ claimed: 1, succeeded: 1, intervention: 0, retried: 0 });
+tests/integration/jobs.test.ts:243:    expect(summary).toEqual({ claimed: 0, succeeded: 0, retried: 0, intervention: 0, lost: 0 });
+tests/integration/jobs.test.ts:259:    expect(summary).toEqual({ claimed: 3, succeeded: 1, retried: 1, intervention: 1, lost: 0 });
+tests/integration/jobs.test.ts:281:    expect(summary).toEqual({ claimed: 1, succeeded: 1, retried: 0, intervention: 0, lost: 0 });
+tests/integration/jobs.test.ts:334:    expect(summary).toEqual({ claimed: 1, succeeded: 0, retried: 0, intervention: 1, lost: 0 });
+tests/integration/jobs.test.ts:347:  it('a render failure is retried later with the same snapshot and posts nothing', async () => {
+tests/integration/jobs.test.ts:359:    expect(first).toEqual({ claimed: 1, succeeded: 0, retried: 1, intervention: 0, lost: 0 });
+tests/integration/jobs.test.ts:367:    expect(second).toEqual({ claimed: 1, succeeded: 1, retried: 0, intervention: 0, lost: 0 });
+tests/integration/ledger.test.ts:197:  it('a retried correction returns the existing entry; a later correction uses the corrected value as old', () => {
+tests/integration/ledger.test.ts:480:  it('a pending increase retried after more credit arrives posts once', () => {
+tests/integration/operations-status.test.ts:115:  expect(pdf).toMatchObject({ intervention: 0, retried: 0 });
+tests/integration/ot-leave.test.ts:160:  it('a retried reservation with the same key returns the existing request and appends nothing', () => {
+tests/integration/sends.test.ts:526:    expect(await runSend()).toMatchObject({ claimed: 1, retried: 1 });
+tests/integration/delivery.test.ts:379:    const { revisionId, sendJobId } = await finalized({ pdf: false });
+tests/integration/pdf-download.test.ts:195:    const revisionId = await finalized({ pdf: false });
+tests/e2e/admin-status.spec.ts:95:async function sendSigned(api: SeedClient, revisionId: string): Promise<void> {
+tests/e2e/admin-status.spec.ts:98:    `/api/revisions/${revisionId}/send-draft`,
+tests/e2e/admin-status.spec.ts:160:  await sendSigned(api, signedOff.revision.id);
+tests/e2e/admin-status.spec.ts:302:  await sendSigned(api, signed.revision.id);
+tests/e2e/history-settings.spec.ts:147:    `/api/revisions/${done.revision.id}/send-draft`,
+tests/e2e/sharing.spec.ts:376:  expect(await statusInPage(page, 'GET', `/api/shared/${owner.account.id}/revisions/${someRevision}/send-draft`)).toBe(404);
+tests/e2e/today.spec.ts:1181:    const draft = await me.api.call<{ to: string[]; cc: string[]; subject: string; body_text: string; time_rows: boolean; ot_rows: boolean }>('GET', `/api/revisions/${signed.revision.id}/send-draft`);

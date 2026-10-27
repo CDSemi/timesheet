@@ -1,0 +1,8 @@
+Rule slips by the worker (WP5-UX5-FIX11), recorded as they happened:
+1. Two read-only inspection commands piped into head (a grep -o of docs/04 and a grep of the G2 mutant log, and an ls of a
+   folder): the output was only read, nothing was written or changed.
+2. One heredoc (cat > run-http.sh <<'EOF') created a task-folder script; the file was then overwritten with the Write tool and
+   the stored copy comes from the Write tool.
+3. The tar of the clean export printed "--exclude has no effect": the export therefore also holds handoff/ (a copy of the
+   working tree's handoff files); the digest excludes handoff/ and the byte check covered every non-handoff file.
+4. Probe defect: the first axe probe run failed on a variable typo (tags for TAGS); fixed and rerun (both logs kept).

@@ -1,0 +1,310 @@
+import { appendFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { paintedSurface, contrast } from './contrast.ts';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-RECHECK-A probe (auditor, not part of the suite): the signed and reloaded Review (F-UX5A-1) and the read-only week cards
+ * that scroll sideways (FIX9). Synthetic data only. Every observation is appended to $RA_OUT as one JSON line.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const OUT = process.env.RA_OUT ?? '';
+function note(kind: string, data: unknown): void {
+  const line = JSON.stringify({ kind, ...(data as object) });
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+
+async function signedAndReloaded(page: Page, adminSeed: Parameters<typeof newPerson>[0], server: Parameters<typeof newPerson>[1], options: { name?: string; image?: boolean } = {}) {
+  const person = await newPerson(adminSeed, server, { displayName: options.name ?? 'Synthetic Reviewer', signature: options.image === false ? 'none' : 'saved' });
+  await page.goto(`/#/review/${person.payrollDate}`);
+  await page.getByLabel('Email').fill(person.account.email);
+  await page.getByLabel('Password').fill(person.account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  return person;
+}
+
+async function signOffAndReload(page: Page) {
+  await page.locator('[data-sign-off]').click();
+  const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ }).check();
+  await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+  await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
+  await page.reload();
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  await expect(page.locator('[data-sign-off]')).toHaveText('Sign correction');
+}
+
+const MEASURE = `(() => {
+  const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom, w: b.width, h: b.height }; };
+  const group = document.querySelector('.review-preview .sheet-footer .review-signatures');
+  const L = (n) => r(group.querySelector('[data-sig-line="' + n + '"]'));
+  const name = group.querySelector('[data-signer-name]');
+  const img = group.querySelector('img.signed-image');
+  const lh = name ? parseFloat(getComputedStyle(name).lineHeight) : 0;
+  return {
+    group: r(group), emp: L('employee'), empDate: L('employee-date'), mgr: L('manager'), mgrDate: L('manager-date'),
+    content: r(group.querySelector('[data-sig-line="employee"] .rsig-content')),
+    btn: r(document.querySelector('[data-sign-off]')),
+    img: r(img), imgLoaded: img ? (img.complete && img.naturalWidth > 0) : null,
+    name: r(name), nameLh: lh, nameText: name ? name.textContent : null,
+    seal: r(group.querySelector('[data-signed-seal]')),
+    empDateText: (group.querySelector('[data-sig-line="employee-date"]') || {}).textContent,
+    scrollW: document.documentElement.scrollWidth, innerW: window.innerWidth, clientW: document.documentElement.clientWidth,
+  };
+})()`;
+
+type Box = { l: number; r: number; t: number; b: number; w: number; h: number } | null;
+const overlap = (a: Box, b: Box) => a !== null && b !== null && a.l < b.r - 0.5 && b.l < a.r - 0.5 && a.t < b.b - 0.5 && b.t < a.b - 0.5;
+
+function judge(width: number, m: Record<string, unknown>) {
+  const g = m as { group: NonNullable<Box>; emp: NonNullable<Box>; empDate: NonNullable<Box>; mgr: NonNullable<Box>; mgrDate: NonNullable<Box>; content: Box; btn: Box; img: Box; name: Box; nameLh: number; seal: Box; scrollW: number; innerW: number };
+  const fr = (v: number) => Number((v / g.group.w).toFixed(4));
+  return {
+    width,
+    overlaps: { img: overlap(g.btn, g.img), name: overlap(g.btn, g.name), seal: overlap(g.btn, g.seal) },
+    btnInsetFromLineEnd: g.btn === null ? null : Number((g.emp.r - g.btn.r).toFixed(2)),
+    btnBottomMinusLine: g.btn === null ? null : Number((g.btn.b - g.emp.b).toFixed(2)),
+    btnBelowContent: g.btn === null || g.content === null ? null : g.btn.t >= g.content.b - 0.5,
+    btnH: g.btn?.h ?? null,
+    rowAlign: [Number((g.emp.b - g.empDate.b).toFixed(2)), Number((g.mgr.b - g.mgrDate.b).toFixed(2))],
+    colAlign: { x: Number((g.emp.l - g.mgr.l).toFixed(2)), w: Number((g.emp.w - g.mgr.w).toFixed(2)), dateX: Number((g.empDate.l - g.mgrDate.l).toFixed(2)), dateW: Number((g.empDate.w - g.mgrDate.w).toFixed(2)) },
+    twoRows: g.mgr.t > g.emp.b,
+    fractions: { inset: fr(g.emp.l - g.group.l), line: fr(g.emp.w), gap: fr(g.empDate.l - g.emp.r), date: fr(g.empDate.w), right: fr(g.group.r - g.empDate.r) },
+    lineW: Number(g.emp.w.toFixed(1)), lineH: Number(g.emp.h.toFixed(1)), contentW: g.content === null ? null : Number(g.content.w.toFixed(1)),
+    imgW: g.img === null ? null : Number(g.img.w.toFixed(1)), imgH: g.img === null ? null : Number(g.img.h.toFixed(1)),
+    nameLines: g.name === null ? null : Math.round(g.name.h / g.nameLh), nameInsideLine: g.name === null ? null : g.name.l >= g.emp.l - 0.5 && g.name.r <= g.emp.r + 0.5,
+    sealInsideLine: g.seal === null ? null : g.seal.l >= g.emp.l - 0.5 && g.seal.r <= g.emp.r + 0.5,
+    sideways: g.scrollW > g.innerW,
+  };
+}
+
+const WIDTHS = [1440, 1200, 1100, 900, 768, 600, 480, 390, 320];
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`F-UX5A-1 signed and reloaded Review, ${scheme}`, async ({ page, adminSeed, builtServer, isMobile }, testInfo) => {
+    test.setTimeout(240_000);
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await signedAndReloaded(page, adminSeed, builtServer);
+    await signOffAndReload(page);
+    const project = testInfo.project.name;
+    for (const width of WIDTHS) {
+      await page.setViewportSize({ width, height: 900 });
+      const footer = page.locator('.review-preview .sheet-footer');
+      await footer.scrollIntoViewIfNeeded();
+      await frames(page);
+      await expect.poll(() => page.evaluate<boolean>(`(() => { const i = document.querySelector('.review-preview .sheet-footer img.signed-image'); return !!i && i.complete && i.naturalWidth > 0; })()`)).toBe(true);
+      const m = await page.evaluate<Record<string, unknown>>(MEASURE);
+      note('sig', { project, scheme, ...judge(width, m) });
+      const shot =
+        (scheme === 'light' && ((width === 1100 && project === 'desktop') || (width === 390 && project === 'mobile'))) ||
+        (scheme === 'dark' && ((width === 768 && project === 'desktop') || (width === 320 && project === 'desktop')));
+      if (shot) await footer.screenshot({ path: screenshotPath(`ra-sig-${project}-${width}-${scheme}-synthetic.png`) });
+    }
+    if (project === 'desktop' && scheme === 'light') {
+      // Where does the button drop under the content? Every width from 1100 to 1260.
+      let lastWrapped = 0;
+      let firstBeside = 0;
+      for (let width = 1100; width <= 1260; width += 1) {
+        await page.setViewportSize({ width, height: 900 });
+        await frames(page);
+        const m = await page.evaluate<Record<string, unknown>>(MEASURE);
+        const j = judge(width, m);
+        if (j.btnBelowContent) lastWrapped = width;
+        else if (firstBeside === 0) firstBeside = width;
+        if (j.overlaps.img || j.overlaps.name || j.overlaps.seal || Math.abs((j.btnInsetFromLineEnd ?? 0) - 8) > 1 || j.sideways) note('sig-sweep-problem', { width, ...j });
+      }
+      note('sig-threshold', { project, lastWrapped, firstBeside });
+    }
+  });
+}
+
+test('F-UX5A-1 name only (no saved image) and a long name, signed and reloaded, light', async ({ page, adminSeed, builtServer, isMobile }, testInfo) => {
+  test.setTimeout(240_000);
+  test.skip(isMobile, 'desktop project sets the widths');
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signedAndReloaded(page, adminSeed, builtServer, { image: false, name: 'Synthetic Reviewer Withaverylongfamilyname Anotherpart' });
+  await signOffAndReload(page);
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.locator('.review-preview .sheet-footer').scrollIntoViewIfNeeded();
+    await frames(page);
+    const m = await page.evaluate<Record<string, unknown>>(MEASURE);
+    note('sig-noimage-longname', { project: testInfo.project.name, ...judge(width, m) });
+  }
+});
+
+/* ---- FIX9: read-only week cards ------------------------------------------------------------ */
+
+const CARDS = `(() => [...document.querySelectorAll('.review-preview .sheet-week')].map((c) => ({
+  tab: c.getAttribute('tabindex'), ox: getComputedStyle(c).overflowX, sw: c.scrollWidth, cw: c.clientWidth, label: c.getAttribute('aria-label') })))()`;
+
+test('FIX9 sweep 470-1110: a tab stop exactly while the card scrolls, and only where it can scroll', async ({ page, adminSeed, builtServer, isMobile }) => {
+  test.setTimeout(240_000);
+  test.skip(isMobile, 'desktop project sets the widths');
+  await signedAndReloaded(page, adminSeed, builtServer);
+  const bad: unknown[] = [];
+  const seen: Record<string, number[]> = {};
+  for (let width = 470; width <= 1110; width += 1) {
+    await page.setViewportSize({ width, height: 900 });
+    await frames(page);
+    const cards = await page.evaluate<Array<{ tab: string | null; ox: string; sw: number; cw: number; label: string }>>(CARDS);
+    for (const [index, card] of cards.entries()) {
+      const overflows = card.sw > card.cw;
+      const key = `${index}:${card.tab ?? '-'}:${card.ox}:${overflows}`;
+      (seen[key] ??= []).push(width);
+      if ((card.tab === '0') !== overflows || (card.tab === '0' && card.ox !== 'auto' && card.ox !== 'scroll')) bad.push({ width, index, ...card });
+    }
+    if (cards.length !== 2 && width >= 480) bad.push({ width, count: cards.length });
+  }
+  const ranges = Object.fromEntries(Object.entries(seen).map(([key, list]) => [key, `${Math.min(...list)}-${Math.max(...list)} (${list.length})`]));
+  note('fix9-sweep', { bad: bad.slice(0, 20), badCount: bad.length, ranges });
+  expect(bad.length).toBe(0);
+});
+
+async function tabTo(page: Page, selector: string, max = 120): Promise<string[]> {
+  const stops: string[] = [];
+  for (let i = 0; i < max; i += 1) {
+    await page.keyboard.press('Tab');
+    const desc = await page.evaluate<string>(`(() => { const a = document.activeElement; if (!a) return 'none'; return a.tagName + (a.className ? '.' + String(a.className).split(' ').join('.') : '') + '|' + (a.getAttribute('aria-label') || (a.textContent || '').trim().slice(0, 30)); })()`);
+    stops.push(desc);
+    if (await page.evaluate<boolean>(`document.activeElement && document.activeElement.matches(${JSON.stringify(selector)})`)) return stops;
+  }
+  return stops;
+}
+
+const THEMES = [
+  { name: 'device-light', scheme: 'light', stored: null },
+  { name: 'device-dark', scheme: 'dark', stored: null },
+  { name: 'manual-dark-on-light-device', scheme: 'light', stored: 'dark' },
+  { name: 'manual-light-on-dark-device', scheme: 'dark', stored: 'light' },
+] as const;
+
+for (const theme of THEMES) {
+  test(`FIX9 focus ring, name, arrows, revealFocused and resize, ${theme.name}`, async ({ page, adminSeed, builtServer, isMobile }) => {
+    test.setTimeout(240_000);
+    test.skip(isMobile, 'desktop project sets the widths');
+    await page.emulateMedia({ colorScheme: theme.scheme, reducedMotion: 'reduce' });
+    if (theme.stored !== null) await page.addInitScript(`localStorage.setItem('timesheet.theme', ${JSON.stringify(theme.stored)})`);
+    await signedAndReloaded(page, adminSeed, builtServer);
+    const dataTheme = await page.evaluate<string | null>(`document.documentElement.getAttribute('data-theme')`);
+    for (const width of [900, 768, 600, 480]) {
+      await page.setViewportSize({ width, height: 900 });
+      await frames(page);
+      await page.locator('h1').first().focus();
+      await page.evaluate('document.activeElement && document.activeElement.blur()');
+      await page.locator('.review-preview .preview-bar h2').click();
+      const stops = await tabTo(page, '.review-preview .sheet-week');
+      const card = page.locator('.review-preview .sheet-week').first();
+      await expect(card).toBeFocused();
+      const fv = await card.evaluate((el) => el.matches(':focus-visible'));
+      const style = await card.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { outline: `${s.outlineStyle} ${s.outlineWidth} ${s.outlineColor}`, offset: s.outlineOffset, shadow: s.boxShadow };
+      });
+      // The painted ring: pixels on the ring (1px in from the left and top edges) against the pixels just outside and just inside it.
+      await card.scrollIntoViewIfNeeded();
+      await frames(page);
+      const box = await card.evaluate((el) => { const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; });
+      const surface = await paintedSurface(page);
+      const px = (x: number, y: number) => surface.at(Math.round(x), Math.round(y));
+      const midY = Math.round(box.t + (box.b - box.t) * 0.6);
+      const barY = Math.round(box.t + 6);
+      const midX = Math.round((box.l + box.r) / 2);
+      const samples = {
+        leftRing: px(Math.ceil(box.l) + 0, midY), leftOutside: px(Math.floor(box.l) - 2, midY), leftInside: px(Math.ceil(box.l) + 3, midY),
+        topRing: px(midX, Math.ceil(box.t) + 0), topOutside: px(midX, Math.floor(box.t) - 2), topInside: px(midX, Math.ceil(box.t) + 3),
+        barRing: px(Math.ceil(box.l) + 0, barY), barInside: px(Math.ceil(box.l) + 4, barY),
+        rightRing: px(Math.floor(box.r) - 1, midY), rightOutside: px(Math.ceil(box.r) + 1, midY), rightInside: px(Math.floor(box.r) - 4, midY),
+      };
+      const ratio = (a: number[], b: number[]) => Number(contrast(a as never, b as never).toFixed(2));
+      const ratios = {
+        leftOut: ratio(samples.leftRing, samples.leftOutside), leftIn: ratio(samples.leftRing, samples.leftInside),
+        topOut: ratio(samples.topRing, samples.topOutside), topIn: ratio(samples.topRing, samples.topInside),
+        barIn: ratio(samples.barRing, samples.barInside),
+        rightOut: ratio(samples.rightRing, samples.rightOutside), rightIn: ratio(samples.rightRing, samples.rightInside),
+      };
+      if (width === 900 || width === 768) {
+        if ((theme.name === 'device-light' && width === 900) || (theme.name === 'device-dark' && width === 768) || (theme.name === 'manual-dark-on-light-device' && width === 900)) {
+          await card.screenshot({ path: screenshotPath(`ra-fix9-${theme.name}-${width}-synthetic.png`) });
+        }
+      }
+      // Name (Chromium's computed name through CDP).
+      const cdp = await page.context().newCDPSession(page);
+      const { root } = (await cdp.send('DOM.getDocument', { depth: 0 })) as { root: { nodeId: number } };
+      const { nodeId } = (await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: '.review-preview .sheet-week' })) as { nodeId: number };
+      const ax = (await cdp.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false })) as { nodes: Array<{ role?: { value: string }; name?: { value: string }; focusable?: unknown; properties?: Array<{ name: string; value: { value: unknown } }> }> };
+      const axNode = ax.nodes[0];
+      await cdp.detach();
+      // Arrow keys and revealFocused: pre-scroll, blur, Tab back in, the scroll position must not jump; then ArrowRight, End, Home.
+      const sl = () => card.evaluate((el) => el.scrollLeft);
+      await card.evaluate((el) => { el.scrollLeft = 60; });
+      await page.locator('.review-preview .preview-bar h2').click();
+      await card.evaluate((el) => { el.scrollLeft = 60; });
+      await tabTo(page, '.review-preview .sheet-week');
+      await frames(page);
+      const afterFocus = await sl();
+      await card.evaluate((el) => { el.scrollLeft = 0; });
+      await page.keyboard.press('ArrowRight');
+      await expect.poll(sl).toBeGreaterThan(0);
+      const afterRight = await sl();
+      await page.keyboard.press('End');
+      await frames(page);
+      await page.waitForFunction(`(() => { const c = document.querySelector('.review-preview .sheet-week'); return Math.abs(c.scrollLeft - (c.scrollWidth - c.clientWidth)) < 2; })()`, undefined, { timeout: 3000 }).catch(() => undefined);
+      const afterEnd = await sl();
+      const max = await card.evaluate((el) => el.scrollWidth - el.clientWidth);
+      await page.keyboard.press('Home');
+      await page.waitForFunction(`document.querySelector('.review-preview .sheet-week').scrollLeft < 2`, undefined, { timeout: 3000 }).catch(() => undefined);
+      const afterHome = await sl();
+      note('fix9-focus', {
+        theme: theme.name, dataTheme, width, focusVisible: fv, style, ratios, samples, stopsToCard: stops.length,
+        ax: { role: axNode?.role?.value, name: axNode?.name?.value, focusable: (axNode?.properties ?? []).find((p) => p.name === 'focusable')?.value.value },
+        scroll: { preScrolled: 60, afterFocus, afterRight, afterEnd, max, afterHome },
+      });
+    }
+    // Resize while the card has focus: 900 (stop) -> 1100 (no stop) -> where is focus, where does Tab go, and back to 900.
+    await page.setViewportSize({ width: 900, height: 900 });
+    await frames(page);
+    await page.locator('.review-preview .preview-bar h2').click();
+    await tabTo(page, '.review-preview .sheet-week');
+    const card = page.locator('.review-preview .sheet-week').first();
+    await expect(card).toBeFocused();
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await frames(page);
+    await frames(page);
+    const active1100 = await page.evaluate<string>(`(() => { const a = document.activeElement; return a ? a.tagName + '.' + a.className + ' tabindex=' + a.getAttribute('tabindex') : 'none'; })()`);
+    const cardTab1100 = await card.getAttribute('tabindex');
+    await page.keyboard.press('Tab');
+    const nextAfterTab = await page.evaluate<string>(`(() => { const a = document.activeElement; return a ? a.tagName + '.' + a.className + '|' + (a.getAttribute('aria-label') || (a.textContent || '').trim().slice(0, 40)) : 'none'; })()`);
+    await page.setViewportSize({ width: 900, height: 900 });
+    await frames(page);
+    const cardTab900 = await card.getAttribute('tabindex');
+    note('fix9-resize', { theme: theme.name, active1100, cardTab1100, nextAfterTab, cardTab900 });
+  });
+}
+
+test('FIX9: no extra stop at 1280 and 1440 (Review) and the editable Timesheet cards unchanged at 768 and 900', async ({ page, adminSeed, builtServer, isMobile }) => {
+  test.setTimeout(240_000);
+  test.skip(isMobile, 'desktop project sets the widths');
+  const person = await signedAndReloaded(page, adminSeed, builtServer);
+  for (const width of [1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await frames(page);
+    await page.locator('.review-preview .preview-bar h2').click();
+    const stops = await tabTo(page, '.never-matches', 60);
+    note('fix9-nostop', { width, cardStops: stops.filter((s) => s.startsWith('SECTION.sheet-week')).length, stops: stops.length, cardsWithTab: await page.locator('.sheet-week[tabindex]').count() });
+  }
+  expect(person.payrollDate).not.toBe('');
+  await page.goto('/#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const width of [900, 768, 600, 480]) {
+    await page.setViewportSize({ width, height: 900 });
+    await frames(page);
+    const cards = await page.evaluate<Array<{ tab: string | null; ox: string; sw: number; cw: number }>>(`[...document.querySelectorAll('.sheet-week')].map((c) => ({ tab: c.getAttribute('tabindex'), ox: getComputedStyle(c).overflowX, sw: c.scrollWidth, cw: c.clientWidth }))`);
+    note('fix9-timesheet', { width, cards });
+  }
+});

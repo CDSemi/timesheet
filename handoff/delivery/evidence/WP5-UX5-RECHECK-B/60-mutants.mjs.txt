@@ -1,0 +1,204 @@
+// WP5-UX5-RECHECK-B: the auditor's own mutants on the FIX7 changes and the FIX10 admin-status change, run in the probe export.
+// Each mutant replaces one exact anchor (it must occur exactly once), runs the named tests (vitest files, or the admin-status
+// e2e on a fresh build), then the full vitest suite when the targeted run passed, and restores the file byte-identical.
+// Usage: node mutants.mjs <probeDir> <logDir> [mutant ids...]
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [probe, logDir, ...only] = process.argv.slice(2);
+const node = process.execPath;
+const vitest = join(probe, 'node_modules', 'vitest', 'vitest.mjs');
+const playwright = join(probe, 'node_modules', '@playwright', 'test', 'cli.js');
+const tsc = join(probe, 'node_modules', 'typescript', 'bin', 'tsc');
+const vite = join(probe, 'node_modules', 'vite', 'bin', 'vite.js');
+const summary = join(logDir, 'mutants-summary.txt');
+const sha = (text) => createHash('sha256').update(text).digest('hex');
+
+const DELIVERY_TESTS = ['tests/integration/sends.test.ts', 'tests/integration/delivery.test.ts', 'tests/integration/corrections.test.ts', 'tests/integration/deadline.test.ts', 'tests/integration/jobs.test.ts', 'tests/integration/restore.test.ts'];
+const PDF_TESTS = ['tests/integration/pdf-render.test.ts', 'tests/integration/pdf-layout.test.ts'];
+const CLIENT_TESTS = ['tests/client/deliveryModel.test.ts'];
+const SEND_JOB_TESTS = ['tests/integration/delivery.test.ts', 'tests/integration/delivery-crash.test.ts', 'tests/integration/sends.test.ts', 'tests/integration/jobs.test.ts'];
+const DELIVERIES = 'src/server/services/deliveries.ts';
+const PDF = 'src/server/pdf/timesheetPdf.ts';
+
+const MUTANTS = [
+  {
+    id: 'M11',
+    what: 'AUDIT-B M11, verbatim: the reason is added to the stored email text body',
+    file: DELIVERIES,
+    from: '    input.envelope.bodyText,\n    input.envelope.bodyHtml,',
+    to: "    input.reason === null ? input.envelope.bodyText : `${input.envelope.bodyText}\\nReason: ${input.reason}`,\n    input.envelope.bodyHtml,",
+    tests: ['tests/integration/sends.test.ts'],
+  },
+  {
+    id: 'M11b',
+    what: 'own variant of M11: the reason is added to the stored HTML body only',
+    file: DELIVERIES,
+    from: '    input.envelope.bodyText,\n    input.envelope.bodyHtml,',
+    to: "    input.envelope.bodyText,\n    input.reason === null ? input.envelope.bodyHtml : `${input.envelope.bodyHtml}<p>Reason: ${input.reason}</p>`,",
+    tests: ['tests/integration/sends.test.ts'],
+  },
+  {
+    id: 'M12b',
+    what: "AUDIT-B M12b, verbatim: the sign-off's own PDF follows the Settings time switch (t0 when off), schema-safe",
+    file: 'src/server/services/finalization.ts',
+    from: '  enqueuePdfJob(db, clock, userId, revisionId, payload, defaultPdfVariant(payload));\n}',
+    to: "  const timeOff = (() => { try { return db.prepare('SELECT show_time_on_pdf FROM submission_settings WHERE user_id = ? ORDER BY seq DESC LIMIT 1').pluck().get(userId) === 0; } catch { return false; } })();\n  enqueuePdfJob(db, clock, userId, revisionId, payload, (timeOff ? (payload.show_ot_on_pdf ? 't0o1' : 't0o0') : defaultPdfVariant(payload)) as never);\n}",
+    tests: ['tests/integration/sends.test.ts'],
+  },
+  {
+    id: 'G1',
+    what: 'the in-flight guard back to one revision (the pre-FIX7 per-revision job check)',
+    file: DELIVERIES,
+    from: `SELECT 1 AS one FROM jobs j
+         JOIN timesheet_revisions r ON r.id = j.revision_id AND r.user_id = j.user_id
+         JOIN timesheet_revisions target ON target.timesheet_id = r.timesheet_id AND target.user_id = r.user_id
+        WHERE j.user_id = ? AND j.kind = ? AND j.state IN ('queued', 'leased') AND target.id = ? LIMIT 1`,
+    to: "SELECT 1 AS one FROM jobs j WHERE j.user_id = ? AND j.kind = ? AND j.state IN ('queued', 'leased') AND j.revision_id = ? LIMIT 1",
+    tests: DELIVERY_TESTS,
+    http: true,
+  },
+  { id: 'G2', what: 'a leased send job no longer blocks', file: DELIVERIES, from: "j.state IN ('queued', 'leased') AND target.id", to: "j.state IN ('queued') AND target.id", tests: DELIVERY_TESTS },
+  {
+    id: 'G3',
+    what: "a waiting send of ANY period of the owner blocks (the period join dropped)",
+    file: DELIVERIES,
+    from: 'JOIN timesheet_revisions target ON target.timesheet_id = r.timesheet_id AND target.user_id = r.user_id',
+    to: 'JOIN timesheet_revisions target ON target.user_id = r.user_id',
+    tests: DELIVERY_TESTS,
+  },
+  { id: 'G4', what: 'a send job in intervention also blocks', file: DELIVERIES, from: "j.state IN ('queued', 'leased') AND target.id", to: "j.state IN ('queued', 'leased', 'intervention') AND target.id", tests: DELIVERY_TESTS },
+  {
+    id: 'G5',
+    what: 'the reason rule runs before the in-flight guard',
+    file: DELIVERIES,
+    edits: [
+      { from: '  assertNothingInFlight(db, user.id, revision.id);\n  // B-A2, inside this transaction', to: '  // B-A2, inside this transaction' },
+      { from: '  const snapshot = JSON.parse(revision.payload_json) as ReviewSnapshot;\n  const send = insertSend(db, clock, {', to: '  assertNothingInFlight(db, user.id, revision.id);\n  const snapshot = JSON.parse(revision.payload_json) as ReviewSnapshot;\n  const send = insertSend(db, clock, {' },
+    ],
+    tests: DELIVERY_TESTS,
+  },
+  {
+    id: 'G6',
+    what: "the Send card's 409 text says 'this revision' again",
+    file: 'src/client/components/deliveryModel.ts',
+    from: "message: 'A delivery of this period is already in progress or waiting.",
+    to: "message: 'A delivery of this revision is already in progress or waiting.",
+    tests: CLIENT_TESTS,
+  },
+  { id: 'P1', what: 'the holiday label keeps two lines on a day with leave', file: PDF, from: 'width, both ? 1 : 2, measureFace(fonts.sans)', to: 'width, 2, measureFace(fonts.sans)', tests: PDF_TESTS },
+  { id: 'P2', what: 'the leave line at 6 pt', file: PDF, from: 'if (both) sub.push({ text: leave, size: 7 });', to: 'if (both) sub.push({ text: leave, size: 6 });', tests: PDF_TESTS },
+  { id: 'P3', what: 'the leave line above the label', file: PDF, from: 'if (both) sub.push({ text: leave, size: 7 });', to: 'if (both) sub.unshift({ text: leave, size: 7 });', tests: PDF_TESTS },
+  {
+    id: 'P4',
+    what: 'the block height ignores the separate leave line (vertical centring off by one line)',
+    file: PDF,
+    from: 'sub.reduce((sum, line) => sum + line.size * 1.2, 0)',
+    to: 'fitted.lines.length * fitted.size * 1.2',
+    tests: PDF_TESTS,
+  },
+  {
+    id: 'P4x',
+    what: 'P4 again, against the auditor mini probe (the 37 pt band of four sessions)',
+    file: PDF,
+    from: 'sub.reduce((sum, line) => sum + line.size * 1.2, 0)',
+    to: 'fitted.lines.length * fitted.size * 1.2',
+    tests: ['tests/integration/zz-recheck-pdf-mini.test.ts'],
+    noFull: true,
+  },
+  { id: 'P5', what: 'the leave line is dropped when the label had to be cut', file: PDF, from: 'if (both) sub.push({ text: leave, size: 7 });', to: 'if (both && !fitted.truncated) sub.push({ text: leave, size: 7 });', tests: PDF_TESTS },
+  {
+    id: 'S1',
+    what: 'a send claimed before its PDF fails permanently (never retried)',
+    file: 'src/server/jobs/sendJob.ts',
+    from: "if (pdf === undefined) throw new JobError('pdf_not_ready');",
+    to: "if (pdf === undefined) throw new JobError('pdf_not_ready', { permanent: true });",
+    tests: SEND_JOB_TESTS,
+    e2e: true,
+  },
+  { id: 'S2', what: 'a send claimed before its PDF succeeds without sending', file: 'src/server/jobs/sendJob.ts', from: "if (pdf === undefined) throw new JobError('pdf_not_ready');", to: 'if (pdf === undefined) return;', tests: SEND_JOB_TESTS },
+  {
+    id: 'A1',
+    what: 'admin-status: the FIX10 wait for the PDF removed (both tests)',
+    file: 'tests/e2e/admin-status.spec.ts',
+    all: true,
+    from: '  await waitForPdf(adminSeed, account.id);\n',
+    to: '',
+    e2eOnly: true,
+  },
+  {
+    id: 'A2',
+    what: "admin-status: the wait for the PDF reads another person's row",
+    file: 'tests/e2e/admin-status.spec.ts',
+    from: 'return response.submissions.find((row) => row.user_id === userId)?.pdf.state;',
+    to: 'return response.submissions.find((row) => row.user_id !== userId)?.pdf.state;',
+    e2eOnly: true,
+  },
+];
+
+function run(label, args, timeoutMs) {
+  const started = Date.now();
+  const result = spawnSync(node, args, { cwd: probe, encoding: 'utf8', timeout: timeoutMs, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }, maxBuffer: 256 * 1024 * 1024 });
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+  writeFileSync(join(logDir, `mut-${label}.log`), output);
+  const tail = output
+    .split('\n')
+    .filter((line) => /Test Files|Tests |passed|failed|flaky|skipped|FAIL|✘|×/.test(line))
+    .slice(-12)
+    .join(' / ');
+  return { status: result.status, seconds: Math.round((Date.now() - started) / 1000), tail };
+}
+
+const build = (label) => {
+  const server = run(`${label}-tsc`, [tsc, '-p', 'tsconfig.server.json'], 300_000);
+  const client = run(`${label}-vite`, [vite, 'build'], 300_000);
+  return `${server.status}/${client.status}`;
+};
+
+for (const mutant of MUTANTS.filter((item) => only.length === 0 || only.includes(item.id))) {
+  const path = join(probe, mutant.file);
+  const original = readFileSync(path, 'utf8');
+  const edits = mutant.edits ?? [{ from: mutant.from, to: mutant.to }];
+  let text = original;
+  let anchorsOk = true;
+  for (const edit of edits) {
+    const occurrences = text.split(edit.from).length - 1;
+    if (mutant.all ? occurrences < 1 : occurrences !== 1) anchorsOk = false;
+    text = mutant.all ? text.split(edit.from).join(edit.to) : text.replace(edit.from, edit.to);
+  }
+  if (!anchorsOk) {
+    appendFileSync(summary, `${mutant.id} ANCHOR NOT UNIQUE, not run\n`);
+    continue;
+  }
+  writeFileSync(path, text);
+  let line = `${mutant.id} (${mutant.file}): ${mutant.what}`;
+  try {
+    if (!mutant.e2eOnly) {
+      const targeted = run(`${mutant.id}-targeted`, [vitest, 'run', ...mutant.tests], 900_000);
+      line += ` | targeted exit ${targeted.status} (${targeted.seconds} s): ${targeted.tail}`;
+      if (targeted.status === 0 && mutant.noFull !== true) {
+        const full = run(`${mutant.id}-full`, [vitest, 'run'], 1_800_000);
+        line += ` | FULL exit ${full.status} (${full.seconds} s): ${full.tail}`;
+      }
+    }
+    if (mutant.http) {
+      line += ` | build ${build(`${mutant.id}-http`)}`;
+      const out = join(logDir, `http-${mutant.id}.txt`);
+      const http = run(`${mutant.id}-http`, [join(logDir, '..', 'http-optionA.mjs'), probe, join(logDir, '..', `http-${mutant.id}`), '49894', '49895', '49896', '49897', out], 900_000);
+      line += ` | two-process HTTP probe exit ${http.status} (${http.seconds} s), see http-${mutant.id}.txt`;
+    }
+    if (mutant.e2e || mutant.e2eOnly) {
+      line += ` | build ${build(mutant.id)}`;
+      const e2e = run(`${mutant.id}-e2e`, [playwright, 'test', 'tests/e2e/admin-status.spec.ts'], 1_800_000);
+      line += ` | admin-status e2e exit ${e2e.status} (${e2e.seconds} s): ${e2e.tail}`;
+    }
+  } finally {
+    writeFileSync(path, original);
+    const restored = readFileSync(path, 'utf8');
+    line += ` | restored ${sha(restored) === sha(original) ? 'byte-identical' : 'DIFFERENT'}`;
+    appendFileSync(summary, `${line}\n`);
+  }
+}
+appendFileSync(summary, `done ${new Date().toISOString()}\n`);

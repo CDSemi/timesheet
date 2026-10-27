@@ -1,0 +1,62 @@
+
+ RUN  v5.0.2 <task>/head-export
+
+ ❯ tests/integration/restore.test.ts (33 tests | 2 failed) 11452ms
+   ❯ isolated restore with outbound paused (AC-15, AC-11) (7)
+     × releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs 65ms
+   ❯ a held send of a superseded revision (F-UX5B2-1) (1)
+     × is not released once the owner has sent a correction of the period, while it waits or after it succeeded, and the old copy never follows the new 440ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/restore.test.ts:486:61
+    484|     await pass('runner-owner-resend');
+    485|     expect(states(source.revisions.pdfPending)).toEqual(['accepted']);
+    486|     expect(releaseHeldJob(restored, clock, heldPdfPending)).toEqual({ …
+       |                                                             ^
+    487|
+    488|     // A held reminder may be dropped instead (it never runs); a send …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send of a superseded revision (F-UX5B2-1) > is not released once the owner has sent a correction of the period, while it waits or after it succeeded, and the old copy never follows the new
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/restore.test.ts:624:50
+    622|     expect(states(second)).toEqual(['accepted']);
+    623|     expect(db.prepare<[string], { state: string }>("SELECT state FROM …
+    624|     expect(releaseHeldJob(db, clock, heldJobId)).toEqual(refusal);
+       |                                                  ^
+    625|     expect(releaseAllHeldJobs(db, clock)).toEqual({ released: 0, refus…
+    626|     // The superseded revision was never sent, the job is still held, …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 31 passed (33)
+   Start at  10:46:54
+   Duration  12.41s (tests 93%, transform 4%, import 3%)
+
+exit=1

@@ -1,0 +1,45 @@
+# Copies masked LF evidence into the repository evidence folder (run again at the end; it overwrites).
+. <task>/env.sh
+EV=$E
+mkdir -p $EV $T/stage
+rm -f $T/stage/*
+cd $T
+# Name the staged copies.
+cp out/00-head.txt stage/00-head-before.txt
+cp out/00-start-time.txt stage/00-start-time.txt
+cp out/00-nonhandoff-status-before.txt stage/00-nonhandoff-status-before.txt
+cp out/digest-before.log stage/01-digest-before.txt
+[ -f out/digest-after.log ] && cp out/digest-after.log stage/01-digest-after.txt
+cp out/02-ci.txt stage/02-ci-export.txt
+cp out/02-ci-export-probe.txt stage/02-ci-export-probe.txt
+cp out/02-ci-export-mut.txt stage/02-ci-export-mut.txt
+cp out/02-build-export-probe.txt stage/02-build-export-probe.txt
+cp out/02-build-export-mut.txt stage/02-build-export-mut.txt
+for f in 03-typecheck 03-lint 03-npmtest 03-build 03-ac13 03-core-exits; do cp out/$f.txt stage/$f.txt; done
+cp out/06-e2e-full-run1.txt stage/06-e2e-full-run1.txt
+cp out/06-e2e-exits.txt stage/06-e2e-exits.txt
+[ -f out/06-e2e-counts.txt ] && cp out/06-e2e-counts.txt stage/06-e2e-counts.txt
+cp out/06-e2e-area-a-lines.txt stage/06-e2e-area-a-lines.txt
+cp out/e2e-logo-lines.txt stage/06-e2e-logo-durations.txt
+cp out/20-namestatus-base-target.txt stage/20-namestatus-f4049aa-a5533b5.txt
+cp out/20-log.txt stage/20-log-f4049aa-a5533b5.txt
+cp out/pdf-diffstat.txt stage/20-pdf-diffstat.txt
+cp out/contrast-tokens.txt stage/30-contrast-tokens.txt
+cp out/07-npm-audit-omit-dev.txt stage/07-npm-audit-omit-dev.txt
+cp out/07-npm-audit-all.txt stage/07-npm-audit-all.txt
+cp impact.sh stage/91-impact.sh.txt
+cp ma5-impact.sh stage/91-ma5-impact.sh.txt
+for f in out/obs-*.jsonl; do b=$(basename $f .jsonl); cp $f stage/40-$b.txt; done
+for f in out/log-*.txt; do b=$(basename $f .txt); cp $f stage/41-$b.txt; done
+cp out/probe-exits.txt stage/40-probe-exits.txt
+cp out/sum-axe.txt stage/40-sum-axe.txt
+for f in out/mut-M*.txt; do b=$(basename $f .txt); case $b in *-build|*-restore-build) continue;; esac; cp $f stage/50-$b.txt; done
+[ -f out/mut-summary.txt ] && cp out/mut-summary.txt stage/50-mut-summary.txt
+cp out/mut-exits.txt stage/50-mut-exits.txt
+# Sources of the probes and scripts.
+for f in export-probe/tests/e2e/zz-ra-*.spec.ts; do b=$(basename $f); cp $f stage/90-src-$b.txt; done
+for f in env.sh setup.sh digest.sh ci.sh core.sh e2e-full.sh probe.sh mut.sh mutants-run.sh collect.sh; do cp $f stage/91-$f.txt; done
+for f in mutate.mjs mkmutants.mjs counts.mjs sum-axe.mjs sum-mut.mjs contrast-tokens.mjs mask.mjs board.py owner.py; do cp $f stage/91-$f.txt; done
+cp slips.txt stage/99-slips.txt
+node $T/mask.mjs "$EV" stage/*.txt
+echo "mask exit $?"

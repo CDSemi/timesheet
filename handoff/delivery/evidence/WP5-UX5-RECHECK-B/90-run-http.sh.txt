@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Runs the two-process HTTP probe against a built export. Usage: run-http.sh <label> <exportDir>
+source <task>/env.sh
+label=$1
+dir=${2:-$X}
+work="$T/http-$label"
+start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+node "$T/http-optionA.mjs" "$(cygpath -w "$dir")" "$(cygpath -w "$work")" 49890 49891 49892 49893 "$(cygpath -w "$T/logs/http-$label.txt")" > "$T/logs/http-$label.stdout.txt" 2>&1
+echo "http-$label exit=$? start=$start end=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/logs/probe-exits.txt"

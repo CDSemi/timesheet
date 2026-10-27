@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Container drill --wp3 on the clean export of the working tree. Compose project ts-fix11-drill, down -v at the end.
+source <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+mkdir -p "$T/wp3" "$T/drillwork"
+cd "$REPO" || exit 9
+GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$REPO" git archive 49651c8bb91d56bf6c6966405257537ec7ca474b | tar -x -C "$T/wp3"
+echo "wp3 archive exit=$?" > "$T/logs/drill-exits.txt"
+cd "$T/wp3" || exit 9
+npm ci > "$T/logs/wp3-ci.txt" 2>&1
+echo "wp3 ci exit=$?" >> "$T/logs/drill-exits.txt"
+npm run build:server > "$T/logs/wp3-build.txt" 2>&1
+echo "wp3 build:server exit=$?" >> "$T/logs/drill-exits.txt"
+echo "wp3 prepared $(date -u +%H:%M:%SZ)" >> "$T/logs/drill-exits.txt"
+cd "$W" || exit 9
+node scripts/container-drill.mjs --work "$(cygpath -w "$T/drillwork")" --project ts-fix11-drill --wp3 "$(cygpath -w "$T/wp3")" > "$T/logs/drill.txt" 2>&1
+echo "drill exit=$?" >> "$T/logs/drill-exits.txt"
+docker compose -p ts-fix11-drill down -v > "$T/logs/compose-down.txt" 2>&1
+echo "compose down exit=$?" >> "$T/logs/drill-exits.txt"
+docker ps --all --filter name=ts-fix11-drill > "$T/logs/docker-after.txt" 2>&1
+echo "drill done $(date -u +%H:%M:%SZ)" >> "$T/logs/drill-exits.txt"

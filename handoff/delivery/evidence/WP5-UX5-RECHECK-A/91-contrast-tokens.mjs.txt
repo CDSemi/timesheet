@@ -1,0 +1,20 @@
+// Contrast of the week-card focus outline (--accent) against the surfaces next to it, from the token values (light and dark sets).
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const lum = ([r, g, b]) => {
+  const c = (v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * c(r) + 0.7152 * c(g) + 0.0722 * c(b);
+};
+const ratio = (a, b) => {
+  const [x, y] = [lum(hex(a)), lum(hex(b))].sort((p, q) => q - p);
+  return ((x + 0.05) / (y + 0.05)).toFixed(2);
+};
+const sets = {
+  light: { accent: '#1f5fbf', card: '#ffffff', sheetHeadStrong: '#dde5f0', sheetRule: '#cdd5df', bg: '#edf0f5', dayEditingHead: '#d8e6fa' },
+  dark: { accent: '#6ea8ff', card: '#1a2029', sheetHeadStrong: '#2c3746', sheetRule: '#36404d', bg: '#0e1217', dayEditingHead: '#24395a' },
+};
+for (const [name, s] of Object.entries(sets)) {
+  console.log(name, Object.fromEntries(Object.entries(s).filter(([k]) => k !== 'accent').map(([k, v]) => [k, ratio(s.accent, v)])));
+}

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Runs the three new/changed e2e tests of review.spec.ts in one export. Usage: e2e-new-tests.sh <export-dir> <label> [extra playwright args]
+source <task>/env.sh
+dir="$1"
+label="$2"
+shift 2
+mkdir -p "$T/pw-$label" "$T/tmp-$label"
+export TEMP="$(cygpath -w "$T/tmp-$label")" TMP="$(cygpath -w "$T/tmp-$label")" TMPDIR="$T/tmp-$label"
+cd "$dir" || exit 9
+npx playwright test tests/e2e/review.spec.ts --project=desktop --output "$(cygpath -w "$T/pw-$label")" -g "shows the shared focus ring on all four edges|signature rows: the PDF block insets" "$@" > "$T/logs/e2e-$label.txt" 2>&1
+echo "exit=$?" >> "$T/logs/e2e-$label.txt"

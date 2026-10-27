@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Copies masked LF evidence into the repository's evidence folder for this task (and nothing else).
+source <task>/env.sh
+E="$REPO/handoff/delivery/evidence/WP5-UX5-FIX11"
+L=$T/logs
+w() { cygpath -w "$1"; }
+cat "$L/repo-exits.txt" > "$L/60-repo-exits.txt"
+node "$T/mask.mjs" "$(w "$E")" \
+  "$(w "$L/repo-exits.txt")=60-repo-exits.txt" \
+  "$(w "$L/repo-lint.txt")=60-repo-lint.txt" \
+  "$(w "$L/repo-typecheck.txt")=60-repo-typecheck.txt" \
+  "$(w "$L/repo-test.txt")=60-repo-npm-test.txt" \
+  "$(w "$L/repo-build.txt")=60-repo-build.txt" \
+  "$(w "$L/repo-verify.txt")=60-repo-verify-smoke-port-50631.txt" \
+  "$(w "$L/repo-diffcheck.txt")=60-repo-git-diff-check.txt" \
+  "$(w "$L/diffstat.txt")=60-repo-diffstat-non-handoff.txt" \
+  "$(w "$L/setup-work.txt")=61-clean-export-setup.txt" \
+  "$(w "$L/e2e-exits.txt")=62-e2e-exits.txt" \
+  "$(w "$L/e2e-counts.txt")=62-e2e-counts.txt" \
+  "$(w "$L/e2e-run1.log")=62-e2e-full-run1.txt" \
+  "$(w "$L/http-head-run.txt")=63-http-sequence-on-head-run.txt" \
+  "$(w "$L/http-head.txt")=63-http-sequence-on-head.txt" \
+  "$(w "$L/http-fixed-run.txt")=64-http-sequence-on-fix-run.txt" \
+  "$(w "$L/http-fixed.txt")=64-http-sequence-on-fix.txt" \
+  "$(w "$L/drill-exits.txt")=65-drill-exits.txt" \
+  "$(w "$L/drill.txt")=65-drill-wp3.txt" \
+  "$(w "$L/docker-after.txt")=65-docker-after.txt" \
+  "$(w "$L/compose-down.txt")=65-compose-down.txt" \
+  "$(w "$L/mutant-export-vs-clean.txt")=66-mutation-sandbox-vs-clean-export.txt" \
+  "$(w "$T/slips.txt")=99-slips.txt" \
+  "$(w "$T/env.sh")=90-env.sh.txt" \
+  "$(w "$T/setup-head.sh")=90-setup-head.sh.txt" \
+  "$(w "$T/setup-work.sh")=90-setup-work.sh.txt" \
+  "$(w "$T/sync.sh")=90-sync.sh.txt" \
+  "$(w "$T/restore-file.sh")=90-restore-file.sh.txt" \
+  "$(w "$T/mut-int.sh")=90-mut-int.sh.txt" \
+  "$(w "$T/mut-e2e.sh")=90-mut-e2e.sh.txt" \
+  "$(w "$T/e2e-new-tests.sh")=90-e2e-new-tests.sh.txt" \
+  "$(w "$T/e2e-full.sh")=90-e2e-full.sh.txt" \
+  "$(w "$T/axe-run.sh")=90-axe-run.sh.txt" \
+  "$(w "$T/repo-checks.sh")=90-repo-checks.sh.txt" \
+  "$(w "$T/run-http.sh")=90-run-http.sh.txt" \
+  "$(w "$T/head-server.sh")=90-head-server.sh.txt" \
+  "$(w "$T/drill.sh")=90-drill.sh.txt" \
+  "$(w "$T/collect.sh")=90-collect.sh.txt" \
+  "$(w "$T/mask.mjs")=90-mask.mjs.txt" \
+  "$(w "$T/parity.mjs")=90-parity.mjs.txt" \
+  "$(w "$T/counts.mjs")=90-counts.mjs.txt" \
+  > "$L/collect.txt" 2>&1
+echo "collect exit=$?" >> "$L/collect.txt"

@@ -1,0 +1,269 @@
+import { createHash } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import { datesBetween } from '../../src/domain/dates.ts';
+import type { ReviewSnapshot, SnapshotDay } from '../../src/domain/snapshot.ts';
+import { pdfLayout } from '../../src/server/pdf/layout.ts';
+import { renderTimesheetPdf, type TimesheetPdfInput } from '../../src/server/pdf/timesheetPdf.ts';
+import { renderTimesheetPdf as renderOld } from '../../src/server/pdf/timesheetPdfOld.ts';
+import { instantOfWallTime } from '../client/zoneOracle.ts';
+import { makePng, readPdf, type PdfTextItem } from '../support/pdfText.ts';
+
+/*
+ * WP5-UX5-RECHECK-B probe (auditor's own, synthetic): F-UX5B-3 after FIX7. For a matrix of holiday labels (none, short,
+ * diacritics, closures, long, very long, one long word, control and format characters), leave values, categories (one the
+ * handwriting face cannot draw), sessions (none or four on every day), the four row variants and two positions (week 1 and
+ * week 2), it checks on the target renderer: one page; every text item inside the 36 pt margins; the category cell's items
+ * inside the cell and band; "Leave h:mm" whole on its own 7 pt line, below the label, the label on one line and cut first;
+ * deterministic bytes; and every PDF without both labels byte-identical to the f4049aa renderer (timesheetPdfOld.ts).
+ * Expected strings are spelled out, not produced by the formatter under test.
+ */
+
+const ZONE = 'America/Los_Angeles';
+const START = '2026-09-14';
+const DATES = datesBetween(START, '2026-09-27');
+const utc = (date: string, time: string): string => instantOfWallTime(date, time, ZONE).replace('.000Z', 'Z');
+const cp = (...codePoints: number[]): string => String.fromCodePoint(...codePoints);
+const ELLIPSIS = cp(0x2026);
+
+const NAMES: Array<string | null> = [
+  null,
+  'Labor Day',
+  `Qu${cp(0x1ed1)}c kh${cp(0xe1, 0x6e, 0x68)} ${cp(0x111)}${cp(0x1ea1)}i l${cp(0x1ec5)}`,
+  'Christmas Eve (company closure)',
+  "Lunar New Year's Eve (company closure)",
+  'Year-end shutdown: plant maintenance week',
+  'Founders Remembrance and Community Service Observance Day and Extended Plant Closure for Annual Maintenance',
+  'Supercalifragilisticexpialidociousholidayclosureweek',
+  `  Spaced\tname${cp(0x200b)} with${cp(0x0007)}control  `,
+];
+const LEAVE: Array<[number, string]> = [
+  [0, ''],
+  [1, 'Leave 0:01'],
+  [90, 'Leave 1:30'],
+  [600, 'Leave 10:00'],
+];
+const CATEGORIES: Array<{ category: string; dayClass: 'normal' | 'nonworking' }> = [
+  { category: 'Holiday', dayClass: 'nonworking' },
+  { category: 'Shutdown', dayClass: 'nonworking' },
+  { category: 'Vacation', dayClass: 'normal' },
+  { category: `Ngh${cp(0x1ec9)} ph${cp(0xe9)}p`, dayClass: 'normal' },
+];
+const POSITIONS: Array<{ date: string; week: 0 | 1; column: number }> = [
+  { date: '2026-09-16', week: 0, column: 2 },
+  { date: '2026-09-27', week: 1, column: 6 },
+];
+const VARIANTS = [
+  { time: true, ot: true },
+  { time: true, ot: false },
+  { time: false, ot: true },
+  { time: false, ot: false },
+];
+
+/** The documented clean-up of a label (NFC, control and format characters to spaces, spaces collapsed, trimmed). */
+const cleaned = (value: string): string => value.normalize('NFC').replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ').replace(/\s+/g, ' ').trim();
+
+function sessions(date: string, count: number): SnapshotDay['sessions'] {
+  const slots = [
+    ['06:00', '08:00'],
+    ['09:00', '11:00'],
+    ['12:00', '14:00'],
+    ['15:00', '17:45'],
+  ];
+  return slots.slice(0, count).map(([from = '', to = ''], index) => ({
+    id: `s-${date}-${index}`,
+    start_utc: utc(date, from),
+    end_utc: utc(date, to),
+    source: 'manual',
+    breaks_confirmed: true,
+    breaks: [],
+  }));
+}
+
+function baseDay(date: string, sessionCount: number): SnapshotDay {
+  return {
+    work_date: date,
+    day_class: 'normal',
+    day_class_reason: null,
+    holiday_name: null,
+    calendar_version_id: 'cv-1',
+    category: 'Worked',
+    category_source: 'default',
+    attendance_expected: true,
+    wfh: false,
+    notes: 'private note that must not be printed',
+    leave_minutes: 0,
+    leave_kind: null,
+    ot_leave: { kind_minutes: 0, consumed_minutes: 0, reversed_minutes: 0, mismatch: false },
+    sessions: sessions(date, sessionCount),
+    completeness: 'complete',
+    policy_version_id: 'pv-1',
+    calculation: { regular_minutes: 480, nonworking_minutes: 0, normal_excess_minutes: 0, eligible_minutes: 0, credited_minutes: 30 },
+    calculation_error: null,
+  };
+}
+
+function snapshot(days: SnapshotDay[]): ReviewSnapshot {
+  const credited = days.reduce((sum, day) => sum + (day.calculation?.credited_minutes ?? 0), 0);
+  return {
+    schema: 'timesheet-review',
+    schema_version: 2,
+    employee: { name: 'Alex Example' },
+    period: {
+      payroll_date: '2026-10-02',
+      nominal_payroll_date: '2026-10-02',
+      period_start: START,
+      period_end: '2026-09-27',
+      due_local_date: '2026-09-29',
+      due_local_time: '17:00',
+      due_at_utc: utc('2026-09-29', '17:00'),
+      is_exception: false,
+    },
+    reporting_zone: ZONE,
+    submission: { id: 'TS-2026-10-02-0123456789', revision_no: 1, sign_off_status: 'Submitted' },
+    timesheet: { finalized_revision_no: null },
+    calendar: { id: 'cal-1', version_ids: ['cv-1'] },
+    policy: { version_ids: ['pv-1'] },
+    days,
+    totals: { credited_minutes: credited, pending_days: 0 },
+    ot_proposals: [],
+    deficit_proposals: [],
+    unresolved_inputs: [],
+    ot_leave_reservations: [],
+    recipients: { to: ['payroll@example.invalid'], cc: [], subject: 's', body_text: 'b', body_html: '<p>b</p>', template_version: 1 },
+    signature: null,
+    auto_image: { authorized: false, attachment_id: null },
+    auto_note: { enabled: false, text: 'Automatic submission' },
+    show_ot_on_pdf: true,
+  };
+}
+
+const IMAGE = makePng(120, 40);
+const sha = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
+
+describe('RECHECK-B PDF probe: leave on a holiday day (F-UX5B-3)', () => {
+  it('holds every rule over the matrix', async () => {
+    const failures: string[] = [];
+    const kinds = new Map<string, number>();
+    const counts = { renders: 0, both: 0, bothChanged: 0, notBoth: 0, notBothIdentical: 0, determinism: 0, truncatedLabels: 0, leaveChecked: 0, oldBothLeaveBroken: 0, maxGlyphTopAbove756: 0 };
+    const fail = (context: string, message: string) => {
+      const kind = message.split(':')[0] ?? message;
+      kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
+      if ((kinds.get(kind) ?? 0) <= 10) failures.push(`${context}: ${message}`);
+    };
+    for (const name of NAMES) {
+      for (const [leaveMinutes, leaveText] of LEAVE) {
+        for (const { category, dayClass } of CATEGORIES) {
+          for (const sessionCount of [0, 4]) {
+            for (const position of POSITIONS) {
+              for (const rows of VARIANTS) {
+                const context = `name=${JSON.stringify(name)} leave=${leaveMinutes} cat=${category} sessions=${sessionCount} pos=w${position.week + 1}c${position.column} time=${rows.time} ot=${rows.ot}`;
+                const days = DATES.map((date) =>
+                  date === position.date
+                    ? { ...baseDay(date, sessionCount), category, day_class: dayClass, holiday_name: name, leave_minutes: leaveMinutes, leave_kind: leaveMinutes > 0 ? ('vacation' as const) : null }
+                    : baseDay(date, sessionCount),
+                );
+                const input: TimesheetPdfInput = {
+                  snapshot: snapshot(days),
+                  submissionId: 'TS-2026-10-02-0123456789',
+                  revisionNo: 1,
+                  origin: 'manual',
+                  signedAt: utc('2026-10-07', '22:30'),
+                  automaticSubmittedAt: null,
+                  signerName: 'Alex Example',
+                  signatureImage: IMAGE,
+                  rows,
+                } as TimesheetPdfInput;
+                const bytes = await renderTimesheetPdf(input);
+                const old = await renderOld(input as Parameters<typeof renderOld>[0]);
+                counts.renders += 1;
+                const label = name === null ? '' : cleaned(name);
+                const both = label !== '' && leaveMinutes > 0;
+                if (both) {
+                  counts.both += 1;
+                  if (sha(bytes) !== sha(old)) counts.bothChanged += 1;
+                  const again = await renderTimesheetPdf(input);
+                  counts.determinism += 1;
+                  if (sha(again) !== sha(bytes)) fail(context, 'not deterministic');
+                } else {
+                  counts.notBoth += 1;
+                  if (sha(bytes) === sha(old)) counts.notBothIdentical += 1;
+                  else fail(context, 'a PDF without both labels differs from f4049aa');
+                }
+                const content = await readPdf(bytes);
+                if (content.pages.length !== 1) fail(context, `pages: ${content.pages.length}`);
+                const items: PdfTextItem[] = content.pages[0]?.items ?? [];
+                for (const item of items) {
+                  if (item.text.trim() === '') continue;
+                  // The baseline and the advance width lie inside the 36 pt margins (the criterion of the earlier audits).
+                  if (item.x < 36 - 0.5 || item.x + item.width > 612 - 36 + 0.5 || item.y < 36 - 0.5 || item.y > 792 - 36 + 0.5) {
+                    fail(context, `outside the margins: ${JSON.stringify(item)}`);
+                  }
+                  counts.maxGlyphTopAbove756 = Math.max(counts.maxGlyphTopAbove756, Math.round((item.y + 0.76 * item.height - 756) * 100) / 100);
+                }
+                // The renderer stacks as many time lines as the busiest day has sessions (at least one).
+                const layout = pdfLayout({ timeRows: rows.time, otRows: rows.ot, sessionLines: Math.max(1, sessionCount) });
+                const week = layout.weeks[position.week];
+                const xLow = week.daysLeft + position.column * week.dayWidth;
+                const xHigh = xLow + week.dayWidth;
+                const yLow = 792 - (week.category.top + week.category.height);
+                const yHigh = 792 - week.category.top;
+                const inColumn = (item: PdfTextItem) => item.text.trim() !== '' && item.x >= xLow - 0.5 && item.x < xHigh;
+                const column = items.filter((item) => inColumn(item) && item.y > yLow && item.y < yHigh);
+                for (const item of column) {
+                  // The glyph box (DejaVu ascent 0.76 and descent 0.24 of the size) stays inside the cell.
+                  if (item.x + item.width > xHigh + 0.5 || item.y - 0.24 * item.height < yLow - 0.5 || item.y + 0.76 * item.height > yHigh + 0.5) {
+                    fail(context, `outside the category cell: ${JSON.stringify(item)} band ${yLow.toFixed(2)}-${yHigh.toFixed(2)}`);
+                  }
+                }
+                // No small line (holiday or leave) leaked just above or below the band.
+                const leaked = items.filter((item) => inColumn(item) && item.height < 8 && !(item.y > yLow && item.y < yHigh) && item.y > yLow - 12 && item.y < yHigh + 12);
+                if (leaked.length > 0) fail(context, `small text just outside the category band: ${JSON.stringify(leaked)}`);
+                if (both) {
+                  const oldItems = (await readPdf(old)).pages[0]?.items ?? [];
+                  const oldSmall = oldItems.filter((item) => inColumn(item) && item.y > yLow && item.y < yHigh && item.height < 8);
+                  if (oldSmall.filter((item) => item.text === leaveText).length !== 1) counts.oldBothLeaveBroken += 1;
+                }
+                const small = column.filter((item) => item.height < 8).sort((a, b) => b.y - a.y);
+                const texts = small.map((item) => item.text);
+                if (leaveMinutes > 0) {
+                  counts.leaveChecked += 1;
+                  const leaveItems = small.filter((item) => item.text === leaveText);
+                  if (leaveItems.length !== 1) fail(context, `"${leaveText}" is not one whole item: ${JSON.stringify(texts)}`);
+                  else {
+                    const leaveItem = leaveItems[0];
+                    if (Math.abs((leaveItem?.height ?? 0) - 7) > 0.6) fail(context, `the leave line is not 7 pt: ${leaveItem?.height}`);
+                    if (small.at(-1) !== leaveItem) fail(context, `the leave line is not the lowest small line: ${JSON.stringify(texts)}`);
+                  }
+                  if (small.some((item) => item.text !== leaveText && item.text.includes('Leave'))) fail(context, `a split leave figure: ${JSON.stringify(texts)}`);
+                }
+                if (both) {
+                  if (small.length !== 2) fail(context, `expected the label line and the leave line: ${JSON.stringify(texts)}`);
+                  const shown = small[0]?.text ?? '';
+                  const bare = shown.endsWith(ELLIPSIS) ? shown.slice(0, -1) : shown;
+                  if (bare === '' || !label.startsWith(bare)) fail(context, `the label line is not the label or its cut: ${JSON.stringify(shown)} of ${JSON.stringify(label)}`);
+                  if (shown !== label) {
+                    counts.truncatedLabels += 1;
+                    if (!shown.endsWith(ELLIPSIS)) fail(context, `a cut label without an ellipsis: ${JSON.stringify(shown)}`);
+                  }
+                  if ((small[0]?.y ?? 0) <= (small[1]?.y ?? 0)) fail(context, 'the label is not above the leave line');
+                } else if (label === '' && leaveMinutes === 0) {
+                  if (small.length !== 0) fail(context, `unexpected small lines: ${JSON.stringify(texts)}`);
+                } else if (label === '' && leaveMinutes > 0) {
+                  if (JSON.stringify(texts) !== JSON.stringify([leaveText])) fail(context, `expected only the leave line: ${JSON.stringify(texts)}`);
+                } else {
+                  const joined = texts.join(' ').replace(ELLIPSIS, '');
+                  if (small.length < 1 || small.length > 2 || !label.startsWith(joined.trim().split(' ').slice(0, 1).join(' '))) fail(context, `label without leave: ${JSON.stringify(texts)}`);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    const out = process.env.RECHECK_OUT;
+    const report = [`counts ${JSON.stringify(counts)}`, `failure kinds ${JSON.stringify(Object.fromEntries(kinds))}`, `examples ${failures.length}`, ...failures].join('\n');
+    if (out !== undefined) writeFileSync(out, `${report}\n`);
+    expect(failures, report).toEqual([]);
+  }, 3_600_000);
+});

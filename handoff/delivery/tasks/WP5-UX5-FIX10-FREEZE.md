@@ -126,3 +126,9 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+
+- HEAD before 94accda904240fda1cf500063d8b30d3a3603fd2; after a5533b57daa81a340c0ad9dfe5f5feac4e6ce1f5.
+- Pushed to origin main (fast-forward); remote SHA a5533b57daa81a340c0ad9dfe5f5feac4e6ce1f5.
+- D_PRE = HEAD digest = 4147751090b5511ea56225bb7bf9a33225602cc705eb906a13477cec9101869f.
+- Staged 307 paths. Masked 3 profile-path lines in DIAG4/census-end.txt; no file unstaged.
+- All checks exit 0 (precommit after masking). Details in evidence/WP5-UX5-FIX10-FREEZE/checks.txt.

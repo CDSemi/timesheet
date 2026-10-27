@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Runs the auditor's PDF probe in the probe export (old renderer copied beside the target one).
+source <task>/env.sh
+cd "$P" || exit 9
+export RECHECK_OUT="$(cygpath -w "$T/logs/pdf-probe-result.txt")"
+start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+npx vitest run tests/integration/zz-recheck-pdf.test.ts > "$T/logs/pdf-probe.log" 2>&1
+echo "pdf-probe exit=$? start=$start end=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/logs/probe-exits.txt"

@@ -1,0 +1,49 @@
+== mut-A1: real start 2026-10-27T16:09:17Z, simulated start real, AB8_SHIFT_MS=0
+process clock 2026-10-27T16:09:17.387Z (Date.now 1793117357397); America/Los_Angeles Tue, 2026-10-27, 09:09; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test -g pipeline states tests/e2e/admin-status.spec.ts --project=desktop --workers=1 --reporter=list --output=<task>\pw-mut-A1
+
+Running 1 test using 1 worker
+
+  x  1 [desktop] › tests\e2e\admin-status.spec.ts:139:1 › the admin sees pipeline states, a fault code and recipients, and no timesheet detail (39.3s)
+
+
+  1) [desktop] › tests\e2e\admin-status.spec.ts:139:1 › the admin sees pipeline states, a fault code and recipients, and no timesheet detail 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: 'Submissions and delivery' }).locator('[data-submission-user="b39e0790-fcb7-49c6-a616-0c8381e9997e"]').locator('[data-status="delivery"]')
+    Expected: "Delivered"
+    Received: "Sent"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: 'Submissions and delivery' }).locator('[data-submission-user="b39e0790-fcb7-49c6-a616-0c8381e9997e"]').locator('[data-status="delivery"]') with timeout 7000ms
+      - waiting for getByRole('region', { name: 'Submissions and delivery' }).locator('[data-submission-user="b39e0790-fcb7-49c6-a616-0c8381e9997e"]').locator('[data-status="delivery"]')
+        18 × locator resolved to <span class="badge badge-ok" data-status="delivery">Sent</span>
+           - unexpected value "Sent"
+
+
+      196 |   await expect(personRow.locator('[data-status="pdf"]')).toHaveText('PDF ready');
+      197 |   if (row.delivery.state === 'accepted') {
+    > 198 |     await expect(personRow.locator('[data-status="delivery"]')).toHaveText('Delivered');
+          |                                                                 ^
+      199 |   } else {
+      200 |     await expect(personRow.locator('[data-status="delivery"]')).toHaveText('Failed');
+      201 |     await expect(personRow).toContainText(row.delivery.fault_code ?? 'unclassified');
+        at <task>\export-probe\tests\e2e\admin-status.spec.ts:198:65
+
+    Error Context: ..\pw-mut-A1\admin-status-the-admin-see-bee93-nts-and-no-timesheet-detail-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-A1\admin-status-the-admin-see-bee93-nts-and-no-timesheet-detail-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-A1\admin-status-the-admin-see-bee93-nts-and-no-timesheet-detail-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\admin-status.spec.ts:139:1 › the admin sees pipeline states, a fault code and recipients, and no timesheet detail 
+exit=1
+process clock 2026-10-27T16:09:59.344Z (Date.now 1793117399354); America/Los_Angeles Tue, 2026-10-27, 09:09; shift ms 0; instanceof true
+== mut-A1 real end 2026-10-27T16:09:59Z

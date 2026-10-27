@@ -2329,11 +2329,91 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
     2026-11-01T08:45Z, workers=6, had 871 passed and 0 failed, with the logo tests at 1.1
     to 1.3 min.
   - The build asset names are unchanged.
-- **Running now:** WP5-UX5-FIX10-FREEZE (committer, sonnet), alone.
-- **Next:**
-  1. The scoped regate WP5-UX5-REGATE6.
-  2. Fresh rechecks of areas A and B.
-  2. The integration audit, ACCEPT-DOCS and the WP5 re-accept.
+- **WP5-UX5-FIX10-FREEZE done.**
+  - Commit a5533b57daa81a340c0ad9dfe5f5feac4e6ce1f5 is on main and pushed, a fast-forward
+    from 94accda.
+  - D_PRE equals the HEAD digest, 41477510.
+  - 307 paths. Three profile-path lines in a DIAG4 census log were masked as `<user>`.
+    Every check exits 0.
+- **WP5-UX5-REGATE6** (verifier, sonnet), the scoped regate, ran alone on a5533b5.
+  - **Carried forward from REGATE5,** once the five-path identity and equal `dist/` hashes
+    are confirmed: the build pair, the drill, `npm audit`, `npm test` ×3, the unit
+    mutants, axe, and the stress of untouched files.
+  - **Rerun:** lint, typecheck, `verify`, the validators, the FULL e2e, the six sweeps
+    (any timeout fails), the stress of the changed tests, the mutants, and a diff read.
+  - **First stop:** the verifier called PowerShell with `-ExecutionPolicy Bypass -File`, a
+    form the brief never allowed. The permission check denied it, and the verifier stopped
+    correctly. No gate item ran.
+  - **Coordinator decision (Addendum 1):** never retry that form. The census uses only
+    inline read-only `-Command` queries. If those are denied too, the census is skipped and
+    recorded; it is a precaution, not a gate criterion. The same verifier continues.
+- **WP5-UX5-REGATE6: PASS** (scoped) on a5533b5 / 41477510.
+  - The census was taken inline: 2.57 busy cores.
+  - **The premise holds:** exactly five `tests/e2e` paths changed, and the 250 `dist/`
+    hashes equal REGATE5's. So the drill, `npm audit`, `npm test` ×3, the unit mutants and
+    axe carry forward.
+  - lint, typecheck, `verify` and the validators exit 0.
+  - The FULL e2e had 466 and 405 passed, 0 failed.
+  - The six sweeps had 0 failed and no timeout; the logo tests took 1.1 to 1.4 min.
+  - The stress runs had 0 failed. The longest logo test took 204 s of 240 s under the
+    10-worker load.
+  - All 12 mutants failed their tests.
+- **WP5-UX5-RECHECK-B: FIX REQUIRED** (opus), with one new Low finding.
+  - **F-UX5B2-1:** after a restore, `outbound release` checks for later sends per revision
+    only (`restore.ts:535-555`). A held send of a superseded revision can be released and
+    delivered after the correction.
+  - **The fix:** check later sends by period (`timesheet_id`) and add one
+    `restore.test.ts` case.
+  - **The old findings F-UX5B-1..5 are fixed.** The auditor's own PDF probe made 2,304
+    renders, and the 768 PDFs without both labels are byte-identical. The pilot sample
+    hashes are unaffected. Option A is verified, including a race between two server
+    processes.
+  - **Risks:**
+    - the one-minute retry when a send's PDF is not stored yet, acceptable for the pilot;
+    - a correction's send can be blocked for up to about 81 minutes while the mail server
+      is down;
+    - two test gaps (G2, P4) that the auditor's probes catch but the suite does not.
+- **Coordinator decision:** one fix after RECHECK-A returns, never beside a running audit.
+  It covers:
+  - F-UX5B2-1 in code, consistent with option A;
+  - tests for the G2 and P4 gaps;
+  - one known-limit sentence in docs/12 (EN and VI) on how long option A can block.
+- **WP5-UX5-RECHECK-A: FIX REQUIRED** (opus), with one new Low finding.
+  - **F-UX5A-1..4 are fixed.** Measured at nine widths in both themes: no overlap, the
+    button 8 px inside the line end, the lines aligned. The "Change days" name matches its
+    words. The touch fix is proven in Chromium emulation. The docs are corrected.
+  - **New, F-UX5A2-1:** the focus ring of a read-only week card is painted only on the top
+    and left edges, because the day columns cover the rest. The docs claim the shared
+    ring. WCAG 2.2 AA is still met (SC 2.4.7); the defect is against the AGENTS UI
+    standard and the docs.
+  - axe: 104 scans, 0 violations. FULL e2e: 871 passed, 0 failed.
+  - **Risks:** touch on real iOS and Android, overlay scrollbars, the test gaps MA1, MA5,
+    MA8 and MA9, and the load-sensitive logo sweeps.
+  - The auditor's probe run was still running at hand-back. The coordinator stopped it with
+    TaskStop; no PID kill.
+- **Coordinator decision:** one fix, WP5-UX5-FIX11 (worker-high). It covers:
+  - F-UX5B2-1 and F-UX5A2-1;
+  - tests for the gaps G2, P4, MA1, MA8 and MA9;
+  - a docs/12 known-limit sentence on how long option A can block.
+
+  R-A2-1 (real devices), R-A2-2 and MA5 stay recorded. The pilot packet will list a check
+  on a real iPad and Android tablet.
+- **WP5-UX5-FIX11 done** (worker-high, sonnet; uncommitted; digest 20709d60; 15 changed
+  files). Both findings were reproduced first.
+  - **F-UX5B2-1:** `blockerOf` now checks by period. The held superseded send stays held
+    (`superseded_by_later_send`). docs/11:178 is corrected and docs/05:72 is extended.
+  - **F-UX5A2-1:** a ring layer paints all four edges, in light and dark, also when the card
+    is scrolled. The comments and docs/04 are corrected.
+  - **Gap tests:** G2, P4, MA1, MA8 and MA9 all fail under their mutants now.
+  - docs/12 has the known-limit sentence.
+  - axe: 46 scans, 0 violations. `npm test` ran 2,388 tests. The FULL e2e had 872 passed
+    and 0 failed. The drill had 209 PASS and 0 FAIL.
+  - **Leftover:** the RECHECK-A probe run left orphaned Playwright processes and a built
+    server (PIDs 63092, 37448, 90528, 101148) after its bash task was stopped. The owner
+    is asked to close them; mission tasks never kill by PID.
+- **Running now:** WP5-UX5-FIX11-FREEZE (committer), alone.
+- **Next:** WP5-UX5-REGATE7, fresh rechecks of the two findings, the integration audit,
+  ACCEPT-DOCS and the WP5 re-accept.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

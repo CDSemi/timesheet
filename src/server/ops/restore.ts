@@ -82,8 +82,9 @@ import {
  * capture (`cli.js outbound release|drop`). `releaseHeldJob` (by id) and `releaseAllHeldJobs` (bulk, after the preview
  * of `listHeldJobs`) put a held job back in the queue under the normal AC-08 rules: a job whose latest attempt is
  * uncertain is never released (its attempt takes the owner's decision instead), and a send job is not released while
- * another attempt of its revision is open or a later send of the same revision exists (so a send the owner already
- * repeated is never sent twice). `dropHeldReminder` cancels a held reminder instead. Each step is one IMMEDIATE
+ * another attempt of its revision is open or a later send of the same period (any of its revisions) exists (so a send
+ * the owner already repeated is never sent twice, and a superseded revision's copy never follows the correction's).
+ * `dropHeldReminder` cancels a held reminder instead. Each step is one IMMEDIATE
  * transaction with a system audit event (job id and kind only).
  */
 
@@ -546,9 +547,14 @@ function blockerOf(db: Db, job: HeldRow): ReleaseBlocker | null {
     )
     .get(job.revision_id, job.user_id, job.id);
   if (open !== undefined) return 'delivery_attempt_open';
+  // A later send of ANY revision of the same period (not only of the held job's own revision) keeps the held job held, so the
+  // older revision's copy cannot arrive after the correction's (R-UX5B-1, the same period-wide rule as the send guard).
   const later = db
     .prepare<[string, string, string, number], { one: number }>(
-      `SELECT 1 AS one FROM jobs WHERE revision_id = ? AND user_id = ? AND kind = ? AND rowid > ? AND state IN ('queued', 'leased', 'succeeded') LIMIT 1`,
+      `SELECT 1 AS one FROM jobs j
+         JOIN timesheet_revisions r ON r.id = j.revision_id AND r.user_id = j.user_id
+         JOIN timesheet_revisions held ON held.timesheet_id = r.timesheet_id AND held.user_id = r.user_id
+        WHERE held.id = ? AND j.user_id = ? AND j.kind = ? AND j.rowid > ? AND j.state IN ('queued', 'leased', 'succeeded') LIMIT 1`,
     )
     .get(job.revision_id, job.user_id, job.kind, job.rowid);
   return later === undefined ? null : 'superseded_by_later_send';

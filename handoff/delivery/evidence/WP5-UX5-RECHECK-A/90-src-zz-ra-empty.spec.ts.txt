@@ -1,0 +1,41 @@
+import { appendFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-RECHECK-A probe for mutant MA1: does `.rsig-content:empty { display: none }` change the unsigned signature line? The same page is
+ * measured with and without a runtime override that makes the empty content a flex item again. Synthetic data only.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUT = process.env.RA_OUT ?? '';
+function note(kind: string, data: unknown): void {
+  const line = JSON.stringify({ kind, ...(data as object) });
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+const MEASURE = `(() => { const r = (e) => { const b = e.getBoundingClientRect(); return [Math.round(b.left * 10) / 10, Math.round(b.top * 10) / 10, Math.round(b.width * 10) / 10, Math.round(b.height * 10) / 10]; };
+  const g = document.querySelector('.review-preview .review-signatures'); return { line: r(g.querySelector('[data-sig-line="employee"]')), date: r(g.querySelector('[data-sig-line="employee-date"]')), button: r(document.querySelector('[data-sign-off]')), content: r(g.querySelector('.rsig-content')) }; })()`;
+
+test('unsigned line with and without the :empty rule', async ({ page, adminSeed, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop');
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Empty', signature: 'saved' });
+  await page.goto(`/#/review/${person.payrollDate}`);
+  await page.getByLabel('Email').fill(person.account.email);
+  await page.getByLabel('Password').fill(person.account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  const rows: unknown[] = [];
+  for (const width of [1440, 1100, 768, 600, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await frames(page);
+    const normal = await page.evaluate(MEASURE);
+    // CSSOM on the app's own sheet (the CSP refuses an inline style tag).
+    await page.evaluate(`(() => { const s = [...document.styleSheets].find((x) => x.href !== null); s.insertRule('.rsig-content:empty { display: flex !important; }', s.cssRules.length); })()`);
+    await frames(page);
+    const mutated = await page.evaluate(MEASURE);
+    await page.evaluate(`(() => { const s = [...document.styleSheets].find((x) => x.href !== null); s.deleteRule(s.cssRules.length - 1); })()`);
+    await frames(page);
+    rows.push({ width, normal, mutated, same: JSON.stringify({ ...(normal as object), content: null }) === JSON.stringify({ ...(mutated as object), content: null }) });
+  }
+  note('empty-rule', { rows });
+});

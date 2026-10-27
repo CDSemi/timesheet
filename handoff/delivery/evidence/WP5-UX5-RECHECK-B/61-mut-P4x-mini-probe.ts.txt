@@ -1,0 +1,91 @@
+import { describe, expect, it } from 'vitest';
+import { datesBetween } from '../../src/domain/dates.ts';
+import type { ReviewSnapshot, SnapshotDay } from '../../src/domain/snapshot.ts';
+import { pdfLayout } from '../../src/server/pdf/layout.ts';
+import { renderTimesheetPdf } from '../../src/server/pdf/timesheetPdf.ts';
+import { instantOfWallTime } from '../client/zoneOracle.ts';
+import { readPdf } from '../support/pdfText.ts';
+
+/*
+ * WP5-UX5-RECHECK-B mini probe (auditor's own, synthetic): the tightest category band (four sessions on every day, time
+ * and OT rows on: 37 pt) with a holiday label and leave on the same day. "Leave 1:30" must be one item whose glyph box lies
+ * inside the category band, below the label. Used to tell whether mutant P4 (the block height ignores the leave line) is
+ * caught by a probe the suite lacks.
+ */
+const ZONE = 'America/Los_Angeles';
+const DATES = datesBetween('2026-09-14', '2026-09-27');
+const utc = (date: string, time: string): string => instantOfWallTime(date, time, ZONE).replace('.000Z', 'Z');
+
+function day(date: string, overrides: Partial<SnapshotDay> = {}): SnapshotDay {
+  return {
+    work_date: date,
+    day_class: 'normal',
+    day_class_reason: null,
+    holiday_name: null,
+    calendar_version_id: 'cv-1',
+    category: 'Worked',
+    category_source: 'default',
+    attendance_expected: true,
+    wfh: false,
+    notes: '',
+    leave_minutes: 0,
+    leave_kind: null,
+    ot_leave: { kind_minutes: 0, consumed_minutes: 0, reversed_minutes: 0, mismatch: false },
+    sessions: [['06:00', '08:00'], ['09:00', '11:00'], ['12:00', '14:00'], ['15:00', '17:45']].map(([from = '', to = ''], index) => ({
+      id: `s-${date}-${index}`,
+      start_utc: utc(date, from),
+      end_utc: utc(date, to),
+      source: 'manual',
+      breaks_confirmed: true,
+      breaks: [],
+    })),
+    completeness: 'complete',
+    policy_version_id: 'pv-1',
+    calculation: { regular_minutes: 480, nonworking_minutes: 0, normal_excess_minutes: 0, eligible_minutes: 0, credited_minutes: 30 },
+    calculation_error: null,
+    ...overrides,
+  };
+}
+
+function snapshot(days: SnapshotDay[]): ReviewSnapshot {
+  return {
+    schema: 'timesheet-review',
+    schema_version: 2,
+    employee: { name: 'Alex Example' },
+    period: { payroll_date: '2026-10-02', nominal_payroll_date: '2026-10-02', period_start: '2026-09-14', period_end: '2026-09-27', due_local_date: '2026-09-29', due_local_time: '17:00', due_at_utc: utc('2026-09-29', '17:00'), is_exception: false },
+    reporting_zone: ZONE,
+    submission: { id: 'TS-2026-10-02-0123456789', revision_no: 1, sign_off_status: 'Submitted' },
+    timesheet: { finalized_revision_no: null },
+    calendar: { id: 'cal-1', version_ids: ['cv-1'] },
+    policy: { version_ids: ['pv-1'] },
+    days,
+    totals: { credited_minutes: 420, pending_days: 0 },
+    ot_proposals: [],
+    deficit_proposals: [],
+    unresolved_inputs: [],
+    ot_leave_reservations: [],
+    recipients: { to: ['payroll@example.invalid'], cc: [], subject: 's', body_text: 'b', body_html: '<p>b</p>', template_version: 1 },
+    signature: null,
+    auto_image: { authorized: false, attachment_id: null },
+    auto_note: { enabled: false, text: 'Automatic submission' },
+    show_ot_on_pdf: true,
+  };
+}
+
+describe('RECHECK-B mini probe: leave and holiday in the tightest category band', () => {
+  it.each(['Labor Day', "Lunar New Year's Eve (company closure)"])('keeps "Leave 1:30" inside the 37 pt band under %s', async (name) => {
+    const days = DATES.map((date) => (date === '2026-09-16' ? day(date, { category: 'Holiday', day_class: 'nonworking', holiday_name: name, leave_minutes: 90, leave_kind: 'sick' }) : day(date)));
+    const bytes = await renderTimesheetPdf({ snapshot: snapshot(days), submissionId: 'TS-2026-10-02-0123456789', revisionNo: 1, origin: 'manual', signedAt: utc('2026-10-07', '22:30'), automaticSubmittedAt: null, signerName: 'Alex Example', signatureImage: null, rows: { time: true, ot: true } });
+    const items = (await readPdf(bytes)).pages[0]?.items ?? [];
+    const week = pdfLayout({ timeRows: true, otRows: true, sessionLines: 4 }).weeks[0];
+    expect(week.category.height).toBe(37);
+    const xLow = week.daysLeft + 2 * week.dayWidth;
+    const yLow = 792 - (week.category.top + week.category.height);
+    const yHigh = 792 - week.category.top;
+    const leave = items.filter((item) => item.text === 'Leave 1:30' && item.x >= xLow - 0.5 && item.x < xLow + week.dayWidth);
+    expect(leave, JSON.stringify(leave)).toHaveLength(1);
+    const line = leave[0];
+    expect(line?.y ?? 0, `baseline ${line?.y} band ${yLow}-${yHigh}`).toBeGreaterThan(yLow + 0.24 * 7 - 0.5);
+    expect((line?.y ?? 0) + 0.76 * 7).toBeLessThan(yHigh + 0.5);
+  });
+});

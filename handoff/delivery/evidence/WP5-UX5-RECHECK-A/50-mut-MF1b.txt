@@ -1,0 +1,87 @@
+mutant MF1b file tests/e2e/logo.spec.ts build none args tests/e2e/logo.spec.ts -g wordmark shows whenever it fits.*\(light\) --project=desktop --workers=2 --reporter=list
+mutated tests/e2e/logo.spec.ts
+mutate exit 0
+
+Running 1 test using 1 worker
+
+  x  1 [desktop] › tests\e2e\logo.spec.ts:547:3 › the wordmark shows whenever it fits, 320 to 1440px in 1px steps, on the person's own screens (light) (33.9s)
+
+
+  1) [desktop] › tests\e2e\logo.spec.ts:547:3 › the wordmark shows whenever it fits, 320 to 1440px in 1px steps, on the person's own screens (light) 
+
+    Error: every width from 320 to 1440px was measured once, in order
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 4
+    + Received  + 0
+
+    @@ -277,11 +277,10 @@
+        595,
+        596,
+        597,
+        598,
+        599,
+    -   600,
+        601,
+        602,
+        603,
+        604,
+        605,
+    @@ -558,11 +557,10 @@
+        876,
+        877,
+        878,
+        879,
+        880,
+    -   881,
+        882,
+        883,
+        884,
+        885,
+        886,
+    @@ -839,11 +837,10 @@
+        1157,
+        1158,
+        1159,
+        1160,
+        1161,
+    -   1162,
+        1163,
+        1164,
+        1165,
+        1166,
+        1167,
+    @@ -1117,7 +1114,6 @@
+        1435,
+        1436,
+        1437,
+        1438,
+        1439,
+    -   1440,
+      ]
+
+      529 |     rows.map((row) => row.width),
+      530 |     'every width from 320 to 1440px was measured once, in order',
+    > 531 |   ).toEqual(Array.from({ length: SWEEP_LAST - SWEEP_FIRST + 1 }, (_, index) => SWEEP_FIRST + index));
+          |     ^
+      532 |   const shows = rows.map((row) => row.actual.visible);
+      533 |   const fits = rows.map((row) => (row.width >= 768 && options.fixedDesktopBound ? row.width >= 1280 : wordmarkFits(row, row.width < 768)));
+      534 |   for (const [index, row] of rows.entries()) {
+        at sweepWordmark (<task>\export-mut\tests\e2e\logo.spec.ts:531:5)
+        at <task>\export-mut\tests\e2e\logo.spec.ts:558:19
+
+    Error Context: ..\tmp\pw-mut-MF1b\logo-the-wordmark-shows-wh-be3d8-person-s-own-screens-light--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\pw-mut-MF1b\logo-the-wordmark-shows-wh-be3d8-person-s-own-screens-light--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\pw-mut-MF1b\logo-the-wordmark-shows-wh-be3d8-person-s-own-screens-light--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\logo.spec.ts:547:3 › the wordmark shows whenever it fits, 320 to 1440px in 1px steps, on the person's own screens (light) 
+tests exit 1
+restored byte-identical to the clean export

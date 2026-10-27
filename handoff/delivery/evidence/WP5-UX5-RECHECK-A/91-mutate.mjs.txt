@@ -1,0 +1,15 @@
+// Usage: node mutate.mjs <file> <old-file> <new-file>
+// Replaces exactly one occurrence of the text in <old-file> by the text in <new-file> inside <file>; exits 2 if the count is not 1.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, oldFile, newFile] = process.argv.slice(2);
+const text = readFileSync(file, 'utf8');
+const from = readFileSync(oldFile, 'utf8');
+const to = readFileSync(newFile, 'utf8');
+const count = text.split(from).length - 1;
+if (count !== 1) {
+  console.error(`expected exactly one occurrence, found ${count} in ${file}`);
+  process.exit(2);
+}
+writeFileSync(file, text.replace(from, to));
+console.log(`mutated ${file}`);

@@ -1,0 +1,15 @@
+. <task>/env.sh
+cd $T
+cp zz-control.spec.ts export-probe/tests/e2e/
+node zone.mjs > out/03-window.txt 2>&1
+SHIFT_EXPORT=$T/export-probe bash run-shift.sh ctl-real real tests/e2e/zz-control.spec.ts > logs/control-real.txt 2>&1
+CONTROL_TODAY=2026-11-01 SHIFT_EXPORT=$T/export-probe bash run-shift.sh ctl-1101 2026-11-01T08:45:00Z tests/e2e/zz-control.spec.ts > logs/control-1101.txt 2>&1
+echo "controls done $(date -u +%H:%M:%SZ)" > logs/chain2.log
+for P in desktop mobile; do
+  bash run-shift.sh full-$P real --project=$P > out/04-e2e-$P.txt 2>&1
+  node counts.mjs out/04-e2e-$P.txt >> out/04-e2e-project-counts.txt 2>&1
+  echo "e2e $P done $(date -u +%H:%M:%SZ)" >> logs/chain2.log
+done
+node zone.mjs >> out/03-window.txt 2>&1
+echo "e2e done $(date -u +%H:%M:%SZ)" >> logs/chain2.log
+echo chain2-done > out/chain2.done

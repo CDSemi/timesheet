@@ -1,0 +1,72 @@
+import { appendFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { paintedSurface } from './contrast.ts';
+import { namedDayButton } from './dayButton.ts';
+import { expect, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-RECHECK-A probe: the FIX10 PNG decoder (`paintedSurface`) against an independent decoder, the browser's own (the same PNG bytes
+ * drawn on a canvas and read back with getImageData), for every pixel of the 1280x800 viewport, light and dark. Synthetic data only.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUT = process.env.RA_OUT ?? '';
+function note(kind: string, data: unknown): void {
+  const line = JSON.stringify({ kind, ...(data as object) });
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`paintedSurface decodes exactly what the browser decodes - ${scheme}`, async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+    test.setTimeout(240_000);
+    test.skip(isMobile, 'desktop');
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await namedDayButton(page, date, 'Edit').click();
+    await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+    // Keep the bytes of the screenshot paintedSurface takes.
+    const original = page.screenshot.bind(page);
+    let captured: Buffer | null = null;
+    (page as unknown as { screenshot: Page['screenshot'] }).screenshot = async (options) => {
+      captured = await original(options);
+      return captured;
+    };
+    const surface = await paintedSurface(page);
+    (page as unknown as { screenshot: Page['screenshot'] }).screenshot = original;
+    expect(captured).not.toBeNull();
+    const base64 = (captured as unknown as Buffer).toString('base64');
+    // The browser decodes the same bytes in a fresh blank page.
+    const other = await page.context().newPage();
+    await other.goto('about:blank');
+    const decoded = await other.evaluate<number[], string>(async (data) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext('2d', { colorSpace: 'srgb' });
+      if (context === null) return [];
+      context.drawImage(image, 0, 0);
+      return Array.from(context.getImageData(0, 0, canvas.width, canvas.height).data);
+    }, base64);
+    await other.close();
+    let differ = 0;
+    const examples: unknown[] = [];
+    for (let y = 0; y < 800; y += 1) {
+      for (let x = 0; x < 1280; x += 1) {
+        const a = surface.at(x, y);
+        const i = (y * 1280 + x) * 4;
+        const b = [decoded[i], decoded[i + 1], decoded[i + 2]];
+        if (a[0] !== b[0] || a[1] !== b[1] || a[2] !== b[2]) {
+          differ += 1;
+          if (examples.length < 5) examples.push({ x, y, a, b });
+        }
+      }
+    }
+    note('surface-vs-browser-decoder', { scheme, pixels: 1280 * 800, differ, examples, decodedLength: decoded.length });
+    expect(differ).toBe(0);
+  });
+}

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Copies every changed or new non-handoff file of the repository working tree into the scratch export given as $1.
+source <task>/env.sh
+dest="$1"
+cd "$REPO" || exit 9
+for f in $(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$REPO" git status --short --untracked-files=all -- . ':!handoff' | cut -c4-); do
+  mkdir -p "$dest/$(dirname "$f")"
+  cp "$REPO/$f" "$dest/$f"
+  echo "synced $f"
+done

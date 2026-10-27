@@ -1,0 +1,15 @@
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+out = []
+for i, od in enumerate(d.get('owner_decisions') or []):
+    s = json.dumps(od, ensure_ascii=False)
+    if '2026-10-21' in s or '2026-10-22' in s or '2026-10-23' in s or '2026-10-24' in s or '2026-10-25' in s or '2026-10-26' in s or '2026-10-27' in s:
+        out.append('--- %d ---' % i)
+        out.append(json.dumps(od, ensure_ascii=False, indent=1))
+for k in ['coordinator_decisions']:
+    for i, cd in enumerate(d.get(k) or []):
+        s = json.dumps(cd, ensure_ascii=False)
+        if 'FIX7A' in s or 'F-UX5A' in s or 'FIX9' in s or 'FIX10' in s or 'RECHECK-A' in s:
+            out.append('=== coord %d ===' % i)
+            out.append(json.dumps(cd, ensure_ascii=False, indent=1))
+open(sys.argv[2], 'w', encoding='utf-8', newline='\n').write('\n'.join(out) + '\n')

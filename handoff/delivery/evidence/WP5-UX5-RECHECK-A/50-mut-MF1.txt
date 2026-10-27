@@ -1,0 +1,44 @@
+mutant MF1 file src/client/styles.css build client args tests/e2e/logo.spec.ts -g in a shared view.*\(light\) --project=desktop --workers=2 --reporter=list
+mutated src/client/styles.css
+mutate exit 0
+build exit 0
+
+Running 1 test using 1 worker
+
+  x  1 [desktop] › tests\e2e\logo.spec.ts:599:3 › in a shared view the wordmark never adds a row: shown from 492px, and from 1280px on the desktop bar (light) (33.1s)
+
+
+  1) [desktop] › tests\e2e\logo.spec.ts:599:3 › in a shared view the wordmark never adds a row: shown from 492px, and from 1280px on the desktop bar (light) 
+
+    Error: 493px: the wordmark is hidden but fits
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      538 |     if (shows[index] !== fits[index]) {
+      539 |       const neighbour = shows[index] === fits[index - 1] || shows[index] === fits[index + 1];
+    > 540 |       expect(neighbour, `${row.width}px: the wordmark is ${shows[index] ? 'shown' : 'hidden'} but ${fits[index] ? 'fits' : 'does not fit'}`).toBe(true);
+          |                                                                                                                                              ^
+      541 |     }
+      542 |   }
+      543 |   return rows.filter((row) => row.actual.visible).map((row) => row.width);
+        at sweepWordmark (<task>\export-mut\tests\e2e\logo.spec.ts:540:142)
+        at <task>\export-mut\tests\e2e\logo.spec.ts:623:25
+
+    Error Context: ..\tmp\pw-mut-MF1\logo-in-a-shared-view-the--59f60-x-on-the-desktop-bar-light--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\pw-mut-MF1\logo-in-a-shared-view-the--59f60-x-on-the-desktop-bar-light--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\pw-mut-MF1\logo-in-a-shared-view-the--59f60-x-on-the-desktop-bar-light--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\logo.spec.ts:599:3 › in a shared view the wordmark never adds a row: shown from 492px, and from 1280px on the desktop bar (light) 
+tests exit 1
+restored byte-identical to the clean export
+restore build exit 0

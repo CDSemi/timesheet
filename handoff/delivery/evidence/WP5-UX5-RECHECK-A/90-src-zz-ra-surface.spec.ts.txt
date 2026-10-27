@@ -1,0 +1,78 @@
+import { appendFileSync } from 'node:fs';
+import { inflateSync } from 'node:zlib';
+import type { Page } from '@playwright/test';
+import { paintedPixel, paintedSurface } from './contrast.ts';
+import { namedDayButton } from './dayButton.ts';
+import { expect, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-RECHECK-A probe: the decoded screenshot surface of FIX10 (`paintedSurface`) against the per-pixel screenshot it replaces
+ * (`paintedPixel`), on the Timesheet with a day open, in both themes; and the PNG filter types and colour type Playwright's screenshot
+ * actually uses, so the decoder's branches are known to be exercised. Synthetic data only.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUT = process.env.RA_OUT ?? '';
+function note(kind: string, data: unknown): void {
+  const line = JSON.stringify({ kind, ...(data as object) });
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+
+async function pngFacts(page: Page) {
+  const png = await page.screenshot({ scale: 'css', animations: 'disabled', caret: 'hide' });
+  const data: Buffer[] = [];
+  let [width, height, colourType, depth, interlace] = [0, 0, 0, 0, 0];
+  const chunks: string[] = [];
+  for (let offset = 8; offset < png.length; ) {
+    const length = png.readUInt32BE(offset);
+    const type = png.toString('latin1', offset + 4, offset + 8);
+    chunks.push(type);
+    const body = png.subarray(offset + 8, offset + 8 + length);
+    if (type === 'IHDR') [width, height, depth, colourType, interlace] = [body.readUInt32BE(0), body.readUInt32BE(4), body.readUInt8(8), body.readUInt8(9), body.readUInt8(12)];
+    if (type === 'IDAT') data.push(body);
+    offset += 12 + length;
+  }
+  const raw = inflateSync(Buffer.concat(data));
+  const bytes = colourType === 6 ? 4 : 3;
+  const filters: Record<number, number> = {};
+  for (let row = 0; row < height; row += 1) {
+    const f = raw.readUInt8(row * (width * bytes + 1));
+    filters[f] = (filters[f] ?? 0) + 1;
+  }
+  return { width, height, depth, colourType, interlace, idatChunks: chunks.filter((c) => c === 'IDAT').length, chunkTypes: [...new Set(chunks)], filters };
+}
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`paintedSurface equals paintedPixel - ${scheme}`, async ({ page, employeeSeed, signInThroughUi, isMobile }) => {
+    test.setTimeout(240_000);
+    test.skip(isMobile, 'the frame test that uses the surface is a desktop test');
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await namedDayButton(page, date, 'Edit').click();
+    await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+    await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+    const facts = await pngFacts(page);
+    const surface = await paintedSurface(page);
+    const box = await page.locator(`[data-day="${date}"]`).first().boundingBox();
+    const points: Array<[number, number]> = [];
+    for (let y = 3; y < 800; y += 41) for (let x = 2; x < 1280; x += 53) points.push([x, y]);
+    // Every pixel of a horizontal line across the open column and its neighbours, where the frame and fills change.
+    const lineY = Math.floor((box?.y ?? 200) + 30);
+    for (let x = Math.max(0, Math.floor((box?.x ?? 0) - 20)); x < Math.min(1280, Math.ceil((box?.x ?? 0) + (box?.width ?? 0) + 20)); x += 1) points.push([x, lineY]);
+    let differ = 0;
+    const examples: unknown[] = [];
+    for (const [x, y] of points) {
+      const a = surface.at(x, y);
+      const b = await paintedPixel(page, x, y);
+      const max = Math.max(...[0, 1, 2, 3].map((i) => Math.abs((a[i] ?? 0) - (b[i] ?? 0)) * (i === 3 ? 255 : 1)));
+      if (max > 0) {
+        differ += 1;
+        if (examples.length < 10) examples.push({ x, y, surface: a, pixel: b });
+      }
+    }
+    note('surface-vs-pixel', { scheme, facts, points: points.length, differ, examples });
+    expect(differ).toBe(0);
+  });
+}

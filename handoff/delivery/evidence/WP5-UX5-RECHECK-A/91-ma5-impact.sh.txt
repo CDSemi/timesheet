@@ -1,0 +1,19 @@
+# Shows what the surviving mutant MA5 (the touch-end cancel listener never removed) does to a person: the auditor's tap probe run
+# against the mutated build in export-mut, then everything restored.
+. <task>/env.sh
+cd $T/export-mut
+LOG=$T/out/mut-MA5-impact.txt
+FILE=src/client/TimesheetScreen.tsx
+cp $FILE $T/mutbak/MA5-impact.orig
+node $T/mutate.mjs $FILE $T/mutants/MA5.old $T/mutants/MA5.new > $LOG 2>&1
+npm run build:client > $T/out/mut-MA5-impact-build.txt 2>&1; echo "build exit $?" >> $LOG
+cp $T/export-probe/tests/e2e/zz-ra-tap.spec.ts tests/e2e/zz-ra-tap.spec.ts
+export RA_OUT="$TW\\out\\obs-ma5-impact.jsonl"
+rm -f $T/out/obs-ma5-impact.jsonl
+npx playwright test --output=$T/tmp/pw-ma5-impact tests/e2e/zz-ra-tap.spec.ts --project=desktop --workers=1 >> $LOG 2>&1
+echo "tests exit $?" >> $LOG
+rm -f tests/e2e/zz-ra-tap.spec.ts
+cp $T/mutbak/MA5-impact.orig $FILE
+cmp $FILE $T/export/$FILE && echo "restored byte-identical to the clean export" >> $LOG
+npm run build:client > $T/out/mut-MA5-impact-restore-build.txt 2>&1; echo "restore build exit $?" >> $LOG
+ls tests/e2e | grep -c zz- >> $LOG

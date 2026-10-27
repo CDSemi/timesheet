@@ -1,0 +1,25 @@
+# What the surviving mutants do: MA5 (touch-end cancel listener never removed) under the auditor's tap probe, and MF3 / MF3b (wrong PNG
+# decoder) under the auditor's decoder probe, each in export-mut, then everything restored and compared with the clean export.
+. <task>/env.sh
+cd $T/export-mut
+run_impact() {
+  local NAME=$1 FILE=$2 BUILD=$3 SPEC=$4
+  local LOG=$T/out/mut-$NAME-impact.txt
+  cp $FILE $T/mutbak/$NAME-impact.orig
+  node $T/mutate.mjs $FILE $T/mutants/$NAME.old $T/mutants/$NAME.new > $LOG 2>&1
+  if [ "$BUILD" = "client" ]; then npm run build:client > $T/out/mut-$NAME-impact-build.txt 2>&1; echo "build exit $?" >> $LOG; fi
+  cp $T/export-probe/tests/e2e/$SPEC tests/e2e/$SPEC
+  export RA_OUT="$TW\\out\\obs-$NAME-impact.jsonl"
+  rm -f $T/out/obs-$NAME-impact.jsonl
+  npx playwright test --output=$T/tmp/pw-$NAME-impact tests/e2e/$SPEC --project=desktop --workers=1 >> $LOG 2>&1
+  echo "tests exit $?" >> $LOG
+  rm -f tests/e2e/$SPEC
+  cp $T/mutbak/$NAME-impact.orig $FILE
+  cmp $FILE $T/export/$FILE && echo "restored byte-identical to the clean export" >> $LOG
+  if [ "$BUILD" = "client" ]; then npm run build:client > $T/out/mut-$NAME-impact-restore-build.txt 2>&1; echo "restore build exit $?" >> $LOG; fi
+  echo "zz files left in tests/e2e: $(ls tests/e2e | grep -c zz-)" >> $LOG
+}
+run_impact MA5 src/client/TimesheetScreen.tsx client zz-ra-tap.spec.ts
+run_impact MF3 tests/e2e/contrast.ts none zz-ra-surface3.spec.ts
+run_impact MF3b tests/e2e/contrast.ts none zz-ra-surface3.spec.ts
+echo impact-done >> $T/out/mut-exits.txt

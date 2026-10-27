@@ -1,0 +1,52 @@
+mutant MA7 file src/client/components/TimesheetSheet.tsx build client args tests/e2e/review.spec.ts -g keyboard stops --project=desktop --workers=2 --reporter=list
+mutated src/client/components/TimesheetSheet.tsx
+mutate exit 0
+build exit 0
+
+Running 1 test using 1 worker
+
+  x  1 [desktop] › tests\e2e\review.spec.ts:464:1 › the Preview week cards that scroll sideways are named keyboard stops that ArrowRight scrolls; a window wide enough adds no stop (9.8s)
+
+
+  1) [desktop] › tests\e2e\review.spec.ts:464:1 › the Preview week cards that scroll sideways are named keyboard stops that ArrowRight scrolls; a window wide enough adds no stop 
+
+    Error: 1100px: week 1 fits, so it takes no tab stop
+
+    expect(locator).not.toHaveAttribute(expected) failed
+
+    Locator: locator('[data-paper="review"]').locator('.sheet-week').first()
+    Expected pattern: not /.*/
+    Received string: "0"
+    Timeout: 7000ms
+
+    Call log:
+      - 1100px: week 1 fits, so it takes no tab stop locator('[data-paper="review"]').locator('.sheet-week').first() with timeout 7000ms
+      - waiting for locator('[data-paper="review"]').locator('.sheet-week').first()
+        18 × locator resolved to <section tabindex="0" class="sheet-week" aria-label="Week 1, 10/12/2026 to 10/18/2026">…</section>
+           - unexpected value "0"
+
+
+      493 |     await page.setViewportSize({ width, height: 900 });
+      494 |     await expect(cards, `${width}px: two week cards`).toHaveCount(2);
+    > 495 |     for (const index of [0, 1]) await expect(cards.nth(index), `${width}px: week ${index + 1} fits, so it takes no tab stop`).not.toHaveAttribute('tabindex', /.*/);
+          |                                                                                                                                   ^
+      496 |   }
+      497 | });
+      498 |
+        at <task>\export-mut\tests\e2e\review.spec.ts:495:131
+
+    Error Context: ..\tmp\pw-mut-MA7\review-the-Preview-week-ca-e3999-ow-wide-enough-adds-no-stop-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\pw-mut-MA7\review-the-Preview-week-ca-e3999-ow-wide-enough-adds-no-stop-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\pw-mut-MA7\review-the-Preview-week-ca-e3999-ow-wide-enough-adds-no-stop-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\review.spec.ts:464:1 › the Preview week cards that scroll sideways are named keyboard stops that ArrowRight scrolls; a window wide enough adds no stop 
+tests exit 1
+restored byte-identical to the clean export
+restore build exit 0
