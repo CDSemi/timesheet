@@ -278,6 +278,9 @@ test('WP5-UX3-T04: the check in/out group of the title row is one tab stop betwe
   await expect(page.locator('[data-day]')).toHaveCount(14);
   const button = page.locator('.page-head').getByRole('region', { name: 'Check in and out' }).getByRole('button', { name: 'Check in', exact: true });
   const previous = page.locator('.period-bar').getByRole('button', { name: 'Previous period', exact: true });
+  // The button is disabled ("Checking your status") until the first lookup of the running session has answered, which is a few requests
+  // after the days are drawn; a disabled button cannot take focus, so wait for the enabled state before the focus call.
+  await expect(button).toBeEnabled();
   await button.focus();
   await expect(button).toBeFocused();
   // Forward: the next stop is the period card, not something further down the page.

@@ -1,0 +1,25 @@
+# Escape-does-not-close mutants (the first run of esc_no_close hit the document handler, which the two named tests do not exercise).
+. <task>/env.sh
+GE="Escape and the Close button: with unsaved edits"
+GN="Escape dispatched in the same task"
+GS="Escape on a sheet control with unsaved edits"
+DED=tests/e2e/day-editor.spec.ts
+run() { L=$1; shift; bash $T/run-pw.sh $L real "$@" --trace=off > $T/logs/$L.txt 2>&1; }
+mut() {
+  bash $T/apply-stage.sh fixed >> $T/out/mutant2-exits.txt 2>&1
+  (cd $T/export && node.exe $T/mutate.mjs $1 . >> $T/out/mutant2-exits.txt 2>&1)
+  (cd $T/export && npm run build:client > $T/logs/build-client-mut-$1.txt 2>&1; echo "build:client $1 exit=$?" >> $T/out/mutant2-exits.txt)
+}
+: > $T/out/mutant2-exits.txt
+mut esc_no_close
+run mut2-esc_no_close $DED -g "$GE|$GN" --project=desktop --workers=2
+mut esc_no_close_doc
+run mut2-esc_no_close_doc-sheet-tests $DED -g "$GS" --project=desktop --workers=2
+run mut2-esc_no_close_doc-named-tests $DED -g "$GE|$GN" --project=desktop --workers=2
+bash $T/apply-stage.sh fixed >> $T/out/mutant2-exits.txt 2>&1
+for f in tests/e2e/keyboard-access.spec.ts tests/e2e/day-editor.spec.ts src/client/components/DayFieldsForm.tsx; do
+  cmp $T/export/$f $T/stage/$f && echo "restored byte-equal: $f" >> $T/out/mutant2-exits.txt
+done
+cmp $T/export/src/client/DayEditor.tsx $T/orig/src/client/DayEditor.tsx && echo "restored byte-equal: src/client/DayEditor.tsx" >> $T/out/mutant2-exits.txt
+cmp $T/export/src/client/components/ClockPanel.tsx $T/orig/src/client/components/ClockPanel.tsx && echo "restored byte-equal: src/client/components/ClockPanel.tsx" >> $T/out/mutant2-exits.txt
+echo mutants2-done > $T/out/mutants2.done

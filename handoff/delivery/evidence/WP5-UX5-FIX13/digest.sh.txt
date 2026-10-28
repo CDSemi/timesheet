@@ -1,0 +1,21 @@
+# Step 5, last: a clean export of the working tree (git archive of HEAD plus the eight changed files, no node_modules) and the repository's digest script
+# in both forms. The two digests must agree.
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX13/env.sh
+X=$T/export-digest
+mkdir -p $X
+cd $REPO || exit 9
+git archive HEAD | tar -x -C $X
+for f in tests/e2e/fixtures.ts tests/e2e/logo.spec.ts tests/e2e/review.spec.ts tests/e2e/timesheet.spec.ts tests/integration/restore.test.ts src/client/components/DayFieldsForm.tsx tests/e2e/keyboard-access.spec.ts tests/e2e/day-editor.spec.ts; do cp $REPO/$f $X/$f; done
+{
+  echo "--- export form: node scripts/source-digest.mjs in the clean export"
+  (cd $X && node scripts/source-digest.mjs 2>&1)
+  echo "--- repository form: npm run digest"
+  npm run digest 2>&1
+  echo "--- git status --short outside handoff/"
+  git status --short -- . ':!handoff'
+  echo "--- git diff --stat outside handoff/"
+  git diff --stat -- . ':!handoff'
+  echo "--- HEAD"
+  git rev-parse HEAD
+} > $T/out/digest-final.txt 2>&1
+echo "digest exit=$?"

@@ -1,0 +1,14 @@
+# Step 4c: npm test once in the proof export, the real-clock FULL e2e per project (default workers), then one sweep-instant run (FIX10 wrapper).
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX13/env.sh
+export X=$T/export
+: > $T/out/prove3-exits.txt
+cd $X || exit 9
+rm -f tests/e2e/probe-*.spec.ts tests/e2e/dly-*.spec.ts tests/e2e/new-*.spec.ts
+mkdir -p $T/tmp-npmtest
+(export NODE_OPTIONS=; export TEMP="$TW\\tmp-npmtest" TMP="$TW\\tmp-npmtest" TMPDIR="$T/tmp-npmtest"; npm test > $T/logs/npm-test.txt 2>&1; echo "npm test exit=$?" >> $T/out/prove3-exits.txt)
+run() { L=$1; shift; bash $E/run-pw.sh.txt $L "$@" > $T/logs/$L.txt 2>&1; echo "$L exit=$?" >> $T/out/prove3-exits.txt; }
+run full-desktop real --project=desktop
+run full-mobile real --project=mobile
+SEVEN="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts tests/e2e/keyboard-access.spec.ts"
+run sweep-1026 2026-10-27T06:58:30Z $SEVEN --workers=6
+echo prove3-done > $T/out/prove3.done

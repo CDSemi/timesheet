@@ -1,0 +1,14 @@
+// Prints the page-side event list of the given runs. Usage: node showrun.mjs <jsonl> <run index>...
+import { readFileSync } from 'node:fs';
+
+const [file, ...indexes] = process.argv.slice(2);
+const runs = readFileSync(file, 'utf8').split('\n').filter((l) => l !== '').map((l) => JSON.parse(l));
+for (const i of indexes.map(Number)) {
+  const run = runs[i];
+  if (run === undefined) continue;
+  console.log(`--- run ${i}: mode=${run.mode} failed=${JSON.stringify(run.failed)}`);
+  for (const e of run.events) {
+    const { what, t, ...rest } = e;
+    console.log(`${String(t).padStart(8)} ms  ${what}  ${Object.keys(rest).length === 0 ? '' : JSON.stringify(rest)}`);
+  }
+}

@@ -1,0 +1,66 @@
+/* DIAG6 probe (scratch only): the first Escape-with-edit step of day-editor.spec.ts:5304, with a page-side event record.
+ * Recorded with performance.now() in the page: the Notes input event, each Escape keydown (capture phase, with defaultPrevented read on
+ * the bubbling phase at the document), React-driven DOM changes (the discard question appearing, the editor closing), and task turns of a
+ * MessageChannel (React's scheduler) so a macrotask gap between the input and the Escape is visible.
+ * One JSON line per run goes to DIAG_OUT. PROBE_MODE=orig presses Escape right after fill(); PROBE_MODE=wait first waits for the
+ * state the Escape needs (proposed fix is chosen from the record).
+ */
+import { appendFileSync } from 'node:fs';
+import { expect, newPerson, test } from './fixtures.ts';
+import { namedDayButton } from './dayButton.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+const OUT = process.env.DIAG_OUT ?? '';
+const MODE = process.env.PROBE_MODE ?? 'orig';
+
+test('diag6 esc: record of the first Escape with an unsaved note', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.setTimeout(60_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Close Guard', signature: 'none' });
+  const [a = ''] = await person.api.displayedPeriodFreeWorkdays();
+  if (!isMobile) await page.setViewportSize({ width: 1440, height: 800 });
+  await page.addInitScript(() => {
+    const w = window as unknown as { __ev: unknown[] };
+    w.__ev = [];
+    const log = (what: string, extra: Record<string, unknown> = {}) => w.__ev.push({ what, t: Math.round(performance.now() * 10) / 10, ...extra });
+    document.addEventListener('input', (e) => log('input', { target: (e.target as HTMLElement).tagName }), true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') log('keydown Escape (capture)', { active: (document.activeElement as HTMLElement | null)?.tagName }); }, true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') log('keydown Escape (bubble at document)', { defaultPrevented: e.defaultPrevented }); });
+    // The scheduler's own channel: a message posted at each input and Escape shows when the macrotask queue ran relative to them.
+    const ch = new MessageChannel();
+    ch.port1.onmessage = (e) => log('macrotask turn', { tag: e.data });
+    document.addEventListener('input', () => ch.port2.postMessage('after-input'), true);
+    let last = '';
+    const snap = () => {
+      const prompt = document.querySelector('[role="alertdialog"]') !== null;
+      const editor = document.querySelector('dialog[open][aria-label*="Day editor"], dialog[open]') !== null;
+      const state = `prompt=${prompt}|editorOpen=${editor}`;
+      if (state !== last) { last = state; log('state', { state }); }
+    };
+    new MutationObserver(snap).observe(document, { subtree: true, childList: true, attributes: true });
+  });
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  const prompt = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+  const button = namedDayButton(page, a, 'Edit');
+  const notes = editor.getByLabel('Notes');
+  // PROBE_THROTTLE: the page's main thread runs this many times slower (Chromium's CPU throttling), as on a slow or busy machine.
+  const rate = Number(process.env.PROBE_THROTTLE ?? '1');
+  if (rate > 1) await (await page.context().newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate });
+  let failed = '';
+  try {
+    await button.click();
+    await expect(editor).toHaveAttribute('data-day-editor', a);
+    await notes.fill('Synthetic unsaved note');
+    // PROBE_GAP (diagnosis only): a pause of this many ms between the keystroke and the Escape, to measure how long the flag lags.
+    const gap = Number(process.env.PROBE_GAP ?? '0');
+    if (gap > 0) await page.waitForTimeout(gap);
+    await page.keyboard.press('Escape');
+    await expect(prompt).toBeVisible({ timeout: 1500 });
+  } catch (error) {
+    failed = String(error).split('\n')[0] ?? 'failed';
+  }
+  const events = await page.evaluate(() => (window as unknown as { __ev: unknown[] }).__ev);
+  if (OUT !== '') appendFileSync(OUT, `${JSON.stringify({ mode: MODE, failed, events })}\n`);
+  expect(failed).toBe('');
+});

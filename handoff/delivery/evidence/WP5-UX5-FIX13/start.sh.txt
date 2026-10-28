@@ -1,0 +1,13 @@
+# Step 1: start state of the repository (HEAD, status and diff stat outside handoff/, digest).
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX13/env.sh
+cd $REPO || exit 9
+{
+  echo "HEAD $(git rev-parse HEAD)"
+  echo "--- git status --short (outside handoff/)"
+  git status --short -- . ':!handoff'
+  echo "--- git diff --stat (outside handoff/)"
+  git diff --stat -- . ':!handoff'
+  echo "--- npm run digest"
+  npm run digest 2>&1
+} > $T/out/01-start.txt 2>&1
+echo "start exit=$?"

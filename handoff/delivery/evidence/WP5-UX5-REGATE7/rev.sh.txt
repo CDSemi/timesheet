@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# The original finding (F-UX5B2-1): restore.ts of a5533b5 in the scratch copy; the new test and the HTTP sequence must show the superseded release accepted.
+source <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+X=$T/export-mut
+C=$T/export
+F=src/server/ops/restore.ts
+rm -f $T/logs/rev-exits.txt
+cd $REPO && git show $PREV:$F > $X/$F
+cmp -s $X/$F $T/export-prev/$F && echo "scratch restore.ts equals a5533b5 version" >> $T/logs/rev-exits.txt || echo "scratch restore.ts DIFFERS from a5533b5 version" >> $T/logs/rev-exits.txt
+cd $X
+npm run build:server > $T/logs/rev-build.txt 2>&1; echo "build:server exit=$?" >> $T/logs/rev-exits.txt
+mkdir -p $T/tmp-rev
+(export TEMP="$TW\\tmp-rev" TMP="$TW\\tmp-rev" TMPDIR="$T/tmp-rev"; npx vitest run tests/integration/restore.test.ts > $T/logs/rev-restore-test.txt 2>&1; echo "exit=$?" >> $T/logs/rev-restore-test.txt)
+echo "restore.test.ts on reverted restore.ts: $(grep '^exit=' $T/logs/rev-restore-test.txt)" >> $T/logs/rev-exits.txt
+bash $T/http.sh export-mut reverted
+echo "http on reverted: $(grep '^exit=' $T/logs/http-reverted-run.txt)" >> $T/logs/rev-exits.txt
+cp $C/$F $X/$F
+cmp -s $C/$F $X/$F && echo "restored byte-identical: $F" >> $T/logs/rev-exits.txt || echo "DIFFERENT AFTER RESTORE" >> $T/logs/rev-exits.txt
+cd $X
+npm run build:server > $T/logs/rev-restore-build.txt 2>&1; echo "restore build:server exit=$?" >> $T/logs/rev-exits.txt
+cmp -s $X/dist/server/ops/restore.js $C/dist/server/ops/restore.js && echo "dist restore.js equals clean export" >> $T/logs/rev-exits.txt || echo "dist restore.js DIFFERS from clean export" >> $T/logs/rev-exits.txt
+echo rev-done > $T/out/rev.done

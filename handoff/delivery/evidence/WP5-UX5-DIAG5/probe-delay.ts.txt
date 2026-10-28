@@ -1,0 +1,21 @@
+/* ---- DIAG5 probe (scratch only): the unchanged check-card test with the React media-query notification delayed ----------- */
+
+// A slow main thread delays the rendering update that tells React the width changed; the CSS follows the new width at once. This
+// patch delays only that notification (matchMedia 'change' listeners) by DIAG_MQ_BASE + DIAG_MQ_STEP * repeat index milliseconds.
+test.beforeEach(async ({ page }, testInfo) => {
+  const ms = Number(process.env.DIAG_MQ_BASE ?? '0') + Number(process.env.DIAG_MQ_STEP ?? '0') * testInfo.repeatEachIndex;
+  await page.addInitScript((delay: number) => {
+    const original = window.matchMedia.bind(window);
+    window.matchMedia = (query: string) => {
+      const list = original(query);
+      const add = list.addEventListener.bind(list);
+      list.addEventListener = ((type: string, listener: EventListener, options?: boolean | AddEventListenerOptions) => {
+        if (type === 'change') add(type, ((event: Event) => setTimeout(() => listener(event), delay)) as EventListener, options);
+        else add(type, listener, options);
+      }) as typeof list.addEventListener;
+      return list;
+    };
+  }, ms);
+});
+
+//@@TESTNAME:the check card:@@

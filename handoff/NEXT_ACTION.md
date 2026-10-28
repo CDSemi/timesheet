@@ -102,22 +102,27 @@ Current route:
      deliver an older copy after the correction. The old area B findings are fixed.
    - The area A recheck found one Low gap: the focus ring of a read-only week card is
      partly hidden. The old area A findings are fixed.
-   - WP5-UX5-FIX11 fixed both gaps and added the missing tests; it is not committed yet.
-   - Running now: WP5-UX5-FIX11-FREEZE, one commit of FIX11 and the records, then a push.
-   - Then a regate, its freeze, a scoped regate, fresh rechecks, the integration
-     audit, ACCEPT-DOCS and the WP5 re-accept.
-   - Details: the checkpoint, section "REGATE3 failed; two diagnoses run (2026-10-26)" and
-     the sections after it.
-   - Earlier the same day it was paused twice for machine restarts.
-   - Every slice of both rounds is frozen. The last commit is 2bce0ab (digest 70975091).
-   - The round-5 gate failed and FIX1 fixed it. The regate then failed on one test race;
-     WP5-UX5-DIAG1 classified it as a test defect.
-   - WP5-UX5-FIX2 (tests only) was interrupted.
-   - Resume with the entry prompt below. The coordinator continues at the board's
-     `next_task_id` (WP5-UX5-FIX2, attempt 2). Then come its freeze, WP5-UX5-REGATE2,
-     audits A and B, the integration audit, ACCEPT-DOCS and the WP5 re-accept.
+   - WP5-UX5-FIX11 fixed both gaps and added the missing tests; it is frozen in 0f52300
+     (digest 20709d60) and pushed.
+   - WP5-UX5-REGATE7 failed on one criterion only: in one sweep run, the unchanged test
+     `review.spec.ts:406` read the check-card text 8 px off centre at 767 px. Alone and on
+     rerun it passed. Everything else passed. It also found a missing restore test (mutant
+     R3).
+   - WP5-UX5-DIAG5 found a measuring race on a one-frame layout change, not a product
+     fault. It proposed layout waits and the missing restore test, in five test files.
+   - WP5-UX5-FIX12 applied it; it is not committed yet (digest bf7ec3f7). It found two
+     older flaky tests that would fail the next regate.
+   - WP5-UX5-DIAG6 found one test race and one narrow product race: a fast Escape after
+     typing in the Day editor's Notes could drop the note without asking. The fix is one
+     client hook and a new test.
+   - WP5-UX5-FIX13 applied it (digest c1691aed).
+   - Running now: WP5-UX5-FIX13-FREEZE commits FIX12 and FIX13 together and pushes.
+   - Then a full regate, fresh rechecks of the two fixed findings, the
+     integration audit, ACCEPT-DOCS and the WP5 re-accept.
+   - To resume after an interruption, use the entry prompt above. The coordinator continues
+     at the board's `next_task_id`.
    - Details: the [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), section
-     "Paused for restart (2026-10-22)".
+     "REGATE3 failed; two diagnoses run (2026-10-26)" and the sections after it.
    - Until the re-accept, the last accepted snapshot stays 8e55710 / 507de97c.
 1. **Done: WP5 accepted, then re-accepted after each UI change round.** The first
    acceptance record was committed at dd0c7d1. The re-acceptances are in the

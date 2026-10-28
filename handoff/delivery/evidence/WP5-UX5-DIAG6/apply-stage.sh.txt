@@ -1,0 +1,17 @@
+# Usage: bash apply-stage.sh <fixed|orig|prodorig>
+#   fixed: staged tests and staged product (the proposed fixes); orig: the FIX12-tree files; prodorig: staged tests with the ORIGINAL product.
+# Copies into the scratch export and rebuilds the client (vite only).
+. <task>/env.sh
+W=${1:-fixed}
+cd $T/export || exit 9
+if [ "$W" = "orig" ]; then S=$T/orig; else S=$T/stage; fi
+for f in tests/e2e/keyboard-access.spec.ts tests/e2e/day-editor.spec.ts src/client/DayEditor.tsx src/client/components/DayFieldsForm.tsx; do
+  [ -f "$S/$f" ] && cp "$S/$f" "$f"
+done
+if [ "$W" = "prodorig" ] || [ "$W" = "orig" ]; then
+  cp $T/orig/src/client/DayEditor.tsx src/client/DayEditor.tsx
+  cp $T/orig/src/client/components/DayFieldsForm.tsx src/client/components/DayFieldsForm.tsx
+fi
+cp $T/orig/src/client/components/ClockPanel.tsx src/client/components/ClockPanel.tsx
+npm run build:client > $T/logs/build-client-$W.txt 2>&1
+echo "applied $W; build:client exit=$?"

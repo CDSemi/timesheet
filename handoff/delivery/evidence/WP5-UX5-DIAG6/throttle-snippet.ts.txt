@@ -1,0 +1,7 @@
+
+/* DIAG6 scratch only: the page's main thread runs PROBE_THROTTLE times slower (Chromium CPU throttling) for every test of this copy of the file. */
+test.beforeEach(async ({ page }) => {
+  const rate = Number(process.env.PROBE_THROTTLE ?? '1');
+  if (rate <= 1) return;
+  await (await page.context().newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate });
+});

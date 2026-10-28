@@ -1,0 +1,9 @@
+# Baseline under the self-stopping burner: each test as a single run, then 10 repeats on 2 workers (32 burner threads; the host has 32 logical CPUs).
+. <task>/env.sh
+K="tests/e2e/keyboard-access.spec.ts:267"
+D="tests/e2e/day-editor.spec.ts:5304"
+bash $T/loadrun.sh kbd-burn-single 32 60 $K --project=desktop --workers=1
+bash $T/loadrun.sh esc-burn-single 32 60 $D --project=desktop --workers=1
+bash $T/loadrun.sh kbd-burn-r10w2 32 120 $K --project=desktop --workers=2 --repeat-each=10
+bash $T/loadrun.sh esc-burn-r10w2 32 120 $D --project=desktop --workers=2 --repeat-each=10
+echo burn-done > $T/out/burn.done

@@ -2411,9 +2411,122 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - **Leftover:** the RECHECK-A probe run left orphaned Playwright processes and a built
     server (PIDs 63092, 37448, 90528, 101148) after its bash task was stopped. The owner
     is asked to close them; mission tasks never kill by PID.
-- **Running now:** WP5-UX5-FIX11-FREEZE (committer), alone.
-- **Next:** WP5-UX5-REGATE7, fresh rechecks of the two findings, the integration audit,
-  ACCEPT-DOCS and the WP5 re-accept.
+- **WP5-UX5-FIX11-FREEZE done.**
+  - Commit 0f52300ca1ab7d458c30e7dbe1fb098d9c6dd955 is on main and pushed, a fast-forward
+    from a5533b5.
+  - D_PRE equals the HEAD digest, 20709d60.
+  - 425 paths, with no masking. Every check exits 0.
+- **WP5-UX5-REGATE7 FAILED on one criterion** (verifier, sonnet, alone, on 0f52300 /
+  20709d60).
+  - The failure: sweep run `seven-1026` (2026-10-27T06:58:30Z, `--workers=6`), desktop
+    `review.spec.ts:406`. The assertion "the text is vertically centred at 767px" read 8,
+    and the limit is 1.5. It is not a network, buffer or timeout error.
+  - The test is unchanged by FIX11. Alone at the same instant it passed 20/20, and 20/20 on
+    the real clock. A rerun of the whole seven-file scope had 0 failed.
+  - Everything else passed:
+    - exactly FIX11's 15 paths;
+    - `dist/` changes map to `restore.ts` and the client bundle;
+    - drill `--wp3`: 209 PASS, 0 FAIL;
+    - `npm audit --omit=dev`: 0;
+    - `npm test` three times, 2,388 tests each, and the validators;
+    - the real-clock FULL e2e: 467/35/0 and 405/97/0;
+    - the other five sweeps: 0 failed, no timeout;
+    - stress: 0 failed;
+    - the FIX11 mutants were all killed. The old `restore.ts` delivers the superseded copy,
+      and the target refuses it;
+    - axe: 84 scans, 0 violations.
+  - **Test gap:** the extra mutant R3 survived all 33 restore tests. In R3, a leased later
+    send no longer blocks the restore-path release. The guarded line is older than FIX11.
+  - Census: the RECHECK-A orphans were still alive, using about one core. Nothing was
+    stopped.
+  - **Coordinator:** an assertion failure of an unchanged test is not waived, as with
+    REGATE5.
+- **WP5-UX5-DIAG5 first result** (planner, sonnet, alone, read-only):
+  - **Cause:** a measuring race on a real one-frame transient.
+    - At the 768-to-767 crossing, the CSS applies first. React's `useMedia` mounts the top-bar
+      clock one rendering update later, so the bar grows from 52 to 60 px and the card moves
+      8 px.
+    - The test read the card and its text in different states. Every settled layout is
+      centred.
+    - The trace of the failed run agrees. A delay on React's media notice reproduces "Received
+      8" in 35 of 40 runs.
+    - No product change. The one-frame jump goes to the WP5 optional backlog.
+  - **Fix (tests only):** a helper `expectLayoutAt(page, width)` in `tests/e2e/fixtures.ts`,
+    called after `setViewportSize` in `review.spec.ts` 406, 643 and 734 and in
+    `timesheet.spec.ts` 2541.
+    - It passed 40/40 under the delay model and under load.
+    - An 8 px off-centre mutant still fails it.
+  - **R3:** a `restore.test.ts` case in which a leased later send blocks the release with
+    `superseded_by_later_send`. This is the correct reason. The case kills R3.
+  - **Coordinator:** accepted. Addendum 1 asks the same planner to cover `logo.spec.ts:599`
+    too, which failed at 90 ms like 734. It also asks for a rerun of the 15-spec delay suite
+    with the final patch.
+- **WP5-UX5-DIAG5 done (Addendum 1).**
+  - `logo.spec.ts:599` has the same cause at 480 px. React swaps the 865 px week grid for the
+    phone table one update after the CSS, so a helper `expectSheetAt` now runs in the logo
+    `sweepRange`.
+  - The final patch has five files.
+  - The delay suite (the 15 spec files that change the viewport, 436 desktop tests) had 0
+    failed at 20, 45 and 90 ms. Before the patch it had 1, 3 and 6 failed.
+  - The mutants still fail their tests.
+- **WP5-UX5-FIX12 done** (worker, sonnet; uncommitted; digest bf7ec3f7, 882 files).
+  - It reproduced the failures on HEAD, then applied the patch to the five test files.
+  - **Accepted deviation:** two more `expectLayoutAt` lines, in `review.spec.ts` "a signed
+    period opened again" and `timesheet.spec.ts` "from 320 to 1920px". The completeness runs
+    found them failing, 8 of 18 and 4 of 120; with the lines, 0 failed.
+  - Delay suite: 0 failed at 20, 45, 70 and 90 ms. Load runs: 0 failed. The mutants fail
+    their tests. `restore.test.ts`: 33/33.
+  - Lint, typecheck, build, verify and `npm test` (2,388) passed. `dist/` is identical to
+    HEAD.
+  - Real-clock FULL e2e:
+    - mobile: 405/97/0;
+    - desktop: the first run had 1 failed (`keyboard-access.spec.ts:267`); the rerun was
+      467/35/0.
+  - Sweep instant 2026-10-27T06:58:30Z: 0 failed.
+  - **Two pre-existing flaky tests** fail on HEAD too:
+    - `keyboard-access.spec.ts:267` ("Received: inactive"): about half of repeated runs;
+    - `day-editor.spec.ts:5304`: 2 to 4 of 20.
+  - **Coordinator:** either flake can fail the next regate. They are diagnosed and fixed
+    before one freeze of FIX12 and that fix.
+- **WP5-UX5-DIAG6 done** (planner, sonnet, read-only).
+  - Neither flake comes from state carried between repeats. Both races also exist in a
+    single run; host load makes them more frequent.
+  - **`keyboard-access.spec.ts:267`: a test race.**
+    - The Check in button is disabled while its status loads, 10 to 56 ms after the days
+      are drawn. That is documented behaviour.
+    - `focus()` does nothing on a disabled button, so the test waits in vain.
+    - Fix: wait until the button is enabled before focusing it.
+  - **`day-editor.spec.ts:5304`: a narrow product race, of the data-loss class.**
+    - The Day editor's unsaved-changes flag is reported one task late.
+    - An Escape pressed right after typing in Notes can close the editor without "Discard
+      your changes?", and the note is lost. This breaks U4-05.
+    - Fix: `useLayoutEffect` for the report in `DayFieldsForm.tsx`, plus a deterministic
+      e2e test that fails on the old product 10 of 10.
+  - Proof:
+    - 60 repeats at 2 and 6 workers: 0 failed;
+    - the delay and throttle models pass;
+    - the mutants are caught;
+    - a repeat census of the whole FULL suite three times on both projects: 0 failed.
+  - History: both races are long-standing. Earlier logs show no failure.
+  - `dist/client` changes, so the regate is full. A fresh auditor reads the product change.
+  - **Coordinator:** accepted. No business or UX decision is needed, because the fix
+    restores U4-05.
+- **WP5-UX5-FIX13 done** (worker, sonnet; uncommitted; digest c1691aed, 882 files).
+  - It reproduced all three failures on the original product: 10/10, 10/10 and 20/20.
+  - It applied the patch to `DayFieldsForm.tsx`, `keyboard-access.spec.ts` and
+    `day-editor.spec.ts`. Eight paths now differ outside `handoff/`.
+  - 60 repeats at 2 and 6 workers: 0 failed. The models, the flag-lag matrix and the load
+    run pass. Five mutants, including `useEffect` restored, each fail their test.
+  - Lint, typecheck, build, verify and `npm test` (2,388) passed, with no deprecation
+    warning. `dist/server` is identical. `dist/client` changed: `index.html` and six chunks.
+  - Real-clock FULL e2e: desktop 468/35/0, mobile 406/97/0.
+  - The sweep instant had 0 failed.
+- **Running now:** WP5-UX5-FIX13-FREEZE (committer, sonnet), alone. It makes one commit of
+  FIX12, FIX13 and the records, and pushes it.
+- **Then:** a full WP5-UX5-REGATE8, fresh rechecks (including the Day editor change), the
+  integration audit, ACCEPT-DOCS and the WP5 re-accept.
+- **Next:** a fix, its freeze, a regate, then fresh rechecks of the two findings, the
+  integration audit, ACCEPT-DOCS and the WP5 re-accept.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

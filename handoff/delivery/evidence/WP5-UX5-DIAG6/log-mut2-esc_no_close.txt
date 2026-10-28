@@ -1,0 +1,67 @@
+== mut2-esc_no_close: real start 2026-10-28T00:43:23Z, simulated start real, AB8_SHIFT_MS=0
+process clock 2026-10-28T00:43:23.523Z (Date.now 1793148203533); America/Los_Angeles Tue, 2026-10-27, 17:43; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts -g Escape and the Close button: with unsaved edits|Escape dispatched in the same task --project=desktop --workers=2 --trace=off --output=<task>\pw-mut2-esc_no_close
+
+Running 2 tests using 1 worker
+
+  x  1 [desktop] › tests\e2e\day-editor.spec.ts:5304:3 › WP5-UX4-T02 addendum 1: Today, a period step, Close and Escape ask "Discard your changes?" when the open editor holds unsaved edits › Escape and the Close button: with unsaved edits they ask first (Escape on the question keeps editing), Keep editing leaves the editor and the values, Discard closes it; without edits they close at once (7.9s)
+  x  2 [desktop] › tests\e2e\day-editor.spec.ts:5377:3 › WP5-UX4-T02 addendum 1: Today, a period step, Close and Escape ask "Discard your changes?" when the open editor holds unsaved edits › Escape dispatched in the same task as a keystroke in the Notes still asks "Discard your changes?" (7.8s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:5304:3 › WP5-UX4-T02 addendum 1: Today, a period step, Close and Escape ask "Discard your changes?" when the open editor holds unsaved edits › Escape and the Close button: with unsaved edits they ask first (Escape on the question keeps editing), Keep editing leaves the editor and the values, Discard closes it; without edits they close at once 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('dialog', { name: /Day editor/ })
+    Expected: 0
+    Received: 1
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveCount" getByRole('dialog', { name: /Day editor/ }) with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ })
+        18 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      5329 |     await expect(editor).toHaveAttribute('data-day-editor', a);
+      5330 |     await page.keyboard.press('Escape');
+    > 5331 |     await expect(editor).toHaveCount(0);
+           |                          ^
+      5332 |     await button.click();
+      5333 |     await close.click();
+      5334 |     await expect(editor).toHaveCount(0);
+        at <task>\export\tests\e2e\day-editor.spec.ts:5331:26
+
+    Error Context: ..\pw-mut2-esc_no_close\day-editor-WP5-UX4-T02-add-d9d97-ut-edits-they-close-at-once-desktop\error-context.md
+
+  2) [desktop] › tests\e2e\day-editor.spec.ts:5377:3 › WP5-UX4-T02 addendum 1: Today, a period step, Close and Escape ask "Discard your changes?" when the open editor holds unsaved edits › Escape dispatched in the same task as a keystroke in the Notes still asks "Discard your changes?" 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('alertdialog', { name: 'Discard your changes?' })
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('alertdialog', { name: 'Discard your changes?' }) with timeout 7000ms
+      - waiting for getByRole('alertdialog', { name: 'Discard your changes?' })
+
+
+      5401 |       area.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      5402 |     });
+    > 5403 |     await expect(promptOf(page)).toBeVisible();
+           |                                  ^
+      5404 |     await expect(keepOf(page)).toBeFocused();
+      5405 |     await keepOf(page).click();
+      5406 |     await expect(editor).toHaveAttribute('data-day-editor', a);
+        at <task>\export\tests\e2e\day-editor.spec.ts:5403:34
+
+    Error Context: ..\pw-mut2-esc_no_close\day-editor-WP5-UX4-T02-add-14eba--asks-Discard-your-changes--desktop\error-context.md
+
+  2 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:5304:3 › WP5-UX4-T02 addendum 1: Today, a period step, Close and Escape ask "Discard your changes?" when the open editor holds unsaved edits › Escape and the Close button: with unsaved edits they ask first (Escape on the question keeps editing), Keep editing leaves the editor and the values, Discard closes it; without edits they close at once 
+    [desktop] › tests\e2e\day-editor.spec.ts:5377:3 › WP5-UX4-T02 addendum 1: Today, a period step, Close and Escape ask "Discard your changes?" when the open editor holds unsaved edits › Escape dispatched in the same task as a keystroke in the Notes still asks "Discard your changes?" 
+exit=1
+== mut2-esc_no_close real end 2026-10-28T00:43:44Z

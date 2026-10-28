@@ -1,0 +1,15 @@
+# Repository checks, one after another, in the repository itself (no npm ci / npm install).
+# dist-hash.sh <dist dir> <out file>: sha256 of every file under dist, sorted by path, plus a file count.
+. <task>/env.sh
+unset DIAG_MQ_DELAY
+cd $REPO || exit 9
+O=$E
+npm run lint > $O/20-lint.txt 2>&1; echo "lint exit=$?" >> $O/20-lint.txt
+npm run typecheck > $O/21-typecheck.txt 2>&1; echo "typecheck exit=$?" >> $O/21-typecheck.txt
+npm run build > $O/22-build.txt 2>&1; echo "build exit=$?" >> $O/22-build.txt
+bash $T/dist-hash.sh $REPO/dist $E/23-dist-hashes-repo.txt
+bash $T/dist-hash.sh $T/export-head/dist $E/23-dist-hashes-head.txt
+cmp $E/23-dist-hashes-repo.txt $E/23-dist-hashes-head.txt > $E/23-dist-compare.txt 2>&1 && echo "dist/ identical to the HEAD build (same files, same sha256)" >> $E/23-dist-compare.txt || echo "dist/ DIFFERS from the HEAD build" >> $E/23-dist-compare.txt
+npm run verify > $O/24-verify.txt 2>&1; echo "verify exit=$?" >> $O/24-verify.txt
+git diff --check -- . ':!handoff' > $O/25-diff-check.txt 2>&1; echo "diff-check exit=$?" >> $O/25-diff-check.txt
+echo repo-checks-done > $T/out/repo-checks.done

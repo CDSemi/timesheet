@@ -1,0 +1,47 @@
+/* ---- DIAG5 probe (scratch only): the test's own reads, repeated, right after each width change ---------------------------- */
+
+import { appendFileSync } from 'node:fs';
+
+const LOOP_OUT = process.env.DIAG_OUT ?? '';
+const LOOP_N = Number(process.env.DIAG_LOOPS ?? '100');
+const THROTTLE = Number(process.env.DIAG_THROTTLE ?? '1');
+
+test('diag5 loop: 768 and 767 alternately, the test reads right after setViewportSize', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(240_000);
+  const reviewer = await newReviewer(adminSeed, builtServer);
+  await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+  const card = page.locator('.check-card');
+  await expect(card).toBeVisible();
+  const text = card.locator('p');
+  const back = card.getByRole('link', { name: 'Back to the timesheet' });
+  const tag = `${testInfo.project.name}#${testInfo.repeatEachIndex}`;
+  if (THROTTLE > 1) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: THROTTLE });
+  }
+  const rows: unknown[] = [];
+  const middle = (box: Rect) => box.top + box.height / 2;
+  for (let i = 0; i < LOOP_N; i += 1) {
+    const width = i % 2 === 0 ? 768 : 767;
+    await page.setViewportSize({ width, height: 900 });
+    // Exactly what the test does (no evaluate of the width in between).
+    const padding = await styleOf(card, 'padding-left');
+    await back.innerText();
+    const cardBox = await rect(card);
+    const textBox = await rect(text);
+    const backBox = await rect(back);
+    const offText = Math.abs(middle(textBox) - middle(cardBox));
+    const offBack = Math.abs(middle(backBox) - middle(cardBox));
+    // Then, once the reads are done, what the page looked like at that moment.
+    const after = await page.evaluate(() => ({
+      iw: window.innerWidth,
+      barClock: document.querySelector('.bar-clock') !== null,
+      headTop: document.querySelector('.review-head')?.getBoundingClientRect().top ?? -1,
+      mq: window.matchMedia('(width >= 768px)').matches,
+    }));
+    rows.push({ tag, i, width, padding, cardTop: cardBox.top, textTop: textBox.top, backTop: backBox.top, offText, offBack, after });
+  }
+  const bad = rows.filter((r) => (r as { offText: number }).offText > 1.5 || (r as { offBack: number }).offBack > 1.5);
+  const tops = new Set(rows.map((r) => `${(r as { width: number }).width}:${(r as { cardTop: number }).cardTop}`));
+  if (LOOP_OUT !== '') appendFileSync(LOOP_OUT, `${JSON.stringify({ kind: 'loop', tag, throttle: THROTTLE, n: rows.length, bad: bad.length, badRows: bad.slice(0, 5), distinctTops: [...tops] })}\n`);
+});

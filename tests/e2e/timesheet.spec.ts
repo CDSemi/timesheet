@@ -23,7 +23,7 @@ import {
   tokenColour,
 } from './contrast.ts';
 import { ANY_DAY_BUTTON_NAME, dayButtonName, namedDayButton } from './dayButton.ts';
-import { expect, SCREENSHOT_DIR, screenshotPath, type SeedClient, test } from './fixtures.ts';
+import { expect, expectLayoutAt, SCREENSHOT_DIR, screenshotPath, type SeedClient, test } from './fixtures.ts';
 import { cardParts, cardStyle, near, noSidewaysScroll, rangeState } from './periodCard.ts';
 
 /*
@@ -2548,6 +2548,7 @@ test.describe('the period card (U5-09 to U5-13)', () => {
     // 631px is the widest window with the narrow arrangement without Current period.
     for (const width of [631, 600, 480, 430, 390, 360, 320]) {
       await page.setViewportSize({ width, height: 900 });
+      await expectLayoutAt(page, width);
       const { card, prev, title, name, pills, next, cta, today, review, meta } = await cardParts(page);
       expect(card && prev && title && name && pills && next && cta && today && review && meta, `${width}px: every part is on the card`).toBeTruthy();
       if (!(card && prev && title && name && pills && next && cta && today && review && meta)) continue;
@@ -2673,6 +2674,7 @@ test.describe('the period card never overlaps (U5-12)', () => {
     await expect(page.locator('[data-day]')).toHaveCount(14);
     for (const width of [320, 360, 390, 430, 480, 520, 560, 600, 631, 632, 700, 768, 900, 1100, 1440, 1920]) {
       await page.setViewportSize({ width, height: 900 });
+      await expectLayoutAt(page, width);
       const parts = await cardParts(page);
       const { card } = parts;
       expect(card, `${width}px: the card`).not.toBeNull();

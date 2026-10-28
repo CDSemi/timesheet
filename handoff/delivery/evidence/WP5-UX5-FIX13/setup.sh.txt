@@ -1,0 +1,14 @@
+# Usage: bash setup.sh <name> [apply]
+# Scratch export <task>/<name>: git archive of HEAD, FIX12's five working-tree files copied over, own npm ci.
+# With "apply", the three FIX13 files are copied over as well (the repository working tree after the patch), for the proof export.
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX13/env.sh
+X=$1
+cd $REPO || exit 9
+mkdir -p $T/$X
+git archive HEAD | tar -x -C $T/$X
+FILES="tests/e2e/fixtures.ts tests/e2e/logo.spec.ts tests/e2e/review.spec.ts tests/e2e/timesheet.spec.ts tests/integration/restore.test.ts"
+if [ "$2" = "apply" ]; then FILES="$FILES src/client/components/DayFieldsForm.tsx tests/e2e/keyboard-access.spec.ts tests/e2e/day-editor.spec.ts"; fi
+for f in $FILES; do cp $REPO/$f $T/$X/$f; done
+cd $T/$X || exit 8
+npm ci > $T/logs/ci-$X.txt 2>&1
+echo "npm ci $X exit=$?" >> $T/out/setup.txt

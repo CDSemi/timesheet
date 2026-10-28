@@ -1,0 +1,32 @@
+# R3 check in the scratch export: the proposed restore.test.ts case must pass on the target and fail with the R3 mutation.
+. <task>/env.sh
+X=$T/export
+cd $X || exit 9
+export NODE_OPTIONS=
+mkdir -p $T/tmp-r3
+export TEMP="$TW\\tmp-r3" TMP="$TW\\tmp-r3" TMPDIR="$T/tmp-r3"
+cp $T/patched/tests/integration/restore.test.ts $X/tests/integration/restore.test.ts
+run() { # label
+  npx vitest run tests/integration/restore.test.ts > $T/logs/r3-$1.txt 2>&1
+  echo "$1 exit=$?" >> $T/logs/r3-exits.txt
+}
+rm -f $T/logs/r3-exits.txt
+# 1. Target (unmutated restore.ts), with the new case.
+run target
+# 2. R2 (the control that already works): a succeeded later send no longer blocks.
+node.exe $TW\\mutate.mjs "$X/src/server/ops/restore.ts" "j.state IN ('queued', 'leased', 'succeeded') LIMIT 1" "j.state IN ('queued', 'leased') LIMIT 1" >> $T/logs/r3-exits.txt 2>&1
+run R2
+cp $REPO/src/server/ops/restore.ts $X/src/server/ops/restore.ts
+cmp $REPO/src/server/ops/restore.ts $X/src/server/ops/restore.ts && echo "restore.ts restored byte-identical" >> $T/logs/r3-exits.txt
+# 3. R3: a leased later send no longer blocks.
+node.exe $TW\\mutate.mjs "$X/src/server/ops/restore.ts" "j.state IN ('queued', 'leased', 'succeeded') LIMIT 1" "j.state IN ('queued', 'succeeded') LIMIT 1" >> $T/logs/r3-exits.txt 2>&1
+run R3
+cp $REPO/src/server/ops/restore.ts $X/src/server/ops/restore.ts
+cmp $REPO/src/server/ops/restore.ts $X/src/server/ops/restore.ts && echo "restore.ts restored byte-identical" >> $T/logs/r3-exits.txt
+# 4. The ORIGINAL restore.test.ts with R3 (it survived in REGATE7): shows the gap on this tree too.
+cp $T/restore.test.orig.ts $X/tests/integration/restore.test.ts
+node.exe $TW\\mutate.mjs "$X/src/server/ops/restore.ts" "j.state IN ('queued', 'leased', 'succeeded') LIMIT 1" "j.state IN ('queued', 'succeeded') LIMIT 1" >> $T/logs/r3-exits.txt 2>&1
+run orig-R3
+cp $REPO/src/server/ops/restore.ts $X/src/server/ops/restore.ts
+cmp $REPO/src/server/ops/restore.ts $X/src/server/ops/restore.ts && echo "restore.ts restored byte-identical" >> $T/logs/r3-exits.txt
+cmp $T/restore.test.orig.ts $X/tests/integration/restore.test.ts && echo "restore.test.ts original restored" >> $T/logs/r3-exits.txt

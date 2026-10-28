@@ -1,0 +1,28 @@
+# Copies the task outputs into the evidence folder, masked (LF text only; probe scripts as *.sh.txt / *.mjs.txt / *.ts.txt).
+. <task>/env.sh
+mkdir -p $E
+rm -f $T/tmp/mask-last.txt
+m() { node.exe "$TW\\mask.mjs" "$(cygpath -w "$1")" "$(cygpath -w "$2")" >> $T/tmp/mask-last.txt 2>&1; }
+cd $T/out
+for f in *.txt; do
+  [ "$f" = "proposed.patch.txt" ] && continue
+  [ -f "$f" ] && m "$T/out/$f" "$E/$f"
+done
+m $T/out/proposed.patch.txt $E/proposed.patch.txt
+for f in $T/out/diag-*.jsonl; do
+  [ -f "$f" ] && m "$f" "$E/$(basename $f .jsonl)-jsonl.txt"
+done
+cd $T/logs
+for f in *.txt; do
+  case "$f" in untar*|gen*|apply.txt) ;; esac
+  [ -f "$f" ] && m "$T/logs/$f" "$E/log-$f"
+done
+cd $T
+for s in env.sh census.sh run-pw.sh load-run.sh run-delay-suite.sh fixcheck.sh gen-patch.sh r3.sh collect.sh; do [ -f "$s" ] && m "$T/$s" "$E/$s.txt"; done
+for s in mask.mjs gen-probe.mjs analyze.mjs burn.mjs mutate.mjs trace-actions.mjs trace-frames.mjs shiftclock.mjs probe-now.mjs; do [ -f "$s" ] && m "$T/$s" "$E/$s.txt"; done
+for s in probe-body.ts probe-loop.ts probe-events.ts probe-delay.ts probe-shot.ts; do [ -f "$s" ] && m "$T/$s" "$E/${s%.ts}.ts.txt"; done
+m $T/mutant.css $E/mutant.css.txt
+ls $E | wc -l
+grep -rhoE "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+" $E --include=*.txt | sort -u > $T/tmp/emails-found.txt
+ls $E | grep -i signature > $T/tmp/signature-names.txt
+echo collect-done

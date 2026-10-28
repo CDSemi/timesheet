@@ -1,0 +1,8 @@
+# Restores the proof export after a mutant: the three FIX13 files from the repository working tree, the two untouched product files from the
+# original export, then the client rebuild (vite only).
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX13/env.sh
+cd $T/export || exit 9
+for f in src/client/components/DayFieldsForm.tsx tests/e2e/keyboard-access.spec.ts tests/e2e/day-editor.spec.ts; do cp $REPO/$f $f; done
+for f in src/client/DayEditor.tsx src/client/components/ClockPanel.tsx; do cp $T/export-orig/$f $f; done
+npm run build:client > $T/logs/build-client-restore.txt 2>&1
+echo "restored; build:client exit=$?"

@@ -1,0 +1,21 @@
+# Final checks in the scratch export with the proposed fixes (staged files), the scratch probe/delay copies removed.
+. <task>/env.sh
+rm -f $T/export/tests/e2e/probe-kbd.spec.ts $T/export/tests/e2e/probe-esc.spec.ts $T/export/tests/e2e/probe-new.spec.ts $T/export/tests/e2e/dly-kbd-orig.spec.ts $T/export/tests/e2e/dly-kbd-fixed.spec.ts $T/export/tests/e2e/dly-esc-orig.spec.ts $T/export/tests/e2e/dly-esc-fixed.spec.ts
+ls $T/export/tests/e2e | grep -cE "^(probe|dly)-" > $T/out/checks-leftover-copies.txt
+bash $T/apply-stage.sh fixed > $T/out/apply-checks.txt 2>&1
+for f in tests/e2e/keyboard-access.spec.ts tests/e2e/day-editor.spec.ts src/client/components/DayFieldsForm.tsx; do cmp $T/export/$f $T/stage/$f && echo "export == stage: $f" >> $T/out/apply-checks.txt; done
+cd $T/export || exit 9
+unset DIAG_OUT PROBE_DELAY PROBE_THROTTLE PROBE_GAP PROBE_MODE
+: > $T/out/checks-exits2.txt
+npm run typecheck > $T/logs/typecheck2.txt 2>&1; echo "typecheck exit=$?" >> $T/out/checks-exits2.txt
+npm run lint > $T/logs/lint2.txt 2>&1; echo "lint exit=$?" >> $T/out/checks-exits2.txt
+(export NODE_OPTIONS=; mkdir -p $T/tmp-npmtest; export TEMP="$TW\\tmp-npmtest" TMP="$TW\\tmp-npmtest" TMPDIR="$T/tmp-npmtest"; npm test > $T/logs/npm-test2.txt 2>&1; echo "npm test exit=$?" >> $T/out/checks-exits2.txt)
+npm run build > $T/logs/build-final2.txt 2>&1; echo "build exit=$?" >> $T/out/checks-exits2.txt
+find dist -type f | LC_ALL=C sort > $T/out/dist-files-fixed3.txt
+: > $T/out/dist-hashes-fixed3.txt
+while IFS= read -r f; do printf '%s %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f" >> $T/out/dist-hashes-fixed3.txt; done < $T/out/dist-files-fixed3.txt
+diff $T/out/dist-hashes-head.txt $T/out/dist-hashes-fixed3.txt > $T/out/dist-compare2.txt 2>&1; echo "diff exit=$? (1 = differences listed)" >> $T/out/dist-compare2.txt
+cd $T/export && git diff --no-index --check $T/export-apply/src/client/components/DayFieldsForm.tsx src/client/components/DayFieldsForm.tsx > $T/out/diff-check-src.txt 2>&1; echo "git diff --check (no-index) exit=$?" >> $T/out/diff-check-src.txt
+GN="Escape dispatched in the same task"
+bash $T/run-pw.sh new-final2-r30w6 real tests/e2e/day-editor.spec.ts -g "$GN" --workers=6 --repeat-each=30 --trace=off > $T/logs/new-final2-r30w6.txt 2>&1
+echo checks-done > $T/out/checks.done

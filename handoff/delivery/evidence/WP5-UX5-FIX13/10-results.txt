@@ -1,0 +1,63 @@
+WP5-UX5-FIX13 results (counts read from the Playwright and vitest summaries in <task>/logs; every run used its own --output folder, one after another).
+
+0. Start state (01-start in <task>/out): HEAD 0f52300ca1ab7d458c30e7dbe1fb098d9c6dd955; outside handoff/ only FIX12's five files differ (fixtures.ts, logo.spec.ts,
+   review.spec.ts, timesheet.spec.ts, restore.test.ts; 44 insertions, 5 deletions); npm run digest bf7ec3f7c47ec97f84d51c9bb18d14945b8e303dcd2b732acee7cbb55d73653f (882 files).
+   Census start/end: node.exe 16 and 16, msedge.exe 46 and 46 (the earlier probe's PIDs 63092, 37448, 90528, 101148, 96332, 22240 were not listed at the start);
+   bash.exe 4 and 10 (the Bash tool's own shells of this session). Nothing was stopped.
+
+1. Reproduction on the original product (export-orig, desktop unless noted; Playwright summaries)
+   - original keyboard test with the lookup 300 ms late (3rd and later /api/periods/current), repeat 10, 2 workers:        10 failed, 0 passed
+   - original Escape test with the main thread throttled 4x, repeat 10, 6 workers:                                        10 failed, 0 passed
+   - the new test alone on the original product (both projects), repeat 10, 6 workers:                                    20 failed, 0 passed
+     (failure: alertdialog "Discard your changes?" not visible after the same-task Escape).
+
+2. Patch. git apply --check clean, then git apply of WP5-UX5-DIAG6/proposed.patch.txt (3 files, +42/-2). Outside handoff/, git status shows exactly eight paths:
+   FIX12's five and src/client/components/DayFieldsForm.tsx, tests/e2e/keyboard-access.spec.ts, tests/e2e/day-editor.spec.ts. No stray folder. The files in the
+   repository are LF and equal (modulo CR, which git apply adds outside a repository) to the patched copies used in the reproduction.
+
+3. Repeat runs (proof export, three tests, both projects; the keyboard test is desktop-only, so 60 skipped is expected)
+   - repeat 60, 2 workers: 360 tests, 300 passed, 60 skipped, 0 failed (7.6 min)
+   - repeat 60, 6 workers: 360 tests, 300 passed, 60 skipped, 0 failed (3.6 min)
+
+4. Models on the fixed product
+   - late lookup 300 ms, fixed keyboard test, desktop, repeat 10:            10 passed, 0 failed
+   - 4x throttle, Escape test and new test, desktop, repeat 10, 6 workers:   20 passed, 0 failed
+   - flag-lag matrix (3 throttle rates x 5 gaps, 10 runs each = 150 runs):   0 failures in every cell (all 15 logs show 10 passed and no failed line)
+     (out/gap-fixed-table.txt cells read "0/10"; its "passed" figures are garbled by a grep that also matched durations, so use the logs' "10 passed")
+
+5. Load. 32 burner threads for 240 s (host: 32 logical CPUs; the burner stops itself, exit 0), three tests, repeat 10, 2 workers: 60 tests, 50 passed, 10 skipped, 0 failed.
+
+6. Mutants (proof export, restored byte-equal after each; each failed its named test)
+   - Check in button never enabled        -> keyboard test: 1 failed
+   - Check in button out of the tab order -> keyboard test: 1 failed
+   - Escape inside the drawer does not close -> both Escape tests (5304 and the new one): 2 failed
+   - dirty never reported (false)         -> both Escape tests: 2 failed
+   - useEffect restored in DayFieldsForm.tsx -> the new test: 5 of 5 runs failed
+   Restore check: the three FIX13 files byte-equal to the repository; DayEditor.tsx and ClockPanel.tsx byte-equal to export-orig.
+
+7. Repository checks (one after another, in the repository, NODE_OPTIONS=--trace-deprecation)
+   - npm run lint exit 0; npm run typecheck exit 0; npm run build exit 0
+   - dist/ comparison against the FIX12 build (export-orig): dist/server and dist/domain identical (0 differing hash lines); only dist/client differs:
+     index.html and the hashed chunks AdminScreen, ImportScreen, ReviewScreen, SettingsTransfer, SettingsTransferFile and index (.js and .js.map; new hash suffixes)
+   - npm run verify exit 0 (typecheck, lint, npm test, build, smoke on port 50820; "SMOKE PASSED"); its vitest run: 101 files, 2,388 tests passed
+   - git diff --check exit 0
+   - no deprecation warning: 0 matches for "deprecat" in the lint, typecheck, build, verify, npm test, FULL and census logs
+
+8. npm test once in the proof export: exit 0, 101 files, 2,388 tests passed.
+
+9. Real-clock FULL e2e (proof export, default workers = 2)
+   - desktop: 503 tests, 468 passed, 35 skipped, 0 failed (10.6 min)
+   - mobile:  503 tests, 406 passed, 97 skipped, 0 failed (6.4 min)
+
+10. Sweep instant 2026-10-27T06:58:30Z (America/Los_Angeles Mon 2026-10-26 23:58), FIX10 shiftclock.mjs unchanged, --workers=6, the seven REGATE7 files plus keyboard-access.spec.ts:
+    502 tests, 408 passed, 94 skipped, 0 failed (5.4 min).
+
+11. Digest, last. Clean export of the working tree (git archive of HEAD + the eight changed files, no node_modules):
+    npm run digest (repository form)   c1691aed8604a00e6fa33e89f7a1bf8970c7cef44bf2eab64239661cf6a11fba  (882 files, handoff/ excluded)
+    export form (git hash-object --no-filters, sorted, SHA-256)  c1691aed8604a00e6fa33e89f7a1bf8970c7cef44bf2eab64239661cf6a11fba  (882 files)
+    (scripts/source-digest.mjs itself needs a git repository, so the export form is computed by digest-export.sh.txt.)
+
+12. Canonical documents: grep of docs/ for the guard's timing (layout or passive effect, unsaved-edit flag) found nothing the change contradicts; no document was edited.
+
+Notes. The proof chain (prove1..prove3) was started from one detached shell by mistake; it ran to completion and no process is left. A few pipes into head/tail
+were used in read-only inspection commands (counting lines of logs); no evidence depends on them.

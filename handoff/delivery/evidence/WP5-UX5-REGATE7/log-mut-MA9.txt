@@ -1,0 +1,45 @@
+
+Running 1 test using 1 worker
+
+(node:51864) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  1 [desktop] › tests\e2e\review.spec.ts:529:1 › the Preview week card that scrolls sideways shows the shared focus ring on all four edges at 768px, in both themes and also scrolled, and focusing it does not scroll it (1.6s)
+
+
+  1) [desktop] › tests\e2e\review.spec.ts:529:1 › the Preview week card that scrolls sideways shows the shared focus ring on all four edges at 768px, in both themes and also scrolled, and focusing it does not scroll it 
+
+    Error: light, scrolled 60px: taking focus does not move the card
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    -   60,
+    +   52,
+        0,
+      ]
+
+      562 |       await expect(card, `${where}: the card has focus`).toBeFocused();
+      563 |       await expect.poll(() => card.evaluate((element) => element.matches(':focus-visible')), `${where}: the focus is a keyboard focus`).toBe(true);
+    > 564 |       expect(await card.evaluate((element) => [element.scrollLeft, element.scrollTop]), `${where}: taking focus does not move the card`).toEqual([before, 0]);
+          |                                                                                                                                          ^
+      565 |       await card.evaluate((element) => element.ownerDocument.defaultView?.scrollBy(0, element.getBoundingClientRect().top - 120));
+      566 |       await expect.poll(() => missingRingPixels(page, card, accent), { message: `${where}: the ring is painted on every edge`, timeout: 5000 }).toEqual([]);
+      567 |     }
+        at <task>\export-mut\tests\e2e\review.spec.ts:564:138
+
+    Error Context: ..\pw-mut-MA9\review-the-Preview-week-ca-53c0d-using-it-does-not-scroll-it-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MA9\review-the-Preview-week-ca-53c0d-using-it-does-not-scroll-it-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MA9\review-the-Preview-week-ca-53c0d-using-it-does-not-scroll-it-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\review.spec.ts:529:1 › the Preview week card that scrolls sideways shows the shared focus ring on all four edges at 768px, in both themes and also scrolled, and focusing it does not scroll it 
+exit=1

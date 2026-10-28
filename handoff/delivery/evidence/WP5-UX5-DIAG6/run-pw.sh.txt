@@ -1,0 +1,21 @@
+# Usage: bash run-pw.sh <label> <UTC ISO instant | real> [playwright args...]
+# One Playwright run in $X (default: the FIX12-tree export) under the real clock or the FIX10 simulated clock (shiftclock.mjs, unchanged).
+. <task>/env.sh
+L=$1; TARGET_I=$2; shift 2
+mkdir -p $T/pw-$L $T/shots-$L
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+if [ "$TARGET_I" = "real" ]; then
+  export AB8_SHIFT_MS=0
+else
+  TARGET_MS=$(date -u -d "$TARGET_I" +%s%3N)
+  NOW_MS=$(date -u +%s%3N)
+  export AB8_SHIFT_MS=$((TARGET_MS - NOW_MS))
+  export NODE_OPTIONS="--import file:///$(cygpath -m $T)/shiftclock.mjs"
+fi
+echo "== $L: real start $(date -u +%Y-%m-%dT%H:%M:%SZ), simulated start $TARGET_I, AB8_SHIFT_MS=$AB8_SHIFT_MS"
+node.exe $T/probe-now.mjs
+cd "${X:-$T/export}" || exit 2
+echo "\$ node node_modules/@playwright/test/cli.js test $* --output=$TW\\pw-$L"
+node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-$L"
+echo "exit=$?"
+echo "== $L real end $(date -u +%Y-%m-%dT%H:%M:%SZ)"

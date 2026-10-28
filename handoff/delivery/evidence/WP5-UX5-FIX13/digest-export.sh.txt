@@ -1,0 +1,11 @@
+# Export form of the digest (the clean export is not a git repository): the sorted "<path> <blob>" lines with the blob IDs of git hash-object --no-filters
+# (the export holds LF files, as .gitattributes normalizes), SHA-256 of the lines, handoff/ excluded.
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX13/env.sh
+cd $T/export-digest || exit 9
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' -not -path './.git/*' | sed 's|^\./||' | LC_ALL=C sort > $T/out/dx-files.txt
+: > $T/out/dx-hashes.txt
+while IFS= read -r f; do
+  printf '%s %s\n' "$f" "$(git hash-object --no-filters -- "$f")" >> $T/out/dx-hashes.txt
+done < $T/out/dx-files.txt
+LC_ALL=C sort $T/out/dx-hashes.txt > $T/out/dx-sorted.txt
+echo "export form: $(sha256sum $T/out/dx-sorted.txt | cut -d' ' -f1)  ($(wc -l < $T/out/dx-sorted.txt) files, handoff/ excluded)" | tee $T/out/digest-export-form.txt

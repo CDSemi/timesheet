@@ -1,0 +1,15 @@
+History of the two flaky tests in the earlier gate and fix evidence (handoff/delivery/evidence/*, searched with the Grep tool; counts are of log files).
+
+keyboard-access.spec.ts "WP5-UX3-T04: the check in/out group of the title row ..."
+  introduced: 83c32d2f 2026-10-15 (Freeze WP5-UX3-T04).
+  ingredients of the race, all older than the test: the disabled-while-unknown button b6324b7c 2026-10-08 (WP5-UX-T03); the lookup in ClockProvider.reportView/resolve f70a5c04 2026-10-14 (WP5-UX2-T09).
+  passes in the desktop list of 144 earlier evidence logs (single real-clock FULL runs and sweep-instant runs); 0 recorded failures in them (searched: failure lines "N) [desktop] ... keyboard-access.spec.ts:267" and "x" lines of the list reporter).
+  failures on record: only the FIX12 task (13 of 30 and 16 of 30 in --repeat-each=30 --workers=2 on a busy host; 1 failure in its first real-clock FULL desktop run, line 282 "Received: inactive").
+  the "Received: inactive" text appears in 17 other evidence logs; those are mutant or reproduction logs of other focus tests, none of this test.
+
+day-editor.spec.ts "Escape and the Close button: with unsaved edits they ask first ..." (describe WP5-UX4-T02 addendum 1)
+  introduced: b7cc0635 2026-10-20 (Freeze WP5-UX4-T02), together with the guard it tests and the effect chain (DayFieldsForm -> DayEditor -> TimesheetScreen editorDirty ref); unchanged since for this chain (69d63400 2026-10-22 touched both files without changing the chain).
+  passes in 117 earlier evidence logs (desktop list lines); 0 recorded failures.
+  failures on record: only the FIX12 task (4 of 20 and 2 of 20 in --repeat-each=20 --workers=6, stack line 5340; 1 failure in a 90 ms x3 delay-suite run).
+
+Verdict: both are long-standing latent races, not new since a commit. Gates passed them in single runs because the window is a few milliseconds on a quiet host; FIX12's repeat runs on a busy host and its FULL run exposed them. Neither FIX11 nor FIX12 changed the code involved.

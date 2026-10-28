@@ -1,0 +1,80 @@
+/* DIAG6 probe (scratch only): the page's own record of the Check in button around the moment the test focuses it.
+ * It is the body of keyboard-access.spec.ts:267 up to the first focus, with a recorder installed before the page loads:
+ *   - every HTMLElement.focus() call on a .clock-button (time, disabled, data-clock, activeElement afterwards);
+ *   - every change of the clock group's data-clock and of the button's disabled state;
+ *   - every /api fetch (start and end).
+ * One JSON line per run goes to DIAG_OUT. MODE=orig focuses at once (as the test does); MODE=wait waits for toBeEnabled first (the proposed fix).
+ */
+import { appendFileSync } from 'node:fs';
+import { expect, newPerson, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+const OUT = process.env.DIAG_OUT ?? '';
+const MODE = process.env.PROBE_MODE ?? 'orig';
+
+test('diag6 kbd: record of the Check in button', async ({ page, adminSeed, builtServer, signInPageAs, isMobile }) => {
+  test.skip(isMobile, 'desktop');
+  test.setTimeout(90_000);
+  const me = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Tab Person', signature: 'none' });
+  await page.addInitScript(() => {
+    const w = window as unknown as { __ev: unknown[] };
+    w.__ev = [];
+    const log = (what: string, extra: Record<string, unknown> = {}) => w.__ev.push({ what, t: Math.round(performance.now() * 10) / 10, ...extra });
+    const nativeFocus = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function (this: HTMLElement, ...args: Parameters<HTMLElement['focus']>) {
+      const before = document.activeElement;
+      nativeFocus.apply(this, args);
+      if (this.classList.contains('clock-button')) {
+        log('focus() on clock-button', { text: this.textContent, disabled: (this as HTMLButtonElement).disabled, dataClock: this.closest('.clock-group')?.getAttribute('data-clock'), focusedAfter: document.activeElement === this, activeBefore: before?.tagName });
+      }
+    };
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      log('fetch start', { url: url.replace(/\d{4}-\d{2}-\d{2}/g, 'D') });
+      try {
+        return await nativeFetch(input, init);
+      } finally {
+        log('fetch end', { url: url.replace(/\d{4}-\d{2}-\d{2}/g, 'D') });
+      }
+    };
+    let last = '';
+    const snap = () => {
+      const group = document.querySelector('.clock-group');
+      const b = group?.querySelector('.clock-button') as HTMLButtonElement | null | undefined;
+      const days = document.querySelectorAll('[data-day]').length;
+      const state = `${group?.getAttribute('data-clock') ?? 'none'}|${b === null || b === undefined ? 'nobutton' : b.disabled ? 'disabled' : 'enabled'}|days${days}`;
+      if (state !== last) {
+        last = state;
+        log('state', { state });
+      }
+    };
+    new MutationObserver(snap).observe(document, { subtree: true, childList: true, attributes: true });
+  });
+  // PROBE_DELAY: the answers of /api/periods/current come this many ms late (the lookup of the running session needs them).
+  const delay = Number(process.env.PROBE_DELAY ?? '0');
+  // The 1st and 2nd request pass at once (the period to show); the 3rd and later (the lookup that decides Check in or Check out) are late.
+  if (delay > 0) {
+    let calls = 0;
+    await page.route('**/api/periods/current', async (route) => {
+      calls += 1;
+      if (calls >= 3) await new Promise((resolveWait) => setTimeout(resolveWait, delay));
+      await route.continue();
+    });
+  }
+  await signInPageAs(me.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.evaluate(() => (window as unknown as { __ev: unknown[] }).__ev.push({ what: 'test: 14 days seen', t: Math.round(performance.now() * 10) / 10 }));
+  const button = page.locator('.page-head').getByRole('region', { name: 'Check in and out' }).getByRole('button', { name: 'Check in', exact: true });
+  let failed = '';
+  try {
+    if (MODE === 'wait') await expect(button).toBeEnabled();
+    await button.focus();
+    await expect(button).toBeFocused({ timeout: 1500 });
+  } catch (error) {
+    failed = String(error).split('\n')[0] ?? 'failed';
+  }
+  const events = await page.evaluate(() => (window as unknown as { __ev: unknown[] }).__ev);
+  if (OUT !== '') appendFileSync(OUT, `${JSON.stringify({ mode: MODE, failed, events })}\n`);
+  expect(failed).toBe('');
+});

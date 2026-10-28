@@ -2485,9 +2485,123 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
     mồ côi và một server đã build (PID 63092, 37448, 90528, 101148) sau khi tác vụ bash của
     nó bị dừng. Chủ dự án được nhờ tự đóng chúng; task của mission không bao giờ dừng tiến
     trình theo PID.
-- **Đang chạy:** WP5-UX5-FIX11-FREEZE (committer), một mình.
-- **Tiếp theo:** WP5-UX5-REGATE7, kiểm tra lại độc lập hai lỗi đã sửa, audit tích hợp,
-  ACCEPT-DOCS và nghiệm thu lại WP5.
+- **WP5-UX5-FIX11-FREEZE xong.**
+  - Commit 0f52300ca1ab7d458c30e7dbe1fb098d9c6dd955 đã lên main và đã push, fast-forward từ
+    a5533b5.
+  - D_PRE bằng digest của HEAD, 20709d60.
+  - 425 đường dẫn, không che gì. Mọi kiểm tra đều trả về 0.
+- **WP5-UX5-REGATE7 KHÔNG ĐẠT ở một tiêu chí** (verifier, sonnet, chạy một mình, trên
+  0f52300 / 20709d60).
+  - Chỗ lỗi: lượt quét `seven-1026` (2026-10-27T06:58:30Z, `--workers=6`), test desktop
+    `review.spec.ts:406`. Assertion "the text is vertically centred at 767px" đo được 8,
+    trong khi giới hạn là 1,5. Đây không phải lỗi mạng, buffer hay quá thời gian.
+  - FIX11 không sửa test này. Chạy riêng ở cùng thời điểm mô phỏng: qua 20/20; theo giờ thật
+    cũng 20/20. Chạy lại cả bảy file: 0 lỗi.
+  - Mọi mục khác đều đạt:
+    - đúng 15 đường dẫn của FIX11;
+    - thay đổi trong `dist/` khớp với `restore.ts` và bundle giao diện;
+    - drill `--wp3`: 209 PASS, 0 FAIL;
+    - `npm audit --omit=dev`: 0;
+    - `npm test` ba lần, mỗi lần 2.388 test, cùng các validator;
+    - e2e FULL theo giờ thật: 467/35/0 và 405/97/0;
+    - năm lượt quét còn lại: 0 lỗi, không quá thời gian;
+    - chạy dồn: 0 lỗi;
+    - các mutant của FIX11 đều bị phát hiện. `restore.ts` cũ vẫn gửi bản đã bị thay thế,
+      còn bản đích thì từ chối;
+    - axe: 84 lượt quét, 0 vi phạm.
+  - **Lỗ hổng test:** mutant thêm R3 sống sót qua cả 33 test khôi phục. Với R3, một lượt
+    gửi sau đang được giữ lease không còn chặn việc release trên đường khôi phục. Dòng mã
+    này có từ trước FIX11.
+  - Kiểm kê tiến trình: các tiến trình mồ côi của RECHECK-A vẫn còn, dùng khoảng một lõi
+    CPU. Không dừng tiến trình nào.
+  - **Quyết định coordinator:** không bỏ qua lỗi assertion của một test không đổi, như đã
+    làm với REGATE5.
+- **Kết quả đầu của WP5-UX5-DIAG5** (planner, sonnet, chạy một mình, chỉ đọc):
+  - **Nguyên nhân:** test đo trúng lúc bố cục lệch thật, nhưng chỉ trong một khung hình.
+    - Khi bề rộng đổi từ 768 xuống 767, CSS áp dụng trước. `useMedia` của React gắn đồng hồ
+      trên thanh trên chậm hơn một lần cập nhật hiển thị, nên thanh cao từ 52 lên 60 px và
+      thẻ dịch xuống 8 px.
+    - Test đọc thẻ và chữ ở hai trạng thái khác nhau. Mọi bố cục đã ổn định đều căn giữa.
+    - Trace của lần lỗi khớp với cách giải thích này. Làm trễ thông báo media của React thì
+      tái hiện được "Received 8" trong 35/40 lần chạy.
+    - Không sửa sản phẩm. Cú nhảy một khung hình được đưa vào backlog tùy chọn của WP5.
+  - **Bản sửa (chỉ test):** hàm phụ `expectLayoutAt(page, width)` trong
+    `tests/e2e/fixtures.ts`, gọi sau `setViewportSize` ở `review.spec.ts` 406, 643, 734 và
+    `timesheet.spec.ts` 2541.
+    - Qua 40/40 lần với mô hình trễ và khi máy chịu tải.
+    - Mutant lệch tâm 8 px vẫn làm test lỗi.
+  - **R3:** thêm một ca trong `restore.test.ts`: lượt gửi sau đang giữ lease chặn việc
+    release với lý do `superseded_by_later_send`. Lý do này đúng. Ca này diệt được R3.
+  - **Quyết định coordinator:** chấp nhận. Addendum 1 nhờ chính planner đó xử lý thêm
+    `logo.spec.ts:599`, test này cũng lỗi ở mức trễ 90 ms như 734. Planner cũng chạy lại bộ
+    thử trễ trên 15 file spec với bản sửa cuối.
+- **WP5-UX5-DIAG5 xong (Addendum 1).**
+  - `logo.spec.ts:599` có cùng nguyên nhân, ở mốc 480 px. React thay lưới tuần rộng 865 px
+    bằng bảng dạng điện thoại chậm hơn CSS một lần cập nhật. Vì vậy hàm phụ `expectSheetAt`
+    giờ được gọi trong `sweepRange` của test logo.
+  - Bản sửa cuối gồm năm file.
+  - Bộ thử trễ (15 file spec có đổi bề rộng, 436 test desktop) có 0 lỗi ở các mức 20, 45
+    và 90 ms. Trước khi sửa có 1, 3 và 6 lỗi.
+  - Các mutant vẫn làm test của chúng lỗi.
+- **WP5-UX5-FIX12 xong** (worker, sonnet; chưa commit; digest bf7ec3f7, 882 file).
+  - Task tái hiện lỗi trên HEAD, rồi áp bản sửa vào năm file test.
+  - **Sai khác so với bản sửa, đã chấp nhận:** thêm hai dòng `expectLayoutAt` trong
+    `review.spec.ts` "a signed period opened again" và `timesheet.spec.ts` "from 320 to
+    1920px". Các lượt kiểm tra cả bộ thấy hai test này lỗi 8/18 và 4/120 lần; có thêm dòng
+    thì 0 lỗi.
+  - Bộ thử trễ: 0 lỗi ở 20, 45, 70 và 90 ms. Khi máy chịu tải: 0 lỗi. Các mutant đều làm
+    test của chúng lỗi. `restore.test.ts`: 33/33.
+  - Lint, typecheck, build, verify và `npm test` (2.388) đều qua. `dist/` giống hệt HEAD.
+  - e2e đầy đủ theo giờ thật:
+    - mobile: 405/97/0;
+    - desktop: lần đầu 1 lỗi (`keyboard-access.spec.ts:267`); chạy lại 467/35/0.
+  - Giờ mô phỏng 2026-10-27T06:58:30Z: 0 lỗi.
+  - **Hai test chập chờn có từ trước**, trên HEAD cũng lỗi:
+    - `keyboard-access.spec.ts:267` ("Received: inactive"): khoảng một nửa số lần chạy lặp;
+    - `day-editor.spec.ts:5304`: 2 đến 4 trên 20 lần.
+  - **Quyết định coordinator:** test nào trong hai test này cũng có thể làm gate sau trượt.
+    Vì vậy chẩn đoán và sửa chúng trước, rồi freeze FIX12 cùng bản sửa đó trong một lần.
+- **WP5-UX5-DIAG6 xong** (planner, sonnet, chỉ đọc).
+  - Cả hai test chập chờn đều không phải do trạng thái sót lại giữa các lần chạy lặp. Race
+    có ở cả lần chạy đơn; máy càng bận thì lỗi càng hay xảy ra.
+  - **`keyboard-access.spec.ts:267`: race trong test.**
+    - Nút Check in bị vô hiệu hóa trong lúc tải trạng thái, kéo dài 10 đến 56 ms sau khi
+      các ngày đã vẽ xong. Hành vi này đã được ghi trong tài liệu.
+    - `focus()` không có tác dụng trên nút đang bị vô hiệu hóa, nên test chờ mãi.
+    - Cách sửa: chờ nút bật lại rồi mới focus.
+  - **`day-editor.spec.ts:5304`: một race hẹp trong sản phẩm, thuộc loại làm mất dữ liệu.**
+    - Cờ "có thay đổi chưa lưu" của Day editor được báo trễ một task.
+    - Nếu bấm Escape ngay sau khi gõ vào Notes, editor có thể đóng mà không hỏi "Discard
+      your changes?", và ghi chú bị mất. Như vậy là trái với U4-05.
+    - Cách sửa: dùng `useLayoutEffect` để báo cờ trong `DayFieldsForm.tsx`, và thêm một test
+      e2e tất định. Trên sản phẩm cũ, test này lỗi 10/10.
+  - Bằng chứng:
+    - chạy lặp 60 lần với 2 và 6 worker: 0 lỗi;
+    - các mô hình trễ và bóp CPU đều qua;
+    - các mutant đều bị phát hiện;
+    - chạy lặp cả bộ e2e ba lần trên hai project: 0 lỗi.
+  - Lịch sử: cả hai race đã có từ lâu. Các log trước không ghi nhận lần lỗi nào.
+  - `dist/client` thay đổi, nên phải gate lại toàn bộ. Một auditor mới sẽ đọc thay đổi sản
+    phẩm này.
+  - **Quyết định coordinator:** chấp nhận. Không cần quyết định nghiệp vụ hay UX, vì bản sửa
+    chỉ khôi phục đúng U4-05.
+- **WP5-UX5-FIX13 xong** (worker, sonnet; chưa commit; digest c1691aed, 882 file).
+  - Task tái hiện được cả ba lỗi trên sản phẩm cũ: 10/10, 10/10 và 20/20.
+  - Task áp bản sửa vào `DayFieldsForm.tsx`, `keyboard-access.spec.ts` và
+    `day-editor.spec.ts`. Giờ có tám đường dẫn khác ngoài `handoff/`.
+  - Chạy lặp 60 lần với 2 và 6 worker: 0 lỗi. Các mô hình, bảng đo độ trễ của cờ và lượt
+    chạy khi máy chịu tải đều qua. Năm mutant, kể cả mutant đổi lại `useEffect`, đều làm
+    test của chúng lỗi.
+  - Lint, typecheck, build, verify và `npm test` (2.388) đều qua, không có cảnh báo
+    deprecation. `dist/server` giống hệt. `dist/client` thay đổi: `index.html` và sáu chunk.
+  - e2e đầy đủ theo giờ thật: desktop 468/35/0, mobile 406/97/0.
+  - Lượt chạy ở giờ mô phỏng: 0 lỗi.
+- **Đang chạy:** WP5-UX5-FIX13-FREEZE (committer, sonnet), chạy một mình. Task này commit
+  FIX12, FIX13 và các bản ghi trong một lần, rồi push.
+- **Sau đó:** WP5-UX5-REGATE8 đầy đủ, kiểm tra lại độc lập (có cả thay đổi Day editor), audit
+  tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
+- **Tiếp theo:** bản sửa, freeze, gate lại, rồi kiểm tra lại độc lập hai lỗi đã sửa, audit
+  tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

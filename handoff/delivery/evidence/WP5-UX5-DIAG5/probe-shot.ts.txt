@@ -1,0 +1,12 @@
+/* ---- DIAG5 probe (scratch only): what the settled 768 and 767 pages look like ----------------------------------------- */
+
+test('diag5 shot: settled 768 and 767', async ({ page, adminSeed, builtServer }) => {
+  const reviewer = await newReviewer(adminSeed, builtServer);
+  await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+  await expect(page.locator('.check-card')).toBeVisible();
+  for (const width of [768, 767]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: process.env.DIAG_SHOT_DIR + `\\settled-${width}.png`, scale: 'css' });
+  }
+});

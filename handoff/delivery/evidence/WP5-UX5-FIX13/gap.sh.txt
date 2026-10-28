@@ -1,0 +1,34 @@
+# How long does the unsaved-edit flag lag behind a keystroke? The probe (DIAG6's probe-esc) waits GAP ms between the Notes keystroke and the Escape.
+# Usage: PFX=fixed bash gap.sh   (PFX only names the logs). THROTTLE = Chromium CPU throttling rate. The product in the export decides the result.
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX13/env.sh
+PFX=${PFX:-fixed}
+export X=$T/export
+cp $E/../WP5-UX5-DIAG6/probe-esc.ts.txt $X/tests/e2e/probe-esc.spec.ts
+for TH in 1 4 10; do
+  for G in 0 15 30 60 120; do
+    L=gap-$PFX-t$TH-g$G
+    export DIAG_OUT="$TW\\out\\diag-$L.jsonl"
+    rm -f $T/out/diag-$L.jsonl
+    PROBE_MODE=$PFX PROBE_THROTTLE=$TH PROBE_GAP=$G bash $E/run-pw.sh.txt $L real tests/e2e/probe-esc.spec.ts --project=desktop --workers=6 --repeat-each=10 --trace=off > $T/logs/$L.txt 2>&1
+  done
+done
+rm -f $X/tests/e2e/probe-esc.spec.ts
+unset DIAG_OUT
+{
+  echo "mode=$PFX; rows = CPU throttle rate, columns = pause between the Notes keystroke and the Escape (ms); cells = runs where the Escape closed the editor without the question / 10 runs"
+  for TH in 1 4 10; do
+    line="throttle ${TH}x:"
+    for G in 0 15 30 60 120; do
+      f=$T/logs/gap-$PFX-t$TH-g$G.txt
+      if [ -f "$f" ]; then
+        fl=$(grep -m1 -E "^\s+[0-9]+ failed" "$f" | grep -m1 -oE "[0-9]+")
+        pa=$(grep -m1 -E "^\s+[0-9]+ passed" "$f" | grep -m1 -oE "[0-9]+")
+        line="$line  ${G}ms=${fl:-0}/10(passed ${pa:-0})"
+      else
+        line="$line  ${G}ms=n/a"
+      fi
+    done
+    echo "$line"
+  done
+} > $T/out/gap-$PFX-table.txt
+echo gap-done > $T/out/gap-$PFX.done

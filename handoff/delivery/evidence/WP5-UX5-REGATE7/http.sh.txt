@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# The original finding's sequence (RECHECK-B two-process HTTP probe, option A, restore and release) against a built export.
+# Usage: http.sh <export dir name under the task folder> <label>
+source <task>/env.sh
+dir="$T/$1"
+label="$2"
+mkdir -p "$T/http-work-$label" "$T/tmp-http-$label"
+export TEMP="$TW\\tmp-http-$label" TMP="$TW\\tmp-http-$label" TMPDIR="$T/tmp-http-$label"
+cd "$dir" || exit 9
+node.exe "$TW\\http-optionA.mjs" "$(cygpath -w "$dir")" "$TW\\http-work-$label" 50662 50663 50664 50665 "$TW\\logs\\http-$label.txt" > "$T/logs/http-$label-run.txt" 2>&1
+echo "exit=$?" >> "$T/logs/http-$label-run.txt"

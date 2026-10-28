@@ -1,0 +1,19 @@
+# Proof of the fixes in the scratch export (apply-stage.sh fixed has run). One Playwright run after another.
+. <task>/env.sh
+GK="WP5-UX3-T04: the check in/out group"
+GE="Escape and the Close button: with unsaved edits"
+GN="Escape dispatched in the same task"
+KBD=tests/e2e/keyboard-access.spec.ts
+DED=tests/e2e/day-editor.spec.ts
+run() { L=$1; shift; bash $T/run-pw.sh $L real "$@" --trace=off > $T/logs/$L.txt 2>&1; }
+# 1. repeat 60 at the worker counts that failed (kbd: the default 2 and 6; esc: 6 and 2)
+run kbd-fix-r60w2 $KBD -g "$GK" --project=desktop --workers=2 --repeat-each=60
+run kbd-fix-r60w6 $KBD -g "$GK" --project=desktop --workers=6 --repeat-each=60
+run esc-fix-r60w6 $DED -g "$GE" --project=desktop --workers=6 --repeat-each=60
+run esc-fix-r60w2 $DED -g "$GE" --project=desktop --workers=2 --repeat-each=60
+# 2. the new test: both projects
+run new-fix-r30w6 $DED -g "$GN" --workers=6 --repeat-each=30
+# 3. one run of each under the self-stopping burner
+bash $T/loadrun.sh kbd-fix-burn 32 45 $KBD -g "$GK" --project=desktop --workers=1 --repeat-each=3
+bash $T/loadrun.sh esc-fix-burn 32 45 $DED -g "$GE|$GN" --project=desktop --workers=1 --repeat-each=2
+echo fixproof-done > $T/out/fixproof.done

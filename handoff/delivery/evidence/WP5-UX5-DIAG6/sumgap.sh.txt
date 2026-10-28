@@ -1,0 +1,20 @@
+# Usage: bash sumgap.sh <orig|fixed>   prints "<throttle> <gap ms> <failed>/<total>" for the flag-lag matrix (out/gap-<mode>-table.txt).
+. <task>/env.sh
+P=$1
+{
+  echo "mode=$P; rows = CPU throttle rate, columns = pause between the Notes keystroke and the Escape (ms); cells = runs where the Escape closed the editor without the question / 10 runs"
+  for TH in 1 4 10; do
+    line="throttle ${TH}x:"
+    for G in 0 15 30 60 120; do
+      f=$T/logs/gap-$P-t$TH-g$G.txt
+      if [ -f "$f" ]; then
+        fl=$(grep -E "^\s+[0-9]+ failed" "$f" | grep -oE "[0-9]+" | head -1)
+        line="$line  ${G}ms=${fl:-0}/10"
+      else
+        line="$line  ${G}ms=n/a"
+      fi
+    done
+    echo "$line"
+  done
+} > $T/out/gap-$P-table.txt
+cat $T/out/gap-$P-table.txt

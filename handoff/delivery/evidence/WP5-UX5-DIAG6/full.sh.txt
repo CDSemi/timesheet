@@ -1,0 +1,11 @@
+# The repeat census: the real-clock FULL e2e on both projects with --repeat-each=3 --workers=6, then the fixed tests at the sweep instant.
+# The scratch export holds the FIX12 tree plus the proposed fixes (apply-stage.sh fixed); the probe and delay copies are removed first.
+. <task>/env.sh
+rm -f $T/export/tests/e2e/probe-kbd.spec.ts $T/export/tests/e2e/probe-esc.spec.ts $T/export/tests/e2e/dly-kbd-orig.spec.ts $T/export/tests/e2e/dly-kbd-fixed.spec.ts $T/export/tests/e2e/dly-esc-orig.spec.ts $T/export/tests/e2e/dly-esc-fixed.spec.ts
+ls $T/export/tests/e2e | grep -cE "^(probe|dly)-" > $T/out/census-leftover-copies.txt
+unset DIAG_OUT PROBE_DELAY PROBE_THROTTLE PROBE_GAP PROBE_MODE
+bash $T/run-pw.sh census-desktop real --project=desktop --workers=6 --repeat-each=3 --trace=off > $T/logs/census-desktop.txt 2>&1
+echo "desktop done $(date -u +%H:%M:%SZ)" >> $T/out/census-progress.txt
+bash $T/run-pw.sh census-mobile real --project=mobile --workers=6 --repeat-each=3 --trace=off > $T/logs/census-mobile.txt 2>&1
+echo "mobile done $(date -u +%H:%M:%SZ)" >> $T/out/census-progress.txt
+echo census-done > $T/out/census.done

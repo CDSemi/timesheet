@@ -1,0 +1,10 @@
+// Read-only bounded wait: returns when <marker> exists or after <seconds>. Usage: node waitfor.mjs <marker path> <seconds>
+// Run as a Bash background task, so its exit notice wakes the caller; it starts and stops nothing.
+import { existsSync } from 'node:fs';
+
+const marker = process.argv[2] ?? '';
+const cap = Number(process.argv[3] ?? '540');
+const started = Date.now();
+const cell = new Int32Array(new SharedArrayBuffer(4));
+while (!existsSync(marker) && Date.now() - started < cap * 1000) Atomics.wait(cell, 0, 0, 5000);
+console.log(existsSync(marker) ? `marker present after ${Math.round((Date.now() - started) / 1000)} s` : `cap reached after ${Math.round((Date.now() - started) / 1000)} s`);

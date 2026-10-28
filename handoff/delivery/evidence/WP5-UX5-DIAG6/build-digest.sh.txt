@@ -1,0 +1,15 @@
+# Digest (export form, handoff/ excluded) of the FIX12-tree export BEFORE any probe, then build both exports.
+. <task>/env.sh
+X=${1:-export}
+cd $T/$X || exit 9
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' -not -path './.git/*' | sed 's|^\./||' | LC_ALL=C sort > $T/out/dx-files-$X.txt
+: > $T/out/dx-hashes-$X.txt
+while IFS= read -r f; do
+  printf '%s %s\n' "$f" "$(git hash-object --no-filters -- "$f")" >> $T/out/dx-hashes-$X.txt
+done < $T/out/dx-files-$X.txt
+LC_ALL=C sort $T/out/dx-hashes-$X.txt > $T/out/dx-sorted-$X.txt
+echo "$X export form: $(sha256sum $T/out/dx-sorted-$X.txt | cut -d' ' -f1)  ($(wc -l < $T/out/dx-sorted-$X.txt) files, handoff/ excluded)" | tee $T/out/digest-$X.txt
+if [ "$2" = "build" ]; then
+  npm run build > $T/logs/build-$X.txt 2>&1
+  echo "build $X exit=$?"
+fi

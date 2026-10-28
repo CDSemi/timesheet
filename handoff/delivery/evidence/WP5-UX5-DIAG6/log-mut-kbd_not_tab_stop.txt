@@ -1,0 +1,40 @@
+== mut-kbd_not_tab_stop: real start 2026-10-28T00:36:42Z, simulated start real, AB8_SHIFT_MS=0
+process clock 2026-10-28T00:36:42.969Z (Date.now 1793147802979); America/Los_Angeles Tue, 2026-10-27, 17:36; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/keyboard-access.spec.ts -g WP5-UX3-T04: the check in/out group --project=desktop --workers=1 --trace=off --output=<task>\pw-mut-kbd_not_tab_stop
+
+Running 1 test using 1 worker
+
+  x  1 [desktop] › tests\e2e\keyboard-access.spec.ts:267:1 › WP5-UX3-T04: the check in/out group of the title row is one tab stop between the top bar and the period card, in the visual order (7.7s)
+
+
+  1) [desktop] › tests\e2e\keyboard-access.spec.ts:267:1 › WP5-UX3-T04: the check in/out group of the title row is one tab stop between the top bar and the period card, in the visual order 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  locator('.page-head').getByRole('region', { name: 'Check in and out' }).getByRole('button', { name: 'Check in', exact: true })
+    Expected: focused
+    Received: inactive
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toBeFocused" locator('.page-head').getByRole('region', { name: 'Check in and out' }).getByRole('button', { name: 'Check in', exact: true }) with timeout 7000ms
+      - waiting for locator('.page-head').getByRole('region', { name: 'Check in and out' }).getByRole('button', { name: 'Check in', exact: true })
+        18 × locator resolved to <button type="button" tabindex="-1" class="clock-button">Check in</button>
+           - unexpected value "inactive"
+
+
+      289 |   // Backward: from the button the previous stop is in the top bar, so the group is exactly one stop between the two.
+      290 |   await page.keyboard.press('Shift+Tab');
+    > 291 |   await expect(button).toBeFocused();
+          |                        ^
+      292 |   await page.keyboard.press('Shift+Tab');
+      293 |   expect(await page.evaluate("document.activeElement !== null && document.activeElement.closest('.shell-bar') !== null"), 'the stop before the group is in the top bar').toBe(true);
+      294 |   // The visual order agrees: the title row is above the period card, and the button is above Previous.
+        at <task>\export\tests\e2e\keyboard-access.spec.ts:291:24
+
+    Error Context: ..\pw-mut-kbd_not_tab_stop\keyboard-access-WP5-UX3-T0-1e550-od-card-in-the-visual-order-desktop\error-context.md
+
+  1 failed
+    [desktop] › tests\e2e\keyboard-access.spec.ts:267:1 › WP5-UX3-T04: the check in/out group of the title row is one tab stop between the top bar and the period card, in the visual order 
+exit=1
+== mut-kbd_not_tab_stop real end 2026-10-28T00:36:53Z

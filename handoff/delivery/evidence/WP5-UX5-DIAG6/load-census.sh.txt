@@ -1,0 +1,3 @@
+# Usage: bash load-census.sh <tag>   read-only: CPU load and the five busiest processes by accumulated CPU time, in out/load-<tag>.txt
+. <task>/env.sh
+powershell.exe -NoProfile -Command "(Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average; Get-Process | Sort-Object CPU -Descending | Select-Object -First 8 Id,ProcessName,@{n='CPUs';e={[math]::Round(\$_.CPU)}},StartTime | Format-Table -AutoSize | Out-String -Width 200" > $T/out/load-$1.txt 2>&1

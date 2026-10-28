@@ -105,22 +105,28 @@ Luồng hiện tại:
      cũ của vùng B đã được sửa.
    - Lần kiểm tra lại vùng A tìm ra một lỗ hổng mức Low: viền focus của thẻ tuần chỉ đọc bị
      che mất một phần. Các lỗi cũ của vùng A đã được sửa.
-   - WP5-UX5-FIX11 đã sửa cả hai lỗ hổng và thêm các test còn thiếu, chưa commit.
-   - Đang chạy: WP5-UX5-FIX11-FREEZE, một commit cho FIX11 và các bản ghi, rồi push.
-   - Sau đó là gate lại, freeze, gate lại có giới hạn phạm vi, kiểm tra lại độc lập,
-     audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
-   - Chi tiết: checkpoint, mục "REGATE3 không đạt; hai việc chẩn đoán đang chạy
-     (2026-10-26)" và các mục sau đó.
-   - Trước đó trong ngày đã tạm dừng hai lần để khởi động lại máy.
-   - Mọi slice của hai vòng đã được freeze. Commit gần nhất là 2bce0ab (digest 70975091).
-   - Gate của đợt 5 FAIL và FIX1 đã sửa. Lần regate sau đó FAIL vì một lỗi tranh chấp
-     thời điểm trong test; WP5-UX5-DIAG1 xác định đó là lỗi của test.
-   - WP5-UX5-FIX2 (chỉ sửa test) bị gián đoạn.
-   - Tiếp tục bằng prompt khởi động bên dưới. Điều phối viên làm tiếp ở `next_task_id` của
-     board (WP5-UX5-FIX2, lần 2). Sau đó là freeze của nó, WP5-UX5-REGATE2, audit A và B,
-     audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
-   - Chi tiết: [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), mục "Tạm dừng
-     để khởi động lại máy (2026-10-22)".
+   - WP5-UX5-FIX11 đã sửa cả hai lỗ hổng và thêm các test còn thiếu; đã được freeze trong
+     0f52300 (digest 20709d60) và đã push.
+   - WP5-UX5-REGATE7 chỉ trượt một tiêu chí: trong một lượt quét, test không đổi
+     `review.spec.ts:406` đo chữ trong thẻ kiểm tra lệch tâm 8 px ở bề rộng 767 px. Chạy
+     riêng và chạy lại đều qua. Mọi mục khác đều đạt. Gate cũng phát hiện thiếu một test
+     khôi phục (mutant R3).
+   - WP5-UX5-DIAG5 kết luận test đo trúng lúc bố cục thay đổi trong một khung hình, không
+     phải lỗi sản phẩm. Planner đề xuất thêm bước chờ theo trạng thái (chỉ sửa test) và test
+     khôi phục còn thiếu.
+   - WP5-UX5-FIX12 đã áp bản sửa nhưng chưa commit (digest bf7ec3f7). Task này phát hiện
+     hai test chập chờn có từ trước, có thể làm gate sau trượt.
+   - WP5-UX5-DIAG6 tìm ra một race trong test và một race hẹp trong sản phẩm: bấm Escape
+     ngay sau khi gõ vào Notes của Day editor có thể làm mất ghi chú mà không hỏi. Bản sửa
+     là một hook phía client và một test mới.
+   - WP5-UX5-FIX13 đã áp bản sửa đó (digest c1691aed).
+   - Đang chạy: WP5-UX5-FIX13-FREEZE commit FIX12 và FIX13 cùng lúc, rồi push.
+   - Sau đó là gate lại toàn bộ, kiểm tra lại độc lập hai lỗi đã sửa, audit tích
+     hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
+   - Để tiếp tục sau khi bị gián đoạn, dùng prompt khởi động ở trên. Điều phối viên làm tiếp
+     ở `next_task_id` của board.
+   - Chi tiết: [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), mục "REGATE3
+     không đạt; hai việc chẩn đoán đang chạy (2026-10-26)" và các mục sau đó.
    - Cho đến khi nghiệm thu lại, bản đã nghiệm thu gần nhất vẫn là 8e55710 / 507de97c.
 1. **Đã xong: WP5 đã nghiệm thu, rồi nghiệm thu lại sau mỗi vòng thay đổi UI.** Biên bản
    nghiệm thu đầu đã commit ở dd0c7d1. Các biên bản nghiệm thu lại nằm trong

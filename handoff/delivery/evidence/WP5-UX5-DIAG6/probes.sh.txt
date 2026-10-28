@@ -1,0 +1,20 @@
+# Page-side event records. The probe specs are copied into the scratch export (never into the repository).
+. <task>/env.sh
+cp $T/probe-kbd.ts.txt $T/export/tests/e2e/probe-kbd.spec.ts
+cp $T/probe-esc.ts.txt $T/export/tests/e2e/probe-esc.spec.ts
+run() { # label, env assignments are exported by the caller, remaining args to playwright
+  L=$1; shift
+  export DIAG_OUT="$TW\\out\\diag-$L.jsonl"
+  rm -f $T/out/diag-$L.jsonl
+  bash $T/run-pw.sh $L real "$@" > $T/logs/$L.txt 2>&1
+}
+# kbd: quiet host, then the lookup answers delayed (the deterministic form of the window), then the same delay with the wait of the fix.
+PROBE_MODE=orig PROBE_DELAY=0 run kbd-p-quiet tests/e2e/probe-kbd.spec.ts --project=desktop --workers=2 --repeat-each=20 --trace=off
+PROBE_MODE=orig PROBE_DELAY=40 run kbd-p-d40 tests/e2e/probe-kbd.spec.ts --project=desktop --workers=2 --repeat-each=10 --trace=off
+PROBE_MODE=orig PROBE_DELAY=300 run kbd-p-d300 tests/e2e/probe-kbd.spec.ts --project=desktop --workers=2 --repeat-each=10 --trace=off
+PROBE_MODE=wait PROBE_DELAY=300 run kbd-p-d300-wait tests/e2e/probe-kbd.spec.ts --project=desktop --workers=2 --repeat-each=10 --trace=off
+# esc: quiet host, then the main thread throttled.
+PROBE_MODE=orig PROBE_THROTTLE=1 run esc-p-quiet tests/e2e/probe-esc.spec.ts --project=desktop --workers=2 --repeat-each=20 --trace=off
+PROBE_MODE=orig PROBE_THROTTLE=4 run esc-p-t4 tests/e2e/probe-esc.spec.ts --project=desktop --workers=2 --repeat-each=20 --trace=off
+PROBE_MODE=orig PROBE_THROTTLE=10 run esc-p-t10 tests/e2e/probe-esc.spec.ts --project=desktop --workers=2 --repeat-each=20 --trace=off
+echo probes-done > $T/out/probes.done

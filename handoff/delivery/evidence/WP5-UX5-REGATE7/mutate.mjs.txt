@@ -1,0 +1,12 @@
+// Usage: node mutate.mjs <file> <old text> <new text>   Replaces exactly one occurrence of the old text, or fails.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, oldText, newText] = process.argv.slice(2);
+const source = readFileSync(file, 'utf8');
+const count = source.split(oldText).length - 1;
+if (count !== 1) {
+  console.error(`mutate: expected exactly one occurrence of the old text in ${file}, found ${count}`);
+  process.exit(2);
+}
+writeFileSync(file, source.replace(oldText, () => newText));
+console.log(`mutate: ${file} changed (${oldText.length} -> ${newText.length} chars)`);

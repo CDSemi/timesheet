@@ -1,0 +1,125 @@
+/* ---- DIAG5 probe (scratch only): frame-by-frame record of the check card after each setViewportSize ------------------- */
+
+import { appendFileSync } from 'node:fs';
+
+interface FrameSnap {
+  f: number;
+  t: number;
+  iw: number;
+  cw: number;
+  head: [number, number];
+  card: [number, number, number];
+  p: [number, number, number];
+  a: [number, number, number];
+  off: number;
+}
+
+const DIAG_OUT = process.env.DIAG_OUT ?? '';
+
+function logLine(obj: unknown): void {
+  if (DIAG_OUT !== '') appendFileSync(DIAG_OUT, `${JSON.stringify(obj)}\n`);
+}
+
+test('diag5: the check card frame by frame after setViewportSize', async ({ page, adminSeed, builtServer }, testInfo) => {
+  const reviewer = await newReviewer(adminSeed, builtServer);
+  await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+  const card = page.locator('.check-card');
+  await expect(card).toBeVisible();
+  const text = card.locator('p');
+  const back = card.getByRole('link', { name: 'Back to the timesheet' });
+  await expect(text).toHaveText('Check every day, then sign off. Signing off locks this period and posts your OT credits; you send the PDF to payroll afterwards, below.');
+  const tag = `${testInfo.project.name}#${testInfo.repeatEachIndex}`;
+  for (const width of [1440, 768, 767, 480, 479, 390, 320]) {
+    await page.evaluate(() => {
+      const w = window as unknown as { __frames: unknown[]; __stop: boolean; __shifts: unknown[]; __last: string; __gen: number };
+      w.__frames = [];
+      w.__shifts = [];
+      w.__stop = false;
+      w.__last = '';
+      w.__gen = (w.__gen ?? 0) + 1;
+      const gen = w.__gen;
+      const t0 = performance.now();
+      const r = (selector: string): [number, number, number] => {
+        const el = document.querySelector(selector);
+        if (el === null) return [-1, -1, -1];
+        const b = el.getBoundingClientRect();
+        return [b.top, b.height, b.width];
+      };
+      let n = 0;
+      const loop = () => {
+        if (w.__stop || w.__gen !== gen) return;
+        const head = document.querySelector('.review-head')?.getBoundingClientRect();
+        const card = r('.check-card');
+        const p = r('.check-card > p');
+        const a = r('.check-card > .back-link');
+        const snap = {
+          f: n,
+          t: Math.round(performance.now() - t0),
+          iw: window.innerWidth,
+          cw: document.documentElement.clientWidth,
+          head: [head === undefined ? -1 : head.top, head === undefined ? -1 : head.height],
+          card,
+          p,
+          a,
+          off: Math.abs(p[0] + p[1] / 2 - (card[0] + card[1] / 2)),
+        };
+        const key = JSON.stringify([snap.iw, snap.cw, snap.head, snap.card, snap.p, snap.a]);
+        if (key !== w.__last) {
+          w.__last = key;
+          w.__frames.push(snap);
+        }
+        n += 1;
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) w.__shifts.push({ t: Math.round(e.startTime - t0), v: (e as unknown as { value: number }).value });
+      }).observe({ type: 'layout-shift', buffered: false });
+    });
+    const started = Date.now();
+    await page.setViewportSize({ width, height: 900 });
+    const afterSet = Date.now() - started;
+    const iw0 = await page.evaluate(() => window.innerWidth);
+    const topAtOnce = await card.evaluate((el) => el.getBoundingClientRect().top);
+    // The test's own reads, in the test's own order.
+    const padding = await styleOf(card, 'padding-left');
+    const tPad = Date.now() - started;
+    const label = (await back.innerText()).trim();
+    await expect(back).toHaveAccessibleName('Back to the timesheet');
+    const tName = Date.now() - started;
+    const cardBox = await rect(card);
+    const tCard = Date.now() - started;
+    const textBox = await rect(text);
+    const tText = Date.now() - started;
+    const backBox = await rect(back);
+    const tBack = Date.now() - started;
+    const middle = (box: Rect) => box.top + box.height / 2;
+    const reads = {
+      tag,
+      width,
+      iw0,
+      topAtOnce,
+      padding,
+      label,
+      cardTop: cardBox.top,
+      cardH: cardBox.height,
+      textTop: textBox.top,
+      textH: textBox.height,
+      backTop: backBox.top,
+      backH: backBox.height,
+      offText: Math.abs(middle(textBox) - middle(cardBox)),
+      offBack: Math.abs(middle(backBox) - middle(cardBox)),
+      ms: { afterSet, tPad, tName, tCard, tText, tBack },
+    };
+    await page.waitForTimeout(500);
+    const rec = await page.evaluate(() => {
+      const w = window as unknown as { __frames: unknown[]; __stop: boolean; __shifts: unknown[] };
+      w.__stop = true;
+      return { frames: w.__frames, shifts: w.__shifts };
+    });
+    const frames = rec.frames as FrameSnap[];
+    const settled = frames.length === 0 ? null : frames[frames.length - 1];
+    const maxOff = frames.reduce((m, f) => Math.max(m, f.off), 0);
+    logLine({ kind: 'width', ...reads, nFrames: frames.length, maxOffInFrames: maxOff, settledOff: settled?.off ?? null, shifts: rec.shifts, frames });
+  }
+});

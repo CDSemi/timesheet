@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from '@playwright/test';
 import { contrast, flattenedBackground, parseColour, type Rgba } from './contrast.ts';
-import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+import { expect, expectSheetAt, newPerson, screenshotPath, test } from './fixtures.ts';
 
 /*
  * WP5-UX2-T05: the brand of the shell bar is the traced C&D logo (a 36px image, decorative), named once by
@@ -500,6 +500,9 @@ async function sweepRange(page: Page, from: number, to: number): Promise<SweepRo
   const rows: SweepRow[] = [];
   for (let width = from; width <= to; width += 1) {
     await page.setViewportSize({ width, height: 800 });
+    // React swaps the week sheet one rendering update after the CSS follows the width: below 480px the 7-column grid (865px wide) would
+    // still overflow the window in the row measured here.
+    await expectSheetAt(page, width);
     rows.push({ width, ...(await sweepRow(page)) });
   }
   return rows;

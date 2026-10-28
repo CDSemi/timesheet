@@ -1,0 +1,21 @@
+# Phase 3b: the final text of the new test (a string page function), its repeat/load proof, then typecheck, lint, npm test and the dist comparison in the scratch export.
+. <task>/env.sh
+GE="Escape and the Close button: with unsaved edits"
+GN="Escape dispatched in the same task"
+run() { L=$1; shift; bash $T/run-pw.sh $L real "$@" --trace=off > $T/logs/$L.txt 2>&1; }
+bash $T/apply-stage.sh fixed > $T/out/apply-fixed2.txt 2>&1
+for f in tests/e2e/keyboard-access.spec.ts tests/e2e/day-editor.spec.ts src/client/components/DayFieldsForm.tsx; do cmp $T/export/$f $T/stage/$f && echo "export == stage: $f" >> $T/out/apply-fixed2.txt; done
+run new-final-r30w6 tests/e2e/day-editor.spec.ts -g "$GN" --workers=6 --repeat-each=30
+bash $T/loadrun.sh esc-final-burn 32 45 tests/e2e/day-editor.spec.ts -g "$GE|$GN" --project=desktop --workers=1 --repeat-each=2
+cd $T/export || exit 9
+unset DIAG_OUT PROBE_DELAY PROBE_THROTTLE PROBE_GAP PROBE_MODE
+npm run typecheck > $T/logs/typecheck.txt 2>&1; echo "typecheck exit=$?" >> $T/out/checks-exits.txt
+npm run lint > $T/logs/lint.txt 2>&1; echo "lint exit=$?" >> $T/out/checks-exits.txt
+(export NODE_OPTIONS=; mkdir -p $T/tmp-npmtest; export TEMP="$TW\\tmp-npmtest" TMP="$TW\\tmp-npmtest" TMPDIR="$T/tmp-npmtest"; npm test > $T/logs/npm-test.txt 2>&1; echo "npm test exit=$?" >> $T/out/checks-exits.txt)
+# dist: the client of the fixed export against the HEAD build (names and sha256)
+npm run build > $T/logs/build-final.txt 2>&1; echo "build exit=$?" >> $T/out/checks-exits.txt
+find dist -type f | LC_ALL=C sort > $T/out/dist-files-fixed.txt
+: > $T/out/dist-hashes-fixed.txt
+while IFS= read -r f; do printf '%s %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f" >> $T/out/dist-hashes-fixed.txt; done < $T/out/dist-files-fixed.txt
+diff $T/out/dist-hashes-head.txt $T/out/dist-hashes-fixed.txt > $T/out/dist-compare.txt 2>&1; echo "diff exit=$? (1 = differences listed)" >> $T/out/dist-compare.txt
+echo phase3b-done > $T/out/phase3b.done

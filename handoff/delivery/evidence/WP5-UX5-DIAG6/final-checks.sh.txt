@@ -1,0 +1,11 @@
+# Typecheck and lint of the final staged text in the scratch export; the staged files must equal the export files; the patch is regenerated and checked.
+. <task>/env.sh
+cd $T/export || exit 9
+: > $T/out/final-checks-exits.txt
+for f in tests/e2e/keyboard-access.spec.ts tests/e2e/day-editor.spec.ts src/client/components/DayFieldsForm.tsx; do cmp $T/export/$f $T/stage/$f && echo "export == stage: $f" >> $T/out/final-checks-exits.txt; done
+ls $T/export/tests/e2e | grep -cE "^(probe|dly)-" >> $T/out/final-checks-exits.txt
+npm run typecheck > $T/logs/typecheck-final.txt 2>&1; echo "typecheck exit=$?" >> $T/out/final-checks-exits.txt
+npm run lint > $T/logs/lint-final.txt 2>&1; echo "lint exit=$?" >> $T/out/final-checks-exits.txt
+rm -f $T/out/patch-diff-exits.txt $T/out/patch-check.txt
+bash $T/gen-patch.sh >> $T/out/final-checks-exits.txt 2>&1
+echo final-checks-done > $T/out/final-checks.done

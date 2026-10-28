@@ -1,0 +1,33 @@
+== mutant-patched: real start 2026-10-27T20:46:56Z, simulated start real, AB8_SHIFT_MS=0
+process clock 2026-10-27T20:46:56.078Z (Date.now 1793134016087); America/Los_Angeles Tue, 2026-10-27, 13:46; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/review.spec.ts -g the check card: --project=desktop --workers=1 --trace=off --output=<task>\pw-mutant-patched
+
+Running 1 test using 1 worker
+
+  x  1 [desktop] › tests\e2e\review.spec.ts:407:1 › the check card: the period card padding, "Back" below 480px with the full accessible name, text and button centred and 16px apart (1.0s)
+
+
+  1) [desktop] › tests\e2e\review.spec.ts:407:1 › the check card: the period card padding, "Back" below 480px with the full accessible name, text and button centred and 16px apart 
+
+    Error: the text is vertically centred at 767px
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1.5
+    Received:    8
+
+      432 |     const backBox = await rect(back);
+      433 |     const middle = (box: Rect) => box.top + box.height / 2;
+    > 434 |     expect(Math.abs(middle(textBox) - middle(cardBox)), `the text is vertically centred at ${width}px`).toBeLessThanOrEqual(1.5);
+          |                                                                                                         ^
+      435 |     expect(Math.abs(middle(backBox) - middle(cardBox)), `the button is vertically centred at ${width}px`).toBeLessThanOrEqual(1.5);
+      436 |     expect(backBox.left - textBox.right, `the gap between the text and the button at ${width}px`).toBeGreaterThanOrEqual(15.5);
+      437 |     if (width < 768) expect(backBox.height, `Back is a 44px target at ${width}px`).toBeGreaterThanOrEqual(44);
+        at <task>\export\tests\e2e\review.spec.ts:434:105
+
+    Error Context: ..\pw-mutant-patched\review-the-check-card-the--29d75-tton-centred-and-16px-apart-desktop\error-context.md
+
+  1 failed
+    [desktop] › tests\e2e\review.spec.ts:407:1 › the check card: the period card padding, "Back" below 480px with the full accessible name, text and button centred and 16px apart 
+exit=1
+== mutant-patched real end 2026-10-27T20:46:59Z

@@ -1,0 +1,339 @@
+diff --git a/tests/e2e/review.spec.ts b/tests/e2e/review.spec.ts
+index 8d6235ea..1a861034 100644
+--- a/tests/e2e/review.spec.ts
++++ b/tests/e2e/review.spec.ts
+@@ -2,6 +2,7 @@ import { crc32, deflateSync } from 'node:zlib';
+ import { type Locator, type Page } from '@playwright/test';
+ import { addDays } from '../../src/domain/dates.ts';
+ import { formatDuration, formatHoursMinutes } from '../../src/domain/format.ts';
++import { paintedSurface, type Rgba, sameColour, tokenColour } from './contrast.ts';
+ import {
+   type BuiltServer,
+   type CreatedAccount,
+@@ -496,6 +497,78 @@ test('the Preview week cards that scroll sideways are named keyboard stops that
+   }
+ });
+ 
++/**
++ * The CSS pixels of the shared focus ring that are not painted, read from a screenshot (so a layer the day columns cover, or a ring
++ * that is invisible, is seen; computed styles cannot show that). The ring is 2px of `--accent` at the outer edge of the card's visible
++ * box: for each of the four edges, twelve points along it, on the first pixel row or column inside the box. Empty means all four edges
++ * are painted.
++ */
++async function missingRingPixels(page: Page, card: Locator, accent: Rgba): Promise<string[]> {
++  const box = await card.boundingBox();
++  if (box === null) return ['the card has no box'];
++  const [left, top, right, bottom] = [Math.ceil(box.x), Math.ceil(box.y), Math.floor(box.x + box.width), Math.floor(box.y + box.height)];
++  const viewport = page.viewportSize();
++  if (top < 0 || bottom > (viewport?.height ?? 0)) return [`the card (${top}-${bottom}) is not wholly in the viewport`];
++  const surface = await paintedSurface(page);
++  const missing: string[] = [];
++  for (let step = 1; step <= 12; step += 1) {
++    const along = (from: number, to: number) => Math.floor(from + 8 + ((to - from - 16) * step) / 13);
++    const points: Array<[string, number, number]> = [
++      ['top', along(left, right), top],
++      ['bottom', along(left, right), bottom - 1],
++      ['left', left, along(top, bottom)],
++      ['right', right - 1, along(top, bottom)],
++    ];
++    for (const [edge, x, y] of points) if (!sameColour(surface.at(x, y), accent, 3)) missing.push(`${edge} at ${x},${y}`);
++  }
++  return missing;
++}
++
++// WP5-UX5-FIX11 (F-UX5A2-1, mutant MA8; mutant MA9): the ring is painted on all four edges, in both themes, whatever the card's scroll
++// position, and taking focus does not move the card (the focus handler leaves the card itself alone).
++test('the Preview week card that scrolls sideways shows the shared focus ring on all four edges at 768px, in both themes and also scrolled, and focusing it does not scroll it', async ({
++  page,
++  adminSeed,
++  builtServer,
++  isMobile,
++}) => {
++  test.skip(isMobile, 'The widths are set by the test (desktop project)');
++  test.setTimeout(90_000);
++  const reviewer = await newReviewer(adminSeed, builtServer);
++  await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
++  await expect(page.locator('[data-review-day]')).toHaveCount(14);
++  await page.setViewportSize({ width: 768, height: 1000 });
++  const card = page.locator('[data-paper="review"] .sheet-week').first();
++  await expect(card).toHaveAttribute('tabindex', '0');
++  const range = await card.evaluate((element) => element.scrollWidth - element.clientWidth);
++  expect(range, 'the card scrolls sideways at 768px').toBeGreaterThan(80);
++  for (const scheme of ['light', 'dark'] as const) {
++    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
++    const accent = await tokenColour(page, '--accent');
++    for (const scrollLeft of [0, 60, range]) {
++      await card.evaluate((element, value) => {
++        element.blur();
++        element.scrollLeft = value;
++      }, scrollLeft);
++      // Put the whole card in view, below the sticky shell, then take focus the way the keyboard does.
++      await card.evaluate((element) => element.ownerDocument.defaultView?.scrollBy(0, element.getBoundingClientRect().top - 120));
++      const where = `${scheme}, scrolled ${scrollLeft}px`;
++      await expect.poll(() => card.evaluate((element) => element.scrollLeft), `${where}: the scroll position is set`).toBeCloseTo(scrollLeft, 0);
++      const before = await card.evaluate((element) => element.scrollLeft);
++      // Not focused: no ring on the top edge (the same pixels are accent only while the card has focus).
++      await expect.poll(async () => (await missingRingPixels(page, card, accent)).length, { message: `${where}: no ring while the card has no focus`, timeout: 5000 }).toBeGreaterThan(40);
++      await page.keyboard.press('Shift');
++      await card.focus();
++      await expect(card, `${where}: the card has focus`).toBeFocused();
++      await expect.poll(() => card.evaluate((element) => element.matches(':focus-visible')), `${where}: the focus is a keyboard focus`).toBe(true);
++      expect(await card.evaluate((element) => [element.scrollLeft, element.scrollTop]), `${where}: taking focus does not move the card`).toEqual([before, 0]);
++      await card.evaluate((element) => element.ownerDocument.defaultView?.scrollBy(0, element.getBoundingClientRect().top - 120));
++      await expect.poll(() => missingRingPixels(page, card, accent), { message: `${where}: the ring is painted on every edge`, timeout: 5000 }).toEqual([]);
++    }
++    await card.evaluate((element) => element.blur());
++  }
++});
++
+ test('the Preview header: line 1 is hidden, never wrapped, when it does not fit; line 2 wraps by word; the fields sit 12px below', async ({ page, adminSeed, builtServer }) => {
+   const reviewer = await newReviewer(adminSeed, builtServer);
+   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+@@ -667,11 +740,19 @@ test('signature rows: the PDF block insets and proportions, lines aligned by row
+   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+   await expect(page.locator('[data-review-day]')).toHaveCount(14);
+   const lines: string[] = [`# ${testInfo.project.name}: signature rows`];
+-  for (const width of [1440, 768, 390, 320]) {
++  let unsignedHeight: number | null = null;
++  for (const width of [1440, 768, 600, 390, 320]) {
+     await page.setViewportSize({ width, height: 900 });
+     const footer = page.locator('.review-preview .sheet-footer');
+     await footer.scrollIntoViewIfNeeded();
+     const measured = await expectSignatureGeometry(footer, width, { button: page.locator('[data-sign-off]'), exactFractions: width >= 768 });
++    // WP5-UX5-FIX11 (mutant MA1): the unsigned lines are as high at every width. The empty content block of the Employee line takes no
++    // room (`.rsig-content:empty`); as a flex item with a gap it made both lines 5px higher below 768px (52 to 57px).
++    for (const name of ['employee', 'employee-date']) {
++      const height = (await rect(footer.locator(`[data-sig-line="${name}"]`))).height;
++      unsignedHeight ??= height;
++      expect(Math.abs(height - unsignedHeight), `the unsigned ${name} line is ${unsignedHeight}px high at ${width}px (measured ${height})`).toBeLessThanOrEqual(0.5);
++    }
+     lines.push(`${width}px: ${JSON.stringify(Object.fromEntries(Object.entries(measured).map(([key, value]) => [key, Number(value.toFixed(4))])))}`);
+     await expectNoSidewaysScroll(page);
+     if (width < 768) expect((await rect(page.locator('[data-sign-off]'))).height, `Sign off is a 44px target at ${width}px`).toBeGreaterThanOrEqual(44);
+diff --git a/tests/integration/pdf-render.test.ts b/tests/integration/pdf-render.test.ts
+index ed7cdca4..8c4c44e2 100644
+--- a/tests/integration/pdf-render.test.ts
++++ b/tests/integration/pdf-render.test.ts
+@@ -847,6 +847,45 @@ describe('bounds of long labels', () => {
+     }
+   });
+ 
++  // WP5-UX5-FIX11 (mutant P4 of RECHECK-B): the tightest category band is 37 pt (four sessions, time and OT rows on); the block of the
++  // holiday label and the separate leave line must be sized together, or the leave line falls out of the band into the time row.
++  it.each(['Labor Day', "Lunar New Year's Eve (company closure)"])('keeps "Leave 1:30" whole inside the 37 pt band of four sessions with both row sets, under the holiday label %s', async (name) => {
++    const sessionsOf = (date: string) =>
++      [['06:00', '08:00'], ['09:00', '11:00'], ['12:00', '14:00'], ['15:00', '17:45']].map(([from = '', to = ''], index) => ({
++        id: `s-${date}-${index}`,
++        start_utc: utc(date, from),
++        end_utc: utc(date, to),
++        source: 'manual' as const,
++        breaks_confirmed: true,
++        breaks: [],
++      }));
++    const days = DATES.map((date) =>
++      date === '2026-09-16'
++        ? weekday(date, { category: 'Holiday', holiday_name: name, day_class: 'nonworking', leave_minutes: 90, leave_kind: 'sick', sessions: sessionsOf(date) })
++        : weekday(date, { sessions: sessionsOf(date) }),
++    );
++    const layout = pdfLayout({ timeRows: true, otRows: true, sessionLines: 4 });
++    const week = layout.weeks[0];
++    expect(week.category.height, 'four sessions with both row sets give the 37 pt band').toBe(37);
++    const { content } = await render(manual({ snapshot: snapshotWith({}, days) }));
++    expect(content.pages).toHaveLength(1);
++    // The Wednesday of week 1 is column 2. Look for the leave line anywhere in the column, not only inside the band, so a line that
++    // fell out of the band is found (and fails the bounds) instead of being missed.
++    const xLow = week.daysLeft + 2 * week.dayWidth;
++    const yLow = PAGE_HEIGHT - (week.category.top + week.category.height);
++    const yHigh = PAGE_HEIGHT - week.category.top;
++    const leave = textItems(content).filter((item) => item.text === 'Leave 1:30' && item.x >= xLow - 0.5 && item.x < xLow + week.dayWidth);
++    expect(leave, JSON.stringify(leave)).toHaveLength(1);
++    const line = leave[0];
++    // The glyph box of the 7 pt line (descent 0.24, ascent 0.76 of the size) lies inside the band.
++    expect(line?.y ?? 0, `baseline ${line?.y ?? '?'} in the band ${yLow}-${yHigh}`).toBeGreaterThan(yLow + 0.24 * 7 - 0.5);
++    expect((line?.y ?? 0) + 0.76 * 7, `top of the leave line in the band ${yLow}-${yHigh}`).toBeLessThan(yHigh + 0.5);
++    // The holiday label stays above it, inside the band too.
++    const label = textItems(content).filter((item) => item.text !== 'Leave 1:30' && item.height < 8 && item.x >= xLow - 0.5 && item.x < xLow + week.dayWidth && item.y > yLow - 1 && item.y < yHigh);
++    expect(label.length, 'the holiday label is drawn in the band').toBeGreaterThan(0);
++    for (const item of label) expect(item.y, `${item.text} above the leave line`).toBeGreaterThan(line?.y ?? Infinity);
++  });
++
+   it('still wraps a long holiday label on up to two lines when the day has no leave', async () => {
+     const day = weekday('2026-09-16', { category: 'Holiday', holiday_name: 'Founders Remembrance and Community Service Observance Day', day_class: 'nonworking' });
+     const small = await leaveCell(day, { time: true, ot: true });
+diff --git a/tests/integration/restore.test.ts b/tests/integration/restore.test.ts
+index 9c1ffe7b..69ddacf2 100644
+--- a/tests/integration/restore.test.ts
++++ b/tests/integration/restore.test.ts
+@@ -46,7 +46,7 @@ import { makePng } from '../support/pdfText.ts';
+ import { buildSchemaV6, type SchemaV6Fixture, WP3_SCHEMA_VERSION } from '../support/schemaV6.ts';
+ import { sendWithDefaults } from '../support/sends.ts';
+ import { buildSyntheticWorkbook } from '../support/syntheticWorkbook.ts';
+-import { createTestContext, la, LA, MutableClock, type TestContext } from '../support/testApp.ts';
++import { createTestContext, la, LA, MutableClock, ORIGIN, type TestContext } from '../support/testApp.ts';
+ 
+ /*
+  * WP4-T06: outbound pause, isolated restore and reconciliation (AC-15, AC-11, AC-08; docs/07 "Backup, restore and
+@@ -526,6 +526,110 @@ describe('isolated restore with outbound paused (AC-15, AC-11)', () => {
+   });
+ });
+ 
++/*
++ * WP5-UX5-FIX11 (F-UX5B2-1, R-UX5B-1): the send guard is period-wide (a waiting send of any revision of the period blocks another),
++ * and so is the release of a held job. A restore holds revision 1's waiting send; the owner then corrects the period (revision 2) and
++ * sends it, which a held job does not block and no counted copy makes a reason necessary. Releasing the held job afterwards would
++ * deliver the superseded copy after the correction's, so it is refused (`superseded_by_later_send`) for as long as the later send
++ * exists, whether it still waits or has succeeded. The release was refused only for a later send of the SAME revision before.
++ */
++describe('a held send of a superseded revision (F-UX5B2-1)', () => {
++  const PAYROLL = '2026-10-02';
++  let t: TestContext | undefined;
++  let restored: Db | undefined;
++  let backupsRoot = '';
++  let restoreRoot = '';
++
++  afterAll(() => {
++    restored?.close();
++    t?.close();
++    if (backupsRoot !== '') rmSync(backupsRoot, { recursive: true, force: true });
++    if (restoreRoot !== '') rmSync(restoreRoot, { recursive: true, force: true });
++  });
++
++  it('is not released once the owner has sent a correction of the period, while it waits or after it succeeded, and the old copy never follows the new', async () => {
++    const source = await createTestContext(NOW);
++    t = source;
++    const employee = await source.login('employee');
++    const files = new FileStore(dataDirOf(source));
++    const settings = await source.request('POST', '/api/settings/submission', {
++      cookie: employee,
++      body: { expected_seq: 0, to: ['payroll@example.invalid'], cc: [], auto_submit: false },
++    });
++    expect(settings.status, JSON.stringify(settings.body)).toBeLessThan(300);
++    saveSignature(source.db, source.clock, files, source.userIds.employee, makePng(40, 12), 'image/png');
++    await addSession(source, employee, '2026-09-15', '09:00', '18:00');
++    const first = await signOff(source, employee, PAYROLL); // revision 1 is signed and sent; its send job waits (no runner)
++    source.clock.set('2026-09-29T20:04:00Z');
++    backupsRoot = scratch('timesheet-f11-backups-');
++    const backup = await createBackup({ databasePath: source.config.databasePath, dataDir: dataDirOf(source), targetDir: backupsRoot, clock: source.clock });
++
++    restoreRoot = scratch('timesheet-f11-restore-');
++    const target = join(restoreRoot, 'instance');
++    const clock = new MutableClock(LATER);
++    await restoreBackup({ fromDir: backup.directory, toDir: target, liveDataDir: dataDirOf(source), liveDatabasePath: source.config.databasePath, clock });
++    const db = openDatabase(join(target, RESTORED_DATABASE_NAME));
++    restored = db;
++    const heldJobId = db.prepare<[string], { id: string }>("SELECT id FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(first)?.id ?? '';
++    expect(db.prepare('SELECT state, last_error FROM jobs WHERE id = ?').get(heldJobId)).toEqual({ state: 'intervention', last_error: RECONCILE_AFTER_RESTORE });
++    // Nothing is uncertain, so the operator can resume; the held job alone is still not sent, and it is releasable on its own.
++    expect(resumeOutbound(db, clock)).toMatchObject({ outcome: 'resumed' });
++    const heldSends = () => listHeldJobs(db).filter((job) => job.kind === JOB_SEND_EMAIL);
++    expect(heldSends().map((job) => [job.id, job.blocker])).toEqual([[heldJobId, null]]);
++
++    // On the restored instance the owner corrects the period (revision 2) and sends it: not blocked by the held job, and no reason is asked.
++    const app = createApp({ db, clock, config: source.config, loginLimiter: new LoginRateLimiter(), staticDir: null });
++    const cookie = `${SESSION_COOKIE}=${createAuthSession(db, clock, source.userIds.employee, 3600).token}`;
++    const request: TestContext['request'] = async (method, path, options = {}) => {
++      const headers: Record<string, string> = { origin: ORIGIN, cookie: options.cookie ?? cookie };
++      const init: RequestInit = { method, headers };
++      if (options.body !== undefined) {
++        headers['content-type'] = 'application/json';
++        init.body = JSON.stringify(options.body);
++      }
++      const response = await app.request(path, init);
++      const text = await response.text();
++      const body: unknown = text === '' ? null : JSON.parse(text);
++      return { status: response.status, body, headers: response.headers };
++    };
++    const edit = await request('POST', '/api/days/2026-09-16/sessions', {
++      body: { start: la('2026-09-16T09:00'), end: la('2026-09-16T18:00'), input_zone: LA, breaks: [], breaks_confirmed: true, reason: 'Synthetic forgotten day' },
++    });
++    expect(edit.status, JSON.stringify(edit.body)).toBe(201);
++    const review = await request('GET', `/api/timesheets/${PAYROLL}/review`);
++    const correction = await request('POST', `/api/timesheets/${PAYROLL}/revisions`, {
++      body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false },
++    });
++    expect(correction.status, JSON.stringify(correction.body)).toBe(201);
++    const second = correction.body.revision.id as string;
++    const sent = await sendWithDefaults({ request }, cookie, second);
++    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
++
++    // The correction's send waits, so the held job of the superseded revision is refused (one by id, in the list and in bulk), writing nothing.
++    const auditBefore = count(db, "SELECT count(*) FROM audit_events WHERE operation LIKE 'operations.held_job_%'");
++    const refusal = { outcome: 'refused', code: 'superseded_by_later_send' };
++    expect(heldSends().map((job) => [job.id, job.blocker])).toEqual([[heldJobId, 'superseded_by_later_send']]);
++    expect(releaseHeldJob(db, clock, heldJobId)).toEqual(refusal);
++    expect(releaseAllHeldJobs(db, clock)).toEqual({ released: 0, refused: { superseded_by_later_send: 1 } });
++
++    // The correction goes out; the later send has succeeded, and the old job is still refused.
++    clock.set('2026-09-30T11:00:00Z');
++    const dataDir = join(target, RESTORED_DATA_DIR);
++    await runJobsOnce({ db, clock, owner: 'runner-f11-pdf', handlers: { render_pdf: createPdfJobHandler({ db, clock, files: new FileStore(dataDir) }) } });
++    const delivery = loadDeliveryConfig({ MAIL_FROM: SENDER, DATA_DIR: dataDir }, { databasePath: join(target, 'unused.db'), port: 3000, production: false });
++    await runJobsOnce({ db, clock, owner: 'runner-f11-send', leaseSeconds: 600, handlers: createJobHandlers({ db, clock, files: new FileStore(dataDir), delivery }) });
++    const states = (revisionId: string) => attemptsOf(db).filter((attempt) => attempt.revision_id === revisionId).map((attempt) => attempt.state);
++    expect(states(second)).toEqual(['accepted']);
++    expect(db.prepare<[string], { state: string }>("SELECT state FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(second)?.state).toBe('succeeded');
++    expect(releaseHeldJob(db, clock, heldJobId)).toEqual(refusal);
++    expect(releaseAllHeldJobs(db, clock)).toEqual({ released: 0, refused: { superseded_by_later_send: 1 } });
++    // The superseded revision was never sent, the job is still held, and the refusals left no audit event.
++    expect(states(first)).toEqual([]);
++    expect(db.prepare('SELECT state, last_error FROM jobs WHERE id = ?').get(heldJobId)).toEqual({ state: 'intervention', last_error: RECONCILE_AFTER_RESTORE });
++    expect(count(db, "SELECT count(*) FROM audit_events WHERE operation LIKE 'operations.held_job_%'")).toBe(auditBefore);
++  });
++});
++
+ describe('restore refusals', () => {
+   let t: TestContext;
+   let backupsRoot: string;
+diff --git a/tests/integration/sends.test.ts b/tests/integration/sends.test.ts
+index f5125774..a1f1b169 100644
+--- a/tests/integration/sends.test.ts
++++ b/tests/integration/sends.test.ts
+@@ -5,9 +5,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
+ import { createApp } from '../../src/server/app.ts';
+ import { LoginRateLimiter } from '../../src/server/auth/rateLimit.ts';
+ import { FileStore } from '../../src/server/files/fileStore.ts';
++import { claimNextJob } from '../../src/server/jobs/jobStore.ts';
+ import { createPdfJobHandler } from '../../src/server/jobs/pdfJob.ts';
+ import { runJobsOnce } from '../../src/server/jobs/runner.ts';
+-import { createSendJobHandler } from '../../src/server/jobs/sendJob.ts';
++import { createSendJobHandler, JOB_SEND_EMAIL } from '../../src/server/jobs/sendJob.ts';
+ import { captureFolder } from '../../src/server/mail/captureAdapter.ts';
+ import { createOutboundAdapter, type OutboundAdapter, type SendOutcome } from '../../src/server/mail/outbound.ts';
+ import { listOverdueRecords, runDeadlineScan, setAutomationActivation } from '../../src/server/services/automation.ts';
+@@ -313,6 +314,36 @@ describe('a send that still waits for an older revision (R-UX5B-1)', () => {
+     const sent = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
+     expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+   });
++
++  // WP5-UX5-FIX11 (mutant G2 of RECHECK-B): a send job that a runner holds (leased, inside its PDF check or the network call) still waits.
++  it("blocks the correction's send while the older revision's job is leased by a runner, writing nothing, and lets it through once that job has run", async () => {
++    const first = await signed();
++    expect((await postSend(first, await sendBody(first))).status).toBe(201);
++    await addSession('2026-09-16', '09:00', '18:00', 'Synthetic forgotten day');
++    const review = await t.request('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: employee });
++    const correction = await t.request('POST', `/api/timesheets/${PAYROLL}/revisions`, {
++      cookie: employee,
++      body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false },
++    });
++    expect(correction.status, JSON.stringify(correction.body)).toBe(201);
++    const second = correction.body.revision.id as string;
++    // A runner claims revision 1's send job and has not finished it.
++    const claimed = claimNextJob(t.db, t.clock, { owner: 'runner-leased', kinds: [JOB_SEND_EMAIL], leaseSeconds: 600 });
++    expect(claimed?.revisionId).toBe(first);
++    expect(t.db.prepare('SELECT state FROM jobs WHERE id = ?').pluck().get(claimed?.id)).toBe('leased');
++    const before = writeState();
++    const blocked = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
++    expect(blocked.status).toBe(409);
++    expect(blocked.body.error.code).toBe('delivery_in_progress');
++    expect(writeState()).toEqual(before);
++    // The runner lets the lease run out and the job runs again: delivered, then the correction can be sent.
++    t.clock.advanceSeconds(601);
++    await runPdf();
++    await runSend();
++    expect(t.db.prepare('SELECT state FROM delivery_attempts WHERE revision_id = ?').pluck().all(first)).toEqual(['accepted']);
++    const sent = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
++    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
++  });
+ });
+ 
+ describe("the owner's reason rule (B-A2)", () => {

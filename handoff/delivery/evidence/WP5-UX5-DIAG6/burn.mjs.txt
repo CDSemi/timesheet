@@ -1,0 +1,16 @@
+// CPU burner that stops by itself. Usage: node burn.mjs <threads> <seconds>
+// Each worker thread spins until a fixed deadline, then exits; the main thread exits when all have ended.
+import { cpus } from 'node:os';
+import { Worker, isMainThread, workerData } from 'node:worker_threads';
+
+if (isMainThread) {
+  const threads = Number(process.argv[2] ?? '4');
+  const seconds = Number(process.argv[3] ?? '60');
+  const deadline = Date.now() + seconds * 1000;
+  console.log(`burn: ${threads} threads for ${seconds}s (host has ${cpus().length} logical CPUs)`);
+  for (let i = 0; i < threads; i += 1) new Worker(new URL(import.meta.url), { workerData: { deadline } });
+} else {
+  let x = 0;
+  while (Date.now() < workerData.deadline) x = (x + Math.sqrt(x + 1)) % 1000003;
+  if (x < 0) console.log(x);
+}

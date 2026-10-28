@@ -1,0 +1,23 @@
+# Step 4a: repeat runs (60 each at 2 and 6 workers), the DIAG6 models and the flag-lag matrix, in the fresh proof export <task>/export (working tree with the patch).
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX13/env.sh
+export X=$T/export
+GK="WP5-UX3-T04: the check in/out group"
+GE="Escape and the Close button: with unsaved edits"
+GN="Escape dispatched in the same task"
+D=$X/tests/e2e
+: > $T/out/prove1-exits.txt
+run() { L=$1; shift; bash $E/run-pw.sh.txt $L real "$@" --trace=off > $T/logs/$L.txt 2>&1; echo "$L exit=$?" >> $T/out/prove1-exits.txt; }
+cd $X || exit 9
+npm run build > $T/logs/build-export.txt 2>&1; echo "build export exit=$?" >> $T/out/prove1-exits.txt
+KS=tests/e2e/keyboard-access.spec.ts
+DS=tests/e2e/day-editor.spec.ts
+run rep-r60w2 $KS $DS -g "$GK|$GE|$GN" --workers=2 --repeat-each=60
+run rep-r60w6 $KS $DS -g "$GK|$GE|$GN" --workers=6 --repeat-each=60
+cp $KS $D/dly-kbd-fixed.spec.ts && cat $E/delay-snippet.ts.txt >> $D/dly-kbd-fixed.spec.ts
+cp $DS $D/dly-esc-fixed.spec.ts && cat $E/throttle-snippet.ts.txt >> $D/dly-esc-fixed.spec.ts
+PROBE_DELAY=300 run model-kbd-late300 tests/e2e/dly-kbd-fixed.spec.ts -g "$GK" --project=desktop --workers=2 --repeat-each=10
+PROBE_THROTTLE=4 run model-esc-t4 tests/e2e/dly-esc-fixed.spec.ts -g "$GE|$GN" --project=desktop --workers=6 --repeat-each=10
+rm -f $D/dly-kbd-fixed.spec.ts $D/dly-esc-fixed.spec.ts
+PFX=fixed bash $E/gap.sh.txt
+echo "leftover scratch copies: $(ls $D | grep -cE '^(probe|dly|new)-')" >> $T/out/prove1-exits.txt
+echo prove1-done > $T/out/prove1.done

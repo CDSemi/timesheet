@@ -1,0 +1,13 @@
+# Builds proposed.patch.txt (unified diff, a/ b/ labels) from the repository files and the patched copies, then checks it
+# with git apply --check in a fresh export of HEAD (no .git, nothing changed in the repository).
+. <task>/env.sh
+OUT=$T/out/proposed.patch.txt
+: > $OUT
+for f in tests/e2e/fixtures.ts tests/e2e/logo.spec.ts tests/e2e/review.spec.ts tests/e2e/timesheet.spec.ts tests/integration/restore.test.ts; do
+  diff -u --label "a/$f" --label "b/$f" $REPO/$f $T/patched/$f >> $OUT
+done
+echo "patch lines: $(wc -l < $OUT)" > $T/out/34-patch-check.txt
+cd $T/export-check || exit 9
+git apply --check $OUT >> $T/out/34-patch-check.txt 2>&1
+echo "git apply --check exit=$?" >> $T/out/34-patch-check.txt
+git apply --stat $OUT >> $T/out/34-patch-check.txt 2>&1

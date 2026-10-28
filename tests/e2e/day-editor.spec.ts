@@ -5372,6 +5372,41 @@ test.describe('WP5-UX4-T02 addendum 1: Today, a period step, Close and Escape as
     await expect(notes).toHaveValue('');
   });
 
+  // The page's unsaved-edit flag is current in the task of the keystroke. Here the Escape is dispatched in that same task, with no task turn
+  // between the input and the key (as when a busy page queues both): it must still find the edit and ask, not close the editor unasked.
+  test('Escape dispatched in the same task as a keystroke in the Notes still asks "Discard your changes?"', async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+    isMobile,
+  }) => {
+    test.setTimeout(60_000);
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Close Guard', signature: 'none' });
+    const [a = ''] = need(await person.api.displayedPeriodFreeWorkdays(), 1);
+    if (!isMobile) await page.setViewportSize({ width: 1440, height: 800 });
+    await signInPageAs(person.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const editor = editorOf(page);
+    const notes = editor.getByLabel('Notes');
+    await namedDayButton(page, a, 'Edit').click();
+    await expect(editor).toHaveAttribute('data-day-editor', a);
+    await expect(notes).toBeEditable();
+    // The native setter keeps React's value tracking honest: the page sees an ordinary edit, and the key follows it in the same task.
+    // The test project has no DOM types, so the page's own window supplies the classes.
+    await notes.evaluate((area) => {
+      const win = area.ownerDocument.defaultView;
+      Object.getOwnPropertyDescriptor(win.HTMLTextAreaElement.prototype, 'value')?.set?.call(area, 'Synthetic unsaved note');
+      area.dispatchEvent(new win.Event('input', { bubbles: true }));
+      area.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    await expect(promptOf(page)).toBeVisible();
+    await expect(keepOf(page)).toBeFocused();
+    await keepOf(page).click();
+    await expect(editor).toHaveAttribute('data-day-editor', a);
+    await expect(notes).toHaveValue('Synthetic unsaved note');
+  });
+
   // F-UX4A-2: Escape pressed on a control of the SHEET (not in the drawer) reaches the document handler. Unprevented, the same key press
   // also closed the question that handler had just opened, so no question was seen and the drawer simply stayed.
   for (const { width, layout } of [

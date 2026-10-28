@@ -1,0 +1,6 @@
+# Usage: bash run-delay-suite.sh <label> <delay ms> <project> [extra playwright args]
+# The 15 spec files that call setViewportSize, under a delayed matchMedia 'change' notification (scratch fixture patch).
+. <task>/env.sh
+L=$1; export DIAG_MQ_DELAY=$2; P=$3; shift 3
+FILES="tests/e2e/controls.spec.ts tests/e2e/admin-status.spec.ts tests/e2e/classic-scrollbar.spec.ts tests/e2e/day-editor.spec.ts tests/e2e/logo.spec.ts tests/e2e/hover.spec.ts tests/e2e/pdf-visual.spec.ts tests/e2e/keyboard-access.spec.ts tests/e2e/review.spec.ts tests/e2e/settings-routes.spec.ts tests/e2e/shell.spec.ts tests/e2e/surfaces.spec.ts tests/e2e/theme.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/today.spec.ts"
+bash $T/run-pw.sh $L real $FILES --project=$P --workers=6 --trace=off "$@" > $T/logs/$L.txt 2>&1

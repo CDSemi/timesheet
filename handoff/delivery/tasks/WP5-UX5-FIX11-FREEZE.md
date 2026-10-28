@@ -143,3 +143,10 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+
+- HEAD before a5533b57daa81a340c0ad9dfe5f5feac4e6ce1f5; after and commit
+  0f52300ca1ab7d458c30e7dbe1fb098d9c6dd955; pushed to origin main (fast-forward); remote SHA equal.
+- D_PRE = HEAD digest = 20709d60c814111294bc2386ca5be15fe4b9f1e17f2d24d2f269747a966d9516.
+- Staged 425: 15 source/test/doc, 10 records, 6 tasks, 394 evidence. No masking or unstaged file.
+- All checks exit 0 (precommit, diff --check, JSON, validate_orchestration, check_recovery 106,
+  validate_package). Details in evidence/WP5-UX5-FIX11-FREEZE/checks.txt (unstaged).

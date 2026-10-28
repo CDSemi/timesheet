@@ -1,0 +1,39 @@
+# Step 4b: load run under a self-stopping burner, then the mutants (each in the proof export, restored byte-equal afterwards).
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX13/env.sh
+export X=$T/export
+GK="WP5-UX3-T04: the check in/out group"
+GE="Escape and the Close button: with unsaved edits"
+GN="Escape dispatched in the same task"
+KS=tests/e2e/keyboard-access.spec.ts
+DS=tests/e2e/day-editor.spec.ts
+: > $T/out/prove2-exits.txt
+run() { L=$1; shift; bash $E/run-pw.sh.txt $L real "$@" --trace=off > $T/logs/$L.txt 2>&1; echo "$L exit=$?" >> $T/out/prove2-exits.txt; }
+# Load: 32 burner threads (the host has 32 logical CPUs) for 240 s beside one run of the three tests, repeat 10 on 2 workers.
+node.exe $T/burn.mjs 32 240 > $T/logs/burn-load.txt 2>&1 &
+BURN=$!
+run load-three $KS $DS -g "$GK|$GE|$GN" --workers=2 --repeat-each=10
+wait $BURN
+echo "burner ended (exit=$?)" >> $T/out/prove2-exits.txt
+mut() {
+  bash $E/restore.sh.txt >> $T/out/prove2-exits.txt 2>&1
+  (cd $X && node.exe $T/mutate.mjs $1 . >> $T/out/prove2-exits.txt 2>&1)
+  (cd $X && npm run build:client > $T/logs/build-client-mut-$1.txt 2>&1; echo "build:client $1 exit=$?" >> $T/out/prove2-exits.txt)
+}
+mut kbd_never_enabled
+run mut-kbd_never_enabled $KS -g "$GK" --project=desktop --workers=1
+mut kbd_not_tab_stop
+run mut-kbd_not_tab_stop $KS -g "$GK" --project=desktop --workers=1
+mut esc_no_close
+run mut-esc_no_close $DS -g "$GE|$GN" --project=desktop --workers=2
+mut esc_never_dirty
+run mut-esc_never_dirty $DS -g "$GE|$GN" --project=desktop --workers=2
+mut esc_use_effect
+run mut-esc_use_effect $DS -g "$GN" --project=desktop --workers=2 --repeat-each=5
+bash $E/restore.sh.txt >> $T/out/prove2-exits.txt 2>&1
+for f in tests/e2e/keyboard-access.spec.ts tests/e2e/day-editor.spec.ts src/client/components/DayFieldsForm.tsx; do
+  cmp $X/$f $REPO/$f && echo "restored byte-equal to the repository: $f" >> $T/out/prove2-exits.txt
+done
+for f in src/client/DayEditor.tsx src/client/components/ClockPanel.tsx; do
+  cmp $X/$f $T/export-orig/$f && echo "restored byte-equal to the original: $f" >> $T/out/prove2-exits.txt
+done
+echo prove2-done > $T/out/prove2.done

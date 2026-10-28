@@ -1,0 +1,13 @@
+# The 15 spec files that call setViewportSize, desktop, --workers=6, with React's matchMedia 'change' notification delayed 20, 45, 90 ms.
+# The delay comes from a scratch `page` fixture added to the EXPORT's tests/e2e/fixtures.ts only (init script wrapping
+# matchMedia().addEventListener('change') in setTimeout(DIAG_MQ_DELAY)); it was removed again before anything else ran.
+. <task>/env.sh
+export X=$T/export
+FILES="tests/e2e/controls.spec.ts tests/e2e/admin-status.spec.ts tests/e2e/classic-scrollbar.spec.ts tests/e2e/day-editor.spec.ts tests/e2e/logo.spec.ts tests/e2e/hover.spec.ts tests/e2e/pdf-visual.spec.ts tests/e2e/keyboard-access.spec.ts tests/e2e/review.spec.ts tests/e2e/settings-routes.spec.ts tests/e2e/shell.spec.ts tests/e2e/surfaces.spec.ts tests/e2e/theme.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/today.spec.ts"
+grep -l "setViewportSize" $X/tests/e2e/*.spec.ts > $T/out/setviewport-files.txt
+for D in 20 45 90; do
+  export DIAG_MQ_DELAY=$D
+  bash $T/run-pw.sh delay-d$D real $FILES --project=desktop --workers=6 --trace=off > $T/logs/delay-d$D.txt 2>&1
+  echo "delay $D done $(date -u +%H:%M:%SZ)" >> $T/out/delay-progress.txt
+done
+echo delay-done > $T/out/delay.done

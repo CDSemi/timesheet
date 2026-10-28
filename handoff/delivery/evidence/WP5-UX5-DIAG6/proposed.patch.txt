@@ -1,0 +1,75 @@
+--- a/src/client/components/DayFieldsForm.tsx
++++ b/src/client/components/DayFieldsForm.tsx
+@@ -1,4 +1,4 @@
+-import { type MouseEvent, type SubmitEvent, useEffect, useId, useState } from 'react';
++import { type MouseEvent, type SubmitEvent, useId, useLayoutEffect, useState } from 'react';
+ import { createPortal } from 'react-dom';
+ import { type DayCategory, type DayView, type LeaveKind, ownRequest, type Requester } from '../api.ts';
+ import { describeError, isStaleVersion } from './errors.ts';
+@@ -52,7 +52,9 @@
+   // What the fields held when the day was loaded or last saved; the draft differing from it is an unsaved edit.
+   const [baseline, setBaseline] = useState(() => draftKey(dayFieldsDraft(day)));
+   const dirty = draftKey(draft) !== baseline;
+-  useEffect(() => {
++  // A layout effect: the report reaches the page's unsaved-edit flag in the task of the edit itself, so an Escape that follows the keystroke
++  // at once already finds the flag set (a passive effect hands the report on in a later task, and that Escape would close without asking).
++  useLayoutEffect(() => {
+     onDirtyChange?.(dirty);
+   }, [dirty, onDirtyChange]);
+   const [error, setError] = useState<string | null>(null);
+--- a/tests/e2e/keyboard-access.spec.ts
++++ b/tests/e2e/keyboard-access.spec.ts
+@@ -278,6 +278,9 @@
+   await expect(page.locator('[data-day]')).toHaveCount(14);
+   const button = page.locator('.page-head').getByRole('region', { name: 'Check in and out' }).getByRole('button', { name: 'Check in', exact: true });
+   const previous = page.locator('.period-bar').getByRole('button', { name: 'Previous period', exact: true });
++  // The button is disabled ("Checking your status") until the first lookup of the running session has answered, which is a few requests
++  // after the days are drawn; a disabled button cannot take focus, so wait for the enabled state before the focus call.
++  await expect(button).toBeEnabled();
+   await button.focus();
+   await expect(button).toBeFocused();
+   // Forward: the next stop is the period card, not something further down the page.
+--- a/tests/e2e/day-editor.spec.ts
++++ b/tests/e2e/day-editor.spec.ts
+@@ -5372,6 +5372,41 @@
+     await expect(notes).toHaveValue('');
+   });
+ 
++  // The page's unsaved-edit flag is current in the task of the keystroke. Here the Escape is dispatched in that same task, with no task turn
++  // between the input and the key (as when a busy page queues both): it must still find the edit and ask, not close the editor unasked.
++  test('Escape dispatched in the same task as a keystroke in the Notes still asks "Discard your changes?"', async ({
++    page,
++    adminSeed,
++    builtServer,
++    signInPageAs,
++    isMobile,
++  }) => {
++    test.setTimeout(60_000);
++    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Close Guard', signature: 'none' });
++    const [a = ''] = need(await person.api.displayedPeriodFreeWorkdays(), 1);
++    if (!isMobile) await page.setViewportSize({ width: 1440, height: 800 });
++    await signInPageAs(person.account, '#/timesheet');
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    const editor = editorOf(page);
++    const notes = editor.getByLabel('Notes');
++    await namedDayButton(page, a, 'Edit').click();
++    await expect(editor).toHaveAttribute('data-day-editor', a);
++    await expect(notes).toBeEditable();
++    // The native setter keeps React's value tracking honest: the page sees an ordinary edit, and the key follows it in the same task.
++    // The test project has no DOM types, so the page's own window supplies the classes.
++    await notes.evaluate((area) => {
++      const win = area.ownerDocument.defaultView;
++      Object.getOwnPropertyDescriptor(win.HTMLTextAreaElement.prototype, 'value')?.set?.call(area, 'Synthetic unsaved note');
++      area.dispatchEvent(new win.Event('input', { bubbles: true }));
++      area.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
++    });
++    await expect(promptOf(page)).toBeVisible();
++    await expect(keepOf(page)).toBeFocused();
++    await keepOf(page).click();
++    await expect(editor).toHaveAttribute('data-day-editor', a);
++    await expect(notes).toHaveValue('Synthetic unsaved note');
++  });
++
+   // F-UX4A-2: Escape pressed on a control of the SHEET (not in the drawer) reaches the document handler. Unprevented, the same key press
+   // also closed the question that handler had just opened, so no question was seen and the drawer simply stayed.
+   for (const { width, layout } of [

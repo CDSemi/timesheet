@@ -1,0 +1,22 @@
+// Compares the changed client chunks of two dist folders after normalising content-hash names. Usage: node chunkcmp.mjs <prevDist> <targetDist>
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [prev, target] = process.argv.slice(2);
+const dir = (root) => join(root, 'client', 'assets');
+const norm = (text) => text.replace(/([A-Za-z]+)-[A-Za-z0-9_-]{8}\.(js|css)/g, '$1-HASH.$2');
+const base = (name) => name.replace(/-[A-Za-z0-9_-]{8}\.(js|css)(\.map)?$/, (m, ext, map) => `-HASH.${ext}${map ?? ''}`);
+const byBase = (root) => new Map(readdirSync(dir(root)).map((n) => [base(n), n]));
+const a = byBase(prev);
+const b = byBase(target);
+for (const [key, nameA] of a) {
+  const nameB = b.get(key);
+  if (!nameB) { console.log(`ONLY IN PREV ${nameA}`); continue; }
+  if (nameA === nameB) continue;
+  if (key.endsWith('.map')) continue;
+  const ta = readFileSync(join(dir(prev), nameA), 'utf8');
+  const tb = readFileSync(join(dir(target), nameB), 'utf8');
+  const same = norm(ta) === norm(tb);
+  console.log(`${key}: ${nameA} -> ${nameB}; content identical after normalising hash names: ${same}; length ${ta.length} -> ${tb.length}`);
+}
+for (const [key, nameB] of b) if (!a.has(key)) console.log(`ONLY IN TARGET ${nameB}`);

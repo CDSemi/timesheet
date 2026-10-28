@@ -1,0 +1,49 @@
+// Summarises the page-side records of probe-kbd / probe-esc. Usage: node analyze.mjs <kbd|esc> <jsonl file>
+import { readFileSync } from 'node:fs';
+
+const [kind, file] = process.argv.slice(2);
+const runs = readFileSync(file, 'utf8').split('\n').filter((l) => l !== '').map((l) => JSON.parse(l));
+let failedRuns = 0;
+const rows = [];
+for (const [index, run] of runs.entries()) {
+  const ev = run.events;
+  const failed = run.failed !== '';
+  if (failed) failedRuns += 1;
+  if (kind === 'kbd') {
+    const focus = ev.find((e) => e.what === 'focus() on clock-button');
+    const seen = ev.find((e) => e.what === 'test: 14 days seen');
+    const days = ev.find((e) => e.what === 'state' && /days14/.test(e.state));
+    const enabled = ev.find((e) => e.what === 'state' && /\|enabled\|/.test(e.state) && /out|in/.test(e.state.split('|')[0]));
+    rows.push({
+      run: index,
+      failed,
+      fourteenDaysDrawnAt: days?.t,
+      testSawDaysAt: seen?.t,
+      focusCallAt: focus?.t,
+      focusSawDisabled: focus?.disabled,
+      focusSawDataClock: focus?.dataClock,
+      focusedAfter: focus?.focusedAfter,
+      buttonEnabledAt: enabled?.t,
+      gapDaysToEnabledMs: enabled !== undefined && days !== undefined ? Math.round((enabled.t - days.t) * 10) / 10 : undefined,
+    });
+  } else {
+    const input = ev.find((e) => e.what === 'input' && e.target === 'TEXTAREA');
+    const esc = ev.find((e) => e.what === 'keydown Escape (capture)');
+    const escBubble = ev.find((e) => e.what === 'keydown Escape (bubble at document)');
+    const turn = ev.find((e) => e.what === 'macrotask turn' && input !== undefined && e.t >= input.t);
+    const states = ev.filter((e) => e.what === 'state').map((e) => `${e.state} at ${e.t} ms`);
+    rows.push({
+      run: index,
+      failed,
+      inputAt: input?.t,
+      escapeKeydownAt: esc?.t,
+      escapeToInputMs: esc !== undefined && input !== undefined ? Math.round((esc.t - input.t) * 10) / 10 : undefined,
+      macrotaskTurnAfterInputAt: turn?.t,
+      escapeBeforeMacrotaskTurn: esc !== undefined && turn !== undefined ? esc.t < turn.t : undefined,
+      defaultPreventedAtDocument: escBubble?.defaultPrevented,
+      states: states.slice(-4).join(' ; '),
+    });
+  }
+}
+console.log(`${kind}: ${runs.length} records, ${failedRuns} failed`);
+for (const row of rows) console.log(JSON.stringify(row));

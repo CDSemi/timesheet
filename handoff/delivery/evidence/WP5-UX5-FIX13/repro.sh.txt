@@ -1,0 +1,23 @@
+# Step 2: reproduce on the ORIGINAL product (FIX12 working tree) in <task>/export-orig, before anything is applied to the repository.
+# stage = the three original files with DIAG6's proposed.patch.txt applied by git apply (outside any repository).
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX13/env.sh
+P=$E/../WP5-UX5-DIAG6/proposed.patch.txt
+rm -rf $T/stage; mkdir -p $T/stage/src/client/components $T/stage/tests/e2e
+for f in src/client/components/DayFieldsForm.tsx tests/e2e/keyboard-access.spec.ts tests/e2e/day-editor.spec.ts; do cp $T/export-orig/$f $T/stage/$f; done
+(cd $T/stage && git apply --check $P && git apply --stat $P && git apply $P; echo "stage apply exit=$?") > $T/out/02-stage-apply.txt 2>&1
+export X=$T/export-orig
+cd $X || exit 9
+npm run build > $T/logs/build-orig.txt 2>&1; echo "build orig exit=$?" > $T/out/02-repro-exits.txt
+D=$X/tests/e2e
+cp $D/keyboard-access.spec.ts $D/dly-kbd-orig.spec.ts && cat $E/delay-snippet.ts.txt >> $D/dly-kbd-orig.spec.ts
+cp $D/day-editor.spec.ts $D/dly-esc-orig.spec.ts && cat $E/throttle-snippet.ts.txt >> $D/dly-esc-orig.spec.ts
+cp $T/stage/tests/e2e/day-editor.spec.ts $D/new-orig.spec.ts
+GK="WP5-UX3-T04: the check in/out group"
+GE="Escape and the Close button: with unsaved edits"
+GN="Escape dispatched in the same task"
+run() { L=$1; shift; bash $E/run-pw.sh.txt $L real "$@" --trace=off > $T/logs/$L.txt 2>&1; echo "$L exit=$?" >> $T/out/02-repro-exits.txt; }
+PROBE_DELAY=300 run repro-kbd-late300 tests/e2e/dly-kbd-orig.spec.ts -g "$GK" --project=desktop --workers=2 --repeat-each=10
+PROBE_THROTTLE=4 run repro-esc-t4 tests/e2e/dly-esc-orig.spec.ts -g "$GE" --project=desktop --workers=6 --repeat-each=10
+run repro-new-prodorig tests/e2e/new-orig.spec.ts -g "$GN" --workers=6 --repeat-each=10
+rm -f $D/dly-kbd-orig.spec.ts $D/dly-esc-orig.spec.ts $D/new-orig.spec.ts
+echo repro-done > $T/out/repro.done

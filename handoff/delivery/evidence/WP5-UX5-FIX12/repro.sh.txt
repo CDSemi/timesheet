@@ -1,0 +1,7 @@
+# Step 2: reproduce the failures in the scratch export of HEAD 0f52300 (X=export-head) with the DIAG5 delay model (90 ms).
+. <task>/env.sh
+export X=$T/export-head
+export DIAG_MQ_DELAY=90
+bash $T/run-pw.sh repro-review real tests/e2e/review.spec.ts -g "the check card:" --project=desktop --workers=3 --repeat-each=6 --trace=off > $T/logs/repro-review.txt 2>&1
+bash $T/run-pw.sh repro-logo real tests/e2e/logo.spec.ts -g "320px|wordmark shows whenever|Shared with me|shared view" --project=desktop --workers=6 --trace=off > $T/logs/repro-logo.txt 2>&1
+echo repro-done > $T/out/repro.done

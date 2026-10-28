@@ -1,0 +1,317 @@
+// WP5-UX5-RECHECK-B probe (auditor's own): the period-wide in-flight guard of FIX7 (option A) over real HTTP on the BUILT
+// server, two server processes on one database, capture mode, synthetic example.invalid accounts, random per-run passwords
+// (never printed or stored). Section 3 drives a real backup, isolated restore, resume and held-job release through the CLI.
+// Usage: node http-optionA.mjs <exportDir> <workDir> <portA> <portB> <portC> <portD> <out.txt>
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+
+const [exportDir, work, portA, portB, portC, portD, outPath] = process.argv.slice(2);
+const require = createRequire(join(exportDir, 'package.json'));
+const Database = require('better-sqlite3');
+mkdirSync(work, { recursive: true });
+const lines = [];
+let failures = 0;
+const log = (line) => lines.push(String(line).replaceAll(work, '<work>'));
+const check = (name, ok, detail = '') => {
+  if (!ok) failures += 1;
+  log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail === '' ? '' : ` | ${detail}`}`);
+};
+const SENDER = 'recheck-b-sender@example.invalid';
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+delete process.env.PRODUCTION_SENDING_ENABLED;
+
+function instance(name, ports) {
+  const dir = join(work, name);
+  mkdirSync(dir, { recursive: true });
+  return { dir, databasePath: join(dir, 'timesheet.db'), dataDir: join(dir, 'private-data'), ports };
+}
+const envFor = (inst, port) => ({
+  ...process.env,
+  NODE_ENV: 'development',
+  PORT: String(port),
+  HOST: '127.0.0.1',
+  DATABASE_PATH: inst.databasePath,
+  DATA_DIR: inst.dataDir,
+  APP_ORIGINS: inst.ports.map((item) => `http://localhost:${item}`).join(','),
+  MAIL_FROM: SENDER,
+  OUTBOUND_MODE: 'capture',
+  JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: passwords.admin,
+  SEED_EMPLOYEE_PASSWORD: passwords.employee,
+  SEED_EMPLOYEE2_PASSWORD: passwords.employee2,
+});
+const cli = (inst, args) => {
+  const result = spawnSync(process.execPath, [join(exportDir, 'dist', 'server', 'cli.js'), ...args], { env: envFor(inst, inst.ports[0]), encoding: 'utf8', cwd: exportDir });
+  return { status: result.status, output: `${result.stdout}${result.stderr}`.replaceAll(work, '<work>').trim() };
+};
+const servers = [];
+function startServer(inst, port) {
+  const child = spawn(process.execPath, [join(exportDir, 'dist', 'server', 'index.js')], { env: envFor(inst, port), cwd: exportDir, stdio: ['ignore', 'pipe', 'pipe'] });
+  let output = '';
+  child.stdout.on('data', (chunk) => (output += String(chunk)));
+  child.stderr.on('data', (chunk) => (output += String(chunk)));
+  const server = { child, port, output: () => output, exited: false };
+  child.on('exit', () => (server.exited = true));
+  servers.push(server);
+  return server;
+}
+async function stopServer(server) {
+  if (server.exited) return;
+  server.child.kill();
+  for (let wait = 0; wait < 40 && !server.exited; wait += 1) await new Promise((resolve) => setTimeout(resolve, 100));
+}
+async function waitHealthy(port) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/api/health`, { headers: { connection: 'close' }, signal: AbortSignal.timeout(2000) });
+      if (response.ok) return true;
+    } catch {
+      // not listening yet
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return false;
+}
+async function call(method, path, { cookie, body, port } = {}) {
+  const headers = { connection: 'close', origin: `http://localhost:${port}` };
+  if (cookie) headers.cookie = cookie;
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  const response = await fetch(`http://127.0.0.1:${port}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const text = await response.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = null;
+  }
+  return { status: response.status, json, text };
+}
+const code = (res) => `${res.status}${res.json?.error?.code ? `:${res.json.error.code}` : ''}`;
+async function login(email, password, port) {
+  const res = await fetch(`http://127.0.0.1:${port}/api/auth/login`, {
+    method: 'POST',
+    headers: { connection: 'close', origin: `http://localhost:${port}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  await res.text();
+  return { status: res.status, cookie: (res.headers.get('set-cookie') ?? '').split(';')[0] };
+}
+const addDaysIso = (date, days) => new Date(Date.parse(`${date}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+let clockOffset = 0;
+const runJobs = (inst, passes = 3) => {
+  const out = [];
+  for (let pass = 0; pass < passes; pass += 1) {
+    clockOffset += 150;
+    out.push(cli(inst, ['run-jobs', '--once', '--now', new Date(Date.now() + clockOffset * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')]));
+  }
+  return out.map((item) => `${item.status}:${item.output}`).join(' ; ');
+};
+async function signOff(user, payroll, port) {
+  const review = await call('GET', `/api/timesheets/${payroll}/review`, { cookie: user.cookie, port });
+  if (review.status !== 200) return { status: review.status, code: code(review), id: null };
+  const res = await call('POST', `/api/timesheets/${payroll}/signoff`, {
+    cookie: user.cookie,
+    port,
+    body: { expected_version: review.json.expected_version, reviewed_hash: review.json.payload_hash, incomplete_evidence_acknowledged: true },
+  });
+  return { status: res.status, code: code(res), id: res.json?.revision?.id ?? null };
+}
+async function editDay(user, payroll, port, note) {
+  const review = (await call('GET', `/api/timesheets/${payroll}/review`, { cookie: user.cookie, port })).json;
+  const day = review.payload.days[2].work_date;
+  const edited = await call('PUT', `/api/days/${day}`, { cookie: user.cookie, port, body: { category: 'Worked', leave_minutes: 0, wfh: false, notes: note, reason: 'Synthetic correction probe' } });
+  const after = (await call('GET', `/api/timesheets/${payroll}/review`, { cookie: user.cookie, port })).json;
+  return { edited: code(edited), expected_version: after.expected_version, payload_hash: after.payload_hash };
+}
+async function correct(user, payroll, port, prepared) {
+  const res = await call('POST', `/api/timesheets/${payroll}/revisions`, {
+    cookie: user.cookie,
+    port,
+    body: { expected_version: prepared.expected_version, reviewed_hash: prepared.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic correction probe', send_email: false },
+  });
+  return { status: res.status, code: code(res), id: res.json?.revision?.id ?? null };
+}
+async function sendBody(user, revisionId, port, extra = {}) {
+  const draft = (await call('GET', `/api/revisions/${revisionId}/send-draft`, { cookie: user.cookie, port })).json;
+  return { request_key: randomUUID(), to: draft.to, cc: draft.cc, subject: draft.subject, body_text: draft.body_text, time_rows: draft.time_rows, ot_rows: draft.ot_rows, ...extra };
+}
+const send = (user, revisionId, port, body) => call('POST', `/api/revisions/${revisionId}/send`, { cookie: user.cookie, port, body });
+/** The seed gives one employee no recipients; save synthetic ones (example.invalid) when none are set. */
+async function ensureRecipients(user, port) {
+  const current = await call('GET', '/api/settings/submission', { cookie: user.cookie, port });
+  const settings = current.json?.settings ?? null;
+  if ((settings?.recipients?.to ?? []).length > 0) return 'kept';
+  const saved = await call('POST', '/api/settings/submission', { cookie: user.cookie, port, body: { expected_seq: settings?.seq ?? 0, to: ['payroll@example.invalid'], cc: [], auto_submit: false } });
+  return code(saved);
+}
+
+let monitor;
+let monitor3;
+try {
+  log(`node ${process.version}`);
+  /* ---------------------------------------------------------------- 1. option A on two processes */
+  const one = instance('one', [portA, portB]);
+  check('1 cli migrate', cli(one, ['migrate']).status === 0);
+  check('1 cli seed', cli(one, ['seed']).status === 0);
+  const serverA = startServer(one, portA);
+  const serverB = startServer(one, portB);
+  check('1 servers A and B healthy on one database', (await waitHealthy(portA)) && (await waitHealthy(portB)));
+  monitor = new Database(one.databasePath, { readonly: true });
+  const tableNames = monitor.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+  const dbState = () => JSON.stringify(tableNames.map((name) => [name, monitor.prepare(`SELECT count(*) FROM "${name}"`).pluck().get()]));
+  const count = (sql, ...params) => monitor.prepare(sql).pluck().get(...params);
+  const owner = await login('employee2@example.invalid', passwords.employee2, portA);
+  const other = await login('employee@example.invalid', passwords.employee, portA);
+  check('1 logins', owner.status === 200 && other.status === 200);
+  log(`1 recipients of the other employee: ${await ensureRecipients(other, portA)}; owner: ${await ensureRecipients(owner, portA)}`);
+  const periods = (await call('GET', '/api/periods/current', { cookie: owner.cookie, port: portA })).json;
+  const payroll = periods.current.payroll_date;
+  const previous = addDaysIso(payroll, -14);
+  log(`today ${periods.today_local}, current payroll ${payroll}, previous payroll ${previous}`);
+
+  const rev1 = await signOff(owner, payroll, portA);
+  check('1 owner signs revision 1', rev1.status === 201, rev1.code);
+  const s1 = await send(owner, rev1.id, portA, await sendBody(owner, rev1.id, portA));
+  check('1 send of revision 1: 201 (its job waits, runner off)', s1.status === 201, code(s1));
+  const prepared = await editDay(owner, payroll, portA, 'Synthetic round note 0');
+  const rev2 = await correct(owner, payroll, portA, prepared);
+  check('1 correction revision 2 (send_email false)', rev2.status === 201, `${prepared.edited} ${rev2.code}`);
+
+  const keyed = await sendBody(owner, rev2.id, portB, { reason: 'Synthetic corrected copy (retry key)' });
+  const rounds = [];
+  for (let round = 0; round < 4; round += 1) {
+    const before = dbState();
+    const bodyA = round === 1 ? keyed : await sendBody(owner, rev2.id, portA, round === 0 ? {} : { reason: `Synthetic reason A${round}` });
+    const bodyB = await sendBody(owner, rev2.id, portB, round === 2 ? {} : { reason: `Synthetic reason B${round}` });
+    const first = round === 3 ? call('POST', `/api/revisions/${rev2.id}/resend`, { cookie: owner.cookie, port: portA, body: { reason: 'Synthetic resend reason' } }) : send(owner, rev2.id, portA, bodyA);
+    const results = await Promise.all([first, send(owner, rev2.id, portB, bodyB)]);
+    rounds.push(`${results.map(code).join('+')} unchanged ${dbState() === before}`);
+  }
+  check('1 two processes, four rounds: every send or resend of revision 2 is 409 delivery_in_progress while revision 1 waits; nothing written', rounds.every((item) => item === '409:delivery_in_progress+409:delivery_in_progress unchanged true'), rounds.join(' | '));
+  const message = await send(owner, rev2.id, portA, await sendBody(owner, rev2.id, portA, { reason: 'Synthetic message probe' }));
+  log(`1 refusal message: ${JSON.stringify(message.json?.error?.message)}`);
+
+  const otherRev = await signOff(other, payroll, portA);
+  const otherSend = otherRev.id === null ? { status: 0 } : await send(other, otherRev.id, portB, await sendBody(other, otherRev.id, portB));
+  check("1 another owner's send of the same payroll date is not blocked", otherSend.status === 201, `${otherRev.code} ${code(otherSend)}`);
+  const prevRev = await signOff(owner, previous, portA);
+  const prevSend = prevRev.id === null ? { status: 0 } : await send(owner, prevRev.id, portB, await sendBody(owner, prevRev.id, portB));
+  check("1 the owner's send of another period is not blocked", prevSend.status === 201, `${prevRev.code} ${code(prevSend)}`);
+
+  log(`1 run-jobs: ${runJobs(one)}`);
+  const rev1Attempt = count('SELECT state FROM delivery_attempts WHERE revision_id = ? ORDER BY attempt_no DESC LIMIT 1', rev1.id);
+  check('1 revision 1 delivered by the runner', rev1Attempt === 'accepted', rev1Attempt);
+  const retried = await send(owner, rev2.id, portB, keyed);
+  check('1 the blocked request retried with the same key after delivery: 201 (the refusal stored nothing)', retried.status === 201 && retried.json?.send?.reason === 'Synthetic corrected copy (retry key)', code(retried));
+  const unreasoned = await send(owner, rev2.id, portA, await sendBody(owner, rev2.id, portA));
+  check('1 then another copy without a reason: 409 (the new send waits) or 422 reason_required, never 201', unreasoned.status === 409 || code(unreasoned) === '422:reason_required', code(unreasoned));
+  log(`1 run-jobs: ${runJobs(one)}`);
+
+  /* ------------------------------------------- 2. race: a send of revision k against a correction and its send */
+  const raceResults = [];
+  let current = otherRev.id;
+  for (let round = 1; round <= 6; round += 1) {
+    log(`2 run-jobs before round ${round}: ${runJobs(one, 2)}`);
+    const waiting = count("SELECT count(*) FROM jobs j JOIN timesheet_revisions r ON r.id = j.revision_id WHERE r.user_id = (SELECT user_id FROM timesheet_revisions WHERE id = ?) AND j.kind = 'send_email' AND j.state IN ('queued','leased')", current);
+    const ready = await editDay(other, payroll, portB, `Synthetic race note ${round}`);
+    const sendsBefore = count("SELECT count(*) FROM revision_sends WHERE user_id = (SELECT user_id FROM timesheet_revisions WHERE id = ?)", current);
+    const bodyOld = await sendBody(other, current, portA, { reason: `Synthetic old copy ${round}` });
+    const [oldSend, newPath] = await Promise.all([
+      send(other, current, portA, bodyOld),
+      (async () => {
+        const corrected = await correct(other, payroll, portB, ready);
+        if (corrected.id === null) return { corrected, sent: null };
+        const sent = await send(other, corrected.id, portB, await sendBody(other, corrected.id, portB, { reason: `Synthetic new copy ${round}` }));
+        return { corrected, sent };
+      })(),
+    ]);
+    const sendsAfter = count("SELECT count(*) FROM revision_sends WHERE user_id = (SELECT user_id FROM timesheet_revisions WHERE id = ?)", current);
+    raceResults.push(`r${round}: waiting-before ${waiting}; old ${code(oldSend)}; correction ${newPath.corrected.code}; new ${newPath.sent === null ? '-' : code(newPath.sent)}; sends +${sendsAfter - sendsBefore}`);
+    if (newPath.corrected.id !== null) current = newPath.corrected.id;
+  }
+  check('2 six rounds on two processes: exactly one send is created each round (never the old and the new copy together)', raceResults.every((item) => item.endsWith('sends +1')), raceResults.join(' | '));
+  await stopServer(serverA);
+  await stopServer(serverB);
+  monitor.close();
+  monitor = undefined;
+
+  /* ------------------------------------------- 3. restore: a held send of a superseded revision released after the correction */
+  const src = instance('three-source', [portC]);
+  check('3 cli migrate', cli(src, ['migrate']).status === 0);
+  check('3 cli seed', cli(src, ['seed']).status === 0);
+  const serverC = startServer(src, portC);
+  check('3 source server healthy', await waitHealthy(portC));
+  const ownerC = await login('employee2@example.invalid', passwords.employee2, portC);
+  const otherC = await login('employee@example.invalid', passwords.employee, portC);
+  log(`3 recipients of the other employee: ${await ensureRecipients(otherC, portC)}; owner: ${await ensureRecipients(ownerC, portC)}`);
+  const payrollC = (await call('GET', '/api/periods/current', { cookie: ownerC.cookie, port: portC })).json.current.payroll_date;
+  const r1 = await signOff(ownerC, payrollC, portC);
+  const r1send = await send(ownerC, r1.id, portC, await sendBody(ownerC, r1.id, portC));
+  const o1 = await signOff(otherC, payrollC, portC);
+  const o1send = await send(otherC, o1.id, portC, await sendBody(otherC, o1.id, portC));
+  check('3 two owners sign and send revision 1 on the source; both jobs wait (runner off)', r1send.status === 201 && o1send.status === 201, `${code(r1send)} ${code(o1send)}`);
+  const backupDir = join(work, 'three-backups');
+  mkdirSync(backupDir, { recursive: true });
+  const backup = cli(src, ['backup', '--to', backupDir]);
+  check('3 cli backup while the sends wait', backup.status === 0, backup.output.split('\n')[0]);
+  await stopServer(serverC);
+  const backupName = readdirSync(backupDir).find((name) => !name.startsWith('.'));
+  const restoredDir = join(work, 'three-restored');
+  const restore = cli(src, ['restore', '--from', join(backupDir, backupName ?? 'missing'), '--to', restoredDir]);
+  check('3 cli restore into an isolated folder', restore.status === 0, restore.output.split('\n').slice(0, 2).join(' / '));
+  const dst = { dir: restoredDir, databasePath: join(restoredDir, 'timesheet.db'), dataDir: join(restoredDir, 'private-data'), ports: [portD] };
+  monitor3 = new Database(dst.databasePath, { readonly: true });
+  const held = monitor3.prepare("SELECT revision_id, state, last_error FROM jobs WHERE kind = 'send_email' ORDER BY rowid").all();
+  check('3 the restored copy holds both send jobs (intervention, reconcile_after_restore)', held.length === 2 && held.every((job) => job.state === 'intervention' && job.last_error === 'reconcile_after_restore'), JSON.stringify(held.map((job) => `${job.state}/${job.last_error}`)));
+  const resume = cli(dst, ['outbound', 'resume', '--confirm']);
+  check('3 outbound resume --confirm', resume.status === 0, resume.output.split('\n')[0]);
+  const serverD = startServer(dst, portD);
+  check('3 restored server healthy', await waitHealthy(portD));
+  const ownerD = await login('employee2@example.invalid', passwords.employee2, portD);
+  const otherD = await login('employee@example.invalid', passwords.employee, portD);
+  const jobOf = (revisionId) => monitor3.prepare("SELECT id FROM jobs WHERE revision_id = ? AND kind = 'send_email' ORDER BY rowid LIMIT 1").pluck().get(revisionId);
+
+  // 3a: the other owner's held job is released first, then the correction: the released job waits, so the guard holds.
+  const releaseOther = cli(dst, ['outbound', 'release', '--job', jobOf(o1.id), '--confirm']);
+  const preparedO = await editDay(otherD, payrollC, portD, 'Synthetic restore note other');
+  const o2 = await correct(otherD, payrollC, portD, preparedO);
+  const o2send = await send(otherD, o2.id, portD, await sendBody(otherD, o2.id, portD));
+  check('3a released before the correction: the correction send is 409 delivery_in_progress', code(o2send) === '409:delivery_in_progress', `release ${releaseOther.status}; ${o2.code}; ${code(o2send)}`);
+
+  // 3b: the owner corrects and sends while revision 1's job is still held; then the operator releases the held job.
+  const preparedR = await editDay(ownerD, payrollC, portD, 'Synthetic restore note owner');
+  const r2 = await correct(ownerD, payrollC, portD, preparedR);
+  const r2send = await send(ownerD, r2.id, portD, await sendBody(ownerD, r2.id, portD));
+  log(`3b correction ${r2.code}; its send while revision 1 is held: ${code(r2send)} reason ${JSON.stringify(r2send.json?.send?.reason ?? null)}`);
+  log(`3b run-jobs: ${runJobs(dst)}`);
+  const preview = cli(dst, ['outbound', 'release']);
+  log(`3b outbound release preview: exit ${preview.status} ${preview.output.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '<id>')}`);
+  const releaseOwner = cli(dst, ['outbound', 'release', '--job', jobOf(r1.id), '--confirm']);
+  log(`3b release of the superseded revision 1's held job: exit ${releaseOwner.status} ${releaseOwner.output.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '<id>')}`);
+  log(`3b run-jobs: ${runJobs(dst)}`);
+  const delivered = monitor3
+    .prepare(
+      `SELECT r.revision_no, a.state, a.accepted_at, a.rowid AS seq FROM delivery_attempts a JOIN timesheet_revisions r ON r.id = a.revision_id
+        WHERE a.user_id = (SELECT user_id FROM timesheet_revisions WHERE id = ?) ORDER BY a.rowid`,
+    )
+    .all(r1.id);
+  const finalized = monitor3.prepare('SELECT t.finalized_revision_no FROM timesheets t JOIN timesheet_revisions r ON r.timesheet_id = t.id WHERE r.id = ?').pluck().get(r1.id);
+  log(`3b the owner's delivery attempts in order: ${JSON.stringify(delivered)}; current revision ${finalized}`);
+  const oldAfterNew = delivered.length === 2 && delivered[0].revision_no === 2 && delivered[1].revision_no === 1 && delivered.every((item) => item.state === 'accepted');
+  check('3b (docs/05:72 "an older revision\'s copy cannot arrive after the correction\'s"): the superseded revision 1 is NOT delivered after the correction', !oldAfterNew, oldAfterNew ? 'revision 2 was accepted first, then the released revision 1 copy' : 'held');
+  await stopServer(serverD);
+} catch (error) {
+  failures += 1;
+  log(`FAIL unexpected error: ${error instanceof Error ? `${error.message}\n${error.stack}` : String(error)}`);
+} finally {
+  monitor?.close();
+  monitor3?.close();
+  for (const server of servers) await stopServer(server);
+  for (const [index, server] of servers.entries()) log(`server ${index} (port ${server.port}) exited ${server.exited}; output head: ${server.output().replaceAll(work, '<work>').slice(0, 200).replaceAll('\n', ' | ')}`);
+}
+log(`failures: ${failures}`);
+writeFileSync(outPath, `${lines.join('\n')}\n`);
+process.exitCode = failures === 0 ? 0 : 1;

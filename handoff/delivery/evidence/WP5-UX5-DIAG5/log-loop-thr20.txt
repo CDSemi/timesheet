@@ -1,0 +1,43 @@
+== loop-thr20: real start 2026-10-27T20:20:59Z, simulated start real, AB8_SHIFT_MS=0
+process clock 2026-10-27T20:20:59.462Z (Date.now 1793132459471); America/Los_Angeles Tue, 2026-10-27, 13:20; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/zz-diag5loop.spec.ts --project=desktop --workers=1 --output=<task>\pw-loop-thr20
+
+Running 1 test using 1 worker
+
+  x  1 [desktop] › tests\e2e\zz-diag5loop.spec.ts:217:1 › diag5 loop: 768 and 767 alternately, the test reads right after setViewportSize (32.5s)
+
+
+  1) [desktop] › tests\e2e\zz-diag5loop.spec.ts:217:1 › diag5 loop: 768 and 767 alternately, the test reads right after setViewportSize 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.boundingBox: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('.check-card')
+        - locator resolved to visible <section data-mode="signoff" class="card check-card" aria-label="Before you sign">…</section>
+
+
+      192 |
+      193 | async function rect(locator: Locator): Promise<Rect> {
+    > 194 |   const box = await locator.boundingBox();
+          |                             ^
+      195 |   if (box === null) throw new Error('The element has no box');
+      196 |   return { left: box.x, right: box.x + box.width, top: box.y, bottom: box.y + box.height, width: box.width, height: box.height };
+      197 | }
+        at rect (<task>\export\tests\e2e\zz-diag5loop.spec.ts:194:29)
+        at <task>\export\tests\e2e\zz-diag5loop.spec.ts:237:27
+
+    Error Context: ..\pw-loop-thr20\zz-diag5loop-diag5-loop-76-34a01-right-after-setViewportSize-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-loop-thr20\zz-diag5loop-diag5-loop-76-34a01-right-after-setViewportSize-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-loop-thr20\zz-diag5loop-diag5-loop-76-34a01-right-after-setViewportSize-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\zz-diag5loop.spec.ts:217:1 › diag5 loop: 768 and 767 alternately, the test reads right after setViewportSize 
+exit=1
+== loop-thr20 real end 2026-10-27T20:21:34Z

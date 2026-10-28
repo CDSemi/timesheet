@@ -1,0 +1,12 @@
+cd <task>
+. ./env.sh
+S() {
+  label=$1; shift
+  bash run-shift.sh "stress-$label" real "$@" --repeat-each=20 --workers=10 > "logs/stress-$label.txt" 2>&1
+  node counts.mjs "logs/stress-$label.txt" >> out/31-stress-counts.txt 2>&1
+  echo "$label finished $(date -u +%H:%M:%SZ)" >> logs/stress.log
+}
+S ring tests/e2e/review.spec.ts --project=desktop --grep "shows the shared focus ring on all four edges"
+S sigrows tests/e2e/review.spec.ts --project=desktop --grep "signature rows: the PDF block insets"
+S stops tests/e2e/review.spec.ts --project=desktop --grep "named keyboard stops"
+echo stress-done > out/stress.done

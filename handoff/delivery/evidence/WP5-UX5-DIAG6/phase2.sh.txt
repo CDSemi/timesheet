@@ -1,0 +1,17 @@
+# Phase 2, product as in the FIX12 tree: the flag-lag matrix, the kbd delay model on the original and the fixed test, the esc throttle model on the original test.
+. <task>/env.sh
+cp $T/probe-kbd.ts.txt $T/export/tests/e2e/probe-kbd.spec.ts
+bash $T/mkvariants.sh > $T/logs/mkvariants.txt 2>&1
+GK="WP5-UX3-T04: the check in/out group"
+GE="Escape and the Close button: with unsaved edits"
+run() { L=$1; shift; bash $T/run-pw.sh $L real "$@" --trace=off > $T/logs/$L.txt 2>&1; }
+# kbd: the page-side record with the late lookup, then the REAL test (original, then fixed) with the same late lookup
+export DIAG_OUT="$TW\\out\\diag-kbd-p-late300.jsonl"; rm -f $T/out/diag-kbd-p-late300.jsonl
+PROBE_MODE=orig PROBE_DELAY=300 run kbd-p-late300 tests/e2e/probe-kbd.spec.ts --project=desktop --workers=2 --repeat-each=5
+PROBE_DELAY=300 run kbd-dly-orig tests/e2e/dly-kbd-orig.spec.ts -g "$GK" --project=desktop --workers=2 --repeat-each=10
+PROBE_DELAY=300 run kbd-dly-fixed tests/e2e/dly-kbd-fixed.spec.ts -g "$GK" --project=desktop --workers=2 --repeat-each=10
+# esc: the REAL original test with the main thread throttled 4 times
+PROBE_THROTTLE=4 run esc-dly-orig tests/e2e/dly-esc-orig.spec.ts -g "$GE" --project=desktop --workers=6 --repeat-each=10
+# the flag-lag matrix on the original product
+PFX=orig bash $T/gap.sh
+echo phase2-done > $T/out/phase2.done

@@ -1,0 +1,15 @@
+# npm test once in the export, the real-clock FULL e2e on both projects, then the sweep-instant run (FIX10 shiftclock wrapper via run-pw.sh).
+. <task>/env.sh
+unset DIAG_MQ_DELAY
+export X=$T/export
+cd $X || exit 9
+(export NODE_OPTIONS=; mkdir -p $T/tmp-npmtest; export TEMP="$TW\\tmp-npmtest" TMP="$TW\\tmp-npmtest" TMPDIR="$T/tmp-npmtest"; npm test > $T/logs/npm-test.txt 2>&1; echo "npm test exit=$?" >> $T/logs/npm-test.txt)
+echo "npm test done $(date -u +%H:%M:%SZ)" >> $T/out/full-progress.txt
+bash $T/run-pw.sh full-desktop real --project=desktop --trace=off > $T/logs/full-desktop.txt 2>&1
+echo "full desktop done $(date -u +%H:%M:%SZ)" >> $T/out/full-progress.txt
+bash $T/run-pw.sh full-mobile real --project=mobile --trace=off > $T/logs/full-mobile.txt 2>&1
+echo "full mobile done $(date -u +%H:%M:%SZ)" >> $T/out/full-progress.txt
+SEVEN="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts"
+bash $T/run-pw.sh seven-1026 2026-10-27T06:58:30Z $SEVEN --workers=6 > $T/logs/seven-1026.txt 2>&1
+echo "seven-1026 done $(date -u +%H:%M:%SZ)" >> $T/out/full-progress.txt
+echo full-done > $T/out/full.done

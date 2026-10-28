@@ -1,0 +1,4 @@
+. <task>/env.sh
+# Usage: bash census.sh <outfile>. Read-only inline query, stops nothing.
+powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -in 'node.exe','bash.exe','msedge.exe' } | Select-Object ProcessId,Name,@{n='CpuSec';e={[math]::Round((\$_.KernelModeTime+\$_.UserModeTime)/10000000,1)}} | Sort-Object CpuSec -Descending | Select-Object -First 25 | Format-Table -AutoSize | Out-String -Width 200" > "$1" 2>&1
+powershell.exe -NoProfile -Command "(Get-CimInstance Win32_Processor).LoadPercentage" >> "$1" 2>&1

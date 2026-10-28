@@ -1,0 +1,28 @@
+// Summarises a diag JSONL file. Usage: node analyze.mjs <file.jsonl> [verbose]
+import { readFileSync } from 'node:fs';
+
+const file = process.argv[2];
+const verbose = process.argv[3] === 'verbose';
+const rows = readFileSync(file, 'utf8').split('\n').filter((l) => l !== '').map((l) => JSON.parse(l));
+const byWidth = new Map();
+for (const r of rows) {
+  const s = byWidth.get(r.width) ?? { n: 0, maxOffText: 0, maxOffBack: 0, maxFrameOff: 0, maxFrames: 0, maxMs: 0, bad: 0, cardHeights: new Set(), maxTextH: 0 };
+  s.n += 1;
+  s.maxOffText = Math.max(s.maxOffText, r.offText);
+  s.maxOffBack = Math.max(s.maxOffBack, r.offBack);
+  s.maxFrameOff = Math.max(s.maxFrameOff, r.maxOffInFrames);
+  s.maxFrames = Math.max(s.maxFrames, r.nFrames);
+  s.maxMs = Math.max(s.maxMs, r.ms.tBack);
+  if (r.offText > 1.5 || r.offBack > 1.5) s.bad += 1;
+  s.cardHeights.add(r.cardH);
+  const lastT = r.frames.length === 0 ? 0 : r.frames[r.frames.length - 1].t;
+  s.maxSettle = Math.max(s.maxSettle ?? 0, lastT);
+  if (r.width === 767 || r.width === 768) s.settleList = [...(s.settleList ?? []), lastT];
+  s.staleWidth = (s.staleWidth ?? 0) + (r.iw0 !== undefined && r.iw0 !== r.width ? 1 : 0);
+  s.topMoved = (s.topMoved ?? 0) + (r.topAtOnce !== undefined && Math.abs(r.topAtOnce - r.cardTop) > 0.5 ? 1 : 0);
+  byWidth.set(r.width, s);
+  if (verbose && (r.offText > 1.5 || r.offBack > 1.5 || r.maxOffInFrames > 1.5)) console.log('BAD', JSON.stringify(r));
+}
+for (const [w, s] of byWidth) {
+  console.log(`${w}px n=${s.n} maxOffText=${s.maxOffText} maxOffBack=${s.maxOffBack} maxFrameOff=${s.maxFrameOff} maxFramesChanged=${s.maxFrames} bad=${s.bad} slowestReadsMs=${s.maxMs} cardHeights=${[...s.cardHeights].join('/')} innerWidthStaleRightAfterSet=${s.staleWidth} cardTopMovedAfterFirstRead=${s.topMoved} lastLayoutChangeAtMs(max over runs, from the recorder start)=${s.maxSettle}`);
+}

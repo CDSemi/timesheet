@@ -1,0 +1,18 @@
+// Ranges over the passing runs of the quiet esc probe: task turn after the input, Escape after the input, question after the Escape. Usage: node ranges.mjs <jsonl>
+import { readFileSync } from 'node:fs';
+
+const runs = readFileSync(process.argv[2], 'utf8').split('\n').filter((l) => l !== '').map((l) => JSON.parse(l));
+const rows = [];
+for (const run of runs) {
+  if (run.failed !== '') continue;
+  const input = run.events.find((e) => e.what === 'input' && e.target === 'TEXTAREA');
+  const esc = run.events.find((e) => e.what === 'keydown Escape (capture)');
+  const turn = run.events.find((e) => e.what === 'macrotask turn' && e.t >= input.t);
+  const prompt = run.events.find((e) => e.what === 'state' && e.state.startsWith('prompt=true'));
+  rows.push({ turn: turn.t - input.t, esc: esc.t - input.t, prompt: prompt.t - esc.t });
+}
+const span = (key) => `${Math.min(...rows.map((r) => r[key])).toFixed(1)} to ${Math.max(...rows.map((r) => r[key])).toFixed(1)} ms`;
+console.log(`passing runs: ${rows.length}`);
+console.log(`task turn after the input: ${span('turn')}`);
+console.log(`Escape after the input: ${span('esc')}`);
+console.log(`question visible after the Escape: ${span('prompt')}`);

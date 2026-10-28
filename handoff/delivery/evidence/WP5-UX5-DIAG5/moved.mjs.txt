@@ -1,0 +1,12 @@
+// Prints the runs in which the card moved between the first read after setViewportSize and the test's own card read.
+// Usage: node moved.mjs <file.jsonl>
+import { readFileSync } from 'node:fs';
+
+const rows = readFileSync(process.argv[2], 'utf8').split('\n').filter((l) => l !== '').map((l) => JSON.parse(l));
+for (const r of rows) {
+  if (r.topAtOnce === undefined || Math.abs(r.topAtOnce - r.cardTop) <= 0.5) continue;
+  console.log(`${r.tag} width=${r.width} innerWidthRightAfterSet=${r.iw0} cardTopAtOnce=${r.topAtOnce} cardTopInTestRead=${r.cardTop} textTop=${r.textTop} backTop=${r.backTop} offText=${r.offText} offBack=${r.offBack} readsMs=${JSON.stringify(r.ms)}`);
+  const first = r.frames[0];
+  const last = r.frames[r.frames.length - 1];
+  console.log(`  first frame t=${first?.t}ms iw=${first?.iw} headTop=${first?.head?.[0]} cardTop=${first?.card?.[0]}; last frame t=${last?.t}ms iw=${last?.iw} headTop=${last?.head?.[0]} cardTop=${last?.card?.[0]}`);
+}

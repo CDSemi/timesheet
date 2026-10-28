@@ -1,0 +1,42 @@
+/* ---- DIAG5 probe (scratch only): the page's own event order when the width goes from 768 to 767 ------------------------ */
+
+import { appendFileSync } from 'node:fs';
+
+const EV_OUT = process.env.DIAG_OUT ?? '';
+
+test('diag5 events: resize event, media change event, React commit, rAF after 768 to 767', async ({ page, adminSeed, builtServer }) => {
+  const reviewer = await newReviewer(adminSeed, builtServer);
+  await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+  await expect(page.locator('.check-card')).toBeVisible();
+  await page.setViewportSize({ width: 768, height: 900 });
+  await expect(page.locator('.bar-clock')).toHaveCount(0);
+  for (const [from, to] of [[768, 767], [767, 768]] as const) {
+    await page.setViewportSize({ width: from, height: 900 });
+    await expect(page.locator('.bar-clock')).toHaveCount(from < 768 ? 1 : 0);
+    await page.evaluate(() => {
+      const w = window as unknown as { __ev: unknown[] };
+      w.__ev = [];
+      const t0 = performance.now();
+      const snap = (what: string) => {
+        const cardTop = document.querySelector('.check-card')?.getBoundingClientRect().top ?? -1;
+        const p = document.querySelector('.check-card > p')?.getBoundingClientRect();
+        const head = document.querySelector('.review-head')?.getBoundingClientRect().top ?? -1;
+        const pMid = p === undefined ? -1 : p.top + p.height / 2;
+        const cardH = document.querySelector('.check-card')?.getBoundingClientRect().height ?? -1;
+        w.__ev.push({ what, t: Math.round((performance.now() - t0) * 10) / 10, iw: window.innerWidth, mq: window.matchMedia('(width >= 768px)').matches, barClock: document.querySelector('.bar-clock') !== null, headTop: head, cardTop, cardMid: cardTop + cardH / 2, pMid });
+      };
+      window.addEventListener('resize', () => snap('resize-event'));
+      window.matchMedia('(width >= 768px)').addEventListener('change', () => {
+        snap('mq-change(after React listener)');
+        queueMicrotask(() => snap('microtask after mq-change'));
+        setTimeout(() => snap('timeout 0 after mq-change'), 0);
+      });
+      new MutationObserver(() => snap('DOM mutation')).observe(document.body, { childList: true, subtree: true });
+      requestAnimationFrame(() => snap('rAF'));
+    });
+    await page.setViewportSize({ width: to, height: 900 });
+    await page.waitForTimeout(300);
+    const events = await page.evaluate(() => (window as unknown as { __ev: unknown[] }).__ev);
+    if (EV_OUT !== '') appendFileSync(EV_OUT, `${JSON.stringify({ from, to, events })}\n`);
+  }
+});

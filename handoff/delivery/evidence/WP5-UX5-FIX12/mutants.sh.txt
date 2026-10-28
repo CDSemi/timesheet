@@ -1,0 +1,44 @@
+# Mutants in the scratch copy export-mut (a copy of the clean working-tree export). Each is restored byte-equal afterwards.
+# mutant1.css = "@media (480px <= width < 768px) { .check-card > p { position: relative; top: 8px; } }"  (text 8px low at 767px)
+# mutant2.css = "@media (width <= 320px) { .share-bar { width: calc(100vw + 8px); } }"                    (share bar 8px too wide at 320px)
+# R2 / R3 replace the guard in src/server/ops/restore.ts: "j.state IN ('queued', 'leased', 'succeeded') LIMIT 1"
+#   R2 -> "j.state IN ('queued', 'leased') LIMIT 1"      R3 -> "j.state IN ('queued', 'succeeded') LIMIT 1"
+. <task>/env.sh
+unset DIAG_MQ_DELAY
+C=$T/export
+M=$T/export-mut
+OUT=$T/out/mut-exits.txt
+: > $OUT
+if [ ! -d $M ]; then cp -r $C $M; fi
+cmp $C/tests/e2e/fixtures.ts $REPO/tests/e2e/fixtures.ts && echo "fixtures.ts equals the repository" >> $OUT
+export X=$M
+cp $M/src/client/styles.css $T/styles.css.clean
+cat $T/mutant1.css >> $M/src/client/styles.css
+(cd $M && npm run build > $T/logs/mut-m1-build.txt 2>&1; echo "m1 build exit=$?" >> $OUT)
+bash $T/run-pw.sh mut-m1 real tests/e2e/review.spec.ts -g "the check card:" --project=desktop --workers=1 --trace=off > $T/logs/mut-m1.txt 2>&1
+echo "m1 (text 8px off centre at 767px) review check card: $(grep '^exit=' $T/logs/mut-m1.txt)" >> $OUT
+cp $T/styles.css.clean $M/src/client/styles.css
+cat $T/mutant2.css >> $M/src/client/styles.css
+(cd $M && npm run build > $T/logs/mut-m2-build.txt 2>&1; echo "m2 build exit=$?" >> $OUT)
+bash $T/run-pw.sh mut-m2 real tests/e2e/logo.spec.ts -g "shared view" --project=desktop --workers=2 --trace=off > $T/logs/mut-m2.txt 2>&1
+echo "m2 (share bar 8px wider at 320px) logo shared view: $(grep '^exit=' $T/logs/mut-m2.txt)" >> $OUT
+cp $T/styles.css.clean $M/src/client/styles.css
+cmp $C/src/client/styles.css $M/src/client/styles.css && echo "styles.css restored byte-equal" >> $OUT
+(cd $M && npm run build > $T/logs/mut-unbuild.txt 2>&1; echo "unmutate build exit=$?" >> $OUT)
+cd $M || exit 9
+export NODE_OPTIONS=
+mkdir -p $T/tmp-mr
+export TEMP="$TW\\tmp-mr" TMP="$TW\\tmp-mr" TMPDIR="$T/tmp-mr"
+R=src/server/ops/restore.ts
+OLD="j.state IN ('queued', 'leased', 'succeeded') LIMIT 1"
+npx vitest run tests/integration/restore.test.ts > $T/logs/mut-target.txt 2>&1
+echo "target restore.test.ts: exit=$?" >> $OUT
+node.exe $TW\\mutate.mjs "$M/$R" "$OLD" "j.state IN ('queued', 'leased') LIMIT 1" >> $OUT 2>&1
+npx vitest run tests/integration/restore.test.ts > $T/logs/mut-R2.txt 2>&1
+echo "R2 (succeeded no longer blocks): exit=$?" >> $OUT
+cp $C/$R $M/$R; cmp $C/$R $M/$R && echo "restore.ts restored byte-equal" >> $OUT
+node.exe $TW\\mutate.mjs "$M/$R" "$OLD" "j.state IN ('queued', 'succeeded') LIMIT 1" >> $OUT 2>&1
+npx vitest run tests/integration/restore.test.ts > $T/logs/mut-R3.txt 2>&1
+echo "R3 (leased no longer blocks): exit=$?" >> $OUT
+cp $C/$R $M/$R; cmp $C/$R $M/$R && echo "restore.ts restored byte-equal" >> $OUT
+echo mut-done > $T/out/mut.done

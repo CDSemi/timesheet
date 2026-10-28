@@ -8,6 +8,7 @@ import {
   type CreatedAccount,
   createAccountByAdminApi,
   expect,
+  expectLayoutAt,
   SeedClient,
   screenshotPath,
   starterPolicyBody,
@@ -421,6 +422,7 @@ test('the check card: the period card padding, "Back" below 480px with the full 
     [320, '12px', 'Back'],
   ] as const) {
     await page.setViewportSize({ width, height: 900 });
+    await expectLayoutAt(page, width);
     expect(await styleOf(card, 'padding-left'), `padding at ${width}px`).toBe(padding);
     expect((await back.innerText()).trim(), `the visible words at ${width}px`).toBe(label);
     // The accessible name stays the full text, whatever is shown (SC 2.5.3: it contains the visible text).
@@ -648,6 +650,7 @@ test('one column at every width: the cards stack and share the same left and rig
   await expect(page.locator('.review-checklist, [data-step]')).toHaveCount(0);
   for (const width of [1440, 1280, 1024, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
+    await expectLayoutAt(page, width);
     const cardsInOrder = [page.locator('.check-card'), page.locator('.review-preview'), page.locator('[data-send-card]'), page.locator('[data-zone-note]')];
     let previousBottom = -Infinity;
     for (const element of cardsInOrder) {
@@ -743,6 +746,7 @@ test('signature rows: the PDF block insets and proportions, lines aligned by row
   let unsignedHeight: number | null = null;
   for (const width of [1440, 768, 600, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
+    await expectLayoutAt(page, width);
     const footer = page.locator('.review-preview .sheet-footer');
     await footer.scrollIntoViewIfNeeded();
     const measured = await expectSignatureGeometry(footer, width, { button: page.locator('[data-sign-off]'), exactFractions: width >= 768 });
@@ -794,6 +798,7 @@ test('a signed period opened again (reloaded): the signed image, name and mark s
   await expect(signed).toContainText('Synthetic Reviewer');
   for (const width of [1440, 768, 600, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
+    await expectLayoutAt(page, width);
     const footer = page.locator('.review-preview .sheet-footer');
     await footer.scrollIntoViewIfNeeded();
     // The four lines align by row and by column, the insets are the PDF's at 768px and wider, and the button stands 8px inside its line.

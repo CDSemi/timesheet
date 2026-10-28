@@ -1,0 +1,36 @@
+// Condenses the action list of a Playwright trace folder. Usage: node trace-actions.mjs <trace dir> [from-action-index]
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const files = ['test.trace', '1-trace.trace'];
+const events = [];
+for (const f of files) {
+  let text = '';
+  try { text = readFileSync(join(dir, f), 'utf8'); } catch { continue; }
+  for (const line of text.split('\n')) {
+    if (line === '') continue;
+    try { events.push({ file: f, ...JSON.parse(line) }); } catch { /* skip */ }
+  }
+}
+const types = new Map();
+for (const e of events) types.set(e.type, (types.get(e.type) ?? 0) + 1);
+console.log('event types', JSON.stringify([...types]));
+const befores = new Map();
+let t0 = null;
+const rows = [];
+for (const e of events) {
+  if (e.type === 'before') { befores.set(e.callId, e); if (t0 === null || e.startTime < t0) t0 = e.startTime; }
+}
+for (const e of events) {
+  if (e.type === 'after') {
+    const b = befores.get(e.callId);
+    if (b === undefined) continue;
+    const shown = { ...(b.params ?? {}) };
+    if (typeof shown.value === 'string') shown.value = '<redacted>';
+    rows.push({ start: b.startTime - t0, end: e.endTime - t0, api: b.apiName ?? `${b.class}.${b.method}`, params: JSON.stringify(shown).slice(0, 140), result: JSON.stringify(e.result ?? {}).slice(0, 200), error: e.error === undefined ? '' : String(e.error.message ?? '').slice(0, 80) });
+  }
+}
+rows.sort((a, b) => a.start - b.start);
+const from = Number(process.argv[3] ?? '0');
+rows.slice(from).forEach((r, i) => console.log(`${from + i} ${Math.round(r.start)}-${Math.round(r.end)} ${r.api} ${r.params} => ${r.result} ${r.error}`));

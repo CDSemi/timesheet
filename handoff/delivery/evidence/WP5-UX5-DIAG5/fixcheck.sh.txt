@@ -1,0 +1,53 @@
+# Proves the proposed e2e edit in the scratch export.
+# Usage: bash fixcheck.sh <step> [args]
+#   gen-patch : see gen-patch.sh (separate script)
+#   apply     : put the repository versions (plus the scratch page fixture) in the export, apply proposed.patch.txt with git apply,
+#               regenerate the delay probes from the ORIGINAL and the PATCHED check-card test
+#   delay-orig / delay-patched : 40 repeats, matchMedia 'change' delayed by 3 ms x repeat index (0..117 ms), 3 workers
+#   load-patched : the three patched tests, repeated, 6 workers, CPU burner 32 threads
+#   suite3 <label> <delay ms> : the three tests at one delay (review.spec.ts and the timesheet period-card test)
+#   mutant    : text pushed 8px off centre between 480 and 767px (CSS appended in the export, client rebuilt); original and patched must fail
+#   unmutate  : restore styles.css and rebuild
+. <task>/env.sh
+X=$T/export
+STEP=$1
+case "$STEP" in
+  apply)
+    cp $REPO/tests/e2e/review.spec.ts $X/tests/e2e/review.spec.ts
+    cp $REPO/tests/e2e/timesheet.spec.ts $X/tests/e2e/timesheet.spec.ts
+    cp $REPO/tests/e2e/logo.spec.ts $X/tests/e2e/logo.spec.ts
+    cp $REPO/tests/integration/restore.test.ts $X/tests/integration/restore.test.ts
+    cp $T/fixtures.diag.ts $X/tests/e2e/fixtures.ts
+    cp $REPO/tests/e2e/review.spec.ts $X/tests/e2e/zz-diag5orig.spec.ts
+    (cd $X && git apply $T/out/proposed.patch.txt && echo "git apply exit=0" > $T/logs/apply.txt || echo "git apply FAILED" > $T/logs/apply.txt)
+    SPEC_SRC=$REPO/tests/e2e/review.spec.ts node $T/gen-probe.mjs $X $T/probe-delay.ts zz-diag5delay.spec.ts
+    node $T/gen-probe.mjs $X $T/probe-delay.ts zz-diag5delaypatched.spec.ts
+    ;;
+  delay-orig)
+    export DIAG_MQ_BASE=0 DIAG_MQ_STEP=3
+    bash $T/run-pw.sh delay-orig real tests/e2e/zz-diag5delay.spec.ts --project=desktop --workers=3 --repeat-each=40 --trace=off > $T/logs/delay-orig.txt 2>&1
+    ;;
+  delay-patched)
+    export DIAG_MQ_BASE=0 DIAG_MQ_STEP=3
+    bash $T/run-pw.sh delay-patched real tests/e2e/zz-diag5delaypatched.spec.ts --project=desktop --workers=3 --repeat-each=40 --trace=off > $T/logs/delay-patched.txt 2>&1
+    ;;
+  suite3)
+    L=$2; export DIAG_MQ_DELAY=$3
+    bash $T/run-pw.sh $L real tests/e2e/review.spec.ts tests/e2e/timesheet.spec.ts -g "the check card:|one column at every width|narrow: |signature rows:" --project=desktop --workers=6 --repeat-each=${4:-1} --trace=off > $T/logs/$L.txt 2>&1
+    ;;
+  load-patched)
+    bash $T/load-run.sh load-patched 32 200 real tests/e2e/review.spec.ts tests/e2e/timesheet.spec.ts -g "the check card:|one column at every width|narrow: |signature rows:" --project=desktop --workers=6 --repeat-each=10 --trace=off
+    ;;
+  mutant)
+    cp $X/src/client/styles.css $T/styles.css.clean
+    cat $T/mutant.css >> $X/src/client/styles.css
+    (cd $X && npm run build > $T/logs/mutant-build.txt 2>&1; echo "build exit=$?" >> $T/logs/mutant-build.txt)
+    bash $T/run-pw.sh mutant-patched real tests/e2e/review.spec.ts -g "the check card:" --project=desktop --workers=1 --trace=off > $T/logs/mutant-patched.txt 2>&1
+    bash $T/run-pw.sh mutant-orig real tests/e2e/zz-diag5orig.spec.ts -g "the check card:" --project=desktop --workers=1 --trace=off > $T/logs/mutant-orig.txt 2>&1
+    ;;
+  unmutate)
+    cp $T/styles.css.clean $X/src/client/styles.css
+    cmp $T/styles.css.clean $REPO/src/client/styles.css && echo "styles.css byte-identical to the repository" > $T/logs/unmutate.txt
+    (cd $X && npm run build >> $T/logs/unmutate.txt 2>&1; echo "build exit=$?" >> $T/logs/unmutate.txt)
+    ;;
+esac

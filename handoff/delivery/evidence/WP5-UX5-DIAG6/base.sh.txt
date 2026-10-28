@@ -1,0 +1,11 @@
+# Baseline: four ways for each flaky test (single, repeat 1 worker, repeat many workers); the burner run is in burn-runs.sh.
+. <task>/env.sh
+K="tests/e2e/keyboard-access.spec.ts:267"
+D="tests/e2e/day-editor.spec.ts:5304"
+bash $T/run-pw.sh kbd-single real $K --project=desktop --workers=1 > $T/logs/kbd-single.txt 2>&1
+bash $T/run-pw.sh kbd-r30w1 real $K --project=desktop --workers=1 --repeat-each=30 > $T/logs/kbd-r30w1.txt 2>&1
+bash $T/run-pw.sh kbd-r30w2 real $K --project=desktop --workers=2 --repeat-each=30 > $T/logs/kbd-r30w2.txt 2>&1
+bash $T/run-pw.sh esc-single real $D --project=desktop --workers=1 > $T/logs/esc-single.txt 2>&1
+bash $T/run-pw.sh esc-r30w1 real $D --project=desktop --workers=1 --repeat-each=30 > $T/logs/esc-r30w1.txt 2>&1
+bash $T/run-pw.sh esc-r20w6 real $D --project=desktop --workers=6 --repeat-each=20 > $T/logs/esc-r20w6.txt 2>&1
+echo base-done > $T/out/base.done

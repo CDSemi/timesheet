@@ -1,4 +1,4 @@
-import { type MouseEvent, type SubmitEvent, useEffect, useId, useState } from 'react';
+import { type MouseEvent, type SubmitEvent, useId, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { type DayCategory, type DayView, type LeaveKind, ownRequest, type Requester } from '../api.ts';
 import { describeError, isStaleVersion } from './errors.ts';
@@ -52,7 +52,9 @@ export function DayFieldsForm({
   // What the fields held when the day was loaded or last saved; the draft differing from it is an unsaved edit.
   const [baseline, setBaseline] = useState(() => draftKey(dayFieldsDraft(day)));
   const dirty = draftKey(draft) !== baseline;
-  useEffect(() => {
+  // A layout effect: the report reaches the page's unsaved-edit flag in the task of the edit itself, so an Escape that follows the keystroke
+  // at once already finds the flag set (a passive effect hands the report on in a later task, and that Escape would close without asking).
+  useLayoutEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   const [error, setError] = useState<string | null>(null);

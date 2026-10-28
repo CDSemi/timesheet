@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+cd <task>
+. ./env.sh
+echo "master start $(date -u +%H:%M:%SZ)" > logs/master.log
+bash drill.sh > logs/drill-stdout.txt 2>&1
+echo "drill done $(date -u +%H:%M:%SZ)" >> logs/master.log
+bash chain2.sh > logs/chain2-stdout.txt 2>&1
+echo "chain2 done $(date -u +%H:%M:%SZ)" >> logs/master.log
+bash sweep.sh > logs/sweep-stdout.txt 2>&1
+echo "sweep done $(date -u +%H:%M:%SZ)" >> logs/master.log
+bash stress.sh > logs/stress-stdout.txt 2>&1
+echo "stress done $(date -u +%H:%M:%SZ)" >> logs/master.log
+bash http.sh export target > logs/http-target-stdout.txt 2>&1
+echo "http target done $(date -u +%H:%M:%SZ)" >> logs/master.log
+bash mut.sh > logs/mut-stdout.txt 2>&1
+echo "mut done $(date -u +%H:%M:%SZ)" >> logs/master.log
+bash rev.sh > logs/rev-stdout.txt 2>&1
+echo "rev done $(date -u +%H:%M:%SZ)" >> logs/master.log
+bash axe.sh > logs/axe-stdout.txt 2>&1
+echo "axe done $(date -u +%H:%M:%SZ)" >> logs/master.log
+echo master-done > out/master.done

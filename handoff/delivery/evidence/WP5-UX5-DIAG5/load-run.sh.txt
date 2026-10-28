@@ -1,0 +1,9 @@
+# Usage: bash load-run.sh <label> <burn threads> <burn seconds> <instant|real> <playwright args...>
+# Starts a self-stopping CPU burner, then one Playwright run under it, then waits for the burner to end by itself.
+. <task>/env.sh
+L=$1; THREADS=$2; SECS=$3; INSTANT=$4; shift 4
+node.exe $T/burn.mjs $THREADS $SECS > $T/logs/burn-$L.txt 2>&1 &
+BURN=$!
+bash $T/run-pw.sh $L $INSTANT "$@" > $T/logs/$L.txt 2>&1
+wait $BURN
+echo "burner ended exit=$?" >> $T/logs/burn-$L.txt

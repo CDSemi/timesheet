@@ -1,0 +1,13 @@
+# Builds proposed.patch.txt: the staged files against the FIX12 working tree of the repository (3 files), then checks it with git apply --check
+# against a fresh copy of that tree (export-apply: git archive of HEAD plus FIX12's five files, digest bf7ec3f7).
+. <task>/env.sh
+: > $T/out/proposed.patch.txt
+for f in src/client/components/DayFieldsForm.tsx tests/e2e/keyboard-access.spec.ts tests/e2e/day-editor.spec.ts; do
+  diff -u --label "a/$f" --label "b/$f" $REPO/$f $T/stage/$f >> $T/out/proposed.patch.txt
+  echo "diff exit for $f: $?" >> $T/out/patch-diff-exits.txt
+done
+cd $T/export-apply || exit 9
+git apply --check $T/out/proposed.patch.txt > $T/out/patch-check.txt 2>&1
+echo "git apply --check exit=$?" >> $T/out/patch-check.txt
+git apply --stat $T/out/proposed.patch.txt >> $T/out/patch-check.txt 2>&1
+cat $T/out/patch-check.txt

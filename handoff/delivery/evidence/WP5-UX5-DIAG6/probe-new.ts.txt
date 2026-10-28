@@ -1,0 +1,48 @@
+/* DIAG6 probe (scratch only): what the page holds right after the same-task input + Escape of the regression test, and a moment later.
+ * PROBE_THROTTLE = Chromium CPU throttling rate. One JSON line per run goes to DIAG_OUT. */
+import { appendFileSync } from 'node:fs';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+const OUT = process.env.DIAG_OUT ?? '';
+
+test('diag6 new: same-task input and Escape', async ({ page, adminSeed, builtServer, signInPageAs }) => {
+  test.setTimeout(60_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Close Guard', signature: 'none' });
+  const days = await person.api.displayedPeriodFreeWorkdays();
+  const a = days[0] ?? '';
+  await page.setViewportSize({ width: 1440, height: 800 });
+  const rate = Number(process.env.PROBE_THROTTLE ?? '1');
+  if (rate > 1) await (await page.context().newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate });
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  const notes = editor.getByLabel('Notes');
+  await namedDayButton(page, a, 'Edit').click();
+  await expect(editor).toHaveAttribute('data-day-editor', a);
+  await expect(notes).toBeEditable();
+  const result = await notes.evaluate((element) => {
+    const area = element as HTMLTextAreaElement;
+    const snap = () => ({
+      prompt: document.querySelector('[role="alertdialog"]') !== null,
+      editorOpen: document.querySelector('dialog[open]') !== null,
+      active: document.activeElement === null ? '' : document.activeElement.tagName,
+      notes: area.value,
+    });
+    const out: Record<string, unknown> = { before: snap() };
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(area, 'Synthetic unsaved note');
+    area.dispatchEvent(new Event('input', { bubbles: true }));
+    out.afterInput = snap();
+    const key = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    area.dispatchEvent(key);
+    out.afterEscape = snap();
+    out.defaultPrevented = key.defaultPrevented;
+    return out;
+  });
+  await page.waitForTimeout(400);
+  const later = await page.evaluate(
+    "({ prompt: document.querySelector('[role=\"alertdialog\"]') !== null, editorOpen: document.querySelector('dialog[open]') !== null, active: document.activeElement === null ? '' : document.activeElement.tagName })",
+  );
+  if (OUT !== '') appendFileSync(OUT, `${JSON.stringify({ rate, result, later })}\n`);
+});

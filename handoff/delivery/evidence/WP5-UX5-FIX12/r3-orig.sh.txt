@@ -1,0 +1,15 @@
+# Step 2: the R3 mutation passes the ORIGINAL restore.test.ts (the gap) in the scratch export of HEAD.
+. <task>/env.sh
+X=$T/export-head
+cd $X || exit 9
+export NODE_OPTIONS=
+mkdir -p $T/tmp-r3o
+export TEMP="$TW\\tmp-r3o" TMP="$TW\\tmp-r3o" TMPDIR="$T/tmp-r3o"
+cp $X/src/server/ops/restore.ts $T/restore.ts.head
+npx vitest run tests/integration/restore.test.ts > $T/logs/r3-orig-target.txt 2>&1
+echo "orig test, target: exit=$?" > $T/out/r3-orig-exits.txt
+node.exe $TW\\mutate.mjs "$X/src/server/ops/restore.ts" "j.state IN ('queued', 'leased', 'succeeded') LIMIT 1" "j.state IN ('queued', 'succeeded') LIMIT 1" >> $T/out/r3-orig-exits.txt 2>&1
+npx vitest run tests/integration/restore.test.ts > $T/logs/r3-orig-R3.txt 2>&1
+echo "orig test, R3: exit=$?" >> $T/out/r3-orig-exits.txt
+cp $T/restore.ts.head $X/src/server/ops/restore.ts
+cmp $T/restore.ts.head $X/src/server/ops/restore.ts && echo "restore.ts restored byte-equal" >> $T/out/r3-orig-exits.txt

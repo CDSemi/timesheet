@@ -1,0 +1,27 @@
+# Addendum 1: proves the logo.spec.ts wait in the scratch export (patch already applied by fixcheck.sh apply).
+# Usage: bash logocheck.sh <step>
+#   burner  : the six wordmark sweeps under a self-stopping 32-thread burner, 6 workers, no delay
+#   burner90: the same with React's media notification delayed 90 ms
+#   mutant  : an element 8px wider than the window at 320px (share bar); the shared-view sweep must still fail; then unmutate
+. <task>/env.sh
+X=$T/export
+case "$1" in
+  burner)
+    unset DIAG_MQ_DELAY
+    bash $T/load-run.sh logo-burner 32 240 real tests/e2e/logo.spec.ts -g "the wordmark shows whenever|Shared with me|shared view" --project=desktop --workers=6 --trace=off
+    ;;
+  burner90)
+    export DIAG_MQ_DELAY=90
+    bash $T/load-run.sh logo-burner90 32 240 real tests/e2e/logo.spec.ts -g "the wordmark shows whenever|Shared with me|shared view" --project=desktop --workers=6 --trace=off
+    ;;
+  mutant)
+    cp $X/src/client/styles.css $T/styles.css.clean
+    cat $T/mutant2.css >> $X/src/client/styles.css
+    (cd $X && npm run build > $T/logs/mutant2-build.txt 2>&1; echo "build exit=$?" >> $T/logs/mutant2-build.txt)
+    unset DIAG_MQ_DELAY
+    bash $T/run-pw.sh logo-mutant real tests/e2e/logo.spec.ts -g "shared view" --project=desktop --workers=2 --trace=off > $T/logs/logo-mutant.txt 2>&1
+    cp $T/styles.css.clean $X/src/client/styles.css
+    cmp $T/styles.css.clean $REPO/src/client/styles.css && echo "styles.css byte-identical to the repository" > $T/logs/unmutate2.txt
+    (cd $X && npm run build >> $T/logs/unmutate2.txt 2>&1; echo "build exit=$?" >> $T/logs/unmutate2.txt)
+    ;;
+esac

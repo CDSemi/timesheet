@@ -1,0 +1,20 @@
+// Builds a scratch probe spec: the helper head of review.spec.ts (up to the line before "/* ---- Tests") plus the probe body.
+// The body may contain the marker `//@@TESTNAME:<start of the test title>@@`, replaced by that whole test of the source spec
+// (from its `test('<title>` line to the next line that is exactly `});`).
+// Usage: SPEC_SRC=<spec to read> node gen-probe.mjs <export dir> <probe body file> <out spec name>
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [exportDir, bodyFile, outName] = process.argv.slice(2);
+const lines = readFileSync(process.env.SPEC_SRC ?? join(exportDir, 'tests', 'e2e', 'review.spec.ts'), 'utf8').split(/\r?\n/);
+const testsAt = lines.findIndex((l) => l.startsWith('/* ---- Tests'));
+const head = lines.slice(0, testsAt).join('\n');
+let body = readFileSync(bodyFile, 'utf8');
+body = body.replace(/\/\/@@TESTNAME:(.+?)@@/g, (_all, title) => {
+  const start = lines.findIndex((l) => l.startsWith(`test('${title}`));
+  if (start < 0) throw new Error(`no test starting with "${title}"`);
+  const end = lines.findIndex((l, index) => index > start && l === '});');
+  return lines.slice(start, end + 1).join('\n');
+});
+writeFileSync(join(exportDir, 'tests', 'e2e', outName), `${head}\n\n${body}`);
+console.log(`wrote ${outName} (helper head ${testsAt} lines)`);

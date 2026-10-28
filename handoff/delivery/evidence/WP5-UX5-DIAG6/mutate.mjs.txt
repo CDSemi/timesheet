@@ -1,0 +1,47 @@
+// Applies one named product mutant to the scratch export (exact single replacement, asserted). Usage: node mutate.mjs <name>
+// The scratch export is restored byte-equal afterwards by apply-stage.sh fixed (it copies the staged files over and rebuilds).
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const root = process.argv[3] ?? '.';
+const mutants = {
+  // The Check in button never becomes enabled (the state the focus needs never arrives).
+  kbd_never_enabled: {
+    file: 'src/client/components/ClockPanel.tsx',
+    from: '<button type="button" className="clock-button" onClick={onCheckIn} disabled={running === undefined}>',
+    to: '<button type="button" className="clock-button" onClick={onCheckIn} disabled>',
+  },
+  // The group is not one tab stop in the visual order: the button leaves the tab order.
+  kbd_not_tab_stop: {
+    file: 'src/client/components/ClockPanel.tsx',
+    from: '<button type="button" className="clock-button" onClick={onCheckIn} disabled={running === undefined}>',
+    to: '<button type="button" className="clock-button" tabIndex={-1} onClick={onCheckIn} disabled={running === undefined}>',
+  },
+  // Escape does not close the drawer when typed inside it (the dialog's own key handler; focus is in the Notes in these tests).
+  esc_no_close: {
+    file: 'src/client/DayEditor.tsx',
+    from: '    event.preventDefault();\n    event.stopPropagation();\n    onClose();\n  }',
+    to: '    event.preventDefault();\n    event.stopPropagation();\n  }',
+  },
+  // Escape does not close the drawer when typed on the sheet outside it (the document handler).
+  esc_no_close_doc: {
+    file: 'src/client/DayEditor.tsx',
+    from: "      event.preventDefault();\n      onClose();\n    };\n    document.addEventListener('keydown', closeOnEscape);",
+    to: "      event.preventDefault();\n    };\n    document.addEventListener('keydown', closeOnEscape);",
+  },
+  // The form never reports an unsaved edit.
+  esc_never_dirty: {
+    file: 'src/client/components/DayFieldsForm.tsx',
+    from: 'onDirtyChange?.(dirty);',
+    to: 'onDirtyChange?.(false);',
+  },
+};
+const name = process.argv[2];
+const m = mutants[name];
+if (m === undefined) throw new Error(`unknown mutant ${name}`);
+const path = join(root, m.file);
+const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
+const parts = text.split(m.from);
+if (parts.length !== 2) throw new Error(`mutant ${name}: expected exactly 1 match in ${m.file}, found ${parts.length - 1}`);
+writeFileSync(path, parts.join(m.to));
+console.log(`mutant ${name} applied to ${m.file}`);

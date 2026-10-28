@@ -704,6 +704,26 @@ export async function statusInPage(page: Page, method: string, path: string, bod
   return page.evaluate<number>(`fetch(${JSON.stringify(path)}, ${JSON.stringify(init)}).then((response) => response.status)`);
 }
 
+/* ---- A window width the page has followed ---------------------------------------- */
+
+/**
+ * After `setViewportSize` the CSS follows the new width at once, but React follows the media queries one rendering update later
+ * (`useMedia`): below 768px the check-in group mounts in the top bar of the person's own screens and moves the page by 8px, and below
+ * 480px the week sheet swaps its 7-column grid (865px wide) for the 4-column table. A read between the two sees the old and the new
+ * layout at once, so wait for the DOM that this width asks for before measuring (the person's own timesheet and the review; a shared
+ * view has no check-in group, so it waits with `expectSheetAt` alone).
+ */
+export async function expectLayoutAt(page: Page, width: number): Promise<void> {
+  await expect.poll(() => page.evaluate<number>('window.innerWidth'), { message: `the window is ${width}px wide` }).toBe(width);
+  await expect(page.locator('.bar-clock'), `${width}px: the check-in group is in the top bar below 768px only`).toHaveCount(width < 768 ? 1 : 0);
+  await expectSheetAt(page, width);
+}
+
+/** The week sheet has followed the 480px query: the 4-column phone table below it, the 7-column grid (865px wide) from it. */
+export async function expectSheetAt(page: Page, width: number): Promise<void> {
+  await expect(page.locator('[data-paper] [data-sheet="phone"]'), `${width}px: the week sheet is the phone table below 480px only`).toHaveCount(width < 480 ? 1 : 0);
+}
+
 /* ---- The account area of the shell ---------------------------------------------- */
 
 /**

@@ -1,0 +1,22 @@
+# Step 4d: repository checks, one after another, in the repository: lint, typecheck, build (with the dist/ comparison against the FIX12 build
+# of <task>/export-orig), verify (smoke port 50820), git diff --check. NODE_OPTIONS=--trace-deprecation so a deprecation warning would be traced.
+. /d/.claude-tmp/timesheet/WP5-UX5-FIX13/env.sh
+export NODE_OPTIONS=--trace-deprecation
+cd $REPO || exit 9
+O=$T/out/repocheck-exits.txt
+: > $O
+npm run lint > $T/logs/repo-lint.txt 2>&1; echo "lint exit=$?" >> $O
+npm run typecheck > $T/logs/repo-typecheck.txt 2>&1; echo "typecheck exit=$?" >> $O
+npm run build > $T/logs/repo-build.txt 2>&1; echo "build exit=$?" >> $O
+hashes() { (cd $1/dist && find . -type f | LC_ALL=C sort | while IFS= read -r f; do printf '%s %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; done); }
+hashes $T/export-orig > $T/out/dist-hashes-fix12.txt
+hashes $REPO > $T/out/dist-hashes-fix13.txt
+diff $T/out/dist-hashes-fix12.txt $T/out/dist-hashes-fix13.txt > $T/out/dist-compare.txt 2>&1; echo "diff exit=$? (1 = differences listed)" >> $T/out/dist-compare.txt
+echo "dist/server hash lines differing: $(diff <(grep ' ./server/' $T/out/dist-hashes-fix12.txt) <(grep ' ./server/' $T/out/dist-hashes-fix13.txt) | grep -c '^[<>]')" >> $T/out/dist-compare.txt
+echo "dist/domain hash lines differing: $(diff <(grep ' ./domain/' $T/out/dist-hashes-fix12.txt) <(grep ' ./domain/' $T/out/dist-hashes-fix13.txt) | grep -c '^[<>]')" >> $T/out/dist-compare.txt
+mkdir -p $T/tmp-verify
+(export NODE_OPTIONS=--trace-deprecation TEMP="$TW\\tmp-verify" TMP="$TW\\tmp-verify" TMPDIR="$T/tmp-verify"; npm run verify > $T/logs/repo-verify.txt 2>&1; echo "verify exit=$?" >> $O)
+git diff --check > $T/out/diff-check.txt 2>&1; echo "git diff --check exit=$?" >> $O
+git diff --check -- src tests >> $T/out/diff-check.txt 2>&1
+grep -ciE "deprecat" $T/logs/repo-lint.txt $T/logs/repo-typecheck.txt $T/logs/repo-build.txt $T/logs/repo-verify.txt $T/logs/npm-test.txt >> $T/out/deprecation-count.txt 2>&1
+echo repocheck-done > $T/out/repocheck.done

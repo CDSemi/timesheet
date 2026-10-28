@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# FIX11 mutants, one at a time, in the scratch copy export-mut (a copy of the clean export). Each is restored byte-equal from the clean export.
+source <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+X=$T/export-mut
+C=$T/export
+cd $X || exit 9
+rm -f $T/logs/mut-exits.txt
+restore() {
+  for f in "$@"; do
+    cp "$C/$f" "$X/$f"
+    if cmp -s "$C/$f" "$X/$f"; then echo "restored byte-identical: $f" >> $T/logs/mut-exits.txt; else echo "DIFFERENT AFTER RESTORE: $f" >> $T/logs/mut-exits.txt; fi
+  done
+}
+apply() { # file old new
+  node.exe $TW\\mutate.mjs "$X/$1" "$2" "$3" >> $T/logs/mut-exits.txt 2>&1 || echo "MUTATE FAILED $1" >> $T/logs/mut-exits.txt
+}
+int() { # label file...
+  label=$1; shift
+  mkdir -p $T/tmp-$label
+  (export TEMP="$TW\\tmp-$label" TMP="$TW\\tmp-$label" TMPDIR="$T/tmp-$label"; cd $X; npx vitest run "$@" > $T/logs/mut-$label.txt 2>&1; echo "exit=$?" >> $T/logs/mut-$label.txt)
+  echo "$label exit $(grep '^exit=' $T/logs/mut-$label.txt)" >> $T/logs/mut-exits.txt
+}
+e2e() { # label grep
+  label=$1; pattern=$2
+  mkdir -p $T/tmp-$label $T/pw-mut-$label
+  (export TEMP="$TW\\tmp-$label" TMP="$TW\\tmp-$label" TMPDIR="$T/tmp-$label"; cd $X; npm run build > $T/logs/mut-$label-build.txt 2>&1; echo "build exit=$?" >> $T/logs/mut-$label-build.txt
+   node.exe node_modules/@playwright/test/cli.js test tests/e2e/review.spec.ts --project=desktop --output "$TW\\pw-mut-$label" -g "$pattern" > $T/logs/mut-$label.txt 2>&1; echo "exit=$?" >> $T/logs/mut-$label.txt)
+  echo "$label $(grep '^exit=' $T/logs/mut-$label.txt)" >> $T/logs/mut-exits.txt
+}
+
+# Controls first: the three integration files unmutated, in the scratch copy.
+int control tests/integration/sends.test.ts tests/integration/pdf-render.test.ts tests/integration/restore.test.ts
+
+# G2: a leased send job no longer counts as waiting
+apply src/server/services/deliveries.ts "j.state IN ('queued', 'leased') AND target.id = ?" "j.state IN ('queued') AND target.id = ?"
+int G2 tests/integration/sends.test.ts
+restore src/server/services/deliveries.ts
+
+# P4: the block of the holiday label and the leave line is sized without the leave line
+apply src/server/pdf/timesheetPdf.ts "sub.reduce((sum, line) => sum + line.size * 1.2, 0)" "sub.slice(0, fitted.lines.length).reduce((sum, line) => sum + line.size * 1.2, 0)"
+int P4 tests/integration/pdf-render.test.ts
+restore src/server/pdf/timesheetPdf.ts
+
+# R2: a succeeded later send no longer blocks the release (restore.ts)
+apply src/server/ops/restore.ts "j.state IN ('queued', 'leased', 'succeeded') LIMIT 1" "j.state IN ('queued', 'leased') LIMIT 1"
+int R2 tests/integration/restore.test.ts
+restore src/server/ops/restore.ts
+
+# R3: a leased later send no longer blocks the release (restore.ts)
+apply src/server/ops/restore.ts "j.state IN ('queued', 'leased', 'succeeded') LIMIT 1" "j.state IN ('queued', 'succeeded') LIMIT 1"
+int R3 tests/integration/restore.test.ts
+restore src/server/ops/restore.ts
+
+# MA1: the empty content block of an unsigned line takes room again
+apply src/client/styles.css $'.rsig-content:empty {\n  display: none;\n}' $'.rsig-content:empty {\n  display: flex;\n}'
+e2e MA1 "signature rows: the PDF block insets"
+restore src/client/styles.css
+
+# MA8a: the ring is invisible
+apply src/client/styles.css $'.sheet-week-ring:has(> .sheet-week:focus-visible)::after {\n    box-shadow: var(--focus-ring-inset);' $'.sheet-week-ring:has(> .sheet-week:focus-visible)::after {\n    box-shadow: none;'
+e2e MA8a "shows the shared focus ring on all four edges"
+restore src/client/styles.css
+
+# MA8b: the ring layer lies below the day columns
+apply src/client/styles.css $'  inset: 0;\n  z-index: 1;\n  border-radius: var(--radius-sheet);' $'  inset: 0;\n  z-index: -1;\n  border-radius: var(--radius-sheet);'
+e2e MA8b "shows the shared focus ring on all four edges"
+restore src/client/styles.css
+
+# MA8c: the wrapper is not isolated, the layer joins the page stacking (z-index 1 over the shell)? no: remove the wrapper element only
+apply src/client/components/TimesheetSheet.tsx "return review ? <div className=\"sheet-week-ring\">{sheetWeek}</div> : sheetWeek;" "return sheetWeek;"
+e2e MA8c "shows the shared focus ring on all four edges"
+restore src/client/components/TimesheetSheet.tsx
+
+# MA9: taking focus on the card itself reveals (scrolls) the card
+apply src/client/components/TimesheetSheet.tsx "!(event.target instanceof Element) || event.target === card) return;" "!(event.target instanceof Element)) return;"
+e2e MA9 "shows the shared focus ring on all four edges"
+restore src/client/components/TimesheetSheet.tsx
+
+# Rebuild the restored client so export-mut equals the clean export again
+(cd $X; npm run build > $T/logs/mut-final-build.txt 2>&1; echo "final build exit=$?" >> $T/logs/mut-exits.txt)
+echo mut-done > $T/out/mut.done

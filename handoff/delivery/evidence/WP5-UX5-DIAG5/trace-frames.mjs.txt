@@ -1,0 +1,29 @@
+// Lists screencast frames and frame-snapshot times relative to the first action. Usage: node trace-frames.mjs <trace dir>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const events = [];
+for (const f of ['test.trace', '1-trace.trace']) {
+  let text = '';
+  try { text = readFileSync(join(dir, f), 'utf8'); } catch { continue; }
+  for (const line of text.split('\n')) {
+    if (line === '') continue;
+    try { events.push({ file: f, ...JSON.parse(line) }); } catch { /* skip */ }
+  }
+}
+const befores = events.filter((e) => e.type === 'before');
+const t0 = Math.min(...befores.map((b) => b.startTime));
+console.log(`t0 (monotonic ms) = ${t0}`);
+for (const e of events) {
+  if (e.type === 'screencast-frame') console.log(`screencast ${Math.round(e.timestamp - t0)} ms ${e.width}x${e.height} ${e.sha1}`);
+}
+for (const e of events) {
+  if (e.type === 'frame-snapshot') {
+    const s = e.snapshot;
+    console.log(`snapshot ${s.snapshotName ?? ''} t=${Math.round((s.timestamp ?? 0) - t0)} ms viewport=${JSON.stringify(s.viewport)} callId=${s.callId}`);
+  }
+}
+for (const e of events) {
+  if (e.type === 'event' || e.type === 'error' || e.type === 'console') console.log(`${e.type} ${JSON.stringify(e).slice(0, 300)}`);
+}

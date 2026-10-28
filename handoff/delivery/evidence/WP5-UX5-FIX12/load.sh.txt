@@ -1,0 +1,13 @@
+# Usage: bash load.sh <label> <burn threads> <burn seconds> <playwright args...>   (real clock, working-tree export)
+# Starts the self-stopping CPU burner (burn.mjs: worker threads that spin to a fixed deadline and exit), one Playwright run under it,
+# then waits for the burner to end by itself.  load-all.sh calls it twice (32 threads, 330 s):
+#   load-patched: review.spec.ts + timesheet.spec.ts -g "the check card:|one column at every width|narrow: |signature rows:" --project=desktop --workers=6 --repeat-each=8
+#   load-logo:    logo.spec.ts -g "wordmark shows whenever|Shared with me|shared view" --project=desktop --workers=6
+. <task>/env.sh
+export X=$T/export
+L=$1; THREADS=$2; SECS=$3; shift 3
+node.exe $TW\\burn.mjs $THREADS $SECS > $T/logs/burn-$L.txt 2>&1 &
+BURN=$!
+bash $T/run-pw.sh $L real "$@" > $T/logs/$L.txt 2>&1
+wait $BURN
+echo "burner ended exit=$?" >> $T/logs/burn-$L.txt

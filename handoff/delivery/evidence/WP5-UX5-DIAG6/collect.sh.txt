@@ -1,0 +1,27 @@
+# Copies the task outputs into the evidence folder, masked (LF text only; probe scripts as *.sh.txt / *.mjs.txt / *.ts.txt).
+. <task>/env.sh
+mkdir -p $E
+rm -f $T/tmp/mask-last.txt
+m() { node.exe "$TW\\mask.mjs" "$(cygpath -w "$1")" "$(cygpath -w "$2")" >> $T/tmp/mask-last.txt 2>&1; }
+cd $T/out
+for f in *.txt; do
+  case "$f" in dx-*|proposed.patch.txt) continue ;; esac
+  [ -f "$f" ] && m "$T/out/$f" "$E/$f"
+done
+[ -f $T/out/proposed.patch.txt ] && m $T/out/proposed.patch.txt $E/proposed.patch.txt
+for f in $T/out/diag-*.jsonl; do
+  [ -f "$f" ] && m "$f" "$E/$(basename $f .jsonl)-jsonl.txt"
+done
+cd $T/logs
+for f in *.txt; do
+  case "$f" in ci-*) continue ;; esac
+  [ -f "$f" ] && m "$T/logs/$f" "$E/log-$f"
+done
+cd $T
+for s in env.sh census.sh load-census.sh setup.sh build-digest.sh run-pw.sh loadrun.sh base.sh burn-runs.sh probes.sh phase2.sh phase3.sh gap.sh fixproof.sh apply-stage.sh mkvariants.sh mutants.sh full.sh sweep.sh; do [ -f "$s" ] && m "$T/$s" "$E/$s.txt"; done
+for s in mask.mjs analyze.mjs showrun.mjs mutate.mjs burn.mjs shiftclock.mjs probe-now.mjs; do [ -f "$s" ] && m "$T/$s" "$E/$s.txt"; done
+for s in probe-kbd.ts.txt probe-esc.ts.txt delay-snippet.ts.txt throttle-snippet.ts.txt; do [ -f "$s" ] && m "$T/$s" "$E/$s"; done
+ls $E | wc -l
+grep -rhoE "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+" $E --include=*.txt | sort -u > $T/tmp/emails-found.txt
+ls $E | grep -i signature > $T/tmp/signature-names.txt
+echo collect-done

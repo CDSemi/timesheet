@@ -1,0 +1,26 @@
+# Phase 3c: re-runs that needed the final (typed arrow) text of the new test, the probe of the same-task dispatch, and the fixed tests on the ORIGINAL product.
+. <task>/env.sh
+GE="Escape and the Close button: with unsaved edits"
+GN="Escape dispatched in the same task"
+run() { L=$1; shift; bash $T/run-pw.sh $L real "$@" --trace=off > $T/logs/$L.txt 2>&1; }
+probe() { # label, product name: runs probe-new at throttle 1, 4, 10 (3 runs each)
+  cp $T/probe-new.ts.txt $T/export/tests/e2e/probe-new.spec.ts
+  for TH in 1 4 10; do
+    rm -f $T/out/diag-$1-t$TH.jsonl
+    PROBE_THROTTLE=$TH DIAG_OUT="$TW\\out\\diag-$1-t$TH.jsonl" run $1-t$TH tests/e2e/probe-new.spec.ts --project=desktop --workers=1 --repeat-each=3
+  done
+}
+bash $T/apply-stage.sh fixed > $T/out/apply-fixed3.txt 2>&1
+bash $T/mkvariants.sh > $T/logs/mkvariants3.txt 2>&1
+PROBE_THROTTLE=4 run esc-dly-fixed2 tests/e2e/dly-esc-fixed.spec.ts -g "$GE|$GN" --project=desktop --workers=6 --repeat-each=10
+probe probe-new-fixed
+bash $T/apply-stage.sh prodorig > $T/out/apply-prodorig2.txt 2>&1
+run new-prodorig2 tests/e2e/day-editor.spec.ts -g "$GN" --workers=6 --repeat-each=5
+probe probe-new-prodorig
+bash $T/apply-stage.sh fixed > $T/out/apply-fixed4.txt 2>&1
+cd $T/export || exit 9
+find dist -type f | LC_ALL=C sort > $T/out/dist-files-fixed2.txt
+: > $T/out/dist-hashes-fixed2.txt
+while IFS= read -r f; do printf '%s %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f" >> $T/out/dist-hashes-fixed2.txt; done < $T/out/dist-files-fixed2.txt
+cmp $T/out/dist-hashes-fixed.txt $T/out/dist-hashes-fixed2.txt > $T/out/dist-recheck.txt 2>&1 && echo "dist hashes of the rebuilt fixed export equal the phase 3b build" >> $T/out/dist-recheck.txt
+echo phase3c-done > $T/out/phase3c.done

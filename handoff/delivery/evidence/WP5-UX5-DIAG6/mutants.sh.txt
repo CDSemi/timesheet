@@ -1,0 +1,29 @@
+# Mutants against the FIXED tests (scratch export only). Each mutant is applied to the staged product, the client is rebuilt, the named tests run,
+# and the export is restored (apply-stage.sh fixed) and compared byte-equal with the staged files afterwards.
+. <task>/env.sh
+GK="WP5-UX3-T04: the check in/out group"
+GE="Escape and the Close button: with unsaved edits"
+GN="Escape dispatched in the same task"
+KBD=tests/e2e/keyboard-access.spec.ts
+DED=tests/e2e/day-editor.spec.ts
+run() { L=$1; shift; bash $T/run-pw.sh $L real "$@" --trace=off > $T/logs/$L.txt 2>&1; }
+: > $T/out/mutant-exits.txt
+mut() { # name, then "label|spec|grep" triples are run by the caller
+  bash $T/apply-stage.sh fixed >> $T/out/mutant-exits.txt 2>&1
+  (cd $T/export && node.exe $T/mutate.mjs $1 . >> $T/out/mutant-exits.txt 2>&1)
+  (cd $T/export && npm run build:client > $T/logs/build-client-mut-$1.txt 2>&1; echo "build:client $1 exit=$?" >> $T/out/mutant-exits.txt)
+}
+mut kbd_never_enabled
+run mut-kbd_never_enabled $KBD -g "$GK" --project=desktop --workers=1
+mut kbd_not_tab_stop
+run mut-kbd_not_tab_stop $KBD -g "$GK" --project=desktop --workers=1
+mut esc_no_close
+run mut-esc_no_close $DED -g "$GE|$GN" --project=desktop --workers=2
+mut esc_never_dirty
+run mut-esc_never_dirty $DED -g "$GE|$GN" --project=desktop --workers=2
+bash $T/apply-stage.sh fixed >> $T/out/mutant-exits.txt 2>&1
+for f in tests/e2e/keyboard-access.spec.ts tests/e2e/day-editor.spec.ts src/client/DayEditor.tsx src/client/components/DayFieldsForm.tsx; do
+  cmp $T/export/$f $T/stage/$f && echo "restored byte-equal: $f" >> $T/out/mutant-exits.txt
+done
+cmp $T/export/src/client/components/ClockPanel.tsx $T/orig/src/client/components/ClockPanel.tsx && echo "restored byte-equal: src/client/components/ClockPanel.tsx" >> $T/out/mutant-exits.txt
+echo mutants-done > $T/out/mutants.done

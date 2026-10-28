@@ -1,0 +1,14 @@
+# How long does the unsaved-edit flag lag behind a keystroke? The probe waits GAP ms between the Notes keystroke and the Escape.
+# Usage: PFX=orig|fixed bash gap.sh   (PFX only names the logs; apply-stage.sh decides which product is built). THROTTLE = Chromium CPU throttling rate.
+. <task>/env.sh
+PFX=${PFX:-orig}
+cp $T/probe-esc.ts.txt $T/export/tests/e2e/probe-esc.spec.ts
+for TH in 1 4 10; do
+  for G in 0 15 30 60 120; do
+    L=gap-$PFX-t$TH-g$G
+    export DIAG_OUT="$TW\\out\\diag-$L.jsonl"
+    rm -f $T/out/diag-$L.jsonl
+    PROBE_MODE=$PFX PROBE_THROTTLE=$TH PROBE_GAP=$G bash $T/run-pw.sh $L real tests/e2e/probe-esc.spec.ts --project=desktop --workers=6 --repeat-each=10 --trace=off > $T/logs/$L.txt 2>&1
+  done
+done
+echo gap-done > $T/out/gap-$PFX.done

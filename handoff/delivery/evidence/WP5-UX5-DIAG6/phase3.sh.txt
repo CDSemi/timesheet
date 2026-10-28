@@ -1,0 +1,15 @@
+# Phase 3: the proposed fixes in the scratch export. Apply, prove (repeat, burner, throttle model, flag-lag matrix), the fixed tests on the original product, mutants.
+. <task>/env.sh
+GE="Escape and the Close button: with unsaved edits"
+GN="Escape dispatched in the same task"
+run() { L=$1; shift; bash $T/run-pw.sh $L real "$@" --trace=off > $T/logs/$L.txt 2>&1; }
+bash $T/apply-stage.sh fixed > $T/out/apply-fixed.txt 2>&1
+bash $T/fixproof.sh
+bash $T/mkvariants.sh > $T/logs/mkvariants2.txt 2>&1
+PROBE_THROTTLE=4 run esc-dly-fixed tests/e2e/dly-esc-fixed.spec.ts -g "$GE|$GN" --project=desktop --workers=6 --repeat-each=10
+PFX=fixed bash $T/gap.sh
+# the staged tests on the ORIGINAL product: the new test must fail (it is the regression test of the product fix)
+bash $T/apply-stage.sh prodorig > $T/out/apply-prodorig.txt 2>&1
+run new-prodorig tests/e2e/day-editor.spec.ts -g "$GN" --workers=6 --repeat-each=5
+bash $T/mutants.sh
+echo phase3-done > $T/out/phase3.done

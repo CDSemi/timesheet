@@ -1,0 +1,15 @@
+# Summarises the census logs: per project the Playwright counts, then every test that failed at least once (title with file:line, count of failed repeats, first error line).
+. <task>/env.sh
+{
+  for P in desktop mobile; do
+    f=$T/logs/census-$P.txt
+    echo "### census-$P (--repeat-each=3 --workers=6, real clock)"
+    grep -E "^== |^process clock|^\s+[0-9]+ (failed|flaky|passed|skipped|did not run)|^exit=" "$f"
+    echo "failed repeats (x lines of the list reporter), by test:"
+    grep -E "^\s+x\s+[0-9]+ \[" "$f" | sed -E 's/^\s+x\s+[0-9]+ //; s/ \([0-9.]+m?s\)$//' | cut -c1-260 | LC_ALL=C sort | uniq -c
+    echo "error lines of the failure blocks (count, text):"
+    grep -E "^\s+Error: |^\s+Expected: |^\s+Received: |^\s+Timeout: " "$f" | cut -c1-200 | LC_ALL=C sort | uniq -c | sort -rn > $T/tmp/census-errors-$P.txt
+    awk 'NR<=24' $T/tmp/census-errors-$P.txt
+  done
+} > $T/out/census-summary.txt 2>&1
+cat $T/out/census-summary.txt

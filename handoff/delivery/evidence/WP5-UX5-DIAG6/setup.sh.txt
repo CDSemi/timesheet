@@ -1,0 +1,17 @@
+# Scratch export of the FIX12 working tree: git archive of HEAD, the five FIX12 files copied over, own npm ci.
+. <task>/env.sh
+set -x
+cd $REPO || exit 9
+git rev-parse HEAD > $T/out/head.txt
+mkdir -p $T/export $T/export-head
+git archive HEAD | tar -x -C $T/export
+git archive HEAD | tar -x -C $T/export-head
+for f in tests/e2e/fixtures.ts tests/e2e/logo.spec.ts tests/e2e/review.spec.ts tests/e2e/timesheet.spec.ts tests/integration/restore.test.ts; do
+  cp $REPO/$f $T/export/$f
+done
+for X in export export-head; do
+  cd $T/$X || exit 8
+  npm ci > $T/logs/ci-$X.txt 2>&1
+  echo "npm ci $X exit=$?" >> $T/out/setup.txt
+done
+echo setup-done >> $T/out/setup.txt
