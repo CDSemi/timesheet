@@ -1,0 +1,88 @@
+import { rangeKind, rangeLadder, rangeSpokenText, rangeText } from '../../src/client/components/periodBarModel.ts';
+import { expect, test } from './fixtures.ts';
+import { rangeState } from './periodCard.ts';
+
+/*
+ * WP5-UX5-DIAG8 probe (scratch, never proposed): a forced interleaving of the ladder test of timesheet.spec.ts:2596. The test's own loops,
+ * its count of 14 days and its check() are unchanged. Two things are added. (1) The answer for the period that spans two years is held back
+ * until the step that clicked for it has made the test's own read, then it is released. (2) Every other step waits until its period is drawn
+ * before it reads (as the natural runs do in five of six steps). So the order "stale read at the two-year period, fresh read at the next one"
+ * happens at every pass, and the test must fail every time, with the production message.
+ */
+test.skip(({ isMobile }) => isMobile, 'desktop only, as the original');
+
+test('probe: the ladder test with the two-year period held back until the step that clicked for it has read', async ({ page, signInThroughUi }) => {
+  test.setTimeout(240_000);
+  let answers = 0;
+  let heldNow = false;
+  let heldTotal = 0;
+  let release: () => void = () => undefined;
+  await page.route('**/api/timesheets/*', async (route) => {
+    const response = await route.fetch();
+    let crosses = false;
+    try {
+      const body = (await response.json()) as { period: { period_start: string; period_end: string } };
+      crosses = body.period.period_start.slice(0, 4) !== body.period.period_end.slice(0, 4);
+    } catch {
+      // not a period answer
+    }
+    if (crosses) {
+      heldNow = true;
+      heldTotal += 1;
+    }
+    answers += 1; // counted when the route has decided, before it holds the answer back
+    if (crosses) {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+        setTimeout(resolve, 10_000);
+      });
+    }
+    await route.fulfill({ response });
+  });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const seen = new Set<string>();
+  const check = async () => {
+    const kind = await page.locator('.period-name').getAttribute('data-range-kind');
+    if (kind === null || seen.has(kind)) return;
+    seen.add(kind);
+    for (const width of [320, 360, 390, 430]) {
+      await page.setViewportSize({ width, height: 900 });
+      const state = await rangeState(page);
+      const dates = /^(\d{2})\/(\d{2})\/(\d{4}) to (\d{2})\/(\d{2})\/(\d{4})$/.exec(state.spoken);
+      expect(dates, `${state.kind} at ${width}px: the accessible text is the full dates with "to" (${state.spoken})`).not.toBeNull();
+      const [, startMonth, startDay, startYear, endMonth, endDay, endYear] = dates ?? [];
+      const start = `${startYear}-${startMonth}-${startDay}`;
+      const end = `${endYear}-${endMonth}-${endDay}`;
+      expect(state.spoken).toBe(rangeSpokenText(start, end));
+      expect(state.kind).toBe(rangeKind(start, end));
+      const ladder = rangeLadder(start, end);
+      const fitting = ladder.find((form) => (state.widths[form] ?? Number.POSITIVE_INFINITY) <= state.box + 0.5) ?? ladder[ladder.length - 1] ?? 'full';
+      expect(state.text, `${state.kind} at ${width}px: the form that shows (box ${state.box.toFixed(1)}px, forms ${JSON.stringify(state.widths)})`).toBe(rangeText(start, end, fitting));
+    }
+  };
+  const due = page.locator('[data-period-due]');
+  const stepWithHold = async (name: 'Next period' | 'Previous period') => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    const before = await due.getAttribute('data-period-due');
+    const answered = answers;
+    heldNow = false;
+    await page.getByRole('button', { name }).click();
+    // Wait until the route has the answer for this click (held or not), so that the interleaving does not depend on the speed of the host.
+    await expect.poll(() => heldNow || answers > answered).toBe(true);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    if (heldNow) {
+      await check(); // the test's own read, while the old period is still drawn
+      release();
+      await expect(due).not.toHaveAttribute('data-period-due', before ?? '');
+    } else {
+      await expect(due).not.toHaveAttribute('data-period-due', before ?? '');
+      await check();
+    }
+  };
+  await check();
+  for (let step = 0; step < 14 && seen.size < 3; step += 1) await stepWithHold('Next period');
+  for (let step = 0; step < 28 && seen.size < 3; step += 1) await stepWithHold('Previous period');
+  expect(heldTotal, 'the two-year period was held back at least once').toBeGreaterThan(0);
+  expect([...seen].sort(), 'a one-month, a two-month and a two-year range were checked').toEqual(['cross-month', 'cross-year', 'same-month']);
+});

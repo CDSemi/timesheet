@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# DIAG5 delay suite again (the first attempt used a malformed scratch fixture and ran no test). Scratch fixture, restored byte-equal afterwards.
+source /d/.claude-tmp/timesheet/WP5-UX5-REGATE8/env.sh
+X=$T/export-mut
+C=$T/export
+OUT=$T/logs/models2-exits.txt
+: > $OUT
+cd $X || exit 9
+pwm() { label=$1; shift; SHIFT_EXPORT=$X bash $T/run-shift.sh "model-$label" real "$@" --trace=off > $T/logs/model-$label.txt 2>&1; echo "$label: $(grep '^exit=' $T/logs/model-$label.txt)" >> $OUT; node.exe $TW\\counts.mjs $TW\\logs\\model-$label.txt >> $OUT 2>&1; }
+cp $T/fixtures.diag.ts $X/tests/e2e/fixtures.ts
+FILES="tests/e2e/controls.spec.ts tests/e2e/admin-status.spec.ts tests/e2e/classic-scrollbar.spec.ts tests/e2e/day-editor.spec.ts tests/e2e/logo.spec.ts tests/e2e/hover.spec.ts tests/e2e/pdf-visual.spec.ts tests/e2e/keyboard-access.spec.ts tests/e2e/review.spec.ts tests/e2e/settings-routes.spec.ts tests/e2e/shell.spec.ts tests/e2e/surfaces.spec.ts tests/e2e/theme.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/today.spec.ts"
+for D in 45 90; do
+  export DIAG_MQ_DELAY=$D
+  pwm delay2-d$D $FILES --project=desktop --workers=6
+done
+unset DIAG_MQ_DELAY
+cp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts
+cmp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts && echo "fixtures.ts restored byte-equal" >> $OUT
+echo models2-done > $T/out/models2.done

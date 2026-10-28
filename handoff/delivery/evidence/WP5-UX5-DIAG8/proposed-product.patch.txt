@@ -1,0 +1,85 @@
+diff --git a/src/client/App.tsx b/src/client/App.tsx
+index aebf1c5..719954e 100644
+--- a/src/client/App.tsx
++++ b/src/client/App.tsx
+@@ -4,6 +4,7 @@ import { AppShell, useHashRoute } from './components/AppShell.tsx';
+ import { isSettingsRoute } from './components/routeModel.ts';
+ import { SettingsNav } from './components/SettingsNav.tsx';
+ import { shareEndedMessage } from './components/sharingModel.ts';
++import { followThemeOfOtherTabs } from './components/ThemeToggle.tsx';
+ import { HistoryScreen } from './HistoryScreen.tsx';
+ import { OtScreen } from './OtScreen.tsx';
+ import { ProfileScreen } from './ProfileScreen.tsx';
+@@ -22,6 +23,9 @@ export function App() {
+   const [setup, setSetup] = useState<'unknown' | 'open' | 'closed'>('unknown');
+   const [justCreated, setJustCreated] = useState(false);
+ 
++  // A theme chosen in another tab of this browser shows here too, with or without the theme control on screen.
++  useEffect(followThemeOfOtherTabs, []);
++
+   useEffect(() => {
+     api<{ user: User }>('GET', '/api/auth/me')
+       .then((response) => setUser(response.user))
+diff --git a/src/client/components/ThemeToggle.tsx b/src/client/components/ThemeToggle.tsx
+index 200df77..7606717 100644
+--- a/src/client/components/ThemeToggle.tsx
++++ b/src/client/components/ThemeToggle.tsx
+@@ -43,6 +43,18 @@ function chooseTheme(theme: Theme): void {
+   for (const listener of pressListeners) listener();
+ }
+ 
++/**
++ * Keeps this page's `data-theme` in step with the choice another tab stores. The page mounts it once, because the theme control lives in
++ * the account menu and the More panel, which exist only while open: a tab with the menu closed would otherwise never hear the event.
++ */
++export function followThemeOfOtherTabs(): () => void {
++  const onStorage = (event: StorageEvent) => {
++    if (event.key === null || event.key === THEME_KEY) applyChoice();
++  };
++  window.addEventListener('storage', onStorage);
++  return () => window.removeEventListener('storage', onStorage);
++}
++
+ function subscribe(notify: () => void): () => void {
+   const device = window.matchMedia(DARK_QUERY);
+   const onStorage = (event: StorageEvent) => {
+diff --git a/tests/e2e/theme.spec.ts b/tests/e2e/theme.spec.ts
+index e208c92..852fdd1 100644
+--- a/tests/e2e/theme.spec.ts
++++ b/tests/e2e/theme.spec.ts
+@@ -404,6 +404,35 @@ test('a storage event keeps a second tab in step', async ({ page, signInThroughU
+   await second.close();
+ });
+ 
++test('a theme chosen in one tab reaches a second tab whose account menu is closed', async ({ page, signInThroughUi }) => {
++  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
++  await signInThroughUi();
++  const control = await themeControl(page);
++
++  // The second tab is left as it loads: the account menu (desktop) or the More panel (phone) is closed, so no theme control is mounted in it.
++  const second = await page.context().newPage();
++  second.on('pageerror', (error) => {
++    throw error;
++  });
++  await second.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
++  await second.goto('/#/timesheet');
++  await expect(second.getByRole('navigation', { name: 'Main' })).toBeVisible();
++  await expectPainted(second, 'light', false);
++  await expect(second.locator('#account-menu, #more-panel'), 'the second tab has no open menu').toHaveCount(0);
++
++  await page.bringToFront();
++  await control.radio.dark.click();
++  await second.bringToFront();
++  await expectPainted(second, 'dark', true);
++  await expect(second.getByRole('radiogroup', { name: 'Theme' }), 'the second tab followed without a theme control on screen').toHaveCount(0);
++
++  await page.bringToFront();
++  await control.radio.light.click();
++  await second.bringToFront();
++  await expectPainted(second, 'light', true);
++  await second.close();
++});
++
+ /* ---- Keyboard and contrast, light, dark and the manual override both ways ---------------------------- */
+ 
+ const CASES: ReadonlyArray<{ name: string; media: Theme; stored: Theme | null }> = [

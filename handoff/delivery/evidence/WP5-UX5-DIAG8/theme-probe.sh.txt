@@ -1,0 +1,10 @@
+# Usage: bash theme-probe.sh <label> <project> <repeat-each> [extra env as NAME=value ...]
+# The instrumented copy of theme.spec.ts:376 (step times, page-side events of both tabs), 6 workers, the model fixtures installed.
+. <task>/env.sh
+L=$1; P=$2; R=$3; shift 3
+for kv in "$@"; do export "$kv"; done
+cp $T/probe-theme.spec.ts $T/export/tests/e2e/probe-theme.spec.ts
+rm -f $T/export/tests/e2e/probe-ladder.spec.ts $T/export/tests/e2e/probe-ladder-forced.spec.ts
+bash $T/with-model.sh $L tests/e2e/probe-theme.spec.ts --project=$P --repeat-each=$R --workers=6 --trace=off > $T/logs/$L.txt 2>&1
+node $T/counts.mjs $T/logs/$L.txt > $T/out/$L-counts.txt 2>&1
+node $T/analyze-theme.mjs $T/out/diag-$L.jsonl > $T/out/$L-analysis.txt 2>&1

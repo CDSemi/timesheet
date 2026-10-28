@@ -1,0 +1,36 @@
+// Host census from two inline Get-CimInstance samples (Name, ProcessId, ParentProcessId, KernelModeTime, UserModeTime).
+// Usage: node census.mjs <sample1> <sample2> <gap seconds> [watch ids, comma separated]
+// Prints busy cores per process name (CPU time delta / gap), process counts, and whether the watched ids are alive. Names, ids,
+// counts and CPU times only.
+import { readFileSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
+
+const [f1, f2, gapArg, watchArg = ''] = process.argv.slice(2);
+const gap = Number(gapArg);
+const parse = (file) => {
+  const map = new Map();
+  for (const line of readFileSync(file, 'utf8').replace(/\r/g, '').split('\n')) {
+    const m = /^(.+?)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/.exec(line);
+    if (m) map.set(m[2], { name: m[1].trim(), cpu: (Number(m[4]) + Number(m[5])) / 1e7 });
+  }
+  return map;
+};
+const a = parse(f1);
+const b = parse(f2);
+const busy = new Map();
+const counts = new Map();
+for (const [id, p] of b) {
+  counts.set(p.name, (counts.get(p.name) ?? 0) + 1);
+  const q = a.get(id);
+  if (!q || q.name !== p.name || p.name === 'System Idle Process') continue;
+  busy.set(p.name, (busy.get(p.name) ?? 0) + (p.cpu - q.cpu));
+}
+let total = 0;
+console.log(`census gap ${gap}s, processes ${a.size} then ${b.size}, logical cores ${availableParallelism()}`);
+for (const [name, d] of [...busy].sort((x, y) => y[1] - x[1])) {
+  total += d;
+  if (d / gap >= 0.05) console.log(`${name}\tbusy cores ${(d / gap).toFixed(2)}\tcount ${counts.get(name)}`);
+}
+console.log(`TOTAL busy cores ${(total / gap).toFixed(2)}`);
+console.log(`node.exe count ${counts.get('node.exe') ?? 0}, msedge.exe count ${counts.get('msedge.exe') ?? 0}, bash.exe count ${counts.get('bash.exe') ?? 0}`);
+for (const id of watchArg.split(',').filter(Boolean)) console.log(`watched id ${id}: ${b.has(id) ? `alive (${b.get(id).name})` : 'not present'}`);

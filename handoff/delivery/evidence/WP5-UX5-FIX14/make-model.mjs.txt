@@ -1,0 +1,31 @@
+// Usage: node make-model.mjs <fixtures.ts in> <fixtures.ts out>
+// FIX14 scratch only (from DIAG8): adds a `page` fixture that models a notification delay, from environment variables:
+//   DIAG_MQ_DELAY=<ms>          the matchMedia 'change' notification (what useMedia and the theme toggle hear) is delayed (DIAG5/DIAG7 model)
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+const source = readFileSync(input, 'utf8').replace(/\r\n/g, '\n');
+const anchor = '  privateServer: [\n';
+if (source.split(anchor).length !== 2) throw new Error('anchor not unique');
+const model = `  // FIX14 scratch only (model of a delayed media notification).
+  page: async ({ page }, use) => {
+    const delay = Number(process.env.DIAG_MQ_DELAY ?? '0');
+    if (delay > 0) {
+      await page.addInitScript((ms: number) => {
+        const original = window.matchMedia.bind(window);
+        window.matchMedia = (query: string) => {
+          const list = original(query);
+          const add = list.addEventListener.bind(list);
+          list.addEventListener = ((type: string, listener: EventListener, options?: boolean | AddEventListenerOptions) => {
+            if (type === 'change') add(type, ((event: Event) => setTimeout(() => listener(event), ms)) as EventListener, options);
+            else add(type, listener, options);
+          }) as typeof list.addEventListener;
+          return list;
+        };
+      }, delay);
+    }
+    await use(page);
+  },
+`;
+writeFileSync(output, source.replace(anchor, `${model}${anchor}`));
+console.log(`wrote ${output}`);

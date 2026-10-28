@@ -1,0 +1,19 @@
+# Fresh scratch export of the working tree (HEAD archive plus the five owned files as they are in the repository), then npm ci and build.
+. <task>/env.sh
+OUT=$T/out/setup-fix.txt
+: > $OUT
+cd $REPO
+git archive $TARGET | tar -x -C $T/export-fix
+for f in tests/e2e/controls.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/theme.spec.ts src/client/App.tsx src/client/components/ThemeToggle.tsx; do
+  cp $REPO/$f $T/export-fix/$f
+done
+echo "export files: $(cd $T/export-fix && find . -type f | wc -l)" >> $OUT
+cd $T/export-fix
+for f in controls timesheet theme; do cp tests/e2e/$f.spec.ts $T/$f.spec.fixed.ts; done
+node --version >> $OUT
+npm ci > $T/logs/setup-fix-ci.txt 2>&1
+echo "ci exit=$?" >> $OUT
+npm run build > $T/logs/setup-fix-build.txt 2>&1
+echo "build exit=$?" >> $OUT
+for f in $(cd dist && find . -type f | sort); do echo "$(sha256sum dist/$f | cut -d' ' -f1) $f"; done > $T/out/dist-hashes-fix.txt
+echo "dist files: $(wc -l < $T/out/dist-hashes-fix.txt)" >> $OUT

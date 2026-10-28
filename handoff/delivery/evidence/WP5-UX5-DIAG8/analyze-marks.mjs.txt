@@ -1,0 +1,27 @@
+// Usage: node analyze-marks.mjs <marks jsonl> -> per run: the last step reached, the time of it, and the slowest step; then how often each step
+// was the last one reached by a run that did not finish ("A checked light" is the end).
+import { readFileSync } from 'node:fs';
+
+const rows = readFileSync(process.argv[2], 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l));
+const runs = new Map();
+for (const r of rows) {
+  if (!runs.has(r.run)) runs.set(r.run, []);
+  runs.get(r.run).push(r);
+}
+const lastCount = new Map();
+const out = [];
+for (const [run, marks] of runs) {
+  let prev = 0;
+  let slow = { step: '(start)', d: 0 };
+  for (const m of marks) {
+    const d = m.ms - prev;
+    prev = m.ms;
+    if (d > slow.d) slow = { step: m.step, d };
+  }
+  const last = marks[marks.length - 1];
+  const finished = last.step === 'A checked light';
+  if (!finished) lastCount.set(last.step, (lastCount.get(last.step) ?? 0) + 1);
+  out.push(`run ${run} [${last.project}]: ${finished ? 'finished' : `stopped after "${last.step}"`} at ${last.ms} ms; slowest step "${slow.step}" ${slow.d} ms`);
+}
+console.log(out.join('\n'));
+console.log(`runs=${runs.size}; unfinished runs by last step: ${[...lastCount].map(([k, v]) => `${k} x${v}`).join('; ') || 'none'}`);

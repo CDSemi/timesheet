@@ -1,0 +1,32 @@
+// Usage: node latency.mjs <diag jsonl> -> per step: the app's latency (page click event -> the period changes on the page) and the read's
+// latency (page click event -> the step's read ends, Node clock), with the stale/fresh verdict; then quantiles.
+import { readFileSync } from 'node:fs';
+
+const lines = readFileSync(process.argv[2], 'utf8').split('\n').filter((l) => l.trim() !== '');
+const app = [];
+const read = [];
+let stale = 0;
+let fresh = 0;
+for (const line of lines) {
+  const run = JSON.parse(line);
+  const clicks = run.pageLog.filter((e) => String(e.what).startsWith('click'));
+  const changes = run.pageLog.filter((e) => e.due !== null);
+  // run.steps[0] is the start; the i-th click belongs to steps[i]
+  clicks.forEach((c, i) => {
+    const step = run.steps[i + 1];
+    if (step === undefined) return;
+    const change = changes.find((e) => e.t > c.t);
+    if (change === undefined) return;
+    const a = change.t - c.t;
+    const r = step.readEnd - c.t;
+    app.push(a);
+    read.push(r);
+    if (r < a) stale += 1;
+    else fresh += 1;
+  });
+}
+const q = (xs, p) => [...xs].sort((x, y) => x - y)[Math.min(xs.length - 1, Math.floor(xs.length * p))].toFixed(1);
+const show = (name, xs) => console.log(`${name}: n=${xs.length} min=${q(xs, 0)} p25=${q(xs, 0.25)} median=${q(xs, 0.5)} p75=${q(xs, 0.75)} p90=${q(xs, 0.9)} max=${q(xs, 0.999)}`);
+show('app latency (click event -> period changes)', app);
+show('read latency (click event -> read ends)', read);
+console.log(`read before the period changed (stale): ${stale}; after (fresh): ${fresh}`);

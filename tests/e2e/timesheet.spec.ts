@@ -2590,6 +2590,18 @@ test.describe('the period card (U5-09 to U5-13)', () => {
   });
 });
 
+/**
+ * Steps to the next or the previous period and returns once that period is drawn. The click is answered by two reads of the server, and the
+ * old period (14 days too) stays on the page until then, so counting the days is not enough: wait for the new payroll date.
+ */
+async function stepPeriod(page: Page, name: 'Next period' | 'Previous period'): Promise<void> {
+  const due = page.locator('[data-period-due]');
+  const before = await due.getAttribute('data-period-due');
+  await page.getByRole('button', { name }).click();
+  await expect(due, `${name}: the period shown changes`).not.toHaveAttribute('data-period-due', before ?? '');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+}
+
 test.describe('the range ladder (U5-13)', () => {
   test.skip(({ isMobile }) => isMobile, 'The ladder is checked at the widths of the desktop project');
 
@@ -2625,15 +2637,13 @@ test.describe('the range ladder (U5-13)', () => {
     await check();
     for (let step = 0; step < 14 && seen.size < 3; step += 1) {
       await page.setViewportSize({ width: 390, height: 900 });
-      await page.getByRole('button', { name: 'Next period' }).click();
-      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await stepPeriod(page, 'Next period');
       await check();
     }
     // The nearest two-year range can lie behind: go back past the start.
     for (let step = 0; step < 28 && seen.size < 3; step += 1) {
       await page.setViewportSize({ width: 390, height: 900 });
-      await page.getByRole('button', { name: 'Previous period' }).click();
-      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await stepPeriod(page, 'Previous period');
       await check();
     }
     expect([...seen].sort(), 'a one-month, a two-month and a two-year range were checked').toEqual(['cross-month', 'cross-year', 'same-month']);
@@ -2647,8 +2657,7 @@ test.describe('the range ladder (U5-13)', () => {
     await expect(page.locator('[data-day]')).toHaveCount(14);
     await page.setViewportSize({ width: 390, height: 900 });
     for (let step = 0; step < 14 && (await page.locator('.period-name').getAttribute('data-range-kind')) !== 'same-month'; step += 1) {
-      await page.getByRole('button', { name: 'Next period' }).click();
-      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await stepPeriod(page, 'Next period');
     }
     await expect(page.locator('.period-name')).toHaveAttribute('data-range-kind', 'same-month');
     for (const [width, form] of [[130, 'no-years'], [105, 'end-day'], [80, 'tight']] as const) {

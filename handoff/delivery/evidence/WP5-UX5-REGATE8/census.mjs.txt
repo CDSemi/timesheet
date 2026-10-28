@@ -1,0 +1,31 @@
+// Computes busy cores per process name from two inline Get-CimInstance samples. Usage: node census.mjs <s1> <s2> <gapSeconds>
+import { readFileSync } from 'node:fs';
+
+const [f1, f2, gapArg] = process.argv.slice(2);
+const gap = Number(gapArg);
+const parse = (file) => {
+  const map = new Map();
+  for (const line of readFileSync(file, 'utf8').replace(/\r/g, '').split('\n')) {
+    const m = /^(.+?)\s+(\d+)\s+\d+\/\d+\/\d+ .*?(?:AM|PM)\s+(\d+)\s+(\d+)\s*$/.exec(line);
+    if (!m) continue;
+    map.set(`${m[2]}`, { name: m[1], cpu: (Number(m[3]) + Number(m[4])) / 1e7 });
+  }
+  return map;
+};
+const a = parse(f1);
+const b = parse(f2);
+const groups = new Map();
+for (const [id, p] of b) {
+  const q = a.get(id);
+  if (!q || q.name !== p.name || p.name === 'System Idle Process') continue;
+  const d = p.cpu - q.cpu;
+  groups.set(p.name, (groups.get(p.name) ?? 0) + d);
+}
+let total = 0;
+const rows = [...groups].sort((x, y) => y[1] - x[1]);
+console.log(`census gap ${gap}s, processes sample1 ${a.size} sample2 ${b.size}, logical cores ${(await import('node:os')).availableParallelism()}`);
+for (const [name, d] of rows) {
+  total += d;
+  if (d / gap >= 0.05) console.log(`${name}\tbusy cores ${(d / gap).toFixed(2)}`);
+}
+console.log(`TOTAL busy cores ${(total / gap).toFixed(2)}`);

@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# FIX12 and FIX13 mutants, one at a time, in the scratch copy export-mut (a copy of the clean export). Each is restored byte-equal.
+source /d/.claude-tmp/timesheet/WP5-UX5-REGATE8/env.sh
+unset DIAG_MQ_DELAY
+X=$T/export-mut
+C=$T/export
+OUT=$T/logs/mut-exits.txt
+: > $OUT
+cd $X || exit 9
+cmp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts && echo "scratch fixtures.ts equals clean export" >> $OUT
+GK="WP5-UX3-T04: the check in/out group"
+GE="Escape and the Close button: with unsaved edits"
+GN="Escape dispatched in the same task"
+RESTORE_FILES="src/client/styles.css src/server/ops/restore.ts src/client/components/DayFieldsForm.tsx src/client/DayEditor.tsx src/client/components/ClockPanel.tsx"
+restore() {
+  for f in $RESTORE_FILES; do cp "$C/$f" "$X/$f"; cmp -s "$C/$f" "$X/$f" || echo "DIFFERENT AFTER RESTORE: $f" >> $OUT; done
+}
+pw() { # label spec grep workers [extra]
+  label=$1; spec=$2; pat=$3; w=$4; shift 4
+  SHIFT_EXPORT=$X bash $T/run-shift.sh "mut-$label" real $spec -g "$pat" --project=desktop --workers=$w --trace=off "$@" > $T/logs/mut-$label.txt 2>&1
+  echo "$label: $(grep '^exit=' $T/logs/mut-$label.txt) failed-lines=$(grep -cE '^\s+x\s+[0-9]+ ' $T/logs/mut-$label.txt)" >> $OUT
+}
+build() { (cd $X; npm run $1 > $T/logs/mut-$2-build.txt 2>&1; echo "$2 $1 exit=$?" >> $OUT); }
+vit() { # label file
+  label=$1; shift
+  mkdir -p $T/tmp-$label
+  (export TEMP="$TW\\tmp-$label" TMP="$TW\\tmp-$label" TMPDIR="$T/tmp-$label"; cd $X; npx vitest run "$@" > $T/logs/mut-$label.txt 2>&1; echo "exit=$?" >> $T/logs/mut-$label.txt)
+  echo "$label vitest $(grep '^exit=' $T/logs/mut-$label.txt)" >> $OUT
+}
+m13() { restore; (cd $X && node.exe $TW\\mutate13.mjs $1 . >> $OUT 2>&1); build build:client $1; }
+
+# Controls on the unmutated scratch copy.
+build build:client control
+pw control-checkcard tests/e2e/review.spec.ts "the check card:" 1
+pw control-newtest tests/e2e/day-editor.spec.ts "$GN" 2
+vit control-restore tests/integration/restore.test.ts
+
+# FIX12 M1: the text 8 px low at 767 px
+cat $T/mutant1.css >> $X/src/client/styles.css
+build build:client m1
+pw m1-checkcard tests/e2e/review.spec.ts "the check card:" 1
+restore
+# FIX12 M2: the share bar 8 px wider at 320 px
+cat $T/mutant2.css >> $X/src/client/styles.css
+build build:client m2
+pw m2-sharedview tests/e2e/logo.spec.ts "shared view" 2
+restore
+# R2 / R3 on restore.ts
+R=src/server/ops/restore.ts
+OLD="j.state IN ('queued', 'leased', 'succeeded') LIMIT 1"
+node.exe $TW\\mutate.mjs "$X/$R" "$OLD" "j.state IN ('queued', 'leased') LIMIT 1" >> $OUT 2>&1
+build build:server r2
+vit R2 tests/integration/restore.test.ts
+restore
+node.exe $TW\\mutate.mjs "$X/$R" "$OLD" "j.state IN ('queued', 'succeeded') LIMIT 1" >> $OUT 2>&1
+build build:server r3
+vit R3 tests/integration/restore.test.ts
+restore
+build build:server restore-server
+
+# FIX13 mutants
+m13 kbd_never_enabled
+pw kbd_never_enabled tests/e2e/keyboard-access.spec.ts "$GK" 1
+m13 kbd_not_tab_stop
+pw kbd_not_tab_stop tests/e2e/keyboard-access.spec.ts "$GK" 1
+m13 esc_no_close
+pw esc_no_close tests/e2e/day-editor.spec.ts "$GE|$GN" 2
+m13 esc_never_dirty
+pw esc_never_dirty tests/e2e/day-editor.spec.ts "$GE|$GN" 2
+m13 esc_use_effect
+pw esc_use_effect tests/e2e/day-editor.spec.ts "$GN" 2 --repeat-each=5
+# DayFieldsForm.tsx of 0f52300 (the change reverted)
+restore
+cp $T/export-prev/src/client/components/DayFieldsForm.tsx $X/src/client/components/DayFieldsForm.tsx
+build build:client revert
+pw revert-newtest tests/e2e/day-editor.spec.ts "$GN" 2 --repeat-each=5
+restore
+build build:client final
+for f in $RESTORE_FILES; do cmp $C/$f $X/$f && echo "restored byte-equal: $f" >> $OUT; done
+echo mut-done > $T/out/mut.done

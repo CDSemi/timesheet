@@ -1,0 +1,17 @@
+# Matrix 1: the UNCHANGED controls.spec.ts:49 test, mobile, at several simulated instants, 1 worker and 6 workers.
+. <task>/env.sh
+cd $T
+OUT=$T/out/matrix1.txt
+G="the title row is 32px above the period card"
+m() { label=$1; inst=$2; shift 2; bash run-shift.sh "m1-$label" "$inst" tests/e2e/controls.spec.ts --project=mobile -g "$G" "$@" --trace=off > logs/m1-$label.txt 2>&1; node counts.mjs logs/m1-$label.txt >> $OUT; }
+: > $OUT
+for W in 1 6; do
+  m real-w$W real --repeat-each=10 --workers=$W
+  m 1026-w$W 2026-10-26T16:00:00Z --repeat-each=10 --workers=$W
+  m 1101-w$W 2026-11-01T08:45:00Z --repeat-each=10 --workers=$W
+  m 0314-w$W 2027-03-14T10:30:00Z --repeat-each=10 --workers=$W
+  m 1105-w$W 2026-11-05T08:45:00Z --repeat-each=10 --workers=$W
+  m 1101pm-w$W 2026-11-01T20:00:00Z --repeat-each=10 --workers=$W
+  m 0308-w$W 2026-03-08T10:30:00Z --repeat-each=10 --workers=$W
+done
+echo matrix1-done >> $OUT

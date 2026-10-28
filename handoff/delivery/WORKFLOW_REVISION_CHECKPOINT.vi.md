@@ -2596,12 +2596,124 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
     deprecation. `dist/server` giống hệt. `dist/client` thay đổi: `index.html` và sáu chunk.
   - e2e đầy đủ theo giờ thật: desktop 468/35/0, mobile 406/97/0.
   - Lượt chạy ở giờ mô phỏng: 0 lỗi.
-- **Đang chạy:** WP5-UX5-FIX13-FREEZE (committer, sonnet), chạy một mình. Task này commit
-  FIX12, FIX13 và các bản ghi trong một lần, rồi push.
-- **Sau đó:** WP5-UX5-REGATE8 đầy đủ, kiểm tra lại độc lập (có cả thay đổi Day editor), audit
-  tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
-- **Tiếp theo:** bản sửa, freeze, gate lại, rồi kiểm tra lại độc lập hai lỗi đã sửa, audit
-  tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
+- **WP5-UX5-FIX13-FREEZE xong.**
+  - Commit bb8d34039b79320e415a0224c0bd02075bd0f76a đã lên main và đã push, fast-forward từ
+    0f52300.
+  - D_PRE bằng digest của HEAD, c1691aed. Đã stage 627 đường dẫn.
+  - Lần dừng đầu: `validate_orchestration.py` báo DIAG5 phụ thuộc vào gate đã trượt.
+    Coordinator đã sửa board (DIAG5 giờ phụ thuộc FIX11-FREEZE), và chính committer đó
+    làm tiếp.
+  - Hai file evidence chứa dòng lệnh các công cụ riêng của chủ dự án không được đưa vào
+    commit public: `new-proc-detail.txt` của DIAG6 và `10-census-sample1.txt` của REGATE7.
+- **WP5-UX5-REGATE8 KHÔNG ĐẠT** (verifier, tự báo claude-sonnet-5-5) trên bb8d340 /
+  c1691aed, ở một tiêu chí.
+  - Hai lượt quét FULL theo giờ mô phỏng bị lỗi: `full-1101` (2026-11-01T08:45Z) có 1 lỗi
+    và `full-0314` (2027-03-14T10:30Z) có 2 lỗi.
+  - Cả ba lỗi đều ở test mobile `controls.spec.ts:49`, không đổi trong đợt này: "title row
+    to period card at 768px", nhận 74,8 px, mong đợi 32. Đây là lỗi assertion, không phải
+    lỗi mạng.
+  - Mô tả của verifier:
+    - 1 worker ở thời điểm 1101 trượt 4/5 lần;
+    - 6 worker trượt 0/10 lần;
+    - 0f52300 cũng trượt;
+    - theo giờ thật thì chưa bao giờ trượt.
+  - Mọi mục khác đều đạt:
+    - đúng 8 đường dẫn và đối chiếu `dist/`;
+    - drill 209/0 và `npm audit` 0;
+    - lượt cốt lõi ×3 (2.388 test);
+    - e2e đầy đủ theo giờ thật (0 lỗi);
+    - bốn lượt quét còn lại;
+    - chạy dồn, các mutant và mô hình của DIAG5, DIAG6;
+    - axe, 0 vi phạm.
+- **Quyết định coordinator.** Không bỏ qua, giống REGATE5 và REGATE7. Lớp lỗi này quay lại
+  sau bước kiểm tra độ phủ của DIAG5, vốn chỉ chạy project desktop. Một phần bằng chứng
+  không khớp với race do tải:
+  - một worker trượt nhiều hơn sáu worker;
+  - cả hai thời điểm trượt đều sát lúc đổi giờ mùa hè/mùa đông ở Mỹ (giờ Pacific).
+
+  Theo dòng leo thang của docs/08, WP5-UX5-DIAG7 giao cho timesheet-expert (opus, xhigh),
+  không giao cho planner. Expert phải xác định đây là race, trạng thái sót lại giữa các
+  test, hay trạng thái thật của giao diện, và chạy kiểm tra độ phủ trên cả hai project, ở
+  cả hai thời điểm, với 1 và 6 worker. Giới hạn: nếu bản sửa sau đó lại trượt gate vì cùng
+  lớp lỗi, coordinator báo chủ dự án.
+- **WP5-UX5-DIAG7 xong** (expert, tự báo claude-opus-5-5).
+  - Kết luận: race khi đo, cùng loại với lỗi FIX12 đã sửa. Không phải trạng thái sót lại
+    giữa các test, cũng không phải lỗi bố cục thật. Lỗi không cần ngày đặc biệt, đổi giờ,
+    bộ giả lập đồng hồ hay chạy một worker mới xảy ra.
+  - Nguyên nhân: test đọc vị trí thẻ kỳ ở lần vẽ đầu tiên sau khi đổi độ rộng. Lúc đó cụm
+    check in/out của giao diện điện thoại vẫn nằm trên thanh trên cùng, khiến thanh xuống
+    hai dòng. Sau khi React cập nhật, cụm này chuyển xuống hàng tiêu đề, rồi test mới đọc
+    hàng tiêu đề. 74,8 = 194,8 − 120. Khi đã ổn định, khoảng cách luôn là 32.
+  - Kiểu lỗi "một worker, hai thời điểm" mà REGATE8 thấy chỉ là nhiễu do mẫu quá nhỏ. Test
+    gốc cũng trượt cả theo giờ thật.
+  - Bản sửa, chỉ ở test: `controls.spec.ts` +4/−1, thêm `expectLayoutAt` sau khi đổi độ
+    rộng ở `:49` và `:68`.
+  - Bằng chứng:
+    - mô hình trễ: bản gốc trượt 52/600, bản sửa 0/600;
+    - chạy thường: bản gốc trượt 5/180, bản sửa 0/180;
+    - mutant đẩy thẻ xuống thấp hơn 42,8 px: bắt được 12/12.
+  - Kiểm tra độ phủ trên cả hai project, khoảng 3,5 giờ chạy: 0 lỗi, trừ hai lỗi chập
+    chờn khác, có từ trước.
+    - F1: `timesheet.spec.ts:2596` (bậc thang các loại khoảng kỳ) bỏ sót bước
+      "cross-year" 1/12 lần, cả theo giờ thật.
+    - F2: `theme.spec.ts:376` hết thời gian chờ một lần dưới mô hình trễ 45 ms: tab thứ
+      hai không chuyển sang nền tối. Bộ nghe thay đổi giao diện giữa các tab chỉ nằm trong
+      `ThemeToggle`, mà thành phần này chỉ được gắn khi menu đang mở.
+- **Quyết định coordinator.** Chấp nhận DIAG7. F1 nhiều khả năng sẽ làm trượt lần gate
+  tới, còn F2 có thể là một lỗ hổng đồng bộ giao diện giữa các tab. Vì vậy WP5-UX5-DIAG8
+  (planner, sonnet) chẩn đoán cả hai trước khi vào một vòng sửa. DIAG8 chạy trên bb8d340,
+  với bản vá của DIAG7 trong bản export nháp. F2 được đối chiếu với các kế hoạch đã duyệt:
+  chỉ sửa sản phẩm nếu có quy tắc đã duyệt yêu cầu, nếu không thì ghi vào backlog.
+- **WP5-UX5-DIAG8 xong** (planner, tự báo claude-sonnet-5-5).
+  - **F1** (bậc thang các loại khoảng kỳ): race của test, cùng loại. Sau khi bấm, kỳ mới chỉ
+    hiện ra khi server đã trả lời hai lần, nên bước chờ "đủ 14 ngày" qua ngay trên kỳ cũ.
+    - Trong 15/36 lượt, test còn đo nhầm sang kỳ khác mà không báo lỗi.
+    - Bản sửa: helper `stepPeriod`, chờ `data-period-due` đổi giá trị.
+    - Bằng chứng: bản gốc trượt 5/216, bản sửa 0/216. Mutant sai năm bị bắt 12/12; bản gốc
+      chỉ bắt được 5/12.
+  - **F2** (giao diện ở tab thứ hai): dòng lỗi là lần tô màu của chính tab A. Khi máy bận,
+    tab nằm phía sau bị bỏ đói; đây chính là phát hiện của DIAG4.
+    - Bản sửa: ba lệnh `bringToFront`. Bằng chứng: chạy cạnh tiến trình đốt CPU, bản gốc
+      trượt 41/48, bản sửa qua 48/48.
+  - **Lỗi sản phẩm phát hiện thêm.** Một tab đang đóng menu tài khoản không đổi theo giao
+    diện vừa chọn ở tab khác.
+    - Điều này trái quy tắc đã duyệt ở UX2: "sự kiện storage giữ các tab khác đồng bộ".
+      WP5-UX3-T02 đã làm hỏng quy tắc này khi chuyển nút giao diện, cùng bộ nghe duy nhất
+      của nó, vào trong menu. docs/04 không nói gì về việc này.
+    - Đã chứng minh một bản vá sản phẩm nhỏ: `ThemeToggle.tsx` +12, `App.tsx` +4 và một test
+      mới.
+  - Bằng chứng gộp, theo cả hai kiểu đồng hồ: 855 qua, 0 lỗi; mô hình trễ trên mobile: 0
+    lỗi.
+- **Quyết định coordinator.** Chấp nhận, kể cả bản vá sản phẩm:
+  - nó khôi phục một quy tắc chủ dự án đã duyệt;
+  - nó nhỏ và đã được chứng minh;
+  - nó không đổi tài liệu nào;
+  - nếu để lại, lỗi này sẽ quay lại thành phát hiện của audit.
+
+  Vì vậy lần gate tới là gate đầy đủ.
+- **WP5-UX5-FIX14 xong** (worker, tự báo claude-sonnet-5-5). Chưa commit. Digest 419ede40.
+  - Đã tái hiện lỗi trên bb8d340 trước khi sửa:
+    - controls trên mobile: trượt 26/200;
+    - bậc thang khoảng kỳ với mô hình ép thứ tự: trượt 6/6;
+    - test giao diện chạy cạnh tiến trình đốt CPU: trượt 21/24;
+    - test mới về đồng bộ giữa các tab, trên sản phẩm cũ: trượt 12/12.
+  - Đã áp ba bản vá vào đúng năm file, +69/−7.
+  - Bằng chứng:
+    - các mô hình: 0 lỗi;
+    - chạy lặp: bậc thang 120, spec giao diện 820 và các test controls 120 lượt, đều qua;
+    - cả năm mutant đều làm test tương ứng trượt.
+  - `dist/server` và `dist/domain` giữ nguyên. Chỉ `dist/client` đổi: chunk chính và năm
+    chunk import nó.
+  - `npm test`: 2.388.
+  - e2e đầy đủ: desktop 469/35/0, mobile 407/97/0.
+  - Lượt quét thời điểm 0314 trên 15 file: 0 lỗi.
+- **Đang chạy:** WP5-UX5-FIX14-FREEZE (committer). Coordinator không ghi file nào trong lúc
+  committer chạy.
+- **Tiếp theo:**
+  - REGATE9 đầy đủ;
+  - kiểm tra lại độc lập hai lỗi đã sửa, thay đổi Day editor và thay đổi đồng bộ giao diện
+    giữa các tab;
+  - audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

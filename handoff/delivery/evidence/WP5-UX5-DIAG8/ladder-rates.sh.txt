@@ -1,0 +1,13 @@
+# The ladder test (timesheet.spec.ts:2596, desktop): the original file and the fixed file, the same number of repeats, real clock.
+. <task>/env.sh
+OUT=$T/out/ladder-rates.txt
+: > $OUT
+G="the longest form that fits its box shows"
+rm -f $T/export/tests/e2e/probe-ladder.spec.ts
+for V in orig fixed; do
+  cp $T/timesheet.spec.$V.ts $T/export/tests/e2e/timesheet.spec.ts
+  bash $T/run-pw.sh rate-$V tests/e2e/timesheet.spec.ts --project=desktop -g "$G" --repeat-each=120 --workers=6 --trace=off > $T/logs/rate-$V.txt 2>&1
+  node $T/counts.mjs $T/logs/rate-$V.txt >> $OUT
+done
+cp $T/timesheet.spec.orig.ts $T/export/tests/e2e/timesheet.spec.ts
+echo "timesheet.spec.ts restored to the original" >> $OUT

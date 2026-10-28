@@ -1,0 +1,14 @@
+# The ladder logic with the proposed waits (the new payroll date before the read) and the same record: 36 runs, real clock, quiet host.
+. <task>/env.sh
+OUT=$T/out/probe-fixed.txt
+: > $OUT
+X=$T/export
+rm -f $X/tests/e2e/probe-*.spec.ts
+cp $T/probe-ladder-fixed.spec.ts $X/tests/e2e/probe-ladder-fixed.spec.ts
+bash $T/run-pw.sh probe-fixed tests/e2e/probe-ladder-fixed.spec.ts --project=desktop --repeat-each=36 --workers=6 --trace=off > $T/logs/probe-fixed.txt 2>&1
+rm -f $X/tests/e2e/probe-ladder-fixed.spec.ts
+echo "probe-fixed: $(node $T/counts.mjs $T/logs/probe-fixed.txt)" >> $OUT
+node $T/analyze-ladder.mjs $T/out/diag-probe-fixed.jsonl > $T/out/probe-fixed-analysis.txt 2>&1
+node $T/analyze-measured.mjs $T/out/diag-probe-fixed.jsonl > $T/out/probe-fixed-wrong.txt 2>&1
+echo "measured: $(tail -n 1 $T/out/probe-fixed-wrong.txt)" >> $OUT
+echo "reads: $(tail -n 1 $T/out/probe-fixed-analysis.txt)" >> $OUT

@@ -1,0 +1,11 @@
+# Usage: bash probe-light.sh <label> <instant|real> <workers> <repeat> [project]
+# Copies the light probe into the scratch export, runs it, removes it, and writes the analysis.
+. <task>/env.sh
+L=$1; I=$2; W=$3; R=$4; P=${5:-mobile}
+X=${SHIFT_EXPORT:-$T/export}
+cp $T/probe-light.spec.ts $X/tests/e2e/zz-diag7-light.spec.ts
+rm -f $T/out/diag-light-$L.jsonl
+bash $T/run-shift.sh light-$L $I tests/e2e/zz-diag7-light.spec.ts --project=$P --repeat-each=$R --workers=$W --trace=off > $T/logs/light-$L.txt 2>&1
+rm -f $X/tests/e2e/zz-diag7-light.spec.ts
+node $T/analyze-light.mjs $T/out/diag-light-$L.jsonl > $T/out/an-light-$L.txt 2>&1
+echo "$L: $(grep '^exit=' $T/logs/light-$L.txt) bad=$(grep -c '^### .* BAD ' $T/out/an-light-$L.txt) of $(grep -c '^### ' $T/out/an-light-$L.txt)" >> $T/logs/light-exits.txt

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Characterise the controls.spec.ts:49 mobile failure seen in two simulated-clock FULL sweeps (not part of the gate decision).
+source /d/.claude-tmp/timesheet/WP5-UX5-REGATE8/env.sh
+cd $T
+OUT=$T/logs/diag-exits.txt
+: > $OUT
+g="the title row is 32px above the period card"
+d() { label=$1; shift; bash run-shift.sh "diag-$label" "$@" > logs/diag-$label.txt 2>&1; echo "$label: $(grep '^exit=' logs/diag-$label.txt) failed-lines=$(grep -cE '^\s+x\s+[0-9]+ ' logs/diag-$label.txt)" >> $OUT; }
+d target-1101 2026-11-01T08:45:00Z tests/e2e/controls.spec.ts --project=mobile -g "$g" --repeat-each=10 --workers=6
+d target-real real tests/e2e/controls.spec.ts --project=mobile -g "$g" --repeat-each=10 --workers=6
+SHIFT_EXPORT=$T/export-prev d prev-1101 2026-11-01T08:45:00Z tests/e2e/controls.spec.ts --project=mobile -g "$g" --repeat-each=10 --workers=6
+SHIFT_EXPORT=$T/export-prev d prev-real real tests/e2e/controls.spec.ts --project=mobile -g "$g" --repeat-each=10 --workers=6
+d target-1101-w1 2026-11-01T08:45:00Z tests/e2e/controls.spec.ts --project=mobile -g "$g" --repeat-each=5 --workers=1
+echo diag-done > $T/out/diag.done

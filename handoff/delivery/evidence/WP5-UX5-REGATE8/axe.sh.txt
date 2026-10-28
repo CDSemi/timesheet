@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# axe 4.14.0 probe on the clean build (export-mut rebuilt from the clean sources). Output folder of its own.
+source /d/.claude-tmp/timesheet/WP5-UX5-REGATE8/env.sh
+mkdir -p "$T/pw-axe" "$T/tmp-axe" "$T/shots-axe"
+export TEMP="$TW\\tmp-axe" TMP="$TW\\tmp-axe" TMPDIR="$T/tmp-axe"
+export E2E_SCREENSHOT_DIR="$TW\\shots-axe"
+export AXE_PATH="$TW\\axe\\axe.min.js"
+export AXE_OUT="$TW\\logs\\axe-lines.txt"
+rm -f "$T/logs/axe-lines.txt"
+cd "$T/export-mut" || exit 9
+cp "$T/zz-regate8-axe.spec.ts" tests/e2e/zz-regate8-axe.spec.ts
+node.exe node_modules/@playwright/test/cli.js test tests/e2e/zz-regate8-axe.spec.ts --output "$TW\\pw-axe" --workers=2 > "$T/logs/axe-run.txt" 2>&1
+echo "exit=$?" >> "$T/logs/axe-run.txt"
+echo axe-done > "$T/out/axe.done"

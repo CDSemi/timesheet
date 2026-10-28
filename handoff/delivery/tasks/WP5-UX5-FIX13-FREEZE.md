@@ -171,4 +171,8 @@ Return at most 80 words, beginning 'Self-reported model: ...', with the full com
 
 ## Results
 
-(committer)
+- HEAD before 0f52300ca1ab7d458c30e7dbe1fb098d9c6dd955; after bb8d34039b79320e415a0224c0bd02075bd0f76a.
+- Pushed to origin main (fast-forward); remote SHA equals HEAD.
+- D_PRE = HEAD digest = c1691aed8604a00e6fa33e89f7a1bf8970c7cef44bf2eab64239661cf6a11fba.
+- Staged 627 paths. Unstaged: DIAG6/new-proc-detail.txt and REGATE7/10-census-sample1.txt (foreign command lines). No masking.
+- All checks exit 0 after the board fix. Details in evidence/WP5-UX5-FIX13-FREEZE/checks.txt.

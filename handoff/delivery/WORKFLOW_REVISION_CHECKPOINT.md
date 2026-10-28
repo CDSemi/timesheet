@@ -2521,12 +2521,122 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
     warning. `dist/server` is identical. `dist/client` changed: `index.html` and six chunks.
   - Real-clock FULL e2e: desktop 468/35/0, mobile 406/97/0.
   - The sweep instant had 0 failed.
-- **Running now:** WP5-UX5-FIX13-FREEZE (committer, sonnet), alone. It makes one commit of
-  FIX12, FIX13 and the records, and pushes it.
-- **Then:** a full WP5-UX5-REGATE8, fresh rechecks (including the Day editor change), the
-  integration audit, ACCEPT-DOCS and the WP5 re-accept.
-- **Next:** a fix, its freeze, a regate, then fresh rechecks of the two findings, the
-  integration audit, ACCEPT-DOCS and the WP5 re-accept.
+- **WP5-UX5-FIX13-FREEZE done.**
+  - Commit bb8d34039b79320e415a0224c0bd02075bd0f76a is on main and pushed, a fast-forward
+    from 0f52300.
+  - D_PRE equals the HEAD digest, c1691aed. 627 paths are staged.
+  - First stop: `validate_orchestration.py` refused DIAG5's dependency on the failed gate.
+    The coordinator fixed the board (DIAG5 now depends on FIX11-FREEZE), and the same
+    committer continued.
+  - Two evidence files that show the command lines of the owner's own tools were left out
+    of the public commit: DIAG6 `new-proc-detail.txt` and REGATE7
+    `10-census-sample1.txt`.
+- **WP5-UX5-REGATE8 FAILED** (verifier, self-reported claude-sonnet-5-5) on bb8d340 /
+  c1691aed, on one criterion.
+  - Two simulated-clock FULL sweeps failed: `full-1101` (2026-11-01T08:45Z) had 1 failure
+    and `full-0314` (2027-03-14T10:30Z) had 2.
+  - All three are the unchanged mobile test `controls.spec.ts:49`: "title row to period
+    card at 768px", received 74.8 px, expected 32. They are assertion failures, not
+    network errors.
+  - The verifier's characterisation:
+    - 1 worker at the 1101 instant fails 4 of 5;
+    - 6 workers fail 0 of 10;
+    - 0f52300 fails too;
+    - the real clock never fails.
+  - Everything else passed:
+    - the 8 paths and the `dist/` comparison;
+    - drill 209/0 and `npm audit` 0;
+    - core ×3 (2,388 tests);
+    - the real-clock FULL run (0 failed);
+    - the other four sweeps;
+    - stress, the mutants and the DIAG5 and DIAG6 models;
+    - axe, 0 violations.
+- **Coordinator decision.** Not waived, as with REGATE5 and REGATE7. The failure class
+  came back after DIAG5's completeness check, which covered the desktop project only. Part
+  of the evidence does not fit a load race:
+  - one worker fails more often than six;
+  - both failing instants are next to a US Pacific DST change.
+
+  docs/08 escalation row: WP5-UX5-DIAG7 goes to timesheet-expert (opus, xhigh), not to a
+  planner. It must settle race, carried state or real state, and run the completeness check
+  on both projects, at both instants, with 1 and 6 workers. Cap: if the following fix fails
+  a regate on the same class, an owner blocker.
+- **WP5-UX5-DIAG7 done** (expert, self-reported claude-opus-5-5).
+  - Verdict: a measuring race of the FIX12 class. It is not carried state and not a real
+    layout state. Neither the date, DST, the clock wrapper nor one worker is needed.
+  - Cause: the test reads the period card in the first rendering update after the width
+    change. There, the phone's check in/out group is still in the top bar, which wraps to
+    two rows. It then reads the title row after React's commit, which moves the group into
+    the title row. 74.8 = 194.8 − 120. The settled gap is always 32.
+  - REGATE8's "one worker, two instants" pattern was small-sample noise. The unchanged
+    test also fails on the real clock.
+  - Fix, tests only: `controls.spec.ts` +4/−1, `expectLayoutAt` after the width change at
+    `:49` and `:68`.
+  - Proof:
+    - delay model: original 52 of 600 failed, patched 0 of 600;
+    - plain runs: original 5 of 180 failed, patched 0 of 180;
+    - a mutant with the card 42.8 px lower: 12 of 12 caught.
+  - Completeness on both projects, 3.5 hours of runs: 0 failed except two other
+    pre-existing intermittent failures.
+    - F1: `timesheet.spec.ts:2596`, the range ladder, missed "cross-year" 1 of 12 times,
+      also on the real clock.
+    - F2: `theme.spec.ts:376` timed out once under the 45 ms model: the second tab never
+      turned dark. The theme's only cross-tab listener lives in `ThemeToggle`, which is
+      mounted only while a menu is open.
+- **Coordinator decision.** DIAG7 is accepted. F1 would probably fail the next regate, and
+  F2 may hide a cross-tab theme gap. So WP5-UX5-DIAG8 (planner, sonnet) diagnoses both
+  before one fix round. It runs on bb8d340 with DIAG7's patch in a scratch export. F2 is
+  checked against the accepted plans: a product fix only if an accepted rule requires it,
+  otherwise an observation for the backlog.
+- **WP5-UX5-DIAG8 done** (planner, self-reported claude-sonnet-5-5).
+  - **F1** (range ladder): a test race of the same kind. A click draws the next period only
+    after two server answers, so the 14-day wait passes on the old period.
+    - In 15 of 36 runs, the test also measured the wrong period without failing.
+    - Fix: a `stepPeriod` helper that waits for `data-period-due` to change.
+    - Proof: the original failed 5 of 216, the fix 0 of 216. A wrong-year mutant is caught
+      12 of 12; the original caught it only 5 of 12.
+  - **F2** (theme in a second tab): the failing line is tab A's own paint. On a busy host,
+    the tab behind starves; this is DIAG4's finding again.
+    - Fix: three `bringToFront` calls. Proof: beside a burner, the original failed 41 of 48
+      and the fix passed 48 of 48.
+  - **Product finding.** A tab whose account menu is closed does not follow a theme chosen
+    in another tab.
+    - This breaks the accepted UX2 rule "a storage event keeps other tabs in step".
+      WP5-UX3-T02 broke it when it moved the theme control, with its only listener, into the
+      menu. docs/04 is silent.
+    - A small product patch is proven: `ThemeToggle.tsx` +12, `App.tsx` +4 and a new test.
+  - Combined proof, both clocks: 855 passed, 0 failed; the mobile delay suite: 0 failed.
+- **Coordinator decision.** Accepted, with the product option:
+  - it restores an owner-accepted rule;
+  - it is small and proven;
+  - it changes no document;
+  - left in place, it would come back as an audit finding.
+
+  So the next regate is full.
+- **WP5-UX5-FIX14 done** (worker, self-reported claude-sonnet-5-5). It is uncommitted.
+  Digest 419ede40.
+  - Reproduced first on bb8d340:
+    - controls, mobile: 26 of 200 failed;
+    - the range ladder under the forced probe: 6 of 6 failed;
+    - the theme test beside the burner: 21 of 24 failed;
+    - the new cross-tab test on the old product: 12 of 12 failed.
+  - It applied the three patches to exactly five paths, +69/−7.
+  - Proof:
+    - the models: 0 failed;
+    - repeats: the ladder 120, the theme spec 820 and the controls tests 120 passed;
+    - all five mutants failed their tests.
+  - `dist/server` and `dist/domain` are identical. Only `dist/client` changed: the entry
+    chunk and the five chunks that import it.
+  - `npm test`: 2,388.
+  - FULL: desktop 469/35/0 and mobile 407/97/0.
+  - The 0314 sweep of the 15 files: 0 failed.
+- **Running now:** WP5-UX5-FIX14-FREEZE (committer). The coordinator writes no file while it
+  runs.
+- **Next:**
+  - a full REGATE9;
+  - fresh rechecks of the two findings, the Day editor change and the cross-tab theme
+    change;
+  - the integration audit, ACCEPT-DOCS and the WP5 re-accept.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

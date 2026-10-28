@@ -388,14 +388,48 @@ test('a storage event keeps a second tab in step', async ({ page, signInThroughU
   await expectPainted(second, 'light', false);
   await expectChecked(secondControl, 'light');
 
+  // Only the tab in front is drawn on time: on a loaded host a tab behind answers a click or a read seconds late (WP5-UX5-DIAG8). Each step
+  // below brings to front the tab it drives or reads; the steps and the checks are unchanged.
+  await page.bringToFront();
   await control.radio.dark.click();
   await expectPainted(page, 'dark', true);
+  await second.bringToFront();
   await expectPainted(second, 'dark', true);
   await expectChecked(secondControl, 'dark');
 
   await secondControl.radio.light.click();
+  await page.bringToFront();
   await expectPainted(page, 'light', true);
   await expectChecked(control, 'light');
+  await second.close();
+});
+
+test('a theme chosen in one tab reaches a second tab whose account menu is closed', async ({ page, signInThroughUi }) => {
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signInThroughUi();
+  const control = await themeControl(page);
+
+  // The second tab is left as it loads: the account menu (desktop) or the More panel (phone) is closed, so no theme control is mounted in it.
+  const second = await page.context().newPage();
+  second.on('pageerror', (error) => {
+    throw error;
+  });
+  await second.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await second.goto('/#/timesheet');
+  await expect(second.getByRole('navigation', { name: 'Main' })).toBeVisible();
+  await expectPainted(second, 'light', false);
+  await expect(second.locator('#account-menu, #more-panel'), 'the second tab has no open menu').toHaveCount(0);
+
+  await page.bringToFront();
+  await control.radio.dark.click();
+  await second.bringToFront();
+  await expectPainted(second, 'dark', true);
+  await expect(second.getByRole('radiogroup', { name: 'Theme' }), 'the second tab followed without a theme control on screen').toHaveCount(0);
+
+  await page.bringToFront();
+  await control.radio.light.click();
+  await second.bringToFront();
+  await expectPainted(second, 'light', true);
   await second.close();
 });
 

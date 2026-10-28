@@ -119,10 +119,25 @@ Luồng hiện tại:
    - WP5-UX5-DIAG6 tìm ra một race trong test và một race hẹp trong sản phẩm: bấm Escape
      ngay sau khi gõ vào Notes của Day editor có thể làm mất ghi chú mà không hỏi. Bản sửa
      là một hook phía client và một test mới.
-   - WP5-UX5-FIX13 đã áp bản sửa đó (digest c1691aed).
-   - Đang chạy: WP5-UX5-FIX13-FREEZE commit FIX12 và FIX13 cùng lúc, rồi push.
-   - Sau đó là gate lại toàn bộ, kiểm tra lại độc lập hai lỗi đã sửa, audit tích
-     hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
+   - WP5-UX5-FIX13 đã áp bản sửa đó. FIX12 và FIX13 đã được freeze trong bb8d340 (digest
+     c1691aed) và đã push.
+   - WP5-UX5-REGATE8, gate lại toàn bộ trên bb8d340, chỉ trượt một tiêu chí. Trong hai lượt
+     quét theo giờ mô phỏng, test mobile `controls.spec.ts:49` (không đổi trong đợt này) đo
+     khoảng cách hàng tiêu đề ở 768 px được 74,8 px thay vì 32. Mọi mục khác đều đạt.
+   - Lớp lỗi này quay lại sau bước kiểm tra của DIAG5, vốn chỉ chạy desktop, nên việc chẩn
+     đoán được leo thang.
+   - WP5-UX5-DIAG7 (timesheet-expert) xác định đây vẫn là race khi đo, xảy ra cả theo giờ
+     thật. Bản sửa chỉ ở một file test và đã được chứng minh. Khi kiểm tra trên cả hai
+     project, DIAG7 tìm thêm hai lỗi chập chờn khác, có từ trước: test bậc thang các loại
+     khoảng kỳ và test đồng bộ giao diện sáng/tối giữa các tab.
+   - WP5-UX5-DIAG8 xác định cả hai đều là race của test và đã chứng minh bản sửa test. DIAG8
+     còn phát hiện: một tab đang đóng menu không còn đổi theo giao diện sáng/tối vừa chọn ở
+     tab khác. Điều này trái quy tắc đã duyệt ở vòng UI lần 2. Một bản sửa sản phẩm nhỏ, đã
+     chứng minh, khôi phục quy tắc đó.
+   - WP5-UX5-FIX14 đã áp cả ba bản sửa và qua mọi kiểm tra (digest 419ede40).
+   - Đang chạy: WP5-UX5-FIX14-FREEZE commit và push các bản sửa.
+   - Sau đó là gate lại đầy đủ, kiểm tra lại độc lập hai lỗi đã sửa, thay đổi
+     Day editor và thay đổi giao diện, audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
    - Để tiếp tục sau khi bị gián đoạn, dùng prompt khởi động ở trên. Điều phối viên làm tiếp
      ở `next_task_id` của board.
    - Chi tiết: [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), mục "REGATE3

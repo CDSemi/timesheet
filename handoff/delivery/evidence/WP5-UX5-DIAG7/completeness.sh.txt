@@ -1,0 +1,30 @@
+# Completeness check on the PATCHED export (export-fix). Usage: bash completeness.sh <phase>
+#   A  : the DIAG5 delay suite (15 setViewportSize spec files, controls.spec.ts among them) at 20, 45, 90 ms, --workers=6, mobile and desktop
+#   B6 : those 15 files on both projects at 2026-11-01T08:45Z and 2027-03-14T10:30Z, --workers=6
+#   B1 : the same with --workers=1
+#   C  : FULL census, both projects, at both instants, --workers=6 --repeat-each=2
+. <task>/env.sh
+cd $T
+X=$T/export-fix
+OUT=$T/out/completeness.txt
+FILES=$(sed 's#^export/##' $T/out/setviewport-files.txt | tr '\n' ' ')
+r() { label=$1; inst=$2; shift 2; SHIFT_EXPORT=$X bash run-shift.sh "$label" "$inst" "$@" --trace=off > logs/$label.txt 2>&1; echo "$(node counts.mjs logs/$label.txt) [$(grep -h '^== .*real start' logs/$label.txt | sed -E 's/.*real start ([^,]+),.*/\1/') to $(grep -h 'real end' logs/$label.txt | sed -E 's/.*real end //')]" >> $OUT; }
+case $1 in
+  A)
+    for P in mobile desktop; do
+      for D in 20 45 90; do
+        bash delay-suite.sh cpl-A-$P-d$D $X $D $P
+        grep "^cpl-A-$P-d$D:" $T/out/delay-results.txt >> $OUT
+      done
+    done ;;
+  B6)
+    r cpl-B6-1101 2026-11-01T08:45:00Z $FILES --workers=6
+    r cpl-B6-0314 2027-03-14T10:30:00Z $FILES --workers=6 ;;
+  B1)
+    r cpl-B1-1101 2026-11-01T08:45:00Z $FILES --workers=1
+    r cpl-B1-0314 2027-03-14T10:30:00Z $FILES --workers=1 ;;
+  C)
+    r cpl-C-1101 2026-11-01T08:45:00Z --workers=6 --repeat-each=2
+    r cpl-C-0314 2027-03-14T10:30:00Z --workers=6 --repeat-each=2 ;;
+esac
+echo "phase $1 done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $OUT

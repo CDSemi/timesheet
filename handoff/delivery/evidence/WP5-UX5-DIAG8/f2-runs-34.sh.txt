@@ -1,0 +1,24 @@
+# F2 under a heavy burner (node burner.mjs 48 <seconds> beside it), mobile, 6 workers, DIAG_MQ_DELAY=45:
+#  1-2. the instrumented copy without and with bringToFront before each tab is driven (24 repeats each, failure diagnostics kept)
+#  3-5. the real test as it is (orig), with a 90 s test budget (f2a), and with the budget plus surviveStall on the cross-tab paint checks (f2b), 24 repeats each
+. <task>/env.sh
+OUT=$T/out/f2-runs-34.txt
+: > $OUT
+X=$T/export
+G="a storage event keeps a second tab in step"
+for V in nofront front; do
+  if [ "$V" = "front" ]; then F=1; else F=0; fi
+  bash $T/theme-probe.sh th-b48-$V mobile 24 DIAG_MQ_DELAY=45 PROBE_FRONT=$F
+  echo "th-b48-$V (bringToFront=$F): $(cat $T/out/th-b48-$V-counts.txt)" >> $OUT
+  node $T/analyze-marks.mjs $T/out/diag-th-b48-$V.jsonl.marks > $T/out/th-b48-$V-marks.txt 2>&1
+done
+rm -f $X/tests/e2e/probe-theme.spec.ts
+export DIAG_MQ_DELAY=45
+for V in orig f2a f2b; do
+  cp $T/theme.spec.$V.ts $X/tests/e2e/theme.spec.ts
+  bash $T/with-model.sh b48-$V tests/e2e/theme.spec.ts --project=mobile -g "$G" --repeat-each=24 --workers=6 --trace=off > $T/logs/b48-$V.txt 2>&1
+  echo "b48-$V: $(node $T/counts.mjs $T/logs/b48-$V.txt)" >> $OUT
+done
+unset DIAG_MQ_DELAY
+cp $T/theme.spec.orig.ts $X/tests/e2e/theme.spec.ts
+echo "theme.spec.ts restored to the original" >> $OUT

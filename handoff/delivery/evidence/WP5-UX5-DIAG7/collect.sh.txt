@@ -1,0 +1,24 @@
+# Copies masked LF .txt evidence into the repository's evidence folder. Missing sources are skipped.
+. <task>/env.sh
+cd $T
+m() { [ -f "$1" ] && node mask.mjs "$1" "$E/$2"; }
+# scripts
+for f in env.sh setup.sh run-shift.sh probe.sh probe-light.sh frames.sh matrix1.sh delay-suite.sh delay-orig.sh sweep-model.sh setup-fix.sh mutants.sh proof.sh completeness.sh collect.sh; do m $f $f.txt; done
+for f in shiftclock.mjs probe-now.mjs analyze.mjs analyze-light.mjs frames-table.mjs counts.mjs mask.mjs patch-controls.mjs census.mjs; do m $f $f.txt; done
+m probe-frames.spec.ts probe-frames.ts.txt
+m probe-light.spec.ts probe-light.ts.txt
+m sweep-snippet.ts sweep-snippet.ts.txt
+m fixtures.diag.ts fixtures.diag.ts.txt
+m mutant-m1.css mutant-m1.css.txt
+m mutant-m2.css mutant-m2.css.txt
+m out/proposed.patch proposed.patch.txt
+# results
+for f in out/00-head.txt out/00-nonhandoff-status-start.txt out/fix-setup.txt out/matrix1.txt out/delay-results.txt out/delay-restore.txt out/sweep-model.txt out/frames-table.txt out/mutants.txt out/proof.txt out/completeness.txt out/census-summary.txt out/setviewport-files.txt out/dist-hashes-orig.txt out/dist-hashes-fix.txt out/end-status.txt; do m $f $(basename $f .txt).txt; done
+for f in logs/probe-exits.txt logs/light-exits.txt logs/setup-exits.txt; do m $f $(basename $f .txt).txt; done
+for f in out/an-light-real-w6-a-bad.txt out/an-light-0314-w6-a-1.txt out/an-1.txt; do m $f $(basename $f .txt).txt; done
+m out/an-light-real-w6-a.txt an-light-real-w6-a.txt
+m out/an-light-0314-w6-a.txt an-light-0314-w6-a.txt
+m out/an-probe-1101-w1-a.txt an-probe-1101-w1-a.txt
+# key run logs
+for f in logs/repro-1101-w1.txt logs/m1-real-w6.txt logs/m1-0314-w6.txt logs/sm-orig-real.txt logs/sm-fix-real.txt logs/dly-orig-mobile-d20.txt logs/mut-m1.txt logs/mut-m2.txt; do m $f log-$(basename $f .txt).txt; done
+ls $E | wc -l

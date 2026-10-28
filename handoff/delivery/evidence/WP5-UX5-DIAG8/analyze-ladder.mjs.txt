@@ -1,0 +1,38 @@
+// Usage: node analyze-ladder.mjs <diag jsonl> -> per run: how often each period was drawn (page-side change record) and read (each step's own
+// read returns the payroll date it hit, so no clocks are compared), stale reads (the step read the period the previous step had read:
+// nothing new was drawn yet), the periods drawn but never read, and whether the test's own `seen` set was complete.
+import { readFileSync } from 'node:fs';
+
+const lines = readFileSync(process.argv[2], 'utf8').split('\n').filter((l) => l.trim() !== '');
+let missed = 0;
+let stale = 0;
+let fresh = 0;
+const rows = [];
+for (const line of lines) {
+  const run = JSON.parse(line);
+  const kinds = new Map();
+  const drawn = new Map();
+  let last = null;
+  for (const e of run.pageLog) {
+    if (e.due === null || e.kind === null) continue;
+    kinds.set(e.due, e.kind);
+    if (e.due !== last) drawn.set(e.due, (drawn.get(e.due) ?? 0) + 1);
+    last = e.due;
+  }
+  const reads = new Map();
+  for (const s of run.steps) reads.set(s.due, (reads.get(s.due) ?? 0) + 1);
+  const marks = run.steps.map((s, i) => (i === 0 ? 'S' : s.due === run.steps[i - 1].due ? 'stale' : 'fresh'));
+  const unread = [...drawn.keys()].filter((due) => !reads.has(due)).map((due) => `${due}:${kinds.get(due)}`);
+  const cross = [...kinds].filter(([, k]) => k === 'cross-year').map(([due]) => `${due} drawn ${drawn.get(due) ?? 0}x read ${reads.get(due) ?? 0}x`);
+  const nStale = marks.filter((m) => m === 'stale').length;
+  const nFresh = marks.filter((m) => m === 'fresh').length;
+  stale += nStale;
+  fresh += nFresh;
+  const ok = run.seen.length === 3;
+  if (!ok) missed += 1;
+  rows.push(
+    `run ${run.run}: steps=${run.steps.length} periods drawn=${drawn.size} read=${reads.size} stale=${nStale} fresh=${nFresh} | cross-year period: ${cross.join('; ')} | drawn but never read: [${unread.join(' ')}] | seen=${run.seen.join(',')} ${ok ? 'OK' : 'MISSED'}`,
+  );
+}
+console.log(rows.join('\n'));
+console.log(`runs=${lines.length} missed=${missed} staleReads=${stale} freshReads=${fresh}`);

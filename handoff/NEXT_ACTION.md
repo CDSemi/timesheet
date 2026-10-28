@@ -115,10 +115,23 @@ Current route:
    - WP5-UX5-DIAG6 found one test race and one narrow product race: a fast Escape after
      typing in the Day editor's Notes could drop the note without asking. The fix is one
      client hook and a new test.
-   - WP5-UX5-FIX13 applied it (digest c1691aed).
-   - Running now: WP5-UX5-FIX13-FREEZE commits FIX12 and FIX13 together and pushes.
-   - Then a full regate, fresh rechecks of the two fixed findings, the
-     integration audit, ACCEPT-DOCS and the WP5 re-accept.
+   - WP5-UX5-FIX13 applied it. FIX12 and FIX13 are frozen in bb8d340 (digest c1691aed)
+     and pushed.
+   - WP5-UX5-REGATE8, a full regate on bb8d340, failed on one criterion only. In two
+     simulated-clock sweeps, the unchanged mobile test `controls.spec.ts:49` read the
+     768 px title-row gap as 74.8 px instead of 32. Everything else passed.
+   - The same class of failure came back after DIAG5's check, which covered desktop only, so
+     the diagnosis was escalated.
+   - WP5-UX5-DIAG7 (timesheet-expert) found the same measuring race, which also occurs on the
+     real clock. It proved a one-file test fix. Its check on both projects found two other
+     older intermittent failures: the range-ladder test and the cross-tab theme test.
+   - WP5-UX5-DIAG8 found both are test races, and proved test fixes. It also found that a
+     tab with its menu closed no longer follows a theme chosen in another tab. That breaks a
+     rule accepted in UI round 2, and a small, proven product fix restores it.
+   - WP5-UX5-FIX14 applied all three fixes and passed its checks (digest 419ede40).
+   - Running now: WP5-UX5-FIX14-FREEZE commits and pushes them.
+   - Then a full regate, fresh rechecks of the two fixed findings, the Day editor
+     change and the theme change, the integration audit, ACCEPT-DOCS and the WP5 re-accept.
    - To resume after an interruption, use the entry prompt above. The coordinator continues
      at the board's `next_task_id`.
    - Details: the [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), section

@@ -1,0 +1,22 @@
+// Usage: node analyze-measured.mjs <diag jsonl> -> how often the original check() measured another period than the one whose kind it had read
+// (the measurement of a range kind taken from the next period), per run and in total; and how often that hit the cross-year period.
+import { readFileSync } from 'node:fs';
+
+const lines = readFileSync(process.argv[2], 'utf8').split('\n').filter((l) => l.trim() !== '');
+let checks = 0;
+let wrong = 0;
+let wrongCross = 0;
+let runsWithWrong = 0;
+const rows = [];
+for (const line of lines) {
+  const run = JSON.parse(line);
+  const m = run.measured ?? [];
+  const bad = m.filter((x) => x.readDue !== x.measuredDue);
+  checks += m.length;
+  wrong += bad.length;
+  wrongCross += bad.filter((x) => x.kind === 'cross-year').length;
+  if (bad.length > 0) runsWithWrong += 1;
+  rows.push(`run ${run.run}: measurements=${m.length} taken from another period than the kind was read from=${bad.length}${bad.length ? ` (kinds: ${[...new Set(bad.map((x) => x.kind))].join(',')})` : ''}`);
+}
+console.log(rows.join('\n'));
+console.log(`runs=${lines.length} measurements=${checks} wrong-period=${wrong} (cross-year ${wrongCross}) runs with any=${runsWithWrong}`);

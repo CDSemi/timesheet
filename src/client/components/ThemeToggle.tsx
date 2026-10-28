@@ -43,6 +43,18 @@ function chooseTheme(theme: Theme): void {
   for (const listener of pressListeners) listener();
 }
 
+/**
+ * Keeps this page's `data-theme` in step with the choice another tab stores. The page mounts it once, because the theme control lives in
+ * the account menu and the More panel, which exist only while open: a tab with the menu closed would otherwise never hear the event.
+ */
+export function followThemeOfOtherTabs(): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === THEME_KEY) applyChoice();
+  };
+  window.addEventListener('storage', onStorage);
+  return () => window.removeEventListener('storage', onStorage);
+}
+
 function subscribe(notify: () => void): () => void {
   const device = window.matchMedia(DARK_QUERY);
   const onStorage = (event: StorageEvent) => {

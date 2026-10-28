@@ -1,0 +1,44 @@
+# Mutants on the fixed export (export-fix): each mutation is made in the scratch export, the client is rebuilt, the named test runs
+# (it must fail), then the file is restored byte-equal. Usage: bash prove-b.sh pre | <mutant names...> | post
+#   pre : build the fixed export and record the dist hashes
+#   post: rebuild after the last restore and compare the dist hashes with the build before
+. <task>/env.sh
+X=$T/export-fix
+OUT=$T/out/prove-b.txt
+hashes() { (cd $X && for f in $(cd dist && find . -type f | sort); do echo "$(sha256sum dist/$f | cut -d' ' -f1) $f"; done); }
+
+# run_mutant <name> <file under export> <test file> <grep> <repeat> <project args...>
+run_mutant() {
+  N=$1; F=$2; SPEC=$3; G=$4; R=$5; shift 5
+  cp $X/$F $T/tmp/$N.backup
+  if [ "$N" = "m1" ]; then cat $T/mutant-m1.css >> $X/$F; else node $T/mutate.mjs $X/$F $T/mut-$N.from.txt $T/mut-$N.to.txt >> $OUT 2>&1; fi
+  (cd $X && npm run build > $T/logs/mut-$N-build.txt 2>&1; echo "$N build exit=$?" >> $OUT)
+  PW_EXPORT=$X bash $T/run-pw.sh mut-$N $SPEC -g "$G" --repeat-each=$R --workers=6 --trace=off "$@" > $T/logs/mut-$N.txt 2>&1
+  echo "$N: $(node $T/counts.mjs $T/logs/mut-$N.txt)" >> $OUT
+  cp $T/tmp/$N.backup $X/$F
+  cmp $T/tmp/$N.backup $X/$F && echo "$N: $F restored byte-equal" >> $OUT
+}
+
+for M in "$@"; do
+  case "$M" in
+    pre)
+      : > $OUT
+      cd $X
+      rm -f tests/e2e/probe-*.spec.ts tests/e2e/zz-*.spec.ts
+      npm run build > $T/logs/mut-pre-build.txt 2>&1
+      echo "pre build exit=$?" >> $OUT
+      hashes > $T/out/dist-hashes-mut-before.txt
+      echo "dist before mutants: $(wc -l < $T/out/dist-hashes-mut-before.txt) files" >> $OUT ;;
+    m1) run_mutant m1 src/client/styles.css tests/e2e/controls.spec.ts "the title row is 32px above" 2 ;;
+    f1b) run_mutant f1b src/client/components/periodBarModel.ts tests/e2e/timesheet.spec.ts "the range ladder" 12 --project=desktop ;;
+    f2) run_mutant f2 src/client/components/ThemeToggle.tsx tests/e2e/theme.spec.ts "a storage event keeps a second tab in step" 6 ;;
+    m4) run_mutant m4 src/client/components/ThemeToggle.tsx tests/e2e/theme.spec.ts "a theme chosen in one tab reaches a second tab whose account menu is closed" 6 ;;
+    m5) run_mutant m5 src/client/App.tsx tests/e2e/theme.spec.ts "a theme chosen in one tab reaches a second tab whose account menu is closed" 6 ;;
+    post)
+      cd $X && npm run build > $T/logs/mut-restore-build.txt 2>&1
+      echo "restore build exit=$?" >> $OUT
+      hashes > $T/out/dist-hashes-mut-after.txt
+      cmp $T/out/dist-hashes-mut-before.txt $T/out/dist-hashes-mut-after.txt && echo "dist identical after restore: $(wc -l < $T/out/dist-hashes-mut-after.txt) files" >> $OUT
+      echo prove-b-done >> $OUT ;;
+  esac
+done

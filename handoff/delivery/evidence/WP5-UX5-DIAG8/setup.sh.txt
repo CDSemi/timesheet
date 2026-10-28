@@ -1,0 +1,25 @@
+# Export HEAD into the task folder, apply DIAG7's patch, npm ci and build there (never in the repository).
+. <task>/env.sh
+OUT=$T/out/setup.txt
+: > $OUT
+cd $REPO
+git rev-parse HEAD >> $OUT
+git rev-parse origin/main >> $OUT
+git branch --show-current >> $OUT
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-start.txt
+echo "non-handoff status lines: $(wc -l < $T/out/00-nonhandoff-status-start.txt)" >> $OUT
+git archive $TARGET | tar -x -C $T/export
+git archive $TARGET | tar -x -C $T/export-check
+echo "export files: $(cd $T/export && find . -type f | wc -l)" >> $OUT
+cp $E7/proposed.patch.txt $T/diag7.patch
+cd $T/export-check
+git apply --check $T/diag7.patch >> $OUT 2>&1
+echo "diag7 apply --check (fresh export) exit=$?" >> $OUT
+cd $T/export
+git apply $T/diag7.patch >> $OUT 2>&1
+echo "diag7 apply exit=$?" >> $OUT
+node --version >> $OUT
+npm ci > $T/logs/setup-ci.txt 2>&1
+echo "ci exit=$?" >> $OUT
+npm run build > $T/logs/setup-build.txt 2>&1
+echo "build exit=$?" >> $OUT

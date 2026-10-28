@@ -1,0 +1,48 @@
+// Usage: node make-product.mjs <repo root> <out dir> [mutant]
+// Writes the proposed product edit (the storage listener of the theme moved to an always-mounted place) as two files in <out dir>:
+// ThemeToggle.tsx and App.tsx, from the sources in <repo root>. With `mutant` the listener is there but never applies the choice.
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [root, out, mutant] = process.argv.slice(2);
+mkdirSync(out, { recursive: true });
+const read = (rel) => readFileSync(join(root, rel), 'utf8');
+const once = (text, from, to) => {
+  if (text.split(from).length !== 2) throw new Error(`anchor not unique: ${from.slice(0, 40)}`);
+  return text.replace(from, to);
+};
+
+let toggle = read('src/client/components/ThemeToggle.tsx');
+const lf = toggle.includes('\r\n') ? '\r\n' : '\n';
+toggle = toggle.replace(/\r\n/g, '\n');
+toggle = once(
+  toggle,
+  `function subscribe(notify: () => void): () => void {`,
+  `/**
+ * Keeps this page's \`data-theme\` in step with the choice another tab stores. The page mounts it once, because the theme control lives in
+ * the account menu and the More panel, which exist only while open: a tab with the menu closed would otherwise never hear the event.
+ */
+export function followThemeOfOtherTabs(): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === THEME_KEY) ${mutant === 'mutant' ? 'return' : 'applyChoice()'};
+  };
+  window.addEventListener('storage', onStorage);
+  return () => window.removeEventListener('storage', onStorage);
+}
+
+function subscribe(notify: () => void): () => void {`,
+);
+writeFileSync(join(out, 'ThemeToggle.tsx'), toggle.replace(/\n/g, lf));
+
+let app = read('src/client/App.tsx');
+const lfApp = app.includes('\r\n') ? '\r\n' : '\n';
+app = app.replace(/\r\n/g, '\n');
+app = once(app, `import { SettingsNav } from './components/SettingsNav.tsx';\n`, `import { SettingsNav } from './components/SettingsNav.tsx';\n`);
+app = once(app, `import { shareEndedMessage } from './components/sharingModel.ts';\n`, `import { shareEndedMessage } from './components/sharingModel.ts';\nimport { followThemeOfOtherTabs } from './components/ThemeToggle.tsx';\n`);
+app = once(
+  app,
+  `  const [justCreated, setJustCreated] = useState(false);\n\n  useEffect(() => {\n    api<{ user: User }>('GET', '/api/auth/me')`,
+  `  const [justCreated, setJustCreated] = useState(false);\n\n  // A theme chosen in another tab of this browser shows here too, with or without the theme control on screen.\n  useEffect(followThemeOfOtherTabs, []);\n\n  useEffect(() => {\n    api<{ user: User }>('GET', '/api/auth/me')`,
+);
+writeFileSync(join(out, 'App.tsx'), app.replace(/\n/g, lfApp));
+console.log(`wrote ${out}`);

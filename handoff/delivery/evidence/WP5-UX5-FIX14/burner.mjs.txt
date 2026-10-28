@@ -1,0 +1,25 @@
+// Usage: node burner.mjs <threads> <seconds>
+// A CPU burner for the timing probes: <threads> busy-loop worker threads that stop by themselves after <seconds>.
+import { Worker, isMainThread, workerData } from 'node:worker_threads';
+
+if (isMainThread) {
+  const threads = Number(process.argv[2] ?? 8);
+  const seconds = Number(process.argv[3] ?? 60);
+  if (!Number.isInteger(threads) || threads < 1 || threads > 64 || !Number.isFinite(seconds) || seconds < 1 || seconds > 1800) {
+    console.error('usage: node burner.mjs <threads 1-64> <seconds 1-1800>');
+    process.exit(2);
+  }
+  const end = Date.now() + seconds * 1000;
+  console.log(`burner start: ${threads} threads for ${seconds} s, until ${new Date(end).toISOString()}`);
+  for (let index = 0; index < threads; index += 1) new Worker(new URL(import.meta.url), { workerData: { end } });
+  setTimeout(() => {
+    console.log(`burner end ${new Date().toISOString()}`);
+    process.exit(0);
+  }, seconds * 1000 + 3000).unref();
+} else {
+  let sink = 0;
+  while (Date.now() < workerData.end) {
+    for (let index = 0; index < 1e6; index += 1) sink = (sink + index * 7) % 1000003;
+  }
+  if (sink < 0) console.log(sink);
+}

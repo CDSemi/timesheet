@@ -1,0 +1,17 @@
+// Sums the wall time of every Playwright run of this task from the run-shift.sh start and end lines. Usage: node durations.mjs <log>...
+import { readFileSync } from 'node:fs';
+
+let total = 0;
+const rows = [];
+for (const file of process.argv.slice(2)) {
+  const text = readFileSync(file, 'utf8');
+  const start = /^== (\S+): real start (\S+),/m.exec(text);
+  const end = /^== \S+ real end (\S+)$/m.exec(text);
+  if (!start || !end) continue;
+  const minutes = (Date.parse(end[1]) - Date.parse(start[2])) / 60000;
+  total += minutes;
+  rows.push([start[2], start[1], minutes]);
+}
+rows.sort((a, b) => a[0].localeCompare(b[0]));
+for (const [at, label, minutes] of rows) console.log(`${at} ${label} ${minutes.toFixed(1)} min`);
+console.log(`runs ${rows.length}, total ${(total / 60).toFixed(2)} h`);

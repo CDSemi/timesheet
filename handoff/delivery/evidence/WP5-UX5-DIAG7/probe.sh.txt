@@ -1,0 +1,11 @@
+# Usage: bash probe.sh <label> <instant|real> <workers> <repeat> [project] [settle ms]
+# Copies the frame probe into the scratch export, runs it, removes it, and writes the analysis.
+. <task>/env.sh
+L=$1; I=$2; W=$3; R=$4; P=${5:-mobile}; export DIAG_SETTLE_MS=${6:-0}
+X=${SHIFT_EXPORT:-$T/export}
+cp $T/probe-frames.spec.ts $X/tests/e2e/zz-diag7-frames.spec.ts
+rm -f $T/out/diag-probe-$L.jsonl
+bash $T/run-shift.sh probe-$L $I tests/e2e/zz-diag7-frames.spec.ts --project=$P --repeat-each=$R --workers=$W > $T/logs/probe-$L.txt 2>&1
+rm -f $X/tests/e2e/zz-diag7-frames.spec.ts
+node $T/analyze.mjs $T/out/diag-probe-$L.jsonl > $T/out/an-probe-$L.txt 2>&1
+echo "$L: $(grep '^exit=' $T/logs/probe-$L.txt) bad=$(grep -c ' bad [1-9]' $T/out/an-probe-$L.txt) of $(grep -c '^### ' $T/out/an-probe-$L.txt)" >> $T/logs/probe-exits.txt

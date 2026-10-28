@@ -1,0 +1,23 @@
+// Usage: node counts.mjs <playwright list log> -> one line: label, exit, passed/failed/skipped/flaky, and the failing assertion messages.
+import { readFileSync } from 'node:fs';
+
+const file = process.argv[2];
+const text = readFileSync(file, 'utf8').replace(/\r/g, '');
+const pick = (re) => Number(re.exec(text)?.[1] ?? 0);
+const passed = pick(/^\s+(\d+) passed/m);
+const failed = pick(/^\s+(\d+) failed/m);
+const skipped = pick(/^\s+(\d+) skipped/m);
+const flaky = pick(/^\s+(\d+) flaky/m);
+const exit = /^exit=(\d+)/m.exec(text)?.[1] ?? '?';
+const label = /^== (\S+):/m.exec(text)?.[1] ?? file;
+const errors = [...text.matchAll(/^\s+Error: (.+)\n(?:.*\n){0,8}?\s+Received: (.+)$/gm)].map((m) => `${m[1].trim()} => ${m[2].trim()}`);
+const failedTests = [...text.matchAll(/^\s+x\s+\d+ (\[\w+\] › \S+)/gm)].map((m) => m[1]);
+const tally = new Map();
+for (const e of errors) tally.set(e, (tally.get(e) ?? 0) + 1);
+const tests = new Map();
+for (const t of failedTests) tests.set(t, (tests.get(t) ?? 0) + 1);
+console.log(
+  `${label}: exit=${exit} passed=${passed} failed=${failed} skipped=${skipped} flaky=${flaky}` +
+    (tests.size ? ` | failing lines: ${[...tests].map(([t, n]) => `${t} x${n}`).join('; ')}` : '') +
+    (tally.size ? ` | errors: ${[...tally].map(([e, n]) => `${e} x${n}`).join('; ')}` : ''),
+);

@@ -1,0 +1,9 @@
+# Usage: bash theme-burn.sh <label> <export dir>
+# theme.spec.ts "a storage event keeps a second tab in step", mobile, 6 workers, 24 repeats, the 45 ms media-notification model,
+# beside the self-stopping 48-thread burner (started by the caller through its own background run).
+. <task>/env.sh
+L=$1; X=$2
+export DIAG_MQ_DELAY=45
+PW_EXPORT=$X bash $T/with-model.sh $L tests/e2e/theme.spec.ts --project=mobile -g "a storage event keeps a second tab in step" --repeat-each=24 --workers=6 --trace=off > $T/logs/$L.txt 2>&1
+unset DIAG_MQ_DELAY
+echo "$L: $(node $T/counts.mjs $T/logs/$L.txt)" >> $T/out/theme-burn.txt

@@ -1,0 +1,68 @@
+== repro-1101-w1: real start 2026-10-28T04:18:02Z, simulated start 2026-11-01T08:45:00Z, AB8_SHIFT_MS=361617849
+process clock 2026-11-01T08:45:00.080Z (Date.now 1793522700091); America/Los_Angeles Sun, 2026-11-01, 01:45; shift ms 361617849; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/controls.spec.ts --project=mobile -g the title row is 32px above the period card --repeat-each=5 --workers=1 --output=<task>\pw-repro-1101-w1
+
+Running 10 tests using 1 worker
+
+(node:34152) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   1 [mobile] › tests\e2e\controls.spec.ts:49:3 › the title row is 32px above the period card at 768, 1024, 1440 and 1920 and the head is unchanged on a phone (light) (794ms)
+(node:4808) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  2 [mobile] › tests\e2e\controls.spec.ts:49:3 › the title row is 32px above the period card at 768, 1024, 1440 and 1920 and the head is unchanged on a phone (dark) (937ms)
+(node:46920) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  3 [mobile] › tests\e2e\controls.spec.ts:49:3 › the title row is 32px above the period card at 768, 1024, 1440 and 1920 and the head is unchanged on a phone (light) (982ms)
+  ok  4 [mobile] › tests\e2e\controls.spec.ts:49:3 › the title row is 32px above the period card at 768, 1024, 1440 and 1920 and the head is unchanged on a phone (dark) (758ms)
+(node:92364) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  5 [mobile] › tests\e2e\controls.spec.ts:49:3 › the title row is 32px above the period card at 768, 1024, 1440 and 1920 and the head is unchanged on a phone (light) (987ms)
+  ok  6 [mobile] › tests\e2e\controls.spec.ts:49:3 › the title row is 32px above the period card at 768, 1024, 1440 and 1920 and the head is unchanged on a phone (dark) (763ms)
+(node:50532) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  7 [mobile] › tests\e2e\controls.spec.ts:49:3 › the title row is 32px above the period card at 768, 1024, 1440 and 1920 and the head is unchanged on a phone (light) (929ms)
+  ok  8 [mobile] › tests\e2e\controls.spec.ts:49:3 › the title row is 32px above the period card at 768, 1024, 1440 and 1920 and the head is unchanged on a phone (dark) (807ms)
+(node:105032) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  9 [mobile] › tests\e2e\controls.spec.ts:49:3 › the title row is 32px above the period card at 768, 1024, 1440 and 1920 and the head is unchanged on a phone (light) (908ms)
+  ok 10 [mobile] › tests\e2e\controls.spec.ts:49:3 › the title row is 32px above the period card at 768, 1024, 1440 and 1920 and the head is unchanged on a phone (dark) (720ms)
+
+
+  1) [mobile] › tests\e2e\controls.spec.ts:49:3 › the title row is 32px above the period card at 768, 1024, 1440 and 1920 and the head is unchanged on a phone (light) 
+
+    Error: title row to period card at 1024px
+
+    expect(received).toBeCloseTo(expected, precision)
+
+    Expected: 32
+    Received: 22.796875
+
+    Expected precision:    0
+    Expected difference: < 0.5
+    Received difference:   9.203125
+
+      57 |       const gap = (await boxOf(card)).top - (await boxOf(head)).bottom;
+      58 |       lines.push(`${width}px: period card top - title row bottom = ${round(gap)}px`);
+    > 59 |       expect(gap, `title row to period card at ${width}px`).toBeCloseTo(32, 0);
+         |                                                             ^
+      60 |       expect(await px(head, 'margin-bottom'), `title row margin at ${width}px`).toBe(32);
+      61 |     }
+      62 |     await page.setViewportSize({ width: 390, height: 844 });
+        at <task>\export\tests\e2e\controls.spec.ts:59:61
+
+    Error Context: ..\pw-repro-1101-w1\controls-the-title-row-is--167bb-unchanged-on-a-phone-light--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-repro-1101-w1\controls-the-title-row-is--167bb-unchanged-on-a-phone-light--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-repro-1101-w1\controls-the-title-row-is--167bb-unchanged-on-a-phone-light--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [mobile] › tests\e2e\controls.spec.ts:49:3 › the title row is 32px above the period card at 768, 1024, 1440 and 1920 and the head is unchanged on a phone (light) 
+  9 passed (21.9s)
+exit=1
+process clock 2026-11-01T08:45:22.433Z (Date.now 1793522722443); America/Los_Angeles Sun, 2026-11-01, 01:45; shift ms 361617849; instanceof true
+== repro-1101-w1 real end 2026-10-28T04:18:24Z

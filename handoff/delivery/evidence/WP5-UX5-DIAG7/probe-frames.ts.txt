@@ -1,0 +1,165 @@
+/* ---- DIAG7 probe (scratch only): the controls.spec.ts:49 title gap test, instrumented frame by frame -------------------------- */
+
+// The same steps as the original test, in the same order and with the same number of browser round trips: sign in, wait for the 14
+// days, then for each width setViewportSize, toBeVisible on the head, read the card box, read the head box, read the head margin.
+// A recorder installed before the app's scripts logs (epoch ms): every rendering frame whose layout differs from the previous one,
+// every DOM mutation batch, every fetch start and end, resize and media-change events. The reads log their own value and time.
+// DIAG_SETTLE_MS > 0 adds a wait after each width's reads (probe of the settled state; 0 = the original timing).
+
+import { appendFileSync } from 'node:fs';
+import type { Locator } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const OUT = process.env.DIAG_OUT ?? '';
+const SETTLE = Number(process.env.DIAG_SETTLE_MS ?? '0');
+const wall = () => Math.round((performance.timeOrigin + performance.now()) * 10) / 10;
+
+function recorder() {
+  const w = window as unknown as { __diag: unknown[]; __mark: (what: string, extra?: unknown) => void };
+  const log: unknown[] = [];
+  w.__diag = log;
+  const at = () => Math.round((performance.timeOrigin + performance.now()) * 10) / 10;
+  const r2 = (n: number) => Math.round(n * 1000) / 1000;
+  const rect = (selector: string) => {
+    const element = document.querySelector(selector);
+    if (element === null) return null;
+    const box = element.getBoundingClientRect();
+    return { top: r2(box.top), bottom: r2(box.bottom), h: r2(box.height) };
+  };
+  const snap = () => {
+    const head = rect('header.page-head');
+    const card = rect('.workbar');
+    return {
+      iw: window.innerWidth,
+      shellMq: window.matchMedia('(width >= 768px)').matches,
+      bar: rect('header.shell-bar'),
+      head,
+      card,
+      gap: head === null || card === null ? null : r2(card.top - head.bottom),
+      barClock: document.querySelector('.bar-clock') !== null,
+      clockGroup: document.querySelector('.clock-group') !== null,
+      clockText: document.querySelector('.clock-group .clock-now, .bar-clock .clock-now')?.textContent ?? null,
+      clockButtonDisabled: (document.querySelector('.clock-group .clock-button, .bar-clock .clock-button') as HTMLButtonElement | null)?.disabled ?? null,
+      days: document.querySelectorAll('[data-day]').length,
+      sheet: document.querySelector('[data-paper] [data-sheet]')?.getAttribute('data-sheet') ?? null,
+      periodStatus: document.querySelector('.workbar')?.textContent?.replace(/\s+/g, ' ').slice(0, 400) ?? null,
+    };
+  };
+  let last = '';
+  const record = (what: string, extra?: unknown, always = true) => {
+    const s = snap();
+    const key = JSON.stringify(s);
+    const changed = key !== last;
+    last = key;
+    if (!always && !changed) return;
+    log.push({ t: at(), what, ...(extra === undefined ? {} : { extra }), changed, ...(changed ? { s } : {}) });
+  };
+  w.__mark = (what: string, extra?: unknown) => record(what, extra);
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const method = init?.method ?? 'GET';
+    record('fetch-start', `${method} ${url}`);
+    return originalFetch(input, init).then(
+      (response) => {
+        record('fetch-end', `${response.status} ${method} ${url}`);
+        return response;
+      },
+      (error: unknown) => {
+        record('fetch-error', `${method} ${url} ${String(error)}`);
+        throw error;
+      },
+    );
+  };
+  window.addEventListener('resize', () => record('resize-event'));
+  window.matchMedia('(width >= 768px)').addEventListener('change', () => record('shell-mq-change'));
+  const describe = (node: Node) =>
+    node instanceof Element ? `${node.tagName.toLowerCase()}${node.className && typeof node.className === 'string' ? `.${node.className.trim().split(/\s+/).join('.')}` : ''}` : node.nodeName;
+  const observe = () => {
+    new MutationObserver((mutations) => {
+      const added: string[] = [];
+      const removed: string[] = [];
+      let text = 0;
+      for (const mutation of mutations) {
+        if (mutation.type === 'characterData') text += 1;
+        mutation.addedNodes.forEach((node) => added.length < 8 && added.push(describe(node)));
+        mutation.removedNodes.forEach((node) => removed.length < 8 && removed.push(describe(node)));
+      }
+      record('mutation', { n: mutations.length, added, removed, text });
+    }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+  };
+  if (document.documentElement !== null) observe();
+  else document.addEventListener('DOMContentLoaded', observe);
+  const frame = () => {
+    record('frame', undefined, false);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
+async function readBox(locator: Locator, label: string) {
+  return locator.evaluate((element, name) => {
+    const box = element.getBoundingClientRect();
+    const result = { top: box.top, bottom: box.bottom, left: box.left, right: box.right, width: box.width, height: box.height };
+    (window as unknown as { __mark: (what: string, extra?: unknown) => void }).__mark(`read ${name}`, { top: box.top, bottom: box.bottom });
+    return result;
+  }, label);
+}
+
+async function px(locator: Locator, property: string): Promise<number> {
+  return locator.evaluate((element, name) => parseFloat(element.ownerDocument.defaultView?.getComputedStyle(element).getPropertyValue(name) ?? '0'), property);
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`diag7 title gap probe (${theme})`, async ({ page, signInThroughUi }, testInfo) => {
+    await page.addInitScript(recorder);
+    const node: { t: number; what: string; v?: unknown }[] = [];
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    node.push({ t: wall(), what: 'sign-in start' });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    node.push({ t: wall(), what: 'days 14 seen' });
+    const gaps: { width: number; gap: number; margin: number }[] = [];
+    let failure: unknown = null;
+    try {
+      for (const width of [768, 1024, 1440, 1920]) {
+        node.push({ t: wall(), what: `setViewportSize ${width} call` });
+        await page.setViewportSize({ width, height: 900 });
+        node.push({ t: wall(), what: `setViewportSize ${width} done` });
+        const head = page.locator('header.page-head');
+        const card = page.locator('.workbar');
+        await expect(head).toBeVisible();
+        node.push({ t: wall(), what: `head visible ${width}` });
+        const gap = (await readBox(card, `card ${width}`)).top - (await readBox(head, `head ${width}`)).bottom;
+        const margin = await px(head, 'margin-bottom');
+        node.push({ t: wall(), what: `read done ${width}`, v: { gap, margin } });
+        gaps.push({ width, gap, margin });
+        if (SETTLE > 0) {
+          await page.waitForTimeout(SETTLE);
+          const settled = await page.evaluate(() => {
+            const h = document.querySelector('header.page-head')?.getBoundingClientRect();
+            const c = document.querySelector('.workbar')?.getBoundingClientRect();
+            return h === undefined || c === undefined ? null : c.top - h.bottom;
+          });
+          node.push({ t: wall(), what: `settled gap ${width}`, v: settled });
+        }
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
+      gaps.push({ width: 390, gap: Number.NaN, margin: await px(page.locator('header.page-head'), 'margin-bottom') });
+    } catch (error) {
+      failure = String(error);
+    }
+    const diag = await page.evaluate(() => (window as unknown as { __diag: unknown[] }).__diag);
+    const bad = gaps.filter((g) => g.width !== 390 && Math.abs(g.gap - 32) >= 0.5);
+    if (OUT !== '') {
+      appendFileSync(
+        OUT,
+        `${JSON.stringify({ title: testInfo.title, project: testInfo.project.name, repeat: testInfo.repeatEachIndex, workerIndex: testInfo.workerIndex, parallelIndex: testInfo.parallelIndex, settle: SETTLE, gaps, bad: bad.length, failure, node, diag })}\n`,
+      );
+    }
+    expect(failure).toBeNull();
+    for (const g of gaps) if (g.width !== 390) expect(g.gap, `title row to period card at ${g.width}px`).toBeCloseTo(32, 0);
+  });
+}

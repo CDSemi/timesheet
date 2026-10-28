@@ -1,0 +1,18 @@
+# theme.spec.ts:376 ("a storage event keeps a second tab in step") failed once in the 45 ms mobile delay suite (a 30 s timeout).
+# Repeat it alone on the patched export: with the 45 ms delay model and without it, mobile, 6 workers, 30 repeats each.
+. <task>/env.sh
+cd $T
+X=$T/export-fix
+OUT=$T/out/theme-check.txt
+: > $OUT
+G="a storage event keeps a second tab in step"
+cp $X/tests/e2e/fixtures.ts $T/tmp/fixtures.before-theme.ts
+cp $T/fixtures.diag.ts $X/tests/e2e/fixtures.ts
+export DIAG_MQ_DELAY=45
+SHIFT_EXPORT=$X bash run-shift.sh theme-d45 real tests/e2e/theme.spec.ts --project=mobile -g "$G" --repeat-each=30 --workers=6 --trace=off > logs/theme-d45.txt 2>&1
+unset DIAG_MQ_DELAY
+cp $T/tmp/fixtures.before-theme.ts $X/tests/e2e/fixtures.ts
+cmp $T/fixtures.orig.ts $X/tests/e2e/fixtures.ts && echo "fixtures.ts restored byte-equal" >> $OUT
+node counts.mjs logs/theme-d45.txt >> $OUT
+SHIFT_EXPORT=$X bash run-shift.sh theme-plain real tests/e2e/theme.spec.ts --project=mobile -g "$G" --repeat-each=30 --workers=6 --trace=off > logs/theme-plain.txt 2>&1
+node counts.mjs logs/theme-plain.txt >> $OUT

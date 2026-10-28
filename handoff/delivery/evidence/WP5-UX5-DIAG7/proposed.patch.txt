@@ -1,0 +1,30 @@
+diff --git a/tests/e2e/controls.spec.ts b/tests/e2e/controls.spec.ts
+index e9168fd..abf9a07 100644
+--- a/tests/e2e/controls.spec.ts
++++ b/tests/e2e/controls.spec.ts
+@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
+ import { join } from 'node:path';
+ import type { Locator, Page } from '@playwright/test';
+ import { computedStyle, contrast, flattenedBackground, parseColour, parseLayers, textContrast, tokenColour } from './contrast.ts';
+-import { expect, newPerson, SCREENSHOT_DIR, screenshotPath, test } from './fixtures.ts';
++import { expect, expectLayoutAt, newPerson, SCREENSHOT_DIR, screenshotPath, test } from './fixtures.ts';
+ 
+ /*
+  * WP5-UX4-T01 (round 4, owner answer F-5): the paper sheet, the title gap, the stronger week header and first column, the round
+@@ -51,6 +51,8 @@ for (const theme of THEMES) {
+     const lines = [`# ${testInfo.project.name} / ${theme}: title gap`];
+     for (const width of [768, 1024, 1440, 1920]) {
+       await page.setViewportSize({ width, height: 900 });
++      // From the phone's 390px the check in/out group leaves the top bar for the title row one rendering update after the CSS.
++      await expectLayoutAt(page, width);
+       const head = page.locator('header.page-head');
+       const card = page.locator('.workbar');
+       await expect(head).toBeVisible();
+@@ -77,6 +79,7 @@ test('Review and sign off: the title row is 32px above the next block from 768px
+   const lines = [`# ${testInfo.project.name}: review title gap`];
+   for (const width of [768, 1024, 1440, 1920]) {
+     await page.setViewportSize({ width, height: 900 });
++    await expectLayoutAt(page, width);
+     const next = head.locator('xpath=following-sibling::*[1]');
+     const gap = (await boxOf(next)).top - (await boxOf(head)).bottom;
+     lines.push(`${width}px: next block top - title row bottom = ${round(gap)}px`);

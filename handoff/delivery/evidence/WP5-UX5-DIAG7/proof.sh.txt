@@ -1,0 +1,21 @@
+# Proof of the fix at the two failing instants: the step-delay model with 1 worker (original and patched), and the plain tests
+# (no model) with 1 and with 6 workers (original and patched). Mobile project; :49 and :68 (and :95 under the model).
+. <task>/env.sh
+cd $T
+OUT=$T/out/proof.txt
+: > $OUT
+G="the title row is 32px above"
+for I in 2026-11-01T08:45:00Z 2027-03-14T10:30:00Z; do
+  S=$(echo $I | cut -c6-7,9-10)
+  bash sweep-model.sh sm-orig-$S-w1 $T/export $I 1 40
+  bash sweep-model.sh sm-fix-$S-w1 $T/export-fix $I 1 40
+  for V in orig fix; do
+    X=$T/export; [ $V = fix ] && X=$T/export-fix
+    SHIFT_EXPORT=$X bash run-shift.sh plain-$V-$S-w1 $I tests/e2e/controls.spec.ts --project=mobile -g "$G" --repeat-each=10 --workers=1 --trace=off > logs/plain-$V-$S-w1.txt 2>&1
+    node counts.mjs logs/plain-$V-$S-w1.txt >> $OUT
+    SHIFT_EXPORT=$X bash run-shift.sh plain-$V-$S-w6 $I tests/e2e/controls.spec.ts --project=mobile -g "$G" --repeat-each=20 --workers=6 --trace=off > logs/plain-$V-$S-w6.txt 2>&1
+    node counts.mjs logs/plain-$V-$S-w6.txt >> $OUT
+  done
+done
+cat $T/out/sweep-model.txt >> $OUT
+echo proof-done >> $OUT

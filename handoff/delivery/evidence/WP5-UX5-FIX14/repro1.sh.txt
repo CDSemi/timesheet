@@ -1,0 +1,31 @@
+# Reproductions on the unchanged export of bb8d340 (export-base): the DIAG7 step-delay model on controls.spec.ts, the DIAG8 forced
+# interleaving of the range ladder, and the new cross-tab test on the unchanged product.
+. <task>/env.sh
+X=$T/export-base
+OUT=$T/out/repro1.txt
+: > $OUT
+node $T/make-model.mjs $T/fixtures.orig.ts $T/fixtures.model.ts >> $OUT 2>&1
+cd $X
+cmp $T/controls.spec.orig.ts tests/e2e/controls.spec.ts && cmp $T/timesheet.spec.orig.ts tests/e2e/timesheet.spec.ts && cmp $T/theme.spec.orig.ts tests/e2e/theme.spec.ts && echo "export-base specs are the originals" >> $OUT
+# 1. the DIAG7 step-delay model, original controls.spec.ts :49 :68 :95, real clock, 6 workers, 40 repeats, both projects
+: > $T/out/sweep-model.txt
+for P in mobile desktop; do
+  bash $T/sweep-model.sh repro-sweep-$P $X real 6 40 $P
+done
+cp $T/out/sweep-model.txt $T/out/repro-sweep-model.txt
+cat $T/out/sweep-model.txt >> $OUT
+# 2. the DIAG8 forced interleaving of the range ladder (original steps), desktop, 6 repeats
+cp $T/probe-ladder-forced.ts $X/tests/e2e/probe-ladder-forced.spec.ts
+bash $T/run-pw.sh repro-forced tests/e2e/probe-ladder-forced.spec.ts --project=desktop --repeat-each=6 --workers=6 --trace=off > $T/logs/repro-forced.txt 2>&1
+rm -f $X/tests/e2e/probe-ladder-forced.spec.ts
+echo "forced (original steps): $(node $T/counts.mjs $T/logs/repro-forced.txt)" >> $OUT
+# 3. the new cross-tab test on the unchanged product (test only)
+git_apply() { (cd $X && git apply --include='tests/e2e/theme.spec.ts' "$1"); }
+git_apply $E8/proposed.patch.txt && echo "theme part of DIAG8 proposed.patch applied exit=$?" >> $OUT
+git_apply $E8/proposed-product.patch.txt && echo "theme part of DIAG8 proposed-product.patch applied exit=$?" >> $OUT
+cp $X/tests/e2e/theme.spec.ts $T/theme.spec.crosstab-only.ts
+bash $T/run-pw.sh repro-crosstab tests/e2e/theme.spec.ts -g "a theme chosen in one tab reaches a second tab whose account menu is closed" --repeat-each=6 --workers=6 --trace=off > $T/logs/repro-crosstab.txt 2>&1
+echo "new test on the unchanged product (both projects x6): $(node $T/counts.mjs $T/logs/repro-crosstab.txt)" >> $OUT
+cp $T/theme.spec.orig.ts $X/tests/e2e/theme.spec.ts
+cmp $T/theme.spec.orig.ts $X/tests/e2e/theme.spec.ts && echo "theme.spec.ts restored to the original" >> $OUT
+echo repro1-done >> $OUT

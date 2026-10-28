@@ -1,0 +1,42 @@
+// Usage: node analyze.mjs <diag jsonl> [full]
+// Per probe test: the gaps read, then a merged timeline (page recorder + test-side marks), times in ms relative to the
+// setViewportSize(768) call. "full" prints every event from sign-in; otherwise from 50 ms before the 768 call to 400 ms after the
+// last read. Layout snapshots are printed only where they changed.
+import { readFileSync } from 'node:fs';
+
+const [file, mode] = process.argv.slice(2);
+const lines = readFileSync(file, 'utf8').split('\n').filter((line) => line.trim() !== '');
+const fmt = (s) => {
+  if (s === undefined) return '';
+  const b = (x) => (x === null ? '-' : `${x.top}/${x.bottom}`);
+  return ` | iw ${s.iw} mq ${s.shellMq} bar ${s.bar === null ? '-' : s.bar.h} head ${b(s.head)} card ${s.card === null ? '-' : s.card.top} gap ${s.gap} barClock ${s.barClock} group ${s.clockGroup} clock "${s.clockText}" btnDisabled ${s.clockButtonDisabled} days ${s.days} sheet ${s.sheet}`;
+};
+let index = 0;
+for (const line of lines) {
+  index += 1;
+  const rec = JSON.parse(line);
+  const call768 = rec.node.find((n) => n.what === 'setViewportSize 768 call')?.t ?? rec.node[0].t;
+  const lastRead = [...rec.node].reverse().find((n) => n.what.startsWith('read done'))?.t ?? call768;
+  const gaps = rec.gaps.map((g) => `${g.width}:${Number.isNaN(g.gap) ? 'n/a' : Math.round(g.gap * 1000) / 1000}`).join(' ');
+  console.log(`\n### #${index} ${rec.project} ${rec.title} repeat ${rec.repeat} worker ${rec.workerIndex} settle ${rec.settle} bad ${rec.bad} gaps ${gaps}${rec.failure ? ` FAILURE ${rec.failure}` : ''}`);
+  const events = [
+    ...rec.diag.map((d) => ({ t: d.t, src: 'page', what: d.what, extra: d.extra, s: d.s, changed: d.changed })),
+    ...rec.node.map((n) => ({ t: n.t, src: 'test', what: n.what, extra: n.v })),
+  ].sort((a, b) => a.t - b.t);
+  const from = mode === 'full' ? -Infinity : call768 - 50;
+  const to = mode === 'full' ? Infinity : lastRead + 400;
+  let lastS;
+  for (const e of events) {
+    if (e.t < from || e.t > to) {
+      if (e.s !== undefined) lastS = e.s;
+      continue;
+    }
+    if (lastS !== undefined && e.t >= from) {
+      console.log(`  [state at window start]${fmt(lastS)}`);
+      lastS = undefined;
+    }
+    const rel = (e.t - call768).toFixed(1).padStart(8);
+    const extra = e.extra === undefined ? '' : ` ${JSON.stringify(e.extra)}`;
+    console.log(`  ${rel} ${e.src} ${e.what}${extra}${e.changed ? fmt(e.s) : ''}`);
+  }
+}

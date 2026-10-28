@@ -4,6 +4,7 @@ import { AppShell, useHashRoute } from './components/AppShell.tsx';
 import { isSettingsRoute } from './components/routeModel.ts';
 import { SettingsNav } from './components/SettingsNav.tsx';
 import { shareEndedMessage } from './components/sharingModel.ts';
+import { followThemeOfOtherTabs } from './components/ThemeToggle.tsx';
 import { HistoryScreen } from './HistoryScreen.tsx';
 import { OtScreen } from './OtScreen.tsx';
 import { ProfileScreen } from './ProfileScreen.tsx';
@@ -21,6 +22,9 @@ export function App() {
   // 'unknown' until the server has answered; an unreadable answer reads as closed, so the sign-in form shows.
   const [setup, setSetup] = useState<'unknown' | 'open' | 'closed'>('unknown');
   const [justCreated, setJustCreated] = useState(false);
+
+  // A theme chosen in another tab of this browser shows here too, with or without the theme control on screen.
+  useEffect(followThemeOfOtherTabs, []);
 
   useEffect(() => {
     api<{ user: User }>('GET', '/api/auth/me')

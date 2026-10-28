@@ -1,0 +1,15 @@
+# The ladder test under the 48-thread burner (beside it): the original and the proposed file, 48 repeats each, desktop, 6 workers, real clock.
+. <task>/env.sh
+OUT=$T/out/ladder-load.txt
+: > $OUT
+G="the longest form that fits its box shows"
+X=$T/export
+rm -f $X/tests/e2e/probe-*.spec.ts
+for V in orig fixed2 orig fixed2; do
+  cp $T/timesheet.spec.$V.ts $X/tests/e2e/timesheet.spec.ts
+  L=lad-load-$V-$(date +%H%M%S)
+  bash $T/run-pw.sh $L tests/e2e/timesheet.spec.ts --project=desktop -g "$G" --repeat-each=48 --workers=6 --trace=off > $T/logs/$L.txt 2>&1
+  echo "$V under the burner: $(node $T/counts.mjs $T/logs/$L.txt)" >> $OUT
+done
+cp $T/timesheet.spec.orig.ts $X/tests/e2e/timesheet.spec.ts
+echo "timesheet.spec.ts restored to the original" >> $OUT

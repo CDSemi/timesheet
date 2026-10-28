@@ -1,0 +1,29 @@
+// Writes the proposed controls.spec.ts edit. Usage: node patch-controls.mjs <in controls.spec.ts> <out>
+// The import, and `await expectLayoutAt(page, width);` after setViewportSize in the title-gap loops of :49 (Timesheet) and :68
+// (Review). Every anchor must match exactly once. :95 (the Timesheet paper) is not changed: the step-delay model found no failure
+// there (sm-orig-real, 0 of 80).
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+let text = readFileSync(input, 'utf8');
+const once = (from, to) => {
+  const count = text.split(from).length - 1;
+  if (count !== 1) throw new Error(`anchor found ${count} times: ${from.slice(0, 120)}`);
+  text = text.replace(from, to);
+};
+once(
+  "import { expect, newPerson, SCREENSHOT_DIR, screenshotPath, test } from './fixtures.ts';",
+  "import { expect, expectLayoutAt, newPerson, SCREENSHOT_DIR, screenshotPath, test } from './fixtures.ts';",
+);
+// :49, the Timesheet title gap.
+once(
+  "      await page.setViewportSize({ width, height: 900 });\n      const head = page.locator('header.page-head');",
+  "      await page.setViewportSize({ width, height: 900 });\n      // From the phone's 390px the check in/out group leaves the top bar for the title row one rendering update after the CSS.\n      await expectLayoutAt(page, width);\n      const head = page.locator('header.page-head');",
+);
+// :68, the Review title gap.
+once(
+  "    await page.setViewportSize({ width, height: 900 });\n    const next = head.locator('xpath=following-sibling::*[1]');",
+  "    await page.setViewportSize({ width, height: 900 });\n    await expectLayoutAt(page, width);\n    const next = head.locator('xpath=following-sibling::*[1]');",
+);
+writeFileSync(output, text);
+console.log(`written ${output}`);

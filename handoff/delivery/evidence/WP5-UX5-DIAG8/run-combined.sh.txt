@@ -1,0 +1,11 @@
+# The combined proof of the tests-only change: DIAG7's patch (already in the export) + proposed.patch.txt (timesheet.spec.ts and theme.spec.ts).
+. <task>/env.sh
+X=$T/export
+rm -f $X/tests/e2e/probe-*.spec.ts
+cp $T/timesheet.spec.fixed2.ts $X/tests/e2e/timesheet.spec.ts
+cp $T/theme.spec.f2c.ts $X/tests/e2e/theme.spec.ts
+cmp $T/fixtures.orig.ts $X/tests/e2e/fixtures.ts && echo "fixtures.ts is the original" > $T/out/combined-start.txt
+cmp $T/timesheet.spec.fixed2.ts $X/tests/e2e/timesheet.spec.ts && echo "timesheet.spec.ts is the proposed one" >> $T/out/combined-start.txt
+cmp $T/theme.spec.f2c.ts $X/tests/e2e/theme.spec.ts && echo "theme.spec.ts is the proposed one" >> $T/out/combined-start.txt
+export LABEL=tests
+bash $T/combined.sh

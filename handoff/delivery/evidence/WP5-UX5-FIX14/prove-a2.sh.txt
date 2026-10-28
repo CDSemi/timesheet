@@ -1,0 +1,10 @@
+# Rerun of the forced hold + stepPeriod probe on the fixed export (prove-a.sh ran it in export-base by mistake: PW_EXPORT was missing, "No tests found").
+. <task>/env.sh
+X=$T/export-fix
+OUT=$T/out/prove-a2.txt
+: > $OUT
+cp $T/probe-ladder-forced-fixed.ts $X/tests/e2e/probe-ladder-forced-fixed.spec.ts
+PW_EXPORT=$X bash $T/run-pw.sh proof-forced-fixed2 tests/e2e/probe-ladder-forced-fixed.spec.ts --project=desktop --repeat-each=24 --workers=6 --trace=off > $T/logs/proof-forced-fixed2.txt 2>&1
+rm -f $X/tests/e2e/probe-ladder-forced-fixed.spec.ts
+echo "forced hold + stepPeriod (desktop x24): $(node $T/counts.mjs $T/logs/proof-forced-fixed2.txt)" >> $OUT
+echo prove-a2-done >> $OUT

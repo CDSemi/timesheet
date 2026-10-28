@@ -1,0 +1,17 @@
+// Usage: node census-summary.mjs <census file> -> process counts by name and total CPU seconds by name (names, counts and CPU times only).
+import { readFileSync } from 'node:fs';
+
+const file = process.argv[2];
+const counts = new Map();
+const cpu = new Map();
+for (const line of readFileSync(file, 'utf8').replace(/\r/g, '').split('\n')) {
+  const m = /^(.+?)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/.exec(line);
+  if (!m) continue;
+  const name = m[1].trim();
+  counts.set(name, (counts.get(name) ?? 0) + 1);
+  cpu.set(name, (cpu.get(name) ?? 0) + (Number(m[4]) + Number(m[5])) / 1e7);
+}
+let total = 0;
+for (const n of counts.values()) total += n;
+console.log(`processes ${total}`);
+for (const name of ['node.exe', 'msedge.exe', 'chrome.exe', 'bash.exe', 'npm.cmd', 'sh.exe']) console.log(`${name} count ${counts.get(name) ?? 0} cpu seconds ${(cpu.get(name) ?? 0).toFixed(1)}`);

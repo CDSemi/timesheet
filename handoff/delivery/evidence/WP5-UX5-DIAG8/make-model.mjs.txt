@@ -1,0 +1,78 @@
+// Usage: node make-model.mjs <fixtures.ts in> <fixtures.ts out>
+// DIAG8 scratch only: adds a `page` fixture that models slow responses and a notification delay, from environment variables:
+//   DIAG_PERIOD_PATTERN="60,0"  the n-th GET /api/timesheets/<date> of a page waits pattern[n % length] ms before it is sent on
+//   DIAG_PERIOD_AFTER=<n>       the pattern starts after the first n timesheet GETs of the page (the first load, the sign-in)
+//   DIAG_XYEAR_DELAY=<ms>       the response of the one period that spans two years (its start and end dates are in different years) waits that long
+//   DIAG_MQ_DELAY=<ms>          the matchMedia 'change' notification (what useMedia and the theme toggle hear) is delayed (DIAG5/DIAG7 model)
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+const source = readFileSync(input, 'utf8').replace(/\r\n/g, '\n');
+const anchor = '  privateServer: [\n';
+if (source.split(anchor).length !== 2) throw new Error('anchor not unique');
+const model = `  // DIAG8 scratch only (models of slow responses and a delayed media notification).
+  page: async ({ page }, use) => {
+    const pattern = (process.env.DIAG_PERIOD_PATTERN ?? '').split(',').filter((part) => part !== '').map(Number);
+    const after = Number(process.env.DIAG_PERIOD_AFTER ?? '1');
+    const crossYear = Number(process.env.DIAG_XYEAR_DELAY ?? '0');
+    if (pattern.length > 0 || crossYear > 0) {
+      let served = 0;
+      await page.route('**/api/timesheets/*', async (route) => {
+        const index = served;
+        served += 1;
+        let wait = index < after || pattern.length === 0 ? 0 : (pattern[(index - after) % pattern.length] ?? 0);
+        if (crossYear > 0) {
+          const response = await route.fetch();
+          try {
+            const body = (await response.json()) as { period: { period_start: string; period_end: string } };
+            if (body.period.period_start.slice(0, 4) !== body.period.period_end.slice(0, 4)) wait += crossYear;
+          } catch {
+            // not a period answer
+          }
+          if (wait > 0) await new Promise((resolveWait) => setTimeout(resolveWait, wait));
+          await route.fulfill({ response });
+          return;
+        }
+        if (wait > 0) await new Promise((resolveWait) => setTimeout(resolveWait, wait));
+        await route.continue();
+      });
+    }
+    const spin = Number(process.env.DIAG_SPIN_MS ?? '0');
+    if (spin > 0) {
+      // A model of a starved tab: the page cannot answer for \`spin\` ms after the first change of a form control (the click on the theme radio).
+      await page.addInitScript((ms: number) => {
+        let done = false;
+        document.addEventListener(
+          'change',
+          () => {
+            if (done) return;
+            done = true;
+            const end = performance.now() + ms;
+            while (performance.now() < end) {
+              // the page is busy
+            }
+          },
+          true,
+        );
+      }, spin);
+    }
+    const delay = Number(process.env.DIAG_MQ_DELAY ?? '0');
+    if (delay > 0) {
+      await page.addInitScript((ms: number) => {
+        const original = window.matchMedia.bind(window);
+        window.matchMedia = (query: string) => {
+          const list = original(query);
+          const add = list.addEventListener.bind(list);
+          list.addEventListener = ((type: string, listener: EventListener, options?: boolean | AddEventListenerOptions) => {
+            if (type === 'change') add(type, ((event: Event) => setTimeout(() => listener(event), ms)) as EventListener, options);
+            else add(type, listener, options);
+          }) as typeof list.addEventListener;
+          return list;
+        };
+      }, delay);
+    }
+    await use(page);
+  },
+`;
+writeFileSync(output, source.replace(anchor, `${model}${anchor}`));
+console.log(`wrote ${output}`);

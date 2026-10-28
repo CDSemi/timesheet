@@ -1,0 +1,19 @@
+# Usage: bash gen-patch.sh <out patch> <base file>:<changed file>:<repo-relative path> [...]
+# Builds a unified diff with repo-relative paths (no prefix), as DIAG7 did, in a fresh folder (nothing is deleted).
+. <task>/env.sh
+OUTP=$1; shift
+G=$T/patchgen-$(date +%H%M%S)-$$
+mkdir -p $G
+: > $OUTP
+for spec in "$@"; do
+  A=${spec%%:*}; REST=${spec#*:}; B=${REST%%:*}; REL=${REST#*:}
+  mkdir -p $G/a/$(dirname $REL) $G/b/$(dirname $REL)
+  cp $A $G/a/$REL
+  cp $B $G/b/$REL
+done
+cd $G
+for spec in "$@"; do
+  REST=${spec#*:}; REL=${REST#*:}
+  git diff --no-index --no-prefix a/$REL b/$REL >> $OUTP 2>> $T/out/gen-patch-warnings.txt
+done
+echo "patch lines: $(wc -l < $OUTP)"

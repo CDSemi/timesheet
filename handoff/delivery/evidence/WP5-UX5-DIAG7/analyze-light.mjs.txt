@@ -1,0 +1,38 @@
+// Usage: node analyze-light.mjs <diag jsonl> [full]
+// Per light-probe test: the gaps read and the settled layout, then a merged timeline (page recorder + test-side marks), in ms relative
+// to the setViewportSize(768) call. Without "full", from the 14 days drawn (or 300 ms before the call) to 300 ms after the last read.
+import { readFileSync } from 'node:fs';
+
+const [file, mode] = process.argv.slice(2);
+const lines = readFileSync(file, 'utf8').split('\n').filter((line) => line.trim() !== '');
+let index = 0;
+const summary = [];
+for (const line of lines) {
+  index += 1;
+  const rec = JSON.parse(line);
+  const call768 = rec.node.find((n) => n.what === 'setViewportSize 768 call')?.t ?? rec.node[0].t;
+  const lastRead = [...rec.node].reverse().find((n) => n.what.startsWith('read done'))?.t ?? call768;
+  const gaps = rec.gaps.map((g) => `${g.width}:${Math.round(g.gap * 1000) / 1000}`).join(' ');
+  const events = [
+    ...rec.diag.map((d) => ({ t: d.t, src: 'page', what: d.what, extra: d.extra })),
+    ...rec.node.map((n) => ({ t: n.t, src: 'test', what: n.what, extra: n.v })),
+  ].sort((a, b) => a.t - b.t);
+  const daysDrawn = rec.diag.find((d) => d.what === 'mutation' && JSON.stringify(d.extra).includes('div.workbar'))?.t;
+  const mq768 = rec.diag.find((d) => d.what === 'shell-mq-change' && d.extra === true && d.t > call768)?.t;
+  const commit = rec.diag.find((d) => d.what === 'mutation' && d.t > call768 && JSON.stringify(d.extra).includes('section.clock-group'))?.t;
+  const lastFetchEnd = [...rec.diag].reverse().find((d) => d.what === 'fetch-end' && d.t < call768)?.t;
+  const inflight = rec.diag.filter((d) => d.what === 'fetch-start' && d.t < call768).length - rec.diag.filter((d) => (d.what === 'fetch-end' || d.what === 'fetch-error') && d.t < call768).length;
+  const longtasks = rec.diag.filter((d) => d.what === 'longtask' && d.t > call768 - 200 && d.t < lastRead).map((d) => `${(d.t - call768).toFixed(0)}+${d.extra}`);
+  const rel = (t) => (t === undefined ? 'n/a' : (t - call768).toFixed(1));
+  const s = `#${index} ${rec.project} ${rec.title} repeat ${rec.repeat} worker ${rec.workerIndex} gaps ${gaps}${rec.bad ? ` BAD ${rec.bad.width}:${rec.bad.gap}` : ''} | days drawn ${rel(daysDrawn)} last fetch end ${rel(lastFetchEnd)} in flight at call ${inflight} | mq768 ${rel(mq768)} commit ${rel(commit)} | long tasks ${longtasks.join(',') || '-'} | settled ${JSON.stringify(rec.settled)}`;
+  summary.push(s);
+  console.log(`\n### ${s}`);
+  const from = mode === 'full' ? -Infinity : Math.min(daysDrawn ?? call768, call768 - 300);
+  const to = mode === 'full' ? Infinity : lastRead + 300;
+  for (const e of events) {
+    if (e.t < from || e.t > to) continue;
+    console.log(`  ${(e.t - call768).toFixed(1).padStart(8)} ${e.src} ${e.what}${e.extra === undefined ? '' : ` ${JSON.stringify(e.extra)}`}`);
+  }
+}
+console.log('\n## summary');
+for (const s of summary) console.log(s);

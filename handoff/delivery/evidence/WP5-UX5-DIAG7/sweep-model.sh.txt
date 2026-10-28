@@ -1,0 +1,12 @@
+# Usage: bash sweep-model.sh <label> <export dir> <instant|real> <workers> <repeat> [extra playwright args]
+# The step-delay model on a scratch copy of the export's controls.spec.ts (sweep-snippet.ts appended), mobile project, the three
+# title/paper tests that leave the phone width: :49 (Timesheet title gap), :68 (Review title gap), :95 (Timesheet paper).
+. <task>/env.sh
+L=$1; X=$2; I=$3; W=$4; R=$5; shift 5
+S=$X/tests/e2e/zz-dly-controls.spec.ts
+cp $X/tests/e2e/controls.spec.ts $S
+cat $T/sweep-snippet.ts >> $S
+export DIAG_MQ_BASE=${DIAG_MQ_BASE:-0} DIAG_MQ_STEP=${DIAG_MQ_STEP:-3}
+SHIFT_EXPORT=$X bash $T/run-shift.sh "$L" $I tests/e2e/zz-dly-controls.spec.ts --project=mobile -g "the title row is 32px above|one paper holds the toolbar" --repeat-each=$R --workers=$W --trace=off "$@" > $T/logs/$L.txt 2>&1
+rm -f $S
+echo "$L (base $DIAG_MQ_BASE step $DIAG_MQ_STEP): $(node $T/counts.mjs $T/logs/$L.txt)" >> $T/out/sweep-model.txt

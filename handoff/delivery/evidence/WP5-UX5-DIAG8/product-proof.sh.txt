@@ -1,0 +1,51 @@
+# Proof of the OPTIONAL product edit (the theme's storage listener always mounted) on top of the tests-only patch:
+#  red: the new e2e test against the unchanged product; green: with the edit; mutant: a listener that never applies the choice.
+# Needs $T/theme.spec.product2.ts (the tests-only change plus the new test) and $T/prod, $T/prod-mut (App.tsx, ThemeToggle.tsx). Restores the sources at the end.
+. <task>/env.sh
+X=${PW_EXPORT:-$T/export}
+OUT=$T/out/product-proof.txt
+: > $OUT
+G="a theme chosen in one tab reaches a second tab whose account menu is closed"
+G2="a storage event keeps a second tab in step"
+rm -f $X/tests/e2e/probe-*.spec.ts
+cp $X/src/client/App.tsx $T/tmp/App.base.tsx
+cp $X/src/client/components/ThemeToggle.tsx $T/tmp/ThemeToggle.base.tsx
+cp $T/theme.spec.product2.ts $X/tests/e2e/theme.spec.ts
+hashes() { (cd $X && for f in $(cd dist && find . -type f | sort); do echo "$(sha256sum dist/$f | cut -d' ' -f1) $f"; done); }
+cd $X
+npm run build > $T/logs/prod-base-build.txt 2>&1
+echo "base build exit=$?" >> $OUT
+hashes > $T/out/dist-hashes-prod-base.txt
+# red
+bash $T/run-pw.sh prod-red tests/e2e/theme.spec.ts -g "$G" --repeat-each=6 --workers=6 --trace=off > $T/logs/prod-red.txt 2>&1
+echo "red (unchanged product, new test): $(node $T/counts.mjs $T/logs/prod-red.txt)" >> $OUT
+# green
+cp $T/prod/App.tsx $X/src/client/App.tsx
+cp $T/prod/ThemeToggle.tsx $X/src/client/components/ThemeToggle.tsx
+cd $X && npm run build > $T/logs/prod-fix-build.txt 2>&1
+echo "fix build exit=$?" >> $OUT
+hashes > $T/out/dist-hashes-prod-fix.txt
+cmp -s $T/out/dist-hashes-prod-base.txt $T/out/dist-hashes-prod-fix.txt && echo "dist: identical (unexpected)" >> $OUT || echo "dist: changed, as a src edit must" >> $OUT
+cd $X
+npm run lint > $T/logs/prod-lint.txt 2>&1
+echo "lint exit=$?" >> $OUT
+npm run typecheck > $T/logs/prod-typecheck.txt 2>&1
+echo "typecheck exit=$?" >> $OUT
+npm test > $T/logs/prod-npmtest.txt 2>&1
+echo "npm test exit=$?" >> $OUT
+bash $T/run-pw.sh prod-green tests/e2e/theme.spec.ts --repeat-each=10 --workers=6 --trace=off > $T/logs/prod-green.txt 2>&1
+echo "green (edit, the whole theme.spec.ts, both projects x10): $(node $T/counts.mjs $T/logs/prod-green.txt)" >> $OUT
+# mutant: the listener is there but never applies the choice
+cp $T/prod-mut/ThemeToggle.tsx $X/src/client/components/ThemeToggle.tsx
+cd $X && npm run build > $T/logs/prod-mut-build.txt 2>&1
+echo "mutant build exit=$?" >> $OUT
+bash $T/run-pw.sh prod-mut tests/e2e/theme.spec.ts -g "$G" --repeat-each=6 --workers=6 --trace=off > $T/logs/prod-mut.txt 2>&1
+echo "mutant (listener never applies), new test: $(node $T/counts.mjs $T/logs/prod-mut.txt)" >> $OUT
+# restore
+cp $T/tmp/App.base.tsx $X/src/client/App.tsx
+cp $T/tmp/ThemeToggle.base.tsx $X/src/client/components/ThemeToggle.tsx
+cp $T/theme.spec.orig.ts $X/tests/e2e/theme.spec.ts
+cd $X && npm run build > $T/logs/prod-restore-build.txt 2>&1
+echo "restore build exit=$?" >> $OUT
+hashes > $T/out/dist-hashes-prod-restored.txt
+cmp $T/out/dist-hashes-prod-base.txt $T/out/dist-hashes-prod-restored.txt && echo "dist restored: identical to the base build ($(wc -l < $T/out/dist-hashes-prod-restored.txt) files)" >> $OUT

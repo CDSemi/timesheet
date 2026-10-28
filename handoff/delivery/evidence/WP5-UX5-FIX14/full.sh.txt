@@ -1,0 +1,18 @@
+# Real-clock FULL e2e on both projects (one after the other, each alone) in the fixed export, then npm test, then the sweep-instant run.
+. <task>/env.sh
+X=$T/export-fix
+OUT=$T/out/full.txt
+: > $OUT
+rm -f $X/tests/e2e/probe-*.spec.ts $X/tests/e2e/zz-*.spec.ts
+cmp $T/fixtures.orig.ts $X/tests/e2e/fixtures.ts && echo "fixtures.ts is the original" >> $OUT
+cd $X
+npm test > $T/logs/npm-test.txt 2>&1
+echo "npm test exit=$?" >> $OUT
+for P in desktop mobile; do
+  PW_EXPORT=$X bash $T/run-pw.sh full-$P --project=$P > $T/logs/full-$P.txt 2>&1
+  echo "full $P: $(node $T/counts.mjs $T/logs/full-$P.txt)" >> $OUT
+done
+FILES="tests/e2e/admin-status.spec.ts tests/e2e/classic-scrollbar.spec.ts tests/e2e/controls.spec.ts tests/e2e/day-editor.spec.ts tests/e2e/hover.spec.ts tests/e2e/keyboard-access.spec.ts tests/e2e/logo.spec.ts tests/e2e/pdf-visual.spec.ts tests/e2e/review.spec.ts tests/e2e/settings-routes.spec.ts tests/e2e/shell.spec.ts tests/e2e/surfaces.spec.ts tests/e2e/theme.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/today.spec.ts"
+SHIFT_I=2027-03-14T10:30:00Z PW_EXPORT=$X bash $T/run-pw.sh sweep-0314 $FILES --workers=6 --trace=off > $T/logs/sweep-0314.txt 2>&1
+echo "sweep 2027-03-14T10:30Z (both projects, 6 workers): $(node $T/counts.mjs $T/logs/sweep-0314.txt)" >> $OUT
+echo full-done >> $OUT

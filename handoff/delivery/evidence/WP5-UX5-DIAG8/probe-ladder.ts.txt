@@ -1,0 +1,112 @@
+import { appendFileSync } from 'node:fs';
+import { rangeKind, rangeLadder, rangeSpokenText, rangeText } from '../../src/client/components/periodBarModel.ts';
+import { expect, test } from './fixtures.ts';
+import { rangeState } from './periodCard.ts';
+
+/*
+ * WP5-UX5-DIAG8 probe (scratch, never proposed): the range ladder test of timesheet.spec.ts:2596 with the same steps and the same
+ * check(), plus a page-side recorder of every change of the displayed period (payroll date and range kind) and a Node-side
+ * record of when each step read the kind. The result of each run is one JSON line in DIAG_OUT.
+ * PROBE_DELAY=<ms>: delay every GET /api/timesheets/<date> by that long (a model of a slow period response).
+ * PROBE_DELAY_UNTIL=<n>: delay only the first n period responses after the first load (a regime change from slow to fast).
+ */
+test.skip(({ isMobile }) => isMobile, 'desktop only, as the original');
+
+test('probe: the range ladder with a record of what each step read', async ({ page, signInThroughUi }, testInfo) => {
+  test.setTimeout(240_000);
+  const delay = Number(process.env.PROBE_DELAY ?? '0');
+  const until = Number(process.env.PROBE_DELAY_UNTIL ?? '0');
+  let served = 0;
+  if (delay > 0) {
+    await page.route('**/api/timesheets/*', async (route) => {
+      served += 1;
+      if (until === 0 || served - 1 <= until) await new Promise((resolve) => setTimeout(resolve, delay));
+      await route.continue();
+    });
+  }
+  await page.addInitScript(() => {
+    const log: Array<{ t: number; due: string | null; kind: string | null; what: string }> = [];
+    (window as unknown as { __log: typeof log }).__log = log;
+    let last = '';
+    const note = (what: string) => {
+      const due = document.querySelector('[data-period-due]')?.getAttribute('data-period-due') ?? null;
+      const kind = document.querySelector('.period-name')?.getAttribute('data-range-kind') ?? null;
+      const key = `${due}|${kind}`;
+      if (key !== last) {
+        last = key;
+        log.push({ t: performance.timeOrigin + performance.now(), due, kind, what });
+      }
+    };
+    new MutationObserver(() => note('mutation')).observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+    document.addEventListener(
+      'click',
+      (event) => {
+        const label = (event.target as Element | null)?.closest('button')?.getAttribute('aria-label') ?? '';
+        if (/period$/.test(label)) log.push({ t: performance.timeOrigin + performance.now(), due: null, kind: null, what: `click ${label}` });
+      },
+      true,
+    );
+  });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const seen = new Set<string>();
+  const steps: Array<{ step: number; dir: string; clickStart: number; clickEnd: number; counted: number; readStart: number; readEnd: number; kind: string | null; due: string | null }> = [];
+  const measured: Array<{ step: number; kind: string; width: number; readDue: string | null; measuredDue: string | null }> = [];
+  let stepNo = 0;
+  const check = async (dir: string, clickStart: number, clickEnd: number, counted: number) => {
+    const readStart = Date.now();
+    // The same single read as the test's getAttribute (one locator resolution and one call into the page), returning the period it hit too.
+    const hit = await page.locator('.period-name').evaluate((element) => ({
+      kind: element.getAttribute('data-range-kind'),
+      due: document.querySelector('[data-period-due]')?.getAttribute('data-period-due') ?? null,
+    }));
+    const kind = hit.kind;
+    const readEnd = Date.now();
+    steps.push({ step: stepNo, dir, clickStart, clickEnd, counted, readStart, readEnd, kind, due: hit.due });
+    stepNo += 1;
+    if (kind === null || seen.has(kind)) return;
+    seen.add(kind);
+    for (const width of [320, 360, 390, 430]) {
+      await page.setViewportSize({ width, height: 900 });
+      // The period that the measurement below is taken from (read in the same turn of the page), against the period whose kind this step read.
+      const [state, measuredDue] = await Promise.all([
+        rangeState(page),
+        page.evaluate<string | null>("document.querySelector('[data-period-due]')?.getAttribute('data-period-due') ?? null"),
+      ]);
+      measured.push({ step: stepNo - 1, kind, width, readDue: hit.due, measuredDue });
+      const dates = /^(\d{2})\/(\d{2})\/(\d{4}) to (\d{2})\/(\d{2})\/(\d{4})$/.exec(state.spoken);
+      expect(dates).not.toBeNull();
+      const [, startMonth, startDay, startYear, endMonth, endDay, endYear] = dates ?? [];
+      const start = `${startYear}-${startMonth}-${startDay}`;
+      const end = `${endYear}-${endMonth}-${endDay}`;
+      expect(state.spoken).toBe(rangeSpokenText(start, end));
+      expect(state.kind).toBe(rangeKind(start, end));
+      const ladder = rangeLadder(start, end);
+      const fitting = ladder.find((form) => (state.widths[form] ?? Number.POSITIVE_INFINITY) <= state.box + 0.5) ?? ladder[ladder.length - 1] ?? 'full';
+      expect(state.text).toBe(rangeText(start, end, fitting));
+    }
+  };
+  await check('start', Date.now(), Date.now(), Date.now());
+  for (let step = 0; step < 14 && seen.size < 3; step += 1) {
+    await page.setViewportSize({ width: 390, height: 900 });
+    const clickStart = Date.now();
+    await page.getByRole('button', { name: 'Next period' }).click();
+    const clickEnd = Date.now();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await check('next', clickStart, clickEnd, Date.now());
+  }
+  for (let step = 0; step < 28 && seen.size < 3; step += 1) {
+    await page.setViewportSize({ width: 390, height: 900 });
+    const clickStart = Date.now();
+    await page.getByRole('button', { name: 'Previous period' }).click();
+    const clickEnd = Date.now();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await check('prev', clickStart, clickEnd, Date.now());
+  }
+  const pageLog = await page.evaluate<unknown>('window.__log');
+  appendFileSync(
+    process.env.DIAG_OUT ?? 'diag.jsonl',
+    `${JSON.stringify({ run: `${testInfo.workerIndex}.${testInfo.repeatEachIndex}`, seen: [...seen].sort(), steps, measured, pageLog })}\n`,
+  );
+  expect([...seen].sort(), 'a one-month, a two-month and a two-year range were checked').toEqual(['cross-month', 'cross-year', 'same-month']);
+});

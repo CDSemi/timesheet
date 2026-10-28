@@ -1,0 +1,135 @@
+import { appendFileSync } from 'node:fs';
+import type { Locator, Page } from '@playwright/test';
+import { expect, openAccount, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-DIAG8 probe (scratch, never proposed): theme.spec.ts:376 with the same steps and the same helpers, plus the time of every step
+ * (each written at once), a page-side record in both tabs (`storage` events heard, changes of data-theme, visibility and focus), and, when a
+ * paint check fails, what both tabs show at that moment (read with a 3 s limit). One JSON line per run in DIAG_OUT (+ ".marks" for the steps).
+ * PROBE_FRONT=1 calls bringToFront before each tab is driven.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const BG = { dark: 'rgb(14, 18, 23)', light: 'rgb(237, 240, 245)' } as const;
+type Theme = 'light' | 'dark';
+const THEMES: readonly Theme[] = ['light', 'dark'];
+const OPTION_NAME: Record<Theme, string> = { light: 'Light', dark: 'Dark' };
+
+interface ThemeControl {
+  radio: Record<Theme, Locator>;
+}
+
+async function themeControl(page: Page): Promise<ThemeControl> {
+  const panel = await openAccount(page);
+  const group = panel.getByRole('radiogroup', { name: 'Theme', exact: true });
+  await expect(group).toBeVisible();
+  const radio = {
+    light: group.getByRole('radio', { name: OPTION_NAME.light, exact: true }),
+    dark: group.getByRole('radio', { name: OPTION_NAME.dark, exact: true }),
+  };
+  await expect(radio.light).toBeVisible();
+  await expect(radio.dark).toBeVisible();
+  return { radio };
+}
+
+async function expectChecked(control: ThemeControl, theme: Theme): Promise<void> {
+  for (const option of THEMES) await expect(control.radio[option], `${OPTION_NAME[option]} is ${option === theme ? '' : 'not '}checked`).toBeChecked({ checked: option === theme });
+}
+
+async function themeState(page: Page): Promise<{ attribute: string | null; bodyBackground: string }> {
+  return page.evaluate<{ attribute: string | null; bodyBackground: string }>(`({
+    attribute: document.documentElement.getAttribute('data-theme'),
+    bodyBackground: getComputedStyle(document.body).backgroundColor,
+  })`);
+}
+
+const RECORDER = `(() => {
+  const log = [];
+  window.__log = log;
+  const at = () => performance.timeOrigin + performance.now();
+  const note = (what) => log.push({ t: at(), what, theme: document.documentElement.getAttribute('data-theme'), visible: document.visibilityState, focused: document.hasFocus(), panel: !!document.querySelector('#more-panel, #account-menu') });
+  window.addEventListener('storage', (event) => note('storage key=' + event.key));
+  new MutationObserver(() => note('data-theme')).observe(document, { attributes: true, subtree: true, attributeFilter: ['data-theme'] });
+  document.addEventListener('visibilitychange', () => note('visibilitychange'));
+  window.addEventListener('focus', () => note('focus'));
+  window.addEventListener('blur', () => note('blur'));
+})();`;
+
+test('probe: a storage event keeps a second tab in step, with the time of every step', async ({ page, signInThroughUi }, testInfo) => {
+  const marks: Array<{ step: string; ms: number }> = [];
+  const started = Date.now();
+  const runId = `${testInfo.workerIndex}.${testInfo.repeatEachIndex}`;
+  const out = process.env.DIAG_OUT ?? 'diag.jsonl';
+  const mark = (step: string) => {
+    marks.push({ step, ms: Date.now() - started });
+    appendFileSync(`${out}.marks`, `${JSON.stringify({ run: runId, project: testInfo.project.name, step, ms: Date.now() - started })}\n`);
+  };
+  const peek = (target: Page): Promise<unknown> =>
+    Promise.race([
+      target.evaluate<unknown>(
+        `({ attribute: document.documentElement.getAttribute('data-theme'), bg: getComputedStyle(document.body).backgroundColor, stored: (() => { try { return localStorage.getItem('timesheet.theme'); } catch (e) { return 'blocked'; } })(), visible: document.visibilityState, focused: document.hasFocus(), panel: !!document.querySelector('#more-panel, #account-menu'), log: window.__log })`,
+      ),
+      new Promise((resolve) => setTimeout(() => resolve('no answer in 3 s'), 3000)),
+    ]);
+  let second: Page | undefined;
+  // The test's expectPainted, with a record of both tabs when it fails.
+  const painted = async (target: Page, name: string, theme: Theme, explicit: boolean) => {
+    try {
+      await expect.poll(async () => (await themeState(target)).bodyBackground, { message: `the page is painted ${theme}` }).toBe(BG[theme]);
+      const state = await themeState(target);
+      expect(state.attribute, 'data-theme').toBe(explicit ? theme : null);
+    } catch (error) {
+      const entry = { run: runId, project: testInfo.project.name, failedAt: name, ms: Date.now() - started, A: await peek(page), B: second === undefined ? null : await peek(second) };
+      appendFileSync(`${out}.failures`, `${JSON.stringify(entry)}\n`);
+      throw error;
+    }
+  };
+  const front = async (target: Page) => {
+    if (process.env.PROBE_FRONT === '1') await target.bringToFront();
+  };
+  await page.addInitScript({ content: RECORDER });
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signInThroughUi();
+  mark('signed in');
+  const control = await themeControl(page);
+  mark('A control');
+
+  second = await page.context().newPage();
+  await second.addInitScript({ content: RECORDER });
+  mark('B created');
+  await second.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await second.goto('/#/timesheet');
+  mark('B loaded');
+  const secondControl = await themeControl(second);
+  mark('B control');
+  await painted(second, 'B light', 'light', false);
+  await expectChecked(secondControl, 'light');
+  mark('B light');
+
+  await front(page);
+  const flagsBefore = {
+    A: await page.evaluate<string>('document.visibilityState + "/" + (document.hasFocus() ? "focus" : "nofocus")'),
+    B: await second.evaluate<string>('document.visibilityState + "/" + (document.hasFocus() ? "focus" : "nofocus")'),
+  };
+  mark('flags read');
+  await control.radio.dark.click();
+  mark('A clicked dark');
+  await painted(page, 'A dark', 'dark', true);
+  mark('A dark');
+  await painted(second, 'B dark', 'dark', true);
+  mark('B dark');
+  await expectChecked(secondControl, 'dark');
+  mark('B checked dark');
+
+  await front(second);
+  await secondControl.radio.light.click();
+  mark('B clicked light');
+  await painted(page, 'A light', 'light', true);
+  mark('A light');
+  await expectChecked(control, 'light');
+  mark('A checked light');
+  const logA = await page.evaluate<unknown>('window.__log');
+  const logB = await second.evaluate<unknown>('window.__log');
+  await second.close();
+  appendFileSync(out, `${JSON.stringify({ run: runId, project: testInfo.project.name, marks, flagsBefore, logA, logB })}\n`);
+});

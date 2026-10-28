@@ -1,0 +1,22 @@
+# F1 deterministic and modelled runs.
+. <task>/env.sh
+OUT=$T/out/f1-model.txt
+: > $OUT
+G="the longest form that fits its box shows"
+X=$T/export
+rm -f $X/tests/e2e/probe-ladder.spec.ts $X/tests/e2e/probe-theme.spec.ts
+# 1. the forced interleaving (the original loops and check(), the two-year answer held back until the step has read)
+cp $T/probe-ladder-forced.spec.ts $X/tests/e2e/probe-ladder-forced.spec.ts
+bash $T/run-pw.sh forced tests/e2e/probe-ladder-forced.spec.ts --project=desktop --repeat-each=6 --workers=6 --trace=off > $T/logs/forced.txt 2>&1
+echo "forced (original loops, held two-year answer): $(node $T/counts.mjs $T/logs/forced.txt)" >> $OUT
+rm -f $X/tests/e2e/probe-ladder-forced.spec.ts
+# 2. a model: the two-year period's answer waits 300 ms (original and fixed2), then 150 ms
+for D in 300 150; do
+  for V in orig fixed2; do
+    cp $T/timesheet.spec.$V.ts $X/tests/e2e/timesheet.spec.ts
+    DIAG_XYEAR_DELAY=$D bash $T/with-model.sh xy$D-$V tests/e2e/timesheet.spec.ts --project=desktop -g "$G" --repeat-each=36 --workers=6 --trace=off > $T/logs/xy$D-$V.txt 2>&1
+    echo "two-year answer +${D} ms, $V: $(node $T/counts.mjs $T/logs/xy$D-$V.txt)" >> $OUT
+  done
+done
+cp $T/timesheet.spec.orig.ts $X/tests/e2e/timesheet.spec.ts
+echo "timesheet.spec.ts restored to the original" >> $OUT

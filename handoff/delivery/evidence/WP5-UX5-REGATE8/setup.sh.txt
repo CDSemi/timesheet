@@ -1,0 +1,17 @@
+. /d/.claude-tmp/timesheet/WP5-UX5-REGATE8/env.sh
+mkdir -p $T/tmp $T/out $T/logs $T/data $T/export $T/export-prev
+cd $REPO
+git rev-parse HEAD > $T/out/00-head.txt
+git rev-parse origin/main >> $T/out/00-head.txt 2>&1
+git branch --show-current >> $T/out/00-head.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-before.txt 2>&1
+git diff --stat $PREV..$TARGET -- . ':!handoff' > $T/out/20-diffstat-nonhandoff.txt 2>&1
+git diff --name-status $PREV..$TARGET -- . ':!handoff' > $T/out/20-namestatus.txt 2>&1
+git diff --stat $PREV..$TARGET -- package.json package-lock.json > $T/out/25-lock-and-scope.txt 2>&1
+echo "lock/package diff lines: $(wc -l < $T/out/25-lock-and-scope.txt)" >> $T/out/25-lock-and-scope.txt
+git diff $PREV..$TARGET -- src > $T/src.diff 2>&1
+git diff $PREV..$TARGET -- tests > $T/tests.diff 2>&1
+git archive $TARGET | tar -x -C $T/export
+git archive $PREV | tar -x -C $T/export-prev
+ls $T/export | wc -l
+cat $T/out/00-head.txt $T/out/20-namestatus.txt $T/out/00-nonhandoff-status-before.txt

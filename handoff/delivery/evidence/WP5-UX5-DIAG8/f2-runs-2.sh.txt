@@ -1,0 +1,11 @@
+# F2 under a lighter burner (run next to node burner.mjs 16 <seconds>): the instrumented test with and without bringToFront before each tab is driven.
+. <task>/env.sh
+OUT=$T/out/f2-runs-2.txt
+: > $OUT
+for V in nofront front; do
+  if [ "$V" = "front" ]; then F=1; else F=0; fi
+  bash $T/theme-probe.sh th-b16-$V mobile 30 DIAG_MQ_DELAY=45 PROBE_FRONT=$F
+  echo "th-b16-$V: $(cat $T/out/th-b16-$V-counts.txt)" >> $OUT
+  node $T/analyze-marks.mjs $T/out/diag-th-b16-$V.jsonl.marks > $T/out/th-b16-$V-marks.txt 2>&1
+done
+rm -f $T/export/tests/e2e/probe-theme.spec.ts

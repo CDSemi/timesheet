@@ -1,0 +1,26 @@
+# Proof on the fixed export (export-fix): the models and the repeat runs (the burner run and the mutants are separate scripts).
+. <task>/env.sh
+X=$T/export-fix
+OUT=$T/out/prove-a.txt
+: > $OUT
+cd $X
+for f in controls timesheet theme; do cmp $T/$f.spec.fixed.ts tests/e2e/$f.spec.ts && echo "$f.spec.ts is the fixed one" >> $OUT; done
+cmp $T/fixtures.orig.ts tests/e2e/fixtures.ts && echo "fixtures.ts is the original" >> $OUT
+# 1. models
+: > $T/out/sweep-model.txt
+for P in mobile desktop; do
+  bash $T/sweep-model.sh proof-sweep-$P $X real 6 40 $P
+done
+cat $T/out/sweep-model.txt >> $OUT
+cp $T/probe-ladder-forced-fixed.ts $X/tests/e2e/probe-ladder-forced-fixed.spec.ts
+bash $T/run-pw.sh proof-forced-fixed tests/e2e/probe-ladder-forced-fixed.spec.ts --project=desktop --repeat-each=24 --workers=6 --trace=off > $T/logs/proof-forced-fixed.txt 2>&1
+rm -f $X/tests/e2e/probe-ladder-forced-fixed.spec.ts
+echo "forced hold + stepPeriod (desktop x24): $(node $T/counts.mjs $T/logs/proof-forced-fixed.txt)" >> $OUT
+# 2. repeat runs
+PW_EXPORT=$X bash $T/run-pw.sh proof-ladder tests/e2e/timesheet.spec.ts --project=desktop -g "the range ladder" --repeat-each=60 --workers=6 --trace=off > $T/logs/proof-ladder.txt 2>&1
+echo "range ladder (desktop x60): $(node $T/counts.mjs $T/logs/proof-ladder.txt)" >> $OUT
+PW_EXPORT=$X bash $T/run-pw.sh proof-theme tests/e2e/theme.spec.ts --repeat-each=10 --workers=6 --trace=off > $T/logs/proof-theme.txt 2>&1
+echo "theme.spec.ts whole (both projects x10): $(node $T/counts.mjs $T/logs/proof-theme.txt)" >> $OUT
+PW_EXPORT=$X bash $T/run-pw.sh proof-controls tests/e2e/controls.spec.ts -g "the title row is 32px above" --repeat-each=20 --workers=6 --trace=off > $T/logs/proof-controls.txt 2>&1
+echo "controls :49 and :68 (both projects x20): $(node $T/counts.mjs $T/logs/proof-controls.txt)" >> $OUT
+echo prove-a-done >> $OUT

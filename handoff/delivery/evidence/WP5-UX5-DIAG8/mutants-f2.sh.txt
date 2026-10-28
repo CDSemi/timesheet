@@ -1,0 +1,25 @@
+# F2 mutant: the theme control's storage listener never applies the choice. The cross-tab test (with the proposed bringToFront steps) must fail.
+. <task>/env.sh
+X=${PW_EXPORT:-$T/export}
+OUT=$T/out/mutants-f2.txt
+: > $OUT
+G="a storage event keeps a second tab in step"
+F=src/client/components/ThemeToggle.tsx
+hashes() { (cd $X && for f in $(cd dist && find . -type f | sort); do echo "$(sha256sum dist/$f | cut -d' ' -f1) $f"; done); }
+hashes > $T/out/dist-hashes-before-f2.txt
+cp $X/$F $T/tmp/ThemeToggle.f2backup
+node $T/mutate.mjs $X/$F $T/mut-f2.from.txt $T/mut-f2.to.txt >> $OUT 2>&1
+(cd $X && npm run build > $T/logs/mut-f2-build.txt 2>&1; echo "build exit=$?" >> $OUT)
+for V in f2c orig; do
+  cp $T/theme.spec.$V.ts $X/tests/e2e/theme.spec.ts
+  bash $T/run-pw.sh mut-f2-$V tests/e2e/theme.spec.ts -g "$G" --repeat-each=6 --workers=6 --trace=off > $T/logs/mut-f2-$V.txt 2>&1
+  echo "$V: $(node $T/counts.mjs $T/logs/mut-f2-$V.txt)" >> $OUT
+done
+cp $T/tmp/ThemeToggle.f2backup $X/$F
+cmp $T/tmp/ThemeToggle.f2backup $X/$F && echo "$F restored byte-equal" >> $OUT
+cd $X && npm run build > $T/logs/mut-f2-restore-build.txt 2>&1
+echo "restore build exit=$?" >> $OUT
+hashes > $T/out/dist-hashes-after-f2.txt
+cmp $T/out/dist-hashes-before-f2.txt $T/out/dist-hashes-after-f2.txt && echo "dist identical after restore: $(wc -l < $T/out/dist-hashes-after-f2.txt) files" >> $OUT
+cp $T/theme.spec.orig.ts $X/tests/e2e/theme.spec.ts
+echo "theme.spec.ts restored to the original" >> $OUT

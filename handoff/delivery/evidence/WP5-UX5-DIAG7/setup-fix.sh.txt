@@ -1,0 +1,35 @@
+# A second scratch export of HEAD with the proposed controls.spec.ts edit (own npm ci and build), the patch file, and the
+# git apply --check of that patch in a third, fresh export.
+. <task>/env.sh
+OUT=$T/out/fix-setup.txt
+: > $OUT
+mkdir -p $T/export-fix $T/export-check $T/patchgen/a/tests/e2e $T/patchgen/b/tests/e2e
+cd $REPO
+git archive $TARGET | tar -x -C $T/export-fix
+git archive $TARGET | tar -x -C $T/export-check
+cp $T/export/tests/e2e/controls.spec.ts $T/patchgen/a/tests/e2e/controls.spec.ts
+node $T/patch-controls.mjs $T/patchgen/a/tests/e2e/controls.spec.ts $T/patchgen/b/tests/e2e/controls.spec.ts >> $OUT 2>&1
+cd $T/patchgen
+git diff --no-index --no-prefix a/tests/e2e/controls.spec.ts b/tests/e2e/controls.spec.ts > $T/out/proposed.patch
+echo "diff exit (1 = differences): $?" >> $OUT
+cd $T/export-check
+git apply --check -v $T/out/proposed.patch >> $OUT 2>&1
+echo "git apply --check exit=$?" >> $OUT
+git apply --check --whitespace=error $T/out/proposed.patch >> $OUT 2>&1
+echo "git apply --check --whitespace=error exit=$?" >> $OUT
+cd $T/export-fix
+git apply $T/out/proposed.patch >> $OUT 2>&1
+echo "git apply (export-fix) exit=$?" >> $OUT
+cmp $T/patchgen/b/tests/e2e/controls.spec.ts $T/export-fix/tests/e2e/controls.spec.ts && echo "export-fix controls.spec.ts equals the patched file" >> $OUT
+npm ci > $T/logs/fix-ci.txt 2>&1
+echo "ci exit=$?" >> $OUT
+npm run build > $T/logs/fix-build.txt 2>&1
+echo "build exit=$?" >> $OUT
+npm run lint > $T/logs/fix-lint.txt 2>&1
+echo "lint exit=$?" >> $OUT
+npm run typecheck > $T/logs/fix-typecheck.txt 2>&1
+echo "typecheck exit=$?" >> $OUT
+cd $T
+for f in $(cd export/dist && find . -type f | sort); do echo "$(sha256sum export/dist/$f | cut -d' ' -f1) $f"; done > out/dist-hashes-orig.txt
+for f in $(cd export-fix/dist && find . -type f | sort); do echo "$(sha256sum export-fix/dist/$f | cut -d' ' -f1) $f"; done > out/dist-hashes-fix.txt
+cmp out/dist-hashes-orig.txt out/dist-hashes-fix.txt && echo "dist identical: $(wc -l < out/dist-hashes-fix.txt) files" >> $OUT

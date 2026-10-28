@@ -1,0 +1,15 @@
+# F2 first look: the instrumented copy of theme.spec.ts:376, mobile (the project of the failure) with the 45 ms media-notification model, then desktop; plus the forced ladder probe again.
+. <task>/env.sh
+OUT=$T/out/f2-runs-1.txt
+: > $OUT
+X=$T/export
+rm -f $X/tests/e2e/probe-ladder.spec.ts
+cp $T/probe-ladder-forced.spec.ts $X/tests/e2e/probe-ladder-forced.spec.ts
+bash $T/run-pw.sh forced2 tests/e2e/probe-ladder-forced.spec.ts --project=desktop --repeat-each=6 --workers=6 --trace=off > $T/logs/forced2.txt 2>&1
+echo "forced2 (original loops, held two-year answer): $(node $T/counts.mjs $T/logs/forced2.txt)" >> $OUT
+rm -f $X/tests/e2e/probe-ladder-forced.spec.ts
+bash $T/theme-probe.sh th-mobile45 mobile 60 DIAG_MQ_DELAY=45
+echo "th-mobile45: $(cat $T/out/th-mobile45-counts.txt)" >> $OUT
+bash $T/theme-probe.sh th-desktop45 desktop 60 DIAG_MQ_DELAY=45
+echo "th-desktop45: $(cat $T/out/th-desktop45-counts.txt)" >> $OUT
+rm -f $X/tests/e2e/probe-theme.spec.ts

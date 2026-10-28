@@ -1,0 +1,32 @@
+// Usage: node analyze-theme.mjs <diag jsonl> -> per run: total, the slowest step, and the cross-tab facts (storage event in B, the paint of B,
+// visibility and focus of both tabs); then quantiles of every step over all runs.
+import { readFileSync } from 'node:fs';
+
+const lines = readFileSync(process.argv[2], 'utf8').split('\n').filter((l) => l.trim() !== '');
+const perStep = new Map();
+const rows = [];
+for (const line of lines) {
+  const run = JSON.parse(line);
+  let prev = 0;
+  let slow = { step: '', ms: 0 };
+  for (const m of run.marks) {
+    const d = m.ms - prev;
+    prev = m.ms;
+    if (!perStep.has(m.step)) perStep.set(m.step, []);
+    perStep.get(m.step).push(d);
+    if (d > slow.ms) slow = { step: m.step, ms: d };
+  }
+  const total = run.marks[run.marks.length - 1].ms;
+  const storageB = run.logB.filter((e) => String(e.what).startsWith('storage'));
+  const attrB = run.logB.filter((e) => e.what === 'data-theme');
+  const flagsA = [...new Set(run.logA.map((e) => `${e.visible}/${e.focused ? 'focus' : 'nofocus'}`))].join(',');
+  const flagsB = [...new Set(run.logB.map((e) => `${e.visible}/${e.focused ? 'focus' : 'nofocus'}`))].join(',');
+  rows.push(
+    `run ${run.run} [${run.project}] (before the click: A ${run.flagsBefore?.A}, B ${run.flagsBefore?.B}): total=${total} ms, slowest step "${slow.step}" ${slow.ms} ms; B heard ${storageB.length} storage event(s), B data-theme changes=${attrB.length}; A ${flagsA}; B ${flagsB}`,
+  );
+}
+const q = (xs, p) => [...xs].sort((x, y) => x - y)[Math.min(xs.length - 1, Math.floor(xs.length * p))];
+console.log(rows.join('\n'));
+console.log('--- per step over all runs (ms): median / p90 / max');
+for (const [step, xs] of perStep) console.log(`${step}: ${q(xs, 0.5)} / ${q(xs, 0.9)} / ${q(xs, 0.999)}`);
+console.log(`runs=${lines.length}`);

@@ -1,0 +1,52 @@
+/* ---- DIAG7 screenshot probe (scratch only): the two layouts after setViewportSize(768) from the phone's 390x844 ------------- */
+
+// React's matchMedia notification is held back 3 s (the delay model) so the stale layout X stays on screen long enough to capture;
+// then the test waits for React's commit (.bar-clock gone) and captures the settled layout S768. Both are measured. Screenshots go
+// to the task folder only (synthetic data); the record describes them.
+
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const OUT = process.env.DIAG_OUT ?? '';
+const SHOTS = process.env.E2E_SCREENSHOT_DIR ?? '.';
+
+test('diag7 screenshots of the stale and the settled layout at 768', async ({ page, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'mobile start viewport only');
+  await page.addInitScript(() => {
+    const original = window.matchMedia.bind(window);
+    window.matchMedia = (query: string) => {
+      const list = original(query);
+      const add = list.addEventListener.bind(list);
+      list.addEventListener = ((type: string, listener: EventListener, options?: boolean | AddEventListenerOptions) => {
+        if (type === 'change') add(type, ((event: Event) => setTimeout(() => listener(event), 3000)) as EventListener, options);
+        else add(type, listener, options);
+      }) as typeof list.addEventListener;
+      return list;
+    };
+  });
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const measure = () =>
+    page.evaluate(() => {
+      const r = (s: string) => {
+        const b = document.querySelector(s)?.getBoundingClientRect();
+        return b === undefined ? null : { top: b.top, bottom: b.bottom, height: b.height };
+      };
+      const head = r('header.page-head');
+      const card = r('.workbar');
+      return { iw: window.innerWidth, bar: r('header.shell-bar'), head, card, gap: head && card ? card.top - head.bottom : null, barClock: document.querySelector('.bar-clock') !== null, clockGroup: document.querySelector('.clock-group') !== null, sheet: document.querySelector('[data-paper] [data-sheet]')?.getAttribute('data-sheet') ?? null };
+    });
+  await page.setViewportSize({ width: 768, height: 900 });
+  const stale = await measure();
+  await page.screenshot({ path: join(SHOTS, 'diag7-768-stale-synthetic.png') });
+  await expect(page.locator('.bar-clock')).toHaveCount(0);
+  const settled = await measure();
+  await page.screenshot({ path: join(SHOTS, 'diag7-768-settled-synthetic.png') });
+  if (OUT !== '') appendFileSync(OUT, `${JSON.stringify({ stale, settled })}\n`);
+  expect(stale.barClock).toBe(true);
+  expect(settled.gap).toBeCloseTo(32, 0);
+});

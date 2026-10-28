@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+cd /d/.claude-tmp/timesheet/WP5-UX5-REGATE8
+. ./env.sh
+echo "master start $(date -u +%H:%M:%SZ)" > logs/master.log
+for s in drill chain2 sweep stress models mut axe; do
+  bash $s.sh > logs/$s-stdout.txt 2>&1
+  echo "$s done $(date -u +%H:%M:%SZ)" >> logs/master.log
+done
+echo master-done > out/master.done

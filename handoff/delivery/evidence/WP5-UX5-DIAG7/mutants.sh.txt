@@ -1,0 +1,24 @@
+# Mutants on the patched scratch export (export-fix): a rule appended to styles.css, client rebuilt, then the patched title-gap tests
+# and an unchanged copy of the original tests run on both projects. styles.css is restored byte-equal and dist rebuilt afterwards.
+. <task>/env.sh
+X=$T/export-fix
+OUT=$T/out/mutants.txt
+: > $OUT
+cp $X/src/client/styles.css $T/tmp/styles.orig.css
+cp $T/export/tests/e2e/controls.spec.ts $X/tests/e2e/zz-orig-controls.spec.ts
+G="the title row is 32px above"
+for M in m1 m2; do
+  cp $T/tmp/styles.orig.css $X/src/client/styles.css
+  cat $T/mutant-$M.css >> $X/src/client/styles.css
+  (cd $X && npm run build > $T/logs/mut-$M-build.txt 2>&1; echo "$M build exit=$?" >> $OUT)
+  SHIFT_EXPORT=$X bash $T/run-shift.sh "mut-$M" real tests/e2e/controls.spec.ts tests/e2e/zz-orig-controls.spec.ts -g "$G" --workers=6 --trace=off > $T/logs/mut-$M.txt 2>&1
+  echo "$M: $(node $T/counts.mjs $T/logs/mut-$M.txt)" >> $OUT
+  grep -E "^\s+(ok|x)\s+[0-9]+" $T/logs/mut-$M.txt | sed -E 's/^\s+(ok|x)\s+[0-9]+ (\[\w+\]) › (\S+).*\((light|dark)\).*/  \1 \2 \3 \4/; s/^\s+(ok|x)\s+[0-9]+ (\[\w+\]) › (\S+) › Review.*/  \1 \2 \3 review/' >> $OUT
+done
+cp $T/tmp/styles.orig.css $X/src/client/styles.css
+cmp $T/tmp/styles.orig.css $X/src/client/styles.css && cmp $T/export/src/client/styles.css $X/src/client/styles.css && echo "styles.css restored byte-equal" >> $OUT
+rm -f $X/tests/e2e/zz-orig-controls.spec.ts
+(cd $X && npm run build > $T/logs/mut-restore-build.txt 2>&1; echo "restore build exit=$?" >> $OUT)
+for f in $(cd $X/dist && find . -type f | sort); do echo "$(sha256sum $X/dist/$f | cut -d' ' -f1) $f"; done > $T/out/dist-hashes-fix-after-mutants.txt
+cmp $T/out/dist-hashes-orig.txt $T/out/dist-hashes-fix-after-mutants.txt && echo "dist after restore identical to the original build" >> $OUT
+echo "leftover scratch specs: $(ls $X/tests/e2e | grep -c '^zz-')" >> $OUT

@@ -1,0 +1,25 @@
+// Usage: node consistency.mjs <diag jsonl>... -> does any payroll date appear with two different range kinds in the page-side record
+// (the new period with the old kind, or the reverse)? Counts the records checked.
+import { readFileSync } from 'node:fs';
+
+let records = 0;
+let conflicts = 0;
+let nulls = 0;
+for (const file of process.argv.slice(2)) {
+  for (const line of readFileSync(file, 'utf8').split('\n').filter((l) => l.trim() !== '')) {
+    const run = JSON.parse(line);
+    const kinds = new Map();
+    for (const e of run.pageLog) {
+      if (String(e.what).startsWith('click')) continue;
+      records += 1;
+      if (e.due === null || e.kind === null) {
+        nulls += 1;
+        continue;
+      }
+      const known = kinds.get(e.due);
+      if (known !== undefined && known !== e.kind) conflicts += 1;
+      kinds.set(e.due, e.kind);
+    }
+  }
+}
+console.log(`records=${records} (of which with no period bar yet: ${nulls}); payroll dates seen with two different range kinds: ${conflicts}`);

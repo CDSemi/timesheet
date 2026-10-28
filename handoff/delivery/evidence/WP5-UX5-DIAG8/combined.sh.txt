@@ -1,0 +1,31 @@
+# Combined proof for the tests-only change (DIAG7's patch + proposed.patch.txt), on the scratch export:
+#  - timesheet.spec.ts and theme.spec.ts, both projects, --repeat-each=5 --workers=6: real clock and 2027-03-14T10:30Z
+#  - DIAG7's delay suite (the 15 files) on the mobile project at 45 ms (the model fixtures installed for that run only)
+#  - lint, typecheck, build, dist comparison
+# Usage: bash combined.sh <variant dir suffix label> ; the export must already hold the patched test files.
+. <task>/env.sh
+X=${PW_EXPORT:-$T/export}
+OUT=$T/out/combined-${LABEL:-tests}.txt
+: > $OUT
+rm -f $X/tests/e2e/probe-*.spec.ts
+for I in real 2027-03-14T10:30:00Z; do
+  if [ "$I" = "real" ]; then unset SHIFT_I; else export SHIFT_I=$I; fi
+  L=cmb-${LABEL:-tests}-$(echo $I | cut -c1-10)
+  PW_EXPORT=$X bash $T/run-pw.sh $L tests/e2e/timesheet.spec.ts tests/e2e/theme.spec.ts --repeat-each=5 --workers=6 --trace=off > $T/logs/$L.txt 2>&1
+  echo "$L: $(node $T/counts.mjs $T/logs/$L.txt)" >> $OUT
+done
+unset SHIFT_I
+L=cmb-${LABEL:-tests}-delay45
+export DIAG_MQ_DELAY=45
+PW_EXPORT=$X bash $T/with-model.sh $L tests/e2e/admin-status.spec.ts tests/e2e/classic-scrollbar.spec.ts tests/e2e/controls.spec.ts tests/e2e/day-editor.spec.ts tests/e2e/hover.spec.ts tests/e2e/keyboard-access.spec.ts tests/e2e/logo.spec.ts tests/e2e/pdf-visual.spec.ts tests/e2e/review.spec.ts tests/e2e/settings-routes.spec.ts tests/e2e/shell.spec.ts tests/e2e/surfaces.spec.ts tests/e2e/theme.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/today.spec.ts --project=mobile --workers=6 --trace=off > $T/logs/$L.txt 2>&1
+unset DIAG_MQ_DELAY
+echo "$L: $(node $T/counts.mjs $T/logs/$L.txt)" >> $OUT
+cd $X
+npm run lint > $T/logs/cmb-${LABEL:-tests}-lint.txt 2>&1
+echo "lint exit=$?" >> $OUT
+npm run typecheck > $T/logs/cmb-${LABEL:-tests}-typecheck.txt 2>&1
+echo "typecheck exit=$?" >> $OUT
+npm run build > $T/logs/cmb-${LABEL:-tests}-build.txt 2>&1
+echo "build exit=$?" >> $OUT
+for f in $(cd dist && find . -type f | sort); do echo "$(sha256sum dist/$f | cut -d' ' -f1) $f"; done > $T/out/dist-hashes-${LABEL:-tests}.txt
+echo "dist files: $(wc -l < $T/out/dist-hashes-${LABEL:-tests}.txt)" >> $OUT

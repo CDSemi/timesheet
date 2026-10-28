@@ -1,0 +1,8 @@
+# Usage: [env DIAG_*...] [PW_EXPORT=dir] bash with-model.sh <label> [playwright args...]
+# Installs the model fixtures in the scratch export, runs one Playwright run (run-pw.sh), restores fixtures.ts and checks it byte-equal.
+. <task>/env.sh
+X=${PW_EXPORT:-$T/export-base}
+cp $T/fixtures.model.ts $X/tests/e2e/fixtures.ts
+bash $T/run-pw.sh "$@"
+cp $T/fixtures.orig.ts $X/tests/e2e/fixtures.ts
+cmp $T/fixtures.orig.ts $X/tests/e2e/fixtures.ts && echo "fixtures.ts restored byte-equal"

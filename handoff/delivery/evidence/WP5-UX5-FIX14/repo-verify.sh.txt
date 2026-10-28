@@ -1,0 +1,15 @@
+# In the repository: npm run verify (typecheck, lint, test, build, smoke), git diff --check, the status outside handoff/ and the digest.
+. <task>/env.sh
+OUT=$T/out/repo-verify.txt
+: > $OUT
+cd $REPO
+export SMOKE_PORT=51081
+npm run verify > $T/logs/repo-verify.txt 2>&1
+echo "verify exit=$?" >> $OUT
+echo "deprecation lines in the verify log: $(grep -i -c 'deprecat' $T/logs/repo-verify.txt)" >> $OUT
+git diff --check > $T/logs/repo-diff-check.txt 2>&1
+echo "git diff --check exit=$?" >> $OUT
+git status --short --untracked-files=all -- . ':!handoff' >> $OUT
+for f in $(cd dist && find . -type f | sort); do echo "$(sha256sum dist/$f | cut -d' ' -f1) $f"; done > $T/out/dist-hashes-repo-after-verify.txt
+cmp $T/out/dist-hashes-repo.txt $T/out/dist-hashes-repo-after-verify.txt && echo "dist after verify identical to the build before" >> $OUT
+echo repo-verify-done >> $OUT

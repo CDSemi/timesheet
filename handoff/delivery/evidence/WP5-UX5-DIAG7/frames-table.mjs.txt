@@ -1,0 +1,28 @@
+// Usage: node frames-table.mjs <label=diag jsonl>... -> one line per probe test: the layout states seen after setViewportSize(768)
+// (frame recorder), with the time of each change relative to the call, and the time of the last change before the 1024 call.
+import { readFileSync } from 'node:fs';
+
+for (const arg of process.argv.slice(2)) {
+  const [label, file] = arg.split('=');
+  const lines = readFileSync(file, 'utf8').split('\n').filter((line) => line.trim() !== '');
+  for (const line of lines) {
+    const rec = JSON.parse(line);
+    const call = rec.node.find((n) => n.what === 'setViewportSize 768 call').t;
+    const next = rec.node.find((n) => n.what === 'setViewportSize 1024 call').t;
+    const states = [];
+    let before;
+    for (const d of rec.diag) {
+      if (d.s === undefined) continue;
+      if (d.t < call) {
+        before = d.s;
+        continue;
+      }
+      if (d.t > next) break;
+      const s = d.s;
+      states.push(`${(d.t - call).toFixed(0)}ms ${d.what}: bar ${s.bar?.h} head ${s.head?.top}-${s.head?.bottom} card ${s.card?.top} gap ${s.gap} clock ${s.barClock ? 'bar' : s.clockGroup ? 'title' : '-'}`);
+    }
+    const reads = rec.diag.filter((d) => d.what.startsWith('read ') && d.what.endsWith(' 768')).map((d) => `${d.what.slice(5, 9)}@${(d.t - call).toFixed(0)}`);
+    const b = before === undefined ? '' : `start: iw ${before.iw} bar ${before.bar?.h} clock ${before.barClock ? 'bar' : 'title'} sheet ${before.sheet} "${before.clockText}"`;
+    console.log(`${label} r${rec.repeat} w${rec.workerIndex} ${rec.title.replace('diag7 title gap probe ', '')} | ${b} | ${states.join(' -> ')} | reads ${reads.join(' ')} | gap768 ${rec.gaps[0].gap}`);
+  }
+}

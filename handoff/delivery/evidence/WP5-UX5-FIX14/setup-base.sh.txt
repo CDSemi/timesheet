@@ -1,0 +1,22 @@
+# Export HEAD (bb8d340) into export-base, then npm ci and build there (never in the repository).
+. <task>/env.sh
+OUT=$T/out/setup-base.txt
+: > $OUT
+cd $REPO
+git rev-parse HEAD >> $OUT
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-start.txt
+echo "non-handoff status lines: $(wc -l < $T/out/00-nonhandoff-status-start.txt)" >> $OUT
+git archive $TARGET | tar -x -C $T/export-base
+echo "export files: $(cd $T/export-base && find . -type f | wc -l)" >> $OUT
+cd $T/export-base
+node --version >> $OUT
+npm ci > $T/logs/setup-base-ci.txt 2>&1
+echo "ci exit=$?" >> $OUT
+npm run build > $T/logs/setup-base-build.txt 2>&1
+echo "build exit=$?" >> $OUT
+for f in $(cd dist && find . -type f | sort); do echo "$(sha256sum dist/$f | cut -d' ' -f1) $f"; done > $T/out/dist-hashes-base.txt
+echo "dist files: $(wc -l < $T/out/dist-hashes-base.txt)" >> $OUT
+cp tests/e2e/fixtures.ts $T/fixtures.orig.ts
+cp tests/e2e/controls.spec.ts $T/controls.spec.orig.ts
+cp tests/e2e/timesheet.spec.ts $T/timesheet.spec.orig.ts
+cp tests/e2e/theme.spec.ts $T/theme.spec.orig.ts

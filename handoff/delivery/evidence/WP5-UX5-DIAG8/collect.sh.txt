@@ -1,0 +1,20 @@
+# Copies masked LF .txt evidence into the repository's evidence folder. Missing sources are skipped. Run again at the end.
+. <task>/env.sh
+cd $T
+mkdir -p $E
+m() { [ -f "$1" ] && node mask.mjs "$1" "$E/$2"; }
+# scripts
+for f in env.sh setup.sh run-pw.sh with-model.sh theme-probe.sh ladder-rates.sh ladder-load.sh f1-model.sh f2-runs-1.sh f2-runs-2.sh f2-runs-34.sh f2-runs-5.sh post-burner.sh probe-fixed.sh mutants-f1.sh mutants-f2.sh combined.sh run-combined.sh product-proof.sh gen-patch.sh collect.sh; do m $f $f.txt; done
+for f in make-model.mjs make-product.mjs mutate.mjs analyze-ladder.mjs analyze-measured.mjs analyze-theme.mjs analyze-marks.mjs gaps.mjs latency.mjs consistency.mjs counts.mjs mask.mjs burner.mjs shiftclock.mjs; do m $f $f.txt; done
+for f in probe-ladder.spec.ts probe-ladder-fixed.spec.ts probe-ladder-forced.spec.ts probe-theme.spec.ts; do m $f $(echo $f | sed 's/\.spec\.ts$//').ts.txt; done
+m fixtures.model.ts fixtures.model.ts.txt
+for f in mut-f1a.from.txt mut-f1a.to.txt mut-f1b.from.txt mut-f1b.to.txt mut-f2.from.txt mut-f2.to.txt; do m $f $f; done
+# the patches
+m out/proposed.patch proposed.patch.txt
+m out/proposed-product.patch proposed-product.patch.txt
+# results and run records (the .marks and .failures files are jsonl of the instrumented theme test)
+for f in out/*.txt; do m $f $(basename $f); done
+for f in out/*.jsonl.marks out/*.jsonl.failures; do m $f $(basename $f).txt; done
+# key run logs
+for f in logs/forced.txt logs/forced2.txt logs/rate-orig.txt logs/rate-fixed.txt logs/mut-f1b-orig.txt logs/mut-f1b-fixed2.txt logs/c48-orig.txt logs/c48-f2c.txt logs/c48-orig2.txt logs/c48-f2c2.txt logs/prod-red.txt logs/prod-green.txt logs/prod-mut.txt logs/prod-npmtest.txt logs/cmb-tests-real.txt logs/cmb-tests-2027-03-14.txt logs/cmb-tests-delay45.txt logs/cmb-tests-lint.txt logs/cmb-tests-typecheck.txt logs/cmb-tests-build.txt; do m $f log-$(basename $f); done
+ls $E | wc -l

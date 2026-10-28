@@ -1,0 +1,163 @@
+0a1
+> import { appendFileSync } from 'node:fs';
+6,10c7,11
+<  * WP5-UX5-DIAG8 probe (scratch, never proposed): a forced interleaving of the ladder test of timesheet.spec.ts:2596. The test's own loops,
+<  * its count of 14 days and its check() are unchanged. Two things are added. (1) The answer for the period that spans two years is held back
+<  * until the step that clicked for it has made the test's own read, then it is released. (2) Every other step waits until its period is drawn
+<  * before it reads (as the natural runs do in five of six steps). So the order "stale read at the two-year period, fresh read at the next one"
+<  * happens at every pass, and the test must fail every time, with the production message.
+---
+>  * WP5-UX5-DIAG8 probe (scratch, never proposed): the range ladder test of timesheet.spec.ts:2596 with the same steps and the same
+>  * check(), plus a page-side recorder of every change of the displayed period (payroll date and range kind) and a Node-side
+>  * record of when each step read the kind. The result of each run is one JSON line in DIAG_OUT.
+>  * PROBE_DELAY=<ms>: delay every GET /api/timesheets/<date> by that long (a model of a slow period response).
+>  * PROBE_DELAY_UNTIL=<n>: delay only the first n period responses after the first load (a regime change from slow to fast).
+14c15
+< test('probe: the ladder test with the two-year period held back until the step that clicked for it has read', async ({ page, signInThroughUi }) => {
+---
+> test('probe: the range ladder with a record of what each step read', async ({ page, signInThroughUi }, testInfo) => {
+16,40c17,48
+<   let answers = 0;
+<   let heldNow = false;
+<   let heldTotal = 0;
+<   let release: () => void = () => undefined;
+<   await page.route('**/api/timesheets/*', async (route) => {
+<     const response = await route.fetch();
+<     let crosses = false;
+<     try {
+<       const body = (await response.json()) as { period: { period_start: string; period_end: string } };
+<       crosses = body.period.period_start.slice(0, 4) !== body.period.period_end.slice(0, 4);
+<     } catch {
+<       // not a period answer
+<     }
+<     if (crosses) {
+<       heldNow = true;
+<       heldTotal += 1;
+<     }
+<     answers += 1; // counted when the route has decided, before it holds the answer back
+<     if (crosses) {
+<       await new Promise<void>((resolve) => {
+<         release = resolve;
+<         setTimeout(resolve, 10_000);
+<       });
+<     }
+<     await route.fulfill({ response });
+---
+>   const delay = Number(process.env.PROBE_DELAY ?? '0');
+>   const until = Number(process.env.PROBE_DELAY_UNTIL ?? '0');
+>   let served = 0;
+>   if (delay > 0) {
+>     await page.route('**/api/timesheets/*', async (route) => {
+>       served += 1;
+>       if (until === 0 || served - 1 <= until) await new Promise((resolve) => setTimeout(resolve, delay));
+>       await route.continue();
+>     });
+>   }
+>   await page.addInitScript(() => {
+>     const log: Array<{ t: number; due: string | null; kind: string | null; what: string }> = [];
+>     (window as unknown as { __log: typeof log }).__log = log;
+>     let last = '';
+>     const note = (what: string) => {
+>       const due = document.querySelector('[data-period-due]')?.getAttribute('data-period-due') ?? null;
+>       const kind = document.querySelector('.period-name')?.getAttribute('data-range-kind') ?? null;
+>       const key = `${due}|${kind}`;
+>       if (key !== last) {
+>         last = key;
+>         log.push({ t: performance.timeOrigin + performance.now(), due, kind, what });
+>       }
+>     };
+>     new MutationObserver(() => note('mutation')).observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+>     document.addEventListener(
+>       'click',
+>       (event) => {
+>         const label = (event.target as Element | null)?.closest('button')?.getAttribute('aria-label') ?? '';
+>         if (/period$/.test(label)) log.push({ t: performance.timeOrigin + performance.now(), due: null, kind: null, what: `click ${label}` });
+>       },
+>       true,
+>     );
+45,46c53,66
+<   const check = async () => {
+<     const kind = await page.locator('.period-name').getAttribute('data-range-kind');
+---
+>   const steps: Array<{ step: number; dir: string; clickStart: number; clickEnd: number; counted: number; readStart: number; readEnd: number; kind: string | null; due: string | null }> = [];
+>   const measured: Array<{ step: number; kind: string; width: number; readDue: string | null; measuredDue: string | null }> = [];
+>   let stepNo = 0;
+>   const check = async (dir: string, clickStart: number, clickEnd: number, counted: number) => {
+>     const readStart = Date.now();
+>     // The same single read as the test's getAttribute (one locator resolution and one call into the page), returning the period it hit too.
+>     const hit = await page.locator('.period-name').evaluate((element) => ({
+>       kind: element.getAttribute('data-range-kind'),
+>       due: document.querySelector('[data-period-due]')?.getAttribute('data-period-due') ?? null,
+>     }));
+>     const kind = hit.kind;
+>     const readEnd = Date.now();
+>     steps.push({ step: stepNo, dir, clickStart, clickEnd, counted, readStart, readEnd, kind, due: hit.due });
+>     stepNo += 1;
+51c71,76
+<       const state = await rangeState(page);
+---
+>       // The period that the measurement below is taken from (read in the same turn of the page), against the period whose kind this step read.
+>       const [state, measuredDue] = await Promise.all([
+>         rangeState(page),
+>         page.evaluate<string | null>("document.querySelector('[data-period-due]')?.getAttribute('data-period-due') ?? null"),
+>       ]);
+>       measured.push({ step: stepNo - 1, kind, width, readDue: hit.due, measuredDue });
+53c78
+<       expect(dates, `${state.kind} at ${width}px: the accessible text is the full dates with "to" (${state.spoken})`).not.toBeNull();
+---
+>       expect(dates).not.toBeNull();
+61c86
+<       expect(state.text, `${state.kind} at ${width}px: the form that shows (box ${state.box.toFixed(1)}px, forms ${JSON.stringify(state.widths)})`).toBe(rangeText(start, end, fitting));
+---
+>       expect(state.text).toBe(rangeText(start, end, fitting));
+64,65c89,90
+<   const due = page.locator('[data-period-due]');
+<   const stepWithHold = async (name: 'Next period' | 'Previous period') => {
+---
+>   await check('start', Date.now(), Date.now(), Date.now());
+>   for (let step = 0; step < 14 && seen.size < 3; step += 1) {
+67,72c92,96
+<     const before = await due.getAttribute('data-period-due');
+<     const answered = answers;
+<     heldNow = false;
+<     await page.getByRole('button', { name }).click();
+<     // Wait until the route has the answer for this click (held or not), so that the interleaving does not depend on the speed of the host.
+<     await expect.poll(() => heldNow || answers > answered).toBe(true);
+---
+>     const before = await page.locator('[data-period-due]').getAttribute('data-period-due');
+>     const clickStart = Date.now();
+>     await page.getByRole('button', { name: 'Next period' }).click();
+>     const clickEnd = Date.now();
+>     await expect(page.locator('[data-period-due]')).not.toHaveAttribute('data-period-due', before ?? '');
+74,86c98,114
+<     if (heldNow) {
+<       await check(); // the test's own read, while the old period is still drawn
+<       release();
+<       await expect(due).not.toHaveAttribute('data-period-due', before ?? '');
+<     } else {
+<       await expect(due).not.toHaveAttribute('data-period-due', before ?? '');
+<       await check();
+<     }
+<   };
+<   await check();
+<   for (let step = 0; step < 14 && seen.size < 3; step += 1) await stepWithHold('Next period');
+<   for (let step = 0; step < 28 && seen.size < 3; step += 1) await stepWithHold('Previous period');
+<   expect(heldTotal, 'the two-year period was held back at least once').toBeGreaterThan(0);
+---
+>     await check('next', clickStart, clickEnd, Date.now());
+>   }
+>   for (let step = 0; step < 28 && seen.size < 3; step += 1) {
+>     await page.setViewportSize({ width: 390, height: 900 });
+>     const before = await page.locator('[data-period-due]').getAttribute('data-period-due');
+>     const clickStart = Date.now();
+>     await page.getByRole('button', { name: 'Previous period' }).click();
+>     const clickEnd = Date.now();
+>     await expect(page.locator('[data-period-due]')).not.toHaveAttribute('data-period-due', before ?? '');
+>     await expect(page.locator('[data-day]')).toHaveCount(14);
+>     await check('prev', clickStart, clickEnd, Date.now());
+>   }
+>   const pageLog = await page.evaluate<unknown>('window.__log');
+>   appendFileSync(
+>     process.env.DIAG_OUT ?? 'diag.jsonl',
+>     `${JSON.stringify({ run: `${testInfo.workerIndex}.${testInfo.repeatEachIndex}`, seen: [...seen].sort(), steps, measured, pageLog })}\n`,
+>   );

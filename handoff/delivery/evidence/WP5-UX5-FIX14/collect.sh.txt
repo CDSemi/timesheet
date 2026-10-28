@@ -1,0 +1,22 @@
+# Copies the task's outputs, logs and scripts into the evidence folder as masked LF .txt files (mask.mjs). Skips the npm ci logs.
+. <task>/env.sh
+mkdir -p $E
+for f in $T/out/*.txt; do
+  b=$(basename $f)
+  node $T/mask.mjs $f $E/$b
+done
+for f in $T/logs/*.txt; do
+  b=$(basename $f)
+  case "$b" in setup-*-ci.txt) continue;; esac
+  node $T/mask.mjs $f $E/log-$b
+done
+for f in $T/*.sh $T/*.mjs $T/*.ts $T/*.css; do
+  [ -f "$f" ] || continue
+  b=$(basename $f)
+  node $T/mask.mjs $f $E/$b.txt
+done
+for f in $T/mut-*.txt; do
+  b=$(basename $f)
+  node $T/mask.mjs $f $E/$b
+done
+echo "collected: $(ls $E | wc -l) files"

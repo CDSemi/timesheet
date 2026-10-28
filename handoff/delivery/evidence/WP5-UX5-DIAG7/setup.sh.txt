@@ -1,0 +1,15 @@
+# Export HEAD into the task folder, then npm ci and build there (never in the repository).
+. <task>/env.sh
+cd $REPO
+git rev-parse HEAD > $T/out/00-head.txt
+git rev-parse origin/main >> $T/out/00-head.txt
+git branch --show-current >> $T/out/00-head.txt
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-start.txt
+git archive $TARGET | tar -x -C $T/export
+echo "export files: $(cd $T/export && find . -type f | wc -l)" >> $T/out/00-head.txt
+cd $T/export
+node --version > $T/logs/setup-node.txt
+npm ci > $T/logs/setup-ci.txt 2>&1
+echo "ci exit=$?" >> $T/logs/setup-exits.txt
+npm run build > $T/logs/setup-build.txt 2>&1
+echo "build exit=$?" >> $T/logs/setup-exits.txt

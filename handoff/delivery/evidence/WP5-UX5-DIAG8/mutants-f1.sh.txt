@@ -1,0 +1,32 @@
+# F1 mutants: a product mutation that the ladder test must catch, run against the FIXED test (and the original for comparison).
+# Each mutant edits one src file in the scratch export, rebuilds, runs the ladder test 12 times (desktop, 6 workers), then restores the file,
+# rebuilds, and the dist file list with hashes is compared with the one taken before.
+. <task>/env.sh
+X=$T/export
+OUT=$T/out/mutants-f1.txt
+: > $OUT
+G="the longest form that fits its box shows"
+hashes() { (cd $X && for f in $(cd dist && find . -type f | sort); do echo "$(sha256sum dist/$f | cut -d' ' -f1) $f"; done); }
+cd $X
+rm -f tests/e2e/probe-ladder.spec.ts tests/e2e/probe-ladder-forced.spec.ts
+hashes > $T/out/dist-hashes-before-f1.txt
+echo "dist before: $(wc -l < $T/out/dist-hashes-before-f1.txt) files" >> $OUT
+for M in f1a:src/client/components/PeriodBar.tsx f1b:src/client/components/periodBarModel.ts; do
+  N=${M%%:*}; F=${M#*:}
+  cp $X/$F $T/tmp/$N.backup
+  node $T/mutate.mjs $X/$F $T/mut-$N.from.txt $T/mut-$N.to.txt >> $OUT 2>&1
+  (cd $X && npm run build > $T/logs/mut-$N-build.txt 2>&1; echo "$N build exit=$?" >> $OUT)
+  for V in fixed2 orig; do
+    cp $T/timesheet.spec.$V.ts $X/tests/e2e/timesheet.spec.ts
+    bash $T/run-pw.sh mut-$N-$V tests/e2e/timesheet.spec.ts --project=desktop -g "$G" --repeat-each=12 --workers=6 --trace=off > $T/logs/mut-$N-$V.txt 2>&1
+    echo "$N $V: $(node $T/counts.mjs $T/logs/mut-$N-$V.txt)" >> $OUT
+  done
+  cp $T/tmp/$N.backup $X/$F
+  cmp $T/tmp/$N.backup $X/$F && echo "$N: $F restored byte-equal" >> $OUT
+done
+cd $X && npm run build > $T/logs/mut-restore-build.txt 2>&1
+echo "restore build exit=$?" >> $OUT
+hashes > $T/out/dist-hashes-after-f1.txt
+cmp $T/out/dist-hashes-before-f1.txt $T/out/dist-hashes-after-f1.txt && echo "dist identical after restore: $(wc -l < $T/out/dist-hashes-after-f1.txt) files" >> $OUT
+cp $T/timesheet.spec.orig.ts $X/tests/e2e/timesheet.spec.ts
+echo "timesheet.spec.ts restored to the original" >> $OUT

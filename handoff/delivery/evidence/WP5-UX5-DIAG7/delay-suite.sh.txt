@@ -1,0 +1,14 @@
+# Usage: bash delay-suite.sh <label> <export dir> <delay ms> <project> [extra playwright args]
+# DIAG5 delay model: the 15 spec files that call setViewportSize (controls.spec.ts is among them), with React's matchMedia 'change'
+# notification delayed by <delay> ms through the scratch page fixture (fixtures.diag.ts); fixtures.ts is restored byte-equal after.
+. <task>/env.sh
+L=$1; X=$2; D=$3; P=$4; shift 4
+FILES=$(sed 's#^export/##' $T/out/setviewport-files.txt | tr '\n' ' ')
+cp $X/tests/e2e/fixtures.ts $T/tmp/fixtures.before-$L.ts
+cp $T/fixtures.diag.ts $X/tests/e2e/fixtures.ts
+export DIAG_MQ_DELAY=$D
+SHIFT_EXPORT=$X bash $T/run-shift.sh "$L" real $FILES --project=$P --workers=6 --trace=off "$@" > $T/logs/$L.txt 2>&1
+unset DIAG_MQ_DELAY
+cp $T/tmp/fixtures.before-$L.ts $X/tests/e2e/fixtures.ts
+cmp $T/tmp/fixtures.before-$L.ts $X/tests/e2e/fixtures.ts && cmp $T/fixtures.orig.ts $X/tests/e2e/fixtures.ts && echo "$L: fixtures.ts restored byte-equal" >> $T/out/delay-restore.txt
+node $T/counts.mjs $T/logs/$L.txt >> $T/out/delay-results.txt

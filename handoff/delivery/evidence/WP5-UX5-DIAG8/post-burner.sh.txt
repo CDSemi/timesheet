@@ -1,0 +1,19 @@
+# After the burner has ended (host quiet): the measured probe of the original ladder test, the F2 mutant, and the optional product proof.
+. <task>/env.sh
+OUT=$T/out/post-burner.txt
+: > $OUT
+X=$T/export
+# 1. the original ladder logic with a record of which period each measurement was taken from (real clock, 36 runs)
+cp $T/probe-ladder.spec.ts $X/tests/e2e/probe-ladder.spec.ts
+bash $T/run-pw.sh probe-measured tests/e2e/probe-ladder.spec.ts --project=desktop --repeat-each=36 --workers=6 --trace=off > $T/logs/probe-measured.txt 2>&1
+rm -f $X/tests/e2e/probe-ladder.spec.ts
+echo "probe-measured: $(node $T/counts.mjs $T/logs/probe-measured.txt)" >> $OUT
+node $T/analyze-ladder.mjs $T/out/diag-probe-measured.jsonl > $T/out/probe-measured-analysis.txt 2>&1
+node $T/analyze-measured.mjs $T/out/diag-probe-measured.jsonl > $T/out/probe-measured-wrong.txt 2>&1
+echo "measured: $(tail -n 1 $T/out/probe-measured-wrong.txt)" >> $OUT
+# 2. the F2 mutant
+bash $T/mutants-f2.sh
+echo "mutants-f2 done: see mutants-f2.txt" >> $OUT
+# 3. the optional product proof
+bash $T/product-proof.sh
+echo "product-proof done: see product-proof.txt" >> $OUT

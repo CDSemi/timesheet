@@ -1,0 +1,18 @@
+# F2 under a heavy burner (node burner.mjs 48 <seconds> beside it), mobile, 6 workers, DIAG_MQ_DELAY=45, the real test, 24 repeats each, in the order
+# orig, f2c, orig, f2c (so that the order and a falling load do not decide). f2c = bringToFront before the tab that is driven or read.
+. <task>/env.sh
+OUT=$T/out/f2-runs-5.txt
+: > $OUT
+X=$T/export
+G="a storage event keeps a second tab in step"
+rm -f $X/tests/e2e/probe-theme.spec.ts
+export DIAG_MQ_DELAY=45
+for V in orig f2c orig2 f2c2; do
+  case $V in orig*) S=orig;; *) S=f2c;; esac
+  cp $T/theme.spec.$S.ts $X/tests/e2e/theme.spec.ts
+  bash $T/with-model.sh c48-$V tests/e2e/theme.spec.ts --project=mobile -g "$G" --repeat-each=24 --workers=6 --trace=off > $T/logs/c48-$V.txt 2>&1
+  echo "c48-$V ($S): $(node $T/counts.mjs $T/logs/c48-$V.txt)" >> $OUT
+done
+unset DIAG_MQ_DELAY
+cp $T/theme.spec.orig.ts $X/tests/e2e/theme.spec.ts
+echo "theme.spec.ts restored to the original" >> $OUT
