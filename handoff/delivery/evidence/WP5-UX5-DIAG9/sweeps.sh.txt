@@ -1,0 +1,21 @@
+# Usage: bash sweeps.sh <variant tag> <selection: names from full-1026 full-1101 full-0314 seven-1026 seven-1231 seven-0101 ...>
+# The REGATE9 sweep instants, both projects, --workers=6, --repeat-each=2.
+. <task>/env.sh
+V=$1; shift
+cd $T
+SEVEN="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts"
+for name in "$@"; do
+  case $name in
+    full-1026) I=2026-10-26T16:00:00Z; S="" ;;
+    full-1101) I=2026-11-01T08:45:00Z; S="" ;;
+    full-0314) I=2027-03-14T10:30:00Z; S="" ;;
+    seven-1026) I=2026-10-27T06:58:30Z; S="$SEVEN" ;;
+    seven-1231) I=2027-01-01T07:30:00Z; S="$SEVEN" ;;
+    seven-0101) I=2027-01-01T08:30:00Z; S="$SEVEN" ;;
+  esac
+  L="sweep-$V-$name"
+  bash run-shift.sh "$L" "$I" $S --workers=6 --repeat-each=2 > "logs/$L.txt" 2>&1
+  echo "$L finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> out/sweeps-progress.txt
+  node counts.mjs "logs/$L.txt" >> out/sweeps-counts-$V.txt 2>&1
+done
+echo sweeps-done >> out/sweeps-progress.txt

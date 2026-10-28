@@ -134,9 +134,18 @@ Luồng hiện tại:
      còn phát hiện: một tab đang đóng menu không còn đổi theo giao diện sáng/tối vừa chọn ở
      tab khác. Điều này trái quy tắc đã duyệt ở vòng UI lần 2. Một bản sửa sản phẩm nhỏ, đã
      chứng minh, khôi phục quy tắc đó.
-   - WP5-UX5-FIX14 đã áp cả ba bản sửa và qua mọi kiểm tra (digest 419ede40).
-   - Đang chạy: WP5-UX5-FIX14-FREEZE commit và push các bản sửa.
-   - Sau đó là gate lại đầy đủ, kiểm tra lại độc lập hai lỗi đã sửa, thay đổi
+   - WP5-UX5-FIX14 đã áp cả ba bản sửa và qua mọi kiểm tra. Các bản sửa đã được freeze trong
+     bd9c275 (digest 419ede40) và đã push.
+   - WP5-UX5-REGATE9, gate lại toàn bộ trên bd9c275, chỉ trượt một tiêu chí. Trong lượt quét
+     chạy qua nửa đêm giờ địa phương, test Check in trên mobile không thấy phiên vừa mở. Mọi
+     mục khác đều đạt, kể cả các bản sửa trước.
+   - WP5-UX5-DIAG9 xác định sản phẩm chạy đúng: một phiên qua đêm thuộc về ngày nó bắt đầu.
+     Lỗi là do test đọc ngày trước nửa đêm, và 31 test có cùng giả định đó. Bản vá chỉ đổi
+     test: sửa helper Check in, giữ mỗi test tránh đúng lúc nửa đêm giờ địa phương mà không
+     tác động lên hệ thống, và thêm một test tích hợp ngay tại ranh giới ngày.
+   - WP5-UX5-FIX15 đã áp bản vá đó và qua mọi kiểm tra (digest ff73565b).
+   - Đang chạy: WP5-UX5-FIX15-FREEZE commit và push bản vá.
+   - Sau đó là gate lại có phạm vi, kiểm tra lại độc lập hai lỗi đã sửa, thay đổi
      Day editor và thay đổi giao diện, audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
    - Để tiếp tục sau khi bị gián đoạn, dùng prompt khởi động ở trên. Điều phối viên làm tiếp
      ở `next_task_id` của board.

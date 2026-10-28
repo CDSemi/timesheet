@@ -3,7 +3,7 @@ import type { Locator, Page } from '@playwright/test';
 import { addDays } from '../../src/domain/dates.ts';
 import { backdropOf, backdropsAbove, computedStyle, contrast, focusFromKeyboard, measureFocusRing, over, parseColour, settledStyle, tokenColour } from './contrast.ts';
 import { dayButton } from './dayButton.ts';
-import { expect, newPerson, type PeriodFacts, type PeriodsCurrent, screenshotPath, test } from './fixtures.ts';
+import { CROSSES_MIDNIGHT, expect, newPerson, type PeriodFacts, type PeriodsCurrent, screenshotPath, test } from './fixtures.ts';
 import { cardParts, near } from './periodCard.ts';
 import { insideTheWindow, withToday } from './periodWindow.ts';
 
@@ -623,7 +623,8 @@ async function tagDate(page: Page): Promise<string | null> {
 /** The next response of the server's periods route (set up before the action that causes it). */
 const periodsResponse = (page: Page, path: string) => page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === path);
 
-test('a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself', async ({
+// The one test that crosses the midnight on purpose: the midnight fence of the fixtures does not hold it back.
+test('a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself', { annotation: { type: CROSSES_MIDNIGHT, description: 'starts within 90 s of the reporting-zone midnight and waits for it' } }, async ({
   page,
   context,
   employeeSeed,

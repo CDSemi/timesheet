@@ -1,0 +1,56 @@
+== signdate-orig-cross: real start 2026-10-28T14:41:25Z, simulated start 2026-10-27T06:59:48Z, AB8_SHIFT_MS=-114096993
+process clock 2026-10-27T06:59:48.069Z (Date.now 1793084388078); America/Los_Angeles Mon, 2026-10-26, 23:59; shift ms -114096993; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/review.spec.ts --project=desktop --workers=1 -g without a saved signature image --output=<task>\pw-signdate-orig-cross
+
+Running 1 test using 1 worker
+
+(node:19972) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+DIAG9 test-start: go 2026-10-27T06:59:50.323Z (midnight -9.68 s)
+DIAG9 before-sign: arrive 2026-10-27T06:59:50.960Z (midnight -9.04 s); wait until midnight -1500 ms
+DIAG9 before-sign: go 2026-10-27T06:59:58.501Z (midnight -1.50 s)
+DIAG9 before-date-assert: arrive 2026-10-27T06:59:58.592Z (midnight -1.41 s); wait until midnight 500 ms
+DIAG9 before-date-assert: go 2026-10-27T07:00:00.507Z (midnight 0.51 s)
+  x  1 [desktop] › tests\e2e\review.spec.ts:1008:1 › without a saved signature image the sign-off still goes, by name alone, and the dialog says where to add one (F-5 b) (17.6s)
+
+
+  1) [desktop] › tests\e2e\review.spec.ts:1008:1 › without a saved signature image the sign-off still goes, by name alone, and the dialog says where to add one (F-5 b) 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('[data-signature="employee-date"]')
+    Expected: "10/27/2026"
+    Received: "10/26/2026"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" locator('[data-signature="employee-date"]') with timeout 7000ms
+      - waiting for locator('[data-signature="employee-date"]')
+        18 × locator resolved to <span class="mono" data-signature="employee-date">10/26/2026</span>
+           - unexpected value "10/26/2026"
+
+
+      1031 |   await expect(signed.locator('img')).toHaveCount(0);
+      1032 |   await diagWait('before-date-assert');
+    > 1033 |   await expect(page.locator('[data-signature="employee-date"]')).toHaveText(todayInLosAngeles());
+           |                                                                  ^
+      1034 |   const finalized = await api.call<ApiFinalization>('GET', finalizationPath(currentPayrollDate));
+      1035 |   expect(finalized.finalized_revision_no).toBe(1);
+      1036 |   expect(finalized.revision).toMatchObject({ revision_no: 1, review_state: 'signed', origin: 'employee', send_requested: false });
+        at <task>\export\tests\e2e\review.spec.ts:1033:66
+
+    Error Context: ..\pw-signdate-orig-cross\review-without-a-saved-sig-b1951-ays-where-to-add-one-F-5-b--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-signdate-orig-cross\review-without-a-saved-sig-b1951-ays-where-to-add-one-F-5-b--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-signdate-orig-cross\review-without-a-saved-sig-b1951-ays-where-to-add-one-F-5-b--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\review.spec.ts:1008:1 › without a saved signature image the sign-off still goes, by name alone, and the dialog says where to add one (F-5 b) 
+exit=1
+process clock 2026-10-27T07:00:07.935Z (Date.now 1793084407944); America/Los_Angeles Tue, 2026-10-27, 00:00; shift ms -114096993; instanceof true
+== signdate-orig-cross real end 2026-10-28T14:41:44Z

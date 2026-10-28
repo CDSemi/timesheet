@@ -1,0 +1,41 @@
+# Phase 5: mutants against the clean patched export (chain3 left it installed), then against the original day-editor spec;
+# then the crossing test with the fence, normal and with the exemption removed (mutant).
+. <task>/env.sh
+cd $T
+mkdir -p backup
+DIST=export/dist/server/services/timesheetCommands.js
+TITLES="Check in then Check out asks|a stale session version at Check out"
+run_real() { # run_real <label> : the two check-in tests on both projects, real clock
+  L=$1
+  mkdir -p pw-$L shots-$L
+  export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+  ( cd export && node.exe node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts --workers=2 -g "$TITLES" --output="$TW\\pw-$L" ) > logs/$L.txt 2>&1
+  echo "$L exit=$?" >> out/mutants.txt
+}
+: > out/mutants.txt
+cp $DIST backup/timesheetCommands.js
+for V in patched orig; do
+  if [ "$V" = "orig" ]; then cp export-orig/tests/e2e/day-editor.spec.ts export/tests/e2e/day-editor.spec.ts; fi
+  # control: the tests on the unmutated server
+  run_real mut-$V-control
+  # A: a check-in that never opens a session (it writes a closed session in the past)
+  node mutate.mjs $DIST mut-a.from.txt mut-a.to.txt >> out/mutants.txt 2>&1
+  run_real mut-$V-a
+  cp backup/timesheetCommands.js $DIST
+  cmp backup/timesheetCommands.js $DIST && echo "dist restored after A ($V)" >> out/mutants.txt
+  # B: a check-in filed under the next accounting date
+  node mutate.mjs $DIST mut-b.from.txt mut-b.to.txt >> out/mutants.txt 2>&1
+  run_real mut-$V-b
+  cp backup/timesheetCommands.js $DIST
+  cmp backup/timesheetCommands.js $DIST && echo "dist restored after B ($V)" >> out/mutants.txt
+done
+cp work/day-editor.spec.ts export/tests/e2e/day-editor.spec.ts
+# the crossing test: it starts 40 s before the midnight (the gate starts it at 23:59:20) and must wait for it; with the exemption removed it is held
+INSTANT=2026-10-27T06:59:20Z
+bash run-shift.sh cross-normal $INSTANT tests/e2e/today.spec.ts --project=desktop --workers=1 -g "a page left open across" > logs/cross-normal.txt 2>&1
+cp work/fixtures.ts work/fixtures.mut-x.ts
+node mutate.mjs work/fixtures.mut-x.ts mut-x.from.txt mut-x.to.txt >> out/mutants.txt 2>&1
+cp work/fixtures.mut-x.ts export/tests/e2e/fixtures.ts
+bash run-shift.sh cross-mutx $INSTANT tests/e2e/today.spec.ts --project=desktop --workers=1 -g "a page left open across" > logs/cross-mutx.txt 2>&1
+cp work/fixtures.ts export/tests/e2e/fixtures.ts
+echo chain4-done > out/chain4.done

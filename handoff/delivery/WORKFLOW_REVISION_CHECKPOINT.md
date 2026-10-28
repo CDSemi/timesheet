@@ -2630,10 +2630,93 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - `npm test`: 2,388.
   - FULL: desktop 469/35/0 and mobile 407/97/0.
   - The 0314 sweep of the 15 files: 0 failed.
-- **Running now:** WP5-UX5-FIX14-FREEZE (committer). The coordinator writes no file while it
-  runs.
+- **WP5-UX5-FIX14-FREEZE done.**
+  - Commit bd9c2757d51d4efa8fe99ad2cd548217e2dd7d23 on main. It was pushed as a fast-forward
+    from bb8d340, and the remote equals HEAD.
+  - D_PRE equals the HEAD digest, 419ede40. 549 paths were staged.
+  - Left out: two REGATE8 `.log` files, because evidence must be `.txt`. The two earlier
+    privacy files stay untracked.
+  - A profile-path literal was masked in three evidence scripts.
+  - Every check exited 0.
+- **WP5-UX5-REGATE9 FAILED** (verifier, self-reported claude-sonnet-5-5) on bd9c275 /
+  419ede40, on one criterion.
+  - The seven-spec sweep at 2026-10-27T06:58:30Z failed once. Local midnight in Los Angeles
+    comes 90 s into that run.
+  - The failing test was the mobile `day-editor.spec.ts:2340`. The `clockIn` poll for an
+    open session on `todayLocal` timed out after 7 s. It is not a network error.
+  - Everything else passed:
+    - drill 209/0 and `npm audit` 0;
+    - core ×3 (2,388 tests);
+    - the real-clock FULL run (0 failed);
+    - the other five sweeps;
+    - stress;
+    - the FIX14 mutants;
+    - every model, including the DIAG5 delay suite on both projects;
+    - axe, 0 violations, including the open account menu and the More panel.
+- **Coordinator decision.** Not waived. This is a new class: the measuring-race fixes all
+  held, so the cap does not apply.
+
+  The leading reading is unproven: the test fixes the local date before the run crosses
+  midnight. A real product defect at the day boundary must still be ruled out.
+  WP5-UX5-DIAG9 (planner, sonnet) diagnoses it, and runs a completeness census:
+  - the boundary-crossing scope with midnight at several offsets;
+  - the other sweep instants.
+- **WP5-UX5-DIAG9 first result** (planner, self-reported claude-sonnet-5-5). Its sweep
+  chain was still running, so the result is NOT VERIFIED yet.
+  - **Verdict:** a test assumption at the day boundary. The product is correct: an
+    overnight session belongs to the date it started (docs/02, D-05). The failed run's
+    trace shows the check-in filed at 07:00:00Z under 2026-10-27, while the test looked at
+    2026-10-26.
+  - **Fix A:** `clockIn` looks at that day and the next, and checks the day against the
+    session's own start instant. It is proven at six chosen instants, and the mutants are
+    caught.
+  - **Census:** 31 tests fail on the old suite when midnight falls inside them.
+  - **Fix B:** a "midnight fence" in the fixtures. If midnight is less than 45 s away, it
+    holds a test until the date changes. The deliberate crossing test is exempt. With it,
+    six midnight placements gave 0 failed, and the control without the fence failed again.
+  - **Optional:** an integration test that pins the check-in date at the second boundary.
+- **Coordinator decision (brief Addendum 1).**
+  - Fix A and the integration test are accepted.
+  - Fix B is accepted in principle. Condition: the fence must not sign in or act on the
+    system before every test, unless that is proven harmless.
+  - The same planner finishes the sweep chain and proves the final patch, including the
+    real-clock FULL run on both projects.
+- **WP5-UX5-DIAG9 done (Addendum 1 results).**
+  - The fence now reads the runner's clock and the seed's saved zone. It makes no sign-in,
+    no request and no database access.
+  - The final patch touches tests only: four paths, +101/−14.
+  - Proof in a fresh export:
+    - `npm test`: 2,389;
+    - real-clock FULL: 469/35/0 and 407/97/0;
+    - the seven-file scope at 06:58:30Z and with midnight 200 s into the run: 0 failed;
+    - the models pass;
+    - the fence-off control fails again;
+    - all mutants are caught.
+  - The first fence's sweep chain (repeat 2) also had 0 failed.
+- **Coordinator decision.** Accepted. The fence is a state-based hold before a test starts,
+  and it has no side effect. Midnight behaviour stays covered by:
+  - the crossing test;
+  - the product probe;
+  - the new integration test.
+
+  The fence goes to the WP5 handoff as a recorded test-design choice.
+- **WP5-UX5-FIX15 done** (worker, self-reported claude-sonnet-5-5). It is uncommitted.
+  Digest ff73565b.
+  - Reproduced first: case C2 failed on both projects, and the fence-off models failed.
+  - It applied the patch to exactly four test paths.
+  - Proof:
+    - cases C1–C6: 24/24;
+    - the models pass, and the fence-off control fails again;
+    - mutants A, A2 and B, and the boundary-test mutant, are caught;
+    - repeats: 40/40 per project.
+  - `dist/` is identical.
+  - `npm test`: 2,389.
+  - FULL: 469/35/0 and 407/97/0.
+  - The midnight sweep: 0 failed. The desktop crossing test took 1.0 min.
+- **Running now:** WP5-UX5-FIX15-FREEZE (committer). The coordinator writes no file while it
+  runs. Then a scoped REGATE10.
 - **Next:**
-  - a full REGATE9;
+  - a fix, its freeze and a regate;
   - fresh rechecks of the two findings, the Day editor change and the cross-tab theme
     change;
   - the integration audit, ACCEPT-DOCS and the WP5 re-accept.

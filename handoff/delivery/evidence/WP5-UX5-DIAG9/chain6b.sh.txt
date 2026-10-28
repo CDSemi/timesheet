@@ -1,0 +1,14 @@
+# Mutant A2 on export2: a check-in that stores an already-ended session (no 500, no open session), real clock, the two check-in tests.
+. <task>/env.sh
+cd $T
+DIST=export2/dist/server/services/timesheetCommands.js
+TITLES="Check in then Check out asks|a stale session version at Check out"
+cp $DIST backup2/timesheetCommands.js
+node mutate.mjs $DIST mut-a2.from.txt mut-a2.to.txt >> out2/mutants.txt 2>&1
+L=f-mut-a2
+mkdir -p pw-$L shots-$L
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+( cd export2 && node.exe node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts --workers=2 -g "$TITLES" --output="$TW\\pw-$L" ) > logs/$L.txt 2>&1
+echo "$L exit=$?" >> out2/mutants.txt
+cp backup2/timesheetCommands.js $DIST
+cmp backup2/timesheetCommands.js $DIST && echo "dist restored after A2" >> out2/mutants.txt

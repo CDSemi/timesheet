@@ -1,0 +1,11 @@
+# A fresh scratch export of HEAD plus the four patched files of the repository working tree, its own npm ci and build.
+. <task>/env.sh
+mkdir -p $T/export2
+git -C $REPO archive $TARGET | tar -x -C $T/export2
+for f in tests/e2e/fixtures.ts tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/integration/timesheet-api.test.ts; do
+  cp $REPO/$f $T/export2/$f
+  cmp $REPO/$f $T/export2/$f && echo "export2 holds $f"
+done
+cd $T/export2
+npm ci > $T/logs/export2-npm-ci.txt 2>&1; echo "npm ci exit=$?"
+npm run build > $T/logs/export2-build.txt 2>&1; echo "build exit=$?"

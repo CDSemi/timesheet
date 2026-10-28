@@ -1,0 +1,29 @@
+--- a/tests/integration/timesheet-api.test.ts
++++ b/tests/integration/timesheet-api.test.ts
+@@ -122,6 +122,26 @@
+     ]);
+   });
+ 
++  it('files a check-in under the local date of its own start on either side of the reporting-zone midnight', async () => {
++    // 2026-10-27T07:00:00Z is the Los Angeles midnight that ends 2026-10-26 (PDT).
++    const { t, cookie } = await setup('2026-10-27T06:59:58Z');
++    const night = await t.request('POST', '/api/clock/in', { cookie, body: { input_zone: 'America/Los_Angeles' } });
++    expect(night.body.session).toMatchObject({ work_date: '2026-10-26', start_utc: '2026-10-27T06:59:58Z', end_utc: null });
++    // After the midnight the running session still belongs to the day it started on, open; the new day holds nothing.
++    t.clock.set('2026-10-27T07:00:30Z');
++    const opened = (await t.request('GET', '/api/days/2026-10-26', { cookie })).body.sessions;
++    expect(opened).toHaveLength(1);
++    expect(opened[0]).toMatchObject({ work_date: '2026-10-26', end_utc: null });
++    expect((await t.request('GET', '/api/days/2026-10-27', { cookie })).body.sessions).toEqual([]);
++    const out = await t.request('POST', '/api/clock/out', { cookie, body: { breaks: [], breaks_confirmed: true, expected_version: 1 } });
++    expect(out.body.session).toMatchObject({ work_date: '2026-10-26', end_utc: '2026-10-27T07:00:30Z' });
++    // A check-in after the midnight is the new day's.
++    t.clock.set('2026-10-27T07:00:31Z');
++    const morning = await t.request('POST', '/api/clock/in', { cookie, body: { input_zone: 'America/Los_Angeles' } });
++    expect(morning.body.session).toMatchObject({ work_date: '2026-10-27', start_utc: '2026-10-27T07:00:31Z', end_utc: null });
++    expect((await t.request('GET', '/api/days/2026-10-26', { cookie })).body.sessions.filter((item: { end_utc: string | null }) => item.end_utc === null)).toEqual([]);
++  });
++
+   it('keeps open sessions and unknown breaks pending instead of inventing minutes', async () => {
+     const { t, cookie } = await setup('2026-09-28T16:00:00Z');
+     const open = await t.request('POST', '/api/clock/in', { cookie, body: { input_zone: 'America/Los_Angeles' } });

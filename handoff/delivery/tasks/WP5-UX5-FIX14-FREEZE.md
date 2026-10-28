@@ -156,3 +156,9 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+
+- HEAD before bb8d34039b79320e415a0224c0bd02075bd0f76a; after bd9c2757d51d4efa8fe99ad2cd548217e2dd7d23.
+- Pushed to origin main (fast-forward); remote SHA equals HEAD.
+- D_PRE = HEAD digest = 419ede40b259e649a685241214a8d11f791a76d537f918964ad46ac97af76708.
+- Staged 549 paths. Unstaged REGATE8 log-chain1.log and log-master.log (not .txt). Masked `nobody` in 3 mask.mjs.txt files.
+- All checks exit 0 (precommit after masking). Details in evidence/WP5-UX5-FIX14-FREEZE/checks.txt.

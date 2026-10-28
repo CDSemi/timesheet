@@ -1,0 +1,27 @@
+# Builds the proposed patches from the work copies against the pristine archive and checks them in a fresh export.
+# Usage: bash mkpatch.sh
+. <task>/env.sh
+cd $T
+O=export-orig/tests/e2e
+mkdir -p out/patch
+: > out/patch/proposed.patch.txt
+: > out/patch/proposed-clockin-only.patch.txt
+: > out/patch/proposed-integration-test.patch.txt
+d() { # d <orig> <new> <path in repo> <outfile>
+  diff -u --label "a/$3" --label "b/$3" "$1" "$2" >> "$4"
+}
+d $O/fixtures.ts work/fixtures.ts tests/e2e/fixtures.ts out/patch/proposed.patch.txt
+d $O/day-editor.spec.ts work/day-editor.spec.ts tests/e2e/day-editor.spec.ts out/patch/proposed.patch.txt
+d $O/today.spec.ts work/today.spec.ts tests/e2e/today.spec.ts out/patch/proposed.patch.txt
+d export-orig/tests/integration/timesheet-api.test.ts work/timesheet-api.test.ts tests/integration/timesheet-api.test.ts out/patch/proposed.patch.txt
+d $O/day-editor.spec.ts work/day-editor.spec.ts tests/e2e/day-editor.spec.ts out/patch/proposed-clockin-only.patch.txt
+d export-orig/tests/integration/timesheet-api.test.ts work/timesheet-api.test.ts tests/integration/timesheet-api.test.ts out/patch/proposed-integration-test.patch.txt
+# a fresh export of the base and the check
+rm -f out/patch/check-ok.txt
+mkdir -p patch-check
+cd patch-check
+git -C $REPO archive $TARGET | tar -x -C .
+for p in proposed proposed-clockin-only proposed-integration-test; do
+  git apply --check --whitespace=error $T/out/patch/$p.patch.txt && echo "$p: git apply --check --whitespace=error exit 0" >> $T/out/patch/check-ok.txt
+done
+cat $T/out/patch/check-ok.txt

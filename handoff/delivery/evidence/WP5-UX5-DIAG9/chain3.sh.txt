@@ -1,0 +1,26 @@
+# Phase 4: the clockIn fix alone (V1) and the whole patch (V2) against the midnight placement cases; then the clean patched export
+# (no scratch files) is typechecked and linted.
+. <task>/env.sh
+cd $T
+# V1: pristine fixtures + hooks, patched day-editor spec + hooks, pristine today spec
+cp variants/fixtures.orig-hooks.ts export/tests/e2e/fixtures.ts
+cp variants/day-editor.fix-hooks.ts export/tests/e2e/day-editor.spec.ts
+cp export-orig/tests/e2e/today.spec.ts export/tests/e2e/today.spec.ts
+bash cases.sh clockin desktop "Check in then Check out asks" > logs/cases-clockin-desktop.txt 2>&1
+bash cases.sh clockin mobile "Check in then Check out asks" > logs/cases-clockin-mobile.txt 2>&1
+bash cases.sh clockin-stale desktop "a stale session version at Check out" > logs/cases-clockin-stale-desktop.txt 2>&1
+# V2: fenced fixtures + hooks, patched day-editor spec + hooks, annotated today spec
+cp variants/fixtures.fenced-hooks.ts export/tests/e2e/fixtures.ts
+cp work/today.spec.ts export/tests/e2e/today.spec.ts
+bash cases.sh full desktop "Check in then Check out asks" > logs/cases-full-desktop.txt 2>&1
+bash cases.sh full mobile "Check in then Check out asks" > logs/cases-full-mobile.txt 2>&1
+# the clean patched export: no hooks, no scratch files
+cp work/fixtures.ts export/tests/e2e/fixtures.ts
+cp work/day-editor.spec.ts export/tests/e2e/day-editor.spec.ts
+cp work/today.spec.ts export/tests/e2e/today.spec.ts
+rm export/tests/e2e/diag9Hooks.ts export/tests/e2e/zz-diag9-product.spec.ts
+cd export
+npm run typecheck > ../logs/patched-typecheck.txt 2>&1; echo "typecheck exit=$?" >> ../out/patched-checks.txt
+npm run lint > ../logs/patched-lint.txt 2>&1; echo "lint exit=$?" >> ../out/patched-checks.txt
+cd ..
+echo chain3-done > out/chain3.done

@@ -1,0 +1,15 @@
+# Usage: bash natural.sh <variant tag> <offset seconds before local midnight (2026-10-27T07:00:00Z) at launch>...
+# The seven-file scope, both projects, --workers=6, launched at the given distances before the reporting-zone midnight.
+. <task>/env.sh
+V=$1; shift
+cd $T
+SEVEN="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts"
+MID_MS=$(date -u -d "2026-10-27T07:00:00Z" +%s%3N)
+for off in "$@"; do
+  START_ISO=$(date -u -d "@$(( MID_MS / 1000 - off ))" +%Y-%m-%dT%H:%M:%SZ)
+  L="nat-$V-$off"
+  bash run-shift.sh "$L" "$START_ISO" $SEVEN --workers=6 > "logs/$L.txt" 2>&1
+  echo "$L finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> out/natural-progress.txt
+  node counts.mjs "logs/$L.txt" >> out/natural-counts-$V.txt 2>&1
+done
+echo natural-done >> out/natural-progress.txt

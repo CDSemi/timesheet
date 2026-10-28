@@ -1,0 +1,14 @@
+// Replaces one exact text in a file, failing unless it occurs exactly once. Usage: node mutate.mjs <file> <fromFile> <toFile>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, fromFile, toFile] = process.argv.slice(2);
+const text = readFileSync(file, 'utf8');
+const from = readFileSync(fromFile, 'utf8').replace(/\r\n/g, '\n').replace(/\n$/, '');
+const to = readFileSync(toFile, 'utf8').replace(/\r\n/g, '\n').replace(/\n$/, '');
+const count = text.split(from).length - 1;
+if (count !== 1) {
+  console.error(`expected exactly one occurrence of the text, found ${count}`);
+  process.exit(2);
+}
+writeFileSync(file, text.replace(from, () => to));
+console.log('mutated once');

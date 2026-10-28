@@ -2707,10 +2707,95 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - `npm test`: 2.388.
   - e2e đầy đủ: desktop 469/35/0, mobile 407/97/0.
   - Lượt quét thời điểm 0314 trên 15 file: 0 lỗi.
-- **Đang chạy:** WP5-UX5-FIX14-FREEZE (committer). Coordinator không ghi file nào trong lúc
-  committer chạy.
+- **WP5-UX5-FIX14-FREEZE xong.**
+  - Commit bd9c2757d51d4efa8fe99ad2cd548217e2dd7d23 trên main, đã push dạng fast-forward từ
+    bb8d340; remote trùng với HEAD.
+  - D_PRE trùng digest của HEAD, 419ede40. Đã stage 549 đường dẫn.
+  - Để ngoài commit: hai file `.log` của REGATE8, vì evidence phải là `.txt`. Hai file
+    riêng tư từ lần trước vẫn không được commit.
+  - Đã che một đường dẫn hồ sơ người dùng trong ba script evidence.
+  - Mọi kiểm tra đều exit 0.
+- **WP5-UX5-REGATE9 KHÔNG ĐẠT** (verifier, tự báo claude-sonnet-5-5) trên bd9c275 /
+  419ede40, ở một tiêu chí.
+  - Lượt quét bảy spec ở thời điểm 2026-10-27T06:58:30Z trượt một lần. Lượt này chạy qua nửa
+    đêm giờ Los Angeles ở giây thứ 90.
+  - Test trượt là `day-editor.spec.ts:2340` trên mobile: bước chờ trong `clockIn` tìm một
+    phiên đang mở của `todayLocal` hết thời gian chờ 7 giây. Đây không phải lỗi mạng.
+  - Mọi mục khác đều đạt:
+    - drill 209/0 và `npm audit` 0;
+    - lượt cốt lõi ×3 (2.388 test);
+    - e2e đầy đủ theo giờ thật (0 lỗi);
+    - năm lượt quét còn lại;
+    - chạy dồn;
+    - các mutant của FIX14;
+    - mọi mô hình, kể cả mô hình trễ của DIAG5 trên cả hai project;
+    - axe, 0 vi phạm, kể cả khi mở menu tài khoản và bảng More.
+- **Quyết định coordinator.** Không bỏ qua. Đây là lớp lỗi mới: mọi bản sửa lỗi đo sớm đều
+  giữ được, nên giới hạn leo thang không áp dụng.
+
+  Giả thuyết chính, chưa được chứng minh: test chốt ngày địa phương trước khi lượt chạy qua
+  nửa đêm. Vẫn phải loại trừ khả năng sản phẩm có lỗi thật ở ranh giới ngày.
+  WP5-UX5-DIAG9 (planner, sonnet) chẩn đoán lỗi này và chạy kiểm tra độ phủ:
+  - phạm vi chạy qua nửa đêm, với nửa đêm rơi vào nhiều thời điểm khác nhau trong lượt chạy;
+  - các thời điểm quét còn lại.
+- **Kết quả đầu tiên của WP5-UX5-DIAG9** (planner, tự báo claude-sonnet-5-5). Chuỗi quét
+  còn đang chạy nên kết quả CHƯA ĐƯỢC KIỂM.
+  - **Kết luận:** lỗi nằm ở giả định của test tại ranh giới ngày. Sản phẩm chạy đúng: một
+    phiên qua đêm thuộc về ngày nó bắt đầu (docs/02, D-05). Trace của lượt trượt cho thấy
+    lần Check in được ghi lúc 07:00:00Z vào ngày 2026-10-27, trong khi test lại tìm ở ngày
+    2026-10-26.
+  - **Bản sửa A:** `clockIn` tìm ở ngày đó và ngày kế tiếp, rồi đối chiếu ngày tìm được với
+    thời điểm bắt đầu của chính phiên. Đã chứng minh ở sáu thời điểm chọn sẵn, và các mutant
+    đều bị bắt.
+  - **Kiểm tra độ phủ:** 31 test của bộ cũ trượt khi nửa đêm rơi vào giữa lúc test chạy.
+  - **Bản sửa B:** một "hàng rào nửa đêm" trong fixtures. Nếu còn chưa tới 45 giây là đến
+    nửa đêm, test được giữ lại cho đến khi sang ngày mới. Test cố ý chạy qua nửa đêm được
+    miễn. Có hàng rào, sáu vị trí nửa đêm khác nhau đều 0 lỗi; bỏ hàng rào thì các lỗi quay
+    lại.
+  - **Tùy chọn:** một test tích hợp ghim lại ngày ghi nhận của lần Check in ngay tại giây
+    chuyển ngày.
+- **Quyết định coordinator (Addendum 1 trong brief).**
+  - Chấp nhận bản sửa A và test tích hợp.
+  - Chấp nhận bản sửa B về nguyên tắc, với điều kiện: hàng rào không được đăng nhập hay tác
+    động lên hệ thống trước mỗi test, trừ khi chứng minh được là vô hại.
+  - Chính planner đó chạy nốt chuỗi quét và chứng minh bản vá cuối cùng, kể cả e2e đầy đủ
+    theo giờ thật trên cả hai project.
+- **WP5-UX5-DIAG9 xong (kết quả Addendum 1).**
+  - Hàng rào giờ đọc đồng hồ của trình chạy test và múi giờ đã lưu của dữ liệu mẫu. Nó
+    không đăng nhập, không gửi request và không truy cập cơ sở dữ liệu.
+  - Bản vá cuối chỉ đổi test: bốn file, +101/−14.
+  - Bằng chứng trên bản export mới:
+    - `npm test`: 2.389;
+    - e2e đầy đủ theo giờ thật: 469/35/0 và 407/97/0;
+    - phạm vi bảy file ở 06:58:30Z và khi nửa đêm rơi vào giây thứ 200: 0 lỗi;
+    - các mô hình đều qua;
+    - lần chạy đối chứng khi tắt hàng rào lại trượt như dự đoán;
+    - mọi mutant đều bị bắt.
+  - Chuỗi quét chạy hai lần với phiên bản hàng rào đầu tiên cũng 0 lỗi.
+- **Quyết định coordinator.** Chấp nhận. Hàng rào là một bước chờ theo trạng thái trước khi
+  test bắt đầu, không có tác dụng phụ. Hành vi lúc nửa đêm vẫn được kiểm qua:
+  - test cố ý chạy qua nửa đêm;
+  - lần kiểm sản phẩm của DIAG9;
+  - test tích hợp mới.
+
+  Hàng rào được ghi vào bàn giao WP5 như một lựa chọn thiết kế test.
+- **WP5-UX5-FIX15 xong** (worker, tự báo claude-sonnet-5-5). Chưa commit. Digest ff73565b.
+  - Tái hiện trước: trường hợp C2 trượt trên cả hai project, và các mô hình tắt hàng rào
+    cũng trượt.
+  - Đã áp bản vá vào đúng bốn file test.
+  - Bằng chứng:
+    - các trường hợp C1–C6: 24/24;
+    - các mô hình đều qua, và lần chạy đối chứng tắt hàng rào lại trượt như dự đoán;
+    - các mutant A, A2, B và mutant của test ranh giới đều bị bắt;
+    - chạy lặp: 40/40 mỗi project.
+  - `dist/` giữ nguyên.
+  - `npm test`: 2.389.
+  - e2e đầy đủ: 469/35/0 và 407/97/0.
+  - Lượt quét qua nửa đêm: 0 lỗi. Test cố ý chạy qua nửa đêm trên desktop mất 1,0 phút.
+- **Đang chạy:** WP5-UX5-FIX15-FREEZE (committer). Coordinator không ghi file nào trong lúc
+  committer chạy. Sau đó là REGATE10 có phạm vi.
 - **Tiếp theo:**
-  - REGATE9 đầy đủ;
+  - bản sửa, freeze và gate lại;
   - kiểm tra lại độc lập hai lỗi đã sửa, thay đổi Day editor và thay đổi đồng bộ giao diện
     giữa các tab;
   - audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.

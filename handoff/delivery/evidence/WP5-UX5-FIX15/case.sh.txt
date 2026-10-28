@@ -1,0 +1,10 @@
+# Usage: bash case.sh <label> <seconds before local midnight (2026-10-27T07:00:00Z) at launch> <grep> <project> [extra env as NAME=VALUE ...]
+. <task>/env.sh
+L=$1; BEFORE=$2; GREP=$3; PROJ=$4; shift 4
+MID_ISO=${MIDNIGHT_ISO:-2026-10-27T07:00:00Z}
+MID_MS=$(date -u -d "$MID_ISO" +%s%3N)
+export DIAG9_MID_MS=$MID_MS
+export DIAG9_LOG=1
+for kv in "$@"; do export "$kv"; done
+START_ISO=$(date -u -d "@$(( (MID_MS / 1000) - BEFORE ))" +%Y-%m-%dT%H:%M:%SZ)
+bash $T/run-shift.sh "$L" "$START_ISO" ${SPEC:-tests/e2e/day-editor.spec.ts} --project=$PROJ --workers=1 -g "$GREP"

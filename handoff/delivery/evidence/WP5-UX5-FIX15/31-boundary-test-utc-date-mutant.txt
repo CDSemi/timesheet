@@ -1,0 +1,39 @@
+
+ RUN  v5.0.2 <task>/export2
+
+ ❯ tests/integration/timesheet-api.test.ts (16 tests | 1 failed) 3353ms
+   ❯ calculations through the API (9)
+     × files a check-in under the local date of its own start on either side of the reporting-zone midnight 194ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/timesheet-api.test.ts > calculations through the API > files a check-in under the local date of its own start on either side of the reporting-zone midnight
+AssertionError: expected { …(9) } to match object { work_date: '2026-10-26', …(2) }
+(6 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "end_utc": null,
+    "start_utc": "2026-10-27T06:59:58Z",
+-   "work_date": "2026-10-26",
++   "work_date": "2026-10-27",
+  }
+
+ ❯ tests/integration/timesheet-api.test.ts:129:32
+    127|     const { t, cookie } = await setup('2026-10-27T06:59:58Z');
+    128|     const night = await t.request('POST', '/api/clock/in', { cookie, b…
+    129|     expect(night.body.session).toMatchObject({ work_date: '2026-10-26'…
+       |                                ^
+    130|     // After the midnight the running session still belongs to the day…
+    131|     t.clock.set('2026-10-27T07:00:30Z');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 15 passed (16)
+   Start at  11:14:31
+   Duration  4.17s (tests 82%, transform 11%, import 7%)
+

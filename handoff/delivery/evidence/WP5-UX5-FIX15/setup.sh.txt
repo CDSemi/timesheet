@@ -1,0 +1,9 @@
+. <task>/env.sh
+cd $REPO
+git archive $TARGET | tar -x -C $T/export
+git archive $TARGET | tar -x -C $T/export-orig
+cd $T/export
+npm ci > $T/logs/npm-ci.txt 2>&1
+echo "npm ci exit=$?"
+npm run build > $T/logs/build-base.txt 2>&1
+echo "build exit=$?"

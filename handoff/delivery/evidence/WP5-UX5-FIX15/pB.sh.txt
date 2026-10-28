@@ -1,0 +1,47 @@
+# Usage: bash pB.sh 1|2   Mutants on export2 (clean patched files), each restored byte-equal afterwards.
+#   1: server mutants A, A2, B (dist) against the two check-in tests, real clock, both projects, plus the unmutated control
+#   2: the boundary integration test, against the UTC-date mutant of the source; the crossing test, normal and with the exemption removed
+. <task>/env.sh
+export SHIFT_EXPORT=$T/export2
+cd $T
+X=export2/tests/e2e
+for f in fixtures.ts day-editor.spec.ts today.spec.ts; do cmp $REPO/tests/e2e/$f $X/$f || exit 3; done
+DIST=export2/dist/server/services/timesheetCommands.js
+SRC=export2/src/server/services/timesheetCommands.ts
+TITLES="Check in then Check out asks|a stale session version at Check out"
+run_real() {
+  L=$1
+  mkdir -p pw-$L shots-$L
+  export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+  ( cd export2 && node.exe node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts --workers=2 -g "$TITLES" --output="$TW\\pw-$L" ) > logs/$L.txt 2>&1
+  echo "$L exit=$?" >> out/mutants.txt
+}
+if [ "$1" = "1" ]; then
+  : > out/mutants.txt
+  cp $DIST backup/timesheetCommands.js
+  run_real mut-control
+  for m in a a2 b; do
+    node mutate.mjs $DIST mut-$m.from.txt mut-$m.to.txt >> out/mutants.txt 2>&1
+    run_real mut-$m
+    cp backup/timesheetCommands.js $DIST
+    cmp backup/timesheetCommands.js $DIST && echo "dist restored after $m" >> out/mutants.txt
+  done
+else
+  ( cd export2 && npx vitest run tests/integration/timesheet-api.test.ts > $T/logs/vitest-boundary.txt 2>&1; echo "boundary test exit=$?" >> $T/out/mutants.txt )
+  cp $SRC backup/timesheetCommands.src.ts
+  node mutate.mjs $SRC mut-bsrc.from.txt mut-bsrc.to.txt >> out/mutants.txt 2>&1
+  ( cd export2 && npx vitest run tests/integration/timesheet-api.test.ts > $T/logs/vitest-boundary-mutant.txt 2>&1; echo "boundary test against the UTC-date mutant exit=$?" >> $T/out/mutants.txt )
+  cp backup/timesheetCommands.src.ts $SRC
+  cmp backup/timesheetCommands.src.ts $SRC && echo "src restored" >> out/mutants.txt
+  INSTANT=2026-10-27T06:59:20Z
+  bash run-shift.sh cross-normal $INSTANT tests/e2e/today.spec.ts --project=desktop --workers=1 -g "a page left open across" > logs/cross-normal.txt 2>&1
+  echo "cross-normal $(grep '^exit=' logs/cross-normal.txt)" >> out/mutants.txt
+  cp $REPO/tests/e2e/fixtures.ts backup/fixtures.mut-x.ts
+  node mutate.mjs backup/fixtures.mut-x.ts mut-x.from.txt mut-x.to.txt >> out/mutants.txt 2>&1
+  cp backup/fixtures.mut-x.ts $X/fixtures.ts
+  bash run-shift.sh cross-mutx $INSTANT tests/e2e/today.spec.ts --project=desktop --workers=1 -g "a page left open across" > logs/cross-mutx.txt 2>&1
+  echo "cross-mutx $(grep '^exit=' logs/cross-mutx.txt)" >> out/mutants.txt
+  cp $REPO/tests/e2e/fixtures.ts $X/fixtures.ts
+  cmp $REPO/tests/e2e/fixtures.ts $X/fixtures.ts && echo "fixtures restored" >> out/mutants.txt
+fi
+echo "pB$1 done" >> out/mutants.txt

@@ -1,0 +1,18 @@
+# Phase 2 on the ORIGINAL (export currently holds the pristine specs + hooks fixtures): mobile cases, mobile product probe,
+# the sign-date model, the clock-in model over the check-in tests, and the outside-scope candidates.
+. <task>/env.sh
+cd $T
+cp variants/day-editor.orig-hooks.ts export/tests/e2e/day-editor.spec.ts
+cp variants/fixtures.orig-hooks.ts export/tests/e2e/fixtures.ts
+bash cases.sh orig mobile "Check in then Check out asks" > logs/cases-orig-mobile.txt 2>&1
+SPEC=tests/e2e/zz-diag9-product.spec.ts bash product.sh mobile > logs/product-mobile-run.txt 2>&1
+# the sign date: the page prints the date of the sign-off, the test computes "today" afterwards with new Date()
+cp variants/review.spec.orig-hooks.ts export/tests/e2e/review.spec.ts
+SPEC=tests/e2e/review.spec.ts bash case.sh signdate-orig-control 12 "without a saved signature image" desktop > logs/signdate-orig-control.txt 2>&1
+SPEC=tests/e2e/review.spec.ts bash case.sh signdate-orig-cross 12 "without a saved signature image" desktop DIAG9_AT_BEFORE_SIGN=-1500 DIAG9_AT_BEFORE_DATE_ASSERT=500 > logs/signdate-orig-cross.txt 2>&1
+cp export-orig/tests/e2e/review.spec.ts export/tests/e2e/review.spec.ts
+# the pristine day-editor spec for the dense models (keep the original byte-exact)
+cp export-orig/tests/e2e/day-editor.spec.ts export/tests/e2e/day-editor.spec.ts
+EXTRA_ENV="DIAG9_AT_CLOCK_IN=300" bash dense2.sh orig-clockin -3000 dense-list3.txt desktop mobile > logs/dense2-orig-clockin.log 2>&1
+bash dense.sh orig-list2 300 dense-list2.txt desktop mobile > logs/dense-orig-list2.log 2>&1
+echo chain1-done > out/chain1.done

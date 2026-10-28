@@ -1,0 +1,10 @@
+# A fresh scratch export of HEAD with the final patch applied (git apply --check first), its own npm ci and build.
+. <task>/env.sh
+mkdir -p $T/export2 $T/out2
+git -C $REPO archive $TARGET | tar -x -C $T/export2
+cd $T/export2
+git -c core.autocrlf=false apply --check --whitespace=error $T/out/patch/proposed.patch.txt && echo "git apply --check exit 0" > $T/out2/apply-check.txt
+git -c core.autocrlf=false apply --whitespace=error $T/out/patch/proposed.patch.txt && echo "git apply exit 0" >> $T/out2/apply-check.txt
+cat $T/out2/apply-check.txt
+npm ci > $T/logs/export2-npm-ci.txt 2>&1; echo "npm ci exit=$?"
+npm run build > $T/logs/export2-build.txt 2>&1; echo "build exit=$?"

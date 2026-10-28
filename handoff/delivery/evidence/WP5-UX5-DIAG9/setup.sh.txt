@@ -1,0 +1,13 @@
+. <task>/env.sh
+mkdir -p $T/tmp $T/out $T/logs $T/data $T/export $T/export-orig
+cd $REPO
+git rev-parse HEAD > $T/out/00-head.txt
+git rev-parse origin/main >> $T/out/00-head.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status.txt 2>&1
+git archive $TARGET | tar -x -C $T/export
+git archive $TARGET | tar -x -C $T/export-orig
+cat $T/out/00-head.txt $T/out/00-nonhandoff-status.txt
+echo "--- npm ci (export)"
+cd $T/export
+npm ci > $T/logs/npm-ci.txt 2>&1
+echo "npm ci exit=$?"

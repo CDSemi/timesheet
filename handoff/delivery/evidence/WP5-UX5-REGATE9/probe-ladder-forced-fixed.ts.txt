@@ -1,0 +1,76 @@
+import { rangeKind, rangeLadder, rangeSpokenText, rangeText } from '../../src/client/components/periodBarModel.ts';
+import { expect, test } from './fixtures.ts';
+import type { Page } from '@playwright/test';
+import { rangeState } from './periodCard.ts';
+
+/*
+ * WP5-UX5-FIX14 probe (scratch, never proposed): the DIAG8 forced interleaving, with the steps of the patched test. The answer for the
+ * period that spans two years is held back by a timer (HOLD_MS, default 1500 ms) and every step uses the stepPeriod of the patched
+ * timesheet.spec.ts (read the payroll date, click, wait until it changes, then the 14 days) before the unchanged check(). With the
+ * old steps (click, count 14 days, read) the same hold fails every pass (probe-ladder-forced); with stepPeriod it must pass.
+ */
+test.skip(({ isMobile }) => isMobile, 'desktop only, as the original');
+
+async function stepPeriod(page: Page, name: 'Next period' | 'Previous period'): Promise<void> {
+  const due = page.locator('[data-period-due]');
+  const before = await due.getAttribute('data-period-due');
+  await page.getByRole('button', { name }).click();
+  await expect(due, `${name}: the period shown changes`).not.toHaveAttribute('data-period-due', before ?? '');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+}
+
+test('probe: the ladder test with stepPeriod and the two-year period held back by a timer', async ({ page, signInThroughUi }) => {
+  test.setTimeout(240_000);
+  const hold = Number(process.env.HOLD_MS ?? '1500');
+  let heldTotal = 0;
+  await page.route('**/api/timesheets/*', async (route) => {
+    const response = await route.fetch();
+    let crosses = false;
+    try {
+      const body = (await response.json()) as { period: { period_start: string; period_end: string } };
+      crosses = body.period.period_start.slice(0, 4) !== body.period.period_end.slice(0, 4);
+    } catch {
+      // not a period answer
+    }
+    if (crosses) {
+      heldTotal += 1;
+      await new Promise<void>((resolve) => setTimeout(resolve, hold));
+    }
+    await route.fulfill({ response });
+  });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const seen = new Set<string>();
+  const check = async () => {
+    const kind = await page.locator('.period-name').getAttribute('data-range-kind');
+    if (kind === null || seen.has(kind)) return;
+    seen.add(kind);
+    for (const width of [320, 360, 390, 430]) {
+      await page.setViewportSize({ width, height: 900 });
+      const state = await rangeState(page);
+      const dates = /^(\d{2})\/(\d{2})\/(\d{4}) to (\d{2})\/(\d{2})\/(\d{4})$/.exec(state.spoken);
+      expect(dates, `${state.kind} at ${width}px: the accessible text is the full dates with "to" (${state.spoken})`).not.toBeNull();
+      const [, startMonth, startDay, startYear, endMonth, endDay, endYear] = dates ?? [];
+      const start = `${startYear}-${startMonth}-${startDay}`;
+      const end = `${endYear}-${endMonth}-${endDay}`;
+      expect(state.spoken).toBe(rangeSpokenText(start, end));
+      expect(state.kind).toBe(rangeKind(start, end));
+      const ladder = rangeLadder(start, end);
+      const fitting = ladder.find((form) => (state.widths[form] ?? Number.POSITIVE_INFINITY) <= state.box + 0.5) ?? ladder[ladder.length - 1] ?? 'full';
+      expect(state.text, `${state.kind} at ${width}px: the form that shows (box ${state.box.toFixed(1)}px, forms ${JSON.stringify(state.widths)})`).toBe(rangeText(start, end, fitting));
+    }
+  };
+  await check();
+  for (let step = 0; step < 14 && seen.size < 3; step += 1) {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await stepPeriod(page, 'Next period');
+    await check();
+  }
+  for (let step = 0; step < 28 && seen.size < 3; step += 1) {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await stepPeriod(page, 'Previous period');
+    await check();
+  }
+  expect(heldTotal, 'the two-year period was held back at least once').toBeGreaterThan(0);
+  expect([...seen].sort(), 'a one-month, a two-month and a two-year range were checked').toEqual(['cross-month', 'cross-year', 'same-month']);
+});

@@ -1,0 +1,10 @@
+# Reproduction on the ORIGINAL specs (+ no-op hooks): case C2 on both projects, then the fence-off date-reader models.
+. <task>/env.sh
+cd $T
+G="Check in then Check out asks"
+for P in desktop mobile; do
+  bash case.sh "repro-orig-$P-C2" 12 "$G" "$P" DIAG9_AT_BEFORE_CLICK=300 > "logs/repro-orig-$P-C2.txt" 2>&1
+  echo "repro-orig $P C2 $(grep '^exit=' logs/repro-orig-$P-C2.txt)" >> out/repro.txt
+done
+bash dense.sh repro-orig 300 dense-list-fail.txt desktop mobile > logs/dense-repro-orig.log 2>&1
+echo repro-done >> out/repro.txt

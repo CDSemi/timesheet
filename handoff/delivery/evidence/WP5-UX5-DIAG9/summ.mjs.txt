@@ -1,0 +1,23 @@
+// Summarises dense*.txt result files into one row per target. Usage: node summ.mjs <result file> <out file>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+const rows = new Map();
+for (const line of readFileSync(input, 'utf8').split('\n')) {
+  const m = /^(\S+) (desktop|mobile) .*?exit=(\d+)\s+(.*)$/.exec(line);
+  if (!m) continue;
+  const [, target, project, exit, rest] = m;
+  const state = exit !== '0' ? 'FAILED' : /1 skipped/.test(rest) && !/1 passed/.test(rest) ? 'skipped' : 'passed';
+  const row = rows.get(target) ?? {};
+  row[project] = state;
+  rows.set(target, row);
+}
+const out = [`target\tdesktop\tmobile`];
+let failedTargets = 0;
+for (const [target, row] of rows) {
+  out.push(`${target}\t${row.desktop ?? '-'}\t${row.mobile ?? '-'}`);
+  if (row.desktop === 'FAILED' || row.mobile === 'FAILED') failedTargets += 1;
+}
+out.push(`${rows.size} targets, ${failedTargets} with a failed run`);
+writeFileSync(output, out.join('\n') + '\n');
+console.log(out[out.length - 1]);

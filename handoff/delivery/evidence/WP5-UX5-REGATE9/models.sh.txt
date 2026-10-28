@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Models in the scratch copy export-mut (clean sources): DIAG6 (late lookup, 4x throttle), DIAG5/DIAG7 delay suite on both projects,
+# DIAG7 step-delay on the controls title-row tests on both projects, DIAG8 forced-interleaving ladder probe (stepPeriod form).
+# Scratch spec copies and the scratch fixtures are removed or restored byte-equal afterwards.
+source <task>/env.sh
+X=$T/export-mut
+C=$T/export
+OUT=$T/logs/models-exits.txt
+: > $OUT
+cd $X || exit 9
+GK="WP5-UX3-T04: the check in/out group"
+GE="Escape and the Close button: with unsaved edits"
+GN="Escape dispatched in the same task"
+pwm() { label=$1; shift; SHIFT_EXPORT=$X bash $T/run-shift.sh "model-$label" real "$@" --trace=off > $T/logs/model-$label.txt 2>&1; echo "$label: $(grep '^exit=' $T/logs/model-$label.txt)" >> $OUT; node.exe $TW\\counts.mjs $TW\\logs\\model-$label.txt >> $OUT 2>&1; }
+rm -f $X/tests/e2e/zz-control.spec.ts
+cmp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts && echo "scratch fixtures.ts equals clean export" >> $OUT
+# DIAG6 models
+cp $X/tests/e2e/keyboard-access.spec.ts $X/tests/e2e/dly-kbd.spec.ts; cat $T/delay-snippet.ts >> $X/tests/e2e/dly-kbd.spec.ts
+cp $X/tests/e2e/day-editor.spec.ts $X/tests/e2e/dly-esc.spec.ts; cat $T/throttle-snippet.ts >> $X/tests/e2e/dly-esc.spec.ts
+export PROBE_DELAY=300
+pwm kbd-late300 tests/e2e/dly-kbd.spec.ts -g "$GK" --project=desktop --workers=2 --repeat-each=10
+unset PROBE_DELAY
+export PROBE_THROTTLE=4
+pwm esc-t4 tests/e2e/dly-esc.spec.ts -g "$GE|$GN" --project=desktop --workers=6 --repeat-each=10
+unset PROBE_THROTTLE
+rm -f $X/tests/e2e/dly-kbd.spec.ts $X/tests/e2e/dly-esc.spec.ts
+# DIAG7 step-delay model on the controls title-row tests, both projects
+for P in mobile desktop; do
+  S=$X/tests/e2e/zz-dly-controls.spec.ts
+  cp $X/tests/e2e/controls.spec.ts $S
+  cat $T/sweep-snippet.ts >> $S
+  export DIAG_MQ_BASE=0 DIAG_MQ_STEP=3
+  pwm stepdelay-$P tests/e2e/zz-dly-controls.spec.ts --project=$P -g "the title row is 32px above|one paper holds the toolbar" --repeat-each=40 --workers=6
+  unset DIAG_MQ_BASE DIAG_MQ_STEP
+  rm -f $S
+done
+# DIAG8 forced-interleaving ladder probe, stepPeriod form
+cp $T/probe-ladder-forced-fixed.ts $X/tests/e2e/probe-ladder-forced-fixed.spec.ts
+pwm forced-ladder tests/e2e/probe-ladder-forced-fixed.spec.ts --project=desktop --repeat-each=24 --workers=6
+rm -f $X/tests/e2e/probe-ladder-forced-fixed.spec.ts
+# DIAG5 delay suite: the scratch page fixture, 15 spec files that call setViewportSize, both projects
+cp $T/fixtures.diag.ts $X/tests/e2e/fixtures.ts
+FILES="tests/e2e/controls.spec.ts tests/e2e/admin-status.spec.ts tests/e2e/classic-scrollbar.spec.ts tests/e2e/day-editor.spec.ts tests/e2e/logo.spec.ts tests/e2e/hover.spec.ts tests/e2e/pdf-visual.spec.ts tests/e2e/keyboard-access.spec.ts tests/e2e/review.spec.ts tests/e2e/settings-routes.spec.ts tests/e2e/shell.spec.ts tests/e2e/surfaces.spec.ts tests/e2e/theme.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/today.spec.ts"
+grep -l "setViewportSize" $X/tests/e2e/*.spec.ts > $T/out/setviewport-files.txt
+echo "spec files calling setViewportSize: $(wc -l < $T/out/setviewport-files.txt)" >> $OUT
+for P in desktop mobile; do
+  for D in 20 45 90; do
+    export DIAG_MQ_DELAY=$D
+    pwm delay-$P-d$D $FILES --project=$P --workers=6
+  done
+done
+unset DIAG_MQ_DELAY
+cp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts
+cmp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts && echo "fixtures.ts restored byte-equal" >> $OUT
+echo "leftover scratch specs: $(ls $X/tests/e2e | grep -cE '^(dly|probe|zz)-')" >> $OUT
+echo models-done > $T/out/models.done

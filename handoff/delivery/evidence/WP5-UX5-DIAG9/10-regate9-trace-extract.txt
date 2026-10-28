@@ -1,0 +1,23 @@
+WP5-UX5-DIAG9, question 1 and 3: what the failed REGATE9 run itself recorded
+Source: the Playwright trace and error context of [mobile] day-editor.spec.ts:2340 in the REGATE9 seven-file sweep at 2026-10-27T06:58:30Z
+(local midnight in America/Los_Angeles = 2026-10-27T07:00:00Z; the accounting date before it is 2026-10-26, after it 2026-10-27).
+Only synthetic values; the session cookie and the server port of the trace are left out.
+
+The check-in request the page sent (POST /api/clock/in, status 201) was answered with:
+  session.work_date  = 2026-10-27
+  session.start_utc  = 2026-10-27T07:00:00Z        <- exactly the reporting-zone midnight (00:00:00 in Los Angeles)
+  session.end_utc    = null                        <- the session IS open
+  session.input_zone = Asia/Saigon (the browser zone), source = clock, version 1
+  day.work_date      = 2026-10-27, day.sessions = that one session, day.calculation.status = incomplete (an open session is not zero work)
+The server filed the session under the local date of its start in the saved reporting zone (docs/02: "An overnight session normally belongs
+to its starting work_date in the saved reporting IANA zone"; D-05): 07:00:00Z is the first second of 2026-10-27 in Los Angeles.
+
+The test had read todayLocal = 2026-10-26 before it signed in (employeeSeed.today() at the start of the body), so clockIn polled
+GET /api/days/2026-10-26 for 7 s: that day holds no session, and the poll received false.
+
+Timing inside the trace (the browser's monotonic clock, ms): the page's first read of /api/periods/current 89985.6; the check-in request
+answered at 90048.2, 62 ms later. So the page read the date before the midnight and the server stamped the check-in at the midnight.
+
+The page snapshot at the failure shows the product doing the right thing after the midnight:
+  banner region "Check in and out": "Checked in since 14:00" (07:00Z in the display zone Asia/Saigon), "Tue 10/27, session running", button "Check out".
+The running session was found and drawn; only the test's date was stale.

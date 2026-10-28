@@ -1,0 +1,27 @@
+cd <task>
+. ./env.sh
+# S <label> <repeat> <workers> <playwright args...>: one real-clock run in the clean export, counted.
+S() {
+  label=$1; rep=$2; wk=$3; shift 3
+  bash run-shift.sh "stress-$label" real "$@" --repeat-each=$rep --workers=$wk > "logs/stress-$label.txt" 2>&1
+  echo "$label (repeat $rep, workers $wk): $(node counts.mjs "logs/stress-$label.txt")" >> out/31-stress-counts.txt 2>&1
+  echo "$label finished $(date -u +%H:%M:%S)" >> logs/stress.log
+}
+# FIX14's tests
+S ctl-title 20 10 tests/e2e/controls.spec.ts -g "the title row is 32px above"
+S ladder 60 6 tests/e2e/timesheet.spec.ts --project=desktop -g "the longest form that fits its box shows"
+S theme-tabs 20 6 tests/e2e/theme.spec.ts -g "a storage event keeps a second tab in step|a theme chosen in one tab reaches a second tab whose account menu is closed"
+# REGATE8's stress set again (desktop, repeat 20, workers 10)
+S checkcard 20 10 tests/e2e/review.spec.ts --project=desktop --grep "the check card:"
+S onecolumn 20 10 tests/e2e/review.spec.ts --project=desktop --grep "one column at every width"
+S sigrows 20 10 tests/e2e/review.spec.ts --project=desktop --grep "signature rows: the PDF block insets"
+S reloaded 20 10 tests/e2e/review.spec.ts --project=desktop --grep "a signed period opened again"
+S ring 20 10 tests/e2e/review.spec.ts --project=desktop --grep "shows the shared focus ring on all four edges"
+S stops 20 10 tests/e2e/review.spec.ts --project=desktop --grep "named keyboard stops"
+S ts2541 20 10 tests/e2e/timesheet.spec.ts --project=desktop --grep "narrow: \"<\", the centred range"
+S ts2671 20 10 tests/e2e/timesheet.spec.ts --project=desktop --grep "from 320 to 1920px no part of the card overlaps"
+S kbd 20 10 tests/e2e/keyboard-access.spec.ts --project=desktop --grep "WP5-UX3-T04: the check in/out group"
+S esc 20 10 tests/e2e/day-editor.spec.ts --project=desktop --grep "Escape and the Close button: with unsaved edits|Escape dispatched in the same task"
+S escmobile 20 10 tests/e2e/day-editor.spec.ts --project=mobile --grep "Escape dispatched in the same task"
+S logo 20 10 tests/e2e/logo.spec.ts --project=desktop --grep "wordmark shows whenever it fits|never adds a row"
+echo stress-done > out/stress.done

@@ -1,0 +1,13 @@
+# Usage: bash cases.sh <variant tag> <project> <grep>
+# The midnight-placement cases of the Check in then Check out test (local midnight = 2026-10-27T07:00:00Z, offsets in ms from it).
+# Each run is launched 12 s before midnight, so the test itself starts about 9 s before it and every wait stays far below the 30 s test timeout.
+. <task>/env.sh
+V=$1; P=$2; G=$3
+cd $T
+run() { n=$1; b=$2; shift 2; bash case.sh "$V-$P-$n" "$b" "$G" "$P" "$@" > "logs/$V-$P-$n.txt" 2>&1; echo "$V $P $n $(grep '^exit=' logs/$V-$P-$n.txt)"; }
+run C1-all-before 12
+run C2-between-today-and-click 12 DIAG9_AT_BEFORE_CLICK=300
+run C3-between-click-and-poll 12 DIAG9_AT_BEFORE_CLICK=-1500 DIAG9_AT_IN_POLL=500
+run C4-poll-starts-at-midnight 12 DIAG9_AT_BEFORE_CLICK=-1200 DIAG9_AT_IN_POLL=0
+run C5-after-today-before-signin 12 DIAG9_AT_AFTER_TODAY=300
+run C6-all-after 12 DIAG9_AT_START=2000

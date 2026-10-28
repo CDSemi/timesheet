@@ -1,0 +1,81 @@
+import { addDays } from '../../src/domain/dates.ts';
+import { diagWait } from './diag9Hooks.ts';
+import { expect, test } from './fixtures.ts';
+
+/*
+ * DIAG9 scratch probe, not part of the repository: what the product does with a check-in around local midnight (America/Los_Angeles,
+ * the saved reporting zone). The clock is the FIX10 shifted clock shared by the worker and the server; local midnight is
+ * DIAG9_MID_MS (the start of the accounting date D + 1). AGENTS.md rule 7: the instant, the accounting date and the reporting zone
+ * are different values; docs/02 line 21 and D-05: an overnight session belongs to its starting work date in the reporting zone.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+interface Session {
+  id: string;
+  work_date: string;
+  start_utc: string;
+  end_utc: string | null;
+  version: number;
+}
+
+const say = (label: string, value: unknown): void => console.log(`DIAG9P ${label} ${JSON.stringify(value)}`);
+
+test('DIAG9 product: a night-shift check-in at 23:59 stays on its start date, a check-in after midnight is on the next one', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  const day = (await employeeSeed.today()).todayLocal;
+  const next = addDays(day, 1);
+  say('accounting dates before', { day, next });
+  await signInThroughUi();
+  await expect(page.getByRole('button', { name: 'Check in' })).toBeVisible();
+  try {
+    // Before midnight: the check-in is stamped 23:59:59 (whole seconds), so its accounting date is D.
+    await diagWait('before-click');
+    const started = await employeeSeed.call<{ session: Session }>('POST', '/api/clock/in', { input_zone: 'America/Los_Angeles' }, 201);
+    say('night check-in', started.session);
+    expect(started.session.work_date, 'a check-in at 23:59:59 belongs to D').toBe(day);
+
+    // After midnight: today is D + 1, the session still belongs to D and is open on D, not on D + 1.
+    await diagWait('after-midnight');
+    const periods = await employeeSeed.periodsCurrent();
+    say('periods after midnight', { today_local: periods.today_local, reporting_zone: periods.reporting_zone });
+    expect(periods.today_local, 'the server date moved on').toBe(next);
+    const onDay = await employeeSeed.dayView(day);
+    const onNext = await employeeSeed.dayView(next);
+    say('D after midnight', onDay.sessions);
+    say('D+1 after midnight', onNext.sessions);
+    expect(onDay.sessions.filter((session) => session.end_utc === null)).toHaveLength(1);
+    expect(onNext.sessions).toHaveLength(0);
+
+    // The page still reports the running session after midnight (the clock looks in the current and in-progress periods).
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Check out' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Check in and out' })).toContainText('Checked in since');
+    say('ui after midnight', 'Check out button and "Checked in since" shown');
+
+    // Check out after midnight: the session closes on D with an end after midnight.
+    const open = onDay.sessions.find((session) => session.end_utc === null);
+    const out = await employeeSeed.call<{ day: { work_date: string; sessions: Session[]; calculation: { status: string } | null } }>('POST', '/api/clock/out', {
+      breaks: [],
+      breaks_confirmed: true,
+      expected_version: open?.version,
+    });
+    say('check-out', { day: out.day.work_date, sessions: out.day.sessions, calculation: out.day.calculation?.status });
+    expect(out.day.work_date).toBe(day);
+    expect(Date.parse(out.day.sessions[0]?.end_utc ?? '1970-01-01T00:00:00Z'), 'the session ends after local midnight').toBeGreaterThanOrEqual(Number(process.env.DIAG9_MID_MS));
+    expect((await employeeSeed.dayView(next)).sessions).toHaveLength(0);
+
+    // A check-in after midnight is stamped on D + 1.
+    await diagWait('late-click');
+    const late = await employeeSeed.call<{ session: Session }>('POST', '/api/clock/in', { input_zone: 'America/Los_Angeles' }, 201);
+    say('morning check-in', late.session);
+    expect(late.session.work_date, 'a check-in after midnight belongs to D + 1').toBe(next);
+    expect((await employeeSeed.dayView(day)).sessions.filter((session) => session.end_utc === null)).toHaveLength(0);
+    expect((await employeeSeed.dayView(next)).sessions.filter((session) => session.end_utc === null)).toHaveLength(1);
+  } finally {
+    await employeeSeed.clearSessions(day);
+    await employeeSeed.clearSessions(next);
+  }
+});

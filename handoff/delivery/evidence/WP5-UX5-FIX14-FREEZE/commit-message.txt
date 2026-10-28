@@ -1,0 +1,26 @@
+Let every tab follow a theme chosen in another tab, and wait for the applied period and layout in three e2e specs
+
+- fix(theme): `followThemeOfOtherTabs` keeps `data-theme` in step with the choice another
+  tab stores. `App` mounts it once, so a tab whose account menu or More panel is closed
+  follows too.
+  - The accepted UX2 rule is "a storage event keeps other tabs in step".
+  - WP5-UX3-T02 had moved the only listener into the menu, so the rule held only while the
+    menu was open.
+- test(e2e):
+  - `controls.spec.ts`: `expectLayoutAt` after each width change in the title-row gap tests.
+    Before, the card was read in the stale phone layout and the title row after React's
+    commit.
+  - `timesheet.spec.ts`: `stepPeriod` waits for `data-period-due` to change after Next or
+    Previous. Before, the range ladder could read the old period, or measure the wrong one.
+  - `theme.spec.ts`: `bringToFront` before each step a tab drives or reads, so a busy host
+    no longer starves the tab behind. A new test covers the cross-tab case with the menu
+    closed.
+- docs(handoff): REGATE8 (FAIL), DIAG7, DIAG8 and FIX14, the FIX13-FREEZE outputs, the
+  board, the checkpoint (+ vi), STATE and NEXT_ACTION (+ vi).
+
+Task: WP5-UX5-FIX14 (after WP5-UX5-REGATE8; diagnoses WP5-UX5-DIAG7 and WP5-UX5-DIAG8)
+Gate: WP5-UX5-REGATE8 FAIL on bb8d340; REGATE9 pending
+Audit: rechecks pending
+Digest: 419ede40b259e649a685241214a8d11f791a76d537f918964ad46ac97af76708
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

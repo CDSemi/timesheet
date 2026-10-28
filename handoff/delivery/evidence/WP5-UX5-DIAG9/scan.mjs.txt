@@ -1,0 +1,44 @@
+// Static census helper: lists the tests of the e2e spec files whose body reads a server "today" / accounting date or checks in.
+// Usage: node scan.mjs <exportDir> <out> <file...>
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir, out, ...files] = process.argv.slice(2);
+const patterns = {
+  periodsCurrent: /periodsCurrent\(/,
+  'today()': /\.today\(\)/,
+  todayLocal: /todayLocal/,
+  today_local: /today_local/,
+  'clock/in': /clock\/in/,
+  seedRunning: /seedRunning\(/,
+  clockIn: /clockIn\(/,
+  seedClockSessionToday: /seedClockSessionToday/,
+  shownPeriod: /shownPeriod\(|showToday\(/,
+  'today-tag': /today-tag|\.today\b/,
+  'Check in btn': /name: 'Check in'/,
+  ensureDeadlineAhead: /ensureDeadlineAhead/,
+  'Date.now': /Date\.now\(/,
+  'new Date()': /new Date\(\)/,
+  displayedSeedDay: /displayedSeedDay|displayedPeriodFreeWorkdays|pastFreeWorkdays/,
+};
+const lines = [];
+for (const file of files) {
+  const text = readFileSync(join(dir, file), 'utf8').split('\n');
+  const starts = [];
+  text.forEach((line, index) => {
+    const m = /^(\s*)test(?:\.only)?\(\s*(['"`])(.*)$/.exec(line) ?? /^(\s*)test\(\s*$/.exec(line);
+    if (m !== null) starts.push(index);
+    else if (/^\s*for \(const .* of /.test(line) && false) starts.push(index);
+  });
+  starts.forEach((start, k) => {
+    const end = k + 1 < starts.length ? starts[k + 1] : text.length;
+    const body = text.slice(start, end).join('\n');
+    const title = (text[start] + ' ' + (text[start + 1] ?? '')).replace(/\s+/g, ' ').trim().slice(0, 110);
+    const hits = Object.entries(patterns)
+      .filter(([, re]) => re.test(body))
+      .map(([name]) => name);
+    lines.push(`${file}:${start + 1}\t${end - start} lines\t${hits.join(', ') || '-'}\t${title}`);
+  });
+}
+writeFileSync(out, lines.join('\n') + '\n');
+console.log(`${lines.length} tests scanned`);

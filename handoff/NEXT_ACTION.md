@@ -128,9 +128,18 @@ Current route:
    - WP5-UX5-DIAG8 found both are test races, and proved test fixes. It also found that a
      tab with its menu closed no longer follows a theme chosen in another tab. That breaks a
      rule accepted in UI round 2, and a small, proven product fix restores it.
-   - WP5-UX5-FIX14 applied all three fixes and passed its checks (digest 419ede40).
-   - Running now: WP5-UX5-FIX14-FREEZE commits and pushes them.
-   - Then a full regate, fresh rechecks of the two fixed findings, the Day editor
+   - WP5-UX5-FIX14 applied all three fixes and passed its checks. They are frozen in bd9c275
+     (digest 419ede40) and pushed.
+   - WP5-UX5-REGATE9, a full regate on bd9c275, failed on one criterion only. In the sweep
+     that crosses local midnight, the mobile Check in test did not see its open session.
+     Everything else passed, including every earlier fix.
+   - WP5-UX5-DIAG9 found the product correct: an overnight session belongs to the day it
+     started. The test had read the date before midnight. 31 tests share that assumption.
+     A tests-only patch fixes the check-in helper, holds each test off the local midnight
+     without touching the system, and adds an integration test at the boundary.
+   - WP5-UX5-FIX15 applied that patch and passed its checks (digest ff73565b).
+   - Running now: WP5-UX5-FIX15-FREEZE commits and pushes it.
+   - Then a scoped regate, fresh rechecks of the two fixed findings, the Day editor
      change and the theme change, the integration audit, ACCEPT-DOCS and the WP5 re-accept.
    - To resume after an interruption, use the entry prompt above. The coordinator continues
      at the board's `next_task_id`.

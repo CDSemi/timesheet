@@ -1,0 +1,24 @@
+# Usage: EXTRA_ENV="NAME=VALUE ..." bash dense2.sh <variant tag> <body start offset ms from midnight, negative = before> <list file> <project>...
+. <task>/env.sh
+V=$1; START_AT=$2; LIST=$3; shift 3
+cd $T
+RES=out/dense2-$V.txt
+: > $RES
+while IFS= read -r target; do
+  [ -z "$target" ] && continue
+  for P in "$@"; do
+    tag=$(echo "$target" | tr '/:.' '___')
+    L="dense2-$V-$tag-$P"
+    MID_MS=$(date -u -d "2026-10-27T07:00:00Z" +%s%3N)
+    export DIAG9_MID_MS=$MID_MS
+    export DIAG9_AT_TEST_START=$START_AT
+    unset DIAG9_LOG
+    for kv in $EXTRA_ENV; do export "$kv"; done
+    START_ISO=$(date -u -d "@$(( (MID_MS / 1000) - 7 ))" +%Y-%m-%dT%H:%M:%SZ)
+    bash $T/run-shift.sh "$L" "$START_ISO" "$target" --project=$P --workers=1 > "logs/$L.txt" 2>&1
+    summary=$(grep -E '^\s+[0-9]+ (passed|failed|skipped)' "logs/$L.txt" | tr -s ' ' | tr '\n' ';')
+    ex=$(grep '^exit=' "logs/$L.txt")
+    echo "$target $P start=$START_AT extra=[$EXTRA_ENV] $ex $summary" >> $RES
+  done
+done < "$LIST"
+echo dense2-done >> $RES

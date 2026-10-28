@@ -1,0 +1,14 @@
+
+/* DIAG6 scratch only: the lookup of the running session answers PROBE_DELAY ms late for every test of this copy of the file.
+ * The 1st and 2nd /api/periods/current of the Timesheet page (the period to show) pass at once; the 3rd and later (the lookup that
+ * decides "Check in" or "Check out") come PROBE_DELAY ms late, so the days are drawn first and the button stays disabled for that long. */
+test.beforeEach(async ({ page }) => {
+  const delay = Number(process.env.PROBE_DELAY ?? '0');
+  if (delay <= 0) return;
+  let calls = 0;
+  await page.route('**/api/periods/current', async (route) => {
+    calls += 1;
+    if (calls >= 3) await new Promise((resolveWait) => setTimeout(resolveWait, delay));
+    await route.continue();
+  });
+});

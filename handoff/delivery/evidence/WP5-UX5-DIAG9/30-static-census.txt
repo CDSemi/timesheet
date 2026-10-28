@@ -1,0 +1,55 @@
+WP5-UX5-DIAG9 completeness census, part 1: the reading of the e2e suite at HEAD bd9c275, with the verdict of the midnight models next to it.
+Part 2 is the model itself (20-*, 21-*, 22-*, 23-*, 24-*). Numbers of tests are test declarations; every one runs on both projects.
+
+The pattern: a test fixes a date or "today" once and acts on it after a server write or a page read. It fails only when the reporting-zone
+midnight (America/Los_Angeles, 2026-10-27T07:00:00Z) falls between the read and the act.
+
+Seven-file sweep scope (day-editor, today, timesheet, review, submission, settings-transfer, profile): 191 test declarations (30-scan-seven-file-scope.txt).
+   64  read no date and make no check-in                                              SAFE: nothing to go stale
+   67  only pick a past workday of the displayed period (displayedPeriodFreeWorkdays) SAFE: a past date stays past; the displayed period changes
+                                                                                      only at a period boundary, and 2026-10-26/27 is inside the
+                                                                                      five window days of payroll 2026-10-30 (no flip)
+   60  read the server date, check in, or use new Date()                              classified below with the model verdict
+
+M = confirmed by a model run on the original (the midnight 0.3 s into the test body, `dense.sh`; for check-ins the request itself lands 0.3 s after the
+midnight while the date was read 3 s before, `dense2.sh`; for the sign date the sign-off is before the midnight and the assertion after, `case.sh`).
+R = by reading only.
+
+AT RISK (fails on the original)
+  Check-in side (the session is filed under the local date of its own start; the test used a date read before)
+    day-editor 2340, 2393  (clockIn helper)                                  M observed in REGATE9 and reproduced at C2 and C5 (11-*), both projects
+    day-editor 1869 1933 1966 2018 2035 2093 2173 2248 6108 6186 6298 6360 (seedRunning, 12 tests, window = the clear loop, 0.1 to 0.3 s)
+                                                                              M 12 of 12, both projects, in the check-in model (21-*)
+    sharing 406 (clearSessions(todayLocal), clock/in, dayView(todayLocal))   M both projects (21-*, 22-*)
+  Read side (the date is read before the page loads; the page reads it again later)
+    day-editor 795, 2883, 5196 (desktop; 5196 is skipped on the phone)       M both projects (20-*)
+    today.spec 135 242(desktop) 293(desktop) 343 800 859 898 947             M both projects (20-*): the Today tag, the period pill, the chip
+    import 291, 398 (the as-of date starts at today), ot-leave 90, 196 (leave dates today and tomorrow)
+                                                                              M both projects (22-*), outside the seven files
+  Sign date (the page prints the date of the sign-off; the test computes "today" with new Date() afterwards)
+    review 1007                                                              M (23-*: expected 10/27/2026, received 10/26/2026)
+    submission 67, pdf-visual 153                                            R same shape (signedOn = new Date() after the sign-off)
+
+SAFE
+    fixtures.seedClockSessionToday (timesheet 387)                            M passed: it returns the work_date of the check-in response
+    day-editor 3236 (re-reads today after the check-in), 5963                M passed in the check-in model
+    day-editor 678                                                            R/M brackets the read: expect([before, after]).toContain(today)
+    day-editor 4178                                                           R noon zone chosen from the UTC hour, its midnight is 11 hours away
+    timesheet showToday / shownPeriod (batch, Today bar, marker tests: 93 245 387 468 691 910 1238 1402 1458 1544 1576 1679 2309)
+                                                                              M passed; its poll compares the Today tag with a fresh server read
+    today 106 206 433 455 536 558 1006 1115 (they read periods but assert dates that do not move in the first 0.3 s)  M passed at 0.3 s (see 24-*)
+    review 212 1101, settings-transfer 157 394, submission 67 at 0.3 s        M passed (offset arithmetic on a date, or the window lies later)
+    shell 240 369 478 and controls 496 (check in through the page, no date compared)  M passed: ClockProvider.findRunningSession looks in the shown
+                                                                              period and in the current and in-progress periods
+    ot-leave 226, sharing 634 (owner on Pacific/Auckland: its midnight is 11:00Z)  M passed (LA midnight does not touch it)
+    periodWindow.ts (withToday, insideTheWindow: the periods route is answered by the spec), displayedSeed.ts (pure), ensureDeadlineAhead
+    (tomorrow at noon), Date.now() + 60 s activations, due_at_utc and backup instants (continuous time, not dates)
+    admin 289 defaultImportYear(today_local)                                  R only the year-end midnight can matter
+
+Other zones: the fence below uses the saved zone of the shared employee (Los Angeles). A test whose person is on another calendar has another midnight:
+sharing 634 (Pacific/Auckland, 11:00Z in summer) and day-editor 4178 (a noon zone). No gate instant (the three FULL and the three seven-file instants, real
+runs of 9 to 19 minutes) crosses either.
+
+The one test that crosses the midnight on purpose is today.spec.ts:626 ("a page left open across a reporting-zone midnight"). It starts within 90 s of the
+midnight (the gate starts it at 23:58:30 to 23:59:20), waits for it with a poll and asserts both tabs. In REGATE9 its desktop run took 1.1 m (it crossed) and
+its mobile run 2.7 s (it started after the midnight and took the real-clock branch). It must keep crossing, so the fix exempts it by annotation.

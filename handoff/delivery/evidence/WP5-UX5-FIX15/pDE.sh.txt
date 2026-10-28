@@ -1,0 +1,15 @@
+# Real-clock FULL e2e on both projects, then the seven-file midnight sweep at 2026-10-27T06:58:30Z (both projects, --workers=6), on export2.
+. <task>/env.sh
+export SHIFT_EXPORT=$T/export2
+cd $T
+X=export2/tests/e2e
+for f in fixtures.ts day-editor.spec.ts today.spec.ts; do cmp $REPO/tests/e2e/$f $X/$f || exit 3; done
+cmp backup/timesheetCommands.js export2/dist/server/services/timesheetCommands.js || exit 4
+bash run-shift.sh full-real-desktop real --project=desktop > logs/full-real-desktop.txt 2>&1
+bash run-shift.sh full-real-mobile real --project=mobile > logs/full-real-mobile.txt 2>&1
+node counts.mjs logs/full-real-desktop.txt logs/full-real-mobile.txt > out/full-real-counts.txt 2>&1
+echo full-done >> out/full-real-counts.txt
+SEVEN="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts"
+bash run-shift.sh seven-0658-30Z 2026-10-27T06:58:30Z $SEVEN --workers=6 > logs/seven-0658-30Z.txt 2>&1
+node counts.mjs logs/seven-0658-30Z.txt > out/seven-counts.txt 2>&1
+echo pDE-done >> out/seven-counts.txt

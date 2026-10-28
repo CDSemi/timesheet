@@ -1,0 +1,45 @@
+diff --git a/src/client/App.tsx b/src/client/App.tsx
+index aebf1c5c..719954e0 100644
+--- a/src/client/App.tsx
++++ b/src/client/App.tsx
+@@ -4,6 +4,7 @@ import { AppShell, useHashRoute } from './components/AppShell.tsx';
+ import { isSettingsRoute } from './components/routeModel.ts';
+ import { SettingsNav } from './components/SettingsNav.tsx';
+ import { shareEndedMessage } from './components/sharingModel.ts';
++import { followThemeOfOtherTabs } from './components/ThemeToggle.tsx';
+ import { HistoryScreen } from './HistoryScreen.tsx';
+ import { OtScreen } from './OtScreen.tsx';
+ import { ProfileScreen } from './ProfileScreen.tsx';
+@@ -22,6 +23,9 @@ export function App() {
+   const [setup, setSetup] = useState<'unknown' | 'open' | 'closed'>('unknown');
+   const [justCreated, setJustCreated] = useState(false);
+ 
++  // A theme chosen in another tab of this browser shows here too, with or without the theme control on screen.
++  useEffect(followThemeOfOtherTabs, []);
++
+   useEffect(() => {
+     api<{ user: User }>('GET', '/api/auth/me')
+       .then((response) => setUser(response.user))
+diff --git a/src/client/components/ThemeToggle.tsx b/src/client/components/ThemeToggle.tsx
+index 200df771..7606717b 100644
+--- a/src/client/components/ThemeToggle.tsx
++++ b/src/client/components/ThemeToggle.tsx
+@@ -43,6 +43,18 @@ function chooseTheme(theme: Theme): void {
+   for (const listener of pressListeners) listener();
+ }
+ 
++/**
++ * Keeps this page's `data-theme` in step with the choice another tab stores. The page mounts it once, because the theme control lives in
++ * the account menu and the More panel, which exist only while open: a tab with the menu closed would otherwise never hear the event.
++ */
++export function followThemeOfOtherTabs(): () => void {
++  const onStorage = (event: StorageEvent) => {
++    if (event.key === null || event.key === THEME_KEY) applyChoice();
++  };
++  window.addEventListener('storage', onStorage);
++  return () => window.removeEventListener('storage', onStorage);
++}
++
+ function subscribe(notify: () => void): () => void {
+   const device = window.matchMedia(DARK_QUERY);
+   const onStorage = (event: StorageEvent) => {

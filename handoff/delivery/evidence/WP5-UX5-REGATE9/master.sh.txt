@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+cd <task>
+. ./env.sh
+echo "master start $(date -u +%H:%M:%SZ)" > logs/master.log
+for s in chain1 drill chain2 sweep stress models mut axe; do
+  bash $s.sh > logs/$s-stdout.txt 2>&1
+  echo "$s done $(date -u +%H:%M:%SZ)" >> logs/master.log
+done
+echo master-done > out/master.done

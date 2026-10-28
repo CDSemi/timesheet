@@ -1,0 +1,14 @@
+# Repeats on export2: both projects, --repeat-each=20 --workers=6, real clock.
+. <task>/env.sh
+export SHIFT_EXPORT=$T/export2
+cd $T
+X=export2/tests/e2e
+for f in fixtures.ts day-editor.spec.ts today.spec.ts; do cmp $REPO/tests/e2e/$f $X/$f || exit 3; done
+: > out/repeats.txt
+for P in desktop mobile; do
+  L=repeat-$P
+  bash run-shift.sh $L real tests/e2e/day-editor.spec.ts --project=$P --repeat-each=20 --workers=6 -g "Check in then Check out asks|a stale session version at Check out" > logs/$L.txt 2>&1
+  echo "$L $(grep '^exit=' logs/$L.txt)" >> out/repeats.txt
+  node counts.mjs logs/$L.txt >> out/repeats.txt 2>&1
+done
+echo pC-done >> out/repeats.txt

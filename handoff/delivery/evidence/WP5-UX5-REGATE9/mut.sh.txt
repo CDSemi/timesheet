@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# FIX14 mutants, one at a time, in the scratch copy export-mut (a copy of the clean export). Each is restored byte-equal; the client is rebuilt.
+source <task>/env.sh
+unset DIAG_MQ_DELAY
+X=$T/export-mut
+C=$T/export
+OUT=$T/logs/mut-exits.txt
+: > $OUT
+cd $X || exit 9
+rm -f $X/tests/e2e/zz-control.spec.ts
+cmp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts && echo "scratch fixtures.ts equals clean export" >> $OUT
+RESTORE_FILES="src/client/styles.css src/client/components/periodBarModel.ts src/client/components/ThemeToggle.tsx src/client/App.tsx"
+restore() {
+  for f in $RESTORE_FILES; do cp "$C/$f" "$X/$f"; cmp -s "$C/$f" "$X/$f" || echo "DIFFERENT AFTER RESTORE: $f" >> $OUT; done
+}
+build() { (cd $X; npm run build:client > $T/logs/mut-$2-build.txt 2>&1; echo "$2 build:client exit=$?" >> $OUT); }
+pw() { # label spec grep repeat [project args]
+  label=$1; spec=$2; pat=$3; rep=$4; shift 4
+  SHIFT_EXPORT=$X bash $T/run-shift.sh "mut-$label" real $spec -g "$pat" --repeat-each=$rep --workers=6 --trace=off "$@" > $T/logs/mut-$label.txt 2>&1
+  echo "$label: $(grep '^exit=' $T/logs/mut-$label.txt) $(node.exe $TW\\counts.mjs $TW\\logs\\mut-$label.txt)" >> $OUT
+  grep -E '^\s+[0-9]+\) ' $T/logs/mut-$label.txt | LC_ALL=C sort -u >> $OUT
+}
+# control: unmutated scratch copy builds and passes the named tests
+build x control
+pw control-theme tests/e2e/theme.spec.ts "a storage event keeps a second tab in step|a theme chosen in one tab reaches a second tab whose account menu is closed" 2
+pw control-controls tests/e2e/controls.spec.ts "the title row is 32px above" 2
+# m1: the period card and the Review block 42.797 px lower at 768-1023 px
+restore
+cat $T/mutant-m1.css >> $X/src/client/styles.css
+build x m1
+pw m1 tests/e2e/controls.spec.ts "the title row is 32px above" 2
+restore
+# f1b: a wrong end year on the two-year period
+node.exe $TW\\mutate14.mjs "$X/src/client/components/periodBarModel.ts" "$TW\\mut-f1b.from.txt" "$TW\\mut-f1b.to.txt" >> $OUT 2>&1
+build x f1b
+pw f1b tests/e2e/timesheet.spec.ts "the range ladder" 12 --project=desktop
+restore
+# f2: the theme control's listener never applies the choice
+node.exe $TW\\mutate14.mjs "$X/src/client/components/ThemeToggle.tsx" "$TW\\mut-f2.from.txt" "$TW\\mut-f2.to.txt" >> $OUT 2>&1
+build x f2
+pw f2 tests/e2e/theme.spec.ts "a storage event keeps a second tab in step" 6
+restore
+# m4: followThemeOfOtherTabs never applies the choice
+node.exe $TW\\mutate14.mjs "$X/src/client/components/ThemeToggle.tsx" "$TW\\mut-m4.from.txt" "$TW\\mut-m4.to.txt" >> $OUT 2>&1
+build x m4
+pw m4 tests/e2e/theme.spec.ts "a theme chosen in one tab reaches a second tab whose account menu is closed" 6
+restore
+# m5: App.tsx without the effect
+node.exe $TW\\mutate14.mjs "$X/src/client/App.tsx" "$TW\\mut-m5.from.txt" "$TW\\mut-m5.to.txt" >> $OUT 2>&1
+build x m5
+pw m5 tests/e2e/theme.spec.ts "a theme chosen in one tab reaches a second tab whose account menu is closed" 6
+restore
+build x final
+for f in $RESTORE_FILES; do cmp $C/$f $X/$f && echo "restored byte-equal: $f" >> $OUT; done
+(cd $X; find dist -type f | LC_ALL=C sort > $T/out/52-mut-final-files.txt; rm -f $T/out/52-mut-final-hashes.txt; while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)" >> $T/out/52-mut-final-hashes.txt; done < $T/out/52-mut-final-files.txt)
+cmp $T/out/51-target-hashes.txt $T/out/52-mut-final-hashes.txt && echo "dist after final rebuild identical to the clean target build" >> $OUT
+echo mut-done > $T/out/mut.done

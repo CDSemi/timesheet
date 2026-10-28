@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { type Locator, type Page, test as base, expect } from '@playwright/test';
 import { addDays } from '../../src/domain/dates.ts';
 import { syntheticSignaturePng } from '../../src/server/seed.ts';
+import { dateTimeIn, instantOfWallTime } from '../client/zoneOracle.ts';
 import { type DeadlinePeriodFacts, displayedPeriodSeedDay, laterDeadlineFor } from './displayedSeed.ts';
 
 /*
@@ -21,6 +22,16 @@ import { type DeadlinePeriodFacts, displayedPeriodSeedDay, laterDeadlineFor } fr
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
 const READY_ATTEMPTS = 100;
+
+/**
+ * A test does not start in the last `MIDNIGHT_FENCE_MS` before the saved reporting zone's midnight: it starts after it (see
+ * `midnightFence`). The longest test that reads a server date lasts well under this; the test below that crosses the midnight on
+ * purpose carries the annotation `CROSSES_MIDNIGHT` and is not held.
+ */
+const MIDNIGHT_FENCE_MS = 45_000;
+export const CROSSES_MIDNIGHT = 'crosses-midnight';
+/** The saved reporting zone of the seeded employee and company calendar (the specs assert it as America/Los_Angeles). */
+const SEED_REPORTING_ZONE = 'America/Los_Angeles';
 
 export type Role = 'employee' | 'admin';
 
@@ -746,6 +757,32 @@ export async function openAccount(page: Page): Promise<Locator> {
   return panel;
 }
 
+/* ---- The reporting-zone midnight -------------------------------------------------- */
+
+/**
+ * Keeps a test off the saved reporting zone's midnight. The accounting date, "today", the Today tag and the date a Check in is filed
+ * under all move at that midnight, so a test that reads a date and acts on it a moment later fails when the midnight falls between
+ * the two. The simulated-clock sweeps start a run a minute or so before it on purpose. A test that would start within
+ * `MIDNIGHT_FENCE_MS` of the midnight therefore waits here, in its own fixture and on the fixture's own timeout, until the clock has
+ * passed it, and then runs wholly on the new date. Nothing is skipped and no assertion changes.
+ */
+async function holdOffMidnight(): Promise<void> {
+  // No request is made: the runner's clock is the server's clock (the real one, or the shifted one of the simulated sweeps), and the
+  // seeded employee's zone is the one the specs assert everywhere. The system under test sees nothing of this wait.
+  const now = Date.now();
+  let midnight: number;
+  try {
+    const today = dateTimeIn(new Date(now).toISOString(), SEED_REPORTING_ZONE).slice(0, 10);
+    midnight = Date.parse(instantOfWallTime(addDays(today, 1), '00:00', SEED_REPORTING_ZONE));
+  } catch {
+    return; // A zone without a 00:00 on that date has no midnight to wait for.
+  }
+  if (midnight - now > MIDNIGHT_FENCE_MS) return;
+  await expect
+    .poll(() => Date.now(), { message: 'the clock passes the reporting-zone midnight', timeout: MIDNIGHT_FENCE_MS + 15_000, intervals: [100] })
+    .toBeGreaterThanOrEqual(midnight + 500);
+}
+
 /* ---- Fixtures --------------------------------------------------------------- */
 
 interface WorkerFixtures {
@@ -753,6 +790,8 @@ interface WorkerFixtures {
 }
 
 interface TestFixtures {
+  /** Automatic: holds a test that would start just before the reporting-zone midnight until the midnight has passed. */
+  midnightFence: void;
   /** Seeds data as the synthetic employee, over HTTP. */
   employeeSeed: SeedClient;
   /** Seeds data as the synthetic admin, over HTTP. */
@@ -796,6 +835,13 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       }
     },
     { timeout: 60_000 },
+  ],
+  midnightFence: [
+    async ({}, use, testInfo) => {
+      if (!testInfo.annotations.some((annotation) => annotation.type === CROSSES_MIDNIGHT)) await holdOffMidnight();
+      await use();
+    },
+    { auto: true, timeout: MIDNIGHT_FENCE_MS + 30_000 },
   ],
   employeeSeed: async ({ builtServer }, use) => {
     const { email, password } = builtServer.credentials.employee;

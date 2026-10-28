@@ -1,0 +1,12 @@
+// Usage: node mutate.mjs <file> <from file> <to file>  -> replaces the one occurrence of the text in <from file> by the text in <to file> (a scratch mutant).
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, fromFile, toFile] = process.argv.slice(2);
+const text = readFileSync(file, 'utf8');
+const crlf = text.includes('\r\n');
+const norm = (value) => (crlf ? value.replace(/\r?\n/g, '\r\n') : value);
+const from = norm(readFileSync(fromFile, 'utf8').replace(/\r?\n$/, ''));
+const to = norm(readFileSync(toFile, 'utf8').replace(/\r?\n$/, ''));
+if (text.split(from).length !== 2) throw new Error(`the text to replace must occur exactly once in ${file}`);
+writeFileSync(file, text.replace(from, () => to));
+console.log(`mutated ${file}`);

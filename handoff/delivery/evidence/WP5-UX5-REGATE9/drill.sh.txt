@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Container drill --wp3 on the clean export of the target. Compose project ts-wp5-ux5regate9, down -v at the end.
+source <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+mkdir -p "$T/wp3" "$T/drillwork"
+cd "$REPO" || exit 9
+git archive 49651c8bb91d56bf6c6966405257537ec7ca474b | tar -x -C "$T/wp3"
+echo "wp3 archive exit=$?" > "$T/logs/drill-exits.txt"
+cd "$T/wp3" || exit 9
+npm ci > "$T/logs/wp3-ci.txt" 2>&1
+echo "wp3 ci exit=$?" >> "$T/logs/drill-exits.txt"
+npm run build:server > "$T/logs/wp3-build.txt" 2>&1
+echo "wp3 build:server exit=$?" >> "$T/logs/drill-exits.txt"
+echo "wp3 prepared $(date -u +%H:%M:%SZ)" >> "$T/logs/drill-exits.txt"
+cd "$T/export" || exit 9
+npm audit --omit=dev > "$T/logs/npm-audit.txt" 2>&1
+echo "npm audit --omit=dev exit=$?" >> "$T/logs/drill-exits.txt"
+node scripts/container-drill.mjs --work "$(cygpath -w "$T/drillwork")" --project ts-wp5-ux5regate9 --wp3 "$(cygpath -w "$T/wp3")" > "$T/logs/drill.txt" 2>&1
+echo "drill exit=$?" >> "$T/logs/drill-exits.txt"
+docker compose -p ts-wp5-ux5regate9 down -v > "$T/logs/compose-down.txt" 2>&1
+echo "compose down exit=$?" >> "$T/logs/drill-exits.txt"
+docker ps --all --filter name=ts-wp5-ux5regate9 > "$T/logs/docker-after.txt" 2>&1
+echo "drill done $(date -u +%H:%M:%SZ)" >> "$T/logs/drill-exits.txt"
+echo drill-done > "$T/out/drill.done"

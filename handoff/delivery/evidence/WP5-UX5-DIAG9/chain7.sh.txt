@@ -1,0 +1,12 @@
+# Addendum 1 proofs on export2, part 2: the real-clock FULL e2e on both projects, then the seven-file scope at 2026-10-27T06:58:30Z (90 s before
+# the midnight) and with the midnight 200 s into the run.
+. <task>/env.sh
+export SHIFT_EXPORT=$T/export2
+cd $T
+cmp work/fixtures.ts export2/tests/e2e/fixtures.ts && cmp work/day-editor.spec.ts export2/tests/e2e/day-editor.spec.ts && cmp work/today.spec.ts export2/tests/e2e/today.spec.ts || exit 3
+bash run-shift.sh f-full-real-desktop real --project=desktop > logs/f-full-real-desktop.txt 2>&1
+bash run-shift.sh f-full-real-mobile real --project=mobile > logs/f-full-real-mobile.txt 2>&1
+node counts.mjs logs/f-full-real-desktop.txt logs/f-full-real-mobile.txt > out2/full-real-counts.txt 2>&1
+bash natural.sh final 90 200
+cat out/natural-counts-final.txt >> out2/natural-counts.txt
+echo chain7-done > out2/chain7.done

@@ -1,0 +1,14 @@
+# Usage: bash collect.sh <manifest>   (each line: <source path relative to the task folder> <evidence file name>)
+# Masks every source (ANSI codes, CR, user and task paths, email addresses) and writes it into the evidence folder as an LF .txt file.
+. <task>/env.sh
+cd $T
+mkdir -p "$E"
+while read -r src dst; do
+  [ -z "$src" ] && continue
+  if [ -f "$src" ]; then
+    node mask.mjs "$src" "$E/$dst"
+  else
+    echo "MISSING $src"
+  fi
+done < "$1"
+echo collected

@@ -1,0 +1,20 @@
+# Phase 3: the fence alone (fenced fixtures, ORIGINAL specs) against every model that failed or was at risk on the original,
+# then the same fixtures with the fence switched off (mutant) to show that the fence is what removes the failures.
+. <task>/env.sh
+cd $T
+cp variants/fixtures.fenced-hooks.ts export/tests/e2e/fixtures.ts
+cp export-orig/tests/e2e/day-editor.spec.ts export/tests/e2e/day-editor.spec.ts
+cp export-orig/tests/e2e/review.spec.ts export/tests/e2e/review.spec.ts
+cp export-orig/tests/e2e/today.spec.ts export/tests/e2e/today.spec.ts
+bash dense.sh fenced-only 300 dense-list-fail.txt desktop mobile > logs/dense-fenced-only.log 2>&1
+EXTRA_ENV="DIAG9_AT_CLOCK_IN=300" bash dense2.sh fenced-clockin -3000 dense-list3.txt desktop mobile > logs/dense2-fenced-clockin.log 2>&1
+bash dense.sh fenced-list2 300 dense-list2.txt desktop mobile > logs/dense-fenced-list2.log 2>&1
+cp variants/review.spec.orig-hooks.ts export/tests/e2e/review.spec.ts
+SPEC=tests/e2e/review.spec.ts bash case.sh signdate-fenced-cross 12 "without a saved signature image" desktop DIAG9_AT_BEFORE_SIGN=-1500 DIAG9_AT_BEFORE_DATE_ASSERT=500 > logs/signdate-fenced-cross.txt 2>&1
+cp export-orig/tests/e2e/review.spec.ts export/tests/e2e/review.spec.ts
+# mutant: the fence switched off (MIDNIGHT_FENCE_MS = 0)
+cp variants/fixtures.fenced-hooks.ts variants/fixtures.mut-f.ts
+node mutate.mjs variants/fixtures.mut-f.ts mut-f.from.txt mut-f.to.txt > out/mut-f.txt 2>&1
+cp variants/fixtures.mut-f.ts export/tests/e2e/fixtures.ts
+bash dense.sh mut-fence0 300 dense-list-fail.txt desktop mobile > logs/dense-mut-fence0.log 2>&1
+echo chain2-done > out/chain2.done

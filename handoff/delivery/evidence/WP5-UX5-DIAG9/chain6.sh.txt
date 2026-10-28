@@ -1,0 +1,67 @@
+# Addendum 1 proofs on export2 (fresh export of HEAD + the final patch), one run at a time. Part 1: checks, the fence models, mutants.
+. <task>/env.sh
+export SHIFT_EXPORT=$T/export2
+cd $T
+X=export2/tests/e2e
+mkdir -p backup2
+# 1. the checks of the final patch
+( cd export2 && npm test > $T/logs/f-npm-test.txt 2>&1; echo "npm test exit=$?" >> $T/out2/checks.txt )
+# 2. the models with the final fence (hooks variant), original specs: the 13 date readers and the check-in model
+cp work/fixtures.ts backup2/fixtures.final.ts
+cp work/day-editor.spec.ts backup2/day-editor.final.ts
+cp work/today.spec.ts backup2/today.final.ts
+cp variants/diag9Hooks.ts $X/diag9Hooks.ts
+cp variants/fixtures.final-hooks.ts $X/fixtures.ts
+cp export-orig/tests/e2e/day-editor.spec.ts $X/day-editor.spec.ts
+cp export-orig/tests/e2e/today.spec.ts $X/today.spec.ts
+bash dense.sh final-fence 300 dense-list-fail.txt desktop mobile > logs/dense-final-fence.log 2>&1
+EXTRA_ENV="DIAG9_AT_CLOCK_IN=300" bash dense2.sh final-fence-clockin -3000 dense-list3.txt desktop mobile > logs/dense2-final-fence-clockin.log 2>&1
+# 3. the fence-off control
+cp variants/fixtures.final-hooks.ts variants/fixtures.final-hooks.mut-f.ts
+node mutate.mjs variants/fixtures.final-hooks.mut-f.ts mut-f.from.txt mut-f.to.txt > out2/mut-f.txt 2>&1
+cp variants/fixtures.final-hooks.mut-f.ts $X/fixtures.ts
+bash dense.sh final-fence0 300 dense-list-fail.txt desktop mobile > logs/dense-final-fence0.log 2>&1
+# 4. back to the clean final files, then the mutants
+cp backup2/fixtures.final.ts $X/fixtures.ts
+cp backup2/day-editor.final.ts $X/day-editor.spec.ts
+cp backup2/today.final.ts $X/today.spec.ts
+rm $X/diag9Hooks.ts
+cmp work/fixtures.ts $X/fixtures.ts && cmp work/day-editor.spec.ts $X/day-editor.spec.ts && cmp work/today.spec.ts $X/today.spec.ts && echo "export2 holds the final files" >> out2/checks.txt
+DIST=export2/dist/server/services/timesheetCommands.js
+TITLES="Check in then Check out asks|a stale session version at Check out"
+run_real() {
+  L=$1
+  mkdir -p pw-$L shots-$L
+  export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+  ( cd export2 && node.exe node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts --workers=2 -g "$TITLES" --output="$TW\\pw-$L" ) > logs/$L.txt 2>&1
+  echo "$L exit=$?" >> out2/mutants.txt
+}
+: > out2/mutants.txt
+cp $DIST backup2/timesheetCommands.js
+run_real f-mut-control
+node mutate.mjs $DIST mut-a.from.txt mut-a.to.txt >> out2/mutants.txt 2>&1
+run_real f-mut-a
+cp backup2/timesheetCommands.js $DIST
+cmp backup2/timesheetCommands.js $DIST && echo "dist restored after A" >> out2/mutants.txt
+node mutate.mjs $DIST mut-b.from.txt mut-b.to.txt >> out2/mutants.txt 2>&1
+run_real f-mut-b
+cp backup2/timesheetCommands.js $DIST
+cmp backup2/timesheetCommands.js $DIST && echo "dist restored after B" >> out2/mutants.txt
+# the integration test, and against the UTC-date mutant of the source
+( cd export2 && npx vitest run tests/integration/timesheet-api.test.ts > $T/logs/f-vitest-boundary.txt 2>&1; echo "boundary test exit=$?" >> $T/out2/mutants.txt )
+SRC=export2/src/server/services/timesheetCommands.ts
+cp $SRC backup2/timesheetCommands.src.ts
+node mutate.mjs $SRC mut-bsrc.from.txt mut-bsrc.to.txt >> out2/mutants.txt 2>&1
+( cd export2 && npx vitest run tests/integration/timesheet-api.test.ts > $T/logs/f-vitest-boundary-mutant.txt 2>&1; echo "boundary test against the UTC-date mutant exit=$?" >> $T/out2/mutants.txt )
+cp backup2/timesheetCommands.src.ts $SRC
+cmp backup2/timesheetCommands.src.ts $SRC && echo "src restored" >> out2/mutants.txt
+# the crossing test: normal, and with the exemption removed
+INSTANT=2026-10-27T06:59:20Z
+bash run-shift.sh f-cross-normal $INSTANT tests/e2e/today.spec.ts --project=desktop --workers=1 -g "a page left open across" > logs/f-cross-normal.txt 2>&1
+cp work/fixtures.ts work/fixtures.final.mut-x.ts
+node mutate.mjs work/fixtures.final.mut-x.ts mut-x.from.txt mut-x.to.txt >> out2/mutants.txt 2>&1
+cp work/fixtures.final.mut-x.ts $X/fixtures.ts
+bash run-shift.sh f-cross-mutx $INSTANT tests/e2e/today.spec.ts --project=desktop --workers=1 -g "a page left open across" > logs/f-cross-mutx.txt 2>&1
+cp work/fixtures.ts $X/fixtures.ts
+cmp work/fixtures.ts $X/fixtures.ts && echo "fixtures restored" >> out2/mutants.txt
+echo chain6-done > out2/chain6.done

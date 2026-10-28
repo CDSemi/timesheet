@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# theme.spec.ts "a storage event keeps a second tab in step", mobile, 6 workers, 24 repeats, 45 ms media-notification model, beside the
+# self-stopping 48-thread burner (started by the caller through its own background run). Scratch export-mut; fixtures.ts restored byte-equal.
+source <task>/env.sh
+X=$T/export-mut
+C=$T/export
+cd $X || exit 9
+node.exe $TW\\make-model.mjs "$(cygpath -w $C/tests/e2e/fixtures.ts)" "$(cygpath -w $X/tests/e2e/fixtures.ts)" > $T/logs/theme-burn-model.txt 2>&1
+export DIAG_MQ_DELAY=45
+SHIFT_EXPORT=$X bash $T/run-shift.sh model-theme-burn real tests/e2e/theme.spec.ts --project=mobile -g "a storage event keeps a second tab in step" --repeat-each=24 --workers=6 --trace=off > $T/logs/model-theme-burn.txt 2>&1
+unset DIAG_MQ_DELAY
+cp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts
+cmp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts && echo "fixtures.ts restored byte-equal" >> $T/logs/theme-burn-model.txt
+echo "theme-burn: $(grep '^exit=' $T/logs/model-theme-burn.txt) $(node.exe $TW\\counts.mjs $TW\\logs\\model-theme-burn.txt)" > $T/out/61-theme-burn.txt

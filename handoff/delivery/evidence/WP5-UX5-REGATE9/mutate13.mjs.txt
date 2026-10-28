@@ -1,0 +1,35 @@
+// Applies one named product mutant to the scratch export (exact replacements, each asserted to match once). Usage: node mutate.mjs <name> <root>
+// The scratch export is restored byte-equal afterwards by restore.sh.txt (it copies the fixed files over and rebuilds).
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const CLOCK_BUTTON = '<button type="button" className="clock-button" onClick={onCheckIn} disabled={running === undefined}>';
+const mutants = {
+  // The Check in button never becomes enabled (the state the focus needs never arrives).
+  kbd_never_enabled: [{ file: 'src/client/components/ClockPanel.tsx', from: CLOCK_BUTTON, to: '<button type="button" className="clock-button" onClick={onCheckIn} disabled>' }],
+  // The button leaves the tab order.
+  kbd_not_tab_stop: [
+    { file: 'src/client/components/ClockPanel.tsx', from: CLOCK_BUTTON, to: '<button type="button" className="clock-button" tabIndex={-1} onClick={onCheckIn} disabled={running === undefined}>' },
+  ],
+  // Escape does not close the drawer when typed inside it (the dialog's own key handler; focus is in the Notes in these tests).
+  esc_no_close: [{ file: 'src/client/DayEditor.tsx', from: '    event.preventDefault();\n    event.stopPropagation();\n    onClose();\n  }', to: '    event.preventDefault();\n    event.stopPropagation();\n  }' }],
+  // The form never reports an unsaved edit.
+  esc_never_dirty: [{ file: 'src/client/components/DayFieldsForm.tsx', from: 'onDirtyChange?.(dirty);', to: 'onDirtyChange?.(false);' }],
+  // The passive effect is back in the form (the pre-fix behaviour): the report reaches the page's flag in a later task.
+  esc_use_effect: [
+    { file: 'src/client/components/DayFieldsForm.tsx', from: 'type SubmitEvent, useId, useLayoutEffect, useState }', to: 'type SubmitEvent, useEffect, useId, useState }' },
+    { file: 'src/client/components/DayFieldsForm.tsx', from: '  useLayoutEffect(() => {\n    onDirtyChange?.(dirty);', to: '  useEffect(() => {\n    onDirtyChange?.(dirty);' },
+  ],
+};
+const name = process.argv[2];
+const root = process.argv[3] ?? '.';
+const edits = mutants[name];
+if (edits === undefined) throw new Error(`unknown mutant ${name}`);
+for (const m of edits) {
+  const path = join(root, m.file);
+  const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
+  const parts = text.split(m.from);
+  if (parts.length !== 2) throw new Error(`mutant ${name}: expected exactly 1 match in ${m.file}, found ${parts.length - 1}`);
+  writeFileSync(path, parts.join(m.to));
+  console.log(`mutant ${name} applied to ${m.file}`);
+}

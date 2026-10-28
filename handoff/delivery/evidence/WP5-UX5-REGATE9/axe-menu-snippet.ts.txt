@@ -1,0 +1,28 @@
+
+/* ---- REGATE9 addition: the account menu open (desktop, 1280px) and the More panel open (mobile, 390px) -------------------------------- */
+import { openAccount } from './fixtures.ts';
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`axe Timesheet page with the account menu or the More panel open - ${scheme}`, async ({ page, adminSeed, builtServer, isMobile }, testInfo) => {
+    test.setTimeout(240_000);
+    const project = testInfo.project.name;
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const person = await newPerson(adminSeed, builtServer, { displayName: `Synthetic Axe Menu ${scheme}`, signature: 'saved' });
+    const free = await person.api.displayedPeriodFreeWorkdays();
+    await person.api.seedCompleteDay(free[0] ?? '');
+    await page.goto('/');
+    await page.getByLabel('Email').fill(person.account.email);
+    await page.getByLabel('Password').fill(person.account.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const width = isMobile ? 390 : 1280;
+    await page.setViewportSize({ width, height: 900 });
+    await expect.poll(() => page.evaluate<number>('window.innerWidth')).toBe(width);
+    const panel = await openAccount(page);
+    await expect(panel.getByRole('radiogroup', { name: 'Theme', exact: true })).toBeVisible();
+    const tag = `${project} ${scheme}`;
+    const total = await scan(page, `[${tag}] Timesheet ${isMobile ? 'More panel' : 'account menu'} open ${width}`);
+    note(`[${tag}] Menu TOTAL violations ${total} in 1 scan`);
+    expect(total).toBe(0);
+  });
+}

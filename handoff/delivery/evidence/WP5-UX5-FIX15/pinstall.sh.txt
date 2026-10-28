@@ -1,0 +1,32 @@
+# Usage: bash pinstall.sh <mode>   (installs scratch variants into export2)
+#   cases   : patched specs + scratch hooks (fixtures.final-hooks, day-editor.fix-hooks, patched today)
+#   fence   : patched fixtures + hooks, ORIGINAL specs
+#   fence0  : fence switched off (MIDNIGHT_FENCE_MS = 0) + hooks, ORIGINAL specs
+#   clean   : the four patched files, no hooks
+. <task>/env.sh
+cd $T
+X=export2/tests/e2e
+MODE=$1
+case $MODE in
+  cases)
+    cp variants/diag9Hooks.ts $X/diag9Hooks.ts
+    cp variants/fixtures.final-hooks.ts $X/fixtures.ts
+    cp variants/day-editor.fix-hooks.ts $X/day-editor.spec.ts
+    cp $REPO/tests/e2e/today.spec.ts $X/today.spec.ts ;;
+  fence)
+    cp variants/diag9Hooks.ts $X/diag9Hooks.ts
+    cp variants/fixtures.final-hooks.ts $X/fixtures.ts
+    cp export-orig/tests/e2e/day-editor.spec.ts $X/day-editor.spec.ts
+    cp export-orig/tests/e2e/today.spec.ts $X/today.spec.ts ;;
+  fence0)
+    cp variants/diag9Hooks.ts $X/diag9Hooks.ts
+    cp variants/fixtures.final-hooks.ts variants/fixtures.final-hooks.mut-f.ts
+    node mutate.mjs variants/fixtures.final-hooks.mut-f.ts mut-f.from.txt mut-f.to.txt
+    cp variants/fixtures.final-hooks.mut-f.ts $X/fixtures.ts
+    cp export-orig/tests/e2e/day-editor.spec.ts $X/day-editor.spec.ts
+    cp export-orig/tests/e2e/today.spec.ts $X/today.spec.ts ;;
+  clean)
+    rm -f $X/diag9Hooks.ts
+    for f in fixtures.ts day-editor.spec.ts today.spec.ts; do cp $REPO/tests/e2e/$f $X/$f; cmp $REPO/tests/e2e/$f $X/$f && echo "clean $f"; done ;;
+esac
+echo "mode $MODE installed"

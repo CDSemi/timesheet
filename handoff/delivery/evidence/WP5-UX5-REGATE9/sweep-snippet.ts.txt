@@ -1,0 +1,20 @@
+
+/* ---- DIAG7 sweep model (scratch only, appended to a copy of controls.spec.ts) ----------------------------------------------- */
+
+// React's matchMedia 'change' notification (what useMedia hears) is delayed by DIAG_MQ_BASE + DIAG_MQ_STEP x repeat index ms, so
+// across the repeats React's commit lands at every point of the reads that follow setViewportSize (the DIAG5 step model).
+test.beforeEach(async ({ page }, testInfo) => {
+  const ms = Number(process.env.DIAG_MQ_BASE ?? '0') + Number(process.env.DIAG_MQ_STEP ?? '0') * testInfo.repeatEachIndex;
+  await page.addInitScript((delay: number) => {
+    const original = window.matchMedia.bind(window);
+    window.matchMedia = (query: string) => {
+      const list = original(query);
+      const add = list.addEventListener.bind(list);
+      list.addEventListener = ((type: string, listener: EventListener, options?: boolean | AddEventListenerOptions) => {
+        if (type === 'change') add(type, ((event: Event) => setTimeout(() => listener(event), delay)) as EventListener, options);
+        else add(type, listener, options);
+      }) as typeof list.addEventListener;
+      return list;
+    };
+  }, ms);
+});

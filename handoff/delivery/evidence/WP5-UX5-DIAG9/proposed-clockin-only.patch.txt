@@ -1,0 +1,108 @@
+--- a/tests/e2e/day-editor.spec.ts
++++ b/tests/e2e/day-editor.spec.ts
+@@ -136,14 +136,34 @@
+   return editor.locator(`[data-figure="${name}"]`);
+ }
+ 
+-/** Clocks in through the UI and waits until the server shows the running session and a positive length. */
+-async function clockIn(page: Page, seed: SeedClient, todayLocal: string) {
++/**
++ * Clocks in through the UI and waits until the server shows the running session and a positive length. It returns the accounting
++ * date of that session. The session belongs to the local date of its start in the reporting zone (docs/02), which is the day after
++ * `todayLocal` when the reporting-zone midnight fell between the test reading `todayLocal` and the click, so the session is looked
++ * for on both days and the caller uses the returned date, never `todayLocal`, from then on.
++ */
++async function clockIn(page: Page, seed: SeedClient, today: { todayLocal: string; reportingZone: string }): Promise<string> {
+   await page.getByRole('button', { name: 'Check in' }).click();
++  let workDate = '';
++  let startUtc = '';
+   await expect
+-    .poll(async () => (await seed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null))
++    .poll(async () => {
++      for (const date of [today.todayLocal, addDays(today.todayLocal, 1)]) {
++        const running = (await seed.dayView(date)).sessions.find((session) => session.end_utc === null);
++        if (running !== undefined) {
++          workDate = date;
++          startUtc = running.start_utc;
++          return true;
++        }
++      }
++      return false;
++    })
+     .toBe(true);
++  // The accounting date is the local date of the session's own start (an oracle independent of the app), whichever side of midnight it fell.
++  expect(workDate, 'the running session lies on the local date of its start').toBe(dateTimeIn(startUtc, today.reportingZone).slice(0, 10));
+   // The server stamps whole seconds and a session needs a positive length.
+   await page.waitForTimeout(1_500);
++  return workDate;
+ }
+ 
+ function snap(page: Page, name: string, project: string) {
+@@ -2343,9 +2363,9 @@
+   signInThroughUi,
+ }, testInfo) => {
+   const project = testInfo.project.name;
+-  const { todayLocal } = await employeeSeed.today();
++  const today = await employeeSeed.today();
+   await signInThroughUi();
+-  await clockIn(page, employeeSeed, todayLocal);
++  const workDate = await clockIn(page, employeeSeed, today);
+   const bodies = recordCheckOuts(page);
+ 
+   // One state-aware button: checked in shows only Check out, with the running state in words.
+@@ -2369,7 +2389,7 @@
+   await expect(savedFailedAlert(page)).toContainText('inside their work session');
+   await savedFailedAlert(page).getByRole('button', { name: 'OK', exact: true }).click();
+   await expect(savedFailedAlert(page)).toHaveCount(0);
+-  expect((await employeeSeed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(true);
++  expect((await employeeSeed.dayView(workDate)).sessions.some((session) => session.end_utc === null)).toBe(true);
+   expect(bodies).toHaveLength(1);
+   expect(bodies[0]).toMatchObject({ breaks_confirmed: true });
+   expect(breaksOf(bodies[0])).toHaveLength(3);
+@@ -2384,16 +2404,16 @@
+   // After the check-out the panel offers Check in again.
+   await expect(page.getByRole('button', { name: 'Check in' })).toBeVisible();
+   await expect(page.getByRole('button', { name: 'Check out' })).toHaveCount(0);
+-  const closed = (await employeeSeed.dayView(todayLocal)).sessions.filter((session) => session.source === 'clock').at(-1);
++  const closed = (await employeeSeed.dayView(workDate)).sessions.filter((session) => session.source === 'clock').at(-1);
+   expect(closed?.end_utc).not.toBeNull();
+   expect(closed?.breaks_confirmed).toBe(true);
+   expect(closed?.breaks).toHaveLength(0);
+ });
+ 
+ test('a stale session version at Check out says so, reloads and then checks out', async ({ page, employeeSeed, signInThroughUi }) => {
+-  const { todayLocal } = await employeeSeed.today();
++  const today = await employeeSeed.today();
+   await signInThroughUi();
+-  await clockIn(page, employeeSeed, todayLocal);
++  const workDate = await clockIn(page, employeeSeed, today);
+   const bodies = recordCheckOuts(page);
+ 
+   await page.getByRole('button', { name: 'Check out' }).click();
+@@ -2402,7 +2422,7 @@
+   await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+ 
+   // Another device edits the running session after the dialog loaded its version.
+-  const running = (await employeeSeed.dayView(todayLocal)).sessions.find((session) => session.end_utc === null);
++  const running = (await employeeSeed.dayView(workDate)).sessions.find((session) => session.end_utc === null);
+   expect(running).toBeDefined();
+   await employeeSeed.call('PUT', `/api/sessions/${running?.id}`, {
+     start: running?.start_utc,
+@@ -2415,7 +2435,7 @@
+ 
+   await dialog.getByRole('button', { name: 'Check out, no breaks taken' }).click();
+   await expect(dialog.getByRole('alert').first()).toContainText('This session changed since it was loaded');
+-  expect((await employeeSeed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(true);
++  expect((await employeeSeed.dayView(workDate)).sessions.some((session) => session.end_utc === null)).toBe(true);
+   // The refused request carried the version the dialog loaded, which is no longer the session's version.
+   expect(bodies).toHaveLength(1);
+   expect(bodies[0]).toEqual({ breaks: [], breaks_confirmed: true, expected_version: running?.version });
+@@ -2429,7 +2449,7 @@
+   await again.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+   await again.getByRole('button', { name: 'Check out, no breaks taken' }).click();
+   await expect(again).toHaveCount(0);
+-  expect((await employeeSeed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(false);
++  expect((await employeeSeed.dayView(workDate)).sessions.some((session) => session.end_utc === null)).toBe(false);
+   expect(bodies).toHaveLength(2);
+   expect(bodies[1]?.expected_version, 'the second request carries the reloaded version').toBe((running?.version ?? 0) + 1);
+ });
