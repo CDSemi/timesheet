@@ -1,0 +1,40 @@
+// EN/VI structural parity of document pairs: heading levels in order, list items, table rows and fenced blocks; also the
+// line numbers of the given probe phrases (backticked codes) in both languages. Usage: node parity.mjs <dir> <doc base names...>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [root, ...names] = process.argv.slice(2);
+const shape = (text) => {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  let fenced = false;
+  const out = { headings: [], listItems: 0, tableRows: 0, fences: 0, codes: new Map() };
+  lines.forEach((line, index) => {
+    for (const match of line.matchAll(/`(superseded_by_later_send|attempt_uncertain|delivery_attempt_open|delivery_in_progress|reason_required)`/g)) {
+      out.codes.set(match[1], [...(out.codes.get(match[1]) ?? []), index + 1]);
+    }
+    if (/^\s*(```|~~~)/.test(line)) {
+      fenced = !fenced;
+      out.fences += 1;
+      return;
+    }
+    if (fenced) return;
+    const heading = /^(#{1,6})\s/.exec(line);
+    if (heading) out.headings.push(heading[1].length);
+    else if (/^\s*([-*]|\d+\.)\s/.test(line)) out.listItems += 1;
+    else if (/^\|/.test(line)) out.tableRows += 1;
+  });
+  return out;
+};
+let differences = 0;
+for (const name of names) {
+  const en = shape(readFileSync(join(root, 'docs', `${name}.md`), 'utf8'));
+  const vi = shape(readFileSync(join(root, 'docs', `${name}.vi.md`), 'utf8'));
+  const codesEn = JSON.stringify([...en.codes.entries()].sort());
+  const codesVi = JSON.stringify([...vi.codes.entries()].sort());
+  const same = JSON.stringify(en.headings) === JSON.stringify(vi.headings) && en.listItems === vi.listItems && en.tableRows === vi.tableRows && en.fences === vi.fences;
+  if (!same) differences += 1;
+  console.log(`${name}: ${same ? 'same' : 'DIFFERENT'} headings ${en.headings.length}/${vi.headings.length} lists ${en.listItems}/${vi.listItems} table rows ${en.tableRows}/${vi.tableRows} fences ${en.fences}/${vi.fences}`);
+  console.log(`  codes EN ${codesEn}`);
+  console.log(`  codes VI ${codesVi}${codesEn === codesVi ? ' (same lines)' : ' (lines differ)'}`);
+}
+console.log(`differences ${differences}`);

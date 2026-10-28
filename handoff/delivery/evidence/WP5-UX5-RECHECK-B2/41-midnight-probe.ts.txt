@@ -1,0 +1,209 @@
+// WP5-UX5-RECHECK-B2 auditor probe (not part of the product suite): check-in dates at the reporting-zone midnight and on the
+// two DST nights of America/Los_Angeles, through the real routes with a controlled clock. docs/02 R-03 line 21: "An overnight
+// session normally belongs to its starting `work_date` in the saved reporting IANA zone"; D-05; AGENTS.md rule 7 (the UTC instant,
+// the accounting date and the zone are three values). R-07: duration is elapsed UTC time. The client's search for the running
+// session (ClockProvider.findRunningSession: the shown period, then `current` and `in_progress` of /api/periods/current) is
+// mirrored here so a session that the page could not find would show. Observations go to RECHECK_B2_OUT as JSON lines.
+import { appendFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createTestContext, type TestContext } from '../support/testApp.ts';
+
+const OUT = process.env.RECHECK_B2_OUT ?? join(tmpdir(), 'recheck-b2-midnight.jsonl');
+const note = (caseId: string, what: string, value: unknown) => appendFileSync(OUT, `${JSON.stringify({ case: caseId, what, value })}\n`);
+const LA = 'America/Los_Angeles';
+let t: TestContext | undefined;
+afterEach(() => t?.close());
+
+async function at(iso: string) {
+  t = await createTestContext(iso);
+  return { t, cookie: await t.login('employee') };
+}
+type Ctx = Awaited<ReturnType<typeof at>>;
+const clockIn = (c: Ctx) => c.t.request('POST', '/api/clock/in', { cookie: c.cookie, body: { input_zone: LA } });
+const clockOut = (c: Ctx, version: number) => c.t.request('POST', '/api/clock/out', { cookie: c.cookie, body: { breaks: [], breaks_confirmed: true, expected_version: version } });
+const day = async (c: Ctx, date: string) => (await c.t.request('GET', `/api/days/${date}`, { cookie: c.cookie })).body;
+
+/** What the page's clock would find: the running session in `current` or `in_progress` (ClockProvider.findRunningSession). */
+async function pageFinds(c: Ctx) {
+  const periods = (await c.t.request('GET', '/api/periods/current', { cookie: c.cookie })).body;
+  const found: string[] = [];
+  for (const payroll of [...new Set([periods.current.payroll_date, periods.in_progress.payroll_date])]) {
+    const view = (await c.t.request('GET', `/api/timesheets/${payroll}`, { cookie: c.cookie })).body;
+    const running = view.days.flatMap((d: { work_date: string; sessions: Array<{ end_utc: string | null }> }) => d.sessions.filter((s) => s.end_utc === null).map(() => d.work_date));
+    for (const date of running) found.push(`${payroll}:${date}`);
+  }
+  return { today: periods.today_local, current: [periods.current.period_start, periods.current.period_end, periods.current.payroll_date], in_progress: [periods.in_progress.period_start, periods.in_progress.period_end, periods.in_progress.payroll_date], found };
+}
+
+/** One second before and one second after `midnightUtc` (the local midnight that starts `newDate`), plus the exact instant. */
+async function boundary(caseId: string, midnightUtc: string, oldDate: string, newDate: string) {
+  const ms = Date.parse(midnightUtc);
+  const iso = (offset: number) => new Date(ms + offset * 1000).toISOString().replace('.000Z', 'Z');
+  const results: Array<[string, string]> = [];
+  for (const [label, offset, expected] of [['-1s', -1, oldDate], ['0s', 0, newDate], ['+1s', 1, newDate]] as const) {
+    const c = await at(iso(offset));
+    const res = await clockIn(c);
+    note(caseId, `check-in at ${iso(offset)} (${label})`, [res.status, res.body.session?.work_date, res.body.session?.start_utc]);
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body.session).toMatchObject({ work_date: expected, start_utc: iso(offset), end_utc: null, input_zone: LA });
+    results.push([label, res.body.session.work_date]);
+    c.t.close();
+    t = undefined;
+  }
+  return results;
+}
+
+describe('RECHECK-B2: check-in dates at the reporting-zone midnight', () => {
+  it('M1 2026-10-27T07:00:00Z (PDT midnight, mid-period): -1 s files 10-26, 0 s and +1 s file 10-27', async () => {
+    await boundary('M1', '2026-10-27T07:00:00Z', '2026-10-26', '2026-10-27');
+  });
+
+  it('M2 overnight from 06:59:59Z: open on 10-26 after the midnight, found by the page, checked out after it, still 10-26', async () => {
+    const c = await at('2026-10-27T06:59:59Z');
+    const opened = await clockIn(c);
+    expect(opened.body.session).toMatchObject({ work_date: '2026-10-26', end_utc: null });
+    c.t.clock.set('2026-10-27T07:30:00Z');
+    const finds = await pageFinds(c);
+    note('M2', 'after the midnight: today, periods and where the page finds the running session', finds);
+    const d26 = await day(c, '2026-10-26');
+    const d27 = await day(c, '2026-10-27');
+    note('M2', 'day 10-26 sessions / day 10-27 sessions', [d26.sessions.map((s: { start_utc: string; end_utc: string | null }) => [s.start_utc, s.end_utc]), d27.sessions.length]);
+    expect(finds.today).toBe('2026-10-27');
+    // Run 1 expected the `current` period here: a probe defect (2026-10-26 opens the in-progress period 10-26..11-08).
+    expect(finds.found.some((item) => item.endsWith(':2026-10-26'))).toBe(true);
+    expect(d26.sessions).toHaveLength(1);
+    expect(d26.sessions[0].end_utc).toBeNull();
+    expect(d27.sessions).toEqual([]);
+    const out = await clockOut(c, opened.body.session.version);
+    note('M2', 'check-out at 07:30:00Z', [out.status, out.body.session?.work_date, out.body.session?.start_utc, out.body.session?.end_utc, out.body.day?.calculation?.status]);
+    expect(out.status, JSON.stringify(out.body)).toBe(200);
+    expect(out.body.session).toMatchObject({ work_date: '2026-10-26', start_utc: '2026-10-27T06:59:59Z', end_utc: '2026-10-27T07:30:00Z' });
+  });
+
+  it('M3 a real night shift, Monday 22:00 to Tuesday 06:30 local: one session on Monday, regular minutes per R-03', async () => {
+    const c = await at('2026-10-27T05:00:00Z'); // Monday 2026-10-26 22:00 PDT
+    const opened = await clockIn(c);
+    expect(opened.body.session).toMatchObject({ work_date: '2026-10-26', start_utc: '2026-10-27T05:00:00Z' });
+    c.t.clock.set('2026-10-27T13:30:00Z'); // Tuesday 06:30 PDT
+    const finds = await pageFinds(c);
+    const out = await clockOut(c, opened.body.session.version);
+    note('M3', 'page finds / check-out', [finds, out.status, out.body.session?.work_date, out.body.day?.calculation]);
+    expect(out.body.session).toMatchObject({ work_date: '2026-10-26', end_utc: '2026-10-27T13:30:00Z' });
+    expect(out.body.day.work_date).toBe('2026-10-26');
+    expect(out.body.day.calculation).toMatchObject({ regular_minutes: 510, nonworking_minutes: 0 });
+    expect((await day(c, '2026-10-27')).sessions).toEqual([]);
+  });
+
+  it('M4 a period-boundary midnight: the session of the last day of a period is still found by the page after the midnight', async () => {
+    const probe = await at('2026-10-27T20:00:00Z');
+    const periods = (await probe.t.request('GET', '/api/periods/current', { cookie: probe.cookie })).body;
+    const lastDay = periods.in_progress.period_end as string;
+    note('M4', 'in-progress period on 2026-10-27', [periods.in_progress.period_start, lastDay, periods.in_progress.payroll_date]);
+    probe.t.close();
+    t = undefined;
+    // The local midnight that ends `lastDay`: the start of the next day in LA (PDT or PST, computed from the zone).
+    const next = new Date(Date.parse(`${lastDay}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+    const offsetHours = new Intl.DateTimeFormat('en-US', { timeZone: LA, timeZoneName: 'shortOffset' }).formatToParts(new Date(`${next}T12:00:00Z`)).find((part) => part.type === 'timeZoneName')?.value === 'GMT-8' ? 8 : 7;
+    const midnight = new Date(Date.parse(`${next}T00:00:00Z`) + offsetHours * 3600000).toISOString().replace('.000Z', 'Z');
+    const c = await at(new Date(Date.parse(midnight) - 1000).toISOString().replace('.000Z', 'Z'));
+    const opened = await clockIn(c);
+    expect(opened.body.session.work_date).toBe(lastDay);
+    c.t.clock.set(new Date(Date.parse(midnight) + 3600000).toISOString().replace('.000Z', 'Z'));
+    const finds = await pageFinds(c);
+    note('M4', `check-in 1 s before ${midnight}; one hour later the page sees`, finds);
+    expect(finds.today).toBe(next);
+    expect(finds.found.some((item) => item.endsWith(`:${lastDay}`))).toBe(true);
+    const out = await clockOut(c, opened.body.session.version);
+    note('M4', 'check-out one hour after the midnight', [out.status, out.body.session?.work_date, out.body.error?.code ?? null]);
+    expect(out.status, JSON.stringify(out.body)).toBe(200);
+    expect(out.body.session.work_date).toBe(lastDay);
+  });
+});
+
+describe('RECHECK-B2: what the page shows for the overnight session (client model, rule 7)', () => {
+  it('M5 the running session found after the midnight reads "since 23:59, Mon 10/26" in LA and the instant in another device zone; its day stays 10-26', async () => {
+    const { clockedInText, runningSessionOf } = await import('../../src/client/components/periodBarModel.ts');
+    const c = await at('2026-10-27T06:59:59Z');
+    await clockIn(c);
+    c.t.clock.set('2026-10-27T07:30:00Z');
+    const periods = (await c.t.request('GET', '/api/periods/current', { cookie: c.cookie })).body;
+    const view = (await c.t.request('GET', `/api/timesheets/${periods.in_progress.payroll_date}`, { cookie: c.cookie })).body;
+    const running = runningSessionOf(view);
+    const dayOfRunning = view.days.find((d: { sessions: Array<{ end_utc: string | null }> }) => d.sessions.some((s) => s.end_utc === null))?.work_date;
+    const la = running === undefined ? null : clockedInText(running, LA);
+    const tokyo = running === undefined ? null : clockedInText(running, 'Asia/Tokyo');
+    note('M5', 'running session day / text in LA / text in Asia/Tokyo', [dayOfRunning, la, tokyo]);
+    expect(dayOfRunning).toBe('2026-10-26');
+    expect(la).toEqual({ time: '23:59', day: 'Mon 10/26' });
+    expect(tokyo).toEqual({ time: '15:59', day: 'Tue 10/27' });
+  });
+});
+
+describe('RECHECK-B2: the DST nights of America/Los_Angeles', () => {
+  it('N1 2026-11-01 (fall back): midnight 07:00Z files -1 s on 10-31 and +1 s on 11-01; the 25-hour day ends at 08:00Z on 11-02', async () => {
+    await boundary('N1-start', '2026-11-01T07:00:00Z', '2026-10-31', '2026-11-01');
+    await boundary('N1-end', '2026-11-02T08:00:00Z', '2026-11-01', '2026-11-02');
+  });
+
+  it('N2 an overnight session across the fall-back hour: 23:00 PDT to 03:00 PST is 5 hours elapsed, on 10-31', async () => {
+    const c = await at('2026-11-01T06:00:00Z'); // Sat 2026-10-31 23:00 PDT
+    const opened = await clockIn(c);
+    expect(opened.body.session.work_date).toBe('2026-10-31');
+    c.t.clock.set('2026-11-01T11:00:00Z'); // Sun 2026-11-01 03:00 PST
+    const finds = await pageFinds(c);
+    const out = await clockOut(c, opened.body.session.version);
+    note('N2', 'page finds / check-out / calculation', [finds, out.status, out.body.session?.work_date, out.body.session?.start_utc, out.body.session?.end_utc, out.body.day?.calculation]);
+    expect(out.body.session).toMatchObject({ work_date: '2026-10-31', end_utc: '2026-11-01T11:00:00Z' });
+    const calc = out.body.day.calculation;
+    expect(calc.regular_minutes + calc.nonworking_minutes).toBe(300);
+  });
+
+  it('N3 a check-in in the repeated hour 01:30 (PDT, then PST) files both on 11-01', async () => {
+    for (const iso of ['2026-11-01T08:30:00Z', '2026-11-01T09:30:00Z']) {
+      const c = await at(iso);
+      const res = await clockIn(c);
+      note('N3', `check-in at ${iso}`, [res.status, res.body.session?.work_date]);
+      expect(res.body.session.work_date).toBe('2026-11-01');
+      c.t.close();
+      t = undefined;
+    }
+  });
+
+  it('N4 2027-03-14 (spring forward): midnight 08:00Z files -1 s on 03-13 and +1 s on 03-14; the 23-hour day ends at 07:00Z on 03-15', async () => {
+    await boundary('N4-start', '2027-03-14T08:00:00Z', '2027-03-13', '2027-03-14');
+    await boundary('N4-end', '2027-03-15T07:00:00Z', '2027-03-14', '2027-03-15');
+  });
+
+  it('N5 an overnight session across the spring-forward gap: 23:00 PST to 04:00 PDT is 4 hours elapsed, on 03-13', async () => {
+    const c = await at('2027-03-14T07:00:00Z'); // Sat 2027-03-13 23:00 PST
+    const opened = await clockIn(c);
+    expect(opened.body.session.work_date).toBe('2027-03-13');
+    c.t.clock.set('2027-03-14T11:00:00Z'); // Sun 2027-03-14 04:00 PDT
+    const finds = await pageFinds(c);
+    const out = await clockOut(c, opened.body.session.version);
+    note('N5', 'page finds / check-out / calculation', [finds, out.status, out.body.session?.work_date, out.body.session?.end_utc, out.body.day?.calculation]);
+    expect(out.body.session).toMatchObject({ work_date: '2027-03-13', end_utc: '2027-03-14T11:00:00Z' });
+    const calc = out.body.day.calculation;
+    expect(calc.regular_minutes + calc.nonworking_minutes).toBe(240);
+  });
+
+  it('N6 the DST-night midnight sessions open across the midnight and are found by the page (11-01 and 03-14)', async () => {
+    for (const [start, later, startDate] of [
+      ['2026-11-01T06:59:59Z', '2026-11-01T09:30:00Z', '2026-10-31'],
+      ['2027-03-14T07:59:59Z', '2027-03-14T10:30:00Z', '2027-03-13'],
+    ] as const) {
+      const c = await at(start);
+      const opened = await clockIn(c);
+      c.t.clock.set(later);
+      const finds = await pageFinds(c);
+      const d = await day(c, startDate);
+      note('N6', `check-in ${start}, read at ${later}`, [opened.body.session?.work_date, finds, d.sessions.map((s: { end_utc: string | null }) => s.end_utc)]);
+      expect(opened.body.session.work_date).toBe(startDate);
+      expect(finds.found.some((item) => item.endsWith(`:${startDate}`))).toBe(true);
+      c.t.close();
+      t = undefined;
+    }
+  });
+});

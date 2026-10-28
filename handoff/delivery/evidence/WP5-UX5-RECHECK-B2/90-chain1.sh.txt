@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Mandatory checks in the pristine export: typecheck, lint, build, npm test once, the area-B integration files once, AC-13 once.
+source <task>/env.sh
+cd "$X" || exit 9
+E="$T/logs/chain1-exits.txt"
+step() {
+  local name=$1; shift
+  local start; start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  "$@" > "$T/logs/c1-$name.log" 2>&1
+  local code=$?
+  echo "$name exit=$code start=$start end=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$E"
+}
+echo "node $(node --version) npm $(npm --version) cwd=<export>" >> "$E"
+step typecheck npm run typecheck
+step lint npm run lint
+step build npm run build
+step test npm test
+step integ npx vitest run tests/integration/restore.test.ts tests/integration/sends.test.ts tests/integration/jobs.test.ts tests/integration/jobs-restart.test.ts tests/integration/jobs-sweep.test.ts tests/integration/timesheet-api.test.ts tests/integration/submission-settings.test.ts tests/integration/finalization.test.ts tests/integration/finalization-concurrency.test.ts tests/integration/delivery.test.ts tests/integration/delivery-crash.test.ts tests/integration/pdf-render.test.ts tests/integration/pdf-layout.test.ts tests/integration/pdf-download.test.ts tests/integration/corrections.test.ts tests/integration/deadline.test.ts tests/integration/deadline-race.test.ts tests/integration/reminders.test.ts tests/integration/operations-status.test.ts tests/integration/history.test.ts tests/integration/clock-out-breaks.test.ts
+step ac13 node "$T/run-tz.mjs" Asia/Tokyo "$X" npx vitest run tests/integration/ac13-two-week.test.ts
+echo "chain1 done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$E"

@@ -143,9 +143,17 @@ Luồng hiện tại:
      Lỗi là do test đọc ngày trước nửa đêm, và 31 test có cùng giả định đó. Bản vá chỉ đổi
      test: sửa helper Check in, giữ mỗi test tránh đúng lúc nửa đêm giờ địa phương mà không
      tác động lên hệ thống, và thêm một test tích hợp ngay tại ranh giới ngày.
-   - WP5-UX5-FIX15 đã áp bản vá đó và qua mọi kiểm tra (digest ff73565b).
-   - Đang chạy: WP5-UX5-FIX15-FREEZE commit và push bản vá.
-   - Sau đó là gate lại có phạm vi, kiểm tra lại độc lập hai lỗi đã sửa, thay đổi
+   - WP5-UX5-FIX15 đã áp bản vá đó và qua mọi kiểm tra. Bản vá đã được freeze trong be2afa2
+     (digest ff73565b) và đã push.
+   - WP5-UX5-REGATE10, gate lại có phạm vi trên be2afa2, đã đạt.
+   - Lượt kiểm tra lại độc lập vùng A (WP5-UX5-RECHECK-A2) đã đạt.
+   - Lượt kiểm tra lại độc lập vùng B (WP5-UX5-RECHECK-B2) tìm ra một lỗ hổng mức Low. Sau
+     khi khôi phục, một lần gửi cũ đang bị giữ vẫn có thể được thả ra nếu lần gửi bản đính
+     chính bị lỗi hoặc chưa chắc đã gửi.
+   - WP5-UX5-FIX16 đã sửa lỗi này: lần gửi cũ đang bị giữ giờ vẫn bị giữ khi có bất kỳ lần
+     gửi muộn hơn nào của cùng kỳ, trừ lần đã hủy. Digest 18aa0ad0.
+   - Đang chạy: WP5-UX5-FIX16-FREEZE commit và push bản sửa.
+   - Sau đó là gate lại có phạm vi, một lượt kiểm tra lại độc lập mới cho vùng B, kiểm tra lại độc lập hai lỗi đã sửa, thay đổi
      Day editor và thay đổi giao diện, audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
    - Để tiếp tục sau khi bị gián đoạn, dùng prompt khởi động ở trên. Điều phối viên làm tiếp
      ở `next_task_id` của board.

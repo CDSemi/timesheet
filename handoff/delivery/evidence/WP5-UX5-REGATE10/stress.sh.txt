@@ -1,0 +1,16 @@
+cd <task>
+. ./env.sh
+# S <label> <repeat> <workers> <playwright args...>: one real-clock run in the clean export, counted.
+S() {
+  label=$1; rep=$2; wk=$3; shift 3
+  bash run-shift.sh "stress-$label" real "$@" --repeat-each=$rep --workers=$wk > "logs/stress-$label.txt" 2>&1
+  echo "$label (repeat $rep, workers $wk): $(node counts.mjs "logs/stress-$label.txt")" >> out/31-stress-counts.txt 2>&1
+  echo "$label finished $(date -u +%H:%M:%S)" >> logs/stress.log
+}
+# FIX15's tests (the two check-in tests, both projects)
+S checkin 20 10 tests/e2e/day-editor.spec.ts -g "Check in then Check out asks for break confirmation|a stale session version at Check out"
+# FIX14's tests, because the shared fixtures changed
+S ctl-title 20 10 tests/e2e/controls.spec.ts -g "the title row is 32px above"
+S ladder 60 6 tests/e2e/timesheet.spec.ts --project=desktop -g "the longest form that fits its box shows"
+S theme-tabs 20 6 tests/e2e/theme.spec.ts -g "a storage event keeps a second tab in step|a theme chosen in one tab reaches a second tab whose account menu is closed"
+echo stress-done > out/stress.done

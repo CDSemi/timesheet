@@ -2713,8 +2713,119 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - `npm test`: 2,389.
   - FULL: 469/35/0 and 407/97/0.
   - The midnight sweep: 0 failed. The desktop crossing test took 1.0 min.
-- **Running now:** WP5-UX5-FIX15-FREEZE (committer). The coordinator writes no file while it
-  runs. Then a scoped REGATE10.
+- **WP5-UX5-FIX15-FREEZE done.**
+  - Commit be2afa2e3c43514581ed62fd145c15eeef13b534 on main. It was pushed as a fast-forward
+    from bd9c275.
+  - D_PRE equals the HEAD digest, ff73565b. 433 paths were staged.
+  - First stop: a trailing blank line in the DIAG9 record failed `git diff --cached
+    --check`. The coordinator removed it, then the same committer continued and every check
+    exited 0.
+- **Running now:** WP5-UX5-REGATE10 (verifier, sonnet), alone, on be2afa2. It is a scoped
+  regate, because only tests changed:
+  - identity, with `dist/` identical;
+  - `npm audit`;
+  - core ×3, 2,389 tests;
+  - the real-clock FULL run and the six sweeps;
+  - stress;
+  - the FIX15 mutants and controls;
+  - the delay suite at 90 ms on both projects;
+  - a diff read.
+
+  The drill and axe carry forward from REGATE9 if `dist/` is identical.
+- **REGATE10 first result: NOT VERIFIED.**
+  - Items 1–6 passed with 0 failures:
+    - `dist/` is identical, so the drill and axe carry forward;
+    - core ×3: 2,389;
+    - FULL: 469/407, 0 failed;
+    - all six sweeps: 0 failed. The crossing test took 1.1 min, so it still crosses the
+      midnight.
+    - stress: 0 failed.
+  - Item 7: the mutants, cases, fenced models, the delay suite and the diff read all passed.
+  - The only unmet claim: the fence-off control did not fail every target.
+    - Desktop: 12 of 13 failed; `day-editor.spec.ts:795` passed.
+    - Mobile: 9 failed; `:795` and `today.spec.ts:242` passed.
+- **Coordinator (brief Addendum 1).** The brief had overstated the control. FIX15's own
+  mobile control had `:242` passing, and the model takes one sample of a timing window.
+  - The restated criterion: with the fence on, no sample fails. With the fence off, each
+    target fails in at least one of six samples, or the timeline shows that the model's
+    midnight missed the test's date read.
+  - The same verifier samples the three targets, then decides.
+- **WP5-UX5-REGATE10 PASS** after Addendum 1.
+  - With the fence on, 15 of 15 samples passed.
+  - With the fence off, the three targets also never failed. The hook timeline shows that
+    their date reads all end about 0.27 s before the model's midnight, which falls during
+    sign-in. That is a placement note, not a defect.
+  - Every other item stands: `dist/` identical, so the drill and axe carry forward;
+    `npm audit` 0; core ×3 2,389; FULL 0 failed; six sweeps 0 failed; stress, mutants,
+    cases, models and the diff read all clean.
+- **Running now, in parallel:** two fresh opus auditors, who authored nothing in WP5-UX4 or
+  WP5-UX5, on be2afa2 / ff73565b.
+  - **WP5-UX5-RECHECK-A2 (area A):**
+    - F-UX5A2-1;
+    - the FIX12 to FIX15 client and e2e changes, including the `DayFieldsForm` and
+      cross-tab theme product changes, and the midnight fence;
+    - regressions, axe, own mutants, the mandatory checks.
+  - **WP5-UX5-RECHECK-B2 (area B):**
+    - F-UX5B2-1;
+    - G2 and P4;
+    - the R3 case;
+    - check-in dates at the day boundary and on DST nights;
+    - regressions, own mutants, the mandatory checks.
+- **WP5-UX5-RECHECK-B2: FIX REQUIRED** (auditor, self-reported claude-opus-5-5). One new
+  Low finding.
+  - F-UX5B2-1 is fixed on the path RECHECK-B reproduced, but not closed in full.
+  - **F-UX5B3-1 (Low).** `restore.ts:552-560` (`blockerOf`) counts a later send only when it
+    is queued, leased or succeeded.
+    - The gap: if the correction's send ends in `intervention`, the held older copy can be
+      released and delivered after the correction. `intervention` means the send failed
+      permanently, ended uncertain (also after "marked delivered" or a runner that died),
+      or is held by a second restore.
+    - So docs/05:72 and docs/11:178 overstate the build.
+    - The auditor's bounded fix: count every later send job of the period except a
+      cancelled one, and add `restore.test.ts` cases.
+  - G2, P4 and R3 are caught.
+  - Check-ins at midnight and on both DST nights are correct.
+  - Every mandatory check passed: `npm test` 2,389; FULL 469/407, 0 failed.
+- **Coordinator.** The fix waits for RECHECK-A2: no source writer runs beside an audit.
+  - The fix goes to a worker-high (sonnet), because this is a recovery and outbound-send
+    path with an existing pattern.
+  - Then a freeze, a scoped regate (the server bundle changes), and a fresh recheck of area
+    B.
+- **WP5-UX5-RECHECK-A2: PASS** (auditor, self-reported claude-opus-5-5). Area A is accepted
+  on be2afa2.
+  - F-UX5A2-1 is fixed: the ring was measured in 96 states, and all four edges show every
+    time.
+  - `DayFieldsForm`: no loop and no stale flag.
+  - The cross-tab theme follows, also on the sign-in page and after cleared storage. Other
+    keys are ignored, and blocked storage is safe.
+  - The helpers and the fence prove what the old tests proved.
+  - Every mandatory check passed, including the midnight sweep run. axe found only the
+    accepted UX3 target-size item.
+  - 11 of 16 own mutants were caught. The optional risks are R-A3-1..3.
+  - No new finding.
+- **WP5-UX5-FIX16 done** (worker-high, self-reported claude-sonnet-5-5). It is uncommitted.
+  Digest 18aa0ad0.
+  - Reproduced first: the in-process probe failed 6 of 12, and HTTP sections B, C and D
+    failed.
+  - The fix: `blockerOf` counts every later send job of the period, in any state except
+    `cancelled`.
+    - Why cancelled is excepted: no product path cancels a send job, and a cancelled job is
+      frozen and delivers nothing.
+    - The same-revision repeat is refused as `superseded_by_later_send`.
+  - New tests: seven restore cases and the midnight-second check-in. docs/05:72 gained one
+    clause, in EN and VI.
+  - Proof:
+    - the probes pass, 12/12 and A–D;
+    - ten mutants are killed;
+    - `dist/` differs only in `restore.js` and its map;
+    - `npm test`: 2,397;
+    - FULL: 0 failed.
+- **Running now:** WP5-UX5-FIX16-FREEZE (committer). The coordinator writes no file while it
+  runs.
+- **Next:**
+  - a scoped regate, with the drill, because the server bundle changes;
+  - a fresh area-B recheck;
+  - the integration audit, ACCEPT-DOCS and the WP5 re-accept.
 - **Next:**
   - a fix, its freeze and a regate;
   - fresh rechecks of the two findings, the Day editor change and the cross-tab theme

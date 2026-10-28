@@ -1,0 +1,123 @@
+
+ RUN  v5.0.2 <task>/probe
+
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts (11 tests | 5 failed) 5497ms
+   ❯ RECHECK-B2: check-in dates at the reporting-zone midnight (4)
+     × M2 overnight from 06:59:59Z: open on 10-26 after the midnight, found by the page, checked out after it, still 10-26 212ms
+     × M3 a real night shift, Monday 22:00 to Tuesday 06:30 local: one session on Monday, regular minutes per R-03 231ms
+     × M4 a period-boundary midnight: the session of the last day of a period is still found by the page after the midnight 405ms
+   ❯ RECHECK-B2: the DST nights of America/Los_Angeles (6)
+     × N2 an overnight session across the fall-back hour: 23:00 PDT to 03:00 PST is 5 hours elapsed, on 10-31 202ms
+     × N5 an overnight session across the spring-forward gap: 23:00 PST to 04:00 PDT is 4 hours elapsed, on 03-13 225ms
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 6 passed (11)
+   Start at  14:23:10
+   Duration  6.48s (tests 86%, transform 9%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/zz-recheck-b2-midnight.test.ts > RECHECK-B2: check-in dates at the reporting-zone midnight > M2 overnight from 06:59:59Z: open on 10-26 after the midnight, found by the page, checked out after it, still 10-26
+AssertionError: {"error":{"code":"immutable_session_owner","message":"This record is immutable"}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts:81:50
+     79|     const out = await clockOut(c, opened.body.session.version);
+     80|     note('M2', 'check-out at 07:30:00Z', [out.status, out.body.session…
+     81|     expect(out.status, JSON.stringify(out.body)).toBe(200);
+       |                                                  ^
+     82|     expect(out.body.session).toMatchObject({ work_date: '2026-10-26', …
+     83|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-midnight.test.ts > RECHECK-B2: check-in dates at the reporting-zone midnight > M3 a real night shift, Monday 22:00 to Tuesday 06:30 local: one session on Monday, regular minutes per R-03
+AssertionError: expected undefined to match object { work_date: '2026-10-26', …(1) }
+
+- Expected:
+{
+  "end_utc": "2026-10-27T13:30:00Z",
+  "work_date": "2026-10-26",
+}
+
++ Received:
+undefined
+
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts:93:30
+     91|     const out = await clockOut(c, opened.body.session.version);
+     92|     note('M3', 'page finds / check-out', [finds, out.status, out.body.…
+     93|     expect(out.body.session).toMatchObject({ work_date: '2026-10-26', …
+       |                              ^
+     94|     expect(out.body.day.work_date).toBe('2026-10-26');
+     95|     expect(out.body.day.calculation).toMatchObject({ regular_minutes: …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-midnight.test.ts > RECHECK-B2: check-in dates at the reporting-zone midnight > M4 a period-boundary midnight: the session of the last day of a period is still found by the page after the midnight
+AssertionError: {"error":{"code":"immutable_session_owner","message":"This record is immutable"}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts:120:50
+    118|     const out = await clockOut(c, opened.body.session.version);
+    119|     note('M4', 'check-out one hour after the midnight', [out.status, o…
+    120|     expect(out.status, JSON.stringify(out.body)).toBe(200);
+       |                                                  ^
+    121|     expect(out.body.session.work_date).toBe(lastDay);
+    122|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-midnight.test.ts > RECHECK-B2: the DST nights of America/Los_Angeles > N2 an overnight session across the fall-back hour: 23:00 PDT to 03:00 PST is 5 hours elapsed, on 10-31
+AssertionError: expected undefined to match object { work_date: '2026-10-31', …(1) }
+
+- Expected:
+{
+  "end_utc": "2026-11-01T11:00:00Z",
+  "work_date": "2026-10-31",
+}
+
++ Received:
+undefined
+
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts:158:30
+    156|     const out = await clockOut(c, opened.body.session.version);
+    157|     note('N2', 'page finds / check-out / calculation', [finds, out.sta…
+    158|     expect(out.body.session).toMatchObject({ work_date: '2026-10-31', …
+       |                              ^
+    159|     const calc = out.body.day.calculation;
+    160|     expect(calc.regular_minutes + calc.nonworking_minutes).toBe(300);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-midnight.test.ts > RECHECK-B2: the DST nights of America/Los_Angeles > N5 an overnight session across the spring-forward gap: 23:00 PST to 04:00 PDT is 4 hours elapsed, on 03-13
+AssertionError: expected undefined to match object { work_date: '2027-03-13', …(1) }
+
+- Expected:
+{
+  "end_utc": "2027-03-14T11:00:00Z",
+  "work_date": "2027-03-13",
+}
+
++ Received:
+undefined
+
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts:187:30
+    185|     const out = await clockOut(c, opened.body.session.version);
+    186|     note('N5', 'page finds / check-out / calculation', [finds, out.sta…
+    187|     expect(out.body.session).toMatchObject({ work_date: '2027-03-13', …
+       |                              ^
+    188|     const calc = out.body.day.calculation;
+    189|     expect(calc.regular_minutes + calc.nonworking_minutes).toBe(240);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯

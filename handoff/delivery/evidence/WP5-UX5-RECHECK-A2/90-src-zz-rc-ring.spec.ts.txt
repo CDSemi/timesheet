@@ -1,0 +1,239 @@
+/*
+ * WP5-UX5-RECHECK-A2 probe (F-UX5A2-1 disposition): the focus ring of the read-only Review week card, every pixel of each edge band,
+ * at widths where the card overflows, in four theme states (device light, device dark, a manual dark on a light device and a manual
+ * light on a dark device), at three scroll positions; mouse focus; forced colours; a resize with focus (R-A2-3). Synthetic data only.
+ */
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+import { contrastOf, cssColour, near, obs, reviewerOf, type Rgb, settleWidth, type Shot, shot, signInAt } from './zz-rc-lib.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const STATES = [
+  { name: 'device-light', media: 'light', stored: null },
+  { name: 'device-dark', media: 'dark', stored: null },
+  { name: 'manual-dark-on-light', media: 'light', stored: 'dark' },
+  { name: 'manual-light-on-dark', media: 'dark', stored: 'light' },
+] as const;
+
+async function setTheme(page: Page, media: 'light' | 'dark', stored: 'light' | 'dark' | null): Promise<void> {
+  await page.emulateMedia({ colorScheme: media, reducedMotion: 'reduce' });
+  await page.evaluate((value) => {
+    if (value === null) {
+      localStorage.removeItem('timesheet.theme');
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      localStorage.setItem('timesheet.theme', value);
+      document.documentElement.setAttribute('data-theme', value);
+    }
+  }, stored);
+}
+
+interface EdgeCoverage {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  /** Whole pixel rows (top, bottom) or columns (left, right) that lie fully inside each 2px band (1 when the edge is fractional). */
+  bandPixels: { top: number; bottom: number; left: number; right: number };
+  /** The 1px gap inside the 2px ring is the card colour (share of pixels on the edges whose gap is a whole pixel), or null if none is. */
+  gap: number | null;
+  box: string;
+}
+
+/** The whole pixels fully inside [start, end). */
+function fullPixels(start: number, end: number): number[] {
+  const first = Math.ceil(start - 1e-6);
+  const last = Math.floor(end + 1e-6) - 1;
+  return last < first ? [] : Array.from({ length: last - first + 1 }, (_, i) => first + i);
+}
+
+/**
+ * For each edge: the share of pixels, over every pixel along the edge and every whole pixel row or column fully inside its 2px band,
+ * that is the accent. A fractional edge leaves one whole row inside the band (the other is shared with the gap, anti-aliased).
+ */
+function coverage(surface: Shot, box: { x: number; y: number; width: number; height: number }, accent: Rgb, card: Rgb): EdgeCoverage {
+  const [x0, y0, x1, y1] = [box.x, box.y, box.x + box.width, box.y + box.height];
+  const xs = fullPixels(x0, x1);
+  const ys = fullPixels(y0, y1);
+  const inside = (x: number, y: number) => x >= 0 && y >= 0 && x < surface.width && y < surface.height;
+  const share = (points: Array<[number, number]>) => points.filter(([x, y]) => inside(x, y) && near(surface.at(x, y), accent, 3)).length / Math.max(1, points.length);
+  const band = { top: fullPixels(y0, y0 + 2), bottom: fullPixels(y1 - 2, y1), left: fullPixels(x0, x0 + 2), right: fullPixels(x1 - 2, x1) };
+  const gapRows = { top: fullPixels(y0 + 2, y0 + 3), bottom: fullPixels(y1 - 3, y1 - 2), left: fullPixels(x0 + 2, x0 + 3), right: fullPixels(x1 - 3, x1 - 2) };
+  const gapPoints: Array<[number, number]> = [
+    ...gapRows.top.flatMap((y) => xs.slice(4, -4).map((x): [number, number] => [x, y])),
+    ...gapRows.bottom.flatMap((y) => xs.slice(4, -4).map((x): [number, number] => [x, y])),
+    ...gapRows.left.flatMap((x) => ys.slice(4, -4).map((y): [number, number] => [x, y])),
+    ...gapRows.right.flatMap((x) => ys.slice(4, -4).map((y): [number, number] => [x, y])),
+  ];
+  const gap = gapPoints.length === 0 ? null : gapPoints.filter(([x, y]) => inside(x, y) && near(surface.at(x, y), card, 3)).length / gapPoints.length;
+  return {
+    top: share(band.top.flatMap((y) => xs.map((x): [number, number] => [x, y]))),
+    bottom: share(band.bottom.flatMap((y) => xs.map((x): [number, number] => [x, y]))),
+    left: share(band.left.flatMap((x) => ys.map((y): [number, number] => [x, y]))),
+    right: share(band.right.flatMap((x) => ys.map((y): [number, number] => [x, y]))),
+    bandPixels: { top: band.top.length, bottom: band.bottom.length, left: band.left.length, right: band.right.length },
+    gap,
+    box: `${x0},${y0} ${box.width}x${box.height}`,
+  };
+}
+
+async function bringIntoView(card: Locator): Promise<void> {
+  await card.evaluate((element) => window.scrollBy(0, element.getBoundingClientRect().top - 120));
+  await card.page().evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))));
+}
+
+test('ring coverage on every edge, four theme states, widths where the card overflows, three scroll positions', async ({ page, adminSeed, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop project sets the widths');
+  test.setTimeout(600_000);
+  const person = await reviewerOf(adminSeed, builtServer);
+  await signInAt(page, person, `#/review/${person.payrollDate}`);
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  for (const width of [480, 600, 767, 768, 900, 913]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await settleWidth(page, width);
+    const cards = page.locator('[data-paper="review"] .sheet-week');
+    await expect(cards).toHaveCount(2);
+    for (const index of [0, 1]) {
+      const card = cards.nth(index);
+      await expect(card, `${width}px card ${index} takes a stop`).toHaveAttribute('tabindex', '0');
+      const range = await card.evaluate((element) => element.scrollWidth - element.clientWidth);
+      for (const state of STATES) {
+        await setTheme(page, state.media, state.stored);
+        const accent = await cssColour(page, '--accent');
+        const cardColour = await cssColour(page, '--card');
+        const head = await cssColour(page, '--sheet-head-strong');
+        for (const scrollLeft of index === 0 ? [0, Math.round(range / 2), range] : [range]) {
+          await card.evaluate((element, value) => {
+            (element as HTMLElement).blur();
+            element.scrollLeft = value;
+          }, scrollLeft);
+          await bringIntoView(card);
+          const box = await card.boundingBox();
+          if (box === null) throw new Error('no box');
+          const unfocused = coverage(await shot(page), box, accent, cardColour);
+          await page.keyboard.press('Shift');
+          await card.focus();
+          await expect(card).toBeFocused();
+          const visible = await card.evaluate((element) => element.matches(':focus-visible'));
+          await bringIntoView(card);
+          const box2 = await card.boundingBox();
+          if (box2 === null) throw new Error('no box');
+          const after = await card.evaluate((element) => element.scrollLeft);
+          const focused = coverage(await shot(page), box2, accent, cardColour);
+          const layer = await card.evaluate((element) => {
+            const style = getComputedStyle(element.parentElement as Element, '::after');
+            return { boxShadow: style.boxShadow, outline: `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor}`, zIndex: style.zIndex, own: `${getComputedStyle(element).outlineStyle}/${getComputedStyle(element).boxShadow}` };
+          });
+          obs({
+            kind: 'ring',
+            width,
+            card: index,
+            state: state.name,
+            scrollLeft,
+            range,
+            scrollAfterFocus: after,
+            focusVisible: visible,
+            focused,
+            unfocused,
+            contrastCard: Number(contrastOf(accent, cardColour).toFixed(2)),
+            contrastHead: Number(contrastOf(accent, head).toFixed(2)),
+            layer,
+          });
+          if (width === 768 && index === 0 && scrollLeft === Math.round(range / 2) && (state.name === 'device-light' || state.name === 'manual-light-on-dark')) {
+            await page.screenshot({ path: `${process.env.RC_SHOTS ?? ''}/rc-ring-768-mid-${state.name}-synthetic.png`, clip: { x: Math.max(0, box2.x - 4), y: Math.max(0, box2.y - 4), width: Math.min(width, box2.width + 8), height: box2.height + 8 } });
+          }
+          await card.evaluate((element) => (element as HTMLElement).blur());
+        }
+      }
+      await setTheme(page, 'light', null);
+    }
+  }
+});
+
+test('mouse focus, forced colours, Tab from the control before the card, and a resize with focus (R-A2-3)', async ({ page, adminSeed, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop project sets the widths');
+  test.setTimeout(240_000);
+  const person = await reviewerOf(adminSeed, builtServer);
+  await signInAt(page, person, `#/review/${person.payrollDate}`);
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  await page.setViewportSize({ width: 768, height: 1000 });
+  await settleWidth(page, 768);
+  await setTheme(page, 'light', null);
+  const card = page.locator('[data-paper="review"] .sheet-week').first();
+  const accent = await cssColour(page, '--accent');
+  const cardColour = await cssColour(page, '--card');
+  await bringIntoView(card);
+  // A mouse press on the card: it takes focus (tabindex) but not :focus-visible, so no ring, as for every other control.
+  const box = await card.boundingBox();
+  if (box === null) throw new Error('no box');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height - 10);
+  const mouse = await card.evaluate((element) => ({ focused: document.activeElement === element, visible: element.matches(':focus-visible') }));
+  const mouseCoverage = coverage(await shot(page), box, accent, cardColour);
+  obs({ kind: 'ring-mouse', ...mouse, coverage: mouseCoverage });
+  await card.evaluate((element) => (element as HTMLElement).blur());
+
+  // Tab: from the element before the card, a real Tab lands on the card and the ring is painted.
+  const order = await page.evaluate(() => {
+    const all = [...document.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]')].filter((element) => element.tabIndex >= 0 && !(element as HTMLButtonElement).disabled && element.offsetParent !== null);
+    const firstCard = document.querySelector('[data-paper="review"] .sheet-week');
+    const index = all.findIndex((element) => element === firstCard);
+    return index;
+  });
+  let tabbed = false;
+  await page.locator('body').evaluate((body) => (body as HTMLElement).focus());
+  for (let i = 0; i < 80 && !tabbed; i += 1) {
+    await page.keyboard.press('Tab');
+    tabbed = await card.evaluate((element) => document.activeElement === element);
+  }
+  await bringIntoView(card);
+  const box2 = await card.boundingBox();
+  if (box2 === null) throw new Error('no box');
+  const tabCoverage = coverage(await shot(page), box2, accent, cardColour);
+  obs({ kind: 'ring-tab', indexInOrder: order, reachedByTab: tabbed, visible: await card.evaluate((element) => element.matches(':focus-visible')), coverage: tabCoverage });
+
+  // Forced colours: the box shadow is dropped; the transparent outline of the layer becomes a system colour on all four edges.
+  await page.emulateMedia({ forcedColors: 'active', colorScheme: 'light', reducedMotion: 'reduce' });
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))));
+  const forcedFocused = await shot(page);
+  const layer = await card.evaluate((element) => {
+    const style = getComputedStyle(element.parentElement as Element, '::after');
+    return { boxShadow: style.boxShadow, outline: `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor}`, offset: style.outlineOffset };
+  });
+  const bg = forcedFocused.at(Math.round(box2.x + box2.width / 2), Math.round(box2.y + 40));
+  const edgeColour = {
+    top: forcedFocused.at(Math.round(box2.x + box2.width / 2), Math.ceil(box2.y)),
+    bottom: forcedFocused.at(Math.round(box2.x + box2.width / 2), Math.floor(box2.y + box2.height) - 1),
+    left: forcedFocused.at(Math.ceil(box2.x), Math.round(box2.y + box2.height / 2)),
+    right: forcedFocused.at(Math.floor(box2.x + box2.width) - 1, Math.round(box2.y + box2.height / 2)),
+  };
+  // The same edge pixels without focus, for comparison.
+  await card.evaluate((element) => (element as HTMLElement).blur());
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))));
+  const forcedBlurred = await shot(page);
+  const edgeBlurred = {
+    top: forcedBlurred.at(Math.round(box2.x + box2.width / 2), Math.ceil(box2.y)),
+    bottom: forcedBlurred.at(Math.round(box2.x + box2.width / 2), Math.floor(box2.y + box2.height) - 1),
+    left: forcedBlurred.at(Math.ceil(box2.x), Math.round(box2.y + box2.height / 2)),
+    right: forcedBlurred.at(Math.floor(box2.x + box2.width) - 1, Math.round(box2.y + box2.height / 2)),
+  };
+  obs({ kind: 'ring-forced', layer, background: bg, focusedEdges: edgeColour, blurredEdges: edgeBlurred });
+  await page.keyboard.press('Shift');
+  await card.focus();
+  await page.screenshot({ path: `${process.env.RC_SHOTS ?? ''}/rc-ring-768-forced-colours-synthetic.png`, clip: { x: Math.max(0, box2.x - 4), y: Math.max(0, box2.y - 4), width: Math.min(768, box2.width + 8), height: box2.height + 8 } });
+  await page.emulateMedia({ forcedColors: 'none', colorScheme: 'light', reducedMotion: 'reduce' });
+
+  // R-A2-3: widen the window while the card has focus.
+  await page.setViewportSize({ width: 900, height: 1000 });
+  await settleWidth(page, 900);
+  await page.keyboard.press('Shift');
+  await card.focus();
+  await expect(card).toBeFocused();
+  await page.setViewportSize({ width: 1100, height: 1000 });
+  await settleWidth(page, 1100);
+  await expect.poll(() => card.getAttribute('tabindex')).toBeNull();
+  const afterResize = await page.evaluate(() => ({ active: document.activeElement?.tagName ?? null, className: (document.activeElement as HTMLElement | null)?.className ?? null }));
+  await page.keyboard.press('Tab');
+  const next = await page.evaluate(() => ({ tag: document.activeElement?.tagName ?? null, text: (document.activeElement as HTMLElement | null)?.innerText?.slice(0, 40) ?? null }));
+  obs({ kind: 'ring-resize', afterResize, nextTab: next });
+});

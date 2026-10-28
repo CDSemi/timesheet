@@ -137,9 +137,17 @@ Current route:
      started. The test had read the date before midnight. 31 tests share that assumption.
      A tests-only patch fixes the check-in helper, holds each test off the local midnight
      without touching the system, and adds an integration test at the boundary.
-   - WP5-UX5-FIX15 applied that patch and passed its checks (digest ff73565b).
-   - Running now: WP5-UX5-FIX15-FREEZE commits and pushes it.
-   - Then a scoped regate, fresh rechecks of the two fixed findings, the Day editor
+   - WP5-UX5-FIX15 applied that patch and passed its checks. It is frozen in be2afa2 (digest
+     ff73565b) and pushed.
+   - WP5-UX5-REGATE10, a scoped regate on be2afa2, passed.
+   - The fresh recheck of area A (WP5-UX5-RECHECK-A2) passed.
+   - The fresh recheck of area B (WP5-UX5-RECHECK-B2) found one Low gap. After a restore, a
+     held older send can still be released if the correction's send ended failed or
+     uncertain.
+   - WP5-UX5-FIX16 fixed it: a held older send now stays held for every later send of the
+     period, except a cancelled one. Digest 18aa0ad0.
+   - Running now: WP5-UX5-FIX16-FREEZE commits and pushes it.
+   - Then a scoped regate, a fresh area-B recheck, fresh rechecks of the two fixed findings, the Day editor
      change and the theme change, the integration audit, ACCEPT-DOCS and the WP5 re-accept.
    - To resume after an interruption, use the entry prompt above. The coordinator continues
      at the board's `next_task_id`.

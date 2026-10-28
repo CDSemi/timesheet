@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Export B: the target commit plus the working-tree changes outside handoff/, npm ci inside it.
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX16/env.sh
+cd "$REPO" || exit 9
+tar -xf "$T/target.tar" -C "$B"
+echo "untar B exit=$?" >> "$T/logs/setupB.txt"
+git status --short -- . ':!handoff' > "$T/logs/changed-files.txt"
+for f in $(git diff --name-only -- . ':!handoff'); do
+  cp "$REPO/$f" "$B/$f"
+  echo "overlay $f exit=$?" >> "$T/logs/setupB.txt"
+done
+echo "node $(node --version) npm $(npm --version)" >> "$T/logs/setupB.txt"
+cd "$B" && npm ci > "$T/logs/npm-ci-B.txt" 2>&1
+echo "npm ci B exit=$? at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/logs/setupB.txt"

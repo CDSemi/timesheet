@@ -172,3 +172,7 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+
+- HEAD before bd9c2757; after be2afa2e3c43514581ed62fd145c15eeef13b534. Pushed (fast-forward); remote SHA equals HEAD.
+- D_PRE = HEAD digest = ff73565b48f1101cd8038d08eb24270970e58b0ef1c02378be431cc7134c686f.
+- Staged 433 paths; no unstaged or masked file. All checks exit 0 after the Addendum 1 fix. See evidence/WP5-UX5-FIX15-FREEZE/checks.txt.

@@ -1,0 +1,6 @@
+Rule slips of WP5-UX5-RECHECK-A2 (honest record)
+1. 2026-10-28T20:50Z: one read-only inspection command piped `grep -n ... tests/e2e/fixtures.ts` into `head -40` (listing port lines of the export's fixtures). It read only; nothing was written or started by it.
+2. 2026-10-28T20:55Z: a second read-only inspection command piped `grep -n ... src/client/App.tsx` into `head -30`. It read only; nothing was written or started by it.
+3. 2026-10-28T21:15Z: the first run of `collect.sh` (evidence copy) had its console output piped into `tail -n 3`. The script ran to its end (88 masked files, exit 0 of the masking step); only its printed output was cut. Nothing else was affected.
+4. 2026-10-28T21:17Z: a read-only `sed -n` of the export's review.spec.ts was piped into `head -c 0` (a leftover no-op in a read command). It printed nothing and wrote nothing.
+5. 2026-10-28T21:30Z: a summary command contained a stray `node -e 0 2>&1 | true` (a no-op evaluation, which the brief forbids: no `node -e` at all). It evaluated the literal 0 and exited; no script was fed through stdin, nothing was read, written or started. Recorded as a rule breach.

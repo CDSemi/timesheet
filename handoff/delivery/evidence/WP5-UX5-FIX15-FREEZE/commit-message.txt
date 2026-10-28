@@ -1,0 +1,21 @@
+Keep e2e tests off the reporting-zone midnight and file a check-in under the date it started
+
+- test(e2e):
+  - `clockIn` looks for the open session on the day it read and on the next day. It asserts
+    the found day against the session's own start instant. Before, a check-in answered just
+    after local midnight was looked for on the previous day.
+  - An automatic fixture holds a test before it starts, when the reporting-zone midnight is
+    less than 45 s away. It reads only the runner's clock and the seed's saved zone. It makes
+    no sign-in, request or database access, skips no test and changes no assertion.
+  - The deliberate midnight-crossing test in `today.spec.ts` is exempt.
+- test(integration): a check-in at the reporting-zone midnight boundary is filed under the
+  date of its own start (docs/02, D-05).
+- docs(handoff): REGATE9 (FAIL), DIAG9 and FIX15, the FIX14-FREEZE outputs, the board, the
+  checkpoint (+ vi), STATE and NEXT_ACTION (+ vi).
+
+Task: WP5-UX5-FIX15 (after WP5-UX5-REGATE9; diagnosis WP5-UX5-DIAG9)
+Gate: WP5-UX5-REGATE9 FAIL on bd9c275; REGATE10 pending
+Audit: rechecks pending
+Digest: ff73565b48f1101cd8038d08eb24270970e58b0ef1c02378be431cc7134c686f
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

@@ -1,0 +1,10 @@
+# The auditor's probes, one run after another in export-probe (servers on 51282-51309 through the probe copy's port helper).
+T=<task>
+P="bash $T/probe.sh"
+$P ring tests/e2e/zz-rc-ring.spec.ts --project=desktop --workers=1 --reporter=list
+$P dirty tests/e2e/zz-rc-dirty.spec.ts --workers=2 --reporter=list
+$P theme tests/e2e/zz-rc-theme.spec.ts --workers=2 --reporter=list
+$P axe tests/e2e/zz-rc-axe.spec.ts --workers=2 --reporter=list
+$P walk tests/e2e/zz-rc-walk.spec.ts --workers=2 --reporter=list
+$P scroll tests/e2e/zz-rc-scroll.spec.ts --project=desktop --workers=1 --reporter=list
+echo "probes-done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $T/out/probe-exits.txt

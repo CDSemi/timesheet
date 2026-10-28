@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# DIAG5 delay suite at 90 ms over the spec files that call setViewportSize, both projects, --workers=6, in the scratch copy export-mut.
+# DIAG7's form: the scratch page fixture (fixtures.diag.ts, DIAG5's) is merged onto the target fixtures.ts as a patch computed against the bd9c275 fixtures.ts.
+source <task>/env.sh
+X=$T/export-mut
+C=$T/export
+OUT=$T/out/71-models-exits.txt
+: > $OUT
+cd $X || exit 9
+export SHIFT_EXPORT=$X
+cmp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts && echo "scratch fixtures.ts equals clean export" >> $OUT || exit 3
+diff -u $T/export-prev/tests/e2e/fixtures.ts $T/fixtures.diag.ts > $T/tmp/diag.patch
+echo "diag patch lines: $(wc -l < $T/tmp/diag.patch)" >> $OUT
+patch $X/tests/e2e/fixtures.ts -i $T/tmp/diag.patch >> $OUT 2>&1
+echo "patch exit=$?" >> $OUT
+grep -c "DIAG_MQ_DELAY" $X/tests/e2e/fixtures.ts >> $OUT
+grep -c "midnightFence" $X/tests/e2e/fixtures.ts >> $OUT
+FILES="tests/e2e/controls.spec.ts tests/e2e/admin-status.spec.ts tests/e2e/classic-scrollbar.spec.ts tests/e2e/day-editor.spec.ts tests/e2e/logo.spec.ts tests/e2e/hover.spec.ts tests/e2e/pdf-visual.spec.ts tests/e2e/keyboard-access.spec.ts tests/e2e/review.spec.ts tests/e2e/settings-routes.spec.ts tests/e2e/shell.spec.ts tests/e2e/surfaces.spec.ts tests/e2e/theme.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/today.spec.ts"
+grep -l "setViewportSize" $X/tests/e2e/*.spec.ts > $T/out/setviewport-files.txt
+echo "spec files calling setViewportSize: $(wc -l < $T/out/setviewport-files.txt)" >> $OUT
+pwm() { label=$1; shift; bash $T/run-shift.sh "model-$label" real "$@" --trace=off > $T/logs/model-$label.txt 2>&1; echo "$label: $(grep '^exit=' $T/logs/model-$label.txt)" >> $OUT; node.exe $TW\\counts.mjs $TW\\logs\\model-$label.txt >> $OUT 2>&1; }
+export DIAG_MQ_DELAY=90
+for P in desktop mobile; do
+  pwm delay-$P-d90 $FILES --project=$P --workers=6
+done
+unset DIAG_MQ_DELAY
+cp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts
+cmp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts && echo "fixtures.ts restored byte-equal" >> $OUT
+echo "leftover scratch specs: $(ls $X/tests/e2e | grep -cE '^(dly|probe|zz|diag9)')" >> $OUT
+echo models-done > $T/out/models.done

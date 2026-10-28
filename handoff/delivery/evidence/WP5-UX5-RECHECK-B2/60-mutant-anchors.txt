@@ -1,0 +1,38 @@
+349:  const block = primary.lines.length * primaryLine + sub.reduce((sum, line) => sum + line.size * 1.2, 0) + (primary.lines.length > 0 && sub.length > 0 ? 2 : 0);
+345:  const fitted = subText === '' ? { lines: [] as string[], size: 7 } : fitText(printable(fonts.sans, subText), 7, 5, width, both ? 1 : 2, measureFace(fonts.sans));
+1:import { randomUUID } from 'node:crypto';
+2:import { type DayCategory, defaultCategory, type LeaveKind, validateLeave } from '../../domain/attendance.ts';
+3:import { classifyDate } from '../../domain/calendar.ts';
+4:import { assertCivilDate, type CivilDate, diffDays } from '../../domain/dates.ts';
+5:import { DomainError } from '../../domain/errors.ts';
+6:import { type EpochSeconds, formatUtcInstant, parseUtcInstant } from '../../domain/instants.ts';
+7:import { type BreakInterval, validateSessionShape } from '../../domain/intervals.ts';
+8:import type { PayPeriod } from '../../domain/periods.ts';
+9:import { effectiveVersionOn } from '../../domain/versions.ts';
+10:import { assertTimeZone, localDateOf, resolveLocalDateTime } from '../../domain/zones.ts';
+11:import type { SessionUser } from '../auth/sessions.ts';
+12:import { type Clock, nowEpoch, nowUtc } from '../clock.ts';
+13:import { type Db, writeTransaction } from '../db/database.ts';
+14:import { ApiError, notFound, staleVersion } from '../http/errors.ts';
+15:import type {
+25:import { normalizeReason } from '../http/validation.ts';
+26:import { recordAudit } from './audit.ts';
+27:import { ensurePayPeriodRow } from './periods.ts';
+28:import {
+45:import { importedPeriodError, isImportedTimesheet } from './workbookImport.ts';
+196:      latest_allowed_end: formatUtcInstant(latest),
+244:      endUtc === null ? OPEN_END : formatUtcInstant(endUtc),
+246:      formatUtcInstant(startUtc),
+264:      formatUtcInstant(item.startUtc),
+265:      formatUtcInstant(item.endUtc),
+484:        formatUtcInstant(resolved.startUtc),
+485:        resolved.endUtc === null ? null : formatUtcInstant(resolved.endUtc),
+517:        formatUtcInstant(resolved.startUtc),
+518:        resolved.endUtc === null ? null : formatUtcInstant(resolved.endUtc),
+570:    const stamp = formatUtcInstant(now);
+605:      end: formatUtcInstant(endEpoch),
+616:        .all(open.id, ctx.user.id, formatUtcInstant(endEpoch)) as Array<{ id: string }>;
+639:        formatUtcInstant(resolved.endUtc ?? resolved.startUtc),
+565:    const workDate = localDateOf(scope.calendar.schedule.reportingZone, now);
+557:        WHERE held.id = ? AND j.user_id = ? AND j.kind = ? AND j.rowid > ? AND j.state IN ('queued', 'leased', 'succeeded') LIMIT 1`,
+635:        `UPDATE work_sessions SET end_utc = ?, breaks_confirmed = ?, version = version + 1, updated_at = ?

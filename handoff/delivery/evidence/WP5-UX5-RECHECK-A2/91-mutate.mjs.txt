@@ -1,0 +1,17 @@
+// Usage: node mutate.mjs <file> <spec.json>
+// spec.json is an array of { "old": "...", "new": "..." }; each old text must occur exactly once in <file> (exit 2 otherwise).
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, specFile] = process.argv.slice(2);
+let text = readFileSync(file, 'utf8');
+const pairs = JSON.parse(readFileSync(specFile, 'utf8'));
+for (const { old: from, new: to } of pairs) {
+  const count = text.split(from).length - 1;
+  if (count !== 1) {
+    console.error(`expected exactly one occurrence, found ${count} in ${file}: ${from.slice(0, 80)}`);
+    process.exit(2);
+  }
+  text = text.replace(from, () => to);
+}
+writeFileSync(file, text);
+console.log(`mutated ${file} (${pairs.length} replacement(s))`);

@@ -1,0 +1,119 @@
+/*
+ * WP5-UX5-RECHECK-A2 probe: keyboard walks with Tab, light and dark. Desktop: the Timesheet at 1280, with and without the Day editor
+ * open, and the Review at 900 and 768 (the week cards take stops). Phone (mobile project): the Timesheet and the Review at 390. For
+ * every stop: a focus indicator is painted, read as a change of the painted focus styles (outline, box shadow, the week card's
+ * wrapper layer, the element's label or styled container) between focused and not focused (the previous stop is read again after the
+ * next Tab); and the stop is not wholly hidden behind the fixed or sticky bars (SC 2.4.11). Read after two frames. Synthetic data only.
+ */
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, test } from './fixtures.ts';
+import { obs, settleWidth, signInAt } from './zz-rc-lib.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+interface Stop {
+  name: string;
+  hidden: boolean;
+  /** Whether the previous stop's painted focus styles changed once focus left it (an indicator was shown). */
+  previousChanged: boolean | null;
+}
+
+async function readStop(page: Page): Promise<Stop | null> {
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))));
+  return page.evaluate(() => {
+    const sig = (el: HTMLElement): string => {
+      const s = getComputedStyle(el);
+      const parts = [s.outlineStyle, s.outlineWidth, s.outlineColor, s.boxShadow, s.backgroundColor, s.borderColor];
+      const wrapper = el.parentElement;
+      if (wrapper !== null && wrapper.classList.contains('sheet-week-ring')) parts.push(getComputedStyle(wrapper, '::after').boxShadow);
+      const label = el.closest('label');
+      if (label !== null && label !== el) {
+        const l = getComputedStyle(label);
+        parts.push(l.boxShadow, l.outlineStyle, l.outlineColor, l.backgroundColor);
+      }
+      const container = el.closest('.label-trigger, .theme-option, .table-wrap, .label-picker, .sheet-day');
+      if (container !== null && container !== el) {
+        const c = getComputedStyle(container);
+        parts.push(c.boxShadow, c.outlineStyle);
+      }
+      return parts.join('|');
+    };
+    const w = window as unknown as { __prevEl?: HTMLElement; __prevSig?: string };
+    let previousChanged: boolean | null = null;
+    if (w.__prevEl !== undefined && w.__prevSig !== undefined && w.__prevEl.isConnected) previousChanged = sig(w.__prevEl) !== w.__prevSig;
+    const el = document.activeElement as HTMLElement | null;
+    if (el === null || el === document.body) {
+      delete w.__prevEl;
+      delete w.__prevSig;
+      return null;
+    }
+    w.__prevEl = el;
+    w.__prevSig = sig(el);
+    const target = el.closest('label') ?? el;
+    const tr = target.getBoundingClientRect();
+    const xs = [tr.left + 2, tr.left + tr.width / 2, tr.right - 2];
+    const ys = [tr.top + 2, tr.top + tr.height / 2, tr.bottom - 2];
+    let hits = 0;
+    let total = 0;
+    for (const x of xs)
+      for (const y of ys) {
+        if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+        total += 1;
+        const hit = document.elementFromPoint(x, y);
+        if (hit !== null && (target.contains(hit) || hit.contains(target) || el.contains(hit))) hits += 1;
+      }
+    const name = `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}[${(el.getAttribute('aria-label') ?? el.innerText ?? '').replace(/\s+/g, ' ').slice(0, 40)}]`;
+    return { name, hidden: hits === 0, previousChanged };
+  });
+}
+
+async function walk(page: Page, label: string, limit = 260): Promise<void> {
+  await page.locator('body').evaluate((body) => (body as HTMLElement).focus());
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const seen: Array<Stop & { indicator: boolean | null }> = [];
+  let first: string | null = null;
+  for (let i = 0; i < limit; i += 1) {
+    await page.keyboard.press('Tab');
+    const stop = await readStop(page);
+    const last = seen.at(-1);
+    if (last !== undefined && stop !== null) last.indicator = stop.previousChanged;
+    if (stop === null) continue;
+    if (first === null) first = stop.name;
+    else if (stop.name === first && i > 5) break;
+    seen.push({ ...stop, indicator: null });
+  }
+  const noIndicator = seen.filter((stop) => stop.indicator === false);
+  const hidden = seen.filter((stop) => stop.hidden);
+  obs({ kind: 'walk', label, stops: seen.length, noIndicator: noIndicator.map((s) => s.name), hidden: hidden.map((s) => s.name), cards: seen.filter((s) => s.name.startsWith('section')).map((s) => `${s.name} indicator=${String(s.indicator)}`) });
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`walks, ${theme}`, async ({ page, adminSeed, builtServer, isMobile }) => {
+    test.setTimeout(600_000);
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Walker' });
+    const [a = ''] = await person.api.displayedPeriodFreeWorkdays();
+    const project = isMobile ? 'mobile' : 'desktop';
+    await signInAt(page, person, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    if (!isMobile) {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await settleWidth(page, 1280);
+    }
+    await walk(page, `${project} ${theme} timesheet ${isMobile ? 390 : 1280}`);
+    await namedDayButton(page, a, 'Edit').click();
+    await expect(page.getByRole('dialog', { name: /Day editor/ })).toHaveAttribute('data-day-editor', a);
+    await walk(page, `${project} ${theme} timesheet+editor ${isMobile ? 390 : 1280}`);
+    await page.keyboard.press('Escape');
+    await page.goto(`/#/review/${person.payrollDate}`);
+    await expect(page.locator('[data-review-day]')).toHaveCount(14);
+    for (const width of isMobile ? [390] : [900, 768]) {
+      if (!isMobile) {
+        await page.setViewportSize({ width, height: 900 });
+        await settleWidth(page, width);
+      }
+      await walk(page, `${project} ${theme} review ${width}`);
+    }
+  });
+}

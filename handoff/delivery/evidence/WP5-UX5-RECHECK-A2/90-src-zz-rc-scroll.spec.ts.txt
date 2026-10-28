@@ -1,0 +1,42 @@
+/*
+ * WP5-UX5-RECHECK-A2 probe: no page scrolls sideways at any whole width from 320 to 1440px (the Timesheet, the Review signed and
+ * reloaded with its week-card wrappers), light at every pixel and dark every 8px, after the layout wait. Synthetic data only.
+ */
+import type { Page } from '@playwright/test';
+import { expect, newPerson, test } from './fixtures.ts';
+import { obs, settleWidth, signInAt, signOffOverHttp } from './zz-rc-lib.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+async function sweep(page: Page, label: string, step: number): Promise<void> {
+  const bad: string[] = [];
+  let count = 0;
+  for (let width = 320; width <= 1440; width += step) {
+    await page.setViewportSize({ width, height: 900 });
+    await settleWidth(page, width);
+    const m = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth, body: document.body.scrollWidth }));
+    count += 1;
+    if (m.scroll > m.inner || m.body > m.inner) bad.push(`${width}: ${m.scroll}/${m.body} > ${m.inner}`);
+  }
+  obs({ kind: 'sideways', label, widths: count, overflowing: bad });
+}
+
+test('no sideways page scroll 320-1440', async ({ page, adminSeed, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop project sets the widths');
+  test.setTimeout(900_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Sweeper' });
+  await signOffOverHttp(person);
+  await signInAt(page, person, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await sweep(page, 'timesheet light', 1);
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await sweep(page, 'timesheet dark', 8);
+  await page.goto(`/#/review/${person.payrollDate}`);
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  await expect(page.locator('[data-sign-off]')).toHaveText('Sign correction');
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await sweep(page, 'review signed-reloaded light', 1);
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await sweep(page, 'review signed-reloaded dark', 8);
+});

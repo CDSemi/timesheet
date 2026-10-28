@@ -2792,8 +2792,122 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - `npm test`: 2.389.
   - e2e đầy đủ: 469/35/0 và 407/97/0.
   - Lượt quét qua nửa đêm: 0 lỗi. Test cố ý chạy qua nửa đêm trên desktop mất 1,0 phút.
-- **Đang chạy:** WP5-UX5-FIX15-FREEZE (committer). Coordinator không ghi file nào trong lúc
-  committer chạy. Sau đó là REGATE10 có phạm vi.
+- **WP5-UX5-FIX15-FREEZE xong.**
+  - Commit be2afa2e3c43514581ed62fd145c15eeef13b534 trên main, đã push dạng fast-forward từ
+    bd9c275.
+  - D_PRE trùng digest của HEAD, ff73565b. Đã stage 433 đường dẫn.
+  - Lần dừng đầu: bản ghi DIAG9 thừa một dòng trống ở cuối nên `git diff --cached --check`
+    báo lỗi. Coordinator đã xóa dòng đó, rồi chính committer làm tiếp và mọi kiểm tra đều
+    exit 0.
+- **Đang chạy:** WP5-UX5-REGATE10 (verifier, sonnet), một mình, trên be2afa2. Đây là gate lại
+  có phạm vi, vì chỉ test thay đổi:
+  - xác nhận phạm vi, `dist/` phải giữ nguyên;
+  - `npm audit`;
+  - lượt cốt lõi ×3, 2.389 test;
+  - e2e đầy đủ theo giờ thật và sáu lượt quét;
+  - chạy dồn;
+  - các mutant và lượt đối chứng của FIX15;
+  - mô hình trễ 90 ms trên cả hai project;
+  - đọc diff.
+
+  Drill và axe được giữ kết quả của REGATE9, với điều kiện `dist/` giữ nguyên.
+- **Kết quả đầu tiên của REGATE10: CHƯA ĐƯỢC KIỂM (NOT VERIFIED).**
+  - Mục 1–6 đều đạt, 0 lỗi:
+    - `dist/` giữ nguyên, nên drill và axe được giữ kết quả cũ;
+    - lượt cốt lõi ×3: 2.389;
+    - e2e đầy đủ: 469/407, 0 lỗi;
+    - cả sáu lượt quét: 0 lỗi. Test cố ý chạy qua nửa đêm mất 1,1 phút, nghĩa là nó vẫn
+      thực sự chạy qua nửa đêm;
+    - chạy dồn: 0 lỗi.
+  - Mục 7: các mutant, các trường hợp, các mô hình có hàng rào, mô hình trễ và phần đọc diff
+    đều đạt.
+  - Điểm duy nhất chưa khớp: khi tắt hàng rào, không phải test nào cũng trượt.
+    - Desktop: 12/13 trượt; `day-editor.spec.ts:795` qua.
+    - Mobile: 9 trượt; `:795` và `today.spec.ts:242` qua.
+- **Coordinator (Addendum 1 trong brief).** Brief đã nói quá về lượt đối chứng này. Chính
+  lượt đối chứng mobile của FIX15 cũng có `:242` qua, và mô hình chỉ lấy một mẫu của một cửa
+  sổ thời gian.
+  - Tiêu chí viết lại: khi bật hàng rào, không mẫu nào được trượt. Khi tắt hàng rào, mỗi test
+    phải trượt ít nhất một trong sáu mẫu; nếu không, dòng thời gian phải cho thấy thời điểm
+    nửa đêm của mô hình rơi lệch khỏi lúc test đọc ngày.
+  - Chính verifier đó lấy thêm mẫu cho ba test này rồi kết luận.
+- **WP5-UX5-REGATE10 ĐẠT (PASS)** sau Addendum 1.
+  - Khi bật hàng rào: 15/15 mẫu đều qua.
+  - Khi tắt hàng rào, ba test này cũng không trượt lần nào. Dòng thời gian cho thấy các lần
+    đọc ngày của chúng đều kết thúc khoảng 0,27 giây trước thời điểm nửa đêm của mô hình,
+    vốn rơi vào lúc đăng nhập. Đây là ghi chú về vị trí đặt nửa đêm, không phải lỗi.
+  - Mọi mục khác vẫn giữ: `dist/` giữ nguyên nên giữ kết quả drill và axe; `npm audit` 0;
+    lượt cốt lõi ×3 2.389; e2e đầy đủ 0 lỗi; sáu lượt quét 0 lỗi; chạy dồn, mutant, các
+    trường hợp, mô hình và phần đọc diff đều sạch.
+- **Đang chạy song song:** hai auditor opus mới, chưa viết task nào trong WP5-UX4 hay
+  WP5-UX5, trên be2afa2 / ff73565b.
+  - **WP5-UX5-RECHECK-A2 (vùng A):**
+    - F-UX5A2-1;
+    - các thay đổi phía client và e2e từ FIX12 đến FIX15, gồm hai thay đổi sản phẩm
+      (`DayFieldsForm` và đồng bộ giao diện giữa các tab) và hàng rào nửa đêm;
+    - kiểm tra hồi quy, axe, mutant riêng, các kiểm tra bắt buộc.
+  - **WP5-UX5-RECHECK-B2 (vùng B):**
+    - F-UX5B2-1;
+    - G2 và P4;
+    - trường hợp R3;
+    - ngày ghi nhận Check in ở ranh giới ngày và vào đêm đổi giờ;
+    - kiểm tra hồi quy, mutant riêng, các kiểm tra bắt buộc.
+- **WP5-UX5-RECHECK-B2: CẦN SỬA (FIX REQUIRED)** (auditor, tự báo claude-opus-5-5). Một
+  lỗi mới mức Low.
+  - F-UX5B2-1 đã được sửa trên đúng đường đi mà RECHECK-B tái hiện, nhưng chưa khép kín.
+  - **F-UX5B3-1 (Low).** `restore.ts:552-560` (`blockerOf`) chỉ tính một lần gửi muộn hơn
+    khi nó đang chờ (queued), đang xử lý (leased) hoặc đã thành công (succeeded).
+    - Lỗ hổng: nếu lần gửi bản đính chính rơi vào trạng thái `intervention`, bản cũ đang bị
+      giữ vẫn có thể được thả ra và gửi đi sau bản đính chính. `intervention` là khi lần
+      gửi lỗi vĩnh viễn, chưa chắc đã gửi (kể cả sau khi được đánh dấu "đã gửi" hoặc khi
+      tiến trình gửi bị chết giữa chừng), hoặc bị giữ lại bởi một lần khôi phục thứ hai.
+    - Vì vậy docs/05:72 và docs/11:178 mô tả chặt hơn so với những gì bản build làm được.
+    - Bản sửa auditor đề xuất, có giới hạn: tính mọi lần gửi muộn hơn của cùng kỳ, trừ lần
+      đã hủy, và thêm các trường hợp vào `restore.test.ts`.
+  - G2, P4 và R3 đều đã bị bắt.
+  - Check in lúc nửa đêm và vào cả hai đêm đổi giờ đều đúng.
+  - Mọi kiểm tra bắt buộc đều đạt: `npm test` 2.389; e2e đầy đủ 469/407, 0 lỗi.
+- **Coordinator.** Bản sửa phải chờ RECHECK-A2 xong: không ai được sửa mã nguồn trong lúc
+  một audit đang chạy.
+  - Bản sửa giao cho worker-high (sonnet), vì đây là luồng khôi phục và gửi ra ngoài, đã có
+    mẫu sẵn để theo.
+  - Sau đó là freeze, gate lại có phạm vi (bundle server sẽ đổi), và một lượt kiểm tra lại
+    độc lập mới cho vùng B.
+- **WP5-UX5-RECHECK-A2: ĐẠT (PASS)** (auditor, tự báo claude-opus-5-5). Vùng A được chấp
+  nhận trên be2afa2.
+  - F-UX5A2-1 đã sửa: đường viền focus được đo ở 96 trạng thái, lần nào cũng hiện đủ bốn
+    cạnh.
+  - `DayFieldsForm`: không vòng lặp, không còn sót cờ "đã sửa".
+  - Giao diện sáng/tối đồng bộ giữa các tab, cả ở trang đăng nhập và sau khi bộ nhớ bị
+    xóa. Các khóa khác bị bỏ qua, và an toàn khi bộ nhớ bị chặn.
+  - Các helper và hàng rào nửa đêm chứng minh đúng như các test cũ.
+  - Mọi kiểm tra bắt buộc đều đạt, kể cả lượt quét qua nửa đêm. axe chỉ còn mục kích thước
+    vùng bấm đã được chấp nhận từ UX3.
+  - 11/16 mutant tự viết bị bắt. Rủi ro tùy chọn: R-A3-1..3.
+  - Không có lỗi mới.
+- **WP5-UX5-FIX16 xong** (worker-high, tự báo claude-sonnet-5-5). Chưa commit. Digest
+  18aa0ad0.
+  - Đã tái hiện lỗi trước khi sửa: probe chạy trong tiến trình trượt 6/12, và các phần B, C,
+    D của probe qua HTTP đều trượt.
+  - Bản sửa: `blockerOf` tính mọi lần gửi muộn hơn của cùng kỳ, ở bất kỳ trạng thái nào trừ
+    `cancelled`.
+    - Lý do loại trừ lần gửi đã hủy: không có luồng nào của sản phẩm hủy một lần gửi, và
+      một lần gửi đã hủy bị khóa lại, không gửi đi gì cả.
+    - Lần gửi lặp lại của cùng một bản bị từ chối với mã `superseded_by_later_send`.
+  - Test mới: bảy trường hợp khôi phục và lần Check in đúng giây nửa đêm. docs/05:72 thêm
+    một mệnh đề, cả EN lẫn VI.
+  - Bằng chứng:
+    - các probe đều qua, 12/12 và A–D;
+    - mười mutant đều bị bắt;
+    - `dist/` chỉ khác ở `restore.js` và file map của nó;
+    - `npm test`: 2.397;
+    - e2e đầy đủ: 0 lỗi.
+- **Đang chạy:** WP5-UX5-FIX16-FREEZE (committer). Coordinator không ghi file nào trong lúc
+  committer chạy.
+- **Tiếp theo:**
+  - gate lại có phạm vi, có chạy drill, vì bundle server thay đổi;
+  - một lượt kiểm tra lại độc lập mới cho vùng B;
+  - audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
 - **Tiếp theo:**
   - bản sửa, freeze và gate lại;
   - kiểm tra lại độc lập hai lỗi đã sửa, thay đổi Day editor và thay đổi đồng bộ giao diện

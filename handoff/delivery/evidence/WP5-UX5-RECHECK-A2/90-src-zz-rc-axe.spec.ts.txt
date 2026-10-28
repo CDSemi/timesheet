@@ -1,0 +1,98 @@
+/*
+ * WP5-UX5-RECHECK-A2 probe: axe-core 4.14.0 (loaded from the task folder; no dependency added), WCAG 2.0-2.2 A/AA tags, light and dark:
+ * the Timesheet with the Day editor open and Notes typed (unsaved); the Review unsigned, signed and signed-and-reloaded (with a week
+ * card focused where it scrolls); the account menu (from 768px) or the More panel (below 768px). Widths 1440, 900, 768, 480, 390, 320
+ * on the desktop project; 480, 390 and 320 on the mobile project. Synthetic data only.
+ */
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, openAccount, test } from './fixtures.ts';
+import { axeScan, editorOf, settleWidth, signInAt } from './zz-rc-lib.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const THEMES = ['light', 'dark'] as const;
+
+function widthsOf(isMobile: boolean): number[] {
+  return isMobile ? [480, 390, 320] : [1440, 900, 768, 480, 390, 320];
+}
+
+async function setWidth(page: Page, width: number): Promise<void> {
+  await page.setViewportSize({ width, height: 900 });
+  await settleWidth(page, width);
+}
+
+test('axe: Timesheet with the Day editor open and Notes typed, and the account menu or More panel', async ({ page, adminSeed, builtServer, isMobile }) => {
+  test.setTimeout(600_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Axe Person', signature: 'none' });
+  const [a = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await signInAt(page, person, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const project = isMobile ? 'mobile' : 'desktop';
+  for (const theme of THEMES) {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    for (const width of widthsOf(isMobile)) {
+      await setWidth(page, width);
+      const editor = editorOf(page);
+      if ((await editor.count()) === 0) {
+        await namedDayButton(page, a, 'Edit').click();
+        await expect(editor).toHaveAttribute('data-day-editor', a);
+      }
+      const notes = editor.getByLabel('Notes');
+      await expect(notes).toBeEditable();
+      await notes.fill(`Synthetic note ${theme} ${width}`);
+      await notes.focus();
+      const result = await axeScan(page, `${project} ${theme} ${width} timesheet+editor+notes`);
+      expect.soft(result.violations, `${project} ${theme} ${width}: timesheet with the editor`).toEqual([]);
+    }
+    // Close the editor (discard the unsaved note), then the menu or the More panel at each width.
+    await page.keyboard.press('Escape');
+    const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' }).getByRole('button', { name: 'Discard', exact: true });
+    if (await discard.isVisible()) await discard.click();
+    await expect(editorOf(page)).toHaveCount(0);
+    for (const width of widthsOf(isMobile)) {
+      await setWidth(page, width);
+      const panel = await openAccount(page);
+      await expect(panel).toBeVisible();
+      const result = await axeScan(page, `${project} ${theme} ${width} ${width >= 768 ? 'account-menu' : 'more-panel'}`);
+      expect.soft(result.violations, `${project} ${theme} ${width}: the menu or panel`).toEqual([]);
+      await page.keyboard.press('Escape');
+    }
+  }
+});
+
+test('axe: the Review unsigned, signed, and signed and reloaded, with a focused week card where it scrolls', async ({ page, adminSeed, builtServer, isMobile }) => {
+  test.setTimeout(600_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Reviewer' });
+  await signInAt(page, person, `#/review/${person.payrollDate}`);
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  const project = isMobile ? 'mobile' : 'desktop';
+  const scanAll = async (stage: string) => {
+    for (const theme of THEMES) {
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      for (const width of widthsOf(isMobile)) {
+        await setWidth(page, width);
+        const card = page.locator('[data-paper="review"] .sheet-week').first();
+        if ((await card.count()) > 0 && (await card.getAttribute('tabindex')) === '0') {
+          await page.keyboard.press('Shift');
+          await card.focus();
+        }
+        const result = await axeScan(page, `${project} ${theme} ${width} review-${stage}`);
+        expect.soft(result.violations, `${project} ${theme} ${width}: review ${stage}`).toEqual([]);
+      }
+    }
+  };
+  await scanAll('unsigned');
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await page.locator('[data-sign-off]').click();
+  const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ }).check();
+  await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+  await expect(page.locator('[data-result="created"]')).toContainText('Signed.');
+  await scanAll('signed');
+  await page.reload();
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  await expect(page.locator('[data-sign-off]')).toHaveText('Sign correction');
+  await scanAll('signed-reloaded');
+});

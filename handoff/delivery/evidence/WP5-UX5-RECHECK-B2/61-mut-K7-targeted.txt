@@ -1,0 +1,60 @@
+
+ RUN  v5.0.2 <task>/mut
+
+ ❯ tests/integration/restore.test.ts (33 tests | 2 failed) 14304ms
+   ❯ isolated restore with outbound paused (AC-15, AC-11) (7)
+     × releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs 68ms
+   ❯ a held send of a superseded revision (F-UX5B2-1) (1)
+     × is not released once the owner has sent a correction of the period, while it waits, while a runner holds it or after it succeeded, and the old copy never follows the new 429ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 31 passed (33)
+   Start at  14:08:13
+   Duration  15.52s (tests 93%, transform 4%, import 3%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/restore.test.ts:483:61
+    481|     // WP5-UX5-T01b: the owner's send is its own record and queued job…
+    482|     // job is refused as superseded by that later send (before, the re…
+    483|     expect(releaseHeldJob(restored, clock, heldPdfPending)).toEqual({ …
+       |                                                             ^
+    484|     await pass('runner-owner-resend');
+    485|     expect(states(source.revisions.pdfPending)).toEqual(['accepted']);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send of a superseded revision (F-UX5B2-1) > is not released once the owner has sent a correction of the period, while it waits, while a runner holds it or after it succeeded, and the old copy never follows the new
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/restore.test.ts:612:50
+    610|     const refusal = { outcome: 'refused', code: 'superseded_by_later_s…
+    611|     expect(heldSends().map((job) => [job.id, job.blocker])).toEqual([[…
+    612|     expect(releaseHeldJob(db, clock, heldJobId)).toEqual(refusal);
+       |                                                  ^
+    613|     expect(releaseAllHeldJobs(db, clock)).toEqual({ released: 0, refus…
+    614|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯

@@ -1,0 +1,188 @@
+/*
+ * WP5-UX5-RECHECK-A2 probe (FIX13 product change: DayFieldsForm reports `dirty` in a layout effect). Same-task edits of other fields
+ * followed by Escape or a day switch; no stale flag after a save, a discard or a revert; the reason field; no render loop (any console
+ * error fails). Synthetic data only.
+ */
+import type { Locator, Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, test } from './fixtures.ts';
+import { editorOf, obs, promptOf, signInAt, signOffOverHttp } from './zz-rc-lib.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+test.beforeEach(({ page }) => {
+  page.on('console', (message) => {
+    const expected = /status of (401|409|422)/.test(message.text());
+    expect(message.type() === 'error' && !expected, `console error: ${message.text()}`).toBe(false);
+  });
+  page.on('pageerror', (error) => {
+    throw error;
+  });
+});
+
+const keepOf = (page: Page) => promptOf(page).getByRole('button', { name: 'Keep editing', exact: true });
+const discardOf = (page: Page) => promptOf(page).getByRole('button', { name: 'Discard', exact: true });
+
+/** Sets a textarea or input value through the native setter and dispatches `input`, then (same task) an Escape keydown. */
+async function inputThenEscape(field: Locator, value: string): Promise<void> {
+  await field.evaluate((element, text) => {
+    const win = element.ownerDocument.defaultView as Window & typeof globalThis;
+    const proto = element instanceof win.HTMLTextAreaElement ? win.HTMLTextAreaElement.prototype : win.HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value')?.set?.call(element, text);
+    element.dispatchEvent(new win.Event('input', { bubbles: true }));
+    element.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  }, value);
+}
+
+/** Escape alone, dispatched on the element (as a key press on it). */
+async function escapeOn(field: Locator): Promise<void> {
+  await field.evaluate((element) => {
+    const win = element.ownerDocument.defaultView as Window & typeof globalThis;
+    element.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  });
+}
+
+async function openDay(page: Page, date: string): Promise<Locator> {
+  const editor = editorOf(page);
+  await namedDayButton(page, date, 'Edit').click();
+  await expect(editor).toHaveAttribute('data-day-editor', date);
+  await expect(editor.getByLabel('Notes')).toBeEditable();
+  return editor;
+}
+
+test('same-task edits, no stale flag after save, discard or revert', async ({ page, adminSeed, builtServer, isMobile }) => {
+  test.setTimeout(120_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Dirty Probe', signature: 'none' });
+  const days = await person.api.displayedPeriodFreeWorkdays();
+  expect(days.length).toBeGreaterThanOrEqual(2);
+  const [a = '', b = ''] = days;
+  if (!isMobile) await page.setViewportSize({ width: 1440, height: 800 });
+  await signInAt(page, person, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const editor = editorOf(page);
+  const notes = editor.getByLabel('Notes');
+  const results: Record<string, unknown> = {};
+
+  // 1. Same-task Notes input + Escape asks (the FIX13 case).
+  await openDay(page, a);
+  await inputThenEscape(notes, 'Synthetic note one');
+  await expect(promptOf(page)).toBeVisible();
+  results.notesSameTaskAsks = true;
+  await keepOf(page).click();
+  await expect(notes).toHaveValue('Synthetic note one');
+
+  // 2. Revert to the saved value in the same task, then Escape: nothing is unsaved, so it closes at once.
+  await inputThenEscape(notes, '');
+  await expect(editor).toHaveCount(0);
+  results.revertThenEscapeClosesAtOnce = (await promptOf(page).count()) === 0;
+  expect(results.revertThenEscapeClosesAtOnce).toBe(true);
+
+  // 3. Save, then an immediate Escape (no input): no stale flag, closes at once.
+  await openDay(page, a);
+  await notes.fill('Synthetic saved note');
+  await editor.getByRole('button', { name: 'Save day fields' }).click();
+  await expect.poll(async () => (await person.api.dayView(a)).entry?.notes ?? '').toBe('Synthetic saved note');
+  await expect(notes).toHaveValue('Synthetic saved note');
+  await escapeOn(notes);
+  await expect(editor).toHaveCount(0);
+  results.saveThenEscapeClosesAtOnce = (await promptOf(page).count()) === 0;
+  expect(results.saveThenEscapeClosesAtOnce).toBe(true);
+
+  // 4. Discard, then reopen the same day and the other day: no stale flag.
+  await openDay(page, a);
+  await inputThenEscape(notes, 'Synthetic note to discard');
+  await expect(promptOf(page)).toBeVisible();
+  await discardOf(page).click();
+  await expect(editor).toHaveCount(0);
+  await openDay(page, a);
+  await expect(notes).toHaveValue('Synthetic saved note');
+  await escapeOn(notes);
+  await expect(editor).toHaveCount(0);
+  await openDay(page, b);
+  await escapeOn(notes);
+  await expect(editor).toHaveCount(0);
+  results.discardThenReopenClean = (await promptOf(page).count()) === 0;
+
+  // 5. A same-task category change + Escape asks.
+  await openDay(page, b);
+  const category = editor.locator('.label-select select');
+  const options = await category.evaluate((select) => [...(select as HTMLSelectElement).options].map((option) => option.value));
+  const current = await category.inputValue();
+  const other = options.find((value) => value !== current && value !== '') ?? '';
+  await category.evaluate((select, value) => {
+    const win = select.ownerDocument.defaultView as Window & typeof globalThis;
+    Object.getOwnPropertyDescriptor(win.HTMLSelectElement.prototype, 'value')?.set?.call(select, value);
+    select.dispatchEvent(new win.Event('change', { bubbles: true }));
+    select.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  }, other);
+  const selectAsks = await promptOf(page).isVisible();
+  results.categorySameTask = { from: current, to: other, asks: selectAsks };
+  if (selectAsks) {
+    await discardOf(page).click();
+  }
+  await expect(editor).toHaveCount(0);
+
+  // 6. A same-task Notes input + a click on another day's button: the switch asks instead of dropping the note.
+  await openDay(page, a);
+  const otherButton = namedDayButton(page, b, 'Edit');
+  await notes.evaluate((area, selector) => {
+    const win = area.ownerDocument.defaultView as Window & typeof globalThis;
+    Object.getOwnPropertyDescriptor(win.HTMLTextAreaElement.prototype, 'value')?.set?.call(area, 'Synthetic note before a switch');
+    area.dispatchEvent(new win.Event('input', { bubbles: true }));
+    (area.ownerDocument.querySelector(selector) as HTMLElement).click();
+  }, `[data-day="${b}"] [data-day-button]`);
+  const switchAsks = await promptOf(page).isVisible();
+  results.switchSameTaskAsks = switchAsks;
+  await expect(promptOf(page)).toBeVisible();
+  await keepOf(page).click();
+  await expect(editor).toHaveAttribute('data-day-editor', a);
+  await expect(notes).toHaveValue('Synthetic note before a switch');
+  if (isMobile) {
+    // The phone's bottom sheet is modal (the sheet behind it is inert): open the other day from a closed editor instead.
+    await page.keyboard.press('Escape');
+    await discardOf(page).click();
+    await expect(editor).toHaveCount(0);
+    await otherButton.click();
+  } else {
+    await otherButton.click();
+    await discardOf(page).click();
+  }
+  await expect(editor).toHaveAttribute('data-day-editor', b);
+
+  // 7. Typing then Escape through the real keyboard, back to back.
+  await notes.click();
+  await page.keyboard.type('xy');
+  await page.keyboard.press('Escape');
+  await expect(promptOf(page)).toBeVisible();
+  results.keyboardTypeEscapeAsks = true;
+  await discardOf(page).click();
+  await expect(editor).toHaveCount(0);
+  obs({ kind: 'dirty', project: isMobile ? 'mobile' : 'desktop', results });
+});
+
+test('the reason field of a signed period (DayEditor own flag): a same-task reason + Escape asks; a used reason is not unsaved', async ({ page, adminSeed, builtServer, isMobile }) => {
+  test.setTimeout(120_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Reason Probe' });
+  const [a = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await signOffOverHttp(person);
+  if (!isMobile) await page.setViewportSize({ width: 1440, height: 800 });
+  await signInAt(page, person, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const editor = editorOf(page);
+  await namedDayButton(page, a, 'Edit').click();
+  await expect(editor).toHaveAttribute('data-day-editor', a);
+  const reason = editor.getByLabel(/reason/i).first();
+  const hasReason = (await reason.count()) > 0;
+  obs({ kind: 'reason-field', project: isMobile ? 'mobile' : 'desktop', hasReason, label: hasReason ? await reason.getAttribute('aria-label') : null });
+  if (!hasReason) return;
+  await inputThenEscape(reason, 'Synthetic correction reason');
+  const asks = await promptOf(page).isVisible();
+  obs({ kind: 'reason-same-task', project: isMobile ? 'mobile' : 'desktop', asks });
+  await expect(promptOf(page)).toBeVisible();
+  await keepOf(page).click();
+  await expect(reason).toHaveValue('Synthetic correction reason');
+  // Revert the reason to empty: nothing unsaved remains.
+  await inputThenEscape(reason, '');
+  await expect(editor).toHaveCount(0);
+  obs({ kind: 'reason-revert', project: isMobile ? 'mobile' : 'desktop', closedAtOnce: (await promptOf(page).count()) === 0 });
+});

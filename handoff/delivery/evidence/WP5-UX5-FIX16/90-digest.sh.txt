@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Digest last: a fresh clean export of the working tree (the target commit plus the changed files outside handoff/), its raw-blob digest,
+# and npm run digest in the repository; the two must agree. Usage: digest.sh <label>
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX16/env.sh
+label=$1
+C=$T/exC-$label
+mkdir -p "$C"
+out="$T/logs/digest-$label.txt"
+cd "$REPO" || exit 9
+{
+  echo "label=$label"
+  echo "HEAD=$(git rev-parse HEAD)"
+  echo "status outside handoff:"
+  git status --short -- . ':!handoff'
+  echo "end status"
+  tar -xf "$T/target.tar" -C "$C"
+  echo "untar exit=$?"
+  for f in $(git diff --name-only -- . ':!handoff'); do cp "$REPO/$f" "$C/$f"; echo "overlay $f exit=$?"; done
+  git ls-files --cached --others --exclude-standard > "$T/logs/filelist-$label.txt"
+  echo "export digest (raw blobs of the exported bytes):"
+  node "$T/exportdigest.mjs" "$C" "$T/logs/filelist-$label.txt"
+  echo "npm run digest (repository working tree):"
+  npm run --silent digest
+  echo "exit=$?"
+} > "$out" 2>&1

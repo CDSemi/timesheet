@@ -1,0 +1,95 @@
+
+ RUN  v5.0.2 <task>/mut
+
+ ❯ tests/integration/restore.test.ts (33 tests | 3 failed) 14337ms
+   ❯ isolated restore with outbound paused (AC-15, AC-11) (7)
+     × releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs 100ms
+   ❯ a held send of a superseded revision (F-UX5B2-1) (1)
+     × is not released once the owner has sent a correction of the period, while it waits, while a runner holds it or after it succeeded, and the old copy never follows the new 423ms
+   ❯ cli.js restore and cli.js outbound resume (4)
+     × outbound release previews the held jobs, releases one or all with --confirm, and drops a held reminder (exit codes, counts) 3717ms
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 30 passed (33)
+   Start at  14:07:57
+   Duration  15.61s (tests 93%, transform 4%, import 3%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs
+AssertionError: expected { released: 4, refused: {} } to deeply equal { released: 1, refused: { …(2) } }
+
+- Expected
++ Received
+
+  {
+-   "refused": {
+-     "attempt_uncertain": 2,
+-     "superseded_by_later_send": 1,
+-   },
+-   "released": 1,
++   "refused": {},
++   "released": 4,
+  }
+
+ ❯ tests/integration/restore.test.ts:496:49
+    494|
+    495|     // Bulk release of what remains releasable; the jobs of uncertain …
+    496|     expect(releaseAllHeldJobs(restored, clock)).toEqual({ released: 1,…
+       |                                                 ^
+    497|     await pass('runner-release-3');
+    498|     await pass('runner-release-4');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send of a superseded revision (F-UX5B2-1) > is not released once the owner has sent a correction of the period, while it waits, while a runner holds it or after it succeeded, and the old copy never follows the new
+AssertionError: expected { released: 1, refused: {} } to deeply equal { released: +0, refused: { …(1) } }
+
+- Expected
++ Received
+
+  {
+-   "refused": {
+-     "superseded_by_later_send": 1,
+-   },
+-   "released": 0,
++   "refused": {},
++   "released": 1,
+  }
+
+ ❯ tests/integration/restore.test.ts:613:43
+    611|     expect(heldSends().map((job) => [job.id, job.blocker])).toEqual([[…
+    612|     expect(releaseHeldJob(db, clock, heldJobId)).toEqual(refusal);
+    613|     expect(releaseAllHeldJobs(db, clock)).toEqual({ released: 0, refus…
+       |                                           ^
+    614|
+    615|     // A runner claims the correction's send and is inside it (the job…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/integration/restore.test.ts > cli.js restore and cli.js outbound resume > outbound release previews the held jobs, releases one or all with --confirm, and drops a held reminder (exit codes, counts)
+AssertionError: expected { outcome: 'released', …(2) } to deeply equal { outcome: 'released', …(2) }
+
+- Expected
++ Received
+
+  {
+    "outcome": "released",
+-   "refused": {
+-     "attempt_uncertain": 1,
+-   },
+-   "released": 1,
++   "refused": {},
++   "released": 2,
+  }
+
+ ❯ tests/integration/restore.test.ts:1044:36
+    1042|     const all = cli(['outbound', 'release', '--all', '--confirm'], liv…
+    1043|     expect(all.status).toBe(0);
+    1044|     expect(JSON.parse(all.stdout)).toEqual({ outcome: 'released', rele…
+       |                                    ^
+    1045|     const check = openDatabase(live.DATABASE_PATH);
+    1046|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯

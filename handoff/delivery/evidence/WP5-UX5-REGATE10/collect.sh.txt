@@ -1,0 +1,31 @@
+. <task>/env.sh
+mkdir -p $E
+rm -f $T/tmp/mask-last.txt
+m() { node.exe "$TW\\mask.mjs" "$(cygpath -w "$1")" "$(cygpath -w "$2")" >> $T/tmp/mask-last.txt 2>&1; }
+cd $T/out
+for f in *.txt; do
+  case "$f" in ex-files.txt|ex-hashes.txt|ex-sorted.txt|lstree-sorted.txt|51-*-files.txt) continue;; esac
+  m "$T/out/$f" "$E/$f"
+done
+cd $T/logs
+for f in control-*.txt sweep-*.txt stress-*.txt mut-*.txt model-*.txt cross-*.txt vitest-*.txt dense-fence*.txt fix-*.txt fixstale-*.txt chain1.log master.log stress.log chain2.log chain1-stdout.txt chain2-stdout.txt sweep-stdout.txt stress-stdout.txt strength-stdout.txt models-stdout.txt master-stdout.txt; do
+  [ -f "$f" ] && m "$T/logs/$f" "$E/log-$f"
+done
+for f in $E/*.log; do [ -f "$f" ] && mv "$f" "$f.txt"; done
+cd $T
+node.exe $TW\\census.mjs $TW\\census1.txt $TW\\census2.txt 55 > $T/out-census-calc.txt 2>&1
+m census1.txt $E/10-census-sample1.txt
+m census2.txt $E/10-census-sample2.txt
+m census3.txt $E/10-census-sample3.txt
+m census1.time $E/10-census-sample1-time.txt
+m census2.time $E/10-census-sample2-time.txt
+m census3.time $E/10-census-sample3-time.txt
+m out-census-calc.txt $E/10-census-calc-sample1-sample2.txt
+m out-census-s3.txt $E/10-census-calc-sample2-sample3-raw-delta.txt
+for s in env.sh setup.sh digest.sh run-shift.sh chain1.sh chain2.sh sweep.sh stress.sh strength.sh models.sh master2.sh case.sh cases.sh dense.sh collect.sh; do [ -f "$s" ] && m "$T/$s" "$E/$s.txt"; done
+for s in mask.mjs shiftclock.mjs probe-now.mjs zone.mjs counts.mjs mutate.mjs durations.mjs census.mjs waitfor.mjs finalize.mjs zz-control.spec.ts fixtures.diag.ts; do [ -f "$s" ] && m "$T/$s" "$E/$s.txt"; done
+for s in mut-a.from.txt mut-a.to.txt mut-a2.from.txt mut-a2.to.txt mut-b.from.txt mut-b.to.txt mut-bsrc.from.txt mut-bsrc.to.txt mut-f.from.txt mut-f.to.txt mut-x.from.txt mut-x.to.txt dense-list-fail.txt; do [ -f "$s" ] && m "$T/$s" "$E/mutdef-$s"; done
+for s in diag9Hooks.ts fixtures.final-hooks.ts fixtures.final-hooks.mut-f.ts day-editor.fix-hooks.ts; do m "$T/variants/$s" "$E/variant-$s.txt"; done
+m $T/tests.diff $E/20-fix15-tests.diff.txt
+m $T/tmp/diag.patch $E/diag-fixtures.patch.txt
+ls $E | wc -l

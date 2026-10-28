@@ -1,0 +1,91 @@
+mutant MB4 file src/client/components/ThemeToggle.tsx build client args tests/e2e/theme.spec.ts -g second tab|account menu is closed --workers=2 --reporter=list env none
+start 2026-10-28T21:35:26Z
+mutated src/client/components/ThemeToggle.tsx (1 replacement(s))
+mutate exit 0
+build exit 0
+
+Running 4 tests using 2 workers
+
+  ok 2 [desktop] › tests\e2e\theme.spec.ts:376:1 › a storage event keeps a second tab in step (2.0s)
+  ok 1 [mobile] › tests\e2e\theme.spec.ts:376:1 › a storage event keeps a second tab in step (2.0s)
+  x  3 [desktop] › tests\e2e\theme.spec.ts:407:1 › a theme chosen in one tab reaches a second tab whose account menu is closed (8.3s)
+  x  4 [mobile] › tests\e2e\theme.spec.ts:407:1 › a theme chosen in one tab reaches a second tab whose account menu is closed (8.2s)
+
+
+  1) [desktop] › tests\e2e\theme.spec.ts:407:1 › a theme chosen in one tab reaches a second tab whose account menu is closed 
+
+    Error: the page is painted dark
+
+    the page is painted dark
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rgb(14, 18, 23)"
+    Received: "rgb(237, 240, 245)"
+
+    Call Log:
+    - Timeout 7000ms exceeded while waiting on the predicate
+
+      109 | /** Waits for the page to show `theme`: the attribute is the explicit choice, the background is what is painted. */
+      110 | async function expectPainted(page: Page, theme: Theme, explicit: boolean): Promise<void> {
+    > 111 |   await expect.poll(async () => (await themeState(page)).bodyBackground, { message: `the page is painted ${theme}` }).toBe(BG[theme]);
+          |                                                                                                                       ^
+      112 |   const state = await themeState(page);
+      113 |   expect(state.attribute, 'data-theme').toBe(explicit ? theme : null);
+      114 | }
+        at expectPainted (<task>\export-mut\tests\e2e\theme.spec.ts:111:119)
+        at <task>\export-mut\tests\e2e\theme.spec.ts:426:9
+
+    Error Context: ..\tmp\pw-mut-MB4\theme-a-theme-chosen-in-on-91e92-hose-account-menu-is-closed-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\pw-mut-MB4\theme-a-theme-chosen-in-on-91e92-hose-account-menu-is-closed-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\pw-mut-MB4\theme-a-theme-chosen-in-on-91e92-hose-account-menu-is-closed-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\theme.spec.ts:407:1 › a theme chosen in one tab reaches a second tab whose account menu is closed 
+
+    Error: the page is painted dark
+
+    the page is painted dark
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rgb(14, 18, 23)"
+    Received: "rgb(237, 240, 245)"
+
+    Call Log:
+    - Timeout 7000ms exceeded while waiting on the predicate
+
+      109 | /** Waits for the page to show `theme`: the attribute is the explicit choice, the background is what is painted. */
+      110 | async function expectPainted(page: Page, theme: Theme, explicit: boolean): Promise<void> {
+    > 111 |   await expect.poll(async () => (await themeState(page)).bodyBackground, { message: `the page is painted ${theme}` }).toBe(BG[theme]);
+          |                                                                                                                       ^
+      112 |   const state = await themeState(page);
+      113 |   expect(state.attribute, 'data-theme').toBe(explicit ? theme : null);
+      114 | }
+        at expectPainted (<task>\export-mut\tests\e2e\theme.spec.ts:111:119)
+        at <task>\export-mut\tests\e2e\theme.spec.ts:426:9
+
+    Error Context: ..\tmp\pw-mut-MB4\theme-a-theme-chosen-in-on-91e92-hose-account-menu-is-closed-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\pw-mut-MB4\theme-a-theme-chosen-in-on-91e92-hose-account-menu-is-closed-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\pw-mut-MB4\theme-a-theme-chosen-in-on-91e92-hose-account-menu-is-closed-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\theme.spec.ts:407:1 › a theme chosen in one tab reaches a second tab whose account menu is closed 
+    [mobile] › tests\e2e\theme.spec.ts:407:1 › a theme chosen in one tab reaches a second tab whose account menu is closed 
+  2 passed (13.0s)
+tests exit 1
+restored byte-identical to the backup
+equal to the clean export
+restore build exit 0
+end 2026-10-28T21:35:42Z

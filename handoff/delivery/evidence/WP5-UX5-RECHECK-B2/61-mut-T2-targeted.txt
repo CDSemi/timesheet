@@ -1,0 +1,63 @@
+
+ RUN  v5.0.2 <task>/mut
+
+ ❯ tests/integration/timesheet-api.test.ts (16 tests | 2 failed) 5093ms
+   ❯ calculations through the API (9)
+     × aggregates live-clock seconds across sessions before flooring once 332ms
+     × files a check-in under the local date of its own start on either side of the reporting-zone midnight 278ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 14 passed (16)
+   Start at  14:09:11
+   Duration  6.19s (tests 84%, transform 10%, import 6%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/timesheet-api.test.ts > calculations through the API > aggregates live-clock seconds across sessions before flooring once
+AssertionError: expected { …(9) } to match object { work_date: '2026-09-28', …(2) }
+(6 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "input_zone": "Asia/Ho_Chi_Minh",
+    "source": "clock",
+-   "work_date": "2026-09-28",
++   "work_date": "2026-09-29",
+  }
+
+ ❯ tests/integration/timesheet-api.test.ts:118:30
+    116|     });
+    117|     // The device/input zone differs, but the work date is the reporti…
+    118|     expect(out.body.session).toMatchObject({ work_date: '2026-09-28', …
+       |                              ^
+    119|     expect(out.body.day.sessions.map((item: { end_utc: string }) => it…
+    120|       '2026-09-28T19:00:40Z',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/timesheet-api.test.ts > calculations through the API > files a check-in under the local date of its own start on either side of the reporting-zone midnight
+AssertionError: expected { …(9) } to match object { work_date: '2026-10-26', …(2) }
+(6 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "end_utc": null,
+    "start_utc": "2026-10-27T06:59:58Z",
+-   "work_date": "2026-10-26",
++   "work_date": "2026-10-27",
+  }
+
+ ❯ tests/integration/timesheet-api.test.ts:129:32
+    127|     const { t, cookie } = await setup('2026-10-27T06:59:58Z');
+    128|     const night = await t.request('POST', '/api/clock/in', { cookie, b…
+    129|     expect(night.body.session).toMatchObject({ work_date: '2026-10-26'…
+       |                                ^
+    130|     // After the midnight the running session still belongs to the day…
+    131|     t.clock.set('2026-10-27T07:00:30Z');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Runs the new/changed integration files in export A against the original and the fixed restore.ts.
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX16/env.sh
+cp $REPO/tests/integration/restore.test.ts $A/tests/integration/restore.test.ts
+cp $REPO/tests/integration/timesheet-api.test.ts $A/tests/integration/timesheet-api.test.ts
+cd $A
+cp $T/restore.orig.ts $A/src/server/ops/restore.ts
+npx vitest run tests/integration/restore.test.ts tests/integration/timesheet-api.test.ts > $T/logs/newtests-orig.txt 2>&1
+echo "original restore.ts exit=$?" >> $T/logs/newtests-exits.txt
+cp $REPO/src/server/ops/restore.ts $A/src/server/ops/restore.ts
+npx vitest run tests/integration/restore.test.ts tests/integration/timesheet-api.test.ts > $T/logs/newtests-fixed.txt 2>&1
+echo "fixed restore.ts exit=$?" >> $T/logs/newtests-exits.txt

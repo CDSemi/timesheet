@@ -1,0 +1,42 @@
+
+ RUN  v5.0.2 <task>/mut
+
+ ❯ tests/integration/timesheet-api.test.ts (16 tests | 1 failed) 3896ms
+   ❯ calculations through the API (9)
+     × aggregates live-clock seconds across sessions before flooring once 258ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 15 passed (16)
+   Start at  14:21:15
+   Duration  4.87s (tests 82%, transform 11%, import 7%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/timesheet-api.test.ts > calculations through the API > aggregates live-clock seconds across sessions before flooring once
+AssertionError: expected { status: 'complete', …(12) } to match object { regular_seconds: 30670, …(3) }
+(9 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "credited_minutes": 30,
+-   "eligible_minutes": 31,
+-   "regular_minutes": 511,
+-   "regular_seconds": 30670,
++   "credited_minutes": 0,
++   "eligible_minutes": 0,
++   "regular_minutes": 270,
++   "regular_seconds": 16230,
+  }
+
+ ❯ tests/integration/timesheet-api.test.ts:111:38
+    109|     const out = await t.request('POST', '/api/clock/out', { cookie, bo…
+    110|     // 4h00m40s + 4h30m30s = 8h31m10s → R = 511 (per-session flooring …
+    111|     expect(out.body.day.calculation).toMatchObject({
+       |                                      ^
+    112|       regular_seconds: 30_670,
+    113|       regular_minutes: 511,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

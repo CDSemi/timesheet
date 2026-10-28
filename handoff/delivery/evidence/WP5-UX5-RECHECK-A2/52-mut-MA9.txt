@@ -1,0 +1,55 @@
+mutant MA9 file src/client/components/TimesheetSheet.tsx build client args tests/e2e/review.spec.ts -g four edges|keyboard stops|Preview sheet follows --project=desktop --workers=2 --reporter=list env none
+start 2026-10-28T21:40:06Z
+mutated src/client/components/TimesheetSheet.tsx (1 replacement(s))
+mutate exit 0
+build exit 0
+
+Running 3 tests using 1 worker
+
+  ok 1 [desktop] › tests\e2e\review.spec.ts:444:1 › the Preview sheet follows the sheet breakpoint: the 4-column table below 480px, the 7-column grid from 480px, exactly one layout in the DOM, the tab bar below 768px, no page sideways scroll (1.4s)
+  ok 2 [desktop] › tests\e2e\review.spec.ts:467:1 › the Preview week cards that scroll sideways are named keyboard stops that ArrowRight scrolls; a window wide enough adds no stop (2.2s)
+  x  3 [desktop] › tests\e2e\review.spec.ts:531:1 › the Preview week card that scrolls sideways shows the shared focus ring on all four edges at 768px, in both themes and also scrolled, and focusing it does not scroll it (1.4s)
+
+
+  1) [desktop] › tests\e2e\review.spec.ts:531:1 › the Preview week card that scrolls sideways shows the shared focus ring on all four edges at 768px, in both themes and also scrolled, and focusing it does not scroll it 
+
+    Error: light, scrolled 60px: taking focus does not move the card
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    -   60,
+    +   52,
+        0,
+      ]
+
+      564 |       await expect(card, `${where}: the card has focus`).toBeFocused();
+      565 |       await expect.poll(() => card.evaluate((element) => element.matches(':focus-visible')), `${where}: the focus is a keyboard focus`).toBe(true);
+    > 566 |       expect(await card.evaluate((element) => [element.scrollLeft, element.scrollTop]), `${where}: taking focus does not move the card`).toEqual([before, 0]);
+          |                                                                                                                                          ^
+      567 |       await card.evaluate((element) => element.ownerDocument.defaultView?.scrollBy(0, element.getBoundingClientRect().top - 120));
+      568 |       await expect.poll(() => missingRingPixels(page, card, accent), { message: `${where}: the ring is painted on every edge`, timeout: 5000 }).toEqual([]);
+      569 |     }
+        at <task>\export-mut\tests\e2e\review.spec.ts:566:138
+
+    Error Context: ..\tmp\pw-mut-MA9\review-the-Preview-week-ca-53c0d-using-it-does-not-scroll-it-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\pw-mut-MA9\review-the-Preview-week-ca-53c0d-using-it-does-not-scroll-it-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\pw-mut-MA9\review-the-Preview-week-ca-53c0d-using-it-does-not-scroll-it-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\review.spec.ts:531:1 › the Preview week card that scrolls sideways shows the shared focus ring on all four edges at 768px, in both themes and also scrolled, and focusing it does not scroll it 
+  2 passed (7.3s)
+tests exit 1
+restored byte-identical to the backup
+equal to the clean export
+restore build exit 0
+end 2026-10-28T21:40:16Z

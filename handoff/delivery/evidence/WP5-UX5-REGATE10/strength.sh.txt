@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Test strength (item 7), in the scratch copy export-mut (a copy of the clean export). Everything mutated is restored and compared byte-equal.
+#   1  FIX15 server mutants A, A2, B on the built server (dist) against the two check-in tests, real clock, both projects, plus the control
+#   2  the integration boundary test, plain and against the UTC-date mutant of the source
+#   3  the crossing test at 2026-10-27T06:59:20Z, normal and with the exemption removed
+#   4  DIAG9 case C2 (and C1 to C6 of the check-in test) on the target; the 13 date-reader models with the fence on, then with the fence off
+source <task>/env.sh
+unset DIAG_MQ_DELAY DIAG9_LOG DIAG9_MID_MS
+X=$T/export-mut
+C=$T/export
+OUT=$T/out/70-strength-exits.txt
+: > $OUT
+cd $T
+rm -f $X/tests/e2e/zz-control.spec.ts
+export SHIFT_EXPORT=$X
+for f in tests/e2e/fixtures.ts tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/integration/timesheet-api.test.ts src/server/services/timesheetCommands.ts dist/server/services/timesheetCommands.js; do
+  cmp $C/$f $X/$f && echo "scratch equals clean export: $f" >> $OUT || { echo "SCRATCH DIFFERS BEFORE START: $f" >> $OUT; exit 3; }
+done
+DIST=$X/dist/server/services/timesheetCommands.js
+SRC=$X/src/server/services/timesheetCommands.ts
+TITLES="Check in then Check out asks|a stale session version at Check out"
+
+run_real() { # label
+  L=$1
+  mkdir -p pw-$L shots-$L
+  export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+  ( cd $X && node.exe node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts --workers=2 -g "$TITLES" --output="$TW\\pw-$L" ) > logs/$L.txt 2>&1
+  echo "$L exit=$?" >> $OUT
+  node counts.mjs logs/$L.txt >> $OUT 2>&1
+}
+
+# 1 server mutants
+run_real mut-control
+cp $DIST backup/timesheetCommands.js
+for m in a a2 b; do
+  node mutate.mjs $DIST mut-$m.from.txt mut-$m.to.txt >> $OUT 2>&1
+  run_real mut-$m
+  cp backup/timesheetCommands.js $DIST
+  cmp backup/timesheetCommands.js $DIST && echo "dist restored after $m" >> $OUT
+done
+cmp $C/dist/server/services/timesheetCommands.js $DIST && echo "dist equals clean export after the mutants" >> $OUT
+
+# 2 boundary test
+( cd $X && npx vitest run tests/integration/timesheet-api.test.ts > $T/logs/vitest-boundary.txt 2>&1; echo "boundary test exit=$?" >> $OUT )
+cp $SRC backup/timesheetCommands.src.ts
+node mutate.mjs $SRC mut-bsrc.from.txt mut-bsrc.to.txt >> $OUT 2>&1
+( cd $X && npx vitest run tests/integration/timesheet-api.test.ts > $T/logs/vitest-boundary-mutant.txt 2>&1; echo "boundary test against the UTC-date mutant exit=$?" >> $OUT )
+cp backup/timesheetCommands.src.ts $SRC
+cmp $C/src/server/services/timesheetCommands.ts $SRC && echo "src equals clean export (restored)" >> $OUT
+
+# 3 crossing test
+INSTANT=2026-10-27T06:59:20Z
+bash run-shift.sh cross-normal $INSTANT tests/e2e/today.spec.ts --project=desktop --workers=1 -g "a page left open across" > logs/cross-normal.txt 2>&1
+echo "cross-normal $(grep '^exit=' logs/cross-normal.txt)" >> $OUT
+cp $C/tests/e2e/fixtures.ts backup/fixtures.mut-x.ts
+node mutate.mjs backup/fixtures.mut-x.ts mut-x.from.txt mut-x.to.txt >> $OUT 2>&1
+cp backup/fixtures.mut-x.ts $X/tests/e2e/fixtures.ts
+bash run-shift.sh cross-mutx $INSTANT tests/e2e/today.spec.ts --project=desktop --workers=1 -g "a page left open across" > logs/cross-mutx.txt 2>&1
+echo "cross-mutx $(grep '^exit=' logs/cross-mutx.txt)" >> $OUT
+cp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts
+cmp $C/tests/e2e/fixtures.ts $X/tests/e2e/fixtures.ts && echo "fixtures restored" >> $OUT
+
+# 4 DIAG9 cases and date-reader models
+V=$T/variants
+E2E=$X/tests/e2e
+restore() {
+  rm -f $E2E/diag9Hooks.ts
+  for f in fixtures.ts day-editor.spec.ts today.spec.ts; do cp $C/tests/e2e/$f $E2E/$f; cmp $C/tests/e2e/$f $E2E/$f && echo "restored $f" >> $OUT; done
+}
+# 4a cases on the target (patched specs plus scratch hooks)
+cp $V/diag9Hooks.ts $E2E/diag9Hooks.ts
+cp $V/fixtures.final-hooks.ts $E2E/fixtures.ts
+cp $V/day-editor.fix-hooks.ts $E2E/day-editor.spec.ts
+: > $T/out/72-cases.txt
+for P in desktop mobile; do
+  bash cases.sh fix $P "Check in then Check out asks" >> $T/out/72-cases.txt 2>&1
+  bash cases.sh fixstale $P "a stale session version at Check out" >> $T/out/72-cases.txt 2>&1
+done
+echo "cases done" >> $OUT
+restore
+# 4b the 13 models, fence on, ORIGINAL (bd9c275) specs
+cp $V/diag9Hooks.ts $E2E/diag9Hooks.ts
+cp $V/fixtures.final-hooks.ts $E2E/fixtures.ts
+cp $T/export-prev/tests/e2e/day-editor.spec.ts $E2E/day-editor.spec.ts
+cp $T/export-prev/tests/e2e/today.spec.ts $E2E/today.spec.ts
+bash dense.sh fence 300 dense-list-fail.txt desktop mobile > logs/dense-fence.log 2>&1
+echo "models fence on done" >> $OUT
+# 4c control: fence off
+cp $V/fixtures.final-hooks.mut-f.ts $E2E/fixtures.ts
+bash dense.sh fence0 300 dense-list-fail.txt desktop mobile > logs/dense-fence0.log 2>&1
+echo "models fence off done" >> $OUT
+restore
+echo "leftover scratch specs: $(ls $E2E | grep -cE '^(dly|probe|zz|diag9)')" >> $OUT
+echo strength-done > $T/out/strength.done

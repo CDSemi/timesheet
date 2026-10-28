@@ -1,0 +1,81 @@
+/*
+ * WP5-UX5-RECHECK-A2 probe: the two axe target-size reports of the first axe run (".review-link" with the account menu open, and
+ * ".back-link" on the signed Review, both at 1440px right after 320px). Is it a settled state or a moment after the width change, and is
+ * the menu over the link? Desktop project, light and dark, synthetic data only.
+ */
+import { readFileSync } from 'node:fs';
+import type { Locator, Page } from '@playwright/test';
+import { expect, newPerson, openAccount, test } from './fixtures.ts';
+import { obs, settleWidth, signInAt, signOffOverHttp } from './zz-rc-lib.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+let source: string | null = null;
+
+async function targetScan(page: Page, label: string, watch: Locator): Promise<void> {
+  source ??= readFileSync(process.env.AXE_PATH ?? '', 'utf8');
+  if (!(await page.evaluate(() => typeof (window as unknown as { axe?: unknown }).axe !== 'undefined'))) await page.evaluate(source);
+  const result = await page.evaluate(async () => {
+    const axe = (window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<{ violations: Array<{ id: string; nodes: Array<{ target: unknown[]; failureSummary?: string }> }> }> } }).axe;
+    const run = await axe.run(document, { runOnly: { type: 'rule', values: ['target-size'] }, resultTypes: ['violations'] });
+    return run.violations.flatMap((v) => v.nodes.map((n) => ({ target: JSON.stringify(n.target), summary: (n.failureSummary ?? '').replace(/\s+/g, ' ').slice(0, 300) })));
+  });
+  const box = (await watch.count()) > 0 ? await watch.first().boundingBox() : null;
+  const attrs = (await watch.count()) > 0 ? await watch.first().evaluate((el) => ({ size: el.getAttribute('data-label-size'), text: (el as HTMLElement).innerText })) : null;
+  const menu = (await page.locator('#account-menu').count()) > 0 ? await page.locator('#account-menu').boundingBox() : null;
+  const page2 = await page.evaluate(() => {
+    const bar = document.querySelector('.shell-bar');
+    const r = bar?.getBoundingClientRect();
+    return { scrollY: window.scrollY, barBottom: r === undefined ? null : r.bottom, barPosition: bar === null ? null : getComputedStyle(bar).position };
+  });
+  obs({ kind: 'target', label, violations: result, watched: box, attrs, menu, ...page2 });
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`target size at 1440 before and after a 320px window, ${theme}`, async ({ page, adminSeed, builtServer, isMobile }) => {
+    test.skip(isMobile, 'desktop widths');
+    test.setTimeout(180_000);
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Target Probe' });
+    await signInAt(page, person, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const review = page.locator('.period-cta > .review-link');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await settleWidth(page, 1440);
+    await targetScan(page, `${theme} timesheet 1440 first`, review);
+    await openAccount(page);
+    await targetScan(page, `${theme} timesheet 1440 first, menu open`, review);
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 320, height: 900 });
+    await settleWidth(page, 320);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await settleWidth(page, 1440);
+    await targetScan(page, `${theme} timesheet 1440 after 320, at once`, review);
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 1000)));
+    await targetScan(page, `${theme} timesheet 1440 after 320, 1 s later`, review);
+    await openAccount(page);
+    await targetScan(page, `${theme} timesheet 1440 after 320, menu open`, review);
+    await page.keyboard.press('Escape');
+    await page.reload();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await settleWidth(page, 1440);
+    await targetScan(page, `${theme} timesheet 1440 reloaded`, review);
+    await openAccount(page);
+    await targetScan(page, `${theme} timesheet 1440 reloaded, menu open`, review);
+    await page.keyboard.press('Escape');
+
+    await signOffOverHttp(person);
+    await page.goto(`/#/review/${person.payrollDate}`);
+    await expect(page.locator('[data-review-day]')).toHaveCount(14);
+    const back = page.locator('.check-card > .back-link');
+    await settleWidth(page, 1440);
+    await targetScan(page, `${theme} review 1440 first`, back);
+    await page.setViewportSize({ width: 320, height: 900 });
+    await settleWidth(page, 320);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await settleWidth(page, 1440);
+    await targetScan(page, `${theme} review 1440 after 320, at once`, back);
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 1000)));
+    await targetScan(page, `${theme} review 1440 after 320, 1 s later`, back);
+  });
+}

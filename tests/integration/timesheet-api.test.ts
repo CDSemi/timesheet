@@ -140,6 +140,13 @@ describe('calculations through the API', () => {
     const morning = await t.request('POST', '/api/clock/in', { cookie, body: { input_zone: 'America/Los_Angeles' } });
     expect(morning.body.session).toMatchObject({ work_date: '2026-10-27', start_utc: '2026-10-27T07:00:31Z', end_utc: null });
     expect((await t.request('GET', '/api/days/2026-10-26', { cookie })).body.sessions.filter((item: { end_utc: string | null }) => item.end_utc === null)).toEqual([]);
+
+    // The midnight second itself starts the new day (docs/02, D-05: a day runs from 00:00:00 local, inclusive); the second before it is the old day's.
+    t.close();
+    const atMidnight = await setup('2026-10-27T07:00:00Z');
+    const exact = await atMidnight.t.request('POST', '/api/clock/in', { cookie: atMidnight.cookie, body: { input_zone: 'America/Los_Angeles' } });
+    expect(exact.body.session).toMatchObject({ work_date: '2026-10-27', start_utc: '2026-10-27T07:00:00Z', end_utc: null });
+    expect((await atMidnight.t.request('GET', '/api/days/2026-10-26', { cookie: atMidnight.cookie })).body.sessions).toEqual([]);
   });
 
   it('keeps open sessions and unknown breaks pending instead of inventing minutes', async () => {

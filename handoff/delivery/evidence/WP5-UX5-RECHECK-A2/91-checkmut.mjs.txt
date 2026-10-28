@@ -1,0 +1,35 @@
+// Dry check: every mutant definition's old texts occur exactly once in the mutation base (export-mut as it is now). Writes nothing.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const root = process.argv[2];
+const map = {
+  MB1: 'src/client/components/DayFieldsForm.tsx',
+  MB2: 'src/client/components/DayFieldsForm.tsx',
+  MB3: 'src/client/components/ThemeToggle.tsx',
+  MB4: 'src/client/components/ThemeToggle.tsx',
+  MB5: 'src/client/App.tsx',
+  MB6: 'src/client/components/TimesheetSheet.tsx',
+  MB7: 'src/client/styles.css',
+  MB8: 'src/client/styles.css',
+  MB9: 'src/client/styles.css',
+  MA8n: 'src/client/styles.css',
+  MA9: 'src/client/components/TimesheetSheet.tsx',
+  MA1: 'src/client/styles.css',
+  MB10: 'tests/e2e/fixtures.ts',
+  MB11: 'tests/e2e/fixtures.ts',
+  MB11F: 'tests/e2e/fixtures.ts',
+  MB12: 'tests/e2e/fixtures.ts',
+  MB12S: 'tests/e2e/fixtures.ts',
+  MB13: 'tests/e2e/fixtures.ts',
+};
+let bad = 0;
+for (const [name, file] of Object.entries(map)) {
+  const text = readFileSync(join(root, 'export-mut', file), 'utf8');
+  const pairs = JSON.parse(readFileSync(join(root, 'mutants', `${name}.json`), 'utf8'));
+  const counts = pairs.map((pair) => text.split(pair.old).length - 1);
+  const ok = counts.every((count) => count === 1);
+  if (!ok) bad += 1;
+  console.log(`${name} ${file} counts ${counts.join(',')} ${ok ? 'ok' : 'BAD'}`);
+}
+process.exit(bad === 0 ? 0 : 1);

@@ -1,0 +1,41 @@
+
+ RUN  v5.0.2 <task>/mut
+
+ ❯ tests/integration/restore.test.ts (33 tests | 1 failed) 13411ms
+   ❯ isolated restore with outbound paused (AC-15, AC-11) (7)
+     × releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs 6ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 32 passed (33)
+   Start at  14:21:00
+   Duration  14.59s (tests 93%, transform 4%, import 3%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs
+AssertionError: expected [ Array(6) ] to deeply equal [ Array(6) ]
+
+- Expected
++ Received
+
+  [
+    "send_email:attempt_uncertain",
+    "send_email:attempt_uncertain",
+-   "send_email:releasable",
+-   "send_email:releasable",
++   "send_email:superseded_by_later_send",
++   "send_email:superseded_by_later_send",
+    "send_reminder:releasable",
+    "send_reminder:releasable",
+  ]
+
+ ❯ tests/integration/restore.test.ts:428:86
+    426|     const reminderOf = (key: string) => restored.prepare<[string], { i…
+    427|     const listed = listHeldJobs(restored);
+    428|     expect(listed.map((job) => `${job.kind}:${job.blocker ?? 'releasab…
+       |                                                                                      ^
+    429|       [
+    430|         `${JOB_SEND_EMAIL}:attempt_uncertain`,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

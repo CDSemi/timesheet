@@ -1,0 +1,62 @@
+
+ RUN  v5.0.2 <task>/mut
+
+ ❯ tests/integration/timesheet-api.test.ts (16 tests | 3 failed) 4981ms
+   ❯ calculations through the API (9)
+     × aggregates live-clock seconds across sessions before flooring once 347ms
+     × files a check-in under the local date of its own start on either side of the reporting-zone midnight 337ms
+     × keeps open sessions and unknown breaks pending instead of inventing minutes 333ms
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 13 passed (16)
+   Start at  14:09:17
+   Duration  6.05s (tests 84%, transform 10%, import 6%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/timesheet-api.test.ts > calculations through the API > aggregates live-clock seconds across sessions before flooring once
+TypeError: Cannot read properties of undefined (reading 'calculation')
+ ❯ tests/integration/timesheet-api.test.ts:111:25
+    109|     const out = await t.request('POST', '/api/clock/out', { cookie, bo…
+    110|     // 4h00m40s + 4h30m30s = 8h31m10s → R = 511 (per-session flooring …
+    111|     expect(out.body.day.calculation).toMatchObject({
+       |                         ^
+    112|       regular_seconds: 30_670,
+    113|       regular_minutes: 511,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/integration/timesheet-api.test.ts > calculations through the API > files a check-in under the local date of its own start on either side of the reporting-zone midnight
+AssertionError: expected undefined to match object { work_date: '2026-10-26', …(1) }
+
+- Expected:
+{
+  "end_utc": "2026-10-27T07:00:30Z",
+  "work_date": "2026-10-26",
+}
+
++ Received:
+undefined
+
+ ❯ tests/integration/timesheet-api.test.ts:137:30
+    135|     expect((await t.request('GET', '/api/days/2026-10-27', { cookie })…
+    136|     const out = await t.request('POST', '/api/clock/out', { cookie, bo…
+    137|     expect(out.body.session).toMatchObject({ work_date: '2026-10-26', …
+       |                              ^
+    138|     // A check-in after the midnight is the new day's.
+    139|     t.clock.set('2026-10-27T07:00:31Z');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/integration/timesheet-api.test.ts > calculations through the API > keeps open sessions and unknown breaks pending instead of inventing minutes
+TypeError: Cannot read properties of undefined (reading 'calculation')
+ ❯ tests/integration/timesheet-api.test.ts:156:35
+    154|     t.clock.set('2026-09-29T01:00:00Z');
+    155|     const unknownBreaks = await t.request('POST', '/api/clock/out', { …
+    156|     expect(unknownBreaks.body.day.calculation).toMatchObject({ status:…
+       |                                   ^
+    157|     const sheet = await t.request('GET', '/api/timesheets/2026-10-16',…
+    158|     expect(sheet.body.totals).toEqual({ provisional_credited_minutes: …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯

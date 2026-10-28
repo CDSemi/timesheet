@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Repository checks, one after another: lint, typecheck, build, verify (verify includes its own test run and the smoke).
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX16/env.sh
+cd "$REPO" || exit 9
+npm run lint > $T/logs/repo-lint.txt 2>&1
+echo "lint exit=$?" >> $T/logs/repo-exits.txt
+npm run typecheck > $T/logs/repo-typecheck.txt 2>&1
+echo "typecheck exit=$?" >> $T/logs/repo-exits.txt
+npm run build > $T/logs/repo-build.txt 2>&1
+echo "build exit=$?" >> $T/logs/repo-exits.txt
+git diff --check > $T/logs/repo-diffcheck.txt 2>&1
+echo "git diff --check exit=$?" >> $T/logs/repo-exits.txt
+npm run verify > $T/logs/repo-verify.txt 2>&1
+echo "verify exit=$? (SMOKE_PORT=$SMOKE_PORT)" >> $T/logs/repo-exits.txt

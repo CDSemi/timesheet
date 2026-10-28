@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Checks in export B (the working tree): typecheck, lint, build, npm test once, the five integration files once each.
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX16/env.sh
+cd "$B" || exit 9
+E="$T/logs/chainB-exits.txt"
+step() {
+  local name=$1; shift
+  local start; start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  "$@" > "$T/logs/cB-$name.log" 2>&1
+  local code=$?
+  echo "$name exit=$code start=$start end=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$E"
+}
+echo "node $(node --version) npm $(npm --version) cwd=<exportB>" >> "$E"
+step typecheck npm run typecheck
+step lint npm run lint
+step build npm run build
+step test npm test
+step integ-restore npx vitest run tests/integration/restore.test.ts
+step integ-sends npx vitest run tests/integration/sends.test.ts
+step integ-jobs npx vitest run tests/integration/jobs.test.ts
+step integ-delivery npx vitest run tests/integration/delivery.test.ts
+step integ-timesheet-api npx vitest run tests/integration/timesheet-api.test.ts
+echo "chainB done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$E"

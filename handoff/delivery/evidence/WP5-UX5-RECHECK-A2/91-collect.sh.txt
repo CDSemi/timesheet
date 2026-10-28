@@ -1,0 +1,31 @@
+# Copies masked LF evidence into the repository evidence folder (run again at the end; it overwrites). Only *.txt and -synthetic.png.
+. <task>/env.sh
+EV=$E
+mkdir -p $EV $T/stage
+rm -f $T/stage/*
+cd $T
+cp out/00-head.txt stage/00-head-before.txt
+cp out/00-start-time.txt stage/00-start-time.txt
+cp out/00-nonhandoff-status-before.txt stage/00-nonhandoff-status-before.txt
+cp out/00-node-version.txt stage/00-node-version.txt
+cp out/digest-before.log stage/01-digest-before.txt
+[ -f out/digest-after.log ] && cp out/digest-after.log stage/01-digest-after.txt
+for f in 02-ci-export 02-ci-export-probe 02-ci-export-mut 02-build-export-probe 02-build-export-mut 02-dist-compare; do [ -f out/$f.txt ] && cp out/$f.txt stage/$f.txt; done
+for f in 03-typecheck 03-lint 03-npmtest 03-build 03-ac13 03-core-exits 04-axe-pack; do [ -f out/$f.txt ] && cp out/$f.txt stage/$f.txt; done
+for f in out/06-*.txt out/08-*.txt out/20-*.txt out/30-*.txt out/32-*.txt out/50-*.txt out/51-*.txt; do [ -f "$f" ] && cp "$f" stage/$(basename "$f"); done
+for f in out/obs-*.jsonl; do [ -f "$f" ] && cp "$f" stage/40-$(basename "$f" .jsonl).txt; done
+for f in out/log-*.txt; do [ -f "$f" ] && cp "$f" stage/41-$(basename "$f"); done
+[ -f out/probe-exits.txt ] && cp out/probe-exits.txt stage/40-probe-exits.txt
+for f in out/sum-*.txt; do [ -f "$f" ] && cp "$f" stage/42-$(basename "$f"); done
+for f in out/mut-M*.txt out/mut-CTL*.txt; do [ -f "$f" ] || continue; b=$(basename $f .txt); case $b in *-build|*-restore-build) continue;; esac; cp $f stage/52-$b.txt; done
+[ -f out/mut-exits.txt ] && cp out/mut-exits.txt stage/52-mut-exits.txt
+for f in mutants/*.json; do cp $f stage/53-mutant-$(basename $f .json).json.txt; done
+for f in export-probe/tests/e2e/zz-rc-*.ts; do cp $f stage/90-src-$(basename $f).txt; done
+for f in env.sh setup.sh digest.sh ci.sh core.sh e2e-full.sh run-shift.sh seven.sh probe.sh mut.sh mutants-run.sh collect.sh; do cp $f stage/91-$f.txt; done
+for f in probes-run.sh; do cp $f stage/91-$f.txt; done
+for f in mutate.mjs checkmut.mjs counts.mjs mask.mjs probe-now.mjs sum.mjs summut.mjs shiftclock.mjs; do [ -f $f ] && cp $f stage/91-$f.txt; done
+cp slips.txt stage/99-slips.txt
+node $T/mask.mjs "$EV" stage/*.txt
+echo "mask exit $?"
+for f in shots/*-synthetic.png; do [ -f "$f" ] && cp "$f" $EV/; done
+ls $EV | wc -l

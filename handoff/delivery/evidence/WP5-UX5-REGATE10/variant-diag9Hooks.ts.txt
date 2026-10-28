@@ -1,0 +1,15 @@
+// DIAG9 scratch model, not part of the repository: waits (on the shifted clock this process shares with the server) until a chosen
+// offset from local midnight, and logs the simulated instant of each stage. No-op unless DIAG9_LOG or a DIAG9_AT_<STAGE> is set.
+export async function diagWait(stage: string): Promise<void> {
+  const mid = Number(process.env.DIAG9_MID_MS ?? '');
+  const key = `DIAG9_AT_${stage.toUpperCase().replace(/-/g, '_')}`;
+  const raw = process.env[key];
+  const sim = (): string => `${new Date().toISOString()} (midnight ${((Date.now() - mid) / 1000).toFixed(2)} s)`;
+  if (process.env.DIAG9_LOG === undefined && raw === undefined) return;
+  if (raw !== undefined && Number.isFinite(mid)) {
+    const until = mid + Number(raw);
+    console.log(`DIAG9 ${stage}: arrive ${sim()}; wait until midnight ${raw} ms`);
+    while (Date.now() < until) await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  console.log(`DIAG9 ${stage}: go ${sim()}`);
+}

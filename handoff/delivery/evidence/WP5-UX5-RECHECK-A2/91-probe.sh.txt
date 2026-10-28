@@ -1,0 +1,15 @@
+# Usage: bash probe.sh <tag> <playwright args...>   (runs in export-probe; observations to out/obs-<tag>.jsonl, log to out/log-<tag>.txt)
+. <task>/env.sh
+TAG=$1; shift
+cd $T/export-probe
+mkdir -p $T/shots $T/tmp/pw-$TAG
+export RC_OUT="$TW\\out\\obs-$TAG.jsonl"
+export RC_SHOTS="$TW\\shots"
+export AXE_PATH="$TW\\axe\\x\\package\\axe.min.js"
+export E2E_SCREENSHOT_DIR="$TW\\tmp\\shots-probe"
+rm -f $T/out/obs-$TAG.jsonl
+s=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+npx playwright test --output=$T/tmp/pw-$TAG "$@" > $T/out/log-$TAG.txt 2>&1
+rc=$?
+e=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+echo "probe $TAG exit=$rc start=$s end=$e args=$*" >> $T/out/probe-exits.txt

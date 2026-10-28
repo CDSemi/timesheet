@@ -1,0 +1,47 @@
+# The auditor's own mutants of the FIX11-FIX15 area-A changes, one after another in export-mut (definitions in mutants/*.json).
+T=<task>
+TW='<task>'
+M="bash $T/mut.sh"
+DF=src/client/components/DayFieldsForm.tsx
+TT=src/client/components/ThemeToggle.tsx
+APP=src/client/App.tsx
+SHEET=src/client/components/TimesheetSheet.tsx
+CSS=src/client/styles.css
+FX=tests/e2e/fixtures.ts
+R=tests/e2e/review.spec.ts
+W2="--workers=2 --reporter=list"
+echo "mutants start $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $T/out/mut-exits.txt
+# FIX13 product (DayFieldsForm)
+$M MB1 $DF client tests/e2e/day-editor.spec.ts -g "Escape dispatched in the same task|Escape and the Close button" $W2
+$M MB2 $DF client tests/e2e/day-editor.spec.ts -g "addendum 1|unsaved|U4-05|discard" $W2
+# FIX14 product (cross-tab theme)
+$M MB3 $TT client tests/e2e/theme.spec.ts $W2
+$M MB4 $TT client tests/e2e/theme.spec.ts -g "second tab|account menu is closed" $W2
+$M MB5 $APP client tests/e2e/theme.spec.ts $W2
+# FIX11 product (the week card ring)
+$M MB6 $SHEET client $R tests/e2e/focus-ring.spec.ts tests/e2e/keyboard-access.spec.ts --project=desktop $W2
+$M MB7 $CSS client $R -g "four edges|keyboard stops" --project=desktop $W2
+$M MB8 $CSS client $R tests/e2e/focus-ring.spec.ts tests/e2e/keyboard-access.spec.ts --project=desktop $W2
+$M MB9 $CSS client $R -g "four edges|keyboard stops|Preview sheet follows|one column" --project=desktop $W2
+# RECHECK-A's MA8 (an invisible ring, mapped onto the new layer) and MA9 (revealFocused acts on the card itself), exact texts
+$M MA8n $CSS client $R tests/e2e/focus-ring.spec.ts tests/e2e/keyboard-access.spec.ts --project=desktop $W2
+$M MA9 $SHEET client $R -g "four edges|keyboard stops|Preview sheet follows" --project=desktop $W2
+$M MA1 $CSS client $R -g "signature rows|opened again" --project=desktop $W2
+# FIX12 helper under DIAG5's delay model (90 ms): control first, then the helper made a no-op
+CALLS="the check card|one column at every width|signature rows|signed period opened again|title row is 32px|Review and sign off: the title row|U5-09|never overlaps"
+MUT_ENV=DIAG_MQ_DELAY=90 $M CTL10 $FX none $R tests/e2e/timesheet.spec.ts tests/e2e/controls.spec.ts -g "$CALLS" --repeat-each=2 --workers=4 --reporter=list
+MUT_ENV=DIAG_MQ_DELAY=90 $M MB10 $FX none $R tests/e2e/timesheet.spec.ts tests/e2e/controls.spec.ts -g "$CALLS" --repeat-each=2 --workers=4 --reporter=list
+# FIX12 helper threshold
+$M MB13 $FX none $R tests/e2e/timesheet.spec.ts -g "the check card|Preview sheet follows|U5-09" --project=desktop $W2
+# FIX15 fence: the crossing test at a crossing instant, control then the exemption ignored; the fence probe, control then a wrong zone
+cp $T/export-probe/tests/e2e/zz-rc-fence.spec.ts $T/export-mut/tests/e2e/zz-rc-fence.spec.ts
+cp $T/export-probe/tests/e2e/zz-rc-lib.ts $T/export-mut/tests/e2e/zz-rc-lib.ts
+MUT_SHIFT=2026-10-27T06:59:20Z $M CTL11 $FX none tests/e2e/today.spec.ts -g "a page left open across" --project=desktop --workers=1 --reporter=list
+MUT_SHIFT=2026-10-27T06:59:20Z $M MB11 $FX none tests/e2e/today.spec.ts -g "a page left open across" --project=desktop --workers=1 --reporter=list
+MUT_SHIFT=2026-10-27T06:59:30Z MUT_ENV="RC_OUT=$TW\\out\\obs-mut-CTLF.jsonl" $M CTLF $FX none tests/e2e/zz-rc-fence.spec.ts --project=desktop --workers=1 --reporter=list
+MUT_SHIFT=2026-10-27T06:59:30Z MUT_ENV="RC_OUT=$TW\\out\\obs-mut-MB11F.jsonl" $M MB11F $FX none tests/e2e/zz-rc-fence.spec.ts --project=desktop --workers=1 --reporter=list
+MUT_SHIFT=2026-10-27T06:59:30Z MUT_ENV="RC_OUT=$TW\\out\\obs-mut-MB12.jsonl" $M MB12 $FX none tests/e2e/zz-rc-fence.spec.ts --project=desktop --workers=1 --reporter=list
+MUT_SHIFT=2026-10-27T06:59:40Z $M MB12S $FX none tests/e2e/day-editor.spec.ts -g "Check in then Check out asks|a stale session version at Check out" --project=desktop --workers=1 --reporter=list
+rm -f $T/export-mut/tests/e2e/zz-rc-fence.spec.ts $T/export-mut/tests/e2e/zz-rc-lib.ts
+echo "leftover scratch specs in export-mut: $(ls $T/export-mut/tests/e2e | grep -c '^zz-')" >> $T/out/mut-exits.txt
+echo "all-mutants-done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $T/out/mut-exits.txt

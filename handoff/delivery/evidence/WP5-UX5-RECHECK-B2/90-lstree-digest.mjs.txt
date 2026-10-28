@@ -1,0 +1,14 @@
+// Digest from a `git ls-tree -r --format='%(path) %(objectname)'` listing: lines outside handoff/, sorted bytewise,
+// SHA-256 of "<path> <blob>\n" (the scripts/source-digest.mjs form). Writes the filtered sorted listing for the export check.
+// Usage: node lstree-digest.mjs <listing.txt> <filtered-out.txt>
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [listing, out] = process.argv.slice(2);
+const lines = readFileSync(listing, 'utf8')
+  .split('\n')
+  .filter((line) => line !== '' && !line.startsWith('handoff/'))
+  .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+writeFileSync(out, `${lines.join('\n')}\n`);
+const digest = createHash('sha256').update(lines.map((line) => `${line}\n`).join('')).digest('hex');
+console.log(`${digest}  (${lines.length} files, handoff/ excluded; git ls-tree form)`);

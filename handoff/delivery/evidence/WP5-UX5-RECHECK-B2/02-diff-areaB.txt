@@ -1,0 +1,249 @@
+diff --git a/src/server/ops/restore.ts b/src/server/ops/restore.ts
+index bfe6c965..1c135630 100644
+--- a/src/server/ops/restore.ts
++++ b/src/server/ops/restore.ts
+@@ -82,8 +82,9 @@ import {
+  * capture (`cli.js outbound release|drop`). `releaseHeldJob` (by id) and `releaseAllHeldJobs` (bulk, after the preview
+  * of `listHeldJobs`) put a held job back in the queue under the normal AC-08 rules: a job whose latest attempt is
+  * uncertain is never released (its attempt takes the owner's decision instead), and a send job is not released while
+- * another attempt of its revision is open or a later send of the same revision exists (so a send the owner already
+- * repeated is never sent twice). `dropHeldReminder` cancels a held reminder instead. Each step is one IMMEDIATE
++ * another attempt of its revision is open or a later send of the same period (any of its revisions) exists (so a send
++ * the owner already repeated is never sent twice, and a superseded revision's copy never follows the correction's).
++ * `dropHeldReminder` cancels a held reminder instead. Each step is one IMMEDIATE
+  * transaction with a system audit event (job id and kind only).
+  */
+ 
+@@ -546,9 +547,14 @@ function blockerOf(db: Db, job: HeldRow): ReleaseBlocker | null {
+     )
+     .get(job.revision_id, job.user_id, job.id);
+   if (open !== undefined) return 'delivery_attempt_open';
++  // A later send of ANY revision of the same period (not only of the held job's own revision) keeps the held job held, so the
++  // older revision's copy cannot arrive after the correction's (R-UX5B-1, the same period-wide rule as the send guard).
+   const later = db
+     .prepare<[string, string, string, number], { one: number }>(
+-      `SELECT 1 AS one FROM jobs WHERE revision_id = ? AND user_id = ? AND kind = ? AND rowid > ? AND state IN ('queued', 'leased', 'succeeded') LIMIT 1`,
++      `SELECT 1 AS one FROM jobs j
++         JOIN timesheet_revisions r ON r.id = j.revision_id AND r.user_id = j.user_id
++         JOIN timesheet_revisions held ON held.timesheet_id = r.timesheet_id AND held.user_id = r.user_id
++        WHERE held.id = ? AND j.user_id = ? AND j.kind = ? AND j.rowid > ? AND j.state IN ('queued', 'leased', 'succeeded') LIMIT 1`,
+     )
+     .get(job.revision_id, job.user_id, job.kind, job.rowid);
+   return later === undefined ? null : 'superseded_by_later_send';
+diff --git a/tests/integration/restore.test.ts b/tests/integration/restore.test.ts
+index 9c1ffe7b..0a88b01e 100644
+--- a/tests/integration/restore.test.ts
++++ b/tests/integration/restore.test.ts
+@@ -46,7 +46,7 @@ import { makePng } from '../support/pdfText.ts';
+ import { buildSchemaV6, type SchemaV6Fixture, WP3_SCHEMA_VERSION } from '../support/schemaV6.ts';
+ import { sendWithDefaults } from '../support/sends.ts';
+ import { buildSyntheticWorkbook } from '../support/syntheticWorkbook.ts';
+-import { createTestContext, la, LA, MutableClock, type TestContext } from '../support/testApp.ts';
++import { createTestContext, la, LA, MutableClock, ORIGIN, type TestContext } from '../support/testApp.ts';
+ 
+ /*
+  * WP4-T06: outbound pause, isolated restore and reconciliation (AC-15, AC-11, AC-08; docs/07 "Backup, restore and
+@@ -526,6 +526,119 @@ describe('isolated restore with outbound paused (AC-15, AC-11)', () => {
+   });
+ });
+ 
++/*
++ * WP5-UX5-FIX11 (F-UX5B2-1, R-UX5B-1): the send guard is period-wide (a waiting send of any revision of the period blocks another),
++ * and so is the release of a held job. A restore holds revision 1's waiting send; the owner then corrects the period (revision 2) and
++ * sends it, which a held job does not block and no counted copy makes a reason necessary. Releasing the held job afterwards would
++ * deliver the superseded copy after the correction's, so it is refused (`superseded_by_later_send`) for as long as the later send
++ * exists, whether it still waits, is leased by a runner or has succeeded. The release was refused only for a later send of the SAME revision before.
++ */
++describe('a held send of a superseded revision (F-UX5B2-1)', () => {
++  const PAYROLL = '2026-10-02';
++  let t: TestContext | undefined;
++  let restored: Db | undefined;
++  let backupsRoot = '';
++  let restoreRoot = '';
++
++  afterAll(() => {
++    restored?.close();
++    t?.close();
++    if (backupsRoot !== '') rmSync(backupsRoot, { recursive: true, force: true });
++    if (restoreRoot !== '') rmSync(restoreRoot, { recursive: true, force: true });
++  });
++
++  it('is not released once the owner has sent a correction of the period, while it waits, while a runner holds it or after it succeeded, and the old copy never follows the new', async () => {
++    const source = await createTestContext(NOW);
++    t = source;
++    const employee = await source.login('employee');
++    const files = new FileStore(dataDirOf(source));
++    const settings = await source.request('POST', '/api/settings/submission', {
++      cookie: employee,
++      body: { expected_seq: 0, to: ['payroll@example.invalid'], cc: [], auto_submit: false },
++    });
++    expect(settings.status, JSON.stringify(settings.body)).toBeLessThan(300);
++    saveSignature(source.db, source.clock, files, source.userIds.employee, makePng(40, 12), 'image/png');
++    await addSession(source, employee, '2026-09-15', '09:00', '18:00');
++    const first = await signOff(source, employee, PAYROLL); // revision 1 is signed and sent; its send job waits (no runner)
++    source.clock.set('2026-09-29T20:04:00Z');
++    backupsRoot = scratch('timesheet-f11-backups-');
++    const backup = await createBackup({ databasePath: source.config.databasePath, dataDir: dataDirOf(source), targetDir: backupsRoot, clock: source.clock });
++
++    restoreRoot = scratch('timesheet-f11-restore-');
++    const target = join(restoreRoot, 'instance');
++    const clock = new MutableClock(LATER);
++    await restoreBackup({ fromDir: backup.directory, toDir: target, liveDataDir: dataDirOf(source), liveDatabasePath: source.config.databasePath, clock });
++    const db = openDatabase(join(target, RESTORED_DATABASE_NAME));
++    restored = db;
++    const heldJobId = db.prepare<[string], { id: string }>("SELECT id FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(first)?.id ?? '';
++    expect(db.prepare('SELECT state, last_error FROM jobs WHERE id = ?').get(heldJobId)).toEqual({ state: 'intervention', last_error: RECONCILE_AFTER_RESTORE });
++    // Nothing is uncertain, so the operator can resume; the held job alone is still not sent, and it is releasable on its own.
++    expect(resumeOutbound(db, clock)).toMatchObject({ outcome: 'resumed' });
++    const heldSends = () => listHeldJobs(db).filter((job) => job.kind === JOB_SEND_EMAIL);
++    expect(heldSends().map((job) => [job.id, job.blocker])).toEqual([[heldJobId, null]]);
++
++    // On the restored instance the owner corrects the period (revision 2) and sends it: not blocked by the held job, and no reason is asked.
++    const app = createApp({ db, clock, config: source.config, loginLimiter: new LoginRateLimiter(), staticDir: null });
++    const cookie = `${SESSION_COOKIE}=${createAuthSession(db, clock, source.userIds.employee, 3600).token}`;
++    const request: TestContext['request'] = async (method, path, options = {}) => {
++      const headers: Record<string, string> = { origin: ORIGIN, cookie: options.cookie ?? cookie };
++      const init: RequestInit = { method, headers };
++      if (options.body !== undefined) {
++        headers['content-type'] = 'application/json';
++        init.body = JSON.stringify(options.body);
++      }
++      const response = await app.request(path, init);
++      const text = await response.text();
++      const body: unknown = text === '' ? null : JSON.parse(text);
++      return { status: response.status, body, headers: response.headers };
++    };
++    const edit = await request('POST', '/api/days/2026-09-16/sessions', {
++      body: { start: la('2026-09-16T09:00'), end: la('2026-09-16T18:00'), input_zone: LA, breaks: [], breaks_confirmed: true, reason: 'Synthetic forgotten day' },
++    });
++    expect(edit.status, JSON.stringify(edit.body)).toBe(201);
++    const review = await request('GET', `/api/timesheets/${PAYROLL}/review`);
++    const correction = await request('POST', `/api/timesheets/${PAYROLL}/revisions`, {
++      body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false },
++    });
++    expect(correction.status, JSON.stringify(correction.body)).toBe(201);
++    const second = correction.body.revision.id as string;
++    const sent = await sendWithDefaults({ request }, cookie, second);
++    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
++
++    // The correction's send waits, so the held job of the superseded revision is refused (one by id, in the list and in bulk), writing nothing.
++    const auditBefore = count(db, "SELECT count(*) FROM audit_events WHERE operation LIKE 'operations.held_job_%'");
++    const refusal = { outcome: 'refused', code: 'superseded_by_later_send' };
++    expect(heldSends().map((job) => [job.id, job.blocker])).toEqual([[heldJobId, 'superseded_by_later_send']]);
++    expect(releaseHeldJob(db, clock, heldJobId)).toEqual(refusal);
++    expect(releaseAllHeldJobs(db, clock)).toEqual({ released: 0, refused: { superseded_by_later_send: 1 } });
++
++    // A runner claims the correction's send and is inside it (the job is leased): a leased send is a later send of the period too, so the
++    // old job is still refused. This is the third state of the blocker's `j.state IN ('queued', 'leased', 'succeeded')`.
++    const laterJobId = db.prepare<[string], { id: string }>("SELECT id FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(second)?.id ?? '';
++    expect(claimNextJob(db, clock, { owner: 'runner-f11-lease', kinds: [JOB_SEND_EMAIL], leaseSeconds: 600 })?.id).toBe(laterJobId);
++    expect(db.prepare<[string], { state: string }>('SELECT state FROM jobs WHERE id = ?').get(laterJobId)?.state).toBe('leased');
++    expect(heldSends().map((job) => [job.id, job.blocker])).toEqual([[heldJobId, 'superseded_by_later_send']]);
++    expect(releaseHeldJob(db, clock, heldJobId)).toEqual(refusal);
++    expect(releaseAllHeldJobs(db, clock)).toEqual({ released: 0, refused: { superseded_by_later_send: 1 } });
++
++    // The correction goes out (its lease has run out by then, so the runner takes it over); the later send has succeeded, and the old job is still refused.
++    clock.set('2026-09-30T11:00:00Z');
++    const dataDir = join(target, RESTORED_DATA_DIR);
++    await runJobsOnce({ db, clock, owner: 'runner-f11-pdf', handlers: { render_pdf: createPdfJobHandler({ db, clock, files: new FileStore(dataDir) }) } });
++    const delivery = loadDeliveryConfig({ MAIL_FROM: SENDER, DATA_DIR: dataDir }, { databasePath: join(target, 'unused.db'), port: 3000, production: false });
++    await runJobsOnce({ db, clock, owner: 'runner-f11-send', leaseSeconds: 600, handlers: createJobHandlers({ db, clock, files: new FileStore(dataDir), delivery }) });
++    const states = (revisionId: string) => attemptsOf(db).filter((attempt) => attempt.revision_id === revisionId).map((attempt) => attempt.state);
++    expect(states(second)).toEqual(['accepted']);
++    expect(db.prepare<[string], { state: string }>("SELECT state FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(second)?.state).toBe('succeeded');
++    expect(releaseHeldJob(db, clock, heldJobId)).toEqual(refusal);
++    expect(releaseAllHeldJobs(db, clock)).toEqual({ released: 0, refused: { superseded_by_later_send: 1 } });
++    // The superseded revision was never sent, the job is still held, and the refusals left no audit event.
++    expect(states(first)).toEqual([]);
++    expect(db.prepare('SELECT state, last_error FROM jobs WHERE id = ?').get(heldJobId)).toEqual({ state: 'intervention', last_error: RECONCILE_AFTER_RESTORE });
++    expect(count(db, "SELECT count(*) FROM audit_events WHERE operation LIKE 'operations.held_job_%'")).toBe(auditBefore);
++  });
++});
++
+ describe('restore refusals', () => {
+   let t: TestContext;
+   let backupsRoot: string;
+diff --git a/tests/integration/sends.test.ts b/tests/integration/sends.test.ts
+index f5125774..a1f1b169 100644
+--- a/tests/integration/sends.test.ts
++++ b/tests/integration/sends.test.ts
+@@ -5,9 +5,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
+ import { createApp } from '../../src/server/app.ts';
+ import { LoginRateLimiter } from '../../src/server/auth/rateLimit.ts';
+ import { FileStore } from '../../src/server/files/fileStore.ts';
++import { claimNextJob } from '../../src/server/jobs/jobStore.ts';
+ import { createPdfJobHandler } from '../../src/server/jobs/pdfJob.ts';
+ import { runJobsOnce } from '../../src/server/jobs/runner.ts';
+-import { createSendJobHandler } from '../../src/server/jobs/sendJob.ts';
++import { createSendJobHandler, JOB_SEND_EMAIL } from '../../src/server/jobs/sendJob.ts';
+ import { captureFolder } from '../../src/server/mail/captureAdapter.ts';
+ import { createOutboundAdapter, type OutboundAdapter, type SendOutcome } from '../../src/server/mail/outbound.ts';
+ import { listOverdueRecords, runDeadlineScan, setAutomationActivation } from '../../src/server/services/automation.ts';
+@@ -313,6 +314,36 @@ describe('a send that still waits for an older revision (R-UX5B-1)', () => {
+     const sent = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
+     expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+   });
++
++  // WP5-UX5-FIX11 (mutant G2 of RECHECK-B): a send job that a runner holds (leased, inside its PDF check or the network call) still waits.
++  it("blocks the correction's send while the older revision's job is leased by a runner, writing nothing, and lets it through once that job has run", async () => {
++    const first = await signed();
++    expect((await postSend(first, await sendBody(first))).status).toBe(201);
++    await addSession('2026-09-16', '09:00', '18:00', 'Synthetic forgotten day');
++    const review = await t.request('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: employee });
++    const correction = await t.request('POST', `/api/timesheets/${PAYROLL}/revisions`, {
++      cookie: employee,
++      body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false },
++    });
++    expect(correction.status, JSON.stringify(correction.body)).toBe(201);
++    const second = correction.body.revision.id as string;
++    // A runner claims revision 1's send job and has not finished it.
++    const claimed = claimNextJob(t.db, t.clock, { owner: 'runner-leased', kinds: [JOB_SEND_EMAIL], leaseSeconds: 600 });
++    expect(claimed?.revisionId).toBe(first);
++    expect(t.db.prepare('SELECT state FROM jobs WHERE id = ?').pluck().get(claimed?.id)).toBe('leased');
++    const before = writeState();
++    const blocked = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
++    expect(blocked.status).toBe(409);
++    expect(blocked.body.error.code).toBe('delivery_in_progress');
++    expect(writeState()).toEqual(before);
++    // The runner lets the lease run out and the job runs again: delivered, then the correction can be sent.
++    t.clock.advanceSeconds(601);
++    await runPdf();
++    await runSend();
++    expect(t.db.prepare('SELECT state FROM delivery_attempts WHERE revision_id = ?').pluck().all(first)).toEqual(['accepted']);
++    const sent = await postSend(second, await sendBody(second, { reason: 'Synthetic corrected copy' }));
++    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
++  });
+ });
+ 
+ describe("the owner's reason rule (B-A2)", () => {
+diff --git a/tests/integration/timesheet-api.test.ts b/tests/integration/timesheet-api.test.ts
+index e7374fdf..7ffec5d0 100644
+--- a/tests/integration/timesheet-api.test.ts
++++ b/tests/integration/timesheet-api.test.ts
+@@ -122,6 +122,26 @@ describe('calculations through the API', () => {
+     ]);
+   });
+ 
++  it('files a check-in under the local date of its own start on either side of the reporting-zone midnight', async () => {
++    // 2026-10-27T07:00:00Z is the Los Angeles midnight that ends 2026-10-26 (PDT).
++    const { t, cookie } = await setup('2026-10-27T06:59:58Z');
++    const night = await t.request('POST', '/api/clock/in', { cookie, body: { input_zone: 'America/Los_Angeles' } });
++    expect(night.body.session).toMatchObject({ work_date: '2026-10-26', start_utc: '2026-10-27T06:59:58Z', end_utc: null });
++    // After the midnight the running session still belongs to the day it started on, open; the new day holds nothing.
++    t.clock.set('2026-10-27T07:00:30Z');
++    const opened = (await t.request('GET', '/api/days/2026-10-26', { cookie })).body.sessions;
++    expect(opened).toHaveLength(1);
++    expect(opened[0]).toMatchObject({ work_date: '2026-10-26', end_utc: null });
++    expect((await t.request('GET', '/api/days/2026-10-27', { cookie })).body.sessions).toEqual([]);
++    const out = await t.request('POST', '/api/clock/out', { cookie, body: { breaks: [], breaks_confirmed: true, expected_version: 1 } });
++    expect(out.body.session).toMatchObject({ work_date: '2026-10-26', end_utc: '2026-10-27T07:00:30Z' });
++    // A check-in after the midnight is the new day's.
++    t.clock.set('2026-10-27T07:00:31Z');
++    const morning = await t.request('POST', '/api/clock/in', { cookie, body: { input_zone: 'America/Los_Angeles' } });
++    expect(morning.body.session).toMatchObject({ work_date: '2026-10-27', start_utc: '2026-10-27T07:00:31Z', end_utc: null });
++    expect((await t.request('GET', '/api/days/2026-10-26', { cookie })).body.sessions.filter((item: { end_utc: string | null }) => item.end_utc === null)).toEqual([]);
++  });
++
+   it('keeps open sessions and unknown breaks pending instead of inventing minutes', async () => {
+     const { t, cookie } = await setup('2026-09-28T16:00:00Z');
+     const open = await t.request('POST', '/api/clock/in', { cookie, body: { input_zone: 'America/Los_Angeles' } });

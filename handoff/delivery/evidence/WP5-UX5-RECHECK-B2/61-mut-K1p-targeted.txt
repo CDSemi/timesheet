@@ -1,0 +1,272 @@
+
+ RUN  v5.0.2 <task>/probe
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts (12 tests | 11 failed) 10973ms
+   ❯ RECHECK-B2: release of a held superseded send after a restore (12)
+     × Q1 queued later send of revision 2: refused 958ms
+     × L1 leased later send of revision 2: refused 860ms
+     × S1 succeeded later send of revision 2: refused, revision 1 never delivered 892ms
+     × F1 later send of revision 2 failed permanently: docs/05:72 says refused while any later send of the period exists 979ms
+     × U1 later send of revision 2 uncertain, no decision: the copy may have arrived; the older copy must not follow 976ms
+     × U2 later send of revision 2 uncertain, owner marks it delivered: the older copy must not follow 905ms
+     × U3 later send of revision 2 uncertain, owner resends it with a reason: refused while the resend waits and after it succeeded 891ms
+     × U4 later send of revision 2 left uncertain by a runner that died after `sending` (crash recovery path) 831ms
+     × R1 a later send of the SAME revision 1 that ended uncertain and was marked delivered: releasing the held one would be a duplicate 863ms
+     × P1 another period of the same owner is not affected; bulk release releases it and keeps revision 1 held 607ms
+     × D1 a second restore taken while the correction waited holds both jobs; the superseded one must stay held 1109ms
+
+ Test Files  1 failed (1)
+      Tests  11 failed | 1 passed (12)
+   Start at  14:19:18
+   Duration  12.06s (tests 92%, transform 5%, import 3%)
+
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/zz-recheck-b2-restore.test.ts > RECHECK-B2: release of a held superseded send after a restore > Q1 queued later send of revision 2: refused
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts:189:21
+    187|     expect(sent.status).toBe(201);
+    188|     const release = await releaseAndRun('Q1', r, held);
+    189|     expect(release).toEqual({ outcome: 'refused', code: 'superseded_by…
+       |                     ^
+    190|   });
+    191|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-restore.test.ts > RECHECK-B2: release of a held superseded send after a restore > L1 leased later send of revision 2: refused
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts:202:21
+    200|     const release = releaseHeldJob(r.db, r.clock, held);
+    201|     note('L1', 'releaseHeldJob', release);
+    202|     expect(release).toEqual({ outcome: 'refused', code: 'superseded_by…
+       |                     ^
+    203|   });
+    204|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-restore.test.ts > RECHECK-B2: release of a held superseded send after a restore > S1 succeeded later send of revision 2: refused, revision 1 never delivered
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts:211:21
+    209|     await capturePass(r, 'rb2-s1');
+    210|     const release = await releaseAndRun('S1', r, held);
+    211|     expect(release).toEqual({ outcome: 'refused', code: 'superseded_by…
+       |                     ^
+    212|     expect(attempts(r.db).map((a) => a.revision_no)).toEqual([2]);
+    213|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-restore.test.ts > RECHECK-B2: release of a held superseded send after a restore > F1 later send of revision 2 failed permanently: docs/05:72 says refused while any later send of the period exists
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts:223:21
+    221|     note('F1', 'revision 2 job', jobsOf(r.db, revision));
+    222|     const release = await releaseAndRun('F1', r, held);
+    223|     expect(release).toEqual({ outcome: 'refused', code: 'superseded_by…
+       |                     ^
+    224|   });
+    225|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-restore.test.ts > RECHECK-B2: release of a held superseded send after a restore > U1 later send of revision 2 uncertain, no decision: the copy may have arrived; the older copy must not follow
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts:234:21
+    232|     note('U1', 'revision 2 job', jobsOf(r.db, revision));
+    233|     const release = await releaseAndRun('U1', r, held);
+    234|     expect(release).toEqual({ outcome: 'refused', code: 'superseded_by…
+       |                     ^
+    235|     expect(attempts(r.db).filter((a) => a.revision_no === 1)).toEqual(…
+    236|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-restore.test.ts > RECHECK-B2: release of a held superseded send after a restore > U2 later send of revision 2 uncertain, owner marks it delivered: the older copy must not follow
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts:249:21
+    247|     note('U2', 'revision 2 job after the decision', jobsOf(r.db, revis…
+    248|     const release = await releaseAndRun('U2', r, held);
+    249|     expect(release).toEqual({ outcome: 'refused', code: 'superseded_by…
+       |                     ^
+    250|     expect(attempts(r.db).filter((a) => a.revision_no === 1)).toEqual(…
+    251|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-restore.test.ts > RECHECK-B2: release of a held superseded send after a restore > U3 later send of revision 2 uncertain, owner resends it with a reason: refused while the resend waits and after it succeeded
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts:266:21
+    264|     note('U3', 'releaseHeldJob while the resend waits', waiting);
+    265|     const after = await releaseAndRun('U3', r, held);
+    266|     expect(waiting).toEqual({ outcome: 'refused', code: 'superseded_by…
+       |                     ^
+    267|     expect(after).toEqual({ outcome: 'refused', code: 'superseded_by_l…
+    268|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-restore.test.ts > RECHECK-B2: release of a held superseded send after a restore > U4 later send of revision 2 left uncertain by a runner that died after `sending` (crash recovery path)
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts:287:21
+    285|     note('U4', 'revision 2 attempts', r.db.prepare('SELECT state, deci…
+    286|     const release = await releaseAndRun('U4', r, held);
+    287|     expect(release).toEqual({ outcome: 'refused', code: 'superseded_by…
+       |                     ^
+    288|   });
+    289|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-restore.test.ts > RECHECK-B2: release of a held superseded send after a restore > R1 a later send of the SAME revision 1 that ended uncertain and was marked delivered: releasing the held one would be a duplicate
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts:302:21
+    300|     note('R1', 'decision mark_delivered', [decided.status, decided.bod…
+    301|     const release = await releaseAndRun('R1', r, held);
+    302|     expect(release).toEqual({ outcome: 'refused', code: 'superseded_by…
+       |                     ^
+    303|   });
+    304|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-restore.test.ts > RECHECK-B2: release of a held superseded send after a restore > P1 another period of the same owner is not affected; bulk release releases it and keeps revision 1 held
+AssertionError: expected { released: 2, refused: {} } to deeply equal { released: 1, refused: { …(1) } }
+
+- Expected
++ Received
+
+  {
+-   "refused": {
+-     "superseded_by_later_send": 1,
+-   },
+-   "released": 1,
++   "refused": {},
++   "released": 2,
+  }
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts:313:18
+    311|     const bulk = releaseAllHeldJobs(r.db, r.clock);
+    312|     note('P1', 'releaseAllHeldJobs', bulk);
+    313|     expect(bulk).toEqual({ released: 1, refused: { superseded_by_later…
+       |                  ^
+    314|     expect(jobsOf(r.db, r.otherFirst ?? '')[0]?.state).toBe('queued');
+    315|     expect(jobsOf(r.db, r.first)[0]?.state).toBe('intervention');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-restore.test.ts > RECHECK-B2: release of a held superseded send after a restore > D1 a second restore taken while the correction waited holds both jobs; the superseded one must stay held
+AssertionError: expected { released: 2, refused: {} } to deeply equal { released: 1, refused: { …(1) } }
+
+- Expected
++ Received
+
+  {
+-   "refused": {
+-     "superseded_by_later_send": 1,
+-   },
+-   "released": 1,
++   "refused": {},
++   "released": 2,
+  }
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts:373:18
+    371|     note('D1', 'capture pass', await capturePass(r2, 'rb2-d1'));
+    372|     note('D1', 'attempts in order', attempts(db2).map((a) => [a.revisi…
+    373|     expect(bulk).toEqual({ released: 1, refused: { superseded_by_later…
+       |                  ^
+    374|   });
+    375| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯

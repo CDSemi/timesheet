@@ -1,0 +1,41 @@
+// Usage: node mask.mjs <dest-dir> <file>...  Copies each file as masked LF text: ANSI codes removed, CRLF -> LF, the task folder,
+// the repository, the local app data folder, the user profile and the Windows user name replaced by placeholders; exactly one
+// final newline. Refuses to write a file that holds an e-mail address other than *@example.invalid or a password-like assignment.
+import { readFileSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+
+const [dest, ...files] = process.argv.slice(2);
+const user = process.env.USERPROFILE ?? '';
+const userName = user.split(/[\\/]/).pop() ?? '';
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const variants = (p) => {
+  if (p === '') return [];
+  const win = p.replace(/\//g, '\\');
+  const fwd = p.replace(/\\/g, '/');
+  const cyg = fwd.replace(/^([A-Za-z]):/, (_, d) => `/${d.toLowerCase()}`);
+  return [...new Set([win.replace(/\\/g, '\\\\'), win, fwd, cyg])];
+};
+const rules = [
+  ...variants('<task>').map((v) => [v, '<task>']),
+  ...variants('<repo>').map((v) => [v, '<repo>']),
+  ...variants(process.env.LOCALAPPDATA ?? '').map((v) => [v, '<localappdata>']),
+  ...variants(process.env.APPDATA ?? '').map((v) => [v, '<appdata>']),
+  ...variants(user).map((v) => [v, '<user>']),
+];
+let bad = 0;
+for (const file of files) {
+  let text = readFileSync(file, 'utf8').replace(/\u001b\[[0-9;]*[A-Za-z]/g, '').replace(/\r\n?/g, '\n');
+  for (const [from, to] of rules) text = text.replace(new RegExp(esc(from), 'gi'), to);
+  if (userName.length > 2) text = text.replace(new RegExp(`\\b${esc(userName)}\\b`, 'gi'), '<user>');
+  const emails = [...text.matchAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g)].map((m) => m[0]).filter((m) => !/@example\.invalid$/i.test(m));
+  if (emails.length > 0) {
+    console.error(`${file}: non-synthetic address-like strings: ${[...new Set(emails)].join(', ')}`);
+    bad += 1;
+    continue;
+  }
+  text = `${text.replace(/\n+$/, '')}\n`;
+  const name = basename(file).replace(/\.(log|jsonl|json|sh|mjs|py|ts|diff|patch)$/, (m) => `${m}.txt`).replace(/\.txt\.txt$/, '.txt');
+  writeFileSync(join(dest, name.endsWith('.txt') ? name : `${name}.txt`), text);
+}
+console.log(`masked ${files.length - bad} file(s), refused ${bad}`);
+process.exit(bad === 0 ? 0 : 3);

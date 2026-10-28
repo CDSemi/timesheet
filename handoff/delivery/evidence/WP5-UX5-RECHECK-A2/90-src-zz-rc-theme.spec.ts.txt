@@ -1,0 +1,153 @@
+/*
+ * WP5-UX5-RECHECK-A2 probe (FIX14 product change: followThemeOfOtherTabs in ThemeToggle.tsx, mounted once by App.tsx). A second tab
+ * on the sign-in page; storage cleared (key null); a manual override against the device; another storage key; two listeners while the
+ * menu is open; the attribute sequence (no flash, no loop); a background tab without bringToFront; blocked storage. Synthetic only.
+ */
+import type { Page } from '@playwright/test';
+import { expect, openAccount, test } from './fixtures.ts';
+import { obs } from './zz-rc-lib.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const BG = { dark: 'rgb(14, 18, 23)', light: 'rgb(237, 240, 245)' } as const;
+
+async function state(page: Page): Promise<{ attribute: string | null; bg: string }> {
+  return page.evaluate(() => ({ attribute: document.documentElement.getAttribute('data-theme'), bg: getComputedStyle(document.body).backgroundColor }));
+}
+
+/** Records every change of `data-theme` on <html> in the page (value after each mutation). */
+async function recordThemeMutations(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const log: Array<string | null> = [];
+    (window as unknown as { __themeLog: Array<string | null> }).__themeLog = log;
+    new MutationObserver((records) => {
+      for (const record of records) if (record.attributeName === 'data-theme') log.push(document.documentElement.getAttribute('data-theme'));
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  });
+}
+
+async function themeLog(page: Page): Promise<Array<string | null>> {
+  return page.evaluate(() => [...(window as unknown as { __themeLog: Array<string | null> }).__themeLog]);
+}
+
+async function chooseIn(page: Page, theme: 'Light' | 'Dark'): Promise<void> {
+  const panel = await openAccount(page);
+  await page.bringToFront();
+  await panel.getByRole('radiogroup', { name: 'Theme', exact: true }).getByRole('radio', { name: theme, exact: true }).click();
+}
+
+test('the sign-in page follows; storage cleared; manual override vs device; another key; menu open; no flash; a tab behind', async ({ page, signInThroughUi, isMobile }) => {
+  test.setTimeout(120_000);
+  const project = isMobile ? 'mobile' : 'desktop';
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  // The second tab opens first, signed out: it shows the sign-in form and stays on it (the cookie of the first tab's sign-in does not reload it).
+  const second = await page.context().newPage();
+  second.on('pageerror', (error) => {
+    throw error;
+  });
+  await second.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await second.goto('/');
+  await expect(second.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  await recordThemeMutations(second);
+  await page.bringToFront();
+  await signInThroughUi();
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+  const results: Record<string, unknown> = {};
+  results.secondStart = await state(second);
+
+  // The first tab (light device, no choice: Light is checked) chooses Dark, then Light: a manual Light against the second tab's dark device.
+  await chooseIn(page, 'Dark');
+  await second.bringToFront();
+  await expect.poll(async () => (await state(second)).attribute).toBe('dark');
+  results.signInPageFollowsDark = await state(second);
+  await chooseIn(page, 'Light');
+  await second.bringToFront();
+  await expect.poll(async () => (await state(second)).bg).toBe(BG.light);
+  results.signInPageFollowsManualLight = await state(second);
+  results.stillOnSignIn = await second.getByRole('button', { name: 'Sign in' }).isVisible();
+
+  // Storage cleared in the first tab (the storage event has key null): the second tab drops the choice and follows its dark device.
+  await page.bringToFront();
+  await page.evaluate(() => localStorage.clear());
+  await second.bringToFront();
+  await expect.poll(async () => (await state(second)).bg).toBe(BG.dark);
+  results.afterClear = await state(second);
+
+  // Another key: no change of the attribute at all.
+  const before = (await themeLog(second)).length;
+  await page.bringToFront();
+  await page.evaluate(() => localStorage.setItem('zz-rc-other', String(Date.now())));
+  await page.evaluate(() => localStorage.removeItem('zz-rc-other'));
+  await second.bringToFront();
+  await second.evaluate(() => new Promise((resolve) => setTimeout(resolve, 500)));
+  results.otherKeyMutations = (await themeLog(second)).length - before;
+
+  // A tab behind: the first tab chooses Dark while the second stays behind; read the second's attribute without bringing it forward.
+  await page.bringToFront();
+  const t0 = Date.now();
+  await chooseIn(page, 'Dark');
+  const clicked = Date.now();
+  let attributeAt: number | null = null;
+  for (let i = 0; i < 100 && attributeAt === null; i += 1) {
+    if ((await second.evaluate(() => document.documentElement.getAttribute('data-theme'))) === 'dark') attributeAt = Date.now();
+  }
+  const bgBehind = (await state(second)).bg;
+  results.behind = { clickMs: clicked - t0, attributeAfterClickMs: attributeAt === null ? null : attributeAt - clicked, bgWhileBehind: bgBehind };
+
+  // The second tab signs in (reload keeps the stored choice) and opens its menu: two listeners now hear the event.
+  await second.bringToFront();
+  // The signed-in cookie of the first tab already holds: loading the app again shows it signed in (a hash change alone does not reload).
+  await second.goto('/#/timesheet');
+  await second.reload();
+  obs({ kind: 'theme-partial', project, results });
+  await expect(second.getByRole('navigation', { name: 'Main' })).toBeVisible();
+  await recordThemeMutations(second);
+  const secondPanel = await openAccount(second);
+  const secondGroup = secondPanel.getByRole('radiogroup', { name: 'Theme', exact: true });
+  await expect(secondGroup.getByRole('radio', { name: 'Dark', exact: true })).toBeChecked();
+  await chooseIn(page, 'Light');
+  await second.bringToFront();
+  await expect.poll(async () => (await state(second)).bg).toBe(BG.light);
+  await expect(secondGroup.getByRole('radio', { name: 'Light', exact: true })).toBeChecked();
+  await second.evaluate(() => new Promise((resolve) => setTimeout(resolve, 500)));
+  results.menuOpenLog = await themeLog(second);
+  results.menuOpenState = await state(second);
+  obs({ kind: 'theme', project, results });
+  await second.close();
+});
+
+test('blocked storage in the second tab: no error; it follows its device unless it chose for itself', async ({ page, signInThroughUi, isMobile }) => {
+  test.setTimeout(90_000);
+  const project = isMobile ? 'mobile' : 'desktop';
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await signInThroughUi();
+  const second = await page.context().newPage();
+  const errors: string[] = [];
+  second.on('pageerror', (error) => errors.push(String(error)));
+  await second.addInitScript(() => {
+    Object.defineProperty(window, 'localStorage', {
+      get() {
+        throw new DOMException('blocked', 'SecurityError');
+      },
+    });
+  });
+  await second.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await second.goto('/#/timesheet');
+  await expect(second.getByRole('navigation', { name: 'Main' })).toBeVisible();
+  const results: Record<string, unknown> = {};
+  await chooseIn(page, 'Dark');
+  await second.bringToFront();
+  await second.evaluate(() => new Promise((resolve) => setTimeout(resolve, 700)));
+  results.blockedAfterOtherDark = await state(second);
+  // The second tab (light device, Light checked) chooses Dark for itself (kept for the page only); then the first tab chooses Light.
+  const panel = await openAccount(second);
+  await panel.getByRole('radiogroup', { name: 'Theme', exact: true }).getByRole('radio', { name: 'Dark', exact: true }).click();
+  await expect.poll(async () => (await state(second)).attribute).toBe('dark');
+  await chooseIn(page, 'Light');
+  await second.bringToFront();
+  await second.evaluate(() => new Promise((resolve) => setTimeout(resolve, 700)));
+  results.blockedOwnChoiceKept = await state(second);
+  results.pageErrors = errors;
+  obs({ kind: 'theme-blocked', project, results });
+  await second.close();
+});

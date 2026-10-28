@@ -1,0 +1,38 @@
+
+ RUN  v5.0.2 <task>/mut
+
+ ❯ tests/integration/restore.test.ts (33 tests | 1 failed) 15550ms
+   ❯ a held send of a superseded revision (F-UX5B2-1) (1)
+     × is not released once the owner has sent a correction of the period, while it waits, while a runner holds it or after it succeeded, and the old copy never follows the new 469ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 32 passed (33)
+   Start at  14:06:56
+   Duration  16.91s (tests 93%, transform 4%, import 3%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send of a superseded revision (F-UX5B2-1) > is not released once the owner has sent a correction of the period, while it waits, while a runner holds it or after it succeeded, and the old copy never follows the new
+AssertionError: expected [ [ …(2) ] ] to deeply equal [ [ …(2) ] ]
+
+- Expected
++ Received
+
+  [
+    [
+      "2f94c944-e7fb-4c6a-9402-1299f7930bbc",
+-     "superseded_by_later_send",
++     null,
+    ],
+  ]
+
+ ❯ tests/integration/restore.test.ts:611:61
+    609|     const auditBefore = count(db, "SELECT count(*) FROM audit_events W…
+    610|     const refusal = { outcome: 'refused', code: 'superseded_by_later_s…
+    611|     expect(heldSends().map((job) => [job.id, job.blocker])).toEqual([[…
+       |                                                             ^
+    612|     expect(releaseHeldJob(db, clock, heldJobId)).toEqual(refusal);
+    613|     expect(releaseAllHeldJobs(db, clock)).toEqual({ released: 0, refus…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

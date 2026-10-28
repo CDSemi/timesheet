@@ -547,14 +547,17 @@ function blockerOf(db: Db, job: HeldRow): ReleaseBlocker | null {
     )
     .get(job.revision_id, job.user_id, job.id);
   if (open !== undefined) return 'delivery_attempt_open';
-  // A later send of ANY revision of the same period (not only of the held job's own revision) keeps the held job held, so the
-  // older revision's copy cannot arrive after the correction's (R-UX5B-1, the same period-wide rule as the send guard).
+  // A later send job of ANY revision of the same period (not only of the held job's own revision) keeps the held job held, so the
+  // older revision's copy cannot arrive after the correction's (R-UX5B-1, the same period-wide rule as the send guard). It counts in
+  // whatever state it is in or ended: waiting, leased, succeeded, or `intervention` (failed for good, uncertain, decided by the owner,
+  // or held by another restore); a copy that may have arrived must not be followed by an older one. Only a cancelled job (it never ran
+  // and cannot run) does not count.
   const later = db
     .prepare<[string, string, string, number], { one: number }>(
       `SELECT 1 AS one FROM jobs j
          JOIN timesheet_revisions r ON r.id = j.revision_id AND r.user_id = j.user_id
          JOIN timesheet_revisions held ON held.timesheet_id = r.timesheet_id AND held.user_id = r.user_id
-        WHERE held.id = ? AND j.user_id = ? AND j.kind = ? AND j.rowid > ? AND j.state IN ('queued', 'leased', 'succeeded') LIMIT 1`,
+        WHERE held.id = ? AND j.user_id = ? AND j.kind = ? AND j.rowid > ? AND j.state <> 'cancelled' LIMIT 1`,
     )
     .get(job.revision_id, job.user_id, job.kind, job.rowid);
   return later === undefined ? null : 'superseded_by_later_send';

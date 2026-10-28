@@ -1,0 +1,34 @@
+// Usage: node sum.mjs <obs.jsonl>...  Summaries of the probe observations (ring coverage, axe, walks, sideways, theme, dirty, fence).
+import { readFileSync } from 'node:fs';
+
+const records = process.argv.slice(2).flatMap((file) => readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line)));
+const byKind = (kind) => records.filter((r) => r.kind === kind);
+
+const ring = byKind('ring');
+if (ring.length > 0) {
+  const edges = ['top', 'bottom', 'left', 'right'];
+  const minFocused = Object.fromEntries(edges.map((e) => [e, Math.min(...ring.map((r) => r.focused[e]))]));
+  const maxUnfocused = Object.fromEntries(edges.map((e) => [e, Math.max(...ring.map((r) => r.unfocused[e]))]));
+  const gaps = ring.map((r) => r.focused.gap).filter((g) => g !== null && g !== undefined);
+  const minGap = gaps.length === 0 ? null : Math.min(...gaps);
+  const bandMin = ring[0].focused.bandPixels === undefined ? null : Object.fromEntries(edges.map((e) => [e, Math.min(...ring.map((r) => r.focused.bandPixels[e]))]));
+  const moved = ring.filter((r) => r.scrollAfterFocus !== r.scrollLeft).map((r) => `${r.width}/${r.card}/${r.state}/${r.scrollLeft}->${r.scrollAfterFocus}`);
+  const notVisible = ring.filter((r) => !r.focusVisible).length;
+  const below = ring.filter((r) => edges.some((e) => r.focused[e] < 1)).map((r) => `${r.width}px card ${r.card} ${r.state} scroll ${r.scrollLeft}: ${edges.map((e) => `${e} ${r.focused[e].toFixed(3)}`).join(' ')}`);
+  const contrast = [...new Set(ring.map((r) => `${r.state}: accent/card ${r.contrastCard}, accent/WEEK bar ${r.contrastHead}`))];
+  console.log(JSON.stringify({ ringStates: ring.length, widths: [...new Set(ring.map((r) => r.width))], minFocused, maxUnfocused, minGapShare: minGap, gapMeasured: gaps.length, minWholeBandPixels: bandMin, focusMovedScroll: moved, notFocusVisible: notVisible, statesBelowFull: below, contrast, layerSample: ring[0].layer }, null, 1));
+}
+for (const kind of ['ring-mouse', 'ring-tab', 'ring-forced', 'ring-resize', 'dirty', 'reason-field', 'reason-same-task', 'reason-revert', 'theme', 'theme-blocked', 'fence']) {
+  for (const r of byKind(kind)) console.log(JSON.stringify(r));
+}
+const axe = byKind('axe');
+if (axe.length > 0) {
+  const violations = axe.filter((r) => r.violations.length > 0);
+  const incomplete = {};
+  for (const r of axe) for (const id of r.incomplete) incomplete[id] = (incomplete[id] ?? 0) + 1;
+  console.log(JSON.stringify({ axeScans: axe.length, withViolations: violations.map((r) => ({ label: r.label, violations: r.violations })), incompleteIds: incomplete, labels: axe.map((r) => r.label) }, null, 1));
+}
+const walks = byKind('walk');
+for (const w of walks) console.log(JSON.stringify({ walk: w.label, stops: w.stops, noIndicator: w.noIndicator, hidden: w.hidden, cards: w.cards }));
+const sideways = byKind('sideways');
+for (const s of sideways) console.log(JSON.stringify(s));

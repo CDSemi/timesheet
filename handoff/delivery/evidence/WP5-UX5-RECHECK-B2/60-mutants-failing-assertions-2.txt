@@ -1,0 +1,68 @@
+== K4
+17:AssertionError: expected [ Array(6) ] to deeply equal [ Array(6) ]
+18-
+19-- Expected
+20-+ Received
+21-
+22-  [
+23-    "send_email:attempt_uncertain",
+33: ❯ tests/integration/restore.test.ts:428:86
+== T3
+17:AssertionError: expected { status: 'complete', …(12) } to match object { regular_seconds: 30670, …(3) }
+18-(9 matching properties omitted from actual)
+19-
+20-- Expected
+21-+ Received
+22-
+23-  {
+34: ❯ tests/integration/timesheet-api.test.ts:111:38
+== T5b
+19:TypeError: Cannot read properties of undefined (reading 'calculation')
+20- ❯ tests/integration/timesheet-api.test.ts:111:25
+21-    109|     const out = await t.request('POST', '/api/clock/out', { cookie, bo…
+22-    110|     // 4h00m40s + 4h30m30s = 8h31m10s → R = 511 (per-session flooring …
+23-    111|     expect(out.body.day.calculation).toMatchObject({
+24-       |                         ^
+25-    112|       regular_seconds: 30_670,
+--
+31:AssertionError: expected undefined to match object { work_date: '2026-10-26', …(1) }
+32-
+33-- Expected:
+34-{
+35-  "end_utc": "2026-10-27T07:00:30Z",
+36-  "work_date": "2026-10-26",
+37-}
+--
+53:TypeError: Cannot read properties of undefined (reading 'calculation')
+54- ❯ tests/integration/timesheet-api.test.ts:156:35
+55-    154|     t.clock.set('2026-09-29T01:00:00Z');
+56-    155|     const unknownBreaks = await t.request('POST', '/api/clock/out', { …
+57-    156|     expect(unknownBreaks.body.day.calculation).toMatchObject({ status:…
+58-       |                                   ^
+59-    157|     const sheet = await t.request('GET', '/api/timesheets/2026-10-16',…
+20: ❯ tests/integration/timesheet-api.test.ts:111:25
+42: ❯ tests/integration/timesheet-api.test.ts:137:30
+54: ❯ tests/integration/timesheet-api.test.ts:156:35
+== K2p
+6:     × F1 later send of revision 2 failed permanently: docs/05:72 says refused while any later send of the period exists 556ms
+7:     × U1 later send of revision 2 uncertain, no decision: the copy may have arrived; the older copy must not follow 607ms
+8:     × U2 later send of revision 2 uncertain, owner marks it delivered: the older copy must not follow 518ms
+9:     × U4 later send of revision 2 left uncertain by a runner that died after `sending` (crash recovery path) 678ms
+10:     × R1 a later send of the SAME revision 1 that ended uncertain and was marked delivered: releasing the held one would be a duplicate 507ms
+11:     × E1 a held send of the NEWEST revision is releasable although an older revision was delivered before it (no over-blocking) 454ms
+14:      Tests  6 failed | 6 passed (12)
+19:⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+== K1p (final probe)
+6:     × Q1 queued later send of revision 2: refused 958ms
+7:     × L1 leased later send of revision 2: refused 860ms
+8:     × S1 succeeded later send of revision 2: refused, revision 1 never delivered 892ms
+9:     × F1 later send of revision 2 failed permanently: docs/05:72 says refused while any later send of the period exists 979ms
+10:     × U1 later send of revision 2 uncertain, no decision: the copy may have arrived; the older copy must not follow 976ms
+11:     × U2 later send of revision 2 uncertain, owner marks it delivered: the older copy must not follow 905ms
+12:     × U3 later send of revision 2 uncertain, owner resends it with a reason: refused while the resend waits and after it succeeded 891ms
+13:     × U4 later send of revision 2 left uncertain by a runner that died after `sending` (crash recovery path) 831ms
+14:     × R1 a later send of the SAME revision 1 that ended uncertain and was marked delivered: releasing the held one would be a duplicate 863ms
+15:     × P1 another period of the same owner is not affected; bulk release releases it and keeps revision 1 held 607ms
+16:     × D1 a second restore taken while the correction waited holds both jobs; the superseded one must stay held 1109ms
+19:      Tests  11 failed | 1 passed (12)
+24:⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯

@@ -1,0 +1,16 @@
+. <task>/env.sh
+cd $T/export
+run() {
+  local name=$1; shift
+  local s=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  "$@" > $T/out/$name.txt 2>&1
+  local rc=$?
+  local e=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  echo "$name exit=$rc start=$s end=$e" >> $T/out/03-core-exits.txt
+}
+run 03-typecheck npm run typecheck
+run 03-lint npm run lint
+run 03-npmtest npm test
+run 03-build npm run build
+run 03-ac13 npx vitest run tests/integration/ac13-two-week.test.ts
+echo core-done >> $T/out/03-core-exits.txt

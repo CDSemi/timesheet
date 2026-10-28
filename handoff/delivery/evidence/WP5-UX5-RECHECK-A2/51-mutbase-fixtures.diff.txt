@@ -1,0 +1,47 @@
+60,61c60,62
+< function freePort(): Promise<number> {
+<   return new Promise((resolvePort, reject) => {
+---
+> // WP5-UX5-RECHECK-A2 probe copy only: the built servers of the probes take a port of the task's range 51282-51309.
+> function tryPort(port: number): Promise<boolean> {
+>   return new Promise((resolveTry) => {
+63,67c64,65
+<     probe.once('error', reject);
+<     probe.listen(0, '127.0.0.1', () => {
+<       const address = probe.address();
+<       probe.close(() => (typeof address === 'object' && address !== null ? resolvePort(address.port) : reject(new Error('No port'))));
+<     });
+---
+>     probe.once('error', () => resolveTry(false));
+>     probe.listen(port, '127.0.0.1', () => probe.close(() => resolveTry(true)));
+70a69,77
+> async function freePort(): Promise<number> {
+>   const worker = Number(process.env.TEST_WORKER_INDEX ?? '0');
+>   for (let attempt = 0; attempt < 28; attempt += 1) {
+>     const port = 51282 + ((worker * 4 + attempt) % 28);
+>     if (await tryPort(port)) return port;
+>   }
+>   throw new Error('No free port in 51282-51309');
+> }
+> 
+826a834,853
+>   },
+>   // WP5-UX5-RECHECK-A2 scratch copy only (DIAG5's model, as REGATE10 merged it): delay the matchMedia 'change' notification (what
+>   // useMedia hears) by DIAG_MQ_DELAY ms for every page; inert when the variable is unset.
+>   page: async ({ page }, use) => {
+>     const delay = Number(process.env.DIAG_MQ_DELAY ?? '0');
+>     if (delay > 0) {
+>       await page.addInitScript((ms: number) => {
+>         const original = window.matchMedia.bind(window);
+>         window.matchMedia = (query: string) => {
+>           const list = original(query);
+>           const add = list.addEventListener.bind(list);
+>           list.addEventListener = ((type: string, listener: EventListener, options?: boolean | AddEventListenerOptions) => {
+>             if (type === 'change') add(type, ((event: Event) => setTimeout(() => listener(event), ms)) as EventListener, options);
+>             else add(type, listener, options);
+>           }) as typeof list.addEventListener;
+>           return list;
+>         };
+>       }, delay);
+>     }
+>     await use(page);

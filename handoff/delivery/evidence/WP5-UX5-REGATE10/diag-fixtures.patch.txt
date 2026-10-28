@@ -1,0 +1,28 @@
+--- <task>/export-prev/tests/e2e/fixtures.ts	2026-10-28 04:19:03.000000000 -0700
++++ <task>/fixtures.diag.ts	2026-10-28 11:55:24.085466700 -0700
+@@ -786,6 +786,25 @@
+   baseURL: async ({ builtServer }, use) => {
+     await use(builtServer.origin);
+   },
++  // DIAG5 scratch only: delay the matchMedia 'change' notification (what useMedia hears) by DIAG_MQ_DELAY ms for every page.
++  page: async ({ page }, use) => {
++    const delay = Number(process.env.DIAG_MQ_DELAY ?? '0');
++    if (delay > 0) {
++      await page.addInitScript((ms: number) => {
++        const original = window.matchMedia.bind(window);
++        window.matchMedia = (query: string) => {
++          const list = original(query);
++          const add = list.addEventListener.bind(list);
++          list.addEventListener = ((type: string, listener: EventListener, options?: boolean | AddEventListenerOptions) => {
++            if (type === 'change') add(type, ((event: Event) => setTimeout(() => listener(event), ms)) as EventListener, options);
++            else add(type, listener, options);
++          }) as typeof list.addEventListener;
++          return list;
++        };
++      }, delay);
++    }
++    await use(page);
++  },
+   privateServer: [
+     async ({}, use) => {
+       const { server, stop } = await startBuiltServer({ runner: false });

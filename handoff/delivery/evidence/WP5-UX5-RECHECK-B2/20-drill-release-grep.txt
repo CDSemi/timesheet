@@ -1,0 +1,22 @@
+14:// job and spends no attempt (host copy after a clean stop). Attempt 2 (coordinator decision): that paused instance is
+17:// `cli.js outbound release --job <id>` and `--all` (with `--confirm`) send the held jobs, each exactly once.
+314:const decideAll = (plan) => (plan?.decisions_required ?? []).map((item) => ({ work_date: item.work_date, action: item.allowed_actions.includes('import') ? 'import' : 'skip' }));
+397:  const committedResult = await call('POST', `/api/imports/${committedBatch?.id}/commit`, { cookie, body: { decisions: decideAll(committedBatch?.plan) } });
+398:  check('the batch commits with a decision for every listed day', committedResult.status === 200 && committedResult.json?.status === 'committed' && committedResult.json?.import?.state === 'committ
+575:      attempts: db.prepare('SELECT id, state, decision FROM delivery_attempts ORDER BY id').all(),
+876:  const held = parseJson(cliIn(['outbound', 'release']).stdout);
+878:  check('outbound release (preview, exit 2) lists the held send job as releasable', held?.outcome === 'confirmation_required' && held?.held >= 1 && heldSend !== undefined, JSON.stringify({ held: h
+893:  const release = cliIn(['outbound', 'release', '--job', heldSend?.id ?? 'none', '--confirm']);
+894:  check('cli.js outbound release --job <id> --confirm releases one held job (exit 0)', release.status === 0 && parseJson(release.stdout)?.outcome === 'released', release.stdout.trim());
+895:  const bulk = cliIn(['outbound', 'release', '--all', '--confirm']);
+898:    'cli.js outbound release --all --confirm releases the remaining held send jobs (exit 0, released >= 1)',
+907:  const again = cliIn(['outbound', 'release', '--job', heldSend?.id ?? 'none', '--confirm']);
+1406:  const required = batch?.plan?.decisions_required ?? [];
+1407:  check('the owner previews the workbook through /api/imports (201, new batch, plan with decisions to make)', preview.status === 201 && preview.json?.created === true && batch?.state === 'preview
+1410:  const decisions = decideAll(batch?.plan);
+1411:  check('every listed day gets a decision (skip, or import where the plan allows it)', decisions.length === required.length && decisions.length > 0, `${decisions.filter((item) => item.action === 
+1412:  const first = await call('POST', `/api/imports/${batch?.id}/commit`, { cookie: employee.cookie, body: { decisions } });
+1424:  const second = await call('POST', `/api/imports/${batch?.id}/commit`, { cookie: employee.cookie, body: { decisions } });
+1426:  const different = await call('POST', `/api/imports/${batch?.id}/commit`, { cookie: employee.cookie, body: { decisions: [] } });
+1427:  check('committing the batch with other decisions is refused (409 import_already_committed)', different.status === 409 && different.json?.error?.code === 'import_already_committed');
+1456:  const otherCommit = await call('POST', `/api/imports/${batch?.id}/commit`, { cookie: other.cookie, body: { decisions } });

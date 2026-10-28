@@ -1,0 +1,48 @@
+mutant MA1 file src/client/styles.css build client args tests/e2e/review.spec.ts -g signature rows|opened again --project=desktop --workers=2 --reporter=list env none
+start 2026-10-28T21:40:16Z
+mutated src/client/styles.css (1 replacement(s))
+mutate exit 0
+build exit 0
+
+Running 2 tests using 1 worker
+
+  x  1 [desktop] › tests\e2e\review.spec.ts:737:1 › signature rows: the PDF block insets and proportions, lines aligned by row and column, Sign off 8px inside its line, two rows at every width (1.4s)
+  ok 2 [desktop] › tests\e2e\review.spec.ts:779:1 › a signed period opened again (reloaded): the signed image, name and mark stay readable and uncovered beside Sign correction, and the four lines stay aligned (2.0s)
+
+
+  1) [desktop] › tests\e2e\review.spec.ts:737:1 › signature rows: the PDF block insets and proportions, lines aligned by row and column, Sign off 8px inside its line, two rows at every width 
+
+    Error: the unsigned employee line is 52px high at 600px (measured 57)
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 0.5
+    Received:    5
+
+      756 |       const height = (await rect(footer.locator(`[data-sig-line="${name}"]`))).height;
+      757 |       unsignedHeight ??= height;
+    > 758 |       expect(Math.abs(height - unsignedHeight), `the unsigned ${name} line is ${unsignedHeight}px high at ${width}px (measured ${height})`).toBeLessThanOrEqual(0.5);
+          |                                                                                                                                             ^
+      759 |     }
+      760 |     lines.push(`${width}px: ${JSON.stringify(Object.fromEntries(Object.entries(measured).map(([key, value]) => [key, Number(value.toFixed(4))])))}`);
+      761 |     await expectNoSidewaysScroll(page);
+        at <task>\export-mut\tests\e2e\review.spec.ts:758:141
+
+    Error Context: ..\tmp\pw-mut-MA1\review-signature-rows-the--7b19f-ine-two-rows-at-every-width-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\pw-mut-MA1\review-signature-rows-the--7b19f-ine-two-rows-at-every-width-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\pw-mut-MA1\review-signature-rows-the--7b19f-ine-two-rows-at-every-width-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\review.spec.ts:737:1 › signature rows: the PDF block insets and proportions, lines aligned by row and column, Sign off 8px inside its line, two rows at every width 
+  1 passed (7.7s)
+tests exit 1
+restored byte-identical to the backup
+equal to the clean export
+restore build exit 0
+end 2026-10-28T21:40:27Z

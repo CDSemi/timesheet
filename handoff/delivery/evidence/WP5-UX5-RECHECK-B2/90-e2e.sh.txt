@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Full e2e, both projects, real clock, in the pristine export. Usage: e2e.sh <label>
+source <task>/env.sh
+mkdir -p "$T/tmp-e2e-$1"
+export TEMP="$(cygpath -w "$T/tmp-e2e-$1")" TMP="$(cygpath -w "$T/tmp-e2e-$1")" TMPDIR="$T/tmp-e2e-$1"
+cd "$X" || exit 9
+start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+echo "e2e-$1 start=$start local-LA=$(TZ=America/Los_Angeles date '+%a %Y-%m-%d %H:%M:%S %Z')" >> "$T/logs/e2e-exits.txt"
+npm run test:e2e -- --output="$(cygpath -w "$T/e2e-out-$1")" > "$T/logs/e2e-$1.log" 2>&1
+code=$?
+echo "e2e-$1 exit=$code start=$start end=$(date -u +%Y-%m-%dT%H:%M:%SZ) local-LA-end=$(TZ=America/Los_Angeles date '+%a %Y-%m-%d %H:%M:%S %Z')" >> "$T/logs/e2e-exits.txt"

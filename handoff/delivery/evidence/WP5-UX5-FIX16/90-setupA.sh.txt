@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Export A: a clean export of the target commit, npm ci inside it.
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX16/env.sh
+cd "$REPO" || exit 9
+git archive --format=tar "$TARGET" > "$T/target.tar"
+echo "archive exit=$?" >> "$T/logs/setupA.txt"
+tar -xf "$T/target.tar" -C "$A"
+echo "untar A exit=$?" >> "$T/logs/setupA.txt"
+echo "node $(node --version) npm $(npm --version)" >> "$T/logs/setupA.txt"
+cd "$A" && npm ci > "$T/logs/npm-ci-A.txt" 2>&1
+echo "npm ci A exit=$? at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/logs/setupA.txt"

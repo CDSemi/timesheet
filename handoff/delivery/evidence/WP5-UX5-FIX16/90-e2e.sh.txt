@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Full e2e, both projects, real clock, in export B.
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX16/env.sh
+mkdir -p "$T/tmp-e2e"
+export TEMP="$(cygpath -w "$T/tmp-e2e")" TMP="$(cygpath -w "$T/tmp-e2e")" TMPDIR="$T/tmp-e2e"
+cd "$B" || exit 9
+start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+echo "e2e start=$start local-LA=$(TZ=America/Los_Angeles date '+%a %Y-%m-%d %H:%M:%S %Z')" >> "$T/logs/e2e-exits.txt"
+npm run test:e2e -- --output="$(cygpath -w "$T/e2e-out")" > "$T/logs/e2e.log" 2>&1
+code=$?
+echo "e2e exit=$code start=$start end=$(date -u +%Y-%m-%dT%H:%M:%SZ) local-LA-end=$(TZ=America/Los_Angeles date '+%a %Y-%m-%d %H:%M:%S %Z')" >> "$T/logs/e2e-exits.txt"

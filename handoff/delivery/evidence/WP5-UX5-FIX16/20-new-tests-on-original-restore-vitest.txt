@@ -1,0 +1,147 @@
+
+ RUN  v5.0.2 <task>/exA
+
+ ❯ tests/integration/restore.test.ts (41 tests | 6 failed) 22175ms
+   ❯ a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) (8)
+     × a later send that failed for good 703ms
+     × a later send that ended uncertain and has no decision yet 735ms
+     × a later send that ended uncertain and that the owner marked delivered 731ms
+     × a later send that a runner left uncertain by dying inside the network call 664ms
+     × a later send that a second restore holds as well: only the newest of the two is releasable 519ms
+     × the owner's repeat of the same revision that ended uncertain and was marked delivered: the held copy would be a second one 565ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) > a later send that failed for good
+AssertionError: expected null to be 'superseded_by_later_send' // Object.is equality
+
+- Expected:
+"superseded_by_later_send"
+
++ Received:
+null
+
+ ❯ expectStaysHeld tests/integration/restore.test.ts:789:74
+    787|     const auditBefore = audits();
+    788|     const sentBefore = attemptsOf(r.db).map((attempt) => attempt.id);
+    789|     expect(listHeldJobs(r.db).find((job) => job.id === r.held)?.blocke…
+       |                                                                          ^
+    790|     expect(releaseHeldJob(r.db, r.clock, r.held)).toEqual(REFUSED);
+    791|     expect(releaseAllHeldJobs(r.db, r.clock)).toEqual({ released: 0, r…
+ ❯ tests/integration/restore.test.ts:809:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) > a later send that ended uncertain and has no decision yet
+AssertionError: expected null to be 'superseded_by_later_send' // Object.is equality
+
+- Expected:
+"superseded_by_later_send"
+
++ Received:
+null
+
+ ❯ expectStaysHeld tests/integration/restore.test.ts:789:74
+    787|     const auditBefore = audits();
+    788|     const sentBefore = attemptsOf(r.db).map((attempt) => attempt.id);
+    789|     expect(listHeldJobs(r.db).find((job) => job.id === r.held)?.blocke…
+       |                                                                          ^
+    790|     expect(releaseHeldJob(r.db, r.clock, r.held)).toEqual(REFUSED);
+    791|     expect(releaseAllHeldJobs(r.db, r.clock)).toEqual({ released: 0, r…
+ ❯ tests/integration/restore.test.ts:819:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) > a later send that ended uncertain and that the owner marked delivered
+AssertionError: expected null to be 'superseded_by_later_send' // Object.is equality
+
+- Expected:
+"superseded_by_later_send"
+
++ Received:
+null
+
+ ❯ expectStaysHeld tests/integration/restore.test.ts:789:74
+    787|     const auditBefore = audits();
+    788|     const sentBefore = attemptsOf(r.db).map((attempt) => attempt.id);
+    789|     expect(listHeldJobs(r.db).find((job) => job.id === r.held)?.blocke…
+       |                                                                          ^
+    790|     expect(releaseHeldJob(r.db, r.clock, r.held)).toEqual(REFUSED);
+    791|     expect(releaseAllHeldJobs(r.db, r.clock)).toEqual({ released: 0, r…
+ ❯ tests/integration/restore.test.ts:831:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) > a later send that a runner left uncertain by dying inside the network call
+AssertionError: expected null to be 'superseded_by_later_send' // Object.is equality
+
+- Expected:
+"superseded_by_later_send"
+
++ Received:
+null
+
+ ❯ expectStaysHeld tests/integration/restore.test.ts:789:74
+    787|     const auditBefore = audits();
+    788|     const sentBefore = attemptsOf(r.db).map((attempt) => attempt.id);
+    789|     expect(listHeldJobs(r.db).find((job) => job.id === r.held)?.blocke…
+       |                                                                          ^
+    790|     expect(releaseHeldJob(r.db, r.clock, r.held)).toEqual(REFUSED);
+    791|     expect(releaseAllHeldJobs(r.db, r.clock)).toEqual({ released: 0, r…
+ ❯ tests/integration/restore.test.ts:849:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) > a later send that a second restore holds as well: only the newest of the two is releasable
+AssertionError: expected [ [ …(2) ], [ …(2) ] ] to deeply equal [ [ …(2) ], [ …(2) ] ]
+
+- Expected
++ Received
+
+@@ -1,9 +1,9 @@
+  [
+    [
+      "4f03b894-cd93-4264-a75a-ac95a2826db9",
+-     "superseded_by_later_send",
++     null,
+    ],
+    [
+      "e3057d23-7eb7-42bb-8d0e-a91b8f1c7a71",
+      null,
+    ],
+
+ ❯ tests/integration/restore.test.ts:870:111
+    868|       { state: 'intervention', last_error: RECONCILE_AFTER_RESTORE },
+    869|     ]);
+    870|     expect(listHeldJobs(db).filter((job) => job.kind === JOB_SEND_EMAI…
+       |                                                                                                               ^
+    871|       [r2.held, 'superseded_by_later_send'],
+    872|       [secondHeld, null],
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) > the owner's repeat of the same revision that ended uncertain and was marked delivered: the held copy would be a second one
+AssertionError: expected null to be 'superseded_by_later_send' // Object.is equality
+
+- Expected:
+"superseded_by_later_send"
+
++ Received:
+null
+
+ ❯ expectStaysHeld tests/integration/restore.test.ts:789:74
+    787|     const auditBefore = audits();
+    788|     const sentBefore = attemptsOf(r.db).map((attempt) => attempt.id);
+    789|     expect(listHeldJobs(r.db).find((job) => job.id === r.held)?.blocke…
+       |                                                                          ^
+    790|     expect(releaseHeldJob(r.db, r.clock, r.held)).toEqual(REFUSED);
+    791|     expect(releaseAllHeldJobs(r.db, r.clock)).toEqual({ released: 0, r…
+ ❯ tests/integration/restore.test.ts:897:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  6 failed | 51 passed (57)
+   Start at  15:01:15
+   Duration  23.56s (tests 92%, transform 5%, import 3%)

@@ -1,0 +1,14 @@
+// Lists WP5-UX4 / WP5-UX5 tasks of the board with kind, status, model and agent id (read-only).
+// Usage: node board-authors.mjs <board.json>
+import { readFileSync } from 'node:fs';
+
+const board = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const tasks = (board.tasks ?? []).filter((task) => /^WP5-UX[45]-/.test(task.id));
+const models = new Map();
+for (const task of tasks) {
+  console.log(`${task.id}\t${task.kind}\t${task.status}\t${task.actual_model ?? task.requested_model ?? '-'}\t${task.agent_id ?? '-'}`);
+  if (['implement', 'fix', 'plan', 'diagnose', 'commit'].includes(task.kind) && task.actual_model) models.set(task.actual_model, (models.get(task.actual_model) ?? 0) + 1);
+}
+console.log(`author-kind models: ${JSON.stringify(Object.fromEntries(models))}`);
+const self = (board.tasks ?? []).find((task) => task.id === 'WP5-UX5-RECHECK-B2');
+console.log(`this task: ${JSON.stringify(self ?? null)}`);

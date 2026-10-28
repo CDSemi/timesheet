@@ -1,0 +1,11 @@
+# Usage: bash e2e-full.sh <tag>   (the real-clock FULL e2e on both projects, in the clean export, default config: 2 workers)
+. <task>/env.sh
+TAG=$1
+cd $T/export
+mkdir -p $T/tmp/pw-$TAG
+export E2E_SCREENSHOT_DIR="$TW\\tmp\\shots-$TAG"
+s=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+npx playwright test --output=$T/tmp/pw-$TAG > $T/out/06-e2e-full-$TAG.txt 2>&1
+rc=$?
+e=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+echo "e2e-full $TAG exit=$rc start=$s end=$e" >> $T/out/06-e2e-exits.txt

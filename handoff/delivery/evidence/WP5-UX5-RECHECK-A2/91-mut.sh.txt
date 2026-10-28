@@ -1,0 +1,38 @@
+# Usage: bash mut.sh <name> <file> <client|none> <playwright args...>
+# The mutation is mutants/<name>.json (exact old/new texts). Runs in export-mut: back up the file, mutate, rebuild the client when
+# asked, run the named tests, restore from the backup, compare byte for byte with the backup and with the clean export (fixtures.ts:
+# with the probe port helper copy), rebuild again. Extra env for the run: MUT_ENV (e.g. DIAG_MQ_DELAY=90).
+. <task>/env.sh
+NAME=$1; FILE=$2; BUILD=$3; shift 3
+cd $T/export-mut
+LOG=$T/out/mut-$NAME.txt
+mkdir -p $T/mutbak $T/tmp/pw-mut-$NAME
+cp "$FILE" "$T/mutbak/$NAME.orig"
+echo "mutant $NAME file $FILE build $BUILD args $* env ${MUT_ENV:-none}" > $LOG
+echo "start $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $LOG
+if [ "$NAME" != "${NAME#CTL}" ]; then
+  echo "control run: no mutation" >> $LOG
+  mrc=0
+else
+  node $T/mutate.mjs "$FILE" "$T/mutants/$NAME.json" >> $LOG 2>&1
+  mrc=$?
+fi
+echo "mutate exit $mrc" >> $LOG
+if [ $mrc -eq 0 ]; then
+  if [ "$BUILD" = "client" ]; then npm run build:client > $T/out/mut-$NAME-build.txt 2>&1; echo "build exit $?" >> $LOG; fi
+  export E2E_SCREENSHOT_DIR="$TW\\tmp\\mutshots"
+  if [ -n "${MUT_ENV:-}" ]; then export $MUT_ENV; fi
+  if [ -n "${MUT_SHIFT:-}" ]; then
+    SHIFT_EXPORT=$T/export-mut bash $T/run-shift.sh mut-$NAME "$MUT_SHIFT" "$@" >> $LOG 2>&1
+    echo "tests exit $(grep '^exit=' $LOG | sed 's/exit=//')" >> $LOG
+  else
+    npx playwright test --output=$T/tmp/pw-mut-$NAME "$@" >> $LOG 2>&1
+    echo "tests exit $?" >> $LOG
+  fi
+fi
+cp "$T/mutbak/$NAME.orig" "$FILE"
+cmp "$FILE" "$T/mutbak/$NAME.orig" && echo "restored byte-identical to the backup" >> $LOG
+if [ -f "$T/mutbase/$FILE" ]; then cmp "$FILE" "$T/mutbase/$FILE" && echo "equal to the mutation base copy" >> $LOG; else cmp "$FILE" "$T/export/$FILE" && echo "equal to the clean export" >> $LOG; fi
+if [ "$BUILD" = "client" ]; then npm run build:client > $T/out/mut-$NAME-restore-build.txt 2>&1; echo "restore build exit $?" >> $LOG; fi
+echo "end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $LOG
+echo "mutant $NAME done $(grep '^tests exit' $LOG)" >> $T/out/mut-exits.txt

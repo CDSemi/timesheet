@@ -1,0 +1,29 @@
+/*
+ * WP5-UX5-RECHECK-A2 probe: one dark-theme picture of the focused Review week card at 768px, scrolled to its end (synthetic data).
+ */
+import { expect, test } from './fixtures.ts';
+import { reviewerOf, settleWidth, signInAt } from './zz-rc-lib.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+test('dark ring picture at 768px, scrolled to the end', async ({ page, adminSeed, builtServer, isMobile }) => {
+  test.skip(isMobile, 'desktop project sets the width');
+  const person = await reviewerOf(adminSeed, builtServer);
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await signInAt(page, person, `#/review/${person.payrollDate}`);
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  await page.setViewportSize({ width: 768, height: 1000 });
+  await settleWidth(page, 768);
+  const card = page.locator('[data-paper="review"] .sheet-week').first();
+  await card.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+    window.scrollBy(0, element.getBoundingClientRect().top - 120);
+  });
+  await page.keyboard.press('Shift');
+  await card.focus();
+  await expect(card).toBeFocused();
+  const box = await card.boundingBox();
+  if (box === null) throw new Error('no box');
+  await page.mouse.move(0, 0);
+  await page.screenshot({ path: `${process.env.RC_SHOTS ?? ''}/rc-ring-768-end-device-dark-synthetic.png`, clip: { x: Math.max(0, box.x - 4), y: Math.max(0, box.y - 4), width: Math.min(768, box.width + 8), height: box.height + 8 } });
+});

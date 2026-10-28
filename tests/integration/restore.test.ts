@@ -19,7 +19,7 @@ import { JOB_SEND_REMINDER } from '../../src/server/jobs/reminderJob.ts';
 import { createJobHandlers, runJobsOnce } from '../../src/server/jobs/runner.ts';
 import { createSendJobHandler, JOB_SEND_EMAIL } from '../../src/server/jobs/sendJob.ts';
 import { captureFolder } from '../../src/server/mail/captureAdapter.ts';
-import { createOutboundAdapter } from '../../src/server/mail/outbound.ts';
+import { createOutboundAdapter, type OutboundAdapter, type SendOutcome } from '../../src/server/mail/outbound.ts';
 import { createBackup } from '../../src/server/ops/backup.ts';
 import { MANIFEST_FILE_NAME } from '../../src/server/ops/manifest.ts';
 import {
@@ -636,6 +636,310 @@ describe('a held send of a superseded revision (F-UX5B2-1)', () => {
     expect(states(first)).toEqual([]);
     expect(db.prepare('SELECT state, last_error FROM jobs WHERE id = ?').get(heldJobId)).toEqual({ state: 'intervention', last_error: RECONCILE_AFTER_RESTORE });
     expect(count(db, "SELECT count(*) FROM audit_events WHERE operation LIKE 'operations.held_job_%'")).toBe(auditBefore);
+  });
+});
+
+/*
+ * WP5-UX5-FIX16 (F-UX5B3-1): the release of a held send is refused for as long as ANY later send job of the period exists, whatever
+ * state it is in or ended in (docs/05 "Corrections and resends", docs/11 section 7). The blocker counted only a later job that was
+ * queued, leased or succeeded, so a correction whose send ended in `intervention` (failed for good, uncertain, uncertain and marked
+ * delivered by the owner, uncertain after a runner died in `sending`, or held by a second restore) let the superseded copy go out after
+ * it; so did the owner's repeat of the same revision once it ended uncertain and was marked delivered. Only a cancelled send job
+ * does not count: it never ran and cannot run (no product path cancels a send job, so the case sets the state itself).
+ */
+describe('a held send stays held whatever state the later send of the period ends in (F-UX5B3-1)', () => {
+  const PAYROLL = '2026-10-02';
+  const REFUSED = { outcome: 'refused', code: 'superseded_by_later_send' };
+  const UNCERTAIN: SendOutcome = { kind: 'uncertain', code: 'smtp_connection_lost_after_data', providerResponse: null };
+  const FAILED: SendOutcome = { kind: 'failed_permanent', code: 'smtp_rejected', providerResponse: '550 5.1.1' };
+  const cleanups: Array<() => void> = [];
+  afterAll(() => {
+    for (const cleanup of cleanups.reverse()) cleanup();
+  });
+
+  const folder = (prefix: string): string => {
+    const dir = scratch(prefix);
+    cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+    return dir;
+  };
+  const fixed = (outcome: SendOutcome): OutboundAdapter => ({ mode: 'capture', send: () => Promise.resolve(outcome) });
+
+  interface Instance {
+    db: Db;
+    clock: MutableClock;
+    request: TestContext['request'];
+    cookie: string;
+    dataDir: string;
+    dbPath: string;
+    files: FileStore;
+    config: TestContext['config'];
+    userId: string;
+    /** The first revision of the period and the job a restore holds for it. */
+    first: string;
+    held: string;
+  }
+
+  /** An app over a (restored) database, answering as the owner. */
+  function appOver(db: Db, clock: MutableClock, config: TestContext['config'], userId: string) {
+    const app = createApp({ db, clock, config, loginLimiter: new LoginRateLimiter(), staticDir: null });
+    const cookie = `${SESSION_COOKIE}=${createAuthSession(db, clock, userId, 3600).token}`;
+    const request: TestContext['request'] = async (method, path, options = {}) => {
+      const headers: Record<string, string> = { origin: ORIGIN, cookie: options.cookie ?? cookie };
+      const init: RequestInit = { method, headers };
+      if (options.body !== undefined) {
+        headers['content-type'] = 'application/json';
+        init.body = JSON.stringify(options.body);
+      }
+      const response = await app.request(path, init);
+      const text = await response.text();
+      const body: unknown = text === '' ? null : JSON.parse(text);
+      return { status: response.status, body, headers: response.headers };
+    };
+    return { request, cookie };
+  }
+
+  const sendJobOf = (db: Db, revisionId: string): { id: string; state: string } => {
+    const job = db.prepare<[string], { id: string; state: string }>("SELECT id, state FROM jobs WHERE revision_id = ? AND kind = 'send_email' ORDER BY rowid LIMIT 1").get(revisionId);
+    if (job === undefined) throw new Error('the revision has no send job');
+    return job;
+  };
+
+  /** A source holding revision 1's waiting send (and, optionally, revision 1 already delivered), backed up and restored in isolation. */
+  async function build(options: { deliverFirstInSource?: boolean } = {}): Promise<{ source: TestContext; employee: string; first: string; restore: (clock: MutableClock) => Promise<Instance> }> {
+    const source = await createTestContext(NOW);
+    cleanups.push(() => source.close());
+    const employee = await source.login('employee');
+    const files = new FileStore(dataDirOf(source));
+    const settings = await source.request('POST', '/api/settings/submission', {
+      cookie: employee,
+      body: { expected_seq: 0, to: ['payroll@example.invalid'], cc: [], auto_submit: false },
+    });
+    expect(settings.status, JSON.stringify(settings.body)).toBeLessThan(300);
+    saveSignature(source.db, source.clock, files, source.userIds.employee, makePng(40, 12), 'image/png');
+    await addSession(source, employee, '2026-09-15', '09:00', '18:00');
+    const first = await signOff(source, employee, PAYROLL);
+    if (options.deliverFirstInSource === true) {
+      const delivery = loadDeliveryConfig({ MAIL_FROM: SENDER, DATA_DIR: dataDirOf(source) }, { databasePath: join(dataDirOf(source), '..', 'unused.db'), port: 3000, production: false });
+      const handlers = createJobHandlers({ db: source.db, clock: source.clock, files, delivery });
+      await runJobsOnce({ db: source.db, clock: source.clock, owner: 'runner-f16-pdf', leaseSeconds: 600, handlers });
+      source.clock.advanceSeconds(120);
+      await runJobsOnce({ db: source.db, clock: source.clock, owner: 'runner-f16-send', leaseSeconds: 600, handlers });
+      expect(attemptsOf(source.db).map((attempt) => attempt.state)).toEqual(['accepted']);
+    }
+    return {
+      source,
+      employee,
+      first,
+      restore: async (clock) => {
+        source.clock.set('2026-09-29T20:04:00Z');
+        const backup = await createBackup({ databasePath: source.config.databasePath, dataDir: dataDirOf(source), targetDir: folder('timesheet-f16-backups-'), clock: source.clock });
+        const target = join(folder('timesheet-f16-restore-'), 'instance');
+        await restoreBackup({ fromDir: backup.directory, toDir: target, liveDataDir: dataDirOf(source), liveDatabasePath: source.config.databasePath, clock });
+        const dbPath = join(target, RESTORED_DATABASE_NAME);
+        const db = openDatabase(dbPath);
+        cleanups.push(() => db.close());
+        expect(resumeOutbound(db, clock)).toMatchObject({ outcome: 'resumed' });
+        const { request, cookie } = appOver(db, clock, source.config, source.userIds.employee);
+        const dataDir = join(target, RESTORED_DATA_DIR);
+        return { db, clock, request, cookie, dataDir, dbPath, files: new FileStore(dataDir), config: source.config, userId: source.userIds.employee, first, held: sendJobOf(db, first).id };
+      },
+    };
+  }
+
+  async function restoredInstance(): Promise<Instance> {
+    return (await build()).restore(new MutableClock(LATER));
+  }
+
+  /** The owner's correction of the period on the restored instance (revision 2), and the send of it. */
+  async function correctAndSend(r: Instance, extra: Record<string, unknown> = {}): Promise<string> {
+    const edit = await r.request('POST', '/api/days/2026-09-16/sessions', {
+      body: { start: la('2026-09-16T09:00'), end: la('2026-09-16T18:00'), input_zone: LA, breaks: [], breaks_confirmed: true, reason: 'Synthetic forgotten day' },
+    });
+    expect(edit.status, JSON.stringify(edit.body)).toBe(201);
+    const review = await r.request('GET', `/api/timesheets/${PAYROLL}/review`);
+    const correction = await r.request('POST', `/api/timesheets/${PAYROLL}/revisions`, {
+      body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false },
+    });
+    expect(correction.status, JSON.stringify(correction.body)).toBe(201);
+    const revision = correction.body.revision.id as string;
+    const sent = await sendWithDefaults({ request: r.request }, r.cookie, revision, extra);
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+    return revision;
+  }
+
+  const pdfPass = (r: Instance) => runJobsOnce({ db: r.db, clock: r.clock, owner: 'runner-f16-pdf', handlers: { render_pdf: createPdfJobHandler({ db: r.db, clock: r.clock, files: r.files }) } });
+  const stubSendPass = (r: Instance, outcome: SendOutcome) =>
+    runJobsOnce({ db: r.db, clock: r.clock, owner: 'runner-f16-stub', leaseSeconds: 600, handlers: { send_email: createSendJobHandler({ db: r.db, clock: r.clock, files: r.files, outbound: fixed(outcome), senderAddress: SENDER }) } });
+  const capturePass = (r: Instance, owner: string) => {
+    const delivery = loadDeliveryConfig({ MAIL_FROM: SENDER, DATA_DIR: r.dataDir }, { databasePath: join(r.dataDir, '..', 'unused.db'), port: 3000, production: false });
+    return runJobsOnce({ db: r.db, clock: r.clock, owner, leaseSeconds: 600, handlers: createJobHandlers({ db: r.db, clock: r.clock, files: r.files, delivery }) });
+  };
+  const revisionNosSent = (db: Db): number[] =>
+    db
+      .prepare<[], { revision_no: number }>('SELECT r.revision_no FROM delivery_attempts a JOIN timesheet_revisions r ON r.id = a.revision_id ORDER BY a.rowid')
+      .all()
+      .map((row) => row.revision_no);
+  const blockersOf = (db: Db) => listHeldJobs(db).filter((job) => job.kind === JOB_SEND_EMAIL).map((job) => job.blocker);
+
+  /** The held job stays held: listed as superseded, refused by id and in bulk, and a runner pass never sends it. */
+  async function expectStaysHeld(r: Instance): Promise<void> {
+    const audits = () => count(r.db, "SELECT count(*) FROM audit_events WHERE operation LIKE 'operations.held_job_%'");
+    const auditBefore = audits();
+    const sentBefore = attemptsOf(r.db).map((attempt) => attempt.id);
+    expect(listHeldJobs(r.db).find((job) => job.id === r.held)?.blocker).toBe('superseded_by_later_send');
+    expect(releaseHeldJob(r.db, r.clock, r.held)).toEqual(REFUSED);
+    expect(releaseAllHeldJobs(r.db, r.clock)).toEqual({ released: 0, refused: { superseded_by_later_send: 1 } });
+    r.clock.advanceSeconds(120);
+    await capturePass(r, 'runner-f16-after-refusal');
+    expect(r.db.prepare('SELECT state, last_error FROM jobs WHERE id = ?').get(r.held)).toEqual({ state: 'intervention', last_error: RECONCILE_AFTER_RESTORE });
+    // The pass opened no attempt: the held copy was not sent.
+    expect(attemptsOf(r.db).map((attempt) => attempt.id)).toEqual(sentBefore);
+    expect(audits()).toBe(auditBefore);
+  }
+
+  const attemptIdOf = (db: Db, revisionId: string): string => db.prepare<[string], { id: string }>("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'uncertain'").get(revisionId)?.id ?? '';
+
+  it('a later send that failed for good', async () => {
+    const r = await restoredInstance();
+    const second = await correctAndSend(r);
+    await pdfPass(r);
+    await stubSendPass(r, FAILED);
+    expect(sendJobOf(r.db, second).state).toBe('intervention');
+    expect(attemptsOf(r.db).map((attempt) => attempt.state)).toEqual(['failed_permanent']);
+    await expectStaysHeld(r);
+  });
+
+  it('a later send that ended uncertain and has no decision yet', async () => {
+    const r = await restoredInstance();
+    const second = await correctAndSend(r);
+    await pdfPass(r);
+    await stubSendPass(r, UNCERTAIN);
+    expect(sendJobOf(r.db, second).state).toBe('intervention');
+    expect(attemptsOf(r.db).map((attempt) => [attempt.state, attempt.decision])).toEqual([['uncertain', null]]);
+    await expectStaysHeld(r);
+  });
+
+  it('a later send that ended uncertain and that the owner marked delivered', async () => {
+    const r = await restoredInstance();
+    const second = await correctAndSend(r);
+    await pdfPass(r);
+    await stubSendPass(r, UNCERTAIN);
+    const decided = await r.request('POST', `/api/deliveries/${attemptIdOf(r.db, second)}/decision`, { body: { decision: 'mark_delivered' } });
+    expect(decided.status, JSON.stringify(decided.body)).toBe(200);
+    expect(sendJobOf(r.db, second).state).toBe('intervention');
+    expect(attemptsOf(r.db).map((attempt) => [attempt.state, attempt.decision])).toEqual([['uncertain', 'treat_as_accepted']]);
+    await expectStaysHeld(r);
+  });
+
+  it('a later send that a runner left uncertain by dying inside the network call', async () => {
+    const r = await restoredInstance();
+    const second = await correctAndSend(r);
+    await pdfPass(r);
+    const job = claimNextJob(r.db, r.clock, { owner: 'runner-f16-dies', kinds: [JOB_SEND_EMAIL], leaseSeconds: 600 });
+    expect(job?.revisionId).toBe(second);
+    const crash = () => {
+      throw new SimulatedCrash('beforeSend');
+    };
+    const handler = createSendJobHandler({ db: r.db, clock: r.clock, files: r.files, outbound: fixed(UNCERTAIN), senderAddress: SENDER, hooks: { beforeSend: crash } });
+    if (job !== null) await expect(handler({ job, renewLease: () => true })).rejects.toBeInstanceOf(SimulatedCrash);
+    r.clock.advanceSeconds(601);
+    await capturePass(r, 'runner-f16-recover');
+    expect(sendJobOf(r.db, second).state).toBe('intervention');
+    expect(attemptsOf(r.db).map((attempt) => [attempt.state, attempt.provider_response])).toEqual([['uncertain', 'lease_expired_while_sending']]);
+    await expectStaysHeld(r);
+  });
+
+  it('a later send that a second restore holds as well: only the newest of the two is releasable', async () => {
+    const r = await restoredInstance();
+    const second = await correctAndSend(r);
+    r.clock.set('2026-09-29T21:10:00Z');
+    const backup = await createBackup({ databasePath: r.dbPath, dataDir: r.dataDir, targetDir: folder('timesheet-f16-backups2-'), clock: r.clock });
+    const target = join(folder('timesheet-f16-restore2-'), 'instance');
+    const clock = new MutableClock('2026-09-29T22:00:00Z');
+    await restoreBackup({ fromDir: backup.directory, toDir: target, liveDataDir: r.dataDir, liveDatabasePath: r.dbPath, clock });
+    const db = openDatabase(join(target, RESTORED_DATABASE_NAME));
+    cleanups.push(() => db.close());
+    expect(resumeOutbound(db, clock)).toMatchObject({ outcome: 'resumed' });
+    const dataDir = join(target, RESTORED_DATA_DIR);
+    const r2: Instance = { ...r, db, clock, dataDir, files: new FileStore(dataDir), held: sendJobOf(db, r.first).id };
+    const secondHeld = sendJobOf(db, second).id;
+    expect(db.prepare('SELECT state, last_error FROM jobs WHERE id IN (?, ?)').all(r2.held, secondHeld)).toEqual([
+      { state: 'intervention', last_error: RECONCILE_AFTER_RESTORE },
+      { state: 'intervention', last_error: RECONCILE_AFTER_RESTORE },
+    ]);
+    expect(listHeldJobs(db).filter((job) => job.kind === JOB_SEND_EMAIL).map((job) => [job.id, job.blocker])).toEqual([
+      [r2.held, 'superseded_by_later_send'],
+      [secondHeld, null],
+    ]);
+    expect(releaseHeldJob(db, clock, r2.held)).toEqual(REFUSED);
+    // In bulk the correction's send is released and the superseded one stays held; only the correction goes out.
+    expect(releaseAllHeldJobs(db, clock)).toEqual({ released: 1, refused: { superseded_by_later_send: 1 } });
+    clock.advanceSeconds(120);
+    await capturePass(r2, 'runner-f16-second-restore');
+    expect(revisionNosSent(db)).toEqual([2]);
+    expect(releaseHeldJob(db, clock, r2.held)).toEqual(REFUSED);
+    expect(db.prepare('SELECT state, last_error FROM jobs WHERE id = ?').get(r2.held)).toEqual({ state: 'intervention', last_error: RECONCILE_AFTER_RESTORE });
+  });
+
+  it("the owner's repeat of the same revision that ended uncertain and was marked delivered: the held copy would be a second one", async () => {
+    const r = await restoredInstance();
+    const again = await sendWithDefaults({ request: r.request }, r.cookie, r.first);
+    expect(again.status, JSON.stringify(again.body)).toBe(201);
+    // While the repeat waits, it is a later send of the period.
+    expect(blockersOf(r.db)).toEqual(['superseded_by_later_send']);
+    await pdfPass(r);
+    await stubSendPass(r, UNCERTAIN);
+    // While its attempt awaits the owner's decision, the open attempt of the same revision blocks (an existing, unchanged code).
+    expect(releaseHeldJob(r.db, r.clock, r.held)).toEqual({ outcome: 'refused', code: 'delivery_attempt_open' });
+    const decided = await r.request('POST', `/api/deliveries/${attemptIdOf(r.db, r.first)}/decision`, { body: { decision: 'mark_delivered' } });
+    expect(decided.status, JSON.stringify(decided.body)).toBe(200);
+    // No attempt is open any more, yet a later send of the period exists (the repeat, which may have arrived): still refused.
+    await expectStaysHeld(r);
+    expect(attemptsOf(r.db).map((attempt) => [attempt.revision_id, attempt.state, attempt.decision])).toEqual([[r.first, 'uncertain', 'treat_as_accepted']]);
+  });
+
+  it('a cancelled later send does not hold the superseded copy back (the opposite rule would keep it held)', async () => {
+    const r = await restoredInstance();
+    const second = await correctAndSend(r);
+    expect(blockersOf(r.db)).toEqual(['superseded_by_later_send']);
+    // No product path cancels a send job; the state is set here to pin the rule for a job that never ran and cannot run.
+    expect(r.db.prepare("UPDATE jobs SET state = 'cancelled' WHERE id = ?").run(sendJobOf(r.db, second).id).changes).toBe(1);
+    expect(blockersOf(r.db)).toEqual([null]);
+    expect(releaseAllHeldJobs(r.db, r.clock)).toEqual({ released: 1, refused: {} });
+    r.clock.advanceSeconds(120);
+    await capturePass(r, 'runner-f16-cancelled');
+    expect(revisionNosSent(r.db)).toEqual([1]);
+  });
+
+  it('E1: the newest revision\'s held send is released when only an older revision of the period was delivered', async () => {
+    const built = await build({ deliverFirstInSource: true });
+    const { source } = built;
+    // On the source the owner corrects and sends revision 2 (a reason is asked: revision 1's copy counts); its send waits.
+    const sourceApp = appOver(source.db, source.clock, source.config, source.userIds.employee);
+    source.clock.set('2026-09-29T20:03:00Z');
+    const onSource: Instance = {
+      db: source.db,
+      clock: source.clock,
+      request: sourceApp.request,
+      cookie: sourceApp.cookie,
+      dataDir: dataDirOf(source),
+      dbPath: source.config.databasePath,
+      files: new FileStore(dataDirOf(source)),
+      config: source.config,
+      userId: source.userIds.employee,
+      first: built.first,
+      held: '',
+    };
+    const second = await correctAndSend(onSource, { reason: 'Synthetic corrected copy' });
+    expect(sendJobOf(source.db, second).state).toBe('queued');
+    const r = await built.restore(new MutableClock(LATER));
+    const heldSecond = sendJobOf(r.db, second).id;
+    // Revision 1's job succeeded in the source, so only revision 2's job is held; the delivered older revision does not block it.
+    expect(listHeldJobs(r.db).filter((job) => job.kind === JOB_SEND_EMAIL).map((job) => [job.id, job.blocker])).toEqual([[heldSecond, null]]);
+    expect(releaseAllHeldJobs(r.db, r.clock)).toEqual({ released: 1, refused: {} });
+    r.clock.advanceSeconds(120);
+    await capturePass(r, 'runner-f16-e1');
+    expect(revisionNosSent(r.db)).toEqual([1, 2]);
   });
 });
 

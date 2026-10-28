@@ -1,0 +1,375 @@
+// WP5-UX5-RECHECK-B2 auditor probe (not part of the product suite): the release of a held send after a restore, against
+// docs/05:72 ("the release is refused (`superseded_by_later_send`) while any later send of the period exists") and docs/11:178
+// ("... or when it would deliver an older revision's copy after a later send of the same period"). Each case builds its own
+// source, backup and isolated restore through the product functions and routes, then drives the later send into one state:
+// queued, leased, succeeded, failed permanently, uncertain (undecided, marked delivered, or resent), uncertain through the
+// crash-recovery path, a later send of the same revision, another period, and a second restore. Observations are written to
+// RECHECK_B2_OUT as JSON lines; each `expect` states what the documents require. Synthetic data, capture or stub adapters only.
+import { appendFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { afterAll, describe, expect, it } from 'vitest';
+import { createApp } from '../../src/server/app.ts';
+import { LoginRateLimiter } from '../../src/server/auth/rateLimit.ts';
+import { createAuthSession, SESSION_COOKIE } from '../../src/server/auth/sessions.ts';
+import { loadDeliveryConfig } from '../../src/server/config.ts';
+import { type Db, openDatabase } from '../../src/server/db/database.ts';
+import { FileStore } from '../../src/server/files/fileStore.ts';
+import { claimNextJob } from '../../src/server/jobs/jobStore.ts';
+import { createPdfJobHandler } from '../../src/server/jobs/pdfJob.ts';
+import { createJobHandlers, runJobsOnce } from '../../src/server/jobs/runner.ts';
+import { createSendJobHandler, JOB_SEND_EMAIL } from '../../src/server/jobs/sendJob.ts';
+import type { OutboundAdapter, SendOutcome } from '../../src/server/mail/outbound.ts';
+import { createBackup } from '../../src/server/ops/backup.ts';
+import { listHeldJobs, releaseAllHeldJobs, releaseHeldJob, RESTORED_DATA_DIR, RESTORED_DATABASE_NAME, restoreBackup, resumeOutbound } from '../../src/server/ops/restore.ts';
+import { saveSignature } from '../../src/server/services/signatures.ts';
+import { makePng } from '../support/pdfText.ts';
+import { sendWithDefaults } from '../support/sends.ts';
+import { createTestContext, la, LA, MutableClock, ORIGIN, type TestContext } from '../support/testApp.ts';
+
+const NOW = '2026-09-29T20:00:00Z';
+const LATER = '2026-09-29T21:00:00Z';
+const SENDER = 'recheck-b2-sender@example.invalid';
+const PAYROLL = '2026-10-02';
+const OTHER_PAYROLL = '2026-09-18';
+const OUT = process.env.RECHECK_B2_OUT ?? join(tmpdir(), 'recheck-b2-restore.jsonl');
+const cleanups: Array<() => void> = [];
+afterAll(() => {
+  for (const cleanup of cleanups.reverse()) cleanup();
+});
+const note = (caseId: string, what: string, value: unknown) => appendFileSync(OUT, `${JSON.stringify({ case: caseId, what, value })}\n`);
+const scratch = (prefix: string): string => {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+};
+const dataDirOf = (t: TestContext): string => join(dirname(t.config.databasePath), 'private-data');
+const fixed = (outcome: SendOutcome): OutboundAdapter => ({ mode: 'capture', send: () => Promise.resolve(outcome) });
+const UNCERTAIN: SendOutcome = { kind: 'uncertain', code: 'smtp_connection_lost_after_data', providerResponse: null };
+const FAILED: SendOutcome = { kind: 'failed_permanent', code: 'smtp_rejected', providerResponse: '550 5.1.1' };
+
+type Req = TestContext['request'];
+interface Restored {
+  db: Db;
+  clock: MutableClock;
+  request: Req;
+  cookie: string;
+  dataDir: string;
+  dbPath: string;
+  files: FileStore;
+  first: string;
+  otherFirst: string | null;
+  sourceDataDir: string;
+  sourceDbPath: string;
+}
+
+async function addSession(request: Req, cookie: string, date: string, reason?: string) {
+  const res = await request('POST', `/api/days/${date}/sessions`, {
+    cookie,
+    body: { start: la(`${date}T09:00`), end: la(`${date}T18:00`), input_zone: LA, breaks: [], breaks_confirmed: true, ...(reason === undefined ? {} : { reason }) },
+  });
+  expect(res.status, JSON.stringify(res.body)).toBe(201);
+}
+
+async function signAndSend(t: TestContext, cookie: string, payroll: string): Promise<string> {
+  const review = await t.request('GET', `/api/timesheets/${payroll}/review`, { cookie });
+  const signed = await t.request('POST', `/api/timesheets/${payroll}/signoff`, {
+    cookie,
+    body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, signer_name: 'Example Employee', incomplete_evidence_acknowledged: true },
+  });
+  expect(signed.status, JSON.stringify(signed.body)).toBe(201);
+  const id = signed.body.revision.id as string;
+  const sent = await sendWithDefaults(t, cookie, id);
+  expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+  return id;
+}
+
+function appFor(db: Db, clock: MutableClock, config: TestContext['config'], userId: string) {
+  const app = createApp({ db, clock, config, loginLimiter: new LoginRateLimiter(), staticDir: null });
+  const cookie = `${SESSION_COOKIE}=${createAuthSession(db, clock, userId, 3600).token}`;
+  const request: Req = async (method, path, options = {}) => {
+    const headers: Record<string, string> = { origin: ORIGIN, cookie: options.cookie ?? cookie };
+    const init: RequestInit = { method, headers };
+    if (options.body !== undefined) {
+      headers['content-type'] = 'application/json';
+      init.body = JSON.stringify(options.body);
+    }
+    const response = await app.request(path, init);
+    const text = await response.text();
+    return { status: response.status, body: text === '' ? null : JSON.parse(text), headers: response.headers };
+  };
+  return { request, cookie };
+}
+
+/** A source whose revision 1 send (and, optionally, another period's send) waits; backed up; restored; resumed. */
+async function restored(options: { otherPeriod?: boolean } = {}): Promise<Restored & { source: TestContext }> {
+  const source = await createTestContext(NOW);
+  cleanups.push(() => source.close());
+  const employee = await source.login('employee');
+  const files = new FileStore(dataDirOf(source));
+  const settings = await source.request('POST', '/api/settings/submission', {
+    cookie: employee,
+    body: { expected_seq: 0, to: ['payroll@example.invalid'], cc: [], auto_submit: false },
+  });
+  expect(settings.status, JSON.stringify(settings.body)).toBeLessThan(300);
+  saveSignature(source.db, source.clock, files, source.userIds.employee, makePng(40, 12), 'image/png');
+  await addSession(source.request, employee, '2026-09-15');
+  const first = await signAndSend(source, employee, PAYROLL);
+  let otherFirst: string | null = null;
+  if (options.otherPeriod === true) {
+    source.clock.set('2026-09-29T20:01:00Z');
+    await addSession(source.request, employee, '2026-09-02', 'Synthetic late entry');
+    otherFirst = await signAndSend(source, employee, OTHER_PAYROLL);
+  }
+  source.clock.set('2026-09-29T20:04:00Z');
+  const backup = await createBackup({ databasePath: source.config.databasePath, dataDir: dataDirOf(source), targetDir: scratch('rb2-backups-'), clock: source.clock });
+  const target = join(scratch('rb2-restore-'), 'instance');
+  const clock = new MutableClock(LATER);
+  await restoreBackup({ fromDir: backup.directory, toDir: target, liveDataDir: dataDirOf(source), liveDatabasePath: source.config.databasePath, clock });
+  const dbPath = join(target, RESTORED_DATABASE_NAME);
+  const db = openDatabase(dbPath);
+  cleanups.push(() => db.close());
+  expect(resumeOutbound(db, clock)).toMatchObject({ outcome: 'resumed' });
+  const { request, cookie } = appFor(db, clock, source.config, source.userIds.employee);
+  const dataDir = join(target, RESTORED_DATA_DIR);
+  return { source, db, clock, request, cookie, dataDir, dbPath, files: new FileStore(dataDir), first, otherFirst, sourceDataDir: dataDirOf(source), sourceDbPath: source.config.databasePath };
+}
+
+const jobsOf = (db: Db, revisionId: string) =>
+  db.prepare<[string], { id: string; state: string; last_error: string | null }>("SELECT id, state, last_error FROM jobs WHERE revision_id = ? AND kind = 'send_email' ORDER BY rowid").all(revisionId);
+const heldBlockers = (db: Db) => listHeldJobs(db).filter((job) => job.kind === JOB_SEND_EMAIL).map((job) => [job.id, job.blocker]);
+const attempts = (db: Db) =>
+  db
+    .prepare<[], { revision_no: number; state: string; decision: string | null; seq: number }>(
+      `SELECT r.revision_no, a.state, a.decision, a.rowid AS seq FROM delivery_attempts a JOIN timesheet_revisions r ON r.id = a.revision_id ORDER BY a.rowid`,
+    )
+    .all();
+
+async function correctAndSend(r: Restored, day: string, extra: Record<string, unknown> = {}, payroll = PAYROLL) {
+  await addSession(r.request, r.cookie, day, 'Synthetic forgotten day');
+  const review = await r.request('GET', `/api/timesheets/${payroll}/review`);
+  const correction = await r.request('POST', `/api/timesheets/${payroll}/revisions`, {
+    body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false },
+  });
+  expect(correction.status, JSON.stringify(correction.body)).toBe(201);
+  const revision = correction.body.revision.id as string;
+  const sent = await sendWithDefaults({ request: r.request }, r.cookie, revision, extra);
+  return { revision, sent };
+}
+
+const pdfPass = (r: Restored) => runJobsOnce({ db: r.db, clock: r.clock, owner: 'rb2-pdf', handlers: { render_pdf: createPdfJobHandler({ db: r.db, clock: r.clock, files: r.files }) } });
+const stubSendPass = (r: Restored, outcome: SendOutcome) =>
+  runJobsOnce({ db: r.db, clock: r.clock, owner: 'rb2-stub', leaseSeconds: 600, handlers: { send_email: createSendJobHandler({ db: r.db, clock: r.clock, files: r.files, outbound: fixed(outcome), senderAddress: SENDER }) } });
+const capturePass = (r: Restored, owner: string) => {
+  const delivery = loadDeliveryConfig({ MAIL_FROM: SENDER, DATA_DIR: r.dataDir }, { databasePath: join(r.dataDir, '..', 'unused.db'), port: 3000, production: false });
+  return runJobsOnce({ db: r.db, clock: r.clock, owner, leaseSeconds: 600, handlers: createJobHandlers({ db: r.db, clock: r.clock, files: r.files, delivery }) });
+};
+
+/** Releases the held job of revision 1 (if the build lets it) and runs a capture pass; records everything. */
+async function releaseAndRun(caseId: string, r: Restored, heldJobId: string) {
+  note(caseId, 'blockers before release', heldBlockers(r.db));
+  const release = releaseHeldJob(r.db, r.clock, heldJobId);
+  note(caseId, 'releaseHeldJob(revision 1 job)', release);
+  r.clock.advanceSeconds(120);
+  const run = await capturePass(r, `rb2-capture-${caseId}`);
+  note(caseId, 'capture pass after release', run);
+  note(caseId, 'attempts in order (revision_no, state, decision)', attempts(r.db).map((a) => [a.revision_no, a.state, a.decision]));
+  return release;
+}
+
+describe('RECHECK-B2: release of a held superseded send after a restore', () => {
+  it('Q1 queued later send of revision 2: refused', async () => {
+    const r = await restored();
+    const held = jobsOf(r.db, r.first)[0]?.id ?? '';
+    note('Q1', 'held job before correction', heldBlockers(r.db));
+    const { sent } = await correctAndSend(r, '2026-09-16');
+    note('Q1', 'send of revision 2', [sent.status, sent.body?.send?.reason ?? null]);
+    expect(sent.status).toBe(201);
+    const release = await releaseAndRun('Q1', r, held);
+    expect(release).toEqual({ outcome: 'refused', code: 'superseded_by_later_send' });
+  });
+
+  it('L1 leased later send of revision 2: refused', async () => {
+    const r = await restored();
+    const held = jobsOf(r.db, r.first)[0]?.id ?? '';
+    const { revision } = await correctAndSend(r, '2026-09-16');
+    await pdfPass(r);
+    const claimed = claimNextJob(r.db, r.clock, { owner: 'rb2-lease', kinds: [JOB_SEND_EMAIL], leaseSeconds: 600 });
+    note('L1', 'claimed job is revision 2 and leased', [claimed?.revisionId === revision, jobsOf(r.db, revision).map((j) => j.state)]);
+    note('L1', 'blockers', heldBlockers(r.db));
+    const release = releaseHeldJob(r.db, r.clock, held);
+    note('L1', 'releaseHeldJob', release);
+    expect(release).toEqual({ outcome: 'refused', code: 'superseded_by_later_send' });
+  });
+
+  it('S1 succeeded later send of revision 2: refused, revision 1 never delivered', async () => {
+    const r = await restored();
+    const held = jobsOf(r.db, r.first)[0]?.id ?? '';
+    await correctAndSend(r, '2026-09-16');
+    await capturePass(r, 'rb2-s1');
+    const release = await releaseAndRun('S1', r, held);
+    expect(release).toEqual({ outcome: 'refused', code: 'superseded_by_later_send' });
+    expect(attempts(r.db).map((a) => a.revision_no)).toEqual([2]);
+  });
+
+  it('F1 later send of revision 2 failed permanently: docs/05:72 says refused while any later send of the period exists', async () => {
+    const r = await restored();
+    const held = jobsOf(r.db, r.first)[0]?.id ?? '';
+    const { revision } = await correctAndSend(r, '2026-09-16');
+    await pdfPass(r);
+    note('F1', 'stub pass (failed_permanent)', await stubSendPass(r, FAILED));
+    note('F1', 'revision 2 job', jobsOf(r.db, revision));
+    const release = await releaseAndRun('F1', r, held);
+    expect(release).toEqual({ outcome: 'refused', code: 'superseded_by_later_send' });
+  });
+
+  it('U1 later send of revision 2 uncertain, no decision: the copy may have arrived; the older copy must not follow', async () => {
+    const r = await restored();
+    const held = jobsOf(r.db, r.first)[0]?.id ?? '';
+    const { revision } = await correctAndSend(r, '2026-09-16');
+    await pdfPass(r);
+    note('U1', 'stub pass (uncertain)', await stubSendPass(r, UNCERTAIN));
+    note('U1', 'revision 2 job', jobsOf(r.db, revision));
+    const release = await releaseAndRun('U1', r, held);
+    expect(release).toEqual({ outcome: 'refused', code: 'superseded_by_later_send' });
+    expect(attempts(r.db).filter((a) => a.revision_no === 1)).toEqual([]);
+  });
+
+  it('U2 later send of revision 2 uncertain, owner marks it delivered: the older copy must not follow', async () => {
+    const r = await restored();
+    const held = jobsOf(r.db, r.first)[0]?.id ?? '';
+    const { revision } = await correctAndSend(r, '2026-09-16');
+    await pdfPass(r);
+    await stubSendPass(r, UNCERTAIN);
+    const attemptId = r.db.prepare<[string], { id: string }>("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'uncertain'").get(revision)?.id ?? '';
+    const decided = await r.request('POST', `/api/deliveries/${attemptId}/decision`, { body: { decision: 'mark_delivered' } });
+    note('U2', 'decision mark_delivered', [decided.status, decided.body?.error?.code ?? null]);
+    note('U2', 'revision 2 job after the decision', jobsOf(r.db, revision));
+    const release = await releaseAndRun('U2', r, held);
+    expect(release).toEqual({ outcome: 'refused', code: 'superseded_by_later_send' });
+    expect(attempts(r.db).filter((a) => a.revision_no === 1)).toEqual([]);
+  });
+
+  it('U3 later send of revision 2 uncertain, owner resends it with a reason: refused while the resend waits and after it succeeded', async () => {
+    const r = await restored();
+    const held = jobsOf(r.db, r.first)[0]?.id ?? '';
+    const { revision } = await correctAndSend(r, '2026-09-16');
+    await pdfPass(r);
+    await stubSendPass(r, UNCERTAIN);
+    const attemptId = r.db.prepare<[string], { id: string }>("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'uncertain'").get(revision)?.id ?? '';
+    const decided = await r.request('POST', `/api/deliveries/${attemptId}/decision`, { body: { decision: 'resend', reason: 'Synthetic resend reason' } });
+    note('U3', 'decision resend', [decided.status, decided.body?.error?.code ?? null]);
+    note('U3', 'blockers while the resend waits', heldBlockers(r.db));
+    const waiting = releaseHeldJob(r.db, r.clock, held);
+    note('U3', 'releaseHeldJob while the resend waits', waiting);
+    const after = await releaseAndRun('U3', r, held);
+    expect(waiting).toEqual({ outcome: 'refused', code: 'superseded_by_later_send' });
+    expect(after).toEqual({ outcome: 'refused', code: 'superseded_by_later_send' });
+  });
+
+  it('U4 later send of revision 2 left uncertain by a runner that died after `sending` (crash recovery path)', async () => {
+    const r = await restored();
+    const held = jobsOf(r.db, r.first)[0]?.id ?? '';
+    const { revision } = await correctAndSend(r, '2026-09-16');
+    await pdfPass(r);
+    const job = claimNextJob(r.db, r.clock, { owner: 'rb2-dies', kinds: [JOB_SEND_EMAIL], leaseSeconds: 600 });
+    expect(job?.revisionId).toBe(revision);
+    const crash = () => {
+      throw new Error('simulated runner death after sending was committed');
+    };
+    const handler = createSendJobHandler({ db: r.db, clock: r.clock, files: r.files, outbound: fixed(UNCERTAIN), senderAddress: SENDER, hooks: { beforeSend: crash } });
+    if (job !== null) await expect(handler({ job, renewLease: () => true })).rejects.toThrow('simulated runner death');
+    r.clock.advanceSeconds(601);
+    note('U4', 'capture pass after the lease ran out (recovery marks the attempt uncertain)', await capturePass(r, 'rb2-u4-recover'));
+    note('U4', 'revision 2 job', jobsOf(r.db, revision));
+    note('U4', 'revision 2 attempts', r.db.prepare('SELECT state, decision, provider_response FROM delivery_attempts WHERE revision_id = ?').all(revision));
+    const release = await releaseAndRun('U4', r, held);
+    expect(release).toEqual({ outcome: 'refused', code: 'superseded_by_later_send' });
+  });
+
+  it('R1 a later send of the SAME revision 1 that ended uncertain and was marked delivered: releasing the held one would be a duplicate', async () => {
+    const r = await restored();
+    const held = jobsOf(r.db, r.first)[0]?.id ?? '';
+    const again = await sendWithDefaults({ request: r.request }, r.cookie, r.first);
+    note('R1', 'second send of revision 1 on the restored instance', [again.status, again.body?.error?.code ?? null, again.body?.send?.reason ?? null]);
+    note('R1', 'blockers while it waits', heldBlockers(r.db));
+    await pdfPass(r);
+    await stubSendPass(r, UNCERTAIN);
+    const attemptId = r.db.prepare<[string], { id: string }>("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'uncertain'").get(r.first)?.id ?? '';
+    const decided = await r.request('POST', `/api/deliveries/${attemptId}/decision`, { body: { decision: 'mark_delivered' } });
+    note('R1', 'decision mark_delivered', [decided.status, decided.body?.error?.code ?? null]);
+    const release = await releaseAndRun('R1', r, held);
+    expect(release).toEqual({ outcome: 'refused', code: 'superseded_by_later_send' });
+  });
+
+  it('P1 another period of the same owner is not affected; bulk release releases it and keeps revision 1 held', async () => {
+    const r = await restored({ otherPeriod: true });
+    const held = jobsOf(r.db, r.first)[0]?.id ?? '';
+    const heldOther = jobsOf(r.db, r.otherFirst ?? '')[0]?.id ?? '';
+    await correctAndSend(r, '2026-09-16');
+    note('P1', 'blockers', heldBlockers(r.db).map(([id, blocker]) => [id === held ? 'current period rev 1' : id === heldOther ? 'other period rev 1' : id, blocker]));
+    const bulk = releaseAllHeldJobs(r.db, r.clock);
+    note('P1', 'releaseAllHeldJobs', bulk);
+    expect(bulk).toEqual({ released: 1, refused: { superseded_by_later_send: 1 } });
+    expect(jobsOf(r.db, r.otherFirst ?? '')[0]?.state).toBe('queued');
+    expect(jobsOf(r.db, r.first)[0]?.state).toBe('intervention');
+  });
+
+  it('E1 a held send of the NEWEST revision is releasable although an older revision was delivered before it (no over-blocking)', async () => {
+    const source = await createTestContext(NOW);
+    cleanups.push(() => source.close());
+    const employee = await source.login('employee');
+    const files = new FileStore(dataDirOf(source));
+    await source.request('POST', '/api/settings/submission', { cookie: employee, body: { expected_seq: 0, to: ['payroll@example.invalid'], cc: [], auto_submit: false } });
+    saveSignature(source.db, source.clock, files, source.userIds.employee, makePng(40, 12), 'image/png');
+    await addSession(source.request, employee, '2026-09-15');
+    const first = await signAndSend(source, employee, PAYROLL);
+    // Run 2 of this probe called the source's request without its cookie (401) and ran one pass before the PDF: probe defects.
+    const withCookie: Req = (method, path, options = {}) => source.request(method, path, { ...options, cookie: options.cookie ?? employee });
+    const sourceRestored: Restored = { db: source.db, clock: source.clock, request: withCookie, cookie: employee, dataDir: dataDirOf(source), dbPath: source.config.databasePath, files, first, otherFirst: null, sourceDataDir: dataDirOf(source), sourceDbPath: source.config.databasePath };
+    await capturePass(sourceRestored, 'rb2-e1-source');
+    source.clock.advanceSeconds(120);
+    await capturePass(sourceRestored, 'rb2-e1-source-2');
+    note('E1', 'source: revision 1 delivered', attempts(source.db).map((a) => [a.revision_no, a.state]));
+    source.clock.set('2026-09-29T20:03:00Z');
+    const { revision, sent } = await correctAndSend(sourceRestored, '2026-09-16', { reason: 'Synthetic corrected copy' });
+    note('E1', 'source: revision 2 sent with a reason, its job waits', [sent.status, jobsOf(source.db, revision).map((j) => j.state)]);
+    source.clock.set('2026-09-29T20:04:00Z');
+    const backup = await createBackup({ databasePath: source.config.databasePath, dataDir: dataDirOf(source), targetDir: scratch('rb2-e1-backups-'), clock: source.clock });
+    const target = join(scratch('rb2-e1-restore-'), 'instance');
+    const clock = new MutableClock(LATER);
+    await restoreBackup({ fromDir: backup.directory, toDir: target, liveDataDir: dataDirOf(source), liveDatabasePath: source.config.databasePath, clock });
+    const db = openDatabase(join(target, RESTORED_DATABASE_NAME));
+    cleanups.push(() => db.close());
+    expect(resumeOutbound(db, clock)).toMatchObject({ outcome: 'resumed' });
+    const held = jobsOf(db, revision)[0]?.id ?? '';
+    note('E1', 'blockers on the restored copy', heldBlockers(db));
+    const release = releaseHeldJob(db, clock, held);
+    note('E1', 'releaseHeldJob(revision 2 job)', release);
+    expect(release).toEqual({ outcome: 'released' });
+  });
+
+  it('D1 a second restore taken while the correction waited holds both jobs; the superseded one must stay held', async () => {
+    const r = await restored();
+    const held = jobsOf(r.db, r.first)[0]?.id ?? '';
+    const { revision } = await correctAndSend(r, '2026-09-16');
+    r.clock.set('2026-09-29T21:10:00Z');
+    const backup2 = await createBackup({ databasePath: r.dbPath, dataDir: r.dataDir, targetDir: scratch('rb2-backups2-'), clock: r.clock });
+    const target2 = join(scratch('rb2-restore2-'), 'instance');
+    const clock2 = new MutableClock('2026-09-29T22:00:00Z');
+    await restoreBackup({ fromDir: backup2.directory, toDir: target2, liveDataDir: r.dataDir, liveDatabasePath: r.dbPath, clock: clock2 });
+    const db2 = openDatabase(join(target2, RESTORED_DATABASE_NAME));
+    cleanups.push(() => db2.close());
+    expect(resumeOutbound(db2, clock2)).toMatchObject({ outcome: 'resumed' });
+    const second = jobsOf(db2, revision)[0]?.id ?? '';
+    note('D1', 'jobs after the second restore', [jobsOf(db2, r.first), jobsOf(db2, revision)]);
+    note('D1', 'blockers', heldBlockers(db2).map(([id, blocker]) => [id === held ? 'revision 1' : id === second ? 'revision 2' : id, blocker]));
+    const bulk = releaseAllHeldJobs(db2, clock2);
+    note('D1', 'releaseAllHeldJobs', bulk);
+    const r2: Restored = { ...r, db: db2, clock: clock2, dataDir: join(target2, RESTORED_DATA_DIR), files: new FileStore(join(target2, RESTORED_DATA_DIR)) };
+    clock2.advanceSeconds(120);
+    note('D1', 'capture pass', await capturePass(r2, 'rb2-d1'));
+    note('D1', 'attempts in order', attempts(db2).map((a) => [a.revision_no, a.state]));
+    expect(bulk).toEqual({ released: 1, refused: { superseded_by_later_send: 1 } });
+  });
+});

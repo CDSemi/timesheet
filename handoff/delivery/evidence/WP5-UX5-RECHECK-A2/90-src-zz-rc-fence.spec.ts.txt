@@ -1,0 +1,28 @@
+/*
+ * WP5-UX5-RECHECK-A2 probe of the midnight fence (FIX15): the instant at which a test body starts, from the runner's clock (shared with
+ * the server by the FIX10 wrapper), against the next America/Los_Angeles midnight; one test annotated `crosses-midnight` (first, so it
+ * runs at once in the worker), then one plain test. It makes no request. Run through run-shift.sh at chosen instants, one worker.
+ */
+import { CROSSES_MIDNIGHT, test } from './fixtures.ts';
+import { obs } from './zz-rc-lib.ts';
+
+function nextMidnightOf(now: number): number {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(now));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? '0');
+  const secondsIntoDay = get('hour') * 3600 + get('minute') * 60 + get('second');
+  return now - (now % 1000) + (86400 - secondsIntoDay) * 1000;
+}
+
+test('an annotated test: where its body starts', { annotation: { type: CROSSES_MIDNIGHT, description: 'probe' } }, async ({}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'one project');
+  const start = Date.now();
+  const midnight = nextMidnightOf(start - 120_000);
+  obs({ kind: 'fence', test: 'annotated', bodyStart: new Date(start).toISOString(), midnight: new Date(midnight).toISOString(), msAfterMidnight: start - midnight });
+});
+
+test('a plain test: where its body starts', async ({}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'one project');
+  const start = Date.now();
+  const midnight = nextMidnightOf(start - 120_000);
+  obs({ kind: 'fence', test: 'plain', bodyStart: new Date(start).toISOString(), midnight: new Date(midnight).toISOString(), msAfterMidnight: start - midnight });
+});

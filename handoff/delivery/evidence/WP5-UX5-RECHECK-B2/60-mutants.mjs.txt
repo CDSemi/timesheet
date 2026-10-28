@@ -1,0 +1,156 @@
+// WP5-UX5-RECHECK-B2: the auditor's own mutants on restore.ts since a5533b5 (what the restore tests must pin) and on the check-in
+// filing date (what FIX15's boundary test must pin), plus RECHECK-B's G2 and P4 and REGATE7's R3 run again. Each mutant replaces
+// one exact anchor (it must occur exactly once), runs the named vitest files, then the full suite when the targeted run passed,
+// and restores the file byte-identical. Usage: node mutants.mjs <mutDir> <probeDir> <logDir> [mutant ids...]
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [mutDir, probeDir, logDir, ...only] = process.argv.slice(2);
+const summary = join(logDir, 'mutants-summary.txt');
+const sha = (text) => createHash('sha256').update(text).digest('hex');
+const RESTORE = 'src/server/ops/restore.ts';
+const COMMANDS = 'src/server/services/timesheetCommands.ts';
+const RESTORE_TESTS = ['tests/integration/restore.test.ts'];
+const BOUNDARY_TESTS = ['tests/integration/timesheet-api.test.ts'];
+const LATER_QUERY = `\`SELECT 1 AS one FROM jobs j
+         JOIN timesheet_revisions r ON r.id = j.revision_id AND r.user_id = j.user_id
+         JOIN timesheet_revisions held ON held.timesheet_id = r.timesheet_id AND held.user_id = r.user_id
+        WHERE held.id = ? AND j.user_id = ? AND j.kind = ? AND j.rowid > ? AND j.state IN ('queued', 'leased', 'succeeded') LIMIT 1\`,`;
+const STATES = "j.state IN ('queued', 'leased', 'succeeded')";
+const WORK_DATE = 'const workDate = localDateOf(scope.calendar.schedule.reportingZone, now);';
+
+const MUTANTS = [
+  {
+    id: 'K1',
+    what: 'the later-send check back to one revision (the a5533b5 query; FIX11 reverted)',
+    file: RESTORE,
+    from: LATER_QUERY,
+    to: "`SELECT 1 AS one FROM jobs WHERE revision_id = ? AND user_id = ? AND kind = ? AND rowid > ? AND state IN ('queued', 'leased', 'succeeded') LIMIT 1`,",
+    tests: RESTORE_TESTS,
+  },
+  {
+    id: 'K1p',
+    what: 'K1 against the auditor restore probe (which cases the a5533b5 query fails)',
+    file: RESTORE,
+    from: LATER_QUERY,
+    to: "`SELECT 1 AS one FROM jobs WHERE revision_id = ? AND user_id = ? AND kind = ? AND rowid > ? AND state IN ('queued', 'leased', 'succeeded') LIMIT 1`,",
+    tests: ['tests/integration/zz-recheck-b2-restore.test.ts'],
+    dir: 'probe',
+    noFull: true,
+  },
+  { id: 'K2', what: 'the "later" order dropped: any send job of the period, also an earlier one, blocks', file: RESTORE, from: 'AND j.rowid > ? AND', to: 'AND (j.rowid > ? OR 1) AND', tests: RESTORE_TESTS },
+  { id: 'K2p', what: 'K2 against the auditor restore probe (case E1: a held send of the newest revision after an earlier delivered one)', file: RESTORE, from: 'AND j.rowid > ? AND', to: 'AND (j.rowid > ? OR 1) AND', tests: ['tests/integration/zz-recheck-b2-restore.test.ts'], dir: 'probe', noFull: true },
+  {
+    id: 'K4p',
+    what: 'K4 against the auditor restore probe (case P1: another period)',
+    file: RESTORE,
+    from: 'JOIN timesheet_revisions held ON held.timesheet_id = r.timesheet_id AND held.user_id = r.user_id',
+    to: 'JOIN timesheet_revisions held ON held.user_id = r.user_id',
+    tests: ['tests/integration/zz-recheck-b2-restore.test.ts'],
+    dir: 'probe',
+    noFull: true,
+  },
+  { id: 'K3', what: 'a queued later send no longer blocks', file: RESTORE, from: STATES, to: "j.state IN ('leased', 'succeeded')", tests: RESTORE_TESTS },
+  {
+    id: 'K4',
+    what: 'the period join widened to the owner: a send of ANY period of the owner keeps the held job held',
+    file: RESTORE,
+    from: 'JOIN timesheet_revisions held ON held.timesheet_id = r.timesheet_id AND held.user_id = r.user_id',
+    to: 'JOIN timesheet_revisions held ON held.user_id = r.user_id',
+    tests: RESTORE_TESTS,
+  },
+  { id: 'K5', what: 'the later-send refusal reports the wrong reason (delivery_attempt_open)', file: RESTORE, from: "return later === undefined ? null : 'superseded_by_later_send';", to: "return later === undefined ? null : 'delivery_attempt_open';", tests: RESTORE_TESTS },
+  {
+    id: 'K6',
+    what: 'the bulk release ignores the blocker of send jobs',
+    file: RESTORE,
+    from: '      if (blocker === null) {\n        releaseRow(db, clock, job);',
+    to: '      if (blocker === null || job.kind === JOB_SEND_EMAIL) {\n        releaseRow(db, clock, job);',
+    tests: RESTORE_TESTS,
+  },
+  {
+    id: 'K7',
+    what: 'the release by id ignores superseded_by_later_send (the CLI --job path)',
+    file: RESTORE,
+    from: "    if (blocker !== null) return { outcome: 'refused', code: blocker };",
+    to: "    if (blocker !== null && blocker !== 'superseded_by_later_send') return { outcome: 'refused', code: blocker };",
+    tests: RESTORE_TESTS,
+  },
+  { id: 'R3', what: "REGATE7's R3 again: a leased later send no longer blocks the release", file: RESTORE, from: STATES, to: "j.state IN ('queued', 'succeeded')", tests: RESTORE_TESTS },
+  { id: 'R2', what: "FIX11's R2 again: a succeeded later send no longer blocks the release", file: RESTORE, from: STATES, to: "j.state IN ('queued', 'leased')", tests: RESTORE_TESTS },
+  { id: 'T1', what: 'check-in filed under the UTC date', file: COMMANDS, from: WORK_DATE, to: 'const workDate = formatUtcInstant(now).slice(0, 10);', tests: BOUNDARY_TESTS },
+  { id: 'T2', what: 'check-in filed under the next accounting date', file: COMMANDS, from: WORK_DATE, to: 'const workDate = localDateOf(scope.calendar.schedule.reportingZone, now + 86400);', tests: BOUNDARY_TESTS },
+  { id: 'T3', what: 'check-in filed in the device (input) zone instead of the saved reporting zone (rule 7)', file: COMMANDS, from: WORK_DATE, to: 'const workDate = localDateOf(inputZone, now);', tests: BOUNDARY_TESTS },
+  { id: 'T4', what: 'the midnight second itself filed on the previous day (closed instead of half-open boundary)', file: COMMANDS, from: WORK_DATE, to: 'const workDate = localDateOf(scope.calendar.schedule.reportingZone, now - 1);', tests: BOUNDARY_TESTS },
+  {
+    id: 'T5',
+    what: 'check-out re-files the overnight session under the date of its end',
+    file: COMMANDS,
+    from: '    if (result.changes !== 1) throw staleVersion();\n    insertBreaks(ctx, open.id, resolved.breaks);',
+    to: "    if (result.changes !== 1) throw staleVersion();\n    ctx.db.prepare('UPDATE work_sessions SET work_date = ? WHERE id = ?').run(localDateOf(scope.calendar.schedule.reportingZone, endEpoch), open.id);\n    insertBreaks(ctx, open.id, resolved.breaks);",
+    tests: BOUNDARY_TESTS,
+  },
+  { id: 'T4p', what: 'T4 against the auditor midnight probe (check-ins at -1 s, 0 s and +1 s)', file: COMMANDS, from: WORK_DATE, to: 'const workDate = localDateOf(scope.calendar.schedule.reportingZone, now - 1);', tests: ['tests/integration/zz-recheck-b2-midnight.test.ts'], dir: 'probe', noFull: true },
+  {
+    id: 'T5b',
+    what: 'check-out re-files the overnight session under the date of its end (T5 without the foreign-key crash: the day entry is created first)',
+    file: COMMANDS,
+    from: '    const edit = prepareEdit(ctx, scope, open.work_date, input.reason);\n    const endEpoch = nowEpoch(ctx.clock);',
+    to: "    const endEpoch = nowEpoch(ctx.clock);\n    const movedDate = localDateOf(scope.calendar.schedule.reportingZone, endEpoch);\n    const edit = prepareEdit(ctx, scope, movedDate, input.reason);\n    ensureDayEntry(ctx, edit, movedDate);\n    ctx.db.prepare('UPDATE work_sessions SET work_date = ? WHERE id = ?').run(movedDate, open.id);\n    open.work_date = movedDate;",
+    tests: BOUNDARY_TESTS,
+  },
+  {
+    id: 'T5bp',
+    what: 'T5b against the auditor midnight probe (what the check-out answers under the mutant)',
+    file: COMMANDS,
+    from: '    const edit = prepareEdit(ctx, scope, open.work_date, input.reason);\n    const endEpoch = nowEpoch(ctx.clock);',
+    to: "    const endEpoch = nowEpoch(ctx.clock);\n    const movedDate = localDateOf(scope.calendar.schedule.reportingZone, endEpoch);\n    const edit = prepareEdit(ctx, scope, movedDate, input.reason);\n    ensureDayEntry(ctx, edit, movedDate);\n    ctx.db.prepare('UPDATE work_sessions SET work_date = ? WHERE id = ?').run(movedDate, open.id);\n    open.work_date = movedDate;",
+    tests: ['tests/integration/zz-recheck-b2-midnight.test.ts'],
+    dir: 'probe',
+    noFull: true,
+  },
+  { id: 'G2', what: "RECHECK-B's G2 again: a leased send job no longer blocks a send of the period", file: 'src/server/services/deliveries.ts', from: "j.state IN ('queued', 'leased') AND target.id", to: "j.state IN ('queued') AND target.id", tests: ['tests/integration/sends.test.ts', 'tests/integration/delivery.test.ts', 'tests/integration/restore.test.ts'] },
+  { id: 'P4', what: "RECHECK-B's P4 again: the block height ignores the separate leave line", file: 'src/server/pdf/timesheetPdf.ts', from: 'sub.reduce((sum, line) => sum + line.size * 1.2, 0)', to: 'fitted.lines.length * fitted.size * 1.2', tests: ['tests/integration/pdf-render.test.ts', 'tests/integration/pdf-layout.test.ts'] },
+];
+
+function run(cwd, label, args, timeoutMs) {
+  const started = Date.now();
+  const vitest = join(cwd, 'node_modules', 'vitest', 'vitest.mjs');
+  const result = spawnSync(process.execPath, [vitest, 'run', ...args], { cwd, encoding: 'utf8', timeout: timeoutMs, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0', RECHECK_B2_OUT: join(logDir, `mut-${label}.jsonl`) }, maxBuffer: 256 * 1024 * 1024 });
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+  writeFileSync(join(logDir, `mut-${label}.log`), output);
+  const tail = output
+    .split('\n')
+    .filter((line) => /Test Files|Tests |FAIL |✓|×/.test(line) && !/^\s*✓/.test(line))
+    .slice(-14)
+    .join(' / ');
+  return { status: result.status, seconds: Math.round((Date.now() - started) / 1000), tail };
+}
+
+for (const mutant of MUTANTS.filter((item) => only.length === 0 || only.includes(item.id))) {
+  const dir = mutant.dir === 'probe' ? probeDir : mutDir;
+  const path = join(dir, mutant.file);
+  const original = readFileSync(path, 'utf8');
+  const occurrences = original.split(mutant.from).length - 1;
+  if (occurrences !== 1) {
+    appendFileSync(summary, `${mutant.id} ANCHOR found ${occurrences} times, not run\n`);
+    continue;
+  }
+  writeFileSync(path, original.replace(mutant.from, mutant.to));
+  let line = `${mutant.id} (${mutant.file}${mutant.dir === 'probe' ? ', probe export' : ''}): ${mutant.what}`;
+  try {
+    const targeted = run(dir, `${mutant.id}-targeted`, mutant.tests, 900_000);
+    line += ` | targeted ${mutant.tests.join(' ')} exit ${targeted.status} (${targeted.seconds} s): ${targeted.tail}`;
+    if (targeted.status === 0 && mutant.noFull !== true) {
+      const full = run(dir, `${mutant.id}-full`, [], 1_800_000);
+      line += ` | FULL exit ${full.status} (${full.seconds} s): ${full.tail}`;
+    }
+  } finally {
+    writeFileSync(path, original);
+    line += ` | restored ${sha(readFileSync(path, 'utf8')) === sha(original) ? 'byte-identical' : 'DIFFERENT'}`;
+    appendFileSync(summary, `${line}\n`);
+  }
+}
+appendFileSync(summary, `done ${new Date().toISOString()}\n`);

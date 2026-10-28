@@ -1,0 +1,15 @@
+# Usage: bash ci.sh <dir>   (dir = export, export-probe, export-mut; the last two are made from the target first)
+. <task>/env.sh
+D=$1
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$REPO"
+if [ ! -f $T/$D/package.json ]; then mkdir -p $T/$D; cd $REPO; git archive $TARGET | tar -x -C $T/$D; fi
+cd $T/$D
+node --version > $T/out/02-ci-$D.txt 2>&1
+npm --version >> $T/out/02-ci-$D.txt 2>&1
+npm ci >> $T/out/02-ci-$D.txt 2>&1
+echo "npm ci $D exit $?" >> $T/out/02-ci-$D.txt
+if [ "$D" != "export" ]; then
+  npm run build > $T/out/02-build-$D.txt 2>&1
+  echo "build $D exit $?" >> $T/out/02-build-$D.txt
+fi
+echo "ci $D done"

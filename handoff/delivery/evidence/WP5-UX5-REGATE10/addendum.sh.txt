@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Addendum 1: per target, five more fence-off and five fence-on samples of the 0.3 s model (one run at a time), with the read instants logged.
+source <task>/env.sh
+unset DIAG9_LOG DIAG_MQ_DELAY
+X=$T/export-mut
+C=$T/export
+E2E=$X/tests/e2e
+OUT=$T/out/80-addendum-exits.txt
+: > $OUT
+cd $T
+export SHIFT_EXPORT=$X
+for f in tests/e2e/fixtures.ts tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts; do cmp $C/$f $X/$f || { echo "SCRATCH DIFFERS: $f" >> $OUT; exit 3; }; done
+cp variants/diag9Hooks.ts $E2E/diag9Hooks.ts
+cp export-prev/tests/e2e/day-editor.spec.ts $E2E/day-editor.spec.ts
+cp export-prev/tests/e2e/today.spec.ts $E2E/today.spec.ts
+export DIAG9_READS=1
+printf '%s\n' tests/e2e/day-editor.spec.ts:795 > list-795.txt
+printf '%s\n' tests/e2e/today.spec.ts:242 > list-242.txt
+: > out/81-addendum-samples.txt
+for mode in off on; do
+  cp variants/fixtures.reads-$mode.ts $E2E/fixtures.ts
+  for spec in "795 desktop" "795 mobile" "242 mobile"; do
+    set -- $spec
+    for s in 1 2 3 4 5; do
+      V=add-$mode-s$s
+      bash dense.sh $V 300 list-$1.txt $2 >> logs/addendum-dense.log 2>&1 || true
+      cat out/dense-$V-300.txt | grep -v dense-done | sed "s/^/$mode sample $s: /" >> out/81-addendum-samples.txt
+      L=$(ls logs | grep -E "^dense-$V-300-.*_$1-$2.txt$")
+      grep -E "DIAG9 (test-start|read)|^process clock" logs/$L | sed "s/^/    /" >> out/81-addendum-samples.txt
+    done
+  done
+done
+rm -f $E2E/diag9Hooks.ts
+for f in fixtures.ts day-editor.spec.ts today.spec.ts; do cp $C/tests/e2e/$f $E2E/$f; cmp $C/tests/e2e/$f $E2E/$f && echo "restored $f" >> $OUT; done
+echo "leftover scratch specs: $(ls $E2E | grep -cE '^(dly|probe|zz|diag9)')" >> $OUT
+echo addendum-done > out/addendum.done

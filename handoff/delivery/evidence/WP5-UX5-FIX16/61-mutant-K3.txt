@@ -1,0 +1,107 @@
+
+ RUN  v5.0.2 <task>/exA
+
+ ❯ tests/integration/restore.test.ts (41 tests | 4 failed) 26217ms
+   ❯ isolated restore with outbound paused (AC-15, AC-11) (7)
+     × releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs 69ms
+   ❯ a held send of a superseded revision (F-UX5B2-1) (1)
+     × is not released once the owner has sent a correction of the period, while it waits, while a runner holds it or after it succeeded, and the old copy never follows the new 540ms
+   ❯ a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) (8)
+     × the owner's repeat of the same revision that ended uncertain and was marked delivered: the held copy would be a second one 473ms
+     × a cancelled later send does not hold the superseded copy back (the opposite rule would keep it held) 574ms
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 37 passed (41)
+   Start at  15:12:36
+   Duration  28.12s (tests 94%, transform 4%, import 3%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/restore.test.ts:483:61
+    481|     // WP5-UX5-T01b: the owner's send is its own record and queued job…
+    482|     // job is refused as superseded by that later send (before, the re…
+    483|     expect(releaseHeldJob(restored, clock, heldPdfPending)).toEqual({ …
+       |                                                             ^
+    484|     await pass('runner-owner-resend');
+    485|     expect(states(source.revisions.pdfPending)).toEqual(['accepted']);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send of a superseded revision (F-UX5B2-1) > is not released once the owner has sent a correction of the period, while it waits, while a runner holds it or after it succeeded, and the old copy never follows the new
+AssertionError: expected [ [ …(2) ] ] to deeply equal [ [ …(2) ] ]
+
+- Expected
++ Received
+
+  [
+    [
+      "6a9ad640-1d0e-46d3-85b9-41a31c21f7ce",
+-     "superseded_by_later_send",
++     null,
+    ],
+  ]
+
+ ❯ tests/integration/restore.test.ts:611:61
+    609|     const auditBefore = count(db, "SELECT count(*) FROM audit_events W…
+    610|     const refusal = { outcome: 'refused', code: 'superseded_by_later_s…
+    611|     expect(heldSends().map((job) => [job.id, job.blocker])).toEqual([[…
+       |                                                             ^
+    612|     expect(releaseHeldJob(db, clock, heldJobId)).toEqual(refusal);
+    613|     expect(releaseAllHeldJobs(db, clock)).toEqual({ released: 0, refus…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) > the owner's repeat of the same revision that ended uncertain and was marked delivered: the held copy would be a second one
+AssertionError: expected [ null ] to deeply equal [ 'superseded_by_later_send' ]
+
+- Expected
++ Received
+
+  [
+-   "superseded_by_later_send",
++   null,
+  ]
+
+ ❯ tests/integration/restore.test.ts:889:30
+    887|     expect(again.status, JSON.stringify(again.body)).toBe(201);
+    888|     // While the repeat waits, it is a later send of the period.
+    889|     expect(blockersOf(r.db)).toEqual(['superseded_by_later_send']);
+       |                              ^
+    890|     await pdfPass(r);
+    891|     await stubSendPass(r, UNCERTAIN);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) > a cancelled later send does not hold the superseded copy back (the opposite rule would keep it held)
+AssertionError: expected [ null ] to deeply equal [ 'superseded_by_later_send' ]
+
+- Expected
++ Received
+
+  [
+-   "superseded_by_later_send",
++   null,
+  ]
+
+ ❯ tests/integration/restore.test.ts:904:30
+    902|     const r = await restoredInstance();
+    903|     const second = await correctAndSend(r);
+    904|     expect(blockersOf(r.db)).toEqual(['superseded_by_later_send']);
+       |                              ^
+    905|     // No product path cancels a send job; the state is set here to pi…
+    906|     expect(r.db.prepare("UPDATE jobs SET state = 'cancelled' WHERE id …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯

@@ -1,0 +1,19 @@
+// Usage: node summut.mjs <out-dir>  One line per mutant log (out/mut-<name>.txt): mutate and tests exits, Playwright summary, the
+// restore checks, the failing test titles and the first error line of each failure.
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const names = readdirSync(dir).filter((f) => /^mut-(M|CTL)[A-Za-z0-9]+\.txt$/.test(f)).sort();
+for (const file of names) {
+  const text = readFileSync(join(dir, file), 'utf8').replace(/\u001b\[[0-9;]*[A-Za-z]/g, '');
+  const lines = text.split(/\r?\n/);
+  const pick = (re) => lines.filter((l) => re.test(l)).map((l) => l.trim());
+  const summary = pick(/^\s+\d+ (passed|failed|skipped|flaky|did not run|interrupted)/);
+  const failedTitles = pick(/^\s+\d+\) \[/);
+  const errors = pick(/^\s+Error: /).slice(0, 4);
+  const exits = pick(/^(mutate exit|build exit|tests exit|restore build exit)/);
+  const restore = pick(/^(restored byte-identical|equal to the)/);
+  const durations = pick(/(ok|✘)\s+\d+ \[desktop\] .*a page left open across/);
+  console.log(JSON.stringify({ mutant: file.replace(/^mut-|\.txt$/g, ''), exits, summary, failedTitles: failedTitles.slice(0, 6), errors, restore, durations }));
+}
