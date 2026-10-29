@@ -3144,24 +3144,71 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - Chỉ `dist/client` thay đổi.
   - `npm test`: 2.397. e2e đầy đủ: 484/36/0 và 408/112/0. Lượt chạy qua nửa đêm: 0 lỗi.
   - `npm run digest` chạy lại được.
-- **Đang chạy:** WP5-UX5-FIX19-FREEZE (committer). Coordinator không ghi file nào trong lúc
-  committer chạy.
-- **Tiếp theo:**
-  - REGATE13 và AUDIT-INT2;
-  - ACCEPT-DOCS: backlog trong bàn giao WP5, định danh bản phát hành trong gói pilot, và bước
-    kiểm tra cảm ứng trên thiết bị thật;
-  - nghiệm thu lại WP5.
-- **Tiếp theo:** sửa nếu cần, rồi gate lại trên máy có tải nằm trong giới hạn. RECHECK-B3 và
-  AUDIT-INT chuyển sang phụ thuộc vào lần gate mới.
-- **Sau đó:**
-  - gate lại có phạm vi, có chạy drill, vì bundle server thay đổi;
-  - một lượt kiểm tra lại độc lập mới cho vùng B;
-  - audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
-- **Tiếp theo:**
-  - bản sửa, freeze và gate lại;
-  - kiểm tra lại độc lập hai lỗi đã sửa, thay đổi Day editor và thay đổi đồng bộ giao diện
-    giữa các tab;
-  - audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
+- **WP5-UX5-FIX19-FREEZE xong.**
+  - Commit 0b457817ed29806a36fdd78cc22ac84a0cc2db9d trên main, đã push dạng fast-forward từ
+    d96df5d.
+  - D_PRE trùng cả hai digest của HEAD (`git ls-tree` và `npm run digest`): 67aa715c.
+  - Đã stage 472 đường dẫn. Mọi kiểm tra đều exit 0.
+- **WP5-UX5-REGATE14 ĐẠT (PASS)** (verifier, tự báo claude-sonnet-5-5) trên 0b45781 /
+  67aa715c. Lần đo tải đầu vào dưới 1 lõi. Không có lỗi nào.
+  - `npm run digest` chạy được trên bản clone sạch.
+  - Chỉ `dist/client` thay đổi.
+  - Lượt cốt lõi ×3: 2.397 test.
+  - e2e đầy đủ: 484/36/0 và 408/112/0.
+  - Sáu lượt quét và chạy dồn: 0 lỗi.
+  - Cả 10 mutant của FIX19 đều bị bắt.
+  - axe: 36 lượt quét, 0 vi phạm.
+- **WP5-UX5-AUDIT-INT3 ĐẠT** (auditor opus mới, tự báo claude-opus-5-5) trên 0b45781 /
+  67aa715c ([review](WP5_UX5_REVIEW_INT3.vi.md)).
+  - Định danh: HEAD = origin/main = mục tiêu, trước và sau. Các dạng export, ls-tree và
+    `npm run digest` khớp nhau, trong repository và trong một bản clone sạch.
+  - F-UX5I2-1 đã đóng:
+    - G1 và G2 của AUDIT-INT2 giữ thay đổi của thiết bị kia trên mục tiêu;
+    - 27 ca riêng đều đạt, và 21 ca trong số đó lỗi trên d96df5d;
+    - FIX18 và FIX19 chưa lần nào cho kết quả khác nhau.
+  - F-UX5I2-2 đã đóng.
+  - Không hồi quy. axe: 30 lượt quét, 0 vi phạm.
+  - 12 mutant riêng, bộ test diệt được 7 (R-UX5I3-4).
+  - `npm test`: 2.397. e2e đầy đủ: 484/36/0 và 408/112/0. AC-13 theo Asia/Kathmandu đạt.
+    Lượt chạy bảy file lúc 06:58:30Z: 400 đạt, 0 lỗi.
+  - Không có lỗi mới.
+  - Rủi ro tùy chọn mới: R-UX5I3-1..4.
+  - R-UX5I2-3 được cập nhật: giá trị mặc định theo lịch không có phiên bản để bảo vệ. Đây là
+    quyết định của chủ dự án, tốt nhất trước pilot.
+- **WP5 đã được nghiệm thu lại trên board** trên 0b45781 / 67aa715c:
+  - `current_source_digest` là 67aa715c;
+  - `superseded_by` là WP5-UX5-AUDIT-INT3 cho WP5-UX3-AUDIT-INT, tám audit WP5 trước đó mà
+    nó đã thay thế, RECHECK-A2 và RECHECK-B3.
+- **Quyết định của điều phối viên (2026-10-29).** Release notes vẫn ghi vòng 4 và 5 chưa
+  nghiệm thu (docs/12:7 và các giới hạn của vòng 5), và README vẫn ghi WP4 chưa nghiệm thu.
+  Cả hai file đều được tính vào digest.
+  - Vì vậy WP5-UX5-RELNOTES (worker, sonnet), chỉ sửa tài liệu, cập nhật docs/12 và README,
+    cùng bản dịch.
+  - Việc này cũng trả lời một câu hỏi chỉ đọc: các mẫu pilot làm từ 69d6340 còn đại diện cho
+    0b45781 không?
+  - Sau đó:
+    - RELNOTES-FREEZE;
+    - một lượt gate lại có giới hạn, REGATE15;
+    - một audit opus mới, AUDIT-RN, mà kết quả ĐẠT sẽ thay thế AUDIT-INT3;
+    - ACCEPT-DOCS, ghi định danh mới, backlog và R-UX5I2-3 vào gói pilot và bàn giao WP5;
+    - commit WP5-UX5-ACCEPT.
+  - Phương án bị loại: để nguyên các dòng "in progress" và "not accepted" trong bản ứng viên
+    phát hành.
+- **WP5-UX5-RELNOTES đã xong** (worker, tự báo claude-sonnet-5-5). Chưa commit. Digest
+  2072e3f2, 882 file.
+  - Đúng bốn file khác ngoài `handoff/`: README và docs/12, cùng bản dịch.
+  - Mỗi vòng thay đổi UI giờ ghi rõ gate và audit đã nghiệm thu nó. Dòng về drill ghi
+    REGATE11 trên 1fe5ad3 (209/0) và việc kế thừa kết quả.
+  - Không tài liệu nào ghi digest. Mọi giới hạn đều được giữ.
+  - Preflight đạt (exit 0). Đối chiếu EN/VI khớp.
+  - **Nguồn gốc các mẫu:** `timesheetPdf.ts` đổi ở 94accda (dòng nghỉ phép), và phiên bản
+    nodemailer được ghim đổi ở f4049aa, cả hai đều sau commit tạo mẫu 69d6340. Vì vậy
+    REGATE15 tạo lại các mẫu từ bản phát hành theo cách làm của T06 và so từng mẫu.
+- **Đã đăng ký kèm brief:**
+  - RELNOTES-FREEZE;
+  - REGATE15 (có giới hạn, kèm các mẫu; cổng 51850-51889);
+  - AUDIT-RN (auditor opus mới; cặp review `WP5_UX5_REVIEW_RN`; cổng 51890-51929).
+- **Đang chạy:** WP5-UX5-RELNOTES-FREEZE, chạy một mình.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

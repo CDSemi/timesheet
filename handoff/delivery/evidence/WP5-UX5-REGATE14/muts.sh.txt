@@ -1,0 +1,37 @@
+# The FIX19 mutants as recorded in WP5-UX5-FIX19 (50-mut-*): PA PB PE PF PS and the N-round ND ND2 NG NH NC, each in the scratch copy export-mut.
+. <task>/env.sh
+G='FIX18|FIX19'
+F=src/client/DayEditor.tsx
+M() { bash $T/mut.sh "$@"; }
+M PA "$F" 'if (held === null || sameDayFields(held, next)) {' 'if (true) {' "$G"
+M PB "$F" '} else if (fieldsDirtyRef.current) {' '} else if (false) {' "$G"
+M PE "$F" "nestedOpen.current = editing.kind !== 'none' || deleting !== null;" "nestedOpen.current = editing.kind !== 'none';" "$G"
+M PF "$F" 'if (stamp !== dayStamp.current || nestedOpen.current) return;' 'if (nestedOpen.current) return;' "$G"
+M PS "$F" '    setUsedReason(reason);
+    dayStamp.current += 1;' '    setUsedReason(reason);' "$G"
+M ND "$F" 'held.leave_minutes === fresh.leave_minutes &&' 'true &&' "$G"
+M ND2 "$F" 'held.leave_kind === fresh.leave_kind &&' 'true &&' "$G"
+M NG "$F" "(held.entry?.notes ?? '') === (fresh.entry?.notes ?? '')" 'true' "$G"
+M NH "$F" 'held.category === fresh.category &&' 'true &&' "$G"
+M NC "$F" 'held.wfh === fresh.wfh &&' 'true &&' "$G"
+# the unmutated build, rebuilt and run once, for the record
+cd $T/export-mut
+export GIT_CONFIG_VALUE_0=$T/export-mut
+npm run build:client > $T/logs/mut-build-clean.txt 2>&1
+echo "export-mut client rebuilt clean: exit=$?" > $T/out/50-mut-clean-log.txt
+SHIFT_EXPORT=$T/export-mut bash $T/run-shift.sh mut-clean real tests/e2e/day-editor.spec.ts --project=desktop --workers=1 -g "$G" >> $T/out/50-mut-clean-log.txt 2>&1
+node.exe $T/counts.mjs $T/out/50-mut-clean-log.txt >> $T/out/50-mut-counts.txt 2>&1
+# the digest fix reverted, in the clean clone c1 (restored byte-equal)
+cd $T/clone/c1
+export GIT_CONFIG_VALUE_0=$T/clone/c1
+node.exe $T/mutate.mjs scripts/source-digest.mjs "  encoding: 'utf8',
+  maxBuffer: 64 * 1024 * 1024,
+});
+const files" "  encoding: 'utf8',
+});
+const files" > $T/out/50-mut-digest-log.txt 2>&1
+npm run digest >> $T/out/50-mut-digest-log.txt 2>&1; echo "mutant (digest fix reverted) npm run digest exit $?" >> $T/out/50-mut-digest-log.txt
+cp $REPO/scripts/source-digest.mjs $T/clone/c1/scripts/source-digest.mjs
+if cmp $REPO/scripts/source-digest.mjs $T/clone/c1/scripts/source-digest.mjs; then echo "digest mutant restored byte-equal" >> $T/out/50-mut-digest-log.txt; fi
+npm run digest >> $T/out/50-mut-digest-log.txt 2>&1; echo "restored npm run digest exit $?" >> $T/out/50-mut-digest-log.txt
+echo muts-done > $T/out/muts.done

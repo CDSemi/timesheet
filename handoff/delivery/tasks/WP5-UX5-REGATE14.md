@@ -21,7 +21,15 @@
     digest of FIX19 on the board. The coordinator confirms both, FIX19's paths and its FULL
     counts in the line below before dispatch. HEAD must equal origin/main, or be a later
     commit that changes only `handoff/`.
-  - Target confirmation: (filled in at dispatch).
+  - Target confirmation:
+    - TARGET_SHA = 0b457817ed29806a36fdd78cc22ac84a0cc2db9d, the FIX19-FREEZE commit,
+      pushed as a fast-forward from d96df5d.
+    - TARGET_DIGEST = 67aa715c4cf600624b835a27c568f9225e471e43d819894fbeb8b4da6a89c42b
+      (882 files).
+    - FIX19's paths: `docs/04_UX_AND_SETTINGS.md` and `.vi.md`,
+      `scripts/source-digest.mjs`, `src/client/DayEditor.tsx` and
+      `tests/e2e/day-editor.spec.ts`. `DayFieldsForm.tsx` is unchanged.
+    - FIX19's FULL counts: desktop 484 ok / 36 skipped, mobile 408 ok / 112 skipped.
 
   Compute the digest in three forms, before and after, and record the file count.
   `npm run digest` must now work, both in the repository and in a clean clone. That is part
@@ -175,3 +183,22 @@ queries. Never use `-ExecutionPolicy` or `-File`.
   - the digest.
 
 ## Results
+
+Self-reported model: claude-sonnet-5-5. Evidence: `handoff/delivery/evidence/WP5-UX5-REGATE14/` (index `00-README.txt`). **Decision: PASS.** NAS items stay NOT VERIFIED.
+
+- **Load.** Entry census 0.63 and 0.91 busy cores (limit about 8); the highest in-run census was 1.86. No test failed anywhere, so no failure class and no repeat.
+- **1 Identity.** HEAD = origin/main = 0b457817 before and after; nothing changed outside `handoff/`. Digest 67aa715c4cf600624b835a27c568f9225e471e43d819894fbeb8b4da6a89c42b, 882 files,
+  equal in the export form, `git ls-tree` and `npm run digest`, before and after. `npm run digest` in a clean clone of the target: exit 0, same digest. Reverting the `maxBuffer` line
+  in that clone: exit 1, `spawnSync git ENOBUFS`; restored byte-equal, exit 0. `git diff --name-status d96df5d..target -- . ':!handoff'` lists exactly the five FIX19 paths; no package or lockfile change;
+  `git diff --check` 0. dist/: clean builds of both (250 files each, own `npm ci`): 26 differing lines, all under `dist/client`; `dist/server` and `dist/domain` identical, so the drill and
+  `npm audit` carry forward. Changed: `index.html`, the entry chunk `index-D6YCEv6o.js(.map)` to `index-PcdqNPHg.js(.map)`, and the five lazy chunks (AdminScreen, ImportScreen,
+  ReviewScreen, SettingsTransfer, SettingsTransferFile) by name only (equal once names are normalised); the CSS file is the same. docs/04 EN and VI carry the same added clause.
+- **2 Core.** `npm ci`, lint, typecheck, build (entry chunk 493 kB, no advisory, no deprecation line), `npm run verify` (smoke PASS) all exit 0; `npm test` 3 times: 101 files, 2,397 tests each.
+  `check_recovery.py` PASS (106), `validate_package.py --preflight` 0, `validate_orchestration.py` 0.
+- **3 Real-clock FULL e2e.** Desktop 484 ok / 36 skipped / 0 failed; mobile 408 ok / 112 skipped / 0 failed.
+- **4 Sweeps** (FIX10 wrapper, `--workers=6`, preload validated by controls): full 2026-10-26T16:00Z, 2026-11-01T08:45Z, 2027-03-14T10:30Z each desktop 484/36, mobile 408/112; seven-file
+  2026-10-27T06:58:30Z, 2027-01-01T07:30Z, 2027-01-01T08:30Z each desktop 234/16, mobile 166/84. All 0 failed.
+- **5 Stress** (`--repeat-each=20 --workers=10`): FIX19 tests desktop real 220 and at 2026-10-27T06:58:30Z 220; FIX18 desktop real 80 (20 skipped), crossing 80, mobile 20; unsaved-changes tests desktop 40, mobile 40. 0 failed.
+- **6 Test strength.** In `export-mut`, each restored byte-equal: PA fails 3 (G1, G2, G3), PB G3, PE N, PF O, PS O, ND B(leave minutes), ND2 B(leave kind), NG FIX18 T3 + B(notes), NH B(category), NC B(WFH); the unmutated build passes 15 of 15. As FIX19 recorded; none indistinguishable. Diff read: tests purely additive (no removed line), no loosened or dropped assertion, no sleep, no raised timeout (the only timeouts are new 7 s bounds on the new tests' own `waitForResponse`), the follow-read version check kept, no new state or message (two refs and one helper, no state, no text).
+- **7 axe 4.14.0** (task-local, no dependency), light and dark, Day editor on a past workday with a session, as opened / after a session save / with the stale notice: 1440, 1280 (desktop) and 390 (mobile) all 0 violations (18 scans per scheme-set: desktop 6 + 6, mobile 3 + 3 = 36 scans, 0 violations; incomplete items color-contrast and label-content-name-mismatch only, as before).
+- Slips: a few read-only pipes (`99-slips.txt`), nothing written by them. Nothing left running.

@@ -1,0 +1,31 @@
+# Usage: bash digest.sh <tag>   (export form, ls-tree form, npm run digest in the repository and in a clean clone)
+. <task>/env.sh
+TAG=$1
+cd $T/export
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' -not -path './.git/*' -not -path './test-results/*' -not -path './playwright-report/*' | sed 's|^\./||' | LC_ALL=C sort > $T/out/ex-files-$TAG.txt
+rm -f $T/out/ex-hashes-$TAG.txt
+while IFS= read -r f; do
+  h=$(git hash-object --no-filters -- "$f")
+  printf '%s %s\n' "$f" "$h" >> $T/out/ex-hashes-$TAG.txt
+done < $T/out/ex-files-$TAG.txt
+LC_ALL=C sort $T/out/ex-hashes-$TAG.txt > $T/out/ex-sorted-$TAG.txt
+{
+  echo "time (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "export form (clean git archive of $TARGET, git hash-object --no-filters, outside handoff/): $(sha256sum $T/out/ex-sorted-$TAG.txt | cut -d' ' -f1) lines $(wc -l < $T/out/ex-sorted-$TAG.txt)"
+} > $T/out/01-digest-$TAG.txt
+cd $REPO
+git ls-tree -r --format="%(path) %(objectname)" $TARGET | grep -v '^handoff/' | LC_ALL=C sort > $T/out/lstree-sorted-$TAG.txt
+echo "ls-tree form ($TARGET): $(sha256sum $T/out/lstree-sorted-$TAG.txt | cut -d' ' -f1) lines $(wc -l < $T/out/lstree-sorted-$TAG.txt)" >> $T/out/01-digest-$TAG.txt
+cmp $T/out/ex-sorted-$TAG.txt $T/out/lstree-sorted-$TAG.txt && echo "export list byte-identical to the ls-tree list" >> $T/out/01-digest-$TAG.txt
+git ls-tree -r --format="%(path) %(objectname)" HEAD | grep -v '^handoff/' | LC_ALL=C sort > $T/out/lstree-head-$TAG.txt
+echo "ls-tree form (HEAD $(git rev-parse HEAD)): $(sha256sum $T/out/lstree-head-$TAG.txt | cut -d' ' -f1) lines $(wc -l < $T/out/lstree-head-$TAG.txt)" >> $T/out/01-digest-$TAG.txt
+npm run digest > $T/out/01-digest-npm-repo-$TAG.txt 2>&1
+echo "npm run digest (repository, tracked + untracked, handoff/ excluded) exit $?: $(grep -E '^[0-9a-f]{64}' $T/out/01-digest-npm-repo-$TAG.txt)" >> $T/out/01-digest-$TAG.txt
+cd $T/clone
+export GIT_CONFIG_VALUE_0=$T/clone
+echo "scratch clone HEAD: $(git rev-parse HEAD); status lines: $(git status --short | wc -l)" >> $T/out/01-digest-$TAG.txt
+npm run digest > $T/out/01-digest-npm-clone-$TAG.txt 2>&1
+echo "npm run digest (clean scratch clone at the target, its own script) exit $?: $(grep -E '^[0-9a-f]{64}' $T/out/01-digest-npm-clone-$TAG.txt)" >> $T/out/01-digest-$TAG.txt
+echo "git ls-files --cached --others --exclude-standard -z bytes in the clean clone: $(git ls-files --cached --others --exclude-standard -z | wc -c) (Node's default execFileSync maxBuffer is 1048576)" >> $T/out/01-digest-$TAG.txt
+cd $REPO
+echo "git ls-files --cached --others --exclude-standard -z bytes in the repository: $(git ls-files --cached --others --exclude-standard -z | wc -c)" >> $T/out/01-digest-$TAG.txt

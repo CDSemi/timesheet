@@ -176,17 +176,30 @@ Luồng hiện tại:
        thể khiến lần "Save day fields" sau đó âm thầm ghi đè thay đổi làm từ thiết bị khác.
      - Low: lệnh tính digest cho bản phát hành bị lỗi.
    - WP5-UX5-FIX19 đã sửa cả hai (digest 67aa715c).
-   - Đang chạy: WP5-UX5-FIX19-FREEZE commit và push bản sửa.
-   - Sau đó là gate lại (WP5-UX5-REGATE14), kiểm tra lại tích hợp
-     (WP5-UX5-AUDIT-INT3), kiểm tra lại tích hợp
-     (WP5-UX5-AUDIT-INT2), một lượt kiểm
-     tra lại độc lập mới cho vùng B (WP5-UX5-RECHECK-B3), kiểm tra lại độc lập hai lỗi đã sửa, thay đổi
-     Day editor và thay đổi giao diện, audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
+   - Bản sửa đã được freeze trong 0b45781 (digest 67aa715c) và đã push.
+   - WP5-UX5-REGATE14, gate lại trên 0b45781, đã đạt.
+   - Lần kiểm tra lại tích hợp WP5-UX5-AUDIT-INT3 đã đạt trên 0b45781 / 67aa715c. Cả hai lỗi
+     đã đóng và không có lỗi mới. Trên board, WP5 đã được nghiệm thu lại sau vòng 4 và 5.
+   - Các rủi ro tùy chọn được ghi lại cho handoff WP5. Một rủi ro cần chủ dự án quyết định,
+     tốt nhất trước pilot (R-UX5I2-3): giá trị mặc định theo lịch không có phiên bản, nên một
+     ngày lễ được import trong lúc Day editor đang mở có thể bị lưu thành "Worked".
+   - Release notes (docs/12) và README vẫn mô tả vòng 4 và 5, thậm chí cả WP4, là chưa
+     nghiệm thu. Cả hai file đều được tính vào digest.
+   - WP5-UX5-RELNOTES đã cập nhật hai file đó cùng bản dịch (digest 2072e3f2). Nó cũng phát
+     hiện mã PDF và thư viện gửi mail đã thay đổi sau khi các mẫu pilot được tạo.
+   - Đang chạy: freeze bản cập nhật, WP5-UX5-RELNOTES-FREEZE.
+   - Sau đó:
+     - gate lại có giới hạn (WP5-UX5-REGATE15), đồng thời tạo lại các mẫu pilot từ bản phát
+       hành;
+     - một audit mới (WP5-UX5-AUDIT-RN);
+     - ACCEPT-DOCS, ghi định danh mới vào pilot packet và handoff WP5;
+     - commit WP5-UX5-ACCEPT.
    - Để tiếp tục sau khi bị gián đoạn, dùng prompt khởi động ở trên. Điều phối viên làm tiếp
      ở `next_task_id` của board.
    - Chi tiết: [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), mục "REGATE3
      không đạt; hai việc chẩn đoán đang chạy (2026-10-26)" và các mục sau đó.
-   - Cho đến khi nghiệm thu lại, bản đã nghiệm thu gần nhất vẫn là 8e55710 / 507de97c.
+   - Cho đến commit nghiệm thu, pilot packet vẫn ghi 8e55710 / 507de97c. Đừng dùng định danh
+     đó cho pilot.
 1. **Đã xong: WP5 đã nghiệm thu, rồi nghiệm thu lại sau mỗi vòng thay đổi UI.** Biên bản
    nghiệm thu đầu đã commit ở dd0c7d1. Các biên bản nghiệm thu lại nằm trong
    [WP5 handoff](delivery/WP5_HANDOFF.vi.md):

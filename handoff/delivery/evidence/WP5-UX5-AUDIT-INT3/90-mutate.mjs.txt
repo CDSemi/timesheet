@@ -1,0 +1,38 @@
+// Applies one mutant to a file (the find text must occur exactly once) or restores the file from its pristine copy.
+// Usage: node mutate.mjs apply <file> <mutantId>   |   node mutate.mjs restore <file> <pristine>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const MUTANTS = {
+  MY1: ['    entry: held.entry,\n', '    entry: answer.entry,\n'],
+  MY2: ['    wfh: held.wfh,\n', '    wfh: answer.wfh,\n'],
+  MY3: ['    leave_minutes: held.leave_minutes,\n', '    leave_minutes: answer.leave_minutes,\n'],
+  MY4: ['      saved(next, text);\n      setGeneration((value) => value + 1);\n', '      saved(next, text);\n'],
+  MY5: ['  heldDay.current = day;\n', '  heldDay.current ??= day;\n'],
+  MY6: ['  fieldsDirtyRef.current = fieldsDirty;\n', '  fieldsDirtyRef.current = false;\n'],
+  MY7: ["      sessionWritten(response.day, 'Session deleted.');\n", "      saved(response.day, 'Session deleted.');\n"],
+  MY8: ['    if (held === null || sameDayFields(held, next)) {\n', '    if (held === null || held.entry?.version === next.entry?.version) {\n'],
+  MY9: [
+    '      saved(next, text);\n    } else if (fieldsDirtyRef.current) {\n',
+    '      saved(next, text);\n      setGeneration((value) => value + 1);\n    } else if (fieldsDirtyRef.current) {\n',
+  ],
+  MY10: ['  maxBuffer: 64 * 1024 * 1024,\n});\nconst files', '  maxBuffer: 1024 * 1024,\n});\nconst files'],
+  MY11: ['    held.wfh === fresh.wfh &&\n', ''],
+  MY12: ["  nestedOpen.current = editing.kind !== 'none' || deleting !== null;\n", "  nestedOpen.current = editing.kind !== 'none';\n"],
+};
+
+const [mode, file, arg] = process.argv.slice(2);
+if (mode === 'restore') {
+  writeFileSync(file, readFileSync(arg));
+  console.log(`restored ${file.split(/[\\/]/).pop()} from the pristine copy`);
+} else if (mode === 'apply') {
+  const pair = MUTANTS[arg];
+  if (pair === undefined) throw new Error(`unknown mutant ${arg}`);
+  const [find, replace] = pair;
+  const text = readFileSync(file, 'utf8');
+  const count = text.split(find).length - 1;
+  if (count !== 1) throw new Error(`${arg}: the find text occurs ${count} times`);
+  writeFileSync(file, text.replace(find, replace));
+  console.log(`${arg} applied to ${file.split(/[\\/]/).pop()}: ${JSON.stringify(find)} -> ${JSON.stringify(replace)}`);
+} else {
+  throw new Error('mode must be apply or restore');
+}

@@ -1,0 +1,29 @@
+# The mandatory checks in the clean export, one after another (WP5-UX5-AUDIT-INT3 scope item 7).
+. <task>/env.sh
+O=$T/out
+P=$T/logs/chain-main-progress.txt
+step() { echo "$1 $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P; }
+cd $T/export || exit 2
+step "start"
+npm ci > $O/03-ci.txt 2>&1; echo "npm ci exit $?" >> $O/03-core-exits.txt; step "ci done"
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+npm run typecheck > $O/03-typecheck.txt 2>&1; echo "typecheck exit $?" >> $O/03-core-exits.txt; step "typecheck done"
+npm run lint > $O/03-lint.txt 2>&1; echo "lint exit $?" >> $O/03-core-exits.txt; step "lint done"
+npm test > $O/03-npmtest.txt 2>&1; echo "npm test exit $?" >> $O/03-core-exits.txt; step "test done"
+npm run build > $O/03-build.txt 2>&1; echo "build exit $?" >> $O/03-core-exits.txt; step "build done"
+unset NODE_OPTIONS
+bash $T/cens.sh pre-e2e-desktop > $T/logs/cens-pre-e2e-desktop.log 2>&1
+bash $T/run-shift.sh full-real-desktop real --project=desktop > $O/04-e2e-desktop.txt 2>&1; step "e2e desktop done"
+bash $T/cens.sh post-e2e-desktop > $T/logs/cens-post-e2e-desktop.log 2>&1
+bash $T/run-shift.sh full-real-mobile real --project=mobile > $O/04-e2e-mobile.txt 2>&1; step "e2e mobile done"
+bash $T/cens.sh post-e2e-mobile > $T/logs/cens-post-e2e-mobile.log 2>&1
+node.exe $T/counts.mjs $O/04-e2e-desktop.txt $O/04-e2e-mobile.txt > $O/04-e2e-counts.txt 2>&1
+export NODE_OPTIONS="--trace-deprecation"
+node.exe $T/run-tz.mjs Asia/Kathmandu $T/export node.exe node_modules/vitest/vitest.mjs run tests/integration/ac13-two-week.test.ts > $O/05-ac13-asia-kathmandu.txt 2>&1; echo "ac13 Asia/Kathmandu exit $?" >> $O/03-core-exits.txt; step "ac13 done"
+unset NODE_OPTIONS
+SEVEN="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts"
+bash $T/cens.sh pre-seven-1026 > $T/logs/cens-pre-seven.log 2>&1
+bash $T/run-shift.sh seven-1026 2026-10-27T06:58:30Z $SEVEN --workers=6 > $O/08-seven-1026.txt 2>&1; step "seven-file done"
+bash $T/cens.sh post-seven-1026 > $T/logs/cens-post-seven.log 2>&1
+node.exe $T/counts.mjs $O/08-seven-1026.txt > $O/08-seven-counts.txt 2>&1
+step "chain-main done"

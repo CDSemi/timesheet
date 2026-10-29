@@ -1,0 +1,12 @@
+# After the last mutant: remove my probe copy from export-mut, rebuild its client, and compare src/, tests/ and dist/ with the clean export.
+. <task>/env.sh
+O=$T/out
+cd $T/export-mut || exit 2
+rm -f tests/e2e/zz-int3-session.spec.ts
+npm run build > $T/logs/mut-verify-build.txt 2>&1
+echo "export-mut rebuild exit $?" > $O/51-mut-restored.txt
+diff -r $T/export/src $T/export-mut/src > $T/logs/mut-verify-src.txt 2>&1; echo "src/ vs the clean export: diff exit $? ($(wc -l < $T/logs/mut-verify-src.txt) lines)" >> $O/51-mut-restored.txt
+diff -r $T/export/tests $T/export-mut/tests > $T/logs/mut-verify-tests.txt 2>&1; echo "tests/ vs the clean export: diff exit $? ($(wc -l < $T/logs/mut-verify-tests.txt) lines)" >> $O/51-mut-restored.txt
+diff -r $T/export/scripts $T/export-mut/scripts > $T/logs/mut-verify-scripts.txt 2>&1; echo "scripts/ vs the clean export: diff exit $? ($(wc -l < $T/logs/mut-verify-scripts.txt) lines)" >> $O/51-mut-restored.txt
+diff -r $T/export/dist $T/export-mut/dist > $T/logs/mut-verify-dist.txt 2>&1; echo "dist/ (rebuilt) vs the clean export's build: diff exit $? ($(wc -l < $T/logs/mut-verify-dist.txt) lines)" >> $O/51-mut-restored.txt
+cmp $T/export-mut/src/client/DayEditor.tsx $T/pristine/DayEditor.tsx && echo "DayEditor.tsx byte-equal to the pristine copy" >> $O/51-mut-restored.txt

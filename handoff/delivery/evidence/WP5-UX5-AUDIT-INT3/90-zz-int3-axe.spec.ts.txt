@@ -1,0 +1,134 @@
+// WP5-UX5-AUDIT-INT3 probe (the auditor's own, never part of the repository): axe-core 4.14.0 from the task folder (no dependency added) on the
+// Timesheet page with the Day editor open on a past workday that has a session, light and dark, at 1440 (beside) and 1280 (floating) on the
+// desktop project and 390 on the phone project: (a) as opened with a typed note; (b) after a session save while the day fields changed
+// elsewhere (FIX19 keeps the held fields; "Session saved."); (c) the stale notice after the refused "Save day fields"; (d) after "Reload day";
+// (e) after a session save with nothing typed while the fields changed elsewhere again (the form restarts). Tags WCAG 2.0 to 2.2 A and AA.
+// Focus is logged at each step. Synthetic data only, a person of its own per test.
+import { appendFileSync, readFileSync } from 'node:fs';
+import type { Locator, Page } from '@playwright/test';
+import { expect, newPerson, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const AXE_PATH = process.env.AXE_PATH ?? '';
+const OUT = process.env.AXE_OUT ?? '';
+const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+const SAVED = 'Synthetic note saved before the editor opened';
+const ELSEWHERE = 'Synthetic note saved on another device';
+const TYPED = 'Synthetic note typed here and not saved';
+let axeSource = '';
+function note(line: string): void {
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+
+interface Result {
+  version: string;
+  violations: Array<{ id: string; impact: string | null; nodes: string[] }>;
+  incomplete: string[];
+}
+
+function activeText(page: Page): Promise<string> {
+  return page.evaluate<string>(
+    "(() => { const a = document.activeElement; if (a === null || a === document.body) return 'BODY'; const name = a.getAttribute('aria-label') ?? (a.textContent ?? '').trim(); return a.tagName + ' \"' + name.slice(0, 40) + '\"' + (a.closest('dialog') ? ' in dialog' : ''); })()",
+  );
+}
+
+async function scan(page: Page, label: string): Promise<number> {
+  if (axeSource === '') axeSource = readFileSync(AXE_PATH, 'utf8');
+  await frames(page);
+  if (!(await page.evaluate<boolean>(`typeof window.axe !== 'undefined'`))) await page.evaluate(axeSource);
+  const result = await page.evaluate<Result, string[]>(async (tags) => {
+    const axe = (window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<Record<string, unknown>>; version: string } }).axe;
+    const r = (await axe.run(document, { runOnly: { type: 'tag', values: tags }, resultTypes: ['violations', 'incomplete'] })) as {
+      violations: Array<{ id: string; impact: string | null; nodes: Array<{ target: unknown }> }>;
+      incomplete: Array<{ id: string }>;
+    };
+    return { version: axe.version, violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => JSON.stringify(n.target)) })), incomplete: [...new Set(r.incomplete.map((i) => i.id))] };
+  }, TAGS);
+  note(`${label}: axe ${result.version} violations=${result.violations.length} [${result.violations.map((v) => `${v.id}(${v.impact}) ${v.nodes.join(' ')}`).join('; ')}] incomplete=[${result.incomplete.join(',')}]; focus ${await activeText(page)}`);
+  return result.violations.length;
+}
+
+async function openDay(page: Page, date: string): Promise<Locator> {
+  await page.getByLabel('Open a day').fill(date);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Times', exact: true })).toBeVisible();
+  return editor;
+}
+
+async function saveSessionEnd(page: Page, editor: Locator, end: string): Promise<void> {
+  await editor.getByRole('button', { name: /^Edit session/ }).first().click();
+  const edit = page.getByRole('dialog', { name: 'Edit session', exact: true });
+  await expect(edit).toBeVisible();
+  await edit.getByLabel('End time', { exact: true }).fill(end);
+  await edit.getByRole('button', { name: 'Save', exact: true }).click();
+  const confirm = page.getByRole('alertdialog', { name: 'Save this session?' });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(editor.getByRole('status').filter({ hasText: 'Session saved.' })).toBeVisible();
+}
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`int3-axe Day editor: typed note, session save with fields held, stale notice, Reload day, session save with a restart - ${scheme}`, async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+    isMobile,
+  }, testInfo) => {
+    test.setTimeout(300_000);
+    const project = testInfo.project.name;
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const person = await newPerson(adminSeed, builtServer, { displayName: `Synthetic Int3 Axe ${project} ${scheme}`, signature: 'none' });
+    const days = await person.api.displayedPeriodFreeWorkdays();
+    const widths = isMobile ? [390] : [1440, 1280];
+    expect(days.length, 'past free workdays').toBeGreaterThanOrEqual(widths.length);
+    let total = 0;
+    let scans = 0;
+    for (const [index, width] of widths.entries()) {
+      const date = days[index] ?? '';
+      await person.api.seedCompleteDay(date);
+      await person.api.putDay(date, { notes: SAVED });
+      await page.setViewportSize({ width, height: 800 });
+      if (index === 0) await signInPageAs(person.account, '#/timesheet');
+      else await page.reload();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await expect.poll(() => page.evaluate<number>('window.innerWidth')).toBe(width);
+      const tag = `[${project} ${scheme} ${width} ${date}]`;
+      const editor = await openDay(page, date);
+      const notes = editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes');
+      await notes.fill(TYPED);
+      total += await scan(page, `${tag} (a) editor open, a typed note`);
+      scans += 1;
+      await person.api.putDay(date, { notes: ELSEWHERE, wfh: true });
+      await saveSessionEnd(page, editor, '17:45');
+      await expect(notes).toHaveValue(TYPED);
+      total += await scan(page, `${tag} (b) after a session save, day fields held ("Session saved.")`);
+      scans += 1;
+      await editor.getByRole('button', { name: 'Save day fields' }).click();
+      const stale = editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+      await expect(stale).toBeVisible();
+      total += await scan(page, `${tag} (c) stale notice after the refused save`);
+      scans += 1;
+      await stale.getByRole('button', { name: 'Reload day' }).click();
+      await expect(stale).toHaveCount(0);
+      await expect(notes).toHaveValue(ELSEWHERE);
+      total += await scan(page, `${tag} (d) after Reload day`);
+      scans += 1;
+      await person.api.putDay(date, { notes: `${ELSEWHERE} again`, wfh: false });
+      await saveSessionEnd(page, editor, '17:40');
+      await expect(notes).toHaveValue(`${ELSEWHERE} again`);
+      total += await scan(page, `${tag} (e) after a session save with nothing typed, the form restarted`);
+      scans += 1;
+      // Close the editor (nothing typed now) before the next width.
+      await editor.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(editor).toHaveCount(0);
+    }
+    note(`[${project} ${scheme}] Day editor TOTAL violations ${total} in ${scans} scans`);
+    expect(total).toBe(0);
+  });
+}

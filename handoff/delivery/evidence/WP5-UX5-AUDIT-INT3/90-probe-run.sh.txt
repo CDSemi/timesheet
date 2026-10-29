@@ -1,0 +1,37 @@
+# Probe runs (real clock), one after another, each with its own output folder. Usage: bash probe-run.sh
+. <task>/env.sh
+O=$T/out
+P=$T/logs/probe-run-progress.txt
+step() { echo "$1 $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P; }
+run() {
+  # run <label> <export dir> <playwright args...>
+  label=$1; dir=$2; shift 2
+  mkdir -p $T/pw-$label $T/shots-$label
+  export E2E_SCREENSHOT_DIR="$TW\\shots-$label"
+  cd $T/$dir || return 2
+  { echo "== $label in $dir: start $(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "\$ node node_modules/@playwright/test/cli.js test $* --output=<task>/pw-$label"; } > $T/logs/probe-$label.txt
+  NODE_OPTIONS="--trace-deprecation" node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-$label" >> $T/logs/probe-$label.txt 2>&1
+  echo "exit=$?" >> $T/logs/probe-$label.txt
+  echo "== $label end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $T/logs/probe-$label.txt
+  step "$label done"
+}
+cp $T/probes/zz-int3-session.spec.ts $T/probes/zz-int3-axe.spec.ts $T/probes/zz-int3-admin.spec.ts $T/export-probe/tests/e2e/
+cp $REPO/handoff/delivery/evidence/WP5-UX5-AUDIT-INT2/90-zz-int2-follow.spec.ts.txt $T/export-probe/tests/e2e/zz-int2-follow.spec.ts
+cp $T/probes/zz-int3-session.spec.ts $T/probes/zz-int3-admin.spec.ts $T/export-prev-probe/tests/e2e/
+cp $REPO/handoff/delivery/evidence/WP5-UX5-AUDIT-INT2/90-zz-int2-follow.spec.ts.txt $T/export-prev-probe/tests/e2e/zz-int2-follow.spec.ts
+bash $T/cens.sh pre-probes > $T/logs/cens-pre-probes.log 2>&1
+# 1. My session-write probe on the target, both projects.
+INT3_OUT="$TW\\out\\45-obs-int3-target.txt" run int3-target export-probe tests/e2e/zz-int3-session.spec.ts --workers=2
+# 2. AUDIT-INT2's follow probe (G1 and G2 among its cases), unchanged, on the target, both projects.
+INT2_OUT="$TW\\out\\44-obs-int2-follow-target.txt" run int2-target export-probe tests/e2e/zz-int2-follow.spec.ts --workers=2
+# 3. axe on the target, both projects.
+AXE_PATH="$TW\\axe\\axe.min.js" AXE_OUT="$TW\\out\\47-axe-lines.txt" run axe-target export-probe tests/e2e/zz-int3-axe.spec.ts --workers=1
+# 4. R-UX5I2-3 on the session-write path (an administrator's holiday on a default-source day), private servers, desktop.
+INT3_OUT="$TW\\out\\46-obs-int3-admin-target.txt" run admin-target export-probe tests/e2e/zz-int3-admin.spec.ts --project=desktop --workers=1
+bash $T/cens.sh mid-probes > $T/logs/cens-mid-probes.log 2>&1
+# 5. The same session-write probe on d96df5d (FIX18 without FIX19), and AUDIT-INT2's G1 and G2 there.
+INT3_OUT="$TW\\out\\45-obs-int3-prev.txt" run int3-prev export-prev-probe tests/e2e/zz-int3-session.spec.ts --workers=2
+INT2_OUT="$TW\\out\\44-obs-int2-follow-prev-G.txt" run int2-prev-G export-prev-probe tests/e2e/zz-int2-follow.spec.ts --project=desktop --workers=1 -g "int2-G"
+INT3_OUT="$TW\\out\\46-obs-int3-admin-prev.txt" run admin-prev export-prev-probe tests/e2e/zz-int3-admin.spec.ts --project=desktop --workers=1
+bash $T/cens.sh post-probes > $T/logs/cens-post-probes.log 2>&1
+step "probe-run done"

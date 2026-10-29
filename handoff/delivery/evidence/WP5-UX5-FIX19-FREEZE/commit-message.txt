@@ -1,0 +1,22 @@
+Never let a session write in the open Day editor overwrite day fields changed elsewhere, and let npm run digest run again
+
+- fix(day-editor): a session save, "Confirm breaks" or delete answer replaces the held day
+  fields and entry version only when they match what the form was seeded with.
+  - Otherwise, with no unsaved edit, the form restarts from the server's day.
+  - Otherwise, with an unsaved edit, the save is refused and "Reload day" reads the change.
+  - Before, the next "Save day fields" could silently overwrite another device's change.
+    This was pre-existing since WP2-T10.
+- fix(scripts): source-digest.mjs lists files with a 64 MiB buffer. Since the tracked
+  list passed 1 MiB, npm run digest failed with ENOBUFS in every checkout.
+- test(e2e): the session write and delete cases, the typed-note case, and pins for FIX18's
+  guards (WFH, partial leave, the delete confirmation, the overtaken read).
+- docs(04): the tab-return clause (+ vi).
+- docs(handoff): REGATE13 (PASS), AUDIT-INT2 (FIX REQUIRED) with its review pair, FIX19,
+  the board, the checkpoint (+ vi), STATE and NEXT_ACTION (+ vi).
+
+Task: WP5-UX5-FIX19 (after WP5-UX5-AUDIT-INT2)
+Gate: WP5-UX5-REGATE13 PASS on d96df5d; REGATE14 pending
+Audit: WP5-UX5-AUDIT-INT2 FIX REQUIRED (F-UX5I2-1, F-UX5I2-2); WP5-UX5-AUDIT-INT3 pending
+Digest: 67aa715c4cf600624b835a27c568f9225e471e43d819894fbeb8b4da6a89c42b
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

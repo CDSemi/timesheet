@@ -1,0 +1,17 @@
+# The five renamed lazy chunks of dist/client: equal once the entry chunk name and the chunk names are normalised?
+. <task>/env.sh
+O=$T/out
+A=$T/export-prev-probe/dist/client/assets
+B=$T/export/dist/client/assets
+norm() { sed -E 's/index-[A-Za-z0-9_-]{8}\.js/index-NORM.js/g; s/(AdminScreen|ImportScreen|ReviewScreen|SettingsTransferFile|SettingsTransfer|jsx-runtime)-[A-Za-z0-9_-]{8}\.js/\1-NORM.js/g' "$1"; }
+{
+  for name in AdminScreen ImportScreen ReviewScreen SettingsTransfer SettingsTransferFile; do
+    a=$(ls $A | grep -E "^${name}-[A-Za-z0-9_-]{8}\.js$")
+    b=$(ls $B | grep -E "^${name}-[A-Za-z0-9_-]{8}\.js$")
+    if cmp -s <(norm $A/$a) <(norm $B/$b); then echo "$name: $a vs $b equal after normalising chunk names"; else echo "$name: $a vs $b DIFFER after normalising"; fi
+  done
+  css_a=$(ls $A | grep -E '\.css$'); css_b=$(ls $B | grep -E '\.css$')
+  echo "css: $css_a vs $css_b $(cmp -s $A/$css_a $B/$css_b && echo identical || echo differ)"
+  jsx_a=$(ls $A | grep -E '^jsx-runtime-.*\.js$'); jsx_b=$(ls $B | grep -E '^jsx-runtime-.*\.js$')
+  echo "jsx-runtime: $jsx_a vs $jsx_b $(cmp -s $A/$jsx_a $B/$jsx_b && echo identical || echo differ)"
+} > $O/41-dist-client-normcmp.txt 2>&1

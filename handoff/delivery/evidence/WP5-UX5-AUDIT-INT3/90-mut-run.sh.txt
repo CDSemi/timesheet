@@ -1,0 +1,39 @@
+# Own mutants of FIX19's change in export-mut (WP5-UX5-AUDIT-INT3 scope item 6). Usage: bash mut-run.sh MY1 MY2 ...
+# Per mutant: apply (exactly one occurrence), rebuild the client, run the suite's FIX18 and FIX19 tests (desktop, as the suite runs them);
+# a survivor then runs against the six spec files that touch the Day editor and the clock (desktop); every mutant also runs against my
+# session-write probe (desktop, fully parallel); then the file is restored from its pristine copy and compared byte for byte.
+. <task>/env.sh
+O=$T/out
+P=$T/logs/mut-progress.txt
+F=$T/export-mut/src/client/DayEditor.tsx
+PR=$T/pristine/DayEditor.tsx
+mkdir -p $T/pristine
+[ -f $PR ] || cp $T/export/src/client/DayEditor.tsx $PR
+cp $T/probes/zz-int3-session.spec.ts $T/export-mut/tests/e2e/
+SIX="tests/e2e/day-editor.spec.ts tests/e2e/controls.spec.ts tests/e2e/focus-ring.spec.ts tests/e2e/keyboard-access.spec.ts tests/e2e/sharing.spec.ts tests/e2e/today.spec.ts"
+pw() {
+  label=$1; shift
+  mkdir -p $T/pw-mut-$label $T/shots-mut-$label
+  E2E_SCREENSHOT_DIR="$TW\\shots-mut-$label" NODE_OPTIONS="--trace-deprecation" node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-mut-$label" > $T/logs/mut-$label.txt 2>&1
+  code=$?
+  echo "exit=$code" >> $T/logs/mut-$label.txt
+  return $code
+}
+for M in "$@"; do
+  cd $T/export-mut || exit 2
+  echo "$M start $(date -u +%H:%M:%SZ)" >> $P
+  if ! node.exe $T/mutate.mjs apply $F $M >> $O/50-mut-apply.txt 2>&1; then echo "$M apply FAILED" >> $O/50-mut-exits.txt; continue; fi
+  npm run build:client > $T/logs/mut-build-$M.txt 2>&1; echo "$M build exit $?" >> $O/50-mut-exits.txt
+  pw $M-suite tests/e2e/day-editor.spec.ts --project=desktop --workers=2 -g "WP5-UX5-FIX19|WP5-UX5-FIX18"
+  s=$?; echo "$M suite (FIX18 + FIX19 tests, desktop) exit $s" >> $O/50-mut-exits.txt
+  if [ $s -eq 0 ]; then
+    pw $M-six $SIX --project=desktop --workers=6
+    echo "$M six spec files (desktop) exit $?" >> $O/50-mut-exits.txt
+  fi
+  INT3_OUT="$TW\\out\\52-obs-mut-$M.txt" pw $M-probe tests/e2e/zz-int3-session.spec.ts --project=desktop --workers=6 --fully-parallel
+  echo "$M my probe (desktop) exit $?" >> $O/50-mut-exits.txt
+  node.exe $T/mutate.mjs restore $F $PR >> $O/50-mut-apply.txt 2>&1
+  if cmp $F $PR; then echo "$M restored byte-equal" >> $O/50-mut-apply.txt; else echo "$M RESTORE MISMATCH" >> $O/50-mut-apply.txt; fi
+  echo "$M done $(date -u +%H:%M:%SZ)" >> $P
+done
+echo "mut-run done $(date -u +%H:%M:%SZ)" >> $P

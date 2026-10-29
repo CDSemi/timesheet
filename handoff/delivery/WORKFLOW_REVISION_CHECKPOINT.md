@@ -3054,24 +3054,74 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - Only `dist/client` changed.
   - `npm test`: 2,397. FULL: 484/36/0 and 408/112/0. The midnight run: 0 failed.
   - `npm run digest` works again.
-- **Running now:** WP5-UX5-FIX19-FREEZE (committer). The coordinator writes no file while it
-  runs.
-- **Next:**
-  - REGATE13 and AUDIT-INT2;
-  - ACCEPT-DOCS: the WP5 handoff backlog, the pilot packet's release identity, and the
-    real-device touch check;
-  - the WP5 re-accept.
-- **Next:** a fix if one is needed, then a regate on a host within the limit. RECHECK-B3
-  and AUDIT-INT move to depend on the new regate.
-- **Then:**
-  - a scoped regate, with the drill, because the server bundle changes;
-  - a fresh area-B recheck;
-  - the integration audit, ACCEPT-DOCS and the WP5 re-accept.
-- **Next:**
-  - a fix, its freeze and a regate;
-  - fresh rechecks of the two findings, the Day editor change and the cross-tab theme
-    change;
-  - the integration audit, ACCEPT-DOCS and the WP5 re-accept.
+- **WP5-UX5-FIX19-FREEZE done.**
+  - Commit 0b457817ed29806a36fdd78cc22ac84a0cc2db9d on main. It was pushed as a fast-forward
+    from d96df5d.
+  - D_PRE equals both HEAD digests (`git ls-tree` and `npm run digest`): 67aa715c.
+  - 472 paths were staged. Every check exited 0.
+- **WP5-UX5-REGATE14 PASS** (verifier, self-reported claude-sonnet-5-5) on 0b45781 /
+  67aa715c. The entry census was under 1 core. No failure.
+  - `npm run digest` works in a clean clone.
+  - Only `dist/client` changed.
+  - Core ×3: 2,397 tests.
+  - FULL: 484/36/0 and 408/112/0.
+  - Six sweeps and stress: 0 failed.
+  - All 10 FIX19 mutants are caught.
+  - axe: 36 scans, 0 violations.
+- **WP5-UX5-AUDIT-INT3 PASS** (fresh opus auditor, self-reported claude-opus-5-5) on 0b45781 /
+  67aa715c ([review](WP5_UX5_REVIEW_INT3.md)).
+  - Identity: HEAD = origin/main = target before and after. The export, ls-tree and
+    `npm run digest` forms are equal, in the repository and in a clean clone.
+  - F-UX5I2-1 closed:
+    - AUDIT-INT2's G1 and G2 keep the other device's change on the target;
+    - 27 own cases pass, and 21 of them fail on d96df5d;
+    - FIX18 and FIX19 never disagreed.
+  - F-UX5I2-2 closed.
+  - No regression. axe: 30 scans, 0 violations.
+  - 12 own mutants, 7 of them killed by the suite (R-UX5I3-4).
+  - `npm test`: 2,397. FULL: 484/36/0 and 408/112/0. AC-13 under Asia/Kathmandu passed. The
+    seven-file run at 06:58:30Z: 400 passed, 0 failed.
+  - No new finding.
+  - New optional risks: R-UX5I3-1..4.
+  - R-UX5I2-3 is updated: a calendar default has no version to protect it. It is an owner
+    decision, best taken before the pilot.
+- **WP5 re-accepted on the board** on 0b45781 / 67aa715c:
+  - `current_source_digest` is 67aa715c;
+  - `superseded_by` is WP5-UX5-AUDIT-INT3 for WP5-UX3-AUDIT-INT, the eight earlier WP5 audits
+    it superseded, RECHECK-A2 and RECHECK-B3.
+- **Coordinator decision (2026-10-29).** The release notes still call rounds 4 and 5
+  unaccepted (docs/12:7 and the round-5 limits), and the README still calls WP4 unaccepted.
+  Both files count in the digest.
+  - So the documentation-only WP5-UX5-RELNOTES (worker, sonnet) refreshes docs/12 and the
+    README, with their translations.
+  - It also answers a read-only question: do the pilot samples from 69d6340 still represent
+    0b45781?
+  - Then come:
+    - RELNOTES-FREEZE;
+    - a scoped REGATE15;
+    - a fresh opus AUDIT-RN, whose PASS supersedes AUDIT-INT3;
+    - ACCEPT-DOCS, which puts the new identity, the backlog and R-UX5I2-3 in the pilot
+      packet and the WP5 handoff;
+    - the WP5-UX5-ACCEPT commit.
+  - Alternative rejected: leaving "in progress" and "not accepted" lines in the release
+    candidate.
+- **WP5-UX5-RELNOTES done** (worker, self-reported claude-sonnet-5-5). It is uncommitted.
+  Digest 2072e3f2, 882 files.
+  - Exactly four files differ outside `handoff/`: README and docs/12, with their
+    translations.
+  - Each UI change round now names its accepting gate and audit. The drill line names
+    REGATE11 on 1fe5ad3 (209/0) and the carry-forward.
+  - No digest is written in a document. Every limit is kept.
+  - Preflight passed (exit 0). EN/VI parity is OK.
+  - **Sample provenance:** `timesheetPdf.ts` changed in 94accda (the leave line), and the
+    nodemailer pin changed in f4049aa, both after the sample commit 69d6340. So REGATE15
+    regenerates the samples from the release by the T06 recipe and compares them sample by
+    sample.
+- **Registered with briefs:**
+  - RELNOTES-FREEZE;
+  - REGATE15 (scoped, with the samples; ports 51850-51889);
+  - AUDIT-RN (fresh opus; review pair `WP5_UX5_REVIEW_RN`; ports 51890-51929).
+- **Running now:** WP5-UX5-RELNOTES-FREEZE, alone.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

@@ -1,6 +1,6 @@
 # Timesheet Web — implementation package
 
-Original documentation revision: **2026-09-30-r1.1**. Repository status: **WP1, WP2 and WP3 independently accepted; WP4 implemented (T01–T12 and the documentation task T13), awaiting the package-final gate WP4-GATE and the independent audits; not accepted**.
+Original documentation revision: **2026-09-30-r1.1**. Repository status: **WP1 to WP4 independently accepted; WP5 software ready (independently accepted, and re-accepted after UI change rounds 1 to 5); pilot pending and NAS NOT VERIFIED**.
 
 English `.md` files are authoritative. Every `.vi.md` is a translation of the corresponding English file. JSON keys and enum values stay in English. The manifests in `handoff/delivery/` are historical snapshots of the r1.1 documentation package, not certification of the current repository; see [VALIDATION](handoff/delivery/VALIDATION.md).
 
@@ -8,8 +8,8 @@ English `.md` files are authoritative. Every `.vi.md` is a translation of the co
 
 1. Read [NEXT_ACTION](handoff/NEXT_ACTION.md).
 2. Read [requirements](docs/01_PRODUCT_REQUIREMENTS.md), [time/OT rules](docs/02_TIME_AND_OT_RULES.md) and [roadmap](docs/09_IMPLEMENTATION_ROADMAP.md).
-3. Read [DEVELOPMENT](DEVELOPMENT.md), the [WP1 handoff](handoff/delivery/WP1_HANDOFF.md), the [WP2 handoff](handoff/delivery/WP2_HANDOFF.md) and the [WP3 handoff](handoff/delivery/WP3_HANDOFF.md) and the [WP4 handoff](handoff/delivery/WP4_HANDOFF.md); they describe the complete source in this repository and how to verify it. To install and operate the application on the NAS, read the [operations runbook](docs/11_OPERATIONS_RUNBOOK.md).
-4. WP1 was accepted after the F-01 recheck ([WP1 review](handoff/delivery/WP1_REVIEW.md), [recheck](handoff/delivery/WP1_RECHECK.md)); WP2 and WP3 were accepted after their gates and independent audits (see their handoffs). The next step is the WP4 package-final gate and the fresh independent audits; do not begin WP5 before they pass.
+3. Read [DEVELOPMENT](DEVELOPMENT.md), the [WP1 handoff](handoff/delivery/WP1_HANDOFF.md), the [WP2 handoff](handoff/delivery/WP2_HANDOFF.md) and the [WP3 handoff](handoff/delivery/WP3_HANDOFF.md), the [WP4 handoff](handoff/delivery/WP4_HANDOFF.md) and the [WP5 handoff](handoff/delivery/WP5_HANDOFF.md); they describe the complete source in this repository and how to verify it. To install and operate the application on the NAS, read the [operations runbook](docs/11_OPERATIONS_RUNBOOK.md).
+4. WP1 was accepted after the F-01 recheck ([WP1 review](handoff/delivery/WP1_REVIEW.md), [recheck](handoff/delivery/WP1_RECHECK.md)); WP2, WP3 and WP4 were accepted after their gates and independent audits, and WP5 was accepted and re-accepted after UI change rounds 1 to 5 (see their handoffs). The pilot is pending and the NAS is NOT VERIFIED. The next step is the owner's review of the [pilot packet](handoff/delivery/WP5_PILOT_PACKET.md).
 
 Give Claude the single entry prompt in NEXT_ACTION; the coordinator resumes [saved tasks](handoff/delivery/ORCHESTRATION.json) and advances only after independent gates. Project profiles live in `.claude/agents/`, with the default coordinator in `.claude/settings.json`.
 
@@ -51,4 +51,4 @@ Each prompt names its reading scope. Do not paste every document into every sess
 
 The [Excel template](reference/inputs/Timesheet_Rev8_2026.xlsx) is a public sample: the form, working-info and holiday sheets of the original workbook with all personal data removed (dated attendance sheets, employee name, signature images, author metadata and local path). The personal original is not retained. Keep the workbook out of production images; use synthetic demo data.
 
-WP1, WP2 and WP3 are accepted; WP4 source with implementer and per-task verification evidence is present (WP4 is not yet gated or independently audited); see DEVELOPMENT and the handoffs. No production deployment or real email has occurred: outbound mail is capture-only until the owner authorizes a pilot, and the production sending flag is never set in development. Bilingual documentation does not require a bilingual initial application UI. Model information was rechecked on 2026-09-30; actual account availability and usage must be checked in the client.
+WP1 to WP4 are independently accepted, and WP5 is software ready (independently accepted, and re-accepted after UI change rounds 1 to 5); the pilot is pending and the NAS is NOT VERIFIED; see DEVELOPMENT and the handoffs. No production deployment or real email has occurred: outbound mail is capture-only until the owner authorizes a pilot, and the production sending flag is never set in development. Bilingual documentation does not require a bilingual initial application UI. Model information was rechecked on 2026-09-30; actual account availability and usage must be checked in the client.

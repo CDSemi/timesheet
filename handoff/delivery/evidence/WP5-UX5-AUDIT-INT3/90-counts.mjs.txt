@@ -1,0 +1,21 @@
+// Per-project counts of a Playwright list-reporter log. Usage: node counts.mjs <log> [<log> ...]
+import { readFileSync } from 'node:fs';
+
+for (const file of process.argv.slice(2)) {
+  const text = readFileSync(file, 'utf8').replace(/\r/g, '');
+  const counts = { desktop: { ok: 0, skipped: 0, failed: 0 }, mobile: { ok: 0, skipped: 0, failed: 0 } };
+  const failedTitles = [];
+  for (const line of text.split('\n')) {
+    const m = /^\s+(ok|x|-|✓|✘)\s+\d+ \[(desktop|mobile)\]/.exec(line);
+    if (!m) continue;
+    const kind = m[1] === 'ok' || m[1] === '✓' ? 'ok' : m[1] === 'x' || m[1] === '✘' ? 'failed' : 'skipped';
+    counts[m[2]][kind] += 1;
+    if (kind === 'failed') failedTitles.push(line.trim().slice(0, 220));
+  }
+  const exit = /^exit=(\d+)/m.exec(text)?.[1] ?? '?';
+  const summary = /(\d+) passed \(([\d.]+m?s?)\)/.exec(text);
+  const flaky = /(\d+) flaky/.exec(text)?.[1] ?? '0';
+  const failed = /(\d+) failed/.exec(text)?.[1] ?? '0';
+  console.log(`${file.split('/').pop()}: desktop ${counts.desktop.ok} ok / ${counts.desktop.skipped} skipped / ${counts.desktop.failed} failed; mobile ${counts.mobile.ok} ok / ${counts.mobile.skipped} skipped / ${counts.mobile.failed} failed; summary passed ${summary?.[1] ?? '?'} in ${summary?.[2] ?? '?'}, failed ${failed}, flaky ${flaky}; exit ${exit}`);
+  for (const title of failedTitles) console.log(`  failed: ${title}`);
+}

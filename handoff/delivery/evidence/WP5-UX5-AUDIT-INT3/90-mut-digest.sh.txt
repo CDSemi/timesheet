@@ -1,0 +1,19 @@
+# MY10: the digest fix weakened to Node's default-size buffer (maxBuffer 1 MiB) in the clean clone; npm run digest must fail; then restore.
+. <task>/env.sh
+O=$T/out
+export GIT_CONFIG_VALUE_0=$T/clone
+F=$T/clone/scripts/source-digest.mjs
+cd $T/clone || exit 2
+{
+  echo "time (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ); clone HEAD $(git rev-parse HEAD); status lines before $(git status --short | wc -l)"
+  node.exe $T/mutate.mjs apply $F MY10
+  echo "status after apply: $(git status --short | tr '\n' ' ')"
+  npm run digest > $T/logs/mut-MY10-digest.txt 2>&1
+  echo "npm run digest with MY10: exit $?; $(grep -m1 -oE 'ENOBUFS|[0-9a-f]{64}' $T/logs/mut-MY10-digest.txt)"
+  node.exe $T/mutate.mjs restore $F $T/export/scripts/source-digest.mjs
+  cmp $F $T/export/scripts/source-digest.mjs && echo "restored byte-equal to the clean export's copy"
+  echo "status after restore: $(git status --short | wc -l) lines"
+  npm run digest > $T/logs/mut-MY10-digest-restored.txt 2>&1
+  echo "npm run digest restored: exit $?; $(grep -m1 -oE '[0-9a-f]{64}  \([0-9]+ files' $T/logs/mut-MY10-digest-restored.txt)"
+  echo "npm test does not run scripts/source-digest.mjs: $(grep -rl 'source-digest' $T/export/tests $T/export/vitest.config.* 2>&1 | wc -l) test or config files name it"
+} > $O/50-mut-MY10-digest.txt 2>&1

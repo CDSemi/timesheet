@@ -1,6 +1,6 @@
 # Timesheet Web — bộ tài liệu triển khai
 
-Bản tài liệu gốc: **2026-09-30-r1.1**. Trạng thái repo: **WP1, WP2 và WP3 đã được chấp nhận độc lập; WP4 đã triển khai (T01–T12 và tác vụ tài liệu T13), đang chờ gate cuối gói WP4-GATE và các audit độc lập; chưa được chấp nhận**.
+Bản tài liệu gốc: **2026-09-30-r1.1**. Trạng thái repo: **WP1 đến WP4 đã được chấp nhận độc lập; WP5 đã sẵn sàng về phần mềm (được chấp nhận độc lập, và chấp nhận lại sau các vòng thay đổi UI 1 đến 5); pilot đang chờ và NAS CHƯA ĐƯỢC KIỂM CHỨNG (NOT VERIFIED)**.
 
 File `.md` tiếng Anh là nguồn chuẩn. Mỗi `.vi.md` là bản dịch của file tiếng Anh tương ứng. Khóa JSON và enum giữ tiếng Anh. Các manifest trong `handoff/delivery/` là snapshot lịch sử của gói docs r1.1, không chứng nhận repo hiện tại; xem [VALIDATION](handoff/delivery/VALIDATION.vi.md).
 
@@ -8,8 +8,8 @@ File `.md` tiếng Anh là nguồn chuẩn. Mỗi `.vi.md` là bản dịch củ
 
 1. Đọc [NEXT_ACTION](handoff/NEXT_ACTION.vi.md).
 2. Đọc [yêu cầu](docs/01_PRODUCT_REQUIREMENTS.vi.md), [quy tắc giờ/OT](docs/02_TIME_AND_OT_RULES.vi.md) và [lộ trình](docs/09_IMPLEMENTATION_ROADMAP.vi.md).
-3. Đọc [DEVELOPMENT](DEVELOPMENT.vi.md), [bàn giao WP1](handoff/delivery/WP1_HANDOFF.vi.md), [bàn giao WP2](handoff/delivery/WP2_HANDOFF.vi.md) [bàn giao WP3](handoff/delivery/WP3_HANDOFF.vi.md) và [bàn giao WP4](handoff/delivery/WP4_HANDOFF.vi.md); các tài liệu này mô tả source đầy đủ trong repo và cách kiểm chứng. Để cài đặt và vận hành ứng dụng trên NAS, đọc [sổ tay vận hành](docs/11_OPERATIONS_RUNBOOK.vi.md).
-4. WP1 đã được chấp nhận sau lần kiểm lại F-01 ([review WP1](handoff/delivery/WP1_REVIEW.vi.md), [kiểm lại](handoff/delivery/WP1_RECHECK.vi.md)). WP2 và WP3 đã được chấp nhận sau gate và các audit độc lập (xem các bàn giao của chúng). Bước tiếp theo là gate cuối gói WP4 và các audit độc lập mới; không bắt đầu WP5 trước khi các bước đó đạt.
+3. Đọc [DEVELOPMENT](DEVELOPMENT.vi.md), [bàn giao WP1](handoff/delivery/WP1_HANDOFF.vi.md), [bàn giao WP2](handoff/delivery/WP2_HANDOFF.vi.md) [bàn giao WP3](handoff/delivery/WP3_HANDOFF.vi.md), [bàn giao WP4](handoff/delivery/WP4_HANDOFF.vi.md) và [bàn giao WP5](handoff/delivery/WP5_HANDOFF.vi.md); các tài liệu này mô tả source đầy đủ trong repo và cách kiểm chứng. Để cài đặt và vận hành ứng dụng trên NAS, đọc [sổ tay vận hành](docs/11_OPERATIONS_RUNBOOK.vi.md).
+4. WP1 đã được chấp nhận sau lần kiểm lại F-01 ([review WP1](handoff/delivery/WP1_REVIEW.vi.md), [kiểm lại](handoff/delivery/WP1_RECHECK.vi.md)). WP2, WP3 và WP4 đã được chấp nhận sau gate và các audit độc lập, còn WP5 đã được chấp nhận và chấp nhận lại sau các vòng thay đổi UI 1 đến 5 (xem các bàn giao của chúng). Pilot đang chờ và NAS chưa được kiểm chứng (NOT VERIFIED). Bước tiếp theo là chủ sở hữu xem xét [gói pilot](handoff/delivery/WP5_PILOT_PACKET.vi.md).
 
 Giao Claude prompt đầu vào duy nhất trong NEXT_ACTION; coordinator resume [task đã lưu](handoff/delivery/ORCHESTRATION.json), chỉ tiến sau gate độc lập. Profile ở `.claude/agents/`, coordinator mặc định ở `.claude/settings.json`.
 
@@ -51,6 +51,6 @@ Mỗi prompt chỉ rõ phạm vi đọc. Không dán toàn bộ tài liệu vào
 
 [Excel mẫu](reference/inputs/Timesheet_Rev8_2026.xlsx) là mẫu công khai: gồm biểu mẫu, sheet thông tin làm việc và ngày lễ của workbook gốc, đã xóa toàn bộ dữ liệu cá nhân (các sheet chấm công theo ngày, tên nhân viên, ảnh chữ ký, metadata tác giả và đường dẫn máy). Không giữ bản gốc cá nhân. Không đưa workbook vào image production; dùng dữ liệu giả để demo.
 
-WP1, WP2 và WP3 đã được chấp nhận; source WP4 đã có cùng bằng chứng kiểm tra của bên triển khai và của từng tác vụ (WP4 chưa qua gate và audit độc lập); xem DEVELOPMENT và các bàn giao. Chưa triển khai production hay gửi email thật: mail đi ra chỉ là capture cho đến khi chủ sở hữu cho phép pilot, và cờ gửi production không bao giờ được đặt khi phát triển. Docs song ngữ không bắt buộc UI bản đầu song ngữ. Thông tin model được kiểm lại ngày 30/09/2026; khả dụng và usage thực tế cần xem trong client.
+WP1 đến WP4 đã được chấp nhận độc lập, và WP5 đã sẵn sàng về phần mềm (được chấp nhận độc lập, và chấp nhận lại sau các vòng thay đổi UI 1 đến 5); pilot đang chờ và NAS chưa được kiểm chứng (NOT VERIFIED); xem DEVELOPMENT và các bàn giao. Chưa triển khai production hay gửi email thật: mail đi ra chỉ là capture cho đến khi chủ sở hữu cho phép pilot, và cờ gửi production không bao giờ được đặt khi phát triển. Docs song ngữ không bắt buộc UI bản đầu song ngữ. Thông tin model được kiểm lại ngày 30/09/2026; khả dụng và usage thực tế cần xem trong client.
 
 Bản dịch của [README.md](README.md); tiếng Anh là nguồn chuẩn.

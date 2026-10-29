@@ -1,0 +1,11 @@
+# Probe exports: npm ci and build in export-probe (target), export-mut (target) and export-prev-probe (d96df5d), one after another.
+. <task>/env.sh
+O=$T/out
+P=$T/logs/probe-setup-progress.txt
+for d in export-probe export-mut export-prev-probe; do
+  cd $T/$d || exit 2
+  npm ci > $T/logs/ci-$d.txt 2>&1; echo "$d npm ci exit $?" >> $O/40-probe-setup-exits.txt
+  npm run build > $T/logs/build-$d.txt 2>&1; echo "$d build exit $?" >> $O/40-probe-setup-exits.txt
+  echo "$d done $(date -u +%H:%M:%SZ)" >> $P
+done
+echo "probe-setup done $(date -u +%H:%M:%SZ)" >> $P

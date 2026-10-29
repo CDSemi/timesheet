@@ -1,0 +1,22 @@
+# dist/ of the clean target export against the d96df5d export (export-prev-probe) and the target probe export; file by file SHA-256.
+. <task>/env.sh
+O=$T/out
+hashdist() {
+  cd $T/$1 || return 2
+  find dist -type f | LC_ALL=C sort | while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)"; done > $O/41-dist-$2.txt
+}
+hashdist export target
+hashdist export-prev-probe prev
+hashdist export-probe probe
+{
+  echo "files: target $(wc -l < $O/41-dist-target.txt), d96df5d $(wc -l < $O/41-dist-prev.txt), export-probe $(wc -l < $O/41-dist-probe.txt)"
+  echo "dist/server and dist/domain, target vs d96df5d:"
+  diff <(grep -E '^dist/(server|domain)/' $O/41-dist-prev.txt) <(grep -E '^dist/(server|domain)/' $O/41-dist-target.txt) > $O/41-diff-server-domain.txt; echo "  diff exit $? ($(wc -l < $O/41-diff-server-domain.txt) lines; $(grep -cE '^dist/(server|domain)/' $O/41-dist-target.txt) files)"
+  echo "dist/client, target vs d96df5d (names that differ, hashes stripped):"
+  diff <(grep '^dist/client/' $O/41-dist-prev.txt) <(grep '^dist/client/' $O/41-dist-target.txt) | grep '^[<>]' | sed 's/ [0-9a-f]\{64\}$//'
+  echo "export-probe build equal to the target build:"
+  cmp $O/41-dist-target.txt $O/41-dist-probe.txt && echo "  export-probe: identical"
+  echo "package.json and package-lock.json, d96df5d vs target:"
+  cmp $T/export-prev-probe/package.json $T/export/package.json && echo "  package.json identical"
+  cmp $T/export-prev-probe/package-lock.json $T/export/package-lock.json && echo "  package-lock.json identical"
+} > $O/41-dist-compare.txt 2>&1

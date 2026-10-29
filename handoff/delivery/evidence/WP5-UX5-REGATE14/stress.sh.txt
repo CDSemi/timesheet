@@ -1,0 +1,25 @@
+cd <task>
+. ./env.sh
+CROSS=2026-10-27T06:58:30Z
+F18="WP5-UX5-FIX18 \(F-UX5I-1\)"
+F19="WP5-UX5-FIX19 \(F-UX5I2-1\)"
+UNS="Escape and the Close button: with unsaved edits|Escape dispatched in the same task"
+SPEC=tests/e2e/day-editor.spec.ts
+st() {
+  label=$1; shift
+  bash run-shift.sh "st-$label" "$@" > "logs/stress-$label.txt" 2>&1
+  echo "$label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/stress-progress.txt
+  node counts.mjs "logs/stress-$label.txt" >> out/18-stress-counts.txt 2>&1
+  bash cens.sh "st-$label" > "logs/cens-st-$label.log" 2>&1
+}
+# 1. FIX19's new tests, desktop, real clock and at the midnight-crossing instant
+st f19-real real $SPEC --project=desktop --grep "$F19" --repeat-each=20 --workers=10
+st f19-cross $CROSS $SPEC --project=desktop --grep "$F19" --repeat-each=20 --workers=10
+# 2. FIX18's tests: desktop real and crossing, then the phone test on mobile
+st f18-real real $SPEC --project=desktop --grep "$F18" --repeat-each=20 --workers=10
+st f18-cross $CROSS $SPEC --project=desktop --grep "$F18" --repeat-each=20 --workers=10
+st f18-mobile real $SPEC --project=mobile --grep "$F18" --repeat-each=20 --workers=10
+# 3. the unsaved-changes tests (Escape / Close, and the same-task Escape), both projects
+st uns-desktop real $SPEC --project=desktop --grep "$UNS" --repeat-each=20 --workers=10
+st uns-mobile real $SPEC --project=mobile --grep "$UNS" --repeat-each=20 --workers=10
+echo stress-done > out/stress.done

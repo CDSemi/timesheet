@@ -170,17 +170,32 @@ Current route:
        device.
      - Low: the release digest command fails.
    - WP5-UX5-FIX19 fixed both (digest 67aa715c).
-   - Running now: WP5-UX5-FIX19-FREEZE commits and pushes the fix.
-   - Then a regate (WP5-UX5-REGATE14), the integration recheck
-     (WP5-UX5-AUDIT-INT3), the integration recheck
-     (WP5-UX5-AUDIT-INT2), a fresh
-     area-B recheck (WP5-UX5-RECHECK-B3), fresh rechecks of the two fixed findings, the Day editor
-     change and the theme change, the integration audit, ACCEPT-DOCS and the WP5 re-accept.
+   - It is frozen in 0b45781 (digest 67aa715c) and pushed.
+   - WP5-UX5-REGATE14, a regate on 0b45781, passed.
+   - The integration recheck WP5-UX5-AUDIT-INT3 passed on 0b45781 / 67aa715c. Both findings
+     are closed and there is no new finding. WP5 is re-accepted after rounds 4 and 5 on the
+     board.
+   - Optional risks were recorded for the WP5 handoff. One of them is for the owner to
+     decide, best before the pilot (R-UX5I2-3): a calendar default has no version, so a
+     holiday imported while a Day editor is open can be saved as "Worked".
+   - The release notes (docs/12) and the README still describe rounds 4 and 5, and even
+     WP4, as not accepted. Both files count in the digest.
+   - WP5-UX5-RELNOTES refreshed those two files and their translations (digest 2072e3f2).
+     It also found that the PDF code and the mail library changed after the pilot samples
+     were made.
+   - Running now: its freeze, WP5-UX5-RELNOTES-FREEZE.
+   - Then:
+     - a scoped regate (WP5-UX5-REGATE15), which also makes the pilot samples again from
+       the release;
+     - a fresh audit (WP5-UX5-AUDIT-RN);
+     - ACCEPT-DOCS, which puts the new identity in the pilot packet and the WP5 handoff;
+     - the WP5-UX5-ACCEPT commit.
    - To resume after an interruption, use the entry prompt above. The coordinator continues
      at the board's `next_task_id`.
    - Details: the [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), section
      "REGATE3 failed; two diagnoses run (2026-10-26)" and the sections after it.
-   - Until the re-accept, the last accepted snapshot stays 8e55710 / 507de97c.
+   - Until the accept commit, the pilot packet still names 8e55710 / 507de97c. Do not use
+     that identity for the pilot.
 1. **Done: WP5 accepted, then re-accepted after each UI change round.** The first
    acceptance record was committed at dd0c7d1. The re-acceptances are in the
    [WP5 handoff](delivery/WP5_HANDOFF.md):

@@ -1,0 +1,20 @@
+# Usage: bash mut.sh <label> <file relative to the export> <from> <to> <playwright -g pattern>
+# In the scratch copy export-mut (made after the export build): apply one mutation, rebuild the client, run the matching desktop tests once
+# (real clock, one worker), then restore the file from the repository and compare it byte for byte.
+. <task>/env.sh
+export GIT_CONFIG_VALUE_0=$T/export-mut
+L=$1; F=$2; FROM=$3; TO=$4; G=$5
+cd $T/export-mut
+{
+  node.exe $T/mutate.mjs "$F" "$FROM" "$TO"
+  echo "mutation applied: $?"
+} > $T/out/50-mut-$L-log.txt 2>&1
+npm run build:client > $T/logs/mut-build-$L.txt 2>&1
+echo "$L client build exit=$?" >> $T/out/50-mut-$L-log.txt
+bash $T/cens.sh pre-mut-$L > $T/logs/cens-pre-mut-$L.log 2>&1
+SHIFT_EXPORT=$T/export-mut bash $T/run-shift.sh mut-$L real tests/e2e/day-editor.spec.ts --project=desktop --workers=1 -g "$G" >> $T/out/50-mut-$L-log.txt 2>&1
+bash $T/cens.sh post-mut-$L > $T/logs/cens-post-mut-$L.log 2>&1
+cp $REPO/$F $T/export-mut/$F
+if cmp $REPO/$F $T/export-mut/$F; then echo "$L restored byte-equal: $F" >> $T/out/50-mut-$L-log.txt; else echo "$L RESTORE DIFFERS: $F" >> $T/out/50-mut-$L-log.txt; fi
+echo "$L done" >> $T/out/50-mut-$L-log.txt
+node.exe $T/counts.mjs $T/out/50-mut-$L-log.txt >> $T/out/50-mut-counts.txt 2>&1

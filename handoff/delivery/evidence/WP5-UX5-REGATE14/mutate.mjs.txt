@@ -1,0 +1,11 @@
+// Usage: node mutate.mjs <file> <from> <to>
+// Replaces exactly one occurrence of <from> with <to> in <file>; fails when <from> is absent or not unique.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, from, to] = process.argv.slice(2);
+if (file === undefined || from === undefined || to === undefined) throw new Error('usage: node mutate.mjs <file> <from> <to>');
+const text = readFileSync(file, 'utf8');
+const count = text.split(from).length - 1;
+if (count !== 1) throw new Error(`expected exactly one occurrence of the pattern, found ${count}: ${from}`);
+writeFileSync(file, text.replace(from, () => to));
+console.log(`mutated ${file}: ${from}  ==>  ${to}`);

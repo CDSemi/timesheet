@@ -1,0 +1,41 @@
+# Usage: bash setup.sh  (read-only on the repository; writes only into the task folder)
+. <task>/env.sh
+mkdir -p $T/out $T/logs $T/tmp $T/data $T/export $T/export-probe $T/export-mut $T/export-prev-probe $T/census $T/probes
+cd $REPO
+{
+  echo "start (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "HEAD: $(git rev-parse HEAD)"
+  echo "origin/main: $(git rev-parse origin/main)"
+  echo "branch: $(git branch --show-current)"
+  echo "reviewed_commit: $TARGET"
+  echo "target pushed (branches on the remote that contain it): $(git branch -r --contains $TARGET | tr '\n' ' ')"
+  echo "node: $(node.exe --version)"
+  echo "npm: $(npm --version)"
+} > $T/out/00-head-before.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-before.txt 2>&1
+echo "lines: $(wc -l < $T/out/00-nonhandoff-status-before.txt)" >> $T/out/00-nonhandoff-status-before.txt
+git diff --name-status $PREV..$TARGET -- . ':!handoff' > $T/out/20-namestatus-prev-target.txt 2>&1
+git diff --stat $PREV..$TARGET -- . ':!handoff' > $T/out/20-diffstat-prev-target.txt 2>&1
+git diff $PREV..$TARGET -- src scripts > $T/out/22-fix19-src-scripts-diff.txt 2>&1
+git diff $PREV..$TARGET -- tests > $T/out/22-fix19-tests-diff.txt 2>&1
+git diff $PREV..$TARGET -- docs > $T/out/22-fix19-docs-diff.txt 2>&1
+git diff --numstat $PREV..$TARGET -- tests > $T/out/22-fix19-tests-numstat.txt 2>&1
+git diff --name-status $ACCEPTED..$TARGET -- . ':!handoff' > $T/out/20-namestatus-accepted-target.txt 2>&1
+echo "lines: $(wc -l < $T/out/20-namestatus-accepted-target.txt)" >> $T/out/20-namestatus-accepted-target.txt
+git diff --name-status $TARGET..HEAD -- . ':!handoff' > $T/out/20-namestatus-target-head.txt 2>&1
+echo "lines: $(wc -l < $T/out/20-namestatus-target-head.txt)" >> $T/out/20-namestatus-target-head.txt
+git archive $TARGET | tar -x -C $T/export
+git archive $TARGET | tar -x -C $T/export-probe
+git archive $TARGET | tar -x -C $T/export-mut
+git archive $PREV | tar -x -C $T/export-prev-probe
+GIT_CONFIG_VALUE_0=$T/clone git clone --quiet --shared --no-checkout $REPO $T/clone
+cd $T/clone && GIT_CONFIG_VALUE_0=$T/clone git checkout --quiet $TARGET && echo "clone at $(GIT_CONFIG_VALUE_0=$T/clone git rev-parse HEAD)" > $T/out/01-clone.txt
+cd $REPO
+echo "export top-level entries: $(ls $T/export | wc -l)" >> $T/out/01-clone.txt
+cp $REPO/handoff/delivery/evidence/WP5-UX-FIX10/shiftclock.mjs.txt $T/shiftclock.mjs
+{
+  echo "FIX10 shiftclock.mjs.txt sha256: $(sha256sum $REPO/handoff/delivery/evidence/WP5-UX-FIX10/shiftclock.mjs.txt | cut -d' ' -f1)"
+  echo "task copy shiftclock.mjs sha256:  $(sha256sum $T/shiftclock.mjs | cut -d' ' -f1)"
+  cmp $REPO/handoff/delivery/evidence/WP5-UX-FIX10/shiftclock.mjs.txt $T/shiftclock.mjs && echo "byte-identical"
+} > $T/out/30-shiftclock-identity.txt 2>&1
+echo "setup done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $T/out/01-clone.txt

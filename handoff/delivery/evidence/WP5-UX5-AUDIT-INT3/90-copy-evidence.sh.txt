@@ -1,0 +1,31 @@
+# Masked LF copies of the task-folder outputs, logs and sources into the evidence folder (mask.mjs). Usage: bash copy-evidence.sh
+. <task>/env.sh
+mkdir -p $E
+cd $T || exit 2
+S=()
+for f in out/*.txt; do
+  case "$(basename $f)" in
+    ex-*|lstree-*|zz-*|41-dist-target.txt|41-dist-prev.txt|41-dist-probe.txt|41-diff-server-domain.txt) ;;
+    *) S+=("$f") ;;
+  esac
+done
+for f in logs/probe-*.txt; do
+  case "$(basename $f)" in
+    probe-setup-stdout.txt|probe-list.txt|probe-list2.txt|probe-run-progress.txt|probe-run-stdout.txt|probe-setup-progress.txt) ;;
+    *) S+=("$f=48-log-$(basename $f .txt | sed 's/^probe-//').txt") ;;
+  esac
+done
+for f in logs/mut-*.txt; do
+  case "$(basename $f)" in
+    mut-progress.txt) S+=("$f=50-mut-progress.txt") ;;
+    mut-build-*|mut-run-stdout.txt|mut-digest-stdout.txt|mut-verify-*) ;;
+    *) S+=("$f=52-log-$(basename $f .txt).txt") ;;
+  esac
+done
+S+=("logs/chain-main-progress.txt=03-chain-main-progress.txt" "logs/probe-run-progress.txt=48-probe-run-progress.txt" "logs/ci-summary.txt=03-summary.txt" "logs/ac13-summary.txt=05-ac13-summary.txt" "logs/seven-crossing.txt=08-seven-crossing.txt" "models.txt=01-author-models.txt")
+for f in env.sh setup.sh digest.sh census.sh cens.sh census.mjs mask.mjs counts.mjs run-shift.sh probe-now.mjs run-tz.mjs tzprobe.mjs probe-setup.sh chain-main.sh probe-run.sh mutate.mjs mut-run.sh mut-digest.sh mut-verify.sh dist-compare.sh chunk-normcmp.sh copy-evidence.sh finalize.sh; do
+  [ -f $f ] && S+=("$f=90-$f.txt")
+done
+for f in probes/*.spec.ts; do S+=("$f=90-$(basename $f).txt"); done
+node.exe $T/mask.mjs $E "${S[@]}" > $T/logs/copy-evidence.txt 2>&1
+echo "copy exit $?" >> $T/logs/copy-evidence.txt

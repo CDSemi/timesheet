@@ -129,3 +129,41 @@
 - Return at most 250 words, beginning with your self-reported model.
 
 ## Results
+
+Self-reported model: claude-opus-5-5 (board agent a89b2f7f5fa303382). Review: `handoff/delivery/WP5_UX5_REVIEW_INT3.md` (+ `.vi.md`). Evidence:
+`handoff/delivery/evidence/WP5-UX5-AUDIT-INT3/` (index `00-README.txt`). 2026-10-29, 16:15:33Z to about 17:35Z.
+
+**Decision: PASS.** It re-accepts WP5 after UI change rounds 4 and 5 and supersedes RECHECK-A2 and RECHECK-B3 as the current acceptance at
+0b45781 / 67aa715c.
+
+- **Identity.** reviewed_commit 0b457817ed29806a36fdd78cc22ac84a0cc2db9d = HEAD = origin/main before (16:15:33Z) and after (17:13:22Z); no
+  status line outside `handoff/`. Digest 67aa715c4cf600624b835a27c568f9225e471e43d819894fbeb8b4da6a89c42b, 882 files, equal at 16:16:38Z and
+  17:13:45Z in the export form, the ls-tree form (target and HEAD) and `npm run digest` (repository and a clean clone). FIX19 diff: exactly
+  five paths; `dist/server` and `dist/domain` identical to d96df5d's build.
+- **F-UX5I2-1: closed.** AUDIT-INT2's G1 and G2 keep the other device's change on the target and overwrite it on d96df5d. My 27 cases (Confirm
+  breaks, delete, Add session, each field kind, the phone sheet, a shared edit view, the page clock, a tab return, an overtaken read): all pass
+  on the target, 21 fail on d96df5d. With nothing typed the form shows the server's fields; with an unsaved edit the save is refused and
+  "Reload day" reads the change. FIX18's follow and FIX19's path never let a stale field travel with a fresh version.
+- **F-UX5I2-2: closed.** `npm run digest` exits 0 in a clean clone and in the repository and matches the other forms; with the buffer set
+  back to 1 MiB it fails with ENOBUFS.
+- **Regressions:** none. axe-core 4.14.0: 30 scans, 0 violations.
+- **Mutants:** 12 own. The suite kills 7 at the assertion that names the rule. MY2, MY3, MY5 and MY8 survive the suite and fail only my probe
+  (R-UX5I3-4). MY10 (the digest script) is caught only by running it. All were restored byte-equal.
+- **Mandatory checks:**
+  - typecheck, lint and build exit 0, with no advisory and no deprecation;
+  - `npm test`: 101 files, 2,397 tests;
+  - real-clock FULL: desktop 484/36/0, mobile 408/112/0;
+  - AC-13 under Asia/Kathmandu: 1/1;
+  - seven-file run at 2026-10-27T06:58:30Z: 400 passed, 0 failed.
+- **Findings:** none new.
+- **Optional risks, new:**
+  - R-UX5I3-1: one rule for the follow and the session write;
+  - R-UX5I3-2: the held branch is quiet until the save;
+  - R-UX5I3-3: focus falls to the body after "Save day fields" and "Reload day" (pre-existing since WP2-T10);
+  - R-UX5I3-4: test strength.
+- **Optional risks, updated:** R-UX5I2-1 and R-UX5I2-2 are closed. R-UX5I2-3 now also covers a default-source entry on the session-write
+  path; it is an owner decision, best taken before the pilot. The backlog is carried in the review.
+- **Slips (`99-slips.txt`):** one pipe into head and one into tail, both reading task-folder files, and one pointless `/dev/null` redirect.
+  Nothing was written to the repository by them. Nothing is left running, and nothing was staged or committed.
+
+Status: done
