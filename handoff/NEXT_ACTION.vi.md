@@ -196,13 +196,16 @@ Luồng hiện tại:
      chưa nghiệm thu, trái với các dòng README mới vốn trỏ tới nó. Mọi phần khác đều đạt.
    - WP5-UX5-FIX20 đã sửa dòng đó ở cả EN và VI, đặt cho release notes một quy tắc duy nhất
      về commit nào là bản phát hành, và sửa ba chỗ diễn đạt nhỏ (digest 690fd8fd).
-   - Đang chạy: freeze bản sửa, WP5-UX5-FIX20-FREEZE.
-   - Sau đó:
-     - gate lại có giới hạn (WP5-UX5-REGATE16);
-     - một lượt kiểm tra lại mới, mà kết quả đạt sẽ thay AUDIT-INT3 làm kết quả nghiệm thu
-       hiện hành;
-     - ACCEPT-DOCS, ghi định danh mới vào pilot packet và handoff WP5;
-     - commit WP5-UX5-ACCEPT.
+   - Bản sửa đã được freeze ở commit a54061f (digest 690fd8fd) và đã push.
+   - Gate lại có giới hạn WP5-UX5-REGATE16 đã đạt trên a54061f. Bản build giống hệt.
+   - Lượt kiểm tra lại mới WP5-UX5-RECHECK-RN đã đạt. **WP5 được nghiệm thu trên a54061f /
+     690fd8fd** (882 file), thay AUDIT-INT3 làm kết quả nghiệm thu hiện hành.
+   - Đã xong, chỉ trong `handoff/`: gói pilot (WP5-UX5-ACCEPT-PACKET) và mục vòng 4 và 5
+     trong bàn giao WP5 (WP5-UX5-ACCEPT-HANDOFF).
+   - WP5-UX5-ACCEPT-REVIEW đã duyệt cả hai tài liệu và sửa ba chỗ lệch nhỏ, theo luật của chủ
+     dự án ngày 2026-10-29 cho tài liệu.
+   - Đang chạy: commit WP5-UX5-ACCEPT. Sau đó board trở về `software_ready`.
+   - Sau đó nữa: WP5-GOV-DOCS, phần sửa luật.
    - Để tiếp tục sau khi bị gián đoạn, dùng prompt khởi động ở trên. Điều phối viên làm tiếp
      ở `next_task_id` của board.
    - Chi tiết: [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), mục "REGATE3

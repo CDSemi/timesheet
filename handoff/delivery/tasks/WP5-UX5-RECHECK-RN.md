@@ -21,7 +21,15 @@
   - HEAD may be a later commit that changes only `handoff/`.
   - Record HEAD, the digest before and after (three forms) and `reviewed_commit`.
   - Work on a clean `git archive` export or a scratch clone at TARGET_SHA.
-  - Target confirmation: (filled in at dispatch)
+  - Target confirmation:
+    - TARGET_SHA = a54061f6afc1fda00d4ee2cca4553a5916af24ec, the FIX20-FREEZE commit,
+      pushed. REGATE16 passed on it.
+    - TARGET_DIGEST = 690fd8fd588c902f03cbc9c6efeb63cd58f5c9246579dda0473a190a230c1c4f
+      (882 files).
+    - FIX20's paths: `DEVELOPMENT.md`, `DEVELOPMENT.vi.md`, `README.md`, `README.vi.md`,
+      `docs/12_RELEASE_NOTES.md` and `docs/12_RELEASE_NOTES.vi.md`.
+    - Uncommitted `handoff/` files are expected: the coordinator's records, and the Results
+      and evidence of FIX20-FREEZE and REGATE16.
 - **AGENTS.md on disk wins.**
 - Never touch `.claude/worktrees/` or its branch.
 
@@ -121,3 +129,24 @@
 - Return at most 200 words, beginning with your self-reported model.
 
 ## Results
+
+Self-reported model: claude-opus-5-5 (board agent a099171a27b8df25c; not weaker than the strongest author model, claude-opus-5-5).
+**Decision: PASS.** Review pair `handoff/delivery/WP5_UX5_RECHECK_RN.md` (+ `.vi.md`); evidence
+`handoff/delivery/evidence/WP5-UX5-RECHECK-RN/` (index `00-README.txt`).
+
+- **Identity.** HEAD = local origin/main = remote main = a54061f6afc1fda00d4ee2cca4553a5916af24ec at 18:27:58Z and 18:41:28Z; no
+  status outside `handoff/`. Digest 690fd8fd588c902f03cbc9c6efeb63cd58f5c9246579dda0473a190a230c1c4f (882 files) before and after in the
+  export, ls-tree and `npm run digest` forms, and in a clean clone.
+- **Scope 1.** dc487c6..a54061f outside `handoff/` is exactly FIX20's six files (8+/8-), `--check` 0, nothing read by source, tests or
+  build; clean builds 250 files each, every SHA-256 equal. AUDIT-INT3's product verdict and AUDIT-RN's sample verdict carry forward.
+- **F-UX5RN-1: closed.** DEVELOPMENT:3 EN/VI equals README:3's status and names the WP5 handoff; own search (58 project Markdown files)
+  finds no stale package or round status.
+- **R-UX5RN-1, -2, -3, -5: done and accurate. R-UX5RN-4, -6: open for ACCEPT-DOCS.** No new finding. Optional: R-UX5RN2-1 (docs/12:7
+  omits DEVELOPMENT), R-UX5RN2-2 (docs/11:34 pointer, pre-existing), R-UX5RN2-3 (docs/10 decision-time wording).
+- **Scope 4.** Diff checked: 0b45781..a54061f outside `handoff/`; every statement holds, no limit lost, EN/VI and 199 links fine.
+- **Scope 5.** Forward references and pilot packet statements (section 3 per AUDIT-RN section 6 plus the dc487c6 note; items 6-13
+  outside it) are in review section 5.
+- **Mandatory.** typecheck 0, lint 0, build 0 (no advisory or deprecation), `npm test` 0 with 101 files / 2,397 tests; `dist/`
+  identical to dc487c6. Preflight PASS (142 pairs). Nothing left running. Slips: three, none touching the repository (`99-slips.txt`).
+
+Status: done

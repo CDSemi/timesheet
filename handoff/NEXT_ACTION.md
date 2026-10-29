@@ -192,12 +192,17 @@ Current route:
      not accepted, against the new README lines that point to it. Everything else held.
    - WP5-UX5-FIX20 fixed that line in EN and VI, gave the release notes one rule for which
      commit is the release, and fixed three small wording items (digest 690fd8fd).
-   - Running now: its freeze, WP5-UX5-FIX20-FREEZE.
-   - Then:
-     - a scoped regate (WP5-UX5-REGATE16);
-     - a fresh recheck, whose pass replaces AUDIT-INT3 as the current acceptance;
-     - ACCEPT-DOCS, which puts the new identity in the pilot packet and the WP5 handoff;
-     - the WP5-UX5-ACCEPT commit.
+   - Its freeze is commit a54061f (digest 690fd8fd), pushed.
+   - The scoped regate WP5-UX5-REGATE16 passed on a54061f. The build is identical.
+   - The fresh recheck WP5-UX5-RECHECK-RN passed. **WP5 is accepted on a54061f / 690fd8fd**
+     (882 files). It replaces AUDIT-INT3 as the current acceptance.
+   - Done, in `handoff/` only: the pilot packet (WP5-UX5-ACCEPT-PACKET) and the WP5 handoff
+     section for rounds 4 and 5 (WP5-UX5-ACCEPT-HANDOFF).
+   - WP5-UX5-ACCEPT-REVIEW reviewed both documents and fixed three small drifts, under the
+     owner's 2026-10-29 rule for documentation.
+   - Running now: the WP5-UX5-ACCEPT commit. After it the board goes back to
+     `software_ready`.
+   - Then: WP5-GOV-DOCS, the rule change.
    - To resume after an interruption, use the entry prompt above. The coordinator continues
      at the board's `next_task_id`.
    - Details: the [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), section

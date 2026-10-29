@@ -1,0 +1,83 @@
+import { readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
+const root = process.argv[2];
+const dir = resolve(root, 'handoff/delivery');
+const en = readFileSync(resolve(dir, 'WP5_PILOT_PACKET.md'), 'utf8');
+const vi = readFileSync(resolve(dir, 'WP5_PILOT_PACKET.vi.md'), 'utf8');
+const out = [];
+const log = (s) => out.push(s);
+
+const heads = (t) => t.split('\n').filter((l) => /^#{2,3} /.test(l));
+const h2 = (t) => t.split('\n').filter((l) => /^## /.test(l)).length;
+const h3 = (t) => t.split('\n').filter((l) => /^### /.test(l)).length;
+log(`sections (##): EN ${h2(en)} VI ${h2(vi)}; subsections (###): EN ${h3(en)} VI ${h3(vi)}`);
+log(`headings listed EN ${heads(en).length} VI ${heads(vi).length}`);
+
+const rows = (t) => t.split('\n').filter((l) => l.startsWith('|')).length;
+const boxes = (t) => (t.match(/- \[ \]/g) || []).length;
+const filledBoxes = (t) => (t.match(/- \[[xX]\]/g) || []).length;
+log(`table rows EN ${rows(en)} VI ${rows(vi)}; empty boxes EN ${boxes(en)} VI ${boxes(vi)}; ticked EN ${filledBoxes(en)} VI ${filledBoxes(vi)}`);
+
+const hex = (t, n) => [...new Set(t.match(new RegExp(`\\b[0-9a-f]{${n}}\\b`, 'g')) || [])].sort();
+const sha = (t) => [...new Set(t.match(/\b[0-9a-f]{64}\b/g) || [])].sort();
+const sEn = sha(en), sVi = sha(vi);
+log(`64-hex values: EN ${sEn.length} VI ${sVi.length}; identical sets: ${JSON.stringify(sEn) === JSON.stringify(sVi)}`);
+const c40 = (t) => [...new Set(t.match(/\b[0-9a-f]{40}\b/g) || [])].sort();
+log(`40-hex values: EN ${c40(en).length} VI ${c40(vi).length}; identical: ${JSON.stringify(c40(en)) === JSON.stringify(c40(vi))}`);
+const short = (t) => [...new Set(t.match(/`[0-9a-f]{7}`/g) || [])].sort();
+log(`7-hex SHAs: EN ${short(en).length} VI ${short(vi).length}; identical: ${JSON.stringify(short(en)) === JSON.stringify(short(vi))}`);
+const ids = (t) => [...new Set(t.match(/\b(?:WP5-[A-Z0-9-]+|R-[A-Z0-9]+-\d+|[DFGHQE]-\d+)\b/g) || [])].sort();
+const iE = ids(en), iV = ids(vi);
+log(`IDs: EN ${iE.length} VI ${iV.length}; only EN: ${iE.filter((x) => !iV.includes(x)).join(',') || '-'}; only VI: ${iV.filter((x) => !iE.includes(x)).join(',') || '-'}`);
+const fn = (t) => [...new Set(t.match(/(?:msg|pdf-text|pilot)-\d\d[A-Za-z0-9.-]*\.(?:txt|png)/g) || [])].sort();
+log(`sample file names: EN ${fn(en).length} VI ${fn(vi).length}; identical: ${JSON.stringify(fn(en)) === JSON.stringify(fn(vi))}`);
+const evp = (t) => [...new Set(t.match(/evidence\/[A-Za-z0-9-]+\/[A-Za-z0-9._\/-]*/g) || [])].sort();
+log(`evidence paths: EN ${evp(en).length} VI ${evp(vi).length}; identical: ${JSON.stringify(evp(en)) === JSON.stringify(evp(vi))}`);
+
+function links(t, file) {
+  const res = [];
+  for (const m of t.matchAll(/\]\(([^)\s]+)\)/g)) res.push(m[1]);
+  const set = [...new Set(res)];
+  const missing = [];
+  for (const l of set) {
+    if (/^(https?:|#|mailto:)/.test(l)) continue;
+    const p = resolve(dirname(file), l.split('#')[0]);
+    if (!existsSync(p)) missing.push(l);
+  }
+  return { n: res.length, uniq: set.length, missing };
+}
+const lE = links(en, resolve(dir, 'WP5_PILOT_PACKET.md'));
+const lV = links(vi, resolve(dir, 'WP5_PILOT_PACKET.vi.md'));
+log(`links: EN ${lE.n} (${lE.uniq} unique) missing ${lE.missing.length} ${lE.missing.join(' ')}; VI ${lV.n} (${lV.uniq} unique) missing ${lV.missing.length} ${lV.missing.join(' ')}`);
+const norm = (l) => l.replace(/\.vi\.md/g, '.md');
+const sE = [...new Set((en.match(/\]\(([^)\s]+)\)/g) || []).map(norm))].sort();
+const sV = [...new Set((vi.match(/\]\(([^)\s]+)\)/g) || []).map(norm))].sort();
+log(`link target sets equal after .vi normalisation: ${JSON.stringify(sE) === JSON.stringify(sV)}; only EN: ${sE.filter((x) => !sV.includes(x)).join(' ') || '-'}; only VI: ${sV.filter((x) => !sE.includes(x)).join(' ') || '-'}`);
+
+const mk = (t) => [...new Set((t.match(/`evidence\/[^`]*`|`handoff\/delivery\/evidence\/[^`]*`/g) || []))];
+const evMissing = [];
+for (const [name, t] of [['EN', en], ['VI', vi]]) {
+  for (const raw of mk(t)) {
+    const p = raw.replace(/`/g, '').replace(/^evidence\//, 'handoff/delivery/evidence/');
+    if (/<|\.\.\./.test(p)) continue;
+    if (!existsSync(resolve(root, p))) evMissing.push(`${name}: ${p}`);
+  }
+}
+log(`evidence paths in backticks that do not exist: ${evMissing.length} ${evMissing.join(' ; ')}`);
+
+log('--- search ---');
+for (const term of ['8e55710', '507de97c', '69d6340', 'WP5-UX5-T06', 'in progress', 'refreshed after', 'ACCEPT-DOCS', 'waits for', 'đang thực hiện', 'làm mới sau']) {
+  for (const [name, t] of [['EN', en], ['VI', vi]]) {
+    const lines = t.split('\n');
+    lines.forEach((l, i) => {
+      let idx = l.indexOf(term);
+      while (idx !== -1) {
+        log(`${name}:${i + 1} [${term}] ...${l.slice(Math.max(0, idx - 90), idx + 90).replace(/\s+/g, ' ')}...`);
+        idx = l.indexOf(term, idx + term.length);
+      }
+    });
+  }
+}
+process.stdout.write(out.join('\n') + '\n');

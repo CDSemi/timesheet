@@ -1,0 +1,7 @@
+# usage: bash digest-export.sh <export-dir> <out-file>
+# Export form of the source digest: every file of the export outside handoff/, "<path> <blob>" sorted, SHA-256.
+cd "$1" || exit 2
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' | sed 's#^\./##' | LC_ALL=C sort > "$2.files"
+git hash-object --stdin-paths < "$2.files" > "$2.blobs"
+paste -d' ' "$2.files" "$2.blobs" > "$2.lines"
+printf '%s  (%s files, handoff/ excluded)\n' "$(sha256sum "$2.lines" | cut -d' ' -f1)" "$(wc -l < "$2.files")" > "$2"

@@ -1,0 +1,10 @@
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-REGATE16/env.sh.txt
+cd $T/export || exit 2
+npm run lint > $E/03-lint.txt 2>&1; echo "lint exit $?" >> $E/03-exits.txt
+npm run typecheck > $E/03-typecheck.txt 2>&1; echo "typecheck exit $?" >> $E/03-exits.txt
+grep -inE "deprecat|chunk|larger than" $E/02-build-export.txt $E/03-lint.txt $E/03-typecheck.txt > $E/03-warn-grep.txt; echo "warn grep exit $? (1 = no hits)" >> $E/03-exits.txt
+npm test > $E/05-test.txt 2>&1; echo "npm test exit $?" >> $E/05-exits.txt
+cd /d/Dropbox/Work.CDSemi/timesheet
+"$PY" handoff/delivery/check_recovery.py > $E/11-check_recovery.txt 2>&1; echo "check_recovery exit $?" >> $E/11-exits.txt
+"$PY" handoff/delivery/validate_package.py --preflight > $E/11-validate_package.txt 2>&1; echo "validate_package exit $?" >> $E/11-exits.txt
+"$PY" handoff/delivery/validate_orchestration.py > $E/11-validate_orchestration.txt 2>&1; echo "validate_orchestration exit $?" >> $E/11-exits.txt

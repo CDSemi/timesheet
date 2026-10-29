@@ -3259,11 +3259,67 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - FIX20-FREEZE;
   - REGATE16 (có giới hạn; cổng 51930-51969);
   - RECHECK-RN (auditor opus mới; cặp review `WP5_UX5_RECHECK_RN`; cổng 51970-52009).
-- **Đang chạy:** WP5-UX5-FIX20-FREEZE, chạy một mình.
+- **WP5-UX5-FIX20-FREEZE đã xong.**
+  - Commit a54061f6afc1fda00d4ee2cca4553a5916af24ec trên main, push dạng fast-forward từ
+    dc487c6.
+  - D_PRE bằng cả hai digest của HEAD: 690fd8fd.
+  - 155 đường dẫn được stage. Không có file nào bị bỏ ra hay che đi. Mọi kiểm tra đều trả
+    về 0.
+- **WP5-UX5-REGATE16 ĐẠT** (verifier, tự báo claude-sonnet-5-5) trên a54061f / 690fd8fd.
+  - Ngoài `handoff/`, chỉ đúng sáu file của FIX20 khác so với dc487c6.
+  - `dist/` giống hệt: 250 file. Vì vậy REGATE15 được kế thừa cùng các mẫu của nó, và các
+    kết quả chạy của REGATE14 cùng drill của REGATE11 cũng vậy.
+  - `npm test`: 2.397. Link, đối chiếu EN/VI và lượt tìm trạng thái cũ đều sạch.
+  - Sáu file evidence có tên không kết thúc bằng `.txt`. Verifier đã đổi tên theo yêu cầu
+    của điều phối viên.
+- **Câu hỏi của chủ dự án (2026-10-29): sao cứ regate, fix, audit mãi?** Đã trả lời trong
+  chat:
+  - quy tắc bắt buộc gate và một audit mới cho mỗi lần digest đổi, và tài liệu ngoài
+    `handoff/` cũng được tính;
+  - một vòng (FIX20) là do điều phối viên tìm trạng thái cũ chưa hết trước RELNOTES.
+- **WP5-UX5-RECHECK-RN ĐẠT** (auditor opus mới, tự báo claude-opus-5-5) trên a54061f /
+  690fd8fd ([review](WP5_UX5_RECHECK_RN.vi.md)).
+  - F-UX5RN-1 đã đóng: dòng 3 của DEVELOPMENT khớp từng chữ với dòng 3 của README. Auditor tự
+    tìm trong 58 file Markdown và không thấy trạng thái cũ nào.
+  - R-UX5RN-1, -2, -3 và -5 đã làm và chính xác.
+  - `dist/` giống hệt, nên kết luận về sản phẩm của AUDIT-INT3 và kết luận về các mẫu của
+    AUDIT-RN vẫn được kế thừa.
+  - `npm test`: 2.397. Không có lỗi mới.
+  - Rủi ro tùy chọn: R-UX5RN2-1..3.
+  - Mục 5 của review liệt kê những gì ACCEPT-DOCS phải làm cho đúng.
+- **WP5 được nghiệm thu trên a54061f / 690fd8fd (882 file).**
+  - `current_source_digest` là 690fd8fd.
+  - AUDIT-INT3, và mọi audit từng trỏ tới nó, giờ ghi `superseded_by` là
+    WP5-UX5-RECHECK-RN.
+- **Đang chạy** song song, chỉ trong handoff, trên các file tách biệt (không có tác vụ nào
+  ghi mã nguồn):
+  - WP5-UX5-ACCEPT-PACKET: gói pilot;
+  - WP5-UX5-ACCEPT-HANDOFF: bàn giao WP5.
+- **Sau đó:** WP5-UX5-ACCEPT (brief đã sẵn sàng). Xong bước này, board trở về
+  `software_ready`.
+- **Quyết định của chủ dự án (2026-10-29, nguyên văn trên board).** Tài liệu không cần test,
+  gate hay audit. Chỉ cần duyệt và sửa để tài liệu luôn cập nhật và không lệch nội dung. Mã
+  nguồn và cấu hình vẫn giữ quy tắc gate và audit.
+- **WP5-UX5-ACCEPT-PACKET đã xong.**
+  - Gói pilot đã được cập nhật theo a54061f / 690fd8fd.
+  - Image tham chiếu là bản build drill trên 1fe5ad3.
+  - R-UX5I2-3 được ghi là quyết định còn mở ở mục 8.
+- **WP5-UX5-ACCEPT-HANDOFF đã xong.** Bàn giao WP5 có mục mới cho vòng 4 và 5. 34 SHA trong
+  đó khớp với board.
+- **WP5-UX5-ACCEPT-REVIEW đã xong.** Đây là luật mới của chủ dự án được áp dụng ngay.
+  - Khoảng 120 dữ kiện được kiểm tra.
+  - Ba chỗ lệch trong bàn giao đã được sửa.
+  - 209 lượt kiểm tra của drill gồm 207 lượt trong các stage và 2 lượt dọn dẹp. Gói pilot giờ
+    ghi rõ điều này.
+- **Đang chạy:** commit WP5-UX5-ACCEPT, chạy một mình.
+- **Việc sửa luật** làm sau commit WP5-UX5-ACCEPT, dưới tên WP5-GOV-DOCS.
+  - Trước tiên một planner xác định:
+    - những file nào được tính là tài liệu;
+    - định danh bản phát hành và các validator xử lý một commit chỉ sửa tài liệu ra sao.
+  - Sau đó một worker sửa AGENTS.md, docs/08, ORCHESTRATE, quy tắc phát hành trong docs/12
+    và các validator.
+  - Theo luật mới, thay đổi này được duyệt trước khi commit.
 - **Sau đó:**
-  - REGATE16. `dist/` phải giữ nguyên, để các mẫu của REGATE15 vẫn đại diện cho bản phát
-    hành;
-  - một lượt kiểm tra lại mới, mà kết quả ĐẠT sẽ thay thế AUDIT-INT3;
   - ACCEPT-DOCS;
   - WP5-UX5-ACCEPT.
 

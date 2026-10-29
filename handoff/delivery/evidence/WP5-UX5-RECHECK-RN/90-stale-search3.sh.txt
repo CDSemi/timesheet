@@ -1,0 +1,17 @@
+# Broader search of project Markdown (outside handoff/ and the vendored skill folders) at TARGET:
+# lines naming a gate or audit with a pending word, and package or round names near a pending or not-accepted word.
+. /d/.claude-tmp/timesheet/WP5-UX5-RECHECK-RN/env.sh
+cd "$R" || exit 2
+OUT="$T/stale-search3.raw"
+X=(-- '*.md' ':!handoff' ':!.agents/skills' ':!.claude/skills' ':!.claude/worktrees')
+{
+  printf 'time_utc %s; tree %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$TARGET"
+  printf 'project Markdown files searched: %s\n' "$(git ls-tree -r --name-only "$TARGET" | grep -v '^handoff/' | grep -v '^\.agents/skills/' | grep -v '^\.claude/skills/' | grep -c '\.md$')"
+  printf '\n== A: lines with gate|audit and pending|needs|until|not yet|still|will be|in progress\n'
+  git grep -n -i -o -P '.{0,120}\b(gate|audit)s?\b.{0,160}' "$TARGET" "${X[@]}" | grep -i -E 'pending|needs?|until|not yet|still|will be|in progress'
+  printf 'exit %s\n' "$?"
+  printf '\n== B: WPn, round n or vong n within 80 characters before not accepted|pending|in progress|awaiting|chua|dang cho|dang dien ra\n'
+  git grep -n -i -o -P '(WP[1-5]|round [1-5]|vòng [1-5]).{0,80}(not accepted|pending|in progress|awaiting|chưa|đang chờ|đang diễn ra)' "$TARGET" "${X[@]}"
+  printf 'exit %s\n' "$?"
+} > "$OUT" 2>&1
+echo "stale search 3 done"

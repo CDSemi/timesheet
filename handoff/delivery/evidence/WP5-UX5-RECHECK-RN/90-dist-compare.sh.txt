@@ -1,0 +1,15 @@
+# usage: bash dist-compare.sh <labelA> <labelB> <out-file>
+# Hashes every file under dist/ of two exports (path and SHA-256) and compares the sorted listings.
+. /d/.claude-tmp/timesheet/WP5-UX5-RECHECK-RN/env.sh
+A="$1"; B="$2"; OUT="$3"
+for L in "$A" "$B"; do
+  ( cd "$T/export-$L/dist" && find . -type f | sed 's#^\./##' | LC_ALL=C sort | while read -r f; do printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; done ) > "$T/dist-$L.lst"
+done
+{
+  printf 'dist/ comparison %s vs %s, time_utc %s\n' "$A" "$B" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '%s files: %s, listing sha256 %s\n' "$A" "$(wc -l < "$T/dist-$A.lst")" "$(sha256sum "$T/dist-$A.lst" | cut -d' ' -f1)"
+  printf '%s files: %s, listing sha256 %s\n' "$B" "$(wc -l < "$T/dist-$B.lst")" "$(sha256sum "$T/dist-$B.lst" | cut -d' ' -f1)"
+  printf 'per top-level directory (%s): ' "$A"; cut -d' ' -f3 "$T/dist-$A.lst" | cut -d/ -f1 | sort | uniq -c | tr '\n' ' '; printf '\n'
+  if cmp -s "$T/dist-$A.lst" "$T/dist-$B.lst"; then echo 'RESULT identical (every path and SHA-256 equal)'; else echo 'RESULT DIFFERENT'; diff "$T/dist-$A.lst" "$T/dist-$B.lst"; fi
+} > "$OUT"
+echo "dist compare done"

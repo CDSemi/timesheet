@@ -1,0 +1,69 @@
+// Link resolution and EN/VI parity of the six FIX20 files in a pristine export of the target.
+// usage: node doccheck.mjs <export-root> <out-file>
+import { readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { dirname, join, normalize } from 'node:path';
+
+const root = process.argv[2];
+const out = process.argv[3];
+const pairs = [
+  ['DEVELOPMENT.md', 'DEVELOPMENT.vi.md'],
+  ['README.md', 'README.vi.md'],
+  ['docs/12_RELEASE_NOTES.md', 'docs/12_RELEASE_NOTES.vi.md'],
+];
+const lines = [];
+const log = (s) => lines.push(s);
+
+function links(text) {
+  const res = [];
+  const re = /\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+  let m;
+  while ((m = re.exec(text)) !== null) res.push(m[1]);
+  return res;
+}
+function local(target) {
+  return !/^[a-z][a-z0-9+.-]*:/i.test(target) && !target.startsWith('#');
+}
+function resolveLink(file, target) {
+  const path = target.split('#')[0];
+  return normalize(join(dirname(join(root, file)), decodeURIComponent(path)));
+}
+function headings(text) {
+  return text.split('\n').filter((l) => /^#{1,6} /.test(l));
+}
+function shas(text) {
+  return [...text.matchAll(/`([0-9a-f]{7,64})`/g)].map((m) => m[1]);
+}
+function ids(text) {
+  return [...text.matchAll(/\b(?:WP[0-9]-[A-Z0-9-]+|[A-Z]{1,2}-[A-Z0-9]+(?:-[0-9]+)?|D-[0-9]+|AC-[0-9]+|Q0)\b/g)].map((m) => m[0]);
+}
+function canon(target) {
+  return target.replace(/\.vi\.md(#|$)/, '.md$1');
+}
+function multiset(arr) {
+  const m = new Map();
+  for (const a of arr) m.set(a, (m.get(a) ?? 0) + 1);
+  return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)).map(([k, v]) => `${k}x${v}`).join(' ');
+}
+
+let missing = 0;
+for (const [en, vi] of pairs) {
+  const te = readFileSync(join(root, en), 'utf8');
+  const tv = readFileSync(join(root, vi), 'utf8');
+  for (const [f, t] of [[en, te], [vi, tv]]) {
+    const ls = links(t).filter(local);
+    const miss = ls.filter((l) => l.split('#')[0] !== '' && !existsSync(resolveLink(f, l)));
+    missing += miss.length;
+    log(`${f}: ${ls.length} local links, ${miss.length} missing${miss.length ? ': ' + miss.join(', ') : ''}; ends with exactly one newline: ${t.endsWith('\n') && !t.endsWith('\n\n')}`);
+  }
+  const he = headings(te), hv = headings(tv);
+  log(`  headings EN ${he.length} / VI ${hv.length}: ${he.length === hv.length ? 'equal count' : 'DIFFERENT'}; levels equal: ${JSON.stringify(he.map((h) => h.split(' ')[0])) === JSON.stringify(hv.map((h) => h.split(' ')[0]))}`);
+  const se = multiset(shas(te)), sv = multiset(shas(tv));
+  log(`  backticked hex (SHAs, digests) equal: ${se === sv}${se === sv ? '' : '\n    EN ' + se + '\n    VI ' + sv}`);
+  const ie = multiset(ids(te)), iv = multiset(ids(tv));
+  log(`  IDs equal: ${ie === iv}${ie === iv ? '' : '\n    EN ' + ie + '\n    VI ' + iv}`);
+  const le = links(te).map(canon), lv = links(tv).map(canon);
+  const onlyE = le.filter((l) => !lv.includes(l)), onlyV = lv.filter((l) => !le.includes(l));
+  log(`  link targets (after .vi.md -> .md): EN ${le.length}, VI ${lv.length}; only EN: [${onlyE.join(', ')}]; only VI: [${onlyV.join(', ')}]`);
+}
+log(`TOTAL missing local link targets: ${missing}`);
+writeFileSync(out, lines.join('\n') + '\n');

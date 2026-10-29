@@ -15,17 +15,19 @@
 
 | Trường | Giá trị |
 |---|---|
-| Commit phát hành (WP5-UX3-FIX6-FREEZE, đã push; bản WP5 được nghiệm thu lại sau vòng đổi giao diện 3) | `8e557100d16b6b6eb86a48e00276835761aabfdf` |
-| Source digest (`npm run digest`, không tính `handoff/`; digest ghi nhận của WP5-UX3-REGATE5) | `507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6`, 833 tệp; tính lại trước và sau tác vụ này, không đổi |
-| Gate và audit cuối | WP5-UX3-REGATE5 PASS, NAS NOT VERIFIED ([tác vụ](tasks/WP5-UX3-REGATE5.md)): các bản build giống hệt từng byte với WP5-UX3-REGATE3 và REGATE4, nên các mục của chúng được mang sang; e2e đầy đủ đồng hồ thật 651 passed / 67 skipped / 0 failed; chạy đầy đủ đồng hồ giả lập ở một ngày trong cửa sổ và ở ngày đổi giờ DST, 0 failed; drill `--wp3` 208 PASS / 0 FAIL (REGATE3); 2.141 unit test; axe: chỉ còn mục kích thước mục tiêu của menu tài khoản đã được biện minh. WP5-UX3-AUDIT-INT PASS ([báo cáo](WP5_UX3_REVIEW_INT.vi.md)); nó thay thế WP5-UX2-AUDIT2, bản nghiệm thu ở `a643794` / `229df806…` (lịch sử: [báo cáo](WP5_UX2_REVIEW2.vi.md)) |
+| Commit phát hành (WP5-UX5-FIX20-FREEZE, đã push; bản WP5 được nghiệm thu lại sau vòng đổi giao diện 4 và 5) | `a54061f6afc1fda00d4ee2cca4553a5916af24ec` |
+| Source digest (`npm run digest`, không tính `handoff/`; digest ghi nhận của WP5-UX5-REGATE16, bằng nhau trước và sau trong WP5-UX5-RECHECK-RN) | `690fd8fd588c902f03cbc9c6efeb63cd58f5c9246579dda0473a190a230c1c4f`, 882 tệp |
+| Gate | WP5-UX5-REGATE16 PASS, NAS NOT VERIFIED ([tác vụ](tasks/WP5-UX5-REGATE16.md)). Đây là gate có phạm vi hẹp, chỉ tài liệu: `dist/` giống hệt từng byte với của `dc487c6` và của `0b45781`, và `npm test` chạy 2.397 test. Các mục được mang sang trên các bản build giống hệt: WP5-UX5-REGATE15 ([tác vụ](tasks/WP5-UX5-REGATE15.md), `dc487c6`): các mẫu và kiểm tra sẵn sàng ở mục 1 đến 3; WP5-UX5-REGATE14 ([tác vụ](tasks/WP5-UX5-REGATE14.md), `0b45781`, gate runtime cuối gói): e2e FULL đồng hồ thật desktop 484 passed / 36 skipped / 0 failed và mobile 408 / 112 / 0, sáu lượt chạy đồng hồ giả lập với 0 failed, stress, mutant và axe; WP5-UX5-REGATE11 ([tác vụ](tasks/WP5-UX5-REGATE11.md), `1fe5ad3`): container drill `--wp3`, 209 PASS / 0 FAIL, schema 15, và `npm audit --omit=dev`, 0 lỗ hổng. REGATE11 không đạt với tư cách gate vì một timeout e2e không liên quan, mà WP5-UX5-FIX17 đã sửa; `dist/server`, `dist/domain`, Dockerfile và `vite.config.ts` không đổi từ `1fe5ad3` |
+| Audit cuối | WP5-UX5-RECHECK-RN PASS ([báo cáo](WP5_UX5_RECHECK_RN.vi.md)). Nó mang sang kết luận về sản phẩm của WP5-UX5-AUDIT-INT3 (PASS ở `0b45781` / `67aa715c…`, [báo cáo](WP5_UX5_REVIEW_INT3.vi.md)) và thay thế nó làm bản nghiệm thu hiện hành. Lịch sử: bản nghiệm thu trước đó là WP5-UX3-AUDIT-INT ở `8e55710` / `507de97c…` ([báo cáo](WP5_UX3_REVIEW_INT.vi.md)) |
+| Các commit chỉ tài liệu sau khi nghiệm thu sản phẩm | `dc487c6` (WP5-UX5-RELNOTES-FREEZE: README và ghi chú phát hành; gate bởi REGATE15; WP5-UX5-AUDIT-RN trả FIX REQUIRED với F-UX5RN-1, [báo cáo](WP5_UX5_REVIEW_RN.vi.md)); `a54061f` (WP5-UX5-FIX20-FREEZE: DEVELOPMENT, ghi chú phát hành và README; gate bởi REGATE16; RECHECK-RN đạt) |
 | Phiên bản trong `package.json` | `0.1.0` (không định danh bản phát hành; commit và digest mới định danh) |
-| Image ID tham chiếu (bản build drill của WP5-UX3-REGATE3, máy trạm phát triển, có byte giống hệt bản phát hành, `linux/amd64`, 110.042.848 byte; image đã được xóa) | `sha256:bcb0692cc99fe5c0b198dc26cff623045903f851f3d7069105b1df09bf9e493b` |
+| Image ID tham chiếu (bản build drill container của WP5-UX5-REGATE11 trên `1fe5ad3`, máy trạm phát triển, `linux/amd64`, 110.195.889 byte; việc image còn tồn tại hay không không được ghi lại; bundle `dist/server` và `dist/domain` của nó giống hệt bản phát hành, bundle client thì không) | `sha256:47a183b1202aafcce6596ecbd66555519a550c5d3e9e080ffbda5a3bbbcf2b92` |
 | Image ID build trên NAS | `<image-id>` (chủ sở hữu ghi lại lúc build, [runbook](../../docs/11_OPERATIONS_RUNBOOK.vi.md) mục 1 bước 8; build lại cùng mã nguồn cho ID khác) |
 | Tuyên bố phát hành | chưa tuyên bố, không có tag. Quyết định của chủ sở hữu D-14 (b): bản phát hành đầu tiên được tuyên bố sau thời gian pilot, không phải lúc cho phép pilot; cho đến lúc đó các commit vẫn ở `main` theo quy tắc ở [08 Quy trình AI](../../docs/08_AI_WORKFLOW_AND_BUDGET.vi.md) và `git.release_declared` vẫn là false |
 
-Image ID tham chiếu là image drill của gate trên máy trạm phát triển. Nó không phải image trên NAS, và image đó đã được xóa sau gate. Nếu bất kỳ tệp nào ngoài `handoff/` thay đổi thì commit và digest đổi, và định danh này phải được làm mới.
+Image ID tham chiếu là image drill của WP5-UX5-REGATE11 trên máy trạm phát triển, build từ `1fe5ad3` (log drill, `evidence/WP5-UX5-REGATE11/log-drill.txt`, ghi ID này). Nó không phải image trên NAS và không phải image của bản phát hành: bundle server và domain giống nhau, bundle client thì không. Dù sao, chủ sở hữu ghi lại image ID build trên NAS. Nếu bất kỳ tệp nào ngoài `handoff/` thay đổi thì commit và digest đổi, và định danh này phải được làm mới.
 
-**Định danh bản phát hành: được làm mới sau gate vòng 5.** Commit, source digest, bản ghi gate và image ID tham chiếu ở trên là của vòng 3 và **không phải** bản phát hành vòng 5. Gate cuối gói của vòng 5 tạo các giá trị mới và ACCEPT-DOCS ghi chúng vào đây, vào mục 6 và mục 7; đến lúc đó đừng dùng chúng cho pilot. Các mẫu ở mục 3 là ngoại lệ: chúng được tạo lại từ commit đóng băng vòng 5 `69d6340`.
+**Định danh bản phát hành: được làm mới khi nghiệm thu lại sau vòng đổi giao diện 4 và 5.** Bảng ở trên là bản phát hành WP5 đã nghiệm thu `a54061f` / `690fd8fd…` (882 tệp). Các mẫu ở mục 3 và kiểm tra sẵn sàng ở mục 1 đến từ `dc487c6` (WP5-UX5-REGATE15). `dc487c6` chỉ khác bản phát hành ở sáu tệp Markdown và build giống hệt từng byte (REGATE16 và RECHECK-RN), nên các mẫu đại diện cho bản phát hành mà không cần tạo lại. Các mục 5, 6 và 7 dùng cùng định danh.
 
 **Vòng đổi giao diện (WP5-UX).** Sau khi gói được viết lần đầu ở `014bd47`, chủ sở hữu yêu cầu ngày 2026-10-08 một giao diện đẹp hơn, dễ dùng hơn, với trang Timesheet bố trí như workbook Excel mẫu. Chủ sở hữu trả lời E-1..E-7 theo khuyến nghị, và WP5-UX-Q1 cùng WP5-UX-Q2 bằng "a". Vòng này chỉ đổi giao diện client và các test (cùng một bộ định dạng giờ:phút chỉ để hiển thị); không đổi server và không đổi quy tắc nghiệp vụ. Nó đã được gate lại (WP5-UX-REGATE8) và audit cuối (WP5-UX-AUDIT-AB9, [báo cáo](WP5_UX_REVIEW_AB9.vi.md)); vì vậy định danh ở trên khác định danh phát hành đầu tiên `014bd47` / `150420e7…`. Hồ sơ nằm ở [bàn giao WP5](WP5_HANDOFF.vi.md), mục "Nghiệm thu lại sau vòng đổi giao diện (WP5-UX)".
 
@@ -33,11 +35,11 @@ Image ID tham chiếu là image drill của gate trên máy trạm phát triển
 
 **Vòng đổi giao diện 3 (WP5-UX3).** Ngày 2026-10-15 chủ sở hữu yêu cầu kiểu hiện đại thay cho kiểu công nghiệp, menu danh tính trên thanh trên cùng (avatar, tên phía trên email; Light/Dark, Profile, Settings, Sign out), phần đầu trang và thanh kỳ được sắp lại, các cột được chọn nổi lên (có đổ bóng), và Day editor với hộp thoại phiên riêng cùng vùng giờ nghỉ đơn giản hơn (một ô "Confirm no breaks taken", mỗi giờ nghỉ một dòng, Suggest breaks và Add break). Chủ sở hữu đã trả lời G-1..G-5 (G-1 b có chỉnh sửa, G-2 a "Category", G-3 a điền sẵn, G-4 biến thể của chủ sở hữu, G-5 b nhãn "in progress"), Q6 (b), các chip 24 giờ và Q7 (a, phần đầu AI Instruction của chủ sở hữu trong AGENTS.md). Vòng này chỉ đổi giao diện client và tài liệu; không đổi server, quy tắc nghiệp vụ, phép tính, schema, API, PDF hay email (`dist/server` và `dist/domain` giống hệt từng byte với `a643794`). Nó đã được gate lại (WP5-UX3-REGATE5) và audit cuối (WP5-UX3-AUDIT-INT, [báo cáo](WP5_UX3_REVIEW_INT.vi.md)); vì vậy định danh ở trên khác `a643794` / `229df806…`. Hồ sơ nằm ở [bàn giao WP5](WP5_HANDOFF.vi.md), mục "Nghiệm thu lại sau vòng đổi giao diện 3 (WP5-UX3)".
 
-**Vòng đổi giao diện 4 (WP5-UX4), đang thực hiện.** Ngày 2026-10-20 chủ sở hữu yêu cầu vòng đổi giao diện thứ tư và trả lời các quyết định pilot D-1..D-15 (mục 8). Vòng này đổi giao diện client và, với các câu trả lời D-5 a, D-6 a, D-9 b, D-10 (là F-1 i) và D-15 b, đổi cả server (route đổi mật khẩu, quy tắc số dư đầu kỳ, giới hạn bản xem trước import, số đếm theo ngày trong xem trước ngày nghỉ kèm sự kiện audit) cùng một chốt chặn chấm công qua chia sẻ. Vòng này vẫn cần gate và các audit độc lập mới, nên định danh phát hành ở trên **chưa** được làm mới; nó được làm mới khi nghiệm thu lại. Hồ sơ sẽ nằm ở [bàn giao WP5](WP5_HANDOFF.vi.md).
+**Vòng đổi giao diện 4 (WP5-UX4), đã hoàn tất.** Ngày 2026-10-20 chủ sở hữu yêu cầu vòng đổi giao diện thứ tư và trả lời các quyết định pilot D-1..D-15 (mục 8). Vòng này đã đổi giao diện client và, với các câu trả lời D-5 a, D-6 a, D-9 b, D-10 (là F-1 i) và D-15 b, đổi cả server (route đổi mật khẩu, quy tắc số dư đầu kỳ, giới hạn bản xem trước import, số đếm theo ngày trong xem trước ngày nghỉ kèm sự kiện audit) cùng một chốt chặn chấm công qua chia sẻ. Theo quyết định của chủ sở hữu Q0 (a), nó được gate và audit cùng vòng 5 (bên dưới); vì vậy định danh ở trên khác định danh vòng 3 `8e55710` / `507de97c…`. Hồ sơ nằm ở [bàn giao WP5](WP5_HANDOFF.vi.md), mục "Re-acceptance after UI change rounds 4 and 5 (WP5-UX4, WP5-UX5)".
 
-**Vòng đổi giao diện 5 (WP5-UX5), đang thực hiện.** Ngày 2026-10-21 chủ sở hữu yêu cầu vòng thứ năm và trả lời F-1..F-10 (mục 8). Vòng này đổi giao diện client, PDF và server: ký xác nhận và gửi nay là hai hành động riêng, mỗi lần gửi có phong bì và lựa chọn dòng PDF riêng, bản gửi thêm cần một lý do, ảnh chữ ký là tùy chọn, PDF là một trang thiết kế lại với font viết tay Indie Flower, dạng gọn của bảng chuyển xuống dưới 480px và schema là 15. Vòng 4 được gộp vào cùng gate cuối gói (quyết định của chủ Q0 a). Vòng này vẫn cần gate đó và các audit độc lập mới, nên định danh phát hành ở trên **chưa** được làm mới. Các slice (UX5-T01a đến T05B) đã đóng băng; hồ sơ sẽ nằm ở [bàn giao WP5](WP5_HANDOFF.vi.md).
+**Vòng đổi giao diện 5 (WP5-UX5), đã hoàn tất.** Ngày 2026-10-21 chủ sở hữu yêu cầu vòng thứ năm và trả lời F-1..F-10 (mục 8). Vòng này đã đổi giao diện client, PDF và server: ký xác nhận và gửi nay là hai hành động riêng, mỗi lần gửi có phong bì và lựa chọn dòng PDF riêng, bản gửi thêm cần một lý do, ảnh chữ ký là tùy chọn, PDF là một trang thiết kế lại với font viết tay Indie Flower, dạng gọn của bảng chuyển xuống dưới 480px và schema là 15. Các bản sửa sau đó làm Day editor đang mở theo kịp một lần Check in hoặc Check out thực hiện từ trang, và chặn một lần ghi phiên ghi đè các trường ngày đã đổi ở nơi khác. Gate cuối gói và các audit cho vòng 4 và 5: WP5-UX5-REGATE14 PASS ở `0b45781` (cùng container drill của REGATE11 ở `1fe5ad3`), WP5-UX5-AUDIT-INT3 PASS ở `0b45781`, các mẫu và kiểm tra sẵn sàng của REGATE15 ở `dc487c6`, rồi bản sửa chỉ tài liệu cho phát hiện F-UX5RN-1 của audit (`a54061f`, REGATE16 PASS) và WP5-UX5-RECHECK-RN PASS, là bản nghiệm thu hiện hành. Hồ sơ nằm ở [bàn giao WP5](WP5_HANDOFF.vi.md), mục "Re-acceptance after UI change rounds 4 and 5 (WP5-UX4, WP5-UX5)".
 
-Bằng chứng của gói nằm ở `handoff/delivery/evidence/WP5-UX5-T06/` cho các mẫu ở mục 3 và kiểm tra sẵn sàng ở mục 1, và ở `handoff/delivery/evidence/WP5-PILOT/` cho các bản ghi trước đó (mục lục ở mục 11).
+Bằng chứng của gói nằm ở `handoff/delivery/evidence/WP5-UX5-REGATE15/samples/` cho các mẫu ở mục 3 và ở `handoff/delivery/evidence/WP5-UX5-REGATE15/44-ready-check.txt` cho kiểm tra sẵn sàng ở mục 1, ở `handoff/delivery/evidence/WP5-UX5-REGATE11/log-drill.txt` cho số liệu khôi phục ở mục 5, và ở `handoff/delivery/evidence/WP5-PILOT/` cho các bản ghi trước đó (mục lục ở mục 11).
 
 ## 1. URL
 
@@ -50,7 +52,7 @@ Bằng chứng của gói nằm ở `handoff/delivery/evidence/WP5-UX5-T06/` cho
 
 Các bước kiểm tra. Mỗi bước là **[owner NAS step, unverified]**; tick và ghi ngày trên NAS.
 
-- [ ] `https://<nas-host>/api/ready` trả 200 với `{"status":"ready","schema":{"expected":N,"actual":N},"data_dir_writable":true}` và không gì khác. `https://<nas-host>/api/health` trả 200 `{"status":"ok"}`. Quan sát trên máy phát triển (server đã build của commit đóng băng vòng 5, chế độ capture, cổng loopback, `evidence/WP5-UX5-T06/06-ready-check.txt`): `/api/health` 200 `{"status":"ok"}`, `/api/ready` 200 với schema 15 expected và actual, `data_dir_writable` true.
+- [ ] `https://<nas-host>/api/ready` trả 200 với `{"status":"ready","schema":{"expected":N,"actual":N},"data_dir_writable":true}` và không gì khác. `https://<nas-host>/api/health` trả 200 `{"status":"ok"}`. Quan sát trên máy phát triển (server đã build của `dc487c6`, build giống hệt từng byte với bản phát hành, chế độ capture, cổng loopback, WP5-UX5-REGATE15, `evidence/WP5-UX5-REGATE15/44-ready-check.txt`): `/api/health` 200 `{"status":"ok"}`, `/api/ready` 200 với schema 15 expected và actual, `data_dir_writable` true.
 - [ ] Đăng nhập: quản trị viên đăng nhập tại `https://<nas-host>/` (màn hình Setup chỉ hiện một lần, runbook mục 3). Hai client sau proxy không bị chặn chung (điều này cho thấy `TRUSTED_PROXY_ADDRESSES` đúng).
 - [ ] Deep link: mở `https://<nas-host>/#/review/<payroll-date>` (dạng của mọi liên kết nhắc nhở, như các mẫu ở mục 3); nó yêu cầu đăng nhập rồi mở màn hình review. Một bản nộp đã capture không chứa liên kết nào, và liên kết của lời nhắc đầu tiên được kiểm tra sau khi đặt thời điểm kích hoạt (runbook mục 13 bước 7). Liên kết yêu cầu đăng nhập là đủ; nó không bao giờ tự ký hay tự nộp.
 - [ ] Một yêu cầu thay đổi trạng thái từ origin đó được chấp nhận (origin không có trong `APP_ORIGINS` bị từ chối với 403 `origin_rejected`).
@@ -81,7 +83,7 @@ Làm theo runbook mục 13 bước 2 trên NAS. **[owner NAS step, unverified]**
 - [ ] Cài đặt nộp bài của tài khoản chủ sở hữu và của mọi tài khoản khác sẽ tồn tại đã được lưu, các tài khoản tổng hợp đã bị vô hiệu hóa, và không tài khoản nào bật auto-submit.
 - [ ] Trạng thái quản trị không có job gửi nào đang queued hay leased.
 
-Tương đương trên máy phát triển là mục 3: mười một thư được capture từ bản build đóng băng vòng 5 với user tổng hợp (sáu thư có PDF), mỗi PDF khớp hash đã ghi.
+Tương đương trên máy phát triển là mục 3: mười một thư được capture từ bản build của `dc487c6` (WP5-UX5-REGATE15; giống hệt bản phát hành) với user tổng hợp (sáu thư có PDF), mỗi PDF khớp hash đã ghi.
 
 ### Lần gửi thật đầu tiên
 
@@ -95,25 +97,25 @@ Quyết định của chủ sở hữu D-12 (a): kỳ đầu tiên được ký 
 
 ## 3. Mẫu email và PDF
 
-Mọi mẫu được tạo từ bản export `git archive` sạch của commit `69d6340` (WP5-UX5-T05B-FREEZE, bản đóng băng slice của vòng 5), build bằng `npm ci` và `build:server`, dùng các service và job handler production, đồng hồ cố định, chế độ capture và user tổng hợp ở `example.invalid`. `PRODUCTION_SENDING_ENABLED` chưa bao giờ được đặt và không gửi gì cả. Lịch là lịch seed tổng hợp: kỳ 2026-09-14 đến 2026-09-27, ngày payroll 2026-10-02, múi giờ báo cáo `America/Los_Angeles`. Ngày thật sẽ khác.
+Mọi mẫu được tạo từ bản export `git archive` sạch của commit `dc487c6` (WP5-UX5-RELNOTES-FREEZE, WP5-UX5-REGATE15), build bằng `npm ci` và `build:server`, dùng các service và job handler production, đồng hồ cố định, chế độ capture và user tổng hợp ở `example.invalid`. `PRODUCTION_SENDING_ENABLED` chưa bao giờ được đặt và không gửi gì cả. Lịch là lịch seed tổng hợp: kỳ 2026-09-14 đến 2026-09-27, ngày payroll 2026-10-02, múi giờ báo cáo `America/Los_Angeles`. Ngày thật sẽ khác.
 
-Nguồn gốc của các mẫu này: tạo tại 69d6340 (WP5-UX5-T06, tạo lại cho vòng 5; các mẫu cũ ở 74d5bfe không còn đại diện cho sản phẩm, vì PDF, luồng gửi và các thư đã đổi). Lần chạy là `make-samples.mjs.txt` trong `evidence/WP5-UX5-T06/`: phương pháp của WP5-PILOT được chỉnh theo việc tách đôi. Nó ký xác nhận qua service sign-off production, rồi gửi qua service gửi production (`sendDraft` và `sendRevision`, với mặc định của Settings và các ghi đè cho từng lần gửi nêu bên dưới), chạy các job handler production và lượt quét hạn nộp với đồng hồ cố định, và trích từng thư mục capture. Nó chạy một lần (exit 0, 11 thư được capture, không job nào cần can thiệp). Commit này là bản đóng băng của các slice vòng 5, chưa phải bản phát hành vòng 5: gate cuối gói có thể đổi sản phẩm lần nữa, và khi đó các mẫu được tạo lại từ commit phát hành (làm mới sau gate vòng 5). Lịch và con người đều tổng hợp; ảnh chữ ký là đường lượn sóng do seed tạo ra, và không có chữ ký thật hay trang tham chiếu thật nào được mở hay lưu.
+Nguồn gốc của các mẫu này: tạo tại `dc487c6` bởi WP5-UX5-REGATE15 và được WP5-UX5-AUDIT-RN kiểm tra, audit này chạy lại cùng các script trên một bản export mới. Các mẫu cũ ở `74d5bfe` (`evidence/WP5-PILOT/`) và ở bản đóng băng slice vòng 5 `69d6340` (`evidence/WP5-UX5-T06/`) chỉ là lịch sử và không còn đại diện cho sản phẩm. Lần chạy là `make-samples.mjs.txt` trong `evidence/WP5-UX5-REGATE15/`: phương pháp của WP5-PILOT được chỉnh theo việc tách đôi. Nó ký xác nhận qua service sign-off production, rồi gửi qua service gửi production (`sendDraft` và `sendRevision`, với mặc định của Settings và các ghi đè cho từng lần gửi nêu bên dưới), chạy các job handler production và lượt quét hạn nộp với đồng hồ cố định, và trích từng thư mục capture. Kết quả là 11 thư được capture và không job nào cần can thiệp. `dc487c6` chỉ khác bản phát hành `a54061f` ở sáu tệp Markdown (README, DEVELOPMENT và ghi chú phát hành, mỗi cái bằng tiếng Anh và tiếng Việt) và build giống hệt từng byte (WP5-UX5-REGATE16 và WP5-UX5-RECHECK-RN), nên các mẫu đại diện cho bản phát hành mà không cần tạo lại. Các hash và một số header Date là giá trị của lần chạy đó và đổi theo từng lần chạy: mã nộp được suy ra từ một user id ngẫu nhiên ở mỗi lần chạy, nên byte và SHA-256 của từng PDF khác nhau giữa các lần chạy, và giờ Date của một số thư lệch vài phút theo thứ tự các job. Đừng đọc giờ Date hay hash như một sự kiện của sản phẩm; tiêu đề, nội dung đã giải mã và văn bản PDF khớp nhau giữa các lần chạy khi bỏ qua mã nộp. Lịch và con người đều tổng hợp; ảnh chữ ký là đường lượn sóng do seed tạo ra, và không có chữ ký thật hay trang tham chiếu thật nào được mở hay lưu.
 
-Mỗi thư lưu thành một `.txt` (tiêu đề, header thô, nội dung đã giải mã, thông tin PDF), và mỗi trang PDF thành một ảnh `*-synthetic.png`. Mọi ảnh đều đã được xem sau khi tạo. Mỗi PDF có một trang; hash đã lưu khớp tệp đính kèm đã capture (`pdf_hash_ok` true cho cả sáu trong `sample-index.txt`).
+Mỗi thư lưu thành một `.txt` (tiêu đề, header thô, nội dung đã giải mã, thông tin PDF), và mỗi trang PDF thành một ảnh `*-synthetic.png`. Mọi ảnh đều đã được xem sau khi tạo, và được audit độc lập xem lại. Mỗi PDF có một trang; hash đã lưu khớp tệp đính kèm đã capture (`pdf_hash_ok` true cho cả sáu trong `sample-index.txt`).
 
 | # | Mẫu | Tệp thư | Ảnh PDF | SHA-256 của PDF |
 |---|---|---|---|---|
-| S1 | Sign-off thủ công lúc 2026-09-28 23:30 giờ địa phương (ảnh chữ ký đã lưu), rồi lần gửi revision 1 từ thẻ Send với mặc định của Settings | `msg-05-submission-payroll-manual-rev1.txt` | `pilot-05-submission-payroll-manual-rev1-p1-synthetic.png` | `5b31334fcb28e566cefc1b532790b47e0ce05e1530b994b8435d51dcfc9879f9` |
-| S2 | Một hiệu chỉnh (revision 2) của kỳ S1, gửi như một bản gửi thêm; lần gửi không có lý do bị từ chối trước (422 `reason_required`), rồi gửi với lý do "Corrected Sunday end time; please use this copy" | `msg-11-submission-payroll-manual-rev2.txt` | `pilot-11-submission-payroll-manual-rev2-p1-synthetic.png` | `5893e0393165c34fa9c320bee6888aa721c78f668e5cad1fc2796dd39f15d1ab` |
-| S3 | Nộp tự động lúc đến hạn, dòng ghi chú tắt, đã ủy quyền ảnh | `msg-08-submission-payroll-auto-off-rev1.txt` | `pilot-08-submission-payroll-auto-off-rev1-p1-synthetic.png` | `fa4a8e4f8cc0a023580a58c84f21dcf59071182656cf01ae5293088b0e3596ce` |
-| S4 | Nộp tự động lúc đến hạn, dòng ghi chú bật (chữ mặc định "Automatic submission"), đã ủy quyền ảnh | `msg-07-submission-payroll-auto-on-rev1.txt` | `pilot-07-submission-payroll-auto-on-rev1-p1-synthetic.png` | `b8caaf084cedd49159411c710543ab21fc1ba53d5fcc4d98147e5288aa9f5acf` |
-| S5 | Một revision đã ký lúc 2026-09-28 23:30 giờ địa phương và chưa bao giờ gửi, auto-submit bật: hạn nộp gửi nó như đã ký (F-2 a, `origin deadline`, phong bì của Settings), không có revision mới | `msg-10-submission-payroll-signed-rev1.txt` | `pilot-10-submission-payroll-signed-rev1-p1-synthetic.png` | `039228bd32a2ea44f059f115cb82c1e7264451de6a3eda2ea32ff56e60bca4ac` |
-| S6 | Một sign-off thủ công và một lần gửi với "Time rows on the PDF" tắt chỉ cho lần gửi này (biến thể `t0o1`; dòng OT vẫn bật) | `msg-04-submission-payroll-norows-rev1.txt` | `pilot-04-submission-payroll-norows-rev1-p1-synthetic.png` | `c7ef784100d1371db3fbf69e2eba019f733a52c6b9bafba6c6afb882d09ad00f` |
-| N1, N2 | Nhắc nhở gửi nhân viên ("due in about 18 hours"), mỗi tài khoản tự động một thư | `msg-03-...txt` (ghi chú tắt), `msg-02-...txt` (ghi chú bật) | không có | không có |
-| N3, N4 | Thông báo kết quả gửi nhân viên sau nộp tự động | `msg-09-...txt` (ghi chú tắt), `msg-06-...txt` (ghi chú bật) | không có | không có |
+| S1 | Sign-off thủ công lúc 2026-09-28 23:30 giờ địa phương (ảnh chữ ký đã lưu), rồi lần gửi revision 1 từ thẻ Send với mặc định của Settings | `msg-05-submission-payroll-manual-rev1.txt` | `pilot-05-submission-payroll-manual-rev1-p1-synthetic.png` | `430344dc50deb888eff18fd431ac298f52c1f692a20efc79a2699158004faffa` |
+| S2 | Một hiệu chỉnh (revision 2) của kỳ S1, gửi như một bản gửi thêm; lần gửi không có lý do bị từ chối trước (422 `reason_required`), rồi gửi với lý do "Corrected Sunday end time; please use this copy" | `msg-11-submission-payroll-manual-rev2.txt` | `pilot-11-submission-payroll-manual-rev2-p1-synthetic.png` | `19e8268ed09de67a66c5f4fabe130ceaffa8464a4ec04fa6dfd5425c9c002dc3` |
+| S3 | Nộp tự động lúc đến hạn, dòng ghi chú tắt, đã ủy quyền ảnh | `msg-10-submission-payroll-auto-off-rev1.txt` | `pilot-10-submission-payroll-auto-off-rev1-p1-synthetic.png` | `bdafd3e1bf4d5efe3715b22f9e1d12df6c48759392f9dda1ee9bd717c17ce53b` |
+| S4 | Nộp tự động lúc đến hạn, dòng ghi chú bật (chữ mặc định "Automatic submission"), đã ủy quyền ảnh | `msg-08-submission-payroll-auto-on-rev1.txt` | `pilot-08-submission-payroll-auto-on-rev1-p1-synthetic.png` | `fe1778e012158f709bafac7f90993b8ea582555f0a60ad13f689c9ad34543cac` |
+| S5 | Một revision đã ký lúc 2026-09-28 23:30 giờ địa phương và chưa bao giờ gửi, auto-submit bật: hạn nộp gửi nó như đã ký (F-2 a, `origin deadline`, phong bì của Settings), không có revision mới | `msg-07-submission-payroll-signed-rev1.txt` | `pilot-07-submission-payroll-signed-rev1-p1-synthetic.png` | `01fede20046b4a1168573e08aef0d6bbc925d44b4847e69a9014767a8539ad4b` |
+| S6 | Một sign-off thủ công và một lần gửi với "Time rows on the PDF" tắt chỉ cho lần gửi này (biến thể `t0o1`; dòng OT vẫn bật) | `msg-04-submission-payroll-norows-rev1.txt` | `pilot-04-submission-payroll-norows-rev1-p1-synthetic.png` | `04500ec24df5f9ca4df44ee1ab2a7484b84982bbc4437200ec2dc5b91c6baafa` |
+| N1, N2 | Nhắc nhở gửi nhân viên ("due in about 18 hours"), mỗi tài khoản tự động một thư | `msg-02-...txt` (ghi chú tắt), `msg-03-...txt` (ghi chú bật) | không có | không có |
+| N3, N4 | Thông báo kết quả gửi nhân viên sau nộp tự động | `msg-06-...txt` (ghi chú tắt), `msg-09-...txt` (ghi chú bật) | không có | không có |
 | N5 | Nhắc nhở gửi nhân viên của revision S5: "Timesheet signed, not sent yet" (mới ở vòng 5) | `msg-01-notice-sample.signed-1.txt` | không có | không có |
 
-Văn bản của từng trang PDF: `pdf-text-<n>-...txt`. Chỉ mục kèm các kiểm tra là `sample-index.txt`. Mọi tệp nằm ở `handoff/delivery/evidence/WP5-UX5-T06/`. Có năm thông báo; N5 là nhắc nhở "signed, not sent yet" mới.
+Văn bản của từng trang PDF: `pdf-text-<n>-...txt`. Chỉ mục kèm các kiểm tra là `sample-index.txt`. Mọi tệp nằm ở `handoff/delivery/evidence/WP5-UX5-REGATE15/samples/`. Các giá trị SHA-256 của PDF trong bảng là của lần chạy đó (xem nguồn gốc ở trên). Có năm thông báo; N5 là nhắc nhở "signed, not sent yet" mới.
 
 ### Các mẫu cho thấy gì
 
@@ -182,24 +184,23 @@ Cài đặt ứng dụng. Cột "mặc định đã ghi" là mặc định thi�
 
 ## 5. Bằng chứng khôi phục
 
-### Số liệu trên máy phát triển (drill của WP5-GATE, không phải NAS)
+### Số liệu trên máy phát triển (container drill vòng 5 của WP5-UX5-REGATE11, không phải NAS)
 
-Các số liệu này là của các drill WP5-GATE và WP5-UX3 (schema 13). Chúng được làm mới sau gate vòng 5, có drill chạy bản build schema 15.
+Nguồn: container drill của WP5-UX5-REGATE11 trên `1fe5ad3`, dữ liệu tổng hợp, chế độ capture, Docker Desktop trên máy trạm phát triển (`linux/amd64`), image `sha256:47a183b1202aafcce6596ecbd66555519a550c5d3e9e080ffbda5a3bbbcf2b92`. `npm run drill:container -- --wp3 <bản build trước>`: các giai đoạn 33, 32, 57, 35, 27 và 23 kiểm tra, cộng 2 kiểm tra dọn dẹp sau giai đoạn 6 = 209 PASS, 0 FAIL, schema 15 (`handoff/delivery/evidence/WP5-UX5-REGATE11/log-drill.txt`).
 
-Nguồn: drill container của gate, dữ liệu tổng hợp, chế độ capture, Docker Desktop trên máy trạm phát triển (`linux/amd64`), image `sha256:0addd2000b42...9fd8`. `npm run drill:container -- --wp3 <bản build trước>`: các giai đoạn 33, 31, 57, 35, 27 và 23 kiểm tra = 208 PASS, 0 FAIL (`handoff/delivery/evidence/WP5-GATE/07-drill.txt`).
-
-Nguồn gốc của các số liệu này: bảng được tạo lần đầu tại 74d5bfe (WP5-GATE). Commit phát hành a643794 đã đạt lại cùng drill container trong WP5-UX2-REGATE2 (`--wp3`, 208 PASS / 0 FAIL, cùng 208 kiểm tra, image `sha256:6d1844425345a6e64a962689c01c03143a225abf33df02bcdaa20c8dcc05695a`), nên số lượng đạt đúng với bản phát hành; các giá trị riêng lẻ bên dưới (mili giây, số byte, số lượt ghi) là của lần chạy WP5-GATE; hồ sơ WP5-UX2-REGATE2 ghi số kiểm tra (33/31/57/35/27/23), không ghi các giá trị này. Code server mà drill chạy, `dist/server`, giống hệt từng byte giữa 74d5bfe và 90b98ef và ở a643794 chỉ khác ba văn bản thông báo và một chú thích (hồ sơ WP5-UX2); bản phát hành 8e55710 giống hệt từng byte với a643794 ở `dist/server` và `dist/domain` và đã đạt cùng drill trong WP5-UX3-REGATE3 (`--wp3`, 208 PASS / 0 FAIL, cùng 208 kiểm tra, image `sha256:bcb0692cc99fe5c0b198dc26cff623045903f851f3d7069105b1df09bf9e493b`, trên các bản build có byte giống hệt bản phát hành; WP5-UX3-REGATE5 mang kết quả đó sang); client đã đổi trong các vòng giao diện và không thuộc số liệu khôi phục.
+Nguồn gốc của các số liệu này: drill chạy một lần, trên `1fe5ad3`. Nó được WP5-UX5-REGATE12, REGATE13, REGATE14 và REGATE16 mang sang bản phát hành `a54061f` và được WP5-UX5-RECHECK-RN xác nhận: `dist/server`, `dist/domain`, Dockerfile và `vite.config.ts` không đổi từ `1fe5ad3`. Vì vậy số lượng đạt đúng với bản phát hành; các giá trị riêng lẻ bên dưới (mili giây, số byte, số lượt ghi) là của lần chạy REGATE11. Bundle client đã đổi sau `1fe5ad3` và không thuộc số liệu khôi phục.
 
 | Số liệu | Giá trị |
 |---|---|
-| Backup khi đang ghi | exit 0; 432 ms trong CLI, 1.180 ms qua `docker compose exec`; 5, 56 và 27 lượt ghi trước, trong và sau, tất cả thành công |
-| Nội dung backup | schema 13, app 0.1.0, 10 tệp (7 chữ ký, 1 PDF), database 651.264 byte, integrity ok, 0 vi phạm khóa ngoại; mọi tệp khớp SHA-256 và kích thước trong manifest |
-| Khôi phục cô lập | exit 0 trong 1.331 ms vào thư mục mới còn trống; manifest đã xác minh; 10 tệp, 0 sai lệch; integrity check đạt; schema 13 như backup |
-| Số đếm sau khôi phục bằng backup | users 2, import batches 2, revisions 1, ledger entries 0, sign-offs 1, attachments 8, work sessions 29, outbound jobs 1 |
-| Tạm dừng outbound | bản khôi phục bị tạm dừng với lý do `restored`; 1 job gửi bị giữ, 0 queued, 0 attempt chờ quyết định; không gì được capture hay gửi khi đang tạm dừng (quan sát 40 giây) |
-| Instance khôi phục | healthy sau 5,5 giây; session đã lưu dùng được; một PDF render được |
+| Backup khi đang ghi | exit 0; 347 ms trong CLI, 1.082 ms qua `docker compose exec`; 5, 56 và 27 lượt ghi trước, trong và sau, cả 88 đều thành công |
+| Nội dung backup | schema 15, app 0.1.0, 10 tệp (7 chữ ký, 1 PDF), database 684.032 byte, integrity ok, 0 vi phạm khóa ngoại; mọi tệp khớp SHA-256 và kích thước trong manifest; cả hai nguồn import nằm trong backup và khớp hash trong manifest |
+| Khôi phục cô lập | exit 0 trong 1.168 ms vào thư mục mới còn trống; manifest đã xác minh; 10 tệp, 0 sai lệch; integrity check đạt; schema 15 như backup |
+| Số đếm sau khôi phục bằng backup | users 2, import batches 2, revisions 1, ledger entries 0, attachments 8; sign-offs và work sessions bằng backup |
+| Tạm dừng outbound | bản khôi phục bị tạm dừng với lý do `restored`; không job gửi nào leased, không attempt nào đang sending; không gì được capture hay gửi khi đang tạm dừng (quan sát 40 giây) |
+| Instance khôi phục | healthy sau 5,3 giây; session đã lưu dùng được; một PDF render được |
 | Đối soát | bản xem trước `outbound release` liệt kê thư gửi đang giữ; `outbound resume --confirm` gỡ tạm dừng; sau đó không gì từ backup bị gửi đi; `release --job` và `--all` mỗi cái tạo đúng một attempt |
-| Khôi phục rollback (`--keep-schema`) | bị từ chối khi không có `--confirm`, rồi khôi phục khi có: số đếm bằng giá trị trước nâng cấp; không gửi gì sau khi bản build trước khởi động |
+| Nâng cấp từ schema WP3 | schema 6 lên 15 (các phiên bản 7 đến 15 áp dụng một lần, trong một giao dịch); mọi hàng trước nâng cấp không đổi; thư đang xếp hàng đã gửi xong; khởi động lại không áp dụng migration nào |
+| Khôi phục rollback (`--keep-schema`) | bị từ chối khi không có `--confirm`, rồi khôi phục khi có (842 ms): số đếm bằng giá trị trước nâng cấp; không gửi gì sau khi bản build trước khởi động |
 | Chưa chứng minh ở đây | NAS, hệ thống tệp của nó, DSM Task Scheduler, bản sao thiết bị riêng, cảnh báo host, SMTP thật |
 
 Đây là số đo trên một máy trạm. Các mục tiêu backup hằng đêm, điểm khôi phục 24 giờ và khôi phục trong một giờ cần được thử trên NAS, không được khẳng định.
@@ -235,15 +236,15 @@ Pilot là lần cài đặt đầu tiên, nên không có schema production hay 
 
 | Trường | Giá trị |
 |---|---|
-| Commit phát hành | `8e557100d16b6b6eb86a48e00276835761aabfdf` |
-| Source digest | `507de97c7dc3e351219b505bb5f1bb5094eac7b766eec635e727ce997a45f2b6` (833 tệp, không tính `handoff/`) |
-| Image ID build trên NAS | `<image-id>` (bản build tham chiếu của drill WP5-UX3-REGATE3, máy phát triển, byte giống hệt bản phát hành, 110.042.848 byte, đã xóa sau gate: `sha256:bcb0692cc99fe5c0b198dc26cff623045903f851f3d7069105b1df09bf9e493b`) |
+| Commit phát hành | `a54061f6afc1fda00d4ee2cca4553a5916af24ec` |
+| Source digest | `690fd8fd588c902f03cbc9c6efeb63cd58f5c9246579dda0473a190a230c1c4f` (882 tệp, không tính `handoff/`) |
+| Image ID build trên NAS | `<image-id>` (tham chiếu: bản build drill của WP5-UX5-REGATE11 trên `1fe5ad3`, máy phát triển, cùng bundle server và domain với bản phát hành nhưng không cùng bundle client, 110.195.889 byte: `sha256:47a183b1202aafcce6596ecbd66555519a550c5d3e9e080ffbda5a3bbbcf2b92`) |
 | Backup trước kích hoạt | `<backup-name>` (lấy ở runbook mục 13 bước 3) |
 | Hash manifest của backup đó | `<manifest-sha256>` |
 | Bản sao thiết bị riêng của backup và `<env-file>` chế độ capture | cất ở đâu (bản riêng) |
 | Ngày kích hoạt | `<activation-instant-utc>` |
 
-Các dòng định danh ở trên được làm mới sau gate vòng 5 (ACCEPT-DOCS), như ở mục 0.
+Các dòng định danh ở trên là của mục 0 (bản phát hành được nghiệm thu sau vòng đổi giao diện 4 và 5).
 
 Các bước (văn bản đầy đủ ở runbook mục 14 và 15):
 
@@ -256,7 +257,7 @@ Các bước (văn bản đầy đủ ở runbook mục 14 và 15):
 
 ## 7. Định danh bản phát hành và danh mục kiểm tra NAS
 
-Định danh bản phát hành: bảng ở mục 0 (làm mới sau gate vòng 5, ACCEPT-DOCS). NAS **CHƯA ĐƯỢC XÁC MINH (NOT VERIFIED)** cho đến khi chủ sở hữu tick mọi mục dưới đây và ghi ngày. Đến lúc đó kết quả là "software ready, pilot pending" (quyết định của chủ sở hữu D-13 (a)). Mọi mục là **[owner NAS step, unverified]**, sao từ [runbook](../../docs/11_OPERATIONS_RUNBOOK.vi.md) mục 2.
+Định danh bản phát hành: bảng ở mục 0 (`a54061f` / `690fd8fd…`, được nghiệm thu sau vòng đổi giao diện 4 và 5). NAS **CHƯA ĐƯỢC XÁC MINH (NOT VERIFIED)** cho đến khi chủ sở hữu tick mọi mục dưới đây và ghi ngày. Đến lúc đó kết quả là "software ready, pilot pending" (quyết định của chủ sở hữu D-13 (a)). Mọi mục là **[owner NAS step, unverified]**, sao từ [runbook](../../docs/11_OPERATIONS_RUNBOOK.vi.md) mục 2.
 
 Thông tin NAS cần ghi (bản riêng): model NAS ______; phiên bản DSM ______; phiên bản Container Manager ______; `uname -m` ______; đường dẫn dữ liệu và backup ______; chủ thư mục UID/GID `10001` ______; NTP bật ______.
 
@@ -278,7 +279,7 @@ Tổng thể: danh mục NAS hoàn tất và ghi ngày ______ bởi ______. (Đ�
 
 ## 8. Quyết định của chủ sở hữu
 
-Chủ sở hữu đã trả lời cả mười lăm quyết định ngày 2026-10-20 (`owner_decisions` của board, nguyên văn bằng tiếng Việt). Nguồn các phương án: [WP5-PLAN](tasks/WP5-PLAN.md) mục D; bản ghi quyết định là [10 Quyết định](../../docs/10_DECISIONS_AND_SOURCES.vi.md). D-1, D-7, D-8 và D-13 cần có câu trả lời trước khi kích hoạt và đã có. Năm câu trả lời làm đổi mã (D-5 a, D-6 a, D-9 b, D-10 là F-1 (i) và D-15 b, cùng một chốt chặn chấm công qua chia sẻ); chúng thuộc vòng đổi giao diện 4, dùng chung gate cuối gói của vòng 5 và các audit độc lập mới, nên định danh phát hành ở mục 0 và 6 được làm mới sau gate đó (ACCEPT-DOCS). Các câu trả lời của vòng 5 nằm ở bảng thứ hai bên dưới. D-11 (a) và D-13 (a): giá trị thật ở lại bản riêng của chủ sở hữu, và NAS vẫn NOT VERIFIED cho đến khi chủ sở hữu tick danh mục ở mục 7.
+Chủ sở hữu đã trả lời cả mười lăm quyết định ngày 2026-10-20 (`owner_decisions` của board, nguyên văn bằng tiếng Việt). Nguồn các phương án: [WP5-PLAN](tasks/WP5-PLAN.md) mục D; bản ghi quyết định là [10 Quyết định](../../docs/10_DECISIONS_AND_SOURCES.vi.md). D-1, D-7, D-8 và D-13 cần có câu trả lời trước khi kích hoạt và đã có. Năm câu trả lời làm đổi mã (D-5 a, D-6 a, D-9 b, D-10 là F-1 (i) và D-15 b, cùng một chốt chặn chấm công qua chia sẻ); chúng thuộc vòng đổi giao diện 4, đã dùng chung gate cuối gói của vòng 5 và các audit độc lập mới và nằm trong định danh phát hành ở mục 0 và 6. Các câu trả lời của vòng 5 nằm ở bảng thứ hai bên dưới. D-11 (a) và D-13 (a): giá trị thật ở lại bản riêng của chủ sở hữu, và NAS vẫn NOT VERIFIED cho đến khi chủ sở hữu tick danh mục ở mục 7.
 
 | ID | Quyết định | Câu trả lời | Đã thay đổi gì |
 |---|---|---|---|
@@ -300,11 +301,11 @@ Chủ sở hữu đã trả lời cả mười lăm quyết định ngày 2026-1
 
 ### Quyết định của chủ sở hữu vòng 5 (2026-10-21 và 2026-10-22)
 
-Chủ sở hữu đã trả lời các câu hỏi F-1 đến F-10 của WP5-UX5-PLAN ngày 2026-10-21 và hai câu hỏi của coordinator ngày 2026-10-22 (`owner_decisions` của board, nguyên văn bằng tiếng Việt). Bản ghi quyết định là [10 Quyết định](../../docs/10_DECISIONS_AND_SOURCES.vi.md). F-2, F-3, F-4 và F-5 làm đổi server, dữ liệu và quy tắc nghiệp vụ, nên các mục 2 đến 4 của gói pilot đổi theo; định danh phát hành được làm mới sau gate vòng 5.
+Chủ sở hữu đã trả lời các câu hỏi F-1 đến F-10 của WP5-UX5-PLAN ngày 2026-10-21 và hai câu hỏi của coordinator ngày 2026-10-22 (`owner_decisions` của board, nguyên văn bằng tiếng Việt). Bản ghi quyết định là [10 Quyết định](../../docs/10_DECISIONS_AND_SOURCES.vi.md). F-2, F-3, F-4 và F-5 làm đổi server, dữ liệu và quy tắc nghiệp vụ, nên các mục 2 đến 4 của gói pilot đổi theo; định danh phát hành ở mục 0 đã bao gồm chúng.
 
 | ID | Quyết định | Câu trả lời | Đã thay đổi gì |
 |---|---|---|---|
-| Q0 | Gate của vòng 4 đặt ở đâu | (a) vòng 4 được gộp vào gate cuối gói của vòng 5 | không đổi mã; một gate và audit mới cho vòng 4 và 5, nên định danh phát hành chờ nó |
+| Q0 | Gate của vòng 4 đặt ở đâu | (a) vòng 4 được gộp vào gate cuối gói của vòng 5 | không đổi mã; một gate và audit mới cho vòng 4 và 5 (đã xong: mục 0) |
 | Q1 | Ảnh tham chiếu cho PDF | chủ sở hữu cho xem một trang workbook đã điền; chỉ dùng cho kiểu chữ và tỷ lệ, và không lưu ở đâu vì chứa dữ liệu cá nhân | bố cục PDF của UX5-T02 |
 | Q2 | Chữ ở chân trang PDF | trái: dòng bản quyền do coordinator đề xuất "© <year> C&D Semiconductor Services, Inc. All rights reserved."; phải: "Internal use by C&D only" | chân trang PDF của UX5-T02 |
 | FREEZE-T01B-Q | Ai đóng băng slice T01b | (a) một committer mới với đường dẫn tường minh và không có tệp danh sách | không đổi sản phẩm (quản trị của việc đóng băng) |
@@ -317,9 +318,23 @@ Chủ sở hữu đã trả lời các câu hỏi F-1 đến F-10 của WP5-UX5-
 | F-6 | Cái gì chuyển xuống 480px | (a) dạng gọn của bảng chuyển xuống dưới 480px; vỏ điều hướng, editor dạng sheet, hộp thoại toàn màn hình và quy tắc 44px ở lại 768px | CSS và truy vấn client; tài liệu 04 |
 | F-7 | Bấm ra ngoài đóng Day editor | (a) bấm ra ngoài các cột, ngăn kéo và hộp thoại sẽ đóng nó; bấm vào nút và liên kết giữ hành động của chúng | client; tài liệu 04 |
 | F-8 | Đoạn hướng dẫn của workbook trên PDF | (a) bỏ đi | PDF; tài liệu 03, 04; mục 3 |
-| F-9 | Font của PDF | (b) một font viết tay nếu dùng được: được duyệt là Indie Flower (WP5-UX5-G-1, 2026-10-21), kèm phương án dự phòng | PDF; file font đầu tiên được commit, ADR 0001, Dockerfile và các kiểm tra gate; tài liệu 03, 04, 12; các mẫu được tạo lại |
+| F-9 | Font của PDF | (b) một font viết tay nếu dùng được: được duyệt là Indie Flower (WP5-UX5-G-1, 2026-10-21), kèm phương án dự phòng | PDF; file font đầu tiên được commit, ADR 0001, Dockerfile và các kiểm tra gate; tài liệu 03, 04, 12; các mẫu ở mục 3 cho thấy điều đó |
 | F-10 | Đầu trang PDF "version/revision" | (a) "Revision n" với mã nộp nhỏ bên dưới | PDF; tài liệu 04; mục 3 |
 | Ghi chú mockup | Các ghi chú của chủ sở hữu về mockup B1 đến B11 (khoảng cách, hai dòng chữ ký, thụt lề, việc duyệt Indie Flower, kiểu chữ của PDF) | áp dụng như đã viết | bố cục client và PDF; tài liệu 04 |
+
+### Quyết định còn mở của chủ sở hữu: R-UX5I2-3, mặc định của lịch không có phiên bản
+
+Quyết định này còn mở: chủ sở hữu chưa trả lời. Tốt nhất nên quyết định trước pilot. Nguồn: [WP5_UX5_REVIEW_INT3](WP5_UX5_REVIEW_INT3.vi.md), "Risks", R-UX5I2-3 (có từ trước; WP5-UX5-RECHECK-RN mang sang không đổi).
+
+- **Vấn đề.** Mặc định của lịch (ví dụ Holiday) không có phiên bản. Nếu quản trị viên import một ngày lễ trong lúc Day editor của một người đang mở ở ngày đó, một lần "Save day fields" sau đó có thể ghi "Worked" đè lên mặc định Holiday mới. Điều đó đổi thời gian bắt buộc của ngày, nên một ngày lễ bị ghi là Worked làm đổi số giờ người đó phải làm. Biểu mẫu hiện "Calendar default. Saving records it as your choice." dưới loại cũ.
+- **Các phương án, như báo cáo nêu.**
+  - (a) Giữ hành vi và ghi tài liệu.
+  - (b) Chỉ gửi loại ngày khi người dùng đã đổi nó.
+  - (c) Từ chối lưu khi mặc định đã đổi kể từ lúc tải.
+- **Câu trả lời.**
+  - [ ] (a) giữ và ghi tài liệu / (b) chỉ gửi loại khi đã đổi / (c) từ chối khi mặc định đã đổi kể từ lúc tải: ______ (chủ sở hữu; để trống đến khi trả lời)
+
+Gợi ý của gói này, không phải quyết định: phương án (b) hoặc (c) loại bỏ trường hợp này; phương án (a) để quản trị viên và người dùng tự tránh nó. Không phương án nào chặn việc phần mềm sẵn sàng ở trên.
 
 Không phải quyết định, để chủ sở hữu lưu ý: danh sách ngày nghỉ công ty 2027 (đầu vào cài đặt); bản sao backup trên thiết bị riêng ([07 Vận hành](../../docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md)); cảnh báo host độc lập (runbook mục 11).
 
@@ -352,16 +367,23 @@ Sau lần gửi thật đầu tiên, ghi riêng nhà cung cấp chấp nhận v�
 
 - Các mẫu đến từ chế độ capture trên máy trạm phát triển. Hành vi SMTP thật, NAS, reverse proxy, chứng chỉ và bản sao thiết bị riêng chưa được quan sát cho đến khi chủ sở hữu chạy các bước trên.
 - Lịch, tên và ngày của mẫu là tổng hợp. Không có tên host, địa chỉ, thông tin đăng nhập, chữ ký hay dữ liệu cá nhân thật nào trong gói được theo dõi hay bằng chứng của nó.
-- Các mẫu ở mục 3 đến từ commit đóng băng slice vòng 5 `69d6340`, không phải bản phát hành vòng 5; chúng được tạo lại từ commit phát hành sau gate cuối gói nếu sản phẩm đổi. Chúng không có nhãn ngày lễ và ngày nghỉ phép.
-- Các giới hạn của vòng 5 nằm ở [ghi chú phát hành](../../docs/12_RELEASE_NOTES.vi.md) mục "Vòng chỉnh UI thứ 5": hiệu chỉnh làm sau một lần gửi chỉ do người đó gửi; nút trên Timesheet không thấy một lần gửi đang xếp hàng chưa có lượt nào; mỗi revision lưu tối đa bốn PDF; "PDF Preview" mở trong tab mới; chiều rộng lẻ được chứng minh trên style sheet; container drill và các audit độc lập của vòng 5 thuộc gate và chưa chạy.
+- Các mẫu ở mục 3 đến từ `dc487c6`, build giống hệt từng byte với bản phát hành `a54061f` và chỉ khác nó ở sáu tệp Markdown; chúng không được tạo lại từ `a54061f`. Các hash và một số header Date của chúng là giá trị của một lần chạy (mục 3). Chúng không có nhãn ngày lễ và ngày nghỉ phép.
+- Các giới hạn của vòng 5 nằm ở [ghi chú phát hành](../../docs/12_RELEASE_NOTES.vi.md) mục "Vòng chỉnh UI thứ 5": hiệu chỉnh làm sau một lần gửi chỉ do người đó gửi; nút trên Timesheet không thấy một lần gửi đang xếp hàng chưa có lượt nào; mỗi revision lưu tối đa bốn PDF; "PDF Preview" mở trong tab mới; chiều rộng lẻ được chứng minh trên style sheet. Container drill và các audit độc lập của vòng 5 đã chạy (mục 0 và mục 5).
+- **Các kiểm tra trên thiết bị của pilot, NOT VERIFIED ở đây** ([WP5_UX5_REVIEW_INT3](WP5_UX5_REVIEW_INT3.vi.md), "Optional backlog for the WP5 handoff", mục 5): R-A2-1 và R-A2-2; UX4-A 8; thanh cuộn cổ điển ở các trình duyệt khác ([ghi chú phát hành](../../docs/12_RELEASE_NOTES.vi.md)); và việc chủ sở hữu tự xem các mẫu PDF ở mục 3 so với mockup tham chiếu B11. Các kiểm tra này cần thiết bị và mắt của chính chủ sở hữu.
 - Mục 4 liệt kê mặc định đã ghi, không phải lựa chọn của chủ sở hữu; giá trị của chủ sở hữu không được biết ở đây.
-- Image ID tham chiếu thuộc một bản build đã bị xóa sau gate; bản build trên NAS ghi ID riêng của nó.
+- Image ID tham chiếu thuộc bản build drill của `1fe5ad3` trên máy trạm phát triển, không phải bản build của bản phát hành; bản build trên NAS ghi ID riêng của nó.
 - Pilot chưa chạy, NAS là NOT VERIFIED, chưa ai yêu cầu hay cấp phép, và không có kết quả pilot.
-- Backlog tùy chọn cho vòng sửa sau pilot, chỉ theo ID (không mục nào chặn việc nghiệm thu lại): R-B7-1..R-B7-4 ([WP5_UX_REVIEW_B7](WP5_UX_REVIEW_B7.vi.md)); R-AB8-1..R-AB8-4 ([WP5_UX_REVIEW_AB8](WP5_UX_REVIEW_AB8.vi.md)); R-AB9-1..R-AB9-6 ([WP5_UX_REVIEW_AB9](WP5_UX_REVIEW_AB9.vi.md)); và các rủi ro B6 và A7 ([WP5_UX_REVIEW_B6](WP5_UX_REVIEW_B6.vi.md), [WP5_UX_REVIEW_A7](WP5_UX_REVIEW_A7.vi.md)); từ vòng đổi giao diện 2: R-UX2A-1..R-UX2A-5 ([WP5_UX2_REVIEW](WP5_UX2_REVIEW.vi.md)) và R-UX2A2-1..R-UX2A2-4 ([WP5_UX2_REVIEW2](WP5_UX2_REVIEW2.vi.md)); từ vòng đổi giao diện 3: R-UX3B-1, R-UX3B-2, R-UX3B-5..R-UX3B-7 ([WP5_UX3_REVIEW_B](WP5_UX3_REVIEW_B.vi.md)); phần còn lại của R-A2-1 và các rủi ro A2 R3, R5, R7 ([WP5_UX3_REVIEW_A2](WP5_UX3_REVIEW_A2.vi.md)); R-B2-2, R-B2-3, R-B2-5 ([WP5_UX3_REVIEW_B2](WP5_UX3_REVIEW_B2.vi.md)); R-INT-1..R-INT-4 ([WP5_UX3_REVIEW_INT](WP5_UX3_REVIEW_INT.vi.md)); và các mục backlog quản trị R3-R5 và R8 của [GOV_UX3_REVIEW2](GOV_UX3_REVIEW2.vi.md).
+- Backlog tùy chọn cho vòng sửa sau pilot, chỉ theo ID (không mục nào chặn việc nghiệm thu lại): R-B7-1..R-B7-4 ([WP5_UX_REVIEW_B7](WP5_UX_REVIEW_B7.vi.md)); R-AB8-1..R-AB8-4 ([WP5_UX_REVIEW_AB8](WP5_UX_REVIEW_AB8.vi.md)); R-AB9-1..R-AB9-6 ([WP5_UX_REVIEW_AB9](WP5_UX_REVIEW_AB9.vi.md)); và các rủi ro B6 và A7 ([WP5_UX_REVIEW_B6](WP5_UX_REVIEW_B6.vi.md), [WP5_UX_REVIEW_A7](WP5_UX_REVIEW_A7.vi.md)); từ vòng đổi giao diện 2: R-UX2A-1..R-UX2A-5 ([WP5_UX2_REVIEW](WP5_UX2_REVIEW.vi.md)) và R-UX2A2-1..R-UX2A2-4 ([WP5_UX2_REVIEW2](WP5_UX2_REVIEW2.vi.md)); từ vòng đổi giao diện 3: R-UX3B-1, R-UX3B-2, R-UX3B-5..R-UX3B-7 ([WP5_UX3_REVIEW_B](WP5_UX3_REVIEW_B.vi.md)); phần còn lại của R-A2-1 và các rủi ro A2 R3, R5, R7 ([WP5_UX3_REVIEW_A2](WP5_UX3_REVIEW_A2.vi.md)); R-B2-2, R-B2-3, R-B2-5 ([WP5_UX3_REVIEW_B2](WP5_UX3_REVIEW_B2.vi.md)); R-INT-1..R-INT-4 ([WP5_UX3_REVIEW_INT](WP5_UX3_REVIEW_INT.vi.md)); và các mục backlog quản trị R3-R5 và R8 của [GOV_UX3_REVIEW2](GOV_UX3_REVIEW2.vi.md); từ vòng đổi giao diện 4 và 5: backlog tùy chọn của [WP5_UX5_REVIEW_INT3](WP5_UX5_REVIEW_INT3.vi.md) (R-UX5I3-1..R-UX5I3-4 và các mục trước đó được liệt kê ở đó; R-UX5I2-3 là quyết định còn mở ở mục 8) và R-UX5RN2-1..R-UX5RN2-3 ([WP5_UX5_RECHECK_RN](WP5_UX5_RECHECK_RN.vi.md)).
 - Câu hỏi tùy chọn cho chủ sở hữu WP5-UX2-Q3 (nhãn của kỳ mà Today mở ra trong năm ngày của cửa sổ) đã được câu trả lời G-5 (b) của vòng 3 thay thế: kỳ đó hiện nhãn "in progress". Không còn gì mở về việc này.
 
 ## 11. Mục lục bằng chứng
 
-`handoff/delivery/evidence/WP5-UX5-T06/` (các mẫu hiện hành, mục 3): `msg-01` đến `msg-11` (tiêu đề, header, nội dung của từng thư đã capture: sáu bản nộp và năm thông báo); `pdf-text-04`, `-05`, `-07`, `-08`, `-10`, `-11`; `pilot-04`, `-05`, `-07`, `-08`, `-10`, `-11` `...-p1-synthetic.png` (sáu ảnh render PDF); `sample-index.txt` (số trang và kiểm hash của từng PDF); `04-make-samples.txt` (log chạy tạo mẫu, kèm các bản ghi gửi và lượt gửi); `05-extract.txt`; `06-ready-check.txt` (health và readiness của server đã build ở chế độ capture, schema 15); `00-base.txt`; `01-commands.txt` (lệnh và exit); các script tạo mẫu dạng `make-samples.mjs.txt`, `extract.mjs.txt` và `ready-check.mjs.txt`; cùng các bản ghi parity, preflight và quyền riêng tư của tác vụ.
+`handoff/delivery/evidence/WP5-UX5-REGATE15/samples/` (các mẫu hiện hành, mục 3; chạy trên `dc487c6`): `msg-01` đến `msg-11` (tiêu đề, header, nội dung của từng thư đã capture: sáu bản nộp và năm thông báo); `pdf-text-04`, `-05`, `-07`, `-08`, `-10`, `-11`; `pilot-04`, `-05`, `-07`, `-08`, `-10`, `-11` `...-p1-synthetic.png` (sáu ảnh render PDF); `sample-index.txt` (số trang và kiểm hash của từng PDF); `samples-compare.txt` (so sánh với các mẫu đóng băng trước). Trong `handoff/delivery/evidence/WP5-UX5-REGATE15/` bên cạnh: `42-make-samples.txt` (log chạy tạo mẫu, kèm các bản ghi gửi và lượt gửi); `43-extract.txt`; `44-ready-check.txt` (health và readiness của server đã build ở chế độ capture, schema 15, mục 1); `45-control-run1-vs-run2.txt` (lần chạy đối chứng cho thấy giá trị nào đổi theo từng lần chạy); `50-dist-compare.txt` (so sánh `dist/`); các script tạo mẫu dạng `make-samples.mjs.txt`, `extract.mjs.txt` và `ready-check.mjs.txt`; cùng các bản ghi digest của gate.
+
+`handoff/delivery/evidence/WP5-UX5-REGATE11/log-drill.txt` (container drill trên `1fe5ad3`, mục 5 và image ID tham chiếu; 209 PASS / 0 FAIL, schema 15).
+
+`handoff/delivery/evidence/WP5-UX5-ACCEPT-PACKET/` (lần làm mới này: các bản ghi preflight, parity, tìm kiếm và digest).
+
+`handoff/delivery/evidence/WP5-UX5-T06/` (các mẫu của bản đóng băng slice vòng 5 `69d6340`, chỉ giữ làm lịch sử; chúng được thay bằng các mẫu của REGATE15 ở trên): cùng các loại tệp như trên, `06-ready-check.txt` cho kiểm tra sẵn sàng và `04-make-samples.txt` cho log chạy.
 
 `handoff/delivery/evidence/WP5-PILOT/` (các mẫu cũ của `74d5bfe`, chỉ giữ làm lịch sử; chúng không còn đại diện cho sản phẩm): `msg-01` đến `msg-08` (tiêu đề, header, nội dung của từng thư đã capture); `pdf-text-03`, `-04`, `-07`, `-08`; `pilot-03`, `-04`, `-07`, `-08` `...-p1-synthetic.png` (bốn ảnh render PDF); `sample-index.txt`; `03-make-samples.txt` (log chạy tạo mẫu); `04-extract.txt`; `05-ready-check.txt` (health và readiness của server đã build ở chế độ capture); các script tạo mẫu dạng `make-samples.mjs.txt`, `extract.mjs.txt` và `ready-check.mjs.txt`; cùng các bản ghi digest, precommit và preflight của tác vụ.

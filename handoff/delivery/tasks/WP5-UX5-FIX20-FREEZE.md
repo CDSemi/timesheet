@@ -158,3 +158,8 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+- Commit a54061f6afc1fda00d4ee2cca4553a5916af24ec on main, pushed (fast-forward from dc487c6);
+  remote SHA equals HEAD. Node v24.21.0. Digest D_PRE 690fd8fd... equals HEAD digest (both forms).
+- 155 files staged; nothing unstaged or masked; four expected leftovers stay untracked.
+- All checks exit 0 (precommit, diff --check, JSON, validate_orchestration, check_recovery,
+  validate_package --preflight). Details: evidence/WP5-UX5-FIX20-FREEZE/checks.txt.

@@ -1,0 +1,24 @@
+# Own search of the target tree (tracked Markdown outside handoff/) for statements that a package or UI round
+# still awaits its gate or audit, or is not accepted. git grep on the commit, so the working tree does not matter.
+. /d/.claude-tmp/timesheet/WP5-UX5-RECHECK-RN/env.sh
+cd "$R" || exit 2
+OUT="$T/stale-search2.raw"
+EN='not (yet )?accepted|awaiting|awaits|not yet (gated|audited|independently)|needs? its (own )?gate|needs one package-final gate|still needs|do not begin|in progress|is refreshed only after|refreshed (only )?after (them|the)|before (they|these) pass|not (yet )?(been )?(gated|audited)|pending (gate|audit|acceptance)|(gate|audit)s? (is|are) pending|re-?acceptance is pending|accepted\?|is not yet'
+VI='chưa được chấp nhận|chưa được nghiệm thu|chưa nghiệm thu|đang chờ (gate|cổng|audit|kiểm)|chờ gate|chờ cổng|đang diễn ra|cần cổng kiểm|cần gate|chưa qua (gate|cổng)|chỉ được làm mới sau|không bắt đầu WP5'
+{
+  printf 'time_utc %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf 'tree %s; tracked *.md outside handoff/ (git ls-tree): %s files\n' "$TARGET" "$(git ls-tree -r --name-only "$TARGET" | grep -v '^handoff/' | grep -c '\.md$')"
+  printf '\n== EN patterns (case-insensitive): %s\n' "$EN"
+  git grep -n -i -P "$EN" "$TARGET" -- '*.md' ':!handoff' ':!.claude/worktrees' ':!.agents/skills' ':!.claude/skills'
+  printf 'git grep exit %s (1 = no hit)\n' "$?"
+  printf '\n== VI patterns (case-insensitive): %s\n' "$VI"
+  git grep -n -i -P "$VI" "$TARGET" -- '*.md' ':!handoff' ':!.claude/worktrees' ':!.agents/skills' ':!.claude/skills'
+  printf 'git grep exit %s (1 = no hit)\n' "$?"
+  printf '\n== Status lines: "Status:", "Trạng thái", "Repository status", "WP[1-5] ... accepted"\n'
+  git grep -n -i -P '^(Status|Trạng thái)|Repository status|Trạng thái repo' "$TARGET" -- '*.md' ':!handoff' ':!.claude/worktrees' ':!.agents/skills' ':!.claude/skills'
+  printf 'git grep exit %s\n' "$?"
+  printf '\n== Mentions of WP4-GATE / WP4 not accepted / do not begin WP5\n'
+  git grep -n -i -P 'WP4-GATE|WP4 (is )?not|begin WP5' "$TARGET" -- '*.md' ':!handoff' ':!.claude/worktrees' ':!.agents/skills' ':!.claude/skills'
+  printf 'git grep exit %s\n' "$?"
+} > "$OUT" 2>&1
+echo "stale search done"

@@ -1,0 +1,20 @@
+# usage: bash digest-export.sh <label>   fresh git archive of TARGET into $T/export-digest-<label>; export-form digest
+# Export form: every file of the export outside handoff/, "<path> <blob>" lines (git hash-object) sorted with LC_ALL=C, SHA-256.
+. /d/.claude-tmp/timesheet/WP5-UX5-RECHECK-RN/env.sh
+X="$T/export-digest-$1"
+OUT="$T/digest-export-$1.raw"
+if [ -e "$X" ]; then echo "exists: $X" > "$OUT"; exit 3; fi
+mkdir -p "$X"
+( cd "$R" && git archive "$TARGET" ) | tar -x -C "$X"
+AE=$?
+cd "$X" || exit 2
+find . -type f -not -path './handoff/*' | sed 's#^\./##' | LC_ALL=C sort > "$T/exp-$1-files.txt"
+git hash-object --stdin-paths < "$T/exp-$1-files.txt" > "$T/exp-$1-blobs.txt"
+paste -d' ' "$T/exp-$1-files.txt" "$T/exp-$1-blobs.txt" > "$T/exp-$1-lines.txt"
+{
+  printf 'time_utc %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf 'export of %s (git archive exit %s, handoff/ excluded)\n' "$TARGET" "$AE"
+  printf 'export form: %s  (%s files)\n' "$(sha256sum "$T/exp-$1-lines.txt" | cut -d' ' -f1)" "$(wc -l < "$T/exp-$1-files.txt")"
+  if cmp -s "$T/exp-$1-lines.txt" "$T/lstree-$1.lines"; then echo 'sorted lines byte-identical to the ls-tree form: yes'; else echo 'sorted lines byte-identical to the ls-tree form: NO'; fi
+} > "$OUT"
+echo "digest_export_$1 done"

@@ -3171,11 +3171,67 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - FIX20-FREEZE;
   - REGATE16 (scoped; ports 51930-51969);
   - RECHECK-RN (fresh opus; review pair `WP5_UX5_RECHECK_RN`; ports 51970-52009).
-- **Running now:** WP5-UX5-FIX20-FREEZE, alone.
+- **WP5-UX5-FIX20-FREEZE done.**
+  - Commit a54061f6afc1fda00d4ee2cca4553a5916af24ec on main. It was pushed as a fast-forward
+    from dc487c6.
+  - D_PRE equals both HEAD digests: 690fd8fd.
+  - 155 paths were staged. Nothing was unstaged or masked. Every check exited 0.
+- **WP5-UX5-REGATE16 PASS** (verifier, self-reported claude-sonnet-5-5) on a54061f /
+  690fd8fd.
+  - Exactly FIX20's six files differ from dc487c6 outside `handoff/`.
+  - `dist/` is identical: 250 files. So REGATE15 carries forward with its samples, and so do
+    REGATE14's runtime items and REGATE11's drill.
+  - `npm test`: 2,397. Links, parity and the stale-status search are clean.
+  - Six evidence files had non-`.txt` names. The verifier renamed them at the coordinator's
+    request.
+- **Owner question (2026-10-29): why so many regate, fix and audit cycles?** Answered in
+  chat:
+  - the rules require a gate and a fresh audit for every change of the digest, and
+    documentation outside `handoff/` counts;
+  - one cycle (FIX20) came from the coordinator's incomplete search for stale status
+    before RELNOTES.
+- **WP5-UX5-RECHECK-RN PASS** (fresh opus auditor, self-reported claude-opus-5-5) on
+  a54061f / 690fd8fd ([review](WP5_UX5_RECHECK_RN.md)).
+  - F-UX5RN-1 is closed: DEVELOPMENT line 3 matches README line 3 word for word. The
+    auditor's own search of 58 Markdown files found no stale status.
+  - R-UX5RN-1, -2, -3 and -5 are done and accurate.
+  - `dist/` is identical, so AUDIT-INT3's product verdict and AUDIT-RN's sample verdict
+    carry forward.
+  - `npm test`: 2,397. No new finding.
+  - Optional risks: R-UX5RN2-1..3.
+  - Review section 5 lists what ACCEPT-DOCS must make true.
+- **WP5 accepted on a54061f / 690fd8fd (882 files).**
+  - `current_source_digest` is 690fd8fd.
+  - AUDIT-INT3, and every audit that named it, now name `superseded_by`
+    WP5-UX5-RECHECK-RN.
+- **Running now,** in parallel, handoff only, on disjoint files (no source writer):
+  - WP5-UX5-ACCEPT-PACKET: the pilot packet;
+  - WP5-UX5-ACCEPT-HANDOFF: the WP5 handoff.
+- **Then:** WP5-UX5-ACCEPT (its brief is ready). After it, the board goes to
+  `software_ready`.
+- **Owner decision (2026-10-29, verbatim on the board).** Documentation needs no test, gate
+  or audit. It needs only a review and fixes, so that it stays up to date and its content
+  does not drift. Code and configuration keep the gate and audit rules.
+- **WP5-UX5-ACCEPT-PACKET done.**
+  - The pilot packet is refreshed to a54061f / 690fd8fd.
+  - The reference image is the 1fe5ad3 drill build.
+  - R-UX5I2-3 is open in section 8.
+- **WP5-UX5-ACCEPT-HANDOFF done.** The WP5 handoff has a section for rounds 4 and 5. Its 34
+  SHAs match the board.
+- **WP5-UX5-ACCEPT-REVIEW done.** This is the owner's rule applied at once.
+  - About 120 facts were checked.
+  - Three drifts in the handoff were fixed.
+  - The drill's 209 checks are 207 stage checks plus 2 cleanup checks. The packet now says
+    so.
+- **Running now:** the WP5-UX5-ACCEPT commit, alone.
+- **The rule change** follows the WP5-UX5-ACCEPT commit, as WP5-GOV-DOCS.
+  - A planner first defines:
+    - which files count as documentation;
+    - how the release identity and the validators treat a documentation-only commit.
+  - Then a worker edits AGENTS.md, docs/08, ORCHESTRATE, the release rule in docs/12 and
+    the validators.
+  - Under the new rule, a review checks the change before it is committed.
 - **Then:**
-  - REGATE16. `dist/` must stay identical, so REGATE15's samples still represent the
-    release;
-  - a fresh recheck, whose PASS supersedes AUDIT-INT3;
   - ACCEPT-DOCS;
   - WP5-UX5-ACCEPT.
 

@@ -21,7 +21,15 @@
   - TARGET_DIGEST = the `source_digest` of WP5-UX5-FIX20.
   - The coordinator confirms both, and FIX20's paths, in the line below before dispatch.
   - HEAD must equal origin/main, or be a later commit that changes only `handoff/`.
-  - Target confirmation: (filled in at dispatch)
+  - Target confirmation:
+    - TARGET_SHA = a54061f6afc1fda00d4ee2cca4553a5916af24ec, the FIX20-FREEZE commit, pushed
+      as a fast-forward from dc487c6.
+    - TARGET_DIGEST = 690fd8fd588c902f03cbc9c6efeb63cd58f5c9246579dda0473a190a230c1c4f
+      (882 files).
+    - FIX20's paths: `DEVELOPMENT.md`, `DEVELOPMENT.vi.md`, `README.md`, `README.vi.md`,
+      `docs/12_RELEASE_NOTES.md` and `docs/12_RELEASE_NOTES.vi.md`.
+    - The coordinator's record files and the FIX20-FREEZE Results and evidence may be
+      uncommitted under `handoff/`. That is expected.
 - **Profile and routing.** timesheet-verifier, requested sonnet/medium, no override.
   - Routing: size S, risk L (documentation only), novelty no.
   - Write the records in English.
@@ -114,3 +122,11 @@
   - the digest.
 
 ## Results
+
+Self-reported model: claude-sonnet-5-5. **Decision: PASS** (NAS items stay NOT VERIFIED). Evidence: `handoff/delivery/evidence/WP5-UX5-REGATE16/` (index `00-README.txt`).
+
+1. **Identity and scope.** HEAD = origin/main = a54061f6afc1fda00d4ee2cca4553a5916af24ec before and after. Digest 690fd8fd588c902f03cbc9c6efeb63cd58f5c9246579dda0473a190a230c1c4f (882 files) before and after in the export form, the ls-tree form and `npm run digest`, and `npm run digest` in a clean clone. `git diff --name-status dc487c6..a54061f -- . ':!handoff'` lists exactly DEVELOPMENT.md/.vi.md, README.md/.vi.md, docs/12_RELEASE_NOTES.md/.vi.md. No package or lockfile change. `git diff --check` exit 0.
+2. **Builds.** Clean `npm ci` and `npm run build` of dc487c6 and the target, exit 0. `dist/` has 250 files in each, every SHA-256 equal (listing hash c24f0aab773c...2613 in both): identical. REGATE15 items and samples, REGATE14 runtime items, and REGATE11 drill and `npm audit` carry forward.
+3. **Core.** lint 0, typecheck 0, build 0 (no chunk advisory, no deprecation warning), `npm test` 0 with 101 files and 2,397 tests. `check_recovery.py` PASS, `validate_package.py --preflight` PASS (141 pairs, 2,416 links), `validate_orchestration.py` PASS; all exit 0.
+4. **Documents.** All 6 files: every local link resolves (13, 13, 35, 36, 51, 51). Headings equal in each pair (9/9, 4/4, 11/11). SHAs, IDs, URLs identical in all pairs; DEVELOPMENT and release-notes links identical. README link sets differ only by the pre-existing VI header link to `README.md` (unchanged). No line states the target digest; the only 64-hex value is an older digest in docs/12 line 7. Stale-status search over 373 tracked markdown files outside handoff/: 2 hits (docs/07:36, docs/10:163), both about mail acceptance and restore, unrelated to package status.
+5. **Slip.** One no-op `sed -i` against /dev/null (99-slips.txt). Nothing left running.

@@ -1,0 +1,14 @@
+# Read-only: PDF SHA-256 and file names of REGATE15's samples, and the pilot packet section 3 lines that name them.
+. /d/.claude-tmp/timesheet/WP5-UX5-RECHECK-RN/env.sh
+S="$R/handoff/delivery/evidence/WP5-UX5-REGATE15/samples"
+P="$R/handoff/delivery/WP5_PILOT_PACKET.md"
+{
+  printf 'time_utc %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '== REGATE15 samples: message files and the PDF SHA-256 recorded in each (line 6)\n'
+  for f in "$S"/msg-*.txt; do printf '%s: %s\n' "$(basename "$f")" "$(grep -m1 -o -E 'pdf sha256: [0-9a-f]{64}' "$f" || echo 'no pdf')"; done
+  printf '== pilot packet at HEAD, section 3 table and file-location lines (98-116)\n'
+  sed -n '98p;100p;102p;106,116p' "$P" | cut -c1-400
+  printf '== pilot packet lines outside section 3 that name the round-3 identity, the T06 samples or a pending gate\n'
+  grep -n -E '8e557100|507de97c|bcb0692c|69d6340|WP5-UX5-T06|in progress|still needs|not\*\* refreshed|refreshed after|have not run|waits for it|8e55710' "$P" | cut -c1-300
+} > "$T/samples-check.raw" 2>&1
+echo "samples check done"

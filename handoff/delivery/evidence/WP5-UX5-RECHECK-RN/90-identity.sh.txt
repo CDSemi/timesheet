@@ -1,0 +1,28 @@
+# usage: bash identity.sh <label>   HEAD, origin/main, status outside handoff/, ls-tree digest of TARGET and npm run digest in the repository
+. /d/.claude-tmp/timesheet/WP5-UX5-RECHECK-RN/env.sh
+OUT="$T/identity-$1.raw"
+cd "$R" || exit 2
+{
+  printf 'time_utc %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf 'node %s\n' "$("$NODE" --version)"
+  printf 'HEAD %s\n' "$(git rev-parse HEAD)"
+  printf 'origin/main (local ref, no fetch) %s\n' "$(git rev-parse origin/main)"
+  printf 'remote main (git ls-remote, read-only) %s\n' "$(git ls-remote origin refs/heads/main | cut -f1)"
+  printf 'reviewed_commit %s\n' "$TARGET"
+  printf 'TARGET is ancestor of HEAD: '; git merge-base --is-ancestor "$TARGET" HEAD && echo yes || echo no
+  printf 'git status --porcelain outside handoff/ (lines follow, then count):\n'
+  git status --porcelain -- . ':!handoff' > "$T/status-$1.txt"
+  cat "$T/status-$1.txt"
+  printf 'count %s\n' "$(wc -l < "$T/status-$1.txt")"
+  printf 'git diff --name-only TARGET..HEAD outside handoff/ (lines follow, then count):\n'
+  git diff --name-only "$TARGET" HEAD -- . ':!handoff' > "$T/headdiff-$1.txt"
+  cat "$T/headdiff-$1.txt"
+  printf 'count %s\n' "$(wc -l < "$T/headdiff-$1.txt")"
+  git ls-tree -r --format='%(path) %(objectname)' "$TARGET" > "$T/lstree-all-$1.txt"
+  grep -v '^handoff/' "$T/lstree-all-$1.txt" | LC_ALL=C sort > "$T/lstree-$1.lines"
+  printf 'ls-tree form of TARGET: %s  (%s files)\n' "$(sha256sum "$T/lstree-$1.lines" | cut -d' ' -f1)" "$(wc -l < "$T/lstree-$1.lines")"
+  printf 'npm run digest in the repository (working tree):\n'
+  "$NODE" "$NPM_CLI" run --silent digest
+  printf 'npm_run_digest_exit %s\n' "$?"
+} > "$OUT" 2>&1
+echo "identity_exit=$?"

@@ -1,0 +1,18 @@
+# Clean clone of the repository at TARGET in the task folder, then npm run digest there.
+. /d/.claude-tmp/timesheet/WP5-UX5-RECHECK-RN/env.sh
+C="$T/clone"
+OUT="$T/digest-clone.raw"
+if [ -e "$C" ]; then echo "exists: $C" > "$OUT"; exit 3; fi
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="*"
+{
+  printf 'time_utc %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  git clone --quiet --no-checkout "$R" "$C"
+  printf 'clone exit %s\n' "$?"
+  cd "$C" || exit 2
+  git checkout --quiet --detach "$TARGET"
+  printf 'checkout exit %s; HEAD %s\n' "$?" "$(git rev-parse HEAD)"
+  printf 'status lines: %s\n' "$(git status --porcelain | wc -l)"
+  "$NODE" "$NPM_CLI" run --silent digest
+  printf 'npm_run_digest_exit %s\n' "$?"
+} > "$OUT" 2>&1
+echo "digest clone done"
