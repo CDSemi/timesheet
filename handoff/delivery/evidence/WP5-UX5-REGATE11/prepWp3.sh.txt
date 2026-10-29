@@ -1,0 +1,13 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+mkdir -p "$T/wp3" "$T/drillwork"
+cd "$REPO" || exit 9
+git archive 49651c8bb91d56bf6c6966405257537ec7ca474b | tar -x -C "$T/wp3"
+echo "wp3 archive exit=$?" > "$T/logs/wp3-prep-exits.txt"
+export GIT_CONFIG_VALUE_0=<task>/wp3
+cd "$T/wp3" || exit 9
+npm ci > "$T/logs/wp3-ci.txt" 2>&1
+echo "wp3 ci exit=$?" >> "$T/logs/wp3-prep-exits.txt"
+npm run build:server > "$T/logs/wp3-build.txt" 2>&1
+echo "wp3 build:server exit=$?" >> "$T/logs/wp3-prep-exits.txt"
+echo "wp3 prepared $(date -u +%H:%M:%SZ)" >> "$T/logs/wp3-prep-exits.txt"

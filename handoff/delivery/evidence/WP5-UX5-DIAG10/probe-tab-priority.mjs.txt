@@ -1,0 +1,75 @@
+// Shows the Windows base priority (8 = normal, 4 = idle) of the renderer process of each of two tabs of one browser context,
+// as the front tab changes. A tab's renderer is found by running a short busy loop in the tab and seeing whose CPU time grew.
+// Usage: node probe-tab-priority.mjs <exportDir> <port> <outFile>
+// Read-only census: one inline PowerShell -NoProfile -Command per sample; only the ProcessId and Priority of the renderer ids
+// that this browser reported through CDP SystemInfo.getProcessInfo are printed.
+import { createServer } from 'node:http';
+import { execFileSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+
+const [exportDir, portArg, outFile] = process.argv.slice(2);
+const port = Number(portArg);
+const require = createRequire(join(exportDir, 'package.json'));
+const { chromium } = require('@playwright/test');
+
+const server = createServer((request, response) => {
+  response.setHeader('content-type', 'text/html');
+  response.end('<!doctype html><title>tab</title><p>synthetic tab</p>');
+});
+await new Promise((resolve) => server.listen(port, '127.0.0.1', resolve));
+
+const lines = [];
+function priorityOf(id) {
+  const text = execFileSync(
+    'powershell.exe',
+    ['-NoProfile', '-Command', `Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -eq ${id} } | ForEach-Object { $_.Priority }`],
+    { encoding: 'utf8' },
+  );
+  return Number(text.trim());
+}
+
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const cdp = await browser.newBrowserCDPSession();
+async function cpuTimes() {
+  const info = await cdp.send('SystemInfo.getProcessInfo');
+  return new Map(info.processInfo.filter((p) => p.type === 'renderer').map((p) => [p.id, p.cpuTime]));
+}
+/** The renderer id of a page: the one whose CPU time grew most during a 400 ms busy loop in that page. */
+async function rendererOf(page) {
+  const before = await cpuTimes();
+  await page.evaluate('(() => { const t = Date.now(); while (Date.now() - t < 400); })()');
+  const after = await cpuTimes();
+  let best = -1;
+  let bestGrowth = -1;
+  for (const [id, time] of after) {
+    const growth = time - (before.get(id) ?? 0);
+    if (growth > bestGrowth) {
+      best = id;
+      bestGrowth = growth;
+    }
+  }
+  return best;
+}
+async function stage(label, a, b) {
+  const idA = await rendererOf(a);
+  const idB = await rendererOf(b);
+  lines.push(`${label}: tab A renderer priority ${priorityOf(idA)}, tab B renderer priority ${priorityOf(idB)} (same renderer: ${idA === idB})`);
+}
+
+const context = await browser.newContext();
+const a = await context.newPage();
+await a.goto(`http://127.0.0.1:${port}/`);
+const b = await context.newPage();
+await b.goto(`http://localhost:${port}/`);
+await stage('B opened last (B in front, A behind)', a, b);
+await a.bringToFront();
+await stage('after A.bringToFront() (A in front, B behind)', a, b);
+await b.bringToFront();
+await stage('after B.bringToFront() (B in front, A behind)', a, b);
+await a.bringToFront();
+await stage('after A.bringToFront() again', a, b);
+await browser.close();
+server.close();
+writeFileSync(outFile, lines.join('\n') + '\n');

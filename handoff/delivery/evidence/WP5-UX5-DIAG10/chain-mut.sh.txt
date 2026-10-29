@@ -1,0 +1,20 @@
+# The product mutant: the committed notice is never shown after Confirm import. The fixed test must fail; then the source is restored, rebuilt and dist/ compared.
+source /d/.claude-tmp/timesheet/WP5-UX5-DIAG10/env.sh
+NPMCLI="/c/Program Files/nodejs/node_modules/npm/bin/npm-cli.js"
+D=2026-11-01T08:45:00Z
+cd $T/export
+cp $T/hold/ImportScreen.mut.tsx src/client/ImportScreen.tsx
+node "$NPMCLI" run build > $T/logs/build-mut.log 2>&1
+echo "exit=$?" >> $T/logs/build-mut.log
+cd $T
+GREP="upload, preview with source cells" node $T/dose.mjs pm1 0 1 $D 6 tests/e2e/importfix.spec.ts > $T/logs/dose-pm1.txt 2>&1
+cd $T/export
+cp $T/hold/ImportScreen.orig.tsx src/client/ImportScreen.tsx
+node "$NPMCLI" run build > $T/logs/build-restore.log 2>&1
+echo "exit=$?" >> $T/logs/build-restore.log
+find dist -type f | sort > $T/logs/dist-files-after-mut.txt
+sha256sum $(cat $T/logs/dist-files-after-mut.txt) > $T/logs/dist-hashes-after-mut.txt
+cmp $T/logs/dist-hashes-base.txt $T/logs/dist-hashes-after-mut.txt > $T/logs/dist-cmp-after-mut.txt 2>&1
+echo "cmp exit=$?" >> $T/logs/dist-cmp-after-mut.txt
+cmp src/client/ImportScreen.tsx $T/hold/ImportScreen.orig.tsx >> $T/logs/dist-cmp-after-mut.txt 2>&1
+echo "source cmp exit=$?" >> $T/logs/dist-cmp-after-mut.txt

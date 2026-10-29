@@ -1,0 +1,9 @@
+# Reproduction on the original specs (export-base), under the 48-thread self-stopping burner, desktop, 6 workers.
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX17/env.sh
+export EXP=export-base
+D=2026-11-01T08:45:00Z
+CROSS=2026-10-27T06:58:30Z
+TODAY="a page left open across a reporting-zone midnight"
+GREP="upload, preview with source cells" PROJECT=desktop REPS=12 node $T/dose.mjs rep-imp 48 200 $D tests/e2e/import.spec.ts > $T/logs/dose-rep-imp.txt 2>&1
+GREP="$TODAY" PROJECT=desktop REPS=6 node $T/dose.mjs rep-today 48 360 $CROSS tests/e2e/today.spec.ts > $T/logs/dose-rep-today.txt 2>&1
+echo "chain-repro done $(date -u +%H:%M:%SZ)" > $T/logs/chain-repro.done

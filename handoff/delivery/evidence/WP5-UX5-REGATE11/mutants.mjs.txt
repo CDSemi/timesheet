@@ -1,0 +1,63 @@
+// WP5-UX5-FIX16 mutants on the fixed build (export A). Each mutant replaces one exact anchor (it must occur exactly once), runs the
+// named vitest files, and restores the file byte-identical. Usage: node mutants.mjs <exportDir> <logDir> [mutant ids...]
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir, logDir, ...only] = process.argv.slice(2);
+const summary = join(logDir, 'mutants-summary.txt');
+const sha = (text) => createHash('sha256').update(text).digest('hex');
+const RESTORE = 'src/server/ops/restore.ts';
+const COMMANDS = 'src/server/services/timesheetCommands.ts';
+const RESTORE_TESTS = ['tests/integration/restore.test.ts'];
+const BOUNDARY_TESTS = ['tests/integration/timesheet-api.test.ts'];
+const STATE = "j.state <> 'cancelled'";
+const WORK_DATE = 'const workDate = localDateOf(scope.calendar.schedule.reportingZone, now);';
+
+const MUTANTS = [
+  { id: 'M1', what: 'the old state list: only queued, leased and succeeded later sends block', file: RESTORE, from: STATE, to: "j.state IN ('queued', 'leased', 'succeeded')", tests: RESTORE_TESTS },
+  { id: 'K2', what: 'the "later" order dropped: any send job of the period, also an earlier one, blocks (case E1)', file: RESTORE, from: 'AND j.rowid > ? AND', to: 'AND (j.rowid > ? OR 1) AND', tests: RESTORE_TESTS },
+  { id: 'C1', what: 'the opposite cancelled rule: a cancelled later send blocks as well', file: RESTORE, from: STATE, to: '1 = 1', tests: RESTORE_TESTS },
+  { id: 'T4', what: 'the midnight second itself filed on the previous day', file: COMMANDS, from: WORK_DATE, to: 'const workDate = localDateOf(scope.calendar.schedule.reportingZone, now - 1);', tests: BOUNDARY_TESTS },
+  { id: 'R2', what: "RECHECK-B's R2 on the fixed query: a succeeded later send no longer blocks", file: RESTORE, from: STATE, to: "j.state NOT IN ('cancelled', 'succeeded')", tests: RESTORE_TESTS },
+  { id: 'R3', what: "REGATE7's R3 on the fixed query: a leased later send no longer blocks", file: RESTORE, from: STATE, to: "j.state NOT IN ('cancelled', 'leased')", tests: RESTORE_TESTS },
+  { id: 'K3', what: 'a queued later send no longer blocks', file: RESTORE, from: STATE, to: "j.state NOT IN ('cancelled', 'queued')", tests: RESTORE_TESTS },
+  { id: 'K4', what: 'the period join widened to the owner: a send of ANY period of the owner keeps the held job held', file: RESTORE, from: 'JOIN timesheet_revisions held ON held.timesheet_id = r.timesheet_id AND held.user_id = r.user_id', to: 'JOIN timesheet_revisions held ON held.user_id = r.user_id', tests: RESTORE_TESTS },
+  { id: 'K1', what: 'the later-send check back to one revision (FIX11 reverted)', file: RESTORE, from: "`SELECT 1 AS one FROM jobs j\n         JOIN timesheet_revisions r ON r.id = j.revision_id AND r.user_id = j.user_id\n         JOIN timesheet_revisions held ON held.timesheet_id = r.timesheet_id AND held.user_id = r.user_id\n        WHERE held.id = ? AND j.user_id = ? AND j.kind = ? AND j.rowid > ? AND j.state <> 'cancelled' LIMIT 1`,", to: "`SELECT 1 AS one FROM jobs j WHERE j.revision_id = ? AND j.user_id = ? AND j.kind = ? AND j.rowid > ? AND j.state <> 'cancelled' LIMIT 1`,", tests: RESTORE_TESTS },
+  { id: 'G2', what: "RECHECK-B's G2: a leased send job no longer blocks a send of the period", file: 'src/server/services/deliveries.ts', from: "j.state IN ('queued', 'leased') AND target.id", to: "j.state IN ('queued') AND target.id", tests: ['tests/integration/sends.test.ts', 'tests/integration/delivery.test.ts', 'tests/integration/restore.test.ts'] },
+];
+
+function run(label, args, timeoutMs) {
+  const started = Date.now();
+  const vitest = join(dir, 'node_modules', 'vitest', 'vitest.mjs');
+  const result = spawnSync(process.execPath, [vitest, 'run', ...args], { cwd: dir, encoding: 'utf8', timeout: timeoutMs, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }, maxBuffer: 256 * 1024 * 1024 });
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+  writeFileSync(join(logDir, `mut-${label}.log`), output);
+  const tail = output
+    .split('\n')
+    .filter((line) => /Test Files|Tests |×/.test(line))
+    .join(' / ');
+  return { status: result.status, seconds: Math.round((Date.now() - started) / 1000), tail };
+}
+
+for (const mutant of MUTANTS.filter((item) => only.length === 0 || only.includes(item.id))) {
+  const path = join(dir, mutant.file);
+  const original = readFileSync(path, 'utf8');
+  const occurrences = original.split(mutant.from).length - 1;
+  if (occurrences !== 1) {
+    appendFileSync(summary, `${mutant.id} ANCHOR found ${occurrences} times, not run\n`);
+    continue;
+  }
+  writeFileSync(path, original.replace(mutant.from, () => mutant.to));
+  let line = `${mutant.id} (${mutant.file}): ${mutant.what}`;
+  try {
+    const targeted = run(`${mutant.id}-targeted`, mutant.tests, 900_000);
+    line += ` | targeted ${mutant.tests.join(' ')} exit ${targeted.status} (${targeted.seconds} s): ${targeted.tail}`;
+  } finally {
+    writeFileSync(path, original);
+    line += ` | restored ${sha(readFileSync(path, 'utf8')) === sha(original) ? 'byte-identical' : 'DIFFERENT'}`;
+    appendFileSync(summary, `${line}\n`);
+  }
+}
+appendFileSync(summary, `done ${new Date().toISOString()}\n`);

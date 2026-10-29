@@ -1,0 +1,28 @@
+// Checks every file of a folder: ends with exactly one newline, no carriage return, name rules.
+// Usage: node check-files.mjs <folder> <outFile>
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [folder, outFile] = process.argv.slice(2);
+const out = [];
+let bad = 0;
+for (const name of readdirSync(folder).sort()) {
+  const buf = readFileSync(join(folder, name));
+  const problems = [];
+  if (buf.length === 0) problems.push('empty');
+  else {
+    if (buf[buf.length - 1] !== 0x0a) problems.push('no final newline');
+    if (buf.length > 1 && buf[buf.length - 2] === 0x0a) problems.push('blank line at the end');
+    if (buf.includes(0x0d)) problems.push('carriage return');
+  }
+  if (/signature/i.test(name) && !/synthetic/i.test(name)) problems.push('name has signature without synthetic');
+  if (!/\.txt$/.test(name)) problems.push('not .txt');
+  const text = buf.toString('utf8');
+  // The pattern is assembled so that this script does not match itself.
+  const userPath = new RegExp(['C:\\\\Us', 'ers\\\\|/Us', 'ers/|huy', 'ng'].join(''), 'i');
+  if (userPath.test(text)) problems.push('user path');
+  if (problems.length > 0) { bad += 1; out.push(`${name}: ${problems.join(', ')}`); }
+}
+out.push(`files checked: ${readdirSync(folder).length}; with problems: ${bad}`);
+writeFileSync(outFile, out.join('\n') + '\n');
+console.log(out.join('\n'));

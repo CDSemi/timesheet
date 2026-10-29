@@ -21,7 +21,8 @@
   - TARGET_SHA = the `commit_sha` of WP5-UX5-FIX16-FREEZE on the board. The coordinator
     confirms it in the line below before dispatch. It is pushed. HEAD must equal
     origin/main, or be a later commit that changes only `handoff/`.
-  - Target confirmation: (filled in at dispatch).
+  - Target confirmation: TARGET_SHA = 1fe5ad3075fd4d1b94abe5b8be04ed05729b05c2 (the
+    FIX16-FREEZE commit, pushed as a fast-forward from be2afa2).
   - TARGET_DIGEST = 18aa0ad0f99fbab18ae535d8b36375b756469a717e08b675a1e5d93d7459267c (882
     files).
 
@@ -170,3 +171,26 @@ shows `dist/client` identical. NAS items stay NOT VERIFIED.
   - the digest.
 
 ## Results
+
+**Decision: FAIL.** One failure in item 5: the simulated-clock sweep at 2026-11-01T08:45Z ended with 1 failed, a 30 s test timeout (not a network or buffer error), so the brief fails the gate. Not rerun and not waived. Everything else passed.
+
+Verifier: sonnet (claude-sonnet-5-5). Evidence: `handoff/delivery/evidence/WP5-UX5-REGATE11/` (178 masked LF `.txt`; index `00-README.txt`).
+
+- **Start.** `git fetch origin`; HEAD = origin/main = 1fe5ad3075fd4d1b94abe5b8be04ed05729b05c2, branch main. Census: the first samples showed 6.4 and 5.98 busy cores of non-mission load (two foreign processes, about 2 cores each), above the 4-core limit. I could not wait 10 minutes without a sleep, so I ran the container drill (6 min) first, then sampled again: about 2.7 busy cores (gap 7 s, not 60 s), and proceeded. Deviation recorded in the README.
+- **1 Identity.** Digest 18aa0ad0f99fbab18ae535d8b36375b756469a717e08b675a1e5d93d7459267c, 882 files, export form, ls-tree form and `npm run digest`, before and after: all equal. Non-handoff status empty before and after. `git diff --name-status be2afa2..TARGET -- . ':!handoff'` = exactly `docs/05_SUBMISSION_AND_NOTIFICATIONS.md`, `.vi.md`, `src/server/ops/restore.ts`, `tests/integration/restore.test.ts`, `tests/integration/timesheet-api.test.ts`; package and lockfile diff 0 lines; `src/client` and `tests/e2e` (fixtures included) diff 0 lines; `git diff --check` exit 0. **`dist/`:** clean builds of be2afa2 and of the target, 250 files each; exactly 4 differing hash lines = `dist/server/ops/restore.js` and `restore.js.map`. `dist/client` and `dist/domain` identical, so axe carries forward from REGATE9. dist after `npm run verify` equals dist before. docs/05:72 EN and VI say the same (release refused as `superseded_by_later_send` while any later send of the period exists, whatever state, a cancelled one excepted) and match `j.state <> 'cancelled'` in the build.
+- **2 Container drill `--wp3`** (project `ts-wp5-ux5regate11`, `down -v` exit 0, no container left): stage 1 33 PASS / 0 FAIL; stage 2 32 / 0; stage 3 57 / 0; stage 4 35 / 0; stage 5 27 / 0; stage 6 23 / 0; total 209 PASS, 0 FAIL, exit 0. `npm audit --omit=dev` exit 0, 0 vulnerabilities.
+- **3 Core** (export): `npm ci`, lint, typecheck, build (no chunk advisory, no deprecation line), `npm run verify`: exit 0. `npm test` x3: exit 0 each, 101 files, 2,397 tests each. `check_recovery.py` PASS (106), `validate_package.py --preflight`, `validate_orchestration.py`: exit 0.
+- **4 Real-clock FULL e2e:** desktop 469 ok / 35 skipped / 0 failed; mobile 407 ok / 97 skipped / 0 failed; exit 0 each.
+- **5 Sweep** (`--workers=6`, FIX10 wrapper; control first: 2 passed on the real clock and on 2026-11-01T08:45Z with `today_local` 2026-11-01):
+  - full 2026-10-26T16:00Z: 469 + 407 ok, 0 failed.
+  - **full 2026-11-01T08:45Z: desktop 468 ok / 35 skipped / 1 FAILED; mobile 407 ok / 97 skipped / 0 failed; exit 1.** The failure is `tests/e2e/import.spec.ts:102` (desktop), "upload, preview with source cells, decide, confirm and commit; the same workbook is already imported": `Test timeout of 30000ms exceeded`, waiting for `[data-import-notice="committed"]` after Confirm import (38.0 s). The same test passed on mobile (6.5 s) and in the real-clock FULL run. Class: test timeout under load, outside the FIX16 change (import is not touched). Census taken right after the run (samples 11 and 12, gap 7 s, nothing of mine running): 6.7 busy cores of non-mission load, so the host was loaded, but that is not a waiver. Not rerun, as the brief requires.
+  - full 2027-03-14T10:30Z: 469 + 407 ok, 0 failed.
+  - seven-spec 2026-10-27T06:58:30Z, 2027-01-01T07:30Z, 2027-01-01T08:30Z: desktop 219 ok / 15 skipped, mobile 165 ok / 69 skipped, 0 failed each.
+- **6 Repeats:** `restore.test.ts` x5 (41 tests each) and `timesheet-api.test.ts` x5 (16 each): exit 0, 0 failed.
+- **7 Test strength** (scratch copy `export-mut`, restored byte-equal, `cmp` on the five files before and after):
+  - FIX16 mutants each fail their test: M1 (old state list) fails the new restore cases (`a later send that failed for good`, uncertain, marked delivered, runner died, second restore, same-revision repeat); K2 (later order dropped) fails the existing release cases and E1's neighbours; C1 (cancelled blocks) fails `a cancelled later send does not hold the superseded copy back` (1 of 41); T4 (midnight second on the previous day) fails `files a check-in under the local date of its own start on either side of the reporting-zone midnight` (1 of 16). R2 and R3 fail their restore cases; G2 fails `blocks the correction's send while the older revision's job is leased ...` (1 of 87).
+  - In-process probe `40-restore-probe.ts.txt`: 12 of 12 pass. HTTP and CLI probe `50-http-restore.mjs.txt`: sections A to D, 13 PASS, 0 failures, 8 servers started and stopped.
+  - Carry-forward: `src/client`, `tests/e2e` and `tests/e2e/fixtures.ts` unchanged (0 diff lines), so the FIX12 to FIX15 mutants and models and REGATE10's stress stand.
+  - Diff read (`22-fix16-diff.txt`): `blockerOf` changes one predicate, `IN ('queued','leased','succeeded')` to `<> 'cancelled'`; the `j.rowid > ?` later order and the period join are kept; the refusal codes are unchanged; `restore.test.ts` only adds one describe block (seven cases) and an import; `timesheet-api.test.ts` only adds assertions; no assertion loosened, no case dropped; the cancelled state is the only one left out.
+- **Failures:** one, item 5 above (test timeout in the 2026-11-01 sweep; no network or buffer error occurred anywhere, so no rerun was due).
+- **Process notes (honest record).** (a) The first strength run was started twice by my mistake (a trailing `&` inside a background run), so two copies mutated the same scratch files. I set those logs aside as `contaminated-*`, restored the scratch `restore.ts` from the pristine export, confirmed byte equality, and ran strength once, alone; only that run is used above. (b) Rule slips, nothing written by them: a `| cat >/dev/null 2>&1` after a `git diff --stat`, a `>/dev/null` on an `ls`, a `>/dev/null` on a no-op calculator call, and a `| head -0` on a finalize call. (c) The census deviation above. No PID kill, no source, docs, test, board or STATE edit; files only in the task folder and the evidence folder. Nothing is left running; no Compose project of mine remains.

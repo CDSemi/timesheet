@@ -1,0 +1,26 @@
+// Summarises Playwright list-reporter run logs of the import test: counts, median, p95, max, timeouts.
+// Usage: node summarize-runs.mjs <outFile> <log1> [log2 ...]
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [outFile, ...logs] = process.argv.slice(2);
+const LINE = /^\s+(ok|x|!)\s+\d+\s+\[(desktop|mobile)\]\s+›\s+tests\\e2e\\([^:]+):\d+:\d+\s+›\s+(.*?)\s+\((\d+(?:\.\d+)?)(ms|s|m)\)\s*$/;
+const out = [];
+for (const log of logs) {
+  const text = readFileSync(log, 'utf8');
+  const rows = [];
+  for (const line of text.split('\n')) {
+    const m = LINE.exec(line);
+    if (m === null) continue;
+    const s = m[6] === 'ms' ? Number(m[5]) / 1000 : m[6] === 'm' ? Number(m[5]) * 60 : Number(m[5]);
+    rows.push({ status: m[1], seconds: s });
+  }
+  const sorted = rows.map((r) => r.seconds).sort((a, b) => a - b);
+  const pct = (p) => (sorted.length === 0 ? NaN : sorted[Math.min(sorted.length, Math.max(1, Math.ceil((p / 100) * sorted.length))) - 1]);
+  const failed = rows.filter((r) => r.status !== 'ok').length;
+  const over10 = rows.filter((r) => r.seconds > 10).length;
+  const over30 = rows.filter((r) => r.seconds > 30).length;
+  const name = log.split(/[\\/]/).pop();
+  const summary = (/(\d+) passed/.exec(text)?.[0] ?? '') + ' ' + (/(\d+) failed/.exec(text)?.[0] ?? '') + ' ' + (/exit=\d+/.exec(text)?.[0] ?? '');
+  out.push(`${name}: n=${rows.length} failed=${failed} median=${pct(50)} p95=${pct(95)} max=${sorted[sorted.length - 1]} over10s=${over10} over30s=${over30} | ${summary.trim()}`);
+}
+writeFileSync(outFile, out.join('\n') + '\n');

@@ -1,0 +1,13 @@
+--- a/tests/e2e/import.spec.ts
++++ b/tests/e2e/import.spec.ts
+@@ -188,10 +188,8 @@
+   expect(sheet.days.flatMap((day) => day.sessions)).toEqual([]);
+ 
+   // 5. The replay: the second tab commits the identical decisions, and the same file again is already imported.
+-  await second.bringToFront();
+   await second.getByRole('button', { name: 'Confirm import' }).click();
+   await expect(second.locator('[data-import-notice="replayed"]')).toContainText('Already imported');
+-  await page.bringToFront();
+   await upload(page, bytes);
+   await page.getByRole('button', { name: 'Upload and preview' }).click();
+   await expect(page.locator('[data-import-notice="already_imported"]')).toContainText('Already imported');

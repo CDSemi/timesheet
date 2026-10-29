@@ -1,0 +1,12 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+O=$T/out
+cd $T/export
+npm ci > $O/02-ci.txt 2>&1; echo "ci exit $?" > $O/02-ci-exit.txt
+npm audit --omit=dev > $O/02-npm-audit.txt 2>&1; echo "npm audit --omit=dev exit $?" > $O/02-npm-audit-exit.txt
+echo "prepA target ci+audit done $(date -u +%H:%M:%SZ)" > $T/logs/prepA.log
+cd $T/export-prev
+export GIT_CONFIG_VALUE_0=<task>/export-prev
+npm ci > $O/02-prev-ci.txt 2>&1; echo "prev ci exit $?" >> $O/02-ci-exit.txt
+echo "prepA prev ci done $(date -u +%H:%M:%SZ)" >> $T/logs/prepA.log
+echo prepA-done > $O/prepA.done

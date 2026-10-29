@@ -1,0 +1,88 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/integration/zz-restore-probe.test.ts (12 tests | 3 failed) 6522ms
+   ❯ RECHECK-B2: release of a held superseded send after a restore (12)
+     × P1 another period of the same owner is not affected; bulk release releases it and keeps revision 1 held 331ms
+     × E1 a held send of the NEWEST revision is releasable although an older revision was delivered before it (no over-blocking) 438ms
+     × D1 a second restore taken while the correction waited holds both jobs; the superseded one must stay held 628ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/zz-restore-probe.test.ts > RECHECK-B2: release of a held superseded send after a restore > P1 another period of the same owner is not affected; bulk release releases it and keeps revision 1 held
+AssertionError: expected { released: +0, refused: { …(1) } } to deeply equal { released: 1, refused: { …(1) } }
+
+- Expected
++ Received
+
+  {
+    "refused": {
+-     "superseded_by_later_send": 1,
++     "superseded_by_later_send": 2,
+    },
+-   "released": 1,
++   "released": 0,
+  }
+
+ ❯ tests/integration/zz-restore-probe.test.ts:313:18
+    311|     const bulk = releaseAllHeldJobs(r.db, r.clock);
+    312|     note('P1', 'releaseAllHeldJobs', bulk);
+    313|     expect(bulk).toEqual({ released: 1, refused: { superseded_by_later…
+       |                  ^
+    314|     expect(jobsOf(r.db, r.otherFirst ?? '')[0]?.state).toBe('queued');
+    315|     expect(jobsOf(r.db, r.first)[0]?.state).toBe('intervention');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/integration/zz-restore-probe.test.ts > RECHECK-B2: release of a held superseded send after a restore > E1 a held send of the NEWEST revision is releasable although an older revision was delivered before it (no over-blocking)
+AssertionError: expected { outcome: 'refused', …(1) } to deeply equal { outcome: 'released' }
+
+- Expected
++ Received
+
+  {
+-   "outcome": "released",
++   "code": "superseded_by_later_send",
++   "outcome": "refused",
+  }
+
+ ❯ tests/integration/zz-restore-probe.test.ts:349:21
+    347|     const release = releaseHeldJob(db, clock, held);
+    348|     note('E1', 'releaseHeldJob(revision 2 job)', release);
+    349|     expect(release).toEqual({ outcome: 'released' });
+       |                     ^
+    350|   });
+    351|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/integration/zz-restore-probe.test.ts > RECHECK-B2: release of a held superseded send after a restore > D1 a second restore taken while the correction waited holds both jobs; the superseded one must stay held
+AssertionError: expected { released: +0, refused: { …(1) } } to deeply equal { released: 1, refused: { …(1) } }
+
+- Expected
++ Received
+
+  {
+    "refused": {
+-     "superseded_by_later_send": 1,
++     "superseded_by_later_send": 2,
+    },
+-   "released": 1,
++   "released": 0,
+  }
+
+ ❯ tests/integration/zz-restore-probe.test.ts:373:18
+    371|     note('D1', 'capture pass', await capturePass(r2, 'rb2-d1'));
+    372|     note('D1', 'attempts in order', attempts(db2).map((a) => [a.revisi…
+    373|     expect(bulk).toEqual({ released: 1, refused: { superseded_by_later…
+       |                  ^
+    374|   });
+    375| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 9 passed (12)
+   Start at  17:24:31
+   Duration  7.59s (tests 87%, transform 8%, import 5%)

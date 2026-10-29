@@ -1,0 +1,28 @@
+// Per test title: runs, failed, median and max seconds, for each run log given.
+// Usage: node by-test.mjs <outFile> <log> [log ...]
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [outFile, ...logs] = process.argv.slice(2);
+const LINE = /^\s+(ok|x|!|-)\s+\d+\s+\[(desktop|mobile)\]\s+›\s+tests\\e2e\\([^:]+):\d+:\d+\s+›\s+(.*?)\s+\((\d+(?:\.\d+)?)(ms|s|m)\)\s*$/;
+const out = [];
+for (const log of logs) {
+  const groups = new Map();
+  const text = readFileSync(log, 'utf8');
+  for (const line of text.split('\n')) {
+    const m = LINE.exec(line);
+    if (m === null) continue;
+    const s = m[6] === 'ms' ? Number(m[5]) / 1000 : m[6] === 'm' ? Number(m[5]) * 60 : Number(m[5]);
+    const key = `${m[2]} ${m[3]} | ${m[4].slice(0, 60)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ s, bad: m[1] !== 'ok' });
+  }
+  out.push(`== ${log.split(/[\\/]/).pop()}`);
+  for (const [key, rows] of groups) {
+    const sorted = rows.map((r) => r.s).sort((a, b) => a - b);
+    out.push(`${key}: runs ${rows.length}, failed ${rows.filter((r) => r.bad).length}, median ${sorted[Math.ceil(sorted.length / 2) - 1]} s, max ${sorted[sorted.length - 1]} s`);
+  }
+  for (const l of text.split('\n')) if (/^\s+\d+ (passed|failed|skipped|flaky|did not run)/.test(l)) out.push(l.trim());
+  const ex = /^exit=(\d+)/m.exec(text);
+  out.push(`wrapper ${ex === null ? 'exit unknown' : 'exit ' + ex[1]}`);
+}
+writeFileSync(outFile, out.join('\n') + '\n');

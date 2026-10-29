@@ -1,0 +1,68 @@
+// Windows base priority (8 = normal, 4 = idle) of the renderer of one page in each of four browser contexts of one browser
+// (how logo.spec.ts opens its four sweep windows). Same read-only census and CPU-time mapping as probe-tab-priority.mjs.
+// Usage: node probe-contexts4.mjs <exportDir> <port> <outFile>
+import { createServer } from 'node:http';
+import { execFileSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+
+const [exportDir, portArg, outFile] = process.argv.slice(2);
+const port = Number(portArg);
+const require = createRequire(join(exportDir, 'package.json'));
+const { chromium } = require('@playwright/test');
+
+const server = createServer((request, response) => {
+  response.setHeader('content-type', 'text/html');
+  response.end('<!doctype html><title>tab</title><p>synthetic tab</p>');
+});
+await new Promise((resolve) => server.listen(port, '0.0.0.0', resolve));
+
+function priorityOf(id) {
+  const text = execFileSync(
+    'powershell.exe',
+    ['-NoProfile', '-Command', `Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -eq ${id} } | ForEach-Object { $_.Priority }`],
+    { encoding: 'utf8' },
+  );
+  return Number(text.trim());
+}
+
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const cdp = await browser.newBrowserCDPSession();
+async function cpuTimes() {
+  const info = await cdp.send('SystemInfo.getProcessInfo');
+  return new Map(info.processInfo.filter((p) => p.type === 'renderer').map((p) => [p.id, p.cpuTime]));
+}
+async function rendererOf(page) {
+  const before = await cpuTimes();
+  await page.evaluate('(() => { const t = Date.now(); while (Date.now() - t < 400); })()');
+  const after = await cpuTimes();
+  let best = -1;
+  let bestGrowth = -1;
+  for (const [id, time] of after) {
+    const growth = time - (before.get(id) ?? 0);
+    if (growth > bestGrowth) {
+      best = id;
+      bestGrowth = growth;
+    }
+  }
+  return best;
+}
+
+const hosts = ['127.0.0.1', 'localhost', '127.0.0.2', '127.0.0.3'];
+const pages = [];
+for (const [index, host] of hosts.entries()) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(`http://${host}:${port}/`);
+  pages.push([`window ${index + 1}`, page]);
+}
+const lines = [];
+for (const round of [1, 2]) {
+  const parts = [];
+  for (const [name, page] of pages) parts.push(`${name} priority ${priorityOf(await rendererOf(page))}`);
+  lines.push(`four contexts, one page each, sample ${round}: ${parts.join(', ')}`);
+}
+await browser.close();
+server.close();
+writeFileSync(outFile, lines.join('\n') + '\n');

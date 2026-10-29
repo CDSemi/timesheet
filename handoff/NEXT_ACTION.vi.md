@@ -152,8 +152,17 @@ Luồng hiện tại:
      chính bị lỗi hoặc chưa chắc đã gửi.
    - WP5-UX5-FIX16 đã sửa lỗi này: lần gửi cũ đang bị giữ giờ vẫn bị giữ khi có bất kỳ lần
      gửi muộn hơn nào của cùng kỳ, trừ lần đã hủy. Digest 18aa0ad0.
-   - Đang chạy: WP5-UX5-FIX16-FREEZE commit và push bản sửa.
-   - Sau đó là gate lại có phạm vi, một lượt kiểm tra lại độc lập mới cho vùng B, kiểm tra lại độc lập hai lỗi đã sửa, thay đổi
+   - Bản sửa đã được freeze trong 1fe5ad3 (digest 18aa0ad0) và đã push.
+   - WP5-UX5-REGATE11, gate lại có phạm vi trên 1fe5ad3, chỉ trượt một tiêu chí: một test
+     import vượt quá thời gian chờ trong một lượt quét, đúng lúc máy đang bận khoảng 6–7 lõi
+     cho việc khác. Mọi mục khác đều đạt.
+   - WP5-UX5-DIAG10 xác định thao tác import không chậm. Test vẫn tiếp tục thao tác trên một
+     tab trình duyệt đang nằm phía sau, và tab đó bị bỏ đói khi máy dùng hết CPU. Một test
+     khác cũng có cùng kiểu này. Một bản sửa chỉ đổi test xử lý cả hai.
+   - WP5-UX5-FIX17 đã áp bản sửa đó và qua mọi kiểm tra (digest 69c6daff).
+   - Đang chạy: WP5-UX5-FIX17-FREEZE commit và push bản sửa.
+   - Sau đó là gate lại (WP5-UX5-REGATE12) với quy tắc tải chặt hơn, một lượt kiểm
+     tra lại độc lập mới cho vùng B (WP5-UX5-RECHECK-B3), kiểm tra lại độc lập hai lỗi đã sửa, thay đổi
      Day editor và thay đổi giao diện, audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
    - Để tiếp tục sau khi bị gián đoạn, dùng prompt khởi động ở trên. Điều phối viên làm tiếp
      ở `next_task_id` của board.

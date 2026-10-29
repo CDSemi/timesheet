@@ -1,0 +1,47 @@
+--- a/tests/e2e/import.spec.ts
++++ b/tests/e2e/import.spec.ts
+@@ -160,6 +160,9 @@
+   await second.getByRole('button', { name: 'Review and commit' }).click();
+ 
+   // 4. Commit needs a confirmation that names what is written; going back changes nothing.
++  // Only the tab in front is drawn on time: on a loaded host a tab behind answers a click or a read seconds late (WP5-UX5-DIAG8,
++  // WP5-UX5-DIAG10). A step that drives a tab brings it to front first; the steps and the checks are unchanged.
++  await page.bringToFront();
+   await cache.locator('input[data-action="import"]').check();
+   await page.getByRole('button', { name: 'Review and commit' }).click();
+   const imported = plan.importable_days + 1;
+@@ -185,8 +188,10 @@
+   expect(sheet.days.flatMap((day) => day.sessions)).toEqual([]);
+ 
+   // 5. The replay: the second tab commits the identical decisions, and the same file again is already imported.
++  await second.bringToFront();
+   await second.getByRole('button', { name: 'Confirm import' }).click();
+   await expect(second.locator('[data-import-notice="replayed"]')).toContainText('Already imported');
++  await page.bringToFront();
+   await upload(page, bytes);
+   await page.getByRole('button', { name: 'Upload and preview' }).click();
+   await expect(page.locator('[data-import-notice="already_imported"]')).toContainText('Already imported');
+@@ -333,6 +338,8 @@
+   await secondForm.getByLabel('Evidence reference').fill('Synthetic email 2026-01-05');
+   await secondForm.getByRole('button', { name: 'Review before posting' }).click();
+ 
++  // Only the tab in front is drawn on time (see the first test of this file): the step that drives a tab brings it to front first.
++  await page.bringToFront();
+   await review.click();
+   await expect(panel.locator('[data-confirm-value]')).toHaveText('+12h 30m');
+   await expect(panel.locator('[data-confirm-result]')).toHaveAttribute('data-confirm-result', '750');
+@@ -344,12 +351,14 @@
+   await expect(panel).toContainText('Synthetic email 2026-01-05');
+ 
+   // The repeat from the stale tab posts nothing.
++  await second.bringToFront();
+   await second.getByRole('button', { name: 'Confirm and post' }).click();
+   await expect(second.locator('[data-opening-notice]')).toContainText('Already recorded');
+   const ledger = await person.api.call<{ entries: Array<{ entry_type: string; delta_minutes: number }> }>('GET', '/api/ot/ledger');
+   expect(ledger.entries.filter((entry) => entry.entry_type === 'opening_balance')).toEqual([expect.objectContaining({ delta_minutes: 750 })]);
+   expect(ledger.entries).toHaveLength(1);
+   await second.close();
++  await page.bringToFront();
+ 
+   // WP5-UX-AX-08: cancelling the correction returns focus to the button that opened it.
+   await panel.getByRole('button', { name: 'Correct the opening balance' }).click();

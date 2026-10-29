@@ -1,0 +1,47 @@
+// For each trace.zip in a Playwright output folder (import commit test), splits the test time between the steps on the
+// second tab and the steps on the first tab, by the source line of each step in import.spec.ts.
+// Usage: node trace-split.mjs <outputFolder> <outFile> <secondLines "a-b,c-d"> <firstLines "a-b,c-d"> [specFilter]
+import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { openZip } from './zipread.mjs';
+
+const [root, outFile, secondArg, firstArg] = process.argv.slice(2);
+const ranges = (arg) => arg.split(',').map((r) => r.split('-').map(Number));
+const second = ranges(secondArg);
+const first = ranges(firstArg);
+const inRanges = (line, list) => list.some(([a, b]) => line >= a && line <= b);
+
+const out = [];
+for (const dir of readdirSync(root).sort()) {
+  const zipPath = join(root, dir, 'trace.zip');
+  if (!existsSync(zipPath)) continue;
+  const z = openZip(zipPath);
+  if (!z.entries.has('test.trace')) continue;
+  const events = z.read('test.trace').toString('utf8').split('\n').filter((l) => l.length > 0).map((l) => JSON.parse(l));
+  const ctx = events.find((e) => e.type === 'context-options');
+  const t0 = ctx.monotonicTime;
+  const open = new Map();
+  let secondMs = 0;
+  let firstMs = 0;
+  let firstSlowest = 0;
+  let secondSlowest = 0;
+  let testMs = 0;
+  let timedOutAt = '';
+  for (const e of events) {
+    if (e.type === 'before') open.set(e.callId, e);
+    else if (e.type === 'after') {
+      const b = open.get(e.callId);
+      if (b === undefined) continue;
+      testMs = Math.max(testMs, e.endTime - t0);
+      const line = b.stack?.[0]?.line;
+      const file = b.stack?.[0]?.file ?? '';
+      if (line === undefined || !/spec\.ts$/.test(file)) continue;
+      const d = e.endTime - b.startTime;
+      if (inRanges(line, second)) { secondMs += d; secondSlowest = Math.max(secondSlowest, d); }
+      else if (inRanges(line, first)) { firstMs += d; firstSlowest = Math.max(firstSlowest, d); }
+      if (e.error !== undefined && timedOutAt === '') timedOutAt = `line ${line}`;
+    }
+  }
+  out.push(`${dir.replace(/^import-upload-preview-with-931ba-orkbook-is-already-imported-/, '')}: second-tab steps ${Math.round(secondMs)} ms (slowest ${Math.round(secondSlowest)}), first-tab steps ${Math.round(firstMs)} ms (slowest ${Math.round(firstSlowest)}), trace ends ${Math.round(testMs)} ms${timedOutAt === '' ? '' : `, first error at ${timedOutAt}`}`);
+}
+writeFileSync(outFile, out.join('\n') + '\n');

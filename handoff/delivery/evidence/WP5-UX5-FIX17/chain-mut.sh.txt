@@ -1,0 +1,46 @@
+# Mutants of the fix in export-fix, each restored byte-equal afterwards.
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX17/env.sh
+export EXP=export-fix
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0=$T/export-fix
+D=2026-11-01T08:45:00Z
+CROSS=2026-10-27T06:58:30Z
+TODAY="a page left open across a reporting-zone midnight"
+COMMIT="upload, preview with source cells"
+X=$T/export-fix
+cd $X
+cp tests/e2e/import.spec.ts $T/hold/import.fixed.spec.ts
+cp tests/e2e/today.spec.ts $T/hold/today.fixed.spec.ts
+cp src/client/ImportScreen.tsx $T/hold/ImportScreen.orig.tsx
+# M-n1: the DIAG10 mutant (a bringToFront removed): the commit test must fail under the burner.
+git apply --check --whitespace=error $D10/mutant-n1.patch.txt > $T/logs/mut-n1-check.txt 2>&1
+git apply $D10/mutant-n1.patch.txt >> $T/logs/mut-n1-check.txt 2>&1
+echo "apply exit=$?" >> $T/logs/mut-n1-check.txt
+cd $T
+GREP="$COMMIT" PROJECT=desktop REPS=12 node $T/dose.mjs mut-n1 48 200 $D tests/e2e/import.spec.ts > $T/logs/dose-mut-n1.txt 2>&1
+cp $T/hold/import.fixed.spec.ts $X/tests/e2e/import.spec.ts
+cmp $T/hold/import.fixed.spec.ts $X/tests/e2e/import.spec.ts > $T/out/mut-n1-restore.txt 2>&1; echo "restore cmp exit=$?" >> $T/out/mut-n1-restore.txt
+# M-today: the original context.newPage() (the base today.spec.ts): the crossing branch must fail under the burner.
+cp $T/export-base/tests/e2e/today.spec.ts $X/tests/e2e/today.spec.ts
+GREP="$TODAY" PROJECT=desktop REPS=6 node $T/dose.mjs mut-today 48 360 $CROSS tests/e2e/today.spec.ts > $T/logs/dose-mut-today.txt 2>&1
+cp $T/hold/today.fixed.spec.ts $X/tests/e2e/today.spec.ts
+cmp $T/hold/today.fixed.spec.ts $X/tests/e2e/today.spec.ts > $T/out/mut-today-restore.txt 2>&1; echo "restore cmp exit=$?" >> $T/out/mut-today-restore.txt
+# M-product: the committed notice never shown (DIAG10 mutant-product-m1): the commit test must fail on a calm host. Rebuild, run, restore, rebuild.
+cd $X
+git apply --check --whitespace=error $D10/mutant-product-m1.patch.txt > $T/logs/mut-pm1-check.txt 2>&1
+git apply $D10/mutant-product-m1.patch.txt >> $T/logs/mut-pm1-check.txt 2>&1
+echo "apply exit=$?" >> $T/logs/mut-pm1-check.txt
+node "$NPMCLI" run build > $T/logs/build-mut.log 2>&1
+echo "build exit=$?" >> $T/logs/build-mut.log
+cd $T
+GREP="$COMMIT" PROJECT=desktop REPS=6 node $T/dose.mjs mut-pm1 0 1 $D tests/e2e/import.spec.ts > $T/logs/dose-mut-pm1.txt 2>&1
+cd $X
+cp $T/hold/ImportScreen.orig.tsx src/client/ImportScreen.tsx
+node "$NPMCLI" run build > $T/logs/build-restore.log 2>&1
+echo "build exit=$?" >> $T/logs/build-restore.log
+find dist -type f | LC_ALL=C sort > $T/out/dist-files-after-mut.txt
+sha256sum $(cat $T/out/dist-files-after-mut.txt) > $T/out/dist-hashes-after-mut.txt
+cmp $T/out/dist-hashes-base.txt $T/out/dist-hashes-after-mut.txt > $T/out/dist-cmp-after-mut.txt 2>&1
+echo "dist hash cmp exit=$?" >> $T/out/dist-cmp-after-mut.txt
+cmp src/client/ImportScreen.tsx $T/hold/ImportScreen.orig.tsx >> $T/out/dist-cmp-after-mut.txt 2>&1
+echo "source cmp exit=$?" >> $T/out/dist-cmp-after-mut.txt
+echo "chain-mut done $(date -u +%H:%M:%SZ)" > $T/logs/chain-mut.done

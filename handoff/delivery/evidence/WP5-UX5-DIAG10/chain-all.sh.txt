@@ -1,0 +1,13 @@
+# Sequential controlled-load runs of the import tests. Each node dose.mjs call: label, burner threads, burner seconds, clock, repeats, spec file.
+# GREP and PROJECT select tests and project; extra arguments go to Playwright.
+source /d/.claude-tmp/timesheet/WP5-UX5-DIAG10/env.sh
+D=2026-11-01T08:45:00Z
+BOTH="upload, preview with source cells|the opening balance: validation"
+# The dose ladder on the original file (the commit test only).
+node $T/dose.mjs d24 24 150 $D 24 tests/e2e/import.spec.ts > $T/logs/dose-d24.txt 2>&1
+node $T/dose.mjs d32 32 150 $D 24 tests/e2e/import.spec.ts > $T/logs/dose-d32.txt 2>&1
+# About 4 and about 7 busy cores, on the simulated instant and on the real clock (the original file, the commit test).
+node $T/dose.mjs c4s 1 120 $D 24 tests/e2e/import.spec.ts > $T/logs/dose-c4s.txt 2>&1
+node $T/dose.mjs c7s 4 120 $D 24 tests/e2e/import.spec.ts > $T/logs/dose-c7s.txt 2>&1
+node $T/dose.mjs c4r 1 120 real 24 tests/e2e/import.spec.ts > $T/logs/dose-c4r.txt 2>&1
+node $T/dose.mjs c7r 4 120 real 24 tests/e2e/import.spec.ts > $T/logs/dose-c7r.txt 2>&1

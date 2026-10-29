@@ -1,0 +1,16 @@
+# Addendum 1: per-run statistics and copies of the run logs and census calculations into the evidence folder.
+source /d/.claude-tmp/timesheet/WP5-UX5-DIAG10/env.sh
+E="D:\\Dropbox\\Work.CDSemi\\timesheet\\handoff\\delivery\\evidence\\WP5-UX5-DIAG10"
+EU=/d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-DIAG10
+cd $T/logs
+LABELS="t1d t1m t2d t2m k1d k1m g1d tfcd tf2d tf2m tm1 tm2 pm2 tg1d tg0d tg2d tg2m pm2o pm2g"
+RUNS=""
+for l in $LABELS; do
+  if [ -f run-$l.txt ]; then
+    RUNS="$RUNS run-$l.txt"
+    cp run-$l.txt $EU/log-run-$l.txt
+    if [ -f $T/census/$l-p1.txt ]; then node $T/census.mjs $T/census/$l-p1.txt $T/census/$l-p2.txt $T/census/$l-p1-time.txt $T/census/$l-p2-time.txt "D:\\.claude-tmp\\timesheet\\WP5-UX5-DIAG10\\census\\calc-$l-p1-p2.txt"; cp $T/census/calc-$l-p1-p2.txt $EU/61-census-calc-$l-p1-p2.txt; fi
+  fi
+done
+node $T/summarize-runs.mjs "$E\\82-addendum1-summary.txt" $RUNS
+node $T/by-test.mjs "$E\\82-addendum1-by-test.txt" $RUNS

@@ -1,0 +1,38 @@
+# Addendum 1, fourth part: today.spec.ts:641 with the second page in a browser context of its own (fix 2). The first fix (bringToFront) is
+# replaced because it made the test blind to the focus listener (see the pm2 run). dose.mjs arguments: label, burner threads, burner seconds, clock, repeats, spec file.
+source /d/.claude-tmp/timesheet/WP5-UX5-DIAG10/env.sh
+NPMCLI="/c/Program Files/nodejs/node_modules/npm/bin/npm-cli.js"
+CROSS=2026-10-27T06:58:30Z
+NORMAL=2026-11-01T08:45:00Z
+TODAY="a page left open across a reporting-zone midnight"
+cp $T/hold/todayfix2.spec.ts $T/export/tests/e2e/todayfix2.spec.ts
+cd $T/export
+node node_modules/eslint/bin/eslint.js tests/e2e/todayfix2.spec.ts > $T/logs/lint-today.txt 2>&1
+echo "eslint exit=$?" >> $T/logs/lint-today.txt
+node node_modules/typescript/bin/tsc -p tsconfig.test.json > $T/logs/typecheck-today.txt 2>&1
+echo "tsc exit=$?" >> $T/logs/typecheck-today.txt
+cd $T
+# Calm host, crossing branch and normal branch, both projects.
+GREP="$TODAY" PROJECT=desktop node $T/dose.mjs tg1d 0 1 $CROSS 3 tests/e2e/todayfix2.spec.ts > $T/logs/dose-tg1d.txt 2>&1
+GREP="$TODAY" PROJECT=desktop node $T/dose.mjs tg0d 0 1 $NORMAL 6 tests/e2e/todayfix2.spec.ts > $T/logs/dose-tg0d.txt 2>&1
+# Under the 48-thread burner, crossing branch, both projects (the original: t2d and t2m).
+GREP="$TODAY" PROJECT=desktop node $T/dose.mjs tg2d 48 360 $CROSS 6 tests/e2e/todayfix2.spec.ts > $T/logs/dose-tg2d.txt 2>&1
+GREP="$TODAY" PROJECT=mobile node $T/dose.mjs tg2m 48 360 $CROSS 6 tests/e2e/todayfix2.spec.ts > $T/logs/dose-tg2m.txt 2>&1
+# The product mutant (no window focus refresh): the original and the fix must both fail on a calm host, crossing branch.
+cd $T/export
+cp $T/hold/TimesheetScreen.mut.tsx src/client/TimesheetScreen.tsx
+node "$NPMCLI" run build > $T/logs/build-mut3.log 2>&1
+echo "exit=$?" >> $T/logs/build-mut3.log
+cd $T
+GREP="$TODAY" PROJECT=desktop node $T/dose.mjs pm2o 0 1 $CROSS 3 tests/e2e/today.spec.ts > $T/logs/dose-pm2o.txt 2>&1
+GREP="$TODAY" PROJECT=desktop node $T/dose.mjs pm2g 0 1 $CROSS 3 tests/e2e/todayfix2.spec.ts > $T/logs/dose-pm2g.txt 2>&1
+cd $T/export
+cp $T/hold/TimesheetScreen.orig.tsx src/client/TimesheetScreen.tsx
+node "$NPMCLI" run build > $T/logs/build-restore3.log 2>&1
+echo "exit=$?" >> $T/logs/build-restore3.log
+find dist -type f | sort > $T/logs/dist-files-after-mut3.txt
+sha256sum $(cat $T/logs/dist-files-after-mut3.txt) > $T/logs/dist-hashes-after-mut3.txt
+cmp $T/logs/dist-hashes-base.txt $T/logs/dist-hashes-after-mut3.txt > $T/logs/dist-cmp-after-mut3.txt 2>&1
+echo "cmp exit=$?" >> $T/logs/dist-cmp-after-mut3.txt
+cmp src/client/TimesheetScreen.tsx $T/hold/TimesheetScreen.orig.tsx >> $T/logs/dist-cmp-after-mut3.txt 2>&1
+echo "source cmp exit=$?" >> $T/logs/dist-cmp-after-mut3.txt

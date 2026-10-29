@@ -1,0 +1,40 @@
+// Every evidence log in the repository that holds list-reporter lines of the import commit test: durations per project.
+// Usage: node scan-all-evidence.mjs <evidenceRoot> <outFile>
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [root, outFile] = process.argv.slice(2);
+const LINE = /^\s+(ok|x|!)\s+\d+\s+\[(desktop|mobile)\]\s+›\s+tests\\e2e\\import\.spec\.ts:\d+:\d+\s+›\s+(upload, preview with source cells.*?)\s+\((\d+(?:\.\d+)?)(ms|s|m)\)\s*$/;
+const samples = { desktop: [], mobile: [] };
+const files = [];
+function walk(dir) {
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    const st = statSync(full);
+    if (st.isDirectory()) walk(full);
+    else if (name.endsWith('.txt') || name.endsWith('.log')) files.push(full);
+  }
+}
+walk(root);
+let filesWith = 0;
+for (const file of files) {
+  const text = readFileSync(file, 'utf8');
+  if (!text.includes('upload, preview with source cells')) continue;
+  let any = false;
+  for (const line of text.split('\n')) {
+    const m = LINE.exec(line);
+    if (m === null) continue;
+    any = true;
+    const s = m[5] === 'ms' ? Number(m[4]) / 1000 : m[5] === 'm' ? Number(m[4]) * 60 : Number(m[4]);
+    samples[m[2]].push({ s, status: m[1], file: file.slice(root.length + 1) });
+  }
+  if (any) filesWith += 1;
+}
+const pct = (sorted, p) => (sorted.length === 0 ? NaN : sorted[Math.min(sorted.length, Math.max(1, Math.ceil((p / 100) * sorted.length))) - 1]);
+const out = [`logs scanned ${files.length}; logs with the commit test ${filesWith}`];
+for (const project of ['desktop', 'mobile']) {
+  const sorted = samples[project].map((x) => x.s).sort((a, b) => a - b);
+  out.push(`${project}: n=${sorted.length} median=${pct(sorted, 50)} p95=${pct(sorted, 95)} p99=${pct(sorted, 99)} max=${sorted[sorted.length - 1]} over 10 s=${sorted.filter((x) => x > 10).length} failed=${samples[project].filter((x) => x.status === 'x').length}`);
+  for (const x of samples[project].filter((y) => y.s > 8 || y.status === 'x')) out.push(`  ${x.status} ${x.s} s  ${x.file}`);
+}
+writeFileSync(outFile, out.join('\n') + '\n');

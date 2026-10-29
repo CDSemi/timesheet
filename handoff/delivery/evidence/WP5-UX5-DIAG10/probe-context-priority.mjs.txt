@@ -1,0 +1,74 @@
+// Shows the Windows base priority (8 = normal, 4 = idle) of the renderer of a page in each of two browser contexts, and of two tabs of one context.
+// Usage: node probe-context-priority.mjs <exportDir> <port> <outFile>
+// Same read-only census and the same CPU-time mapping as probe-tab-priority.mjs.
+import { createServer } from 'node:http';
+import { execFileSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+
+const [exportDir, portArg, outFile] = process.argv.slice(2);
+const port = Number(portArg);
+const require = createRequire(join(exportDir, 'package.json'));
+const { chromium } = require('@playwright/test');
+
+const server = createServer((request, response) => {
+  response.setHeader('content-type', 'text/html');
+  response.end('<!doctype html><title>tab</title><p>synthetic tab</p>');
+});
+await new Promise((resolve) => server.listen(port, '127.0.0.1', resolve));
+
+const lines = [];
+function priorityOf(id) {
+  const text = execFileSync(
+    'powershell.exe',
+    ['-NoProfile', '-Command', `Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -eq ${id} } | ForEach-Object { $_.Priority }`],
+    { encoding: 'utf8' },
+  );
+  return Number(text.trim());
+}
+
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const cdp = await browser.newBrowserCDPSession();
+async function cpuTimes() {
+  const info = await cdp.send('SystemInfo.getProcessInfo');
+  return new Map(info.processInfo.filter((p) => p.type === 'renderer').map((p) => [p.id, p.cpuTime]));
+}
+async function rendererOf(page) {
+  const before = await cpuTimes();
+  await page.evaluate('(() => { const t = Date.now(); while (Date.now() - t < 400); })()');
+  const after = await cpuTimes();
+  let best = -1;
+  let bestGrowth = -1;
+  for (const [id, time] of after) {
+    const growth = time - (before.get(id) ?? 0);
+    if (growth > bestGrowth) {
+      best = id;
+      bestGrowth = growth;
+    }
+  }
+  return best;
+}
+async function report(label, pages) {
+  const parts = [];
+  for (const [name, page] of pages) parts.push(`${name} priority ${priorityOf(await rendererOf(page))}`);
+  lines.push(`${label}: ${parts.join(', ')}`);
+}
+
+// Two contexts, one page each, the second opened last (this is how logo.spec.ts and controls.spec.ts open their windows).
+const contextA = await browser.newContext();
+const pageA = await contextA.newPage();
+await pageA.goto(`http://127.0.0.1:${port}/`);
+const contextB = await browser.newContext();
+const pageB = await contextB.newPage();
+await pageB.goto(`http://localhost:${port}/`);
+await report('two contexts, one page each (B opened last)', [['page in context A', pageA], ['page in context B', pageB]]);
+// Two tabs of one context, for comparison.
+const tab2 = await contextA.newPage();
+await tab2.goto(`http://localhost:${port}/`);
+await report('context A now holds two tabs (the second opened last), first sample', [['first tab of A', pageA], ['second tab of A', tab2], ['page in context B', pageB]]);
+await report('same, second sample', [['first tab of A', pageA], ['second tab of A', tab2], ['page in context B', pageB]]);
+await report('same, third sample', [['first tab of A', pageA], ['second tab of A', tab2], ['page in context B', pageB]]);
+await browser.close();
+server.close();
+writeFileSync(outFile, lines.join('\n') + '\n');

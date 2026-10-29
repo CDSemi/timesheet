@@ -2820,9 +2820,114 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
     - `dist/` differs only in `restore.js` and its map;
     - `npm test`: 2,397;
     - FULL: 0 failed.
-- **Running now:** WP5-UX5-FIX16-FREEZE (committer). The coordinator writes no file while it
+- **WP5-UX5-FIX16-FREEZE done.**
+  - Commit 1fe5ad3075fd4d1b94abe5b8be04ed05729b05c2 on main. It was pushed as a fast-forward
+    from be2afa2.
+  - D_PRE equals the HEAD digest, 18aa0ad0. 595 paths were staged.
+  - It stopped three times on the coordinator's board records, never on the source. The
+    fixes:
+    1. RECHECK-A2's PASS on ff73565b was "stale" against the accepted snapshot. It now
+       names `superseded_by: WP5-UX5-AUDIT-INT`: it stays as history, and the integration
+       audit on the final digest is the current acceptance.
+    2. The pending REGATE11, RECHECK-B3 and AUDIT-INT tasks needed their briefs.
+    3. AUDIT-INT needed a direct gate dependency.
+- **Running now:** WP5-UX5-REGATE11 (verifier, sonnet), alone, on 1fe5ad3. It is a scoped
+  regate:
+  - identity, where only `restore.js` may change in `dist/`;
+  - the drill `--wp3`;
+  - `npm audit`;
+  - core ×3, 2,397 tests;
+  - FULL and the six sweeps;
+  - repeats of the changed integration files;
+  - the FIX16 mutants and the RECHECK-B2 probes;
+  - a diff read.
+
+  axe carries forward if `dist/client` is identical.
+- **WP5-UX5-REGATE11 FAILED** on one criterion.
+  - In the FULL sweep at 2026-11-01T08:45Z, the desktop `import.spec.ts:102` timed out. It
+    hit the 30 s limit waiting for the "committed" notice after Confirm import, and ran
+    38 s. The same test took 6.5 s on mobile.
+  - The host carried about 6–7 busy cores of the owner's own non-mission work, above the
+    gate's 4-core limit.
+  - The verifier went on after a short sample. The brief's "wait 10 minutes" rule conflicts
+    with the no-sleep rule. From now on, briefs say "stop and report".
+  - Everything else passed:
+    - `dist/client` is identical, so axe carries forward;
+    - drill 209/0 and `npm audit` 0;
+    - core ×3, 2,397 tests;
+    - the real-clock FULL run: 0 failed;
+    - the other five sweeps;
+    - repeats, mutants and probes.
+- **Coordinator.** Not waived.
+  - WP5-UX5-DIAG10 (planner, sonnet) measures the test's margin across every gate log, and
+    finds where the 38 s went.
+  - It then reproduces the test under a controlled load of 4 cores and of 7 cores. That
+    separates a real slowness or hang from an over-loaded host.
+  - It also lists other tests near their limit.
+- **WP5-UX5-DIAG10 first result** (planner, self-reported claude-sonnet-5-5).
+  - **Verdict:** a test defect that a saturated host exposes, not a product slowness. The
+    test opens a second tab, then keeps driving the first one. Chromium runs that tab
+    behind at idle priority.
+    - In the trace, two steps took 4 s and 10 s, and the Confirm click never finished.
+    - No commit request was sent. The server's slowest answer was 245 ms.
+  - **Margin:** median 2.6 s, p95 3.8 s, against a 30 s limit.
+  - **Under load:**
+    - 0 failures at 3 to 8 busy cores (198 runs);
+    - 0 failures in a 1,068-test mixed run at 10 to 14 cores;
+    - failures only at saturation: 32 threads failed 11 of 24, 48 threads 12 of 24.
+    - The owner's jobs moved the host from 3 to 27 busy cores within 25 minutes.
+  - **Fix:** 9 `bringToFront` lines in `import.spec.ts`, covering both of its two-tab tests.
+    - Under 48 threads, the original fails 5 to 7 of 12 and the fix 0 of 12, on both
+      projects.
+    - The mutants are caught.
+  - **Gate rule:** stop and report at the entry census, and classify any timeout from its
+    trace.
+- **Coordinator (brief Addendum 1).** Accepted.
+  - The "tab behind" class has now failed two gates: theme, then import.
+  - So the same planner checks the three other two-tab tests, and every `newPage` in the
+    e2e suite, under the 48-thread burner. It extends the patch only if one of them fails
+    or slows past half its limit.
+- **WP5-UX5-DIAG10 done (Addendum 1 results).** The "tab behind" class is closed with one
+  more fix.
+  - The midnight-crossing branch of `today.spec.ts:641` drives a tab that is behind. Under
+    the burner it failed 5 of 6 on each project.
+  - It is fixed by opening the second page in a browser context of its own. The fix passes
+    12 of 12 under the burner, and passes on a calm host. The original is the mutant.
+  - `bringToFront` also worked here, but was rejected: the product refreshes the periods on
+    focus and visibility, and this test is about those events.
+  - `logo.spec.ts:489` and `controls.spec.ts:699` never act on a page that is behind. They
+    pass 36/36 and 48/48. No other test drives two pages.
+  - Finding, not fixed: at saturation, the logo sweeps use 70–80 % of their 240 s limit.
+    This is a backlog risk.
+- **Coordinator decisions.**
+  - The patch is accepted: tests only, `import.spec.ts` and `today.spec.ts`.
+  - The new gate load rule, from REGATE12 on:
+    - Stop and report when the entry census shows more than 4 cores of non-mission load.
+    - Take a census right after any failure.
+    - A timeout whose trace shows host starvation while the census is over the limit makes
+      that run NOT VERIFIED. The run is repeated once on a quiet host, and both runs are
+      recorded.
+    - Every other failure fails the gate.
+- **WP5-UX5-FIX17 done** (worker, self-reported claude-sonnet-5-5). It is uncommitted.
+  Digest 69c6daff.
+  - Reproduced under the burner: the import test failed 12 of 12, and the crossing branch
+    3 of 6.
+  - It applied the patch to two e2e files.
+  - Under the burner, on both projects, everything passed: the import tests 24/24 each, the
+    crossing branch 6/6 and the normal branch 12/12.
+  - The mutants were caught.
+  - The calm-host runs passed.
+  - `dist/` is identical.
+  - FULL: 469/407, 0 failed. The midnight run: 0 failed; the crossing test took 72 s.
+- **Records prepared for the next steps:**
+  - REGATE12 is registered with its brief: scoped, tests only, all six sweeps, under the new
+    load rule.
+  - RECHECK-B3 and AUDIT-INT now depend on REGATE12, and target the FIX17 digest.
+- **Running now:** WP5-UX5-FIX17-FREEZE (committer). The coordinator writes no file while it
   runs.
-- **Next:**
+- **Next:** a fix if one is needed, then a regate on a host within the limit. RECHECK-B3
+  and AUDIT-INT move to depend on the new regate.
+- **Then:**
   - a scoped regate, with the drill, because the server bundle changes;
   - a fresh area-B recheck;
   - the integration audit, ACCEPT-DOCS and the WP5 re-accept.

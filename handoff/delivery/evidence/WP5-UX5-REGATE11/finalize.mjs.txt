@@ -1,0 +1,26 @@
+// Normalises every .txt file in a folder to LF with exactly one trailing newline, and lists email-like strings and "signature" basenames. Usage: node finalize.mjs <folder>
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const folder = process.argv[2] ?? '';
+let changed = 0;
+const emails = new Set();
+const names = [];
+for (const name of readdirSync(folder)) {
+  if (!name.endsWith('.txt')) {
+    console.log(`NOT .txt: ${name}`);
+    continue;
+  }
+  if (/signature/i.test(name) && !/synthetic/i.test(name)) names.push(name);
+  const path = join(folder, name);
+  const before = readFileSync(path, 'utf8');
+  const after = `${before.replace(/\r\n?/g, '\n').replace(/\n+$/, '')}\n`;
+  if (after !== before) {
+    writeFileSync(path, after);
+    changed += 1;
+  }
+  for (const m of after.matchAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/g)) emails.add(m[0]);
+}
+console.log(`files normalised: ${changed}`);
+console.log(`signature basenames without synthetic: ${names.length}`);
+console.log(`email-like strings: ${[...emails].join(', ') || 'none'}`);

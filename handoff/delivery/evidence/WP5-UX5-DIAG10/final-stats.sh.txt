@@ -1,0 +1,17 @@
+# Writes the per-run statistics and copies the run logs into the evidence folder.
+source /d/.claude-tmp/timesheet/WP5-UX5-DIAG10/env.sh
+E="D:\\Dropbox\\Work.CDSemi\\timesheet\\handoff\\delivery\\evidence\\WP5-UX5-DIAG10"
+SRC="D:\\.claude-tmp\\timesheet\\WP5-UX5-DIAG10\\export\\tests\\e2e"
+EU=/d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-DIAG10
+cd $T/logs
+node $T/summarize-runs.mjs "$E\\70-fix-proof-summary.txt" run-o48b.txt run-f48.txt run-o48m.txt run-f48m.txt run-n1.txt run-n2.txt run-pm1.txt run-fr.txt run-frm.txt run-fall.txt run-fallm.txt
+node $T/by-test.mjs "$E\\70-fix-proof-by-test.txt" run-o48b.txt run-f48.txt run-o48m.txt run-f48m.txt run-n1.txt run-n2.txt run-pm1.txt run-fr.txt run-frm.txt run-fall.txt run-fallm.txt
+node $T/by-test.mjs "$E\\35-repro-original-by-test.txt" run-e48o.txt run-d32.txt run-d24.txt run-d16.txt
+for l in e0 e4 e48o e48f d16 d24 d32 c4s c7s c4r c7r c4n c4nr o48b f48 o48m f48m n1 n2 pm1 fr frm fall fallm; do
+  if [ -f run-$l.txt ]; then cp run-$l.txt $EU/log-run-$l.txt; fi
+done
+for l in c4n c4nr; do node $T/census.mjs $T/census/$l-p1.txt $T/census/$l-p2.txt $T/census/$l-p1-time.txt $T/census/$l-p2-time.txt "D:\\.claude-tmp\\timesheet\\WP5-UX5-DIAG10\\census\\calc-$l-p1-p2.txt"; done
+for l in o48b f48 o48m f48m n1 n2 pm1 fr frm fall fallm; do
+  if [ -f $T/census/$l-p1.txt ]; then node $T/census.mjs $T/census/$l-p1.txt $T/census/$l-p2.txt $T/census/$l-p1-time.txt $T/census/$l-p2-time.txt "D:\\.claude-tmp\\timesheet\\WP5-UX5-DIAG10\\census\\calc-$l-p1-p2.txt"; fi
+done
+node $T/dose-table.mjs "$E\\60-dose-table.txt" e0:0:sim e4:1:sim c4r:1:real c4nr:2:real c7r:4:real c7s:4:sim c4s:1:sim c4n:2:sim d16:16:sim d24:24:sim d32:32:sim o48b:48:sim f48:48:sim o48m:48:sim f48m:48:sim n1:48:sim n2:48:sim pm1:0:sim fr:0:real frm:0:real fall:0:sim fallm:0:sim

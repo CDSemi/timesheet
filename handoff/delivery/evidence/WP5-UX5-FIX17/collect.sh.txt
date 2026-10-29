@@ -1,0 +1,10 @@
+# Usage: bash collect.sh <label> [<label> ...]  - per-test statistics of each dose log and the census calculations (p1-p2, p2-p3) of each label.
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX17/env.sh
+cd $T
+for L in "$@"; do
+  node by-test.mjs out/20-bytest-$L.txt logs/dose-$L.txt
+  if [ -f census/$L-p1.txt ]; then
+    node census-calc.mjs census/$L-p1.txt census/$L-p2.txt census/$L-p1-time.txt census/$L-p2-time.txt out/21-census-calc-$L-p1-p2.txt
+    node census-calc.mjs census/$L-p2.txt census/$L-p3.txt census/$L-p2-time.txt census/$L-p3-time.txt out/21-census-calc-$L-p2-p3.txt
+  fi
+done

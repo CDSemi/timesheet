@@ -1,0 +1,25 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+O=$T/out
+hashdist() {
+  d=$1; tag=$2
+  cd $T/$d
+  find dist -type f | LC_ALL=C sort > $O/51-$tag-files.txt
+  rm -f $O/51-$tag-hashes.txt
+  while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)" >> $O/51-$tag-hashes.txt; done < $O/51-$tag-files.txt
+  echo "$tag: $(wc -l < $O/51-$tag-files.txt) files" >> $O/51-dist-counts.txt
+}
+cd $T/export
+npm run lint > $O/02-lint.txt 2>&1; echo "lint exit $?" > $O/02-lint-exit.txt
+npm run typecheck > $O/02-typecheck.txt 2>&1; echo "typecheck exit $?" > $O/02-typecheck-exit.txt
+npm run build > $O/02-build.txt 2>&1; echo "build exit $?" > $O/02-build-exit.txt
+hashdist export target
+echo "target build done $(date -u +%H:%M:%SZ)" > $T/logs/chain0.log
+cd $T/export-prev
+export GIT_CONFIG_VALUE_0=<task>/export-prev
+npm run build > $O/02-prev-build.txt 2>&1; echo "prev build exit $?" >> $O/02-build-exit.txt
+hashdist export-prev prev
+export GIT_CONFIG_VALUE_0=<task>/export
+diff $O/51-prev-hashes.txt $O/51-target-hashes.txt > $O/51-hash-diff-prev-vs-target.txt; echo "dist hash diff prev vs target exit $? differing lines $(grep -cE '^[<>]' $O/51-hash-diff-prev-vs-target.txt)" > $O/51-hash-result.txt
+echo "prev build done $(date -u +%H:%M:%SZ)" >> $T/logs/chain0.log
+echo chain0-done > $O/chain0.done

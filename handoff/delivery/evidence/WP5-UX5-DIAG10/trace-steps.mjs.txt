@@ -1,0 +1,36 @@
+// Lists the steps of a Playwright test.trace/1-trace.trace with start offset and duration (ms).
+// Usage: node trace-steps.mjs <trace.jsonl> <outFile> [minMs]
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, outFile, minArg] = process.argv.slice(2);
+const minMs = minArg === undefined ? 0 : Number(minArg);
+const events = readFileSync(file, 'utf8').split('\n').filter((l) => l.length > 0).map((l) => JSON.parse(l));
+const ctx = events.find((e) => e.type === 'context-options');
+const t0 = ctx.monotonicTime;
+const open = new Map();
+const rows = [];
+for (const e of events) {
+  if (e.type === 'before') {
+    open.set(e.callId, e);
+  } else if (e.type === 'after') {
+    const b = open.get(e.callId);
+    if (b === undefined) continue;
+    const depth = (() => {
+      let d = 0;
+      let p = b.parentId;
+      while (p !== undefined && open.has(p)) { d += 1; p = open.get(p).parentId; }
+      return d;
+    })();
+    // A title may carry an API payload or a typed value (Fill "<text>"); keep only the first words.
+    const rawTitle = b.title ?? `${b.class}.${b.method}`;
+    const title = /^(Fill|GET|POST|PUT|DELETE)\b/.test(rawTitle) ? `${rawTitle.split(/[ :]/)[0]} (payload masked)` : rawTitle.slice(0, 100);
+    rows.push({ start: b.startTime - t0, dur: e.endTime - b.startTime, depth, title, line: b.stack?.[0]?.line, err: e.error?.message });
+  }
+}
+rows.sort((a, b) => a.start - b.start || a.depth - b.depth);
+const out = [`context wall ${ctx.wallTime}, monotonic ${t0}, events ${events.length}`];
+for (const r of rows) {
+  if (r.dur < minMs) continue;
+  out.push(`${String(Math.round(r.start)).padStart(7)} +${String(Math.round(r.dur)).padStart(6)} ${'  '.repeat(r.depth)}${r.title}${r.line === undefined ? '' : ` @${r.line}`}${r.err === undefined ? '' : ` ERR ${r.err.slice(0, 80)}`}`);
+}
+writeFileSync(outFile, out.join('\n') + '\n');

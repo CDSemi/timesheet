@@ -1,0 +1,26 @@
+// One controlled-load run of the import tests: a self-stopping CPU burner, two census samples, the Playwright run, one census sample.
+// Usage: node dose.mjs <label> <burnerThreads> <burnerSeconds> <instant|real> <repeatEach> <specFile> [extra playwright args...]
+// Env GREP selects the tests (default: the commit test). The burner ends by itself at its deadline; this driver waits for it.
+import { spawn } from 'node:child_process';
+
+const [label, threads, seconds, instant, reps, spec, ...extra] = process.argv.slice(2);
+const T = '/d/.claude-tmp/timesheet/WP5-UX5-DIAG10';
+const bash = 'C:\\Program Files\\Git\\bin\\bash.exe';
+
+function run(command, args, env = process.env) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { stdio: 'inherit', env });
+    child.on('exit', (code) => resolve(code ?? -1));
+  });
+}
+
+let burnerDone = Promise.resolve(0);
+if (Number(threads) > 0) {
+  burnerDone = run(process.execPath, [`${T.replace('/d/', 'D:/')}/burn.mjs`, threads, seconds]);
+}
+await run(bash, [`${T}/census.sh`, `${label}-p1`]);
+await run(bash, [`${T}/census.sh`, `${label}-p2`]);
+const code = await run(bash, [`${T}/exp-import.sh`, label, instant, reps, spec, ...extra]);
+await run(bash, [`${T}/census.sh`, `${label}-p3`]);
+await burnerDone;
+console.log(`dose ${label}: playwright wrapper exit ${code}`);

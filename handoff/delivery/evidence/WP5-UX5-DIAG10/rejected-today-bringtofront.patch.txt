@@ -1,0 +1,20 @@
+--- a/tests/e2e/today.spec.ts
++++ b/tests/e2e/today.spec.ts
+@@ -658,6 +658,9 @@
+       )
+       .not.toBe(before.today_local);
+     const stillShowsToday = contains(shown, after.today_local);
++    // Only the tab in front is drawn on time: on a loaded host a tab behind answers a click or a read seconds late (WP5-UX5-DIAG8,
++    // WP5-UX5-DIAG10). The second tab was opened last, so this one is behind: it is brought to front before it is driven or read.
++    await page.bringToFront();
+     // The tab nobody refreshed: no event reached it, so it still holds the old answer and its Today is as it was before midnight.
+     if (contains(shown, before.today_local)) await expectTodayActive(page, false);
+     await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(contains(shown, before.today_local) ? 1 : 0);
+@@ -677,6 +680,7 @@
+       await expect(page.locator(`[data-day="${after.today_local}"]`)).toBeInViewport();
+     }
+     // The other tab, which nobody pressed: a focus refresh alone moves the Today tag and the inactive state to the new date, with no reload.
++    await other.bringToFront();
+     await other.evaluate("window.dispatchEvent(new Event('focus'))");
+     await expect.poll(() => tagDate(other), { message: 'the refreshed tab tags the new date' }).toBe(stillShowsToday ? after.today_local : null);
+     await expectTodayActive(other, !stillShowsToday);

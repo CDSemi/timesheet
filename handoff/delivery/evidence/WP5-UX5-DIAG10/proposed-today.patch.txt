@@ -1,0 +1,45 @@
+--- a/tests/e2e/today.spec.ts
++++ b/tests/e2e/today.spec.ts
+@@ -627,6 +627,13 @@
+ test('a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself', { annotation: { type: CROSSES_MIDNIGHT, description: 'starts within 90 s of the reporting-zone midnight and waits for it' } }, async ({
+   page,
+   context,
++  browser,
++  baseURL,
++  locale,
++  timezoneId,
++  isMobile,
++  hasTouch,
++  deviceScaleFactor,
+   employeeSeed,
+   signInThroughUi,
+ }) => {
+@@ -637,8 +644,13 @@
+   const crossing = secondsToMidnight(before.reporting_zone) <= 90;
+   await landOn(page, signInThroughUi);
+   const shown = before.current;
+-  // A second tab on the same session is the person who comes back to the page by focus alone, without pressing anything.
+-  const other = crossing ? await context.newPage() : undefined;
++  // A second window on the same session is the person who comes back to the page by focus alone, without pressing anything. It is a browser
++  // context of its own, as logo.spec.ts and controls.spec.ts open theirs: a second tab of one context leaves the first one behind, and on a
++  // loaded host a tab behind answers seconds late (WP5-UX5-DIAG8, WP5-UX5-DIAG10); a window of its own is in front in its context.
++  const otherContext = crossing
++    ? await browser.newContext({ baseURL, storageState: await context.storageState(), viewport: page.viewportSize(), locale, timezoneId, isMobile, hasTouch, deviceScaleFactor })
++    : undefined;
++  const other = otherContext === undefined ? undefined : await otherContext.newPage();
+   if (other !== undefined) {
+     await other.goto('/');
+     await expect(other.locator('[data-day]')).toHaveCount(14);
+@@ -680,9 +692,12 @@
+     await other.evaluate("window.dispatchEvent(new Event('focus'))");
+     await expect.poll(() => tagDate(other), { message: 'the refreshed tab tags the new date' }).toBe(stillShowsToday ? after.today_local : null);
+     await expectTodayActive(other, !stillShowsToday);
++    await otherContext?.close();
+     return;
+   }
+ 
++  await otherContext?.close();
++
+   // The real-clock part (no midnight in reach): a press on the inactive Today still re-reads /periods/current and, because the
+   // fresh answer is not away, leaves the sheet and the live region exactly as they are.
+   if (isWindow(landed)) {

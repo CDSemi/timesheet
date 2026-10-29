@@ -1,0 +1,7 @@
+# Usage: [PROJECT=desktop|mobile] [GREP=<regex>] bash exp-import.sh <label> <instant|real> <repeat-each> [extra playwright args...]
+# One project (default desktop), the import tests chosen by GREP (default: the commit test), 6 workers, own output folder.
+source /d/.claude-tmp/timesheet/WP5-UX5-DIAG10/env.sh
+L=$1; INSTANT=$2; REPS=$3; shift 3
+PATTERN=${GREP:-"upload, preview with source cells"}
+bash $T/run-shift.sh $L $INSTANT --project=${PROJECT:-desktop} --grep "$PATTERN" --repeat-each=$REPS --workers=6 "$@" > $T/logs/run-$L.txt 2>&1
+echo "exit=$?" >> $T/logs/run-$L.txt

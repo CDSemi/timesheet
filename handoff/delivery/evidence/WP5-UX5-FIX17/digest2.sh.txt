@@ -1,0 +1,22 @@
+# Digest of a clean export of the working tree: git archive of HEAD (line endings normalised) with the two changed files copied over (git status outside handoff/ lists exactly those two).
+# Export form: sha256 of the sorted "<path> <blob>" lines, blobs from git hash-object --no-filters on the export. Then npm run digest in the repository.
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX17/env.sh
+cd $REPO
+git status --short -- . ':!handoff' > $T/out/91-status-before.txt 2>&1
+git archive 1fe5ad3075fd4d1b94abe5b8be04ed05729b05c2 | tar -x -C $T/export-final2
+cp $REPO/tests/e2e/import.spec.ts $T/export-final2/tests/e2e/import.spec.ts
+cp $REPO/tests/e2e/today.spec.ts $T/export-final2/tests/e2e/today.spec.ts
+cd $T/export-final2
+find . -type f -not -path './handoff/*' | sed 's|^\./||' | LC_ALL=C sort > $T/out/91-files.txt
+rm -f $T/out/91-hashes.txt
+while IFS= read -r f; do
+  h=$(git hash-object --no-filters -- "$f")
+  printf '%s %s\n' "$f" "$h" >> $T/out/91-hashes.txt
+done < $T/out/91-files.txt
+LC_ALL=C sort $T/out/91-hashes.txt > $T/out/91-sorted.txt
+echo "export form: $(sha256sum $T/out/91-sorted.txt | cut -d' ' -f1) lines $(wc -l < $T/out/91-sorted.txt)" > $T/out/91-digest-export.txt
+cd $REPO
+node scripts/source-digest.mjs > $T/out/91-digest-npm.txt 2>&1
+git ls-tree -r --format="%(path) %(objectname)" HEAD | grep -v '^handoff/' | LC_ALL=C sort > $T/out/91-lstree-head.txt
+git status --short -- . ':!handoff' > $T/out/91-status-after.txt 2>&1
+cat $T/out/91-status-before.txt $T/out/91-digest-export.txt $T/out/91-digest-npm.txt $T/out/91-status-after.txt

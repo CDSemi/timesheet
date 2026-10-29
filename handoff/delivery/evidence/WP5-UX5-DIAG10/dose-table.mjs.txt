@@ -1,0 +1,28 @@
+// Builds the load table: for each run label, the burner threads, the census total before the run and the run's durations.
+// Usage: node dose-table.mjs <outFile> <label:threads:clock> ...   (reads logs/run-<label>.txt and census/calc-<label>-p1-p2.txt)
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+const T = 'D:/.claude-tmp/timesheet/WP5-UX5-DIAG10';
+const [outFile, ...specs] = process.argv.slice(2);
+const LINE = /^\s+(ok|x|!)\s+\d+\s+\[(desktop|mobile)\]\s+›\s+tests\\e2e\\([^:]+):\d+:\d+\s+›\s+(.*?)\s+\((\d+(?:\.\d+)?)(ms|s|m)\)\s*$/;
+const out = ['label | burner threads | clock | census total before (busy cores of 32; gap) | runs | failed | median s | p95 s | max s'];
+for (const spec of specs) {
+  const [label, threads, clock] = spec.split(':');
+  const log = join(T, 'logs', `run-${label}.txt`);
+  const calc = join(T, 'census', `calc-${label}-p1-p2.txt`);
+  if (!existsSync(log)) { out.push(`${label} | ${threads} | ${clock} | (no log)`); continue; }
+  const rows = readFileSync(log, 'utf8').split('\n').map((l) => LINE.exec(l)).filter((m) => m !== null)
+    .map((m) => ({ status: m[1], project: m[2], seconds: m[6] === 'ms' ? Number(m[5]) / 1000 : m[6] === 'm' ? Number(m[5]) * 60 : Number(m[5]) }));
+  const sorted = rows.map((r) => r.seconds).sort((a, b) => a - b);
+  const pct = (p) => (sorted.length === 0 ? NaN : sorted[Math.min(sorted.length, Math.max(1, Math.ceil((p / 100) * sorted.length))) - 1]);
+  let census = 'not taken';
+  if (existsSync(calc)) {
+    const text = readFileSync(calc, 'utf8');
+    const total = Number(/TOTAL busy cores ([0-9.]+)/.exec(text)?.[1] ?? 'NaN');
+    const node = Number(/node\.exe\tbusy cores ([0-9.]+)/.exec(text)?.[1] ?? '0');
+    census = `total ${total.toFixed(1)}, of which node.exe (the burner) ${node.toFixed(1)}, all others ${(total - node).toFixed(1)} (gap ${/gap ([0-9.]+)s/.exec(text)?.[1] ?? '?'} s)`;
+  }
+  out.push(`${label} | ${threads} | ${clock} | ${census} | ${rows.length} | ${rows.filter((r) => r.status !== 'ok').length} | ${pct(50)} | ${pct(95)} | ${sorted[sorted.length - 1]}`);
+}
+writeFileSync(outFile, out.join('\n') + '\n');

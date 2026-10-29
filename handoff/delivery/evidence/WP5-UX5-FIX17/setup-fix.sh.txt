@@ -1,0 +1,18 @@
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX17/env.sh
+cd $REPO
+git archive 1fe5ad3075fd4d1b94abe5b8be04ed05729b05c2 | tar -x -C $T/export-fix
+cp $REPO/tests/e2e/import.spec.ts $T/export-fix/tests/e2e/import.spec.ts
+cp $REPO/tests/e2e/today.spec.ts $T/export-fix/tests/e2e/today.spec.ts
+cmp $REPO/tests/e2e/import.spec.ts $T/export-fix/tests/e2e/import.spec.ts > $T/out/05-export-fix-cmp.txt 2>&1; echo "import cmp exit=$?" >> $T/out/05-export-fix-cmp.txt
+cmp $REPO/tests/e2e/today.spec.ts $T/export-fix/tests/e2e/today.spec.ts >> $T/out/05-export-fix-cmp.txt 2>&1; echo "today cmp exit=$?" >> $T/out/05-export-fix-cmp.txt
+diff -rq $T/export-base $T/export-fix -x node_modules -x dist > $T/out/05-export-fix-vs-base.txt 2>&1
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0=$T/export-fix
+cd $T/export-fix
+node "$NPMCLI" ci > $T/logs/fix-ci.log 2>&1
+echo "ci exit=$?" >> $T/logs/fix-ci.log
+node "$NPMCLI" run build > $T/logs/fix-build.log 2>&1
+echo "build exit=$?" >> $T/logs/fix-build.log
+find dist -type f | LC_ALL=C sort > $T/out/dist-files-fix.txt
+sha256sum $(cat $T/out/dist-files-fix.txt) > $T/out/dist-hashes-fix.txt
+cmp $T/out/dist-hashes-base.txt $T/out/dist-hashes-fix.txt > $T/out/dist-cmp-fix.txt 2>&1; echo "dist hash cmp exit=$? ($(wc -l < $T/out/dist-files-fix.txt) files)" >> $T/out/dist-cmp-fix.txt
+echo "setup-fix done $(date -u +%H:%M:%SZ)" > $T/logs/setup-fix.done

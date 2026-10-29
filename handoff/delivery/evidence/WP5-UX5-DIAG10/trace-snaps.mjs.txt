@@ -1,0 +1,21 @@
+// Prints the frame-snapshot and input events of a Playwright trace with time offsets (ms from the test start).
+// Usage: node trace-snaps.mjs <1-trace.trace.jsonl> <outFile> <testMonotonicStart> <fromMs> <toMs>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, outFile, t0Arg, fromArg, toArg] = process.argv.slice(2);
+const t0 = Number(t0Arg);
+const from = Number(fromArg);
+const to = Number(toArg);
+const events = readFileSync(file, 'utf8').split('\n').filter((l) => l.length > 0).map((l) => JSON.parse(l));
+const out = [];
+for (const e of events) {
+  if (e.type === 'frame-snapshot') {
+    const s = e.snapshot;
+    const t = s.timestamp - t0;
+    if (t < from || t > to) continue;
+    out.push(`${String(Math.round(t)).padStart(7)} SNAP   ${s.callId} ${s.snapshotName ?? ''} page=${String(s.pageId).slice(-6)} frame=${String(s.frameUrl ?? '').slice(-40)} viewport=${JSON.stringify(s.viewport ?? {})}`);
+  } else if (e.type === 'input') {
+    out.push(`${String(Math.round(e.startTime - t0)).padStart(7)} INPUT  ${e.callId} ${JSON.stringify(e.point ?? {})}`);
+  }
+}
+writeFileSync(outFile, out.join('\n') + '\n');

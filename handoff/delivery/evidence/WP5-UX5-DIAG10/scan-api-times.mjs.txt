@@ -1,0 +1,32 @@
+// For every trace.zip in an output folder: the slowest API request (url, ms) and the commit request, if it was sent.
+// Usage: node scan-api-times.mjs <outputFolder> <outFile>
+import { readdirSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { openZip } from './zipread.mjs';
+
+const [root, outFile] = process.argv.slice(2);
+const out = [];
+for (const dir of readdirSync(root).sort()) {
+  const zipPath = join(root, dir, 'trace.zip');
+  if (!existsSync(zipPath)) continue;
+  const z = openZip(zipPath);
+  const names = [...z.entries.keys()].filter((n) => /trace\.network$/.test(n));
+  let slowest = { ms: -1, url: '' };
+  let commit = 'not sent';
+  let apiCount = 0;
+  for (const name of names) {
+    for (const line of z.read(name).toString('utf8').split('\n')) {
+      if (line.length === 0) continue;
+      const e = JSON.parse(line);
+      if (e.type !== 'resource-snapshot') continue;
+      const url = e.snapshot.request.url.replace(/^https?:\/\/[^/]+/, '');
+      if (!url.startsWith('/api/')) continue;
+      apiCount += 1;
+      const ms = Math.round(e.snapshot.time);
+      if (ms > slowest.ms) slowest = { ms, url: url.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, '<id>') };
+      if (/\/commit$/.test(url)) commit = `${e.snapshot.request.method} ${e.snapshot.response.status} ${ms} ms (wait ${Math.round(e.snapshot.timings?.wait ?? -1)})`;
+    }
+  }
+  out.push(`${dir.replace(/^import-upload-preview-with-931ba-orkbook-is-already-imported-/, '')}: ${apiCount} API requests, slowest ${slowest.ms} ms ${slowest.url}; commit: ${commit}`);
+}
+writeFileSync(outFile, out.join('\n') + '\n');

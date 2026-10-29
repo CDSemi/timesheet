@@ -1,0 +1,34 @@
+# Addendum 1, second part: the fix for today.spec.ts:641 (midnight-crossing branch), its proof under the 48-thread burner, its mutants,
+# and the product mutant. dose.mjs arguments: label, burner threads, burner seconds, clock, repeats, spec file.
+source /d/.claude-tmp/timesheet/WP5-UX5-DIAG10/env.sh
+NPMCLI="/c/Program Files/nodejs/node_modules/npm/bin/npm-cli.js"
+CROSS=2026-10-27T06:58:30Z
+TODAY="a page left open across a reporting-zone midnight"
+cp $T/hold/todayfix.spec.ts $T/export/tests/e2e/todayfix.spec.ts
+cp $T/hold/todaymut1.spec.ts $T/export/tests/e2e/todaymut1.spec.ts
+cp $T/hold/todaymut2.spec.ts $T/export/tests/e2e/todaymut2.spec.ts
+# Calm host first: the fix keeps the test's meaning (the tab nobody refreshed stays stale), crossing branch, both projects.
+GREP="$TODAY" PROJECT=desktop node $T/dose.mjs tfcd 0 1 $CROSS 3 tests/e2e/todayfix.spec.ts > $T/logs/dose-tfcd.txt 2>&1
+# The fix under the burner, both projects (6 repeats start together; each crosses the midnight).
+GREP="$TODAY" PROJECT=desktop node $T/dose.mjs tf2d 48 360 $CROSS 6 tests/e2e/todayfix.spec.ts > $T/logs/dose-tf2d.txt 2>&1
+GREP="$TODAY" PROJECT=mobile node $T/dose.mjs tf2m 48 360 $CROSS 6 tests/e2e/todayfix.spec.ts > $T/logs/dose-tf2m.txt 2>&1
+# The mutants of the fix, desktop.
+GREP="$TODAY" PROJECT=desktop node $T/dose.mjs tm1 48 360 $CROSS 6 tests/e2e/todaymut1.spec.ts > $T/logs/dose-tm1.txt 2>&1
+GREP="$TODAY" PROJECT=desktop node $T/dose.mjs tm2 48 360 $CROSS 6 tests/e2e/todaymut2.spec.ts > $T/logs/dose-tm2.txt 2>&1
+# The product mutant: no window focus refresh. The fixed test must fail (calm host, crossing branch). Then the source is restored and rebuilt.
+cd $T/export
+cp $T/hold/TimesheetScreen.mut.tsx src/client/TimesheetScreen.tsx
+node "$NPMCLI" run build > $T/logs/build-mut2.log 2>&1
+echo "exit=$?" >> $T/logs/build-mut2.log
+cd $T
+GREP="$TODAY" PROJECT=desktop node $T/dose.mjs pm2 0 1 $CROSS 3 tests/e2e/todayfix.spec.ts > $T/logs/dose-pm2.txt 2>&1
+cd $T/export
+cp $T/hold/TimesheetScreen.orig.tsx src/client/TimesheetScreen.tsx
+node "$NPMCLI" run build > $T/logs/build-restore2.log 2>&1
+echo "exit=$?" >> $T/logs/build-restore2.log
+find dist -type f | sort > $T/logs/dist-files-after-mut2.txt
+sha256sum $(cat $T/logs/dist-files-after-mut2.txt) > $T/logs/dist-hashes-after-mut2.txt
+cmp $T/logs/dist-hashes-base.txt $T/logs/dist-hashes-after-mut2.txt > $T/logs/dist-cmp-after-mut2.txt 2>&1
+echo "cmp exit=$?" >> $T/logs/dist-cmp-after-mut2.txt
+cmp src/client/TimesheetScreen.tsx $T/hold/TimesheetScreen.orig.tsx >> $T/logs/dist-cmp-after-mut2.txt 2>&1
+echo "source cmp exit=$?" >> $T/logs/dist-cmp-after-mut2.txt

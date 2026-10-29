@@ -1,0 +1,32 @@
+WP5-UX5-FIX17 checks (commands as run; Git Bash, Node 24.21.0 portable first on PATH; scratch exports under the task folder)
+
+1 Start state
+  git rev-parse HEAD / origin/main : 1fe5ad3075fd4d1b94abe5b8be04ed05729b05c2 / 1fe5ad3075fd4d1b94abe5b8be04ed05729b05c2; branch main
+  git status --short -- . ':!handoff' : empty
+  node scripts/source-digest.mjs : 18aa0ad0f99fbab18ae535d8b36375b756469a717e08b675a1e5d93d7459267c  (882 files, handoff/ excluded)
+
+2 Patch
+  git apply --check --whitespace=error proposed.patch.txt : exit 0
+  git apply --whitespace=error proposed.patch.txt         : exit 0
+  git apply --check --whitespace=error -R proposed.patch.txt : exit 0 afterwards
+  git status --short -- . ':!handoff' : " M tests/e2e/import.spec.ts" and " M tests/e2e/today.spec.ts", nothing else
+  git diff --check : exit 0
+  scratch export-fix: git archive 1fe5ad3 + cp of the two repository files; cmp import exit 0, cmp today exit 0; diff -rq against export-base differs in those two files only; npm ci exit 0 (own), npm run build exit 0.
+
+3 Repository checks, in the repository, one after another (NODE_OPTIONS=--trace-deprecation --pending-deprecation; SMOKE_PORT=51530)
+  npm run lint      : exit 0
+  npm run typecheck : exit 0
+  npm run build     : exit 0
+  dist/ of the repository after the build vs dist/ of a clean build of 1fe5ad3 (export-base): 250 files, sha256 of every file equal, hash-list cmp exit 0
+  npm run verify    : exit 0 (typecheck, lint, vitest 101 files / 2397 tests passed, build, smoke "SMOKE PASSED")
+  dist/ after verify vs the 1fe5ad3 build: hash-list cmp exit 0
+  grep -ci deprecat in the lint, typecheck, build and verify outputs : 0 each
+  the mutant rebuild of export-fix (product mutant, then restore and rebuild): dist/ equals the 1fe5ad3 build, 250 files, cmp exit 0; ImportScreen.tsx cmp exit 0
+  git diff --check : exit 0; git status outside handoff/ after all runs: the same two paths.
+
+4 Digest (last)
+  clean export: git archive 1fe5ad3 into an empty folder (line endings as stored), then the two changed files copied over from the working tree (git status lists exactly those two), 882 files outside handoff/
+  export form (sha256 of the sorted "<path> <git hash-object --no-filters blob>" lines): 69c6daff305dca839a7128e7b7509f3063c165fe5653d1c73159ea41c003e6bf, 882 lines
+  npm run digest (node scripts/source-digest.mjs) in the repository: 69c6daff305dca839a7128e7b7509f3063c165fe5653d1c73159ea41c003e6bf  (882 files, handoff/ excluded)
+  They agree. (A first attempt that copied every file raw from the Windows working tree gave 71f5a50b...: the working tree stores some files with CRLF, which npm run digest normalises; that export form was discarded and rebuilt from the archive as above.)
+  Scripts: digest.sh (first attempt, discarded) and digest2.sh are in the task folder; the form is the one in evidence/WP5-UX5-REGATE11/digest.sh.txt.

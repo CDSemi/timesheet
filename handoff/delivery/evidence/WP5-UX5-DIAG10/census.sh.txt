@@ -1,0 +1,5 @@
+# Usage: bash census.sh <label>  - one read-only process sample (names, ids, CPU times only) plus its epoch ms.
+T=/d/.claude-tmp/timesheet/WP5-UX5-DIAG10
+mkdir -p $T/census
+date +%s%3N > $T/census/$1-time.txt
+powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Select-Object Name,ProcessId,CreationDate,KernelModeTime,UserModeTime | Format-Table -AutoSize | Out-String -Width 4096" > $T/census/$1.txt

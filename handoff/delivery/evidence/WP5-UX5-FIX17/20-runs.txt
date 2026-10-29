@@ -1,0 +1,35 @@
+WP5-UX5-FIX17 run table (masked; Playwright list reporter, --workers=6 unless noted; times are test seconds; B48 = the self-stopping 48-thread burner, burn.mjs.txt)
+
+Reproduction on the original specs (HEAD 1fe5ad3, scratch export export-base, desktop)
+  rep-imp    import.spec.ts commit test, 2026-11-01T08:45:00Z, B48 200 s, 12 repeats : 12 failed, 0 passed, median 40.1 s, max 42.9 s (30 s timeout)
+  rep-today  today.spec.ts crossing branch, 2026-10-27T06:58:30Z, B48 360 s, 6 repeats : 3 failed, 3 passed, median 216 s, max 252 s (240 s limit)
+
+Proof of the fix (scratch export export-fix = HEAD archive + the two patched specs, byte-equal to the repository files: 05-export-fix-cmp)
+  fix-imp-d    commit test + opening-balance test, 2026-11-01T08:45:00Z, B48, 12 repeats each, desktop : 24 passed, 0 failed (commit median 6.1 s max 7.5 s; opening balance median 4.4 s max 5.8 s)
+  fix-imp-m    same, mobile                                                                                : 24 passed, 0 failed (commit median 5.4 s max 8.2 s; opening balance median 4.5 s max 7 s)
+  fix-cross-d  today.spec.ts crossing branch, 2026-10-27T06:58:30Z, B48 360 s, 6 repeats, desktop         : 6 passed, 0 failed (median 78 s, max 84 s)
+  fix-cross-m  same, mobile                                                                                : 6 passed, 0 failed (median 78 s, max 84 s)
+  fix-norm-d   today.spec.ts normal branch, 2026-11-01T08:45:00Z, B48 200 s, 12 repeats, desktop          : 12 passed, 0 failed (median 4.1 s, max 6.4 s)
+  fix-norm-m   same, mobile                                                                                : 12 passed, 0 failed (median 3.8 s, max 5.5 s)
+
+Mutants (export-fix; each restored byte-equal afterwards: mut-n1-restore.txt, mut-today-restore.txt, dist-cmp-after-mut.txt)
+  mut-n1     DIAG10 mutant-n1.patch.txt (the bringToFront before the confirm step removed), commit test, B48, 12 repeats, desktop : 11 failed, 1 passed, median 39.5 s, max 43.7 s
+  mut-today  the original context.newPage() (the base today.spec.ts), crossing branch, B48 360 s, 6 repeats, desktop             : 3 failed, 3 passed, median 156 s, max 234 s
+  mut-pm1    DIAG10 mutant-product-m1.patch.txt (ImportScreen.tsx shows no committed notice), client rebuilt, commit test, calm, 6 repeats, desktop : 6 failed (waiting for [data-import-notice="committed"]), median 11.6 s
+             restore: ImportScreen.tsx copied back, client rebuilt; dist/ of export-fix equals dist/ of the 1fe5ad3 build (250 files, hash cmp exit 0); source cmp exit 0
+
+Calm host (export-fix, 6 workers, no burner)
+  calm-imp-desktop     import.spec.ts whole, 2026-11-01T08:45:00Z, --repeat-each=5 : 40 passed, 0 failed
+  calm-imp-mobile      same, mobile                                                : 40 passed, 0 failed
+  calm-today-x-desktop today.spec.ts whole, 2026-10-27T06:58:30Z                   : 18 passed, 4 skipped, 0 failed (crossing test 78 s)
+  calm-today-x-mobile  same, mobile                                                : 18 passed, 4 skipped, 0 failed (crossing test 78 s)
+  calm-today-r-desktop today.spec.ts whole, real clock                              : 18 passed, 4 skipped, 0 failed
+  calm-today-r-mobile  same, mobile                                                 : 18 passed, 4 skipped, 0 failed
+
+Real-clock FULL e2e (export-fix, default 2 workers, one project per run)
+  desktop : 469 passed, 35 skipped, 0 failed, 9.4 min, exit 0
+  mobile  : 407 passed, 97 skipped, 0 failed, 6.1 min, exit 0
+
+Midnight sweep run (export-fix, 2026-10-27T06:58:30Z, --workers=6, FIX10 clock wrapper, seven files, both projects in one run)
+  384 passed, 84 skipped, 0 failed, 5.8 min, exit 0 (REGATE11 seven-spec run: desktop 219 + mobile 165 = 384 ok, 15 + 69 = 84 skipped)
+  the desktop crossing test (today.spec.ts, a page left open across a reporting-zone midnight) took 72 s; the mobile one passed in 2 s

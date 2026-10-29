@@ -1,0 +1,391 @@
+// WP5-UX5-RECHECK-B2 probe (auditor's own): the release of a held send after a restore, over real HTTP on the BUILT server
+// and the real CLI (backup, isolated restore, outbound resume and release, run-jobs). Capture mode, synthetic example.invalid
+// accounts, random per-run passwords (never printed or stored). JOB_RUNNER off; jobs run only through `cli.js run-jobs`.
+//   A. RECHECK-B's sequence for F-UX5B2-1 (sign and send revision 1; backup; isolated restore; resume; correct and send
+//      revision 2; run-jobs; release --job --confirm; run-jobs), plus another owner and another period, and a bulk release.
+//   B. The correction's send fails permanently (run-jobs without MAIL_FROM: sender_missing), then the held job is released.
+//   C. The correction's send ends uncertain (the capture adapter's own "capture_exists" answer, provoked by creating the
+//      attempt's capture folder while the attempt is `preparing`); the owner marks it delivered; the held job is released.
+//   D. A second backup and restore while the correction's send waits: both jobs held; release --all.
+// Usage: node http-restore.mjs <exportDir> <workDir> <firstPort> <out.txt>
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+
+const [exportDir, work, firstPortText, outPath] = process.argv.slice(2);
+const firstPort = Number(firstPortText);
+const require = createRequire(join(exportDir, 'package.json'));
+const Database = require('better-sqlite3');
+mkdirSync(work, { recursive: true });
+const lines = [];
+let failures = 0;
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+const log = (line) => lines.push(String(line).replaceAll(work, '<work>'));
+const check = (name, ok, detail = '') => {
+  if (!ok) failures += 1;
+  log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail === '' ? '' : ` | ${detail}`}`);
+};
+const SENDER = 'recheck-b2-sender@example.invalid';
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+delete process.env.PRODUCTION_SENDING_ENABLED;
+let nextPort = firstPort;
+const port = () => nextPort++;
+
+function instance(name, ports) {
+  const dir = join(work, name);
+  mkdirSync(dir, { recursive: true });
+  return { dir, databasePath: join(dir, 'timesheet.db'), dataDir: join(dir, 'private-data'), ports };
+}
+const envFor = (inst, p, mailFrom = SENDER) => ({
+  ...process.env,
+  NODE_ENV: 'development',
+  PORT: String(p),
+  HOST: '127.0.0.1',
+  DATABASE_PATH: inst.databasePath,
+  DATA_DIR: inst.dataDir,
+  APP_ORIGINS: inst.ports.map((item) => `http://localhost:${item}`).join(','),
+  MAIL_FROM: mailFrom,
+  OUTBOUND_MODE: 'capture',
+  JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: passwords.admin,
+  SEED_EMPLOYEE_PASSWORD: passwords.employee,
+  SEED_EMPLOYEE2_PASSWORD: passwords.employee2,
+});
+const cliPath = join(exportDir, 'dist', 'server', 'cli.js');
+const cli = (inst, args, mailFrom = SENDER) => {
+  const result = spawnSync(process.execPath, [cliPath, ...args], { env: envFor(inst, inst.ports[0], mailFrom), encoding: 'utf8', cwd: exportDir });
+  return { status: result.status, output: `${result.stdout}${result.stderr}`.replaceAll(work, '<work>').trim() };
+};
+const masked = (text) => text.replace(UUID, '<id>').replaceAll('\n', ' ');
+const servers = [];
+function startServer(inst, p) {
+  const child = spawn(process.execPath, [join(exportDir, 'dist', 'server', 'index.js')], { env: envFor(inst, p), cwd: exportDir, stdio: ['ignore', 'pipe', 'pipe'] });
+  let output = '';
+  child.stdout.on('data', (chunk) => (output += String(chunk)));
+  child.stderr.on('data', (chunk) => (output += String(chunk)));
+  const server = { child, port: p, output: () => output, exited: false };
+  child.on('exit', () => (server.exited = true));
+  servers.push(server);
+  return server;
+}
+async function stopServer(server) {
+  if (server.exited) return;
+  server.child.kill();
+  for (let wait = 0; wait < 50 && !server.exited; wait += 1) await new Promise((resolve) => setTimeout(resolve, 100));
+}
+async function waitHealthy(p) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${p}/api/health`, { headers: { connection: 'close' }, signal: AbortSignal.timeout(2000) });
+      if (response.ok) return true;
+    } catch {
+      // not listening yet
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return false;
+}
+async function call(method, path, { cookie, body, p } = {}) {
+  const headers = { connection: 'close', origin: `http://localhost:${p}` };
+  if (cookie) headers.cookie = cookie;
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  const response = await fetch(`http://127.0.0.1:${p}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const text = await response.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = null;
+  }
+  return { status: response.status, json, text };
+}
+const code = (res) => `${res.status}${res.json?.error?.code ? `:${res.json.error.code}` : ''}`;
+async function login(email, password, p) {
+  const res = await fetch(`http://127.0.0.1:${p}/api/auth/login`, {
+    method: 'POST',
+    headers: { connection: 'close', origin: `http://localhost:${p}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  await res.text();
+  return { status: res.status, cookie: (res.headers.get('set-cookie') ?? '').split(';')[0], p };
+}
+const addDaysIso = (date, days) => new Date(Date.parse(`${date}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+let clockOffset = 0;
+const nowArg = () => {
+  clockOffset += 150;
+  return new Date(Date.now() + clockOffset * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+};
+const runJobs = (inst, passes = 3, mailFrom = SENDER) => {
+  const out = [];
+  for (let pass = 0; pass < passes; pass += 1) out.push(cli(inst, ['run-jobs', '--once', '--now', nowArg()], mailFrom));
+  return out.map((item) => `${item.status}:${masked(item.output)}`).join(' ; ');
+};
+async function signOff(user, payroll) {
+  const review = await call('GET', `/api/timesheets/${payroll}/review`, { cookie: user.cookie, p: user.p });
+  if (review.status !== 200) return { status: review.status, code: code(review), id: null };
+  const res = await call('POST', `/api/timesheets/${payroll}/signoff`, {
+    cookie: user.cookie,
+    p: user.p,
+    body: { expected_version: review.json.expected_version, reviewed_hash: review.json.payload_hash, incomplete_evidence_acknowledged: true },
+  });
+  return { status: res.status, code: code(res), id: res.json?.revision?.id ?? null };
+}
+async function correct(user, payroll, note) {
+  const review = (await call('GET', `/api/timesheets/${payroll}/review`, { cookie: user.cookie, p: user.p })).json;
+  const day = review.payload.days[2].work_date;
+  const edited = await call('PUT', `/api/days/${day}`, { cookie: user.cookie, p: user.p, body: { category: 'Worked', leave_minutes: 0, wfh: false, notes: note, reason: 'Synthetic correction probe' } });
+  const after = (await call('GET', `/api/timesheets/${payroll}/review`, { cookie: user.cookie, p: user.p })).json;
+  const res = await call('POST', `/api/timesheets/${payroll}/revisions`, {
+    cookie: user.cookie,
+    p: user.p,
+    body: { expected_version: after.expected_version, reviewed_hash: after.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic correction probe', send_email: false },
+  });
+  return { status: res.status, code: `${code(edited)} ${code(res)}`, id: res.json?.revision?.id ?? null };
+}
+async function send(user, revisionId, extra = {}) {
+  const draft = (await call('GET', `/api/revisions/${revisionId}/send-draft`, { cookie: user.cookie, p: user.p })).json;
+  const body = { request_key: randomUUID(), to: draft.to, cc: draft.cc, subject: draft.subject, body_text: draft.body_text, time_rows: draft.time_rows, ot_rows: draft.ot_rows, ...extra };
+  return call('POST', `/api/revisions/${revisionId}/send`, { cookie: user.cookie, p: user.p, body });
+}
+async function ensureRecipients(user) {
+  const current = await call('GET', '/api/settings/submission', { cookie: user.cookie, p: user.p });
+  const settings = current.json?.settings ?? null;
+  if ((settings?.recipients?.to ?? []).length > 0) return 'kept';
+  const saved = await call('POST', '/api/settings/submission', { cookie: user.cookie, p: user.p, body: { expected_seq: settings?.seq ?? 0, to: ['payroll@example.invalid'], cc: [], auto_submit: false } });
+  return code(saved);
+}
+
+/** A migrated, seeded source with a server; returns the logged-in owner (employee2) and other owner (employee). */
+async function newSource(name) {
+  const p = port();
+  const src = instance(name, [p]);
+  const migrated = cli(src, ['migrate']).status;
+  const seeded = cli(src, ['seed']).status;
+  const server = startServer(src, p);
+  const healthy = await waitHealthy(p);
+  const owner = await login('employee2@example.invalid', passwords.employee2, p);
+  const other = await login('employee@example.invalid', passwords.employee, p);
+  const recipients = `${await ensureRecipients(other)}/${await ensureRecipients(owner)}`;
+  const periods = (await call('GET', '/api/periods/current', { cookie: owner.cookie, p })).json;
+  log(`${name}: migrate ${migrated}, seed ${seeded}, healthy ${healthy}, logins ${owner.status}/${other.status}, recipients ${recipients}, today ${periods.today_local}, current payroll ${periods.current.payroll_date}`);
+  return { src, server, owner, other, payroll: periods.current.payroll_date };
+}
+/** Backup of `from` (server stopped first), isolated restore into a new folder, resume; returns the restored instance. */
+async function backupRestore(from, server, name) {
+  const backupDir = join(work, `${name}-backups`);
+  mkdirSync(backupDir, { recursive: true });
+  const backup = cli(from, ['backup', '--to', backupDir]);
+  if (server !== null) await stopServer(server);
+  const backupName = readdirSync(backupDir).find((entry) => !entry.startsWith('.'));
+  const restoredDir = join(work, name);
+  const restore = cli(from, ['restore', '--from', join(backupDir, backupName ?? 'missing'), '--to', restoredDir]);
+  const p = port();
+  const dst = { dir: restoredDir, databasePath: join(restoredDir, 'timesheet.db'), dataDir: join(restoredDir, 'private-data'), ports: [p] };
+  const monitor = new Database(dst.databasePath, { readonly: true });
+  const held = monitor.prepare("SELECT state, last_error FROM jobs WHERE kind = 'send_email' AND state = 'intervention' AND last_error = 'reconcile_after_restore'").all().length;
+  const resume = cli(dst, ['outbound', 'resume', '--confirm']);
+  log(`${name}: backup ${backup.status}, restore ${restore.status} (${masked(restore.output.split('\n')[0] ?? '')}), held send jobs ${held}, resume --confirm ${resume.status} (${masked(resume.output)})`);
+  return { dst, monitor, p, held, backup: backup.status, restore: restore.status, resume: resume.status };
+}
+const jobOf = (monitor, revisionId) => monitor.prepare("SELECT id FROM jobs WHERE revision_id = ? AND kind = 'send_email' ORDER BY rowid LIMIT 1").pluck().get(revisionId);
+const jobState = (monitor, jobId) => monitor.prepare('SELECT state, last_error FROM jobs WHERE id = ?').get(jobId);
+const ownerAttempts = (monitor, revisionId) =>
+  monitor
+    .prepare(
+      `SELECT r.revision_no, a.state, a.decision, a.provider_response FROM delivery_attempts a JOIN timesheet_revisions r ON r.id = a.revision_id
+        WHERE r.timesheet_id = (SELECT timesheet_id FROM timesheet_revisions WHERE id = ?) ORDER BY a.rowid`,
+    )
+    .all(revisionId)
+    .map((row) => `r${row.revision_no}:${row.state}${row.decision === null ? '' : `/${row.decision}`}${row.provider_response === 'capture_exists' ? '(capture_exists)' : ''}`);
+const preview = (dst) => {
+  const result = cli(dst, ['outbound', 'release']);
+  let parsed = null;
+  try {
+    parsed = JSON.parse(result.output);
+  } catch {
+    parsed = null;
+  }
+  return { status: result.status, json: parsed, text: masked(result.output) };
+};
+const blockerOf = (pv, jobId) => pv.json?.jobs?.find((job) => job.id === jobId)?.blocker;
+
+/** run-jobs while planting the capture folder of the revision's attempt as soon as it is `preparing`. */
+async function runJobsPlanting(inst, monitor, revisionId) {
+  const child = spawn(process.execPath, [cliPath, 'run-jobs', '--once', '--now', nowArg()], { env: envFor(inst, inst.ports[0]), cwd: exportDir, stdio: ['ignore', 'pipe', 'pipe'] });
+  let output = '';
+  child.stdout.on('data', (chunk) => (output += String(chunk)));
+  child.stderr.on('data', (chunk) => (output += String(chunk)));
+  let exited = false;
+  child.on('exit', () => (exited = true));
+  const latest = monitor.prepare('SELECT id, state FROM delivery_attempts WHERE revision_id = ? ORDER BY rowid DESC LIMIT 1');
+  let planted = null;
+  while (!exited) {
+    const row = latest.get(revisionId);
+    if (planted === null && row !== undefined && row.state === 'preparing') {
+      mkdirSync(join(inst.dataDir, 'mail-capture', row.id), { recursive: true });
+      planted = row.id;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  return { planted: planted !== null, output: masked(output.replaceAll(work, '<work>')) };
+}
+
+const monitors = [];
+try {
+  log(`node ${process.version}; first port ${firstPort}`);
+  /* ------------------------------------------------------------------ A. RECHECK-B's sequence, other owner, other period */
+  {
+    const s = await newSource('A-source');
+    const previous = addDaysIso(s.payroll, -14);
+    const r1 = await signOff(s.owner, s.payroll);
+    const r1send = await send(s.owner, r1.id);
+    const o1 = await signOff(s.other, s.payroll);
+    const o1send = await send(s.other, o1.id);
+    const p1 = await signOff(s.owner, previous);
+    const p1send = await send(s.owner, p1.id);
+    check('A1 owner revision 1, other owner revision 1 and the owner\'s previous period signed and sent on the source; jobs wait', [r1send, o1send, p1send].every((res) => res.status === 201), `${r1.code} ${code(r1send)} | ${o1.code} ${code(o1send)} | ${p1.code} ${code(p1send)}`);
+    const R = await backupRestore(s.src, s.server, 'A-restored');
+    monitors.push(R.monitor);
+    check('A2 backup, isolated restore and resume --confirm exit 0; three send jobs held', R.backup === 0 && R.restore === 0 && R.resume === 0 && R.held === 3, `held ${R.held}`);
+    const serverD = startServer(R.dst, R.p);
+    check('A3 restored server healthy', await waitHealthy(R.p));
+    const owner = await login('employee2@example.invalid', passwords.employee2, R.p);
+    const other = await login('employee@example.invalid', passwords.employee, R.p);
+    const J1 = jobOf(R.monitor, r1.id);
+    const J1o = jobOf(R.monitor, o1.id);
+    const J1p = jobOf(R.monitor, p1.id);
+    const before = preview(R.dst);
+    log(`A preview before the correction: exit ${before.status} ${before.text}`);
+    check('A4 before the correction every held job is releasable (blocker null)', [J1, J1o, J1p].every((id) => blockerOf(before, id) === null), [J1, J1o, J1p].map((id) => blockerOf(before, id)).join(','));
+    const r2 = await correct(owner, s.payroll, 'Synthetic restore note A');
+    const r2send = await send(owner, r2.id);
+    check('A5 the owner corrects (revision 2) and sends it on the restored instance: 201, no reason asked (a held job is not waiting, no copy counts)', r2.status === 201 && r2send.status === 201 && (r2send.json?.send?.reason ?? null) === null, `${r2.code} ${code(r2send)}`);
+    const queued = preview(R.dst);
+    check('A6 while revision 2 waits (queued): revision 1 is blocked superseded_by_later_send; the other owner and the other period stay releasable', blockerOf(queued, J1) === 'superseded_by_later_send' && blockerOf(queued, J1o) === null && blockerOf(queued, J1p) === null, `${blockerOf(queued, J1)} / ${blockerOf(queued, J1o)} / ${blockerOf(queued, J1p)}`);
+    log(`A run-jobs: ${runJobs(R.dst)}`);
+    check('A7 run-jobs: revision 2 accepted', ownerAttempts(R.monitor, r2.id).join(',') === 'r2:accepted', ownerAttempts(R.monitor, r2.id).join(','));
+    const afterRun = preview(R.dst);
+    log(`A preview after run-jobs: exit ${afterRun.status} ${afterRun.text}`);
+    const releaseOld = cli(R.dst, ['outbound', 'release', '--job', J1, '--confirm']);
+    check('A8 outbound release --job <revision 1 job> --confirm: refused superseded_by_later_send, exit non-zero', releaseOld.status !== 0 && /superseded_by_later_send/.test(releaseOld.output), `exit ${releaseOld.status} ${masked(releaseOld.output)}`);
+    log(`A run-jobs: ${runJobs(R.dst)}`);
+    check('A9 the superseded revision 1 is never delivered: the period\'s attempts are revision 2 only; the job is still held', ownerAttempts(R.monitor, r1.id).join(',') === 'r2:accepted' && jobState(R.monitor, J1).last_error === 'reconcile_after_restore', `${ownerAttempts(R.monitor, r1.id).join(',')} ${JSON.stringify(jobState(R.monitor, J1))}`);
+    const all = cli(R.dst, ['outbound', 'release', '--all', '--confirm']);
+    log(`A release --all --confirm: exit ${all.status} ${masked(all.output)}`);
+    log(`A run-jobs: ${runJobs(R.dst)}`);
+    check('A10 bulk release: the other owner\'s and the other period\'s jobs released and delivered; revision 1 still held and never delivered',
+      ownerAttempts(R.monitor, o1.id).join(',') === 'r1:accepted' && ownerAttempts(R.monitor, p1.id).join(',') === 'r1:accepted' && ownerAttempts(R.monitor, r1.id).join(',') === 'r2:accepted' && jobState(R.monitor, J1).state === 'intervention',
+      `other owner ${ownerAttempts(R.monitor, o1.id).join(',')}; other period ${ownerAttempts(R.monitor, p1.id).join(',')}; current ${ownerAttempts(R.monitor, r1.id).join(',')}; revision 1 job ${JSON.stringify(jobState(R.monitor, J1))}`);
+    await stopServer(serverD);
+  }
+
+  /* ------------------------------------------------------------------ B. the correction's send fails permanently */
+  {
+    const s = await newSource('B-source');
+    const r1 = await signOff(s.owner, s.payroll);
+    const r1send = await send(s.owner, r1.id);
+    const R = await backupRestore(s.src, s.server, 'B-restored');
+    monitors.push(R.monitor);
+    const serverD = startServer(R.dst, R.p);
+    await waitHealthy(R.p);
+    const owner = await login('employee2@example.invalid', passwords.employee2, R.p);
+    const J1 = jobOf(R.monitor, r1.id);
+    const r2 = await correct(owner, s.payroll, 'Synthetic restore note B');
+    const r2send = await send(owner, r2.id);
+    log(`B revision 1 send ${code(r1send)}; correction ${r2.code}; its send ${code(r2send)}`);
+    log(`B run-jobs WITHOUT MAIL_FROM: ${runJobs(R.dst, 3, '')}`);
+    const J2 = jobOf(R.monitor, r2.id);
+    log(`B revision 2: attempts ${ownerAttempts(R.monitor, r2.id).join(',')}; job ${JSON.stringify(jobState(R.monitor, J2))}`);
+    const pv = preview(R.dst);
+    log(`B preview: exit ${pv.status} ${pv.text}`);
+    const release = cli(R.dst, ['outbound', 'release', '--job', J1, '--confirm']);
+    log(`B release --job <revision 1 job> --confirm: exit ${release.status} ${masked(release.output)}`);
+    log(`B run-jobs: ${runJobs(R.dst)}`);
+    const seq = ownerAttempts(R.monitor, r1.id).join(',');
+    check('B1 (docs/05:72 "refused ... while any later send of the period exists"): with revision 2\'s send failed, the release of revision 1 is refused', release.status !== 0 && /superseded_by_later_send/.test(release.output), `blocker ${blockerOf(pv, J1)}; release exit ${release.status}; period attempts ${seq}`);
+    await stopServer(serverD);
+  }
+
+  /* ------------------------------------------------------------------ C. the correction's send ends uncertain; marked delivered */
+  {
+    let done = false;
+    for (let attempt = 1; attempt <= 5 && !done; attempt += 1) {
+      const s = await newSource(`C${attempt}-source`);
+      const r1 = await signOff(s.owner, s.payroll);
+      const r1send = await send(s.owner, r1.id);
+      const R = await backupRestore(s.src, s.server, `C${attempt}-restored`);
+      monitors.push(R.monitor);
+      const serverD = startServer(R.dst, R.p);
+      await waitHealthy(R.p);
+      const owner = await login('employee2@example.invalid', passwords.employee2, R.p);
+      const J1 = jobOf(R.monitor, r1.id);
+      const r2 = await correct(owner, s.payroll, `Synthetic restore note C${attempt}`);
+      const r2send = await send(owner, r2.id);
+      log(`C${attempt} revision 1 send ${code(r1send)}; correction ${r2.code}; its send ${code(r2send)}`);
+      const runs = [];
+      for (let pass = 0; pass < 3; pass += 1) runs.push(await runJobsPlanting(R.dst, R.monitor, r2.id));
+      log(`C${attempt} run-jobs (planting): ${runs.map((run) => `planted ${run.planted}: ${run.output}`).join(' ; ')}`);
+      const J2 = jobOf(R.monitor, r2.id);
+      const attempts2 = ownerAttempts(R.monitor, r2.id).join(',');
+      log(`C${attempt} revision 2: attempts ${attempts2}; job ${JSON.stringify(jobState(R.monitor, J2))}`);
+      if (attempts2 !== 'r2:uncertain(capture_exists)') {
+        log(`C${attempt}: the race was missed (revision 2 not uncertain); next scenario`);
+        await stopServer(serverD);
+        continue;
+      }
+      done = true;
+      const undecided = preview(R.dst);
+      log(`C preview with revision 2 uncertain and undecided: exit ${undecided.status} ${undecided.text}`);
+      const attemptId = R.monitor.prepare("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'uncertain'").pluck().get(r2.id);
+      const decided = await call('POST', `/api/deliveries/${attemptId}/decision`, { cookie: owner.cookie, p: R.p, body: { decision: 'mark_delivered' } });
+      log(`C the owner marks revision 2's uncertain copy delivered over HTTP: ${code(decided)}`);
+      const pv = preview(R.dst);
+      log(`C preview after the decision: exit ${pv.status} ${pv.text}`);
+      const release = cli(R.dst, ['outbound', 'release', '--job', J1, '--confirm']);
+      log(`C release --job <revision 1 job> --confirm: exit ${release.status} ${masked(release.output)}`);
+      log(`C run-jobs: ${runJobs(R.dst)}`);
+      const seq = ownerAttempts(R.monitor, r1.id).join(',');
+      check('C1 (docs/05:72, docs/11:178): after revision 2\'s copy (uncertain, marked delivered by the owner) the superseded revision 1 is NOT released or delivered', release.status !== 0 && !seq.includes('r1:accepted'), `blocker undecided ${blockerOf(undecided, J1)}, after decision ${blockerOf(pv, J1)}; release exit ${release.status}; period attempts in order ${seq}`);
+      await stopServer(serverD);
+    }
+    if (!done) check('C0 the uncertain state was reached', false, 'race missed in 5 scenarios');
+  }
+
+  /* ------------------------------------------------------------------ D. a second restore while the correction waits */
+  {
+    const s = await newSource('D-source');
+    const r1 = await signOff(s.owner, s.payroll);
+    await send(s.owner, r1.id);
+    const R = await backupRestore(s.src, s.server, 'D-restored1');
+    monitors.push(R.monitor);
+    const serverD = startServer(R.dst, R.p);
+    await waitHealthy(R.p);
+    const owner = await login('employee2@example.invalid', passwords.employee2, R.p);
+    const r2 = await correct(owner, s.payroll, 'Synthetic restore note D');
+    const r2send = await send(owner, r2.id);
+    log(`D correction ${r2.code}; its send ${code(r2send)} (waits, runner off)`);
+    const R2 = await backupRestore(R.dst, serverD, 'D-restored2');
+    monitors.push(R2.monitor);
+    const J1 = jobOf(R2.monitor, r1.id);
+    const J2 = jobOf(R2.monitor, r2.id);
+    const pv = preview(R2.dst);
+    log(`D preview on the second restore: exit ${pv.status} ${pv.text}`);
+    const all = cli(R2.dst, ['outbound', 'release', '--all', '--confirm']);
+    log(`D release --all --confirm: exit ${all.status} ${masked(all.output)}`);
+    log(`D run-jobs: ${runJobs(R2.dst)}`);
+    const seq = ownerAttempts(R2.monitor, r1.id).join(',');
+    check('D1 (docs/05:72): with revision 2\'s send held as well, revision 1 stays held (superseded_by_later_send) and is not delivered', blockerOf(pv, J1) === 'superseded_by_later_send' && !seq.includes('r1:'), `blockers r1 ${blockerOf(pv, J1)}, r2 ${blockerOf(pv, J2)}; period attempts in order ${seq}`);
+  }
+} catch (error) {
+  failures += 1;
+  log(`FAIL unexpected error: ${error instanceof Error ? `${error.message}\n${error.stack}` : String(error)}`);
+} finally {
+  for (const monitor of monitors) monitor.close();
+  for (const server of servers) await stopServer(server);
+  for (const [index, server] of servers.entries()) log(`server ${index} (port ${server.port}) exited ${server.exited}; output head: ${server.output().replaceAll(work, '<work>').slice(0, 160).replaceAll('\n', ' | ')}`);
+}
+log(`failures: ${failures}`);
+writeFileSync(outPath, `${lines.join('\n')}\n`);
+process.exitCode = failures === 0 ? 0 : 1;

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Container drill --wp3 on the clean export of the target (wp3 prepared by prepWp3.sh). Compose project ts-wp5-ux5regate11, down -v at the end.
+source <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation"
+echo "drill start $(date -u +%H:%M:%SZ)" > "$T/logs/drill-exits.txt"
+cd "$T/export" || exit 9
+node scripts/container-drill.mjs --work "$(cygpath -w "$T/drillwork")" --project ts-wp5-ux5regate11 --wp3 "$(cygpath -w "$T/wp3")" > "$T/logs/drill.txt" 2>&1
+echo "drill exit=$?" >> "$T/logs/drill-exits.txt"
+docker compose -p ts-wp5-ux5regate11 down -v > "$T/logs/compose-down.txt" 2>&1
+echo "compose down exit=$?" >> "$T/logs/drill-exits.txt"
+docker ps --all --filter name=ts-wp5-ux5regate11 > "$T/logs/docker-after.txt" 2>&1
+echo "drill done $(date -u +%H:%M:%SZ)" >> "$T/logs/drill-exits.txt"
+echo drill-done > "$T/out/drill.done"

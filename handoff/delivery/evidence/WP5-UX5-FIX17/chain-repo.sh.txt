@@ -1,0 +1,18 @@
+# Repository checks, one after another, in the repository (no npm ci). Evidence goes to the task out folder.
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX17/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+O=$T/out
+cd $REPO
+node "$NPMCLI" run lint > $O/02-lint.txt 2>&1; echo "lint exit $?" > $O/02-lint-exit.txt
+node "$NPMCLI" run typecheck > $O/02-typecheck.txt 2>&1; echo "typecheck exit $?" > $O/02-typecheck-exit.txt
+node "$NPMCLI" run build > $O/02-build.txt 2>&1; echo "build exit $?" > $O/02-build-exit.txt
+find dist -type f | LC_ALL=C sort > $O/dist-files-repo.txt
+sha256sum $(cat $O/dist-files-repo.txt) > $O/dist-hashes-repo.txt
+cmp $O/dist-hashes-base.txt $O/dist-hashes-repo.txt > $O/dist-cmp-repo.txt 2>&1; echo "dist hash cmp exit $? ($(wc -l < $O/dist-files-repo.txt) files)" >> $O/dist-cmp-repo.txt
+node "$NPMCLI" run verify > $O/03-verify.txt 2>&1; echo "verify exit $?" > $O/03-verify-exit.txt
+find dist -type f | LC_ALL=C sort > $O/dist-files-repo2.txt
+sha256sum $(cat $O/dist-files-repo2.txt) > $O/dist-hashes-repo2.txt
+cmp $O/dist-hashes-base.txt $O/dist-hashes-repo2.txt > $O/dist-cmp-repo2.txt 2>&1; echo "dist hash cmp after verify exit $?" >> $O/dist-cmp-repo2.txt
+git diff --check > $O/04-diff-check.txt 2>&1; echo "diff --check exit $?" >> $O/04-diff-check.txt
+git status --short -- . ':!handoff' > $O/04-status-after.txt 2>&1
+echo "chain-repo done $(date -u +%H:%M:%SZ)" > $T/logs/chain-repo.done

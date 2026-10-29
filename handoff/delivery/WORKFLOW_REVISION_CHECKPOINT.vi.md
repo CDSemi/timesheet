@@ -2902,9 +2902,116 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
     - `dist/` chỉ khác ở `restore.js` và file map của nó;
     - `npm test`: 2.397;
     - e2e đầy đủ: 0 lỗi.
-- **Đang chạy:** WP5-UX5-FIX16-FREEZE (committer). Coordinator không ghi file nào trong lúc
+- **WP5-UX5-FIX16-FREEZE xong.**
+  - Commit 1fe5ad3075fd4d1b94abe5b8be04ed05729b05c2 trên main, đã push dạng fast-forward từ
+    be2afa2.
+  - D_PRE trùng digest của HEAD, 18aa0ad0. Đã stage 595 đường dẫn.
+  - Committer dừng ba lần, đều vì cách coordinator ghi board, không lần nào vì mã nguồn.
+    Các lần sửa:
+    1. PASS của RECHECK-A2 trên ff73565b bị coi là "cũ" so với snapshot đã nghiệm thu. Giờ
+       nó ghi `superseded_by: WP5-UX5-AUDIT-INT`: PASS này được giữ làm lịch sử, còn căn cứ
+       nghiệm thu hiện hành là audit tích hợp trên digest cuối cùng.
+    2. Các task chờ REGATE11, RECHECK-B3 và AUDIT-INT cần có brief.
+    3. AUDIT-INT cần phụ thuộc trực tiếp vào một gate.
+- **Đang chạy:** WP5-UX5-REGATE11 (verifier, sonnet), một mình, trên 1fe5ad3. Đây là gate
+  lại có phạm vi:
+  - xác nhận phạm vi: trong `dist/` chỉ `restore.js` được phép thay đổi;
+  - drill `--wp3`;
+  - `npm audit`;
+  - lượt cốt lõi ×3, 2.397 test;
+  - e2e đầy đủ và sáu lượt quét;
+  - chạy lặp các file test tích hợp đã đổi;
+  - các mutant của FIX16 và các probe của RECHECK-B2;
+  - đọc diff.
+
+  axe được giữ kết quả cũ nếu `dist/client` giữ nguyên.
+- **WP5-UX5-REGATE11 KHÔNG ĐẠT** ở một tiêu chí.
+  - Trong lượt quét FULL lúc 2026-11-01T08:45Z, test desktop `import.spec.ts:102` vượt quá
+    thời gian chờ. Nó chạm mốc 30 giây khi chờ thông báo "committed" sau Confirm import, và
+    chạy hết 38 giây. Cùng test đó trên mobile chỉ mất 6,5 giây.
+  - Lúc đó máy đang bận khoảng 6–7 lõi cho việc riêng của chủ dự án, ngoài mission, vượt
+    giới hạn 4 lõi của gate.
+  - Verifier vẫn chạy tiếp sau một lần đo ngắn. Quy tắc "chờ 10 phút" trong brief mâu thuẫn
+    với quy tắc cấm `sleep`. Từ giờ brief ghi "dừng và báo lại".
+  - Mọi mục khác đều đạt:
+    - `dist/client` giữ nguyên, nên giữ kết quả axe;
+    - drill 209/0 và `npm audit` 0;
+    - lượt cốt lõi ×3, 2.397 test;
+    - e2e đầy đủ theo giờ thật: 0 lỗi;
+    - năm lượt quét còn lại;
+    - chạy lặp, mutant và probe.
+- **Coordinator.** Không bỏ qua lỗi này.
+  - WP5-UX5-DIAG10 (planner, sonnet) đo khoảng dư thời gian của test này qua mọi log gate,
+    và tìm xem 38 giây đã tốn vào đâu.
+  - Sau đó DIAG10 tái hiện test dưới tải CPU có kiểm soát, ở mức 4 lõi và 7 lõi, để phân
+    biệt sản phẩm chậm hoặc treo thật với máy bị quá tải.
+  - DIAG10 cũng liệt kê các test khác đang sát giới hạn thời gian.
+- **Kết quả đầu tiên của WP5-UX5-DIAG10** (planner, tự báo claude-sonnet-5-5).
+  - **Kết luận:** lỗi nằm ở test, lộ ra khi máy bị dùng hết CPU; sản phẩm không chậm. Test
+    mở thêm một tab thứ hai, rồi vẫn tiếp tục điều khiển tab đầu tiên. Lúc đó tab đầu bị
+    đẩy ra sau, và Chromium cho nó chạy ở mức ưu tiên thấp nhất (idle).
+    - Trong trace, hai bước mất 4 giây và 10 giây, còn cú bấm Confirm thì không bao giờ
+      hoàn tất.
+    - Không có request commit nào được gửi đi. Câu trả lời chậm nhất của server chỉ mất
+      245 ms.
+  - **Khoảng dư:** trung vị 2,6 giây, p95 3,8 giây, so với giới hạn 30 giây.
+  - **Dưới tải CPU:**
+    - 0 lỗi khi máy bận 3–8 lõi (198 lượt);
+    - 0 lỗi trong một lượt chạy hỗn hợp 1.068 test khi máy bận 10–14 lõi;
+    - chỉ trượt khi máy bị dùng hết CPU: 32 luồng trượt 11/24, 48 luồng trượt 12/24.
+    - Việc riêng của chủ dự án đẩy máy từ 3 lên 27 lõi bận trong vòng 25 phút.
+  - **Bản sửa:** thêm 9 dòng `bringToFront` vào `import.spec.ts`, cho cả hai test dùng hai
+    tab trong file này.
+    - Với 48 luồng, bản gốc trượt 5–7/12, bản sửa 0/12, trên cả hai project.
+    - Các mutant đều bị bắt.
+  - **Quy tắc gate:** dừng và báo lại ngay ở lần đo tải đầu tiên nếu máy quá tải, và xét
+    mọi lỗi quá thời gian chờ qua trace của nó.
+- **Coordinator (Addendum 1 trong brief).** Chấp nhận.
+  - Lớp lỗi "tab nằm phía sau" giờ đã làm trượt hai lần gate: lần đầu ở theme, lần này ở
+    import.
+  - Vì vậy chính planner đó kiểm tra ba test hai tab còn lại, và mọi chỗ gọi `newPage`
+    trong bộ e2e, dưới tải 48 luồng. Bản vá chỉ mở rộng nếu một test trong số đó trượt hoặc
+    chậm quá nửa giới hạn thời gian.
+- **WP5-UX5-DIAG10 xong (kết quả Addendum 1).** Lớp lỗi "tab nằm phía sau" đã khép lại, với
+  thêm một bản sửa.
+  - Nhánh chạy qua nửa đêm của `today.spec.ts:641` thao tác trên một tab đang nằm phía sau.
+    Dưới tải đốt CPU, nó trượt 5/6 lần trên mỗi project.
+  - Cách sửa: mở trang thứ hai trong một browser context riêng. Bản sửa qua 12/12 lần dưới
+    tải, và cũng qua khi máy rảnh. Bản gốc được dùng làm mutant.
+  - Cách dùng `bringToFront` cũng chạy được ở đây nhưng không được chọn: sản phẩm tải lại
+    các kỳ khi cửa sổ được focus hoặc hiện ra, mà test này lại kiểm đúng các sự kiện đó.
+  - `logo.spec.ts:489` và `controls.spec.ts:699` không bao giờ thao tác trên trang nằm phía
+    sau. Hai test qua 36/36 và 48/48. Không còn test nào khác dùng hai trang.
+  - Ghi nhận, chưa sửa: khi máy bị dùng hết CPU, các lượt quét logo dùng tới 70–80 % giới
+    hạn 240 giây. Rủi ro này đưa vào backlog.
+- **Quyết định coordinator.**
+  - Chấp nhận bản vá, chỉ đổi test: `import.spec.ts` và `today.spec.ts`.
+  - Quy tắc tải mới cho gate, áp dụng từ REGATE12:
+    - Dừng và báo lại nếu lần đo đầu tiên thấy việc ngoài mission chiếm hơn 4 lõi.
+    - Đo lại tải ngay sau mỗi lần trượt.
+    - Một lần quá thời gian chờ mà trace cho thấy máy bị bỏ đói, trong khi lần đo vượt
+      giới hạn, thì lượt chạy đó tính là CHƯA ĐƯỢC KIỂM (NOT VERIFIED). Lượt đó được chạy
+      lại một lần khi máy rảnh, và ghi lại cả hai lượt.
+    - Mọi lỗi khác vẫn làm trượt gate.
+- **WP5-UX5-FIX17 xong** (worker, tự báo claude-sonnet-5-5). Chưa commit. Digest 69c6daff.
+  - Tái hiện dưới tải đốt CPU: test import trượt 12/12, nhánh qua nửa đêm trượt 3/6.
+  - Đã áp bản vá vào hai file e2e.
+  - Dưới tải, trên cả hai project, mọi lượt đều qua: các test import 24/24 mỗi test, nhánh
+    qua nửa đêm 6/6, nhánh thường 12/12.
+  - Các mutant đều bị bắt.
+  - Các lượt chạy khi máy rảnh đều qua.
+  - `dist/` giữ nguyên.
+  - e2e đầy đủ: 469/407, 0 lỗi. Lượt quét qua nửa đêm: 0 lỗi; test cố ý chạy qua nửa đêm mất
+    72 giây.
+- **Các bản ghi đã chuẩn bị cho bước tiếp:**
+  - Đã đăng ký REGATE12 kèm brief: gate lại có phạm vi, chỉ test đổi, chạy đủ sáu lượt quét,
+    theo quy tắc tải mới.
+  - RECHECK-B3 và AUDIT-INT giờ phụ thuộc vào REGATE12, và nhắm tới digest của FIX17.
+- **Đang chạy:** WP5-UX5-FIX17-FREEZE (committer). Coordinator không ghi file nào trong lúc
   committer chạy.
-- **Tiếp theo:**
+- **Tiếp theo:** sửa nếu cần, rồi gate lại trên máy có tải nằm trong giới hạn. RECHECK-B3 và
+  AUDIT-INT chuyển sang phụ thuộc vào lần gate mới.
+- **Sau đó:**
   - gate lại có phạm vi, có chạy drill, vì bundle server thay đổi;
   - một lượt kiểm tra lại độc lập mới cho vùng B;
   - audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.

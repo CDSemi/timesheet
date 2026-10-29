@@ -2,7 +2,7 @@
 
 - **Task.** Mission timesheet-software-readiness, task WP5-UX5-AUDIT-INT, package WP5, kind
   audit, attempt 1.
-  - It depends on WP5-UX5-REGATE11 (PASS required) and WP5-UX5-RECHECK-B3 (PASS required).
+  - It depends on WP5-UX5-REGATE12 (PASS required) and WP5-UX5-RECHECK-B3 (PASS required).
   - Its PASS re-accepts WP5 after UI change rounds 4 and 5. It supersedes
     WP5-UX5-RECHECK-A2 (PASS on be2afa2 / ff73565b) as the current acceptance of area A.
   - Run in a fresh context.
@@ -15,10 +15,10 @@
 - **Author separation.** You wrote no WP5-UX4 or WP5-UX5 task, and none of their audits; the
   agent IDs are on the board. Treat every report and earlier verdict as a claim.
 - **Target.**
-  - `reviewed_commit` = TARGET_SHA = the `freeze_commit` of WP5-UX5-REGATE11 on the board.
-    It is the WP5-UX5-FIX16-FREEZE commit, pushed. HEAD may be a later commit that changes
+  - `reviewed_commit` = TARGET_SHA = the `freeze_commit` of WP5-UX5-REGATE12 on the board.
+    It is the WP5-UX5-FIX17-FREEZE commit, pushed. HEAD may be a later commit that changes
     only `handoff/`.
-  - TARGET_DIGEST = 18aa0ad0f99fbab18ae535d8b36375b756469a717e08b675a1e5d93d7459267c (882
+  - TARGET_DIGEST = 69c6daff305dca839a7128e7b7509f3063c165fe5653d1c73159ea41c003e6bf (882
     files). If the board records a later accepted fix before your dispatch, the coordinator
     states the new target in an addendum.
   - The last accepted snapshot is 8e557100d16b6b6eb86a48e00276835761aabfdf (digest
@@ -42,8 +42,8 @@
   - `WP5_UX4_*` reviews;
   - `WP5_UX5_REVIEW_A.md` and `_B.md`;
   - `WP5_UX5_RECHECK_A.md`, `_B.md`, `_A2.md`, `_B2.md` and `_B3.md`.
-- **Every gate record:** WP5-UX5-GATE, and REGATE to REGATE11.
-- **Every diagnosis and fix record:** DIAG1..DIAG9, FIX1..FIX16, with their evidence.
+- **Every gate record:** WP5-UX5-GATE, and REGATE to REGATE12.
+- **Every diagnosis and fix record:** DIAG1..DIAG10, FIX1..FIX17, with their evidence.
 - docs/04, 05, 10, 11 and 12, EN and VI, as frozen.
 
 ## Scope
@@ -56,16 +56,20 @@
      area.
    - Map every owner item of rounds 4 and 5 (U4-xx, U5-xx), and every answer, to the
      review that judged it. No item may be left unjudged.
-   - Every gate FAIL reason has a verdict. The REGATE5 to REGATE9 failures were:
+   - Every gate FAIL reason has a verdict. The REGATE5 to REGATE11 failures were:
      - the logo timeout;
      - the measuring races;
-     - the starved tab;
+     - the starved tab (theme, then import and the midnight crossing test);
      - the range ladder;
      - the midnight date reads.
+   - Judge the gate load rule adopted after REGATE11: a starvation timeout, with the census
+     over the limit, makes that run NOT VERIFIED and it is repeated once on a quiet host.
+     Also judge the logo sweep's load sensitivity, a backlog risk.
    - Every recorded risk has a current status.
 2. **Changes since the area rechecks.**
    - **Area A:** confirm that RECHECK-A2's PASS (on ff73565b) still holds at the target.
-     FIX16 should touch no client file.
+     FIX16 should touch no client file. FIX17 touches only two e2e files: judge whether its
+     changes prove what the old tests proved.
    - **Area B:** confirm RECHECK-B3's verdict on the target.
 3. **Cross-area behaviour, by your own probes:**
    - a period signed and sent, then corrected and resent, with a backup, restore, resume

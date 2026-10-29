@@ -1,0 +1,34 @@
+// Busy cores per process name from two census samples. Usage: node census.mjs <s1.txt> <s2.txt> <s1-time.txt> <s2-time.txt> [outFile]
+// Adapted from the WP5-UX5-REGATE11 census.mjs (gap read from the two time files). Names, counts and CPU times only.
+import { readFileSync, writeFileSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
+
+const [f1, f2, t1, t2, outFile] = process.argv.slice(2);
+const gap = (Number(readFileSync(t2, 'utf8').trim()) - Number(readFileSync(t1, 'utf8').trim())) / 1000;
+const parse = (file) => {
+  const map = new Map();
+  for (const line of readFileSync(file, 'utf8').replace(/\r/g, '').split('\n')) {
+    const m = /^(.+?)\s+(\d+)\s+\d+\/\d+\/\d+ .*?(?:AM|PM)\s+(\d+)\s+(\d+)\s*$/.exec(line);
+    if (!m) continue;
+    map.set(`${m[2]}`, { name: m[1], cpu: (Number(m[3]) + Number(m[4])) / 1e7 });
+  }
+  return map;
+};
+const a = parse(f1);
+const b = parse(f2);
+const groups = new Map();
+for (const [id, p] of b) {
+  const q = a.get(id);
+  if (!q || q.name !== p.name || p.name === 'System Idle Process') continue;
+  groups.set(p.name, (groups.get(p.name) ?? 0) + (p.cpu - q.cpu));
+}
+let total = 0;
+const lines = [`census gap ${gap.toFixed(1)}s, processes sample1 ${a.size} sample2 ${b.size}, logical cores ${availableParallelism()}`];
+for (const [name, d] of [...groups].sort((x, y) => y[1] - x[1])) {
+  total += d;
+  if (d / gap >= 0.05) lines.push(`${name}\tbusy cores ${(d / gap).toFixed(2)}`);
+}
+lines.push(`TOTAL busy cores ${(total / gap).toFixed(2)}`);
+const text = lines.join('\n') + '\n';
+if (outFile) writeFileSync(outFile, text);
+else process.stdout.write(text);

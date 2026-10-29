@@ -2,7 +2,9 @@
 
 - **Task.** Mission timesheet-software-readiness, task WP5-UX5-RECHECK-B3, package WP5, kind
   audit, attempt 1.
-  - It depends on WP5-UX5-REGATE11 (PASS required).
+  - It depends on WP5-UX5-REGATE12 (PASS required). REGATE11 on 1fe5ad3 failed on one
+    e2e timeout under a saturated host. DIAG10 and FIX17 fixed that in two e2e files
+    (`import.spec.ts`, `today.spec.ts`); no source changed after FIX16.
   - It rechecks WP5-UX5-RECHECK-B2 (FIX REQUIRED on be2afa2): finding F-UX5B3-1 and the
     optional risks R-UX5B3-1 and R-UX5B3-2. Read `handoff/delivery/WP5_UX5_RECHECK_B2.md`.
   - Run in a fresh context.
@@ -14,10 +16,10 @@
 - **Author separation.** You wrote no WP5-UX4 or WP5-UX5 task; their agent IDs are on the
   board. Treat every planner, expert, worker, committer and verifier report as a claim.
 - **Target.**
-  - `reviewed_commit` = TARGET_SHA = the `freeze_commit` of WP5-UX5-REGATE11 on the board.
-    It is the WP5-UX5-FIX16-FREEZE commit, pushed. HEAD may be a later commit that changes
+  - `reviewed_commit` = TARGET_SHA = the `freeze_commit` of WP5-UX5-REGATE12 on the board.
+    It is the WP5-UX5-FIX17-FREEZE commit, pushed. HEAD may be a later commit that changes
     only `handoff/`.
-  - TARGET_DIGEST = 18aa0ad0f99fbab18ae535d8b36375b756469a717e08b675a1e5d93d7459267c (882
+  - TARGET_DIGEST = 69c6daff305dca839a7128e7b7509f3063c165fe5653d1c73159ea41c003e6bf (882
     files).
   - The base for this recheck is be2afa2e3c43514581ed62fd145c15eeef13b534.
   - Record HEAD, the digest before and after (three forms) and `reviewed_commit`.
@@ -28,7 +30,8 @@
 ## Read
 
 - `handoff/delivery/tasks/WP5-UX5-FIX16.md` and its evidence;
-- `handoff/delivery/tasks/WP5-UX5-REGATE11.md` and its evidence;
+- `handoff/delivery/tasks/WP5-UX5-REGATE11.md`, `WP5-UX5-DIAG10.md`, `WP5-UX5-FIX17.md` and
+  `WP5-UX5-REGATE12.md`, with their evidence;
 - RECHECK-B2's review and evidence, including its probes `40-restore-probe.ts.txt` and
   `50-http-restore.mjs.txt`;
 - docs/05, docs/11 and docs/12, EN and VI.
@@ -59,7 +62,8 @@
    - `releaseAllHeldJobs`;
    - other periods and other owners;
    - audit events;
-   - the drill's restore stage, per REGATE11.
+   - the drill's restore stage, per REGATE11 (209 PASS on the FIX16 build, which
+     REGATE12 shows is unchanged).
 5. **Test strength.** Write at least six mutants of your own on FIX16's change, and say
    whether the suite catches each, and for the right reason.
 6. **Mandatory checks yourself:**

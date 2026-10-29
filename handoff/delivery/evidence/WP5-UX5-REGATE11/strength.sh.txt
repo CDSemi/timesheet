@@ -1,0 +1,34 @@
+. <task>/env.sh
+O=$T/out
+L=$T/logs
+mkdir -p $L/mut $T/probework
+# 1. five repeats of the two changed integration files (pristine export)
+cd $T/export
+for i in 1 2 3 4 5; do
+  npx vitest run tests/integration/restore.test.ts > $L/rep-restore-$i.txt 2>&1; echo "restore.test.ts run $i exit $?" >> $O/60-repeat-exits.txt
+  npx vitest run tests/integration/timesheet-api.test.ts > $L/rep-api-$i.txt 2>&1; echo "timesheet-api.test.ts run $i exit $?" >> $O/60-repeat-exits.txt
+done
+echo "repeats done $(date -u +%H:%M:%SZ)" > $L/strength.log
+# 2. mutants in the scratch copy (export-mut); byte-equal check against the pristine export before and after
+cd $T
+for f in src/server/ops/restore.ts src/server/services/timesheetCommands.ts src/server/services/deliveries.ts tests/integration/restore.test.ts tests/integration/timesheet-api.test.ts; do
+  cmp export/$f export-mut/$f && echo "before: $f identical" >> $O/61-mutants-byte-equal.txt
+done
+node mutants.mjs $T/export-mut $L/mut M1 K2 C1 T4 R2 R3 G2 > $L/mutants-stdout.txt 2>&1
+echo "mutants exit $?" >> $L/strength.log
+for f in src/server/ops/restore.ts src/server/services/timesheetCommands.ts src/server/services/deliveries.ts tests/integration/restore.test.ts tests/integration/timesheet-api.test.ts; do
+  cmp export/$f export-mut/$f && echo "after: $f identical" >> $O/61-mutants-byte-equal.txt
+done
+echo "mutants done $(date -u +%H:%M:%SZ)" >> $L/strength.log
+# 3. the auditor's in-process probe (12 cases), scratch copy only
+cp $T/restore-probe.ts $T/export-mut/tests/integration/zz-restore-probe.test.ts
+cd $T/export-mut
+RECHECK_B2_OUT="$TW\\probework\\restore-probe-observations.jsonl" npx vitest run tests/integration/zz-restore-probe.test.ts > $L/probe-inprocess.txt 2>&1
+echo "in-process probe exit $?" >> $O/62-probe-exits.txt
+rm -f tests/integration/zz-restore-probe.test.ts
+# 4. the HTTP and CLI probe on the pristine export build
+cd $T
+node http-restore.mjs $T/export "$TW\\probework\\http" 51381 $L/probe-http.txt > $L/probe-http-stdout.txt 2>&1
+echo "http probe exit $?" >> $O/62-probe-exits.txt
+echo "probes done $(date -u +%H:%M:%SZ)" >> $L/strength.log
+echo strength-done > $O/strength.done

@@ -1,0 +1,15 @@
+# Real-clock FULL e2e on both projects, then the seven-file midnight sweep run (both projects in one run, as REGATE11). export-fix (same files as the repository working tree).
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX17/env.sh
+export EXP=export-fix
+CROSS=2026-10-27T06:58:30Z
+SEVEN="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts"
+cd $T
+for P in desktop mobile; do
+  bash census.sh full-$P-pre
+  bash run.sh full-$P real --project=$P > logs/full-$P.txt 2>&1
+  echo "full $P done $(date -u +%H:%M:%SZ)" >> logs/chain-full.log
+done
+bash census.sh seven-pre
+bash run.sh seven $CROSS $SEVEN --workers=6 > logs/seven.txt 2>&1
+echo "seven done $(date -u +%H:%M:%SZ)" >> logs/chain-full.log
+echo "chain-full done $(date -u +%H:%M:%SZ)" > logs/chain-full.done

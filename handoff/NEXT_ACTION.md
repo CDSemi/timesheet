@@ -146,8 +146,17 @@ Current route:
      uncertain.
    - WP5-UX5-FIX16 fixed it: a held older send now stays held for every later send of the
      period, except a cancelled one. Digest 18aa0ad0.
-   - Running now: WP5-UX5-FIX16-FREEZE commits and pushes it.
-   - Then a scoped regate, a fresh area-B recheck, fresh rechecks of the two fixed findings, the Day editor
+   - It is frozen in 1fe5ad3 (digest 18aa0ad0) and pushed.
+   - WP5-UX5-REGATE11, a scoped regate on 1fe5ad3, failed on one criterion only: an import
+     test timed out in one sweep while the machine was busy with about 6-7 cores of other
+     work. Everything else passed.
+   - WP5-UX5-DIAG10 found that the import is not slow. The test kept driving a browser tab
+     that was behind, and that tab starves on a saturated machine. One other test had the
+     same pattern. A tests-only fix covers both.
+   - WP5-UX5-FIX17 applied it and passed its checks (digest 69c6daff).
+   - Running now: WP5-UX5-FIX17-FREEZE commits and pushes it.
+   - Then a regate (WP5-UX5-REGATE12) under a stricter load rule, a fresh
+     area-B recheck (WP5-UX5-RECHECK-B3), fresh rechecks of the two fixed findings, the Day editor
      change and the theme change, the integration audit, ACCEPT-DOCS and the WP5 re-accept.
    - To resume after an interruption, use the entry prompt above. The coordinator continues
      at the board's `next_task_id`.

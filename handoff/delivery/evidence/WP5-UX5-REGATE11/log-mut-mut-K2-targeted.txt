@@ -1,0 +1,143 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/integration/restore.test.ts (41 tests | 5 failed) 15820ms
+   ❯ isolated restore with outbound paused (AC-15, AC-11) (7)
+     × releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs 6ms
+   ❯ a held send of a superseded revision (F-UX5B2-1) (1)
+     × is not released once the owner has sent a correction of the period, while it waits, while a runner holds it or after it succeeded, and the old copy never follows the new 322ms
+   ❯ a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) (8)
+     × a later send that a second restore holds as well: only the newest of the two is releasable 380ms
+     × a cancelled later send does not hold the superseded copy back (the opposite rule would keep it held) 314ms
+     × E1: the newest revision's held send is released when only an older revision of the period was delivered 444ms
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 36 passed (41)
+   Start at  17:27:40
+   Duration  16.96s (tests 94%, transform 4%, import 2%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs
+AssertionError: expected [ Array(6) ] to deeply equal [ Array(6) ]
+
+- Expected
++ Received
+
+  [
+    "send_email:attempt_uncertain",
+    "send_email:attempt_uncertain",
+-   "send_email:releasable",
+-   "send_email:releasable",
++   "send_email:superseded_by_later_send",
++   "send_email:superseded_by_later_send",
+    "send_reminder:releasable",
+    "send_reminder:releasable",
+  ]
+
+ ❯ tests/integration/restore.test.ts:428:86
+    426|     const reminderOf = (key: string) => restored.prepare<[string], { i…
+    427|     const listed = listHeldJobs(restored);
+    428|     expect(listed.map((job) => `${job.kind}:${job.blocker ?? 'releasab…
+       |                                                                                      ^
+    429|       [
+    430|         `${JOB_SEND_EMAIL}:attempt_uncertain`,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send of a superseded revision (F-UX5B2-1) > is not released once the owner has sent a correction of the period, while it waits, while a runner holds it or after it succeeded, and the old copy never follows the new
+AssertionError: expected [ [ …(2) ] ] to deeply equal [ [ …(2) ] ]
+
+- Expected
++ Received
+
+  [
+    [
+      "8c394c12-e149-4352-aca1-791e59e12d04",
+-     null,
++     "superseded_by_later_send",
+    ],
+  ]
+
+ ❯ tests/integration/restore.test.ts:578:61
+    576|     expect(resumeOutbound(db, clock)).toMatchObject({ outcome: 'resume…
+    577|     const heldSends = () => listHeldJobs(db).filter((job) => job.kind …
+    578|     expect(heldSends().map((job) => [job.id, job.blocker])).toEqual([[…
+       |                                                             ^
+    579|
+    580|     // On the restored instance the owner corrects the period (revisio…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) > a later send that a second restore holds as well: only the newest of the two is releasable
+AssertionError: expected [ [ …(2) ], [ …(2) ] ] to deeply equal [ [ …(2) ], [ …(2) ] ]
+
+- Expected
++ Received
+
+@@ -3,8 +3,8 @@
+      "cc0ddc14-a743-4bbb-ba26-7304b3c343c4",
+      "superseded_by_later_send",
+    ],
+    [
+      "f9b3c80b-d6ff-4c84-b3a9-4de4ba1739ae",
+-     null,
++     "superseded_by_later_send",
+    ],
+  ]
+
+ ❯ tests/integration/restore.test.ts:870:111
+    868|       { state: 'intervention', last_error: RECONCILE_AFTER_RESTORE },
+    869|     ]);
+    870|     expect(listHeldJobs(db).filter((job) => job.kind === JOB_SEND_EMAI…
+       |                                                                                                               ^
+    871|       [r2.held, 'superseded_by_later_send'],
+    872|       [secondHeld, null],
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) > a cancelled later send does not hold the superseded copy back (the opposite rule would keep it held)
+AssertionError: expected [ 'superseded_by_later_send' ] to deeply equal [ null ]
+
+- Expected
++ Received
+
+  [
+-   null,
++   "superseded_by_later_send",
+  ]
+
+ ❯ tests/integration/restore.test.ts:907:30
+    905|     // No product path cancels a send job; the state is set here to pi…
+    906|     expect(r.db.prepare("UPDATE jobs SET state = 'cancelled' WHERE id …
+    907|     expect(blockersOf(r.db)).toEqual([null]);
+       |                              ^
+    908|     expect(releaseAllHeldJobs(r.db, r.clock)).toEqual({ released: 1, r…
+    909|     r.clock.advanceSeconds(120);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  tests/integration/restore.test.ts > a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) > E1: the newest revision's held send is released when only an older revision of the period was delivered
+AssertionError: expected [ [ …(2) ] ] to deeply equal [ [ …(2) ] ]
+
+- Expected
++ Received
+
+  [
+    [
+      "cc23c693-beaf-4ec8-b01e-3fa7ba3846f9",
+-     null,
++     "superseded_by_later_send",
+    ],
+  ]
+
+ ❯ tests/integration/restore.test.ts:938:113
+    936|     const heldSecond = sendJobOf(r.db, second).id;
+    937|     // Revision 1's job succeeded in the source, so only revision 2's …
+    938|     expect(listHeldJobs(r.db).filter((job) => job.kind === JOB_SEND_EM…
+       |                                                                                                                 ^
+    939|     expect(releaseAllHeldJobs(r.db, r.clock)).toEqual({ released: 1, r…
+    940|     r.clock.advanceSeconds(120);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯

@@ -1,0 +1,22 @@
+# Sequential proof runs of the fix and its mutants. dose.mjs arguments: label, burner threads, burner seconds, clock, repeats, spec file.
+# GREP and PROJECT select tests and project; extra arguments go to Playwright.
+source /d/.claude-tmp/timesheet/WP5-UX5-DIAG10/env.sh
+D=2026-11-01T08:45:00Z
+BOTH="upload, preview with source cells|the opening balance: validation"
+cp $T/hold/importfix.spec.ts $T/export/tests/e2e/importfix.spec.ts
+cp $T/hold/importmutn1.spec.ts $T/export/tests/e2e/importmutn1.spec.ts
+cp $T/hold/importmutn2.spec.ts $T/export/tests/e2e/importmutn2.spec.ts
+# The reproducer (48-thread burner): the original, then the fix, on desktop; the fix on mobile; traces kept for the fix.
+GREP="$BOTH" node $T/dose.mjs o48b 48 200 $D 12 tests/e2e/import.spec.ts > $T/logs/dose-o48b.txt 2>&1
+GREP="$BOTH" node $T/dose.mjs f48 48 200 $D 12 tests/e2e/importfix.spec.ts --trace=on > $T/logs/dose-f48.txt 2>&1
+PROJECT=mobile GREP="$BOTH" node $T/dose.mjs f48m 48 200 $D 12 tests/e2e/importfix.spec.ts > $T/logs/dose-f48m.txt 2>&1
+PROJECT=mobile GREP="$BOTH" node $T/dose.mjs o48m 48 200 $D 12 tests/e2e/import.spec.ts > $T/logs/dose-o48m.txt 2>&1
+# Mutants of the fix: a bringToFront removed (the tab behind again), under the same burner.
+GREP="$BOTH" node $T/dose.mjs n1 48 200 $D 12 tests/e2e/importmutn1.spec.ts > $T/logs/dose-n1.txt 2>&1
+GREP="$BOTH" node $T/dose.mjs n2 48 200 $D 12 tests/e2e/importmutn2.spec.ts > $T/logs/dose-n2.txt 2>&1
+# Calm host, real clock, both projects: the fix passes where the original passes.
+GREP="$BOTH" node $T/dose.mjs fr 0 1 real 12 tests/e2e/importfix.spec.ts > $T/logs/dose-fr.txt 2>&1
+PROJECT=mobile GREP="$BOTH" node $T/dose.mjs frm 0 1 real 12 tests/e2e/importfix.spec.ts > $T/logs/dose-frm.txt 2>&1
+# The whole fixed file, every test, both projects, 5 repeats, at the sweep instant.
+GREP=".*" node $T/dose.mjs fall 0 1 $D 5 tests/e2e/importfix.spec.ts > $T/logs/dose-fall.txt 2>&1
+PROJECT=mobile GREP=".*" node $T/dose.mjs fallm 0 1 $D 5 tests/e2e/importfix.spec.ts > $T/logs/dose-fallm.txt 2>&1

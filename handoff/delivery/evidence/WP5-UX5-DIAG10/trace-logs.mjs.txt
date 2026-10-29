@@ -1,0 +1,25 @@
+// Prints the action log lines, console and other event types of a Playwright 1-trace.trace with time offsets.
+// Usage: node trace-logs.mjs <1-trace.trace.jsonl> <outFile> <testMonotonicStart>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, outFile, t0Arg] = process.argv.slice(2);
+const t0 = Number(t0Arg);
+const events = readFileSync(file, 'utf8').split('\n').filter((l) => l.length > 0).map((l) => JSON.parse(l));
+const counts = new Map();
+const titles = new Map();
+const out = [];
+for (const e of events) {
+  counts.set(e.type, (counts.get(e.type) ?? 0) + 1);
+  // A fill carries a typed value (a synthetic login among them): its params are not printed.
+  if (e.type === 'before') titles.set(e.callId, `${e.method ?? ''} ${(e.title ?? '').slice(0, 60)} ${e.method === 'fill' ? '(value masked)' : JSON.stringify(e.params ?? {}).slice(0, 100)}`);
+}
+out.push(`types: ${[...counts].map(([k, v]) => `${k}=${v}`).join(' ')}`);
+for (const e of events) {
+  if (e.type === 'before') out.push(`${String(Math.round(e.startTime - t0)).padStart(7)} BEFORE ${e.callId} ${titles.get(e.callId)}`);
+  else if (e.type === 'after') out.push(`${String(Math.round(e.endTime - t0)).padStart(7)} AFTER  ${e.callId}`);
+  else if (e.type === 'log') out.push(`${String(Math.round(e.time - t0)).padStart(7)} LOG    ${e.callId} ${/^\s*fill\(/.test(String(e.message)) ? 'fill(value masked)' : String(e.message).slice(0, 140)}`);
+  else if (e.type === 'console') out.push(`${String(Math.round(e.time - t0)).padStart(7)} CONSOLE ${e.messageType} ${String(e.text).slice(0, 120)}`);
+  else if (e.type === 'event') out.push(`${String(Math.round(e.time - t0)).padStart(7)} EVENT  ${e.class}.${e.method} ${JSON.stringify(e.params ?? {}).slice(0, 100)}`);
+  else if (e.type === 'screencast-frame') out.push(`${String(Math.round(e.timestamp - t0)).padStart(7)} FRAME  ${String(e.sha1).slice(0, 8)}`);
+}
+writeFileSync(outFile, out.join('\n') + '\n');

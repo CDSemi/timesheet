@@ -1,0 +1,24 @@
+Keep a held superseded send held for every later send of the period except a cancelled one
+
+- fix(restore): `blockerOf` counts every later send job of the period, whatever state it is
+  in or ended in, except a cancelled one.
+  - Before, a held superseded send could be released and delivered after a correction
+    whose own send had failed, ended uncertain (also once marked delivered), or was held by
+    a second restore.
+  - An owner's repeat of the same revision is refused as `superseded_by_later_send`.
+  - The later order is kept, so an older revision's send never blocks the newest one.
+- test(restore): one case for each of those end states, the same-revision repeat, a
+  cancelled later send, and the later order (E1).
+- test(timesheet-api): a check-in at exactly the reporting-zone midnight second is filed on
+  the new date.
+- docs(05): the release rule names the end states and the cancelled exception, in EN and VI.
+- docs(handoff): REGATE10 (PASS), RECHECK-A2 (PASS, now superseded by AUDIT-INT),
+  RECHECK-B2 (FIX REQUIRED) with their review pairs, FIX16, the FIX15-FREEZE outputs, the
+  board, the checkpoint (+ vi), STATE and NEXT_ACTION (+ vi).
+
+Task: WP5-UX5-FIX16 (after WP5-UX5-RECHECK-B2)
+Gate: WP5-UX5-REGATE10 PASS on be2afa2; REGATE11 pending
+Audit: WP5-UX5-RECHECK-A2 PASS; WP5-UX5-RECHECK-B2 FIX REQUIRED; area-B recheck pending
+Digest: 18aa0ad0f99fbab18ae535d8b36375b756469a717e08b675a1e5d93d7459267c
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

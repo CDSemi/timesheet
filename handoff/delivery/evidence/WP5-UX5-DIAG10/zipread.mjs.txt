@@ -1,0 +1,45 @@
+// Reads a zip in place (no extraction to disk). Usage: node zipread.mjs <zip> list | cat <entry>
+import { readFileSync } from 'node:fs';
+import { inflateRawSync } from 'node:zlib';
+
+export function openZip(path) {
+  const buf = readFileSync(path);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= 0; i -= 1) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('no end of central directory');
+  const count = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  const entries = new Map();
+  for (let n = 0; n < count; n += 1) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error('bad central header');
+    const method = buf.readUInt16LE(p + 10);
+    const csize = buf.readUInt32LE(p + 20);
+    const usize = buf.readUInt32LE(p + 24);
+    const nlen = buf.readUInt16LE(p + 28);
+    const elen = buf.readUInt16LE(p + 30);
+    const clen = buf.readUInt16LE(p + 32);
+    const off = buf.readUInt32LE(p + 42);
+    const name = buf.toString('utf8', p + 46, p + 46 + nlen);
+    entries.set(name, { name, method, csize, usize, off });
+    p += 46 + nlen + elen + clen;
+  }
+  function read(name) {
+    const e = entries.get(name);
+    if (e === undefined) throw new Error(`no entry ${name}`);
+    const nlen = buf.readUInt16LE(e.off + 26);
+    const elen = buf.readUInt16LE(e.off + 28);
+    const start = e.off + 30 + nlen + elen;
+    const raw = buf.subarray(start, start + e.csize);
+    return e.method === 0 ? raw : inflateRawSync(raw);
+  }
+  return { entries, read };
+}
+
+if (process.argv[1] !== undefined && process.argv[1].endsWith('zipread.mjs')) {
+  const [zip, cmd, entry] = process.argv.slice(2);
+  const z = openZip(zip);
+  if (cmd === 'list') for (const e of z.entries.values()) console.log(`${e.usize}\t${e.name}`);
+  else process.stdout.write(z.read(entry));
+}

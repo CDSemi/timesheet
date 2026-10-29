@@ -1,0 +1,22 @@
+WP5-UX5-FIX17 host census (read-only: Get-CimInstance Win32_Process, process names, ids and CPU times only; no command line of any process was written)
+
+Method: census.sh.txt takes a sample; census-calc.mjs.txt turns two samples into busy cores per process name (logical cores 32). dose.mjs.txt takes three samples per run: p1, p2 (about 7 to 11 s apart, taken while the burner ramps up, so its share is approximate) and p3 after the Playwright run. A process that ended before the second sample is not counted (the burner is not in p2-p3 once it has stopped), so only the p1-p2 window is listed below.
+
+Start state (sample "start" before the first command): 16 node.exe, 51 msedge.exe, 39 msedgewebview2.exe processes. Final sample after the last run: 16 node.exe, 50 msedge.exe, 39 msedgewebview2.exe. These are the host's own processes; nothing started by this task is left (the burner and every Playwright run end by themselves, each background command returned its exit notice).
+
+Busy cores in the p1-p2 window of each load run (node.exe = the burner plus the Playwright runner and workers of that run; TOTAL = all processes):
+  rep-imp      node.exe 19.83   TOTAL 24.93   (non-mission: sim_proto.exe 2.27, check7_base_x86.exe 0.78, check7_proto_x86.exe 0.33)
+  rep-today    node.exe 20.35   TOTAL 26.70   (non-mission: sim_proto.exe 2.11, real8_base.exe 2.02, check7_base_x86.exe 0.62)
+  fix-imp-d    node.exe 15.55   TOTAL 20.71   (non-mission: sim_base.exe 1.16, real8_base.exe 0.93)
+  fix-imp-m    node.exe 23.31   TOTAL 31.23
+  fix-cross-d  node.exe 19.54   TOTAL 26.23   (non-mission: sim_base.exe 1.74, real8_base.exe 1.66, check7_proto_x86.exe 0.88)
+  fix-cross-m  node.exe 18.62   TOTAL 23.99
+  fix-norm-d   node.exe 18.61   TOTAL 22.80
+  fix-norm-m   node.exe 19.66   TOTAL 24.34
+  mut-n1       node.exe 19.53   TOTAL 23.16
+  mut-today    node.exe 22.87   TOTAL 26.87   (non-mission: sim_base.exe 0.90, check7_proto_x86.exe 0.74)
+  mut-pm1      no burner; one-second window (gap 1.0 s) TOTAL 16.43, of which sim_proto.exe 3.01, sim_base.exe 2.97, check7_proto_x86.exe 2.73, msedge.exe 2.46 (the host was not calm for that run, which is a calm-host product-mutant run: 6 of 6 failed)
+Calm-host runs, p1-p2 window TOTAL busy cores (not zero: the host carries other jobs; no burner started): calm-imp-desktop 10.35, calm-imp-mobile 4.47, calm-today-x-desktop 7.17, calm-today-x-mobile 6.23, calm-today-r-desktop 3.03, calm-today-r-mobile 2.92.
+FULL and sweep runs: census before the desktop FULL, the mobile FULL and the seven-file run (full-desktop-pre, full-mobile-pre, seven-pre). Over the seven-file window to the end of the task the host carried TOTAL 3.95 busy cores (msedge.exe 0.74, dwm.exe 0.55, System 0.54, claude.exe 0.46, MsMpEng.exe 0.32); between the FULL starts 3.29 (same names).
+
+Failures and censuses taken right after: the failures of this task are the expected failures of the reproduction and of the mutants (burner on). No failure occurred in a proof run, so no extra post-failure census was due.

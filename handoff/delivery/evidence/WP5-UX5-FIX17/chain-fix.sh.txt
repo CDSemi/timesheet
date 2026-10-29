@@ -1,0 +1,17 @@
+# Proof of the fix (export-fix = HEAD archive + the two patched specs) under the 48-thread burner, both projects.
+source /d/.claude-tmp/timesheet/WP5-UX5-FIX17/env.sh
+export EXP=export-fix
+D=2026-11-01T08:45:00Z
+CROSS=2026-10-27T06:58:30Z
+TODAY="a page left open across a reporting-zone midnight"
+BOTH="upload, preview with source cells|the opening balance: validation"
+# import: both two-tab tests, 12 repeats, desktop then mobile
+GREP="$BOTH" PROJECT=desktop REPS=12 node $T/dose.mjs fix-imp-d 48 200 $D tests/e2e/import.spec.ts > $T/logs/dose-fix-imp-d.txt 2>&1
+GREP="$BOTH" PROJECT=mobile REPS=12 node $T/dose.mjs fix-imp-m 48 200 $D tests/e2e/import.spec.ts > $T/logs/dose-fix-imp-m.txt 2>&1
+# today: crossing branch, 6 repeats, both projects
+GREP="$TODAY" PROJECT=desktop REPS=6 node $T/dose.mjs fix-cross-d 48 360 $CROSS tests/e2e/today.spec.ts > $T/logs/dose-fix-cross-d.txt 2>&1
+GREP="$TODAY" PROJECT=mobile REPS=6 node $T/dose.mjs fix-cross-m 48 360 $CROSS tests/e2e/today.spec.ts > $T/logs/dose-fix-cross-m.txt 2>&1
+# today: normal branch (real-clock-like instant away from the midnight), 12 repeats, both projects
+GREP="$TODAY" PROJECT=desktop REPS=12 node $T/dose.mjs fix-norm-d 48 200 $D tests/e2e/today.spec.ts > $T/logs/dose-fix-norm-d.txt 2>&1
+GREP="$TODAY" PROJECT=mobile REPS=12 node $T/dose.mjs fix-norm-m 48 200 $D tests/e2e/today.spec.ts > $T/logs/dose-fix-norm-m.txt 2>&1
+echo "chain-fix done $(date -u +%H:%M:%SZ)" > $T/logs/chain-fix.done
